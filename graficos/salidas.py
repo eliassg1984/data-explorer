@@ -21,8 +21,9 @@ from graficos.base import (
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
-from graficos.compras import _periodo_serie
-from graficos.movimientos_comun import _chip_movimientos, _comparativo_pedido_baja
+from graficos.movimientos_comun import (
+    _chip_movimientos, _comparativo_pedido_baja, _evolucion_movimientos,
+)
 from graficos import alturas
 
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
@@ -63,7 +64,6 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     no tener un estado de filtros distinto entre Tabla y gráficos."""
     _chip_movimientos("Salidas")
 
-    col_fecha = _resolver(df_f, ["Fecha registro", "Fecha_registro", "FECHA REGISTRO"])
     col_prod  = _resolver(df_f, ["Nombre Producto", "NOMBRE PRODUCTO", "Producto"])
     col_sub   = _resolver(df_f, ["Sub Almacen", "SUB ALMACEN", "Subalmacen", "Sub Almacén"])
     col_fam   = _resolver(df_f, ["Nombre Familia", "NOMBRE FAMILIA", "Familia"])
@@ -133,40 +133,7 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # de vista. Los cuerpos quedan idénticos —misma indentación, mismas
     # keys de figura— y lo único que cambia es quién los envuelve.
     def _cuerpo_grafico(graf):
-        if graf == "Evolución" and col_fecha:
-            _fe = pd.to_datetime(d[col_fecha], errors="coerce")
-            cg1, _sp = st.columns([1.4, 3.6])
-            with cg1:
-                gran = st.pills(
-                    "Agrupar por", ["Día", "Semana", "Mes", "Año"],
-                    default="Mes", key="sal_graf_gran",
-                    label_visibility="collapsed",
-                ) or "Mes"
-            per = _periodo_serie(_fe, gran)
-            if col_tipo:
-                g = (pd.DataFrame({"per": per, "tipo": d[col_tipo].astype(str), "m": _met})
-                     .dropna(subset=["per"])
-                     .groupby(["per", "tipo"], as_index=False)["m"].sum())
-                orden = sorted(g["per"].unique())
-                fig = px.bar(g, x="per", y="m", color="tipo",
-                             category_orders={"per": orden})
-                fig.update_layout(barmode="stack")
-            else:
-                g = (pd.DataFrame({"per": per, "m": _met})
-                     .dropna(subset=["per"]).groupby("per", as_index=False)["m"].sum())
-                fig = px.bar(g, x="per", y="m")
-            _compras_layout(fig, alto=alturas.PROTAGONISTA)
-            fig.update_layout(
-                title=f"Evolución de {metrica.lower()} por tipo de descargo ({gran.lower()})"
-                      if col_tipo else f"Evolución de {metrica.lower()} ({gran.lower()})",
-                xaxis_title=None, yaxis_title=None,
-                legend=dict(orientation="h", y=-0.25, x=0, font=dict(size=10)),
-            )
-            fig.update_xaxes(type="category")
-            fig.update_traces(hovertemplate=_hover_m)
-            st.plotly_chart(fig, use_container_width=True, key="sal_g_evolucion")
-
-        elif graf == "Subalmacén" and col_sub:
+        if graf == "Subalmacén" and col_sub:
             serie = _met.groupby(d[col_sub].astype(str)).sum().sort_values(ascending=True)
             if serie.empty:
                 st.info("Sin datos.")
@@ -256,6 +223,16 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 _cuerpo_grafico(nombre)
         return _f
 
+    def _dib_evolucion():
+        # La Evolución ya no es de Salidas: es la de MOVIMIENTOS, con los dos
+        # lados en barras agrupadas (2026-09-05, a pedido). Vive en
+        # `movimientos_comun.py` y la dibuja igual Requerimientos — por eso
+        # recibe los chips en vez de leerlos: la función no sabe de qué lado
+        # entró. Lo que se pierde acá es el apilado por Tipo Descargo, que
+        # sigue entero en las vistas "Tipo descargo" y "Subalm. × tipo".
+        with st.container(border=True, key="ajuste_graf_card_izq_sal_evolucion"):
+            _evolucion_movimientos(fam_sel=fam_sel, sub_sel=sub_sel)
+
     def _dib_comparativo():
         with st.container(border=True, key="ajuste_graf_card_izq_sal_comparativo"):
             _comparativo_pedido_baja(key_prefix="sal_cmp")
@@ -268,7 +245,7 @@ def renderizar_graficos_salidas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 st.info("La tabla no está disponible en este contexto.")
 
     _DIBUJANTES = {
-        "sal_sec_evolucion":   _seccion("evolucion", "Evolución"),
+        "sal_sec_evolucion":   _dib_evolucion,
         "sal_sec_subalmacen":  _seccion("subalmacen", "Subalmacén"),
         "sal_sec_tipo":        _seccion("tipo", "Tipo descargo"),
         "sal_sec_cruce":       _seccion("cruce", "Cruce"),

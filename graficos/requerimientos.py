@@ -17,7 +17,6 @@ Nombre Subfamilia, Cantidad, Valor Item, Nombre Estado Requerimiento
 """
 
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -27,8 +26,9 @@ from graficos.base import (
     _compras_layout, _compras_truncar, _render_rail,
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
-from graficos.compras import _periodo_serie
-from graficos.movimientos_comun import _chip_movimientos, _comparativo_pedido_baja
+from graficos.movimientos_comun import (
+    _chip_movimientos, _comparativo_pedido_baja, _evolucion_movimientos,
+)
 from graficos import alturas
 
 _REQ_RAIL_CATEGORIAS = (
@@ -65,11 +65,9 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
     filtros distinto al de los gráficos."""
     _chip_movimientos("Requerimientos")
 
-    col_fecha = _resolver(df_f, ["Fecha Registro", "FECHA REGISTRO"])
     col_prod  = _resolver(df_f, ["Nombre Producto", "NOMBRE PRODUCTO", "Producto"])
     col_sub   = _resolver(df_f, ["Sub Almacen", "SUB ALMACEN", "Subalmacen", "Sub Almacén"])
     col_fam   = _resolver(df_f, ["Nombre Familia", "NOMBRE FAMILIA", "Familia"])
-    col_estado = _resolver(df_f, ["Nombre Estado Requerimiento", "NOMBRE ESTADO REQUERIMIENTO"])
     col_cant  = _resolver(df_f, ["Cantidad", "CANTIDAD"])
     col_val   = _resolver(df_f, ["Valor Item", "VALOR ITEM", "Valorizado"])
 
@@ -129,40 +127,7 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
     # gráfico a ser el cuerpo de esta función, que cada sección llama con SU
     # nombre de vista. Mismo movimiento que en `graficos/salidas.py`.
     def _cuerpo_grafico(graf):
-        if graf == "Evolución" and col_fecha:
-            _fe = pd.to_datetime(d[col_fecha], errors="coerce")
-            cg1, _sp = st.columns([1.4, 3.6])
-            with cg1:
-                gran = st.pills(
-                    "Agrupar por", ["Día", "Semana", "Mes", "Año"],
-                    default="Mes", key="req_graf_gran",
-                    label_visibility="collapsed",
-                ) or "Mes"
-            per = _periodo_serie(_fe, gran)
-            if col_estado:
-                g = (pd.DataFrame({"per": per, "estado": d[col_estado].astype(str), "m": _met})
-                     .dropna(subset=["per"])
-                     .groupby(["per", "estado"], as_index=False)["m"].sum())
-                orden = sorted(g["per"].unique())
-                fig = px.bar(g, x="per", y="m", color="estado",
-                             category_orders={"per": orden})
-                fig.update_layout(barmode="stack")
-            else:
-                g = (pd.DataFrame({"per": per, "m": _met})
-                     .dropna(subset=["per"]).groupby("per", as_index=False)["m"].sum())
-                fig = px.bar(g, x="per", y="m")
-            _compras_layout(fig, alto=alturas.PROTAGONISTA)
-            fig.update_layout(
-                title=f"Evolución de {metrica.lower()} por estado ({gran.lower()})"
-                      if col_estado else f"Evolución de {metrica.lower()} ({gran.lower()})",
-                xaxis_title=None, yaxis_title=None,
-                legend=dict(orientation="h", y=-0.25, x=0, font=dict(size=10)),
-            )
-            fig.update_xaxes(type="category")
-            fig.update_traces(hovertemplate=_hover_m)
-            st.plotly_chart(fig, use_container_width=True, key="req_g_evolucion")
-
-        elif graf == "Sub Almacén" and col_sub:
+        if graf == "Sub Almacén" and col_sub:
             serie = _met.groupby(d[col_sub].astype(str)).sum().sort_values(ascending=True)
             if serie.empty:
                 st.info("Sin datos.")
@@ -216,6 +181,14 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
                 _cuerpo_grafico(nombre)
         return _f
 
+    def _dib_evolucion():
+        # La Evolución ya no es de Requerimientos: es la de MOVIMIENTOS, con
+        # los dos lados en barras agrupadas (2026-09-05, a pedido). Vive en
+        # `movimientos_comun.py` y la dibuja igual Salidas — por eso recibe
+        # los chips en vez de leerlos: la función no sabe de qué lado entró.
+        with st.container(border=True, key="ajuste_graf_card_izq_req_evolucion"):
+            _evolucion_movimientos(fam_sel=fam_sel, sub_sel=sub_sel)
+
     def _dib_comparativo():
         with st.container(border=True, key="ajuste_graf_card_izq_req_comparativo"):
             _comparativo_pedido_baja(key_prefix="req_cmp")
@@ -228,7 +201,7 @@ def renderizar_graficos_requerimientos(df_f, nombre_reporte, df_full=None, tabla
                 st.info("La tabla no está disponible en este contexto.")
 
     _DIBUJANTES = {
-        "req_sec_evolucion":   _seccion("evolucion", "Evolución"),
+        "req_sec_evolucion":   _dib_evolucion,
         "req_sec_subalmacen":  _seccion("subalmacen", "Sub Almacén"),
         "req_sec_top":         _seccion("top", "Top productos"),
         "req_sec_comparativo": _dib_comparativo,

@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-319 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+321 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (104)
+**CSS y estilos** (105)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -124,6 +124,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
+- **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 
 **Layout y alturas** (33)
 
@@ -266,7 +267,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (92)
+**Streamlit** (93)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -360,8 +361,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#311** — En una página APILADA, el st.rerun(scope="app") que escala un atajo de fecha tiene que salir…
 - **#315** — Un filtro que arranca con algo elegido se siembra ANTES de contar los filtros, no dentro del…
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
+- **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 
-**Datos, R2 y DuckDB** (37)
+**Datos, R2 y DuckDB** (38)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -400,6 +402,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#307** — Un default de fecha "el mes en curso" que se recorta a bounds COLAPSA a un día cuando la data…
 - **#309** — Un pedido que falla se avisa en la ETIQUETA, no adentro de la pestaña — y un emisor que nunca…
 - **#313** — Los importes del registro del SIRE vienen SIEMPRE en soles; moneda dice en qué se emitió el…
+- **#321** — Un <= fin sobre una columna de fecha que trae HORA se come el último día del rango, entero y…
 
 **SUNAT y SIRE** (37)
 
@@ -14748,6 +14751,123 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      "Participación…" ni "…desglosado por estado"), las 5 secciones de la
      pila miden alto real (ninguna quedó en esqueleto) y el rail de Salidas
      sigue con sus 7 ítems. (2026-09-05.)
+
+
+320. **El selector de fecha de una tarjeta dejó de ser de Compras — y su
+     CSS no pudo viajar con él (2026-09-05).** Al pedirse "un selector de
+     fecha, igual que el ranking de proveedores" para la Evolución de
+     Movimientos, `selector_fecha_tarjeta` subió de
+     `graficos/compras/_comun.py` a `graficos/base.py`, al lado de
+     `selector_escala`, que es la pieza que abre adentro. Es la tercera vez
+     que un tercero pide el mismo control (Ranking de Productos el
+     2026-08-26, vista Semanal el 2026-09-04) y la primera desde fuera de
+     Compras: ahí deja de ser un helper del reporte y pasa a ser del
+     proyecto. `_comun.py` lo REEXPORTA con `# noqa: F401` y un comentario
+     que nombra a sus tres consumidores —mismo patrón que `_es_movil`, ver
+     la #53—, así que `proveedor.py`, `producto.py` y `semanal.py` no se
+     enteraron. `ruff` cazó de una los cuatro imports que quedaron
+     colgando.
+
+     **Lo que NO pudo mudarse es el CSS, y el porqué importa.** Las reglas
+     del control viven en `graficos/compras/_css_proveedor.py`, que las
+     inyecta `proveedor.py` con `st.markdown` al dibujarse. Movimientos no
+     dibuja nada de Compras: sumarle el prefijo `mov_evo` a aquel bloque
+     —que es lo que se hizo las dos veces anteriores— no habría alcanzado,
+     porque el `<style>` no llega a esta página. Las dos salidas grandes
+     se descartaron con motivo:
+
+       · **Mudar el bloque a `estilos/`** resuelve la inyección pero lo
+         ADELANTA en la cascada: `estilos/` se inyecta al arrancar la app y
+         ese `<style>` llega después. El bloque son ~580 renglones y sus
+         propios comentarios documentan peleas de orden ya resueltas contra
+         reglas que llegan más tarde ("llegaba después y le ganaba al
+         `width:100%` de aquel"). Reordenar eso en el reporte más usado,
+         para una vista de otro reporte, es un mal negocio.
+       · **Parametrizar el bloque por lista de prefijos** parece la salida
+         limpia hasta que se lo mira: de sus 33 reglas, `cp_rank` y
+         `cp_prod` llevan título y `cp_sem` no, la píldora cuelga de la
+         fila en dos y del trigger en el tercero, y el chevron se esconde
+         en dos de tres. No es una plantilla con un parámetro, son cuatro
+         casos con un aire de familia.
+
+     Así que se COPIA, y la copia se generó **mecánicamente**, no a ojo:
+     se parsea la región de `_css_proveedor.py`, se descartan los
+     comentarios, y de cada regla se conservan sólo los selectores que
+     nombran `cp_sem` —reapuntados a `mov_evo`— más las tres clases
+     globales del riel (`.cp-riel-mes`, `.cp-riel-regla`,
+     `.cp-riel-centrada`, que las emite `selector_escala` y no llevan
+     prefijo). Salieron 33 reglas / 178 renglones, y un chequeo de que
+     ninguna "declaración" quedara sin `:` cazó tres bloques donde la prosa
+     de un comentario se había colado adentro del cuerpo. Se copia de
+     `cp_sem` y no de `cp_rank` porque es el mismo caso: fila sin título
+     —lo pone el rail— con dos ítems repartidos por `space-between`.
+
+     **La deuda es real y hay que decirla:** si cambia el LOOK del
+     selector, son DOS sitios. Lo que la hace tolerable es que la copia se
+     puede REGENERAR con el mismo procedimiento en vez de editarse a mano.
+
+     **De yapa, la trampa del widget que viaja en `extra=`.** La
+     granularidad (Día/Semana/Mes/Año) entra por ese hook para compartir
+     renglón con el trigger. Medido en el navegador: con "Año" elegido, un
+     clic en el atajo "Año" del panel de fecha dejaba el DOM mostrando
+     «Año» marcado y a Python dibujando el título "(mes)" — el
+     `st.rerun(scope="app")` que escala el atajo corta el run antes de que
+     las pills se dibujen, y un widget que no se dibuja pierde su estado.
+     Es exactamente lo que `selector_escala` ya resuelve para su propio
+     `segmented_control` (ver el comentario de `k_eco`), en otro widget y
+     con la misma cara: se repone con un espejo en una clave que no es de
+     widget (`mov_evo_gran__eco`). **Ojo: la vista Semanal de Compras tiene
+     la misma forma y NO tiene el espejo** — `compras_sem_gran` vuelve a
+     "Semana" al tocar la fecha. Queda anotado, no se tocó en este cambio
+     (alcance distinto).
+
+     **Verificación:** `ruff` + los tres tests verdes, y `streamlit run`
+     contra R2 real. En Compras, los tres selectores siguen idénticos tras
+     la mudanza —`cp_rank`, `cp_prod` y `cp_sem` con su fila
+     `flex`/`space-between` y su píldora de 22px, radio 999px, fondo
+     blanco, 12px—; en Movimientos el panel abre con sus 290px de ancho, la
+     granularidad Días/Meses/Años a 250px, los atajos, el riel con su
+     cabecera "‹ AGO 2026 ›" y el caption "21 días seleccionados". Ver
+     también la #321, el bug de datos que salió al contrastar esta misma
+     vista. (2026-09-05.)
+
+321. **Un `<= fin` sobre una columna de fecha que trae HORA se come el
+     último día del rango, entero y en silencio (2026-09-05).** Los dos
+     parquets de Movimientos guardan `FECHA REGISTRO` con hora: medido
+     contra R2, **143.360 de 143.360** filas de requerimientos y **17.101
+     de 17.101** de salidas tienen `time != 00:00`. O sea TODAS. Un filtro
+     `serie <= pd.Timestamp(fin)` compara contra la medianoche de `fin`, así
+     que no deja pasar ni una fila de ese día. Con el rango "1 ago – 21
+     ago" el gráfico decía S/ 64.869 en vez de S/ 77.950: faltaba el 21
+     completo, S/ 13.081.
+
+     `app.py` ya lo tenía resuelto —su filtro usa `< fin + 1 día` y lo
+     explica en un comentario—, pero `movimientos_comun.py` no: el
+     Comparativo Pedido vs Baja arrastraba el `<=` desde que nació el
+     2026-08-13, y la Evolución fusionada lo copió de ahí. Los dos
+     corregidos.
+
+     **Cómo salió, que es la parte reusable.** No lo cazó ningún test: la
+     figura se construía bien, el número era plausible y el borde de un
+     rango no se mira. Salió de escribir un contraste INDEPENDIENTE —
+     rehacer la cuenta a mano sobre el parquet crudo, con su propio
+     `groupby`, y comparar contra lo que devuelve el módulo— y correrlo
+     contra el rango que en ese momento mostraba la pantalla. La confirmación
+     no fue la aritmética sino que la página dejó de contradecirse: el
+     "Dado de baja" del gráfico pasó a dar S/ 1.462,00, que es EXACTAMENTE
+     el KPI «Valorizado total» que Salidas muestra arriba para el mismo
+     rango. Antes decía S/ 1.416,60 y nadie lo notaba porque los dos
+     números viven a 300px de distancia y nadie los suma.
+
+     Corolario para el próximo agregado: **una columna de fecha que
+     "funciona" en un `groupby` no dice nada sobre sus BORDES.** Antes de
+     filtrar por rango, `(serie.dt.time != time(0)).sum()` son dos segundos
+     y decide si el `<=` sirve.
+
+     Y el otro corolario, más general: cuando una vista nueva mide lo mismo
+     que algo que ya está en pantalla —un KPI, otra tarjeta—, ese algo es
+     el test. Que coincidan no es cosmética: es lo único que prueba que las
+     dos leen el mismo dato de la misma manera. (2026-09-05.)
 
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
