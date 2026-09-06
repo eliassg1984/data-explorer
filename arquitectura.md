@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-332 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+333 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (106)
 
@@ -385,7 +385,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#328** — git add <ruta> NO te protege en un checkout compartido: se lleva lo que OTRA sesión dejó a…
 - **#332** — Sacarle a un reporte el control de fecha GLOBAL son tres cosas más, y ninguna es opcional…
 
-**Datos, R2 y DuckDB** (43)
+**Datos, R2 y DuckDB** (44)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -430,8 +430,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#324** — El pause no era la causa: la tarea corría python DIRECTO, y lo que colgaba era el input() del…
 - **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
 - **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
+- **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
 
-**SUNAT y SIRE** (39)
+**SUNAT y SIRE** (40)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -472,6 +473,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#314** — El ISC no tiene casillero propio en el Almacén: va ADENTRO del neto, con su tasa al lado. Y…
 - **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
 - **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
+- **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
 
 **Fechas, rangos y cortes** (9)
 
@@ -30224,6 +30226,69 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      24 ago 2026», o sea que las tarjetas siguen mandando; y la CPU vuelve
      a ~0 después de cada gesto, o sea que no hay bucle. (2026-09-06.)
 
+333. **Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce,
+     no a una de las dos (2026-09-06).** El filtro de proveedor de
+     «Documentos SUNAT» parecía ir al lado del de «Mes en SUNAT», que
+     recorta `vis` —el registro del SIRE— antes de cruzar. Ahí funciona
+     porque `situacion` es un campo del SIRE y las filas que no vienen del
+     SIRE no tienen situación que filtrar.
+
+     Con el proveedor no: la tabla es la UNIÓN de dos fuentes, y las filas
+     «Solo sistema» salen del parquet, no del registro. Recortando `vis`
+     por proveedor, esas filas pasan enteras —el cruce las agrega al final
+     recorriendo `g_parquet`, que nadie tocó—, así que la tabla mostraría
+     los comprobantes del proveedor elegido MÁS los documentos huérfanos
+     de todos los demás. Medido en el rango de un año: 289 filas «Solo
+     sistema» colándose detrás de las 71 del proveedor.
+
+     La cura es una línea de sitio: filtrar `df_cruce` DESPUÉS de
+     `cruzar_con_parquet`, con una clave que lea los dos lados
+     (`_claves_proveedor_cruce`: `ruc_proveedor or ruc_sistema`). De yapa
+     sale gratis lo que más se quería: un proveedor que sólo existe en el
+     sistema aparece en la lista y se puede aislar — con DOBLE G, 63
+     coinciden + 8 solo en SUNAT + 2 solo en el sistema = los 73 que
+     cuenta el KPI.
+
+     **Y el filtro recorta TODO lo que cuelga de la tabla**, no sólo la
+     tabla: los KPIs de al lado, el Excel que se baja y los dos gráficos
+     de rango del panel de abajo (que leen `vis`, así que `vis` también se
+     filtra, con `_claves_proveedor_sire`). Un KPI que dice 4.911
+     documentos encima de una tabla que muestra 73 es la app
+     contradiciéndose sola — la misma regla que la #238 sobre la celda que
+     no puede usar una tolerancia distinta de la que decide el estado.
+
+     Dos detalles del widget, que son reglas viejas aplicadas:
+
+     · **Va en un `st.empty()` reservado arriba**, como el botón de Excel:
+       sus opciones son los proveedores del cruce y el cruce se calcula
+       después de dibujar la cabecera. El precio es que parpadea —durante
+       el rerun el hueco está vacío— y es el mismo precio que ya pagaba el
+       botón de al lado.
+     · **El espejo guarda la CLAVE, no la etiqueta.** El widget vive
+       dentro de `_cuerpo`, que tiene tres salidas tempranas (sin rango,
+       SUNAT caído, rango vacío); pasar por una y volver le borra el
+       estado (regla #211). Y si el proveedor no existe en el rango nuevo,
+       el espejo no resuelve y cae a «Todos» — filtrar por alguien que no
+       compró nada dejaría la tabla vacía sin decir por qué.
+
+     **El costo de layout está medido, no estimado:** la tira de KPIs mide
+     91px mientras tenga 530px de ancho y salta a 126 por debajo. Meter el
+     segundo `selectbox` la baja de 562 a 415, o sea +34px en la fila de
+     controles cuando NO hay filtro puesto. Las dos alternativas cuestan
+     más (una tercera fila son 38px fijos; partir los controles en dos
+     `st.columns` para no tocar el ancho de la tira, 137). Y con un
+     proveedor elegido la mitad de los KPIs desaparece —los conteos van
+     dentro de un `if`— y la fila baja a 72, 19px menos que antes.
+
+     **Verificación:** `ruff` y los cuatro tests verdes; en el navegador
+     (viewport 1358, datos reales de R2 + SIRE, rango 7 sep 2025 – 6 sep
+     2026) elegir DOBLE G deja la tabla en 73 filas, los KPIs en «73 docs
+     · S/ 210.213,40», el ranking del panel de abajo en «1 proveedor · 71
+     docs» (los 2 «Solo sistema» no están en el SIRE y por eso no suman
+     ahí) y la ficha sigue abriendo al clickear una fila; volver a «Todos
+     los proveedores» restituye las 4.911. Sin desborde horizontal
+     (`scrollWidth == clientWidth == 1358`). (2026-09-06.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30236,7 +30301,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#333**.
+> próxima regla nueva es la **#334**.
 
 >
 

@@ -494,6 +494,151 @@ def cruzar_con_parquet(df_sire, g_parquet):
     return out.sort_values("fecha_emision").reset_index(drop=True)
 
 
+# ===========================================================================
+# FILTRO por proveedor
+# ===========================================================================
+# El tercer eje de la tabla, después de la fecha (el pill de la tarjeta) y
+# del período tributario («Mes en SUNAT»). Agregado 2026-09-06, a pedido.
+
+_TODOS_PROV = "Todos los proveedores"
+"""Etiqueta de la opción «sin filtro». Primera de la lista."""
+
+
+def _clave_proveedor(ruc, nombre):
+    """Identidad del proveedor: el RUC si lo hay, si no el nombre
+    normalizado.
+
+    Mismo criterio que `_ranking_proveedores`, y por el mismo motivo: SUNAT
+    devuelve la razón social tal como está en su padrón y basta una tilde o
+    un «S.A.C.» abreviado distinto entre períodos para partir un proveedor
+    en dos. El nombre queda de red de seguridad para las filas que no traen
+    RUC utilizable — las «Solo sistema» viejas del parquet, sobre todo.
+    """
+    r = str(ruc or "").strip()
+    return r if r else _norm(str(nombre or ""))
+
+
+def _claves_proveedor_cruce(df):
+    """La identidad del proveedor de CADA fila del cruce, mirando los DOS
+    lados.
+
+    Las filas «Solo sistema» no tienen `ruc_proveedor` ni `proveedor` —no
+    hay comprobante en el SIRE del que sacarlos— y son justamente las que
+    más interesa poder aislar: son plata cargada sin comprobante
+    electrónico detrás. Por eso la clave cae al lado del parquet
+    (`ruc_sistema` / `proveedor_sistema`) cuando el del SIRE viene vacío,
+    y no al revés: un documento que existe en las dos fuentes tiene que
+    caer en el MISMO grupo que sus hermanos de una sola.
+    """
+    return pd.Series(
+        [_clave_proveedor(r.get("ruc_proveedor") or r.get("ruc_sistema"),
+                          r.get("proveedor") or r.get("proveedor_sistema"))
+         for _, r in df.iterrows()],
+        index=df.index, dtype="object")
+
+
+def _claves_proveedor_sire(df):
+    """La misma clave, para el df crudo del SIRE (que sólo tiene un lado).
+
+    Existe porque el filtro también recorta lo que resumen los gráficos del
+    panel de abajo, y ésos leen `vis`, no el cruce.
+    """
+    return pd.Series(
+        [_clave_proveedor(r.get("ruc_proveedor"), r.get("proveedor"))
+         for _, r in df.iterrows()],
+        index=df.index, dtype="object")
+
+
+def _opciones_proveedor(df_cruce, claves):
+    """`(etiquetas, mapa etiqueta -> clave)` para el desplegable.
+
+    Ordenadas por MONTO descendente, como el ranking: al abrir la lista lo
+    primero que se ve es dónde está la plata. Buscar uno puntual por nombre
+    lo resuelve el buscador que el propio `selectbox` trae.
+
+    **La etiqueta es sólo el nombre, sin el conteo de documentos**, y no es
+    por minimalismo: el widget vive en media columna de la tarjeta (~200px)
+    y el ellipsis come por el FINAL, así que el conteo sería justo lo
+    primero que desaparece. Los conteos por proveedor están enteros en el
+    ranking del panel de abajo, que para eso es una tabla.
+
+    El monto sale del lado SUNAT y cae al del sistema cuando el documento
+    no está en el SIRE: si no cayera, los proveedores que sólo existen en
+    el parquet valdrían 0 y quedarían todos al fondo de la lista.
+    """
+    tot = pd.to_numeric(df_cruce.get("total_sunat"), errors="coerce")
+    tot = tot.fillna(pd.to_numeric(df_cruce.get("total_sistema"),
+                                   errors="coerce")).fillna(0.0)
+    nom = df_cruce["proveedor"].astype(str).str.strip()
+    nom = nom.where(nom != "",
+                    df_cruce["proveedor_sistema"].astype(str).str.strip())
+    g = (pd.DataFrame({"clave": claves.values, "nombre": nom.values,
+                       "valor": tot.values})
+         # `max` y no `first`: dentro de un mismo proveedor puede haber
+         # filas sin nombre (las «Solo sistema» sin razón social en el
+         # parquet) y `first` se quedaría con la cadena vacía si esa fila
+         # cae primera. Cualquier nombre real gana contra "".
+         .groupby("clave", sort=False)
+         .agg(nombre=("nombre", "max"), valor=("valor", "sum"))
+         .reset_index()
+         .sort_values("valor", ascending=False))
+
+    etiquetas, mapa = [_TODOS_PROV], {}
+    for _, r in g.iterrows():
+        nombre = str(r["nombre"]).strip() or str(r["clave"])
+        if nombre in mapa:
+            # Dos RUC distintos con la misma razón social. Se desempata
+            # agregándole el RUC al SEGUNDO; el primero se queda con el
+            # nombre pelado, que es lo único que no rompe la etiqueta que
+            # el usuario pueda tener ya elegida.
+            nombre = f"{nombre} · {r['clave']}"
+        etiquetas.append(nombre)
+        mapa[nombre] = r["clave"]
+    return etiquetas, mapa
+
+
+def _filtro_proveedor(slot, df_cruce, claves):
+    """Dibuja el filtro en el hueco que la cabecera reservó y devuelve la
+    clave elegida (`None` = todos).
+
+    Va en un `st.empty()` de arriba y se rellena acá abajo por lo mismo que
+    el botón de Excel: sus opciones son los proveedores del cruce, y el
+    cruce se calcula después de dibujar la cabecera. Es la única forma de
+    tener un control arriba que dependa de algo de abajo sin partir el
+    flujo en dos reruns.
+
+    El estado va en un ESPEJO que guarda la CLAVE, no la etiqueta. Dos
+    motivos, los dos medidos como bugs en otras vistas:
+
+      · El widget se dibuja dentro de `_cuerpo`, que tiene salidas
+        tempranas (sin rango, SUNAT caído, rango vacío). Un widget que deja
+        de renderizarse pierde su estado —regla #211—, así que sin espejo,
+        pasar por un rango vacío y volver perdería el proveedor elegido.
+      · La etiqueta puede no existir en el rango nuevo. Ahí el espejo no
+        resuelve y se cae a «Todos», que es la degradación correcta: mejor
+        mostrar todo que filtrar por un proveedor que no compró nada.
+    """
+    etiquetas, mapa = _opciones_proveedor(df_cruce, claves)
+    inverso = {v: k for k, v in mapa.items()}
+    k_w, k_eco = "sunat_prov", "sunat_prov__eco"
+    # Sólo se re-siembra cuando lo que hay NO sirve: si el usuario acaba de
+    # elegir, su etiqueta está en la lista y no hay que tocar nada.
+    # Pisarla siempre desde el espejo descartaría la elección recién hecha.
+    if st.session_state.get(k_w) not in etiquetas:
+        st.session_state[k_w] = inverso.get(st.session_state.get(k_eco),
+                                            _TODOS_PROV)
+    with slot:
+        sel = st.selectbox(
+            "Proveedor", etiquetas, key=k_w, label_visibility="collapsed",
+            help="Filtra la tabla, los KPIs, el Excel y los gráficos de "
+                 "abajo por un proveedor. La lista sale de los DOS lados "
+                 "del cruce, así que incluye a los que sólo están cargados "
+                 "en el sistema. Se puede escribir para buscar.",
+        )
+    st.session_state[k_eco] = mapa.get(sel)
+    return mapa.get(sel)
+
+
 def _kpis_cruce(df, origen=None):
     """Resumen de UNA línea del cruce: cuántos documentos coinciden,
     difieren, o faltan de un lado u otro. Mismo criterio compacto que
@@ -1056,7 +1201,7 @@ def _ranking_proveedores(df):
         f'<div style="font-size:14px;font-weight:600;color:{TEXTO_PRINCIPAL};'
         'margin:2px 0 0;">Proveedores del período</div>'
         f'<div style="font-size:11.5px;color:{GRIS_TEXTO};margin:0 0 6px;">'
-        f'{len(agg):,} proveedores · {tot_docs:,} docs · '
+        f'{len(agg):,} proveedor{"es" if len(agg) != 1 else ""} · {tot_docs:,} docs · '
         f'S/ {tot_val:,.2f} — los % son sobre esta base</div>',
         unsafe_allow_html=True)
 
@@ -3513,6 +3658,12 @@ def renderizar_documentos_sunat(d, col_fecha):
     porque `_parquet_agrupado_por_documento` y el propio registro están
     cacheados.
 
+    LOS TRES FILTROS (fecha, «Mes en SUNAT» y proveedor) SON DE LA TABLA:
+    recortan también los KPIs de al lado, el Excel que se baja y los dos
+    gráficos de rango del panel de abajo. Es a propósito — un KPI que
+    cuenta 65 documentos sobre una tabla que muestra 3 es la app
+    contradiciéndose sola.
+
     LOS CONTROLES VIVEN DENTRO DE LA TARJETA, no en una franja aparte
     arriba — mismo criterio que el selector "La semana empieza" del drill
     Semanal. No es gusto: esta app no tiene scroll de PÁGINA (el main lo
@@ -3531,7 +3682,22 @@ def renderizar_documentos_sunat(d, col_fecha):
     estado = {"doc": None, "vis": None, "cruce": None}
 
     with st.container(border=True, key="sunat_card_izq"):
-        c_sel, c_act, c_kpi = st.columns([1.5, 0.8, 4.1])
+        # 2.6 y no 1.5 desde que son DOS filtros y no uno: el de proveedor
+        # necesita ancho o el ellipsis se come el nombre entero (queda en
+        # 195px; a menos de eso ya no se distingue un proveedor de otro).
+        #
+        # LO PAGA LA TIRA DE KPIs, y está medido en el navegador (viewport
+        # 1358, tarjeta de 945): la tira mide 91px de alto mientras tenga
+        # 530px de ancho y salta a 126 por debajo de eso, así que pasarla
+        # de 562 a 415 le suma ~34px a la fila — media pantalla de tabla,
+        # no cero. Se aceptó igual porque las otras dos formas de meter el
+        # filtro cuestan MÁS: una tercera fila de controles son 38px fijos,
+        # y dejarle a la tira sus 530px obliga a partir los controles en
+        # dos `st.columns` apilados, que son 137. Y el costo sólo lo paga
+        # el caso SIN filtrar: elegido un proveedor desaparecen la mitad de
+        # los KPIs (los conteos van dentro de un `if`) y la fila baja a 72,
+        # o sea 19px MENOS que antes de este cambio.
+        c_sel, c_act, c_kpi = st.columns([2.6, 0.8, 3.0])
         with c_sel:
             # El pill de fecha, DENTRO de la tarjeta. Acá la fecha no es
             # contexto global: es EL filtro de la tabla — el rango que se
@@ -3545,15 +3711,27 @@ def renderizar_documentos_sunat(d, col_fecha):
             franja_fecha.render()
             # El selector «Ver» que había acá bajó al panel del gráfico
             # (`_panel_grafico`), que es lo único que controlaba.
-            mes_sunat = st.selectbox(
-                "Mes en SUNAT", list(_MES_SUNAT), key="sunat_mes_sunat",
-                label_visibility="collapsed",
-                help="El estado del PERÍODO tributario en SUNAT, no del "
-                     "documento. «Mes abierto» = SUNAT ya ve la compra "
-                     "pero el registro de ese mes todavía no se presentó: "
-                     "es crédito fiscal sin tomar. Si está cargado o no en "
-                     "tu sistema lo dice «Está vs Sistema».",
-            )
+            # columnas-internas: los dos filtros de la tabla, uno al lado
+            # del otro. Van en la misma fila y no apilados para no sumarle
+            # 46px de alto a la tarjeta — que es alto que le sale a la
+            # TABLA, porque la tarjeta está clampeada a `--alto-util`.
+            c_mes, c_prov = st.columns([1, 1.3])
+            with c_mes:
+                mes_sunat = st.selectbox(
+                    "Mes en SUNAT", list(_MES_SUNAT), key="sunat_mes_sunat",
+                    label_visibility="collapsed",
+                    help="El estado del PERÍODO tributario en SUNAT, no del "
+                         "documento. «Mes abierto» = SUNAT ya ve la compra "
+                         "pero el registro de ese mes todavía no se "
+                         "presentó: es crédito fiscal sin tomar. Si está "
+                         "cargado o no en tu sistema lo dice «Está vs "
+                         "Sistema».",
+                )
+            with c_prov:
+                # Mismo truco que el botón de Excel de al lado: el hueco se
+                # reserva acá y lo rellena `_cuerpo`, que es quien tiene la
+                # lista de proveedores. Ver `_filtro_proveedor`.
+                _slot_prov = st.empty()
         with c_act:
             _c_ref, _c_xls = st.columns(2)  # columnas-internas: 2 iconos de accion
         with _c_ref:
@@ -3619,6 +3797,21 @@ def renderizar_documentos_sunat(d, col_fecha):
 
             g_pq = _parquet_agrupado_por_documento(d, col_fecha, f_ini, f_fin)
             df_cruce = cruzar_con_parquet(vis, g_pq)
+
+            # EL FILTRO DE PROVEEDOR VA ACÁ, sobre el cruce ya armado, y no
+            # sobre `vis` antes de cruzar. Recortar el lado SUNAT primero
+            # dejaría pasar enteras las filas «Solo sistema» —que salen del
+            # parquet, no del SIRE— y la tabla mostraría el proveedor
+            # elegido MÁS los documentos huérfanos de todos los demás.
+            _claves = _claves_proveedor_cruce(df_cruce)
+            _prov = _filtro_proveedor(_slot_prov, df_cruce, _claves)
+            if _prov:
+                df_cruce = df_cruce[_claves == _prov]
+                # `vis` también, que es lo que resumen los dos gráficos de
+                # rango del panel de abajo: dejarlo entero pondría un
+                # gráfico del período completo al lado de una tabla de un
+                # solo proveedor, y la pantalla se contradiría sola.
+                vis = vis[_claves_proveedor_sire(vis) == _prov]
             estado["vis"], estado["cruce"] = vis, df_cruce
 
             with c_kpi:
