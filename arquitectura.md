@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-323 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+324 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (105)
 
@@ -364,7 +364,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 
-**Datos, R2 y DuckDB** (40)
+**Datos, R2 y DuckDB** (41)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -406,6 +406,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#321** — Un <= fin sobre una columna de fecha que trae HORA se come el último día del rango, entero y…
 - **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
 - **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
+- **#324** — El pause no era la causa: la tarea corría python DIRECTO, y lo que colgaba era el input() del…
 
 **SUNAT y SIRE** (37)
 
@@ -13150,6 +13151,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      NOCTURNO dejó de correr. Se diagnostica por los timestamps de
      `salida\`, no por R2.**
 
+     > **Corregida por la #324 (2026-09-06).** El método de diagnóstico de
+     > esta regla —mirar los timestamps de `salida\`— sigue siendo válido y
+     > es por donde hay que empezar. La CAUSA que le atribuye, en cambio,
+     > era falsa: el `pause` de `ejecutar_extraccion.bat` no tenía nada que
+     > ver, porque **la tarea programada nunca llamó a ese `.bat`**.
+
      2026-09-03. Ventas mostraba el warning de siempre y ninguna de las dos
      causas ya documentadas era: ni el `None` cacheado (#19) ni la
      cancelación de runs (#94). El parquet en R2 estaba sano, sólo que
@@ -15083,13 +15090,81 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      dice S/ 1.552 requerido — antes ese chip no la tocaba. (2026-09-05.)
 
 
+324. **El `pause` no era la causa: la tarea corría python DIRECTO, y lo que
+     colgaba era el `input()` del propio `.py`. `isatty()` no distingue "hay
+     un humano" de "hay una consola".** (Corrige la #293.)
+
+     2026-09-06. La #293 culpó al `pause` de `ejecutar_extraccion.bat` y lo
+     sacó. Tres días después nada había cambiado — y la prueba de que la
+     hipótesis era falsa la dio el propio arreglo: el log que ese `.bat`
+     empezaba a escribir **nunca se creó**. Si el `.bat` hubiera corrido,
+     había log. No corrió: no lo ejecuta nadie automáticamente.
+
+     Sin acceso remoto a procesos (WinRM pide `TrustedHosts`, WMI/DCOM da
+     "servidor RPC no disponible", `schtasks /S` falla de autenticación)
+     igual se puede leer todo por SMB, porque los shares administrativos sí
+     responden:
+
+     - `\<host>\C$\Windows\System32\Tasks\<tarea>` es el XML de la tarea:
+       qué ejecuta, con qué cuenta y con qué políticas.
+     - `...\winevt\Logs\Microsoft-Windows-TaskScheduler%4Operational.evtx`
+       es el historial. Copiarlo y leerlo con
+       `wevtutil qe <copia> /lf:true /q:<xpath> /f:text`: `Get-WinEvent`
+       sobre 10MB tarda minutos y `wevtutil` segundos.
+
+     El XML dijo lo que ningún archivo de `C:\proyecto` insinuaba:
+
+         <Command>...\python.exe</Command>
+         <Arguments>"Extraer a parquet.py"</Arguments>
+         <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+         <ExecutionTimeLimit>P3D</ExecutionTimeLimit>
+
+     Y el historial mostró el ciclo, con el **evento 322** ("launch request
+     ignored, instance already running") de protagonista:
+
+         30/08 03:00  100  INICIADA
+         31/08 03:00  322  ignorada    | la del 30/08 seguía viva
+         01/09 03:00  322  ignorada    |
+         02/09 03:00  322  ignorada    |
+         02/09 03:00  102  <- la matan a los 3 días (ExecutionTimeLimit)
+         03/09 03:00  100  INICIADA
+         04..06/09    322  ignorada x3
+         06/09 03:00  102  <- la matan a los 3 días
+
+     O sea: **la tarea es diaria y corría una vez cada CUATRO días**, sin
+     fallar nunca. Cada corrida hacía su trabajo bien —parquets escritos y
+     subidos a R2 a las 03:00-03:01, verificado contra los `LastModified`
+     del bucket— y recién DESPUÉS se quedaba viva sin hacer nada.
+
+     La única línea que puede bloquear es el `input()` final del `.py`,
+     guardado con `if sys.stdin.isatty():` y un comentario que afirmaba
+     "cuando lo dispara el Programador de tareas no hay consola
+     interactiva". **Esa premisa es falsa para un proceso de consola:**
+     Windows le crea una consola propia, oculta y sin teclado, así que
+     `isatty()` devuelve True y el `input()` espera una tecla que no existe.
+     Fix: la pausa pasa a ser explícita (`if "--pausar" in sys.argv:`), y
+     `ejecutar_extraccion.bat --manual` es quien pasa el flag.
+
+     **Tres cosas para llevarse:**
+
+     1. **Un `.bat` wrapper en la carpeta no prueba que la tarea lo use.**
+        Leer la definición de la tarea ANTES de arreglar el wrapper; si no,
+        se arregla algo que nadie ejecuta y el síntoma sigue igual.
+     2. **`isatty()` responde "¿hay una consola?", no "¿hay alguien?".** Una
+        pausa interactiva se pide con un flag explícito; adivinarla es un
+        cuelgue esperando.
+     3. **`IgnoreNew` + `ExecutionTimeLimit` convierten un cuelgue en una
+        cadencia**, no en una caída: el trabajo sale bien, sólo que cada N+1
+        días. Si un dato "se actualiza a veces", mirar esas dos políticas
+        antes que la red o las credenciales.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 > **Ojo con el próximo número: la #160 YA está usada.** No vive al final:
 > está entre la #143 y la #144 (el registro del SIRE en parquet). Nació
 > duplicando el número de la #143 y se renumeró el 2026-08-22 sin moverla
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
-> próxima regla nueva es la **#319**.
+> próxima regla nueva es la **#325**.
 >
 > **La #162 tampoco vive al final:** está entre la #32 y la #33 (el
 > `margin-bottom: -16px` de `st.markdown` con HTML de bloque). Nació
