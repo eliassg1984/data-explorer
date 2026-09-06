@@ -985,7 +985,14 @@ def _cb_chips_en_navegador(d):
 
 
 def _cb_requerimientos_tabla(d):
-    """Callback de Tabla para Requerimientos. Hasta 2026-08-13 Requerimientos
+    """Callback de la Tabla de REQUERIMIENTOS, hoy una sección de Movimientos.
+
+    (El reporte se llama «Movimientos» desde el 2026-09-05, cuando se fusionó
+    con Salidas; la tabla que arma este callback sigue siendo la de
+    requerimientos, que es el `archivo` del reporte. La de salidas la dibuja
+    `graficos/movimientos.py::_tabla_salidas`, directo — ver su docstring.)
+
+    Hasta 2026-08-13 Requerimientos
     era una rama de despacho aparte en `_render_contenido` (sin dashboard de
     gráficos); ahora tiene uno (`graficos.requerimientos`, con chips propios
     Sub Almacén/Familia) y "Tabla" es un item más de su rail, como Salidas —
@@ -1004,7 +1011,7 @@ def _cb_requerimientos_tabla(d):
 _TABLA_CB = {
     "Ajuste de Inventario": _cb_chips_en_navegador,
     "Recetas":              _cb_chips_en_python,
-    "Requerimientos":       _cb_requerimientos_tabla,
+    "Movimientos":          _cb_requerimientos_tabla,
 }
 
 

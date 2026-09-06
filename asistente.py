@@ -335,10 +335,14 @@ def _sugerencias(reporte: str) -> list[str]:
             "¿Qué canal deja más ingreso?",
             "¿Qué grupo cayó respecto al resto?",
         ],
-        "Salidas": [
-            "¿Qué sub almacén saca más valorizado?",
-            "¿Cuáles son los 10 productos con más salidas?",
-            "¿Qué tipo de descargo pesa más?",
+        # El df que ve el asistente en Movimientos es el de REQUERIMIENTOS
+        # (el `archivo` del reporte, ver graficos/movimientos.py), así que
+        # las tres preguntas van de ese lado. Antes decían "Salidas" y una
+        # preguntaba por el sub almacén, que salidas.parquet no trae.
+        "Movimientos": [
+            "¿Qué sub almacén requiere más valorizado?",
+            "¿Cuáles son los 10 productos más requeridos?",
+            "¿Qué familia pesa más en los requerimientos?",
         ],
     }
     return por_reporte.get(reporte, [

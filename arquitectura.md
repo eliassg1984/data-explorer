@@ -16,9 +16,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-321 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+322 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (105)
+**CSS y estilos** (106)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -125,6 +125,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
+- **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
 
 **Layout y alturas** (33)
 
@@ -363,7 +364,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 
-**Datos, R2 y DuckDB** (38)
+**Datos, R2 y DuckDB** (39)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -403,6 +404,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#309** — Un pedido que falla se avisa en la ETIQUETA, no adentro de la pestaña — y un emisor que nunca…
 - **#313** — Los importes del registro del SIRE vienen SIEMPRE en soles; moneda dice en qué se emitió el…
 - **#321** — Un <= fin sobre una columna de fecha que trae HORA se come el último día del rango, entero y…
+- **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
 
 **SUNAT y SIRE** (37)
 
@@ -14868,6 +14870,80 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      que algo que ya está en pantalla —un KPI, otra tarjeta—, ese algo es
      el test. Que coincidan no es cosmética: es lo único que prueba que las
      dos leen el mismo dato de la misma manera. (2026-09-05.)
+
+
+322. **Un chip que hace elegir entre dos lados sobra en cuanto la página
+     muestra los dos: Requerimientos + Salidas se fusionan en «Movimientos»
+     (2026-09-05).** El pedido llegó al día siguiente de que la Evolución
+     pasara a dibujar requerido y baja en una figura (#320), señalando el
+     chip Requerimiento/Salidas: «esto ya no debería estar, ya que ahora
+     muestra ambos». Es el mismo movimiento —y casi las mismas palabras—
+     que fusionó Receta Base y Receta Venta el 2026-09-04 (#303), con una
+     diferencia de origen: allá la separación se apoyaba en una medición
+     equivocada, acá era correcta hasta que la vista compartida la volvió
+     obsoleta.
+
+     **Sacar el chip NO era sacar el chip.** Los dos reportes comparten un
+     solo botón de nav (`grupo_nav`), así que ese control era la ÚNICA
+     puerta al otro lado: borrarlo dejaba inalcanzable la mitad del dato
+     —las vistas propias de Salidas y su Tabla, que no es la misma AgGrid—.
+     La forma coherente del pedido era la fusión, y conviene decirlo antes
+     de empezar: «sacá este control» y «juntá estos dos reportes» son
+     trabajos de tamaño muy distinto.
+
+     **Dos vistas se cayeron por MUERTAS, no por falta de lugar.**
+     «Subalmacén» y «Subalm. × tipo» de Salidas colgaban de una columna que
+     `salidas.parquet` no trae: sus columnas reales son LOCAL (constante
+     "SAPIENS") y TIPO DESCARGO, confirmado contra R2. Las dos venían
+     dibujando «No hay columnas suficientes para este gráfico» desde que
+     nacieron. La #98 ya lo había medido en 2026-08-13 y lo dejó anotado
+     como tarea aparte; una fusión es el momento en que esa clase de deuda
+     se paga sola, porque hay que mirar vista por vista para decidir el
+     orden. `TIPO DESCARGO`, en cambio, reparte de verdad (Bajas 9.930 ·
+     Comida Personal 4.846 · Uso en el Area 1.763 · Prueba 358 · Evento 211
+     · Consumo en Servicio 201 · Despacho Mayta 43) y sobrevive — es el
+     contraste con la #319, donde una columna 98,8% de un solo valor sí se
+     fue.
+
+     **Lo que hubo que preservar, que es donde una fusión rompe cosas en
+     silencio.** `tablas/desktop.py` decide por el STRING del reporte: el
+     modo pivote (`es_requerimientos`) y la paginación apagada
+     (`es_salidas`). Al desaparecer los dos nombres de `REPORTES`, las dos
+     conductas se habrían perdido sin un error. Se conservan porque cada
+     Tabla le pasa al grid su nombre LITERAL —`_render_requerimientos` ya
+     lo hacía, y `_tabla_salidas` lo copia— en vez del reporte activo.
+     Verificado en el navegador leyendo las cabeceras de las dos grillas:
+     la de requerimientos trae «Mes» y «Año» al final (las columnas que
+     deriva el pivote) y la de salidas trae las suyas sin las de trabajo
+     `_*`.
+
+     **La fila de KPIs cambió de idioma, y no es cosmético.** Antes cada
+     lado mostraba Registros / Cantidad total / Valorizado total de SU
+     parquet. Juntos eso no se puede: un kilo requerido y un kilo dado de
+     baja no se suman, se comparan. Los KPIs pasan a ser los tres del
+     Comparativo —Requerido, Dado de baja, Baja/Requerido—, que es la
+     pregunta que la página contesta.
+
+     **Y la trampa de layout que traía puesta**, que es la #38 otra vez:
+     la primera tarjeta de la página lleva `margin-top: -48px` (el jalón
+     que recupera el hueco de la franja), y con una fila de KPIs EN FLUJO
+     encima el jalón se come esa fila. Ya existía la excepción, escrita
+     para `_izq_sal_`… que quedó sin dueño con esta fusión, igual que había
+     quedado sin dueño en 2026-09-04 cuando Salidas se apiló y sus tarjetas
+     se renombraron. Tercera vez para la misma regla: **un selector de CSS
+     no avisa cuando su elemento deja de existir** (#49). Hoy apunta a
+     `_izq_mov_`. Se descubrió midiendo: el caption arrancaba en y=299 y la
+     tarjeta en y=289.
+
+     **Verificación:** `ruff` + los tres tests verdes —el contrato del
+     dispatcher ahora dice «Movimientos acepta tabla_cb» y ya no nombra a
+     los dos viejos— y `streamlit run` contra R2 real. En la página: el
+     chip no está (`st-key-mov_fuente_chip` = 0 nodos), el rail trae los
+     ocho ítems y entran sin desborde en 1440px (el último cierra en
+     x=1146), las ocho secciones salen del esqueleto y dibujan sus siete
+     figuras y sus dos grillas, y los KPIs dan S/ 64.184,15 requerido
+     contra S/ 1.462,00 de baja — los mismos números que mostraban los dos
+     reportes por separado para ese rango. (2026-09-05.)
 
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->

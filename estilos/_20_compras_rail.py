@@ -633,24 +633,31 @@ CSS = """    /* ================================================================
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_der_"] {
         margin-top: -48px !important;
     }
-    /* Excepción: Salidas mete una fila de KPIs (st.metric x3) EN FLUJO justo
-       arriba de esta tarjeta — a diferencia de Ajuste/Compras/Ventas/
-       Inventario, donde encima solo hay chips y el -80px recupera un hueco
-       vacío. En Salidas no hay tal hueco: el -80px se comía la fila de
-       KPIs, y el título del Plotly (p.ej. el donut de "Tipo descargo")
-       quedaba pintado ENCIMA de los números de REGISTROS/CANTIDAD/
-       VALORIZADO (ver arquitectura.md regla #38). Selector con la MISMA
+    /* Excepción: Movimientos mete una fila de KPIs (st.metric x3) más un
+       caption EN FLUJO justo arriba de esta tarjeta — a diferencia de
+       Ajuste/Compras/Ventas/Inventario, donde encima solo hay chips y el
+       jalón recupera un hueco vacío. Acá no hay tal hueco: el jalón se
+       comía la fila de KPIs y el título del Plotly quedaba pintado ENCIMA
+       de los números (ver arquitectura.md regla #38). Selector con la MISMA
        especificidad que el de arriba + !important en ambos → gana por ir
        DESPUÉS en el archivo (ver convención de _SECCIONES).
 
-       2026-09-04: el selector era `.st-key-ajuste_graf_card_izq_sal` a
-       secas, o sea una clase EXACTA, y llevaba muerto desde que Salidas se
-       apiló: sus tarjetas pasaron a llamarse `..._sal_evolucion`,
-       `..._sal_tipo`, etc. (una key por sección, porque apiladas coexisten)
-       y ninguna de ésas lleva ya la clase `..._izq_sal`. Wildcard con el
-       guión bajo final, entonces: `_sal_` matchea a las siete y no se cuela
-       en otra familia. */
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_sal_"] {
+       Sólo hace falta para la PRIMERA tarjeta de la página: de la segunda
+       sección para abajo ya lo cancela la excepción estructural de más
+       abajo (`div:has(> [class*="_sec_"]) ~ div`). Se escribe igual por
+       familia porque la de arriba también lo hace, y así las dos se leen
+       juntas.
+
+       HISTORIA, que explica el nombre del prefijo. Nació el 2026-09-04 para
+       Salidas, apuntando a `.st-key-ajuste_graf_card_izq_sal` — una clase
+       EXACTA que llevaba muerta desde que Salidas se apiló (sus tarjetas
+       pasaron a `..._sal_evolucion`, `..._sal_tipo`, etc.). Se arregló con
+       un wildcard, `_sal_`. El 2026-09-05 Salidas y Requerimientos se
+       fusionaron en un reporte único (ver graficos/movimientos.py y la
+       regla #322) y ese prefijo volvió a quedar sin dueño: hoy la familia
+       es `_mov_`. Misma trampa, tercera vez — un selector de CSS no avisa
+       cuando su elemento deja de existir (regla #49). */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_mov_"] {
         margin-top: 0 !important;
     }
     /* Segunda excepción, y por un motivo distinto: TODA TARJETA QUE NO
@@ -680,7 +687,7 @@ CSS = """    /* ================================================================
        la define: una tarjeta metida en un wrapper que va DESPUÉS de otro
        wrapper de sección no abre nada. Las secciones de la pila comparten
        el infijo `_sec_` en su key (`aj_sec_`, `compras_sec_`, `vt_sec_`,
-       `inv_sec_`, `sal_sec_`, `req_sec_`, `rec_sec_` — y no hay ninguna
+       `inv_sec_`, `mov_sec_`, `rec_sec_` — y no hay ninguna
        otra key del repo con ese infijo), así que un `:has()` las reconoce a
        todas sin enumerarlas, incluidas las del dashboard que se agregue
        mañana si respeta la convención. */

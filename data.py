@@ -96,32 +96,30 @@ REPORTES = {
     # Requerimientos — hay overlap real de producto entre los dos parquets
     # (0% overlap, por eso esas dos nunca se cruzan). Detalle en
     # arquitectura.md § Unificación Movimientos.
-    "Salidas": {
-        "label_corto": "Salidas",
-        "grupo_nav": "Movimientos",
-        "archivo": "salidas.parquet",
-        "icono": ":material/sync_alt:",
-        "kpis": (("Valorizado", "VALOR NETO", "sum"),
-                 ("Documentos", "DOCUMENTO", "count_distinct")),
-        "kpi_fecha": "FECHA REGISTRO",
-        # Columnas confirmadas contra el parquet real (2026-08-04): destino
-        # de la salida es "Sub Almacen" (no "Nombre Area" — no hay tal
-        # columna en este reporte), cantidad/valorizado son "Cant Salida" /
-        # "Valor Neto", el tipo de salida es "Tipo Descargo", y la jerarquía
-        # de producto es Nombre Familia > Nombre SubFamilia > Nombre Producto.
-        "fecha": "Fecha registro",
-        "filtros_cat": ["Sub Almacen", "Nombre Familia"],
-        "buscador": "Nombre Producto",
-        "agrupar": ["Sub Almacen", "Nombre Familia", "Nombre SubFamilia", "Tipo Descargo"],
-        "columnas_movil": [
-            "Nombre Producto", "Cant Salida", "Valor Neto", "Sub Almacen",
-        ],
-        "columnas_fijas_movil": 2,
-    },
-    "Requerimientos": {
-        "label_corto": "Requerim.",
-        "grupo_nav": "Movimientos",
+    # UN SOLO reporte de Movimientos desde el 2026-09-05. Hasta esa fecha
+    # eran DOS entradas ("Requerimientos" y "Salidas") que un chip alternaba,
+    # con `grupo_nav` para que el rail mostrara un solo botón. Se fusionaron a
+    # pedido, el día después de que la Evolución empezara a dibujar los dos
+    # lados en una figura: "esto ya no debería estar, ya que ahora muestra
+    # ambos". Las ocho vistas viven hoy en una sola página, ver
+    # graficos/movimientos.py y arquitectura.md regla #322.
+    #
+    # `archivo` es el de REQUERIMIENTOS y no es indistinto: de él salen los
+    # KPIs de la franja, el rango de fecha, los chips (`filtros_cat`), el
+    # buscador y las columnas de la Tabla pivote. Es el lado grande (144.636
+    # filas contra 17.355), el único que trae Sub Almacen, y el que tiene la
+    # tabla con tratamiento propio.
+    "Movimientos": {
+        "label_corto": "Movim.",
         "archivo": "requerimientos.parquet",
+        # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
+        # (`archivo`) y pasandolo como df_f; salidas.parquet lo carga
+        # graficos/movimientos.py con data.cargar. Esta clave existe para que
+        # el boton de refresco sepa que hay mas de un parquet detras del
+        # reporte - sin ella, "Refrescar" dejaria las salidas viejas y no
+        # habria forma de actualizarlas desde la UI. Ver
+        # navegacion.py::boton_refresco.
+        "archivos_extra": ("salidas.parquet",),
         "icono": ":material/sync_alt:",
         "kpis": (("Valorizado", "VALOR ITEM", "sum"),
                  ("Requerim.", "COD REQUERIMIENTO", "count_distinct")),
@@ -132,9 +130,9 @@ REPORTES = {
         # valorizado son "Cantidad" / "Valor Item", el estado es "Nombre
         # Estado Requerimiento" (Procesado/Anulado/Generado), y la jerarquía
         # de producto es Nombre Familia > Nombre Subfamilia > Nombre
-        # Producto — mismos nombres de columna "amigables" que Salidas
+        # Producto — mismos nombres de columna "amigables" que salidas
         # (ambos vienen del mismo ERP, SAPIENS), aunque el código de
-        # producto real es CODIGO PRODUCTO acá vs COD PRODUCTO en Salidas.
+        # producto real es CODIGO PRODUCTO acá vs COD PRODUCTO en salidas.
         "fecha": "Fecha Registro",
         "filtros_cat": ["Sub Almacen", "Nombre Familia"],
         "buscador": "Nombre Producto",

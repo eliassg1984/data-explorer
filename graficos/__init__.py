@@ -16,13 +16,13 @@ Estructura:
                           Era un compras.py de 2.835 líneas hasta 2026-08-01.
         ventas.py      → dashboard Ventas (ranking FoodCost, matriz agrupada)
         inventario.py  → dashboard Inventario Valorizado (v2)
-        salidas.py     → dashboard Salidas (evolución + subalmacén + tipo)
-        requerimientos.py → dashboard Requerimientos (evolución + sub
-                          almacén + estado). Comparte nav con Salidas
-                          ("Movimientos") — ver movimientos_comun.py.
-        movimientos_comun.py → chip Requerimiento/Salidas + vista
-                          "Comparativo" (Pedido vs Baja), compartidos entre
-                          requerimientos.py y salidas.py.
+        movimientos.py  → dashboard Movimientos: UNA página con los dos
+                          parquets del flujo de stock (requerimientos +
+                          salidas). Eran DOS reportes que un chip
+                          alternaba hasta el 2026-09-05 — ver regla #322.
+        movimientos_comun.py → las piezas que miran los DOS parquets a la
+                          vez: la Evolución fusionada, el Comparativo
+                          (Pedido vs Baja) y el recorte por rango.
 
 Cómo agregar un dashboard nuevo (p.ej. "Mermas"):
     1. Crear graficos/mermas.py con `def renderizar_graficos_mermas(df, reporte, df_full=None): ...`
@@ -46,9 +46,8 @@ from graficos.base import _card, crear_grafico, renderizar_graficos_genericos
 from graficos.ajuste import renderizar_graficos_ajuste                # noqa: F401
 from graficos.compras import renderizar_graficos_compras              # noqa: F401
 from graficos.inventario import renderizar_graficos_inventario        # noqa: F401
+from graficos.movimientos import renderizar_graficos_movimientos      # noqa: F401
 from graficos.recetas import renderizar_graficos_recetas              # noqa: F401
-from graficos.requerimientos import renderizar_graficos_requerimientos  # noqa: F401
-from graficos.salidas import renderizar_graficos_salidas              # noqa: F401
 from graficos.ventas import renderizar_graficos_ventas                # noqa: F401
 
 
@@ -69,8 +68,7 @@ _DASHBOARDS = {
     "Compras":               renderizar_graficos_compras,
     "Inventario Valorizado": renderizar_graficos_inventario,
     "Recetas":               renderizar_graficos_recetas,
-    "Requerimientos":        renderizar_graficos_requerimientos,
-    "Salidas":               renderizar_graficos_salidas,
+    "Movimientos":           renderizar_graficos_movimientos,
     "Ventas":                renderizar_graficos_ventas,
 }
 

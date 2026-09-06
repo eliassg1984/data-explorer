@@ -50,27 +50,28 @@ from graficos import alturas
 import franja_fecha
 
 
-# ─── Chip de fuente (mismo mecanismo que recetas_comun._chip_fuente) ───────
-def _chip_movimientos(reporte_activo):
-    """Segmented control Requerimiento/Salidas arriba del rail — separa los
-    dos reportes dentro del mismo ítem de nav ("Movimientos"). Clic en el
-    lado NO activo NAVEGA (session_state['_nav_reporte'] + rerun) en vez de
-    filtrar, así reusa todo el pipeline de carga de app.py sin duplicar
-    nada acá. La key incluye `reporte_activo` por la misma razón que en
-    `_chip_fuente`: si el usuario entra por el RAIL (no por este chip) una
-    key fija dejaría "pegado" el valor de la sesión anterior."""
-    etiquetas = {"Requerimientos": "Requerimiento", "Salidas": "Salidas"}
-    inverso = {v: k for k, v in etiquetas.items()}
-    sel = st.segmented_control(
-        "Fuente", list(etiquetas.values()),
-        default=etiquetas.get(reporte_activo, "Requerimiento"),
-        key=f"mov_fuente_chip_{reporte_activo}",
-        label_visibility="collapsed",
-    )
-    destino = inverso.get(sel, reporte_activo)
-    if destino != reporte_activo:
-        st.session_state["_nav_reporte"] = destino
-        st.rerun()
+# ─── El rango vigente, en una sola función ─────────────────────────────────
+def _rango_vigente():
+    """`(inicio, fin_EXCLUSIVO)` del rango canónico del reporte, o None.
+
+    El fin viene como `fin + 1 día` y se compara con `<`, NO con `<=`: las
+    dos columnas de fecha de estos parquets traen hora en el 100% de sus
+    filas, así que un `<=` contra medianoche se come el último día entero
+    del rango. Medido, documentado y corregido en la regla #321 — vive acá
+    para que los tres sitios que recortan por fecha en esta página (la
+    Evolución, el Comparativo y las secciones de Salidas de
+    `graficos/movimientos.py`) no puedan volver a escribirlo distinto.
+
+    Devuelve None cuando la franja todavía no publicó su contexto o el rango
+    está a medio elegir; el llamador muestra entonces el histórico entero,
+    que es lo que ya hacía.
+    """
+    ctx = franja_fecha.contexto()
+    rango = st.session_state.get(ctx["k_rango"]) if ctx else None
+    if not (isinstance(rango, (tuple, list)) and len(rango) == 2 and all(rango)):
+        return None
+    return (pd.Timestamp(rango[0]),
+            pd.Timestamp(rango[1]) + pd.Timedelta(days=1))
 
 
 # ===========================================================================
@@ -487,20 +488,9 @@ def _evolucion_movimientos(*, fam_sel=(), sub_sel=()):
     # de acá arriba. Movimientos no tiene modo Cortes (`cfg["cortes"]` sólo
     # lo trae Ajuste), así que el rango es el único eje temporal y no hay que
     # replicar acá el filtro por conjunto de días.
-    #
-    # EL BORDE SUPERIOR VA COMO `< fin + 1 día`, NO `<= fin`, y no es
-    # cosmético: las DOS columnas de fecha traen hora. Medido contra R2 el
-    # 2026-09-05, 143.360 de 143.360 filas de requerimientos y 17.101 de
-    # 17.101 de salidas tienen `time != 00:00`, así que un `<= fin` —que es
-    # medianoche— se come el ÚLTIMO DÍA ENTERO del rango, en silencio. Con
-    # "1 ago – 21 ago" el gráfico mostraba S/ 64.869 en vez de S/ 77.950:
-    # faltaba el 21, que solo son S/ 13.081. Es el mismo idioma —y el mismo
-    # porqué— que el filtro de `app.py`, que ya lo documenta.
-    ctx = franja_fecha.contexto()
-    rango = st.session_state.get(ctx["k_rango"]) if ctx else None
-    if isinstance(rango, (tuple, list)) and len(rango) == 2 and all(rango):
-        _ini = pd.Timestamp(rango[0])
-        _fin = pd.Timestamp(rango[1]) + pd.Timedelta(days=1)
+    _rango = _rango_vigente()
+    if _rango:
+        _ini, _fin = _rango
         req = req[(req["_fecha"] >= _ini) & (req["_fecha"] < _fin)]
         sal = sal[(sal["_fecha"] >= _ini) & (sal["_fecha"] < _fin)]
     if fam_sel:
