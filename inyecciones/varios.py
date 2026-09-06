@@ -143,12 +143,18 @@ def inject_fullscreen_app():
     })();
     </script>
     """, height=0)
-def inject_footer_actualizacion(texto):
+def inject_footer_actualizacion(texto, color=None):
     """Pinta el texto como div fijo en el body del documento de la app:
     los contenedores de Streamlit crean stacking contexts que dejaban el
     texto ENTERRADO bajo la franja inferior (.stApp::after) por más
-    z-index que tuviera; anclado directo al body escapa de todos ellos."""
+    z-index que tuviera; anclado directo al body escapa de todos ellos.
+
+    `color`: color CSS del texto; None deja el gris de siempre. Lo usa
+    app.py para que el pie se ponga ámbar cuando el dato está viejo (ver
+    data.HORAS_DATO_VIEJO) — el aviso de arriba se lee y se ignora, este
+    queda."""
     _t = json.dumps(str(texto))
+    _c = json.dumps(str(color) if color else "#71717a")
     inyectar_html("""
     <script>
     (function(){
@@ -176,6 +182,11 @@ def inject_footer_actualizacion(texto):
                 + ' } }';
             doc.head.appendChild(stl);
         }
+        /* El color se aplica FUERA del if(!el): el elemento se crea una
+           sola vez y en los reruns siguientes solo se actualiza el texto,
+           así que si esto viviera adentro, el pie se quedaría con el color
+           del primer render y no podría volver a gris al normalizarse. */
+        el.style.color = """ + _c + """;
         el.textContent = """ + _t + """;
     })();
     </script>

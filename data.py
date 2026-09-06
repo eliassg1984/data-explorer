@@ -337,6 +337,45 @@ def fecha_ultima_actualizacion(archivo):
         return None
 
 
+# Umbral de frescura de los parquets. El extractor nocturno corre a las 03:00
+# todos los días, así que a las 02:59 un dato de 24h es lo NORMAL y 26 deja
+# dos horas de margen. Pasado eso, se saltó al menos una corrida entera.
+#
+# Existe porque el 2026-09 la extracción estuvo corriendo 1 vez cada 4 días
+# —sin fallar: se colgaba DESPUÉS de trabajar— y nadie se enteró hasta que un
+# reporte salió vacío por casualidad, al cambiar de mes el rango por defecto.
+# El dato viejo no se delata solo: hay que preguntarle la edad.
+HORAS_DATO_VIEJO = 26
+
+
+def antiguedad_datos(archivos):
+    """Antigüedad del parquet MÁS VIEJO de `archivos`: `(horas, fecha_utc)`.
+
+    Se queda con el más viejo porque un reporte puede apoyarse en más de un
+    parquet (`archivos_extra` en REPORTES) y basta con que uno esté atrasado
+    para que lo que se ve en pantalla lo esté.
+
+    Retorna None si no se puede saber: modo demo, fallo de red, o un reporte
+    sin parquet (las herramientas). Nunca lanza — un aviso de frescura no
+    puede ser el motivo de que la app no cargue.
+    """
+    fechas = []
+    for archivo in archivos:
+        if not archivo:
+            continue
+        try:
+            f = fecha_ultima_actualizacion(archivo)
+        except Exception:
+            f = None
+        if f is not None:
+            fechas.append(f)
+    if not fechas:
+        return None
+    mas_vieja = min(fechas)
+    horas = (datetime.now(timezone.utc) - mas_vieja).total_seconds() / 3600
+    return horas, mas_vieja
+
+
 def hay_dato_nuevo(archivo, fecha_base):
     """
     True si el parquet en R2 tiene una fecha de modificación MÁS RECIENTE
