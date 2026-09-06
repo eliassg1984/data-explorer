@@ -11,8 +11,9 @@ import streamlit as st
 from utils import buscar_columna, buscar_columna_fecha, resolver_columnas
 from data import (
     REPORTES, cargar, cargar_rango, rango_fechas, secrets_disponibles,
-    hay_dato_nuevo, fecha_ultima_actualizacion, limpiar_cache,
+    hay_dato_nuevo, antiguedad_datos, HORAS_DATO_VIEJO, limpiar_cache,
 )
+from tema import ADVERTENCIA_TEXTO
 from estilos import TAM_FUENTE, inject_css
 from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
@@ -405,22 +406,6 @@ if _usa_carga_rango and col_fecha:
         )
 
 _hoy = datetime.date.today()
-# EL MES EN CURSO ES EL DE LOS DATOS, NO EL DEL CALENDARIO. El default era
-# `(hoy.replace(day=1), hoy)` a secas, y cuando el parquet no llega hasta hoy
-# `asegurar_rango` recorta LOS DOS extremos al tope de los datos y el rango
-# COLAPSA a un día suelto: con datos hasta el 31-ago y hoy 4-sep, la app abría
-# en "31 ago 2026" — un día, no un mes (visto 2026-09-04 en el selector de
-# fecha del Ranking de Proveedores, que rotula el rango vigente con todas las
-# letras y por eso lo dejó a la vista).
-#
-# Es el MISMO criterio con el que `atajos_rango` descarta "Este mes" cuando
-# colapsaría contra el borde: no ofrecer un período que la data no cubre. Acá
-# no se descarta, se ANCLA — el mes en curso pasa a ser el del último día con
-# datos. Si la data llega hasta hoy, `min()` no cambia nada y el default es el
-# de siempre.
-_ancla_mes = min(_hoy, fecha_max_full) if fecha_max_full else _hoy
-fecha_ini_default = _ancla_mes.replace(day=1)   # 01 del mes con datos
-fecha_fin_default = _ancla_mes                  # hoy, o el último día con datos
 
 es_ajuste = (reporte == "Ajuste de Inventario")
 
@@ -481,6 +466,33 @@ if _franja_con_fecha and reporte == "Compras":
         if _b_vista[1]:
             fecha_max_full = max(fecha_max_full, _b_vista[1])
 
+# EL MES EN CURSO ES EL DE LOS DATOS, NO EL DEL CALENDARIO. El default era
+# `(hoy.replace(day=1), hoy)` a secas, y cuando el parquet no llega hasta hoy
+# `asegurar_rango` recorta LOS DOS extremos al tope de los datos y el rango
+# COLAPSA a un día suelto: con datos hasta el 31-ago y hoy 4-sep, la app abría
+# en "31 ago 2026" — un día, no un mes (visto 2026-09-04 en el selector de
+# fecha del Ranking de Proveedores, que rotula el rango vigente con todas las
+# letras y por eso lo dejó a la vista).
+#
+# Es el MISMO criterio con el que `atajos_rango` descarta "Este mes" cuando
+# colapsaría contra el borde: no ofrecer un período que la data no cubre. Acá
+# no se descarta, se ANCLA — el mes en curso pasa a ser el del último día con
+# datos. Si la data llega hasta hoy, `min()` no cambia nada y el default es el
+# de siempre.
+#
+# VA DESPUÉS DEL ENSANCHE DE ARRIBA, no antes: ancla contra los topes de la
+# vista ACTIVA, no contra los del parquet del reporte. Calcularlo antes fue
+# un bug con captura (2026-09-06): «Documentos SUNAT» no lee
+# compras.parquet —le pregunta al SIRE— pero heredaba su tope, y como el
+# sistema todavía no tenía cargado septiembre, la vista abría en "1 ago –
+# 31 ago" el 6 de septiembre, con 61 comprobantes de septiembre esperando
+# en el registro. El calendario SÍ dejaba elegirlos (el ensanche ya
+# estaba); lo que mentía era el rango con el que abría. Ver
+# `arquitectura.md` regla #326.
+_ancla_mes = min(_hoy, fecha_max_full) if fecha_max_full else _hoy
+fecha_ini_default = _ancla_mes.replace(day=1)   # 01 del mes con datos
+fecha_fin_default = _ancla_mes                  # hoy, o el último día con datos
+
 # INVARIANTE: sembrar el default Y recortar a bounds AQUÍ, justo antes de
 # dibujar el widget en este mismo render. Nunca clampear después del
 # widget (se vería un render tarde → desync overlay/calendario/datos).
@@ -515,6 +527,7 @@ _corte_apl = corte_vigente(_k_corte) if _cortes_franja else None
 
 # Evitar NameError antes de la franja superior
 _fecha_actualizacion = None
+_horas_dato = None          # antigüedad en horas; None = no se pudo saber
 
 # Franja superior: título (izquierda) + fecha (derecha, extremo opuesto).
 _fila_top = st.container(key="fila_ajuste_top")
@@ -532,12 +545,16 @@ with _fila_top:
         pass
     with col_fecha_top:
         if _franja_con_fecha:
-            try:
-                _fecha_actualizacion = fecha_ultima_actualizacion(
-                    cfg.get("archivo")
-                )
-            except Exception:
-                _fecha_actualizacion = None
+            # Mira el principal Y sus `archivos_extra`: manda el más viejo
+            # (ver data.antiguedad_datos). Antes sólo miraba `archivo` y sólo
+            # alimentaba el pie; ahora también decide el aviso de dato viejo,
+            # así que Movimientos —que se apoya en dos parquets— no puede
+            # decir "al día" con un lado atrasado.
+            _antiguedad = antiguedad_datos(
+                (cfg.get("archivo"),) + tuple(cfg.get("archivos_extra", ()))
+            )
+            _horas_dato = _antiguedad[0] if _antiguedad else None
+            _fecha_actualizacion = _antiguedad[1] if _antiguedad else None
 
             if isinstance(_fecha_actualizacion, datetime.datetime):
                 if _fecha_actualizacion.tzinfo is not None:
@@ -651,10 +668,24 @@ with _fila_top:
 # Así su position:fixed vive en el contexto raíz y no es tapado
 # por .stApp::after (fila_ajuste_top crea un stacking context propio
 # por su sticky + z-index).
+def _texto_antiguedad(horas):
+    """"hace 31 h" / "hace 4 días". Cambia a días recién a las 48: por debajo
+    de eso el número de horas dice más (30 h se lee como "hoy no corrió")."""
+    if horas < 48:
+        return f"hace {int(horas)} h"
+    return f"hace {int(horas // 24)} días"
+
+
+_dato_viejo = _horas_dato is not None and _horas_dato > HORAS_DATO_VIEJO
+
 if isinstance(_fecha_actualizacion, datetime.datetime):
+    # Ámbar + la edad cuando el dato está viejo: es la señal PERMANENTE, la
+    # que sigue ahí cuando el aviso de arriba ya se leyó y se ignoró.
     inject_footer_actualizacion(
         "Última actualización: "
         + _fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")
+        + (f" · {_texto_antiguedad(_horas_dato)}" if _dato_viejo else ""),
+        color=ADVERTENCIA_TEXTO if _dato_viejo else None,
     )
 
 # Aplicar el rango al DataFrame (usa el valor ya guardado en session_state).
@@ -1050,6 +1081,30 @@ def _render_contenido():
             renderizar_graficos_reporte(df_f, reporte, cfg, df_full=df)
 
     perf.fragment_end("_render_contenido")                                  # ⚡ PERF
+
+
+# ===========================================================================
+# AVISO DE DATO VIEJO
+# ===========================================================================
+# Fuera de `_render_contenido` a propósito: ese es un @st.fragment y se
+# re-ejecuta solo con cada interacción; lo que se dibuja acá se pinta una vez
+# y sobrevive a esos reruns.
+#
+# Y ARRIBA del contenido, no flotando abajo como `aviso_refresco`: aquel avisa
+# de algo transitorio que el usuario acaba de pedir, este pone en duda todo lo
+# que hay en pantalla. Compartir su key, además, sería un DuplicateWidgetID
+# cuando encima hay un refresco en curso.
+if _dato_viejo:
+    with st.container(key="aviso_dato_viejo"):
+        st.warning(
+            f"Estos datos son de {_texto_antiguedad(_horas_dato)} "
+            f"(última actualización: "
+            f"{_fecha_actualizacion.strftime('%d/%m %H:%M')}). "
+            "La extracción automática corre cada madrugada: si el aviso sigue "
+            "mañana, hay que revisarla en el servidor. Para traer este "
+            "reporte al día ahora, «Refrescar» al pie del rail.",
+            icon="⚠️",
+        )
 
 
 # ── Llamada al fragment ──────────────────────────────────────────────────────

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-325 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+327 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (105)
 
@@ -283,7 +283,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (93)
+**Streamlit** (94)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -378,8 +378,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#315** — Un filtro que arranca con algo elegido se siembra ANTES de contar los filtros, no dentro del…
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
+- **#327** — El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA sola vez: el color hay…
 
-**Datos, R2 y DuckDB** (42)
+**Datos, R2 y DuckDB** (43)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -423,8 +424,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
 - **#324** — El pause no era la causa: la tarea corría python DIRECTO, y lo que colgaba era el input() del…
 - **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
+- **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
 
-**SUNAT y SIRE** (37)
+**SUNAT y SIRE** (38)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -463,6 +465,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#312** — El redondeo del comprobante se DERIVA, no se lee — y el que no se escribió tumbó la importación
 - **#313** — Los importes del registro del SIRE vienen SIEMPRE en soles; moneda dice en qué se emitió el…
 - **#314** — El ISC no tiene casillero propio en el Almacén: va ADENTRO del neto, con su tasa al lado. Y…
+- **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
 
 **Fechas, rangos y cortes** (9)
 
@@ -511,7 +514,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (56)
+**Decisiones de diseño y UX** (57)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -569,6 +572,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 - **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
 - **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
+- **#327** — El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA sola vez: el color hay…
 
 **Mantenimiento y trampas del lenguaje** (9)
 
@@ -29838,6 +29842,116 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      recortar. (2026-09-06.)
 
 
+326. **El default del rango se anclaba al tope del parquet del REPORTE,
+     aunque la vista mirara OTRO dato: «Documentos SUNAT» abría en agosto
+     el 6 de septiembre (2026-09-06).** El reporte fue "los documentos
+     sunat de mi reporte de compras solo muestra documentos del sire hasta
+     agosto, si ya estamos 6 de septiembre", con captura.
+
+     **No faltaba dato.** `sunat_compras.parquet` se había subido esa misma
+     mañana (12:15 UTC) y traía **61 comprobantes emitidos del 1 al 5 de
+     septiembre, S/ 88.820,49**, los 61 «Solo SUNAT». Lo que se veía en
+     pantalla era el FILTRO: la pastilla decía «1 ago – 31 ago 2026», que
+     es el rango que `asegurar_rango` siembra al abrir.
+
+     La causa, en `app.py`: el default salía de
+
+         _ancla_mes = min(_hoy, fecha_max_full)
+
+     calculado **ANTES** del bloque que ensancha `fecha_max_full` con los
+     topes de la vista activa (la regla #197, que le da a «Documentos
+     SUNAT» un techo de HOY porque no lee `compras.parquet` — le pregunta
+     al SIRE). O sea: el CALENDARIO usaba el techo de hoy y el RANGO CON
+     EL QUE ABRÍA usaba el techo del parquet de Compras. El calendario sí
+     dejaba elegir septiembre; el rango de arranque no lo ofrecía.
+
+     Y el techo del parquet de Compras no llega a hoy casi nunca, porque
+     las compras se cargan al sistema con días de atraso. Medido ese día
+     sobre `compras.parquet`:
+
+         31/08  96 filas      02/09  1 fila      04/09  1 fila
+                              03/09  1 fila      05/09  1 fila
+
+     Con eso, `_ancla_mes` cae en el mes ANTERIOR durante los primeros días
+     de cada mes. No fue la mala suerte de un día: es el estado normal.
+
+     **La huella que lo delató, y que sirve para la próxima:** `atajos_rango`
+     descarta el atajo que no intersecta los bounds, así que la MISMA
+     pantalla ofrecía «Este mes» en la vista de SUNAT y NO lo ofrecía en
+     las vistas del parquet. Dos listas de atajos del mismo reporte en
+     desacuerdo sobre si el mes en curso existe = dos techos distintos
+     conviviendo.
+
+     El arreglo son las tres líneas del ancla movidas DESPUÉS del ensanche;
+     cero lógica nueva. Es la misma forma de la #325: **un número lo
+     consumen dos sitios y el parche tocó uno solo.** La #197 ensanchó los
+     bounds del widget y se olvidó del default que se siembra doce líneas
+     más abajo.
+
+     **Lo que a propósito NO cambia:** llegar por el rail desde otra vista
+     de Compras (sin recargar) conserva el rango que traías. Es el filtro
+     COMPARTIDO de la franja y ya está sembrado; reescribirlo sería pisar
+     una elección del usuario. Ahí el atajo «Este mes» ya aparece —y
+     aparece justamente porque los bounds llegan a hoy—. Lo que sí arranca
+     en el mes en curso es cualquier carga nueva con la vista activa, que
+     es como se llega desde el link (`?reporte=Compras&vista=documentos_sunat`,
+     el mismo de la captura): `vista_activa` la resuelve del query param
+     antes del primer render, así que `bounds_fecha_de_la_vista` ya
+     contesta en el render donde se siembra el default.
+
+     **Verificación:** `ruff` y los tres tests verdes. En la app desplegada,
+     antes: sesión nueva → «1 ago – 31 ago 2026», 436 docs. Tocando «Este
+     mes» a mano → «1 sep – 6 sep 2026», **61 docs, S/ 88.820,49, 0
+     coinciden, 61 solo en SUNAT**, con el sello «registro + en vivo» (la
+     cola del día se pidió en vivo, regla #197). Después del fix, esa misma
+     URL abre directo en «1 sep – 6 sep». (2026-09-06.)
+
+
+327. **El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA
+     sola vez: el color hay que reasignarlo FUERA del `if (!el)`.**
+
+     2026-09-06, a pedido, después de que la extracción nocturna estuviera
+     corriendo una vez cada cuatro días sin que nadie lo notara (ver #324).
+     Lo que falló ahí no fue el pipeline —el trabajo salía bien— sino que
+     **un dato viejo no se delata solo**: hay que preguntarle la edad. La app
+     ahora lo hace con `data.antiguedad_datos(archivos)`, que devuelve
+     `(horas, fecha)` del parquet MÁS VIEJO del reporte —el principal y sus
+     `archivos_extra`, porque basta que uno esté atrasado para que la
+     pantalla lo esté— y por encima de `HORAS_DATO_VIEJO` avisa por dos vías.
+     El umbral es 26 h y no 24: el extractor corre a las 03:00, así que a las
+     02:59 un dato de 24 h es lo NORMAL; 26 deja dos horas de margen y sigue
+     detectando la primera corrida saltada.
+
+     **Dónde va cada aviso, que no es lo mismo.** El de refresco en curso
+     (`aviso_refresco`) flota abajo a la izquierda: anuncia algo transitorio
+     que el usuario acaba de pedir. El de dato viejo va ARRIBA del contenido,
+     porque no habla de una acción sino que **pone en duda todo lo que hay en
+     pantalla**. Y no pueden compartir key aunque se pareciera: dos
+     `st.container(key=...)` iguales en el mismo run son un
+     DuplicateWidgetID, y los dos avisos coexisten (se puede pedir un
+     refresco justamente porque el dato está viejo).
+
+     **La trampa, que casi se va a producción.** El pie de "Última
+     actualización" lo pinta `inyecciones/varios.py::inject_footer_actualizacion`,
+     que crea un `<div>` en el body del documento padre y le pone TODO su
+     estilo en un `cssText` dentro de `if (!el) { ... }`. En los reruns
+     siguientes el elemento ya existe y esa rama no vuelve a correr: sólo se
+     actualiza el `textContent`. Poner ahí el color ámbar lo dejaba ámbar
+     **para siempre** — al día siguiente, con el dato ya fresco, el pie
+     seguiría gritando. El color se asigna afuera, en cada llamada.
+
+     La regla general: **en un elemento que se crea una vez y se actualiza
+     muchas, todo lo que pueda CAMBIAR va fuera del bloque de creación.**
+     Adentro sólo lo que es constante para la vida del elemento. El síntoma
+     es traicionero porque la primera transición (gris → ámbar) funciona
+     perfecto; la que no ocurre es la vuelta.
+
+     Verificado en los tres estados, no en dos: fresco → gris y sin sufijo;
+     viejo → `rgb(194,65,12)` (`ADVERTENCIA_TEXTO`) + "hace N h" + el banner;
+     y **de vuelta a fresco → gris otra vez**, que es el que descubre el bug.
+     El color se leyó con el truco de la regla #93 (anular la transición y
+     forzar reflow antes de medir), no a ojo.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -29850,7 +29964,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#326**.
+> próxima regla nueva es la **#328**.
 
 >
 
