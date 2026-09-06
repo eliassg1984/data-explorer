@@ -18,7 +18,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 322 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (106)
+**CSS y estilos** (105)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -125,7 +125,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
-- **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
 
 **Layout y alturas** (33)
 
@@ -493,7 +492,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (55)
+**Decisiones de diseño y UX** (56)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -550,6 +549,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#290** — Un guard que se dispara SIEMPRE no es una red: es el camino normal, y tapa el bug que debería…
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 - **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
+- **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
 
 **Mantenimiento y trampas del lenguaje** (9)
 
@@ -14917,23 +14917,41 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      deriva el pivote) y la de salidas trae las suyas sin las de trabajo
      `_*`.
 
-     **La fila de KPIs cambió de idioma, y no es cosmético.** Antes cada
-     lado mostraba Registros / Cantidad total / Valorizado total de SU
-     parquet. Juntos eso no se puede: un kilo requerido y un kilo dado de
-     baja no se suman, se comparan. Los KPIs pasan a ser los tres del
-     Comparativo —Requerido, Dado de baja, Baja/Requerido—, que es la
-     pregunta que la página contesta.
+     **LA FILA DE KPIs: puesta y sacada el mismo día, y las dos veces por
+     el mismo motivo.** Antes cada lado mostraba Registros / Cantidad total
+     / Valorizado total de SU parquet. Juntos eso no se puede: un kilo
+     requerido y un kilo dado de baja no se suman, se comparan. Así que la
+     fusión los reemplazó por los tres del Comparativo — Requerido, Dado de
+     baja, Baja/Requerido — más un caption con el conteo de líneas.
 
-     **Y la trampa de layout que traía puesta**, que es la #38 otra vez:
-     la primera tarjeta de la página lleva `margin-top: -48px` (el jalón
-     que recupera el hueco de la franja), y con una fila de KPIs EN FLUJO
-     encima el jalón se come esa fila. Ya existía la excepción, escrita
-     para `_izq_sal_`… que quedó sin dueño con esta fusión, igual que había
-     quedado sin dueño en 2026-09-04 cuando Salidas se apiló y sus tarjetas
-     se renombraron. Tercera vez para la misma regla: **un selector de CSS
-     no avisa cuando su elemento deja de existir** (#49). Hoy apunta a
-     `_izq_mov_`. Se descubrió midiendo: el caption arrancaba en y=299 y la
-     tarjeta en y=289.
+     Duró unas horas: «eliminemos todo esto, del recuadro, está muy feo».
+     Y el pedido tiene razón de fondo, no sólo de gusto: esa banda gastaba
+     una franja de alto —la primera pantalla, la más cara— para decir
+     exactamente lo que el caption de la Evolución dice DOS RENGLONES más
+     abajo («En el período: S/ X requerido · S/ Y dado de baja ·
+     baja/requerido Z%»), pegado al gráfico que los explica. El número que
+     de verdad hace falta sin entrar al reporte —el del rail de Reportes—
+     sale de `kpis` en REPORTES y no de acá. Hoy la página abre en el
+     gráfico.
+
+     La lección general: **un KPI que repite lo que dice el elemento de
+     abajo no informa, empuja.** Vale la pena mirar qué más dice la
+     pantalla antes de agregar una fila de `st.metric`.
+
+     **Y la trampa de layout que la banda traía puesta**, que es la #38
+     otra vez: la primera tarjeta lleva `margin-top: -48px` (el jalón que
+     recupera el hueco de la franja) y con una fila EN FLUJO encima se la
+     come — medido, el caption arrancaba en y=299 y la tarjeta en y=289.
+     Ya existía la excepción para eso, escrita para `_izq_sal_`… que quedó
+     sin dueño con esta fusión, igual que había quedado sin dueño el
+     2026-09-04 cuando Salidas se apiló y sus tarjetas se renombraron.
+     Tercera vez para la misma regla: **un selector de CSS no avisa cuando
+     su elemento deja de existir** (#49). Se reapuntó a `_izq_mov_`… y al
+     sacar la banda esa misma tarde volvió a sobrar, porque encima de la
+     tarjeta vuelve a haber sólo chips y el jalón es correcto. Se retiró,
+     dejando en su lugar un comentario que dice cuándo hace falta de nuevo:
+     apenas alguien ponga cualquier cosa en flujo entre la franja y la
+     primera tarjeta.
 
      **Verificación:** `ruff` + los tres tests verdes —el contrato del
      dispatcher ahora dice «Movimientos acepta tabla_cb» y ya no nombra a
@@ -14941,9 +14959,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      chip no está (`st-key-mov_fuente_chip` = 0 nodos), el rail trae los
      ocho ítems y entran sin desborde en 1440px (el último cierra en
      x=1146), las ocho secciones salen del esqueleto y dibujan sus siete
-     figuras y sus dos grillas, y los KPIs dan S/ 64.184,15 requerido
-     contra S/ 1.462,00 de baja — los mismos números que mostraban los dos
-     reportes por separado para ese rango. (2026-09-05.)
+     figuras y sus dos grillas, y el caption de la Evolución da S/ 63.564
+     requerido contra S/ 1.462 de baja — los mismos números que mostraban
+     los dos reportes por separado para ese rango. Tras sacar la banda:
+     cero `stMetric` en la página, la tarjeta con su `-48px` de vuelta
+     arrancando en y=160 contra unos chips que cierran en y=74, y el
+     caption diciendo lo mismo que decían los KPIs. (2026-09-05.)
 
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->

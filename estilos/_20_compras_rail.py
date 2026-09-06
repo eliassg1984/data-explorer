@@ -633,33 +633,18 @@ CSS = """    /* ================================================================
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_der_"] {
         margin-top: -48px !important;
     }
-    /* Excepción: Movimientos mete una fila de KPIs (st.metric x3) más un
-       caption EN FLUJO justo arriba de esta tarjeta — a diferencia de
-       Ajuste/Compras/Ventas/Inventario, donde encima solo hay chips y el
-       jalón recupera un hueco vacío. Acá no hay tal hueco: el jalón se
-       comía la fila de KPIs y el título del Plotly quedaba pintado ENCIMA
-       de los números (ver arquitectura.md regla #38). Selector con la MISMA
-       especificidad que el de arriba + !important en ambos → gana por ir
-       DESPUÉS en el archivo (ver convención de _SECCIONES).
+    /* (Acá vivió, unas horas del 2026-09-05, la excepción al jalón para la
+       primera tarjeta de Movimientos: ese dashboard metía una fila de KPIs
+       EN FLUJO justo encima y el -48px se la comía, con el título del Plotly
+       pintado sobre los números — la regla #38 otra vez. La fila de KPIs se
+       retiró el mismo día (repetía lo que dice el caption de la Evolución,
+       dos renglones más abajo), así que encima de esa tarjeta vuelve a haber
+       sólo chips: el hueco existe y el jalón es correcto.
 
-       Sólo hace falta para la PRIMERA tarjeta de la página: de la segunda
-       sección para abajo ya lo cancela la excepción estructural de más
-       abajo (`div:has(> [class*="_sec_"]) ~ div`). Se escribe igual por
-       familia porque la de arriba también lo hace, y así las dos se leen
-       juntas.
-
-       HISTORIA, que explica el nombre del prefijo. Nació el 2026-09-04 para
-       Salidas, apuntando a `.st-key-ajuste_graf_card_izq_sal` — una clase
-       EXACTA que llevaba muerta desde que Salidas se apiló (sus tarjetas
-       pasaron a `..._sal_evolucion`, `..._sal_tipo`, etc.). Se arregló con
-       un wildcard, `_sal_`. El 2026-09-05 Salidas y Requerimientos se
-       fusionaron en un reporte único (ver graficos/movimientos.py y la
-       regla #322) y ese prefijo volvió a quedar sin dueño: hoy la familia
-       es `_mov_`. Misma trampa, tercera vez — un selector de CSS no avisa
-       cuando su elemento deja de existir (regla #49). */
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_mov_"] {
-        margin-top: 0 !important;
-    }
+       Queda el apunte porque la excepción se necesita de nuevo apenas
+       alguien ponga cualquier cosa EN FLUJO entre la franja y la primera
+       tarjeta de un dashboard. Antes de ésta hubo una para `_izq_sal_`, que
+       se quedó sin dueño dos veces seguidas — ver la regla #322 y la #49. */
     /* Segunda excepción, y por un motivo distinto: TODA TARJETA QUE NO
        ABRE LA PÁGINA.
 

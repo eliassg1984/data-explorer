@@ -257,26 +257,21 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     _met_sal = (pd.to_numeric(d_sal[col_val_sal], errors="coerce").fillna(0)
                 if (d_sal is not None and col_val_sal) else None)
 
-    # ── KPIs: los DOS lados y su relación ─────────────────────────────────
-    # Son los mismos tres que ya usaba «Pedido vs Baja», y a propósito: la
-    # página es sobre el par, no sobre uno de los dos. Los de antes
-    # (Registros / Cantidad total / Valorizado total) hablaban de un solo
-    # parquet, y sumar cantidades de los dos lados no significa nada — un
-    # kilo requerido y un kilo dado de baja no se suman, se comparan.
-    _tot_req = float(_met.sum())
-    _tot_sal = float(_met_sal.sum()) if _met_sal is not None else 0.0
-    kpis = st.columns(3)
-    kpis[0].metric("📥 Requerido", f"S/ {_tot_req:,.2f}")
-    kpis[1].metric("📤 Dado de baja", f"S/ {_tot_sal:,.2f}")
-    kpis[2].metric("Baja / Requerido",
-                   f"{_tot_sal / _tot_req * 100:.1f}%" if _tot_req else "—",
-                   delta_color="off")
-    st.caption(
-        f"{len(d):,} líneas de requerimiento · "
-        + (f"{len(d_sal):,} de salida" if d_sal is not None else "salidas no disponible")
-        + " en el rango. Estos KPIs incluyen los anulados; las vistas de "
-          "«Ambos» los descartan."
-    )
+    # ── SIN BANDA DE KPIs, a propósito (2026-09-05) ───────────────────────
+    # Acá había tres `st.metric` (Requerido / Dado de baja / Baja÷Requerido)
+    # y un caption. Se fueron a pedido —"eliminemos todo esto, está muy
+    # feo"— y el pedido tiene razón de fondo: la banda ocupaba una pantalla
+    # de alto para repetir números que la página ya da DOS renglones más
+    # abajo. El caption de la Evolución dice exactamente lo mismo ("En el
+    # período: S/ X requerido · S/ Y dado de baja · baja/requerido Z%"),
+    # pegado al gráfico que los explica, que es donde se leen bien.
+    #
+    # El KPI del reporte —el que se ve sin entrar— no se pierde: vive en el
+    # rail de Reportes, y sale de `kpis` en REPORTES (data.py).
+    #
+    # Ojo si alguna vez vuelve una fila de KPIs EN FLUJO acá arriba: hay que
+    # devolver la excepción del jalón en `estilos/_20_compras_rail.py`, o la
+    # primera tarjeta se la come (regla #38, y la #322 para esta vuelta).
 
     # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
     _render_rail(_RAIL_CATEGORIAS, "mov_graf_tipo",
