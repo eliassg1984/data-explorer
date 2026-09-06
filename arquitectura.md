@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-329 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+331 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (105)
+**CSS y estilos** (106)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -139,8 +139,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
+- **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
 
-**Layout y alturas** (33)
+**Layout y alturas** (34)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -175,6 +176,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#281** — Una cabecera que depende de un dato que se calcula 100 líneas más abajo se dibuja con…
 - **#288** — Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el renglón para decir que no hay…
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
+- **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
 
 **Plotly y figuras** (54)
 
@@ -233,7 +235,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
 - **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
 
-**AgGrid y tablas** (47)
+**AgGrid y tablas** (48)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -282,6 +284,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#274** — Un grid con presupuesto FIJO de filas miente cuando hay menos datos: el hueco queda ENTRE la…
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
+- **#331** — Una segunda línea en una celda de AgGrid no entra ensanchando la columna: el presupuesto real…
 
 **Streamlit** (95)
 
@@ -30045,6 +30048,111 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      que antes dejaban la página en blanco. (2026-09-06.)
 
 
+330. **Dos controles de fecha en la MISMA tarjeta: el que no manda tiene
+     que decir que no manda, y el que se toca tiene que pasar a mandar
+     (2026-09-06).** Volatilidad pidió «el segmentador de fecha» —el
+     `selector_fecha_tarjeta` que ya tenían los dos rankings y la vista
+     Semanal—, y esa tarjeta es la única que además tiene VENTANA PROPIA
+     (`graficos/periodo.py`: Rango/3m/12m/24m/Todo, abriendo en 12m porque
+     con las ~3 semanas del rango por defecto no hay candlestick que
+     dibujar). O sea dos controles de fecha, uno al lado del otro, en un
+     renglón de 35px.
+
+     Sumarlo y nada más habría dado un control que **miente y no hace
+     nada**, las dos cosas a la vez:
+
+     · **Miente**, porque el trigger escribe el rango canónico con todas
+       las letras («1 ago – 24 ago 2026») y mientras la ventana propia
+       mande, ésa NO es la fecha que la tarjeta está mostrando. Es el
+       renglón más leído de la cabecera diciendo un dato ajeno.
+     · **No hace nada**, porque tocar el panel escribe el rango canónico y
+       la tarjeta lo estaba ignorando: se mueven las otras cinco secciones
+       de la pila y ésta se queda igual. Un botón que responde con la
+       pantalla quieta es peor que no tener el botón (misma familia que la
+       #180).
+
+     La cura son tres piezas, y la tercera es la que costó una vuelta:
+
+     1. **El trigger dice lo que la tarjeta muestra.** `label=` es nuevo en
+        `selector_fecha_tarjeta` y nace con default `None` justamente
+        porque los otros tres call sites no tienen ventana propia — ahí el
+        rango canónico ES lo que muestran.
+     2. **Usar el panel es PEDIR que mande el rango elegido**, así que la
+        bandera del selector, además de escalar a `st.rerun(scope="app")`,
+        devuelve la ventana a "Rango".
+     3. **Y esa vuelta a "Rango" NO se puede escribir en la clave del
+        widget.** Primer intento, medido en el navegador: con
+        `st.session_state["compras_vol_periodo"] = HEREDA` la píldora de la
+        franja pasaba a «1 ene – 24 ago 2026» —o sea que la escalada corría
+        y el rango canónico ya era el nuevo— y el desplegable seguía
+        marcando «12m», con la tarjeta mostrando 12 meses. Es la **#212**
+        tal cual, en un widget que no tiene nada que ver con el riel que la
+        estrenó: **el valor que manda el navegador le gana al que escribe
+        el servidor.** El dueño de la ventana pasó a ser una clave normal
+        (`compras_vol_ventana`) y el `selectbox` lleva ese valor DENTRO de
+        su key, igual que el riel de `selector_escala` lleva su rango.
+
+     Y un cuarto detalle, de CSS: **la fila de la tarjeta ya existía**, así
+     que `cp_vol_fila` cae DENTRO de `vol_fila_hdr` en vez de ser la fila.
+     El helper la dibuja pensada para ser cabecera (`width: 100%` +
+     `space-between`), así que hay que devolverla a su contenido — las dos
+     mitades, el `stLayoutWrapper` anónimo y el `stVerticalBlock` con la
+     key, por la regla #272. Es el único de los cuatro prefijos que NO
+     entra al bloque de fila de `_css_proveedor.py`.
+
+     **Verificación:** `ruff` y los tres tests verdes; medido en el
+     navegador (viewport 1358, datos reales de R2) el renglón queda en UNA
+     línea de 35px — título 645px flexible, ventana 90, trigger 122 — con
+     la píldora idéntica a las otras tres (22px de alto, radio 999px,
+     12px), y el panel abre en 250px con los atajos, las tres escalas, la
+     cabecera «‹ AGO 2026 ›», el riel y su regla de días. Con el atajo
+     «Año»: la franja pasa a «1 ene – 24 ago 2026», la ventana a «Rango» y
+     el trigger a esa misma fecha. (2026-09-06.)
+
+
+331. **Una segunda línea en una celda de AgGrid no entra ensanchando la
+     columna: el presupuesto real es el PADDING del tema (2026-09-06).**
+     Al bajar los dos precios a las celdas del ranking de Volatilidad —el
+     `+12.4%` arriba y el `33.89 → 36.00` debajo, a pedido, porque un
+     `+12.4%` sobre 8.50 y sobre 85.00 son la misma celda y no la misma
+     decisión de compra— la segunda línea salía cortada. El reflejo fue
+     subir el ancho de columna de 84 a 98. **No cambió nada**, y las dos
+     razones se miden en diez segundos:
+
+     · **El ancho de columna no es el ancho de columna.** El grid recibe
+       850px y los reparte: «Insumo» se queda con su `minWidth` y el resto
+       se escala proporcionalmente, así que 170/98/92 salió en pantalla
+       como 175/85/80. Subir el número le saca a la columna de al lado, no
+       al scroll — es un REPARTO, no un tamaño.
+     · **De esos 85px, 30 son padding.** El tema material pone 15px por
+       lado, así que quedaban 55 útiles para un texto de 56 a 69. Medido
+       antes de tocar nada: **46 de las 65 celdas con dos líneas salían
+       recortadas**; con `padding: 0 6px`, cero.
+
+     El padding va en el `cellStyle` de esas columnas y NO en el
+     `custom_css` del grid: ahí sería `.ag-cell` a secas y le apretaría
+     también al nombre del insumo, que no lo pidió — el aviso de CLAUDE.md
+     sobre reglas colgadas del contenedor, en su versión AgGrid.
+
+     Y la cola, que es la parte que no se ve venir: **un número recortado
+     no parece recortado, parece otro número.** «169.41» cortado se lee
+     «169.4», que es un precio perfectamente plausible. El peor caso real
+     entra con 2px de sobra, o sea que el margen existe pero es flaco, así
+     que la segunda línea lleva `text-overflow: ellipsis` + `nowrap`: si
+     algún día un precio no entra, se ve «169.…» y se sabe que falta algo.
+     Mismo criterio que el caption del riel de `selector_escala` — el
+     control dibuja lo más parecido que puede y CANTA la diferencia.
+
+     El renderer es una `class` con `init`/`getGui` (regla #25) y el índice
+     de la semana entra por `cellRendererParams`, no interpolado en el
+     código: así son siete columnas con UN solo `JsCode` en vez de siete,
+     que es lo que pide la #226.
+
+     **Verificación:** `ruff` y los tres tests verdes; medido en el
+     navegador sobre datos reales de R2 — 168 celdas, 65 con segunda línea,
+     0 recortadas, peor caso «110.17 → 169.41» en 69px sobre 71 útiles,
+     filas de 40px. (2026-09-06.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30057,7 +30165,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#330**.
+> próxima regla nueva es la **#332**.
 
 >
 

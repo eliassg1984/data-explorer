@@ -22,11 +22,28 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO
-from graficos.base import _card, _compras_layout, _compras_truncar, _slug
+from graficos.base import (
+    _card, _compras_layout, _compras_truncar, _slug, selector_fecha_tarjeta,
+)
 from graficos.compras._comun import _first_point
 from graficos import periodo
 from graficos import alturas
-from tablas.compras_volatilidad import renderizar_ranking_volatilidad
+from tablas.compras_volatilidad import (
+    ALTO_FILA as ALTO_FILA_RANK, renderizar_ranking_volatilidad,
+)
+
+_K_VENTANA = "compras_vol_ventana"
+"""Dueño de la ventana propia (`graficos/periodo.py`), y NO es clave de widget.
+
+El `selectbox` que la muestra lleva este valor DENTRO de su key
+(`compras_vol_periodo_<valor>`), así que cuando la ventana cambia por
+afuera —hoy: tocar el segmentador de fecha de la misma cabecera— el widget
+que se dibuja es OTRO y nace con su `index` en el valor nuevo. Escribir la
+clave del widget no alcanza: el navegador vuelve a mandar el valor viejo y
+Streamlit lo re-aplica (arquitectura.md regla #212, medida otra vez acá el
+2026-09-06). El espíritu de "sin key dinámica" se respeta igual, con el
+mismo argumento que `selector_escala`: el dueño del dato es esta clave, y
+el widget es una VISTA que se recalcula de ella en cada render."""
 
 MIN_SEMANAS = 4          # con menos, un candlestick no dice nada
 MAX_SEMANAS = 8          # tope de velas visibles — más se vuelve ilegible y
@@ -165,6 +182,32 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 "para calcular volatilidad.")
         return
 
+    # ── Escalada a rerun COMPLETO tras tocar el selector de fecha ────────
+    # El filtro que consume el rango canónico vive en `app.py`, fuera de
+    # este fragment: sin escalar, el estado cambia y la pantalla no. Mismo
+    # mecanismo que `_cp_sem_atajo_pendiente` (semanal.py) y sus dos
+    # gemelos de Proveedor/Producto — arquitectura.md #180.
+    #
+    # LO PROPIO DE ESTA TARJETA es la línea del medio: la ventana vuelve a
+    # "Rango". Esta vista tiene DOS controles de fecha (ver más abajo) y
+    # mientras la ventana propia mande, la tarjeta ignora la franja — o sea
+    # que sin esto el gesto no se vería, que es peor que no tener el
+    # control. Elegir un rango a mano ES pedir que mande ese rango.
+    #
+    # SE ESCRIBE EL DUEÑO, NO LA CLAVE DEL WIDGET, y eso costó una vuelta
+    # medida en el navegador (2026-09-06): con `st.session_state[
+    # "compras_vol_periodo"] = HEREDA` la píldora de la franja pasaba a
+    # "1 ene – 24 ago 2026" —o sea, la escalada corría— y el desplegable
+    # seguía marcando "12m". Es la regla #212 tal cual: el valor que manda
+    # el NAVEGADOR le gana al que escribe el servidor, así que un widget no
+    # se resetea desde `session_state`; hay que cambiarle la KEY. Por eso
+    # `_K_VENTANA` es una clave normal (nadie la recolecta) y la key del
+    # `selectbox` la lleva adentro, exactamente como el riel de
+    # `base.py::selector_escala` lleva su rango.
+    if st.session_state.pop("_cp_vol_atajo_pendiente", False):
+        st.session_state[_K_VENTANA] = periodo.HEREDA
+        st.rerun(scope="app")
+
     # ── VENTANA PROPIA DE ESTA TARJETA ───────────────────────────────────
     # A pedido (2026-08-26): "la visualización de volatilidad debería por
     # defecto mostrar la información del año, creo debería ponerle un
@@ -206,10 +249,40 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             st.markdown('<p class="chart-card-hdr vol-hdr">Insumos ordenados '
                         'por volatilidad</p>', unsafe_allow_html=True)
             with st.container(key="vol_hdr_periodo"):
-                _op_vol = periodo.selector("compras_vol_periodo",
-                                           widget="lista")
-        if _op_vol != periodo.HEREDA and d_full is not None:
-            d = periodo.recortar(d_full, col_fecha, _op_vol)
+                _prev_vol = st.session_state.get(_K_VENTANA, "12m")
+                if _prev_vol not in periodo.OPCIONES:
+                    _prev_vol = "12m"
+                _op_vol = periodo.selector(f"compras_vol_periodo_{_prev_vol}",
+                                           default=_prev_vol, widget="lista")
+            st.session_state[_K_VENTANA] = _op_vol
+            if _op_vol != periodo.HEREDA and d_full is not None:
+                d = periodo.recortar(d_full, col_fecha, _op_vol)
+
+            # ── El segmentador de fecha, tercer ítem de la fila ──────────
+            # 2026-09-06, a pedido. Es el MISMO componente que ya tienen
+            # los dos rankings y la vista Semanal
+            # (`base.py::selector_fecha_tarjeta`): trigger con el rango
+            # escrito + panel con los cuatro atajos y la escala de tiempo
+            # (Días/Meses/Años + riel). No es un filtro paralelo — escribe
+            # la clave canónica del rango, así que mover la fecha acá la
+            # mueve en toda la página apilada.
+            #
+            # Va ÚLTIMO en la fila: en las otras tres tarjetas la fecha es
+            # el ancla derecha, y que sea la misma cosa en las cuatro es
+            # justamente lo que hace que se lea como un solo control.
+            #
+            # LOS DOS CONTROLES SON UNO SOLO, leídos de izquierda a
+            # derecha: la ventana elige el GRANO ("últimos 12 meses") y la
+            # fecha elige un rango EXACTO. Por eso el trigger no muestra la
+            # fecha de la franja mientras la ventana mande —mostraría un
+            # dato que esta tarjeta no está usando— sino la ventana misma,
+            # y por eso tocar el panel devuelve la ventana a "Rango"
+            # (arriba, en la escalada). Con eso las dos mitades nunca dicen
+            # cosas distintas.
+            selector_fecha_tarjeta(
+                "cp_vol", "_cp_vol_atajo_pendiente",
+                label=(periodo.etiqueta(_op_vol).capitalize() or None
+                       if _op_vol != periodo.HEREDA else None))
 
         dd = d.copy()
         if col_moneda and col_moneda in dd.columns:
@@ -282,7 +355,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # nueva (arquitectura.md regla #130).
             _clicked = renderizar_ranking_volatilidad(
                 tv, cols_sem, labels_todas[:-1],
-                altura=alturas.por_filas(len(tv), px_fila=30, extra=40, minimo=0),
+                altura=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
+                                         extra=40, minimo=0),
                 key="compras_vol_rank_grid",
             )
             if _clicked is not None:

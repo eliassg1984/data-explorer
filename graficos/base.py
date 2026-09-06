@@ -906,7 +906,8 @@ def _aplicar_atajo_select(clave_widget, placeholder, opciones, ctx, bandera):
     st.session_state[clave_widget] = placeholder
 
 
-def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None):
+def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
+                           label=None):
     """Trigger + panel de fecha para UNA tarjeta, en cualquier dashboard.
 
     El TRIGGER es el rango vigente escrito con todas las letras ("1 ago –
@@ -922,6 +923,14 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None):
     el filtro de proveedores del Ranking, 2026-09-01). Es un callable y no
     un elemento ya dibujado porque en Streamlit el contenedor se elige
     ENTRANDO en él: lo que se pasa es qué dibujar, no qué mover.
+
+    `label` PISA el texto del trigger. Sólo lo necesita una tarjeta que
+    NO esté mirando el rango canónico en este momento: Volatilidad tiene
+    además su ventana propia (`graficos/periodo.py`, "últimos 12 meses" de
+    entrada) y mientras esa ventana mande, escribir la fecha de la franja
+    en el trigger sería mentir — el dato que la tarjeta muestra es otro.
+    Con `None` (los otros tres call sites) el texto sale del rango
+    canónico, como siempre.
 
     `clave` es el prefijo de TODAS las keys que dibuja, así que dos
     tarjetas en la misma página no chocan — y desde que Compras se lee
@@ -966,10 +975,10 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None):
         # sesión recién abierta) cae a "Elegir rango": si el label quedara
         # vacío no habría nada que apretar.
         _rango = st.session_state.get(ctx["k_rango"])
-        _lbl = (franja_fecha.fmt_rango_es(*_rango)
-                if (isinstance(_rango, (tuple, list)) and len(_rango) == 2
-                    and all(_rango))
-                else "Elegir rango")
+        _lbl = label or (franja_fecha.fmt_rango_es(*_rango)
+                         if (isinstance(_rango, (tuple, list))
+                             and len(_rango) == 2 and all(_rango))
+                         else "Elegir rango")
         with st.popover(_lbl, key=f"{clave}_escala",
                         use_container_width=False):
             with st.container(key=f"{clave}_escala_panel"):

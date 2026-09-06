@@ -349,6 +349,31 @@ CSS = """    /* ================================================================
         width: 90px !important;
     }
     .st-key-vol_hdr_periodo { width: 100% !important; }
+    /* ── VOLATILIDAD: el segmentador de fecha, tercer item de la fila ──
+       2026-09-06, a pedido. Lo dibuja `base.py::selector_fecha_tarjeta`,
+       que trae su PROPIA fila (`cp_vol_fila`) — pensada para ser LA
+       cabecera de una tarjeta, con `width: 100%` y `space-between`. Aca
+       esa fila cae DENTRO de otra, asi que se la devuelve a su contenido:
+       si no, se come el renglon y el titulo salta abajo.
+
+       Van las dos mitades: el `stLayoutWrapper` anonimo que Streamlit mete
+       entre el flex y el container (nace en `width: 100%`, regla #272) y
+       el `stVerticalBlock` que lleva la key. El resto del look del control
+       —pildora, panel, riel— vive en `graficos/compras/_css_proveedor.py`
+       con los otros tres prefijos, que es donde tiene que estar por
+       posicion en la cascada (regla #320). */
+    .st-key-vol_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_vol_fila) {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    .st-key-cp_vol_fila {
+        width: auto !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        margin: 0 !important;
+    }
 
     .chart-card-hdr.vap-hdr {
         display: flex;

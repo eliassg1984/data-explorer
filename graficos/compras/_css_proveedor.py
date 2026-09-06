@@ -754,6 +754,16 @@ CSS = """        <style>
            la granularidad — es exactamente el caso que advierte CLAUDE.md
            (una regla colgada del contenedor captura widgets que el .py no
            insinua). Su trigger las repite acotadas a `cp_sem_escala`. */
+        /* 2026-09-06: `cp_vol` (Volatilidad) es el CUARTO consumidor, y el
+           unico que NO entra a este bloque de fila. Su cabecera ya existia
+           —`vol_fila_hdr`, con el titulo y el selector de ventana, en
+           estilos/_80_cards.py— asi que el helper dibuja su `cp_vol_fila`
+           ADENTRO de aquella: es un item mas de un flex ajeno, no la fila.
+           Lo que se le hace medir su contenido esta alla, pegado al resto
+           de las reglas de esa cabecera. Todo lo demas —pildora del
+           trigger, panel, riel, atajos— si lo comparte, con las reglas
+           colgadas de `cp_vol_escala` y no de la fila, por el mismo motivo
+           que `cp_sem`. */
         .st-key-cp_rank_fila,
         .st-key-cp_prod_fila,
         .st-key-cp_sem_fila {
@@ -798,7 +808,8 @@ CSS = """        <style>
         }
         .st-key-cp_rank_fila [data-testid="stElementToolbar"],
         .st-key-cp_prod_fila [data-testid="stElementToolbar"],
-        .st-key-cp_sem_fila [data-testid="stElementToolbar"] {
+        .st-key-cp_sem_fila [data-testid="stElementToolbar"],
+        .st-key-cp_vol_fila [data-testid="stElementToolbar"] {
             display: none;
         }
         .st-key-cp_rank_fila button,
@@ -827,7 +838,8 @@ CSS = """        <style>
            `stButtonGroup` de la granularidad, que tiene su propio look de
            toggle y no quiere ser cinco pildoras blancas. Se repite en vez
            de sumarse al selector de arriba justamente por eso. */
-        .st-key-cp_sem_escala button {
+        .st-key-cp_sem_escala button,
+        .st-key-cp_vol_escala button {
             min-width: 0 !important;
             height: 22px !important;
             min-height: 22px !important;
@@ -842,7 +854,8 @@ CSS = """        <style>
             box-shadow: 0 1px 2px rgba(15,15,30,0.06) !important;
             transition: background .12s, color .12s !important;
         }
-        .st-key-cp_sem_escala button:hover {
+        .st-key-cp_sem_escala button:hover,
+        .st-key-cp_vol_escala button:hover {
             background: #f0edfe !important;
             color: #4d3fb3 !important;
         }
@@ -867,7 +880,8 @@ CSS = """        <style>
             [data-testid="stPopover"]:has(.st-key-cp_prod_escala) button,
         .st-key-cp_rank_escala button,
         .st-key-cp_prod_escala button,
-        .st-key-cp_sem_escala button {
+        .st-key-cp_sem_escala button,
+        .st-key-cp_vol_escala button {
             padding: 0 10px !important;
             font-size: 12px !important;
             white-space: nowrap !important;
@@ -890,6 +904,8 @@ CSS = """        <style>
         .st-key-cp_rank_escala button > div > div:has(
             [data-testid="stIconMaterial"]),
         .st-key-cp_sem_escala button > div > div:has(
+            [data-testid="stIconMaterial"]),
+        .st-key-cp_vol_escala button > div > div:has(
             [data-testid="stIconMaterial"]) {
             display: none !important;
         }
@@ -901,7 +917,8 @@ CSS = """        <style>
            la franja (estilos/_50_fecha.py) y el del asistente. */
         [data-testid="stPopoverBody"]:has(.st-key-cp_rank_escala_panel),
         [data-testid="stPopoverBody"]:has(.st-key-cp_prod_escala_panel),
-        [data-testid="stPopoverBody"]:has(.st-key-cp_sem_escala_panel) {
+        [data-testid="stPopoverBody"]:has(.st-key-cp_sem_escala_panel),
+        [data-testid="stPopoverBody"]:has(.st-key-cp_vol_escala_panel) {
             /* 290px es el ancho MINIMO util del riel: con menos, las
                etiquetas de las paradas de "Meses" (ene 24 ... ago 26) se
                encabalgan y el slider deja de leerse. */
@@ -921,7 +938,8 @@ CSS = """        <style>
            tambien al slider y al caption). */
         .st-key-cp_rank_esc_gran,
         .st-key-cp_prod_esc_gran,
-        .st-key-cp_sem_esc_gran {
+        .st-key-cp_sem_esc_gran,
+        .st-key-cp_vol_esc_gran {
             width: 100% !important;
         }
         /* `display: flex` explicito: el ButtonGroup nace BLOCK (medido), y
@@ -941,9 +959,11 @@ CSS = """        <style>
         .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"],
         .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"],
         .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"],
+        .st-key-cp_vol_esc_gran [data-testid="stButtonGroup"],
         .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] > div,
         .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] > div,
-        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"] > div {
+        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"] > div,
+        .st-key-cp_vol_esc_gran [data-testid="stButtonGroup"] > div {
             display: flex !important;
             width: 100% !important;
             /* El `width` solo no alcanza: la clase de emotion del div
@@ -954,13 +974,15 @@ CSS = """        <style>
         }
         .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] button,
         .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] button,
-        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"] button {
+        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"] button,
+        .st-key-cp_vol_esc_gran [data-testid="stButtonGroup"] button {
             flex: 1 1 0 !important;
         }
         /* El caption del total de dias: al ras del riel, no como parrafo. */
         .st-key-cp_rank_escala_panel [data-testid="stCaptionContainer"],
         .st-key-cp_prod_escala_panel [data-testid="stCaptionContainer"],
-        .st-key-cp_sem_escala_panel [data-testid="stCaptionContainer"] {
+        .st-key-cp_sem_escala_panel [data-testid="stCaptionContainer"],
+        .st-key-cp_vol_escala_panel [data-testid="stCaptionContainer"] {
             margin-top: -4px !important;
             font-size: 11px !important;
         }
@@ -980,7 +1002,8 @@ CSS = """        <style>
            CLAUDE.md advierte de las reglas colgadas de un contenedor. */
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"]),
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"]),
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"]) {
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"]),
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_vol_esc_gran"]) {
             padding-top: 8px !important;
             padding-bottom: 8px !important;
         }
@@ -989,6 +1012,8 @@ CSS = """        <style>
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"])
             [data-testid="stVerticalBlock"],
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"])
+            [data-testid="stVerticalBlock"],
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_vol_esc_gran"])
             [data-testid="stVerticalBlock"] {
             gap: 4px !important;
         }
@@ -1007,7 +1032,9 @@ CSS = """        <style>
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"])
             [class*="st-key-cp_prod_atajo_sel"],
         [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"])
-            [class*="st-key-cp_sem_atajo_sel"] {
+            [class*="st-key-cp_sem_atajo_sel"],
+        [data-testid="stPopoverBody"]:has([class*="st-key-cp_vol_esc_gran"])
+            [class*="st-key-cp_vol_atajo_sel"] {
             margin-bottom: 0 !important;
         }
         /* ── CABECERA "‹ AGO 2026 ›" del riel de Días ────────────────────
@@ -1034,9 +1061,11 @@ CSS = """        <style>
         [class*="st-key-cp_rank_esc_mes_prev"] button,
         [class*="st-key-cp_prod_esc_mes_prev"] button,
         [class*="st-key-cp_sem_esc_mes_prev"] button,
+        [class*="st-key-cp_vol_esc_mes_prev"] button,
         [class*="st-key-cp_rank_esc_mes_sig"] button,
         [class*="st-key-cp_prod_esc_mes_sig"] button,
-        [class*="st-key-cp_sem_esc_mes_sig"] button {
+        [class*="st-key-cp_sem_esc_mes_sig"] button,
+        [class*="st-key-cp_vol_esc_mes_sig"] button {
             min-height: 22px !important;
             height: 22px !important;
             padding: 0 !important;
@@ -1144,7 +1173,8 @@ CSS = """        <style>
            que es exactamente lo que se quiere ocultar. */
         [class*="st-key-cp_rank_esc_"] [data-testid="stSliderTickBar"],
         [class*="st-key-cp_prod_esc_"] [data-testid="stSliderTickBar"],
-        [class*="st-key-cp_sem_esc_"] [data-testid="stSliderTickBar"] {
+        [class*="st-key-cp_sem_esc_"] [data-testid="stSliderTickBar"],
+        [class*="st-key-cp_vol_esc_"] [data-testid="stSliderTickBar"] {
             display: none !important;
         }
         /* Etiquetas de los TIRADORES, sólo en Meses/Años. Es el precio del
@@ -1163,7 +1193,9 @@ CSS = """        <style>
         [class*="st-key-cp_prod_esc_meses_"] [data-testid="stSliderThumbValue"],
         [class*="st-key-cp_prod_esc_anos_"] [data-testid="stSliderThumbValue"],
         [class*="st-key-cp_sem_esc_meses_"] [data-testid="stSliderThumbValue"],
-        [class*="st-key-cp_sem_esc_anos_"] [data-testid="stSliderThumbValue"] {
+        [class*="st-key-cp_sem_esc_anos_"] [data-testid="stSliderThumbValue"],
+        [class*="st-key-cp_vol_esc_meses_"] [data-testid="stSliderThumbValue"],
+        [class*="st-key-cp_vol_esc_anos_"] [data-testid="stSliderThumbValue"] {
             display: none !important;
         }
 
@@ -1178,7 +1210,8 @@ CSS = """        <style>
            tres traen "_pan" de casualidad, sin relación con este. */
         [class*="st-key-cp_rank_esc_"][class*="_pan"],
         [class*="st-key-cp_prod_esc_"][class*="_pan"],
-        [class*="st-key-cp_sem_esc_"][class*="_pan"] {
+        [class*="st-key-cp_sem_esc_"][class*="_pan"],
+        [class*="st-key-cp_vol_esc_"][class*="_pan"] {
             position: absolute !important;
             width: 1px !important;
             height: 1px !important;
@@ -1214,7 +1247,8 @@ CSS = """        <style>
            mano, para no depender de qué ande suelto por ese lado. */
         .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"],
         .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"],
-        .st-key-cp_sem_atajo_sel [data-testid="stButtonGroup"] {
+        .st-key-cp_sem_atajo_sel [data-testid="stButtonGroup"],
+        .st-key-cp_vol_atajo_sel [data-testid="stButtonGroup"] {
             display: flex !important;
             flex-wrap: wrap !important;
             gap: 0 !important;
@@ -1224,7 +1258,8 @@ CSS = """        <style>
         }
         .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"] button,
         .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"] button,
-        .st-key-cp_sem_atajo_sel [data-testid="stButtonGroup"] button {
+        .st-key-cp_sem_atajo_sel [data-testid="stButtonGroup"] button,
+        .st-key-cp_vol_atajo_sel [data-testid="stButtonGroup"] button {
             min-width: 0 !important;
             min-height: 0 !important;
             height: auto !important;
@@ -1247,6 +1282,8 @@ CSS = """        <style>
         .st-key-cp_rank_atajo_sel
             [data-testid="stButtonGroup"] button:not(:last-child)::after,
         .st-key-cp_sem_atajo_sel
+            [data-testid="stButtonGroup"] button:not(:last-child)::after,
+        .st-key-cp_vol_atajo_sel
             [data-testid="stButtonGroup"] button:not(:last-child)::after {
             content: "·";
             color: var(--text-muted);
@@ -1256,6 +1293,8 @@ CSS = """        <style>
         .st-key-cp_rank_atajo_sel
             [data-testid="stButtonGroup"] button:hover,
         .st-key-cp_sem_atajo_sel
+            [data-testid="stButtonGroup"] button:hover,
+        .st-key-cp_vol_atajo_sel
             [data-testid="stButtonGroup"] button:hover {
             text-decoration: underline !important;
         }
@@ -1271,13 +1310,18 @@ CSS = """        <style>
         .st-key-cp_sem_atajo_sel
             [data-testid="stButtonGroup"] button[aria-checked="true"],
         .st-key-cp_sem_atajo_sel
+            [data-testid="stButtonGroup"] button[aria-pressed="true"],
+        .st-key-cp_vol_atajo_sel
+            [data-testid="stButtonGroup"] button[aria-checked="true"],
+        .st-key-cp_vol_atajo_sel
             [data-testid="stButtonGroup"] button[aria-pressed="true"] {
             background: transparent !important;
             color: var(--accent-deep) !important;
         }
         .st-key-cp_rank_atajo_sel,
         .st-key-cp_prod_atajo_sel,
-        .st-key-cp_sem_atajo_sel {
+        .st-key-cp_sem_atajo_sel,
+        .st-key-cp_vol_atajo_sel {
             width: 100% !important;
             max-width: none !important;
             margin-bottom: 8px !important;
