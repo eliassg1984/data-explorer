@@ -162,7 +162,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#288** — Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el renglón para decir que no hay…
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 
-**Plotly y figuras** (52)
+**Plotly y figuras** (53)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -216,6 +216,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#289** — Sacar un adorno de una figura no la achica: hay que RESTARLE lo que el adorno ocupaba, o el…
 - **#291** — Cuando un bloque "ocupa mucho" y sus px no lo explican, el hueco está DENTRO de la figura de…
 - **#294** — st.dataframe (glide-data-grid) sobrevive a un st.empty() que lo reemplaza por OTRO contenido…
+- **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
 
 **AgGrid y tablas** (47)
 
@@ -493,7 +494,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (57)
+**Decisiones de diseño y UX** (56)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -551,7 +552,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 - **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
 - **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
-- **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
 
 **Mantenimiento y trampas del lenguaje** (9)
 
@@ -15023,11 +15023,56 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      misma familia de error que la #319 (una dona de una dimensión 98,8%
      de un solo valor): la vista promete un reparto que el dato no tiene.
 
-     Queda anotado y NO resuelto acá a propósito: elegir el reemplazo
-     —rankear por el cociente baja/requerido con un piso de volumen, o
-     partir el ranking en sus dos mitades para que la roja se vea, o
-     sacar la sección por redundante— es una decisión de producto, no de
-     implementación.
+     **EL REEMPLAZO: el cociente, y el piso NO puede ser un número de
+     soles.** De las tres salidas posibles —cociente con piso, partir el
+     ranking en dos mitades, o borrar la sección— se eligió la primera. La
+     resta pasó a ser `baja / requerido`, y el ranking se llama ahora
+     «Proporción dada de baja».
+
+     El piso costó una medición y una sorpresa. Lo natural era un umbral en
+     soles, que es lo que ya usa el drill de Volatilidad de Compras («≥ S/
+     400 de gasto»). **No sirve acá, porque el volumen escala con el largo
+     del período** y esta página cambia de rango todo el tiempo:
+
+         piso fijo         3 semanas     2026        histórico
+         S/   500          3 productos   199         492
+         S/ 1.000          0 productos   146         410
+
+     Con el rango de tres semanas —con el que la página ABRE— un piso de S/
+     500 deja tres barras y uno de S/ 1.000 la deja vacía. El piso que sí
+     escala es un TOP-N por movimiento: «de los 100 productos de mayor
+     movimiento, los 15 de mayor cociente». Medido, N=100 da 14 / 72 / 88
+     candidatos en los tres períodos; N=50 deja 4 en tres semanas y N=200 ya
+     mete ruido (un producto de S/ 20 con 346%). El "movimiento" de un
+     producto es `max(requerido, baja)` y no su suma: sumando, uno con 1.000
+     requerido y 0 de baja pesaría igual que otro con 500 y 500, y el
+     segundo es justamente el que interesa.
+
+     **Generalización: un umbral absoluto sobre una magnitud que depende del
+     rango es un bug esperando el rango equivocado.** Si el usuario elige el
+     período, el corte se expresa en RANKING o en porcentaje del total, no
+     en unidades.
+
+     **Y el grupo que queda afuera hay que contarlo, no callarlo.** Los
+     productos con requerido = 0 y baja > 0 no tienen cociente. No son
+     ruido: son 22 productos y el **27% de toda la baja** en tres semanas
+     (7,6% en 2026, 5,6% en el histórico). Pero casi todos son `(Rs)` —
+     producción propia: Zumo de limón, Tarta de queso, Creme brulee— que por
+     naturaleza no se pide a Almacén Central, así que su cociente infinito
+     es ESTRUCTURAL y encabezaría el gráfico para siempre por la razón
+     equivocada. Se excluyen del ranking y se cuentan en el caption, con el
+     porqué. Excluir en silencio hubiera sido la misma falta que la mitad
+     roja que no se encendía.
+
+     **Verificación del reemplazo:** el solapamiento con «Top productos ·
+     requerim.» cae de 15/15 a **0 de 15** en los tres períodos (2 de 15 en
+     el histórico), y la mitad roja de la leyenda **se enciende**: 2 barras
+     sobre 100% en tres semanas y 2 en 2026, contra 0 que daba la resta.
+     En pantalla, medido en el DOM: 15 filas de 0% a 151%, dos barras en
+     `#d97a72` que son exactamente las dos que pasan de 100% (Carne de guiso
+     151%, Pollo Entero 126%), la línea punteada de referencia en x=100, y
+     el hover con los dos importes en soles para poder juzgar la magnitud
+     detrás del porcentaje. (2026-09-05.)
 
      **Verificación:** `ruff` y los tres tests verdes, y `streamlit run`
      contra R2 real. La sección quedó con UNA figura y CERO controles

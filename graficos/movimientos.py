@@ -6,7 +6,7 @@ en dos reportes que un chip Requerimiento/Salidas alternaba. A pedido, al ver
 que la Evolución ya mostraba los dos lados juntos: «esto ya no debería estar,
 ya que ahora muestra ambos».
 
-    Ambos                              Evolución · Diferencias por producto
+    Ambos                              Evolución · Proporción dada de baja
     Requerimientos (requerimientos)    Sub Almacén · Top productos · Tabla
     Salidas (salidas.parquet)          Tipo de descargo · Top productos · Tabla
 
@@ -70,7 +70,7 @@ from graficos.base import (
     seccion_perezosa,
 )
 from graficos.movimientos_comun import (
-    _evolucion_movimientos, _ranking_diferencias, _rango_vigente,
+    _evolucion_movimientos, _ranking_proporcion_baja, _rango_vigente,
 )
 from graficos import alturas
 
@@ -84,13 +84,14 @@ from graficos import alturas
 # «Tabla» existían en los dos lados y al juntarlas quedaban dos ítems con el
 # mismo nombre.
 _RAIL_CATEGORIAS = (
-    # «Diferencias por producto» se llamaba «Pedido vs Baja» hasta el
-    # 2026-09-05. El nombre viejo describía la vista cuando ésta abría con
-    # una evolución requerido-vs-baja; hoy esa evolución es la sección de
-    # al lado y acá sólo queda el ranking, así que el rail decía dos veces
-    # lo mismo. Ver regla #323.
-    ("Ambos", (("Evolución",              "Evolución"),
-               ("Diferencias por producto", "Diferencias"))),
+    # La segunda se llamó «Pedido vs Baja» y después «Diferencias por
+    # producto», las dos veces el mismo día (2026-09-05). El primer nombre
+    # describía la vista cuando abría con una evolución requerido-vs-baja
+    # —que es la sección de al lado, o sea el rail decía dos veces lo
+    # mismo—; el segundo, cuando el ranking todavía iba por la RESTA. Hoy
+    # va por el cociente y el nombre dice eso. Ver regla #323.
+    ("Ambos", (("Evolución",                "Evolución"),
+               ("Proporción dada de baja",  "Proporción"))),
     ("Requerimientos", (("Sub Almacén",               "Sub Almacén"),
                         ("Top productos · requerim.", "Top prod. · req."),
                         ("Tabla · requerim.",         "Tabla · req."))),
@@ -108,7 +109,7 @@ _RAIL_CATEGORIAS = (
 # del bloque, igual que `recetas.py`.
 _PILA = (
     ("mov_sec_evolucion",   "Evolución"),
-    ("mov_sec_comparativo", "Diferencias por producto"),
+    ("mov_sec_proporcion",  "Proporción dada de baja"),
     ("mov_sec_subalmacen",  "Sub Almacén"),
     ("mov_sec_top_req",     "Top productos · requerim."),
     ("mov_sec_tabla_req",   "Tabla · requerim."),
@@ -292,13 +293,13 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         with st.container(border=True, key="ajuste_graf_card_izq_mov_evolucion"):
             _evolucion_movimientos(fam_sel=fam_sel, sub_sel=sub_sel)
 
-    def _dib_comparativo():
-        with st.container(border=True, key="ajuste_graf_card_izq_mov_comparativo"):
+    def _dib_proporcion():
+        with st.container(border=True, key="ajuste_graf_card_izq_mov_proporcion"):
             # Hereda la familia como todo lo demás de la página: desde que
             # los dos parquets se cargan y recortan acá, un filtro propio
             # sólo agregaba una segunda fecha que contradecía a la de
             # arriba (regla #323).
-            _ranking_diferencias(key_prefix="mov_cmp", fam_sel=fam_sel)
+            _ranking_proporcion_baja(key_prefix="mov_prop", fam_sel=fam_sel)
 
     def _dib_subalmacen():
         with st.container(border=True, key="ajuste_graf_card_izq_mov_subalmacen"):
@@ -378,7 +379,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
 
     _DIBUJANTES = {
         "mov_sec_evolucion":   _dib_evolucion,
-        "mov_sec_comparativo": _dib_comparativo,
+        "mov_sec_proporcion":  _dib_proporcion,
         "mov_sec_subalmacen":  _dib_subalmacen,
         "mov_sec_top_req":     _dib_top_req,
         "mov_sec_tabla_req":   _dib_tabla_req,

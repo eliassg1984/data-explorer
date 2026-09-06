@@ -48,7 +48,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from data import cargar as _cargar_reporte
-from tema import ACENTO, AJUSTE_NEG, AJUSTE_POS, GRIS_TEXTO_SUAVE
+from tema import ACENTO, AJUSTE_NEG, GRIS_TEXTO_SUAVE
 from graficos.base import (
     _compras_layout, _compras_truncar, _resolver, selector_fecha_tarjeta,
 )
@@ -582,37 +582,51 @@ def _cargar_lado(archivo, *, col_fecha_cand, col_cod_cand, col_prod_cand,
     return d.dropna(subset=["_fecha"])
 
 
-# ─── Diferencias por producto ───────────────────────────────────────────────
-def _ranking_diferencias(*, key_prefix, fam_sel=()):
-    """En QUÉ producto se desbalanceó lo requerido contra lo dado de baja.
+# ─── Proporción dada de baja ────────────────────────────────────────────────
+# CUÁNTOS PRODUCTOS ENTRAN AL UNIVERSO, y por qué es un TOP-N y no un piso en
+# soles. Medido contra R2 el 2026-09-05, con «los 15 de mayor cociente» sobre
+# distintos universos:
+#
+#                     piso fijo S/ 500        top-100 por movimiento
+#   3 semanas         3 productos             14 candidatos, 2 sobre 100%
+#   2026              199 productos           72 candidatos, 2 sobre 100%
+#   histórico         492 productos           88 candidatos
+#
+# Un piso en soles no escala: el volumen crece con el largo del período, así
+# que el mismo número que deja 492 productos en el histórico deja TRES en el
+# rango de tres semanas con el que la página abre — y con S/ 1.000, cero. El
+# top-N se acomoda solo. N=100 y no 50 (deja 4 candidatos en tres semanas) ni
+# 200 (a esa altura entra ruido: un producto de S/ 20 con 346%).
+_UNIVERSO_PROPORCION = 100
+_TOPE_PROPORCION = 15
 
-    Hermana de la Evolución y no su repetición: aquélla contesta CUÁNDO
-    (una barra por período), ésta contesta EN QUÉ (una barra por producto,
-    del signo de la diferencia). Las dos leen el mismo par de parquets con
-    el mismo filtro.
 
-    HASTA EL 2026-09-05 ESTA VISTA DIBUJABA TRES COSAS: una fila de KPIs,
-    un gráfico de evolución y este ranking. El gráfico era —literalmente,
-    el mismo `_fig_pedido_vs_baja`— el de la sección «Evolución», dos
-    scrolls más arriba en la misma página, y los KPIs decían lo mismo que
-    el caption de aquélla. Se fueron a pedido, tras preguntar «Evolución y
-    Pedido vs Baja, ¿es lo mismo?». La respuesta era «el gráfico sí; el
-    ranking no», así que quedó el ranking. Ver arquitectura.md regla #323.
+def _ranking_proporcion_baja(*, key_prefix, fam_sel=()):
+    """QUÉ PROPORCIÓN de lo que entró a un área terminó dada de baja.
 
-    Y CON ELLOS SE FUERON SUS TRES CONTROLES PROPIOS (rango, familia y un
-    radio Valor/Cantidad). Eso NO es una simplificación cosmética: traía
-    controles propios porque nació el 2026-08-13 viviendo dentro de dos
-    dashboards distintos, cada uno con UN solo parquet cargado por app.py,
-    y los dos lados tenían que quedar filtrados exactamente igual para que
-    la comparación valiera. Desde que la página carga los dos parquets y
-    los recorta junta (`_rango_vigente`), ese motivo ya no existe: heredar
-    es ahora lo correcto, y tener dos fechas en la misma página era lo que
-    confundía.
+    Hermana de la Evolución y no su repetición: aquélla contesta CUÁNDO (una
+    barra por período), ésta contesta DÓNDE DUELE (una barra por producto).
+    Las dos leen el mismo par de parquets con el mismo filtro.
 
-    Lo que se pierde y conviene saber: la métrica queda FIJA en soles (el
-    radio Valor/Cantidad se fue con el resto) y el rango es el de la
-    página — para ver el histórico entero está «Todo» en la píldora de la
-    franja.
+    POR QUÉ UN COCIENTE Y NO LA RESTA, que es lo que dibujaba hasta el
+    2026-09-05. La resta ordenaba por `|requerido − baja|`, y como requerido
+    es ~14 veces la baja, eso es ordenar por requerido: medido, el top-15 de
+    esta vista y el de «Top productos · requerim.» daban **15 de 15 iguales**
+    en los dos períodos probados. Dos secciones de la misma página dibujando
+    la misma lista. Con el cociente el solapamiento es **0 de 15**. Ver
+    arquitectura.md regla #323 — el corolario es que una resta entre dos
+    magnitudes de órdenes distintos no compara: devuelve la magnitud grande.
+
+    QUÉ QUEDA AFUERA, que hay que decirlo o la vista miente por omisión:
+      · Los productos con requerido = 0 y baja > 0 — cociente sin definir.
+        NO son ruido: son 22 productos y el 27% de toda la baja en tres
+        semanas. Pero casi todos son `(Rs)`, producción propia (Zumo de
+        limón, Tarta de queso, Creme brulee) que por naturaleza no se pide a
+        Almacén Central, así que su cociente infinito es ESTRUCTURAL y no una
+        anomalía: encabezarían el gráfico para siempre por la razón
+        equivocada. Se cuentan en el caption en vez de dibujarse.
+      · Los que quedan fuera del top-100 por movimiento, para que un producto
+        de S/ 20 con 300% no le gane a uno de S/ 3.000 con 119%.
     """
     req, sal = _cargar_los_dos_lados()
     if req is None or sal is None:
@@ -638,40 +652,69 @@ def _ranking_diferencias(*, key_prefix, fam_sel=()):
         st.info("No hay datos para el rango y los filtros seleccionados.")
         return
 
-    # ── Ranking por producto: mayor diferencia (requerido − baja) ───────
-    g_req_p = req.groupby(["_cod", "_prod"])["_valor"].sum()
-    g_sal_p = sal.groupby(["_cod", "_prod"])["_valor"].sum()
-    idx = g_req_p.index.union(g_sal_p.index)
-    tabla = pd.DataFrame({
-        "requerido": g_req_p.reindex(idx, fill_value=0),
-        "baja": g_sal_p.reindex(idx, fill_value=0),
+    g_req = req.groupby(["_cod", "_prod"])["_valor"].sum()
+    g_sal = sal.groupby(["_cod", "_prod"])["_valor"].sum()
+    idx = g_req.index.union(g_sal.index)
+    t = pd.DataFrame({
+        "requerido": g_req.reindex(idx, fill_value=0),
+        "baja": g_sal.reindex(idx, fill_value=0),
     }).reset_index()
-    tabla["dif"] = tabla["requerido"] - tabla["baja"]
-    top = tabla.reindex(tabla["dif"].abs().sort_values(ascending=False).index).head(15)
-    top = top.sort_values("dif")
+    # El "movimiento" de un producto es el mayor de sus dos lados, no su
+    # suma: sumarlos haría que uno con 1.000 requerido y 0 de baja pesara lo
+    # mismo que otro con 500 y 500, y el segundo es el que interesa acá.
+    t["mov"] = t[["requerido", "baja"]].max(axis=1)
 
-    if top.empty:
-        st.info("Sin datos.")
+    _sin_req = t[(t["requerido"] <= 0) & (t["baja"] > 0)]
+    universo = t.nlargest(_UNIVERSO_PROPORCION, "mov")
+    sel = universo[(universo["requerido"] > 0) & (universo["baja"] > 0)].copy()
+    if sel.empty:
+        st.info("Ningún producto del período tiene requerimiento y baja a la vez.")
         return
+    sel["ratio"] = sel["baja"] / sel["requerido"]
+    top = sel.nlargest(_TOPE_PROPORCION, "ratio").sort_values("ratio")
 
-    colores = [AJUSTE_POS if v >= 0 else AJUSTE_NEG for v in top["dif"]]
+    # ROJO = la baja superó a lo requerido. A diferencia de la versión de la
+    # resta —donde el rojo no se encendía NUNCA porque los negativos eran un
+    # orden de magnitud más chicos y jamás entraban al top—, acá el caso sí
+    # aparece: 2 de 15 en tres semanas y 2 de 15 en 2026, medido.
+    colores = [AJUSTE_NEG if r > 1 else ACENTO for r in top["ratio"]]
     fig = go.Figure(go.Bar(
-        x=top["dif"], y=[_compras_truncar(p, 34) for p in top["_prod"]],
+        x=top["ratio"] * 100,
+        y=[_compras_truncar(p, 34) for p in top["_prod"]],
         orientation="h", marker_color=colores,
-        text=[f"S/ {v:,.0f}" for v in top["dif"]],
+        text=[f"{r * 100:,.0f}%" for r in top["ratio"]],
         textposition="outside", cliponaxis=False,
+        customdata=top[["requerido", "baja"]].values,
+        hovertemplate=("%{y}<br>Requerido: S/ %{customdata[0]:,.0f}"
+                       "<br>Dado de baja: S/ %{customdata[1]:,.0f}"
+                       "<br>Proporción: %{x:.0f}%<extra></extra>"),
     ))
     _compras_layout(fig, alto=alturas.por_filas(
         len(top), px_fila=30, minimo=320, extra=120))
     fig.update_layout(
-        title="Mayor diferencia entre lo requerido y lo dado de baja",
+        title="Qué proporción de lo requerido terminó dada de baja",
         xaxis_title=None, yaxis_title=None, showlegend=False,
     )
+    # La línea del 100% es la lectura entera del gráfico: a la derecha se dio
+    # de baja MÁS de lo que entró en el período. Va como `shape` y no como
+    # una traza para que no aparezca en el hover ni pida leyenda.
+    fig.add_vline(x=100, line_width=1, line_dash="dot",
+                  line_color=GRIS_TEXTO_SUAVE)
     fig.update_xaxes(visible=False)
     st.plotly_chart(fig, use_container_width=True, key=f"{key_prefix}_ranking")
-    st.caption(
-        "🟢 Se requirió más de lo que se dio de baja en el período. "
-        "🔴 Se dio de baja más de lo requerido. Agregado por producto: no "
-        "hay una llave que una un Requerimiento puntual con la Salida que "
-        "lo originó."
+
+    _pie = (
+        f"De los {_UNIVERSO_PROPORCION} productos de mayor movimiento del "
+        "período, los de mayor proporción de baja sobre lo requerido. "
+        "La línea punteada es el 100%: a su derecha se dio de baja más de lo "
+        "que entró. Agregado por producto — no hay una llave que una un "
+        "Requerimiento puntual con la Salida que lo originó."
     )
+    if len(_sin_req):
+        _pie += (
+            f" Aparte, {len(_sin_req):,} productos (S/ {_sin_req['baja'].sum():,.0f}) "
+            "se dieron de baja sin haberse requerido en el período: no tienen "
+            "proporción que calcular y casi todos son producción propia, que "
+            "no se pide a Almacén Central."
+        )
+    st.caption(_pie)
