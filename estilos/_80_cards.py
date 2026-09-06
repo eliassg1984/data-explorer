@@ -349,6 +349,39 @@ CSS = """    /* ================================================================
         width: 90px !important;
     }
     .st-key-vol_hdr_periodo { width: 100% !important; }
+
+    /* ── TABLA: el selector de ventana, pegado a la derecha ────────────
+       2026-09-06. La sección «Tabla» de Compras no tiene cabecera (el
+       nombre lo pone el rail), así que su selector no comparte renglón con
+       nada: va solo, alineado con el borde derecho de la grilla que
+       encabeza. Mismo ancho (90px) y mismo alto (26px) que el gemelo de
+       Volatilidad — son el MISMO control y tienen que verse igual. */
+    .st-key-tabla_fila_hdr {
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: flex-end !important;
+        width: 100% !important;
+        margin: 0 0 6px !important;
+    }
+    .st-key-tabla_fila_hdr > [data-testid="stElementContainer"],
+    .st-key-tabla_fila_hdr > [data-testid="stLayoutWrapper"] {
+        flex: 0 0 auto !important;
+        width: 90px !important;
+    }
+    .st-key-tabla_fila_hdr [data-testid="stElementToolbar"] { display: none; }
+    .st-key-tabla_fila_hdr .react-aria-ComboBox,
+    .st-key-tabla_fila_hdr .react-aria-ComboBox > div,
+    .st-key-tabla_fila_hdr [data-baseweb="select"] > div {
+        min-height: 26px !important;
+        height: 26px !important;
+        font-size: 12px !important;
+    }
+    .st-key-tabla_fila_hdr .react-aria-ComboBox [role="button"],
+    .st-key-tabla_fila_hdr .react-aria-ComboBox input {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        font-size: 12px !important;
+    }
     /* ── VOLATILIDAD: el segmentador de fecha, tercer item de la fila ──
        2026-09-06, a pedido. Lo dibuja `base.py::selector_fecha_tarjeta`,
        que trae su PROPIA fila (`cp_vol_fila`) — pensada para ser LA

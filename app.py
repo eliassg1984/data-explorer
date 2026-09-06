@@ -21,10 +21,11 @@ from estado_rango import (
 )
 from cortes import cortes_disponibles
 import franja_fecha
-from graficos.compras import bounds_fecha_de_la_vista, vista_quiere_fecha_propia
+from graficos.compras import bounds_fecha_de_la_vista
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_herramientas, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
+from graficos import periodo
 from graficos.base import (_render_rail, compartimento_filtros,
                            contar_filtros, filtro_pills)
 from graficos.ajuste import categoria_rango_ajuste
@@ -493,18 +494,77 @@ _ancla_mes = min(_hoy, fecha_max_full) if fecha_max_full else _hoy
 fecha_ini_default = _ancla_mes.replace(day=1)   # 01 del mes con datos
 fecha_fin_default = _ancla_mes                  # hoy, o el último día con datos
 
+# COMPRAS ABRE EN LOS ÚLTIMOS 12 MESES, y no es un default más: es la otra
+# mitad de haberle sacado el calendario a la franja (2026-09-06, a pedido).
+# Sin control de fecha arriba, el default deja de ser "por dónde empezar a
+# mirar" y pasa a ser "lo que ve una vista que no tiene selector propio" —
+# y ahí un mes es una mentira por omisión, no un punto de partida.
+#
+# Mata además una familia entera de bugs: las reglas #293, #307, #326 y #329
+# son cuatro fallos distintos del MISMO default relativo ("el mes en curso"),
+# que colapsa a un día cuando el parquet no llega a hoy y deja la página en
+# blanco cuando el mes todavía no tiene compras cargadas. Una ventana de 12
+# meses anclada al último día CON DATOS no puede caer en el vacío.
+#
+# POR QUÉ 12 MESES Y NO «TODO», que fue lo primero que se probó: el drill de
+# Proveedor —la sección que se construye al ENTRAR— dibuja una traza de
+# Plotly por cada proveedor del rango, sin tope (es así desde el 2026-08-16,
+# a pedido: "sin selección propia se muestran TODOS"). Medido contra el
+# parquet real, con las cinco familias que vienen marcadas:
+#
+#     un mes     35 proveedores    1.083 filas
+#     12 meses  131 proveedores   11.324 filas
+#     todo      368 proveedores   43.827 filas
+#
+# Con 368 trazas el tab del navegador se bloquea entero —verificado en vivo:
+# ni un `1` en la consola llegaba a evaluarse, con el servidor ocioso al
+# mismo tiempo (0,1 s de CPU en 10 s)—. Es exactamente el modo de fallo de
+# la regla #211, que es la razón de ser de la pila perezosa. «Todo» sigue a
+# un clic desde el selector de fecha de cualquier tarjeta; lo que no puede
+# es ser el estado con el que la página abre.
+#
+# La ventana sale de `periodo.ventana`, la MISMA función que usa la ventana
+# propia de Volatilidad y de «Vs año pasado» — no una cuenta de fechas
+# repetida acá. De paso hereda su recorte contra el primer día con datos.
+#
+# Los otros siete reportes NO cambian: ahí el pill de la franja sigue siendo
+# el control de fecha.
+if reporte == "Compras" and fecha_min_full and fecha_max_full:
+    _v12 = periodo.ventana("12m", _ancla_mes, minimo=fecha_min_full)
+    if _v12:
+        fecha_ini_default, fecha_fin_default = _v12[0].date(), _v12[1].date()
+
 # INVARIANTE: sembrar el default Y recortar a bounds AQUÍ, justo antes de
 # dibujar el widget en este mismo render. Nunca clampear después del
 # widget (se vería un render tarde → desync overlay/calendario/datos).
 # Para carga_por_rango es idempotente con el recorte de arriba; para el
 # resto de reportes ésta es su única inicialización/recorte.
+#
+# EL ESPEJO NO ES REDUNDANTE desde que Compras no dibuja el calendario en la
+# franja (2026-09-06). La clave canónica del rango es también la KEY de un
+# `st.date_input`, y Streamlit recolecta el estado de un widget que deja de
+# renderizarse. Mientras el pill vivía arriba siempre había alguien
+# dibujándolo —la franja, o la tarjeta de Documentos SUNAT— así que la clave
+# nunca quedaba huérfana. Ahora, en Compras, el único render que la dibuja es
+# el de esa tarjeta: al SALIR de ella nadie la dibuja, la recolección se
+# lleva la clave y `asegurar_rango` la volvería a sembrar con el default —
+# o sea, el rango que el usuario acababa de elegir se perdería al cambiar de
+# vista.
+#
+# El espejo es una clave normal (nadie la recolecta) y se restaura ANTES de
+# sembrar. Va para todos los reportes: es barato y el modo de fallo es el
+# mismo en cualquiera que algún día mueva su pill a una tarjeta.
+_k_rango_eco = f"{_k_rango_franja}__eco"
 if _franja_con_fecha:
+    if _k_rango_franja not in st.session_state and _k_rango_eco in st.session_state:
+        st.session_state[_k_rango_franja] = st.session_state[_k_rango_eco]
     asegurar_rango(
         _k_rango_franja,
         default=(fecha_ini_default, fecha_fin_default),
         bounds=(fecha_min_full, fecha_max_full),
         reporte=reporte, usa_carga_rango=_usa_carga_rango,
     )
+    st.session_state[_k_rango_eco] = st.session_state.get(_k_rango_franja)
 
 # ── Modo CORTES de la franja (solo reportes con "cortes" en REPORTES) ──
 # Las claves del corte y del modo salen del mismo dueño único que el rango
@@ -566,11 +626,10 @@ with _fila_top:
             # puede duplicar: su key ES la clave canonica del rango. Ver el
             # docstring del modulo.
             #
-            # Se PUBLICA siempre (el drill lo necesita igual) y se DIBUJA
-            # solo si la vista activa no se lo quedo. `vista_quiere_fecha_
-            # propia()` se resuelve SIN dibujar el rail —que corre mucho mas
-            # abajo, en _render_contenido— leyendo el mismo estado/deep-link
-            # que usaria el rail, asi que no parpadea en la primera carga.
+            # Se PUBLICA siempre: el contexto lo consumen los selectores de
+            # fecha de las TARJETAS (`base.py::selector_fecha_tarjeta`, en
+            # los dos rankings, Semanal y Volatilidad) y la tarjeta de
+            # Documentos SUNAT, que dibuja el pill entero adentro.
             franja_fecha.publicar(
                 k_rango=_k_rango_franja, k_corte=_k_corte,
                 corte_apl=_corte_apl, cortes=_cortes_franja,
@@ -578,18 +637,27 @@ with _fila_top:
                 reporte=reporte, usa_carga_rango=_usa_carga_rango,
                 hoy=_hoy,
             )
-            # Se DEJA CONSTANCIA de quien dibujo la fecha en este render.
-            # No es telemetria: es lo que le permite al dashboard detectar
-            # que la franja quedo desfasada. `_render_contenido` es un
-            # `@st.fragment`, asi que un clic en el rail NO vuelve a
-            # ejecutar este archivo — la franja se entera de que cambio la
-            # vista recien en el siguiente rerun COMPLETO. Sin esta bandera,
-            # entrar a Documentos SUNAT dejaba la fecha arriba y abajo a la
-            # vez (dos widgets, misma key) y salir la dejaba en ninguna
-            # parte. Ver `graficos/compras/__init__.py`, que reconcilia.
-            _franja_dibuja_fecha = not (
-                reporte == "Compras" and vista_quiere_fecha_propia())
-            st.session_state["_franja_dibujo_fecha"] = _franja_dibuja_fecha
+            # COMPRAS NO LLEVA CALENDARIO EN LA FRANJA (2026-09-06, a
+            # pedido: "a todo el reporte de compras, quitemosle el
+            # calendario que esta arriba"). Sus gráficos y tablas ya traen
+            # su propio selector de fecha —los dos rankings, Semanal y
+            # Volatilidad con `selector_fecha_tarjeta`; «Vs año pasado» y
+            # Volatilidad además con su ventana propia de `periodo.py`; y
+            # Documentos SUNAT con el pill entero dentro de su tarjeta—,
+            # así que el de arriba era un cuarto sitio donde tocar lo mismo
+            # y, peor, el que decidía con qué rango ABRE la página: con el
+            # mes en curso todavía sin compras cargadas, el reporte entero
+            # salía vacío (reglas #326 y #329). Lo que no tiene selector
+            # propio muestra ahora todo el histórico — ver el default más
+            # arriba.
+            #
+            # Hasta acá esto era condicional (`vista_quiere_fecha_propia()`,
+            # ya retirada): la franja cedía el pill SOLO a Documentos SUNAT,
+            # porque el widget no se puede duplicar —su key ES la clave
+            # canónica del rango, ver el docstring de `franja_fecha`—. Con
+            # la franja fuera de juego esa negociación desaparece: en
+            # Compras el único que puede dibujarlo es ese drill.
+            _franja_dibuja_fecha = reporte != "Compras"
             if _franja_dibuja_fecha:
                 franja_fecha.render()
 

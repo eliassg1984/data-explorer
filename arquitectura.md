@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-331 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+332 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (106)
 
@@ -286,7 +286,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 - **#331** — Una segunda línea en una celda de AgGrid no entra ensanchando la columna: el presupuesto real…
 
-**Streamlit** (95)
+**Streamlit** (96)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -383,6 +383,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 - **#327** — El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA sola vez: el color hay…
 - **#328** — git add <ruta> NO te protege en un checkout compartido: se lleva lo que OTRA sesión dejó a…
+- **#332** — Sacarle a un reporte el control de fecha GLOBAL son tres cosas más, y ninguna es opcional…
 
 **Datos, R2 y DuckDB** (43)
 
@@ -519,7 +520,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (58)
+**Decisiones de diseño y UX** (59)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -579,6 +580,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
 - **#327** — El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA sola vez: el color hay…
 - **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
+- **#332** — Sacarle a un reporte el control de fecha GLOBAL son tres cosas más, y ninguna es opcional…
 
 **Mantenimiento y trampas del lenguaje** (10)
 
@@ -30153,6 +30155,75 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      0 recortadas, peor caso «110.17 → 169.41» en 69px sobre 71 útiles,
      filas de 40px. (2026-09-06.)
 
+332. **Sacarle a un reporte el control de fecha GLOBAL son tres cosas más,
+     y ninguna es opcional (2026-09-06).** A pedido: "a todo el reporte de
+     compras, quitémosle el calendario que está arriba, los gráficos y
+     tablas mantienen los selectores de fecha que ya tienen o muestran todo
+     el rango". Compras ya tenía cuatro tarjetas con
+     `selector_fecha_tarjeta` y dos con ventana propia de `periodo.py`; el
+     pill de la franja era un quinto sitio para lo mismo y, peor, el que
+     decidía con qué rango ABRE la página — las reglas #293, #307, #326 y
+     #329 son cuatro bugs distintos de ese mismo default relativo.
+
+     Borrar la llamada es una línea. Lo que hay que mover con ella:
+
+     · **EL DEFAULT CAMBIA DE SENTIDO.** Con calendario arriba es "por
+       dónde empezar a mirar" y se arregla en un clic. Sin calendario es
+       "lo que ve una vista que no tiene selector propio", o sea el estado
+       final para esa vista. Un mes deja de ser un punto de partida y pasa
+       a ser una mentira por omisión.
+
+     · **NADIE SOSTIENE LA CLAVE DEL RANGO.** Esa clave es también la KEY
+       de un `st.date_input`, y Streamlit recolecta el estado de un widget
+       que deja de renderizarse. Mientras el pill vivía arriba siempre
+       había alguien dibujándolo —la franja, o la tarjeta de Documentos
+       SUNAT—; ahora el único que puede es ese drill, así que al SALIR de
+       él la clave queda huérfana, la recolección se la lleva y
+       `asegurar_rango` la vuelve a sembrar con el default: el rango que el
+       usuario acaba de elegir se pierde al cambiar de vista. La cura es un
+       espejo en una clave normal (`{k_rango}__eco`), restaurado ANTES de
+       sembrar. Es la #212 vista desde el otro lado: allá el navegador
+       recuerda de más, acá el servidor olvida.
+
+     · **LA NEGOCIACIÓN "quién dibuja el pill" HAY QUE BORRARLA, NO
+       DEJARLA CON UN LADO FIJO.** Había una reconciliación que forzaba
+       `st.rerun(scope="app")` cuando la franja y la vista no coincidían
+       (`_franja_dibujo_fecha == _quiere_propia`). Con la franja siempre en
+       `False`, esa condición la cumple CUALQUIER vista que no sea SUNAT
+       — en cada render. O sea bucle infinito de reruns. Sin frontera que
+       cruzar, la reconciliación entera sobra.
+
+     **Y EL DEFAULT NO PUDO SER «TODO», que era lo pedido.** El drill de
+     Proveedor dibuja una traza de Plotly por cada proveedor del rango, sin
+     tope (así desde el 2026-08-16, también a pedido). Medido contra el
+     parquet real con las cinco familias que vienen marcadas:
+
+         un mes     35 proveedores    1.083 filas    0,94 MB de tabla
+         12 meses  131 proveedores   11.324 filas    9,76 MB
+         todo      368 proveedores   43.827 filas   37,81 MB
+
+     Con 368 trazas el tab del navegador se bloquea entero — verificado en
+     vivo: ni un `1` en la consola llegaba a evaluarse, con el servidor
+     OCIOSO al mismo tiempo (0,1 s de CPU en 10 s). Es el modo de fallo de
+     la #211 otra vez, y la medición separa las dos cosas que se confunden:
+     agregar 43.827 filas cuesta 15 ms (los gráficos no son el problema),
+     DIBUJAR una serie por proveedor sí. Quedó en 12 meses, a elección del
+     usuario, con «Todo» a un clic desde cualquier tarjeta.
+
+     De yapa, la vista «Tabla» —la única sin control de fecha y la única
+     cuyo costo crece con las FILAS, porque manda cada una al navegador—
+     estrena la misma ventana de `periodo.py` que ya usan Volatilidad y
+     «Vs año pasado».
+
+     **Verificación:** `ruff` y los tres tests verdes; en el navegador
+     (viewport 1358, datos reales de R2) el pill no aparece en ninguna
+     vista de Compras salvo Documentos SUNAT, donde sale DENTRO de su
+     tarjeta (y=224, no en la franja); el compartimento de Filtros sigue
+     anclado a la derecha; el reporte abre en «25 ago 2025 – 24 ago 2026»;
+     el atajo «30 días» de la tarjeta de Proveedor lo mueve a «8 ago –
+     24 ago 2026», o sea que las tarjetas siguen mandando; y la CPU vuelve
+     a ~0 después de cada gesto, o sea que no hay bucle. (2026-09-06.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30165,7 +30236,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#332**.
+> próxima regla nueva es la **#333**.
 
 >
 

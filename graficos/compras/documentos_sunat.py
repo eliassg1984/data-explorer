@@ -3448,9 +3448,9 @@ def _rango_vigente():
 
     Antes esto se leía con `len(rango) < 2 → no hay rango`, y el drill
     cortaba con un `st.info` ANTES de dibujar su tarjeta. Como el pill de
-    fecha vive DENTRO de esa tarjeta desde el 2026-08-21 (y `app.py` deja
-    de dibujarlo arriba cuando esta vista está activa, ver
-    `vista_quiere_fecha_propia`), el mensaje pedía elegir una fecha en un
+    fecha vive DENTRO de esta tarjeta desde el 2026-08-21 —y desde el
+    2026-09-06 `app.py` no lo dibuja arriba en NINGUNA vista de Compras,
+    así que ésta es la única que lo tiene—, el mensaje pedía elegir una fecha en un
     control que él mismo acababa de borrar de la pantalla: sin salida,
     salvo cambiar de vista. Ver `arquitectura.md` regla #115.
     """
@@ -3536,10 +3536,12 @@ def renderizar_documentos_sunat(d, col_fecha):
             # El pill de fecha, DENTRO de la tarjeta. Acá la fecha no es
             # contexto global: es EL filtro de la tabla — el rango que se
             # le consulta al SIRE. NO es una copia del de la franja: es la
-            # MISMA llamada, movida. `app.py` lo publica y deja de
-            # dibujarlo cuando esta vista está activa
-            # (`vista_quiere_fecha_propia`), porque el widget no se puede
-            # duplicar: su key es la clave canónica del rango.
+            # MISMA llamada, movida. `app.py` lo publica y NO lo dibuja
+            # —desde el 2026-09-06 en ninguna vista de Compras—, porque el
+            # widget no se puede duplicar: su key es la clave canónica del
+            # rango. O sea que ésta es la única tarjeta de todo el reporte
+            # que trae el calendario entero; las demás tocan ese mismo
+            # rango con `base.py::selector_fecha_tarjeta`.
             franja_fecha.render()
             # El selector «Ver» que había acá bajó al panel del gráfico
             # (`_panel_grafico`), que es lo único que controlaba.

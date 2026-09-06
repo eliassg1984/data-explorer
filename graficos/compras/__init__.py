@@ -44,6 +44,7 @@ from graficos.compras.volatilidad import _compras_volatilidad_drill
 from graficos.compras.vs_ano_pasado import _compras_vs_ano_pasado_drill
 from graficos.compras.semanal import _compras_semanal_drill
 from graficos import alturas
+from graficos import periodo
 
 
 
@@ -335,24 +336,10 @@ _FAMILIAS_DE_ENTRADA = ("ALIMENTOS", "BEBIDAS CON ALCOHOL",
                         "ENVASES Y EMBALAJES")
 
 
-def vista_quiere_fecha_propia():
-    """True si la vista activa de Compras se queda el pill de fecha.
-
-    La consulta `app.py` ANTES de dibujar la franja, para saber si le toca
-    dibujarlo a el o al drill — el widget no se puede duplicar (su key es la
-    clave canonica del rango, ver `franja_fecha`). Se resuelve sin dibujar el
-    rail con `vista_activa`, que usa el mismo criterio que el rail usara
-    despues, deep-link incluido.
-    """
-    return vista_activa(_COMPRAS_RAIL_CATEGORIAS,
-                        "compras_graf_tipo") in _VISTAS_CON_FECHA_PROPIA
-
-
 def bounds_fecha_de_la_vista():
     """`(min, max)` que la vista activa necesita en el calendario, o None.
 
-    Gemela de `vista_quiere_fecha_propia` y con el mismo cliente: la
-    consulta `app.py` antes de sembrar/recortar el rango. Devuelve None
+    La consulta `app.py` antes de sembrar/recortar el rango. Devuelve None
     para el resto de las vistas — cada una se queda con los topes de su
     propio dato, incluida la Semanal, que filtra el parquet de Compras
     como todas las demas y por lo tanto NO quiere los topes del SIRE.
@@ -532,32 +519,30 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     if graf not in opciones:
         graf = opciones[0]
 
-    # ── Quien dibuja el selector de fecha: la franja o el drill ─────────
-    # Hay DOS vistas que se lo quedan (Documentos SUNAT y Semanal, ver
-    # `_VISTAS_CON_FECHA_PROPIA`). El problema es de
-    # ORDEN: la franja de `app.py` se dibuja mucho antes que este rail, y
-    # ademas `_render_contenido` es un `@st.fragment`, asi que un clic aca
-    # NO re-ejecuta `app.py`. En ese rerun parcial la franja sigue con la
-    # decision de la vista ANTERIOR:
-    #   · entrando a SUNAT  -> la franja ya dibujo la fecha Y el drill la
-    #     dibujaria de nuevo: dos widgets con la misma key -> excepcion.
-    #   · saliendo de SUNAT -> no la dibujo ninguno de los dos y la vista
-    #     se queda sin selector de fecha (medido: eso pasaba).
-    # Cuando no coinciden se fuerza un rerun COMPLETO, que es la unica
-    # forma de que `app.py` vuelva a decidir. Cuesta un render extra al
-    # cruzar esa frontera y nada el resto del tiempo.
-    _quiere_propia = graf in _VISTAS_CON_FECHA_PROPIA
-    if st.session_state.get("_franja_dibujo_fecha", True) == _quiere_propia:
-        st.rerun(scope="app")
+    # ── Quien dibuja el selector de fecha ────────────────────────────────
+    # ACA VIVIA UNA RECONCILIACION, y se fue el 2026-09-06 con el
+    # calendario de la franja. Existia porque la franja de `app.py` se
+    # dibuja mucho antes que este rail y `_render_contenido` es un
+    # `@st.fragment`: un clic aca NO re-ejecuta `app.py`, asi que en ese
+    # rerun parcial la franja seguia con la decision de la vista ANTERIOR
+    # —entrando a SUNAT, dos widgets con la misma key; saliendo, ninguno—
+    # y habia que forzar un rerun completo al cruzar esa frontera.
+    #
+    # Sin fecha en la franja de Compras no hay frontera que cruzar: el
+    # unico que puede dibujar el pill es Documentos SUNAT, y lo dibuja
+    # dentro de su propia tarjeta. Que la negociacion desaparezca —en vez
+    # de quedar con un lado fijo en `False`— es lo que evita el bucle: la
+    # condicion vieja era "los dos coinciden", y con la franja SIEMPRE en
+    # `False` cualquier vista que no fuera SUNAT la cumplia en cada render.
 
     # Tabla: usa el mismo AgGrid de la vista Tabla, pero como una opción más
     # del selector. `d` ya viene filtrado por los chips Familia/Subfamilia.
     # ── Vistas que siguen siendo un DESTINO propio ───────────────────────
-    # Una excepción a la pila de abajo: Documentos SUNAT se lleva prestado
-    # el ÚNICO selector de fecha de la app (`franja_fecha.render()`, la
-    # misma función que llama `app.py`). Si estuviera siempre en pantalla,
-    # las demás vistas se quedarían sin control de fecha arriba. Entra a la
-    # pila cuando tenga rango propio — ver `vista_quiere_fecha_propia`.
+    # Una excepción a la pila de abajo: Documentos SUNAT dibuja el pill de
+    # fecha completo (`franja_fecha.render()`, la misma función que llamaba
+    # `app.py`), y es la única del reporte que lo hace. Entra a la pila
+    # cuando tenga rango propio; hasta entonces sigue siendo un destino
+    # aparte, porque dos widgets con esa key son una excepción.
     if graf == "Documentos SUNAT":
         # Import local a propósito: arrastra `sunat.py` y, con él,
         # `requests` — no hay por qué pagarlo al importar Compras si nadie
@@ -601,8 +586,12 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # devuelve `{}` y no revienta), así que desde el cartel se puede saltar
     # a otra vista — antes el único camino era soltar el filtro a ciegas.
     if d is None or d.empty:
+        # El texto NOMBRA DÓNDE está el control, y desde el 2026-09-06 eso
+        # importa: la franja ya no tiene calendario, así que "ampliá el
+        # rango" a secas mandaba a buscar algo que no está en pantalla.
         st.info("No hay compras con esta Familia/Subfamilia en el rango de "
-                "fechas elegido. Ampliá el rango o soltá el filtro.")
+                "fechas elegido. Soltá el filtro de Familia, o ampliá el "
+                "rango desde el selector de fecha de cualquier tarjeta.")
         return
 
     # ══ LA PILA ══════════════════════════════════════════════════════════
@@ -689,8 +678,31 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # Tabla. `d` ya viene filtrado por los chips Familia/Subfamilia.
             from tablas import renderizar_aggrid_compras as _render_tabla_compras
             from estilos import TAM_FUENTE
+
+            # ── LA ÚNICA VISTA CUYO COSTO CRECE CON LAS FILAS ────────────
+            # Desde que Compras abre en todo el histórico (2026-09-06, al
+            # sacarle el calendario a la franja) ésta es la sección que hay
+            # que poder acotar, y la única que no tenía con qué. Los
+            # gráficos agregan —un top-10 sobre 43.827 filas dibuja las
+            # mismas 10 barras que sobre 1.083, y el groupby cuesta 15 ms—,
+            # pero la tabla MANDA CADA FILA al navegador. Medido contra el
+            # parquet real, con las cinco familias que vienen marcadas:
+            #
+            #     un mes    1.083 filas  ->   0,94 MB
+            #     12 meses 11.324 filas  ->   9,76 MB
+            #     todo     43.827 filas  ->  37,81 MB   (4,8 s de serializar)
+            #
+            # El default sigue siendo "Todo", que es lo que se pidió: la
+            # tabla de detalle muestra el detalle. Lo que agrega el selector
+            # es la salida — y se paga sólo al llegar acá, porque esta
+            # sección es la ÚLTIMA de la pila perezosa y no se construye
+            # hasta que uno baja (`seccion_perezosa`, regla #211).
+            with st.container(key="tabla_fila_hdr"):
+                _op_tab = periodo.selector("compras_tabla_periodo",
+                                           default="Todo", widget="lista")
+            _d_tab = periodo.recortar(d, col_fecha, _op_tab)
             _font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
-            _render_tabla_compras(d, _font_px)
+            _render_tabla_compras(_d_tab, _font_px)
 
     _DIBUJANTES = {
         "compras_sec_proveedor":     _dib_proveedor,

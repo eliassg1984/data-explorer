@@ -188,7 +188,11 @@ resto de `graficos/compras/`.
   User-Agent vía `st.context.headers`. El layout va por CSS `@media`.
 - **Un widget que deja de renderizarse pierde su estado.** Por eso el
   `date_input` de la franja se dibuja en los TRES modos: esconderlo
-  borraría la clave del rango del reporte.
+  borraría la clave del rango del reporte. **Compras ya no lo dibuja
+  arriba** (2026-09-06): sus tarjetas traen el selector y el único que
+  dibuja el calendario entero es Documentos SUNAT, dentro de su tarjeta —
+  de ahí el espejo `{k_rango}__eco` de `app.py`, que es lo que evita que
+  el rango se pierda al salir de esa vista. Ver `arquitectura.md` #332.
 
 ## Antes de sumar una columna "comparable": mirá su GRANO
 
