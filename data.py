@@ -89,7 +89,7 @@ REPORTES = {
     # registra después (consumo/merma/evento — ver `Tipo Descargo`). No hay
     # llave que una un Requerimiento con la Salida que lo "cierra" (numeran
     # documentos en secuencias independientes), así que el cruce entre
-    # ambos (`graficos/movimientos_comun.py::_comparativo_pedido_baja`) es
+    # ambos (`graficos/movimientos_comun.py`, sus dos vistas de «Ambos») es
     # agregado por producto/familia/período, nunca documento a documento.
     # Confirmado con DuckDB directo contra R2 real (no demo) 2026-08-13:
     # 726 de los 968 productos de Salidas (75%) también aparecen en

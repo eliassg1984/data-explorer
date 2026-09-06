@@ -16,7 +16,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-322 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+323 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (105)
 
@@ -363,7 +363,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 
-**Datos, R2 y DuckDB** (39)
+**Datos, R2 y DuckDB** (40)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -404,6 +404,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#313** — Los importes del registro del SIRE vienen SIEMPRE en soles; moneda dice en qué se emitió el…
 - **#321** — Un <= fin sobre una columna de fecha que trae HORA se come el último día del rango, entero y…
 - **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
+- **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
 
 **SUNAT y SIRE** (37)
 
@@ -492,7 +493,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (56)
+**Decisiones de diseño y UX** (57)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -550,6 +551,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 - **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
 - **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
+- **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
 
 **Mantenimiento y trampas del lenguaje** (9)
 
@@ -14965,6 +14967,75 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      cero `stMetric` en la página, la tarjeta con su `-48px` de vuelta
      arrancando en y=160 contra unos chips que cierran en y=74, y el
      caption diciendo lo mismo que decían los KPIs. (2026-09-05.)
+
+
+323. **«Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos
+     scrolls más arriba — y lo que quedó al sacarlo resultó ser otro
+     duplicado (2026-09-05).** La pregunta fue directa: «Evolución y Pedido
+     vs Baja, ¿es lo mismo?». La respuesta, mirando el código y no la
+     memoria: **el gráfico sí, literalmente** — las dos secciones llamaban
+     a `_fig_pedido_vs_baja`, el mismo constructor, con las mismas dos
+     series agrupadas por período. Lo único suyo era el segundo gráfico, el
+     ranking por producto de mayor diferencia |requerido − baja|.
+
+     Se sacaron de esa vista el gráfico duplicado, su fila de KPIs y sus
+     TRES controles propios (un `date_input` que arrancaba vacío, un
+     multiselect de Familia y un radio Valor/Cantidad). Lo de los controles
+     no es cosmética: los tenía porque nació el 2026-08-13 viviendo dentro
+     de dos dashboards distintos, cada uno con UN solo parquet cargado por
+     `app.py`, y los dos lados debían quedar filtrados EXACTAMENTE igual
+     para que la comparación valiera. Desde que la página carga los dos
+     parquets y los recorta junta (`_rango_vigente`, #321), ese motivo
+     desapareció: heredar pasó a ser lo correcto, y tener dos fechas en la
+     misma página era justo lo que confundía. **Un control propio que
+     nació de una limitación sobrevive a la limitación si nadie lo revisa.**
+     La vista pasó a llamarse «Diferencias por producto»: con la evolución
+     al lado, dos ítems del rail llamados casi igual decían dos veces lo
+     mismo.
+
+     **Y ACÁ VIENE LA PARTE QUE NO SE VE VENIR.** El ranking que sobrevivió
+     —el que parecía la única pieza con contenido propio— también es un
+     duplicado, de OTRA sección de la misma página. Medido contra R2:
+
+         top-15 por |requerido − baja|  vs  top-15 por requerido
+           · rango 1–21 ago 2026 ......... 15 de 15 iguales
+           · todo 2026 .................... 15 de 15 iguales
+
+     La causa es la misma asimetría que ya obligó a poner el número encima
+     de cada barra en la Evolución (#320): requerido es ~14 veces la baja,
+     así que `requerido − baja ≈ requerido` y ordenar por el módulo de la
+     diferencia ordena por requerido. El ranking es, producto por producto,
+     «Top productos · requerim.», que vive cuatro ítems más allá en el
+     mismo rail.
+
+     El corolario práctico: **una resta entre dos magnitudes de órdenes
+     distintos no es una comparación, es la magnitud grande con ruido.**
+     Antes de rankear por una diferencia, medir el cociente entre los dos
+     lados; si da 10x o más, la resta no va a decir nada que no diga el
+     lado grande solo.
+
+     De yapa, el mismo desbalance rompe la leyenda: el caption promete
+     «🔴 Se dio de baja más de lo requerido» y ese caso EXISTE —26
+     productos en tres semanas, 154 en el año, 253 en el histórico, con
+     `(Rs) Zumo de limón` a −S/ 3.923 a la cabeza— pero **nunca entra al
+     top-15**, porque los negativos son un orden de magnitud más chicos que
+     los positivos. La mitad roja de la leyenda no se enciende jamás. Es la
+     misma familia de error que la #319 (una dona de una dimensión 98,8%
+     de un solo valor): la vista promete un reparto que el dato no tiene.
+
+     Queda anotado y NO resuelto acá a propósito: elegir el reemplazo
+     —rankear por el cociente baja/requerido con un piso de volumen, o
+     partir el ranking en sus dos mitades para que la roja se vea, o
+     sacar la sección por redundante— es una decisión de producto, no de
+     implementación.
+
+     **Verificación:** `ruff` y los tres tests verdes, y `streamlit run`
+     contra R2 real. La sección quedó con UNA figura y CERO controles
+     (`stDateInput`, `stMultiSelect`, `stRadio`, `stButtonGroup` y
+     `stMetric` en cero dentro de ella), y ahora obedece los chips de la
+     página: con Familia = BEBIDAS CON ALCOHOL el ranking pasa de
+     Lomo/Aceite/Pulpo a Campari/Pilsen/Piscos y el caption de la Evolución
+     dice S/ 1.552 requerido — antes ese chip no la tocaba. (2026-09-05.)
 
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->

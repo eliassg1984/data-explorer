@@ -1,29 +1,36 @@
 """
-graficos.movimientos_comun — infraestructura COMPARTIDA entre Requerimientos
-y Salidas.
+graficos.movimientos_comun — las piezas que miran los DOS parquets a la vez.
 
 Los dos parquets describen las DOS MITADES de un mismo flujo de stock:
 Requerimiento es lo que Almacén Central le entrega a un área de producción
 (Cocina, Barra, Pastelería...); Salidas es la baja que esa misma área
-registra después (consumo, merma, evento — ver "Tipo Descargo"). Comparten
-UN ítem de nav ("Movimientos", ver `grupo_nav` en
-navegacion.py::inject_navegacion) con un chip Requerimiento/Salidas
-(`_chip_movimientos`, mismo mecanismo que
-`graficos/recetas_comun.py::_chip_fuente`: clic en el lado no activo NAVEGA,
-no filtra).
+registra después (consumo, merma, evento — ver "Tipo Descargo"). Desde el
+2026-09-05 viven en UN reporte, «Movimientos» (`graficos/movimientos.py`).
 
-Acá hay overlap real de producto: 726 de los 968 productos de Salidas (75%)
-también aparecen en Requerimientos, confirmado con DuckDB directo contra R2
-real 2026-08-13. Por eso este módulo también trae
-`_comparativo_pedido_baja`, una vista que carga AMBOS parquets y los cruza
-— precedente de carga cruzada entre dashboards:
-`recetas_comun.py::_cargar_flujo_compras` ya carga compras.parquet desde
-dentro del dashboard de Recetas.
+Este módulo tiene lo que NO es de un lado ni del otro:
+
+  · `_cargar_los_dos_lados()` — los dos parquets normalizados y sin
+    anulados, con las MISMAS listas de columnas candidatas para los dos
+    consumidores. Es un precedente de carga cruzada entre dashboards, igual
+    que `recetas_comun.py::_cargar_flujo_compras` con compras.parquet.
+  · `_rango_vigente()` — el recorte por fecha, en un solo sitio (ver #321).
+  · `_evolucion_movimientos()` — CUÁNDO: una barra por período, requerido y
+    baja agrupados (ver #320).
+  · `_ranking_diferencias()` — EN QUÉ: una barra por producto, del signo de
+    la diferencia (ver #323).
+
+Las dos vistas se ganan el lugar porque hay overlap real de producto: 726
+de los 968 productos de Salidas (75%) también aparecen en Requerimientos,
+confirmado con DuckDB directo contra R2 real el 2026-08-13.
 
 (Acá decía "a diferencia de Receta Base/Venta, que con 0% overlap NUNCA se
 cruzan". Ese 0% era una medición contra la columna equivocada y se corrigió
 el 2026-09-04 — los dos parquets de receta SÍ se cruzan, y desde entonces
 comparten una sola página. Ver `arquitectura.md` regla #303.)
+
+Hasta el 2026-09-05 acá vivía también `_chip_movimientos`, el segmented
+control Requerimiento/Salidas que navegaba entre los dos reportes. Se fue
+con la fusión: no hay dos destinos que alternar. Ver regla #322.
 
 Dos límites reales del DATO, no del código — no se resuelven con más
 columnas, hay que diseñar la vista alrededor de ellos:
@@ -32,7 +39,7 @@ columnas, hay que diseñar la vista alrededor de ellos:
     producto/familia/período ("¿cuánto entró vs cuánto se dio de baja en
     este mes?"), nunca "este Requerimiento se resolvió con esta Salida".
   - `salidas.parquet` NO trae el área/sub almacén que originó la baja (solo
-    Requerimientos tiene esa columna) — el comparativo no puede desglosar
+    Requerimientos tiene esa columna) — estas vistas no pueden desglosar
     por área, solo por producto/familia.
 """
 
@@ -99,7 +106,7 @@ def _rango_vigente():
 # es peor.
 #
 # LOS DOS LADOS SE FILTRAN IGUAL, que es la regla de esta pareja de parquets
-# (misma doctrina que `_comparativo_pedido_baja`):
+# (misma doctrina que `_ranking_diferencias`, su vista hermana):
 #   · La FECHA sale del rango canónico del reporte —el que escriben la
 #     píldora de la franja y el selector de esta tarjeta— y se aplica a los
 #     dos por igual.
@@ -392,9 +399,9 @@ def _cargar_los_dos_lados():
     """Los dos parquets del flujo, normalizados y sin anulados.
 
     Las listas de candidatos viven ACÁ y no repetidas en cada llamador:
-    `_comparativo_pedido_baja` y la Evolución fusionada tienen que mirar
-    exactamente las mismas columnas, o las dos vistas de la misma página
-    dirían números distintos de la misma cosa.
+    la Evolución y `_ranking_diferencias` tienen que mirar exactamente
+    las mismas columnas, o las dos vistas de la misma página dirían
+    números distintos de la misma cosa.
     """
     req = _cargar_lado(
         "requerimientos.parquet",
@@ -534,7 +541,7 @@ def _evolucion_movimientos(*, fam_sel=(), sub_sel=()):
     st.caption(_pie)
 
 
-# ─── Comparativo Pedido vs Baja ─────────────────────────────────────────────
+# ─── Carga del par de parquets ───────────────────────────────────────────────
 def _cargar_lado(archivo, *, col_fecha_cand, col_cod_cand, col_prod_cand,
                  col_fam_cand, col_valor_cand, col_cant_cand, col_estado_cand,
                  estados_excluir):
@@ -575,108 +582,65 @@ def _cargar_lado(archivo, *, col_fecha_cand, col_cod_cand, col_prod_cand,
     return d.dropna(subset=["_fecha"])
 
 
-def _comparativo_pedido_baja(*, key_prefix):
-    """Vista compartida por Requerimientos y Salidas: cuánto se requirió
-    (entrada al área) contra cuánto se dio de baja (salida de esa área)
-    después, por producto/familia/período — ver límites del dato en el
-    docstring del módulo.
+# ─── Diferencias por producto ───────────────────────────────────────────────
+def _ranking_diferencias(*, key_prefix, fam_sel=()):
+    """En QUÉ producto se desbalanceó lo requerido contra lo dado de baja.
 
-    Trae SUS PROPIOS controles (fecha/familia/granularidad/métrica) en vez
-    de heredar el rango o los chips del dashboard "anfitrión": los dos
-    lados tienen que quedar filtrados exactamente igual para que el
-    comparativo sea válido, y `df_f` del anfitrión solo trae SU parquet ya
-    filtrado por SU fecha (mismo criterio que
-    `recetas_comun._panorama_compras`, que también trae su propio
-    `date_input` en vez de heredar el de la franja)."""
+    Hermana de la Evolución y no su repetición: aquélla contesta CUÁNDO
+    (una barra por período), ésta contesta EN QUÉ (una barra por producto,
+    del signo de la diferencia). Las dos leen el mismo par de parquets con
+    el mismo filtro.
+
+    HASTA EL 2026-09-05 ESTA VISTA DIBUJABA TRES COSAS: una fila de KPIs,
+    un gráfico de evolución y este ranking. El gráfico era —literalmente,
+    el mismo `_fig_pedido_vs_baja`— el de la sección «Evolución», dos
+    scrolls más arriba en la misma página, y los KPIs decían lo mismo que
+    el caption de aquélla. Se fueron a pedido, tras preguntar «Evolución y
+    Pedido vs Baja, ¿es lo mismo?». La respuesta era «el gráfico sí; el
+    ranking no», así que quedó el ranking. Ver arquitectura.md regla #323.
+
+    Y CON ELLOS SE FUERON SUS TRES CONTROLES PROPIOS (rango, familia y un
+    radio Valor/Cantidad). Eso NO es una simplificación cosmética: traía
+    controles propios porque nació el 2026-08-13 viviendo dentro de dos
+    dashboards distintos, cada uno con UN solo parquet cargado por app.py,
+    y los dos lados tenían que quedar filtrados exactamente igual para que
+    la comparación valiera. Desde que la página carga los dos parquets y
+    los recorta junta (`_rango_vigente`), ese motivo ya no existe: heredar
+    es ahora lo correcto, y tener dos fechas en la misma página era lo que
+    confundía.
+
+    Lo que se pierde y conviene saber: la métrica queda FIJA en soles (el
+    radio Valor/Cantidad se fue con el resto) y el rango es el de la
+    página — para ver el histórico entero está «Todo» en la píldora de la
+    franja.
+    """
     req, sal = _cargar_los_dos_lados()
     if req is None or sal is None:
         st.info(
-            "No se pudo armar el comparativo: falta requerimientos.parquet "
+            "No se pudo armar el ranking: falta requerimientos.parquet "
             "o salidas.parquet, o no traen las columnas esperadas."
         )
         return
 
-    c1, c2, c3 = st.columns([2, 2, 1.3])
-    with c1:
-        rango = st.date_input(
-            "Rango (vacío = todo el histórico)", value=(),
-            format="DD/MM/YYYY", key=f"{key_prefix}_rango",
-        )
-    fams = sorted(set(req["_fam"].unique()) | set(sal["_fam"].unique()))
-    with c2:
-        fam_sel = st.multiselect("Familia", fams, key=f"{key_prefix}_fam")
-    with c3:
-        metrica = st.radio("Medir por", ["Valor (S/)", "Cantidad"],
-                           key=f"{key_prefix}_metrica")
-    es_valor = (metrica == "Valor (S/)")
-    campo = "_valor" if es_valor else "_cant"
-    pref = "S/ " if es_valor else ""
-
-    if len(rango) >= 1:
-        req = req[req["_fecha"] >= pd.Timestamp(rango[0])]
-        sal = sal[sal["_fecha"] >= pd.Timestamp(rango[0])]
-    if len(rango) >= 2:
-        # `< fin + 1 día` y no `<= fin`: las dos columnas de fecha traen
-        # hora, así que el `<=` contra medianoche perdía el último día
-        # entero. Ver el comentario largo de `_evolucion_movimientos`, que
-        # trae la medición. Corregido el 2026-09-05 — el bug era de acá
-        # desde el principio y salió al contrastar la vista nueva contra R2:
-        # las dos vistas viven en la misma página y tienen que decir lo
-        # mismo del mismo período.
-        _fin = pd.Timestamp(rango[1]) + pd.Timedelta(days=1)
-        req = req[req["_fecha"] < _fin]
-        sal = sal[sal["_fecha"] < _fin]
+    # El MISMO recorte que la Evolución, por la misma función: si los dos
+    # lados de esta página se filtraran distinto, las dos vistas dirían
+    # números que no se pueden comparar entre sí.
+    _rango = _rango_vigente()
+    if _rango:
+        _ini, _fin = _rango
+        req = req[(req["_fecha"] >= _ini) & (req["_fecha"] < _fin)]
+        sal = sal[(sal["_fecha"] >= _ini) & (sal["_fecha"] < _fin)]
     if fam_sel:
         req = req[req["_fam"].isin(fam_sel)]
         sal = sal[sal["_fam"].isin(fam_sel)]
 
     if req.empty and sal.empty:
-        st.info("No hay datos para los filtros seleccionados.")
+        st.info("No hay datos para el rango y los filtros seleccionados.")
         return
 
-    # ── KPIs ────────────────────────────────────────────────────────────
-    total_req = float(req[campo].sum())
-    total_sal = float(sal[campo].sum())
-    pct = f"{total_sal / total_req * 100:.1f}%" if total_req else "—"
-    k1, k2, k3 = st.columns(3)
-    k1.metric("📥 Requerido", f"{pref}{total_req:,.0f}")
-    k2.metric("📤 Dado de baja", f"{pref}{total_sal:,.0f}")
-    k3.metric("Baja / Requerido", pct, delta_color="off")
-    st.caption(
-        "Agregado por producto/familia/período — no hay una llave que una "
-        "un Requerimiento puntual con la Salida que lo originó."
-    )
-
-    # ── Evolución comparada ─────────────────────────────────────────────
-    cg1, _sp = st.columns([1.4, 3.6])
-    with cg1:
-        gran = st.pills(
-            "Agrupar por", ["Día", "Semana", "Mes", "Año"], default="Mes",
-            key=f"{key_prefix}_gran", label_visibility="collapsed",
-        ) or "Mes"
-
-    g_req = (pd.DataFrame({"per": _periodo_serie(req["_fecha"], gran), "v": req[campo]})
-             .groupby("per")["v"].sum())
-    g_sal = (pd.DataFrame({"per": _periodo_serie(sal["_fecha"], gran), "v": sal[campo]})
-             .groupby("per")["v"].sum())
-    todos_per = sorted(set(g_req.index) | set(g_sal.index))
-    g_req = g_req.reindex(todos_per, fill_value=0)
-    g_sal = g_sal.reindex(todos_per, fill_value=0)
-
-    with st.container(border=True, key="mov_cmp_card_evolucion"):
-        # MISMO constructor que la sección "Evolución" (`_fig_pedido_vs_baja`):
-        # las dos figuras conviven en la página apilada, así que si el look se
-        # bifurca se nota a un scroll de distancia. Acá la métrica puede ser
-        # Cantidad, de ahí el `pref` variable.
-        fig = _fig_pedido_vs_baja(
-            todos_per, g_req.values, g_sal.values,
-            titulo=f"Requerido vs dado de baja ({gran.lower()})",
-            pref=pref, con_texto=len(todos_per) <= 14)
-        st.plotly_chart(fig, use_container_width=True, key=f"{key_prefix}_evolucion")
-
     # ── Ranking por producto: mayor diferencia (requerido − baja) ───────
-    g_req_p = req.groupby(["_cod", "_prod"])[campo].sum()
-    g_sal_p = sal.groupby(["_cod", "_prod"])[campo].sum()
+    g_req_p = req.groupby(["_cod", "_prod"])["_valor"].sum()
+    g_sal_p = sal.groupby(["_cod", "_prod"])["_valor"].sum()
     idx = g_req_p.index.union(g_sal_p.index)
     tabla = pd.DataFrame({
         "requerido": g_req_p.reindex(idx, fill_value=0),
@@ -686,24 +650,28 @@ def _comparativo_pedido_baja(*, key_prefix):
     top = tabla.reindex(tabla["dif"].abs().sort_values(ascending=False).index).head(15)
     top = top.sort_values("dif")
 
-    if not top.empty:
-        colores = [AJUSTE_POS if v >= 0 else AJUSTE_NEG for v in top["dif"]]
-        with st.container(border=True, key="mov_cmp_card_ranking"):
-            fig2 = go.Figure(go.Bar(
-                x=top["dif"], y=[_compras_truncar(p, 34) for p in top["_prod"]],
-                orientation="h", marker_color=colores,
-                text=[f"{pref}{v:,.0f}" for v in top["dif"]],
-                textposition="outside", cliponaxis=False,
-            ))
-            _compras_layout(fig2, alto=alturas.por_filas(
-                len(top), px_fila=30, minimo=320, extra=120))
-            fig2.update_layout(
-                title="Mayor diferencia entre lo requerido y lo dado de baja",
-                xaxis_title=None, yaxis_title=None, showlegend=False,
-            )
-            fig2.update_xaxes(visible=False)
-            st.plotly_chart(fig2, use_container_width=True, key=f"{key_prefix}_ranking")
-            st.caption(
-                "🟢 Se requirió más de lo que se dio de baja en el período. "
-                "🔴 Se dio de baja más de lo requerido."
-            )
+    if top.empty:
+        st.info("Sin datos.")
+        return
+
+    colores = [AJUSTE_POS if v >= 0 else AJUSTE_NEG for v in top["dif"]]
+    fig = go.Figure(go.Bar(
+        x=top["dif"], y=[_compras_truncar(p, 34) for p in top["_prod"]],
+        orientation="h", marker_color=colores,
+        text=[f"S/ {v:,.0f}" for v in top["dif"]],
+        textposition="outside", cliponaxis=False,
+    ))
+    _compras_layout(fig, alto=alturas.por_filas(
+        len(top), px_fila=30, minimo=320, extra=120))
+    fig.update_layout(
+        title="Mayor diferencia entre lo requerido y lo dado de baja",
+        xaxis_title=None, yaxis_title=None, showlegend=False,
+    )
+    fig.update_xaxes(visible=False)
+    st.plotly_chart(fig, use_container_width=True, key=f"{key_prefix}_ranking")
+    st.caption(
+        "🟢 Se requirió más de lo que se dio de baja en el período. "
+        "🔴 Se dio de baja más de lo requerido. Agregado por producto: no "
+        "hay una llave que una un Requerimiento puntual con la Salida que "
+        "lo originó."
+    )
