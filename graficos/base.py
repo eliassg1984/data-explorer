@@ -1738,6 +1738,22 @@ def _layout(**overrides):
                  showline=False, zeroline=False, mirror=False)
     yaxis.update(showline=False, zeroline=False, mirror=False)
     yaxis.setdefault("showticklabels", False)  # oculta valores del eje Y
+    # ENCENDER LAS ETIQUETAS DEL EJE Y OBLIGA A `automargin`, y por eso lo
+    # pone esta función y no cada llamador. `_LAYOUT_BASE` fija `margin l=20`
+    # — suficiente cuando el eje Y va sin rótulos, que es el default de acá.
+    # En una barra HORIZONTAL el eje Y son NOMBRES, y 20px no alcanzan para
+    # ninguno: Plotly no expande el margen solo, así que las etiquetas se
+    # recortan hasta desaparecer. Se veía como "el gráfico no muestra los
+    # nombres" — pasó con «Ingredientes clave» de Recetas el 2026-09-06, con
+    # los nombres puestos en el eje y sólo los importes visibles.
+    #
+    # Va con `setdefault` para que un llamador pueda apagarlo a propósito, y
+    # es el gemelo del `automargin=True` que el eje X recibe siempre acá
+    # arriba. CLAUDE.md ya pedía el par `showticklabels` + `automargin`; el
+    # problema de pedirlo en la convención es que se cumple de a un
+    # llamador. Ver arquitectura.md regla #325.
+    if yaxis.get("showticklabels"):
+        yaxis.setdefault("automargin", True)
 
     base["xaxis"] = xaxis
     base["yaxis"] = yaxis

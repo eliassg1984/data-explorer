@@ -129,9 +129,25 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     ver el docstring del módulo."""
     # ── Columnas de PLATOS (recetaventa.parquet) ──────────────────────────
     col_plato = _resolver(df_f, ["Nomb Plato", "Nombre Plato", "PLATO", "Plato"])
-    col_item = _resolver(df_f, ["Item Rv", "Item RV", "ITEM RV", "Item",
-                                "Nombre Item", "Insumo", "Ingrediente",
-                                "Nombre Producto"])
+    # EL INGREDIENTE ES `INS RV`, NO `ITEM RV`. Los dos existen en
+    # recetaventa.parquet y el segundo PARECE el bueno por el nombre, pero
+    # es el NÚMERO DE LÍNEA dentro de la receta: '001', '002', '003'…, sólo
+    # 31 valores distintos contra los 1.053 de `INS RV`, que es donde vive
+    # el nombre ('Mantequilla Sin Sal', '(L) Palta Limpia DD'). Medido
+    # contra R2 el 2026-09-06.
+    #
+    # La lista de candidatos vieja empezaba por «Item Rv»/«ITEM RV», así que
+    # «Ingredientes clave» venía agrupando por POSICIÓN EN LA RECETA — el
+    # costo de todos los ingredientes #1 de todos los platos juntos, que no
+    # significa nada. Se veía como «el gráfico no muestra los nombres»
+    # porque Plotly lee '001' como número y rotula el eje 2, 4, 6…: el
+    # síntoma era de rótulos y el bug era de agregación. Ver arquitectura.md
+    # regla #325.
+    #
+    # Los candidatos de `ITEM RV` NO vuelven a la lista ni como último
+    # recurso: caer ahí no es degradarse, es mentir.
+    col_item = _resolver(df_f, ["INS RV", "Insumo", "Ingrediente",
+                                "Nombre Item", "Nombre Producto"])
     col_total = _resolver(df_f, ["Total", "TOTAL", "Importe", "Costo Total",
                                  "Total Costo", "Valorizado"])
     col_cant = _resolver(df_f, ["Cantidad", "CANTIDAD", "Cant"])

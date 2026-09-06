@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-324 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+325 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (105)
 
@@ -176,7 +176,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#288** — Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el renglón para decir que no hay…
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 
-**Plotly y figuras** (53)
+**Plotly y figuras** (54)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -231,6 +231,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#291** — Cuando un bloque "ocupa mucho" y sus px no lo explican, el hueco está DENTRO de la figura de…
 - **#294** — st.dataframe (glide-data-grid) sobrevive a un st.empty() que lo reemplaza por OTRO contenido…
 - **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
+- **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
 
 **AgGrid y tablas** (47)
 
@@ -378,7 +379,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 
-**Datos, R2 y DuckDB** (41)
+**Datos, R2 y DuckDB** (42)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -421,6 +422,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
 - **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
 - **#324** — El pause no era la causa: la tarea corría python DIRECTO, y lo que colgaba era el input() del…
+- **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
 
 **SUNAT y SIRE** (37)
 
@@ -29772,6 +29774,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 
 
+325. **«No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no
+     un problema de rótulos (2026-09-06).** El reporte fue «esta tabla de
+     ingredientes debe mostrar el nombre de los ingredientes», y el gráfico
+     de «Ingredientes clave» de Recetas mostraba sólo importes con el eje Y
+     rotulado 2, 4, 6, 8… La lectura fácil —y equivocada— es la trampa que
+     este mismo documento ya tiene escrita: barras horizontales sin
+     `automargin`. Lo que lo desmintió fue leer el DOM en vez del código:
+     los valores del eje eran `["017", "012", "019"]` y
+     `_fullLayout.yaxis.type` decía **`linear`**, no `category`. O sea que
+     el eje no estaba recortado: estaba rotulando NÚMEROS, porque los
+     valores eran códigos que Plotly parsea como tales.
+
+     La causa real: `recetaventa.parquet` tiene DOS columnas que parecen la
+     del ingrediente y sólo una lo es.
+
+         ITEM RV     31 valores distintos    '001', '002', '003'…
+         INS RV   1.053 valores distintos    'Mantequilla Sin Sal',
+                                             '(L) Palta Limpia DD'
+
+     `ITEM RV` es el **número de línea dentro de la receta**. La lista de
+     candidatos de `_resolver` empezaba por `"Item Rv", "Item RV", "ITEM
+     RV"`, así que la vista venía agrupando por POSICIÓN EN LA RECETA. No
+     era un rótulo feo: la CUENTA estaba mal. Medido, el "ingrediente" más
+     caro del catálogo era **`001`, S/ 14.307, «en 649 platos»** — el costo
+     de todos los primeros ingredientes de todas las recetas sumados, bajo
+     un encabezado que decía «Ingrediente». Con `INS RV` la misma vista da
+     Whisky Glenfiddich 21 Años, S/ 1.184, en 1 plato.
+
+     **`buscar_columna` devuelve el PRIMER candidato que exista, así que una
+     lista de candidatos es una lista de PRIORIDAD, no de sinónimos.** Una
+     columna plausible-pero-equivocada puesta antes que la buena gana
+     siempre, y falla en silencio porque el resultado existe y tiene el tipo
+     esperado. Los candidatos de `ITEM RV` no volvieron a la lista ni como
+     último recurso: caer ahí no es degradarse, es mentir. El chequeo que lo
+     habría cazado en diez segundos es el mismo de la #239 —contar en
+     cuántas filas dice algo—, acá en su versión `nunique`: 31 grupos para
+     algo que debería tener miles no es un ingrediente.
+
+     **Y el `automargin` que resultó no ser la causa hacía falta igual.**
+     `_layout()` le ponía `automargin=True` al eje X SIEMPRE y al Y nunca,
+     con `_LAYOUT_BASE` fijando `margin l=20`. Mientras el eje Y llevó
+     números eso estuvo bien (es el default, van ocultos); apenas lleva
+     NOMBRES, 20px no alcanzan para ninguno y Plotly no expande solo. Este
+     documento ya pedía el par `showticklabels=True` + `automargin=True`,
+     pero **una convención se cumple de a un llamador**: de los tres sitios
+     del repo que encienden las etiquetas del eje Y, `ventas_horario` lo
+     tenía y los dos de `recetas_comun` no. Ahora lo pone `_layout()` con
+     `setdefault` —apagable a propósito— y es imposible olvidarlo. Medido
+     después: el área izquierda pasa de 20px a 281/282/293px en las tres
+     figuras, con cero rótulos recortados.
+
+     Moraleja de método, que es la que se repite: **el síntoma apunta a la
+     capa de presentación y el bug suele estar una capa más abajo.** Un
+     gráfico que "no muestra nombres" puede no tener nombres que mostrar.
+     Antes de tocar el layout, mirar QUÉ hay en los datos de la traza.
+
+     **Verificación:** `ruff` y los tres tests verdes, y `streamlit run`
+     contra R2 real: `yaxis.type` pasa de `linear` a `category`, las 15
+     barras traen nombre («Whisky Isla Kilchoman Sanaig Islay Single Malt»
+     entero, sin recorte) y las otras dos vistas de barras horizontales de
+     Recetas —Ranking de recetas base e Insumos clave— también dejan de
+     recortar. (2026-09-06.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -29784,7 +29850,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#325**.
+> próxima regla nueva es la **#326**.
 
 >
 

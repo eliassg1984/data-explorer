@@ -268,8 +268,17 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   finas). `go.Bar` sí usa `bargap`.
 - **`_layout()` oculta los ticks del eje Y a propósito** (convención: la
   cuadrícula se ve, los valores no). En barras **horizontales** el eje Y son
-  NOMBRES, no valores: hay que pasar `showticklabels=True` + `automargin=True`
-  o las etiquetas no aparecen.
+  NOMBRES, no valores: pasar `showticklabels=True` en su `yaxis`. El
+  `automargin` que esos rótulos necesitan lo agrega `_layout()` solo desde
+  el 2026-09-06 — pedirlo a mano se cumplía de a un llamador y dos de tres
+  no lo tenían, así que los nombres se recortaban contra el `margin l=20`.
+  Ver `arquitectura.md` regla #325.
+- **Un eje que rotula 2, 4, 6… donde esperabas nombres no es un problema de
+  layout.** Es que los valores de la traza son códigos (`'001'`, `'017'`) y
+  Plotly los parsea como números: `yaxis.type` sale `linear` en vez de
+  `category`. Mirá los datos de la traza antes de tocar márgenes — la misma
+  #325 nació de una columna de agrupación equivocada disfrazada de rótulo
+  faltante.
 - En barras horizontales, grosor y separación dependen ambos de los píxeles
   por fila (`height / n`). Para filas compactas, altura proporcional
   (`height = k * n + margen`), no `bargap`.
