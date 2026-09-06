@@ -504,15 +504,6 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     publicar_contexto_ia("Compras", d,
                          {"Familia": fam_sel, "Subfamilia": sub_sel})
 
-    if d is None or d.empty:
-        # Desde el 2026-09-02 este cartel es alcanzable a propósito: las
-        # opciones de Familia/Subfamilia salen del histórico, así que se
-        # puede elegir una que no compró nada en el rango de la píldora. Por
-        # eso el texto nombra a los DOS filtros y no sólo "los filtros".
-        st.info("No hay compras con esta Familia/Subfamilia en el rango de "
-                "fechas elegido. Ampliá el rango o soltá el filtro.")
-        return
-
     # Data SIN filtro de fecha (para el toggle "Todo el histórico" del Panel B
     # del drill Proveedor). Se le aplican los mismos chips Familia/Subfamilia,
     # que no son de fecha. Si no llega df_full, cae a df_f (mismo comportamiento).
@@ -590,6 +581,28 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # de ahí el fallback a `d`. Ver arquitectura.md regla #301.
             renderizar_documentos_sunat(
                 df_full if df_full is not None else d, col_fecha)
+        return
+
+    # ── SIN FILAS TRAS LOS CHIPS: recién ACÁ se corta ────────────────────
+    # Desde el 2026-09-02 este cartel es alcanzable a propósito: las
+    # opciones de Familia/Subfamilia salen del histórico, así que se puede
+    # elegir una que no compró nada en el rango de la píldora. Por eso el
+    # texto nombra a los DOS filtros y no sólo "los filtros".
+    #
+    # ESTABA ARRIBA DE TODO Y SE MOVIÓ ACÁ (2026-09-06). Cortar antes del
+    # rail apagaba la pantalla ENTERA —ni rail, ni vistas— y con eso se
+    # llevaba puesta a «Documentos SUNAT», que no mira `d`: le pregunta al
+    # SIRE y recibe `df_full` justamente para que los chips no la toquen
+    # (regla #301). El día que el rango cayó en un mes que el sistema
+    # todavía no cargó, la vista de SUNAT tenía 61 comprobantes para
+    # mostrar y la página salía en blanco. Ver `arquitectura.md` regla #329.
+    #
+    # Puesto acá, el rail se dibuja igual (con `d` vacío `_kpis_vistas`
+    # devuelve `{}` y no revienta), así que desde el cartel se puede saltar
+    # a otra vista — antes el único camino era soltar el filtro a ciegas.
+    if d is None or d.empty:
+        st.info("No hay compras con esta Familia/Subfamilia en el rango de "
+                "fechas elegido. Ampliá el rango o soltá el filtro.")
         return
 
     # ══ LA PILA ══════════════════════════════════════════════════════════

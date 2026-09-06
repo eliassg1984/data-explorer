@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-328 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+329 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (105)
 
@@ -427,7 +427,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
 - **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
 
-**SUNAT y SIRE** (38)
+**SUNAT y SIRE** (39)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -467,6 +467,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#313** — Los importes del registro del SIRE vienen SIEMPRE en soles; moneda dice en qué se emitió el…
 - **#314** — El ISC no tiene casillero propio en el Almacén: va ADENTRO del neto, con su tasa al lado. Y…
 - **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
+- **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
 
 **Fechas, rangos y cortes** (9)
 
@@ -515,7 +516,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (57)
+**Decisiones de diseño y UX** (58)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -574,6 +575,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
 - **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
 - **#327** — El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA sola vez: el color hay…
+- **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
 
 **Mantenimiento y trampas del lenguaje** (10)
 
@@ -29996,6 +29998,53 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (2026-09-06.)
 
 
+329. **Una guarda de "no hay filas" puesta ANTES del rail apaga vistas
+     que no dependen de esas filas: el reporte de Compras salía en blanco
+     con 61 comprobantes para mostrar (2026-09-06).** Segundo acto de la
+     #326. Con el default del rango ya anclado a HOY, «Documentos SUNAT»
+     abre en el mes en curso — y en ese mes el sistema todavía no tenía
+     cargadas las compras. `compras.parquet` traía **4 filas del 1 al 6 de
+     septiembre, S/ 43**, y las cuatro caían fuera de las cinco familias
+     que vienen marcadas por defecto (ALIMENTOS, BEBIDAS C/ y S/ ALCOHOL,
+     ENVASES Y EMBALAJES, VINOS Y ESPUMANTES). O sea: `d` vacío tras los
+     chips, y en `renderizar_graficos_compras` eso era
+
+         if d is None or d.empty:
+             st.info("No hay compras con esta Familia/Subfamilia…")
+             return
+
+     **doce líneas antes del rail.** El `return` no se llevaba una vista:
+     se llevaba la PÁGINA. Ni rail, ni pila, ni la vista de SUNAT — que no
+     mira `d` (recibe `df_full` a propósito, para que los chips de familia
+     no la toquen, regla #301) y tenía 61 comprobantes de septiembre
+     esperando. En pantalla: un cartel celeste hablando de familias, en un
+     reporte donde el usuario venía a ver documentos de SUNAT.
+
+     La guarda ahora vive DESPUÉS de la rama de Documentos SUNAT, justo
+     antes de la pila. Lo que hay en el medio ya tolera un `d` vacío —
+     `_kpis_vistas` arranca con `if d is None or d.empty: return {}`, y
+     `d_full` no se deriva de `d`—, así que el rail se dibuja igual.
+
+     Dos cosas que deja, más allá del bug:
+
+     · **El cartel de "no hay nada" no puede ser una salida por arriba.**
+       Es la regla #115 otra vez (dibujar las tarjetas SIEMPRE y decidir el
+       contenido adentro), aplicada al ESQUELETO de la página: el cartel
+       reemplaza el contenido de una vista, no la navegación. Con la guarda
+       movida, desde el estado vacío se puede saltar a otra vista con un
+       clic; antes el único camino era adivinar qué filtro soltar.
+
+     · **Un default de filtro convierte "pocas filas" en "cero filas".** Las
+       cinco familias marcadas de fábrica se leen como "sin filtrar" hasta
+       que el rango cae en un tramo flaco. No es motivo para sacarlas: es
+       motivo para que la guarda no sea terminal.
+
+     **Verificación:** `ruff` y los tres tests verdes; en la app desplegada,
+     `?reporte=Compras&vista=documentos_sunat` abre en «1 sep – 6 sep» con
+     los 61 comprobantes y el rail entero, con los mismos chips de familia
+     que antes dejaban la página en blanco. (2026-09-06.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30008,7 +30057,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#329**.
+> próxima regla nueva es la **#330**.
 
 >
 
