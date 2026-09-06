@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-327 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+328 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (105)
 
@@ -283,7 +283,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 
-**Streamlit** (94)
+**Streamlit** (95)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -379,6 +379,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#316** — Un control que sube a la línea del título arrastra CON ÉL todo el cálculo que depende de su…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 - **#327** — El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA sola vez: el color hay…
+- **#328** — git add <ruta> NO te protege en un checkout compartido: se lleva lo que OTRA sesión dejó a…
 
 **Datos, R2 y DuckDB** (43)
 
@@ -574,7 +575,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#322** — Un chip que hace elegir entre dos lados sobra en cuanto la página muestra los dos:…
 - **#327** — El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA sola vez: el color hay…
 
-**Mantenimiento y trampas del lenguaje** (9)
+**Mantenimiento y trampas del lenguaje** (10)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -585,6 +586,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#233** — Una guarda que rastrea el fuente tiene que excluir .claude/worktrees/ — y el filtro mira los…
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 - **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
+- **#328** — git add <ruta> NO te protege en un checkout compartido: se lleva lo que OTRA sesión dejó a…
 
 **Sin tema asignado** (1)
 
@@ -29952,6 +29954,48 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      El color se leyó con el truco de la regla #93 (anular la transición y
      forzar reflow antes de medir), no a ojo.
 
+328. **`git add <ruta>` NO te protege en un checkout compartido: se lleva
+     lo que OTRA sesión dejó a medias en ESE MISMO archivo, y tumbó la app
+     en producción (2026-09-06).** La regla que ya estaba escrita —commitear
+     por ruta explícita, nunca `git add -A`— evita arrastrar archivos
+     ajenos. No evita nada dentro del archivo: `git add app.py` sube el
+     app.py del DISCO, no "mis cambios de app.py".
+
+     Lo que pasó: dos sesiones de Claude Code sobre el mismo directorio. La
+     otra estaba a mitad de un cambio —`app.py` ya importaba
+     `antiguedad_datos` y `HORAS_DATO_VIEJO`, y `data.py`, donde iban a
+     vivir, todavía sin guardar—. Esta sesión corrió `git add app.py
+     arquitectura.md` para un fix propio y se llevó ese import a medio
+     nacer. En `main`, y con deploy automático:
+
+         ImportError  ·  app.py line 12, in <module>  ·  from data import (
+
+     El `git status` del arranque LO DECÍA (`M data.py`, `M
+     inyecciones/varios.py`): había trabajo ajeno en curso. Lo que no se
+     leyó es que ese trabajo también tocaba `app.py`, que era justo el
+     archivo a commitear. **La comprobación son cinco segundos**, y va
+     ANTES del `git add`:
+
+         git diff -- app.py          # ¿es TODO mío lo que aparece acá?
+
+     Si el diff trae líneas que no escribiste, el commit no es tuyo:
+     `git add -p` para elegir tramos, o esperar a que la otra sesión cierre.
+
+     La otra mitad de la lección es el TIEMPO DE RECUPERACIÓN. La sesión
+     vecina empujó el `data.py` que faltaba a los ~14 min, así que el repo
+     quedó sano — pero **Streamlit Cloud no volvió solo**: 15 minutos
+     después seguía sirviendo la pantalla de ImportError. Una app que
+     revienta en el import queda muerta y el push siguiente no siempre la
+     revive; hay que apretar *Manage app → Reboot app*. O sea: romper `main`
+     no cuesta el minuto que tarda el arreglo, cuesta lo que tarde alguien
+     con acceso al panel.
+
+     **Verificación:** `ruff` y los tres tests verdes; los imports de nivel
+     superior de `app.py` resuelven todos contra el `HEAD` actual
+     (comprobado con un barrido `ast` + `hasattr`, símbolo por símbolo).
+     (2026-09-06.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -29964,7 +30008,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#328**.
+> próxima regla nueva es la **#329**.
 
 >
 
