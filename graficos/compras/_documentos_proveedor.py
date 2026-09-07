@@ -25,6 +25,8 @@ from st_aggrid import AgGrid, JsCode
 
 from inyecciones import inject_maximize_aggrid
 from graficos import alturas
+from graficos.compras._css_proveedor import CSS_PIVOTE_DOCS
+from graficos.compras._etiquetas_proveedor import nombre_propio
 
 
 def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
@@ -58,7 +60,16 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
         if not _bd.empty:
             _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
             _pv_docs = pd.DataFrame({
-                "Proveedor": _bd["prov"].astype(str).values,
+                # Mismo trato que el ranking de arriba: los nombres llegan
+                # GRITADOS desde el ERP y una columna entera de mayúsculas
+                # se lee como un bloque. `nombre_propio` es puro y está
+                # cubierto por `test_graficos.py`.
+                #
+                # Acá NO hace falta la columna oculta `_prov_raw` que sí
+                # lleva el ranking: ese grid COMPARA la selección contra los
+                # datos, y este sólo agrupa y muestra. El filtro por
+                # `top_provs` ya pasó, arriba, sobre el nombre crudo.
+                "Proveedor": [nombre_propio(n) for n in _bd["prov"].astype(str)],
                 # Fecha en ISO para orden correcto; se muestra dd/mm/yyyy en el front
                 "Fecha": _fe.dt.strftime("%Y-%m-%d").fillna("").values,
                 "Documento": (_bd["docu"].astype(str).values
@@ -123,17 +134,42 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
             # se cambia una sola, el marco deja de coincidir con lo que las
             # filas ocupan y sobra (o falta) media fila al pie.
             _ALTO_FILA_PIVOT = 23
-            _ALTO_HEADER_PIVOT = 38
-            # Todo lo que el grid mide y NO son filas. MEDIDO restando en el
-            # navegador (root 150 − `.ag-body-viewport` 58 = 92), que es la
-            # única forma honesta acá: la cabecera del pivote son DOS
-            # niveles —el grupo de períodos y los campos— y da 77px con
-            # `headerHeight: 38`, no 38; y abajo hay ~13px de barra de
-            # scroll HORIZONTAL que este grid tiene siempre (las columnas de
-            # período no entran nunca en el ancho), más 2 de borde y 1 de
-            # `ag-sticky-bottom`. Sumar los declarados daba 81 y la tabla
-            # scrolleaba media fila con 3 filas de contenido.
-            _CROMO_GRID_PIVOT = _ALTO_HEADER_PIVOT * 2 + 16
+            # ── Los DOS niveles de la cabecera, cada uno con su número ──
+            # 2026-09-06, a pedido ("se ve muy sobredimensionada"): eran 38
+            # y 38 —los dos por defecto—, o sea 77px de cabecera contra 23px
+            # de fila. Medido en el navegador: 3,3 filas de dato gastadas en
+            # rotular. Bajan a 24 + 28 = 53. El resto de la dieta (la
+            # negrita, las líneas verticales) es CSS y vive en
+            # `CSS_PIVOTE_DOCS`; los altos tienen que quedarse acá porque el
+            # marco del iframe se dimensiona con ellos, tres líneas abajo.
+            #
+            # `groupHeaderHeight` NO existía: sin declararlo, el nivel del
+            # grupo hereda `headerHeight`, que es de donde salía el 38 × 2.
+            _ALTO_GRUPO_PIVOT = 24
+            _ALTO_HEADER_PIVOT = 28
+            # Todo lo que el grid mide y NO son filas. MEDIDO en el
+            # navegador, que es la única forma honesta acá — el 2026-09-06,
+            # con la cabecera nueva, `.ag-root-wrapper` 430 menos
+            # `.ag-body-viewport` 360 = 70, y las piezas cierran exacto:
+            #
+            #   2  los dos bordes de 1px del `.ag-root-wrapper`
+            #   1  el borde inferior de `.ag-header` (los 52 declarados
+            #      arriba son sus dos niveles; el borde va aparte)
+            #  15  la barra de scroll HORIZONTAL, que este grid tiene
+            #      siempre (las columnas de período no entran nunca en el
+            #      ancho disponible)
+            #
+            # El `ag-sticky-bottom` del gran total NO suma: se superpone al
+            # viewport, no lo empuja (53 + 360 + 15 = 428 = el interior del
+            # wrapper, sin lugar para sus 24px).
+            #
+            # De los tres, el que se mueve es el scroll: depende del SO y
+            # del navegador, y el 16 que vivía acá se calibró contra uno de
+            # 13px. Si vuelve a no cuadrar, se remide — pero conviene que
+            # sobre y no que falte: de más queda una franja vacía de 2px, de
+            # menos la tabla scrollea media fila (que es como se descubrió
+            # el bug original, con los declarados sumando 81).
+            _CROMO_GRID_PIVOT = _ALTO_GRUPO_PIVOT + _ALTO_HEADER_PIVOT + 18
             # Filas que el grid muestra SIN expandir: una por proveedor más
             # la del gran total (`grandTotalRow`). Expandir un grupo abre
             # filas nuevas y ésas scrollean por dentro — Python no puede
@@ -187,6 +223,7 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                 },
                 "rowHeight": _ALTO_FILA_PIVOT,
                 "headerHeight": _ALTO_HEADER_PIVOT,
+                "groupHeaderHeight": _ALTO_GRUPO_PIVOT,
                 # domLayout NORMAL (no autoHeight): el grid tiene un viewport de
                 # alto fijo con scroll interno. Es lo que permite hacer scroll en
                 # PANTALLA COMPLETA — el _FS_CSS_IFRAME fuerza el grid a 100vh y
@@ -208,6 +245,11 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                     gridOptions=_grid_pv,
                     allow_unsafe_jscode=True,
                     theme="streamlit",
+                    # Sin esto el grid salía con el `theme="streamlit"` de
+                    # fábrica —era el único AgGrid del repo sin estilar— y
+                    # su cabecera pesaba más que la tabla. El grid es un
+                    # iframe: `CSS_PROVEEDOR`, que es del padre, no lo toca.
+                    custom_css=CSS_PIVOTE_DOCS,
                     height=_ALTO_PIVOT,
                     enable_enterprise_modules=True,
                     fit_columns_on_grid_load=True,

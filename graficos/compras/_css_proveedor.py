@@ -10,15 +10,17 @@ drill se dibuja. `estilos/` se inyecta en TODAS las paginas via
 inject_css(); moverlo ahi lo aplicaria siempre, que es un cambio de
 comportamiento, no una reorganizacion. El drill lo inyecta cuando toca.
 
-DOS exports, y NO son la misma clase de cosa:
+TRES exports, y el primero NO es la misma clase de cosa que los otros:
   · `CSS` — el `<style>` del documento PADRE, el de siempre.
-  · `CSS_RANKING_GRID` — un dict para el `custom_css=` de `AgGrid(...)`,
-    que es la ÚNICA vía de estilar el grid: vive en un iframe propio y
-    nada del padre lo alcanza (lo mismo que ya obliga a que los colores
-    de la barra de "Valor" salgan de `tema.py` y no de `var(--acento)`).
+  · `CSS_RANKING_GRID` y `CSS_PIVOTE_DOCS` — dicts para el `custom_css=`
+    de `AgGrid(...)`, que es la ÚNICA vía de estilar un grid: vive en un
+    iframe propio y nada del padre lo alcanza (lo mismo que ya obliga a
+    que los colores de la barra de "Valor" salgan de `tema.py` y no de
+    `var(--acento)`). Uno por grid, porque son dos tablas distintas: el
+    ranking de arriba y el pivote de documentos de abajo.
 """
 
-from tema import BLANCO
+from tema import BLANCO, GRIS_BORDE, GRIS_TEXTO_MEDIO
 
 CSS = """        <style>
         .st-key-compras_prov_marco { position: relative; }
@@ -2027,3 +2029,41 @@ CSS_RANKING_GRID = {
 # que ya viene en mayusculas -- `capitalize` no baja el resto de la palabra,
 # y dos `text-transform` no se encadenan sobre el mismo texto. Lo resuelve
 # `_etiquetas_proveedor.nombre_propio`, que ademas es pura y testeable.
+
+
+# ── La cabecera del pivote de Documentos ────────────────────────────
+# Ese grid era el UNICO AgGrid del repo que se dibujaba sin `custom_css`:
+# los demas pasan por `tablas/_css.py` o por `CSS_RANKING_GRID`, y este se
+# habia quedado con el `theme="streamlit"` tal cual salio de fabrica. Se
+# noto por lo que pesaba la cabecera, medido en el navegador el 2026-09-06:
+#
+#   · 77px de cabecera (dos niveles de 38) contra 23px de fila de dato,
+#     o sea 3,3 filas gastadas en rotular.
+#   · rotulos en 12px `bold` (700) -- el MISMO cuerpo que el dato, pero en
+#     negrita, que es lo que la hacia leerse mas fuerte que la tabla.
+#   · una linea vertical entre cada par de columnas, en los dos niveles.
+#
+# Se estila por las VARIABLES del tema por la misma razon medida que
+# `CSS_RANKING_GRID` (ver el comentario de arriba): `theme="streamlit"`
+# declara las suyas dentro de un `:where(...)`, que tiene especificidad
+# CERO, asi que alcanza con redeclararlas.
+#
+# Lo que este dict NO toca son los ALTOS: salen de `headerHeight` y
+# `groupHeaderHeight` en el `gridOptions`, porque el marco del iframe se
+# dimensiona en Python a partir de esos mismos numeros. Cambiarlos aca
+# desincronizaria las dos mitades -- misma trampa que ya documenta
+# `_ALTO_FILA_PIVOT`.
+CSS_PIVOTE_DOCS = {
+    ".ag-root-wrapper": {
+        "--ag-header-background-color": BLANCO,
+        # Lo que separa una columna de la otra en la cabecera es el mismo
+        # aire que las separa en el cuerpo. La linea de abajo (una sola,
+        # la de `.ag-header`) alcanza para que siga leyendose cabecera.
+        "--ag-header-column-border": "none",
+        "--ag-header-row-border": "none",
+        "--ag-header-font-size": "11px",
+        "--ag-header-font-weight": "500",
+        "--ag-header-text-color": GRIS_TEXTO_MEDIO,
+    },
+    ".ag-header": {"border-bottom": f"1px solid {GRIS_BORDE} !important"},
+}

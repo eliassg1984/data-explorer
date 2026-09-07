@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-335 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+337 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (107)
+**CSS y estilos** (108)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -141,6 +141,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 - **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
 - **#334** — Un scrollspy que compara contra MAPA[0] miente cuando la página dibuja un SUBCONJUNTO de su…
+- **#336** — Un AgGrid sin custom_css= se queda con el tema de FÁBRICA, y eso se ve como una cabecera que…
 
 **Layout y alturas** (34)
 
@@ -179,7 +180,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 - **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
 
-**Plotly y figuras** (55)
+**Plotly y figuras** (56)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -236,8 +237,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
 - **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
+- **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 
-**AgGrid y tablas** (48)
+**AgGrid y tablas** (50)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -287,6 +289,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#277** — El cromo de un AgGrid se mide RESTANDO (root − .ag-body-viewport), no sumando los…
 - **#285** — inject_grid_health_check inyecta su CSS en TODOS los iframes de AgGrid de la página, no en el…
 - **#331** — Una segunda línea en una celda de AgGrid no entra ensanchando la columna: el presupuesto real…
+- **#336** — Un AgGrid sin custom_css= se queda con el tema de FÁBRICA, y eso se ve como una cabecera que…
+- **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 
 **Streamlit** (96)
 
@@ -30483,6 +30487,83 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      regla #199 sobre por qué se calcula por producto y recién después se
      suma). Lo contrafáctico vive dentro de la aritmética, no en el
      resultado.
+
+     (2026-09-06.)
+
+336. **Un AgGrid sin `custom_css=` se queda con el tema de FÁBRICA, y
+     eso se ve como una cabecera que pesa más que su tabla. La cabecera
+     de un pivote son DOS niveles, y el de arriba NO tiene alto propio
+     hasta que se lo declarás.** (2026-09-06, a pedido: *"la cabecera se
+     ve muy sobredimensionada, quisiera algo más ligero visualmente"*,
+     sobre el pivote de Documentos del drill de Proveedor.)
+
+     El pivote de `_documentos_proveedor.py` era **el único AgGrid del
+     repo dibujado sin `custom_css=`**: los demás pasan por
+     `tablas/_css.py` o por `CSS_RANKING_GRID`, y éste se quedó con el
+     `theme="streamlit"` tal cual vino. No se notaba como "le falta
+     estilo" sino como que la cabecera competía con el dato. Medido en el
+     navegador, que es lo que convirtió una queja estética en tres
+     números:
+
+       · **77px de cabecera contra 23px de fila** — 3,3 filas de dato
+         gastadas en rotular;
+       · rótulos en **12px `bold` (700)**, el MISMO cuerpo que el dato
+         pero en negrita, que es de dónde salía el "pesa más";
+       · **2 íconos siempre visibles** por columna (el ⋮ y el embudo) =
+         34px robados a una columna de 100. Ésa es la causa REAL de que
+         se leyera `Cantid…` y `Precio …`: no era el ancho de la
+         columna, y ensancharla no lo habría arreglado.
+
+     **Los 77px no eran 38 + 39 por casualidad: eran 38 × 2.** El nivel
+     del grupo (la fila de los períodos) no tiene alto propio —
+     `groupHeaderHeight` NO estaba declarado, y sin él **hereda
+     `headerHeight`**. O sea que el número que uno cree estar tocando
+     vale doble, y una cabecera de dos niveles no se puede afinar con una
+     sola constante. Ahora son 24 + 28 = 53.
+
+     Lo que sí hay que respetar es de dónde sale cada cosa: **los altos
+     van en `gridOptions` y NO en el CSS**, porque el marco del iframe se
+     dimensiona en Python a partir de esos mismos números
+     (`alturas.por_filas(..., extra=_CROMO_GRID_PIVOT)`). Bajarlos por
+     CSS deja las dos mitades desincronizadas — la misma trampa que ya
+     documenta `_ALTO_FILA_PIVOT` en ese archivo. El resto de la dieta
+     (fondo, negrita, líneas verticales) sí es CSS, y va por las
+     **variables** del tema y no por selectores propios, por la razón
+     medida de `CSS_RANKING_GRID`: `theme="streamlit"` declara las suyas
+     dentro de un `:where(...)`, que tiene especificidad CERO.
+
+     Corolario de método, que es lo que más ahorró: **la queja era
+     "se ve pesada" y la respuesta no fue una opinión.** Se midió el DOM
+     (`--ag-header-*` computadas, alto de cabecera contra alto de fila,
+     ancho del rótulo contra ancho de la celda) y recién ahí se armaron
+     cuatro variantes probándolas SOBRE la tabla viva, inyectando CSS en
+     el iframe. Discutir píxeles sin medir es el ida-y-vuelta que evita
+     la sección "Auditar el layout" de CLAUDE.md.
+
+     (2026-09-06.)
+
+337. **El "cromo" de un grid enmarcado tiene una pieza que depende del
+     SISTEMA, no del código: la barra de scroll. Se remide, y conviene
+     que sobre.** Corolario de la #336, del mismo cambio.
+
+     `_CROMO_GRID_PIVOT` declara todo lo que el grid mide y no son filas,
+     para que `por_filas` dimensione el iframe. Al bajar la cabecera, la
+     cuenta declarada dio 68 y la medida 70. No era un error de la resta:
+     las piezas cierran exacto —2 de los bordes del `.ag-root-wrapper`,
+     1 del borde inferior del `.ag-header`, 15 de la barra horizontal—,
+     pero **la constante venía calibrada contra una barra de 13px** y hoy
+     mide 15. Es ancho de scrollbar: cambia con el SO y el navegador.
+
+     Dos cosas que dejó, además del número:
+
+     · **El `ag-sticky-bottom` del gran total NO suma al cromo**: se
+       superpone al viewport en vez de empujarlo (53 + 360 + 15 = 428 =
+       el interior del wrapper, sin lugar para sus 24px). El comentario
+       viejo lo contaba, y por eso la cuenta cerraba por compensación
+       con el scroll mal medido — dos errores que se tapaban.
+     · **Errar por exceso, no por defecto.** De más queda una franja
+       vacía de 2px; de menos, la tabla scrollea media fila, que es
+       exactamente cómo se descubrió el bug original.
 
      (2026-09-06.)
 
