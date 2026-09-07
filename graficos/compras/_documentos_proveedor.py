@@ -25,6 +25,9 @@ from st_aggrid import AgGrid, JsCode
 
 from inyecciones import inject_maximize_aggrid
 from graficos import alturas
+from graficos.compras._comun import (
+    filtro_proveedores, selector_fecha_tarjeta,
+)
 from graficos.compras._css_proveedor import CSS_PIVOTE_DOCS
 from graficos.compras._etiquetas_proveedor import nombre_propio
 
@@ -56,7 +59,51 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
     # El título pasa a ser texto dentro de la tarjeta, con el mismo
     # `.cp-rank-tit` que usa el ranking de arriba.
     with st.container(key="docs_row"):
+        # ── Los DOS controles de la tarjeta (2026-09-04, a pedido) ────
+        # "añadamos el selector de fecha, así como el filtro minimalista
+        # de proveedor". Son los MISMOS componentes que ya usan el Ranking
+        # de proveedores (`cp_rank`) y el de productos (`cp_prod`), no una
+        # copia: `base.py::selector_fecha_tarjeta` y
+        # `_comun.py::filtro_proveedores`. Su CSS también sale del de
+        # Productos, clonado en `_css_proveedor.py::clonar_prefijo`.
+        #
+        # EL FILTRO ES UN SEGUNDO NIVEL, no un duplicado del de arriba.
+        # Esta tabla ya viene acotada a `top_provs`, que es lo que eligió
+        # el filtro del Ranking; el de acá recorta DENTRO de eso, para
+        # poder mirar el detalle de uno sin sacar a los demás del gráfico.
+        # Por eso su universo es `top_provs` y no la lista completa: un
+        # filtro que ofreciera proveedores que la tabla no puede mostrar
+        # mentiría. Mismo criterio —y mismo pedido, "añadamos el de
+        # proveedor"— con el que nació el de Productos, que también es
+        # independiente y tiene su propio prefijo de keys.
+        #
+        # La FECHA, en cambio, sí es compartida por diseño: escribe la
+        # clave canónica del rango, así que moverla acá mueve también las
+        # otras tarjetas. Son puertas al mismo dato, no filtros paralelos.
+        _sel_docs, _pop_docs = filtro_proveedores("cp_docs_prov", top_provs)
+
+        def _cabecera():
+            """Título + filtro + fecha, los tres en la misma fila."""
+            selector_fecha_tarjeta(
+                "cp_docs", "_cp_docs_atajo_pendiente",
+                titulo_html=('<div class="cp-rank-tit">Detalle de '
+                             'documentos por proveedor · vista '
+                             f'{gran}</div>'),
+                extra=_pop_docs)
+
         _bd = base[base["prov"].isin(top_provs)].copy()
+        _bd = _bd[_bd["prov"].isin(set(_sel_docs))].copy()
+        if _bd.empty:
+            # La tarjeta SE DIBUJA IGUAL, con su cabecera. Es la regla
+            # #196: un return temprano que se lleva puesto el único
+            # control capaz de deshacer el estado que lo causó deja al
+            # usuario sin salida — acá, destildar hasta el último
+            # proveedor y quedarse sin filtro para volver a tildarlo.
+            with st.container(border=True, key="compras_prov_card_docs"):
+                _cabecera()
+                st.info("Ningún proveedor seleccionado tiene documentos "
+                        "en el rango.")
+            return
         if not _bd.empty:
             _fe = pd.to_datetime(_bd["fecha"], errors="coerce")
             _pv_docs = pd.DataFrame({
@@ -235,11 +282,7 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
             # Alto del iframe inline (no fullscreen). En fullscreen lo
             # sobrescribe _FS_CSS_IFRAME a 100vh.
             with _pv_box:
-                st.markdown(
-                    '<div class="cp-rank-tit">Detalle de documentos por '
-                    f'proveedor · vista {gran}</div>',
-                    unsafe_allow_html=True,
-                )
+                _cabecera()
                 AgGrid(
                     _pv_docs,
                     gridOptions=_grid_pv,
@@ -263,10 +306,3 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                 # buscarIframe() da con este.
                 inject_maximize_aggrid()
 
-                st.download_button(
-                    "⬇ Descargar CSV",
-                    data=_pv_docs.to_csv(index=False).encode("utf-8-sig"),
-                    file_name=f"compras_documentos_{gran.lower()}.csv",
-                    mime="text/csv",
-                    key="cp_prov_resumen_dl",
-                )

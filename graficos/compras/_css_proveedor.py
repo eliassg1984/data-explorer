@@ -1990,6 +1990,137 @@ CSS = """        <style>
 """
 
 
+def clonar_prefijo(css, origen, destino, extra=()):
+    """Las reglas de `css` que nombran `origen`, reescritas para `destino`.
+
+    Por que existe. Las dos tarjetas que ya usan `selector_fecha_tarjeta`
+    + `filtro_proveedores` -Ranking de proveedores (`cp_rank`) y Ranking
+    de productos (`cp_prod`)- tienen su CSS listado EXPLICITO, prefijo por
+    prefijo, sin wildcards por familia (el aviso de CLAUDE.md). Son 41
+    reglas donde los dos nombres aparecen apareados.
+
+    El 2026-09-04 se pidio el mismo par de controles para una TERCERA
+    tarjeta (Detalle de documentos por proveedor). Con dos prefijos, pegar
+    el tercero a mano en 41 grupos es tedioso; con tres deja de ser
+    sostenible, y sobre todo abre lo que este repo ya escarmento dos veces:
+    dos sitios donde arreglar el proximo detalle. Es el mismo argumento que
+    llevo el popover de proveedores a `_comun.py::filtro_proveedores` y el
+    selector de fecha a `base.py::selector_fecha_tarjeta`, aplicado al CSS.
+
+    Clonar en vez de generalizar el selector es a proposito: la promesa de
+    "nada de wildcards" se mantiene -lo que sale son selectores literales,
+    uno por regla- y el prefijo nuevo hereda cualquier retoque futuro de su
+    modelo sin que nadie se acuerde de copiarlo.
+
+    Como parsea, y por que alcanza con esto: recorre contando llaves y
+    SALTA los bloques de at-rule (`@media`, `@container`, `@keyframes`)
+    enteros. Verificado sobre este fichero el 2026-09-04: las 41 reglas con
+    `cp_prod` estan todas en el nivel de arriba, ninguna adentro de un
+    at-rule. Si algun dia una se muda a un `@media`, esta funcion la ignora
+    en silencio -- de ahi la guarda de `test_graficos.py`, que cuenta
+    cuantas clona.
+
+    `extra` son pares `(de, a)` que se aplican DESPUES del prefijo: hoy solo
+    la clase del titulo, que no sigue la convencion de las keys
+    (`cp-prod-rank-tit` es de Productos; el clon usa la generica
+    `cp-rank-tit`).
+    """
+    fuera = []
+    pila_at = []      # True por cada nivel de llaves que es un at-rule
+    cabeza = []       # texto acumulado desde la ultima llave
+    regla = []        # la regla que se esta copiando, si toca
+    for ch in css:
+        if ch == "{":
+            txt = "".join(cabeza)
+            sel = _selector(txt)
+            es_at = sel.startswith("@")
+            if not es_at and not any(pila_at) and origen in sel:
+                regla = [sel, " {"]
+            pila_at.append(es_at)
+            cabeza = []
+        elif ch == "}":
+            if regla:
+                regla.append("}")
+                fuera.append("".join(regla))
+                regla = []
+            if pila_at:
+                pila_at.pop()
+            cabeza = []
+        else:
+            cabeza.append(ch)
+            if regla:
+                regla.append(ch)
+    fuera = [_solo_de(sel_cuerpo, origen) for sel_cuerpo in fuera]
+    fuera = [r for r in fuera if r]
+    txt = ("\n").join(fuera)
+    txt = txt.replace(origen, destino)
+    for de, a in extra:
+        txt = txt.replace(de, a)
+    return txt
+
+
+def _partir_selectores(sel):
+    """`sel` partido por comas, ignorando las que van dentro de `(...)`.
+
+    `:has(> .x)` no trae comas hoy, pero `:is(a, b)` si las traeria y
+    partir a lo bruto rompe el selector en dos mitades invalidas.
+    """
+    partes, buf, prof = [], [], 0
+    for ch in sel:
+        if ch == "(":
+            prof += 1
+        elif ch == ")":
+            prof -= 1
+        if ch == "," and prof == 0:
+            partes.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    partes.append("".join(buf))
+    return [x.strip() for x in partes if x.strip()]
+
+
+def _solo_de(regla, origen):
+    """La misma regla con SOLO los selectores que nombran `origen`.
+
+    Sin esto el clon se lleva puestos los selectores hermanos: las reglas
+    de este fichero agrupan `cp_rank`, `cp_prod` y `cp_sem` en la misma
+    lista, asi que clonar una tal cual re-declara tambien las otras dos —
+    al FINAL de la hoja, o sea pisando cualquier regla posterior que las
+    hubiera sobrescrito. El clon tiene que hablar solo de su prefijo.
+    """
+    cabeza, _, cuerpo = regla.partition("{")
+    quedan = [x for x in _partir_selectores(cabeza) if origen in x]
+    if not quedan:
+        return ""
+    return (",\n").join(quedan) + " {" + cuerpo
+
+def _selector(txt):
+    """El selector que precede a una `{`: lo que sigue al ultimo comentario.
+
+    Un selector puede ocupar VARIAS lineas (los hay con `:has(...)` partido
+    en dos), asi que quedarse con la ultima no alcanza. Lo que si es fiable
+    es que el comentario de arriba termina en `*/` y que despues de eso ya
+    no hay nada que no sea selector.
+    """
+    resto = txt.rsplit("*/", 1)[-1]
+    lineas = [ln.strip() for ln in resto.split("\n") if ln.strip()]
+    return ("\n").join(lineas)
+
+
+# -- El tercer prefijo: la tarjeta «Detalle de documentos por proveedor» --
+# Pedido 2026-09-04 ("anadamos el selector de fecha, asi como el filtro
+# minimalista de proveedor"). Sus controles son los MISMOS componentes que
+# los de las otras dos tarjetas, asi que su CSS tambien: se clona del de
+# Productos, que es el que ya tiene las dos piezas (fecha + filtro de
+# proveedores) y ninguna regla propia de su grafico.
+CSS_CP_DOCS = clonar_prefijo(
+    CSS, "cp_prod", "cp_docs",
+    extra=(("cp-prod-rank-tit", "cp-rank-tit"),))
+CSS = CSS.replace("        </style>",
+                  CSS_CP_DOCS + "\n        </style>")
+
+
 # ── El AgGrid del ranking de proveedores ────────────────────────────
 # Se estila por las VARIABLES del tema (`--ag-*`) y no por selectores
 # propios, por una razon medida y no por gusto: `theme="streamlit"` declara

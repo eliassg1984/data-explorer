@@ -74,6 +74,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # gastar un render que se va a descartar. Ver arquitectura.md #180.
     if st.session_state.pop("_cp_rank_atajo_pendiente", False):
         st.rerun(scope="app")
+    # La gemela de la tarjeta «Detalle de documentos por proveedor», que
+    # gano su propio selector de fecha el 2026-09-04. Misma bandera, mismo
+    # motivo y mismo sitio: `tabla_documentos` se dibuja al final de ESTE
+    # fragment, asi que el escalado tiene que pasar por aca.
+    if st.session_state.pop("_cp_docs_atajo_pendiente", False):
+        st.rerun(scope="app")
 
     if not (col_prov and col_valor):
         st.info("Faltan columnas (Proveedor, Valor) para este gráfico.")

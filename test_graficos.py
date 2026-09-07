@@ -2286,6 +2286,52 @@ def _pruebas_jscode_barato():
     return fallos
 
 
+def _pruebas_css_clonado():
+    """Que el CSS del tercer prefijo (`cp_docs`) siga saliendo del molde.
+
+    `_css_proveedor.py::clonar_prefijo` genera las reglas de la tarjeta
+    «Detalle de documentos por proveedor» a partir de las del Ranking de
+    productos, en vez de pegarlas a mano en 41 grupos de selectores.
+
+    Lo que vigila esto es el modo en que ese clonador puede fallar EN
+    SILENCIO: salta los bloques de at-rule enteros, asi que el dia que
+    una regla de `cp_prod` se mude adentro de un `@media`, deja de
+    clonarse y su gemela de `cp_docs` simplemente no existe — la tarjeta
+    se ve rota sin que nada avise. El contador lo caza.
+    """
+    fallos = 0
+
+    def check(nombre, cond, detalle=""):
+        nonlocal fallos
+        print(("OK    " if cond else "FALLA ") + "css clonado · " + nombre
+              + (("  " + str(detalle)) if (detalle and not cond) else ""))
+        if not cond:
+            fallos += 1
+
+    from graficos.compras import _css_proveedor as cssp
+    clon = cssp.CSS_CP_DOCS
+    n = clon.count("{")
+    # 41 el 2026-09-04. El umbral va abajo del numero real a proposito:
+    # que alguien SUME reglas a `cp_prod` no tiene por que romper el test,
+    # pero que se caigan a la mitad si.
+    check("se clonan las reglas de cp_prod (>=35)", n >= 35, n)
+    check("el clon no quedo vacio", bool(clon.strip()))
+    check("llaves balanceadas en el clon",
+          clon.count("{") == clon.count("}"), n)
+    check("llaves balanceadas en el CSS final",
+          cssp.CSS.count("{") == cssp.CSS.count("}"))
+    # Si un prefijo AJENO sobrevive al clon, la regla se re-declara al
+    # final de la hoja y pisa lo que viniera despues para esa otra
+    # tarjeta. Es el bug que `_solo_de` existe para evitar.
+    ajenos = [x for x in ("cp_rank", "cp_prod", "cp_sem", "cp_vol")
+              if x in clon]
+    check("el clon habla SOLO de cp_docs", not ajenos, ", ".join(ajenos))
+    # La clase del titulo no sigue la convencion de las keys, asi que va
+    # por `extra=`; si eso se cae, el titulo pierde su truncado.
+    check("el titulo usa la clase generica",
+          "cp-prod-rank-tit" not in clon)
+    return fallos
+
 def _pruebas_container_queries():
     """Que ningún `@container` quede SIN contenedor (regla #317).
 
@@ -2620,6 +2666,9 @@ def main():
 
     # ── Container queries: que ninguna se quede sin contenedor ──────────
     fallos += _pruebas_container_queries()
+
+    # ── CSS clonado: el tercer prefijo sale del molde, no a mano ───────
+    fallos += _pruebas_css_clonado()
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()

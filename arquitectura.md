@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-339 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+340 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (109)
+**CSS y estilos** (110)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -143,6 +143,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#334** — Un scrollspy que compara contra MAPA[0] miente cuando la página dibuja un SUBCONJUNTO de su…
 - **#336** — Un AgGrid sin custom_css= se queda con el tema de FÁBRICA, y eso se ve como una cabecera que…
 - **#338** — Un st.container(key=…) VACÍO se dibuja una vez y desaparece en el render siguiente
+- **#340** — El CSS de un TERCER prefijo se clona, no se pega
 
 **Layout y alturas** (34)
 
@@ -30647,6 +30648,69 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-04.)
 
+340. **El CSS de un TERCER prefijo se clona, no se pega.** Pedido
+     2026-09-04 sobre «Detalle de documentos por proveedor»: *"eliminemos
+     la botonera de descargar Csv y añadamos el selector de fecha, así
+     como el filtro minimalista de proveedor"*.
+
+     Los dos controles ya existían como componentes compartidos
+     (`base.py::selector_fecha_tarjeta` y `_comun.py::filtro_proveedores`)
+     — eso fue gratis. Lo que no era gratis es su CSS: este proyecto lo
+     lista **explícito por prefijo, sin wildcards por familia** (el aviso
+     de CLAUDE.md), y las dos tarjetas que ya los usaban aparecían
+     apareadas en **41 reglas**. Sumar la tercera a mano son 41 grupos de
+     selectores editados uno por uno, y —peor— deja tres sitios donde
+     arreglar el próximo detalle.
+
+     `_css_proveedor.py::clonar_prefijo(css, origen, destino, extra)`
+     recorre el CSS contando llaves, se queda con las reglas de nivel
+     superior que nombran `origen` y las re-emite para `destino`. Es el
+     mismo argumento que ya había llevado el popover a `_comun.py` y el
+     selector de fecha a `base.py`, aplicado al CSS: **la promesa de "nada
+     de wildcards" se mantiene** —lo que sale son selectores literales,
+     uno por regla— y el prefijo nuevo hereda cualquier retoque futuro de
+     su modelo sin que nadie se acuerde de copiarlo.
+
+     Dos trampas del clonado, las dos con su guarda en `test_graficos.py`:
+
+     1. **Hay que RECORTAR los selectores ajenos** (`_solo_de`). Las
+        reglas de este fichero agrupan `cp_rank`, `cp_prod` y `cp_sem` en
+        la misma lista; clonar una tal cual re-declara también las otras
+        dos, y al final de la hoja, o sea pisando cualquier regla
+        posterior que las hubiera sobrescrito. El clon tiene que hablar
+        SÓLO de su prefijo.
+     2. **Salta los at-rules, y eso puede fallar en silencio.** Verificado
+        el 2026-09-04: las 41 reglas de `cp_prod` están todas en el nivel
+        de arriba. El día que una se mude a un `@media`, deja de clonarse
+        y su gemela no existe — la tarjeta se ve rota sin que nada avise.
+        Por eso el test CUENTA cuántas clona.
+
+     **Lo que se fue, y por qué no se pierde nada.** El botón «⬇ Descargar
+     CSV» era un `st.download_button` aparte, debajo del grid. La regla
+     #146 manda contar qué hay adentro antes de sacar cromo: acá la
+     función sobrevive porque el grid es AgGrid con
+     `enable_enterprise_modules=True` y su propio menú de columna trae
+     export — que es exactamente el argumento con el que la #146 decidió
+     que las tablas de AgGrid no dependían de la barra de Streamlit.
+
+     Y una decisión que no es obvia: **el filtro de proveedores de esta
+     tarjeta es un SEGUNDO NIVEL, no una segunda puerta.** La tabla ya
+     viene acotada a `top_provs`, que es lo que eligió el filtro del
+     Ranking; el de acá recorta DENTRO de eso, para mirar el detalle de
+     uno sin sacar a los demás del gráfico de arriba. Su universo es
+     `top_provs` y no la lista completa: ofrecer proveedores que la tabla
+     no puede mostrar sería mentir. La FECHA, en cambio, sí es compartida
+     —escribe la clave canónica del rango—, y esa asimetría es
+     deliberada. El precedente es el Ranking de productos, que nació del
+     mismo pedido ("añadamos el de proveedor") y también salió
+     independiente, con su propio prefijo de keys.
+
+     De paso, la regla #196 aplica textual: si el filtro deja la tabla
+     vacía, la tarjeta **se dibuja igual** con su cabecera. Sin eso, el
+     `return` se llevaría puesto el único control capaz de deshacer el
+     estado que lo causó.
+
+     (2026-09-04.)
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30659,7 +30723,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#340**.
+> próxima regla nueva es la **#341**.
 
 >
 
