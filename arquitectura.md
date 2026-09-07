@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-343 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+344 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (113)
+**CSS y estilos** (114)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -147,6 +147,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#341** — Un querySelector singular es una decisión sobre la CARDINALIDAD, no un atajo — y en una…
 - **#342** — Un piso pensado para tarjetas convierte a una línea en una franja para siempre — y el padding…
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
+- **#344** — Plegar un riel y "más KPI" tiran para lados opuestos: la salida es que cada estado cargue lo…
 
 **Layout y alturas** (34)
 
@@ -30849,6 +30850,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-07.)
 
+344. **Plegar un riel y "más KPI" tiran para lados opuestos: la salida es
+     que cada estado cargue lo suyo.** Pedido 2026-09-07, encadenado al
+     pestillo (#216 y su reposición): *"me gustaría añadirle más
+     información, más KPI"* sobre la misma columna que se acababa de
+     poder plegar a 46px.
+
+     Las dos cosas no se negocian entre sí — se reparten:
+
+     · **Plegado (46px)** no entra un número, pero sí un punto de color.
+       Un semáforo por fila: verde/rojo por dirección, **ámbar por
+       excepción**, y el ámbar GANA — "3 documentos a revisar" pide una
+       acción y "subió 6%" no.
+     · **Desplegado (280px)** entra el KPI completo.
+
+     Cuatro decisiones de implementación que valen para el próximo KPI
+     que se sume a un riel:
+
+     1. **El punto es un `::after` del BOTÓN, no texto del label.**
+        Plegado, el label entero está en `display:none` —es donde viven
+        el nombre Y el KPI—, así que un punto adentro se iría con él.
+        Justo al revés de lo que tiene que pasar: el punto es lo que
+        queda cuando no queda nada más.
+     2. **El color viaja como VARIABLE (`--punto`), no como regla por
+        key.** Los KPI son del rango vigente, o sea que cambian en cada
+        render; emitir una regla nueva por render infla el `<style>`. Con
+        la variable, la regla que dibuja el punto es UNA y vive en
+        `estilos/`, que es donde el proyecto quiere el CSS. El default
+        `transparent` es lo que deja invisibles a las filas sin estado sin
+        tener que emitir sus keys.
+     3. **Los valores del dict de estados son NOMBRES DE VARIABLE CSS**
+        (`success`/`danger`/`warning`), no estados propios: entran tal cual
+        en un `var(--…)`. Sin tabla de traducción en el medio no hay dos
+        sitios que se desincronicen.
+     4. **El estado se DERIVA del texto ya armado, no en paralelo.** El
+        KPI trae `:red[▲…]` o `:green[▼…]`, así que el punto dice por
+        construcción lo mismo que el número de al lado. Calcularlo aparte
+        es abrir la puerta a un punto verde junto a una flecha roja.
+
+     **Y lo que el pedido destapó, que no era el pedido:** la copia
+     lateral del riel mostraba sólo icono + nombre. El KPI existía pero
+     vivía únicamente en la franja horizontal de arriba — que es la que se
+     VA al scrollear. O sea que justo cuando la columna toma el relevo, el
+     número desaparecía. Antes de agregar KPI nuevos había que mostrar los
+     que ya estaban.
+
+     Los dos contadores de excepción que se sumaron, y de dónde sale que
+     no son arbitrarios:
+
+     · **Volatilidad, "N altos"**: corte en CV >= 1, o sea el desvío
+       iguala al promedio — el punto donde el precio deja de tener un
+       valor típico, no un umbral tuneado. Cuántos hay es lo accionable;
+       el peor solo dice que existe UN caso raro.
+     · **Documentos, "N a revisar"**: los que están de un lado y no del
+       otro, más los que están en los dos con importes distintos. Los dos
+       totales que ya se mostraban no lo dicen — "204 y 207" se lee como
+       "casi igual" cuando pueden ser 7 documentos mal por los dos lados.
+
+     Ojo con una divergencia que este contador hace más visible y que ya
+     estaba: en el rail la volatilidad es el **CV del precio unitario** y
+     la VISTA rankea por `_vol_score` (suma de variaciones semana a
+     semana). Son dos métricas, así que el producto que nombra el rail
+     puede no ser el primero de la tabla. Unificarlas es un cambio aparte.
+
+     (2026-09-07.)
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30861,7 +30926,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#344**.
+> próxima regla nueva es la **#345**.
 
 >
 

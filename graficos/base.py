@@ -1319,7 +1319,7 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
 
 
 def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
-                 secciones=None, kpis=None):
+                 secciones=None, kpis=None, estados=None):
     """Vistas del reporte activo — fila de TABS DE TEXTO en la franja
     superior. Selector de tipo de gráfico/pantalla dentro de un reporte.
 
@@ -1511,15 +1511,51 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     # intercambio se ve como un salto de formato.
                     # 3er elemento opcional: hay rails con tuplas de 2.
                     icono = item[2] if len(item) > 2 else None
+                    # EL KPI TAMBIEN ACA (2026-09-07, a pedido: "mas
+                    # KPI"). Hasta hoy la copia lateral mostraba solo
+                    # icono + nombre: el dato existia pero vivia unicamente
+                    # en la franja horizontal de arriba, que es la que se
+                    # VA al scrollear. O sea que justo cuando esta columna
+                    # toma el relevo, el numero desaparecia.
+                    _k = (kpis or {}).get(oid)
                     st.button(
-                        label,
+                        f"{label}  :violet[{_k}]" if _k else label,
                         key=f"{btn_prefix}lat_{_slug_url(oid)}",
                         type="secondary",
                         on_click=_rail_set, args=(state_key, oid),
                         **({"icon": icono} if icono else {}),
                     )
 
-        # ── El rail: marcado + activación ────────────────────────────────
+        # ── SEMAFORO: un punto por fila ──────────────────────────────────
+    # `estados` es `{id_vista: "success"|"danger"|"warning"}` y lo unico
+    # que se hace con el valor es meterlo en un `var(--…)`: son nombres de
+    # variable CSS a proposito, para que no haya una tabla de traduccion
+    # en el medio que se pueda desincronizar del dict que la llena.
+    #
+    # POR QUE UN `::after` Y NO TEXTO EN EL LABEL: plegado, el label
+    # entero esta en `display:none` (es donde vive el nombre Y el KPI, ver
+    # `_20_compras_rail.py`). Un punto dentro del label se iria con el. El
+    # pseudo cuelga del BOTON, que sigue ahi — y ese es justo el sentido
+    # del semaforo: es lo que queda cuando no queda nada mas.
+    #
+    # Se emite una variable por key y NO una regla por key: el color
+    # cambia en cada render (los KPI son del rango vigente) y una regla
+    # nueva por render infla el `<style>`. Con la variable, la regla que
+    # dibuja el punto es UNA sola y vive en `estilos/`, que es donde el
+    # proyecto quiere el CSS.
+    if estados:
+        _vars = []
+        for _oid, _est in estados.items():
+            if _est not in ("success", "danger", "warning"):
+                continue
+            _sl = _slug_url(_oid)
+            for _k in (f"{btn_prefix}{_slug(_oid)}", f"{btn_prefix}lat_{_sl}"):
+                _vars.append(f".st-key-{_k} {{ --punto: var(--{_est}); }}")
+        if _vars:
+            st.markdown("<style>" + "".join(_vars) + "</style>",
+                        unsafe_allow_html=True)
+
+    # ── El rail: marcado + activación ────────────────────────────────
         # Un temporizador que mide geometría, no observers. El porqué de cada
         # decisión está en el propio JS de abajo; en resumen: los umbrales de
         # `IntersectionObserver` no alcanzan para marcar secciones más altas

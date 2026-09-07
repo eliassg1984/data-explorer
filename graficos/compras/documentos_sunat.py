@@ -690,6 +690,15 @@ def _kpis_cruce(df, origen=None):
     st.session_state["_cp_docs_cruce"] = {
         "sunat": int(len(df) - conteos.get("Solo sistema", 0)),
         "sistema": int(len(df) - conteos.get("Solo SUNAT", 0)),
+        # Lo que NO cuadra, en un solo numero (2026-09-07): los que estan
+        # de un lado y no del otro, mas los que estan en los dos con
+        # importes distintos. El rail lo pinta como excepcion (ambar) —
+        # es lo unico de esta vista que pide una accion, y los dos totales
+        # de arriba no lo dicen: 204 y 207 se leen como "casi igual"
+        # cuando pueden ser 7 documentos mal por los dos lados.
+        "revisar": int(conteos.get("Solo sistema", 0)
+                      + conteos.get("Solo SUNAT", 0)
+                      + conteos.get("Diferencia", 0)),
     }
 
     n_dif = int(conteos.get("Diferencia", 0))

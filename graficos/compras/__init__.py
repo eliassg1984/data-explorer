@@ -99,15 +99,30 @@ def _delta(hoy, ant):
 
 def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
                  col_docu, col_fecha):
-    """`{id_vista: texto}` para `_render_rail(kpis=...)`.
+    """`({id_vista: texto}, {id_vista: estado})` para `_render_rail`.
+
+    El segundo dict es el SEMAFORO (2026-09-07, a pedido: "mas KPI"). Es
+    lo unico del KPI que sobrevive al riel PLEGADO —en 46px no entra un
+    numero, pero si un punto de color— asi que responde de un vistazo la
+    pregunta que importa con la columna cerrada: hay algo que mirar?
+
+    Los valores son NOMBRES DE VARIABLE CSS (`success`/`danger`/
+    `warning`), no colores ni estados propios: `_render_rail` los mete
+    tal cual en un `var(--…)`. Sin tabla de traduccion en el medio no hay
+    dos sitios que se puedan desincronizar.
+
+    Y se DERIVAN DEL TEXTO ya armado, no en paralelo: el KPI trae
+    `:red[▲…]` o `:green[▼…]`, asi que el punto dice por construccion lo
+    mismo que el numero de al lado. Calcularlos por separado seria abrir
+    la puerta a un punto verde junto a una flecha roja.
 
     `d_full` es el mismo df SIN el filtro de fecha: de ahi sale el PERIODO
     ANTERIOR con el que se comparan los KPIs. Sin el no habria flecha — `d`
     es exactamente el rango vigente y no tiene con que compararse.
     """
-    kpis = {}
+    kpis, estados = {}, {}
     if d is None or getattr(d, "empty", True) or not col_valor:
-        return kpis
+        return kpis, estados
     val = pd.to_numeric(d[col_valor], errors="coerce")
 
     # ── El periodo ANTERIOR: mismo largo, pegado por atras ───────────────
@@ -176,8 +191,24 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
         cv = cv[g.count() >= 5]
         if len(cv):
             _p = cv.idxmax()
-            kpis["Volatilidad"] = _texto(
-                f"{_compras_truncar(str(_p), 14)} ±{cv[_p] * 100:.0f}%", None)
+            # CUANTOS, no solo el peor (2026-09-07, a pedido). El corte es
+            # CV >= 1, o sea el desvio iguala o supera al promedio — no es
+            # un umbral tuneado sino el punto donde el precio deja de
+            # tener un valor "tipico". Si hay varios, es lo accionable: el
+            # peor solo dice que existe UN caso raro.
+            #
+            # OJO con una divergencia que ya estaba y este contador hace
+            # mas visible: aca la volatilidad es el CV del precio unitario
+            # y la VISTA rankea por `_vol_score` (suma de variaciones
+            # semana a semana, volatilidad.py). Son dos metricas, asi que
+            # el producto que nombra el rail puede no ser el primero de la
+            # tabla. Unificarlas es un cambio aparte.
+            _n_alta = int((cv >= 1.0).sum())
+            _txt_vol = f"{_compras_truncar(str(_p), 14)} ±{cv[_p] * 100:.0f}%"
+            if _n_alta > 1:
+                _txt_vol += f" · {_n_alta} altos"
+                estados["Volatilidad"] = "warning"
+            kpis["Volatilidad"] = _texto(_txt_vol, None)
 
     # DOCUMENTOS: cuantos en el SISTEMA y cuantos en SUNAT (2026-09-01, a
     # pedido). El del sistema sale de aca, que es barato. El de SUNAT no:
@@ -192,6 +223,17 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
         _txt = f"sis {_n_sis:,}".replace(",", ".")
         if _cruce.get("sunat") is not None:
             _txt += f" · sun {_cruce['sunat']:,}".replace(",", ".")
+        # Lo que NO cuadra, que es lo unico accionable de esta vista.
+        # Viaja por `session_state` desde `documentos_sunat.py` igual que
+        # los dos totales de arriba, y por el mismo motivo: el lado SUNAT
+        # sale de la consulta al SIRE y el rail no puede dispararla para
+        # decorar un rotulo. Hasta que Documentos se abra una vez, no
+        # esta — y no estar es correcto: mejor sin numero que con uno
+        # inventado.
+        _n_rev = _cruce.get("revisar")
+        if _n_rev:
+            _txt += f" · {_n_rev} a revisar"
+            estados["Documentos SUNAT"] = "warning"
         _prev_docs = (int(prev[col_docu].nunique())
                       if prev is not None and col_docu in prev.columns else None)
         kpis["Documentos SUNAT"] = _texto(_txt, _delta(_n_sis, _prev_docs))
@@ -248,7 +290,23 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
                     f":blue[{str(_ft)[:3].upper()}] "
                     f":{'red' if _sube else 'green'}"
                     f"[{'▲' if _sube else '▼'}{abs(_var[_ft]):.0f}%]")
-    return kpis
+    # El semaforo, derivado del texto que se acaba de armar. La excepcion
+    # (ambar) GANA sobre la direccion: "3 documentos a revisar" pide una
+    # accion y "subio 6%" no, asi que ya viene puesta desde arriba y aca
+    # solo se rellenan las que faltan.
+    #
+    # `:red[` es GASTAR MAS, y por eso mapea a `danger`: es la misma
+    # convencion de `_delta` y del drill Vs año pasado, donde en Compras
+    # el rojo es el gasto que sube. No se reinventa aca.
+    for _vista, _t in kpis.items():
+        if estados.get(_vista):
+            continue
+        if ":red[" in _t:
+            estados[_vista] = "danger"
+        elif ":green[" in _t:
+            estados[_vista] = "success"
+    return kpis, estados
+
 
 _COMPRAS_RAIL_CATEGORIAS = (
     ("Dimensión", (("Proveedor",        "Proveedor",     ":material/local_shipping:"),
@@ -511,11 +569,12 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # `secciones`: la pila de esta página. Con eso el rail vertical de la
     # izquierda sabe qué botón encender según lo que haya en pantalla, y
     # aparece a partir de la segunda sección. Ver `base.py::_render_rail`.
+    _kpis_rail, _estados_rail = _kpis_vistas(d, d_full, col_valor, col_prov,
+                                             col_fam, col_prod, col_punit,
+                                             col_docu, col_fecha)
     graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo",
                         secciones=_PILA,
-                        kpis=_kpis_vistas(d, d_full, col_valor, col_prov,
-                                          col_fam, col_prod, col_punit,
-                                          col_docu, col_fecha))
+                        kpis=_kpis_rail, estados=_estados_rail)
     if graf not in opciones:
         graf = opciones[0]
 

@@ -1194,6 +1194,45 @@ CSS = """    /* ================================================================
         display: none !important;
     }
 
+    /* ── SEMAFORO: el punto de cada fila (2026-09-07) ───────────────────
+       UNA sola regla; el color entra por `--punto`, que `_render_rail`
+       emite por key en cada render (los KPI son del rango vigente).
+
+       `transparent` como default es lo que hace que las filas SIN estado
+       no muestren nada: el pseudo existe igual pero no se ve. Sin eso
+       habria que emitir tambien las keys vacias, o poner `content` desde
+       Python — las dos cosas devuelven el CSS al render, que es lo que
+       este proyecto evita.
+
+       Cuelga del BOTON y no del label: plegado el label esta en
+       `display:none` y el punto se iria con el. Es justo al reves de lo
+       que tiene que pasar — el punto es lo que queda cuando no queda
+       nada mas. */
+    .st-key-compras_tabs_row button,
+    .st-key-nav_rail_lateral button {
+        position: relative !important;
+    }
+    .st-key-compras_tabs_row button::after,
+    .st-key-nav_rail_lateral button::after {
+        content: "";
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--punto, transparent);
+        pointer-events: none;
+    }
+    /* Plegado el boton mide 46px y el chevron ya no esta: el punto se
+       centra arriba del icono en vez de pelear por la esquina. */
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-compras_tabs_row
+        button::after,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral
+        button::after {
+        top: 5px;
+        right: 5px;
+    }
     /* ── AL SCROLLEAR, EL PESTILLO BAJA CON LA COLUMNA ──────────────────
        Medido en Cloud el 2026-09-07, que es como se encontro el bug:
 
