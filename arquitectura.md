@@ -30417,8 +30417,49 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      · varios → no hay cantidad que nombrar y se cae al pivote, que es
        PLATA y sí se puede sumar entre unidades distintas.
 
-     La unidad no hace falta escribirla: el título de la tarjeta ya dice
-     «Entraña fina importada x Kg».
+     **Tercera vuelta, y la que corrige el razonamiento anterior:** se
+     había resuelto no escribir la unidad porque *"el título de la tarjeta
+     ya dice «x Kg»"*. Está mal, y la respuesta fue una captura del
+     tooltip con *"los 246 ¿qué? ¿soles? ¿kilos? ¿documentos?"*. Dos
+     motivos, los dos generales:
+
+     · **El tooltip tapa la tarjeta.** Sale sobre el gráfico, encima del
+       título; el contexto que se suponía al lado no está a la vista
+       cuando se lee el número.
+     · **En una tarjeta donde TODO lo demás está en soles, un número
+       pelado se lee como soles.** No es una ambigüedad teórica: las otras
+       cinco cifras del mismo tooltip llevan `S/`.
+
+     Regla, entonces: **una cantidad se muestra CON su unidad o no se
+     muestra.** `_fig_puente` ignora `cant` si `unidad` viene vacía y cae a
+     la rama en plata — cero cantidades peladas por construcción, no por
+     disciplina del llamador.
+
+     La unidad sale de `UNIDAD_DE_INGRESO` (`col_um`, que el drill ya
+     recibía y sólo usaba para la tabla). Medido antes de confiarle el
+     dato: **1.588 productos, CERO con más de una unidad, cero vacías**, y
+     `col_um` resuelve de verdad contra el parquet real (`UNIDAD_DE_INGRESO`
+     está en la lista de `_resolver`). La resolución se extrajo a
+     `_unidades_por()` porque ahora la usan el puente y la tabla, y el
+     criterio (`mode()`, no el primero) tiene que cambiar en un solo sitio.
+
+     **Y la forma final del tooltip no es una frase: es la CUENTA.** Con
+     tres correcciones seguidas por lo mismo, lo que se acabó escribiendo
+     no explica con palabras sino que muestra los dos renglones cuya resta
+     ES la barra:
+
+         Efecto precio: +S/ 2.012
+           246 kilos × precio de este año     = S/ 27.222
+           246 kilos × precio del año pasado  = S/ 25.210
+
+         Efecto cantidad: −S/ 17.623
+           246 kilos × precio del año pasado  = S/ 25.210
+           418 kilos × precio del año pasado  = S/ 42.833
+
+     El pivote (25.210) aparece en los dos, que es lo que hace visible que
+     encadenan. **Cuando una explicación necesita tres intentos, el
+     problema no es la redacción: es que se está redactando en vez de
+     mostrar la aritmética.**
 
      **Y de ahí sale el orden de las barras, que está al revés.** El
      waterfall dibuja `año pasado → precio → cantidad → este año`, así que

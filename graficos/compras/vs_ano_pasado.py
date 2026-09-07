@@ -473,7 +473,26 @@ def _fig_serie(g, modo, parcial):
     return fig
 
 
-def _fig_puente(valor, valor_aa, ef_precio, ef_cant, cant=None, cant_aa=None):
+def _unidades_por(fuente, llave, col_um):
+    """`{valor de llave: unidad}` — la unidad de medida de cada ítem.
+
+    `mode()` y no el primero: un producto puede tener alguna fila con la
+    unidad mal cargada y la moda la ignora. Medido el 2026-09-06 sobre
+    `compras.parquet`: 1.588 productos, CERO con más de una
+    `UNIDAD_DE_INGRESO`, así que a nivel producto la moda es el único
+    valor. La red está por las agrupaciones (Familia/Subfamilia), donde sí
+    conviven unidades distintas.
+    """
+    if not (col_um and llave and col_um in fuente.columns
+            and llave in fuente.columns):
+        return {}
+    return (fuente[[llave, col_um]].astype(str).groupby(llave)[col_um]
+            .agg(lambda s: s.mode().iat[0] if not s.mode().empty else "")
+            .to_dict())
+
+
+def _fig_puente(valor, valor_aa, ef_precio, ef_cant,
+                cant=None, cant_aa=None, unidad=""):
     """Puente: año pasado → efecto precio → efecto cantidad → este año.
 
     `go.Waterfall` ignora `bargap` (CLAUDE.md § Plotly): el grosor se
@@ -488,6 +507,12 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant, cant=None, cant_aa=None):
     # concepto. Ver `arquitectura.md` regla #335.
     def _signo(v):
         return f"{'+' if v >= 0 else '−'}S/ {abs(v):,.0f}"
+
+    # La cantidad sólo se muestra con su unidad al lado. Ver el comentario
+    # largo del `hovertext`: "246" a secas, en una tarjeta donde todo lo
+    # demás está en soles, se lee como soles.
+    _um = str(unidad or "").strip().lower()
+    _con_cant = cant is not None and cant_aa is not None and bool(_um)
 
     fig = go.Figure(go.Waterfall(
         orientation="v",
@@ -522,29 +547,52 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant, cant=None, cant_aa=None):
         # aunque es la bisagra entre los dos efectos:
         #     valor_aa  ──(cantidad)──▶  pivote  ──(precio)──▶  valor
         #
-        # Y con el pivote pasó lo mismo una vez más: "lo de este año" es
-        # OTRO pronombre. Cuando el puente mira UN producto —una unidad
-        # sola— la cantidad es un número real y se dice; cuando mira varios
-        # (productos con distinta unidad) no hay cantidad que nombrar y se
-        # cae al pivote, que es plata y sí se puede sumar. Esa es toda la
-        # diferencia entre las dos ramas de abajo.
+        # Y con el pivote pasó lo mismo DOS veces más, que es de lo que sale
+        # la forma final de abajo:
+        #
+        #   · "lo de este año" es OTRO pronombre (preguntado: *"¿qué es «lo
+        #     de este año»?"*). Cambiar un pronombre por otro no arregla
+        #     nada.
+        #   · y decir sólo el número tampoco: *"los 246 ¿qué? ¿soles?
+        #     ¿kilos? ¿documentos?"*. Una cantidad SIN SU UNIDAD, en una
+        #     tarjeta donde todo lo demás está en soles, se lee como soles.
+        #
+        # Así que el tooltip escribe la CUENTA, con la unidad pegada a cada
+        # cantidad y el mismo número repetido donde los dos efectos se
+        # tocan (el pivote). No queda nada que interpretar: la resta de los
+        # dos renglones ES la barra.
+        #
+        # La rama sin cantidades no es un caso raro, es el caso normal
+        # (Familia, o sin foco): ahí no hay UNA unidad —sumar kilos con
+        # litros y con servicios es la trampa que evita `_por_item`— y se
+        # dice todo en plata, que sí se puede sumar entre unidades. Se cae
+        # también si falta la unidad: un número pelado es justo lo que se
+        # reportó, así que sin unidad no se muestra cantidad.
         hovertext=[
             f"Año pasado: S/ {valor_aa:,.0f}",
             f"Efecto precio: {_signo(ef_precio)}<br>"
             "<span style='font-size:11px'>"
-            + (f"las {cant:,.0f} compradas este año valían "
-               f"S/ {valor - ef_precio:,.0f} al precio del año pasado"
-               if cant is not None else
-               f"las cantidades compradas este año valían "
-               f"S/ {valor - ef_precio:,.0f} a precios del año pasado")
+            + (f"{cant:,.0f} {_um} × precio de este año = "
+               f"S/ {valor:,.0f}<br>"
+               f"{cant:,.0f} {_um} × precio del año pasado = "
+               f"S/ {valor - ef_precio:,.0f}"
+               if _con_cant else
+               f"compras de este año, a precio de este año = "
+               f"S/ {valor:,.0f}<br>"
+               f"compras de este año, a precios del año pasado = "
+               f"S/ {valor - ef_precio:,.0f}")
             + "</span>",
             f"Efecto cantidad: {_signo(ef_cant)}<br>"
             "<span style='font-size:11px'>"
-            + (f"{cant:,.0f} este año contra {cant_aa:,.0f} el año pasado, "
-               "a precios del año pasado"
-               if cant is not None and cant_aa is not None else
-               f"esas compras (S/ {valor - ef_precio:,.0f}) contra las del "
-               f"año pasado (S/ {valor_aa:,.0f}), a los mismos precios")
+            + (f"{cant:,.0f} {_um} × precio del año pasado = "
+               f"S/ {valor - ef_precio:,.0f}<br>"
+               f"{cant_aa:,.0f} {_um} × precio del año pasado = "
+               f"S/ {valor_aa:,.0f}"
+               if _con_cant else
+               f"compras de este año, a precios del año pasado = "
+               f"S/ {valor - ef_precio:,.0f}<br>"
+               f"compras del año pasado, a esos mismos precios = "
+               f"S/ {valor_aa:,.0f}")
             + "</span>",
             f"Este año: S/ {valor:,.0f}",
         ],
@@ -1036,17 +1084,24 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
             st.markdown(_resumen_html(delta, pct, ef_p, ef_c),
                         unsafe_allow_html=True)
             # La CANTIDAD sólo viaja si `_items` es un producto solo: ahí
-            # hay UNA unidad y el número se puede decir ("las 3.061 de este
-            # año"). Con varios productos sumaría kilos con litros y con
-            # servicios — la misma trampa que `_por_item` evita para el
-            # precio del grupo. Sin cantidad el tooltip lo dice en plata.
+            # hay UNA unidad y el número se puede decir ("246 kilos"). Con
+            # varios productos sumaría kilos con litros y con servicios —
+            # la misma trampa que `_por_item` evita para el precio del
+            # grupo. Sin cantidad el tooltip lo dice todo en plata.
+            #
+            # Y va con su UNIDAD o no va: `_fig_puente` ignora la cantidad
+            # si la unidad viene vacía. Un "246" pelado en una tarjeta de
+            # soles se lee como soles (reportado el 2026-09-06, regla #335).
             _uno = len(_items) == 1
+            _um_puente = (_unidades_por(fuente, col_prod, col_um)
+                          .get(str(_items["item"].iloc[0]), "") if _uno else "")
             st.plotly_chart(_fig_puente(tot["valor"], tot["valor_aa"],
                                         ef_p, ef_c,
                                         cant=float(_items["cant"].iloc[0])
                                         if _uno else None,
                                         cant_aa=float(_items["cant_aa"].iloc[0])
-                                        if _uno else None),
+                                        if _uno else None,
+                                        unidad=_um_puente),
                             use_container_width=True, key="compras_g_vap_puente")
 
         if parcial is not None:
@@ -1089,17 +1144,13 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
             st.info(f"Ningún ítem coincide con «{q}».")
             return
 
-        # Unidad de medida por ítem, sólo para el tooltip. `mode()` y no el
-        # primero: un producto puede tener alguna fila con la unidad mal
-        # cargada y la moda la ignora.
-        ums = {}
-        if col_um and col_um in fuente.columns:
-            _llave_um = col_prod if agrupar_nuevo == "Producto" else (
-                col_fam if agrupar_nuevo == "Familia" else col_subfam)
-            _m = (fuente[[_llave_um, col_um]].astype(str)
-                  .groupby(_llave_um)[col_um]
-                  .agg(lambda s: s.mode().iat[0] if not s.mode().empty else ""))
-            ums = _m.to_dict()
+        # Unidad de medida por ítem, para el tooltip de la tabla. Misma
+        # resolución que la del puente de arriba (`_unidades_por`), que es
+        # por qué son una función y no dos bloques parecidos: el día que la
+        # moda deje de ser el criterio, tiene que cambiar en un solo sitio.
+        _llave_um = col_prod if agrupar_nuevo == "Producto" else (
+            col_fam if agrupar_nuevo == "Familia" else col_subfam)
+        ums = _unidades_por(fuente, _llave_um, col_um)
 
         clic = _tabla_detalle(g_tabla, agrupar_nuevo, ums,
                               "compras_vap_detalle_grid")
