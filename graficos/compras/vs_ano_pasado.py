@@ -479,12 +479,26 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant):
     `go.Waterfall` ignora `bargap` (CLAUDE.md § Plotly): el grosor se
     controla con `waterfallgap`.
     """
+    # Las DOS barras del medio se miden en SOLES, así que su rótulo tiene que
+    # nombrar algo que se mida en soles: "Precio" a secas se lee como si la
+    # barra FUERA un precio (reportado 2026-09-06, con el tooltip diciendo
+    # "Precio: S/ 44,845"). Son "Efecto precio"/"Efecto cantidad", que además
+    # es como ya las nombran la tabla de abajo y el popover de ayuda de esta
+    # misma tarjeta — el gráfico era el único que le decía distinto al mismo
+    # concepto. Ver `arquitectura.md` regla #335.
+    def _signo(v):
+        return f"{'+' if v >= 0 else '−'}S/ {abs(v):,.0f}"
+
     fig = go.Figure(go.Waterfall(
         orientation="v",
         measure=["absolute", "relative", "relative", "total"],
-        x=["Año<br>pasado", "Precio", "Cantidad", "Este<br>año"],
+        x=["Año<br>pasado", "Efecto<br>precio", "Efecto<br>cantidad",
+           "Este<br>año"],
         y=[valor_aa, ef_precio, ef_cant, 0],
-        text=[f"S/ {v:,.0f}" for v in (valor_aa, ef_precio, ef_cant, valor)],
+        # Con signo las dos del medio (son diferencias: "+" costó más, "−"
+        # costó menos) y sin signo las dos de los bordes, que son totales.
+        text=[f"S/ {valor_aa:,.0f}", _signo(ef_precio), _signo(ef_cant),
+              f"S/ {valor:,.0f}"],
         textposition="outside",
         cliponaxis=False,
         # Es un COSTO: subir es malo. Rojo/verde invertidos respecto de la
@@ -493,7 +507,21 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant):
         decreasing=dict(marker=dict(color=EXITO)),
         totals=dict(marker=dict(color=ACENTO)),
         connector=dict(line=dict(color=GRIS_BORDE, width=1)),
-        hovertemplate="%{x}: S/ %{y:,.0f}<extra></extra>",
+        # `%{y}` en un Waterfall NO es el alto de la barra: es el ACUMULADO
+        # corrido. Medido el 2026-09-06: la barra rotulada "S/ 2,012" abría
+        # un tooltip que decía "S/ 44,845" (= 42,833 + 2,012), o sea el
+        # gráfico se contradecía consigo mismo. El texto va armado desde
+        # Python en `hovertext` para que diga exactamente lo mismo que la
+        # etiqueta, y de paso qué significa cada barra.
+        hovertext=[
+            f"Año pasado: S/ {valor_aa:,.0f}",
+            f"Efecto precio: {_signo(ef_precio)}<br>"
+            "<span style='font-size:11px'>pagar distinto por lo mismo</span>",
+            f"Efecto cantidad: {_signo(ef_cant)}<br>"
+            "<span style='font-size:11px'>comprar más (o menos)</span>",
+            f"Este año: S/ {valor:,.0f}",
+        ],
+        hovertemplate="%{hovertext}<extra></extra>",
     ))
     fig.update_layout(waterfallgap=0.45)
     # Menos alto que la serie de al lado, y por eso terminan a la misma
@@ -504,7 +532,8 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant):
     # literal "undefined" donde iría el título (medido en el navegador,
     # 2026-08-24 — salía sobre el waterfall). El título de esta figura
     # sobra: la línea de resumen de arriba y las etiquetas del propio eje
-    # ("Año pasado → Precio → Cantidad → Este año") ya la nombran.
+    # ("Año pasado → Efecto precio → Efecto cantidad → Este año") ya la
+    # nombran.
     # `t=16` y no 44 (2026-09-02, reportado: "esto me quita mucho espacio").
     # Medido antes de tocarlo: el área de trazo del waterfall empezaba 36px
     # por debajo del borde de la figura y ocupaba 97 de los 176 de alto —

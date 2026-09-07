@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-334 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+335 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (107)
 
@@ -179,7 +179,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 - **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
 
-**Plotly y figuras** (54)
+**Plotly y figuras** (55)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -235,6 +235,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#294** — st.dataframe (glide-data-grid) sobrevive a un st.empty() que lo reemplaza por OTRO contenido…
 - **#323** — «Pedido vs Baja» dibujaba el mismo gráfico que «Evolución», dos scrolls más arriba — y lo que…
 - **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
+- **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 
 **AgGrid y tablas** (48)
 
@@ -30342,6 +30343,55 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-04.)
 
+335. **Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se
+     rotula con el efecto. Y `%{y}` en un `go.Waterfall` no es el alto de
+     la barra, es el ACUMULADO.** Los dos bugs salieron del mismo reporte
+     (2026-09-06, sobre el puente de «Vs año pasado»): *"no veo que diga
+     efecto precio, sólo dice precio, y eso no explica mucho"*, con una
+     captura donde la barra rotulada `S/ 2,012` abría un tooltip que decía
+     `Precio: S/ 44,845`.
+
+     **El rótulo.** El eje decía `Año pasado → Precio → Cantidad → Este
+     año`. Pero las dos del medio no son un precio ni una cantidad: son
+     PLATA — la parte del Δ que explica cada causa. Con ese rótulo, un
+     número en soles debajo de la palabra "Precio" se lee como el precio.
+     La prueba es de una línea: **si la barra está en soles, su rótulo
+     tiene que nombrar algo que se mida en soles.** «Efecto precio» sí;
+     «Precio», no.
+
+     Y el nombre no era libre: **la tabla de abajo y el popover de ayuda
+     de la MISMA tarjeta ya decían «Efecto precio»/«Efecto cantidad»**. El
+     gráfico era el único que le decía distinto al mismo concepto, que es
+     la misma familia de bug que el KPI contradiciendo a su tabla (#333) o
+     la celda con una tolerancia distinta de la que decide el estado
+     (#238). Un concepto, un nombre, en las tres piezas.
+
+     **El tooltip.** `hovertemplate="%{x}: S/ %{y:,.0f}"` parece obvio y
+     está mal: en un waterfall, `y` después del procesamiento es la
+     posición ACUMULADA de la barra, no su alto. Medido: 42.833 + 2.012 =
+     44.845, o sea el gráfico se contradecía consigo mismo — la etiqueta
+     `text=` (que sí sale del valor de Python) decía 2.012 y el tooltip
+     44.845. La cura es no depender de lo que Plotly deja en `y`: el texto
+     se arma en Python y viaja en `hovertext`, con
+     `hovertemplate="%{hovertext}<extra></extra>"`. De paso el tooltip
+     puede decir QUÉ significa la barra ("pagar distinto por lo mismo"),
+     que es justo lo que un rótulo de dos palabras no puede.
+
+     Corolario de formato, del mismo cambio: **en un waterfall, las barras
+     RELATIVAS llevan signo y las absolutas no.** `S/ -17,623` bajo una
+     barra verde es ruido; `−S/ 17,623` dice que ese pedazo del Δ es un
+     ahorro, y empareja con cómo lo escribe la tabla. Los bordes («Año
+     pasado», «Este año») son totales, no diferencias: van sin signo.
+
+     Nota de vocabulario, que salió en la misma conversación: esto **no es
+     una proyección**. Una proyección estima algo que no pasó; esto reparte
+     un Δ que ya pasó, y los dos pedazos lo cierran exacto (`_puente`, y la
+     regla #199 sobre por qué se calcula por producto y recién después se
+     suma). Lo contrafáctico vive dentro de la aritmética, no en el
+     resultado.
+
+     (2026-09-06.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30354,7 +30404,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#335**.
+> próxima regla nueva es la **#336**.
 
 >
 
