@@ -249,6 +249,23 @@ CSS = """    <style>
         --rail-der-res: calc(var(--rail-der-w) + 19px + 24px);
     }
 
+    /* ── PESTILLO: la columna plegada (2026-09-04) ───────────────────────
+       El riel pasa de 280px a 46px — lo justo para el icono de cada fila,
+       que es lo unico que sobrevive al plegado (ver `_20_compras_rail.py`).
+
+       Se mueve UNA variable y la reserva del contenido va sola: se deriva
+       (`calc(var(--rail-der-w) + 19px + 24px)`), asi que plegar da
+       46+19+24 = 89px de reserva y las tarjetas ganan 234px sin que nadie
+       toque un padding. Esa derivacion existe desde el 2026-08-25 y es
+       justo para esto; el pestillo viejo la usaba igual.
+
+       El gancho es la KEY del contenedor del boton, que codifica el
+       estado (`navegacion.py`). No hay un marcador aparte a proposito:
+       un `st.container` vacio se poda en el render siguiente (regla
+       #338) y el plegado se apagaria solo. */
+    :root:has(.st-key-rail_pestillo_plegado) {
+        --rail-der-w: 46px;
+    }
     /* ── MODO "SOLO": sin rail, la reserva se suelta (2026-09-04) ────────
        Cuando una sección de Compras se queda con la página (el ⛶ de la
        cabecera de «Vs año pasado» → `compras_pila_solo`), el rail se

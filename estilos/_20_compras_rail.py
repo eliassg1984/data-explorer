@@ -1138,6 +1138,99 @@ CSS = """    /* ================================================================
         display: none !important;
     }
 
+    /* PESTILLO: la columna izquierda se pliega a 46px (2026-09-04)      */
+    /*                                                                      */
+    /* El ANCHO lo cambia una sola variable en `_00_base.py`; aca va lo que  */
+    /* pasa ADENTRO: que sobreviva el icono y se vaya todo lo demas.         */
+    /* =================================================================== */
+    /* El pestillo, pegado al borde derecho de la CABECERA de la columna.
+       Mismo `top` y mismo `left` que el rotulo (`rail_rotulo_rep`), y su
+       ancho sale de `--rail-cab-alto`: asi es un cuadrado del alto de la
+       cabecera, 33x33 desplegado y lo mismo plegado — la queja del
+       pestillo viejo era que era "casi imperceptible", y un objetivo de
+       33px no lo es. Al derivar el `left` de `--rail-der-w`, sigue al riel
+       en los dos estados sin una regla aparte. */
+    .st-key-rail_pestillo_abierto,
+    .st-key-rail_pestillo_plegado {
+        position: fixed !important;
+        top: calc(var(--franja-rep-alto) + var(--nav-top-alto)) !important;
+        left: calc(19px + var(--rail-der-w) - var(--rail-cab-alto)) !important;
+        width: var(--rail-cab-alto) !important;
+        height: var(--rail-cab-alto) !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        z-index: 902 !important;   /* sobre los dos railes (900 y 901) */
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .st-key-rail_pestillo_abierto button,
+    .st-key-rail_pestillo_plegado button {
+        width: 22px !important;
+        height: 22px !important;
+        min-height: 22px !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        border-radius: 6px !important;
+        border: 0.5px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        box-shadow: none !important;
+    }
+    .st-key-rail_pestillo_abierto button:hover,
+    .st-key-rail_pestillo_plegado button:hover {
+        background: var(--bg-hover) !important;
+        color: var(--acento-texto, #4938b8) !important;
+    }
+    /* DEFENSA ANTI-TOOLTIP-FANTASMA (regla #164): el boton lleva `help=`,
+       asi que Streamlit deja una copia suelta dentro del mismo `stButton`.
+       Es invisible hasta que algo le da tamano explicito — y el `width/
+       height` de aca arriba se lo daria, duplicando el chevron. */
+    .st-key-rail_pestillo_abierto [data-testid="stButton"]:has(.stTooltipIcon)
+        > div:not(:has(.stTooltipIcon)),
+    .st-key-rail_pestillo_plegado [data-testid="stButton"]:has(.stTooltipIcon)
+        > div:not(:has(.stTooltipIcon)) {
+        display: none !important;
+    }
+
+    /* ── PLEGADO: sobrevive el icono, se va el texto ────────────────────
+       Los dos railes de la columna se tratan juntos: `compras_tabs_row`
+       (Reportes) y `nav_rail_lateral` (Vistas) se TURNAN al scrollear
+       (`_26_rails_scroll.py`), asi que estilar solo el visible deja al
+       otro listo para aparecer mal — es exactamente el bug que costo el
+       modo solo (regla #334).
+
+       Que se esconde: el `stMarkdownContainer` del label, que es donde
+       vive el nombre Y el KPI. El icono es un nodo hermano
+       (`stIconMaterial`), asi que queda. Verificado en el DOM el
+       2026-09-04:
+
+           button > div > span > span > span[stIconMaterial]
+                                     > div[stMarkdownContainer] > p
+
+       El rotulo de la cabecera ("Reportes"/"Vistas") tambien se va: en
+       46px no entra, y el pestillo ya ocupa esa banda. */
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-compras_tabs_row
+        [data-testid="stMarkdownContainer"],
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral
+        [data-testid="stMarkdownContainer"] {
+        display: none !important;
+    }
+    /* Solo hay UN rotulo: el gemelo "Vistas" se retiro el 2026-09-01
+       (ver `base.py::_render_rail`), asi que aca no hay par. */
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-rail_rotulo_rep
+        .rail-rotulo {
+        display: none !important;
+    }
+    /* El icono, centrado: sin el label que lo empujaba, un boton alineado
+       a la izquierda deja el icono contra el borde. */
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-compras_tabs_row button,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral button {
+        justify-content: center !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
     /* =================================================================== */
     /* MODO "SOLO" — una sección se queda con la página (2026-09-04)        */
     /*                                                                      */

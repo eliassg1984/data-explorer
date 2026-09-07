@@ -831,6 +831,51 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         st.markdown('<div class="rail-rotulo">Reportes</div>',
                     unsafe_allow_html=True)
 
+    # ── PESTILLO: pliega la columna izquierda a 46px ─────────────────────
+    # Vuelve el 2026-09-04, a pedido. Ya existió y se retiró el 2026-08-26
+    # ("eliminemos esto") — la regla #216 cuenta esa retirada. Lo que el
+    # usuario aclaró al pedirlo de nuevo es POR QUÉ lo había sacado: *"lo
+    # borré porque estaba pobremente diseñado"*, y su queja de entonces está
+    # citada en la bitácora: *"el pestillo es casi imperceptible"*. Así que
+    # el rediseño se juzga contra eso.
+    #
+    # Tres decisiones que salen de ahí:
+    #
+    # 1. **VIVE EN LA CABECERA DE LA COLUMNA, no flotando al costado.**
+    #    Ocupa el alto entero de `--rail-cab-alto` pegado al borde derecho
+    #    del riel, así que es un objetivo de 33x33 y no un gusano. Es UN
+    #    elemento y no dos: la cabecera tiene dos copias que se cruzan
+    #    ("Reportes"/"Vistas", ver el rótulo de acá arriba) y meter el
+    #    pestillo adentro de cada una daría dos botones para un solo
+    #    estado. Éste va aparte, fijo, y no cruza.
+    #
+    # 2. **EL CHEVRON APUNTA AL DESTINO, no al estado.** Plegado muestra
+    #    «›» (te va a abrir), desplegado «‹» (te va a cerrar). Es la
+    #    lección que ya dejó el pestillo viejo y está en la bitácora.
+    #
+    # 3. **LA KEY DEL CONTENEDOR CODIFICA EL ESTADO**, y de ahí cuelga todo
+    #    el CSS del plegado (`:has(.st-key-rail_pestillo_plegado)`). El
+    #    camino obvio —un `st.container` vacío de marcador— NO sirve:
+    #    Streamlit poda el bloque sin hijos en el render siguiente y el
+    #    modo se apaga solo (regla #338, medido). Este contenedor nunca
+    #    está vacío, lleva el botón adentro.
+    #
+    # Se dibuja SIEMPRE, en todos los reportes, y por eso el estado no
+    # puede quedar encerrado: la regla #216 (escrita al retirar el
+    # anterior) dice que un estado "plegado" sin control visible que lo
+    # deshaga es un usuario sin salida. Acá el control es el mismo botón,
+    # y en plegado sigue en pantalla.
+    _plegado = bool(st.session_state.get("rail_plegado", False))
+    with st.container(key="rail_pestillo_"
+                      + ("plegado" if _plegado else "abierto")):
+        if st.button(":material/chevron_right:" if _plegado
+                     else ":material/chevron_left:",
+                     key="rail_pestillo_btn",
+                     help=("Desplegar el panel" if _plegado
+                           else "Plegar el panel")):
+            st.session_state["rail_plegado"] = not _plegado
+            st.rerun()
+
     # ── FRANJA DE REPORTES (2026-08-31, a pedido) ────────────────────────
     # Arriba de todo, blanca, ~1cm de alto, con los nombres de los reportes.
     #
