@@ -1165,10 +1165,32 @@ CSS = """    /* ================================================================
     /* La reserva que el contenido le hacía al rail se suelta en
        `estilos/_00_base.py` (dueño único de `--rail-der-res`, ver allá el
        porqué); acá va todo lo demás del modo solo. */
-    /* El rail y su rótulo se van: son `position: fixed`, así que dejarlos
+    /* Los rails y el rótulo se van: son `position: fixed`, así que dejarlos
        visibles con la reserva suelta los pondría ENCIMA de la tarjeta. Se
-       vuelve por el mismo ⛶, que en modo solo muestra el ícono de cerrar. */
+       vuelve por el mismo ⛶, que en modo solo muestra el ícono de cerrar.
+
+       SON DOS RAILS, no uno, y olvidarse del segundo fue el primer bug de
+       este modo (2026-09-04, reportado como "el maximizar choca con el rail
+       izquierdo"). La columna izquierda INTERCAMBIA contenido al scrollear
+       —`compras_tabs_row` (Reportes) arriba, `nav_rail_lateral` (Vistas) al
+       bajar, ver `_26_rails_scroll.py`—, así que esconder sólo el primero
+       deja al segundo listo para aparecer encima de la tarjeta.
+
+       La causa raíz se arregló en `graficos/base.py` (el scrollspy tomaba
+       "no está la primera sección" por "dejaste la primera" y encendía
+       `rails-scrolled`). Esta regla queda igual, y no es redundante: la
+       clase vive en el `<html>` y sobrevive al rerun, así que entre entrar
+       al modo solo y el siguiente tick del temporizador el rail de Vistas
+       se vería encima. Acá es CSS, o sea inmediato.
+
+       La especificidad alcanza sin depender del orden de `_SECCIONES`, que
+       es lo que haría falta si no: `_26_rails_scroll.py` va DESPUÉS de este
+       módulo y declara `display: flex !important` sobre
+       `.st-key-nav_rail_lateral` (0,1,0). El selector de acá es (0,2,1) por
+       el `:root` más las dos clases, así que gana por especificidad y no
+       por posición. */
     :root:has(.st-key-compras_solo_on) .st-key-compras_tabs_row,
+    :root:has(.st-key-compras_solo_on) .st-key-nav_rail_lateral,
     :root:has(.st-key-compras_solo_on) .st-key-rail_rotulo_rep {
         display: none !important;
     }

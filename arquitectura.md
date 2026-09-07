@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-333 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+334 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (106)
+**CSS y estilos** (107)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -140,6 +140,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#318** — Angostar un st.selectbox recorta sus OPCIONES, no sólo su valor: el desplegable mide lo mismo…
 - **#320** — El selector de fecha de una tarjeta dejó de ser de Compras — y su CSS no pudo viajar con él…
 - **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
+- **#334** — Un scrollspy que compara contra MAPA[0] miente cuando la página dibuja un SUBCONJUNTO de su…
 
 **Layout y alturas** (34)
 
@@ -522,7 +523,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 
-**Decisiones de diseño y UX** (59)
+**Decisiones de diseño y UX** (60)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -583,6 +584,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#327** — El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA sola vez: el color hay…
 - **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
 - **#332** — Sacarle a un reporte el control de fecha GLOBAL son tres cosas más, y ninguna es opcional…
+- **#334** — Un scrollspy que compara contra MAPA[0] miente cuando la página dibuja un SUBCONJUNTO de su…
 
 **Mantenimiento y trampas del lenguaje** (10)
 
@@ -30289,6 +30291,57 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      los proveedores» restituye las 4.911. Sin desborde horizontal
      (`scrollWidth == clientWidth == 1358`). (2026-09-06.)
 
+334. **Un scrollspy que compara contra `MAPA[0]` miente cuando la página
+     dibuja un SUBCONJUNTO de su pila — y la columna izquierda tiene DOS
+     rails, no uno.** Primer bug del modo solo (#308), reportado el
+     2026-09-04 como *"el maximizar choca con el rail izquierdo"*.
+
+     El mecanismo, que son dos piezas encadenadas:
+
+     1. `graficos/base.py::_render_rail` recibe `secciones=_PILA` (las seis
+        de Compras) y su temporizador decide `rails-scrolled` con
+        `mejor.sec !== MAPA[0].sec`, o sea "¿la sección más visible es
+        distinta de la PRIMERA de la pila?". En modo solo la única sección
+        del DOM es «Vs año pasado» y `MAPA[0]` —Proveedor— **no existe**,
+        así que la comparación da true SIEMPRE.
+     2. `rails-scrolled` es justo el disparador del intercambio de rails
+        (`estilos/_26_rails_scroll.py`): la columna izquierda muestra
+        `compras_tabs_row` (Reportes) arriba de todo y `nav_rail_lateral`
+        (Vistas) al bajar. Con la clase encendida entra el de Vistas —
+        `position: fixed`, `left: 19px`, 280px de ancho— y en modo solo el
+        contenido ya no le reserva esa columna. Se planta encima de la
+        tarjeta.
+
+     **La regla general de la primera pieza:** una condición de la forma
+     "¿me fui del elemento 0?" no se puede evaluar cuando el elemento 0 no
+     está en pantalla, y `!==` contra algo ausente responde que sí en vez de
+     "no sé". La guarda es exigir que la referencia exista
+     (`!!primera && mejor.sec !== MAPA[0].sec`); si no está, no se cambia de
+     estado. Vale para cualquier vista que un día decida dibujar parte de su
+     pila — el rail es COMPARTIDO por seis dashboards.
+
+     **La de la segunda:** antes de esconder cromo por CSS, contar cuántos
+     elementos ocupan ese sitio. Acá el sitio es uno (la columna izquierda)
+     pero los elementos son dos, porque se turnan; esconder el que se ve
+     deja al otro listo para aparecer. Es la misma familia que la regla
+     #146 —"antes de esconder chrome de Streamlit, contar qué hay adentro"—
+     aplicada al eje del TIEMPO en vez del de la jerarquía.
+
+     Se arregló en los dos sitios a propósito, y el CSS no es redundante:
+     `rails-scrolled` vive en el `<html>` y sobrevive al rerun, así que
+     entre entrar al modo solo y el siguiente tick del temporizador el rail
+     de Vistas se vería igual. El CSS es inmediato; el JS es la causa.
+
+     Detalle de especificidad, que es lo que evita depender del orden de
+     `_SECCIONES`: `_26_rails_scroll.py` va DESPUÉS de `_20_compras_rail.py`
+     y declara `display: flex !important` sobre `.st-key-nav_rail_lateral`
+     (0,1,0). La regla del modo solo es
+     `:root:has(.st-key-compras_solo_on) .st-key-nav_rail_lateral` (0,2,1),
+     así que gana por especificidad y no por posición — que es como hay que
+     escribir un override entre módulos cuando el que manda va antes.
+
+     (2026-09-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30301,7 +30354,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#334**.
+> próxima regla nueva es la **#335**.
 
 >
 

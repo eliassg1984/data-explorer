@@ -1547,8 +1547,24 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     if (mejor) {{
                       // El rail de la columna cambia de Reportes a Vistas en
                       // cuanto dejas la primera seccion.
+                      //
+                      // El `primera &&` NO es defensivo, arregla un bug con
+                      // captura (2026-09-04): una pagina puede dibujar UN
+                      // SUBCONJUNTO de su pila —hoy el modo solo de Compras,
+                      // que deja una sola seccion cuando maximizas su
+                      // tarjeta— y entonces MAPA[0] no esta en el DOM. Sin
+                      // la guarda, `mejor.sec !== MAPA[0].sec` da true
+                      // SIEMPRE y la columna cambia al rail de Vistas: 280px
+                      // fijos en left:19 encima de la tarjeta ancha, porque
+                      // en ese modo el contenido ya no le reserva su columna.
+                      // Si la primera seccion no esta en pantalla, la premisa
+                      // de la que cuelga todo esto ("dejaste la primera") no
+                      // se puede evaluar — asi que no se cambia de rail.
+                      var primera = doc.querySelector(
+                        '[class*="st-key-' + MAPA[0].sec + '"]');
                       doc.documentElement.classList.toggle(
-                        'rails-scrolled', mejor.sec !== MAPA[0].sec);
+                        'rails-scrolled',
+                        !!primera && mejor.sec !== MAPA[0].sec);
                       var previos = doc.querySelectorAll('.vista-en-pantalla');
                       for (var i = 0; i < previos.length; i++) {{
                         previos[i].classList.remove('vista-en-pantalla');
