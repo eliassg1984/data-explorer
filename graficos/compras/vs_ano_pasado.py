@@ -473,7 +473,7 @@ def _fig_serie(g, modo, parcial):
     return fig
 
 
-def _fig_puente(valor, valor_aa, ef_precio, ef_cant):
+def _fig_puente(valor, valor_aa, ef_precio, ef_cant, cant=None, cant_aa=None):
     """Puente: año pasado → efecto precio → efecto cantidad → este año.
 
     `go.Waterfall` ignora `bargap` (CLAUDE.md § Plotly): el grosor se
@@ -521,18 +521,31 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant):
         # (`valor - ef_precio`) no aparece en ninguna parte de la pantalla,
         # aunque es la bisagra entre los dos efectos:
         #     valor_aa  ──(cantidad)──▶  pivote  ──(precio)──▶  valor
-        # Sirve igual para un GRUPO, donde no hay una cantidad única que
-        # nombrar (productos con distinta unidad): el pivote es plata, y es
-        # «lo que compraste este año, a los precios del año pasado».
+        #
+        # Y con el pivote pasó lo mismo una vez más: "lo de este año" es
+        # OTRO pronombre. Cuando el puente mira UN producto —una unidad
+        # sola— la cantidad es un número real y se dice; cuando mira varios
+        # (productos con distinta unidad) no hay cantidad que nombrar y se
+        # cae al pivote, que es plata y sí se puede sumar. Esa es toda la
+        # diferencia entre las dos ramas de abajo.
         hovertext=[
             f"Año pasado: S/ {valor_aa:,.0f}",
             f"Efecto precio: {_signo(ef_precio)}<br>"
-            "<span style='font-size:11px'>lo de este año, a precios del año "
-            f"pasado: S/ {valor - ef_precio:,.0f}</span>",
+            "<span style='font-size:11px'>"
+            + (f"las {cant:,.0f} compradas este año valían "
+               f"S/ {valor - ef_precio:,.0f} al precio del año pasado"
+               if cant is not None else
+               f"las cantidades compradas este año valían "
+               f"S/ {valor - ef_precio:,.0f} a precios del año pasado")
+            + "</span>",
             f"Efecto cantidad: {_signo(ef_cant)}<br>"
-            f"<span style='font-size:11px'>esos S/ {valor - ef_precio:,.0f} "
-            f"contra los S/ {valor_aa:,.0f} del año pasado, a los mismos "
-            "precios</span>",
+            "<span style='font-size:11px'>"
+            + (f"{cant:,.0f} este año contra {cant_aa:,.0f} el año pasado, "
+               "a precios del año pasado"
+               if cant is not None and cant_aa is not None else
+               f"esas compras (S/ {valor - ef_precio:,.0f}) contra las del "
+               f"año pasado (S/ {valor_aa:,.0f}), a los mismos precios")
+            + "</span>",
             f"Este año: S/ {valor:,.0f}",
         ],
         hovertemplate="%{hovertext}<extra></extra>",
@@ -821,12 +834,12 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                             # cantidad de ESTE año: se la valoriza a los dos
                             # precios y la resta es el efecto precio. Ver
                             # regla #335.
-                            + "**Efecto precio**: lo que compraste este año, "
-                            "valorizado al precio de este año y al del "
-                            "pasado — la resta. **Efecto cantidad**: esa "
-                            "misma compra contra la del año pasado, las dos "
-                            "a precios del año pasado. Los dos suman el Δ "
-                            "exacto." + PARR
+                            + "**Efecto precio**: las CANTIDADES que "
+                            "compraste este año, valorizadas al precio de "
+                            "este año y al del pasado — la resta. **Efecto "
+                            "cantidad**: esas cantidades contra las del año "
+                            "pasado, las dos a precios del año pasado. Los "
+                            "dos suman el Δ exacto." + PARR
                             + "**Clic en una fila** de la tabla enfoca el "
                             "gráfico de arriba; volver a clickearla lo "
                             "devuelve a todas las compras.")
@@ -1022,8 +1035,18 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         with col_p:
             st.markdown(_resumen_html(delta, pct, ef_p, ef_c),
                         unsafe_allow_html=True)
+            # La CANTIDAD sólo viaja si `_items` es un producto solo: ahí
+            # hay UNA unidad y el número se puede decir ("las 3.061 de este
+            # año"). Con varios productos sumaría kilos con litros y con
+            # servicios — la misma trampa que `_por_item` evita para el
+            # precio del grupo. Sin cantidad el tooltip lo dice en plata.
+            _uno = len(_items) == 1
             st.plotly_chart(_fig_puente(tot["valor"], tot["valor_aa"],
-                                        ef_p, ef_c),
+                                        ef_p, ef_c,
+                                        cant=float(_items["cant"].iloc[0])
+                                        if _uno else None,
+                                        cant_aa=float(_items["cant_aa"].iloc[0])
+                                        if _uno else None),
                             use_container_width=True, key="compras_g_vap_puente")
 
         if parcial is not None:

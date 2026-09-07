@@ -494,7 +494,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (27)
+**Herramientas de desarrollo** (28)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -523,6 +523,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#264** — Un mock arrastrado con "Mover" podía terminar pintado DEBAJO de un hermano posterior — no…
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
+- **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 
 **Decisiones de diseño y UX** (60)
 
@@ -30394,9 +30395,30 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
          42.833                            25.210                        27.222
 
      Una explicación que nombra un referente ("lo mismo", "lo comparable")
-     sin decir cuál es, no explica: el tooltip ahora dice el pivote. Sirve
-     igual para un GRUPO, donde no hay una cantidad única que nombrar
-     (productos con distinta unidad), porque el pivote es PLATA.
+     sin decir cuál es, no explica: el tooltip ahora dice el pivote.
+
+     **Y la corrección cayó en la misma trampa una vez más:** el reemplazo
+     era *"lo de este año, a precios del año pasado"*, y la pregunta
+     siguiente fue *"¿qué es «lo de este año»?"*. Cambiar un pronombre por
+     otro pronombre no arregla nada. **La prueba a aplicar es mecánica: si
+     la frase tiene un «lo», un «eso» o un «lo mismo», o se lo reemplaza
+     por el dato o la explicación no explica.**
+
+     El dato existe y estaba a mano — `_items` ya trae `cant`/`cant_aa`—,
+     con una condición: **sólo es decible cuando el puente mira UN
+     producto**, porque ahí hay una unidad sola. Con varios, sumar la
+     cantidad mezclaría kilos con litros y con servicios, que es la misma
+     trampa que la #199 evita para el precio del grupo. De ahí las dos
+     ramas del tooltip:
+
+     · un producto → *"las 3.061 compradas este año valían S/ 25.210 al
+       precio del año pasado"*, y el de cantidad compara 3.061 contra
+       5.199 directamente;
+     · varios → no hay cantidad que nombrar y se cae al pivote, que es
+       PLATA y sí se puede sumar entre unidades distintas.
+
+     La unidad no hace falta escribirla: el título de la tarjeta ya dice
+     «Entraña fina importada x Kg».
 
      **Y de ahí sale el orden de las barras, que está al revés.** El
      waterfall dibuja `año pasado → precio → cantidad → este año`, así que
