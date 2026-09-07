@@ -504,8 +504,14 @@ CSS = """    /* ================================================================
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row),
     .block-container:has(.st-key-compras_tabs_row) {
         /* La reserva sigue al rail: era `padding-right` mientras vivía a la
-           derecha. El otro lado vuelve solo a los 80px de base. */
+           derecha. */
         padding-left: var(--rail-der-res) !important;    /* rail + aire + offset (_00_base) */
+        /* Y el otro lado deja de ser los 80px de base de Streamlit
+           (2026-09-07, a pedido): eran 48px de aire muerto contra un canal
+           izquierdo de 24. La tarjeta gana ese ancho, que en la grilla de
+           Volatilidad son ~29px de la columna del ranking. El número vive
+           en `_00_base.py`, dueño único — igual que `--rail-der-res`. */
+        padding-right: var(--margen-der-contenido) !important;
     }
 
     /* Badge de categoría + separador entre secciones */

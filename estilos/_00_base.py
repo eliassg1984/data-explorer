@@ -247,6 +247,25 @@ CSS = """    <style>
            las tarjetas arrancaban en 349. Ahora arrancan en 323 y el
            contenido gana 26px de ancho. */
         --rail-der-res: calc(var(--rail-der-w) + 19px + 24px);
+
+        /* ── EL MARGEN DERECHO DEL CONTENIDO ────────────────────────────
+           Gemelo de `--rail-der-res`, del otro lado, y por el mismo motivo:
+           hay más de un sitio que necesita saber dónde termina la tarjeta.
+
+           Streamlit trae 5rem (80px) por defecto en el `block-container` y
+           nadie lo tocaba, así que el lado izquierdo tenía un canal de 24px
+           contra el rail y el derecho 80 de aire muerto. Reportado el
+           2026-09-07 mirando la grilla de Volatilidad: «veo que hay mucho
+           espacio a los lados».
+
+           32px y no 24: el canal izquierdo separa la tarjeta de OTRA cosa
+           (el rail, que ya es un borde visual), y éste la separa del borde
+           de la ventana, que no lo es. Con 24 la tarjeta se lee pegada al
+           vidrio. Lo consume hoy sólo el `padding-right` del
+           block-container de Compras (`_20_compras_rail.py`); vive acá para
+           que el día que un elemento fijo tenga que alinearse con ese borde
+           lo lea de un solo sitio, que es la lección de `--rail-der-res`. */
+        --margen-der-contenido: 32px;
     }
 
     /* ── PESTILLO: la columna plegada (2026-09-04) ───────────────────────

@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-347 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+348 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (115)
+**CSS y estilos** (116)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -149,6 +149,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 - **#344** — Plegar un riel y "más KPI" tiran para lados opuestos: la salida es que cada estado cargue lo…
 - **#345** — Una vista que es "un ranking y su drill" no son dos tarjetas: es UNA, y lo único que scrollea…
+- **#348** — Cuando una columna «no se ve», medí su PADDING antes de pedirle ancho a la tarjeta
 
 **Layout y alturas** (36)
 
@@ -248,7 +249,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 
-**AgGrid y tablas** (51)
+**AgGrid y tablas** (52)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -301,6 +302,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#336** — Un AgGrid sin custom_css= se queda con el tema de FÁBRICA, y eso se ve como una cabecera que…
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 - **#346** — Apilar un drill bajo su ranking cuesta el ALTO; ponerlo al lado cuesta el ANCHO. Elegí…
+- **#348** — Cuando una columna «no se ve», medí su PADDING antes de pedirle ancho a la tarjeta
 
 **Streamlit** (98)
 
@@ -31108,6 +31110,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      filtra, o vuelve del clic de una grilla sigue siendo el del parquet. Un
      nombre bonito guardado en `session_state` dejaría de matchear su propia
      fila — el mismo modo de fallo que la regla #130 evita por el otro lado.
+
+     (2026-09-07.)
+
+348. **Cuando una columna «no se ve», medí su PADDING antes de pedirle
+     ancho a la tarjeta.** Reportado el 2026-09-07 con captura, después de
+     #346: la cabecera «Volatilidad» salía como una torre de letras
+     —`Vol` / `atil` / `ida` / `d`—, «Ago» se partía en `Ag` + `o`, y los
+     valores de esa columna salían como «1…». El pedido fue *"podemos
+     aumentar horizontalmente el tamaño de la tarjeta, veo que hay mucho
+     espacio a los lados"*.
+
+     El espacio de los lados existía y se recuperó (abajo), pero **no era la
+     causa**. Medido en el navegador, columna por columna:
+
+     | | ancho | padding | queda para el rótulo |
+     |---|---|---|---|
+     | `.ag-cell` (semana) | 50 px | 6+6 (`_PAD_X_SEMANA`) | 38 px |
+     | `.ag-header-cell` | 50 px | **16+16** (tema material) | **18 px** |
+     | `.ag-cell` (Volatilidad) | 46 px | **15+15** (tema) | **16 px** |
+
+     O sea: la CELDA de las semanas ya tenía el padding bajado desde el
+     2026-09-06, y la CABECERA se había quedado con el del tema. 18px no
+     alcanzan para «Ago» — de ahí la torre de letras, que se lee como «la
+     tarjeta es angosta» cuando en realidad la columna estaba casi vacía por
+     dentro. Bajar el padding de la cabecera a 6px lleva el rótulo de 18 a
+     38px: **todas las cabeceras pasan a UN renglón** y la cabecera de la
+     grilla baja de 62 a 33px, que son ~0.7 filas más de ranking.
+
+     Va por `headerClass` y no por `.ag-header-cell` a secas: «Insumo» tiene
+     ancho de sobra y su celda conserva el padding del tema, así que
+     apretarle sólo la cabecera lo dejaría desalineado contra su propia
+     columna.
+
+     **Las otras tres cosas que salieron de la misma medición:**
+
+     · **La columna que le da nombre a la vista necesita `minWidth`.** Sin
+       piso, AG Grid escalaba «Volatilidad» hasta 46px. Es la última que
+       puede ceder, no la primera.
+     · **Nueve columnas no se virtualizan.** Con
+       `suppressColumnVirtualisation` desactivado, la última columna quedaba
+       FUERA DEL DOM cuando el ancho cambia después del primer render: la
+       cabecera estaba y sus celdas no. Verificado con `col-id` en el
+       inspector — y ojo, no se arregla scrolleando: hay que apagar la
+       virtualización.
+     · **A partir de mil por ciento, multiplicador.** «+12282.1%» son nueve
+       caracteres: no entran en 50px y envolvían en dos renglones dentro de
+       una fila de 40, desbordando sobre la vecina. «×124» son cuatro, y se
+       lee mejor — nadie procesa doce mil por ciento como otra cosa que «se
+       multiplicó por». Sólo hacia arriba: una baja no puede pasar de −100%.
+       Los dos precios exactos siguen en el tooltip.
+
+     **Y el espacio de los lados, que sí existía.** El `block-container` de
+     Streamlit trae 5rem (80px) de `padding-right` y nadie lo tocaba,
+     mientras el lado izquierdo tenía un canal de 24px contra el rail: 48px
+     de aire muerto asimétrico. Pasa a `--margen-der-contenido: 32px` en
+     `estilos/_00_base.py` —dueño único, gemelo de `--rail-der-res` y por el
+     mismo motivo: el día que un elemento fijo tenga que alinearse con ese
+     borde, lo lee de un solo sitio—. La tarjeta gana 48px y la columna del
+     ranking 30.
+
+     **Resultado de las dos cosas juntas** (1440x900): tarjeta 991 → 1.039,
+     columna del ranking 582 → 612, filas visibles 9.6 → 10.3, cabecera 62 →
+     33, y cero desborde horizontal. De los 48px que dio el margen, el
+     ranking se quedó con 30; el resto de la mejora vino del padding.
 
      (2026-09-07.)
 

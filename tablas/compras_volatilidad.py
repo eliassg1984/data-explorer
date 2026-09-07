@@ -47,6 +47,14 @@ from tablas._css import _css_grid
 # línea fue el padding de la celda (ver `_PAD_X_SEMANA`).
 _ANCHO_COL_SEMANA = 98
 _ANCHO_COL_VOL = 92
+_MIN_ANCHO_COL_VOL = 78
+"""Piso de la columna «Volatilidad». No lo tenía, y con el drill al lado del
+ranking (2026-09-07) AG Grid la escalaba hasta 46px: la cabecera salía como
+una torre de letras («Vol / atil / ida / d») y el valor como «1…». Es la
+columna que le da nombre a la vista, así que es la última que puede ceder.
+
+78 = 66 del texto «Volatilidad» a 11px + los 12 del padding de `_PAD_X_COL`.
+El valor más grande que hay hoy en el parquet, «12402.5», mide ~46."""
 
 # Alto de fila: DOS lineas donde hubo variacion (el % arriba, los dos
 # precios abajo). Sale de la suma medida -- 13px de la primera linea y 9.5
@@ -66,6 +74,14 @@ _FMT_PCT = JsCode("""
         if (params.value === null || params.value === undefined) return '';
         var v = Number(params.value);
         if (Math.abs(v) < 0.05) return '0.0%';
+        // A PARTIR DE MIL POR CIENTO, MULTIPLICADOR. "+12282.1%" son nueve
+        // caracteres en una columna de 50px: no entra, y envolvia en dos
+        // renglones dentro de una fila de 40 (medido el 2026-09-07 sobre
+        // "Vino tinto de la casa"). "x124" son cuatro, y ademas se lee
+        // mejor -- nadie procesa doce mil por ciento como otra cosa que
+        // "se multiplico por". Los dos precios exactos siguen en el
+        // tooltip. Solo hacia arriba: una baja no puede pasar de -100%.
+        if (v >= 1000) return '\\u00d7' + (1 + v / 100).toFixed(0);
         var sign = v > 0 ? '+' : '\\u2212';
         return sign + Math.abs(v).toFixed(1) + '%';
     }
@@ -99,6 +115,25 @@ _TAM_CERO = "11px"
 # que no lo pidió. Es el aviso de CLAUDE.md sobre reglas colgadas del
 # contenedor, en su versión AgGrid.
 _PAD_X_SEMANA = "0 6px"
+
+_PAD_X_COL = "6px"
+"""Padding horizontal de la CABECERA de las columnas angostas, y la mitad
+del arreglo del 2026-09-07.
+
+El tema `material` de AG Grid le pone 16px POR LADO a `.ag-header-cell`. En
+una columna de 50px eso deja **18px** para el rótulo — medido, no estimado —
+y a 18px "Ago" se parte en "Ag"+"o" y "Volatilidad" se vuelve una torre de
+cuatro letras. La celda no tenía el problema porque su `cellStyle` ya bajaba
+el padding a 6 (`_PAD_X_SEMANA`); la cabecera se había quedado atrás.
+
+Con 6px el rótulo pasa de 18 a 38px y entra en un renglón. Va por
+`headerClass` y no por `.ag-header-cell` a secas para no tocar «Insumo», que
+sí tiene ancho de sobra y cuyo rótulo quedaría desalineado contra su propia
+celda (que conserva el padding del tema)."""
+
+_TAM_HDR_SEMANA = "11px"
+"""Cabecera de columna angosta, más chica que el cuerpo (13px). Es lo que
+hace que «Volatilidad» entre en un renglón dentro de 66px."""
 
 _MIN_ANCHO_PRECIOS = 81
 """Ancho REAL de columna a partir del cual la celda dibuja su segunda línea.
@@ -168,6 +203,9 @@ class DeltaCelda {
         g.height = '100%';
         var a = document.createElement('div');
         a.textContent = p.valueFormatted == null ? '' : p.valueFormatted;
+        // Sin `nowrap` un valor largo se parte en dos renglones DENTRO de
+        // una fila de 40px y desborda por abajo, encima de su vecina.
+        a.style.whiteSpace = 'nowrap';
         this.eGui.appendChild(a);
         if (p.value == null || Math.abs(Number(p.value)) < __EPS__) return;
         var d = p.data || {};
@@ -252,6 +290,13 @@ def _tooltip_delta(idx, label_prev, label_cur):
     """)
 
 
+_CLASE_HDR_COMPACTA = "vol-hdr-compacta"
+"""Clase que llevan las cabeceras de las columnas angostas (las 7 semanas y
+Volatilidad). El CSS que la acompaña se arma en `renderizar_ranking_volatilidad`
+y viaja por `custom_css`, o sea DENTRO del iframe del grid: no hay forma de
+que se escape a otra tabla."""
+
+
 def _style_vol(max_vol):
     """Barra de volatilidad como gradiente CSS de dos colores, cortado en
     `pct`% -- mismo truco que el `_sty_vol_bar` de Styler que reemplaza,
@@ -263,7 +308,11 @@ def _style_vol(max_vol):
             var pct = Math.round(Number(params.value) / {max_vol} * 100);
             return {{
                 background: 'linear-gradient(90deg, {ACENTO} ' + pct + '%, {LAVANDA_FONDO} ' + pct + '%)',
-                fontWeight: '600'
+                fontWeight: '600',
+                // El mismo padding que las celdas-semana, y por el mismo
+                // motivo: con los 15px por lado del tema, en una columna
+                // angosta «111.2» salia «1...». Ver `_PAD_X_SEMANA`.
+                padding: '{_PAD_X_SEMANA}'
             }};
         }}
     """)
@@ -299,7 +348,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
                                                    headers)):
         gb.configure_column(
             col, header_name=hdr, type=["numericColumn"],
-            width=_ANCHO_COL_SEMANA,
+            width=_ANCHO_COL_SEMANA, headerClass=_CLASE_HDR_COMPACTA,
             valueFormatter=_FMT_PCT, cellStyle=_STYLE_DELTA,
             cellRenderer=_RENDER_DELTA, cellRendererParams={"idx": i},
             tooltipValueGetter=_tooltip_delta(i, prev_label, col),
@@ -309,15 +358,32 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
 
     max_vol = (max((float(v) for v in tv["Volatilidad"]), default=0.0) or 1.0)
     gb.configure_column("Volatilidad", type=["numericColumn"], width=_ANCHO_COL_VOL,
+                        minWidth=_MIN_ANCHO_COL_VOL,
+                        headerClass=_CLASE_HDR_COMPACTA,
                         valueFormatter=_FMT_1DEC, cellStyle=_style_vol(max_vol))
 
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(rowHeight=ALTO_FILA, headerHeight=32,
-                              tooltipShowDelay=200)
+                              tooltipShowDelay=200,
+                              # NUEVE columnas: virtualizarlas no ahorra nada
+                              # y sí deja fuera del DOM a la última cuando el
+                              # ancho cambia después del primer render
+                              # (medido el 2026-09-07: la cabecera
+                              # «Volatilidad» estaba y sus celdas no).
+                              suppressColumnVirtualisation=True)
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
     custom_css = dict(_css_grid(13))
+    # La cabecera de las columnas angostas: menos padding y menos cuerpo que
+    # el resto de la grilla. Ver `_PAD_X_COL` para la medición.
+    custom_css[f".{_CLASE_HDR_COMPACTA}"] = {
+        "padding-left": f"{_PAD_X_COL} !important",
+        "padding-right": f"{_PAD_X_COL} !important",
+    }
+    custom_css[f".{_CLASE_HDR_COMPACTA} .ag-header-cell-text"] = {
+        "font-size": f"{_TAM_HDR_SEMANA} !important",
+    }
     custom_css[".ag-tooltip"] = {
         "background-color": f"{TEXTO_PRINCIPAL} !important",
         "color": "#ffffff !important",
