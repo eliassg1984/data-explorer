@@ -315,6 +315,37 @@ def seccion_perezosa(clave, vista, dibujar, activa_de_entrada=False):
     dibujar()
 
 
+def scope_rerun():
+    """`"fragment"` si estamos DENTRO de un rerun de fragment; `"app"` si no.
+
+    Existe porque `st.rerun(scope="fragment")` NO es legal en una corrida
+    COMPLETA del script: Streamlit tira `StreamlitInvalidLayoutContextError`
+    y se cae la pantalla entera con el traceback. Es la regla #306, que lo
+    documentó para el Panel A de Proveedor — y volvió a morder el 2026-09-04
+    en el drill «Vs año pasado», porque el ⛶ del modo solo (#308) escala a
+    `scope="app"` a propósito y con eso pasa a ser un caso FRECUENTE en vez
+    de uno raro.
+
+    Se decide mirando lo MISMO que mira Streamlit
+    (`ScriptRunContext.fragment_ids_this_run`, en
+    `commands/execution_control.py::_new_fragment_id_queue`), no adivinando.
+    Y si esa interna se mueve de sitio, devuelve `"app"`: es el scope que es
+    legal SIEMPRE, así que el peor caso es un rerun de más, no una pantalla
+    caída.
+
+    No sirve un `try/except` alrededor del `st.rerun`: el camino feliz
+    también sale por una excepción (`RerunException`), así que habría que
+    distinguirlas por nombre — y el nombre de la clase del error tampoco
+    existe en todas las versiones (la 1.59.2 local no la exporta, Cloud sí).
+    """
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        ctx = get_script_run_ctx()
+        return "fragment" if getattr(ctx, "fragment_ids_this_run", None) else "app"
+    except Exception:
+        return "app"
+
+
 def scroll_a_seccion(clave):
     """Lleva la vista a la sección `clave` de una página APILADA.
 

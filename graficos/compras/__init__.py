@@ -749,7 +749,21 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         _solo = None
         st.session_state.pop("compras_pila_solo", None)
     if _solo:
-        st.container(key="compras_solo_on")
+        # EL MARCADOR NECESITA UN HIJO, y esto no es cosmético: un
+        # `st.container(key=…)` VACÍO se dibuja la primera vez y DESAPARECE
+        # del DOM en el render siguiente (Streamlit poda el bloque que no
+        # tiene contenido). Medido en Cloud el 2026-09-04, muestreando cada
+        # 3s después del clic en el ⛶:
+        #
+        #     +3s   marcador sí · tarjeta 1100px · --rail-der-res 90px
+        #     +6s   marcador NO · tarjeta  867px · --rail-der-res 323px
+        #
+        # …con la pila ya filtrada a UNA sección en los dos momentos. O sea
+        # que el modo entraba bien y lo que volvía atrás era sólo el CSS,
+        # que cuelga entero de `:has(.st-key-compras_solo_on)`. Se veía como
+        # "maximiza y se vuelve a achicar solo".
+        with st.container(key="compras_solo_on"):
+            st.markdown("<span></span>", unsafe_allow_html=True)
     _secciones = [_s for _s in _PILA if _s[0] == _solo] if _solo else _PILA
 
     for _i, (_clave, _vista) in enumerate(_secciones):

@@ -66,7 +66,9 @@ import streamlit as st
 from tema import (
     ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_BORDE,
 )
-from graficos.base import _card, _compras_layout, _compras_truncar
+from graficos.base import (
+    _card, _compras_layout, _compras_truncar, scope_rerun,
+)
 from graficos import alturas, periodo
 from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
 from tablas.compras_vs_ano_pasado import (
@@ -1162,4 +1164,21 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         # "todas las compras" — es un gesto explícito, se respeta.
         if clic != st.session_state.get("compras_vap_foco"):
             st.session_state["compras_vap_foco"] = clic
-            st.rerun(scope="fragment")
+            # EL SCOPE SE DECIDE, no se fija. `scope="fragment"` sólo es
+            # legal durante un rerun DE fragment; en una corrida completa
+            # del script Streamlit lo prohíbe y se cae la pantalla entera
+            # (regla #306). Acá reventó de verdad el 2026-09-04:
+            #
+            #   StreamlitInvalidLayoutContextError
+            #     .../graficos/compras/vs_ano_pasado.py:1165
+            #
+            # Era latente —una corrida completa la dispara cualquier cambio
+            # de fecha o de chips en `app.py`, con la selección de AG Grid
+            # todavía viva— y el ⛶ del modo solo la volvió frecuente: cada
+            # entrada y cada salida es un `st.rerun(scope="app")`.
+            #
+            # No se puede arreglar como la #306 (dejar de rerunear): allá el
+            # único consumidor del foco se dibujaba DESPUÉS en la misma
+            # corrida. Acá el consumidor es el gráfico de ARRIBA, que en
+            # esta pasada ya se dibujó — hace falta otra sí o sí.
+            st.rerun(scope=scope_rerun())

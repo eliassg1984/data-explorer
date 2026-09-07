@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-337 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+339 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (108)
+**CSS y estilos** (109)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -142,6 +142,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
 - **#334** — Un scrollspy que compara contra MAPA[0] miente cuando la página dibuja un SUBCONJUNTO de su…
 - **#336** — Un AgGrid sin custom_css= se queda con el tema de FÁBRICA, y eso se ve como una cabecera que…
+- **#338** — Un st.container(key=…) VACÍO se dibuja una vez y desaparece en el render siguiente
 
 **Layout y alturas** (34)
 
@@ -292,7 +293,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#336** — Un AgGrid sin custom_css= se queda con el tema de FÁBRICA, y eso se ve como una cabecera que…
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 
-**Streamlit** (96)
+**Streamlit** (98)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -390,6 +391,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#327** — El aviso de dato viejo, y la trampa de un elemento que se inyecta UNA sola vez: el color hay…
 - **#328** — git add <ruta> NO te protege en un checkout compartido: se lleva lo que OTRA sesión dejó a…
 - **#332** — Sacarle a un reporte el control de fecha GLOBAL son tres cosas más, y ninguna es opcional…
+- **#338** — Un st.container(key=…) VACÍO se dibuja una vez y desaparece en el render siguiente
+- **#339** — El scope de un st.rerun se DECIDE en tiempo de ejecución, no se fija en el código
 
 **Datos, R2 y DuckDB** (44)
 
@@ -30567,6 +30570,83 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-06.)
 
+338. **Un `st.container(key=…)` VACÍO se dibuja una vez y desaparece en el
+     render siguiente.** Segundo bug del modo solo (#308), reportado el
+     2026-09-04 como *"así se queda y regresa a como estaba pequeño"*.
+
+     El marcador que enciende todo el CSS del modo
+     (`:has(.st-key-compras_solo_on)`) era un container sin contenido — la
+     forma más barata de poner una clase en el DOM. Streamlit lo emite en
+     el delta que lo crea y lo PODA en el siguiente, por no tener hijos.
+
+     **Cómo se midió, que es lo que lo volvió obvio.** Muestreando cada 3s
+     después del clic, contra la app en Cloud:
+
+         antes  secciones 6 · marcador no · tarjeta  867px
+         +3s    secciones 5 · marcador SÍ · tarjeta 1100px
+         +6s    secciones 1 · marcador NO · tarjeta  867px
+
+     La columna que descarta el diagnóstico fácil es la primera:
+     **`secciones` se queda en 1**, o sea que `compras_pila_solo` sigue
+     puesto y el bucle sigue filtrando. El modo no se apagó — se apagó su
+     CSS. Sin ese contador el síntoma ("se achica sola") apunta al estado de
+     Python, que es justo donde NO estaba el problema.
+
+     El arreglo es darle un hijo (`st.markdown("<span></span>")`); el
+     container sigue en `display: none`, así que no se ve ni ocupa.
+
+     **La regla general:** un elemento del DOM que existe SÓLO para que un
+     selector lo encuentre tiene que tener contenido. Y su gemela de
+     método: cuando algo "se revierte solo", medir por separado el ESTADO
+     (Python) y su EFECTO (CSS) — que se muevan juntos es una suposición.
+
+     (2026-09-04.)
+
+339. **El `scope` de un `st.rerun` se DECIDE en tiempo de ejecución, no se
+     fija en el código.** Tercer bug del modo solo (#308) y una recaída de
+     la #306, esta vez con la pantalla caída y traceback a la vista:
+
+         StreamlitInvalidLayoutContextError
+           graficos/compras/vs_ano_pasado.py:1165  st.rerun(scope="fragment")
+
+     `scope="fragment"` sólo es legal DURANTE un rerun de fragment. El clic
+     en la tabla de detalle lo usaba fijo, y estaba bien mientras el único
+     camino hasta ahí fuera un clic dentro del fragment. **El ⛶ del modo
+     solo abrió el otro camino**: escala a `scope="app"` a propósito —el
+     bucle de la pila vive AFUERA del fragment de la sección—, así que cada
+     entrada y cada salida del modo es una corrida completa del script con
+     la selección de AG Grid todavía viva. Era un bug LATENTE (lo dispara
+     igual cualquier cambio de fecha o de chips en `app.py`) que pasó de
+     raro a frecuente.
+
+     No se arregla como la #306 —dejar de rerunear— porque allá el único
+     consumidor del foco se dibujaba DESPUÉS en la misma corrida. Acá el
+     consumidor es el gráfico de ARRIBA, que en esa pasada ya se dibujó:
+     hace falta otra sí o sí.
+
+     El arreglo es `graficos.base.scope_rerun()`, que mira **lo mismo que
+     mira Streamlit** (`ScriptRunContext.fragment_ids_this_run`, en
+     `commands/execution_control.py::_new_fragment_id_queue`) y devuelve
+     `"app"` si esa interna se mueve de sitio — el scope que es legal
+     siempre, o sea que el peor caso es un rerun de más y no una pantalla
+     caída.
+
+     **Por qué no un `try/except` alrededor del `st.rerun`**, que fue lo
+     primero que se pensó: el camino feliz TAMBIÉN sale por una excepción
+     (`RerunException`), así que habría que distinguirlas por nombre; y el
+     nombre de la clase del error no existe en todas las versiones —la
+     1.59.2 local no exporta `StreamlitInvalidLayoutContextError`, Cloud sí,
+     que es justo por qué esto no se podía reproducir en local.
+
+     **Quedan seis `scope="fragment"` fijos** en el repo con la misma forma
+     (`documentos_sunat.py` x3, `ventas_horario.py` x4, `ventas_comparativo.py`
+     x2). Hoy no los alcanza el ⛶ —ninguna de esas vistas lo tiene—, pero
+     son la misma bomba: el día que una de ellas gane un control que escale
+     a `scope="app"`, revientan igual. `scope_rerun()` está en `base.py`
+     para que el arreglo sea cambiar una línea.
+
+     (2026-09-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30579,7 +30659,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#336**.
+> próxima regla nueva es la **#340**.
 
 >
 
