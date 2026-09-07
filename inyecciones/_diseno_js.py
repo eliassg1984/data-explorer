@@ -1392,14 +1392,40 @@ JS = """
         // visible. Si el <p> existe, tambien es destino de las props de
         // TEXTO (ademas del boton, no en su lugar: barato y sin efecto
         // visible cuando el boton no tiene un p con su propio override).
+        //
+        // Y son TODOS los <p>, no el primero (2026-09-07, regla #341).
+        // `querySelector` singular hacia que pinear una fila de botones
+        // —el rail de Compras, la franja de atajos: N st.button sueltos,
+        // que destinosDeEstilo() deja como [elemento] a proposito— pintara
+        // SOLO el primer label. El resto ni se movia, porque cada <p> trae
+        // su propio color/font-size explicito y no hereda el del
+        // contenedor. Peor: el "Copiar CSS" ya emitia el selector PLURAL
+        // (ancla + ' [data-testid=stMarkdownContainer] p', con comillas),
+        // asi que el bloque copiado hacia una cosa y la vista previa otra.
         function extenderATexto(destinos) {
             var out = [];
             destinos.forEach(function(d) {
                 out.push(d);
-                var p = d.querySelector && d.querySelector('[data-testid="stMarkdownContainer"] p');
-                if (p && out.indexOf(p) === -1) out.push(p);
+                if (!d.querySelectorAll) return;
+                var ps = d.querySelectorAll('[data-testid="stMarkdownContainer"] p');
+                for (var i = 0; i < ps.length; i++) {
+                    if (out.indexOf(ps[i]) === -1) out.push(ps[i]);
+                }
             });
             return out;
+        }
+
+        // Para LEER el valor de arranque de los controles de texto: el
+        // PRIMER <p>, no el ultimo de la lista. Con un solo destino daba
+        // igual; con N labels, "el ultimo" es el de la punta derecha de la
+        // fila y el slider arrancaba mostrando un numero que no era el del
+        // texto que el usuario esta mirando.
+        function primerTexto(destinos) {
+            var ext = extenderATexto(destinos);
+            for (var i = 0; i < ext.length; i++) {
+                if (ext[i].tagName === 'P') return ext[i];
+            }
+            return destinos[0];
         }
 
         // Hallazgo real (no hipotetico): un boton con `transition: all
@@ -2769,7 +2795,9 @@ JS = """
             // navegacion.py) — el slider parece "no hacer nada" porque
             // arranca leyendo el numero equivocado.
             var destinosTexto = extenderATexto(destinos);
-            var lecturaTexto = destinosTexto[destinosTexto.length - 1];
+            var lecturaTexto = primerTexto(destinos);
+            var nLabels = 0;
+            destinosTexto.forEach(function(d) { if (d.tagName === 'P') nLabels++; });
 
             // El contorno violeta marca SIEMPRE el elemento pineado, pero
             // los controles de ESTILO pueden escribir en otro lado. Decirlo
@@ -2791,7 +2819,9 @@ JS = """
             if (lecturaTexto !== lectura) {
                 var avisoTexto = doc.createElement('div');
                 avisoTexto.style.cssText = 'font:11px/1.4 -apple-system,sans-serif;color:#9385ec;background:#1c1c24;border:1px solid #34343f;border-radius:4px;padding:6px 7px;margin-bottom:10px';
-                avisoTexto.textContent = 'Tipografía/color de texto → el <p> del label (trae su propio tamaño/peso), no el botón.';
+                avisoTexto.textContent = nLabels > 1
+                    ? 'Tipografía/color de texto → los ' + nLabels + ' <p> de los labels de adentro (cada uno trae su propio tamaño/peso), no el contenedor. Se pintan TODOS.'
+                    : 'Tipografía/color de texto → el <p> del label (trae su propio tamaño/peso), no el botón.';
                 panel.appendChild(avisoTexto);
             }
 

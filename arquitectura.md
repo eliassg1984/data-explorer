@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-340 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+341 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (110)
+**CSS y estilos** (111)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -144,6 +144,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#336** — Un AgGrid sin custom_css= se queda con el tema de FÁBRICA, y eso se ve como una cabecera que…
 - **#338** — Un st.container(key=…) VACÍO se dibuja una vez y desaparece en el render siguiente
 - **#340** — El CSS de un TERCER prefijo se clona, no se pega
+- **#341** — Un querySelector singular es una decisión sobre la CARDINALIDAD, no un atajo — y en una…
 
 **Layout y alturas** (34)
 
@@ -533,7 +534,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 
-**Decisiones de diseño y UX** (60)
+**Decisiones de diseño y UX** (61)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -595,6 +596,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
 - **#332** — Sacarle a un reporte el control de fecha GLOBAL son tres cosas más, y ninguna es opcional…
 - **#334** — Un scrollspy que compara contra MAPA[0] miente cuando la página dibuja un SUBCONJUNTO de su…
+- **#341** — Un querySelector singular es una decisión sobre la CARDINALIDAD, no un atajo — y en una…
 
 **Mantenimiento y trampas del lenguaje** (10)
 
@@ -30711,6 +30713,57 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      estado que lo causó.
 
      (2026-09-04.)
+341. **Un `querySelector` singular es una decisión sobre la CARDINALIDAD,
+     no un atajo — y en una herramienta de estilo se ve como "pinta uno de
+     siete".** Reportado con captura el 2026-09-07: fijar la franja de
+     atajos de Compras (`nav_rail`, 7 `st.button`) en el modo diseño y
+     tocar «Color · Texto» ponía negro **sólo «Proveedor»**; los otros seis
+     seguían grises. Lo mismo con «Tamaño de letra».
+
+     La causa son dos piezas que por separado están bien:
+
+     1. `destinosDeEstilo()` devuelve `[elemento]` —el contenedor— cuando
+        adentro hay VARIOS botones sueltos (fuera de un `stButtonGroup`).
+        Es deliberado y está explicado ahí mismo: si redirigiera, el
+        contorno violeta marcaría la fila y el estilo se iría a los items.
+     2. `extenderATexto()` agregaba a esa lista el `<p>` del label…
+        con `querySelector`, o sea **el primero**.
+
+     Y el `color` puesto en el contenedor no llega a los otros seis porque
+     cada `<p>` trae el suyo explícito desde `estilos/` — un elemento con
+     valor propio no hereda el del padre. Es la misma física de la regla
+     #154, pero con el síntoma dado vuelta: allá el control "no hacía
+     nada", acá **sí hace**, en uno de siete, que es peor porque parece
+     que anduvo.
+
+     **Lo que lo convierte en bug y no en criterio:** el botón «Copiar
+     CSS» de ese mismo panel ya emitía el selector PLURAL
+     (`div[class*="st-key-nav_rail"] [data-testid="stMarkdownContainer"]
+     p`), que alcanza a los siete. O sea que la vista previa mostraba una
+     cosa y el bloque que copiaba hacía otra — justo la brecha que el modo
+     diseño existe para cerrar.
+
+     El arreglo es `querySelectorAll` y sumarlos todos. Con eso vienen dos
+     cosas más, chicas pero necesarias:
+
+     - **Para LEER hay que usar el PRIMERO, no el último.** El panel
+       arrancaba sus controles con `destinosTexto[destinosTexto.length-1]`,
+       que con un solo destino era el `<p>` correcto y con siete es el de
+       la punta derecha: el slider abría mostrando el tamaño de un label
+       que el usuario ni está mirando. Se separó en `primerTexto()`.
+     - **El aviso del panel dice cuántos son.** «Tipografía/color de texto
+       → los 7 `<p>` de los labels de adentro (cada uno trae su propio
+       tamaño/peso), no el contenedor. Se pintan TODOS.» Escribir en siete
+       sitios a la vez tiene que verse antes de tocar el swatch, no
+       después.
+
+     Medido sobre `nav_rail` con la app en local: los 7 labels pasan a
+     `rgb(24,24,29)` con el picker, los 7 a `22px` con el slider, y el
+     `↺` los devuelve a los 7 (incluido el activo, que tenía otro color de
+     origen).
+
+     (2026-09-07.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30723,7 +30776,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#341**.
+> próxima regla nueva es la **#342**.
 
 >
 
