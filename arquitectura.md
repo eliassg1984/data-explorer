@@ -30383,6 +30383,37 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      ahorro, y empareja con cómo lo escribe la tabla. Los bordes («Año
      pasado», «Este año») son totales, no diferencias: van sin signo.
 
+     **Segunda vuelta, mismo día: "por lo mismo" esconde un número.** El
+     tooltip arreglado decía *"pagar distinto por lo mismo"* y la pregunta
+     siguiente fue *"¿a qué dato es «lo mismo»?"*. Es la cantidad de ESTE
+     año — el efecto precio es `(p − p_aa)·q` con la `q` de ahora — y lo
+     que esa cantidad vale a precios del año pasado (`valor − ef_precio`)
+     NO aparecía en ninguna parte de la pantalla, aunque es la bisagra:
+
+         valor_aa  ──(efecto cantidad)──▶  pivote  ──(efecto precio)──▶  valor
+         42.833                            25.210                        27.222
+
+     Una explicación que nombra un referente ("lo mismo", "lo comparable")
+     sin decir cuál es, no explica: el tooltip ahora dice el pivote. Sirve
+     igual para un GRUPO, donde no hay una cantidad única que nombrar
+     (productos con distinta unidad), porque el pivote es PLATA.
+
+     **Y de ahí sale el orden de las barras, que está al revés.** El
+     waterfall dibuja `año pasado → precio → cantidad → este año`, así que
+     su punto intermedio es `valor_aa + ef_precio` = 44.845 — que no es el
+     pivote ni ninguna otra cosa con nombre (`p_aa·q_aa + p·q − p_aa·q`).
+     Con el orden `cantidad → precio`, el intermedio ES el pivote, que sí
+     se puede decir en castellano. Que el tooltip viejo mostrara justo
+     44.845 no fue casualidad doble: era el único número que la geometría
+     tenía para ofrecer ahí, y no significa nada. Pendiente, porque cambia
+     la lectura de una vista de uso diario.
+
+     La asimetría del reparto no es un descuido: al moverse las dos cosas
+     queda un término de interacción `(p−p_aa)·(q−q_aa)` que tiene que ir a
+     algún lado o los efectos no cierran, y acá va DENTRO del efecto
+     precio. Medido con el mismo caso: precio puro a los kilos del año
+     pasado +3.418, interacción −1.406, efecto precio publicado +2.012.
+
      Nota de vocabulario, que salió en la misma conversación: esto **no es
      una proyección**. Una proyección estima algo que no pasó; esto reparte
      un Δ que ya pasó, y los dos pedazos lo cierran exacto (`_puente`, y la

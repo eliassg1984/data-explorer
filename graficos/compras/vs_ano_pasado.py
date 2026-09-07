@@ -513,12 +513,26 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant):
         # gráfico se contradecía consigo mismo. El texto va armado desde
         # Python en `hovertext` para que diga exactamente lo mismo que la
         # etiqueta, y de paso qué significa cada barra.
+        #
+        # Y el tooltip nombra el PIVOTE, que es el número que la frase
+        # "pagar distinto por lo mismo" escondía: preguntado el 2026-09-06,
+        # *"¿a qué dato es «lo mismo»?"*. «Lo mismo» es la cantidad de ESTE
+        # año, y lo que vale esa cantidad a precios del año pasado
+        # (`valor - ef_precio`) no aparece en ninguna parte de la pantalla,
+        # aunque es la bisagra entre los dos efectos:
+        #     valor_aa  ──(cantidad)──▶  pivote  ──(precio)──▶  valor
+        # Sirve igual para un GRUPO, donde no hay una cantidad única que
+        # nombrar (productos con distinta unidad): el pivote es plata, y es
+        # «lo que compraste este año, a los precios del año pasado».
         hovertext=[
             f"Año pasado: S/ {valor_aa:,.0f}",
             f"Efecto precio: {_signo(ef_precio)}<br>"
-            "<span style='font-size:11px'>pagar distinto por lo mismo</span>",
+            "<span style='font-size:11px'>lo de este año, a precios del año "
+            f"pasado: S/ {valor - ef_precio:,.0f}</span>",
             f"Efecto cantidad: {_signo(ef_cant)}<br>"
-            "<span style='font-size:11px'>comprar más (o menos)</span>",
+            f"<span style='font-size:11px'>esos S/ {valor - ef_precio:,.0f} "
+            f"contra los S/ {valor_aa:,.0f} del año pasado, a los mismos "
+            "precios</span>",
             f"Este año: S/ {valor:,.0f}",
         ],
         hovertemplate="%{hovertext}<extra></extra>",
@@ -802,10 +816,17 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                         st.markdown(
                             "**Δ** = este año − el mismo período del año "
                             "pasado." + PARR
-                            + "**Efecto precio** es lo que costó pagar "
-                            "distinto por lo mismo; **efecto cantidad**, lo "
-                            "que costó comprar más (o menos). Los dos suman "
-                            "el Δ exacto." + PARR
+                            # "pagar distinto por lo mismo" escondía CUÁL es
+                            # lo mismo (preguntado el 2026-09-06). Es la
+                            # cantidad de ESTE año: se la valoriza a los dos
+                            # precios y la resta es el efecto precio. Ver
+                            # regla #335.
+                            + "**Efecto precio**: lo que compraste este año, "
+                            "valorizado al precio de este año y al del "
+                            "pasado — la resta. **Efecto cantidad**: esa "
+                            "misma compra contra la del año pasado, las dos "
+                            "a precios del año pasado. Los dos suman el Δ "
+                            "exacto." + PARR
                             + "**Clic en una fila** de la tabla enfoca el "
                             "gráfico de arriba; volver a clickearla lo "
                             "devuelve a todas las compras.")
