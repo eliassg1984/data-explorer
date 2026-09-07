@@ -164,6 +164,45 @@ MARCO = PRESUPUESTO
 # tampoco desborda ni empuja a la tabla vecina a crecer.
 MINI_PROD_EVO = 270
 
+# Ranking (AgGrid) que comparte su tarjeta con el DRILL que abre, apilado
+# debajo. Hoy: «Insumos ordenados por volatilidad» (compras/volatilidad.py),
+# donde la grilla manda arriba y el candlestick + la tabla de la semana van
+# abajo, en la MISMA superficie.
+#
+# No es "una grilla más chica" por gusto: es la única forma de que la vista
+# entera entre en una tarjeta, y el pedido (2026-09-07) fue exactamente ese
+# — "el usuario no debería hacer scroll en la tarjeta, quizás sólo en la
+# tabla". La grilla YA scrollea por dentro, así que recortarla no esconde
+# datos: mueve el corte de la página a la grilla, que es donde el usuario
+# espera encontrarlo.
+#
+# EL NÚMERO SALE DE UNA RESTA MEDIDA en el navegador el 2026-09-07 (viewport
+# 1280x720, --alto-util 528). La tarjeta fusionada gasta, sin la grilla:
+#     cabecera 44 + caption 0 (se fue al popover) + KPIs 26
+#     + candlestick 240 + 4 gaps de 16 + padding 16 + borde 2 = 392
+# y 528 - 392 = 136. Ese sería el número para el laptop chico, y a 136 la
+# grilla muestra DOS filas: la vista dejaría de servir para lo que existe,
+# que es barrer un ranking. Así que el rol NO se ajusta al peor viewport
+# sino al de la pantalla de trabajo. 280 y no 300 —los dos muestran las
+# MISMAS ~6 filas, (280-45)/40 = 5.9 contra 6.4— porque los 20px de
+# diferencia son margen contra una ventana más baja: con la tarjeta en
+# 650px entra en cualquier ventana de 842px de alto para arriba.
+#
+# ES LA PALANCA: si la vista muestra pocas filas, o si sobra aire debajo
+# del candlestick, el número que hay que mover es ÉSTE, y cada 40px es una
+# fila. No hay un segundo sitio donde el alto del ranking se decida.
+#
+# Consecuencia asumida y visible: en un laptop de 1366x768 la tarjeta sigue
+# pasándose ~170px y la PÁGINA scrollea (no la tarjeta — no lleva el clamp
+# de `--alto-util`). Es el mismo residuo que documenta § LA RESTA NO SE HACE
+# ACÁ: el alto de un iframe de AgGrid sólo lo puede fijar Python, y Python
+# no conoce la ventana. Medido: forzar el alto del iframe por CSS lo encoge
+# pero el grid de adentro se queda en su alto y queda CORTADO (el `<body>`
+# del iframe sigue midiendo lo que pidió Python), así que la resta no se
+# puede mudar al navegador como sí se hizo con `vh_panel_drill`.
+RANKING_CON_DRILL = 280
+
+
 
 # ===========================================================================
 # LO QUE LA FIGURA NO ES: LA FRANJA DE CONTROLES

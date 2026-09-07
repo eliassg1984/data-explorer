@@ -70,7 +70,7 @@ from graficos.base import (
     _card, _compras_layout, _compras_truncar, scope_rerun,
 )
 from graficos import alturas, periodo
-from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL
+from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL, PARR
 from tablas.compras_vs_ano_pasado import (
     _ALTO_FILA as _ALTO_FILA_DETALLE, renderizar_detalle_vs_ano_pasado,
 )
@@ -92,9 +92,6 @@ El número sigue existiendo porque se le RESTA a la figura: sin la resta, la
 leyenda desaparecía y su hueco quedaba de aire. Es el mismo mecanismo que
 las `alturas.FRANJA_*`, pero al revés — no se descuenta lo que ocupa otro
 bloque, se descuenta lo que la figura dejó de necesitar."""
-
-PARR = "\n\n"
-"""Salto de párrafo para el markdown del popover de ayuda."""
 
 _FAM_TODAS = "Todas"
 """Primera opción del filtro de Familia de la cabecera: no filtrar.

@@ -21,11 +21,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from cortes import MESES_ABR_ES
 from tema import ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO
 from graficos.base import (
     _card, _compras_layout, _compras_truncar, _slug, selector_fecha_tarjeta,
 )
-from graficos.compras._comun import _first_point
+from graficos.compras._comun import PARR, _first_point
 from graficos import periodo
 from graficos import alturas
 from tablas.compras_volatilidad import (
@@ -96,8 +97,14 @@ def _vol_score(cierres):
     return round(total, 1)
 
 
-_MESES_CORTO = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago",
-                "Sep", "Oct", "Nov", "Dic"]
+_MESES_CORTO = tuple(m.capitalize() for m in MESES_ABR_ES)
+"""Los meses de `cortes.py` con la inicial en mayúscula, que es como se
+rotulan las columnas de esta grilla ("3-9 Ago").
+
+Derivado y no escrito a mano: hasta el 2026-09-07 era una lista literal acá,
+o sea la SEGUNDA lista de meses en español del repo — justo lo que la regla
+#241 dice que no debe haber. La capitalización es lo único propio de esta
+vista."""
 
 
 def _vol_fmt_rango_semana(ini):
@@ -244,7 +251,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
     # dibuja acá. Los `return` tempranos quedan dentro de la tarjeta, que de
     # paso es mejor: el mensaje sale bajo la cabecera que tiene el selector
     # con el que se arregla, y no en un bloque suelto sin contexto.
-    with _card("compras_vol_ranking"):
+    with _card("compras_vol"):
         with st.container(key="vol_fila_hdr"):
             st.markdown('<p class="chart-card-hdr vol-hdr">Insumos ordenados '
                         'por volatilidad</p>', unsafe_allow_html=True)
@@ -258,7 +265,56 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             if _op_vol != periodo.HEREDA and d_full is not None:
                 d = periodo.recortar(d_full, col_fecha, _op_vol)
 
-            # ── El segmentador de fecha, tercer ítem de la fila ──────────
+            # ── El buscador, también en la fila del título ───────────────
+            # 2026-09-07: vivía en un renglón propio debajo de la cabecera,
+            # un `st.columns([1, 2])[0]` que gastaba 56px (40 del campo +
+            # 16 de gap) para un input de un tercio de ancho. Mismo
+            # movimiento —y mismo motivo— que el buscador de «Vs año
+            # pasado» (`vap_hdr_buscar`, 2026-09-02): esta vista tiene que
+            # entrar ENTERA en una pantalla y cada renglón de cromo se lo
+            # come al ranking.
+            with st.container(key="vol_hdr_buscar"):
+                _q = st.text_input("Buscar insumo", key="compras_vol_q",
+                                   placeholder="Buscar insumo…",
+                                   label_visibility="collapsed").strip().lower()
+
+            # ── Cómo se lee la vista: un ícono, no dos captions ──────────
+            # Acá había DOS `st.caption` EN FLUJO —uno bajo la grilla y
+            # otro bajo el candlestick— que sumaban ~83px con sus gaps para
+            # explicar algo que se lee UNA vez. Pasan a un popover de sólo
+            # ícono, exactamente como `vap_hdr_ayuda`.
+            #
+            # La primera línea (familia, nº de semanas y los dos umbrales)
+            # va por un HUECO: `n_sem` se sabe ~40 líneas más abajo, cuando
+            # ya se recortó `dd` a las semanas con datos. Mismo mecanismo
+            # que el aviso del mes parcial de vs_ano_pasado.py.
+            #
+            # El párrafo de los DOS PRECIOS no es relleno: la segunda línea
+            # de cada celda («110.17 → 169.41») son cierres de semanas
+            # DISTINTAS —el de la anterior y el de ésta— y leerlos como si
+            # los dos fueran de la semana del encabezado es la confusión
+            # que reportó el usuario el 2026-09-07 con captura.
+            with st.container(key="vol_hdr_ayuda"):
+                with st.popover(":material/info:", use_container_width=False):
+                    with st.container(key="vol_ayuda_panel"):
+                        _ayuda_alcance = st.empty()
+                        st.markdown(
+                            "**Volatilidad** = la suma de las variaciones % "
+                            "de una semana a la siguiente, en valor "
+                            "absoluto: mide cuánto se MUEVE el precio, no "
+                            "hacia dónde." + PARR
+                            + "Cada celda compara el **cierre** (la última "
+                            "compra) de esa semana contra el de la semana "
+                            "anterior, así que los dos precios de la segunda "
+                            "línea son de semanas DISTINTAS — el tooltip de "
+                            "la celda las nombra. Las compras intermedias se "
+                            "ven abajo, en el candlestick y en su tabla."
+                            + PARR
+                            + "Clic en una fila para ver su candlestick; "
+                            "clic en una vela, para las compras de esa "
+                            "semana.")
+
+            # ── El segmentador de fecha, último ítem de la fila ──────────
             # 2026-09-06, a pedido. Es el MISMO componente que ya tienen
             # los dos rankings y la vista Semanal
             # (`base.py::selector_fecha_tarjeta`): trigger con el rango
@@ -317,11 +373,6 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         labels_todas = [_vol_fmt_rango_semana(s) for s in semanas]
         cols_sem = labels_todas[1:]
 
-        _c_q = st.columns([1, 2])[0]
-        with _c_q:
-            _q = st.text_input("Buscar insumo", key="compras_vol_q",
-                               placeholder="Buscar insumo…",
-                               label_visibility="collapsed").strip().lower()
         ranking_vista = [(p, info) for p, info in ranking
                          if not _q or _q in str(p).lower()]
 
@@ -356,7 +407,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             _clicked = renderizar_ranking_volatilidad(
                 tv, cols_sem, labels_todas[:-1],
                 altura=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
-                                         extra=40, minimo=0),
+                                         extra=40, minimo=0,
+                                         rol=alturas.RANKING_CON_DRILL),
                 key="compras_vol_rank_grid",
             )
             if _clicked is not None:
@@ -370,45 +422,57 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             st.session_state["compras_vol_semfocus"] = None
             st.session_state["compras_vol_last_click"] = None
 
-        st.caption(f"Familia Alimentos · {n_sem} semanas · insumos con ≥ S/ 400 "
-                   "de gasto y compras en al menos 75% de las semanas del rango "
-                   "· pasa el cursor sobre un % para ver el precio, clic en la "
-                   "fila para ver su candlestick.")
+        _ayuda_alcance.markdown(
+            f"Familia Alimentos · **{n_sem} semanas** · sólo insumos con "
+            "≥ S/ 400 de gasto y compras en al menos el 75% de las semanas "
+            "del rango.")
 
-    unidad_raw = str(dd.loc[dd[col_prod] == prod_sel, col_um].mode().iat[0]) \
-        if col_um and col_um in dd.columns and not dd.loc[dd[col_prod] == prod_sel, col_um].empty \
-        else "kg"
-    unidad = {"KILOS": "kg", "KG": "kg", "LITROS": "L", "LT": "L", "UND": "und"}.get(
-        unidad_raw.upper(), unidad_raw.lower())
+        unidad_raw = str(dd.loc[dd[col_prod] == prod_sel, col_um].mode().iat[0]) \
+            if col_um and col_um in dd.columns and not dd.loc[dd[col_prod] == prod_sel, col_um].empty \
+            else "kg"
+        unidad = {"KILOS": "kg", "KG": "kg", "LITROS": "L", "LT": "L", "UND": "und"}.get(
+            unidad_raw.upper(), unidad_raw.lower())
 
-    weeks = _vol_detalle_producto(dd, prod_sel, col_prod, col_punit, col_fecha,
-                                  col_prov, col_cant, semanas)
+        weeks = _vol_detalle_producto(dd, prod_sel, col_prod, col_punit, col_fecha,
+                                      col_prov, col_cant, semanas)
 
-    # ── Card de detalle: stats + candlestick + compras de la semana ──────
-    with _card("compras_vol_detalle", titulo_arriba=False):
+        # ── El detalle, en la MISMA tarjeta ──────────────────────────────
+        # 2026-09-07, a pedido: «no entra en su tarjeta la parte de abajo,
+        # el gráfico y su tabla; el usuario no debería hacer scroll en la
+        # tarjeta, quizás sólo en la tabla». Acá había un segundo `_card()`.
+        #
+        # Fusionarlas no es cosmético: dos tarjetas son dos superficies que
+        # el encuadre del proyecto («una tarjeta = una pantalla») mide por
+        # separado, y apiladas medían 1.039px — dos pantallas. Con una
+        # sola, lo único que scrollea es la GRILLA (que ya tenía su scroll
+        # interno) y el resto se ve completo. Mismo movimiento que hizo
+        # «Vs año pasado» el 2026-09-02, y por el mismo pedido.
         cierres = [w["c"] for w in weeks]
         precio_actual = cierres[-1]
         cambio_total = ((cierres[-1] - cierres[0]) / cierres[0] * 100) if cierres[0] else 0.0
         vol_total = candidatos[prod_sel]["volatilidad"]
         color_cambio = ERROR if cambio_total > 0.05 else (EXITO if cambio_total < -0.05 else GRIS_TEXTO)
+        # EL SIGNO SE CALLA CUANDO REDONDEA A CERO, igual que el `_FMT_PCT`
+        # de la grilla de arriba: `cierres[-1]` y `cierres[0]` pueden diferir
+        # en la séptima cifra (el parquet guarda 110.169492 y 110.169375 para
+        # el mismo precio de lista) y con el `>= 0` de antes eso salía como
+        # «−0.0%» — un signo que afirma una caída sobre un número que dice
+        # que no pasó nada. Medido con «Entraña fina importada x Kg».
+        _sig = "" if abs(cambio_total) < 0.05 else ("+" if cambio_total > 0 else "−")
+        # UN SOLO RENGLÓN (2026-09-07): los tres KPIs venían en bloques de
+        # dos líneas —rótulo arriba, cifra abajo— que medían 51px. Con el
+        # rótulo en línea bajan a ~26, y esos 25px son grilla. El look lo
+        # pone `estilos/_80_cards.py` (.vol-detalle-hdr), no un `style=`
+        # inline: son cinco reglas repetidas tres veces.
         st.markdown(
-            f'<div style="display:flex; justify-content:space-between; align-items:baseline; '
-            f'flex-wrap:wrap; gap:16px; margin-bottom:.75rem;">'
-            f'<span style="font-size:1.1rem; font-weight:700;">{_compras_truncar(str(prod_sel), 48)}</span>'
-            f'<div style="display:flex; gap:24px;">'
-            f'<div style="text-align:right;"><span style="display:block; font-size:.68rem; '
-            f'font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:{GRIS_TEXTO};">'
-            f'Precio actual</span><span style="font-size:1.15rem; font-weight:700;">'
-            f'S/ {precio_actual:,.2f} /{unidad}</span></div>'
-            f'<div style="text-align:right;"><span style="display:block; font-size:.68rem; '
-            f'font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:{GRIS_TEXTO};">'
-            f'Cambio total</span><span style="font-size:1.15rem; font-weight:700; color:{color_cambio};">'
-            f'{"+" if cambio_total >= 0 else "−"}{abs(cambio_total):.1f}%</span></div>'
-            f'<div style="text-align:right;"><span style="display:block; font-size:.68rem; '
-            f'font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:{GRIS_TEXTO};">'
-            f'Volatilidad</span><span style="font-size:1.15rem; font-weight:700;">'
-            f'{vol_total:.1f} pts</span></div>'
-            f'</div></div>',
+            f'<div class="vol-detalle-hdr">'
+            f'<span class="vol-detalle-nom">{_compras_truncar(str(prod_sel), 48)}</span>'
+            f'<span class="vol-detalle-kpis">'
+            f'<span><i>Precio actual</i><b>S/ {precio_actual:,.2f} /{unidad}</b></span>'
+            f'<span><i>Cambio total</i><b style="color:{color_cambio};">'
+            f'{_sig}{abs(cambio_total):.1f}%</b></span>'
+            f'<span><i>Volatilidad</i><b>{vol_total:.1f} pts</b></span>'
+            f'</span></div>',
             unsafe_allow_html=True,
         )
 
@@ -439,8 +503,22 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 hoverinfo="skip", showlegend=False,
             ))
             _compras_layout(fig, alto=alturas.MINI)
+            # UNA MARCA POR VELA, EN ESPAÑOL. Sin `tickvals` Plotly elige
+            # sus propias fechas y las rotula con su locale por defecto —
+            # el inglés: el eje decía "Jul 12 / Jul 26 / Aug 9 / Aug 23"
+            # mientras la grilla de arriba, el hover y el título de la
+            # tabla de al lado decían "3-9 Ago" (regla #241, la misma que
+            # ya arregló el gráfico por fecha de Documentos SUNAT).
+            #
+            # `ticktext` y no `tickformat`: acá el eje tiene ocho puntos
+            # conocidos —los lunes de las ocho semanas— y marcarlos todos
+            # es lo que hace que una vela se pueda buscar por su fecha.
             fig.update_layout(
-                xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False, rangeslider=dict(visible=False)),
+                xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False,
+                           rangeslider=dict(visible=False),
+                           tickmode="array", tickvals=semanas,
+                           ticktext=[f"{s.day} {_MESES_CORTO[s.month - 1]}"
+                                     for s in semanas]),
                 yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ "),
                 showlegend=False,
             )
@@ -509,4 +587,3 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 st.dataframe(sty_p, use_container_width=True, hide_index=True,
                             height=alturas.por_filas(len(tp), px_fila=34, extra=60,
                                                      minimo=0, rol=alturas.MINI))
-        st.caption("Tocá una vela para ver las compras de esa semana.")

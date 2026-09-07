@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-344 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+345 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (114)
+**CSS y estilos** (115)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -148,8 +148,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#342** — Un piso pensado para tarjetas convierte a una línea en una franja para siempre — y el padding…
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 - **#344** — Plegar un riel y "más KPI" tiran para lados opuestos: la salida es que cada estado cargue lo…
+- **#345** — Una vista que es "un ranking y su drill" no son dos tarjetas: es UNA, y lo único que scrollea…
 
-**Layout y alturas** (34)
+**Layout y alturas** (35)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -185,6 +186,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#288** — Un rótulo que nombra el estado POR DEFECTO no informa: ocupa el renglón para decir que no hay…
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 - **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
+- **#345** — Una vista que es "un ranking y su drill" no son dos tarjetas: es UNA, y lo único que scrollea…
 
 **Plotly y figuras** (56)
 
@@ -30914,6 +30916,95 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      puede no ser el primero de la tabla. Unificarlas es un cambio aparte.
 
      (2026-09-07.)
+345. **Una vista que es "un ranking y su drill" no son dos tarjetas: es
+     UNA, y lo único que scrollea es el ranking.** Pedido 2026-09-07, con
+     captura: *"la vista Insumos ordenados por volatilidad no entra en su
+     tarjeta, la parte de abajo, el gráfico y su tabla. En la tarjeta el
+     usuario no debería hacer scroll, quizás solo en la tabla."*
+
+     Medido antes de tocar nada (viewport 1280x720, `--alto-util` 528):
+
+     | bloque                      | px  |
+     |-----------------------------|-----|
+     | tarjeta del ranking         | 646 |
+     | gap entre tarjetas          |  16 |
+     | tarjeta del detalle         | 377 |
+     | **sección**                 |**1.039**|
+
+     O sea **dos pantallas**, y ninguna de las dos tarjetas estaba rota
+     por su cuenta: cada una encuadraba bien su propio contenido. El
+     encuadre del proyecto («una tarjeta = una pantalla», #101) mide por
+     SUPERFICIE, así que dos superficies apiladas se le escapan enteras.
+     Es el mismo hallazgo que ya había hecho «Vs año pasado» el
+     2026-09-02, y la salida es la misma: fusionarlas.
+
+     **De dónde salieron los 351px** (1.039 → 688), de mayor a menor:
+
+     · **La grilla, 438 → 288.** Ver abajo: es el único bloque que puede
+       ceder, porque ya scrollea por dentro.
+     · **El gap entre bloques, 16 → 10.** 48px repartidos en tres huecos
+       para separar cuatro bandas que ya se distinguen solas.
+     · **Los dos `st.caption`, 83 → 0.** Uno bajo la grilla (45px, tres
+       renglones de texto) y otro bajo el candlestick (22). Pasan a un
+       popover de sólo ícono en la cabecera, igual que `vap_hdr_ayuda`.
+       Un texto que se lee UNA vez no puede costar dos filas del ranking
+       en cada render.
+     · **El renglón del buscador, 56 → 0.** Era un
+       `st.columns([1, 2])[0]` propio para un campo de un tercio de
+       ancho; entra en la fila del título, que tenía 566px libres.
+     · **Los tres KPI del detalle, 51 → 26.** Estaban en bloques de dos
+       líneas (rótulo chico arriba, cifra grande abajo). En línea dicen
+       lo mismo.
+     · **Fusionar, ~32.** Un padding de tarjeta, un borde y el gap que
+       las separaba.
+
+     **POR QUÉ EL ALTO DE LA GRILLA LO TIENE QUE DECIDIR PYTHON, y no el
+     navegador como en `vh_panel_drill` (#101 y su bloque de CSS).** La
+     tentación es obvia: publicar el cromo con `publicar_var_px` y dejar
+     que el CSS haga `max-height: calc(var(--alto-util) - …)`, que es lo
+     que ya hace el panel del drill de Ventas › Por hora. **No funciona
+     con AgGrid**, y se midió en el navegador antes de descartarlo:
+
+     · `st_aggrid` renderiza en un IFRAME cuyo alto sale del `height=`
+       de Python (medido: `height=430` → `<iframe height="430">`).
+     · Forzando `iframe { height: 250px !important }` el iframe se
+       encoge, pero el `<body>` de adentro **sigue midiendo 430** y el
+       `.ag-root-wrapper` con él: la grilla queda CORTADA, con su barra
+       de scroll fuera de la vista. No es un caso de "falta un
+       `flex: 1 1 0`" — el documento de adentro no se entera.
+     · Dejar el wrapper con `overflow-y: auto` da un scroll externo que
+       arrastra la CABECERA de la grilla fuera de la pantalla, que es
+       justo lo que la grilla no puede perder (los rótulos son las
+       semanas).
+
+     Así que el alto sale de `alturas.RANKING_CON_DRILL`, un rol nuevo, y
+     con él viene el residuo honesto que ya documenta § LA RESTA NO SE
+     HACE ACÁ: **el número se ajusta a una pantalla SUPUESTA.** Está
+     elegido contra la de trabajo (~1800x900, `--alto-util` ~700), no
+     contra el laptop objetivo de 1366x768 — contra ése la resta daba
+     136px, o sea DOS filas, y una vista que existe para barrer un
+     ranking dejaría de servir para lo que existe. En un laptop chico la
+     tarjeta se pasa y scrollea la PÁGINA, no la tarjeta.
+
+     **Verificado tras el cambio** (viewport 1440x900, `--alto-util`
+     708): cabecera 45 + grilla 288 + KPI 26 + candlestick 240 + gaps y
+     padding 51 = **tarjeta 650**. Entra en cualquier ventana de 842px de
+     alto para arriba, y el único scroll que queda es el de la grilla (6
+     filas visibles de 42). A 1366x700 (`--alto-util` 508) se pasa 142px
+     y scrollea la PÁGINA — sin desborde horizontal, medido.
+
+     **Lo que el cambio destapó, que no era el pedido:** el eje X del
+     candlestick rotulaba en INGLÉS ("Jul 12 / Aug 9") mientras la grilla
+     de arriba, el hover y el título de la tabla de al lado decían
+     "3-9 Ago". Es la regla #241 tal cual, en la única vista que le
+     faltaba. Se arregla con `tickvals`/`ticktext` sobre los ocho lunes
+     —no con `tickformat`— porque marcar TODAS las velas es lo que
+     permite buscar una por su fecha. De paso, `_MESES_CORTO` deja de ser
+     una lista literal y se deriva de `cortes.MESES_ABR_ES`, que es lo
+     que #241 dice que tiene que haber: una sola.
+
+     (2026-09-07.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 

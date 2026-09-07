@@ -350,6 +350,131 @@ CSS = """    /* ================================================================
     }
     .st-key-vol_hdr_periodo { width: 100% !important; }
 
+    /* ── VOLATILIDAD: la tarjeta fusionada respira menos ──────────────
+       2026-09-07. Sus cuatro bloques —cabecera, grilla, KPIs del detalle
+       y la fila candlestick+tabla— van separados por el gap por defecto
+       de un `stVerticalBlock`, 1rem. Son 48px para una tarjeta que tiene
+       que entrar en una pantalla: 10px la siguen leyendo como cuatro
+       bandas y devuelven 18px, casi media fila del ranking.
+
+       Acotado a ESTA key y no a `chartcard_`, que es la familia genérica
+       de `graficos/base.py::_card` y la usan ~15 tarjetas que no pidieron
+       apretarse (el aviso de CLAUDE.md sobre reglas por familia). */
+    div[class*="st-key-chartcard_compras_vol"] {
+        gap: 10px !important;
+    }
+
+    /* ── VOLATILIDAD: buscador y ayuda, en el renglón del título ───────
+       2026-09-07. Suben a la cabecera los dos ítems que costaban un
+       renglón cada uno: el buscador (que tenía su propio
+       `st.columns([1, 2])[0]`, 40px de campo + 16 de gap) y la ayuda, que
+       eran DOS `st.caption` al pie de cada mitad de la vista. Los dos
+       son gemelos EXACTOS de `vap_hdr_buscar` / `vap_hdr_ayuda`: mismo
+       alto de 26px, mismo ícono sin chevron. La razón de subirlos es la
+       del pedido — la vista tiene que entrar en UNA tarjeta, y 83px de
+       cromo son dos filas del ranking.
+
+       118px y no los 104 de vap: el placeholder es «Buscar insumo…», dos
+       caracteres más largo que «Buscar ítem…». Mismo criterio de ancho
+       que documenta el bloque de vap (texto + 50 de cromo). */
+    .st-key-vol_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_hdr_buscar) {
+        flex: 0 0 auto !important;
+        width: 118px !important;
+    }
+    .st-key-vol_hdr_buscar { width: 100% !important; }
+    .st-key-vol_hdr_buscar > [data-testid="stElementContainer"] {
+        width: 100% !important;
+    }
+    /* El `st.text_input` NO comparte gancho con el `st.selectbox` de al
+       lado (ver el bloque de vap: uno es `.react-aria-ComboBox`, el otro
+       `stTextInputRootElement`). Sin esta regla el campo se queda en los
+       40px del default y la fila entera mide lo que el más alto. */
+    .st-key-vol_fila_hdr [data-testid="stTextInputRootElement"] {
+        min-height: 26px !important;
+        height: 26px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vol_fila_hdr [data-testid="stTextInputRootElement"] input {
+        padding: 0 8px !important;
+        font-size: 12px !important;
+    }
+    /* El ícono mide su contenido: sin esto su `stLayoutWrapper` nace con
+       `width: 100%` y se queda con todo el hueco que dejaba el título
+       (regla #272, y el mismo caso que documenta `vap_hdr_ayuda`). */
+    .st-key-vol_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_hdr_ayuda) {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    .st-key-vol_hdr_ayuda [data-testid="stPopoverButton"] {
+        min-height: 26px !important;
+        height: 26px !important;
+        min-width: 0 !important;
+        padding: 0 6px !important;
+    }
+    /* El CHEVRON del popover, igual que en `vap_hdr_ayuda`: se esconde el
+       WRAPPER, no el glifo — el ícono del label entra por el shortcode y
+       sale como `stMarkdownContainer`, que es otro nodo. */
+    .st-key-vol_hdr_ayuda button > div > div:has(
+        [data-testid="stIconMaterial"]) {
+        display: none !important;
+    }
+
+    /* ── VOLATILIDAD: la cabecera del DETALLE, en un renglón ───────────
+       2026-09-07. Los tres KPIs (precio actual, cambio total,
+       volatilidad) venían en bloques de dos líneas —rótulo chico arriba,
+       cifra grande abajo— dibujados con `style=` inline en el f-string
+       del módulo. Medían 51px; en línea miden ~26, y esos 25px son media
+       fila del ranking en una tarjeta que se pasaba de la pantalla.
+
+       El look se muda acá por lo que dice CLAUDE.md de los colores: el
+       gris del rótulo era `{GRIS_TEXTO}` interpolado tres veces en el
+       f-string, o sea el mismo valor escrito tres veces en Python cuando
+       ya existe como `var(--text-secondary)`. Lo único que sigue inline
+       es el color del cambio, que DEPENDE del dato (rojo sube / verde
+       baja) y por eso no puede ser una clase. */
+    .vol-detalle-hdr {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 4px 16px;
+        margin: 0 0 .35rem;
+    }
+    .vol-detalle-nom {
+        font-size: 1rem;
+        font-weight: 700;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .vol-detalle-kpis {
+        display: flex;
+        align-items: baseline;
+        gap: 20px;
+        flex: 0 0 auto;
+    }
+    .vol-detalle-kpis > span {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .vol-detalle-kpis i {
+        font-style: normal;
+        font-size: .64rem;
+        font-weight: 700;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+    }
+    .vol-detalle-kpis b {
+        font-size: .95rem;
+        font-weight: 700;
+    }
+
     /* ── TABLA: el selector de ventana, pegado a la derecha ────────────
        2026-09-06. La sección «Tabla» de Compras no tiene cabecera (el
        nombre lo pone el rail), así que su selector no comparte renglón con

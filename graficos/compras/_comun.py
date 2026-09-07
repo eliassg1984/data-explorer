@@ -80,6 +80,14 @@ GAP_DRILL = "small"
 filas parten en el mismo sitio pero con gaps distintos, el canal gris cambia
 de ancho a media página y el salto se ve igual."""
 
+PARR = "\n\n"
+"""Salto de párrafo para el markdown de un popover de ayuda.
+
+Vivía en `vs_ano_pasado.py` hasta el 2026-09-07, cuando «Volatilidad»
+estrenó el suyo (el mismo popover de sólo ícono). Dos cadenas iguales
+escritas en dos módulos no driftean solas, pero el CRITERIO sí: si
+mañana el popover pasa a separar con `---`, cambia en un sitio."""
+
 
 def _first_point(evt):
     """Primer punto de una selección de st.plotly_chart(on_select=...).
