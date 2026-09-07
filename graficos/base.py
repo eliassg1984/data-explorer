@@ -2104,6 +2104,86 @@ def _compras_truncar(s, n=26):
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
+# ── NOMBRE PROPIO: los proveedores dejan de gritar ──────────────────────────
+# Los 770 proveedores de `compras.parquet` vienen en MAYÚSCULA SOSTENIDA (769
+# de 770, medido) porque así los tipea el ERP. En pantalla eso cuesta dos
+# cosas: se lee peor —el ojo pierde la silueta de la palabra, que es lo que
+# hace rápida la lectura— y ocupa ~12% más de ancho, justo en la columna que
+# siempre es la primera en truncarse.
+#
+# No es un `.title()` de Python, que sobre estos datos se equivoca en 223 de
+# 770 nombres: «S.A.C.» se vuelve «S.A.C.» → «S.a.c.». Las cuatro reglas
+# salen de contar los tokens del parquet real (2026-09-07):
+#   · con punto adentro   → sigla, va entera en mayúscula (S.A.C. 223 veces,
+#                            E.I.R.L. 79, S.A. 32, S.R.L. 14, Y.R. …)
+#   · sigla sin punto      → ídem (SAC 47, EIRL 18, SA 12)
+#   · conector             → minúscula, salvo que abra el nombre (DE 35,
+#                            Y 26, DEL 18, LA 15, EL 8)
+#   · una sola letra       → mayúscula («DOBLE G», «LINDAS TELAS S A»)
+# El resto capitaliza. Sin vocales y hasta tres letras también queda en
+# mayúscula: en español no hay palabra así, pero sí iniciales de marca («LV
+# DITEK S.A»).
+#
+# SOLO PARA MOSTRAR. El valor que agrupa, filtra o vuelve del clic de una
+# grilla sigue siendo el del parquet — si se guardara el nombre bonito en
+# `session_state`, dejaría de matchear su propia fila.
+
+_NP_CONECTORES = {"de", "del", "la", "las", "los", "el", "en", "con",
+                  "para", "por", "al", "y", "e", "o", "u"}
+"""Palabras que van en minúscula cuando no abren el nombre."""
+
+_NP_SIGLAS = {"SAC", "SA", "SAA", "SAB", "SRL", "SCRL", "EIRL", "LTDA"}
+"""Formas societarias que el ERP escribe sin puntos."""
+
+_NP_VOCALES = set("AEIOUÁÉÍÓÚÜ")
+"""La «Y» queda fuera a propósito: como palabra suelta es el conector (lo
+atrapa `_NP_CONECTORES` antes), y dentro de una sigla no la vuelve palabra."""
+
+
+def _np_palabra(p, primera):
+    """Una palabra de `nombre_propio`. Ver las reglas en el bloque de arriba."""
+    if any(c.isdigit() for c in p):
+        return p
+    if "." in p:
+        return p.upper()
+    if "-" in p:
+        return "-".join(_np_palabra(x, primera and i == 0)
+                        for i, x in enumerate(p.split("-")))
+    if p.upper() in _NP_SIGLAS:
+        return p.upper()
+    # EL CONECTOR SE MIRA ANTES QUE EL LARGO, y ese orden es el arreglo de un
+    # caso real: «PACIFICO COMPAÑIA DE SEGUROS Y REASEGUROS» salía con la «Y»
+    # en mayúscula porque la regla de «una sola letra» se disparaba primero.
+    # Las únicas letras sueltas que son conectores son y/e/o/u, y las cuatro
+    # están en el set; el resto («DOBLE G», «LINDAS TELAS S A») cae al `len`
+    # de abajo y se queda en mayúscula.
+    if not primera and p.lower() in _NP_CONECTORES:
+        return p.lower()
+    if len(p) == 1:
+        return p.upper() if p.isalpha() else p
+    # SIN VOCALES = SIGLA. No hay palabra española sin vocal, así que la
+    # regla no tiene falsos positivos y sí cazaba dos casos reales que un
+    # tope de tres letras dejaba pasar: «JCCF S.A.C.» y «OPERADORA LCPM
+    # S.A.C.» salían «Jccf» y «Lcpm». Barrido sobre los 770 proveedores del
+    # parquet: 768 quedan bien, y los dos que no («EY», «3M») llevan vocal
+    # o dígito y no hay señal en el texto para distinguirlos de una palabra.
+    if p.isalpha() and not (set(p.upper()) & _NP_VOCALES):
+        return p.upper()
+    return p[:1].upper() + p[1:].lower()
+
+
+def nombre_propio(texto):
+    """«COMPAÑIA FOOD RETAIL S.A.C.» → «Compañia Food Retail S.A.C.».
+
+    Para MOSTRAR un nombre de proveedor (o de cualquier razón social) que el
+    parquet trae en mayúscula sostenida. Nunca para agrupar ni para comparar:
+    el valor canónico es el del parquet."""
+    if texto is None:
+        return texto
+    palabras = str(texto).split()
+    return " ".join(_np_palabra(p, i == 0) for i, p in enumerate(palabras))
+
+
 def _compras_layout(fig, alto=alturas.PROTAGONISTA):
     """Layout común de los dashboards. `alto` espera un ROL de
     graficos/alturas.py (PROTAGONISTA / APOYO / MINI) o el resultado de

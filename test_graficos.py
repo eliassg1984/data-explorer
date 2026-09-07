@@ -198,6 +198,29 @@ def _pruebas_puras():
           _rc._activo(_serie_activo).tolist(),
           [True, False, False, True, False, True, False, False])
 
+    # nombre_propio — los 770 proveedores del parquet vienen en MAYÚSCULA
+    # SOSTENIDA y `str.title()` se equivoca en los 223 que llevan "S.A.C.".
+    # Cada caso de acá es un token que existe en el parquet real y una regla
+    # distinta; el barrido completo se corrió a mano el 2026-09-07 (768 de
+    # 770 correctos). Ver el bloque de comentarios en graficos/base.py.
+    for _entra, _sale in [
+        ("COMPAÑIA FOOD RETAIL S.A.C.", "Compañia Food Retail S.A.C."),
+        ("INVERSIONES BARCO AZUL E.I.R.L.", "Inversiones Barco Azul E.I.R.L."),
+        ("ESTABLECIMIENTOS INCA SAC", "Establecimientos Inca SAC"),
+        ("LUZ DEL SUR S.A.A.", "Luz del Sur S.A.A."),
+        ("EL ESTUDIANTE S.A.", "El Estudiante S.A."),
+        ("PACIFICO COMPAÑIA DE SEGUROS Y REASEGUROS",
+         "Pacifico Compañia de Seguros y Reaseguros"),
+        ("DOBLE G REPRESENTACIONES S.A.C.", "Doble G Representaciones S.A.C."),
+        ("LINDAS TELAS S A", "Lindas Telas S A"),
+        ("JCCF S.A.C.", "JCCF S.A.C."),
+        ("3M PERU S.A.", "3M Peru S.A."),
+        ("COMERCIAL COGNIMETA Y.R. E.I.R.L.", "Comercial Cognimeta Y.R. E.I.R.L."),
+    ]:
+        check(f"nombre_propio · {_entra[:28]}", b.nombre_propio(_entra), _sale)
+    check("nombre_propio · None pasa de largo", b.nombre_propio(None), None)
+    check("nombre_propio · vacío pasa de largo", b.nombre_propio(""), "")
+
     # _slug — id seguro para keys/CSS
     check("_slug símbolos", b._slug("Cascada · Precio"), "cascada_precio")
     check("_slug espacios extremos", b._slug("  Hola Mundo  "), "hola_mundo")

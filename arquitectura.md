@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-345 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+347 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (115)
 
@@ -150,7 +150,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#344** — Plegar un riel y "más KPI" tiran para lados opuestos: la salida es que cada estado cargue lo…
 - **#345** — Una vista que es "un ranking y su drill" no son dos tarjetas: es UNA, y lo único que scrollea…
 
-**Layout y alturas** (35)
+**Layout y alturas** (36)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -187,6 +187,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#317** — Un panel que ocupa una FRACCIÓN de la fila no se mide con @media, y un @container sin…
 - **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
 - **#345** — Una vista que es "un ranking y su drill" no son dos tarjetas: es UNA, y lo único que scrollea…
+- **#346** — Apilar un drill bajo su ranking cuesta el ALTO; ponerlo al lado cuesta el ANCHO. Elegí…
 
 **Plotly y figuras** (56)
 
@@ -247,7 +248,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 
-**AgGrid y tablas** (50)
+**AgGrid y tablas** (51)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -299,6 +300,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#331** — Una segunda línea en una celda de AgGrid no entra ensanchando la columna: el presupuesto real…
 - **#336** — Un AgGrid sin custom_css= se queda con el tema de FÁBRICA, y eso se ve como una cabecera que…
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
+- **#346** — Apilar un drill bajo su ranking cuesta el ALTO; ponerlo al lado cuesta el ANCHO. Elegí…
 
 **Streamlit** (98)
 
@@ -401,7 +403,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#338** — Un st.container(key=…) VACÍO se dibuja una vez y desaparece en el render siguiente
 - **#339** — El scope de un st.rerun se DECIDE en tiempo de ejecución, no se fija en el código
 
-**Datos, R2 y DuckDB** (44)
+**Datos, R2 y DuckDB** (45)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -447,6 +449,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
 - **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
 - **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
+- **#347** — Un nombre en MAYÚSCULA SOSTENIDA es un dato del ERP, no una decisión de diseño — y…
 
 **SUNAT y SIRE** (40)
 
@@ -31002,6 +31005,109 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      permite buscar una por su fecha. De paso, `_MESES_CORTO` deja de ser
      una lista literal y se deriva de `cortes.MESES_ABR_ES`, que es lo
      que #241 dice que tiene que haber: una sola.
+
+     (2026-09-07.)
+
+346. **Apilar un drill bajo su ranking cuesta el ALTO; ponerlo al lado
+     cuesta el ANCHO. Elegí sabiendo cuál de los dos te falta.** Continuación
+     directa de #345, el mismo día y sobre la misma vista: la #345 fusionó
+     las dos tarjetas de «Volatilidad» y para que entraran recortó la grilla
+     a 6 filas. El pedido siguiente fue verlo **al lado** —ranking a la
+     izquierda, candlestick a la derecha, su tabla debajo del candlestick— y
+     se maquetó a escala real antes de tocar código.
+
+     La aritmética es la que decide, y es simple: **apilados, el alto de la
+     fila es la SUMA de los dos bloques; al lado, es el MÁXIMO.** Medido en
+     una ventana de 1440x900 (`--alto-util` 708):
+
+     | | apilado (#345) | al lado (esta) |
+     |---|---|---|
+     | tarjeta | 650 px | **609 px** |
+     | filas visibles del ranking | 6 | **9.6** |
+     | ancho de la columna-semana | 85 px | **50 px** |
+     | ancho de la tabla de la semana | 472 px | **361 px** |
+
+     O sea: 290px que devuelve el alto se pagan con 35 de cada columna-semana
+     y 111 de la tabla. La proporción sale de `COLUMNAS_DRILL` (1.6/1), no de
+     un literal — es la misma con la que parten sus filas Proveedor y
+     Producto, y las tres vistas se leen apiladas en la misma página
+     (regla #145).
+
+     **Los dos costos, y qué hacer con cada uno** (los dos se midieron sobre
+     la maqueta, antes de implementar, y se le mostraron al usuario):
+
+     · **La segunda línea de la celda** (los dos cierres, «110.17 → 169.41»,
+       que la vista estrenó el 2026-09-06) necesita 81px: 69 del peor caso
+       real más los 12 de padding. A 50 no entra. **No se recorta: se
+       omite** — el `text-overflow` la dejaría en «110.17 → 16…» y un precio
+       recortado no parece un recorte, parece otro precio. Los dos números
+       siguen en el tooltip.
+     · **La cabecera de la columna.** «27 Jul - 2 Ago» a 50px envuelve en
+       CUATRO renglones: la cabecera de la grilla saltaba de 45 a 96px, o
+       sea 51px que salían de las filas — la mitad de lo que el cambio
+       acababa de ganar. Pasa a nombrarse por su lunes («27 Jul»), que
+       además es EXACTAMENTE la etiqueta del eje X del candlestick de al
+       lado. El rango entero sigue en el tooltip.
+
+     **LA TRAMPA, que costó una vuelta de deploy: `getActualWidth()` leído
+     dentro de `init()` de un cellRenderer devuelve el ancho DECLARADO, no el
+     real.** AG Grid construye las celdas y DESPUÉS escala las columnas para
+     llenar el grid, así que el guard `if (col.getActualWidth() < 81) return`
+     leía 98 y daba verde siempre: la línea salía igual, recortada, y el
+     código se veía correcto. Lo que sí funciona es medir **después del
+     layout** — `p.eGridCell.clientWidth` dentro de un `requestAnimationFrame`
+     — y agregar el nodo ahí adentro en vez de agregarlo y esconderlo, para
+     no dejar un frame con el texto puesto.
+
+     La regla general que deja: **un cellRenderer no sabe cuánto mide su
+     celda mientras se está construyendo.** Cualquier decisión de render que
+     dependa del ancho real va después de un frame.
+
+     (2026-09-07.)
+
+347. **Un nombre en MAYÚSCULA SOSTENIDA es un dato del ERP, no una decisión
+     de diseño — y `str.title()` no lo arregla.** Pedido 2026-09-07, mirando
+     la maqueta de #346: *"coloquemos el nombre del proveedor como Nombre
+     Propio"*. Los 770 proveedores de `compras.parquet` vienen en mayúscula
+     (769 de 770, contado) porque así los tipea el ERP.
+
+     Cuesta dos cosas medibles: se lee peor —la mayúscula sostenida borra la
+     silueta de la palabra, que es de lo que vive la lectura rápida— y ocupa
+     **~12% más de ancho**, justo en la columna que primero se trunca. En la
+     tabla de la semana de Volatilidad, que con el drill al costado quedó en
+     361px, eso es la diferencia entre leer el proveedor y no leerlo.
+
+     **`str.title()` se equivoca en 223 de los 770**: «S.A.C.» sale
+     «S.a.c.». Las cuatro reglas de `graficos/base.py::nombre_propio` salen
+     de CONTAR los tokens del parquet real, no de teoría:
+
+     · **con punto adentro → sigla**, va entera en mayúscula: `S.A.C.` 223
+       veces, `E.I.R.L.` 79, `S.A.` 32, `S.R.L.` 14, y también `Y.R.`;
+     · **sigla sin punto** → ídem: `SAC` 47, `EIRL` 18, `SA` 12;
+     · **conector** → minúscula salvo que abra el nombre: `DE` 35, `Y` 26,
+       `DEL` 18, `LA` 15, `EL` 8;
+     · **una sola letra** → mayúscula: «DOBLE G», «LINDAS TELAS S A».
+
+     Dos detalles que sólo aparecen al correrlo sobre los 770:
+
+     · **El conector se mira ANTES que el largo.** Con el orden al revés,
+       «SEGUROS **Y** REASEGUROS» salía con la Y en mayúscula, porque la
+       regla de «una sola letra» se disparaba primero. Las únicas letras
+       sueltas que son conectores son y/e/o/u; el resto cae al largo.
+     · **Sin vocales = sigla, sin tope de largo.** No hay palabra española
+       sin vocal, así que la regla no tiene falsos positivos, y un tope de
+       tres letras dejaba pasar dos casos reales: «JCCF S.A.C.» y «OPERADORA
+       LCPM S.A.C.» salían «Jccf» y «Lcpm».
+
+     Barrido final: 768 de 770 correctos. Los dos que no («EY», «3M») llevan
+     vocal o dígito y no hay señal EN EL TEXTO que los distinga de una
+     palabra — para esos haría falta un diccionario de marcas, que es otro
+     problema.
+
+     **Y lo que no se toca: es SÓLO para mostrar.** El valor que agrupa,
+     filtra, o vuelve del clic de una grilla sigue siendo el del parquet. Un
+     nombre bonito guardado en `session_state` dejaría de matchear su propia
+     fila — el mismo modo de fallo que la regla #130 evita por el otro lado.
 
      (2026-09-07.)
 

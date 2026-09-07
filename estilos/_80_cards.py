@@ -421,26 +421,29 @@ CSS = """    /* ================================================================
         display: none !important;
     }
 
-    /* ── VOLATILIDAD: la cabecera del DETALLE, en un renglón ───────────
-       2026-09-07. Los tres KPIs (precio actual, cambio total,
-       volatilidad) venían en bloques de dos líneas —rótulo chico arriba,
-       cifra grande abajo— dibujados con `style=` inline en el f-string
-       del módulo. Medían 51px; en línea miden ~26, y esos 25px son media
-       fila del ranking en una tarjeta que se pasaba de la pantalla.
+    /* ── VOLATILIDAD: la cabecera del DETALLE ─────────────────────────
+       Nació el 2026-09-07 EN UN RENGLÓN, cuando el drill iba debajo del
+       ranking y tenía 959px de ancho: ahí los tres KPI en línea ahorraban
+       25px de alto que hacían falta.
 
-       El look se muda acá por lo que dice CLAUDE.md de los colores: el
-       gris del rótulo era `{GRIS_TEXTO}` interpolado tres veces en el
-       f-string, o sea el mismo valor escrito tres veces en Python cuando
-       ya existe como `var(--text-secondary)`. Lo único que sigue inline
-       es el color del cambio, que DEPENDE del dato (rojo sube / verde
-       baja) y por eso no puede ser una clase. */
+       Unas horas después el drill pasó a ser la columna DERECHA de la fila
+       y su ancho cayó a ~361px. En línea ya no entran —medido: 379px de
+       contenido nowrap contra 361 de columna, y el desborde se comía el
+       borde de la tarjeta— así que vuelven a rótulo-arriba/cifra-abajo, en
+       tres columnas iguales. Ahora el alto sobra (la tarjeta mide 590 de
+       708 disponibles) y lo que falta es ancho: es la misma decisión de
+       antes leída sobre la restricción que manda hoy.
+
+       `minmax(0, 1fr)` y no `1fr`: el mínimo por defecto de una pista de
+       grid es su contenido, así que sin el 0 una cifra larga («S/ 1,234.56
+       /und») volvería a empujar la columna por fuera de la tarjeta en vez
+       de recortarse. */
     .vol-detalle-hdr {
         display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 4px 16px;
+        flex-direction: column;
+        gap: 6px;
         margin: 0 0 .35rem;
+        min-width: 0;
     }
     .vol-detalle-nom {
         font-size: 1rem;
@@ -451,28 +454,34 @@ CSS = """    /* ================================================================
         white-space: nowrap;
     }
     .vol-detalle-kpis {
-        display: flex;
-        align-items: baseline;
-        gap: 20px;
-        flex: 0 0 auto;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        min-width: 0;
     }
     .vol-detalle-kpis > span {
-        display: inline-flex;
-        align-items: baseline;
-        gap: 6px;
-        white-space: nowrap;
+        display: block;
+        min-width: 0;
     }
     .vol-detalle-kpis i {
+        display: block;
         font-style: normal;
         font-size: .64rem;
         font-weight: 700;
         letter-spacing: .05em;
         text-transform: uppercase;
         color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .vol-detalle-kpis b {
-        font-size: .95rem;
+        display: block;
+        font-size: 1rem;
         font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     /* ── TABLA: el selector de ventana, pegado a la derecha ────────────

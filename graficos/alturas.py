@@ -164,43 +164,46 @@ MARCO = PRESUPUESTO
 # tampoco desborda ni empuja a la tabla vecina a crecer.
 MINI_PROD_EVO = 270
 
-# Ranking (AgGrid) que comparte su tarjeta con el DRILL que abre, apilado
-# debajo. Hoy: «Insumos ordenados por volatilidad» (compras/volatilidad.py),
-# donde la grilla manda arriba y el candlestick + la tabla de la semana van
-# abajo, en la MISMA superficie.
+# Ranking (AgGrid) que comparte su tarjeta con el DRILL que abre. Hoy:
+# «Insumos ordenados por volatilidad» (compras/volatilidad.py), donde la
+# grilla es la columna izquierda de la fila y el candlestick + la tabla de la
+# semana son la derecha.
 #
-# No es "una grilla más chica" por gusto: es la única forma de que la vista
-# entera entre en una tarjeta, y el pedido (2026-09-07) fue exactamente ese
-# — "el usuario no debería hacer scroll en la tarjeta, quizás sólo en la
-# tabla". La grilla YA scrollea por dentro, así que recortarla no esconde
-# datos: mueve el corte de la página a la grilla, que es donde el usuario
-# espera encontrarlo.
+# NACIÓ EN 280, APILADO (2026-09-07). Con el drill DEBAJO de la grilla, el
+# alto de la tarjeta era la SUMA de los dos y a la grilla le quedaban 6
+# filas. Unas horas después, a pedido y sobre una maqueta a escala, el drill
+# se mudó AL LADO: ahí el alto de la fila es el MÁXIMO de las dos columnas,
+# no la suma, y los ~290px que ocupaba el drill vuelven enteros a la grilla.
 #
-# EL NÚMERO SALE DE UNA RESTA MEDIDA en el navegador el 2026-09-07 (viewport
-# 1280x720, --alto-util 528). La tarjeta fusionada gasta, sin la grilla:
-#     cabecera 44 + caption 0 (se fue al popover) + KPIs 26
-#     + candlestick 240 + 4 gaps de 16 + padding 16 + borde 2 = 392
-# y 528 - 392 = 136. Ese sería el número para el laptop chico, y a 136 la
-# grilla muestra DOS filas: la vista dejaría de servir para lo que existe,
-# que es barrer un ranking. Así que el rol NO se ajusta al peor viewport
-# sino al de la pantalla de trabajo. 280 y no 300 —los dos muestran las
-# MISMAS ~6 filas, (280-45)/40 = 5.9 contra 6.4— porque los 20px de
-# diferencia son margen contra una ventana más baja: con la tarjeta en
-# 650px entra en cualquier ventana de 842px de alto para arriba.
+# 450 SALE DE IGUALAR LAS DOS COLUMNAS, que es lo que hace que no sobre aire
+# en ninguna de las dos. La derecha mide, apilada:
+#     KPIs 26 + gap 10 + candlestick 240 (MINI) + gap 10
+#     + título de la semana 22 + gap 10 + tabla ≤ 160 (PANEL_BAJO_FIGURA)
+#     ≈ 450-480 según cuántas compras tenga la semana
+# y 450 en la grilla son (450 - 45 de cabecera) / 40 = 10 filas.
 #
-# ES LA PALANCA: si la vista muestra pocas filas, o si sobra aire debajo
-# del candlestick, el número que hay que mover es ÉSTE, y cada 40px es una
-# fila. No hay un segundo sitio donde el alto del ranking se decida.
+# ES LA PALANCA: si la vista muestra pocas filas, o si sobra aire debajo del
+# candlestick, el número que hay que mover es ÉSTE, y cada 40px es una fila.
+# No hay un segundo sitio donde el alto del ranking se decida.
 #
-# Consecuencia asumida y visible: en un laptop de 1366x768 la tarjeta sigue
-# pasándose ~170px y la PÁGINA scrollea (no la tarjeta — no lleva el clamp
-# de `--alto-util`). Es el mismo residuo que documenta § LA RESTA NO SE HACE
-# ACÁ: el alto de un iframe de AgGrid sólo lo puede fijar Python, y Python
-# no conoce la ventana. Medido: forzar el alto del iframe por CSS lo encoge
-# pero el grid de adentro se queda en su alto y queda CORTADO (el `<body>`
-# del iframe sigue midiendo lo que pidió Python), así que la resta no se
-# puede mudar al navegador como sí se hizo con `vh_panel_drill`.
-RANKING_CON_DRILL = 280
+# Y VIENE CON EL RESIDUO QUE DOCUMENTA § LA RESTA NO SE HACE ACÁ: es un
+# número contra una pantalla supuesta, no contra la ventana real. No se
+# puede mudar la resta al CSS como se hizo con `vh_panel_drill`, y eso está
+# MEDIDO: `st_aggrid` renderiza en un iframe cuyo alto sale del `height=` de
+# Python, y forzarlo por CSS encoge el iframe pero deja el documento de
+# adentro en su alto — la grilla queda cortada, con su scroll fuera de la
+# vista. Ver arquitectura.md #345.
+RANKING_CON_DRILL = 450
+
+PANEL_BAJO_FIGURA = 160
+"""Tope de una tabla de detalle que va DEBAJO de una figura, en la misma
+columna (no al lado). Hoy: la tabla de compras de la semana de Volatilidad.
+
+Es MINI recortado, y el recorte tiene motivo: apilada bajo el candlestick,
+cada píxel que crece esta tabla lo paga la fila entera —o sea también la
+grilla de la izquierda, que se estira para igualarla. A 160 entran cuatro
+compras, y la semana con más compras de un mismo insumo que hay en el
+parquet tiene tres."""
 
 
 

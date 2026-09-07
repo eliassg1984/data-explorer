@@ -100,6 +100,19 @@ _TAM_CERO = "11px"
 # contenedor, en su versión AgGrid.
 _PAD_X_SEMANA = "0 6px"
 
+_MIN_ANCHO_PRECIOS = 81
+"""Ancho REAL de columna a partir del cual la celda dibuja su segunda línea.
+
+69 del peor caso medido ("S/ 169.41", el precio más alto del rango) + los 12
+de `_PAD_X_SEMANA`. Debajo de eso la línea no se dibuja en vez de recortarse:
+ver el comentario dentro de `_RENDER_DELTA`.
+
+No es el `width` declarado sino `getActualWidth()`, que es otra cosa — AG Grid
+escala las columnas para llenar el grid, así que el ancho de esta columna
+depende del ancho de la ventana. Medido el 2026-09-07 con el drill al lado:
+~55px en una ventana de 1440, ~81 en una de 1800, ~139 en una de 2560. O sea
+que la línea aparece sola cuando hay monitor para ella."""
+
 _STYLE_DELTA = JsCode(f"""
     function(params) {{
         var base = {{padding: '{_PAD_X_SEMANA}'}};
@@ -175,7 +188,28 @@ class DeltaCelda {
         b.style.overflow = 'hidden';
         b.style.textOverflow = 'ellipsis';
         b.style.whiteSpace = 'nowrap';
-        this.eGui.appendChild(b);
+        // SOLO DONDE ENTRA. Con el drill al lado del ranking (2026-09-07)
+        // la columna-semana pasa de ~85px a ~50, y ahi "110.17 -> 169.41"
+        // no cabe: el `text-overflow` de arriba lo cortaria en
+        // "110.17 -> 16..." y un precio recortado no parece un recorte,
+        // parece otro precio. Los dos numeros siguen en el tooltip, que es
+        // de donde vinieron hasta el 2026-09-06.
+        //
+        // SE MIDE DESPUES DEL LAYOUT, y eso es el arreglo de un intento
+        // fallido del mismo dia: `p.column.getActualWidth()` leido aca
+        // devuelve el ancho DECLARADO (98), porque AG Grid escala las
+        // columnas para llenar el grid DESPUES de construir las celdas.
+        // El guard daba verde siempre y la linea salia igual, recortada.
+        // `p.eGridCell.clientWidth` dentro de un rAF ya ve el ancho real.
+        //
+        // Se agrega DENTRO del rAF en vez de agregarlo y esconderlo: asi
+        // no hay un frame con el texto puesto. Sin `eGridCell` (no deberia
+        // pasar) se dibuja, que es el comportamiento de antes.
+        var caja = this.eGui;
+        requestAnimationFrame(function () {
+            var w = p.eGridCell ? p.eGridCell.clientWidth : 0;
+            if (!w || w >= __MINANCHO__) caja.appendChild(b);
+        });
     }
     num(v) {
         return Number(v).toLocaleString('es-PE',
@@ -183,7 +217,8 @@ class DeltaCelda {
     }
     getGui() { return this.eGui; }
 }
-""".replace("__EPS__", str(_EPS_CERO)).replace("__TAM__", _TAM_PRECIOS))
+""".replace("__EPS__", str(_EPS_CERO)).replace("__TAM__", _TAM_PRECIOS)
+   .replace("__MINANCHO__", str(_MIN_ANCHO_PRECIOS)))
 """La celda de una semana: el % arriba y, si hubo movimiento, el cierre
 anterior y el nuevo debajo.
 
@@ -234,13 +269,20 @@ def _style_vol(max_vol):
     """)
 
 
-def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, altura, key):
+def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
+                                   key):
     """`tv`: columnas Insumo, __insumo_full (oculta, nombre sin truncar),
     una columna FLOAT por semana (nombrada con su etiqueta de fecha,
     p.ej. "15-21 Jun"), __prev_i/__cur_i por semana (ocultas, precio de
     cierre anterior/actual -- alimentan el tooltip) y Volatilidad.
-    `cols_sem` y `labels_prev` van pareados por índice: `labels_prev[i]`
-    es la etiqueta de la semana ANTERIOR a `cols_sem[i]`.
+    `cols_sem`, `labels_prev` y `headers` van pareados por índice:
+    `labels_prev[i]` es la etiqueta de la semana ANTERIOR a `cols_sem[i]`, y
+    `headers[i]` el rótulo CORTO que se dibuja en la cabecera.
+
+    El rótulo de la cabecera es otro texto que el nombre de la columna a
+    propósito: el nombre tiene que ser único (es la clave del DataFrame y la
+    del tooltip) y el rótulo tiene que entrar en ~50px. Ver
+    `volatilidad.py::_vol_fmt_semana_corta`.
 
     Devuelve el nombre completo del insumo de la fila clickeada en ESTA
     corrida (`__insumo_full`), o None si no hubo clic."""
@@ -253,9 +295,11 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, altura, key):
                         tooltipValueGetter=_TOOLTIP_INSUMO)
     gb.configure_column("__insumo_full", hide=True)
 
-    for i, (col, prev_label) in enumerate(zip(cols_sem, labels_prev)):
+    for i, (col, prev_label, hdr) in enumerate(zip(cols_sem, labels_prev,
+                                                   headers)):
         gb.configure_column(
-            col, type=["numericColumn"], width=_ANCHO_COL_SEMANA,
+            col, header_name=hdr, type=["numericColumn"],
+            width=_ANCHO_COL_SEMANA,
             valueFormatter=_FMT_PCT, cellStyle=_STYLE_DELTA,
             cellRenderer=_RENDER_DELTA, cellRendererParams={"idx": i},
             tooltipValueGetter=_tooltip_delta(i, prev_label, col),

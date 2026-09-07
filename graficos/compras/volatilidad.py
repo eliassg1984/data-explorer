@@ -24,9 +24,12 @@ import streamlit as st
 from cortes import MESES_ABR_ES
 from tema import ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO
 from graficos.base import (
-    _card, _compras_layout, _compras_truncar, _slug, selector_fecha_tarjeta,
+    _card, _compras_layout, _compras_truncar, _slug, nombre_propio,
+    selector_fecha_tarjeta,
 )
-from graficos.compras._comun import PARR, _first_point
+from graficos.compras._comun import (
+    COLUMNAS_DRILL, GAP_DRILL, PARR, _first_point,
+)
 from graficos import periodo
 from graficos import alturas
 from tablas.compras_volatilidad import (
@@ -107,6 +110,19 @@ o sea la SEGUNDA lista de meses en español del repo — justo lo que la regla
 vista."""
 
 
+def _vol_fmt_semana_corta(ini):
+    """La semana nombrada por su lunes: "27 Jul". Es la etiqueta de la
+    CABECERA de la grilla y también la del eje X del candlestick — el mismo
+    texto en los dos sitios, a propósito.
+
+    Nació el 2026-09-07, al mudar el drill al costado: con la columna en
+    ~50px, "27 Jul - 2 Ago" envolvía en CUATRO renglones y la cabecera de la
+    grilla pasaba de 45 a 96px — 51px que salían de las filas. El rango
+    entero sigue estando en el tooltip de cada celda, que es donde hace
+    falta leerlo con precisión."""
+    return f"{ini.day} {_MESES_CORTO[ini.month - 1]}"
+
+
 def _vol_fmt_rango_semana(ini):
     """Etiqueta de columna para la semana que empieza el lunes `ini`:
     "15-21 Jun" si cae en un solo mes, "29 Jun - 5 Jul" si cruza de mes."""
@@ -158,7 +174,11 @@ def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
                 continue
             rows.append({
                 "fecha": r[col_fecha],
-                "prov": str(r[col_prov]) if col_prov else "—",
+                # NOMBRE PROPIO, no el grito del ERP (2026-09-07, a pedido).
+                # Es SOLO para mostrar: esta tabla no agrupa ni filtra por
+                # proveedor, así que no hay ningún valor canónico que se
+                # pueda desalinear. Ver `base.py::nombre_propio`.
+                "prov": nombre_propio(str(r[col_prov])) if col_prov else "—",
                 "cant": r[col_cant] if col_cant else None,
                 "precio": float(precio),
             })
@@ -380,6 +400,24 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         if prod_focus not in {p for p, _ in ranking}:
             prod_focus = None
 
+        # ── EL RANKING A LA IZQUIERDA, EL DRILL A LA DERECHA ─────────────
+        # 2026-09-07, a pedido y sobre una maqueta a escala. Apilados, el
+        # alto de la tarjeta era la SUMA de los dos y el ranking tenía que
+        # encogerse a 6 filas para que el candlestick entrara en la
+        # pantalla. Al lado, el alto es el MÁXIMO de los dos: los ~290px
+        # que ocupaba el drill vuelven a la grilla, que pasa a mostrar 10.
+        #
+        # `COLUMNAS_DRILL` y no un literal: es la proporción con la que
+        # parten sus filas los drills de Proveedor y de Producto, y las
+        # tres vistas se leen apiladas en la misma página. Un eje distinto
+        # a media página es el bug que hizo nacer la constante (regla #145).
+        #
+        # El precio de esta fila está medido y es real: la columna-semana
+        # baja de 85 a ~50px, así que la segunda línea de la celda (los dos
+        # cierres) sólo se dibuja donde entra — lo decide la propia celda
+        # en `tablas/compras_volatilidad.py`, no este módulo.
+        col_rank, col_drill = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
+
         if not ranking_vista:
             st.info(f"Ningún insumo coincide con «{_q}».")
         else:
@@ -404,13 +442,15 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # st.dataframe que tenía este ranking antes, filtrar con el
             # buscador no puede desalinear un índice viejo contra la fila
             # nueva (arquitectura.md regla #130).
-            _clicked = renderizar_ranking_volatilidad(
-                tv, cols_sem, labels_todas[:-1],
-                altura=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
-                                         extra=40, minimo=0,
-                                         rol=alturas.RANKING_CON_DRILL),
-                key="compras_vol_rank_grid",
-            )
+            with col_rank:
+                _clicked = renderizar_ranking_volatilidad(
+                    tv, cols_sem, labels_todas[:-1],
+                    [_vol_fmt_semana_corta(s) for s in semanas[1:]],
+                    altura=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
+                                             extra=40, minimo=0,
+                                             rol=alturas.RANKING_CON_DRILL),
+                    key="compras_vol_rank_grid",
+                )
             if _clicked is not None:
                 prod_focus = _clicked
                 st.session_state["compras_vol_focus"] = prod_focus
@@ -436,53 +476,53 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         weeks = _vol_detalle_producto(dd, prod_sel, col_prod, col_punit, col_fecha,
                                       col_prov, col_cant, semanas)
 
-        # ── El detalle, en la MISMA tarjeta ──────────────────────────────
-        # 2026-09-07, a pedido: «no entra en su tarjeta la parte de abajo,
-        # el gráfico y su tabla; el usuario no debería hacer scroll en la
-        # tarjeta, quizás sólo en la tabla». Acá había un segundo `_card()`.
-        #
-        # Fusionarlas no es cosmético: dos tarjetas son dos superficies que
-        # el encuadre del proyecto («una tarjeta = una pantalla») mide por
-        # separado, y apiladas medían 1.039px — dos pantallas. Con una
-        # sola, lo único que scrollea es la GRILLA (que ya tenía su scroll
-        # interno) y el resto se ve completo. Mismo movimiento que hizo
-        # «Vs año pasado» el 2026-09-02, y por el mismo pedido.
-        cierres = [w["c"] for w in weeks]
-        precio_actual = cierres[-1]
-        cambio_total = ((cierres[-1] - cierres[0]) / cierres[0] * 100) if cierres[0] else 0.0
-        vol_total = candidatos[prod_sel]["volatilidad"]
-        color_cambio = ERROR if cambio_total > 0.05 else (EXITO if cambio_total < -0.05 else GRIS_TEXTO)
-        # EL SIGNO SE CALLA CUANDO REDONDEA A CERO, igual que el `_FMT_PCT`
-        # de la grilla de arriba: `cierres[-1]` y `cierres[0]` pueden diferir
-        # en la séptima cifra (el parquet guarda 110.169492 y 110.169375 para
-        # el mismo precio de lista) y con el `>= 0` de antes eso salía como
-        # «−0.0%» — un signo que afirma una caída sobre un número que dice
-        # que no pasó nada. Medido con «Entraña fina importada x Kg».
-        _sig = "" if abs(cambio_total) < 0.05 else ("+" if cambio_total > 0 else "−")
-        # UN SOLO RENGLÓN (2026-09-07): los tres KPIs venían en bloques de
-        # dos líneas —rótulo arriba, cifra abajo— que medían 51px. Con el
-        # rótulo en línea bajan a ~26, y esos 25px son grilla. El look lo
-        # pone `estilos/_80_cards.py` (.vol-detalle-hdr), no un `style=`
-        # inline: son cinco reglas repetidas tres veces.
-        st.markdown(
-            f'<div class="vol-detalle-hdr">'
-            f'<span class="vol-detalle-nom">{_compras_truncar(str(prod_sel), 48)}</span>'
-            f'<span class="vol-detalle-kpis">'
-            f'<span><i>Precio actual</i><b>S/ {precio_actual:,.2f} /{unidad}</b></span>'
-            f'<span><i>Cambio total</i><b style="color:{color_cambio};">'
-            f'{_sig}{abs(cambio_total):.1f}%</b></span>'
-            f'<span><i>Volatilidad</i><b>{vol_total:.1f} pts</b></span>'
-            f'</span></div>',
-            unsafe_allow_html=True,
-        )
+        with col_drill:
+            # ── El detalle, en la MISMA tarjeta ──────────────────────────────
+            # 2026-09-07, a pedido: «no entra en su tarjeta la parte de abajo,
+            # el gráfico y su tabla; el usuario no debería hacer scroll en la
+            # tarjeta, quizás sólo en la tabla». Acá había un segundo `_card()`.
+            #
+            # Fusionarlas no es cosmético: dos tarjetas son dos superficies que
+            # el encuadre del proyecto («una tarjeta = una pantalla») mide por
+            # separado, y apiladas medían 1.039px — dos pantallas. Con una
+            # sola, lo único que scrollea es la GRILLA (que ya tenía su scroll
+            # interno) y el resto se ve completo. Mismo movimiento que hizo
+            # «Vs año pasado» el 2026-09-02, y por el mismo pedido.
+            cierres = [w["c"] for w in weeks]
+            precio_actual = cierres[-1]
+            cambio_total = ((cierres[-1] - cierres[0]) / cierres[0] * 100) if cierres[0] else 0.0
+            vol_total = candidatos[prod_sel]["volatilidad"]
+            color_cambio = ERROR if cambio_total > 0.05 else (EXITO if cambio_total < -0.05 else GRIS_TEXTO)
+            # EL SIGNO SE CALLA CUANDO REDONDEA A CERO, igual que el `_FMT_PCT`
+            # de la grilla de arriba: `cierres[-1]` y `cierres[0]` pueden diferir
+            # en la séptima cifra (el parquet guarda 110.169492 y 110.169375 para
+            # el mismo precio de lista) y con el `>= 0` de antes eso salía como
+            # «−0.0%» — un signo que afirma una caída sobre un número que dice
+            # que no pasó nada. Medido con «Entraña fina importada x Kg».
+            _sig = "" if abs(cambio_total) < 0.05 else ("+" if cambio_total > 0 else "−")
+            # UN SOLO RENGLÓN (2026-09-07): los tres KPIs venían en bloques de
+            # dos líneas —rótulo arriba, cifra abajo— que medían 51px. Con el
+            # rótulo en línea bajan a ~26, y esos 25px son grilla. El look lo
+            # pone `estilos/_80_cards.py` (.vol-detalle-hdr), no un `style=`
+            # inline: son cinco reglas repetidas tres veces.
+            st.markdown(
+                f'<div class="vol-detalle-hdr">'
+                f'<span class="vol-detalle-nom">{_compras_truncar(str(prod_sel), 48)}</span>'
+                f'<span class="vol-detalle-kpis">'
+                f'<span><i>Precio actual</i><b>S/ {precio_actual:,.2f} /{unidad}</b></span>'
+                f'<span><i>Cambio total</i><b style="color:{color_cambio};">'
+                f'{_sig}{abs(cambio_total):.1f}%</b></span>'
+                f'<span><i>Volatilidad</i><b>{vol_total:.1f} pts</b></span>'
+                f'</span></div>',
+                unsafe_allow_html=True,
+            )
 
-        # Candlestick (izq.) + compras de la semana enfocada (der.), uno al
-        # lado del otro — antes apiladas, entre las dos pasaban de una
-        # pantalla. alto=MINI (no APOYO): mismo criterio que el gráfico de
-        # evolución de Producto, que también comparte fila con una tabla.
-        col_chart, col_detalle = st.columns([1, 1], gap="small")
+            # El candlestick y la tabla de la semana, APILADOS: los dos son la
+            # columna derecha de la fila, así que ya no compiten por el ancho
+            # entre sí sino con el ranking. alto=MINI (no APOYO): sigue
+            # compartiendo su columna con una tabla, el mismo criterio que el
+            # gráfico de evolución de Producto.
 
-        with col_chart:
             fig = go.Figure()
             fig.add_trace(go.Candlestick(
                 x=semanas, open=[w["o"] for w in weeks], high=[w["h"] for w in weeks],
@@ -517,8 +557,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False,
                            rangeslider=dict(visible=False),
                            tickmode="array", tickvals=semanas,
-                           ticktext=[f"{s.day} {_MESES_CORTO[s.month - 1]}"
-                                     for s in semanas]),
+                           ticktext=[_vol_fmt_semana_corta(s) for s in semanas]),
                 yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ "),
                 showlegend=False,
             )
@@ -539,16 +578,15 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                     _misma = st.session_state.get("compras_vol_semfocus") == _pi
                     st.session_state["compras_vol_semfocus"] = None if _misma else _pi
 
-        sem_focus = st.session_state.get("compras_vol_semfocus")
-        if sem_focus is None or not (0 <= sem_focus < len(weeks)):
-            # sin clic: la semana con el mayor movimiento propio (abre→cierra)
-            sem_focus = max(range(len(weeks)), key=lambda i: abs(weeks[i]["c"] - weeks[i]["o"]))
+            sem_focus = st.session_state.get("compras_vol_semfocus")
+            if sem_focus is None or not (0 <= sem_focus < len(weeks)):
+                # sin clic: la semana con el mayor movimiento propio (abre→cierra)
+                sem_focus = max(range(len(weeks)), key=lambda i: abs(weeks[i]["c"] - weeks[i]["o"]))
 
-        w = weeks[sem_focus]
-        ini = semanas[sem_focus]
-        fin = ini + pd.Timedelta(days=6)
+            w = weeks[sem_focus]
+            ini = semanas[sem_focus]
+            fin = ini + pd.Timedelta(days=6)
 
-        with col_detalle:
             delta_txt = ""
             if sem_focus > 0 and weeks[sem_focus - 1]["c"]:
                 var = (w["c"] - weeks[sem_focus - 1]["c"]) / weeks[sem_focus - 1]["c"] * 100
@@ -585,5 +623,6 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                          .map(_sty_precio, subset=[f"Precio/{unidad}"])
                          .hide(axis="index"))
                 st.dataframe(sty_p, use_container_width=True, hide_index=True,
-                            height=alturas.por_filas(len(tp), px_fila=34, extra=60,
-                                                     minimo=0, rol=alturas.MINI))
+                            height=alturas.por_filas(
+                                len(tp), px_fila=34, extra=60, minimo=0,
+                                rol=alturas.PANEL_BAJO_FIGURA))
