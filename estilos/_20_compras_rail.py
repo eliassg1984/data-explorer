@@ -1194,6 +1194,38 @@ CSS = """    /* ================================================================
         display: none !important;
     }
 
+    /* ── AL SCROLLEAR, EL PESTILLO BAJA CON LA COLUMNA ──────────────────
+       Medido en Cloud el 2026-09-07, que es como se encontro el bug:
+
+           arriba      rail t=121  ·  cabecera t=88..121  ·  pestillo t=88
+           scrolleado  rail t=48   ·  cabecera SE VA      ·  pestillo t=88
+
+       O sea que al bajar los dos railes suben a tocar la franja de
+       reportes (`_26_rails_scroll.py`) y la cabecera donde vivia el
+       pestillo deja de existir — pero el pestillo se quedaba en 88,
+       encima de las dos primeras filas del rail.
+
+       El arreglo mantiene la PROMESA del control: el pestillo siempre
+       ocupa una banda de `--rail-cab-alto` en el tope de la columna. Lo
+       que cambia es de donde sale esa banda — arriba es el rotulo, y
+       scrolleado se la cede el propio rail con un `padding-top`. Asi el
+       boton no se mueve de sitio relativo y nunca tapa una fila.
+
+       Esconderlo en este estado NO era opcion: dejaria el modo plegado
+       sin ningun control que lo deshaga, que es exactamente el bug que
+       documenta la regla #216 sobre el pestillo ANTERIOR.
+
+       Gana por ESPECIFICIDAD, no por orden: `_26_rails_scroll.py` va
+       DESPUES de este modulo y declara el `padding` de
+       `.st-key-nav_rail_lateral` (0,1,0); estas reglas son (0,2,1). */
+    :root.rails-scrolled .st-key-rail_pestillo_abierto,
+    :root.rails-scrolled .st-key-rail_pestillo_plegado {
+        top: var(--franja-rep-alto) !important;
+    }
+    :root.rails-scrolled .st-key-compras_tabs_row,
+    :root.rails-scrolled .st-key-nav_rail_lateral {
+        padding-top: var(--rail-cab-alto) !important;
+    }
     /* ── PLEGADO: sobrevive el icono, se va el texto ────────────────────
        Los dos railes de la columna se tratan juntos: `compras_tabs_row`
        (Reportes) y `nav_rail_lateral` (Vistas) se TURNAN al scrollear
