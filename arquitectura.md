@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-341 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+343 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (111)
+**CSS y estilos** (113)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -145,6 +145,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#338** — Un st.container(key=…) VACÍO se dibuja una vez y desaparece en el render siguiente
 - **#340** — El CSS de un TERCER prefijo se clona, no se pega
 - **#341** — Un querySelector singular es una decisión sobre la CARDINALIDAD, no un atajo — y en una…
+- **#342** — Un piso pensado para tarjetas convierte a una línea en una franja para siempre — y el padding…
+- **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 
 **Layout y alturas** (34)
 
@@ -503,7 +505,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (28)
+**Herramientas de desarrollo** (29)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -533,6 +535,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#268** — Selección múltiple en el modo diseño: el pin sigue siendo UNO, el grupo es una capa aparte —…
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
+- **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 
 **Decisiones de diseño y UX** (61)
 
@@ -30764,6 +30767,88 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-07.)
 
+342. **Un piso pensado para tarjetas convierte a una línea en una franja
+     para siempre — y el padding es un SEGUNDO piso que no se ve.**
+     Reportado el 2026-09-07: *"hice una línea, aumenté el padding luego,
+     la hice más gruesa y ahora no me permite volverla a hacer delgada"*.
+     Dos causas distintas, apiladas, y ninguna se anunciaba.
+
+     1. **El piso del arrastre.** `iniciarArrastre` clampeaba con
+        `Math.max(40, …)` el alto y `Math.max(60, …)` el ancho. Existe por
+        una razón buena —una tarjeta real colapsada a 2px queda debajo de
+        sus propias manijas y no se puede volver a agarrar— pero un mock
+        de «Línea» **nace de 1px**: engordarlo era un viaje de ida. El
+        piso ahora depende de qué se arrastra (`pisoResize`): 1px de alto
+        para los mocks línea/barra/espacio, que no tienen contenido que
+        proteger y se borran con un botón; 60x40 para todo lo demás.
+     2. **El padding.** Con `box-sizing: border-box` —que los mocks ya
+        traen— un `height: 1px` sobre un div con `padding: 20px` **no da
+        1px, da 40**: el relleno es el alto mínimo de la caja. O sea que
+        aun con el piso arreglado la línea seguía gorda, y el panel decía
+        "1px pedido" mientras la pantalla mostraba 40. Ahora la fila
+        **«Piso del alto»** aparece sola cuando el alto real supera al
+        pedido, con el número de padding adentro del tooltip. Es la
+        hermana de «Recortado por» (regla #155): misma forma —nace
+        oculta, se enciende cuando el síntoma existe— y otro culpable
+        invisible.
+
+     **Y no había cómo deshacer un tamaño.** Cada slider del panel tiene
+     su «↺», pero el tamaño no se toca con un slider sino con las manijas,
+     así que era lo único que se podía cambiar y no revertir. `Tamaño`
+     ahora lleva su propio ↺ (`filaSoloLectura` acepta `onRevertir`), y
+     borra las CINCO propiedades que escribe el arrastre —`width`,
+     `height` y las tres que hay que neutralizar para que tengan efecto en
+     un flex item (regla #47)—, no dos.
+
+     **Trampa del revertir, encontrada al probarlo:** quitar el override
+     de un mock **no** lo devuelve a su original. Un widget real saca su
+     valor de `estilos/`, así que borrar el inline alcanza; un mock nace
+     con su estilo INLINE (`nodoMock`), y `removeProperty('height')` lo
+     dejaba en **0px** — la línea desaparecía. `restaurarPropDeOriginal`
+     lee la foto de nacimiento que `aplicarEstado` ya guardaba en
+     `cssTextOriginal` y repone el valor.
+
+     Medido de punta a punta: línea 1px → padding 20 → 40px → arrastre
+     → 100px → arrastre inverso → `height:1px` pedido con el aviso de
+     piso → ↺ Tamaño → 40px (queda el padding, correcto) → ↺ Padding →
+     1px, sin overrides.
+
+     (2026-09-07.)
+
+343. **"Eliminar" un widget desde el modo diseño no existe; "ver la
+     página sin él", sí — y son la misma pregunta.** Preguntado el
+     2026-09-07 ("¿puedo desaparecer o eliminar en modo diseño algún
+     elemento?"). Hasta ahí sacar algo de la pantalla sólo existía para
+     los MOCKS («Quitar este»), que se pueden borrar de verdad porque los
+     inventó la herramienta. Un widget real lo dibuja Python en cada
+     rerun: la herramienta no puede borrarlo, y fingir que sí sería
+     mentira que dura hasta el próximo rerun.
+
+     Lo que sí se puede es responder la pregunta que uno se hace ANTES de
+     ir a borrarlo en el código — «¿se ve mejor sin esto?». El botón
+     **«Ocultar (ver sin esto)»** pone `display: none`, es un toggle
+     («Mostrar de nuevo») y —lo importante— **es CSS de verdad**: sale en
+     «Copiar CSS» como
+     `div[class*="st-key-K"] { display: none; }`, y pegado en `estilos/`
+     hace exactamente lo que se vio. El caption del panel dice la
+     diferencia en una línea: el widget se sigue dibujando y su estado
+     sigue vivo.
+
+     Dos detalles que hacen que no se lea como un bug:
+
+     - **`display` va en `PROPS_GEOMETRIA`.** Si no, `destinosDeEstilo()`
+       lo manda a los botones internos (una tarjeta cuyos botones ocupan
+       ≥60%): ocultar la tarjeta escondía las pills y dejaba el marco
+       vacío. Geometría siempre va sobre el elemento pineado, y esto es
+       geometría.
+     - **Un elemento oculto mide 0x0**, así que el contorno colapsaba a un
+       cuadradito en el origen con las tres manijas encimadas. `trackear`
+       ahora esconde el overlay entero cuando el pineado está en
+       `display:none`. El pin NO se suelta: el panel sigue mostrando la
+       key y su botón es la única salida.
+
+     (2026-09-07.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -30776,7 +30861,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#342**.
+> próxima regla nueva es la **#344**.
 
 >
 

@@ -1229,6 +1229,16 @@ JS = """
         var SEPARACION_CONTORNO = 4;
 
         function trackear(el) {
+            // Un elemento con display:none (el boton "Ocultar" del panel)
+            // mide 0x0 y su rect cae en el origen: el contorno colapsaba a
+            // un cuadradito arriba a la izquierda, con las manijas encimadas
+            // — se lee como un bug de la herramienta, no como "esta oculto".
+            // El pin NO se suelta: el panel sigue mostrando la key y su
+            // boton dice "Mostrar de nuevo", que es la unica salida.
+            if (el.style && el.style.display === 'none') {
+                overlay.style.display = 'none';
+                return;
+            }
             trackearRect(el.getBoundingClientRect());
         }
 
@@ -1374,7 +1384,11 @@ JS = """
         // Props de GEOMETRIA: siempre sobre `elemento` (asi coincide con el
         // overlay/las manijas, que trackean su bounding box). Todo lo
         // demas en `cambios` es "estilo" y va a destinosDeEstilo().
-        var PROPS_GEOMETRIA = { width: 1, height: 1, flex: 1, 'max-width': 1, 'max-height': 1 };
+        // `display` esta aca por el boton "Ocultar": tiene que ir sobre el
+        // elemento PINEADO, no sobre los botones internos a los que
+        // destinosDeEstilo() redirige el estilo — ocultar una tarjeta con
+        // pills adentro escondia las pills y dejaba la tarjeta vacia.
+        var PROPS_GEOMETRIA = { width: 1, height: 1, flex: 1, 'max-width': 1, 'max-height': 1, display: 1 };
 
         // Props de TEXTO: ademas de destinosDeEstilo(), tambien van al <p>
         // de adentro si existe (ver extenderATexto). border/padding/
@@ -1449,6 +1463,20 @@ JS = """
         // valor del CSS (12px de radio, en el rail), o sea el sintoma exacto
         // de "el control no hace nada". Ahora 0 se aplica como 0px/none y
         // volver al original es lo que hace el boton "Ver original".
+        // Quitar un override NO siempre devuelve al original: para un widget
+        // real el valor de base vive en `estilos/` y sacar el inline alcanza,
+        // pero un MOCK nace con su estilo INLINE (`nodoMock`), asi que
+        // `removeProperty('height')` no lo devolvia a 1px — lo dejaba en 0 y
+        // la linea desaparecia. `cssTextOriginal` es justo esa foto de
+        // nacimiento (la toma aplicarEstado en el primer toque). Ver #342.
+        function restaurarPropDeOriginal(el, registro, prop) {
+            if (!registro.cssTextOriginal) return;
+            var tmp = doc.createElement('div');
+            tmp.style.cssText = registro.cssTextOriginal;
+            var v = tmp.style.getPropertyValue(prop);
+            if (v) el.style.setProperty(prop, v);
+        }
+
         function establecerCambioEstilo(elemento, registro, prop, valor) {
             var destinos = destinosDeEstilo(elemento);
             if (PROPS_TEXTO[prop]) destinos = extenderATexto(destinos);
@@ -1887,6 +1915,20 @@ JS = """
             doc.addEventListener('mouseup', onUp);
         }
 
+        // Piso del arrastre. Los 60x40 existen para que una tarjeta real no
+        // se colapse debajo de sus propias manijas y quede inagarrable. Pero
+        // una LINEA insertada nace de 1px y una barra/espacio son justamente
+        // lo que uno quiere afinar: reportado 2026-09-07 —"la hice mas
+        // gruesa y ahora no me permite volverla a hacer delgada"—, el piso
+        // de 40 dejaba la linea convertida en una franja para siempre. Un
+        // mock no tiene contenido que proteger (y se borra con un boton),
+        // asi que su piso es 1px. Ver regla #342.
+        function pisoResize(el) {
+            var t = el.getAttribute && el.getAttribute('data-diseno-mock');
+            if (t === 'linea' || t === 'barra' || t === 'espacio') return { ancho: 8, alto: 1 };
+            return { ancho: 60, alto: 40 };
+        }
+
         function iniciarArrastre(e, modo) {
             if (modo === 'move' && grupoActivo()) return iniciarArrastreGrupo(e);
             e.preventDefault();
@@ -1928,13 +1970,14 @@ JS = """
                     vivo.registro.transformState.translateY = Math.round(startTY + dy);
                     aplicarTransform(vivo.el, vivo.registro);
                 } else {
+                    var piso = pisoResize(vivo.el);
                     var nuevoAncho = null, nuevoAlto = null;
                     if (modo.indexOf('e') !== -1) {
-                        nuevoAncho = Math.max(60, Math.round(startW + dx));
+                        nuevoAncho = Math.max(piso.ancho, Math.round(startW + dx));
                         establecerCambio(vivo.el, vivo.registro, 'width', nuevoAncho + 'px');
                     }
                     if (modo.indexOf('s') !== -1) {
-                        nuevoAlto = Math.max(40, Math.round(startH + dy));
+                        nuevoAlto = Math.max(piso.alto, Math.round(startH + dy));
                         establecerCambio(vivo.el, vivo.registro, 'height', nuevoAlto + 'px');
                     }
                     // En vivo, arrastrando: mismo mecanismo que el reaplicado
@@ -2013,11 +2056,27 @@ JS = """
         construirHandles();
 
         // ---- panel: controles interactivos ----
-        function filaSoloLectura(etiquetaTexto, valorEl) {
+        // `onRevertir` es opcional y agrega el mismo "↺" que filaControl.
+        // "Tamaño" era la unica cosa del panel que se podia CAMBIAR (las
+        // manijas) y no se podia DESHACER — no hay slider al que ponerle el
+        // ↺ porque el control es el arrastre. Se reporto como "no me deja
+        // volverla a hacer delgada" (regla #342).
+        function filaSoloLectura(etiquetaTexto, valorEl, onRevertir) {
             var div = doc.createElement('div');
             div.style.cssText = 'margin:6px 0;font-size:11px;color:#8b8b95;display:flex;justify-content:space-between;gap:8px';
             var lbl = doc.createElement('span');
-            lbl.textContent = etiquetaTexto;
+            lbl.style.cssText = 'display:flex;align-items:center;gap:5px';
+            var txt = doc.createElement('span');
+            txt.textContent = etiquetaTexto;
+            lbl.appendChild(txt);
+            if (onRevertir) {
+                var btnRev = doc.createElement('button');
+                btnRev.textContent = '↺';
+                btnRev.title = 'Volver al tamaño original (borra el ancho/alto probado)';
+                btnRev.style.cssText = 'background:transparent;color:#6f6f7a;border:0;padding:0;font-size:12px;line-height:1;cursor:pointer';
+                btnRev.addEventListener('click', function(ev) { ev.stopPropagation(); onRevertir(); });
+                lbl.appendChild(btnRev);
+            }
             div.appendChild(lbl);
             div.appendChild(valorEl);
             return div;
@@ -2846,7 +2905,19 @@ JS = """
             }
 
             var tamVal = spanValor('');
-            panel.appendChild(filaSoloLectura('Tamaño', tamVal));
+            // Las cinco que escribe iniciarArrastre(): width/height mas las
+            // tres que hay que neutralizar para que tengan efecto en un item
+            // flex (regla #47). Revertir solo width/height dejaria el
+            // elemento con `flex:none` y sin su max-width — o sea "vuelve al
+            // tamaño" a medias.
+            panel.appendChild(filaSoloLectura('Tamaño', tamVal, function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                ['width', 'height', 'flex', 'max-width', 'max-height'].forEach(function(pr) {
+                    establecerCambio(ctx.el, ctx.registro, pr, null);
+                    restaurarPropDeOriginal(ctx.el, ctx.registro, pr);
+                });
+                rehacerPanel();
+            }));
             var posVal = spanValor('');
             panel.appendChild(filaSoloLectura('Posición (nudge)', posVal));
             // Se actualiza en cada tick desde actualizarReadouts(); nace
@@ -2856,10 +2927,19 @@ JS = """
             var filaRecorte = filaSoloLectura('Recortado por', recorteVal);
             filaRecorte.style.display = 'none';
             panel.appendChild(filaRecorte);
+            // Hermana de "Recortado por": misma forma (nace oculta, aparece
+            // sola cuando el sintoma existe), otro culpable.
+            var pisoVal = spanValor('');
+            pisoVal.style.color = '#f0a500';
+            var filaPiso = filaSoloLectura('Piso del alto', pisoVal);
+            filaPiso.style.display = 'none';
+            panel.appendChild(filaPiso);
             panel.__tamVal = tamVal;
             panel.__posVal = posVal;
             panel.__recorteVal = recorteVal;
             panel.__filaRecorte = filaRecorte;
+            panel.__pisoVal = pisoVal;
+            panel.__filaPiso = filaPiso;
 
             // ── Alto de fila (solo AgGrid) ────────────────────────
             // Preview de `rowHeight`: lo unico del panel que no se toca
@@ -3285,6 +3365,39 @@ JS = """
                 rehacerPanel();
             }));
 
+            // ---- ocultar: "como se veria SIN esto" ----
+            // Pedido 2026-09-07 ("puedo desaparecer o eliminar en modo
+            // diseño algun elemento"). Hasta ahora sacar algo de la pantalla
+            // solo existia para los MOCKS ("Quitar este"), que es borrarlos
+            // de verdad porque los invento la herramienta. Un widget REAL no
+            // se puede borrar desde acá —lo dibuja Python en cada rerun— pero
+            // sí se puede ver la página sin él, que es la pregunta que uno se
+            // hace antes de ir a borrarlo en el código. `display:none` es
+            // ademas CSS de verdad: sale en "Copiar CSS" y pegado en
+            // `estilos/` hace exactamente esto.
+            var ocultoAhora = registro.cambios['display'] === 'none';
+            var btnOcultar = doc.createElement('button');
+            btnOcultar.textContent = ocultoAhora ? 'Mostrar de nuevo' : 'Ocultar (ver sin esto)';
+            btnOcultar.style.cssText = 'width:100%;margin-top:10px;background:'
+                + (ocultoAhora ? '#6c5ce7' : '#1c1c24')
+                + ';color:#e4e4e8;border:1px solid #34343f;border-radius:4px;padding:7px;font:600 11px sans-serif;cursor:pointer';
+            btnOcultar.addEventListener('click', function() {
+                var ctx = elementoActivo(); if (!ctx) return;
+                var esta = ctx.registro.cambios['display'] === 'none';
+                establecerCambio(ctx.el, ctx.registro, 'display', esta ? null : 'none');
+                rehacerPanel();
+            });
+            panel.appendChild(btnOcultar);
+
+            var capOcultar = doc.createElement('div');
+            capOcultar.style.cssText = 'font-size:10px;line-height:1.45;color:#6f6f7a;margin:5px 0 0';
+            capOcultar.textContent = ocultoAhora
+                ? 'Oculto sólo en pantalla: el widget se sigue dibujando y su estado sigue vivo. El contorno desaparece mientras tanto; este botón es la salida.'
+                : (esMock(key)
+                    ? 'Lo esconde sin borrarlo. Para sacarlo de verdad, "Quitar este" más abajo.'
+                    : 'Es el LOOK de "sin esto": display:none. Sacarlo de verdad es un cambio de Python — pero el CSS que copia hace exactamente lo que ves.');
+            panel.appendChild(capOcultar);
+
             // ver original
             var btnOriginal = doc.createElement('button');
             btnOriginal.textContent = registro.verOriginalActivo ? 'Ver con cambios' : 'Ver original';
@@ -3410,6 +3523,27 @@ JS = """
             if (!panel.__tamVal) return;
             var r = elemento.getBoundingClientRect();
             panel.__tamVal.textContent = Math.round(r.width) + ' x ' + Math.round(r.height) + ' px';
+            // El alto PEDIDO y el alto REAL pueden no coincidir, y el
+            // culpable no se ve: el padding (y el contenido) son un PISO
+            // que ningun `height` mas chico atraviesa. Es la mitad del
+            // "no me deja volverla a hacer delgada" que el piso del
+            // arrastre no explica — la linea tenia 40px de padding y
+            // seguia gorda con height:1px. Solo se dibuja cuando la
+            // diferencia es real (regla #342).
+            var pedido = parseFloat(registro.cambios['height'] || '');
+            if (panel.__filaPiso) {
+                if (pedido && r.height - pedido > 1) {
+                    var pad = win.getComputedStyle(elemento);
+                    var suma = Math.round(parseFloat(pad.paddingTop || 0) + parseFloat(pad.paddingBottom || 0));
+                    panel.__pisoVal.textContent = Math.round(pedido) + 'px pedido → ' + Math.round(r.height) + 'px';
+                    panel.__filaPiso.title = 'El alto no baja de ahi: el padding'
+                        + (suma ? ' (' + suma + 'px arriba+abajo)' : '')
+                        + ' y el contenido son un piso. Bajá el padding con su ↺ o su slider.';
+                    panel.__filaPiso.style.display = 'flex';
+                } else {
+                    panel.__filaPiso.style.display = 'none';
+                }
+            }
             panel.__posVal.textContent = Math.round(registro.transformState.translateX) + ', ' + Math.round(registro.transformState.translateY) + ' px';
             // Aviso de recorte: se recalcula en cada tick porque depende del
             // tamano de AHORA — aparece a mitad de un arrastre, que es
