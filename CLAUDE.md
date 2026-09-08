@@ -28,6 +28,14 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
   2026-08-13: un texto corregido en el código seguía saliendo viejo en el
   navegador). Ante cualquier duda de "¿esto ya se ve actualizado?",
   reiniciar el server en vez de asumir.
+- **En Cloud ese mismo mecanismo no es una molestia: es una caída.**
+  Streamlit relee `app.py` en cada rerun pero NO los paquetes ya
+  importados (`sys.modules` sobrevive), así que un commit que **renombra
+  o borra algo que `app.py` importa** —o que cambia la FIRMA de algo que
+  llama— deja el `app.py` nuevo hablando con el paquete viejo y la app
+  publicada muere con un `ImportError` de una sola línea de traza. No hay
+  parche que pushear: se arregla con «Manage app» → «Reboot app». Al
+  pushear un cambio así, **avisarlo**. Ver `arquitectura.md` regla #357.
 - Cada cambio se pushea y se confirma explícitamente. Si algo NO se pusheó,
   decirlo — si no, se diagnostican "conflictos" que no existen.
 

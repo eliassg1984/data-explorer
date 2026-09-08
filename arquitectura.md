@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-356 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+357 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (123)
 
@@ -316,7 +316,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#350** — El iframe de un componente de Streamlit se queda con el ancho que tenía cuando se renderizó,…
 - **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
 
-**Streamlit** (98)
+**Streamlit** (99)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -416,6 +416,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#332** — Sacarle a un reporte el control de fecha GLOBAL son tres cosas más, y ninguna es opcional…
 - **#338** — Un st.container(key=…) VACÍO se dibuja una vez y desaparece en el render siguiente
 - **#339** — El scope de un st.rerun se DECIDE en tiempo de ejecución, no se fija en el código
+- **#357** — Renombrar un símbolo que app.py IMPORTA tira la app en Streamlit Cloud hasta que alguien la…
 
 **Datos, R2 y DuckDB** (45)
 
@@ -31741,6 +31742,61 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      sólo el valor (171px de aire), a 1100 sigue (121px), a 1040 desaparece.
      En 375px, la pastilla se lee sobre el gráfico. (2026-09-08.)
 
+357. **Renombrar un símbolo que `app.py` IMPORTA tira la app en Streamlit
+     Cloud hasta que alguien la reinicia — porque `app.py` se relee de
+     disco en cada rerun y los paquetes importados NO (2026-09-08).**
+     Apareció al desplegar la #356, que renombró
+     `inject_footer_actualizacion` → `inject_sello_actualizacion`. La app
+     publicada quedó en:
+
+         ImportError
+         File "/mount/src/data-explorer/app.py", line 25, in <module>
+             from inyecciones import …, inject_sello_actualizacion, …
+
+     **Una sola línea de traza**, y ahí está el diagnóstico entero: si
+     hubiera fallado `inyecciones/__init__.py` habría un segundo marco.
+     `import inyecciones` resolvió; lo que no estaba era el NOMBRE. O sea:
+     Cloud estaba corriendo el `app.py` NUEVO contra el paquete VIEJO.
+
+     **El mecanismo.** Streamlit re-ejecuta el script de entrada en cada
+     rerun, así que un cambio en `app.py` se ve enseguida. Los `import` de
+     ese script pegan en `sys.modules`, que sobrevive al rerun: un cambio
+     dentro de `inyecciones/`, `estilos/` o `graficos/` NO se ve hasta que
+     el PROCESO se reinicia. Es exactamente la trampa que CLAUDE.md ya
+     documentaba para el preview local ("no siempre toma cambios al
+     navegar/rerunear si el server ya estaba corriendo"); lo que no estaba
+     escrito es que en Cloud el mismo mecanismo no es una molestia de
+     desarrollo sino una CAÍDA: el `git pull` deja los dos lados del
+     import desfasados y el desfase es fatal.
+
+     Ojo con el corolario, que es lo que descarta el arreglo obvio: **no
+     hay parche que se pueda pushear para esto**. Un alias de
+     compatibilidad (`inject_footer_actualizacion = inject_sello_…`) vive
+     en el paquete NUEVO, que es justo el que no está cargado. Lo único
+     que se relee es `app.py`, así que lo único que "arregla" sin
+     reiniciar es que `app.py` vuelva a pedir el nombre VIEJO con la firma
+     VIEJA — y aun así la app arrancaría con el `estilos` viejo, o sea sin
+     el cambio. **Reiniciar es el arreglo, no el rodeo.** En Streamlit
+     Community Cloud: «Manage app» (abajo a la derecha) → «Reboot app».
+
+     **La regla operativa.** Un commit que renombra o borra algo que
+     `app.py` importa —o que cambia la FIRMA de una función que llama— no
+     es un commit más: se avisa que hay que reiniciar la app publicada.
+     No hace falta evitar el rename (el nombre honesto vale), hace falta
+     no dejar al usuario mirando un `ImportError` sin saber que el botón
+     está a un clic.
+
+     **Cómo distinguirlo de un bug de verdad, en 30 segundos.** El código
+     de `main` se prueba en un checkout LIMPIO, no en el working tree
+     (que puede tener trabajo de otra sesión):
+
+         git archive origin/main | tar -x -C <tmp>
+         cd <tmp> && python -c "from inyecciones import inject_sello_actualizacion"
+
+     Si eso pasa y Cloud falla, el problema es el proceso, no el commit.
+     Acá pasó, y la comprobación se extendió a los 15 módulos propios que
+     importa `app.py`: todos limpios. (2026-09-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31753,7 +31809,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#357**.
+> próxima regla nueva es la **#358**.
 
 >
 
