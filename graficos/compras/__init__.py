@@ -745,9 +745,18 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # `@st.fragment` — ver el docstring de `semanal.py`, que
             # explica por qué el fragment de `seccion_perezosa` no
             # alcanzaba desde que la tarjeta tiene selector de fecha.
+            #
+            # `col_fam` y `d_full` son de sus dos filtros propios
+            # (2026-09-08): la tarjeta acota por Familia y por Producto
+            # encima de los chips de la franja. `d_full` es sólo para las
+            # OPCIONES del selector de familia — sacarlas del rango las
+            # hace desaparecer al angostar la fecha, y Streamlit borra la
+            # selección en silencio (el bug medido del bloque de chips, más
+            # arriba). Los datos que se grafican siguen saliendo de `d`.
             _compras_semanal_drill(d, col_prod, col_fecha, col_cant,
                                    col_punit, col_prov, col_docu,
-                                   col_valor)
+                                   col_valor, col_fam=col_fam,
+                                   d_full=d_full)
 
     def _dib_tabla():
             # Cierra la página con el detalle: el mismo AgGrid de la vista

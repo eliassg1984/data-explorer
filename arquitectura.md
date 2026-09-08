@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-358 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+360 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (124)
 
@@ -200,7 +200,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
 - **#354** — La salida de un estado vacío no puede estar adentro de lo que el estado vacío apaga: Compras…
 
-**Plotly y figuras** (56)
+**Plotly y figuras** (58)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -258,6 +258,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#325** — «No muestra los nombres» era una columna de AGRUPACIÓN equivocada, no un problema de rótulos…
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
+- **#359** — Un eje category no interpreta una x numérica como POSICIÓN: la agrega como una categoría más
+- **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
 
 **AgGrid y tablas** (55)
 
@@ -419,7 +421,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#339** — El scope de un st.rerun se DECIDE en tiempo de ejecución, no se fija en el código
 - **#357** — Renombrar un símbolo que app.py IMPORTA tira la app en Streamlit Cloud hasta que alguien la…
 
-**Datos, R2 y DuckDB** (45)
+**Datos, R2 y DuckDB** (46)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -466,6 +468,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
 - **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
 - **#347** — Un nombre en MAYÚSCULA SOSTENIDA es un dato del ERP, no una decisión de diseño — y…
+- **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
 
 **SUNAT y SIRE** (40)
 
@@ -31864,6 +31867,106 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-08.)
 
+359. **Un eje `category` no interpreta una x numérica como POSICIÓN: la
+     agrega como una categoría más.** Es la trampa que costó la primera
+     vuelta del pedido *"los puntos que son los documentos son casi
+     imposibles de seleccionar"* (2026-09-08, vista Semanal de Compras).
+
+     El plan era el de siempre para separar puntos que caen todos en el
+     centro de su barra: dejar las barras con x de texto y darle a la traza
+     de puntos una x numérica —`índice ± desplazamiento`— confiando en que
+     Plotly la leyera como posición dentro del slot. Los desplazamientos
+     salían perfectos; el eje, no. Medido en el navegador con datos reales
+     (53 semanas, 424 puntos):
+
+         xaxis._categories.length   477   (= 53 + 424, una por punto)
+         xaxis.range                [-0.5, 504.5]
+         px por slot                1,94  sobre 988px de lienzo
+
+     O sea las 53 barras aplastadas contra el borde izquierdo y los 424
+     puntos ocupando 424 categorías propias a la derecha. El gráfico se
+     veía roto, pero no de una forma que grite "el eje": grita "hay
+     demasiadas barras".
+
+     **La cura es un eje `linear` y que las DOS trazas hablen el mismo
+     idioma** — el índice del período— con `tickmode="array"`,
+     `tickvals=range(n)` y `ticktext` con las etiquetas. Ahí el
+     desplazamiento es aritmética y no hay nada que interpretar. El
+     `range=[-0.5, n-0.5]` explícito va con eso: el autorange de un eje
+     lineal pone su propio aire a los costados y la primera y la última
+     barra quedan flotando media barra dentro del margen.
+
+     **Y arrastra tres consecuencias que hay que atender juntas, o el
+     arreglo del eje rompe otra cosa:**
+
+     · **El hover de la barra deja de poder usar `%{x}`**, que ahora es
+       "20" y no "2026-S04". La etiqueta viaja por `customdata`.
+     · **El clic devuelve el ÍNDICE**, así que el handler tiene que
+       traducirlo a la clave (`semanal.py::_clave_del_clic`, tolerante a
+       propósito: un clic da un float y una x fuera de rango tiene que ser
+       un no-op, no una excepción en medio del render).
+     · **En la traza de puntos, no se resuelve por la x sino por
+       `point_index`.** Que además es lo correcto: con desplazamiento, la x
+       identifica el PERÍODO y el índice identifica LA COMPRA. Requiere que
+       el DataFrame de los puntos venga con `reset_index(drop=True)` y con
+       un desempate estable en el `sort_values` — si dos compras del mismo
+       día se intercambian entre reruns, el índice del clic apunta a otra.
+
+     Ojo al leer la figura desde la consola para verificar esto:
+     `gd.data[1].x` viene como `{dtype, bdata}` (plotly.py 6.x serializa
+     los arrays numéricos en base64), así que `.length` es `undefined` y
+     `Array.from()` devuelve `[]` sin tirar error — parece que la traza no
+     tiene puntos. Lo que hay que mirar es **`gd._fullData[1].x`**, que es
+     lo que Plotly.js ya decodificó.
+
+360. **El tope de puntos superpuestos sale de los PÍXELES que hay, no de un
+     número lindo.** Segunda vuelta del mismo pedido, el mismo día, y la
+     que tiró abajo la premisa de la primera.
+
+     Con el eje ya arreglado (#359) el reparto dentro del slot funcionaba
+     —offsets de -0.31 a +0.31, verificados— y no separaba nada. Medido:
+
+         períodos en la franja      53
+         px por slot              18,6   (988px / 53)
+         reparto (62% del slot)   11,5px
+         entre dos puntos          1,7px  con marcadores de 10
+
+     Ocho manchas de 10px en 15px de barra. El tope estaba fijo en 8
+     porque 8 parecía poco; lo que importa es cuántos marcadores de 10px
+     entran en el 62% de un slot:
+
+         53 períodos ->  1 punto     20 ->  2      8 ->  5
+         12 períodos ->  3 puntos     5 ->  8 (el techo)
+
+     **Con 1 punto la vista no pierde el sentido, lo AFILA:** es la compra
+     MAYOR de cada período, que es la que se quiere mirar, y a 18px de slot
+     es un blanco cómodo. El resto sigue sumado en la barra — el tope es de
+     puntos, no de datos.
+
+     Dos cosas que van con esto y no son opcionales:
+
+     · **El ancho del lienzo hay que MEDIRLO, porque el servidor no lo
+       sabe.** `_es_movil` distingue móvil de escritorio por User-Agent, no
+       da píxeles. `semanal.py::_LIENZO_PX` es 820, leído de
+       `xaxis._length` con la figura ya montada: 818 con viewport 1280 (la
+       laptop) y 988 con 1440. Se toma el caso chico; errar por defecto
+       deja aire de sobra, errar por exceso vuelve al amontonamiento.
+     · **La leyenda tiene que decir QUÉ se está viendo**, que con tope
+       variable cambia: "Compra individual" cuando no recortó nada,
+       "Compra mayor de cada período" con tope 1, "Las N compras mayores de
+       cada período" con N. Sin eso, un punto por barra se lee como que esa
+       semana hubo una sola compra.
+
+     Y la moraleja del pedido entero, que es lo que hay que recordar antes
+     de tocar marcadores: **el amontonamiento era un problema de DATO, no
+     de tamaño.** Medido con DuckDB sobre `compras.parquet`, compras
+     distintas por semana: 93 de media con todas las familias, 69 con las
+     cinco de entrada, y **1,4 con un producto elegido**. Por eso el
+     selector de producto de esa tarjeta y la selectividad de los puntos
+     son el mismo cambio y no dos.
+
+     (2026-09-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31876,7 +31979,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#359**.
+> próxima regla nueva es la **#361**.
 
 >
 

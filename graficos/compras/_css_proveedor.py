@@ -778,6 +778,113 @@ CSS = """        <style>
             gap: 10px !important;
             margin: 0 0 4px !important;
         }
+        /* ── LOS DOS FILTROS DE LA VISTA SEMANAL (2026-09-08) ───────────
+           `cp_sem_filtros` es el grupo de la izquierda (granularidad +
+           Familia + Producto) y existe para que la fila de arriba siga
+           teniendo DOS items: con cuatro, el `space-between` reparte el
+           hueco entre todos y los deja desperdigados a lo ancho de la
+           tarjeta en vez de agrupados a la izquierda.
+
+           `flex-wrap` es la RED, no el plan. Medido en el navegador con la
+           tarjeta a todo el ancho:
+
+               viewport 1280   fila 869px   ->  no entra, baja un renglon
+               viewport 1440   fila 1029px  ->  un solo renglon
+
+           porque la suma no cede: pildoras 354 + Familia 190 + Producto
+           210 + fecha 154 + 30 de gaps = 938. Sin wrap, lo que sobra
+           desborda la tarjeta; con wrap, la fecha baja un renglon (fila de
+           68px en vez de 40, verificado). Mismo criterio —y misma red— que
+           `vap_fila_hdr` en `estilos/_80_cards.py`.
+
+           El `margin-left: auto` de la fecha NO es de adorno: un item que
+           WRAPEA arranca el renglon nuevo, asi que `space-between` deja de
+           alcanzar y la fecha quedaba pegada a la IZQUIERDA — visto en
+           pantalla. Con el `auto` se come el hueco del renglon y vuelve al
+           borde derecho, que es donde esta en las otras tres tarjetas que
+           usan este mismo selector. */
+
+           LOS ANCHOS SON MEDIDOS, con el mismo metodo que documenta el
+           bloque de `vap_hdr_*`: texto del PEOR caso + 50px de cromo (34
+           de la caja del combobox + 16 de padding propio del `<input>`).
+           A DM Sans 12px son ~7,16px por caracter:
+
+               Familia   "BEBIDAS CON ALCOHOL"  19 ch  136 -> 190
+               Producto  "Todos los productos"  19 ch  136 -> 190, +20
+                         de aire para que el nombre de un producto real
+                         (los del top miden 21,6 ch de media) entre casi
+                         siempre -> 210
+
+           Lo que NO entra son los nombres largos de la cola (el peor del
+           parquet mide 58 caracteres) y es un recorte ACEPTADO: la lista
+           de un `st.selectbox` recorta con `text-overflow: clip`, sin
+           puntos suspensivos (regla #318), y truncar en el `format_func`
+           lo arreglaria a la vista pero romperia el BUSCADOR — Streamlit
+           filtra sobre la etiqueta formateada, asi que un nombre cortado
+           en 28 caracteres deja de encontrarse escribiendo el final. Se
+           prefiere buscar entero y ver cortado. */
+        .st-key-cp_sem_fila { flex-wrap: wrap !important; }
+        /* Los dos selectores porque el item del flex es el popover MISMO
+           (medido: el segundo hijo de la fila ya trae la clase de la key),
+           y el `:has` cubre el caso de que una version de Streamlit lo
+           envuelva. */
+        .st-key-cp_sem_fila > .st-key-cp_sem_escala,
+        .st-key-cp_sem_fila > *:has(> .st-key-cp_sem_escala) {
+            margin-left: auto !important;
+        }
+        .st-key-cp_sem_filtros {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            align-items: center !important;
+            gap: 10px !important;
+            width: auto !important;
+        }
+        /* `st.container(key=…)` pone la key en el `stVerticalBlock` de
+           ADENTRO: el item del flex es el `stLayoutWrapper` anonimo que lo
+           envuelve, que nace con `width: 100%`. Estilar solo la key de
+           adentro no alcanza — el que reparte es el padre (regla #272). */
+        .st-key-cp_sem_filtros
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_hdr_familia) {
+            flex: 0 0 auto !important;
+            width: 190px !important;
+        }
+        .st-key-cp_sem_filtros
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_hdr_producto) {
+            flex: 0 0 auto !important;
+            width: 210px !important;
+        }
+        /* Y el contenedor de elemento de adentro TAMBIEN, o el campo no
+           llena el ancho reservado: la regla `width: auto` de mas abajo
+           —que existe para que cada item mida su contenido— en un
+           `stVerticalBlock` (flex column con `align-items: start`) deja de
+           estirar y pasa a ser `fit-content`, un tope invisible que
+           agrandar el hueco no supera. Es la misma trampa medida que
+           documenta el bloque de `vap_hdr_*`. */
+        .st-key-cp_sem_hdr_familia,
+        .st-key-cp_sem_hdr_producto { width: 100% !important; }
+        .st-key-cp_sem_hdr_familia > [data-testid="stElementContainer"],
+        .st-key-cp_sem_hdr_producto > [data-testid="stElementContainer"] {
+            width: 100% !important;
+        }
+        /* A la altura de las pildoras de granularidad, que en esta fila
+           miden 32px (no 22: `cp_sem_fila` no comparte las reglas de
+           `... fila button` — ver el aviso de mas arriba). El default de un
+           `st.selectbox` es 40, y los 8px de diferencia se veian como un
+           escalon en la fila.
+
+           OJO CON EL SELECTOR (medido, 2026-09-02, y sigue valiendo): en
+           esta version de Streamlit el combobox NO es
+           `[data-baseweb="select"]` sino `.react-aria-ComboBox`. */
+        .st-key-cp_sem_hdr_familia .react-aria-ComboBox,
+        .st-key-cp_sem_hdr_producto .react-aria-ComboBox {
+            min-height: 32px !important;
+            height: 32px !important;
+        }
+        .st-key-cp_sem_hdr_familia .react-aria-ComboBox input,
+        .st-key-cp_sem_hdr_producto .react-aria-ComboBox input {
+            font-size: 12px !important;
+        }
         /* El TITULO cede, el control no. El `min-width: 0` no es
            decorativo: sin el, un flex item nunca se encoge por debajo de
            su contenido, asi que un nombre largo empujaria al control fuera
