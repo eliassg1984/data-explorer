@@ -22,7 +22,7 @@ from estado_rango import (
 from cortes import cortes_disponibles
 import franja_fecha
 from graficos.compras import bounds_fecha_de_la_vista
-from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_herramientas, inject_footer_actualizacion, inject_calendario_es, inject_fullscreen_app
+from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_herramientas, inject_sello_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
 from graficos import periodo
@@ -732,10 +732,11 @@ with _fila_top:
     # banda pegada al borde superior del canvas (ver más abajo, justo
     # antes de _render_contenido). Así la franja queda de un solo nivel.
 
-# ── Texto de actualización FUERA de la franja sticky ──
-# Así su position:fixed vive en el contexto raíz y no es tapado
-# por .stApp::after (fila_ajuste_top crea un stacking context propio
-# por su sticky + z-index).
+# ── Sello de actualización: extremo DERECHO de la franja de reportes ──
+# Se dibuja FUERA de la franja sticky para que su position:fixed viva en el
+# contexto raíz (fila_ajuste_top crea un stacking context propio por su
+# sticky + z-index). Hasta el 2026-09-08 se apoyaba en la franja blanca
+# inferior, que se eliminó; ver inject_sello_actualizacion.
 def _texto_antiguedad(horas):
     """"hace 31 h" / "hace 4 días". Cambia a días recién a las 48: por debajo
     de eso el número de horas dice más (30 h se lee como "hoy no corrió")."""
@@ -749,9 +750,12 @@ _dato_viejo = _horas_dato is not None and _horas_dato > HORAS_DATO_VIEJO
 if isinstance(_fecha_actualizacion, datetime.datetime):
     # Ámbar + la edad cuando el dato está viejo: es la señal PERMANENTE, la
     # que sigue ahí cuando el aviso de arriba ya se leyó y se ignoró.
-    inject_footer_actualizacion(
-        "Última actualización: "
-        + _fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")
+    # Rótulo y valor por separado: el sello comparte renglón con la
+    # navegación y en pantallas angostas se queda sólo con el valor (el
+    # docstring de la inyección tiene las medidas).
+    inject_sello_actualizacion(
+        "Última actualización:",
+        _fecha_actualizacion.strftime("%d/%m/%Y · %H:%M")
         + (f" · {_texto_antiguedad(_horas_dato)}" if _dato_viejo else ""),
         color=ADVERTENCIA_TEXTO if _dato_viejo else None,
     )

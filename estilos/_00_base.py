@@ -116,18 +116,33 @@ CSS = """    <style>
            son los mismos que CROMO en graficos/alturas.py, y test_graficos
            falla si se desincronizan. NUNCA escribir estos px sueltos.
            ================================================================== */
-        --franja-inf-alto: 42px;      /* la franja blanca fija de abajo */
-        /* 66px hasta el 2026-08-14, contra una franja que mide 42: 24px de
-           reserva que no cubría nada. Con 48 quedan 6px de aire entre el
-           borde de la tarjeta y la franja. */
-        --franja-inf-reserva: 48px;   /* lo que reserva el block-container */
+        /* AIRE AL PIE DEL CONTENIDO (2026-09-08).
+           Se llamaba `--franja-inf-reserva` y valía 48px: 42 de la franja
+           blanca fija de abajo (`.stApp::after`, que vivía en el módulo
+           `_90_franja_inferior.py`) + 6 de aire contra el borde de la
+           tarjeta. La franja se eliminó a pedido ("eliminemos la franja
+           inferior") y su texto de «Última actualización» se mudó a la
+           derecha de la franja de REPORTES, así que abajo ya no hay nada
+           que despejar: quedan 8px de aire, que con `--margen-tarjeta`
+           dan 16 entre la tarjeta y el borde de la ventana.
+
+           Cambió el NOMBRE junto con el valor a propósito: una variable
+           que se llama "reserva de la franja inferior" cuando esa franja
+           ya no existe es la clase de mentira que hace que el próximo que
+           la lea busque un elemento que no está. Los 40px que se liberan
+           son 40px más de `--alto-util` para cada tarjeta.
+
+           Sigue siendo un sumando del presupuesto vertical: si cambia acá,
+           cambia `_AIRE_INF` en graficos/alturas.py (test_graficos lo
+           coteja). */
+        --aire-inferior: 8px;         /* lo que reserva el block-container */
         /* 16px hasta el 2026-08-15. Medido: la franja termina en y=36 y la
            tarjeta arrancaba en 60 — 24px de hueco para una barra que el
            usuario quiere «casi rozando». Con 8 quedan 4px de aire y el alto
            útil gana 16 (el margen cuenta arriba Y abajo). */
         --margen-tarjeta: 8px;        /* margen de bloque de Streamlit, arriba y abajo */
         --alto-util: calc(100dvh - var(--cab-offset-contenido)
-                                 - var(--franja-inf-reserva)
+                                 - var(--aire-inferior)
                                  - var(--margen-tarjeta) * 2);
 
         /* ==================================================================
@@ -325,6 +340,19 @@ CSS = """    <style>
     [data-testid="stMainBlockContainer"],
     .block-container {
         padding-top: 1.5rem !important;
+    }
+
+    /* PADDING INFERIOR — el otro extremo del presupuesto vertical.
+       Vivía en `estilos/_90_franja_inferior.py` junto a la franja blanca
+       fija que reservaba; borrada la franja (2026-09-08), la regla se muda
+       acá, que es donde vive su variable. No quedó ninguna otra declaración
+       de `padding-bottom` sobre el block-container en `estilos/`, así que
+       el cambio de posición dentro de la cascada no altera nada — el
+       override de móvil sigue en `_99_movil.py`, que va último. */
+    .stMainBlockContainer,
+    [data-testid="stMainBlockContainer"],
+    .block-container {
+        padding-bottom: var(--aire-inferior) !important;
     }
 
     [data-testid="stSidebarHeader"] {

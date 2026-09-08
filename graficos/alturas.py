@@ -71,10 +71,15 @@ _CAB_OFFSET = 128   # padding-top del block-container   (_00_base.py, --cab-offs
                     # 2026-08-31: 80 -> 118, los 38px de la franja de reportes
                     # 2026-09-01: 118 -> 128, la franja paso de 38 a 48
 _MARGEN_SUP = 8     # margen del bloque hasta la tarjeta (Streamlit)
-_FRANJA_INF = 48    # padding-bottom que reserva la franja (_90_franja_inferior.py)
+# 2026-09-08: 48 -> 8, y `_FRANJA_INF` -> `_AIRE_INF`. Los 48 eran la franja
+# blanca fija de abajo (42) más 6 de aire; la franja se eliminó a pedido y su
+# texto de «Última actualización» se mudó a la derecha de la franja de
+# REPORTES. Abajo ya no hay nada que despejar, sólo aire: 8px. El presupuesto
+# vertical gana esos 40px. Su gemelo CSS es `--aire-inferior` (_00_base.py).
+_AIRE_INF = 8       # padding-bottom del block-container  (_00_base.py)
 _MARGEN_INF = 8     # margen bajo la tarjeta             (Streamlit)
 
-CROMO = _CAB_OFFSET + _MARGEN_SUP + _FRANJA_INF + _MARGEN_INF   # 104
+CROMO = _CAB_OFFSET + _MARGEN_SUP + _AIRE_INF + _MARGEN_INF
 
 # Alto máximo que puede medir una tarjeta sin obligar a scrollear la página.
 # Verificado dos veces contra el navegador: en viewport 864 el presupuesto da

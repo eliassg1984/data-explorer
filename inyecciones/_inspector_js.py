@@ -1364,13 +1364,18 @@ JS = """
         }
 
         function franjaEnCoords(x, y) {
-            // Fallback para las franjas fijas superior/inferior. Ambas se pintan
-            // con pseudo-elementos (::before / ::after) y/o llevan pointer-events:
-            // none, asi que e.target nunca cae en su nodo real. Al hoverear su
-            // area visual, mapeamos manualmente al st-key correspondiente para
+            // Fallback para la franja fija superior. Se pinta con un
+            // pseudo-elemento (::before) y/o lleva pointer-events: none, asi
+            // que e.target nunca cae en su nodo real. Al hoverear su area
+            // visual, mapeamos manualmente al st-key correspondiente para
             // que el usuario pueda copiar contexto y decirle a la IA "esta zona".
-            var vh = win.innerHeight;
-            var vw = win.innerWidth;
+            //
+            // 2026-09-08: se borro la rama de la franja INFERIOR. Doble
+            // motivo: la franja se elimino (con su `.stApp::after`, y su
+            // texto se mudo al extremo derecho de la de reportes), y la rama
+            // ya estaba muerta antes de eso — buscaba
+            // `.st-key-footer_actualizacion`, una key que no emite nadie
+            // (ver la nota de arquitectura.md #49).
             // Rail izquierdo (~90px). Fuera del rail = a partir de x=90.
             var xUtil = x >= 90;
             if (!xUtil) return null;
@@ -1388,14 +1393,6 @@ JS = """
                     '[franja] Franja superior fija\\n' +
                     '  pintada por: .st-key-fila_ajuste_top::before (position:fixed)\\n' +
                     '  nota: pseudo-elemento — el mouse no lo toca; contexto por ubicacion' };
-            }
-            // Franja inferior: ultimos ~42px (coincide con altura .stApp::after).
-            if (y >= vh - 42 && y <= vh && x <= vw) {
-                var f2 = doc.querySelector('.st-key-footer_actualizacion');
-                if (f2) return { el: f2, etiqueta:
-                    '[franja] Franja inferior fija (hora de actualizacion)\\n' +
-                    '  pintada por: .stApp::after (position:fixed) + .st-key-footer_actualizacion\\n' +
-                    '  nota: pointer-events:none — el mouse la atraviesa; contexto por ubicacion' };
             }
             return null;
         }

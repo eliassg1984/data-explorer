@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-355 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+356 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (122)
+**CSS y estilos** (123)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -156,6 +156,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
 - **#354** — La salida de un estado vacío no puede estar adentro de lo que el estado vacío apaga: Compras…
 - **#355** — Un default que tapaba un problema de OTRA parte de la app queda huérfano cuando esa parte…
+- **#356** — Al borrar una franja fija, lo que hay que borrar son TRES cosas: la superficie, la reserva…
 
 **Layout y alturas** (38)
 
@@ -621,7 +622,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#341** — Un querySelector singular es una decisión sobre la CARDINALIDAD, no un atajo — y en una…
 - **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
 
-**Mantenimiento y trampas del lenguaje** (11)
+**Mantenimiento y trampas del lenguaje** (12)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -634,6 +635,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
 - **#328** — git add <ruta> NO te protege en un checkout compartido: se lleva lo que OTRA sesión dejó a…
 - **#355** — Un default que tapaba un problema de OTRA parte de la app queda huérfano cuando esa parte…
+- **#356** — Al borrar una franja fija, lo que hay que borrar son TRES cosas: la superficie, la reserva…
 
 **Sin tema asignado** (1)
 
@@ -31641,6 +31643,104 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      −S/ 458.111 · −21,4 % coincide exacto con la medición de DuckDB de
      acá arriba. (2026-09-07.)
 
+356. **Al borrar una franja fija, lo que hay que borrar son TRES cosas: la
+     superficie, la reserva que le hacía el layout, y el sitio donde vivía
+     lo que llevaba adentro. Y un texto que se muda a una fila CENTRADA no
+     compite por el centro: compite por el ANCHO (2026-09-08).** Pedido con
+     captura: *"eliminemos la franja inferior, en donde está el texto
+     «Última actualización», ese texto pongámoslo en la franja superior de
+     reportes, pero alineado a la derecha"*.
+
+     **Las tres cosas.** La franja de abajo eran 42px de `.stApp::after` en
+     `estilos/_90_franja_inferior.py`, pero su huella en el proyecto era
+     más grande:
+
+       · la SUPERFICIE — el pseudo-elemento, y con él el módulo entero: no
+         quedaba nada más adentro, así que se borró el fichero y su línea
+         de `_SECCIONES` (`estilos/__init__.py`) y del índice de
+         `CLAUDE.md`, que `test_docs.py` coteja;
+       · la RESERVA — `--franja-inf-reserva: 48px` de `padding-bottom` en
+         el `block-container`. Borrar sólo la superficie deja 48px de
+         lienzo vacío al pie, que es lo contrario del pedido. Es un sumando
+         del presupuesto vertical, así que se toca de a DOS ficheros
+         (`--aire-inferior` en `_00_base.py` y `_AIRE_INF` en
+         `graficos/alturas.py`, con `test_graficos` cotejando la suma);
+         48 → 8 y `--alto-util` gana 40px;
+       · el INQUILINO — el texto. Se mudó, y de paso se le arregló el
+         nombre: `inject_footer_actualizacion` → `inject_sello_
+         actualizacion`, id `footer-actualizacion` → `sello-actualizacion`.
+         Un "footer" que vive en la cabecera es la clase de mentira que
+         hace que el próximo lo busque abajo. Misma decisión con la
+         variable: `--franja-inf-reserva` → `--aire-inferior`.
+
+     De paso cayó código que ya estaba muerto: la rama de la franja
+     inferior de `franjaEnCoords` (`inyecciones/_inspector_js.py`) buscaba
+     `.st-key-footer_actualizacion`, una key que no emite nadie — lo mismo
+     que ya decía la nota del módulo borrado (#49).
+
+     **La parte que se mide.** La franja de reportes centra sus 6 botones
+     con `justify-content: safe center`, a pedido del 2026-08-31. Un texto
+     anclado a la derecha no le disputa el centro, pero sí el ancho, y el
+     choque no es hipotético — medido a 1440 (12px, DM Sans):
+
+         grupo de botones                                       608px
+         «Última actualización: 07/09/2026 · 03:00»             230px
+         … + « · hace 12 días» (dato viejo)                      290px
+         sólo el valor «07/09/2026 · 03:00»                      109px
+         … + « · hace 12 días»                                   186px
+
+     El borde derecho del grupo está en `W/2 + 304`, el izquierdo del sello
+     en `W - 16 - ancho`; con 24px de aire mínimo se tocan en
+     `2 * (304 + 16 + ancho + 24)` = **1268px** con el rótulo puesto y el
+     dato viejo. O sea: se veía perfecto a 1440 y se pisaba en un navegador
+     a 1200, que no es un caso raro. La salida es ENCOGER antes que
+     desaparecer — el rótulo y el valor van en `<span>` separados, el
+     rótulo se esconde bajo 1280px (el valor es una fecha, se lee sola) y
+     recién bajo 1060px se va el sello entero.
+
+     **Lo que NO se hizo, y por qué.** Reservarle sitio al sello con
+     `padding-right` en la franja descentra los botones; hacerlo simétrico
+     los deja centrados pero obliga a la franja a scrollear por debajo de
+     1100px, y dejar un nombre de reporte fuera de pantalla es peor que
+     dejar fuera la hora del dato. Tampoco se metió el texto DENTRO del
+     `st.container(key="nav_franja_rep")`: sería un hijo más del flex
+     centrado (los correría a la izquierda), y además `inject_navegacion()`
+     corre en `app.py:141` mientras la antigüedad del dato no se conoce
+     hasta `app.py:617`, después de resolver `cfg`. Sigue siendo un div
+     `fixed` colgado del `body`, apoyado en la caja de la franja.
+
+     **El detalle vertical:** se alinea con los BOTONES, no con la caja. La
+     franja mide 48px pero sus botones van pegados al tope (`align-items:
+     flex-start`, `padding-top: 1px`, `height: 30px`), así que centrar el
+     sello en los 48 lo dejaba 8px por debajo de los nombres. Lleva los
+     mismos tres números: `top:1px; height:30px; align-items:center`.
+
+     **Móvil es otro problema, no el mismo.** Allá la franja de reportes no
+     existe (`_99_movil.py` la esconde), así que el sello se queda abajo a
+     la izquierda sobre la barra de navegación — pero se quedó SIN el
+     blanco de la franja que borramos, y el gris de 12px sobre un gráfico
+     que scrollea no se lee (medido: encima del área de «Evolución»). Se le
+     puso fondo, borde y radio propios: una pastilla. Dos trampas del
+     mismo bloque: el `@media` de móvil no puede pisar el `display:flex`
+     del sello con `display:block` —el espacio entre rótulo y valor es un
+     `gap`, y en block los dos `<span>` salen pegados
+     ("Última actualización:07/09/2026", medido)—, y la reserva de abajo
+     dejó de contar la franja: 104 → 94px (barra nav 60 + los ~18 del sello
+     + 16 de aire).
+
+     **Verificación:** `ruff` limpio, `test_docs` y `test_asistente_datos`
+     verdes; `test_graficos` sigue con el fallo AJENO del cromo de
+     `--cab-offset-contenido` (cambio en curso de otra sesión en
+     `estilos/_00_base.py`, ver #354 y #355) — el commit lleva sólo los
+     hunks propios, y con el 128 de `main` la suma da 152 = `alturas.CROMO`.
+     En el navegador, con el server reiniciado: `.stApp::after` computa
+     `content: none`, el `padding-bottom` del `block-container` es 8px, y a
+     1366x740 (el laptop objetivo) el sello va en `x=1119..1350, y=1..31`
+     —la misma banda vertical que los botones— con 132px de aire hasta
+     «Ventas». Los dos cortes verificados moviendo la ventana: a 1200 queda
+     sólo el valor (171px de aire), a 1100 sigue (121px), a 1040 desaparece.
+     En 375px, la pastilla se lee sobre el gráfico. (2026-09-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31653,7 +31753,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#356**.
+> próxima regla nueva es la **#357**.
 
 >
 

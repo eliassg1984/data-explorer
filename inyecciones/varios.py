@@ -143,51 +143,142 @@ def inject_fullscreen_app():
     })();
     </script>
     """, height=0)
-def inject_footer_actualizacion(texto, color=None):
-    """Pinta el texto como div fijo en el body del documento de la app:
-    los contenedores de Streamlit crean stacking contexts que dejaban el
-    texto ENTERRADO bajo la franja inferior (.stApp::after) por más
-    z-index que tuviera; anclado directo al body escapa de todos ellos.
+def inject_sello_actualizacion(rotulo, valor, color=None):
+    """Pinta `<rotulo> <valor>` como div fijo en el body del documento de la
+    app: los contenedores de Streamlit crean stacking contexts que dejaban el
+    texto ENTERRADO bajo el cromo fijo por más z-index que tuviera; anclado
+    directo al body escapa de todos ellos.
+
+    2026-09-08 — DE PIE A SELLO DE LA CABECERA
+        Se llamaba `inject_footer_actualizacion` y vivía abajo a la
+        izquierda, dentro de la franja blanca fija que cerraba el área de
+        contenido. Esa franja se eliminó a pedido ("eliminemos la franja
+        inferior, ese texto pongámoslo en la franja superior de reportes,
+        pero alineado a la derecha") y el texto se mudó al extremo derecho
+        de la franja de REPORTES.
+
+        Sigue siendo un div `fixed` colgado del body y NO un `st.markdown`
+        dentro de `st.container(key="nav_franja_rep")`, por dos motivos:
+          · la franja centra sus botones con `justify-content: safe center`
+            (`estilos/_20_compras_rail.py`, a pedido del 2026-08-31), y
+            meterle un hijo más los descentraría — el texto no es un ítem
+            de esa navegación, se apoya en su caja;
+          · `inject_navegacion()` (que dibuja la franja) corre en app.py:141
+            y la antigüedad del dato no se conoce hasta app.py:617, después
+            de resolver `cfg`. Ponerlo dentro obligaría a reordenar eso.
+
+        Se alinea con los BOTONES, no con la caja: la franja mide 48px pero
+        sus botones van pegados al tope (`align-items: flex-start` + 1px de
+        padding, 30px de alto), así que centrarlo en los 48 lo dejaría 8px
+        más abajo que los nombres de los reportes. De ahí `top:1px` +
+        `height:30px` — los mismos tres números que los botones.
+
+    POR QUÉ EL RÓTULO Y EL VALOR VAN SEPARADOS
+        Porque el sello y la navegación se disputan el mismo renglón y hay
+        anchos donde no entran los dos. Medido en el navegador a 1440
+        (12px, DM Sans): el grupo de los 6 botones mide 608px y va CENTRADO,
+        así que su borde derecho está en `W/2 + 304`; el sello arranca en
+        `W - 16 - ancho`. Los cuatro anchos que puede tener el sello:
+
+            «Última actualización: 07/09/2026 · 03:00»            230px
+            … + « · hace 12 días» (dato viejo)                    290px
+            sólo el valor «07/09/2026 · 03:00»                    109px
+            … + « · hace 12 días»                                 186px
+
+        Con 24px de aire mínimo, el ancho al que se tocan es
+        `2 * (304 + 16 + ancho + 24)`: 1268px con el rótulo puesto y el dato
+        viejo, 1060px sin rótulo. De ahí los dos cortes del `<style>` de
+        abajo — 1280 y 1060. Se elige encoger antes que desaparecer: por
+        debajo de 1280 el rótulo sobra (el valor es una fecha, se lee sola)
+        y sólo por debajo de 1060 se va el sello entero.
+
+        NO se resuelve con `padding` en la franja: darle sitio al sello con
+        un padding derecho descentraría los botones, y hacerlo simétrico
+        (para que sigan centrados) obligaría a la franja a scrollear por
+        debajo de 1100px — dejar un nombre de reporte fuera de pantalla es
+        peor que dejar fuera la hora del dato.
 
     `color`: color CSS del texto; None deja el gris de siempre. Lo usa
-    app.py para que el pie se ponga ámbar cuando el dato está viejo (ver
+    app.py para que el sello se ponga ámbar cuando el dato está viejo (ver
     data.HORAS_DATO_VIEJO) — el aviso de arriba se lee y se ignora, este
     queda."""
-    _t = json.dumps(str(texto))
+    _r = json.dumps(str(rotulo))
+    _v = json.dumps(str(valor))
     _c = json.dumps(str(color) if color else "#71717a")
     inyectar_html("""
     <script>
     (function(){
         var doc = window.parent.document;
-        var el = doc.getElementById('footer-actualizacion');
+        var el = doc.getElementById('sello-actualizacion');
         if (!el) {
             el = doc.createElement('div');
-            el.id = 'footer-actualizacion';
-            /* 114px hasta el 2026-08-18: eran los 90 del rail izquierdo +
-               24 de aire. Retirado el rail (hoy es la franja superior), el
-               texto se alinea con el borde de la ventana. */
-            el.style.cssText = 'position:fixed;left:24px;bottom:13px;'
+            el.id = 'sello-actualizacion';
+            /* Los 16px de `right` son el padding lateral de la franja
+               (`padding: 1px 16px 0 16px` en _20_compras_rail.py): así el
+               texto termina en la misma línea vertical en la que termina
+               su contenido, no contra el vidrio. */
+            el.style.cssText = 'position:fixed;right:16px;top:1px;'
+                + 'height:30px;display:flex;align-items:center;gap:4px;'
                 + 'z-index:2147483647;font-size:12px;color:#71717a;'
-                + "font-family:'DM Sans',sans-serif;pointer-events:none;";
+                + "font-family:'DM Sans',sans-serif;pointer-events:none;"
+                + 'white-space:nowrap;';
+            /* Dos hijos y no un textContent suelto: el rótulo se esconde
+               solo cuando la franja se queda sin sitio (ver el docstring).
+               `textContent` en los dos, nunca innerHTML — el valor lleva
+               una fecha formateada en app.py, no HTML. */
+            var rot = doc.createElement('span');
+            rot.className = 'sello-rotulo';
+            var val = doc.createElement('span');
+            val.className = 'sello-valor';
+            el.appendChild(rot);
+            el.appendChild(val);
             doc.body.appendChild(el);
         }
-        /* En movil la barra de navegacion inferior ocupa 60px: el texto
-           sube para no solaparse con los iconos. */
-        if (!doc.getElementById('footer-actualizacion-css')) {
+        if (!doc.getElementById('sello-actualizacion-css')) {
             var stl = doc.createElement('style');
-            stl.id = 'footer-actualizacion-css';
-            stl.textContent = '@media (max-width:768px) {'
-                + ' #footer-actualizacion {'
+            stl.id = 'sello-actualizacion-css';
+            /* En movil no hay franja de reportes donde apoyarse (la esconde
+               `estilos/_99_movil.py`): el sello se queda abajo a la
+               izquierda, por encima de los 60px de la barra de navegacion
+               inferior. Se resetean top/right/height porque el estilo
+               inline de arriba los deja puestos, pero NO el `display:flex`
+               — el espacio entre el rotulo y el valor es el `gap`, y con
+               `display:block` los dos <span> quedaban pegados
+               ("Ultima actualizacion:07/09/2026"), medido en el navegador.
+               El rotulo no hace falta devolverlo: los dos cortes de arriba
+               llevan `min-width:769px`, asi que aca nunca se esconde (abajo
+               no compite con nadie por el renglon). */
+            stl.textContent = '@media (max-width:1280px) and (min-width:769px) {'
+                + ' #sello-actualizacion .sello-rotulo { display: none; } }'
+                + '@media (max-width:1060px) and (min-width:769px) {'
+                + ' #sello-actualizacion { display: none !important; } }'
+                + '@media (max-width:768px) {'
+                + ' #sello-actualizacion {'
                 + '   left: 12px !important; bottom: 68px !important;'
+                + '   top: auto !important; right: auto !important;'
+                + '   height: auto !important;'
+                /* PASTILLA, solo en movil. En escritorio el sello se apoya
+                   en la franja de reportes, que es opaca y por la que el
+                   contenido pasa POR DEBAJO; aca no hay franja, asi que sin
+                   un fondo propio el texto queda flotando sobre lo que se
+                   este scrolleando (medido: se leia encima del grafico de
+                   Evolucion). La franja blanca que hacia ese trabajo hasta
+                   el 2026-09-08 se elimino con todo lo demas. */
+                + '   background: var(--bg-card, #fff) !important;'
+                + '   padding: 3px 8px !important;'
+                + '   border: 1px solid var(--border, #e4e4e7) !important;'
+                + '   border-radius: 6px !important;'
                 + ' } }';
             doc.head.appendChild(stl);
         }
-        /* El color se aplica FUERA del if(!el): el elemento se crea una
-           sola vez y en los reruns siguientes solo se actualiza el texto,
-           así que si esto viviera adentro, el pie se quedaría con el color
-           del primer render y no podría volver a gris al normalizarse. */
+        /* El color y los textos se aplican FUERA del if(!el): el elemento se
+           crea una sola vez y en los reruns siguientes sólo se actualiza su
+           contenido, así que si esto viviera adentro, el sello se quedaría
+           con el color y la hora del primer render y no podría volver a gris
+           al normalizarse. */
         el.style.color = """ + _c + """;
-        el.textContent = """ + _t + """;
+        el.querySelector('.sello-rotulo').textContent = """ + _r + """;
+        el.querySelector('.sello-valor').textContent = """ + _v + """;
     })();
     </script>
     """, height=0)

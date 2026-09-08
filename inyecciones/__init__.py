@@ -39,4 +39,4 @@ from inyecciones.paginacion import (inject_pagination_v2)  # noqa: F401
 from inyecciones.inspector import (inject_element_inspector)  # noqa: F401
 from inyecciones.diseno import (inject_diseno_visual)  # noqa: F401
 from inyecciones.herramientas import (inject_herramientas)  # noqa: F401
-from inyecciones.varios import (inject_calendario_es, inject_error_overlay, inject_footer_actualizacion, inject_fullscreen_app)  # noqa: F401
+from inyecciones.varios import (inject_calendario_es, inject_error_overlay, inject_sello_actualizacion, inject_fullscreen_app)  # noqa: F401

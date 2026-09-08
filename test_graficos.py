@@ -2075,13 +2075,13 @@ def _pruebas_presupuesto_vertical():
         return int(m.group(1)) if m else None
 
     cab = _var("cab-offset-contenido")
-    franja = _var("franja-inf-reserva")
+    aire = _var("aire-inferior")
     margen = _var("margen-tarjeta")
     check("las variables de cromo existen en estilos/_00_base.py",
-          None not in (cab, franja, margen),
-          f"cab={cab} franja={franja} margen={margen}")
-    if None not in (cab, franja, margen):
-        suma_css = cab + franja + margen * 2
+          None not in (cab, aire, margen),
+          f"cab={cab} aire={aire} margen={margen}")
+    if None not in (cab, aire, margen):
+        suma_css = cab + aire + margen * 2
         check("el cromo de CSS coincide con alturas.CROMO",
               suma_css == alturas.CROMO,
               f"CSS suma {suma_css}px y alturas.CROMO vale {alturas.CROMO}px")

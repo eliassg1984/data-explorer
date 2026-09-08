@@ -294,17 +294,24 @@ CSS = """    /* ================================================================
             min-height: 44px !important;
         }
 
-        /* Franja inferior + footer: se apoyan sobre la barra nav móvil */
-        .stApp::after {
-            left: 0 !important;
-            height: 34px !important;
-            bottom: var(--nav-movil-alto) !important;
-        }
+        /* El sello de «Última actualización» se apoya sobre la barra nav
+           móvil, y el contenido tiene que terminar por encima de él.
+
+           Acá NO se mudó arriba como en escritorio: en móvil la franja de
+           REPORTES no existe (`.st-key-nav_franja_rep { display:none }`,
+           más arriba en este mismo fichero), así que el sello se queda
+           donde estaba — sólo que ahora flota sobre el lienzo en vez de
+           sobre una franja blanca, que se eliminó el 2026-09-08 junto con
+           su `.stApp::after`.
+
+           94 = barra nav (60) + los ~18 del sello (vive en `bottom:68px`,
+           ver `inyecciones/varios.py::inject_sello_actualizacion`) + 16 de
+           aire. Eran 104 cuando el sumando del medio era la franja de
+           34px. */
         [data-testid="stMainBlockContainer"],
         .stMainBlockContainer,
         .block-container {
-            /* Reserva: barra nav (60) + franja (34) + 10 de aire */
-            padding-bottom: 104px !important;
+            padding-bottom: 94px !important;
         }
     }
 
