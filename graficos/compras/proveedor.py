@@ -141,7 +141,45 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     })
     base = base[base["prov"].notna() & (base["prov"] != "nan")]
     if base.empty or base["valor"].sum() == 0:
-        st.info("Sin datos en el rango seleccionado.")
+        # SIN FILAS SE VACÍA EL CONTENIDO, NO LA VISTA (2026-09-07). Este
+        # `return` salía ANTES de la tarjeta — o sea, antes del selector de
+        # fecha de su cabecera, que desde el 2026-09-06 es el único control
+        # de rango que tiene la sección (la franja ya no dibuja calendario).
+        # El cartel decía "ampliá el rango" y se llevaba puesto el widget
+        # con el que se amplía. Es la regla #115 aplicada a la cabecera:
+        # la tarjeta se dibuja SIEMPRE y lo que se decide adentro es el
+        # contenido. Ver regla #354.
+        #
+        # El CSS se inyecta ACÁ y no sólo abajo por el mismo motivo:
+        # `CSS_PROVEEDOR` estila los CUATRO prefijos `cp_*` (rank, prod,
+        # sem, vol) y lo inyecta este drill, que es el primero de la pila.
+        # Saliendo antes, los selectores de fecha de Semanal y Volatilidad
+        # se dibujaban sin estilo en la pantalla vacía.
+        st.markdown(CSS_PROVEEDOR, unsafe_allow_html=True)
+        # Misma key de FAMILIA que la tarjeta real (`compras_prov_card_`,
+        # el wildcard de `estilos/_80_cards.py`) para heredar fondo, radio
+        # y padding; y el MISMO prefijo de widget (`cp_rank`), que acá no
+        # choca porque la tarjeta real no se dibujó — así el rango elegido
+        # desde este cartel sigue puesto cuando la vista vuelve con datos.
+        with st.container(border=True, key="compras_prov_card_vacio"):
+            selector_fecha_tarjeta(
+                "cp_rank", "_cp_rank_atajo_pendiente",
+                titulo_html='<div class="cp-rank-tit">Ranking de '
+                            'proveedores</div>')
+            # EL CARTEL COMPLETO DEL REPORTE VIVE ACÁ, no en un `st.info`
+            # suelto arriba de la pila: ése no cabe (el jalón de -104px que
+            # sube esta tarjeta bajo la franja se lo comería, ver el
+            # comentario de la guarda en `__init__.py`). Y esta tarjeta es
+            # la primera de la pila, así que decirlo acá es decirlo arriba.
+            #
+            # Nombra las DOS salidas —la fecha de esta cabecera y el filtro
+            # de Familia— y avisa de lo que SÍ tiene datos más abajo: sin
+            # esa última línea, el usuario lee "no hay nada" y no baja a
+            # las dos vistas que abren sobre el histórico.
+            st.info("Sin compras en el rango seleccionado. Ampliá el rango "
+                    "desde la fecha de la cabecera, o soltá el filtro de "
+                    "Familia. «Vs año pasado» y «Volatilidad», más abajo, "
+                    "tienen ventana propia y siguen mostrando datos.")
         return
 
     # ── Calcular periodo ──────────────────────────────────────────────────

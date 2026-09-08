@@ -627,31 +627,48 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 df_full if df_full is not None else d, col_fecha)
         return
 
-    # ── SIN FILAS TRAS LOS CHIPS: recién ACÁ se corta ────────────────────
+    # ── SIN FILAS TRAS LOS CHIPS: un CARTEL, no una salida ───────────────
     # Desde el 2026-09-02 este cartel es alcanzable a propósito: las
     # opciones de Familia/Subfamilia salen del histórico, así que se puede
     # elegir una que no compró nada en el rango de la píldora. Por eso el
     # texto nombra a los DOS filtros y no sólo "los filtros".
     #
-    # ESTABA ARRIBA DE TODO Y SE MOVIÓ ACÁ (2026-09-06). Cortar antes del
-    # rail apagaba la pantalla ENTERA —ni rail, ni vistas— y con eso se
-    # llevaba puesta a «Documentos SUNAT», que no mira `d`: le pregunta al
-    # SIRE y recibe `df_full` justamente para que los chips no la toquen
-    # (regla #301). El día que el rango cayó en un mes que el sistema
-    # todavía no cargó, la vista de SUNAT tenía 61 comprobantes para
-    # mostrar y la página salía en blanco. Ver `arquitectura.md` regla #329.
+    # TRES ACTOS DE LA MISMA GUARDA, y conviene leerlos juntos:
     #
-    # Puesto acá, el rail se dibuja igual (con `d` vacío `_kpis_vistas`
-    # devuelve `{}` y no revienta), así que desde el cartel se puede saltar
-    # a otra vista — antes el único camino era soltar el filtro a ciegas.
-    if d is None or d.empty:
-        # El texto NOMBRA DÓNDE está el control, y desde el 2026-09-06 eso
-        # importa: la franja ya no tiene calendario, así que "ampliá el
-        # rango" a secas mandaba a buscar algo que no está en pantalla.
-        st.info("No hay compras con esta Familia/Subfamilia en el rango de "
-                "fechas elegido. Soltá el filtro de Familia, o ampliá el "
-                "rango desde el selector de fecha de cualquier tarjeta.")
-        return
+    #   1. Vivía ARRIBA DE TODO. Cortar antes del rail apagaba la pantalla
+    #      ENTERA y se llevaba puesta a «Documentos SUNAT», que no mira `d`
+    #      (recibe `df_full` para que los chips no la toquen, regla #301):
+    #      61 comprobantes esperando y la página en blanco. Regla #329.
+    #   2. Bajó hasta acá (2026-09-06) y dejó el rail vivo… pero seguía
+    #      terminando en `return`, o sea que se llevaba LA PILA ENTERA.
+    #   3. 2026-09-07, reportado con captura desde la vista Semanal: el
+    #      `return` ya no está. Dos motivos medidos, no de gusto:
+    #
+    #      · DOS de las seis secciones NO dependen de `d`. «Vs año pasado»
+    #        (ventana propia, abre en "Todo") y «Volatilidad» (abre en 12
+    #        meses) calculan sobre `d_full` — con el rango vacío siguen
+    #        mostrando el histórico entero. Apagarlas era la #329 otra vez,
+    #        un piso más abajo.
+    #      · Y sobre todo: LA SALIDA ESTABA ADENTRO DE LO QUE SE APAGABA.
+    #        Desde que la franja no tiene calendario (2026-09-06) el único
+    #        control de rango son los selectores de fecha de las CABECERAS
+    #        de las tarjetas. Sin pila no hay cabeceras, así que el cartel
+    #        decía "ampliá el rango desde cualquier tarjeta" con la pantalla
+    #        vacía detrás: un callejón sin salida del que sólo se volvía
+    #        soltando el filtro de Familia a ciegas. Ver regla #354.
+    #
+    # Lo que hay debajo tolera un `d` vacío — se verificó sección por
+    # sección en el navegador. Y el CARTEL TAMBIÉN SE FUE DE ACÁ: ahora lo
+    # dibuja cada sección DENTRO de su tarjeta, junto al selector de fecha
+    # de la cabecera, que es el control con el que se arregla.
+    #
+    # No es sólo prolijidad: un `st.info` suelto arriba de la pila NO CABE.
+    # El jalón de `-104px` que sube la primera tarjeta bajo la franja
+    # (`estilos/_20_compras_rail.py`) está medido contra los CINCO bloques
+    # de alto cero que hay entre el borde del contenedor y esa tarjeta; un
+    # sexto bloque con alto de verdad se lo come el jalón y el cartel sale
+    # ENCIMA de la tarjeta. Medido en el navegador el 2026-09-07, con el
+    # cartel pisando el título "Ranking de proveedores".
 
     # ══ LA PILA ══════════════════════════════════════════════════════════
     # Las vistas de Compras no se reemplazan: se apilan y se leen bajando.

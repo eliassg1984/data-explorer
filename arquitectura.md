@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-353 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+354 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (120)
+**CSS y estilos** (121)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -154,8 +154,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#350** — El iframe de un componente de Streamlit se queda con el ancho que tenía cuando se renderizó,…
 - **#351** — "Ponelo en línea" es una CUENTA, no un gusto: medí el contenido nowrap antes de discutir
 - **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
+- **#354** — La salida de un estado vacío no puede estar adentro de lo que el estado vacío apaga: Compras…
 
-**Layout y alturas** (37)
+**Layout y alturas** (38)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -194,6 +195,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#345** — Una vista que es "un ranking y su drill" no son dos tarjetas: es UNA, y lo único que scrollea…
 - **#346** — Apilar un drill bajo su ranking cuesta el ALTO; ponerlo al lado cuesta el ANCHO. Elegí…
 - **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
+- **#354** — La salida de un estado vacío no puede estar adentro de lo que el estado vacío apaga: Compras…
 
 **Plotly y figuras** (56)
 
@@ -31478,6 +31480,84 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-07.)
 
+
+354. **La salida de un estado vacío no puede estar adentro de lo que el
+     estado vacío apaga: Compras se quedaba sin NINGÚN control de fecha
+     (2026-09-07).** Tercer acto de la #329, reportado con captura desde la
+     vista Semanal: *"cuando escojo una fecha sin datos me aparece este
+     mensaje, debería permitirme las demás vistas, pero al parecer bloquea
+     todo el reporte"*.
+
+     La guarda ya había bajado dos veces —de arriba de todo, a debajo del
+     rail (#329)— pero seguía terminando en `return`:
+
+         if d is None or d.empty:
+             st.info("No hay compras con esta Familia/Subfamilia…")
+             return          # ← y con él, LA PILA ENTERA
+
+     Y el mismo día que se movió (2026-09-06) pasó otra cosa que la volvió
+     mucho más cara: **la franja de Compras dejó de dibujar el calendario**
+     (#332). Desde entonces el único control de rango del reporte son los
+     selectores de fecha de las CABECERAS de las tarjetas. O sea que el
+     cartel decía *"ampliá el rango desde el selector de fecha de cualquier
+     tarjeta"* después de borrar todas las tarjetas. **Callejón sin
+     salida**: el único camino de vuelta era soltar el filtro de Familia a
+     ciegas, sin ver qué se estaba soltando.
+
+     Dos hallazgos al medirlo en el navegador, los dos verificables:
+
+     · **Dos de las seis secciones no dependen de `d`.** «Vs año pasado»
+       abre en "Todo" y «Volatilidad» en 12 meses; las dos calculan sobre
+       `d_full` (el histórico con los chips aplicados, SIN el filtro de
+       fecha). Con el rango de septiembre vacío, quitando el `return`
+       dibujan el histórico entero — medido: S/ 5.09M y el candlestick de
+       Azúcar Blanca. Apagarlas era exactamente la #329, un piso más abajo.
+     · **Nada revienta con `d` vacío.** Se probó sección por sección con el
+       rango del mes en curso (4 filas, todas fuera de las cinco familias
+       de fábrica): Proveedor y Producto salían por su propia guarda,
+       Semanal dibujaba su eje sin barras, la Tabla su AgGrid con "No hay
+       datos para mostrar". Ninguna excepción en el log.
+
+     El arreglo es que la guarda **deje de cortar** y que cada sección
+     traiga su cartel ADENTRO de su tarjeta. En Proveedor y Producto eso
+     además significó mover el `st.info("Sin datos…")` de ANTES de la
+     tarjeta a DESPUÉS de su cabecera — que es donde está el selector de
+     fecha con el que se arregla. Es la #115 aplicada a la cabecera, y el
+     mismo movimiento que ya había hecho Volatilidad el 2026-09-05.
+
+     Tres cosas que sólo aparecen al hacerlo:
+
+     · **El cartel general NO puede ir arriba de la pila.** El jalón de
+       `-104px` que sube la primera tarjeta bajo la franja
+       (`estilos/_20_compras_rail.py`) está medido contra los CINCO bloques
+       de alto CERO que hay entre el borde del contenedor y esa tarjeta. Un
+       `st.info` es un sexto bloque con alto de verdad: el jalón se lo come
+       y el cartel sale ENCIMA del título "Ranking de proveedores" — se vio
+       así en la primera versión de este cambio. Por eso el texto completo
+       —las dos salidas, y qué sigue teniendo datos más abajo— vive en la
+       tarjeta vacía de Proveedor, que es la primera de la pila.
+     · **La rama vacía tiene que inyectar el CSS que la rama llena
+       inyectaba.** `CSS_PROVEEDOR` estila los CUATRO prefijos `cp_*`
+       (rank, prod, sem, vol) y lo inyecta `proveedor.py` — 320 líneas
+       DESPUÉS de su guarda. Saliendo antes, los selectores de fecha de
+       Semanal y Volatilidad quedaban sin estilo en la pantalla vacía. Lo
+       mismo con `.cp-prod-rank-tit`, que vive en `_CSS_SELECTOR_TEXTO` de
+       `producto.py`, también después de su guarda.
+     · **La tarjeta vacía reusa el prefijo de widget de la llena**
+       (`cp_rank`, `cp_prod`) y la misma FAMILIA de key de tarjeta
+       (`compras_prov_card_`, `compras_prod_card_`), que es de donde
+       cuelgan fondo, radio y padding en `estilos/_80_cards.py`. No choca,
+       porque las dos ramas son excluyentes; y así el rango elegido desde
+       el cartel sigue puesto cuando la vista vuelve con datos.
+
+     **Verificación:** `ruff` limpio, `test_docs` y `test_asistente_datos`
+     verdes (`test_graficos` falla por el cromo de `--nav-top-alto`, cambio
+     ajeno en curso en `estilos/`). En el navegador, con el rango en "Mes"
+     (1–5 sep 2026, `d` vacío): las seis secciones se dibujan, «Vs año
+     pasado» y «Volatilidad» con datos, y desde el selector de fecha de la
+     tarjeta vacía de Proveedor un clic en "Año" devuelve el reporte entero
+     (1 ene – 5 sep 2026). (2026-09-07.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31490,7 +31570,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#354**.
+> próxima regla nueva es la **#355**.
 
 >
 

@@ -375,7 +375,26 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     dd = dd.dropna(subset=[col_fecha, col_prod])
     dd = dd[dd[col_prod].astype(str).str.strip() != ""]
     if dd.empty:
-        st.info("Sin datos en el rango seleccionado.")
+        # Gemelo del cartel vacío del Ranking de Proveedores, y por el mismo
+        # motivo: este `return` salía antes de la cabecera, que es donde
+        # vive el ÚNICO control de rango de la sección desde que la franja
+        # no dibuja calendario. La tarjeta se dibuja siempre; lo que se
+        # decide adentro es el contenido (regla #115, y ver #354).
+        #
+        # DOS blobs de CSS, y los dos hacen falta acá arriba: la fila del
+        # selector la estila `CSS_PROVEEDOR` (lo inyecta el drill de
+        # Proveedor, la sección de ARRIBA, que con `d` vacío cae en su
+        # propia rama vacía — y por eso ahí también se inyecta), y el
+        # título `.cp-prod-rank-tit` vive en `_CSS_SELECTOR_TEXTO`, que
+        # este módulo inyectaba DESPUÉS de esta guarda.
+        st.markdown(_CSS_SELECTOR_TEXTO, unsafe_allow_html=True)
+        with st.container(border=True, key="compras_prod_card_vacio"):
+            selector_fecha_tarjeta(
+                "cp_prod", "_cp_prod_atajo_pendiente",
+                titulo_html='<div class="cp-prod-rank-tit">'
+                            'Ranking de productos</div>')
+            st.info("Sin compras en el rango seleccionado. Ampliá el rango "
+                    "desde la fecha de la cabecera.")
         return
 
     st.markdown(_CSS_SELECTOR_TEXTO, unsafe_allow_html=True)
