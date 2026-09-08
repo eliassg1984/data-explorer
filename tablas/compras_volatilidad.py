@@ -28,62 +28,99 @@ from tema import (
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
 
-# Ancho FIJO (no por longitud de header, como ajuste_pivote.py): el
-# contenido de cada celda-semana es corto y ACOTADO, así que no hace falta
-# ganchar el ancho al texto de la cabecera -- eso fue justo el bug
-# reportado (autoSizeStrategy="fitGridWidth" estiraba las columnas para
-# llenar el ancho disponible, y en una tarjeta ancha solo entraban 3 de
-# 8). Con ancho fijo y sin auto-fit, la cabecera larga ("29 Jun - 5 Jul")
-# envuelve a dos líneas (wrapHeaderText/autoHeaderHeight ya activos) en
-# vez de ensanchar la columna.
-#
-# 84 -> 98 el 2026-09-06, al bajar la segunda línea con los dos precios.
-# OJO CON LO QUE ESTE NÚMERO ES: NO es el ancho final. Medido en el
-# navegador (viewport 1358, rail puesto) el grid recibe 850px y los
-# reparte -- «Insumo» se queda con su `minWidth` y el resto se escala
-# proporcionalmente, así que 170/98/92 sale en pantalla como 175/85/80.
-# O sea que acá se elige el REPARTO, no los píxeles: subir esto le saca a
-# «Volatilidad», no al scroll. Lo que de verdad le hizo sitio a la segunda
-# línea fue el padding de la celda (ver `_PAD_X_SEMANA`).
+# EL REPARTO: un ancho DECLARADO por columna, que AG Grid escala para
+# llenar la grilla respetando cada `minWidth`. O sea que esto es una
+# PROPORCION, no pixeles: 98 contra los 80 de «Volatilidad» y los 150 fijos
+# de «Insumo». Quien lo dispara es `_AL_MONTAR`, mas abajo.
 _ANCHO_COL_SEMANA = 98
-_ANCHO_COL_VOL = 92
+_ANCHO_COL_VOL = 80
+"""Peso de «Volatilidad» en el reparto. Bajo de 92 a 80 el 2026-09-07: es la
+unica columna cuyo contenido no crece con el ancho de la ventana -- «12402.5»
+mide ~46px y la cabecera 66 -- asi que lo que se le saque va a las siete
+semanas, que son las que estaban apretadas."""
+
+_MIN_ANCHO_COL_SEMANA = 48
+"""Piso de una columna-semana, y la cuenta que lo fija (2026-09-07).
+
+El peor valor que dibuja `_FMT_PCT` son cinco glifos ("+562%", "x124"), que
+a `_TAM_DELTA` miden 34px. La celda gasta ademas 12px de cromo horizontal:
+4+4 de `_PAD_X_SEMANA` y 2+2 del borde transparente que separa una pastilla
+de la siguiente (ver `_STYLE_DELTA`). 34 + 12 = 46, y 48 deja 2px de aire.
+
+NO ES COSMETICO, y por eso es un piso y no un deseo: hasta hoy la columna
+salia en 46px con un formato de siete glifos (51px) y el `overflow: hidden`
+de la celda se comia el principio del numero. "+176.9%" se leia "76.9%" --
+un recorte que no parece un recorte, parece OTRO NUMERO, la misma trampa
+que ya documenta `_FMT_PCT` con los multiplicadores. Reportado con captura.
+
+La columna crece con la ventana (el reparto es proporcional) pero no baja de
+aca. Si la grilla se angosta tanto que ni la suma de los pisos entra, AG
+Grid saca scroll horizontal: feo, pero visible, que es justo lo contrario de
+mentir."""
+
+_ANCHO_COL_INSUMO = 150
+"""Ancho de «Insumo», que ademas va `pinned` y con el mismo valor de piso:
+asi el reparto no le da ni le saca nada, que es lo que se busca -- lo que
+sobra tiene que ir a las siete columnas-semana, no al nombre.
+
+Era 170 y bajo a 150 el 2026-09-07: los 20px
+son los que le faltaban a las siete columnas-semana para llegar a su piso
+sin pedir scroll horizontal (150 + 7x48 + 78 + 17 del scrollbar = 581, contra
+los 587 que mide la grilla con el rail desplegado en una ventana de 1400).
+
+150px son ~20 caracteres a 13px; el nombre entero sigue en el tooltip."""
+
 _MIN_ANCHO_COL_VOL = 78
-"""Piso de la columna «Volatilidad». No lo tenía, y con el drill al lado del
-ranking (2026-09-07) AG Grid la escalaba hasta 46px: la cabecera salía como
-una torre de letras («Vol / atil / ida / d») y el valor como «1…». Es la
-columna que le da nombre a la vista, así que es la última que puede ceder.
+"""Piso de la columna «Volatilidad». No lo tenia, y con el drill al lado del
+ranking (2026-09-07) AG Grid la escalaba hasta 46px: la cabecera salia como
+una torre de letras («Vol / atil / ida / d») y el valor como «1...». Es la
+columna que le da nombre a la vista, asi que es la ultima que puede ceder.
 
 78 = 66 del texto «Volatilidad» a 11px + los 12 del padding de `_PAD_X_COL`.
-El valor más grande que hay hoy en el parquet, «12402.5», mide ~46."""
+El valor mas grande que hay hoy en el parquet, «12402.5», mide ~46."""
 
-# Alto de fila: DOS lineas donde hubo variacion (el % arriba, los dos
-# precios abajo). Sale de la suma medida -- 13px de la primera linea y 9.5
-# de la segunda, las dos a `line-height: 1.15`, son 26px de texto -- mas el
-# aire de la celda. No se usa `getRowHeight` para dejar en 30 las filas sin
-# segunda linea (el truco de `documentos_sunat.py`, donde 291 de 326 filas
-# no la tienen) porque aca es al reves: la tabla esta ORDENADA por
-# volatilidad, asi que una fila sin ninguna variacion es la excepcion y
-# alternar dos altos en una grilla de 7 columnas se lee como un temblor.
-ALTO_FILA = 40
-_TAM_PRECIOS = "9.5px"
+# Alto de fila: UNA linea. Nacio en 40 para alojar una segunda linea con
+# los dos precios de cierre; esa linea se fue el 2026-09-07 (ver
+# `_FMT_PCT`) y con ella los 10px que le hacian falta. A 30px las diez
+# filas de antes son trece en la misma tarjeta, y cada fila respira.
+ALTO_FILA = 30
 
-# Sin signo cuando redondea a cero: un "+0.0%" dice "subio" con un
-# numero que dice "no cambio". Mismo umbral que `_EPS_CERO`.
+_TAM_DELTA = "12px"
+"""Cuerpo del % en las columnas-semana, un punto por debajo del resto de la
+grilla (13px). Es lo que hace que los cinco glifos del peor caso entren en
+`_MIN_ANCHO_COL_SEMANA` -- 34px contra los 37 que medirian a 13px."""
+
+# SIN DECIMAL, y no es una decision de gusto: es la unica forma de que el
+# peor caso entre en la columna. Con un decimal, "+176.9%" mide 51px y la
+# columna real son 46 -- el `overflow: hidden` de la celda se comia el
+# principio y la grilla mostraba "76.9%" (reportado con captura el
+# 2026-09-07). Sin el, cinco glifos, 34px, y la cifra exacta a un hover de
+# distancia en el tooltip.
+#
+# El decimal ademas era falsa precision para lo que esta tabla hace: es un
+# ESCANER -- se lee de un golpe para encontrar que insumo se movio y cuando.
+# El precio exacto de las dos semanas vive en el tooltip, y el detalle en el
+# candlestick de al lado.
+#
+# Sin signo cuando redondea a cero: un "+0%" dice "subio" con un numero que
+# dice "no cambio". Mismo umbral que `_EPS_CERO`, que por eso subio de 0.05
+# a 0.5 el mismo dia -- lo que se VE "0%" tiene que ser exactamente lo que
+# se dibuja como "aca no paso nada", o la tabla se contradice sola pintando
+# de rojo una celda que dice cero.
 _FMT_PCT = JsCode("""
     function(params) {
         if (params.value === null || params.value === undefined) return '';
         var v = Number(params.value);
-        if (Math.abs(v) < 0.05) return '0.0%';
-        // A PARTIR DE MIL POR CIENTO, MULTIPLICADOR. "+12282.1%" son nueve
-        // caracteres en una columna de 50px: no entra, y envolvia en dos
-        // renglones dentro de una fila de 40 (medido el 2026-09-07 sobre
-        // "Vino tinto de la casa"). "x124" son cuatro, y ademas se lee
-        // mejor -- nadie procesa doce mil por ciento como otra cosa que
-        // "se multiplico por". Los dos precios exactos siguen en el
-        // tooltip. Solo hacia arriba: una baja no puede pasar de -100%.
-        if (v >= 1000) return '\\u00d7' + (1 + v / 100).toFixed(0);
-        var sign = v > 0 ? '+' : '\\u2212';
-        return sign + Math.abs(v).toFixed(1) + '%';
+        if (Math.abs(v) < 0.5) return '0%';
+        // A PARTIR DE MIL POR CIENTO, MULTIPLICADOR. "+12282%" son siete
+        // caracteres en una columna de 48px: no entra. "x124" son cuatro,
+        // y ademas se lee mejor -- nadie procesa doce mil por ciento como
+        // otra cosa que "se multiplico por". Los dos precios exactos
+        // siguen en el tooltip. Solo hacia arriba: una baja no puede pasar
+        // de -100%.
+        if (v >= 1000) return '×' + (1 + v / 100).toFixed(0);
+        var sign = v > 0 ? '+' : '−';
+        return sign + Math.abs(v).toFixed(0) + '%';
     }
 """)
 
@@ -93,28 +130,28 @@ _FMT_1DEC = JsCode("""
     }
 """)
 
-# Un cambio que redondea a "0.0%" es RUIDO: ocupa el mismo ancho que un
-# +12.4% y compite por la mirada en una tabla donde lo que importa son los
+# Un cambio que redondea a "0%" es RUIDO: ocupa el mismo ancho que un
+# +12% y compite por la mirada en una tabla donde lo que importan son los
 # saltos. Se dibuja mas chico (y mas claro) para que la fila se lea como
 # "aca no paso nada" sin sacar el dato. El umbral es el del formateo
-# (`toFixed(1)`), no uno propio: lo que se ve "0.0%" es exactamente lo que
-# se achica -- si no, la tabla mostraria dos ceros de tamanos distintos.
-_EPS_CERO = 0.05
-_TAM_CERO = "11px"
+# (`toFixed(0)`), no uno propio: lo que se ve "0%" es exactamente lo que se
+# achica -- si no, la tabla mostraria dos ceros de tamanos distintos, o
+# peor, una pastilla roja con un cero adentro.
+_EPS_CERO = 0.5
+_TAM_CERO = "10.5px"
 
 # El padding horizontal de la celda, propio de las columnas-semana. El del
-# tema material son 15px POR LADO, o sea 30 de los 85 que mide la columna:
-# quedaban 55px útiles y la segunda línea de precios mide entre 56 y 69.
-# Medido antes de tocar nada -- 46 de las 65 celdas con dos líneas salían
-# recortadas, y el corte no se ve como un error, se ve como un precio
-# distinto ("110.17 → 169.4"). Con 6px quedan 73 útiles contra los 69 del
-# peor caso real (S/ 169.41, el precio más alto del rango medido).
+# tema material son 15px POR LADO, o sea 30 de los 48 que mide la columna:
+# no quedaria sitio ni para tres glifos.
 #
-# Va en el `cellStyle` y no en el `custom_css` del grid a propósito: ahí
-# sería `.ag-cell` a secas y le apretaría también al nombre del insumo,
-# que no lo pidió. Es el aviso de CLAUDE.md sobre reglas colgadas del
-# contenedor, en su versión AgGrid.
-_PAD_X_SEMANA = "0 6px"
+# 6 -> 4 el 2026-09-07: los 2px que faltaban para que la pastilla pudiera
+# separarse de su vecina sin robarle ancho al numero. Ver `_STYLE_DELTA`.
+#
+# Va en el `cellStyle` y no en el `custom_css` del grid a proposito: ahi
+# seria `.ag-cell` a secas y le apretaria tambien al nombre del insumo,
+# que no lo pidio. Es el aviso de CLAUDE.md sobre reglas colgadas del
+# contenedor, en su version AgGrid.
+_PAD_X_SEMANA = "0 4px"
 
 _PAD_X_COL = "6px"
 """Padding horizontal de la CABECERA de las columnas angostas, y la mitad
@@ -135,22 +172,31 @@ _TAM_HDR_SEMANA = "11px"
 """Cabecera de columna angosta, más chica que el cuerpo (13px). Es lo que
 hace que «Volatilidad» entre en un renglón dentro de 66px."""
 
-_MIN_ANCHO_PRECIOS = 81
-"""Ancho REAL de columna a partir del cual la celda dibuja su segunda línea.
-
-69 del peor caso medido ("S/ 169.41", el precio más alto del rango) + los 12
-de `_PAD_X_SEMANA`. Debajo de eso la línea no se dibuja en vez de recortarse:
-ver el comentario dentro de `_RENDER_DELTA`.
-
-No es el `width` declarado sino `getActualWidth()`, que es otra cosa — AG Grid
-escala las columnas para llenar el grid, así que el ancho de esta columna
-depende del ancho de la ventana. Medido el 2026-09-07 con el drill al lado:
-~55px en una ventana de 1440, ~81 en una de 1800, ~139 en una de 2560. O sea
-que la línea aparece sola cuando hay monitor para ella."""
-
 _STYLE_DELTA = JsCode(f"""
     function(params) {{
-        var base = {{padding: '{_PAD_X_SEMANA}'}};
+        // El borde TRANSPARENTE es el canal entre columnas. Sin el, la
+        // pastilla de cada celda llega hasta el borde y las de dos semanas
+        // seguidas se tocan: la fila se lee como una banda de color en vez
+        // de como siete celdas. Con `background-clip: padding-box` el color
+        // se pinta solo dentro del padding, asi que 2px por lado abren el
+        // canal horizontal y 3px arriba y abajo lo abren entre filas --
+        // sale una pastilla, no un bloque.
+        //
+        // El borde y no un margen: `.ag-cell` esta posicionada en absoluto
+        // con su ancho puesto a mano, y un margen la desalinearia de su
+        // cabecera. El borde lo absorbe el `box-sizing: border-box` que ya
+        // trae AG Grid.
+        // En LONGHANDS, no `border: '3px 2px solid transparent'`: el
+        // atajo de CSS no acepta dos anchos, asi que la declaracion entera
+        // se descarta en silencio y la celda se queda con el borde de 1px
+        // del tema. Medido: `getComputedStyle(celda).borderTopWidth` daba
+        // 1px con el atajo puesto.
+        var base = {{padding: '{_PAD_X_SEMANA}',
+                     fontSize: '{_TAM_DELTA}',
+                     borderWidth: '3px 2px',
+                     borderStyle: 'solid',
+                     borderColor: 'transparent',
+                     backgroundClip: 'padding-box'}};
         if (params.value === null || params.value === undefined) {{
             return Object.assign(base, {{color: '#c9c9d1'}});
         }}
@@ -169,102 +215,25 @@ _STYLE_DELTA = JsCode(f"""
     }}
 """)
 
-# LOS DOS PRECIOS, DEBAJO DEL %: sin ellos la celda dice cuanto se movio y
-# no desde donde -- "+12.4%" sobre 8.50 y sobre 85.00 son la misma celda, y
-# la decision de compra no es la misma. Estaban en el tooltip desde que la
-# tabla es AgGrid; a pedido (2026-09-06) pasan a estar VISIBLES, que es lo
-# unico que se puede leer de un golpe de vista sobre la grilla entera.
+# LOS DOS PRECIOS YA NO SE DIBUJAN EN LA CELDA, y aca esta el porque
+# (2026-09-07). Estuvieron un dia: una segunda linea con "110.17 -> 169.41"
+# debajo del %, a pedido, cuando el ranking ocupaba la tarjeta entera y su
+# columna-semana media 85px. Al mudarse el drill al costado la columna cayo
+# a 46 y la linea dejo de entrar: salia recortada como "28.14..." -- dos
+# precios cortados que no parecen cortados, parecen otros precios.
 #
-# Solo donde HAY variacion, y con el mismo umbral que decide el resto
-# (`_EPS_CERO`): en una celda que dice "0.0%" los dos precios serian el
-# mismo numero repetido. Es la misma doctrina que la segunda linea de
-# `documentos_sunat.py::_JS_IMPORTE` -- aparece cuando dice algo.
+# El guard que la dibujaba "solo donde entra" media `p.eGridCell.clientWidth`
+# dentro de un `requestAnimationFrame`, y era una CARRERA: segun cuando
+# corriera el frame veia el ancho declarado (98) o el real (46), asi que la
+# linea aparecia o no sin que nada cambiara en el codigo. Es la unica
+# diferencia entre la captura del usuario (con linea, recortada) y el mismo
+# commit medido en local (sin linea).
 #
-# `class` con `init`/`getGui` y no una funcion que devuelva HTML: en
-# `st_aggrid` el atajo vanilla no pinta (se ve como texto escapado, o
-# revienta con React #31). Ver `arquitectura.md` regla #25.
-#
-# El indice de la semana entra por `cellRendererParams` y NO interpolado en
-# el codigo: asi es UN solo `JsCode` para las siete columnas en vez de
-# siete, y el coste de `JsCode.__init__` es cuadratico en el largo del
-# texto (regla #226). Los precios se leen de `params.data`, que es la
-# misma fila -- no hace falta `api.getValue`, que en esta version de AG
-# Grid no existe.
-_RENDER_DELTA = JsCode("""
-class DeltaCelda {
-    init(p) {
-        this.eGui = document.createElement('div');
-        var g = this.eGui.style;
-        g.display = 'flex';
-        g.flexDirection = 'column';
-        g.alignItems = 'flex-end';
-        g.justifyContent = 'center';
-        g.lineHeight = '1.15';
-        g.height = '100%';
-        var a = document.createElement('div');
-        a.textContent = p.valueFormatted == null ? '' : p.valueFormatted;
-        // Sin `nowrap` un valor largo se parte en dos renglones DENTRO de
-        // una fila de 40px y desborda por abajo, encima de su vecina.
-        a.style.whiteSpace = 'nowrap';
-        this.eGui.appendChild(a);
-        if (p.value == null || Math.abs(Number(p.value)) < __EPS__) return;
-        var d = p.data || {};
-        var prev = d['__prev_' + p.idx];
-        var cur = d['__cur_' + p.idx];
-        if (prev == null || cur == null) return;
-        var b = document.createElement('div');
-        b.textContent = this.num(prev) + '\u2009\u2192\u2009' + this.num(cur);
-        b.style.fontSize = '__TAM__';
-        b.style.fontWeight = '400';
-        b.style.opacity = '0.78';
-        // Que un precio mas ancho de lo previsto FALLE VISIBLE. Sin esto
-        // el `overflow: hidden` de la celda corta el texto por la mitad y
-        // "169.41" se lee "169.4", que no parece un recorte: parece otro
-        // precio. Medido el 2026-09-06 sobre el parquet real, el peor caso
-        // entra con 2px de sobra -- o sea que el margen es real pero flaco.
-        b.style.maxWidth = '100%';
-        b.style.overflow = 'hidden';
-        b.style.textOverflow = 'ellipsis';
-        b.style.whiteSpace = 'nowrap';
-        // SOLO DONDE ENTRA. Con el drill al lado del ranking (2026-09-07)
-        // la columna-semana pasa de ~85px a ~50, y ahi "110.17 -> 169.41"
-        // no cabe: el `text-overflow` de arriba lo cortaria en
-        // "110.17 -> 16..." y un precio recortado no parece un recorte,
-        // parece otro precio. Los dos numeros siguen en el tooltip, que es
-        // de donde vinieron hasta el 2026-09-06.
-        //
-        // SE MIDE DESPUES DEL LAYOUT, y eso es el arreglo de un intento
-        // fallido del mismo dia: `p.column.getActualWidth()` leido aca
-        // devuelve el ancho DECLARADO (98), porque AG Grid escala las
-        // columnas para llenar el grid DESPUES de construir las celdas.
-        // El guard daba verde siempre y la linea salia igual, recortada.
-        // `p.eGridCell.clientWidth` dentro de un rAF ya ve el ancho real.
-        //
-        // Se agrega DENTRO del rAF en vez de agregarlo y esconderlo: asi
-        // no hay un frame con el texto puesto. Sin `eGridCell` (no deberia
-        // pasar) se dibuja, que es el comportamiento de antes.
-        var caja = this.eGui;
-        requestAnimationFrame(function () {
-            var w = p.eGridCell ? p.eGridCell.clientWidth : 0;
-            if (!w || w >= __MINANCHO__) caja.appendChild(b);
-        });
-    }
-    num(v) {
-        return Number(v).toLocaleString('es-PE',
-            {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    }
-    getGui() { return this.eGui; }
-}
-""".replace("__EPS__", str(_EPS_CERO)).replace("__TAM__", _TAM_PRECIOS)
-   .replace("__MINANCHO__", str(_MIN_ANCHO_PRECIOS)))
-"""La celda de una semana: el % arriba y, si hubo movimiento, el cierre
-anterior y el nuevo debajo.
-
-Sin simbolo de moneda a proposito, y no es una suposicion de las que
-advierte la regla #240: el drill filtra `TIPO_MONEDA` a soles antes de
-calcular nada, asi que la columna no puede traer otra cosa. El "S/" lo
-ponen el tooltip y la tarjeta de abajo, donde hay ancho; aca son 20px
-repetidos siete veces por fila para decir lo mismo."""
+# Los dos numeros siguen en el tooltip, que es de donde salieron, y en la
+# tabla de la semana del drill. Con la linea se fue tambien el cellRenderer
+# propio: sin segunda linea la celda es su valor formateado, o sea el
+# renderer por defecto -- una `class` con `init`/`getGui` menos, y de paso
+# un `JsCode` menos por render (regla #226).
 
 
 _TOOLTIP_INSUMO = JsCode(
@@ -318,6 +287,61 @@ def _style_vol(max_vol):
     """)
 
 
+_AL_MONTAR = JsCode("""
+    function(params) {
+        try {
+            var caja = document.getElementById('gridContainer');
+            if (!caja || !window.ResizeObserver) return;
+            new ResizeObserver(function () {
+                try { params.api.sizeColumnsToFit(); } catch (e) {}
+            }).observe(caja);
+        } catch (e) {}
+    }
+""")
+"""Re-reparte las columnas cada vez que cambia el ANCHO de la grilla.
+
+Tres mecanismos se probaron para esto el 2026-09-07 y dos no sirven, asi que
+conviene dejar por que:
+
+  * `autoSizeStrategy: fitGridWidth` (lo que pone `GridOptionsBuilder` por
+    defecto) reparte UNA vez, en `onFirstDataRendered`. Plegar el rail de la
+    izquierda ensancha la columna de Streamlit de 587 a 731px sin volver a
+    montar la grilla: se quedaba repartida a 587, con ~160px de vacio a la
+    derecha -- la mitad del "las columnas se ven apretadas" que reporto el
+    usuario. Al reves (desplegar el rail) el sobrante se vuelve scroll
+    horizontal.
+  * `colDef.flex` reparte solo en cada resize, que es exactamente lo que
+    hace falta, PERO se calcula al montar y si el cuerpo mide 0 se queda en
+    el ancho por defecto (200px) para siempre. Esta vista es una
+    `seccion_perezosa`, o sea que se construye fuera de pantalla: dos
+    renders del mismo codigo dieron 48.6px y 200px de columna segun donde
+    estuviera el scroll.
+  * `onGridSizeChanged` no llega: st_aggrid registra SU PROPIO listener del
+    evento (`this.state.api.addEventListener("gridSizeChanged", ...)`, en el
+    bundle del componente) y, a diferencia de lo que hace con `onGridReady`,
+    no llama al del usuario.
+
+Queda `onGridReady`, que el componente SI reenvia (`let {onGridReady: o} =
+this.state.gridOptions; o && o(e)`), y desde ahi un `ResizeObserver` sobre
+`#gridContainer` -- el div que st_aggrid dibuja dentro del iframe y que
+`estilos/_80_cards.py` + el `custom_css` de mas abajo estiran al ancho real
+de la columna. `sizeColumnsToFit` respeta los `minWidth`, asi que el reparto
+nunca baja de los pisos; si ni los pisos entran, sale scroll horizontal.
+
+LO QUE ESTA MEDIDO Y LO QUE NO, que es justo la clase de cosa que despues
+nadie recuerda: que este `onGridReady` CORRE y deja el observer puesto se
+comprobo en el navegador (una marca en el DOM del iframe). Que el observer
+DISPARE no se pudo comprobar ahi: en la sesion instrumentada el documento
+del iframe no estaba corriendo sus pasos de render -- ni `ResizeObserver` ni
+`window.onresize` entregaban nada, tampoco al cambiar el tamano de la
+ventana entera, que es sintoma del navegador automatizado y no de Streamlit
+(AG Grid usa el mismo mecanismo para su propio relayout). O sea: el reparto
+AL MONTAR esta verificado a 587 y a 731px; el re-reparto tardio, no.
+
+Si algun dia se ve que no re-reparte en un navegador de verdad, el plan B
+medido es un `setInterval` que compare `clientWidth`: los timers si corren."""
+
+
 def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
                                    key):
     """`tv`: columnas Insumo, __insumo_full (oculta, nombre sin truncar),
@@ -340,7 +364,8 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
         resizable=False, sortable=False, filter=False, editable=False,
         suppressMovable=True, wrapHeaderText=True, autoHeaderHeight=True,
     )
-    gb.configure_column("Insumo", pinned="left", minWidth=170,
+    gb.configure_column("Insumo", pinned="left", width=_ANCHO_COL_INSUMO,
+                        minWidth=_ANCHO_COL_INSUMO,
                         tooltipValueGetter=_TOOLTIP_INSUMO)
     gb.configure_column("__insumo_full", hide=True)
 
@@ -348,9 +373,9 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
                                                    headers)):
         gb.configure_column(
             col, header_name=hdr, type=["numericColumn"],
-            width=_ANCHO_COL_SEMANA, headerClass=_CLASE_HDR_COMPACTA,
+            width=_ANCHO_COL_SEMANA, minWidth=_MIN_ANCHO_COL_SEMANA,
+            headerClass=_CLASE_HDR_COMPACTA,
             valueFormatter=_FMT_PCT, cellStyle=_STYLE_DELTA,
-            cellRenderer=_RENDER_DELTA, cellRendererParams={"idx": i},
             tooltipValueGetter=_tooltip_delta(i, prev_label, col),
         )
         gb.configure_column(f"__prev_{i}", hide=True)
@@ -365,6 +390,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(rowHeight=ALTO_FILA, headerHeight=32,
                               tooltipShowDelay=200,
+                              onGridReady=_AL_MONTAR,
                               # NUEVE columnas: virtualizarlas no ahorra nada
                               # y sí deja fuera del DOM a la última cuando el
                               # ancho cambia después del primer render
@@ -384,6 +410,13 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
     custom_css[f".{_CLASE_HDR_COMPACTA} .ag-header-cell-text"] = {
         "font-size": f"{_TAM_HDR_SEMANA} !important",
     }
+    # QUE LA GRILLA OCUPE SU COLUMNA, no el ancho que tenía al renderizarse.
+    # Ver `_REPARTIR_ANCHO`: `#gridContainer` es el div que st_aggrid dibuja
+    # DENTRO del iframe con el ancho de Python escrito a mano (`width:
+    # 587px`). El gemelo de afuera —el iframe mismo— lo estira
+    # `estilos/_80_cards.py`, que es el único CSS que llega al documento de
+    # la app; éste viaja en `custom_css`, o sea dentro del iframe.
+    custom_css["#gridContainer"] = {"width": "100% !important"}
     custom_css[".ag-tooltip"] = {
         "background-color": f"{TEXTO_PRINCIPAL} !important",
         "color": "#ffffff !important",

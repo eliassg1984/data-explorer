@@ -422,66 +422,103 @@ CSS = """    /* ================================================================
     }
 
     /* ── VOLATILIDAD: la cabecera del DETALLE ─────────────────────────
-       Nació el 2026-09-07 EN UN RENGLÓN, cuando el drill iba debajo del
-       ranking y tenía 959px de ancho: ahí los tres KPI en línea ahorraban
-       25px de alto que hacían falta.
+       Nombre a la izquierda, los tres KPI a la derecha, TODO en un renglón
+       (2026-09-07, a pedido: «reducir el tamaño de los kpis y ponerlos en
+       línea con el título»).
 
-       Unas horas después el drill pasó a ser la columna DERECHA de la fila
-       y su ancho cayó a ~361px. En línea ya no entran —medido: 379px de
-       contenido nowrap contra 361 de columna, y el desborde se comía el
-       borde de la tarjeta— así que vuelven a rótulo-arriba/cifra-abajo, en
-       tres columnas iguales. Ahora el alto sobra (la tarjeta mide 590 de
-       708 disponibles) y lo que falta es ancho: es la misma decisión de
-       antes leída sobre la restricción que manda hoy.
+       Es el tercer intento del mismo día y los tres están medidos, así que
+       vale dejar la cuenta: el trío con las tallas de antes (rótulo .64rem,
+       cifra 1rem) mide 473px de contenido nowrap — por eso el intento
+       anterior no entró en los ~361px de la columna y volvió a
+       rótulo-arriba/cifra-abajo. Con rótulo .55rem, cifra .8rem, rótulos
+       cortos y la volatilidad sin su «pts», el trío baja a ~305px: con la
+       columna del drill en 454px (ventana 1400 y rail plegado) al nombre le
+       quedan ~137, y a partir de ~1600px de ventana entra entero.
 
-       `minmax(0, 1fr)` y no `1fr`: el mínimo por defecto de una pista de
-       grid es su contenido, así que sin el 0 una cifra larga («S/ 1,234.56
-       /und») volvería a empujar la columna por fuera de la tarjeta en vez
-       de recortarse. */
+       El NOMBRE es el que cede, pero con PISO: `flex: 1 1 130px` (unos 17
+       caracteres) + ellipsis. El piso va en la BASE del flex y no en
+       `min-width`: quién se va a otro renglón se decide con la base —el
+       ancho del contenido si la base es `auto`, o sea el nombre entero—,
+       y el `min-width` recién se mira después, cuando ya hay línea. Con
+       `auto` la fila envolvía igual (169 + 10 + 303 = 482 > 454) y el
+       nombre se quedaba con la línea entera para él. Sin el piso, con el rail desplegado —columna
+       de 364px— al nombre le quedaban 51px y el título del drill salía
+       «Vin…». Con él, cuando no entran los dos, el `flex-wrap` baja el trío
+       de KPIs a su propio renglón: la fila mide 20px más, que es
+       exactamente lo que costaba antes de este cambio, y ninguna de las dos
+       mitades miente. El umbral cae en ~443px de columna, o sea que en la
+       ventana del pedido (454) entra en línea y en la de al lado no.
+
+       El nombre completo sigue a un golpe de vista en la fila marcada de la
+       grilla de al lado, y el `title=` de cada KPI (lo pone
+       `volatilidad.py`) recupera el rótulo largo que acá se abrevia.
+
+       `align-items: baseline` y no `center`: rótulo y cifra tienen tallas
+       distintas y lo que alinea a la vista es la línea de base del texto,
+       no el centro de sus cajas. */
     .vol-detalle-hdr {
         display: flex;
-        flex-direction: column;
-        gap: 6px;
+        flex-flow: row wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        column-gap: 10px;
+        row-gap: 2px;
         margin: 0 0 .35rem;
         min-width: 0;
     }
     .vol-detalle-nom {
-        font-size: 1rem;
+        font-size: .95rem;
         font-weight: 700;
+        flex: 1 1 130px;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
     .vol-detalle-kpis {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        display: flex;
+        align-items: baseline;
+        flex: 0 0 auto;
         gap: 10px;
-        min-width: 0;
+        white-space: nowrap;
     }
     .vol-detalle-kpis > span {
-        display: block;
-        min-width: 0;
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
     }
     .vol-detalle-kpis i {
-        display: block;
         font-style: normal;
-        font-size: .64rem;
+        font-size: .55rem;
         font-weight: 700;
-        letter-spacing: .05em;
+        letter-spacing: .04em;
         text-transform: uppercase;
         color: var(--text-secondary);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
     .vol-detalle-kpis b {
-        display: block;
-        font-size: 1rem;
+        font-size: .8rem;
         font-weight: 700;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+    }
+
+    /* ── VOLATILIDAD: la grilla ocupa SU columna, siempre ─────────────
+       Streamlit le escribe al iframe de un componente el ancho que la
+       columna medía CUANDO se renderizó, como atributo HTML
+       (`width="587.0625"`), y no lo vuelve a tocar hasta el siguiente
+       rerun. Plegar el rail de la izquierda ensancha la columna a 731px sin
+       rerun: la grilla se quedaba dibujada en 587 con ~190px de vacío al
+       lado, y sus siete columnas-semana apretadas en 46px. Medido en el
+       navegador el 2026-09-07 — es la mitad del "se ven apretadas" que
+       reportó el usuario con captura.
+
+       Un atributo de presentación lo gana cualquier regla CSS, así que con
+       esto el iframe sigue a su columna. La otra mitad —el div de adentro,
+       que st_aggrid dibuja con el mismo ancho escrito a mano— y el
+       re-reparto de las columnas viven en `tablas/compras_volatilidad.py`
+       (`#gridContainer` en su `custom_css` y `_REPARTIR_ANCHO`): tres
+       piezas para un solo gesto, porque el iframe parte el CSS en dos
+       documentos. */
+    .st-key-compras_vol_rank_grid iframe {
+        width: 100% !important;
     }
 
     /* ── TABLA: el selector de ventana, pegado a la derecha ────────────

@@ -309,11 +309,13 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # ya se recortó `dd` a las semanas con datos. Mismo mecanismo
             # que el aviso del mes parcial de vs_ano_pasado.py.
             #
-            # El párrafo de los DOS PRECIOS no es relleno: la segunda línea
-            # de cada celda («110.17 → 169.41») son cierres de semanas
-            # DISTINTAS —el de la anterior y el de ésta— y leerlos como si
-            # los dos fueran de la semana del encabezado es la confusión
-            # que reportó el usuario el 2026-09-07 con captura.
+            # El párrafo del TOOLTIP no es relleno: la celda muestra la
+            # variación REDONDEADA a entero y los dos precios que la
+            # explican son cierres de semanas DISTINTAS —el de la anterior y
+            # el de ésta—. Leerlos como si los dos fueran de la semana del
+            # encabezado es la confusión que reportó el usuario el
+            # 2026-09-07 con captura, cuando esos precios se dibujaban en
+            # una segunda línea de la celda.
             with st.container(key="vol_hdr_ayuda"):
                 with st.popover(":material/info:", use_container_width=False):
                     with st.container(key="vol_ayuda_panel"):
@@ -325,10 +327,11 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                             "hacia dónde." + PARR
                             + "Cada celda compara el **cierre** (la última "
                             "compra) de esa semana contra el de la semana "
-                            "anterior, así que los dos precios de la segunda "
-                            "línea son de semanas DISTINTAS — el tooltip de "
-                            "la celda las nombra. Las compras intermedias se "
-                            "ven abajo, en el candlestick y en su tabla."
+                            "anterior. El % va redondeado para que entre en "
+                            "la columna: **el tooltip de la celda tiene los "
+                            "dos precios exactos** y nombra a qué semana es "
+                            "cada uno. Las compras intermedias se ven a la "
+                            "derecha, en el candlestick y en su tabla."
                             + PARR
                             + "Clic en una fila para ver su candlestick; "
                             "clic en una vela, para las compras de esa "
@@ -500,28 +503,43 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # «−0.0%» — un signo que afirma una caída sobre un número que dice
             # que no pasó nada. Medido con «Entraña fina importada x Kg».
             _sig = "" if abs(cambio_total) < 0.05 else ("+" if cambio_total > 0 else "−")
-            # UN SOLO RENGLÓN (2026-09-07): los tres KPIs venían en bloques de
-            # dos líneas —rótulo arriba, cifra abajo— que medían 51px. Con el
-            # rótulo en línea bajan a ~26, y esos 25px son grilla. El look lo
-            # pone `estilos/_80_cards.py` (.vol-detalle-hdr), no un `style=`
-            # inline: son cinco reglas repetidas tres veces.
+            # NOMBRE Y KPIs EN EL MISMO RENGLON (2026-09-07, a pedido).
+            # Los tres KPIs ocupaban 51px en dos lineas propias debajo del
+            # nombre; en linea y con las tallas chicas el bloque entero baja
+            # a ~22, y esos ~30px son grafico.
+            #
+            # LOS ROTULOS SE ABREVIAN Y LA VOLATILIDAD PIERDE SU «pts»
+            # porque el renglon es un presupuesto MEDIDO: con los rotulos
+            # largos el trio mide 473px de contenido nowrap contra los 454
+            # de la columna (la cuenta entera, en `estilos/_80_cards.py`).
+            # Lo que se abrevia vuelve en el `title=`, que es un tooltip
+            # nativo y no cuesta pixeles.
+            #
+            # El look lo pone `estilos/_80_cards.py` (.vol-detalle-hdr), no
+            # un `style=` inline: son cinco reglas repetidas tres veces.
             st.markdown(
                 f'<div class="vol-detalle-hdr">'
-                f'<span class="vol-detalle-nom">{_compras_truncar(str(prod_sel), 48)}</span>'
+                f'<span class="vol-detalle-nom" title="{prod_sel}">'
+                f'{_compras_truncar(str(prod_sel), 48)}</span>'
                 f'<span class="vol-detalle-kpis">'
-                f'<span><i>Precio actual</i><b>S/ {precio_actual:,.2f} /{unidad}</b></span>'
-                f'<span><i>Cambio total</i><b style="color:{color_cambio};">'
+                f'<span title="Precio actual: cierre de la ultima semana">'
+                f'<i>Precio</i><b>S/ {precio_actual:,.2f} /{unidad}</b></span>'
+                f'<span title="Cambio total entre la primera y la ultima semana">'
+                f'<i>Cambio</i><b style="color:{color_cambio};">'
                 f'{_sig}{abs(cambio_total):.1f}%</b></span>'
-                f'<span><i>Volatilidad</i><b>{vol_total:.1f} pts</b></span>'
+                f'<span title="Volatilidad: suma de las variaciones % semanales">'
+                f'<i>Volatilidad</i><b>{vol_total:.1f}</b></span>'
                 f'</span></div>',
                 unsafe_allow_html=True,
             )
 
             # El candlestick y la tabla de la semana, APILADOS: los dos son la
             # columna derecha de la fila, así que ya no compiten por el ancho
-            # entre sí sino con el ranking. alto=MINI (no APOYO): sigue
-            # compartiendo su columna con una tabla, el mismo criterio que el
-            # gráfico de evolución de Producto.
+            # entre sí sino con el ranking. El alto sale de un rol propio
+            # (`MINI_CANDLE_DRILL`, 200) y no de MINI (240): además de
+            # apoyar a una tabla, es el tercero de CUATRO bloques apilados
+            # en media columna. La cuenta de esa columna está en
+            # `graficos/alturas.py`.
 
             fig = go.Figure()
             fig.add_trace(go.Candlestick(
@@ -542,7 +560,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 mode="markers", marker=dict(size=38, opacity=0),
                 hoverinfo="skip", showlegend=False,
             ))
-            _compras_layout(fig, alto=alturas.MINI)
+            _compras_layout(fig, alto=alturas.MINI_CANDLE_DRILL)
             # UNA MARCA POR VELA, EN ESPAÑOL. Sin `tickvals` Plotly elige
             # sus propias fechas y las rotula con su locale por defecto —
             # el inglés: el eje decía "Jul 12 / Jul 26 / Aug 9 / Aug 23"

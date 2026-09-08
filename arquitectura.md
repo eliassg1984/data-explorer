@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-348 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+351 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (116)
+**CSS y estilos** (119)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -150,6 +150,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#344** — Plegar un riel y "más KPI" tiran para lados opuestos: la salida es que cada estado cargue lo…
 - **#345** — Una vista que es "un ranking y su drill" no son dos tarjetas: es UNA, y lo único que scrollea…
 - **#348** — Cuando una columna «no se ve», medí su PADDING antes de pedirle ancho a la tarjeta
+- **#349** — Un número recortado no parece recortado: parece OTRO número. El formato de una celda se elige…
+- **#350** — El iframe de un componente de Streamlit se queda con el ancho que tenía cuando se renderizó,…
+- **#351** — "Ponelo en línea" es una CUENTA, no un gusto: medí el contenido nowrap antes de discutir
 
 **Layout y alturas** (36)
 
@@ -249,7 +252,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 
-**AgGrid y tablas** (52)
+**AgGrid y tablas** (54)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -303,6 +306,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 - **#346** — Apilar un drill bajo su ranking cuesta el ALTO; ponerlo al lado cuesta el ANCHO. Elegí…
 - **#348** — Cuando una columna «no se ve», medí su PADDING antes de pedirle ancho a la tarjeta
+- **#349** — Un número recortado no parece recortado: parece OTRO número. El formato de una celda se elige…
+- **#350** — El iframe de un componente de Streamlit se queda con el ancho que tenía cuando se renderizó,…
 
 **Streamlit** (98)
 
@@ -31177,6 +31182,152 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-07.)
 
+349. **Un número recortado no parece recortado: parece OTRO número. El
+     formato de una celda se elige contra el ancho REAL de su columna.**
+     Reportado el 2026-09-07 con captura — *"las columnas de la tabla de
+     volatilidad se ven apretadas"*— y lo que había debajo del "se ven
+     apretadas" era una tabla que mostraba cifras falsas.
+
+     Medido en el navegador, con la vista ya al lado de su drill (#346):
+
+     | | mide | entra en |
+     |---|---|---|
+     | columna-semana | **46 px** | — |
+     | menos padding 6+6 | | **34 px de texto** |
+     | «+176.9%» a 13px | **51 px** | ✗ |
+     | «−99.2%» a 13px | 44 px | ✗ |
+     | «+177%» a 13px | 37 px | ✗ |
+     | «+177%» a 12px, padding 4+4 y 2+2 de canal | 34 px | ✓ (38 de sitio) |
+
+     El `overflow: hidden` de la celda se come el PRINCIPIO del número, así
+     que «+176.9%» se leía **«76.9%»** y «+561.8%» se leía «51.8%». No hay
+     puntos suspensivos, no hay recuadro rojo: la tabla dice un número
+     plausible y equivocado. Es la misma trampa que #346 ya había
+     documentado para la segunda línea de precios; lo que faltaba era
+     aplicarla al dato principal.
+
+     **Lo que se hizo, en orden de cuánto ancho devuelve cada cosa:**
+
+     · **El decimal se va.** Un escáner —una grilla que se lee de un golpe
+       para ver QUÉ se movió y CUÁNDO— no necesita 0.1% de precisión, y ese
+       decimal cuesta 7px por celda. La cifra exacta sigue en el tooltip,
+       que es de donde vino.
+     · **Cuerpo 12px** en la celda-semana (el resto de la grilla, 13).
+     · **Padding 6→4** y un **canal de 2px** por lado, con
+       `border-*-width` transparente y `background-clip: padding-box`: sin
+       él las pastillas de dos semanas seguidas se tocan y la fila se lee
+       como una banda de color. **En LONGHANDS**: `border: '3px 2px solid
+       transparent'` es CSS inválido —el atajo no acepta dos anchos— y el
+       navegador descarta la declaración entera en silencio; medido,
+       `borderTopWidth` seguía en 1px con el atajo puesto.
+     · **«Insumo» 170→150** y **«Volatilidad» 92→80**: los 20+12px que le
+       faltaban a las siete semanas para llegar a un piso decente.
+     · **`minWidth` en la columna-semana (48).** Si algún día ni el piso
+       entra, que salga scroll horizontal: feo, pero visible.
+
+     **Y el umbral del cero acompaña al formato.** Con `toFixed(0)`, un
+     +0.4% se dibuja «0%»; si el umbral que decide "acá no pasó nada"
+     siguiera en 0.05, esa celda saldría **roja y diciendo cero**. Sube a
+     0.5, o sea al del propio formateo: *lo que se VE como cero es
+     exactamente lo que se pinta como cero.*
+
+     **Bonus: la segunda línea de precios de #346 se retira.** Su guard
+     (`p.eGridCell.clientWidth` dentro de un `requestAnimationFrame`) es una
+     CARRERA: según cuándo corra el frame ve el ancho declarado (98) o el
+     real (46), así que la línea aparecía o no sin que nada cambiara en el
+     código — es la única diferencia entre la captura del usuario (con
+     línea, recortada) y el mismo commit medido en local (sin línea). Al
+     irse, la fila baja de 40 a 30px: **13 filas visibles donde había 10**,
+     y de paso desaparece el cellRenderer propio (un `JsCode` menos, regla
+     #226).
+
+     (2026-09-07.)
+
+350. **El iframe de un componente de Streamlit se queda con el ancho que
+     tenía cuando se renderizó, y ningún evento de adentro se entera.**
+     La otra mitad del "se ven apretadas" de #349, y la que no se ve mirando
+     el código: Streamlit le escribe al iframe el ancho de la columna como
+     ATRIBUTO HTML (`width="587.0625"`) y no lo vuelve a tocar salvo rerun
+     con re-montaje. Plegar el rail de la izquierda ensancha la columna de
+     587 a 731px **sin** re-montar: la grilla se quedaba dibujada a 587 con
+     ~160px de vacío al lado y sus columnas apretadas. En la captura del
+     usuario ese vacío se ve entre la tabla y el candlestick.
+
+     **El arreglo son dos reglas de CSS en dos documentos distintos**, que
+     es lo que hace que no se encuentren de un grep:
+
+     · el iframe, desde `estilos/` (`.st-key-<key> iframe {width:100%}`) —
+       un atributo de presentación lo gana cualquier regla CSS;
+     · `#gridContainer`, el div que st_aggrid dibuja DENTRO del iframe con
+       el mismo ancho a mano, desde el `custom_css` del propio AgGrid.
+
+     **Y el reparto de las columnas, que es lo que sobra por resolver.**
+     Cuatro caminos, tres muertos, todos medidos el 2026-09-07:
+
+     · `autoSizeStrategy: fitGridWidth` (lo que pone `GridOptionsBuilder`
+       por defecto) reparte **una vez**, en `onFirstDataRendered`. Es el que
+       queda, y al montar funciona: verificado a 587 y a 731px.
+     · `colDef.flex` reparte solo en cada resize —justo lo que hace falta—
+       pero se calcula al montar y **si el cuerpo mide 0 se queda en el
+       ancho por defecto (200px) para siempre**. Esta vista es una
+       `seccion_perezosa`, o sea que se construye fuera de pantalla: dos
+       renders del MISMO código dieron 48.6px y 200px de columna según dónde
+       estuviera el scroll. `fitGridWidth` no tiene ese problema porque
+       reintenta cuando mide cero (0 → 100 → 500ms).
+     · `onGridSizeChanged` **no llega al usuario**: st_aggrid registra su
+       propio listener del evento y, a diferencia de lo que hace con
+       `onGridReady`, no llama al de uno. (Ojo: `tablas/desktop.py` lo usa
+       creyendo que sí.)
+     · `onGridReady` **sí** se reenvía —verificado dejando una marca en el
+       DOM del iframe—, así que desde ahí se instala un `ResizeObserver`
+       sobre `#gridContainer`.
+
+     **Lo que no se pudo verificar, y conviene que quede escrito:** que ese
+     observer DISPARE. En la sesión instrumentada el documento del iframe no
+     estaba corriendo sus pasos de render —ni `ResizeObserver` ni
+     `window.onresize` entregaban nada, tampoco al cambiar el tamaño de la
+     ventana entera—, que es síntoma del navegador automatizado y no de
+     Streamlit: AG Grid usa el mismo mecanismo para su propio relayout. Si
+     algún día se ve que no re-reparte en un navegador de verdad, el plan B
+     medido es un `setInterval` comparando `clientWidth`: los timers sí
+     corren.
+
+     (2026-09-07.)
+
+351. **"Ponelo en línea" es una CUENTA, no un gusto: medí el contenido
+     nowrap antes de discutir.** Tercer intento del mismo renglón en un día,
+     y el que salió bien salió por medir. Es la cabecera del drill de
+     Volatilidad: nombre del insumo + tres KPI.
+
+     | | ancho del trío | ¿entra al lado del nombre? |
+     |---|---|---|
+     | rótulo .64rem / cifra 1rem, rótulos largos | **473 px** | ✗ (columna: 454) |
+     | ídem, .55rem / .8rem | 408 px | ✗ |
+     | + rótulos cortos («Precio», «Cambio») y sin «pts» | **303 px** | ✓ (al nombre le quedan 141) |
+
+     El intento anterior había medido 379px contra 361 de columna y
+     concluido *"en línea no entran"* — correcto para ESAS tallas. El pedido
+     («reducí el tamaño de los KPI **y** ponelos en línea») era en realidad
+     una instrucción sobre la palanca: achicá hasta que entre. Lo que se
+     abrevia vuelve como `title=`, que es un tooltip nativo y no cuesta
+     píxeles.
+
+     **La trampa de CSS que costó una vuelta: en un contenedor `flex-wrap`,
+     quién se va al renglón de abajo se decide con la BASE del flex, no con
+     `min-width`.** Con `flex: 1 1 auto` la base es el ancho del contenido
+     —el nombre entero, 169px— así que la fila envolvía igual (169 + 10 +
+     303 = 482 > 454) y el nombre se quedaba con el renglón para él solo. El
+     `min-width` recién se mira DESPUÉS, cuando ya hay línea. Con
+     `flex: 1 1 130px` la cuenta que decide es 130 + 10 + 303 = 443 ≤ 454:
+     entra en línea, y el nombre crece a 141.
+
+     De paso queda el patrón para este tipo de cabecera: **el título es el
+     que cede, pero con piso**, y cuando ni el piso entra, el `flex-wrap`
+     baja el bloque de KPIs a su propio renglón en vez de recortar el
+     nombre a «Vin…». Los 130px del piso son ~17 caracteres.
+
+     (2026-09-07.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31189,7 +31340,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#345**.
+> próxima regla nueva es la **#352**.
 
 >
 

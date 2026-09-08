@@ -164,6 +164,33 @@ MARCO = PRESUPUESTO
 # tampoco desborda ni empuja a la tabla vecina a crecer.
 MINI_PROD_EVO = 270
 
+MINI_CANDLE_DRILL = 200
+"""El candlestick de Volatilidad, que comparte su COLUMNA con tres cosas más.
+
+Es MINI (240) recortado, y el recorte se pidió: «deseo que el gráfico de
+velas se reduzca de forma vertical» (2026-09-07). Tiene sitio porque el
+mismo pedido puso los tres KPI en el renglón del título — 51px que pasaron
+a ~22 (ver `estilos/_80_cards.py`, .vol-detalle-hdr).
+
+Por qué un rol propio y no MINI: MINI es «una figura de apoyo al lado de
+otra cosa». Éste apoya y ADEMÁS es el tercero de cuatro bloques apilados en
+media columna, que es una restricción distinta y más dura. La cuenta de esa
+columna, que es la que fija el número:
+
+    KPIs 22 + gap 10 + candlestick 200 + gap 10
+    + título de la semana 22 + gap 10 + tabla <= 160 (PANEL_BAJO_FIGURA)
+    = 434, contra los 450 de `RANKING_CON_DRILL` a la izquierda
+
+O sea que la columna derecha vuelve a caber DEBAJO de la izquierda, que es
+lo que hace que la fila no crezca y que no sobre aire en ninguna de las dos.
+Si el candlestick baja más, el que manda es el ranking y el aire aparece
+abajo del drill; si sube de ~215, la fila entera crece.
+
+El piso de lo legible está cerca: a 200px, descontando los 30+10 de margen
+de `_compras_layout` y los ~25 de los rótulos del eje X, al área de dibujo
+le quedan ~135px. Con ocho velas se leen bien; con menos alto empiezan a
+confundirse cuerpo y mecha."""
+
 # Ranking (AgGrid) que comparte su tarjeta con el DRILL que abre. Hoy:
 # «Insumos ordenados por volatilidad» (compras/volatilidad.py), donde la
 # grilla es la columna izquierda de la fila y el candlestick + la tabla de la
@@ -176,11 +203,12 @@ MINI_PROD_EVO = 270
 # no la suma, y los ~290px que ocupaba el drill vuelven enteros a la grilla.
 #
 # 450 SALE DE IGUALAR LAS DOS COLUMNAS, que es lo que hace que no sobre aire
-# en ninguna de las dos. La derecha mide, apilada:
-#     KPIs 26 + gap 10 + candlestick 240 (MINI) + gap 10
-#     + título de la semana 22 + gap 10 + tabla ≤ 160 (PANEL_BAJO_FIGURA)
-#     ≈ 450-480 según cuántas compras tenga la semana
-# y 450 en la grilla son (450 - 45 de cabecera) / 40 = 10 filas.
+# en ninguna de las dos. La derecha mide, apilada (la cuenta entera está en
+# `MINI_CANDLE_DRILL`, acá arriba): ≈ 434.
+#
+# Y 450 en la grilla son (450 - 45 de cabecera) / 30 = 13 filas desde el
+# 2026-09-07, cuando la fila de la grilla bajó de 40 a 30 al irse la segunda
+# línea de precios de la celda. Eran 10.
 #
 # ES LA PALANCA: si la vista muestra pocas filas, o si sobra aire debajo del
 # candlestick, el número que hay que mover es ÉSTE, y cada 40px es una fila.

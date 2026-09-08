@@ -299,7 +299,15 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   interfaz de Component: una `class` con `init(params)` que arma
   `this.eGui` a mano (`createElement`/`textContent`) y `getGui()` que lo
   devuelve. Detalle y ejemplo en `arquitectura.md` § Reglas #25.
-- **`api.getValue(colKey, rowNode)` no existe** en la versión de AG Grid
+- **El ancho de una celda decide su FORMATO, y el ancho real no es el
+  declarado.** AG Grid escala las columnas para llenar la grilla: una
+  columna declarada en 98 sale en 46, y ahí «+176.9%» (51px) se recorta
+  por la IZQUIERDA y se lee «76.9%» — un número plausible y falso. Medí el
+  peor caso contra el ancho real antes de elegir decimales. Ver
+  `arquitectura.md` reglas #349 y #350; la segunda cubre además el iframe
+  del componente, que se queda con el ancho que tenía al renderizarse, y
+  cuáles de sus hooks llegan (`onGridReady` sí, `onGridSizeChanged` no).
+- - **`api.getValue(colKey, rowNode)` no existe** en la versión de AG Grid
   de este proyecto (34.3.1). Si un cellRenderer necesita el valor de OTRA
   columna, resolverlo con `valueGetter` + `aggFunc` propio en vez de leer
   una columna vecina en tiempo de render.
