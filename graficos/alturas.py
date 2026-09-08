@@ -164,32 +164,35 @@ MARCO = PRESUPUESTO
 # tampoco desborda ni empuja a la tabla vecina a crecer.
 MINI_PROD_EVO = 270
 
-MINI_CANDLE_DRILL = 200
+MINI_CANDLE_DRILL = 150
 """El candlestick de Volatilidad, que comparte su COLUMNA con tres cosas más.
 
-Es MINI (240) recortado, y el recorte se pidió: «deseo que el gráfico de
-velas se reduzca de forma vertical» (2026-09-07). Tiene sitio porque el
-mismo pedido puso los tres KPI en el renglón del título — 51px que pasaron
-a ~22 (ver `estilos/_80_cards.py`, .vol-detalle-hdr).
+Es MINI (240) recortado dos veces, y las dos se pidieron: primero a 200
+(«deseo que el gráfico de velas se reduzca de forma vertical») y el mismo día
+a 160, cuando se midió que la tarjeta entera no entraba en el presupuesto y
+sacaba barra de scroll — ver `RANKING_CON_DRILL`, acá abajo.
 
-Por qué un rol propio y no MINI: MINI es «una figura de apoyo al lado de
-otra cosa». Éste apoya y ADEMÁS es el tercero de cuatro bloques apilados en
-media columna, que es una restricción distinta y más dura. La cuenta de esa
+Por qué un rol propio y no MINI: MINI es «una figura de apoyo al lado de otra
+cosa». Éste apoya y ADEMÁS es el tercero de cuatro bloques apilados en media
+columna, que es una restricción distinta y más dura. La cuenta de esa
 columna, que es la que fija el número:
 
-    KPIs 22 + gap 10 + candlestick 200 + gap 10
-    + título de la semana 22 + gap 10 + tabla <= 160 (PANEL_BAJO_FIGURA)
-    = 434, contra los 450 de `RANKING_CON_DRILL` a la izquierda
+    KPIs 31 + gap 10 + candlestick 150 + gap 10
+    + título de la semana 35 + gap 10 + tabla <= 110 (PANEL_BAJO_FIGURA)
+    = 356, medido en el navegador bloque por bloque
 
-O sea que la columna derecha vuelve a caber DEBAJO de la izquierda, que es
-lo que hace que la fila no crezca y que no sobre aire en ninguna de las dos.
-Si el candlestick baja más, el que manda es el ranking y el aire aparece
-abajo del drill; si sube de ~215, la fila entera crece.
+contra los 360 de `RANKING_CON_DRILL` a la izquierda: la fila mide el MÁXIMO
+de las dos, o sea 362, y con eso la tarjeta cierra en ~450 contra los 465
+del presupuesto. Los gaps son 10 y no el 1rem por defecto porque
+`estilos/_80_cards.py` se los baja a las DOS columnas de esta fila: 18px que
+se descubrieron midiendo, no leyendo el código.
 
-El piso de lo legible está cerca: a 200px, descontando los 30+10 de margen
-de `_compras_layout` y los ~25 de los rótulos del eje X, al área de dibujo
-le quedan ~135px. Con ocho velas se leen bien; con menos alto empiezan a
-confundirse cuerpo y mecha."""
+LO QUE SE COMPENSA POR EL LADO DEL MARGEN: a 160px, los 30 de margen
+superior de `_compras_layout` serían el 19% de la figura para un título que
+esta figura NO tiene (lo pone el KPI de arriba). El llamador los baja a 8, y
+así el área de dibujo queda en ~120px — apenas 20 menos que a 200 con el
+margen de siempre. Antes de bajar más este número, mirá si queda margen que
+recortar: es más barato que velas más chatas."""
 
 # Ranking (AgGrid) que comparte su tarjeta con el DRILL que abre. Hoy:
 # «Insumos ordenados por volatilidad» (compras/volatilidad.py), donde la
@@ -202,13 +205,24 @@ confundirse cuerpo y mecha."""
 # se mudó AL LADO: ahí el alto de la fila es el MÁXIMO de las dos columnas,
 # no la suma, y los ~290px que ocupaba el drill vuelven enteros a la grilla.
 #
-# 450 SALE DE IGUALAR LAS DOS COLUMNAS, que es lo que hace que no sobre aire
-# en ninguna de las dos. La derecha mide, apilada (la cuenta entera está en
-# `MINI_CANDLE_DRILL`, acá arriba): ≈ 434.
+# 450 -> 370 EL 2026-09-07, Y ES LA CORRECCIÓN DE UN OLVIDO: 450 salía de
+# igualar las dos columnas entre sí, pero nadie las midió contra el
+# PRESUPUESTO. La tarjeta terminaba en 545px contra los 465 que caben en el
+# laptop objetivo, así que el contenedor la clampeaba y le sacaba barra de
+# scroll — reportado con captura, "la tarjeta no debe tener barra deslizando
+# al lado". La cuenta que faltaba, con la tarjeta medida en el navegador:
 #
-# Y 450 en la grilla son (450 - 45 de cabecera) / 30 = 13 filas desde el
-# 2026-09-07, cuando la fila de la grilla bajó de 40 a 30 al irse la segunda
-# línea de precios de la celda. Eran 10.
+#     padding 15+15 + cabecera 36 + gap 10 + FILA <= PRESUPUESTO (465)
+#     o sea FILA <= 389; con 360 la tarjeta mide ~450 y quedan 15px de aire
+#     para que la cabecera crezca (envuelve en ventanas angostas)
+#
+# (Ojo: el padding REAL de la tarjeta son 15px por lado, no los 8 que dice
+# `_PADDING_TARJETA` — medido. Esa constante la usan los asserts de abajo,
+# que son de otra familia de tarjetas; acá se cuenta lo medido.)
+#
+# Y 360 en la grilla son (360 - 37 de cabecera) / 40 = 8 filas. La fila
+# volvió a 40 el mismo día, al volver la segunda línea con los dos precios
+# (pedido: "no se ve el precio inicial y el precio final").
 #
 # ES LA PALANCA: si la vista muestra pocas filas, o si sobra aire debajo del
 # candlestick, el número que hay que mover es ÉSTE, y cada 40px es una fila.
@@ -221,17 +235,20 @@ confundirse cuerpo y mecha."""
 # Python, y forzarlo por CSS encoge el iframe pero deja el documento de
 # adentro en su alto — la grilla queda cortada, con su scroll fuera de la
 # vista. Ver arquitectura.md #345.
-RANKING_CON_DRILL = 450
+RANKING_CON_DRILL = 360
 
-PANEL_BAJO_FIGURA = 160
+PANEL_BAJO_FIGURA = 110
 """Tope de una tabla de detalle que va DEBAJO de una figura, en la misma
 columna (no al lado). Hoy: la tabla de compras de la semana de Volatilidad.
 
 Es MINI recortado, y el recorte tiene motivo: apilada bajo el candlestick,
 cada píxel que crece esta tabla lo paga la fila entera —o sea también la
-grilla de la izquierda, que se estira para igualarla. A 160 entran cuatro
-compras, y la semana con más compras de un mismo insumo que hay en el
-parquet tiene tres."""
+grilla de la izquierda, que se estira para igualarla.
+
+160 -> 110 el 2026-09-07, con el resto de la columna, para que la tarjeta
+entre en el presupuesto (ver `RANKING_CON_DRILL`). A 110 entran DOS compras
+enteras y la tercera scrollea dentro de la tabla; la semana con más compras
+de un mismo insumo que hay en el parquet tiene tres."""
 
 
 

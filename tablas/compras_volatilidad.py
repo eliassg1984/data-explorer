@@ -39,24 +39,27 @@ unica columna cuyo contenido no crece con el ancho de la ventana -- «12402.5»
 mide ~46px y la cabecera 66 -- asi que lo que se le saque va a las siete
 semanas, que son las que estaban apretadas."""
 
-_MIN_ANCHO_COL_SEMANA = 48
-"""Piso de una columna-semana, y la cuenta que lo fija (2026-09-07).
+_MIN_ANCHO_COL_SEMANA = 81
+"""Piso de una columna-semana, y la cuenta que lo fija.
 
-El peor valor que dibuja `_FMT_PCT` son cinco glifos ("+562%", "x124"), que
-a `_TAM_DELTA` miden 34px. La celda gasta ademas 12px de cromo horizontal:
-4+4 de `_PAD_X_SEMANA` y 2+2 del borde transparente que separa una pastilla
-de la siguiente (ver `_STYLE_DELTA`). 34 + 12 = 46, y 48 deja 2px de aire.
+Lo manda la SEGUNDA LINEA de la celda (los dos cierres, «110.17 -> 169.41»):
+69px del peor caso real medido sobre el parquet mas los 12 de cromo
+horizontal — 4+4 de `_PAD_X_SEMANA` y 2+2 del borde transparente que separa
+una pastilla de la siguiente. El % de arriba entra de sobra en eso: cinco
+glifos a `_TAM_DELTA` son 34px.
 
-NO ES COSMETICO, y por eso es un piso y no un deseo: hasta hoy la columna
-salia en 46px con un formato de siete glifos (51px) y el `overflow: hidden`
-de la celda se comia el principio del numero. "+176.9%" se leia "76.9%" --
-un recorte que no parece un recorte, parece OTRO NUMERO, la misma trampa
-que ya documenta `_FMT_PCT` con los multiplicadores. Reportado con captura.
+48 -> 81 el 2026-09-07, al volver los dos precios. Es el numero que decide
+cuantas semanas se pueden mostrar (`volatilidad.py::MAX_SEMANAS`): en los
+587px que recibe la grilla con el rail desplegado entran CUATRO columnas de
+81, no siete. La alternativa —dibujar la linea "solo donde entra"— ya se
+probo dos veces y las dos fallaron por lo mismo: el ancho real no se sabe
+mientras la celda se construye (ver `_RENDER_DELTA`).
 
-La columna crece con la ventana (el reparto es proporcional) pero no baja de
-aca. Si la grilla se angosta tanto que ni la suma de los pisos entra, AG
-Grid saca scroll horizontal: feo, pero visible, que es justo lo contrario de
-mentir."""
+NO ES COSMETICO. Con la columna en 46px y un formato de siete glifos (51px)
+el `overflow: hidden` de la celda se comia el principio del numero:
+"+176.9%" se leia "76.9%" — un recorte que no parece un recorte, parece OTRO
+NUMERO. Si la grilla se angosta tanto que ni los pisos entran, AG Grid saca
+scroll horizontal: feo, pero visible."""
 
 _ANCHO_COL_INSUMO = 150
 """Ancho de «Insumo», que ademas va `pinned` y con el mismo valor de piso:
@@ -79,11 +82,22 @@ columna que le da nombre a la vista, asi que es la ultima que puede ceder.
 78 = 66 del texto «Volatilidad» a 11px + los 12 del padding de `_PAD_X_COL`.
 El valor mas grande que hay hoy en el parquet, «12402.5», mide ~46."""
 
-# Alto de fila: UNA linea. Nacio en 40 para alojar una segunda linea con
-# los dos precios de cierre; esa linea se fue el 2026-09-07 (ver
-# `_FMT_PCT`) y con ella los 10px que le hacian falta. A 30px las diez
-# filas de antes son trece en la misma tarjeta, y cada fila respira.
-ALTO_FILA = 30
+# Alto de fila: DOS lineas donde hubo variacion (el % arriba, los dos
+# precios abajo). 13.8px de la primera (12px a line-height 1.15) mas 10.9 de
+# la segunda son 25 de texto; el resto es el aire de la celda y los 3+3 del
+# borde que separa una pastilla de la de la fila siguiente.
+#
+# Estuvo en 30 unas horas, mientras la segunda linea no se dibujaba. Volvio
+# a 40 con ella (2026-09-07, a pedido: "no se ve el precio inicial y el
+# precio final"). Cuesta filas visibles —de 12 a 8— y eso se pago bajando el
+# alto de la tarjeta entera, no ignorandolo: ver `alturas.RANKING_CON_DRILL`.
+#
+# No se usa `getRowHeight` para dejar en 30 las filas sin segunda linea (el
+# truco de `documentos_sunat.py`) porque aca es al reves: la tabla esta
+# ORDENADA por volatilidad, asi que una fila sin ninguna variacion es la
+# excepcion y alternar dos altos en una grilla se lee como un temblor.
+ALTO_FILA = 40
+_TAM_PRECIOS = "9.5px"
 
 _TAM_DELTA = "12px"
 """Cuerpo del % en las columnas-semana, un punto por debajo del resto de la
@@ -215,25 +229,90 @@ _STYLE_DELTA = JsCode(f"""
     }}
 """)
 
-# LOS DOS PRECIOS YA NO SE DIBUJAN EN LA CELDA, y aca esta el porque
-# (2026-09-07). Estuvieron un dia: una segunda linea con "110.17 -> 169.41"
-# debajo del %, a pedido, cuando el ranking ocupaba la tarjeta entera y su
-# columna-semana media 85px. Al mudarse el drill al costado la columna cayo
-# a 46 y la linea dejo de entrar: salia recortada como "28.14..." -- dos
-# precios cortados que no parecen cortados, parecen otros precios.
+# LOS DOS PRECIOS, DEBAJO DEL %: sin ellos la celda dice cuanto se movio y
+# no desde donde -- "+12%" sobre 8.50 y sobre 85.00 son la misma celda, y la
+# decision de compra no es la misma. Ademas son el precio INICIAL y el FINAL
+# de la ventana leidos en la grilla: el `prev` de la primera columna y el
+# `cur` de la ultima.
 #
-# El guard que la dibujaba "solo donde entra" media `p.eGridCell.clientWidth`
-# dentro de un `requestAnimationFrame`, y era una CARRERA: segun cuando
-# corriera el frame veia el ancho declarado (98) o el real (46), asi que la
-# linea aparecia o no sin que nada cambiara en el codigo. Es la unica
-# diferencia entre la captura del usuario (con linea, recortada) y el mismo
-# commit medido en local (sin linea).
+# SIN GUARD DE ANCHO, y esa es la diferencia con las dos versiones
+# anteriores. La linea se dibujaba "solo donde entra", midiendo la celda: la
+# primera vez con `col.getActualWidth()` (devuelve el ancho DECLARADO, no el
+# real) y la segunda con `p.eGridCell.clientWidth` dentro de un
+# `requestAnimationFrame` (una CARRERA: segun cuando corriera el frame veia
+# 98 o 46, asi que la linea salia recortada o no salia, sin que nada
+# cambiara en el codigo). La conclusion, medida dos veces: **un cellRenderer
+# no sabe cuanto mide su celda mientras se construye.**
 #
-# Los dos numeros siguen en el tooltip, que es de donde salieron, y en la
-# tabla de la semana del drill. Con la linea se fue tambien el cellRenderer
-# propio: sin segunda linea la celda es su valor formateado, o sea el
-# renderer por defecto -- una `class` con `init`/`getGui` menos, y de paso
-# un `JsCode` menos por render (regla #226).
+# Asi que el ancho se garantiza ANTES, desde Python: `_MIN_ANCHO_COL_SEMANA`
+# es el piso que la linea necesita y `MAX_SEMANAS` esta elegido para que ese
+# piso entre siempre. Sin medicion en el navegador no hay carrera posible.
+#
+# `class` con `init`/`getGui` y no una funcion que devuelva HTML: en
+# `st_aggrid` el atajo vanilla no pinta (se ve como texto escapado, o
+# revienta con React #31). Ver `arquitectura.md` regla #25.
+#
+# El indice de la semana entra por `cellRendererParams` y NO interpolado en
+# el codigo: asi es UN solo `JsCode` para las columnas en vez de uno por
+# columna, y el coste de `JsCode.__init__` es cuadratico en el largo del
+# texto (regla #226). Los precios se leen de `params.data`, que es la misma
+# fila -- no hace falta `api.getValue`, que en esta version de AG Grid no
+# existe.
+_RENDER_DELTA = JsCode("""
+class DeltaCelda {
+    init(p) {
+        this.eGui = document.createElement('div');
+        var g = this.eGui.style;
+        g.display = 'flex';
+        g.flexDirection = 'column';
+        g.alignItems = 'flex-end';
+        g.justifyContent = 'center';
+        g.lineHeight = '1.15';
+        g.height = '100%';
+        var a = document.createElement('div');
+        a.textContent = p.valueFormatted == null ? '' : p.valueFormatted;
+        // Sin `nowrap` un valor largo se parte en dos renglones DENTRO de
+        // la fila y desborda por abajo, encima de su vecina.
+        a.style.whiteSpace = 'nowrap';
+        this.eGui.appendChild(a);
+        if (p.value == null || Math.abs(Number(p.value)) < __EPS__) return;
+        var d = p.data || {};
+        var prev = d['__prev_' + p.idx];
+        var cur = d['__cur_' + p.idx];
+        if (prev == null || cur == null) return;
+        var b = document.createElement('div');
+        b.textContent = this.num(prev) + ' → ' + this.num(cur);
+        b.style.fontSize = '__TAM__';
+        b.style.fontWeight = '400';
+        b.style.opacity = '0.78';
+        // Que un precio mas ancho de lo previsto FALLE VISIBLE en vez de
+        // cortarse por la mitad: "169.41" recortado a "169.4" no parece un
+        // recorte, parece otro precio. El peor caso del parquet entra en el
+        // piso de la columna, asi que esto es un cinturon, no el mecanismo.
+        b.style.maxWidth = '100%';
+        b.style.overflow = 'hidden';
+        b.style.textOverflow = 'ellipsis';
+        b.style.whiteSpace = 'nowrap';
+        this.eGui.appendChild(b);
+    }
+    num(v) {
+        // A partir de mil, sin decimales: "1,234.56 -> 1,299.00" mide ~95px
+        // y no hay columna que lo aguante; "1,235 -> 1,299" son ~62. Debajo
+        // de mil los centimos son el dato (un insumo de S/ 8.50).
+        var dec = Math.abs(v) >= 1000 ? 0 : 2;
+        return Number(v).toLocaleString('es-PE',
+            {minimumFractionDigits: dec, maximumFractionDigits: dec});
+    }
+    getGui() { return this.eGui; }
+}
+""".replace("__EPS__", str(_EPS_CERO)).replace("__TAM__", _TAM_PRECIOS))
+"""La celda de una semana: el % arriba y, si hubo movimiento, el cierre
+anterior y el nuevo debajo.
+
+Sin simbolo de moneda a proposito, y no es una suposicion de las que
+advierte la regla #240: el drill filtra `TIPO_MONEDA` a soles antes de
+calcular nada, asi que la columna no puede traer otra cosa. El "S/" lo ponen
+el tooltip y la tarjeta de al lado, donde hay ancho."""
 
 
 _TOOLTIP_INSUMO = JsCode(
@@ -376,6 +455,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
             width=_ANCHO_COL_SEMANA, minWidth=_MIN_ANCHO_COL_SEMANA,
             headerClass=_CLASE_HDR_COMPACTA,
             valueFormatter=_FMT_PCT, cellStyle=_STYLE_DELTA,
+            cellRenderer=_RENDER_DELTA, cellRendererParams={"idx": i},
             tooltipValueGetter=_tooltip_delta(i, prev_label, col),
         )
         gb.configure_column(f"__prev_{i}", hide=True)

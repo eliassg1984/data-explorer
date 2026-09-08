@@ -50,8 +50,26 @@ mismo argumento que `selector_escala`: el dueño del dato es esta clave, y
 el widget es una VISTA que se recalcula de ella en cada render."""
 
 MIN_SEMANAS = 4          # con menos, un candlestick no dice nada
-MAX_SEMANAS = 8          # tope de velas visibles — más se vuelve ilegible y
-                          # además diluye la volatilidad real entre huecos
+MAX_SEMANAS = 5
+"""Tope de semanas de la ventana, y NO es un gusto: es el ancho de la celda.
+
+8 -> 5 el 2026-09-07, a pedido — *"deseo que muestre menos días, no se ve el
+precio inicial y el precio final"*. La segunda línea de cada celda (los dos
+cierres, «110.17 → 169.41») necesita 81px de columna: 69 del peor caso real
+más 12 de cromo. Con el ranking en la columna izquierda de la fila, la
+grilla recibe 587px con el rail desplegado, y ahí sólo caben CUATRO columnas
+de 81 (150 del insumo + 4x81 + 78 de volatilidad + 17 del scrollbar = 569).
+Cuatro columnas de variación son cinco semanas, porque la primera es la
+línea de base.
+
+Así el precio inicial y el final se leen en la propia grilla: el `prev` de
+la primera columna es el cierre con el que arranca la ventana y el `cur` de
+la última, el cierre de hoy.
+
+Este número manda además sobre el candlestick (cinco velas) y sobre el
+score de volatilidad, que es la suma de las variaciones DE LA VENTANA: con
+cinco semanas los puntajes bajan y el ranking se reordena. Es consecuencia
+del pedido, no un efecto colateral escondido."""
 MIN_GASTO = 400.0        # S/ gastados en la ventana; filtra ruido de insumos
 MIN_COBERTURA = 0.75     # % de semanas con al menos una compra
 
@@ -309,13 +327,11 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # ya se recortó `dd` a las semanas con datos. Mismo mecanismo
             # que el aviso del mes parcial de vs_ano_pasado.py.
             #
-            # El párrafo del TOOLTIP no es relleno: la celda muestra la
-            # variación REDONDEADA a entero y los dos precios que la
-            # explican son cierres de semanas DISTINTAS —el de la anterior y
-            # el de ésta—. Leerlos como si los dos fueran de la semana del
-            # encabezado es la confusión que reportó el usuario el
-            # 2026-09-07 con captura, cuando esos precios se dibujaban en
-            # una segunda línea de la celda.
+            # El párrafo de los DOS PRECIOS no es relleno: la segunda
+            # línea de cada celda («110.17 → 169.41») son cierres de semanas
+            # DISTINTAS —el de la anterior y el de ésta— y leerlos como si
+            # los dos fueran de la semana del encabezado es la confusión que
+            # reportó el usuario el 2026-09-07 con captura.
             with st.container(key="vol_hdr_ayuda"):
                 with st.popover(":material/info:", use_container_width=False):
                     with st.container(key="vol_ayuda_panel"):
@@ -327,11 +343,12 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                             "hacia dónde." + PARR
                             + "Cada celda compara el **cierre** (la última "
                             "compra) de esa semana contra el de la semana "
-                            "anterior. El % va redondeado para que entre en "
-                            "la columna: **el tooltip de la celda tiene los "
-                            "dos precios exactos** y nombra a qué semana es "
-                            "cada uno. Las compras intermedias se ven a la "
-                            "derecha, en el candlestick y en su tabla."
+                            "anterior, así que los dos precios de la segunda "
+                            "línea son de semanas DISTINTAS — el tooltip de "
+                            "la celda las nombra. El % va redondeado a "
+                            "entero; los precios, no. Las compras "
+                            "intermedias se ven a la derecha, en el "
+                            "candlestick y en su tabla."
                             + PARR
                             + "Clic en una fila para ver su candlestick; "
                             "clic en una vela, para las compras de esa "
@@ -561,6 +578,13 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 hoverinfo="skip", showlegend=False,
             ))
             _compras_layout(fig, alto=alturas.MINI_CANDLE_DRILL)
+            # EL MARGEN SUPERIOR, A 8: `_compras_layout` reserva 30px arriba
+            # para un título que esta figura no tiene —el suyo es el renglón
+            # de KPIs de más arriba— y a 160px de alto esos 30 son el 19% de
+            # la figura. Bajarlos devuelve casi todo lo que costó el recorte
+            # de altura: el área de dibujo queda en ~120px contra los ~140
+            # que tenía a 200 con el margen de siempre.
+            fig.update_layout(margin=dict(l=10, r=10, t=8, b=10))
             # UNA MARCA POR VELA, EN ESPAÑOL. Sin `tickvals` Plotly elige
             # sus propias fechas y las rotula con su locale por defecto —
             # el inglés: el eje decía "Jul 12 / Jul 26 / Aug 9 / Aug 23"
@@ -611,8 +635,12 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 color = ERROR if var > 0 else (EXITO if var < 0 else GRIS_TEXTO)
                 delta_txt = (f' <span style="color:{color}; font-weight:700;">'
                             f'{"+" if var >= 0 else "−"}{abs(var):.1f}% vs semana anterior</span>')
+            # SIN MARGEN PROPIO: el `gap` de la columna ya separa este
+            # renglón de la tabla que va abajo, y sumarle .5rem lo dejaba en
+            # 43px para una línea de texto. Los 8px son la mitad de lo que le
+            # faltaba a la tarjeta para no sacar barra de scroll.
             st.markdown(
-                f'<div style="margin-bottom:.5rem;">'
+                f'<div>'
                 f'<span style="font-weight:600;">Semana del {ini:%d/%m} al {fin:%d/%m}</span>{delta_txt}'
                 f'</div>', unsafe_allow_html=True,
             )

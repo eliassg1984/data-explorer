@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-351 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+352 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (119)
 
@@ -154,7 +154,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#350** — El iframe de un componente de Streamlit se queda con el ancho que tenía cuando se renderizó,…
 - **#351** — "Ponelo en línea" es una CUENTA, no un gusto: medí el contenido nowrap antes de discutir
 
-**Layout y alturas** (36)
+**Layout y alturas** (37)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -192,6 +192,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#330** — Dos controles de fecha en la MISMA tarjeta: el que no manda tiene que decir que no manda, y…
 - **#345** — Una vista que es "un ranking y su drill" no son dos tarjetas: es UNA, y lo único que scrollea…
 - **#346** — Apilar un drill bajo su ranking cuesta el ALTO; ponerlo al lado cuesta el ANCHO. Elegí…
+- **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
 
 **Plotly y figuras** (56)
 
@@ -252,7 +253,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 
-**AgGrid y tablas** (54)
+**AgGrid y tablas** (55)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -308,6 +309,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#348** — Cuando una columna «no se ve», medí su PADDING antes de pedirle ancho a la tarjeta
 - **#349** — Un número recortado no parece recortado: parece OTRO número. El formato de una celda se elige…
 - **#350** — El iframe de un componente de Streamlit se queda con el ancho que tenía cuando se renderizó,…
+- **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
 
 **Streamlit** (98)
 
@@ -31241,6 +31243,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      y de paso desaparece el cellRenderer propio (un `JsCode` menos, regla
      #226).
 
+     **Duró seis horas: la #352 la devuelve**, pero por el otro camino — en
+     vez de medir la celda para decidir si la línea entra, se eligen menos
+     columnas para que entre siempre. El pedido que lo destapó fue *"no se
+     ve el precio inicial y el precio final"*: esos dos precios eran la
+     línea. Lo que queda en pie de acá es el formato sin decimal y el
+     umbral del cero, que no dependen de ella.
+
      (2026-09-07.)
 
 350. **El iframe de un componente de Streamlit se queda con el ancho que
@@ -31328,6 +31337,80 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-07.)
 
+352. **Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el
+     rango de fechas. Y "las dos columnas miden igual" no es lo mismo que
+     "la tarjeta entra en la pantalla".** Dos pedidos del 2026-09-07, con
+     captura, sobre la vista que venían de arreglar #349 y #350:
+     *"la tarjeta no debe tener barra deslizando al lado"* y *"deseo que
+     muestre menos días, no se ve el precio inicial y el precio final"*.
+
+     **1) El ancho manda sobre el rango.** La segunda línea de la celda (los
+     dos cierres, «110.17 → 169.41») necesita **81px** de columna: 69 del
+     peor caso real más 12 de cromo. Con la grilla en los 617px que recibe
+     al lado de su drill, eso son CUATRO columnas —no siete—, y cuatro
+     columnas de variación son **cinco semanas**, porque la primera es la
+     línea de base. Así que `MAX_SEMANAS` bajó de 8 a 5 y el orden de la
+     decisión quedó al revés de como se venía haciendo:
+
+         ancho de la celda → nº de columnas → nº de semanas de la ventana
+
+     y no «mostremos ocho semanas y que la celda se arregle». Las dos veces
+     que se intentó lo segundo salió mal por la misma razón —un cellRenderer
+     no sabe cuánto mide su celda mientras se construye (#346, #349)—, así
+     que ahora el ancho se **garantiza desde Python** (`_MIN_ANCHO_COL_SEMANA`
+     es el piso, `MAX_SEMANAS` está elegido para que ese piso siempre entre)
+     y la línea se dibuja sin ningún guard. Sin medición en el navegador no
+     hay carrera posible.
+
+     El efecto colateral es el que pedía el usuario sin nombrarlo: **el
+     precio inicial y el final de la ventana se leen en la propia grilla** —
+     el `prev` de la primera columna y el `cur` de la última.
+
+     Lo que cuesta, dicho para que nadie lo descubra después: el score de
+     volatilidad es la suma de las variaciones **de la ventana**, así que
+     con cinco semanas los puntajes bajan y el ranking se reordena.
+
+     **2) La tarjeta se mide contra el PRESUPUESTO, no contra sí misma.**
+     `RANKING_CON_DRILL` valía 450 porque igualaba las dos columnas de la
+     fila entre sí — pero nadie las sumó contra `alturas.PRESUPUESTO` (465px
+     en el laptop objetivo). La tarjeta medía **545** y el contenedor la
+     clampeaba a `--alto-util` con `overflow-y: auto`: de ahí la barra. La
+     cuenta que faltaba es de una línea:
+
+         padding + cabecera + gap + FILA <= PRESUPUESTO
+
+     **Los 96px salieron casi todos de cromo, no de contenido**, y ese es el
+     orden en que conviene buscarlos:
+
+     · **30px de padding duplicado.** La tarjeta interna (`chartcard_`) es
+       TRANSPARENTE —el marco, el fondo y la sombra los pone la externa
+       (`ajuste_graf_card_`)— pero conservaba sus 15px por lado: un segundo
+       marco invisible encima de los 8+8 de la madre. A 4px vertical y 0
+       horizontal se van 22px de alto, y de paso la fila gana 30px de ancho
+       (las columnas-semana pasan de 81 a 85).
+     · **18px de gaps.** Cada columna de un `st.columns` es un
+       `stVerticalBlock` PROPIO: el `gap: 10px` que ya tenía la tarjeta no
+       lo heredan, y sus cuatro bloques iban separados por el 1rem por
+       defecto. Se ve midiendo, no leyendo.
+     · **14px de márgenes sueltos** — el `.35rem` bajo el renglón de KPIs y
+       el `.5rem` bajo el título de la semana, los dos redundantes con el
+       gap que ya los separa.
+     · Recién ahí, contenido: candlestick 200 → 150, tabla de la semana
+       160 → 110 y ranking 450 → 360 (8 filas).
+
+     **Y un truco que devuelve casi gratis lo que cuesta bajar una figura:**
+     `_compras_layout` reserva 30px de margen superior para un título que
+     esta figura no tiene. Bajarlo a 8 le devuelve 22px al área de dibujo, o
+     sea que el candlestick a 150 dibuja casi lo mismo que a 200 con el
+     margen de siempre. Antes de recortar el alto de una figura, mirá si el
+     recorte se puede pagar con margen.
+
+     Resultado medido en el viewport objetivo (657): tarjeta **449px contra
+     465**, sin barra, con el ranking a 8 filas y los dos precios visibles
+     en cada celda.
+
+     (2026-09-07.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31340,7 +31423,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#352**.
+> próxima regla nueva es la **#353**.
 
 >
 

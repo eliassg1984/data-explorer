@@ -307,6 +307,11 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   `arquitectura.md` reglas #349 y #350; la segunda cubre además el iframe
   del componente, que se queda con el ancho que tenía al renderizarse, y
   cuáles de sus hooks llegan (`onGridReady` sí, `onGridSizeChanged` no).
+  Corolario de la #352: **cuántas columnas caben lo decide el dato más
+  ancho de la celda**, así que el orden es ancho de celda → nº de columnas
+  → rango de fechas, y el piso se garantiza desde Python en vez de medir la
+  celda al dibujarla (un cellRenderer no sabe cuánto mide mientras se
+  construye).
 - - **`api.getValue(colKey, rowNode)` no existe** en la versión de AG Grid
   de este proyecto (34.3.1). Si un cellRenderer necesita el valor de OTRA
   columna, resolverlo con `valueGetter` + `aggFunc` propio en vez de leer

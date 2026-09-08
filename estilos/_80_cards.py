@@ -362,6 +362,27 @@ CSS = """    /* ================================================================
        apretarse (el aviso de CLAUDE.md sobre reglas por familia). */
     div[class*="st-key-chartcard_compras_vol"] {
         gap: 10px !important;
+        /* PADDING PROPIO CASI CERO, y no es apretar por apretar: esta
+           tarjeta interna es TRANSPARENTE —el marco, el fondo y la sombra
+           los pone la externa (`ajuste_graf_card_`, con `padding: 8px
+           18px`)—, así que sus 15px por lado eran un segundo marco
+           invisible: 30px verticales encima de los 16 de la madre. Medido,
+           eso solo era la diferencia entre entrar en `alturas.PRESUPUESTO`
+           y sacar barra de scroll.
+
+           En horizontal va a 0 por el mismo motivo, y de paso la fila gana
+           30px: la grilla pasa de 587 a 617 y sus columnas-semana de 81 a
+           ~93, o sea más aire para la segunda línea de precios. */
+        padding: 4px 0 !important;
+    }
+    /* Y lo mismo DENTRO de cada columna de la fila, que es un
+       `stVerticalBlock` propio y por lo tanto no heredaba el gap de arriba:
+       sus cuatro bloques —KPIs, candlestick, título de la semana y tabla—
+       iban separados por el 1rem por defecto. Medido: 3 huecos x 6px = 18,
+       que es justo lo que le faltaba a la tarjeta para entrar en
+       `alturas.PRESUPUESTO` y dejar de sacar barra de scroll. */
+    div[class*="st-key-chartcard_compras_vol"] [data-testid="stColumn"] > div {
+        gap: 10px !important;
     }
 
     /* ── VOLATILIDAD: buscador y ayuda, en el renglón del título ───────
@@ -463,7 +484,7 @@ CSS = """    /* ================================================================
         justify-content: space-between;
         column-gap: 10px;
         row-gap: 2px;
-        margin: 0 0 .35rem;
+        margin: 0;
         min-width: 0;
     }
     .vol-detalle-nom {
