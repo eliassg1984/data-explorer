@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-352 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+353 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (119)
+**CSS y estilos** (120)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -153,6 +153,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#349** — Un número recortado no parece recortado: parece OTRO número. El formato de una celda se elige…
 - **#350** — El iframe de un componente de Streamlit se queda con el ancho que tenía cuando se renderizó,…
 - **#351** — "Ponelo en línea" es una CUENTA, no un gusto: medí el contenido nowrap antes de discutir
+- **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
 
 **Layout y alturas** (37)
 
@@ -552,7 +553,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 
-**Decisiones de diseño y UX** (61)
+**Decisiones de diseño y UX** (62)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -615,6 +616,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#332** — Sacarle a un reporte el control de fecha GLOBAL son tres cosas más, y ninguna es opcional…
 - **#334** — Un scrollspy que compara contra MAPA[0] miente cuando la página dibuja un SUBCONJUNTO de su…
 - **#341** — Un querySelector singular es una decisión sobre la CARDINALIDAD, no un atajo — y en una…
+- **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
 
 **Mantenimiento y trampas del lenguaje** (10)
 
@@ -31411,6 +31413,71 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-07.)
 
+353. **Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su
+     superficie — y todo lo que cuelga de ella se va junto.** Pedido del
+     2026-09-07, con captura: *"podemos hacer que la franja que está debajo
+     de la franja de reportes sólo aparezca cuando el cursor se posa sobre
+     la botonera del reporte"*. Es la fila de 40px que va bajo la de
+     Reportes: las vistas de la pila (Proveedor · Producto · Volatilidad…)
+     con sus KPIs, más el compartimento de filtros al fondo.
+
+     **La banda no se puede ir.** El primer intento —apagar
+     `.st-key-nav_rail` entero— es lo que parece que se pide, y rompe el
+     scroll: esa banda blanca es lo ÚNICO que pinta esos 40px desde que el
+     `::before` de `fila_ajuste_top` dejó de hacerlo (2026-08-31,
+     `_40_ajuste_franja.py`), así que sin ella se ve el contenido de la
+     página pasar por detrás del hueco al bajar. Es la MISMA razón por la
+     que el cruce del scroll apaga los botones y no la franja, escrita ahí
+     desde el 2026-09-01: la respuesta ya estaba en el módulo que había que
+     tocar.
+
+     Lo que se gana con esto es la ATENCIÓN, no los 40px. Devolver el
+     espacio es otro cambio y no es de CSS: hay que subir el contenido
+     (`--cab-offset-contenido` y el `_CAB_OFFSET` de `graficos/alturas.py`,
+     que van acoplados y los coteja `test_graficos.py`).
+
+     **El disparador es `:has(… :hover)` en `:root`.** La franja de reportes
+     no es ni ancestro ni hermano de la de vistas —una la dibuja
+     `inject_navegacion` ANTES del fragment y la otra `_render_rail`
+     adentro—, así que ni `>` ni `~` llegan: hay que subir el estado a la
+     raíz y bajar desde ahí. Sin JS y sin clase que poner, a diferencia del
+     cruce por scroll que vive tres reglas más arriba en el mismo archivo.
+
+     **Y se va TODO lo que cuelga de la banda, no sólo los botones:** el
+     compartimento de filtros (`chips_ajuste_tabla`) y la píldora de fecha
+     (`fecha_ajuste_pill`) están anclados a su mismo `top` y su mismo alto
+     (`_50_fecha.py`). Dejar uno fijo no es "conservar un control": es un
+     control flotando solo sobre una banda vacía.
+
+     Tres detalles que sólo aparecen al usarla:
+
+     · **La franja tiene que mantenerse abierta a sí misma.** Si el único
+       disparador es la botonera de arriba, se cierra en cuanto el cursor
+       baja a tocar una vista — o sea justo cuando se la va a usar.
+     · **Un popover abierto también la mantiene** (`[aria-expanded="true"]`).
+       Su panel es un portal a nivel de `body`, así que hoverearlo NO cuenta
+       como hoverear la franja: sin esa condición, abrir Filtros y llevar el
+       cursor al panel desvanece el botón que lo ancla.
+     · **Dos mecánicas sobre el mismo hueco se excluyen por construcción, no
+       por especificidad.** Al bajar ya entra ahí la franja de KPIs
+       (`nav_franja_kpis`), así que el reveal lleva `:not(.rails-scrolled)`.
+       Sin eso funcionaba IGUAL —ganaba la regla del scroll por un
+       `[data-testid]` de más—, y ese "igual" es el que se rompe callado en
+       el próximo cambio de selector.
+
+     **Cómo se verificó, que también es regla.** En el panel del navegador
+     las transiciones no avanzan nunca, así que `getComputedStyle(…).opacity`
+     devuelve `0` con la regla aplicando perfecto: medirla no prueba nada. La
+     salida es elegir de probe una propiedad SIN transición — acá
+     `pointer-events`, que cambia en el mismo par de reglas y responde al
+     instante; `visibility` sirve igual mientras su transición sea de `0s` de
+     duración. Con eso los cuatro estados (reposo, cursor en la botonera,
+     cursor en la franja, popover abierto) se comprueban sin depender de un
+     fundido que no corre. Para la captura, lo de siempre:
+     `document.getAnimations().forEach(a => a.finish())` antes de mirar.
+
+     (2026-09-07.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31423,7 +31490,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#353**.
+> próxima regla nueva es la **#354**.
 
 >
 

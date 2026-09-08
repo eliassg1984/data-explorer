@@ -1,5 +1,13 @@
 """Intercambio de rails al hacer scroll (2026-08-24).
 
+Desde el 2026-09-07 el modulo tiene DOS disparadores, no uno: el scroll
+(todo lo de abajo) y el HOVER sobre la cabecera, que es el que decide si la
+franja de vistas muestra su contenido — ver la seccion "LA FRANJA DE VISTAS
+SE MUESTRA AL PASAR EL CURSOR". Comparten modulo porque comparten elemento:
+los dos apagan y prenden los mismos botones, y dos modulos declarando
+`opacity` sobre el mismo elemento es el bug que advierte el indice de
+`estilos/__init__.py`.
+
 La columna izquierda muestra DOS cosas distintas segun donde estes:
 
   · arriba de todo  -> el rail de REPORTES (`compras_tabs_row`): Compras,
@@ -59,6 +67,13 @@ el resto del proyecto.
 
 # Duracion del cruce. Corta a proposito: es un intercambio, no un efecto.
 _TRANS = "160ms"
+
+# Cuanto espera la franja antes de irse cuando el cursor la deja (solo el
+# disparador de HOVER; el del scroll no espera). No es estetica: el camino
+# natural del cursor —de la franja de reportes a una vista— pasa por el borde
+# entre las dos, y sin gracia un temblor de 1px la cierra en la cara del
+# usuario. Al entrar no hay espera, ver esa seccion.
+_ESPERA = "220ms"
 
 CSS = f"""
 @media screen and (min-width: 769px) {{
@@ -195,17 +210,21 @@ CSS = f"""
 
        `visibility` además del `opacity`, igual que los railes: los siete
        botones de vista seguían siendo tabbables y encontrables con Ctrl+F
-       estando invisibles (ver el bloque de accesibilidad de más arriba). */
+       estando invisibles (ver el bloque de accesibilidad de más arriba).
+
+       2026-09-07: el reposo de estos botones pasó a ser OCULTO —se muestran
+       al pasar el cursor por la cabecera, ver la sección del final de este
+       módulo—, así que la regla que los apagaba con `.rails-scrolled` se
+       retiró: apagaba algo que ya está apagado. El párrafo de arriba sigue
+       valiendo entero y por eso se queda: es el porqué de apagar los
+       BOTONES y no la franja, que es la decisión que las dos mecánicas
+       comparten. */
     .st-key-nav_rail [data-testid="stButton"] {{
-        transition: opacity {_TRANS} linear,
-                    visibility 0s linear 0s;
-    }}
-    :root.rails-scrolled .st-key-nav_rail [data-testid="stButton"] {{
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
-        transition: opacity {_TRANS} linear,
-                    visibility 0s linear {_TRANS};
+        transition: opacity {_TRANS} linear {_ESPERA},
+                    visibility 0s linear calc({_TRANS} + {_ESPERA});
     }}
     /* Y la de KPIs entra. Reposo OCULTO y sin `!important`, por el mismo
        motivo que el rail lateral (ver "DEGRADACION SEGURA"): si el gancho
@@ -238,6 +257,79 @@ CSS = f"""
         visibility: hidden;                    /* ver OCULTO DE VERDAD */
         transition: opacity {_TRANS} linear,
                     visibility 0s linear {_TRANS};
+    }}
+
+    /* ── LA FRANJA DE VISTAS SE MUESTRA AL PASAR EL CURSOR (2026-09-07) ─
+       A pedido: "que la franja que está debajo de la franja de reportes
+       sólo aparezca cuando el cursor se posa sobre la botonera del
+       reporte".
+
+       ES EL MISMO PAR QUE YA CRUZA AL SCROLLEAR, con otro disparador. Acá
+       no hay gancho de JS ni clase que poner: el estado lo lee el propio
+       CSS con `:has(… :hover)`. Vive en ESTE módulo y no en uno nuevo
+       porque quien apaga y prende los botones de `nav_rail` tiene que ser
+       UNO SOLO — dos módulos declarando `opacity` sobre el mismo elemento
+       es el bug que advierte el índice de `estilos/__init__.py`.
+
+       SE VA EL CONTENIDO, NO LA FRANJA, y no es una media tinta: esa banda
+       blanca es lo ÚNICO que pinta los 40px. El `::before` de
+       `fila_ajuste_top` dejó de pintar ahí el 2026-08-31
+       (`_40_ajuste_franja.py`), así que sin ella se ve el contenido de la
+       página pasar por detrás del hueco al scrollear. Es la misma razón por
+       la que el cruce del scroll apaga los botones y no la franja.
+       Recuperar los 40px es otro cambio, y no es de CSS: hay que subir el
+       contenido (`--cab-offset-contenido` + `graficos/alturas.py`).
+
+       QUÉ SE VA CON ELLOS: el compartimento de filtros
+       (`chips_ajuste_tabla`) y la píldora de fecha (`fecha_ajuste_pill`, en
+       los reportes que la dibujan). Los tres cuelgan de ESTA franja —mismo
+       `top`, misma altura, `_50_fecha.py`—, así que dejar uno fijo lo
+       dejaría flotando solo sobre una banda vacía.
+
+       QUÉ LA MANTIENE ABIERTA, además de la franja de reportes:
+
+         · la franja misma — sin esto se cerraría en cuanto el cursor baje
+           a tocar una vista, que es el gesto entero;
+         · cualquier popover suyo ABIERTO (`aria-expanded="true"`): su
+           panel es un portal a nivel de `body`, así que hoverearlo no
+           cuenta como hoverear la franja, y un panel de filtros abierto
+           con su botón desvanecido es un panel huérfano.
+
+       SÓLO ARRIBA DE TODO (`:not(.rails-scrolled)`): al bajar manda el
+       cruce de siempre, que se lleva la franja y pone los KPIs en su
+       lugar. Sin ese `:not()` los dos estados se pelearían el mismo hueco
+       —los botones de vista encima de los KPIs— por especificidad, que es
+       la peor forma de decidir un comportamiento. */
+    :root:not(.rails-scrolled):has(
+            .st-key-nav_franja_rep:hover,
+            .st-key-nav_rail:hover,
+            .st-key-chips_ajuste_tabla:hover,
+            .st-key-fecha_ajuste_pill:hover,
+            .st-key-chips_ajuste_tabla [aria-expanded="true"],
+            .st-key-fecha_ajuste_pill [aria-expanded="true"]
+        ) :is(.st-key-nav_rail [data-testid="stButton"],
+              .st-key-chips_ajuste_tabla,
+              .st-key-fecha_ajuste_pill) {{
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        /* Al ENTRAR no hay espera: aparecer tarde se siente roto. La
+           espera vive en el reposo (`_ESPERA`), que es el lado que la
+           necesita. */
+        transition: opacity {_TRANS} linear,
+                    visibility 0s linear 0s;
+    }}
+
+    /* El reposo de los otros dos. El de los botones vive arriba, con el
+       bloque del cruce, porque es el MISMO reposo para las dos mecánicas
+       (ver ahí). */
+    .st-key-chips_ajuste_tabla,
+    .st-key-fecha_ajuste_pill {{
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity {_TRANS} linear {_ESPERA},
+                    visibility 0s linear calc({_TRANS} + {_ESPERA});
     }}
 
     /* ── El rail de VISTAS entra ──────────────────────────────────────
