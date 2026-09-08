@@ -93,7 +93,9 @@ from graficos.base import (
 from graficos import alturas, periodo
 from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL, PARR
 from tablas.compras_vs_ano_pasado import (
-    _ALTO_FILA as _ALTO_FILA_DETALLE, renderizar_detalle_vs_ano_pasado,
+    _ALTO_FILA as _ALTO_FILA_DETALLE,
+    _ALTO_SUB_HDR as _ALTO_SUB_HDR_DETALLE,
+    renderizar_detalle_vs_ano_pasado,
 )
 
 # Alto de la fila de controles que comparte tarjeta con la serie: métrica
@@ -381,6 +383,16 @@ def _etiqueta_mes(periodo_m):
     return f"{_MES[periodo_m.month - 1]} {periodo_m.year % 100:02d}"
 
 
+def _rango_meses(m0, m1):
+    """"oct 25 – sep 26", para el subtítulo de la cabecera de la tabla.
+
+    Un solo mes no se escribe dos veces ("sep 26", no "sep 26 – sep 26"):
+    la ventana "Rango" puede tocar uno solo.
+    """
+    a, b = _etiqueta_mes(m0), _etiqueta_mes(m1)
+    return a if a == b else f"{a} – {b}"
+
+
 # ===========================================================================
 # GRÁFICOS
 # ===========================================================================
@@ -637,12 +649,17 @@ def _resumen_html(delta, pct, ef_precio, ef_cant):
     )
 
 
-def _tabla_detalle(g, agrupar_por, col_um_valores, key_grid):
+def _tabla_detalle(g, agrupar_por, col_um_valores, key_grid, rangos=None):
     """Tabla de abajo: una fila por ítem, con el puente abierto.
 
     Devuelve el ítem clickeado en esta corrida (o None). El orden por defecto
     es |Δ S/| descendente —lo que más movió la aguja arriba de todo—, no
     alfabético: la pregunta de esta tabla es "qué explica la diferencia".
+
+    `rangos` es `(este_año, año_pasado)` ya formateado, para el subtítulo de
+    esas dos cabeceras. Llega de afuera y no se calcula de `g` porque acá
+    `g` YA pasó por el buscador: si el ítem que quedó no compró en todos los
+    meses, la cabecera anunciaría una ventana más corta que la de la cuenta.
     """
     llave = "prod" if agrupar_por == "Producto" else "grupo"
     ag = _por_item(g, llave)
@@ -704,10 +721,18 @@ def _tabla_detalle(g, agrupar_por, col_um_valores, key_grid):
         # pantallas. El `extra` pasa de 44 a 47, que es el cromo MEDIDO por
         # resta en el navegador (grid 380 − `.ag-body-viewport` 333, o sea
         # cabecera 45 + 2 de borde) en vez de sumado a ojo — regla #277.
+        #
+        # `+ _ALTO_SUB_HDR_DETALLE` desde el 2026-09-08: el subtítulo de las
+        # cabeceras las hizo más altas y `autoHeaderHeight` las crece SOLO,
+        # pero este `extra` es un número escrito a mano que no se entera.
+        # Vuelto a medir con el subtítulo puesto: cromo 60 = cabecera 58 + 2
+        # de borde, o sea 47 + 13. Regla #361.
         altura=alturas.por_filas(len(tv), px_fila=_ALTO_FILA_DETALLE,
-                                 extra=47,
+                                 extra=47 + _ALTO_SUB_HDR_DETALLE,
                                  minimo=200, rol=alturas.COMPACTO),
         key=key_grid,
+        rango_act=rangos[0] if rangos else None,
+        rango_aa=rangos[1] if rangos else None,
     )
 
 
@@ -1151,8 +1176,14 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
             col_fam if agrupar_nuevo == "Familia" else col_subfam)
         ums = _unidades_por(fuente, _llave_um, col_um)
 
+        # Los rangos salen de `g` (la ventana entera) y no de `g_tabla` (ya
+        # filtrado por el buscador): la cabecera describe la CUENTA, que es
+        # la misma se busque lo que se busque. Ver `_tabla_detalle`.
+        _m0, _m1 = g["mes"].min(), g["mes"].max()
         clic = _tabla_detalle(g_tabla, agrupar_nuevo, ums,
-                              "compras_vap_detalle_grid")
+                              "compras_vap_detalle_grid",
+                              rangos=(_rango_meses(_m0, _m1),
+                                      _rango_meses(_m0 - 12, _m1 - 12)))
 
         # UNA sola comparación, igual que el ranking de Proveedor: AG Grid
         # conserva su selección entre reruns del fragment, así que `clic`

@@ -53,8 +53,45 @@ from tablas._css import _css_grid
 # Mismo criterio (y misma razón) que `_ANCHO_COL_SEMANA` en
 # tablas/compras_volatilidad.py: con auto-fit, una cabecera larga estira su
 # columna y en una tarjeta angosta dejan de entrar todas.
+#
+# El % pasó de 88 a 100 el 2026-09-08, al sumarse los subtítulos de
+# cabecera: su celda es la más angosta y "÷ año pasado" pide 62px contra los
+# 56 que deja un ancho de 88 (medido en el navegador; la cabecera de AG Grid
+# se come 32px de padding por celda). Medir contra el ancho DECLARADO y no
+# contra el de pantalla no es exceso de celo: AG Grid estira las columnas
+# para llenar la grilla, así que la de 88 se veía en 97 y el recorte no
+# aparecía hasta que la tarjeta se angostara — regla #349.
 _ANCHO_SOLES = 112
-_ANCHO_PCT = 88
+_ANCHO_PCT = 100
+
+# ── Subtítulo de cabecera: la REFERENCIA de cada cuenta ────────────────────
+# "Este año" / "Año pasado" NO son años calendario: son la ventana elegida
+# arriba (por defecto, 12 meses móviles que terminan en el último mes con
+# compras). Sin el rango, la cabecera se lee como "2026" contra "2025" y el
+# número no coincide con esa cuenta — reportado el 2026-09-08. Por eso el
+# rango de cada lado viaja como dato (`rango_act`/`rango_aa`): lo sabe el
+# drill, que es el que filtró la ventana, no esta función.
+#
+# Los de las columnas de diferencia sí son fijos: dicen contra qué se mide
+# cada una, que es lo que el tooltip explica en largo. Los dos efectos se
+# nombran por lo que dejan QUIETO —el precio se mide a igual cantidad y la
+# cantidad a igual precio—, que es la forma corta de la fórmula del
+# docstring y la razón de que sumen el Δ exacto.
+_SUB_HDR = {
+    "Δ S/": "este − pasado",
+    "Δ %": "÷ año pasado",
+    "Efecto precio": "a igual cantidad",
+    "Efecto cantidad": "a igual precio",
+}
+_SUB_FONT_PX = 10
+
+_ALTO_SUB_HDR = 13
+"""Lo que el subtítulo le suma a la cabecera (px).
+
+Acoplado a `extra=` de `alturas.por_filas()` en el drill, igual que
+`_ALTO_FILA`: el marco de la grilla se calcula en Python sumando cromo +
+filas, así que una cabecera más alta que no se cuente ahí se come una fila
+de las que se ven. Medido en el navegador, no estimado."""
 
 _FMT_SOLES = JsCode("""
     function(params) {
@@ -205,7 +242,8 @@ filas ocupan."""
 
 
 def renderizar_detalle_vs_ano_pasado(tv, etiqueta_item, altura, key,
-                                     font_px=13):
+                                     font_px=13, rango_act=None,
+                                     rango_aa=None):
     """Grilla del detalle ítem por ítem. `tv` trae, en este orden:
 
         Item, __item_full, Este año, Año pasado, Δ S/, Δ %,
@@ -215,6 +253,12 @@ def renderizar_detalle_vs_ano_pasado(tv, etiqueta_item, altura, key,
     `etiqueta_item` es el encabezado de la primera columna ("Producto",
     "Familia"…): la fija el agrupador que eligió el usuario, así que no
     puede escribirse acá.
+
+    `rango_act`/`rango_aa` son los rangos de meses que cubre cada lado
+    ("oct 25 – sep 26"), y van de subtítulo en su cabecera. Los calcula el
+    drill sobre la ventana ENTERA, no sobre `tv`: con el buscador filtrando,
+    las filas que sobreviven pueden no tocar todos los meses y la cabecera
+    diría un rango más corto que el de la cuenta.
 
     Devuelve el `__item_full` de la fila clickeada en ESTA corrida, o None.
     """
@@ -265,6 +309,53 @@ def renderizar_detalle_vs_ano_pasado(tv, etiqueta_item, altura, key,
     custom_css[".ag-row-selected"] = {
         "box-shadow": f"inset 3px 0 0 0 {ACENTO} !important",
     }
+
+    # ── El subtítulo de cada cabecera (ver `_SUB_HDR`) ────────────────────
+    # Va por CSS y no pegado al `header_name` porque AG Grid ESCAPA el texto
+    # de la cabecera y lo pinta con una sola tipografía: "Este año oct 25 –
+    # sep 26" saldría del mismo tamaño y peso que el título, wrappeando por
+    # donde le tocara. La otra salida sería un `headerComponent` propio, y
+    # ése obliga a reimplementar a mano el clic de ordenar y su flecha —
+    # esta tabla se ordena, así que se pagaría una función por un renglón.
+    #
+    # El pseudo cuelga de `.ag-header-cell-label` (el flex que lleva título
+    # + flecha de orden) y no de `.ag-header-cell-text`: ahí adentro
+    # quedaría AL LADO de la flecha en vez de debajo de las dos cosas.
+    # `flex-wrap` + `flex: 0 0 100%` es lo que le da renglón propio; el
+    # `align-content` evita que las dos líneas se peguen al borde de arriba
+    # cuando la cabecera crece.
+    subtitulos = dict(_SUB_HDR)
+    if rango_act:
+        subtitulos["Este año"] = rango_act
+    if rango_aa:
+        subtitulos["Año pasado"] = rango_aa
+    for _col, _txt in subtitulos.items():
+        _sel = f'.ag-header-cell[col-id="{_col}"] .ag-header-cell-label'
+        custom_css[_sel] = {
+            "flex-wrap": "wrap !important",
+            "align-content": "center !important",
+        }
+        custom_css[f"{_sel}::after"] = {
+            "content": f"'{_txt}'",
+            "flex": "0 0 100%",
+            "text-align": "right",
+            "font-size": f"{_SUB_FONT_PX}px",
+            "font-weight": "400",
+            "line-height": f"{_ALTO_SUB_HDR}px",
+            "color": f"{GRIS_TEXTO}",
+            "letter-spacing": "normal",
+            "text-transform": "none",
+            # `nowrap` + elipsis y no wrap a dos líneas: el subtítulo entra
+            # con holgura en el ancho DECLARADO de cada columna (medido:
+            # entre 6 y 21px de sobra), pero AG Grid escala las columnas
+            # para llenar la grilla y en un contenedor más angosto que la
+            # suma de los anchos las achica — regla #349. Ahí el subtítulo
+            # se corta con "…" en vez de empujar la cabecera a un tercer
+            # renglón, que descuadraría el marco calculado en Python.
+            "white-space": "nowrap",
+            "overflow": "hidden",
+            "text-overflow": "ellipsis",
+        }
 
     resp = AgGrid(
         tv, gridOptions=grid_options, height=altura, theme="material",

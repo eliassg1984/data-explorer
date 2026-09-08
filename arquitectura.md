@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-360 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+361 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (124)
 
@@ -261,7 +261,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#359** — Un eje category no interpreta una x numérica como POSICIÓN: la agrega como una categoría más
 - **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
 
-**AgGrid y tablas** (55)
+**AgGrid y tablas** (56)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -318,6 +318,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#349** — Un número recortado no parece recortado: parece OTRO número. El formato de una celda se elige…
 - **#350** — El iframe de un componente de Streamlit se queda con el ancho que tenía cuando se renderizó,…
 - **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
+- **#361** — Una cabecera que dice "Este año" sobre una ventana MÓVIL se lee como el año calendario
 
 **Streamlit** (99)
 
@@ -31967,6 +31968,73 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-08.)
 
+361. **Una cabecera que dice "Este año" sobre una ventana MÓVIL se lee
+     como el año calendario.** Reportado el 2026-09-08 leyendo la tabla de
+     «Vs año pasado» de Compras: *"solo el texto induce al error"*. Las
+     columnas se llaman "Este año" y "Año pasado", pero la ventana por
+     defecto son 12 meses móviles que terminan en el último mes con
+     compras — **sep 25 – ago 26 contra sep 24 – ago 25**, no 2026 contra
+     2025. El número es correcto; el que lo lee está sumando otra cosa en
+     la cabeza.
+
+     La cura es un SUBTÍTULO en la cabecera, y lo que se pone ahí es la
+     REFERENCIA de la cuenta, no un adorno: el rango real en las dos
+     columnas de plata, y contra qué se mide cada una de las cuatro de
+     diferencia (`este − pasado`, `÷ año pasado`, `a igual cantidad`,
+     `a igual precio`). Los dos efectos se nombran por lo que dejan
+     QUIETO, que es la forma corta de la fórmula del puente y la razón de
+     que sumen el Δ exacto — ver #335.
+
+     **El rango viaja como DATO desde el drill, no se calcula en la
+     tabla**, y no sale del `tv` que la tabla recibe sino de la ventana
+     entera: con el buscador filtrando, las filas que sobreviven pueden no
+     tocar todos los meses y la cabecera anunciaría un período más corto
+     que el de la cuenta que muestra.
+
+     **Cómo se pinta un subtítulo en AG Grid sin escribir un
+     `headerComponent`.** AG Grid ESCAPA el texto de la cabecera y lo pinta
+     con una sola tipografía, así que pegarlo al `header_name` lo saca del
+     mismo tamaño y peso que el título, wrappeando por donde le toque. Un
+     `headerComponent` propio sí puede, pero reemplaza al de fábrica: hay
+     que reimplementar a mano el clic de ordenar y su flecha (misma
+     interfaz de Component de la #25), o sea una función por un renglón.
+     La salida barata es un `::after`, con dos detalles que no son
+     opcionales:
+
+     · Cuelga de **`.ag-header-cell-label`** (el flex que lleva título +
+       flecha), no de `.ag-header-cell-text`: ahí adentro el pseudo queda
+       AL LADO de la flecha en vez de debajo de las dos cosas.
+     · El renglón propio lo da `flex-wrap: wrap` en el label y
+       `flex: 0 0 100%` en el pseudo. Con `flex-direction: row-reverse`
+       (que es lo que AG Grid le pone a una columna numérica) el pseudo
+       sigue cayendo en la línea de abajo, porque el wrap no invierte el
+       eje transversal.
+
+     **`autoHeaderHeight` SÍ mide el pseudo — y esa es justo la parte que
+     descuadra el marco.** Medido en el navegador con datos reales: la
+     cabecera pasó de 45 a 58px sola, sin tocar `headerHeight`. Pero el
+     alto de un grid enmarcado se calcula en PYTHON
+     (`alturas.por_filas(..., extra=)`, regla #337) y ese `extra` es un
+     número escrito a mano: si no se le suma lo mismo, los 13px salen de
+     las filas visibles. Por eso el subtítulo trae su propia constante
+     (`_ALTO_SUB_HDR`) que los dos lados importan, igual que `_ALTO_FILA`.
+     Después del cambio, el cromo medido y el declarado coinciden: 60 =
+     58 de cabecera + 2 de borde.
+
+     **Y el ancho se mide contra el DECLARADO, no contra el de pantalla**
+     — corolario directo de la #349. "÷ año pasado" pide 62px y la columna
+     del Δ %, declarada en 88, estaba rindiendo 97 porque AG Grid estira
+     las columnas para llenar la grilla: en pantalla entraba, y se habría
+     cortado en la primera tarjeta más angosta. Pasó a 100 (la cabecera se
+     come 32px de padding por celda, así que 100 deja 68 contra 62). Con
+     eso las seis quedaron entre 6 y 21px de holgura sobre el ancho
+     declarado, y el pseudo lleva `overflow:hidden` + elipsis para lo que
+     quede afuera cuando el contenedor achique todo: mejor cortar el
+     subtítulo que empujar la cabecera a un tercer renglón, que
+     descuadraría el marco otra vez.
+
+     (2026-09-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31979,7 +32047,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#361**.
+> próxima regla nueva es la **#362**.
 
 >
 
