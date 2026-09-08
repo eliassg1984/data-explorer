@@ -137,103 +137,32 @@ vuelve a decidir."""
 
 _CSS = f"""
 <style>
-/* Franja de controles de la tarjeta: métrica a la izquierda, ventana a la
-   derecha, MISMO renglón. El alto total está presupuestado en `_FRANJA_VAP`
-   y la figura ya se lo restó — si acá se le agrega aire, hay que mover esa
-   constante o la tarjeta empuja su borde. */
+/* Retoques de los dos controles que mandan sobre la TABLA de abajo: el
+   agrupador y el buscador. Es lo ÚNICO que queda acá.
 
-/* ── Métrica: tabs de TEXTO, no pastillas ────────────────────────────────
-   Mismo lenguaje que las franjas de Ventas y el rail de Proveedor: el
-   activo se marca con color y peso, no con un relleno.
-   `[data-selected]` y NO `[aria-pressed]`: son single-select, que Streamlit
-   marca con role="radio" + data-selected (arquitectura.md #107). */
-.st-key-compras_vap_modo [data-testid="stButtonGroup"] {{
-    border: none !important;
-    background: transparent !important;
-}}
-/* El gap REAL va en el hijo directo del stButtonGroup (que es display:block),
-   no en el grupo — mismo hallazgo que en Ventas y en Proveedor. */
-.st-key-compras_vap_modo [data-testid="stButtonGroup"] > div {{
-    gap: 14px !important;
-}}
-.st-key-compras_vap_modo [data-testid="stButtonGroup"] button[role="radio"] {{
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 1px 0 !important;
-    min-height: 0 !important;
-    font-size: 12.5px !important;
-    font-weight: 400 !important;
-    color: {GRIS_TEXTO} !important;
-}}
-.st-key-compras_vap_modo [data-testid="stButtonGroup"] button[role="radio"][data-selected] {{
-    color: {ACENTO} !important;
-    font-weight: 600 !important;
-}}
+   EL ESTILO DE LA CABECERA NO ESTÁ EN ESTE FICHERO. La fila del título
+   —sus cinco controles, los anchos medidos uno por uno y el alto de 36px—
+   se estila desde `estilos/_80_cards.py`, colgada de `.st-key-vap_fila_hdr`
+   y de los cinco `.st-key-vap_hdr_*`. Si venís buscando el ancho de un
+   desplegable, es allá. Ojo: el agrupador y el buscador TAMBIÉN se dibujan
+   en esa fila desde el 2026-09-02 — lo que queda acá es su color y su
+   cuerpo de letra, no su sitio ni su ancho.
 
-/* ── Ventana propia de la tarjeta: un texto que despliega, no una caja ───
-   Misma receta (y mismo hallazgo medido) que `cp_evo_ctrl` en
-   `_css_proveedor.py`: la CAJA del selectbox no la lleva ni el
-   `stSelectbox` ni el `input`, sino el `div[role="group"]` que hay entre
-   los dos, y el ALTO lo fija el `input`. Estilar el ancestro no alcanza.
-   OJO: en esta versión de Streamlit el selectbox es `react-aria-ComboBox`,
-   NO `div[data-baseweb="select"]` — un selector con baseweb no matchea
-   nada y el control sale con su caja de 40px (medido acá el 2026-08-24). */
-.st-key-compras_vap_ventana {{
-    display: flex !important;
-    /* `flex-direction: row` EXPLÍCITO: el stVerticalBlock de Streamlit es
-       `column`, así que sin esto `justify-content` alinea en el eje
-       VERTICAL y el `align-items: center` es el que manda en el
-       horizontal — el control salía centrado en su columna, 214px antes
-       del borde derecho (medido acá el 2026-08-24). */
-    flex-direction: row !important;
-    justify-content: flex-end !important;
-    align-items: center !important;
-    padding: 0 !important; margin: 0 !important;
-}}
-.st-key-compras_vap_ventana [data-testid="stElementContainer"] {{
-    width: auto !important;
-    padding: 0 !important; margin: 0 !important;
-}}
-.st-key-compras_vap_ventana [data-testid="stSelectbox"] {{
-    max-width: 130px !important;
-}}
-.st-key-compras_vap_ventana [data-testid="stSelectbox"] div[role="group"] {{
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-}}
-.st-key-compras_vap_ventana [data-testid="stSelectbox"] input,
-.st-key-compras_vap_ventana [data-testid="stSelectbox"] div[role="group"],
-.st-key-compras_vap_ventana [data-testid="stSelectbox"] .react-aria-ComboBox {{
-    height: 22px !important;
-    min-height: 0 !important;
-}}
-.st-key-compras_vap_ventana [data-testid="stSelectbox"] input {{
-    padding: 0 !important;
-    height: auto !important;
-    font-size: 12.5px !important;
-    font-weight: 600 !important;
-    color: {GRIS_TEXTO} !important;
-    text-align: right !important;
-    cursor: pointer !important;
-}}
-/* El chevron se conserva, y en acento: sin ninguna affordance, un texto que
-   despliega una lista no se distingue de una etiqueta muerta. */
-.st-key-compras_vap_ventana [data-testid="stSelectbox"] svg {{
-    width: 14px !important; height: 14px !important;
-    fill: {ACENTO} !important; color: {ACENTO} !important;
-}}
-.st-key-compras_vap_ventana [data-testid="stSelectbox"] button[aria-haspopup] {{
-    width: 16px !important; min-width: 0 !important;
-}}
-.st-key-compras_vap_ventana [data-testid="stSelectbox"]:hover input {{
-    color: {ACENTO} !important;
-}}
+   Acá vivían además dos bloques que el rearmado de la cabecera del
+   2026-09-02 dejó muertos, y que se borraron el 2026-09-07 tras
+   verificarlos contra el DOM: `compras_vap_modo` (la métrica, cuando era
+   `st.pills` con sus reglas de `stButtonGroup` — hoy es un `st.selectbox`
+   con key `compras_vap_modo_sel`, y un selector de CLASE no matchea por
+   prefijo, así que no la alcanzaba) y `compras_vap_ventana` (una key que
+   ni existe: el contenedor es `vap_hdr_ventana` y el widget,
+   `compras_vap_periodo`). El segundo traía un `max-width: 130px` que era
+   justo lo que mandaba a buscar acá el ancho del desplegable.
 
-/* ── Controles de la tabla de abajo: agrupador y buscador, compactos ─────
-   El buscador queda con su caja (es un campo de escritura y tiene que
-   parecerlo); el agrupador se aplana igual que la ventana de arriba. */
+   El buscador conserva su caja —es un campo de escritura y tiene que
+   parecerlo—; del agrupador se toca sólo el borde. Los dos van por su key
+   PROPIA y no por la del contenedor: ése ya está estilado desde
+   `_80_cards.py`, y una regla colgada de él alcanzaría a los demás
+   controles de la fila. */
 .st-key-compras_vap_agrupar [data-testid="stSelectbox"] div[role="group"] {{
     border-color: {LAVANDA_BORDE} !important;
 }}
