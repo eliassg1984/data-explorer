@@ -24,10 +24,31 @@ TRES DECISIONES QUE COSTARON DATOS EQUIVOCADOS
    corriente, así que la vista se pasaba la vida comparando un mes
    incompleto contra un año entero.
    La ventana es ahora un control PROPIO de la tarjeta
-   (`graficos/periodo.py`, el mismo que usa la Evolución de Proveedor) y
-   arranca en "Todo". La opción `periodo.HEREDA` ("Rango") sigue ahí para
-   el que quiera volver a atarla a la franja — no se le quita nada a nadie,
-   se cambia el default.
+   (`graficos/periodo.py`, el mismo que usa la Evolución de Proveedor). La
+   opción `periodo.HEREDA` ("Rango") sigue ahí para el que quiera volver a
+   atarla a la franja — no se le quita nada a nadie, se cambia el default.
+
+   ARRANCA EN 12 MESES, y arrancó en "Todo" hasta el 2026-09-07.
+   "Todo" era el parche correcto mientras la franja abría en el MES EN
+   CURSO: la vista comparaba un mes incompleto contra un año entero, o
+   salía vacía. El 2026-09-06 la franja de Compras perdió el calendario y
+   el reporte pasó a abrir en los últimos 12 meses (`app.py`, "COMPRAS ABRE
+   EN LOS ÚLTIMOS 12 MESES"), así que el motivo se venció — y el default se
+   quedó, descolgado de las otras tres tarjetas de gráfico, que abren todas
+   en 12m.
+   No es cosmético: la ventana decide qué dice el TITULAR. Medido contra el
+   parquet real con los cinco chips de familia de entrada (2026-09-07):
+
+       3m    jun-ago 26     S/  323.733  vs S/  515.828    -37,2 %
+       12m   sep 25-ago 26  S/1.682.347  vs S/2.140.459    -21,4 %
+       24m                  S/3.822.806  vs S/3.821.385     +0,0 %
+       Todo  ene 24-ago 26  S/5.092.773  vs S/4.970.192     +2,5 %
+
+   Los cuatro números son ciertos. Con "Todo" la tarjeta abría diciendo
+   "+2,5 %" —el promedio de 32 meses, donde el crecimiento 24→25 tapa la
+   caída 25→26— mientras el último año venía 21 % abajo. Y de paso dibujaba
+   32 pares de barras en 660px, con el eje de meses amontonado en un
+   borrón.
 
 2. LAS COLUMNAS `*_ANO_ANTERIOR` DEL PARQUET NO SE SUMAN. ESTA VISTA YA NO
    LAS USA.
@@ -224,6 +245,41 @@ _CSS = f"""
 
 _MODOS = ("Valor", "Cantidad", "Precio")
 _AGRUPADORES = ("Producto", "Familia", "Subfamilia")
+
+_ETIQ_VENTANA = {
+    periodo.HEREDA: "📅 Rango",
+    "3m": "📅 Últimos 3 meses",
+    "12m": "📅 Últimos 12 meses",
+    "24m": "📅 Últimos 24 meses",
+    "Todo": "📅 Todo el histórico",
+}
+"""Cómo se LEE cada opción de la ventana en esta cabecera. Sólo texto.
+
+`periodo.OPCIONES` viene en el idioma corto de una fila de pastillas ("3m",
+"12m"), que es lo que la fila de Volatilidad o la de Producto necesitan. Acá
+el desplegable comparte renglón con otros cuatro que tampoco tienen etiqueta
+—métrica, familia, agrupador, buscador—, y "12m" suelto no dice de qué
+habla: reportado el 2026-09-07, pidiendo "el selector de fecha" para una
+tarjeta que ya lo tenía a la vista.
+
+El ícono no es adorno: es lo único que separa a este control de los otros
+cuatro de un vistazo. Ojo con el ancho — la fila los reparte a lo fijo en
+`estilos/_80_cards.py`, y el hueco de éste se agrandó a la vez que estas
+etiquetas. `proveedor.py` tuvo que sacar su emoji por eso mismo, pero su
+fila mide 279px; ésta es el ancho entero de la tarjeta.
+
+Un `dict` y no un `format_func` con `if`: la lista de opciones la manda
+`periodo.OPCIONES`, así que una opción nueva allá aparece acá con su nombre
+crudo en vez de reventar."""
+
+
+def _etiq_ventana(opcion):
+    """`format_func` del selector de ventana. Ver `_ETIQ_VENTANA`.
+
+    Cae al nombre crudo si la opción no está mapeada — el valor que devuelve
+    el widget es SIEMPRE la cadena de `periodo.OPCIONES`, así que esto no
+    puede desincronizar las comparaciones (`ventana == periodo.HEREDA`)."""
+    return _ETIQ_VENTANA.get(opcion, str(opcion))
 
 
 # ===========================================================================
@@ -786,10 +842,25 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                          "RATIO: se dibuja en líneas y sobre UN ítem, no "
                          "sobre la suma de varios.") or "Valor"
             with st.container(key="vap_hdr_ventana"):
-                # Default "Todo": esta vista mira el histórico, no el rango
-                # de la franja (decisión 1 del docstring del módulo).
+                # Default "12m", igual que las otras tres tarjetas de
+                # gráfico de Compras y que el rango con el que abre el
+                # reporte (`app.py`, "COMPRAS ABRE EN LOS ÚLTIMOS 12
+                # MESES"). Ver la decisión 1 del docstring del módulo:
+                # arrancaba en "Todo" y ese default se volvió obsoleto el
+                # 2026-09-06.
+                #
+                # `format_func`: el texto largo con el ícono de calendario.
+                # Es el ÚNICO de los cinco controles de la fila que nombra
+                # un período, y con "12m" suelto no se distinguía de los
+                # otros cuatro desplegables sin etiqueta — reportado el
+                # 2026-09-07 ("¿quizás es mejor tener el selector de
+                # fecha?", sobre un selector de fecha que ya estaba ahí).
+                # Cambia el TEXTO, nunca el valor: las comparaciones
+                # `ventana == periodo.HEREDA` de más abajo siguen viendo la
+                # cadena literal (ver el docstring de `periodo.selector`).
                 ventana = periodo.selector("compras_vap_periodo",
-                                           default="Todo", widget="lista")
+                                           default="12m", widget="lista",
+                                           format_func=_etiq_ventana)
 
             # Agrupador + buscador, en la MISMA fila del título (2026-09-02, a
             # pedido). Vivían en la tarjeta de abajo, que era la de la tabla;

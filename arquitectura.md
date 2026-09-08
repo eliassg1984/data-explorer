@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-354 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+355 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (121)
+**CSS y estilos** (122)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -155,6 +155,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#351** — "Ponelo en línea" es una CUENTA, no un gusto: medí el contenido nowrap antes de discutir
 - **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
 - **#354** — La salida de un estado vacío no puede estar adentro de lo que el estado vacío apaga: Compras…
+- **#355** — Un default que tapaba un problema de OTRA parte de la app queda huérfano cuando esa parte…
 
 **Layout y alturas** (38)
 
@@ -620,7 +621,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#341** — Un querySelector singular es una decisión sobre la CARDINALIDAD, no un atajo — y en una…
 - **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
 
-**Mantenimiento y trampas del lenguaje** (10)
+**Mantenimiento y trampas del lenguaje** (11)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -632,6 +633,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#269** — El JS que vive dentro de un string de Python necesita el escape de salto de línea con DOS…
 - **#319** — Una dona de una dimensión que es 98,8% un solo valor no es un gráfico: es un círculo. Sacarla…
 - **#328** — git add <ruta> NO te protege en un checkout compartido: se lleva lo que OTRA sesión dejó a…
+- **#355** — Un default que tapaba un problema de OTRA parte de la app queda huérfano cuando esa parte…
 
 **Sin tema asignado** (1)
 
@@ -31507,11 +31509,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Dos hallazgos al medirlo en el navegador, los dos verificables:
 
      · **Dos de las seis secciones no dependen de `d`.** «Vs año pasado»
-       abre en "Todo" y «Volatilidad» en 12 meses; las dos calculan sobre
-       `d_full` (el histórico con los chips aplicados, SIN el filtro de
-       fecha). Con el rango de septiembre vacío, quitando el `return`
-       dibujan el histórico entero — medido: S/ 5.09M y el candlestick de
-       Azúcar Blanca. Apagarlas era exactamente la #329, un piso más abajo.
+       abría en "Todo" —hoy en 12 meses, ver la #355— y «Volatilidad» en 12
+       meses; las dos calculan sobre `d_full` (el histórico con los chips
+       aplicados, SIN el filtro de fecha). Con el rango de septiembre
+       vacío, quitando el `return` dibujan el histórico entero — medido:
+       S/ 5.09M y el candlestick de Azúcar Blanca. Apagarlas era
+       exactamente la #329, un piso más abajo.
      · **Nada revienta con `d` vacío.** Se probó sección por sección con el
        rango del mes en curso (4 filas, todas fuera de las cinco familias
        de fábrica): Proveedor y Producto salían por su propia guarda,
@@ -31558,6 +31561,86 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      tarjeta vacía de Proveedor un clic en "Año" devuelve el reporte entero
      (1 ene – 5 sep 2026). (2026-09-07.)
 
+355. **Un default que tapaba un problema de OTRA parte de la app queda
+     huérfano cuando esa parte cambia — y en una vista que COMPARA, el
+     default de ventana no es un punto de partida: es el TITULAR
+     (2026-09-07).** Reportado así: *"la vista vs año pasado del reporte de
+     compras me muestra todo, debería mostrar 3 meses por defecto, puedes
+     evaluar, antes de hacer algo, si quizás es mejor tener el selector de
+     fecha?"* — sobre una tarjeta que **ya tenía** el selector de fecha a la
+     vista. Ahí están las dos mitades de esta regla.
+
+     **La mitad del default.** «Vs año pasado» abría en "Todo" desde el
+     2026-08-24, y era el parche CORRECTO para su momento: la franja abría
+     en el mes en curso, así que la vista comparaba un mes incompleto
+     contra un año entero, o salía vacía (#200). El 2026-09-06 la franja de
+     Compras perdió el calendario y el reporte pasó a abrir en 12 meses
+     (#332, y el comentario "COMPRAS ABRE EN LOS ÚLTIMOS 12 MESES" de
+     `app.py`). El motivo se venció ese día; el default se quedó, y con él
+     la tarjeta quedó descolgada de las otras tres de gráfico —Producto,
+     Proveedor y Volatilidad abren todas en 12m—.
+
+     Lo que la vuelve una regla y no un ajuste de gusto es el efecto
+     medido. La misma cuenta de la tarjeta contra el parquet real, con los
+     cinco chips de familia de entrada:
+
+         3m    jun–ago 26     S/  323.733  vs S/  515.828    −37,2 %
+         12m   sep 25–ago 26  S/1.682.347  vs S/2.140.459    −21,4 %
+         24m                  S/3.822.806  vs S/3.821.385     +0,0 %
+         Todo  ene 24–ago 26  S/5.092.773  vs S/4.970.192     +2,5 %
+
+     Los cuatro son ciertos. Con "Todo" la tarjeta abría cantando
+     **"+S/ 122.581 · +2,5 %"** —el promedio de 32 meses, donde el
+     crecimiento 24→25 tapa la caída 25→26— mientras el último año venía
+     21 % abajo y el último trimestre 37 %. Un default de ventana en una
+     vista de ranking elige por dónde EMPEZAR a mirar; en una vista de
+     comparación elige el veredicto. Y de yapa dibujaba 32 pares de barras
+     en 660px, con el eje de meses hecho un borrón (`enefebmarabr…`).
+
+     **La mitad del control invisible.** Que el pedido fuera "quizás es
+     mejor tener el selector de fecha" es el diagnóstico: la cabecera tiene
+     CINCO controles sin etiqueta —`Valor`, `Todo`, `Todas`, `Producto`,
+     `Buscar ítem…`— y el segundo era el selector de fecha. En una fila de
+     desplegables mudos, un valor que no nombra su dimensión ("Todo", "12m")
+     no se lee como control: se lee como estado. `periodo.OPCIONES` viene en
+     el idioma corto de una fila de PASTILLAS, donde el label de al lado o
+     el propio grupo dan el contexto; mudado a un `selectbox` suelto, ese
+     contexto no viaja. Se arregló con el `format_func` que
+     `periodo.selector` ya aceptaba (`vs_ano_pasado._ETIQ_VENTANA`): "12m" →
+     "📅 Últimos 12 meses". Cambia el TEXTO y nunca el valor, así que las
+     comparaciones `ventana == periodo.HEREDA` siguen intactas.
+
+     **El texto largo se paga en ancho, y el ancho se MIDE.** Mismo criterio
+     que la #349/#350 y que el filtro de Familia de al lado: el `<span>`
+     clonado con la misma fuente daba 119px para el valor más largo y el
+     `input` real pedía 135 — 16px que no aparecen en la cuenta. Con los
+     34px de cromo del desplegable son 169 → 172, y el hueco sale del lado
+     del título, que en esa fila es el elástico (254 → 234px para un texto
+     de ~110). Los 88px de antes dejaban el input en 54: entraba
+     "📅 Rango" y nada más. Ojo con el hermano: `proveedor.py` tuvo que
+     SACAR su emoji por esto mismo, pero su fila mide 279px; ésta es el
+     ancho entero de la tarjeta.
+
+     **Corolario para la próxima vez.** Cuando se mueve un control de fecha
+     de sitio —o se lo saca—, los defaults que existían PARA COMPENSARLO
+     quedan sueltos y nada avisa: no rompen nada, no fallan ningún test,
+     sólo siguen contestando la pregunta de antes. La pista de que uno
+     quedó huérfano es que su comentario cite un motivo que ya no se
+     cumple; el de éste decía "esta vista mira el histórico, no el rango de
+     la franja" doce días después de que la franja dejara de tener rango
+     visible.
+
+     **Verificación:** `ruff` limpio, `test_docs` y `test_asistente_datos`
+     verdes (`test_graficos` sigue con el fallo ajeno del cromo de
+     `--cab-offset-contenido`, cambio en curso de otra sesión en
+     `estilos/_00_base.py` — ver la #354). En el navegador, con el server
+     reiniciado (`estilos/` no toma cambios en caliente): la cabecera dice
+     "📅 Últimos 12 meses" en UN renglón de 36px sin recortes
+     (`scrollWidth` 138 = `clientWidth` 138), la lista abre con las cinco
+     opciones enteras, el eje pasó de 32 rótulos a 12 y el veredicto de
+     −S/ 458.111 · −21,4 % coincide exacto con la medición de DuckDB de
+     acá arriba. (2026-09-07.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31570,7 +31653,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#355**.
+> próxima regla nueva es la **#356**.
 
 >
 

@@ -167,10 +167,32 @@ CSS = """    /* ================================================================
         flex: 0 0 auto !important;
         width: 106px !important;
     }
+    /* La ventana pasó de "12m" a "📅 Últimos 12 meses" el 2026-09-07
+       (`vs_ano_pasado._ETIQ_VENTANA`: era el único control de la fila que
+       nombra un período y con el nombre corto no se distinguía de los otros
+       cuatro desplegables sin etiqueta). Los 88px de antes eran para "Todo
+       el hi…" — el texto largo hay que pagarlo en ancho. El hueco sale del
+       lado del TÍTULO, que en esta fila es el elástico: "Vs año pasado"
+       mide ~110 de los ~495 que le tocaban.
+       Sigue el mismo criterio MEDIDO que el filtro de Familia de acá abajo
+       (`scrollWidth` del input ya renderizado, no un `<span>` clonado con
+       la misma fuente), y por la misma razón: el `<span>` daba 119 para el
+       valor más largo y el input real pide 135 — 16px que no se ven en la
+       cuenta. Medido el 2026-09-07 con la fila renderizada:
+
+           📅 Rango             118      📅 Últimos 24 meses  135  ← el peor
+           📅 Últimos 3 meses   128      📅 Todo el histórico  129
+           📅 Últimos 12 meses  132
+
+       El cromo del desplegable (chevron + padding) come 34, así que 135+34
+       = 169 → 172 con holgura, y el input queda en 138. Con los 88 de antes
+       el input medía 54: entraba "📅 Rango" y nada más.
+       La fila sigue en UN renglón (36px, verificado): los 20px salen del
+       hueco del título, que baja de 254 a 234 para un texto de ~110. */
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ventana) {
         flex: 0 0 auto !important;
-        width: 88px !important;
+        width: 172px !important;
     }
     /* El más ancho de la fila, y no por capricho: sus opciones son nombres
        REALES del parquet, y el más largo ("BEBIDAS CON ALCOHOL") mide 136
