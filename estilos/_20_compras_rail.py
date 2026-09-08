@@ -85,7 +85,7 @@ CSS = """    /* ================================================================
            encima, en orden — no un 111 suelto. Quinta vuelta de este `top`
            (74 -> 8 -> -2 -> 0 -> 47 -> acá) y la primera en la que el
            número sale entero de otras medidas en vez de medirse a ojo. */
-        top: calc(var(--franja-rep-alto) + var(--nav-top-alto)
+        top: calc(var(--franja-rep-alto) + var(--franja-vistas-reserva)
                   + var(--rail-cab-alto)) !important;
         /* 2026-08-18, a pedido: el rail pasa del borde DERECHO al IZQUIERDO.
            Es el sitio que dejó libre el rail de navegación al convertirse en
@@ -113,7 +113,8 @@ CSS = """    /* ================================================================
            tantas vistas que no entran (activa el overflow-y:auto de abajo
            en vez de desbordar). */
         height: auto !important;
-        max-height: calc(100vh - var(--franja-rep-alto) - var(--nav-top-alto)
+        max-height: calc(100vh - var(--franja-rep-alto)
+                               - var(--franja-vistas-reserva)
                                - var(--rail-cab-alto) - 8px) !important;
         z-index: 900 !important;
         overflow-y: auto !important;
@@ -435,7 +436,8 @@ CSS = """    /* ================================================================
            arranca exactamente donde termina la de VISTAS, que es la ultima
            del cromo superior. Las dos franjas y la cabecera quedan apiladas
            sin hueco: 0..38, 38..78, 78..111. */
-        top: calc(var(--franja-rep-alto) + var(--nav-top-alto)) !important;
+        top: calc(var(--franja-rep-alto)
+                  + var(--franja-vistas-reserva)) !important;
         left: 19px !important;              /* == el rail */
         width: var(--rail-der-w) !important;
         /* ── CABECERA DEL RAIL (2026-08-31, a pedido) ───────────────────
@@ -557,22 +559,31 @@ CSS = """    /* ================================================================
        más arriba) y la primera tarjeta arrancaba en y=165. 77px de gris
        muerto entre la franja de vistas y la tarjeta.
        De dónde salen esos 77: el `.block-container` arranca en
-       `--cab-offset-contenido` (128px) y ENTRE ese borde y la tarjeta hay
-       CINCO bloques de alto CERO —`rail_rotulo_rep`, `nav_franja_rep`,
-       `nav_franja_kpis`, `compras_tabs_row` y `fila_ajuste_top`, todos
-       cromo fijo que sigue contando como flex item— y cada uno se cobra el
-       `gap: 16px` del contenedor: 5 x 16 = 80px de hueco fantasma que el
-       -43 sólo tapaba a medias.
-       El AIRE es un sumando aparte, y va explícito: 128 + 80 - 104 = 104,
-       o sea 16px bajo la franja (`y=88`), el mismo gap que separa a todo
-       lo demás de la página. La primera versión de este cambio fue -120
-       (tarjeta a y=88, EXACTAMENTE la línea del rail) y volvió con
-       "está pegado, debe tener un espacio": el rail puede tocar la franja
-       porque es cromo anclado a ella, una tarjeta de contenido no.
-       Si algún día esos bloques dejan de ocupar gap (o aparece un sexto),
+       `--cab-offset-contenido` y ENTRE ese borde y la tarjeta hay bloques
+       de alto CERO —`rail_rotulo_rep`, `nav_franja_rep`, `nav_franja_kpis`,
+       `compras_tabs_row`, `fila_ajuste_top` y el sello de «Última
+       actualización» (2026-09-08), todos cromo fijo o iframes de alto 0 que
+       siguen contando como flex item— y cada uno se cobra el `gap: 16px`
+       del contenedor.
+       El AIRE es un sumando aparte, y va explícito. La cuenta, medida en el
+       navegador cada vez que cambió alguno de los tres términos:
+         2026-09-01:  128 (offset) + 5x16 (bloques) - 104 = 104
+         2026-09-08:   88           + 6x16         - 120 =  64
+       o sea 16px bajo la franja de arriba, el mismo gap que separa a todo
+       lo demás de la página. Los dos cambios del 2026-09-08 son
+       independientes y se suman: el offset bajó 40 (la franja de vistas
+       dejó de reservar, `_26_rails_scroll.py`) y apareció un SEXTO bloque
+       fantasma (el sello, `inject_sello_actualizacion`), que devolvía 16 de
+       los 40. Sin ese -120 la tarjeta quedaba en y=80.
+       Ojo con el número, que ya estuvo acá: -120 fue el primer intento del
+       2026-09-01 y volvió con "está pegado, debe tener un espacio" — pero
+       entonces dejaba la tarjeta a y=88, PEGADA al cromo. Hoy el cromo
+       termina en 48 y ese mismo -120 deja los 16px de aire. Es la misma
+       cuenta con otro offset, no una vuelta atrás.
+       Si algún día esos bloques dejan de ocupar gap (o aparece un séptimo),
        este número cambia: son las dos caras de la misma cuenta. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
-        margin-top: -104px !important;
+        margin-top: -120px !important;
     }
     /* 2026-08-17, a pedido: ensanchar la tarjeta para que las columnas de
        proveedor.py (ranking-tabla + evolución; nació pensado para 3 —
@@ -1159,7 +1170,8 @@ CSS = """    /* ================================================================
     .st-key-rail_pestillo_abierto,
     .st-key-rail_pestillo_plegado {
         position: fixed !important;
-        top: calc(var(--franja-rep-alto) + var(--nav-top-alto)) !important;
+        top: calc(var(--franja-rep-alto)
+                  + var(--franja-vistas-reserva)) !important;
         left: calc(19px + var(--rail-der-w) - var(--rail-cab-alto)) !important;
         width: var(--rail-cab-alto) !important;
         height: var(--rail-cab-alto) !important;
@@ -1370,15 +1382,17 @@ CSS = """    /* ================================================================
        cuenta documentada allá arriba, con dos sumandos menos.
          pila completa:  128 (--cab-offset-contenido) + 5x16 (bloques de
                          alto cero que igual cobran gap) - 104 = 104
-         modo solo:      esos cinco bajan a TRES (`compras_tabs_row` y
+         modo solo:      esos seis bajan a CUATRO (`compras_tabs_row` y
                          `rail_rotulo_rep` salen con el display:none de
                          acá arriba, y el marcador nunca contó)
-                         128 + 3x16 - 72 = 104
-       O sea el mismo destino (y=104, 16px bajo la franja) con -72 en vez
-       de -104. Si algún día cambia lo que se esconde en modo solo, este
-       número cambia con él: son la misma cuenta. */
+                         88 + 4x16 - 88 = 64
+       O sea el mismo destino (y=64, 16px bajo la franja) con -88 en vez
+       de -120. Si algún día cambia lo que se esconde en modo solo, este
+       número cambia con él: son la misma cuenta. DERIVADO, no medido: la
+       pila completa sí se midió en el navegador (y=64), ésta se despejó de
+       la misma fórmula. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_solo_on)
         .st-key-compras_vap_drill_wrap {
-        margin-top: -72px !important;
+        margin-top: -88px !important;
     }
 """

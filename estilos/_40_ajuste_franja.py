@@ -164,7 +164,8 @@ CSS = """    /* ================================================================
         /* Las dos filas: la de vistas (`--nav-top-alto`) mas la banda de
            siempre (`--cab-altura`). Derivado, no un 90 suelto: si cualquiera
            de las dos cambia de alto, la banda las sigue. */
-        height: calc(var(--nav-top-alto) + var(--cab-altura)) !important;
+        height: calc(var(--franja-vistas-reserva)
+                     + var(--cab-altura)) !important;
         border-radius: 0 !important;   /* toca los dos bordes: sin esquinas */
         /* 2026-08-15: de tinte lavanda a blanco --bg-card (mismo fondo que
            las tarjetas de gráfico), a pedido — el lavanda se leía como una

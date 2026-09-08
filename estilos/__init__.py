@@ -8,8 +8,9 @@ Estilos globales de la app: CSS, tamaños de fuente e inyección del tema.
     _20_compras_rail    rail vertical derecho (selector de gráfico) —
                         compartido por TODOS los reportes pese al nombre
     _26_rails_scroll    la columna izquierda cambia de Reportes a Vistas
-                        segun la seccion que este en pantalla, y la franja
-                        de vistas muestra su contenido al pasar el cursor
+                        segun la seccion que este en pantalla; y la banda
+                        bajo la franja de reportes (vistas / KPIs / filtros)
+                        solo aparece al pasar el cursor por la cabecera
     _27_pila            esqueletos de carga de la pagina apilada
     _30_filtros         botón/popover de filtros
     _40_ajuste_franja   franja superior sticky + chips de filtro

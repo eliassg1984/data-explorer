@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-357 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+358 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (123)
+**CSS y estilos** (124)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -157,6 +157,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#354** — La salida de un estado vacío no puede estar adentro de lo que el estado vacío apaga: Compras…
 - **#355** — Un default que tapaba un problema de OTRA parte de la app queda huérfano cuando esa parte…
 - **#356** — Al borrar una franja fija, lo que hay que borrar son TRES cosas: la superficie, la reserva…
+- **#358** — Una franja que pasa a aparecer con el cursor deja de ser una FILA y pasa a ser una CAPA, y…
 
 **Layout y alturas** (38)
 
@@ -31797,6 +31798,72 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Acá pasó, y la comprobación se extendió a los 15 módulos propios que
      importa `app.py`: todos limpios. (2026-09-08.)
 
+358. **Una franja que pasa a aparecer con el cursor deja de ser una FILA y
+     pasa a ser una CAPA, y eso es un cambio de layout, no de opacidad.**
+     Continuación de la #353, al día siguiente y con el pedido corregido:
+     *"debe desaparecer la franja, no sólo los iconos y el texto sino la
+     franja como tal… deseo aprovechar el espacio del lienzo, para poder
+     subir más las tarjetas"*, y después *"también la franja que muestra los
+     kpis del reporte"*.
+
+     La #353 había apagado el CONTENIDO y dejado la superficie, porque esa
+     banda blanca era lo único que tapaba el contenido que scrollea por
+     detrás. Eso resolvía la mitad visual y ninguna de la espacial: los 40px
+     seguían reservados. Sacarla de verdad son **tres** cambios, y el
+     primero es el que no se ve:
+
+     · **Separar el ALTO de la RESERVA.** `--nav-top-alto` era las dos cosas
+       a la vez —cuánto mide la franja y cuánto corre hacia abajo todo lo
+       que va debajo— porque mientras fue una fila eran la misma. Ahora hay
+       `--franja-vistas-reserva: 0`, que es la que entra en los seis
+       anclajes de offset (el rail izquierdo, su cabecera, el pestillo, la
+       copia lateral del rail, la banda de la cabecera); `--nav-top-alto` se
+       queda en los que miden el ALTO de algo que vive en ese hueco (la
+       franja, la de KPIs, el compartimento de filtros). Con una sola
+       variable no se puede: bajarla a 0 mueve bien los offsets y aplasta
+       las alturas.
+     · **El offset del contenido y su gemelo Python**,
+       `--cab-offset-contenido` 128 → 88 y `alturas._CAB_OFFSET` igual.
+     · **Y el jalón de la primera tarjeta**, que NO se mueve solo.
+
+     **La trampa del tercero: el jalón se calcula con los bloques
+     FANTASMA, y aparecieron seis donde había cinco.** El
+     `margin-top: -104px` de la primera tarjeta de Compras compensa el
+     offset más los `gap: 16px` que cobran los contenedores de alto cero del
+     cromo fijo. Con el offset a 88 la tarjeta tenía que caer en y=64 y
+     midió **80**: `88 + N*16 - 104 = 80` da `N = 6`, no 5. El sexto es el
+     sello de «Última actualización» que había entrado ese mismo día
+     (`inject_sello_actualizacion`). Devolvía 16 de los 40 ganados, en
+     silencio. El jalón pasó a -120 y ahí sí midió 64.
+
+     La lección general: **cuando el destino sale de una cuenta con un
+     término que nadie declara (cuántos bloques invisibles hay), la cuenta
+     se comprueba MIDIENDO el resultado, no releyéndola.** El comentario del
+     repo enumeraba cinco y era correcto cuando se escribió.
+
+     Y dos cosas que aparecieron al verificar, las dos sobre el mismo
+     elemento:
+
+     · **`pointer-events` es el mejor probe para esto, salvo donde alguien
+       ya lo usó.** La #353 recomienda medir `pointer-events` porque no
+       tiene transición y el navegador automatizado no compone frames. Vale
+       — pero la franja de KPIs lo tiene en `none !important` a propósito
+       ("es un rótulo, no un control"), así que ahí siempre dice `none` y
+       parecía que su regla no aplicaba. El probe bueno para ESE elemento es
+       `opacity` tras `document.getAnimations().forEach(a => a.finish())`.
+     · **Un elemento con `pointer-events: none` no puede estar `:hover`
+       jamás**, así que ponerlo en la lista de disparadores de un `:has()`
+       es un selector muerto. Se sacó.
+
+     Resultado medido a 1366x768 en Compras, los cuatro estados: arriba sin
+     cursor (banda vacía, tarjeta en y=64), arriba con cursor (vistas +
+     filtros), abajo sin cursor (nada, el contenido pasa bajo la franja de
+     reportes) y abajo con cursor (KPIs + filtros). Con los 40px que devolvió
+     la franja inferior el mismo día, el presupuesto vertical pasó de 465 a
+     **545**.
+
+     (2026-09-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -31809,7 +31876,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#358**.
+> próxima regla nueva es la **#359**.
 
 >
 

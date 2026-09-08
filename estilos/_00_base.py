@@ -71,8 +71,14 @@ CSS = """    <style>
         /* 30px hasta el 2026-08-18. La franja ya no arranca en el borde de
            la ventana: encima de ella vive la barra de navegación superior,
            así que su anclaje se corre --nav-top-alto (30 + 40 = 70). */
-        /* 2026-08-31: 70 -> 108, los 38px de la franja de reportes. */
-        --cab-nivel1-top: 108px;
+        /* 2026-08-31: 70 -> 108, los 38px de la franja de reportes.
+           2026-09-07: 108 -> 68. Los 40px que se van son los de la franja
+           de vistas, que dejo de reservar sitio (--franja-vistas-reserva).
+           Es el `top` sticky de `fila_ajuste_top`: arriba de 901px su banda
+           no pinta y sus hijos son `fixed`, asi que no se nota; entre 769 y
+           900 SI pinta, y ahi es lo que evita que la banda se coma los
+           primeros 40px del contenido, que acaba de subir. */
+        --cab-nivel1-top: 68px;
         --cab-nivel2-top: 52px;   /* legacy: ya no hay nivel 2 en la banda */
         /* 58px hasta el 2026-08-14. Medido en el navegador: la franja ocupa
            de y=8 a y=37 (29px reales de controles) y la tarjeta arrancaba en
@@ -94,11 +100,19 @@ CSS = """    <style>
            mas abajo y el presupuesto vertical baja otro tanto. Va LITERAL y
            no `calc(80px + var(--franja-rep-alto))` por lo que dice el parrafo
            de arriba: test_graficos.py lee esta variable con un regex de
-           `\d+px` para cotejarla contra graficos/alturas.py, y un calc() lo
+           `\\d+px` para cotejarla contra graficos/alturas.py, y un calc() lo
            dejaria ciego. Si se cambia el alto de la franja, este numero y el
            `_CAB_OFFSET` de alturas.py se cambian a mano, los dos.
-           2026-09-01: 118 -> 128, los 10px que crecio la franja. */
-        --cab-offset-contenido: 128px;
+           2026-09-01: 118 -> 128, los 10px que crecio la franja.
+           2026-09-07: 128 -> 88, a pedido ("deseo aprovechar el espacio del
+           lienzo, para poder subir mas las tarjetas"). La franja de vistas
+           dejo de reservar sus 40px (--franja-vistas-reserva) porque ahora
+           es una capa que aparece al pasar el cursor, asi que el contenido
+           arranca 40px mas arriba y el presupuesto vertical gana otro
+           tanto. Con el jalon de -104 de la primera tarjeta de Compras
+           (`_20_compras_rail.py`), esa tarjeta pasa de y=104 a y=64: los
+           mismos 16px de aire, ahora bajo la franja de REPORTES. */
+        --cab-offset-contenido: 88px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -159,6 +173,26 @@ CSS = """    <style>
            todos esos calc() vuelven solos a los valores de siempre.
            ================================================================== */
         --nav-top-alto: 40px;
+        /* LO QUE LA FRANJA DE VISTAS RESERVA EN EL LAYOUT (2026-09-07).
+           Hasta hoy esto y --nav-top-alto eran la MISMA variable, porque
+           eran la misma cosa: una fila que ocupaba su alto y empujaba a
+           todo lo de abajo. Desde que la franja aparece al pasar el cursor
+           (`_26_rails_scroll.py`) dejó de ser una fila y pasó a ser una
+           CAPA: sigue midiendo --nav-top-alto cuando se la ve, pero no le
+           quita sitio a nadie. Son dos cosas distintas y ahora se llaman
+           distinto.
+
+           Vale 0. No se borraron los `calc()` que la sumaban —quedan como
+           documentación de qué se apoya en esa franja, y volver atrás es
+           poner 40 acá— y su valor entra en los seis anclajes que antes
+           sumaban --nav-top-alto: el rail izquierdo y su cabecera, el
+           pestillo, la copia lateral del rail y la banda de la cabecera.
+
+           OJO: los que siguen usando --nav-top-alto son los que miden el
+           ALTO de la franja o de algo que ocupa su mismo hueco (la propia
+           `nav_rail`, la franja de KPIs, el compartimento de filtros). Esos
+           NO son offsets y no cambian. */
+        --franja-vistas-reserva: 0px;
         /* LA FRANJA DE REPORTES (2026-08-31, a pedido). Va arriba de todo,
            por encima de las dos bandas que ya existian, y desplaza a TODO el
            cromo fijo que se ancla al borde superior de la ventana. Por eso
