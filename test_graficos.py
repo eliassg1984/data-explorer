@@ -2946,6 +2946,121 @@ def _pruebas_container_queries():
     return fallos
 
 
+def _pruebas_drill_familia_subfamilia():
+    """El drill Familia › Subfamilia › Producto de `compras/producto.py`.
+
+    Lo que se puede romper en silencio, que es de lo que está hecha esta
+    lista:
+
+      1. Que los tres niveles dejen de CUADRAR. Cada panel es el desglose
+         del de su izquierda: la suma del panel B tiene que dar la fila
+         elegida del A, y la del C la fila elegida del B. Si alguien cambia
+         un `groupby` o un filtro y eso se rompe, en pantalla se ve una
+         tabla perfectamente creíble con los números de otra cosa.
+      2. Que el % deje de ser sobre el PADRE. Es la decisión de diseño del
+         drill: con % global las cinco subfamilias de VINOS darían 4%,
+         0,5%… y la columna dejaría de comparar lo que se está viendo.
+      3. Que el filtro de subfamilia se haga por la subfamilia SOLA. La
+         clave es el PAR (familia, subfamilia): medido sobre R2 el
+         2026-09-09, 9 de las 95 subfamilias de compras.parquet aparecen en
+         más de una familia, así que un `df[col_subfam] == x` suelto mezcla
+         productos de dos familias sin dar error. Acá se reproduce con una
+         subfamilia repetida a propósito.
+      4. Que la UM se pierda. La cantidad de un producto sólo significa algo
+         con su unidad al lado (ver el docstring de `_grupo_productos`).
+
+    Datos sintéticos y deterministas: sin R2, sin secrets, sin red.
+    """
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    drill · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA drill · {nombre}{': ' + detalle if detalle else ''}")
+
+    from graficos.compras.producto import (
+        _fam_normalizada, _fam_ranking, _grupo_productos, _subfam_normalizada,
+        _subfam_ranking,
+    )
+
+    # "Varios" es la subfamilia repetida entre DOS familias: es la trampa 3.
+    df = pd.DataFrame({
+        "FAM": ["A", "A", "A", "A", "B", "B", "B"],
+        "SUB": ["Carnes", "Carnes", "Verduras", "Varios",
+                "Vinos", "Varios", "Varios"],
+        "PROD": ["Lomo", "Asado", "Papa", "Bolsa",
+                 "Malbec", "Bolsa", "Corcho"],
+        "VAL": [600.0, 200.0, 150.0, 50.0, 300.0, 80.0, 20.0],
+        "CANT": [10.0, 5.0, 30.0, 100.0, 12.0, 40.0, 200.0],
+        "UM": ["KILOS", "KILOS", "KILOS", "UND", "UND", "UND", "UND"],
+    })
+
+    fam = _fam_ranking(df, "FAM", "PROD", "VAL", "SUB")
+    check("panel A ordena por valor descendente",
+          fam["familia"].tolist() == ["A", "B"], str(fam["familia"].tolist()))
+    check("panel A cuenta las SUBFAMILIAS de cada familia",
+          fam["subfamilias"].tolist() == [3, 2], str(fam["subfamilias"].tolist()))
+    check("los % del panel A suman 100", abs(fam["pct"].sum() - 100) < 1e-9)
+
+    d_fam = df[_fam_normalizada(df, "FAM") == "A"]
+    sub = _subfam_ranking(d_fam, "SUB", "PROD", "VAL")
+    check("el panel B CUADRA con su fila del panel A",
+          abs(sub["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9,
+          f"{sub['valor'].sum()} vs {fam.iloc[0]['valor']}")
+    check("la columna Subfam. del panel A cuenta las filas del panel B",
+          len(sub) == int(fam.iloc[0]["subfamilias"]))
+    # 600+200 sobre 1000, no sobre 1400: el % es del PADRE (trampa 2).
+    check("el % del panel B es sobre SU FAMILIA, no sobre el total",
+          abs(float(sub.iloc[0]["pct"]) - 80.0) < 1e-9,
+          f"{sub.iloc[0]['pct']}")
+
+    g = d_fam[_subfam_normalizada(d_fam, "SUB") == "Carnes"]
+    pro = _grupo_productos(g, "PROD", "VAL", "CANT", "UM")
+    check("el panel C CUADRA con su fila del panel B",
+          abs(pro["valor"].sum() - float(sub.iloc[0]["valor"])) < 1e-9)
+    check("la columna Prod. del panel B cuenta las filas del panel C",
+          len(pro) == int(sub.iloc[0]["productos"]))
+    check("el % del panel C es sobre SU SUBFAMILIA",
+          abs(float(pro.iloc[0]["pct"]) - 75.0) < 1e-9, f"{pro.iloc[0]['pct']}")
+    check("cada producto se lleva su UM (trampa 4)",
+          pro["um"].tolist() == ["KILOS", "KILOS"], str(pro["um"].tolist()))
+
+    # Trampa 3, la que motivó que `_subfam_ranking` reciba el df YA filtrado
+    # por familia en vez de (df, familia): "Varios" existe en A y en B.
+    por_par = _grupo_productos(
+        d_fam[_subfam_normalizada(d_fam, "SUB") == "Varios"],
+        "PROD", "VAL", "CANT", "UM")
+    suelto = _grupo_productos(
+        df[_subfam_normalizada(df, "SUB") == "Varios"],
+        "PROD", "VAL", "CANT", "UM")
+    check("filtrar por el PAR (familia, subfamilia) no mezcla familias",
+          float(por_par["valor"].sum()) == 50.0
+          and float(suelto["valor"].sum()) == 150.0,
+          f"par={por_par['valor'].sum()} suelto={suelto['valor'].sum()}")
+
+    # Sin subfamilia elegida el panel C es la familia ENTERA: es lo que hacía
+    # la tarjeta de dos paneles, y el drill no puede habérselo llevado.
+    todo = _grupo_productos(d_fam, "PROD", "VAL", "CANT", "UM")
+    check("sin subfamilia elegida, el panel C es la familia entera",
+          abs(todo["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9)
+
+    # Parquet sin columna de Subfamilia: la tarjeta vuelve a dos paneles y
+    # el panel A muestra el conteo de PRODUCTOS, que es lo que había.
+    fam_sin = _fam_ranking(df, "FAM", "PROD", "VAL", None)
+    check("sin columna de Subfamilia el ranking de familia sigue vivo",
+          "subfamilias" not in fam_sin.columns
+          and fam_sin["productos"].tolist() == [4, 3],
+          str(fam_sin.columns.tolist()))
+    flaco = _grupo_productos(d_fam, "PROD", "VAL", None, None)
+    check("sin columnas de Cantidad/UM el panel C no revienta",
+          (flaco["cantidad"] == 0).all() and (flaco["um"] == "").all())
+
+    return fallos
+
+
 def _pruebas_grilla_horizontal():
     """El contrato de la GRILLA (graficos/compras/_comun.py).
 
@@ -3196,6 +3311,9 @@ def main():
 
     # ── Grilla horizontal: que todas las filas partan en el mismo sitio ──
     fallos += _pruebas_grilla_horizontal()
+
+    # ── Drill Familia › Subfamilia › Producto: que los 3 niveles cuadren ─
+    fallos += _pruebas_drill_familia_subfamilia()
 
     # ── Container queries: que ninguna se quede sin contenedor ──────────
     fallos += _pruebas_container_queries()

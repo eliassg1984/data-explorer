@@ -16,11 +16,15 @@ las tres separaban precio-promedio, precio-real y cantidad/valor de UN mismo
 producto en tres pantallas distintas — acá conviven en una, con un selector
 de texto plano en vez de tabs/pills con caja (a pedido, para no ocupar sitio).
 
-Debajo, un segundo ranking agrupa las mismas compras por Familia; un clic
-abre el mini ranking de productos de esa familia. Panel B es una tabla
-AgGrid (mismo patrón barra-en-celda que la tabla de la izquierda, 2026-08-26
-— antes un `_compras_mini_barras` de Plotly), a pedido para que las dos
-mitades de la fila se lean como una sola grilla y no como tabla+gráfico.
+ARRIBA de todo eso, la tarjeta del drill jerárquico: tres tablas AgGrid en
+cascada — Familia › Subfamilia › Producto (2026-09-09, a pedido). Un clic
+en una familia repuebla las subfamilias; un clic en una subfamilia, los
+productos; y soltar la subfamilia devuelve el tercer panel a la familia
+entera, que es lo que hacía la versión de DOS paneles que esto reemplaza.
+Cada % es sobre su padre, no sobre el total. Las tres son tablas con el
+mismo patrón barra-en-celda (2026-08-26 — antes el panel de la derecha era
+un `_compras_mini_barras` de Plotly), a pedido para que la fila se lea como
+una sola grilla y no como tabla+gráfico.
 """
 
 import pandas as pd
@@ -314,14 +318,102 @@ def _fam_normalizada(dd, col_fam):
     return dd[col_fam].astype(str).replace({"": "Sin familia", "nan": "Sin familia"})
 
 
-def _fam_ranking(dd, col_fam, col_prod, col_valor):
-    """Una familia por fila: valor total y Nº de productos distintos."""
+def _subfam_normalizada(dd, col_subfam):
+    """Gemela de `_fam_normalizada` para Subfamilia, y por el mismo motivo:
+    los vacíos se unifican en "Sin subfamilia" en vez de descartarse, o el
+    total del panel B dejaría de cuadrar con la fila de su familia en el A.
+
+    Medido sobre R2 el 2026-09-09: hoy no hace falta para nada —
+    `compras.parquet` trae `SUBFAMILIA` en las 51.838 filas, 0 nulas y 0
+    vacías, 95 valores distintos. Es una red por si el parquet cambia, no
+    una rama que se recorra."""
+    return dd[col_subfam].astype(str).replace({"": "Sin subfamilia",
+                                               "nan": "Sin subfamilia"})
+
+
+def _fam_ranking(dd, col_fam, col_prod, col_valor, col_subfam=None):
+    """Una familia por fila: valor total, Nº de productos distintos y —si el
+    parquet trae Subfamilia— cuántas subfamilias hay detrás.
+
+    `subfamilias` es la que se MUESTRA desde el 2026-09-09, y `productos`
+    quedó calculada pero fuera de la tabla: con tres paneles no entran las
+    dos (ver el comentario de anchos en la tarjeta), y la que dice algo en
+    el panel A es cuántas puertas abre el clic. El conteo de productos baja
+    al panel de Subfamilia, donde es más chico y más útil."""
     g = dd.copy()
     g[col_fam] = _fam_normalizada(g, col_fam)
-    out = g.groupby(col_fam).agg(valor=(col_valor, "sum"),
-                                 productos=(col_prod, "nunique"))
+    agg = {"valor": (col_valor, "sum"), "productos": (col_prod, "nunique")}
+    if col_subfam and col_subfam in g.columns:
+        # Normalizada, no cruda: si no, una subfamilia vacía no contaría acá
+        # y sí sería una fila del panel B ("Sin subfamilia").
+        g[col_subfam] = _subfam_normalizada(g, col_subfam)
+        agg["subfamilias"] = (col_subfam, "nunique")
+    out = g.groupby(col_fam).agg(**agg)
     out = out.sort_values("valor", ascending=False).reset_index()
     out = out.rename(columns={col_fam: "familia"})
+    tot = out["valor"].sum() or 1.0
+    out["pct"] = out["valor"] / tot * 100
+    return out
+
+
+def _subfam_ranking(d_fam, col_subfam, col_prod, col_valor):
+    """Una subfamilia por fila, DENTRO de una familia ya recortada: valor,
+    Nº de productos y % SOBRE ESA FAMILIA — no sobre el total comprado.
+
+    El % es sobre el padre a propósito: con % global, las cinco subfamilias
+    de VINOS Y ESPUMANTES darían 4%, 0,5%, 0,2%… y la columna dejaría de
+    servir para comparar las filas que se están viendo. Lo dice el caption
+    del panel, que es lo que evita que se lea como el % del panel A.
+
+    Recibe el df YA filtrado por familia y no `(df, familia)` a propósito:
+    la clave real es el PAR (familia, subfamilia), no la subfamilia sola.
+    Medido sobre R2 el 2026-09-09, 9 de las 95 subfamilias de
+    `compras.parquet` aparecen en más de una familia, así que un
+    `df[col_subfam] == x` suelto mezcla productos de dos familias sin dar
+    error y sin que se note."""
+    g = d_fam.copy()
+    g[col_subfam] = _subfam_normalizada(g, col_subfam)
+    out = g.groupby(col_subfam).agg(valor=(col_valor, "sum"),
+                                    productos=(col_prod, "nunique"))
+    out = out.sort_values("valor", ascending=False).reset_index()
+    out = out.rename(columns={col_subfam: "subfamilia"})
+    tot = out["valor"].sum() or 1.0
+    out["pct"] = out["valor"] / tot * 100
+    return out
+
+
+def _grupo_productos(g, col_prod, col_valor, col_cant, col_um):
+    """Un producto por fila del grupo que se le pase (una familia entera o
+    una de sus subfamilias): valor, % sobre ESE grupo, cantidad y UM.
+
+    La CANTIDAD se suma por PRODUCTO y nunca por el grupo, y no es un
+    detalle de implementación. Medido sobre R2 el 2026-09-09: los 1.592
+    productos de `compras.parquet` tienen UNA sola unidad cada uno (cero
+    con más de una), así que la cantidad de una fila es exacta y se puede
+    mostrar — pero dentro de una misma subfamilia se mezclan (ABARROTES
+    compra en LITROS, KILOS y UND el mismo mes). De ahí las dos decisiones
+    que van pegadas a esta función: la UM viaja al lado del número, y la
+    columna NO lleva fila de totales, porque sumar 213 kilos con 441
+    unidades da un número inventado. Misma familia de trampa que el grano
+    de las columnas `*_ANO_ANTERIOR` (reglas #198 a #200): el gráfico sale
+    lindo igual, sólo miente."""
+    agg = {"valor": (col_valor, "sum")}
+    if col_cant and col_cant in g.columns:
+        agg["cantidad"] = (col_cant, "sum")
+    out = g.groupby(col_prod).agg(**agg)
+    if "cantidad" not in out.columns:
+        out["cantidad"] = 0.0
+    if col_um and col_um in g.columns:
+        # Moda y no `first`: mismo criterio que `_prod_ranking`, para que la
+        # UM de un producto no dependa de qué compra quedó primera.
+        out["um"] = g.groupby(col_prod)[col_um].agg(
+            lambda s: str(s.dropna().mode().iat[0]) if not s.dropna().empty
+            else "")
+    else:
+        out["um"] = ""
+    out = out.sort_values("valor", ascending=False).reset_index()
+    out = out.rename(columns={col_prod: "producto"})
+    out["producto"] = out["producto"].astype(str)
     tot = out["valor"].sum() or 1.0
     out["pct"] = out["valor"] / tot * 100
     return out
@@ -366,10 +458,16 @@ def _prod_stats(g, col_fecha, col_punit, col_cant, col_valor, col_um):
 
 
 def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit,
-                            col_um, col_fecha, col_prov=None, d_full=None):
-    """Ranking de productos → evolución del producto en foco (Precio /
-    Cantidad / Valor). Debajo, ranking por Familia → mini ranking de sus
-    productos."""
+                            col_um, col_fecha, col_prov=None, d_full=None,
+                            col_subfam=None):
+    """Arriba, el drill Familia › Subfamilia › Producto. Debajo, el ranking
+    de productos → evolución del producto en foco (Precio / Cantidad /
+    Valor).
+
+    `col_subfam` va al FINAL y con default: el resto de la firma es
+    posicional en el llamador, y en Cloud un commit que le cambia el orden
+    a algo ya importado deja el `app.py` nuevo hablando con el paquete
+    viejo (regla #357). Con default, la firma vieja sigue siendo válida."""
     if not (col_prod and col_valor and col_punit and col_fecha):
         st.info("Faltan columnas (Producto, Valor, Precio unitario o Fecha) "
                 "para este gráfico.")
@@ -455,54 +553,92 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
         st.info("Sin productos con precio válido en el rango.")
         return
 
-    # ── Card 1: compras por familia + mini ranking de sus productos ─────
-    # 2026-09-09, a pedido: esta tarjeta pasa a ser la PRIMERA de la
-    # sección. Antes cerraba el drill, debajo del ranking de productos.
+    # ── Card 1: el drill Familia › Subfamilia › Producto ────────────────
+    # 2026-09-09, a pedido ("uno de familia, otro de subfamilia y otro de
+    # producto… al hacer clic en una familia, muestre en el otro cuadro las
+    # subfamilias"). Antes eran DOS paneles —familia → top 10 de SUS
+    # productos— y el del medio no existía.
+    #
+    # Por qué el del medio importa, medido sobre R2 antes de escribir una
+    # línea: ALIMENTOS es el 87% del gasto y era un callejón sin salida.
+    # Abierto en 12 meses da CARNES 677k, ABARROTES 215k, VERDURAS 157k,
+    # PESCADOS 146k, LÁCTEOS 137k, AVES 106k, FRUTAS 55k — o sea que el
+    # "top 10 de ALIMENTOS" era en la práctica el top 10 de CARNES, y las
+    # otras seis subfamilias no llegaban nunca a la pantalla.
+    #
+    # El panel del medio es OPCIONAL (`hay_sub`): si el parquet no trae
+    # columna de Subfamilia, la tarjeta vuelve sola a los dos paneles de
+    # antes, con la misma proporción de siempre.
     #
     # El `if not col_fam: return` que tenía se vuelve un `if` normal, y no
     # es cosmético: arriba del ranking, un `return` acá se llevaría puesto
     # el resto de la sección cada vez que el parquet no traiga columna de
     # Familia — o sea, apagaría la vista entera por una tarjeta.
     if col_fam and col_fam in dd.columns:
+        hay_sub = bool(col_subfam and col_subfam in dd.columns)
         with st.container(border=True, key="compras_prod_card_familia"):
-            fam_ranking = _fam_ranking(dd, col_fam, col_prod, col_valor)
+            fam_ranking = _fam_ranking(dd, col_fam, col_prod, col_valor,
+                                       col_subfam if hay_sub else None)
             fam_focus = st.session_state.get("compras_prod_fam_focus")
             if fam_focus not in set(fam_ranking["familia"]):
                 fam_focus = None
 
-            # columnas-internas: Panel B pasó de gráfico a tabla (ver docstring
-            # del módulo) y ya no necesita el ancho extra que un gráfico de
-            # barras reclamaba para sus etiquetas de texto afuera.
-            col_famtabla, col_famdet = st.columns([1.3, 1], gap=GAP_DRILL)
+            if hay_sub:
+                # 1.35 al último y no tres iguales: es el que carga el nombre
+                # largo (media 17,5 caracteres, máximo 64) MÁS dos columnas
+                # extra (Cant./UM); los otros dos llevan nombres de ≤22 y ≤38.
+                # columnas-internas: los tres niveles del drill.
+                col_famtabla, col_subtabla, col_famdet = st.columns(
+                    [1, 1, 1.35], gap=GAP_DRILL)
+            else:
+                # columnas-internas: sin Subfamilia la tarjeta vuelve a los dos
+                # paneles de antes, con la proporción que ya tenía.
+                col_famtabla, col_famdet = st.columns([1.3, 1], gap=GAP_DRILL)
+                col_subtabla = None
+
             with col_famtabla:
                 st.markdown('<div class="cp-prod-rank-tit">Compras por familia</div>',
                            unsafe_allow_html=True)
 
                 disp_fam = fam_ranking.rename(columns={
                     "familia": "Familia", "valor": "Valor", "pct": "%",
-                    "productos": "Productos",
+                    "productos": "Productos", "subfamilias": "Subfam",
                 })
                 _val_max_fam = (float(fam_ranking["valor"].max())
                                if len(fam_ranking) else 1.0)
                 disp_fam["_barra"] = disp_fam["Valor"] / _val_max_fam * 100
+                # Con el panel del medio, el conteo que se muestra es el de
+                # SUBFAMILIAS (cuántas puertas abre el clic); sin él, el de
+                # productos, que es lo que había.
+                _col_cuenta = "Subfam" if hay_sub else "Productos"
                 _resp_fam = AgGrid(
-                    disp_fam[["Familia", "Valor", "%", "Productos", "_barra"]],
+                    disp_fam[["Familia", "Valor", "%", _col_cuenta, "_barra"]],
                     gridOptions={
                         # Sin `flex`: mismo motivo que el ranking de arriba
                         # (`st_aggrid` le clava `width: 200` a toda columna sin
                         # `width` propio, y ese `width` le gana al `flex`).
+                        #
+                        # Los anchos de los TRES paneles se eligieron con la
+                        # regla #349 en la mano: AG Grid reescala las columnas
+                        # para llenar la grilla, así que un panel de ~264px
+                        # (tres paneles en una laptop de 1010) las achica ~13%.
+                        # El reparto prioriza "Valor", porque un número
+                        # recortado por la izquierda es plausible y falso
+                        # ("S/ 1,452,437" → "452,437"), mientras que un nombre
+                        # recortado se ve recortado — y encima tiene tooltip.
                         "columnDefs": [
-                            {"field": "Familia", "width": 210,
+                            {"field": "Familia", "width": 104,
                              "tooltipField": "Familia"},
-                            {"field": "Valor", "width": 100,
+                            {"field": "Valor", "width": 108, "minWidth": 100,
                              "type": "numericColumn",
                              "cellStyle": _js_barra_prod,
                              "valueFormatter": _js_soles0_prod},
-                            {"field": "%", "width": 56,
+                            {"field": "%", "width": 38,
                              "type": "numericColumn",
                              "valueFormatter": _js_pct_prod},
-                            {"field": "Productos", "width": 80,
-                             "type": "numericColumn",
+                            {"field": _col_cuenta,
+                             "headerName": "Subfam." if hay_sub else "Prod.",
+                             "width": 52, "type": "numericColumn",
                              "valueFormatter": _js_num0_prod},
                             {"field": "_barra", "hide": True},
                         ],
@@ -531,33 +667,154 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                 if _clicked_fam != fam_focus:
                     fam_focus = _clicked_fam
                     st.session_state["compras_prod_fam_focus"] = fam_focus
+                    # Cambiar de familia INVALIDA la subfamilia: sin esto,
+                    # elegir CARNES y saltar a VINOS deja el panel de la
+                    # derecha mostrando carne. El guard de más abajo lo
+                    # ataja igual (la subfamilia vieja no está en el ranking
+                    # de la familia nueva), pero se limpia también acá para
+                    # que el estado y la key del grid del medio —que lleva
+                    # el slug de la familia— cuenten lo mismo en la MISMA
+                    # pasada, sin depender del orden de lectura.
+                    st.session_state.pop("compras_prod_subfam_focus", None)
                 st.caption("% sobre el total comprado en el rango.")
 
+            # El foco se resuelve DESPUÉS del panel A y antes de los otros
+            # dos: así el clic de esta corrida ya manda, sin un rerun de por
+            # medio. Sin selección se enfoca la familia de arriba, que es lo
+            # que evita que la tarjeta abra vacía.
+            fam_foco = (fam_focus if fam_focus is not None
+                        else fam_ranking.iloc[0]["familia"])
+            d_fam = dd[_fam_normalizada(dd, col_fam) == fam_foco]
+
+            sub_focus = None
+            if hay_sub:
+                with col_subtabla:
+                    st.markdown(
+                        f'<div class="cp-prod-rank-tit">'
+                        f'{_compras_truncar(fam_foco, 34)}</div>',
+                        unsafe_allow_html=True)
+                    sub_ranking = _subfam_ranking(d_fam, col_subfam, col_prod,
+                                                  col_valor)
+                    sub_focus = st.session_state.get("compras_prod_subfam_focus")
+                    if sub_focus not in set(sub_ranking["subfamilia"]):
+                        sub_focus = None
+                    if sub_ranking.empty:
+                        st.info("Sin subfamilias para esta familia.")
+                    else:
+                        disp_sub = sub_ranking.rename(columns={
+                            "subfamilia": "Subfamilia", "valor": "Valor",
+                            "pct": "%", "productos": "Productos",
+                        })
+                        _val_max_sub = float(sub_ranking["valor"].max())
+                        disp_sub["_barra"] = disp_sub["Valor"] / _val_max_sub * 100
+                        _resp_sub = AgGrid(
+                            disp_sub[["Subfamilia", "Valor", "%", "Productos",
+                                     "_barra"]],
+                            gridOptions={
+                                # Mismos anchos que el panel A: los tres se
+                                # leen como una sola grilla, no como tres
+                                # tablas que se parecen.
+                                "columnDefs": [
+                                    {"field": "Subfamilia", "width": 104,
+                                     "tooltipField": "Subfamilia"},
+                                    {"field": "Valor", "width": 108, "minWidth": 100,
+                                     "type": "numericColumn",
+                                     "cellStyle": _js_barra_prod,
+                                     "valueFormatter": _js_soles0_prod},
+                                    {"field": "%", "width": 38,
+                                     "type": "numericColumn",
+                                     "valueFormatter": _js_pct_prod},
+                                    {"field": "Productos", "headerName": "Prod.",
+                                     "width": 52, "type": "numericColumn",
+                                     "valueFormatter": _js_num0_prod},
+                                    {"field": "_barra", "hide": True},
+                                ],
+                                "rowSelection": {"mode": "singleRow",
+                                                 "checkboxes": False,
+                                                 "enableClickSelection": False},
+                                "onRowClicked": _js_toggle_prod,
+                                "rowHeight": _ALTO_FILA,
+                                "headerHeight": 38,
+                                "suppressCellFocus": True,
+                                "suppressMovableColumns": True,
+                            },
+                            allow_unsafe_jscode=True,
+                            theme="streamlit",
+                            height=_ALTO_FRAME,
+                            update_on=["selectionChanged"],
+                            # La key lleva el slug de la FAMILIA a propósito:
+                            # al cambiar de familia el componente se remonta y
+                            # nace sin selección, así que la fila marcada del
+                            # panel viejo no puede sobrevivir a la de al lado.
+                            key=f"compras_prod_subfam_tab_{_slug(fam_foco)}",
+                        )
+                        _sel_sub = getattr(_resp_sub, "selected_rows", None)
+                        if _sel_sub is not None and len(_sel_sub):
+                            _fila_sub = (_sel_sub.iloc[0]
+                                        if hasattr(_sel_sub, "iloc")
+                                        else _sel_sub[0])
+                            _clicked_sub = str(_fila_sub["Subfamilia"])
+                        else:
+                            _clicked_sub = None
+                        if _clicked_sub != sub_focus:
+                            sub_focus = _clicked_sub
+                            st.session_state["compras_prod_subfam_focus"] = sub_focus
+                    st.caption(f"% sobre {_compras_truncar(fam_foco, 22)}. "
+                               "Otro clic en la misma subfamilia la suelta.")
+
             with col_famdet:
-                fam_foco = fam_focus if fam_focus is not None else fam_ranking.iloc[0]["familia"]
-                st.markdown(f'<div class="cp-prod-rank-tit">{_compras_truncar(fam_foco, 40)}</div>',
-                           unsafe_allow_html=True)
-                serie_fam = (dd[_fam_normalizada(dd, col_fam) == fam_foco]
-                            .groupby(col_prod)[col_valor].sum().nlargest(10))
-                if serie_fam.empty:
-                    st.info("Sin productos para esta familia.")
+                # Sin subfamilia elegida el panel muestra la familia ENTERA,
+                # que es exactamente lo que hacía la tarjeta de dos paneles.
+                # O sea: el drill agrega un nivel sin sacar ninguna lectura.
+                if sub_focus:
+                    g_det = d_fam[_subfam_normalizada(d_fam, col_subfam) == sub_focus]
+                    ambito = sub_focus
+                    titulo_det = _compras_truncar(sub_focus, 40)
                 else:
-                    disp_prodfam = (serie_fam.rename_axis("Producto")
-                                   .reset_index(name="Valor"))
-                    _val_max_prodfam = float(disp_prodfam["Valor"].max())
+                    g_det = d_fam
+                    ambito = fam_foco
+                    # "· todas" y no el nombre pelado: sin subfamilia elegida
+                    # este panel y el del medio se titulaban IGUAL, dos veces
+                    # el nombre de la familia, uno al lado del otro.
+                    titulo_det = (f"{_compras_truncar(fam_foco, 30)} · todas"
+                                  if hay_sub else _compras_truncar(fam_foco, 40))
+                st.markdown(
+                    f'<div class="cp-prod-rank-tit">{titulo_det}</div>',
+                    unsafe_allow_html=True)
+                prod_grupo = _grupo_productos(g_det, col_prod, col_valor,
+                                              col_cant, col_um)
+                if prod_grupo.empty:
+                    st.info("Sin productos para esta selección.")
+                else:
+                    disp_prodfam = prod_grupo.rename(columns={
+                        "producto": "Producto", "valor": "Valor", "pct": "%",
+                        "cantidad": "Cant", "um": "UM",
+                    })
+                    _val_max_prodfam = float(prod_grupo["valor"].max())
                     disp_prodfam["_barra"] = disp_prodfam["Valor"] / _val_max_prodfam * 100
                     AgGrid(
-                        disp_prodfam[["Producto", "Valor", "_barra"]],
+                        disp_prodfam[["Producto", "Valor", "%", "Cant", "UM",
+                                     "_barra"]],
                         gridOptions={
-                            # Mismos anchos/renderers que la tabla de Familia:
-                            # panel A y B deben leerse como una sola grilla.
+                            # SIN el punto en "Cant": AG Grid resuelve `field`
+                            # con notación de PATH, así que un campo "Cant."
+                            # se parte en ["Cant", ""] y la celda sale vacía en
+                            # silencio (regla #192). El punto vuelve como
+                            # `headerName`, igual que en el ranking de arriba.
                             "columnDefs": [
-                                {"field": "Producto", "width": 210,
+                                {"field": "Producto", "width": 150,
                                  "tooltipField": "Producto"},
-                                {"field": "Valor", "width": 100,
+                                {"field": "Valor", "width": 108, "minWidth": 100,
                                  "type": "numericColumn",
                                  "cellStyle": _js_barra_prod,
                                  "valueFormatter": _js_soles0_prod},
+                                {"field": "%", "width": 38,
+                                 "type": "numericColumn",
+                                 "valueFormatter": _js_pct_prod},
+                                {"field": "Cant", "headerName": "Cant.",
+                                 "width": 58, "type": "numericColumn",
+                                 "valueFormatter": _js_num0_prod},
+                                {"field": "UM", "width": 46},
                                 {"field": "_barra", "hide": True},
                             ],
                             "rowHeight": _ALTO_FILA,
@@ -568,9 +825,28 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                         allow_unsafe_jscode=True,
                         theme="streamlit",
                         height=_ALTO_FRAME,
-                        key=f"compras_prod_fam_det_tab_{_slug(fam_foco)}",
+                        # Fam Y subfamilia en la key: es lo que fuerza el
+                        # remonte con los datos nuevos. Con una key estable y
+                        # el `client_wins` que trae st_aggrid de fábrica, el
+                        # navegador puede quedarse con la tabla anterior
+                        # (regla #227).
+                        key=("compras_prod_fam_det_tab_"
+                             f"{_slug(fam_foco)}_{_slug(sub_focus or 'todo')}"),
                     )
-                st.caption("Top 10 productos de la familia, por valor comprado.")
+                # La lista NO se corta en 10: el punto de bajar tres niveles
+                # es llegar al ítem. Medido sobre R2, una subfamilia tiene
+                # mediana 2 productos en un mes y máximo 180 en 12 meses, así
+                # que lo que sobra scrollea dentro del frame de 8 filas.
+                #
+                # Y la cantidad NO se totaliza: dentro de una misma subfamilia
+                # se mezclan unidades (ABARROTES compra en LITROS, KILOS y UND
+                # el mismo mes), así que la suma sería un número inventado.
+                # Ver el docstring de `_grupo_productos`.
+                st.caption(
+                    f"{len(prod_grupo)} productos de "
+                    f"{_compras_truncar(ambito, 22)}, por valor comprado. "
+                    "% sobre ese total; la cantidad va con su unidad y no "
+                    "se suma entre productos.")
 
     # ── Card 2: ranking de productos + evolución del producto en foco ──
     # 2026-09-02, a pedido ("al gráfico que está al costado de ranking de

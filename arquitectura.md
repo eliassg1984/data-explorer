@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-373 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+374 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (131)
 
@@ -272,7 +272,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 
-**AgGrid y tablas** (58)
+**AgGrid y tablas** (59)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -332,6 +332,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#361** — Una cabecera que dice "Este año" sobre una ventana MÓVIL se lee como el año calendario
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 - **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
+- **#374** — Un drill de TRES niveles no es "una tabla más": son cinco cosas que se rompen en silencio, y…
 
 **Streamlit** (105)
 
@@ -33097,6 +33098,96 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+374. **Un drill de TRES niveles no es "una tabla más": son cinco cosas
+     que se rompen en silencio, y cuatro se descubren midiendo, no
+     leyendo.** Nació el 2026-09-09 con el pedido de abrir «Compras por
+     familia» en Familia › Subfamilia › Producto
+     (`graficos/compras/producto.py`, tarjeta `compras_prod_card_familia`).
+
+     **0. Primero, ¿el nivel nuevo dice algo?** `SUBFAMILIA` está limpia
+     —95 valores en las 51.838 filas de `compras.parquet`, 0 nulas y 0
+     vacías— pero eso no alcanza: la pregunta es si el nivel abre algo que
+     hoy está tapado. Lo abría. ALIMENTOS es el 87% del gasto y era un
+     callejón sin salida; en 12 meses se parte en CARNES 677k, ABARROTES
+     215k, VERDURAS 157k, PESCADOS 146k, LÁCTEOS 137k, AVES 106k, FRUTAS
+     55k. O sea que el «top 10 de ALIMENTOS» era en la práctica el top 10
+     de CARNES y las otras seis subfamilias no llegaban nunca a la
+     pantalla. Es la misma pregunta de las reglas #238 a #240 (contá en
+     cuántas filas dice algo), hecha antes de escribir una línea.
+
+     **1. La clave del nivel del medio es el PAR (padre, hijo), no el hijo
+     solo.** Medido: 9 de las 95 subfamilias aparecen en más de una
+     familia (`Electricidad`, `Otros Gastos De Viaje`, `Planilla de
+     Movilidad`…). Un `df[col_subfam] == x` suelto mezcla productos de dos
+     familias, sin error y sin que se note. Por eso `_subfam_ranking`
+     recibe el df YA recortado a la familia y no `(df, familia)`: la firma
+     hace imposible el filtro suelto. Es la misma forma de la #313 —dos
+     columnas que se parecen y viven en escalas distintas— pero en el eje
+     de las categorías.
+
+     **2. La cantidad se puede MOSTRAR por producto y no se puede
+     TOTALIZAR.** Los 1.592 productos tienen UNA sola unidad cada uno (cero
+     con más de una), así que la cantidad de una fila es exacta; pero
+     dentro de una misma subfamilia se mezclan —ABARROTES compra en
+     LITROS, KILOS y UND el mismo mes—, así que una fila de totales que
+     sume 213 kilos con 441 unidades es un número inventado. De ahí las
+     dos decisiones pegadas a `_grupo_productos`: la UM viaja al lado del
+     número, y esa columna no lleva totales. Misma familia de trampa que
+     el grano de las `*_ANO_ANTERIOR` (#198 a #200): el gráfico sale lindo
+     igual, sólo miente.
+
+     **3. El % de cada nivel es sobre su PADRE, no sobre el total.** Con %
+     global, las cinco subfamilias de VINOS Y ESPUMANTES darían 4%, 0,5%,
+     0,2%… y la columna dejaría de comparar lo que se está viendo. Cada
+     panel lo dice en su caption, que es lo que evita que se lea como el %
+     del panel anterior.
+
+     **4. El estado en cascada se invalida en DOS sitios, y los dos hacen
+     falta.** Elegir CARNES y saltar a VINOS tiene que dejar el tercer
+     panel sin carne. Uno: al cambiar el foco de familia se hace `pop` del
+     foco de subfamilia. Dos: el foco de subfamilia se valida contra las
+     subfamilias DE LA FAMILIA EN FOCO (`if sub_focus not in set(...)`),
+     que es el mismo guard que ya tenía el nivel de arriba y cubre el caso
+     por otro camino. Y la key del AgGrid del medio lleva el slug de la
+     familia: sin eso el componente no se remonta y el navegador reporta
+     la fila marcada del padre anterior — la selección de un AgGrid es
+     estado del CLIENTE, no del servidor, y sobrevive al rerun (es lo que
+     hace que el patrón funcione, y también lo que lo rompe acá).
+
+     Corolario de herramienta: **`AppTest` no puede manejar este drill**.
+     Corre el script de verdad y sirve para probar que la tarjeta se dibuja
+     sin excepción en cada estado —lo hizo—, pero no puede simular la
+     selección de un AgGrid: el componente devuelve "sin selección" y el
+     código, correctamente, lo interpreta como que el usuario soltó la
+     fila. Sembrar `session_state` no alcanza. La cascada se prueba con las
+     funciones puras (que sí cuadran nivel contra nivel) y se mira en el
+     navegador.
+
+     **5. Con tres paneles, el ancho decide qué se recorta — y hay que
+     elegirlo a mano.** AG Grid reescala las columnas para llenar la grilla
+     (#349), así que un panel de ~264px (tres columnas en una laptop de
+     1010) achica lo declarado ~13%. Entre recortar el NOMBRE y recortar el
+     NÚMERO se recorta el nombre: «S/ 1,452,437» recortado por la izquierda
+     se lee «452,437», que es plausible y falso, mientras que un nombre
+     recortado se ve recortado y encima tiene tooltip. Eso no se consigue
+     con `width` —que es sólo una proporción cuando la grilla escala— sino
+     con **`minWidth` en la columna de valor**: es un piso que AG Grid
+     respeta, y si el panel se vuelve imposible aparece scroll horizontal
+     en vez de una cifra mentirosa. Es la #352 aplicada al revés: allá el
+     dato más ancho decidía cuántas columnas caben; acá decide cuál se
+     protege.
+
+     La guarda es `test_graficos.py::_pruebas_drill_familia_subfamilia`,
+     con datos sintéticos (sin R2, sin red): que los tres niveles cuadren
+     entre sí, que los conteos de un panel cuenten las filas del siguiente,
+     que el % sea sobre el padre, que el filtro por el PAR no mezcle
+     familias, y que sin subfamilia elegida el tercer panel siga siendo la
+     familia entera — que es lo que hacía la tarjeta de dos paneles y lo
+     que el drill no puede haberse llevado puesto.
+
+     (2026-09-09.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -33109,7 +33200,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#374**.
+> próxima regla nueva es la **#375**.
 
 >
 
