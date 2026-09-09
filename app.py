@@ -260,7 +260,16 @@ if cfg.get("tool"):
 # ===========================================================================
 # CARGAR DATOS
 # ===========================================================================
-with perf.phase("cargar()"):                                                # ⚡ PERF
+# El spinner es lo PRIMERO que se ve de la app. Hasta acá el script sólo
+# inyectó CSS y JS —nada dibujado—, así que mientras baja el parquet de R2 la
+# pantalla está literalmente en blanco: medido el 2026-09-09 recargando con la
+# caché de disco caliente, 22 s con CERO elementos en el DOM. En frío se le
+# suman los parquets (ver `estilos/_27_pila.py`). Y el indicador nativo de
+# Streamlit, que sería quien avisara, lo esconde `estilos/_70_chrome.py`.
+#
+# Nombra el REPORTE porque a esta altura ya se sabe cuál es, y así el primer
+# texto de la pantalla dice también dónde estás — no sólo que hay que esperar.
+with perf.phase("cargar()"), st.spinner(f"Cargando {reporte}…"):            # ⚡ PERF
     _col_rango = cfg.get("carga_por_rango")
     if _col_rango:
         # El date-picker de la franja (más abajo) usa esta MISMA clave, así que

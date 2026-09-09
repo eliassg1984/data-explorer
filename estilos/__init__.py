@@ -19,6 +19,8 @@ Estilos globales de la app: CSS, tamaños de fuente e inyección del tema.
     _70_chrome          ocultar toolbars nativas, posición del toast
     _80_cards           cards de gráficos + tarjetas del drill de Proveedor
     _85_asistente       asistente IA: ícono de la franja + panel de chat
+    _88_cargando        velo + círculo sobre el gráfico o la tabla que
+                        el servidor está recalculando (data-stale)
     _99_movil           overrides @media (SIEMPRE al final; no mover)
 
 Para ubicar una regla: `grep` el prefijo de la key en `estilos/`. No hay
@@ -110,6 +112,7 @@ from ._60_calendario import CSS as _CSS_CALENDARIO
 from ._70_chrome import CSS as _CSS_CHROME
 from ._80_cards import CSS as _CSS_CARDS
 from ._85_asistente import CSS as _CSS_ASISTENTE
+from ._88_cargando import CSS as _CSS_CARGANDO
 from ._99_movil import CSS as _CSS_MOVIL
 
 
@@ -126,6 +129,7 @@ _SECCIONES = (
     _CSS_CHROME,
     _CSS_CARDS,
     _CSS_ASISTENTE,
+    _CSS_CARGANDO,
     _CSS_MOVIL,
 )
 
@@ -138,7 +142,7 @@ def get_css():
     ninguno), pero no invalida cuando cambia el contenido de un submodulo
     editado. Resultado: en el preview las ediciones a estilos/_*.py quedan
     invisibles porque get_css devuelve el string cacheado del proceso
-    anterior. El join de 11 strings es microsegundos; no vale la pena
+    anterior. El join de 13 strings es microsegundos; no vale la pena
     cachear a cambio de perder recarga en caliente.
     """
     return "\n" + "\n".join(_SECCIONES) + "\n    "

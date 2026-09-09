@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-365 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+366 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (127)
+**CSS y estilos** (128)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -161,6 +161,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#363** — Un control que vive DENTRO de una tarjeta promete que es de esa tarjeta. Si escribe el rango…
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 - **#365** — El estado por DEFECTO de un riel plegable no es una preferencia: decide con qué ancho nace la…
+- **#366** — Esconder stStatusWidget esconde también la única señal de "estoy trabajando"
 
 **Layout y alturas** (39)
 
@@ -326,7 +327,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#361** — Una cabecera que dice "Este año" sobre una ventana MÓVIL se lee como el año calendario
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 
-**Streamlit** (101)
+**Streamlit** (102)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -429,6 +430,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#357** — Renombrar un símbolo que app.py IMPORTA tira la app en Streamlit Cloud hasta que alguien la…
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 - **#365** — El estado por DEFECTO de un riel plegable no es una preferencia: decide con qué ancho nace la…
+- **#366** — Esconder stStatusWidget esconde también la única señal de "estoy trabajando"
 
 **Datos, R2 y DuckDB** (46)
 
@@ -32565,6 +32567,79 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-08.)
 
+
+366. **Esconder `stStatusWidget` esconde también la única señal de "estoy
+     trabajando".** `estilos/_70_chrome.py` apaga el indicador nativo de
+     Streamlit —el de arriba a la derecha— porque trae el botón «Stop» y
+     el cromo de Community Cloud. Es la decisión correcta y se paga cara:
+     los reruns de esta app no son instantáneos, así que quedan segundos
+     en los que la pantalla muestra el dato VIEJO sin ninguna marca.
+     Reportado el 2026-09-09 como *"cuando una tabla o gráfico esté
+     cargando puedo tener un círculo o algo que haga referencia a cargar
+     o analizando"*. Medido ese día en el navegador, Compras ›
+     Proveedores con los datos reales de R2:
+
+         gesto                                     hay elementos stale
+         ---------------------------------------   --------------------
+         Top 5 → Top 20 (chips del ranking)         414 ms →  5.229 ms
+         Top 20 → Top 10                          1.090 ms →  6.329 ms
+         clic en un item del rail (sólo scroll)     522 ms →  3.388 ms
+         primera carga, con la caché de disco       0 elementos en el
+         caliente, hasta el primer elemento         DOM durante 22 s
+
+     Son TRES huecos distintos y cada uno necesita su propia pieza,
+     porque la señal disponible es distinta en cada momento:
+
+     · **Un gráfico o una tabla que se está RECALCULANDO.** Hay contenido
+       en pantalla, y Streamlit ya lo marca: pone `data-stale="true"` en
+       el `stElementContainer` de cada elemento pendiente de rehacer, y
+       lo hace con precisión de FRAGMENT (tocar un chip de Proveedores no
+       marca los gráficos de Producto). Lo único que Streamlit hace hoy
+       con ese atributo es pasarlo a emotion, y el estilo resultante es
+       `opacity: 1` — medido: nadie lo estaba usando. De ahí cuelga
+       `estilos/_88_cargando.py`: velo + círculo + «Actualizando…», sólo
+       sobre Plotly y AgGrid. No hace falta JS ni un flag de Python.
+     · **Una sección de la pila que se construye por PRIMERA vez.** Ahí
+       no hay nada que marcar: el esqueleto se acaba de ir y el contenido
+       todavía no llegó. Medido en Compras › Vs año pasado, la sección
+       cae de 772px a 90px y se queda casi SIETE segundos así, con la
+       cabecera sola. Lo cubre `graficos/base.py::seccion_perezosa` con
+       un `st.spinner`, y sólo en la primera pasada: después ya hay
+       gráficos en pantalla y el velo es mejor señal, porque aparece
+       donde el usuario está mirando en vez de arriba de todo.
+     · **La carga inicial del parquet.** Hasta ahí `app.py` sólo inyectó
+       CSS y JS, así que la pantalla está literalmente en blanco. Otro
+       `st.spinner`, alrededor de `perf.phase("cargar()")`.
+
+     Cuatro cosas que costaron una vuelta cada una:
+
+     · **Un `iframe` no admite pseudo-elementos.** El velo de la tabla no
+       se puede colgar de la grilla: hay que subir al contenedor, y para
+       eso hace falta `:has()`. Se midió antes de escribirlo — marcar 24
+       contenedores como stale cuesta 0,02 ms sin la regla y 2,28 ms con
+       ella, contra reruns de 3.000-6.000 ms.
+     · **El retardo es la mitad de la función.** El velo entra a los
+       400 ms; un rerun más rápido no llega a mostrarlo. Sin eso el
+       indicador parpadea en cada clic y deja de significar nada. Es el
+       mismo criterio que el `DELAY_SECS = 0.5` que `st.spinner` trae
+       adentro.
+     · **`show_time=True` habla inglés.** Sería lo natural para una
+       espera de 20 s, pero Streamlit rinde «(2.7 seconds)» en un `<span>`
+       aparte que no se puede traducir desde CSS. Misma trampa que los
+       meses de Plotly (regla #241). Se descartó: el ícono gira, que es
+       lo que hacía falta para que no se lea como colgado.
+     · **La pista del anillo en `--accent-light` no se ve.** El lavanda
+       100 (#e7e3fb) sobre un velo casi blanco es un fantasma, no un
+       círculo. Va en `--border-lavender`.
+
+     Y una que NO se hizo: ponerle el círculo a TODO lo que está stale.
+     En un rerun se marcan ~24 contenedores (títulos, chips, botones,
+     KPIs) y eso es una feria. El velo va sobre las dos cosas que además
+     MIENTEN mientras están stale, porque siguen dibujando el dato
+     anterior: la figura Plotly y la grilla AgGrid.
+
+     (2026-09-09.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32577,7 +32652,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#366**.
+> próxima regla nueva es la **#367**.
 
 >
 

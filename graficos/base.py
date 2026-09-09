@@ -10,7 +10,7 @@ import datetime
 import math
 import re
 import unicodedata
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 import pandas as pd
 import plotly.express as px
@@ -299,6 +299,35 @@ def seccion_perezosa(clave, vista, dibujar, activa_de_entrada=False):
 
     `activa_de_entrada` la usa la primera sección: arrancar con todo en
     esqueleto dejaría la página vacía al abrir.
+
+    ENTRE EL ESQUELETO Y EL CONTENIDO NO HABÍA NADA, y ese hueco duraba lo
+    suyo. Medido en el navegador el 2026-09-09 (Compras › Vs año pasado,
+    datos reales, muestreo cada 200 ms desde el clic del observador):
+
+        t = 0        el esqueleto sigue en pantalla, 772px de alto
+        t = 13,3 s   arranca el fragment de ESTA sección
+        t = 13,8 s   el esqueleto se va y la sección cae a 90px — una
+                     cabecera sola, sin gráficos, sin nada que gire
+        t = 20,5 s   aparecen las dos figuras, 307px
+
+    O sea casi SIETE segundos de tira vacía. El velo de `data-stale` de
+    `estilos/_88_cargando.py` no llega acá: no marca lo que todavía no
+    existe, sólo lo que se está rehaciendo. Así que este aviso lo pone
+    Python, y sólo en la PRIMERA construcción — después ya hay gráficos y
+    tablas en pantalla y el velo es mejor señal, porque aparece donde el
+    usuario está mirando en vez de arriba de todo.
+
+    `st.spinner` y no un `st.empty()` a mano por tres cosas suyas: es
+    TRANSITORIO (no ocupa índice en el delta path, así que no corre el
+    contenido ni deja hueco al irse), trae 0,5 s de retardo interno para no
+    parpadear, y limpia en un `finally` — si `dibujar()` revienta, el aviso
+    se va igual.
+
+    SIN `show_time=True`, que sería lo natural para una espera de 20 s: ese
+    contador lo rinde Streamlit como «(2.7 seconds)», en inglés y en un
+    `<span>` propio que no se puede traducir desde CSS. Es la misma trampa
+    que los meses de Plotly (regla #241). El ícono gira, que es lo que
+    hacía falta para que no se lea como colgado.
     """
     k = f"_pila_activa_{clave}"
     if activa_de_entrada:
@@ -313,7 +342,14 @@ def seccion_perezosa(clave, vista, dibujar, activa_de_entrada=False):
                   on_click=_activar_seccion, args=(clave,))
         return
 
-    dibujar()
+    # La bandera se escribe DESPUÉS de dibujar: si `dibujar()` revienta, la
+    # próxima pasada sigue contando como primera y vuelve a avisar.
+    k_visto = f"_pila_visto_{clave}"
+    primera = not st.session_state.get(k_visto, False)
+    with (st.spinner(f"Cargando {vista}…") if primera else nullcontext()):
+        dibujar()
+    if primera:
+        st.session_state[k_visto] = True
 
 
 def scope_rerun():

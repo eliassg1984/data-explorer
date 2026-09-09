@@ -102,7 +102,7 @@ Cada sección tiene su módulo, con prefijo numérico que marca el orden:
 `_00_base` → `_20_compras_rail` →
 `_26_rails_scroll` → `_27_pila` → `_30_filtros` →
 `_40_ajuste_franja` → `_50_fecha` → `_60_calendario` → `_70_chrome` →
-`_80_cards` → `_85_asistente` → `_99_movil`.
+`_80_cards` → `_85_asistente` → `_88_cargando` → `_99_movil`.
 
 **El orden de `_SECCIONES` en `__init__.py` es parte del comportamiento**, no
 estética: hay `!important` en ambos lados de varios conflictos, así que gana
@@ -131,6 +131,32 @@ puntual, acótalo a su key propia, no al contenedor.
 Corolario: si cambias `st.pills` → `st.segmented_control` y se ve idéntico,
 no es el widget — es una regla CSS del contenedor. Ambos rinden el mismo DOM
 (`[data-testid="stButtonGroup"]`).
+
+## Que se note que está trabajando: el velo de `data-stale`
+
+La app esconde el indicador nativo de Streamlit (`stStatusWidget`, arriba a
+la derecha) en `_70_chrome.py`, y con eso se fue toda la señal de "estoy
+recalculando". Los reruns acá tardan 3-6s: el gráfico y la tabla se quedan
+mostrando el dato VIEJO sin ninguna marca.
+
+Hay tres piezas, una por hueco, y **la señal es distinta en cada momento**:
+
+- **Algo que se está RECALCULANDO** — hay contenido en pantalla y Streamlit
+  ya lo marca con `data-stale="true"` en su `stElementContainer`, con
+  precisión de fragment. De ahí cuelga `estilos/_88_cargando.py`: velo +
+  círculo + «Actualizando…», **sólo sobre Plotly y AgGrid**. Nada de JS.
+- **Una sección de la pila que se construye por primera vez** — no hay nada
+  que marcar. Lo pone `graficos/base.py::seccion_perezosa` con `st.spinner`,
+  y **sólo en la primera pasada**: después el velo es mejor señal porque
+  aparece donde el usuario está mirando.
+- **La carga inicial del parquet** — pantalla en blanco (medido: 22s con la
+  caché caliente). Otro `st.spinner` en `app.py`, sobre `perf.phase("cargar()")`.
+
+Dos cosas que no son negociables si tocás esto: el velo entra **a los
+400ms** (sin retardo parpadea en cada clic y deja de significar algo), y
+**no se le pone el círculo a todo lo stale** — en un rerun se marcan ~24
+contenedores y eso es una feria. Detalle y mediciones en `arquitectura.md`
+regla #366.
 
 ## Colores: nunca un `#hex` suelto
 
