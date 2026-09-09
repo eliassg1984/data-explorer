@@ -115,6 +115,15 @@ JS = """
         // unirlas, nunca los nodos — un rerun los recrea, igual que los
         // mocks y el sub-pin.
         if (!win.__disenoState.uniones) { win.__disenoState.uniones = []; }
+        // Estilo de las TABLAS (AgGrid), indexado por KEY y no por el `id`
+        // de elementoPineado(). La diferencia importa: la grilla vive en un
+        // iframe, asi que el usuario puede estar pineando la TARJETA
+        // (`compras_prov_card_ranking`) o una CELDA de adentro
+        // (`... «PROVEEDOR»`), y las dos cosas tienen que editar la misma
+        // tabla. Con el indice por `id` —el que usa `porKey`— cada celda
+        // habria arrastrado su propio juego de colores y mover el pin de
+        // una columna a la otra habria "perdido" los cambios.
+        if (!win.__disenoState.tablas) { win.__disenoState.tablas = {}; }
         // Sub-pin (regla #157): {key, clase} del hijo SIN key propia al que
         // bajo el pin, o null. Se guarda la CLASE, nunca el nodo — un rerun
         // lo recrea, igual que al widget con key.
@@ -135,7 +144,6 @@ JS = """
                     bordeColor: '#6c5ce7',
                     sombraNivel: 0,
                     texto: { original: null, actual: null },
-                    filaAlto: { original: null, actual: null },
                     reorder: { tocado: false, ordenOriginal: null, ordenActual: null },
                     verOriginalActivo: false
                 };
@@ -1714,16 +1722,406 @@ JS = """
             if (!vp || !alto) return null;
             return Math.floor(vp.getBoundingClientRect().height / alto);
         }
-        function aplicarAltoFila(elemento, registro) {
-            var destino = registro.filaAlto && registro.filaAlto.actual;
-            if (!destino) return;
-            var api = apiDeAgGrid(docDeAgGrid(elemento));
+        // -- ESTILO DE LA TABLA: por KEY, y adentro del iframe ---------
+        // Todo lo de arriba (destinosDeEstilo, establecerCambioEstilo) le
+        // escribe `style` INLINE a un nodo. Para una grilla eso alcanza
+        // para UNA celda y nada mas, que es exactamente donde se quedaba
+        // corta la herramienta: pinear el rotulo de una columna deja tocar
+        // su tipografia, pero "el color de la cabecera" es `.ag-header`,
+        // "las lineas" son `.ag-row` y el marco es `.ag-root-wrapper` --
+        // tres cajas que el arbol de sub-pin ni siquiera ofrece (solo lista
+        // `.ag-header-cell-text` y `.ag-cell`, ver nodosDeTexto).
+        //
+        // Asi que esto NO va por inline: se inyecta una <style> propia en
+        // el head del documento del iframe, que es el mismo camino que ya
+        // usan `inyecciones/grid.py` y `_fragmentos.py` para meterle CSS a
+        // la grilla. Same-origin, se entra sin CORS.
+        //
+        // Va ULTIMA en el head a proposito. `st_aggrid` publica el
+        // `custom_css` como su propia <style>, y estas reglas usan los
+        // mismos selectores con la misma especificidad: a igualdad de
+        // ambas, gana la que aparece despues. Por eso el `lastElementChild`
+        // de aplicarEstiloTabla la re-manda al final si algo se colo atras.
+        var ID_STYLE_TABLA = 'diseno-tabla-css';
+
+        function docDeAgGridDeKey(key) {
+            return docDeAgGrid(porKeyReal(key));
+        }
+
+        // getComputedStyle SIEMPRE devuelve los colores como `rgb(a, b, c)`,
+        // nunca como el `#rrggbb` que se escribio en el CSS. Sin traducir,
+        // dos cosas fallaban a la vez: el swatch de la paleta no se marcaba
+        // como elegido (compara texto contra los hex de tema.py) y, peor, el
+        // custom_css copiado salia con un `rgb(...)` crudo — un color suelto
+        // sin nombre, justo lo que prohibe la regla #1.
+        // Sin regex a proposito, y no por gusto: este JS viaja adentro de
+        // un string de Python que NO es raw (ver el docstring del modulo),
+        // asi que cualquier clase de caracter con barra invertida la
+        // consume el parser de Python antes de que el navegador la vea.
+        // En este archivo la barra invertida esta prohibida, punto —
+        // grepealo y vas a ver que no hay una sola.
+        function trozos(txt, sep) {
+            var crudos = txt.split(sep), out = [];
+            for (var i = 0; i < crudos.length; i++) {
+                var v = crudos[i].trim();
+                if (v !== '') out.push(v);
+            }
+            return out;
+        }
+
+        function aHex(color) {
+            if (!color) return color;
+            var c = String(color).trim();
+            if (c.charAt(0) === '#') return c.toLowerCase();
+            var ini = c.indexOf('('), fin = c.lastIndexOf(')');
+            if (ini < 0 || fin < 0) return c;
+            var cuerpo = c.substring(ini + 1, fin);
+            var alfa = 1, comp;
+            if (c.indexOf('color(') === 0) {
+                // Chrome devuelve los colores del tema de AG Grid en esta
+                // forma —- `color(srgb 0.19 0.2 0.24 / 0.2)`, medido el
+                // 2026-09-08 sobre el borde de `.ag-row`— y no como rgb().
+                // Los canales van de 0 a 1 y el primer token es el espacio
+                // de color, que se descarta.
+                var mitades = trozos(cuerpo, '/');
+                if (mitades.length > 1) alfa = parseFloat(mitades[1]);
+                var ns = trozos(mitades[0], ' ');
+                if (ns.length < 4) return c;
+                comp = [parseFloat(ns[1]) * 255, parseFloat(ns[2]) * 255,
+                        parseFloat(ns[3]) * 255];
+            } else if (c.indexOf('rgb') === 0) {
+                var rs = trozos(cuerpo, ',');
+                if (rs.length < 3) return c;
+                if (rs.length > 3) alfa = parseFloat(rs[3]);
+                comp = [parseFloat(rs[0]), parseFloat(rs[1]), parseFloat(rs[2])];
+            } else {
+                return c;
+            }
+            var r = Math.round(comp[0]), g = Math.round(comp[1]), b = Math.round(comp[2]);
+            // Un color CON transparencia no se puede escribir en hex sin
+            // mentir: aplanarlo contra blanco da otro color en cuanto la
+            // tabla no esta sobre blanco. Se devuelve rgba(), que es exacto
+            // y ademas legible -- y el bloque copiado lo marca como "sin
+            // nombre en tema.py", que es la verdad.
+            if (!(alfa >= 0.999)) {
+                return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alfa + ')';
+            }
+            function dos(n) {
+                var h = n.toString(16);
+                return h.length === 1 ? ('0' + h) : h;
+            }
+            return '#' + dos(r) + dos(g) + dos(b);
+        }
+
+        // El nombre de la constante de `tema.py` para un color de la paleta,
+        // o null si es uno libre del picker. Lo consume el bloque de Python
+        // que se copia: con nombre sale `f"{GRIS_LINEA} !important"` y se
+        // pega tal cual; sin el, el bloque avisa que ese color todavia no
+        // tiene nombre en tema.py.
+        function constDeColor(hex) {
+            if (!hex) return null;
+            var h = String(hex).toLowerCase();
+            for (var i = 0; i < PALETA.length; i++) {
+                if (String(PALETA[i].hex).toLowerCase() === h) return PALETA[i].const || null;
+            }
+            return null;
+        }
+
+        function tablaDe(key) {
+            var ts = win.__disenoState.tablas;
+            if (!ts[key]) {
+                // `null` = "no lo toque" en TODOS los campos, y no es un
+                // detalle de estilo: lo que no se toco no se emite, ni en
+                // la <style> del preview ni en el custom_css copiado. Un 0
+                // por defecto en el grosor de las lineas habria borrado los
+                // separadores de la tabla apenas se abre la seccion.
+                ts[key] = { fuente: null,
+                            cabFondo: null, cabTexto: null, cabTam: null, cabPeso: null,
+                            celTexto: null, celTam: null,
+                            linH: null, linHColor: null,
+                            linV: null, linVColor: null,
+                            marcoLados: null, marcoAncho: null, marcoColor: null,
+                            marcoRadio: null,
+                            filaAlto: null, filaAltoOriginal: null,
+                            medido: null };
+            }
+            return ts[key];
+        }
+
+        function hayCambiosDeTabla(t) {
+            if (!t) return false;
+            return !!(t.fuente || t.cabFondo || t.cabTexto || t.cabTam || t.cabPeso
+                      || t.celTexto || t.celTam
+                      || t.linH !== null || t.linV !== null
+                      || t.marcoLados || t.marcoRadio !== null);
+        }
+
+        // Los sliders arrancan donde ESTA la tabla, no en un default
+        // inventado: es la misma idea que el resto del panel, que se
+        // siembra de getComputedStyle. Sin esto, mover el grosor de las
+        // lineas un punto significaba primero adivinar de cuanto eran.
+        // Se mide una sola vez por tabla (queda en `t.medido`): los valores
+        // de arranque no cambian mientras dure la sesion de diseno, y
+        // medirlos en cada rehacerPanel() los leeria YA pisados por el
+        // preview.
+        function medirTabla(gdoc, t) {
+            if (t.medido) return t.medido;
+            if (!gdoc) return null;
+            function cs(sel) {
+                var n = gdoc.querySelector(sel);
+                return n ? gdoc.defaultView.getComputedStyle(n) : null;
+            }
+            var wrap = cs('.ag-root-wrapper'), fila = cs('.ag-row'),
+                cab = cs('.ag-header-cell-text'), cel = cs('.ag-cell'),
+                cabCaja = cs('.ag-header-cell');
+            t.medido = {
+                marcoAncho: wrap ? Math.round(numDe(wrap.borderTopWidth, 1)) : 1,
+                marcoColor: wrap ? aHex(wrap.borderTopColor) : '#e5e5ea',
+                marcoRadio: wrap ? Math.round(numDe(wrap.borderTopLeftRadius, 0)) : 0,
+                marcoLados: {
+                    top: wrap ? numDe(wrap.borderTopWidth, 0) > 0 : true,
+                    right: wrap ? numDe(wrap.borderRightWidth, 0) > 0 : true,
+                    bottom: wrap ? numDe(wrap.borderBottomWidth, 0) > 0 : true,
+                    left: wrap ? numDe(wrap.borderLeftWidth, 0) > 0 : true
+                },
+                linH: fila ? Math.round(numDe(fila.borderBottomWidth, 1)) : 1,
+                linHColor: fila ? aHex(fila.borderBottomColor) : '#e5e5ea',
+                linV: cabCaja ? Math.round(numDe(cabCaja.borderRightWidth, 0)) : 0,
+                linVColor: cabCaja ? aHex(cabCaja.borderRightColor) : '#e5e5ea',
+                cabTam: cab ? Math.round(numDe(cab.fontSize, 13)) : 13,
+                celTam: cel ? Math.round(numDe(cel.fontSize, 13)) : 13
+            };
+            return t.medido;
+        }
+
+        // Selectores en un solo lugar: los consumen el preview (cssDeTabla)
+        // y el bloque de Python que se copia (construirBloqueTabla), y si
+        // los dos no dicen LO MISMO el "pegalo y hace lo que viste" deja de
+        // ser cierto -- la trampa de la regla #169, que ya costo media hora
+        // una vez.
+        var SEL_CAB_CAJA  = '.ag-header, .ag-header-cell, .ag-header-group-cell';
+        var SEL_CAB_TEXTO = '.ag-header-cell-text, .ag-header-group-text';
+
+        function reglasDeTabla(t) {
+            var R = [];
+            function add(sel, prop, val) {
+                for (var i = 0; i < R.length; i++) {
+                    if (R[i][0] === sel) { R[i][1][prop] = val; return; }
+                }
+                var o = {}; o[prop] = val; R.push([sel, o]);
+            }
+            if (t.fuente) {
+                // Cuatro declaraciones para UNA fuente, y ninguna sobra.
+                // El iframe no hereda nada de la app (es otro documento) y
+                // hoy ningun grid del repo declara font-family, asi que se
+                // ven todos con la del tema de AG Grid. Pero poner la regla
+                // en `.ag-root-wrapper` NO alcanza: medido, el wrapper y
+                // `.ag-root` toman la fuente nueva y `.ag-header` vuelve a
+                // la del tema, que se la declara encima. La variable cubre
+                // a los temas que si la leen (CSS_RANKING_GRID /
+                // CSS_PIVOTE_DOCS van por ahi); el wrapper cubre el cromo
+                // (paginacion, barra de estado); y los dos selectores de
+                // texto cubren lo unico que de verdad se mira.
+                add('.ag-root-wrapper', 'font-family', t.fuente);
+                add('.ag-root-wrapper', '--ag-font-family', t.fuente);
+                add(SEL_CAB_TEXTO, 'font-family', t.fuente);
+                add('.ag-cell', 'font-family', t.fuente);
+            }
+            if (t.cabFondo) add(SEL_CAB_CAJA, 'background-color', t.cabFondo);
+            if (t.cabTexto) add(SEL_CAB_TEXTO, 'color', t.cabTexto);
+            if (t.cabTam)   add(SEL_CAB_TEXTO, 'font-size', t.cabTam + 'px');
+            if (t.cabPeso)  add(SEL_CAB_TEXTO, 'font-weight', t.cabPeso);
+            if (t.celTexto) add('.ag-cell', 'color', t.celTexto);
+            if (t.celTam)   add('.ag-cell', 'font-size', t.celTam + 'px');
+            if (t.linH !== null) {
+                add('.ag-row', 'border-bottom', t.linH === 0 ? 'none'
+                    : (t.linH + 'px solid ' + t.linHColor));
+            }
+            if (t.linV !== null) {
+                var vv = t.linV === 0 ? 'none' : (t.linV + 'px solid ' + t.linVColor);
+                add('.ag-cell, .ag-header-cell', 'border-right', vv);
+                // Y la variable del tema ademas del selector: la linea
+                // vertical de la CABECERA la dibuja el tema del AgGrid, no
+                // un `border-right` nuestro -- es la palanca que ya usa
+                // CSS_PIVOTE_DOCS para apagarla (`--ag-header-column-border:
+                // none`). Con el selector solo, apagarla no siempre alcanza.
+                add('.ag-root-wrapper', '--ag-header-column-border', vv);
+                add('.ag-root-wrapper', '--ag-column-border', vv);
+            }
+            if (t.marcoLados) {
+                ['top', 'right', 'bottom', 'left'].forEach(function(lado) {
+                    add('.ag-root-wrapper', 'border-' + lado,
+                        t.marcoLados[lado]
+                            ? (t.marcoAncho + 'px solid ' + t.marcoColor)
+                            : 'none');
+                });
+            }
+            if (t.marcoRadio !== null) {
+                add('.ag-root-wrapper', 'border-radius', t.marcoRadio + 'px');
+            }
+            return R;
+        }
+
+        // El export de una tabla NO es CSS: es el `custom_css` de Python.
+        // Devolver un bloque de CSS pegable en `estilos/` seria mentir —
+        // la grilla vive en un iframe y esa regla no la alcanza nunca
+        // (regla #169). Asi que se emite el dict tal como se escribe en
+        // `tablas/_css.py`, con los colores por su nombre de `tema.py`.
+        function construirBloqueTabla(key) {
+            var t = win.__disenoState.tablas[key];
+            if (!t) return null;
+            var R = reglasDeTabla(t);
+            var out = [], sinNombre = [];
+
+            // Una pila tipografica trae comillas dobles adentro
+            // (`Georgia, "Times New Roman", serif`), asi que envolverla
+            // siempre en comillas dobles daba un SyntaxError al pegar el
+            // bloque. Se elige la comilla que el valor NO usa: es todo lo
+            // que hace falta, porque ningun valor de CSS lleva las dos.
+            function comillar(txt, prefijo) {
+                var q = (txt.indexOf('"') >= 0 && txt.indexOf("'") < 0) ? "'" : '"';
+                return (prefijo || '') + q + txt + q;
+            }
+
+            if (R.length) {
+                out.push('# copiado del modo diseño — tabla de ' + key);
+                out.push('# Va en el custom_css del AgGrid (PYTHON), no en estilos/: la');
+                out.push('# grilla corre dentro de un iframe y una regla del documento');
+                out.push('# padre no la alcanza. Para las tablas que pasan por');
+                out.push('# tablas/_css.py el destino es _css_grid(); las de Proveedor');
+                out.push('# tienen su propio dict en graficos/compras/_css_proveedor.py.');
+                out.push('custom_css = {');
+                R.forEach(function(par) {
+                    var props = par[1];
+                    out.push('    "' + par[0] + '": {');
+                    for (var prop in props) {
+                        var val = props[prop];
+                        var esVar = prop.indexOf('--') === 0;
+                        // Un color de la paleta sale por su constante; uno
+                        // libre sale literal y se anota abajo. La distincion
+                        // importa: pegar un hex suelto en tablas/_css.py es
+                        // exactamente lo que la regla #1 prohibe.
+                        var linea = null;
+                        var hexes = String(val).match(/#[0-9a-fA-F]{6}/g);
+                        if (hexes && hexes.length === 1) {
+                            var nom = constDeColor(hexes[0]);
+                            if (nom) {
+                                linea = '        "' + prop + '": '
+                                    + comillar(String(val).replace(hexes[0], '{' + nom + '}')
+                                               + (esVar ? '' : ' !important'), 'f')
+                                    + ',';
+                            } else if (sinNombre.indexOf(hexes[0]) === -1) {
+                                sinNombre.push(hexes[0]);
+                            }
+                        } else if (String(val).indexOf('rgba(') >= 0) {
+                            // Un color con transparencia (los bordes del
+                            // tema del AgGrid lo son) nunca va a matchear un
+                            // hex de la paleta. Sin esta rama se copiaba un
+                            // literal crudo sin una linea que lo avisara.
+                            var rgba = String(val).slice(String(val).indexOf('rgba('));
+                            if (sinNombre.indexOf(rgba) === -1) sinNombre.push(rgba);
+                        }
+                        if (linea === null) {
+                            linea = '        "' + prop + '": '
+                                + comillar(String(val) + (esVar ? '' : ' !important'))
+                                + ',';
+                        }
+                        out.push(linea);
+                    }
+                    out.push('    },');
+                });
+                out.push('}');
+            }
+
+            // El alto de fila no es CSS y se emite igual aunque no haya ni
+            // una propiedad tocada — es justo el caso de "solo vine a
+            // achicar las filas".
+            if (t.filaAlto) {
+                if (out.length) out.push('');
+                out.push('# Alto de fila probado: ' + t.filaAlto + 'px (era '
+                         + (t.filaAltoOriginal || '?') + 'px). NO es CSS: va en el');
+                out.push('# gridOptions de la tabla ->  "rowHeight": ' + t.filaAlto);
+                out.push('# Y su gemela en graficos/alturas.py, de donde sale el height=');
+                out.push('# del grid:  por_filas(n, px_fila=' + t.filaAlto + ', ...)');
+                out.push('# Las dos juntas o ninguna: si se cambia una sola, el alto del');
+                out.push('# marco deja de coincidir con lo que ocupan las filas.');
+            }
+
+            if (!out.length) return null;
+            if (sinNombre.length) {
+                out.push('');
+                out.push('# OJO: ' + sinNombre.join(', ') + ' no esta en tema.py.');
+                out.push('# Antes de pegar esto, darle un nombre alli (regla #1: nunca un');
+                out.push('# #hex suelto) y usar la constante en vez del literal.');
+            }
+            return out.join('\\n');
+        }
+
+        function cssDeTabla(t) {
+            var R = reglasDeTabla(t);
+            if (!R.length) return '';
+            var out = [];
+            R.forEach(function(par) {
+                var props = par[1], lineas = [];
+                for (var p in props) {
+                    // Las custom properties (`--ag-*`) NO llevan !important
+                    // aca: el valor de una variable no compite por cascada
+                    // como una declaracion normal, y ponerselo solo agrega
+                    // ruido al bloque que se copia.
+                    lineas.push('  ' + p + ': ' + props[p]
+                                + (p.indexOf('--') === 0 ? '' : ' !important') + ';');
+                }
+                out.push(par[0] + ' {\\n' + lineas.join('\\n') + '\\n}');
+            });
+            return out.join('\\n');
+        }
+
+        function aplicarAltoFilaDeKey(key, gdoc) {
+            var t = win.__disenoState.tablas[key];
+            if (!t || !t.filaAlto) return;
+            var api = apiDeAgGrid(gdoc || docDeAgGridDeKey(key));
             if (!api) return;
             try {
-                if (api.getGridOption('rowHeight') === destino) return;   // idempotente
-                api.setGridOption('rowHeight', destino);
+                if (api.getGridOption('rowHeight') === t.filaAlto) return;   // idempotente
+                api.setGridOption('rowHeight', t.filaAlto);
                 api.resetRowHeights();
             } catch (err) {}
+        }
+
+        function aplicarEstiloTabla(key) {
+            var gdoc = docDeAgGridDeKey(key);
+            if (!gdoc || !gdoc.head) return;
+            var t = win.__disenoState.tablas[key];
+            var css = t ? cssDeTabla(t) : '';
+            var st = gdoc.getElementById(ID_STYLE_TABLA);
+            if (!css) {
+                if (st && st.parentNode) st.parentNode.removeChild(st);
+            } else {
+                if (!st) {
+                    st = gdoc.createElement('style');
+                    st.id = ID_STYLE_TABLA;
+                    gdoc.head.appendChild(st);
+                }
+                if (st.textContent !== css) st.textContent = css;
+                // Ver el comentario de ID_STYLE_TABLA: si algo se agrego al
+                // head despues, hay que volver a mandarla al final o pierde
+                // el desempate contra el custom_css. El guard la deja en un
+                // no-op salvo el tick en que aparece un hermano nuevo.
+                if (gdoc.head.lastElementChild !== st) gdoc.head.appendChild(st);
+            }
+            aplicarAltoFilaDeKey(key, gdoc);
+        }
+
+        // Reaplicado por tick, hermano de reaplicarUniones(): Streamlit
+        // recrea el iframe entero del AgGrid en cada rerun y se lleva la
+        // <style> con el. Y recorre TODAS las tablas tocadas, no solo la
+        // pineada -- dos tablas ajustadas y el pin en la segunda no puede
+        // dejar que la primera vuelva sola a su look original.
+        function reaplicarTablas() {
+            var ts = win.__disenoState.tablas;
+            for (var k in ts) {
+                if (hayCambiosDeTabla(ts[k]) || ts[k].filaAlto) aplicarEstiloTabla(k);
+            }
         }
 
         // ── Override de TEXTO (efimero, como todo el modo diseno) ────────
@@ -1838,10 +2236,6 @@ JS = """
                     registro.cambios.width ? parseInt(registro.cambios.width, 10) : null,
                     registro.cambios.height ? parseInt(registro.cambios.height, 10) : null);
             }
-            // Mismo reaplicado defensivo que el de arriba, y por un motivo
-            // mas fuerte: ag-grid recicla filas al scrollear y las reescribe
-            // con SU rowHeight. La guarda de idempotencia esta adentro.
-            aplicarAltoFila(elemento, registro);
             aplicarTransform(elemento, registro);
             // Vale tambien para HTML normal (un `.cp-rank-tit`, el label de
             // un boton): la guarda de "sin hijos elemento" que trae adentro
@@ -2129,6 +2523,26 @@ JS = """
         var SOMBRAS = ['', '0 1px 3px rgba(16,16,20,.14)', '0 4px 10px rgba(16,16,20,.18)',
                        '0 8px 20px rgba(16,16,20,.22)', '0 16px 34px rgba(16,16,20,.28)'];
 
+        // Familia tipografica. La lista NO es libre: son las pilas que el
+        // proyecto ya usa mas las webfont-safe que existen en cualquier
+        // maquina. Un <select> con 200 fuentes del sistema mentiria — lo
+        // que se elija tiene que poder pegarse en estilos/ (o en el
+        // custom_css de una tabla) y verse igual en la laptop del usuario
+        // final, que no es esta. Ver regla #255.
+        // Vive aca y no adentro de construirControles porque la consumen
+        // DOS secciones del panel — Tipografia y Tabla (AgGrid) — y la
+        // segunda se construye primero.
+        var FUENTES = [
+            ['', '(la que hereda)'],
+            ['-apple-system, "Segoe UI", sans-serif', 'Sistema (la de la app)'],
+            ['"Segoe UI", Roboto, sans-serif', 'Segoe UI'],
+            ['Georgia, "Times New Roman", serif', 'Georgia (serif)'],
+            ['"Courier New", monospace', 'Courier (mono)'],
+            ['Arial, Helvetica, sans-serif', 'Arial'],
+            ['Verdana, Geneva, sans-serif', 'Verdana'],
+            ['Impact, "Arial Black", sans-serif', 'Impact (titular)']
+        ];
+
         function seccion(titulo) {
             var div = doc.createElement('div');
             div.style.cssText = 'font-size:10px;letter-spacing:.04em;color:#6f6f7a;text-transform:uppercase;margin:16px 0 4px;padding-top:10px;border-top:1px solid #2a2a35';
@@ -2227,6 +2641,15 @@ JS = """
                 var txtNuevo = (registro.texto && registro.texto.actual !== null
                                 && registro.texto.actual !== undefined)
                     ? registro.texto.actual : null;
+                var bloqueTablaTxt = construirBloqueTabla(key);
+                // Con una celda fijada y NADA tocado en ese texto, la nota
+                // de abajo hablaria de algo que el usuario no toco — y
+                // justo arriba de lo unico que si pidio. Es el caso normal
+                // desde que existe la seccion Tabla: se fija una celda para
+                // llegar a la grilla, no para editar esa celda.
+                if (!props.length && txtNuevo === null && bloqueTablaTxt) {
+                    return bloqueTablaTxt;
+                }
                 var out = [];
                 if (subTexto.tipo === 'svgtext') {
                     out.push('/* Texto de PLOTLY — «' + subTexto.txt + '»');
@@ -2255,6 +2678,12 @@ JS = """
                     out.push('/* Texto probado: «' + txtNuevo + '»');
                     out.push('   (preview: el valor real sale de los datos o de Python) */');
                 }
+                // La seccion Tabla se edita casi siempre con una CELDA
+                // fijada (es el gesto natural, regla #185), asi que su
+                // export tiene que salir tambien por este camino — si no,
+                // "Copiar CSS" devolveria solo la nota del texto y todo lo
+                // que se ajusto de la grilla se perderia sin aviso.
+                if (bloqueTablaTxt) out.push('', bloqueTablaTxt);
                 return out.join('\\n');
             }
             // Con sub-pin el selector baja al hijo: `.cp-rank-tit` es una
@@ -2314,23 +2743,11 @@ JS = """
                 var lineas = Object.keys(props).map(function(p) { return '    ' + p + ': ' + props[p] + ';'; });
                 bloques.push(sel + ' {\\n' + lineas.join('\\n') + '\\n}');
             });
-            // El alto de fila probado tampoco es CSS (ver aplicarAltoFila):
-            // va al gridOptions de Python. Se emite aunque no haya ni una
-            // propiedad CSS tocada — es justo el caso de "solo vine a
-            // achicar las filas".
-            var notaFila = '';
-            if (registro.filaAlto && registro.filaAlto.actual) {
-                notaFila = '/* AgGrid — alto de fila probado: '
-                    + registro.filaAlto.actual + 'px (era '
-                    + (registro.filaAlto.original || '?') + 'px)\\n'
-                    + '   NO es CSS: va en el gridOptions de la tabla, en Python\\n'
-                    + '     "rowHeight": ' + registro.filaAlto.actual + '\\n'
-                    + '   Y su gemela en graficos/alturas.py, que es de donde sale\\n'
-                    + '   el height= del grid:  por_filas(n, px_fila='
-                    + registro.filaAlto.actual + ', ...)\\n'
-                    + '   Las dos juntas o ninguna: si se cambia una sola, el alto\\n'
-                    + '   del marco deja de coincidir con lo que ocupan las filas. */';
-            }
+            // Lo de la TABLA (si el elemento tiene una grilla adentro) no
+            // es CSS de estilos/ sino el custom_css de Python, asi que sale
+            // como bloque aparte y se pega en otro archivo. Ver
+            // construirBloqueTabla.
+            var notaFila = construirBloqueTabla(key);
             if (!bloques.length) return notaFila || null;
 
             // Las notas se emiten solo si esa redireccion LE PASO a algo que
@@ -2941,52 +3358,331 @@ JS = """
             panel.__pisoVal = pisoVal;
             panel.__filaPiso = filaPiso;
 
-            // ── Alto de fila (solo AgGrid) ────────────────────────
-            // Preview de `rowHeight`: lo unico del panel que no se toca
-            // arrastrando ni se copia como CSS. Ver aplicarAltoFila().
-            // Sin api alcanzable NO se dibuja el control: un slider que
-            // mueve el DOM pero no la virtualizacion se ve bien hasta el
-            // primer scroll y despues miente (ver el comentario de
-            // aplicarAltoFila). Mejor no ofrecerlo que ofrecerlo roto.
-            var gdocPanel = docDeAgGrid(elemento);
-            if (gdocPanel && apiDeAgGrid(gdocPanel)) {
-                var altoAhora = altoFilaDe(gdocPanel);
-                if (registro.filaAlto.original === null && altoAhora) {
-                    registro.filaAlto.original = altoAhora;
+            // ── TABLA (AgGrid): la grilla entera, no la celda pineada ──
+            // Se resuelve por KEY y no por `elemento` a proposito: el gesto
+            // natural para disenar una tabla es clic derecho sobre una
+            // CELDA (regla #185), y ahi `elemento` es un nodo de adentro
+            // del iframe — `docDeAgGrid(elemento)` no encuentra nada porque
+            // busca el iframe hacia ABAJO. Con la key se llega igual desde
+            // la tarjeta o desde cualquier celda de adentro, que es lo que
+            // hace que la seccion aparezca cuando uno espera que aparezca.
+            var gdocPanel = docDeAgGridDeKey(key);
+            if (gdocPanel) {
+                var T = tablaDe(key);
+                var med = medirTabla(gdocPanel, T) || {};
+                panel.appendChild(seccion('Tabla (AgGrid)'));
+
+                var capTabla = doc.createElement('div');
+                capTabla.style.cssText = 'font-size:10px;line-height:1.45;color:#6f6f7a;margin:6px 0 2px';
+                capTabla.textContent = 'Toca la tabla ENTERA, no la celda fijada.'
+                    + ' No sale en estilos/ (la grilla corre en un iframe): "Copiar CSS"'
+                    + ' lo entrega como el dict custom_css que va en Python.';
+                panel.appendChild(capTabla);
+
+                function subEtiqueta(txt) {
+                    var d = doc.createElement('div');
+                    d.style.cssText = 'font-size:10px;letter-spacing:.03em;color:#9385ec;text-transform:uppercase;margin:14px 0 -4px';
+                    d.textContent = txt;
+                    return d;
                 }
-                var base = registro.filaAlto.actual || altoAhora
-                           || registro.filaAlto.original || 35;
-                var inpFila = rango(16, 56, 1, base);
-                var filaLbl = spanValor('');
-                function pintarFilaLbl(v) {
-                    var n = filasQueEntran(gdocPanel, v);
-                    filaLbl.textContent = Math.round(v) + 'px'
-                        + (n ? ' · entran ' + n + ' filas' : '');
+                function tocarTabla(fn) {
+                    var ctx = elementoActivo(); if (!ctx) return;
+                    fn(tablaDe(ctx.key));
+                    aplicarEstiloTabla(ctx.key);
                 }
-                pintarFilaLbl(base);
-                inpFila.addEventListener('input', function() {
-                    var ctx = elementoActivo(); if (!ctx) return;
-                    var v = parseInt(inpFila.value, 10);
-                    ctx.registro.filaAlto.actual = v;
-                    aplicarAltoFila(ctx.el, ctx.registro);
-                    pintarFilaLbl(v);
-                });
-                panel.appendChild(filaControl('Alto de fila (AgGrid)', inpFila,
-                                              filaLbl, function() {
-                    var ctx = elementoActivo(); if (!ctx) return;
-                    var orig = ctx.registro.filaAlto.original;
-                    if (orig) {
-                        // Restaurar es aplicar el original y recien despues
-                        // soltar el override: si se pone `actual = null` a
-                        // secas, las filas se quedan con el alto probado
-                        // hasta que ag-grid decida redibujar solo.
-                        ctx.registro.filaAlto.actual = orig;
-                        aplicarAltoFila(ctx.el, ctx.registro);
-                        inpFila.value = orig;
-                        pintarFilaLbl(orig);
+
+                // Alto de fila. Sin api alcanzable NO se dibuja: un slider
+                // que mueve el DOM pero no la virtualizacion se ve bien
+                // hasta el primer scroll y despues miente (ver el
+                // comentario largo de aplicarAltoFilaDeKey). Mejor no
+                // ofrecerlo que ofrecerlo roto.
+                if (apiDeAgGrid(gdocPanel)) {
+                    var altoAhora = altoFilaDe(gdocPanel);
+                    if (T.filaAltoOriginal === null && altoAhora) T.filaAltoOriginal = altoAhora;
+                    var baseFila = T.filaAlto || altoAhora || T.filaAltoOriginal || 35;
+                    var inpFila = rango(16, 56, 1, baseFila);
+                    var filaLbl = spanValor('');
+                    function pintarFilaLbl(v) {
+                        var n = filasQueEntran(gdocPanel, v);
+                        filaLbl.textContent = Math.round(v) + 'px'
+                            + (n ? ' · entran ' + n + ' filas' : '');
                     }
-                    ctx.registro.filaAlto.actual = null;
+                    pintarFilaLbl(baseFila);
+                    inpFila.addEventListener('input', function() {
+                        var v = parseInt(inpFila.value, 10);
+                        tocarTabla(function(t) { t.filaAlto = v; });
+                        pintarFilaLbl(v);
+                    });
+                    panel.appendChild(filaControl('Alto de fila', inpFila, filaLbl, function() {
+                        var ctx = elementoActivo(); if (!ctx) return;
+                        var t = tablaDe(ctx.key), orig = t.filaAltoOriginal;
+                        if (orig) {
+                            // Restaurar es aplicar el original y recien
+                            // despues soltar el override: poniendo
+                            // `filaAlto = null` a secas las filas se quedan
+                            // con el alto probado hasta que ag-grid decida
+                            // redibujar solo.
+                            t.filaAlto = orig;
+                            aplicarAltoFilaDeKey(ctx.key, gdocPanel);
+                            inpFila.value = orig;
+                            pintarFilaLbl(orig);
+                        }
+                        t.filaAlto = null;
+                    }));
+                }
+
+                // Tipo de letra de TODA la tabla. Misma lista que la de
+                // Tipografia — es la MISMA constante, no una copia: son
+                // las pilas que el proyecto ya usa, y duplicarlas dejaria
+                // dos listas que se desincronizan (regla #255 explica por
+                // que no es libre).
+                var selFuenteT = doc.createElement('select');
+                selFuenteT.style.cssText = 'width:100%;background:#1c1c24;color:#e4e4e8;'
+                    + 'border:1px solid #34343f;border-radius:4px;padding:5px 6px;'
+                    + 'font:11px sans-serif;cursor:pointer';
+                FUENTES.forEach(function(par) {
+                    var o = doc.createElement('option');
+                    o.value = par[0];
+                    o.textContent = par[1];
+                    if (par[0]) o.style.fontFamily = par[0];
+                    if (par[0] === (T.fuente || '')) o.selected = true;
+                    selFuenteT.appendChild(o);
+                });
+                selFuenteT.addEventListener('change', function() {
+                    tocarTabla(function(t) { t.fuente = selFuenteT.value || null; });
+                });
+                panel.appendChild(filaControl('Tipo de letra (toda la tabla)', selFuenteT,
+                                              spanValor(''), function() {
+                    tocarTabla(function(t) { t.fuente = null; });
+                    rehacerPanel();
                 }));
+
+                // ---- cabecera ----
+                panel.appendChild(subEtiqueta('Cabecera'));
+
+                var cabFondoLbl = spanValor(T.cabFondo || 'sin cambio');
+                panel.appendChild(filaControl('Fondo', construirSwatches(T.cabFondo, function(hex) {
+                    tocarTabla(function(t) { t.cabFondo = hex; });
+                    cabFondoLbl.textContent = hex;
+                }, { libre: true, transparente: true }), cabFondoLbl, function() {
+                    tocarTabla(function(t) { t.cabFondo = null; });
+                    rehacerPanel();
+                }));
+
+                var cabTextoLbl = spanValor(T.cabTexto || 'sin cambio');
+                panel.appendChild(filaControl('Color de letra', construirSwatches(T.cabTexto, function(hex) {
+                    tocarTabla(function(t) { t.cabTexto = hex; });
+                    cabTextoLbl.textContent = hex;
+                }, { libre: true }), cabTextoLbl, function() {
+                    tocarTabla(function(t) { t.cabTexto = null; });
+                    rehacerPanel();
+                }));
+
+                var inpCabTam = rango(8, 24, 1, T.cabTam || med.cabTam || 13);
+                var cabTamLbl = spanValor((T.cabTam || med.cabTam || 13) + 'px');
+                inpCabTam.addEventListener('input', function() {
+                    var v = parseInt(inpCabTam.value, 10);
+                    tocarTabla(function(t) { t.cabTam = v; });
+                    cabTamLbl.textContent = v + 'px';
+                });
+                panel.appendChild(filaControl('Tamaño de letra', inpCabTam, cabTamLbl, function() {
+                    tocarTabla(function(t) { t.cabTam = null; });
+                    rehacerPanel();
+                }));
+
+                var PESOS_T = [['400', 'Normal'], ['500', 'Medium'], ['600', 'Semibold'], ['700', 'Bold']];
+                var cabPesoWrap = doc.createElement('div');
+                cabPesoWrap.style.cssText = 'display:flex;gap:4px;margin-top:6px';
+                var cabPesoBotones = [];
+                PESOS_T.forEach(function(par) {
+                    var b = doc.createElement('button');
+                    b.textContent = par[1];
+                    b.style.cssText = 'flex:1;background:' + (par[0] === T.cabPeso ? '#3C3489' : '#1c1c24')
+                        + ';color:#fff;border:1px solid #34343f;border-radius:4px;padding:5px 2px;font:11px sans-serif;cursor:pointer';
+                    b.addEventListener('click', function() {
+                        tocarTabla(function(t) { t.cabPeso = par[0]; });
+                        cabPesoBotones.forEach(function(x) { x.style.background = '#1c1c24'; });
+                        b.style.background = '#3C3489';
+                    });
+                    cabPesoBotones.push(b);
+                    cabPesoWrap.appendChild(b);
+                });
+                panel.appendChild(filaControl('Peso', cabPesoWrap, spanValor(''), function() {
+                    tocarTabla(function(t) { t.cabPeso = null; });
+                    rehacerPanel();
+                }));
+
+                // ---- celdas ----
+                panel.appendChild(subEtiqueta('Celdas'));
+
+                var celTextoLbl = spanValor(T.celTexto || 'sin cambio');
+                panel.appendChild(filaControl('Color de letra', construirSwatches(T.celTexto, function(hex) {
+                    tocarTabla(function(t) { t.celTexto = hex; });
+                    celTextoLbl.textContent = hex;
+                }, { libre: true }), celTextoLbl, function() {
+                    tocarTabla(function(t) { t.celTexto = null; });
+                    rehacerPanel();
+                }));
+
+                var inpCelTam = rango(8, 24, 1, T.celTam || med.celTam || 13);
+                var celTamLbl = spanValor((T.celTam || med.celTam || 13) + 'px');
+                inpCelTam.addEventListener('input', function() {
+                    var v = parseInt(inpCelTam.value, 10);
+                    tocarTabla(function(t) { t.celTam = v; });
+                    celTamLbl.textContent = v + 'px';
+                });
+                panel.appendChild(filaControl('Tamaño de letra', inpCelTam, celTamLbl, function() {
+                    tocarTabla(function(t) { t.celTam = null; });
+                    rehacerPanel();
+                }));
+
+                // ---- lineas ----
+                // Grosor y color se escriben SIEMPRE juntos: un
+                // `border-bottom` a medio especificar (grosor sin color, o
+                // al reves) no es un cambio parcial, es una regla que el
+                // navegador completa con sus defaults — `medium currentColor`
+                // — y la linea sale de otro grosor y otro color que los que
+                // se ven en el slider. Por eso cada handler rellena al
+                // hermano con el valor MEDIDO si todavia estaba en null.
+                panel.appendChild(subEtiqueta('Líneas'));
+
+                var capLin = doc.createElement('div');
+                capLin.style.cssText = 'font-size:10px;line-height:1.45;color:#6f6f7a;margin:6px 0 0';
+                capLin.textContent = '1px ya es lo más fino que dibuja el navegador:'
+                    + ' para que se noten menos, bajá el CONTRASTE del color, no el grosor.';
+                panel.appendChild(capLin);
+
+                var inpLinH = rango(0, 4, 1, T.linH !== null ? T.linH : (med.linH || 0));
+                var linHLbl = spanValor((T.linH !== null ? T.linH : (med.linH || 0)) + 'px');
+                inpLinH.addEventListener('input', function() {
+                    var v = parseInt(inpLinH.value, 10);
+                    tocarTabla(function(t) {
+                        t.linH = v;
+                        if (!t.linHColor) t.linHColor = med.linHColor;
+                    });
+                    linHLbl.textContent = v + 'px';
+                });
+                panel.appendChild(filaControl('Entre filas — grosor', inpLinH, linHLbl, function() {
+                    tocarTabla(function(t) { t.linH = null; t.linHColor = null; });
+                    rehacerPanel();
+                }));
+
+                var linHColorLbl = spanValor(T.linHColor || 'sin cambio');
+                panel.appendChild(filaControl('Entre filas — color', construirSwatches(T.linHColor, function(hex) {
+                    tocarTabla(function(t) {
+                        t.linHColor = hex;
+                        if (t.linH === null) t.linH = med.linH || 1;
+                    });
+                    linHColorLbl.textContent = hex;
+                }, { libre: true }), linHColorLbl));
+
+                var inpLinV = rango(0, 4, 1, T.linV !== null ? T.linV : (med.linV || 0));
+                var linVLbl = spanValor((T.linV !== null ? T.linV : (med.linV || 0)) + 'px');
+                inpLinV.addEventListener('input', function() {
+                    var v = parseInt(inpLinV.value, 10);
+                    tocarTabla(function(t) {
+                        t.linV = v;
+                        if (!t.linVColor) t.linVColor = med.linVColor;
+                    });
+                    linVLbl.textContent = v + 'px';
+                });
+                panel.appendChild(filaControl('Entre columnas — grosor', inpLinV, linVLbl, function() {
+                    tocarTabla(function(t) { t.linV = null; t.linVColor = null; });
+                    rehacerPanel();
+                }));
+
+                var linVColorLbl = spanValor(T.linVColor || 'sin cambio');
+                panel.appendChild(filaControl('Entre columnas — color', construirSwatches(T.linVColor, function(hex) {
+                    tocarTabla(function(t) {
+                        t.linVColor = hex;
+                        if (t.linV === null) t.linV = med.linV || 1;
+                    });
+                    linVColorLbl.textContent = hex;
+                }, { libre: true }), linVColorLbl));
+
+                // ---- marco ----
+                // Los cuatro lados por separado, que es lo que "Borde
+                // completo" (mas abajo, el de la CAJA) nunca pudo hacer: ese
+                // escribe el shorthand `border` y por definicion mueve los
+                // cuatro juntos.
+                panel.appendChild(subEtiqueta('Marco'));
+
+                function ladosVigentes(t) {
+                    // Encender un lado sin haber tocado nada antes tiene que
+                    // partir de como esta la tabla HOY, no de "los cuatro
+                    // prendidos": el grid que se dibuja con `marco=False`
+                    // (tablas/_css.py) no tiene ninguno, y arrancar de los
+                    // cuatro le habria puesto un marco que no pidio nadie.
+                    if (!t.marcoLados) {
+                        t.marcoLados = { top: med.marcoLados ? med.marcoLados.top : true,
+                                         right: med.marcoLados ? med.marcoLados.right : true,
+                                         bottom: med.marcoLados ? med.marcoLados.bottom : true,
+                                         left: med.marcoLados ? med.marcoLados.left : true };
+                        if (t.marcoAncho === null) t.marcoAncho = med.marcoAncho || 1;
+                        if (t.marcoColor === null) t.marcoColor = med.marcoColor;
+                    }
+                    return t.marcoLados;
+                }
+
+                var LADOS = [['top', 'Arriba'], ['right', 'Derecha'],
+                             ['bottom', 'Abajo'], ['left', 'Izquierda']];
+                var ladosWrap = doc.createElement('div');
+                ladosWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-top:6px';
+                LADOS.forEach(function(par) {
+                    var encendido = T.marcoLados
+                        ? T.marcoLados[par[0]]
+                        : (med.marcoLados ? med.marcoLados[par[0]] : true);
+                    var b = doc.createElement('button');
+                    b.textContent = par[1];
+                    b.style.cssText = 'flex:1 1 46%;background:' + (encendido ? '#3C3489' : '#1c1c24')
+                        + ';color:#fff;border:1px solid #34343f;border-radius:4px;padding:5px 2px;font:11px sans-serif;cursor:pointer';
+                    b.addEventListener('click', function() {
+                        var nuevo;
+                        tocarTabla(function(t) {
+                            var l = ladosVigentes(t);
+                            l[par[0]] = !l[par[0]];
+                            nuevo = l[par[0]];
+                        });
+                        b.style.background = nuevo ? '#3C3489' : '#1c1c24';
+                    });
+                    ladosWrap.appendChild(b);
+                });
+                panel.appendChild(filaControl('Lados (clic para quitar/poner)', ladosWrap,
+                                              spanValor(''), function() {
+                    tocarTabla(function(t) {
+                        t.marcoLados = null; t.marcoAncho = null; t.marcoColor = null;
+                    });
+                    rehacerPanel();
+                }));
+
+                var inpMarcoAncho = rango(0, 4, 1, T.marcoAncho !== null ? T.marcoAncho : (med.marcoAncho || 1));
+                var marcoAnchoLbl = spanValor((T.marcoAncho !== null ? T.marcoAncho : (med.marcoAncho || 1)) + 'px');
+                inpMarcoAncho.addEventListener('input', function() {
+                    var v = parseInt(inpMarcoAncho.value, 10);
+                    tocarTabla(function(t) { ladosVigentes(t); t.marcoAncho = v; });
+                    marcoAnchoLbl.textContent = v + 'px';
+                });
+                panel.appendChild(filaControl('Grosor', inpMarcoAncho, marcoAnchoLbl));
+
+                var marcoColorLbl = spanValor(T.marcoColor || 'sin cambio');
+                panel.appendChild(filaControl('Color', construirSwatches(T.marcoColor, function(hex) {
+                    tocarTabla(function(t) { ladosVigentes(t); t.marcoColor = hex; });
+                    marcoColorLbl.textContent = hex;
+                }, { libre: true }), marcoColorLbl));
+
+                var inpMarcoRadio = rango(0, 24, 1, T.marcoRadio !== null ? T.marcoRadio : (med.marcoRadio || 0));
+                var marcoRadioLbl = spanValor((T.marcoRadio !== null ? T.marcoRadio : (med.marcoRadio || 0)) + 'px');
+                inpMarcoRadio.addEventListener('input', function() {
+                    var v = parseInt(inpMarcoRadio.value, 10);
+                    tocarTabla(function(t) { t.marcoRadio = v; });
+                    marcoRadioLbl.textContent = v + 'px';
+                });
+                panel.appendChild(filaControl('Esquinas', inpMarcoRadio, marcoRadioLbl, function() {
+                    tocarTabla(function(t) { t.marcoRadio = null; });
+                    rehacerPanel();
+                }));
+
+                panel.appendChild(seccion('Esta caja'));
             }
 
             // radio de borde
@@ -3158,21 +3854,6 @@ JS = """
             // ---- tipografía ----
             panel.appendChild(seccion('Tipografía'));
 
-            // Familia tipografica. La lista NO es libre: son las pilas que el
-            // proyecto ya usa mas las webfont-safe que existen en cualquier
-            // maquina. Un <select> con 200 fuentes del sistema mentiria — lo
-            // que se elija tiene que poder pegarse en estilos/ y verse igual
-            // en la laptop del usuario final, que no es esta. Ver regla #255.
-            var FUENTES = [
-                ['', '(la que hereda)'],
-                ['-apple-system, "Segoe UI", sans-serif', 'Sistema (la de la app)'],
-                ['"Segoe UI", Roboto, sans-serif', 'Segoe UI'],
-                ['Georgia, "Times New Roman", serif', 'Georgia (serif)'],
-                ['"Courier New", monospace', 'Courier (mono)'],
-                ['Arial, Helvetica, sans-serif', 'Arial'],
-                ['Verdana, Geneva, sans-serif', 'Verdana'],
-                ['Impact, "Arial Black", sans-serif', 'Impact (titular)']
-            ];
             var selFuente = doc.createElement('select');
             selFuente.style.cssText = 'width:100%;background:#1c1c24;color:#e4e4e8;'
                 + 'border:1px solid #34343f;border-radius:4px;padding:5px 6px;'
@@ -3603,6 +4284,10 @@ JS = """
             // union se reaplican aunque ninguna este pineada — el
             // aplicarEstado() del final del tick solo alcanza a la pineada.
             reaplicarUniones();
+            // Mismo motivo que la de arriba, con un ladron mas concreto: la
+            // <style> del estilo de tabla vive en el head del IFRAME del
+            // AgGrid, y Streamlit recrea ese iframe entero en cada rerun.
+            reaplicarTablas();
             // Barato por el guard `__disenoEnganchado`, y hay que reintentar
             // en cada tick: Streamlit recrea el iframe de AgGrid en cada
             // rerun y el listener se va con el documento viejo.

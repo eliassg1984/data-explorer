@@ -148,23 +148,30 @@ from tema import (
 # tenue) se agregó el 2026-08-21 porque faltaba justo lo que más se prueba
 # en Fondo/Borde — probar "¿este gris de tarjeta, o el lienzo?" no se podía
 # hacer sin ella (ver arquitectura.md regla #153).
+# El tercer campo, `const`, es el NOMBRE de la constante en `tema.py`. No
+# es decoracion: el `custom_css` que copia la seccion "Tabla (AgGrid)" es
+# Python que se pega en `tablas/_css.py`, y ahi un `#hex` suelto esta
+# prohibido (CLAUDE.md, regla #1). Con el nombre, el bloque copiado sale
+# como `f"{LAVANDA_FONDO} !important"` y se pega tal cual; sin el, cada
+# color habria que rastrearlo a mano en `tema.py` antes de usarlo — que es
+# justo el paso que la gente saltea.
 _PALETA = [
-    {"hex": ACENTO, "nombre": "Acento"},
-    {"hex": ACENTO_FUERTE, "nombre": "Acento fuerte"},
-    {"hex": ACENTO_TEXTO_OSCURO, "nombre": "Indigo oscuro"},
-    {"hex": EXITO, "nombre": "Exito"},
-    {"hex": ADVERTENCIA, "nombre": "Advertencia"},
-    {"hex": ERROR, "nombre": "Error"},
-    {"hex": AJUSTE_POS, "nombre": "Ajuste positivo"},
-    {"hex": AJUSTE_NEG, "nombre": "Ajuste negativo"},
-    {"hex": TEXTO_PRINCIPAL, "nombre": "Texto principal"},
-    {"hex": BLANCO, "nombre": "Blanco"},
-    {"hex": GRIS_FONDO, "nombre": "Gris lienzo"},
-    {"hex": GRIS_BORDE, "nombre": "Gris borde"},
-    {"hex": GRIS_LINEA, "nombre": "Gris linea"},
-    {"hex": GRIS_TEXTO, "nombre": "Gris texto"},
-    {"hex": GRIS_TEXTO_SUAVE, "nombre": "Gris texto suave"},
-    {"hex": LAVANDA_FONDO, "nombre": "Lavanda tenue"},
+    {"hex": ACENTO, "nombre": "Acento", "const": "ACENTO"},
+    {"hex": ACENTO_FUERTE, "nombre": "Acento fuerte", "const": "ACENTO_FUERTE"},
+    {"hex": ACENTO_TEXTO_OSCURO, "nombre": "Indigo oscuro", "const": "ACENTO_TEXTO_OSCURO"},
+    {"hex": EXITO, "nombre": "Exito", "const": "EXITO"},
+    {"hex": ADVERTENCIA, "nombre": "Advertencia", "const": "ADVERTENCIA"},
+    {"hex": ERROR, "nombre": "Error", "const": "ERROR"},
+    {"hex": AJUSTE_POS, "nombre": "Ajuste positivo", "const": "AJUSTE_POS"},
+    {"hex": AJUSTE_NEG, "nombre": "Ajuste negativo", "const": "AJUSTE_NEG"},
+    {"hex": TEXTO_PRINCIPAL, "nombre": "Texto principal", "const": "TEXTO_PRINCIPAL"},
+    {"hex": BLANCO, "nombre": "Blanco", "const": "BLANCO"},
+    {"hex": GRIS_FONDO, "nombre": "Gris lienzo", "const": "GRIS_FONDO"},
+    {"hex": GRIS_BORDE, "nombre": "Gris borde", "const": "GRIS_BORDE"},
+    {"hex": GRIS_LINEA, "nombre": "Gris linea", "const": "GRIS_LINEA"},
+    {"hex": GRIS_TEXTO, "nombre": "Gris texto", "const": "GRIS_TEXTO"},
+    {"hex": GRIS_TEXTO_SUAVE, "nombre": "Gris texto suave", "const": "GRIS_TEXTO_SUAVE"},
+    {"hex": LAVANDA_FONDO, "nombre": "Lavanda tenue", "const": "LAVANDA_FONDO"},
 ]
 
 

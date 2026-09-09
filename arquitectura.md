@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-363 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+364 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (125)
+**CSS y estilos** (126)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -159,6 +159,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#356** — Al borrar una franja fija, lo que hay que borrar son TRES cosas: la superficie, la reserva…
 - **#358** — Una franja que pasa a aparecer con el cursor deja de ser una FILA y pasa a ser una CAPA, y…
 - **#363** — Un control que vive DENTRO de una tarjeta promete que es de esa tarjeta. Si escribe el rango…
+- **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 
 **Layout y alturas** (39)
 
@@ -264,7 +265,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 
-**AgGrid y tablas** (56)
+**AgGrid y tablas** (57)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -322,6 +323,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#350** — El iframe de un componente de Streamlit se queda con el ancho que tenía cuando se renderizó,…
 - **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
 - **#361** — Una cabecera que dice "Este año" sobre una ventana MÓVIL se lee como el año calendario
+- **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 
 **Streamlit** (100)
 
@@ -32410,6 +32412,84 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      otra vez y en una sola vista, que es como se descubrió.
 
+364. **El modo diseño le escribía `style` inline a UN nodo, y una tabla
+     no se diseña así.** Para el AgGrid hacían falta tres cosas que el
+     inline no da: llegar a cajas que el árbol no ofrece, alcanzar
+     ADENTRO del iframe, y exportar a Python en vez de a `estilos/`.
+
+     Pedido del 2026-09-08: «cambiar color de la cabecera, el tipo de
+     letra, el color, el tamaño, quitar los bordes individualmente,
+     hacer las líneas más delgadas». De esas seis, el panel sólo cubría
+     tres — y a medias: con una celda fijada (regla #185) se podía tocar
+     su tipografía y su color, pero de UNA columna. Las otras tres no
+     tenían por dónde: el fondo de la cabecera es `.ag-header`, las
+     líneas son `.ag-row` y el marco es `.ag-root-wrapper`, y
+     `nodosDeTexto()` sólo lista `.ag-header-cell-text` y `.ag-cell`.
+     El control de bordes, además, escribe el shorthand `border`: por
+     definición mueve los cuatro lados juntos.
+
+     La sección **«Tabla (AgGrid)»** del panel resuelve las tres a la
+     vez, y cada una tiene su decisión de diseño:
+
+     - **Estado por KEY, no por el `id` de `elementoPineado()`.** El
+       gesto natural para diseñar una tabla es clic derecho sobre una
+       celda, así que el registro habitual es el de un sub-pin de texto
+       — uno por celda. Con el índice por `id`, mover el pin de una
+       columna a la otra habría "perdido" los cambios. `win.__disenoState.tablas[key]`
+       es lo mismo se fije la tarjeta o cualquier celda de adentro; el
+       panel resuelve el grid con `docDeAgGridDeKey()`, que busca por
+       key y no hacia abajo desde `elemento` (desde una celda,
+       `docDeAgGrid(elemento)` no encuentra nada: el iframe está por
+       ENCIMA, no por debajo).
+     - **Una `<style>` propia en el head del iframe**, el mismo camino
+       de `inyecciones/grid.py` y `_fragmentos.py`. Va última a
+       propósito: `st_aggrid` publica el `custom_css` como su propia
+       `<style>` y estas reglas usan los mismos selectores con la misma
+       especificidad, así que el desempate es el orden. Se reaplica por
+       tick (`reaplicarTablas()`, hermano de `reaplicarUniones()`)
+       porque Streamlit recrea el iframe entero en cada rerun y se lleva
+       la hoja con él.
+     - **El export es el `custom_css` de Python, no CSS de `estilos/`.**
+       Devolver un bloque pegable en `estilos/` sería mentir dos veces
+       (regla #169): no alcanza el iframe, y ni siquiera es el archivo
+       correcto. `construirBloqueTabla()` emite el dict tal como se
+       escribe en `tablas/_css.py`, con los colores por su nombre de
+       `tema.py` — de ahí el campo `const` que se le agregó a `_PALETA`
+       en `diseno.py`. Lo que no está en la paleta sale literal y con
+       una línea que lo dice, que es la única forma honesta de no
+       romper la regla #1 sin inventarle un nombre.
+
+     **Tres cosas que sólo se vieron midiendo en el navegador**, y las
+     tres habrían pasado por buenas leyendo el código:
+
+     1. **`font-family` en `.ag-root-wrapper` NO llega al texto.** El
+        wrapper y `.ag-root` toman la fuente nueva; `.ag-header` vuelve
+        a la del tema, que se la declara encima. Y `--ag-font-family`
+        tampoco alcanza: se ve heredada con el valor nuevo hasta la
+        última celda y el tema no la lee (AG Grid 34 pasa por
+        `--ag-inherited-header-font-family`). Hay que nombrar los
+        selectores del texto. `.ag-icon` queda AFUERA, verificado: su
+        glifo sale de una fuente de iconos y pisársela lo convierte en
+        un carácter suelto.
+     2. **`getComputedStyle` devuelve `color(srgb 0.19 0.2 0.24 / 0.2)`,
+        no `rgb()`.** Los bordes del tema del AgGrid son así. Un `aHex()`
+        que sólo entendía `rgb(` dejaba ese literal viajar entero hasta
+        el `custom_css` copiado. Y un color CON alfa no se puede aplanar
+        a hex sin mentir (da otro color en cuanto la tabla no está sobre
+        blanco): se devuelve `rgba()`, que es exacto, y el bloque lo
+        marca como "sin nombre en tema.py".
+     3. **Una pila tipográfica trae comillas dobles adentro**
+        (`Georgia, "Times New Roman", serif`), así que envolverla siempre
+        en comillas dobles daba un `SyntaxError` al pegar el bloque. Se
+        elige la comilla que el valor no usa.
+
+     De paso, `filaAlto` se mudó del registro por-`id` al estado por
+     key: era el otro control de AgGrid del panel y sufría el mismo
+     problema — no aparecía con una celda fijada, que es justo el gesto
+     con el que se llega a la tabla.
+
+     (2026-09-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32422,7 +32502,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#364**.
+> próxima regla nueva es la **#365**.
 
 >
 

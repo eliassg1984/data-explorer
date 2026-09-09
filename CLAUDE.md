@@ -562,12 +562,30 @@ ancestros) para elegir con un clic en vez de perseguir el píxel. Regla
 **`?diagnostico=1`** (independiente de debug).
 Y con **`?debug=1&diseno=1`** se suma el **modo diseño**: fijás un elemento
 con clic derecho y un panel lateral lo edita en vivo (caja, tipografía,
-color, mover/redimensionar, **alto de fila** si es una tabla AgGrid, con
+color, mover/redimensionar, con
 "↺" por fila para revertir solo esa propiedad; **Rotar** llega a una
 vuelta completa, -180°..180°, con botones de ángulo exacto 0/90/180/270
 para girar una franja/línea insertada a vertical sin pelear con el
 slider), o **inserta** texto/línea/barra/espacio de mentira para ver
-"cómo se vería" algo que todavía no existe. **"Look rápido"** junta 4
+"cómo se vería" algo que todavía no existe.
+
+**Las tablas AgGrid tienen su propia sección, «Tabla (AgGrid)»**, y hace
+falta porque el resto del panel escribe `style` inline sobre UN nodo — con
+eso se estila una celda, no una tabla. Aparece con clic derecho sobre
+cualquier celda (o sobre la tarjeta) y toca la grilla ENTERA: fondo y
+tipografía de la cabecera, color y tamaño de las celdas, tipo de letra de
+toda la tabla, grosor y color de las líneas entre filas y entre columnas,
+los cuatro lados del marco **por separado**, esquinas y alto de fila.
+
+Dos cosas suyas, las dos por la misma razón — la grilla corre en un
+**iframe**: el preview no es CSS inline sino una `<style>` inyectada en el
+head de ese iframe, y **"Copiar CSS" no devuelve CSS de `estilos/` sino el
+dict `custom_css` de Python**, listo para pegar en `tablas/_css.py`
+(o en `graficos/compras/_css_proveedor.py`, que es donde viven los dos
+grids de Proveedor). Los colores salen por su nombre de `tema.py`; el que
+no esté en la paleta sale literal y con un aviso, para no romper la regla
+de "nunca un `#hex` suelto" en silencio. Detalle en `arquitectura.md`
+regla #364. **"Look rápido"** junta 4
 presets de botonera (Normal / Fantasma / Minimalista / Píldora) para
 probar la FORMA completa de un botón de una — mismas props que ya tocan
 los sliders de al lado, combinadas — en vez de ajustarlas una por una; el
