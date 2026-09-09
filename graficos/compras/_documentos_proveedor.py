@@ -1,19 +1,38 @@
 """graficos.compras._documentos_proveedor - tabla pivotable de documentos.
 
-El bloque que va DEBAJO de los paneles A/B del drill de Proveedor: una
-AgGrid en modo pivote donde cada fila es una linea de detalle
+Una AgGrid en modo pivote donde cada fila es una linea de detalle
 (documento x producto) y el usuario puede arrastrar campos a
 Filas/Columnas/Valores desde el panel derecho.
 
 Salio de _compras_proveedor_drill el 2026-08-08. Es la pieza del drill
 con MENOS acoplamiento hacia atras: solo necesita 6 valores ya
-calculados (abajo, en la firma). El resto del drill comparte ~50 locales
-entre secciones, y por eso no se siguio cortando sin antes decidir como
-se pasa ese estado.
+calculados (abajo, en la firma de `tabla_documentos`). El resto del drill
+comparte ~50 locales entre secciones, y por eso no se siguio cortando sin
+antes decidir como se pasa ese estado.
 
-2026-08-21, a pedido: la tabla esta SIEMPRE visible. Hasta hoy el bloque
-era colapsable y guardaba su estado en `cp_docs_*` — que no leia nadie
-fuera de este modulo, asi que sacarlo no toco nada mas.
+2026-09-09, a pedido («bajemos Detalle de documentos por proveedor»): deja
+de ser la ultima fila del drill de Proveedor y pasa a ser la ULTIMA SECCION
+del reporte, con su propio item en el rail. Eso convierte a este modulo en
+un DIBUJANTE de seccion, no en un bloque invitado: `render_seccion` arma
+por su cuenta los seis valores que antes le pasaba el drill.
+
+Lo que NO cambia —y es deliberado— es de donde salen esos valores:
+
+· el RANGO sigue siendo el de la seccion Proveedor
+  (`CATEGORIA_SEC["compras_sec_proveedor"]`, que ahora tienen las dos);
+· los PROVEEDORES siguen siendo los que eligio el filtro del Ranking
+  (`cp_prov`), y el filtro propio de esta tarjeta (`cp_docs_prov`) sigue
+  recortando DENTRO de eso.
+
+O sea que la tabla dice lo mismo que decia cuando estaba pegada al
+ranking; lo unico que cambio es donde aparece. Separar tambien los datos
+habria sido otro cambio, y no el que se pidio: dos tablas del mismo drill
+con rangos distintos discrepan sin que nada avise (ver el comentario de
+`CATEGORIA_SEC`).
+
+2026-08-21, a pedido: la tabla esta SIEMPRE visible. Hasta ese dia el
+bloque era colapsable y guardaba su estado en `cp_docs_*` — que no leia
+nadie fuera de este modulo, asi que sacarlo no toco nada mas.
 """
 
 import json
@@ -26,10 +45,92 @@ from st_aggrid import AgGrid, JsCode
 from inyecciones import inject_maximize_aggrid
 from graficos import alturas
 from graficos.compras._comun import (
-    CATEGORIA_SEC, filtro_proveedores, selector_fecha_tarjeta,
+    CATEGORIA_SEC, agregar_periodo, base_normalizada, filtro_proveedores,
+    periodos_ordenados, selector_fecha_tarjeta,
 )
 from graficos.compras._css_proveedor import CSS_PIVOTE_DOCS
 from graficos.compras._etiquetas_proveedor import nombre_propio
+
+
+def render_seccion(d, col_prov, col_prod, col_cant, col_valor, col_punit,
+                   col_um, col_fecha, col_docu):
+    """La seccion «Detalle de documentos por proveedor» de la pila.
+
+    Arma los seis valores que `tabla_documentos` necesita y la dibuja. Hasta
+    el 2026-09-09 se los pasaba el drill de Proveedor, del que esta tarjeta
+    era la ultima fila; ver el docstring del modulo.
+
+    Tres de esos valores se REPRODUCEN aca y no se heredan, y conviene saber
+    por que: el drill es un `@st.fragment`, asi que un clic adentro suyo lo
+    re-ejecuta a el SOLO. Si esta seccion leyera un `base`/`top_provs` que
+    aquel dejo guardado, cada interaccion del drill la dejaria mostrando el
+    calculo de la corrida anterior — y no se veria como un error, se veria
+    como una tabla que no se entera. Recalcular sobre el mismo `d` y el mismo
+    filtro cuesta un `groupby` y no puede desincronizarse.
+
+    `gran` SI se lee de `session_state`: es el widget «Agrupar por» de la
+    tarjeta de Evolucion, y decide las COLUMNAS del pivote. Es una de las dos
+    dependencias que quedan hacia la seccion Proveedor, y se sostiene porque
+    Proveedor es la PRIMERA de la pila —siempre se dibuja antes— y porque
+    hay default. Si algun dia esta tabla quiere su propia granularidad, el
+    cambio es agregarle el control, no romper esto.
+
+    La otra dependencia es el CSS: `CSS_PROVEEDOR` —que estila `docs_row`,
+    `.cp-rank-tit` y todo el prefijo `cp_docs`— lo inyecta el drill de
+    Proveedor, no este modulo. Se sostiene por lo mismo (Proveedor va
+    primero) y es la MISMA herencia que ya tenia `producto.py` para su
+    selector de fecha. Ojo con una sola cosa: si algun dia el ⛶ de «modo
+    solo» llega a esta seccion, seria la unica dibujada y se quedaria sin
+    ese `<style>`. Hoy ese boton existe unicamente en «Vs año pasado».
+    """
+    # El escalado a rerun COMPLETO del atajo de fecha. `selector_fecha_tarjeta`
+    # levanta la bandera, y quien la baja tiene que ser el dueño de la
+    # sección: el FILTRO que consume ese rango vive en `app.py`, fuera de
+    # este fragment, así que sin el rerun de app el estado cambia y la
+    # pantalla no — botón que responde, datos quietos.
+    #
+    # Hasta el 2026-09-09 esta línea vivía en `_compras_proveedor_drill`
+    # (la tarjeta era su última fila) y se mudó con ella. Es lo único del
+    # traslado que NO se ve si se olvida: la fecha se guarda igual, sólo
+    # que la tabla sigue mostrando el rango viejo hasta el próximo rerun
+    # completo. Mismo mecanismo que `_cp_rank_atajo_pendiente`
+    # (proveedor.py) y sus tres hermanos. Ver arquitectura.md #180.
+    if st.session_state.pop("_cp_docs_atajo_pendiente", False):
+        st.rerun(scope="app")
+
+    if not (col_prov and col_valor):
+        return
+    gran = st.session_state.get("compras_prov_gran") or "Mes"
+    base = base_normalizada(d, col_prov, col_prod, col_cant, col_valor,
+                            col_punit, col_um, col_fecha, col_docu)
+    if base.empty or base["valor"].sum() == 0:
+        # La tarjeta se dibuja igual (regla #196): su cabecera lleva el
+        # selector de fecha, que es lo unico que puede deshacer el rango que
+        # dejo la tabla vacia. Un `return` seco aca esconderia la salida.
+        with st.container(key="docs_row"):
+            with st.container(border=True, key="compras_prov_card_docs"):
+                selector_fecha_tarjeta(
+                    "cp_docs", "_cp_docs_atajo_pendiente",
+                    titulo_html=('<div class="cp-rank-tit">Detalle de '
+                                 'documentos por proveedor</div>'),
+                    categoria=CATEGORIA_SEC["compras_sec_documentos"])
+                st.info("Sin compras en el rango seleccionado. Ampliá el "
+                        "rango desde la fecha de esta cabecera, o soltá el "
+                        "filtro de Familia.")
+        return
+    base = agregar_periodo(base, gran)
+    # Los proveedores del RANKING, no un universo propio: esta tabla siempre
+    # fue el segundo nivel de aquella seleccion (ver el docstring). Se lee
+    # sin dibujar — `filtro_proveedores` devuelve la seleccion y el popover
+    # por separado, y aca solo se usa la primera mitad.
+    _universo = (base.groupby("prov")["valor"].sum()
+                 .sort_values(ascending=False).index.tolist())
+    _sel_rank, _ = filtro_proveedores("cp_prov", _universo)
+    top_provs = [p for p in _sel_rank if p in set(base["prov"].unique())]
+    if not top_provs:
+        top_provs = _universo
+    tabla_documentos(base, top_provs, gran, periodos_ordenados(base),
+                     col_docu, col_punit)
 
 
 def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
@@ -90,11 +191,16 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                              'documentos por proveedor · vista '
                              f'{gran}</div>'),
                 extra=_pop_docs,
-                # LA MISMA CATEGORÍA QUE EL RANKING DE ARRIBA, a propósito:
-                # esta tabla se calcula sobre el `base`/`top_provs` que
-                # produce aquél, así que con rangos distintos mostraría
-                # documentos de proveedores rankeados en otro período.
-                categoria=CATEGORIA_SEC["compras_sec_proveedor"])
+                # LA MISMA CATEGORÍA QUE EL RANKING DE PROVEEDORES, a
+                # propósito, aunque desde el 2026-09-09 sean dos secciones
+                # distintas: esta tabla se calcula sobre el mismo `base` y
+                # los mismos `top_provs` que aquél, así que con rangos
+                # distintos mostraría documentos de proveedores rankeados en
+                # otro período. `compras_sec_documentos` apunta a
+                # `sec_proveedor` justamente para eso — se nombra por la
+                # clave de ESTA sección para que se lea que es una decisión,
+                # no una herencia.
+                categoria=CATEGORIA_SEC["compras_sec_documentos"])
 
         _bd = base[base["prov"].isin(top_provs)].copy()
         _bd = _bd[_bd["prov"].isin(set(_sel_docs))].copy()

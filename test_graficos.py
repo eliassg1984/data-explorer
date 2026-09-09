@@ -1616,8 +1616,27 @@ def _pruebas_rango_por_tarjeta():
     claves_pila = {c for c, _v in gc._PILA}
     check("las claves de CATEGORIA_SEC son secciones de _PILA",
           sorted(set(gc.CATEGORIA_SEC) - claves_pila), [])
-    check("una categoría distinta por sección",
-          len(set(gc.CATEGORIA_SEC.values())), len(gc.CATEGORIA_SEC))
+    # UNA categoría por sección, con UNA excepción declarada acá: desde el
+    # 2026-09-09 «Detalle de documentos por proveedor» es su propia sección
+    # y comparte el rango con el Ranking de Proveedores A PROPÓSITO — se
+    # calcula sobre el mismo `base`/`top_provs`, así que con rangos
+    # distintos mostraría documentos de proveedores rankeados en otro
+    # período (ver `CATEGORIA_SEC` en `_comun.py`).
+    #
+    # La excepción se escribe con nombre y apellido en vez de aflojar la
+    # guarda: lo que esta prueba caza es el share por COPIAR Y PEGAR, y
+    # ese sigue fallando. Si mañana la tabla quiere su rango propio, esta
+    # línea es lo que hay que borrar.
+    _PAR_COMPARTIDO = {"compras_sec_proveedor", "compras_sec_documentos"}
+    check("el par Proveedor/Documentos comparte categoría a propósito",
+          len({gc.CATEGORIA_SEC.get(k) for k in _PAR_COMPARTIDO}), 1)
+    _solas = {k: v for k, v in gc.CATEGORIA_SEC.items()
+              if k not in _PAR_COMPARTIDO}
+    check("una categoría distinta por sección (fuera del par declarado)",
+          len(set(_solas.values())), len(_solas))
+    check("y el par no comparte con ninguna otra sección",
+          sorted(set(_solas.values())
+                 & {gc.CATEGORIA_SEC["compras_sec_proveedor"]}), [])
     # Las dos secciones SIN este selector quedan fuera a propósito: su
     # control de fecha es el desplegable de `graficos/periodo.py`, que ya
     # era por tarjeta. Meterlas les daría dos controles que se pisan.

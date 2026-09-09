@@ -16,21 +16,21 @@ import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
 
-from tema import (ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, GRIS_TEXTO,
-                  LAVANDA_CHIP, TEXTO_PRINCIPAL)
+from tema import (ACENTO, ACENTO_TEXTO_OSCURO, ERROR, EXITO, GRIS_BORDE,
+                  GRIS_TEXTO, LAVANDA_CHIP, TEXTO_PRINCIPAL)
 from inyecciones import inject_hover_kpis
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
     paso_etiquetas, publicar_var_px,
 )
 from graficos.compras._comun import (
-    CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, filtro_proveedores,
+    CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, agregar_periodo,
+    base_normalizada, filtro_proveedores, periodos_ordenados,
     selector_fecha_tarjeta,
 )
 from graficos.compras._css_proveedor import (
     CSS as CSS_PROVEEDOR, CSS_RANKING_GRID,
 )
-from graficos.compras._documentos_proveedor import tabla_documentos
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos import alturas, periodo
 
@@ -76,13 +76,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # gastar un render que se va a descartar. Ver arquitectura.md #180.
     if st.session_state.pop("_cp_rank_atajo_pendiente", False):
         st.rerun(scope="app")
-    # La gemela de la tarjeta «Detalle de documentos por proveedor», que
-    # gano su propio selector de fecha el 2026-09-04. Misma bandera, mismo
-    # motivo y mismo sitio: `tabla_documentos` se dibuja al final de ESTE
-    # fragment, asi que el escalado tiene que pasar por aca.
-    if st.session_state.pop("_cp_docs_atajo_pendiente", False):
-        st.rerun(scope="app")
-
     if not (col_prov and col_valor):
         st.info("Faltan columnas (Proveedor, Valor) para este gráfico.")
         return
@@ -128,20 +121,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                  "Se abrevia segun el ancho disponible."))
 
     # ── Preparar base de datos ─────────────────────────────────────────────
-    base = pd.DataFrame({
-        "prov":  d[col_prov].astype(str).values,
-        "prod":  (d[col_prod].astype(str).values if col_prod else "—"),
-        "cant":  (pd.to_numeric(d[col_cant],  errors="coerce").fillna(0).values
-                  if col_cant else 0.0),
-        "valor": pd.to_numeric(d[col_valor], errors="coerce").fillna(0).values,
-        "punit": (pd.to_numeric(d[col_punit], errors="coerce").values
-                  if col_punit else np.nan),
-        "um":    (d[col_um].astype(str).values if col_um else ""),
-        "fecha": (pd.to_datetime(d[col_fecha], errors="coerce").values
-                  if col_fecha else pd.NaT),
-        "docu":  (d[col_docu].astype(str).values if col_docu else ""),
-    })
-    base = base[base["prov"].notna() & (base["prov"] != "nan")]
+    # Vive en `_comun.py` desde el 2026-09-09: la sección «Detalle de
+    # documentos por proveedor» se separó de este drill y necesita el MISMO
+    # df normalizado. Ver el bloque «LA BASE DEL DRILL DE PROVEEDOR» de allá.
+    base = base_normalizada(d, col_prov, col_prod, col_cant, col_valor,
+                            col_punit, col_um, col_fecha, col_docu)
     if base.empty or base["valor"].sum() == 0:
         # SIN FILAS SE VACÍA EL CONTENIDO, NO LA VISTA (2026-09-07). Este
         # `return` salía ANTES de la tarjeta — o sea, antes del selector de
@@ -186,35 +170,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         return
 
     # ── Calcular periodo ──────────────────────────────────────────────────
-    # Extraído a función (2026-08-16) para poder aplicárselo TAMBIÉN al
-    # histórico completo, que es lo que alimenta el gráfico de evolución:
-    # con el rango de la franja puede haber un solo período y una línea de
-    # un punto no dibuja ninguna evolución (reportado con captura: en
-    # granularidad Año se veía un punto suelto en medio de la nada).
+    # `agregar_periodo` vive en `_comun.py` (misma mudanza que `base`, y por
+    # el mismo motivo). Acá queda como closure sobre `gran` porque este drill
+    # se lo aplica DOS veces —a `base` y al histórico completo que alimenta
+    # la evolución— y la granularidad es la misma en las dos.
     def _agregar_periodo(_df):
-        _fe = pd.to_datetime(_df["fecha"], errors="coerce")
-        _mes_es = {'Jan': 'Ene', 'Apr': 'Abr', 'Aug': 'Ago', 'Dec': 'Dic'}
-        if gran == "Día":
-            _df["_per_sort"] = _fe.dt.strftime("%Y-%m-%d")
-            _p = _fe.dt.strftime("%d %b")
-            for _en, _es in _mes_es.items():
-                _p = _p.str.replace(_en, _es)
-            _df["per"] = _p
-        elif gran == "Semana":
-            _ws = (_fe - pd.to_timedelta(_fe.dt.weekday, unit="D")).dt.normalize()
-            _we = _ws + pd.Timedelta(days=6)
-            _df["_per_sort"] = _ws.dt.strftime("%Y-%m-%d")   # clave de orden
-            _p = _ws.dt.strftime("%d%b") + "-" + _we.dt.strftime("%d%b")
-            for _en, _es in _mes_es.items():
-                _p = _p.str.replace(_en, _es)
-            _df["per"] = _p
-        elif gran == "Año":
-            _df["_per_sort"] = _fe.dt.year.astype("Int64").astype(str)
-            _df["per"] = _df["_per_sort"]
-        else:  # Mes
-            _df["_per_sort"] = _fe.dt.to_period("M").astype(str)
-            _df["per"] = _df["_per_sort"]
-        return _df[_df["per"].notna() & (_df["per"] != "<NA>")]
+        return agregar_periodo(_df, gran)
 
     base = _agregar_periodo(base)
 
@@ -234,12 +195,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Asignar color por proveedor (los que no están en top → "Otros" en gris)
     base["prov_label"] = base["prov"].where(base["prov"].isin(top_provs), "Otros")
 
-    if "_per_sort" in base.columns:
-        _per_order = (base[["_per_sort", "per"]].drop_duplicates()
-                      .sort_values("_per_sort")["per"].tolist())
-        periodos = list(dict.fromkeys(_per_order))   # deduplicado, orden cronológico
-    else:
-        periodos = sorted(base["per"].dropna().unique())
+    periodos = periodos_ordenados(base)
 
     # ── Estado de foco ────────────────────────────────────────────────────
     prov_focus = st.session_state.get("compras_prov_focus")
@@ -1353,10 +1309,18 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                       .reindex(_evo_x, fill_value=0.0))
                             _g_tot = (_src_evo.groupby("per")["valor"].sum()
                                       .reindex(_evo_x, fill_value=0.0))
-                            _g_cant = (_dprov.groupby("per")["cant"].sum()
-                                       .reindex(_evo_x, fill_value=0.0)
-                                       if "cant" in _dprov.columns
-                                       else pd.Series(0.0, index=_evo_x))
+                            # El período ANTERIOR a cada uno de los dibujados,
+                            # para la variación. Sale de `_per_evo` (todos los
+                            # períodos de `_src_evo`) y no de `_evo_x` (los que
+                            # se ven): con las flechas de ventana, el primero
+                            # de la pantalla SÍ tiene uno antes, sólo que fuera
+                            # de cuadro. `_evo_x` es un tramo contiguo de
+                            # `_per_evo`, así que basta con saber dónde
+                            # empieza.
+                            _g_todo = (_dprov.groupby("per")["valor"].sum()
+                                       .reindex(_per_evo, fill_value=0.0))
+                            _pos0 = (_per_evo.index(_evo_x[0])
+                                     if _evo_x[0] in _per_evo else 0)
                             if "docu" in _dprov.columns:
                                 # Mismo criterio que la versión de un solo
                                 # período: el documento vacío no cuenta.
@@ -1372,6 +1336,47 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # ("Semana" es femenino y las otras tres no: sin
                             # esto salía "Último semana".)
                             _ult_art = "Última" if gran == "Semana" else "Último"
+
+                            def _var_txt(_i, _g=_g_todo, _p0=_pos0):
+                                """`(texto, color)` de la variación del punto
+                                `_i` contra el período de antes.
+
+                                Tres casos y ninguno es cosmético:
+
+                                · **Sin período anterior** (el primero del
+                                  histórico) o con el anterior en CERO: «—».
+                                  Un % de variación desde cero no existe, y
+                                  fabricar un «+100%» sería inventarlo. Mismo
+                                  criterio que `_delta` en
+                                  `graficos/compras/__init__.py`, que
+                                  directamente no devuelve nada con `ant <= 0`.
+                                · **Redondea a 0.0%**: sin flecha. Una flecha
+                                  sobre un «0.0%» dice que se movió cuando lo
+                                  que se ve es que no.
+                                · **Por debajo del 0,5%**: flecha sí, color no
+                                  — es el umbral de ruido de `_delta`, que a
+                                  esa altura ni dibuja la flecha.
+
+                                El COLOR no se elige acá: en Compras GASTAR
+                                MÁS es rojo, y eso lo fija `_delta` (y el
+                                drill «Vs año pasado»). Dos sitios de la
+                                misma pantalla no pueden decir lo contrario
+                                del mismo signo.
+                                """
+                                _j = _p0 + _i - 1
+                                if _j < 0:
+                                    return "—", ""
+                                _ant = float(_g.iloc[_j])
+                                if _ant <= 0:
+                                    return "—", ""
+                                _v = (float(_g.iloc[_p0 + _i]) - _ant) / _ant * 100
+                                if abs(_v) < 0.05:
+                                    return "0.0%", ""
+                                _flecha = "▲" if _v > 0 else "▼"
+                                _color = ("" if abs(_v) < 0.5
+                                          else (ERROR if _v > 0 else EXITO))
+                                return f"{_flecha} {abs(_v):.1f}%", _color
+
                             _kpis_evo = []
                             for _i, _p in enumerate(_evo_x):
                                 _r_val = float(_g_val.iloc[_i])
@@ -1379,6 +1384,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 # proveedores en ese mismo período: "de lo que
                                 # gasté este mes, tanto fue con este proveedor".
                                 _r_pct = _r_val / (float(_g_tot.iloc[_i]) or 1.0) * 100
+                                _r_var, _r_var_col = _var_txt(_i)
                                 _kpis_evo.append({
                                     "tit": (f"{_ult_art} {gran.lower()}"
                                             if _i == len(_evo_x) - 1
@@ -1386,21 +1392,40 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                            + f" · {_etq_evo(_p)}",
                                     "vals": [f"S/ {_r_val:,.0f}",
                                              f"{_r_pct:.1f}%",
-                                             f"{float(_g_cant.iloc[_i]):,.0f}",
+                                             _r_var,
                                              f"{int(_g_docs.iloc[_i]):,.0f}"],
+                                    # Un color por celda, en el mismo orden.
+                                    # Vacío = el que ya pone el CSS.
+                                    "cols": ["", "", _r_var_col, ""],
                                 })
+                            # "Vs. anterior" y no "Vs. mes anterior": la celda
+                            # da 63px de texto a 10px (medido) y el rótulo
+                            # largo pide 63 en «mes» y 78 en «semana», o sea
+                            # que envolvería a dos renglones y estiraría la
+                            # pila —que es el piso de alto de la figura de al
+                            # lado (`_MIN_EVO`)—. Cuál es el anterior lo dice
+                            # el encabezado, que nombra el período.
                             _rotulos_kpi = ("Total compra", "% del total",
-                                            "Cantidad", "Documentos")
+                                            "Vs. anterior", "Documentos")
                             with _c_kpi:
                                 _base_kpi = _kpis_evo[-1]
                                 st.markdown(
                                     f'<div class="cp-evo-kpis-tit">'
                                     f'{_base_kpi["tit"]}</div>'
                                     '<div class="cp-evo-kpis">'
+                                    # El color va INLINE, igual que lo escribe
+                                    # el JS del hover: si el de reposo saliera
+                                    # de una clase y el del hover de un
+                                    # `style`, el primer hover cambiaría el
+                                    # color y el `unhover` no podría
+                                    # devolverlo.
                                     + "".join(
-                                        f'<div><span>{_k}</span><b>{_v}</b></div>'
-                                        for _k, _v in zip(_rotulos_kpi,
-                                                          _base_kpi["vals"]))
+                                        f'<div><span>{_k}</span>'
+                                        f'<b{f" style=\'color:{_c}\'" if _c else ""}>'
+                                        f'{_v}</b></div>'
+                                        for _k, _v, _c in zip(_rotulos_kpi,
+                                                              _base_kpi["vals"],
+                                                              _base_kpi["cols"]))
                                     + '</div>', unsafe_allow_html=True)
                                 # El que cambia las cifras al pasar el mouse.
                                 # Va DENTRO de la columna de los KPIs a
@@ -1881,8 +1906,3 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     with st.container(key="paneles_row"):
         _paneles_card()
 
-    # ── Tabla pivotable de documentos (debajo de los paneles A/B) ─────────
-    # Vive en su propio modulo desde 2026-08-08: es la pieza del drill con
-    # menos acoplamiento hacia atras (solo estos 6 valores) y su estado de
-    # abierto/cerrado no lo lee nadie mas. Ver _documentos_proveedor.py.
-    tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit)

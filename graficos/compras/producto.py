@@ -437,7 +437,124 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
         st.info("Sin productos con precio válido en el rango.")
         return
 
-    # ── Card 1: ranking de productos + evolución del producto en foco ────
+    # ── Card 1: compras por familia + mini ranking de sus productos ─────
+    # 2026-09-09, a pedido: esta tarjeta pasa a ser la PRIMERA de la
+    # sección. Antes cerraba el drill, debajo del ranking de productos.
+    #
+    # El `if not col_fam: return` que tenía se vuelve un `if` normal, y no
+    # es cosmético: arriba del ranking, un `return` acá se llevaría puesto
+    # el resto de la sección cada vez que el parquet no traiga columna de
+    # Familia — o sea, apagaría la vista entera por una tarjeta.
+    if col_fam and col_fam in dd.columns:
+        with st.container(border=True, key="compras_prod_card_familia"):
+            fam_ranking = _fam_ranking(dd, col_fam, col_prod, col_valor)
+            fam_focus = st.session_state.get("compras_prod_fam_focus")
+            if fam_focus not in set(fam_ranking["familia"]):
+                fam_focus = None
+
+            # columnas-internas: Panel B pasó de gráfico a tabla (ver docstring
+            # del módulo) y ya no necesita el ancho extra que un gráfico de
+            # barras reclamaba para sus etiquetas de texto afuera.
+            col_famtabla, col_famdet = st.columns([1.3, 1], gap=GAP_DRILL)
+            with col_famtabla:
+                st.markdown('<div class="cp-prod-rank-tit">Compras por familia</div>',
+                           unsafe_allow_html=True)
+
+                disp_fam = fam_ranking.rename(columns={
+                    "familia": "Familia", "valor": "Valor", "pct": "%",
+                    "productos": "Productos",
+                })
+                _val_max_fam = (float(fam_ranking["valor"].max())
+                               if len(fam_ranking) else 1.0)
+                disp_fam["_barra"] = disp_fam["Valor"] / _val_max_fam * 100
+                _resp_fam = AgGrid(
+                    disp_fam[["Familia", "Valor", "%", "Productos", "_barra"]],
+                    gridOptions={
+                        # Sin `flex`: mismo motivo que el ranking de arriba
+                        # (`st_aggrid` le clava `width: 200` a toda columna sin
+                        # `width` propio, y ese `width` le gana al `flex`).
+                        "columnDefs": [
+                            {"field": "Familia", "width": 210,
+                             "tooltipField": "Familia"},
+                            {"field": "Valor", "width": 100,
+                             "type": "numericColumn",
+                             "cellStyle": _js_barra_prod,
+                             "valueFormatter": _js_soles0_prod},
+                            {"field": "%", "width": 56,
+                             "type": "numericColumn",
+                             "valueFormatter": _js_pct_prod},
+                            {"field": "Productos", "width": 80,
+                             "type": "numericColumn",
+                             "valueFormatter": _js_num0_prod},
+                            {"field": "_barra", "hide": True},
+                        ],
+                        "rowSelection": {"mode": "singleRow",
+                                         "checkboxes": False,
+                                         "enableClickSelection": False},
+                        "onRowClicked": _js_toggle_prod,
+                        "rowHeight": _ALTO_FILA,
+                        "headerHeight": 38,
+                        "suppressCellFocus": True,
+                        "suppressMovableColumns": True,
+                    },
+                    allow_unsafe_jscode=True,
+                    theme="streamlit",
+                    height=_ALTO_FRAME,
+                    update_on=["selectionChanged"],
+                    key="compras_prod_fam_rank_tab",
+                )
+                _sel_fam = getattr(_resp_fam, "selected_rows", None)
+                if _sel_fam is not None and len(_sel_fam):
+                    _fila_fam = (_sel_fam.iloc[0] if hasattr(_sel_fam, "iloc")
+                                else _sel_fam[0])
+                    _clicked_fam = str(_fila_fam["Familia"])
+                else:
+                    _clicked_fam = None
+                if _clicked_fam != fam_focus:
+                    fam_focus = _clicked_fam
+                    st.session_state["compras_prod_fam_focus"] = fam_focus
+                st.caption("% sobre el total comprado en el rango.")
+
+            with col_famdet:
+                fam_foco = fam_focus if fam_focus is not None else fam_ranking.iloc[0]["familia"]
+                st.markdown(f'<div class="cp-prod-rank-tit">{_compras_truncar(fam_foco, 40)}</div>',
+                           unsafe_allow_html=True)
+                serie_fam = (dd[_fam_normalizada(dd, col_fam) == fam_foco]
+                            .groupby(col_prod)[col_valor].sum().nlargest(10))
+                if serie_fam.empty:
+                    st.info("Sin productos para esta familia.")
+                else:
+                    disp_prodfam = (serie_fam.rename_axis("Producto")
+                                   .reset_index(name="Valor"))
+                    _val_max_prodfam = float(disp_prodfam["Valor"].max())
+                    disp_prodfam["_barra"] = disp_prodfam["Valor"] / _val_max_prodfam * 100
+                    AgGrid(
+                        disp_prodfam[["Producto", "Valor", "_barra"]],
+                        gridOptions={
+                            # Mismos anchos/renderers que la tabla de Familia:
+                            # panel A y B deben leerse como una sola grilla.
+                            "columnDefs": [
+                                {"field": "Producto", "width": 210,
+                                 "tooltipField": "Producto"},
+                                {"field": "Valor", "width": 100,
+                                 "type": "numericColumn",
+                                 "cellStyle": _js_barra_prod,
+                                 "valueFormatter": _js_soles0_prod},
+                                {"field": "_barra", "hide": True},
+                            ],
+                            "rowHeight": _ALTO_FILA,
+                            "headerHeight": 38,
+                            "suppressCellFocus": True,
+                            "suppressMovableColumns": True,
+                        },
+                        allow_unsafe_jscode=True,
+                        theme="streamlit",
+                        height=_ALTO_FRAME,
+                        key=f"compras_prod_fam_det_tab_{_slug(fam_foco)}",
+                    )
+                st.caption("Top 10 productos de la familia, por valor comprado.")
+
+    # ── Card 2: ranking de productos + evolución del producto en foco ──
     # 2026-09-02, a pedido ("al gráfico que está al costado de ranking de
     # producto, colocarlo en su propia tarjeta"). Este contenedor DEJA de
     # ser una tarjeta y queda como MARCO, exactamente el mismo movimiento
@@ -728,114 +845,3 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     st.plotly_chart(fig, use_container_width=True,
                                     key=f"compras_g_prod_{gran}")
 
-    # ── Card 2: ranking por familia + mini ranking de sus productos ──────
-    if not col_fam or col_fam not in dd.columns:
-        return
-
-    with st.container(border=True, key="compras_prod_card_familia"):
-        fam_ranking = _fam_ranking(dd, col_fam, col_prod, col_valor)
-        fam_focus = st.session_state.get("compras_prod_fam_focus")
-        if fam_focus not in set(fam_ranking["familia"]):
-            fam_focus = None
-
-        # columnas-internas: Panel B pasó de gráfico a tabla (ver docstring
-        # del módulo) y ya no necesita el ancho extra que un gráfico de
-        # barras reclamaba para sus etiquetas de texto afuera.
-        col_famtabla, col_famdet = st.columns([1.3, 1], gap=GAP_DRILL)
-        with col_famtabla:
-            st.markdown('<div class="cp-prod-rank-tit">Compras por familia</div>',
-                       unsafe_allow_html=True)
-
-            disp_fam = fam_ranking.rename(columns={
-                "familia": "Familia", "valor": "Valor", "pct": "%",
-                "productos": "Productos",
-            })
-            _val_max_fam = (float(fam_ranking["valor"].max())
-                           if len(fam_ranking) else 1.0)
-            disp_fam["_barra"] = disp_fam["Valor"] / _val_max_fam * 100
-            _resp_fam = AgGrid(
-                disp_fam[["Familia", "Valor", "%", "Productos", "_barra"]],
-                gridOptions={
-                    # Sin `flex`: mismo motivo que el ranking de arriba
-                    # (`st_aggrid` le clava `width: 200` a toda columna sin
-                    # `width` propio, y ese `width` le gana al `flex`).
-                    "columnDefs": [
-                        {"field": "Familia", "width": 210,
-                         "tooltipField": "Familia"},
-                        {"field": "Valor", "width": 100,
-                         "type": "numericColumn",
-                         "cellStyle": _js_barra_prod,
-                         "valueFormatter": _js_soles0_prod},
-                        {"field": "%", "width": 56,
-                         "type": "numericColumn",
-                         "valueFormatter": _js_pct_prod},
-                        {"field": "Productos", "width": 80,
-                         "type": "numericColumn",
-                         "valueFormatter": _js_num0_prod},
-                        {"field": "_barra", "hide": True},
-                    ],
-                    "rowSelection": {"mode": "singleRow",
-                                     "checkboxes": False,
-                                     "enableClickSelection": False},
-                    "onRowClicked": _js_toggle_prod,
-                    "rowHeight": _ALTO_FILA,
-                    "headerHeight": 38,
-                    "suppressCellFocus": True,
-                    "suppressMovableColumns": True,
-                },
-                allow_unsafe_jscode=True,
-                theme="streamlit",
-                height=_ALTO_FRAME,
-                update_on=["selectionChanged"],
-                key="compras_prod_fam_rank_tab",
-            )
-            _sel_fam = getattr(_resp_fam, "selected_rows", None)
-            if _sel_fam is not None and len(_sel_fam):
-                _fila_fam = (_sel_fam.iloc[0] if hasattr(_sel_fam, "iloc")
-                            else _sel_fam[0])
-                _clicked_fam = str(_fila_fam["Familia"])
-            else:
-                _clicked_fam = None
-            if _clicked_fam != fam_focus:
-                fam_focus = _clicked_fam
-                st.session_state["compras_prod_fam_focus"] = fam_focus
-            st.caption("% sobre el total comprado en el rango.")
-
-        with col_famdet:
-            fam_foco = fam_focus if fam_focus is not None else fam_ranking.iloc[0]["familia"]
-            st.markdown(f'<div class="cp-prod-rank-tit">{_compras_truncar(fam_foco, 40)}</div>',
-                       unsafe_allow_html=True)
-            serie_fam = (dd[_fam_normalizada(dd, col_fam) == fam_foco]
-                        .groupby(col_prod)[col_valor].sum().nlargest(10))
-            if serie_fam.empty:
-                st.info("Sin productos para esta familia.")
-            else:
-                disp_prodfam = (serie_fam.rename_axis("Producto")
-                               .reset_index(name="Valor"))
-                _val_max_prodfam = float(disp_prodfam["Valor"].max())
-                disp_prodfam["_barra"] = disp_prodfam["Valor"] / _val_max_prodfam * 100
-                AgGrid(
-                    disp_prodfam[["Producto", "Valor", "_barra"]],
-                    gridOptions={
-                        # Mismos anchos/renderers que la tabla de Familia:
-                        # panel A y B deben leerse como una sola grilla.
-                        "columnDefs": [
-                            {"field": "Producto", "width": 210,
-                             "tooltipField": "Producto"},
-                            {"field": "Valor", "width": 100,
-                             "type": "numericColumn",
-                             "cellStyle": _js_barra_prod,
-                             "valueFormatter": _js_soles0_prod},
-                            {"field": "_barra", "hide": True},
-                        ],
-                        "rowHeight": _ALTO_FILA,
-                        "headerHeight": 38,
-                        "suppressCellFocus": True,
-                        "suppressMovableColumns": True,
-                    },
-                    allow_unsafe_jscode=True,
-                    theme="streamlit",
-                    height=_ALTO_FRAME,
-                    key=f"compras_prod_fam_det_tab_{_slug(fam_foco)}",
-                )
-            st.caption("Top 10 productos de la familia, por valor comprado.")

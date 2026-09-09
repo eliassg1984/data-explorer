@@ -269,10 +269,15 @@ rango compartido y el bug reaparece en una sola vista. Lo ataja
 `test_graficos.py::_pruebas_rango_por_tarjeta`, que barre
 `graficos/compras/` con `ast`.
 
-Dos tarjetas comparten categoría a propósito: **Ranking de proveedores y
-Detalle de documentos** son la misma sección, y la tabla se calcula sobre
-los `top_provs` del ranking de arriba. Rango por tarjeta es una clave por
-**unidad de lectura**, no por trigger.
+Dos SECCIONES comparten categoría a propósito: **Ranking de proveedores y
+Detalle de documentos por proveedor**, porque la tabla se calcula sobre el
+mismo `base`/`top_provs` que el ranking. Eran una sola sección hasta el
+2026-09-09, cuando la tabla bajó al final del reporte con su propio ítem de
+rail; el rango compartido sobrevivió a la mudanza porque no era una
+consecuencia de estar juntas, era la razón. Rango por tarjeta es una clave
+por **unidad de lectura**, no por trigger — y esa unidad puede ocupar dos
+sitios de la página. `test_graficos.py` declara ese par por nombre: un share
+por copiar y pegar sigue fallando.
 
 ## Antes de sumar una columna "comparable": mirá su GRANO
 

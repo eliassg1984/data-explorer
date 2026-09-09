@@ -44,6 +44,9 @@ from graficos.compras._comun import (  # noqa: F401  (re-export)
     CATEGORIA_SEC, _es_movil, _first_point, _periodo_serie,
 )
 from graficos.compras.proveedor import _compras_proveedor_drill
+from graficos.compras._documentos_proveedor import (
+    render_seccion as _docs_seccion,
+)
 from graficos.compras.producto import _compras_producto_drill
 from graficos.compras.volatilidad import _compras_volatilidad_drill
 from graficos.compras.vs_ano_pasado import _compras_vs_ano_pasado_drill
@@ -353,7 +356,13 @@ _COMPRAS_RAIL_CATEGORIAS = (
                    ("Volatilidad",      "Volatilidad",   ":material/candlestick_chart:"))),
     ("SUNAT",     (("Documentos SUNAT", "Documentos",    ":material/receipt_long:"),)),
     ("Más",       (("Semanal",          "Semanal",       ":material/calendar_view_week:"),
-                   ("Tabla",            "Tabla",         ":material/table_rows:"))),
+                   ("Tabla",            "Tabla",         ":material/table_rows:"),
+                   # El rótulo corto dice «Documentos» a secas y el largo
+                   # aclara de qué: en el riel plegado no entra más, y
+                   # «Documentos SUNAT» ya se llama así dos grupos más
+                   # arriba. Se distinguen por el ícono y por el grupo.
+                   ("Documentos por proveedor", "Detalle docs.",
+                    ":material/list_alt:"))),
 )
 
 # Vistas de Compras que se quedan el selector de fecha DENTRO de su tarjeta
@@ -391,6 +400,12 @@ _VISTAS_CON_BOUNDS_SUNAT = {"Documentos SUNAT"}
 #
 # Fuera de la pila: `Documentos SUNAT`, que se lleva prestado el único
 # selector de fecha de la app.
+#
+# 2026-09-09, a pedido («bajemos Detalle de documentos por proveedor»):
+# `compras_sec_documentos` entra al FINAL. No es una vista nueva — es la
+# tarjeta que cerraba la sección Proveedor, que ahora tiene sitio y botón
+# propios. Comparte el rango de Proveedor por `CATEGORIA_SEC`, así que sigue
+# hablando del mismo período que el ranking del que sale.
 _PILA = (
     ("compras_sec_proveedor",     "Proveedor"),
     ("compras_sec_producto",      "Producto"),
@@ -398,6 +413,7 @@ _PILA = (
     ("compras_sec_volatilidad",   "Volatilidad"),
     ("compras_sec_semanal",       "Semanal"),
     ("compras_sec_tabla",         "Tabla"),
+    ("compras_sec_documentos",    "Documentos por proveedor"),
 )
 
 # ── Con qué familias abre Compras ─────────────────────────────────────────
@@ -649,7 +665,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
 
     opciones = ["Proveedor", "Producto", "Vs año pasado", "Volatilidad",
-                "Documentos SUNAT", "Semanal", "Tabla"]
+                "Documentos SUNAT", "Semanal", "Tabla",
+                "Documentos por proveedor"]
 
     # Rail vertical fijo al borde DERECHO (componente compartido _render_rail):
     # selector de tipo de gráfico agrupado por categoría. El activo se marca
@@ -871,15 +888,29 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             #
             # El default sigue siendo "Todo", que es lo que se pidió: la
             # tabla de detalle muestra el detalle. Lo que agrega el selector
-            # es la salida — y se paga sólo al llegar acá, porque esta
-            # sección es la ÚLTIMA de la pila perezosa y no se construye
-            # hasta que uno baja (`seccion_perezosa`, regla #211).
+            # es la salida — y se paga sólo al llegar acá, porque la pila
+            # es perezosa y esta sección no se construye hasta que uno baja
+            # (`seccion_perezosa`, regla #211). Desde el 2026-09-09 ya no es
+            # la última: debajo va «Documentos por proveedor».
             with st.container(key="tabla_fila_hdr"):
                 _op_tab = periodo.selector("compras_tabla_periodo",
                                            default="Todo", widget="lista")
             _d_tab = periodo.recortar(d, col_fecha, _op_tab)
             _font_px = TAM_FUENTE.get(st.session_state.get("tabla_tam", "Mediano"), 14)
             _render_tabla_compras(_d_tab, _font_px)
+
+    def _dib_documentos():
+            # «Detalle de documentos por proveedor». Era la última fila del
+            # drill de Proveedor hasta el 2026-09-09; hoy cierra la página.
+            #
+            # Recibe el `d` de la categoría `sec_proveedor` —la MISMA que el
+            # ranking del que sale— y no uno propio: ver `CATEGORIA_SEC`.
+            # `_d_sec` memoiza por categoría, así que este recorte ya está
+            # hecho y no se paga dos veces.
+            with st.container(key="compras_docs_wrap"):
+                _docs_seccion(_d_sec("compras_sec_documentos"),
+                              col_prov, col_prod, col_cant, col_valor,
+                              col_punit, col_um, col_fecha, col_docu)
 
     _DIBUJANTES = {
         "compras_sec_proveedor":     _dib_proveedor,
@@ -888,6 +919,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         "compras_sec_volatilidad":   _dib_volatilidad,
         "compras_sec_semanal":       _dib_semanal,
         "compras_sec_tabla":         _dib_tabla,
+        "compras_sec_documentos":    _dib_documentos,
     }
 
     # El contenedor con la key va AFUERA del fragment a propósito: es el que

@@ -9,6 +9,8 @@ en dos una fila de un drill. Vive aca y no en cada modulo porque el eje
 vertical tiene que caer en el mismo sitio en TODAS las filas de una vista.
 """
 
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -188,19 +190,129 @@ def _periodo_serie(fe, gran):
 #     la franja, cuya key ES la clave canónica. Ése no se puede mover sin
 #     mover el widget, y no es lo que se pidió.
 #
-# PROVEEDOR ES UNA SOLA CATEGORÍA PARA DOS TARJETAS, y eso es deliberado:
-# «Ranking de proveedores» y «Detalle de documentos por proveedor» viven en
-# la misma sección y la segunda se calcula sobre `base`/`top_provs` que
-# produce la primera (ver `proveedor.py:1786` y el docstring de
-# `_documentos_proveedor.tabla_documentos`). Con rangos distintos la tabla
+# PROVEEDOR ES UNA SOLA CATEGORÍA PARA DOS SECCIONES, y eso es deliberado:
+# «Ranking de proveedores» y «Detalle de documentos por proveedor» se
+# calculan sobre el MISMO `base`/`top_provs` (ver
+# `_documentos_proveedor.render_seccion`). Con rangos distintos la tabla
 # mostraría documentos de proveedores rankeados en otro período — un
-# desacuerdo silencioso entre dos cosas que se leen juntas. Ver regla #363.
+# desacuerdo silencioso entre dos cosas que dicen ser lo mismo. Ver regla
+# #363.
+#
+# Hasta el 2026-09-09 eran una sola SECCIÓN con dos tarjetas, así que el
+# rango compartido salía gratis. Al separarlas —«Detalle de documentos» pasó
+# a ser la última sección del reporte, a pedido— el mapa las vuelve a atar a
+# mano: dos claves, un solo valor. `_d_sec` memoiza por CATEGORÍA, así que
+# además comparten el recorte y no lo calculan dos veces.
 CATEGORIA_SEC = {
     "compras_sec_proveedor":   "sec_proveedor",
+    "compras_sec_documentos":  "sec_proveedor",
     "compras_sec_producto":    "sec_producto",
     "compras_sec_volatilidad": "sec_volatilidad",
     "compras_sec_semanal":     "sec_semanal",
 }
+
+
+# ===========================================================================
+# LA BASE DEL DRILL DE PROVEEDOR
+# ===========================================================================
+# Salieron de `proveedor.py` el 2026-09-09, cuando «Detalle de documentos por
+# proveedor» dejo de ser la ultima fila de ese drill y paso a ser su PROPIA
+# seccion, al final del reporte. Las dos secciones necesitan exactamente el
+# mismo df normalizado y la misma lista de periodos: si cada una lo armara
+# por su lado, la tabla y el ranking podrian discrepar sin que nada avise
+# — que es el mismo argumento por el que comparten rango (ver
+# `CATEGORIA_SEC`, mas arriba).
+#
+# Son funciones PURAS: no dibujan, no leen `session_state`. La granularidad
+# entra por parametro justamente por eso — en `proveedor.py` `gran` era una
+# variable de la funcion y `_agregar_periodo` una closure sobre ella.
+
+def base_normalizada(d, col_prov, col_prod, col_cant, col_valor, col_punit,
+                     col_um, col_fecha, col_docu):
+    """El df del drill de Proveedor: nombres de columna FIJOS.
+
+    Traduce las columnas del parquet (cuyos nombres cambian) a las ocho que
+    el drill usa en todos lados: prov/prod/cant/valor/punit/um/fecha/docu.
+    Las columnas que no existen entran con su vacio (`0.0`, `NaN`, `""`,
+    `NaT`) en vez de faltar: asi el resto del drill no tiene que preguntar
+    por cada una antes de tocarla.
+
+    Filtra las filas SIN proveedor, incluida la cadena `"nan"` — que no es
+    paranoia: `astype(str)` sobre un `NaN` da exactamente eso, y sin el
+    filtro aparece como un proveedor mas, con su color y su fila en el
+    ranking.
+    """
+    b = pd.DataFrame({
+        "prov":  d[col_prov].astype(str).values,
+        "prod":  (d[col_prod].astype(str).values if col_prod else "—"),
+        "cant":  (pd.to_numeric(d[col_cant],  errors="coerce").fillna(0).values
+                  if col_cant else 0.0),
+        "valor": pd.to_numeric(d[col_valor], errors="coerce").fillna(0).values,
+        "punit": (pd.to_numeric(d[col_punit], errors="coerce").values
+                  if col_punit else np.nan),
+        "um":    (d[col_um].astype(str).values if col_um else ""),
+        "fecha": (pd.to_datetime(d[col_fecha], errors="coerce").values
+                  if col_fecha else pd.NaT),
+        "docu":  (d[col_docu].astype(str).values if col_docu else ""),
+    })
+    return b[b["prov"].notna() & (b["prov"] != "nan")]
+
+
+def agregar_periodo(df, gran):
+    """`df` con dos columnas mas: `per` (el rotulo) y `_per_sort` (su orden).
+
+    Estan separadas porque el rotulo NO ordena: en granularidad Semana
+    `per` es «01Sep-07Sep», que alfabeticamente pone agosto despues de
+    abril. `_per_sort` lleva la fecha ISO del lunes y es la que manda.
+
+    Los meses van en espanol a mano (`_mes_es`) y no por locale: el locale
+    del server no es el del usuario, y en Cloud es el del contenedor.
+    Misma decision que `cortes.MESES_ABR_ES` (regla #241), con la que
+    conviene no desincronizarse.
+
+    Se aplica TAMBIEN al historico completo, que es lo que alimenta el
+    grafico de evolucion: con el rango de la franja puede haber un solo
+    periodo, y una linea de un punto no dibuja ninguna evolucion
+    (reportado con captura: en granularidad Ano se veia un punto suelto en
+    medio de la nada). De ahi que sea una funcion y no dos lineas inline.
+    """
+    _fe = pd.to_datetime(df["fecha"], errors="coerce")
+    _mes_es = {'Jan': 'Ene', 'Apr': 'Abr', 'Aug': 'Ago', 'Dec': 'Dic'}
+    if gran == "Día":
+        df["_per_sort"] = _fe.dt.strftime("%Y-%m-%d")
+        _p = _fe.dt.strftime("%d %b")
+        for _en, _es in _mes_es.items():
+            _p = _p.str.replace(_en, _es)
+        df["per"] = _p
+    elif gran == "Semana":
+        _ws = (_fe - pd.to_timedelta(_fe.dt.weekday, unit="D")).dt.normalize()
+        _we = _ws + pd.Timedelta(days=6)
+        df["_per_sort"] = _ws.dt.strftime("%Y-%m-%d")   # clave de orden
+        _p = _ws.dt.strftime("%d%b") + "-" + _we.dt.strftime("%d%b")
+        for _en, _es in _mes_es.items():
+            _p = _p.str.replace(_en, _es)
+        df["per"] = _p
+    elif gran == "Año":
+        df["_per_sort"] = _fe.dt.year.astype("Int64").astype(str)
+        df["per"] = df["_per_sort"]
+    else:  # Mes
+        df["_per_sort"] = _fe.dt.to_period("M").astype(str)
+        df["per"] = df["_per_sort"]
+    return df[df["per"].notna() & (df["per"] != "<NA>")]
+
+
+def periodos_ordenados(base):
+    """Los periodos de `base`, deduplicados y en orden CRONOLOGICO.
+
+    Fija el orden de las columnas del pivote de documentos y del eje X de
+    la evolucion. Sin `_per_sort` (que solo falta si `base` viene de otro
+    sitio) cae al alfabetico, que para «Mes» y «Año» coincide.
+    """
+    if "_per_sort" in base.columns:
+        _orden = (base[["_per_sort", "per"]].drop_duplicates()
+                  .sort_values("_per_sort")["per"].tolist())
+        return list(dict.fromkeys(_orden))
+    return sorted(base["per"].dropna().unique())
 
 
 def _llave_documento_parquet(num_documento):

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-371 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+372 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (131)
 
@@ -333,7 +333,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 - **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
 
-**Streamlit** (103)
+**Streamlit** (104)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -438,6 +438,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#365** — El estado por DEFECTO de un riel plegable no es una preferencia: decide con qué ancho nace la…
 - **#366** — Esconder stStatusWidget esconde también la única señal de "estoy trabajando"
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
+- **#372** — Sacar una tarjeta de su sección y darle sección propia rompe tres cosas que estaban…
 
 **Datos, R2 y DuckDB** (47)
 
@@ -582,7 +583,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 - **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
 
-**Decisiones de diseño y UX** (62)
+**Decisiones de diseño y UX** (63)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -646,6 +647,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#334** — Un scrollspy que compara contra MAPA[0] miente cuando la página dibuja un SUBCONJUNTO de su…
 - **#341** — Un querySelector singular es una decisión sobre la CARDINALIDAD, no un atajo — y en una…
 - **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
+- **#372** — Sacar una tarjeta de su sección y darle sección propia rompe tres cosas que estaban…
 
 **Mantenimiento y trampas del lenguaje** (12)
 
@@ -32919,6 +32921,69 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+372. **Sacar una tarjeta de su sección y darle sección propia rompe tres
+     cosas que estaban implícitas por estar juntas: los DATOS, el RERUN y
+     el CSS.** Ninguna da error; las tres se ven como "la tarjeta no se
+     entera".
+
+     Cómo llegó (2026-09-09): «bajemos Detalle de documentos por proveedor».
+     Esa tabla era la última fila del drill de Proveedor y pasó a ser la
+     última sección del reporte, con su ítem propio en el rail. Recibía seis
+     valores ya calculados por el drill; al separarse, hay que decidir de
+     dónde salen.
+
+     **1. Los datos no se heredan, se recalculan.** La tentación es que el
+     drill deje `base`/`top_provs` en `session_state` y la sección nueva los
+     lea. No sirve: el drill es un `@st.fragment`, así que un clic adentro
+     suyo lo re-ejecuta a él SOLO y la sección de abajo se queda con el
+     cálculo de la corrida anterior. No se ve como un error — se ve como una
+     tabla que no se entera. `render_seccion` arma los seis valores sobre el
+     mismo `d` y el mismo filtro; cuesta un `groupby` y no puede
+     desincronizarse.
+
+     **2. El rango compartido hay que atarlo A MANO.** «Ranking de
+     proveedores» y esta tabla se calculan sobre el mismo `base`, así que con
+     rangos distintos mostraría documentos de proveedores rankeados en otro
+     período (regla #363). Estando en la misma sección eso salía gratis;
+     separadas, `CATEGORIA_SEC` mapea DOS claves al mismo valor
+     (`sec_proveedor`). `_d_sec` memoiza por categoría, así que además
+     comparten el recorte.
+
+     Y eso choca con la guarda que ya existía —«una categoría distinta por
+     sección», puesta para cazar el share por copiar y pegar—. La salida es
+     declarar el par POR NOMBRE en el test, no aflojar la guarda: el share
+     accidental sigue fallando y el deliberado queda escrito en el único
+     sitio que se lee cuando alguien lo cambie.
+
+     **3. La bandera del rerun se muda con la tarjeta.** El atajo de fecha
+     escala a `st.rerun(scope="app")` porque el filtro que consume el rango
+     vive en `app.py`, fuera del fragment (regla #180). El `pop` de esa
+     bandera estaba en el drill; si se olvida, la fecha se guarda igual y la
+     tabla sigue mostrando el rango viejo hasta el próximo rerun completo.
+     Cada dibujante popea la suya, arriba de todo.
+
+     **4. El CSS puede quedar huérfano.** `CSS_PROVEEDOR` —que estila
+     `docs_row`, `.cp-rank-tit` y el prefijo `cp_docs` entero— lo inyecta el
+     drill de Proveedor. Funciona porque Proveedor es la PRIMERA sección de
+     la pila y siempre se dibuja antes; el `<style>` queda en el DOM y el
+     fragment de abajo lo usa sin saberlo. Es la misma herencia que ya tenía
+     `producto.py`. **La grieta:** en «modo solo» (el ⛶ que deja UNA sección
+     en la página) la sección heredera sería la única dibujada y saldría sin
+     estilos. Hoy ese botón existe únicamente en «Vs año pasado», así que no
+     es alcanzable — pero si el ⛶ se generaliza, ese `st.markdown` tiene que
+     subir arriba de la pila.
+
+     Corolario barato: **lo que sí se puede mover sin pensar es el ORDEN
+     DENTRO de una sección.** En la misma vuelta «Compras por familia» pasó
+     arriba de «Ranking de productos» y fue mover un bloque — salvo por un
+     detalle que sí muerde: su `if not col_fam: return` tenía sentido siendo
+     la ÚLTIMA tarjeta y, puesto primero, apaga la sección entera cuando el
+     parquet no trae columna de Familia. Un `return` de guarda es una
+     afirmación sobre lo que hay DEBAJO, así que al reordenar hay que
+     releerlo.
+
+     (2026-09-09.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32931,7 +32996,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#372**.
+> próxima regla nueva es la **#373**.
 
 >
 

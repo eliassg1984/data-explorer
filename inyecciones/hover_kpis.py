@@ -55,11 +55,12 @@ def inject_hover_kpis(clave_tarjeta, valores,
       selectores de abajo se resuelven DENTRO de esa tarjeta y no hace falta
       que sean únicos en la página.
     · `valores` — una entrada por punto del eje X, EN EL MISMO ORDEN que la
-      traza: `{"tit": <encabezado>, "vals": [<cifra>, ...]}`. Las cifras van
-      ya formateadas (Python es el que sabe de monedas y decimales) y tienen
-      que ser tantas como `<b>` dibuje la pila; si no coinciden, el JS no
-      toca nada — prefiere quedarse quieto antes que escribir una cifra en
-      la celda equivocada.
+      traza: `{"tit": <encabezado>, "vals": [<cifra>, ...]}`, y opcionalmente
+      `"cols": [<color CSS>, ...]` en el mismo orden (cadena vacía = el color
+      que ya pone el CSS). Las cifras van ya formateadas (Python es el que
+      sabe de monedas y decimales) y tienen que ser tantas como `<b>` dibuje
+      la pila; si no coinciden, el JS no toca nada — prefiere quedarse quieto
+      antes que escribir una cifra en la celda equivocada.
 
     El valor de REPOSO es el último de la lista: el mismo que Python acaba de
     dibujar. No se lee del DOM a propósito — leerlo obligaría a que el JS
@@ -103,7 +104,16 @@ def inject_hover_kpis(clave_tarjeta, valores,
             // nuestras a ciegas.
             if (!tit || bs.length !== f.vals.length) return;
             tit.textContent = f.tit;
-            for (var k = 0; k < bs.length; k++) bs[k].textContent = f.vals[k];
+            for (var k = 0; k < bs.length; k++) {
+              bs[k].textContent = f.vals[k];
+              // El color de la celda, si la fila trae uno. Va INLINE y no
+              // por clase porque asi lo escribe tambien el render de
+              // Python: si el de reposo saliera de una clase, el primer
+              // hover lo pisaria con un `style` y el `unhover` no podria
+              // devolverlo (gana el inline). Cadena vacia = borrar el
+              // inline y volver al color del CSS.
+              if (f.cols) bs[k].style.color = f.cols[k] || '';
+            }
             // Marca "esto NO es el valor de reposo": la usa el CSS para
             // tenir el encabezado mientras el cursor manda. Sin alguna senal,
             // cuatro cifras que cambian solas se leen como un parpadeo.
