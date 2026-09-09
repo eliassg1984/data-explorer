@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-367 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+368 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (128)
+**CSS y estilos** (129)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -162,6 +162,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 - **#365** — El estado por DEFECTO de un riel plegable no es una preferencia: decide con qué ancho nace la…
 - **#366** — Esconder stStatusWidget esconde también la única señal de "estoy trabajando"
+- **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
 
 **Layout y alturas** (39)
 
@@ -267,7 +268,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 
-**AgGrid y tablas** (57)
+**AgGrid y tablas** (58)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -326,6 +327,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
 - **#361** — Una cabecera que dice "Este año" sobre una ventana MÓVIL se lee como el año calendario
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
+- **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
 
 **Streamlit** (102)
 
@@ -32734,6 +32736,44 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+368. **Un `!important` en el `custom_css` de un AgGrid pisa los estilos
+     INLINE que la grilla arma desde Python — que es justo lo que el modo
+     diseño emite por defecto.** La cascada de CSS pone el `!important` de
+     autor POR ENCIMA del `style=""` inline, así que una regla copiada tal
+     cual del panel puede borrar, sin decir nada, la lógica por celda que
+     vive en un `cellStyle`.
+
+     El caso (2026-09-09): se pidió el texto de las celdas del Ranking de
+     proveedores en violeta, con captura del modo diseño. Una línea —
+     `".ag-cell": {"color": ACENTO_TEXTO}` en `CSS_RANKING_GRID`— y hay que
+     escribirla SIN `!important`, al revés de lo que sale del panel
+     (`reglasDeTabla` en `inyecciones/_diseno_js.py` le agrega
+     ` !important` a toda propiedad que no sea una variable). Lo que el
+     `!important` habría roto, medido en el navegador:
+
+     · **La columna «Valor» se pinta sola.** Su color sale de `_js_barra`
+       (`proveedor.py`) como `cellStyle`, o sea inline SOBRE LA CELDA: con
+       la regla normal el inline gana y el monto queda en `#18181d` — que
+       es lo que lo mantiene legible encima de su barra. Con `!important`
+       los montos se van a violeta sobre violeta.
+     · **La fila TOTAL conserva su paleta**, pero por otro motivo: su color
+       (`_js_fila_total`) es inline sobre la FILA, y las celdas lo HEREDAN.
+       La herencia pierde contra cualquier regla que apunte a la celda, así
+       que ahí no alcanza con no poner `!important`: hace falta un selector
+       propio —`.ag-row-pinned .ag-cell, .ag-row-footer .ag-cell`— que le
+       gane a `.ag-cell` por especificidad. Sin él, la fila de cierre pasa
+       de `#3b2e93` al violeta de las demás y deja de leerse como cierre.
+
+     Corolario para el que traiga una captura del modo diseño: **su sección
+     «Tabla (AgGrid)» estila la grilla ENTERA**, nunca una columna suelta
+     (sus selectores son `.ag-cell`, `.ag-row-*`, `.ag-header-*`). Si en la
+     captura hay una sola columna de otro color, no salió de ahí — salió de
+     un `cellStyle` de Python, o de que esa columna YA tenía uno que le
+     ganó a la regla global. Ver la #169, que es la misma familia: un CSS
+     que se pega donde no gobierna no falla, no hace nada.
+
+     (2026-09-09.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32746,7 +32786,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#368**.
+> próxima regla nueva es la **#369**.
 
 >
 

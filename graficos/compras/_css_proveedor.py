@@ -20,7 +20,8 @@ TRES exports, y el primero NO es la misma clase de cosa que los otros:
     ranking de arriba y el pivote de documentos de abajo.
 """
 
-from tema import BLANCO, GRIS_BORDE, GRIS_TEXTO_MEDIO
+from tema import (ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, BLANCO, GRIS_BORDE,
+                  GRIS_TEXTO_MEDIO)
 
 CSS = """        <style>
         .st-key-compras_prov_marco { position: relative; }
@@ -2259,6 +2260,32 @@ CSS_RANKING_GRID = {
         "--ag-data-font-size": "11.5px",
         "--ag-header-font-size": "11.5px",
     },
+    # 2026-09-09, a pedido (llego como captura del modo diseno): el texto de
+    # las celdas en violeta, no en el gris casi negro del tema.
+    #
+    # SIN `!important`, y NO es un olvido -- es lo que hace que la tabla
+    # quede como en la captura. Las dos excepciones que se ven ahi salen
+    # gratis solo mientras esta regla sea normal:
+    #
+    #   · La columna "Valor" sigue OSCURA. Su color lo pone `_js_barra`
+    #     (proveedor.py) como `cellStyle`, o sea un estilo INLINE sobre la
+    #     celda. Un inline le gana a una regla normal y pierde contra una
+    #     con `!important`: poniendoselo, los montos se irian a violeta
+    #     encima de sus propias barras.
+    #   · La fila TOTAL conserva su paleta. Su color es inline sobre la
+    #     FILA (`_js_fila_total`), asi que las celdas lo heredan -- y la
+    #     herencia pierde contra cualquier regla que apunte a la celda.
+    #     Por eso hace falta el selector de abajo, que le gana a este por
+    #     especificidad sin necesitar `!important` tampoco.
+    #
+    # Alcanza a Proveedor, Docs y % (las tres columnas sin cellStyle).
+    ".ag-cell": {"color": ACENTO_TEXTO},
+    # Misma pareja de selectores que usa el modo diseno para la fila de
+    # cierre (`.ag-row-pinned, .ag-row-footer`): esta tabla arma su TOTAL
+    # con `pinnedBottomRowData`, pero el dia que alguna use el total nativo
+    # el `footer` ya esta cubierto.
+    ".ag-row-pinned .ag-cell, .ag-row-footer .ag-cell": {
+        "color": ACENTO_TEXTO_OSCURO},
 }
 # OJO, para el que venga a bajar estos nombres a minuscula por CSS: ya se
 # intento y no se puede. Aca vivio un `text-transform: lowercase` sobre la
