@@ -67,6 +67,16 @@ hora). Va en rgba y no en hex a propósito: al ser el tinte de la tinta
 gris finito y sobre el azul oscuro de una celda cargada desaparece sola. Un
 hex opaco tendría que elegir entre verse en un fondo o en el otro."""
 
+GRIS_LINEA_GRILLA = "rgba(49, 51, 63, 0.2)"
+"""Líneas de una tabla AgGrid: separadores de fila y marco.
+
+No es un gris elegido acá: es el `--ag-border-color` del tema
+`theme="streamlit"`, o sea el que la grilla YA usa para separar sus filas.
+Tiene nombre porque el marco del Ranking de proveedores lo pide explícito
+(regla #1), y va en rgba por lo mismo que GRIS_CUADRICULA — es tinta al
+20%, así que un marco de 3px y un separador de 1px se leen como la misma
+familia sin tener que elegir dos grises distintos."""
+
 GRIS_TEXTO = "#71717a"
 """Texto secundario: etiquetas, títulos de campos."""
 

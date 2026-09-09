@@ -752,11 +752,21 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # Misma paleta que la fila TOTAL del pivote de documentos
                     # de más abajo (`_documentos_proveedor.py`) — dos filas
                     # de cierre del mismo drill, mismo idioma visual.
+                    #
+                    # SIN `borderTop` desde el 2026-09-09. Acá había un
+                    # `2px solid ACENTO` que se APILABA con la línea que el
+                    # tema dibuja en `.ag-floating-bottom`: dos rayas
+                    # pegadas de distinto color. El rediseño del marco
+                    # (`CSS_RANKING_GRID`) deja la tabla sin línea sobre los
+                    # totales — la separa el fondo lavanda, que ya lo hacía.
+                    # Se saca ACÁ y no con un `!important` en el CSS a
+                    # propósito: un estilo inline sólo se apaga tapándolo, y
+                    # el que viene a leer esta función tiene que ver lo que
+                    # de verdad se dibuja.
                     _js_fila_total = JsCode(
                         "function(p){ if(p.node.rowPinned){ return {"
                         f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
-                        f"'color':'{ACENTO_TEXTO_OSCURO}',"
-                        f"'borderTop':'2px solid {ACENTO}'"
+                        f"'color':'{ACENTO_TEXTO_OSCURO}'"
                         "}; } }")
                     _js_soles = JsCode(
                         "function(p){ return p.value==null ? '' :"

@@ -21,7 +21,7 @@ TRES exports, y el primero NO es la misma clase de cosa que los otros:
 """
 
 from tema import (ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, BLANCO, GRIS_BORDE,
-                  GRIS_TEXTO_MEDIO)
+                  GRIS_LINEA_GRILLA, GRIS_TEXTO_MEDIO)
 
 CSS = """        <style>
         .st-key-compras_prov_marco { position: relative; }
@@ -2259,6 +2259,29 @@ CSS_RANKING_GRID = {
         # en subpixel, asi que 11.5px se dibuja distinto de los dos enteros.
         "--ag-data-font-size": "11.5px",
         "--ag-header-font-size": "11.5px",
+        # ── 2026-09-09: el marco, copiado del modo diseno ────────────
+        # La tabla deja de ser una CAJA y pasa a ser una franja: se van
+        # los bordes de los costados y quedan dos lineas de 3px, arriba y
+        # abajo, del mismo gris que ya separa las filas. Con los lados
+        # abiertos la tabla respira dentro de la tarjeta en vez de
+        # dibujar un recuadro adentro de otro (la tarjeta ya trae el
+        # suyo, redondeado).
+        "border-top": f"3px solid {GRIS_LINEA_GRILLA} !important",
+        "border-bottom": f"3px solid {GRIS_LINEA_GRILLA} !important",
+        "border-right": "none !important",
+        "border-left": "none !important",
+        # Sin lineas verticales: lo que separa una columna de la otra es
+        # el aire, igual que en el pivote de Documentos de mas abajo.
+        # Estas dos variables gobiernan la cabecera (que la dibuja el
+        # tema) y el cuerpo; a las celdas las apaga el `border-right` de
+        # mas abajo.
+        "--ag-header-column-border": "none",
+        "--ag-column-border": "none",
+        # La linea que el TEMA dibuja sobre el contenedor de la fila
+        # fijada. La otra mitad —la que Python escribia inline sobre la
+        # fila— se saco de `_js_fila_total` en proveedor.py, que es el
+        # sitio limpio: eran dos lineas apiladas de distinto color.
+        "--ag-pinned-row-border": "none",
     },
     # 2026-09-09, a pedido (llego como captura del modo diseno): el texto de
     # las celdas en violeta, no en el gris casi negro del tema.
@@ -2286,6 +2309,11 @@ CSS_RANKING_GRID = {
     # el `footer` ya esta cubierto.
     ".ag-row-pinned .ag-cell, .ag-row-footer .ag-cell": {
         "color": ACENTO_TEXTO_OSCURO},
+    ".ag-cell, .ag-header-cell": {"border-right": "none !important"},
+    # El separador de filas queda EXPLICITO aunque hoy coincida con el
+    # default del tema: es el que le da la escala al marco de 3px de
+    # arriba (uno es el triple del otro, no dos grosores sueltos).
+    ".ag-row": {"border-bottom": f"1px solid {GRIS_LINEA_GRILLA} !important"},
 }
 # OJO, para el que venga a bajar estos nombres a minuscula por CSS: ya se
 # intento y no se puede. Aca vivio un `text-transform: lowercase` sobre la
