@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-369 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+371 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (130)
+**CSS y estilos** (131)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -164,8 +164,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#366** — Esconder stStatusWidget esconde también la única señal de "estoy trabajando"
 - **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
 - **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
+- **#371** — Una cabecera flex que ENVUELVE convierte el margen negativo de la regla #162 en un solapamiento
 
-**Layout y alturas** (39)
+**Layout y alturas** (40)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -206,8 +207,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
 - **#354** — La salida de un estado vacío no puede estar adentro de lo que el estado vacío apaga: Compras…
 - **#363** — Un control que vive DENTRO de una tarjeta promete que es de esa tarjeta. Si escribe el rango…
+- **#371** — Una cabecera flex que ENVUELVE convierte el margen negativo de la regla #162 en un solapamiento
 
-**Plotly y figuras** (59)
+**Plotly y figuras** (60)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -268,6 +270,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#359** — Un eje category no interpreta una x numérica como POSICIÓN: la agrega como una categoría más
 - **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
+- **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 
 **AgGrid y tablas** (58)
 
@@ -330,7 +333,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 - **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
 
-**Streamlit** (102)
+**Streamlit** (103)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -434,6 +437,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 - **#365** — El estado por DEFECTO de un riel plegable no es una preferencia: decide con qué ancho nace la…
 - **#366** — Esconder stStatusWidget esconde también la única señal de "estoy trabajando"
+- **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 
 **Datos, R2 y DuckDB** (47)
 
@@ -32825,6 +32829,96 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+370. **El hover de un Plotly NO llega al servidor, así que "estas cifras
+     siguen al cursor" se resuelve mandando TODAS las cifras con la página.**
+     `st.plotly_chart(on_select=...)` reporta selección (clic/lazo), no
+     hover: el evento no existe del lado de Streamlit. Y aunque existiera no
+     serviría — un rerun de esta app tarda 3-6s (por eso `_88_cargando.py`
+     dibuja un velo), o sea que "seguir el cursor" a fuerza de servidor no
+     es lento, es imposible.
+
+     Cómo llegó (2026-09-09): «los kpis del lado derecho deben mostrar los
+     datos según el punto del gráfico en donde el cursor se coloque», sobre
+     la tarjeta de Evolución de Compras › Proveedor, cuya pila de 4 cifras
+     (Total compra / % del total / Cantidad / Documentos) resumía siempre el
+     ÚLTIMO período.
+
+     **La forma.** Python calcula los 4 valores para CADA punto del eje —ya
+     formateados, que es lo que sabe hacer— y los manda en el payload de
+     `inyecciones/hover_kpis.py::inject_hover_kpis`. El navegador se engancha
+     a `plotly_hover` y reparte. Son 4 cadenas por punto sobre un eje de
+     decenas de puntos: el payload pesa nada, y a cambio el intercambio es
+     instantáneo y no toca el servidor.
+
+     El eje MANDA sobre el agrupado: los cuatro `groupby(...)` van con
+     `.reindex(_evo_x, fill_value=0)`. Un período sin compras de ese
+     proveedor tiene que salir en 0, no faltar — si falta, el `pointIndex`
+     que reporta Plotly deja de coincidir con la fila y las cifras se
+     corren enteras a partir de ahí, calladas.
+
+     **Cuatro cosas que hay que respetar si se reusa esto:**
+
+     · **El `<script>` va por `inyectar_html`, no por `st.markdown`** (regla
+       #7), porque los eventos de Plotly viven en el div del gráfico
+       (`gd.on(...)`) y no en el DOM: sin JS de verdad no hay enganche.
+     · **El enganche se REINTENTA con un temporizador**, igual que el
+       scrollspy del rail (`graficos/base.py::_render_rail`) y por lo mismo:
+       React monta el div cuando quiere y en cada rerun puede reemplazarlo.
+     · **El sello no es "¿ya tiene listener?".** React REUSA el nodo entre
+       reruns y sólo le cambia los datos, así que un div ya enganchado
+       seguiría repartiendo las cifras de la corrida anterior. El sello es un
+       hash del payload, y al cambiar dispara `removeAllListeners` + volver
+       a enganchar.
+     · **`plotly_unhover` no siempre llega** si el mouse sale rápido, y las
+       cifras quedan congeladas en un período que ya no está bajo el cursor
+       — peor que no tener la función, porque no se nota. La red es un
+       `mouseleave` sobre el div.
+
+     Y una de lectura, que no es opcional: **cuatro números que cambian
+     solos, sin ninguna marca, se leen como un parpadeo.** El encabezado ya
+     dice qué período se está mostrando («Último mes · sep 26» vs «Mes · may
+     26»); mientras no es el de reposo se enciende en acento
+     (`.cp-kpis-hover`), que es lo que hace mirarlo.
+
+     (2026-09-09.)
+
+371. **Una cabecera flex que ENVUELVE convierte el margen negativo de la
+     regla #162 en un solapamiento.** Un `st.markdown` con HTML de bloque se
+     lleva un `margin-bottom: -16px` en su `stMarkdownContainer`. Apilado en
+     un bloque vertical eso es invisible (se come un hueco que sobraba); como
+     ítem de un flex con `flex-wrap: wrap` es otra cosa: el -16 se le resta
+     al alto de la PRIMERA línea, así que la segunda se sube encima. Medido a
+     1000px de viewport: el título ocupaba de 80 a 106 y los controles
+     arrancaban en 90.
+
+     Salió de subir los controles de tiempo de la Evolución a la fila del
+     título (2026-09-09, a pedido). A 1280 entra todo en un renglón y no
+     pasa nada; el solapamiento aparece SÓLO en la banda donde envuelve, que
+     es justo la que nadie mira. Se arregla con
+     `[data-testid="stMarkdownContainer"] { margin-bottom: 0 }` dentro de la
+     cabecera, y el título va con `line-height` CLAVADO al mismo alto que los
+     controles (24px) para que la fila mida lo mismo envuelva o no — si no,
+     el presupuesto de alto de la tarjeta (`_CROMO_CARD_EVO`) deja de ser un
+     número.
+
+     **El corolario útil es el otro:** para que una fila de controles caiga
+     ENTERA al renglón de abajo cuando no entra, tiene que ser UN solo ítem
+     flex. Los controles ya vivían en su propio container (`cp_evo_ctrl`), y
+     la cabecera nueva (`cp_evo_cab`) lo envuelve en vez de reemplazarlo: dos
+     ítems, título y grupo. Con los cuatro controles sueltos en el flex,
+     `wrap` los baja de a uno y la fila queda rota en dos mitades desparejas.
+     Y así no hace falta ningún `@media`: la fila útil de esa tarjeta mide
+     398px a 1280 de viewport (entra todo) y 290px alrededor de 1000 (no
+     entra), y el umbral lo encuentra el navegador solo.
+
+     Ver también la #145 (dos tarjetas de la misma fila miden lo mismo): al
+     desaparecer una fila de la cabecera, el cromo de la tarjeta bajó de 106
+     a 78 y esos 28px van a la figura. Si no se actualiza esa constante no
+     se rompe nada — se ve como blanco al pie de la tarjeta, que es
+     exactamente lo que el `:has()` está para tapar.
+
+     (2026-09-09.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32837,7 +32931,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#370**.
+> próxima regla nueva es la **#372**.
 
 >
 

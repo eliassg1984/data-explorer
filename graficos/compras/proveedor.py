@@ -16,8 +16,9 @@ import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
 
-from tema import (ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, LAVANDA_CHIP,
-                  TEXTO_PRINCIPAL)
+from tema import (ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, GRIS_TEXTO,
+                  LAVANDA_CHIP, TEXTO_PRINCIPAL)
+from inyecciones import inject_hover_kpis
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
     paso_etiquetas, publicar_var_px,
@@ -461,12 +462,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # no acierta:
     #   Ranking:   padding 32 + fila del título 26 + gap 16 + 8 del wrapper
     #              del componente = 82
-    #   Evolución: padding 32 + título 28 + controles 30 + gap 16 = 106
+    #   Evolución: padding 32 + cabecera 30 + gap 16 = 78
     # Con eso, `tarjeta_ranking = 82 + _ALTO_RANK` y
-    # `tarjeta_evo = 106 + _ALTO_EVO`: igualarlas es la resta de abajo, y el
+    # `tarjeta_evo = 78 + _ALTO_EVO`: igualarlas es la resta de abajo, y el
     # `:has()` de _80_cards.py ya no tiene nada que estirar.
+    #
+    # 2026-09-09: la Evolución baja de 106 a 78. El título y los controles
+    # eran DOS filas (28 + 30) y pasaron a ser una sola —«Evolución» a la
+    # izquierda, los tres desplegables y las flechas a la derecha, ver
+    # `cp_evo_cab`—, así que los 28px de la fila que desapareció vuelven a
+    # la figura. Medido en el navegador con el cambio puesto: la tarjeta
+    # llegaba a 309px de contenido natural contra los 337 del Ranking, y la
+    # diferencia se la comía el piso del `:has()` en forma de blanco al pie.
     _CROMO_CARD_RANK = 82
-    _CROMO_CARD_EVO = 106
+    _CROMO_CARD_EVO = 78
     # Piso de la figura, y NO es `alturas.MINI` (240) ni un número elegido a
     # ojo: es el alto de la PILA DE KPIs que comparte fila con ella (Total
     # compra / % del total / Cantidad / Documentos, más su caption). MEDIDO
@@ -928,13 +937,29 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # más ACÁ" y "cómo viene este proveedor"— y ahora cada
                         # una tiene su eje de tiempo, en vez de compartir uno y
                         # corregirlo a escondidas.
-                        # El título se reserva ANTES del selector y se
-                        # rellena al final: nombra la ventana, así que no puede
-                        # escribirse hasta saber cuál eligió el usuario, pero
-                        # tiene que DIBUJARSE arriba de él (si no, la columna de
-                        # la evolución arranca con unas pills sueltas y su título
-                        # deja de alinear con el del ranking de al lado).
-                        _ph_tit_evo = st.empty()
+                        # 2026-09-09, a pedido: el título dice «Evolución»
+                        # y NADA MÁS. Antes traía además el proveedor y la
+                        # ventana («Evolución · Vibej Colibri SAC · últimos 3
+                        # meses»), y las dos se fueron por el mismo motivo:
+                        # repetían algo que ya está a la vista tres píxeles
+                        # más allá. La ventana la dice el desplegable de su
+                        # misma fila; el proveedor pasó DENTRO del gráfico,
+                        # como anotación del color de su propia línea (ver
+                        # `add_annotation`, más abajo).
+                        #
+                        # Con eso deja de ser un texto que sólo se puede
+                        # escribir al final —ya no nombra nada que dependa de
+                        # los controles— y vuelve a ser una constante: se
+                        # dibuja acá, en su sitio, sin el `st.empty()` que se
+                        # reservaba arriba y se rellenaba 300 líneas después.
+                        #
+                        # `cp_evo_cab` es la CABECERA de la tarjeta: el título
+                        # a la izquierda y la fila de controles pegada a la
+                        # derecha, en un solo renglón. Envuelve a
+                        # `cp_evo_ctrl` en vez de reemplazarlo para no tocar
+                        # nada del reparto horizontal de los tres
+                        # desplegables, que está medido al píxel (ver su
+                        # bloque en `_css_proveedor.py`).
                         # 2026-08-23 (3), a pedido ("que sea una lista
                         # desplegable, minimalista... y que esté en una
                         # línea, no una debajo de otra"): las DOS filas de
@@ -983,102 +1008,105 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 return f"Todo {_n_per}" if _n_per < 100 else "Todo"
                             return str(_o)
 
-                        with st.container(key="cp_evo_ctrl"):
-                            # 2026-08-23 (4), a pedido ("que entre en la
-                            # misma línea que el resto"): `win_nav` era la
-                            # TERCERA fila de controles de tiempo de esta
-                            # tarjeta y se parte en dos para caber en el
-                            # renglón compartido:
-                            #
-                            #   · el TAMAÑO de la ventana (cuántos períodos
-                            #     se ven a la vez) pasa a ser el tercer
-                            #     desplegable, hermano de los otros dos;
-                            #   · las FLECHAS ‹ › se quedan como están —
-                            #     mover una ventana es navegación de un
-                            #     clic, y meterla en una lista la volvería
-                            #     de dos.
-                            #
-                            # El emoji 📅 del primero se fue en la misma
-                            # vuelta: medidos los textos a 11px, los tres
-                            # desplegables más las flechas suman ~270px en
-                            # una fila de 279.5, y con el emoji se pasaban.
-                            # Era decorativo; "Rango" solo dice lo mismo.
-                            _op_evo = periodo.selector(
-                                "cp_evo_periodo", widget="lista")
-                            # Se resuelve ACÁ y no después del bloque porque
-                            # los dos controles de ventana de más abajo lo
-                            # necesitan para saber si les toca estar vivos.
-                            _evo_hist = _op_evo != periodo.HEREDA
-                            # `gran_float` conserva la key aunque ya no
-                            # flote ni sea pills (mismo criterio que
-                            # --rail-der-* tras el flip de lado): la nombra
-                            # arquitectura.md #178 y la usa el bloque móvil
-                            # de _css_proveedor.py.
-                            with st.container(key="gran_float"):
-                                # El label va COLAPSADO, así que sólo lo
-                                # ve un lector de pantalla — y por eso
-                                # dejó de llamarse "Periodo": ahora que
-                                # comparte renglón con `cp_evo_periodo`
-                                # (cuyo label ES "Período"), dos controles
-                                # vecinos se anunciaban casi igual.
-                                st.selectbox(
-                                    "Agrupar por",
-                                    ["Día", "Semana", "Mes", "Año"],
-                                    index=2, key="compras_prov_gran",
-                                    format_func=lambda g: f"Por {g.lower()}",
-                                    label_visibility="collapsed")
-                            # El TAMAÑO de la ventana. El widget es dueño
-                            # DIRECTO de `cp_prov_win_size`, la misma clave
-                            # que antes escribían los `on_click` de los
-                            # botones: no hace falta callback ni una clave
-                            # espejo. Por eso desapareció `_win_size()`, y
-                            # con él el `st.markdown` con un `<style>` que
-                            # pintaba de acento el botón activo — un
-                            # desplegable ya muestra cuál está elegido.
-                            # El clamp de `_ops_win` vive arriba, donde se
-                            # calcula la ventana: la lista es dinámica y un
-                            # valor viejo fuera de ella rompe el widget.
-                            # La ventana es del RANGO: `_sl` sólo se aplica
-                            # cuando la tarjeta hereda el rango de la franja
-                            # (ver el bloque de `_evo_x`, más abajo, que ya
-                            # era así). Hasta ahora eso no se veía: con una
-                            # ventana propia elegida, estos dos controles
-                            # seguían habilitados y no hacían nada. Con el
-                            # rango de franja corto las flechas salían
-                            # apagadas por sus propios topes y disimulaba,
-                            # pero con un rango ancho quedaban encendidas y
-                            # muertas. Mismo criterio que el bloqueo de
-                            # clicks del modo diseño: si no va a pasar nada,
-                            # decirlo antes, no después.
-                            _ayuda_win = ("Sólo cuando la tarjeta hereda el "
-                                          "rango de la franja (opción "
-                                          "«Rango»)")
-                            with st.container(key="win_size"):
-                                st.selectbox(
-                                    "Períodos visibles", _ops_win,
-                                    index=0, key="cp_prov_win_size",
-                                    format_func=_fmt_win, disabled=_evo_hist,
-                                    help=_ayuda_win if _evo_hist else None,
-                                    label_visibility="collapsed")
-                            # Las flechas se quedan como botones: son
-                            # navegación de UN clic. `win_nav` conserva la
-                            # key, y ahora le queda mejor que antes — mover
-                            # la ventana es lo único que hace, el tamaño
-                            # nunca fue "navegación".
-                            with st.container(key="win_nav"):
-                                st.button("‹", key="cp_win_prev",
-                                          disabled=_evo_hist or _win_ini <= 0,
-                                          help=(_ayuda_win if _evo_hist
-                                                else "Periodos anteriores"),
-                                          on_click=_win_mover,
-                                          args=(-_ventana,))
-                                st.button("›", key="cp_win_next",
-                                          disabled=(_evo_hist
-                                                    or _win_ini >= _ini_max),
-                                          help=(_ayuda_win if _evo_hist
-                                                else "Periodos siguientes"),
-                                          on_click=_win_mover,
-                                          args=(_ventana,))
+                        with st.container(key="cp_evo_cab"):
+                            st.markdown('<div class="cp-evo-tit">Evolución</div>',
+                                        unsafe_allow_html=True)
+                            with st.container(key="cp_evo_ctrl"):
+                                # 2026-08-23 (4), a pedido ("que entre en la
+                                # misma línea que el resto"): `win_nav` era la
+                                # TERCERA fila de controles de tiempo de esta
+                                # tarjeta y se parte en dos para caber en el
+                                # renglón compartido:
+                                #
+                                #   · el TAMAÑO de la ventana (cuántos períodos
+                                #     se ven a la vez) pasa a ser el tercer
+                                #     desplegable, hermano de los otros dos;
+                                #   · las FLECHAS ‹ › se quedan como están —
+                                #     mover una ventana es navegación de un
+                                #     clic, y meterla en una lista la volvería
+                                #     de dos.
+                                #
+                                # El emoji 📅 del primero se fue en la misma
+                                # vuelta: medidos los textos a 11px, los tres
+                                # desplegables más las flechas suman ~270px en
+                                # una fila de 279.5, y con el emoji se pasaban.
+                                # Era decorativo; "Rango" solo dice lo mismo.
+                                _op_evo = periodo.selector(
+                                    "cp_evo_periodo", widget="lista")
+                                # Se resuelve ACÁ y no después del bloque porque
+                                # los dos controles de ventana de más abajo lo
+                                # necesitan para saber si les toca estar vivos.
+                                _evo_hist = _op_evo != periodo.HEREDA
+                                # `gran_float` conserva la key aunque ya no
+                                # flote ni sea pills (mismo criterio que
+                                # --rail-der-* tras el flip de lado): la nombra
+                                # arquitectura.md #178 y la usa el bloque móvil
+                                # de _css_proveedor.py.
+                                with st.container(key="gran_float"):
+                                    # El label va COLAPSADO, así que sólo lo
+                                    # ve un lector de pantalla — y por eso
+                                    # dejó de llamarse "Periodo": ahora que
+                                    # comparte renglón con `cp_evo_periodo`
+                                    # (cuyo label ES "Período"), dos controles
+                                    # vecinos se anunciaban casi igual.
+                                    st.selectbox(
+                                        "Agrupar por",
+                                        ["Día", "Semana", "Mes", "Año"],
+                                        index=2, key="compras_prov_gran",
+                                        format_func=lambda g: f"Por {g.lower()}",
+                                        label_visibility="collapsed")
+                                # El TAMAÑO de la ventana. El widget es dueño
+                                # DIRECTO de `cp_prov_win_size`, la misma clave
+                                # que antes escribían los `on_click` de los
+                                # botones: no hace falta callback ni una clave
+                                # espejo. Por eso desapareció `_win_size()`, y
+                                # con él el `st.markdown` con un `<style>` que
+                                # pintaba de acento el botón activo — un
+                                # desplegable ya muestra cuál está elegido.
+                                # El clamp de `_ops_win` vive arriba, donde se
+                                # calcula la ventana: la lista es dinámica y un
+                                # valor viejo fuera de ella rompe el widget.
+                                # La ventana es del RANGO: `_sl` sólo se aplica
+                                # cuando la tarjeta hereda el rango de la franja
+                                # (ver el bloque de `_evo_x`, más abajo, que ya
+                                # era así). Hasta ahora eso no se veía: con una
+                                # ventana propia elegida, estos dos controles
+                                # seguían habilitados y no hacían nada. Con el
+                                # rango de franja corto las flechas salían
+                                # apagadas por sus propios topes y disimulaba,
+                                # pero con un rango ancho quedaban encendidas y
+                                # muertas. Mismo criterio que el bloqueo de
+                                # clicks del modo diseño: si no va a pasar nada,
+                                # decirlo antes, no después.
+                                _ayuda_win = ("Sólo cuando la tarjeta hereda el "
+                                              "rango de la franja (opción "
+                                              "«Rango»)")
+                                with st.container(key="win_size"):
+                                    st.selectbox(
+                                        "Períodos visibles", _ops_win,
+                                        index=0, key="cp_prov_win_size",
+                                        format_func=_fmt_win, disabled=_evo_hist,
+                                        help=_ayuda_win if _evo_hist else None,
+                                        label_visibility="collapsed")
+                                # Las flechas se quedan como botones: son
+                                # navegación de UN clic. `win_nav` conserva la
+                                # key, y ahora le queda mejor que antes — mover
+                                # la ventana es lo único que hace, el tamaño
+                                # nunca fue "navegación".
+                                with st.container(key="win_nav"):
+                                    st.button("‹", key="cp_win_prev",
+                                              disabled=_evo_hist or _win_ini <= 0,
+                                              help=(_ayuda_win if _evo_hist
+                                                    else "Periodos anteriores"),
+                                              on_click=_win_mover,
+                                              args=(-_ventana,))
+                                    st.button("›", key="cp_win_next",
+                                              disabled=(_evo_hist
+                                                        or _win_ini >= _ini_max),
+                                              help=(_ayuda_win if _evo_hist
+                                                    else "Periodos siguientes"),
+                                              on_click=_win_mover,
+                                              args=(_ventana,))
                         # ALCANCE de los tres controles de tiempo de esta
                         # tarjeta, que NO es el mismo (corregido 2026-08-23:
                         # el comentario anterior afirmaba que `gran` era
@@ -1225,38 +1253,50 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             showlegend=False,
                             hovermode="x unified",
                         )
-                        # El sufijo lo pone el propio módulo del período: es
-                        # la misma opción escrita en prosa ("últimos 12 meses"),
-                        # no un texto paralelo que un día quede desfasado del
-                        # control que tiene tres píxeles más arriba.
-                        _et_evo = periodo.etiqueta(_op_evo)
+                        # ── QUIÉN es esta línea: DENTRO del gráfico ──────
+                        # 2026-09-09, a pedido. El nombre del proveedor vivía
+                        # en el título de la tarjeta; ahora es una anotación
+                        # en el papel de la propia figura, DEL COLOR DE SU
+                        # LÍNEA — el mismo que le tocó en el ranking de al
+                        # lado. Ahí dice dos cosas de una: quién, y cuál de
+                        # las barras de la tabla vecina es.
+                        #
+                        # Arriba a la IZQUIERDA y en coordenadas de papel
+                        # (`xref/yref="paper"`), que es lo único estable: el
+                        # eje X es `type="category"` y el Y arranca en 0 con
+                        # `fill="tozeroy"`, así que anclarla a un dato la
+                        # movería con cada cambio de ventana. La esquina
+                        # superior izquierda es la que más veces queda
+                        # vacía —el área pintada crece desde abajo— y el
+                        # fondo translúcido cubre el caso en que no.
+                        #
+                        # `nombre_propio` ANTES de truncar, para que los
+                        # puntos suspensivos caigan sobre el texto que se ve.
+                        _tit_evo = _compras_truncar(nombre_propio(_prov_evo), 26)
                         # Un punto suelto no dibuja ninguna evolución. Antes eso
                         # se corregía solo (se saltaba al histórico sin avisar);
                         # ahora la ventana la eligió el usuario, así que la salida
                         # correcta es DECIRLO y dejarle los controles que lo
-                        # arreglan, no pasar por encima de lo que pidió. Va en el
-                        # sufijo del título y no en un `st.caption` porque el
-                        # caption medía 41px (dos líneas en una columna de 399) y
-                        # empujaba la tarjeta a scroll interno: el aviso de que
-                        # algo no se ve terminaba tapando lo que sí se veía.
-                        # Acá cuesta cero alto y queda pegado a las pills que lo
-                        # resuelven, que están tres píxeles más abajo.
-                        _suf_evo = " · ".join(
-                            x for x in (_et_evo,
-                                        "1 solo período" if len(_evo_x) < 2 else "")
-                            if x)
-                        _ph_tit_evo.markdown(
-                            f'<div class="cp-evo-tit">Evolución · '
-                            # `nombre_propio` ANTES de truncar, para que los
-                            # puntos suspensivos caigan sobre el texto que se
-                            # ve. Va también acá y no sólo en el ranking: son
-                            # las dos mitades de la misma fila, y con una
-                            # gritando y la otra no el clic se lee como si
-                            # hubiera enfocado otra cosa.
-                            f'{_compras_truncar(nombre_propio(_prov_evo), 22)}'
-                            + (f'<span> · {_suf_evo}</span>' if _suf_evo else '')
-                            + '</div>',
-                            unsafe_allow_html=True)
+                        # arreglan, no pasar por encima de lo que pidió. Iba en
+                        # el sufijo del título de la tarjeta; se muda con el
+                        # nombre, en segundo renglón y apagado — sigue costando
+                        # cero alto (es papel de la figura, no una fila más) y
+                        # queda a la vista de los controles que lo resuelven.
+                        # NO se va con el resto del sufijo: la ventana la dice
+                        # el desplegable, pero "no hay nada que dibujar" no lo
+                        # dice nadie más.
+                        if len(_evo_x) < 2:
+                            _tit_evo += ('<br><span style="font-size:10px;'
+                                         f'color:{GRIS_TEXTO}">'
+                                         '1 solo período</span>')
+                        fig_evo.add_annotation(
+                            xref="paper", yref="paper",
+                            x=0, y=1, xanchor="left", yanchor="top",
+                            text=f"<b>{_tit_evo}</b>", showarrow=False,
+                            align="left",
+                            font=dict(size=12, color=_color_evo),
+                            bgcolor="rgba(255,255,255,0.72)", borderpad=2,
+                        )
                         # 2026-08-19, a pedido: el resumen deja de ir DEBAJO
                         # del gráfico y pasa a su COSTADO, en columna. Gana el
                         # gráfico (recupera los ~97px de alto que le comía el
@@ -1281,46 +1321,95 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 config={"displayModeBar": False},
                             )
                         # ── Resumen del proveedor ───────────────────────────
-                        # Resume el ÚLTIMO período de la granularidad vigente (a
-                        # pedido), no todo el tramo dibujado: es el último punto
-                        # de la línea de arriba, o sea "cómo le fue el último
-                        # mes / semana / año". El período se imprime en el
-                        # encabezado — sin eso, "S/ 2,104" no dice contra qué.
+                        # Resume UN período de la granularidad vigente. En
+                        # reposo, el ÚLTIMO —el último punto de la línea de
+                        # arriba, o sea "cómo le fue el último mes / semana /
+                        # año"—; con el cursor sobre un punto del gráfico, ESE
+                        # (2026-09-09, a pedido). El período se imprime en el
+                        # encabezado: sin eso "S/ 2,104" no dice contra qué, y
+                        # menos todavía si el número cambia solo al pasar el
+                        # mouse.
                         #
                         # Sale de `_src_evo`, la MISMA fuente que la línea (rango
                         # o histórico según el caso). Un resumen pegado a un
                         # gráfico tiene que sumar lo que ese gráfico muestra, o
                         # los números contradicen a la curva que tienen encima.
+                        #
+                        # Los 4 valores se calculan para TODOS los períodos
+                        # dibujados, no sólo para el último: el hover no puede
+                        # ir al servidor (`st.plotly_chart` sólo reporta
+                        # selección, no hover, y aunque la reportara un rerun
+                        # de esta app tarda 3-6s — ver `estilos/_88_cargando.py`),
+                        # así que la tabla entera viaja con el gráfico y el
+                        # intercambio lo hace el navegador. Son 4 cifras por
+                        # punto y el eje tiene a lo sumo unas decenas.
                         if _evo_x:
-                            with _c_kpi:
-                                _per_ult = _evo_x[-1]
-                                _ult = _src_evo[_src_evo["per"] == _per_ult]
-                                _f_evo = _ult[_ult["prov"] == _prov_evo]
-                                _r_val = float(_f_evo["valor"].sum())
-                                _r_cant = (float(_f_evo["cant"].sum())
-                                           if "cant" in _f_evo.columns else 0.0)
-                                _r_docs = (int(_f_evo["docu"].replace("", pd.NA)
-                                               .dropna().nunique())
-                                           if "docu" in _f_evo.columns else 0)
+                            _dprov = _src_evo[_src_evo["prov"] == _prov_evo]
+                            # `reindex(_evo_x)`: el eje manda. Un período sin
+                            # compras de ESTE proveedor tiene que salir en 0,
+                            # no faltar — si no, el índice del punto que
+                            # reporta Plotly deja de coincidir con la fila.
+                            _g_val = (_dprov.groupby("per")["valor"].sum()
+                                      .reindex(_evo_x, fill_value=0.0))
+                            _g_tot = (_src_evo.groupby("per")["valor"].sum()
+                                      .reindex(_evo_x, fill_value=0.0))
+                            _g_cant = (_dprov.groupby("per")["cant"].sum()
+                                       .reindex(_evo_x, fill_value=0.0)
+                                       if "cant" in _dprov.columns
+                                       else pd.Series(0.0, index=_evo_x))
+                            if "docu" in _dprov.columns:
+                                # Mismo criterio que la versión de un solo
+                                # período: el documento vacío no cuenta.
+                                # `nunique()` ya descarta los NA.
+                                _g_docs = (_dprov.assign(
+                                    _d=_dprov["docu"].replace("", pd.NA))
+                                    .groupby("per")["_d"].nunique()
+                                    .reindex(_evo_x, fill_value=0))
+                            else:
+                                _g_docs = pd.Series(0, index=_evo_x)
+                            # Encabezado por período: sólo el último lleva
+                            # "Último/Última" — en los demás sería mentira.
+                            # ("Semana" es femenino y las otras tres no: sin
+                            # esto salía "Último semana".)
+                            _ult_art = "Última" if gran == "Semana" else "Último"
+                            _kpis_evo = []
+                            for _i, _p in enumerate(_evo_x):
+                                _r_val = float(_g_val.iloc[_i])
                                 # El % se mide contra lo comprado a TODOS los
-                                # proveedores en ese mismo período: "de lo que gasté
-                                # este mes, tanto fue con este proveedor".
-                                _tot_ult = float(_ult["valor"].sum()) or 1.0
-                                _r_pct = _r_val / _tot_ult * 100
-                                _celdas = [("Total compra", f"S/ {_r_val:,.0f}"),
-                                           ("% del total", f"{_r_pct:.1f}%"),
-                                           ("Cantidad", f"{_r_cant:,.0f}"),
-                                           ("Documentos", f"{_r_docs:,.0f}")]
+                                # proveedores en ese mismo período: "de lo que
+                                # gasté este mes, tanto fue con este proveedor".
+                                _r_pct = _r_val / (float(_g_tot.iloc[_i]) or 1.0) * 100
+                                _kpis_evo.append({
+                                    "tit": (f"{_ult_art} {gran.lower()}"
+                                            if _i == len(_evo_x) - 1
+                                            else gran)
+                                           + f" · {_etq_evo(_p)}",
+                                    "vals": [f"S/ {_r_val:,.0f}",
+                                             f"{_r_pct:.1f}%",
+                                             f"{float(_g_cant.iloc[_i]):,.0f}",
+                                             f"{int(_g_docs.iloc[_i]):,.0f}"],
+                                })
+                            _rotulos_kpi = ("Total compra", "% del total",
+                                            "Cantidad", "Documentos")
+                            with _c_kpi:
+                                _base_kpi = _kpis_evo[-1]
                                 st.markdown(
                                     f'<div class="cp-evo-kpis-tit">'
-                                    # "Semana" es femenino y las otras tres no: sin
-                                    # esto salia "Último semana".
-                                    f'{"Última" if gran == "Semana" else "Último"} '
-                                    f'{gran.lower()} · {_etq_evo(_per_ult)}</div>'
+                                    f'{_base_kpi["tit"]}</div>'
                                     '<div class="cp-evo-kpis">'
-                                    + "".join(f'<div><span>{_k}</span><b>{_v}</b></div>'
-                                              for _k, _v in _celdas)
+                                    + "".join(
+                                        f'<div><span>{_k}</span><b>{_v}</b></div>'
+                                        for _k, _v in zip(_rotulos_kpi,
+                                                          _base_kpi["vals"]))
                                     + '</div>', unsafe_allow_html=True)
+                                # El que cambia las cifras al pasar el mouse.
+                                # Va DENTRO de la columna de los KPIs a
+                                # propósito (es su comportamiento) y no cuesta
+                                # alto: `navegacion.py` le pone `display:none`
+                                # al contenedor de cualquier iframe, así que ni
+                                # el gap del bloque vertical paga.
+                                inject_hover_kpis("compras_prov_card_evo",
+                                                  _kpis_evo)
         # 2026-08-23: `win_nav` (‹ Auto/N/Todo ›, navegación de la ventana de
         # períodos) se movió DENTRO de la tarjeta de Evolución, junto con
         # `gran_float` — ver ese bloque, debajo de `cp_evo_periodo`. Sigue

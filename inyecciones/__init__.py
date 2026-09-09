@@ -13,6 +13,8 @@ paquete. La API publica no cambio: from inyecciones import inject_*.
     inspector.py    inspector de elementos (herramienta de desarrollo)
     diseno.py       modo de diseno visual (herramienta de desarrollo, lee
                     el pin de inspector.py — ver Regla viva mas abajo)
+    hover_kpis.py   la pila de KPIs de una tarjeta sigue al cursor sobre
+                    su grafico Plotly (hover, sin rerun)
     herramientas.py barra unificada que prende/apaga todo lo anterior mas
                     los auditores de herramientas/*.js (lee el silenciador
                     de inspector.py y le comparte el espacio del badge)
@@ -39,4 +41,5 @@ from inyecciones.paginacion import (inject_pagination_v2)  # noqa: F401
 from inyecciones.inspector import (inject_element_inspector)  # noqa: F401
 from inyecciones.diseno import (inject_diseno_visual)  # noqa: F401
 from inyecciones.herramientas import (inject_herramientas)  # noqa: F401
+from inyecciones.hover_kpis import (inject_hover_kpis)  # noqa: F401
 from inyecciones.varios import (inject_calendario_es, inject_error_overlay, inject_sello_actualizacion, inject_fullscreen_app)  # noqa: F401

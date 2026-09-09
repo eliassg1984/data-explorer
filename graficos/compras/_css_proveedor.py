@@ -190,17 +190,84 @@ CSS = """        <style>
             font-weight: 600;
             color: var(--text-primary);
             padding-left: 8px;
-            margin: 0 0 2px;
+            /* Sin `margin-bottom`: desde el 2026-09-09 esta clase NO es una
+               fila, es la mitad izquierda de una (`cp_evo_cab`), y el aire
+               de abajo lo pone la fila entera. Ojo con el margen NEGATIVO
+               que Streamlit le mete al `stMarkdown` con HTML de bloque
+               (regla #162): lo neutraliza `cp_evo_cab`, abajo. */
+            margin: 0;
+            /* 24px CLAVADOS, el mismo alto que los desplegables de al lado.
+               Es lo que hace que la cabecera mida 24 tanto en un renglón
+               como en dos, y por eso `_CROMO_CARD_EVO` (proveedor.py) puede
+               ser un número: con `line-height: normal` el título pedía 26 y
+               la figura perdía 2px cada vez. */
+            line-height: 24px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        /* "· todo el histórico": avisa que este gráfico NO está mirando el
-           mismo rango que el ranking de al lado. Va en el mismo renglón y
-           apagado — es una aclaración, no un dato. */
-        .cp-evo-tit span {
-            font-weight: 400;
-            color: var(--text-secondary);
+        /* ── La CABECERA de la tarjeta de Evolución: título + controles ───
+           2026-09-09, a pedido ("el selector de tiempo y la granularidad
+           debe subir a la fila del título, alineado al lado derecho").
+
+           `cp_evo_cab` ENVUELVE a `cp_evo_ctrl` en vez de reemplazarlo: el
+           reparto horizontal de los tres desplegables está medido al píxel
+           (ver su bloque, más abajo) y no se toca nada de eso — acá sólo se
+           agrega un nivel que pone el título a la izquierda y esa fila,
+           entera, contra el borde derecho.
+
+           `flex-wrap: wrap` + el título como PRIMER ítem no es decoración:
+           es lo que resuelve el tramo angosto sin un `@media`. Medido en el
+           navegador: la fila útil de esta tarjeta mide 398px a 1280 de
+           viewport (entra todo: 68 del título + 274 de los controles + los
+           huecos) pero baja a 290px alrededor de 1000, donde ya no entra.
+           Ahí `cp_evo_ctrl` —que es UN solo ítem flex, no cuatro— cae
+           entero al renglón de abajo y sigue pegado a la derecha, que es
+           exactamente el layout que había antes de este cambio. Sin el
+           `wrap` se desbordaba la tarjeta; con `wrap` pero sin agrupar los
+           controles, bajaban de a uno y la fila quedaba rota en dos mitades
+           desparejas.
+           (Por debajo de ~850px las columnas del drill se apilan y la
+           tarjeta pasa a ancho completo, así que ahí vuelve a entrar todo
+           en un renglón.) */
+        .st-key-cp_evo_cab {
+            display: flex !important;
+            flex-flow: row wrap !important;
+            align-items: center !important;
+            /* `0 8px`: sin hueco entre renglones cuando envuelve — los 6px
+               de abajo son de la fila entera, no de cada línea. */
+            gap: 0 8px !important;
+            width: auto !important;
+            margin: 0 0 6px !important;
+            padding: 0 !important;
+        }
+        /* El título. Es un `stMarkdown` suelto (no un container), así que su
+           hijo directo del flex es un `stElementContainer` SIN key propia:
+           se lo identifica por lo que trae adentro y no por un `:not(...)`,
+           que se rompería el día que se agregue otro markdown a la fila. */
+        .st-key-cp_evo_cab > [data-testid="stElementContainer"]:has(.cp-evo-tit) {
+            flex: 0 1 auto !important;
+            min-width: 0 !important;
+            width: auto !important;
+            margin: 0 !important;
+        }
+        /* Y el margen NEGATIVO de adentro, que es el que muerde: un
+           `st.markdown` con HTML de bloque se lleva un `margin-bottom: -16px`
+           en su `stMarkdownContainer` (regla #162). En una fila normal no se
+           nota; acá SÍ, y sólo cuando la cabecera envuelve — el -16 se le
+           resta al alto de la primera línea, así que la segunda se le sube
+           encima. Medido a 1000px de viewport antes del arreglo: el título
+           ocupaba de 80 a 106 y los controles arrancaban en 90. */
+        .st-key-cp_evo_cab [data-testid="stMarkdownContainer"] {
+            margin-bottom: 0 !important;
+        }
+        /* La fila de controles, contra el borde derecho. Es un container
+           anidado, así que el hijo directo es su `stLayoutWrapper` (mismo
+           detalle que documenta el bloque de `cp_evo_ctrl`, más abajo). */
+        .st-key-cp_evo_cab > [data-testid="stLayoutWrapper"] {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            margin: 0 0 0 auto !important;
         }
         /* Resumen del ultimo periodo, debajo de la linea. El encabezado dice
            QUE periodo se esta resumiendo: sin eso las cifras no tienen
@@ -213,6 +280,18 @@ CSS = """        <style>
             /* Sin margen superior: la columna arranca a la misma altura que
                el gráfico de al lado, no 6px más abajo. */
             margin: 0 0 4px;
+        }
+        /* Las cuatro cifras siguen al cursor sobre el gráfico
+           (`inyecciones/hover_kpis.py`, 2026-09-09). Mientras muestran un
+           punto que NO es el de reposo, el encabezado se enciende en acento:
+           sin ninguna señal, cuatro números que cambian solos se leen como
+           un parpadeo, y el usuario no sabe si está viendo el último período
+           o el que tiene debajo del mouse. El encabezado ya DICE cuál es —
+           esto sólo lo hace mirar. El color NO se pone con `!important` ni
+           se anima: es un cambio que ocurre a 60fps mientras se barre la
+           línea, y una transición lo dejaría siempre a medio camino. */
+        .cp-evo-kpis-tit.cp-kpis-hover {
+            color: var(--accent-deep);
         }
         /* 2026-08-19: de 2x2 a UNA columna. El resumen dejó de ir debajo
            del gráfico y pasó a su costado (proveedor.py), así que ahora tiene
@@ -1722,7 +1801,10 @@ CSS = """        <style>
             align-items: center !important;
             gap: 8px !important;
             width: auto !important;
-            margin: 0 0 6px !important; padding: 0 !important;
+            /* Sin margen: desde el 2026-09-09 esta fila vive dentro de
+               `cp_evo_cab` (arriba), que es quien separa la cabecera del
+               gráfico. */
+            margin: 0 !important; padding: 0 !important;
         }
         /* OJO con el `>`: `cp_evo_periodo` SÍ es hijo directo del flex (es un
            stElementContainer), pero `gran_float` NO — al ser un container
