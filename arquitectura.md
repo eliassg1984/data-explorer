@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-366 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+367 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (128)
 
@@ -432,7 +432,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#365** — El estado por DEFECTO de un riel plegable no es una preferencia: decide con qué ancho nace la…
 - **#366** — Esconder stStatusWidget esconde también la única señal de "estoy trabajando"
 
-**Datos, R2 y DuckDB** (46)
+**Datos, R2 y DuckDB** (47)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -480,6 +480,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
 - **#347** — Un nombre en MAYÚSCULA SOSTENIDA es un dato del ERP, no una decisión de diseño — y…
 - **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
+- **#367** — Una caché con persist="disk" NO caduca: el ttl sólo gobierna la copia en memoria
 
 **SUNAT y SIRE** (40)
 
@@ -7189,13 +7190,29 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
       220.481 filas, sólo que tardando 40s).
 
-    `persist="disk"` (el `ttl` se sigue respetando, verificado en 1.59) hace
+    `persist="disk"` hace que sobreviva al reinicio. **No cambia el split
 
-    que sobreviva al reinicio. **No cambia el split cacheada/wrapper** de la
+    cacheada/wrapper** de la regla del None cacheado: sólo se persiste el
 
-    regla del None cacheado: sólo se persiste el éxito, porque la función
+    éxito, porque la función interna sigue LANZANDO ante un fallo.
 
-    interna sigue LANZANDO ante un fallo.
+    **CORRECCIÓN (2026-09-09) — esta regla decía "el `ttl` se sigue
+
+    respetando, verificado en 1.59", y es FALSO: costó el bug de la regla
+
+    #367.** El ttl gobierna la copia en MEMORIA; la de DISCO no caduca
+
+    nunca, así que un parquet nuevo en R2 podía no verse durante días.
+
+    Aquella verificación miró la única capa que en este caso no manda.
+
+    Desde la #367 la clave de las cacheables lleva el `LastModified` del
+
+    parquet: la frescura ya no depende del ttl, y el ahorro de ESTA regla
+
+    se conserva entero (el archivo que no cambió sigue dando acierto en
+
+    disco).
 
     Corolario para diagnosticar: si "no cargan los datos", antes de sospechar
 
@@ -32640,6 +32657,83 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+367. **Una caché con `persist="disk"` NO caduca: el `ttl` sólo gobierna la
+     copia en memoria.** Y una caché de datos que no caduca deja de ser una
+     caché: es una foto vieja que la app presenta como el dato de hoy.
+
+     El síntoma, tal como llegó (2026-09-09): «Sin compras en el rango
+     seleccionado» en el Ranking de proveedores de Compras, con el rango
+     puesto en «1 sep – 5 sep 2026» y, arriba, la franja diciendo «Última
+     actualización: 09/09/2026 · 03:00».
+
+     Lo que había de verdad, medido contra R2 con DuckDB: 268 líneas, 57
+     documentos y S/33.795 en septiembre; 238 líneas y ~S/23k entre el 1 y
+     el 5. La app estaba sirviendo el `compras.parquet` del **6-sep 23:41**
+     que tenía cacheado en disco (51.574 filas, hasta el 5-sep, septiembre
+     con 4 líneas —y las cuatro de COSTOS PRODUCCION, familia que no está
+     entre las cinco que siembra `_FAMILIAS_DE_ENTRADA`, así que el ranking
+     quedaba en CERO filas). Prueba de que era caché y no descarga: el
+     server local se levantó a las 06:58 y no escribió ningún `.memo`
+     nuevo — el que sirvió seguía con mtime del 6-sep.
+
+     **El mecanismo** (streamlit 1.59.2,
+     `runtime/caching/storage/in_memory_cache_storage_wrapper.py:91`):
+
+         try:
+             entry_bytes = self._read_from_mem_cache(key)   # TTLCache: caduca
+         except CacheStorageKeyNotFoundError:
+             entry_bytes = self._persist_storage.get(key)   # disco: sin fecha
+             self._write_to_mem_cache(key, entry_bytes)     # y recalienta
+
+     `local_disk_cache_storage.py:137` abre el `.memo` y lo devuelve; no
+     mira mtime ni nada ("Disk cache HIT"). O sea: el `ttl` decide cada
+     cuánto se RELEE el disco, y la copia de disco vive hasta un `.clear()`
+     o hasta que alguien borre el fichero. La #94, que introdujo
+     `persist="disk"` el 2026-08-12, afirmaba lo contrario; quedó corregida.
+
+     **Tres cosas lo taparon cuatro semanas:**
+     · **Falla muda.** Ni excepción ni traza: números plausibles, sólo que
+       de otro día.
+     · **Falla diferida.** Necesita que el parquet cambie MIENTRAS la caché
+       vive. Hasta esa semana la extracción venía atrasada en el origen
+       (ver `HORAS_DATO_VIEJO`), así que caché y origen mentían lo mismo.
+     · **La única alarma de frescura mira el objeto equivocado.** «Última
+       actualización» y el aviso de dato viejo salen de
+       `fecha_ultima_actualizacion` (head_object en vivo), o sea del
+       ARCHIVO en R2, no del df cargado. Antes del 12-ago eran lo mismo;
+       después pueden diferir días, y el rótulo termina avalando el dato
+       viejo con fecha de hoy.
+
+     **El arreglo: la clave de la caché lleva la VERSIÓN del dato.** Las
+     cuatro cacheables de `data.py` (`_cargar_cacheable`,
+     `_cargar_rango_cacheable`, `_rango_fechas_cacheable`,
+     `_resumen_kpis_cacheable`) toman `sello` como segundo argumento —el
+     `LastModified` de R2, vía `sello_datos()`— y no lo usan en el cuerpo:
+     es la clave. Archivo nuevo = clave nueva = descarga sola, en ≤1 min
+     (el `ttl` del sello). No se pierde nada de la #94: el archivo que no
+     cambió sigue dando acierto en disco, que es para lo que se puso.
+
+     Dos detalles que el arreglo tuvo que resolver:
+     · **Un `head_object` que falla no puede invalidar la caché.** Si el
+       sello sale vacío se sigue con el último conocido; devolver `""`
+       sería una tercera clave, o sea bajar el parquet entero por un blip
+       de red — el mismo error que el split cacheada/wrapper de `cargar()`
+       evita del otro lado.
+     · **Las generaciones viejas hay que barrerlas.** Con el sello en la
+       clave, cada versión escribe su propio `.memo` y ninguno se borra
+       solo (20 MB los de Compras, 180 MB los de Ventas). `_purgar_version`
+       limpia la anterior al detectar el cambio; lo que ya estaba en disco
+       al arrancar el proceso no se puede atribuir a ninguna versión, así
+       que ahí el tope práctico son dos generaciones.
+
+     Y la lección general, que es lo que se pagó caro: **un cambio cuya
+     falla es silenciosa y diferida no se cierra con "verificado"** — se
+     cierra diciendo qué se ejecutó y qué se observó. «El ttl se sigue
+     respetando, verificado en 1.59» era una corazonada con formato de
+     hecho y, como vive en este fichero, autorizó a no volver a mirar.
+
+     (2026-09-09.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32652,7 +32746,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#367**.
+> próxima regla nueva es la **#368**.
 
 >
 

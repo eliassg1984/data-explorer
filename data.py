@@ -786,10 +786,97 @@ def _datos_demo(archivo, filas=60):
 # CARGA DE DATOS
 # ===========================================================================
 
+# ===========================================================================
+# EL SELLO: QUÉ VERSIÓN DEL PARQUET TIENE CACHEADA LA APP
+# ===========================================================================
+# Las cuatro cacheables de acá abajo llevan `sello` como SEGUNDO argumento.
+# No lo usan en el cuerpo: es la CLAVE. Un parquet nuevo en R2 = un sello
+# nuevo = una entrada nueva = se baja solo, sin que nadie apriete nada.
+#
+# POR QUÉ HACE FALTA, SI YA TIENEN `ttl=3600`: porque con `persist="disk"`
+# ese ttl NO gobierna el disco. En streamlit 1.59.2,
+# `in_memory_cache_storage_wrapper.py::get()` (línea 91) busca en el TTLCache
+# de memoria y, cuando ahí no está —expiró, o el proceso arrancó recién—, cae
+# a `_persist_storage.get(key)`, que abre el `.memo` y lo devuelve SIN mirar
+# ninguna fecha (`local_disk_cache_storage.py:137`, "Disk cache HIT"); con eso
+# recalienta la memoria. O sea: el ttl decide cada cuánto se RELEE el disco;
+# la copia en disco no caduca nunca. Sale con `.clear()` o borrando el
+# fichero, y con nada más.
+#
+# Lo que costó (2026-09-09, medido): la app servía el `compras.parquet` del
+# 6-sep (51.574 filas, hasta el 5-sep, septiembre con 4 líneas) mientras R2
+# tenía el de las 03:00 de ESE MISMO día (51.838 filas, hasta el 8-sep,
+# septiembre con 268). El «Ranking de proveedores» decía "Sin compras en el
+# rango seleccionado" sobre un 1–5 sep que tenía S/22.182 en 38 documentos.
+# Y la franja de arriba decía "Última actualización: hoy 03:00", porque ese
+# rótulo mide el ARCHIVO en R2 (`fecha_ultima_actualizacion`, head_object en
+# vivo) y no el df que está en pantalla: desde el 2026-08-12 esos dos pueden
+# diferir días. Ver regla #367 — la #94 afirmaba lo contrario y quedó
+# corregida ahí mismo.
+
+_SELLOS = {}   # archivo -> sello vigente en ESTE proceso
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _sello_r2(archivo):
+    """`LastModified` del parquet, en texto. `""` si no se pudo saber.
+
+    `ttl` corto y SIN `persist`: es un head_object de milisegundos, y es lo
+    que decide en cuánto se entera la app de un archivo nuevo (≤1 min).
+    Cachearlo evita repetir la llamada en las cuatro cacheables de cada
+    rerun."""
+    f = fecha_ultima_actualizacion(archivo)
+    return f.isoformat() if f is not None else ""
+
+
+def sello_datos(archivo):
+    """El sello con el que se identifica lo cacheado de `archivo`.
+
+    Y, de paso, el que tira la generación anterior: sin eso cada versión
+    nueva dejaría su `.memo` viejo ocupando disco para siempre (20 MB los de
+    Compras, 180 MB los de Ventas). Lo que este proceso NO puede saber es a
+    qué versión pertenece un `.memo` que ya estaba en disco al arrancar: si
+    el parquet cambió con la app apagada, esa generación sobrevive hasta el
+    próximo cambio (tope práctico: dos).
+
+    UN head_object QUE FALLA NO INVALIDA NADA: se sigue con el último sello
+    conocido. Devolver `""` ahí sería un tercer sello, o sea bajar el parquet
+    entero por un blip de red — el mismo error que el split cacheada/wrapper
+    de `cargar()` evita del otro lado."""
+    s = _sello_r2(archivo)
+    if not s:
+        return _SELLOS.get(archivo, "")
+    anterior = _SELLOS.get(archivo)
+    _SELLOS[archivo] = s
+    if anterior is not None and anterior != s:
+        _purgar_version(archivo, anterior)
+    return s
+
+
+def _purgar_version(archivo, sello):
+    """Saca del disco lo PESADO que quedó de una versión anterior.
+
+    Sólo las dos cacheables grandes. `_rango_fechas_cacheable` y
+    `_resumen_kpis_cacheable` guardan un par de fechas y un dict de KPIs
+    —bytes—, y sus claves llevan `col_fecha` adentro, que acá no se conoce:
+    su generación vieja no le molesta a nadie y ya nadie la lee, porque la
+    clave tiene el sello."""
+    _cargar_cacheable.clear(archivo, sello)
+    if any(c.get("archivo") == archivo and c.get("carga_por_rango")
+           for c in REPORTES.values()):
+        # Su clave lleva (col_fecha, ini, fin): no hay forma de nombrar las
+        # entradas de ESTE archivo una por una, así que se vacía entera —
+        # mismo argumento que `limpiar_cache`. Hoy el único reporte con
+        # `carga_por_rango` es Ventas, así que el radio es uno solo.
+        _cargar_rango_cacheable.clear()
+
+
 @st.cache_data(ttl=3600, persist="disk")
-def _cargar_cacheable(archivo):
+def _cargar_cacheable(archivo, sello):
     """Lectura pura del parquet. Si falla, LANZA — así @st.cache_data NO cachea
     el fracaso. Ver `cargar()` para el porqué de este split.
+
+    `sello` no se usa en el cuerpo: ES la clave (ver el bloque de arriba).
 
     `persist="disk"` (2026-08-12): sin él, la caché vive SOLO en memoria del
     proceso, así que cada reinicio del server vuelve a bajar el parquet de R2
@@ -797,8 +884,7 @@ def _cargar_cacheable(archivo):
     mientras baja, Streamlit cancela el run (StopException) y la descarga
     arranca de CERO; se puede quedar en un bucle donde nunca termina y parece
     que R2 está caído cuando no lo está.
-    El `ttl` se sigue respetando con persist (verificado en 1.59), y sólo se
-    persiste el ÉXITO: el split cacheada/wrapper de abajo no cambia."""
+    Sólo se persiste el ÉXITO: el split cacheada/wrapper de abajo no cambia."""
     # ── Modo demo: sin credenciales R2 → datos sintéticos en memoria ──
     if not secrets_disponibles():
         return _datos_demo(archivo)
@@ -825,7 +911,7 @@ def cargar(archivo):
     un blip afecta solo ese rerun: F5 reintenta.
     """
     try:
-        return _cargar_cacheable(archivo)
+        return _cargar_cacheable(archivo, sello_datos(archivo))
     except Exception as e:
         st.error(f"Error cargando {archivo}: {str(e)}")
         return None
@@ -848,22 +934,38 @@ def limpiar_cache(archivo):
     venciera su `ttl=3600` (hasta 1h — y con `persist="disk"` sobrevive
     incluso a un reinicio del server).
     `_cargar_rango_cacheable.clear()` sin argumentos porque su clave es
-    (archivo, col_fecha, ini, fin): Streamlit solo permite limpiar una
-    entrada puntual pasando los CUATRO valores exactos, o vaciar la función
+    (archivo, sello, col_fecha, ini, fin): Streamlit solo permite limpiar una
+    entrada puntual pasando TODOS los valores exactos, o vaciar la función
     entera. Acá no se conoce ini/fin del caller (y puede haber más de un
     rango cacheado a la vez si distintos usuarios miraron distintas
     ventanas), así que se vacía TODA — hoy Ventas es el único reporte con
     `carga_por_rango`, así que el radio es uno solo; si se suma otro
     reporte con el mismo patrón, seguirá siendo correcto (solo un poco más
-    ancho: purga rangos de otros archivos que no hacía falta invalidar)."""
-    _cargar_cacheable.clear(archivo)
+    ancho: purga rangos de otros archivos que no hacía falta invalidar).
+
+    Desde el 2026-09-09 limpia además las OTRAS DOS cacheables del mismo
+    parquet —los topes del calendario y los KPIs del rail— y el sello. Que
+    el botón dijera "✅ actualizado" y el rail siguiera mostrando los KPIs
+    viejos era el bug de 2026-09-03 otra vez, en otra función.
+
+    Y `_sello_r2.clear()` no es higiene: sin él, el sello (ttl 60s) puede
+    seguir siendo el ANTERIOR justo después del refresco, y el parquet nuevo
+    quedaría guardado bajo la clave vieja — para volver a bajarse un minuto
+    después, cuando aparezca el sello nuevo. Dos descargas por cada clic."""
+    _cargar_cacheable.clear(archivo, _SELLOS.get(archivo, ""))
     _cargar_rango_cacheable.clear()
+    _rango_fechas_cacheable.clear()
+    _resumen_kpis_cacheable.clear()
+    _sello_r2.clear()
+    _SELLOS.pop(archivo, None)
 
 
 @st.cache_data(ttl=3600, persist="disk")
-def _cargar_rango_cacheable(archivo, col_fecha, ini, fin):
+def _cargar_rango_cacheable(archivo, sello, col_fecha, ini, fin):
     """Lectura filtrada por rango. Si falla, LANZA — @st.cache_data no cachea el
     fracaso. Ver `cargar()` para el porqué del split cacheada/wrapper.
+
+    `sello` no se usa en el cuerpo: ES la clave (ver el bloque del sello).
 
     `persist="disk"` por lo mismo que `_cargar_cacheable`: la clave incluye el
     rango, así que cada ventana que ya se miró una vez queda en disco y
@@ -907,16 +1009,22 @@ def cargar_rango(archivo, col_fecha, ini, fin):
     quedar cacheado 1h como None. Mismo patrón que cargar().
     """
     try:
-        return _cargar_rango_cacheable(archivo, col_fecha, ini, fin)
+        return _cargar_rango_cacheable(archivo, sello_datos(archivo),
+                                       col_fecha, ini, fin)
     except Exception as e:
         st.error(f"Error cargando {archivo}: {str(e)}")
         return None
 
 
 @st.cache_data(ttl=3600, persist="disk")
-def _rango_fechas_cacheable(archivo, col_fecha):
+def _rango_fechas_cacheable(archivo, sello, col_fecha):
     """MIN/MAX de la fecha. Si falla, LANZA (no se cachea). El None de 'no hay
-    fechas' SÍ es cacheable — es un resultado válido, no un error."""
+    fechas' SÍ es cacheable — es un resultado válido, no un error.
+
+    `sello` no se usa en el cuerpo: ES la clave (ver el bloque del sello).
+    Sin él, los TOPES del calendario se quedaban clavados en los del parquet
+    viejo — que es como se ve este bug desde la pantalla: el date-picker no
+    deja elegir un día que en R2 ya existe."""
     if not secrets_disponibles():
         df = _datos_demo(archivo)
         col = "Fecha" if "Fecha" in df.columns else None
@@ -954,7 +1062,8 @@ def rango_fechas(archivo, col_fecha):
     cacheado como None 1h y romper el date-picker. Mismo patrón que cargar().
     """
     try:
-        return _rango_fechas_cacheable(archivo, col_fecha)
+        return _rango_fechas_cacheable(archivo, sello_datos(archivo),
+                                       col_fecha)
     except Exception:
         return None
 
@@ -973,7 +1082,7 @@ def _expr_fecha_kpi(col_fecha):
 
 
 @st.cache_data(ttl=3600, persist="disk")
-def _resumen_kpis_cacheable(archivo, kpis, col_fecha, col_dedup):
+def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup):
     """Agregados SUM/COUNT DISTINCT directo en DuckDB, sin materializar
     filas — mismo espíritu que `_rango_fechas_cacheable`. Acota al MES EN
     CURSO cuando `col_fecha` viene dado (mismo default que usa la franja de
@@ -1052,6 +1161,7 @@ def resumen_kpis(archivo, kpis, col_fecha=None, col_dedup=None):
     if not kpis:
         return {}
     try:
-        return _resumen_kpis_cacheable(archivo, kpis, col_fecha, col_dedup)
+        return _resumen_kpis_cacheable(archivo, sello_datos(archivo),
+                                       kpis, col_fecha, col_dedup)
     except Exception:
         return {}

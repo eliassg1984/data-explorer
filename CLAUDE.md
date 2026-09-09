@@ -42,7 +42,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_docs.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_docs.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -77,6 +77,13 @@ automático) y la guarda de **columnas con espacios sin comillas** — que no es
 cosmética: `SELECT AJUSTE VALORIZADO` no da error, DuckDB lo lee como
 `SELECT AJUSTE AS VALORIZADO` y devuelve la columna equivocada en silencio.
 Corre sin API key ni navegador. Ver `arquitectura.md` regla #69.
+
+`test_datos.py` vigila el contrato de la caché de datos: toda cacheable con
+`persist="disk"` lleva el `sello` (la versión del parquet en R2) en su clave,
+y `limpiar_cache` las vacía a todas. Es la misma forma que el `categoria=` de
+las tarjetas de Compras — un argumento que si falta no rompe nada, sólo hace
+que la app sirva el parquet de hace días con cara de dato de hoy. Análisis
+estático con `ast`: sin secrets, sin red. Ver `arquitectura.md` regla #367.
 
 ## El asistente IA no adivina: consulta
 
@@ -213,6 +220,13 @@ resto de `graficos/compras/`.
 
 - **`st.markdown` no ejecuta `<script>`.** Animaciones y DOM se hacen con CSS
   sobre `.st-key-*`. Nada de JS inyectado por markdown.
+- **La caché de datos se identifica por el SELLO del parquet, no por su
+  nombre.** `@st.cache_data(persist="disk")` NO caduca: el `ttl` sólo
+  gobierna la copia en memoria, y la de disco vive hasta un `.clear()`. Sin
+  el sello la app sirve un parquet de hace días mientras la franja dice
+  «Última actualización: hoy» — ese rótulo mide el ARCHIVO en R2, no el df
+  cargado. Toda cacheable que lea R2 recibe `data.sello_datos(archivo)` como
+  segundo argumento. Ver `arquitectura.md` regla #367.
 - **La selección de `st.plotly_chart(on_select=...)` persiste entre reruns.**
   Con `key` estática, cada rerun re-procesa el mismo clic → toggle infinito
   (parpadeo). Incluir el foco en la key: `key=f"..._{focus or 'none'}"`.
