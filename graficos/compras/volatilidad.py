@@ -25,7 +25,7 @@ from cortes import MESES_ABR_ES
 from tema import ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO
 from graficos.base import (
     _card, _compras_layout, _compras_truncar, _slug, nombre_propio,
-    selector_fecha_tarjeta,
+    preservar_widgets, selector_fecha_tarjeta,
 )
 from graficos.compras._comun import (
     CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, PARR, _first_point,
@@ -48,6 +48,20 @@ Streamlit lo re-aplica (arquitectura.md regla #212, medida otra vez acá el
 2026-09-06). El espíritu de "sin key dinámica" se respeta igual, con el
 mismo argumento que `selector_escala`: el dueño del dato es esta clave, y
 el widget es una VISTA que se recalcula de ella en cada render."""
+
+_KEYS_WIDGET = ("compras_vol_q",)
+"""Los controles de esta sección que la escalada NO puede llevarse.
+
+La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo:
+ese rerun aborta la corrida antes de dibujarlos y Streamlit recolecta lo
+que no se dibujó, así que sin esto mover la fecha borraba lo escrito en el
+buscador de insumos. Ver `graficos/base.py::preservar_widgets` y
+`arquitectura.md` regla #373.
+
+La ventana propia NO está en la lista, y eso es lo contrario de un olvido:
+esa misma escalada la manda a `HEREDA` a propósito (ver más abajo), y su
+dueño es `_K_VENTANA`, que no es clave de widget. El foco del ranking
+tampoco: vive en `compras_vol_focus`, por el mismo motivo."""
 
 MIN_SEMANAS = 4          # con menos, un candlestick no dice nada
 MAX_SEMANAS = 5
@@ -249,8 +263,13 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
     # `_K_VENTANA` es una clave normal (nadie la recolecta) y la key del
     # `selectbox` la lleva adentro, exactamente como el riel de
     # `base.py::selector_escala` lleva su rango.
+    #
+    # Y `preservar_widgets` por lo de siempre: el rerun aborta ACÁ, antes
+    # de que los controles se registren, y Streamlit recolecta el estado de
+    # todo widget de este fragment que no se dibujó (ver `_KEYS_WIDGET`).
     if st.session_state.pop("_cp_vol_atajo_pendiente", False):
         st.session_state[_K_VENTANA] = periodo.HEREDA
+        preservar_widgets(_KEYS_WIDGET)
         st.rerun(scope="app")
 
     # ── VENTANA PROPIA DE ESTA TARJETA ───────────────────────────────────

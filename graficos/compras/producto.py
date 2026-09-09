@@ -30,7 +30,9 @@ import streamlit as st
 from st_aggrid import AgGrid, JsCode
 
 from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
-from graficos.base import _compras_layout, _compras_truncar, _slug
+from graficos.base import (
+    _compras_layout, _compras_truncar, _slug, preservar_widgets,
+)
 from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
     CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, filtro_proveedores,
@@ -56,6 +58,18 @@ dejando aire de sobra abajo (o de más, si `_ALTO_FRAME` quedara más chico
 que 8 filas reales)."""
 
 _ALTO_FRAME = alturas.por_filas(8, px_fila=_ALTO_FILA, extra=45, minimo=0)
+
+_KEYS_WIDGET = ("compras_prod_gran_pills", "compras_prod_periodo",
+                "cp_prod_prov_q", "cp_prod_prov_cb::*")
+"""Los controles de esta sección, para que la escalada no se los lleve.
+
+La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo:
+ese rerun aborta la corrida antes de dibujarlos y Streamlit recolecta lo
+que no se dibujó, así que sin esta tupla mover la fecha de la cabecera
+devolvía la granularidad a «Mes», la ventana a «12m» y marcaba de nuevo a
+TODOS los proveedores. Ver `graficos/base.py::preservar_widgets` y
+`arquitectura.md` regla #373. Las dos últimas son del filtro de proveedores
+(`_comun.py`), que abre una checkbox por razón social."""
 
 # Eje X por granularidad: forzado a propósito. Con pocos puntos (rango de
 # fecha corto, o un producto con 1-2 compras) Plotly no tiene de dónde sacar
@@ -366,7 +380,11 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     # `st.rerun(scope="app")` el estado cambiaría y la pantalla no. Se
     # consume al entrar, antes de dibujar nada. Mismo mecanismo que el
     # Ranking de Proveedores.
+    # `preservar_widgets` porque el rerun aborta ACÁ, antes de que los
+    # controles de la sección se registren, y Streamlit recolecta el estado
+    # de todo widget de este fragment que no se dibujó (ver `_KEYS_WIDGET`).
     if st.session_state.pop("_cp_prod_atajo_pendiente", False):
+        preservar_widgets(_KEYS_WIDGET)
         st.rerun(scope="app")
 
     dd = d.copy()

@@ -1047,6 +1047,69 @@ def recortar_por_tarjeta(df, col_fecha, categoria, ctx=None):
               & (_fe < pd.Timestamp(par[1]) + pd.Timedelta(days=1))]
 
 
+def preservar_widgets(keys):
+    """Salva lo elegido en los widgets de un fragment que está por abortar.
+
+    Se llama JUSTO ANTES del `st.rerun(scope="app")` que escala un gesto de
+    adentro de un fragment a la app entera (regla #180), y por lo tanto
+    antes de dibujar nada.
+
+    EL PROBLEMA es la regla #211, pero aplicada a la tarjeta entera y no al
+    control de una escala: ese `rerun` corta la corrida antes de que los
+    widgets del fragment lleguen a registrarse, y al terminarla Streamlit
+    recolecta el estado de todo widget de ESE fragment que no se dibujó
+    (`session_state._remove_stale_widgets`, acotado por
+    `fragment_ids_this_run`). En el rerun completo cada control nace de
+    cero y toma su `default`.
+
+    Reportado el 2026-09-09 mirando «Compra por período»: se elegía «Por
+    documento», se movía la fecha de la cabecera, y el gráfico volvía a
+    semanas — con la píldora «Por documento» todavía marcada, porque el
+    NAVEGADOR conserva su valor (regla #212). El mismo gesto vaciaba, sin
+    que nadie lo notara, el filtro de Familia y el de Producto de esa
+    tarjeta y la selección de proveedores de las otras.
+
+    LA CURA es re-escribir cada valor sobre sí mismo antes del `rerun`, y
+    NO es un no-op: `st.session_state[k] = v` guarda en el diccionario de
+    lo "puesto a mano" (`_new_session_state`), que la recolección no toca,
+    y de ahí lo lee el widget al registrarse — exactamente como cualquier
+    siembra. Sobrevive al corte porque un `st.rerun` del SERVIDOR no
+    adjunta `widget_states`, y sin eso Streamlit ni siquiera compacta el
+    estado (`on_script_will_rerun` corre sólo cuando el rerun lo pide el
+    navegador). Sale más barato que el espejo de la #211 —una clave
+    paralela por control, más la vuelta para restaurarla— y cubre la
+    tarjeta entera con una lista.
+
+    Medido con `AppTest` sobre una reproducción de doce líneas: elegir
+    «Por documento» y tocar la fecha deja la vista en «Semana» sin esto, y
+    en «Por documento» con esto. De yapa, Streamlit loguea una vez por
+    proceso «created with a default value but also had its value set via
+    the Session State API»: es esperado (el widget tiene `default=` y acá
+    se le siembra la key) y no se repite — `policies.py` lo apaga con un
+    flag de módulo después del primero.
+
+    `keys` son las keys EXACTAS de los controles de ESA tarjeta. Una que
+    termina en `*` es un PREFIJO y se expande contra lo que haya en
+    session_state: lo necesita el filtro de proveedores, que abre una
+    checkbox por proveedor (`cp_prov_cb::<razón social>`).
+
+    Dos cosas que NO van en la lista:
+
+      · keys de `st.button` — no tienen nada que perder, y escribirle el
+        valor a un botón es lo único que Streamlit prohíbe expresamente
+        (`Values for st.button cannot be set using st.session_state`);
+      · keys de widgets de OTRA tarjeta — escribir una key cuyo widget ya
+        se dibujó en esta corrida también es `StreamlitAPIException`.
+    """
+    for decl in keys:
+        concretas = ([s for s in st.session_state
+                      if s.startswith(decl[:-1])]
+                     if decl.endswith("*") else [decl])
+        for k in concretas:
+            if k in st.session_state:
+                st.session_state[k] = st.session_state[k]
+
+
 def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
                            label=None, categoria=None):
     """Trigger + panel de fecha para UNA tarjeta, en cualquier dashboard.

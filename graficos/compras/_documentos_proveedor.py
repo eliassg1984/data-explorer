@@ -44,12 +44,27 @@ from st_aggrid import AgGrid, JsCode
 
 from inyecciones import inject_maximize_aggrid
 from graficos import alturas
+from graficos.base import preservar_widgets
 from graficos.compras._comun import (
     CATEGORIA_SEC, agregar_periodo, base_normalizada, filtro_proveedores,
     periodos_ordenados, selector_fecha_tarjeta,
 )
 from graficos.compras._css_proveedor import CSS_PIVOTE_DOCS
 from graficos.compras._etiquetas_proveedor import nombre_propio
+
+_KEYS_WIDGET = ("cp_docs_prov_q", "cp_docs_prov_cb::*")
+"""El filtro de proveedores de ESTA tabla, que la escalada no puede vaciar.
+
+La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo.
+Esta sección no es un fragment propio, así que el que aborta es el de
+`seccion_perezosa` — y la recolección se lleva igual todo widget suyo que
+no se dibujó. Sin esto, mover la fecha de la cabecera volvía a marcar a
+todos los proveedores. Ver `graficos/base.py::preservar_widgets` y
+`arquitectura.md` regla #373.
+
+Son las keys de `cp_docs_prov`, no las de `cp_prov`: el filtro de acá es
+independiente del de la sección de Proveedor (ver el comentario del
+llamador), y escribir las del otro sería tocar widgets ajenos."""
 
 
 def render_seccion(d, col_prov, col_prod, col_cant, col_valor, col_punit,
@@ -96,6 +111,7 @@ def render_seccion(d, col_prov, col_prod, col_cant, col_valor, col_punit,
     # completo. Mismo mecanismo que `_cp_rank_atajo_pendiente`
     # (proveedor.py) y sus tres hermanos. Ver arquitectura.md #180.
     if st.session_state.pop("_cp_docs_atajo_pendiente", False):
+        preservar_widgets(_KEYS_WIDGET)
         st.rerun(scope="app")
 
     if not (col_prov and col_valor):

@@ -241,6 +241,14 @@ resto de `graficos/compras/`.
   dibuja el calendario entero es Documentos SUNAT, dentro de su tarjeta —
   de ahí el espejo `{k_rango}__eco` de `app.py`, que es lo que evita que
   el rango se pierda al salir de esa vista. Ver `arquitectura.md` #332.
+- **Y un `st.rerun` al tope de un fragment los esconde a TODOS**: aborta la
+  corrida antes de que se registren, así que la escalada de fecha de una
+  tarjeta le borraba lo elegido a sus propios controles — la granularidad
+  volvía a «Semana» con «Por documento» todavía marcado en pantalla.
+  Antes del `rerun` va `graficos.base.preservar_widgets(_KEYS_WIDGET)`,
+  una tupla por tarjeta; lo vigila
+  `test_graficos.py::_pruebas_widgets_de_fragment_escalado`. Ver
+  `arquitectura.md` #373.
 
 ## En Compras, cada tarjeta tiene SU rango de fecha
 

@@ -61,7 +61,9 @@ from tema import (
     TEXTO_PRINCIPAL,
 )
 from graficos import alturas
-from graficos.base import _compras_layout, _compras_truncar, _slug
+from graficos.base import (
+    _compras_layout, _compras_truncar, _slug, preservar_widgets,
+)
 from graficos.compras._comun import (
     CATEGORIA_SEC, _first_point, _periodo_serie, documento_legible,
     selector_fecha_tarjeta,
@@ -78,6 +80,18 @@ from graficos.compras._comun import (
 # producto del parquet empieza con "Todas las" ni con "Top ".
 _FAM_TODAS = "Todas las familias"
 _PROD_TODOS = "Todos los productos"
+
+_KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familia",
+                "compras_sem_producto")
+"""Los tres controles de la cabecera, para que la escalada no se los lleve.
+
+No es una lista decorativa: la consume `preservar_widgets` en el
+`st.rerun(scope="app")` de más abajo, y sin ella mover la fecha de la
+cabecera devolvía la granularidad a «Semana» —con la píldora «Por
+documento» todavía marcada en pantalla— y los dos filtros a "todas/todos".
+Ver `graficos/base.py::preservar_widgets` y `arquitectura.md` regla #373.
+`test_graficos.py::_pruebas_widgets_de_fragment_escalado` falla si aparece
+un cuarto control acá arriba y nadie lo agrega a esta tupla."""
 
 _TOPS = (5, 10, 20)
 """Los "Top N por valor" que ofrece el selector de producto.
@@ -446,7 +460,15 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
     #   · dentro del fragment de la SECCION escala bien pero deja
     #     esta tarjeta un gesto atras — ver el comentario del
     #     `@st.fragment` de arriba.
+    #
+    # Y LO QUE SE DIBUJA DESPUÉS DE ESTA LÍNEA SE PIERDE, que es el bug
+    # reportado el 2026-09-09: el `rerun` aborta la corrida antes de que
+    # los tres controles de la cabecera se registren, y Streamlit recolecta
+    # el estado de todo widget de este fragment que no se dibujó. Se elegía
+    # «Por documento», se movía la fecha, y el gráfico volvía a semanas con
+    # la píldora todavía marcada. `preservar_widgets` los salva.
     if st.session_state.pop("_cp_sem_atajo_pendiente", False):
+        preservar_widgets(_KEYS_WIDGET)
         st.rerun(scope="app")
 
     # Tarjeta única a todo el ancho de la fila del drill — SIN

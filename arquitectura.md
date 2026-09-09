@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-372 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+373 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (131)
 
@@ -333,7 +333,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 - **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
 
-**Streamlit** (104)
+**Streamlit** (105)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -439,6 +439,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#366** — Esconder stStatusWidget esconde también la única señal de "estoy trabajando"
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 - **#372** — Sacar una tarjeta de su sección y darle sección propia rompe tres cosas que estaban…
+- **#373** — Un st.rerun al tope de un fragment no sólo aborta ese render: le BORRA el estado a TODOS los…
 
 **Datos, R2 y DuckDB** (47)
 
@@ -32984,6 +32985,118 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+373. **Un `st.rerun` al tope de un fragment no sólo aborta ese render: le
+     BORRA el estado a TODOS los widgets del fragment que no llegaron a
+     dibujarse.** Es la #211 —la escala de tiempo volviendo sola a
+     «Días»— pero con el alcance de una tarjeta entera, así que lo que hay
+     que blindar es la tarjeta y no el control.
+
+     Reportado el 2026-09-09, con captura, sobre «Compra por período»:
+     *"si he elegido vista por documento y luego cambio el selector de
+     fecha, ¿por qué regresa a vista por semana, pero en los toggle sigue
+     en vista por documento?"*. La pantalla se contradecía sola: la
+     píldora «Por documento» marcada arriba, el título diciendo «Compra
+     por semana» y dos barras semanales debajo.
+
+     **La cadena** es la misma que documenta la #211; lo que cambia es a
+     quién alcanza:
+
+       1. mover la fecha dispara el callback, que escribe el rango y deja
+          la bandera de escalada;
+       2. Streamlit re-corre el FRAGMENT de la tarjeta;
+       3. el fragment aborta en su primera línea con
+          `st.rerun(scope="app")` — la escalada que necesita el filtro,
+          que vive en `app.py` (regla #180);
+       4. en esa corrida NINGÚN control de la cabecera llegó a
+          registrarse;
+       5. en el rerun completo cada uno nace de cero y toma su `default`.
+
+     **La medición**, esta vez leída en el fuente de Streamlit 1.59.2 y no
+     en el navegador, porque el síntoma no dice qué se recolectó ni por
+     qué la pantalla sigue mostrando lo otro:
+
+       · `script_runner.py::_on_script_finished` limpia salvo
+         `premature_stop`, y `exec_code.py` deja `premature_stop = False`
+         justamente para las `RerunException` ("we want to count as a
+         script completion"). O sea: un `st.rerun` cuenta como corrida
+         terminada, y la limpieza CORRE;
+       · `session_state.py::_remove_stale_widgets` borra todo widget cuyo
+         id no se registró, y `_is_stale_widget` exceptúa a los de otros
+         fragments vía `fragment_ids_this_run` — la poda cae exactamente
+         sobre la tarjeta que abortó, y sobre ninguna otra;
+       · `st.rerun` NO adjunta `widget_states`, así que en el rerun
+         completo el navegador no vuelve a mandar su valor y el widget se
+         registra con su `default`. El frontend sí conserva el suyo, y de
+         ahí que el DOM y Python discrepen: es la #212 vista del otro
+         lado.
+
+     **La cura es `graficos/base.py::preservar_widgets(keys)`**, que antes
+     del `rerun` re-escribe cada valor sobre sí mismo. No es un no-op:
+     `st.session_state[k] = v` guarda en `_new_session_state` —el
+     diccionario de lo "puesto a mano", que la poda no toca— y de ahí lo
+     lee el widget al registrarse, igual que cualquier siembra. Sobrevive
+     al corte por una tercera interna que conviene saber: un `st.rerun`
+     del SERVIDOR no adjunta `widget_states`, y sin eso Streamlit ni
+     siquiera compacta el estado (`on_script_will_rerun` corre sólo cuando
+     el rerun lo pide el navegador). Una key que termina en `*` es un
+     prefijo y se expande contra `session_state`, que es lo que necesita
+     el filtro de proveedores (una checkbox por razón social). Con UNA
+     lista por tarjeta alcanza; el espejo de la #211 sigue siendo válido,
+     pero cuesta una clave paralela por control.
+
+     **Reproducido y curado con `AppTest`**, que corre el script de verdad
+     —incluida la poda de widgets— sin navegador ni datos. Doce líneas: un
+     fragment con la bandera, el `st.rerun(scope="app")` arriba y un
+     `selectbox` con `index=1` debajo. Elegir «Por documento» y apretar
+     «mover fecha» deja la vista dibujando `Semana`; con `preservar_widgets`
+     la deja en `Por documento`. Es la forma barata de probar esta clase de
+     bug: el navegador tarda minutos en llegar al gesto y no dice qué se
+     recolectó.
+
+     De yapa, Streamlit loguea UNA vez por proceso «The widget with key
+     "x" was created with a default value but also had its value set via
+     the Session State API». Es esperado —el control tiene `default=` y
+     acá se le siembra la key— y no se repite: `policies.py` lo apaga con
+     un flag de módulo después del primero. No hay que ir a buscarlo.
+
+     **Lo que NO va en la lista**, y por qué:
+
+       · keys de `st.button` — no guardan nada que perder, y es el único
+         widget al que Streamlit le prohíbe expresamente el seteo por
+         `session_state`;
+       · keys de OTRA tarjeta — `_documentos_proveedor.py` LEE la
+         selección del filtro del Ranking (`cp_prov`) sin dibujarlo;
+         escribirla desde ahí sería tocar un widget que en un rerun
+         completo ya se dibujó, y eso es `StreamlitAPIException`;
+       · lo que se resetea A PROPÓSITO — la ventana propia de Volatilidad
+         vuelve a «Rango» en esa misma escalada porque elegir un rango a
+         mano ES pedir que mande ese rango (y su dueño, `_K_VENTANA`, no
+         es clave de widget).
+
+     **Y eran cinco tarjetas, no una.** El bug se reportó por la
+     granularidad porque es el cambio que más se ve, pero el mismo gesto
+     vaciaba el filtro de Familia y el de Producto de esa misma vista,
+     apagaba «Nombres en barras» y volvía a marcar a TODOS los proveedores
+     en Proveedor, Producto y Detalle de documentos, y borraba lo escrito
+     en el buscador de Volatilidad. Se arreglaron las cinco en el mismo
+     commit.
+
+     **Cómo reconocerlo sin depurar** (heredado de la #211, y sigue siendo
+     lo más rápido): el DOM y Python discrepan sobre qué opción está
+     elegida. Si el control dice A y la vista dibuja B, el estado se
+     recolectó entre las dos corridas. Los botones de al lado conviven con
+     esto sin síntoma, así que una fila donde sólo el desplegable "se
+     resetea" no es un problema de ese widget.
+
+     La guarda es `test_graficos.py::_pruebas_widgets_de_fragment_escalado`:
+     barre el repo por `ast` buscando la FORMA —un `st.rerun` y, más abajo
+     en la misma función, un widget con `key`— y exige que esa key esté
+     declarada o exenta con motivo. Es lo que va a cazar al sexto control,
+     que no se ve venir: no da error, no deja traza, y la vista
+     simplemente aparece en su default.
+
+     (2026-09-09.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32996,7 +33109,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#373**.
+> próxima regla nueva es la **#374**.
 
 >
 

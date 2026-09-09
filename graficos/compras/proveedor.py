@@ -21,7 +21,7 @@ from tema import (ACENTO, ACENTO_TEXTO_OSCURO, ERROR, EXITO, GRIS_BORDE,
 from inyecciones import inject_hover_kpis
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
-    paso_etiquetas, publicar_var_px,
+    paso_etiquetas, preservar_widgets, publicar_var_px,
 )
 from graficos.compras._comun import (
     CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, agregar_periodo,
@@ -33,6 +33,26 @@ from graficos.compras._css_proveedor import (
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos import alturas, periodo
+
+
+_KEYS_WIDGET = (
+    "compras_prov_gran", "cp_prov_win_size", "cp_evo_periodo",
+    "compras_prov_prod_scope", "compras_prov_topn",
+    "compras_prov_prov_scope", "cp_prov_show_names",
+    "cp_prov_q", "cp_prov_cb::*",
+)
+"""Los controles de esta sección, para que la escalada no se los lleve.
+
+La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo:
+ese rerun aborta la corrida antes de dibujarlos y Streamlit recolecta lo
+que no se dibujó, así que sin esta tupla mover la fecha de la cabecera
+devolvía la granularidad a «Mes», apagaba «Nombres en barras» y volvía a
+marcar a TODOS los proveedores. Ver `graficos/base.py::preservar_widgets` y
+`arquitectura.md` regla #373.
+
+Las dos últimas son del filtro de proveedores (`_comun.py`), que dibuja una
+checkbox por razón social — de ahí el prefijo con `*`. Los cinco botones de
+atajo (`cp_prov_topn3`…) NO van: un `st.button` no guarda nada."""
 
 
 def _prov_mayor(src, col_prov, col_valor):
@@ -74,7 +94,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # datos quietos. Mismo patrón y mismo motivo que
     # `graficos/compras/__init__.py:216`. Va ANTES de dibujar nada para no
     # gastar un render que se va a descartar. Ver arquitectura.md #180.
+    # `preservar_widgets` porque el rerun aborta ACÁ: los controles de la
+    # sección todavía no se registraron y Streamlit recolecta el estado de
+    # todo widget de este fragment que no se dibujó (ver `_KEYS_WIDGET`).
     if st.session_state.pop("_cp_rank_atajo_pendiente", False):
+        preservar_widgets(_KEYS_WIDGET)
         st.rerun(scope="app")
     if not (col_prov and col_valor):
         st.info("Faltan columnas (Proveedor, Valor) para este gráfico.")

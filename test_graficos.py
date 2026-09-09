@@ -1577,6 +1577,208 @@ def _pruebas_estado_y_utils():
     return fallos
 
 
+def _pruebas_widgets_de_fragment_escalado():
+    """Un `st.rerun` al tope de un fragment le borra el estado a SUS widgets.
+
+    Reportado el 2026-09-09 sobre «Compra por período»: se elegía «Por
+    documento», se movía la fecha de la cabecera, y el gráfico volvía a
+    semanas — con la píldora «Por documento» todavía marcada. Es la regla
+    #211 (la escala de tiempo volviendo sola a «Días») pero sobre la
+    tarjeta entera: el `st.rerun(scope="app")` que escala el gesto a la app
+    (regla #180) aborta la corrida antes de que los controles se
+    registren, y Streamlit recolecta el estado de todo widget de ESE
+    fragment que no se dibujó. La cura es `base.py::preservar_widgets`, y
+    la regla nueva es la #373.
+
+    LO QUE ESTA GUARDA CUBRE es lo único que no se ve venir: alguien
+    agrega un control a una tarjeta que escala —o copia una cabecera para
+    hacer la tarjeta siguiente— y el control se resetea solo cada vez que
+    se toca la fecha. No da error y no deja traza: la vista aparece en su
+    default, y en pantalla el widget sigue marcando lo otro (el navegador
+    conserva su valor, regla #212).
+
+    El barrido es por `ast` y mira TODO el repo, no una lista de módulos:
+    lo que se busca es la FORMA —un `st.rerun` y, más abajo en la misma
+    función, un widget con `key`— y esa forma puede aparecer en cualquier
+    dashboard nuevo.
+    """
+    import ast
+    import pathlib
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    widgets tras rerun · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA widgets tras rerun · {nombre}: "
+                  f"got={got!r} exp={exp!r}")
+
+    # Los widgets que GUARDAN algo. `st.button` NO está, y es a propósito:
+    # no tiene estado que perder, y es el único al que Streamlit prohíbe
+    # expresamente escribirle el valor por `session_state`.
+    _WIDGETS = {
+        "pills", "selectbox", "segmented_control", "multiselect", "toggle",
+        "checkbox", "radio", "slider", "select_slider", "text_input",
+        "number_input", "date_input", "text_area", "color_picker",
+        "time_input", "data_editor", "feedback",
+    }
+
+    # Lo que NO se preserva, con nombre y apellido y el motivo. Igual que
+    # el par Proveedor/Documentos de la guarda de al lado: la excepción se
+    # escribe entera en vez de aflojar la prueba, así el caso que esto
+    # caza —un control nuevo sin preservar— sigue fallando.
+    _EXENTOS = {
+        ("_documentos_proveedor.py", "cp_prov_q"):
+            "esta sección sólo LEE la selección del filtro de Proveedor "
+            "(`_sel_rank, _ =`); el que lo DIBUJA es aquel drill, y "
+            "escribirle sus keys desde acá sería tocar widgets ajenos — en "
+            "un rerun completo aquéllos ya se dibujaron, y eso es "
+            "StreamlitAPIException",
+        ("_documentos_proveedor.py", "cp_prov_cb::*"): "ídem",
+        ("volatilidad.py", "compras_vol_periodo_*"):
+            "la escalada manda la ventana a HEREDA A PROPÓSITO (elegir un "
+            "rango a mano es pedir que mande ese rango); su dueño es "
+            "`_K_VENTANA`, que no es clave de widget",
+        ("movimientos_comun.py", "mov_evo_gran"):
+            "ya lo cubre el espejo `_K_GRAN_ECO`, que es la forma vieja de "
+            "la misma cura (regla #211, medida ahí el 2026-09-05)",
+        ("ventas_horario.py", "vh_otra_*"):
+            "los reruns de ese panel son de scope fragment y viven dentro "
+            "de handlers de botón; lo único que queda debajo es el "
+            "`date_input` «Otra fecha», que es de un solo uso y nace vacío",
+    }
+
+    def _key_de(nodo):
+        """La key de un `key=` literal, o su PREFIJO + `*` si es f-string.
+
+        Una key armada (`f"vh_otra_{grano}"`) no se puede comparar contra
+        una lista, pero su prefijo sí: es la misma forma con la que
+        `preservar_widgets` declara una familia."""
+        if isinstance(nodo, ast.Constant) and isinstance(nodo.value, str):
+            return nodo.value
+        if isinstance(nodo, ast.JoinedStr):
+            pre = ""
+            for parte in nodo.values:
+                if isinstance(parte, ast.Constant):
+                    pre += str(parte.value)
+                else:
+                    break
+            return f"{pre}*" if pre else None
+        return None
+
+    def _cubre(declarada, key):
+        return (declarada == key
+                or (declarada.endswith("*")
+                    and key.startswith(declarada[:-1])))
+
+    def _tupla(arbol, nombre):
+        """El valor de un `NOMBRE = (...)` de nivel de módulo."""
+        for nodo in arbol.body:
+            if not isinstance(nodo, ast.Assign):
+                continue
+            if not any(isinstance(t, ast.Name) and t.id == nombre
+                       for t in nodo.targets):
+                continue
+            try:
+                return [str(v) for v in ast.literal_eval(nodo.value)]
+            except (ValueError, TypeError, SyntaxError):
+                return []
+        return []
+
+    raiz = pathlib.Path(__file__).parent
+    sin_preservar, exentos_usados, n_funcs = [], set(), 0
+    for py, texto in _fuentes_py(raiz):
+        if py.name.startswith("test_"):
+            continue
+        try:
+            arbol = ast.parse(texto)
+        except SyntaxError:                      # que lo cante otra guarda
+            continue
+        for fn in ast.walk(arbol):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            reruns = [n.lineno for n in ast.walk(fn)
+                      if isinstance(n, ast.Call)
+                      and getattr(n.func, "attr", None) == "rerun"]
+            if not reruns:
+                continue
+            corte = min(reruns)
+            # Lo DECLARADO: el argumento de `preservar_widgets(...)`,
+            # resuelto contra la tupla de nivel de módulo que nombra.
+            declaradas = []
+            for n in ast.walk(fn):
+                if (isinstance(n, ast.Call)
+                        and getattr(n.func, "id", None) == "preservar_widgets"
+                        and n.args and isinstance(n.args[0], ast.Name)):
+                    declaradas += _tupla(arbol, n.args[0].id)
+            # Y lo EXPUESTO: lo que se dibuja después del rerun.
+            expuestas = []
+            for n in ast.walk(fn):
+                if not isinstance(n, ast.Call) or n.lineno <= corte:
+                    continue
+                nom = (getattr(n.func, "attr", None)
+                       or getattr(n.func, "id", None))
+                if nom in _WIDGETS:
+                    k = next((_key_de(kw.value) for kw in n.keywords
+                              if kw.arg == "key"), None)
+                    if k:
+                        expuestas.append((n.lineno, k))
+                elif nom == "selector" and n.args:
+                    # `graficos/periodo.py`: la ventana propia de la tarjeta.
+                    k = _key_de(n.args[0])
+                    if k:
+                        expuestas.append((n.lineno, k))
+                elif nom == "filtro_proveedores" and n.args:
+                    # `_comun.py`: una checkbox por proveedor + su buscador.
+                    k = _key_de(n.args[0])
+                    if k and not k.endswith("*"):
+                        expuestas += [(n.lineno, f"{k}_q"),
+                                      (n.lineno, f"{k}_cb::*")]
+            if expuestas:
+                n_funcs += 1
+            for lineno, key in expuestas:
+                if any(_cubre(d, key) for d in declaradas):
+                    continue
+                if (py.name, key) in _EXENTOS:
+                    exentos_usados.add((py.name, key))
+                    continue
+                sin_preservar.append(f"{py.name}:{lineno} {key}")
+
+    check("todo widget dibujado tras un rerun está preservado o exento",
+          sorted(set(sin_preservar)), [])
+    # Un glob que no matchea nada pasa en verde sin haber leído nada.
+    check("el barrido encontró las funciones que escalan", n_funcs >= 6, True)
+    # Y al revés: una exención que ya no aplica es una mentira que envejece.
+    check("no quedan exenciones muertas",
+          sorted(set(_EXENTOS) - exentos_usados), [])
+
+    # ── La expansión de `*`, que es lo único con lógica ──────────────────
+    # Corre en bare mode: sin app, `st.session_state` es un dict.
+    import streamlit as st
+
+    from graficos.base import preservar_widgets
+
+    st.session_state["_t_pw_gran"] = "Por documento"
+    st.session_state["_t_pw_cb::ACME S.A."] = True
+    st.session_state.pop("_t_pw_falta", None)
+    preservar_widgets(("_t_pw_gran", "_t_pw_cb::*", "_t_pw_falta"))
+    check("preserva lo que existe",
+          (st.session_state["_t_pw_gran"],
+           st.session_state["_t_pw_cb::ACME S.A."]),
+          ("Por documento", True))
+    # Una key declarada que todavía no existe NO se crea: sembrar `None` en
+    # la clave de un widget es elegir por el usuario.
+    check("una key declarada que no existe no se inventa",
+          "_t_pw_falta" in st.session_state, False)
+    for _k in ("_t_pw_gran", "_t_pw_cb::ACME S.A."):
+        st.session_state.pop(_k, None)
+
+    return fallos
+
+
 def _pruebas_rango_por_tarjeta():
     """Compras: una categoría de rango por SECCIÓN de la pila (2026-09-08).
 
@@ -2974,6 +3176,7 @@ def main():
 
     # ── Ventana propia de una tarjeta (graficos/periodo.py) ─────────────
     fallos += _pruebas_rango_por_tarjeta()
+    fallos += _pruebas_widgets_de_fragment_escalado()
     fallos += _pruebas_periodo_por_vista()
 
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────
