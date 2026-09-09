@@ -1748,6 +1748,30 @@ JS = """
             return docDeAgGrid(porKeyReal(key));
         }
 
+        // La MISMA grilla se alcanza desde VARIAS keys, porque docDeAgGrid
+        // busca el iframe hacia ABAJO: lo encuentran el widget del grid, la
+        // tarjeta que lo envuelve y el marco de mas afuera. El estado de la
+        // seccion Tabla se guardaba por la key del PIN, asi que ajustar una
+        // tabla con el pin en la tarjeta y copiarla con el pin en una celda
+        // devolvia "nada que copiar" -- y en silencio, porque
+        // reaplicarTablas recorre TODAS las entradas y la pantalla seguia
+        // mostrando lo ajustado. Se normaliza a la key mas CERCANA al
+        // iframe, que es la misma se pinee donde se pinee.
+        // Ver arquitectura.md regla #369.
+        function keyDeGrid(key) {
+            var el = porKeyReal(key);
+            if (!el || !el.querySelector) return key;
+            var ifr = el.querySelector('iframe[title="st_aggrid.AgGrid.agGrid"]');
+            if (!ifr) return key;
+            var n = ifr.parentNode;
+            while (n && n !== doc.body) {
+                var k = keyPropiaDe(n);
+                if (k) return k;
+                n = n.parentNode;
+            }
+            return key;
+        }
+
         // getComputedStyle SIEMPRE devuelve los colores como `rgb(a, b, c)`,
         // nunca como el `#rrggbb` que se escribio en el CSS. Sin traducir,
         // dos cosas fallaban a la vez: el swatch de la paleta no se marcaba
@@ -1839,6 +1863,7 @@ JS = """
         }
 
         function tablaDe(key) {
+            key = keyDeGrid(key);
             var ts = win.__disenoState.tablas;
             if (!ts[key]) {
                 // `null` = "no lo toque" en TODOS los campos, y no es un
@@ -1930,6 +1955,20 @@ JS = """
         var SEL_CAB_CAJA  = '.ag-header, .ag-header-cell, .ag-header-group-cell';
         var SEL_CAB_TEXTO = '.ag-header-cell-text, .ag-header-group-text';
 
+        // Un `style=""` con color/fondo en una celda o una fila sale SIEMPRE
+        // de Python: AG Grid no pinta inline por su cuenta (lo suyo son las
+        // variables del tema). Se ignora el resto del inline, que es cromo
+        // de la virtualizacion (transform, height, width).
+        function colorInlineDePython(gdoc) {
+            if (!gdoc) return false;
+            var nodos = gdoc.querySelectorAll('.ag-cell[style], .ag-row[style]');
+            for (var i = 0; i < nodos.length; i++) {
+                var st = nodos[i].getAttribute('style') || '';
+                if (st.indexOf('color') >= 0 || st.indexOf('background') >= 0) return true;
+            }
+            return false;
+        }
+
         function reglasDeTabla(t) {
             var R = [];
             function add(sel, prop, val) {
@@ -2013,6 +2052,10 @@ JS = """
         // (regla #169). Asi que se emite el dict tal como se escribe en
         // `tablas/_css.py`, con los colores por su nombre de `tema.py`.
         function construirBloqueTabla(key) {
+            // Normalizada UNA vez: la usa la busqueda del estado y tambien
+            // el encabezado del bloque, que si nombrara la key del pin
+            // mandaria a grepear un widget que no es la tabla.
+            key = keyDeGrid(key);
             var t = win.__disenoState.tablas[key];
             if (!t) return null;
             var R = reglasDeTabla(t);
@@ -2030,6 +2073,23 @@ JS = """
 
             if (R.length) {
                 out.push('# copiado del modo diseño — tabla de ' + key);
+                // Aviso, no adorno: el bloque sale con `!important` en
+                // toda propiedad que no sea variable, y un `!important` de
+                // autor le GANA al estilo inline. En las grillas que arman
+                // la celda o la fila desde Python (`cellStyle`,
+                // `getRowStyle`) eso borra logica por columna sin decir
+                // nada -- en el ranking de Proveedores se comeria el color
+                // oscuro de los montos, que es lo que los hace legibles
+                // encima de su barra. Ver arquitectura.md regla #368.
+                if (colorInlineDePython(docDeAgGridDeKey(key))) {
+                    out.push('# OJO: esta grilla pinta celdas/filas desde PYTHON'
+                             + ' (cellStyle / getRowStyle).');
+                    out.push('# El `!important` de abajo le gana a ese inline y lo borra.'
+                             + ' Si al');
+                    out.push('# pegarlo se pierde un color que en pantalla estaba,'
+                             + ' sacale el');
+                    out.push('# !important a esa propiedad. Ver arquitectura.md regla #368.');
+                }
                 out.push('# Va en el custom_css del AgGrid (PYTHON), no en estilos/: la');
                 out.push('# grilla corre dentro de un iframe y una regla del documento');
                 out.push('# padre no la alcanza. Para las tablas que pasan por');
@@ -2148,7 +2208,7 @@ JS = """
         }
 
         function aplicarAltoFilaDeKey(key, gdoc) {
-            var t = win.__disenoState.tablas[key];
+            var t = win.__disenoState.tablas[keyDeGrid(key)];
             if (!t || !t.filaAlto) return;
             var api = apiDeAgGrid(gdoc || docDeAgGridDeKey(key));
             if (!api) return;
@@ -2162,7 +2222,7 @@ JS = """
         function aplicarEstiloTabla(key) {
             var gdoc = docDeAgGridDeKey(key);
             if (!gdoc || !gdoc.head) return;
-            var t = win.__disenoState.tablas[key];
+            var t = win.__disenoState.tablas[keyDeGrid(key)];
             var css = t ? cssDeTabla(t) : '';
             var st = gdoc.getElementById(ID_STYLE_TABLA);
             if (!css) {

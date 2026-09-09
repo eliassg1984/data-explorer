@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-368 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+369 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (129)
+**CSS y estilos** (130)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -163,6 +163,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#365** — El estado por DEFECTO de un riel plegable no es una preferencia: decide con qué ancho nace la…
 - **#366** — Esconder stStatusWidget esconde también la única señal de "estoy trabajando"
 - **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
+- **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
 
 **Layout y alturas** (39)
 
@@ -544,7 +545,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (29)
+**Herramientas de desarrollo** (30)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -575,6 +576,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#295** — El inspector resolvía "qué hay bajo el cursor" con UN solo punto (e.target) — con elementos…
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
+- **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
 
 **Decisiones de diseño y UX** (62)
 
@@ -32774,6 +32776,55 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+369. **La MISMA grilla se puede fijar desde varias keys, y el modo diseño
+     guardaba sus ajustes bajo la del PIN — así que "Copiar CSS" podía
+     devolver «nada que copiar» con la tabla ya ajustada en pantalla.**
+     Pérdida silenciosa de trabajo: lo que se ve y lo que se copia dejan de
+     ser lo mismo, y nada avisa.
+
+     Cómo llegó (2026-09-09): «edité con mi herramienta de diseño y deseo
+     replicarlo en producción». Lo que pegó fue, dos veces, el bloque del
+     INSPECTOR (`--- copiar para IA ---`), no el de "Copiar CSS": el
+     portapapeles no había cambiado desde el clic derecho, que copia el
+     bloque del inspector como efecto de fijar. El cambio existía —la
+     captura mostraba las celdas en violeta— pero el botón no lo encontró.
+
+     **El mecanismo.** `docDeAgGrid` busca el `iframe` hacia ABAJO desde el
+     elemento fijado, así que a la misma grilla llegan CUATRO keys de este
+     drill: `compras_prov_rank_grid` (el widget), `compras_prov_card_ranking`
+     (la tarjeta), `cp_chart_wrap` y `compras_prov_marco`. La sección
+     «Tabla (AgGrid)» aparece con cualquiera de ellas —es lo que la hace
+     cómoda, regla #185— y guardaba en `__disenoState.tablas[key_del_pin]`.
+     Ajustar con el pin en la tarjeta y copiar con el pin en el widget son
+     dos entradas distintas del mismo diccionario.
+
+     Y no se nota, por dos motivos que se suman: `reaplicarTablas` recorre
+     TODAS las entradas en cada tick, así que la pantalla sigue mostrando lo
+     ajustado aunque el pin se haya movido; y el aviso de que no se copió
+     nada son diez píxeles de gris al lado del botón.
+
+     **El arreglo:** `keyDeGrid()` normaliza a la key más CERCANA al iframe
+     —sube desde el `<iframe>` hasta el primer ancestro con `st-key-`— y por
+     ahí pasan las cuatro entradas al estado (`tablaDe`,
+     `construirBloqueTabla`, `aplicarEstiloTabla`, `aplicarAltoFilaDeKey`).
+     Verificado en el navegador: las cuatro keys del drill colapsan a
+     `compras_prov_rank_grid`, un contenedor sin grilla adentro conserva la
+     suya, y la secuencia que fallaba —ajustar desde la tarjeta, copiar
+     desde otro pin— ahora emite el `custom_css`.
+
+     Dos cosas que este caso dejó y no son el bug:
+     · **El clic derecho copia el bloque del inspector.** Si después
+       "Copiar CSS" no copia nada, el portapapeles queda con ESE texto y se
+       pega creyendo que es el otro. Los dos bloques se distinguen por la
+       primera línea (`--- copiar para IA ---` vs `# copiado del modo
+       diseño`).
+     · **El copiado automático se bloquea seguido** (pasó en esta misma
+       verificación). No es una falla muda: el bloque aparece en un cuadro
+       debajo del botón, seleccionado, para un `Ctrl+C` a mano — pero hay
+       que mirar ahí. Ver § Reglas #39.
+
+     (2026-09-09.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32786,7 +32837,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#369**.
+> próxima regla nueva es la **#370**.
 
 >
 
