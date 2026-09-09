@@ -3,6 +3,7 @@ ver_figura.py — vuelca a PNG los gráficos de un dashboard, SIN navegador.
 
     python herramientas/ver_figura.py Ventas
     python herramientas/ver_figura.py Ventas -s ventas_comp_vista=Descomposición
+    python herramientas/ver_figura.py Compras --desde 2026-08-15 --hasta 2026-08-20
     python herramientas/ver_figura.py --lista
 
 Por qué existe (2026-08-12): hasta ahora la única forma de VER un gráfico
@@ -225,6 +226,42 @@ def _cargar_df(reporte, cfg):
     return cargar_rango(cfg["archivo"], col_rango, hoy.replace(day=1), hoy)
 
 
+def _acotar(df, cfg, desde, hasta):
+    """El df como lo entrega la FRANJA, no como sale del parquet.
+
+    Existe desde el 2026-09-08 y por una limitación que se vio de golpe: el
+    dashboard se invoca con el df ENTERO, así que toda vista de grano diario
+    salía con el histórico completo encima. En «Compra por documento» eso son
+    ~17.000 barras en 1550px — un PNG donde no se puede juzgar nada de lo que
+    se fue a mirar, y menos el cromo de calendario que se dibuja sólo cuando
+    los días tienen píxeles. Sin esto, "verificar" un cambio de grano diario
+    volvía a ser levantar la app (que es justo lo que este script existe para
+    evitar).
+
+    La columna de fecha sale de `REPORTES` y no se adivina: `kpi_fecha` es la
+    que ya declara cada reporte para sus KPIs, y `carga_por_rango` la que usan
+    los que se traen de a rangos. Sin ninguna de las dos, no se recorta y se
+    dice por qué — callarse dejaría un PNG de todo el histórico que parece
+    haber respetado el flag.
+    """
+    if not (desde or hasta):
+        return df
+    col = cfg.get("kpi_fecha") or cfg.get("carga_por_rango") or cfg.get("fecha")
+    if not col or col not in df.columns:
+        print(f"  [aviso] --desde/--hasta ignorados: {col or 'el reporte'} "
+              "no es una columna de fecha de este parquet")
+        return df
+    import pandas as _pd
+    _fe = _pd.to_datetime(df[col], errors="coerce")
+    m = _fe.notna()
+    if desde:
+        m &= _fe >= _pd.Timestamp(desde)
+    if hasta:
+        m &= _fe <= _pd.Timestamp(hasta)
+    print(f"  {int(m.sum()):,} filas tras acotar por {col}")
+    return df[m]
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Vuelca a PNG los gráficos de un dashboard, sin navegador.")
@@ -232,6 +269,9 @@ def main():
     ap.add_argument("-s", "--set", action="append", default=[], metavar="KEY=VALOR",
                     help="fuerza el valor de un widget por su key "
                          "(repetible). Ej: -s ventas_comp_vista=Descomposición")
+    ap.add_argument("--desde", metavar="AAAA-MM-DD",
+                    help="acota el df como lo haría la franja de fechas")
+    ap.add_argument("--hasta", metavar="AAAA-MM-DD")
     ap.add_argument("--lista", action="store_true",
                     help="lista los reportes con dashboard y sale")
     args = ap.parse_args()
@@ -271,6 +311,7 @@ def main():
         print("Sin datos: R2 no respondió o el parquet vino vacío.")
         return 1
     print(f"  {len(df):,} filas")
+    df = _acotar(df, cfg, args.desde, args.hasta)
 
     try:
         _DASHBOARDS[args.reporte](df, args.reporte, df_full=df, tabla_cb=lambda _d: None)

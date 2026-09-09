@@ -202,6 +202,38 @@ resto de `graficos/compras/`.
   de ahí el espejo `{k_rango}__eco` de `app.py`, que es lo que evita que
   el rango se pierda al salir de esa vista. Ver `arquitectura.md` #332.
 
+## En Compras, cada tarjeta tiene SU rango de fecha
+
+Desde el 2026-09-08. Antes los cinco selectores de las cabeceras
+escribían una sola clave, así que mover la fecha en una tarjeta la movía
+en las otras cuatro — reportado tal cual: «pensé que cada tarjeta, su
+selector, solo afectaba a su tarjeta». Ver `arquitectura.md` regla #363.
+
+**Hay DOS controles de fecha en Compras y no son lo mismo.** Se parecen,
+viven los dos en la cabecera de la tarjeta, y en Volatilidad están los dos
+en la misma fila:
+
+- El **trigger con el rango escrito** (`1 sep – 5 sep 2026`) —
+  `base.py::selector_fecha_tarjeta`. Escribe la clave de SU sección.
+- El **desplegable `Rango / 3m / 12m / 24m / Todo`** — `graficos/periodo.py`.
+  Es la ventana relativa de esa tarjeta, y siempre fue por tarjeta.
+
+**Para agregar una tarjeta con selector de fecha son dos líneas:** una
+entrada en `CATEGORIA_SEC` (`graficos/compras/_comun.py`, con la clave de
+su sección de `_PILA`) y el `categoria=` en la llamada a
+`selector_fecha_tarjeta`. El recorte lo hace `_d_sec()` en el dispatcher,
+sobre `d_full` — el drill no se entera: sigue recibiendo su `d`.
+
+**Olvidarse el `categoria=` no da error**: la tarjeta vuelve callada al
+rango compartido y el bug reaparece en una sola vista. Lo ataja
+`test_graficos.py::_pruebas_rango_por_tarjeta`, que barre
+`graficos/compras/` con `ast`.
+
+Dos tarjetas comparten categoría a propósito: **Ranking de proveedores y
+Detalle de documentos** son la misma sección, y la tabla se calcula sobre
+los `top_provs` del ranking de arriba. Rango por tarjeta es una clave por
+**unidad de lectura**, no por trigger.
+
 ## Antes de sumar una columna "comparable": mirá su GRANO
 
 `compras.parquet` trae `VALOR_ANO_ANTERIOR`, `CANTIDAD_ANO_ANTERIOR` y
@@ -504,14 +536,17 @@ python herramientas/ver_figura.py Ventas -s "ventas_graf_tipo=Comparativo vs Añ
 ```
 
 `-s key=valor` fuerza cualquier widget o el item del rail por su key (las
-muestra el inspector). Existe porque medir el DOM prueba que un gráfico
-**funciona**, nunca que **se ve**: así se escapó un legend legible-en-el-DOM
-e invisible en pantalla (regla #91). Necesita `kaleido` de
-`requirements-dev.txt` y, una vez por máquina,
+muestra el inspector), y **`--desde/--hasta` acotan el df como lo haría la
+franja** — sin eso el dashboard recibe el histórico entero y toda vista de
+grano diario sale con miles de barras en 1550px. Existe porque medir el DOM
+prueba que un gráfico **funciona**, nunca que **se ve**: así se escapó un
+legend legible-en-el-DOM e invisible en pantalla (regla #91). Necesita
+`kaleido` de `requirements-dev.txt` y, una vez por máquina,
 `python -c "import kaleido; kaleido.get_chrome_sync()"`.
 Ojo: los **márgenes** del PNG no son fieles (el export fuerza `automargin`
 porque kaleido no expande solo como el navegador) — para juzgar recortes,
-el navegador manda.
+el navegador manda. No es teórico: un rótulo de eje de tres renglones se ve
+impecable en el PNG y en la página se mete encima del legend (regla #362).
 
 También existe el inspector propio: **`?debug=1` en la URL o `Alt+I`**
 activa `inject_element_inspector` (tooltip con selectores y estilos al

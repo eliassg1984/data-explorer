@@ -60,12 +60,19 @@ def clave_rango(reporte, usa_carga_rango, categoria=None):
 
     - carga_por_rango → misma clave que el loader R2 (`rango_carga_*`), así
       el date-picker controla directamente qué se descarga.
-    - `categoria` → una clave POR CATEGORÍA de gráfico. Hoy solo lo usa
-      Ajuste de Inventario, con "visual" o "tiempo" (ver
-      graficos.ajuste.categoria_rango_ajuste): Cascada/Mapa de calor/
-      Distribución/Tabla funcionan mejor acotados a un período, mientras
-      Evolución/Comparativa necesitan varios meses o un año — antes
-      compartían una sola clave y se pisaban el rango entre sí.
+    - `categoria` → una clave POR CATEGORÍA de gráfico. La usan DOS
+      reportes, y por motivos distintos:
+        · Ajuste de Inventario, con "visual" o "tiempo" (ver
+          graficos.ajuste.categoria_rango_ajuste): Cascada/Mapa de calor/
+          Distribución/Tabla funcionan mejor acotados a un período,
+          mientras Evolución/Comparativa necesitan varios meses o un año —
+          antes compartían una sola clave y se pisaban el rango entre sí.
+        · Compras, con una categoría por SECCIÓN de su pila (ver
+          graficos.compras.CATEGORIA_SEC): ahí la categoría no agrupa
+          gráficos parecidos, separa TARJETAS. Cada una trae su propio
+          selector de fecha en la cabecera y hasta el 2026-09-08 los cinco
+          escribían esta misma clave sin categoría, así que mover la fecha
+          en una movía las otras cuatro. Ver regla #363.
     - resto → clave de filtro local.
 
     Hasta el 2026-08-08 esta función recibía TAMBIÉN un `es_ajuste`, que
@@ -79,11 +86,13 @@ def clave_rango(reporte, usa_carga_rango, categoria=None):
     if usa_carga_rango:
         return f"rango_carga_{reporte}"
     if categoria:
-        # OJO: esta clave NO lleva el reporte. Hoy no colisiona porque solo
-        # Ajuste usa categorías Y app.py limpia estas claves al cambiar de
-        # reporte. Si un segundo reporte adopta rango por categoría, hay que
-        # meter `reporte` en la clave — y entonces esa limpieza sobra.
-        return f"ajuste_rango_aplicado_{categoria}"
+        # LA CLAVE LLEVA EL REPORTE desde el 2026-09-08, y ese cambio se
+        # hizo justo cuando llegó el segundo reporte con categorías
+        # (Compras). Antes era `ajuste_rango_aplicado_{categoria}` y no
+        # colisionaba sólo porque el único usuario era Ajuste Y `app.py`
+        # limpiaba esas dos claves al cambiar de reporte — esa limpieza ya
+        # no hace falta y se retiró con este cambio.
+        return f"rango_cat_{reporte}_{categoria}"
     return f"rango_franja_{reporte}"
 
 
@@ -433,17 +442,22 @@ def clave_corte(reporte, categoria=None):
     """Clave de session_state del corte activo de `reporte`.
 
     Espeja EXACTAMENTE la partición de `clave_rango`: si el reporte separa
-    rango por categoría (hoy solo Ajuste, visual/tiempo), el corte se
-    separa igual. Si no espejara, cambiar de item del rail dejaría vivo un
-    corte que ya no corresponde al rango que se está mostrando — el mismo
-    bug de desync que motivó este módulo, con otro nombre.
+    rango por categoría (Ajuste por categoría del rail, Compras por sección
+    de la pila), el corte se separa igual. Si no espejara, cambiar de item
+    del rail dejaría vivo un corte que ya no corresponde al rango que se
+    está mostrando — el mismo bug de desync que motivó este módulo, con
+    otro nombre.
+
+    El reporte va adentro de la clave por el mismo motivo que en
+    `clave_rango`, y desde el mismo día: dos reportes con categorías se
+    pisarían.
 
     A diferencia de `clave_rango` no distingue `usa_carga_rango`: el corte
     nunca decide QUÉ se descarga de R2 (para eso ya escribió el rango),
     solo estrecha lo que ya está en memoria.
     """
     if categoria:
-        return f"ajuste_corte_aplicado_{categoria}"
+        return f"corte_cat_{reporte}_{categoria}"
     return f"corte_franja_{reporte}"
 
 

@@ -55,11 +55,16 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import SERIE_PRINCIPAL, TEXTO_PRINCIPAL, BLANCO
+import cortes
+from tema import (
+    ADVERTENCIA_TEXTO, BLANCO, GRIS_BORDE, GRIS_TEXTO, SERIE_PRINCIPAL,
+    TEXTO_PRINCIPAL,
+)
 from graficos import alturas
-from graficos.base import _compras_layout, _slug
+from graficos.base import _compras_layout, _compras_truncar, _slug
 from graficos.compras._comun import (
-    _first_point, _periodo_serie, selector_fecha_tarjeta,
+    CATEGORIA_SEC, _first_point, _periodo_serie, documento_legible,
+    selector_fecha_tarjeta,
 )
 
 
@@ -157,6 +162,192 @@ def _tope_puntos(n_periodos):
     return max(1, min(_TOPE_PUNTOS, caben))
 
 
+# ===========================================================================
+# EL CALENDARIO DEL EJE: separación de días, fin de semana y feriado
+# ===========================================================================
+# Pedido el 2026-09-08, mirando "Por documento": "una leve línea punteada
+# vertical que dé una idea de separación visual de días, y añadir algo que
+# indique el día, si es finde semana, o si es feriado".
+#
+# El rótulo del eje era el síntoma. Con 61 documentos en la ventana de la
+# captura (6 días), `_paso` dejaba un rótulo cada 4 barras y salía
+# «15/08 15/08 15/08 15/08 17/08 …»: cuatro veces la MISMA fecha, y aun así
+# sin decir dónde empieza el día siguiente. Un rótulo por DÍA, centrado en su
+# tramo de barras, dice las dos cosas con menos tinta.
+#
+# LA REGLA DE LA PUNTEADA, que vale para las dos granularidades de grano
+# diario: la línea marca el cambio de la unidad de ARRIBA de la barra.
+#   · «Por documento» — la barra es un documento, arriba está el día  -> una
+#     línea en cada cambio de día.
+#   · «Día» — la barra YA es un día, arriba está la semana  -> una línea en
+#     cada lunes. Es exactamente lo que hace `ventas_comparativo` en su
+#     granularidad día, y de ahí sale también la paleta de las bandas.
+#
+# En Semana/Mes/Año no se dibuja nada: no hay día que sombrear, y un feriado
+# adentro de una barra que suma siete días no explica esa barra. (Ventas sí
+# marca ahí el DESBALANCE de feriados, pero porque COMPARA dos períodos —
+# acá no hay contra qué.)
+#
+# NO ES CÓSMETICO: un lunes de S/ 0 al lado de un domingo de S/ 8.000 se lee
+# como un bache del negocio hasta que la banda dice "domingo". Los feriados
+# son la misma historia una vez al mes.
+
+_PX_MIN_DIA_ROTULO = 16
+"""Píxeles por día a partir de los cuales el eje admite rótulo y punteada.
+
+Mismo criterio —y mismo `_LIENZO_PX`— que `_tope_puntos`: el número sale de
+los píxeles que hay, no de un día lindo. A 16px por día se rotula uno de
+cada dos y las punteadas todavía se distinguen entre sí. Con 820px de lienzo
+el techo cae en ~51 días, un poco más que el rango por defecto de la franja
+(1º del mes → hoy)."""
+
+_PX_MIN_DIA_BANDA = 4
+"""Y el piso de las BANDAS, que aguantan mucho más que los rótulos.
+
+Una banda no tiene que leerse una por una: de lejos es un patrón —dos
+franjas grises cada cinco huecos— y eso sigue diciendo "fin de semana" a 4px
+de ancho. Por eso sobrevive al rótulo y a la punteada en vez de apagarse con
+ellos: ~205 días de techo contra ~51. Más allá de eso las BARRAS mismas ya
+no llegan al píxel y el gráfico no es de días."""
+
+_ROTULO_DIA_PX = 44
+"""Lo que OCUPA un rótulo de día: los 36px que mide más 8 de aire.
+
+Los 36 están medidos en el navegador (figura a 915px de tarjeta, Plotly
+3.6): los 14 rótulos de un mes miden entre 30 y 36px. El aire no: es la
+corrección de haber usado 36 pelado, que la app en vivo desmintió al primer
+intento — con 22 días en 808px de lienzo el paso daba 1 (un rótulo por día,
+36,7px de separación) y **7 pares se pisaban**. Un rótulo que mide 36 no
+entra en 36: entra en 36 más el hueco que lo separa del vecino.
+
+Con 44 el mismo caso pasa a un rótulo cada dos días —73px de separación,
+37 de aire— y en el peor caso que admite `_PX_MIN_DIA_ROTULO` (51 días)
+quedan 12. Es el mismo error de la #349: medir el ancho del contenido y
+olvidar que el contenido no es lo único que ocupa lugar."""
+
+_MARGEN_SUP_FERIADO = 46
+"""Margen superior cuando hay al menos una anotación «feriado».
+
+`_compras_layout` deja 30, que alcanza para el título y nada más. Medido en
+el navegador: el título ocupa y=6..28 y la fila de anotaciones y=31..44, así
+que con 46 entran las dos sin pisarse."""
+
+
+def _grupos_de_dia(dias):
+    """`[(i0, i1, dia), …]`: tramos CONTIGUOS del eje que caen el mismo día.
+
+    `dias` viene alineado con el eje —un `date` por período dibujado—, así
+    que un tramo son las N compras de ese día en «Por documento» y un solo
+    índice en «Día». Que los documentos de un día sean contiguos no es
+    suerte: `_ord_claves` ordena por la clave de compra, que arranca con la
+    fecha (ver `dd["compra"]`).
+    """
+    grupos = []
+    for i, d in enumerate(dias):
+        if grupos and grupos[-1][2] == d:
+            grupos[-1][1] = i
+        else:
+            grupos.append([i, i, d])
+    return [tuple(g) for g in grupos]
+
+
+def _rachas(marcados):
+    """`[(desde, hasta), …]`: tramos de índices CONSECUTIVOS de `marcados`.
+
+    Los feriados se anotan por racha y no de a uno porque sus bandas se
+    tocan: 28 y 29 de julio son dos días y UNA sola franja ámbar, así que
+    dos «feriado» encima serían dos rótulos de 34px a 33px de distancia —
+    pisados, y diciendo lo mismo dos veces."""
+    out = []
+    for j in sorted(marcados):
+        if out and out[-1][1] == j - 1:
+            out[-1][1] = j
+        else:
+            out.append([j, j])
+    return [tuple(r) for r in out]
+
+
+def _calendario_del_eje(fig, dias, sep):
+    """Pinta el calendario sobre `fig` y devuelve `(tickvals, ticktext)`.
+
+    `sep` dice dónde va la punteada: `"dia"` (cambio de día — «Por
+    documento») o `"semana"` (cada lunes — «Día»). Ver el comentario de
+    arriba, que explica por qué son dos reglas distintas y la misma idea.
+
+    Devuelve `None` cuando no entra un rótulo por día: el llamador vuelve
+    entonces a las etiquetas de siempre. Las bandas, que aguantan más, ya
+    quedaron dibujadas igual — de ahí que el `None` no signifique "no se
+    dibujó nada".
+    """
+    grupos = _grupos_de_dia(dias)
+    px_dia = _LIENZO_PX / max(len(grupos), 1)
+    if px_dia < _PX_MIN_DIA_BANDA:
+        return None
+
+    feriados = set()
+    for _a in {d.year for _, _, d in grupos}:
+        feriados |= cortes.feriados_peru(_a)
+
+    # Las BANDAS. `layer="below"` para que la barra siga siendo lo que se
+    # mira; el feriado le gana al fin de semana cuando caen juntos (un
+    # domingo feriado es, de las dos, la que explica la anomalía).
+    _fer_ix = []
+    for j, (i0, i1, d) in enumerate(grupos):
+        _fer, _finde = d in feriados, d.weekday() >= 5
+        if _fer:
+            _fer_ix.append(j)
+        if not (_fer or _finde):
+            continue
+        fig.add_vrect(
+            x0=i0 - 0.5, x1=i1 + 0.5, layer="below", line_width=0,
+            fillcolor=(ADVERTENCIA_TEXTO if _fer else GRIS_TEXTO),
+            opacity=(0.10 if _fer else 0.07))
+
+    # La palabra «feriado» va ARRIBA del lienzo, no en el rótulo del eje, y
+    # eso se decidió MIDIENDO en el navegador (arquitectura.md #362). Como
+    # tercer renglón del rótulo empujaba el eje 14px hacia abajo y se metía
+    # encima del legend —que vive en `y=-0.22`—, y de paso engordaba el
+    # rótulo de 36 a 47px, con lo que dos días vecinos se pisaban. Acá
+    # arriba no compite con nada: es la misma franja que usa
+    # `ventas_comparativo` para lo mismo. Sin banda no habría anotación, así
+    # que el ámbar y la palabra siempre aparecen juntos.
+    for _a, _b in _rachas(_fer_ix):
+        fig.add_annotation(
+            x=(grupos[_a][0] + grupos[_b][1]) / 2, y=1.0, yref="paper",
+            yanchor="bottom", showarrow=False, text="feriado",
+            font=dict(size=10, color=ADVERTENCIA_TEXTO))
+    if _fer_ix:
+        fig.update_layout(margin_t=_MARGEN_SUP_FERIADO)
+
+    if px_dia < _PX_MIN_DIA_ROTULO:
+        return None
+
+    # La PUNTEADA. Va en los BORDES de los tramos (i0 - 0.5), o sea entre dos
+    # barras y no encima de una.
+    for j, (i0, _, d) in enumerate(grupos):
+        if j == 0:
+            continue
+        if sep == "semana" and d.weekday() != 0:
+            continue
+        fig.add_shape(type="line", xref="x", yref="paper",
+                      x0=i0 - 0.5, x1=i0 - 0.5, y0=0, y1=1,
+                      line=dict(color=GRIS_BORDE, width=1, dash="dot"),
+                      layer="below")
+
+    # Los RÓTULOS, uno por día y centrado en su tramo. Todos miden lo mismo
+    # (dos renglones), así que el adelgazado es un paso parejo y no hay que
+    # protegerle el lugar a nadie.
+    _paso = max(1, -(-len(grupos) // max(1, int(_LIENZO_PX // _ROTULO_DIA_PX))))
+    tickvals, ticktext = [], []
+    for j, (i0, i1, d) in enumerate(grupos):
+        if j % _paso:
+            continue
+        tickvals.append((i0 + i1) / 2)
+        ticktext.append(f"{cortes.DIAS_ABR_ES[d.weekday()].capitalize()}"
+                        f"<br>{d:%d/%m}")
+    return tickvals, ticktext
+
+
 def _clave_del_clic(x, ord_claves):
     """Clave del período que corresponde a la x de un clic en una barra.
 
@@ -176,12 +367,36 @@ def _tabla_detalle(det, hueco):
 
     Las dos ramas de foco —un período entero, una sola compra— muestran la
     MISMA tabla; sin esto el formato se escribiría dos veces y la próxima
-    columna se agregaría en una sola de las dos."""
-    tp = det[["fecha", "prov", "prod", "cant", "punit", "valor"]].rename(
-        columns={"fecha": "Fecha", "prov": "Proveedor", "prod": "Producto",
-                 "cant": "Cantidad", "punit": "P. unit.", "valor": "Valor"})
+    columna se agregaría en una sola de las dos.
+
+    LA COLUMNA «DOCUMENTO» (2026-09-08, a pedido: "cuando selecciono la
+    granularidad documentos debe aparecer también en la tabla el número del
+    documento") va en las DOS ramas, y no sólo en la que la pidió. La regla
+    del proyecto es contar en cuántas filas dice algo (`arquitectura.md`
+    #238-#239), y medido sobre `compras.parquet` las dos ramas dan lo
+    contrario la una de la otra:
+
+        foco de PERÍODO    una semana trae 267 líneas de 96 documentos
+                           distintos (medianas) — la columna cambia casi
+                           en cada fila y es la que dice de dónde sale
+                           cada línea;
+        foco de COMPRA     una sola compra, el mismo número repetido en
+                           todas sus filas.
+
+    O sea la que la pidió es justo el caso que la regla mandaría a chip.
+    Va igual, y el chip TAMBIÉN: el caption de esa rama nombra el
+    documento. No es redundancia gratis — es la respuesta a "cuál es este
+    documento" en el lugar donde se mira (arriba, junto al proveedor y al
+    total) y en el lugar donde se copia (la celda).
+    """
+    tp = det[["fecha", "doc", "prov", "prod",
+              "cant", "punit", "valor"]].rename(
+        columns={"fecha": "Fecha", "doc": "Documento", "prov": "Proveedor",
+                 "prod": "Producto", "cant": "Cantidad",
+                 "punit": "P. unit.", "valor": "Valor"})
     fmts = {
         "Fecha": lambda v: f"{v:%d/%m/%Y}",
+        "Documento": lambda v: (v or "—"),
         "Cantidad": lambda v: f"{v:,.1f}",
         "P. unit.": lambda v: ("—" if pd.isna(v) else f"S/ {v:,.2f}"),
         "Valor": lambda v: f"S/ {v:,.2f}",
@@ -363,8 +578,9 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                              "valor» suma los N mayores en una sola serie. "
                              "Se puede escribir para buscar.")
 
-        if selector_fecha_tarjeta("cp_sem", "_cp_sem_atajo_pendiente",
-                                  extra=_controles) is None:
+        if selector_fecha_tarjeta(
+                "cp_sem", "_cp_sem_atajo_pendiente", extra=_controles,
+                categoria=CATEGORIA_SEC["compras_sec_semanal"]) is None:
             # El selector no dibuja NADA si la franja todavia no publico su
             # contexto, y con el se irian tambien los tres controles de la
             # izquierda, que son de esta vista y no de la fecha. En ese caso
@@ -395,8 +611,17 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _docn = d[col_docu].astype(str) if col_docu else pd.Series("", index=d.index)
 
         dd = pd.DataFrame({
+            # DOS columnas para el mismo dato, y a propósito. `docn` es el
+            # valor CRUDO y sólo se usa para la identidad (entra en
+            # `compra`, más abajo); `doc` es el que se muestra. En el parquet
+            # el número viene codificado —`"F0E001000001328"` son 15
+            # caracteres para decir `E001-1328`— y decodificarlo dentro de la
+            # clave la ataría a un formateo de pantalla: un cambio ahí
+            # invalidaría en silencio el `compras_sem_doc` guardado en
+            # `session_state`. Ver `documento_legible` en `_comun.py`.
             "fecha": _fe, "prod": d[col_prod].astype(str), "prov": _prvs,
-            "docn": _docn, "cant": _cnt, "punit": _pu, "valor": _valor,
+            "docn": _docn, "doc": documento_legible(_docn),
+            "cant": _cnt, "punit": _pu, "valor": _valor,
             "fam": (d[col_fam].astype(str) if _hay_fam
                     else pd.Series("", index=d.index)),
         }).dropna(subset=["fecha"])
@@ -483,16 +708,54 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # apilada no es buena para esto").
         g = dd.groupby("clave", as_index=False)[["valor", "cant"]].sum()
 
+        # El DÍA de cada período, indexado por clave. Lo piden dos cosas: el
+        # calendario del eje (`_calendario_del_eje`, más abajo) y la primera
+        # línea del hover. En las dos granularidades de grano diario cada
+        # clave cae en un solo día, así que el `min` no promedia nada — es
+        # sólo la forma de sacarlo del groupby.
+        _dia_de = dd.groupby("clave")["fecha"].min().dt.date
+
         # La etiqueta del período viaja por `customdata` y no sale de
         # `%{x}`: la x de las dos trazas es un ÍNDICE (ver el
         # `update_xaxes`), así que `%{x}` diría "17" en vez de "2026-S17".
         g["ix"] = g["clave"].map(_ix)
         g["lbl"] = g["clave"].map(dict(zip(_ord_claves, _ord_lbls)))
+
+        # El ENCABEZADO del hover, que no es la etiqueta del eje. En grano
+        # diario el eje tiene que ser corto («Sáb» sobre «15/08»); el hover
+        # no compite con nadie por el ancho, así que ahí va el día completo
+        # con año — y en «Por documento», además, QUIÉN y CUÁL, que es lo
+        # que el eje no puede decir con una barra por documento. Es el mismo
+        # número de documento de la tabla y del caption: uno solo en toda la
+        # vista, salido de `dd["doc"]`.
+        if gran in ("Por documento", "Día"):
+            _dias_g = g["clave"].map(_dia_de)
+            # El feriado también se dice acá, y no por adorno: la anotación
+            # de arriba se adelgaza sola cuando dos feriados son seguidos
+            # (una por racha), así que el hover es el único lugar donde cada
+            # barra contesta por sí misma.
+            _fer = set()
+            for _a in {_d.year for _d in _dias_g}:
+                _fer |= cortes.feriados_peru(_a)
+            g["hov"] = [
+                f"{cortes.DIAS_ABR_ES[_d.weekday()].capitalize()} {_d:%d/%m/%Y}"
+                + (" · feriado" if _d in _fer else "")
+                for _d in _dias_g]
+            if gran == "Por documento":
+                _de_compra = dd.drop_duplicates("compra").set_index("compra")
+                g["hov"] = (g["hov"] + "<br>"
+                            + g["clave"].map(_de_compra["doc"]).fillna("")
+                            + " · "
+                            + g["clave"].map(_de_compra["prov"]).fillna("")
+                                        .map(_compras_truncar))
+        else:
+            g["hov"] = g["lbl"]
+
         fig = go.Figure()
         fig.add_bar(
             x=g["ix"], y=g["valor"], name="Valor total",
             marker=dict(color=SERIE_PRINCIPAL),
-            customdata=g[["lbl", "cant"]].to_numpy(),
+            customdata=g[["hov", "cant"]].to_numpy(),
             hovertemplate=("%{customdata[0]}<br>Valor: S/ %{y:,.2f}"
                            "<br>Cantidad: %{customdata[1]:,.1f}"
                            "<extra></extra>"),
@@ -605,16 +868,29 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # autorange de un eje lineal pone su propio aire a los costados y
         # la primera y la última barra quedaban flotando media barra
         # adentro del margen.
+        # ── El calendario, en las dos granularidades de grano diario ────
+        # Dibuja las bandas y las punteadas, y devuelve SUS rótulos (uno por
+        # día) para reemplazar a los de abajo. Devuelve `None` cuando el
+        # rango es tan ancho que un rótulo por día ya no entra — ahí se cae
+        # a las etiquetas de siempre, que es lo correcto: a 200 días la
+        # pregunta que se está haciendo no es de qué día es cada barra.
+        _ticks = None
+        if gran in ("Por documento", "Día"):
+            _ticks = _calendario_del_eje(
+                fig, [_dia_de[_c] for _c in _ord_claves],
+                sep=("dia" if gran == "Por documento" else "semana"))
+
         # Un tick por período sólo mientras se puedan leer. Con la franja en
         # todo el histórico son 192 semanas: `tickmode="array"` dibuja TODAS
         # las que se le den —no las adelgaza como el modo automático— y
         # "2026-S17" mide ~55px, así que a partir de ~17 por lienzo se
         # pisan entre sí. El paso mantiene el primero y va salteando.
-        _paso = max(1, -(-_n_per // 17))
+        if _ticks is None:
+            _paso = max(1, -(-_n_per // 17))
+            _ticks = (list(range(0, _n_per, _paso)), _ord_lbls[::_paso])
         fig.update_xaxes(
             type="linear", tickmode="array",
-            tickvals=list(range(0, _n_per, _paso)),
-            ticktext=_ord_lbls[::_paso],
+            tickvals=_ticks[0], ticktext=_ticks[1],
             range=[-0.5, _n_per - 0.5])
 
         # Clic en una barra o un punto -> foco de la tabla de
@@ -694,7 +970,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                                                         ascending=False)
             _f = _det["fecha"].iloc[0]
             st.caption(f"Compra · **{_det['prov'].iloc[0]}** · "
-                      f"{_det['docn'].iloc[0]} · {_f:%d/%m/%Y} · "
+                      f"{_det['doc'].iloc[0]} · {_f:%d/%m/%Y} · "
                       f"{len(_det)} líneas · S/ {_det['valor'].sum():,.2f} "
                       "— clic en la barra para volver al período.")
             _tabla_detalle(_det, _hueco_tabla)
@@ -702,8 +978,20 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             _det = dd[dd["clave"] == _focus].sort_values("valor",
                                                          ascending=False)
             _et = _det["lbl"].iloc[0]
-            st.caption(f"**{_et}** · {_det['compra'].nunique()} "
-                      f"compras · S/ {_det['valor'].sum():,.2f}")
+            # En «Por documento» la barra clickeada YA es una compra, así que
+            # el caption dice cuál en vez de "1 compras" —que era lo que
+            # decía, y no identificaba nada—. En las otras granularidades la
+            # barra es un período de verdad y el conteo es la información.
+            if gran == "Por documento":
+                _fd = _det["fecha"].iloc[0]
+                st.caption(f"Compra · **{_det['prov'].iloc[0]}** · "
+                          f"{_det['doc'].iloc[0]} · "
+                          f"{cortes.DIAS_ABR_ES[_fd.weekday()].capitalize()} "
+                          f"{_fd:%d/%m/%Y} · {len(_det)} líneas · "
+                          f"S/ {_det['valor'].sum():,.2f}")
+            else:
+                st.caption(f"**{_et}** · {_det['compra'].nunique()} "
+                          f"compras · S/ {_det['valor'].sum():,.2f}")
             _tabla_detalle(_det, _hueco_tabla)
         else:
             st.caption("Tocá una barra para ver el período, o un punto "

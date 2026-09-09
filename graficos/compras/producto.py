@@ -33,7 +33,8 @@ from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _compras_layout, _compras_truncar, _slug
 from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
-    COLUMNAS_DRILL, GAP_DRILL, filtro_proveedores, selector_fecha_tarjeta,
+    CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, filtro_proveedores,
+    selector_fecha_tarjeta,
 )
 from graficos import alturas, periodo
 
@@ -392,7 +393,8 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
             selector_fecha_tarjeta(
                 "cp_prod", "_cp_prod_atajo_pendiente",
                 titulo_html='<div class="cp-prod-rank-tit">'
-                            'Ranking de productos</div>')
+                            'Ranking de productos</div>',
+                categoria=CATEGORIA_SEC["compras_sec_producto"])
             st.info("Sin compras en el rango seleccionado. Ampliá el rango "
                     "desde la fecha de la cabecera.")
         return
@@ -481,7 +483,8 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     "cp_prod", "_cp_prod_atajo_pendiente",
                     titulo_html='<div class="cp-prod-rank-tit">'
                                 'Ranking de productos</div>',
-                    extra=_pop_prov_prod)
+                    extra=_pop_prov_prod,
+                    categoria=CATEGORIA_SEC["compras_sec_producto"])
 
                 # SIN el punto en "Cant": AG Grid resuelve `field` con notación
                 # de PATH ("a.b" -> row.a.b), así que un campo "Cant." se parte

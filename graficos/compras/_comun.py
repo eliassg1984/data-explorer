@@ -145,6 +145,92 @@ def _periodo_serie(fe, gran):
 
 
 # ===========================================================================
+# EL NÚMERO DE DOCUMENTO: EN EL PARQUET ESTÁ CODIFICADO
+# ===========================================================================
+# `NUM_DOCUMENTO` NO es lo que dice el papel. Son 15 caracteres siempre
+# (verificado sobre las 51.574 filas del parquet: una sola longitud), con la
+# forma `"F0" + serie(4) + numero(9 con ceros a la izquierda)`:
+#
+#     F0E001000001328  ->  E001-1328
+#     F0F001000016855  ->  F001-16855
+#
+# `_llave_documento_parquet` nació en `documentos_sunat.py` como CLAVE DE
+# CRUCE contra el registro del SIRE (que trae `documento` ya sin los ceros).
+# Subió acá el 2026-09-08, cuando el drill Semanal la pidió para MOSTRAR el
+# número en su tabla de detalle. Son los dos lados de la misma decodificación
+# y no puede haber dos: si se separaran, la tabla y el cruce dirían números
+# distintos del mismo comprobante. `documentos_sunat.py` la reexporta con su
+# nombre de siempre.
+
+
+# VIVE ACÁ Y NO EN `__init__.py` por el ciclo de imports: la usan los cinco
+# drills, y `__init__.py` los importa a ellos. Este módulo es el que ya
+# importan todos, así que es el único sitio donde puede estar sin que nadie
+# importe hacia arriba. `__init__.py` la reexporta.
+# ── QUÉ SECCIÓN TIENE RANGO PROPIO ────────────────────────────────────────
+# 2026-09-08, a pedido. Hasta este día los cinco selectores de fecha de las
+# cabeceras escribían UNA sola clave (`rango_franja_Compras`), así que mover
+# la fecha en una tarjeta la movía en las otras cuatro. Estaba puesto a
+# propósito y era razonable mientras el control fuera un ATAJO a la píldora
+# de la franja; el 2026-09-06 la franja perdió el calendario y el atajo pasó
+# a ser EL control, con la semántica vieja. Se reportó como se ve: "pensé
+# que cada tarjeta, su selector, solo afectaba a su tarjeta".
+#
+# La categoría entra en `clave_rango(reporte, ..., categoria=)` y sale una
+# clave por sección. Cuatro entradas para seis secciones, y las dos que
+# faltan no son un olvido:
+#
+#   · «Vs año pasado» y «Tabla» NO tienen este selector. Tienen el OTRO —
+#     el desplegable Rango/3m/12m/24m/Todo de `graficos/periodo.py`, que ya
+#     era por tarjeta. Meterlas acá les daría dos controles de fecha que se
+#     pisan, que es justo el enredo que este cambio viene a deshacer.
+#   · «Documentos SUNAT» está fuera de la pila y dibuja el pill entero de
+#     la franja, cuya key ES la clave canónica. Ése no se puede mover sin
+#     mover el widget, y no es lo que se pidió.
+#
+# PROVEEDOR ES UNA SOLA CATEGORÍA PARA DOS TARJETAS, y eso es deliberado:
+# «Ranking de proveedores» y «Detalle de documentos por proveedor» viven en
+# la misma sección y la segunda se calcula sobre `base`/`top_provs` que
+# produce la primera (ver `proveedor.py:1786` y el docstring de
+# `_documentos_proveedor.tabla_documentos`). Con rangos distintos la tabla
+# mostraría documentos de proveedores rankeados en otro período — un
+# desacuerdo silencioso entre dos cosas que se leen juntas. Ver regla #363.
+CATEGORIA_SEC = {
+    "compras_sec_proveedor":   "sec_proveedor",
+    "compras_sec_producto":    "sec_producto",
+    "compras_sec_volatilidad": "sec_volatilidad",
+    "compras_sec_semanal":     "sec_semanal",
+}
+
+
+def _llave_documento_parquet(num_documento):
+    """`"{serie}-{numero}"` desde `NUM_DOCUMENTO` del parquet de Compras.
+
+    Se le sacan los ceros de más para que calce con `documento` del SIRE
+    (`sunat._normalizar_registro`, que ya viene sin ellos)."""
+    s = num_documento.astype(str)
+    serie = s.str[2:6]
+    numero = s.str[6:].str.lstrip("0")
+    numero = numero.where(numero != "", "0")   # el raro caso numero="000..."
+    return serie + "-" + numero
+
+
+def documento_legible(num_documento):
+    """Lo mismo, pero para MOSTRAR: decodifica sólo lo que tiene la forma
+    del parquet y deja pasar el resto tal cual.
+
+    La guarda no es defensiva por las dudas, cubre un caso que corre todos
+    los días: el modo demo de `data.py` genera `"F0001-123"` —ya legible, 9
+    caracteres— y `_llave_documento_parquet` a ciegas lo cortaría en
+    `"01-1 23"`. Cualquier valor que no sea `"F0"` + 13 caracteres se
+    devuelve entero, que es la única respuesta honesta cuando el formato no
+    es el que se sabe decodificar."""
+    s = num_documento.astype(str).str.strip()
+    _codificado = (s.str.len() == 15) & s.str.startswith("F0")
+    return s.where(~_codificado, _llave_documento_parquet(s))
+
+
+# ===========================================================================
 # EL SELECTOR DE FECHA DE UNA TARJETA — vive en graficos/base.py
 # ===========================================================================
 # Nació dentro del Ranking de Proveedores (2026-08-23 → 08-26, cuatro vueltas

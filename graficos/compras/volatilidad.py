@@ -28,7 +28,7 @@ from graficos.base import (
     selector_fecha_tarjeta,
 )
 from graficos.compras._comun import (
-    COLUMNAS_DRILL, GAP_DRILL, PARR, _first_point,
+    CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, PARR, _first_point,
 )
 from graficos import periodo
 from graficos import alturas
@@ -378,7 +378,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             selector_fecha_tarjeta(
                 "cp_vol", "_cp_vol_atajo_pendiente",
                 label=(periodo.etiqueta(_op_vol).capitalize() or None
-                       if _op_vol != periodo.HEREDA else None))
+                       if _op_vol != periodo.HEREDA else None),
+                categoria=CATEGORIA_SEC["compras_sec_volatilidad"])
 
         dd = d.copy()
         if col_moneda and col_moneda in dd.columns:

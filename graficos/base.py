@@ -29,7 +29,8 @@ from tema import (
     PALETA_SERIES,
 )
 from cortes import MESES_ABR_ES
-from estado_rango import (ESCALAS, aplicar_atajo, atajos_rango,
+from estado_rango import (ESCALAS, aplicar_atajo, asegurar_rango,
+                          atajos_rango, clave_rango,
                           escala_a_rango, escala_desde_rango, escala_periodos,
                           ventana_ano, ventana_decada, ventana_mes)
 import franja_fecha
@@ -937,8 +938,81 @@ def _aplicar_atajo_select(clave_widget, placeholder, opciones, ctx, bandera):
     st.session_state[clave_widget] = placeholder
 
 
+def k_rango_tarjeta(categoria, ctx=None):
+    """La clave de rango de UNA tarjeta, o la de la página si no hay.
+
+    `categoria` viene de `graficos.compras.CATEGORIA_SEC` (una por sección
+    de la pila). Con `None` devuelve la clave canónica del reporte, que es
+    lo que usaban las cinco tarjetas hasta el 2026-09-08.
+
+    Existe como función y no inline en los dos sitios que la necesitan
+    —el selector que ESCRIBE y el dispatcher que RECORTA— porque si esos
+    dos calcularan la clave por su cuenta podrían dejar de nombrar la
+    misma: el control movería un rango y el filtro leería otro. Es el
+    mismo argumento de dueño único que ya hace `estado_rango`.
+    """
+    ctx = ctx if ctx is not None else franja_fecha.contexto()
+    if not ctx:
+        return None
+    if not categoria:
+        return ctx["k_rango"]
+    return clave_rango(ctx["reporte"], ctx["usa_carga_rango"], categoria)
+
+
+def rango_tarjeta(categoria, ctx=None):
+    """`(ini, fin)` vigente de una tarjeta, SEMBRADO y recortado a bounds.
+
+    Idempotente: la siembra la hace `asegurar_rango`, el dueño único. El
+    default sale de `ctx["rango_default"]` —lo publica `app.py`— y no de
+    una cuenta propia: dos cuentas del mismo default se desincronizan.
+
+    Devuelve `None` si todavía no hay contexto (no debería pasar dentro de
+    un reporte real) o si el rango quedó a medias.
+    """
+    ctx = ctx if ctx is not None else franja_fecha.contexto()
+    if not ctx:
+        return None
+    k = k_rango_tarjeta(categoria, ctx)
+    _def = ctx.get("rango_default")
+    if _def and all(_def):
+        asegurar_rango(k, _def, bounds=(ctx["fecha_min"], ctx["fecha_max"]),
+                       reporte=ctx["reporte"],
+                       usa_carga_rango=ctx["usa_carga_rango"])
+    cur = st.session_state.get(k)
+    if isinstance(cur, (tuple, list)) and len(cur) == 2 and all(cur):
+        return tuple(cur)
+    return None
+
+
+def recortar_por_tarjeta(df, col_fecha, categoria, ctx=None):
+    """`df` acotado al rango de esa tarjeta. Sin rango, lo devuelve igual.
+
+    Es la MITAD PASIVA del rango por tarjeta: el selector de la cabecera
+    escribe la clave y esto la lee. Vive acá y no en cada drill porque el
+    dispatcher de Compras puede recortar UNA vez por sección y pasarle a
+    cada drill su `d` ya acotado — así los drills siguen recibiendo "el df
+    del rango vigente" y no hubo que tocarles el cuerpo.
+
+    El límite superior va como `< fin + 1 día` para que el rango siga
+    siendo INCLUSIVO aunque la columna traiga hora, exactamente igual que
+    el filtro de `app.py` que esto reemplaza para las secciones con
+    selector propio. Que las dos mitades filtren distinto sería un desync
+    invisible: la misma fecha mostrando dos totales según quién filtró.
+    """
+    if df is None or getattr(df, "empty", True):
+        return df
+    if not col_fecha or col_fecha not in df.columns:
+        return df
+    par = rango_tarjeta(categoria, ctx)
+    if not par:
+        return df
+    _fe = pd.to_datetime(df[col_fecha], errors="coerce")
+    return df[(_fe >= pd.Timestamp(par[0]))
+              & (_fe < pd.Timestamp(par[1]) + pd.Timedelta(days=1))]
+
+
 def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
-                           label=None):
+                           label=None, categoria=None):
     """Trigger + panel de fecha para UNA tarjeta, en cualquier dashboard.
 
     El TRIGGER es el rango vigente escrito con todas las letras ("1 ago –
@@ -968,10 +1042,35 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
     apilada, Proveedor y Producto coexisten de verdad. El CSS de cada
     prefijo se lista explícito en `_css_proveedor.py` (nada de wildcards:
     ver el aviso de CLAUDE.md sobre reglas por familia).
+
+    `categoria` ES EL RANGO QUE MUEVE, y es lo que cambió el 2026-09-08.
+    Hasta ese día no existía: las cinco tarjetas de Compras escribían la
+    clave canónica del reporte, o sea que mover la fecha en una movía las
+    otras cuatro. Estaba hecho a propósito —"dos puertas al mismo dato"—
+    y era cierto mientras esto fuera un ATAJO a la píldora de la franja;
+    dejó de serlo el 2026-09-06, cuando la franja perdió el calendario y
+    el atajo quedó siendo el control principal con semántica de atajo. El
+    usuario lo reportó como lo que parecía: "pensé que cada tarjeta, su
+    selector, solo afectaba a su tarjeta".
+
+    Con `categoria` la tarjeta escribe `rango_cat_{reporte}_{categoria}` y
+    con `None` sigue escribiendo la canónica — que es lo que necesita
+    Movimientos, donde la franja SÍ dibuja su calendario y esto vuelve a
+    ser de verdad un atajo. Dos tarjetas que comparten categoría comparten
+    rango a propósito: es el caso de `cp_rank` y `cp_docs`, que son la
+    misma sección y donde la tabla de documentos se calcula sobre los
+    proveedores que rankeó el gráfico de arriba. Ver regla #363.
     """
     ctx = franja_fecha.contexto()
     if not ctx:
         return None
+    if categoria:
+        # SEMBRAR ANTES DE DIBUJAR, que es el invariante de orden de
+        # `estado_rango`: el recorte a bounds tiene que pasar en ESTE
+        # render y no en el siguiente, o se ve un render de retraso. Lo
+        # hace `rango_tarjeta` vía `asegurar_rango`, el dueño único.
+        rango_tarjeta(categoria, ctx)
+        ctx = {**ctx, "k_rango": k_rango_tarjeta(categoria, ctx)}
     # De la lista completa (Todo + semana/mes/d30/año + un chip por año)
     # sólo van los 4 relativos: "Todo" y los años sueltos se quedan en el
     # popover de la franja, y acá el alto es el recurso escaso.

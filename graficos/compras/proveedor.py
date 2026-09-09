@@ -23,7 +23,8 @@ from graficos.base import (
     paso_etiquetas, publicar_var_px,
 )
 from graficos.compras._comun import (
-    COLUMNAS_DRILL, GAP_DRILL, filtro_proveedores, selector_fecha_tarjeta,
+    CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, filtro_proveedores,
+    selector_fecha_tarjeta,
 )
 from graficos.compras._css_proveedor import (
     CSS as CSS_PROVEEDOR, CSS_RANKING_GRID,
@@ -165,7 +166,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             selector_fecha_tarjeta(
                 "cp_rank", "_cp_rank_atajo_pendiente",
                 titulo_html='<div class="cp-rank-tit">Ranking de '
-                            'proveedores</div>')
+                            'proveedores</div>',
+                categoria=CATEGORIA_SEC["compras_sec_proveedor"])
             # EL CARTEL COMPLETO DEL REPORTE VIVE ACÁ, no en un `st.info`
             # suelto arriba de la pila: ése no cabe (el jalón de -104px que
             # sube esta tarjeta bajo la franja se lo comería, ver el
@@ -635,7 +637,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         "cp_rank", "_cp_rank_atajo_pendiente",
                         titulo_html='<div class="cp-rank-tit">Ranking de '
                                     'proveedores</div>',
-                        extra=_pop_proveedores)
+                        extra=_pop_proveedores,
+                        categoria=CATEGORIA_SEC["compras_sec_proveedor"])
                     # `_ALTO_RANK` (la resta de FRANJA_ATAJOS) se calcula
                     # arriba, con `_ALTO_FRAME_RANK`: la figura de Evolución
                     # lo necesita antes de llegar acá. La fila de atajos

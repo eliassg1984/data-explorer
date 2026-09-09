@@ -32,11 +32,16 @@ from utils import _norm, fmt_k
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
     _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, sembrar_seleccion, seccion_perezosa,
+    _resolver, publicar_contexto_ia, recortar_por_tarjeta,
+    sembrar_seleccion, seccion_perezosa,
     renderizar_graficos_genericos, vista_activa,
 )
 from graficos.compras._comun import (  # noqa: F401  (re-export)
-    _es_movil, _first_point, _periodo_serie,
+    # `CATEGORIA_SEC` la consumen los cinco drills Y este dispatcher; se
+    # reexporta acá porque su sitio natural de lectura es al lado de `_PILA`
+    # (sus claves son las de esa tupla) aunque viva en `_comun` por el ciclo
+    # de imports. `test_graficos.py` verifica que sigan apareadas.
+    CATEGORIA_SEC, _es_movil, _first_point, _periodo_serie,
 )
 from graficos.compras.proveedor import _compras_proveedor_drill
 from graficos.compras.producto import _compras_producto_drill
@@ -97,8 +102,8 @@ def _delta(hoy, ant):
             "red" if var > 0 else "green")
 
 
-def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
-                 col_docu, col_fecha):
+def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
+                 col_punit, col_docu, col_fecha):
     """`({id_vista: texto}, {id_vista: estado})` para `_render_rail`.
 
     El segundo dict es el SEMAFORO (2026-09-07, a pedido: "mas KPI"). Es
@@ -116,30 +121,55 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
     mismo que el numero de al lado. Calcularlos por separado seria abrir
     la puerta a un punto verde junto a una flecha roja.
 
+    `df_de_vista` ES UN CALLABLE Y NO UN DATAFRAME desde el 2026-09-08, y
+    ese es todo el cambio de esta funcion. Antes recibia UN `d`: el rango
+    era uno solo para todo el reporte, asi que los seis KPI hablaban del
+    mismo periodo por construccion. Ahora cada seccion de la pila tiene su
+    propio rango (ver `CATEGORIA_SEC`), y un KPI calculado sobre otro
+    periodo que el de su tarjeta seria peor que no tenerlo: el rail diria
+    un numero y la tarjeta de al lado otro, sin nada que explique la
+    diferencia. Cada bloque de aca abajo pide EL DF DE SU VISTA.
+
     `d_full` es el mismo df SIN el filtro de fecha: de ahi sale el PERIODO
-    ANTERIOR con el que se comparan los KPIs. Sin el no habria flecha — `d`
-    es exactamente el rango vigente y no tiene con que compararse.
+    ANTERIOR con el que se comparan los KPIs. Sin el no habria flecha — el
+    df de una vista es exactamente su rango vigente y no tiene con que
+    compararse.
     """
     kpis, estados = {}, {}
-    if d is None or getattr(d, "empty", True) or not col_valor:
-        return kpis, estados
-    val = pd.to_numeric(d[col_valor], errors="coerce")
 
-    # ── El periodo ANTERIOR: mismo largo, pegado por atras ───────────────
-    # Se deriva del propio `d` y no del contexto de la franja: asi la
-    # comparacion sigue al rango que el usuario tenga puesto, venga de la
-    # franja o de una tarjeta, sin que este helper sepa cual es cual.
-    prev = None
-    if col_fecha and col_fecha in d.columns and d_full is not None:
-        _f = pd.to_datetime(d[col_fecha], errors="coerce").dropna()
-        if len(_f):
-            _ini, _fin = _f.min(), _f.max()
-            _largo = _fin - _ini
-            _ff = pd.to_datetime(d_full[col_fecha], errors="coerce")
-            prev = d_full[(_ff >= _ini - _largo - pd.Timedelta(days=1))
-                          & (_ff < _ini)]
-            if prev.empty:
-                prev = None
+    def _prev_de(dv):
+        """El periodo ANTERIOR de `dv`: mismo largo, pegado por atras.
+
+        Se deriva del PROPIO `dv` y no del contexto de la franja: asi la
+        comparacion sigue al rango que tenga puesto ESA tarjeta, sin que
+        este helper sepa de donde salio.
+        """
+        if not (col_fecha and dv is not None and col_fecha in dv.columns
+                and d_full is not None):
+            return None
+        _f = pd.to_datetime(dv[col_fecha], errors="coerce").dropna()
+        if not len(_f):
+            return None
+        _ini, _fin = _f.min(), _f.max()
+        _largo = _fin - _ini
+        _ff = pd.to_datetime(d_full[col_fecha], errors="coerce")
+        prev = d_full[(_ff >= _ini - _largo - pd.Timedelta(days=1))
+                      & (_ff < _ini)]
+        return None if prev.empty else prev
+
+    def _vista(nombre):
+        """`(df, valores, prev)` de una vista, o `(None, None, None)`.
+
+        Las tres cosas juntas porque los bloques de abajo necesitan las
+        tres, y pedirlas sueltas invitaria a que uno mezclara el `val` de
+        una vista con el `df` de otra — que es exactamente el cruce que
+        este cambio vino a sacar.
+        """
+        dv = df_de_vista(nombre)
+        if (dv is None or getattr(dv, "empty", True) or not col_valor
+                or col_valor not in dv.columns):
+            return None, None, None
+        return dv, pd.to_numeric(dv[col_valor], errors="coerce"), _prev_de(dv)
 
     def _suma(df_, col, clave):
         """Lo que sumo UN grupo puntual en ese df."""
@@ -149,10 +179,10 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
         m = df_[col].astype(str) == clave
         return float(v[m].sum()) if m.any() else 0.0
 
-    def _top(col):
-        if not col or col not in d.columns:
+    def _top(dv, val, col):
+        if dv is None or not col or col not in dv.columns:
             return None
-        s = val.groupby(d[col].astype(str)).sum().dropna()
+        s = val.groupby(dv[col].astype(str)).sum().dropna()
         s = s[s > 0]
         return (s.idxmax(), float(s.max())) if len(s) else None
 
@@ -166,14 +196,16 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
         return _t
 
     # PROVEEDOR: el que mas compro, contra lo que ESE MISMO compro antes.
-    _t = _top(col_prov)
+    d_v, val, prev = _vista("Proveedor")
+    _t = _top(d_v, val, col_prov)
     if _t:
         kpis["Proveedor"] = _texto(
             f"{_inic(_t[0])} {fmt_k(_t[1])}",
             _delta(_t[1], _suma(prev, col_prov, _t[0])))
 
     # PRODUCTO: la familia que mas compro, contra esa misma familia antes.
-    _t = _top(col_fam)
+    d_v, val, prev = _vista("Producto")
+    _t = _top(d_v, val, col_fam)
     if _t:
         kpis["Producto"] = _texto(
             f"{str(_t[0])[:3].upper()} {fmt_k(_t[1])}",
@@ -184,9 +216,11 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
     # variacion (desvio / media) y no el desvio pelado: un producto caro
     # tiene desvios grandes por escala, no por volatilidad. Piso de 5
     # compras porque con dos el CV es ruido.
-    if col_punit and col_punit in d.columns and col_prod and col_prod in d.columns:
-        pu = pd.to_numeric(d[col_punit], errors="coerce")
-        g = pu.groupby(d[col_prod].astype(str))
+    d_v, val, prev = _vista("Volatilidad")
+    if (d_v is not None and col_punit and col_punit in d_v.columns
+            and col_prod and col_prod in d_v.columns):
+        pu = pd.to_numeric(d_v[col_punit], errors="coerce")
+        g = pu.groupby(d_v[col_prod].astype(str))
         cv = (g.std() / g.mean().replace(0, pd.NA)).dropna()
         cv = cv[g.count() >= 5]
         if len(cv):
@@ -217,8 +251,9 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
     # cuando dibuja— asi que aparece recien cuando esa vista se abrio una
     # vez. Preferible eso a disparar una consulta externa para decorar un
     # rotulo de navegacion.
-    if col_docu and col_docu in d.columns:
-        _n_sis = int(d[col_docu].nunique())
+    d_v, val, prev = _vista("Documentos SUNAT")
+    if d_v is not None and col_docu and col_docu in d_v.columns:
+        _n_sis = int(d_v[col_docu].nunique())
         _cruce = st.session_state.get("_cp_docs_cruce") or {}
         _txt = f"sis {_n_sis:,}".replace(",", ".")
         if _cruce.get("sunat") is not None:
@@ -239,8 +274,9 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
         kpis["Documentos SUNAT"] = _texto(_txt, _delta(_n_sis, _prev_docs))
 
     # SEMANAL: la mejor semana del rango, contra la mejor de antes.
-    if col_fecha and col_fecha in d.columns:
-        f = pd.to_datetime(d[col_fecha], errors="coerce")
+    d_v, val, prev = _vista("Semanal")
+    if d_v is not None and col_fecha and col_fecha in d_v.columns:
+        f = pd.to_datetime(d_v[col_fecha], errors="coerce")
         s = val.groupby(f.dt.to_period("W")).sum().dropna()
         if len(s):
             _ant = None
@@ -263,18 +299,20 @@ def _kpis_vistas(d, d_full, col_valor, col_prov, col_fam, col_prod, col_punit,
     # Aca la flecha va DENTRO del KPI y no como delta aparte: el dato ya ES
     # una variacion, y una flecha sobre una variacion se leeria como la
     # variacion de la variacion.
-    _col_ant = _resolver(d, ["Valor_ano_anterior", "Valor año anterior",
-                             "VALOR_ANO_ANTERIOR"])
+    d_v, val, prev = _vista("Vs año pasado")
+    _col_ant = (_resolver(d_v, ["Valor_ano_anterior", "Valor año anterior",
+                                "VALOR_ANO_ANTERIOR"])
+                if d_v is not None else None)
     if (_col_ant and col_fam and col_fecha and col_prod
-            and all(c in d.columns
+            and all(c in d_v.columns
                     for c in (_col_ant, col_fam, col_fecha, col_prod))):
-        _f = pd.to_datetime(d[col_fecha], errors="coerce")
+        _f = pd.to_datetime(d_v[col_fecha], errors="coerce")
         _base = pd.DataFrame({
-            "fam": d[col_fam].astype(str),
-            "prod": d[col_prod].astype(str),
+            "fam": d_v[col_fam].astype(str),
+            "prod": d_v[col_prod].astype(str),
             "mes": _f.dt.to_period("M"),
             "hoy": val,
-            "ant": pd.to_numeric(d[_col_ant], errors="coerce"),
+            "ant": pd.to_numeric(d_v[_col_ant], errors="coerce"),
         }).dropna(subset=["mes"])
         if len(_base):
             _sant = (_base.groupby(["fam", "prod", "mes"])["ant"].max()
@@ -558,6 +596,56 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     if sub_sel and col_subfam and col_subfam in d_full.columns:
         d_full = d_full[d_full[col_subfam].astype(str).isin(sub_sel)]
 
+    # ── EL `d` DE CADA SECCIÓN ────────────────────────────────────────────
+    # Desde el 2026-09-08 cada sección de la pila tiene su propio rango de
+    # fecha (ver `CATEGORIA_SEC`), así que ya no hay UN `d` para todos.
+    #
+    # EL RECORTE PASA ACÁ Y NO ADENTRO DE CADA DRILL, y eso es lo que hizo
+    # barato el cambio: los cinco drills reciben un `d` y lo usan en cientos
+    # de líneas cada uno. Cambiándoles la FUENTE —de "el df que ya filtró
+    # `app.py`" a "el df del rango de esta tarjeta"— siguen recibiendo
+    # exactamente lo que esperan y no hubo que tocarles el cuerpo.
+    # `proveedor.py` solo son 1.786 líneas.
+    #
+    # Se parte de `d_full` (chips SÍ, fecha NO) y no de `d` (chips + rango
+    # canónico): recortar sobre `d` sería una INTERSECCIÓN de dos rangos, o
+    # sea que una tarjeta nunca podría ampliar más allá de lo que dejó pasar
+    # `app.py`. Ese techo invisible es justo lo que hoy le pasa a la sección
+    # Tabla con su propio selector de período.
+    #
+    # Una sección SIN categoría (Vs año pasado, Tabla) se queda con `d`, el
+    # de siempre: su control de fecha es el desplegable de
+    # `graficos/periodo.py`, que ya era por tarjeta.
+    _cache_sec = {}
+
+    def _d_sec(clave_sec):
+        """El `d` de una sección, memoizado por render.
+
+        La memoización no es prematura: `_kpis_vistas` pide el df de las
+        seis vistas y después cada `seccion_perezosa` vuelve a pedir el
+        suyo, así que sin caché el mismo recorte corre dos veces. Sobre
+        `d_full` (~44k filas) cada uno cuesta unos 16 ms.
+        """
+        _cat = CATEGORIA_SEC.get(clave_sec)
+        if not _cat:
+            return d
+        if _cat not in _cache_sec:
+            _cache_sec[_cat] = recortar_por_tarjeta(d_full, col_fecha, _cat)
+        return _cache_sec[_cat]
+
+    # Vista del rail → sección de la pila. Sale de `_PILA`, que es la que ya
+    # aparea las dos cosas: una tabla aparte se desincronizaría.
+    _SEC_DE_VISTA = {_vista: _clave for _clave, _vista in _PILA}
+
+    def _df_de_vista(nombre):
+        """El df de una VISTA del rail, para su KPI.
+
+        «Documentos SUNAT» no está en `_PILA` (es un destino aparte, fuera
+        de la pila) así que cae a `d`, que es lo que usaba antes — su rango
+        propio es el pill que dibuja adentro de su tarjeta.
+        """
+        return _d_sec(_SEC_DE_VISTA.get(nombre))
+
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
 
     opciones = ["Proveedor", "Producto", "Vs año pasado", "Volatilidad",
@@ -569,9 +657,9 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # `secciones`: la pila de esta página. Con eso el rail vertical de la
     # izquierda sabe qué botón encender según lo que haya en pantalla, y
     # aparece a partir de la segunda sección. Ver `base.py::_render_rail`.
-    _kpis_rail, _estados_rail = _kpis_vistas(d, d_full, col_valor, col_prov,
-                                             col_fam, col_prod, col_punit,
-                                             col_docu, col_fecha)
+    _kpis_rail, _estados_rail = _kpis_vistas(_df_de_vista, d_full, col_valor,
+                                             col_prov, col_fam, col_prod,
+                                             col_punit, col_docu, col_fecha)
     graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo",
                         secciones=_PILA,
                         kpis=_kpis_rail, estados=_estados_rail)
@@ -710,13 +798,15 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # Drill Proveedor→productos→proveedores del prod. Sin borde externo:
             # cada uno de sus 4 bloques internos lleva el suyo.
             with st.container(key="compras_prov_drill_wrap"):
-                _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
+                _compras_proveedor_drill(_d_sec("compras_sec_proveedor"),
+                                         col_prov, col_prod, col_cant, col_valor,
                                          col_punit, col_um, col_fecha, col_docu,
                                          d_full=d_full)
 
     def _dib_producto():
             with st.container(key="compras_prod_drill_wrap"):
-                _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant,
+                _compras_producto_drill(_d_sec("compras_sec_producto"),
+                                        col_prod, col_fam, col_valor, col_cant,
                                         col_punit, col_um, col_fecha, col_prov,
                                         d_full=d_full)
 
@@ -735,7 +825,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     def _dib_volatilidad():
             with st.container(border=True, key="ajuste_graf_card_izq_vol"):
-                _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
+                _compras_volatilidad_drill(_d_sec("compras_sec_volatilidad"),
+                                           col_prod, col_prov, col_punit, col_fecha,
                                            col_valor, col_cant, col_um, col_moneda,
                                            d_full=d_full)
 
@@ -753,7 +844,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # hace desaparecer al angostar la fecha, y Streamlit borra la
             # selección en silencio (el bug medido del bloque de chips, más
             # arriba). Los datos que se grafican siguen saliendo de `d`.
-            _compras_semanal_drill(d, col_prod, col_fecha, col_cant,
+            _compras_semanal_drill(_d_sec("compras_sec_semanal"),
+                                   col_prod, col_fecha, col_cant,
                                    col_punit, col_prov, col_docu,
                                    col_valor, col_fam=col_fam,
                                    d_full=d_full)

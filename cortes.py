@@ -36,6 +36,90 @@ from functools import lru_cache
 MESES_ABR_ES = ("ene", "feb", "mar", "abr", "may", "jun",
                 "jul", "ago", "set", "oct", "nov", "dic")
 
+DIAS_ABR_ES = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
+"""Día de semana abreviado, indexado por `date.weekday()` (0 = lunes).
+
+Gemela de `MESES_ABR_ES` y por el mismo motivo: Plotly rotula en INGLÉS si
+no se le dice otra cosa (regla #241), y el proyecto ya tenía DOS listas de
+meses en español. Ésta nació capitalizada y privada en
+`graficos/ventas_comparativo.py` (`_DIAS_ES`); subió acá el 2026-09-08,
+cuando el drill Semanal de Compras pidió la misma cosa. En minúscula, como
+sus vecinas — quien quiera «Sáb» tiene `.capitalize()`."""
+
+# ── FERIADOS NACIONALES DE PERÚ ────────────────────────────────────────────
+# Vivían privados en `graficos/ventas_comparativo.py`, que fue el primero
+# que los necesitó (una barra rara de un martes se explica sola si el martes
+# era feriado). Subieron acá —módulo de raíz, sin streamlit ni graficos— por
+# el mismo criterio que explica el docstring de arriba para los cortes: los
+# pide un SEGUNDO consumidor de otro reporte (el drill Semanal de Compras,
+# 2026-09-08) y el import directo entre dos módulos de reportes distintos es
+# la forma de terminar en un ciclo. `ventas_comparativo` los reexporta con
+# sus nombres privados de siempre; sus consumidores (y sus tests) no
+# cambiaron una línea.
+#
+# OJO: es el calendario NACIONAL. No sabe de cierres propios del local,
+# aniversarios ni feriados regionales — si eso hace falta, esto tiene que
+# pasar a ser un dato mantenido por el negocio, no una constante acá.
+FERIADOS_FIJOS_PE = (
+    (1, 1),    # Año Nuevo
+    (5, 1),    # Día del Trabajo
+    (6, 29),   # San Pedro y San Pablo
+    (7, 28),   # Fiestas Patrias
+    (7, 29),   # Fiestas Patrias
+    (8, 6),    # Batalla de Junín
+    (8, 30),   # Santa Rosa de Lima
+    (10, 8),   # Combate de Angamos
+    (11, 1),   # Todos los Santos
+    (12, 8),   # Inmaculada Concepción
+    (12, 9),   # Batalla de Ayacucho
+    (12, 25),  # Navidad
+)
+
+
+def pascua(anio):
+    """Domingo de Pascua de `anio` (algoritmo gregoriano anónimo/Meeus).
+    Hace falta para Jueves y Viernes Santo, los dos únicos feriados peruanos
+    que cambian de fecha cada año — y los que mueven Semana Santa entre
+    marzo y abril, distorsionando cualquier comparativo mensual."""
+    a = anio % 19
+    b, c = divmod(anio, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    lo = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * lo) // 451
+    mes, dia = divmod(h + lo - 7 * m + 114, 31)
+    return datetime.date(anio, mes, dia + 1)
+
+
+@lru_cache(maxsize=64)
+def feriados_peru(anio):
+    """`frozenset` de `date` con los feriados nacionales de Perú de `anio`:
+    los fijos de FERIADOS_FIJOS_PE + Jueves y Viernes Santo.
+
+    Cacheado porque se pregunta POR DÍA: el drill Semanal lo consulta una
+    vez por cada día del rango dibujado, y recalcular Pascua 60 veces por
+    render es trabajo regalado. El `frozenset` es lo que hace segura esa
+    caché — un `set` mutable devuelto desde `lru_cache` es el mismo objeto
+    para todos los llamadores, y al primero que le haga `|=` le ensucia el
+    calendario a los demás."""
+    fer = {datetime.date(anio, m, d) for m, d in FERIADOS_FIJOS_PE}
+    p = pascua(anio)
+    fer.add(p - datetime.timedelta(days=3))   # Jueves Santo
+    fer.add(p - datetime.timedelta(days=2))   # Viernes Santo
+    return frozenset(fer)
+
+
+def feriados_entre(ini, fin):
+    """Cuántos feriados nacionales caen en [ini, fin] (inclusive)."""
+    fer = set()
+    for a in range(ini.year, fin.year + 1):
+        fer |= feriados_peru(a)
+    return sum(1 for f in fer if ini <= f <= fin)
+
+
 CORTE_MAX_SALTO_DIAS = 4
 """Una sesión de conteo real puede durar varios días NO estrictamente
 seguidos (fin de semana de por medio, un área que se retoma dos días

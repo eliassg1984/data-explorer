@@ -43,6 +43,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import cortes
 from data import REPORTES, cargar_rango
 from tema import (
     ACENTO, ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
@@ -57,68 +58,27 @@ VENTANAS = {"Día": (7, 14, 30), "Semana": (4, 8, 13), "Mes": (3, 6, 12)}
 VENTANA_DEF = {"Día": 14, "Semana": 8, "Mes": 6}
 MAX_ETIQUETAS = 14   # con más barras el %Var se pisa: queda sólo en el hover
 
-_DIAS_ES = ("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
+# ── EL CALENDARIO SUBIÓ A `cortes.py` ──────────────────────────────────────
+# `_DIAS_ES`, `_FERIADOS_FIJOS_PE`, `_pascua`, `_feriados_peru` y
+# `_feriados_entre` nacieron acá y se mudaron a `cortes.py` el 2026-09-08,
+# cuando el drill Semanal de Compras pidió lo mismo (bandas de fin de semana
+# y de feriado sobre su eje de días). Un import de Compras a Ventas para
+# conseguirlas habría atado dos reportes entre sí; `cortes.py` ya era el
+# módulo de fechas del proyecto y no importa ni streamlit ni graficos.
+#
+# Se mantienen los ALIAS con el nombre privado —no se reescribieron los ~10
+# usos de más abajo— por dos motivos: `test_graficos.py` los llama por ese
+# nombre (`_vc._pascua(2026)`), y renombrar algo que ya está importado es
+# justo lo que en Cloud deja la app hablando con el paquete viejo hasta el
+# reboot (CLAUDE.md, arquitectura.md #357).
+_DIAS_ES = tuple(_d.capitalize() for _d in cortes.DIAS_ABR_ES)
+_FERIADOS_FIJOS_PE = cortes.FERIADOS_FIJOS_PE
+_pascua = cortes.pascua
+_feriados_peru = cortes.feriados_peru
+_feriados_entre = cortes.feriados_entre
+
 _MESES_ES = ("Ene", "Feb", "Mar", "Abr", "May", "Jun",
              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
-
-# Feriados nacionales de Perú de fecha FIJA (mes, día). Los movibles
-# (Jueves/Viernes Santo) dependen de Pascua y se calculan en _feriados_peru.
-#
-# OJO: es el calendario NACIONAL. No sabe de cierres propios del local,
-# aniversarios ni feriados regionales — si eso hace falta, esto tiene que
-# pasar a ser un dato mantenido por el negocio, no una constante acá.
-_FERIADOS_FIJOS_PE = (
-    (1, 1),    # Año Nuevo
-    (5, 1),    # Día del Trabajo
-    (6, 29),   # San Pedro y San Pablo
-    (7, 28),   # Fiestas Patrias
-    (7, 29),   # Fiestas Patrias
-    (8, 6),    # Batalla de Junín
-    (8, 30),   # Santa Rosa de Lima
-    (10, 8),   # Combate de Angamos
-    (11, 1),   # Todos los Santos
-    (12, 8),   # Inmaculada Concepción
-    (12, 9),   # Batalla de Ayacucho
-    (12, 25),  # Navidad
-)
-
-
-# ── Funciones puras (testeadas en test_graficos.py) ─────────────────────────
-
-def _pascua(anio):
-    """Domingo de Pascua de `anio` (algoritmo gregoriano anónimo/Meeus).
-    Hace falta para Jueves y Viernes Santo, los dos únicos feriados peruanos
-    que cambian de fecha cada año — y los que mueven Semana Santa entre
-    marzo y abril, distorsionando cualquier comparativo mensual."""
-    a = anio % 19
-    b, c = divmod(anio, 100)
-    d, e = divmod(b, 4)
-    f = (b + 8) // 25
-    g = (b - f + 1) // 3
-    h = (19 * a + b - d - g + 15) % 30
-    i, k = divmod(c, 4)
-    lo = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * lo) // 451
-    mes, dia = divmod(h + lo - 7 * m + 114, 31)
-    return _dt.date(anio, mes, dia + 1)
-
-
-def _feriados_peru(anio):
-    """set de `date` con los feriados nacionales de Perú de `anio`:
-    los fijos de _FERIADOS_FIJOS_PE + Jueves y Viernes Santo."""
-    fer = {_dt.date(anio, m, d) for m, d in _FERIADOS_FIJOS_PE}
-    p = _pascua(anio)
-    fer.add(p - _dt.timedelta(days=3))   # Jueves Santo
-    fer.add(p - _dt.timedelta(days=2))   # Viernes Santo
-    return fer
-
-
-def _feriados_entre(ini, fin):
-    """Cuántos feriados nacionales caen en [ini, fin] (inclusive)."""
-    fer = set()
-    for a in range(ini.year, fin.year + 1):
-        fer |= _feriados_peru(a)
-    return sum(1 for f in fer if ini <= f <= fin)
 
 
 def _fecha_equivalente(f, modo):

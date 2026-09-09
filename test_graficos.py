@@ -1318,6 +1318,119 @@ def _pruebas_puras():
           sorted(_det[_det["prod"] == "Lomo"]["tipo"].tolist()),
           sorted([_vh._SIN_DSCTO, "BCP"]))
 
+    # ── El calendario del eje del drill Semanal (arquitectura.md #362) ───
+    # Bandas de fin de semana / feriado, punteada de separación y rótulo
+    # por día. Todo se prueba contra una figura de verdad —`fig.layout`—
+    # porque el valor de retorno son sólo los rótulos: las bandas y las
+    # líneas se dibujan como efecto y se irían sin que nadie se entere.
+    import plotly.graph_objects as _go
+    import tema as _tema
+    from graficos.compras import semanal as _sem
+
+    check("calendario · agrupa días contiguos, no todos los iguales",
+          _sem._grupos_de_dia([
+              _dt.date(2026, 8, 15), _dt.date(2026, 8, 15),
+              _dt.date(2026, 8, 17), _dt.date(2026, 8, 15)]),
+          [(0, 1, _dt.date(2026, 8, 15)), (2, 2, _dt.date(2026, 8, 17)),
+           (3, 3, _dt.date(2026, 8, 15))])
+
+    # La ventana de la captura del pedido: sáb 15 a jue 20 de agosto 2026,
+    # con 3 documentos por día (18 barras, 6 días).
+    _dias_cap = [_d for _d in (_dt.date(2026, 8, 15), _dt.date(2026, 8, 16),
+                               _dt.date(2026, 8, 17), _dt.date(2026, 8, 18),
+                               _dt.date(2026, 8, 19), _dt.date(2026, 8, 20))
+                 for _ in range(3)]
+    _figc = _go.Figure()
+    _tv, _tt = _sem._calendario_del_eje(_figc, _dias_cap, sep="dia")
+    check("calendario · un rótulo por día, no uno por barra", len(_tt), 6)
+    # El aire entre rótulos NO es cosmético: con `_ROTULO_DIA_PX` puesto en
+    # lo que el rótulo MIDE (36) y no en lo que OCUPA, la app en vivo dibujó
+    # 22 rótulos en 808px y 7 pares se pisaron (#362). El paso tiene que
+    # dejar al menos el ancho del rótulo de separación entre dos vecinos.
+    _sep_px = (_tv[1] - _tv[0]) * _sem._LIENZO_PX / len(_dias_cap)
+    check("calendario · dos rótulos vecinos no se tocan",
+          _sep_px >= _sem._ROTULO_DIA_PX, True)
+    _dias_mes = [_dt.date(2026, 8, 10) + _dt.timedelta(days=_i)
+                 for _i in range(22)]
+    _figm = _go.Figure()
+    _tvm, _ttm = _sem._calendario_del_eje(_figm, _dias_mes, sep="dia")
+    check("calendario · el caso medido en vivo (22 días) deja aire",
+          ((_tvm[1] - _tvm[0]) * _sem._LIENZO_PX / len(_dias_mes)
+           >= _sem._ROTULO_DIA_PX), True)
+    check("calendario · el rótulo va CENTRADO en el tramo del día",
+          _tv[0], 1.0)
+    check("calendario · el rótulo dice el día de semana", _tt[0], "Sáb<br>15/08")
+    _bandas = [_f for _f in _figc.layout.shapes if _f.type == "rect"]
+    _lineas = [_f for _f in _figc.layout.shapes if _f.type == "line"]
+    check("calendario · banda sólo en sábado y domingo", len(_bandas), 2)
+    check("calendario · la banda cubre el tramo entero del día",
+          (_bandas[0].x0, _bandas[0].x1), (-0.5, 2.5))
+    check("calendario · una punteada por cambio de día, menos la primera",
+          len(_lineas), 5)
+    check("calendario · la punteada va ENTRE dos barras", _lineas[0].x0, 2.5)
+    check("calendario · la punteada es punteada", _lineas[0].line.dash, "dot")
+
+    # «Día»: la barra ya es un día, así que la punteada sube un nivel y
+    # marca la semana. 15/08/2026 es sábado; el lunes cae en el índice 2.
+    _figd = _go.Figure()
+    _sem._calendario_del_eje(_figd, sorted(set(_dias_cap)), sep="semana")
+    _lin_d = [_f for _f in _figd.layout.shapes if _f.type == "line"]
+    check("calendario · en «Día» la punteada marca el LUNES, no cada día",
+          [_f.x0 for _f in _lin_d], [1.5])
+
+    # Feriado: 30/08 es Santa Rosa y además domingo. Gana el ámbar, y la
+    # palabra va ARRIBA del lienzo, no como tercer renglón del rótulo —
+    # medido en el navegador, ahí chocaba con el legend (#362).
+    _figf = _go.Figure()
+    _, _ttf = _sem._calendario_del_eje(
+        _figf, [_dt.date(2026, 8, 30)], sep="dia")
+    check("calendario · el rótulo del feriado sigue midiendo 2 renglones",
+          _ttf[0], "Dom<br>30/08")
+    check("calendario · el feriado le gana al fin de semana en el color",
+          _figf.layout.shapes[0].fillcolor, _tema.ADVERTENCIA_TEXTO)
+    check("calendario · «feriado» se anota arriba del lienzo",
+          [(_a.text, _a.y, _a.yref) for _a in _figf.layout.annotations],
+          [("feriado", 1.0, "paper")])
+    check("calendario · y el margen de arriba le hace lugar al título",
+          _figf.layout.margin.t, _sem._MARGEN_SUP_FERIADO)
+
+    # Feriados SEGUIDOS (28 y 29 de julio) = una sola banda continua, así
+    # que una sola palabra, centrada en la racha. Dos se pisarían.
+    _figr = _go.Figure()
+    _sem._calendario_del_eje(
+        _figr, [_dt.date(2026, 7, 27), _dt.date(2026, 7, 28),
+                _dt.date(2026, 7, 29), _dt.date(2026, 7, 30)], sep="dia")
+    check("calendario · una anotación por RACHA de feriados, no por día",
+          [(_a.text, _a.x) for _a in _figr.layout.annotations],
+          [("feriado", 1.5)])
+    check("rachas · agrupa consecutivos y corta en el hueco",
+          _sem._rachas([1, 2, 5]), [(1, 2), (5, 5)])
+
+    # Los dos umbrales: el rótulo se rinde antes que la banda.
+    _n_sin_rotulo = int(_sem._LIENZO_PX / _sem._PX_MIN_DIA_ROTULO) + 5
+    _figw = _go.Figure()
+    _rango = [_dt.date(2026, 1, 1) + _dt.timedelta(days=_i)
+              for _i in range(_n_sin_rotulo)]
+    check("calendario · sin píxeles para el rótulo, devuelve None",
+          _sem._calendario_del_eje(_figw, _rango, sep="dia"), None)
+    check("calendario · …pero las bandas del fin de semana quedan igual",
+          len(_figw.layout.shapes) > 0, True)
+    _figx = _go.Figure()
+    _rango_x = [_dt.date(2026, 1, 1) + _dt.timedelta(days=_i)
+                for _i in range(int(_sem._LIENZO_PX / _sem._PX_MIN_DIA_BANDA)
+                                + 5)]
+    check("calendario · más allá del piso de la banda, no se dibuja nada",
+          (_sem._calendario_del_eje(_figx, _rango_x, sep="dia"),
+           len(_figx.layout.shapes)), (None, 0))
+
+    # El Nº de documento que se MUESTRA: decodifica el del parquet y deja
+    # pasar el del demo, que ya viene legible (arquitectura.md #362).
+    from graficos.compras._comun import documento_legible as _doclbl
+    check("documento_legible · decodifica el formato del parquet",
+          _doclbl(pd.Series(["F0E001000001328"])).iloc[0], "E001-1328")
+    check("documento_legible · deja pasar lo que no tiene esa forma",
+          _doclbl(pd.Series(["F0001-123"])).iloc[0], "F0001-123")
+
     return fallos
 
 
@@ -1376,13 +1489,40 @@ def _pruebas_estado_y_utils():
     # ── estado_rango: qué clave usa cada reporte ────────────────────────
     from estado_rango import (
         _fin_de_mes, _recortar_media, atajos_rango, clave_rango,
+        clave_corte as _clave_corte, clave_modo as _clave_modo,
     )
 
     check("clave_rango carga_por_rango",
           clave_rango("Ventas", True), "rango_carga_Ventas")
+    # LA CLAVE POR CATEGORÍA LLEVA EL REPORTE desde el 2026-09-08. Antes era
+    # `ajuste_rango_aplicado_{categoria}` y no colisionaba sólo porque el
+    # único reporte con categorías era Ajuste; Compras adoptó una categoría
+    # por sección de su pila y dos reportes con la misma categoría habrían
+    # compartido rango sin que nada lo detectara.
     check("clave_rango por categoría",
           clave_rango("Ajuste de Inventario", False, categoria="tiempo"),
-          "ajuste_rango_aplicado_tiempo")
+          "rango_cat_Ajuste de Inventario_tiempo")
+    check("clave_rango por categoría separa REPORTES",
+          clave_rango("Compras", False, categoria="tiempo")
+          != clave_rango("Ajuste de Inventario", False, categoria="tiempo"),
+          True)
+    check("clave_rango por categoría separa CATEGORÍAS",
+          clave_rango("Compras", False, categoria="sec_proveedor")
+          != clave_rango("Compras", False, categoria="sec_semanal"),
+          True)
+    # El corte espeja la partición del rango: si no, cambiar de sección
+    # dejaría vivo un corte que ya no corresponde al rango en pantalla.
+    check("clave_corte espeja la partición del rango",
+          _clave_corte("Compras", categoria="sec_proveedor")
+          != _clave_corte("Compras", categoria="sec_semanal"),
+          True)
+    check("clave_corte por categoría separa reportes",
+          _clave_corte("Compras", categoria="tiempo")
+          != _clave_corte("Ajuste de Inventario", categoria="tiempo"),
+          True)
+    check("clave_modo se deriva de la del corte",
+          _clave_modo(_clave_corte("Compras", categoria="sec_semanal")),
+          "modo_" + _clave_corte("Compras", categoria="sec_semanal"))
     check("clave_rango normal",
           clave_rango("Compras", False), "rango_franja_Compras")
     # carga_por_rango GANA sobre la categoría: el date-picker tiene que
@@ -1433,6 +1573,153 @@ def _pruebas_estado_y_utils():
     check("atajos incluye el año de la data", "y2023" in dict(
         (c, r) for c, _, r in atajos_rango(
             hoy, (datetime.date(2023, 1, 1), datetime.date(2024, 5, 31)))), True)
+
+    return fallos
+
+
+def _pruebas_rango_por_tarjeta():
+    """Compras: una categoría de rango por SECCIÓN de la pila (2026-09-08).
+
+    Hasta ese día los cinco selectores de fecha de las cabeceras escribían
+    UNA sola clave, así que mover la fecha en una tarjeta la movía en las
+    otras cuatro. Estaba puesto a propósito —eran un ATAJO a la píldora de
+    la franja— y dejó de tener sentido el 2026-09-06, cuando la franja
+    perdió el calendario y el atajo quedó siendo EL control. Ver regla
+    #363.
+
+    Lo que estas guardas cubren es lo que se rompe SIN QUE SE VEA:
+
+      · una categoría que nombra una sección que no existe (un typo en
+        `CATEGORIA_SEC` no da error: `dict.get` devuelve None y la tarjeta
+        vuelve callada al rango compartido, o sea el bug de vuelta);
+      · dos secciones compartiendo categoría por copiar y pegar;
+      · y sobre todo: una tarjeta a la que se le olvidó el `categoria=`.
+        Así se descubrió el bug original —una vista sola comportándose
+        distinto— y es exactamente lo que va a pasar cuando alguien copie
+        una cabecera para hacer la sexta tarjeta.
+    """
+    import ast
+    import pathlib
+
+    import graficos.compras as gc
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    rango tarjeta · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA rango tarjeta · {nombre}: got={got!r} exp={exp!r}")
+
+    claves_pila = {c for c, _v in gc._PILA}
+    check("las claves de CATEGORIA_SEC son secciones de _PILA",
+          sorted(set(gc.CATEGORIA_SEC) - claves_pila), [])
+    check("una categoría distinta por sección",
+          len(set(gc.CATEGORIA_SEC.values())), len(gc.CATEGORIA_SEC))
+    # Las dos secciones SIN este selector quedan fuera a propósito: su
+    # control de fecha es el desplegable de `graficos/periodo.py`, que ya
+    # era por tarjeta. Meterlas les daría dos controles que se pisan.
+    check("las secciones sin trigger quedan fuera",
+          sorted({"compras_sec_vs_ano_pasado", "compras_sec_tabla"}
+                 & set(gc.CATEGORIA_SEC)), [])
+
+    # POR `ast` Y NO POR REGEX, y no es purismo: el primer intento marcaba
+    # `_css_proveedor.py:78`, que es una MENCION en un comentario
+    # (`Ahora lo dibuja selector_fecha_tarjeta(extra=...) DENTRO de`).
+    # Filtrar comentarios a mano deja afuera los docstrings, y el arbol
+    # ademas distingue una LLAMADA de un import o de la definicion misma.
+    raiz = pathlib.Path(__file__).parent / "graficos" / "compras"
+    sin_categoria, n_llamadas = [], 0
+    for py, texto in _fuentes_py(raiz):
+        try:
+            arbol = ast.parse(texto)
+        except SyntaxError:                      # que lo cante otra guarda
+            continue
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, ast.Call):
+                continue
+            fn = nodo.func
+            nombre = getattr(fn, "id", None) or getattr(fn, "attr", None)
+            if nombre != "selector_fecha_tarjeta":
+                continue
+            n_llamadas += 1
+            if not any(k.arg == "categoria" for k in nodo.keywords):
+                sin_categoria.append(f"{py.name}:{nodo.lineno}")
+    check("todo selector_fecha_tarjeta de Compras declara su categoria",
+          sorted(set(sin_categoria)), [])
+    # Y que el barrido haya visto algo: un glob que no matchea nada pasa en
+    # verde sin haber leído nada (la trampa 2 de `_fuentes_py`).
+    check("el barrido encontró los selectores de fecha",
+          n_llamadas >= 5, True)
+
+    # ── Y AHORA EL COMPORTAMIENTO, que es lo único que se ve ─────────────
+    # Lo de arriba prueba el CABLEADO: que cada tarjeta declare su
+    # categoría. No prueba lo que al usuario le importa —que mover una no
+    # mueva a la otra— y son cosas distintas: el cableado puede estar bien
+    # y la siembra pisar igual las dos claves. Esto corre en bare mode,
+    # sin app: `franja_fecha.publicar` es un dict en `session_state` y
+    # `asegurar_rango` no dibuja nada.
+    import datetime
+
+    import streamlit as st
+    import franja_fecha
+    from graficos.base import (k_rango_tarjeta, rango_tarjeta,
+                               recortar_por_tarjeta)
+
+    f_min, f_max = datetime.date(2023, 1, 2), datetime.date(2026, 9, 5)
+    por_defecto = (datetime.date(2025, 9, 6), f_max)   # los 12m de app.py
+    ctx_previo = st.session_state.get("_franja_fecha_ctx")
+    franja_fecha.publicar(
+        k_rango="rango_franja_Compras", k_corte="corte_franja_Compras",
+        corte_apl=None, cortes=[], fecha_min=f_min, fecha_max=f_max,
+        reporte="Compras", usa_carga_rango=False,
+        hoy=datetime.date(2026, 9, 8), rango_default=por_defecto,
+    )
+    k_prov = k_rango_tarjeta("sec_proveedor")
+    k_sem = k_rango_tarjeta("sec_semanal")
+    for _k in (k_prov, k_sem, "rango_franja_Compras"):
+        st.session_state.pop(_k, None)
+
+    check("cada categoría tiene su propia clave", k_prov != k_sem, True)
+    check("la clave lleva reporte y categoría",
+          k_prov, "rango_cat_Compras_sec_proveedor")
+    # SIEMBRA: las dos arrancan en el default publicado por `app.py`. Si
+    # cada una se inventara el suyo, la página abriría con dos períodos
+    # distintos sin que nadie los haya tocado.
+    check("las dos tarjetas siembran el default publicado",
+          (rango_tarjeta("sec_proveedor"), rango_tarjeta("sec_semanal")),
+          (por_defecto, por_defecto))
+
+    # EL ASSERT DE LA REGLA #363: mover una no mueve a la otra.
+    st.session_state[k_prov] = (datetime.date(2026, 9, 1), f_max)
+    check("mover el rango de una tarjeta NO mueve el de la otra",
+          rango_tarjeta("sec_semanal"), por_defecto)
+    check("y la tarjeta movida se queda con el suyo",
+          rango_tarjeta("sec_proveedor"),
+          (datetime.date(2026, 9, 1), f_max))
+    # Una tarjeta con categoría no puede escribir la clave GLOBAL: ahí es
+    # donde escribían las cinco antes, y es lo que hay que no repetir.
+    check("una tarjeta con categoría no toca la clave global",
+          "rango_franja_Compras" in st.session_state, False)
+
+    # Y el recorte usa el rango de SU tarjeta, no el de al lado.
+    df = pd.DataFrame({"f": pd.date_range("2026-08-01", "2026-09-05",
+                                          freq="D")})
+    check("el recorte sigue al rango de su tarjeta",
+          (len(recortar_por_tarjeta(df, "f", "sec_proveedor")),
+           len(recortar_por_tarjeta(df, "f", "sec_semanal"))),
+          (5, len(df)))
+
+    # Se deja `session_state` como estaba: estas pruebas corren en el mismo
+    # proceso que las demás y una clave colgada las contamina.
+    for _k in (k_prov, k_sem, "rango_franja_Compras"):
+        st.session_state.pop(_k, None)
+    if ctx_previo is None:
+        st.session_state.pop("_franja_fecha_ctx", None)
+    else:
+        st.session_state["_franja_fecha_ctx"] = ctx_previo
 
     return fallos
 
@@ -2667,6 +2954,7 @@ def main():
     fallos += _pruebas_estado_y_utils()
 
     # ── Ventana propia de una tarjeta (graficos/periodo.py) ─────────────
+    fallos += _pruebas_rango_por_tarjeta()
     fallos += _pruebas_periodo_por_vista()
 
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────

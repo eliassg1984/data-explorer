@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-361 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+363 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (124)
+**CSS y estilos** (125)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -158,8 +158,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#355** — Un default que tapaba un problema de OTRA parte de la app queda huérfano cuando esa parte…
 - **#356** — Al borrar una franja fija, lo que hay que borrar son TRES cosas: la superficie, la reserva…
 - **#358** — Una franja que pasa a aparecer con el cursor deja de ser una FILA y pasa a ser una CAPA, y…
+- **#363** — Un control que vive DENTRO de una tarjeta promete que es de esa tarjeta. Si escribe el rango…
 
-**Layout y alturas** (38)
+**Layout y alturas** (39)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -199,8 +200,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#346** — Apilar un drill bajo su ranking cuesta el ALTO; ponerlo al lado cuesta el ANCHO. Elegí…
 - **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
 - **#354** — La salida de un estado vacío no puede estar adentro de lo que el estado vacío apaga: Compras…
+- **#363** — Un control que vive DENTRO de una tarjeta promete que es de esa tarjeta. Si escribe el rango…
 
-**Plotly y figuras** (58)
+**Plotly y figuras** (59)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -260,6 +262,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#337** — El "cromo" de un grid enmarcado tiene una pieza que depende del SISTEMA, no del código: la…
 - **#359** — Un eje category no interpreta una x numérica como POSICIÓN: la agrega como una categoría más
 - **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
+- **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 
 **AgGrid y tablas** (56)
 
@@ -320,7 +323,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#352** — Cuántas columnas caben lo decide el DATO MÁS ANCHO de la celda, no el rango de fechas. Y "las…
 - **#361** — Una cabecera que dice "Este año" sobre una ventana MÓVIL se lee como el año calendario
 
-**Streamlit** (99)
+**Streamlit** (100)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -421,6 +424,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#338** — Un st.container(key=…) VACÍO se dibuja una vez y desaparece en el render siguiente
 - **#339** — El scope de un st.rerun se DECIDE en tiempo de ejecución, no se fija en el código
 - **#357** — Renombrar un símbolo que app.py IMPORTA tira la app en Streamlit Cloud hasta que alguien la…
+- **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 
 **Datos, R2 y DuckDB** (46)
 
@@ -32035,6 +32039,377 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-08.)
 
+362. **Un eje que repite «15/08» cuatro veces no es un eje apretado: es
+     un eje que rotula la unidad equivocada.** Reportado el 2026-09-08
+     sobre «Compra por documento» del drill Semanal: *"podemos tener una
+     leve línea punteada vertical que dé una idea de separación visual de
+     días, y añadir algo que indique el día, si es finde semana, o si es
+     feriado"*. En la captura, seis días traían 61 documentos y el
+     adelgazado de siempre (`_paso`, un rótulo cada 4 barras) escribía
+     `15/08 15/08 15/08 15/08 17/08 …`. Cuatro veces la misma fecha, y aun
+     así sin decir dónde termina un día y empieza el otro — que es
+     justamente lo único que esa fila de rótulos tenía para aportar.
+
+     La cura no es más tinta sino OTRA unidad: **un rótulo por DÍA,
+     centrado en su tramo de barras** (`_calendario_del_eje` en
+     `graficos/compras/semanal.py`), con el día de semana arriba: `Sáb`
+     sobre `15/08`.
+
+     **La palabra «feriado» NO va en el rótulo, y eso lo decidió una
+     medición en el navegador — no el PNG.** Como tercer renglón se veía
+     perfecta en el export de kaleido y en la página se mete encima del
+     legend. Medido con Plotly 3.6 sobre un lienzo de 808px, con la figura
+     armada por el mismo código que la dibuja:
+
+         rótulo de 2 renglones   36px de ancho   el eje baja hasta y=386
+         rótulo de 3 renglones   41px de ancho   el eje baja hasta y=401
+
+     El legend de esta figura vive en `y=-0.22`, o sea arranca en y=392:
+     con dos renglones sobran 6px y con tres se pisan. Y los 41px son
+     culpa de la palabra, que es más ancha que la fecha — con dos feriados
+     SEGUIDOS (28 y 29 de julio, el caso peruano clásico) sus rótulos
+     quedan a 33px de distancia y se pisan entre sí. Por eso la palabra
+     subió a una anotación ARRIBA del lienzo (`y=1.0, yref="paper"`), que
+     es donde `ventas_comparativo` ya la ponía: ahí no compite con nada, y
+     alcanza con subir el margen superior de 30 a 46 para que no toque el
+     título (medido: título y=6..28, anotación y=31..44). Es el mismo
+     error de método que la #91 — el PNG prueba que el gráfico FUNCIONA,
+     nunca que SE VE, y kaleido encima fuerza `automargin`, así que justo
+     los choques de margen es lo que no puede mostrar.
+
+     **TRAMPA de esa medición, y costó una lectura falsa: `automargin` del
+     eje X lo pone STREAMLIT, no el código de la figura.** `_compras_layout`
+     no lo toca —sólo `_layout()` lo hace, y este drill no usa `_layout()`—,
+     pero la figura montada en la app sale con `xaxis.automargin: true` y
+     `margin.pad: 8`: los agrega el tema que `st.plotly_chart` aplica por
+     defecto. Sin `automargin`, `margin.b=10` NO se expande para los
+     rótulos y una misma figura reproducida fuera de Streamlit reporta
+     recorte donde la app no lo tiene (medido: el eje termina en y=453
+     contra una figura de 430). O sea: **una figura reproducida a mano para
+     medirla tiene que declarar `automargin` en el eje, o miente en la
+     dirección contraria al PNG.**
+
+     Corolario: **`<span style="color:…">` no tiñe el rótulo de un eje** en
+     esta versión de Plotly (medido: los `fill` computados salen todos
+     iguales). La idea de marcar el feriado coloreando su fecha no es que
+     se haya descartado por gusto — no funciona.
+
+     **Y el ancho del rótulo no es lo que el rótulo MIDE: es lo que ocupa.**
+     `_ROTULO_DIA_PX` arrancó en 36 —el ancho medido— y la app en vivo lo
+     desmintió al primer intento: con 22 días en 808px de lienzo el paso
+     daba 1, o sea 36,7px de separación para rótulos de 36, y **7 pares se
+     pisaban**. Pasó a 44 (36 + 8 de aire): el mismo caso cae a un rótulo
+     cada dos días, con 16px de aire medidos. Es la misma lección que la
+     #349 — medir el contenido y olvidar que el contenido no es lo único
+     que ocupa lugar.
+
+     **Y una anotación por RACHA de feriados, no por día.** Las bandas de
+     dos feriados seguidos se tocan y forman UNA franja ámbar continua; dos
+     «feriado» encima serían dos rótulos de 34px a 33px de distancia,
+     pisados y diciendo lo mismo dos veces. Como el adelgazado de las
+     anotaciones deja entonces barras sin palabra, **el hover de cada barra
+     también lo dice** (`Jue 06/08/2026 · feriado`): es el único lugar donde
+     cada barra contesta por sí misma.
+
+     **La regla de la punteada, que es la que se va a volver a necesitar:
+     la línea marca el cambio de la unidad de ARRIBA de la barra.** En
+     «Por documento» la barra es un documento y arriba está el día → una
+     línea por cambio de día. En «Día» la barra ya es un día y arriba está
+     la semana → una línea por lunes, que es exactamente lo que
+     `ventas_comparativo` hacía desde antes en su granularidad día (de ahí
+     salió también la paleta: banda gris al 7% el fin de semana, ámbar al
+     10% el feriado, las dos `layer="below"`). Formulada así, es UNA regla
+     y no dos casos.
+
+     **Las bandas sobreviven a los rótulos, y por eso son dos umbrales y
+     no uno.** Los dos salen de `_LIENZO_PX`, como `_tope_puntos`, y no de
+     un número lindo: un rótulo de dos renglones mide ~34px, así que por
+     debajo de 16px por día no entra (~51 días de techo); una banda, en
+     cambio, no se lee de a una — de lejos es un patrón, dos franjas
+     grises cada cinco huecos, y eso todavía dice "fin de semana" a 4px
+     (~205 días). Apagar las tres cosas juntas habría tirado la
+     información barata junto con la cara.
+
+     Dos mudanzas que el cambio arrastró, las dos por tener un SEGUNDO
+     consumidor y ninguna por gusto:
+
+     · **el calendario de feriados subió a `cortes.py`** (`DIAS_ABR_ES`,
+       `FERIADOS_FIJOS_PE`, `pascua`, `feriados_peru`, `feriados_entre`).
+       Vivía privado en `graficos/ventas_comparativo.py`; importarlo desde
+       Compras habría atado dos reportes entre sí, y `cortes.py` ya era el
+       módulo de fechas del proyecto y no importa ni streamlit ni
+       graficos — el mismo argumento que explica su propio docstring.
+       `ventas_comparativo` conserva los ALIAS privados (`_pascua`, …):
+       `test_graficos.py` los llama por ese nombre, y renombrar algo ya
+       importado es lo que en Cloud deja la app hablando con el paquete
+       viejo hasta el reboot (ver #357). `feriados_peru` pasó a devolver
+       un `frozenset` cacheado, porque ahora se pregunta POR DÍA: un `set`
+       mutable salido de `lru_cache` es el mismo objeto para todos y al
+       primero que le haga `|=` le ensucia el calendario a los demás.
+     · **`_llave_documento_parquet` bajó a `graficos/compras/_comun.py`**,
+       con `documentos_sunat.py` reexportándola. `NUM_DOCUMENTO` no es lo
+       que dice el papel: son 15 caracteres (`"F0"` + serie + número con
+       ceros) para decir `E001-1328`, y esa decodificación no puede
+       existir dos veces — si la tabla y el cruce contra el SIRE se
+       separaran, dirían números distintos del mismo comprobante. Al lado
+       queda `documento_legible`, que decodifica sólo lo que tiene esa
+       forma y deja pasar el resto: el modo demo genera `"F0001-123"`, ya
+       legible y de 9 caracteres, que a ciegas saldría cortado en
+       `"01-1 23"`.
+
+     **La columna «Documento» de la tabla de detalle va en las DOS ramas
+     de foco, aunque la regla de "contá en cuántas filas dice algo"
+     (#238-#239) mande a chip justo la que la pidió.** Medido sobre
+     `compras.parquet`: con foco de PERÍODO, una semana trae 267 líneas de
+     96 documentos distintos (medianas) y la columna cambia casi en cada
+     fila; con foco de COMPRA es el mismo número repetido en todas. Va
+     igual, y el chip también — el caption de esa rama nombra el
+     documento. No es redundancia: es la respuesta a "cuál es este
+     documento" en el lugar donde se mira (arriba, junto al proveedor y al
+     total) y en el lugar donde se copia (la celda).
+
+     **Corolario de herramienta:** `ver_figura.py` no podía verificar nada
+     de esto. Invoca al dashboard con el df ENTERO, así que «Por
+     documento» salía con ~17.000 barras en 1550px — un PNG donde el cromo
+     de calendario ni se dibuja, porque se dibuja sólo cuando los días
+     tienen píxeles. De ahí `--desde/--hasta`, que acota como lo haría la
+     franja. Sin eso, verificar un cambio de grano diario volvía a ser
+     levantar la app, que es lo que ese script existe para evitar (#91).
+
+     (2026-09-08.)
+
+363. **Un control que vive DENTRO de una tarjeta promete que es de esa
+
+     tarjeta. Si escribe el rango global, miente — y no avisa.**
+
+
+
+
+
+     Reportado el 2026-09-08 con esas palabras: «pensé que cada tarjeta,
+
+     su selector, solo afectaba a su tarjeta». Compras tenía CINCO
+
+     selectores de fecha en cabeceras de tarjeta (`cp_rank`, `cp_docs`,
+
+     `cp_prod`, `cp_vol`, `cp_sem`) y los cinco escribían la misma clave,
+
+     `rango_franja_Compras`.
+
+
+
+
+
+     **No era un descuido: estaba escrito a propósito** en
+
+     `base.py::selector_fecha_tarjeta` («dos tarjetas con este control son
+
+     dos puertas al mismo dato, no dos filtros»). Y era cierto mientras
+
+     esto fuera un ATAJO a la píldora de fecha de la franja. Dejó de serlo
+
+     el 2026-09-06, cuando a Compras se le sacó el calendario de la franja
+
+     (#326, #329): el atajo quedó siendo EL control, con la semántica de
+
+     atajo intacta. **Nadie tocó esas líneas el día que se volvieron
+
+     falsas** — es el mismo modo de fallo de la #210, que también nació de
+
+     una invariante que se cayó sin que el código cambiara.
+
+
+
+
+
+     **Medido en el navegador, con datos reales de R2.** Con cuatro
+
+     secciones de la pila construidas, tres triggers mostraban el mismo
+
+     string (`6 sep 2025 – 5 sep 2026`) y el cuarto —Volatilidad— su
+
+     propia ventana. Un clic en «Mes» dentro del selector de «Detalle de
+
+     documentos por proveedor» dejó al «Ranking de proveedores», que es
+
+     otra tarjeta, en `1 sep – 5 sep 2026`.
+
+
+
+
+
+     **Y lo que lo volvió urgente, que no es el cruce.** Ese rango dejó a
+
+     la sección sin filas, saltó la guarda de `proveedor.py` y la tarjeta
+
+     de Documentos DESAPARECIÓ — con su propio selector adentro:
+
+     `document.querySelectorAll('[class*="st-key-cp_docs"]')` devolvía
+
+     cero. `_documentos_proveedor.py` tiene su guarda de vacío escrita con
+
+     cuidado, citando la #196, para dibujar la tarjeta IGUAL y no llevarse
+
+     puesto el control que arregla el estado. Nunca corre: quien retorna
+
+     es su LLAMADOR, 1.600 líneas antes. **Una precaución puesta un nivel
+
+     más abajo del que la necesita no protege de nada**, y se ve
+
+     exactamente igual que una que funciona.
+
+
+
+
+
+     **Cómo quedó** (es la «salida de fondo» que la #210 nombró y dejó
+
+     para otra sesión):
+
+
+
+
+
+       - `graficos/compras/_comun.py::CATEGORIA_SEC` — una categoría de
+
+         rango por SECCIÓN de la pila. Vive en `_comun` y no en
+
+         `__init__` por el ciclo de imports; `__init__` la reexporta.
+
+       - `estado_rango.clave_rango(reporte, ..., categoria=)` ahora mete
+
+         el REPORTE en la clave (`rango_cat_{reporte}_{categoria}`). Lo
+
+         mandaba su propio docstring para el día que llegara un segundo
+
+         reporte con categorías, y con eso sobró el `pop` de `app.py` que
+
+         limpiaba las dos claves de Ajuste al cambiar de reporte.
+
+       - `base.py::selector_fecha_tarjeta(categoria=)` siembra la clave de
+
+         SU tarjeta (`rango_tarjeta`, vía `asegurar_rango`) y le pasa a
+
+         `selector_escala` un `ctx` con esa `k_rango`. Sin `categoria`
+
+         sigue escribiendo la canónica: es lo que necesita Movimientos,
+
+         donde la franja SÍ dibuja su calendario y esto vuelve a ser de
+
+         verdad un atajo.
+
+       - `_d_sec()` en el dispatcher recorta `d_full` una vez por sección.
+
+
+
+
+
+     **Dos decisiones del recorte que valen más que el resto.**
+
+
+
+
+
+     *Pasa en el DISPATCHER, no adentro de cada drill.* Los cinco drills
+
+     reciben un `d` y lo usan en cientos de líneas cada uno
+
+     (`proveedor.py` son 1.786). Cambiándoles la FUENTE —de «el df que ya
+
+     filtró `app.py`» a «el df del rango de esta tarjeta»— siguen
+
+     recibiendo lo que esperan y no hubo que tocarles el cuerpo.
+
+
+
+
+
+     *Se parte de `d_full` (chips sí, fecha no), no de `d`.* Recortar
+
+     sobre `d` sería una INTERSECCIÓN de dos rangos: una tarjeta nunca
+
+     podría ampliar más allá de lo que dejó pasar `app.py`. Ese techo
+
+     invisible es justo lo que le sigue pasando a la sección Tabla, cuyo
+
+     «Todo» significa «todo lo que dejó el rango canónico».
+
+
+
+
+
+     **Dos tarjetas comparten categoría A PROPÓSITO.** «Ranking de
+
+     proveedores» y «Detalle de documentos por proveedor» son la misma
+
+     sección, y la segunda se calcula sobre el `base`/`top_provs` que
+
+     produce la primera. Con rangos distintos mostraría documentos de
+
+     proveedores rankeados en OTRO período: un desacuerdo silencioso entre
+
+     dos cosas que se leen juntas. Rango por tarjeta no quiere decir una
+
+     clave por trigger, quiere decir una clave por unidad de lectura.
+
+
+
+
+
+     **El aviso de producto de la #210 sigue en pie, y acá se cumple
+
+     solo.** Grafana marca con un ícono de reloj el panel que tiene rango
+
+     propio, porque dos secciones del mismo dataset con períodos distintos
+
+     y sin aviso se contradicen a la vista. Acá el señalamiento ya existe
+
+     por construcción: el trigger ES el rango escrito con todas las letras
+
+     en la cabecera de cada tarjeta. No hace falta agregarle un ícono —
+
+     pero tampoco se le puede sacar el texto al trigger y dejarlo en
+
+     ícono, que fue lo que fue hasta el 2026-08-26.
+
+
+
+
+
+     **Lo que NO cambió, y por qué.** «Vs año pasado» y «Tabla» no entran:
+
+     su control de fecha es el desplegable de `graficos/periodo.py`, que ya
+
+     era por tarjeta, y darles los dos sería volver al enredo de tener dos
+
+     controles de fecha que se pisan (que es lo que todavía tiene
+
+     Volatilidad, a sabiendas: ventana propia + rango). «Documentos SUNAT»
+
+     tampoco: está fuera de la pila y dibuja el pill ENTERO de la franja,
+
+     cuya key ES la clave canónica.
+
+
+
+
+
+     **La guarda.** `test_graficos.py::_pruebas_rango_por_tarjeta` recorre
+
+     `graficos/compras/` con `ast` y exige que toda llamada a
+
+     `selector_fecha_tarjeta` declare su `categoria=`. Con `ast` y no con
+
+     un regex porque el primer intento marcaba una MENCIÓN dentro de un
+
+     comentario de `_css_proveedor.py`. Hace falta una guarda porque el
+
+     olvido no da error: `CATEGORIA_SEC.get(clave)` devuelve `None` y la
+
+     tarjeta vuelve callada al rango compartido — o sea, este mismo bug
+
+     otra vez y en una sola vista, que es como se descubrió.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32047,7 +32422,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#362**.
+> próxima regla nueva es la **#364**.
 
 >
 

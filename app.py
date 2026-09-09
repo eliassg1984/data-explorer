@@ -181,10 +181,18 @@ for _extra in cfg.get("archivos_extra", ()):
 # ===========================================================================
 # LIMPIAR ESTADO AL CAMBIAR DE REPORTE
 # ===========================================================================
+# ACÁ SE POPEABAN LAS DOS CLAVES DE RANGO POR CATEGORÍA de Ajuste
+# (`ajuste_rango_aplicado_visual` / `_tiempo`). No era limpieza de higiene:
+# esas claves NO llevaban el reporte adentro, así que sin el pop el rango
+# de una categoría de Ajuste se le habría aplicado a cualquier otro reporte
+# que adoptara categorías. El 2026-09-08 Compras adoptó una categoría por
+# sección de su pila y `clave_rango` pasó a meter el reporte en la clave
+# (`rango_cat_{reporte}_{categoria}`), que es lo que el propio docstring de
+# esa función mandaba hacer llegado este caso. Con el reporte adentro no
+# hay colisión posible y el pop sobra — peor: borraría el rango de cada
+# tarjeta de Compras al ir y volver de otro reporte.
 if st.session_state.get("_reporte_anterior") != reporte:
     st.session_state["_reporte_anterior"] = reporte
-    st.session_state.pop("ajuste_rango_aplicado_visual", None)
-    st.session_state.pop("ajuste_rango_aplicado_tiempo", None)
 
 
 # ===========================================================================
@@ -630,12 +638,20 @@ with _fila_top:
             # fecha de las TARJETAS (`base.py::selector_fecha_tarjeta`, en
             # los dos rankings, Semanal y Volatilidad) y la tarjeta de
             # Documentos SUNAT, que dibuja el pill entero adentro.
+            # `rango_default` NO estaba acá hasta el 2026-09-08. Lo pide
+            # `base.py::selector_fecha_tarjeta(categoria=...)`: una tarjeta
+            # con rango propio tiene que SEMBRAR su clave la primera vez
+            # que se dibuja, y el default correcto es el mismo que usa la
+            # página (los últimos 12 meses anclados al último día CON
+            # datos, calculado arriba). Recalcularlo del lado de la tarjeta
+            # sería una segunda cuenta que se desincroniza de ésta.
             franja_fecha.publicar(
                 k_rango=_k_rango_franja, k_corte=_k_corte,
                 corte_apl=_corte_apl, cortes=_cortes_franja,
                 fecha_min=fecha_min_full, fecha_max=fecha_max_full,
                 reporte=reporte, usa_carga_rango=_usa_carga_rango,
                 hoy=_hoy,
+                rango_default=(fecha_ini_default, fecha_fin_default),
             )
             # COMPRAS NO LLEVA CALENDARIO EN LA FRANJA (2026-09-06, a
             # pedido: "a todo el reporte de compras, quitemosle el

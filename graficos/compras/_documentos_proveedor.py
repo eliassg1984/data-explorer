@@ -26,7 +26,7 @@ from st_aggrid import AgGrid, JsCode
 from inyecciones import inject_maximize_aggrid
 from graficos import alturas
 from graficos.compras._comun import (
-    filtro_proveedores, selector_fecha_tarjeta,
+    CATEGORIA_SEC, filtro_proveedores, selector_fecha_tarjeta,
 )
 from graficos.compras._css_proveedor import CSS_PIVOTE_DOCS
 from graficos.compras._etiquetas_proveedor import nombre_propio
@@ -89,7 +89,12 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                 titulo_html=('<div class="cp-rank-tit">Detalle de '
                              'documentos por proveedor · vista '
                              f'{gran}</div>'),
-                extra=_pop_docs)
+                extra=_pop_docs,
+                # LA MISMA CATEGORÍA QUE EL RANKING DE ARRIBA, a propósito:
+                # esta tabla se calcula sobre el `base`/`top_provs` que
+                # produce aquél, así que con rangos distintos mostraría
+                # documentos de proveedores rankeados en otro período.
+                categoria=CATEGORIA_SEC["compras_sec_proveedor"])
 
         _bd = base[base["prov"].isin(top_provs)].copy()
         _bd = _bd[_bd["prov"].isin(set(_sel_docs))].copy()

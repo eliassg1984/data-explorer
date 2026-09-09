@@ -93,6 +93,14 @@ from graficos.base import _compras_layout, _compras_truncar
 from graficos.compras._comun import (
     COLUMNAS_COTEJO, GAP_DRILL,
 )
+# REEXPORT, no import muerto: `_llave_documento_parquet` vivia definida aca
+# y se movio a `_comun.py` el 2026-09-08, cuando el drill Semanal la pidio
+# para mostrar el N de documento en su tabla (ver el comentario largo que la
+# acompana alla). Este modulo SI la usa —en `_parquet_agrupado_por_documento`
+# y en `_fila_de`—, asi que no lleva noqa; el import va aparte para que se
+# lea que es una mudanza y que `test_graficos.py` la sigue llamando por este
+# nombre.
+from graficos.compras._comun import _llave_documento_parquet
 from graficos import alturas
 from tablas._css import _css_grid
 from utils import _norm
@@ -131,22 +139,6 @@ chica real por encima del umbral es S/0,06 — remedido con `total_pq` y
 `COL_TOTAL_PARQUET` / `COL_BASE_PARQUET`), no de la suma por línea. 5
 centavos sigue alcanzando para cubrir ruido de redondeo sin tapar
 diferencias de negocio reales."""
-
-
-def _llave_documento_parquet(num_documento):
-    """`"{serie}-{numero}"` desde `NUM_DOCUMENTO` del parquet de Compras.
-
-    El parquet lo arma como `"F0" + serie(4) + numero(9, con ceros a la
-    izquierda)` — verificado decodificando valores reales
-    (`"F0E001000001328"` → serie `"E001"`, número `"1328"`). Se le sacan
-    los ceros de más para que calce con `documento` del SIRE
-    (`sunat._normalizar_registro`, que ya viene sin ellos).
-    """
-    s = num_documento.astype(str)
-    serie = s.str[2:6]
-    numero = s.str[6:].str.lstrip("0")
-    numero = numero.where(numero != "", "0")   # el raro caso numero="000..."
-    return serie + "-" + numero
 
 
 COL_RUC_PARQUET = "INDICADOR TRIBUTARIO"
