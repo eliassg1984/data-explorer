@@ -1953,7 +1953,19 @@ JS = """
         // ser cierto -- la trampa de la regla #169, que ya costo media hora
         // una vez.
         var SEL_CAB_CAJA  = '.ag-header, .ag-header-cell, .ag-header-group-cell';
-        var SEL_CAB_TEXTO = '.ag-header-cell-text, .ag-header-group-text';
+        // TRES clases donde alcanzaria una, y no es paranoia: una tabla
+        // puede pisar el cuerpo de SU cabecera con un `headerClass` propio,
+        // y ese selector tiene DOS clases contra la una del desnudo. En el
+        // ranking de volatilidad es `.vol-hdr-compacta .ag-header-cell-text`
+        // (11px, para que "Volatilidad" entre en un renglon). Las dos
+        // reglas llevan `!important`, asi que no hay empate que el orden en
+        // el head pueda desempatar: gana la mas especifica, y el slider
+        // "Tamano de letra" de la cabecera movia UNA sola columna -- la
+        // unica sin headerClass, o sea la primera. Reportado con captura el
+        // 2026-09-09 ("solo me permite aumentar la primera celda de la
+        // cabecera"). Ver arquitectura.md regla #375.
+        var SEL_CAB_TEXTO = '.ag-header .ag-header-cell .ag-header-cell-text, '
+                          + '.ag-header .ag-header-group-cell .ag-header-group-text';
 
         // Un `style=""` con color/fondo en una celda o una fila sale SIEMPRE
         // de Python: AG Grid no pinta inline por su cuenta (lo suyo son las
@@ -1967,6 +1979,26 @@ JS = """
                 if (st.indexOf('color') >= 0 || st.indexOf('background') >= 0) return true;
             }
             return false;
+        }
+
+        // Las clases NO-`ag-` que Python le puso a las celdas de cabecera
+        // (`headerClass=` en el GridOptionsBuilder). Son las que el bloque
+        // copiado va a pisar por especificidad, asi que se nombran en el
+        // aviso: quien lo pegue tiene que saber que ahi habia un tamano
+        // elegido a proposito. Ver SEL_CAB_TEXTO.
+        function clasesDeCabeceraPropias(gdoc) {
+            if (!gdoc) return [];
+            var cs = gdoc.querySelectorAll('.ag-header-cell, .ag-header-group-cell');
+            var out = [];
+            for (var i = 0; i < cs.length; i++) {
+                var lista = cs[i].classList;
+                for (var j = 0; j < lista.length; j++) {
+                    var c = lista[j];
+                    if (c.indexOf('ag-') === 0) continue;
+                    if (out.indexOf(c) === -1) out.push(c);
+                }
+            }
+            return out;
         }
 
         function reglasDeTabla(t) {
@@ -2089,6 +2121,23 @@ JS = """
                     out.push('# pegarlo se pierde un color que en pantalla estaba,'
                              + ' sacale el');
                     out.push('# !important a esa propiedad. Ver arquitectura.md regla #368.');
+                }
+                // Hermano del de arriba, para la CABECERA: el selector de
+                // tres clases le gana a cualquier `headerClass` de Python,
+                // que es justo lo que hace falta para que el preview se vea
+                // parejo -- pero al pegarlo apaga un tamano elegido a
+                // proposito para las columnas angostas. Se nombra la clase
+                // para que se pueda ir a mirar por que estaba.
+                if (t.cabTam || t.cabTexto || t.cabPeso || t.fuente) {
+                    var clasesCab = clasesDeCabeceraPropias(docDeAgGridDeKey(key));
+                    if (clasesCab.length) {
+                        out.push('# OJO: esta cabecera tiene headerClass propias ('
+                                 + clasesCab.join(', ') + ').');
+                        out.push('# El selector de abajo les gana por especificidad, o sea que');
+                        out.push('# lo que esa clase ajustaba (un cuerpo mas chico para que el');
+                        out.push('# rotulo entre en una columna angosta, casi siempre) queda');
+                        out.push('# apagado. Ver arquitectura.md regla #375.');
+                    }
                 }
                 out.push('# Va en el custom_css del AgGrid (PYTHON), no en estilos/: la');
                 out.push('# grilla corre dentro de un iframe y una regla del documento');

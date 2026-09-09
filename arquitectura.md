@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-374 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+375 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (131)
+**CSS y estilos** (132)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -165,6 +165,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
 - **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
 - **#371** — Una cabecera flex que ENVUELVE convierte el margen negativo de la regla #162 en un solapamiento
+- **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 
 **Layout y alturas** (40)
 
@@ -272,7 +273,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 
-**AgGrid y tablas** (59)
+**AgGrid y tablas** (60)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -333,6 +334,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 - **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
 - **#374** — Un drill de TRES niveles no es "una tabla más": son cinco cosas que se rompen en silencio, y…
+- **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 
 **Streamlit** (105)
 
@@ -33187,6 +33189,48 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+375. **«Va última en el head» sólo desempata a IGUAL especificidad — para
+     PISAR a otra regla hay que ganarle el selector.** El modo diseño
+     inyecta su `<style>` al final del head del iframe del AgGrid y se
+     apoyaba en eso para ganarle al `custom_css` de Python (ver el
+     comentario de `ID_STYLE_TABLA`). Funciona mientras las dos reglas usen
+     el MISMO selector, que es lo que pasa en ocho de las nueve tablas.
+
+     En el ranking de volatilidad no: sus columnas angostas llevan
+     `headerClass="vol-hdr-compacta"` y `tablas/compras_volatilidad.py`
+     emite `.vol-hdr-compacta .ag-header-cell-text { font-size: 11px
+     !important }` — dos clases contra la una de `.ag-header-cell-text`.
+     Las dos con `!important`, así que no hay empate que el orden pueda
+     resolver: entre dos declaraciones `!important` de autor manda la
+     especificidad, y el orden es el ÚLTIMO criterio, no el primero.
+
+     El síntoma no se lee como un problema de cascada, y por eso vale la
+     pena la regla: el slider «Tamaño de letra» de la sección Cabecera
+     movía **una sola columna**, la primera. No porque el control estuviera
+     roto, sino porque «Insumo» es la única columna sin `headerClass` — las
+     siete semanas y «Volatilidad» sí la tienen. Reportado con captura el
+     2026-09-09 como «solo me permite aumentar el tamaño de la letra de la
+     primera celda de la cabecera».
+
+     El arreglo es una línea: `SEL_CAB_TEXTO` pasa a
+     `.ag-header .ag-header-cell .ag-header-cell-text` (tres clases), que
+     le gana a cualquier `headerClass` de una sola. **Diagnóstico
+     transferible:** si un control global de la herramienta toca sólo
+     algunos elementos, buscá una regla POR COLUMNA/POR FAMILIA antes que
+     un bug del control — el patrón «el primero sí y el resto no» es una
+     firma de especificidad, no de un listener que no se enganchó.
+
+     Lo que el arreglo compra en el preview lo paga en el **bloque
+     copiado**: ese selector pegado en `tablas/_css.py` apaga el 11px que
+     la clase ponía a propósito (con 13px «Volatilidad» sale como una torre
+     de letras, ver `_TAM_HDR_SEMANA`). Como el bloque tiene que decir lo
+     mismo que el preview (#169), no se puede emitir un selector distinto:
+     se emite el mismo y se AVISA, listando las clases propias que la
+     grilla tenga (`clasesDeCabeceraPropias`). Mismo mecanismo y mismo
+     motivo que el aviso de `colorInlineDePython` de la #368.
+
+     (2026-09-09.)
+
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -33200,7 +33244,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#375**.
+> próxima regla nueva es la **#376**.
 
 >
 
