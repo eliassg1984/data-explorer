@@ -573,9 +573,11 @@ slider), o **inserta** texto/línea/barra/espacio de mentira para ver
 falta porque el resto del panel escribe `style` inline sobre UN nodo — con
 eso se estila una celda, no una tabla. Aparece con clic derecho sobre
 cualquier celda (o sobre la tarjeta) y toca la grilla ENTERA: fondo y
-tipografía de la cabecera, color y tamaño de las celdas, tipo de letra de
-toda la tabla, grosor y color de las líneas entre filas y entre columnas,
-los cuatro lados del marco **por separado**, esquinas y alto de fila.
+tipografía de la cabecera, los cinco fondos de fila (todas, rayado, al
+pasar el mouse, fila elegida, fila de totales), color y tamaño de las
+celdas, tipo de letra de toda la tabla, grosor y color de las líneas entre
+filas y entre columnas, los cuatro lados del marco **por separado**,
+esquinas y alto de fila.
 
 Dos cosas suyas, las dos por la misma razón — la grilla corre en un
 **iframe**: el preview no es CSS inline sino una `<style>` inyectada en el

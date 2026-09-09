@@ -1838,6 +1838,8 @@ JS = """
                 ts[key] = { fuente: null,
                             cabFondo: null, cabTexto: null, cabTam: null, cabPeso: null,
                             celTexto: null, celTam: null,
+                            filaFondo: null, filaFondoAlt: null, filaHover: null,
+                            filaSel: null, filaTotal: null,
                             linH: null, linHColor: null,
                             linV: null, linVColor: null,
                             marcoLados: null, marcoAncho: null, marcoColor: null,
@@ -1852,6 +1854,8 @@ JS = """
             if (!t) return false;
             return !!(t.fuente || t.cabFondo || t.cabTexto || t.cabTam || t.cabPeso
                       || t.celTexto || t.celTam
+                      || t.filaFondo || t.filaFondoAlt || t.filaHover
+                      || t.filaSel || t.filaTotal
                       || t.linH !== null || t.linV !== null
                       || t.marcoLados || t.marcoRadio !== null);
         }
@@ -1931,6 +1935,11 @@ JS = """
             if (t.cabTexto) add(SEL_CAB_TEXTO, 'color', t.cabTexto);
             if (t.cabTam)   add(SEL_CAB_TEXTO, 'font-size', t.cabTam + 'px');
             if (t.cabPeso)  add(SEL_CAB_TEXTO, 'font-weight', t.cabPeso);
+            if (t.filaFondo)    add('.ag-row-even, .ag-row-odd', 'background-color', t.filaFondo);
+            if (t.filaFondoAlt) add('.ag-row-odd', 'background-color', t.filaFondoAlt);
+            if (t.filaHover)    add('.ag-row-hover', 'background-color', t.filaHover);
+            if (t.filaSel)      add('.ag-row-selected', 'background-color', t.filaSel);
+            if (t.filaTotal)    add('.ag-row-pinned', 'background-color', t.filaTotal);
             if (t.celTexto) add('.ag-cell', 'color', t.celTexto);
             if (t.celTam)   add('.ag-cell', 'font-size', t.celTam + 'px');
             if (t.linH !== null) {
@@ -2047,6 +2056,18 @@ JS = """
                 out.push('# marco deja de coincidir con lo que ocupan las filas.');
             }
 
+            // Solo cuando el rayado quedo de VERDAD aplanado: con un
+            // `filaFondoAlt` distinto el zebra sigue vivo (con otros dos
+            // colores) y el aviso estaria describiendo algo que no paso.
+            var aplanado = t.filaFondo
+                && (!t.filaFondoAlt || t.filaFondoAlt === t.filaFondo);
+            if (out.length && aplanado && !t.filaSel) {
+                out.push('');
+                out.push('# OJO: se pintaron todas las filas iguales (rayado apagado).');
+                out.push('# Si esta tabla es de SELECCION, revisa que la fila clickeada');
+                out.push('# siga marcandose: `_css_grid` no estila `.ag-row-selected` y');
+                out.push('# el rayado era lo unico que la delataba (regla #235).');
+            }
             if (!out.length) return null;
             if (sinNombre.length) {
                 out.push('');
@@ -3512,8 +3533,38 @@ JS = """
                     rehacerPanel();
                 }));
 
-                // ---- celdas ----
-                panel.appendChild(subEtiqueta('Celdas'));
+                // ---- filas y celdas ----
+                // Van juntas y no en dos bloques: el usuario que viene a
+                // "cambiar el color de las filas" no distingue el relleno
+                // de la fila del color de la letra de la celda, y son las
+                // dos mitades de lo mismo -- el cuerpo de la tabla.
+                panel.appendChild(subEtiqueta('Filas y celdas'));
+
+                var capFilas = doc.createElement('div');
+                capFilas.style.cssText = 'font-size:10px;line-height:1.45;color:#6f6f7a;margin:6px 0 0';
+                capFilas.textContent = '"Fondo" pinta TODAS las filas (o sea, apaga el rayado).'
+                    + ' Ojo con eso en una tabla de selección: sin rayado, la fila que se'
+                    + ' clickeó puede quedar sin ninguna marca — para eso está "Fila elegida".';
+                panel.appendChild(capFilas);
+
+                // Cinco fondos con la misma forma: un swatch por rol. Se
+                // arman en bucle porque el unico que cambia es a que campo
+                // del estado escriben.
+                [['filaFondo',    'Fondo (todas las filas)'],
+                 ['filaFondoAlt', 'Fondo alterno (rayado)'],
+                 ['filaHover',    'Al pasar el mouse'],
+                 ['filaSel',      'Fila elegida'],
+                 ['filaTotal',    'Fila de totales']].forEach(function(par) {
+                    var campo = par[0];
+                    var lbl = spanValor(T[campo] || 'sin cambio');
+                    panel.appendChild(filaControl(par[1], construirSwatches(T[campo], function(hex) {
+                        tocarTabla(function(t) { t[campo] = hex; });
+                        lbl.textContent = hex;
+                    }, { libre: true, transparente: true }), lbl, function() {
+                        tocarTabla(function(t) { t[campo] = null; });
+                        rehacerPanel();
+                    }));
+                });
 
                 var celTextoLbl = spanValor(T.celTexto || 'sin cambio');
                 panel.appendChild(filaControl('Color de letra', construirSwatches(T.celTexto, function(hex) {

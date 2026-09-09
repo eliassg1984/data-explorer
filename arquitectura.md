@@ -32459,6 +32459,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        una línea que lo dice, que es la única forma honesta de no
        romper la regla #1 sin inventarle un nombre.
 
+     **El fondo de las FILAS faltó en la primera pasada** y lo reportó el
+     usuario en el acto («creo que el color de las filas, no puedo
+     cambiarlo?»). Son cinco roles —todas, rayado, al pasar el mouse,
+     fila elegida, fila de totales— y se apoyan en algo que no es obvio:
+     los cinco selectores tienen la MISMA especificidad (una clase), así
+     que el desempate es la POSICIÓN en la hoja. De ahí que
+     `reglasDeTabla()` los emita en ese orden y no en otro: la base
+     primero, el rayado después (para que gane en las impares) y
+     hover/elegida/totales al final — una fila impar hovereada matchea
+     las dos y tiene que ganar el hover. El «Fondo» que pinta todas
+     apaga el rayado, que es la trampa de la #235 (sin rayado, una tabla
+     de selección queda sin rastro de qué se clickeó): el bloque copiado
+     lo avisa, pero sólo cuando quedó de verdad aplanado, no cada vez
+     que se toca un fondo.
+
      **Tres cosas que sólo se vieron midiendo en el navegador**, y las
      tres habrían pasado por buenas leyendo el código:
 
