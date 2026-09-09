@@ -32476,6 +32476,32 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      lo avisa, pero sólo cuando quedó de verdad aplanado, no cada vez
      que se toca un fondo.
 
+     **La línea que separa la fila de totales tampoco se podía tocar**, y
+     es el caso más enredado de los tres pedidos. Medido en el ranking:
+     son DOS líneas apiladas, de distinto color, que nadie pidió juntas.
+     Una la pone el tema en el CONTENEDOR
+     (`:where(.ag-floating-bottom) { border-top: var(--ag-pinned-row-border) }`,
+     1px gris) y la otra la pone Python en la FILA — y no por
+     `custom_css` sino **inline**, desde el `getRowStyle` de
+     `proveedor.py` (`'borderTop': '2px solid ACENTO'`). De ahí tres
+     consecuencias que hay que respetar juntas o el control miente:
+
+     - **El `!important` no es decorativo.** Contra un estilo inline no
+       gana ninguna regla sin él.
+     - **Poner la línea en la fila obliga a apagar la del contenedor**
+       (`--ag-pinned-row-border: none`), o se suman y quedan dos.
+       Apagarla por la variable es limpio: es la que el tema lee.
+     - **Los dos nombres de la fila de cierre.** `pinnedBottomRowData`
+       da `.ag-row-pinned` (ranking, receta, ajuste) y
+       `grandTotalRow: "bottom"` da `.ag-row-footer` (pivote de
+       documentos, movimientos, desktop). El usuario ve "la fila de
+       totales", no el mecanismo, así que el selector nombra los dos —
+       verificado en vivo sobre una tabla de cada clase.
+
+     El bloque copiado detecta si esa línea era inline y lo dice, con el
+     valor y todo: pegarlo funciona, pero el sitio limpio es el
+     `getRowStyle`, y sin la nota no hay forma de saberlo.
+
      **Tres cosas que sólo se vieron midiendo en el navegador**, y las
      tres habrían pasado por buenas leyendo el código:
 

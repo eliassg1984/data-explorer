@@ -1827,6 +1827,17 @@ JS = """
             return null;
         }
 
+        // La fila de cierre se llama distinto segun como la arme Python:
+        // `pinnedBottomRowData` da `.ag-row-pinned` (el ranking, receta,
+        // ajuste) y `grandTotalRow: "bottom"` da `.ag-row-footer` (el
+        // pivote de documentos, movimientos, desktop). Se buscan las dos,
+        // porque el usuario ve "la fila de totales" y no el mecanismo.
+        var SEL_FILA_TOTAL = '.ag-row-pinned, .ag-row-footer';
+
+        function tieneFilaTotal(gdoc) {
+            return !!(gdoc && gdoc.querySelector(SEL_FILA_TOTAL));
+        }
+
         function tablaDe(key) {
             var ts = win.__disenoState.tablas;
             if (!ts[key]) {
@@ -1842,6 +1853,7 @@ JS = """
                             filaSel: null, filaTotal: null,
                             linH: null, linHColor: null,
                             linV: null, linVColor: null,
+                            linT: null, linTColor: null,
                             marcoLados: null, marcoAncho: null, marcoColor: null,
                             marcoRadio: null,
                             filaAlto: null, filaAltoOriginal: null,
@@ -1856,7 +1868,7 @@ JS = """
                       || t.celTexto || t.celTam
                       || t.filaFondo || t.filaFondoAlt || t.filaHover
                       || t.filaSel || t.filaTotal
-                      || t.linH !== null || t.linV !== null
+                      || t.linH !== null || t.linV !== null || t.linT !== null
                       || t.marcoLados || t.marcoRadio !== null);
         }
 
@@ -1895,6 +1907,18 @@ JS = """
                 cabTam: cab ? Math.round(numDe(cab.fontSize, 13)) : 13,
                 celTam: cel ? Math.round(numDe(cel.fontSize, 13)) : 13
             };
+            // La linea de arriba de los totales puede estar en DOS sitios a
+            // la vez, y de hecho lo esta en el ranking: la fila trae la
+            // suya (2px del acento, inline, desde el `getRowStyle` de
+            // Python) y el contenedor `.ag-floating-bottom` trae la del
+            // tema (1px, `--ag-pinned-row-border`). Se apilan. Manda la de
+            // la FILA si existe, que es la que se ve; si no, la del
+            // contenedor.
+            var filaTot = cs(SEL_FILA_TOTAL), contTot = cs('.ag-floating-bottom');
+            var anchoFila = filaTot ? numDe(filaTot.borderTopWidth, 0) : 0;
+            var fuente = anchoFila > 0 ? filaTot : contTot;
+            t.medido.linT = fuente ? Math.round(numDe(fuente.borderTopWidth, 0)) : 0;
+            t.medido.linTColor = fuente ? aHex(fuente.borderTopColor) : '#e5e5ea';
             return t.medido;
         }
 
@@ -1956,6 +1980,18 @@ JS = """
                 // none`). Con el selector solo, apagarla no siempre alcanza.
                 add('.ag-root-wrapper', '--ag-header-column-border', vv);
                 add('.ag-root-wrapper', '--ag-column-border', vv);
+            }
+            if (t.linT !== null) {
+                var vt = t.linT === 0 ? 'none' : (t.linT + 'px solid ' + t.linTColor);
+                // `!important` no es decoracion aca: en las tablas que
+                // arman la fila con un `getRowStyle` la linea es un estilo
+                // INLINE, y sin `!important` ninguna regla le gana.
+                add(SEL_FILA_TOTAL, 'border-top', vt);
+                // Y se apaga la del contenedor, que si no se SUMA a la de
+                // la fila y salen dos lineas de distinto color pegadas —
+                // que es como esta hoy el ranking sin que nadie lo pidiera.
+                // Es una variable del tema, asi que apagarla es limpio.
+                add('.ag-root-wrapper', '--ag-pinned-row-border', 'none');
             }
             if (t.marcoLados) {
                 ['top', 'right', 'bottom', 'left'].forEach(function(lado) {
@@ -2061,6 +2097,20 @@ JS = """
             // colores) y el aviso estaria describiendo algo que no paso.
             var aplanado = t.filaFondo
                 && (!t.filaFondoAlt || t.filaFondoAlt === t.filaFondo);
+            if (out.length && t.linT !== null) {
+                var gdocNota = docDeAgGridDeKey(key);
+                var filaNota = gdocNota && gdocNota.querySelector(SEL_FILA_TOTAL);
+                var inline = filaNota && filaNota.style && filaNota.style.borderTop;
+                if (inline) {
+                    out.push('');
+                    out.push('# OJO: la linea de los totales de ESTA tabla no sale de un');
+                    out.push('# custom_css sino de un `getRowStyle` (JsCode) en Python, que');
+                    out.push('# la escribe INLINE sobre la fila: "borderTop": "' + inline + '".');
+                    out.push('# La regla de arriba le gana por !important, pero el sitio');
+                    out.push('# limpio es ese JsCode — buscarlo en el modulo que arma la');
+                    out.push('# tabla (el inspector dice cual, fila "codigo").');
+                }
+            }
             if (out.length && aplanado && !t.filaSel) {
                 out.push('');
                 out.push('# OJO: se pintaron todas las filas iguales (rayado apagado).');
@@ -3650,6 +3700,42 @@ JS = """
                     });
                     linVColorLbl.textContent = hex;
                 }, { libre: true }), linVColorLbl));
+
+                // Solo si la tabla TIENE fila de cierre: un slider que no
+                // mueve nada se lee como "el control esta roto", que es la
+                // regla #48 otra vez. Mismo criterio que "Alto de fila",
+                // que tampoco se dibuja sin api.
+                if (tieneFilaTotal(gdocPanel)) {
+                    var capLinT = doc.createElement('div');
+                    capLinT.style.cssText = 'font-size:10px;line-height:1.45;color:#6f6f7a;margin:12px 0 0';
+                    capLinT.textContent = 'La de arriba de la fila TOTAL. Hoy pueden ser DOS pegadas'
+                        + ' (la de la fila y la del tema): tocar esto deja una sola, la que elijas.';
+                    panel.appendChild(capLinT);
+
+                    var inpLinT = rango(0, 6, 1, T.linT !== null ? T.linT : (med.linT || 0));
+                    var linTLbl = spanValor((T.linT !== null ? T.linT : (med.linT || 0)) + 'px');
+                    inpLinT.addEventListener('input', function() {
+                        var v = parseInt(inpLinT.value, 10);
+                        tocarTabla(function(t) {
+                            t.linT = v;
+                            if (!t.linTColor) t.linTColor = med.linTColor;
+                        });
+                        linTLbl.textContent = v + 'px';
+                    });
+                    panel.appendChild(filaControl('Sobre los totales — grosor', inpLinT, linTLbl, function() {
+                        tocarTabla(function(t) { t.linT = null; t.linTColor = null; });
+                        rehacerPanel();
+                    }));
+
+                    var linTColorLbl = spanValor(T.linTColor || 'sin cambio');
+                    panel.appendChild(filaControl('Sobre los totales — color', construirSwatches(T.linTColor, function(hex) {
+                        tocarTabla(function(t) {
+                            t.linTColor = hex;
+                            if (t.linT === null) t.linT = med.linT || 2;
+                        });
+                        linTColorLbl.textContent = hex;
+                    }, { libre: true }), linTColorLbl));
+                }
 
                 // ---- marco ----
                 // Los cuatro lados por separado, que es lo que "Borde

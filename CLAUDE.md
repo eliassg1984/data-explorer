@@ -576,8 +576,14 @@ cualquier celda (o sobre la tarjeta) y toca la grilla ENTERA: fondo y
 tipografía de la cabecera, los cinco fondos de fila (todas, rayado, al
 pasar el mouse, fila elegida, fila de totales), color y tamaño de las
 celdas, tipo de letra de toda la tabla, grosor y color de las líneas entre
-filas y entre columnas, los cuatro lados del marco **por separado**,
-esquinas y alto de fila.
+filas, entre columnas y **sobre la fila de totales**, los cuatro lados del
+marco **por separado**, esquinas y alto de fila.
+
+Ojo con la de los totales, que es la más enredada: hoy son **dos líneas
+apiladas** —la del tema, en el contenedor `.ag-floating-bottom`, y la que
+Python escribe INLINE con un `getRowStyle`— así que el control pone una
+sola y apaga la otra. Y necesita `!important`, porque contra un inline no
+gana ninguna regla sin él. Regla #364.
 
 Dos cosas suyas, las dos por la misma razón — la grilla corre en un
 **iframe**: el preview no es CSS inline sino una `<style>` inyectada en el
