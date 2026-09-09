@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-364 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+365 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (126)
+**CSS y estilos** (127)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -160,6 +160,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#358** — Una franja que pasa a aparecer con el cursor deja de ser una FILA y pasa a ser una CAPA, y…
 - **#363** — Un control que vive DENTRO de una tarjeta promete que es de esa tarjeta. Si escribe el rango…
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
+- **#365** — El estado por DEFECTO de un riel plegable no es una preferencia: decide con qué ancho nace la…
 
 **Layout y alturas** (39)
 
@@ -325,7 +326,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#361** — Una cabecera que dice "Este año" sobre una ventana MÓVIL se lee como el año calendario
 - **#364** — El modo diseño le escribía style inline a UN nodo, y una tabla no se diseña así
 
-**Streamlit** (100)
+**Streamlit** (101)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -427,6 +428,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#339** — El scope de un st.rerun se DECIDE en tiempo de ejecución, no se fija en el código
 - **#357** — Renombrar un símbolo que app.py IMPORTA tira la app en Streamlit Cloud hasta que alguien la…
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
+- **#365** — El estado por DEFECTO de un riel plegable no es una preferencia: decide con qué ancho nace la…
 
 **Datos, R2 y DuckDB** (46)
 
@@ -32505,6 +32507,38 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-08.)
 
+365. **El estado por DEFECTO de un riel plegable no es una preferencia:
+     decide con qué ancho nace la página.** Pedido 2026-09-08: *"hagamos
+     que el rail izquierdo inicie oculto por defecto, no extendido"*. Es
+     UNA línea —el default de `session_state.get("rail_plegado", …)` en
+     `navegacion.py`— y justamente por eso conviene anotar qué arrastra.
+
+     Lo que se acomoda solo, sin tocar un padding: `--rail-der-w` pasa de
+     280px a 46px y la reserva del contenido se deriva de ella
+     (`calc(var(--rail-der-w) + 19px + 24px)`), así que el
+     `block-container` nace con `padding-left: 89px` en vez de 323 y las
+     tarjetas ganan 234px. Esa derivación es del 2026-08-25 y existe para
+     esto. Medido en vivo (preview local, datos reales, viewport
+     1400x900): riel de 46px en x=19, pestillo de 33x33 en (32,48) con
+     «›», botones de 44px con el icono solo.
+
+     Lo que NO se acomoda solo, y es la parte que hay que sostener: con
+     TODA sesión naciendo plegada, la regla #216 —"un estado plegado sin
+     control visible que lo deshaga es un usuario sin salida"— deja de
+     ser una precaución para el que plegó a propósito y pasa a ser el
+     camino de entrada de todos. Por eso el control tiene que vivir donde
+     el plegado no lo alcanza: el chevron está en la CABECERA del riel
+     (`estilos/_20_compras_rail.py`), no dentro de una fila, y el CSS del
+     plegado apaga sólo el `stMarkdownContainer` de los ítems.
+
+     Se verificó el ciclo entero y no sólo el arranque, que es lo que un
+     default cambia de sitio: clic → 280px y «‹»; y un reload —que en
+     Streamlit abre una sesión nueva, o sea que vuelve a leer el
+     default— nace otra vez en 46px. Cambiar de reporte tampoco lo toca:
+     el estado es de la columna, no del reporte.
+
+     (2026-09-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -32517,7 +32551,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#365**.
+> próxima regla nueva es la **#366**.
 
 >
 

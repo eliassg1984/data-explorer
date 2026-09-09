@@ -860,12 +860,24 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     #    modo se apaga solo (regla #338, medido). Este contenedor nunca
     #    está vacío, lleva el botón adentro.
     #
+    # 4. **ARRANCA PLEGADO** (2026-09-08, a pedido: "que inicie oculto por
+    #    defecto, no extendido"). El default no es cosmético: son 234px de
+    #    ancho que la sesión le regala al contenido antes de que el usuario
+    #    toque nada — la reserva se deriva sola de `--rail-der-w`
+    #    (`estilos/_00_base.py`), así que no hay ningún padding que ajustar.
+    #    Lo que sí hay que sostener es la salida: con TODA sesión naciendo
+    #    en el estado plegado, la regla #216 deja de ser una precaución
+    #    para el que plegó a propósito y pasa a ser el camino de entrada de
+    #    todos. Por eso el chevron «›» de acá abajo se dibuja en la
+    #    cabecera del riel y no dentro de una fila que el plegado esconde.
+    #    Ver regla #365.
+    #
     # Se dibuja SIEMPRE, en todos los reportes, y por eso el estado no
     # puede quedar encerrado: la regla #216 (escrita al retirar el
     # anterior) dice que un estado "plegado" sin control visible que lo
     # deshaga es un usuario sin salida. Acá el control es el mismo botón,
     # y en plegado sigue en pantalla.
-    _plegado = bool(st.session_state.get("rail_plegado", False))
+    _plegado = bool(st.session_state.get("rail_plegado", True))
     with st.container(key="rail_pestillo_"
                       + ("plegado" if _plegado else "abierto")):
         if st.button(":material/chevron_right:" if _plegado
