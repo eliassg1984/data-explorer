@@ -9,6 +9,8 @@ inyectado con st.markdown para los controles flotantes sobre el grafico;
 vive aca (y no en estilos/) porque esta scopeado a las keys de este drill.
 """
 
+import zlib
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -37,7 +39,6 @@ from graficos import alturas, periodo
 
 _KEYS_WIDGET = (
     "compras_prov_gran", "cp_prov_win_size", "cp_evo_periodo",
-    "compras_prov_prod_scope", "compras_prov_topn",
     "compras_prov_prov_scope", "cp_prov_show_names",
     "cp_prov_q", "cp_prov_cb::*",
 )
@@ -122,10 +123,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         st.session_state["cp_prov_show_names"] = True
         st.session_state["_cp_show_names_seed_v2"] = True
 
-    # Granularidad y Top productos: se leen aquí (de session_state), pero sus
-    # selectores se DIBUJAN flotando sobre sus gráficos respectivos (más abajo).
+    # La granularidad se lee aquí (de session_state), pero su selector se
+    # DIBUJA flotando sobre su gráfico (más abajo).
     gran = st.session_state.get("compras_prov_gran") or "Mes"
-    topn = st.session_state.get("compras_prov_topn") or 10
 
     # El filtro de proveedores vive en `_comun.py::filtro_proveedores` desde
     # el 2026-09-02, al pedirse el MISMO control para el Ranking de Productos.
@@ -839,9 +839,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         prod_focus = None
                         st.session_state["compras_prov_focus"]     = prov_focus
                         st.session_state["compras_prov_prodfocus"] = None
-                        # El período ya no sale de esta tabla (el ranking no
-                        # tiene eje de tiempo): lo fija el de evolución.
-                        st.session_state["compras_prov_perfocus"]  = None
             with _c_evo:
                 # ── BLOQUE 2: la evolución, con su propio período ──
                 with st.container(border=True,
@@ -1542,45 +1539,30 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                        # defecto) se muestra como nombre propio.
                        else f"Productos · "
                             f"{_compras_truncar(nombre_propio(_prov_ver), 24)}")
+                # LA TARJETA NO TIENE CONTROLES PROPIOS (2026-09-11, a
+                # pedido): obedece al selector de fecha de la cabecera y
+                # lista TODOS los productos del proveedor. Tenía dos
+                # pastillas flotando acá —«Rango / Selección» y «Top 5 /
+                # 10 / 20»— y la primera estaba MUERTA: filtraba por
+                # `compras_prov_perfocus`, una clave que nadie escribía
+                # (sólo se ponía en None), así que el modo «Selección» no
+                # recortaba nada desde que el gráfico de evolución dejó de
+                # publicar el período clicado. Ver regla #378.
                 with _card("prov_prods", _ta, titulo_arriba=True):
-                    # Controles flotantes en la cabecera (Opción 1). Dos flotantes
-                    # absolutos apilados a la derecha: un texto chico con la
-                    # selección (período) clicada ARRIBA y, justo debajo, Ámbito +
-                    # Top N en una fila. Flotantes → no empujan el gráfico. El
-                    # ámbito arranca en "periodo" (el período de la barra clicada).
-                    _perf = st.session_state.get("compras_prov_perfocus")
-                    if _perf is not None:
-                        st.markdown(
-                            f'<style>.st-key-topn_pills {{ '
-                            f'--periodo-selec: "{_perf}"; }}</style>',
-                            unsafe_allow_html=True)
-                    with st.container(key="topn_float"):
-                        with st.container(key="topn_pills"):
-                            _scope = st.pills(
-                                "Ámbito de período", ["rango", "periodo"],
-                                default="periodo",
-                                format_func=lambda v: ("Rango"
-                                                       if v == "rango" else "Selección"),
-                                key="compras_prov_prod_scope",
-                                label_visibility="collapsed",
-                            ) or "periodo"
-                            st.pills("Top productos", [5, 10, 20], default=10,
-                                     key="compras_prov_topn",
-                                     label_visibility="collapsed")
                     if _prov_ver is None:
                         pass
                     else:
                         sub = base[base["prov"] == _prov_ver]
-                        if _scope == "periodo" and _perf is not None:
-                            sub = sub[sub["per"] == _perf]
-                        # `nlargest` ya devuelve de mayor a menor, que es el
-                        # orden natural de una TABLA. El `.sort_values()`
-                        # ascendente que habia aca era para el grafico de
-                        # barras horizontales, que dibuja de abajo hacia
-                        # arriba: sin el, el mas grande quedaba ultimo.
+                        # De mayor a menor, el orden natural de una TABLA.
+                        # (El `.sort_values()` ASCENDENTE que hubo acá era
+                        # para el gráfico de barras horizontales, que dibuja
+                        # de abajo hacia arriba.) Ya no hay `nlargest`: la
+                        # tabla trae TODOS los productos del proveedor y lo
+                        # que no entra scrollea dentro del grid, cuyo alto
+                        # sigue capado en 8 filas más abajo (`_ALTO_PRODS`).
                         agg = (sub.groupby("prod")
                                   .agg(valor=("valor", "sum"), cant=("cant", "sum"))
-                                  .nlargest(topn, "valor"))
+                                  .sort_values("valor", ascending=False))
                         if agg.empty:
                             st.info("Sin productos para este proveedor.")
                         else:
@@ -1600,12 +1582,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # el que el Panel B muestra si no hay ninguno
                             # elegido a mano.
                             _prod_top = prod_cats[0]
-                            # El % se calcula sobre el total del proveedor en el
-                            # ambito vigente (`sub`), NO sobre la suma del Top N:
-                            # asi "12%" sigue significando lo mismo tanto en Top
-                            # 5 como en Top 20, y los porcentajes no suman 100
-                            # cuando el Top deja productos afuera, que es la
-                            # lectura honesta.
+                            # El % se calcula sobre el total del proveedor
+                            # en el rango vigente (`sub`). Desde que la tabla
+                            # lista todos sus productos la columna suma 100;
+                            # con el Top N no sumaba, y ESO era lo correcto
+                            # entonces: el resto seguía existiendo aunque no
+                            # se viera.
                             _tot_sub = float(sub["valor"].sum()) or 1.0
                             _val = agg["valor"].to_numpy(dtype=float)
                             tv = pd.DataFrame({
@@ -1869,6 +1851,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 return f"S/ {v/1000:.1f}k"
                             return f"S/ {v:,.0f}"
 
+                        # Peso relativo de cada proveedor, para la barra
+                        # de fondo de su fila. El TOTAL dejó el renglón
+                        # colapsado (vive en el desplegable) y la lista
+                        # sigue ordenada por él: sin esa señal el orden
+                        # queda sin explicación a la vista. Ver regla #377.
+                        _tope = max((r["total"] for r in filas), default=0.0)
                         _cards = []
                         for r in filas:
                             _es_min = (_min is not None and pd.notna(r["ult_p"])
@@ -1876,33 +1864,56 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             _pu_txt = ("—" if pd.isna(r["ult_p"])
                                        else f"S/ {r['ult_p']:,.2f}")
                             _pu_cls = " pu-min" if _es_min else ""
-                            _cells = [
-                                ("Últ.",  r["ult_f"] or "—"),
-                                ("P.U.",  f'<span class="pu{_pu_cls}">{_pu_txt}</span>'),
-                                ("Cant.", f"{r['cant']:,.0f}"),
-                            ]
+                            # `nombre_propio` es SOLO para mostrar: el valor
+                            # que agrupa sigue siendo el del parquet. Es la
+                            # misma función que usa el ranking de al lado,
+                            # así que el panel deja de contradecirlo — hasta
+                            # hoy la tabla decía «Quality Beef» y el panel,
+                            # «QUALITY BEEF», del mismo proveedor.
+                            _nom = _esc(nombre_propio(r["prov"]))
+                            _peso = (r["total"] / _tope * 100) if _tope else 0.0
+                            # La UNIDAD va PEGADA a la cantidad, no en celda
+                            # aparte: «1,679 KILOS» se lee de una. Separada,
+                            # la UM era una columna entera que repetía el
+                            # mismo valor en todas las filas (regla #239).
+                            _cant = f"{r['cant']:,.0f}"
                             if col_um and r["um"]:
-                                _cells.append(("UM", _esc(r["um"])))
-                            _grid = "".join(
-                                f'<div class="cell"><span class="lab">{lab}</span>'
-                                f'<span class="val">{val}</span></div>'
-                                for lab, val in _cells
-                            )
+                                _cant += f" {_esc(r['um'])}"
                             _cards.append(
-                                f'<div class="pb-card{"  is-min" if _es_min else ""}">'
-                                f'<div class="line1">'
+                                f'<details class="pb-row{" is-min" if _es_min else ""}">'
+                                f'<summary>'
+                                f'<span class="peso" style="width:{_peso:.1f}%"></span>'
                                 f'<span class="sw" style="background:{r["color"]}"></span>'
-                                f'<span class="name" title="{_esc(r["prov"])}">'
-                                f'{_esc(r["prov"])}</span>'
-                                f'<span class="total">{_fmt_soles(r["total"])}</span>'
+                                f'<span class="name" title="{_nom}">{_nom}</span>'
+                                f'<span class="pu{_pu_cls}">{_pu_txt}</span>'
+                                f'<span class="fec">{r["ult_f"] or "—"}</span>'
+                                f'</summary>'
+                                f'<div class="mas">'
+                                f'<span class="cell"><span class="lab">Cant.</span>'
+                                f'<span class="val">{_cant}</span></span>'
+                                f'<span class="cell"><span class="lab">Total</span>'
+                                f'<span class="val tot">{_fmt_soles(r["total"])}'
+                                f'</span></span>'
                                 f'</div>'
-                                f'<div class="grid">{_grid}</div>'
-                                f'</div>'
+                                f'</details>'
                             )
-                        st.markdown(
-                            '<div class="pb-cards">' + "".join(_cards) + '</div>',
-                            unsafe_allow_html=True,
-                        )
+                        # REMONTAJE POR CONTENIDO. Un `<details>` guarda su
+                        # estado abierto/cerrado en el DOM, y ese nodo
+                        # SOBREVIVE al rerun: Streamlit parchea el markdown
+                        # en su sitio y el atributo `open` —que no viaja en
+                        # el HTML nuevo— no se toca. Medido: con una fila
+                        # abierta, cambiar el ámbito dejaba abierta la fila
+                        # de esa MISMA POSICIÓN, que ya era otro proveedor.
+                        # La key lleva un hash del HTML: mismo contenido =
+                        # mismo nodo (la fila que abrió el usuario sigue
+                        # abierta si el rerun no cambió la lista), contenido
+                        # distinto = key distinta = nodos nuevos y todo
+                        # cerrado. Es el mismo recurso que `cp_paneles_inst`
+                        # más abajo. Ver regla #377.
+                        _html = '<div class="pb-cards">' + "".join(_cards) + '</div>'
+                        _k_lista = zlib.crc32(_html.encode("utf-8"))
+                        with st.container(key=f"pb_lista_{_k_lista:08x}"):
+                            st.markdown(_html, unsafe_allow_html=True)
 
     # -- Los paneles A/B se ven SIEMPRE (2026-09-03, a pedido): antes sólo
     #    aparecían con un proveedor en foco. Ahora, sin foco, muestran el

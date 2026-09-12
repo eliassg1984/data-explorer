@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-376 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+378 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (132)
+**CSS y estilos** (133)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -166,6 +166,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
 - **#371** — Una cabecera flex que ENVUELVE convierte el margen negativo de la regla #162 en un solapamiento
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
+- **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 
 **Layout y alturas** (41)
 
@@ -337,7 +338,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#374** — Un drill de TRES niveles no es "una tabla más": son cinco cosas que se rompen en silencio, y…
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 
-**Streamlit** (105)
+**Streamlit** (107)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -444,6 +445,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 - **#372** — Sacar una tarjeta de su sección y darle sección propia rompe tres cosas que estaban…
 - **#373** — Un st.rerun al tope de un fragment no sólo aborta ese render: le BORRA el estado a TODOS los…
+- **#377** — Una tarjeta por ítem es un formato, no una ley: cuando la lista crece, la fila gana — y el…
+- **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 
 **Datos, R2 y DuckDB** (48)
 
@@ -33284,6 +33287,104 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (2026-09-11.)
 
 
+377. **Una tarjeta por ítem es un formato, no una ley: cuando la lista
+     crece, la fila gana — y el clic que la abre no necesita JS.** Pedido
+     del 2026-09-11 sobre el Panel B del drill de Proveedor («estas
+     tarjetas son muy grandes... que en la primera fila muestre el nombre,
+     el precio unitario y la fecha de última compra, y al hacer clic el
+     resto»).
+
+     **La cuenta que lo justifica.** Cada proveedor ocupaba 78px: dos
+     líneas (swatch + nombre + total) más una grilla de 4 métricas que en
+     un panel de 337px colapsaba a 2x2. El panel está capado al alto de la
+     tabla de al lado (`--cp-prov-alto-paneles`, #145), así que entraban
+     3 de los 11 proveedores de «Lomo fino entero nacional x Kg» y el
+     resto pedía scroll. La fila mide 28px y entran 7-10. No es una
+     opinión sobre densidad: el dato de cuántos proveedores tiene un
+     producto está en el parquet, y la mediana no es 1.
+
+     **`<details>`/`<summary>` pasa el sanitizer de Streamlit.** Es el
+     único desplegable posible acá: `st.markdown` no ejecuta `<script>`
+     (#59 y CLAUDE.md), así que la alternativa era un `st.expander` por
+     proveedor —11 widgets para 11 filas— o nada. Verificado en un
+     Streamlit real antes de escribir una línea del cambio: el markup
+     sobrevive y el toggle nativo funciona. De yapa **no pasa por el
+     server**: abrir una fila no es un rerun, así que es instantáneo en
+     vez de los 3-6s que tarda acá cualquier ida y vuelta.
+
+     **La trampa: el estado abierto es POSICIONAL y sobrevive al rerun.**
+     Medido en la app, no deducido. Streamlit parchea el markdown en su
+     sitio y el atributo `open` —que el HTML nuevo no trae— no se toca, así
+     que el `<details>` número N de la lista se queda como estaba. Con una
+     fila abierta y un cambio de ámbito, la que aparecía abierta era la
+     fila de esa misma POSICIÓN, o sea otro proveedor: nadie la había
+     clicado. El arreglo es el mismo recurso que ya usaba `cp_paneles_inst`
+     para remontar la grilla — envolver la lista en un `st.container` cuya
+     key lleva un `crc32` del HTML. Mismo contenido = mismo nodo (si el
+     rerun no cambió la lista, la fila que abrió el usuario sigue
+     abierta, que es lo que uno quiere); contenido distinto = key distinta
+     = nodos nuevos y todo cerrado.
+
+     **Sacar un número de la vista colapsada tiene precio.** El total se
+     fue al desplegable, y la lista sigue ordenada por total: sin señal, el
+     orden queda sin explicación a la vista. Lo devuelve una barra de peso
+     de FONDO (`.peso`, ancho = % del mayor), que es la única forma de
+     mostrarlo que no cuesta ancho — y el ancho es justo lo que no sobra en
+     un panel que es el `1` de `COLUMNAS_DRILL`. Misma idea que la columna
+     `_barra` del ranking.
+
+     **Dos detalles que se miden, no se estiman.** (1) El `line-height:
+     1.6` de Streamlit se hereda como NÚMERO: un cuerpo de 12.5px se lleva
+     20px de renglón y la fila salía en 32px en vez de 27 — en 17
+     proveedores son 85px, fila y media que se deja de ver. Va un
+     `line-height: 1.25` explícito en el `summary`. (2) La UNIDAD va pegada
+     a la cantidad («1,679 KILOS»), no en celda propia: como columna
+     repetía el mismo valor en todas las filas, que es la #239 otra vez.
+
+     Y el nombre pasa por `nombre_propio` (#347), que hasta hoy usaba el
+     ranking de al lado y este panel no: la misma pantalla decía «Quality
+     Beef» en la tabla y «QUALITY BEEF» en el panel. En mayúscula sostenida
+     el texto ocupa ~12% más, así que acá además compra ancho de nombre.
+
+     (2026-09-11.)
+
+378. **Un control que no cambia nada no se arregla: se saca — y antes de
+     sacarlo, grep para saber si alguna vez hizo algo.** Pedido del
+     2026-09-11 sobre la cabecera del Panel A del drill de Proveedor
+     («quitemos estas opciones, por defecto debe obedecer al selector de
+     fecha de arriba y mostrar todos los productos»).
+
+     Eran dos grupos de pastillas flotando sobre el título: «Rango /
+     Selección» y «Top 5 / 10 / 20». El primero estaba **muerto**.
+     Filtraba con `sub[sub["per"] == _perf]`, donde `_perf` sale de
+     `st.session_state["compras_prov_perfocus"]` — y esa clave aparecía
+     exactamente dos veces en todo el repo: una para LEERLA y otra para
+     ponerla en `None`. Nadie le escribía nunca un período. El modo
+     «Selección» no recortaba nada desde que el gráfico de evolución dejó
+     de publicar la barra clicada; el control seguía ahí, encendiéndose y
+     apagándose, prometiendo un filtro que no existía. Es la forma de bug
+     más cara de encontrar por la vía normal: no falla, no avisa, y
+     probarlo a mano da «no pasa nada», que se lee como «no había nada que
+     filtrar».
+
+     **Un control de más no cuesta sólo su alto.** El título de esa tarjeta
+     tenía `padding-right: 200px` — la reserva para que las pastillas no se
+     le montaran encima (#317) — o sea 200 de sus ~560px de cabecera
+     gastados en un hueco. Al sacar los controles se va la reserva, y el
+     nombre del proveedor, que es lo que la tarjeta dice, deja de
+     truncarse. Lo mismo con el `@media (max-width: 900px)` que bajaba los
+     flotantes a un renglón propio: una regla menos que mantener.
+
+     **Y el Top N escondía el resto.** Sin él la tabla lista TODOS los
+     productos del proveedor; no crece de alto porque `_ALTO_PRODS` ya
+     estaba capado en 8 filas (`alturas.por_filas(min(8, ...))`) y lo que
+     sobra scrollea dentro del grid. Efecto lateral que conviene saber: la
+     columna «%» ahora suma 100. Con el Top N **no** sumaba, y eso era
+     correcto entonces — el resto seguía existiendo aunque no se viera.
+
+     (2026-09-11.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -33296,7 +33397,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#377**.
+> próxima regla nueva es la **#379**.
 
 >
 

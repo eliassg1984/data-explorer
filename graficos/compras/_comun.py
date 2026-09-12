@@ -49,10 +49,11 @@ COLUMNAS_DRILL = [1.6, 1]
 """Proporción izq./der. de una fila de dos columnas en un drill de Compras.
 
 1.6/1 y no 1/1: la columna izquierda lleva siempre la tabla con nombres
-largos (proveedores, productos) y la derecha un panel de apoyo. La grilla de
-4 métricas del Panel B ya colapsa sola a 2x2 en anchos chicos
-(`@container pbcard (max-width: 460px)` en `_css_proveedor.py`), así que
-angostarla es seguro.
+largos (proveedores, productos) y la derecha un panel de apoyo. El Panel B
+aguanta el apretón: desde el 2026-09-11 su lista es una FILA por proveedor
+—nombre, precio unitario y última compra, y el resto en un `<details>`— en
+vez de una tarjeta con una grilla de 4 métricas que había que colapsar a
+2x2. Ver regla #377.
 
 Ojo con lo que ese 1 significa en píxeles: medido con datos reales, el Panel
 B mide 289px en una pantalla de 1280 y 535px en una de 1920. Cualquier cosa

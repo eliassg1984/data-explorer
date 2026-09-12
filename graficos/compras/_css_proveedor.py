@@ -1548,69 +1548,19 @@ CSS = """        <style>
             padding-top: 0 !important;
             padding-bottom: 0 !important;
         }
-        /* Reducir el padding interior de la card (era 15px por defecto).
-           Padding-top mínimo para que el título quede alineado con los
-           botones absolutos de la derecha (que están anclados al top). */
+        /* Reducir el padding interior de la card (era 15px por defecto). */
         .st-key-chartcard_prov_prods {
             padding: 2px 12px 8px 12px !important;
         }
-        /* Tooltip del período: aparece al posar el cursor sobre el botón
-           "Selección" (2º botón del primer button group). El valor viene de
-           la CSS variable --periodo-selec inyectada desde Python. */
-        .st-key-topn_pills > div:first-child [data-testid="stButtonGroup"]
-        button:nth-child(2) { position: relative; }
-        .st-key-topn_pills > div:first-child [data-testid="stButtonGroup"]
-        button:nth-child(2):hover::after {
-            content: var(--periodo-selec, "");
-            position: absolute; top: calc(100% + 4px); right: 0;
-            background: var(--text-primary);
-            color: var(--bg-card);
-            padding: 4px 8px; border-radius: 4px;
-            font-size: 11px; line-height: 1.2; white-space: nowrap;
-            z-index: 100; pointer-events: none;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-        }
-        /* Toggles en la MISMA fila del título, centrados vertical.
-           z-index 6 y no 20 por el mismo motivo que win_nav (ver su regla):
-           su bloque contenedor no crea contexto de apilado, asi que un 20
-           empataba con la franja sticky y ganaba por orden de DOM,
-           montandosele encima al scrollear. Aca todavia no se habia
-           reportado —el Panel A queda mas abajo, hay que scrollear mas para
-           cruzarlo con la franja— pero es el mismo bug latente. */
-        .st-key-topn_float {
-            position: absolute; top: 0; right: 12px; z-index: 6;
-            height: 24px; display: flex; align-items: center;
-            width: auto !important;
-        }
-        .st-key-topn_float > div { width: auto !important; }
-        /* Clase DUPLICADA a proposito: `.st-key-chartcard_prov_prods
-           [data-testid="stVerticalBlock"] { gap:0 !important }` (mas arriba)
-           mata el gap de TODOS los bloques anidados —existe para juntar el
-           titulo con el grafico, en vertical— y de paso aplastaba tambien
-           esta fila, que es horizontal. Con una sola clase (0,1,0) perdia
-           contra esa regla (0,2,0); duplicada empata en especificidad y
-           gana por ir despues.
-           Medido: el `gap: 6px` que habia aca NUNCA se aplico (computaba
-           0px). No se notaba porque cada grupo era una capsula con borde
-           propio, que ya marcaba donde terminaba uno y empezaba el otro. Al
-           pasar a tabs de texto esa frontera la tiene que dar el aire, y
-           con 0 los dos grupos quedaban pegados ("Seleccion" terminaba en
-           el mismo pixel donde arrancaba "5"). 20px > los 14px de
-           separacion DENTRO de cada grupo, para que se lean como dos
-           clusters y no como una lista pareja de cinco opciones. */
-        .st-key-topn_pills.st-key-topn_pills {
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            align-items: center !important;
-            gap: 20px !important;
-            column-gap: 20px !important;
-            width: auto !important;
-        }
-        .st-key-topn_pills > div { width: auto !important; }
-        /* Cabecera compacta: título y controles en una sola línea. Se reduce
-           min-height y padding vertical para acercar el gráfico al título. */
+        /* Cabecera compacta: se reduce min-height y padding vertical para
+           acercar la tabla al título.
+           El `padding-right` era 200px: la reserva para los dos grupos de
+           pastillas que flotaban acá (Rango/Selección y Top 5/10/20). Se
+           fueron el 2026-09-11 —la tarjeta obedece al selector de fecha de
+           arriba y lista todos los productos— y con ellos la reserva, que
+           le comía al título 200 de sus ~560px por nada. Ver regla #378. */
         .st-key-chartcard_prov_prods .chart-card-hdr {
-            padding: 0 200px 0 4px;
+            padding: 0 4px;
             min-height: 22px;
             margin: 0 !important;
             font-size: 13px;
@@ -1619,16 +1569,6 @@ CSS = """        <style>
             align-items: center;
             border-bottom: none;
         }
-        .st-key-topn_float [data-testid="stElementToolbar"] { display: none; }
-        /* Encoger los botones de los pills (Rango/Selección y 5/10/20). */
-        .st-key-topn_float [data-testid="stButtonGroup"] button {
-            min-height: 22px !important;
-            height: 22px !important;
-            padding: 0 8px !important;
-            font-size: 11px !important;
-            line-height: 1 !important;
-        }
-
         /* Ámbito de fecha (En rango / Todo) — en la cabecera del Panel B.
            Se replican las mismas reglas de compactación del Panel A para
            que titulo, toggles y contenido queden a la misma altura. */
@@ -1734,7 +1674,6 @@ CSS = """        <style>
            es el marcado de los MULTI-select. Ese error ya costo un selector
            muerto durante varios commits en Ano Pasado (arquitectura.md
            #107, 2do addendum). */
-        .st-key-topn_float [data-testid="stButtonGroup"],
         .st-key-panelb_scope_float [data-testid="stButtonGroup"] {
             border: none !important;
             border-radius: 0 !important;
@@ -1745,12 +1684,10 @@ CSS = """        <style>
            display:block), no en el grupo — mismo hallazgo que en Ventas y
            Familia. Sin capsula que los una, el aire es lo unico que separa
            una opcion de la otra. */
-        .st-key-topn_float [data-testid="stButtonGroup"] > div,
         .st-key-panelb_scope_float [data-testid="stButtonGroup"] > div {
             gap: 14px !important;
             flex-wrap: nowrap !important;
         }
-        .st-key-topn_float [data-testid="stButtonGroup"] button[data-variant="pills"],
         .st-key-panelb_scope_float [data-testid="stButtonGroup"] button[data-variant="pills"] {
             background: transparent !important;
             border: none !important;
@@ -1764,16 +1701,12 @@ CSS = """        <style>
             font-weight: 400 !important;
             line-height: 1.3 !important;
         }
-        .st-key-topn_float [data-testid="stButtonGroup"]
-            button[data-variant="pills"][data-selected="true"],
         .st-key-panelb_scope_float [data-testid="stButtonGroup"]
             button[data-variant="pills"][data-selected="true"] {
             border-bottom-color: var(--accent) !important;
             color: var(--accent-deep) !important;
             font-weight: 600 !important;
         }
-        .st-key-topn_float [data-testid="stButtonGroup"]
-            button[data-variant="pills"]:hover,
         .st-key-panelb_scope_float [data-testid="stButtonGroup"]
             button[data-variant="pills"]:hover {
             color: var(--accent) !important;
@@ -1925,7 +1858,7 @@ CSS = """        <style>
            2 columnas; en desktop cabe en fila. La tarjeta con el menor precio
            lleva un borde izquierdo verde y el precio en verde. */
         .pb-cards {
-            display: flex; flex-direction: column; gap: 6px;
+            display: flex; flex-direction: column; gap: 0;
             margin: 4px 0 8px;
             /* 2026-08-25, a pedido: capado al mismo alto que la tabla de
                Panel A (`--cp-prov-alto-paneles`, publicada por Python
@@ -1948,68 +1881,101 @@ CSS = """        <style>
             background: var(--scroll-thumb);
             border-radius: 3px;
         }
-        /* Los tamaños de acá subieron un escalón el 2026-09-05, a pedido
-           («se ve muy pequeño»): nombre 12→13.5px, total 11.5→13px, las
-           métricas 11→12px y sus rótulos 9.5→10.5px, con más aire en el
-           padding. No cuesta alto de tarjeta: `.pb-cards` está capado por
-           `--cp-prov-alto-paneles` y lo que no entra scrollea. Sí cuesta
-           ANCHO — por eso el `@container` de más abajo, que ahora colapsa
-           la grilla mucho antes. */
-        .pb-card {
-            background: #fff; border: 0.5px solid #e6e6ea;
-            border-left: 3px solid transparent;
-            border-radius: 8px; padding: 8px 12px;
+        /* FILA, no tarjeta (2026-09-11, a pedido: «estas tarjetas son
+           muy grandes»). Cada proveedor entra en un renglón de ~28px con
+           lo que se mira de un vistazo —nombre, precio unitario y última
+           compra— y el resto (la cantidad con su unidad, y el total) vive
+           en un `<details>` que se abre al clic. Antes eran 78px por
+           proveedor —dos líneas más una grilla de 4 métricas—, de los que
+           entraban 3 de 11 en el panel; ahora entran 10.
+
+           POR QUÉ `<details>` Y NO JS: `st.markdown` no ejecuta `<script>`
+           (CLAUDE.md), así que un desplegable con JS no era opción. El
+           nativo no lo necesita y además NO pasa por el server: abre al
+           instante, en vez de esperar los 3-6s de un rerun. Verificado
+           contra Streamlit real — el sanitizer deja pasar
+           `<details>`/`<summary>`. Ver regla #377. */
+        .pb-row {
+            border-bottom: 0.5px solid var(--border);
+            border-left: 2px solid transparent;
         }
-        .pb-card.is-min { border-left-color: #15803d; }
-        .pb-card .line1 {
-            display: flex; align-items: center; gap: 7px; margin-bottom: 4px;
+        .pb-row:last-child { border-bottom: none; }
+        /* Verde del precio más bajo. Es el mismo hex que ya tenía la
+           tarjeta: `--success` (#16a34a) es un tono más claro y sobre
+           blanco pierde contraste en un cuerpo de 12.5px. */
+        .pb-row.is-min { border-left-color: #15803d; }
+        .pb-row > summary {
+            display: grid;
+            grid-template-columns: 9px minmax(0, 1fr) auto auto 10px;
+            align-items: center; gap: 7px;
+            padding: 6px 8px;
+            cursor: pointer; position: relative; list-style: none;
+            /* El `line-height: 1.6` de Streamlit se hereda como NUMERO, asi
+               que un cuerpo de 12.5px se lleva 20px de renglon y la fila
+               mide 32px en vez de 27 — medido en la app. En una lista de 17
+               proveedores eso son 85px, o sea una fila y media que se deja
+               de ver. */
+            line-height: 1.25;
         }
-        .pb-card .sw {
-            width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0;
+        /* Las dos líneas hacen falta: `list-style` mata el marcador
+           estándar y el pseudo de -webkit el de los Chrome viejos. Sin
+           esto queda el triangulito nativo pisando el swatch de color. */
+        .pb-row > summary::-webkit-details-marker { display: none; }
+        .pb-row > summary:hover { background: var(--bg-primary); }
+        /* BARRA DE PESO — el total dejó el renglón colapsado y la lista
+           sigue ordenada por él: sin una señal, el orden queda sin
+           explicación a la vista. Va de FONDO porque así no cuesta ancho,
+           que es justo lo que no sobra en un panel de 337px. */
+        .pb-row .peso {
+            position: absolute; left: 0; top: 0; bottom: 0;
+            background: var(--accent-tint); z-index: 0;
         }
-        .pb-card .name {
-            flex: 1; min-width: 0;
-            color: #18181d; font-size: 13.5px; font-weight: 500;
+        .pb-row > summary > *:not(.peso) { position: relative; z-index: 1; }
+        .pb-row .sw { width: 9px; height: 9px; border-radius: 2px; }
+        .pb-row .name {
+            color: var(--text-primary); font-size: 12.5px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-        .pb-card .total {
-            color: #534AB7; font-size: 13px; font-weight: 600;
-            font-variant-numeric: tabular-nums; flex-shrink: 0;
+        .pb-row .pu {
+            color: var(--text-primary); font-size: 12.5px; font-weight: 500;
+            font-variant-numeric: tabular-nums;
         }
-        .pb-card .grid {
-            display: grid; grid-template-columns: repeat(4, 1fr);
-            gap: 4px 12px; font-size: 12px;
+        .pb-row .pu.pu-min { color: #15803d; }
+        .pb-row .fec {
+            color: var(--text-secondary); font-size: 11.5px;
+            font-variant-numeric: tabular-nums;
         }
-        .pb-card .cell {
+        /* Chevron dibujado con dos bordes de una caja de 5px, rotados.
+           No es un carácter: un «⌄» de texto cambia de forma con la
+           fuente y no se puede rotar con `transform`. */
+        .pb-row > summary::after {
+            content: ""; width: 5px; height: 5px; justify-self: end;
+            border-right: 1.5px solid var(--text-muted);
+            border-bottom: 1.5px solid var(--text-muted);
+            transform: translateY(-2px) rotate(45deg);
+            transition: transform 0.15s;
+        }
+        .pb-row[open] > summary::after {
+            transform: translateY(1px) rotate(-135deg);
+        }
+        .pb-row .mas {
+            display: flex; gap: 16px; font-size: 12px;
+            line-height: 1.25;
+            padding: 4px 8px 7px 25px;
+            background: var(--accent-tint);
+        }
+        .pb-row .mas .cell {
             display: flex; align-items: baseline; gap: 5px; min-width: 0;
         }
-        .pb-card .cell .lab {
-            color: #a2a2ad; text-transform: uppercase;
+        .pb-row .mas .lab {
+            color: var(--text-muted); text-transform: uppercase;
             letter-spacing: 0.03em; font-size: 10.5px; flex-shrink: 0;
         }
-        .pb-card .cell .val {
-            color: #18181d; font-variant-numeric: tabular-nums;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        .pb-row .mas .val {
+            color: var(--text-primary); font-variant-numeric: tabular-nums;
         }
-        .pb-card .pu { font-weight: 500; }
-        .pb-card .pu.pu-min { color: #15803d; font-weight: 600; }
-        /* Grid a 2 columnas cuando la tarjeta se aprieta. Mismo umbral que
-           el de las pastillas de más arriba — ahí está la cuenta.
-           Dos cosas cambiaron el 2026-09-05 y las dos importan:
-           · El `@container` estaba SIN contenedor. Ningún ancestro
-             declaraba `container-type`, así que la consulta era falsa
-             siempre y la grilla nunca colapsaba: lo único que funcionaba
-             era el `@media` de abajo, que mira el VIEWPORT — y el caso
-             real (1280px de pantalla, tarjeta de 289px) no lo toca. Se veía
-             como valores recortados: «ÚLT. 06/…», «P.U. S/ 1…».
-           · El umbral pasó de 380 a 460px porque los cuerpos crecieron.
-           El `@media` de abajo queda como red por si algún navegador no
-           soporta container queries; hoy no hay ninguno en uso. */
-        @container pbcard (max-width: 460px) {
-            .pb-card .grid { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 900px) {
-            .pb-card .grid { grid-template-columns: 1fr 1fr; }
+        .pb-row .mas .val.tot {
+            color: var(--accent-deep); font-weight: 500;
         }
 
         /* ── TARJETAS COLAPSABLES: animacion unfold (drill Proveedor) ──
@@ -2074,16 +2040,15 @@ CSS = """        <style>
            ── Dos breakpoints, por qué distintos:
            · Paneles A/B viven en `st.columns(COLUMNAS_DRILL)`, que colapsa a
              1 columna recién por debajo de ~640px. ENTRE 640 y 900px cada
-             panel es media pantalla y su título + los 5 pills ya no caben en
-             la cabecera → el fix de topn_float/panelb_scope_float aplica
-             desde 900px.
+             panel es media pantalla y su título + las pastillas ya no caben
+             en la cabecera → el fix de panelb_scope_float aplica desde
+             900px. El Panel A ya no entra en la cuenta: desde el 2026-09-11
+             no tiene controles propios (regla #378).
            · El gráfico principal (y su win_nav / floats de tope) es de ancho
              completo: solo se aprieta de verdad por debajo de ~640px.
            ══════════════════════════════════════════════════════════════ */
         @media (max-width: 900px) {
-            /* Panel A: Rango/Selección + 5/10/20 — bajo el título.
-               Panel B: En rango/Todo — bajo el título. */
-            .st-key-topn_float,
+            /* Panel B: En rango/Todo — bajo el título. */
             .st-key-panelb_scope_float {
                 position: static !important;
                 height: auto !important;
