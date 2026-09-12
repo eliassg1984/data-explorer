@@ -2269,6 +2269,15 @@ def _selector(txt):
 # los de las otras dos tarjetas, asi que su CSS tambien: se clona del de
 # Productos, que es el que ya tiene las dos piezas (fecha + filtro de
 # proveedores) y ninguna regla propia de su grafico.
+#
+# OJO desde el 2026-09-12: el Ranking de productos YA NO TIENE filtro de
+# proveedores (se pidió fuera de esa sección, regla #382), pero las reglas
+# `cp_prod_prov_*` de este fichero se quedan a propósito. Son el MOLDE: de
+# ellas sale todo el CSS del filtro de «Detalle de documentos»
+# (`cp_docs_prov_*`), que sigue vivo. Parecen muertas —ningún `.py` dibuja
+# ya una key `cp_prod_prov`— y borrarlas por limpieza deja ese filtro sin
+# estilo, sin error y en otra sección. Si algún día molestan, el arreglo es
+# mudar el molde a `cp_docs` y dejar de clonar, no borrar.
 CSS_CP_DOCS = clonar_prefijo(
     CSS, "cp_prod", "cp_docs",
     extra=(("cp-prod-rank-tit", "cp-rank-tit"),))

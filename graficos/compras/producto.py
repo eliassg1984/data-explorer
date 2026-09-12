@@ -5,10 +5,11 @@ de inicio/fin de periodo y su variación) con el mismo patrón de tabla-
 ranking + clic-para-enfocar que graficos/compras/proveedor.py. El producto
 en foco muestra su evolución (Precio / Cantidad / Valor, con granularidad
 Semana / Mes / Año) fusionando el promedio del período con el precio real
-de cada compra en un solo gráfico. Esa tarjeta tiene VENTANA PROPIA
-(`periodo.selector`, default 12m) desde el 2026-08-26: heredando el rango
-de la franja —~24 días— cualquier granularidad daba UN solo período y la
-"línea" de promedio era un punto suelto.
+de cada compra en un solo gráfico. Esa tarjeta va a la IZQUIERDA y mira
+una VENTANA FIJA de los últimos 3 meses (2026-09-12; antes elegible,
+3m/12m/…, abriendo en 12m). La fecha de la sección vive en la fila del
+título de «Compras por familia» y manda sobre las tablas. Filtro de
+proveedores no hay: se pidió fuera el mismo día (regla #382).
 
 Reemplaza a los antiguos drills "Precio top 10", "Precio por compra" y
 "Cantidad por producto" (graficos/compras/cantidad.py, eliminado 2026-08-17):
@@ -50,8 +51,8 @@ from graficos.base import (
 )
 from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
-    ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL,
-    CROMO_GRID_RANK, GAP_DRILL, filtro_proveedores, selector_fecha_tarjeta,
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL_ESPEJO,
+    CROMO_GRID_RANK, GAP_DRILL, selector_fecha_tarjeta,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos.compras._etiquetas_proveedor import nombre_propio
@@ -98,32 +99,36 @@ _ALTO_FRAME_FAM = alturas.por_filas(
 #
 # Las dos constantes son el CROMO de cada tarjeta —todo lo que mide y no
 # son sus grids ni su figura—, MEDIDAS en el navegador el 2026-09-12
-# (1366x768), no deducidas:
-#   Ranking:   padding 32 + fila de paneles sin sus grids 37 (el título)
-#              + gap 16 + fila del título del ranking 30 + gap 16 + 8 del
-#              wrapper del componente = 139
-#   Evolución: padding 32 + nombre del producto 6 (el `margin-bottom:
-#              -16px` de `st.markdown`, regla #162) + gap 16 + controles
-#              32 + gap 16 + las dos líneas de cifras 26 + gap 16 = 144
+# (1280x650, con el layout final de ese día), no deducidas. Se miden las
+# TARJETAS, no la suma de sus hijos: los hijos traen fracciones de px y
+# la suma redondeada se pasaba por 2.
+#   Ranking:   600 de tarjeta − 207 − 255 de grids = 138 (padding 32 +
+#              fila de títulos con la fecha 30 + 8 del wrapper del grid de
+#              paneles + título del ranking 14, por el `margin-bottom:
+#              -16px` de `st.markdown` de la regla #162 + 8 del wrapper del
+#              grid + tres gaps de 16)
+#   Evolución: 582 de tarjeta − 438 de figura = 144 (padding 32 + nombre
+#              del producto 6, por la misma #162 + ventana y granularidad
+#              32 + las dos líneas de cifras 26 + tres gaps de 16)
 # Con una sola línea de cifras (un producto que no fluctuó) la Evolución
 # pide menos y el piso `:has()` rellena esos px al pie: es el caso raro.
-_CROMO_CARD_RANK = 139
+_CROMO_CARD_RANK = 138
 _CROMO_CARD_EVO = 144
 _ALTO_EVO = max(alturas.MINI,
                 _ALTO_FRAME_FAM + _ALTO_FRAME + _CROMO_CARD_RANK
                 - _CROMO_CARD_EVO)
 
-_KEYS_WIDGET = ("compras_prod_gran_pills", "compras_prod_periodo",
-                "cp_prod_prov_q", "cp_prod_prov_cb::*")
+_KEYS_WIDGET = ("compras_prod_gran_pills",)
 """Los controles de esta sección, para que la escalada no se los lleve.
 
 La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo:
 ese rerun aborta la corrida antes de dibujarlos y Streamlit recolecta lo
 que no se dibujó, así que sin esta tupla mover la fecha de la cabecera
-devolvía la granularidad a «Mes», la ventana a «12m» y marcaba de nuevo a
-TODOS los proveedores. Ver `graficos/base.py::preservar_widgets` y
-`arquitectura.md` regla #373. Las dos últimas son del filtro de proveedores
-(`_comun.py`), que abre una checkbox por razón social."""
+devolvía la granularidad a «Mes». Ver `graficos/base.py::preservar_widgets`
+y `arquitectura.md` regla #373. Hasta el 2026-09-12 había tres más: la
+ventana elegible del gráfico (`compras_prod_periodo`) y las dos del filtro
+de proveedores (`cp_prod_prov_q`, `cp_prod_prov_cb::*`), que se fueron el
+mismo día."""
 
 # Eje X por granularidad: forzado a propósito. Con pocos puntos (rango de
 # fecha corto, o un producto con 1-2 compras) Plotly no tiene de dónde sacar
@@ -178,46 +183,28 @@ _CSS_SELECTOR_TEXTO = f"""
     color: {ACENTO} !important;
     font-weight: 600 !important;
 }}
-/* El selector de ventana (3m/12m/…), APLANADO A TEXTO para que haga
-   juego con la granularidad de al lado: los dos son texto suelto, no
-   una caja contra unas palabras. Misma receta que `cp_evo_ctrl` en
-   _css_proveedor.py — se conserva el chevron, que es la única señal de
-   que eso despliega. */
-.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"] div[role="group"] {{
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    min-height: 0 !important;
-    height: 22px !important;
+/* (Acá vivió el selector de ventana del gráfico —3m/12m/…— aplanado a
+   texto. Se fue el 2026-09-12: el gráfico obedece al selector de fecha
+   del segmento. Ver el comentario de `compras_prod_card_evo`.)
+
+   El nombre del producto en foco, al lado de la granularidad. Recorta
+   con puntos suspensivos y el nombre entero va en el `title`: un corte
+   fijo en N caracteres no sigue al ancho de la columna. */
+.cp-prod-evo-tit {{
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }}
-.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"] input {{
-    padding: 0 !important;
-    height: auto !important;
-    font-size: 12.5px !important;
-    font-weight: 400 !important;
-    color: {GRIS_TEXTO} !important;
-    cursor: pointer !important;
-}}
-.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"]:hover input {{
-    color: {ACENTO} !important;
-}}
-.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"] svg {{
-    width: 13px !important;
-    height: 13px !important;
-    fill: {ACENTO} !important;
-    color: {ACENTO} !important;
-}}
-.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"]
-    button[aria-haspopup] {{
-    width: 16px !important;
-    min-width: 0 !important;
-    height: 22px !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    flex: 0 0 auto !important;
+/* La ventana fija del gráfico («Últimos 3 meses»), donde estaba el
+   desplegable: mismo tamaño y gris que la granularidad de al lado. Tiene
+   que verse, porque el selector de fecha de la tarjeta vecina dice otro
+   período (regla #330). */
+.cp-prod-evo-win {{
+    font-size: 12.5px;
+    color: {GRIS_TEXTO};
 }}
 /* Título sobre cada tabla-ranking: mismo lenguaje visual que
    `.cp-rank-tit` de graficos/compras/_css_proveedor.py, pero declarado acá
@@ -530,7 +517,8 @@ def _prod_stats(g, col_fecha, col_punit, col_cant, col_valor, col_um):
     }
 
 
-def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor):
+def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor,
+                     fecha=None):
     """Los dos paneles de arriba de la tarjeta —Familia | Subfamilia— y el
     ÁMBITO que dejan elegido, como `(familia, subfamilia)` para
     `_ambito_ranking`.
@@ -547,20 +535,43 @@ def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor):
 
     Sin columna de Subfamilia en el parquet, el panel B no se dibuja y la
     mitad derecha de la fila queda vacía: es una red, no un caso real
-    (`SUBFAMILIA` viene en las 51.838 filas, ver `_subfam_normalizada`)."""
+    (`SUBFAMILIA` viene en las 51.838 filas, ver `_subfam_normalizada`).
+
+    `fecha` es un callable `fecha(titulo_html)` que dibuja el selector de
+    fecha de la sección con ese título a su izquierda. Va en la fila de
+    títulos de la tarjeta, del lado del panel B (2026-09-12, a pedido: «en
+    la misma fila del título de la tarjeta compras por familia»): el borde
+    derecho de la tarjeta es donde está en las otras cuatro que lo usan, y
+    el panel A no tiene sitio — su título y el trigger no entran juntos en
+    ~340px. Es un callable y no un valor por la misma razón que el `extra=`
+    de `selector_fecha_tarjeta`: en Streamlit el sitio se elige entrando."""
     hay_sub = bool(col_subfam and col_subfam in dd.columns)
     fam_ranking = _fam_ranking(dd, col_fam, col_valor)
     fam_focus = st.session_state.get("compras_prod_fam_focus")
     if fam_focus not in set(fam_ranking["familia"]):
         fam_focus = None
 
+    # DOS filas de columnas y no una, desde el 2026-09-12: los títulos en
+    # una y los grids en otra. Con el título de cada panel dentro de su
+    # columna, el del panel B —que comparte fila con la píldora de la fecha—
+    # medía distinto que el del A, texto suelto con el margen negativo de la
+    # #162, y el grid B arrancaba 16px más abajo que el A (medido, 1280px).
+    # En filas separadas Streamlit alinea las dos columnas solo. El título B
+    # se escribe DESPUÉS del grid A (depende de su clic) en una columna
+    # creada antes: en Streamlit el sitio lo decide el contenedor, no el
+    # orden de escritura.
+    # columnas-internas: títulos de los dos niveles del drill.
+    tit_fam, tit_sub = st.columns(2, gap=GAP_DRILL,
+                                  vertical_alignment="center")
     # columnas-internas: los dos niveles del drill, mitad y mitad, dentro
     # de la tarjeta del ranking. No es una fila de drill.
     col_famtabla, col_subtabla = st.columns(2, gap=GAP_DRILL)
 
-    with col_famtabla:
+    with tit_fam:
         st.markdown('<div class="cp-prod-rank-tit">Compras por familia</div>',
                    unsafe_allow_html=True)
+
+    with col_famtabla:
 
         disp_fam = fam_ranking.rename(columns={
             "familia": "Familia", "valor": "Valor", "pct": "%",
@@ -609,7 +620,7 @@ def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor):
                     # abajo de ellos"); lo que decían no era adorno
                     # —de qué es % esta columna— así que en vez de
                     # borrarse se movió al rótulo, que no gasta alto.
-                    {"field": "%", "width": 38,
+                    {"field": "%", "width": 38, "minWidth": 44,
                      "type": "numericColumn",
                      "headerTooltip": "% sobre el total comprado "
                                       "en el rango",
@@ -686,12 +697,19 @@ def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor):
     d_fam = dd[_fam_normalizada(dd, col_fam) == fam_foco]
 
     sub_focus = None
+    _tit_sub = (f'<div class="cp-prod-rank-tit">'
+                f'{html.escape(_sin_gritar(fam_foco))}</div>')
+    with tit_sub:
+        # Título y fecha en UNA fila (`cp_prod_fila`, flex): el título cede
+        # con puntos suspensivos y el trigger conserva su ancho. Sin panel B
+        # la fecha va sola: la sección no puede quedarse sin su único
+        # control de rango.
+        if fecha is not None:
+            fecha(_tit_sub if hay_sub else None)
+        elif hay_sub:
+            st.markdown(_tit_sub, unsafe_allow_html=True)
     if hay_sub:
         with col_subtabla:
-            st.markdown(
-                f'<div class="cp-prod-rank-tit">'
-                f'{_compras_truncar(_sin_gritar(fam_foco), 34)}</div>',
-                unsafe_allow_html=True)
             sub_ranking = _subfam_ranking(d_fam, col_subfam, col_prod,
                                           col_valor)
             sub_focus = st.session_state.get("compras_prod_subfam_focus")
@@ -731,7 +749,11 @@ def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor):
                             # es la decisión de diseño del drill y lo
                             # decía el caption que se fue. Ver el
                             # docstring de `_subfam_ranking`.
-                            {"field": "%", "width": 38,
+                            # `minWidth` 44 (también en los otros dos
+                            # grids): a 1280px, con la barra vertical de
+                            # este panel, `fitGridWidth` la dejaba en 39px
+                            # y «11%» salía «1…» — la regla #349.
+                            {"field": "%", "width": 38, "minWidth": 44,
                              "type": "numericColumn",
                              "headerTooltip":
                                  f"% sobre {_sin_gritar(fam_foco)}",
@@ -792,7 +814,10 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     `col_subfam` va al FINAL y con default: el resto de la firma es
     posicional en el llamador, y en Cloud un commit que le cambia el orden
     a algo ya importado deja el `app.py` nuevo hablando con el paquete
-    viejo (regla #357). Con default, la firma vieja sigue siendo válida."""
+    viejo (regla #357). Con default, la firma vieja sigue siendo válida.
+
+    `d_full` es el histórico sin la fecha de la sección: de ahí sale la
+    ventana fija de 3 meses del gráfico, que no depende del rango elegido."""
     if not (col_prod and col_valor and col_punit and col_fecha):
         st.info("Faltan columnas (Producto, Valor, Precio unitario o Fecha) "
                 "para este gráfico.")
@@ -842,37 +867,17 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
 
     st.markdown(_CSS_SELECTOR_TEXTO, unsafe_allow_html=True)
 
-    # ── Filtro de proveedores ────────────────────────────────────────────
-    # 2026-09-02, a pedido ("añadamos el de proveedor"). El MISMO componente
-    # que el Ranking de Proveedores, no una copia: vive en
-    # `_comun.py::filtro_proveedores` desde este mismo pedido — ver el
-    # comentario de allá sobre por qué devuelve la selección y el dibujo por
-    # separado.
-    #
-    # Lo que filtra acá NO es lo mismo que allá, y conviene tenerlo claro:
-    # en Proveedor la selección elige QUÉ FILAS del ranking se ven; acá
-    # recorta el universo de compras sobre el que se rankean los PRODUCTOS
-    # ("los productos que le compro a estos proveedores"). Por eso se aplica
-    # sobre `dd`, antes de `_prod_ranking`, y no sobre el resultado.
-    #
-    # `clave` propio ("cp_prod_prov") porque Compras se lee APILADA: los dos
-    # popovers están en la página a la vez y sus widgets no pueden compartir
-    # key. El CSS de cada prefijo se lista explícito en `_css_proveedor.py`.
-    _provs_prod = []
-    if col_prov and col_prov in dd.columns:
-        _provs_prod = (dd.groupby(col_prov)[col_valor].sum()
-                         .sort_values(ascending=False).index.tolist())
-    _pop_prov_prod = None
-    if _provs_prod:
-        _sel_prov_prod, _pop_prov_prod = filtro_proveedores(
-            "cp_prod_prov", _provs_prod)
-        # `set` porque la lista puede tener ~cientos y esto corre por fila.
-        dd = dd[dd[col_prov].astype(str).isin({str(x) for x in _sel_prov_prod})]
-        if dd.empty:
-            st.info("Ningún proveedor seleccionado tiene compras en el rango.")
-            return
+    # (Acá vivió el filtro de proveedores de esta sección —el mismo
+    # `_comun.py::filtro_proveedores` del Ranking de Proveedores, clave
+    # "cp_prod_prov"—, que recortaba `dd` a "los productos que le compro a
+    # estos proveedores". Nació el 2026-09-02 y se fue el 2026-09-12, a
+    # pedido: «eliminemos el filtro de proveedores, ya no lo necesitaremos
+    # en este grupo de vista». `col_prov` sigue en la firma por la #357.
+    # Su CSS NO se borró: las reglas `cp_prod_prov_*` de `_css_proveedor.py`
+    # son el molde del que se clona el filtro de «Detalle de documentos»
+    # (`cp_docs_prov_*`), que sigue vivo. Ver regla #382.)
 
-    # ── UNA fila: [Familia | Subfamilia + Ranking de productos] | Evolución ─
+    # ── UNA fila: Evolución | [Familia | Subfamilia + Ranking de productos] ─
     # 2026-09-12, a pedido. Hasta ese día eran DOS filas: arriba una tarjeta
     # de ancho completo con tres paneles en cascada (Familia › Subfamilia ›
     # Productos del grupo), y debajo el Ranking de productos al lado de la
@@ -887,28 +892,44 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     # los de todo el rango. Ahora hay una sola y el grupo la RECORTA — ver
     # `_paneles_familia` para qué ámbito deja cada combinación de clics.
     #
-    # Por qué la tarjeta del Ranking es la que se queda con los paneles, y
-    # no al revés: su cabecera trae el filtro de proveedores y el selector
-    # de fecha, y los dos ya recortaban a los paneles de Familia (se
-    # aplican sobre `dd`, antes de todo) desde otra tarjeta. Juntos, el
-    # control y lo que controla por fin comparten marco.
-    #
     # El contenedor de afuera es MARCO, no tarjeta: las dos tarjetas son las
     # columnas (el mismo movimiento que hizo el drill de Proveedor el
     # 2026-08-18). Su key NO empieza con `compras_prod_card_`, que es un
     # wildcard por familia en estilos/_80_cards.py: si lo llevara, se
     # pintaría de blanco con padding y sombra ENCIMA de las dos tarjetas.
+    #
+    # 2026-09-12, segunda vuelta del mismo día: el gráfico pasa a la
+    # IZQUIERDA y las tablas a la derecha, a pedido — `COLUMNAS_DRILL_ESPEJO`
+    # (ver `_comun.py` sobre por qué es la misma proporción al revés). Las
+    # tablas se siguen escribiendo PRIMERO en el código: el gráfico necesita
+    # el ranking y el foco que ellas resuelven, y en Streamlit la posición la
+    # decide la columna, no el orden del `with`. En esa misma vuelta la
+    # fecha pasó a la fila de títulos de las tablas, el gráfico a una
+    # ventana fija de 3 meses, el filtro de proveedores se fue del segmento,
+    # y las dos tarjetas dejaron de scrollear por dentro (ver
+    # estilos/_80_cards.py y la regla #382).
     hay_fam = bool(col_fam and col_fam in dd.columns)
     with st.container(key="compras_prod_marco"):
-        col_tabla, col_detalle = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
+        col_detalle, col_tabla = st.columns(COLUMNAS_DRILL_ESPEJO,
+                                            gap=GAP_DRILL)
         with col_tabla:
             with st.container(border=True, key="compras_prod_card_ranking"):
                 # El `if` y no un `return`: sin columna de Familia se va la
                 # fila de paneles, no la sección entera.
+                # El selector de fecha de la sección. `clave` propio
+                # ("cp_prod") porque Compras se lee APILADA y la tarjeta de
+                # Proveedores está en la página a la vez.
+                def _fecha(titulo_html):
+                    selector_fecha_tarjeta(
+                        "cp_prod", "_cp_prod_atajo_pendiente",
+                        titulo_html=titulo_html,
+                        categoria=CATEGORIA_SEC["compras_sec_producto"])
+
                 fam_amb = sub_amb = None
                 if hay_fam:
                     fam_amb, sub_amb = _paneles_familia(dd, col_fam, col_subfam,
-                                                        col_prod, col_valor)
+                                                        col_prod, col_valor,
+                                                        fecha=_fecha)
                 d_rank = _ambito_ranking(dd, col_fam, col_subfam, fam_amb,
                                          sub_amb)
                 ranking = _prod_ranking(d_rank, col_prod, col_fecha, col_valor,
@@ -925,17 +946,18 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                             if _amb else "")
                 _amb_html = (f'<span class="cp-prod-rank-amb"> · {_amb_txt}'
                              f'</span>' if _amb else "")
-                # El título entra por `titulo_html` y comparte fila con el
-                # filtro de proveedores y la fecha (2026-09-02, "alineado
-                # con el título, así como está en Ranking de Proveedores").
-                # `clave` propio ("cp_prod") porque Compras se lee APILADA y
-                # la tarjeta de Proveedores está en la página a la vez.
-                selector_fecha_tarjeta(
-                    "cp_prod", "_cp_prod_atajo_pendiente",
-                    titulo_html=('<div class="cp-prod-rank-tit">'
-                                 f'Ranking de productos{_amb_html}</div>'),
-                    extra=_pop_prov_prod,
-                    categoria=CATEGORIA_SEC["compras_sec_producto"])
+                # Título solo, sin controles: el filtro de proveedores y la
+                # fecha compartían esta fila hasta el 2026-09-12. El filtro
+                # se fue del segmento y la fecha a la fila de títulos de
+                # arriba (ver `_paneles_familia`). Sólo sin
+                # columna de Familia —sin fila de arriba— la fecha vuelve
+                # acá: la sección no puede quedarse sin control de rango.
+                _tit_rank = ('<div class="cp-prod-rank-tit">'
+                             f'Ranking de productos{_amb_html}</div>')
+                if hay_fam:
+                    st.markdown(_tit_rank, unsafe_allow_html=True)
+                else:
+                    _fecha(_tit_rank)
 
                 # SIN el punto en "Cant": AG Grid resuelve `field` con notación
                 # de PATH ("a.b" -> row.a.b), así que un campo "Cant." se parte
@@ -972,7 +994,7 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                              "type": "numericColumn",
                              "cellStyle": _js_barra_prod,
                              "valueFormatter": _js_soles0_prod},
-                            {"field": "%", "width": 44,
+                            {"field": "%", "width": 44, "minWidth": 44,
                              "type": "numericColumn",
                              "headerTooltip": (f"% sobre {_sin_gritar(_amb)}"
                                                if _amb else
@@ -1058,42 +1080,70 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
             with st.container(border=True, key="compras_prod_card_evo"):
                 prod_foco = prod_focus if prod_focus is not None else ranking.iloc[0]["producto"]
 
-                st.markdown(f'<div style="font-size:13.5px;font-weight:700;">'
-                           f'{_compras_truncar(prod_foco, 40)}</div>',
-                           unsafe_allow_html=True)
-
-                # ── VENTANA PROPIA DE ESTA TARJETA ───────────────────────────
-                # 2026-08-26, a pedido ("creo que no es entendible para el
-                # usuario"), y es la CAUSA de que no lo fuera: el eje salía del
-                # rango de la franja —~24 días por defecto— así que pedirle
-                # "agrupá por Mes" o "por Año" a 24 días sólo podía dar UN
-                # grupo. Medido: con el default, la traza "Promedio mes" tenía
-                # 1 punto y el eje un solo tick ("Aug 2026"); en Año, 1 punto
-                # anclado al 1-ene mientras las compras eran de agosto, y las
-                # 11 compras reales apiladas en 18px de los ~300 del gráfico.
+                # ── CABECERA: el producto en foco ────────────────────────────
+                # Sin controles de sección, y eso es lo que quedó de tres
+                # vueltas del 2026-09-12: la fecha y el filtro de proveedores
+                # llegaron a vivir acá; la fecha se pidió en la fila del
+                # título de «Compras por familia» —que es sobre lo que manda;
+                # este gráfico tiene su ventana fija— y el filtro se pidió
+                # fuera del segmento.
                 #
-                # Con ventana propia (mismo `periodo.selector` que Evolución en
-                # proveedor.py y que Volatilidad) "Mes" da 12 puntos y la línea
-                # existe de verdad. El caso de UN período sigue siendo posible
-                # (elegir "Año" sobre 12 meses) y se dibuja distinto, más
-                # abajo — no se esconde la opción: que una granularidad
-                # aparezca y desaparezca según el rango confunde más que
-                # dibujar bien el caso degenerado.
-                # ── UNA SOLA FILA DE CONTROLES: ventana + granularidad ──────
-                # 2026-08-26, a pedido. Antes eran TRES renglones apilados —
-                # ventana, granularidad y modo (Precio/Cantidad/Valor)— y el
-                # gráfico arrancaba recién debajo. El modo se va del todo (las
-                # tres métricas pasan a verse SIEMPRE, como etiqueta de cada
-                # barra) y los dos que quedan comparten renglón, alineados.
-                # Son ~40px que gana el gráfico.
-                # columnas-internas: ventana y granularidad, dentro de la
-                # tarjeta. No es una fila de drill: COLUMNAS_DRILL no aplica.
-                _c_win, _c_gran = st.columns([1, 1.35],
+                # Recorte por CSS (ellipsis) y el nombre entero en el
+                # `title`: el ancho de la tarjeta cambia con la ventana, y
+                # un corte fijo en N caracteres o sobra o no alcanza.
+                _nom = html.escape(str(prod_foco))
+                st.markdown(
+                    f'<div class="cp-prod-evo-tit" title="{_nom}">'
+                    f'{_nom}</div>', unsafe_allow_html=True)
+
+                # ── VENTANA PROPIA Y FIJA: los últimos 3 meses ──────────────
+                # Historia corta, porque cambió dos veces el mismo día:
+                #   · 2026-08-26 → 2026-09-12: ventana propia ELEGIBLE
+                #     (`periodo.selector`: Rango/3m/12m/24m/Todo, abría en
+                #     12m). Nació porque el rango de la franja era de ~24
+                #     días y cualquier granularidad daba UN solo período.
+                #   · 2026-09-12, primera vuelta: se quitó, para que la fecha
+                #     del segmento (entonces en esta tarjeta) mandara también
+                #     acá — si no, era la regla #330, un control de fecha
+                #     sentado sobre un gráfico que lo ignora.
+                #   · 2026-09-12, segunda vuelta, a pedido: «que el gráfico de
+                #     producto mantenga su propia ventana fija pero de 3
+                #     meses». Fija: sin selector. Y como la fecha del
+                #     segmento se fue a la otra tarjeta, ya no hay dos
+                #     controles de fecha en ésta.
+                #
+                # Lo que la #330 sigue exigiendo: que el gráfico DIGA qué
+                # período muestra, porque el selector de fecha de al lado
+                # dice otro. Por eso el rótulo «últimos 3 meses», en el lugar
+                # donde estaba el desplegable.
+                #
+                # El ancla es el último día CON DATOS del parquet, no `hoy`
+                # (ver el docstring de `graficos/periodo.py`). Sale de
+                # `d_full`, el histórico sin la fecha de la sección: con
+                # `dd` la ventana quedaría dentro del rango elegido y
+                # dejaría de ser fija.
+                _VENTANA_EVO = "3m"
+                if d_full is not None:
+                    _src_evo = periodo.recortar(d_full, col_fecha,
+                                                _VENTANA_EVO).copy()
+                    _src_evo[col_fecha] = pd.to_datetime(_src_evo[col_fecha],
+                                                         errors="coerce")
+                    _src_evo[col_punit] = pd.to_numeric(_src_evo[col_punit],
+                                                        errors="coerce")
+                    _src_evo[col_valor] = pd.to_numeric(
+                        _src_evo[col_valor], errors="coerce").fillna(0)
+                    _src_evo = _src_evo.dropna(subset=[col_fecha, col_prod])
+                else:
+                    _src_evo = dd
+
+                # columnas-internas: rótulo de la ventana y granularidad.
+                _c_win, _c_gran = st.columns([1.1, 1],
                                              vertical_alignment="center")
                 with _c_win:
-                    with st.container(key="compras_prod_periodo_wrap"):
-                        _op_prod = periodo.selector("compras_prod_periodo",
-                                                    widget="lista")
+                    st.markdown(
+                        '<div class="cp-prod-evo-win">'
+                        f'{periodo.etiqueta(_VENTANA_EVO).capitalize()}</div>',
+                        unsafe_allow_html=True)
                 with _c_gran:
                     with st.container(key="compras_prod_gran"):
                         gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
@@ -1101,28 +1151,24 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                                         key="compras_prod_gran_pills",
                                         label_visibility="collapsed") or "Mes"
 
-                _src_evo = dd
-                if _op_prod != periodo.HEREDA and d_full is not None:
-                    _rec = periodo.recortar(d_full, col_fecha, _op_prod)
-                    _rec = _rec.copy()
-                    _rec[col_fecha] = pd.to_datetime(_rec[col_fecha], errors="coerce")
-                    _rec[col_punit] = pd.to_numeric(_rec[col_punit], errors="coerce")
-                    _rec[col_valor] = pd.to_numeric(_rec[col_valor], errors="coerce").fillna(0)
-                    _src_evo = _rec.dropna(subset=[col_fecha, col_prod])
-
                 g = _src_evo[_src_evo[col_prod].astype(str) == prod_foco]
                 # Las cifras del encabezado salen de `g`, o sea de la MISMA
-                # ventana que las barras. Antes salían de `ranking`, que se
-                # calcula sobre el rango de la franja: con dos ventanas
-                # distintas sería un número describiendo un período y unas
-                # barras dibujando otro.
+                # ventana que las barras. Si salieran de `ranking` —que mira
+                # el rango de la sección— serían un número describiendo un
+                # período y unas barras dibujando otro.
                 fila = _prod_stats(g, col_fecha, col_punit, col_cant, col_valor,
                                    col_um)
                 agg = _prod_serie_periodo(g, col_fecha, col_punit, col_cant,
                                           col_valor, gran)
 
                 if agg.empty or fila is None:
-                    st.info("Sin compras con precio válido para este producto.")
+                    # Con la ventana fija es un caso NORMAL, no un borde: el
+                    # Ranking mira el rango de la sección (12 meses de
+                    # entrada) y un producto que se compró en enero no tiene
+                    # nada en los últimos 3. El mensaje dice cuál ventana,
+                    # o se lee como un producto sin datos.
+                    st.info("Sin compras con precio válido de este producto "
+                            f"en los {periodo.etiqueta(_VENTANA_EVO)}.")
                 else:
                     var_pct = fila["var_pct"]
                     color_var = (ERROR if var_pct and var_pct > 0.05

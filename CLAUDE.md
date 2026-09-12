@@ -185,7 +185,13 @@ falla si reaparece uno, o si el cromo de CSS y el de Python se
 desincronizan.
 
 Una tarjeta = una pantalla: se clampea con `max-height: var(--alto-util)` y
-lo que no entra scrollea DENTRO (`estilos/_80_cards.py`). Dos trampas que
+lo que no entra scrollea DENTRO (`estilos/_80_cards.py`). **Excepción
+pedida (2026-09-12): las de Compras › Producto (`compras_prod_card_`) no
+llevan techo** — «las tarjetas no deben deslizarse internamente, solo la
+tabla». Una tarjeta con barra propia y grids con la suya se lee como una
+caja rota; ahí la tarjeta mide su contenido y scrollea la página. Antes de
+sumar otra tarjeta de varios niveles al techo, pensar si no va por el mismo
+lado. Ver `arquitectura.md` regla #382. Dos trampas que
 ya están medidas y documentadas en `arquitectura.md` reglas #101 y #102:
 **`height` en CSS no aplica** a un bloque de Streamlit (son flex items con
 `flex: 1 1 0%`; hay que usar `max-height`), y **Plotly no llena su

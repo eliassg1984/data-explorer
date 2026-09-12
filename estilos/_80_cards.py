@@ -775,9 +775,18 @@ CSS = """    /* ================================================================
     /* _99_movil.py.                                                         */
     /* =================================================================== */
     @media screen and (min-width: 769px) {
+        /* `compras_prod_card_` SALIÓ de esta lista el 2026-09-12, a pedido:  */
+        /* «las tarjetas no deben deslizarse internamente […] como que el     */
+        /* contenedor es muy pequeño […] solo para uso interno de la tabla». */
+        /* Su tarjeta de tablas lleva DOS niveles —Familia | Subfamilia y el  */
+        /* Ranking debajo— y mide ~600px: en una pantalla más baja que 768    */
+        /* el techo la cortaba y le salía barra propia, además de la de cada  */
+        /* grid. Dos barras anidadas se leen como una caja rota. Sin el techo */
+        /* la tarjeta mide su contenido y lo que sobra lo scrollea la PÁGINA; */
+        /* dentro, sólo scrollean los grids, que tienen su propio tope de     */
+        /* filas. Ver regla #382.                                             */
         div[class*="st-key-ajuste_graf_card_"],
         div[class*="st-key-compras_prov_card_"],
-        div[class*="st-key-compras_prod_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
             overflow-y: auto;

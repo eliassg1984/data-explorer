@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-381 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+382 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (133)
+**CSS y estilos** (134)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -167,8 +167,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#371** — Una cabecera flex que ENVUELVE convierte el margen negativo de la regla #162 en un solapamiento
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
+- **#382** — Una tarjeta que scrollea por dentro, con grids que también scrollean, se lee como una caja…
 
-**Layout y alturas** (43)
+**Layout y alturas** (44)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -213,6 +214,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#376** — El default del REPORTE y el default de una TARJETA son dos cosas distintas — y la excepción…
 - **#380** — Un caption que explica una columna es una columna sin sitio: mudalo al headerTooltip antes de…
 - **#381** — Dos tablas de productos una encima de la otra son una pregunta con dos respuestas: el drill…
+- **#382** — Una tarjeta que scrollea por dentro, con grids que también scrollean, se lee como una caja…
 
 **Plotly y figuras** (60)
 
@@ -33670,6 +33672,110 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+     **El mismo día, la #382 dio vuelta la fila** (Evolución a la
+     izquierda), sacó el filtro de proveedores, movió la fecha y le quitó
+     el techo a estas dos tarjetas. Lo de acá sobre el ámbito, la key y el
+     alto de fila sigue valiendo; los px medidos no.
+
+382. **Una tarjeta que scrollea por dentro, con grids que también
+     scrollean, se lee como una caja rota: si el contenido es de dos
+     niveles, la tarjeta mide su contenido y scrollea la PÁGINA.** Y dos
+     trampas de la misma tarde: una fila de títulos que MIDE distinto
+     desalinea los grids de abajo, y un CSS "muerto" puede ser el molde de
+     otro. Pedido 2026-09-12 sobre Compras › Producto, en cuatro vueltas el
+     mismo día (la primera, a medio implementar, se corrigió sobre la
+     marcha):
+
+     · «las tarjetas no deben deslizarse internamente, genera una imagen,
+       como que el contenedor es muy pequeño […] solo para uso interno de
+       la tabla»;
+     · el gráfico del producto a la IZQUIERDA y las tablas a la derecha;
+     · el selector de fecha en la fila del título de «Compras por
+       familia», y el gráfico con «su propia ventana fija, pero de 3
+       meses»;
+     · «eliminemos el filtro de proveedores, ya no lo necesitaremos en
+       este grupo de vista».
+
+     **1. El techo se fue, para estas dos tarjetas.** La #101 clampea toda
+     tarjeta a `max-height: var(--alto-util)` con `overflow-y: auto`. La de
+     tablas de la #381 lleva DOS niveles —Familia | Subfamilia y el Ranking
+     debajo— y mide ~600px: en una pantalla más baja que 768 el techo la
+     cortaba y le salía barra propia, además de la de cada grid. El pedido
+     lo describió exacto: una caja chica con cosas adentro. La familia
+     `compras_prod_card_` salió de la lista del techo en
+     `estilos/_80_cards.py` (sólo ésa: las otras siguen con él). Medido a 1280x650 —`--alto-util`
+     ~538px—: las dos tarjetas miden 600, `scrollHeight == clientHeight`,
+     cero barras de tarjeta; lo que no entra lo scrollea la página, y
+     adentro sólo scrollean los grids, que tienen su propio tope de filas.
+     El piso `:has()` sigue igualando las dos.
+
+     **2. Espejar la fila es una constante, no un literal.**
+     `COLUMNAS_DRILL_ESPEJO = COLUMNAS_DRILL[::-1]` en `_comun.py`: la
+     tabla se sigue llevando el 1.6 (nombres largos, ocho columnas) y la
+     figura el 1. Poner la figura en el 1.6 habría dejado Familia y
+     Subfamilia en ~200px cada una. El precio, dicho en el docstring: el
+     canal gris cae en el espejo del de Proveedor (38% en vez de 62%) y las
+     dos filas apiladas de Compras se leen en zigzag. Derivada, así que si
+     `COLUMNAS_DRILL` cambia, ésta la sigue. Las tablas se siguen
+     escribiendo PRIMERO en el código —el gráfico necesita el ranking y el
+     foco que ellas resuelven—: en Streamlit la posición la decide la
+     columna, no el orden del `with`.
+
+     **3. La ventana del gráfico: elegible → ninguna → fija, en un día, y
+     la regla que la gobierna es la #330.** Tenía `periodo.selector`
+     (Rango/3m/12m/24m/Todo, abría en 12m). En la primera vuelta la fecha
+     del segmento se iba a sentar en la tarjeta del gráfico, y con la
+     ventana puesta eso era la #330 literal —un control de fecha sobre un
+     gráfico que lo ignora—, así que se quitó. Al pedirse la fecha en la
+     OTRA tarjeta y el gráfico con ventana fija de 3 meses, volvió, sin
+     selector: `periodo.recortar(d_full, col_fecha, "3m")`, anclada al
+     último día con datos del parquet (no a `hoy`, ver `periodo.py`), y
+     desde `d_full` y no `dd` — con `dd` la ventana quedaría dentro del
+     rango elegido y dejaría de ser fija. Lo que la #330 sigue exigiendo es
+     que el gráfico DIGA su período, porque el selector de al lado dice
+     otro: «Últimos 3 meses», en el sitio del desplegable, y el cartel de
+     "sin compras" nombra la ventana — con 12 meses de ranking y 3 de
+     gráfico, un producto comprado en enero sin barras es el caso NORMAL.
+     Verificado: con el atajo «30 días» el trigger pasa a «14 ago – 10 sep
+     2026», las tablas se recalculan y el gráfico sigue en sus 3 meses.
+
+     **4. Una fila de títulos que MIDE distinto desalinea los grids.** Con
+     la fecha en la fila del panel B (título + píldora, flex de 26-30px) y
+     el título del panel A como texto suelto (el `margin-bottom: -16px` de
+     la #162), cada título dentro de SU columna: el grid B arrancaba 16px
+     más abajo que el A y los títulos a 8px de distancia (medido). No se
+     arregla con márgenes: los títulos van en su PROPIA fila de columnas y
+     los grids en otra, y Streamlit alinea las dos columnas solo — medido
+     después, los dos grids a 62px del borde. El título B depende del clic
+     del grid A, así que se escribe después en una columna creada antes.
+     La fecha va del lado del panel B porque el borde derecho es donde está
+     en las otras cuatro tarjetas que usan `selector_fecha_tarjeta`, y el
+     panel A no tiene sitio: su título y el trigger no entran en ~340px.
+
+     **5. El CSS del filtro de proveedores NO se borró, aunque parece
+     muerto.** Ningún `.py` dibuja ya una key `cp_prod_prov`, pero
+     `_css_proveedor.py::CSS_CP_DOCS` sale de `clonar_prefijo(CSS,
+     "cp_prod", "cp_docs")`: las reglas `cp_prod_prov_*` son el MOLDE del
+     filtro de «Detalle de documentos por proveedor», que sigue vivo.
+     Borrarlas por limpieza deja ese filtro sin estilo, sin error y en otra
+     sección. Quedó escrito encima de `CSS_CP_DOCS`. Lo que sí se revirtió
+     es la píldora que se le había agregado a `cp_prod_prov_pop_float` en
+     la vuelta intermedia, cuando el filtro vivía en la cabecera del
+     gráfico: se clonaba a `cp_docs` sin hacer nada allá.
+
+     **6. Dos columnas % en 39px.** A 1280, con la barra vertical del panel
+     B, `fitGridWidth` dejaba la % en 39px y «11%» salía «1…» — la #349
+     otra vez. `minWidth: 44` en las tres columnas %.
+
+     **Los altos, medidos en la TARJETA y no sumando hijos** (los hijos
+     traen fracciones y la suma redondeada se pasaba por 2): tablas 600 −
+     207 − 255 de grids = cromo 138; gráfico 582 − 438 de figura = 144. Con
+     eso `_ALTO_EVO` = 456 y las dos tarjetas miden 600,4 con 16px de
+     padding al pie cada una — sin el blanco que el piso `:has()` rellena
+     cuando no coinciden.
+
+     (2026-09-12.)
+
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -33683,7 +33789,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#382**.
+> próxima regla nueva es la **#383**.
 
 >
 
