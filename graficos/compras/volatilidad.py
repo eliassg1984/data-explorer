@@ -22,7 +22,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from cortes import MESES_ABR_ES
-from tema import ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO
+from tema import (
+    CELDA_POS_TEXTO, ERROR, ERROR_TEXTO, EXITO, GRIS_BORDE, GRIS_TEXTO,
+    GRIS_TEXTO_SUAVE,
+)
 from graficos.base import (
     _card, _compras_layout, _compras_truncar, _slug,
     preservar_widgets, selector_fecha_tarjeta,
@@ -840,6 +843,75 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 mode="markers", marker=dict(size=38, opacity=0),
                 hoverinfo="skip", showlegend=False,
             ))
+
+            # ── LOS PRECIOS, ESCRITOS AL COSTADO DE CADA VELA ────────────
+            # 2026-09-12, a pedido y sobre una maqueta con datos reales: la
+            # primera y la última compra de la semana, siempre visibles, sin
+            # tener que pasar el mouse. Van en trazas de TEXTO aparte y
+            # DESPUÉS del overlay del clic: el clic se atiende por
+            # `curve_number == 1`, y una traza metida antes lo correría.
+            #
+            # AL COSTADO Y A LA ALTURA DE SU PRECIO, no arriba o abajo de la
+            # vela: así una etiqueta en el precio más alto o más bajo no se
+            # corta contra el borde de un gráfico de 150px, y no hubo que
+            # agrandarlo. El corrimiento es en DÍAS (`_dx`), no en píxeles: el
+            # ancho de la vela también se mide en días, así que la etiqueta
+            # queda pegada a la vela en cualquier ancho de pantalla.
+            #
+            # La ÚLTIMA compra va en negrita y en el tono oscuro del color de
+            # su vela —el mismo de los precios de la grilla—; es el número de
+            # la derecha de la celda de esa semana. Una semana SIN compras la
+            # lleva en gris: es el precio anterior repetido. La PRIMERA sólo
+            # aparece si hubo compras, si difiere de la última y si las dos
+            # no se pisan (11% del rango ≈ 12px de los ~110 de alto útil); en
+            # una vela plana hay una sola etiqueta.
+            #
+            # El color de una vela plana (primera == última) no lo decide su
+            # cuerpo sino el cierre ANTERIOR, que es lo que hace Plotly: sube
+            # si cerró más alto, baja si cerró más bajo, y si repite, sigue
+            # la dirección de la vela previa. Se replica acá para que la
+            # etiqueta tenga el color de su vela.
+            # 2.1 días: medido, la vela mide ~1.7 días de medio ancho (49px
+            # de cuerpo cada 100px de semana), así que la etiqueta arranca
+            # ~6px después del borde. Con 2.5 quedaba a 13px y se leía suelta.
+            _dx = pd.Timedelta(days=2.1)
+            _rng = (max(w["h"] for w in weeks) - min(w["l"] for w in weeks)) or 1.0
+            _ult_x, _ult_y, _ult_t, _ult_c = [], [], [], []
+            _pri_x, _pri_y, _pri_t = [], [], []
+            _dir_prev, _c_prev = "sube", None
+            for s, w in zip(semanas, weeks):
+                if w["c"] > w["o"]:
+                    _dir = "sube"
+                elif w["c"] < w["o"]:
+                    _dir = "baja"
+                elif _c_prev is None:
+                    _dir = "sube"
+                else:
+                    _dir = ("sube" if w["c"] > _c_prev
+                            else "baja" if w["c"] < _c_prev else _dir_prev)
+                _dir_prev, _c_prev = _dir, w["c"]
+                _ult_x.append(s + _dx)
+                _ult_y.append(w["c"])
+                _ult_t.append(f"<b>{w['c']:,.2f}</b>")
+                _ult_c.append(GRIS_TEXTO_SUAVE if not w["rows"]
+                              else ERROR_TEXTO if _dir == "sube" else CELDA_POS_TEXTO)
+                if w["rows"] and abs(w["o"] - w["c"]) >= 0.11 * _rng:
+                    _pri_x.append(s + _dx)
+                    _pri_y.append(w["o"])
+                    _pri_t.append(f"{w['o']:,.2f}")
+            fig.add_trace(go.Scatter(
+                x=_ult_x, y=_ult_y, text=_ult_t, mode="text",
+                textposition="middle right",
+                textfont=dict(size=11, color=_ult_c),
+                hoverinfo="skip", showlegend=False, cliponaxis=False,
+            ))
+            if _pri_x:
+                fig.add_trace(go.Scatter(
+                    x=_pri_x, y=_pri_y, text=_pri_t, mode="text",
+                    textposition="middle right",
+                    textfont=dict(size=10.5, color=GRIS_TEXTO),
+                    hoverinfo="skip", showlegend=False, cliponaxis=False,
+                ))
             _compras_layout(fig, alto=alturas.MINI_CANDLE_DRILL)
             # EL MARGEN SUPERIOR, A 8: `_compras_layout` reserva 30px arriba
             # para un título que esta figura no tiene —el suyo es el renglón
@@ -869,8 +941,13 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # cuatro que miden (`mide` en `cols_sem`). Cinco rótulos de ~95px
             # entran en la mitad de la tarjeta.
             fig.update_layout(
+                # El rango de X, a mano: la etiqueta de la ÚLTIMA vela queda
+                # a la derecha de todo, y con el rango automático el texto
+                # se salía por el margen de 10px.
                 xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False,
                            rangeslider=dict(visible=False),
+                           range=[semanas[0] - pd.Timedelta(days=3.5),
+                                  semanas[-1] + pd.Timedelta(days=6)],
                            tickmode="array", tickvals=semanas,
                            ticktext=[_vol_fmt_semana_cabecera(s, anio_ref)
                                      for s in semanas]),

@@ -34144,6 +34144,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      la pantalla se llaman parecido, cada uno tiene que decir de dónde
      sale.**
 
+     Y el paso siguiente, también a pedido y sobre maqueta: la primera y la
+     última compra **escritas al costado de cada vela**, siempre visibles.
+     Trazas `Scatter` de texto agregadas DESPUÉS del overlay del clic (que
+     se atiende por `curve_number == 1`), al costado y a la altura del
+     precio —no arriba/abajo, donde la del extremo se cortaba contra un
+     gráfico de 150px—, corridas en DÍAS y no en píxeles porque el ancho de
+     la vela también se mide en días. La primera sólo aparece si difiere de
+     la última y no se pisan (11% del rango ≈ 12px). El color de una vela
+     plana lo decide el cierre anterior, como hace Plotly, y se replica para
+     que la etiqueta tenga el color de su vela. El rango de X va a mano:
+     con el automático, la etiqueta de la última vela se salía por el
+     margen.
+
      (2026-09-12.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
