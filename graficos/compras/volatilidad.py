@@ -25,7 +25,7 @@ import streamlit as st
 from cortes import MESES_ABR_ES
 from tema import (
     CELDA_POS_TEXTO, ERROR, ERROR_TEXTO, EXITO, GRIS_BORDE, GRIS_TEXTO,
-    GRIS_TEXTO_SUAVE,
+    GRIS_TEXTO_SUAVE, LAVANDA_FONDO,
 )
 from graficos.base import (
     _card, _compras_layout, _compras_truncar, _slug,
@@ -711,7 +711,6 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         if st.session_state.get("compras_vol_prod_prev") != prod_sel:
             st.session_state["compras_vol_prod_prev"] = prod_sel
             st.session_state["compras_vol_semfocus"] = None
-            st.session_state["compras_vol_last_click"] = None
 
         _ayuda_alcance.markdown(
             f"Volatilidad de las **últimas {n_sem} semanas** "
@@ -831,35 +830,94 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                         f" · máx S/ {w['h']:.2f} · mín S/ {w['l']:.2f}"
                         f" · última compra S/ {w['c']:.2f}")
 
+            # ── EL CLIC SE LEE ANTES DE DIBUJAR ───────────────────────────────
+            # 2026-09-12, a pedido: «cuando hay un solo documento, la vela se
+            # reduce y es casi imposible de clickearle». Con una sola compra
+            # la vela es una raya de 1-2px. Darle un tamaño MÍNIMO se
+            # descartó: una semana plana dibujada con cuerpo parecería una
+            # semana que se movió. Lo que crece es el BLANCO DEL CLIC, no la
+            # vela: una barra invisible por semana, del ancho de su columna y
+            # del alto entero del gráfico (traza 0, más abajo).
+            #
+            # Y la semana elegida se marca con una BANDA detrás de su vela, no
+            # con la atenuación de Plotly: esa atenuación la pinta la
+            # selección del gráfico, y la selección ahora es de la barra
+            # invisible. Para dibujar la banda en la MISMA corrida del clic,
+            # el clic se lee del estado del gráfico ANTES de dibujarlo
+            # (`st.session_state[key]` ya trae la selección de la corrida
+            # anterior), y el gráfico se dibuja con una key NUEVA después de
+            # cada clic (`compras_vol_nclic`): así nace sin selección —sin
+            # nada atenuado— y un clic sobre la semana que ya estaba elegida
+            # también se atiende. Es la receta de CLAUDE.md para la selección
+            # que persiste entre reruns, con un contador en vez del foco.
+            _nclic = st.session_state.get("compras_vol_nclic", 0)
+            _key_base = f"compras_g_vol_candle_{_slug(str(prod_sel))}"
+            _mp = _first_point(st.session_state.get(f"{_key_base}_{_nclic}"))
+            if _mp is not None and _mp.get("curve_number") == 0:
+                _pi = _mp.get("point_index", _mp.get("point_number"))
+                if _pi is None and _mp.get("x") is not None:
+                    try:
+                        _xs = pd.Timestamp(_mp["x"]).normalize()
+                        _pi = next((i for i, s in enumerate(semanas)
+                                    if s == _xs), None)
+                    except (ValueError, TypeError):
+                        _pi = None
+                if _pi is not None and 0 <= _pi < len(weeks):
+                    st.session_state["compras_vol_semfocus"] = _pi
+                    _nclic += 1
+                    st.session_state["compras_vol_nclic"] = _nclic
+            _chart_key = f"{_key_base}_{_nclic}"
+
+            sem_focus = st.session_state.get("compras_vol_semfocus")
+            if sem_focus is None or not (0 <= sem_focus < len(weeks)):
+                # sin clic: la semana con el mayor movimiento propio (abre→cierra)
+                sem_focus = max(range(len(weeks)), key=lambda i: abs(weeks[i]["c"] - weeks[i]["o"]))
+
+            # El rango de Y, a mano: la barra invisible tiene que ir de
+            # borde a borde del área de dibujo, y para eso hace falta saber
+            # dónde están los bordes. 12% de aire, como el automático; con
+            # un precio que no se movió en ninguna de las cinco semanas, un
+            # aire mínimo para que la raya no quede pegada al borde.
+            _lo = min(w["l"] for w in weeks)
+            _hi = max(w["h"] for w in weeks)
+            _pad = max((_hi - _lo) * 0.12, abs(_hi) * 0.04, 0.5)
+            _y0, _y1 = _lo - _pad, _hi + _pad
+
             fig = go.Figure()
+            # Traza 0: el BLANCO DEL CLIC. Invisible, una barra por semana
+            # de 7 días de ancho —la columna entera de la vela, sin huecos—
+            # y del alto del área de dibujo. Lleva el hover de la semana
+            # (`hoverinfo="text"`, NO "skip": con "skip" Plotly apaga
+            # también el clic, regla #388).
+            fig.add_trace(go.Bar(
+                x=semanas, base=[_y0] * len(weeks), y=[_y1 - _y0] * len(weeks),
+                width=[7 * 24 * 3600 * 1000] * len(weeks),
+                marker=dict(color="rgba(0,0,0,0)", line=dict(width=0)),
+                hovertext=[_hover_vela(s, w) for s, w in zip(semanas, weeks)],
+                hoverinfo="text", showlegend=False, name="",
+            ))
+            # Traza 1: la vela, sólo para VER. `hoverinfo="skip"` a
+            # propósito: el hover y el clic los da la barra de atrás, y dos
+            # hovers de la misma semana competirían por quién se muestra.
             fig.add_trace(go.Candlestick(
                 x=semanas, open=[w["o"] for w in weeks], high=[w["h"] for w in weeks],
                 low=[w["l"] for w in weeks], close=[w["c"] for w in weeks],
                 increasing=dict(line=dict(color=ERROR), fillcolor=ERROR),
                 decreasing=dict(line=dict(color=EXITO), fillcolor=EXITO),
-                hovertext=[_hover_vela(s, w) for s, w in zip(semanas, weeks)],
-                hoverinfo="text",
-                name="",
+                hoverinfo="skip", name="",
             ))
-            # (Acá había un `go.Scatter` invisible —marcadores de 38px,
-            # `hoverinfo="skip"`— puesto para capturar el clic, porque se
-            # suponía que `go.Candlestick` no era seleccionable (reglas #11 y
-            # #44). Era al revés, y se descubrió con una captura del usuario
-            # el 2026-09-12: la vela del 24 Ago quedaba MARCADA —Plotly
-            # atenuaba las demás— y la tabla seguía en la semana por defecto.
-            # Una traza con `hoverinfo="skip"` no dispara clics (la doc de
-            # Plotly: sólo con "none" se siguen emitiendo), así que el
-            # overlay nunca recibió uno; el que llegaba era el de la VELA
-            # (traza 0), y el código lo descartaba por no ser la 1. El clic
-            # en una vela, entonces, no cambió nunca la semana de la tabla.
-            # Se atiende la traza 0 y el overlay se fue.)
+            # La semana elegida: una banda lavanda detrás de su vela.
+            fig.add_vrect(
+                x0=semanas[sem_focus] - pd.Timedelta(days=3.5),
+                x1=semanas[sem_focus] + pd.Timedelta(days=3.5),
+                fillcolor=LAVANDA_FONDO, opacity=1, line_width=0, layer="below")
 
             # ── LOS PRECIOS, ESCRITOS AL COSTADO DE CADA VELA ────────────
             # 2026-09-12, a pedido y sobre una maqueta con datos reales: la
             # primera y la última compra de la semana, siempre visibles, sin
             # tener que pasar el mouse. Van en trazas de TEXTO aparte, con
             # `hoverinfo="skip"` —que, justamente, las deja fuera del clic:
-            # el clic lo recibe sólo la vela (traza 0)—.
+            # el clic lo recibe sólo la barra invisible (traza 0)—.
             #
             # AL COSTADO Y A LA ALTURA DE SU PRECIO, no arriba o abajo de la
             # vela: así una etiqueta en el precio más alto o más bajo no se
@@ -959,41 +1017,27 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                            range=[semanas[0] - pd.Timedelta(days=3.5),
                                   semanas[-1] + pd.Timedelta(days=6)],
                            tickmode="array", tickvals=semanas,
-                           ticktext=[_vol_fmt_semana_cabecera(s, anio_ref)
-                                     for s in semanas]),
-                yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ "),
+                           # DOS RENGLONES Y RECTOS (2026-09-12, captura del
+                           # usuario): en una columna angosta los cinco
+                           # rótulos de ~95px no entraban en uno y Plotly
+                           # los torcía a 45°, encima del área de dibujo y
+                           # con el último cortado. Partido en el guion,
+                           # cada rótulo mide ~50px y entra hasta en ~300px
+                           # de columna. La semana elegida, en negrita.
+                           ticktext=[
+                               ("<b>{}</b>" if i == sem_focus else "{}").format(
+                                   _vol_fmt_semana_cabecera(s, anio_ref)
+                                   .replace(" – ", " –<br>"))
+                               for i, s in enumerate(semanas)],
+                           tickangle=0, automargin=True),
+                yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ ",
+                           range=[_y0, _y1]),
                 showlegend=False,
             )
 
-            _chart_key = f"compras_g_vol_candle_{_slug(str(prod_sel))}"
             _cfg = {"displaylogo": False, "displayModeBar": False}
-            evt = st.plotly_chart(fig, use_container_width=True, key=_chart_key,
-                                  on_select="rerun", selection_mode="points", config=_cfg)
-
-            # Procesar clic (dedup, patrón de proveedor.py): se atiende un
-            # punto de la traza 0, la de las VELAS — ver el comentario de
-            # arriba sobre el overlay que nunca recibió un clic. El índice de
-            # la semana sale de `point_index`/`point_number`; si el evento no
-            # lo trae, de la fecha `x`, que es el lunes de la semana.
-            _mp = _first_point(evt)
-            if _mp is not None and _mp.get("curve_number") == 0:
-                _pi = _mp.get("point_index", _mp.get("point_number"))
-                if _pi is None and _mp.get("x") is not None:
-                    try:
-                        _xs = pd.Timestamp(_mp["x"]).normalize()
-                        _pi = next((i for i, s in enumerate(semanas)
-                                    if s == _xs), None)
-                    except (ValueError, TypeError):
-                        _pi = None
-                if _pi is not None and st.session_state.get("compras_vol_last_click") != _pi:
-                    st.session_state["compras_vol_last_click"] = _pi
-                    _misma = st.session_state.get("compras_vol_semfocus") == _pi
-                    st.session_state["compras_vol_semfocus"] = None if _misma else _pi
-
-            sem_focus = st.session_state.get("compras_vol_semfocus")
-            if sem_focus is None or not (0 <= sem_focus < len(weeks)):
-                # sin clic: la semana con el mayor movimiento propio (abre→cierra)
-                sem_focus = max(range(len(weeks)), key=lambda i: abs(weeks[i]["c"] - weeks[i]["o"]))
+            st.plotly_chart(fig, use_container_width=True, key=_chart_key,
+                            on_select="rerun", selection_mode="points", config=_cfg)
 
             w = weeks[sem_focus]
             ini = semanas[sem_focus]

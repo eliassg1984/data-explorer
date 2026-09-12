@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-388 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+389 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (136)
 
@@ -220,7 +220,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 
-**Plotly y figuras** (62)
+**Plotly y figuras** (63)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -284,6 +284,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 - **#387** — Dos rótulos para la misma cosa son una pregunta que el usuario va a hacer
 - **#388** — hoverinfo="skip" apaga también el CLIC: un overlay invisible puesto para capturar clics con…
+- **#389** — Si algo es difícil de clickear, lo que crece es el blanco del clic, no el dibujo — y la…
 
 **AgGrid y tablas** (63)
 
@@ -34199,6 +34200,47 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+389. **Si algo es difícil de clickear, lo que crece es el blanco del
+     clic, no el dibujo — y la selección se lee ANTES de dibujar.** Pedido
+     del usuario sobre el candlestick de Volatilidad: «cuando hay un solo
+     registro de documento, el gráfico de velas se reduce y es casi
+     imposible de clickearle; pensaba que debía tener un tamaño mínimo».
+     Una semana con una sola compra es una vela plana: una raya de 1-2px.
+
+     **El tamaño mínimo se descartó por honestidad del dato**: una semana
+     sin movimiento dibujada con cuerpo parecería una semana que subió o
+     bajó. En su lugar, la traza 0 del gráfico es una `go.Bar` INVISIBLE
+     por semana, de 7 días de ancho —la columna entera, sin huecos— y del
+     alto del área de dibujo (el rango de Y va a mano para conocer los
+     bordes). Lleva el hover de la semana con `hoverinfo="text"` (con
+     `"skip"` no emitiría clics, #388); la vela pasó a `hoverinfo="skip"`
+     y quedó sólo para ver. Medido con clics sintéticos: uno 70px por
+     encima de la raya de la semana del 7 Set y otro al pie del gráfico al
+     costado de la del 24 Ago eligieron cada uno su semana.
+
+     **La marca de la semana elegida dejó de ser la atenuación de Plotly**,
+     que la pinta la selección del gráfico —y la selección ahora es de la
+     barra invisible, así que atenuaría las VELAS enteras, todas—. Es una
+     banda lavanda detrás de la vela (`add_vrect`, `layer="below"`) más el
+     rótulo en negrita. Para dibujarla en la misma corrida del clic, el
+     clic se lee de `st.session_state[key]` ANTES de construir la figura
+     (el estado del widget ya trae la selección de la corrida anterior), y
+     después de cada clic el gráfico se dibuja con una key NUEVA
+     (`compras_vol_nclic` en la key): nace sin selección, nada queda
+     atenuado, y un clic sobre la semana que ya estaba elegida también se
+     atiende. Es la receta de CLAUDE.md para la selección que persiste
+     entre reruns («el foco en la key»), con un contador en vez del foco.
+
+     De la misma captura: con la columna angosta (ventana de ~1160px) los
+     cinco rótulos «10 Ago – 16 Ago» no entraban en un renglón y Plotly
+     los torció a 45°, encima del dibujo y con el último cortado. Van en
+     dos renglones partidos en el guion y con `tickangle=0`; se comieron
+     ~15px del área de dibujo (quedó en 90), que volvieron subiendo
+     `alturas.MINI_CANDLE_DRILL` de 150 a 165 — la tarjeta mide 480 contra
+     545.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34211,7 +34253,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#389**.
+> próxima regla nueva es la **#390**.
 
 >
 

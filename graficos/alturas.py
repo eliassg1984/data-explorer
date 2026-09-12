@@ -167,10 +167,16 @@ MARCO = PRESUPUESTO
 # ya tenía la Evolución de Proveedor. Un rol fijo no puede seguir a una
 # vecina que cambió de alto.)
 
-MINI_CANDLE_DRILL = 150
+MINI_CANDLE_DRILL = 165
 """El candlestick de Volatilidad: la mitad izquierda de la fila de abajo de
 su tarjeta, al lado de la tabla de la semana (`PANEL_JUNTO_A_FIGURA`, que
 mide lo mismo para que la fila termine en una sola línea).
+
+150 -> 165 el 2026-09-12: los rótulos de las semanas pasaron a DOS renglones
+(rectos, para que no se tuerzan a 45° en una columna angosta) y se comieron
+~15px del área de dibujo, que quedó en 90px medidos a 1160 de ventana. Los
+15px vuelven de la tarjeta, que tenía aire: medida a 1366x657, la tarjeta
+pasa de 473 a 480 contra 545 y el área de dibujo vuelve a 106px.
 
 2026-09-12: el drill bajó de la columna derecha a una fila propia DEBAJO
 del ranking, partida en dos (a pedido). La cuenta de abajo es la de la
