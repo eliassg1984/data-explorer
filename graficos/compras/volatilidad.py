@@ -32,7 +32,7 @@ from graficos.base import (
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.compras._comun import (
-    CATEGORIA_SEC, GAP_DRILL, PARR, _first_point,
+    CATEGORIA_SEC, GAP_DRILL, PARR, _first_point, documento_legible,
 )
 from graficos import periodo
 from graficos import alturas
@@ -289,7 +289,7 @@ def _vol_candidatos(d, col_prod, col_punit, col_fecha, col_valor, semanas,
 
 
 def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
-                          col_cant, semanas, cierre_previo=None):
+                          col_cant, semanas, cierre_previo=None, col_docu=None):
     """OHLC + filas de compra (fecha, proveedor, cantidad, precio) por
     semana, para UN producto ya elegido.
 
@@ -318,6 +318,10 @@ def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
                 # que es la unica desde el 2026-09-11 (arquitectura.md #379:
                 # esta tarjeta importaba una copia que escribia distinto).
                 "prov": nombre_propio(str(r[col_prov])) if col_prov else "—",
+                # El número CRUDO del parquet («F0E001000001703»); lo pasa a
+                # «E001-1703» la tabla, con `documento_legible` (2026-09-12).
+                "doc": (str(r[col_docu]) if col_docu and pd.notna(r[col_docu])
+                        else "—"),
                 "cant": r[col_cant] if col_cant else None,
                 "precio": float(precio),
             })
@@ -334,7 +338,7 @@ def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
 @st.fragment
 def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                                col_valor, col_cant, col_um, col_moneda=None,
-                               d_full=None):
+                               d_full=None, col_docu=None):
     """Ranking de insumos por volatilidad de precio → candlestick semanal
     del insumo elegido → compras de la semana clickeada.
 
@@ -731,7 +735,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 antes_de=semanas[0])
         weeks = _vol_detalle_producto(
             dd_rec, prod_sel, col_prod, col_punit, col_fecha, col_prov,
-            col_cant, semanas, cierre_previo=_cierre_previo)
+            col_cant, semanas, cierre_previo=_cierre_previo, col_docu=col_docu)
 
         # ── LA FILA DE ABAJO: VELAS | SEMANA, MITAD Y MITAD ──────────────
         # 2026-09-12, a pedido (ver el bloque del ranking, más arriba). Cada
@@ -1030,8 +1034,20 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                         return f"color:{EXITO}; font-weight:700;"
                     return ""
 
-                tp = tp.rename(columns={"fecha": "Fecha", "prov": "Proveedor",
-                                        "cant": "Cantidad", "precio": f"Precio/{unidad}"})
+                # EL DOCUMENTO, AL LADO DE LA FECHA (2026-09-12, a pedido):
+                # «E001-1703», como se lee en el papel, y no el código de 15
+                # caracteres del parquet — `documento_legible` es la misma que
+                # usan las tablas de Documentos. Sin columna de documento
+                # (el demo local) la columna no se dibuja: una fila de «—» no
+                # dice nada.
+                if col_docu:
+                    tp["doc"] = documento_legible(tp["doc"])
+                    tp = tp[["fecha", "doc", "prov", "cant", "precio"]]
+                else:
+                    tp = tp.drop(columns="doc")
+                tp = tp.rename(columns={"fecha": "Fecha", "doc": "Documento",
+                                        "prov": "Proveedor", "cant": "Cantidad",
+                                        "precio": f"Precio/{unidad}"})
                 fmts = {"Fecha": lambda v: f"{v:%d/%m/%Y}",
                        "Cantidad": lambda v: "—" if pd.isna(v) else f"{v:,.2f} {unidad}",
                        f"Precio/{unidad}": lambda v: f"S/ {v:,.2f}"}
