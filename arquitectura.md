@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-384 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+385 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (135)
 
@@ -282,7 +282,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 
-**AgGrid y tablas** (61)
+**AgGrid y tablas** (62)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -345,6 +345,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#374** — Un drill de TRES niveles no es "una tabla más": son cinco cosas que se rompen en silencio, y…
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
+- **#385** — Dos series que "hacen lo mismo" tienen que hacerlo con el MISMO código — el desempate de un…
 
 **Streamlit** (107)
 
@@ -33952,6 +33953,85 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+385. **Dos series que "hacen lo mismo" tienen que hacerlo con el MISMO
+     código — el desempate de un `sort_values` alcanza para multiplicar un
+     puntaje por nueve.** Segundo pedido del día sobre «Insumos ordenados
+     por volatilidad», otra vez sobre maqueta con datos reales: la grilla
+     se desliza hacia atrás por toda la ventana de la tarjeta (53 semanas
+     en 12m), abre en la más reciente, la columna «Volatilidad» arranca
+     oculta y se consulta (pastilla en la cabecera, o el tooltip del
+     nombre), su barra pasa a FINA —el morado lleno tapaba el número— y
+     lleva escrito el período que mide («10 Ago – 13 Set»). Cabecera de
+     semana «17 Ago – 23 Ago», con «’25» en las de otro año. Una fila
+     menos (7) para que la tarjeta no saque barra.
+
+     **El puntaje NO sigue al deslizamiento, y se decidió con el
+     usuario.** El scroll pasa en el navegador —el servidor no sabe qué
+     semanas están a la vista— y un orden que se reacomoda mientras se
+     desliza pierde la fila que uno seguía. La alternativa real era medir
+     la ventana entera, y se midió antes de ofrecerla: **ninguno de los
+     ocho primeros de hoy queda entre los ocho primeros de 12 meses**
+     (Azúcar Blanca pasa del 1 al 34; arriba quedan Poro, Apio, Huacatay…)
+     y la suma de 52 variaciones da números como 4635. Responde otra
+     pregunta. Por eso el período va escrito en la cabecera de la columna:
+     lo que se ve al deslizar es historia, no entra en el número.
+
+     **La trampa.** Con la historia a la vista, la serie de cierres se
+     calcula una vez para toda la ventana (`_vol_cierres_semanales`) y el
+     puntaje sale de sus últimas 5 — para que la celda y el número digan lo
+     mismo: antes la primera semana de la ventana corta arrancaba a ciegas
+     y una celda podía mostrar «+99%» que el puntaje no contaba. La primera
+     versión sacaba el cierre con un `sort_values` sobre el DataFrame
+     ENTERO y un `groupby().last()`. En el navegador, «Cachema Entera» saltó
+     de **191.8 a 1659.1**: el 10 Ago tiene DOS compras el mismo día, a
+     31.90 y a 3.19 (un punto decimal corrido en el ERP, casi seguro), y
+     «la última» depende del desempate del ordenamiento — que no es estable
+     y cambia con el array que se ordena. El candlestick y `_vol_candidatos`
+     ordenan el subconjunto de la semana; la versión nueva decía otra cosa.
+     El arreglo es usar la MISMA receta (`groupby` conserva el orden de las
+     filas, así que cada semana llega igual al `sort_values`, y el cierre
+     sale de `_vol_ohlc_semana`). Con eso sólo cambian los dos puntajes que
+     tenían que cambiar (Huevo de Corral 53.7 → 153.1 y Pulpa de Camu Camu
+     33.3 → 51.3, los dos por la primera semana sin compra). **Antes de
+     reescribir "más eficiente" un cálculo que ya existe, compararlo contra
+     el viejo sobre datos reales**: los datos sucios son justo los que
+     distinguen dos implementaciones "equivalentes".
+
+     Tres cosas de AG Grid que salieron de esto:
+
+     - **Un botón de Streamlit no puede mover el scroll de la grilla**:
+       vive fuera del iframe y sólo pide un rerun. Las flechas ‹ › que
+       mostraba la maqueta en la cabecera de la tarjeta se mudaron a la
+       cabecera de la columna «Insumo» (`headerComponent` con
+       `params.api`), donde el movimiento es instantáneo.
+       `ensureColumnVisible` y no un `scrollBy` sobre el viewport: AG Grid
+       sincroniza cabecera, cuerpo y barra.
+     - **`columnTypes` para lo que comparten ~52 columnas.** Renderer,
+       formato, estilo y tooltip viajan una vez; cada columna lleva sólo
+       sus datos (`cellRendererParams` con índice y rótulos).
+       `walk_gridOptions` de st_aggrid recorre el dict entero, así que un
+       `JsCode` anidado ahí se evalúa igual.
+     - **`suppressSizeToFit` es lo que frena a una columna fijada, no su
+       piso** (la #384 lo descubrió creciendo; acá hacía falta lo
+       contrario: con 52 semanas el reparto no entra y `sizeColumnsToFit`
+       bajaba «Insumo» a su `minWidth`).
+
+     Y una del banco de pruebas: con el panel del navegador OCULTO, el
+     cuerpo de la grilla quedó en la semana más reciente y la cabecera en
+     la más vieja — desfasados. No es un bug: el documento del iframe no
+     corre sus pasos de render (el mismo síntoma que ya documenta
+     `_AL_MONTAR`) y AG Grid sincroniza la cabecera en uno. Al pedir una
+     captura, que fuerza el render, quedaron alineadas. **Medir scroll en
+     un iframe con el panel oculto da números que no existen.**
+
+     El alto: `RANKING_CON_DRILL` 276 → 261 (32 + 7×30 + 4 + 15 de la
+     barra horizontal, que ahora está siempre: `alwaysShowHorizontalScroll`
+     para que el alto no dependa de cuántas semanas trae la ventana). La
+     tarjeta mide 528 contra 545 a 1366×657; con el panel renderizado se
+     ven 7.03 filas.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -33964,7 +34044,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#385**.
+> próxima regla nueva es la **#386**.
 
 >
 

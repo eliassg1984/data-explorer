@@ -472,6 +472,42 @@ def _pruebas_puras():
     check("_vol_fmt_rango cruza de mes",
           _vol._vol_fmt_rango_semana(pd.Timestamp("2026-06-29")), "29 Jun - 5 Jul")
 
+    # Cabecera de la grilla (2026-09-12): el mes en las dos puntas, y el año
+    # corto sólo en las semanas que terminan en otro año que el de referencia.
+    check("_vol_fmt_cabecera mismo mes",
+          _vol._vol_fmt_semana_cabecera(pd.Timestamp("2026-08-17"), 2026),
+          "17 Ago – 23 Ago")
+    check("_vol_fmt_cabecera cruza de mes",
+          _vol._vol_fmt_semana_cabecera(pd.Timestamp("2026-08-31"), 2026),
+          "31 Ago – 6 Set")
+    check("_vol_fmt_cabecera de otro año lleva el año",
+          _vol._vol_fmt_semana_cabecera(pd.Timestamp("2025-09-08"), 2026),
+          "8 Set – 14 Set ’25")
+    check("_vol_fmt_cabecera que cruza AL año de referencia no lo lleva",
+          _vol._vol_fmt_semana_cabecera(pd.Timestamp("2025-12-29"), 2026),
+          "29 Dic – 4 Ene")
+
+    # La serie de la grilla Y del puntaje: relleno hacia adelante, None sólo
+    # antes de la primera compra, y el cierre es la ÚLTIMA compra válida de
+    # la semana (un 0 no cierra nada).
+    _sems = [pd.Timestamp("2026-06-01"), pd.Timestamp("2026-06-08"),
+             pd.Timestamp("2026-06-15"), pd.Timestamp("2026-06-22")]
+    _dc = pd.DataFrame({
+        "p": ["A", "A", "A", "B"],
+        "precio": [10.0, 12.0, 0.0, 5.0],
+        "f": pd.to_datetime(["2026-06-08", "2026-06-10", "2026-06-17",
+                             "2026-06-01"]),
+    })
+    _dc["_semana"] = (_dc["f"] - pd.to_timedelta(_dc["f"].dt.weekday, unit="D")
+                      ).dt.normalize()
+    _ch = _vol._vol_cierres_semanales(_dc, ["A", "B"], "p", "precio", "f", _sems)
+    check("_vol_cierres: None antes de la primera compra, luego relleno",
+          _ch["A"], [None, 12.0, 12.0, 12.0])
+    check("_vol_cierres: una compra al principio se arrastra",
+          _ch["B"], [5.0, 5.0, 5.0, 5.0])
+    check("_vol_cierres: el puntaje sale de la misma serie",
+          _vol._vol_score(_ch["A"]), 0.0)
+
     # ── Vs año pasado (drill de Compras) ────────────────────────────────
     # Lo que fijan estos asserts NO es aritmética de fechas: es que el año
     # pasado se calcule del propio histórico y no de las columnas

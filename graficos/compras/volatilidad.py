@@ -34,7 +34,8 @@ from graficos.compras._comun import (
 from graficos import periodo
 from graficos import alturas
 from tablas.compras_volatilidad import (
-    ALTO_FILA as ALTO_FILA_RANK, renderizar_ranking_volatilidad,
+    ALTO_FILA as ALTO_FILA_RANK, CROMO_GRID as CROMO_GRID_VOL,
+    renderizar_ranking_volatilidad,
 )
 
 _K_VENTANA = "compras_vol_ventana"
@@ -50,7 +51,7 @@ Streamlit lo re-aplica (arquitectura.md regla #212, medida otra vez acá el
 mismo argumento que `selector_escala`: el dueño del dato es esta clave, y
 el widget es una VISTA que se recalcula de ella en cada render."""
 
-_KEYS_WIDGET = ("compras_vol_q",)
+_KEYS_WIDGET = ("compras_vol_q", "compras_vol_ver")
 """Los controles de esta sección que la escalada NO puede llevarse.
 
 La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo:
@@ -66,7 +67,13 @@ tampoco: vive en `compras_vol_focus`, por el mismo motivo."""
 
 MIN_SEMANAS = 4          # con menos, un candlestick no dice nada
 MAX_SEMANAS = 5
-"""Tope de semanas de la ventana, y NO es un gusto: es el ancho de la celda.
+"""Semanas que MIDE el puntaje (y dibuja el candlestick): las 5 más recientes,
+o sea 4 variaciones. Desde el 2026-09-12 NO son las que muestra la grilla,
+que recorre toda la ventana de la tarjeta hacia atrás; la columna
+«Volatilidad» lleva escrito el período para que eso no se lea mal.
+
+Nació como tope de la ventana entera, y NO era un gusto: era el ancho de la
+celda.
 
 8 -> 5 el 2026-09-07, a pedido — *"deseo que muestre menos días, no se ve el
 precio inicial y el precio final"*. La segunda línea de cada celda (los dos
@@ -105,7 +112,10 @@ def _vol_semanas_ventana(fechas, minimo=MIN_SEMANAS, maximo=MAX_SEMANAS):
     tiene sentido sobre una ventana corta y reciente — más semanas no es
     "más historia útil", es un gráfico ilegible y una volatilidad que
     mezcla huecos de años con movimiento real (ver arquitectura.md).
-    None si hay menos de `minimo` semanas distintas en total."""
+    None si hay menos de `minimo` semanas distintas en total.
+
+    `maximo=None` no recorta: son TODAS las semanas de la ventana, que es lo
+    que recorre la grilla al deslizar hacia atrás (2026-09-12)."""
     fechas = fechas.dropna()
     if fechas.empty:
         return None
@@ -113,7 +123,50 @@ def _vol_semanas_ventana(fechas, minimo=MIN_SEMANAS, maximo=MAX_SEMANAS):
     semanas = sorted(pd.to_datetime(inicios.unique()))
     if len(semanas) < minimo:
         return None
-    return semanas[-maximo:]
+    return semanas if maximo is None else semanas[-maximo:]
+
+
+def _vol_cierres_semanales(d, prods, col_prod, col_punit, col_fecha, semanas):
+    """Cierre (el último precio válido de la semana) de cada producto en cada
+    una de `semanas`, con relleno hacia adelante en las semanas sin compra.
+    Devuelve {producto: [cierre o None, ...]}, pareado con `semanas`; None
+    sólo al principio, antes de la primera compra de la serie.
+
+    Es la serie que dibuja la GRILLA y la que mide el puntaje, y tienen que
+    ser la misma (2026-09-12). Con la historia a la vista, la primera semana
+    de la ventana corta ya no arranca a ciegas: si no hubo compra, su cierre
+    es el último precio conocido, de antes. Si el puntaje siguiera midiendo
+    la ventana corta aislada, la grilla mostraría «+99%» en una celda que el
+    número de «Volatilidad» no cuenta — la tabla contradiciéndose sola.
+
+    EL CIERRE SE SACA IGUAL QUE EN `_vol_candidatos` Y EN EL CANDLESTICK:
+    el subconjunto de la semana en su orden original, `sort_values` por
+    fecha y `_vol_ohlc_semana`. No es un detalle. Con dos compras el MISMO
+    día, «la última» depende del desempate del ordenamiento, y la primera
+    versión de esta función (un `sort_values` sobre el DataFrame entero y
+    un `groupby().last()`) desempataba distinto: «Cachema Entera» tiene el
+    10 Ago una compra a 31.90 y otra a 3.19 —un punto decimal corrido, con
+    toda probabilidad— y el cierre salía 3.19 donde la vela decía 31.90; el
+    puntaje saltaba de 191.8 a 1659.1. Medido en el navegador, 2026-09-12.
+    `groupby` conserva el orden de las filas dentro de cada grupo, así que
+    cada semana llega al `sort_values` igual que por el filtro de siempre."""
+    out = {p: [None] * len(semanas) for p in prods}
+    pos = {s: i for i, s in enumerate(semanas)}
+    sub = d[d[col_prod].isin(list(prods))]
+    for p, g in sub.groupby(col_prod, sort=False):
+        propios = {}
+        for sem, gs in g.groupby("_semana", sort=False):
+            if sem in pos:
+                ohlc = _vol_ohlc_semana(gs.sort_values(col_fecha)[col_punit].tolist())
+                if ohlc:
+                    propios[pos[sem]] = ohlc["c"]
+        prev, cierres = None, []
+        for i in range(len(semanas)):
+            if i in propios:
+                prev = propios[i]
+            cierres.append(prev)
+        out[p] = cierres
+    return out
 
 
 def _vol_ohlc_semana(precios_ordenados):
@@ -151,9 +204,10 @@ vista."""
 
 
 def _vol_fmt_semana_corta(ini):
-    """La semana nombrada por su lunes: "27 Jul". Es la etiqueta de la
-    CABECERA de la grilla y también la del eje X del candlestick — el mismo
-    texto en los dos sitios, a propósito.
+    """La semana nombrada por su lunes: "27 Jul". Es la etiqueta del eje X
+    del candlestick. Hasta el 2026-09-12 también era la de la CABECERA de la
+    grilla; desde entonces la grilla rotula la semana entera
+    (`_vol_fmt_semana_cabecera`), porque sus columnas pasaron a 120px.
 
     Nació el 2026-09-07, al mudar el drill al costado: con la columna en
     ~50px, "27 Jul - 2 Ago" envolvía en CUATRO renglones y la cabecera de la
@@ -161,6 +215,26 @@ def _vol_fmt_semana_corta(ini):
     entero sigue estando en el tooltip de cada celda, que es donde hace
     falta leerlo con precisión."""
     return f"{ini.day} {_MESES_CORTO[ini.month - 1]}"
+
+
+def _vol_fmt_semana_cabecera(ini, anio_ref=None):
+    """Rótulo de una columna-semana de la grilla: «17 Ago – 23 Ago», el mes
+    escrito en las DOS puntas aunque sea el mismo (2026-09-12, a pedido y
+    sobre una maqueta: «17Ago-23Ago»).
+
+    Si la semana termina en un año que no es `anio_ref` (el de la semana más
+    reciente) lleva el año corto: «8 Set – 14 Set ’25». Con la historia a la
+    vista la grilla recorre más de un año, y sin eso dos columnas del mismo
+    día y mes se leerían como la misma semana. Una semana que cruza al año de
+    referencia («29 Dic – 4 Ene») no lo lleva: se lee sola.
+
+    Mide ~95px a 11px en el peor caso, dentro de los 120 de la columna."""
+    fin = ini + pd.Timedelta(days=6)
+    txt = (f"{ini.day} {_MESES_CORTO[ini.month - 1]} – "
+           f"{fin.day} {_MESES_CORTO[fin.month - 1]}")
+    if anio_ref is not None and fin.year != anio_ref:
+        txt += f" ’{fin.year % 100:02d}"
+    return txt
 
 
 def _vol_fmt_rango_semana(ini):
@@ -198,12 +272,18 @@ def _vol_candidatos(d, col_prod, col_punit, col_fecha, col_valor, semanas,
 
 
 def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
-                          col_cant, semanas):
+                          col_cant, semanas, cierre_previo=None):
     """OHLC + filas de compra (fecha, proveedor, cantidad, precio) por
-    semana, para UN producto ya elegido."""
+    semana, para UN producto ya elegido.
+
+    `cierre_previo` es el último precio conocido ANTES de la primera de
+    `semanas`. Sin él, una primera semana sin compras dibujaba una vela
+    plana en S/ 0 —el eje bajaba a «S/ −10» para mostrarla— y el KPI
+    «Cambio» se quedaba sin base. Llega de la misma serie que dibuja la
+    grilla (`_vol_cierres_semanales`), 2026-09-12."""
     g = d[d[col_prod] == prod]
     weeks = []
-    prev_close = None
+    prev_close = cierre_previo
     for sem in semanas:
         sub = g[g["_semana"] == sem].sort_values(col_fecha)
         ohlc = _vol_ohlc_semana(sub[col_punit].tolist())
@@ -345,6 +425,20 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                                    placeholder="Buscar insumo…",
                                    label_visibility="collapsed").strip().lower()
 
+            # ── La columna «Volatilidad», a pedido y no siempre ──────────
+            # 2026-09-12: «que la columna de volatilidad no figure siempre
+            # visible sino sea consultable». Arranca oculta; esta pastilla la
+            # prende y la apaga. Sin ella el puntaje sigue a mano en el
+            # tooltip del nombre del insumo, y el orden de la tabla no cambia.
+            #
+            # `st.pills` de UNA opción y no un `st.toggle`: se lee como un
+            # botón que queda marcado, que es lo que es. Va en `_KEYS_WIDGET`
+            # por lo de siempre (la escalada de fecha la borraría, #373).
+            with st.container(key="vol_hdr_ver"):
+                _ver_vol = st.pills(
+                    "Mostrar", ["Volatilidad"], key="compras_vol_ver",
+                    label_visibility="collapsed") == "Volatilidad"
+
             # ── Cómo se lee la vista: un ícono, no dos captions ──────────
             # Acá había DOS `st.caption` EN FLUJO —uno bajo la grilla y
             # otro bajo el candlestick— que sumaban ~83px con sus gaps para
@@ -372,12 +466,20 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                             "hacia dónde." + PARR
                             + "Cada celda compara el **cierre** (la última "
                             "compra) de esa semana contra el de la semana "
-                            "anterior, así que los dos precios de la segunda "
-                            "línea son de semanas DISTINTAS — el tooltip de "
+                            "anterior, así que los dos precios al costado "
+                            "del % son de semanas DISTINTAS — el tooltip de "
                             "la celda las nombra. El % va redondeado a "
                             "entero; los precios, no. Las compras "
-                            "intermedias se ven a la derecha, en el "
-                            "candlestick y en su tabla."
+                            "intermedias se ven abajo, en el candlestick y "
+                            "en su tabla."
+                            + PARR
+                            + "Deslizá la tabla hacia la izquierda (o usá "
+                            "‹ › junto a «Insumo») para ver semanas "
+                            "anteriores: son historia, no entran en el "
+                            "puntaje, y el orden no cambia. El botón "
+                            "**Volatilidad** muestra la columna del "
+                            "puntaje; sin ella, se consulta pasando el "
+                            "mouse sobre el nombre del insumo."
                             + PARR
                             + "Clic en una fila para ver su candlestick; "
                             "clic en una vela, para las compras de esa "
@@ -419,29 +521,69 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         dd = dd.dropna(subset=[col_fecha, col_prod])
         dd = dd[dd[col_prod].astype(str).str.strip() != ""]
 
-        semanas = _vol_semanas_ventana(dd[col_fecha])
-        if not semanas:
+        # ── DOS JUEGOS DE SEMANAS, Y NO SE MEZCLAN ───────────────────────
+        # 2026-09-12, a pedido: «que la tabla se pueda deslizar en horizontal
+        # para ver períodos de atrás». `semanas_hist` son TODAS las de la
+        # ventana de la tarjeta (12m por defecto: 53) y es lo que recorre la
+        # grilla; `semanas` son las `MAX_SEMANAS` más recientes, y es lo que
+        # MIDEN el puntaje, el filtro de candidatos y el candlestick.
+        #
+        # Deslizar hacia atrás NO cambia el puntaje ni el orden, a propósito
+        # y con el usuario: el deslizamiento pasa en el navegador —el
+        # servidor no sabe qué semanas están a la vista— y un orden que se
+        # reacomoda mientras se desliza pierde de vista la fila que uno
+        # seguía. Medir la ventana entera se evaluó con datos reales y
+        # responde otra pregunta: ninguno de los ocho primeros de hoy queda
+        # entre los ocho primeros de 12 meses. Por eso la columna
+        # «Volatilidad» lleva escrito el período que mide.
+        semanas_hist = _vol_semanas_ventana(dd[col_fecha], maximo=None)
+        if not semanas_hist:
             st.info(f"Necesitás al menos 4 semanas de compras en "
                     f"{periodo.etiqueta(_op_vol) or 'el rango elegido'} para "
                     f"armar un candlestick. Probá una ventana más amplia con el "
                     f"selector del título.")
             return
+        semanas = semanas_hist[-MAX_SEMANAS:]
         dd["_semana"] = (dd[col_fecha] - pd.to_timedelta(
             dd[col_fecha].dt.weekday, unit="D")).dt.normalize()
-        dd = dd[dd["_semana"].isin(semanas)]
+        dd_rec = dd[dd["_semana"].isin(semanas)]
 
-        candidatos = _vol_candidatos(dd, col_prod, col_punit, col_fecha, col_valor, semanas)
+        candidatos = _vol_candidatos(dd_rec, col_prod, col_punit, col_fecha,
+                                     col_valor, semanas)
         if not candidatos:
             st.info(f"Ningún insumo tiene compras regulares (≥75% de las "
                     f"semanas) y gasto relevante (≥ S/ 400) en "
                     f"{periodo.etiqueta(_op_vol) or 'el rango elegido'}.")
             return
 
+        # El puntaje se mide sobre la MISMA serie que dibuja la grilla: la
+        # de toda la ventana, recortada a sus últimas `MAX_SEMANAS`. Ver
+        # `_vol_cierres_semanales` para lo que cambia (una primera semana
+        # sin compra ya no arranca a ciegas).
+        cierres_hist = _vol_cierres_semanales(dd, list(candidatos), col_prod,
+                                              col_punit, col_fecha, semanas_hist)
+        for prod, info in candidatos.items():
+            info["cierres_hist"] = cierres_hist[prod]
+            info["volatilidad"] = _vol_score(cierres_hist[prod][-len(semanas):])
+
         ranking = sorted(candidatos.items(), key=lambda kv: -kv[1]["volatilidad"])
+        puesto = {p: k for k, (p, _) in enumerate(ranking, 1)}
 
         n_sem = len(semanas)
-        labels_todas = [_vol_fmt_rango_semana(s) for s in semanas]
-        cols_sem = labels_todas[1:]
+        _fin_vol = semanas[-1] + pd.Timedelta(days=6)
+        periodo_vol = (f"{semanas[0].day} {_MESES_CORTO[semanas[0].month - 1]}"
+                       f" – {_fin_vol.day} {_MESES_CORTO[_fin_vol.month - 1]}")
+        anio_ref = (semanas_hist[-1] + pd.Timedelta(days=6)).year
+        # Una entrada por columna-semana: la columna compara el cierre de
+        # `semanas_hist[i + 1]` contra el de `semanas_hist[i]`. El nombre de
+        # la columna es la FECHA y no el rótulo: con más de un año a la
+        # vista, dos rótulos pueden coincidir, y el nombre es la clave del
+        # DataFrame.
+        cols_sem = [{"col": f"s_{s:%Y%m%d}",
+                     "hdr": _vol_fmt_semana_cabecera(s, anio_ref),
+                     "lp": _vol_fmt_semana_cabecera(semanas_hist[i], anio_ref),
+                     "lc": _vol_fmt_semana_cabecera(s, anio_ref)}
+                    for i, s in enumerate(semanas_hist[1:])]
 
         ranking_vista = [(p, info) for p, info in ranking
                          if not _q or _q in str(p).lower()]
@@ -479,14 +621,20 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         else:
             filas = []
             for prod, info in ranking_vista:
-                cierres = info["cierres"]
+                cierres = info["cierres_hist"]
                 fila = {"Insumo": _compras_truncar(str(prod), 34),
-                        "__insumo_full": str(prod)}
-                for i, col in enumerate(cols_sem):
+                        "__insumo_full": str(prod),
+                        # El tooltip del nombre: con la columna oculta, es
+                        # la forma de consultar el puntaje sin prenderla.
+                        "__tip_insumo": (
+                            f"{prod}\nVolatilidad {info['volatilidad']:.1f}"
+                            f" · puesto {puesto[prod]} de {len(ranking)}"
+                            f" · {periodo_vol}")}
+                for i, c in enumerate(cols_sem):
                     prev, cur = cierres[i], cierres[i + 1]
                     delta = (None if (prev is None or cur is None or not prev)
                              else (cur - prev) / prev * 100)
-                    fila[col] = delta
+                    fila[c["col"]] = delta
                     fila[f"__prev_{i}"] = prev
                     fila[f"__cur_{i}"] = cur
                 fila["Volatilidad"] = info["volatilidad"]
@@ -499,12 +647,12 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # buscador no puede desalinear un índice viejo contra la fila
             # nueva (arquitectura.md regla #130).
             _clicked = renderizar_ranking_volatilidad(
-                tv, cols_sem, labels_todas[:-1],
-                [_vol_fmt_semana_corta(s) for s in semanas[1:]],
+                tv, cols_sem,
                 altura=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
-                                         extra=40, minimo=0,
+                                         extra=CROMO_GRID_VOL, minimo=0,
                                          rol=alturas.RANKING_CON_DRILL),
                 key="compras_vol_rank_grid",
+                ver_vol=_ver_vol, periodo_vol=periodo_vol, n_sem=n_sem,
             )
             if _clicked is not None:
                 prod_focus = _clicked
@@ -518,18 +666,22 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             st.session_state["compras_vol_last_click"] = None
 
         _ayuda_alcance.markdown(
-            f"Familia Alimentos · **{n_sem} semanas** · sólo insumos con "
-            "≥ S/ 400 de gasto y compras en al menos el 75% de las semanas "
-            "del rango.")
+            f"Volatilidad de las **últimas {n_sem} semanas** "
+            f"({periodo_vol}), o sea sus {n_sem - 1} variaciones · sólo "
+            "insumos con ≥ S/ 400 de gasto y compras en al menos el 75% de "
+            "esas semanas.")
 
-        unidad_raw = str(dd.loc[dd[col_prod] == prod_sel, col_um].mode().iat[0]) \
-            if col_um and col_um in dd.columns and not dd.loc[dd[col_prod] == prod_sel, col_um].empty \
+        unidad_raw = str(dd_rec.loc[dd_rec[col_prod] == prod_sel, col_um].mode().iat[0]) \
+            if col_um and col_um in dd_rec.columns and not dd_rec.loc[dd_rec[col_prod] == prod_sel, col_um].empty \
             else "kg"
         unidad = {"KILOS": "kg", "KG": "kg", "LITROS": "L", "LT": "L", "UND": "und"}.get(
             unidad_raw.upper(), unidad_raw.lower())
 
-        weeks = _vol_detalle_producto(dd, prod_sel, col_prod, col_punit, col_fecha,
-                                      col_prov, col_cant, semanas)
+        _ch = candidatos[prod_sel]["cierres_hist"]
+        weeks = _vol_detalle_producto(
+            dd_rec, prod_sel, col_prod, col_punit, col_fecha, col_prov,
+            col_cant, semanas,
+            cierre_previo=_ch[-len(semanas) - 1] if len(_ch) > len(semanas) else None)
 
         # ── LA FILA DE ABAJO: VELAS | SEMANA, MITAD Y MITAD ──────────────
         # 2026-09-12, a pedido (ver el bloque del ranking, más arriba). Cada
@@ -595,7 +747,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 f'<span title="Cambio total entre la primera y la ultima semana">'
                 f'<i>Cambio</i><b style="color:{color_cambio};">'
                 f'{_sig}{abs(cambio_total):.1f}%</b></span>'
-                f'<span title="Volatilidad: suma de las variaciones % semanales">'
+                f'<span title="Volatilidad: suma de las variaciones % '
+                f'semanales de las ultimas {n_sem} semanas ({periodo_vol})">'
                 f'<i>Volatilidad</i><b>{vol_total:.1f}</b></span>'
                 f'</span></div>',
                 unsafe_allow_html=True,

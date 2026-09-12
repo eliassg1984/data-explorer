@@ -22,26 +22,32 @@ un índice de fila que se pueda desalinear contra la lista filtrada.
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from tema import (
-    ACENTO, CELDA_POS_TEXTO, ERROR, ERROR_FONDO, ERROR_TEXTO, EXITO,
-    EXITO_FONDO, GRIS_TEXTO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, ERROR, ERROR_FONDO,
+    ERROR_TEXTO, EXITO, EXITO_FONDO, GRIS_LINEA, GRIS_TEXTO, LAVANDA_BORDE,
+    TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
 
-# EL REPARTO: un ancho DECLARADO por columna, que AG Grid escala para
-# llenar la grilla respetando cada `minWidth`. O sea que esto es una
-# PROPORCION, no pixeles: 120 contra los 80 de «Volatilidad» y los 150 de
-# «Insumo». Quien lo dispara es `_AL_MONTAR`, mas abajo.
+# EL REPARTO. Sólo las columnas-semana se reparten: «Insumo» y «Volatilidad»
+# llevan `suppressSizeToFit` y miden lo que dicen sus constantes. Con pocas
+# semanas (una ventana corta) las columnas-semana se estiran hasta llenar la
+# grilla; con muchas —la historia de 12m son ~52— quedan en su piso y la
+# grilla se desliza. Quien lo dispara es `_AL_MONTAR`, más abajo.
 #
 # 98 -> 120 el 2026-09-12, con el piso: un ancho declarado POR DEBAJO de su
 # `minWidth` hace que AG Grid arranque la columna en el piso y reparta el
-# resto con una proporcion que ya no es la escrita aca.
+# resto con una proporción que ya no es la escrita acá.
 _ANCHO_COL_SEMANA = 120
-_ANCHO_COL_VOL = 80
-"""Peso de «Volatilidad» en el reparto. Bajo de 92 a 80 el 2026-09-07: es la
-unica columna cuyo contenido no crece con el ancho de la ventana -- «12402.5»
-mide ~46px y la cabecera 66 -- asi que lo que se le saque va a las siete
-semanas, que son las que estaban apretadas."""
+_ANCHO_COL_VOL = 104
+"""Ancho FIJO de «Volatilidad», fijada a la derecha. Lo manda su cabecera de
+dos renglones: el período de abajo («10 Ago – 13 Set», ~80px a 10px) más
+los 12 del padding de `_PAD_X_COL`, con aire. El número más grande que hay
+hoy en el parquet, «12402.5», mide ~46.
+
+Era un PESO en el reparto (80, con piso de 78) mientras la columna era la
+última de la grilla y competía por el ancho con las semanas. Desde el
+2026-09-12 va fijada y oculta por defecto: no compite con nadie."""
 
 _MIN_ANCHO_COL_SEMANA = 120
 """Piso de una columna-semana, y la cuenta que lo fija.
@@ -69,29 +75,21 @@ el `overflow: hidden` de la celda se comia el principio del numero:
 NUMERO. Si la grilla se angosta tanto que ni los pisos entran, AG Grid saca
 scroll horizontal: feo, pero visible."""
 
-_ANCHO_COL_INSUMO = 150
-"""Ancho declarado de «Insumo», que ademas va `pinned` y con el mismo valor
-de piso.
+_ANCHO_COL_INSUMO = 240
+"""Ancho FIJO de «Insumo» (`suppressSizeToFit`), fijada a la izquierda. 240
+son los 34 caracteres a los que `volatilidad.py` trunca el nombre, a 13px,
+más el espacio de las flechas ‹ › de la cabecera; el nombre entero sigue en
+el tooltip.
 
-El piso NO es un techo, y aca decia lo contrario hasta el 2026-09-12: que
+El piso NO es un techo, y acá decía lo contrario hasta el 2026-09-12: que
 con `width == minWidth` "el reparto no le da ni le saca nada". Le saca no,
-pero le DA: `sizeColumnsToFit` escala tambien a la columna fijada, y con la
-grilla a todo el ancho de la tarjeta (1231px a 1400 de ventana) «Insumo»
-mide 257, medido. Es lo que conviene — con el ancho sobrado, el nombre
-entero de 34 caracteres entra sin tooltip —, pero es una consecuencia del
-reparto proporcional, no algo que este numero impida.
+pero le DA: `sizeColumnsToFit` escala también a la columna fijada, y con la
+grilla a todo el ancho de la tarjeta «Insumo» llegó a medir 257. Lo que la
+frena es `suppressSizeToFit` (o `maxWidth`), no su piso — y hace falta
+frenarla desde que la grilla se desliza: con ~52 semanas el reparto no
+entra y `sizeColumnsToFit` la bajaría a su piso.
 
-Era 170 y bajo a 150 el 2026-09-07, cuando la grilla media 587px y los 20px
-eran los que le faltaban a las columnas-semana para llegar a su piso."""
-
-_MIN_ANCHO_COL_VOL = 78
-"""Piso de la columna «Volatilidad». No lo tenia, y con el drill al lado del
-ranking (2026-09-07) AG Grid la escalaba hasta 46px: la cabecera salia como
-una torre de letras («Vol / atil / ida / d») y el valor como «1...». Es la
-columna que le da nombre a la vista, asi que es la ultima que puede ceder.
-
-78 = 66 del texto «Volatilidad» a 11px + los 12 del padding de `_PAD_X_COL`.
-El valor mas grande que hay hoy en el parquet, «12402.5», mide ~46."""
+Era 170 y bajó a 150 el 2026-09-07, cuando la grilla medía 587px."""
 
 # Alto de fila: UN renglon, el % y los dos precios al costado. 13.8px de
 # texto (12px a line-height 1.15); el resto es el aire de la celda y los 3+3
@@ -357,51 +355,174 @@ el tooltip y la tarjeta de al lado, donde hay ancho."""
 
 
 _TOOLTIP_INSUMO = JsCode(
-    "function(params){ return params.data ? params.data['__insumo_full'] : ''; }")
+    "function(params){ return params.data ? params.data['__tip_insumo'] : ''; }")
+"""El nombre entero y, debajo, el puntaje con su puesto y su período. Es la
+forma de CONSULTAR la volatilidad con la columna oculta (2026-09-12). El
+texto lo arma Python y viaja en la fila (`__tip_insumo`), no en el código:
+datos adentro de un `JsCode` es la regla #226."""
 
 
-def _tooltip_delta(idx, label_prev, label_cur):
-    """Cierre de la semana ANTERIOR → cierre de ESTA semana: las dos cifras
-    que explican el % de la celda (el delta es cierre a cierre, no
-    apertura/cierre de la MISMA semana -- eso ya lo muestra el candlestick
-    de abajo al hacer clic en la fila)."""
-    return JsCode(f"""
-        function(params) {{
-            var prev = params.data['__prev_{idx}'];
-            var cur = params.data['__cur_{idx}'];
-            if (prev == null || cur == null) return '';
-            var fmt = function(v) {{
-                return 'S/ ' + Number(v).toLocaleString('es-PE',
-                    {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
-            }};
-            return '{label_prev}: ' + fmt(prev) + ' \\u2192 {label_cur}: ' + fmt(cur);
-        }}
-    """)
+_TOOLTIP_DELTA = JsCode("""
+    function(params) {
+        var cp = params.colDef.cellRendererParams || {};
+        var d = params.data || {};
+        var prev = d['__prev_' + cp.idx];
+        var cur = d['__cur_' + cp.idx];
+        if (prev == null || cur == null) return '';
+        var fmt = function(v) {
+            return 'S/ ' + Number(v).toLocaleString('es-PE',
+                {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        };
+        return cp.lp + ': ' + fmt(prev) + ' \\u2192 ' + cp.lc + ': ' + fmt(cur);
+    }
+""")
+"""Cierre de la semana ANTERIOR → cierre de ESTA semana: las dos cifras que
+explican el % de la celda (el delta es cierre a cierre, no apertura/cierre
+de la MISMA semana -- eso lo muestra el candlestick de abajo).
+
+UNO SOLO para todas las columnas desde el 2026-09-12: los rótulos de las dos
+semanas llegan por `cellRendererParams` (`lp`/`lc`), igual que el índice.
+Era una fábrica que interpolaba los rótulos en el código, un `JsCode` por
+columna; con la historia a la vista son ~52 columnas y cada una habría
+viajado con su copia de la función."""
 
 
 _CLASE_HDR_COMPACTA = "vol-hdr-compacta"
-"""Clase que llevan las cabeceras de las columnas angostas (las 7 semanas y
-Volatilidad). El CSS que la acompaña se arma en `renderizar_ranking_volatilidad`
-y viaja por `custom_css`, o sea DENTRO del iframe del grid: no hay forma de
-que se escape a otra tabla."""
+"""Clase que llevan las cabeceras de las columnas-semana y de Volatilidad. El
+CSS que la acompaña se arma en `renderizar_ranking_volatilidad` y viaja por
+`custom_css`, o sea DENTRO del iframe del grid: no hay forma de que se
+escape a otra tabla."""
+
+_PASO_NAV = 4
+"""Cuántas semanas corre cada flecha ‹ › de la cabecera de «Insumo». Cuatro
+es lo que se lee de un vistazo en la grilla a todo el ancho (entran ~8), así
+que cada clic deja a la vista la mitad de lo que se veía: se sabe de dónde
+se viene."""
+
+_HDR_INSUMO = JsCode("""
+class HdrInsumo {
+    init(p) {
+        this.p = p;
+        var g = this.eGui = document.createElement('div');
+        g.style.display = 'flex';
+        g.style.alignItems = 'center';
+        g.style.gap = '2px';
+        g.style.width = '100%';
+        var t = document.createElement('span');
+        t.className = 'ag-header-cell-text';
+        t.textContent = p.displayName;
+        t.style.flex = '1 1 auto';
+        g.appendChild(t);
+        var self = this;
+        [['\\u2039', -1, 'Semanas anteriores'],
+         ['\\u203a', 1, 'Semanas siguientes']].forEach(function (b) {
+            var e = document.createElement('button');
+            e.type = 'button';
+            e.className = 'vol-nav';
+            e.textContent = b[0];
+            e.title = b[2];
+            e.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                self.mover(b[1]);
+            });
+            g.appendChild(e);
+        });
+    }
+    mover(dir) {
+        var api = this.p.api;
+        var cols = api.getAllDisplayedColumns().filter(function (c) {
+            return !c.getPinned();
+        });
+        if (!cols.length) return;
+        var r = api.getHorizontalPixelRange();
+        var i;
+        if (dir < 0) {
+            i = cols.findIndex(function (c) { return c.getLeft() >= r.left - 1; });
+            if (i < 0) i = 0;
+            api.ensureColumnVisible(cols[Math.max(0, i - __PASO__)], 'start');
+        } else {
+            i = cols.findIndex(function (c) {
+                return c.getLeft() + c.getActualWidth() > r.right + 1;
+            });
+            if (i < 0) return;
+            api.ensureColumnVisible(
+                cols[Math.min(cols.length - 1, i + __PASO__ - 1)], 'end');
+        }
+    }
+    getGui() { return this.eGui; }
+}
+""".replace("__PASO__", str(_PASO_NAV)))
+"""La cabecera de «Insumo», con las flechas para recorrer las semanas.
+
+Viven ACÁ y no en la cabecera de la tarjeta (donde las mostraba la maqueta
+del 2026-09-12) porque tienen que mover el scroll de la grilla, y la grilla
+corre en un iframe: un botón de Streamlit sólo puede pedir un rerun, que
+tarda segundos y vuelve a montar la vista. Desde la cabecera de una columna
+las flechas tienen `params.api` a mano y el movimiento es instantáneo.
+
+`ensureColumnVisible` y no `scrollBy` sobre el viewport: AG Grid sincroniza
+tres contenedores (cabecera, cuerpo y la barra horizontal) y mover sólo uno
+los desfasa. `getHorizontalPixelRange` dice qué tramo está a la vista.
+
+`class` con `init`/`getGui` por lo mismo que `_RENDER_DELTA` (regla #25)."""
+
+_HDR_VOL = JsCode("""
+class HdrVol {
+    init(p) {
+        var g = this.eGui = document.createElement('div');
+        g.style.display = 'flex';
+        g.style.flexDirection = 'column';
+        g.style.alignItems = 'flex-end';
+        g.style.justifyContent = 'center';
+        g.style.width = '100%';
+        g.style.lineHeight = '1.15';
+        var a = document.createElement('span');
+        a.className = 'ag-header-cell-text';
+        a.textContent = p.displayName;
+        var b = document.createElement('span');
+        b.className = 'vol-hdr-periodo';
+        b.textContent = p.periodo || '';
+        g.appendChild(a);
+        g.appendChild(b);
+    }
+    getGui() { return this.eGui; }
+}
+""")
+"""«Volatilidad» y, debajo, el período que mide (2026-09-12, a pedido: «un
+texto en la columna volatilidad que diga el tiempo sobre el que está
+calculado»). Hace falta desde que la grilla se desliza hacia atrás: las
+semanas viejas quedan a la vista pero NO entran en el número, y sin el
+período escrito la columna parecería resumir todo lo que se ve.
+
+Un componente y no `wrapHeaderText`: el partido del texto lo decidiría el
+ancho, y «Volatilidad 10 Ago» / «– 13 Set» corta el período por la mitad.
+El período llega por `headerComponentParams`, no interpolado."""
 
 
 def _style_vol(max_vol):
-    """Barra de volatilidad como gradiente CSS de dos colores, cortado en
-    `pct`% -- mismo truco que el `_sty_vol_bar` de Styler que reemplaza,
-    ahora como `cellStyle` (patrón ya usado por `ajuste_pivote.py`/
-    `compras.py`, ver arquitectura.md)."""
+    """La barra de volatilidad, FINA: el número sobre blanco y una raya de
+    3px abajo, larga en proporción al máximo de la tabla.
+
+    Hasta el 2026-09-12 era un degradé de `ACENTO` que pintaba la celda
+    entera, con el número en gris oscuro encima — en los primeros puestos,
+    los que más importan, la barra llenaba la celda y el número casi no se
+    leía («ese color que oscurece el número», pedido con captura). Se
+    maquetaron tres variantes y se eligió ésta."""
     return JsCode(f"""
         function(params) {{
             if (params.value === null || params.value === undefined) return {{}};
             var pct = Math.round(Number(params.value) / {max_vol} * 100);
             return {{
-                background: 'linear-gradient(90deg, {ACENTO} ' + pct + '%, {LAVANDA_FONDO} ' + pct + '%)',
+                backgroundColor: '{BLANCO}',
+                backgroundImage: 'linear-gradient(90deg, {ACENTO} ' + pct
+                    + '%, {GRIS_LINEA} ' + pct + '%)',
+                backgroundSize: '100% 3px',
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: '0 calc(100% - 5px)',
+                backgroundOrigin: 'content-box',
+                color: '{ACENTO_TEXTO_OSCURO}',
                 fontWeight: '600',
-                // El mismo padding que las celdas-semana, y por el mismo
-                // motivo: con los 15px por lado del tema, en una columna
-                // angosta «111.2» salia «1...». Ver `_PAD_X_SEMANA`.
-                padding: '{_PAD_X_SEMANA}'
+                padding: '0 {_PAD_X_COL}'
             }};
         }}
     """)
@@ -409,115 +530,153 @@ def _style_vol(max_vol):
 
 _AL_MONTAR = JsCode("""
     function(params) {
+        var alFinal = function () {
+            try {
+                var cols = params.api.getAllDisplayedColumns().filter(
+                    function (c) { return !c.getPinned(); });
+                if (cols.length) {
+                    params.api.ensureColumnVisible(cols[cols.length - 1], 'end');
+                }
+            } catch (e) {}
+        };
         try {
             var caja = document.getElementById('gridContainer');
-            if (!caja || !window.ResizeObserver) return;
-            new ResizeObserver(function () {
-                try { params.api.sizeColumnsToFit(); } catch (e) {}
-            }).observe(caja);
+            if (caja && window.ResizeObserver) {
+                var primera = true;
+                new ResizeObserver(function () {
+                    try { params.api.sizeColumnsToFit(); } catch (e) {}
+                    if (primera) { primera = false; alFinal(); }
+                }).observe(caja);
+            }
         } catch (e) {}
+        setTimeout(alFinal, 0);
     }
 """)
-"""Re-reparte las columnas cada vez que cambia el ANCHO de la grilla.
+"""Al montar: re-reparte las columnas cada vez que cambia el ANCHO de la
+grilla, y abre la grilla en la semana MÁS RECIENTE.
 
-Tres mecanismos se probaron para esto el 2026-09-07 y dos no sirven, asi que
-conviene dejar por que:
+LO SEGUNDO es del 2026-09-12: con la historia de la ventana a la vista (53
+semanas en 12m) la grilla es mucho más ancha que la tarjeta, y sin esto
+abriría en la semana más vieja — lo contrario de lo que se viene a mirar.
+Se hace una sola vez, al montar: un rerun no vuelve a montar la grilla (la
+key no cambia), así que no le roba al usuario la semana a la que había ido.
+
+LO PRIMERO, y por qué es `onGridReady`. Tres mecanismos se probaron el
+2026-09-07 y dos no sirven:
 
   * `autoSizeStrategy: fitGridWidth` (lo que pone `GridOptionsBuilder` por
     defecto) reparte UNA vez, en `onFirstDataRendered`. Plegar el rail de la
-    izquierda ensancha la columna de Streamlit de 587 a 731px sin volver a
-    montar la grilla: se quedaba repartida a 587, con ~160px de vacio a la
-    derecha -- la mitad del "las columnas se ven apretadas" que reporto el
-    usuario. Al reves (desplegar el rail) el sobrante se vuelve scroll
-    horizontal.
-  * `colDef.flex` reparte solo en cada resize, que es exactamente lo que
-    hace falta, PERO se calcula al montar y si el cuerpo mide 0 se queda en
-    el ancho por defecto (200px) para siempre. Esta vista es una
-    `seccion_perezosa`, o sea que se construye fuera de pantalla: dos
-    renders del mismo codigo dieron 48.6px y 200px de columna segun donde
-    estuviera el scroll.
+    izquierda ensancha la columna de Streamlit sin volver a montar la
+    grilla: se quedaba repartida al ancho viejo.
+  * `colDef.flex` reparte solo en cada resize, PERO se calcula al montar y
+    si el cuerpo mide 0 se queda en el ancho por defecto (200px) para
+    siempre. Esta vista es una `seccion_perezosa`: se construye fuera de
+    pantalla.
   * `onGridSizeChanged` no llega: st_aggrid registra SU PROPIO listener del
-    evento (`this.state.api.addEventListener("gridSizeChanged", ...)`, en el
-    bundle del componente) y, a diferencia de lo que hace con `onGridReady`,
-    no llama al del usuario.
+    evento y, a diferencia de lo que hace con `onGridReady`, no llama al del
+    usuario.
 
-Queda `onGridReady`, que el componente SI reenvia (`let {onGridReady: o} =
-this.state.gridOptions; o && o(e)`), y desde ahi un `ResizeObserver` sobre
-`#gridContainer` -- el div que st_aggrid dibuja dentro del iframe y que
-`estilos/_80_cards.py` + el `custom_css` de mas abajo estiran al ancho real
-de la columna. `sizeColumnsToFit` respeta los `minWidth`, asi que el reparto
-nunca baja de los pisos; si ni los pisos entran, sale scroll horizontal.
-
-LO QUE ESTA MEDIDO Y LO QUE NO, que es justo la clase de cosa que despues
-nadie recuerda: que este `onGridReady` CORRE y deja el observer puesto se
-comprobo en el navegador (una marca en el DOM del iframe). Que el observer
-DISPARE no se pudo comprobar ahi: en la sesion instrumentada el documento
-del iframe no estaba corriendo sus pasos de render -- ni `ResizeObserver` ni
-`window.onresize` entregaban nada, tampoco al cambiar el tamano de la
-ventana entera, que es sintoma del navegador automatizado y no de Streamlit
-(AG Grid usa el mismo mecanismo para su propio relayout). O sea: el reparto
-AL MONTAR esta verificado a 587 y a 731px; el re-reparto tardio, no.
-
-Si algun dia se ve que no re-reparte en un navegador de verdad, el plan B
-medido es un `setInterval` que compare `clientWidth`: los timers si corren."""
+Queda `onGridReady`, que el componente SI reenvia, y desde ahi un
+`ResizeObserver` sobre `#gridContainer`. `sizeColumnsToFit` respeta los
+`minWidth` y no toca las columnas con `suppressSizeToFit` («Insumo» y
+«Volatilidad»): con pocas semanas éstas se estiran hasta llenar; con
+muchas, quedan en su piso y sale scroll horizontal, que es el mecanismo
+para ir hacia atrás."""
 
 
-def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
-                                   key):
+CROMO_GRID = 32 + 4 + 15
+"""Alto de la grilla que NO son filas: la cabecera (32), los bordes (4) y la
+barra de scroll horizontal (15), que desde el 2026-09-12 está siempre — la
+grilla recorre toda la ventana de la tarjeta. Sin sumarla, la barra se come
+media fila de la última línea visible. Es el `extra` de `por_filas` en el
+llamador."""
+
+
+def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
+                                   periodo_vol="", n_sem=None):
     """`tv`: columnas Insumo, __insumo_full (oculta, nombre sin truncar),
-    una columna FLOAT por semana (nombrada con su etiqueta de fecha,
-    p.ej. "15-21 Jun"), __prev_i/__cur_i por semana (ocultas, precio de
-    cierre anterior/actual -- alimentan el tooltip) y Volatilidad.
-    `cols_sem`, `labels_prev` y `headers` van pareados por índice:
-    `labels_prev[i]` es la etiqueta de la semana ANTERIOR a `cols_sem[i]`, y
-    `headers[i]` el rótulo CORTO que se dibuja en la cabecera.
+    __tip_insumo (oculta, el tooltip del nombre), una columna FLOAT por
+    semana, __prev_i/__cur_i por semana (ocultas, cierre anterior/actual --
+    alimentan la celda y el tooltip) y Volatilidad.
 
-    El rótulo de la cabecera es otro texto que el nombre de la columna a
-    propósito: el nombre tiene que ser único (es la clave del DataFrame y la
-    del tooltip) y el rótulo tiene que entrar en ~50px. Ver
-    `volatilidad.py::_vol_fmt_semana_corta`.
+    `cols_sem` es una lista pareada con esas columnas-semana, un dict por
+    columna: `col` (el nombre en `tv`, único), `hdr` (el rótulo de la
+    cabecera), `lp`/`lc` (los rótulos de la semana anterior y de ésta, para
+    el tooltip). El nombre es otro texto que el rótulo a propósito: con más
+    de un año a la vista dos rótulos pueden repetirse, y el nombre es la
+    clave del DataFrame.
+
+    `ver_vol` muestra la columna «Volatilidad» (fijada a la derecha, con
+    `periodo_vol` debajo del título); oculta es el default desde el
+    2026-09-12. `n_sem` son las semanas que mide el puntaje, para el tooltip
+    de la cabecera.
 
     Devuelve el nombre completo del insumo de la fila clickeada en ESTA
     corrida (`__insumo_full`), o None si no hubo clic."""
     gb = GridOptionsBuilder.from_dataframe(tv)
+    # SIN `wrapHeaderText`/`autoHeaderHeight` desde el 2026-09-12: con 120px
+    # por columna-semana los rótulos entran en un renglón, y la cabecera de
+    # dos líneas de «Volatilidad» la dibuja su propio componente. Así el
+    # alto de la cabecera es SIEMPRE `headerHeight`, que es lo que cuenta
+    # `CROMO_GRID`.
     gb.configure_default_column(
         resizable=False, sortable=False, filter=False, editable=False,
-        suppressMovable=True, wrapHeaderText=True, autoHeaderHeight=True,
+        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
     )
     gb.configure_column("Insumo", pinned="left", width=_ANCHO_COL_INSUMO,
-                        minWidth=_ANCHO_COL_INSUMO,
-                        tooltipValueGetter=_TOOLTIP_INSUMO)
+                        minWidth=_ANCHO_COL_INSUMO, suppressSizeToFit=True,
+                        tooltipValueGetter=_TOOLTIP_INSUMO,
+                        headerComponent=_HDR_INSUMO)
     gb.configure_column("__insumo_full", hide=True)
+    gb.configure_column("__tip_insumo", hide=True)
 
-    for i, (col, prev_label, hdr) in enumerate(zip(cols_sem, labels_prev,
-                                                   headers)):
+    # Las columnas-semana comparten TODO su código por un `columnType`: el
+    # renderer, el formato, el estilo y el tooltip viajan una vez en
+    # `columnTypes` y no una por columna (con 12m son ~52). Cada columna
+    # sólo lleva lo suyo, que es dato: el rótulo y sus `cellRendererParams`.
+    for i, c in enumerate(cols_sem):
         gb.configure_column(
-            col, header_name=hdr, type=["numericColumn"],
-            width=_ANCHO_COL_SEMANA, minWidth=_MIN_ANCHO_COL_SEMANA,
-            headerClass=_CLASE_HDR_COMPACTA,
-            valueFormatter=_FMT_PCT, cellStyle=_STYLE_DELTA,
-            cellRenderer=_RENDER_DELTA, cellRendererParams={"idx": i},
-            tooltipValueGetter=_tooltip_delta(i, prev_label, col),
+            c["col"], header_name=c["hdr"], type=["numericColumn", "semana"],
+            cellRendererParams={"idx": i, "lp": c["lp"], "lc": c["lc"]},
         )
         gb.configure_column(f"__prev_{i}", hide=True)
         gb.configure_column(f"__cur_{i}", hide=True)
 
     max_vol = (max((float(v) for v in tv["Volatilidad"]), default=0.0) or 1.0)
-    gb.configure_column("Volatilidad", type=["numericColumn"], width=_ANCHO_COL_VOL,
-                        minWidth=_MIN_ANCHO_COL_VOL,
-                        headerClass=_CLASE_HDR_COMPACTA,
-                        valueFormatter=_FMT_1DEC, cellStyle=_style_vol(max_vol))
+    gb.configure_column(
+        "Volatilidad", type=["numericColumn"], pinned="right",
+        hide=not ver_vol, width=_ANCHO_COL_VOL, minWidth=_ANCHO_COL_VOL,
+        suppressSizeToFit=True, headerClass=_CLASE_HDR_COMPACTA,
+        headerComponent=_HDR_VOL,
+        headerComponentParams={"periodo": periodo_vol},
+        headerTooltip=(f"Suma de las variaciones % semanales de las últimas "
+                       f"{n_sem} semanas ({periodo_vol}). Las semanas "
+                       "anteriores que se ven al deslizar no entran en este "
+                       "número." if n_sem else None),
+        valueFormatter=_FMT_1DEC, cellStyle=_style_vol(max_vol))
 
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    gb.configure_grid_options(rowHeight=ALTO_FILA, headerHeight=32,
-                              tooltipShowDelay=200,
-                              onGridReady=_AL_MONTAR,
-                              # NUEVE columnas: virtualizarlas no ahorra nada
-                              # y sí deja fuera del DOM a la última cuando el
-                              # ancho cambia después del primer render
-                              # (medido el 2026-09-07: la cabecera
-                              # «Volatilidad» estaba y sus celdas no).
-                              suppressColumnVirtualisation=True)
+    gb.configure_grid_options(
+        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
+        onGridReady=_AL_MONTAR,
+        columnTypes={"semana": {
+            "width": _ANCHO_COL_SEMANA, "minWidth": _MIN_ANCHO_COL_SEMANA,
+            "headerClass": _CLASE_HDR_COMPACTA,
+            "valueFormatter": _FMT_PCT, "cellStyle": _STYLE_DELTA,
+            "cellRenderer": _RENDER_DELTA, "tooltipValueGetter": _TOOLTIP_DELTA,
+        }},
+        # La barra horizontal SIEMPRE, aunque las semanas entren: así el alto
+        # de la grilla no depende de cuántas semanas trae la ventana, y
+        # `CROMO_GRID` no miente cuando la ventana es corta.
+        alwaysShowHorizontalScroll=True,
+        # Sin virtualizar columnas, y ya no por la razón de antes (que la
+        # última, «Volatilidad», quedaba fuera del DOM al cambiar el ancho:
+        # hoy va fijada a la derecha y las fijadas se dibujan siempre). Es
+        # que las flechas y la apertura en la semana más reciente saltan
+        # lejos, y una columna virtualizada aparece vacía un instante al
+        # llegar. Con 12m son ~52 columnas x las ~17 filas que AG Grid
+        # dibuja (7 a la vista + su búfer): cabe de sobra.
+        suppressColumnVirtualisation=True)
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
@@ -535,12 +694,37 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
     custom_css[f".{_CLASE_HDR_COMPACTA} .ag-header-cell-text"] = {
         "font-size": f"{_TAM_HDR_SEMANA} !important",
     }
+    # El período, debajo de «Volatilidad»: más chico y en gris, es la nota
+    # al pie del título, no un segundo título.
+    custom_css[".vol-hdr-periodo"] = {
+        "font-size": "10px",
+        "font-weight": "400",
+        "color": f"{GRIS_TEXTO}",
+        "white-space": "nowrap",
+    }
+    # Las flechas de la cabecera de «Insumo»: botones mínimos con el color
+    # del texto de la cabecera, sin marco hasta el hover.
+    custom_css[".vol-nav"] = {
+        "border": "1px solid transparent",
+        "background": "transparent",
+        "color": f"{ACENTO_TEXTO_OSCURO}",
+        "border-radius": "6px",
+        "width": "22px",
+        "height": "22px",
+        "padding": "0",
+        "font-size": "16px",
+        "line-height": "18px",
+        "cursor": "pointer",
+    }
+    custom_css[".vol-nav:hover"] = {
+        "background": f"{BLANCO}",
+        "border-color": f"{LAVANDA_BORDE}",
+    }
     # QUE LA GRILLA OCUPE SU COLUMNA, no el ancho que tenía al renderizarse.
-    # Ver `_REPARTIR_ANCHO`: `#gridContainer` es el div que st_aggrid dibuja
-    # DENTRO del iframe con el ancho de Python escrito a mano (`width:
-    # 587px`). El gemelo de afuera —el iframe mismo— lo estira
-    # `estilos/_80_cards.py`, que es el único CSS que llega al documento de
-    # la app; éste viaja en `custom_css`, o sea dentro del iframe.
+    # `#gridContainer` es el div que st_aggrid dibuja DENTRO del iframe con el
+    # ancho de Python escrito a mano. El gemelo de afuera —el iframe mismo— lo
+    # estira `estilos/_80_cards.py`, que es el único CSS que llega al
+    # documento de la app; éste viaja en `custom_css`, o sea dentro del iframe.
     custom_css["#gridContainer"] = {"width": "100% !important"}
     custom_css[".ag-tooltip"] = {
         "background-color": f"{TEXTO_PRINCIPAL} !important",
@@ -550,6 +734,9 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
         "padding": "6px 10px !important",
         "font-size": "12px !important",
         "box-shadow": "0 6px 20px rgba(0,0,0,0.25) !important",
+        # El tooltip del nombre son dos renglones (nombre / puntaje): sin
+        # esto el salto de línea se colapsa en un espacio.
+        "white-space": "pre-line !important",
     }
 
     resp = AgGrid(

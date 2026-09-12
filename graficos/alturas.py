@@ -231,6 +231,15 @@ recortar: es más barato que velas más chatas."""
 # lo que se guardaban los 15px de antes. Si algún día envuelve, lo que cede
 # es ESTE número, de a 30.
 #
+# 276 -> 261 EL MISMO DÍA, a pedido: «quitemos la barra del scroll interno
+# de la tarjeta; quitemos una fila del cuadro». Los 2px de aire de arriba
+# eran de la laptop de 1366x657; en la pantalla del usuario no alcanzaban y
+# la tarjeta sacaba barra. Una fila menos son 30px, pero la grilla ganó en
+# el mismo cambio una barra de scroll HORIZONTAL (ahora recorre la ventana
+# entera hacia atrás): 261 = cabecera 32 + 7 filas x 30 + 4 de bordes + 15
+# de la barra — `tablas/compras_volatilidad.py::CROMO_GRID`. El aire neto
+# pasa de 2 a ~17px.
+#
 # LO DE ABAJO ES LA HISTORIA DE LAS DOS FORMAS ANTERIORES.
 #
 # NACIÓ EN 280, APILADO (2026-09-07). Con el drill DEBAJO de la grilla, el
@@ -269,7 +278,7 @@ recortar: es más barato que velas más chatas."""
 # Python, y forzarlo por CSS encoge el iframe pero deja el documento de
 # adentro en su alto — la grilla queda cortada, con su scroll fuera de la
 # vista. Ver arquitectura.md #345.
-RANKING_CON_DRILL = 276
+RANKING_CON_DRILL = 261
 
 PANEL_JUNTO_A_FIGURA = MINI_CANDLE_DRILL
 """Tope de una tabla de detalle que va AL LADO de una figura, en la misma

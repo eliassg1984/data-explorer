@@ -470,6 +470,25 @@ CSS = """    /* ================================================================
         [data-testid="stIconMaterial"]) {
         display: none !important;
     }
+    /* ── VOLATILIDAD: la pastilla que muestra la columna del puntaje ──
+       2026-09-12, a pedido: la columna «Volatilidad» arranca oculta y este
+       `st.pills` de una sola opción la prende. Mide su contenido (sin esto
+       su `stLayoutWrapper` nace en `width: 100%`, regla #272) y baja a los
+       26px del resto de la fila: el buscador, el desplegable y el ícono de
+       ayuda de al lado miden eso, y una pastilla de 32 haría crecer la fila
+       entera. Acotado a SU key, no a `vol_fila_hdr`: el aviso de CLAUDE.md
+       sobre reglas del contenedor que capturan widgets futuros. */
+    .st-key-vol_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_hdr_ver) {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    .st-key-vol_hdr_ver [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
 
     /* ── VOLATILIDAD: la cabecera del DETALLE ─────────────────────────
        Nombre a la izquierda, los tres KPI a la derecha, TODO en un renglón
