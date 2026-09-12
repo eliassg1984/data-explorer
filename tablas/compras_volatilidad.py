@@ -22,36 +22,44 @@ un índice de fila que se pueda desalinear contra la lista filtrada.
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from tema import (
-    ACENTO, ERROR, ERROR_FONDO, EXITO, EXITO_FONDO, GRIS_TEXTO,
-    LAVANDA_FONDO, TEXTO_PRINCIPAL,
+    ACENTO, CELDA_POS_TEXTO, ERROR, ERROR_FONDO, ERROR_TEXTO, EXITO,
+    EXITO_FONDO, GRIS_TEXTO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
 
 # EL REPARTO: un ancho DECLARADO por columna, que AG Grid escala para
 # llenar la grilla respetando cada `minWidth`. O sea que esto es una
-# PROPORCION, no pixeles: 98 contra los 80 de «Volatilidad» y los 150 fijos
-# de «Insumo». Quien lo dispara es `_AL_MONTAR`, mas abajo.
-_ANCHO_COL_SEMANA = 98
+# PROPORCION, no pixeles: 120 contra los 80 de «Volatilidad» y los 150 de
+# «Insumo». Quien lo dispara es `_AL_MONTAR`, mas abajo.
+#
+# 98 -> 120 el 2026-09-12, con el piso: un ancho declarado POR DEBAJO de su
+# `minWidth` hace que AG Grid arranque la columna en el piso y reparta el
+# resto con una proporcion que ya no es la escrita aca.
+_ANCHO_COL_SEMANA = 120
 _ANCHO_COL_VOL = 80
 """Peso de «Volatilidad» en el reparto. Bajo de 92 a 80 el 2026-09-07: es la
 unica columna cuyo contenido no crece con el ancho de la ventana -- «12402.5»
 mide ~46px y la cabecera 66 -- asi que lo que se le saque va a las siete
 semanas, que son las que estaban apretadas."""
 
-_MIN_ANCHO_COL_SEMANA = 81
+_MIN_ANCHO_COL_SEMANA = 120
 """Piso de una columna-semana, y la cuenta que lo fija.
 
-Lo manda la SEGUNDA LINEA de la celda (los dos cierres, «110.17 -> 169.41»):
-69px del peor caso real medido sobre el parquet mas los 12 de cromo
-horizontal — 4+4 de `_PAD_X_SEMANA` y 2+2 del borde transparente que separa
-una pastilla de la siguiente. El % de arriba entra de sobra en eso: cinco
-glifos a `_TAM_DELTA` son 34px.
+Lo manda el RENGLON de la celda: el % y, AL COSTADO, los dos cierres
+(«+562%  2.88 → 19.07»). 34px del % en el peor caso (cinco glifos a
+`_TAM_DELTA`) + 5 de `_GAP_PRECIOS` + 69 de los dos precios en el peor caso
+real del parquet + los 12 de cromo horizontal — 4+4 de `_PAD_X_SEMANA` y 2+2
+del borde transparente que separa una pastilla de la siguiente.
 
-48 -> 81 el 2026-09-07, al volver los dos precios. Es el numero que decide
-cuantas semanas se pueden mostrar (`volatilidad.py::MAX_SEMANAS`): en los
-587px que recibe la grilla con el rail desplegado entran CUATRO columnas de
-81, no siete. La alternativa —dibujar la linea "solo donde entra"— ya se
+Historia, porque cada valor lo fijo una forma distinta de la celda:
+48 cuando era solo el %; 81 el 2026-09-07, con los precios DEBAJO del % (el
+ancho lo mandaba la segunda linea sola); 120 el 2026-09-12, con los precios
+al costado, a pedido y sobre una maqueta a escala. Ese mismo dia la grilla
+paso a ocupar el ANCHO ENTERO de la tarjeta (antes era la columna izquierda
+de la fila, 587px), y es lo que hace posible este piso: con 587px cuatro
+columnas de 120 no entraban (150 + 4x120 + 78 + 17 = 725) y salia scroll
+horizontal. La alternativa —dibujar los precios "solo donde entran"— ya se
 probo dos veces y las dos fallaron por lo mismo: el ancho real no se sabe
 mientras la celda se construye (ver `_RENDER_DELTA`).
 
@@ -62,16 +70,19 @@ NUMERO. Si la grilla se angosta tanto que ni los pisos entran, AG Grid saca
 scroll horizontal: feo, pero visible."""
 
 _ANCHO_COL_INSUMO = 150
-"""Ancho de «Insumo», que ademas va `pinned` y con el mismo valor de piso:
-asi el reparto no le da ni le saca nada, que es lo que se busca -- lo que
-sobra tiene que ir a las siete columnas-semana, no al nombre.
+"""Ancho declarado de «Insumo», que ademas va `pinned` y con el mismo valor
+de piso.
 
-Era 170 y bajo a 150 el 2026-09-07: los 20px
-son los que le faltaban a las siete columnas-semana para llegar a su piso
-sin pedir scroll horizontal (150 + 7x48 + 78 + 17 del scrollbar = 581, contra
-los 587 que mide la grilla con el rail desplegado en una ventana de 1400).
+El piso NO es un techo, y aca decia lo contrario hasta el 2026-09-12: que
+con `width == minWidth` "el reparto no le da ni le saca nada". Le saca no,
+pero le DA: `sizeColumnsToFit` escala tambien a la columna fijada, y con la
+grilla a todo el ancho de la tarjeta (1231px a 1400 de ventana) «Insumo»
+mide 257, medido. Es lo que conviene — con el ancho sobrado, el nombre
+entero de 34 caracteres entra sin tooltip —, pero es una consecuencia del
+reparto proporcional, no algo que este numero impida.
 
-150px son ~20 caracteres a 13px; el nombre entero sigue en el tooltip."""
+Era 170 y bajo a 150 el 2026-09-07, cuando la grilla media 587px y los 20px
+eran los que le faltaban a las columnas-semana para llegar a su piso."""
 
 _MIN_ANCHO_COL_VOL = 78
 """Piso de la columna «Volatilidad». No lo tenia, y con el drill al lado del
@@ -82,22 +93,19 @@ columna que le da nombre a la vista, asi que es la ultima que puede ceder.
 78 = 66 del texto «Volatilidad» a 11px + los 12 del padding de `_PAD_X_COL`.
 El valor mas grande que hay hoy en el parquet, «12402.5», mide ~46."""
 
-# Alto de fila: DOS lineas donde hubo variacion (el % arriba, los dos
-# precios abajo). 13.8px de la primera (12px a line-height 1.15) mas 10.9 de
-# la segunda son 25 de texto; el resto es el aire de la celda y los 3+3 del
-# borde que separa una pastilla de la de la fila siguiente.
+# Alto de fila: UN renglon, el % y los dos precios al costado. 13.8px de
+# texto (12px a line-height 1.15); el resto es el aire de la celda y los 3+3
+# del borde que separa una pastilla de la de la fila siguiente.
 #
-# Estuvo en 30 unas horas, mientras la segunda linea no se dibujaba. Volvio
-# a 40 con ella (2026-09-07, a pedido: "no se ve el precio inicial y el
-# precio final"). Cuesta filas visibles —de 12 a 8— y eso se pago bajando el
-# alto de la tarjeta entera, no ignorandolo: ver `alturas.RANKING_CON_DRILL`.
-#
-# No se usa `getRowHeight` para dejar en 30 las filas sin segunda linea (el
-# truco de `documentos_sunat.py`) porque aca es al reves: la tabla esta
-# ORDENADA por volatilidad, asi que una fila sin ninguna variacion es la
-# excepcion y alternar dos altos en una grilla se lee como un temblor.
-ALTO_FILA = 40
+# 40 -> 30 el 2026-09-12, al pasar los precios de DEBAJO del % a su costado
+# (a pedido, sobre una maqueta a escala). Estuvo en 40 desde el 2026-09-07
+# porque la celda tenia dos lineas; cada 10px por fila son ~2 filas mas en el
+# mismo alto de grilla (`alturas.RANKING_CON_DRILL`).
+ALTO_FILA = 30
 _TAM_PRECIOS = "9.5px"
+_GAP_PRECIOS = "5px"
+"""Aire entre el % y los dos precios que van a su costado. Entra en la
+cuenta de `_MIN_ANCHO_COL_SEMANA`."""
 
 _TAM_DELTA = "12px"
 """Cuerpo del % en las columnas-semana, un punto por debajo del resto de la
@@ -229,11 +237,26 @@ _STYLE_DELTA = JsCode(f"""
     }}
 """)
 
-# LOS DOS PRECIOS, DEBAJO DEL %: sin ellos la celda dice cuanto se movio y
-# no desde donde -- "+12%" sobre 8.50 y sobre 85.00 son la misma celda, y la
+# LOS DOS PRECIOS, AL COSTADO DEL %: sin ellos la celda dice cuanto se movio
+# y no desde donde -- "+12%" sobre 8.50 y sobre 85.00 son la misma celda, y la
 # decision de compra no es la misma. Ademas son el precio INICIAL y el FINAL
 # de la ventana leidos en la grilla: el `prev` de la primera columna y el
 # `cur` de la ultima.
+#
+# AL COSTADO Y NO DEBAJO desde el 2026-09-12, a pedido y sobre una maqueta a
+# escala con cuatro variantes de color. El % va PRIMERO (lo que se escanea)
+# y los precios en el TONO OSCURO de su mismo semaforo — `ERROR_TEXTO` si
+# subio, `CELDA_POS_TEXTO` si bajo —, sin la opacidad de antes: con los dos
+# en el mismo renglon, lo que los separa tiene que ser el color, no el
+# renglon. Se probaron gris y lavanda: el gris los despegaba de su celda y
+# el lavanda competia con la barra de «Volatilidad», que es del mismo tono.
+#
+# SI NO ENTRA, SE CORTAN LOS PRECIOS, NUNCA EL %: el % no encoge
+# (`flex: none`) y los precios llevan `min-width: 0` + ellipsis. Sin eso, un
+# renglon alineado a la derecha que no entra se recorta por la IZQUIERDA —
+# el `overflow: hidden` de la celda se come el principio del %, que es el
+# modo de fallo que documenta `_MIN_ANCHO_COL_SEMANA` («+176.9%» leido
+# «76.9%»).
 #
 # SIN GUARD DE ANCHO, y esa es la diferencia con las dos versiones
 # anteriores. La linea se dibujaba "solo donde entra", midiendo la celda: la
@@ -264,36 +287,52 @@ class DeltaCelda {
         this.eGui = document.createElement('div');
         var g = this.eGui.style;
         g.display = 'flex';
-        g.flexDirection = 'column';
-        g.alignItems = 'flex-end';
-        g.justifyContent = 'center';
-        g.lineHeight = '1.15';
+        g.alignItems = 'center';
+        g.justifyContent = 'flex-end';
         g.height = '100%';
-        var a = document.createElement('div');
+        // El renglon va en su PROPIA caja: la celda centra en vertical y
+        // adentro el % y los precios se alinean por la linea de base — son
+        // dos tallas distintas y lo que se ve alineado es el texto, no el
+        // centro de sus cajas.
+        var fila = document.createElement('div');
+        fila.style.display = 'flex';
+        fila.style.alignItems = 'baseline';
+        fila.style.gap = '__GAP__';
+        fila.style.lineHeight = '1.15';
+        fila.style.minWidth = '0';
+        fila.style.maxWidth = '100%';
+        this.eGui.appendChild(fila);
+        var a = document.createElement('span');
         a.textContent = p.valueFormatted == null ? '' : p.valueFormatted;
         // Sin `nowrap` un valor largo se parte en dos renglones DENTRO de
         // la fila y desborda por abajo, encima de su vecina.
         a.style.whiteSpace = 'nowrap';
-        this.eGui.appendChild(a);
+        a.style.flex = 'none';
+        fila.appendChild(a);
         if (p.value == null || Math.abs(Number(p.value)) < __EPS__) return;
         var d = p.data || {};
         var prev = d['__prev_' + p.idx];
         var cur = d['__cur_' + p.idx];
         if (prev == null || cur == null) return;
-        var b = document.createElement('div');
+        var v = Number(p.value);
+        var b = document.createElement('span');
         b.textContent = this.num(prev) + ' → ' + this.num(cur);
         b.style.fontSize = '__TAM__';
         b.style.fontWeight = '400';
-        b.style.opacity = '0.78';
+        // El tono OSCURO del mismo semaforo de la pastilla; debajo de 1% la
+        // pastilla no se pinta (ver `_STYLE_DELTA`) y los precios van en el
+        // gris de su texto.
+        b.style.color = Math.abs(v) < 1 ? '__GRIS__'
+                      : (v > 0 ? '__SUBE__' : '__BAJA__');
         // Que un precio mas ancho de lo previsto FALLE VISIBLE en vez de
         // cortarse por la mitad: "169.41" recortado a "169.4" no parece un
         // recorte, parece otro precio. El peor caso del parquet entra en el
         // piso de la columna, asi que esto es un cinturon, no el mecanismo.
-        b.style.maxWidth = '100%';
+        b.style.minWidth = '0';
         b.style.overflow = 'hidden';
         b.style.textOverflow = 'ellipsis';
         b.style.whiteSpace = 'nowrap';
-        this.eGui.appendChild(b);
+        fila.appendChild(b);
     }
     num(v) {
         // A partir de mil, sin decimales: "1,234.56 -> 1,299.00" mide ~95px
@@ -305,9 +344,11 @@ class DeltaCelda {
     }
     getGui() { return this.eGui; }
 }
-""".replace("__EPS__", str(_EPS_CERO)).replace("__TAM__", _TAM_PRECIOS))
-"""La celda de una semana: el % arriba y, si hubo movimiento, el cierre
-anterior y el nuevo debajo.
+""".replace("__EPS__", str(_EPS_CERO)).replace("__TAM__", _TAM_PRECIOS)
+   .replace("__GAP__", _GAP_PRECIOS).replace("__GRIS__", GRIS_TEXTO)
+   .replace("__SUBE__", ERROR_TEXTO).replace("__BAJA__", CELDA_POS_TEXTO))
+"""La celda de una semana: el % y, si hubo movimiento, el cierre anterior y
+el nuevo a su costado.
 
 Sin simbolo de moneda a proposito, y no es una suposicion de las que
 advierte la regla #240: el drill filtra `TIPO_MONEDA` a soles antes de
@@ -480,7 +521,11 @@ def renderizar_ranking_volatilidad(tv, cols_sem, labels_prev, headers, altura,
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
-    custom_css = dict(_css_grid(13))
+    # SIN RAYADO (2026-09-12, a pedido): las filas van todas en blanco. Lo
+    # que separa una fila de la siguiente ya lo hacen la linea de `.ag-row`
+    # y el borde transparente de 3px de cada pastilla; el gris alternado
+    # competia con el rojo/verde claro de las pastillas.
+    custom_css = dict(_css_grid(13, cebra=False))
     # La cabecera de las columnas angostas: menos padding y menos cuerpo que
     # el resto de la grilla. Ver `_PAD_X_COL` para la medición.
     custom_css[f".{_CLASE_HDR_COMPACTA}"] = {

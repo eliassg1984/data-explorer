@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-383 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+384 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (135)
 
@@ -170,7 +170,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#382** — Una tarjeta que scrollea por dentro, con grids que también scrollean, se lee como una caja…
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 
-**Layout y alturas** (45)
+**Layout y alturas** (46)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -217,6 +217,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#381** — Dos tablas de productos una encima de la otra son una pregunta con dos respuestas: el drill…
 - **#382** — Una tarjeta que scrollea por dentro, con grids que también scrollean, se lee como una caja…
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
+- **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 
 **Plotly y figuras** (60)
 
@@ -281,7 +282,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 
-**AgGrid y tablas** (60)
+**AgGrid y tablas** (61)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -343,6 +344,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#368** — Un !important en el custom_css de un AgGrid pisa los estilos INLINE que la grilla arma desde…
 - **#374** — Un drill de TRES niveles no es "una tabla más": son cinco cosas que se rompen en silencio, y…
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
+- **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 
 **Streamlit** (107)
 
@@ -33876,6 +33878,80 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (2026-09-12.)
 
 
+384. **El ancho de la celda decide DÓNDE va la grilla, no al revés — y un
+     piso de AG Grid no es un techo.** Pedido en dos pasos sobre el ranking
+     de «Insumos ordenados por volatilidad», los dos sobre maquetas a
+     escala con datos reales (la misma cuenta de la app, ventana 12m, 42
+     insumos):
+
+     **1. Los dos precios, al COSTADO del % y en tono oscuro.** Hasta hoy
+     iban DEBAJO (`«+562%» / «2.88 → 19.07»`, dos renglones, fila de 40).
+     Se maquetaron cuatro colores para separar el % de los precios —gris,
+     pastilla sólo en el %, tono oscuro, lavanda— y se eligió el **tono
+     oscuro del mismo semáforo** (`ERROR_TEXTO` si subió,
+     `CELDA_POS_TEXTO` si bajó), con el % primero. El gris despegaba los
+     precios de su celda y el lavanda competía con la barra de
+     «Volatilidad», que es del mismo tono. De paso, **sin rayado**
+     (`_css_grid(13, cebra=False)`): el gris alternado competía con el
+     rojo/verde claro de las pastillas. La fila baja a 30.
+
+     La celda en un renglón pide **120px** (34 del % + 5 + 69 de los
+     precios en el peor caso + 12 de cromo; medido en el navegador: el
+     contenido más ancho del parquet, «+107% 52.53 → 108.84», son 107). Y
+     acá está la lección: **en 587px —lo que medía la grilla como columna
+     izquierda de la fila— cuatro columnas de 120 no entran** (150 + 4×120
+     + 78 + 17 = 725). La maqueta lo mostraba como 140px de scroll
+     horizontal. Es el corolario de la #352 un paso más allá: el orden no
+     es sólo ancho de celda → nº de columnas → rango de fechas, es
+     **ancho de celda → dónde vive la grilla**. Una forma de celda que no
+     entra en su columna no se arregla achicando la letra: se arregla
+     moviendo la grilla.
+
+     Y el reparto tiene su trampa: un renglón alineado a la derecha que no
+     entra se recorta por la IZQUIERDA — el `overflow: hidden` de la celda
+     se come el principio del %, que es exactamente el «+176.9%» leído
+     «76.9%» de la #349. Por eso el % va con `flex: none` y los precios con
+     `min-width: 0` + ellipsis: **si algo tiene que cortarse, que sea el
+     dato secundario, y que se note que está cortado.**
+
+     **2. La grilla sube y ocupa el ancho entero; el drill baja, mitad y
+     mitad.** «Que el cuadro suba u ocupe todo el largo horizontal; que el
+     gráfico de velas y el detalle de semana bajen y compartan a mitad el
+     espacio abajo.» Es la tercera forma de esta tarjeta en cinco días y
+     cada una tuvo su razón (el detalle en `volatilidad.py`, bloque «EL
+     RANKING ARRIBA»). La fila de abajo es `st.columns(2, gap=GAP_DRILL)`
+     marcada `# columnas-internas:` — es una subdivisión dentro de la
+     tarjeta, no una fila de drill que tenga que caer en el eje de
+     `COLUMNAS_DRILL` (#145).
+
+     El alto se volvió a medir, no a sumar: la tarjeta da **543px contra
+     un techo de 545** a 1366×657 y a 1280×657, con
+     `alturas.RANKING_CON_DRILL` en 360 → **276** (cabecera 32 + 8×30 + 4:
+     ocho filas exactas, las mismas que había a 360 con filas de 40). La
+     tabla de la semana pasó a medir lo mismo que el candlestick
+     (`PANEL_JUNTO_A_FIGURA = MINI_CANDLE_DRILL`, 150) para que las dos
+     mitades terminen en una línea; entran tres compras, el máximo del
+     parquet para un insumo en una semana. El rol se llamaba
+     `PANEL_BAJO_FIGURA` y se renombró: un rol que dice «bajo» sobre algo
+     que está al lado deja al vocabulario mintiendo.
+
+     **El piso no es un techo.** El docstring de `_ANCHO_COL_INSUMO`
+     afirmaba que con `width == minWidth` el reparto «no le da ni le saca
+     nada» a la columna fijada. Medido con la grilla a todo el ancho:
+     «Insumo» sale en **257px**, no en 150 — `sizeColumnsToFit` escala
+     también a las columnas `pinned`. Mientras la grilla medía 587 no se
+     notaba porque no sobraba nada que repartir; la afirmación era falsa
+     desde el principio y la destapó el cambio de ancho. Acá conviene
+     (entra el nombre entero), pero si alguna vez hace falta que una
+     columna NO crezca, lo que la frena es `suppressSizeToFit` o
+     `maxWidth`, no su piso.
+
+     `MAX_SEMANAS` se queda en 5 aunque la cuenta de ancho que lo fijaba
+     ya no lo ata: el pedido original fue «que muestre menos días», no
+     «que entren», y subirlo reordena el ranking.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -33888,7 +33964,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#384**.
+> próxima regla nueva es la **#385**.
 
 >
 

@@ -168,7 +168,14 @@ MARCO = PRESUPUESTO
 # vecina que cambió de alto.)
 
 MINI_CANDLE_DRILL = 150
-"""El candlestick de Volatilidad, que comparte su COLUMNA con tres cosas más.
+"""El candlestick de Volatilidad: la mitad izquierda de la fila de abajo de
+su tarjeta, al lado de la tabla de la semana (`PANEL_JUNTO_A_FIGURA`, que
+mide lo mismo para que la fila termine en una sola línea).
+
+2026-09-12: el drill bajó de la columna derecha a una fila propia DEBAJO
+del ranking, partida en dos (a pedido). La cuenta de abajo es la de la
+columna que dejó de existir; se conserva porque explica el 150. La que
+vale hoy está en `RANKING_CON_DRILL`.
 
 Es MINI (240) recortado dos veces, y las dos se pidieron: primero a 200
 («deseo que el gráfico de velas se reduzca de forma vertical») y el mismo día
@@ -199,8 +206,32 @@ recortar: es más barato que velas más chatas."""
 
 # Ranking (AgGrid) que comparte su tarjeta con el DRILL que abre. Hoy:
 # «Insumos ordenados por volatilidad» (compras/volatilidad.py), donde la
-# grilla es la columna izquierda de la fila y el candlestick + la tabla de la
-# semana son la derecha.
+# grilla ocupa el ANCHO ENTERO de la tarjeta y debajo va una fila partida en
+# dos: el candlestick a la izquierda y la tabla de la semana a la derecha.
+#
+# 360 -> 276 EL 2026-09-12, con esa mudanza (a pedido: «que el cuadro suba y
+# ocupe todo el largo horizontal»). Ahora el alto de la tarjeta vuelve a ser
+# una SUMA —grilla + fila de abajo—, pero la fila de abajo cuesta una sola de
+# sus mitades. La cuenta, MEDIDA en el navegador a 1366x657 y a 1280x657:
+#
+#     cromo arriba 13 + cabecera 36 + 19 + GRILLA 276 + 18
+#     + fila de abajo 168 (título + candlestick 150) + cromo abajo 13
+#     = 543, contra un techo (`--alto-util`) de 545: entra sin barra,
+#     con 2px de aire
+#
+# (Los huecos de 19 y 18 son el gap de 10 de `estilos/_80_cards.py` más
+# los contenedores de Streamlit que hay entre bloque y bloque; se midieron
+# por posición, no se sumaron del código.)
+#
+# 276 = cabecera 32 + 8 filas x 30 + 4 de bordes: OCHO FILAS EXACTAS, las
+# mismas que mostraba a 360 con filas de 40. No se perdió ninguna fila con la
+# mudanza porque el mismo día la fila bajó a 30 (los precios pasaron al
+# costado del %, `tablas/compras_volatilidad.py::ALTO_FILA`). El aire es poco
+# a propósito: la cabecera de la tarjeta no envuelve ni a 1280, que era para
+# lo que se guardaban los 15px de antes. Si algún día envuelve, lo que cede
+# es ESTE número, de a 30.
+#
+# LO DE ABAJO ES LA HISTORIA DE LAS DOS FORMAS ANTERIORES.
 #
 # NACIÓ EN 280, APILADO (2026-09-07). Con el drill DEBAJO de la grilla, el
 # alto de la tarjeta era la SUMA de los dos y a la grilla le quedaban 6
@@ -238,20 +269,24 @@ recortar: es más barato que velas más chatas."""
 # Python, y forzarlo por CSS encoge el iframe pero deja el documento de
 # adentro en su alto — la grilla queda cortada, con su scroll fuera de la
 # vista. Ver arquitectura.md #345.
-RANKING_CON_DRILL = 360
+RANKING_CON_DRILL = 276
 
-PANEL_BAJO_FIGURA = 110
-"""Tope de una tabla de detalle que va DEBAJO de una figura, en la misma
-columna (no al lado). Hoy: la tabla de compras de la semana de Volatilidad.
+PANEL_JUNTO_A_FIGURA = MINI_CANDLE_DRILL
+"""Tope de una tabla de detalle que va AL LADO de una figura, en la misma
+fila. Hoy: la tabla de compras de la semana de Volatilidad, a la derecha
+del candlestick.
 
-Es MINI recortado, y el recorte tiene motivo: apilada bajo el candlestick,
-cada píxel que crece esta tabla lo paga la fila entera —o sea también la
-grilla de la izquierda, que se estira para igualarla.
+Es el alto de la figura y no un número propio: las dos mitades de la fila
+llevan un renglón de título encima, así que con el mismo alto terminan en
+la misma línea. A 150 entran TRES compras enteras (35px por fila + 38 de
+cabecera y bordes), que es la semana más cargada de un mismo insumo que hay
+hoy en el parquet.
 
-160 -> 110 el 2026-09-07, con el resto de la columna, para que la tarjeta
-entre en el presupuesto (ver `RANKING_CON_DRILL`). A 110 entran DOS compras
-enteras y la tercera scrollea dentro de la tabla; la semana con más compras
-de un mismo insumo que hay en el parquet tiene tres."""
+Se llamaba `PANEL_BAJO_FIGURA` y valía 110 mientras la tabla iba DEBAJO del
+candlestick, en la misma columna: ahí cada píxel que crecía lo pagaba la
+columna entera y entraban dos compras. Cambió de nombre el 2026-09-12, con
+la mudanza al costado — un rol que dice «bajo» sobre algo que está al lado
+deja al vocabulario mintiendo."""
 
 
 

@@ -402,7 +402,14 @@ CSS = """    /* ================================================================
        sus cuatro bloques —KPIs, candlestick, título de la semana y tabla—
        iban separados por el 1rem por defecto. Medido: 3 huecos x 6px = 18,
        que es justo lo que le faltaba a la tarjeta para entrar en
-       `alturas.PRESUPUESTO` y dejar de sacar barra de scroll. */
+       `alturas.PRESUPUESTO` y dejar de sacar barra de scroll.
+
+       Desde el 2026-09-12 la fila es OTRA —la de abajo de la grilla, con
+       el candlestick en una mitad y la semana en la otra—, y cada columna
+       lleva dos bloques (título + figura, título + tabla). La regla sigue
+       valiendo tal cual: es la que deja los dos títulos a 10px de lo suyo
+       en las dos mitades, y la cuenta de `alturas.RANKING_CON_DRILL`
+       cuenta ese 10. */
     div[class*="st-key-chartcard_compras_vol"] [data-testid="stColumn"] > div {
         gap: 10px !important;
     }

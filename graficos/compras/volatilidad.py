@@ -29,7 +29,7 @@ from graficos.base import (
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.compras._comun import (
-    CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, PARR, _first_point,
+    CATEGORIA_SEC, GAP_DRILL, PARR, _first_point,
 )
 from graficos import periodo
 from graficos import alturas
@@ -80,6 +80,13 @@ línea de base.
 Así el precio inicial y el final se leen en la propia grilla: el `prev` de
 la primera columna es el cierre con el que arranca la ventana y el `cur` de
 la última, el cierre de hoy.
+
+2026-09-12: la cuenta de ancho de arriba YA NO ATA este número. La grilla
+pasó a ocupar el ancho entero de la tarjeta (el drill bajó a la fila de
+abajo) y los precios pasaron al costado del %, a 120px por columna: en el
+ancho completo entran más de cuatro. Se deja en 5 porque el pedido original
+fue «que muestre menos días», no «que entren»; subirlo sería otro pedido, y
+reordena el ranking (ver el párrafo de abajo).
 
 Este número manda además sobre el candlestick (cinco velas) y sobre el
 score de volatilidad, que es la suma de las variaciones DE LA VENTANA: con
@@ -443,24 +450,30 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         if prod_focus not in {p for p, _ in ranking}:
             prod_focus = None
 
-        # ── EL RANKING A LA IZQUIERDA, EL DRILL A LA DERECHA ─────────────
-        # 2026-09-07, a pedido y sobre una maqueta a escala. Apilados, el
-        # alto de la tarjeta era la SUMA de los dos y el ranking tenía que
-        # encogerse a 6 filas para que el candlestick entrara en la
-        # pantalla. Al lado, el alto es el MÁXIMO de los dos: los ~290px
-        # que ocupaba el drill vuelven a la grilla, que pasa a mostrar 10.
+        # ── EL RANKING ARRIBA, A TODO EL ANCHO; EL DRILL ABAJO ───────────
+        # 2026-09-12, a pedido: «que el cuadro suba y ocupe todo el largo
+        # horizontal; que el gráfico de velas y el detalle de semana bajen y
+        # compartan a mitad el espacio abajo».
         #
-        # `COLUMNAS_DRILL` y no un literal: es la proporción con la que
-        # parten sus filas los drills de Proveedor y de Producto, y las
-        # tres vistas se leen apiladas en la misma página. Un eje distinto
-        # a media página es el bug que hizo nacer la constante (regla #145).
+        # Es la TERCERA forma de esta tarjeta y conviene saber por qué
+        # cambió cada vez. El 2026-09-07 el drill vivía DEBAJO de la grilla
+        # en una sola columna (candlestick, título de la semana y tabla
+        # apilados): el alto era la suma de todo y a la grilla le quedaban 6
+        # filas. Unas horas después se mudó AL COSTADO (`COLUMNAS_DRILL`),
+        # y eso le devolvió alto a la grilla pero le quitó ANCHO: 587px, en
+        # los que las celdas sólo aguantaban los dos precios DEBAJO del %.
         #
-        # El precio de esta fila está medido y es real: la columna-semana
-        # baja de 85 a ~50px, así que la segunda línea de la celda (los dos
-        # cierres) sólo se dibuja donde entra — lo decide la propia celda
-        # en `tablas/compras_volatilidad.py`, no este módulo.
-        col_rank, col_drill = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
-
+        # El mismo día de esta mudanza los precios pasaron al COSTADO del %
+        # en la celda (`tablas/compras_volatilidad.py::_MIN_ANCHO_COL_SEMANA`),
+        # que pide 120px por columna-semana: en 587px eso era scroll
+        # horizontal. Con la grilla a todo el ancho entra, y el drill,
+        # partido en dos, cuesta el alto de UNA de sus mitades y no el de
+        # las tres piezas apiladas — la cuenta está en
+        # `alturas.RANKING_CON_DRILL`.
+        #
+        # Ya no hay `st.columns(COLUMNAS_DRILL)` en esta vista: la grilla no
+        # comparte fila con nadie. La fila de abajo es una subdivisión
+        # DENTRO de la tarjeta (ver más abajo).
         if not ranking_vista:
             st.info(f"Ningún insumo coincide con «{_q}».")
         else:
@@ -485,15 +498,14 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # st.dataframe que tenía este ranking antes, filtrar con el
             # buscador no puede desalinear un índice viejo contra la fila
             # nueva (arquitectura.md regla #130).
-            with col_rank:
-                _clicked = renderizar_ranking_volatilidad(
-                    tv, cols_sem, labels_todas[:-1],
-                    [_vol_fmt_semana_corta(s) for s in semanas[1:]],
-                    altura=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
-                                             extra=40, minimo=0,
-                                             rol=alturas.RANKING_CON_DRILL),
-                    key="compras_vol_rank_grid",
-                )
+            _clicked = renderizar_ranking_volatilidad(
+                tv, cols_sem, labels_todas[:-1],
+                [_vol_fmt_semana_corta(s) for s in semanas[1:]],
+                altura=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
+                                         extra=40, minimo=0,
+                                         rol=alturas.RANKING_CON_DRILL),
+                key="compras_vol_rank_grid",
+            )
             if _clicked is not None:
                 prod_focus = _clicked
                 st.session_state["compras_vol_focus"] = prod_focus
@@ -519,7 +531,21 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         weeks = _vol_detalle_producto(dd, prod_sel, col_prod, col_punit, col_fecha,
                                       col_prov, col_cant, semanas)
 
-        with col_drill:
+        # ── LA FILA DE ABAJO: VELAS | SEMANA, MITAD Y MITAD ──────────────
+        # 2026-09-12, a pedido (ver el bloque del ranking, más arriba). Cada
+        # mitad es un renglón de título y su bloque: a la izquierda el
+        # nombre con sus KPIs y el candlestick, a la derecha la semana en
+        # foco y sus compras. Los dos títulos van a la misma altura y los
+        # dos bloques miden lo mismo (`MINI_CANDLE_DRILL` y
+        # `PANEL_JUNTO_A_FIGURA`), así que la fila termina en una sola
+        # línea en vez de en dos.
+        #
+        # columnas-internas: subdivisión DENTRO de la tarjeta (el gráfico y
+        # su tabla), no una fila de drill que tenga que caer en el eje de
+        # `COLUMNAS_DRILL`; 1/1 porque se pidió «a mitad».
+        col_vela, col_semana = st.columns(2, gap=GAP_DRILL)
+
+        with col_vela:
             # ── El detalle, en la MISMA tarjeta ──────────────────────────────
             # 2026-09-07, a pedido: «no entra en su tarjeta la parte de abajo,
             # el gráfico y su tabla; el usuario no debería hacer scroll en la
@@ -551,9 +577,11 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # LOS ROTULOS SE ABREVIAN Y LA VOLATILIDAD PIERDE SU «pts»
             # porque el renglon es un presupuesto MEDIDO: con los rotulos
             # largos el trio mide 473px de contenido nowrap contra los 454
-            # de la columna (la cuenta entera, en `estilos/_80_cards.py`).
-            # Lo que se abrevia vuelve en el `title=`, que es un tooltip
-            # nativo y no cuesta pixeles.
+            # que tenia la columna del drill al costado del ranking (la
+            # cuenta entera, en `estilos/_80_cards.py`). Desde el 2026-09-12
+            # esta mitad mide lo mismo o algo mas, asi que la cuenta sigue
+            # valiendo. Lo que se abrevia vuelve en el `title=`, que es un
+            # tooltip nativo y no cuesta pixeles.
             #
             # El look lo pone `estilos/_80_cards.py` (.vol-detalle-hdr), no
             # un `style=` inline: son cinco reglas repetidas tres veces.
@@ -573,13 +601,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 unsafe_allow_html=True,
             )
 
-            # El candlestick y la tabla de la semana, APILADOS: los dos son la
-            # columna derecha de la fila, así que ya no compiten por el ancho
-            # entre sí sino con el ranking. El alto sale de un rol propio
-            # (`MINI_CANDLE_DRILL`, 200) y no de MINI (240): además de
-            # apoyar a una tabla, es el tercero de CUATRO bloques apilados
-            # en media columna. La cuenta de esa columna está en
-            # `graficos/alturas.py`.
+            # El alto del candlestick sale de un rol propio
+            # (`MINI_CANDLE_DRILL`) y no de MINI (240): comparte la tarjeta
+            # con el ranking de arriba, que es la lectura principal. La
+            # cuenta de la tarjeta entera está en `graficos/alturas.py`.
 
             fig = go.Figure()
             fig.add_trace(go.Candlestick(
@@ -658,6 +683,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 color = ERROR if var > 0 else (EXITO if var < 0 else GRIS_TEXTO)
                 delta_txt = (f' <span style="color:{color}; font-weight:700;">'
                             f'{"+" if var >= 0 else "−"}{abs(var):.1f}% vs semana anterior</span>')
+        with col_semana:
             # SIN MARGEN PROPIO: el `gap` de la columna ya separa este
             # renglón de la tabla que va abajo, y sumarle .5rem lo dejaba en
             # 43px para una línea de texto. Los 8px son la mitad de lo que le
@@ -691,7 +717,11 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 sty_p = (tp.style.format(fmts)
                          .map(_sty_precio, subset=[f"Precio/{unidad}"])
                          .hide(axis="index"))
+                # 35 por fila y 38 de cabecera y bordes: lo que mide un
+                # `st.dataframe`, para que con tres compras (el máximo que
+                # hay hoy en el parquet para un insumo en una semana) la
+                # tabla entre entera en `PANEL_JUNTO_A_FIGURA` sin scroll.
                 st.dataframe(sty_p, use_container_width=True, hide_index=True,
                             height=alturas.por_filas(
-                                len(tp), px_fila=34, extra=60, minimo=0,
-                                rol=alturas.PANEL_BAJO_FIGURA))
+                                len(tp), px_fila=35, extra=38, minimo=0,
+                                rol=alturas.PANEL_JUNTO_A_FIGURA))
