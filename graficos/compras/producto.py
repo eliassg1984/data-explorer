@@ -58,22 +58,24 @@ from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos import alturas, periodo
 
-_FILAS_PROD = 9
+_FILAS_PROD = 7
 """Filas que reserva el Ranking de productos. Un techo, no un alto: lo que
 sobra scrollea adentro.
 
 Desde el 2026-09-12 las dibuja a 24px (`ALTO_FILA_RANK`) y no a los 28 que
 tenía: entró en la tarjeta de los paneles de Familia, que ya estaban a 24,
 y dos altos de fila en la misma tarjeta se leían como dos tablas pegadas.
-Y 9 en vez de 8 por lo mismo: a 24px, 8 filas dejaban la tarjeta en 552px
-contra los 656 de `--alto-util` a 1366x768 (medido). Con 9 y los 7 de
-`_FILAS_FAM` mide 600: entra con aire en la pantalla objetivo y no
-scrollea por dentro en una de ~700 de alto."""
+
+7, a pedido (2026-09-12, «quitemos dos filas al ranking de productos, para
+que se reduzca la tarjeta»). Esa misma mañana había subido a 9 para
+aprovechar el alto de una pantalla de 768; con la tarjeta ya sin techo
+(regla #382) el alto que manda es el que el usuario quiere ver, no el que
+cabe."""
 
 _ALTO_FRAME = alturas.por_filas(
     _FILAS_PROD, px_fila=ALTO_FILA_RANK, extra=CROMO_GRID_RANK, minimo=0)
 
-_FILAS_FAM = 7
+_FILAS_FAM = 6
 """Filas que RESERVAN los dos paneles de arriba (Familia | Subfamilia).
 
 Los dos el mismo número a propósito: se leen como UNA grilla de dos
@@ -81,12 +83,14 @@ columnas, así que una altura por panel los dejaría terminando a dos
 alturas distintas. Y es un techo, no un alto: lo que sobra scrollea
 adentro.
 
-7 y no 8 desde el 2026-09-11, a pedido ("reduzcamos verticalmente las
-tarjetas"). Medido sobre R2 ese día: las 8 familias del parquet son 5 con
-el filtro de entrada, así que el panel A entra entero; el B scrollea igual
-con 7 que con 8 — ALIMENTOS tiene 10 subfamilias. Desde el 2026-09-12 el
-Ranking de productos va DEBAJO, en la misma tarjeta: la cuenta de que todo
-entre en una pantalla está en `_FILAS_PROD`."""
+6 desde el 2026-09-12, a pedido («una fila [menos] a la tabla de
+subfamilias»). El pedido nombró sólo a Subfamilia, y bajan LAS DOS: van
+lado a lado en la misma fila de columnas, que mide lo que la más alta, así
+que achicar sólo la B no achicaba la tarjeta — dejaba la B terminando 24px
+antes que la A. El panel A no pierde nada: las 8 familias del parquet son
+5 con el filtro de entrada (medido sobre R2 el 2026-09-11) y las 5 entran
+en 6 filas. El B scrollea, como ya lo hacía con 7: ALIMENTOS tiene 10
+subfamilias. Venía de 8 (hasta el 2026-09-11) y de 7."""
 
 _ALTO_FRAME_FAM = alturas.por_filas(
     _FILAS_FAM, px_fila=ALTO_FILA_RANK, extra=CROMO_GRID_RANK, minimo=0)
@@ -538,13 +542,15 @@ def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor,
     (`SUBFAMILIA` viene en las 51.838 filas, ver `_subfam_normalizada`).
 
     `fecha` es un callable `fecha(titulo_html)` que dibuja el selector de
-    fecha de la sección con ese título a su izquierda. Va en la fila de
-    títulos de la tarjeta, del lado del panel B (2026-09-12, a pedido: «en
-    la misma fila del título de la tarjeta compras por familia»): el borde
-    derecho de la tarjeta es donde está en las otras cuatro que lo usan, y
-    el panel A no tiene sitio — su título y el trigger no entran juntos en
-    ~340px. Es un callable y no un valor por la misma razón que el `extra=`
-    de `selector_fecha_tarjeta`: en Streamlit el sitio se elige entrando."""
+    fecha de la sección con ese título a su izquierda. Va en la fila del
+    título del panel A, «Compras por familia» (2026-09-12, a pedido, y
+    repetido: «el selector de fecha debe estar al lado de la primera tabla
+    de familia»). Una primera versión lo había puesto del lado del panel B
+    —el borde derecho de la tarjeta, donde está en las otras cuatro que lo
+    usan— y no era lo pedido: el selector se lee como parte de la tabla que
+    tiene al lado. Es un callable y no un valor por la misma razón que el
+    `extra=` de `selector_fecha_tarjeta`: en Streamlit el sitio se elige
+    entrando."""
     hay_sub = bool(col_subfam and col_subfam in dd.columns)
     fam_ranking = _fam_ranking(dd, col_fam, col_valor)
     fam_focus = st.session_state.get("compras_prod_fam_focus")
@@ -553,9 +559,10 @@ def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor,
 
     # DOS filas de columnas y no una, desde el 2026-09-12: los títulos en
     # una y los grids en otra. Con el título de cada panel dentro de su
-    # columna, el del panel B —que comparte fila con la píldora de la fecha—
-    # medía distinto que el del A, texto suelto con el margen negativo de la
-    # #162, y el grid B arrancaba 16px más abajo que el A (medido, 1280px).
+    # columna, el que comparte fila con la píldora de la fecha (hoy el del
+    # A; ese día, el del B) medía distinto que el otro, texto suelto con el
+    # margen negativo de la #162, y los grids arrancaban a 16px de
+    # distancia (medido, 1280px).
     # En filas separadas Streamlit alinea las dos columnas solo. El título B
     # se escribe DESPUÉS del grid A (depende de su clic) en una columna
     # creada antes: en Streamlit el sitio lo decide el contenedor, no el
@@ -568,8 +575,13 @@ def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor,
     col_famtabla, col_subtabla = st.columns(2, gap=GAP_DRILL)
 
     with tit_fam:
-        st.markdown('<div class="cp-prod-rank-tit">Compras por familia</div>',
-                   unsafe_allow_html=True)
+        # Título y fecha en UNA fila (`cp_prod_fila`, flex): el título cede
+        # con puntos suspensivos y el trigger conserva su ancho.
+        _tit_fam = '<div class="cp-prod-rank-tit">Compras por familia</div>'
+        if fecha is not None:
+            fecha(_tit_fam)
+        else:
+            st.markdown(_tit_fam, unsafe_allow_html=True)
 
     with col_famtabla:
 
@@ -699,14 +711,8 @@ def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor,
     sub_focus = None
     _tit_sub = (f'<div class="cp-prod-rank-tit">'
                 f'{html.escape(_sin_gritar(fam_foco))}</div>')
-    with tit_sub:
-        # Título y fecha en UNA fila (`cp_prod_fila`, flex): el título cede
-        # con puntos suspensivos y el trigger conserva su ancho. Sin panel B
-        # la fecha va sola: la sección no puede quedarse sin su único
-        # control de rango.
-        if fecha is not None:
-            fecha(_tit_sub if hay_sub else None)
-        elif hay_sub:
+    if hay_sub:
+        with tit_sub:
             st.markdown(_tit_sub, unsafe_allow_html=True)
     if hay_sub:
         with col_subtabla:

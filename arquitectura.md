@@ -33774,6 +33774,27 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      padding al pie cada una — sin el blanco que el piso `:has()` rellena
      cuando no coinciden.
 
+     **Quinta vuelta, la misma noche:** «quitemos dos filas al ranking de
+     productos […] y también una fila a la tabla de subfamilias; también
+     igualemos el gráfico del producto. Y recuerda que el selector de
+     fecha debe estar al lado de la primera tabla de familia».
+     · `_FILAS_PROD` 9 → 7 y `_FILAS_FAM` 7 → 6. El pedido nombró sólo a
+       Subfamilia y bajan LAS DOS: van lado a lado en una fila de columnas
+       que mide lo que la más alta, así que achicar sólo la B no achicaba
+       la tarjeta, dejaba la B terminando 24px antes que la A. Familia no
+       pierde nada: sus 5 familias de entrada entran en 6 filas.
+     · La fecha pasa del título del panel B al del A. La primera versión
+       la había puesto contra el borde derecho de la tarjeta —donde está en
+       las otras cuatro que usan el selector— y no era lo pedido: un
+       selector se lee como parte de la tabla que tiene AL LADO. Entra: a
+       1280 el título mide 146px sin recorte y el trigger termina en el
+       mismo píxel que el grid de Familia (880).
+     · El gráfico no necesitó nada propio: `_ALTO_EVO` se calcula de los
+       frames de las tablas, así que siguió solo. Medido a 1280x650: las
+       dos tarjetas en 528,4 (antes 600), figura 384, 16px de padding al
+       pie en las dos, cero scroll de tarjeta. El cromo medido (138/144)
+       no cambió con la fecha de un panel al otro.
+
      (2026-09-12.)
 
 
