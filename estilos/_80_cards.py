@@ -845,9 +845,11 @@ CSS = """    /* ================================================================
         /* pasó a tener, por primera vez, una FILA de dos tarjetas. Sin el  */
         /* piso, el gráfico y la tabla cierran en alturas distintas y el    */
         /* borde inferior de la fila sale en escalón — el mismo síntoma que */
-        /* originó esta regla. La familia `_familia` de más abajo no entra  */
-        /* en juego: es una tarjeta de ancho completo, no vive en una       */
-        /* `.stColumn`, así que el selector no la alcanza.                  */
+        /* originó esta regla. Desde el 2026-09-12 la tarjeta del ranking   */
+        /* lleva ADEMÁS los paneles de Familia/Subfamilia (antes eran una   */
+        /* tarjeta de ancho completo, arriba), y la Evolución se dimensiona */
+        /* contra ella (`_ALTO_EVO` en graficos/compras/producto.py): este  */
+        /* piso queda de red, igual que en Proveedor.                       */
         .stColumn > .stVerticalBlock
         > div:has(> div[class*="st-key-compras_prod_card_"]) {
             flex: 1 1 auto;
@@ -903,8 +905,8 @@ CSS = """    /* ================================================================
     /* TARJETAS DEL DRILL DE PRODUCTO (Compras)                              */
     /*                                                                       */
     /* Misma convención que el bloque de Proveedor de arriba: 2 bloques      */
-    /* separados por el gris del app (ranking+evolución, ranking por         */
-    /* familia), cada uno con key con prefijo `compras_prod_card_`.          */
+    /* separados por el gris del app (familia+subfamilia+ranking |           */
+    /* evolución), cada uno con key con prefijo `compras_prod_card_`.        */
     /*                                                                       */
     /* No tocar sin revisar `_compras_producto_drill` en graficos/compras/producto.py */
     /* =================================================================== */

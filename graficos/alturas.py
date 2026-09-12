@@ -160,21 +160,12 @@ MINI = 240
 # `height=` de `st.container()`, que scrollea su contenido por dentro.
 MARCO = PRESUPUESTO
 
-# Gráfico de evolución de producto en Compras › Proveedor
-# (`compras_prod_card_evo`, el panel de la derecha del ranking de
-# productos). Mismo papel que MINI (panel de detalle, no protagonista),
-# pero la TARJETA mide más que su contenido: la regla `:has()` de
-# estilos/_80_cards.py la iguala a su vecina de fila (la tabla de ranking,
-# que manda por ser la más alta — arquitectura.md #145), y a MINI (240)
-# eso dejaba aire muerto debajo del gráfico.
-#
-# MEDIDO en el navegador el 2026-09-03, a pedido ("un poco más largo, las
-# etiquetas casi no se ven"): con MINI ambas tarjetas medían 415px pero el
-# gráfico terminaba a los 368px de contenido — 47px de hueco vacío entre el
-# eje X y el borde inferior de la tarjeta. A 270 quedan ~17px, casi
-# exactamente el padding-bottom de la tarjeta (16px): ya no sobra aire pero
-# tampoco desborda ni empuja a la tabla vecina a crecer.
-MINI_PROD_EVO = 270
+# (Acá vivió `MINI_PROD_EVO = 270`, el alto de la Evolución de producto en
+# Compras. Se fue el 2026-09-12: desde que el Ranking de productos comparte
+# tarjeta con los paneles de Familia, la figura se mide contra esa tarjeta
+# —`_ALTO_EVO` en graficos/compras/producto.py—, que es el mismo arreglo que
+# ya tenía la Evolución de Proveedor. Un rol fijo no puede seguir a una
+# vecina que cambió de alto.)
 
 MINI_CANDLE_DRILL = 150
 """El candlestick de Volatilidad, que comparte su COLUMNA con tres cosas más.

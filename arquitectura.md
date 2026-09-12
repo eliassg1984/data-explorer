@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-380 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+381 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (133)
 
@@ -168,7 +168,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 
-**Layout y alturas** (42)
+**Layout y alturas** (43)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -212,6 +212,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#371** — Una cabecera flex que ENVUELVE convierte el margen negativo de la regla #162 en un solapamiento
 - **#376** — El default del REPORTE y el default de una TARJETA son dos cosas distintas — y la excepción…
 - **#380** — Un caption que explica una columna es una columna sin sitio: mudalo al headerTooltip antes de…
+- **#381** — Dos tablas de productos una encima de la otra son una pregunta con dos respuestas: el drill…
 
 **Plotly y figuras** (60)
 
@@ -33207,6 +33208,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+     **Actualizado 2026-09-12:** el tercer panel ya no existe. Su papel lo
+     tomó el Ranking de productos, que los dos paneles de arriba RECORTAN
+     (`_ambito_ranking`), y la tarjeta `compras_prod_card_familia` se fundió
+     en `compras_prod_card_ranking`. Las cinco trampas de arriba siguen
+     valiendo, con otro dueño: `_grupo_productos` se fue y la del punto 2
+     (UM al lado, sin totales) la cumple `_prod_ranking`; la del punto 1 (el
+     PAR) la cumple `_ambito_ranking`, que filtra por familia SIEMPRE antes
+     que por subfamilia. La guarda se reescribió en consecuencia. Ver #381.
+
 375. **«Va última en el head» sólo desempata a IGUAL especificidad — para
      PISAR a otra regla hay que ganarle el selector.** El modo diseño
      inyecta su `<style>` al final del head del iframe del AgGrid y se
@@ -33572,6 +33582,94 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-11.)
 
+381. **Dos tablas de productos una encima de la otra son una pregunta con
+     dos respuestas: el drill RECORTA la tabla que ya existe, no le suma
+     otra. Y lo que recorta es el ÁMBITO, que no es el foco del panel.**
+     Pedido 2026-09-12 sobre Compras › Producto, en cuatro partes: sacarle
+     al panel de Familia su columna «Subfam.»; eliminar el tercer panel
+     (los productos del grupo elegido); que el clic en Subfamilia afecte al
+     Ranking de productos; y meter el Ranking en la tarjeta de
+     Familia/Subfamilia, con lo que la Evolución sube a la altura de los
+     paneles. Queda UNA fila, [Familia | Subfamilia + Ranking] | Evolución,
+     que es la forma del drill de Proveedor (`COLUMNAS_DRILL`).
+
+     **Por qué sobraba el tercer panel.** Mostraba los productos del grupo
+     elegido; el Ranking, 300px más abajo, los de todo el rango. Mismas
+     filas, mismo orden, columnas distintas, y ninguna de las dos decía por
+     qué la otra existía. Con el recorte hay una sola tabla de productos y
+     el grupo la acota — `_ambito_ranking(dd, fam, sub)` y sobre eso el
+     mismo `_prod_ranking` de siempre, que ya traía la UM y el precio real
+     de inicio/fin que el panel no tenía.
+
+     **El ámbito no es el foco, y ése es el bug que había que no escribir.**
+     El panel B abre mostrando las subfamilias de la familia de ARRIBA —si
+     no, abre vacío—, pero eso es su foco de pantalla, no un clic. Si el
+     ranking siguiera al foco, abriría la página recortado a ALIMENTOS sin
+     que nadie lo pidiera, y el ranking fue siempre el de TODO lo comprado.
+     Tres estados, y `_paneles_familia` devuelve el ámbito, no el foco:
+
+     · nada clicado        → todo lo comprado
+     · una familia         → esa familia
+     · una subfamilia      → (la familia que muestra el panel B, esa
+                             subfamilia), aunque la familia no se haya
+                             clicado — el PAR, por la trampa 1 de la #374.
+
+     El ámbito se DICE en el título («Ranking de productos · Vino Blanco»)
+     y en el `headerTooltip` del % («% sobre Vino Blanco»): una tabla que
+     cambia de contenido por un clic en OTRO panel, sin decir por qué, se
+     lee como un bug.
+
+     **La key del grid lleva el ámbito**, por la #227 (con key estable y el
+     `client_wins` de fábrica el navegador puede quedarse con la tabla
+     anterior). El remonte trae un efecto que conviene saber que es a
+     propósito: el grid nace sin fila elegida, así que al cambiar de grupo
+     la Evolución pasa al primer producto del grupo nuevo en vez de quedarse
+     mostrando uno que ya no está en la tabla.
+
+     **El `_ALTO_FILA = 28` que la #380 dejó "donde estaba a propósito" se
+     fue, y la razón es la condición que esa misma regla escribió.** Se
+     quedaba porque la tabla compartía fila con una Evolución de alto fijo
+     (`alturas.MINI_PROD_EVO`), así que adelgazarla sólo abría blanco. Ahora
+     la Evolución se mide contra la tarjeta de al lado —`_ALTO_EVO`, el
+     mismo arreglo que Proveedor desde la #276—, y el Ranking, que además
+     comparte tarjeta con dos grids a 24px, pasa a `ALTO_FILA_RANK` +
+     `CSS_RANKING_GRID` + `fitGridWidth`: dos idiomas de grilla en una
+     tarjeta se leían como dos tarjetas pegadas. `MINI_PROD_EVO` se borró
+     de `alturas.py`. Su caption («UM = unidad de kardex · Inicio/Fin =
+     primera y última compra…») se mudó a los `headerTooltip` (#380).
+
+     **Medido en el navegador, 1366x768** (`--alto-util` = 656px): con 7
+     filas en los paneles y 9 en el ranking, las DOS tarjetas miden 601px
+     —exactamente iguales, sin scroll interno—. El cromo que usa
+     `_ALTO_EVO` salió de esa medición y no de una cuenta: 139px el del
+     Ranking (padding 32 + título de los paneles 37 + gap 16 + fila del
+     título 30 + gap 16 + 8 del wrapper del componente) y 144 el de la
+     Evolución (el nombre del producto ocupa 6px de flujo por el margen
+     negativo de la #162). A 1366 las tres grillas entran sin scroll
+     horizontal: Familia 350px, Subfamilia 350, Ranking 716.
+
+     **Corolario de herramienta: en el panel Browser con viewport EMULADO,
+     el clic por coordenada miente.** La vista emulada se dibuja
+     encuadrada dentro de la captura (1366 de ancho metidos en ~560 de 800
+     px), así que la cuenta `800/innerWidth` no da el punto; y además las
+     secciones perezosas de abajo, al construirse, corren el scroll de la
+     página entre la medición y el clic. Resultado visto: clics que caían
+     en otra fila, otra familia o en el ranking, y un estado que parecía un
+     bug de selección fantasma. Lo que sí es fiel es disparar el clic
+     DENTRO del iframe del grid (mismo origen):
+     `cell.dispatchEvent(new MouseEvent('click', {bubbles: true}))` sobre
+     `.ag-row[row-index="N"] .ag-cell` — AG Grid no mira `isTrusted` y el
+     `onRowClicked` corre igual. Medir alto a viewport emulado; probar
+     clics con el panel a su tamaño nativo o por evento.
+
+     La guarda es la misma de la #374,
+     `test_graficos.py::_pruebas_drill_familia_subfamilia`, reescrita: que
+     el ranking recortado cuadre con su fila del panel A o B, que sin clic
+     sea el total, que el % sea sobre el ámbito y que el recorte por el PAR
+     no mezcle familias.
+
+     (2026-09-12.)
+
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -33585,7 +33683,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#381**.
+> próxima regla nueva es la **#382**.
 
 >
 

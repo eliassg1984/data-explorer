@@ -3059,27 +3059,33 @@ def _pruebas_container_queries():
 
 
 def _pruebas_drill_familia_subfamilia():
-    """El drill Familia › Subfamilia › Producto de `compras/producto.py`.
+    """El drill Familia › Subfamilia → Ranking de productos de
+    `compras/producto.py`.
 
-    Lo que se puede romper en silencio, que es de lo que está hecha esta
-    lista:
+    Hasta el 2026-09-12 el tercer nivel era un panel propio (los productos
+    del grupo elegido); ese día se fue y su papel lo tomó el Ranking de
+    productos, que los paneles de arriba RECORTAN (`_ambito_ranking`). Las
+    trampas son las mismas, cambió quién las pisa:
 
-      1. Que los tres niveles dejen de CUADRAR. Cada panel es el desglose
-         del de su izquierda: la suma del panel B tiene que dar la fila
-         elegida del A, y la del C la fila elegida del B. Si alguien cambia
-         un `groupby` o un filtro y eso se rompe, en pantalla se ve una
-         tabla perfectamente creíble con los números de otra cosa.
+      1. Que los niveles dejen de CUADRAR. La suma del panel B tiene que
+         dar la fila elegida del A, y la del ranking recortado la fila
+         elegida del B. Si alguien cambia un `groupby` o un filtro y eso se
+         rompe, en pantalla se ve una tabla perfectamente creíble con los
+         números de otra cosa.
       2. Que el % deje de ser sobre el PADRE. Es la decisión de diseño del
          drill: con % global las cinco subfamilias de VINOS darían 4%,
          0,5%… y la columna dejaría de comparar lo que se está viendo.
-      3. Que el filtro de subfamilia se haga por la subfamilia SOLA. La
+      3. Que el recorte por subfamilia se haga por la subfamilia SOLA. La
          clave es el PAR (familia, subfamilia): medido sobre R2 el
          2026-09-09, 9 de las 95 subfamilias de compras.parquet aparecen en
          más de una familia, así que un `df[col_subfam] == x` suelto mezcla
          productos de dos familias sin dar error. Acá se reproduce con una
          subfamilia repetida a propósito.
       4. Que la UM se pierda. La cantidad de un producto sólo significa algo
-         con su unidad al lado (ver el docstring de `_grupo_productos`).
+         con su unidad al lado (ver el docstring de `_prod_ranking`).
+      5. Que sin ningún clic el ranking deje de ser el de TODO lo comprado.
+         El panel B abre mostrando la familia de arriba, pero eso es su
+         foco, no el ámbito del ranking (ver `_paneles_familia`).
 
     Datos sintéticos y deterministas: sin R2, sin secrets, sin red.
     """
@@ -3094,8 +3100,8 @@ def _pruebas_drill_familia_subfamilia():
             print(f"FALLA drill · {nombre}{': ' + detalle if detalle else ''}")
 
     from graficos.compras.producto import (
-        _fam_normalizada, _fam_ranking, _grupo_productos, _subfam_normalizada,
-        _subfam_ranking,
+        _ambito_ranking, _fam_normalizada, _fam_ranking, _prod_ranking,
+        _subfam_normalizada, _subfam_ranking,
     )
 
     # "Varios" es la subfamilia repetida entre DOS familias: es la trampa 3.
@@ -3108,66 +3114,73 @@ def _pruebas_drill_familia_subfamilia():
         "VAL": [600.0, 200.0, 150.0, 50.0, 300.0, 80.0, 20.0],
         "CANT": [10.0, 5.0, 30.0, 100.0, 12.0, 40.0, 200.0],
         "UM": ["KILOS", "KILOS", "KILOS", "UND", "UND", "UND", "UND"],
+        "PUNIT": [60.0, 40.0, 5.0, 0.5, 25.0, 2.0, 0.1],
+        "FECHA": pd.to_datetime(["2026-08-01", "2026-08-02", "2026-08-03",
+                                 "2026-08-04", "2026-08-05", "2026-08-06",
+                                 "2026-08-07"]),
     })
 
-    fam = _fam_ranking(df, "FAM", "PROD", "VAL", "SUB")
+    def ranking(fam, sub, col_subfam="SUB", col_cant="CANT", col_um="UM"):
+        """El Ranking de productos tal como lo arma la tarjeta: el ámbito
+        que dejan los paneles, y sobre eso `_prod_ranking`."""
+        amb = _ambito_ranking(df, "FAM", col_subfam, fam, sub)
+        return _prod_ranking(amb, "PROD", "FECHA", "VAL", col_cant, "PUNIT",
+                             col_um)
+
+    fam = _fam_ranking(df, "FAM", "VAL")
     check("panel A ordena por valor descendente",
           fam["familia"].tolist() == ["A", "B"], str(fam["familia"].tolist()))
-    check("panel A cuenta las SUBFAMILIAS de cada familia",
-          fam["subfamilias"].tolist() == [3, 2], str(fam["subfamilias"].tolist()))
     check("los % del panel A suman 100", abs(fam["pct"].sum() - 100) < 1e-9)
+    check("el panel A ya no trae la columna de conteo (se pidió fuera)",
+          fam.columns.tolist() == ["familia", "valor", "pct"],
+          str(fam.columns.tolist()))
 
     d_fam = df[_fam_normalizada(df, "FAM") == "A"]
     sub = _subfam_ranking(d_fam, "SUB", "PROD", "VAL")
     check("el panel B CUADRA con su fila del panel A",
           abs(sub["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9,
           f"{sub['valor'].sum()} vs {fam.iloc[0]['valor']}")
-    check("la columna Subfam. del panel A cuenta las filas del panel B",
-          len(sub) == int(fam.iloc[0]["subfamilias"]))
     # 600+200 sobre 1000, no sobre 1400: el % es del PADRE (trampa 2).
     check("el % del panel B es sobre SU FAMILIA, no sobre el total",
           abs(float(sub.iloc[0]["pct"]) - 80.0) < 1e-9,
           f"{sub.iloc[0]['pct']}")
 
-    g = d_fam[_subfam_normalizada(d_fam, "SUB") == "Carnes"]
-    pro = _grupo_productos(g, "PROD", "VAL", "CANT", "UM")
-    check("el panel C CUADRA con su fila del panel B",
+    # Trampa 5: sin ningún clic, el ranking es el de todo lo comprado.
+    todo = ranking(None, None)
+    check("sin clic, el ranking es TODO lo comprado",
+          abs(todo["valor"].sum() - float(df["VAL"].sum())) < 1e-9,
+          f"{todo['valor'].sum()} vs {df['VAL'].sum()}")
+
+    solo_fam = ranking("A", None)
+    check("con una familia elegida, el ranking CUADRA con su fila del A",
+          abs(solo_fam["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9)
+
+    pro = ranking("A", "Carnes")
+    check("con una subfamilia elegida, el ranking CUADRA con su fila del B",
           abs(pro["valor"].sum() - float(sub.iloc[0]["valor"])) < 1e-9)
-    check("la columna Prod. del panel B cuenta las filas del panel C",
+    check("la columna Prod. del panel B cuenta las filas del ranking",
           len(pro) == int(sub.iloc[0]["productos"]))
-    check("el % del panel C es sobre SU SUBFAMILIA",
+    check("el % del ranking es sobre SU ámbito (la subfamilia)",
           abs(float(pro.iloc[0]["pct"]) - 75.0) < 1e-9, f"{pro.iloc[0]['pct']}")
     check("cada producto se lleva su UM (trampa 4)",
           pro["um"].tolist() == ["KILOS", "KILOS"], str(pro["um"].tolist()))
 
-    # Trampa 3, la que motivó que `_subfam_ranking` reciba el df YA filtrado
-    # por familia en vez de (df, familia): "Varios" existe en A y en B.
-    por_par = _grupo_productos(
-        d_fam[_subfam_normalizada(d_fam, "SUB") == "Varios"],
-        "PROD", "VAL", "CANT", "UM")
-    suelto = _grupo_productos(
-        df[_subfam_normalizada(df, "SUB") == "Varios"],
-        "PROD", "VAL", "CANT", "UM")
-    check("filtrar por el PAR (familia, subfamilia) no mezcla familias",
+    # Trampa 3, la que motivó que `_ambito_ranking` filtre SIEMPRE por la
+    # familia primero: "Varios" existe en A y en B.
+    por_par = ranking("A", "Varios")
+    suelto = df[_subfam_normalizada(df, "SUB") == "Varios"]
+    check("recortar por el PAR (familia, subfamilia) no mezcla familias",
           float(por_par["valor"].sum()) == 50.0
-          and float(suelto["valor"].sum()) == 150.0,
-          f"par={por_par['valor'].sum()} suelto={suelto['valor'].sum()}")
+          and float(suelto["VAL"].sum()) == 150.0,
+          f"par={por_par['valor'].sum()} suelto={suelto['VAL'].sum()}")
 
-    # Sin subfamilia elegida el panel C es la familia ENTERA: es lo que hacía
-    # la tarjeta de dos paneles, y el drill no puede habérselo llevado.
-    todo = _grupo_productos(d_fam, "PROD", "VAL", "CANT", "UM")
-    check("sin subfamilia elegida, el panel C es la familia entera",
-          abs(todo["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9)
-
-    # Parquet sin columna de Subfamilia: la tarjeta vuelve a dos paneles y
-    # el panel A muestra el conteo de PRODUCTOS, que es lo que había.
-    fam_sin = _fam_ranking(df, "FAM", "PROD", "VAL", None)
-    check("sin columna de Subfamilia el ranking de familia sigue vivo",
-          "subfamilias" not in fam_sin.columns
-          and fam_sin["productos"].tolist() == [4, 3],
-          str(fam_sin.columns.tolist()))
-    flaco = _grupo_productos(d_fam, "PROD", "VAL", None, None)
-    check("sin columnas de Cantidad/UM el panel C no revienta",
+    # Parquet sin columna de Subfamilia: el recorte se queda en la familia
+    # en vez de reventar o de devolver vacío.
+    sin_sub = ranking("A", "Carnes", col_subfam=None)
+    check("sin columna de Subfamilia el ranking se recorta a la familia",
+          abs(sin_sub["valor"].sum() - float(fam.iloc[0]["valor"])) < 1e-9)
+    flaco = ranking("A", None, col_cant=None, col_um=None)
+    check("sin columnas de Cantidad/UM el ranking no revienta",
           (flaco["cantidad"] == 0).all() and (flaco["um"] == "").all())
 
     return fallos

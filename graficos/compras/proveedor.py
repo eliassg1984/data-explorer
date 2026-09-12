@@ -363,7 +363,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Proveedores", así que ese día dejaron de describir ESTA tabla y
     # pasaron a describir a todas — que es lo que el párrafo de arriba
     # venía anticipando. Acá quedan los alias locales: los consumen ocho
-    # líneas de este archivo y renombrarlas no aportaba nada.
+    # líneas de este archivo y renombrarlas no aportaba nada. El 2026-09-12
+    # el Ranking de productos también se sumó (el 28 de allá se fue): hoy
+    # los dos rankings apilados de Compras dibujan a 24 (regla #381).
     _ALTO_FILA_RANK = ALTO_FILA_RANK
     _ALTO_HEADER_RANK = ALTO_HEADER_RANK
     # `extra` es TODO lo que el grid mide y no son las filas de datos:
