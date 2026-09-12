@@ -233,6 +233,12 @@ resto de `graficos/compras/`.
   «Última actualización: hoy» — ese rótulo mide el ARCHIVO en R2, no el df
   cargado. Toda cacheable que lea R2 recibe `data.sello_datos(archivo)` como
   segundo argumento. Ver `arquitectura.md` regla #367.
+- **`hoverinfo="skip"` apaga también el CLIC.** Un `go.Scatter` invisible
+  puesto encima para "capturar" clics con esa opción no recibe ninguno
+  (sólo `"none"` oculta la etiqueta y sigue emitiendo). El candlestick de
+  Volatilidad estuvo así desde que nació: la vela quedaba marcada y la
+  tabla no la seguía. Para selección por caja da igual. Ver
+  `arquitectura.md` #388.
 - **La selección de `st.plotly_chart(on_select=...)` persiste entre reruns.**
   Con `key` estática, cada rerun re-procesa el mismo clic → toggle infinito
   (parpadeo). Incluir el foco en la key: `key=f"..._{focus or 'none'}"`.

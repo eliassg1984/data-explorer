@@ -9,12 +9,13 @@ Semáforo de precio: como el dato es un COSTO (no una ganancia), "sube" es
 malo (rojo, ERROR) y "baja" es bueno (verde, EXITO) — al revés de la
 convención bursátil, a propósito.
 
-`go.Candlestick` no tiene precedente de selección por clic en este
-proyecto (a diferencia de go.Bar, que Proveedor ya usa con éxito). Se
-asume NO seleccionable de forma confiable, igual que go.Heatmap (regla
-#11) y go.Histogram (regla #44): se agrega una traza go.Scatter invisible
-(un punto por semana) para capturar el clic, y se ignoran los eventos que
-lleguen del candlestick mismo.
+El clic en una vela lo recibe `go.Candlestick` MISMO (traza 0). Hasta el
+2026-09-12 se lo suponía no seleccionable —como go.Heatmap (regla #11) y
+go.Histogram (regla #44)— y se capturaba con un go.Scatter invisible encima,
+descartando los eventos de la vela. Pero ese scatter llevaba
+`hoverinfo="skip"`, que en Plotly apaga también los clics: nunca recibió
+uno, y la vela clickeada quedaba marcada sin que la tabla de la semana la
+siguiera. Ver regla #388.
 """
 
 import pandas as pd
@@ -840,20 +841,25 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 hoverinfo="text",
                 name="",
             ))
-            # Overlay invisible para capturar el clic (go.Candlestick sin
-            # precedente de selección confiable en este proyecto — ver rules #11/#44).
-            fig.add_trace(go.Scatter(
-                x=semanas, y=[(w["h"] + w["l"]) / 2 for w in weeks],
-                mode="markers", marker=dict(size=38, opacity=0),
-                hoverinfo="skip", showlegend=False,
-            ))
+            # (Acá había un `go.Scatter` invisible —marcadores de 38px,
+            # `hoverinfo="skip"`— puesto para capturar el clic, porque se
+            # suponía que `go.Candlestick` no era seleccionable (reglas #11 y
+            # #44). Era al revés, y se descubrió con una captura del usuario
+            # el 2026-09-12: la vela del 24 Ago quedaba MARCADA —Plotly
+            # atenuaba las demás— y la tabla seguía en la semana por defecto.
+            # Una traza con `hoverinfo="skip"` no dispara clics (la doc de
+            # Plotly: sólo con "none" se siguen emitiendo), así que el
+            # overlay nunca recibió uno; el que llegaba era el de la VELA
+            # (traza 0), y el código lo descartaba por no ser la 1. El clic
+            # en una vela, entonces, no cambió nunca la semana de la tabla.
+            # Se atiende la traza 0 y el overlay se fue.)
 
             # ── LOS PRECIOS, ESCRITOS AL COSTADO DE CADA VELA ────────────
             # 2026-09-12, a pedido y sobre una maqueta con datos reales: la
             # primera y la última compra de la semana, siempre visibles, sin
-            # tener que pasar el mouse. Van en trazas de TEXTO aparte y
-            # DESPUÉS del overlay del clic: el clic se atiende por
-            # `curve_number == 1`, y una traza metida antes lo correría.
+            # tener que pasar el mouse. Van en trazas de TEXTO aparte, con
+            # `hoverinfo="skip"` —que, justamente, las deja fuera del clic:
+            # el clic lo recibe sólo la vela (traza 0)—.
             #
             # AL COSTADO Y A LA ALTURA DE SU PRECIO, no arriba o abajo de la
             # vela: así una etiqueta en el precio más alto o más bajo no se
@@ -964,12 +970,21 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             evt = st.plotly_chart(fig, use_container_width=True, key=_chart_key,
                                   on_select="rerun", selection_mode="points", config=_cfg)
 
-            # Procesar clic (dedup, patrón de proveedor.py): solo se atiende
-            # un punto que venga de la traza 1 (el overlay), no de la 0
-            # (las velas).
+            # Procesar clic (dedup, patrón de proveedor.py): se atiende un
+            # punto de la traza 0, la de las VELAS — ver el comentario de
+            # arriba sobre el overlay que nunca recibió un clic. El índice de
+            # la semana sale de `point_index`/`point_number`; si el evento no
+            # lo trae, de la fecha `x`, que es el lunes de la semana.
             _mp = _first_point(evt)
-            if _mp is not None and _mp.get("curve_number") == 1:
+            if _mp is not None and _mp.get("curve_number") == 0:
                 _pi = _mp.get("point_index", _mp.get("point_number"))
+                if _pi is None and _mp.get("x") is not None:
+                    try:
+                        _xs = pd.Timestamp(_mp["x"]).normalize()
+                        _pi = next((i for i, s in enumerate(semanas)
+                                    if s == _xs), None)
+                    except (ValueError, TypeError):
+                        _pi = None
                 if _pi is not None and st.session_state.get("compras_vol_last_click") != _pi:
                     st.session_state["compras_vol_last_click"] = _pi
                     _misma = st.session_state.get("compras_vol_semfocus") == _pi

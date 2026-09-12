@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-387 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+388 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (136)
 
@@ -220,7 +220,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 
-**Plotly y figuras** (61)
+**Plotly y figuras** (62)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -283,6 +283,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 - **#387** — Dos rótulos para la misma cosa son una pregunta que el usuario va a hacer
+- **#388** — hoverinfo="skip" apaga también el CLIC: un overlay invisible puesto para capturar clics con…
 
 **AgGrid y tablas** (63)
 
@@ -34159,6 +34160,45 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+388. **`hoverinfo="skip"` apaga también el CLIC: un overlay invisible
+     puesto para capturar clics con esa opción no recibe ninguno.** Captura
+     del usuario, 2026-09-12, sobre el candlestick de Volatilidad: la vela
+     del 24 Ago quedaba MARCADA —Plotly atenuaba las otras cuatro— y la
+     tabla de al lado seguía en «Semana del 10/08 al 16/08». Pregunta:
+     «¿esto es lógico?». No: el clic en una vela no había cambiado nunca la
+     semana de la tabla.
+
+     La vista se armó suponiendo que `go.Candlestick` no era seleccionable
+     —por analogía con la #11 (Heatmap) y la #44 (Histogram)— y capturaba
+     el clic con un `go.Scatter` invisible encima (marcadores de 38px,
+     `opacity=0`) con `hoverinfo="skip"`, descartando los eventos de la
+     vela (`curve_number == 1`). Las dos suposiciones eran al revés: la
+     documentación de Plotly dice que con `"skip"` la traza no emite hover
+     NI clic —sólo `"none"` oculta la etiqueta y sigue emitiendo—, así que
+     el overlay no recibió nunca un clic; y el candlestick SÍ es
+     seleccionable: el clic le llegaba a la vela (traza 0), Plotly la
+     marcaba, y el código lo tiraba. La tabla mostraba siempre la semana
+     por defecto (la de más movimiento propio).
+
+     El arreglo es atender la traza 0 y borrar el overlay. Verificado con
+     un clic sintético sobre `.nsewdrag` (mousemove + mousedown + mouseup +
+     click en las coordenadas de la vela): `gd.data[0].selectedpoints`
+     pasa a `[2]` y la tabla a «Semana del 24/08 al 30/08». En el panel de
+     pruebas la recarga tardó ~15 s; medir antes de eso da un falso «no
+     anda».
+
+     **Dos lecciones.** Una capa invisible que "captura" clics tiene que
+     llevar `hoverinfo="none"` —o `hovertemplate` vacío—, nunca `"skip"`;
+     para selección por CAJA sí da igual, porque no pasa por el hover (así
+     funciona la capa de `ventas_horario.py`). Y la #11 y la #44 son
+     hallazgos sobre Heatmap e Histogram, no una ley sobre "trazas
+     agregadas": antes de ponerle un overlay a una traza nueva, probar si
+     se selecciona sola. El histograma de Ajuste › Distribución tiene la
+     misma capa con `"skip"` y queda para revisar su clic suelto (el
+     arrastre de caja sí funciona).
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34171,7 +34211,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#388**.
+> próxima regla nueva es la **#389**.
 
 >
 
