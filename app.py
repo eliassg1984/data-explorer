@@ -522,8 +522,8 @@ fecha_ini_default = _ancla_mes.replace(day=1)   # 01 del mes con datos
 fecha_fin_default = _ancla_mes                  # hoy, o el último día con datos
 
 # EL MISMO MES, PERO ANCLADO AL PARQUET (2026-09-11). Es el default de las
-# tarjetas que abren en el mes en curso (hoy sólo el Ranking de
-# Proveedores, ver `graficos.compras.SEC_ABRE_EN_EL_MES`), y se calcula
+# tarjetas que abren en el mes en curso (hoy Proveedores, Producto y
+# Semanal, ver `graficos.compras.SEC_ABRE_EN_EL_MES`), y se calcula
 # acá —una sola vez, al lado del otro default— porque recalcularlo del lado
 # de la tarjeta es la segunda cuenta que se desincroniza.
 #
@@ -576,7 +576,7 @@ if reporte == "Compras" and fecha_min_full and fecha_max_full:
 # ...Y UNA TARJETA PUEDE ABRIR EN OTRO (2026-09-11, a pedido). El default de
 # arriba es el del REPORTE: el que ve una sección sin selector de fecha
 # propio. Una que SÍ lo tiene en la cabecera puede abrir en otra ventana —
-# hoy el Ranking de Proveedores, en el mes en curso.
+# hoy Proveedores, Producto y Semanal, en el mes en curso.
 #
 # Se publica un dict {categoría: rango} y no un default por sección: la
 # categoría es la unidad del rango (dos secciones pueden compartirla, y

@@ -285,8 +285,9 @@ rango compartido y el bug reaparece en una sola vista. Lo ataja
 
 **Con qué rango ABRE cada tarjeta es otra cosa.** El default del reporte
 son los últimos 12 meses; una categoría puede pedir otro sumándose a
-`SEC_ABRE_EN_EL_MES` (`graficos/compras/_comun.py`) — hoy sólo el Ranking
-de proveedores, que abre en el mes en curso. El mes lo calcula `app.py` y
+`SEC_ABRE_EN_EL_MES` (`graficos/compras/_comun.py`) — hoy Proveedores,
+Producto y Semanal, que abren en el mes en curso (Volatilidad sigue en los
+12 meses). El mes lo calcula `app.py` y
 lo publica en `rango_default_cat`; quien elige es `base.py::rango_tarjeta`,
 y tiene que ser ahí: esa función la llaman el trigger Y el recorte del
 dispatcher, y el recorte corre PRIMERO. Poner el default en el selector no

@@ -282,7 +282,20 @@ CATEGORIA_SEC = {
 # (`rango_default_cat`), no esta tupla: acá sólo se declara CUÁL de los dos
 # defaults quiere cada categoría. Una segunda cuenta del mismo mes es
 # exactamente lo que evita `rango_default` desde el 2026-09-08.
-SEC_ABRE_EN_EL_MES = ("sec_proveedor",)
+#
+# 2026-09-12, a pedido, se suman dos: «el selector de fecha de la tabla de
+# compras por familia debe mostrar el mes actual seleccionado» (Producto) y
+# la vista Semanal, «seleccionado el mes actual en su selector de fecha
+# inicialmente» — que además abre en «Por documento» (`_GRAN_DEFAULT` en
+# semanal.py). Quedan en los 12 meses del reporte Volatilidad, que tiene su
+# propia ventana, y las secciones sin selector.
+#
+# Lo que NO cambia con esto: el gráfico de evolución de Producto mira su
+# VENTANA propia (abre en 3 meses, `producto.py`), no esta fecha — salvo
+# que se elija «Rango de las tablas». Un mes de ranking al lado de 3 meses
+# de evolución es a propósito: el ranking contesta "qué compré ahora", la
+# evolución "cómo viene el precio".
+SEC_ABRE_EN_EL_MES = ("sec_proveedor", "sec_producto", "sec_semanal")
 
 
 # ===========================================================================

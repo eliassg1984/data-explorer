@@ -81,14 +81,29 @@ from graficos.compras._comun import (
 _FAM_TODAS = "Todas las familias"
 _PROD_TODOS = "Todos los productos"
 
+_GRAN_DEFAULT = "Por documento"
+"""Con qué granularidad abre la vista, y a qué vuelve si se suelta la
+píldora activa (Streamlit devuelve `None` al des-elegir un `st.pills`).
+
+«Por documento» desde el 2026-09-12, a pedido («debe aparecer
+inicialmente seleccionado "Por documento"»), junto con abrir en el mes en
+curso (`SEC_ABRE_EN_EL_MES` en `_comun.py`): las dos cosas van juntas, un
+mes por documento son ~30-60 barras legibles; doce meses por documento
+serían cientos. Antes era «Semana».
+
+UNA constante para los dos usos a propósito: con el default en el widget y
+el fallback escrito aparte, soltar la píldora mostraba otra granularidad
+que la del arranque."""
+
 _KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familia",
                 "compras_sem_producto")
 """Los tres controles de la cabecera, para que la escalada no se los lleve.
 
 No es una lista decorativa: la consume `preservar_widgets` en el
 `st.rerun(scope="app")` de más abajo, y sin ella mover la fecha de la
-cabecera devolvía la granularidad a «Semana» —con la píldora «Por
-documento» todavía marcada en pantalla— y los dos filtros a "todas/todos".
+cabecera devolvía la granularidad a su default —«Semana» entonces, con la
+píldora «Por documento» todavía marcada en pantalla— y los dos filtros a
+"todas/todos".
 Ver `graficos/base.py::preservar_widgets` y `arquitectura.md` regla #373.
 `test_graficos.py::_pruebas_widgets_de_fragment_escalado` falla si aparece
 un cuarto control acá arriba y nadie lo agrega a esta tupla."""
@@ -580,7 +595,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 _box["gran"] = st.pills(
                     "Agrupar por",
                     ["Día", "Semana", "Mes", "Año", "Por documento"],
-                    default="Semana", key="compras_sem_gran",
+                    default=_GRAN_DEFAULT, key="compras_sem_gran",
                     label_visibility="collapsed")
                 if _hay_fam and len(_ops_fam) > 1:
                     with st.container(key="cp_sem_hdr_familia"):
@@ -608,7 +623,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             # izquierda, que son de esta vista y no de la fecha. En ese caso
             # se dibujan sueltos.
             _controles()
-        gran = _box.get("gran") or "Semana"
+        gran = _box.get("gran") or _GRAN_DEFAULT
         fam_sel = _box.get("fam") or _FAM_TODAS
         prod_sel = _box.get("prod") or _PROD_TODOS
 

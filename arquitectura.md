@@ -33313,6 +33313,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-11.)
 
+     **Addendum 2026-09-12:** se suman `sec_producto` («el selector de
+     fecha de la tabla de compras por familia debe mostrar el mes actual»)
+     y `sec_semanal`, que además abre en «Por documento»
+     (`semanal.py::_GRAN_DEFAULT`, una constante para el default del
+     widget Y el fallback de soltar la píldora — antes eran dos literales,
+     «Semana» los dos). Fue exactamente lo que esta regla prometía: una
+     línea en la tupla por sección, sin tocar el selector. Verificado en
+     sesión nueva: los triggers de Producto y Semanal en «1 sep – 10 sep
+     2026», Semanal con 61 barras por documento. El default sólo SIEMBRA:
+     una sesión que ya tenía el rango en `session_state` lo conserva hasta
+     recargar la página. Queda en 12 meses sólo Volatilidad, que mira su
+     ventana propia.
+
 
 377. **Una tarjeta por ítem es un formato, no una ley: cuando la lista
      crece, la fila gana — y el clic que la abre no necesita JS.** Pedido
