@@ -198,28 +198,12 @@ def _pruebas_puras():
           _rc._activo(_serie_activo).tolist(),
           [True, False, False, True, False, True, False, False])
 
-    # nombre_propio — los 770 proveedores del parquet vienen en MAYÚSCULA
-    # SOSTENIDA y `str.title()` se equivoca en los 223 que llevan "S.A.C.".
-    # Cada caso de acá es un token que existe en el parquet real y una regla
-    # distinta; el barrido completo se corrió a mano el 2026-09-07 (768 de
-    # 770 correctos). Ver el bloque de comentarios en graficos/base.py.
-    for _entra, _sale in [
-        ("COMPAÑIA FOOD RETAIL S.A.C.", "Compañia Food Retail S.A.C."),
-        ("INVERSIONES BARCO AZUL E.I.R.L.", "Inversiones Barco Azul E.I.R.L."),
-        ("ESTABLECIMIENTOS INCA SAC", "Establecimientos Inca SAC"),
-        ("LUZ DEL SUR S.A.A.", "Luz del Sur S.A.A."),
-        ("EL ESTUDIANTE S.A.", "El Estudiante S.A."),
-        ("PACIFICO COMPAÑIA DE SEGUROS Y REASEGUROS",
-         "Pacifico Compañia de Seguros y Reaseguros"),
-        ("DOBLE G REPRESENTACIONES S.A.C.", "Doble G Representaciones S.A.C."),
-        ("LINDAS TELAS S A", "Lindas Telas S A"),
-        ("JCCF S.A.C.", "JCCF S.A.C."),
-        ("3M PERU S.A.", "3M Peru S.A."),
-        ("COMERCIAL COGNIMETA Y.R. E.I.R.L.", "Comercial Cognimeta Y.R. E.I.R.L."),
-    ]:
-        check(f"nombre_propio · {_entra[:28]}", b.nombre_propio(_entra), _sale)
-    check("nombre_propio · None pasa de largo", b.nombre_propio(None), None)
-    check("nombre_propio · vacío pasa de largo", b.nombre_propio(""), "")
+    # nombre_propio ya NO vive en graficos/base.py: hasta el 2026-09-11
+    # hubo dos, con el mismo nombre y distinto resultado en 48 de los 773
+    # proveedores. Quedó la de `graficos/compras/_etiquetas_proveedor.py`
+    # con las reglas de las dos; sus casos están en el bloque `_ep` de más
+    # abajo, y `_pruebas_una_sola_nombre_propio` vigila que no reaparezca
+    # una segunda copia. Ver arquitectura.md regla #379.
 
     # _slug — id seguro para keys/CSS
     check("_slug símbolos", b._slug("Cascada · Precio"), "cascada_precio")
@@ -302,15 +286,31 @@ def _pruebas_puras():
 
     # nombre_propio — el ranking de Proveedor MUESTRA esto y guarda el
     # original en `_prov_raw` (proveedor.py). Los casos salen de contar los
-    # 767 proveedores reales de compras.parquet, no de inventarlos: si
-    # alguien "simplifica" el orden de los cuatro `elif`, acá se cae.
+    # 773 proveedores reales de compras.parquet, no de inventarlos: si
+    # alguien "simplifica" el orden de los `elif`, acá se cae.
+    #
+    # Es la ÚNICA nombre_propio del repo desde el 2026-09-11 (regla #379):
+    # `graficos/base.py` tenía otra, y diferían en 48 de los 773. Los casos
+    # de abajo marcados «(era de base.py)» son las reglas que aportaba esa
+    # copia y que si desaparecen hacen que Volatilidad vuelva a escribir
+    # los nombres distinto que el drill de Proveedor. Lo que NADIE de los
+    # dos lados hacía bien (el apóstrofo) tiene su propio bloque al final.
     check("propio caso base",
           _ep.nombre_propio("DOBLE G REPRESENTACIONES S.A.C."),
           "Doble G Representaciones S.A.C.")
+    check("propio Ñ y sigla con puntos",
+          _ep.nombre_propio("COMPAÑIA FOOD RETAIL S.A.C."),
+          "Compañia Food Retail S.A.C.")
+    check("propio E.I.R.L.",
+          _ep.nombre_propio("INVERSIONES BARCO AZUL E.I.R.L."),
+          "Inversiones Barco Azul E.I.R.L.")
     # Sigla SIN puntos: 46 SAC + 18 EIRL + 12 SA en los datos reales.
     check("propio sigla sin puntos",
           _ep.nombre_propio("ESTABLECIMIENTOS INCA SAC"),
           "Establecimientos Inca SAC")
+    check("propio sigla larga sin puntos (SRLTDA)",
+          _ep.nombre_propio("A-IBAR COMERCIAL SRLTDA"),
+          "A-Ibar Comercial SRLTDA")
     # Preposición en minúscula, artículo NO: en castellano el artículo que
     # forma parte del nombre lleva mayúscula.
     check("propio preposición en minúscula",
@@ -318,6 +318,17 @@ def _pruebas_puras():
     check("propio artículo en mayúscula",
           _ep.nombre_propio("AGRICOLA LA CHACRA S.A.C."),
           "Agricola La Chacra S.A.C.")
+    # … pero el artículo que viene DETRÁS de una preposición es parte del
+    # sintagma y va en minúscula. Las dos versiones viejas acertaban una de
+    # las dos y fallaban la otra; por eso son dos listas y no una.
+    check("propio artículo tras preposición, en minúscula",
+          _ep.nombre_propio("BANCO DE LA NACION"), "Banco de la Nacion")
+    check("propio artículo plural tras preposición",
+          _ep.nombre_propio("CERVECERIA ARTESANAL DE LOS ANDES S.A.C."),
+          "Cerveceria Artesanal de los Andes S.A.C.")
+    check("propio apellido «De la Cruz»",
+          _ep.nombre_propio("DE LA CRUZ ASTORGA LUIS ALFONSO"),
+          "De la Cruz Astorga Luis Alfonso")
     check("propio conjunción en minúscula",
           _ep.nombre_propio("PACIFICO COMPAÑIA DE SEGUROS Y REASEGUROS"),
           "Pacifico Compañia de Seguros y Reaseguros")
@@ -335,8 +346,11 @@ def _pruebas_puras():
     # sin romperse: el primero sale igual, el segundo se capitaliza.
     check("propio bucket Otros", _ep.nombre_propio("Otros"), "Otros")
     check("propio vacío", _ep.nombre_propio(""), "")
+    # None NO es lo mismo que "": `str(None)` da "None" y la celda mostraría
+    # un proveedor llamado "None". (era de base.py)
+    check("propio None pasa de largo", _ep.nombre_propio(None), None)
     # Separador que NO es espacio. Los dos salieron de correr la función
-    # sobre los 767 nombres reales: sin capitalizar por RACHAS daban "E&r"
+    # sobre los nombres reales: sin capitalizar por RACHAS daban "E&r"
     # y "(peru)" — en el segundo, el primer caracter es "(" y ponerlo en
     # mayúscula no hace nada mientras el resto se va a minúscula.
     check("propio & sin espacios",
@@ -344,7 +358,52 @@ def _pruebas_puras():
           "E&R Innovaciones Glass S.A.C.")
     check("propio paréntesis y guión",
           _ep.nombre_propio("TTG-THE GLOBAL GROUP (PERU)"),
-          "Ttg-The Global Group (Peru)")
+          "TTG-The Global Group (Peru)")
+    check("propio dígitos adentro del token",
+          _ep.nombre_propio("3M PERU S.A."), "3M Peru S.A.")
+    check("propio iniciales con puntos",
+          _ep.nombre_propio("COMERCIAL COGNIMETA Y.R. E.I.R.L."),
+          "Comercial Cognimeta Y.R. E.I.R.L.")
+
+    # SIN VOCALES = SIGLA. (era de base.py) Son 24 de los 773: sin esta
+    # regla "LV DITEK" sale "Lv Ditek" y "OPERADORA LCPM", "Operadora
+    # Lcpm" — se leen como palabra y no lo son. No hay tope de largo
+    # porque un tope de tres letras dejaba pasar "JCCF" y "LCPM".
+    for _entra, _sale in [
+        ("LV DITEK S.A", "LV Ditek S.A"),
+        ("CORPORACION BASERITO LMC SAC", "Corporacion Baserito LMC SAC"),
+        ("CORPORACION MG SOCIEDAD ANONIMA CERRADA",
+         "Corporacion MG Sociedad Anonima Cerrada"),
+        ("JCCF S.A.C.", "JCCF S.A.C."),
+        ("OPERADORA LCPM S.A.C.", "Operadora LCPM S.A.C."),
+        ("ALMACENES J&S SAC", "Almacenes J&S SAC"),
+    ]:
+        check(f"propio sin vocales · {_entra[:26]}",
+              _ep.nombre_propio(_entra), _sale)
+    # Y EL LÍMITE DE ESA REGLA: la Y cuenta como vocal. Sin eso, el único
+    # falso positivo del parquet — la Y hace de vocal en inglés y "DRY" no
+    # es una sigla. Era el precio que pagaba la versión de base.py.
+    check("propio la Y no hace sigla",
+          _ep.nombre_propio("DASSO DRY CLEANER E.I.R.L."),
+          "Dasso Dry Cleaner E.I.R.L.")
+
+    # APÓSTROFO — esto no lo hacía bien NINGUNA de las dos: la de
+    # `_etiquetas_proveedor` escribía "Stella'S" (la racha de después
+    # arranca palabra) y la de base.py acertaba de rebote, sin regla. Son 5
+    # nombres reales y el ERP usa DOS caracteres distintos: U+0027 y U+00B4.
+    check("propio posesivo en minúscula",
+          _ep.nombre_propio("STELLA'S FV E.I.R.L."), "Stella's FV E.I.R.L.")
+    check("propio posesivo con acento agudo (U+00B4)",
+          _ep.nombre_propio("KEY´S MASTER E.I.R.L."),
+          "Key´s Master E.I.R.L.")
+    check("propio letra suelta tras apóstrofo",
+          _ep.nombre_propio("QUILCAT FLORES GUISEL'L EDITH"),
+          "Quilcat Flores Guisel'l Edith")
+    # El tope de dos letras es lo que separa el rabito de la partícula
+    # elidida. No está en el parquet de hoy; está para que el día que entre
+    # un "D'ONOFRIO" no salga "D'onofrio".
+    check("propio partícula elidida NO se baja",
+          _ep.nombre_propio("D'ONOFRIO SAC"), "D'Onofrio SAC")
 
     # etiqueta_serie — barra en 0 no lleva etiqueta; la 1ª no tiene variación
     _et = _ep.etiqueta_serie([0, 100, 150], "del Mes")
@@ -3206,6 +3265,82 @@ def _pruebas_grilla_horizontal():
     return fallos
 
 
+def _pruebas_una_sola_nombre_propio():
+    """Que `nombre_propio` no vuelva a ser DOS funciones.
+
+    Hasta el 2026-09-11 había dos, con el mismo nombre y el mismo
+    propósito: una en `graficos/base.py` y otra en
+    `graficos/compras/_etiquetas_proveedor.py`. Sobre los 773 proveedores
+    distintos de `compras.parquet` daban resultados distintos en **48**, y
+    ninguna ganaba en todas: la de base acertaba las siglas sin vocales
+    («LV Ditek», «Operadora LCPM») y la otra los artículos («Agricola La
+    Chacra») y los tokens con separador raro («J&S»). El síntoma no era un
+    error sino algo peor: el mismo proveedor escrito de dos maneras según
+    qué tarjeta lo dibujara — «Corporacion Baserito Lmc» en el ranking de
+    Volatilidad y «Corporacion Baserito LMC» en el drill de Proveedor.
+
+    Se copian funciones por una razón buena (no crear un import feo) y el
+    coste tarda semanas en verse, así que lo que se vigila es la copia, no
+    el resultado:
+
+      1. Una sola `def nombre_propio` en todo el repo, y en su módulo.
+      2. Nadie la importa de `graficos.base` — ahí ya no está, pero un
+         `from graficos.base import nombre_propio` falla en el import del
+         dashboard, o sea EN CLOUD y con la app caída (regla #357), no acá.
+
+    Por qué vive en `graficos/compras/` y no en `base.py`, que sería el
+    sitio natural de un helper compartido: `base.py` no puede importar de
+    `graficos/compras/` porque el paquete importa de `base.py` al cargarse
+    — probado, `ImportError: cannot import name 'compartimento_filtros'
+    from partially initialized module`. La dependencia va en un solo
+    sentido y el que tiene que ceder es `base.py`. Ver regla #379.
+    """
+    import ast
+    import pathlib
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    nombre_propio · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA nombre_propio · {nombre}{': ' + detalle if detalle else ''}")
+
+    raiz = pathlib.Path(__file__).parent
+    DUENO = "graficos/compras/_etiquetas_proveedor.py"
+
+    definiciones, importan_de_base = [], []
+    for py, src in _fuentes_py(raiz):
+        rel = py.relative_to(raiz).as_posix()
+        try:
+            arbol = ast.parse(src)
+        except SyntaxError:
+            continue
+        for nodo in ast.walk(arbol):
+            if (isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and nodo.name == "nombre_propio"):
+                definiciones.append(f"{rel}:{nodo.lineno}")
+            if (isinstance(nodo, ast.ImportFrom)
+                    and nodo.module == "graficos.base"
+                    and any(a.name == "nombre_propio" for a in nodo.names)):
+                importan_de_base.append(f"{rel}:{nodo.lineno}")
+
+    check("hay exactamente UNA definición en el repo",
+          len(definiciones) == 1,
+          f"encontradas {len(definiciones)}: {', '.join(definiciones)}"
+          " — si hacen falta dos comportamientos, son dos NOMBRES")
+    check(f"y vive en {DUENO}",
+          definiciones == [d for d in definiciones if d.startswith(DUENO)],
+          f"está en {', '.join(definiciones)}")
+    check("nadie la importa de graficos.base",
+          not importan_de_base,
+          f"la importan de base: {', '.join(importan_de_base)}")
+
+    return fallos
+
+
 def main():
     df, df_min = _df_completo(), _df_minimo()
     fallos = 0
@@ -3380,7 +3515,10 @@ def main():
     # ── El JS inyectado: que el escapado de dos niveles no lo rompa ─────
     fallos += _pruebas_js_inyectado_sano()
 
-    # ── El barrido del fuente que usan las tres guardas de arriba ───────
+    # ── Una sola `nombre_propio`: que no vuelvan a ser dos ──────────────
+    fallos += _pruebas_una_sola_nombre_propio()
+
+    # ── El barrido del fuente que usan las guardas de arriba ────────────
     fallos += _pruebas_recorrido_fuentes()
 
     print()

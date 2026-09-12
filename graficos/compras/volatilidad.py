@@ -24,9 +24,10 @@ import streamlit as st
 from cortes import MESES_ABR_ES
 from tema import ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO
 from graficos.base import (
-    _card, _compras_layout, _compras_truncar, _slug, nombre_propio,
+    _card, _compras_layout, _compras_truncar, _slug,
     preservar_widgets, selector_fecha_tarjeta,
 )
+from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.compras._comun import (
     CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, PARR, _first_point,
 )
@@ -209,7 +210,9 @@ def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
                 # NOMBRE PROPIO, no el grito del ERP (2026-09-07, a pedido).
                 # Es SOLO para mostrar: esta tabla no agrupa ni filtra por
                 # proveedor, así que no hay ningún valor canónico que se
-                # pueda desalinear. Ver `base.py::nombre_propio`.
+                # pueda desalinear. Ver `_etiquetas_proveedor.nombre_propio`,
+                # que es la unica desde el 2026-09-11 (arquitectura.md #379:
+                # esta tarjeta importaba una copia que escribia distinto).
                 "prov": nombre_propio(str(r[col_prov])) if col_prov else "—",
                 "cant": r[col_cant] if col_cant else None,
                 "precio": float(precio),

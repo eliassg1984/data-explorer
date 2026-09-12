@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-378 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+379 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (133)
 
@@ -448,7 +448,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#377** — Una tarjeta por ítem es un formato, no una ley: cuando la lista crece, la fila gana — y el…
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 
-**Datos, R2 y DuckDB** (48)
+**Datos, R2 y DuckDB** (49)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -498,6 +498,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
 - **#367** — Una caché con persist="disk" NO caduca: el ttl sólo gobierna la copia en memoria
 - **#376** — El default del REPORTE y el default de una TARJETA son dos cosas distintas — y la excepción…
+- **#379** — Dos funciones con el mismo nombre y el mismo propósito no son una duplicación: son dos…
 
 **SUNAT y SIRE** (40)
 
@@ -31147,8 +31148,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      361px, eso es la diferencia entre leer el proveedor y no leerlo.
 
      **`str.title()` se equivoca en 223 de los 770**: «S.A.C.» sale
-     «S.a.c.». Las cuatro reglas de `graficos/base.py::nombre_propio` salen
-     de CONTAR los tokens del parquet real, no de teoría:
+     «S.a.c.». Las cuatro reglas de `nombre_propio` salen de CONTAR los
+     tokens del parquet real, no de teoría (la función nació en
+     `graficos/base.py`; hoy vive en
+     `graficos/compras/_etiquetas_proveedor.py` y es la única — #379):
 
      · **con punto adentro → sigla**, va entera en mayúscula: `S.A.C.` 223
        veces, `E.I.R.L.` 79, `S.A.` 32, `S.R.L.` 14, y también `Y.R.`;
@@ -31164,9 +31167,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        regla de «una sola letra» se disparaba primero. Las únicas letras
        sueltas que son conectores son y/e/o/u; el resto cae al largo.
      · **Sin vocales = sigla, sin tope de largo.** No hay palabra española
-       sin vocal, así que la regla no tiene falsos positivos, y un tope de
-       tres letras dejaba pasar dos casos reales: «JCCF S.A.C.» y «OPERADORA
-       LCPM S.A.C.» salían «Jccf» y «Lcpm».
+       sin vocal, y un tope de tres letras dejaba pasar dos casos reales:
+       «JCCF S.A.C.» y «OPERADORA LCPM S.A.C.» salían «Jccf» y «Lcpm».
+       («no tiene falsos positivos» decía acá, y **sí tenía uno**: «DASSO
+       DRY CLEANER» salía «Dasso DRY Cleaner», porque la Y estaba fuera
+       del set de vocales. Corregido el 2026-09-11 metiéndola — ver #379,
+       que cuenta lo que cuesta: cero acrónimos.)
 
      Barrido final: 768 de 770 correctos. Los dos que no («EY», «3M») llevan
      vocal o dígito y no hay señal EN EL TEXTO que los distinga de una
@@ -31178,7 +31184,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      nombre bonito guardado en `session_state` dejaría de matchear su propia
      fila — el mismo modo de fallo que la regla #130 evita por el otro lado.
 
-     (2026-09-07.)
+     **Esta regla describe la función que vivía en `graficos/base.py`, y
+     había otra igual.** Se unificaron el 2026-09-11: qué hacía distinto
+     cada una y por qué la que quedó vive en `graficos/compras/`, en la
+     #379.
+
+     (2026-09-07, ampliada el 2026-09-11.)
 
 348. **Cuando una columna «no se ve», medí su PADDING antes de pedirle
      ancho a la tarjeta.** Reportado el 2026-09-07 con captura, después de
@@ -33385,6 +33396,85 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (2026-09-11.)
 
 
+379. **Dos funciones con el mismo nombre y el mismo propósito no son una
+     duplicación: son dos comportamientos que nadie comparó.** El repo
+     tenía dos `nombre_propio` —`graficos/base.py` y
+     `graficos/compras/_etiquetas_proveedor.py`—, las dos para bajar una
+     razón social de MAYÚSCULA SOSTENIDA a nombre propio, las dos escritas
+     contra el mismo parquet (#347). Corridas sobre los **773 proveedores
+     distintos de `compras.parquet`, dan resultados distintos en 48**.
+
+     Eso no se ve como un error. Se ve como que el mismo proveedor está
+     escrito de dos maneras según qué tarjeta lo dibuje: «Corporacion
+     Baserito Lmc» en el ranking de Volatilidad (que importaba la de
+     `base.py`) y «Corporacion Baserito LMC» en el drill de Proveedor (que
+     importa la otra), en la misma sesión y a dos clics de distancia.
+
+     **Ninguna de las dos ganaba.** Los 48 se reparten así:
+
+     | lo que decide | la acertaba | ejemplo |
+     |---|---|---|
+     | sigla sin vocales | `base.py` | «LV Ditek», «Operadora LCPM», «JCCF» |
+     | artículo que abre el nombre | `_etiquetas` | «Agricola **La** Chacra» |
+     | separador que no es espacio | `_etiquetas` | «J&S», «E&R», «(Peru)» |
+     | siglas societarias raras | `_etiquetas` | «SRLTDA» |
+     | artículo tras preposición | `base.py` | «Banco de **la** Nacion» |
+     | apóstrofo | **ninguna** | «Stella's», «Guisel'l» |
+
+     La última fila es la que justifica el método: al unificar hay que
+     **correr las dos sobre los nombres reales y mirar los que cambian**,
+     no elegir una a ojo. Los 5 nombres con apóstrofo salían mal en las
+     dos (`_etiquetas` los escribía «Stella'S», porque capitaliza por
+     rachas de letras y el apóstrofo abre racha; `base.py` acertaba de
+     rebote, sin regla), y ninguna de las dos los tenía en sus tests.
+
+     **La regla «sin vocales = sigla» SÍ tiene un falso positivo**, contra
+     lo que afirmaba la #347: «DASSO DRY CLEANER» salía «Dasso DRY
+     Cleaner». La Y estaba fuera del set de vocales a propósito, y la
+     consecuencia es que en inglés hace de vocal. Se arregla metiéndola:
+     contado sobre los 773, las únicas rachas sin vocal que llevan Y son
+     «DRY» y la conjunción «Y» suelta —que ya la atrapa la lista de
+     preposiciones—, así que la Y adentro cuesta **cero** acrónimos y
+     arregla uno. El resto de la regla se queda tal cual: caza 24 nombres.
+
+     **Y el artículo no es una decisión, es dos.** En castellano el
+     artículo va en mayúscula cuando ABRE el nombre («Agricola La Chacra»,
+     «Inmobiliaria Las Piedras») y en minúscula cuando viene DETRÁS de una
+     preposición, porque ahí es parte del sintagma («Banco de la Nacion»,
+     «de los Andes», «De la Cruz Astorga»). Con una sola lista de palabras
+     menores se falla siempre en la mitad: por eso son dos, y el artículo
+     mira el token anterior. Toca 6 de los 773.
+
+     **Vive en `graficos/compras/` y no en `base.py`, que sería el sitio
+     natural, porque `base.py` no puede importarla.** Es un ciclo, y está
+     medido, no supuesto: `graficos/compras/__init__.py` hace
+     `from graficos.base import compartimento_filtros, …` al cargarse, así
+     que un import en la otra dirección revienta con `ImportError: cannot
+     import name 'compartimento_filtros' from partially initialized
+     module 'graficos.base'`. La dependencia va en un solo sentido y el
+     que cede es `base.py`: se quedó sin su copia y `volatilidad.py` —su
+     único consumidor— importa la del otro módulo. (La salida alternativa
+     era `utils.py`, que es el camino que tomó `fmt_k` el 2026-08-22 por
+     este mismo motivo; se descartó porque deja tres sitios donde buscar
+     una función que ahora es una.)
+
+     **La guarda es contra la copia, no contra el resultado:**
+     `test_graficos.py::_pruebas_una_sola_nombre_propio` barre el repo con
+     `ast` y exige UNA sola `def nombre_propio`, en ese módulo, y que
+     nadie la importe de `graficos.base`. Un test de valores no habría
+     encontrado nada: las dos versiones tenían sus tests y las dos pasaban
+     en verde. Lo que falla en silencio es la existencia de la segunda.
+
+     Cómo se revalida si alguien toca las reglas: bajar los nombres
+     distintos con DuckDB —`SELECT DISTINCT NOMBRE_PROVEEDOR FROM
+     read_parquet('s3://…/compras.parquet')`— y comparar la salida contra
+     la versión anterior (`git show HEAD:…` como módulo suelto). Mirar a
+     ojo sólo los que cambian: fueron 34 contra la de `_etiquetas` y 18
+     contra la de `base.py`, y todos para mejor.
+
+     (2026-09-11.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -33397,7 +33487,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#379**.
+> próxima regla nueva es la **#380**.
 
 >
 
