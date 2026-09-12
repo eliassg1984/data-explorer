@@ -1913,6 +1913,59 @@ def _pruebas_rango_por_tarjeta():
           (rango_tarjeta("sec_proveedor"), rango_tarjeta("sec_semanal")),
           (por_defecto, por_defecto))
 
+    # ── LA EXCEPCIÓN POR CATEGORÍA (2026-09-11) ──────────────────────────
+    # `rango_default_cat` le da a UNA categoría otra ventana de apertura. Lo
+    # que se fija acá es que sea una excepción y no un cambio de default: la
+    # categoría nombrada abre en el mes, el resto sigue con los 12 meses del
+    # reporte. Sin este assert, un dict mal leído (o un `.get` sobre el dict
+    # equivocado) pasaría desapercibido porque las dos ventanas son rangos
+    # válidos y ninguna revienta nada.
+    mes = (datetime.date(2026, 9, 1), f_max)
+    for _k in (k_prov, k_sem):
+        st.session_state.pop(_k, None)
+    franja_fecha.publicar(
+        k_rango="rango_franja_Compras", k_corte="corte_franja_Compras",
+        corte_apl=None, cortes=[], fecha_min=f_min, fecha_max=f_max,
+        reporte="Compras", usa_carga_rango=False,
+        hoy=datetime.date(2026, 9, 8), rango_default=por_defecto,
+        rango_default_cat={"sec_proveedor": mes},
+    )
+    check("la categoría con excepción abre en su ventana",
+          rango_tarjeta("sec_proveedor"), mes)
+    check("y las demás siguen con el default del reporte",
+          rango_tarjeta("sec_semanal"), por_defecto)
+    # Las excepciones las declara `graficos.compras`; que nombren una
+    # categoría REAL no es obvio: `CATEGORIA_SEC` mapea sección→categoría,
+    # así que escribir ahí el nombre de la sección ("compras_sec_proveedor")
+    # es el error natural — y no rompería nada, sólo dejaría la excepción
+    # sin efecto y la tarjeta abriendo con el default de siempre.
+    check("las secciones que abren en el mes nombran categorías reales",
+          sorted(set(gc.SEC_ABRE_EN_EL_MES) - set(gc.CATEGORIA_SEC.values())),
+          [])
+    # Y que `app.py` siga publicando el dict: es el único cable entre el
+    # cálculo del mes y el lector. Quitar el kwarg no da error en ningún
+    # lado, sólo devuelve la tarjeta a los 12 meses en silencio.
+    _app = (pathlib.Path(__file__).parent / "app.py").read_text(
+        encoding="utf-8")
+    _pub = [n for n in ast.walk(ast.parse(_app))
+            if isinstance(n, ast.Call)
+            and getattr(n.func, "attr", None) == "publicar"]
+    check("el barrido encontró la publicación del contexto",
+          len(_pub) >= 1, True)
+    check("app.py publica rango_default_cat",
+          [c.lineno for c in _pub
+           if not any(k.arg == "rango_default_cat" for k in c.keywords)], [])
+    for _k in (k_prov, k_sem):
+        st.session_state.pop(_k, None)
+    franja_fecha.publicar(
+        k_rango="rango_franja_Compras", k_corte="corte_franja_Compras",
+        corte_apl=None, cortes=[], fecha_min=f_min, fecha_max=f_max,
+        reporte="Compras", usa_carga_rango=False,
+        hoy=datetime.date(2026, 9, 8), rango_default=por_defecto,
+    )
+    rango_tarjeta("sec_proveedor")
+    rango_tarjeta("sec_semanal")
+
     # EL ASSERT DE LA REGLA #363: mover una no mueve a la otra.
     st.session_state[k_prov] = (datetime.date(2026, 9, 1), f_max)
     check("mover el rango de una tarjeta NO mueve el de la otra",

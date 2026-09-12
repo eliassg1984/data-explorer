@@ -41,7 +41,12 @@ from graficos.compras._comun import (  # noqa: F401  (re-export)
     # reexporta acá porque su sitio natural de lectura es al lado de `_PILA`
     # (sus claves son las de esa tupla) aunque viva en `_comun` por el ciclo
     # de imports. `test_graficos.py` verifica que sigan apareadas.
-    CATEGORIA_SEC, _es_movil, _first_point, _periodo_serie,
+    # `SEC_ABRE_EN_EL_MES` no la usa este módulo: la lee `app.py`, que es
+    # quien arma los defaults publicados. Se reexporta por el mismo camino
+    # que `bounds_fecha_de_la_vista` para que `app.py` siga hablando con el
+    # paquete y no con un privado (`_comun`).
+    CATEGORIA_SEC, SEC_ABRE_EN_EL_MES,
+    _es_movil, _first_point, _periodo_serie,
 )
 from graficos.compras.proveedor import _compras_proveedor_drill
 from graficos.compras._documentos_proveedor import (

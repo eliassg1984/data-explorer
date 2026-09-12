@@ -277,6 +277,15 @@ rango compartido y el bug reaparece en una sola vista. Lo ataja
 `test_graficos.py::_pruebas_rango_por_tarjeta`, que barre
 `graficos/compras/` con `ast`.
 
+**Con qué rango ABRE cada tarjeta es otra cosa.** El default del reporte
+son los últimos 12 meses; una categoría puede pedir otro sumándose a
+`SEC_ABRE_EN_EL_MES` (`graficos/compras/_comun.py`) — hoy sólo el Ranking
+de proveedores, que abre en el mes en curso. El mes lo calcula `app.py` y
+lo publica en `rango_default_cat`; quien elige es `base.py::rango_tarjeta`,
+y tiene que ser ahí: esa función la llaman el trigger Y el recorte del
+dispatcher, y el recorte corre PRIMERO. Poner el default en el selector no
+falla "a veces", no se aplica nunca. Ver `arquitectura.md` regla #376.
+
 Dos SECCIONES comparten categoría a propósito: **Ranking de proveedores y
 Detalle de documentos por proveedor**, porque la tabla se calcula sobre el
 mismo `base`/`top_provs` que el ranking. Eran una sola sección hasta el

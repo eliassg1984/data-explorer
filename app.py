@@ -21,7 +21,7 @@ from estado_rango import (
 )
 from cortes import cortes_disponibles
 import franja_fecha
-from graficos.compras import bounds_fecha_de_la_vista
+from graficos.compras import bounds_fecha_de_la_vista, SEC_ABRE_EN_EL_MES
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_herramientas, inject_sello_actualizacion, inject_calendario_es, inject_fullscreen_app
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
@@ -460,6 +460,16 @@ _k_rango_franja = clave_rango(reporte, _usa_carga_rango,
                               categoria=_categoria_ajuste_rango)
 _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
 
+# EL TOPE DEL PARQUET, ANTES DE QUE LO ENSANCHE UNA VISTA (2026-09-11). El
+# ensanche de acá abajo es correcto para el CALENDARIO —«Documentos SUNAT»
+# tiene que poder elegir los días que sólo el SIRE cubre— pero no para
+# anclar el mes con el que abre una tarjeta que lee el PARQUET: con el
+# parquet hasta el 31-ago y hoy 11-sep, anclar al tope ensanchado le daría
+# al Ranking de Proveedores un "mes en curso" (1–11 sep) sin una sola
+# compra. Es la familia de bugs de las reglas #326 y #329, que es la razón
+# de que el default del reporte sean 12 meses.
+_max_parquet = fecha_max_full
+
 # Una vista puede filtrar OTRO dataset que el del reporte, y entonces los
 # topes del calendario no son los del parquet. Hoy solo Compras >
 # Documentos SUNAT, que le pregunta al SIRE: otra fuente, que llega más
@@ -511,6 +521,18 @@ _ancla_mes = min(_hoy, fecha_max_full) if fecha_max_full else _hoy
 fecha_ini_default = _ancla_mes.replace(day=1)   # 01 del mes con datos
 fecha_fin_default = _ancla_mes                  # hoy, o el último día con datos
 
+# EL MISMO MES, PERO ANCLADO AL PARQUET (2026-09-11). Es el default de las
+# tarjetas que abren en el mes en curso (hoy sólo el Ranking de
+# Proveedores, ver `graficos.compras.SEC_ABRE_EN_EL_MES`), y se calcula
+# acá —una sola vez, al lado del otro default— porque recalcularlo del lado
+# de la tarjeta es la segunda cuenta que se desincroniza.
+#
+# El ancla es `_max_parquet` y no `fecha_max_full`: esas tarjetas leen el
+# parquet, así que su "mes en curso" es el del último día CON compras. Con
+# el tope ensanchado por «Documentos SUNAT» el mes podría no tener ninguna.
+_ancla_mes_parquet = min(_hoy, _max_parquet) if _max_parquet else _hoy
+_mes_default = (_ancla_mes_parquet.replace(day=1), _ancla_mes_parquet)
+
 # COMPRAS ABRE EN LOS ÚLTIMOS 12 MESES, y no es un default más: es la otra
 # mitad de haberle sacado el calendario a la franja (2026-09-06, a pedido).
 # Sin control de fecha arriba, el default deja de ser "por dónde empezar a
@@ -550,6 +572,22 @@ if reporte == "Compras" and fecha_min_full and fecha_max_full:
     _v12 = periodo.ventana("12m", _ancla_mes, minimo=fecha_min_full)
     if _v12:
         fecha_ini_default, fecha_fin_default = _v12[0].date(), _v12[1].date()
+
+# ...Y UNA TARJETA PUEDE ABRIR EN OTRO (2026-09-11, a pedido). El default de
+# arriba es el del REPORTE: el que ve una sección sin selector de fecha
+# propio. Una que SÍ lo tiene en la cabecera puede abrir en otra ventana —
+# hoy el Ranking de Proveedores, en el mes en curso.
+#
+# Se publica un dict {categoría: rango} y no un default por sección: la
+# categoría es la unidad del rango (dos secciones pueden compartirla, y
+# «Detalle de documentos por proveedor» comparte la de Proveedor a
+# propósito). Quién quiere cuál lo declara `graficos.compras`, que es donde
+# viven las categorías; acá sólo se calcula el mes. Lo lee
+# `graficos.base.rango_tarjeta`, que es el dueño único de la siembra.
+_rango_default_cat = (
+    {_cat: _mes_default for _cat in SEC_ABRE_EN_EL_MES}
+    if reporte == "Compras" else {}
+)
 
 # INVARIANTE: sembrar el default Y recortar a bounds AQUÍ, justo antes de
 # dibujar el widget en este mismo render. Nunca clampear después del
@@ -654,6 +692,11 @@ with _fila_top:
             # página (los últimos 12 meses anclados al último día CON
             # datos, calculado arriba). Recalcularlo del lado de la tarjeta
             # sería una segunda cuenta que se desincroniza de ésta.
+            #
+            # `rango_default_cat` es la excepción por CATEGORÍA de ese
+            # default (2026-09-11): una tarjeta con selector propio puede
+            # abrir en otra ventana — hoy el Ranking de Proveedores, en el
+            # mes en curso. Vacío para los otros siete reportes.
             franja_fecha.publicar(
                 k_rango=_k_rango_franja, k_corte=_k_corte,
                 corte_apl=_corte_apl, cortes=_cortes_franja,
@@ -661,6 +704,7 @@ with _fila_top:
                 reporte=reporte, usa_carga_rango=_usa_carga_rango,
                 hoy=_hoy,
                 rango_default=(fecha_ini_default, fecha_fin_default),
+                rango_default_cat=_rango_default_cat,
             )
             # COMPRAS NO LLEVA CALENDARIO EN LA FRANJA (2026-09-06, a
             # pedido: "a todo el reporte de compras, quitemosle el

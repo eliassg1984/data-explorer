@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-375 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+376 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (132)
 
@@ -167,7 +167,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#371** — Una cabecera flex que ENVUELVE convierte el margen negativo de la regla #162 en un solapamiento
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 
-**Layout y alturas** (40)
+**Layout y alturas** (41)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -209,6 +209,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#354** — La salida de un estado vacío no puede estar adentro de lo que el estado vacío apaga: Compras…
 - **#363** — Un control que vive DENTRO de una tarjeta promete que es de esa tarjeta. Si escribe el rango…
 - **#371** — Una cabecera flex que ENVUELVE convierte el margen negativo de la regla #162 en un solapamiento
+- **#376** — El default del REPORTE y el default de una TARJETA son dos cosas distintas — y la excepción…
 
 **Plotly y figuras** (60)
 
@@ -444,7 +445,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#372** — Sacar una tarjeta de su sección y darle sección propia rompe tres cosas que estaban…
 - **#373** — Un st.rerun al tope de un fragment no sólo aborta ese render: le BORRA el estado a TODOS los…
 
-**Datos, R2 y DuckDB** (47)
+**Datos, R2 y DuckDB** (48)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -493,6 +494,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#347** — Un nombre en MAYÚSCULA SOSTENIDA es un dato del ERP, no una decisión de diseño — y…
 - **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
 - **#367** — Una caché con persist="disk" NO caduca: el ttl sólo gobierna la copia en memoria
+- **#376** — El default del REPORTE y el default de una TARJETA son dos cosas distintas — y la excepción…
 
 **SUNAT y SIRE** (40)
 
@@ -33231,6 +33233,56 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-09.)
 
+376. **El default del REPORTE y el default de una TARJETA son dos cosas
+     distintas — y la excepción va donde se SIEMBRA, no donde se dibuja.**
+     Pedido del 2026-09-11 señalando el trigger del Ranking de Proveedores:
+     «este selector de fecha debe mostrar lo del mes presente por defecto».
+
+     Los 12 meses de Compras (#329, el default que nació al sacarle el
+     calendario a la franja) NO se tocaron, y eso es la mitad del cambio:
+     ese default es lo que ve una sección **sin** selector propio —«Vs año
+     pasado», «Tabla»— y ahí un mes es una mentira por omisión. Lo que
+     cambia es con qué abre una sección que SÍ tiene su control en la
+     cabecera. La forma es `ctx["rango_default_cat"]`, un dict
+     {categoría: rango} que publica `app.py` al lado de `rango_default`, y
+     `graficos.compras.SEC_ABRE_EN_EL_MES` declara quién lo quiere.
+
+     **Lo que costaría un bug es dónde se lee.** `rango_tarjeta` la llaman
+     los DOS lados del rango por tarjeta (#363): el trigger que ESCRIBE y
+     `recortar_por_tarjeta`, que FILTRA el df. `asegurar_rango` es
+     idempotente, así que siembra el primero que llegue — y poner el
+     default en `selector_fecha_tarjeta` (que es donde parece que va, es el
+     control) no daría "a veces": no se aplicaría **nunca**. En el
+     dispatcher de Compras `_kpis_vistas` pide el df de las seis vistas en
+     la línea 682 y las secciones se dibujan en la 985, así que para cuando
+     el selector existe la clave ya está sembrada con el default del
+     reporte. Mismo argumento de dueño único que ya justifica
+     `k_rango_tarjeta`: si los dos lados calcularan, podrían dejar de decir
+     lo mismo.
+
+     **El ancla del mes es el PARQUET, no los topes del calendario.** Los
+     topes se ensanchan cuando la vista activa es «Documentos SUNAT», que
+     le pregunta al SIRE y llega hasta hoy (#326) — y ese ensanche es
+     correcto para el calendario y veneno para este default: con el parquet
+     hasta el 31-ago y hoy 11-sep, el "mes en curso" del ranking sería
+     1–11 sep sin una sola compra. Es la familia #293/#307/#326/#329 otra
+     vez. De ahí `_max_parquet` en `app.py`, capturado ANTES del ensanche,
+     y dos anclas que conviven a propósito.
+
+     **La unidad es la categoría, no la sección**, así que «Detalle de
+     documentos por proveedor» abrió en el mes sin tocarla: comparte
+     categoría con el ranking (#363) y por eso lista los documentos de los
+     proveedores que ese ranking rankeó. Verificado en el navegador con los
+     cinco triggers a la vez: `cp_rank` y `cp_docs` en «1 sep – 10 sep
+     2026», `cp_prod` y `cp_sem` en «11 sep 2025 – 10 sep 2026», `cp_vol`
+     en su ventana propia. Una excepción, no un cambio de default — que es
+     justo lo que los asserts nuevos de
+     `test_graficos.py::_pruebas_rango_por_tarjeta` fijan, junto con que
+     `app.py` siga pasando el kwarg: quitarlo no da error en ningún lado,
+     sólo devuelve la tarjeta a los 12 meses en silencio.
+
+     (2026-09-11.)
+
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -33244,7 +33296,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#376**.
+> próxima regla nueva es la **#377**.
 
 >
 

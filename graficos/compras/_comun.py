@@ -212,6 +212,30 @@ CATEGORIA_SEC = {
 }
 
 
+# ── CON QUÉ RANGO ABRE CADA SECCIÓN ───────────────────────────────────────
+# 2026-09-11, a pedido, señalando el trigger del Ranking de Proveedores:
+# «este selector de fecha debe mostrar lo del mes presente por defecto».
+#
+# EL DEFAULT DEL REPORTE NO SE TOCA: siguen siendo los últimos 12 meses
+# desde el 2026-09-06 (ver el comentario largo de `app.py`). Ése es lo que
+# ve una sección SIN selector propio, y ahí un mes es una mentira por
+# omisión. Lo que cambia acá es con qué abre una sección que SÍ tiene su
+# selector en la cabecera: el ranking contesta "quién pesa más ACÁ", y ese
+# "acá" por defecto es el mes en curso. Los 12 meses siguen a un clic desde
+# su propio trigger.
+#
+# LA CATEGORÍA Y NO LA SECCIÓN, igual que en `CATEGORIA_SEC` y por el mismo
+# motivo: «Detalle de documentos por proveedor» comparte la categoría de
+# Proveedor, así que abre con el mismo mes — que es justo lo que se quiere,
+# porque lista los documentos de los proveedores que rankeó el gráfico.
+#
+# EL MES LO CALCULA `app.py` Y LO PUBLICA EN EL CONTEXTO
+# (`rango_default_cat`), no esta tupla: acá sólo se declara CUÁL de los dos
+# defaults quiere cada categoría. Una segunda cuenta del mismo mes es
+# exactamente lo que evita `rango_default` desde el 2026-09-08.
+SEC_ABRE_EN_EL_MES = ("sec_proveedor",)
+
+
 # ===========================================================================
 # LA BASE DEL DRILL DE PROVEEDOR
 # ===========================================================================

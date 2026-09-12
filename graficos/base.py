@@ -1002,6 +1002,19 @@ def rango_tarjeta(categoria, ctx=None):
     default sale de `ctx["rango_default"]` —lo publica `app.py`— y no de
     una cuenta propia: dos cuentas del mismo default se desincronizan.
 
+    SALVO QUE LA CATEGORÍA PIDA OTRO (2026-09-11): `ctx["rango_default_cat"]`
+    es un dict {categoría: rango} con las excepciones, y hoy tiene una sola
+    —el Ranking de Proveedores abre en el mes en curso y no en los 12 meses
+    del reporte (ver `graficos.compras.SEC_ABRE_EN_EL_MES`)—. Sigue siendo
+    `app.py` quien calcula las dos ventanas; acá sólo se elige cuál.
+
+    LA EXCEPCIÓN VA ACÁ Y NO EN EL SELECTOR, y ése es el punto: esta función
+    la llaman los DOS lados —el trigger que escribe y `recortar_por_tarjeta`,
+    que es quien filtra el df—. Si el default viviera en el selector, el
+    primero de los dos en correr sembraría la clave (`asegurar_rango` es
+    idempotente) y cuál gana dependería del orden de render. Mismo argumento
+    de dueño único que `k_rango_tarjeta`.
+
     Devuelve `None` si todavía no hay contexto (no debería pasar dentro de
     un reporte real) o si el rango quedó a medias.
     """
@@ -1009,7 +1022,8 @@ def rango_tarjeta(categoria, ctx=None):
     if not ctx:
         return None
     k = k_rango_tarjeta(categoria, ctx)
-    _def = ctx.get("rango_default")
+    _def = ((ctx.get("rango_default_cat") or {}).get(categoria)
+            or ctx.get("rango_default"))
     if _def and all(_def):
         asegurar_rango(k, _def, bounds=(ctx["fecha_min"], ctx["fecha_max"]),
                        reporte=ctx["reporte"],
