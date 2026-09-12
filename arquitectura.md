@@ -34132,6 +34132,18 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      sitios, el rótulo es uno solo**. Es la #241 (el mismo texto de mes en
      el eje y en el hover) llevada a la semana.
 
+     La segunda pregunta llegó enseguida, y es la misma regla con PRECIOS:
+     «¿por qué la vela dice abre 8.50 y la tabla dice 16.95 en la semana
+     del 24?». La celda muestra `cierre anterior → cierre de ésta`; la vela,
+     `primera compra → última compra` de la semana. Coinciden en el cierre
+     y difieren en la base, y «abre/cierra» —jerga de bolsa— invitaba a
+     leer el 16.95 como la apertura. El hover pasó a decir «primera compra
+     / última compra» (y «sin compras · se repite el último precio» en una
+     semana vacía), y el título de la semana dice contra qué compara, con
+     el número: «−8.5% vs cierre anterior (S/ 16.95)». **Si dos números de
+     la pantalla se llaman parecido, cada uno tiene que decir de dónde
+     sale.**
+
      (2026-09-12.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->

@@ -806,15 +806,30 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # con el ranking de arriba, que es la lectura principal. La
             # cuenta de la tarjeta entera está en `graficos/alturas.py`.
 
+            # EL HOVER HABLA DE COMPRAS, NO DE BOLSA (2026-09-12, a pedido).
+            # Decía «abre S/ 8.50 · cierra S/ 15.52» y la celda de la misma
+            # semana en la grilla decía «16.95 → 15.52»: el usuario leyó el
+            # 16.95 como la apertura y preguntó por qué no coincidían. No es
+            # la apertura — es el CIERRE DE LA SEMANA ANTERIOR; la vela mira
+            # sólo lo que pasó dentro de la semana. «Primera compra / última
+            # compra» dice qué es cada número sin saber qué es una vela.
+            # Una semana sin compras no tiene ni primera ni última: su vela
+            # es el precio anterior repetido, y el hover lo dice así.
+            def _hover_vela(s, w):
+                if not w["rows"]:
+                    return (f"Semana del {s:%d/%m} · sin compras · se repite "
+                            f"el último precio, S/ {w['c']:.2f}")
+                return (f"Semana del {s:%d/%m} · primera compra S/ {w['o']:.2f}"
+                        f" · máx S/ {w['h']:.2f} · mín S/ {w['l']:.2f}"
+                        f" · última compra S/ {w['c']:.2f}")
+
             fig = go.Figure()
             fig.add_trace(go.Candlestick(
                 x=semanas, open=[w["o"] for w in weeks], high=[w["h"] for w in weeks],
                 low=[w["l"] for w in weeks], close=[w["c"] for w in weeks],
                 increasing=dict(line=dict(color=ERROR), fillcolor=ERROR),
                 decreasing=dict(line=dict(color=EXITO), fillcolor=EXITO),
-                hovertext=[f"Semana del {s:%d/%m} · abre S/ {w['o']:.2f} · máx S/ {w['h']:.2f} "
-                          f"· mín S/ {w['l']:.2f} · cierra S/ {w['c']:.2f}"
-                          for s, w in zip(semanas, weeks)],
+                hovertext=[_hover_vela(s, w) for s, w in zip(semanas, weeks)],
                 hoverinfo="text",
                 name="",
             ))
@@ -888,12 +903,30 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             ini = semanas[sem_focus]
             fin = ini + pd.Timedelta(days=6)
 
+            # CONTRA QUÉ SE COMPARA, CON EL PRECIO ESCRITO (2026-09-12, a
+            # pedido). Decía «−8.5% vs semana anterior» y no se veía de dónde
+            # salía: la base es el CIERRE de la semana anterior (su última
+            # compra), el mismo número de la izquierda de la celda de la
+            # grilla («16.95 → 15.52»), no la primera compra de ésta que
+            # muestra la vela. Escribirlo cierra la pregunta.
+            #
+            # La primera semana también tiene base desde que existe
+            # `_cierre_previo` (el cierre anterior a la ventana); antes se
+            # quedaba sin comparación.
+            #
+            # Sin signo cuando redondea a cero, como el `_FMT_PCT` de la
+            # grilla y el KPI «Cambio»: decía «+0.0%», un «subió» sobre un
+            # número que dice que no pasó nada.
             delta_txt = ""
-            if sem_focus > 0 and weeks[sem_focus - 1]["c"]:
-                var = (w["c"] - weeks[sem_focus - 1]["c"]) / weeks[sem_focus - 1]["c"] * 100
-                color = ERROR if var > 0 else (EXITO if var < 0 else GRIS_TEXTO)
+            _base = weeks[sem_focus - 1]["c"] if sem_focus > 0 else _cierre_previo
+            if _base:
+                var = (w["c"] - _base) / _base * 100
+                _cero = abs(var) < 0.05
+                color = GRIS_TEXTO if _cero else (ERROR if var > 0 else EXITO)
+                _sig = "" if _cero else ("+" if var > 0 else "−")
                 delta_txt = (f' <span style="color:{color}; font-weight:700;">'
-                            f'{"+" if var >= 0 else "−"}{abs(var):.1f}% vs semana anterior</span>')
+                             f'{_sig}{abs(var):.1f}% vs cierre anterior '
+                             f'(S/ {_base:,.2f})</span>')
         with col_semana:
             # SIN MARGEN PROPIO: el `gap` de la columna ya separa este
             # renglón de la tabla que va abajo, y sumarle .5rem lo dejaba en
