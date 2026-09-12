@@ -117,11 +117,6 @@ EXITO = "#16a34a"
 EXITO_FONDO = "#f0fdf4"
 """Verde muy claro: fondo de badge/alerta de éxito."""
 
-EXITO_BORDE = "#86efac"
-"""Verde medio, gemelo de `ERROR_BORDE`. Lo estrenó la barrita de magnitud
-de las tablas de Compras (regla #390): una raya de 3px necesita un tono con
-cuerpo, y `EXITO_FONDO` sobre blanco no se ve. = --success-border."""
-
 ADVERTENCIA = "#f97316"
 """Naranja base: badges de advertencia."""
 

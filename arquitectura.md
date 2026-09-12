@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-390 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+391 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (136)
+**CSS y estilos** (137)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -170,6 +170,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#382** — Una tarjeta que scrollea por dentro, con grids que también scrollean, se lee como una caja…
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 - **#386** — Una grilla que cambia de columnas SIN volver a montarse no se entera por el ResizeObserver —…
+- **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
 
 **Layout y alturas** (46)
 
@@ -287,7 +288,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#389** — Si algo es difícil de clickear, lo que crece es el blanco del clic, no el dibujo — y la…
 - **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
 
-**AgGrid y tablas** (64)
+**AgGrid y tablas** (65)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -353,6 +354,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#385** — Dos series que "hacen lo mismo" tienen que hacerlo con el MISMO código — el desempate de un…
 - **#386** — Una grilla que cambia de columnas SIN volver a montarse no se entera por el ResizeObserver —…
 - **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
+- **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
 
 **Streamlit** (107)
 
@@ -34295,6 +34297,43 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+391. **Una línea fina al pie de un número se lee como un trazo sobre el
+     papel, no como un dato: la alarma es un PUNTO.** La barrita de la #390
+     duró unas horas: «la raya me es ruidosa… pareciera como una raya sobre
+     el papel». Se maquetaron cuatro reemplazos sobre las filas reales
+     —barra de fondo tenue a media altura, tinte suave sólo en la alarma,
+     punto, y nada más que la letra— y se eligió el **punto**: un círculo
+     de 6px en el tono CLARO del semáforo (`ERROR`/`EXITO`) antes del
+     número, sólo en las alarmas, mientras el número va en el oscuro. Como
+     el aviso de una notificación: se ve de lejos y no tacha nada.
+
+     Con eso **se perdió la magnitud en «Δ S/» de Vs año pasado** (la
+     barrita marcaba el tamaño en todas las filas, no sólo las alarmas), y
+     fue consciente: el orden de la tabla ya es por tamaño, y el punto sólo
+     tiene que decir «mirá esta fila». `EXITO_BORDE`/`--success-border`,
+     que había nacido para esa barra, se fue con ella.
+
+     **Dónde vive cada punto:**
+     - Vs año pasado: un `::before` en `custom_css` sobre la celda de
+       «Δ S/», colgado de una `cellClass` (`vap-alarma-sube/baja`) que
+       decide la alarma de la FILA por su «Δ %». Sin cellRenderer: es un
+       adorno y el pseudo no toca cómo AG Grid arma la celda.
+     - Volatilidad: un `<span>` que `_RENDER_DELTA` pone antes de la
+       flecha, porque esa celda ya tiene su renderer.
+
+     **El punto se paga en ancho, y en las dos tablas se pagó ANTES del
+     dato.** Suma 10-11px al renglón, y los dos casos estaban medidos al
+     píxel: en Volatilidad la celda de alarma más ancha («● ▴107%  52.53 →
+     108.84») pide 115px de contenido, así que `_MIN_ANCHO_COL_SEMANA` pasó
+     de 120 a 130 (a 120 el par de precios se cortaba en «108.…»); en Vs
+     año pasado «−S/ 110,905» + punto + padding son 125 —la primera cuenta
+     estimó 86px de texto y eran 88: medido, se pasaba 2px—, y «Δ S/» pasó
+     a `width`/`minWidth` 128. El `minWidth` no es adorno: un número alineado
+     a la derecha que no entra se corta por la IZQUIERDA y lo primero que se
+     come es el signo — un −S/ que se lee S/ (#349).
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34307,7 +34346,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#391**.
+> próxima regla nueva es la **#392**.
 
 >
 

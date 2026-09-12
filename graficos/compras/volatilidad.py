@@ -650,7 +650,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         #
         # El mismo día de esta mudanza los precios pasaron al COSTADO del %
         # en la celda (`tablas/compras_volatilidad.py::_MIN_ANCHO_COL_SEMANA`),
-        # que pide 120px por columna-semana: en 587px eso era scroll
+        # que pide 120px por columna-semana (130 desde el punto de alarma,
+        # regla #391): en 587px eso era scroll
         # horizontal. Con la grilla a todo el ancho entra, y el drill,
         # partido en dos, cuesta el alto de UNA de sus mitades y no el de
         # las tres piezas apiladas — la cuenta está en

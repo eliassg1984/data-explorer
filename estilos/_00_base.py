@@ -33,7 +33,6 @@ CSS = """    <style>
         --border: #e6e6eb;
         --success: #16a34a;
         --success-bg: #f0fdf4;
-        --success-border: #86efac;
         --warning: #f97316;
         --warning-bg: #fff7ed;
         --warning-border: #fdba74;

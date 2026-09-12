@@ -35,10 +35,10 @@ from tablas._css import _css_grid
 # grilla; con muchas —la historia de 12m son ~52— quedan en su piso y la
 # grilla se desliza. Quien lo dispara es `_AL_MONTAR`, más abajo.
 #
-# 98 -> 120 el 2026-09-12, con el piso: un ancho declarado POR DEBAJO de su
-# `minWidth` hace que AG Grid arranque la columna en el piso y reparta el
-# resto con una proporción que ya no es la escrita acá.
-_ANCHO_COL_SEMANA = 120
+# 98 -> 120 -> 130 el 2026-09-12, con el piso: un ancho declarado POR DEBAJO
+# de su `minWidth` hace que AG Grid arranque la columna en el piso y reparta
+# el resto con una proporción que ya no es la escrita acá.
+_ANCHO_COL_SEMANA = 130
 _ANCHO_COL_VOL = 104
 """Ancho FIJO de «Volatilidad», fijada a la derecha. Lo manda su cabecera de
 dos renglones: el período de abajo («10 Ago – 13 Set», ~80px a 10px) más
@@ -49,19 +49,24 @@ Era un PESO en el reparto (80, con piso de 78) mientras la columna era la
 última de la grilla y competía por el ancho con las semanas. Desde el
 2026-09-12 va fijada y oculta por defecto: no compite con nadie."""
 
-_MIN_ANCHO_COL_SEMANA = 120
+_MIN_ANCHO_COL_SEMANA = 130
 """Piso de una columna-semana, y la cuenta que lo fija.
 
-Lo manda el RENGLON de la celda: el % y, AL COSTADO, los dos cierres
-(«+562%  2.88 → 19.07»). 34px del % en el peor caso (cinco glifos a
-`_TAM_DELTA`) + 5 de `_GAP_PRECIOS` + 69 de los dos precios en el peor caso
-real del parquet + los 12 de cromo horizontal — 4+4 de `_PAD_X_SEMANA` y 2+2
-del borde transparente que separa una pastilla de la siguiente.
+Lo manda el RENGLON de la celda de ALARMA, que es la más ancha: el punto, el
+% y, AL COSTADO, los dos cierres («● ▴107%  52.53 → 108.84»). 10px del punto
+(`_TAM_PUNTO` + `_AIRE_PUNTO`) + 36 del % en el peor caso (flecha a
+`_TAM_FLECHA` + cuatro glifos a `_TAM_DELTA` en negrita 600, medido) + 5 de
+`_GAP_PRECIOS` + 64 de los dos precios en el peor caso real del parquet
+(medido sobre las 290 celdas del 2026-09-12) = 115, + los 12 de cromo
+horizontal — 4+4 de `_PAD_X_SEMANA` y 2+2 del borde transparente que
+separaba una pastilla de la siguiente. Quedan 3 de aire.
 
 Historia, porque cada valor lo fijo una forma distinta de la celda:
 48 cuando era solo el %; 81 el 2026-09-07, con los precios DEBAJO del % (el
 ancho lo mandaba la segunda linea sola); 120 el 2026-09-12, con los precios
-al costado, a pedido y sobre una maqueta a escala. Ese mismo dia la grilla
+al costado, a pedido y sobre una maqueta a escala; 130 ese mismo dia, con el
+punto de alarma (regla #391) — a 120 el par de precios de las alarmas mas
+anchas se cortaba en «108.…». Ese mismo dia la grilla
 paso a ocupar el ANCHO ENTERO de la tarjeta (antes era la columna izquierda
 de la fila, 587px), y es lo que hace posible este piso: con 587px cuatro
 columnas de 120 no entraban (150 + 4x120 + 78 + 17 = 725) y salia scroll
@@ -202,28 +207,33 @@ _TAM_HDR_SEMANA = "11px"
 hace que «Volatilidad» entre en un renglón dentro de 66px."""
 
 _UMBRAL_ALARMA = 50
-"""Desde qué |%| semanal una celda es ALARMA: negrita, tono oscuro y una raya
-de 3px al pie, larga en proporción al salto (topada en `_TOPE_BARRA`).
+"""Desde qué |%| semanal una celda es ALARMA: negrita, tono oscuro y un PUNTO
+de color antes de la flecha (`_TAM_PUNTO`, lo dibuja `_RENDER_DELTA`).
 Debajo, el semáforo en la letra y nada más.
 
 Es LA señal de la tabla desde el 2026-09-12 (regla #390): con pastilla en
 cada celda que se movía, casi toda la grilla iba pintada y el color dejó de
-separar un +562% de un −8%. La barra aparece SÓLO pasando el umbral: acá
-la barra es la alarma, no una medida de todas las celdas. En esta tabla
-±50% en una semana pasa, así que el umbral es más alto que el ±30% de
-«Vs año pasado»."""
+separar un +562% de un −8%. El punto aparece SÓLO pasando el umbral —38 de
+290 celdas con los datos de ese día—, así que marca la excepción. En esta
+tabla ±50% en una semana pasa, así que el umbral es más alto que el ±30%
+de «Vs año pasado».
 
-_TOPE_BARRA = 150
-"""El % en el que la raya de alarma llena la celda. Sin tope, un +562% la
-llena y un +63% queda en una muesca: los dos son alarma y tienen que
-leerse como tal."""
+Fue una raya de 3px al pie de la celda durante unas horas del mismo día;
+la cambió el punto porque «pareciera una raya sobre el papel» (regla
+#391)."""
+
+_TAM_PUNTO = 6
+"""Diámetro del punto de alarma, en px. Con su margen (`_AIRE_PUNTO`) es lo
+que la celda de alarma le suma al renglón, y por eso entra en la cuenta de
+`_MIN_ANCHO_COL_SEMANA`."""
+_AIRE_PUNTO = 4
 
 _STYLE_DELTA = JsCode(f"""
     function(params) {{
         // El borde TRANSPARENTE era el canal entre pastillas, cuando la
         // celda llevaba fondo (hasta el 2026-09-12). Se queda porque es
-        // parte del ancho que mide `_MIN_ANCHO_COL_SEMANA` —sacarlo mueve
-        // la cuenta— y porque la raya de alarma cuelga del mismo recuadro.
+        // parte del ancho que mide `_MIN_ANCHO_COL_SEMANA`: sacarlo mueve
+        // la cuenta.
         //
         // En LONGHANDS, no `border: '3px 2px solid transparent'`: el
         // atajo de CSS no acepta dos anchos, asi que la declaracion entera
@@ -248,24 +258,13 @@ _STYLE_DELTA = JsCode(f"""
         var sube = v > 0;
         if (Math.abs(v) < {_UMBRAL_ALARMA}) return Object.assign(base, {{
             color: sube ? '{ERROR}' : '{EXITO}', fontWeight: '500'}});
-        // La raya: un fondo y no un elemento, igual que la barra de
-        // «Volatilidad» (`_style_vol`). Alineada a la DERECHA como el
-        // número, y con `background-origin: content-box` termina donde
-        // termina el texto, no contra el borde de la celda.
-        var c = sube ? '{ERROR}' : '{EXITO}';
-        var w = Math.max(8, Math.round(Math.min(Math.abs(v), {_TOPE_BARRA})
-                                       / {_TOPE_BARRA} * 100));
+        // La alarma: el punto lo pone `_RENDER_DELTA`; acá, el texto.
         return Object.assign(base, {{
             color: sube ? '{ERROR_TEXTO}' : '{CELDA_POS_TEXTO}',
             // 600 y no 700: es el peso que tenía la pastilla, y el que
             // entra en la cuenta de `_MIN_ANCHO_COL_SEMANA` — a 700
             // «107%» mide 3px más.
-            fontWeight: '600',
-            backgroundImage: 'linear-gradient(' + c + ',' + c + ')',
-            backgroundSize: w + '% 3px',
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'right bottom 1px',
-            backgroundOrigin: 'content-box'}});
+            fontWeight: '600'}});
     }}
 """)
 
@@ -346,6 +345,21 @@ class DeltaCelda {
         // cortaba en «108.…»). A `_TAM_FLECHA` mide 8 y la cuenta de la
         // columna queda como estaba.
         var c0 = txt.charAt(0);
+        // El PUNTO de alarma, antes de la flecha, sólo desde `_UMBRAL_ALARMA`
+        // (regla #391). En el tono CLARO del semáforo: el número va en el
+        // oscuro, y el punto es lo que se ve de lejos.
+        var vv = p.value == null ? 0 : Number(p.value);
+        if (Math.abs(vv) >= __UMBRAL__) {
+            var pt = document.createElement('span');
+            pt.style.display = 'inline-block';
+            pt.style.width = '__PUNTO__px';
+            pt.style.height = '__PUNTO__px';
+            pt.style.borderRadius = '50%';
+            pt.style.marginRight = '__AIRE__px';
+            pt.style.verticalAlign = '1px';
+            pt.style.background = vv > 0 ? '__SUBE__' : '__BAJA__';
+            a.appendChild(pt);
+        }
         if (c0 === '\\u25B4' || c0 === '\\u25BE') {
             var fl = document.createElement('span');
             fl.textContent = c0;
@@ -354,7 +368,7 @@ class DeltaCelda {
             a.appendChild(fl);
             a.appendChild(document.createTextNode(txt.slice(1)));
         } else {
-            a.textContent = txt;
+            a.appendChild(document.createTextNode(txt));
         }
         // Sin `nowrap` un valor largo se parte en dos renglones DENTRO de
         // la fila y desborda por abajo, encima de su vecina.
@@ -393,7 +407,10 @@ class DeltaCelda {
 }
 """.replace("__EPS__", str(_EPS_CERO)).replace("__TAM__", _TAM_PRECIOS)
    .replace("__GAP__", _GAP_PRECIOS).replace("__GRIS__", GRIS_TEXTO)
-   .replace("__TAM_FLECHA__", _TAM_FLECHA))
+   .replace("__TAM_FLECHA__", _TAM_FLECHA)
+   .replace("__UMBRAL__", str(_UMBRAL_ALARMA))
+   .replace("__PUNTO__", str(_TAM_PUNTO)).replace("__AIRE__", str(_AIRE_PUNTO))
+   .replace("__SUBE__", ERROR).replace("__BAJA__", EXITO))
 """La celda de una semana: el % y, si hubo movimiento, el cierre anterior y
 el nuevo a su costado.
 
