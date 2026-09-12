@@ -33,6 +33,13 @@ SEMÁFORO INVERTIDO, IGUAL QUE VOLATILIDAD
     CANTIDAD va en gris a propósito: comprar más no es malo — puede ser que
     el negocio creció — y pintarlo de rojo mandaría el mensaje contrario.
 
+    SIN FONDO DE CELDA desde el 2026-09-12 (regla #390): el semáforo va en
+    la LETRA, y cada recurso en la columna donde rinde — la barrita de
+    magnitud en «Δ S/» (cuánto), la flecha en «Δ %» (hacia dónde), y la
+    negrita con el tono oscuro sólo en las filas que pasan
+    `_UMBRAL_ALARMA_PCT`. Con pastillas en tres columnas la tabla era una
+    colcha y el color dejó de avisar nada.
+
 Selección de fila SIN checkbox y por CONTENIDO (`__item_full`), mismo
 criterio que `tablas/compras_volatilidad.py`: el buscador de arriba filtra
 la lista sin que un índice viejo pueda desalinearse contra la fila nueva
@@ -42,8 +49,8 @@ la lista sin que un índice viejo pueda desalinearse contra la fila nueva
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from tema import (
-    ACENTO, ERROR, ERROR_FONDO, EXITO, EXITO_FONDO, GRIS_TEXTO,
-    TEXTO_PRINCIPAL,
+    ACENTO, CELDA_POS_TEXTO, ERROR, ERROR_BORDE, ERROR_TEXTO, EXITO,
+    EXITO_BORDE, GRIS_TEXTO, TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
@@ -103,32 +110,88 @@ _FMT_SOLES = JsCode("""
     }
 """)
 
+# La FLECHA ocupa el lugar del signo, no se suma a él: «▴20.6%» mide lo
+# mismo que «+20.6%», y la columna ya está medida contra su cabecera
+# (ver `_ANCHO_PCT`). Un ítem sin año pasado no tiene % —dividiría por
+# cero—: dice «nuevo», que es lo que el Δ S/ de al lado está contando.
 _FMT_PCT = JsCode("""
     function(params) {
-        if (params.value === null || params.value === undefined) return '';
+        if (params.value === null || params.value === undefined)
+            return params.data && params.data['Este año'] ? 'nuevo' : '';
         var v = Number(params.value);
-        var sign = v >= 0 ? '+' : '\\u2212';
-        return sign + Math.abs(v).toFixed(1) + '%';
+        if (Math.abs(v) < 0.05) return '0.0%';
+        return (v > 0 ? '\\u25B4' : '\\u25BE') + Math.abs(v).toFixed(1) + '%';
     }
 """)
 
-# Semáforo de COSTO (ver docstring): positivo = rojo.
-_STYLE_COSTO = JsCode(f"""
-    function(params) {{
-        var base = {{fontFamily: "'Courier New',Courier,monospace",
-                     textAlign: 'right', paddingRight: '10px'}};
-        if (params.value === null || params.value === undefined) return base;
+_UMBRAL_ALARMA_PCT = 30
+"""Desde qué |Δ %| una fila es ALARMA: negrita, tono oscuro y barra fuerte en
+«Δ S/» y «Δ %». Debajo, el mismo semáforo pero en peso normal y tono claro.
+
+Es de la FILA y no de cada celda: «Δ S/» no tiene un umbral propio que
+tenga sentido para todos los ítems (S/ 900 es mucho en sal y nada en
+carne), y el % sí. Mismo criterio que la barra de Volatilidad, con otro
+número: allá los saltos semanales de ±50% son lo común."""
+
+# El semáforo de COSTO (ver docstring) en la LETRA: positivo = rojo. Un
+# solo cuerpo para las tres columnas que lo llevan; lo que cambia entre
+# ellas es si la fila puede ser alarma y si lleva barra, y eso lo dicen
+# las dos banderas que se interpolan en `_style_costo`.
+_JS_COSTO = """
+    function(params) {
+        var base = {fontFamily: "'Courier New',Courier,monospace",
+                    textAlign: 'right', paddingRight: '10px'};
+        if (params.value === null || params.value === undefined) {
+            base.color = '__GRIS__'; return base;
+        }
         var v = Number(params.value);
-        if (Math.abs(v) < 0.5) {{ base.color = '{GRIS_TEXTO}'; return base; }}
-        if (v > 0) {{
-            base.backgroundColor = '{ERROR_FONDO}'; base.color = '{ERROR}';
-        }} else {{
-            base.backgroundColor = '{EXITO_FONDO}'; base.color = '{EXITO}';
-        }}
-        base.fontWeight = '600';
+        if (Math.abs(v) < 0.5) { base.color = '__GRIS__'; return base; }
+        var d = params.data || {};
+        var pct = d['Δ %'];
+        var alarma = __ALARMA__ && pct !== null && pct !== undefined
+                     && Math.abs(Number(pct)) >= __UMBRAL__;
+        var sube = v > 0;
+        base.color = alarma ? (sube ? '__SUBE_OSC__' : '__BAJA_OSC__')
+                            : (sube ? '__SUBE__' : '__BAJA__');
+        base.fontWeight = alarma ? '700' : '500';
+        if (__BARRA__) {
+            // La barrita de magnitud: una raya de 3px al pie de la celda,
+            // alineada a la derecha como el número, larga en proporción al
+            // mayor |Δ S/| de la tabla (`__bar`, 0-100, lo calcula Python).
+            // Es un fondo y no un elemento: así no hace falta un
+            // cellRenderer, y el `background-origin: content-box` la deja
+            // terminando donde termina el número y no en el borde.
+            var c = alarma ? (sube ? '__SUBE__' : '__BAJA__')
+                           : (sube ? '__SUBE_BAR__' : '__BAJA_BAR__');
+            var w = Math.max(4, Math.round(Number(d['__bar']) || 0));
+            base.backgroundImage = 'linear-gradient(' + c + ',' + c + ')';
+            base.backgroundSize = w + '% 3px';
+            base.backgroundRepeat = 'no-repeat';
+            base.backgroundPosition = 'right bottom 2px';
+            base.backgroundOrigin = 'content-box';
+        }
         return base;
-    }}
-""")
+    }
+"""
+
+
+def _style_costo(alarma, barra):
+    return JsCode(
+        _JS_COSTO.replace("__ALARMA__", "true" if alarma else "false")
+        .replace("__BARRA__", "true" if barra else "false")
+        .replace("__UMBRAL__", str(_UMBRAL_ALARMA_PCT))
+        .replace("__GRIS__", GRIS_TEXTO)
+        .replace("__SUBE_OSC__", ERROR_TEXTO).replace("__BAJA_OSC__", CELDA_POS_TEXTO)
+        .replace("__SUBE_BAR__", ERROR_BORDE).replace("__BAJA_BAR__", EXITO_BORDE)
+        .replace("__SUBE__", ERROR).replace("__BAJA__", EXITO))
+
+
+_STYLE_DELTA_SOLES = _style_costo(alarma=True, barra=True)
+_STYLE_DELTA_PCT = _style_costo(alarma=True, barra=False)
+_STYLE_EF_PRECIO = _style_costo(alarma=False, barra=False)
+"""El efecto precio lleva el color y nada más: la alarma de la fila ya la
+dicen «Δ S/» y «Δ %», y una tercera negrita en la misma fila vuelve a ser
+ruido."""
 
 # Neutro: cifras de contexto (el gasto de cada lado) y el efecto CANTIDAD.
 _STYLE_NUM = JsCode(f"""
@@ -262,6 +325,13 @@ def renderizar_detalle_vs_ano_pasado(tv, etiqueta_item, altura, key,
 
     Devuelve el `__item_full` de la fila clickeada en ESTA corrida, o None.
     """
+    # El largo de la barrita de «Δ S/» viaja como DATO de la fila y no como
+    # un máximo metido en el JsCode (regla #226). Relativo a la tabla que se
+    # VE: con el buscador filtrando, la barra más larga es la del ítem mayor
+    # entre los que quedan.
+    _mx = float(tv["Δ S/"].abs().max() or 0) if len(tv) else 0.0
+    tv = tv.assign(__bar=(tv["Δ S/"].abs() / _mx * 100) if _mx else 0.0)
+
     gb = GridOptionsBuilder.from_dataframe(tv)
     gb.configure_default_column(
         resizable=False, sortable=True, filter=False, editable=False,
@@ -274,18 +344,18 @@ def renderizar_detalle_vs_ano_pasado(tv, etiqueta_item, altura, key,
     for col, style, tip in (
         ("Este año",        _STYLE_NUM,       _TOOLTIP_ACT),
         ("Año pasado",      _STYLE_NUM_SUAVE, _TOOLTIP_AA),
-        ("Efecto precio",   _STYLE_COSTO,     _TOOLTIP_EF_PRECIO),
+        ("Efecto precio",   _STYLE_EF_PRECIO, _TOOLTIP_EF_PRECIO),
         ("Efecto cantidad", _STYLE_NUM,       _TOOLTIP_EF_CANT),
-        ("Δ S/",            _STYLE_COSTO,     None),
+        ("Δ S/",            _STYLE_DELTA_SOLES, None),
     ):
         gb.configure_column(col, type=["numericColumn"], width=_ANCHO_SOLES,
                             valueFormatter=_FMT_SOLES, cellStyle=style,
                             **({"tooltipValueGetter": tip} if tip else {}))
     gb.configure_column("Δ %", type=["numericColumn"], width=_ANCHO_PCT,
-                        valueFormatter=_FMT_PCT, cellStyle=_STYLE_COSTO)
+                        valueFormatter=_FMT_PCT, cellStyle=_STYLE_DELTA_PCT)
 
     for oculta in ("__item_full", "__cant", "__cant_aa", "__p", "__p_aa",
-                   "__um", "__n"):
+                   "__um", "__n", "__bar"):
         gb.configure_column(oculta, hide=True)
 
     gb.configure_selection(selection_mode="single", use_checkbox=False)
@@ -294,7 +364,7 @@ def renderizar_detalle_vs_ano_pasado(tv, etiqueta_item, altura, key,
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # arquitectura.md regla #159
 
-    custom_css = dict(_css_grid(font_px))
+    custom_css = dict(_css_grid(font_px, cabecera_neutra=True))
     custom_css[".ag-tooltip"] = {
         "background-color": f"{TEXTO_PRINCIPAL} !important",
         "color": "#ffffff !important",

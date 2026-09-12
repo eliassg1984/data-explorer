@@ -14,12 +14,12 @@ from tema import (
 )
 
 
-def _css_grid(font_px, cebra=True, marco=True):
+def _css_grid(font_px, cebra=True, marco=True, cabecera_neutra=False):
     """CSS del propio grid: guías de tab, root-wrapper, cabecera, filas,
     celda, fila fijada, paginación y barra de estado.
 
-    Dos interruptores, los dos en `True` por defecto para no mover a las
-    otras ocho tablas que comparten esta función:
+    Tres interruptores, todos en su valor de siempre por defecto para no
+    mover a las otras ocho tablas que comparten esta función:
 
     `cebra=False` deja las filas de un blanco uniforme (a pedido
     2026-08-28 para la tabla de Documentos SUNAT). Lo que separa las
@@ -35,7 +35,15 @@ def _css_grid(font_px, cebra=True, marco=True):
     tarjetas"— y eran exactamente tres marcos anidados. Lo que NO se
     toca es `overflow: hidden`, que sigue haciendo falta para que las
     filas no se salgan por abajo.
+
+    `cabecera_neutra=True` cambia la franja lavanda de la cabecera por
+    blanco con texto gris oscuro y una línea gris debajo. Es para las
+    tablas cuyas CELDAS ya cargan color de dato (el semáforo de Compras):
+    ahí la franja de marca es un color más compitiendo por la mirada.
+    A pedido el 2026-09-12, junto con sacarle el fondo a las celdas —
+    regla #390.
     """
+    cab_fondo = BLANCO if cabecera_neutra else LAVANDA_FONDO
     return {
         ".ag-tab-guard-top, .ag-tab-guard-bottom": {
             "caret-color": "transparent !important",
@@ -53,14 +61,17 @@ def _css_grid(font_px, cebra=True, marco=True):
             "width": "100% !important",
         },
         ".ag-header": {
-            "background-color": f"{LAVANDA_FONDO} !important",
-            "border-bottom": f"1px solid {ACENTO} !important",
+            "background-color": f"{cab_fondo} !important",
+            "border-bottom": (f"1px solid {GRIS_BORDE} !important"
+                              if cabecera_neutra
+                              else f"1px solid {ACENTO} !important"),
         },
         ".ag-header-cell": {
-            "background-color": f"{LAVANDA_FONDO} !important",
+            "background-color": f"{cab_fondo} !important",
         },
         ".ag-header-cell-text": {
-            "color": f"{ACENTO_TEXTO_OSCURO} !important",
+            "color": (f"{GRIS_TEXTO_MEDIO} !important" if cabecera_neutra
+                      else f"{ACENTO_TEXTO_OSCURO} !important"),
             "font-weight": "500",
             "font-size": f"{font_px}px",
             "letter-spacing": "normal",

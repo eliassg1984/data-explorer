@@ -22,9 +22,9 @@ un índice de fila que se pueda desalinear contra la lista filtrada.
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, ERROR, ERROR_FONDO,
-    ERROR_TEXTO, EXITO, EXITO_FONDO, GRIS_LINEA, GRIS_TEXTO, LAVANDA_BORDE,
-    LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, ERROR, ERROR_TEXTO,
+    EXITO, GRIS_BORDE, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO,
+    TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
@@ -139,7 +139,11 @@ _FMT_PCT = JsCode("""
         // siguen en el tooltip. Solo hacia arriba: una baja no puede pasar
         // de -100%.
         if (v >= 1000) return '×' + (1 + v / 100).toFixed(0);
-        var sign = v > 0 ? '+' : '−';
+        // La FLECHA en el lugar del signo (2026-09-12, regla #390): con
+        // la celda sin fondo, la dirección tiene que decirse con algo más
+        // que el color, y sumarla AL LADO del signo son dos glifos más en
+        // una columna medida al píxel (`_MIN_ANCHO_COL_SEMANA`).
+        var sign = v > 0 ? '\\u25B4' : '\\u25BE';
         return sign + Math.abs(v).toFixed(0) + '%';
     }
 """)
@@ -159,6 +163,11 @@ _FMT_1DEC = JsCode("""
 # peor, una pastilla roja con un cero adentro.
 _EPS_CERO = 0.5
 _TAM_CERO = "10.5px"
+
+_TAM_FLECHA = "8px"
+"""La flecha ▴/▾ que hace de signo del % (regla #390). A este cuerpo mide
+8px, lo mismo que el «+» que reemplazó: «▴107%» a peso 600 son 36px, igual
+que «+107%» antes. Ver el comentario en `_RENDER_DELTA`."""
 
 # El padding horizontal de la celda, propio de las columnas-semana. El del
 # tema material son 15px POR LADO, o sea 30 de los 48 que mide la columna:
@@ -192,20 +201,30 @@ _TAM_HDR_SEMANA = "11px"
 """Cabecera de columna angosta, más chica que el cuerpo (13px). Es lo que
 hace que «Volatilidad» entre en un renglón dentro de 66px."""
 
+_UMBRAL_ALARMA = 50
+"""Desde qué |%| semanal una celda es ALARMA: negrita, tono oscuro y una raya
+de 3px al pie, larga en proporción al salto (topada en `_TOPE_BARRA`).
+Debajo, el semáforo en la letra y nada más.
+
+Es LA señal de la tabla desde el 2026-09-12 (regla #390): con pastilla en
+cada celda que se movía, casi toda la grilla iba pintada y el color dejó de
+separar un +562% de un −8%. La barra aparece SÓLO pasando el umbral: acá
+la barra es la alarma, no una medida de todas las celdas. En esta tabla
+±50% en una semana pasa, así que el umbral es más alto que el ±30% de
+«Vs año pasado»."""
+
+_TOPE_BARRA = 150
+"""El % en el que la raya de alarma llena la celda. Sin tope, un +562% la
+llena y un +63% queda en una muesca: los dos son alarma y tienen que
+leerse como tal."""
+
 _STYLE_DELTA = JsCode(f"""
     function(params) {{
-        // El borde TRANSPARENTE es el canal entre columnas. Sin el, la
-        // pastilla de cada celda llega hasta el borde y las de dos semanas
-        // seguidas se tocan: la fila se lee como una banda de color en vez
-        // de como siete celdas. Con `background-clip: padding-box` el color
-        // se pinta solo dentro del padding, asi que 2px por lado abren el
-        // canal horizontal y 3px arriba y abajo lo abren entre filas --
-        // sale una pastilla, no un bloque.
+        // El borde TRANSPARENTE era el canal entre pastillas, cuando la
+        // celda llevaba fondo (hasta el 2026-09-12). Se queda porque es
+        // parte del ancho que mide `_MIN_ANCHO_COL_SEMANA` —sacarlo mueve
+        // la cuenta— y porque la raya de alarma cuelga del mismo recuadro.
         //
-        // El borde y no un margen: `.ag-cell` esta posicionada en absoluto
-        // con su ancho puesto a mano, y un margen la desalinearia de su
-        // cabecera. El borde lo absorbe el `box-sizing: border-box` que ya
-        // trae AG Grid.
         // En LONGHANDS, no `border: '3px 2px solid transparent'`: el
         // atajo de CSS no acepta dos anchos, asi que la declaracion entera
         // se descarta en silencio y la celda se queda con el borde de 1px
@@ -226,12 +245,27 @@ _STYLE_DELTA = JsCode(f"""
                                          fontSize: '{_TAM_CERO}'}});
         }}
         if (Math.abs(v) < 1) return Object.assign(base, {{color: '{GRIS_TEXTO}'}});
-        if (v > 0) return Object.assign(base, {{
-            backgroundColor: '{ERROR_FONDO}', color: '{ERROR}',
-            fontWeight: '600', borderRadius: '6px'}});
+        var sube = v > 0;
+        if (Math.abs(v) < {_UMBRAL_ALARMA}) return Object.assign(base, {{
+            color: sube ? '{ERROR}' : '{EXITO}', fontWeight: '500'}});
+        // La raya: un fondo y no un elemento, igual que la barra de
+        // «Volatilidad» (`_style_vol`). Alineada a la DERECHA como el
+        // número, y con `background-origin: content-box` termina donde
+        // termina el texto, no contra el borde de la celda.
+        var c = sube ? '{ERROR}' : '{EXITO}';
+        var w = Math.max(8, Math.round(Math.min(Math.abs(v), {_TOPE_BARRA})
+                                       / {_TOPE_BARRA} * 100));
         return Object.assign(base, {{
-            backgroundColor: '{EXITO_FONDO}', color: '{EXITO}',
-            fontWeight: '600', borderRadius: '6px'}});
+            color: sube ? '{ERROR_TEXTO}' : '{CELDA_POS_TEXTO}',
+            // 600 y no 700: es el peso que tenía la pastilla, y el que
+            // entra en la cuenta de `_MIN_ANCHO_COL_SEMANA` — a 700
+            // «107%» mide 3px más.
+            fontWeight: '600',
+            backgroundImage: 'linear-gradient(' + c + ',' + c + ')',
+            backgroundSize: w + '% 3px',
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right bottom 1px',
+            backgroundOrigin: 'content-box'}});
     }}
 """)
 
@@ -243,11 +277,14 @@ _STYLE_DELTA = JsCode(f"""
 #
 # AL COSTADO Y NO DEBAJO desde el 2026-09-12, a pedido y sobre una maqueta a
 # escala con cuatro variantes de color. El % va PRIMERO (lo que se escanea)
-# y los precios en el TONO OSCURO de su mismo semaforo — `ERROR_TEXTO` si
-# subio, `CELDA_POS_TEXTO` si bajo —, sin la opacidad de antes: con los dos
-# en el mismo renglon, lo que los separa tiene que ser el color, no el
-# renglon. Se probaron gris y lavanda: el gris los despegaba de su celda y
-# el lavanda competia con la barra de «Volatilidad», que es del mismo tono.
+# y los precios en GRIS.
+#
+# El gris ya se había probado y descartado ese mismo día: «los despegaba de
+# su celda» — pero la celda era una PASTILLA de color, y un gris adentro de
+# una pastilla roja se lee como otra cosa. Desde que la celda va sin fondo
+# (regla #390) no hay pastilla de la que despegarse, y el tono del semáforo
+# en los precios duplicaba el rojo del % al lado: dos rojos por celda en
+# una tabla a la que se le estaba sacando color.
 #
 # SI NO ENTRA, SE CORTAN LOS PRECIOS, NUNCA EL %: el % no encoge
 # (`flex: none`) y los precios llevan `min-width: 0` + ellipsis. Sin eso, un
@@ -301,7 +338,24 @@ class DeltaCelda {
         fila.style.maxWidth = '100%';
         this.eGui.appendChild(fila);
         var a = document.createElement('span');
-        a.textContent = p.valueFormatted == null ? '' : p.valueFormatted;
+        var txt = p.valueFormatted == null ? '' : String(p.valueFormatted);
+        // La flecha que `_FMT_PCT` pone en el lugar del signo va en su
+        // PROPIO span, más chica: al cuerpo del % mide 11px contra los 8
+        // del «+» que reemplaza, y con eso el par de precios del peor caso
+        // dejaba de entrar en `_MIN_ANCHO_COL_SEMANA` (medido: «108.84» se
+        // cortaba en «108.…»). A `_TAM_FLECHA` mide 8 y la cuenta de la
+        // columna queda como estaba.
+        var c0 = txt.charAt(0);
+        if (c0 === '\\u25B4' || c0 === '\\u25BE') {
+            var fl = document.createElement('span');
+            fl.textContent = c0;
+            fl.style.fontSize = '__TAM_FLECHA__';
+            fl.style.verticalAlign = '1px';
+            a.appendChild(fl);
+            a.appendChild(document.createTextNode(txt.slice(1)));
+        } else {
+            a.textContent = txt;
+        }
         // Sin `nowrap` un valor largo se parte en dos renglones DENTRO de
         // la fila y desborda por abajo, encima de su vecina.
         a.style.whiteSpace = 'nowrap';
@@ -312,16 +366,11 @@ class DeltaCelda {
         var prev = d['__prev_' + p.idx];
         var cur = d['__cur_' + p.idx];
         if (prev == null || cur == null) return;
-        var v = Number(p.value);
         var b = document.createElement('span');
         b.textContent = this.num(prev) + ' → ' + this.num(cur);
         b.style.fontSize = '__TAM__';
         b.style.fontWeight = '400';
-        // El tono OSCURO del mismo semaforo de la pastilla; debajo de 1% la
-        // pastilla no se pinta (ver `_STYLE_DELTA`) y los precios van en el
-        // gris de su texto.
-        b.style.color = Math.abs(v) < 1 ? '__GRIS__'
-                      : (v > 0 ? '__SUBE__' : '__BAJA__');
+        b.style.color = '__GRIS__';
         // Que un precio mas ancho de lo previsto FALLE VISIBLE en vez de
         // cortarse por la mitad: "169.41" recortado a "169.4" no parece un
         // recorte, parece otro precio. El peor caso del parquet entra en el
@@ -344,7 +393,7 @@ class DeltaCelda {
 }
 """.replace("__EPS__", str(_EPS_CERO)).replace("__TAM__", _TAM_PRECIOS)
    .replace("__GAP__", _GAP_PRECIOS).replace("__GRIS__", GRIS_TEXTO)
-   .replace("__SUBE__", ERROR_TEXTO).replace("__BAJA__", CELDA_POS_TEXTO))
+   .replace("__TAM_FLECHA__", _TAM_FLECHA))
 """La celda de una semana: el % y, si hubo movimiento, el cierre anterior y
 el nuevo a su costado.
 
@@ -395,8 +444,9 @@ escape a otra tabla."""
 
 _CLASE_HDR_MIDE = "vol-hdr-mide"
 """Cabecera de las columnas-semana que SUMAN el puntaje de «Volatilidad» (las
-últimas cuatro). Van resaltadas —fondo lavanda más lleno y una raya de
-`ACENTO` arriba— para que se distingan de la historia que se ve al deslizar
+últimas cuatro). Van resaltadas —una raya oscura arriba y el rótulo en
+negrita; hasta la regla #390 era además un fondo lavanda más lleno— para
+que se distingan de la historia que se ve al deslizar
 (2026-09-12, a pedido, después de «¿de dónde sale el 10 Ago?»). Qué columna
 lleva la marca lo decide `volatilidad.py` (`mide` en `cols_sem`)."""
 
@@ -736,7 +786,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     # que separa una fila de la siguiente ya lo hacen la linea de `.ag-row`
     # y el borde transparente de 3px de cada pastilla; el gris alternado
     # competia con el rojo/verde claro de las pastillas.
-    custom_css = dict(_css_grid(13, cebra=False))
+    custom_css = dict(_css_grid(13, cebra=False, cabecera_neutra=True))
     # La cabecera de las columnas angostas: menos padding y menos cuerpo que
     # el resto de la grilla. Ver `_PAD_X_COL` para la medición.
     custom_css[f".{_CLASE_HDR_COMPACTA}"] = {
@@ -746,16 +796,17 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     custom_css[f".{_CLASE_HDR_COMPACTA} .ag-header-cell-text"] = {
         "font-size": f"{_TAM_HDR_SEMANA} !important",
     }
-    # Las semanas que MIDEN: fondo más lleno y una raya de acento arriba,
-    # como una pestaña. `.ag-header-cell.clase` y con `!important` porque
-    # `_css_grid` ya pinta TODAS las cabeceras con `!important`.
+    # Las semanas que MIDEN: una raya oscura arriba, como una pestaña, y el
+    # rótulo en negrita. Hasta el 2026-09-12 eran además un fondo lavanda
+    # más lleno sobre la cabecera lavanda; con la cabecera neutra (regla
+    # #390) la marca se quedó con lo que no es color. `.ag-header-cell.clase`
+    # y con `!important` porque `_css_grid` pinta TODAS las cabeceras así.
     custom_css[f".ag-header-cell.{_CLASE_HDR_MIDE}"] = {
-        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-        "box-shadow": f"inset 0 3px 0 {ACENTO} !important",
+        "box-shadow": f"inset 0 2px 0 {GRIS_TEXTO_MEDIO} !important",
     }
     custom_css[f".{_CLASE_HDR_MIDE} .ag-header-cell-text"] = {
         "font-weight": "600 !important",
-        "color": f"{ACENTO_TEXTO_OSCURO} !important",
+        "color": f"{TEXTO_PRINCIPAL} !important",
     }
     # El período, debajo de «Volatilidad»: más chico y en gris, es la nota
     # al pie del título, no un segundo título.
@@ -776,7 +827,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
         "border": "1px solid transparent !important",
         "background": "transparent !important",
         "box-shadow": "none !important",
-        "color": f"{ACENTO_TEXTO_OSCURO} !important",
+        "color": f"{GRIS_TEXTO_MEDIO} !important",
         "border-radius": "6px !important",
         "width": "22px !important",
         "height": "22px !important",
@@ -787,7 +838,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     }
     custom_css[".vol-nav:hover"] = {
         "background": f"{BLANCO} !important",
-        "border-color": f"{LAVANDA_BORDE} !important",
+        "border-color": f"{GRIS_BORDE} !important",
     }
     # Sin nada que deslizar, sin flechas (la clase la pone `_AL_MONTAR`).
     custom_css[".vol-sin-scroll .vol-nav"] = {

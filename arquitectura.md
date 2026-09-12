@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-389 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+390 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (136)
 
@@ -220,7 +220,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 
-**Plotly y figuras** (63)
+**Plotly y figuras** (64)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -285,8 +285,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#387** — Dos rótulos para la misma cosa son una pregunta que el usuario va a hacer
 - **#388** — hoverinfo="skip" apaga también el CLIC: un overlay invisible puesto para capturar clics con…
 - **#389** — Si algo es difícil de clickear, lo que crece es el blanco del clic, no el dibujo — y la…
+- **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
 
-**AgGrid y tablas** (63)
+**AgGrid y tablas** (64)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -351,6 +352,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 - **#385** — Dos series que "hacen lo mismo" tienen que hacerlo con el MISMO código — el desempate de un…
 - **#386** — Una grilla que cambia de columnas SIN volver a montarse no se entera por el ResizeObserver —…
+- **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
 
 **Streamlit** (107)
 
@@ -34241,6 +34243,58 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+390. **Si casi todas las celdas llevan color, el color ya no avisa nada:
+     el semáforo va en la LETRA y cada recurso donde rinde.** Pedido con
+     captura sobre «Vs año pasado» y la grilla de Volatilidad: «me genera
+     mucho ruido visual la cantidad de colores en las celdas». Medido en
+     Volatilidad: 290 celdas con movimiento, las 290 con pastilla roja o
+     verde — un −8% pesaba lo mismo que un +562%.
+
+     Se maquetaron cuatro formas (letra, flecha, umbral, barra) y después
+     la mezcla en dos dosis; se eligió la **repartida**, porque la
+     completa —cuatro señales en cada celda— devolvía el ruido por otro
+     lado. Quedó así, con el fondo de celda SIEMPRE blanco:
+
+     - **Vs año pasado** (`tablas/compras_vs_ano_pasado.py`): «Δ S/» con
+       color y una barrita de 3px (el CUÁNTO); «Δ %» con la flecha ▴/▾ en
+       el lugar del signo (el HACIA DÓNDE); «Efecto precio» sólo color;
+       «Efecto cantidad» sigue neutra (docstring del módulo: comprar más
+       no es malo). La alarma es de la FILA: |Δ %| ≥ 30 pone negrita y
+       tono oscuro en «Δ S/» y «Δ %» y la barra fuerte. El largo de la
+       barra viaja como dato (`__bar`), no en el JsCode (#226).
+     - **Volatilidad** (`tablas/compras_volatilidad.py`): el % en color
+       con la flecha de signo, los dos precios en GRIS, y la raya al pie
+       SÓLO desde ±50% — ahí la barra ES la alarma. Quedaron 38 de 290.
+
+     **La flecha va EN el lugar del signo, y a 8px en su propio span.** Al
+     cuerpo del % (12px) «▴» mide 11px contra los 8 del «+»; sumado a la
+     negrita 700, «▴107%» pasaba de 36 a 42px y el par de precios del peor
+     caso («52.53 → 108.84», 64px) se cortaba en «108.…» — el mismo modo
+     de fallo de `_MIN_ANCHO_COL_SEMANA` que la #349 describe con el %.
+     Con la flecha a `_TAM_FLECHA` y la alarma a 600 (el peso de la
+     pastilla vieja) vuelve a medir 36 y la columna no se tocó. En «Vs año
+     pasado» no pasa: es Courier y la negrita no ensancha.
+
+     **Los precios de Volatilidad vuelven al gris, que se había
+     descartado ese mismo día** («despegaba los precios de su celda»).
+     Aquello era gris ADENTRO de una pastilla de color; sin pastilla no
+     hay de qué despegarse, y el tono del semáforo en los precios era un
+     segundo rojo por celda.
+
+     **La cabecera también quedó sin color** (a pedido): `_css_grid(...,
+     cabecera_neutra=True)` — blanco, texto `GRIS_TEXTO_MEDIO`, línea
+     `GRIS_BORDE`. Es un interruptor, así que las otras ocho tablas siguen
+     lavanda. La marca de las semanas que miden el puntaje de Volatilidad
+     era un fondo lavanda más lleno sobre la cabecera lavanda; se quedó con
+     lo que no es color: una raya oscura de 2px arriba y el rótulo en
+     negrita. `EXITO_BORDE` (+ `--success-border`) nació para la barra
+     verde: `EXITO_FONDO` sobre blanco no se ve en 3px.
+
+     Es una PRUEBA con vuelta atrás pedida («si no lo veo bien,
+     regresamos a como estaba antes»): todo el cambio es un solo commit.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34253,7 +34307,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#390**.
+> próxima regla nueva es la **#391**.
 
 >
 
