@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-386 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+387 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (136)
 
@@ -220,7 +220,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 
-**Plotly y figuras** (60)
+**Plotly y figuras** (61)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -282,6 +282,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#360** — El tope de puntos superpuestos sale de los PÍXELES que hay, no de un número lindo
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
+- **#387** — Dos rótulos para la misma cosa son una pregunta que el usuario va a hacer
 
 **AgGrid y tablas** (63)
 
@@ -604,7 +605,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 - **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
 
-**Decisiones de diseño y UX** (64)
+**Decisiones de diseño y UX** (65)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -670,6 +671,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
 - **#372** — Sacar una tarjeta de su sección y darle sección propia rompe tres cosas que estaban…
 - **#380** — Un caption que explica una columna es una columna sin sitio: mudalo al headerTooltip antes de…
+- **#387** — Dos rótulos para la misma cosa son una pregunta que el usuario va a hacer
 
 **Mantenimiento y trampas del lenguaje** (12)
 
@@ -34102,6 +34104,36 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+387. **Dos rótulos para la misma cosa son una pregunta que el usuario va a
+     hacer.** Con la captura de «Huevo de Corral» delante: «¿por qué el
+     gráfico de velas dice 10 Ago en la base y la tabla de volatilidad
+     empieza en 17 Ago – 23 Ago? ¿De dónde sale el 10?».
+
+     No había error de datos: las cinco velas son cinco SEMANAS y las
+     columnas que suman el puntaje son cuatro VARIACIONES, así que la
+     primera semana es la base y no tiene columna propia entre las que
+     miden — su precio es el de la izquierda de la primera celda
+     («8.50 → 16.95»). Lo que confundía era el rótulo: el eje decía sólo el
+     lunes («10 Ago») y la tabla la semana entera («10 Ago – 16 Ago»), y
+     con la historia a la vista la tabla además tenía una columna de esa
+     semana que NO suma (compara contra la del 3 Ago).
+
+     Dos arreglos, a pedido: **el eje usa el mismo rótulo que la grilla**
+     (`_vol_fmt_semana_cabecera`; `_vol_fmt_semana_corta` se borró, había
+     nacido para columnas de 50px que ya no existen), y **las columnas que
+     suman llevan la cabecera resaltada** (`vol-hdr-mide`: fondo más lleno
+     y una raya de `ACENTO` arriba, con tooltip «Suma en la volatilidad» /
+     «Historia: no entra…»). Qué columna mide lo decide `volatilidad.py`
+     (`mide` en `cols_sem`); la grilla sólo pinta. Ojo con `headerClass`:
+     la de la columna PISA a la de su `columnType`, así que la clase
+     compacta va repetida en la lista.
+
+     La regla general: **cuando una vista muestra la misma unidad en dos
+     sitios, el rótulo es uno solo**. Es la #241 (el mismo texto de mes en
+     el eje y en el hover) llevada a la semana.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34114,7 +34146,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#387**.
+> próxima regla nueva es la **#388**.
 
 >
 

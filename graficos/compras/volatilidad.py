@@ -225,24 +225,16 @@ o sea la SEGUNDA lista de meses en español del repo — justo lo que la regla
 vista."""
 
 
-def _vol_fmt_semana_corta(ini):
-    """La semana nombrada por su lunes: "27 Jul". Es la etiqueta del eje X
-    del candlestick. Hasta el 2026-09-12 también era la de la CABECERA de la
-    grilla; desde entonces la grilla rotula la semana entera
-    (`_vol_fmt_semana_cabecera`), porque sus columnas pasaron a 120px.
-
-    Nació el 2026-09-07, al mudar el drill al costado: con la columna en
-    ~50px, "27 Jul - 2 Ago" envolvía en CUATRO renglones y la cabecera de la
-    grilla pasaba de 45 a 96px — 51px que salían de las filas. El rango
-    entero sigue estando en el tooltip de cada celda, que es donde hace
-    falta leerlo con precisión."""
-    return f"{ini.day} {_MESES_CORTO[ini.month - 1]}"
-
-
 def _vol_fmt_semana_cabecera(ini, anio_ref=None):
-    """Rótulo de una columna-semana de la grilla: «17 Ago – 23 Ago», el mes
-    escrito en las DOS puntas aunque sea el mismo (2026-09-12, a pedido y
-    sobre una maqueta: «17Ago-23Ago»).
+    """Rótulo de una semana en la grilla Y en el eje del candlestick: «17 Ago –
+    23 Ago», el mes escrito en las DOS puntas aunque sea el mismo
+    (2026-09-12, a pedido y sobre una maqueta: «17Ago-23Ago»).
+
+    Reemplaza a `_vol_fmt_semana_corta` («10 Ago», sólo el lunes), que nació
+    el 2026-09-07 cuando la columna medía ~50px y el rango entero envolvía
+    en cuatro renglones. Con columnas de 120px dejó de hacer falta, y tener
+    dos rótulos para la misma semana hizo que el usuario preguntara de dónde
+    salía el «10 Ago» del gráfico si la tabla no tenía esa columna.
 
     Si la semana termina en un año que no es `anio_ref` (el de la semana más
     reciente) lleva el año corto: «8 Set – 14 Set ’25». Con la historia a la
@@ -525,7 +517,11 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                                     "(o usá ‹ › junto a «Insumo») para ver "
                                     "semanas anteriores: son historia, no "
                                     "entran en el puntaje, y el orden no "
-                                    "cambia. El botón **Volatilidad** "
+                                    "cambia. Las que SÍ suman son las de "
+                                    "título resaltado; la semana anterior a "
+                                    "la primera de ellas es la base (la "
+                                    "primera vela del gráfico). "
+                                    "El botón **Volatilidad** "
                                     "muestra la columna del puntaje; sin "
                                     "ella, se consulta pasando el mouse "
                                     "sobre el nombre del insumo."
@@ -601,11 +597,28 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # la columna es la FECHA y no el rótulo: con más de un año a la
         # vista, dos rótulos pueden coincidir, y el nombre es la clave del
         # DataFrame.
-        cols_sem = [{"col": f"s_{s:%Y%m%d}",
-                     "hdr": _vol_fmt_semana_cabecera(s, anio_ref),
-                     "lp": _vol_fmt_semana_cabecera(semanas_hist[i], anio_ref),
-                     "lc": _vol_fmt_semana_cabecera(s, anio_ref)}
-                    for i, s in enumerate(semanas_hist[1:])]
+        #
+        # `mide` marca las columnas que SUMAN el puntaje: las últimas
+        # `n_sem - 1` (cinco semanas son cuatro variaciones). La grilla les
+        # resalta la cabecera (2026-09-12, a pedido): con la historia a la
+        # vista, sin la marca no hay forma de saber qué entra en el número
+        # de «Volatilidad» y qué es historia. La semana BASE —la primera de
+        # las cinco— no tiene columna propia entre las que miden: su precio
+        # es el de la izquierda de la primera columna marcada.
+        _n_miden = n_sem - 1
+        cols_sem = []
+        for i, s in enumerate(semanas_hist[1:]):
+            _mide = i >= len(semanas_hist) - 1 - _n_miden
+            cols_sem.append({
+                "col": f"s_{s:%Y%m%d}",
+                "hdr": _vol_fmt_semana_cabecera(s, anio_ref),
+                "lp": _vol_fmt_semana_cabecera(semanas_hist[i], anio_ref),
+                "lc": _vol_fmt_semana_cabecera(s, anio_ref),
+                "mide": _mide,
+                "tip": (f"Suma en la volatilidad ({periodo_vol})" if _mide
+                        else f"Historia: no entra en la volatilidad, que mide "
+                             f"{periodo_vol}"),
+            })
 
         ranking_vista = [(p, info) for p, info in ranking
                          if not _q or _q in str(p).lower()]
@@ -827,14 +840,25 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # tabla de al lado decían "3-9 Ago" (regla #241, la misma que
             # ya arregló el gráfico por fecha de Documentos SUNAT).
             #
-            # `ticktext` y no `tickformat`: acá el eje tiene ocho puntos
-            # conocidos —los lunes de las ocho semanas— y marcarlos todos
+            # `ticktext` y no `tickformat`: acá el eje tiene cinco puntos
+            # conocidos —los lunes de las cinco semanas— y marcarlos todos
             # es lo que hace que una vela se pueda buscar por su fecha.
+            #
+            # EL MISMO RÓTULO QUE LA GRILLA (2026-09-12, a pedido). Decía
+            # sólo el lunes («10 Ago») mientras la columna de la misma semana
+            # decía «10 Ago – 16 Ago», y la pregunta fue literal: «¿de dónde
+            # sale el 10?». Es la semana BASE: la primera vela no tiene
+            # columna entre las que suman el puntaje, porque una variación
+            # necesita la semana anterior. Con el rótulo entero se ve que es
+            # la misma semana que la columna, y que la grilla marca las
+            # cuatro que miden (`mide` en `cols_sem`). Cinco rótulos de ~95px
+            # entran en la mitad de la tarjeta.
             fig.update_layout(
                 xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False,
                            rangeslider=dict(visible=False),
                            tickmode="array", tickvals=semanas,
-                           ticktext=[_vol_fmt_semana_corta(s) for s in semanas]),
+                           ticktext=[_vol_fmt_semana_cabecera(s, anio_ref)
+                                     for s in semanas]),
                 yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ "),
                 showlegend=False,
             )

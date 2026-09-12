@@ -24,7 +24,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, ERROR, ERROR_FONDO,
     ERROR_TEXTO, EXITO, EXITO_FONDO, GRIS_LINEA, GRIS_TEXTO, LAVANDA_BORDE,
-    TEXTO_PRINCIPAL,
+    LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
@@ -393,6 +393,13 @@ CSS que la acompaña se arma en `renderizar_ranking_volatilidad` y viaja por
 `custom_css`, o sea DENTRO del iframe del grid: no hay forma de que se
 escape a otra tabla."""
 
+_CLASE_HDR_MIDE = "vol-hdr-mide"
+"""Cabecera de las columnas-semana que SUMAN el puntaje de «Volatilidad» (las
+últimas cuatro). Van resaltadas —fondo lavanda más lleno y una raya de
+`ACENTO` arriba— para que se distingan de la historia que se ve al deslizar
+(2026-09-12, a pedido, después de «¿de dónde sale el 10 Ago?»). Qué columna
+lleva la marca lo decide `volatilidad.py` (`mide` en `cols_sem`)."""
+
 _PASO_NAV = 4
 """Cuántas semanas corre cada flecha ‹ › de la cabecera de «Insumo». Cuatro
 es lo que se lee de un vistazo en la grilla a todo el ancho (entran ~8), así
@@ -678,6 +685,11 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
         gb.configure_column(
             c["col"], header_name=c["hdr"], type=["numericColumn", "semana"],
             cellRendererParams={"idx": i, "lp": c["lp"], "lc": c["lc"]},
+            # La `headerClass` de la columna PISA a la del `columnType`, así
+            # que la compacta va repetida en la lista.
+            headerClass=([_CLASE_HDR_COMPACTA, _CLASE_HDR_MIDE] if c.get("mide")
+                         else _CLASE_HDR_COMPACTA),
+            headerTooltip=c.get("tip"),
         )
         gb.configure_column(f"__prev_{i}", hide=True)
         gb.configure_column(f"__cur_{i}", hide=True)
@@ -733,6 +745,17 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     }
     custom_css[f".{_CLASE_HDR_COMPACTA} .ag-header-cell-text"] = {
         "font-size": f"{_TAM_HDR_SEMANA} !important",
+    }
+    # Las semanas que MIDEN: fondo más lleno y una raya de acento arriba,
+    # como una pestaña. `.ag-header-cell.clase` y con `!important` porque
+    # `_css_grid` ya pinta TODAS las cabeceras con `!important`.
+    custom_css[f".ag-header-cell.{_CLASE_HDR_MIDE}"] = {
+        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
+        "box-shadow": f"inset 0 3px 0 {ACENTO} !important",
+    }
+    custom_css[f".{_CLASE_HDR_MIDE} .ag-header-cell-text"] = {
+        "font-weight": "600 !important",
+        "color": f"{ACENTO_TEXTO_OSCURO} !important",
     }
     # El período, debajo de «Volatilidad»: más chico y en gris, es la nota
     # al pie del título, no un segundo título.
