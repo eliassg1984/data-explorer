@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-379 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+380 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (133)
 
@@ -168,7 +168,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 
-**Layout y alturas** (41)
+**Layout y alturas** (42)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -211,6 +211,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#363** — Un control que vive DENTRO de una tarjeta promete que es de esa tarjeta. Si escribe el rango…
 - **#371** — Una cabecera flex que ENVUELVE convierte el margen negativo de la regla #162 en un solapamiento
 - **#376** — El default del REPORTE y el default de una TARJETA son dos cosas distintas — y la excepción…
+- **#380** — Un caption que explica una columna es una columna sin sitio: mudalo al headerTooltip antes de…
 
 **Plotly y figuras** (60)
 
@@ -593,7 +594,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 - **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
 
-**Decisiones de diseño y UX** (63)
+**Decisiones de diseño y UX** (64)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -658,6 +659,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#341** — Un querySelector singular es una decisión sobre la CARDINALIDAD, no un atajo — y en una…
 - **#353** — Una franja que aparece al pasar el cursor esconde su CONTENIDO, no su superficie — y todo lo…
 - **#372** — Sacar una tarjeta de su sección y darle sección propia rompe tres cosas que estaban…
+- **#380** — Un caption que explica una columna es una columna sin sitio: mudalo al headerTooltip antes de…
 
 **Mantenimiento y trampas del lenguaje** (12)
 
@@ -33475,6 +33477,102 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (2026-09-11.)
 
 
+380. **Un caption que explica una columna es una columna sin sitio: mudalo
+     al `headerTooltip` antes de borrarlo.** Pedido 2026-09-11 sobre las
+     tres tablas del drill Familia › Subfamilia › Producto (#374):
+     *"hagamos estas tablas similares al de Ranking de Proveedores […]
+     eliminemos el texto que está abajo de ellos […] y reduzcamos
+     verticalmente las tarjetas"*. Las tres cosas son la misma: los
+     captions eran **83px de los 421** que medía la tarjeta.
+
+     **Lo que decían no era adorno.** Uno aclaraba que el % del panel B es
+     sobre la FAMILIA y no sobre el total —la decisión de diseño del drill,
+     la que evita leer 45% como "45% de las compras"—, otro que la cantidad
+     va en la unidad del producto y no se suma entre productos (#374), y el
+     tercero de qué es % la columna del panel A. Borrarlos a secas deja
+     tres columnas que mienten en silencio. Van al `headerTooltip` de SU
+     columna, que es donde la pregunta aparece: cuesta 0px de alto y se lee
+     señalando lo que uno no entiende, no leyendo un pie que habla de otra
+     cosa.
+
+     **"Parecerse a" es un dict y dos números, no un ojo.** El look del
+     Ranking de Proveedores era `CSS_RANKING_GRID` (franja en vez de caja,
+     todo blanco, sin líneas verticales, cuerpo 11.5, texto en violeta) más
+     `_ALTO_FILA_RANK = 24` y `_ALTO_HEADER_RANK = 32`, los dos escritos
+     DENTRO de `_compras_proveedor_drill`. El comentario que los acompañaba
+     desde el 2026-08-28 anticipaba el día: «si algún día se unifican, es
+     24 + `CSS_RANKING_GRID` lo que tiene que viajar para allá». Viajaron a
+     `_comun.py` (`ALTO_FILA_RANK`, `ALTO_HEADER_RANK`, `CROMO_GRID_RANK`),
+     que es la misma forma que ya tienen el color (`tema.py`), el alto de
+     figura (`alturas.py`) y la grilla (`COLUMNAS_DRILL`): el número deja de
+     ser de UNA tabla y pasa a describir a todas. Copiarlo habría
+     funcionado igual hoy y habría driftado en el próximo pedido.
+
+     **Medido en el navegador, antes y después, a la misma ventana:** la
+     tarjeta pasó de **421,4px a 276,2** (−145, o −34%). Conviene saber de
+     dónde salió cada mitad, porque una de las dos no se ve en el diseño:
+
+     · el grid, de 276,6 a 214,6 (**−62**): filas de 28 a 24px, una fila
+       menos (8 → 7) y una cabecera de 32 en vez de 38;
+     · los captions, **−83**. En la captura del pedido son un renglón de
+       22,4px, pero la tarjeta la mide la columna MÁS ALTA, y ahí el
+       caption no es un renglón: medido en la página, el del panel B y el
+       del C ocupan **dos renglones a 1440px de ventana y tres a 1024**,
+       porque viven en una columna de 255-370px. Un pie de tres renglones
+       bajo una tabla de siete filas es un cuarto de la tarjeta explicando
+       la tabla.
+
+     El `_ALTO_FILA = 28` del ranking de PRODUCTOS de más abajo se queda
+     donde estaba a propósito: esa tabla comparte fila con la figura de
+     Evolución, cuyo alto sale de `alturas`, así que adelgazarla no baja la
+     fila — sólo le deja un hueco blanco (la regla de "dos tarjetas de la
+     misma fila miden lo mismo", #145).
+
+     **Las columnas no entraban, y el arreglo NO es `flex`.** Los 302px
+     declarados del panel A no entran en los 255 de un panel a 1024px de
+     ventana: la tabla salía con scroll horizontal y "Subfam." cortada — se
+     ve en la captura del pedido, y es lo que hace que una franja se lea
+     como una caja rota. Lo resuelve `autoSizeStrategy: fitGridWidth`, no
+     `colDef.flex`, y la diferencia está medida en la #350: estos tres
+     grids se construyen dentro de una `seccion_perezosa`, o sea fuera de
+     pantalla, y `flex` calculado sobre un cuerpo de ancho 0 se queda
+     clavado en 200px para siempre. `fitGridWidth` reintenta (0 → 100 →
+     500ms). El `minWidth` de "Valor" sigue mandando (#349).
+
+     **Y la capitalización, que es la mitad de por qué el Ranking se ve
+     distinto.** Acá la pasada ciega NO servía, y eso salió de contar el
+     parquet, no de mirarlo: las 8 familias llegan gritadas las 8, pero de
+     las 95 subfamilias sólo 34 gritan — las otras 61 ya vienen en nombre
+     propio desde el ERP ("Otros Servicios Prestados Por Terceros"), así
+     que el panel B mezcla los dos estilos según qué familia esté enfocada.
+     Correr `nombre_propio` sobre las 61 que están bien las EMPEORA: "Serv.
+     Analisis Y Certificacion" vuelve "SERV. Analisis y Certificacion",
+     porque la regla de "token con punto = sigla" está escrita para
+     `S.A.C.` y no para un `Serv.` abreviado. De ahí `_sin_gritar`, que
+     sólo toca lo que no tiene ni una minúscula.
+
+     **Este cambio se cruzó con la #379 y conviene saber en qué orden se
+     leen.** Mientras esto se escribía había DOS `nombre_propio` en el repo
+     —`base.py` y `_etiquetas_proveedor.py`— y acá se eligió la de `base`
+     por su vocabulario de conectores más largo, que en estos datos se nota
+     en dos de las ocho familias ("Bebidas con Alcohol", no "Con") y en las
+     siglas sin vocales ("RB Alimentos", no "Rb"). La #379 las unificó ese
+     mismo día y dejó la de `_etiquetas_proveedor` **con las reglas de las
+     dos**, así que hoy no hay elección que hacer: se importa de ahí y sale
+     lo mismo. Si esta regla se lee sola, el párrafo de arriba describe un
+     estado del repo que ya no existe.
+
+     **Lo que no cambia, y es lo que rompe si se olvida:** el nombre bonito
+     es SÓLO para mostrar. El valor que vuelve del clic de la grilla, el que
+     filtra el panel de al lado y el que arma la key del componente siguen
+     siendo los del parquet — viajan en una columna oculta (`_fam_raw`,
+     `_sub_raw`), exactamente como `_prov_raw` en el Ranking. Sin eso el
+     drill se enfoca en una familia llamada "Alimentos" que no existe en los
+     datos, y el panel de la derecha abre vacío.
+
+     (2026-09-11.)
+
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -33487,7 +33585,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#380**.
+> próxima regla nueva es la **#381**.
 
 >
 

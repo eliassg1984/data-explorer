@@ -83,6 +83,37 @@ GAP_DRILL = "small"
 filas parten en el mismo sitio pero con gaps distintos, el canal gris cambia
 de ancho a media página y el salto se ve igual."""
 
+# ── El LOOK de una tabla-ranking de Compras ──────────────────────────
+# Cuarta cara del mismo patrón que ya tienen el color (`tema.py`), el alto
+# de figura (`alturas.py`) y la grilla (`COLUMNAS_DRILL`): un número que
+# vivía en UNA tabla y describe a TODAS.
+ALTO_FILA_RANK = 24
+"""Alto de fila, en px, de las tablas-ranking de los drills de Compras.
+
+Nació inline en `proveedor.py` el 2026-08-28 ("las filas un poco más
+delgadas", junto con el blanco, el cuerpo de 11.5px y las minúsculas de
+`CSS_RANKING_GRID`), y el comentario que lo acompañaba anticipaba este
+día: «si algún día se unifican, es 24 + `CSS_RANKING_GRID` lo que tiene
+que viajar para allá». El 2026-09-11 viajó — los tres paneles del drill
+Familia › Subfamilia › Producto se pidieron "similares al de Ranking de
+Proveedores" —, así que el número deja de ser de una tabla y pasa a ser
+el de todas.
+
+Va SIEMPRE con `_css_proveedor.CSS_RANKING_GRID`: el alto solo, sin el
+cuerpo de 11.5px, aprieta el texto de 12px contra las líneas."""
+
+ALTO_HEADER_RANK = 32
+"""Alto de la cabecera de esas mismas tablas. Acompaña a `ALTO_FILA_RANK`
+y no se elige aparte: 38px sobre filas de 24 queda cabezona (era el doble
+de una fila)."""
+
+CROMO_GRID_RANK = ALTO_HEADER_RANK + 7
+"""Todo lo que mide un grid de ranking y NO son sus filas de datos: la
+cabecera + su borde inferior de 1px + ~5.5px de cromo del tema. Medido en
+el DOM, no a ojo. Es el `extra=` con el que `alturas.por_filas` dimensiona
+el `height=` del AgGrid; una tabla que además lleve fila TOTAL o una
+franja de atajos encima le suma lo suyo (ver `proveedor.py`)."""
+
 PARR = "\n\n"
 """Salto de párrafo para el markdown de un popover de ayuda.
 

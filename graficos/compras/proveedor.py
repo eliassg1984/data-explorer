@@ -26,9 +26,9 @@ from graficos.base import (
     paso_etiquetas, preservar_widgets, publicar_var_px,
 )
 from graficos.compras._comun import (
-    CATEGORIA_SEC, COLUMNAS_DRILL, GAP_DRILL, agregar_periodo,
-    base_normalizada, filtro_proveedores, periodos_ordenados,
-    selector_fecha_tarjeta,
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL,
+    CROMO_GRID_RANK, GAP_DRILL, agregar_periodo, base_normalizada,
+    filtro_proveedores, periodos_ordenados, selector_fecha_tarjeta,
 )
 from graficos.compras._css_proveedor import (
     CSS as CSS_PROVEEDOR, CSS_RANKING_GRID,
@@ -357,11 +357,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # sobre ESTA tabla. Los dos rankings viven apilados en la misma página,
     # así que si algún día se unifican, es 24 + `CSS_RANKING_GRID` lo que
     # tiene que viajar para allá, no 28 lo que vuelve para acá.
-    _ALTO_FILA_RANK = 24
-    # La cabecera acompaña: 38px sobre filas de 24 queda cabezona (era el
-    # doble de una fila). Vive en una constante porque el `extra` de abajo
-    # la necesita — son el mismo número contado dos veces.
-    _ALTO_HEADER_RANK = 32
+    #
+    # 2026-09-11: los dos números se mudaron a `_comun.py`. El drill de
+    # Producto pidió sus tres paneles "similares al de Ranking de
+    # Proveedores", así que ese día dejaron de describir ESTA tabla y
+    # pasaron a describir a todas — que es lo que el párrafo de arriba
+    # venía anticipando. Acá quedan los alias locales: los consumen ocho
+    # líneas de este archivo y renombrarlas no aportaba nada.
+    _ALTO_FILA_RANK = ALTO_FILA_RANK
+    _ALTO_HEADER_RANK = ALTO_HEADER_RANK
     # `extra` es TODO lo que el grid mide y no son las filas de datos:
     #   · el alto fijo del propio grid: la cabecera + su borde inferior de
     #     1px + ~5.5px de chrome del tema. Medido en el DOM, no a ojo.
@@ -376,7 +380,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # Verificado midiendo el grid entero: root 297 = cabecera 39 +
     # body-viewport 225 + fila TOTAL 28 + 5 de chrome, con los números
     # viejos. Con los nuevos: 33 + 192 + 24 + 5 = 254.
-    _CROMO_GRID_RANK = _ALTO_HEADER_RANK + 7
+    _CROMO_GRID_RANK = CROMO_GRID_RANK
     # Cuántas filas RESERVA el grid. 8 es el TECHO, no el alto: hasta el
     # 2026-09-01 era un 8 fijo y el grid medía lo mismo con 2 proveedores
     # que con 20 — reportado con captura ("la tabla es muy larga hacia
