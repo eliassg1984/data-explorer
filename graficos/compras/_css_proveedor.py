@@ -1621,22 +1621,23 @@ CSS = """        <style>
             height: 24px; display: flex; align-items: center;
             width: auto !important;
         }
-        /* ANCHO DE APRETÓN DEL PANEL B — 460px, y se usa DOS veces: acá
-           (las pastillas bajan a un renglón propio) y abajo (la grilla de
-           métricas colapsa a 2 columnas). Es un solo número a propósito:
-           las dos cosas se rompen por lo mismo —la tarjeta dejó de ser
-           ancha— y dos umbrales cercanos dan un tramo intermedio que
-           nadie mira nunca.
-           De dónde sale: la grilla es la más exigente de las dos. Sus 4
-           celdas necesitan ~97px la mayor («ÚLT. 22/08/2026» con los
-           cuerpos nuevos) → 4x97 + 3 de gap x12 = 424px de grilla, y entre
-           la grilla y el borde de la tarjeta hay 34px de padding/borde/
-           scrollbar. El título con las pastillas al lado pide menos
-           (~410px), así que 460 los cubre a los dos.
-           El renglón extra cuesta ~30px de alto, que esta tarjeta ya tenía
-           de sobra: el `:has()` de _80_cards.py la estiraba para igualar
-           al Panel A (regla #145), así que el gesto sale gratis. */
-        @container pbcard (max-width: 460px) {
+        /* LAS PASTILLAS SE QUEDAN EN LA FILA DEL TÍTULO (2026-09-12, a
+           pedido: «coloca las opciones de rango y todo al lado del título
+           de esa misma tarjeta»). Hasta ese día este bloque las bajaba a un
+           renglón propio por debajo de 460px de tarjeta. El 460 salía de la
+           grilla de 4 métricas que tenía cada proveedor (~458px), con la
+           que compartía umbral a propósito; esa grilla se fue el
+           2026-09-11 (una FILA por proveedor, regla #377) y el umbral quedó
+           sirviendo sólo a las pastillas, que piden mucho menos. El renglón
+           extra las dejaba debajo del título en la tarjeta de ~430px de
+           una laptop — que es lo que se reportó con captura.
+           Ahora el título cede (ellipsis, con la reserva de `padding-right`
+           de arriba) y las pastillas no se mueven. Sólo en una tarjeta
+           MINÚSCULA bajan, porque ahí el título ya no diría nada: 300px de
+           tarjeta dejan ~150 de título, ~22 caracteres. En pantallas
+           angostas manda además el `@media (max-width: 900px)` del bloque
+           de MÓVIL, al final. */
+        @container pbcard (max-width: 300px) {
             .st-key-chartcard_prov_prov_de_prod .chart-card-hdr {
                 padding-right: 4px;
             }

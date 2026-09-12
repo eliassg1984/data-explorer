@@ -1656,17 +1656,21 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # cambia de alto de fila, esta tabla lo sigue,
                             # que es literalmente lo que se pidió.
                             #
-                            # `extra` NO es el mismo que el del Ranking y va
-                            # MEDIDO por resta (regla #277): acá el grid da
-                            # `root 325 − .ag-body-viewport 269 = 56` con
-                            # cabecera de 39, o sea 17px que no son la
-                            # cabecera — 15 de barra de scroll HORIZONTAL
-                            # (esta tabla tiene 5 columnas y en media fila
-                            # de ancho no entran) + 1 de `ag-sticky-bottom`
-                            # + el borde. El Ranking no los paga porque sus
-                            # columnas sí entran. Tampoco lleva el sumando
+                            # `extra` va MEDIDO por resta (regla #277), no
+                            # copiado del Ranking. Hasta el 2026-09-12 era
+                            # cabecera + 18: 15 de barra de scroll
+                            # HORIZONTAL (sus columnas quedaban clavadas en
+                            # 200px y no entraban) + 1 de `ag-sticky-bottom`
+                            # + el borde. Ese día la tabla tomó el look del
+                            # Ranking (`CSS_RANKING_GRID`) y `fitGridWidth`,
+                            # la barra horizontal se fue, y los 18 dejaban
+                            # ~9px en blanco al pie del grid — visible con
+                            # 2 productos, en la captura del pedido. Medido
+                            # después: frame − `.ag-body-viewport` = 41 con
+                            # cabecera de 32, o sea +9 (las dos franjas de
+                            # 3px + ~3 de cromo). Tampoco lleva el sumando
                             # de la fila TOTAL: esta tabla no tiene.
-                            _CROMO_GRID_PRODS = _ALTO_HEADER_RANK + 18
+                            _CROMO_GRID_PRODS = _ALTO_HEADER_RANK + 9
                             _ALTO_PRODS = alturas.por_filas(
                                 min(8, max(1, len(prod_cats))),
                                 px_fila=_ALTO_FILA_RANK,
@@ -1732,6 +1736,16 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                                      "checkboxes": False,
                                                      "enableClickSelection": False},
                                     "onRowClicked": _js_toggle,
+                                    # Que las columnas LLENEN la tabla, como
+                                    # en el Ranking de arriba. El `flex` de
+                                    # sus columnas no alcanza acá: esta
+                                    # tarjeta se construye fuera de pantalla
+                                    # (sección perezosa) y `flex` calculado
+                                    # sobre un cuerpo de ancho 0 se queda en
+                                    # los 200px de `st_aggrid` — medido: 620
+                                    # de 637. `fitGridWidth` reintenta al
+                                    # tener ancho. Regla #350.
+                                    "autoSizeStrategy": {"type": "fitGridWidth"},
                                     "rowHeight": _ALTO_FILA_RANK,
                                     "headerHeight": _ALTO_HEADER_RANK,
                                     "suppressCellFocus": True,
@@ -1739,6 +1753,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 },
                                 allow_unsafe_jscode=True,
                                 theme="streamlit",
+                                # El look del Ranking de proveedores de
+                                # arriba, a pedido (2026-09-12: «debe ser
+                                # similar en diseño que la tabla ranking de
+                                # proveedores»): franja en vez de caja, todo
+                                # blanco, sin líneas verticales, cuerpo 11.5
+                                # y el texto en violeta. El MISMO dict, no
+                                # una copia — el grid es un iframe y
+                                # `custom_css=` es la única vía.
+                                custom_css=CSS_RANKING_GRID,
                                 height=_ALTO_PRODS,
                                 update_on=["selectionChanged"],
                                 key=f"cp_prov_prods_tab_{_pan_inst}",

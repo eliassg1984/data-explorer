@@ -5,11 +5,11 @@ de inicio/fin de periodo y su variación) con el mismo patrón de tabla-
 ranking + clic-para-enfocar que graficos/compras/proveedor.py. El producto
 en foco muestra su evolución (Precio / Cantidad / Valor, con granularidad
 Semana / Mes / Año) fusionando el promedio del período con el precio real
-de cada compra en un solo gráfico. Esa tarjeta va a la IZQUIERDA y mira
-una VENTANA FIJA de los últimos 3 meses (2026-09-12; antes elegible,
-3m/12m/…, abriendo en 12m). La fecha de la sección vive en la fila del
-título de «Compras por familia» y manda sobre las tablas. Filtro de
-proveedores no hay: se pidió fuera el mismo día (regla #382).
+de cada compra en un solo gráfico. Esa tarjeta va a la IZQUIERDA y tiene
+VENTANA PROPIA elegible (Rango/3m/12m/24m/Todo) que abre en los últimos 3
+meses (2026-09-12; antes abría en 12m). La fecha de la sección vive en la
+fila del título de «Compras por familia» y manda sobre las tablas. Filtro
+de proveedores no hay: se pidió fuera el mismo día (regla #382).
 
 Reemplaza a los antiguos drills "Precio top 10", "Precio por compra" y
 "Cantidad por producto" (graficos/compras/cantidad.py, eliminado 2026-08-17):
@@ -122,17 +122,31 @@ _ALTO_EVO = max(alturas.MINI,
                 _ALTO_FRAME_FAM + _ALTO_FRAME + _CROMO_CARD_RANK
                 - _CROMO_CARD_EVO)
 
-_KEYS_WIDGET = ("compras_prod_gran_pills",)
+_ETIQ_VENTANA_EVO = {
+    periodo.HEREDA: "Rango de las tablas",
+    "3m": "Últimos 3 meses",
+    "12m": "Últimos 12 meses",
+    "24m": "Últimos 24 meses",
+    "Todo": "Todo el histórico",
+}
+"""Lo que muestra el desplegable de ventana del gráfico de Producto.
+
+Sólo el TEXTO: el valor sigue siendo la cadena de `periodo.OPCIONES`, que
+es contra lo que se compara (`== periodo.HEREDA`). «Rango de las tablas» y
+no el «Rango» pelado de las otras tarjetas: acá el rango que hereda vive
+en la tarjeta de AL LADO (el selector de «Compras por familia»), y
+«Rango» a secas no dice cuál."""
+
+_KEYS_WIDGET = ("compras_prod_gran_pills", "compras_prod_periodo")
 """Los controles de esta sección, para que la escalada no se los lleve.
 
 La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo:
 ese rerun aborta la corrida antes de dibujarlos y Streamlit recolecta lo
 que no se dibujó, así que sin esta tupla mover la fecha de la cabecera
-devolvía la granularidad a «Mes». Ver `graficos/base.py::preservar_widgets`
-y `arquitectura.md` regla #373. Hasta el 2026-09-12 había tres más: la
-ventana elegible del gráfico (`compras_prod_periodo`) y las dos del filtro
-de proveedores (`cp_prod_prov_q`, `cp_prod_prov_cb::*`), que se fueron el
-mismo día."""
+devolvía la granularidad a «Mes» y la ventana a «Últimos 3 meses». Ver
+`graficos/base.py::preservar_widgets` y `arquitectura.md` regla #373.
+Hasta el 2026-09-12 había dos más, las del filtro de proveedores
+(`cp_prod_prov_q`, `cp_prod_prov_cb::*`), que se fue ese día."""
 
 # Eje X por granularidad: forzado a propósito. Con pocos puntos (rango de
 # fecha corto, o un producto con 1-2 compras) Plotly no tiene de dónde sacar
@@ -187,13 +201,51 @@ _CSS_SELECTOR_TEXTO = f"""
     color: {ACENTO} !important;
     font-weight: 600 !important;
 }}
-/* (Acá vivió el selector de ventana del gráfico —3m/12m/…— aplanado a
-   texto. Se fue el 2026-09-12: el gráfico obedece al selector de fecha
-   del segmento. Ver el comentario de `compras_prod_card_evo`.)
-
-   El nombre del producto en foco, al lado de la granularidad. Recorta
-   con puntos suspensivos y el nombre entero va en el `title`: un corte
-   fijo en N caracteres no sigue al ancho de la columna. */
+/* El selector de ventana del gráfico («Últimos 3 meses ▾»), APLANADO A
+   TEXTO para que haga juego con la granularidad de al lado: los dos son
+   texto suelto, no una caja contra unas palabras. Misma receta que
+   `cp_evo_ctrl` en _css_proveedor.py — se conserva el chevron, que es la
+   única señal de que eso despliega. Se fue y volvió el 2026-09-12: ver el
+   comentario de la ventana en `compras_prod_card_evo`. */
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"] div[role="group"] {{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: 0 !important;
+    height: 22px !important;
+}}
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"] input {{
+    padding: 0 !important;
+    height: auto !important;
+    font-size: 12.5px !important;
+    font-weight: 400 !important;
+    color: {GRIS_TEXTO} !important;
+    cursor: pointer !important;
+}}
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"]:hover input {{
+    color: {ACENTO} !important;
+}}
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"] svg {{
+    width: 13px !important;
+    height: 13px !important;
+    fill: {ACENTO} !important;
+    color: {ACENTO} !important;
+}}
+.st-key-compras_prod_periodo_wrap [data-testid="stSelectbox"]
+    button[aria-haspopup] {{
+    width: 16px !important;
+    min-width: 0 !important;
+    height: 22px !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    flex: 0 0 auto !important;
+}}
+/* El nombre del producto en foco. Recorta con puntos suspensivos y el
+   nombre entero va en el `title`: un corte fijo en N caracteres no sigue
+   al ancho de la columna. */
 .cp-prod-evo-tit {{
     font-size: 13.5px;
     font-weight: 700;
@@ -201,14 +253,6 @@ _CSS_SELECTOR_TEXTO = f"""
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}}
-/* La ventana fija del gráfico («Últimos 3 meses»), donde estaba el
-   desplegable: mismo tamaño y gris que la granularidad de al lado. Tiene
-   que verse, porque el selector de fecha de la tarjeta vecina dice otro
-   período (regla #330). */
-.cp-prod-evo-win {{
-    font-size: 12.5px;
-    color: {GRIS_TEXTO};
 }}
 /* Título sobre cada tabla-ranking: mismo lenguaje visual que
    `.cp-rank-tit` de graficos/compras/_css_proveedor.py, pero declarado acá
@@ -1102,36 +1146,47 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     f'<div class="cp-prod-evo-tit" title="{_nom}">'
                     f'{_nom}</div>', unsafe_allow_html=True)
 
-                # ── VENTANA PROPIA Y FIJA: los últimos 3 meses ──────────────
-                # Historia corta, porque cambió dos veces el mismo día:
+                # ── VENTANA PROPIA, ELEGIBLE, ABRIENDO EN 3 MESES ────────────
+                # Historia corta, porque cambió tres veces:
                 #   · 2026-08-26 → 2026-09-12: ventana propia ELEGIBLE
                 #     (`periodo.selector`: Rango/3m/12m/24m/Todo, abría en
                 #     12m). Nació porque el rango de la franja era de ~24
                 #     días y cualquier granularidad daba UN solo período.
-                #   · 2026-09-12, primera vuelta: se quitó, para que la fecha
-                #     del segmento (entonces en esta tarjeta) mandara también
-                #     acá — si no, era la regla #330, un control de fecha
-                #     sentado sobre un gráfico que lo ignora.
-                #   · 2026-09-12, segunda vuelta, a pedido: «que el gráfico de
-                #     producto mantenga su propia ventana fija pero de 3
-                #     meses». Fija: sin selector. Y como la fecha del
-                #     segmento se fue a la otra tarjeta, ya no hay dos
-                #     controles de fecha en ésta.
+                #   · 2026-09-12: se quitó, para que la fecha del segmento
+                #     (entonces en esta tarjeta) mandara también acá —si no,
+                #     era la regla #330, un control de fecha sentado sobre
+                #     un gráfico que lo ignora—, y el mismo día volvió como
+                #     ventana FIJA de 3 meses, sin selector, a pedido.
+                #   · 2026-09-12, más tarde, a pedido: «no permite cambiar
+                #     las opciones de "Últimos 3 meses", recuerdo que se
+                #     podía personalizar». Vuelve el desplegable, abriendo
+                #     en 3m. Lo que se quiso fijar era el DEFAULT, no quitar
+                #     la elección.
                 #
-                # Lo que la #330 sigue exigiendo: que el gráfico DIGA qué
-                # período muestra, porque el selector de fecha de al lado
-                # dice otro. Por eso el rótulo «últimos 3 meses», en el lugar
-                # donde estaba el desplegable.
+                # La #330 ya no muerde: la fecha del segmento vive en la
+                # OTRA tarjeta, así que ésta tiene un solo control de fecha
+                # y es el suyo. Con «Rango» el gráfico sigue a esa fecha.
+                # Las etiquetas dicen el período entero («Últimos 3 meses»,
+                # no «3m»): con el selector de las tablas a la vista, que
+                # cada tarjeta diga qué mira con todas las letras.
                 #
                 # El ancla es el último día CON DATOS del parquet, no `hoy`
-                # (ver el docstring de `graficos/periodo.py`). Sale de
-                # `d_full`, el histórico sin la fecha de la sección: con
-                # `dd` la ventana quedaría dentro del rango elegido y
-                # dejaría de ser fija.
-                _VENTANA_EVO = "3m"
-                if d_full is not None:
+                # (ver el docstring de `graficos/periodo.py`). La ventana se
+                # recorta de `d_full`, el histórico sin la fecha de la
+                # sección: con `dd` quedaría dentro del rango elegido.
+                # columnas-internas: ventana y granularidad, dentro de la
+                # tarjeta. No es una fila de drill.
+                _c_win, _c_gran = st.columns([1.1, 1],
+                                             vertical_alignment="center")
+                with _c_win:
+                    with st.container(key="compras_prod_periodo_wrap"):
+                        _op_prod = periodo.selector(
+                            "compras_prod_periodo", default="3m",
+                            widget="lista",
+                            format_func=lambda o: _ETIQ_VENTANA_EVO.get(o, o))
+                if _op_prod != periodo.HEREDA and d_full is not None:
                     _src_evo = periodo.recortar(d_full, col_fecha,
-                                                _VENTANA_EVO).copy()
+                                                _op_prod).copy()
                     _src_evo[col_fecha] = pd.to_datetime(_src_evo[col_fecha],
                                                          errors="coerce")
                     _src_evo[col_punit] = pd.to_numeric(_src_evo[col_punit],
@@ -1141,15 +1196,6 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     _src_evo = _src_evo.dropna(subset=[col_fecha, col_prod])
                 else:
                     _src_evo = dd
-
-                # columnas-internas: rótulo de la ventana y granularidad.
-                _c_win, _c_gran = st.columns([1.1, 1],
-                                             vertical_alignment="center")
-                with _c_win:
-                    st.markdown(
-                        '<div class="cp-prod-evo-win">'
-                        f'{periodo.etiqueta(_VENTANA_EVO).capitalize()}</div>',
-                        unsafe_allow_html=True)
                 with _c_gran:
                     with st.container(key="compras_prod_gran"):
                         gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
@@ -1168,13 +1214,14 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                                           col_valor, gran)
 
                 if agg.empty or fila is None:
-                    # Con la ventana fija es un caso NORMAL, no un borde: el
-                    # Ranking mira el rango de la sección (12 meses de
+                    # Con la ventana propia es un caso NORMAL, no un borde:
+                    # el Ranking mira el rango de la sección (12 meses de
                     # entrada) y un producto que se compró en enero no tiene
                     # nada en los últimos 3. El mensaje dice cuál ventana,
                     # o se lee como un producto sin datos.
+                    _en = _ETIQ_VENTANA_EVO.get(_op_prod, _op_prod).lower()
                     st.info("Sin compras con precio válido de este producto "
-                            f"en los {periodo.etiqueta(_VENTANA_EVO)}.")
+                            f"en «{_en}».")
                 else:
                     var_pct = fila["var_pct"]
                     color_var = (ERROR if var_pct and var_pct > 0.05

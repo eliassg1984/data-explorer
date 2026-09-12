@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-382 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+383 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (134)
+**CSS y estilos** (135)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -168,8 +168,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 - **#382** — Una tarjeta que scrollea por dentro, con grids que también scrollean, se lee como una caja…
+- **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 
-**Layout y alturas** (44)
+**Layout y alturas** (45)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -215,6 +216,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#380** — Un caption que explica una columna es una columna sin sitio: mudalo al headerTooltip antes de…
 - **#381** — Dos tablas de productos una encima de la otra son una pregunta con dos respuestas: el drill…
 - **#382** — Una tarjeta que scrollea por dentro, con grids que también scrollean, se lee como una caja…
+- **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 
 **Plotly y figuras** (60)
 
@@ -33795,6 +33797,69 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        pie en las dos, cero scroll de tarjeta. El cromo medido (138/144)
        no cambió con la fecha de un panel al otro.
 
+     **Y la ventana "fija" no era fija:** horas después se pidió de
+     vuelta el desplegable («no permite cambiar las opciones de "Últimos 3
+     meses", recuerdo que se podía personalizar»). Lo que se había querido
+     fijar era el DEFAULT. Ver la #383.
+
+     (2026-09-12.)
+
+383. **«Fijo en X» puede querer decir "que abra en X", no "que no se
+     pueda cambiar" — y un umbral compartido "a propósito" sobrevive a la
+     razón que lo ataba.** Tres pedidos de la misma noche sobre Compras,
+     cada uno con captura:
+
+     **1. La ventana del gráfico de Producto vuelve a ser elegible.** La
+     #382 la había dejado fija en 3 meses, sin selector, leyendo «su
+     propia ventana fija pero de 3 meses» al pie de la letra. Al rato:
+     «no permite cambiar las opciones […] recuerdo que se podía
+     personalizar». Vuelve `periodo.selector("compras_prod_periodo",
+     default="3m", widget="lista")` con el CSS aplanado de antes (se
+     recuperó de `git show 52141c8`), y vuelve a `_KEYS_WIDGET` — sin eso
+     la escalada del selector de fecha lo devolvería al default (#373;
+     `test_graficos.py` lo exige). Las etiquetas dicen el período entero
+     (`_ETIQ_VENTANA_EVO`: «Últimos 3 meses», «Todo el histórico») y la
+     opción que hereda se llama «Rango de las tablas» y no «Rango»: el
+     rango que hereda vive en la tarjeta de AL LADO. La lección para la
+     próxima: ante «fijo en X» sobre algo que antes era elegible,
+     **preguntar si se quiere quitar la elección o sólo cambiar dónde
+     abre** — cuesta una línea y ahorra una vuelta.
+
+     Verificación con `AppTest` y no con el navegador, y a propósito: el
+     desplegable es un `ComboBox` de react-aria y desde el panel oculto del
+     preview ni el clic, ni la flecha + Enter, ni escribir + Enter lo
+     confirmaron (la familia de la #217: un widget ajeno no se confirma
+     con eventos sintéticos). `AppTest` sí: con datos sintéticos de 2024 a
+     2026, abre en 3m (4 barras mensuales), 12m da 13, «Rango de las
+     tablas» sigue al df de la sección y «Todo» da 33.
+
+     **2. La tabla de productos del proveedor (drill de Proveedor, Panel A)
+     toma el look del Ranking de proveedores** («debe ser similar en diseño
+     que la tabla ranking de proveedores»): `custom_css=CSS_RANKING_GRID` +
+     `fitGridWidth`. Lo segundo no es estética: sus columnas llevaban
+     `flex` y aun así quedaban clavadas en los 200px de `st_aggrid` —
+     medido, 620 de 637—, porque la tarjeta se construye fuera de pantalla
+     (la #350 tal cual). Y el alto: su `extra` era cabecera + 18, con 15
+     de barra de scroll HORIZONTAL que la tabla ya no tiene; los 18
+     dejaban ~9px en blanco al pie, visibles con 2 productos en la
+     captura. Medido por resta (#277): frame − `.ag-body-viewport` = 41,
+     o sea cabecera + 9. Con eso el cuerpo muestra 8 filas exactas (192px)
+     y el Panel B, que se clampea contra ese número, sigue igualándola
+     (307/307).
+
+     **3. «En rango / Todo» vuelve a la fila del título del Panel B.** El
+     CSS ya lo ponía ahí (`position: absolute` arriba a la derecha), pero
+     un `@container pbcard (max-width: 460px)` lo bajaba a un renglón
+     propio, y en la laptop del pedido la tarjeta mide ~430px. Ese 460
+     venía de la grilla de 4 métricas de cada proveedor, con la que
+     compartía umbral "a propósito, las dos se rompen por lo mismo". La
+     grilla se fue el 2026-09-11 (#377) y el umbral siguió mandando sobre
+     las pastillas, que piden mucho menos. **Al borrar el consumidor de un
+     umbral compartido, revisar a los que quedan: el número ya no mide lo
+     que dice medir.** Ahora sólo bajan por debajo de 300px de tarjeta; a
+     1280 (434px de tarjeta) el título «Proveedores de · Mantequilla Sin
+     Sal» entra entero con las pastillas al lado.
+
      (2026-09-12.)
 
 
@@ -33810,7 +33875,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#383**.
+> próxima regla nueva es la **#384**.
 
 >
 
