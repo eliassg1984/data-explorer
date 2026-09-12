@@ -531,7 +531,20 @@ fecha_fin_default = _ancla_mes                  # hoy, o el último día con dat
 # parquet, así que su "mes en curso" es el del último día CON compras. Con
 # el tope ensanchado por «Documentos SUNAT» el mes podría no tener ninguna.
 _ancla_mes_parquet = min(_hoy, _max_parquet) if _max_parquet else _hoy
-_mes_default = (_ancla_mes_parquet.replace(day=1), _ancla_mes_parquet)
+# UN MES ENTERO, NO «LO QUE VA DEL MES» (2026-09-12, a pedido: «el selector
+# de fecha debe estar como mínimo mostrando un mes inicialmente»). Hasta hoy
+# era del 1 del mes al ancla, o sea que el día 10 las tarjetas abrían con
+# DIEZ días —«1 sep – 10 sep»—, y el día 1 con uno solo: la misma familia de
+# fallos que las reglas #293/#307/#326/#329 le cobraron al default viejo del
+# reporte. Ahora es el mes corrido que termina en el ancla: «11 ago – 10
+# sep». El mismo día y mes del mes anterior MÁS UN DÍA, para que sea un mes
+# y no un mes y un día; el recorte a los bounds lo sigue haciendo
+# `asegurar_rango`.
+_mes_default = (
+    (pd.Timestamp(_ancla_mes_parquet) - pd.DateOffset(months=1)
+     + pd.Timedelta(days=1)).date(),
+    _ancla_mes_parquet,
+)
 
 # COMPRAS ABRE EN LOS ÚLTIMOS 12 MESES, y no es un default más: es la otra
 # mitad de haberle sacado el calendario a la franja (2026-09-06, a pedido).

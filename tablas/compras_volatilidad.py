@@ -530,36 +530,76 @@ def _style_vol(max_vol):
 
 _AL_MONTAR = JsCode("""
     function(params) {
+        var api = params.api;
+        var centro = function () {
+            return api.getAllDisplayedColumns().filter(
+                function (c) { return !c.getPinned(); });
+        };
         var alFinal = function () {
             try {
-                var cols = params.api.getAllDisplayedColumns().filter(
-                    function (c) { return !c.getPinned(); });
-                if (cols.length) {
-                    params.api.ensureColumnVisible(cols[cols.length - 1], 'end');
-                }
+                var cols = centro();
+                if (cols.length) api.ensureColumnVisible(cols[cols.length - 1], 'end');
             } catch (e) {}
         };
+        var flechas = function () {
+            try {
+                var vp = document.querySelector('.ag-center-cols-viewport');
+                var sobra = !!vp && vp.scrollWidth > vp.clientWidth + 1;
+                document.body.classList.toggle('vol-sin-scroll', !sobra);
+            } catch (e) {}
+        };
+        var ajustar = function () {
+            try { api.sizeColumnsToFit(); } catch (e) {}
+            setTimeout(flechas, 0);
+            setTimeout(flechas, 250);
+        };
+        var firma = function () {
+            return centro().map(function (c) { return c.getColId(); }).join('|');
+        };
+        var ultima = firma();
         try {
             var caja = document.getElementById('gridContainer');
             if (caja && window.ResizeObserver) {
                 var primera = true;
                 new ResizeObserver(function () {
-                    try { params.api.sizeColumnsToFit(); } catch (e) {}
+                    ajustar();
                     if (primera) { primera = false; alFinal(); }
                 }).observe(caja);
             }
+        } catch (e) {}
+        try {
+            api.addEventListener('displayedColumnsChanged', function () {
+                ajustar();
+                var f = firma();
+                if (f !== ultima) { ultima = f; setTimeout(alFinal, 0); }
+            });
         } catch (e) {}
         setTimeout(alFinal, 0);
     }
 """)
 """Al montar: re-reparte las columnas cada vez que cambia el ANCHO de la
-grilla, y abre la grilla en la semana MÁS RECIENTE.
+grilla o su JUEGO DE COLUMNAS, la abre en la semana MÁS RECIENTE, y esconde
+las flechas ‹ › cuando todas las semanas entran.
 
-LO SEGUNDO es del 2026-09-12: con la historia de la ventana a la vista (53
-semanas en 12m) la grilla es mucho más ancha que la tarjeta, y sin esto
-abriría en la semana más vieja — lo contrario de lo que se viene a mirar.
-Se hace una sola vez, al montar: un rerun no vuelve a montar la grilla (la
-key no cambia), así que no le roba al usuario la semana a la que había ido.
+LAS COLUMNAS CAMBIAN SIN VOLVER A MONTAR, y eso lo destapó una captura del
+usuario (2026-09-12): en «Rango», cuatro columnas-semana de 120px y ~470px
+vacíos a la derecha. La grilla se había montado con la ventana de 12m (53
+columnas, que no entran y quedan en su piso); al pasar a Rango, st_aggrid le
+cambia las columnas a la MISMA grilla —la key no cambia— y el ancho del
+contenedor no se mueve, así que el `ResizeObserver` no tenía de qué
+enterarse. Por eso ahora también escucha `displayedColumnsChanged`, que se
+engancha con `api.addEventListener` (el `onXxx` de `gridOptions` no está
+garantizado: ver `onGridSizeChanged`, abajo).
+
+Y en ese mismo evento, si cambió QUÉ semanas hay (la `firma` son los ids
+de las columnas del centro), vuelve a la más reciente — si no, al pasar de
+Rango a 12m se abría en la más vieja. Prender o apagar «Volatilidad» no
+cambia la firma (va fijada, no es del centro), así que no le roba al
+usuario la semana a la que había ido.
+
+LAS FLECHAS se esconden con una clase en el `<body>` del iframe y no
+tocando los botones: la cabecera de «Insumo» se vuelve a construir cuando
+cambian las columnas, y un estilo puesto al botón viejo se perdería con él.
 
 LO PRIMERO, y por qué es `onGridReady`. Tres mecanismos se probaron el
 2026-09-07 y dos no sirven:
@@ -704,21 +744,31 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     }
     # Las flechas de la cabecera de «Insumo»: botones mínimos con el color
     # del texto de la cabecera, sin marco hasta el hover.
+    #
+    # CON `!important`, y no por costumbre: sin él, en la app publicada se
+    # veían como dos cajas grises con borde (captura del 2026-09-12) — el
+    # estilo de `<button>` del tema o del navegador les ganaba a estas
+    # reglas, que viajan en `custom_css` sin prioridad garantizada.
     custom_css[".vol-nav"] = {
-        "border": "1px solid transparent",
-        "background": "transparent",
-        "color": f"{ACENTO_TEXTO_OSCURO}",
-        "border-radius": "6px",
-        "width": "22px",
-        "height": "22px",
-        "padding": "0",
-        "font-size": "16px",
-        "line-height": "18px",
+        "border": "1px solid transparent !important",
+        "background": "transparent !important",
+        "box-shadow": "none !important",
+        "color": f"{ACENTO_TEXTO_OSCURO} !important",
+        "border-radius": "6px !important",
+        "width": "22px !important",
+        "height": "22px !important",
+        "padding": "0 !important",
+        "font-size": "16px !important",
+        "line-height": "18px !important",
         "cursor": "pointer",
     }
     custom_css[".vol-nav:hover"] = {
-        "background": f"{BLANCO}",
-        "border-color": f"{LAVANDA_BORDE}",
+        "background": f"{BLANCO} !important",
+        "border-color": f"{LAVANDA_BORDE} !important",
+    }
+    # Sin nada que deslizar, sin flechas (la clase la pone `_AL_MONTAR`).
+    custom_css[".vol-sin-scroll .vol-nav"] = {
+        "visibility": "hidden !important",
     }
     # QUE LA GRILLA OCUPE SU COLUMNA, no el ancho que tenía al renderizarse.
     # `#gridContainer` es el div que st_aggrid dibuja DENTRO del iframe con el

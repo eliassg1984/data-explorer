@@ -88,13 +88,12 @@ CSS = """    /* ================================================================
        La RAYA divisoria se muda del `<p>` a la FILA: con el `<p>` como un
        flex item más, su `border-bottom` subrayaba sólo el título y dejaba
        los controles colgando de nada. */
-    /* `vol_fila_hdr` (Compras > Volatilidad, 2026-09-05) usa la MISMA
-       receta con dos items: titulo + selector de ventana. Se agrega a los
-       selectores genericos en vez de copiarlos para que no drifteen (el
-       mismo criterio que `franja_cabecera` en graficos/base.py); las
-       reglas de ANCHO, que si son propias de cada fila, van aparte. */
-    .st-key-vap_fila_hdr,
-    .st-key-vol_fila_hdr {
+    /* (Acá también estaba `vol_fila_hdr`, la cabecera de Volatilidad,
+       desde el 2026-09-05. El 2026-09-12 dejó de ser una FILA: pasó a un
+       panel a la derecha de la tabla, `vol_panel`, con sus reglas de
+       layout propias más abajo. Las de TAMAÑO de los controles —26px, que
+       sí siguen compartidas con vap— cambiaron de key y nada más.) */
+    .st-key-vap_fila_hdr {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: wrap !important;
@@ -108,8 +107,7 @@ CSS = """    /* ================================================================
        él un flex item nunca baja de su contenido, así que un ítem en foco
        de nombre largo empujaría el buscador fuera de la tarjeta en vez de
        truncar. */
-    .st-key-vap_fila_hdr > [data-testid="stElementContainer"]:first-child,
-    .st-key-vol_fila_hdr > [data-testid="stElementContainer"]:first-child {
+    .st-key-vap_fila_hdr > [data-testid="stElementContainer"]:first-child {
         flex: 1 1 auto !important;
         min-width: 0 !important;
         width: auto !important;
@@ -307,17 +305,17 @@ CSS = """    /* ================================================================
     .st-key-vap_fila_hdr .react-aria-ComboBox > div,
     .st-key-vap_fila_hdr [data-baseweb="select"] > div,
     .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"],
-    .st-key-vol_fila_hdr .react-aria-ComboBox,
-    .st-key-vol_fila_hdr .react-aria-ComboBox > div,
-    .st-key-vol_fila_hdr [data-baseweb="select"] > div {
+    .st-key-vol_panel .react-aria-ComboBox,
+    .st-key-vol_panel .react-aria-ComboBox > div,
+    .st-key-vol_panel [data-baseweb="select"] > div {
         min-height: 26px !important;
         height: 26px !important;
         font-size: 12px !important;
     }
     .st-key-vap_fila_hdr .react-aria-ComboBox [role="button"],
     .st-key-vap_fila_hdr .react-aria-ComboBox input,
-    .st-key-vol_fila_hdr .react-aria-ComboBox [role="button"],
-    .st-key-vol_fila_hdr .react-aria-ComboBox input {
+    .st-key-vol_panel .react-aria-ComboBox [role="button"],
+    .st-key-vol_panel .react-aria-ComboBox input {
         padding-top: 0 !important;
         padding-bottom: 0 !important;
         font-size: 12px !important;
@@ -332,15 +330,14 @@ CSS = """    /* ================================================================
        compensaba el centrado. Anulando el margen la caja vuelve a medir su
        texto y el centrado del flex hace lo suyo, sin transform. */
     .st-key-vap_fila_hdr [data-testid="stMarkdownContainer"],
-    .st-key-vol_fila_hdr [data-testid="stMarkdownContainer"] {
+    .st-key-vol_panel [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"] input {
         padding: 0 8px !important;
         font-size: 12px !important;
     }
-    .st-key-vap_fila_hdr [data-testid="stElementContainer"],
-    .st-key-vol_fila_hdr [data-testid="stElementContainer"] {
+    .st-key-vap_fila_hdr [data-testid="stElementContainer"] {
         width: auto;
     }
 
@@ -365,7 +362,7 @@ CSS = """    /* ================================================================
            tapar la cabecera de vap (16px contra los 13 del resto). */
         font-size: 13px !important;
     }
-    .st-key-vol_fila_hdr
+    .st-key-vol_panel_f1
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_hdr_periodo) {
         flex: 0 0 auto !important;
         width: 90px !important;
@@ -414,6 +411,61 @@ CSS = """    /* ================================================================
         gap: 10px !important;
     }
 
+    /* ── VOLATILIDAD: la tabla a la izquierda, el panel a la derecha ──
+       2026-09-12, a pedido y sobre una maqueta: «el título y los toggles y
+       selectores al lado derecho, y subamos la tabla». Eran una fila
+       ENCIMA de la grilla (55px antes de su primera fila); ahora la grilla
+       arranca en el borde de la tarjeta y el título con sus controles son
+       un panel de 240px a su derecha.
+
+       `vol_fila_top` es un `st.container` que se vuelve flex por CSS, la
+       misma receta de todas las filas de controles de este fichero: sus
+       ítems son los `stLayoutWrapper` anónimos que envuelven a cada
+       container con key (regla #272), y es a ÉSOS a los que se reparte.
+       La tabla se lleva lo que sobra (`flex: 1 1 0` + `min-width: 0`, sin
+       el cual el iframe de AgGrid empuja la fila más allá de la tarjeta);
+       el panel mide 240 fijos: ~215 del título en un renglón a 13px, más
+       aire.
+
+       `align-items: flex-start`: el panel mide ~130px y la tabla 261; sin
+       esto el panel se estiraría al alto de la tabla y sus controles se
+       repartirían el aire. */
+    .st-key-vol_fila_top {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: flex-start !important;
+        gap: 14px !important;
+    }
+    .st-key-vol_fila_top
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_tabla) {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    .st-key-vol_fila_top
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_panel) {
+        flex: 0 0 240px !important;
+        width: 240px !important;
+    }
+    .st-key-vol_panel {
+        gap: 8px !important;
+    }
+    /* El título lleva la raya que antes llevaba la fila entera: separa el
+       nombre de la vista de sus controles. */
+    .st-key-vol_panel > [data-testid="stElementContainer"]:first-child {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6px !important;
+    }
+    /* Los dos renglones del panel: ventana + fecha, y la pastilla
+       «Volatilidad» + la ayuda. */
+    .st-key-vol_panel_f1,
+    .st-key-vol_panel_f2 {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+
     /* ── VOLATILIDAD: buscador y ayuda, en el renglón del título ───────
        2026-09-07. Suben a la cabecera los dos ítems que costaban un
        renglón cada uno: el buscador (que tenía su propio
@@ -427,11 +479,8 @@ CSS = """    /* ================================================================
        118px y no los 104 de vap: el placeholder es «Buscar insumo…», dos
        caracteres más largo que «Buscar ítem…». Mismo criterio de ancho
        que documenta el bloque de vap (texto + 50 de cromo). */
-    .st-key-vol_fila_hdr
-        > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_hdr_buscar) {
-        flex: 0 0 auto !important;
-        width: 118px !important;
-    }
+    /* (Acá el buscador medía 118px, lo justo para su placeholder en la
+       fila del título. En el panel ocupa el ancho entero.) */
     .st-key-vol_hdr_buscar { width: 100% !important; }
     .st-key-vol_hdr_buscar > [data-testid="stElementContainer"] {
         width: 100% !important;
@@ -440,19 +489,19 @@ CSS = """    /* ================================================================
        lado (ver el bloque de vap: uno es `.react-aria-ComboBox`, el otro
        `stTextInputRootElement`). Sin esta regla el campo se queda en los
        40px del default y la fila entera mide lo que el más alto. */
-    .st-key-vol_fila_hdr [data-testid="stTextInputRootElement"] {
+    .st-key-vol_panel [data-testid="stTextInputRootElement"] {
         min-height: 26px !important;
         height: 26px !important;
         font-size: 12px !important;
     }
-    .st-key-vol_fila_hdr [data-testid="stTextInputRootElement"] input {
+    .st-key-vol_panel [data-testid="stTextInputRootElement"] input {
         padding: 0 8px !important;
         font-size: 12px !important;
     }
     /* El ícono mide su contenido: sin esto su `stLayoutWrapper` nace con
        `width: 100%` y se queda con todo el hueco que dejaba el título
        (regla #272, y el mismo caso que documenta `vap_hdr_ayuda`). */
-    .st-key-vol_fila_hdr
+    .st-key-vol_panel_f2
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_hdr_ayuda) {
         flex: 0 0 auto !important;
         width: auto !important;
@@ -476,12 +525,13 @@ CSS = """    /* ================================================================
        su `stLayoutWrapper` nace en `width: 100%`, regla #272) y baja a los
        26px del resto de la fila: el buscador, el desplegable y el ícono de
        ayuda de al lado miden eso, y una pastilla de 32 haría crecer la fila
-       entera. Acotado a SU key, no a `vol_fila_hdr`: el aviso de CLAUDE.md
+       entera. Acotado a SU key, no a `vol_panel`: el aviso de CLAUDE.md
        sobre reglas del contenedor que capturan widgets futuros. */
-    .st-key-vol_fila_hdr
+    .st-key-vol_panel_f2
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vol_hdr_ver) {
-        flex: 0 0 auto !important;
+        flex: 1 1 auto !important;
         width: auto !important;
+        min-width: 0 !important;
     }
     .st-key-vol_hdr_ver [data-testid="stButtonGroup"] button {
         min-height: 26px !important;
@@ -635,10 +685,11 @@ CSS = """    /* ================================================================
        —pildora, panel, riel— vive en `graficos/compras/_css_proveedor.py`
        con los otros tres prefijos, que es donde tiene que estar por
        posicion en la cascada (regla #320). */
-    .st-key-vol_fila_hdr
+    .st-key-vol_panel_f1
         > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_vol_fila) {
-        flex: 0 0 auto !important;
+        flex: 1 1 auto !important;
         width: auto !important;
+        min-width: 0 !important;
     }
     .st-key-cp_vol_fila {
         width: auto !important;

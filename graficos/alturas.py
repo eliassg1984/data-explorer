@@ -240,6 +240,12 @@ recortar: es más barato que velas más chatas."""
 # de la barra — `tablas/compras_volatilidad.py::CROMO_GRID`. El aire neto
 # pasa de 2 a ~17px.
 #
+# Y MÁS TARDE, EL MISMO DÍA, LA CABECERA SE FUE A LA DERECHA (a pedido: «el
+# título y los selectores al lado derecho, y subamos la tabla»). Este número
+# no cambió —la grilla sigue en 7 filas—, pero ya no hay 55px de cabecera
+# encima: la tarjeta pasa de 528 a 473 medidos a 1366x657. Si algún día se
+# quiere la octava fila de vuelta, entra con aire (≈503 contra 545).
+#
 # LO DE ABAJO ES LA HISTORIA DE LAS DOS FORMAS ANTERIORES.
 #
 # NACIÓ EN 280, APILADO (2026-09-07). Con el drill DEBAJO de la grilla, el

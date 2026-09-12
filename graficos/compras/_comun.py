@@ -290,6 +290,13 @@ CATEGORIA_SEC = {
 # semanal.py). Quedan en los 12 meses del reporte Volatilidad, que tiene su
 # propia ventana, y las secciones sin selector.
 #
+# 2026-09-12, más tarde: «el selector de fecha debe estar como mínimo
+# mostrando un mes inicialmente». «El mes» dejó de ser «lo que va del mes»
+# —del 1 al último día con compras, que el día 10 eran diez días— y pasó a
+# ser el MES CORRIDO que termina ese día («11 ago – 10 sep»). La cuenta
+# vive en `app.py` (`_mes_default`); el nombre de esta tupla sigue diciendo
+# la verdad: abren en un mes.
+#
 # Lo que NO cambia con esto: el gráfico de evolución de Producto mira su
 # VENTANA propia (abre en 3 meses, `producto.py`), no esta fecha — salvo
 # que se elija «Rango de las tablas». Un mes de ranking al lado de 3 meses

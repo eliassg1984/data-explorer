@@ -508,6 +508,21 @@ def _pruebas_puras():
     check("_vol_cierres: el puntaje sale de la misma serie",
           _vol._vol_score(_ch["A"]), 0.0)
 
+    # El respaldo de la primera vela: el último precio válido ANTES de la
+    # ventana, en soles (un 0 y un precio en dólares no cuentan).
+    _dp = pd.DataFrame({
+        "p": ["A", "A", "A", "A"],
+        "precio": [9.0, 11.0, 0.0, 30.0],
+        "f": ["2026-05-01", "2026-05-20", "2026-05-25", "2026-05-26"],
+        "m": ["01", "01", "01", "02"],
+    })
+    check("_vol_precio_previo: último válido en soles antes de la fecha",
+          _vol._vol_precio_previo(_dp, "A", "p", "precio", "f", "m",
+                                  pd.Timestamp("2026-06-01")), 11.0)
+    check("_vol_precio_previo: sin compras antes -> None",
+          _vol._vol_precio_previo(_dp, "A", "p", "precio", "f", "m",
+                                  pd.Timestamp("2026-05-01")), None)
+
     # ── Vs año pasado (drill de Compras) ────────────────────────────────
     # Lo que fijan estos asserts NO es aritmética de fechas: es que el año
     # pasado se calcule del propio histórico y no de las columnas

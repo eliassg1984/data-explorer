@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-385 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+386 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (135)
+**CSS y estilos** (136)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -169,6 +169,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 - **#382** — Una tarjeta que scrollea por dentro, con grids que también scrollean, se lee como una caja…
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
+- **#386** — Una grilla que cambia de columnas SIN volver a montarse no se entera por el ResizeObserver —…
 
 **Layout y alturas** (46)
 
@@ -282,7 +283,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#362** — Un eje que repite «15/08» cuatro veces no es un eje apretado: es un eje que rotula la unidad…
 - **#370** — El hover de un Plotly NO llega al servidor, así que "estas cifras siguen al cursor" se…
 
-**AgGrid y tablas** (62)
+**AgGrid y tablas** (63)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -346,6 +347,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#375** — «Va última en el head» sólo desempata a IGUAL especificidad — para PISAR a otra regla hay que…
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 - **#385** — Dos series que "hacen lo mismo" tienen que hacerlo con el MISMO código — el desempate de un…
+- **#386** — Una grilla que cambia de columnas SIN volver a montarse no se entera por el ResizeObserver —…
 
 **Streamlit** (107)
 
@@ -34032,6 +34034,74 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+386. **Una grilla que cambia de columnas SIN volver a montarse no se
+     entera por el `ResizeObserver` — y un «Rango» que parecía funcionar
+     era un clic que había caído en otro control.** Tercera vuelta del día
+     sobre «Insumos ordenados por volatilidad», desde una captura de la app
+     publicada.
+
+     **1. El título y los controles, en un panel a la DERECHA de la tabla**
+     (a pedido, sobre maqueta): la grilla arranca en el borde de la
+     tarjeta y sube 55px; la tarjeta pasa de 528 a 473. `vol_fila_top` es
+     un `st.container` hecho flex por CSS con dos hijos con key —`vol_tabla`
+     y `vol_panel`— y se reparte a sus `stLayoutWrapper` (#272). **El orden
+     del código no es el de la pantalla**: el hueco de la tabla se reserva
+     primero (`c_tabla = st.container(...)`, queda a la izquierda) y se
+     llena al final, porque la tabla depende de lo que digan los controles.
+     Los avisos de «no hay datos» van en ese hueco, al lado de los
+     controles con que se arreglan. Las reglas de ANCHO que colgaban de la
+     fila con `>` (hijo directo) se reescribieron para los dos renglones
+     del panel; las de TAMAÑO (26px) eran descendientes y sólo cambiaron de
+     key.
+
+     **2. El vacío de la captura era un bug, no espacio libre.** En
+     «Rango», cuatro columnas-semana de 120px y ~470px vacíos a la derecha.
+     La grilla se había montado en 12m (53 columnas, en su piso); al pasar
+     a Rango st_aggrid le cambia las columnas a la MISMA grilla —la key no
+     cambia— y el contenedor no cambia de ancho, así que el
+     `ResizeObserver` de `_AL_MONTAR` no tenía de qué enterarse. Ahora
+     también escucha `displayedColumnsChanged` (con `api.addEventListener`:
+     los `onXxx` de `gridOptions` no están garantizados en st_aggrid, ver
+     `onGridSizeChanged` en la #350), y si cambió QUÉ semanas hay —una
+     «firma» con los ids de las columnas del centro— vuelve a la más
+     reciente. Prender «Volatilidad» no cambia la firma (va fijada), así
+     que no le roba al usuario la semana en la que estaba. Las flechas ‹ ›
+     se esconden sin nada que deslizar con una clase en el `<body>` del
+     iframe: la cabecera se reconstruye al cambiar las columnas y un estilo
+     puesto al botón viejo se perdería con él.
+
+     **3. Cómo se verificó, porque el navegador no alcanzó.** El
+     `ComboBox` de react-aria de la ventana otra vez no confirmó ninguna
+     opción desde el panel de pruebas (la #217 y la #383). Y hubo un falso
+     positivo que conviene dejar escrito: un clic pareció pasar la ventana a
+     «Rango» y la tarjeta mostró «1 sep – 10 sep», pero lo que había
+     cambiado era el rango — el clic cayó en el atajo «Mes» del selector de
+     fecha, que por la escalada (#180) manda la ventana a Rango. **Si el
+     efecto de un clic es plausible pero no el esperado exacto, sospechar
+     del clic antes que del código.** El mecanismo se probó aislado: una
+     página con AG Grid 34.3.1 servida con `python -m http.server` (una
+     entrada temporal en `.claude/launch.json`; un `file://` no deja correr
+     JS desde las herramientas), montada con 52 columnas y cambiada a 4 y
+     a 12 con `setGridOption('columnDefs')`, que es lo que hace st_aggrid:
+     52 abre en la última; 4 se estiran a 170px y esconden las flechas; 12
+     salta a la más reciente. Las tres cosas, medidas.
+
+     **4. Tres arreglos que se veían en la misma captura.** Las flechas
+     salían como cajas grises en la app publicada: sus reglas de
+     `custom_css` no llevaban `!important` y el estilo de `<button>` les
+     ganaba. La primera vela de un insumo sin compra esa semana se dibujaba
+     en S/ 0 (eje hasta «S/ −10») cuando la ventana no trae la semana
+     anterior —en Rango, la historia es sólo el rango—: ahora la base sale
+     del histórico entero (`_vol_precio_previo`, en soles). Y **«el mes» con
+     el que abren Proveedores, Producto y Semanal pasó a ser un mes CORRIDO**
+     («11 ago – 10 sep») y no lo que va del mes («1 sep – 10 sep»), a
+     pedido: «el selector de fecha debe estar como mínimo mostrando un mes
+     inicialmente». El día 1 el default viejo era UN día — la misma familia
+     de fallos de las #293/#307/#326/#329. Volatilidad no cambia: abre en
+     12 meses.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34044,7 +34114,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#386**.
+> próxima regla nueva es la **#387**.
 
 >
 

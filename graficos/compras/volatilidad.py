@@ -169,6 +169,28 @@ def _vol_cierres_semanales(d, prods, col_prod, col_punit, col_fecha, semanas):
     return out
 
 
+def _vol_precio_previo(d, prod, col_prod, col_punit, col_fecha, col_moneda,
+                       antes_de):
+    """Último precio de compra válido de `prod` ANTES de `antes_de`, sobre el
+    histórico entero (`d_full`), o None si no compró nunca antes.
+
+    Es el respaldo de `cierre_previo` del candlestick cuando la ventana de la
+    tarjeta no trae semanas anteriores — con «Rango», las semanas de la
+    historia son sólo las del rango. Sin él, la primera vela de un insumo
+    que no compró esa semana se dibujaba en S/ 0 y el eje bajaba a «S/ −10»
+    (captura del usuario, 2026-09-12). Mismo filtro de moneda que el drill:
+    un precio en dólares no puede ser la base de una serie en soles."""
+    g = d[d[col_prod] == prod]
+    if col_moneda and col_moneda in g.columns:
+        g = g[g[col_moneda].astype(str).str.strip().isin(["01", "1"])]
+    s = pd.DataFrame({"f": pd.to_datetime(g[col_fecha], errors="coerce"),
+                      "p": pd.to_numeric(g[col_punit], errors="coerce")})
+    s = s[(s["f"] < antes_de) & s["p"].notna() & (s["p"] > 0)]
+    if s.empty:
+        return None
+    return float(s.sort_values("f")["p"].iloc[-1])
+
+
 def _vol_ohlc_semana(precios_ordenados):
     """OHLC de una lista/Serie de precios YA ordenada por fecha ascendente.
     None si está vacía."""
@@ -384,133 +406,133 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
     # recientes CON DATOS. Más velas no es más historia útil, es un gráfico
     # ilegible (ver `_vol_semanas_ventana`).
 
-    # ── Tabla ranking (semáforo, buscador, tooltip + clic en fila) ───────
-    # El selector de ventana comparte RENGLÓN con el título (2026-09-05, a
-    # pedido). Vivía en una fila propia arriba de la tarjeta: un renglón
-    # entero para un control de 90px. Es el mismo patrón que la cabecera de
-    # «Vs año pasado» (`vap_fila_hdr`): el título deja de salir por
-    # `_card(titulo_arriba=True)` y pasa a ser el primer ítem de una fila
-    # flex, con la raya divisoria mudada del `<p>` a la fila — las reglas
-    # genéricas las comparten las dos en `estilos/_80_cards.py`.
-    #
-    # Por eso el CÁLCULO entero se mudó ADENTRO de la tarjeta: la ventana
-    # hay que leerla antes de recortar `d`, y el widget que la lee ahora se
-    # dibuja acá. Los `return` tempranos quedan dentro de la tarjeta, que de
-    # paso es mejor: el mensaje sale bajo la cabecera que tiene el selector
-    # con el que se arregla, y no en un bloque suelto sin contexto.
     with _card("compras_vol"):
-        with st.container(key="vol_fila_hdr"):
-            st.markdown('<p class="chart-card-hdr vol-hdr">Insumos ordenados '
-                        'por volatilidad</p>', unsafe_allow_html=True)
-            with st.container(key="vol_hdr_periodo"):
-                _prev_vol = st.session_state.get(_K_VENTANA, "12m")
-                if _prev_vol not in periodo.OPCIONES:
-                    _prev_vol = "12m"
-                _op_vol = periodo.selector(f"compras_vol_periodo_{_prev_vol}",
-                                           default=_prev_vol, widget="lista")
-            st.session_state[_K_VENTANA] = _op_vol
-            if _op_vol != periodo.HEREDA and d_full is not None:
-                d = periodo.recortar(d_full, col_fecha, _op_vol)
+        # ── LA TABLA ARRIBA A LA IZQUIERDA; TÍTULO Y CONTROLES, A SU DERECHA ─
+        # 2026-09-12, a pedido y sobre una maqueta: «el título y los toggles
+        # y selectores al lado derecho, y subamos la tabla». Hasta hoy eran
+        # una FILA encima de la tabla (título a la izquierda, controles a la
+        # derecha, raya debajo): 55px de cabecera medidos antes de la
+        # primera fila de la grilla. Ahora la grilla arranca en el borde de
+        # la tarjeta y el título con sus controles forman un panel angosto
+        # a su derecha (`vol_panel`, 240px — `estilos/_80_cards.py`).
+        #
+        # Lo que cuesta, medido en la maqueta: con la ventana de 12 meses se
+        # ven ~6 semanas de la grilla a la vez en vez de ~8. Se desliza, así
+        # que no se pierde nada. Con una ventana corta no cuesta nada: las
+        # columnas-semana se estiran hasta llenar.
+        #
+        # EL ORDEN DEL CÓDIGO NO ES EL DE LA PANTALLA, y es a propósito: el
+        # hueco de la tabla se reserva PRIMERO (queda a la izquierda) pero
+        # se llena al final, porque la tabla depende de lo que digan los
+        # controles (la ventana recorta `d`, el buscador filtra filas).
+        # Los mensajes de «no hay datos» van en ese mismo hueco: salen donde
+        # iba la tabla, al lado de los controles con los que se arreglan.
+        with st.container(key="vol_fila_top"):
+            c_tabla = st.container(key="vol_tabla")
+            with st.container(key="vol_panel"):
+                st.markdown('<p class="chart-card-hdr vol-hdr">Insumos ordenados '
+                            'por volatilidad</p>', unsafe_allow_html=True)
 
-            # ── El buscador, también en la fila del título ───────────────
-            # 2026-09-07: vivía en un renglón propio debajo de la cabecera,
-            # un `st.columns([1, 2])[0]` que gastaba 56px (40 del campo +
-            # 16 de gap) para un input de un tercio de ancho. Mismo
-            # movimiento —y mismo motivo— que el buscador de «Vs año
-            # pasado» (`vap_hdr_buscar`, 2026-09-02): esta vista tiene que
-            # entrar ENTERA en una pantalla y cada renglón de cromo se lo
-            # come al ranking.
-            with st.container(key="vol_hdr_buscar"):
-                _q = st.text_input("Buscar insumo", key="compras_vol_q",
-                                   placeholder="Buscar insumo…",
-                                   label_visibility="collapsed").strip().lower()
+                # ── Ventana + fecha, en un renglón ───────────────────────
+                # LOS DOS CONTROLES SON UNO SOLO, leídos de izquierda a
+                # derecha: la ventana elige el GRANO ("últimos 12 meses") y
+                # la fecha elige un rango EXACTO. Por eso el trigger no
+                # muestra la fecha de la franja mientras la ventana mande
+                # —mostraría un dato que esta tarjeta no está usando— sino la
+                # ventana misma, y por eso tocar el panel devuelve la ventana
+                # a "Rango" (arriba, en la escalada).
+                #
+                # El trigger es el MISMO componente que tienen los dos
+                # rankings y la vista Semanal (`base.py::selector_fecha_tarjeta`):
+                # no es un filtro paralelo, escribe la clave del rango de
+                # esta sección (`categoria=`, regla #363).
+                with st.container(key="vol_panel_f1"):
+                    with st.container(key="vol_hdr_periodo"):
+                        _prev_vol = st.session_state.get(_K_VENTANA, "12m")
+                        if _prev_vol not in periodo.OPCIONES:
+                            _prev_vol = "12m"
+                        _op_vol = periodo.selector(
+                            f"compras_vol_periodo_{_prev_vol}",
+                            default=_prev_vol, widget="lista")
+                    st.session_state[_K_VENTANA] = _op_vol
+                    if _op_vol != periodo.HEREDA and d_full is not None:
+                        d = periodo.recortar(d_full, col_fecha, _op_vol)
+                    selector_fecha_tarjeta(
+                        "cp_vol", "_cp_vol_atajo_pendiente",
+                        label=(periodo.etiqueta(_op_vol).capitalize() or None
+                               if _op_vol != periodo.HEREDA else None),
+                        categoria=CATEGORIA_SEC["compras_sec_volatilidad"])
 
-            # ── La columna «Volatilidad», a pedido y no siempre ──────────
-            # 2026-09-12: «que la columna de volatilidad no figure siempre
-            # visible sino sea consultable». Arranca oculta; esta pastilla la
-            # prende y la apaga. Sin ella el puntaje sigue a mano en el
-            # tooltip del nombre del insumo, y el orden de la tabla no cambia.
-            #
-            # `st.pills` de UNA opción y no un `st.toggle`: se lee como un
-            # botón que queda marcado, que es lo que es. Va en `_KEYS_WIDGET`
-            # por lo de siempre (la escalada de fecha la borraría, #373).
-            with st.container(key="vol_hdr_ver"):
-                _ver_vol = st.pills(
-                    "Mostrar", ["Volatilidad"], key="compras_vol_ver",
-                    label_visibility="collapsed") == "Volatilidad"
+                # ── El buscador, a todo el ancho del panel ───────────────
+                with st.container(key="vol_hdr_buscar"):
+                    _q = st.text_input("Buscar insumo", key="compras_vol_q",
+                                       placeholder="Buscar insumo…",
+                                       label_visibility="collapsed").strip().lower()
 
-            # ── Cómo se lee la vista: un ícono, no dos captions ──────────
-            # Acá había DOS `st.caption` EN FLUJO —uno bajo la grilla y
-            # otro bajo el candlestick— que sumaban ~83px con sus gaps para
-            # explicar algo que se lee UNA vez. Pasan a un popover de sólo
-            # ícono, exactamente como `vap_hdr_ayuda`.
-            #
-            # La primera línea (familia, nº de semanas y los dos umbrales)
-            # va por un HUECO: `n_sem` se sabe ~40 líneas más abajo, cuando
-            # ya se recortó `dd` a las semanas con datos. Mismo mecanismo
-            # que el aviso del mes parcial de vs_ano_pasado.py.
-            #
-            # El párrafo de los DOS PRECIOS no es relleno: la segunda
-            # línea de cada celda («110.17 → 169.41») son cierres de semanas
-            # DISTINTAS —el de la anterior y el de ésta— y leerlos como si
-            # los dos fueran de la semana del encabezado es la confusión que
-            # reportó el usuario el 2026-09-07 con captura.
-            with st.container(key="vol_hdr_ayuda"):
-                with st.popover(":material/info:", use_container_width=False):
-                    with st.container(key="vol_ayuda_panel"):
-                        _ayuda_alcance = st.empty()
-                        st.markdown(
-                            "**Volatilidad** = la suma de las variaciones % "
-                            "de una semana a la siguiente, en valor "
-                            "absoluto: mide cuánto se MUEVE el precio, no "
-                            "hacia dónde." + PARR
-                            + "Cada celda compara el **cierre** (la última "
-                            "compra) de esa semana contra el de la semana "
-                            "anterior, así que los dos precios al costado "
-                            "del % son de semanas DISTINTAS — el tooltip de "
-                            "la celda las nombra. El % va redondeado a "
-                            "entero; los precios, no. Las compras "
-                            "intermedias se ven abajo, en el candlestick y "
-                            "en su tabla."
-                            + PARR
-                            + "Deslizá la tabla hacia la izquierda (o usá "
-                            "‹ › junto a «Insumo») para ver semanas "
-                            "anteriores: son historia, no entran en el "
-                            "puntaje, y el orden no cambia. El botón "
-                            "**Volatilidad** muestra la columna del "
-                            "puntaje; sin ella, se consulta pasando el "
-                            "mouse sobre el nombre del insumo."
-                            + PARR
-                            + "Clic en una fila para ver su candlestick; "
-                            "clic en una vela, para las compras de esa "
-                            "semana.")
+                with st.container(key="vol_panel_f2"):
+                    # ── La columna «Volatilidad», a pedido y no siempre ──
+                    # 2026-09-12: «que la columna de volatilidad no figure
+                    # siempre visible sino sea consultable». Arranca oculta;
+                    # esta pastilla la prende y la apaga. Sin ella el puntaje
+                    # sigue a mano en el tooltip del nombre del insumo, y el
+                    # orden de la tabla no cambia.
+                    #
+                    # `st.pills` de UNA opción y no un `st.toggle`: se lee
+                    # como un botón que queda marcado, que es lo que es. Va
+                    # en `_KEYS_WIDGET` por lo de siempre (la escalada de
+                    # fecha la borraría, #373).
+                    with st.container(key="vol_hdr_ver"):
+                        _ver_vol = st.pills(
+                            "Mostrar", ["Volatilidad"], key="compras_vol_ver",
+                            label_visibility="collapsed") == "Volatilidad"
 
-            # ── El segmentador de fecha, último ítem de la fila ──────────
-            # 2026-09-06, a pedido. Es el MISMO componente que ya tienen
-            # los dos rankings y la vista Semanal
-            # (`base.py::selector_fecha_tarjeta`): trigger con el rango
-            # escrito + panel con los cuatro atajos y la escala de tiempo
-            # (Días/Meses/Años + riel). No es un filtro paralelo — escribe
-            # la clave canónica del rango, así que mover la fecha acá la
-            # mueve en toda la página apilada.
-            #
-            # Va ÚLTIMO en la fila: en las otras tres tarjetas la fecha es
-            # el ancla derecha, y que sea la misma cosa en las cuatro es
-            # justamente lo que hace que se lea como un solo control.
-            #
-            # LOS DOS CONTROLES SON UNO SOLO, leídos de izquierda a
-            # derecha: la ventana elige el GRANO ("últimos 12 meses") y la
-            # fecha elige un rango EXACTO. Por eso el trigger no muestra la
-            # fecha de la franja mientras la ventana mande —mostraría un
-            # dato que esta tarjeta no está usando— sino la ventana misma,
-            # y por eso tocar el panel devuelve la ventana a "Rango"
-            # (arriba, en la escalada). Con eso las dos mitades nunca dicen
-            # cosas distintas.
-            selector_fecha_tarjeta(
-                "cp_vol", "_cp_vol_atajo_pendiente",
-                label=(periodo.etiqueta(_op_vol).capitalize() or None
-                       if _op_vol != periodo.HEREDA else None),
-                categoria=CATEGORIA_SEC["compras_sec_volatilidad"])
+                    # ── Cómo se lee la vista: un ícono, no dos captions ──
+                    # Eran DOS `st.caption` EN FLUJO que sumaban ~83px para
+                    # explicar algo que se lee UNA vez; pasaron a un popover
+                    # de sólo ícono, exactamente como `vap_hdr_ayuda`.
+                    #
+                    # La primera línea (período y umbrales) va por un HUECO:
+                    # el período se sabe más abajo, cuando ya se recortó `dd`
+                    # a las semanas con datos.
+                    #
+                    # El párrafo de los DOS PRECIOS no es relleno: son
+                    # cierres de semanas DISTINTAS —el de la anterior y el
+                    # de ésta— y leerlos como si los dos fueran de la semana
+                    # del encabezado es la confusión que reportó el usuario
+                    # el 2026-09-07 con captura.
+                    with st.container(key="vol_hdr_ayuda"):
+                        with st.popover(":material/info:",
+                                        use_container_width=False):
+                            with st.container(key="vol_ayuda_panel"):
+                                _ayuda_alcance = st.empty()
+                                st.markdown(
+                                    "**Volatilidad** = la suma de las "
+                                    "variaciones % de una semana a la "
+                                    "siguiente, en valor absoluto: mide "
+                                    "cuánto se MUEVE el precio, no hacia "
+                                    "dónde." + PARR
+                                    + "Cada celda compara el **cierre** (la "
+                                    "última compra) de esa semana contra el "
+                                    "de la semana anterior, así que los dos "
+                                    "precios al costado del % son de semanas "
+                                    "DISTINTAS — el tooltip de la celda las "
+                                    "nombra. El % va redondeado a entero; "
+                                    "los precios, no. Las compras "
+                                    "intermedias se ven abajo, en el "
+                                    "candlestick y en su tabla."
+                                    + PARR
+                                    + "Deslizá la tabla hacia la izquierda "
+                                    "(o usá ‹ › junto a «Insumo») para ver "
+                                    "semanas anteriores: son historia, no "
+                                    "entran en el puntaje, y el orden no "
+                                    "cambia. El botón **Volatilidad** "
+                                    "muestra la columna del puntaje; sin "
+                                    "ella, se consulta pasando el mouse "
+                                    "sobre el nombre del insumo."
+                                    + PARR
+                                    + "Clic en una fila para ver su "
+                                    "candlestick; clic en una vela, para "
+                                    "las compras de esa semana.")
 
         dd = d.copy()
         if col_moneda and col_moneda in dd.columns:
@@ -538,7 +560,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # «Volatilidad» lleva escrito el período que mide.
         semanas_hist = _vol_semanas_ventana(dd[col_fecha], maximo=None)
         if not semanas_hist:
-            st.info(f"Necesitás al menos 4 semanas de compras en "
+            c_tabla.info(f"Necesitás al menos 4 semanas de compras en "
                     f"{periodo.etiqueta(_op_vol) or 'el rango elegido'} para "
                     f"armar un candlestick. Probá una ventana más amplia con el "
                     f"selector del título.")
@@ -551,7 +573,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         candidatos = _vol_candidatos(dd_rec, col_prod, col_punit, col_fecha,
                                      col_valor, semanas)
         if not candidatos:
-            st.info(f"Ningún insumo tiene compras regulares (≥75% de las "
+            c_tabla.info(f"Ningún insumo tiene compras regulares (≥75% de las "
                     f"semanas) y gasto relevante (≥ S/ 400) en "
                     f"{periodo.etiqueta(_op_vol) or 'el rango elegido'}.")
             return
@@ -613,11 +635,15 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # las tres piezas apiladas — la cuenta está en
         # `alturas.RANKING_CON_DRILL`.
         #
-        # Ya no hay `st.columns(COLUMNAS_DRILL)` en esta vista: la grilla no
-        # comparte fila con nadie. La fila de abajo es una subdivisión
-        # DENTRO de la tarjeta (ver más abajo).
+        # Ya no hay `st.columns(COLUMNAS_DRILL)` en esta vista. La fila de
+        # abajo es una subdivisión DENTRO de la tarjeta (ver más abajo).
+        #
+        # (Unas horas después, el mismo día, el título y los controles
+        # dejaron de ser una fila ENCIMA de la grilla y pasaron a un panel a
+        # su DERECHA — ver el bloque de `vol_fila_top`, arriba. «A todo el
+        # ancho» quedó en «todo el ancho menos 240px».)
         if not ranking_vista:
-            st.info(f"Ningún insumo coincide con «{_q}».")
+            c_tabla.info(f"Ningún insumo coincide con «{_q}».")
         else:
             filas = []
             for prod, info in ranking_vista:
@@ -646,14 +672,15 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # st.dataframe que tenía este ranking antes, filtrar con el
             # buscador no puede desalinear un índice viejo contra la fila
             # nueva (arquitectura.md regla #130).
-            _clicked = renderizar_ranking_volatilidad(
-                tv, cols_sem,
-                altura=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
-                                         extra=CROMO_GRID_VOL, minimo=0,
-                                         rol=alturas.RANKING_CON_DRILL),
-                key="compras_vol_rank_grid",
-                ver_vol=_ver_vol, periodo_vol=periodo_vol, n_sem=n_sem,
-            )
+            with c_tabla:
+                _clicked = renderizar_ranking_volatilidad(
+                    tv, cols_sem,
+                    altura=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
+                                             extra=CROMO_GRID_VOL, minimo=0,
+                                             rol=alturas.RANKING_CON_DRILL),
+                    key="compras_vol_rank_grid",
+                    ver_vol=_ver_vol, periodo_vol=periodo_vol, n_sem=n_sem,
+                )
             if _clicked is not None:
                 prod_focus = _clicked
                 st.session_state["compras_vol_focus"] = prod_focus
@@ -677,11 +704,18 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         unidad = {"KILOS": "kg", "KG": "kg", "LITROS": "L", "LT": "L", "UND": "und"}.get(
             unidad_raw.upper(), unidad_raw.lower())
 
+        # La base de la primera vela: el cierre de la semana anterior en la
+        # historia de la ventana y, si la ventana no la trae (Rango), el
+        # último precio del histórico entero.
         _ch = candidatos[prod_sel]["cierres_hist"]
+        _cierre_previo = _ch[-len(semanas) - 1] if len(_ch) > len(semanas) else None
+        if _cierre_previo is None and d_full is not None:
+            _cierre_previo = _vol_precio_previo(
+                d_full, prod_sel, col_prod, col_punit, col_fecha, col_moneda,
+                antes_de=semanas[0])
         weeks = _vol_detalle_producto(
             dd_rec, prod_sel, col_prod, col_punit, col_fecha, col_prov,
-            col_cant, semanas,
-            cierre_previo=_ch[-len(semanas) - 1] if len(_ch) > len(semanas) else None)
+            col_cant, semanas, cierre_previo=_cierre_previo)
 
         # ── LA FILA DE ABAJO: VELAS | SEMANA, MITAD Y MITAD ──────────────
         # 2026-09-12, a pedido (ver el bloque del ranking, más arriba). Cada

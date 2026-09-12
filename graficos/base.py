@@ -1004,7 +1004,8 @@ def rango_tarjeta(categoria, ctx=None):
 
     SALVO QUE LA CATEGORÍA PIDA OTRO (2026-09-11): `ctx["rango_default_cat"]`
     es un dict {categoría: rango} con las excepciones, y hoy tiene una sola
-    —el Ranking de Proveedores abre en el mes en curso y no en los 12 meses
+    —el Ranking de Proveedores abre en un mes (corrido desde el
+    2026-09-12, antes el mes en curso) y no en los 12 meses
     del reporte (ver `graficos.compras.SEC_ABRE_EN_EL_MES`)—. Sigue siendo
     `app.py` quien calcula las dos ventanas; acá sólo se elige cuál.
 
