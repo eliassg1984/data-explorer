@@ -2296,6 +2296,26 @@ CSS = CSS.replace("        </style>",
 # de pelearle sus reglas una por una.
 CSS_RANKING_GRID = {
     ".ag-root-wrapper": {
+        # ── El ALTO, que no es decorativo ────────────────────────────
+        # Sin esto el wrapper computa `height: auto` y mide TODO su
+        # contenido, se desborda del contenedor que el componente
+        # dimensiono con el `height=` de Python, y st_aggrid le reporta a
+        # Streamlit ese alto desbordado: el iframe sale con un
+        # `style.height` inline que pisa su propio atributo `height`.
+        #
+        # Medido el 2026-09-13 en Inventario > Por area, que es donde se
+        # vio: Python pedia 255px (8 filas), el iframe salia con
+        # `height="255"` y `style="height: 508px"` — las 21 areas
+        # completas—, y su tarjeta media 554 contra los 308 de las dos
+        # vecinas. El grid de al lado, con el MISMO codigo y menos filas,
+        # computaba 255: por eso se leia como un problema de datos y no de
+        # CSS. Reportado como "veo que es mas larga verticalmente".
+        #
+        # Va en el dict COMPARTIDO y no en el llamador: cualquier
+        # tabla-ranking con `height=` fijo tiene el mismo agujero, y las
+        # que hoy andan bien ya miden 100% — ponerselo no les cambia nada.
+        "height": "100% !important",
+        "max-height": "100% !important",
         # Todo blanco, a pedido (2026-08-28). El rayado del tema es
         # sutilisimo — un #fbfbfb al 50% de alpha — y aun asi se lee como
         # bandas adentro de una tarjeta que ya es blanca. Lo que separa las
