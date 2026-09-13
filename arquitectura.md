@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-391 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+392 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (137)
+**CSS y estilos** (138)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -171,6 +171,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 - **#386** — Una grilla que cambia de columnas SIN volver a montarse no se entera por el ResizeObserver —…
 - **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
+- **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
 
 **Layout y alturas** (46)
 
@@ -578,7 +579,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (30)
+**Herramientas de desarrollo** (31)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -610,6 +611,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#335** — Una barra medida en SOLES no se rotula con el nombre de la CAUSA: se rotula con el efecto. Y…
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 - **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
+- **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
 
 **Decisiones de diseño y UX** (65)
 
@@ -34334,6 +34336,37 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+392. **Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y
+     pegar: tres de sus reglas se aplicaron distinto de como venían.** El
+     usuario armó en el modo diseño el look de la grilla de Vs año pasado
+     (`compras_vap_detalle_grid`) y mandó el «Copiar CSS»: cabecera en
+     `GRIS_LINEA` con títulos `ACENTO_FUERTE` a 14px, línea de 2px entre
+     filas, sin líneas verticales, marco sólo arriba y abajo y sin radio,
+     filas blancas de 28px. Lo que cambió al pasarlo a
+     `tablas/compras_vs_ano_pasado.py`:
+
+     - **El rayado se apagó con `_css_grid(..., cebra=False)`, no con
+       `.ag-row-even, .ag-row-odd {background: blanco !important}`** como
+       venía. Esa regla entra en el dict DESPUÉS del `.ag-row-hover` de
+       `_css_grid`, con la misma especificidad y también `!important`, así
+       que ganaba ella: el hover desaparecía (el modo diseño no lo muestra
+       porque en su vista previa nadie está pasando el mouse). Medido
+       después: con `cebra=False` el hover simulado da el lavanda de
+       siempre.
+     - **`.ag-root-wrapper`, `.ag-cell` y `.ag-row` se FUSIONARON** con lo
+       que `_css_grid` ya tenía en esas claves. El bloque copiado trae sólo
+       las propiedades tocadas; asignarlo tal cual reemplaza la entrada
+       entera y se lleva el `overflow: hidden` del wrapper (las filas se
+       salen por abajo) y su `width: 100%`.
+     - **La cabecera creció 4px con los títulos a 14px** (58 → 62, medido)
+       y el `extra=` de `alturas.por_filas()` es un número escrito a mano:
+       sin `_ALTO_TIT_HDR` la última fila de una tabla corta quedaba
+       cortada. El alto de fila, en cambio, no hizo falta tocarlo en dos
+       sitios aunque el aviso del modo diseño lo pide: el drill ya importa
+       `_ALTO_FILA` del módulo de la tabla, así que 28 se escribe una vez.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34346,7 +34379,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#392**.
+> próxima regla nueva es la **#393**.
 
 >
 

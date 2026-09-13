@@ -50,8 +50,8 @@ la lista sin que un índice viejo pueda desalinearse contra la fila nueva
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from tema import (
-    ACENTO, CELDA_POS_TEXTO, ERROR, ERROR_TEXTO, EXITO, GRIS_TEXTO,
-    TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_FUERTE, CELDA_POS_TEXTO, ERROR, ERROR_TEXTO, EXITO,
+    GRIS_BORDE, GRIS_LINEA, GRIS_TEXTO, TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
@@ -296,8 +296,20 @@ _TOOLTIP_EF_CANT = JsCode("""
 """)
 
 
-_ALTO_FILA = 24
+_ALTO_TIT_HDR = 4
+"""Lo que la cabecera creció al pasar sus títulos de 13 a 14px (el look del
+modo diseño, regla #392): medida, 58 -> 62px. Mismo acoplamiento que
+`_ALTO_SUB_HDR` — `autoHeaderHeight` la crece sola, pero el `extra=` de
+`alturas.por_filas()` en el drill es un número escrito a mano, y sin
+sumarlo la última fila de una tabla corta queda cortada por 4px."""
+
+_ALTO_FILA = 28
 """Alto de fila de la tabla de detalle.
+
+28 desde el 2026-09-12, copiado del modo diseño junto con el look de la
+grilla (regla #392): con la línea entre filas a 2px y el cuerpo en 13px,
+24 quedaba apretado. Cuesta ~1 fila de las que se ven en el marco de
+`alturas.COMPACTO`.
 
 24 y no 30 desde el 2026-09-02: en el mismo pedido, el marco de la tabla
 bajó de 300 a 250 (`alturas.COMPACTO`) y con filas de 30 eso costaba fila y
@@ -367,7 +379,45 @@ def renderizar_detalle_vs_ano_pasado(tv, etiqueta_item, altura, key,
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # arquitectura.md regla #159
 
-    custom_css = dict(_css_grid(font_px, cabecera_neutra=True))
+    # SIN RAYADO por el interruptor (`cebra=False`) y no pintando
+    # `.ag-row-even, .ag-row-odd` de blanco con `!important`, que es como lo
+    # copió el modo diseño: esa regla va DESPUÉS del `.ag-row-hover` de
+    # `_css_grid` en el dict, con la misma especificidad, y le borraba el
+    # hover; y le ganaba al fondo de la fila seleccionada del tema. Sin el
+    # `!important` las dos siguen (regla #392).
+    custom_css = dict(_css_grid(font_px, cebra=False, cabecera_neutra=True))
+
+    # ── El look, copiado del modo diseño (2026-09-12, regla #392) ─────────
+    # Cabecera en gris muy claro con los títulos en violeta, línea de 2px
+    # entre filas, sin líneas verticales, y la tabla como una franja: sólo
+    # bordes arriba y abajo, sin radio. Las reglas que YA existen en
+    # `_css_grid` se FUSIONAN y no se pisan: reemplazar la entrada entera
+    # de `.ag-root-wrapper` se llevaría su `overflow: hidden` (las filas se
+    # saldrían por abajo) y su `width: 100%`.
+    custom_css[".ag-header, .ag-header-cell, .ag-header-group-cell"] = {
+        "background-color": f"{GRIS_LINEA} !important",
+    }
+    custom_css[".ag-header .ag-header-cell .ag-header-cell-text, "
+               ".ag-header .ag-header-group-cell .ag-header-group-text"] = {
+        "color": f"{ACENTO_FUERTE} !important",
+        "font-size": "14px !important",
+    }
+    custom_css[".ag-cell"] = {**custom_css[".ag-cell"],
+                              "font-size": "13px !important"}
+    custom_css[".ag-row"] = {**custom_css[".ag-row"],
+                             "border-bottom": f"2px solid {GRIS_LINEA} !important"}
+    custom_css[".ag-cell, .ag-header-cell"] = {"border-right": "none !important"}
+    custom_css[".ag-root-wrapper"] = {
+        **custom_css[".ag-root-wrapper"],
+        "--ag-header-column-border": "none",
+        "--ag-column-border": "none",
+        "border-top": f"1px solid {GRIS_BORDE} !important",
+        "border-right": "none !important",
+        "border-bottom": f"1px solid {GRIS_BORDE} !important",
+        "border-left": "none !important",
+        "border-radius": "0px !important",
+    }
+
     # El punto de alarma (ver `_CLASE_ALARMA`): 6px, en el tono CLARO del
     # semáforo mientras el número va en el oscuro — el punto es la señal que
     # se ve de lejos, el número el que se lee de cerca.

@@ -95,6 +95,7 @@ from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL, PARR
 from tablas.compras_vs_ano_pasado import (
     _ALTO_FILA as _ALTO_FILA_DETALLE,
     _ALTO_SUB_HDR as _ALTO_SUB_HDR_DETALLE,
+    _ALTO_TIT_HDR as _ALTO_TIT_HDR_DETALLE,
     renderizar_detalle_vs_ano_pasado,
 )
 
@@ -726,9 +727,11 @@ def _tabla_detalle(g, agrupar_por, col_um_valores, key_grid, rangos=None):
         # cabeceras las hizo más altas y `autoHeaderHeight` las crece SOLO,
         # pero este `extra` es un número escrito a mano que no se entera.
         # Vuelto a medir con el subtítulo puesto: cromo 60 = cabecera 58 + 2
-        # de borde, o sea 47 + 13. Regla #361.
+        # de borde, o sea 47 + 13. Regla #361. Y `+ _ALTO_TIT_HDR_DETALLE`
+        # desde el 2026-09-12: los títulos a 14px la llevaron a 62 (#392).
         altura=alturas.por_filas(len(tv), px_fila=_ALTO_FILA_DETALLE,
-                                 extra=47 + _ALTO_SUB_HDR_DETALLE,
+                                 extra=(47 + _ALTO_SUB_HDR_DETALLE
+                                        + _ALTO_TIT_HDR_DETALLE),
                                  minimo=200, rol=alturas.COMPACTO),
         key=key_grid,
         rango_act=rangos[0] if rangos else None,
