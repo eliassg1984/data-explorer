@@ -630,6 +630,11 @@ def _pruebas_puras():
           _vap._con_segundo(None, "S/ 12.35/kg"), None)
     from graficos.compras._comun import unidad_corta as _uc
     check("unidad_corta KILOS", _uc("KILOS"), "kg")
+    # "Lt" y no "L": el símbolo SI no es el vocabulario de la casa — el
+    # propio catálogo escribe "Drambuie x Lt" (2026-09-13, a pedido). Va
+    # como assert para que no vuelva sola en el próximo retoque del mapa.
+    check("unidad_corta LITROS", _uc("LITROS"), "Lt")
+    check("unidad_corta LT abreviado", _uc("LT"), "Lt")
     check("unidad_corta desconocida sale en minúscula", _uc("ROLLO"), "rollo")
     check("32 meses: sólo rotula «Este año»",
           _vap._plan_etiquetas(32, 9, "Cantidad")["ambas"], False)
@@ -2950,6 +2955,83 @@ def _pruebas_js_inyectado_sano():
     return fallos
 
 
+def _pruebas_hook_del_rail_bajo_secciones():
+    """Que el scrollspy de la pila siga colgando de `secciones` y no de
+    otra cosa.
+
+    Bug real, 2026-09-13, reportado como "¿por qué la tarjeta que dice Por
+    familia no es visible?". El bloque que inyecta el temporizador del rail
+    —el que marca la sección que estás mirando y APRIETA el botón invisible
+    de la que se acerca— vivía a nivel de función desde el 2026-08-25. El
+    `if estados:` del semáforo del rail (2026-09-07) se insertó encima y se
+    lo TRAGÓ: en Python, un bloque que queda más adentro es sintaxis
+    válida, no hay error ni warning, y los tests seguían en verde porque
+    ninguno miraba la estructura.
+
+    Consecuencia, seis días sin que nadie la viera: `estados` lo pasa UN
+    solo dashboard (Compras). En los otros cinco —Inventario, Ventas,
+    Movimientos, Recetas, Ajuste— el temporizador no se inyectaba y las
+    secciones de la pila se quedaban en esqueleto para siempre. Nadie
+    aprieta ese botón a mano: es invisible a propósito.
+
+    Lo que despistaba el diagnóstico: `window.__railTimer` SÍ existía en
+    Inventario. Era el de Compras, que sobrevive al cambio de reporte
+    (`setInterval` global, y el `clearInterval` que lo reemplaza sólo corre
+    si el script nuevo se inyecta). O sea: la variable global no prueba que
+    el script esté montado; lo prueba el `srcdoc` del iframe.
+
+    La guarda es estructural y mira el árbol, no el texto: el `with
+    st.container(key="rail_scroll_hook")` tiene que tener ARRIBA, entre sus
+    ancestros, un `if` cuyo test sea exactamente el nombre `secciones`.
+    """
+    import ast
+    import pathlib
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    rail · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA rail · {nombre}{': ' + detalle if detalle else ''}")
+
+    ruta = pathlib.Path(__file__).parent / "graficos" / "base.py"
+    arbol = ast.parse(ruta.read_text(encoding="utf-8"))
+
+    # Padres, para poder subir del `with` a sus `if`.
+    padre = {}
+    for nodo in ast.walk(arbol):
+        for hijo in ast.iter_child_nodes(nodo):
+            padre[hijo] = nodo
+
+    def _es_el_hook(nodo):
+        if not isinstance(nodo, ast.With):
+            return False
+        return "rail_scroll_hook" in ast.dump(nodo.items[0].context_expr
+                                              if nodo.items else nodo)
+
+    hooks = [n for n in ast.walk(arbol) if _es_el_hook(n)]
+    check("el hook del scrollspy sigue existiendo", len(hooks) == 1,
+          f"encontrados {len(hooks)}")
+    if not hooks:
+        return fallos
+
+    guardas = []
+    n = padre.get(hooks[0])
+    while n is not None:
+        if isinstance(n, ast.If) and isinstance(n.test, ast.Name):
+            guardas.append(n.test.id)
+        n = padre.get(n)
+
+    check("el hook cuelga de `secciones`", "secciones" in guardas,
+          f"guardas vistas: {guardas or 'ninguna'}")
+    check("y NO quedó dentro del `if estados:`", "estados" not in guardas,
+          "lo tragó el if del semáforo: sólo Compras inyectaría el timer")
+    return fallos
+
+
 def _pruebas_jscode_barato():
     """Que nadie vuelva a meter un payload de DATOS dentro de un `JsCode`.
 
@@ -3628,6 +3710,9 @@ def main():
 
     # ── CSS clonado: el tercer prefijo sale del molde, no a mano ───────
     fallos += _pruebas_css_clonado()
+
+    # ── El hook del scrollspy: que siga colgando de `secciones` ────────
+    fallos += _pruebas_hook_del_rail_bajo_secciones()
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()

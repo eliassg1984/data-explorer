@@ -1769,6 +1769,16 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                         unsafe_allow_html=True)
 
     # ── El rail: marcado + activación ────────────────────────────────
+    # `if secciones:` y no la indentación heredada: este bloque vivía a
+    # nivel de función y el `if estados:` de arriba —que nació el 2026-09-07
+    # con el semáforo del rail— se lo TRAGÓ al insertarse encima. Python no
+    # se queja: un bloque de más adentro es sintaxis válida. Consecuencia,
+    # seis días sin que nadie la viera: el temporizador sólo se inyectaba en
+    # Compras, el único dashboard que pasa `estados`, y en los otros cinco
+    # (Inventario, Ventas, Movimientos, Recetas, Ajuste) las secciones de la
+    # pila se quedaban en esqueleto para siempre — no hay quien apriete su
+    # botón invisible. Ver `arquitectura.md` regla #408.
+    if secciones:
         # Un temporizador que mide geometría, no observers. El porqué de cada
         # decisión está en el propio JS de abajo; en resumen: los umbrales de
         # `IntersectionObserver` no alcanzan para marcar secciones más altas
