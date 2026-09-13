@@ -170,7 +170,10 @@ CSS = """    /* ================================================================
 
            El `1px` es lo que queda de aire arriba: el boton mide 30 y la
            franja 48, asi que centrado caeria en y=9 y con esto cae en y=1 —
-           los 8px que se pidieron. El aire sobrante queda abajo. */
+           los 8px que se pidieron. El aire sobrante queda abajo.
+           2026-09-12: ese aire sobrante (17px) se recorto a 5 bajando la
+           franja a 36 (`--franja-rep-alto`), a pedido. Los botones siguen
+           en y=1..31. */
         align-items: flex-start !important;
         /* CENTRADA en horizontal (2026-08-31, a pedido). Nació en `flex-start` —el default
            del flex, que nunca se escribió— y arrancaba en x=16, o sea encima
@@ -569,6 +572,7 @@ CSS = """    /* ================================================================
        navegador cada vez que cambió alguno de los tres términos:
          2026-09-01:  128 (offset) + 5x16 (bloques) - 104 = 104
          2026-09-08:   88           + 6x16         - 120 =  64
+         2026-09-12:   76           + 6x16         - 120 =  52
        o sea 16px bajo la franja de arriba, el mismo gap que separa a todo
        lo demás de la página. Los dos cambios del 2026-09-08 son
        independientes y se suman: el offset bajó 40 (la franja de vistas
@@ -580,6 +584,9 @@ CSS = """    /* ================================================================
        entonces dejaba la tarjeta a y=88, PEGADA al cromo. Hoy el cromo
        termina en 48 y ese mismo -120 deja los 16px de aire. Es la misma
        cuenta con otro offset, no una vuelta atrás.
+       El 2026-09-12 la franja de reportes bajó de 48 a 36 y el offset
+       bajó los mismos 12 (88 -> 76): el jalón NO cambia, porque el aire se
+       mide contra la franja y las dos cosas se movieron juntas.
        Si algún día esos bloques dejan de ocupar gap (o aparece un séptimo),
        este número cambia: son las dos caras de la misma cuenta. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
@@ -1387,7 +1394,8 @@ CSS = """    /* ================================================================
                          acá arriba, y el marcador nunca contó)
                          88 + 4x16 - 88 = 64
        O sea el mismo destino (y=64, 16px bajo la franja) con -88 en vez
-       de -120. Si algún día cambia lo que se esconde en modo solo, este
+       de -120. (2026-09-12: 76 + 4x16 - 88 = 52, con la franja en 36 —
+       mismos 16px de aire, el jalón no cambia.) Si algún día cambia lo que se esconde en modo solo, este
        número cambia con él: son la misma cuenta. DERIVADO, no medido: la
        pila completa sí se midió en el navegador (y=64), ésta se despejó de
        la misma fórmula. */

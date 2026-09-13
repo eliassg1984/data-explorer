@@ -73,10 +73,11 @@ VIEWPORT_OBJETIVO = 657
 # cursor (`--franja-vistas-reserva: 0`, estilos/_26_rails_scroll.py). Su
 # gemelo CSS es `--cab-offset-contenido`. Junto con los 40 que devolvio la
 # franja inferior el mismo dia, el presupuesto sube de 465 a 545.
-_CAB_OFFSET = 88    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
+_CAB_OFFSET = 76    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
                     # 2026-08-31: 80 -> 118, los 38px de la franja de reportes
                     # 2026-09-01: 118 -> 128, la franja paso de 38 a 48
                     # 2026-09-07: 128 -> 88, la franja de vistas no reserva
+                    # 2026-09-12: 88 -> 76, la franja de reportes paso de 48 a 36
 _MARGEN_SUP = 8     # margen del bloque hasta la tarjeta (Streamlit)
 # 2026-09-08: 48 -> 8, y `_FRANJA_INF` -> `_AIRE_INF`. Los 48 eran la franja
 # blanca fija de abajo (42) más 6 de aire; la franja se eliminó a pedido y su
@@ -92,13 +93,13 @@ CROMO = _CAB_OFFSET + _MARGEN_SUP + _AIRE_INF + _MARGEN_INF
 # Verificado dos veces contra el navegador: en viewport 864 el presupuesto da
 # 708 y la vista «Matriz» (742px) desbordaba exactamente 34px; en viewport
 # 657 da 501 y «Por día» (584px) desbordaba exactamente 83px.
-PRESUPUESTO = VIEWPORT_OBJETIVO - CROMO                          # 545
+PRESUPUESTO = VIEWPORT_OBJETIVO - CROMO                          # 557
 
 # Padding propio de la tarjeta (`padding: 8px 18px` en estilos/_80_cards.py;
 # vertical bajado de 16 a 8 el 2026-08-15). Lo que queda es el sitio real
 # para el contenido.
 _PADDING_TARJETA = 8 * 2
-CONTENIDO = PRESUPUESTO - _PADDING_TARJETA                       # 529
+CONTENIDO = PRESUPUESTO - _PADDING_TARJETA                       # 541
 
 
 # ===========================================================================

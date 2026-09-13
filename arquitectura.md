@@ -23400,7 +23400,17 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      ocho anclas de abajo se movieron solas. Lo único que hubo que tocar a
 
-     mano fueron las dos caras del presupuesto.
+     mano fueron las dos caras del presupuesto. El 2026-09-12 volvió a
+
+     bajar, 48 -> 36 ("más delgado, su parte de abajo más arriba"): los
+
+     botones siguen en y=1..31 y se recortó el aire muerto de DEBAJO de
+
+     ellos (17 -> 5px). Mismas dos caras a mano (88 -> 76), y los jalones
+
+     negativos de la primera tarjeta de Compras no se tocan: el aire se
+
+     mide contra la franja, y la franja y el offset se movieron juntos.
 
      La suman, todos anclados al borde superior de la ventana:
 

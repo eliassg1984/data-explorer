@@ -167,10 +167,11 @@ def inject_sello_actualizacion(rotulo, valor, color=None):
             y la antigüedad del dato no se conoce hasta app.py:617, después
             de resolver `cfg`. Ponerlo dentro obligaría a reordenar eso.
 
-        Se alinea con los BOTONES, no con la caja: la franja mide 48px pero
-        sus botones van pegados al tope (`align-items: flex-start` + 1px de
-        padding, 30px de alto), así que centrarlo en los 48 lo dejaría 8px
-        más abajo que los nombres de los reportes. De ahí `top:1px` +
+        Se alinea con los BOTONES, no con la caja: la franja mide 36px (48
+        hasta el 2026-09-12) pero sus botones van pegados al tope
+        (`align-items: flex-start` + 1px de padding, 30px de alto), así que
+        centrarlo en la franja lo dejaría más abajo que los nombres de los
+        reportes. De ahí `top:1px` +
         `height:30px` — los mismos tres números que los botones.
 
     POR QUÉ EL RÓTULO Y EL VALOR VAN SEPARADOS

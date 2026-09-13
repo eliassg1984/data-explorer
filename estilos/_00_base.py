@@ -111,8 +111,11 @@ CSS = """    <style>
            arranca 40px mas arriba y el presupuesto vertical gana otro
            tanto. Con el jalon de -104 de la primera tarjeta de Compras
            (`_20_compras_rail.py`), esa tarjeta pasa de y=104 a y=64: los
-           mismos 16px de aire, ahora bajo la franja de REPORTES. */
-        --cab-offset-contenido: 88px;
+           mismos 16px de aire, ahora bajo la franja de REPORTES.
+           2026-09-12: 88 -> 76, los 12px que adelgazo la franja de reportes
+           (48 -> 36). La primera tarjeta sube con ella: y=64 -> y=52, los
+           mismos 16px de aire. */
+        --cab-offset-contenido: 76px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -204,8 +207,13 @@ CSS = """    <style>
            de mas no son estetica: los pide el corrimiento de los botones
            que va en el mismo commit — con 38 se salian 4px por arriba y la
            franja los recortaba (`overflow-y: hidden`). Medido: pasaban de
-           y=4..34 a y=-4..26. */
-        --franja-rep-alto: 48px;
+           y=4..34 a y=-4..26.
+           2026-09-12: 48 -> 36, a pedido ("mas delgado verticalmente, su
+           parte de abajo mas arriba"). Los botones no se mueven (siguen en
+           y=1..31, al tope): lo que se va son 12 de los 17px de aire muerto
+           que quedaban DEBAJO de ellos. Quedan 4px entre la pastilla del
+           hover y el borde. */
+        --franja-rep-alto: 36px;
         /* Alto de la CABECERA del rail ("Reportes" / "Vistas"). Era el
            literal 33 —la resta entre los dos `top` que había antes— repetido
            en tres sitios: su propia `height` y el `top` y el `max-height` de
