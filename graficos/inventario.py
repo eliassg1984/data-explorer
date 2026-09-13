@@ -49,6 +49,11 @@ from graficos.compras._comun import (
     ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK, unidad_corta,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
+# La ÚNICA del repo, y se importa de acá y no de `graficos.base` a propósito
+# (`test_graficos.py::_pruebas_una_sola_nombre_propio` monta guardia): hubo
+# dos definiciones hasta el 2026-09-11 y diferían en 48 de 773 nombres — el
+# mismo texto escrito distinto según qué módulo lo formateara. Regla #379.
+from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
     _compras_layout, _compras_truncar, _render_rail,
@@ -144,6 +149,30 @@ _FORMATO_RANKING = {
     3: {"ancho_pct": 64, "flex_nombre": 3, "ancho_barra": 0.45},
 }
 
+# Qué categorías se ESCRIBEN como nombre propio en vez de como las grita el
+# ERP (2026-09-13, a pedido: "que las letras en el cuadro de familia y
+# subfamilia sean nombre propio"). Son las frases largas —"BEBIDAS CON
+# ALCOHOL", "GASTOS ADMINISTRATIVOS"— donde ocho filas de mayúsculas se leen
+# como un bloque; el área queda gritada porque son nombres cortos de almacén
+# ("GASTOS", "SALON", "CAVA") y ahí el grito no molesta.
+#
+# Se decide por el NOMBRE de la categoría y no por la posición del cuadro: en
+# "Por área" la familia es el segundo cuadro y en "Por familia" es el primero,
+# así que atarlo a "el cuadro 2" la dejaría gritada en una de las dos vistas.
+_CATEGORIAS_NOMBRE_PROPIO = ("familia", "subfamilia")
+
+
+def _texto_cat(nombre_cat, valor):
+    """Cómo se ESCRIBE `valor` cuando es de la categoría `nombre_cat`.
+
+    El valor crudo no se toca nunca: es la clave con la que se filtra el df
+    (ver el docstring de `nombre_propio`, que explica la misma separación
+    del lado de Compras). Esto es sólo para mostrar."""
+    if not valor or nombre_cat not in _CATEGORIAS_NOMBRE_PROPIO:
+        return valor
+    return nombre_propio(valor)
+
+
 # Cuántas filas RESERVA una tabla-ranking antes de scrollear por dentro. El
 # 8 es el techo de Compras (`proveedor.py::_FILAS_RANK`) y viaja con el
 # resto del look: dos tablas con el mismo tema y el mismo alto de fila pero
@@ -195,7 +224,8 @@ def _rango_con_holgura(*series, factor=0.28):
 
 def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                    ancho_pct=80, flex_nombre=2, ancho_barra=0.62,
-                   monto_corto=False, abre_en=(), abrir_en_mayor=False):
+                   monto_corto=False, nombre_bonito=False, abre_en=(),
+                   abrir_en_mayor=False):
     """Ranking de Por area/Por familia como TABLA con barra de progreso.
 
     Es la tabla-ranking del repo, la misma que el Ranking de proveedores de
@@ -257,10 +287,18 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     _mayor = float(np.abs(serie.values).max()) or 1.0
     col_nombre = nombre_grp.capitalize()
     _pcts = [(v / total * 100) if total else 0.0 for v in serie.values]
+    _crudos = [str(i) for i in serie.index]
     tabla = pd.DataFrame({
-        col_nombre: serie.index.astype(str),
+        # Lo que se VE puede ir en capitalización de nombre propio; lo que
+        # se COMPARA es `_crudo`, unas líneas más abajo. Misma separación que
+        # el Ranking de proveedores con su `_prov_raw`: el texto formateado
+        # ya no matchea contra el parquet, así que usarlo para filtrar
+        # devolvería un df vacío sin decir por qué.
+        col_nombre: ([nombre_propio(x) for x in _crudos] if nombre_bonito
+                     else _crudos),
         "Valorizado": serie.values,
         "%": _pcts,
+        "_crudo": _crudos,
         # Ocultas: el % de LLENADO de la barra (contra la mayor MAGNITUD,
         # que no es el mismo numero que la columna "%"), y el signo, que se
         # lee por color y no por direccion, igual que en los graficos de
@@ -276,6 +314,8 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     # `pinnedBottomRowData`, no el `"grandTotalRow"` nativo, que en este
     # repo solo esta probado junto a `pivotMode=True` y esta tabla es plana.
     # Suma lo que la tabla MUESTRA, que aca es todo el recorte.
+    # "TOTAL" no pasa por `nombre_propio` —quedaría "Total"— porque no es
+    # un nombre del ERP sino el rótulo de la fila de cierre.
     fila_total = {col_nombre: "TOTAL", "Valorizado": round(total, 2),
                   "%": round(sum(_pcts), 2)}
 
@@ -360,6 +400,7 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                  "valueFormatter": _js_pct},
                 {"field": "_barra", "hide": True},
                 {"field": "_neg", "hide": True},
+                {"field": "_crudo", "hide": True},
             ],
             "rowSelection": {"mode": "singleRow", "checkboxes": False,
                              "enableClickSelection": False},
@@ -390,7 +431,9 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     sel = getattr(resp, "selected_rows", None)
     if sel is not None and len(sel):
         fila = sel.iloc[0] if hasattr(sel, "iloc") else sel[0]
-        return str(fila[col_nombre])
+        # `_crudo` y no la columna visible: con `nombre_bonito` aquélla pasó
+        # por `nombre_propio` y ya no es la clave de los datos.
+        return str(fila["_crudo"])
     if not abrir_en_mayor:
         return None
     # Sin seleccion: el default. La comparacion va normalizada porque el
@@ -418,11 +461,14 @@ def _tabla_detalle_foco(d, col_next, nombre_next, col_val, key, ruta=(),
     la tabla de productos de abajo— se recorten a ella. Ver `arquitectura.md`
     reglas #403 y #407.
 
-    `ruta` es el recorte que ya está aplicado, en pares (columna, valor):
-    filtra el df Y arma el título. Se recibe hecha en vez de recalcularse
-    acá porque el caller la va acumulando nivel a nivel — con dos eslabones
-    ya no alcanza un `col_grp`/`foco` sueltos, y tres argumentos paralelos
-    por nivel es lo que convierte una cadena en un `if` por profundidad.
+    `ruta` es el recorte que ya está aplicado, en tríos (columna, valor
+    crudo, texto): el valor FILTRA el df y el texto arma el título. Van los
+    dos porque desde el 2026-09-13 no son lo mismo — familia y subfamilia se
+    escriben en capitalización de nombre propio y esa forma ya no matchea
+    contra el parquet. Se recibe hecha en vez de recalcularse acá porque el
+    caller la va acumulando nivel a nivel — con dos eslabones ya no alcanza
+    un `col_grp`/`foco` sueltos, y tres argumentos paralelos por nivel es lo
+    que convierte una cadena en un `if` por profundidad.
 
     La `key` que le pasa el caller lleva el foco adentro a propósito: al
     cambiar de área, la grilla es OTRA y nace sin selección. Con AgGrid eso
@@ -430,7 +476,7 @@ def _tabla_detalle_foco(d, col_next, nombre_next, col_val, key, ruta=(),
     evento que se repite de `plotly_chart(on_select=...)` (regla #399)—, y es
     lo que evita que un sub-foco sobreviva al área que lo justificaba."""
     dd = d
-    for _col_r, _val_r in ruta:
+    for _col_r, _val_r, _ in ruta:
         if _col_r and _val_r:
             dd = dd[dd[_col_r].astype(str) == _val_r]
     # El titulo nombra sólo el ÚLTIMO eslabón, no la ruta entera: con tres
@@ -438,8 +484,8 @@ def _tabla_detalle_foco(d, col_next, nombre_next, col_val, key, ruta=(),
     # en 339px, y de qué área viene ya lo dice el cuadro de la izquierda. La
     # ruta completa va al `title=`, que es donde se la puede leer sin que
     # empuje el layout.
-    _ruta_txt = " › ".join(str(v) for _, v in ruta if v)
-    _de = next((str(v) for _, v in reversed(list(ruta)) if v), "")
+    _ruta_txt = " › ".join(str(t) for _, v, t in ruta if v)
+    _de = next((str(t) for _, v, t in reversed(list(ruta)) if v), "")
     if not col_next or dd.empty:
         st.caption(f"Sin desglose adicional para {_de}." if _de
                    else "Sin desglose adicional.")
@@ -447,8 +493,10 @@ def _tabla_detalle_foco(d, col_next, nombre_next, col_val, key, ruta=(),
     st.markdown(
         f'<div class="inv-rank-tit" title="{_ruta_txt.replace(chr(34), "")}">'
         f'{_de} — por {nombre_next}</div>', unsafe_allow_html=True)
-    return _tabla_ranking(dd, col_next, col_val, nombre_next, key,
-                          **(formato or _FORMATO_DETALLE[2]))
+    return _tabla_ranking(
+        dd, col_next, col_val, nombre_next, key,
+        nombre_bonito=nombre_next in _CATEGORIAS_NOMBRE_PROPIO,
+        **(formato or _FORMATO_DETALLE[2]))
 
 
 def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
@@ -687,8 +735,9 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
     mismas ocho filas que las otras dos tablas de la sección; la tarjeta no
     crece ni saca barra propia.
 
-    `ruta` son los pares (columna, valor) de la cadena de arriba —área,
-    familia, subfamilia— hasta donde el usuario haya clickeado. El % de
+    `ruta` son los tríos (columna, valor crudo, texto) de la cadena de
+    arriba —área, familia, subfamilia— hasta donde el usuario haya
+    clickeado: el valor filtra, el texto se escribe. El % de
     participación se recalcula sobre ESE recorte, no sobre el área entera,
     porque el criterio de la tarjeta es "sumar 100% con lo que el usuario ya
     está viendo arriba".
@@ -709,7 +758,7 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
     from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
     d_panel = d
-    for _col_r, _val_r in ruta:
+    for _col_r, _val_r, _ in ruta:
         if _col_r and _val_r:
             d_panel = d_panel[d_panel[_col_r].astype(str) == _val_r]
     if not (col_prod and col_area and _cant is not None and col_val):
@@ -753,7 +802,7 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
 
     # El encabezado dice el recorte Y cuántas filas trae: sin el número, una
     # tabla que scrollea no deja ver si son 12 productos o 400.
-    _ruta = " › ".join([str(v) for _, v in ruta if v])
+    _ruta = " › ".join([str(t) for _, v, t in ruta if v])
     st.markdown(
         '<div class="inv-rank-tit">Productos'
         + (f" · {_ruta}" if _ruta else "")
@@ -792,7 +841,7 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
     # caso exacto de la regla #239. Oculta y no borrada: sigue en el modelo
     # por si hace falta ordenar por ella, y son los 90px que necesitaba la
     # UM para entrar sin empujar la tabla a scroll horizontal.
-    _area_fija = any(c == col_area and v for c, v in ruta)
+    _area_fija = any(c == col_area and v for c, v, _t in ruta)
     gb.configure_column("Área", minWidth=90, hide=_area_fija)
     # Angosta: son tres letras ("kg", "L", "und"). Sin `flex`, para que no
     # se coma el ancho que necesitan los nombres de producto.
@@ -914,7 +963,7 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
         # La key lleva el recorte entero: cambiar de área o de familia
         # estrena grilla, así los checkboxes de "Selección %" no quedan
         # marcados sobre productos que ya no están en la tabla.
-        key="inv_top_grid_" + (_slug("_".join(str(v) for _, v in ruta if v))
+        key="inv_top_grid_" + (_slug("_".join(str(v) for _, v, _ in ruta if v))
                                or "global"),
     )
 
@@ -1006,6 +1055,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         Con un foco por defecto (`abre_en`) esa tabla vive siempre en la
         franja ancha, que es donde entra."""
         col_grp, nombre_grp = niveles[0]
+        _bonito_grp = nombre_grp in _CATEGORIAS_NOMBRE_PROPIO
         # columnas-internas: el ranking y sus desgloses, dentro de la
         # sección. No es una fila de drill de Compras: COLUMNAS_DRILL no
         # aplica; el reparto propio vive en `_COLUMNAS_NIVELES`.
@@ -1036,8 +1086,9 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                                           key=f"inv_rank_grid_{slug}",
                                           abre_en=abre_en,
                                           abrir_en_mayor=True,
+                                          nombre_bonito=_bonito_grp,
                                           **_FORMATO_RANKING[len(niveles)])
-                    ruta.append((col_grp, foco))
+                    ruta.append((col_grp, foco, _texto_cat(nombre_grp, foco)))
         for _i, (_col_n, _nombre_n) in enumerate(niveles[1:]):
             # La key de la tarjeta conserva el prefijo `ajuste_graf_card_der_`
             # aunque ahora sean dos: de ese prefijo cuelga el CSS por FAMILIA
@@ -1052,18 +1103,18 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                     # cuadro queda callado en vez de repetir el nivel
                     # anterior. Con el default de `abre_en`, al primero
                     # nunca le falta.
-                    if not [v for _, v in ruta if v]:
+                    if not [v for _, v, _t in ruta if v]:
                         st.caption("Elegí una fila del cuadro anterior.")
                         continue
                     # La key lleva la ruta adentro a propósito: al cambiar
                     # lo de arriba, la grilla es OTRA y nace sin selección
                     # (ver el docstring de `_tabla_detalle_foco`).
-                    _k = _slug("_".join(str(v) for _, v in ruta if v))
+                    _k = _slug("_".join(str(v) for _, v, _t in ruta if v))
                     _sub = _tabla_detalle_foco(
                         d, _col_n, _nombre_n, col_val,
                         key=f"inv_det_grid_{slug}_{_i}_{_k}", ruta=tuple(ruta),
                         formato=_FORMATO_DETALLE[len(niveles)])
-                    ruta.append((_col_n, _sub))
+                    ruta.append((_col_n, _sub, _texto_cat(_nombre_n, _sub)))
         with st.container(border=True,
                           key=f"ajuste_graf_card_abajo_inv_{slug}"):
             _panel_top(d, tuple(ruta), col_prod, col_area, col_val,
