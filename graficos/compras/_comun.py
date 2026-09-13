@@ -139,6 +139,32 @@ estrenó el suyo (el mismo popover de sólo ícono). Dos cadenas iguales
 escritas en dos módulos no driftean solas, pero el CRITERIO sí: si
 mañana el popover pasa a separar con `---`, cambia en un sitio."""
 
+UNIDAD_CORTA = {
+    "KILOS": "kg", "KILO": "kg", "KG": "kg",
+    "LITROS": "L", "LITRO": "L", "LT": "L",
+    "UND": "und", "UNIDAD": "und",
+    "PAQUETE": "paq",
+}
+"""Cómo se ESCRIBE al lado de un número la `UNIDAD_DE_INGRESO` del parquet.
+
+Vivía como un dict literal dentro de `volatilidad.py` hasta el 2026-09-13,
+cuando «Vs año pasado» empezó a rotular cantidades ("4,300 kg"). Dos
+copias del mismo mapa se desincronizan en la primera unidad nueva: una
+vista diría "kg" y la otra "kilos" para el mismo producto.
+
+Medido ese día sobre los últimos 3 meses de `compras.parquet`: KILOS (309
+productos, 76,5 % del gasto), UND (137), LITROS (80), y restos en CAJA,
+ROLLO y PAQUETE. Lo que no está acá sale en minúscula ("caja", "rollo"),
+que ya se lee bien."""
+
+
+def unidad_corta(um):
+    """`UNIDAD_CORTA` con caída a la minúscula del valor crudo. "" si no
+    hay unidad — el llamador decide qué hacer sin ella, y lo correcto casi
+    siempre es no escribir la cantidad (regla #335)."""
+    crudo = str(um or "").strip()
+    return UNIDAD_CORTA.get(crudo.upper(), crudo.lower())
+
 
 def _first_point(evt):
     """Primer punto de una selección de st.plotly_chart(on_select=...).

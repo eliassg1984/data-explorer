@@ -606,10 +606,31 @@ def _pruebas_puras():
           _vap._fmt_etiqueta(0.0, "Valor"), None)
     check("3 meses: etiquetas derechas en las dos series",
           _vap._plan_etiquetas(3, 9, "Valor"),
-          {"girar": False, "ambas": True, "paso": 1})
+          {"girar": False, "ambas": True, "paso": 1, "sec": False})
     check("12 meses: no entran derechas, van giradas",
           _vap._plan_etiquetas(12, 9, "Valor"),
-          {"girar": True, "ambas": True, "paso": 1})
+          {"girar": True, "ambas": True, "paso": 1, "sec": False})
+    # Segundo renglón con el precio (regla #401): entra con 3 meses; con 12
+    # cede él, no la etiqueta del año pasado.
+    check("3 meses con precio: dos renglones derechos",
+          _vap._plan_etiquetas(3, 9, "Cantidad", largo_sec=11),
+          {"girar": False, "ambas": True, "paso": 1, "sec": True})
+    check("12 meses con precio: el precio cede, las dos series quedan",
+          _vap._plan_etiquetas(12, 9, "Cantidad", largo_sec=11),
+          {"girar": True, "ambas": True, "paso": 1, "sec": False})
+    check("cantidad con unidad va entera",
+          _vap._fmt_etiqueta(4300.0, "Cantidad", "kg"), "4,300 kg")
+    check("cantidad con unidad y muchos miles, compacta",
+          _vap._fmt_etiqueta(123456.0, "Cantidad", "und"), "123.5k und")
+    check("precio por unidad", _vap._fmt_etiqueta(12.345, "Precio", "kg"),
+          "S/ 12.35/kg")
+    check("segundo renglón debajo del principal",
+          _vap._con_segundo("300 kg", "S/ 12.35/kg").split("<br>")[0], "300 kg")
+    check("sin principal no hay etiqueta",
+          _vap._con_segundo(None, "S/ 12.35/kg"), None)
+    from graficos.compras._comun import unidad_corta as _uc
+    check("unidad_corta KILOS", _uc("KILOS"), "kg")
+    check("unidad_corta desconocida sale en minúscula", _uc("ROLLO"), "rollo")
     check("32 meses: sólo rotula «Este año»",
           _vap._plan_etiquetas(32, 9, "Cantidad")["ambas"], False)
     check("precio con 12 meses rotula las dos líneas",
@@ -618,7 +639,7 @@ def _pruebas_puras():
     # meses (21 px por mes) una etiqueta de 47 px necesita 3 meses de lugar.
     check("precio con 32 meses ralea en vez de alternar",
           _vap._plan_etiquetas(32, 8, "Precio"),
-          {"girar": False, "ambas": False, "paso": 3})
+          {"girar": False, "ambas": False, "paso": 3, "sec": False})
     check("_ralear conserva siempre el último mes",
           _vap._ralear(["a", "b", "c", "d", "e"], 2), ["a", None, "c", None, "e"])
     _techo = _vap._techo_con_etiquetas(100.0, 0.0, 17, alto_plot=149)
@@ -3539,6 +3560,9 @@ def main():
          lambda: _vap_fig._fig_serie(_g_vap, "Cantidad", None), ()),
         ("compras vs año pasado · serie (Precio, ratio con cero)",
          lambda: _vap_fig._fig_serie(_g_vap, "Precio", None), ()),
+        ("compras vs año pasado · serie (Cantidad, con unidad y precio)",
+         lambda: _vap_fig._fig_serie(_g_vap, "Cantidad", None, unidad="kg",
+                                     con_precio=True), ()),
         ("compras vs año pasado · puente precio/cantidad",
          lambda: _vap_fig._fig_puente(250.0, 450.0, 60.0, -260.0), ()),
     ]

@@ -34,6 +34,7 @@ from graficos.base import (
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.compras._comun import (
     CATEGORIA_SEC, GAP_DRILL, PARR, _first_point, documento_legible,
+    unidad_corta,
 )
 from graficos import periodo
 from graficos import alturas
@@ -712,8 +713,9 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         unidad_raw = str(dd_rec.loc[dd_rec[col_prod] == prod_sel, col_um].mode().iat[0]) \
             if col_um and col_um in dd_rec.columns and not dd_rec.loc[dd_rec[col_prod] == prod_sel, col_um].empty \
             else "kg"
-        unidad = {"KILOS": "kg", "KG": "kg", "LITROS": "L", "LT": "L", "UND": "und"}.get(
-            unidad_raw.upper(), unidad_raw.lower())
+        # El mapa vive en `_comun.py` desde el 2026-09-13: «Vs año pasado»
+        # también escribe unidades, y dos copias se desincronizan.
+        unidad = unidad_corta(unidad_raw)
 
         # La base de la primera vela: el cierre de la semana anterior en la
         # historia de la ventana y, si la ventana no la trae (Rango), el

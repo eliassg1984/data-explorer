@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-400 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+401 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (140)
 
@@ -296,7 +296,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#399** — Leer el clic ANTES de dibujar obliga a leerlo de la key que se DIBUJÓ — y con el foco en la…
 - **#400** — «Etiquetas visibles» es una cuenta de píxeles por columna, y la ventana con la que abre la…
 
-**AgGrid y tablas** (66)
+**AgGrid y tablas** (67)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -364,6 +364,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
 - **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
 - **#396** — Una tabla que tiene que verse «igual que la de al lado» no puede ser un st.dataframe si la de…
+- **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 
 **Streamlit** (108)
 
@@ -476,7 +477,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 - **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
 
-**Datos, R2 y DuckDB** (49)
+**Datos, R2 y DuckDB** (50)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -527,6 +528,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#367** — Una caché con persist="disk" NO caduca: el ttl sólo gobierna la copia en memoria
 - **#376** — El default del REPORTE y el default de una TARJETA son dos cosas distintas — y la excepción…
 - **#379** — Dos funciones con el mismo nombre y el mismo propósito no son una duplicación: son dos…
+- **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 
 **SUNAT y SIRE** (40)
 
@@ -34752,6 +34754,62 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-13.)
 
+401. **Una unidad sólo se escribe si el número TIENE una unidad: antes de
+     pegarle «kg» a una suma, contá cuántas unidades hay adentro.** Segundo
+     pedido del mismo día sobre «Vs año pasado» (#400): «en lo que es
+     cantidad, debe decir la unidad, por ejemplo 4300 kg 9700kg», y debajo
+     de la etiqueta principal, «una etiqueta secundaria con el precio».
+
+     - **El problema estaba en el dato, no en el rótulo.** Sin un producto
+       elegido, la barra de Cantidad sumaba TODAS las compras. Medido sobre
+       los últimos 3 meses de `compras.parquet`: KILOS (309 productos, 76,5 %
+       del gasto), UND (137, 14,8 %), LITROS (80, 7,7 %) y restos en CAJA,
+       ROLLO y PAQUETE — o sea 26.461 kg + 28.687 und + 2.204 L en un solo
+       número. Ni «kg» ni «S/ x/kg» sobre eso son ciertos, y el número sin
+       rótulo tampoco lo era: sólo no lo decía.
+     - **Se le dieron tres salidas al usuario, con los números**, y eligió
+       la primera: (1) sin foco, Cantidad se calcula sobre el PRODUCTO de
+       mayor gasto — lo que Precio ya hacía — y la cabecera lo nombra con
+       «· mayor gasto»; (2) unidad y precio sólo con un producto elegido,
+       lo más fiel pero invisible al abrir la tarjeta; (3) sumar sólo lo que
+       entra en KILOS, un número físico real pero con efecto mezcla: más
+       carne y menos verdura suben el «precio por kilo» sin que nada suba.
+     - **Por PRODUCTO, no por `llave_foco`.** Precio elegía «el ítem de
+       mayor gasto» según el agrupador, y con Familia eso era una familia:
+       otra vez kilos con litros. Valor no cambia: la plata sí se suma
+       entre unidades.
+     - **Dos umbrales distintos, a propósito.** La unidad se escribe si
+       todos los productos de la serie comparten UNA (una familia toda en
+       kilos suma kilos de verdad); el precio, sólo si la serie es UN
+       producto — el de una familia se mueve con la mezcla.
+     - **El segundo renglón es lo primero que cede.** Con 3 meses entran
+       los dos, derechos; con 12 las dos series siguen rotuladas y el
+       precio pasa al hover, que lo lleva siempre. El gráfico es una
+       COMPARACIÓN: perder la etiqueta del año pasado es perder la mitad de
+       la lectura, y el precio tiene otro sitio donde vivir.
+     - **Cantidad con unidad va entera** hasta los 100 mil («4,300 kg»,
+       el ejemplo del pedido): compacta sería «4.3k kg», y el «k» de miles
+       pegado al «kg» se lee como un error de tipeo.
+     - **El mapa KILOS → kg se mudó a `graficos/compras/_comun.py`**
+       (`UNIDAD_CORTA` / `unidad_corta`). Vivía como dict literal dentro de
+       `volatilidad.py`; con dos vistas escribiendo unidades, dos copias se
+       desincronizan en la primera unidad nueva.
+
+     Verificado de dos lados. Píxeles: las 12 combinaciones (3 métricas ×
+     3/13/24/32 meses, con unidad y precio) re-dibujadas con `Plotly.react`
+     sobre el gráfico real a 1366x768 — 0 choques, 0 fuera, 0 encogidas; el
+     segundo renglón sale a 9px en `GRIS_TEXTO`. Lógica: `AppTest` sobre el
+     drill con el parquet real — Cantidad sin foco abre en «Lomo fino entero
+     nacional… · mayor gasto» con «225 kg / S/ 74.50/kg» contra «410 kg /
+     S/ 60.58/kg» del año pasado; Valor sin foco sigue en todas las compras
+     y sin segundo renglón. Ojo al probar el foco con `AppTest`: el AgGrid
+     devuelve `None` y el drill lo toma por una fila DESELECCIONADA — suelta
+     el foco y re-ejecuta, así que el foco "no pega". No es un bug de la
+     app (en el navegador AgGrid conserva la selección): hay que reemplazar
+     `_tabla_detalle` por una que devuelva el ítem.
+
+     (2026-09-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34764,7 +34822,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#401**.
+> próxima regla nueva es la **#402**.
 
 >
 

@@ -103,7 +103,9 @@ from graficos.base import (
     _card, _compras_layout, _compras_truncar, scope_rerun,
 )
 from graficos import alturas, periodo
-from graficos.compras._comun import COLUMNAS_DRILL, GAP_DRILL, PARR
+from graficos.compras._comun import (
+    COLUMNAS_DRILL, GAP_DRILL, PARR, unidad_corta,
+)
 from tablas.compras_vs_ano_pasado import (
     _ALTO_FILA as _ALTO_FILA_DETALLE,
     _ALTO_SUB_HDR as _ALTO_SUB_HDR_DETALLE,
@@ -457,7 +459,7 @@ decide cuánto espacio hay entre dos columnas del mismo mes, que es contra
 lo que se mide si una etiqueta entra derecha."""
 
 
-def _fmt_etiqueta(v, modo):
+def _fmt_etiqueta(v, modo, unidad=None):
     """El número que va ENCIMA de la columna (o del punto, en Precio).
 
     Compacto en Valor y Cantidad —"S/ 107.9k" entra donde "S/ 107,911" no—,
@@ -472,10 +474,22 @@ def _fmt_etiqueta(v, modo):
     if v is None or pd.isna(v) or float(v) == 0:
         return None
     v = float(v)
+    u = str(unidad or "").strip()
     if modo == "Precio":
-        return f"S/ {v:,.2f}"
-    pre = "S/ " if modo == "Valor" else ""
+        # Con unidad es el precio POR esa unidad ("S/ 12.35/kg"): así lo
+        # usa el segundo renglón de Valor y Cantidad.
+        return f"S/ {v:,.2f}/{u}" if u else f"S/ {v:,.2f}"
     a = abs(v)
+    if modo == "Cantidad" and u:
+        # Con unidad, ENTERA hasta los 100 mil — "4,300 kg", el ejemplo del
+        # pedido. Compacta sería "4.3k kg": dos sufijos pegados, y el "k"
+        # de miles al lado del "kg" de kilos se lee como un error de tipeo.
+        if a >= 100_000:
+            return f"{v / 1_000:,.1f}k {u}"
+        if a < 10 and v != round(v):
+            return f"{v:,.1f} {u}"
+        return f"{v:,.0f} {u}"
+    pre = "S/ " if modo == "Valor" else ""
     if a >= 1_000_000:
         return f"{pre}{v / 1_000_000:,.2f}M"
     if a >= 1_000:
@@ -485,13 +499,20 @@ def _fmt_etiqueta(v, modo):
     return f"{pre}{v:,.0f}"
 
 
-def _plan_etiquetas(n, largo_max, modo, ancho_plot=_ANCHO_PLOT_VAP):
+def _plan_etiquetas(n, largo_max, modo, ancho_plot=_ANCHO_PLOT_VAP,
+                    largo_sec=0):
     """Cómo se dibujan las etiquetas de `n` meses cuya etiqueta más larga
     tiene `largo_max` caracteres. Devuelve un dict:
 
       · `girar`: la etiqueta va vertical (sólo barras).
       · `ambas`: rotulan las DOS series; si no, sólo "Este año".
       · `paso`: se rotula uno de cada `paso` meses (1 = todos).
+      · `sec`: la etiqueta lleva el SEGUNDO renglón (el precio unitario,
+        `largo_sec` caracteres). Es lo primero que cede: con 12 meses las
+        dos series siguen rotuladas y el precio pasa al hover, porque el
+        gráfico es una COMPARACIÓN y perder la etiqueta del año pasado es
+        perder la mitad de la lectura. Sólo con "Este año" solo (24m,
+        Todo) vuelve, si entra girado en el mes entero.
 
     Barras: dos columnas del MISMO mes están a `grupo·(1−bargap)/2` px de
     centro a centro, y ése es el apretón que manda. Derecha si la etiqueta
@@ -513,7 +534,7 @@ def _plan_etiquetas(n, largo_max, modo, ancho_plot=_ANCHO_PLOT_VAP):
     El `paso` es el último recurso, para históricos tan largos que ni eso
     alcanza: mejor la mitad de los números legibles que todos encimados.
     """
-    plan = {"girar": False, "ambas": True, "paso": 1}
+    plan = {"girar": False, "ambas": True, "paso": 1, "sec": False}
     if n <= 0:
         return plan
     grupo = ancho_plot / n
@@ -525,13 +546,42 @@ def _plan_etiquetas(n, largo_max, modo, ancho_plot=_ANCHO_PLOT_VAP):
         plan.update(ambas=False, paso=max(1, math.ceil(txt_px / grupo)))
         return plan
     hueco = grupo * (1 - _BARGAP_VAP) / 2
+    lin2_px = 2 * _ETQ_ALTO_LINEA + _ETQ_AIRE
+    if largo_sec:
+        txt2_px = max(largo_max, largo_sec) * _ETQ_PX_CARACTER + _ETQ_AIRE
+        if txt2_px <= hueco:
+            return dict(plan, sec=True)
+        if lin2_px <= hueco:
+            return dict(plan, girar=True, sec=True)
     if txt_px <= hueco:
         return plan
     plan["girar"] = True
     if lin_px <= hueco:
         return plan
-    plan.update(ambas=False, paso=max(1, math.ceil(lin_px / grupo)))
+    plan["ambas"] = False
+    if largo_sec and lin2_px <= grupo:
+        return dict(plan, sec=True)
+    plan["paso"] = max(1, math.ceil(lin_px / grupo))
     return plan
+
+
+_ETQ_FUENTE_SEC = 9
+"""Cuerpo del segundo renglón (el precio): un punto menos que el principal
+y en gris, para que se lea como dato de apoyo y no como otra serie."""
+
+
+def _con_segundo(principal, segundo):
+    """El principal y, debajo, el segundo renglón en chico y apagado.
+
+    Sin principal no hay etiqueta (la columna no existe) y sin segundo queda
+    el principal solo — p. ej. un mes con valor pero sin cantidad cargada,
+    donde el precio no se puede calcular. El `<span style>` lo entiende el
+    texto de una traza de Plotly: es su subconjunto de HTML, el mismo del
+    `<br>`."""
+    if not principal or not segundo:
+        return principal
+    return (f"{principal}<br><span style='font-size:{_ETQ_FUENTE_SEC}px;"
+            f"color:{GRIS_TEXTO}'>{segundo}</span>")
 
 
 def _ralear(etiquetas, paso):
@@ -576,8 +626,14 @@ def _techo_con_etiquetas(hi, lo, alto_etq, simetrico=False,
 # GRÁFICOS
 # ===========================================================================
 
-def _fig_serie(g, modo, parcial):
+def _fig_serie(g, modo, parcial, unidad=None, con_precio=False):
     """Serie mensual: este año contra el mismo mes del año pasado.
+
+    `unidad` ("kg") va pegada a la etiqueta de Cantidad, y `con_precio`
+    agrega debajo de cada etiqueta de Valor/Cantidad el precio unitario de
+    ese mes. Los dos los decide el llamador, que es el que sabe si la serie
+    es UN producto con UNA unidad (ver regla #401): esta función no puede
+    distinguir 4.300 kg de 4.300 "cosas".
 
     Valor y Cantidad van en barras agrupadas (son magnitudes que se suman y
     la comparación es de altura contra altura). Precio va en líneas: es un
@@ -592,7 +648,10 @@ def _fig_serie(g, modo, parcial):
     if modo == "Valor":
         y_act, y_aa, fmt = por_mes["valor"], por_mes["valor_aa"], "S/ %{y:,.0f}"
     elif modo == "Cantidad":
-        y_act, y_aa, fmt = por_mes["cant"], por_mes["cant_aa"], "%{y:,.1f}"
+        # El hover dice la unidad igual que la etiqueta: "225.0" pelado, en
+        # una tarjeta de soles, se lee como soles (regla #335).
+        y_act, y_aa = por_mes["cant"], por_mes["cant_aa"]
+        fmt = "%{y:,.1f}" + (f" {unidad}" if unidad else "")
     else:
         # `.where(> 0)` y no `replace(0, NA)`: sobre una serie float, NA
         # la vuelve object y Plotly deja de saber que es un eje numérico.
@@ -608,12 +667,36 @@ def _fig_serie(g, modo, parcial):
 
     # ── Etiquetas de valor (2026-09-13, a pedido). La forma sale de los
     # píxeles por mes: ver `_plan_etiquetas` y regla #400.
-    etq_act = [_fmt_etiqueta(v, modo) for v in y_act]
-    etq_aa = [_fmt_etiqueta(v, modo) for v in y_aa]
+    #
+    # Segunda vuelta del pedido, el mismo día: Cantidad dice su UNIDAD
+    # ("4,300 kg") y Valor y Cantidad llevan un SEGUNDO renglón con el
+    # precio unitario del mes ("S/ 12.35/kg"). Precio no cambia: su número
+    # ya es el precio, y "/kg" le haría perder la etiqueta del año pasado
+    # desde los 12 meses.
+    _um_etq = unidad if modo == "Cantidad" else None
+    etq_act = [_fmt_etiqueta(v, modo, _um_etq) for v in y_act]
+    etq_aa = [_fmt_etiqueta(v, modo, _um_etq) for v in y_aa]
+    sec_act = sec_aa = [None] * len(por_mes)
+    _con_sec = con_precio and modo != "Precio"
+    if _con_sec:
+        _p = por_mes["valor"] / por_mes["cant"].where(por_mes["cant"] > 0)
+        _p_aa = por_mes["valor_aa"] / por_mes["cant_aa"].where(
+            por_mes["cant_aa"] > 0)
+        sec_act = [_fmt_etiqueta(p, "Precio", unidad) for p in _p]
+        sec_aa = [_fmt_etiqueta(p, "Precio", unidad) for p in _p_aa]
     _largo = max((len(t) for t in etq_act + etq_aa if t), default=0)
-    plan = _plan_etiquetas(len(por_mes), _largo, modo)
+    _largo_sec = max((len(t) for t in sec_act + sec_aa if t), default=0)
+    plan = _plan_etiquetas(len(por_mes), _largo, modo, largo_sec=_largo_sec)
+    if plan["sec"]:
+        etq_act = [_con_segundo(t, s) for t, s in zip(etq_act, sec_act)]
+        etq_aa = [_con_segundo(t, s) for t, s in zip(etq_aa, sec_aa)]
     etq_act = _ralear(etq_act, plan["paso"])
     etq_aa = _ralear(etq_aa, plan["paso"]) if plan["ambas"] else None
+    # El precio va SIEMPRE en el hover, haya entrado o no en la etiqueta:
+    # es donde queda cuando el segundo renglón cede su sitio (12 meses).
+    _hov = "  ·  %{customdata}" if _con_sec else ""
+    _cd_act = [s or "" for s in sec_act]
+    _cd_aa = [s or "" for s in sec_aa]
     # "Este año" en el color del texto y "Año pasado" apagado: la misma
     # jerarquía que las dos columnas (acento contra gris).
     _fnt_act = dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL)
@@ -655,7 +738,8 @@ def _fig_serie(g, modo, parcial):
         fig.add_bar(x=etiquetas, y=y_aa, name="Año pasado",
                     marker=dict(color=GRIS_BORDE),
                     text=etq_aa, textfont=_fnt_aa, **_kw_etq,
-                    hovertemplate=fmt + "<extra>Año pasado</extra>")
+                    customdata=_cd_aa,
+                    hovertemplate=fmt + _hov + "<extra>Año pasado</extra>")
         fig.add_bar(
             x=etiquetas, y=y_act, name="Este año",
             marker=dict(
@@ -667,7 +751,8 @@ def _fig_serie(g, modo, parcial):
                              fgcolor="#ffffff", size=4, solidity=0.35),
             ),
             text=etq_act, textfont=_fnt_act, **_kw_etq,
-            hovertemplate=fmt + "<extra>Este año</extra>")
+            customdata=_cd_act,
+            hovertemplate=fmt + _hov + "<extra>Este año</extra>")
 
     _compras_layout(fig, alto=_ALTO_FIG_VAP)
     # SIN `title`: el ámbito vive en la cabecera de la tarjeta desde el
@@ -688,8 +773,12 @@ def _fig_serie(g, modo, parcial):
     # Girada ocupa su LARGO hacia arriba; derecha, una línea.
     _vis = [v for v in list(y_act) + list(y_aa) if pd.notna(v)]
     if _vis:
-        _alto_etq = ((_largo * _ETQ_PX_CARACTER) if plan["girar"]
-                     else _ETQ_ALTO_LINEA) + _ETQ_AIRE
+        # Con el segundo renglón, derecha ocupa DOS líneas y girada ocupa
+        # lo que el más largo de los dos.
+        _largo_vis = max(_largo, _largo_sec) if plan["sec"] else _largo
+        _renglones = 2 if plan["sec"] else 1
+        _alto_etq = ((_largo_vis * _ETQ_PX_CARACTER) if plan["girar"]
+                     else _renglones * _ETQ_ALTO_LINEA) + _ETQ_AIRE
         _rng = _techo_con_etiquetas(max(_vis), min(_vis), _alto_etq,
                                     simetrico=modo == "Precio")
         if _rng:
@@ -1022,9 +1111,10 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                 modo = st.selectbox(
                     "Ver", list(_MODOS), key="compras_vap_modo_sel",
                     label_visibility="collapsed",
-                    help="Qué se compara contra el año pasado. Precio es un "
-                         "RATIO: se dibuja en líneas y sobre UN ítem, no "
-                         "sobre la suma de varios.") or "Valor"
+                    help="Qué se compara contra el año pasado. Cantidad y "
+                         "Precio se leen sobre UN producto —kilos y litros "
+                         "no se suman—: sin uno elegido en la tabla, el de "
+                         "mayor gasto.") or "Valor"
             with st.container(key="vap_hdr_ventana"):
                 # Default "3m" desde el 2026-09-13, a pedido («debe mostrar
                 # inicialmente 3 meses»); antes "12m", y antes del
@@ -1292,19 +1382,43 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         if foco is not None and g_foco.empty:
             foco, g_foco = None, g
 
-        # Precio es un RATIO: promediarlo sobre productos distintos (y
-        # unidades distintas) no es una magnitud real. Sin foco, la curva
-        # se calcula sobre el ítem de mayor gasto y el título lo dice.
-        if modo == "Precio" and foco is None:
-            _top = (g.groupby(llave_foco)["valor"].sum().sort_values()
+        # Precio es un RATIO y Cantidad suma UNIDADES: sobre todas las
+        # compras ninguno de los dos es una magnitud real. Medido el
+        # 2026-09-13 (últimos 3 meses): la barra de Cantidad sumaba 26.461
+        # KILOS + 28.687 UND + 2.204 LITROS en un solo número. Sin foco, las
+        # dos se calculan sobre el PRODUCTO de mayor gasto y la cabecera lo
+        # dice. Precio lo hacía desde antes; Cantidad, desde que pasó a
+        # escribir la unidad («debe decir la unidad, por ejemplo 4300 kg»),
+        # a elección del usuario entre tres salidas (regla #401).
+        #
+        # Por PRODUCTO y no por `llave_foco`: con el agrupador en Familia,
+        # el "ítem de mayor gasto" era una familia, o sea otra vez kilos
+        # con litros. Valor no entra acá: la plata sí se suma entre
+        # unidades, y "todas las compras" es su lectura natural.
+        _auto = False
+        if modo in ("Precio", "Cantidad") and foco is None:
+            _top = (g.groupby("prod")["valor"].sum().sort_values()
                     .index.tolist())
             if _top:
-                g_foco = g[g[llave_foco].astype(str) == str(_top[-1])]
+                g_foco = g[g["prod"].astype(str) == str(_top[-1])]
                 foco_titulo = str(_top[-1])
+                _auto = True
             else:
                 foco_titulo = None
         else:
             foco_titulo = foco
+
+        # Unidad y precio de la SERIE que se va a dibujar. La unidad se
+        # escribe si todos sus productos comparten UNA (una familia toda en
+        # kilos suma kilos de verdad); el precio, sólo si la serie es UN
+        # producto — el precio por kilo de una familia se mueve con la
+        # mezcla aunque nada haya subido (la trampa de `_por_item`).
+        _ums_prod = _unidades_por(fuente, col_prod, col_um)
+        _ums_serie = {_ums_prod.get(p, "")
+                      for p in g_foco["prod"].astype(str).unique()} - {""}
+        unidad_serie = (unidad_corta(next(iter(_ums_serie)))
+                        if len(_ums_serie) == 1 else None)
+        un_producto = g_foco["prod"].nunique() == 1
 
         # Mismo criterio que la tabla: el puente se suma desde los
         # productos, nunca se calcula sobre el agregado (ver `_por_item`).
@@ -1325,11 +1439,19 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         # Sin foco el `<span>` no se dibuja (`_pinta_hdr` lo omite si el
         # texto viene vacío) y el título queda solo, que es lo correcto:
         # cuando no hay recorte, no hay nada que aclarar.
-        _pinta_hdr(_compras_truncar(foco_titulo, 34) if foco_titulo else "")
+        # Cuando el ítem lo eligió la VISTA y no el usuario (Cantidad o
+        # Precio sin foco), la cabecera lo avisa: sin eso, un producto solo
+        # en el gráfico se lee como un clic que nadie hizo.
+        if _auto:
+            _pinta_hdr(_compras_truncar(foco_titulo, 26) + " · mayor gasto")
+        else:
+            _pinta_hdr(_compras_truncar(foco_titulo, 34) if foco_titulo
+                       else "")
 
         col_g, col_p = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
         with col_g:
-            fig = _fig_serie(g_foco, modo, parcial)
+            fig = _fig_serie(g_foco, modo, parcial, unidad=unidad_serie,
+                             con_precio=un_producto)
             if fig is not None:
                 st.plotly_chart(fig, use_container_width=True,
                                 key=f"compras_g_vap_{modo.lower()}")
@@ -1346,8 +1468,8 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
             # si la unidad viene vacía. Un "246" pelado en una tarjeta de
             # soles se lee como soles (reportado el 2026-09-06, regla #335).
             _uno = len(_items) == 1
-            _um_puente = (_unidades_por(fuente, col_prod, col_um)
-                          .get(str(_items["item"].iloc[0]), "") if _uno else "")
+            _um_puente = (_ums_prod.get(str(_items["item"].iloc[0]), "")
+                          if _uno else "")
             st.plotly_chart(_fig_puente(tot["valor"], tot["valor_aa"],
                                         ef_p, ef_c,
                                         cant=float(_items["cant"].iloc[0])
