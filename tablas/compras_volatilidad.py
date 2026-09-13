@@ -108,7 +108,12 @@ Era 170 y bajó a 150 el 2026-09-07, cuando la grilla medía 587px."""
 # 30 -> 36 el mismo día, copiado del modo diseño junto con el look de la
 # grilla (regla #393): más aire por fila, a cambio de ~1 fila menos a la
 # vista. El drill lo importa para `por_filas`, así que es un solo número.
-ALTO_FILA = 36
+#
+# 36 -> 24 unas horas después, otra vez del modo diseño (regla #395), con
+# la grilla a todo el ancho y pegada a la cabecera: 10 filas a la vista en
+# vez de 6. Entra: el renglón es de 13.8px y los 3+3 del borde transparente
+# de `_STYLE_DELTA` dejan 18 de caja.
+ALTO_FILA = 24
 _TAM_PRECIOS = "9.5px"
 _GAP_PRECIOS = "5px"
 """Aire entre el % y los dos precios que van a su costado. Entra en la

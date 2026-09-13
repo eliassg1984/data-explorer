@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-394 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+395 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (139)
 
@@ -174,7 +174,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 
-**Layout y alturas** (47)
+**Layout y alturas** (48)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -223,6 +223,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 - **#394** — «Que mida igual que aquella» es una cuenta entre dos tarjetas, y sólo se sostiene si las dos…
+- **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
 
 **Plotly y figuras** (64)
 
@@ -581,7 +582,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (32)
+**Herramientas de desarrollo** (33)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -615,6 +616,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
 - **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
+- **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
 
 **Decisiones de diseño y UX** (66)
 
@@ -34448,6 +34450,33 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+395. **Un `transform: translate()` del modo diseño es una vista previa, no
+     un cambio: se traduce a la distancia que estaba cerrando.** Pedido
+     sobre la tarjeta de Volatilidad recién rearmada (#394): «subir» la
+     cabecera, y después, desde el modo diseño, `translate(-1px, -20px)`
+     sobre la grilla y filas de 24px (eran 36). Un `transform` corre el
+     DIBUJO y deja la caja donde estaba: pegado tal cual, la grilla tapa la
+     fila de controles y abajo queda un hueco de 20px. Por eso se midió qué
+     separaba las dos cosas antes de tocar nada: 18.8px — el `margin-bottom`
+     de la fila (8.8) y el `gap` de 10 de la tarjeta —, más la raya de 1px
+     de la fila, que en la vista previa quedaba debajo de la grilla. Los
+     «20» eran eso. Se cerró con `margin-bottom: -10px` en `vol_fila_hdr`
+     (se come también el `gap`, que es de todos los hijos de la tarjeta y
+     no se puede sacar sólo para un par) y sin la raya: el borde de 3px de
+     la grilla es ahora la separación.
+
+     «Subir la cabecera» no traía número; se tomó el de su vecina: el
+     título quedaba a 23.8px del borde contra 18.8 en «Vs año pasado»,
+     porque la tarjeta de adentro (`chartcard_compras_vol`) suma 4 de
+     padding y 1 de borde. El padding-top de la de afuera bajó de 16 a 11.
+
+     Los ~25px que perdió la tarjeta volvieron a la grilla para seguir
+     midiendo lo que vap (#394): `RANKING_CON_DRILL` 273 → 298 = cromo 55
+     + 10 filas × 24 + 3. Medido: 571.1 contra 570.6, títulos a 18.8 los
+     dos, 10 filas a la vista en vez de 6, ningún par de precios cortado.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34460,7 +34489,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#395**.
+> próxima regla nueva es la **#396**.
 
 >
 

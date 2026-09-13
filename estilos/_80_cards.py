@@ -371,6 +371,24 @@ CSS = """    /* ================================================================
         flex: 0 0 auto !important;
         width: 90px !important;
     }
+    /* LA TABLA PEGADA A LA CABECERA (2026-09-12, a pedido, del modo diseño
+       como `translate(0, -20px)` sobre la grilla): entre la raya de la fila
+       y la grilla había 18.8px — el margen de la fila (8.8) y el `gap` de 10
+       de la tarjeta. Un `transform` sólo corre el DIBUJO: el hueco se queda
+       abajo y la grilla tapa la fila. Acá se cierra de verdad.
+
+       `margin-bottom: -10px` y no 0: se come también el `gap` de la
+       tarjeta, que es de TODOS sus hijos (`chartcard_compras_vol`) y no se
+       puede sacar sólo para este par. Y sin la raya de la fila: la grilla
+       arranca con su propio borde de 3px (`tablas/compras_volatilidad.py`),
+       que ES la separación — con las dos, se leían 4px de línea. En la
+       vista previa del modo diseño la grilla tapaba justo esa raya.
+       Va DESPUÉS de la regla compartida con vap y con la misma
+       especificidad: gana por orden. Regla #395. */
+    .st-key-vol_fila_hdr {
+        margin-bottom: -10px !important;
+        border-bottom: none !important;
+    }
     .st-key-vol_hdr_periodo { width: 100% !important; }
 
     /* ── VOLATILIDAD: la tarjeta fusionada respira menos ──────────────
@@ -831,8 +849,13 @@ CSS = """    /* ================================================================
         /* Y el mismo padding vertical que la de vap (16, no los 8 de la     */
         /* familia): son 16 de los 28px que la separaban de su alto. Los    */
         /* otros 12 los pone `alturas.RANKING_CON_DRILL`. Regla #394.        */
+        /*                                                                    */
+        /* Arriba 11 y no 16 (a pedido, «subir esto» sobre la cabecera): la  */
+        /* tarjeta de adentro, `chartcard_compras_vol`, suma 4 de padding y  */
+        /* 1 de borde, así que el título quedaba 5px más abajo que el de vap */
+        /* (23.8 contra 18.8, medido). 11 + 4 + 1 = los 16 de vap. #395.     */
         div.st-key-ajuste_graf_card_izq_vol {
-            padding-top: 16px !important;
+            padding-top: 11px !important;
             padding-bottom: 16px !important;
         }
         /* Barra fina y discreta, igual criterio que el panel del asistente

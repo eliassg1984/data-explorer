@@ -261,6 +261,12 @@ recortar: es más barato que velas más chatas."""
 # Si vap cambia de alto, este número se desincroniza EN SILENCIO: no hay
 # nada que ate las dos tarjetas más que esta cuenta. Se vuelve a medir.
 #
+# 273 -> 298 minutos después (regla #395), y fue exactamente eso: la
+# cabecera subió 5px (para quedar a la altura del título de vap) y la grilla
+# 19.8 (pegada a la cabecera), o sea la tarjeta perdió ~25px; y la fila bajó
+# de 36 a 24. 298 = cromo 55 + 10 filas x 24 + 3 de aire, y devuelve los
+# 25px: la tarjeta vuelve a medir lo que vap.
+#
 # Y MÁS TARDE, EL MISMO DÍA, LA CABECERA SE FUE A LA DERECHA (a pedido: «el
 # título y los selectores al lado derecho, y subamos la tabla»). Este número
 # no cambió —la grilla sigue en 7 filas—, pero ya no hay 55px de cabecera
@@ -305,7 +311,7 @@ recortar: es más barato que velas más chatas."""
 # Python, y forzarlo por CSS encoge el iframe pero deja el documento de
 # adentro en su alto — la grilla queda cortada, con su scroll fuera de la
 # vista. Ver arquitectura.md #345.
-RANKING_CON_DRILL = 273
+RANKING_CON_DRILL = 298
 
 PANEL_JUNTO_A_FIGURA = MINI_CANDLE_DRILL
 """Tope de una tabla de detalle que va AL LADO de una figura, en la misma
