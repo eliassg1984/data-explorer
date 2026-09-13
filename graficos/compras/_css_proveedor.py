@@ -838,8 +838,8 @@ CSS = """        <style>
            insinua). Su trigger las repite acotadas a `cp_sem_escala`. */
         /* 2026-09-06: `cp_vol` (Volatilidad) es el CUARTO consumidor, y el
            unico que NO entra a este bloque de fila. Su cabecera ya existia
-           —hoy `vol_panel` (un panel a la derecha de la tabla desde el
-           2026-09-12; antes la fila `vol_fila_hdr`), en
+           —la fila `vol_fila_hdr` (con unas horas del 2026-09-12 como panel
+           a la derecha de la tabla, `vol_panel`), en
            estilos/_80_cards.py— asi que el helper dibuja su `cp_vol_fila`
            ADENTRO de aquella: es un item mas de un flex ajeno, no la fila.
            Lo que se le hace medir su contenido esta alla, pegado al resto

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-393 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+394 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (139)
 
@@ -174,7 +174,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 
-**Layout y alturas** (46)
+**Layout y alturas** (47)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -222,6 +222,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#382** — Una tarjeta que scrollea por dentro, con grids que también scrollean, se lee como una caja…
 - **#383** — «Fijo en X» puede querer decir "que abra en X", no "que no se pueda cambiar" — y un umbral…
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
+- **#394** — «Que mida igual que aquella» es una cuenta entre dos tarjetas, y sólo se sostiene si las dos…
 
 **Plotly y figuras** (64)
 
@@ -615,7 +616,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 
-**Decisiones de diseño y UX** (65)
+**Decisiones de diseño y UX** (66)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -682,6 +683,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#372** — Sacar una tarjeta de su sección y darle sección propia rompe tres cosas que estaban…
 - **#380** — Un caption que explica una columna es una columna sin sitio: mudalo al headerTooltip antes de…
 - **#387** — Dos rótulos para la misma cosa son una pregunta que el usuario va a hacer
+- **#394** — «Que mida igual que aquella» es una cuenta entre dos tarjetas, y sólo se sostiene si las dos…
 
 **Mantenimiento y trampas del lenguaje** (12)
 
@@ -34414,6 +34416,38 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+394. **«Que mida igual que aquella» es una cuenta entre dos tarjetas, y
+     sólo se sostiene si las dos juegan con las mismas reglas de alto.**
+     Pedido sobre Volatilidad: título «Volatilidad de Insumos» arriba a la
+     izquierda con los controles en la misma fila, «como la vista Vs año
+     pasado», la tabla a todo el ancho, y «que la tarjeta mida igual que
+     la de Vs año pasado». La cabecera volvió a ser una fila
+     (`vol_fila_hdr`, que ahora comparte con `vap_fila_hdr` las reglas de
+     layout de `estilos/_80_cards.py` en vez de tener un juego propio) y el
+     panel de 240px a la derecha de la tabla (`vol_panel`, `vol_fila_top`)
+     desapareció con sus reglas: la grilla pasó de 601 a 1197px a 1366.
+
+     Igualar los altos pidió tres cosas, y ninguna era la grilla sola:
+     - **El techo.** La tarjeta de Volatilidad es de la familia
+       `ajuste_graf_card_`, que lleva `max-height: var(--alto-util)`; la
+       de vap no (es `chartcard_compras_vap`). Con techo, «medir lo mismo»
+       en una pantalla baja es una tarjeta con barra propia — lo que ya se
+       había pedido quitar (#382). Salió del techo con un `:not()`, no
+       tocando el prefijo, que es de siete reportes más.
+     - **El padding.** 8px verticales la de la familia, 16 la de vap: 16 de
+       los 28px de diferencia medidos (vap 571, vol 543 a 1366x768) no eran
+       contenido. Se le dio el mismo padding.
+     - **La grilla**, los 12 que quedaban: `alturas.RANKING_CON_DRILL` 261
+       → 273, que con `CROMO_GRID` 55 y filas de 36 son seis filas enteras
+       y 2px de aire. Medido después: 571 y 571.
+
+     Lo que NO ata: nada une las dos tarjetas más que esta cuenta. Si vap
+     cambia de alto, o si su cabecera se parte en dos renglones antes que
+     la de vol (tiene siete controles contra cinco: pasa por debajo de
+     ~1150px de ancho), dejan de coincidir sin que nada falle.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34426,7 +34460,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#394**.
+> próxima regla nueva es la **#395**.
 
 >
 

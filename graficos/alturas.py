@@ -247,6 +247,20 @@ recortar: es más barato que velas más chatas."""
 # de la barra — `tablas/compras_volatilidad.py::CROMO_GRID`. El aire neto
 # pasa de 2 a ~17px.
 #
+# 261 -> 273 AL FINAL DEL MISMO DÍA (regla #394), y el número ya no se
+# despeja contra el presupuesto sino contra la tarjeta de «Vs año pasado»,
+# a pedido: «que la tarjeta mida igual que la de Vs año pasado». Esa tarjeta
+# no tiene techo y ésta tampoco desde entonces (`estilos/_80_cards.py`), así
+# que lo que no entra lo scrollea la PÁGINA. Medido a 1366x768, las dos con
+# la cabecera en un renglón: vap 571, vol 543 con la cabecera de vuelta ARRIBA
+# de la grilla (título y controles en una fila, como vap). Los 28 salen 16
+# del padding vertical de la tarjeta —8 -> 16, el mismo de vap— y 12 de
+# acá: 273 = cromo 55 (`CROMO_GRID`) + 6 filas x 36 + 2 de aire. Seis filas
+# ENTERAS: la fila pasó a 36 ese día (look del modo diseño, #393).
+#
+# Si vap cambia de alto, este número se desincroniza EN SILENCIO: no hay
+# nada que ate las dos tarjetas más que esta cuenta. Se vuelve a medir.
+#
 # Y MÁS TARDE, EL MISMO DÍA, LA CABECERA SE FUE A LA DERECHA (a pedido: «el
 # título y los selectores al lado derecho, y subamos la tabla»). Este número
 # no cambió —la grilla sigue en 7 filas—, pero ya no hay 55px de cabecera
@@ -291,7 +305,7 @@ recortar: es más barato que velas más chatas."""
 # Python, y forzarlo por CSS encoge el iframe pero deja el documento de
 # adentro en su alto — la grilla queda cortada, con su scroll fuera de la
 # vista. Ver arquitectura.md #345.
-RANKING_CON_DRILL = 261
+RANKING_CON_DRILL = 273
 
 PANEL_JUNTO_A_FIGURA = MINI_CANDLE_DRILL
 """Tope de una tabla de detalle que va AL LADO de una figura, en la misma
