@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-392 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+393 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (138)
+**CSS y estilos** (139)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -172,6 +172,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#386** — Una grilla que cambia de columnas SIN volver a montarse no se entera por el ResizeObserver —…
 - **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
 - **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
+- **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 
 **Layout y alturas** (46)
 
@@ -579,7 +580,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (31)
+**Herramientas de desarrollo** (32)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -612,6 +613,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#343** — "Eliminar" un widget desde el modo diseño no existe; "ver la página sin él", sí — y son la…
 - **#369** — La MISMA grilla se puede fijar desde varias keys, y el modo diseño guardaba sus ajustes bajo…
 - **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
+- **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 
 **Decisiones de diseño y UX** (65)
 
@@ -34367,6 +34369,41 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+393. **Un `.ag-cell {font-size: X !important}` del modo diseño le gana al
+     tamaño que un `cellStyle` pone INLINE, y en una columna medida al
+     píxel eso es un recorte en espera.** Mismo pedido que la #392, ahora
+     sobre el ranking de Volatilidad (`compras_vol_rank_grid`): cabecera en
+     `GRIS_FONDO` con rótulos `GRIS_TEXTO` 12px/600, línea de 2px
+     `GRIS_BORDE` entre filas, marco de 3px sólo arriba y abajo, sin
+     líneas verticales, filas de 36px (eran 30). Venía además un bloque
+     suelto «border: none» sobre «Insumo»: medido, la única línea que tenía
+     esa columna era el separador de la columna fija, que el tema dibuja
+     en DOS sitios (`.ag-cell-last-left-pinned` y `.ag-pinned-left-header`);
+     se apagaron los dos.
+
+     Lo que no se pegó tal cual:
+     - **El `.ag-cell` a 13px con `!important`.** La grilla ya estaba en 13;
+       lo único que esa regla cambiaba era lo que `_STYLE_DELTA` achica a
+       propósito —el % a 12px, que es el cuerpo con el que se midió
+       `_MIN_ANCHO_COL_SEMANA`, y los ceros a 10.5px, que se ven chicos
+       para leerse como «acá no pasó nada»—. Con el `!important` el % crecía
+       fuera de la cuenta de la columna. Es la advertencia de la #368.
+     - **La cabecera compacta quedó apagada, y está bien**: el aviso del
+       modo diseño lo anticipa (#375) — el selector de rótulo del bloque
+       tiene una clase más que `.vol-hdr-compacta .ag-header-cell-text` y
+       le gana, así que las semanas van a 12px en vez de 11. Medido: el
+       rótulo más largo son 100px en una columna de 130. Los 11px eran de
+       cuando la columna medía 50.
+     - **`CROMO_GRID` subió de 51 a 55**: el marco pasó de 1px por lado a
+       3px arriba y abajo. El alto de fila no se tocó en dos sitios: el
+       drill importa `ALTO_FILA`.
+
+     La marca de las semanas que miden el puntaje sigue siendo la raya
+     oscura de 2px arriba; su rótulo en negrita quedó igual al resto
+     porque el bloque ya pone todas las cabeceras en 600.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34379,7 +34416,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#393**.
+> próxima regla nueva es la **#394**.
 
 >
 

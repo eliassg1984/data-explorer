@@ -23,7 +23,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, ERROR, ERROR_TEXTO,
-    EXITO, GRIS_BORDE, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO,
+    EXITO, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO,
     TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
@@ -104,7 +104,11 @@ Era 170 y bajó a 150 el 2026-09-07, cuando la grilla medía 587px."""
 # (a pedido, sobre una maqueta a escala). Estuvo en 40 desde el 2026-09-07
 # porque la celda tenia dos lineas; cada 10px por fila son ~2 filas mas en el
 # mismo alto de grilla (`alturas.RANKING_CON_DRILL`).
-ALTO_FILA = 30
+#
+# 30 -> 36 el mismo día, copiado del modo diseño junto con el look de la
+# grilla (regla #393): más aire por fila, a cambio de ~1 fila menos a la
+# vista. El drill lo importa para `por_filas`, así que es un solo número.
+ALTO_FILA = 36
 _TAM_PRECIOS = "9.5px"
 _GAP_PRECIOS = "5px"
 """Aire entre el % y los dos precios que van a su costado. Entra en la
@@ -698,12 +702,15 @@ muchas, quedan en su piso y sale scroll horizontal, que es el mecanismo
 para ir hacia atrás."""
 
 
-CROMO_GRID = 32 + 4 + 15
-"""Alto de la grilla que NO son filas: la cabecera (32), los bordes (4) y la
+CROMO_GRID = 32 + 8 + 15
+"""Alto de la grilla que NO son filas: la cabecera (32), los bordes (8) y la
 barra de scroll horizontal (15), que desde el 2026-09-12 está siempre — la
 grilla recorre toda la ventana de la tarjeta. Sin sumarla, la barra se come
 media fila de la última línea visible. Es el `extra` de `por_filas` en el
-llamador."""
+llamador.
+
+Los bordes eran 4 hasta el look del modo diseño (regla #393): el marco del
+`.ag-root-wrapper` pasó de 1px por lado a 3px arriba y abajo — +4."""
 
 
 def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
@@ -806,6 +813,12 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     custom_css = dict(_css_grid(13, cebra=False, cabecera_neutra=True))
     # La cabecera de las columnas angostas: menos padding y menos cuerpo que
     # el resto de la grilla. Ver `_PAD_X_COL` para la medición.
+    #
+    # El CUERPO de esa regla (`_TAM_HDR_SEMANA`) quedó apagado desde el look
+    # del modo diseño (abajo, regla #393): su selector de rótulo tiene una
+    # clase más y le gana (#375), así que las cabeceras de semana van a
+    # 12px. Entran: las columnas miden 130 desde el punto de alarma, y los
+    # 11px eran de cuando medían 50. El padding sí sigue valiendo.
     custom_css[f".{_CLASE_HDR_COMPACTA}"] = {
         "padding-left": f"{_PAD_X_COL} !important",
         "padding-right": f"{_PAD_X_COL} !important",
@@ -867,6 +880,47 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     # estira `estilos/_80_cards.py`, que es el único CSS que llega al
     # documento de la app; éste viaja en `custom_css`, o sea dentro del iframe.
     custom_css["#gridContainer"] = {"width": "100% !important"}
+
+    # ── El look, copiado del modo diseño (2026-09-12, regla #393) ─────────
+    # Cabecera en gris muy claro con rótulos grises en seminegrita, línea de
+    # 2px entre filas, sin líneas verticales —tampoco el separador de la
+    # columna fija «Insumo», que el tema dibuja en la celda Y en su cabecera—
+    # y la tabla como una franja: 3px arriba y abajo, sin costados ni radio.
+    #
+    # Dos cosas NO se pegaron como venían:
+    #   · `.ag-cell {font-size: 13px !important}`. La grilla ya está en 13
+    #     (`_css_grid(13)`), y con `!important` le ganaba al tamaño INLINE que
+    #     `_STYLE_DELTA` le da al % (12px) y a los ceros (10.5px): el % crecía
+    #     fuera del ancho medido de `_MIN_ANCHO_COL_SEMANA` y los ceros
+    #     dejaban de verse chicos. Es el aviso de la regla #368.
+    #   · Las claves que `_css_grid` ya tenía (`.ag-root-wrapper`, `.ag-row`)
+    #     se FUSIONAN: reemplazarlas se llevaría el `overflow: hidden` y el
+    #     `width: 100%` del wrapper (#392).
+    custom_css[".ag-header, .ag-header-cell, .ag-header-group-cell"] = {
+        "background-color": f"{GRIS_FONDO} !important",
+    }
+    custom_css[".ag-header .ag-header-cell .ag-header-cell-text, "
+               ".ag-header .ag-header-group-cell .ag-header-group-text"] = {
+        "color": f"{GRIS_TEXTO} !important",
+        "font-size": "12px !important",
+        "font-weight": "600 !important",
+    }
+    custom_css[".ag-row"] = {**custom_css[".ag-row"],
+                             "border-bottom": f"2px solid {GRIS_BORDE} !important"}
+    custom_css[".ag-cell, .ag-header-cell"] = {"border-right": "none !important"}
+    custom_css[".ag-pinned-left-header, .ag-cell-last-left-pinned"] = {
+        "border": "none !important",
+    }
+    custom_css[".ag-root-wrapper"] = {
+        **custom_css[".ag-root-wrapper"],
+        "--ag-header-column-border": "none",
+        "--ag-column-border": "none",
+        "border-top": f"3px solid {GRIS_BORDE} !important",
+        "border-right": "none !important",
+        "border-bottom": f"3px solid {GRIS_BORDE} !important",
+        "border-left": "none !important",
+        "border-radius": "0px !important",
+    }
     custom_css[".ag-tooltip"] = {
         "background-color": f"{TEXTO_PRINCIPAL} !important",
         "color": "#ffffff !important",
