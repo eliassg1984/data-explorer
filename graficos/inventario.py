@@ -46,7 +46,7 @@ from tema import (
 # juntos: partirlos en dos mudanzas es lo que deja una tabla a 24px de fila
 # con el cuerpo de 12px de otro tema. Ver `arquitectura.md` regla #404.
 from graficos.compras._comun import (
-    ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK,
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK, unidad_corta,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos.base import (
@@ -671,7 +671,8 @@ def _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val):
         st.caption("Elegí un producto o un grupo para ver contexto relacionado acá.")
 
 
-def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant):
+def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
+               col_unidad=None):
     """Productos de Por área/Por familia — tabla ordenable, no un
     gráfico. Reemplaza las 2 pestañas de mini-barras (Mayor cantidad/Precio
     más alto): con columnas ordenables por header, "top por cantidad" y
@@ -691,6 +692,12 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant):
     participación se recalcula sobre ESE recorte, no sobre el área entera,
     porque el criterio de la tarjeta es "sumar 100% con lo que el usuario ya
     está viendo arriba".
+
+    La columna "UM" (2026-09-13, a pedido) escribe la `Unidad Kardex` del
+    producto con `unidad_corta` —el mismo mapa que rotula las cantidades de
+    Compras, no una copia— y va pegada a "Cantidad", que es el número al que
+    le da sentido: 34 de qué. El TOTAL la deja vacía: sumar kg con L no da
+    una unidad.
 
     Barra de "Participación %" + checkbox con "Selección %" recalculada en
     vivo (sin rerun de Streamlit): MISMO patrón ya usado en la Tabla
@@ -717,11 +724,19 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant):
         "Producto": d_panel[col_prod].astype(str),
         "Área": d_panel[col_area].astype(str),
         "Cantidad": _cant_panel.values,
+        "UM": ([unidad_corta(u) for u in d_panel[col_unidad]]
+               if col_unidad else ""),
         "Precio unitario": _pu_panel.values,
         "Valorizado": _val_panel.values,
     })
+    # `first` para la UM y no una agregación: es un atributo del producto,
+    # no una medida. Va dentro del `agg` y no como cuarta clave del groupby
+    # a propósito — si un producto llegara con dos unidades distintas, una
+    # clave más lo partiría en dos filas que suman mal; así se queda en una
+    # y a lo sumo rotula con la primera.
     g = (base.groupby(["Producto", "Área"], as_index=False)
          .agg(Cantidad=("Cantidad", "sum"), Valorizado=("Valorizado", "sum"),
+              UM=("UM", "first"),
               **{"Precio unitario": ("Precio unitario", "mean")}))
     if g.empty:
         st.info("Sin datos.")
@@ -754,14 +769,15 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant):
     _fila_total = {
         "Producto": "TOTAL",
         "Área": "",
+        "UM": "",
         "Cantidad": round(float(g["Cantidad"].sum()), 1),
         "Valorizado": round(float(g["Valorizado"].sum()), 2),
         "Participación %": round(float(g["Participación %"].sum()), 1),
     }
 
     gb = GridOptionsBuilder.from_dataframe(
-        g[["Producto", "Área", "Cantidad", "Precio unitario", "Valorizado",
-           "Participación %", "Selección %"]])
+        g[["Producto", "Área", "Cantidad", "UM", "Precio unitario",
+           "Valorizado", "Participación %", "Selección %"]])
     gb.configure_default_column(resizable=True, sortable=True, filter=False)
     # minWidths ajustados para que las 7 entren sin scroll horizontal en la
     # franja de abajo (~911-1117px medido en vivo): con los anchos "cómodos"
@@ -770,7 +786,17 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant):
     # al ser la última, quedaba virtualizada fuera de vista (ni scrolleable
     # a simple vista: parecía que la columna no existía).
     gb.configure_column("Producto", pinned="left", minWidth=150)
-    gb.configure_column("Área", minWidth=90)
+    # El ÁREA se esconde cuando la cadena de arriba ya la fijó: con el foco
+    # por defecto en ALMACEN CENTRAL, esa columna escribe la misma palabra
+    # en las 3.865 filas y el dato ya está en el título de la tarjeta — el
+    # caso exacto de la regla #239. Oculta y no borrada: sigue en el modelo
+    # por si hace falta ordenar por ella, y son los 90px que necesitaba la
+    # UM para entrar sin empujar la tabla a scroll horizontal.
+    _area_fija = any(c == col_area and v for c, v in ruta)
+    gb.configure_column("Área", minWidth=90, hide=_area_fija)
+    # Angosta: son tres letras ("kg", "L", "und"). Sin `flex`, para que no
+    # se coma el ancho que necesitan los nombres de producto.
+    gb.configure_column("UM", minWidth=52, maxWidth=64)
 
     _num_fmt = JsCode("""
         function(params) {
@@ -1041,7 +1067,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         with st.container(border=True,
                           key=f"ajuste_graf_card_abajo_inv_{slug}"):
             _panel_top(d, tuple(ruta), col_prod, col_area, col_val,
-                       col_punit, _cant)
+                       col_punit, _cant, col_unidad=col_unidad)
 
     def _dib_area():
         _seccion_grupo("area",
