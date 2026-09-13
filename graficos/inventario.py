@@ -16,6 +16,12 @@ se mantiene igual en Por área/Por familia, pero en Buscar producto pasa a
 mostrar productos relacionados (misma subfamilia/familia) en vez de un top
 genérico — repetir el mismo top ahí era redundante con lo que ya se ve a la
 izquierda para el producto elegido.
+
+2026-09-13, a pedido: Por área y Por familia son TABLAS de punta a punta, y
+las tres son clickeables en cadena. Ranking (izquierda) → desglose del nivel
+siguiente (derecha, era un `go.Bar` sin clic) → productos (franja de abajo),
+que ahora lista TODOS los del recorte en vez de un top-20: "ya que es una
+tabla, el usuario puede hacer scroll". Ver `arquitectura.md` regla #403.
 """
 
 import numpy as np
@@ -76,8 +82,27 @@ def _rango_con_holgura(*series, factor=0.28):
     return [lo - pad if lo < 0 else 0, hi + pad]
 
 
-def _tabla_ranking(d, col_grp, col_val, nombre_grp, key):
+def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
+                   rol=alturas.APOYO, ancho_pct=80, flex_nombre=2,
+                   ancho_barra=0.62):
     """Ranking de Por área/Por familia como TABLA con barra de progreso.
+
+    La usan los DOS niveles de la sección: el ranking de la tarjeta izquierda
+    y el desglose de la derecha (`_tabla_detalle_foco`). Lo único que cambia
+    entre ellos es el reparto horizontal, porque la tarjeta derecha mide
+    449px contra 770 de la izquierda (medido en 1366x768, la pantalla
+    objetivo) y ahí el ancho decide el formato (regla #349):
+
+      · `flex_nombre` 3 en vez de 2 — el nombre de la categoría es el dato
+        que no se puede abreviar. Con 2, "GASTOS ADMINISTRATIVOS" (174px de
+        texto) cae en una celda de 145 y se lee "GASTOS ADMINISTRATI…".
+      · `ancho_barra` 0.45 en vez de 0.62 — la barra y el monto comparten
+        celda (barra de fondo, texto a la derecha), así que cuanto más
+        angosta la celda, menos puede ocupar la barra sin meterse debajo
+        del número. "S/ 164,858" mide 68px: en los 141 de la celda angosta,
+        con la barra al 62% le quedan 54 y el monto termina escrito sobre
+        el morado.
+      · `ancho_pct` y `rol`, el alto y la columna de porcentaje.
 
     Reemplaza (2026-08-23, a pedido) la barra horizontal de Plotly que vivía
     en esta tarjeta. Es el mismo componente que el Ranking de proveedores de
@@ -133,7 +158,7 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key):
     # anula el alineado a la derecha que trae `type: numericColumn`.
     _js_barra = JsCode(
         "function(p){"
-        " var w = Math.max(0, Math.min(100, p.data._barra||0)) * 0.62;"
+        f" var w = Math.max(0, Math.min(100, p.data._barra||0)) * {ancho_barra};"
         f" var c = p.data._neg ? '{AJUSTE_NEG}' : '{ACENTO}';"
         " return {'background': 'linear-gradient(90deg, ' + c + ' 0 ' + w"
         " + '%, transparent ' + w + '% 100%)',"
@@ -156,10 +181,11 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key):
         tabla,
         gridOptions={
             "columnDefs": [
-                {"field": col_nombre, "flex": 2, "tooltipField": col_nombre},
+                {"field": col_nombre, "flex": flex_nombre,
+                 "tooltipField": col_nombre},
                 {"field": "Valorizado", "flex": 2, "type": "numericColumn",
                  "cellStyle": _js_barra, "valueFormatter": _js_soles},
-                {"field": "%", "width": 80, "type": "numericColumn",
+                {"field": "%", "width": ancho_pct, "type": "numericColumn",
                  "valueFormatter": _js_pct},
                 {"field": "_barra", "hide": True},
                 {"field": "_neg", "hide": True},
@@ -186,7 +212,7 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key):
                         "font-weight": "600 !important",
                     }},
         height=alturas.por_filas(len(serie), px_fila=35, extra=45, minimo=0,
-                                 rol=alturas.APOYO),
+                                 rol=rol),
         update_on=["selectionChanged"],
         key=key,
     )
@@ -197,65 +223,30 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key):
     return str(fila[col_nombre])
 
 
-def _grafico_detalle_foco(d, graf, col_grp, foco, col_fam, col_subfam, col_val):
+def _tabla_detalle_foco(d, col_grp, foco, col_next, nombre_next, col_val, key):
     """Al lado del ranking, cuando hay una categoría en foco: siguiente nivel
     de desglose del grupo elegido (Área → Familia, Familia → Subfamilia) — la
     pregunta natural después de "cuánto vale GASTOS" es "de qué se compone".
-    Sin clic propio (no hay drill anidado, dos niveles alcanza) — así no
-    compite con el ranking por la selección.
 
-    Barra horizontal y no tabla, a diferencia del ranking: acá no hay nada
-    que elegir, y el gráfico se lee de un vistazo en una columna angosta."""
+    Es la MISMA tabla que el ranking de la izquierda (`_tabla_ranking`), no
+    una copia: sólo cambia el ancho de la columna "%". Era un `go.Bar`
+    horizontal hasta el 2026-09-13, sin clic propio y con el argumento de que
+    "acá no hay nada que elegir"; a pedido pasa a tabla y SÍ tiene clic —
+    devuelve la familia/subfamilia elegida (o None) para que la tabla de
+    productos de abajo se recorte a ella. Ver `arquitectura.md` regla #403.
+
+    La `key` que le pasa el caller lleva el foco adentro a propósito: al
+    cambiar de área, la grilla es OTRA y nace sin selección. Con AgGrid eso
+    es correcto —la selección es estado que se relee en cada run, no el
+    evento que se repite de `plotly_chart(on_select=...)` (regla #399)—, y es
+    lo que evita que un sub-foco sobreviva al área que lo justificaba."""
     dd = d[d[col_grp].astype(str) == foco]
-    if graf == "Por área":
-        col_next, nombre_next = col_fam, "familia"
-    else:
-        col_next, nombre_next = col_subfam, "subfamilia"
     if not col_next or dd.empty:
         st.caption(f"Sin desglose adicional para {foco}.")
-        return
-
-    met = pd.to_numeric(dd[col_val], errors="coerce").fillna(0)
-    serie = met.groupby(dd[col_next].astype(str)).sum().sort_values()
-    if serie.empty:
-        st.info("Sin datos.")
-        return
-    total = float(serie.sum())
-    _texto = [
-        f"S/ {v:,.0f} · {(v / total * 100):.1f}%" if total else f"S/ {v:,.0f}"
-        for v in serie.values
-    ]
-    # Un valor negativo (ajuste/devolución) dibujado hacia la izquierda
-    # descentra el gráfico: el resto de las barras arranca en x=0 y esa queda
-    # flotando sola contra el margen. Mismo lado que todas (largo = magnitud)
-    # pero en un color de la familia AJUSTE_NEG — el mismo que usa el heatmap
-    # de Ajuste para "negativo" — así el signo se lee por color, no por
-    # dirección. El texto/hover siguen con el valor real con signo.
-    fig = go.Figure(go.Bar(
-        x=np.abs(serie.values),
-        y=[_compras_truncar(i, 30) for i in serie.index],
-        orientation="h",
-        marker=dict(color=[AJUSTE_NEG if v < 0 else ACENTO for v in serie.values],
-                    opacity=0.85),
-        text=_texto,
-        textposition="outside", cliponaxis=False,
-        customdata=serie.values,
-        hovertemplate="%{y}<br>S/ %{customdata:,.2f}<extra></extra>",
-    ))
-    _compras_layout(fig, alto=alturas.por_filas(
-        len(serie), px_fila=22, minimo=190, extra=50, rol=alturas.MINI))
-    fig.update_layout(title=f"{foco} — por {nombre_next}")
-    # Esta figura vive en col_der, angosta (~1/2.7 del ancho de la card izq):
-    # el factor de holgura que alcanza en una card ancha se queda corto y la
-    # etiqueta de la barra más larga se corta contra el borde (mismo bug de la
-    # regla #44, con otra causa — antes era la barra al 100%, acá la columna).
-    fig.update_xaxes(visible=False,
-                     range=_rango_con_holgura(np.abs(serie.values), factor=3.2))
-    fig.update_yaxes(showgrid=False)  # sin esto la cuadrícula de _compras_layout
-    # cruza cada barra horizontal a la altura de su fila — tiene sentido en un
-    # eje de VALORES, no acá donde el eje Y son nombres de categoría.
-    st.plotly_chart(fig, use_container_width=True,
-                    key=f"inv_g_detalle_{_slug(foco)}")
+        return None
+    st.markdown(f"**{foco} — por {nombre_next}**")
+    return _tabla_ranking(dd, col_next, col_val, nombre_next, key,
+                          ancho_pct=64, flex_nombre=3, ancho_barra=0.45)
 
 
 def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
@@ -478,12 +469,25 @@ def _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val):
         st.caption("Elegí un producto o un grupo para ver contexto relacionado acá.")
 
 
-def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant):
-    """Top de productos de Por área/Por familia — tabla ordenable, no un
+def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant,
+               *, col_sub=None, sub_foco=None, rol=alturas.APOYO):
+    """Productos de Por área/Por familia — tabla ordenable, no un
     gráfico. Reemplaza las 2 pestañas de mini-barras (Mayor cantidad/Precio
     más alto): con columnas ordenables por header, "top por cantidad" y
     "top por precio" son el mismo componente visto con otro orden — dos
     gráficos separados eran redundantes.
+
+    Lista TODOS los productos del recorte, no los 20 más grandes: "ya que es
+    una tabla, el usuario puede hacer scroll" (2026-09-13). Un top-20 en una
+    tabla ORDENABLE miente por partida doble — ordenar por "Precio unitario"
+    reordena esos 20, no los productos caros, y el nº 21 por valorizado no
+    existe para el usuario. El scroll lo hace la GRILLA, que tiene su alto
+    por `rol`; la tarjeta no crece ni saca barra propia.
+
+    `col_sub`/`sub_foco` recortan al segundo nivel: la familia que se clickeó
+    en `_tabla_detalle_foco`. El % de participación se recalcula sobre ese
+    recorte —no sobre el área entera— porque el criterio de la tarjeta es
+    "sumar 100% con lo que el usuario ya está viendo arriba".
 
     Barra de "Participación %" + checkbox con "Selección %" recalculada en
     vivo (sin rerun de Streamlit): MISMO patrón ya usado en la Tabla
@@ -496,8 +500,8 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant):
     from tablas._css import _css_grid
 
     d_panel = d[d[col_grp].astype(str) == foco] if foco else d
-    if foco:
-        st.caption(f"Top de **{foco}**.")
+    if sub_foco and col_sub:
+        d_panel = d_panel[d_panel[col_sub].astype(str) == sub_foco]
     if not (col_prod and col_area and _cant is not None and col_val):
         st.info("Faltan columnas para esta tabla.")
         return
@@ -527,7 +531,13 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant):
     g["Participación %"] = ((g["Valorizado"] / _total_foco * 100)
                             if _total_foco else 0.0)
     g["Selección %"] = g["Participación %"]  # semilla; el valueGetter de abajo la recalcula en vivo
-    g = g.nlargest(20, "Valorizado")
+    g = g.sort_values("Valorizado", ascending=False)
+
+    # El encabezado dice el recorte Y cuántas filas trae: sin el número, una
+    # tabla que scrollea no deja ver si son 12 productos o 400.
+    _ruta = " › ".join([x for x in (foco, sub_foco) if x])
+    st.caption(f"**{len(g):,}** productos" + (f" en **{_ruta}**." if _ruta
+                                              else " en total."))
 
     gb = GridOptionsBuilder.from_dataframe(
         g[["Producto", "Área", "Cantidad", "Precio unitario", "Valorizado",
@@ -621,6 +631,10 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant):
     # performance. Causa raíz probable: AG Grid calcula el rango visible
     # ANTES de que el iframe de Streamlit se asiente en su ancho final.
     grid_options["suppressColumnVirtualisation"] = True
+    # Misma fila que el ranking de la izquierda: las dos tablas de la sección
+    # se leen como una sola grilla partida, no como dos componentes distintos.
+    grid_options["rowHeight"] = 35
+    grid_options["headerHeight"] = 38
     # AG Grid no sabe que un valueGetter "cambió" (no depende de ningún
     # field propio) — sin este refreshCells forzado tras cada click de
     # checkbox, "Selección %" se queda pintada con el valor anterior.
@@ -633,9 +647,19 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant):
     """)
 
     AgGrid(
-        g, gridOptions=grid_options, height=alturas.APOYO, theme="material",
+        g, gridOptions=grid_options, theme="material",
+        # Crece con las filas hasta el tope del rol y ahí scrollea la grilla.
+        # `rol` es PROTAGONISTA cuando la tabla baja a la franja de abajo (va
+        # sola en su fila y es lo que el usuario está mirando) y APOYO cuando
+        # comparte fila con el ranking, que es quien manda el alto.
+        height=alturas.por_filas(len(g), px_fila=35, extra=45, minimo=0,
+                                 rol=rol),
         custom_css=_css_grid(12),
-        allow_unsafe_jscode=True, key=f"inv_top_grid_{foco or 'global'}",
+        allow_unsafe_jscode=True,
+        # La key lleva el recorte entero: cambiar de área o de familia
+        # estrena grilla, así los checkboxes de "Selección %" no quedan
+        # marcados sobre productos que ya no están en la tabla.
+        key=f"inv_top_grid_{_slug(foco or 'global')}_{_slug(sub_foco or '')}",
     )
 
 
@@ -702,17 +726,21 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     # sección pasa a ser AUTÓNOMA: arma su propio par de columnas y lleva su
     # sufijo. Se conserva el prefijo `ajuste_graf_card_`, de donde cuelga el
     # CSS de tarjeta (`estilos/_80_cards.py`).
-    def _seccion_grupo(slug, graf_nombre, col_grp, nombre_grp):
+    def _seccion_grupo(slug, col_grp, nombre_grp, col_next, nombre_next):
         """Una de las dos vistas de ranking (Por área / Por familia).
 
         Las dos son el MISMO layout sobre otra columna de agrupación, que es
         lo que antes resolvía el `col_area if graf == "Por área" else
-        col_fam` de adentro del bloque compartido."""
+        col_fam` de adentro del bloque compartido. El par
+        `col_next`/`nombre_next` es el segundo nivel del drill (Área →
+        Familia, Familia → Subfamilia); lo elige el caller en vez de un `if`
+        por nombre de vista adentro del desglose, que era el último sitio
+        donde el layout compartido seguía preguntando "¿qué vista soy?"."""
         # columnas-internas: el ranking y su panel de apoyo, dentro de la
         # sección. No es una fila de drill de Compras: COLUMNAS_DRILL no
         # aplica. Proporción heredada tal cual del layout anterior.
         col_izq, col_der = st.columns([1.7, 1])
-        foco = None
+        foco = sub_foco = None
         with col_izq:
             with st.container(border=True,
                               key=f"ajuste_graf_card_izq_inv_{slug}"):
@@ -731,8 +759,9 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
             with st.container(border=True,
                               key=f"ajuste_graf_card_der_inv_{slug}"):
                 if foco:
-                    _grafico_detalle_foco(d, graf_nombre, col_grp, foco,
-                                          col_fam, col_subfam, col_val)
+                    sub_foco = _tabla_detalle_foco(
+                        d, col_grp, foco, col_next, nombre_next, col_val,
+                        key=f"inv_det_grid_{slug}_{_slug(foco)}")
                 else:
                     _panel_top(d, None, col_grp, col_prod, col_area, col_val,
                               col_punit, _cant)
@@ -740,13 +769,14 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
             with st.container(border=True,
                               key=f"ajuste_graf_card_abajo_inv_{slug}"):
                 _panel_top(d, foco, col_grp, col_prod, col_area, col_val,
-                          col_punit, _cant)
+                          col_punit, _cant, col_sub=col_next,
+                          sub_foco=sub_foco, rol=alturas.PROTAGONISTA)
 
     def _dib_area():
-        _seccion_grupo("area", "Por área", col_area, "área")
+        _seccion_grupo("area", col_area, "área", col_fam, "familia")
 
     def _dib_familia():
-        _seccion_grupo("familia", "Por familia", col_fam, "familia")
+        _seccion_grupo("familia", col_fam, "familia", col_subfam, "subfamilia")
 
     def _dib_buscar():
         # columnas-internas: mismo par que las de ranking, para que las
