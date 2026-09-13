@@ -593,6 +593,38 @@ def _pruebas_puras():
     check("una baja también es efecto cantidad",
           _vap._puente(0.0, 0.0, 250.0, 10.0), (0.0, -250.0))
 
+    # Etiquetas de la serie mensual (regla #400). Lo que se fija es que la
+    # etiqueta sea LEGIBLE en cada ventana: con 3 meses (el default) entra
+    # derecha, con 12 girada, y con "Todo" ya no caben las dos series.
+    check("etiqueta de valor compacta con un decimal",
+          _vap._fmt_etiqueta(107911.0, "Valor"), "S/ 107.9k")
+    check("etiqueta de cantidad sin S/", _vap._fmt_etiqueta(1234.5, "Cantidad"),
+          "1.2k")
+    check("etiqueta de precio con sus dos decimales",
+          _vap._fmt_etiqueta(12.345, "Precio"), "S/ 12.35")
+    check("una columna en cero no lleva etiqueta",
+          _vap._fmt_etiqueta(0.0, "Valor"), None)
+    check("3 meses: etiquetas derechas en las dos series",
+          _vap._plan_etiquetas(3, 9, "Valor"),
+          {"girar": False, "ambas": True, "paso": 1})
+    check("12 meses: no entran derechas, van giradas",
+          _vap._plan_etiquetas(12, 9, "Valor"),
+          {"girar": True, "ambas": True, "paso": 1})
+    check("32 meses: sólo rotula «Este año»",
+          _vap._plan_etiquetas(32, 9, "Cantidad")["ambas"], False)
+    check("precio con 12 meses rotula las dos líneas",
+          _vap._plan_etiquetas(12, 8, "Precio")["ambas"], True)
+    # Sin alternar arriba/abajo: se probó y chocaba (regla #400). Con 32
+    # meses (21 px por mes) una etiqueta de 47 px necesita 3 meses de lugar.
+    check("precio con 32 meses ralea en vez de alternar",
+          _vap._plan_etiquetas(32, 8, "Precio"),
+          {"girar": False, "ambas": False, "paso": 3})
+    check("_ralear conserva siempre el último mes",
+          _vap._ralear(["a", "b", "c", "d", "e"], 2), ["a", None, "c", None, "e"])
+    _techo = _vap._techo_con_etiquetas(100.0, 0.0, 17, alto_plot=149)
+    check("el techo deja lugar a la etiqueta de la columna más alta",
+          round(100.0 / _techo[1] * 149), 132)
+
     # El puente de un GRUPO se suma desde los productos, nunca se calcula
     # sobre el agregado: `Σvalor / Σcantidad` mezcla kilos con litros y con
     # servicios. Medido con el parquet real: la familia GASTOS VENTAS daba

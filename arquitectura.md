@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-399 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+400 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (140)
 
@@ -226,7 +226,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#394** — «Que mida igual que aquella» es una cuenta entre dos tarjetas, y sólo se sostiene si las dos…
 - **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
 
-**Plotly y figuras** (66)
+**Plotly y figuras** (67)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -294,6 +294,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
 - **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
 - **#399** — Leer el clic ANTES de dibujar obliga a leerlo de la key que se DIBUJÓ — y con el foco en la…
+- **#400** — «Etiquetas visibles» es una cuenta de píxeles por columna, y la ventana con la que abre la…
 
 **AgGrid y tablas** (66)
 
@@ -34699,6 +34700,58 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-13.)
 
+400. **«Etiquetas visibles» es una cuenta de píxeles por columna, y la
+     ventana con la que abre la tarjeta es parte de esa cuenta.** Pedido
+     sobre Compras › «Vs año pasado»: «debe mostrar inicialmente 3 meses y
+     colocar etiquetas visibles en las columnas, tanto en la vista de
+     cantidad, valor y precio». Hasta ese día la serie mensual no llevaba
+     ningún número; sólo el hover.
+
+     - **El default pasó de 12m a 3m** (`compras_vap_periodo`), el mismo
+       camino que la Evolución de Producto el día anterior. Es el DEFAULT:
+       las otras cuatro opciones siguen en el desplegable (#383). Una
+       sesión abierta conserva lo que tenía elegido — el `index=` de un
+       `st.selectbox` con `key` sólo fija el arranque.
+     - **Un `text=` suelto no alcanza.** Plotly no oculta la etiqueta que
+       no entra: la ENCOGE (`constraintext`) o, sin él, la encima con la
+       vecina — sigue en el DOM y no se lee (#91). La forma sale de
+       `vs_ano_pasado._plan_etiquetas`, pura y testeada, contra el área de
+       trazo MEDIDA a 1366x768 (675×149 px) y el ancho medido de un
+       carácter de 10px (4,4-5,3 px, se usa 5,4):
+         · dos columnas del mismo mes están a `grupo·(1−bargap)/2` px de
+           centro a centro — ése es el apretón, no el ancho del mes;
+         · entra derecha → derecha (3 meses: 81 px de hueco para ~53);
+         · si no, girada, que ocupa una línea de ancho (12 meses);
+         · si ni así, sólo «Este año», girada (24m, «Todo»);
+         · Precio son líneas: las dos etiquetas de un mes van cada una del
+           lado de AFUERA de su línea (arriba la del precio más alto), así
+           no se pisan donde las líneas se cruzan; si no entran, sólo «Este
+           año», arriba, una de cada N meses (contando desde el final: el
+           último mes lleva número siempre).
+     - **Alternar arriba/abajo NO sirve, y se midió.** La primera versión,
+       para Precio con muchos meses, rotulaba sólo «Este año» una arriba y
+       otra abajo de la línea: dobla la distancia entre dos del MISMO lado.
+       Re-dibujadas las 12 combinaciones (3 métricas × 3/13/24/32 meses)
+       sobre el gráfico real con `Plotly.react`, 11 dieron cero choques y
+       ésa dio 3 con 24 meses: dos vecinas de lados OPUESTOS siguen a un
+       mes (28 px) y la etiqueta mide ~36, así que cuando la línea salta la
+       de abajo del mes alto cae sobre la de arriba del mes bajo. Ralear
+       (`paso = ⌈etiqueta / mes⌉`) sí se puede garantizar sin conocer la y.
+     - **El techo del eje, también por cuenta.** `textposition="outside"`
+       no agranda el rango: la etiqueta de la columna más alta se corta
+       contra el borde. `_techo_con_etiquetas` le da al dato
+       `alto_plot − alto_etiqueta` px; girada, la etiqueta ocupa su LARGO.
+     - **Formato**: Valor y Cantidad compactos con UN decimal en los miles
+       («S/ 107.9k»): con «S/ 108k» tres meses parecidos se leían iguales.
+       Precio entero con dos decimales. Una columna en cero no lleva
+       etiqueta. El número exacto sigue en el hover.
+
+     Moraleja: antes de prometer «etiquetas visibles» en un gráfico cuya
+     cantidad de columnas elige el usuario, preguntá cuántos píxeles tiene
+     la columna en el PEOR caso de cada opción, no en el default.
+
+     (2026-09-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34711,7 +34764,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#400**.
+> próxima regla nueva es la **#401**.
 
 >
 
