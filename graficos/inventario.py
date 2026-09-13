@@ -31,14 +31,53 @@ import streamlit as st
 
 
 from tema import (
-    ACENTO, AJUSTE_NEG, LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, LAVANDA_BORDE, LAVANDA_CHIP,
+    TEXTO_PRINCIPAL,
 )
+# El LOOK de una tabla-ranking del repo. Nació en `proveedor.py`, se
+# generalizó a los tres paneles del drill de Producto el 2026-09-11 ("que
+# sean similares al de Ranking de Proveedores") y el 2026-09-13 cruza a
+# Inventario con el mismo pedido. Se importa de Compras en vez de copiarse
+# —o de mudarse a `tablas/_css.py` y `alturas.py`, que es donde terminará
+# viviendo— porque el alto y el CSS son UNA sola decisión y hoy están
+# juntos: partirlos en dos mudanzas es lo que deja una tabla a 24px de fila
+# con el cuerpo de 12px de otro tema. Ver `arquitectura.md` regla #404.
+from graficos.compras._comun import (
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK,
+)
+from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
     _compras_layout, _compras_truncar, _render_rail,
     _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos import alturas
+
+# Los títulos de las tarjetas de ranking, con los MISMOS cuatro valores que
+# `.cp-rank-tit` de `graficos/compras/_css_proveedor.py`: las dos se mueven
+# juntas. No se reusa aquella clase porque su regla vive dentro de un
+# `<style>` de 2.400 líneas que estila el drill entero de Compras, y traerlo
+# a Inventario para heredar cuatro propiedades sería peor que repetirlas.
+# Va sin guard de "inyectar una sola vez" a propósito (regla #59).
+CSS_TITULOS_INV = """
+<style>
+.inv-rank-tit { font-size: 16px; font-weight: 600; color: var(--text-primary);
+                padding-left: 2px; margin: 0 0 4px; }
+/* Cuantos productos hay: va en el titulo y no en un `st.caption` aparte
+   (que sumaba un renglon a una tarjeta que se acaba de podar), pero con
+   menos peso que el nombre. En una tabla que scrollea, sin el numero no se
+   ve si son 12 productos o 400. */
+.inv-rank-tit-n { font-size: 12px; font-weight: 500; opacity: .55;
+                  margin-left: 6px; }
+</style>
+"""
+
+# Cuántas filas RESERVA una tabla-ranking antes de scrollear por dentro. El
+# 8 es el techo de Compras (`proveedor.py::_FILAS_RANK`) y viaja con el
+# resto del look: dos tablas con el mismo tema y el mismo alto de fila pero
+# distinta cantidad de filas a la vista no se leen como la misma tabla.
+_FILAS_RANK = 8
+
 
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
 # ver graficos/base.py).
@@ -83,44 +122,45 @@ def _rango_con_holgura(*series, factor=0.28):
 
 
 def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
-                   rol=alturas.APOYO, ancho_pct=80, flex_nombre=2,
-                   ancho_barra=0.62):
-    """Ranking de Por área/Por familia como TABLA con barra de progreso.
+                   ancho_pct=80, flex_nombre=2, ancho_barra=0.62):
+    """Ranking de Por area/Por familia como TABLA con barra de progreso.
 
-    La usan los DOS niveles de la sección: el ranking de la tarjeta izquierda
-    y el desglose de la derecha (`_tabla_detalle_foco`). Lo único que cambia
-    entre ellos es el reparto horizontal, porque la tarjeta derecha mide
-    449px contra 770 de la izquierda (medido en 1366x768, la pantalla
-    objetivo) y ahí el ancho decide el formato (regla #349):
+    Es la tabla-ranking del repo, la misma que el Ranking de proveedores de
+    Compras: `CSS_RANKING_GRID` sobre `theme="streamlit"` (franja en vez de
+    caja, todo blanco, sin lineas verticales, cuerpo de 11.5px), filas de
+    `ALTO_FILA_RANK`, ocho a la vista y el resto por scroll interno, y una
+    fila TOTAL fija abajo. La barra NO es un `cellRenderer` (ni la clase
+    `init()/getGui()` de la regla #25, ni los sparklines de AG Grid, que son
+    Enterprise) sino el FONDO de la celda, un `linear-gradient` cortado en
+    el % del valor. Los colores salen de `tema.py` y no de `var(--accent)` a
+    proposito: el grid vive en un iframe propio y las variables CSS del
+    documento padre no llegan.
 
-      · `flex_nombre` 3 en vez de 2 — el nombre de la categoría es el dato
-        que no se puede abreviar. Con 2, "GASTOS ADMINISTRATIVOS" (174px de
-        texto) cae en una celda de 145 y se lee "GASTOS ADMINISTRATI…".
-      · `ancho_barra` 0.45 en vez de 0.62 — la barra y el monto comparten
-        celda (barra de fondo, texto a la derecha), así que cuanto más
-        angosta la celda, menos puede ocupar la barra sin meterse debajo
-        del número. "S/ 164,858" mide 68px: en los 141 de la celda angosta,
-        con la barra al 62% le quedan 54 y el monto termina escrito sobre
-        el morado.
-      · `ancho_pct` y `rol`, el alto y la columna de porcentaje.
-
-    Reemplaza (2026-08-23, a pedido) la barra horizontal de Plotly que vivía
-    en esta tarjeta. Es el mismo componente que el Ranking de proveedores de
-    Compras (`compras/proveedor.py`): la barra NO es un `cellRenderer` (ni la
-    clase `init()/getGui()` de la regla #25, ni los sparklines de AG Grid,
-    que son Enterprise) sino el FONDO de la celda, un `linear-gradient`
-    cortado en el % del valor. Los colores salen de `tema.py` y no de
-    `var(--accent)` a propósito: el grid vive en un iframe propio y las
-    variables CSS del documento padre no llegan.
-
-    Clic en una fila = TOGGLE del foco; devuelve la categoría elegida (o
+    Clic en una fila = TOGGLE del foco; devuelve la categoria elegida (o
     None) para que el caller filtre el panel derecho y muestre el detalle
     del siguiente nivel. A diferencia de `plotly_chart(on_select=...)`,
-    AgGrid devuelve la selección VIGENTE en cada run —es estado, no un
-    evento que se repite—, así que acá no hacen falta ni la key dinámica por
-    foco ni el `st.rerun()` que evitaban el toggle infinito del gráfico."""
+    AgGrid devuelve la seleccion VIGENTE en cada run --es estado, no un
+    evento que se repite--, asi que aca no hacen falta ni la key dinamica
+    por foco ni el `st.rerun()` que evitaban el toggle infinito del grafico.
+
+    La usan los DOS niveles de la seccion: el ranking de la tarjeta
+    izquierda y el desglose de la derecha (`_tabla_detalle_foco`). Lo unico
+    que cambia entre ellos es el reparto horizontal, porque la tarjeta
+    derecha mide 449px contra 770 de la izquierda (medido en 1366x768, la
+    pantalla objetivo) y ahi el ancho decide el formato (regla #349):
+
+      - `flex_nombre` 3 en vez de 2: el nombre de la categoria es el dato
+        que no se puede abreviar. Con 2, "GASTOS ADMINISTRATIVOS" (174px de
+        texto) cae en una celda de 145 y se lee "GASTOS ADMINISTRATI...".
+      - `ancho_barra` 0.45 en vez de 0.62: la barra y el monto comparten
+        celda (barra de fondo, texto a la derecha), asi que cuanto mas
+        angosta la celda, menos puede ocupar la barra sin meterse debajo
+        del numero. "S/ 164,858" mide 68px: en los 141 de la celda angosta,
+        con la barra al 62% le quedan 54 y el monto termina escrito sobre
+        el morado.
+      - `ancho_pct`, la columna de porcentaje.
+    """
     from st_aggrid import AgGrid, JsCode
-    from tablas._css import _css_grid
 
     met = pd.to_numeric(d[col_val], errors="coerce").fillna(0)
     serie = met.groupby(d[col_grp].astype(str)).sum().sort_values(ascending=False)
@@ -128,36 +168,52 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
         st.info("Sin datos.")
         return None
 
-    # % sobre el total NETO — el mismo que el KPI "Valorizado total" de
-    # arriba, para que sumen 100% con lo que el usuario ya está viendo (no
-    # sobre la suma de absolutos).
+    # % sobre el total NETO, el mismo que la fila TOTAL de abajo, para que
+    # sumen 100% con lo que el usuario ya esta viendo (no sobre la suma de
+    # absolutos).
     total = float(serie.sum())
     _mayor = float(np.abs(serie.values).max()) or 1.0
     col_nombre = nombre_grp.capitalize()
+    _pcts = [(v / total * 100) if total else 0.0 for v in serie.values]
     tabla = pd.DataFrame({
         col_nombre: serie.index.astype(str),
         "Valorizado": serie.values,
-        "%": [(v / total * 100) if total else 0.0 for v in serie.values],
-        # Ocultas: el % de LLENADO de la barra (contra la mayor MAGNITUD, que
-        # no es el mismo número que la columna "%"), y el signo — que se lee
-        # por color y no por dirección, igual que en los gráficos de este
-        # dashboard (regla #80). La columna visible mantiene el valor con
-        # signo; sin `_neg`, un ajuste negativo pintaría una barra larga
+        "%": _pcts,
+        # Ocultas: el % de LLENADO de la barra (contra la mayor MAGNITUD,
+        # que no es el mismo numero que la columna "%"), y el signo, que se
+        # lee por color y no por direccion, igual que en los graficos de
+        # este dashboard (regla #80). La columna visible mantiene el valor
+        # con signo; sin `_neg`, un ajuste negativo pintaria una barra larga
         # indistinguible de una compra grande.
         "_barra": [abs(v) / _mayor * 100 for v in serie.values],
         "_neg": [bool(v < 0) for v in serie.values],
     })
+    # La fila TOTAL reemplaza al KPI "Valorizado total" que vivia arriba de
+    # esta tabla (pedido del 2026-09-13: "quitar el KPI"). Mismo mecanismo
+    # que el Ranking de proveedores: un dict calculado en PYTHON +
+    # `pinnedBottomRowData`, no el `"grandTotalRow"` nativo, que en este
+    # repo solo esta probado junto a `pivotMode=True` y esta tabla es plana.
+    # Suma lo que la tabla MUESTRA, que aca es todo el recorte.
+    fila_total = {col_nombre: "TOTAL", "Valorizado": round(total, 2),
+                  "%": round(sum(_pcts), 2)}
 
-    # La barra llega al 62% de la celda y el texto va a la DERECHA: así
-    # nunca se pisan (con la barra al 100% el monto caía sobre el morado,
-    # texto oscuro sobre fondo oscuro). No falsea la lectura — todas se
+    # La barra llega al 62% de la celda y el texto va a la DERECHA: asi
+    # nunca se pisan (con la barra al 100% el monto caia sobre el morado,
+    # texto oscuro sobre fondo oscuro). No falsea la lectura: todas se
     # escalan igual, las proporciones entre filas se mantienen. La pista va
     # transparente, no tintada: con fondo, la columna entera se lee como un
     # bloque lavanda que compite con las barras.
     # `justifyContent` es obligatorio: el `display:flex` de esta misma regla
     # anula el alineado a la derecha que trae `type: numericColumn`.
+    # La fila TOTAL no dibuja barra: no hay `_barra` contra que escalarla
+    # (seria 100% de si misma, una barra llena sin informacion) y el fondo
+    # lo pone `getRowStyle` - un `background` aca se lo comeria, porque la
+    # celda pinta ENCIMA de la fila.
     _js_barra = JsCode(
         "function(p){"
+        " if (p.node.rowPinned) return {'display':'flex',"
+        " 'alignItems':'center','justifyContent':'flex-end',"
+        " 'fontWeight':'700'};"
         f" var w = Math.max(0, Math.min(100, p.data._barra||0)) * {ancho_barra};"
         f" var c = p.data._neg ? '{AJUSTE_NEG}' : '{ACENTO}';"
         " return {'background': 'linear-gradient(90deg, ' + c + ' 0 ' + w"
@@ -166,16 +222,42 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
         f" 'color':'{TEXTO_PRINCIPAL}'"
         "};"
         "}")
+    # Misma paleta que la fila TOTAL del Ranking de proveedores: dos filas
+    # de cierre del mismo idioma visual. SIN `borderTop`: la linea sobre los
+    # totales la dibuja (o no) el tema en `.ag-floating-bottom`, y un inline
+    # aca se apilaria con ella dando dos rayas pegadas de distinto color.
+    _js_fila_total = JsCode(
+        "function(p){ if(p.node.rowPinned){ return {"
+        f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
+        f"'color':'{ACENTO_TEXTO_OSCURO}'"
+        "}; } }")
     _js_soles = JsCode(
         "function(p){ return p.value==null ? '' :"
         " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
+    # Entero y no un decimal, igual que el Ranking de proveedores: "79%" y
+    # no "79.0%". La columna es angosta y el decimal no cambia ninguna
+    # decision: para el numero exacto esta el monto de al lado.
     _js_pct = JsCode(
-        "function(p){ return p.value==null ? '' : p.value.toFixed(1) + '%'; }")
-    # AG Grid, por sí solo, NO deselecciona al reclickear la fila ya
+        "function(p){ return p.value==null ? '' :"
+        " Math.round(p.value) + '%'; }")
+    # AG Grid, por si solo, NO deselecciona al reclickear la fila ya
     # seleccionada (pide Ctrl+clic, que nadie descubre). `setSelected(valor,
-    # true)` limpia las demás → sigue siendo selección única.
+    # true)` limpia las demas -> sigue siendo seleccion unica. El guard de
+    # `rowPinned` va afuera: sin el, clickear la fila TOTAL la "selecciona"
+    # como si fuera una categoria real y el panel de al lado intentaria
+    # enfocar un area llamada "TOTAL" que no existe en los datos.
     _js_toggle = JsCode(
-        "function(e){ e.node.setSelected(!e.node.isSelected(), true); }")
+        "function(e){ if (e.node.rowPinned) return;"
+        " e.node.setSelected(!e.node.isSelected(), true); }")
+
+    # Ocho filas de datos y el resto por scroll interno, como el Ranking de
+    # proveedores. `extra` es todo lo que el grid mide y no son esas filas:
+    # el cromo del grid (cabecera + borde + chrome del tema) mas la fila
+    # TOTAL, que reserva su espacio DENTRO del `height=` - sin ese sumando
+    # le comeria una fila a los datos. El `max(1, ...)` deja la cabecera y
+    # el TOTAL con una fila de aire en el caso vacio, en vez de un grid de 0
+    # filas que AG Grid dibuja recortando su propio overlay.
+    _filas = min(_FILAS_RANK, max(1, len(serie)))
 
     resp = AgGrid(
         tabla,
@@ -193,26 +275,26 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
             "rowSelection": {"mode": "singleRow", "checkboxes": False,
                              "enableClickSelection": False},
             "onRowClicked": _js_toggle,
-            "rowHeight": 35,
-            "headerHeight": 38,
+            "rowHeight": ALTO_FILA_RANK,
+            "headerHeight": ALTO_HEADER_RANK,
             "suppressCellFocus": True,
             "suppressMovableColumns": True,
+            "pinnedBottomRowData": [fila_total],
+            "getRowStyle": _js_fila_total,
         },
         allow_unsafe_jscode=True,
-        theme="material",
-        # `_css_grid` no estila la fila SELECCIONADA, y acá esa fila ES el
-        # foco del drill: sin marcarla, el usuario no ve sobre qué categoría
-        # está mirando el panel de la derecha. La tabla de Documentos SUNAT
-        # copia esta receta desde el 2026-08-28 (hasta ese día el comentario
-        # decía que ninguna otra tabla tenía selección de fila — la tenía,
-        # sin marcar, y el rayado de filas disimulaba el problema).
-        custom_css={**_css_grid(12),
-                    ".ag-row-selected": {
-                        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-                        "font-weight": "600 !important",
-                    }},
-        height=alturas.por_filas(len(serie), px_fila=35, extra=45, minimo=0,
-                                 rol=rol),
+        theme="streamlit",
+        # El tema de fabrica no alcanza: filas blancas, cuerpo de 11.5px y
+        # el marco de franja salen de `CSS_RANKING_GRID`, y el unico camino
+        # es `custom_css=` porque el grid es un iframe y el `<style>` del
+        # documento padre no entra. Ese dict ya estila la fila SELECCIONADA
+        # (`.ag-row-selected::before`, el acento al 12%), que aca es el foco
+        # del drill: sin marcarla, no se ve sobre que categoria esta
+        # mirando el panel de la derecha.
+        custom_css=CSS_RANKING_GRID,
+        height=alturas.por_filas(_filas, px_fila=ALTO_FILA_RANK,
+                                 extra=CROMO_GRID_RANK + ALTO_FILA_RANK,
+                                 minimo=0),
         update_on=["selectionChanged"],
         key=key,
     )
@@ -244,7 +326,8 @@ def _tabla_detalle_foco(d, col_grp, foco, col_next, nombre_next, col_val, key):
     if not col_next or dd.empty:
         st.caption(f"Sin desglose adicional para {foco}.")
         return None
-    st.markdown(f"**{foco} — por {nombre_next}**")
+    st.markdown(f'<div class="inv-rank-tit">{foco} — por {nombre_next}</div>',
+                unsafe_allow_html=True)
     return _tabla_ranking(dd, col_next, col_val, nombre_next, key,
                           ancho_pct=64, flex_nombre=3, ancho_barra=0.45)
 
@@ -470,7 +553,7 @@ def _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val):
 
 
 def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant,
-               *, col_sub=None, sub_foco=None, rol=alturas.APOYO):
+               *, col_sub=None, sub_foco=None):
     """Productos de Por área/Por familia — tabla ordenable, no un
     gráfico. Reemplaza las 2 pestañas de mini-barras (Mayor cantidad/Precio
     más alto): con columnas ordenables por header, "top por cantidad" y
@@ -481,8 +564,9 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant,
     una tabla, el usuario puede hacer scroll" (2026-09-13). Un top-20 en una
     tabla ORDENABLE miente por partida doble — ordenar por "Precio unitario"
     reordena esos 20, no los productos caros, y el nº 21 por valorizado no
-    existe para el usuario. El scroll lo hace la GRILLA, que tiene su alto
-    por `rol`; la tarjeta no crece ni saca barra propia.
+    existe para el usuario. El scroll lo hace la GRILLA, que reserva las
+    mismas ocho filas que las otras dos tablas de la sección; la tarjeta no
+    crece ni saca barra propia.
 
     `col_sub`/`sub_foco` recortan al segundo nivel: la familia que se clickeó
     en `_tabla_detalle_foco`. El % de participación se recalcula sobre ese
@@ -497,7 +581,6 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant,
     en un Styler de pandas (ver `arquitectura.md` sobre por qué acá sí
     hace falta JsCode y en `compras/volatilidad.py` no)."""
     from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
-    from tablas._css import _css_grid
 
     d_panel = d[d[col_grp].astype(str) == foco] if foco else d
     if sub_foco and col_sub:
@@ -536,8 +619,25 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant,
     # El encabezado dice el recorte Y cuántas filas trae: sin el número, una
     # tabla que scrollea no deja ver si son 12 productos o 400.
     _ruta = " › ".join([x for x in (foco, sub_foco) if x])
-    st.caption(f"**{len(g):,}** productos" + (f" en **{_ruta}**." if _ruta
-                                              else " en total."))
+    st.markdown(
+        '<div class="inv-rank-tit">Productos'
+        + (f" · {_ruta}" if _ruta else "")
+        + f' <span class="inv-rank-tit-n">{len(g):,}</span></div>',
+        unsafe_allow_html=True)
+
+    # Fila TOTAL, igual que las otras dos tablas de la sección. "Precio
+    # unitario" queda VACÍA a propósito: es un ratio y un ratio no se suma ni
+    # se promedia sobre el agregado (la misma trampa que la regla #199). El
+    # "Selección %" tampoco lleva total — su valor lo calcula en vivo el
+    # valueGetter contra lo tildado, así que un número fijo ahí mentiría en
+    # cuanto se marque la primera fila.
+    _fila_total = {
+        "Producto": "TOTAL",
+        "Área": "",
+        "Cantidad": round(float(g["Cantidad"].sum()), 1),
+        "Valorizado": round(float(g["Valorizado"].sum()), 2),
+        "Participación %": round(float(g["Participación %"].sum()), 1),
+    }
 
     gb = GridOptionsBuilder.from_dataframe(
         g[["Producto", "Área", "Cantidad", "Precio unitario", "Valorizado",
@@ -631,10 +731,19 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant,
     # performance. Causa raíz probable: AG Grid calcula el rango visible
     # ANTES de que el iframe de Streamlit se asiente en su ancho final.
     grid_options["suppressColumnVirtualisation"] = True
-    # Misma fila que el ranking de la izquierda: las dos tablas de la sección
-    # se leen como una sola grilla partida, no como dos componentes distintos.
-    grid_options["rowHeight"] = 35
-    grid_options["headerHeight"] = 38
+    # Las tres tablas de la sección miden lo mismo y se leen igual: mismo
+    # alto de fila y de cabecera que el ranking, mismo tema, mismo CSS.
+    grid_options["rowHeight"] = ALTO_FILA_RANK
+    grid_options["headerHeight"] = ALTO_HEADER_RANK
+    grid_options["pinnedBottomRowData"] = [_fila_total]
+    # La fila TOTAL con la paleta de cierre de las otras dos. `rowPinned`
+    # también apaga su checkbox: una fila que no es un producto no se puede
+    # sumar a la selección (y "Selección %" la contaría dos veces).
+    grid_options["getRowStyle"] = JsCode(
+        "function(p){ if(p.node.rowPinned){ return {"
+        f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
+        f"'color':'{ACENTO_TEXTO_OSCURO}'"
+        "}; } }")
     # AG Grid no sabe que un valueGetter "cambió" (no depende de ningún
     # field propio) — sin este refreshCells forzado tras cada click de
     # checkbox, "Selección %" se queda pintada con el valor anterior.
@@ -647,14 +756,14 @@ def _panel_top(d, foco, col_grp, col_prod, col_area, col_val, col_punit, _cant,
     """)
 
     AgGrid(
-        g, gridOptions=grid_options, theme="material",
-        # Crece con las filas hasta el tope del rol y ahí scrollea la grilla.
-        # `rol` es PROTAGONISTA cuando la tabla baja a la franja de abajo (va
-        # sola en su fila y es lo que el usuario está mirando) y APOYO cuando
-        # comparte fila con el ranking, que es quien manda el alto.
-        height=alturas.por_filas(len(g), px_fila=35, extra=45, minimo=0,
-                                 rol=rol),
-        custom_css=_css_grid(12),
+        g, gridOptions=grid_options, theme="streamlit",
+        # Ocho filas reservadas y el resto por scroll interno, la misma
+        # cuenta que `_tabla_ranking` (ver el comentario de `extra` allá).
+        height=alturas.por_filas(min(_FILAS_RANK, max(1, len(g))),
+                                 px_fila=ALTO_FILA_RANK,
+                                 extra=CROMO_GRID_RANK + ALTO_FILA_RANK,
+                                 minimo=0),
+        custom_css=CSS_RANKING_GRID,
         allow_unsafe_jscode=True,
         # La key lleva el recorte entero: cambiar de área o de familia
         # estrena grilla, así los checkboxes de "Selección %" no quedan
@@ -715,6 +824,10 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     _cant = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
              if col_cant else None)
 
+    # Sin guard de "inyectar una sola vez": un `st.markdown` de estilos con
+    # ese guard DESAPARECE en el rerun siguiente (regla #59).
+    st.markdown(CSS_TITULOS_INV, unsafe_allow_html=True)
+
     # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
     _render_rail(_INVENTARIO_RAIL_CATEGORIAS, "inv_graf_tipo",
                  btn_prefix="inv_rail_btn_", secciones=_PILA)
@@ -744,11 +857,18 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         with col_izq:
             with st.container(border=True,
                               key=f"ajuste_graf_card_izq_inv_{slug}"):
-                st.metric("Valorizado total", f"S/ {_val.sum():,.0f}")
+                # El KPI "Valorizado total" que abría esta tarjeta se retiró
+                # el 2026-09-13, a pedido: ocupaba un cuarto de la tarjeta
+                # para decir un número que la fila TOTAL de la tabla dice en
+                # una línea, en la columna donde el usuario ya está leyendo
+                # montos. El título pasa a ser el de la tarjeta, con el
+                # mismo cuerpo que "Ranking de proveedores".
                 if not col_grp:
                     st.info(f"No se encontró la columna de {nombre_grp}.")
                 else:
-                    st.markdown(f"**Valorizado por {nombre_grp}**")
+                    st.markdown(
+                        f'<div class="inv-rank-tit">Valorizado por '
+                        f'{nombre_grp}</div>', unsafe_allow_html=True)
                     foco = _tabla_ranking(d, col_grp, col_val, nombre_grp,
                                           key=f"inv_rank_grid_{slug}")
                     # El detalle NO se apila acá abajo: con foco activo se
@@ -770,7 +890,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                               key=f"ajuste_graf_card_abajo_inv_{slug}"):
                 _panel_top(d, foco, col_grp, col_prod, col_area, col_val,
                           col_punit, _cant, col_sub=col_next,
-                          sub_foco=sub_foco, rol=alturas.PROTAGONISTA)
+                          sub_foco=sub_foco)
 
     def _dib_area():
         _seccion_grupo("area", col_area, "área", col_fam, "familia")
