@@ -73,11 +73,13 @@ VIEWPORT_OBJETIVO = 657
 # cursor (`--franja-vistas-reserva: 0`, estilos/_26_rails_scroll.py). Su
 # gemelo CSS es `--cab-offset-contenido`. Junto con los 40 que devolvio la
 # franja inferior el mismo dia, el presupuesto sube de 465 a 545.
-_CAB_OFFSET = 76    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
+_CAB_OFFSET = 52    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
                     # 2026-08-31: 80 -> 118, los 38px de la franja de reportes
                     # 2026-09-01: 118 -> 128, la franja paso de 38 a 48
                     # 2026-09-07: 128 -> 88, la franja de vistas no reserva
                     # 2026-09-12: 88 -> 76, la franja de reportes paso de 48 a 36
+                    # 2026-09-13: 76 -> 52, la franja de reportes paso a CAPA:
+                    #             en reposo solo reserva 12 de sus 36 (#397)
 _MARGEN_SUP = 8     # margen del bloque hasta la tarjeta (Streamlit)
 # 2026-09-08: 48 -> 8, y `_FRANJA_INF` -> `_AIRE_INF`. Los 48 eran la franja
 # blanca fija de abajo (42) más 6 de aire; la franja se eliminó a pedido y su
@@ -167,6 +169,34 @@ MARCO = PRESUPUESTO
 # —`_ALTO_EVO` en graficos/compras/producto.py—, que es el mismo arreglo que
 # ya tenía la Evolución de Proveedor. Un rol fijo no puede seguir a una
 # vecina que cambió de alto.)
+
+# «Semanal» (compras/semanal.py): la figura de la serie por período SIN foco,
+# y la tabla de detalle que aparece al tocar una barra o un punto. Con foco la
+# figura baja a COMPACTO, que es justo el rol de «figura con un segundo bloque
+# del mismo peso debajo».
+#
+# No se despejan contra el presupuesto sino contra la tarjeta de «Vs año
+# pasado», a pedido (2026-09-13, regla #398): «que la vista semanal, su
+# tarjeta sea del tamaño de la de vs año anterior, ya que es muy larga cuando
+# aparece el detalle». Medido antes: 552 sin foco y ~800 con él, que el techo
+# de `--alto-util` cortaba con barra propia. La tarjeta salió del techo
+# (`estilos/_80_cards.py`), como Volatilidad (#394), y mide lo que vap en los
+# DOS estados: la tabla toma lo que la figura cede. La cuenta, MEDIDA a
+# 1366x768 bloque por bloque (vap: 570.6):
+#
+#     sin foco   padding 16 + controles 32 + 20 + FIGURA 449 + 16
+#                + caption 38 (su margen de -16 se come el padding de abajo)
+#                = 571
+#     con foco   padding 16 + controles 32 + 20 + COMPACTO 240 + 16
+#                + TABLA 192 + 16 + caption 38 = 570
+#
+# 196 fue el primer intento y dio 574: la tabla es la que absorbe el ajuste,
+# porque su alto es exacto (la figura se mide con su propio aire).
+#
+# Si vap cambia de alto, estos dos números se desincronizan EN SILENCIO: nada
+# ata las dos tarjetas más que la cuenta. Se vuelve a medir.
+SEMANAL_SOLO = 449
+SEMANAL_TABLA = 192
 
 MINI_CANDLE_DRILL = 165
 """El candlestick de Volatilidad: la mitad izquierda de la fila de abajo de

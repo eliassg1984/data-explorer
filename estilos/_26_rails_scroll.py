@@ -93,15 +93,24 @@ _ESPERA = "220ms"
 #                                 asi que hoverearlo NO cuenta como
 #                                 hoverear la franja, y un panel de filtros
 #                                 abierto con su boton desvanecido es un
-#                                 panel huerfano.
+#                                 panel huerfano;
+#   · el foco de TECLADO en la  -> desde el 2026-09-13 la franja de reportes
+#     franja de reportes           es capa y en reposo no se ve: tabular a
+#                                 sus botones seria operar uno invisible.
+#                                 `:focus-visible` y NO `:focus`: tras un
+#                                 CLIC el boton se queda con el foco, y con
+#                                 `:focus` la franja no se cerraria hasta
+#                                 hacer clic en otro lado.
 #
 # NO ESTA la franja de KPIs, y no es un olvido: `_20_compras_rail.py` le pone
 # `pointer-events: none !important` a proposito ("es un rotulo, no un
 # control"), y un elemento que el navegador no hit-testea no puede estar
 # :hover NUNCA. Ponerla en esta lista seria un selector que no matchea jamas.
-# No hace falta: la franja de reportes esta pegada encima y siempre visible,
-# y sobre un rotulo no hay nada que ir a tocar.
+# No hace falta: la franja de reportes esta pegada encima —desde el
+# 2026-09-13 tambien aparece con el cursor, pero la capa entera se abre y se
+# cierra junta—, y sobre un rotulo no hay nada que ir a tocar.
 _DISPARADORES = """.st-key-nav_franja_rep:hover,
+            .st-key-nav_franja_rep :focus-visible,
             .st-key-nav_rail:hover,
             .st-key-chips_ajuste_tabla:hover,
             .st-key-fecha_ajuste_pill:hover,
@@ -166,7 +175,10 @@ CSS = f"""
        no la franja —que el contenido se veia pasar por detras del hueco—:
        ese hueco ya no existe. La franja de REPORTES (opaca, de borde a
        borde, 0..48) es el techo, y el contenido pasa por debajo de ella
-       como por debajo de cualquier cabecera fija. */
+       como por debajo de cualquier cabecera fija.
+       (2026-09-13: ya no. La franja de reportes siguio el mismo camino y
+       es capa tambien — ver el punto 0 de "LA CAPA DE LA CABECERA". En
+       reposo el techo es su tira de `--franja-rep-reserva`.) */
     .st-key-nav_rail {{
         opacity: 0;
         visibility: hidden;
@@ -202,8 +214,10 @@ CSS = f"""
     :root.rails-scrolled
         [data-testid="stAppViewContainer"]:has(.st-key-nav_rail_lateral)
         .st-key-nav_rail_lateral {{
-        top: var(--franja-rep-alto) !important;
-        max-height: calc(100vh - var(--franja-rep-alto) - 8px) !important;
+        /* La RESERVA y no el alto (2026-09-13): la franja de reportes es
+           capa desde ese dia y en reposo solo ocupa su tira de arriba. */
+        top: var(--franja-rep-reserva) !important;
+        max-height: calc(100vh - var(--franja-rep-reserva) - 8px) !important;
     }}
     /* Y la cabecera se va con ellos: al pegarse el rail a la franja de
        reportes ya no hay banda donde ponerla, y el nombre del reporte lo
@@ -318,6 +332,66 @@ CSS = f"""
        aplicando perfecto. Medir `pointer-events`, que cambia en el mismo
        par de reglas y no tiene transicion. Ver arquitectura.md #353. */
 
+    /* 0. LA FRANJA DE REPORTES MISMA (2026-09-13, a pedido: *"que la
+          franja superior de reportes aparezca cuando el cursor se ponga
+          sobre su lugar y que inicialmente este oculta... para aprovechar
+          espacio vertical"*). Hasta hoy era la unica pieza fija de la
+          cabecera y el disparador de las otras; ahora es una mas de la capa
+          y sigue siendo la que la abre.
+
+          EN REPOSO NO PUEDE IRSE ENTERA, y ese es todo el truco. Con
+          `visibility: hidden` el navegador no la hit-testea, asi que no
+          podria estar `:hover` NUNCA y no tendria como volver. Se queda con
+          `opacity: 0` (invisible pero hit-testeable) y un `clip-path` que la
+          RECORTA a la tira de `--franja-rep-reserva`. El recorte recorta
+          tambien el hit-testing: en reposo solo los 12px de arriba la
+          despiertan, y lo que quedo debajo al subir el contenido 24px —el
+          rail, el pestillo, la fila de controles de la primera tarjeta—
+          sigue recibiendo sus clics. Sin el recorte, los 36px serian una
+          tapa invisible sobre todo eso.
+
+          El `clip-path` se suelta AL INSTANTE al abrir —la franja entera
+          pasa a ser zona de hover, asi que bajar el cursor hacia un nombre
+          no la cierra— y se vuelve a poner al FINAL del fundido de salida.
+          Es el `visibility` de las otras tres piezas, con otro nombre.
+
+          Lo que se pierde: los nombres de los reportes siguen en el arbol de
+          accesibilidad aunque no se vean. Es el precio de que la franja
+          pueda despertar sola. A cambio, el foco de TECLADO la abre (esta en
+          `_DISPARADORES`): tabular a un boton no deja operando uno invisible.
+
+          COMO SE VERIFICA: igual que el resto de la capa, por
+          `document.elementFromPoint` y no por la opacidad (#353): con el
+          recorte puesto, a y=20 tiene que devolver lo que hay DEBAJO. */
+    .st-key-nav_franja_rep {{
+        opacity: 0;
+        clip-path: inset(0 0 calc(100% - var(--franja-rep-reserva)) 0);
+        transition: opacity {_TRANS} linear {_ESPERA},
+                    clip-path 0s linear calc({_TRANS} + {_ESPERA});
+    }}
+    :root:has({_DISPARADORES}
+        ) .st-key-nav_franja_rep {{
+        opacity: 1;
+        clip-path: inset(0);
+        transition: opacity {_TRANS} linear,
+                    clip-path 0s linear 0s;
+    }}
+    /* Y el sello de «Ultima actualizacion» con ella. Es un div `fixed`
+       colgado del body (`inyecciones/varios.py`), no un hijo de la franja,
+       asi que no hereda su opacidad; y en escritorio no tiene fondo propio
+       —se apoyaba en el blanco de la franja—, asi que en reposo quedaria
+       flotando sobre el contenido que pasa por debajo. Ya es
+       `pointer-events: none`: no hace falta recortarlo. */
+    #sello-actualizacion {{
+        opacity: 0;
+        transition: opacity {_TRANS} linear {_ESPERA};
+    }}
+    :root:has({_DISPARADORES}
+        ) #sello-actualizacion {{
+        opacity: 1;
+        transition: opacity {_TRANS} linear;
+    }}
+
     /* 1. LOS CONTROLES DEL REPORTE. Se ven en los dos estados: no dependen
           de donde estes en la pagina, y hasta hoy seguian pinchados arriba
           tambien al scrollear. */
@@ -385,11 +459,11 @@ CSS = f"""
        entera en `_20_compras_rail.py`. */
     .st-key-nav_rail_lateral {{
         position: fixed !important;
-        top: calc(var(--franja-rep-alto) + var(--franja-vistas-reserva)
+        top: calc(var(--franja-rep-reserva) + var(--franja-vistas-reserva)
                   + var(--rail-cab-alto)) !important;   /* == _20_compras_rail.py */
         left: 19px !important;                        /* == _20_compras_rail.py */
         width: var(--rail-der-w) !important;          /* nombre historico: es el IZQUIERDO */
-        max-height: calc(100vh - var(--franja-rep-alto)
+        max-height: calc(100vh - var(--franja-rep-reserva)
                                - var(--franja-vistas-reserva)
                                - var(--rail-cab-alto) - 8px) !important;  /* == _20_compras_rail.py */
         overflow-y: auto !important;

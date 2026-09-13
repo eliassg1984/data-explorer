@@ -844,7 +844,15 @@ CSS = """    /* ================================================================
         /* con el techo, en una pantalla baja, salía la barra propia que ya   */
         /* se había pedido quitar. Va con `:not()` y no sacando el prefijo,   */
         /* que es de las tarjetas de los otros siete reportes. Regla #394.    */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_vol),
+        /*                                                                    */
+        /* `ajuste_graf_card_izq_sem` (Semanal) salió el 2026-09-13, con el   */
+        /* mismo pedido en otras palabras: «que su tarjeta sea del tamaño de  */
+        /* la de vs año anterior, ya que es muy larga cuando aparece el       */
+        /* detalle». Con techo, la tabla del detalle la estiraba hasta        */
+        /* `--alto-util` y le sacaba barra propia; ahora la figura cede su    */
+        /* sitio a la tabla y la tarjeta mide lo mismo con foco o sin él.     */
+        /* Regla #398.                                                        */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_vol):not(.st-key-ajuste_graf_card_izq_sem),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -861,6 +869,13 @@ CSS = """    /* ================================================================
         /* (23.8 contra 18.8, medido). 11 + 4 + 1 = los 16 de vap. #395.     */
         div.st-key-ajuste_graf_card_izq_vol {
             padding-top: 11px !important;
+            padding-bottom: 16px !important;
+        }
+        /* Semanal, el mismo padding que vap por el mismo motivo (#398): 8   */
+        /* de la familia contra 16 de vap son píxeles de diferencia que no   */
+        /* son contenido. Sin tarjeta interna, acá no hay 5px que restar.    */
+        div.st-key-ajuste_graf_card_izq_sem {
+            padding-top: 16px !important;
             padding-bottom: 16px !important;
         }
         /* Barra fina y discreta, igual criterio que el panel del asistente

@@ -77,8 +77,10 @@ CSS = """    <style>
            Es el `top` sticky de `fila_ajuste_top`: arriba de 901px su banda
            no pinta y sus hijos son `fixed`, asi que no se nota; entre 769 y
            900 SI pinta, y ahi es lo que evita que la banda se coma los
-           primeros 40px del contenido, que acaba de subir. */
-        --cab-nivel1-top: 68px;
+           primeros 40px del contenido, que acaba de subir.
+           2026-09-13: 68 -> 44, los 24px que la franja de REPORTES dejo de
+           reservar (--franja-rep-reserva). Mismo motivo y misma cuenta. */
+        --cab-nivel1-top: 44px;
         --cab-nivel2-top: 52px;   /* legacy: ya no hay nivel 2 en la banda */
         /* 58px hasta el 2026-08-14. Medido en el navegador: la franja ocupa
            de y=8 a y=37 (29px reales de controles) y la tarjeta arrancaba en
@@ -114,8 +116,14 @@ CSS = """    <style>
            mismos 16px de aire, ahora bajo la franja de REPORTES.
            2026-09-12: 88 -> 76, los 12px que adelgazo la franja de reportes
            (48 -> 36). La primera tarjeta sube con ella: y=64 -> y=52, los
-           mismos 16px de aire. */
-        --cab-offset-contenido: 76px;
+           mismos 16px de aire.
+           2026-09-13: 76 -> 52, a pedido ("aprovechar espacio vertical"). La
+           franja de reportes paso a CAPA y en reposo solo reserva sus 12px
+           de arriba (--franja-rep-reserva), asi que el contenido sube los 24
+           que dejo de ocupar: la primera tarjeta, de y=52 a y=28, con los
+           mismos 16px de aire. En MOVIL este valor no se usa: `_99_movil.py`
+           le devuelve el de antes (alla no hay franja que se haya ido). */
+        --cab-offset-contenido: 52px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -214,6 +222,30 @@ CSS = """    <style>
            que quedaban DEBAJO de ellos. Quedan 4px entre la pastilla del
            hover y el borde. */
         --franja-rep-alto: 36px;
+        /* LO QUE LA FRANJA DE REPORTES RESERVA EN EL LAYOUT (2026-09-13).
+           El mismo desdoblamiento que --franja-vistas-reserva, un piso más
+           arriba. A pedido («que la franja superior de reportes aparezca
+           cuando el cursor se ponga sobre su lugar y que inicialmente esté
+           oculta ... para aprovechar espacio vertical») la franja dejó de
+           ser una fila y pasó a ser una CAPA (`_26_rails_scroll.py`): sigue
+           midiendo --franja-rep-alto cuando se abre, pero en reposo sólo
+           deja esta tira de arriba, que es por donde entra el cursor.
+
+           NO vale 0, a diferencia de la de vistas. Aquélla la abre la
+           franja de reportes; ésta no tiene nada encima que la abra, así
+           que su disparador es su propio borde. Y ese borde no puede ir
+           sobre contenido: con 0 la primera tarjeta sube a y=16 y su fila de
+           controles queda DEBAJO de la franja — ir al selector de fecha la
+           abriría encima de él. 12px es un blanco cómodo contra el borde de
+           la ventana y devuelve 24 de los 36.
+
+           Quién suma cuál: los OFFSETS de lo que se ve siempre (el rail, su
+           cabecera y el pestillo, --cab-offset-contenido, la banda de la
+           cabecera) suman ESTA. Lo que vive DENTRO de la capa (la franja de
+           vistas, la de KPIs, el compartimento de filtros, la fecha) sigue
+           colgando de --franja-rep-alto, porque aparece con ella y debajo
+           de ella. Regla #397. */
+        --franja-rep-reserva: 12px;
         /* Alto de la CABECERA del rail ("Reportes" / "Vistas"). Era el
            literal 33 —la resta entre los dos `top` que había antes— repetido
            en tres sitios: su propia `height` y el `top` y el `max-height` de

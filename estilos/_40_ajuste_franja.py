@@ -144,8 +144,10 @@ CSS = """    /* ================================================================
            y esta banda solo cubria la de abajo: la de arriba quedaba sin
            fondo y al scrollear se veia el contenido pasar POR DETRAS del
            titulo y los chips. */
-        /* 2026-08-31: 0 -> la franja de reportes, que va por encima. */
-        top: var(--franja-rep-alto) !important;
+        /* 2026-08-31: 0 -> la franja de reportes, que va por encima.
+           2026-09-13: -> lo que esa franja RESERVA, que desde ese dia es
+           capa y en reposo solo ocupa su tira de arriba (_00_base.py). */
+        top: var(--franja-rep-reserva) !important;
         bottom: auto !important;
         /* 2026-08-09: de tarjeta colgante (left:170/right:163, alineada con
            la tarjeta del gráfico) a BARRA de borde a borde. left:90px = el

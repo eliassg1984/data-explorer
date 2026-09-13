@@ -84,8 +84,11 @@ CSS = """    /* ================================================================
            franja de vistas. Los tres sumandos son las tres cosas que hay
            encima, en orden — no un 111 suelto. Quinta vuelta de este `top`
            (74 -> 8 -> -2 -> 0 -> 47 -> acá) y la primera en la que el
-           número sale entero de otras medidas en vez de medirse a ojo. */
-        top: calc(var(--franja-rep-alto) + var(--franja-vistas-reserva)
+           número sale entero de otras medidas en vez de medirse a ojo.
+           2026-09-13: el primer sumando pasa a ser lo que la franja de
+           reportes RESERVA (12), no lo que mide abierta (36): paso a capa,
+           igual que la de vistas antes que ella. Ver _00_base.py. */
+        top: calc(var(--franja-rep-reserva) + var(--franja-vistas-reserva)
                   + var(--rail-cab-alto)) !important;
         /* 2026-08-18, a pedido: el rail pasa del borde DERECHO al IZQUIERDO.
            Es el sitio que dejó libre el rail de navegación al convertirse en
@@ -113,7 +116,7 @@ CSS = """    /* ================================================================
            tantas vistas que no entran (activa el overflow-y:auto de abajo
            en vez de desbordar). */
         height: auto !important;
-        max-height: calc(100vh - var(--franja-rep-alto)
+        max-height: calc(100vh - var(--franja-rep-reserva)
                                - var(--franja-vistas-reserva)
                                - var(--rail-cab-alto) - 8px) !important;
         z-index: 900 !important;
@@ -439,7 +442,10 @@ CSS = """    /* ================================================================
            arranca exactamente donde termina la de VISTAS, que es la ultima
            del cromo superior. Las dos franjas y la cabecera quedan apiladas
            sin hueco: 0..38, 38..78, 78..111. */
-        top: calc(var(--franja-rep-alto)
+        /* 2026-09-13: la RESERVA de la franja de reportes, no su alto — es
+           capa desde ese dia. Abierta tapa la parte de arriba de esta
+           cabecera, como ya la tapaba la franja de vistas. */
+        top: calc(var(--franja-rep-reserva)
                   + var(--franja-vistas-reserva)) !important;
         left: 19px !important;              /* == el rail */
         width: var(--rail-der-w) !important;
@@ -1177,7 +1183,7 @@ CSS = """    /* ================================================================
     .st-key-rail_pestillo_abierto,
     .st-key-rail_pestillo_plegado {
         position: fixed !important;
-        top: calc(var(--franja-rep-alto)
+        top: calc(var(--franja-rep-reserva)
                   + var(--franja-vistas-reserva)) !important;
         left: calc(19px + var(--rail-der-w) - var(--rail-cab-alto)) !important;
         width: var(--rail-cab-alto) !important;
@@ -1284,7 +1290,7 @@ CSS = """    /* ================================================================
        `.st-key-nav_rail_lateral` (0,1,0); estas reglas son (0,2,1). */
     :root.rails-scrolled .st-key-rail_pestillo_abierto,
     :root.rails-scrolled .st-key-rail_pestillo_plegado {
-        top: var(--franja-rep-alto) !important;
+        top: var(--franja-rep-reserva) !important;   /* == los railes, _26 */
     }
     :root.rails-scrolled .st-key-compras_tabs_row,
     :root.rails-scrolled .st-key-nav_rail_lateral {

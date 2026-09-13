@@ -24,6 +24,17 @@ CSS = """    /* ================================================================
             /* La franja de reportes es de escritorio: aca los reportes
                viven en la barra inferior. Ver _00_base.py. */
             --franja-rep-alto: 0px;
+            /* Y lo que reserva en reposo, que es lo que suman los offsets
+               del cromo (_00_base.py). Sin esto el rail y su cabecera
+               bajarian 12px por una franja que aca no existe. */
+            --franja-rep-reserva: 0px;
+            /* El padding-top del contenido (`navegacion.py::_CSS_AJUSTE`) es
+               GLOBAL y cuelga de esta variable. El 2026-09-13 bajo de 76 a 52
+               en `_00_base.py` por la franja de reportes, que aca no existe:
+               sin esto el contenido de movil subia 24px contra el pill de
+               fecha y la banda, que reservan su propio sitio. Queda como
+               estaba. */
+            --cab-offset-contenido: 76px;
         }
 
         /* COLAPSAR el hueco fantasma de la franja: en móvil TODO su

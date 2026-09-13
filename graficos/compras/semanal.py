@@ -430,12 +430,15 @@ def _tabla_detalle(det, hueco):
         "P. unit.": lambda v: ("—" if pd.isna(v) else f"S/ {v:,.2f}"),
         "Valor": lambda v: f"S/ {v:,.2f}",
     }
+    # Alto FIJO y no `por_filas` (2026-09-13, regla #398): la tarjeta mide lo
+    # que la de «Vs año pasado» con detalle o sin él, y eso sólo se sostiene
+    # si la tabla no crece con las filas. Lo que no entra lo desliza la tabla
+    # por dentro, que es el único scroll que se permite en una tarjeta.
     with hueco.container():
         st.dataframe(
             tp.style.format(fmts).hide(axis="index"),
             use_container_width=True, hide_index=True,
-            height=alturas.por_filas(len(tp), px_fila=34, extra=60, minimo=0,
-                                     rol=alturas.MINI))
+            height=alturas.SEMANAL_TABLA)
 
 
 @st.fragment
@@ -871,7 +874,66 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                                "<extra></extra>"),
             )
 
-        _compras_layout(fig, alto=alturas.PROTAGONISTA)
+        # ── EL CLIC SE RESUELVE ANTES DE DIBUJAR (2026-09-13, regla #398) ─
+        # La tarjeta mide lo que la de «Vs año pasado» con detalle o sin él,
+        # y para eso la FIGURA le cede su sitio a la tabla: su alto depende de
+        # si hay foco. Pero el foco lo escribe el clic, y el clic se leía del
+        # valor que DEVUELVE `st.plotly_chart` — o sea con la figura ya
+        # dibujada. En el rerun del clic, que es el que el usuario está
+        # mirando, la tabla aparecía y el gráfico seguía con el alto de antes.
+        #
+        # Por eso se lee el MISMO evento de `session_state`, donde Streamlit
+        # lo deja antes de que corra el script (el estado de un widget con
+        # `key` se lee sin dibujarlo). La key no cambia: sigue llevando el
+        # foco de ANTES del clic (ver el comentario del `st.plotly_chart`),
+        # así que en ese rerun el gráfico conserva la barra que Plotly marcó.
+        # Lo que `st.plotly_chart` devuelve se IGNORA: ya se procesó acá, y
+        # procesarlo dos veces es un toggle doble — un clic que no hace nada.
+        _foco_antes = st.session_state.get("compras_sem_focus")
+        _doc_antes = st.session_state.get("compras_sem_doc")
+        # El foco de COMPRA entra también, y SLUGUEADO: es una cadena con
+        # fecha, razón social y Nº de documento, y una key emite una clase
+        # CSS (mismo motivo que los sufijos de `selector_escala`).
+        _key_graf = (f"compras_g_semanal_{gran}_{_foco_antes or 'none'}"
+                     f"_{_slug(str(_doc_antes))[:24] if _doc_antes else 'nodoc'}")
+        _pt = _first_point(st.session_state.get(_key_graf))
+        if _pt is not None:
+            if _pt.get("curve_number") == 1 and not _pts.empty:
+                # Traza 1 = los puntos. `point_index` contra `_pts`, que se
+                # construyó con `reset_index` justo para esto.
+                _pi = _pt.get("point_index", _pt.get("point_number"))
+                if _pi is not None and 0 <= _pi < len(_pts):
+                    _c = _pts["compra"].iloc[_pi]
+                    st.session_state["compras_sem_doc"] = (
+                        None if _doc_antes == _c else _c)
+                    st.session_state["compras_sem_focus"] = (
+                        _pts["clave"].iloc[_pi])
+            else:
+                # Traza 0 = las barras. Su x es el ÍNDICE del período (eje
+                # lineal), así que hay que traducirla: el foco se guarda
+                # como CLAVE, que es lo que compara la tabla de abajo.
+                _clic = _clave_del_clic(_pt.get("x"), _ord_claves)
+                # Con una compra en foco, la barra SUBE un nivel (vuelve al
+                # período entero) en vez de apagarlo todo: apagar obligaría
+                # a dos clics para deshacer uno.
+                if _clic is None:
+                    pass
+                elif _doc_antes:
+                    st.session_state["compras_sem_doc"] = None
+                    st.session_state["compras_sem_focus"] = _clic
+                else:
+                    st.session_state["compras_sem_focus"] = (
+                        None if _foco_antes == _clic else _clic)
+        _focus = st.session_state.get("compras_sem_focus")
+        _doc = st.session_state.get("compras_sem_doc")
+        # Las mismas dos condiciones que eligen la rama de la tabla, más
+        # abajo: si una dice que hay tabla y la otra no, la tarjeta cambia de
+        # alto — que es justo lo que este bloque viene a evitar.
+        _con_detalle = ((_doc is not None and _doc in set(dd["compra"]))
+                        or _focus in set(dd["clave"]))
+
+        _compras_layout(fig, alto=(alturas.COMPACTO if _con_detalle
+                                   else alturas.SEMANAL_SOLO))
         fig.update_layout(
             title=_titulo,
             legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=10)),
@@ -938,44 +1000,12 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # Mismo patrón que el click-drill de Por área/Por
         # familia — ver CLAUDE.md y arquitectura.md #76.
         #
-        # El foco de COMPRA entra también, y SLUGUEADO: es una cadena con
-        # fecha, razón social y Nº de documento, y una key emite una clase
-        # CSS (mismo motivo que los sufijos de `selector_escala`).
-        _foco_antes = st.session_state.get("compras_sem_focus")
-        _doc_antes = st.session_state.get("compras_sem_doc")
-        evt = st.plotly_chart(
+        # El clic ya se resolvió ARRIBA, antes de armar el layout (ver «EL
+        # CLIC SE RESUELVE ANTES DE DIBUJAR»): lo que devuelve esta llamada
+        # no se lee, a propósito.
+        st.plotly_chart(
             fig, use_container_width=True, on_select="rerun",
-            selection_mode="points",
-            key=(f"compras_g_semanal_{gran}_{_foco_antes or 'none'}"
-                 f"_{_slug(str(_doc_antes))[:24] if _doc_antes else 'nodoc'}"))
-        _pt = _first_point(evt)
-        if _pt is not None:
-            if _pt.get("curve_number") == 1 and not _pts.empty:
-                # Traza 1 = los puntos. `point_index` contra `_pts`, que se
-                # construyó con `reset_index` justo para esto.
-                _pi = _pt.get("point_index", _pt.get("point_number"))
-                if _pi is not None and 0 <= _pi < len(_pts):
-                    _c = _pts["compra"].iloc[_pi]
-                    st.session_state["compras_sem_doc"] = (
-                        None if _doc_antes == _c else _c)
-                    st.session_state["compras_sem_focus"] = (
-                        _pts["clave"].iloc[_pi])
-            else:
-                # Traza 0 = las barras. Su x es el ÍNDICE del período (eje
-                # lineal), así que hay que traducirla: el foco se guarda
-                # como CLAVE, que es lo que compara la tabla de abajo.
-                _clic = _clave_del_clic(_pt.get("x"), _ord_claves)
-                # Con una compra en foco, la barra SUBE un nivel (vuelve al
-                # período entero) en vez de apagarlo todo: apagar obligaría
-                # a dos clics para deshacer uno.
-                if _clic is None:
-                    pass
-                elif _doc_antes:
-                    st.session_state["compras_sem_doc"] = None
-                    st.session_state["compras_sem_focus"] = _clic
-                else:
-                    st.session_state["compras_sem_focus"] = (
-                        None if _foco_antes == _clic else _clic)
+            selection_mode="points", key=_key_graf)
 
         # El CAPTION es un elemento simple: un `if/else`
         # desnudo lo reconcilia bien (mismo conteo de
@@ -999,8 +1029,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # `hueco.empty()` antes de escribir la respuesta
         # aparte) — no se reutiliza el mismo hueco para el
         # caption.
-        _focus = st.session_state.get("compras_sem_focus")
-        _doc = st.session_state.get("compras_sem_doc")
+        # `_focus` y `_doc` ya vienen resueltos de antes de la figura.
         _hueco_tabla = st.empty()
         if _doc is not None and _doc in set(dd["compra"]):
             _det = dd[dd["compra"] == _doc].sort_values("valor",

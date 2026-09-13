@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-396 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+398 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (139)
+**CSS y estilos** (140)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -173,6 +173,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
 - **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
+- **#397** — Una franja que aparece con el cursor no puede irse entera: algo tiene que quedar…
 
 **Layout y alturas** (48)
 
@@ -225,7 +226,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#394** — «Que mida igual que aquella» es una cuenta entre dos tarjetas, y sólo se sostiene si las dos…
 - **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
 
-**Plotly y figuras** (64)
+**Plotly y figuras** (65)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -291,6 +292,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#388** — hoverinfo="skip" apaga también el CLIC: un overlay invisible puesto para capturar clics con…
 - **#389** — Si algo es difícil de clickear, lo que crece es el blanco del clic, no el dibujo — y la…
 - **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
+- **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
 
 **AgGrid y tablas** (66)
 
@@ -361,7 +363,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
 - **#396** — Una tabla que tiene que verse «igual que la de al lado» no puede ser un st.dataframe si la de…
 
-**Streamlit** (107)
+**Streamlit** (108)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -470,6 +472,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#373** — Un st.rerun al tope de un fragment no sólo aborta ese render: le BORRA el estado a TODOS los…
 - **#377** — Una tarjeta por ítem es un formato, no una ley: cuando la lista crece, la fila gana — y el…
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
+- **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
 
 **Datos, R2 y DuckDB** (49)
 
@@ -619,7 +622,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 - **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
 
-**Decisiones de diseño y UX** (66)
+**Decisiones de diseño y UX** (67)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -687,6 +690,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#380** — Un caption que explica una columna es una columna sin sitio: mudalo al headerTooltip antes de…
 - **#387** — Dos rótulos para la misma cosa son una pregunta que el usuario va a hacer
 - **#394** — «Que mida igual que aquella» es una cuenta entre dos tarjetas, y sólo se sostiene si las dos…
+- **#397** — Una franja que aparece con el cursor no puede irse entera: algo tiene que quedar…
 
 **Mantenimiento y trampas del lenguaje** (12)
 
@@ -34529,6 +34533,107 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+397. **Una franja que aparece con el cursor no puede irse entera: algo
+     tiene que quedar hit-testeable para despertarla, y eso que queda no
+     puede ir encima de contenido.** Pedido: «que la franja superior de
+     reportes aparezca cuando el cursor se ponga sobre su lugar y que
+     inicialmente esté oculta… para aprovechar espacio vertical». Es el
+     camino que ya hizo la franja de vistas el 2026-09-07: de FILA a CAPA,
+     con una variable nueva, `--franja-rep-reserva`, que separa lo que la
+     franja MIDE abierta (36, `--franja-rep-alto`) de lo que RESERVA en el
+     layout. Con una diferencia que decidió el diseño entero: a la de vistas
+     la abría la franja de reportes, que estaba siempre; a ésta no la abre
+     nada de encima.
+
+     - **`visibility: hidden` no sirve** —es el reposo del resto de la
+       capa—: un elemento que el navegador no hit-testea no puede estar
+       `:hover` nunca, así que la franja no tendría cómo volver. Se queda con
+       `opacity: 0` y un `clip-path: inset(0 0 calc(100% - 12px) 0)`, que
+       recorta también el hit-testing (`estilos/_26_rails_scroll.py`, punto
+       0 de «LA CAPA DE LA CABECERA»). Al abrir el recorte se suelta al
+       instante; al cerrar vuelve al final del fundido.
+     - **Reserva 0 tampoco**: la primera tarjeta subiría a y=16 y su fila de
+       controles quedaría debajo de la franja invisible — ir al selector de
+       fecha la abriría encima. Con 12 la tira despierta la franja y lo de
+       abajo sigue recibiendo sus clics. Medido a 1366x768 con
+       `elementFromPoint`, en reposo: y=5 → la franja, y=20 → el contenido,
+       (40, 20) → el pestillo del rail. Abierta: y=20 → la franja, y=50 →
+       un botón de vista.
+     - **Quién suma cuál.** Suman la reserva los OFFSETS de lo que se ve
+       siempre: el rail (arriba y scrolleado), su cabecera, el pestillo (en
+       los dos estados), la banda de la cabecera, `--cab-offset-contenido`
+       (76 → 52, con `alturas._CAB_OFFSET` en sync) y `--cab-nivel1-top`.
+       Siguen en `--franja-rep-alto` los MIEMBROS de la capa —la franja de
+       vistas, la de KPIs, el compartimento de filtros, la fecha—, que
+       aparecen con ella y debajo de ella. Medido: rail, cabecera, pestillo y
+       primera tarjeta suben los cuatro 24px (la tarjeta, de y=96 a y=72).
+     - **Móvil no se toca.** El `padding-top` del contenido es global
+       (`navegacion.py::_CSS_AJUSTE`) y cuelga de `--cab-offset-contenido`,
+       así que `_99_movil.py` le devuelve el 76: allá no hay franja que se
+       haya ido.
+     - **El sello de «Última actualización»** es un div fijo colgado del
+       body, no un hijo de la franja: se apaga y se prende con la capa, o
+       quedaría flotando sin fondo sobre el contenido.
+     - **El foco de TECLADO también la abre** (`:focus-visible` en
+       `_DISPARADORES`). No `:focus`: tras un clic el botón se queda con el
+       foco y la franja no se cerraría hasta hacer clic en otro lado.
+
+     Cómo se verifica, porque los dos atajos obvios mienten: JS no puede
+     poner un elemento en `:hover`, y un `.focus()` desde script NO cuenta
+     como `:focus-visible` (medido: `matches(':focus-visible')` da false y
+     la capa no se abre). Lo que sí: `.focus()` y después Tab + Shift+Tab
+     reales (la acción `key` del navegador automatizado), y medir
+     `clip-path`, `pointer-events` y `elementFromPoint` — nunca `opacity`,
+     que en ese navegador no transiciona (#353).
+
+     (2026-09-13.)
+
+398. **Para que una tarjeta mida lo mismo con detalle o sin él, el alto de
+     la figura depende del foco — y el foco hay que resolverlo ANTES de
+     dibujarla.** Pedido sobre «Semanal»: «que su tarjeta sea del tamaño de
+     la de vs año anterior, ya que es muy larga cuando aparece el detalle».
+     Antes, a 1366x768: 552 sin foco (536 visibles + 16 que el techo
+     escondía con scroll) y, con la tabla del detalle, figura 430 + tabla
+     hasta 240 + caption ≈ 790 por cuenta, que el techo de `--alto-util`
+     (668) cortaba con barra propia. Vs año pasado: 570.6.
+
+     - **Salió del techo** como Volatilidad (#394), con otro `:not()` en
+       `estilos/_80_cards.py`, y tomó el padding vertical de 16 de vap.
+     - **La figura le cede su sitio a la tabla**: `alturas.SEMANAL_SOLO`
+       (449) sin foco, `COMPACTO` (240) con foco — el rol que existe
+       justamente para «figura con un segundo bloque del mismo peso debajo».
+       La tabla pasa de `por_filas` a un alto FIJO, `alturas.SEMANAL_TABLA`
+       (192): si creciera con las filas, la tarjeta crecería con ella. Lo
+       que no entra lo desliza la tabla por dentro.
+     - **La trampa.** El foco lo escribe el clic, y el clic se leía del
+       valor que DEVUELVE `st.plotly_chart`, o sea con la figura ya
+       dibujada: en el rerun del clic —el que el usuario está mirando— la
+       tabla aparecía y la figura seguía con el alto del gesto anterior. Se
+       lee el mismo evento de `st.session_state[key]` antes de armar el
+       layout (con `key`, el estado de un widget se lee sin dibujarlo), y lo
+       que devuelve `st.plotly_chart` se IGNORA: procesarlo dos veces es un
+       toggle doble, un clic que no hace nada. La key no cambia —sigue
+       llevando el foco de antes del clic, el patrón de CLAUDE.md—, así que
+       la barra que Plotly marcó se conserva en ese rerun.
+
+     Medido después, a 1366x768: 571.4 sin foco (figura 449) y 570.4 con
+     foco (figura 240 + tabla 192), contra 570.6 de vap. La figura cambia
+     de alto en el MISMO rerun en que aparece la tabla. El primer intento de
+     tabla, 196, dio 574: el ajuste lo absorbe la tabla porque su alto es
+     exacto.
+
+     Cómo se hace clic en un gráfico desde el navegador automatizado, que
+     con el panel oculto no saca capturas: `gd.emit('plotly_selected',
+     {points: [{curveNumber, pointNumber, pointIndex, x, y, data,
+     fullData}]})`, que es el evento que escucha Streamlit. Dos cosas que no
+     sirven: un `mousedown`/`mouseup` sintético sobre `.nsewdrag` (Plotly
+     resuelve el clic con su hover, que no corre con el panel oculto), y
+     leer la barra de `gd.data[0].y`, que llega en binario (`bdata`): los
+     valores decodificados están en `gd.calcdata[0]` —`p` es la x, `s` el
+     alto de la barra—.
+
+     (2026-09-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34541,7 +34646,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#397**.
+> próxima regla nueva es la **#399**.
 
 >
 
