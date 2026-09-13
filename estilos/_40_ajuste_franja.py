@@ -293,10 +293,10 @@ CSS = """    /* ================================================================
     }
 
     /* ================================================================== */
-    /* RECETAS — sin franja, sin reserva                                  */
+    /* RECETAS e INVENTARIO — sin franja, sin reserva                     */
     /* ================================================================== */
-    /* Es catálogo (data.py: "fecha": None) y el título de la franja está  */
-    /* oculto por pedido (app.py) — no queda nada adentro,                 */
+    /* Son los dos reportes FOTO (data.py: "fecha": None) y el título de   */
+    /* la franja está oculto por pedido (app.py) — no queda nada adentro,  */
     /* solo la banda decorativa. A pedido (2026-08-24) se oculta ENTERA    */
     /* (:has() apaga el contenedor y con él su ::before, sin tocar Python) */
     /* y en desktop se recorta el padding-top que el contenido reserva     */
@@ -313,18 +313,49 @@ CSS = """    /* ================================================================
     /* padding-top de navegacion.py ahí reservan para otros fijos (pill de */
     /* fecha, banda) que comparten presupuesto — recortarlos a ciegas, sin */
     /* poder medir reporte por reporte, es más riesgo que la ganancia.     */
-    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .st-key-fila_ajuste_top {
+    /* Inventario Valorizado se suma el 2026-09-13, a pedido ("subamos las
+       tarjetas, ya eliminamos los KPIs y sobra espacio arriba"): medido en
+       1366x768, su franja reservaba 52px de alto con CERO hijos con altura
+       adentro, y las tarjetas arrancaban en y=100. Su config lo dice desde
+       que nació —«Foto sin fecha (igual que Recetas)»—, así que no es un
+       estado transitorio: no hay dato que pueda aparecer ahí. Va en el
+       MISMO selector que Recetas y no en una regla nueva: el criterio es
+       uno solo ("fecha": None ⇒ franja vacía), y separarlo en dos bloques
+       es lo que hace que el tercer reporte-foto lo herede a medias. */
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .st-key-fila_ajuste_top,
+    [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado) .st-key-fila_ajuste_top {
         display: none !important;
     }
     @media (min-width: 769px) {
         [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) [data-testid="stMainBlockContainer"],
         [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .stMainBlockContainer,
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .block-container {
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .block-container,
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado) [data-testid="stMainBlockContainer"],
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado) .stMainBlockContainer,
+        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado) .block-container {
             /* --nav-top-alto (40px) despeja la barra de navegación fija;
                +8px es el mismo respiro que usan _50_fecha.py/_40_ajuste_
                franja.py para lo que ancla contra esa variable. */
             padding-top: calc(var(--nav-top-alto) + 8px) !important;
         }
+    }
+
+    /* Y aun sin franja, la primera tarjeta de Inventario arrancaba 68px
+       mas abajo que la de Compras (96 contra 28, medido en 1366x768). No
+       era la franja: el bloque vertical raiz lleva `gap: 16px` y arriba de
+       las secciones hay CINCO wrappers de altura 0 —markers, franjas fijas
+       y contenedores que dibujan en `position: fixed`— que no ocupan alto
+       pero si consumen su gap. 5 x 16 = los 80px de aire.
+
+       Se corrige subiendo la PRIMERA seccion, que arrastra a todo el flujo
+       de abajo: un solo numero, medido contra Compras, en vez de pelear
+       wrapper por wrapper con un `:not(:has())` que el proximo contenedor
+       invisible dejaria desactualizado. La key `inv_sec_area` solo existe
+       en este reporte, asi que no necesita el scope del marker.
+       (2026-09-13, a pedido: "subamos las tarjetas, sobra espacio arriba".)
+       Ver arquitectura.md regla #406. */
+    @media (min-width: 769px) {
+        .st-key-inv_sec_area { margin-top: -68px !important; }
     }
 
     /* ================================================================== */
