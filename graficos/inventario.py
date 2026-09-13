@@ -9,8 +9,11 @@ la celda, como el Ranking de proveedores de Compras; la torta se rompía
 apenas una familia concentraba >70% del total) y **Buscar producto**
 (nueva: ficha de un producto puntual, o de un grupo — Subfamilia — completo,
 con cantidad + valorizado + precio promedio + unidad de medida por área).
-Se agrega un KPI "Valorizado total" — vive DENTRO de la card izquierda (no
-en una franja aparte arriba: se probó así y quedaba la card muy abajo).
+El KPI "Valorizado total" vivía DENTRO de la card izquierda (no en una
+franja aparte arriba: se probó así y quedaba la card muy abajo). Se retiró
+de las cuatro secciones el 2026-09-13, a pedido: en las dos de ranking lo
+dice la fila TOTAL de la tabla, y en "Buscar producto" era el valorizado de
+todo el inventario en una ficha de UN producto. Ver regla #404.
 El panel lateral de la derecha (Mayor cantidad/Precio más alto)
 se mantiene igual en Por área/Por familia, pero en Buscar producto pasa a
 mostrar productos relacionados (misma subfamilia/familia) en vez de un top
@@ -72,6 +75,18 @@ CSS_TITULOS_INV = """
 </style>
 """
 
+# Con qué categoría ABRE "Por área" mientras nadie haya elegido otra
+# (2026-09-13, a pedido: "abrir en almacen"). No es un filtro ni quita la
+# elección — es dónde abre: un clic en cualquier otra fila la reemplaza, y
+# soltarla vuelve acá. GASTOS es la mayor por valorizado (79%) pero no es
+# inventario que se pueda contar en un estante, así que abrir ahí gastaba la
+# primera pantalla en la categoría menos accionable. Ver regla #405.
+#
+# Es una tupla y no un string: si el nombre cambia en el ERP, el siguiente
+# candidato sigue sirviendo sin tocar código. Si ninguno está en los datos,
+# `_tabla_ranking` abre en la categoría mayor — nunca en vacío.
+ABRE_EN_AREA = ("ALMACEN CENTRAL",)
+
 # Cuántas filas RESERVA una tabla-ranking antes de scrollear por dentro. El
 # 8 es el techo de Compras (`proveedor.py::_FILAS_RANK`) y viaja con el
 # resto del look: dos tablas con el mismo tema y el mismo alto de fila pero
@@ -122,7 +137,8 @@ def _rango_con_holgura(*series, factor=0.28):
 
 
 def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
-                   ancho_pct=80, flex_nombre=2, ancho_barra=0.62):
+                   ancho_pct=80, flex_nombre=2, ancho_barra=0.62,
+                   abre_en=(), abrir_en_mayor=False):
     """Ranking de Por area/Por familia como TABLA con barra de progreso.
 
     Es la tabla-ranking del repo, la misma que el Ranking de proveedores de
@@ -136,9 +152,18 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     proposito: el grid vive en un iframe propio y las variables CSS del
     documento padre no llegan.
 
-    Clic en una fila = TOGGLE del foco; devuelve la categoria elegida (o
-    None) para que el caller filtre el panel derecho y muestre el detalle
-    del siguiente nivel. A diferencia de `plotly_chart(on_select=...)`,
+    Clic en una fila = TOGGLE del foco; devuelve la categoria elegida para
+    que el caller filtre el panel derecho y muestre el detalle del siguiente
+    nivel. Sin seleccion devuelve None, salvo que el caller pida un default
+    con `abrir_en_mayor`: ahi devuelve el primer nombre de `abre_en` que
+    exista en los datos y, si ninguno esta, la categoria mayor. Es el mismo
+    criterio que el drill de Proveedor, donde la tarjeta de al lado nunca
+    esta vacia; soltar la seleccion vuelve a ese default, no a "nada".
+
+    El default es del PRIMER nivel y no del segundo, a proposito: si el
+    desglose tambien se auto-enfocara, la franja de productos de abajo
+    abriria recortada a una familia y no habria forma de ver el area
+    entera. A diferencia de `plotly_chart(on_select=...)`,
     AgGrid devuelve la seleccion VIGENTE en cada run --es estado, no un
     evento que se repite--, asi que aca no hacen falta ni la key dinamica
     por foco ni el `st.rerun()` que evitaban el toggle infinito del grafico.
@@ -299,10 +324,20 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
         key=key,
     )
     sel = getattr(resp, "selected_rows", None)
-    if sel is None or not len(sel):
+    if sel is not None and len(sel):
+        fila = sel.iloc[0] if hasattr(sel, "iloc") else sel[0]
+        return str(fila[col_nombre])
+    if not abrir_en_mayor:
         return None
-    fila = sel.iloc[0] if hasattr(sel, "iloc") else sel[0]
-    return str(fila[col_nombre])
+    # Sin seleccion: el default. La comparacion va normalizada porque el
+    # nombre viaja escrito a mano en `ABRE_EN_AREA` y el ERP los manda
+    # gritados y con espacios de sobra.
+    _norm = {str(i).strip().upper(): str(i) for i in serie.index}
+    for _cand in abre_en:
+        _hit = _norm.get(str(_cand).strip().upper())
+        if _hit is not None:
+            return _hit
+    return str(serie.index[0])
 
 
 def _tabla_detalle_foco(d, col_grp, foco, col_next, nombre_next, col_val, key):
@@ -820,7 +855,6 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         st.info("No hay datos para los filtros seleccionados.")
         return
 
-    _val  = pd.to_numeric(d[col_val], errors="coerce").fillna(0)
     _cant = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
              if col_cant else None)
 
@@ -839,7 +873,8 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     # sección pasa a ser AUTÓNOMA: arma su propio par de columnas y lleva su
     # sufijo. Se conserva el prefijo `ajuste_graf_card_`, de donde cuelga el
     # CSS de tarjeta (`estilos/_80_cards.py`).
-    def _seccion_grupo(slug, col_grp, nombre_grp, col_next, nombre_next):
+    def _seccion_grupo(slug, col_grp, nombre_grp, col_next, nombre_next,
+                       abre_en=()):
         """Una de las dos vistas de ranking (Por área / Por familia).
 
         Las dos son el MISMO layout sobre otra columna de agrupación, que es
@@ -848,7 +883,15 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         `col_next`/`nombre_next` es el segundo nivel del drill (Área →
         Familia, Familia → Subfamilia); lo elige el caller en vez de un `if`
         por nombre de vista adentro del desglose, que era el último sitio
-        donde el layout compartido seguía preguntando "¿qué vista soy?"."""
+        donde el layout compartido seguía preguntando "¿qué vista soy?".
+
+        Las tres tarjetas se dibujan SIEMPRE, con o sin clic: la de la
+        derecha es el desglose de la categoría en foco y la de abajo, sus
+        productos. Hasta el 2026-09-13 la derecha mostraba, sin foco, la
+        tabla de productos de TODO el inventario —15.360 filas en un tercio
+        de pantalla, con scroll horizontal porque sus 7 columnas piden
+        620px y ahí hay 248—. Con un foco por defecto (`abre_en`) esa tabla
+        vive siempre en la franja ancha, que es donde entra."""
         # columnas-internas: el ranking y su panel de apoyo, dentro de la
         # sección. No es una fila de drill de Compras: COLUMNAS_DRILL no
         # aplica. Proporción heredada tal cual del layout anterior.
@@ -870,11 +913,12 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                         f'<div class="inv-rank-tit">Valorizado por '
                         f'{nombre_grp}</div>', unsafe_allow_html=True)
                     foco = _tabla_ranking(d, col_grp, col_val, nombre_grp,
-                                          key=f"inv_rank_grid_{slug}")
-                    # El detalle NO se apila acá abajo: con foco activo se
-                    # dibuja lateral, en col_der — el Top que vive ahí
-                    # normalmente le cede el lugar y baja a su propia
-                    # franja debajo de las dos columnas.
+                                          key=f"inv_rank_grid_{slug}",
+                                          abre_en=abre_en,
+                                          abrir_en_mayor=True)
+                    # El detalle NO se apila acá abajo: se dibuja lateral,
+                    # en col_der, y los productos bajan a su propia franja
+                    # debajo de las dos columnas.
         with col_der:
             with st.container(border=True,
                               key=f"ajuste_graf_card_der_inv_{slug}"):
@@ -882,18 +926,15 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                     sub_foco = _tabla_detalle_foco(
                         d, col_grp, foco, col_next, nombre_next, col_val,
                         key=f"inv_det_grid_{slug}_{_slug(foco)}")
-                else:
-                    _panel_top(d, None, col_grp, col_prod, col_area, col_val,
-                              col_punit, _cant)
-        if foco:
-            with st.container(border=True,
-                              key=f"ajuste_graf_card_abajo_inv_{slug}"):
-                _panel_top(d, foco, col_grp, col_prod, col_area, col_val,
-                          col_punit, _cant, col_sub=col_next,
-                          sub_foco=sub_foco)
+        with st.container(border=True,
+                          key=f"ajuste_graf_card_abajo_inv_{slug}"):
+            _panel_top(d, foco, col_grp, col_prod, col_area, col_val,
+                      col_punit, _cant, col_sub=col_next,
+                      sub_foco=sub_foco)
 
     def _dib_area():
-        _seccion_grupo("area", col_area, "área", col_fam, "familia")
+        _seccion_grupo("area", col_area, "área", col_fam, "familia",
+                       abre_en=ABRE_EN_AREA)
 
     def _dib_familia():
         _seccion_grupo("familia", col_fam, "familia", col_subfam, "subfamilia")
@@ -904,7 +945,10 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         col_izq, col_der = st.columns([1.7, 1])
         with col_izq:
             with st.container(border=True, key="ajuste_graf_card_izq_inv_buscar"):
-                st.metric("Valorizado total", f"S/ {_val.sum():,.0f}")
+                # Sin KPI, como las otras tres secciones (2026-09-13). Acá
+                # no hay fila TOTAL que lo herede: el número se fue, y es
+                # lo pedido — en una ficha de UN producto, el valorizado de
+                # todo el inventario no era el dato de la pantalla.
                 _render_buscar_producto(d, col_prod, col_area, col_subfam,
                                         col_val, col_cant, col_unidad)
         with col_der:
