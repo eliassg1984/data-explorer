@@ -605,8 +605,13 @@ CSS = """    /* ================================================================
        re-reparto de las columnas viven en `tablas/compras_volatilidad.py`
        (`#gridContainer` en su `custom_css` y `_REPARTIR_ANCHO`): tres
        piezas para un solo gesto, porque el iframe parte el CSS en dos
-       documentos. */
-    .st-key-compras_vol_rank_grid iframe {
+       documentos.
+
+       Desde el 2026-09-12 vale también para la tabla de compras de la
+       semana, que pasó de `st.dataframe` a AgGrid (regla #396) y tiene el
+       mismo iframe con el mismo ancho escrito a mano. */
+    .st-key-compras_vol_rank_grid iframe,
+    .st-key-compras_vol_semana_grid iframe {
         width: 100% !important;
     }
 

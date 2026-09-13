@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-395 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+396 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (139)
 
@@ -292,7 +292,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#389** — Si algo es difícil de clickear, lo que crece es el blanco del clic, no el dibujo — y la…
 - **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
 
-**AgGrid y tablas** (65)
+**AgGrid y tablas** (66)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -359,6 +359,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#386** — Una grilla que cambia de columnas SIN volver a montarse no se entera por el ResizeObserver —…
 - **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
 - **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
+- **#396** — Una tabla que tiene que verse «igual que la de al lado» no puede ser un st.dataframe si la de…
 
 **Streamlit** (107)
 
@@ -34477,6 +34478,57 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-12.)
 
+396. **Una tabla que tiene que verse «igual que la de al lado» no puede ser
+     un `st.dataframe` si la de al lado es AgGrid: el diseño de una no se
+     traduce a la otra.** Pedido sobre la tarjeta de Volatilidad: la tabla
+     de compras de la semana (al lado del candlestick) con «el mismo tamaño
+     de filas y diseño» que el ranking de arriba — filas de 24 (#395) y el
+     look del modo diseño (#393). Antes, la pregunta: «¿mi herramienta de
+     diseño permite editar esto?». Del marco para afuera sí (alto, borde,
+     márgenes: la sección de caja escribe `style` inline sobre cualquier
+     nodo); de adentro, nada. La sección «Tabla (AgGrid)» busca el iframe
+     de st_aggrid, y `st.dataframe` dibuja sus celdas en un `<canvas>`: no
+     hay filas, cabecera ni líneas en el DOM, así que tampoco las alcanza
+     `estilos/`. Es el mismo muro que ya mudó a AgGrid los rankings de
+     Proveedor y de esta tarjeta (#130).
+
+     El look pasó a una función, `tablas/compras_volatilidad.py::_css_look`,
+     que usan las dos grillas: dos copias del mismo dict se separan al
+     primer retoque del modo diseño. El alto de fila es la misma constante,
+     `ALTO_FILA`, importada. Tres cosas NO se copiaron del ranking tal cual:
+
+     - **El cromo es 32 + 8 = 40** (`CROMO_SEMANA`), sin los 15 de la barra
+       horizontal que sí cuenta `CROMO_GRID`: esta grilla no se desliza de
+       costado, sus columnas se reparten la media tarjeta. **Y los dos
+       canales de scroll hay que sacarlos por CSS**: sus viewports llevan
+       `overflow: scroll` y Chrome dibuja el canal aunque no haya nada que
+       deslizar. Medido con dos compras: el de abajo (11.7px) le robaba el
+       alto a las filas aunque las columnas entraban justas (529/529) —
+       cuerpo de 37px para 48 de filas —, y el de la derecha (15px) quedaba
+       fuera de la cuenta de `sizeColumnsToFit`, que repartía los 544
+       enteros: el precio, alineado a la derecha, terminaba 7px DEBAJO del
+       canal. La opción `suppressHorizontalScroll` llega a la grilla (leída
+       con `api.getGridOption`) y no cambia ninguno de los dos: los mide el
+       navegador, no AG Grid. Con
+       `.ag-body-horizontal-scroll, .ag-body-vertical-scroll {display: none}`
+       en el `custom_css`: cuerpo de 49px para 49, área visible de 544 y el
+       precio entero. Si algún día no entran las compras, desliza
+       `.ag-body-viewport` (`overflow-y: auto` propio) — como en el ranking,
+       donde el canal vertical mide 2px. Un alto calculado sin barra no
+       alcanza si el navegador la dibuja igual.
+     - **El padding de celda baja de 16 a 8 por lado.** El del tema material,
+       en cinco columnas de la media tarjeta, eran 160px de aire.
+     - **El semáforo del precio viaja como DATO** (`__tono`, columna oculta:
+       la compra más cara en rojo, la más barata en verde). El precio llega
+       a la celda ya formateado como texto, y comparar textos no dice cuál
+       es mayor. Y el caso neutro devuelve `{color: null}`: AG Grid no borra
+       un estilo que el `cellStyle` deja de devolver.
+
+     Con filas de 24 en `alturas.PANEL_JUNTO_A_FIGURA` (165) entran cinco
+     compras enteras; con las de 35 del `st.dataframe` entraban tres.
+
+     (2026-09-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34489,7 +34541,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#396**.
+> próxima regla nueva es la **#397**.
 
 >
 

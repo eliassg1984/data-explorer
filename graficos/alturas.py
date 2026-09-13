@@ -320,9 +320,11 @@ del candlestick.
 
 Es el alto de la figura y no un número propio: las dos mitades de la fila
 llevan un renglón de título encima, así que con el mismo alto terminan en
-la misma línea. A 150 entran TRES compras enteras (35px por fila + 38 de
-cabecera y bordes), que es la semana más cargada de un mismo insumo que hay
-hoy en el parquet.
+la misma línea. A 165 entran CINCO compras enteras (24px por fila + 40 de
+cabecera y bordes, `tablas/compras_volatilidad.py::CROMO_SEMANA`), y la
+semana más cargada de un mismo insumo que hay hoy en el parquet son tres.
+Eran tres justas mientras la tabla fue un `st.dataframe` de filas de 35; el
+2026-09-12 pasó a AgGrid con las filas del ranking de arriba (regla #396).
 
 Se llamaba `PANEL_BAJO_FIGURA` y valía 110 mientras la tabla iba DEBAJO del
 candlestick, en la misma columna: ahí cada píxel que crecía lo pagaba la

@@ -39,7 +39,8 @@ from graficos import periodo
 from graficos import alturas
 from tablas.compras_volatilidad import (
     ALTO_FILA as ALTO_FILA_RANK, CROMO_GRID as CROMO_GRID_VOL,
-    renderizar_ranking_volatilidad,
+    CROMO_SEMANA as CROMO_SEMANA_VOL,
+    renderizar_compras_semana, renderizar_ranking_volatilidad,
 )
 
 _K_VENTANA = "compras_vol_ventana"
@@ -1073,41 +1074,41 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             else:
                 tp = pd.DataFrame(w["rows"])
                 maxp, minp = tp["precio"].max(), tp["precio"].min()
-
-                def _sty_precio(v):
-                    if maxp == minp:
-                        return ""
-                    if v == maxp:
-                        return f"color:{ERROR}; font-weight:700;"
-                    if v == minp:
-                        return f"color:{EXITO}; font-weight:700;"
-                    return ""
+                # EL SEMÁFORO DEL PRECIO viaja como DATO en la fila
+                # (`__tono`) y no como estilo: la grilla corre en un iframe y
+                # su `cellStyle` sólo ve lo que trae la fila. La compra más
+                # cara en rojo, la más barata en verde; con un solo precio en
+                # la semana, ninguna.
+                tp["__tono"] = [
+                    "" if maxp == minp
+                    else "max" if p == maxp else "min" if p == minp else ""
+                    for p in tp["precio"]]
 
                 # EL DOCUMENTO, AL LADO DE LA FECHA (2026-09-12, a pedido):
                 # «E001-1703», como se lee en el papel, y no el código de 15
                 # caracteres del parquet — `documento_legible` es la misma que
                 # usan las tablas de Documentos. Sin columna de documento
-                # (el demo local) la columna no se dibuja: una fila de «—» no
+                # (el demo local) la columna va oculta: una fila de «—» no
                 # dice nada.
                 if col_docu:
                     tp["doc"] = documento_legible(tp["doc"])
-                    tp = tp[["fecha", "doc", "prov", "cant", "precio"]]
-                else:
-                    tp = tp.drop(columns="doc")
-                tp = tp.rename(columns={"fecha": "Fecha", "doc": "Documento",
-                                        "prov": "Proveedor", "cant": "Cantidad",
-                                        "precio": f"Precio/{unidad}"})
-                fmts = {"Fecha": lambda v: f"{v:%d/%m/%Y}",
-                       "Cantidad": lambda v: "—" if pd.isna(v) else f"{v:,.2f} {unidad}",
-                       f"Precio/{unidad}": lambda v: f"S/ {v:,.2f}"}
-                sty_p = (tp.style.format(fmts)
-                         .map(_sty_precio, subset=[f"Precio/{unidad}"])
-                         .hide(axis="index"))
-                # 35 por fila y 38 de cabecera y bordes: lo que mide un
-                # `st.dataframe`, para que con tres compras (el máximo que
-                # hay hoy en el parquet para un insumo en una semana) la
-                # tabla entre entera en `PANEL_JUNTO_A_FIGURA` sin scroll.
-                st.dataframe(sty_p, use_container_width=True, hide_index=True,
-                            height=alturas.por_filas(
-                                len(tp), px_fila=35, extra=38, minimo=0,
-                                rol=alturas.PANEL_JUNTO_A_FIGURA))
+                tp["fecha"] = tp["fecha"].map(lambda v: f"{v:%d/%m/%Y}")
+                tp["cant"] = tp["cant"].map(
+                    lambda v: "—" if pd.isna(v) else f"{v:,.2f} {unidad}")
+                tp["precio"] = tp["precio"].map(lambda v: f"S/ {v:,.2f}")
+
+                # EN AGGRID Y NO EN `st.dataframe` (2026-09-12, a pedido: «el
+                # mismo tamaño de filas y diseño» que el ranking de arriba).
+                # `st.dataframe` dibuja sus celdas en un canvas: ni el modo
+                # diseño ni `estilos/` alcanzan sus filas, su cabecera o sus
+                # líneas. Es lo que ya mudó a AgGrid los rankings de Proveedor
+                # y de esta misma tarjeta. Las filas de 24 y el look salen de
+                # las constantes del ranking, no de una copia. Regla #396.
+                renderizar_compras_semana(
+                    tp[["fecha", "doc", "prov", "cant", "precio", "__tono"]],
+                    titulo_precio=f"Precio/{unidad}",
+                    altura=alturas.por_filas(
+                        len(tp), px_fila=ALTO_FILA_RANK,
+                        extra=CROMO_SEMANA_VOL, minimo=0,
+                        rol=alturas.PANEL_JUNTO_A_FIGURA),
+                    key="compras_vol_semana_grid", ver_doc=bool(col_docu))

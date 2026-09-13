@@ -1,5 +1,8 @@
-"""tablas.compras_volatilidad - grilla AgGrid del ranking de insumos por
-volatilidad (graficos/compras/volatilidad.py::_compras_volatilidad_drill).
+"""tablas.compras_volatilidad - las dos grillas AgGrid de la tarjeta de
+Volatilidad (graficos/compras/volatilidad.py::_compras_volatilidad_drill):
+el ranking de insumos por volatilidad y, al final del módulo, las compras
+de la semana en foco (`renderizar_compras_semana`, desde el 2026-09-12).
+Las dos llevan el mismo look, `_css_look` (regla #396).
 
 Reemplaza a la versión anterior en `pandas.Styler` + `st.dataframe`: esa
 combinación pinta bien el semáforo y la barra de Volatilidad, pero
@@ -886,38 +889,61 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     # documento de la app; éste viaja en `custom_css`, o sea dentro del iframe.
     custom_css["#gridContainer"] = {"width": "100% !important"}
 
-    # ── El look, copiado del modo diseño (2026-09-12, regla #393) ─────────
-    # Cabecera en gris muy claro con rótulos grises en seminegrita, línea de
-    # 2px entre filas, sin líneas verticales —tampoco el separador de la
-    # columna fija «Insumo», que el tema dibuja en la celda Y en su cabecera—
-    # y la tabla como una franja: 3px arriba y abajo, sin costados ni radio.
-    #
-    # Dos cosas NO se pegaron como venían:
-    #   · `.ag-cell {font-size: 13px !important}`. La grilla ya está en 13
-    #     (`_css_grid(13)`), y con `!important` le ganaba al tamaño INLINE que
-    #     `_STYLE_DELTA` le da al % (12px) y a los ceros (10.5px): el % crecía
-    #     fuera del ancho medido de `_MIN_ANCHO_COL_SEMANA` y los ceros
-    #     dejaban de verse chicos. Es el aviso de la regla #368.
-    #   · Las claves que `_css_grid` ya tenía (`.ag-root-wrapper`, `.ag-row`)
-    #     se FUSIONAN: reemplazarlas se llevaría el `overflow: hidden` y el
-    #     `width: 100%` del wrapper (#392).
-    custom_css[".ag-header, .ag-header-cell, .ag-header-group-cell"] = {
+    # El look del modo diseño (regla #393). Lo comparte con la tabla de
+    # compras de la semana, así que vive en `_css_look`.
+    custom_css = _css_look(custom_css)
+
+    resp = AgGrid(
+        tv, gridOptions=grid_options, height=altura, theme="material",
+        custom_css=custom_css, allow_unsafe_jscode=True, key=key,
+    )
+    sel = resp.selected_rows
+    if sel is not None and not sel.empty:
+        return str(sel.iloc[0]["__insumo_full"])
+    return None
+
+
+def _css_look(css):
+    """El look de las grillas de Volatilidad, copiado del modo diseño
+    (2026-09-12, regla #393): cabecera en gris muy claro con rótulos grises
+    en seminegrita, línea de 2px entre filas, sin líneas verticales
+    —tampoco el separador de la columna fija «Insumo», que el tema dibuja en
+    la celda Y en su cabecera— y la tabla como una franja: 3px arriba y
+    abajo, sin costados ni radio.
+
+    UNA función para las dos grillas de la tarjeta —el ranking y las compras
+    de la semana— desde que la segunda pasó a AgGrid (regla #396): se
+    pidieron «con el mismo diseño», y dos copias del mismo dict se separan
+    al primer retoque.
+
+    Recibe el dict de `_css_grid` y devuelve uno nuevo. Dos cosas NO se
+    pegaron como venían del modo diseño:
+      · `.ag-cell {font-size: 13px !important}`. La grilla ya está en 13
+        (`_css_grid(13)`), y con `!important` le ganaba al tamaño INLINE que
+        `_STYLE_DELTA` le da al % (12px) y a los ceros (10.5px): el % crecía
+        fuera del ancho medido de `_MIN_ANCHO_COL_SEMANA` y los ceros
+        dejaban de verse chicos. Es el aviso de la regla #368.
+      · Las claves que `_css_grid` ya tenía (`.ag-root-wrapper`, `.ag-row`)
+        se FUSIONAN: reemplazarlas se llevaría el `overflow: hidden` y el
+        `width: 100%` del wrapper (#392)."""
+    css = dict(css)
+    css[".ag-header, .ag-header-cell, .ag-header-group-cell"] = {
         "background-color": f"{GRIS_FONDO} !important",
     }
-    custom_css[".ag-header .ag-header-cell .ag-header-cell-text, "
-               ".ag-header .ag-header-group-cell .ag-header-group-text"] = {
+    css[".ag-header .ag-header-cell .ag-header-cell-text, "
+        ".ag-header .ag-header-group-cell .ag-header-group-text"] = {
         "color": f"{GRIS_TEXTO} !important",
         "font-size": "12px !important",
         "font-weight": "600 !important",
     }
-    custom_css[".ag-row"] = {**custom_css[".ag-row"],
-                             "border-bottom": f"2px solid {GRIS_BORDE} !important"}
-    custom_css[".ag-cell, .ag-header-cell"] = {"border-right": "none !important"}
-    custom_css[".ag-pinned-left-header, .ag-cell-last-left-pinned"] = {
+    css[".ag-row"] = {**css.get(".ag-row", {}),
+                      "border-bottom": f"2px solid {GRIS_BORDE} !important"}
+    css[".ag-cell, .ag-header-cell"] = {"border-right": "none !important"}
+    css[".ag-pinned-left-header, .ag-cell-last-left-pinned"] = {
         "border": "none !important",
     }
-    custom_css[".ag-root-wrapper"] = {
-        **custom_css[".ag-root-wrapper"],
+    css[".ag-root-wrapper"] = {
+        **css.get(".ag-root-wrapper", {}),
         "--ag-header-column-border": "none",
         "--ag-column-border": "none",
         "border-top": f"3px solid {GRIS_BORDE} !important",
@@ -926,7 +952,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
         "border-left": "none !important",
         "border-radius": "0px !important",
     }
-    custom_css[".ag-tooltip"] = {
+    css[".ag-tooltip"] = {
         "background-color": f"{TEXTO_PRINCIPAL} !important",
         "color": "#ffffff !important",
         "border": "none !important",
@@ -938,12 +964,141 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
         # esto el salto de línea se colapsa en un espacio.
         "white-space": "pre-line !important",
     }
+    return css
 
-    resp = AgGrid(
-        tv, gridOptions=grid_options, height=altura, theme="material",
+
+# ===========================================================================
+# LAS COMPRAS DE LA SEMANA (debajo del ranking, al lado del candlestick)
+# ===========================================================================
+
+CROMO_SEMANA = 32 + 8
+"""Alto de la grilla de compras de la semana que NO son filas: la cabecera
+(32) y los bordes (8), los mismos de `CROMO_GRID`. Sin los 15 de la barra
+horizontal: esta grilla no se desliza de costado, sus columnas se reparten
+el ancho de la media tarjeta. Es el `extra` de `por_filas` en el llamador."""
+
+_PAD_X_CELDA_SEMANA = "8px"
+"""Padding horizontal de celdas y cabeceras de la tabla de la semana. El del
+tema material son 16 por lado: en la media tarjeta, cinco columnas se comían
+160px de aire y a «Proveedor» no le quedaba nada."""
+
+_STYLE_PRECIO_SEMANA = JsCode(f"""
+    function(params) {{
+        var t = params.data ? params.data['__tono'] : '';
+        if (t === 'max') return {{color: '{ERROR}', fontWeight: '700'}};
+        if (t === 'min') return {{color: '{EXITO}', fontWeight: '700'}};
+        return {{color: null, fontWeight: null}};
+    }}
+""")
+"""La compra más cara de la semana en rojo y la más barata en verde, como
+las pintaba el `Styler` del `st.dataframe` de antes. Cuál es cuál lo decide
+Python (`__tono`, columna oculta): el precio llega a la celda ya formateado
+como texto, y comparar textos no dice cuál es mayor.
+
+Los `null` del caso neutro no son de adorno: AG Grid no borra un estilo que
+el `cellStyle` deja de devolver, así que una celda que fue roja y ya no lo
+es tiene que decir `color: null` para volver al color de la grilla."""
+
+_AL_MONTAR_SEMANA = JsCode("""
+    function(params) {
+        var api = params.api;
+        var ajustar = function () {
+            try { api.sizeColumnsToFit(); } catch (e) {}
+        };
+        try {
+            var caja = document.getElementById('gridContainer');
+            if (caja && window.ResizeObserver) {
+                new ResizeObserver(ajustar).observe(caja);
+            }
+        } catch (e) {}
+        try { api.addEventListener('displayedColumnsChanged', ajustar); } catch (e) {}
+        ajustar();
+    }
+""")
+"""Re-reparte el ancho cada vez que cambia el de la grilla o su juego de
+columnas. Es `_AL_MONTAR` del ranking sin lo que es sólo del ranking (las
+flechas y abrir en la semana más reciente), y por las mismas razones: el
+`autoSizeStrategy` reparte una sola vez, `colDef.flex` se congela si la
+grilla se monta fuera de pantalla (esta vista es una `seccion_perezosa`), y
+`onGridSizeChanged` no llega (st_aggrid no reenvía el del usuario)."""
+
+
+def renderizar_compras_semana(tp, titulo_precio, altura, key, ver_doc=True):
+    """Las compras que formaron la semana en foco: una fila por compra.
+
+    `tp` trae las columnas `fecha`, `doc`, `prov`, `cant` y `precio` YA
+    FORMATEADAS como texto (las formatea `volatilidad.py`, que sabe la
+    unidad) y `__tono` (oculta: `max`/`min`/vacío, ver
+    `_STYLE_PRECIO_SEMANA`). `titulo_precio` es el rótulo de la columna del
+    precio («Precio/kg»): va en la cabecera y no en el nombre de la columna,
+    así la grilla no cambia de juego de columnas al pasar de un insumo en kg
+    a uno en litros.
+
+    Filas de `ALTO_FILA` y el look de `_css_look`: las del ranking de arriba,
+    a pedido (regla #396). Sin selección: esta tabla se lee, no se clickea.
+
+    Los anchos: sólo «Proveedor» se estira, las demás miden lo que dice su
+    dato más ancho a 13px más los 8+8 de `_PAD_X_CELDA_SEMANA`. El nombre
+    que no entra se corta con «…» y sale entero en el tooltip."""
+    gb = GridOptionsBuilder.from_dataframe(tp)
+    gb.configure_default_column(
+        resizable=False, sortable=False, filter=False, editable=False,
+        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
+    )
+    gb.configure_column("fecha", header_name="Fecha", width=86, minWidth=86,
+                        suppressSizeToFit=True)
+    # 104 = los 87px de «FF01-00012345» a 13px (el documento más largo que
+    # escribe `documento_legible`) más los 8+8 del padding. A 92, medido,
+    # «FA28-2312603» ya salía cortado.
+    gb.configure_column("doc", header_name="Documento", hide=not ver_doc,
+                        width=104, minWidth=104, suppressSizeToFit=True)
+    gb.configure_column("prov", header_name="Proveedor", width=120,
+                        minWidth=80, tooltipField="prov")
+    gb.configure_column("cant", header_name="Cantidad", type=["numericColumn"],
+                        width=96, minWidth=96, suppressSizeToFit=True)
+    gb.configure_column("precio", header_name=titulo_precio,
+                        type=["numericColumn"], width=90, minWidth=90,
+                        suppressSizeToFit=True, cellStyle=_STYLE_PRECIO_SEMANA)
+    gb.configure_column("__tono", hide=True)
+    gb.configure_grid_options(
+        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
+        # Sin selección configurada un clic no hace nada, pero AG Grid igual
+        # le dibuja el recuadro de foco a la celda: en una tabla que sólo se
+        # lee, ese recuadro parece un estado que no existe.
+        suppressCellFocus=True,
+        onGridReady=_AL_MONTAR_SEMANA)
+    grid_options = gb.build()
+    _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
+
+    custom_css = _css_look(_css_grid(13, cebra=False, cabecera_neutra=True))
+    custom_css[".ag-row .ag-cell, .ag-header-row .ag-header-cell"] = {
+        "padding-left": f"{_PAD_X_CELDA_SEMANA} !important",
+        "padding-right": f"{_PAD_X_CELDA_SEMANA} !important",
+    }
+    # Mismo par que el ranking: el iframe lo estira `estilos/_80_cards.py`, el
+    # div de adentro va acá porque `custom_css` es lo único que entra al
+    # documento del iframe.
+    custom_css["#gridContainer"] = {"width": "100% !important"}
+    # SIN LOS DOS CANALES DE SCROLL, y no es cosmético. Sus viewports llevan
+    # `overflow: scroll`, y Chrome dibuja el canal aunque no haya nada que
+    # deslizar. Medido con dos compras:
+    #   · el de abajo (11.7px) le robaba el alto a las filas — la segunda
+    #     quedaba media tapada — aunque las columnas entraban justas
+    #     (529/529). `CROMO_SEMANA` no cuenta barra horizontal: esta grilla
+    #     no se desliza de costado.
+    #   · el de la derecha (15px) quedaba FUERA de la cuenta de
+    #     `sizeColumnsToFit`, que repartía los 544 enteros: el precio,
+    #     alineado a la derecha, terminaba 7px debajo del canal.
+    # La opción `suppressHorizontalScroll` llega a la grilla (leída con
+    # `api.getGridOption`) y no cambia ninguno de los dos: los mide el
+    # navegador, no AG Grid. Si algún día hay más compras que las que entran,
+    # desliza `.ag-body-viewport`, que tiene su propio `overflow-y: auto` —
+    # igual que en el ranking, donde el canal vertical mide 2px.
+    custom_css[".ag-body-horizontal-scroll, .ag-body-vertical-scroll"] = {
+        "display": "none !important",
+    }
+
+    AgGrid(
+        tp, gridOptions=grid_options, height=altura, theme="material",
         custom_css=custom_css, allow_unsafe_jscode=True, key=key,
     )
-    sel = resp.selected_rows
-    if sel is not None and not sel.empty:
-        return str(sel.iloc[0]["__insumo_full"])
-    return None
