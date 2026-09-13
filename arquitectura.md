@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-398 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+399 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (140)
 
@@ -226,7 +226,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#394** — «Que mida igual que aquella» es una cuenta entre dos tarjetas, y sólo se sostiene si las dos…
 - **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
 
-**Plotly y figuras** (65)
+**Plotly y figuras** (66)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -293,6 +293,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#389** — Si algo es difícil de clickear, lo que crece es el blanco del clic, no el dibujo — y la…
 - **#390** — Si casi todas las celdas llevan color, el color ya no avisa nada: el semáforo va en la LETRA…
 - **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
+- **#399** — Leer el clic ANTES de dibujar obliga a leerlo de la key que se DIBUJÓ — y con el foco en la…
 
 **AgGrid y tablas** (66)
 
@@ -34614,7 +34615,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        que devuelve `st.plotly_chart` se IGNORA: procesarlo dos veces es un
        toggle doble, un clic que no hace nada. La key no cambia —sigue
        llevando el foco de antes del clic, el patrón de CLAUDE.md—, así que
-       la barra que Plotly marcó se conserva en ese rerun.
+       la barra que Plotly marcó se conserva en ese rerun. **Corregido en
+       la #399:** esa key perdía un clic de cada dos; ahora es un contador.
 
      Medido después, a 1366x768: 571.4 sin foco (figura 449) y 570.4 con
      foco (figura 240 + tabla 192), contra 570.6 de vap. La figura cambia
@@ -34634,6 +34636,69 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-13.)
 
+399. **Leer el clic ANTES de dibujar obliga a leerlo de la key que se
+     DIBUJÓ — y con el foco en la key, esa no es la que se busca: se pierde
+     un clic de cada dos.** Semanal (#398) resolvía el clic desde
+     `st.session_state[key]` antes de armar la figura, con la key del foco
+     de ANTES del clic. En la corrida del clic sobre A el foco pasa a A pero
+     el gráfico se dibuja con `K_none`; el clic siguiente, sobre B, cae en
+     `K_none`; y la corrida que lo tiene que leer calcula `K_A` —un gráfico
+     que nadie tocó—, lee vacío, dibuja `K_A` y el clic sobre B desaparece.
+     El siguiente, ya sobre `K_A`, entra; el que viene después se pierde
+     otra vez. Medido en el navegador: barra 3 entra, barra 4 no (la key
+     pasó a la de la 3 y el caption no cambió), barra 5 entra. El código de
+     antes de la #398 derivaba la key igual y leía lo que DEVOLVÍA
+     `st.plotly_chart`, sin `st.rerun()`: el mismo bug, más viejo.
+
+     - **La key pasa a ser un contador** (`compras_sem_nclic`) que sube con
+       cada evento leído y en la MISMA corrida — la receta de Volatilidad
+       (`compras_vol_nclic`). El gráfico ya se dibuja con la key donde se
+       va a buscar el próximo clic. Todo evento leído se consume, haya
+       movido el foco o no: con la key igual, la corrida siguiente lo
+       volvería a leer.
+     - **Se descartó la key quieta + huella** (la de `ventas_horario.py`).
+       Ahí la selección de Plotly sobrevive entre clics y hay que tenerla de
+       acuerdo con un foco de DOS niveles (período / compra), y Plotly no
+       ayuda: según su código (`selectOnClick`), una barra seleccionada se
+       DESELECCIONA al tocarla, y eso llega como selección vacía —igual al
+       estado inicial del widget—.
+     - **El precio era el resaltado de Plotly**, y se repuso a mano. Con la
+       key del foco, en la corrida del clic la barra quedaba marcada por la
+       selección de Plotly; con key nueva el gráfico nace sin selección. Se
+       pinta `marker.opacity` por punto: 1 lo que está en foco,
+       `_ATENUADO` (0.2, el `DESELECTDIM` de Plotly) el resto — barras y
+       puntos. Y ahora DURA mientras el detalle está abierto: la de Plotly
+       se borraba en el primer rerun, porque ahí la key ya cambiaba. No con
+       `selectedpoints`, por la misma deselección de arriba: el clic para
+       cerrar el detalle no haría nada.
+
+     Medido después, en «Por documento»: cuatro clics seguidos con el
+     detalle abierto, los cuatro entran (key `_0` → `_4`, el caption sigue a
+     cada barra); tocar de nuevo la barra en foco cierra el detalle y apaga
+     la marca. En «Semana», punto → otro punto → barra (sube al período, con
+     sus 8 puntos marcados) → la misma barra (apaga), cada gesto en su
+     clic. La tarjeta sigue midiendo lo mismo con detalle o sin él (612.4 /
+     613.4 en el panel del preview; figura 240 / 449).
+
+     **La regla general** (ya en CLAUDE.md): la key tiene que cambiar tras
+     cada clic procesado Y el gráfico tiene que dibujarse con la key nueva
+     antes del próximo clic. El foco en la key cumple sólo con un
+     `st.rerun()` después de procesar: `ventas_comparativo.py` lo hace y,
+     medido, no pierde clics (9 → 11 seguidos, los dos entran). Tiene otro
+     problema, aparte: tocar de nuevo la barra en foco no cierra el drill
+     (la huella `ventas_comp_click` se come el re-clic; sólo cierra la ✕).
+     El drill de la #76 (`compras/familia.py`) ya no existe, y los de
+     Ajuste usan key estática con lectura idempotente —la selección filtra
+     una tabla, no togglea—: no es este patrón.
+
+     Ojo al medir: el `st.rerun(scope="fragment")` de Ventas no muestra
+     `stStatusWidget`, así que esperar a que desaparezca devuelve antes de
+     tiempo y la medición queda UN CLIC atrasada — que se ve igual que un
+     clic perdido. Esperar a que CAMBIE la key, con un tope (20s): si no
+     cambia, el clic se perdió.
+
+     (2026-09-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34646,7 +34711,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#399**.
+> próxima regla nueva es la **#400**.
 
 >
 

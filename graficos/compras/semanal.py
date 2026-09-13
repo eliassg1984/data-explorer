@@ -62,7 +62,7 @@ from tema import (
 )
 from graficos import alturas
 from graficos.base import (
-    _compras_layout, _compras_truncar, _slug, preservar_widgets,
+    _compras_layout, _compras_truncar, preservar_widgets,
 )
 from graficos.compras._comun import (
     CATEGORIA_SEC, _first_point, _periodo_serie, documento_legible,
@@ -120,6 +120,11 @@ conjunto top-N, un producto suelto— y el buscador propio de `st.selectbox`
 sigue filtrando sobre él."""
 
 _ANCHO_SLOT = 0.62
+
+# Opacidad de lo que NO está en foco cuando hay un detalle abierto: la misma
+# con que Plotly atenúa lo no seleccionado (`DESELECTDIM`), porque la marca
+# a mano reemplaza a la selección de Plotly (ver «EL FOCO SE MARCA A MANO»).
+_ATENUADO = 0.2
 """Fracción del slot de la categoría que ocupa el reparto de los puntos.
 
 La barra mide 0.8 del slot (el `bargap` de 0.2 por defecto), así que 0.62
@@ -874,7 +879,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                                "<extra></extra>"),
             )
 
-        # ── EL CLIC SE RESUELVE ANTES DE DIBUJAR (2026-09-13, regla #398) ─
+        # ── EL CLIC SE RESUELVE ANTES DE DIBUJAR (2026-09-13, #398 y #399) ─
         # La tarjeta mide lo que la de «Vs año pasado» con detalle o sin él,
         # y para eso la FIGURA le cede su sitio a la tabla: su alto depende de
         # si hay foco. Pero el foco lo escribe el clic, y el clic se leía del
@@ -884,20 +889,30 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         #
         # Por eso se lee el MISMO evento de `session_state`, donde Streamlit
         # lo deja antes de que corra el script (el estado de un widget con
-        # `key` se lee sin dibujarlo). La key no cambia: sigue llevando el
-        # foco de ANTES del clic (ver el comentario del `st.plotly_chart`),
-        # así que en ese rerun el gráfico conserva la barra que Plotly marcó.
-        # Lo que `st.plotly_chart` devuelve se IGNORA: ya se procesó acá, y
-        # procesarlo dos veces es un toggle doble — un clic que no hace nada.
+        # `key` se lee sin dibujarlo). Lo que `st.plotly_chart` devuelve se
+        # IGNORA: ya se procesó acá, y procesarlo dos veces es un toggle
+        # doble — un clic que no hace nada.
+        #
+        # LA KEY ES UN CONTADOR, NO EL FOCO (regla #399). Leer antes de
+        # dibujar obliga a leer de la key que se DIBUJÓ en la corrida
+        # anterior, y con el foco en la key eso no se cumplía: en la corrida
+        # del clic la key salía del foco de antes (K_none) y el foco ya era
+        # A, así que la corrida siguiente buscaba el clic en K_A —un gráfico
+        # que nadie había tocado— y el que el usuario hizo sobre K_none se
+        # perdía. Medido: con un detalle abierto se perdía UN CLIC DE CADA
+        # DOS. El contador sube con cada evento leído y en la MISMA corrida,
+        # así que el gráfico ya se dibuja con la key donde se va a buscar el
+        # próximo clic. Es la receta de Volatilidad (`compras_vol_nclic`).
         _foco_antes = st.session_state.get("compras_sem_focus")
         _doc_antes = st.session_state.get("compras_sem_doc")
-        # El foco de COMPRA entra también, y SLUGUEADO: es una cadena con
-        # fecha, razón social y Nº de documento, y una key emite una clase
-        # CSS (mismo motivo que los sufijos de `selector_escala`).
-        _key_graf = (f"compras_g_semanal_{gran}_{_foco_antes or 'none'}"
-                     f"_{_slug(str(_doc_antes))[:24] if _doc_antes else 'nodoc'}")
-        _pt = _first_point(st.session_state.get(_key_graf))
+        _nclic = st.session_state.get("compras_sem_nclic", 0)
+        _key_base = f"compras_g_semanal_{gran}"
+        _pt = _first_point(st.session_state.get(f"{_key_base}_{_nclic}"))
         if _pt is not None:
+            # Todo evento leído se CONSUME, haya movido el foco o no: con la
+            # key igual, la corrida siguiente lo volvería a leer.
+            _nclic += 1
+            st.session_state["compras_sem_nclic"] = _nclic
             if _pt.get("curve_number") == 1 and not _pts.empty:
                 # Traza 1 = los puntos. `point_index` contra `_pts`, que se
                 # construyó con `reset_index` justo para esto.
@@ -924,13 +939,35 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 else:
                     st.session_state["compras_sem_focus"] = (
                         None if _foco_antes == _clic else _clic)
+        _key_graf = f"{_key_base}_{_nclic}"
         _focus = st.session_state.get("compras_sem_focus")
         _doc = st.session_state.get("compras_sem_doc")
-        # Las mismas dos condiciones que eligen la rama de la tabla, más
-        # abajo: si una dice que hay tabla y la otra no, la tarjeta cambia de
+        # Las mismas dos condiciones eligen la rama de la tabla, más abajo:
+        # si una dijera que hay tabla y la otra no, la tarjeta cambiaría de
         # alto — que es justo lo que este bloque viene a evitar.
-        _con_detalle = ((_doc is not None and _doc in set(dd["compra"]))
-                        or _focus in set(dd["clave"]))
+        _doc_ok = _doc is not None and _doc in set(dd["compra"])
+        _foco_ok = _focus in set(dd["clave"])
+        _con_detalle = _doc_ok or _foco_ok
+
+        # ── EL FOCO SE MARCA A MANO (regla #399) ────────────────────────
+        # Con la key del foco, en la corrida del clic la barra quedaba
+        # resaltada: era la selección de Plotly, que atenúa todo lo demás.
+        # Con la key nueva el gráfico nace sin selección y esa marca se iba.
+        # Se pinta la misma atenuación desde acá, y así además DURA: la de
+        # Plotly se borraba en el rerun siguiente con la tabla todavía
+        # abierta, porque ahí la key ya cambiaba. NO con `selectedpoints`:
+        # una barra que Plotly cree seleccionada se DESELECCIONA al tocarla
+        # (`selectOnClick` en su código), eso llega como selección vacía, y
+        # el clic para cerrar el detalle no haría nada.
+        if _con_detalle:
+            fig.data[0].marker.opacity = [
+                1.0 if _c == _focus else _ATENUADO for _c in g["clave"]]
+            if len(fig.data) > 1:
+                # Los puntos: la compra en foco, o las del período en foco.
+                fig.data[1].marker.opacity = [
+                    1.0 if (_c == _doc if _doc_ok else _k == _focus)
+                    else _ATENUADO
+                    for _c, _k in zip(_pts["compra"], _pts["clave"])]
 
         _compras_layout(fig, alto=(alturas.COMPACTO if _con_detalle
                                    else alturas.SEMANAL_SOLO))
@@ -992,13 +1029,11 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             tickvals=_ticks[0], ticktext=_ticks[1],
             range=[-0.5, _n_per - 0.5])
 
-        # Clic en una barra o un punto -> foco de la tabla de
-        # abajo. La key lleva el foco DE ANTES del clic: la
-        # selección de on_select persiste mientras la key no
-        # cambie, así que con key estática cada rerun re-lee
-        # el mismo punto y togglea para siempre (parpadeo).
-        # Mismo patrón que el click-drill de Por área/Por
-        # familia — ver CLAUDE.md y arquitectura.md #76.
+        # Clic en una barra o un punto -> foco de la tabla de abajo. La
+        # selección de on_select persiste mientras la key no cambie, así que
+        # con key estática cada rerun re-lee el mismo punto y togglea para
+        # siempre (parpadeo). Por eso la key cambia — pero con el CONTADOR de
+        # arriba, no con el foco (CLAUDE.md, arquitectura.md #76 y #399).
         #
         # El clic ya se resolvió ARRIBA, antes de armar el layout (ver «EL
         # CLIC SE RESUELVE ANTES DE DIBUJAR»): lo que devuelve esta llamada
@@ -1031,7 +1066,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # caption.
         # `_focus` y `_doc` ya vienen resueltos de antes de la figura.
         _hueco_tabla = st.empty()
-        if _doc is not None and _doc in set(dd["compra"]):
+        if _doc_ok:
             _det = dd[dd["compra"] == _doc].sort_values("valor",
                                                         ascending=False)
             _f = _det["fecha"].iloc[0]
@@ -1040,7 +1075,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                       f"{len(_det)} líneas · S/ {_det['valor'].sum():,.2f} "
                       "— clic en la barra para volver al período.")
             _tabla_detalle(_det, _hueco_tabla)
-        elif _focus in set(dd["clave"]):
+        elif _foco_ok:
             _det = dd[dd["clave"] == _focus].sort_values("valor",
                                                          ascending=False)
             _et = _det["lbl"].iloc[0]

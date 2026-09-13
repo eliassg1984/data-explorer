@@ -241,7 +241,14 @@ resto de `graficos/compras/`.
   `arquitectura.md` #388.
 - **La selección de `st.plotly_chart(on_select=...)` persiste entre reruns.**
   Con `key` estática, cada rerun re-procesa el mismo clic → toggle infinito
-  (parpadeo). Incluir el foco en la key: `key=f"..._{focus or 'none'}"`.
+  (parpadeo). La key tiene que cambiar tras cada clic procesado **y el
+  gráfico tiene que DIBUJARSE con la key nueva antes del próximo clic**: si
+  no, ese clic cae en una key que ya nadie lee — se perdía uno de cada dos
+  en Semanal. Dos recetas que cumplen: foco en la key + `st.rerun()` tras
+  procesar (`ventas_comparativo.py`), o leer el clic de
+  `st.session_state[key]` ANTES de dibujar, con un contador en la key
+  (`compras_vol_nclic`, `compras_sem_nclic`). Foco en la key sin rerun es
+  el bug. Ver `arquitectura.md` #399.
 - **Widget + display auxiliar del mismo valor:** UNA sola key compartida (sin
   `value=`, sin key dinámica). El clamp de bounds va justo antes del widget.
 - **Detección móvil server-side:** para texto que Plotly dibuja en servidor,
