@@ -141,7 +141,7 @@ mañana el popover pasa a separar con `---`, cambia en un sitio."""
 
 UNIDAD_CORTA = {
     "KILOS": "kg", "KILO": "kg", "KG": "kg",
-    "LITROS": "L", "LITRO": "L", "LT": "L",
+    "LITROS": "Lt", "LITRO": "Lt", "LT": "Lt",
     "UND": "und", "UNIDAD": "und",
     "PAQUETE": "paq",
 }
@@ -155,7 +155,21 @@ vista diría "kg" y la otra "kilos" para el mismo producto.
 Medido ese día sobre los últimos 3 meses de `compras.parquet`: KILOS (309
 productos, 76,5 % del gasto), UND (137), LITROS (80), y restos en CAJA,
 ROLLO y PAQUETE. Lo que no está acá sale en minúscula ("caja", "rollo"),
-que ya se lee bien."""
+que ya se lee bien.
+
+El litro es **"Lt" y no "L"** desde el 2026-09-13, cuando Inventario
+estrenó su columna UM y el reporte fue "no me convence el símbolo L". "L"
+es el símbolo SI, pero el vocabulario de la casa es otro y el propio
+catálogo lo escribe: hay productos llamados "Drambuie x Lt" y "Frangelico
+x Lt". Cambia en los TRES sitios que leen este mapa —Vs año pasado,
+Volatilidad e Inventario— porque para eso está centralizado.
+
+Segunda medición, ese mismo día, sobre `inventariovalorizado.parquet`
+(15.376 filas): KILOS 8.468, UND 4.551, LITROS 1.995, y una cola de trece
+más —PORCION 169, ROLLO 76, TANDA 46, PAQUETE 16, MOLDE 16, METROS 13,
+GALON 6, CAJA 5, PACK 5, M3 3, BOTELLA 3, PRODUCCION 2, BOLSA 2—. Esa cola
+sale por la caída a minúscula, que la deja legible sin inventarle
+abreviatura a ninguna: son 362 filas sobre 15.376 (2,4 %)."""
 
 
 def unidad_corta(um):
