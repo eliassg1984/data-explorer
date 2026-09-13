@@ -918,6 +918,87 @@ CSS = """    /* ================================================================
         line-height: 1 !important;
     }
 
+    /* ── Refrescar se muda a la franja, al lado del sello ──────────────
+       2026-09-13, a pedido: "el botón actualizar, que actualiza los
+       reportes y deja una señal en Cloudflare R2, creo que se perdió;
+       ponelo al lado del texto que dice la hora de actualización, que
+       está en la franja superior de reportes".
+
+       Y se había perdido de verdad. Medido en el DOM antes de tocar nada:
+       el contenedor quedaba DENTRO de `compras_tabs_row` —una fila de
+       59px con `overflow: auto hidden`— y el botón medía 545x10 px con el
+       `<p>` de su label en altura 0. En Inventario era peor: `top:
+       -1189px`, o sea fuera de la pantalla. Estaba en el DOM, clickeable
+       en teoría, invisible en la práctica.
+
+       `position: fixed` y no un `st.container` nuevo en la franja: el
+       sello vecino ya es un div fijo colgado del body por la misma razón
+       (ver `inyecciones/varios.py::inject_sello_actualizacion`) —los
+       contenedores de Streamlit crean stacking contexts que lo enterraban
+       bajo el cromo— y la franja centra sus botones con `justify-content:
+       safe center`, así que meterle un hijo más los descentraría. Se
+       verificó en el navegador que ningún ancestro del botón tiene
+       `transform`/`filter`/`contain`: si lo tuviera, capturaría al hijo
+       fijo y esto no funcionaría (regla #156).
+
+       Los tres números —`top:1px`, `height:30px` y `right:16px`— son los
+       MISMOS del sello, que a su vez son los de los botones de la franja.
+       No se eligen acá: se copian, para que el botón, la fecha y los
+       nombres de los reportes se apoyen en la misma línea.
+
+       Sólo en escritorio. En móvil la franja de reportes no existe
+       (`_99_movil.py` la esconde) y el sello se va abajo a la izquierda,
+       así que no hay renglón que compartir. */
+    @media (min-width: 769px) {
+        .st-key-rail_refresh {
+            position: fixed !important;
+            top: 1px !important;
+            right: 16px !important;
+            width: 96px !important;
+            height: 30px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            /* El mismo que el sello: por debajo, el cromo fijo lo tapa. */
+            z-index: 2147483647 !important;
+        }
+        .st-key-rail_refresh button {
+            height: 30px !important;
+            justify-content: center !important;
+            padding: 0 8px !important;
+            background: var(--accent-tint) !important;
+        }
+        /* El LABEL, que era la otra mitad de "se perdió", y la causa es
+           de casa: el botón vive en el DOM DENTRO de `compras_tabs_row`
+           —aunque ahora se dibuje en la franja— y con el rail PLEGADO hay
+           una regla, unas 500 líneas más abajo, que le borra el
+           `stMarkdownContainer` a todo lo que cuelgue de ese contenedor
+           («PLEGADO: sobrevive el icono, se va el texto»). Refrescar no es
+           un ítem del rail, así que ahí no debería entrar. Medido antes de
+           tocar nada: el botón quedaba de 96x30 con el label en altura 0.
+
+           Se arregla por ESPECIFICIDAD y no por orden, que es lo que hay
+           que mirar acá: la regla del plegado es (0,4,0) y vive DESPUÉS en
+           el fichero, así que un selector simple —(0,2,1)— pierde aunque
+           lleve `!important`. Se probó y no alcanzó. El primer selector de
+           acá abajo repite su misma condición y suma el `button`: (0,4,1).
+
+           Los contenedores intermedios (el wrapper del tooltip y su span)
+           venían en `height: 0` por lo mismo: con el label visible vuelven
+           a medir solos. */
+        :root:has(.st-key-rail_pestillo_plegado) .st-key-rail_refresh button
+            [data-testid="stMarkdownContainer"],
+        .st-key-rail_refresh button [data-testid="stMarkdownContainer"] {
+            display: block !important;
+        }
+        /* Y el sello le hace sitio. Su `right:16px` es un estilo INLINE
+           (lo escribe el JS de la inyección), así que sólo se lo puede
+           correr con `!important`: una regla normal pierde contra inline.
+           118 = 16 de margen + 96 del botón + 6 de aire. */
+        #sello-actualizacion {
+            right: 118px !important;
+        }
+    }
+
     /* =================================================================== */
     /* RAIL EN MÓVIL (<=900px): el rail vertical fijo de 270px + su reserva  */
     /* de ancho se comen casi la mitad de un viewport de 375px. En móvil el */
