@@ -1099,7 +1099,13 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 # se salía por el margen de 10px.
                 xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False,
                            rangeslider=_barra_velas,
-                           range=[semanas_v[_iv0] - pd.Timedelta(days=3.5),
+                           # Y arranca 2 días antes de la primera vela y no
+                           # 3.5 (2026-09-13, captura del usuario): con 3.5
+                           # asomaba en el borde el FINAL de la etiqueta de
+                           # la semana anterior a la ventana («…8»), cortada
+                           # por el clip del área de dibujo. El cuerpo de la
+                           # vela mide ~1.7 días de medio ancho: entra igual.
+                           range=[semanas_v[_iv0] - pd.Timedelta(days=2),
                                   semanas_v[_iv1] + pd.Timedelta(days=6)],
                            tickmode="array", tickvals=semanas_v,
                            # DOS RENGLONES Y RECTOS (2026-09-12, captura del

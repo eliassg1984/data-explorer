@@ -34887,6 +34887,25 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (`RANKING_CON_DRILL` 298 → 250): la tarjeta deja de medir lo mismo
      que «Vs año pasado» (#394), a pedido.
 
+     **Y horas después, la cuenta de alto al revés** (captura: «que no se
+     vea tan aplastado», y «quitemos también una fila»): el ranking a 7
+     filas (250 → 226) y la tarjeta 48px más larga, con los 72px enteros
+     al candlestick (`MINI_CANDLE_DRILL` 165 → 237). Medido a 1272x760:
+     tarjeta 569 (lo que medía antes del pedido), área de dibujo 93 →
+     159px, 7 filas enteras. El eje X pasó a arrancar 2 días antes de la
+     primera vela y no 3.5: con 3.5 asomaba en el borde el FINAL de la
+     etiqueta de la semana anterior («…8», cortada por el clip); a 2 días
+     no asoma ninguna y la primera vela queda a 4px del borde.
+
+     **Ojo al medir etiquetas de este gráfico:** el `rangeslider` dibuja
+     una COPIA de cada traza, etiquetas de texto incluidas, comprimida al
+     ancho de la barra (las 53 semanas cada ~8px). Están recortadas por el
+     clip de la barra y no se ven, pero siguen en el DOM con su caja: un
+     `querySelectorAll('.textpoint text')` sobre la figura las cuenta, y la
+     copia de la última semana «asoma» por el borde derecho. Dos veces dio
+     un falso «etiqueta cortada». Las de verdad son las de
+     `.cartesianlayer`, fuera de `.rangeslider-container`.
+
      (2026-09-13.)
 
 403. **Un top-N dentro de una tabla ORDENABLE miente por partida doble — y

@@ -198,10 +198,18 @@ MARCO = PRESUPUESTO
 SEMANAL_SOLO = 449
 SEMANAL_TABLA = 192
 
-MINI_CANDLE_DRILL = 165
+MINI_CANDLE_DRILL = 237
 """El candlestick de Volatilidad: la mitad izquierda de la fila de abajo de
 su tarjeta, al lado de la tabla de la semana (`PANEL_JUNTO_A_FIGURA`, que
 mide lo mismo para que la fila termine en una sola línea).
+
+165 -> 237 el 2026-09-13, a pedido y con captura: «hacer un poco más larga
+la tarjeta para que el gráfico de velas crezca verticalmente y no se vea
+tan aplastado», y en el mismo pedido una fila menos al ranking. Son 48px
+de tarjeta más los 24 de la fila (`RANKING_CON_DRILL` 250 -> 226), enteros
+al gráfico: la barra para deslizarlo (regla #402) le había dejado el área
+de dibujo en 93px. La tarjeta vuelve a ~569, lo que medía antes de ese
+pedido.
 
 150 -> 165 el 2026-09-12: los rótulos de las semanas pasaron a DOS renglones
 (rectos, para que no se tuerzan a 45° en una columna angosta) y se comieron
@@ -347,7 +355,12 @@ recortar: es más barato que velas más chatas."""
 # ALTO_FILA`), así que son 8 filas a la vista en vez de 10 y la tarjeta baja
 # 48px. Con eso deja de medir lo mismo que «Vs año pasado» (la cuenta de la
 # regla #394) — a pedido, no por olvido. Regla #402.
-RANKING_CON_DRILL = 250
+#
+# 250 -> 226 unas horas después, otra vez a pedido («quitemos también una
+# fila al cuadro de volatilidad»): 7 filas a la vista. Los 24px no se pierden:
+# van al candlestick, junto con los 48 que creció la tarjeta en el mismo
+# pedido — ver `MINI_CANDLE_DRILL`.
+RANKING_CON_DRILL = 226
 
 PANEL_JUNTO_A_FIGURA = MINI_CANDLE_DRILL
 """Tope de una tabla de detalle que va AL LADO de una figura, en la misma
@@ -356,9 +369,10 @@ del candlestick.
 
 Es el alto de la figura y no un número propio: las dos mitades de la fila
 llevan un renglón de título encima, así que con el mismo alto terminan en
-la misma línea. A 165 entran CINCO compras enteras (24px por fila + 40 de
+la misma línea. A 237 entran OCHO compras enteras (24px por fila + 40 de
 cabecera y bordes, `tablas/compras_volatilidad.py::CROMO_SEMANA`), y la
 semana más cargada de un mismo insumo que hay hoy en el parquet son tres.
+(Eran cinco a 165, hasta que el candlestick creció el 2026-09-13.)
 Eran tres justas mientras la tabla fue un `st.dataframe` de filas de 35; el
 2026-09-12 pasó a AgGrid con las filas del ranking de arriba (regla #396).
 
