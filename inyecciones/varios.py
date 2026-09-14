@@ -206,6 +206,7 @@ def inject_sello_actualizacion(rotulo, valor, color=None):
     _r = json.dumps(str(rotulo))
     _v = json.dumps(str(valor))
     _c = json.dumps(str(color) if color else "#71717a")
+    _viejo = json.dumps(bool(color))
     inyectar_html("""
     <script>
     (function(){
@@ -278,6 +279,12 @@ def inject_sello_actualizacion(rotulo, valor, color=None):
            con el color y la hora del primer render y no podría volver a gris
            al normalizarse. */
         el.style.color = """ + _c + """;
+        /* El dato viejo tambien como CLASE, porque un color inline no se
+           deja leer desde CSS: donde el reporte tiene Filtros el sello se
+           corre a su izquierda, y sus cortes de ancho dependen de cuanto
+           mide — con « · hace N dias» mide mas (`estilos/_50_fecha.py`,
+           regla #419). */
+        el.classList.toggle('sello-viejo', """ + _viejo + """);
         el.querySelector('.sello-rotulo').textContent = """ + _r + """;
         el.querySelector('.sello-valor').textContent = """ + _v + """;
     })();

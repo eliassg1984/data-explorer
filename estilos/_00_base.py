@@ -246,6 +246,18 @@ CSS = """    <style>
            colgando de --franja-rep-alto, porque aparece con ella y debajo
            de ella. Regla #397. */
         --franja-rep-reserva: 12px;
+        /* ANCHO DEL COMPARTIMENTO DE FILTROS (2026-09-14). Desde que la
+           franja de vistas dejo de dibujarse en escritorio (regla #419),
+           «Filtros» vive en el extremo derecho de la franja de REPORTES, y el
+           sello de «Ultima actualizacion» —que llegaba hasta ese borde— se
+           corre a su izquierda. Las dos cosas cuelgan de estos numeros: el
+           ancho del compartimento y el `right` del sello (`_50_fecha.py`).
+           Fijos y no medidos por el navegador por eso mismo: con `auto`, el
+           sello no tendria como saber donde termina Filtros.
+           Son DOS porque la etiqueta crece con el badge de la cuenta
+           («Filtros 2», `graficos/base.py::compartimento_filtros`). */
+        --filtros-ancho: 112px;
+        --filtros-ancho-cuenta: 136px;
         /* Alto de la CABECERA del rail ("Reportes" / "Vistas"). Era el
            literal 33 —la resta entre los dos `top` que había antes— repetido
            en tres sitios: su propia `height` y el `top` y el `max-height` de

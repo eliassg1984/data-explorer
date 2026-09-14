@@ -263,7 +263,12 @@ CSS = """    /* ================================================================
            Va acá y no en la regla base porque abajo de 901px las franjas no
            se apilan así y la banda todavía pinta. */
         .st-key-fila_ajuste_top {
-            z-index: 1000000 !important;
+            /* 1000000 -> 1000002 (2026-09-14, regla #419): el pill de fecha
+               subio a la franja de REPORTES (1000001) y, por lo de arriba,
+               su z-index propio no vale nada fuera de este contexto — con
+               el valor viejo quedaba pintado detras del blanco de esa
+               franja. */
+            z-index: 1000002 !important;
             /* Y TRANSPARENTE AL PUNTERO. Subirlo por encima de las franjas
                resolvió el pintado pero le regaló los CLICS: su caja mide
                323..1190 x 48..166 (medido en Ajuste) y tapa la fila de

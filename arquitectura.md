@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-418 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+419 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (146)
+**CSS y estilos** (147)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -180,6 +180,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 - **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 - **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
+- **#419** — Sacar una franja no es sacar lo que vivía en ella: la fecha, Filtros y la única salida de un…
 
 **Layout y alturas** (56)
 
@@ -649,7 +650,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#414** — Un sufijo sin verbo se pega al número de al lado: −62.6% · la cantidad se lee «la cantidad…
 - **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
 
-**Decisiones de diseño y UX** (73)
+**Decisiones de diseño y UX** (74)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -724,6 +725,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#414** — Un sufijo sin verbo se pega al número de al lado: −62.6% · la cantidad se lee «la cantidad…
 - **#415** — Una tarjeta que se parte en tres no se re-indenta: cada parte se cuelga de SU contenedor
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
+- **#419** — Sacar una franja no es sacar lo que vivía en ella: la fecha, Filtros y la única salida de un…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -35767,6 +35769,74 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-14.)
 
+419. **Sacar una franja no es sacar lo que vivía en ella: la fecha,
+     Filtros y la única salida de un destino aparte colgaban de la de
+     vistas.** Pedido, con captura de Movimientos: «eliminemos la segunda
+     franja superior, donde salen las vistas y sus kpis, ojo solo la
+     franja, no las vistas», y a mitad de camino «la de reportes debe
+     permanecer». En escritorio (≥901px) `nav_rail` y `nav_franja_kpis`
+     pasan a `display: none` (`estilos/_26_rails_scroll.py`). Las vistas
+     siguen siendo las secciones de la pila, y su lista vive en el rail
+     lateral, que toma la columna al bajar.
+
+     Lo que la franja cargaba sin ser ella, y adónde fue:
+     - **Fecha y Filtros** suben a la franja de REPORTES, dentro de la
+       misma capa que abre el cursor: la fecha a la izquierda (y=3..29,
+       centrada en los botones, que van en y=1..31) y Filtros contra el
+       borde derecho. El sello de «Última actualización» se corre a la
+       izquierda de Filtros (`--filtros-ancho` / `--filtros-ancho-cuenta`
+       en `_00_base.py`, dos porque el badge de la cuenta agranda la
+       etiqueta) y sus cortes de ancho se recalculan con la cuenta del
+       docstring de `inject_sello_actualizacion` — la tabla está en
+       `_50_fecha.py`. Medido a 1366: grupo de reportes 379..987, sello
+       1018..1246 con el rótulo, Filtros 1254..1366.
+     - **El stepper del corte** (Ajuste) va pegado al pill y aparece desde
+       1490px (antes 1400): a la derecha ya no queda sitio.
+     - **Documentos SUNAT**, un destino aparte sin pila, sólo tenía esta
+       franja para volver a las otras vistas: el rail lateral aparece al
+       dejar la PRIMERA sección, y ahí no hay ninguna. `_render_rail` le
+       pasa al gancho `FUERA` y el JS pone `rails-scrolled` con la vista
+       elegida marcada. Lo decide Python, que lo sabe, y no el JS mirando
+       qué secciones hay en el DOM.
+
+     Tres trampas del camino:
+     - **Una regla de `estilos/` pierde contra el CSS que un componente
+       inyecta después, a igual especificidad y con `!important` en los
+       dos.** `_CSS_FRANJA_VISTAS` (`navegacion.py`) lo emite
+       `_render_rail` en cada render, detrás de `estilos/`: el
+       `display: none` se medía `flex` hasta duplicar la clase.
+     - **Subir un control a otra franja es subirle el z-index a su
+       CONTEXTO, no a él.** El pill vive dentro de `fila_ajuste_top`, un
+       sticky con z-index propio; pasó de 1000000 a 1000002 para quedar
+       sobre la franja de reportes (1000001). El panel del popover es un
+       portal en `body` (z 1000060) y ya quedaba encima: verificado con
+       `elementFromPoint` sobre su borde superior.
+     - **El techo del scroll del rail lateral medía la franja de vistas**
+       (`[class*="st-key-nav_rail"]`, que de paso también atrapaba a
+       `nav_rail_lateral`). Con la franja en `display: none` medía 0 y la
+       sección caía bajo la tira que abre la cabecera; ahora lee
+       `--franja-rep-reserva`.
+     - **Y ese clic muchas veces no estaba enlazado.** El gancho enlazaba
+       los botones del rail lateral UNA vez, al ejecutarse el iframe, y en
+       una carga fresca las secciones todavía no están en el DOM: medido en
+       Compras, `__railClic` en false y el clic en «Semanal» cayó a
+       Streamlit, que es el rerun de ~45s que la intercepción viene a
+       evitar. Venía de antes, pero sin la franja de vistas este rail es la
+       única navegación entre vistas. Ahora se enlaza en cada vuelta de un
+       temporizador. Y como un botón enlazado sobrevive a los reruns, en un
+       destino aparte su clic tiene que seguir de largo hacia Streamlit —
+       lo que no se puede decidir mirando el DOM: medido, con Documentos
+       SUNAT en pantalla quedaban 6 secciones VIEJAS de la pila, el clic en
+       «Proveedor» se cortaba y no se volvía nunca. Lo decide el último
+       render, que publica `window.__railFuera`: el `FUERA` del closure no
+       sirve, el manejador de un botón enlazado antes guarda el viejo.
+
+     Entre 769 y 900px la franja se queda como estaba: el grupo de
+     reportes ocupa el ancho entero y la fecha y Filtros no tienen adónde
+     subir.
+
+     (2026-09-14.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -35779,7 +35849,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#419**.
+> próxima regla nueva es la **#420**.
 
 >
 

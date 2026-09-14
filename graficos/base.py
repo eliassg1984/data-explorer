@@ -1791,12 +1791,20 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         _mapa = [{"sec": _cl, "btn": f"{btn_prefix}lat_{_slug_url(_oid)}",
                    "go": f"pila_go_{_cl}"}
                  for _cl, _oid in secciones]
+        # ¿La vista elegida es un DESTINO APARTE? (Compras › Documentos
+        # SUNAT: no está en `secciones`, y estando ahí la pila no se dibuja.)
+        # Lo dice Python, que lo sabe, en vez de que el JS lo deduzca de
+        # qué secciones hay en el DOM. Ver el paso 0 del temporizador.
+        _fuera = sel not in {_oid for _, _oid in secciones}
+        _btn_act = f"{btn_prefix}lat_{_slug_url(sel)}"
         with st.container(key="rail_scroll_hook"):
             inyectar_html(
                 f"""<script>
                 (function () {{
                   var w = window.parent, doc = w.document;
                   var MAPA = {json.dumps(_mapa, ensure_ascii=False)};
+                  var FUERA = {json.dumps(_fuera)};
+                  var ACT = {json.dumps(_btn_act, ensure_ascii=False)};
                   var raiz = doc.querySelector('[data-testid="stMain"]');
                   if (!raiz) return;
 
@@ -1823,6 +1831,28 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                   if (w.__railTimer) clearInterval(w.__railTimer);
                   w.__railTimer = setInterval(function () {{
                     var caja = raiz.getBoundingClientRect();
+
+                    // ── 0. Un DESTINO APARTE no tiene pila que mirar ─────
+                    // (Compras › Documentos SUNAT.) Ninguna seccion de MAPA
+                    // esta en el DOM, asi que el paso 1 no llega a decidir
+                    // nada y la columna se quedaba con Reportes. La salida
+                    // era la franja de vistas; desde que no se dibuja en
+                    // escritorio (2026-09-14) la vista quedaba sin camino de
+                    // vuelta a la pila. Ahora la columna pasa a Vistas —con
+                    // la elegida marcada— igual que al bajar. Regla #419.
+                    if (FUERA) {{
+                      doc.documentElement.classList.add('rails-scrolled');
+                      var act = doc.querySelector(
+                        '[class*="st-key-' + ACT + '"] button');
+                      if (act && !act.classList.contains('vista-en-pantalla')) {{
+                        var prev0 = doc.querySelectorAll('.vista-en-pantalla');
+                        for (var k = 0; k < prev0.length; k++) {{
+                          prev0[k].classList.remove('vista-en-pantalla');
+                        }}
+                        act.classList.add('vista-en-pantalla');
+                      }}
+                      return;
+                    }}
 
                     // ── 1. Marcar la seccion con MAS pixeles a la vista ──
                     var mejor = null, mejorPx = 0;
@@ -1886,22 +1916,56 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                   // Solo los botones de la PILA. Los que son destino aparte
                   // (Documentos SUNAT) tienen que seguir
                   // haciendo su navegacion normal.
-                  MAPA.forEach(function (m) {{
-                    var b = doc.querySelector('[class*="st-key-' + m.btn + '"] button');
-                    var s = doc.querySelector('[class*="st-key-' + m.sec + '"]');
-                    if (!b || !s || b.__railClic) return;
-                    b.__railClic = true;
-                    b.addEventListener('click', function (ev) {{
-                      ev.preventDefault();
-                      ev.stopPropagation();
-                      var franja = doc.querySelector('[class*="st-key-nav_rail"]');
-                      var techo = franja ? franja.getBoundingClientRect().height : 0;
-                      var y = s.getBoundingClientRect().top
-                            - raiz.getBoundingClientRect().top
-                            + raiz.scrollTop - techo - 8;
-                      raiz.scrollTo({{ top: Math.max(0, y), behavior: 'smooth' }});
-                    }}, true);
-                  }});
+                  //
+                  // SE ENLAZA EN CADA VUELTA, no una vez (2026-09-14). Este
+                  // script corre cuando el iframe carga, y en una carga
+                  // fresca las secciones todavia no estan en el DOM: no se
+                  // enlazaba ningun boton y el clic caia a Streamlit — el
+                  // rerun de ~45s que esto viene a evitar (medido en
+                  // Compras: `__railClic` en false, la seccion no se movio).
+                  // Con la franja de vistas fuera de escritorio, este rail es
+                  // la unica navegacion entre vistas. Regla #419.
+                  //
+                  // Y un boton enlazado SOBREVIVE a los reruns: estando en un
+                  // destino aparte, su clic tiene que seguir de largo hacia
+                  // Streamlit, que es lo que te devuelve a la pila. No se
+                  // puede decidir por el DOM —medido: con Documentos SUNAT
+                  // en pantalla quedaban 6 secciones viejas de la pila, el
+                  // clic en «Proveedor» se cortaba y no volvias nunca— ni
+                  // por el `FUERA` de este script, que el manejador de un
+                  // boton enlazado antes no ve. Lo dice el ULTIMO render,
+                  // en `window`.
+                  w.__railFuera = FUERA;
+                  function enlazar() {{
+                    MAPA.forEach(function (m) {{
+                      var b = doc.querySelector('[class*="st-key-' + m.btn + '"] button');
+                      if (!b || b.__railClic) return;
+                      if (!doc.querySelector('[class*="st-key-' + m.sec + '"]')) return;
+                      b.__railClic = true;
+                      b.addEventListener('click', function (ev) {{
+                        if (w.__railFuera) return;
+                        var s = doc.querySelector('[class*="st-key-' + m.sec + '"]');
+                        if (!s) return;
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        // El techo es lo que la cabecera RESERVA en reposo
+                        // (`--franja-rep-reserva`, la tira que abre la
+                        // franja de reportes). Hasta el 2026-09-14 se medía
+                        // la franja de vistas, que en escritorio ya no se
+                        // dibuja (regla #419): medía 0 y la sección caía
+                        // debajo de esa tira.
+                        var techo = parseFloat(getComputedStyle(doc.documentElement)
+                          .getPropertyValue('--franja-rep-reserva')) || 0;
+                        var y = s.getBoundingClientRect().top
+                              - raiz.getBoundingClientRect().top
+                              + raiz.scrollTop - techo - 8;
+                        raiz.scrollTo({{ top: Math.max(0, y), behavior: 'smooth' }});
+                      }}, true);
+                    }});
+                  }}
+                  enlazar();
+                  if (w.__railEnlace) clearInterval(w.__railEnlace);
+                  w.__railEnlace = setInterval(enlazar, 400);
                 }})();
                 </script>""",
             )

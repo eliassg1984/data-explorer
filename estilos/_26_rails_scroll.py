@@ -114,6 +114,7 @@ _DISPARADORES = """.st-key-nav_franja_rep:hover,
             .st-key-nav_rail:hover,
             .st-key-chips_ajuste_tabla:hover,
             .st-key-fecha_ajuste_pill:hover,
+            .st-key-fecha_corte_nav:hover,
             .st-key-chips_ajuste_tabla [aria-expanded="true"],
             .st-key-fecha_ajuste_pill [aria-expanded="true"]"""
 
@@ -396,7 +397,8 @@ CSS = f"""
           de donde estes en la pagina, y hasta hoy seguian pinchados arriba
           tambien al scrollear. */
     :root:has({_DISPARADORES}
-        ) :is(.st-key-chips_ajuste_tabla, .st-key-fecha_ajuste_pill) {{
+        ) :is(.st-key-chips_ajuste_tabla, .st-key-fecha_ajuste_pill,
+              .st-key-fecha_corte_nav) {{
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
@@ -431,7 +433,8 @@ CSS = f"""
        arriba, cada uno con su bloque, porque los dos tienen ademas su
        propia historia con el cruce por scroll. */
     .st-key-chips_ajuste_tabla,
-    .st-key-fecha_ajuste_pill {{
+    .st-key-fecha_ajuste_pill,
+    .st-key-fecha_corte_nav {{
         opacity: 0;
         visibility: hidden;
         pointer-events: none;
@@ -758,6 +761,38 @@ CSS = f"""
    veia; se encontro midiendo, no mirando. */
 .st-key-rail_scroll_hook {{
     display: none !important;
+}}
+
+/* ── ESCRITORIO: LA FRANJA DE VISTAS NO SE DIBUJA (2026-09-14) ───────
+   A pedido, con captura de Movimientos: «eliminemos la segunda franja
+   superior, donde salen las vistas y sus kpis, ojo solo la franja, no las
+   vistas» — y la de reportes se queda. Se van las DOS mitades del cruce
+   que ocupaban la banda de 40px bajo la de reportes: las vistas
+   (`nav_rail`) y los KPIs del reporte (`nav_franja_kpis`). Las vistas no
+   se pierden: son las secciones de la pila, y su lista vive en el rail
+   lateral, que toma la columna al bajar.
+
+   Lo que vivia en esa banda sin ser ella —la fecha, Filtros, el stepper
+   del corte— subio a la franja de reportes (`_50_fecha.py`). Y la vista
+   que no tenia mas salida que esta franja —un destino aparte como
+   Documentos SUNAT, sin pila que scrollear— pasa sola la columna a Vistas
+   (`base.py::_render_rail`, el `FUERA` del gancho).
+
+   `display: none` y no el reposo de la capa: ya no hay estado en que se
+   vean, asi que no hay transicion que cuidar. Desde 901 y no desde 769:
+   entre los dos la franja de reportes ocupa el ancho entero, la fecha y
+   Filtros no tienen donde subir, y ahi la franja se queda como estaba —
+   con las reglas de la capa de mas arriba. Regla #419. */
+/* La clase DUPLICADA no es un descuido: `navegacion.py::_CSS_FRANJA_VISTAS`
+   le pone `display:flex !important` a `.st-key-nav_rail` con la misma
+   especificidad, y se inyecta DESPUES que `estilos/` (lo emite
+   `_render_rail` en cada render), asi que con clase simple ganaba ella.
+   Medido: la franja seguia en `display: flex` con esta regla aplicando. */
+@media screen and (min-width: 901px) {{
+    .st-key-nav_rail.st-key-nav_rail,
+    .st-key-nav_franja_kpis.st-key-nav_franja_kpis {{
+        display: none !important;
+    }}
 }}
 
 /* En movil no hay columna izquierda: el lateral no se dibuja nunca. El

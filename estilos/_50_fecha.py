@@ -168,10 +168,13 @@ CSS = """    /* ================================================================
                eso se resta: sin restarlo salen 4px abajo contra 6 arriba y
                el control se ve apretado contra la línea inferior — fue
                justo el bug de la pasada anterior. Ver _40_ajuste_franja.py. */
-            /* La fila 1 dejo de existir: su banda la ocupa ahora la
-               franja de vistas, que subio a tocar la de reportes. Los 5px
-               centran un control de 30px en los 40 de esa franja. */
-            top: calc(var(--franja-rep-alto) + 5px) !important;
+            /* 2026-09-14: SUBE A LA FRANJA DE REPORTES (regla #419). La
+               de vistas, donde vivia, ya no se dibuja en escritorio. Los
+               3px centran los 26 del pill en los 30 de los botones de
+               reportes (y=1..31, `_20_compras_rail.py`), que no van
+               centrados en su franja sino pegados al tope — el mismo
+               criterio que el sello (`top:1px; height:30px`). */
+            top: 3px !important;
             /* 2026-08-19: era `left: 85px`, un numero heredado de cuando el
                rail vivia a la IZQUIERDA y el contenido empezaba en otro
                lado. Ahora arranca donde arranca el contenido -- la misma
@@ -298,27 +301,39 @@ CSS = """    /* ================================================================
 
                `z-index` un punto sobre la franja (999999, `navegacion.py`):
                comparten superficie y este va encima. */
-            /* Sigue a su franja, que subió a tocar la de reportes. */
-            top: var(--franja-rep-alto) !important;
-            height: var(--nav-top-alto) !important;
+            /* 2026-09-14: SUBE A LA FRANJA DE REPORTES (regla #419). La de
+               vistas ya no se dibuja en escritorio, asi que el
+               compartimento pasa a ser la ultima zona de la de arriba: su
+               borde derecho, con el sello de «Ultima actualizacion» corrido
+               a su izquierda (mas abajo). Mismo `top` y mismo alto que los
+               botones de reportes y el sello —`top:1px; height:30px`, los
+               de `inject_sello_actualizacion`—, asi el filete de la
+               izquierda mide lo que un boton y no la franja entera. */
+            top: 1px !important;
+            height: 30px !important;
             left: auto !important;
-            /* 90 -> 0: la franja pasó a ir de borde a borde, así que su
-               borde derecho es el de la ventana. El compartimento sigue
-               cerrando donde cierra ella, que es lo que lo hace leerse
-               como su última zona y no como algo apoyado encima. */
             right: 0 !important;
             transform: none !important;
-            /* 40% del ancho: con 4 filtros (Ajuste, Ventas) la etiqueta no
-               crece —siempre dice "Filtros"— asi que el tope es un seguro,
-               no una medida. */
-            max-width: 40vw !important;
-            z-index: 1000000 !important;
+            /* ANCHO FIJO y no `auto`: el sello se ancla a este mismo numero
+               (`--filtros-ancho`, `_00_base.py`), y con `auto` el badge de
+               la cuenta lo agrandaba por debajo del sello. */
+            width: var(--filtros-ancho) !important;
+            max-width: none !important;
+            box-sizing: border-box !important;
+            /* Sobre la franja de reportes (1000001, `_20_compras_rail.py`),
+               que ahora comparte: con el 1000000 de antes quedaba pintado
+               detras de su fondo blanco. */
+            z-index: 1000002 !important;
             display: flex !important;
             align-items: center !important;
             padding: 0 16px !important;
             border-left: 1px solid var(--border) !important;
             background: var(--bg-card) !important;
-            border-radius: 0 10px 10px 0 !important;
+            /* Sin radio: su borde derecho es el de la ventana. */
+            border-radius: 0 !important;
+        }
+        .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla:has(.st-key-chipwrap_filtros_on) {
+            width: var(--filtros-ancho-cuenta) !important;
         }
         .st-key-chips_ajuste_tabla.st-key-chips_ajuste_tabla
             [data-testid="stPopover"] button {
@@ -410,6 +425,74 @@ CSS = """    /* ================================================================
         }
     }
 
+    /* =================================================================== */
+    /* LA FRANJA DE REPORTES CON LA FECHA Y FILTROS ADENTRO (2026-09-14)    */
+    /* Regla #419. Los dos subieron de la franja de vistas, que ya no se    */
+    /* dibuja en escritorio, y comparten fila con dos cosas que ya estaban: */
+    /* el grupo CENTRADO de reportes (608px, `_20_compras_rail.py`) y el    */
+    /* sello de «Ultima actualizacion» (`inject_sello_actualizacion`).      */
+    /* =================================================================== */
+    @media (min-width: 901px) {
+        /* EL SELLO LE HACE SITIO A FILTROS. Terminaba en el borde de la
+           ventana (`right:16px`), que ahora es de Filtros: se corre su
+           ancho mas 8px de aire. Scopeado por PRESENCIA — un reporte sin
+           filtros deja el sello donde estaba. */
+        :root:has(.st-key-chips_ajuste_tabla) #sello-actualizacion {
+            right: calc(var(--filtros-ancho) + 8px) !important;
+        }
+        :root:has(.st-key-chipwrap_filtros_on) #sello-actualizacion {
+            right: calc(var(--filtros-ancho-cuenta) + 8px) !important;
+        }
+        /* Con el dato viejo el sello suma « · hace N dias» y el rotulo ya
+           no entra al lado de Filtros en ningun ancho razonable: se queda
+           el valor, que es la parte que avisa (en ambar). */
+        :root:has(.st-key-chips_ajuste_tabla) #sello-actualizacion.sello-viejo .sello-rotulo {
+            display: none !important;
+        }
+    }
+    /* Y SUS CORTES DE ANCHO SE MUEVEN CON EL. La cuenta del docstring de
+       `inject_sello_actualizacion` —grupo de 608px centrado, 24px de aire
+       contra su borde—, con 120 (112 + 8) o 144 (136 + 8) a la derecha en
+       vez de 16:
+                                   sin cuenta   con cuenta
+           rotulo + valor  (230)      1356         1404
+           solo el valor   (109)      1114         1162
+           valor viejo     (186)      1268         1316
+       Por debajo, el sello se va entero: el criterio de ese docstring,
+       perder la hora antes que un nombre de reporte. A 1366 (la laptop de
+       la captura) el rotulo se ve mientras no haya filtros puestos. */
+    @media (min-width: 901px) and (max-width: 1356px) {
+        :root:has(.st-key-chips_ajuste_tabla) #sello-actualizacion .sello-rotulo { display: none !important; }
+    }
+    @media (min-width: 901px) and (max-width: 1404px) {
+        :root:has(.st-key-chipwrap_filtros_on) #sello-actualizacion .sello-rotulo { display: none !important; }
+    }
+    @media (min-width: 901px) and (max-width: 1114px) {
+        :root:has(.st-key-chips_ajuste_tabla) #sello-actualizacion { display: none !important; }
+    }
+    @media (min-width: 901px) and (max-width: 1162px) {
+        :root:has(.st-key-chipwrap_filtros_on) #sello-actualizacion { display: none !important; }
+    }
+    @media (min-width: 901px) and (max-width: 1268px) {
+        :root:has(.st-key-chips_ajuste_tabla) #sello-actualizacion.sello-viejo { display: none !important; }
+    }
+    @media (min-width: 901px) and (max-width: 1316px) {
+        :root:has(.st-key-chipwrap_filtros_on) #sello-actualizacion.sello-viejo { display: none !important; }
+    }
+    /* EL PILL CONTRA LOS REPORTES, en pantallas angostas. Termina en 229
+       (19 + 210) y el grupo centrado arranca en (W - 608) / 2: con 16px de
+       aire se tocan por debajo de W = 1098. Ahi la franja deja de centrar
+       sobre la ventana y centra entre el pill y Filtros — y si ni asi
+       entra (W < 981), scrollea, que es la valvula que ya tenia. */
+    @media (min-width: 901px) and (max-width: 1100px) {
+        :root:has(.st-key-fila_ajuste_top .st-key-fecha_ajuste_pill) .st-key-nav_franja_rep {
+            padding-left: calc(19px + 210px + 16px) !important;
+        }
+        :root:has(.st-key-chips_ajuste_tabla) .st-key-nav_franja_rep {
+            padding-right: calc(var(--filtros-ancho-cuenta) + 16px) !important;
+        }
+    }
+
     /* Panel del popover: se renderiza en un portal (fuera del contenedor),
        así que lo scopeamos por el contenedor keyed interno con :has(). */
     [data-testid="stPopoverBody"]:has(.st-key-fecha_panel) {
@@ -460,22 +543,21 @@ CSS = """    /* ================================================================
     .st-key-fecha_corte_nav {
         display: none !important;
     }
-    @media (min-width: 1400px) {
+    /* 2026-09-14: de 1400 a 1490, y a la IZQUIERDA pegado al pill (regla
+       #419). Subio con el a la franja de reportes, donde la derecha es del
+       sello y de Filtros. Al lado del pill (19 + 210 + 8 = 237) termina en
+       413, y el grupo centrado de reportes (608px) arranca en
+       (W - 608) / 2: con 24px de aire entra desde W = 1482. */
+    @media (min-width: 1490px) {
         .st-key-fecha_corte_nav {
             display: block !important;
             position: fixed !important;
-            /* La fila 1 dejo de existir: su banda la ocupa ahora la
-               franja de vistas, que subio a tocar la de reportes. Los 5px
-               centran un control de 30px en los 40 de esa franja. */
-            top: calc(var(--franja-rep-alto) + 5px) !important;
-            /* 65 -> 130: con la franja de borde a borde, el `right:65`
-               lo metia debajo del compartimento de Filtros (1168..1280).
-               Con 130 cae en 974..1150, entre el grupo centrado de vistas
-               (termina en 956) y ese compartimento. */
-            right: 130px !important;
-            left: auto !important;
+            /* 2px centran sus 28 en los 30 de los botones de reportes. */
+            top: 2px !important;
+            left: calc(19px + 210px + 8px) !important;
+            right: auto !important;
             width: 176px !important;
-            z-index: 1000000 !important;   /* sobre la franja, ver el pill */
+            z-index: 1000002 !important;   /* sobre la franja de reportes, ver el pill */
             margin: 0 !important;
         }
         .st-key-fecha_corte_nav [data-testid="stHorizontalBlock"] {
@@ -581,10 +663,11 @@ CSS = """    /* ================================================================
             line-height: calc(var(--cab-altura) - 8px) !important;
             color: var(--text-primary) !important;
         }
-        [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
-            .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-            left: calc(var(--rail-der-res) + 276px) !important;   /* titulo (260) + 16 */
-        }
+        /* 2026-09-14: aca el pill se corria 276px para dejarle sitio al
+           titulo. Ya no comparten fila: el pill subio a la franja de
+           reportes (regla #419) y el titulo se quedo abajo, asi que el
+           corrimiento sobraba — y corrido, el pill caia encima de los
+           nombres de los reportes. */
         /* 2026-08-31: el titulo fantasma seguia corriendo los chips con un
            `left` — y el compartimento se ancla por la DERECHA, asi que ese
            left lo mandaba al medio de la franja. El titulo sigue corriendo

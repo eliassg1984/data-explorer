@@ -228,6 +228,12 @@ _CSS_FRANJA_VISTAS = f"""
    una línea inferior: es cromo, no una tarjeta, así que no lleva ni sombra
    fuerte ni redondeo. */
 .st-key-nav_rail {{
+    /* 2026-09-14: EN ESCRITORIO (>=901px) ESTA FRANJA YA NO SE DIBUJA, a
+       pedido («eliminemos la segunda franja superior, donde salen las
+       vistas y sus kpis»). La apaga `estilos/_26_rails_scroll.py`; lo de
+       aca sigue mandando entre 769 y 900px —donde la franja de reportes no
+       tiene sitio para la fecha ni para Filtros— y en el bloque movil de
+       abajo, donde esta fila es la nav inferior. Regla #419. */
     /* DOS FILAS, no una (2026-08-25, a pedido, con captura del modo diseno):
            fila 1  ->  Familia / Subfamilia / chips del drill
            fila 2  ->  Proveedor · Producto · Vs ano pasado · ...
