@@ -239,6 +239,11 @@ resto de `graficos/compras/`.
   Volatilidad estuvo así desde que nació: la vela quedaba marcada y la
   tabla no la seguía. Para selección por caja da igual. Ver
   `arquitectura.md` #388.
+- **Y `dragmode="select"` apaga el clic suelto del gráfico entero**, sea
+  cual sea el `hoverinfo`: Streamlit fuerza `clickmode="event"` mientras el
+  modo sea select o lazo. Clic y caja no conviven en un `st.plotly_chart`;
+  hay que elegir con qué gesto abre (el histograma de Ajuste › Distribución
+  abre en clic: `dragmode="pan"` + ejes `fixedrange`). Misma #388.
 - **La selección de `st.plotly_chart(on_select=...)` persiste entre reruns.**
   Con `key` estática, cada rerun re-procesa el mismo clic → toggle infinito
   (parpadeo). La key tiene que cambiar tras cada clic procesado **y el

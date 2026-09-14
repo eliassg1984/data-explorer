@@ -52,8 +52,8 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     muestra aparte como texto, no se pierde.
 
     Con `col_producto` resuelto, el hover se enriquece (vía `custom_data`)
-    con código/área/cantidad/fecha, y clic + selección (caja o lazo, barra
-    del gráfico) arma una tabla de detalle abajo — mismo patrón
+    con código/área/cantidad/fecha, y la selección (caja o lazo en el strip,
+    clic en la barra del histograma) arma una tabla de detalle abajo — mismo patrón
     `on_select="rerun"` que ya usa `_graf_comparativa_mensual`. Las keys de
     ambos charts son estáticas a propósito: la selección solo pinta la
     tabla de abajo, no realimenta el propio gráfico, así que no aplica la
@@ -62,26 +62,31 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     Distribución/Histograma no reprocesa la selección del otro, porque el
     que no está activo ni siquiera se construye en ese rerun.
 
-    Cuando la selección está activa (`_hay_prod`/`_hay_prod_hist`), dos
-    cosas que Plotly NO trae por default y hacían que nadie usara esto:
+    Cuando la selección está activa en el strip (`_hay_prod`), dos cosas
+    que Plotly NO trae por default y hacían que nadie usara esto:
     `dragmode="select"` explícito — sin él el modo activo es "pan" y
     arrastrar corre la vista en vez de seleccionar (así se llega fácil a
     "solo veo una familia", ver arquitectura.md) — y `config` con la barra
-    recortada a 4-5 botones relevantes en vez de los 10 de default, con
+    recortada a los botones relevantes en vez de los 10 de default, con
     `displayModeBar=True` (no el "hover" default: visible siempre, no solo
     para quien ya sabía que estaba ahí). Sin `col_producto` la selección
     está apagada (`on_select="ignore"`) y la barra se oculta entera — no
     hay nada que seleccionar, mostrarla sería un botón muerto.
 
-    El histograma tiene el mismo click→tabla, pero SIN custom_data sobre el
-    propio `go.Histogram`: es una traza agregada (barras = bins, no filas)
-    y `on_select` sobre ella es territorio no verificado — mismo riesgo que
-    `go.Heatmap` (regla #11 de arquitectura.md, selección que nunca llega,
-    sin error). Se reutiliza esa solución: overlay de `go.Scatter`
-    invisible (opacity=0), un punto por bin a media altura, con el rango
-    `[lo, hi]` de ese bin en `customdata`. El click/drag selecciona el
-    punto invisible, no la barra; el rango de su customdata filtra `df_nz`
-    directo en pandas."""
+    Con `dragmode="select"` un clic SUELTO no selecciona nada: Streamlit
+    pone `clickmode="event"` (sin "select") mientras el modo sea select o
+    lazo, así que clic y caja no conviven (regla #388). En el strip se
+    acepta: el hover ya dice qué producto es cada punto, y el gesto que
+    suma es la caja. El histograma va al revés y abre en modo CLIC: una
+    barra es un bin que el hover no desglosa, y clic + shift+clic cubre
+    cualquier tramo de sus 30 bins.
+
+    La selección del histograma se lee del propio `go.Histogram`: se
+    selecciona solo (verificado el 2026-09-12, Plotly 3.6) y cada barra
+    devuelve en `point_indices` las filas de `d_hist` que cuenta — exacto,
+    sin rehacer el binning en pandas. Hasta esa fecha llevaba un overlay de
+    `go.Scatter` invisible por analogía con el Heatmap (reglas #11 y #44),
+    con `hoverinfo="skip"`, que no recibió nunca un clic."""
     grp = col_familia or col_area
 
     n_total = len(df)
@@ -153,8 +158,9 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             if _hay_prod:
                 # Sin esto el dragmode por default de Plotly es "pan": arrastrar
                 # sobre el gráfico corre la vista en vez de seleccionar. "select"
-                # lo deja listo para usar sin tocar ningún botón de la barra —
-                # clic selecciona un punto, arrastre selecciona una caja.
+                # lo deja listo para usar sin tocar ningún botón de la barra.
+                # El precio: en este modo un clic suelto NO selecciona (ver
+                # docstring y arquitectura.md #388) — el gesto es la caja.
                 fig.update_layout(dragmode="select")
                 _linea_ajuste = "Ajuste: <b>S/ %{y:,.2f}</b>"
                 if col_cantidad and col_cantidad in d.columns:
@@ -254,12 +260,12 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         if n_fuera:
             _cap += f" · {n_fuera} outliers fuera de este rango"
         if _hay_prod_hist:
-            _cap += " · arrastrá para seleccionar y ver el detalle abajo"
+            _cap += (" · clic en una barra para ver sus productos abajo"
+                     " (shift+clic suma otras)")
         st.caption(_cap)
 
         _n_bins = 30
         _paso = (p_hi - p_lo) / _n_bins
-        _bordes = [p_lo + i * _paso for i in range(_n_bins + 1)]
 
         fig2 = go.Figure()
         fig2.add_trace(go.Histogram(
@@ -269,18 +275,6 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             marker_color=SERIE_PRINCIPAL, opacity=0.75,
             hovertemplate="Valor: S/ %{x:,.2f}<br>Frecuencia: %{y}<extra></extra>",
         ))
-        if _hay_prod_hist:
-            _bins_cat = pd.cut(d_hist[col_ajuste_val], bins=_bordes,
-                               include_lowest=True)
-            _conteo = (_bins_cat.value_counts(sort=False)
-                       .reindex(_bins_cat.cat.categories, fill_value=0))
-            fig2.add_trace(go.Scatter(
-                x=[iv.mid for iv in _conteo.index],
-                y=[c / 2 for c in _conteo.to_numpy()],
-                mode="markers", marker=dict(size=20, opacity=0),
-                customdata=[(iv.left, iv.right) for iv in _conteo.index],
-                hoverinfo="skip", showlegend=False,
-            ))
         fig2.add_vline(x=0, line_dash="solid", line_color=ERROR, line_width=2)
         fig2.add_vline(x=media, line_dash="dot", line_color=ADVERTENCIA, line_width=2)
         fig2.add_vline(x=mediana, line_dash="dash", line_color=EXITO, line_width=2)
@@ -293,24 +287,20 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             showlegend=False,
         ))
         if _hay_prod_hist:
-            # Mismo motivo que en el strip de arriba: sin esto el drag por
-            # default es "pan" y arrastrar sobre los bins no selecciona nada.
-            fig2.update_layout(dragmode="select")
+            # Modo CLIC, a propósito NO "select" como el strip: en select
+            # Streamlit apaga la selección por clic y la barra clickeada no
+            # llegaba nunca a la tabla (regla #388). En "pan" Streamlit pone
+            # clickmode="event+select", y los ejes fijos dejan quieto el
+            # arrastre, que si no correría los bins fuera de la vista.
+            fig2.update_layout(dragmode="pan")
+            fig2.update_xaxes(fixedrange=True)
+            fig2.update_yaxes(fixedrange=True)
 
-        # Mismo recorte de barra que el strip — acá directo sin lasso: la
-        # selección corre sobre el overlay de Scatter invisible (ver
-        # docstring), no sobre las barras, y selection_mode de abajo no
-        # incluye "lasso" para este chart (el rango [lo, hi] por customdata
-        # solo tiene sentido como caja, un lazo no define un intervalo).
-        _cfg_hist = {"displaylogo": False}
-        if _hay_prod_hist:
-            _cfg_hist["displayModeBar"] = True
-            _cfg_hist["modeBarButtonsToRemove"] = [
-                "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d",
-                "lasso2d",
-            ]
-        else:
-            _cfg_hist["displayModeBar"] = False
+        # Sin barra de Plotly: con los ejes fijos no hay zoom ni paneo que
+        # ofrecer, y la caja NO se ofrece a propósito — quien la eligiera
+        # quedaría sin forma de volver al clic (con los dos ejes fijos Plotly
+        # tampoco dibuja el botón de pan), y shift+clic ya cubre un tramo.
+        _cfg_hist = {"displaylogo": False, "displayModeBar": False}
 
         with _card("dist_hist", "Histograma"):
             st.markdown(
@@ -325,18 +315,19 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             _evento_hist = st.plotly_chart(
                 fig2, use_container_width=True, key="ajuste_dist_hist",
                 on_select="rerun" if _hay_prod_hist else "ignore",
-                selection_mode=["points", "box"],
+                selection_mode="points",
                 config=_cfg_hist,
             )
 
         if _hay_prod_hist:
-            _puntos_hist = ((_evento_hist or {}).get("selection", {}) or {}).get("points", [])
-            _mask = pd.Series(False, index=df_nz.index)
-            for _p in _puntos_hist:
-                _cd = _p.get("customdata") or []
-                if len(_cd) == 2:
-                    _mask |= df_nz[col_ajuste_val].between(_cd[0], _cd[1])
-            _sel_hist = df_nz[_mask]
+            # `point_indices` junta las filas de TODAS las barras elegidas:
+            # posiciones en `d_hist`, que es el `x` de la traza. No se usa el
+            # `bin_number` de cada punto: Plotly recorta los bins vacíos de
+            # los bordes y lo numera desde el primero con datos, no desde p_lo.
+            _sel = ((_evento_hist or {}).get("selection", {}) or {})
+            _idx = sorted({int(i) for i in (_sel.get("point_indices") or [])
+                           if 0 <= int(i) < len(d_hist)})
+            _sel_hist = d_hist.iloc[_idx]
             if not _sel_hist.empty:
                 _det2 = pd.DataFrame({"Producto": _sel_hist[col_producto]})
                 if grp and grp in _sel_hist.columns:

@@ -3425,6 +3425,14 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
     el deploy antes de asumirlo funcionando.
 
+    **Resuelto el 2026-09-14 (ver #388):** `go.Histogram` SÍ se selecciona
+
+    solo, por clic y por caja, y devuelve las filas de cada barra en
+
+    `point_indices`. El overlay se borró; el clic suelto no andaba por el
+
+    `dragmode="select"`, no por la traza.
+
 
 
 45. **`inject_maximize_aggrid` — el botón ⛶ desaparecía para siempre al
@@ -34260,6 +34268,59 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      arrastre de caja sí funciona).
 
      (2026-09-12.)
+
+     **Revisado el histograma, y ahí el `"skip"` ni siquiera era la causa.**
+     Clic sintético sobre la barra de −1.287 a −1.149 (dos productos): el
+     clic lo recibe el `go.Histogram` (traza 0) y NO se selecciona nada,
+     ni esa traza ni el overlay. Con el overlay puesto en `"none"` por
+     `Plotly.restyle` el clic sí le llega a él (traza 1) —y de paso le
+     roba el hover a la barra— y tampoco se selecciona nada. El motivo es
+     de Streamlit, no de Plotly: su componente fuerza
+     `clickmode="event"` (sin `"select"`) **mientras el `dragmode` sea
+     `"select"` o `"lasso"`**, y sólo pone `"event+select"` en los otros
+     modos (`PlotlyChart.*.js` de Streamlit 1.59, efecto sobre
+     `layout.dragmode`). Con `clickmode="event"`, un clic en modo select
+     emite `plotly_selected(undefined)` y el handler de Streamlit empieza
+     con `if(!e)return`. El candlestick de Volatilidad no fija `dragmode`
+     —Streamlit lo deja en `"pan"`— y por eso ahí bastó con atender la
+     traza 0.
+
+     Consecuencia: **en un `st.plotly_chart` el clic suelto y la caja NO
+     conviven en el mismo modo**, por diseño de Streamlit y sin forma de
+     puentearlo desde Python (sigue el `dragmode` que el usuario elige en
+     la barra, vía `onUpdate`). Hay que elegir con qué gesto abre cada
+     gráfico:
+
+     - El **strip** de Distribución se queda en `"select"`: el hover ya
+       dice qué producto es cada punto y el gesto que suma es la caja. Su
+       comentario decía «clic selecciona un punto», y era falso.
+     - El **histograma** pasa a abrir en modo CLIC: `dragmode="pan"` con
+       `fixedrange` en los dos ejes (sin eso, arrastrar corre los bins
+       fuera de la vista). Clic en una barra la elige, shift+clic suma
+       otras, un clic en otra barra reemplaza la selección. La caja NO se
+       ofrece: con los dos ejes fijos Plotly no dibuja el botón de pan, así
+       que quien eligiera la caja no tendría cómo volver al clic. Sin
+       botones útiles, la barra de Plotly se oculta.
+
+     Y el overlay se borró: **el `go.Histogram` se selecciona solo** (lo
+     que la #44 no había podido verificar), por clic y por caja, y cada
+     barra devuelve en `point_indices` las posiciones de sus filas en el
+     `x` de la traza —`d_hist`—, así que la tabla sale de
+     `d_hist.iloc[...]` sin rehacer el binning. Ojo con el `bin_number` de
+     cada punto: Plotly **recorta los bins vacíos de los bordes** y lo
+     numera desde el primero con datos (el bin 1 de Plotly era el 6 de
+     `p_lo`), así que no sirve para ubicar el bin.
+
+     Verificado igual que el de arriba, con la recarga de ~15 s de por
+     medio: clic → «2 seleccionados · ajuste neto S/ -2,428.38»;
+     shift+clic en otra barra → 4; clic en una tercera → 1 (S/ −177.87,
+     dentro de su bin). Arrastrar deja el rango de los ejes idéntico y el
+     hover de la barra sigue saliendo.
+
+     **Lección:** antes de culpar a la traza que recibe el clic, mirá el
+     `dragmode`. Un `dragmode="select"` puesto "para que arrastrar
+     seleccione" apaga en silencio la selección por clic del mismo
+     gráfico. (2026-09-14.)
 
 389. **Si algo es difícil de clickear, lo que crece es el blanco del
      clic, no el dibujo — y la selección se lee ANTES de dibujar.** Pedido
