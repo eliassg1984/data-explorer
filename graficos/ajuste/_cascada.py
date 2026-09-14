@@ -44,7 +44,7 @@ import streamlit as st
 from tema import (
     ACENTO, GRIS_BORDE, GRIS_FONDO,
     TEXTO_PRINCIPAL,
-    GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
+    BLANCO, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
     LAVANDA_SELECCION,
     AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO,
     AJUSTE_CRIT_FONDO, AJUSTE_SOB_FONDO,
@@ -189,27 +189,13 @@ def _css():
     .ajcas-lista-scroll:hover::-webkit-scrollbar-thumb {{
         background: {GRIS_TEXTO_SUAVE}; }}
 
-    /* ── EL LOOK DE TARJETA NO SE DEFINE ACA ──────────────────────────
-       Las tres superficies (`_hdr`, `_prota`, `_mini_*`) llevan el prefijo
-       `ajuste_graf_card_`, asi que el fondo blanco, el radio de 20px, la
-       sombra tenue y el "sin borde" salen de `estilos/_80_cards.py`, que
-       es la unica fuente de ese look — el mismo que usan las cuatro
-       tarjetas de Compras > Vs ano pasado, que es la referencia que se
-       pidio. La v1 de esta vista invento keys propias (`ajcas_cab`,
-       `ajcas_prota`, `ajcas_mini_`): como no caian en ninguna familia
-       conocida se quedaron con el marco por defecto de
-       `st.container(border=True)` y el reporte cambiaba de idioma visual.
-       Ver arquitectura.md regla #426.
-
-       Lo de abajo son SOLO los deltas que cada una necesita. */
-
-    /* Cabecera: el padding de la familia (8px 18px) es correcto, pero la
-       fila de tres columnas no necesita el margen inferior del bloque. */
-    div[class*="st-key-ajuste_graf_card_cascada_hdr"] {{
-        padding: 12px 18px !important; }}
-    div[class*="st-key-ajuste_graf_card_cascada_hdr"]
-        div[data-testid="stHorizontalBlock"] {{ align-items: center; }}
-    div[class*="st-key-ajuste_graf_card_cascada_hdr"] p {{ margin: 0 !important; }}
+    /* ── TARJETA DE CABECERA ──────────────────────────────────────────
+       Es una tarjeta propia arriba de las de familia, a pedido. Junta el
+       titulo, los KPIs del conjunto y el compartimento de filtros. */
+    div[class*="st-key-ajcas_cab"] {{
+        border-radius: 12px !important;
+        padding: 14px 16px 10px 16px !important;
+        margin-bottom: 12px !important; }}
 
     /* ── MINI-TARJETA DEL RIEL ────────────────────────────────────────
        EL BOTON CUBRE LA TARJETA ENTERA. Es el fix del pestillo de 16x36:
@@ -218,19 +204,15 @@ def _css():
        <button> se estira a inset:0 por encima del HTML. Verificado en la
        app: 100 % de la superficie clickeable, el texto se sigue viendo
        debajo. Coste conocido: el texto deja de ser seleccionable.
-       Ver arquitectura.md regla #421.
-
-       El padding de la familia (8px 18px) es para una tarjeta grande; en
-       una de 205px de ancho los 18 laterales se comen el nombre, asi que
-       se acota a su key propia — no se toca el de la familia. */
-    div[class*="st-key-ajuste_graf_card_cascada_mini_"] {{
+       Ver arquitectura.md regla #421. */
+    div[class*="st-key-ajcas_mini_"] {{
         position: relative !important;
-        padding: 10px 12px !important;
-        cursor: pointer;
-        transition: box-shadow .12s ease, background .12s ease; }}
-    div[class*="st-key-ajuste_graf_card_cascada_mini_"]:hover {{
-        background: {LAVANDA_SELECCION} !important;
-        box-shadow: 0 0 0 1px {ACENTO} !important; }}
+        border: 1px solid {GRIS_BORDE}; border-radius: 10px;
+        padding: 9px 11px; margin-bottom: 8px; cursor: pointer;
+        background: {BLANCO};
+        transition: border-color .12s ease, background .12s ease; }}
+    div[class*="st-key-ajcas_mini_"]:hover {{
+        border-color: {ACENTO}; background: {LAVANDA_SELECCION}; }}
     div[class*="st-key-ajcas_btnmini_"] {{ position: static !important; }}
     div[class*="st-key-ajcas_btnmini_"] button {{
         position: absolute !important; inset: 0 !important;
@@ -238,22 +220,20 @@ def _css():
         min-height: 0 !important; padding: 0 !important;
         border: none !important; background: transparent !important;
         color: transparent !important; box-shadow: none !important;
-        z-index: 3 !important; border-radius: 20px !important; }}
+        z-index: 3 !important; border-radius: 10px !important; }}
     div[class*="st-key-ajcas_btnmini_"] button:hover,
     div[class*="st-key-ajcas_btnmini_"] button:focus {{
         background: transparent !important; color: transparent !important;
         border: none !important; box-shadow: none !important; }}
     div[class*="st-key-ajcas_btnmini_"] button:focus-visible {{
         outline: 2px solid {ACENTO} !important; outline-offset: 1px; }}
-    div[class*="st-key-ajuste_graf_card_cascada_mini_"] p {{ margin: 0 !important; }}
+    div[class*="st-key-ajcas_mini_"] [data-testid="stMarkdownContainer"] p {{
+        margin: 0 !important; }}
 
-    /* ── TARJETA PROTAGONISTA ─────────────────────────────────────────
-       La que tiene el foco se marca con un anillo de acento. Va por
-       `box-shadow` y no por `border`: un borde de 2px cambia la caja y
-       desalinea la tarjeta con las minis de al lado, que no lo llevan. */
-    div[class*="st-key-ajuste_graf_card_cascada_prota"] {{
-        padding: 16px 18px !important;
-        box-shadow: 0 0 0 2px {ACENTO}, 0 1px 4px rgba(16,16,20,.06) !important; }}
+    /* ── TARJETA PROTAGONISTA ─────────────────────────────────────────── */
+    div[class*="st-key-ajcas_prota"] {{
+        border: 2px solid {ACENTO} !important; border-radius: 12px !important;
+        padding: 17px 20px 18px 20px !important; }}
 
     /* El compartimento de filtros de la tarjeta: sin la caja de formulario
        que Streamlit le pone al popover trigger. */
@@ -305,27 +285,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     d = df
     _sel_area, _sel_fam = [], []
-    with st.container(border=True, key="ajuste_graf_card_cascada_hdr"):
-        # UN SOLO RENGLÓN: título · Filtros · KPIs, como la cabecera de
-        # Compras › Vs año pasado (`compras_vap_card_hdr`, regla #420) —
-        # que es la referencia que se pidió.
-        #
-        # Las TRES columnas se crean juntas y se llenan en otro orden a
-        # propósito: los KPIs se calculan sobre `d` YA filtrado, y quien
-        # filtra es el popover de la columna del medio. La posición en
-        # pantalla la da el orden en que se CREA el contenedor, no el orden
-        # en que se escribe en él (misma mecánica que #420), así que el
-        # bloque de KPIs puede computarse último y seguir saliendo a la
-        # derecha. Antes iban en un `st.markdown` aparte con
-        # `margin-top:-30px` para treparlos a la fila: no llegaban, y se
-        # veían colgando abajo del compartimento.
-        # columnas-internas: título · filtros · KPIs de la cabecera
-        _c_tit, _c_fil, _c_kpi = st.columns([2.4, 1.2, 1.7],
-                                            vertical_alignment="center")
+    with st.container(border=True, key="ajcas_cab"):
+        _c_tit, _c_fil = st.columns([1, 1])  # columnas-internas: título vs. controles
         with _c_tit:
             st.markdown(
                 f"<div style='font-size:15.5px;font-weight:600;"
-                f"color:{GRIS_TEXTO_MEDIO}'>"
+                f"color:{GRIS_TEXTO_MEDIO};padding-top:2px'>"
                 f"Ajuste valorizado por {grp_col.lower()}</div>",
                 unsafe_allow_html=True)
         with _c_fil:
@@ -341,6 +306,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     d, _sel_fam = filtro_pills(
                         d, col_familia, _K_FAMILIA, "Familia")
 
+        # El agregado y los KPIs viven en la MISMA tarjeta que el título,
+        # así que se calculan acá adentro: el neto de abajo tiene que ser
+        # el de lo que efectivamente se dibuja, ya filtrado.
         agg = (d.groupby(grp_col, as_index=False)[col_ajuste_val]
                .sum())
         if not agg.empty:
@@ -377,11 +345,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 f"font-variant-numeric:tabular-nums'>{_p:+.1f}%</span> "
                 f"<span style='font-size:11.5px;color:{_fgp};opacity:.65'>"
                 f"s/ total</span>"))
-        with _c_kpi:
-            st.markdown(
-                f"<div style='display:flex;justify-content:flex-end;"
-                f"gap:10px;flex-wrap:wrap'>{_kpis}</div>",
-                unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='display:flex;justify-content:flex-end;gap:10px;"
+            f"flex-wrap:wrap;margin-top:-30px;padding-bottom:4px'>"
+            f"{_kpis}</div>", unsafe_allow_html=True)
 
     # ── Datos por familia ────────────────────────────────────────────────
     _vv = (d.groupby(grp_col)[col_valorizado].sum()
@@ -416,7 +383,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     _c_pro, _c_riel = st.columns([3.2, 1])
 
     with _c_pro:
-        with st.container(border=True, key="ajuste_graf_card_cascada_prota"):
+        with st.container(border=True, key="ajcas_prota"):
             _render_protagonista(
                 _act, d, grp_col, col_ajuste_val, col_producto, col_area,
                 col_cantidad, col_unidad)
@@ -436,8 +403,7 @@ def _render_mini(f):
     """
     _col = _tono(f["val"])[0]
     _sig = "+" if f["val"] > 0 else "−"
-    with st.container(border=True,
-                      key=f"ajuste_graf_card_cascada_mini_{_slug(f['cat'])}"):
+    with st.container(key=f"ajcas_mini_{_slug(f['cat'])}"):
         st.markdown(
             f"<div style='font-size:11px;font-weight:600;"
             f"color:{GRIS_TEXTO_MEDIO};white-space:nowrap;overflow:hidden;"
