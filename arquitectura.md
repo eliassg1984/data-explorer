@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-425 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+426 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (151)
+**CSS y estilos** (152)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -185,6 +185,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#421** — El área de clic de una fila no es lo que se ilumina al pasar el mouse. Si la fila entera se…
 - **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
 - **#424** — Un filtro categórico que ofrece todo el maestro ofrece pastillas que dejan la vista vacía
+- **#426** — Una tarjeta nueva no se estila: se la nombra para que caiga en la familia que ya tiene el look
 
 **Layout y alturas** (58)
 
@@ -36098,6 +36099,68 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-14.)
 
+426. **Una tarjeta nueva no se estila: se la nombra para que caiga en la
+     familia que ya tiene el look.** Reportado con captura: «deberá tener
+     un diseño similar a la primera imagen, o sea tarjeta blanca; el que me
+     das no se ve bien y las tarjetas no son blancas».
+
+     La v1 de la cascada por familia invento tres keys propias —`ajcas_cab`,
+     `ajcas_prota`, `ajcas_mini_*`— y se dibujo su propio look a mano
+     (`border: 1px solid GRIS_BORDE; border-radius: 10px`). Como ninguna
+     caia en una familia conocida, se quedaron con el marco POR DEFECTO de
+     `st.container(border=True)` mas ese parche, y el reporte cambiaba de
+     idioma visual al llegar a la vista.
+
+     El look de tarjeta del proyecto es UNO y vive en
+     `estilos/_80_cards.py`. Medido sobre la referencia que se pidio
+     (`compras_vap_card_hdr`, Compras > Vs ano pasado):
+
+     ```
+     background:    rgb(255, 255, 255)   /* var(--bg-card) */
+     border:        0px none
+     border-radius: 20px
+     box-shadow:    rgba(16,16,20,.06) 0 1px 4px
+     ```
+
+     Cuelga de wildcards por prefijo: `compras_prod_card_`,
+     `compras_vol_card_`, `compras_vap_card_`, `sunat_card_` y
+     `ajuste_graf_card_`. Renombrar las tres superficies a
+     `ajuste_graf_card_cascada_{hdr,prota,mini_<slug>}` las metio en la
+     familia de Ajuste y el look salio solo, sin tocar `estilos/`.
+
+     **Regla:** antes de escribir CSS de superficie para una tarjeta nueva,
+     `grep` el prefijo de las familias en `estilos/_80_cards.py` y elegir el
+     que corresponde al reporte. El CSS propio del modulo se queda con los
+     DELTAS —el padding de 8px 18px de la familia se come el nombre en una
+     mini de 205px, asi que ahi va `10px 12px` acotado a su key— y nunca
+     con el fondo, el radio o la sombra. Es la regla de CLAUDE.md («el CSS
+     matchea por prefijo de key») usada a favor en vez de sufrida: el mismo
+     mecanismo que en #421 obliga a mirar que arrastra un prefijo, aca
+     regala el look correcto por elegirlo bien.
+
+     **Corolario del mismo arreglo, sobre la CABECERA.** Tres cosas en un
+     renglon (titulo · Filtros · KPIs) con los KPIs calculados sobre el df
+     que filtra el control del medio. La v1 dibujaba los KPIs en un
+     `st.markdown` aparte con `margin-top: -30px` para treparlos a la fila:
+     no llegaban y quedaban colgando abajo del compartimento. Lo correcto
+     es crear las TRES columnas juntas y llenarlas en otro orden — la
+     posicion la da el orden en que se CREA el contenedor, no el orden en
+     que se escribe en el (misma mecanica que #420). Alto de la cabecera:
+     95px -> 77px.
+
+     **Lo que NO era culpa de la vista.** En la misma captura se reporto
+     «esta muy abajo». Medido: el contenido arranca en y=148 con
+     `padding-top: 52px` del `stMainBlockContainer` y **96px de `row-gap`
+     puro** — el bloque principal tiene `row-gap: 16px` y antes del
+     contenido hay SEIS hijos `display:flex` de **altura 0** (el rail y la
+     nav, que pintan con `position: fixed`). Un hijo de altura cero no
+     ocupa alto pero SI cobra el gap. Pasa en todos los reportes: en
+     Compras no se nota porque el scrollspy ya scrolleo la pagina. Queda
+     anotado sin arreglar: tocarlo es cromo compartido por los seis
+     reportes y merece un cambio propio, no el arrastre de este.
+
+     (2026-09-14.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36110,7 +36173,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#426**.
+> próxima regla nueva es la **#427**.
 
 >
 
