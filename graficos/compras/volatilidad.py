@@ -1138,8 +1138,17 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                            # la semana anterior a la ventana («…8»), cortada
                            # por el clip del área de dibujo. El cuerpo de la
                            # vela mide ~1.7 días de medio ancho: entra igual.
+                           #
+                           # Y TERMINA 5.2 DÍAS DESPUÉS DE LA ÚLTIMA, no 6
+                           # (2026-09-13, captura del usuario): con la
+                           # ventana en medio de la historia, a 6 días
+                           # asomaba en el borde derecho un pedazo de la
+                           # vela de la semana SIGUIENTE, que empieza a los
+                           # 7 - 1.7 = 5.3. La etiqueta de la última vela
+                           # sigue entrando: arranca a 2.1 días y a ~13px
+                           # por día llega hasta ~40px de texto.
                            range=[semanas_v[_iv0] - pd.Timedelta(days=2),
-                                  semanas_v[_iv1] + pd.Timedelta(days=6)],
+                                  semanas_v[_iv1] + pd.Timedelta(days=5.2)],
                            tickmode="array", tickvals=semanas_v,
                            # DOS RENGLONES Y RECTOS (2026-09-12, captura del
                            # usuario): en una columna angosta los cinco

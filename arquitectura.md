@@ -32,7 +32,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 412 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (145)
+**CSS y estilos** (144)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -178,7 +178,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#406** — Un contenedor de altura CERO igual consume su gap: cinco de ellos eran los 68px que separaban…
 - **#409** — Un boton puede estar en el DOM, habilitado y clickeable, y aun asi estar PERDIDO. Y cuando…
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
-- **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 
 **Layout y alturas** (54)
 
@@ -380,7 +379,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#396** — Una tabla que tiene que verse «igual que la de al lado» no puede ser un st.dataframe si la de…
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 
-**Streamlit** (108)
+**Streamlit** (109)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -490,6 +489,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#377** — Una tarjeta por ítem es un formato, no una ley: cuando la lista crece, la fila gana — y el…
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 - **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
+- **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 
 **Datos, R2 y DuckDB** (51)
 
@@ -35482,6 +35482,17 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      área de dibujo de las velas 159 → 192 sin la barra de Plotly, 18px
      entre cada título y lo suyo, y el título de la semana centrado con
      su selector (medido: los dos centros en el mismo píxel).
+
+     **Y dos retoques del mismo día, sobre una captura** («explicame esto,
+     veo hasta 3 datos de fecha»): la vista mostraba el eje del gráfico, la
+     etiqueta del tirador (que durante el arrastre va ADELANTE del gráfico:
+     el gráfico recién se mueve al soltar, con el rerun) y las dos puntas
+     del recorrido. Las puntas se esconden (`stSliderTickBar`). Y en la
+     misma captura asomaba en el borde derecho un pedazo de la vela de la
+     semana SIGUIENTE: con la ventana en medio de la historia, el eje que
+     llegaba 6 días más allá de la última vela alcanzaba el cuerpo de la
+     vecina (empieza a los 7 − 1.7 = 5.3). Ahora llega a 5.2, el mismo
+     razonamiento que los 2 días del borde izquierdo.
 
      (2026-09-13.)
 

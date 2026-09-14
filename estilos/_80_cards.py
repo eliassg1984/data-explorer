@@ -647,12 +647,19 @@ CSS = """    /* ================================================================
         font-size: 12px !important;
     }
     /* El deslizador de la ventana de las velas (`volatilidad.py::_K_VFIN`):
-       la etiqueta sobre el tirador y las dos puntas, a la talla de los
-       rótulos del eje del gráfico que tiene encima, no a la del cuerpo. */
-    [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderThumbValue"],
-    [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderTickBarMin"],
-    [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderTickBarMax"] {
+       la etiqueta sobre el tirador, a la talla de los rótulos del eje del
+       gráfico que tiene encima, no a la del cuerpo. */
+    [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderThumbValue"] {
         font-size: 11px !important;
+    }
+    /* SIN LAS FECHAS DE LAS PUNTAS (2026-09-13, a pedido). Con ellas la
+       vista mostraba TRES fechas —el eje del gráfico, la etiqueta del
+       tirador y los dos extremos del recorrido— y la pregunta fue
+       «explicame esto, veo hasta 3 datos de fecha». Los extremos son lo
+       que menos se usa: el tirador ya dice a dónde va, y el eje, lo que
+       se ve. Regla #412. */
+    [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderTickBar"] {
+        display: none !important;
     }
 
     /* ── VOLATILIDAD: la grilla ocupa SU columna, siempre ─────────────
