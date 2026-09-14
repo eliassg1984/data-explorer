@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-425 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+426 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (151)
+**CSS y estilos** (152)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -185,6 +185,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#421** — El área de clic de una fila no es lo que se ilumina al pasar el mouse. Si la fila entera se…
 - **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
 - **#424** — Un filtro categórico que ofrece todo el maestro ofrece pastillas que dejan la vista vacía
+- **#426** — Un hijo de altura CERO no ocupa alto pero sí cobra el gap. Seis de ellos son 96px de página…
 
 **Layout y alturas** (58)
 
@@ -620,7 +621,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (35)
+**Herramientas de desarrollo** (36)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -657,6 +658,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
 - **#414** — Un sufijo sin verbo se pega al número de al lado: −62.6% · la cantidad se lee «la cantidad…
 - **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
+- **#426** — Un hijo de altura CERO no ocupa alto pero sí cobra el gap. Seis de ellos son 96px de página…
 
 **Decisiones de diseño y UX** (76)
 
@@ -36098,6 +36100,55 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-14.)
 
+426. **Un hijo de altura CERO no ocupa alto pero sí cobra el `gap`. Seis
+     de ellos son 96px de página en blanco.** Reportado como «está muy
+     abajo», con el CSS que propuso el modo diseño pegado en el mensaje.
+
+     Medido en la cascada de Ajuste: el contenido arrancaba en **y=148**,
+     con el cromo fijo de arriba (`nav_franja_rep`) terminando en **y=36**.
+     El desglose:
+
+     | | |
+     |---|---|
+     | `padding-top` del `stMainBlockContainer` | 52px |
+     | `row-gap` de los hijos de altura cero | **96px** |
+     | Total hasta el primer contenido | 148px |
+
+     El bloque principal tiene `row-gap: 16px` y antes del contenido hay
+     **seis** hijos `display: flex` de altura 0 — el rail y la nav, que
+     pintan con `position: fixed`, así que su caja mide cero. Un flex item
+     de altura cero sigue siendo un flex item: cobra su gap igual. 6 × 16 =
+     96. Pasa en los seis reportes; en Compras no se nota porque el
+     scrollspy ya scrolleó la página cuando llegás a mirar.
+
+     **El arreglo va con `margin` negativo, NUNCA con `transform`.** El
+     modo diseño propone `transform: translate(...)` porque es lo que puede
+     animar en vivo — es correcto como PREVIEW y equivocado como parche:
+
+     - Un `transform` mueve el píxel y **deja el hueco**. Subir la cabecera
+       137px la habría despegado de sus propias tarjetas de familia, que se
+       quedan donde estaban: cabecera arriba, agujero en el medio.
+     - Un `transform` en un ancestro **captura a sus hijos `fixed`** (regla
+       #156, la que motivó `rayos_x.js`). Esta vista tiene el popover de
+       Filtros adentro; con el transform puesto, el panel deja de anclarse
+       a la ventana.
+
+     `margin-top: -96px` sobre la SECCIÓN (no sobre la tarjeta: puesta en
+     la tarjeta sube ella sola) deja el contenido en y=52, al ras del
+     padding del contenedor y 16px debajo de la franja. Verificado después:
+     cabecera y tarjetas alineadas al mismo `left`, y el popover sigue
+     abriendo pegado a su trigger y dentro de la ventana.
+
+     **Corolario sobre el número que propone el modo diseño.** Venía
+     `translate(9px, -137px)`. Los 137 dejaban la tarjeta en y=11, debajo
+     de una franja fija que termina en 36; los 9px horizontales la
+     desalineaban de las tarjetas de abajo. Un valor arrastrado a ojo en el
+     panel es una hipótesis sobre el resultado, no la cuenta: antes de
+     pegarlo, medir contra qué tiene que quedar alineado y qué cromo fijo
+     no se puede tapar.
+
+     (2026-09-14.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36110,7 +36161,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#426**.
+> próxima regla nueva es la **#427**.
 
 >
 

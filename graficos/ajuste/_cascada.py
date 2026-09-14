@@ -189,10 +189,40 @@ def _css():
     .ajcas-lista-scroll:hover::-webkit-scrollbar-thumb {{
         background: {GRIS_TEXTO_SUAVE}; }}
 
+    /* ── SUBIR LA VISTA ───────────────────────────────────────────────
+       Medido en la app: el contenido arrancaba en y=148 con el cromo fijo
+       de arriba (`nav_franja_rep`) terminando en y=36. De esos 148, 52 son
+       el `padding-top` del `stMainBlockContainer` y los otros 96 son
+       `row-gap` PURO: el bloque principal tiene `row-gap: 16px` y antes
+       del contenido hay SEIS hijos `display:flex` de ALTURA CERO — el rail
+       y la nav, que pintan con `position: fixed`. Un hijo de altura cero
+       no ocupa alto pero si cobra el gap.
+
+       -96px es exactamente esa suma, asi que la tarjeta queda en y=52: al
+       ras del padding del contenedor, 16px debajo de la franja.
+
+       MARGIN Y NO TRANSFORM, y no es estetica. El modo diseno propone
+       `transform: translate(...)` porque es lo que puede animar en vivo,
+       pero (a) un transform mueve el pixel y deja el hueco, asi que las
+       tarjetas de familia no subirian con la cabecera, y (b) un transform
+       en un ancestro CAPTURA a sus hijos `fixed` (regla #156, la que
+       motivo rayos_x.js) — y esta vista tiene el popover de Filtros
+       adentro, que se posiciona fixed. El margin negativo si mueve el
+       hueco y no crea contenedor de bloque nuevo.
+
+       Va en la SECCION y no en la tarjeta de cabecera para que suba la
+       vista entera; puesto en la cabecera, subiria ella sola y dejaria el
+       agujero abajo. Ver arquitectura.md regla #426. */
+    div[class*="st-key-aj_sec_cascada"] {{
+        margin-top: -96px !important; }}
+
     /* ── TARJETA DE CABECERA ──────────────────────────────────────────
        Es una tarjeta propia arriba de las de familia, a pedido. Junta el
-       titulo, los KPIs del conjunto y el compartimento de filtros. */
+       titulo, los KPIs del conjunto y el compartimento de filtros.
+       Blanca: `var(--bg-card)` y no un `#ffffff` suelto, que es la regla
+       #1 del proyecto (el color sale de la paleta, no del CSS). */
     div[class*="st-key-ajcas_cab"] {{
+        background: var(--bg-card) !important;
         border-radius: 12px !important;
         padding: 14px 16px 10px 16px !important;
         margin-bottom: 12px !important; }}
