@@ -430,7 +430,11 @@ CSS = """    /* ================================================================
        en las dos mitades, y la cuenta de `alturas.RANKING_CON_DRILL`
        cuenta ese 10. */
     div[class*="st-key-chartcard_compras_vol"] [data-testid="stColumn"] > div {
-        gap: 10px !important;
+        /* 10 -> 18 el 2026-09-13, a pedido: «más espacio entre el título y
+           el gráfico de velas, y entre "Semana del … al …" y la tabla». La
+           tarjeta ya no tiene techo (`:not(...izq_vol)`, más abajo): los 8px
+           por hueco los paga la PÁGINA, no una barra de la tarjeta. */
+        gap: 18px !important;
     }
 
     /* ── VOLATILIDAD: la cabecera es una FILA, como la de vap ──────────
@@ -604,29 +608,51 @@ CSS = """    /* ================================================================
         white-space: nowrap;
     }
 
-    /* ── VOLATILIDAD: la barra para deslizar las velas ────────────────
-       2026-09-13 (regla #402). Es el `rangeslider` de Plotly vacío
-       (`volatilidad.py::_barra_velas`), y de fábrica se lee al revés de
-       una barra de scroll: la ventana es el fondo claro y lo de afuera una
-       máscara gris oscura (`rgba(0,0,0,.4)`, fija en Plotly, sin opción
-       de layout). Acá la máscara pasa a ser el riel claro y la ventana
-       queda con el gris de `SCROLL_THUMB` que le pone Python.
-
-       Las MANIJAS de las puntas (`.rangeslider-handle-*`) se esconden: son
-       para cambiar el ancho de la ventana, o sea zoom, y acá la ventana es
-       de cinco semanas. El área que se agarra (`.rangeslider-grabarea-*`)
-       sigue ahí, invisible como siempre.
-
-       `!important` porque Plotly escribe esos colores como estilo INLINE
-       del elemento SVG, y contra un inline no gana ninguna regla sin él. */
-    [class*="st-key-compras_g_vol_candle_"] .rangeslider-mask-min,
-    [class*="st-key-compras_g_vol_candle_"] .rangeslider-mask-max {
-        fill: var(--bg-primary) !important;
-        fill-opacity: 1 !important;
+    /* ── VOLATILIDAD: título de la semana + «1 semana | 5 semanas» ─────
+       2026-09-13. Una fila: el título (un `st.empty` con markdown) se
+       estira y el control mide lo suyo. El control, con el alto y la
+       letra de la píldora «Volatilidad» de la cabecera (`vol_hdr_ver`,
+       arriba), para que no parezca otro componente. Acotado a SUS keys:
+       el aviso de CLAUDE.md sobre reglas del contenedor. Regla #412. */
+    /* Los DOS títulos de la fila de abajo sin el `margin-bottom: -16px` de
+       la regla #162 (el mismo arreglo que `vol_fila_hdr`, arriba). Medido:
+       el de la izquierda se comía 16 de los 18px de aire que lo separan
+       del gráfico —quedaban 2—, y el de la derecha medía 6px de caja con
+       21 de texto, así que al centrarlo contra el selector el texto
+       colgaba por debajo del botón. */
+    .st-key-chartcard_compras_vol
+        [data-testid="stMarkdownContainer"]:has(.vol-detalle-hdr) {
+        margin-bottom: 0 !important;
     }
-    [class*="st-key-compras_g_vol_candle_"] .rangeslider-handle-min,
-    [class*="st-key-compras_g_vol_candle_"] .rangeslider-handle-max {
-        display: none !important;
+    .st-key-vol_sem_hdr {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 10px !important;
+    }
+    .st-key-vol_sem_hdr > [data-testid="stElementContainer"]:first-child {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    .st-key-vol_sem_hdr > .st-key-compras_vol_tabla_modo {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    .st-key-compras_vol_tabla_modo [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
+    /* El deslizador de la ventana de las velas (`volatilidad.py::_K_VFIN`):
+       la etiqueta sobre el tirador y las dos puntas, a la talla de los
+       rótulos del eje del gráfico que tiene encima, no a la del cuerpo. */
+    [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderThumbValue"],
+    [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderTickBarMin"],
+    [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderTickBarMax"] {
+        font-size: 11px !important;
     }
 
     /* ── VOLATILIDAD: la grilla ocupa SU columna, siempre ─────────────
@@ -651,7 +677,7 @@ CSS = """    /* ================================================================
        semana, que pasó de `st.dataframe` a AgGrid (regla #396) y tiene el
        mismo iframe con el mismo ancho escrito a mano. */
     .st-key-compras_vol_rank_grid iframe,
-    .st-key-compras_vol_semana_grid iframe {
+    [class*="st-key-compras_vol_semana_grid_"] iframe {
         width: 100% !important;
     }
 

@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-411 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+412 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (144)
+**CSS y estilos** (145)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -178,6 +178,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#406** — Un contenedor de altura CERO igual consume su gap: cinco de ellos eran los 68px que separaban…
 - **#409** — Un boton puede estar en el DOM, habilitado y clickeable, y aun asi estar PERDIDO. Y cuando…
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
+- **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 
 **Layout y alturas** (54)
 
@@ -236,7 +237,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#407** — Una cadena de drill no se modela con un par de argumentos por nivel: se modela con la RUTA
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 
-**Plotly y figuras** (69)
+**Plotly y figuras** (70)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -307,6 +308,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#400** — «Etiquetas visibles» es una cuenta de píxeles por columna, y la ventana con la que abre la…
 - **#402** — Para deslizar un gráfico de Plotly se mueve la VENTANA de su eje, no un contenedor con…
 - **#403** — Un top-N dentro de una tabla ORDENABLE miente por partida doble — y un desglose "sin nada que…
+- **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 
 **AgGrid y tablas** (67)
 
@@ -35424,6 +35426,65 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-13.)
 
+412. **Una ventana que otra pieza tiene que SEGUIR no puede moverse en el
+     navegador: el `rangeslider` del candlestick se cambió por un
+     `st.select_slider`.** Pedido con captura: «la barra deslizante del
+     gráfico de velas no es muy funcional» (la de #402). La captura
+     mostraba «Calamar mediano fresco» sin una vela ni un rótulo: una raya
+     verde de borde a borde. Era la barra: sus manijas de zoom estaban
+     ESCONDIDAS por CSS, no apagadas, y arrastrar cerca de una punta
+     achicaba la ventana a unas horas en vez de correrla — una sola vela
+     estirada. Y en el mismo pedido: «una opción minimalista de mostrar
+     varias semanas en la tabla de documentos, para que esté alineada con
+     el gráfico de velas». Eso era imposible con la barra de Plotly: lo
+     que mueve el navegador, el servidor no lo sabe.
+
+     - **La ventana es estado del servidor**: `_K_VFIN`, el lunes de la
+       última semana a la vista. La escribe el `on_change` del deslizador,
+       que corre ANTES de la corrida — el gráfico se dibuja arriba del
+       deslizador, y leyendo su valor de retorno la ventana llegaba una
+       corrida tarde. Su key lleva el insumo, cuántas semanas hay y la
+       ventana vigente, el patrón de `_K_VENTANA` (#212). Los dos ejes van
+       en `fixedrange`: medido, `dragmode=False` no alcanza, porque
+       Streamlit deja `_fullLayout.dragmode` en `"pan"` en un gráfico con
+       `on_select`. Cuesta un rerun del fragment por movimiento.
+     - **«1 semana | 5 semanas»** (`compras_vol_tabla_modo`) junto al
+       título de la tabla: con «5 semanas» lista las compras de todas las
+       velas a la vista, con el rojo/verde del más caro/barato del tramo.
+     - **El foco vive DENTRO de la ventana.** Un clic sólo puede caer en
+       una vela visible; lo que la saca es mover la ventana, y el callback
+       la suelta: vuelve a elegirse la de mayor movimiento propio entre
+       las que se ven.
+
+     **Lo que destapó: st_aggrid no le cambia el alto al IFRAME** cuando la
+     misma key recibe otro `height`. Medido con «5 semanas»: iframe de 88px
+     (el alto de dos compras, el de la primera corrida) con un
+     `#gridContainer` de 184 y seis filas adentro — de la tercera en
+     adelante no se veían. Pasaba desde #396 cada vez que se cambiaba a
+     una semana con más compras. La key de la tabla lleva ahora el alto.
+
+     **Y el `margin-bottom: -16px` de #162, otra vez:** de los 18px de aire
+     nuevos entre el título del insumo y el gráfico (10 → 18, a pedido)
+     se comía 16 — quedaban 2 —, y la caja de 6px del título de la semana
+     lo dejaba colgando por debajo del selector. Se anula para los dos con
+     `:has(.vol-detalle-hdr)`, el mismo arreglo que `vol_fila_hdr`.
+
+     **Para probar un `st.slider` por script** (Streamlit 1.59 lo dibuja
+     como un `<input type="range">` nativo): una tecla simulada no lo
+     mueve —el navegador no ejecuta la acción por defecto de un evento
+     que no es de verdad—. Lo que sí: el setter nativo de `value`
+     (`Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,
+     'value').set`) y después `input` y `change`. Medido llevándolo al
+     mínimo: la ventana pasó a «8 Set – 12 Oct ’25» y la tabla listó sus
+     cuatro compras, en la misma corrida.
+
+     Tarjeta: 569 → 651px (no tiene techo desde #394, la página desliza),
+     área de dibujo de las velas 159 → 192 sin la barra de Plotly, 18px
+     entre cada título y lo suyo, y el título de la semana centrado con
+     su selector (medido: los dos centros en el mismo píxel).
+
+     (2026-09-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -35436,7 +35497,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#411**.
+> próxima regla nueva es la **#413**.
 
 >
 
