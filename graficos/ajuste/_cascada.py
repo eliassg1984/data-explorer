@@ -260,8 +260,12 @@ def _css():
     div[class*="st-key-ajcas_mini_"] [data-testid="stMarkdownContainer"] p {{
         margin: 0 !important; }}
 
-    /* ── TARJETA PROTAGONISTA ─────────────────────────────────────────── */
+    /* ── TARJETA PROTAGONISTA ─────────────────────────────────────────
+       Blanca como la cabecera y las minis: `var(--bg-card)`, no un
+       `#ffffff` suelto (regla #1 — el color sale de la paleta). Sin esto
+       quedaba con fondo transparente entre dos superficies blancas. */
     div[class*="st-key-ajcas_prota"] {{
+        background: var(--bg-card) !important;
         border: 2px solid {ACENTO} !important; border-radius: 12px !important;
         padding: 17px 20px 18px 20px !important; }}
 
