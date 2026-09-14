@@ -4,11 +4,14 @@ Compara el gasto/cantidad/precio de compra contra el MISMO mes del año
 anterior, y explica la diferencia: cuánto es porque compramos más y cuánto
 porque nos cobraron más caro.
 
-La pantalla son dos filas:
+La pantalla son cuatro tarjetas (desde el 2026-09-14, regla #420; hasta
+ese día, una sola superficie), en este orden:
 
-  · arriba, la SERIE mensual (este año vs año pasado) y, al lado, el
-    PUENTE precio/cantidad que descompone la diferencia total;
-  · abajo, la TABLA de detalle: la misma cuenta abierta ítem por ítem
+  · la CABECERA: el título y los siete controles, que mandan sobre las
+    tres de abajo;
+  · la SERIE mensual (este año vs año pasado) y, al lado, el PUENTE
+    precio/cantidad que descompone la diferencia total;
+  · la TABLA de detalle: la misma cuenta abierta ítem por ítem
     (`tablas/compras_vs_ano_pasado.py`). Clic en una fila enfoca la serie
     de arriba en ese ítem.
 
@@ -100,7 +103,7 @@ from tema import (
     TEXTO_PRINCIPAL,
 )
 from graficos.base import (
-    _card, _compras_layout, _compras_truncar, scope_rerun,
+    _compras_layout, _compras_truncar, scope_rerun,
 )
 from graficos import alturas, periodo
 from graficos.compras._comun import (
@@ -1122,8 +1125,28 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
     # veces a propósito: la primera, sólo "Vs año pasado", para que los
     # `return` tempranos de más abajo —sin meses comparables, sin datos—
     # no dejen la tarjeta sin cabecera.
-    with _card("compras_vap"):
-        with st.container(key="vap_fila_hdr"):
+    #
+    # CUATRO TARJETAS Y NO UNA (2026-09-14, a pedido: «separar en tarjetas
+    # la vista Vs año pasado, así como está separada Volatilidad; no me
+    # refiero al orden, sino solo a ponerlo en tarjetas»). El orden es el de
+    # siempre —cabecera, serie | puente, tabla— y cada bloque va en su
+    # superficie: `compras_vap_card_hdr`, `_serie`, `_puente` y `_tabla`,
+    # con el look de las de Producto y Volatilidad (`estilos/_80_cards.py`).
+    # Hasta ese día era `_card("compras_vap")`, una sola.
+    #
+    # La cabecera va SOLA en la suya, y no por gusto: sus siete controles
+    # ocupan ~720px medidos (ver `_80_cards.py`), más de lo que mide la
+    # tarjeta de la serie, y mandan sobre las TRES de abajo —ventana y
+    # familia recortan todo, el agrupador decide las filas de la tabla y
+    # qué enfoca la serie—, así que no pertenece a ninguna. Los avisos de
+    # «no hay datos» van en ella: salen al lado del control que los arregla.
+    #
+    # Sin re-indentar, como Volatilidad (#415): la cabecera cuelga de
+    # `_tarj_hdr.container(...)`, las dos del medio de `with col_x,
+    # st.container(...)` y la tabla de `_tarj_tabla`. Regla #420.
+    with st.container(key="compras_vap_cuerpo"):
+        _tarj_hdr = st.container(key="compras_vap_card_hdr")
+        with _tarj_hdr.container(key="vap_fila_hdr"):
             _hdr = st.empty()
             _pinta_hdr = lambda amb=None: _hdr.markdown(  # noqa: E731
                 '<p class="chart-card-hdr vap-hdr">Vs año pasado'
@@ -1330,7 +1353,7 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         if fam_vap and col_fam and col_fam in fuente.columns:
             fuente = fuente[fuente[col_fam].astype(str) == fam_vap]
         if fuente is None or fuente.empty:
-            st.info("No hay datos para los filtros seleccionados.")
+            _tarj_hdr.info("No hay datos para los filtros seleccionados.")
             return
 
         parcial = _mes_parcial(fuente[col_fecha])
@@ -1343,7 +1366,7 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
             recorte=(parcial[0] - 12, parcial[1]))
         g = _con_ano_pasado(g_act, g_src)
         if g.empty:
-            st.info("El histórico no llega a un año completo todavía: "
+            _tarj_hdr.info("El histórico no llega a un año completo todavía: "
                     "no hay mes con el mismo mes del año anterior para "
                     "comparar.")
             return
@@ -1373,7 +1396,7 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                 g = g[(g["mes"] >= ini.to_period("M"))
                       & (g["mes"] <= fin.to_period("M"))]
         if g.empty:
-            st.info("Sin meses comparables en esta ventana. El histórico "
+            _tarj_hdr.info("Sin meses comparables en esta ventana. El histórico "
                     "arranca un año antes del primer mes que se puede "
                     "comparar.")
             return
@@ -1481,14 +1504,18 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
             _pinta_hdr(_compras_truncar(foco_titulo, 34) if foco_titulo
                        else "")
 
+        # Una fila de DOS TARJETAS desde el 2026-09-14 (#420), y por eso
+        # ahora sí es una fila de drill de verdad: `COLUMNAS_DRILL` la ata al
+        # mismo eje que las de Proveedor y Producto. El piso de alto de
+        # `estilos/_80_cards.py` (#145) las hace terminar en la misma línea.
         col_g, col_p = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
-        with col_g:
+        with col_g, st.container(key="compras_vap_card_serie"):
             fig = _fig_serie(g_foco, modo, parcial, unidad=unidad_serie,
                              con_precio=un_producto)
             if fig is not None:
                 st.plotly_chart(fig, use_container_width=True,
                                 key=f"compras_g_vap_{modo.lower()}")
-        with col_p:
+        with col_p, st.container(key="compras_vap_card_puente"):
             st.markdown(_resumen_html(delta, pct, ef_p, ef_c,
                                       tot["valor"], tot["valor_aa"]),
                         unsafe_allow_html=True)
@@ -1525,7 +1552,11 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                 f"contra los mismos días del año pasado, no contra el mes "
                 f"entero.")
 
-        # ── La tabla de detalle, en la MISMA tarjeta ─────────────────────
+        # ── La tabla de detalle ──────────────────────────────────────────
+        # (Desde el 2026-09-14 vuelve a tener tarjeta PROPIA —
+        # `compras_vap_card_tabla`, #420—, pero SIN título ni cabecera: lo
+        # que se deshizo fue la superficie compartida, no lo de abajo.)
+        #
         # 2026-09-02, a pedido: "que la tarjeta de la tabla se fusione con
         # la de arriba, y que desaparezca el título 'Detalle ítem por
         # ítem'". Acá había un segundo `_card(...)` con su propia cabecera.
@@ -1546,11 +1577,16 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         # dibuja en la cabecera, así que su lectura de `session_state` de
         # más arriba ve el valor de ESTE run.)
 
+        # Su tarjeta se abre ACÁ y no arriba con las otras: la posición en
+        # pantalla la decide el orden en que se crean los contenedores, y
+        # ésta va debajo de la fila de la serie. El aviso del buscador sale
+        # adentro, donde iba la tabla.
+        _tarj_tabla = st.container(key="compras_vap_card_tabla")
         g_tabla = g if not q else g[
             g["prod" if agrupar_nuevo == "Producto" else "grupo"]
             .astype(str).str.lower().str.contains(q, regex=False)]
         if g_tabla.empty:
-            st.info(f"Ningún ítem coincide con «{q}».")
+            _tarj_tabla.info(f"Ningún ítem coincide con «{q}».")
             return
 
         # Unidad de medida por ítem, para el tooltip de la tabla. Misma
@@ -1565,10 +1601,11 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         # filtrado por el buscador): la cabecera describe la CUENTA, que es
         # la misma se busque lo que se busque. Ver `_tabla_detalle`.
         _m0, _m1 = g["mes"].min(), g["mes"].max()
-        clic = _tabla_detalle(g_tabla, agrupar_nuevo, ums,
-                              "compras_vap_detalle_grid",
-                              rangos=(_rango_meses(_m0, _m1),
-                                      _rango_meses(_m0 - 12, _m1 - 12)))
+        with _tarj_tabla:
+            clic = _tabla_detalle(g_tabla, agrupar_nuevo, ums,
+                                  "compras_vap_detalle_grid",
+                                  rangos=(_rango_meses(_m0, _m1),
+                                          _rango_meses(_m0 - 12, _m1 - 12)))
 
         # UNA sola comparación, igual que el ranking de Proveedor: AG Grid
         # conserva su selección entre reruns del fragment, así que `clic`

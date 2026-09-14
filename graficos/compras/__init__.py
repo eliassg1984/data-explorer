@@ -839,6 +839,10 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # desplazando 12 meses su propio histórico, así que necesita el
             # histórico entero aunque la franja esté en un rango corto. Ver el
             # docstring del módulo, decisiones 1 y 2.
+            #
+            # Sin borde externo, como Proveedor, Producto y Volatilidad: sus
+            # cuatro bloques —cabecera, serie, puente y tabla— son tarjetas
+            # propias (`compras_vap_card_*`) desde el 2026-09-14. Regla #420.
             with st.container(key="compras_vap_drill_wrap"):
                 _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha,
                                              col_valor, col_fam=col_fam,
@@ -945,9 +949,10 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # ELEMENTO (la figura, la tabla), y en «Vs año pasado» la información
     # completa es la TARJETA — cabecera con métrica/ventana/agrupador,
     # serie mensual, puente y tabla de detalle, que además se enfocan entre
-    # sí (`compras_vap_foco`). Acá sección ≡ wrap ≡ tarjeta, uno a uno, así
-    # que filtrar el bucle ya es "maximizar la tarjeta" sin inventar
-    # ninguna unidad nueva.
+    # sí (`compras_vap_foco`). Acá sección ≡ wrap, uno a uno, así que
+    # filtrar el bucle ya es "maximizar la vista" sin inventar ninguna
+    # unidad nueva. (Hasta el 2026-09-14 el wrap era además UNA tarjeta;
+    # desde entonces son cuatro, #420, y el ⛶ se las lleva a las cuatro.)
     #
     # Lo que gana es ANCHO, no alto: la tarjeta ya está clampeada a
     # `--alto-util` y ocupa casi una pantalla, pero se parte en dos con

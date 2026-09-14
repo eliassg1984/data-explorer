@@ -51,32 +51,18 @@ CSS = """    /* ================================================================
         text-overflow: ellipsis;
     }
 
-    /* ── VS AÑO PASADO: sus dos bloques toman el look de tarjeta ──────
-       2026-09-02, a pedido ("deben de tener fondo blanco en sus tarjetas,
-       como las otras"). Los dos usan `_card()`, o sea `st.container(
-       border=True, key="chartcard_…")`, que sólo trae el borde de
-       Streamlit: sobre el gris casi blanco de la app (--bg-primary) se
-       leían como una caja con línea, no como una tarjeta. Los otros
-       drills (`compras_prov_card_`, `compras_prod_card_`, `sunat_card_`)
-       cambian ese borde por fondo + radio + sombra; acá se repite el
-       MISMO bloque de propiedades para que los cuatro se vean iguales.
-
-       Se listan por su key COMPLETA y no por el prefijo `chartcard_`, que
-       es genérico: lo emite `graficos/base.py::_card` y lo usan ~15
-       tarjetas de otros dashboards que no pidieron esto. El aviso de
-       CLAUDE.md sobre reglas por familia es exactamente este caso.
-       (`[class*=]` alcanza a `chartcard_compras_vap` y a
-       `chartcard_compras_vap_detalle` de una: la segunda contiene a la
-       primera como prefijo.) */
-    div[class*="st-key-chartcard_compras_vap"] {
-        background: var(--bg-card) !important;
-        border: none !important;
-        border-radius: 20px !important;
-        padding: 16px 18px;
-        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
-    }
-    div[class*="st-key-chartcard_compras_vap"] > div {
-        border: none !important;
+    /* ── VS AÑO PASADO: CUATRO TARJETAS (2026-09-14, regla #420) ──────
+       Hasta ese día era UNA superficie, `chartcard_compras_vap` (la de
+       `graficos/base.py::_card`), que desde el 2026-09-02 tomaba acá el
+       look de tarjeta —fondo, radio, sombra— con un bloque copiado del de
+       Producto. Se partió como Volatilidad (#415): las superficies son
+       `compras_vap_card_hdr`, `_serie`, `_puente` y `_tabla`, y el look lo
+       pone la MISMA regla de Producto y Volatilidad (más abajo, en
+       «TARJETAS DEL DRILL DE PRODUCTO»): el selector se sumó a esa regla,
+       no se copió. Acá queda el hueco entre las tarjetas, que es el `gap`
+       del cuerpo transparente: 16px, el de todos los drills de Compras. */
+    .st-key-compras_vap_cuerpo {
+        gap: 16px !important;
     }
 
     /* La cabecera de ESTA tarjeta lleva, en UN renglón: el nombre de la
@@ -387,6 +373,17 @@ CSS = """    /* ================================================================
        especificidad: gana por orden. Regla #395. */
     .st-key-vol_fila_hdr {
         margin-bottom: -10px !important;
+        border-bottom: none !important;
+    }
+    /* Y la de vap, desde que va SOLA en su tarjeta (2026-09-14, #420): la
+       raya y los 17px de margen y padding de abajo separaban la cabecera de
+       la serie, que ahora está en OTRA tarjeta — esa separación la pone el
+       gris de la app. Con la raya, la tarjeta cerraba con una línea a 8px
+       de su borde de abajo. Misma especificidad que la regla compartida de
+       arriba: gana por orden. */
+    .st-key-vap_fila_hdr {
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
         border-bottom: none !important;
     }
     .st-key-vol_hdr_periodo { width: 100% !important; }
@@ -1053,7 +1050,12 @@ CSS = """    /* ================================================================
         /* de la semana mide lo que tenga filas y sin piso cerraba más      */
         /* arriba que el gráfico.                                            */
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-compras_vol_card_"]) {
+        > div:has(> div[class*="st-key-compras_vol_card_"]),
+        /* Y las dos del medio de Vs año pasado (serie | puente), desde el   */
+        /* 2026-09-14 (#420). Hoy nacen del mismo alto (`_ALTO_FIG_VAP`, el */
+        /* puente le resta su veredicto); el piso queda de red.             */
+        .stColumn > .stVerticalBlock
+        > div:has(> div[class*="st-key-compras_vap_card_"]) {
             flex: 1 1 auto;
         }
 
@@ -1114,8 +1116,11 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     /* Las tres de Volatilidad (`compras_vol_card_`) llevan el MISMO look   */
     /* desde el 2026-09-13, cuando su tarjeta única se partió en tres. #415 */
+    /* Y las cuatro de Vs año pasado (`compras_vap_card_`), desde el        */
+    /* 2026-09-14, por el mismo pedido. #420                                */
     div[class*="st-key-compras_prod_card_"],
-    div[class*="st-key-compras_vol_card_"] {
+    div[class*="st-key-compras_vol_card_"],
+    div[class*="st-key-compras_vap_card_"] {
         background: var(--bg-card) !important;
         border: none !important;
         border-radius: 20px !important;
@@ -1123,7 +1128,8 @@ CSS = """    /* ================================================================
         box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
     }
     div[class*="st-key-compras_prod_card_"] > div,
-    div[class*="st-key-compras_vol_card_"] > div {
+    div[class*="st-key-compras_vol_card_"] > div,
+    div[class*="st-key-compras_vap_card_"] > div {
         border: none !important;
     }
     div[class*="st-key-compras_prod_card_"] + div[class*="st-key-compras_prod_card_"] {

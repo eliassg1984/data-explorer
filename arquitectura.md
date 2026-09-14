@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-419 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+420 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (147)
+**CSS y estilos** (148)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -181,8 +181,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 - **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
 - **#419** — Sacar una franja no es sacar lo que vivía en ella: la fecha, Filtros y la única salida de un…
+- **#420** — Partir una vista en tarjetas "como Volatilidad" no dice dónde va la cabecera: si sus…
 
-**Layout y alturas** (56)
+**Layout y alturas** (57)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -240,6 +241,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 - **#415** — Una tarjeta que se parte en tres no se re-indenta: cada parte se cuelga de SU contenedor
 - **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
+- **#420** — Partir una vista en tarjetas "como Volatilidad" no dice dónde va la cabecera: si sus…
 
 **Plotly y figuras** (70)
 
@@ -35837,6 +35839,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-14.)
 
+420. **Partir una vista en tarjetas "como Volatilidad" no dice dónde va la
+     cabecera: si sus controles mandan sobre todas las partes, va sola.**
+     Pedido: «separar en tarjetas la vista Vs año pasado, así como está
+     separada Volatilidad; no me refiero al orden, sino solo a ponerlo en
+     tarjetas». Era UNA superficie, `_card("compras_vap")` →
+     `chartcard_compras_vap`, con la cabecera, la fila serie | puente y la
+     tabla adentro.
+
+     Ahora son cuatro, en el mismo orden: `compras_vap_card_hdr`,
+     `_serie`, `_puente` y `_tabla`, dentro de un cuerpo transparente
+     (`compras_vap_cuerpo`, gap 16), con el look de `compras_prod_card_` /
+     `compras_vol_card_` (el selector se sumó a esa regla y el bloque
+     copiado de `chartcard_compras_vap` se borró).
+
+     - **Por qué cuatro y no tres, como Volatilidad.** Allá la cabecera
+       entró en la tarjeta del ranking porque el ranking es de ancho
+       entero y va ARRIBA. Acá lo de arriba es una fila de DOS tarjetas, y
+       la cabecera no cabe en ninguna: sus siete controles ocupan ~720px
+       (más de lo que mide la tarjeta de la serie, 752 con padding) y
+       mandan sobre las tres de abajo — ventana y familia recortan todo,
+       el agrupador decide las filas de la tabla y qué enfoca la serie.
+       Meterla con la tabla era cambiar el orden, que es justo lo que no
+       se pidió. Va sola, y los avisos de «no hay datos» van en ella.
+     - **La cabecera sola pierde su raya.** `vap_fila_hdr` separaba el
+       título de la serie con `border-bottom` + 17px de margen y padding;
+       en su propia tarjeta eso cerraba la tarjeta con una línea a 8px del
+       borde. Se anulan después de la regla compartida con `vol_fila_hdr`.
+     - **La fila serie | puente pasa a ser una fila de drill de verdad**
+       y ya venía en `COLUMNAS_DRILL`; entra al piso de alto con `:has()`
+       (#145), aunque hoy nacen iguales por `_ALTO_FIG_VAP`.
+     - **Mismo mecanismo que #415 para no re-indentar:** la cabecera
+       cuelga de `_tarj_hdr.container(...)`, serie y puente de `with col_x,
+       st.container(...)`, y la tabla de `_tarj_tabla`, que se abre recién
+       debajo de la fila — la posición la da el orden en que se CREA el
+       contenedor, no el orden en que se escribe en él.
+
+     Medido a 1366x768 con datos reales: cabecera 1235×72, serie 752×246 y
+     puente 467×246 (mismo tope y mismo fondo), tabla 1235×272; 16px entre
+     las cuatro, bordes de afuera alineados: la vista mide 622px. Contra la
+     tarjeta única son ~46px más —cuenta sobre esas mismas piezas, no una
+     medición del antes—: los paddings de las superficies nuevas, menos la
+     raya y los márgenes que perdió la cabecera.
+
+     (2026-09-14.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -35849,7 +35896,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#420**.
+> próxima regla nueva es la **#421**.
 
 >
 
