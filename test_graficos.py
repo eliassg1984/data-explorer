@@ -593,6 +593,29 @@ def _pruebas_puras():
     check("una baja también es efecto cantidad",
           _vap._puente(0.0, 0.0, 250.0, 10.0), (0.0, -250.0))
 
+    # El veredicto de arriba de la cascada (regla #414). Lo que se fija es
+    # que cada pedazo diga QUÉ es: "−62.6% · la cantidad" se leía como "la
+    # cantidad bajó 62.6%", y ese 62.6% era del gasto. La causa va con verbo
+    # y dirección, y el % con contra qué se restó.
+    _r = _vap._resumen_html(-16660.0, -62.6, 235.0, -16895.0, 9933.0, 26594.0)
+    check("veredicto: el % dice contra qué se restó",
+          "−62.6% vs año pasado" in _r, True)
+    check("veredicto: la causa va con su dirección",
+          "por comprar menos" in _r, True)
+    check("veredicto: sin el sustantivo pelado que se pegaba al %",
+          "· la cantidad" in _r, False)
+    check("veredicto: el title escribe la resta de la cascada",
+          "Este año S/ 9,933 − año pasado S/ 26,594 = −S/ 16,660" in _r, True)
+    check("causa: precio que manda y sube",
+          _vap._causa(300.0, 400.0, -100.0), "por precio más alto")
+    check("causa: precio que manda y baja",
+          _vap._causa(-300.0, -400.0, 100.0), "por precio más bajo")
+    check("causa: sin diferencia no se inventa una",
+          _vap._causa(0.0, 100.0, -100.0), "")
+    check("veredicto: ítem nuevo, sin un +0.0% que diga 'no cambió'",
+          "%" in _vap._resumen_html(500.0, None, 0.0, 500.0, 500.0, 0.0),
+          False)
+
     # Etiquetas de la serie mensual (regla #400). Lo que se fija es que la
     # etiqueta sea LEGIBLE en cada ventana: con 3 meses (el default) entra
     # derecha, con 12 girada, y con "Todo" ya no caben las dos series.

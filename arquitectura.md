@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-413 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+414 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (145)
 
@@ -606,7 +606,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (33)
+**Herramientas de desarrollo** (34)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -641,8 +641,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 - **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
+- **#414** — Un sufijo sin verbo se pega al número de al lado: −62.6% · la cantidad se lee «la cantidad…
 
-**Decisiones de diseño y UX** (70)
+**Decisiones de diseño y UX** (71)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -714,6 +715,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#405** — "Abrir en X" es un default del FOCO, y el default es del primer nivel: si el segundo tambien…
 - **#407** — Una cadena de drill no se modela con un par de argumentos por nivel: se modela con la RUTA
 - **#408** — Un if nuevo se traga el bloque que tenía debajo, y Python no dice nada: la pila de CINCO…
+- **#414** — Un sufijo sin verbo se pega al número de al lado: −62.6% · la cantidad se lee «la cantidad…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -35536,6 +35538,42 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-13.)
 
+414. **Un sufijo sin verbo se pega al número de al lado: `−62.6% · la
+     cantidad` se lee «la cantidad bajó 62.6%», y ese 62.6% era del
+     GASTO.** Señalado con el inspector sobre el veredicto de la cascada de
+     Compras › Vs año pasado: «¿no es fácil leer de dónde sale?». La línea
+     era `−S/ 16,660  −62.6%  · la cantidad` — tres pedazos sin rótulo, que
+     quedaron así tras dos vueltas de «más minimalista» (#291): primero se
+     fue el «vs año pasado» (lo decía el título), después el «lo explica»
+     (lo decía la barra). Cada recorte era razonable solo; juntos dejaron un
+     sustantivo pelado al lado de un porcentaje, y el lector los une. En el
+     caso de la captura (Magret, jul–sep) la cantidad había bajado ~63.4 %
+     y el gasto 62.6 %: dos números parecidos, así que la lectura
+     equivocada ni siquiera se ve rara.
+
+     Ahora: `−S/ 16,660  −62.6% vs año pasado  · por comprar menos`.
+     «vs año pasado» pegado al % dice contra qué se restó; la causa va con
+     VERBO y dirección (`_causa`: por comprar más/menos, por precio más
+     alto/bajo), y un verbo no puede leerse como el sujeto del porcentaje.
+     La dirección nunca contradice el color: si |a| > |b| y a + b = Δ, Δ
+     tiene el signo de a. Y el `title` del renglón escribe la resta con los
+     dos totales morados de la cascada. De paso, un ítem nuevo (sin año
+     pasado) ya no dice «+0.0%», que se leía «no cambió».
+
+     El precio en píxeles, medido: con el monto de todas las compras la
+     línea pasa de ~245 a 354px. Entra a 1358 de ventana (columna de 450)
+     pero no a 1100 (351) ni a 1024 (322), y `alturas.FRANJA_VEREDICTO`
+     cuenta con UN renglón. Va con `text-overflow: ellipsis`: en una laptop
+     angosta la causa sale recortada con «…» — se ve recortada, que no es
+     lo mismo que un número recortado que parece otro (#349).
+
+     Corolario para el próximo «más minimalista»: se puede quitar el rótulo
+     de un número si lo dice otro lugar de la pantalla, pero no dejar un
+     sustantivo suelto al lado de otro número — ahí no falta información,
+     sobra una lectura.
+
+     (2026-09-14.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -35548,7 +35586,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#414**.
+> próxima regla nueva es la **#415**.
 
 >
 

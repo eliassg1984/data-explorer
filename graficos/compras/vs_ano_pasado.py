@@ -939,30 +939,63 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant,
 # UI
 # ===========================================================================
 
-def _resumen_html(delta, pct, ef_precio, ef_cant):
+def _causa(delta, ef_precio, ef_cant):
+    """"por comprar menos" / "por precio más alto": el efecto que manda,
+    CON su dirección. Vacío si no hay diferencia que explicar.
+
+    La dirección siempre coincide con el signo de `delta`: si |a| > |b| y
+    a + b = Δ, Δ tiene el signo de a. Así que la frase no puede contradecir
+    el color del número de al lado.
+    """
+    if round(delta) == 0:
+        return ""
+    if abs(ef_precio) > abs(ef_cant):
+        return "por precio más alto" if ef_precio > 0 else "por precio más bajo"
+    return "por comprar más" if ef_cant > 0 else "por comprar menos"
+
+
+def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa):
     """Una línea con el veredicto, arriba del puente. Es texto y no `st.metric`
     porque tres métricas nativas ocupan 90px de la tarjeta para decir lo que
-    el propio waterfall ya dibuja debajo."""
+    el propio waterfall ya dibuja debajo.
+
+    `pct` en None cuando el año pasado no hubo compras: un "+0.0%" ahí
+    diría que no cambió nada, y es un ítem nuevo.
+    """
     color = ERROR if delta > 0 else (EXITO if delta < 0 else GRIS_TEXTO)
     signo = "+" if delta >= 0 else "−"
-    # Con artículo: "el precio" / "la cantidad" — sin él salía "la precio".
-    culpa = ("el precio" if abs(ef_precio) > abs(ef_cant) else "la cantidad")
-    # 2026-09-02, a pedido ("más minimalista"): de DOS renglones a UNO.
-    # Lo que se fue no era dato:
-    #   · "vs año pasado" lo dice el título de la tarjeta, dos filas arriba.
-    #   · "Lo explica sobre todo …" era una frase para nombrar lo que el
-    #     waterfall de abajo DIBUJA — la barra grande es el efecto que manda.
-    #     Quedó el sustantivo como sufijo apagado, y el 2026-09-02 (segunda
-    #     vuelta, "más minimalista") se le fue también el "lo explica": la
-    #     barra verde o roja de abajo ya dice cuál manda, y el popover de
-    #     ayuda explica qué significan. Queda "· cantidad" / "· precio".
+    # 2026-09-02, a pedido ("más minimalista"): de DOS renglones a UNO, y
+    # el sufijo quedó en un sustantivo pelado: `−S/ 16,660 −62.6% · la
+    # cantidad`. 2026-09-14, señalado con el inspector sobre ese sufijo:
+    # «¿no es fácil leer de dónde sale?». Tres pedazos sin rótulo, y el
+    # tercero se pega al de al lado — "−62.6% · la cantidad" se lee "la
+    # cantidad bajó 62.6%", cuando el 62.6% es del GASTO (la cantidad
+    # había bajado otro número). Regla #414. Sigue siendo un renglón, pero
+    # cada pedazo dice qué es:
+    #   · "vs año pasado" pegado al %: nombra contra qué se restó.
+    #   · la causa con su dirección ("por comprar menos"): un verbo no se
+    #     puede leer como el sujeto del porcentaje.
+    #   · el `title` escribe la resta con los dos totales de la cascada.
+    # Cuesta ancho: medido con el monto de todas las compras, 354px contra
+    # 450 de columna a 1358 de ventana — pero 351 a 1100 y 322 a 1024. Por
+    # eso el `ellipsis`: en una laptop angosta se recorta la causa con "…"
+    # (se VE recortada), en vez de salirse de la tarjeta o partir el renglón
+    # (`alturas.FRANJA_VEREDICTO` cuenta con uno solo).
+    causa = _causa(delta, ef_precio, ef_cant)
+    _chico = (f'font:400 12px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
+              f'margin-left:8px')
+    _vs = (f"{signo}{abs(pct):.1f}% vs año pasado" if pct is not None
+           else "vs año pasado")
+    _cuenta = (f"Este año S/ {valor:,.0f} − año pasado S/ {valor_aa:,.0f}"
+               f" = {signo}S/ {abs(delta):,.0f}")
     return (
-        f'<div style="font:600 18px/1.25 DM Sans,sans-serif;color:{color};'
-        f'margin:0 0 4px;white-space:nowrap">{signo}S/ {abs(delta):,.0f}'
-        f'<span style="font:400 12px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
-        f'margin-left:8px">{signo}{abs(pct):.1f}%</span>'
-        f'<span style="font:400 12px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
-        f'margin-left:8px">· {culpa}</span></div>'
+        f'<div title="{_cuenta}" '
+        f'style="font:600 18px/1.25 DM Sans,sans-serif;color:{color};'
+        f'margin:0 0 4px;white-space:nowrap;overflow:hidden;'
+        f'text-overflow:ellipsis">{signo}S/ {abs(delta):,.0f}'
+        f'<span style="{_chico}">{_vs}</span>'
+        + (f'<span style="{_chico}">· {causa}</span>' if causa else "")
+        + '</div>'
     )
 
 
@@ -1426,7 +1459,7 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         tot = _items[["valor", "valor_aa", "ef_precio", "ef_cant"]].sum()
         ef_p, ef_c = float(tot["ef_precio"]), float(tot["ef_cant"])
         delta = tot["valor"] - tot["valor_aa"]
-        pct = (delta / tot["valor_aa"] * 100) if tot["valor_aa"] else 0.0
+        pct = (delta / tot["valor_aa"] * 100) if tot["valor_aa"] else None
 
         # El ámbito dice SÓLO el ítem en foco (2026-09-02, a pedido:
         # "eliminemos el texto que dice Todas las compras, que ya no
@@ -1456,7 +1489,8 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                 st.plotly_chart(fig, use_container_width=True,
                                 key=f"compras_g_vap_{modo.lower()}")
         with col_p:
-            st.markdown(_resumen_html(delta, pct, ef_p, ef_c),
+            st.markdown(_resumen_html(delta, pct, ef_p, ef_c,
+                                      tot["valor"], tot["valor_aa"]),
                         unsafe_allow_html=True)
             # La CANTIDAD sólo viaja si `_items` es un producto solo: ahí
             # hay UNA unidad y el número se puede decir ("246 kilos"). Con
