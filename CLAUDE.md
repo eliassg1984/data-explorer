@@ -254,6 +254,16 @@ resto de `graficos/compras/`.
   `st.session_state[key]` ANTES de dibujar, con un contador en la key
   (`compras_vol_nclic`, `compras_sem_nclic`). Foco en la key sin rerun es
   el bug. Ver `arquitectura.md` #399.
+- **Si un contenedor se ilumina en `:hover`, el contenedor entero tiene que
+  responder al clic.** Un `st.button` con `padding: 0` se encoge hasta su
+  glifo: el de la cascada de Ajuste medía **16×36 px dentro de una fila de
+  1081×46** — el 1,16 %— mientras la fila se pintaba de lavanda completa.
+  Se reportó como «hago clic y a veces no pasa nada», y no era falta de
+  puntería: era clickear donde la fila decía. Se arregla estirando el
+  botón por encima del contenedor (`position: absolute; inset: 0`), con el
+  `stElementContainer` del botón forzado a `position: static` — nace
+  `relative` y sin eso el `absolute` ancla en él. Coste: el texto de abajo
+  deja de ser seleccionable. Ver `arquitectura.md` #421.
 - **Widget + display auxiliar del mismo valor:** UNA sola key compartida (sin
   `value=`, sin key dinámica). El clamp de bounds va justo antes del widget.
 - **Detección móvil server-side:** para texto que Plotly dibuja en servidor,

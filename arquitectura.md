@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-420 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+425 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (148)
+**CSS y estilos** (151)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -182,8 +182,11 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
 - **#419** — Sacar una franja no es sacar lo que vivía en ella: la fecha, Filtros y la única salida de un…
 - **#420** — Partir una vista en tarjetas "como Volatilidad" no dice dónde va la cabecera: si sus…
+- **#421** — El área de clic de una fila no es lo que se ilumina al pasar el mouse. Si la fila entera se…
+- **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
+- **#424** — Un filtro categórico que ofrece todo el maestro ofrece pastillas que dejan la vista vacía
 
-**Layout y alturas** (57)
+**Layout y alturas** (58)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -242,6 +245,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#415** — Una tarjeta que se parte en tres no se re-indenta: cada parte se cuelga de SU contenedor
 - **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
 - **#420** — Partir una vista en tarjetas "como Volatilidad" no dice dónde va la cabecera: si sus…
+- **#425** — Cuando una vista de la pila se queda con sus propios filtros, el df que recibe tiene que ser…
 
 **Plotly y figuras** (70)
 
@@ -387,7 +391,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 
-**Streamlit** (110)
+**Streamlit** (111)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -499,8 +503,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
 - **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 - **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
+- **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
 
-**Datos, R2 y DuckDB** (51)
+**Datos, R2 y DuckDB** (52)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -553,6 +558,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#379** — Dos funciones con el mismo nombre y el mismo propósito no son una duplicación: son dos…
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#411** — Una cadena de tablas que se pide "igual a la de otro reporte" se saca a un módulo — y si ese…
+- **#424** — Un filtro categórico que ofrece todo el maestro ofrece pastillas que dejan la vista vacía
 
 **SUNAT y SIRE** (40)
 
@@ -652,7 +658,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#414** — Un sufijo sin verbo se pega al número de al lado: −62.6% · la cantidad se lee «la cantidad…
 - **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
 
-**Decisiones de diseño y UX** (74)
+**Decisiones de diseño y UX** (76)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -728,6 +734,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#415** — Una tarjeta que se parte en tres no se re-indenta: cada parte se cuelga de SU contenedor
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 - **#419** — Sacar una franja no es sacar lo que vivía en ella: la fecha, Filtros y la única salida de un…
+- **#422** — Un tinte al 8 % de opacidad no es un código de color: es blanco. Antes de discutir qué color…
+- **#425** — Cuando una vista de la pila se queda con sus propios filtros, el df que recibe tiene que ser…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -35884,6 +35892,212 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-14.)
 
+421. **El área de clic de una fila no es lo que se ilumina al pasar el
+     mouse. Si la fila entera se pinta, la fila entera tiene que
+     responder.** Reportado como «hago clic y a veces no pasa nada, veo
+     pequeña el pestillo», sobre la cascada de Ajuste.
+
+     Medido en la app corriendo (`localhost:8503`, datos reales de R2,
+     ancho útil 1081px):
+
+     | | |
+     |---|---|
+     | Fila (`st-key-ajcas_fila_*`) | 1081 × 46 px |
+     | Botón `▸` (`st-key-ajcas_btn_*`) | **16 × 36 px** |
+     | Superficie que responde al clic | **1,16 %** |
+     | `cursor` sobre la fila | `auto` |
+     | `cursor` sobre esos 16px | `pointer` |
+
+     El botón declaraba `padding: 0` sin ancho ni `use_container_width`,
+     así que se encogía hasta el glifo: la columna del gutter medía 37px y
+     el botón ocupaba 16. Para referencia, WCAG 2.2 § 2.5.8 pide 24×24 como
+     mínimo absoluto y táctil pide 44.
+
+     Lo que convertía el tamaño en un bug de comprensión era la regla de al
+     lado: `div[class*="st-key-ajcas_fila_"]:hover` pintaba la fila ENTERA
+     de lavanda. La fila prometía ser un botón y contestaba en el 1,16 % de
+     su superficie. No se fallaba el clic: se clickeaba donde la fila decía
+     que había que clickear.
+
+     **Regla:** el elemento que reacciona al hover es el que tiene que
+     recibir el clic. Cuando el gesto es «abrir esta fila / esta tarjeta»,
+     el botón de Streamlit se estira por encima de todo el contenedor:
+
+     ```css
+     div[class*="st-key-<fila>"]   { position: relative !important; }
+     div[class*="st-key-<boton>"]  { position: static !important; }
+     div[class*="st-key-<boton>"] button {
+         position: absolute !important; inset: 0 !important;
+         width: 100% !important; height: 100% !important;
+         z-index: 3 !important; }
+     ```
+
+     El `position: static` del medio es lo que no se ve venir: el
+     `stElementContainer` del botón nace `relative`, así que sin anularlo
+     el `absolute` ancla en él (16px) y no en la fila. Verificado en el
+     DOM: toda la cadena de ancestros es `overflow: visible` y sin
+     `transform`, así que el botón no se recorta ni cambia de contenedor de
+     bloque. Después del parche, 100 % de la fila clickeable y el texto se
+     sigue viendo debajo; un clic real sobre el nombre «VINOS Y
+     ESPUMANTES» —que antes no hacía nada— abrió el drill.
+
+     **Dos costes que hay que aceptar a sabiendas:** el texto de las celdas
+     deja de ser seleccionable (el botón transparente está encima), y el
+     `help=` del botón pasa a aparecer en cualquier punto del contenedor.
+
+     Sale gratis una tercera señal: como el botón cubre la fila,
+     `button:hover` se dispara desde cualquier lado, así que el chevron
+     pasa a acento al entrar a la fila. De una señal de hover (fondo) a
+     tres (cursor, fondo, chevron).
+
+     (2026-09-14.)
+
+422. **Un tinte al 8 % de opacidad no es un código de color: es blanco.
+     Antes de discutir qué color poner, componer el que hay y mirarlo.**
+     Pedido: «en lugar de los cachetes de renglón, otra manera de marcar —
+     rojo, verde, naranja — porque el color como que no es muy intuitivo».
+
+     La cascada de Ajuste pintaba la fila según severidad con
+     `_hex_rgba(AJUSTE_NEG, 0.08)`, `(AJUSTE_ALERTA_TEXTO, 0.09)` y
+     `(AJUSTE_POS, 0.08)`. Compuestos sobre el blanco de la card:
+
+     | Estado | Tinte declarado | Lo que se pinta |
+     |---|---|---|
+     | Crítico | `#d97a72` @ 8 % | `#FCF4F4` |
+     | Alerta | `#a9793f` @ 9 % | `#F7F3EE` |
+     | Sobrante | `#74ab7e` @ 8 % | `#F4F8F5` |
+
+     Los tres son blanco con un suspiro de color, y entre «Crítico» y
+     «Sobrante» —los dos extremos opuestos del código— hay una diferencia
+     que no se ve. El diagnóstico del usuario («el color no es intuitivo»)
+     apuntaba al tono; el problema era el **alfa**.
+
+     **Regla:** un color que codifica información se compone contra su
+     fondo real y se mira antes de darlo por puesto. `rgba(...)` en un
+     `<style>` no dice cómo se ve. La cuenta es de una línea:
+     `255 + a*(c-255)` por canal.
+
+     Corolario del mismo pedido, y más de fondo que el alfa: **el tinte, la
+     pastilla de Estado, el «65 % del total» y el largo de la barra
+     codificaban los cuatro el mismo número** — el peso de la familia
+     dentro del ajuste total. Cuatro canales para una variable. Y el dato
+     que sí alarma —cuánto se fue contra el stock que esa familia tiene—
+     no tenía ninguno: vivía en una columna sin rótulo visible, como
+     `-177.9 %`. Por eso el color no decía nada: no agregaba información
+     que no estuviera dos columnas más allá. Ver #423.
+
+     (2026-09-14.)
+
+423. **Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se
+     contradice con la fila que la contiene.** `_badge_for(peso, val)`
+     decidía con `peso` = |ajuste| / Σ|ajuste|. Resultado medido en el
+     corte del 2 set 2026:
+
+     - ENVASES Y EMBALAJES: **−157,3 %** sobre su propio stock → «**OK**»
+       (pesaba 3 %, eran S/ 876).
+     - VINOS Y ESPUMANTES: −12,0 % → también «OK».
+     - COSTOS PRODUCCION: «Crítico» por ser el 65 % del total, no por su
+       −177,9 %.
+
+     Una tabla que en la misma fila escribe «−157.3 %» y «OK» enseña a no
+     creerle. La reemplaza una frase con el ratio en palabras:
+     `_frase_ratio()` → «faltó **1,6×** su stock». Un múltiplo se entiende;
+     un `-157.3 %` se lee como error de cálculo, y encima invita a la
+     pregunta equivocada («¿cómo puede faltar más del 100 %?» — puede: es
+     un FLUJO sobre un STOCK, `VALORIZADO TOTAL = cierre × precio`).
+
+     **Regla:** si una etiqueta cualitativa y un número de la misma fila
+     pueden discrepar, o miden lo mismo (y entonces sobra una) o la
+     etiqueta está midiendo otra cosa que la que su palabra promete.
+
+     Lo mismo vale para la DISPOSICIÓN elegida acá. Partir la vista en una
+     tarjeta por familia mata la cascada encadenada —encadenar exige un eje
+     continuo compartido— y la reemplaza una barra desde el cero, con el
+     cero en el mismo sitio horizontal en todas: es lo único que la cascada
+     hacía bien (comparar largos) y lo que había que no perder. El orden
+     entre familias era arbitrario igual, así que el acumulado no contaba
+     ninguna historia.
+
+     Y el foco va a **protagonista + riel**, no a «la elegida salta al
+     lugar 1»: el lugar del protagonista no se mueve, sólo cambia lo que
+     tiene adentro. Reordenar seis tarjetas sí se puede, pero **animarlo
+     no**: cada rerun crea nodos DOM nuevos (no hay identidad que CSS
+     pueda transicionar) y `st.markdown` no ejecuta `<script>` (no hay JS
+     que sostenga las posiciones entre frames). Con reruns de 3-6s, seis
+     tarjetas que se reacomodan de golpe se leen como que la página se
+     rompió. El velo de `estilos/_88_cargando.py` cubre la espera.
+
+     (2026-09-14.)
+
+424. **Un filtro categórico que ofrece todo el maestro ofrece pastillas que
+     dejan la vista vacía.** Pedido: «que el filtro de área muestre las
+     áreas que tienen ajuste».
+
+     `filtro_pills` arma sus opciones con `df[col].dropna().unique()`. En
+     Ajuste eso son las **20 áreas** del parquet, pero en un corte
+     cualquiera la mitad tiene ajuste 0 en todas sus filas: existen en el
+     maestro y no participaron de esa sesión de inventario. Elegirlas deja
+     la cascada en «No hay datos para los filtros seleccionados», que es
+     una respuesta correcta a una pregunta que la UI no debió ofrecer.
+
+     `_cascada.areas_con_ajuste()` filtra por `ajuste != 0`. De paso se
+     lleva dos porquerías del dato que se veían como opciones legítimas y
+     que aparecieron al listarlas para la maqueta:
+
+     - un área llamada literalmente **`---`**;
+     - **`CAVA `** con un espacio al final — en una pastilla es
+       indistinguible de `CAVA`, y las dos aparecerían si el maestro
+       tuviera ambas.
+
+     **Regla:** las opciones de un filtro salen de las filas que el filtro
+     puede llegar a mostrar, no del dominio de la columna. Y al construir
+     la lista se normaliza el texto (`.strip()`), porque un espacio al
+     final es invisible en un chip pero parte del valor que se compara.
+
+     (2026-09-14.)
+
+425. **Cuando una vista de la pila se queda con sus propios filtros, el df
+     que recibe tiene que ser el de ANTES de los chips compartidos.**
+     Pedido: los filtros de Área y Familia adentro de la tarjeta de la
+     cascada, «aplicado solo para esta vista».
+
+     Ajuste dibuja `compartimento_filtros` ARRIBA de la pila (regla de
+     CLAUDE.md: los controles compartidos van arriba, o quedan escondidos
+     hasta que su sección salga del esqueleto) y recorta `d` con ellos. Las
+     cuatro vistas de la categoría «Visual» leen ese `d`.
+
+     Darle a la cascada un compartimento propio y seguir pasándole `d` la
+     deja filtrando DOS veces: el usuario ve un compartimento, y la vista
+     obedece a dos. Con un chip puesto arriba y otro distinto abajo, la
+     intersección puede ser vacía y no hay nada en pantalla que lo
+     explique.
+
+     `renderizar_graficos_ajuste` guarda `d_sin_chips` justo antes de
+     aplicar los chips y es ESE el que recibe la cascada. Los de arriba
+     siguen gobernando Mapa de calor, Distribución y Tabla.
+
+     **Tres consecuencias que hay que saber:**
+
+     - `publicar_contexto_ia` sigue publicando el `d` post-chips, así que
+       con filtros distintos arriba y abajo el asistente ve los de arriba.
+       Con la pila mostrando cuatro vistas a la vez no hay un «lo que está
+       en pantalla» único; queda así a sabiendas.
+     - La cascada es la única sección que NO va envuelta en `_en_tarjeta`:
+       dibuja su propia tarjeta de cabecera más una por familia, así que
+       envolverla daría una tarjeta alrededor de N tarjetas. Su chequeo de
+       «sin datos» lo hace ella, después de aplicar sus filtros — el
+       `_vacio` del dispatcher mira un df que ella ya no usa.
+     - **Con qué ABRE es otra decisión, y va en otro sitio.** Familia se
+       siembra con `sembrar_seleccion` (cinco de seis: todas menos COSTOS
+       PRODUCCION) desde el propio módulo. El CORTE, en cambio, se siembra
+       en `app.py`, porque `aplicar_corte` escribe el rango — que es la key
+       de un `st.date_input`— y tiene que estar puesto ANTES de que la
+       franja instancie el widget, ~60 líneas más abajo. Y sólo para la
+       categoría «visual»: «tiempo» son Evolución y Comparativa, que con un
+       corte de un solo día se quedan con un punto.
+
+     (2026-09-14.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -35896,7 +36110,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#421**.
+> próxima regla nueva es la **#426**.
 
 >
 

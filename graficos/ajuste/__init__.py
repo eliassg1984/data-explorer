@@ -197,6 +197,15 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     else:
         d = df_f
 
+    # Cascada NO pasa por estos chips: desde el 2026-09-14 tiene los suyos
+    # adentro de su tarjeta de cabecera (Área acotada a las áreas que
+    # movieron algo, Familia sembrada con cinco). Se guarda el df de acá,
+    # antes de recortar, porque filtrar dos veces dejaría la vista
+    # mostrando la intersección de dos compartimentos y sólo uno visible.
+    # Los chips de arriba siguen gobernando Mapa de calor, Distribución y
+    # Tabla. Ver arquitectura.md regla #425.
+    d_sin_chips = d
+
     if area_sel and col_area and col_area in d.columns:
         d = d[d[col_area].astype(str).isin(area_sel)]
     if fam_sel and col_familia and col_familia in d.columns:
@@ -229,11 +238,20 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 cuerpo()
 
     def _dib_cascada():
-        _en_tarjeta("cascada", lambda: _graf_waterfall_ajuste(
-            d, col_familia, col_area, col_ajuste_val,
+        """Cascada va SIN `_en_tarjeta`: dibuja sus propias tarjetas.
+
+        Es la única sección de la pila que no entra en una card única —
+        desde el 2026-09-14 son una tarjeta de cabecera más una por
+        familia, así que envolverla daría una tarjeta alrededor de N
+        tarjetas. El chequeo de vacío lo hace ella, después de aplicar sus
+        propios filtros: el `_vacio` de acá mira el df de los chips de
+        arriba, que la cascada ya no usa.
+        """
+        _graf_waterfall_ajuste(
+            d_sin_chips, col_familia, col_area, col_ajuste_val,
             col_producto=col_producto, col_valorizado=col_valorizado,
             col_cantidad=col_cantidad, df_full=df_full, col_fecha=col_fecha,
-            col_unidad=col_unidad))
+            col_unidad=col_unidad)
 
     def _dib_heatmap():
         _en_tarjeta("heatmap", lambda: _graf_heatmap_ajuste(

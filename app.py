@@ -649,6 +649,27 @@ if _franja_con_fecha and cfg.get("cortes"):
     if len(_cortes_franja) < 2:
         # Un solo corte = no hay nada que segmentar; la pestaña sobra.
         _cortes_franja = []
+    # ABRE EN EL ÚLTIMO CORTE, no en un rango de calendario (2026-09-14, a
+    # pedido). Lo que se mira de Ajuste es una sesión de inventario, no un
+    # intervalo: abrir en "lo que va del mes" mezcla dos conteos o no
+    # agarra ninguno.
+    #
+    # Va ACÁ y no en el dashboard porque `aplicar_corte` escribe el rango,
+    # que es la key de un `st.date_input` — tiene que estar puesto ANTES de
+    # que la franja instancie el widget, y la franja se dibuja ~60 líneas
+    # abajo. Escribirlo después es un error de Streamlit.
+    #
+    # Sólo para la categoría "visual" (Cascada / Mapa de calor /
+    # Distribución / Tabla): "tiempo" son Evolución y Comparativa, que
+    # necesitan varios meses — abrirlas en un corte de un solo día las deja
+    # con un punto.
+    #
+    # Y sólo la PRIMERA vez: con la clave ya escrita el usuario eligió, y
+    # volver a sembrar le pisaría la elección en cada rerun.
+    if (_cortes_franja and _k_corte not in st.session_state
+            and _categoria_ajuste_rango == "visual"):
+        aplicar_corte(_k_rango_franja, _k_corte, _cortes_franja[-1],
+                      reporte=reporte, usa_carga_rango=_usa_carga_rango)
 # corte_vigente() devuelve None si el modo es Rango, aunque haya un corte
 # guardado. Es lo que decide el filtro de más abajo Y el label del pill.
 _corte_apl = corte_vigente(_k_corte) if _cortes_franja else None
