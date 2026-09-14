@@ -212,9 +212,16 @@ def _css():
 
        Va en la SECCION y no en la tarjeta de cabecera para que suba la
        vista entera; puesto en la cabecera, subiria ella sola y dejaria el
-       agujero abajo. Ver arquitectura.md regla #426. */
+       agujero abajo.
+
+       -108px deja la tarjeta en y=40, a 4px de la franja. Es el PISO: la
+       franja es `position: fixed` y opaca, asi que cualquier valor mayor
+       mete la tarjeta DEBAJO de ella. Los 96 de la cuenta de arriba son lo
+       que sobra por el gap; los 12 extra se los come al `padding-top: 52`
+       del contenedor, que existe justo para despejar esa franja.
+       Ver arquitectura.md regla #426. */
     div[class*="st-key-aj_sec_cascada"] {{
-        margin-top: -96px !important; }}
+        margin-top: -108px !important; }}
 
     /* ── TARJETA DE CABECERA ──────────────────────────────────────────
        Es una tarjeta propia arriba de las de familia, a pedido. Junta el
@@ -224,7 +231,9 @@ def _css():
     div[class*="st-key-ajcas_cab"] {{
         background: var(--bg-card) !important;
         border-radius: 12px !important;
-        padding: 14px 16px 10px 16px !important;
+        /* padding-top 14 -> 8: sube el TITULO sin mover la caja, que ya
+           esta contra el piso de la franja fija. */
+        padding: 8px 16px 10px 16px !important;
         margin-bottom: 12px !important; }}
 
     /* ── MINI-TARJETA DEL RIEL ────────────────────────────────────────
