@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-412 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+413 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (144)
 
@@ -236,7 +236,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#407** — Una cadena de drill no se modela con un par de argumentos por nivel: se modela con la RUTA
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 
-**Plotly y figuras** (70)
+**Plotly y figuras** (71)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -308,6 +308,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#402** — Para deslizar un gráfico de Plotly se mueve la VENTANA de su eje, no un contenedor con…
 - **#403** — Un top-N dentro de una tabla ORDENABLE miente por partida doble — y un desglose "sin nada que…
 - **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
+- **#413** — Una decisión tomada por una restricción se revisa cuando la restricción se va: el eje Y de…
 
 **AgGrid y tablas** (67)
 
@@ -35496,6 +35497,33 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-13.)
 
+413. **Una decisión tomada por una restricción se revisa cuando la
+     restricción se va: el eje Y de las velas quedó con el rango de toda la
+     historia después de que dejó de hacer falta.** Pedido con captura:
+     «¿por qué el eje vertical dice 20 soles? ¿es el precio máximo
+     histórico? Hace que en otras visualizaciones la vela casi sea
+     imperceptible». Era eso: en una ventana donde el azúcar se movía entre
+     2.97 y 3.40, el eje llegaba a S/ 20 por una sola semana de agosto a
+     19.07, y las cinco velas quedaban como rayas pegadas al piso.
+
+     El rango de la historia NO fue un descuido: lo pidió #402, cuando la
+     ventana se deslizaba EN EL NAVEGADOR — Plotly no reacomoda el eje Y al
+     correr el X, y un rango tomado de las cinco semanas de la vista dejaba
+     cortadas las velas que entraban al deslizar. #412 pasó la ventana al
+     servidor (cada posición es una corrida nueva) y con eso se llevó el
+     motivo, pero la decisión se quedó: nada en el código la ataba a la
+     barra que acababa de irse. Lo que la delató fue una captura, no un
+     test.
+
+     Ahora el rango (y el `_rng` que decide si dos etiquetas de una vela se
+     pisan) sale de las semanas a la vista, `weeks[_iv0.._iv1]`. Corolario
+     para el próximo cambio de mecanismo: al quitar una pieza, buscar qué
+     decisiones de alrededor citan su restricción — acá el comentario del
+     rango lo decía con todas las letras («Plotly no reacomoda el eje Y al
+     deslizar»), y bastaba leerlo.
+
+     (2026-09-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -35508,7 +35536,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#413**.
+> próxima regla nueva es la **#414**.
 
 >
 

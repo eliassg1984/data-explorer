@@ -982,12 +982,18 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # un precio que no se movió en ninguna semana, un aire mínimo
             # para que la raya no quede pegada al borde.
             #
-            # Sobre TODAS las semanas del gráfico, no sólo las que se ven:
-            # Plotly no reacomoda el eje Y al deslizar, así que un rango
-            # tomado de las cinco de la vista dejaría cortadas las velas
-            # viejas más caras o más baratas.
-            _lo = min(w["l"] for w in weeks)
-            _hi = max(w["h"] for w in weeks)
+            # SOBRE LAS SEMANAS A LA VISTA (2026-09-13, a pedido y con
+            # captura: «¿por qué el eje vertical dice 20 soles?», en una
+            # ventana donde el azúcar se movía entre 2.97 y 3.40). Fue el
+            # rango de TODA la historia mientras la ventana se deslizaba en
+            # el navegador (#402): Plotly no reacomoda el eje Y al correr el
+            # X, y un rango de las cinco a la vista dejaba cortadas las velas
+            # que entraban. Desde que la ventana la mueve el servidor (#412)
+            # cada posición es una corrida nueva, y ese motivo se fue — el
+            # rango de la historia sólo servía para que el pico de una semana
+            # de agosto (19.07) aplastara a todas las demás. Regla #413.
+            _lo = min(weeks[i]["l"] for i in range(_iv0, _iv1 + 1))
+            _hi = max(weeks[i]["h"] for i in range(_iv0, _iv1 + 1))
             _pad = max((_hi - _lo) * 0.12, abs(_hi) * 0.04, 0.5)
             _y0, _y1 = _lo - _pad, _hi + _pad
 
@@ -1051,7 +1057,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # de cuerpo cada 100px de semana), así que la etiqueta arranca
             # ~6px después del borde. Con 2.5 quedaba a 13px y se leía suelta.
             _dx = pd.Timedelta(days=2.1)
-            _rng = (max(w["h"] for w in weeks) - min(w["l"] for w in weeks)) or 1.0
+            # El mismo rango que el eje (el de la ventana): el 11% que decide
+            # si las dos etiquetas de una vela se pisan es 11% del ALTO que
+            # se ve, no del de la historia.
+            _rng = (_hi - _lo) or 1.0
             _ult_x, _ult_y, _ult_t, _ult_c = [], [], [], []
             _pri_x, _pri_y, _pri_t = [], [], []
             _dir_prev, _c_prev = "sube", None
