@@ -82,8 +82,9 @@ dibuja es otro y nace en el valor nuevo. Escribirle la key al widget no
 alcanza: el navegador le vuelve a mandar el valor viejo (regla #212).
 
 La escribe `_mover_ventana_velas`, el callback del deslizador, que corre
-ANTES de la corrida: el gráfico se dibuja arriba del deslizador, y leyendo
-el valor de retorno la ventana llegaría una corrida tarde."""
+ANTES de la corrida: la ventana ya se usó —rango del eje, foco, título y
+tabla— cuando se llega a dibujar el deslizador, así que leyendo su valor de
+retorno llegaría una corrida tarde."""
 
 
 def _mover_ventana_velas(key, semanas):
@@ -560,8 +561,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                             "suman son las de título resaltado; la semana "
                             "anterior a la primera de ellas es la base. El "
                             "gráfico de velas recorre las mismas semanas: "
-                            "movelo con la barra de abajo para ir hacia "
-                            "atrás, y con «1 semana | 5 semanas» la tabla "
+                            "movelo con la línea que tiene arriba (al "
+                            "pasarle el mouse dice qué tramo es) para ir "
+                            "hacia atrás, y con «1 semana | 5 semanas» la "
+                            "tabla "
                             "de al lado lista las compras de la vela "
                             "elegida o las de todas las que se ven. El "
                             "botón "
@@ -954,7 +957,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # no podía seguir a las velas, que fue el otro pedido del día.
             #
             # Ahora la ventana es estado (`_K_VFIN`) y la mueve un
-            # `st.select_slider` debajo del gráfico. El eje X va fijo: sin
+            # `st.select_slider` —una línea entre el título y el gráfico—. El eje X va fijo: sin
             # arrastre ni zoom, lo que se ve es siempre lo que el servidor
             # cree que se ve. Cuesta un rerun del fragment por movimiento.
             _n_v = min(VELAS_A_LA_VISTA, len(weeks))
@@ -1184,16 +1187,19 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 showlegend=False,
             )
 
-            _cfg = {"displaylogo": False, "displayModeBar": False}
-            st.plotly_chart(fig, use_container_width=True, key=_chart_key,
-                            on_select="rerun", selection_mode="points", config=_cfg)
-
-            # ── EL DESLIZADOR DE LA VENTANA ──────────────────────────────
+            # ── EL DESLIZADOR DE LA VENTANA: UNA LÍNEA, ARRIBA ───────────
             # Uno por posición de la ventana: su valor es la ÚLTIMA semana a
             # la vista, rotulado con el tramo entero («10 Ago – 13 Set»).
             # La key lleva el insumo, cuántas semanas hay y la ventana
             # vigente: ver `_K_VFIN` para por qué. Sólo si hay más semanas
             # que las que entran.
+            #
+            # Se dibuja ANTES que el gráfico (2026-09-13, a pedido: «no me
+            # parece que ocupe una fila abajo de todo, quizás arriba con una
+            # línea botón»): queda entre el título del insumo y las velas, y
+            # `estilos/_80_cards.py` lo reduce a una raya con un punto,
+            # alineada con el área de dibujo, con el tramo escrito sólo al
+            # pasarle el mouse o al arrastrarlo.
             if len(weeks) > _n_v:
                 _k_sl = (f"compras_vol_vslider_{_slug(str(prod_sel))}_"
                          f"{len(weeks)}_{semanas_v[_iv1]:%Y%m%d}")
@@ -1205,6 +1211,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                         semanas_v[i - _n_v + 1], semanas_v[i], anio_ref),
                     on_change=_mover_ventana_velas,
                     args=(_k_sl, tuple(semanas_v)))
+
+            _cfg = {"displaylogo": False, "displayModeBar": False}
+            st.plotly_chart(fig, use_container_width=True, key=_chart_key,
+                            on_select="rerun", selection_mode="points", config=_cfg)
 
             w = weeks[sem_focus]
             ini = semanas_v[sem_focus]

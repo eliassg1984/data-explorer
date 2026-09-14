@@ -661,6 +661,46 @@ CSS = """    /* ================================================================
     [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderTickBar"] {
         display: none !important;
     }
+    /* LA LÍNEA-BOTÓN (2026-09-13, a pedido: «hacer minimalista ese
+       deslizador; no me parece que ocupe una fila abajo de todo, quizás
+       arriba con una línea botón»). Python lo dibuja entre el título del
+       insumo y el gráfico, y acá queda en una raya y un punto:
+
+       · SIN RELLENO. Streamlit pinta el riel con un degradado que colorea
+         desde el inicio hasta el punto, que dice «cuánto» — y una ventana
+         no es una cantidad. El riel entero va en el gris de las líneas.
+       · El TRAMO sólo al pasarle el mouse o con el foco (o sea, mientras
+         se arrastra): quieto, lo dice el eje X del gráfico de abajo.
+       · ALINEADA CON EL ÁREA DE DIBUJO: 35px a la izquierda (lo que miden
+         los rótulos «S/ 20» del eje Y) y 10 a la derecha (el margen de la
+         figura), para que se lea como parte del gráfico.
+       · 6px de caja arriba y abajo y no 20: esos 20 eran el sitio del
+         rótulo y de las puntas, que ya no ocupan lugar. Y se come 10 del
+         `gap` de abajo, para quedar pegada a las velas.
+
+       El riel es el primer hijo del div con padding, sin testid propio
+       (medido en Streamlit 1.59). Regla #412. */
+    [class*="st-key-compras_vol_vslider_"] {
+        margin-bottom: -10px !important;
+    }
+    [class*="st-key-compras_vol_vslider_"] [role="group"] {
+        padding: 0 10px 0 35px !important;
+    }
+    [class*="st-key-compras_vol_vslider_"] [role="group"] > div {
+        padding: 6px 0 !important;
+    }
+    [class*="st-key-compras_vol_vslider_"] [role="group"] > div > div:first-child {
+        background-image: none !important;
+        background-color: var(--border) !important;
+    }
+    [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderThumbValue"] {
+        opacity: 0;
+        transition: opacity .15s ease;
+    }
+    [class*="st-key-compras_vol_vslider_"]:hover [data-testid="stSliderThumbValue"],
+    [class*="st-key-compras_vol_vslider_"]:focus-within [data-testid="stSliderThumbValue"] {
+        opacity: 1;
+    }
 
     /* ── VOLATILIDAD: la grilla ocupa SU columna, siempre ─────────────
        Streamlit le escribe al iframe de un componente el ancho que la

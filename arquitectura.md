@@ -32,7 +32,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 413 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (144)
+**CSS y estilos** (145)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -178,6 +178,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#406** — Un contenedor de altura CERO igual consume su gap: cinco de ellos eran los 68px que separaban…
 - **#409** — Un boton puede estar en el DOM, habilitado y clickeable, y aun asi estar PERDIDO. Y cuando…
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
+- **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 
 **Layout y alturas** (54)
 
@@ -236,7 +237,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#407** — Una cadena de drill no se modela con un par de argumentos por nivel: se modela con la RUTA
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 
-**Plotly y figuras** (71)
+**Plotly y figuras** (70)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -307,7 +308,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#400** — «Etiquetas visibles» es una cuenta de píxeles por columna, y la ventana con la que abre la…
 - **#402** — Para deslizar un gráfico de Plotly se mueve la VENTANA de su eje, no un contenedor con…
 - **#403** — Un top-N dentro de una tabla ORDENABLE miente por partida doble — y un desglose "sin nada que…
-- **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 - **#413** — Una decisión tomada por una restricción se revisa cuando la restricción se va: el eje Y de…
 
 **AgGrid y tablas** (67)
@@ -35494,6 +35494,18 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      llegaba 6 días más allá de la última vela alcanzaba el cuerpo de la
      vecina (empieza a los 7 − 1.7 = 5.3). Ahora llega a 5.2, el mismo
      razonamiento que los 2 días del borde izquierdo.
+
+     **Y la forma final del deslizador** («hacerlo minimalista; no me
+     parece que ocupe una fila abajo de todo, quizás arriba con una línea
+     botón»): se dibuja ANTES que el gráfico, entre el título del insumo y
+     las velas, y el CSS lo deja en una raya gris y un punto, alineada con
+     el área de dibujo. Sin el relleno de color desde el inicio hasta el
+     punto (dice «cuánto», y una ventana no es una cantidad) y con el tramo
+     escrito sólo al pasarle el mouse o al arrastrarlo. Streamlit 1.59 lo
+     arma así, medido: un div con 20px de padding arriba y abajo (el sitio
+     del rótulo y de las puntas), el riel de 4px como su primer hijo —sin
+     testid propio, con el relleno en un `linear-gradient`— y un punto de
+     12px con el `<input type="range">` real escondido adentro.
 
      (2026-09-13.)
 
