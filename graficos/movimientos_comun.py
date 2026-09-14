@@ -28,6 +28,22 @@ cruzan". Ese 0% era una medición contra la columna equivocada y se corrigió
 el 2026-09-04 — los dos parquets de receta SÍ se cruzan, y desde entonces
 comparten una sola página. Ver `arquitectura.md` regla #303.)
 
+SIN CALLER DESDE EL 2026-09-13, y a propósito: `_evolucion_movimientos` y
+`_ranking_proporcion_baja` ya no cuelgan de la pila. Las dos secciones que
+las dibujaban se retiraron a pedido —«eliminemos los 3 gráficos iniciales»,
+la tercera era el ranking de Sub Almacén, que vivía en `movimientos.py`— y
+en su lugar entró la cadena de cuatro tablas de `drill_tablas.py`. El código
+se conserva entero, con sus mediciones, porque volver a colgarlo es una
+entrada en `_PILA` + una en `_DIBUJANTES`; lo que NO hay que hacer es
+editarlo "de paso" creyendo que algo lo dibuja. Lo único de este módulo que
+sigue en uso es `_rango_vigente()`, que es el recorte por fecha de las tres
+secciones de Salidas. Ver regla #411.
+
+OJO SI VUELVE LA EVOLUCIÓN: era la única sección con
+`selector_fecha_tarjeta`, así que hoy la fecha la manda SÓLO la píldora de
+la franja. Devolverla devuelve también un segundo control sobre la misma
+clave — que es lo que se quería entonces, pero conviene saberlo.
+
 Hasta el 2026-09-05 acá vivía también `_chip_movimientos`, el segmented
 control Requerimiento/Salidas que navegaba entre los dos reportes. Se fue
 con la fusión: no hay dos destinos que alternar. Ver regla #322.

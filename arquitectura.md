@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-401 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+411 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (140)
+**CSS y estilos** (144)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -174,8 +174,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#392** — Pegar un bloque del modo diseño es una TRADUCCIÓN, no un copiar y pegar: tres de sus reglas…
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 - **#397** — Una franja que aparece con el cursor no puede irse entera: algo tiene que quedar…
+- **#404** — Copiar el COMPONENTE no es copiar el LOOK: lo que hace que dos tablas se lean iguales son…
+- **#406** — Un contenedor de altura CERO igual consume su gap: cinco de ellos eran los 68px que separaban…
+- **#409** — Un boton puede estar en el DOM, habilitado y clickeable, y aun asi estar PERDIDO. Y cuando…
+- **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 
-**Layout y alturas** (48)
+**Layout y alturas** (54)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -225,8 +229,14 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#384** — El ancho de la celda decide DÓNDE va la grilla, no al revés — y un piso de AG Grid no es un…
 - **#394** — «Que mida igual que aquella» es una cuenta entre dos tarjetas, y sólo se sostiene si las dos…
 - **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
+- **#403** — Un top-N dentro de una tabla ORDENABLE miente por partida doble — y un desglose "sin nada que…
+- **#404** — Copiar el COMPONENTE no es copiar el LOOK: lo que hace que dos tablas se lean iguales son…
+- **#405** — "Abrir en X" es un default del FOCO, y el default es del primer nivel: si el segundo tambien…
+- **#406** — Un contenedor de altura CERO igual consume su gap: cinco de ellos eran los 68px que separaban…
+- **#407** — Una cadena de drill no se modela con un par de argumentos por nivel: se modela con la RUTA
+- **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 
-**Plotly y figuras** (67)
+**Plotly y figuras** (69)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -295,6 +305,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
 - **#399** — Leer el clic ANTES de dibujar obliga a leerlo de la key que se DIBUJÓ — y con el foco en la…
 - **#400** — «Etiquetas visibles» es una cuenta de píxeles por columna, y la ventana con la que abre la…
+- **#402** — Para deslizar un gráfico de Plotly se mueve la VENTANA de su eje, no un contenedor con…
+- **#403** — Un top-N dentro de una tabla ORDENABLE miente por partida doble — y un desglose "sin nada que…
 
 **AgGrid y tablas** (67)
 
@@ -477,7 +489,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 - **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
 
-**Datos, R2 y DuckDB** (50)
+**Datos, R2 y DuckDB** (51)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -529,6 +541,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#376** — El default del REPORTE y el default de una TARJETA son dos cosas distintas — y la excepción…
 - **#379** — Dos funciones con el mismo nombre y el mismo propósito no son una duplicación: son dos…
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
+- **#411** — Una cadena de tablas que se pide "igual a la de otro reporte" se saca a un módulo — y si ese…
 
 **SUNAT y SIRE** (40)
 
@@ -626,7 +639,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 - **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
 
-**Decisiones de diseño y UX** (67)
+**Decisiones de diseño y UX** (70)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -695,8 +708,11 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#387** — Dos rótulos para la misma cosa son una pregunta que el usuario va a hacer
 - **#394** — «Que mida igual que aquella» es una cuenta entre dos tarjetas, y sólo se sostiene si las dos…
 - **#397** — Una franja que aparece con el cursor no puede irse entera: algo tiene que quedar…
+- **#405** — "Abrir en X" es un default del FOCO, y el default es del primer nivel: si el segundo tambien…
+- **#407** — Una cadena de drill no se modela con un par de argumentos por nivel: se modela con la RUTA
+- **#408** — Un if nuevo se traga el bloque que tenía debajo, y Python no dice nada: la pila de CINCO…
 
-**Mantenimiento y trampas del lenguaje** (12)
+**Mantenimiento y trampas del lenguaje** (13)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -710,6 +726,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#328** — git add <ruta> NO te protege en un checkout compartido: se lleva lo que OTRA sesión dejó a…
 - **#355** — Un default que tapaba un problema de OTRA parte de la app queda huérfano cuando esa parte…
 - **#356** — Al borrar una franja fija, lo que hay que borrar son TRES cosas: la superficie, la reserva…
+- **#408** — Un if nuevo se traga el bloque que tenía debajo, y Python no dice nada: la pila de CINCO…
 
 **Sin tema asignado** (1)
 
@@ -34810,6 +34827,584 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-13.)
 
+402. **Para deslizar un gráfico de Plotly se mueve la VENTANA de su eje, no
+     un contenedor con `overflow-x` — y la barra que trae Plotly para eso
+     cuesta alto.** Pedido sobre Volatilidad: «que en el gráfico de velas el
+     usuario pueda hacer scroll horizontal y ver semanas anteriores; que
+     muestre las semanas que figuran en la tabla superior». El candlestick
+     dibujaba sólo las cinco semanas que miden el puntaje; ahora dibuja
+     `semanas_hist` entera (53 con 12m) y abre mostrando
+     `VELAS_A_LA_VISTA` (5).
+
+     **Por qué no una barra del navegador.** Un contenedor más angosto que
+     la figura, con `overflow-x: auto`, desliza de verdad, pero con dos
+     costos: el eje de precios se va con el scroll, y cada clic en una vela
+     re-dibuja el gráfico con key nueva (`compras_vol_nclic`, la receta de
+     la selección que persiste) — la posición del scroll se pierde y la
+     vela recién elegida queda fuera de la vista. Con la ventana del eje
+     (`xaxis.range`) el SERVIDOR la vuelve a calcular en cada corrida: abre
+     en las cinco más recientes o, si la semana elegida es más vieja,
+     centrada en ella. Arrastrar es `dragmode="pan"`; el eje Y va
+     `fixedrange` y con el rango de TODAS las semanas, porque Plotly no lo
+     reacomoda al deslizar.
+
+     **La barra es el `rangeslider`, vacío y pintado al revés.** Vacío: su
+     eje Y se fija en un tramo sin precios (`rangemode="fixed"`,
+     `range=[-2, -1]`), así no repite en miniatura las velas ni sus
+     etiquetas. Al revés: de fábrica la ventana es el fondo claro y lo de
+     afuera una máscara `rgba(0,0,0,.4)` escrita INLINE por Plotly, sin
+     opción de layout — se leía como un riel oscuro con un hueco. Python le
+     pone a la ventana `SCROLL_THUMB` y `estilos/_80_cards.py` aclara la
+     máscara y esconde las manijas de zoom, con `!important` contra el
+     inline. **Su costo, medido** en una figura de 165px: el área de dibujo
+     bajó de ~103 a 76px — la barra son 12px, pero Plotly deja 15 FIJOS
+     entre los rótulos del eje y ella, y el `pad` del margen (8, del tema de
+     Streamlit) se suma. Con `pad=2` y margen inferior 2: 93px.
+
+     Tres cosas que vinieron con el cambio:
+     - **El foco de semana se guarda como FECHA, no como posición.** Con la
+       historia en el gráfico, el índice depende de la ventana de la
+       tarjeta y de dónde arranca la serie del insumo: pasar de 12m a 3m
+       corría el foco a otra semana.
+     - **Las semanas anteriores a la primera compra se recortan**: sin
+       cierre previo, `_vol_detalle_producto` las llena con S/ 0 y el eje
+       baja a cero.
+     - **Las etiquetas de precio pasan a `cliponaxis=True`**: con el eje
+       deslizable, las de las semanas fuera de la vista se dibujaban encima
+       del eje Y. La de la última vela entra igual (el eje llega 6 días más
+       allá).
+
+     Y `herramientas/ver_figura.py` no podía exportar este gráfico: kaleido
+     serializa con `orjson`, que no conoce `pd.Timestamp`, y el LAYOUT de un
+     gráfico de fechas los trae sueltos (`range`, `tickvals`, el x0/x1 de
+     un `add_vrect`). Ahora hace ida y vuelta por `to_json` de Plotly antes
+     de exportar.
+
+     En el mismo pedido, sin trampa: 64px entre las velas y la tabla de la
+     semana (`gap="large"`, era `GAP_DRILL`), los dos títulos de esa fila
+     compartiendo `.vol-detalle-nom` con menos notoriedad (.85rem, 500,
+     gris; eran 700 y 600), y el ranking de 10 a 8 filas
+     (`RANKING_CON_DRILL` 298 → 250): la tarjeta deja de medir lo mismo
+     que «Vs año pasado» (#394), a pedido.
+
+     (2026-09-13.)
+
+403. **Un top-N dentro de una tabla ORDENABLE miente por partida doble — y
+     un desglose "sin nada que elegir" deja de serlo en cuanto hay algo
+     abajo que recortar.** Pedido sobre Inventario Valorizado: «que las
+     tarjetas de Por área tengan la información en tabla, como el reporte de
+     Compras en la vista Ranking de proveedores, o sea en tablas
+     clickeables», y enseguida «no manejemos top, que muestre todos, ya que
+     es una tabla el usuario puede hacer scroll».
+
+     De las tres tarjetas de la sección, dos ya eran AgGrid: el ranking de
+     la izquierda (`_tabla_ranking`, el mismo componente que el Ranking de
+     proveedores desde el 2026-08-23) y los productos de abajo
+     (`_panel_top`). La que seguía siendo un `go.Bar` horizontal era el
+     desglose de la derecha, y su docstring defendía el gráfico con un
+     argumento que era cierto: «acá no hay nada que elegir, y se lee de un
+     vistazo en una columna angosta». Dejó de serlo al haber un segundo
+     nivel que recortar — la tabla de productos de abajo. Ahora el clic en
+     una familia la filtra, y la cadena se lee entera: **ranking → desglose
+     → productos**, los tres con el mismo gesto (clic = toggle) y el mismo
+     componente. Como Por área y Por familia son la MISMA función
+     (`_seccion_grupo`), el cambio entra en las dos: Área → Familia y
+     Familia → Subfamilia. El `if graf == "Por área"` que resolvía el nivel
+     siguiente ADENTRO del desglose pasó a ser un par de parámetros del
+     caller — era el último sitio donde el layout compartido seguía
+     preguntando «¿qué vista soy?».
+
+     **Por qué el top-20 se cae solo.** `_panel_top` mostraba
+     `nlargest(20, "Valorizado")` con TODAS sus columnas ordenables por
+     header — su propio docstring vendía eso como la razón de haber
+     reemplazado dos gráficos: «top por cantidad» y «top por precio» son el
+     mismo componente con otro orden. Con un top-N previo, no lo son:
+     ordenar por «Precio unitario» reordena los 20 productos más
+     valorizados, que no son los 20 más caros. Y el nº 21 por valorizado no
+     existe para el usuario, sin ninguna marca que lo diga. Un recorte de
+     filas y un orden elegible son dos cosas que no conviven: si la tabla
+     deja ordenar, tiene que traer el universo del recorte.
+
+     **Dónde va el scroll: en la GRILLA, no en la tarjeta.** Las tarjetas de
+     este dashboard llevan `max-height: var(--alto-util)` (familia
+     `ajuste_graf_card_`), así que una grilla que creciera con los datos le
+     sacaría barra propia a la tarjeta — exactamente lo que ya se pidió
+     quitar tres veces (#382, #394, #398). El alto sale de
+     `alturas.por_filas(..., rol=...)`: `PROTAGONISTA` cuando la tabla baja
+     a la franja de abajo (va sola en su fila y es lo que el usuario está
+     mirando) y `APOYO` cuando comparte fila con el ranking, que es quien
+     manda el alto. Con pocos productos la grilla se achica en vez de dejar
+     hueco; con muchos, topa y scrollea adentro. Encima, el caption dice
+     cuántas filas trae: en una tabla que scrollea, sin el número no se ve
+     si son 12 productos o 400.
+
+     **La trampa de estado, y por qué acá la key dinámica SÍ va.** La key de
+     las dos grillas lleva el recorte adentro (`inv_det_grid_<slug>_<foco>`,
+     `inv_top_grid_<foco>_<subfoco>`). Sin eso pasan dos cosas: el sub-foco
+     sobrevive al área que lo justificaba —quedás mirando «GASTOS» con el
+     recorte de una familia que ya no está en la tabla— y los checkboxes de
+     «Selección %» siguen marcados sobre productos que la grilla ya no
+     muestra. Es lo contrario de la #399: con `plotly_chart(on_select=...)`
+     la key dinámica es el parche a un EVENTO que se repite, y hay que
+     cuidar que el gráfico se dibuje con la key nueva antes del próximo
+     clic; con AgGrid la selección es ESTADO que se relee en cada corrida,
+     así que estrenar key es sólo estrenar grilla, que es justo lo que se
+     quiere cuando cambia el conjunto de filas.
+
+     Detalle menor del mismo cambio: el % de participación se recalcula
+     sobre el recorte vigente (área + familia), no sobre el área entera —
+     el criterio de la tarjeta sigue siendo «sumar 100% con lo que el
+     usuario ya está viendo arriba», y con el sub-foco activo lo que ve
+     arriba es esa familia. Y la columna «%» del desglose va a 64px y no a
+     los 80 del ranking: la tarjeta derecha mide ~1/2.7 de la izquierda y
+     ahí 80px fijos le comen el nombre a la categoría (#349).
+
+     (2026-09-13.)
+
+404. **Copiar el COMPONENTE no es copiar el LOOK: lo que hace que dos
+     tablas se lean iguales son cinco decisiones que viajan juntas.**
+     Segunda vuelta del pedido de la #403. La primera pasada dejó las tres
+     tarjetas de Inventario con el mismo AgGrid del Ranking de proveedores
+     —misma barra-gradiente en la celda, mismo clic-toggle, mismo
+     `_tabla_ranking`— y la respuesta fue: «pensé que ibas a copiar también
+     el diseño, el tamaño, quitar el KPI, y lo demás», y enseguida «quiero
+     que las tablas sean similares: tamaño, forma, interacción».
+
+     Tenía razón, y la distancia era más grande de lo que parecía desde el
+     código. Lo que separa una tabla de la otra no es el widget:
+
+       · `theme="streamlit"` + `custom_css=CSS_RANKING_GRID`, no
+         `theme="material"` + `_css_grid(12)`. De ahí salen el blanco sin
+         rayado, la cabecera sin fondo lavanda, el cuerpo de 11.5px y el
+         marco de FRANJA (dos líneas de 3px arriba y abajo, sin bordes
+         laterales ni líneas verticales) en vez de una caja dentro de otra.
+       · `rowHeight=ALTO_FILA_RANK` (24) y `headerHeight=ALTO_HEADER_RANK`
+         (32), no 35/38.
+       · Ocho filas RESERVADAS y el resto por scroll interno, en vez de un
+         alto por rol.
+       · Una fila TOTAL fija abajo (`pinnedBottomRowData`).
+
+     Las cinco van juntas o no van: el docstring de `ALTO_FILA_RANK` ya lo
+     avisaba —«va SIEMPRE con `CSS_RANKING_GRID`: el alto solo, sin el
+     cuerpo de 11.5px, aprieta el texto de 12px contra las líneas»— y por
+     eso Inventario las importa de `graficos/compras/` en bloque en vez de
+     mudar el CSS a `tablas/_css.py` y los altos a `alturas.py`, que es
+     donde terminarán viviendo. Partir la mudanza en dos es lo que deja una
+     tabla con filas de 24 y cuerpo de 12.
+
+     **El KPI se va porque la fila TOTAL lo dice mejor.** Arriba del ranking
+     había un `st.metric("Valorizado total")` que ocupaba ~100px —un cuarto
+     de la tarjeta— para escribir S/ 209,202 en cuerpo gigante. Ese número
+     es exactamente el total de la columna que está justo debajo: puesto en
+     la fila de cierre lo lee alineado con los montos que ya está mirando,
+     y la tarjeta pasa de 408px a 308. La misma fila se agregó a las otras
+     dos tablas de la sección. En la de productos, «Precio unitario» queda
+     VACÍA a propósito: es un ratio, y un ratio no se suma ni se promedia
+     sobre el agregado (la trampa de la #199). «Selección %» tampoco lleva
+     total — lo calcula en vivo un `valueGetter` contra lo tildado, así que
+     un número fijo ahí mentiría apenas se marque la primera fila. Y el
+     guard `rowPinned` no es opcional en ninguna de las tres: sin él la
+     fila TOTAL se puede clickear (y el panel de al lado va a buscar un
+     área llamada «TOTAL»), se le dibuja barra, y en la de productos se le
+     dibuja checkbox y se cuenta a sí misma en la selección.
+
+     **Un efecto medido que no se buscaba:** el cuerpo de 11.5px hizo entrar
+     las 7 columnas de la tabla de productos en la franja de abajo sin
+     scroll horizontal (1029px necesarios contra 1029 disponibles; con
+     12px eran 620 contra 248 en la columna angosta). Bajar el cuerpo de
+     una tabla no es sólo estética: cambia cuántas columnas caben, que es
+     el corolario de la #352.
+
+     Verificado en 1366x768: las tres tarjetas miden 308px exactos —las de
+     Compras, 306— filas de 24, cuerpo de 11.5, fila TOTAL en `LAVANDA_CHIP`
+     y la fila enfocada marcada por `.ag-row-selected::before` (el acento al
+     8%), que es lo que `CSS_RANKING_GRID` trae y por eso se pudo sacar el
+     override de fila seleccionada que tenía la versión anterior.
+
+     (2026-09-13.)
+
+405. **"Abrir en X" es un default del FOCO, y el default es del primer
+     nivel: si el segundo tambien se auto-enfoca, no queda forma de ver el
+     nivel de arriba entero.** Tercera vuelta del pedido de la #403/#404.
+     La tarjeta derecha de Inventario, antes de que el usuario clickeara un
+     area, listaba los 15.360 productos del inventario completo en un tercio
+     de pantalla: sus 7 columnas piden 620px y ahi hay 248, asi que se leia
+     por scroll horizontal. La respuesta al plantearlo fue «abrir en
+     almacen».
+
+     Copiado del drill de Proveedor, donde la tarjeta de al lado NUNCA esta
+     vacia (abre con el proveedor mayor): ahora las tres tarjetas se dibujan
+     siempre, la derecha es el desglose de la categoria en foco y la de
+     abajo sus productos, en la franja ancha donde las 7 columnas entran sin
+     scroll. Lo que cambia respecto de Compras es cual es el default:
+     `ABRE_EN_AREA = ("ALMACEN CENTRAL",)` y no la mayor. GASTOS se lleva el
+     79% del valorizado, pero no es inventario que se pueda contar en un
+     estante — abrir ahi gastaba la primera pantalla en la categoria menos
+     accionable. Es una TUPLA y no un string para que un cambio de nombre en
+     el ERP caiga en el siguiente candidato, y si ninguno esta en los datos
+     se abre en la mayor: nunca en vacio.
+
+     Sigue siendo un default y no un filtro (la regla de "fijo en X"): un
+     clic en cualquier otra fila lo reemplaza, y soltar la seleccion vuelve
+     aca en vez de volver a "nada".
+
+     **La trampa, que aparecio a la primera pasada y se vio en pantalla.**
+     El default se implemento dentro de `_tabla_ranking`, que es la MISMA
+     funcion que dibuja el desglose de segundo nivel. Con eso, el desglose
+     tambien se auto-enfocaba en su familia mayor, y la franja de productos
+     abria recortada a "ALMACEN CENTRAL > ALIMENTOS": el area entera dejaba
+     de ser alcanzable, porque deseleccionar la familia volvia al mismo
+     default. Un default por nivel se propaga hacia abajo y multiplica el
+     recorte. Se arregla con un flag explicito del caller
+     (`abrir_en_mayor=True`, que solo pasa el ranking de primer nivel), no
+     con "si no hay seleccion, la mayor" escrito adentro del componente
+     compartido.
+
+     Verificado en 1366x768: abre en «ALMACEN CENTRAL — por familia» con
+     «Productos · ALMACEN CENTRAL 3.865» debajo, sin familia preseleccionada
+     y sin scroll horizontal.
+
+     (2026-09-13.)
+
+406. **Un contenedor de altura CERO igual consume su `gap`: cinco de ellos
+     eran los 68px que separaban a Inventario de Compras.** Pedido: «subamos
+     las tarjetas, ya eliminamos los KPIs y sobra espacio arriba». Medido en
+     1366x768, la primera tarjeta de Inventario arrancaba en y=96 y la de
+     Compras —que tiene MAS cromo arriba, no menos— en y=28.
+
+     **El primer sospechoso no era el culpable.** `fila_ajuste_top`, la
+     franja superior, media 52px de alto con CERO hijos con altura adentro:
+     Inventario es un reporte FOTO (`data.py`: `"fecha": None`, y su config
+     lo dice desde que nacio — «Foto sin fecha (igual que Recetas)»), asi que
+     ni la fecha ni el titulo dibujan nada ahi. No es un estado transitorio:
+     no hay dato que pueda aparecer. Se oculto con la MISMA regla que ya
+     tenia Recetas desde el 2026-08-24 —`display: none` sobre el contenedor,
+     que se lleva tambien su `::before` decorativo, mas el recorte del
+     `padding-top` del block-container a `calc(var(--nav-top-alto) + 8px)`—
+     sumando el marker al selector existente en vez de escribir un bloque
+     nuevo: el criterio es uno solo (`"fecha": None` ⇒ franja vacia), y
+     partirlo en dos es lo que hace que el tercer reporte-foto lo herede a
+     medias. Ganancia: **4px**.
+
+     **Lo que de verdad ocupaba el hueco.** El bloque vertical raiz lleva
+     `gap: 16px`, y arriba de las secciones hay CINCO wrappers de altura 0
+     —markers (`app_reporte_<slug>`), franjas que dibujan en `position:
+     fixed` (`nav_franja_kpis`), contenedores de elementos con `display:
+     none`—. No miden nada, pero el flex gap se aplica ENTRE hijos, no entre
+     hijos visibles: 5 x 16 = 80px de aire que ningun inspector de altura
+     muestra, porque ninguno de los cinco tiene altura que mostrar. Es la
+     version flex del mismo genero de trampa que la #101 (`height` que no
+     aplica a un bloque de Streamlit): el DOM esta bien, la caja esta bien,
+     y el espacio lo pone el CONTENEDOR por tener hijos.
+
+     Se corrige subiendo la PRIMERA seccion con un `margin-top: -68px`, que
+     arrastra todo el flujo de abajo: un solo numero medido contra Compras,
+     en vez de pelear wrapper por wrapper con un `:not(:has())` que el
+     proximo contenedor invisible dejaria desactualizado. La key
+     `inv_sec_area` solo existe en este reporte, asi que no necesita el
+     scope del marker, y va dentro de `@media (min-width: 769px)`: en movil
+     `_99_movil.py` ya tiene su propio presupuesto vertical.
+
+     **El trade-off, dicho:** a y=28 el titulo de la tarjeta cae en y=36, y
+     las dos franjas de navegacion —que desde el 2026-09-12 viven en
+     `opacity: 0` y aparecen con el cursor— ocupan 0-36 y 36-76. Cuando el
+     usuario sube el mouse, la franja de KPIs le pasa por encima al titulo.
+     Es el mismo trade-off que Compras ya tiene con su tarjeta a la misma
+     altura: un overlay a demanda tapa lo que hay debajo, esa es su
+     naturaleza. Si algun dia molesta, el numero a mover es este, no el
+     overlay.
+
+     (2026-09-13.)
+
+407. **Una cadena de drill no se modela con un par de argumentos por nivel:
+     se modela con la RUTA.** Pedido: «agregar un cuadro similar clickeable
+     pero de su familia, ya que veo que tengo área y luego familia — que
+     hayan tres cuadros en el primer segmento, y que este cuadro sea el que
+     afecte al cuadro de abajo». Inventario › Por área pasa de dos cuadros a
+     tres: **Área › Familia › Subfamilia**, cada uno desglosando el recorte
+     que viene de su izquierda, y la tabla de productos de abajo mostrando el
+     recorte más profundo que esté activo.
+
+     `_seccion_grupo` recibia `col_grp`/`nombre_grp` + `col_next`/
+     `nombre_next`, y `_panel_top` recibia `foco` + `col_sub`/`sub_foco`. Con
+     tres niveles eso pide `col_sub2`/`sub2_foco`, un `sub2_foco = None` mas
+     arriba y un `if` por profundidad en cada consumidor. La forma que
+     escala es una sola: `niveles`, la tupla de pares (columna, nombre) que
+     define la cadena, y `ruta`, la lista de pares (columna, valor) que se va
+     acumulando cuadro a cuadro — filtra el df, arma el titulo y nombra la
+     key. Agregar un cuarto nivel es hoy una entrada mas en `niveles`.
+     "Por familia" se queda en dos porque su tercer nivel seria el producto,
+     y ese ya es la tabla de abajo.
+
+     **Agregar un cuadro cambia el ancho de TODOS, y el ancho decide el
+     formato (#349).** Tres mediciones seguidas en 1366x768, cada una
+     arreglando lo anterior y rompiendo lo siguiente:
+
+       · Con `(1.5, 1, 1)` los dos desgloses quedaron en 306px de grilla y
+         cortaron "RB ALIMENTOS PRODUCCION" (185px de texto en 171 de celda).
+       · Con `(1.2, 1, 1)` dejaron de cortar (205 y 194 de celda), pero el
+         ranking bajo a 416px y empezo a cortar el "GASTOS ADMINISTRATIVOS"
+         que ANTES entraba. El ancho sobrante estaba del lado que no lo
+         necesitaba: 194px de columna para nombres de area que miden 110.
+       · La tercera pasada le dio a cada cuadro su propio formato por
+         cantidad de vecinos (`_FORMATO_RANKING`, `_FORMATO_DETALLE`): el
+         ranking cede ancho de BARRA (0.45) y mantiene los montos exactos
+         porque es el cuadro que se lee como fuente del numero; los
+         desgloses ceden el MONTO (abreviado a miles, "S/ 33.4k") y se
+         quedan con el nombre. Cero cortes en los tres.
+
+     **Y un titulo que crece con la ruta rompe la fila.** "ALMACEN CENTRAL ›
+     COSTOS PRODUCCION — por subfamilia" no entra en 339px: pasaba a dos
+     renglones y esa tarjeta medía 334px contra los 308 de sus dos vecinas
+     —dos tarjetas de la misma fila tienen que medir lo mismo (#145)—. Dos
+     arreglos, y hacen falta los dos: el titulo nombra sólo el ÚLTIMO
+     eslabon ("COSTOS PRODUCCION — por subfamilia"; de qué área viene ya lo
+     dice el cuadro de la izquierda) y la ruta completa se va al `title=`;
+     y `.inv-rank-tit` lleva `white-space: nowrap` + `text-overflow:
+     ellipsis`, que es lo que evita que el proximo nombre largo vuelva a
+     empujar el layout. Sin lo segundo, el arreglo dura hasta el siguiente
+     dato.
+
+     Nota de reparto: las secciones de dos cuadros se quedan en `(1.7, 1)` y
+     por lo tanto ya no parten la fila donde la de tres. Es a propósito —
+     alinear los cortes obligaria a darle 772px al unico desglose de "Por
+     familia" y a dejar la ficha de "Buscar producto" mas angosta que su
+     panel de apoyo. El bug del eje corrido que ataja `COLUMNAS_DRILL`
+     (#145) es entre filas de UNA vista; estas son secciones distintas de la
+     pila, cada una con su titulo y su gap.
+
+     Verificado con la cadena completa: Área ALMACEN CENTRAL › Familia
+     COSTOS PRODUCCION › Subfamilia Suministros De Limpieza → 85 productos,
+     TOTAL S/ 1.732, las cuatro tarjetas en 308px.
+
+     (2026-09-13.)
+
+408. **Un `if` nuevo se traga el bloque que tenía debajo, y Python no dice
+     nada: la pila de CINCO dashboards estuvo seis días sin activarse
+     sola.** Reportado como «¿por qué la tarjeta que dice Por familia no es
+     visible? me refiero a la tarjeta de abajo».
+
+     El bloque de `_render_rail` que inyecta el temporizador del rail —el
+     que marca la sección que estás mirando y APRIETA el botón invisible de
+     la que se acerca (ver `seccion_perezosa`)— vivía a nivel de función
+     desde que nació la pila, el 2026-08-25. El `if estados:` del semáforo
+     por fila (2026-09-07) se insertó justo encima, y el bloque quedó
+     adentro. No hay error de sintaxis ni warning: en Python un bloque más
+     indentado es válido, y `ruff` con reglas `F` no mira estructura.
+
+     El alcance lo decide quién pasa `estados`, y lo pasa **uno solo**:
+     Compras. En los otros cinco dashboards apilados —Inventario, Ventas,
+     Movimientos, Recetas, Ajuste— el temporizador dejó de inyectarse y las
+     secciones se quedaban en esqueleto para siempre. Nadie las rescata a
+     mano: ese botón es invisible a propósito. Que el reporte más usado
+     fuera justo el único sano es lo que hizo que pasaran seis días.
+
+     **Lo que despistó el diagnóstico, y es la parte que vale para la
+     próxima:** en Inventario `window.__railTimer` SÍ existía. Era el de
+     Compras — un `setInterval` sobre `window.parent` sobrevive al cambio
+     de reporte, porque el `clearInterval` que lo reemplaza vive DENTRO del
+     script nuevo y ese script no se estaba inyectando. Así que el
+     temporizador corría, con el MAPA de las secciones de Compras, sin
+     encontrar ninguna de Inventario. Un efecto global vivo no prueba que
+     su script esté montado; lo prueba el `srcdoc` del iframe. La medición
+     que cerró el caso fue exactamente esa: de los seis iframes inyectados
+     en la página, NINGUNO contenía `__railTimer`.
+
+     El arreglo es una línea (`if secciones:`, que es de lo que el bloque
+     siempre debió colgar) y la guarda es estructural, no textual:
+     `test_graficos.py::_pruebas_hook_del_rail_bajo_secciones` levanta el
+     AST de `graficos/base.py`, sube del `with st.container(key=
+     "rail_scroll_hook")` por sus ancestros y exige ver un `if secciones:`
+     y NO un `if estados:`. Verificado en los dos sentidos: con el bug
+     puesto a propósito, falla.
+
+     (2026-09-13.)
+
+409. **Un boton puede estar en el DOM, habilitado y clickeable, y aun asi
+     estar PERDIDO. Y cuando dos `!important` se pelean, gana la
+     especificidad, no el orden.** Reportado como «el boton actualizar, que
+     actualiza los reportes y deja una senal en Cloudflare R2, creo que se
+     perdio; ponelo al lado del texto que dice la hora de actualizacion».
+
+     Medido antes de tocar nada: el boton existia, `disabled: false`,
+     `pointer-events: auto`. Lo que no existia era algo que ver. En Compras
+     medía **545x10 px con el label en altura 0**; en Inventario, `top:
+     -1189px`, o sea fuera de la pantalla. "Se perdio" era exacto en lo
+     visual y falso en el DOM: por eso no aparecia en ningun grep.
+
+     **La causa es una regla de FAMILIA por contenedor.** «Refrescar» se
+     dibuja en el pie del rail, asi que en el DOM cuelga de
+     `compras_tabs_row`; y el bloque «PLEGADO: sobrevive el icono, se va el
+     texto» esconde el `stMarkdownContainer` de TODO lo que cuelgue de ese
+     contenedor, para que los items del rail queden en 46px. Refrescar no es
+     un item del rail —su propio comentario lo dice desde el 2026-08-22,
+     «la unica ACCION»— pero comparte contenedor, y el CSS de este proyecto
+     matchea por contenedor, no por widget. Es la misma trampa que CLAUDE.md
+     documenta para los prefijos de key, en su version "por ancestro": un
+     widget hereda el estilo de la familia en la que cae, aunque nada en el
+     `.py` lo insinue.
+
+     **Dos `!important` no se resuelven por orden.** El primer intento fue
+     `.st-key-rail_refresh button [data-testid="stMarkdownContainer"] {
+     display: block !important }` — (0,2,1) — y no cambio nada: la regla del
+     plegado es `:root:has(.st-key-rail_pestillo_plegado)
+     .st-key-compras_tabs_row [data-testid=…]`, o sea (0,4,0). Con
+     `!important` en los dos lados, el desempate es especificidad y recien
+     despues el orden. La que gana repite la misma condicion del plegado y
+     suma el `button`: (0,4,1).
+
+     **Y una trampa del diagnostico que vale para cualquier auditoria de
+     CSS desde la consola:** recorrer `document.styleSheets` y preguntar
+     `cssRules` NO ve el CSS de este proyecto — esas hojas lanzan al
+     leerlas y el barrido las saltea en silencio. La primera medicion dijo
+     "ninguna regla lo oculta", y era un falso negativo que mando el
+     diagnostico por el camino equivocado (a culpar a una clase interna de
+     Streamlit). Lo que si funciona es leer el TEXTO:
+     `[...document.querySelectorAll('style')].map(e => e.textContent)` y
+     buscar ahi. Con eso aparecieron las dos reglas en juego en un paso.
+
+     Donde quedo: `position: fixed` en la franja de reportes, pegado al
+     sello de «Ultima actualizacion» —con `top:1px`, `height:30px` y el
+     mismo `right:16px` que el sello, que a su vez los copia de los botones
+     de la franja—, y el sello corrido a `right:118px` para hacerle sitio
+     (16 + 96 del boton + 6 de aire). El `right` del sello es un estilo
+     INLINE que escribe su inyeccion, asi que sólo se lo puede correr con
+     `!important`. Se verifico que ningun ancestro del boton tiene
+     `transform`/`filter`/`contain`: uno solo capturaria al hijo fijo y
+     nada de esto funcionaria (#156).
+
+     El boton queda SIEMPRE visible aunque el sello de al lado se desvanezca
+     con la franja (`opacity: 0` hasta que el cursor sube). Es deliberado:
+     es una accion, no un rotulo, y el pedido nacio justamente de no
+     encontrarla.
+
+     (2026-09-13.)
+
+410. **El alto de un componente lo decide lo que el componente REPORTA, no
+     lo que Python le pide — y para atarlo desde afuera hacen falta los DOS
+     nodos.** Reportado sobre Inventario > Por area: «podemos hacer que el
+     valorizado por area sea de similar tamano que las demas tarjetas, veo
+     que es mas larga verticalmente».
+
+     Medido: Python pedia `height=255` (8 filas de 24 + cromo), el iframe
+     salia con `height="255"` en su ATRIBUTO... y con `style="height:
+     508px"` INLINE, que es el alto de las 21 areas completas. La tarjeta
+     media 554 contra los 308 de sus dos vecinas de fila (#145).
+
+     **Lo que despistaba:** el grid de al lado —el desglose, con el MISMO
+     codigo, el mismo `custom_css` y el mismo `height`— media 255 clavados.
+     La unica diferencia entre los dos era cuantas filas traia el df, asi
+     que el sintoma se leia como un problema de DATOS y no de CSS. La
+     medicion que lo desarmo fue bajar al iframe y comparar el
+     `.ag-root-wrapper` de los dos: el que fallaba computaba `height: 508px`
+     dentro de un contenedor de 255 —o sea `height: auto`, que mide todo su
+     contenido— y el sano, `255px`.
+
+     **Son DOS capas y las dos fallan solas.** Arreglar una sola no cambia
+     nada en pantalla, que es lo que hace perder el rato:
+
+       1. `CSS_RANKING_GRID` le pone al `.ag-root-wrapper` `height: 100%` +
+          `max-height: 100%`. Sin eso computa `auto` y se desborda del
+          contenedor que el componente dimensiono. Va en el dict COMPARTIDO
+          porque cualquier tabla-ranking con `height=` fijo tiene el mismo
+          agujero, y a las que hoy andan bien no les cambia nada.
+       2. Aun con el wrapper ya en 255, el iframe seguia en 508: st_aggrid
+          le habia reportado ese numero a Streamlit ANTES de que el
+          `custom_css` llegara, y Streamlit no vuelve a preguntar. Por eso
+          `_tabla_ranking` emite ademas un `<style>` por key que ata el alto
+          desde el documento padre, con el mismo numero que ya calculo
+          `alturas.por_filas`.
+
+     **Y el `<style>` tiene que nombrar el `stElementContainer` ADEMAS del
+     iframe.** Atando solo `div.st-key-<key> iframe`, el iframe obedece y la
+     tarjeta NO cambia: Streamlit escribe el alto reportado sobre los dos
+     nodos, y el contenedor se queda con los 508. Medido en ese estado
+     intermedio: iframe 255, contenedor 508, tarjeta 554. El selector
+     correcto es `div.st-key-<key>, div.st-key-<key> iframe`.
+
+     Verificado despues: las tres tarjetas de la fila en 301px, el grid en
+     255 con sus 8 filas y el resto por scroll interno.
+
+     (2026-09-13.)
+
+411. **Una cadena de tablas que se pide "igual a la de otro reporte" se saca
+     a un módulo — y si ese día no se puede migrar al original, se escribe
+     dónde quedó la otra copia.** Pedido del 2026-09-13 sobre Movimientos:
+     «eliminemos los 3 gráficos iniciales. Y agreguemos cuatro tablas
+     similares a las de inventario valorizado. similares en diseño, y
+     clickeables, el primero dirá el área, el segundo la familia, el tercero
+     la subfamilia y el cuarto abajo el producto».
+
+     Lo que se fue: **Evolución** (requerido vs dado de baja), **Proporción
+     dada de baja** y el ranking **Sub Almacén**, que eran las tres primeras
+     secciones de `_PILA`. Con ellas se fue la categoría «Ambos» del rail
+     —quedó vacía— y el único `selector_fecha_tarjeta` de la página, que
+     vivía en la Evolución: hoy la fecha de Movimientos la manda sólo la
+     píldora de la franja, que este reporte sí dibuja (`app.py`:
+     `_franja_dibuja_fecha = reporte != "Compras"`). Los dos builders de
+     `movimientos_comun.py` quedaron SIN CALLER y no se borraron —volver a
+     colgarlos es una entrada en `_PILA` y otra en `_DIBUJANTES`—, con el
+     aviso escrito en la cabecera de ese módulo para que nadie los edite
+     creyendo que algo los dibuja.
+
+     Lo que entró: `graficos/drill_tablas.py`, la cadena ranking ›
+     desgloses › hojas en cuatro funciones (`tabla_ranking`,
+     `tabla_detalle`, `tabla_hojas`, `seccion_cadena`). El módulo salió de
+     `graficos/inventario.py`, que estrenó el layout ese mismo día (#403,
+     #404, #407), generalizando lo que estaba atado a sus columnas: el
+     prefijo de las keys (`inv`/`mov`), el nombre y las columnas de la hoja,
+     la columna de contexto que se esconde cuando la ruta ya la fijó, y las
+     opcionales —`Cantidad`, `UM`, `Precio unitario`— que ahora existen sólo
+     si el parquet las trae (`requerimientos.parquet` no tiene unidad de
+     medida, así que ahí la columna no está, en vez de estar vacía).
+
+     **HAY DOS COPIAS Y ES DEUDA, no diseño.** Inventario conserva la suya
+     inline (`_tabla_ranking`, `_tabla_detalle_foco`, `_panel_top`,
+     `_seccion_grupo`) porque ese archivo tenía trabajo en vuelo el mismo
+     día; migrarlo es mecánico —cada sección pasa a ser una llamada a
+     `seccion_cadena`— y hasta que pase, **un cambio de look va en las DOS**.
+     Es el escenario exacto que midió la #379: dos definiciones de
+     `nombre_propio` que diferían en 48 de 773 nombres. El docstring del
+     módulo nuevo lo dice en su cabecera para que no haya que descubrirlo.
+
+     **El nivel 1 de Movimientos es SUB ALMACÉN y no "área":**
+     `requerimientos.parquet` no trae una columna de área, y sub almacén es
+     el área que PIDE (COCINA/BARRA/SALON/GASTOS…), la misma que filtran los
+     chips de la franja. Llamarla de dos maneras en la misma página era la
+     otra opción, y es peor.
+
+     **Lo que la generalización arregló de paso — `claves()`.** El cuadro de
+     Subfamilia abría con una fila **"nan"**: 2.944 de las 145.550 filas del
+     parquet (2%) no traen subfamilia, y `astype(str)` las agrupa bajo ese
+     texto. No es cosmético: esa fila es CLICKEABLE, y al clickearla el
+     recorte de abajo filtraba por el literal `"nan"` contra una columna que
+     tiene NaN — cero productos, sin decir por qué. La cura es una sola
+     función que normaliza (`strip`, vacíos a `"(sin dato)"`) y que usan LAS
+     DOS puntas: la que agrupa y la que filtra (`recorte`). Si se separan,
+     la tabla vuelve a mostrar una cosa y a filtrar otra. De paso une las
+     categorías que el ERP manda con espacio de sobra (`"CAVA "`,
+     `"GASTOS OPERATIVOS "`).
+
+     **Y el matiz de la #410 que este reporte dejó ver:** ahí el iframe del
+     ranking se reportaba al doble DESDE LA PRIMERA CARGA, porque «Valorizado
+     por área» tiene 21 categorías contra 8 filas reservadas. En Movimientos
+     el sub almacén trae 8 en el rango de apertura —el contenido ENTRA— y el
+     doble aparecía recién **después del primer clic**: los cuadros de
+     desglose llevan la ruta en la key, así que cada rerun estrena componente
+     y nace midiendo bien, mientras que el ranking conserva la suya —tiene
+     que conservarla, ahí vive la fila marcada— y se queda con el número que
+     reportó. Mismo arreglo, el `<style>` por key que ata los dos nodos.
+     Medido: tarjeta de 554 → 301, con el grid en 255.
+
+     Antes de emparejar a mano el alto de los tres cuadros, ojo: reservar
+     `FILAS_RANK` filas en los tres (para que midan igual, #145) es lo que
+     dispara ese doble en el ranking. Las tres tarjetas de esta cadena miden
+     distinto —301, 133 y 205px con PRODUCCION— porque cada nivel tiene otra
+     cantidad de categorías, y eso es lo que hay hasta que el piso salga de
+     CSS, como en `compras_prov_card_`.
+
+     (2026-09-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -34822,7 +35417,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#402**.
+> próxima regla nueva es la **#411**.
 
 >
 

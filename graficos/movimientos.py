@@ -1,22 +1,37 @@
 """
 graficos.movimientos — dashboard ÚNICO de Movimientos (requerimientos + salidas).
 
-Una sola página con las OCHO vistas que hasta el 2026-09-05 vivían repartidas
-en dos reportes que un chip Requerimiento/Salidas alternaba. A pedido, al ver
-que la Evolución ya mostraba los dos lados juntos: «esto ya no debería estar,
-ya que ahora muestra ambos».
+Una sola página con las SEIS vistas de los dos parquets del flujo de stock,
+que hasta el 2026-09-05 vivían repartidas en dos reportes que un chip
+Requerimiento/Salidas alternaba. A pedido, al ver que la Evolución ya
+mostraba los dos lados juntos: «esto ya no debería estar, ya que ahora
+muestra ambos».
 
-    Ambos                              Evolución · Proporción dada de baja
-    Requerimientos (requerimientos)    Sub Almacén · Top productos · Tabla
+    Requerimientos (requerimientos)    Por sub almacén (la cadena de tablas)
+                                       Top productos · Tabla
     Salidas (salidas.parquet)          Tipo de descargo · Top productos · Tabla
 
-POR QUÉ ERAN DOS Y AHORA SON UNA. La separación tenía sentido mientras cada
-lado contestaba sólo por lo suyo. Dejó de tenerlo el 2026-09-05, cuando la
-Evolución pasó a dibujar requerido y baja en la misma figura (regla #320): a
-partir de ahí el chip pedía elegir un lado en una página cuyo primer gráfico
-ya mostraba los dos. Es el mismo movimiento —y el mismo pedido, casi con las
-mismas palabras— que fusionó Receta Base y Receta Venta el 2026-09-04; ver
-`graficos/recetas.py` y la regla #303.
+QUÉ PASÓ EL 2026-09-13. La página abría con TRES gráficos —Evolución
+(requerido vs dado de baja), Proporción dada de baja y el ranking de Sub
+Almacén— y los tres se fueron a pedido: «eliminemos los 3 gráficos
+iniciales». En su lugar entra UNA sección con la cadena de cuatro tablas
+clickeables que Inventario estrenó ese mismo día: Sub Almacén › Familia ›
+Subfamilia arriba y la tabla de Productos abajo. El componente es compartido
+(`graficos/drill_tablas.py::seccion_cadena`), así que no hay una segunda
+versión del mismo look acá adentro.
+
+Los dos builders que quedaron sin caller —`_evolucion_movimientos` y
+`_ranking_proporcion_baja`, en `graficos/movimientos_comun.py`— no se
+borraron: siguen ahí, completos y documentados, para que volver a colgarlos
+de la pila sea una línea. Lo dice también la cabecera de aquel módulo.
+
+POR QUÉ ERAN DOS REPORTES Y AHORA SON UNO. La separación tenía sentido
+mientras cada lado contestaba sólo por lo suyo. Dejó de tenerlo el
+2026-09-05, cuando la Evolución pasó a dibujar requerido y baja en la misma
+figura (regla #320): a partir de ahí el chip pedía elegir un lado en una
+página cuyo primer gráfico ya mostraba los dos. Es el mismo movimiento —y el
+mismo pedido, casi con las mismas palabras— que fusionó Receta Base y Receta
+Venta el 2026-09-04; ver `graficos/recetas.py` y la regla #303.
 
 DOS VISTAS DE SALIDAS NO SOBREVIVIERON, y no por falta de lugar: estaban
 MUERTAS. «Subalmacén» y «Subalm. × tipo» colgaban de una columna que
@@ -47,10 +62,13 @@ Las dos Tablas NO se dibujan igual, y no es un descuido:
     que los dos comportamientos se conservan tal cual estaban.
 
 QUÉ EXCLUYE CADA SECCIÓN, que es donde la página puede contradecirse:
-las dos vistas de «Ambos» descartan los comprobantes ANULADOS —lo hacen
-desde que nacieron, y lo dicen en su caption— y las seis de un solo lado no.
-Es la conducta que ya tenían por separado y no se cambió acá para no mover
-números que nadie pidió mover; queda anotado como pendiente en la regla #322.
+NINGUNA descarta hoy los comprobantes ANULADOS. Las dos que sí lo hacían
+eran las de «Ambos», que se retiraron el 2026-09-13; las seis que quedan
+miran el mismo `d` post-chips, así que el valorizado que dicen es el mismo
+en la cadena de tablas, en el Top de productos y en la Tabla pivote. Son
+S/ 174.939 de S/ 8.481.700 (2,1%, medido contra R2 el 2026-09-13). No se
+cambió acá porque es la conducta que estas seis ya tenían y mover números
+que nadie pidió mover es otra decisión; queda anotado en la regla #322.
 
 Punto de entrada público: renderizar_graficos_movimientos().
 """
@@ -69,10 +87,8 @@ from graficos.base import (
     _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
     seccion_perezosa,
 )
-from graficos.movimientos_comun import (
-    _evolucion_movimientos, _ranking_proporcion_baja, _rango_vigente,
-)
-from graficos import alturas
+from graficos.movimientos_comun import _rango_vigente
+from graficos import alturas, drill_tablas
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es horizontal
 # y aplana las categorías a una sola fila (ver `base.py::_render_rail`), así
@@ -84,15 +100,12 @@ from graficos import alturas
 # «Tabla» existían en los dos lados y al juntarlas quedaban dos ítems con el
 # mismo nombre.
 _RAIL_CATEGORIAS = (
-    # La segunda se llamó «Pedido vs Baja» y después «Diferencias por
-    # producto», las dos veces el mismo día (2026-09-05). El primer nombre
-    # describía la vista cuando abría con una evolución requerido-vs-baja
-    # —que es la sección de al lado, o sea el rail decía dos veces lo
-    # mismo—; el segundo, cuando el ranking todavía iba por la RESTA. Hoy
-    # va por el cociente y el nombre dice eso. Ver regla #323.
-    ("Ambos", (("Evolución",                "Evolución"),
-               ("Proporción dada de baja",  "Proporción"))),
-    ("Requerimientos", (("Sub Almacén",               "Sub Almacén"),
+    # «Por sub almacén» ocupa el sitio que tenían «Evolución», «Proporción
+    # dada de baja» y el ranking «Sub Almacén», que se retiraron el
+    # 2026-09-13. No hereda el nombre de aquel ranking —que era UN cuadro—
+    # porque ahora son cuatro tablas encadenadas: el ítem del rail nombra la
+    # cadena, no su primer eslabón.
+    ("Requerimientos", (("Por sub almacén",           "Sub almacén"),
                         ("Top productos · requerim.", "Top prod. · req."),
                         ("Tabla · requerim.",         "Tabla · req."))),
     ("Salidas", (("Tipo de descargo",       "Tipo descargo"),
@@ -103,14 +116,17 @@ _RAIL_CATEGORIAS = (
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla
 # (el porqué, en `graficos/compras/__init__.py::_PILA`).
 #
-# Las dos de «Ambos» van PRIMERO: son la razón de que esta página sea una
-# sola, y la Evolución es además la que trae el selector de fecha que manda
-# sobre todo lo demás. Después cada lado con sus vistas y su Tabla al final
-# del bloque, igual que `recetas.py`.
+# Cada lado con sus vistas y su Tabla al final del bloque, igual que
+# `recetas.py`. Requerimientos va primero por lo mismo que era el `archivo`
+# del reporte: es el lado grande (144.636 filas contra 17.355) y el único que
+# trae Sub Almacén.
+#
+# La FECHA ya no la gobierna ninguna sección: el selector de tarjeta vivía en
+# la Evolución, que se retiró el 2026-09-13. Manda la píldora de la franja,
+# que este reporte sí dibuja (`app.py`: `_franja_dibuja_fecha = reporte !=
+# "Compras"`), y las secciones de Salidas la leen con `_rango_vigente()`.
 _PILA = (
-    ("mov_sec_evolucion",   "Evolución"),
-    ("mov_sec_proporcion",  "Proporción dada de baja"),
-    ("mov_sec_subalmacen",  "Sub Almacén"),
+    ("mov_sec_cadena",      "Por sub almacén"),
     ("mov_sec_top_req",     "Top productos · requerim."),
     ("mov_sec_tabla_req",   "Tabla · requerim."),
     ("mov_sec_tipo",        "Tipo de descargo"),
@@ -207,8 +223,12 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     col_prod = _resolver(df_f, ["Nombre Producto", "NOMBRE PRODUCTO", "Producto"])
     col_sub = _resolver(df_f, ["Sub Almacen", "SUB ALMACEN", "Subalmacen", "Sub Almacén"])
     col_fam = _resolver(df_f, ["Nombre Familia", "NOMBRE FAMILIA", "Familia"])
+    col_subfam = _resolver(df_f, ["Nombre Subfamilia", "NOMBRE SUBFAMILIA",
+                                  "Subfamilia"])
     col_cant = _resolver(df_f, ["Cantidad", "CANTIDAD"])
     col_val = _resolver(df_f, ["Valor Item", "VALOR ITEM", "Valorizado"])
+    col_punit = _resolver(df_f, ["Precio Unit", "PRECIO UNIT",
+                                 "Precio Unitario"])
 
     if not col_val and not col_cant:
         st.warning("No se encontraron las columnas de cantidad/valor del "
@@ -268,9 +288,9 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # y un caption. Se fueron a pedido —"eliminemos todo esto, está muy
     # feo"— y el pedido tiene razón de fondo: la banda ocupaba una pantalla
     # de alto para repetir números que la página ya da DOS renglones más
-    # abajo. El caption de la Evolución dice exactamente lo mismo ("En el
-    # período: S/ X requerido · S/ Y dado de baja · baja/requerido Z%"),
-    # pegado al gráfico que los explica, que es donde se leen bien.
+    # abajo. Lo decía el caption de la Evolución hasta el 2026-09-13; hoy lo
+    # dice la fila TOTAL de la primera tabla, pegada a las filas que la
+    # componen, que es donde ese número se lee bien.
     #
     # El KPI del reporte —el que se ve sin entrar— no se pierde: vive en el
     # rail de Reportes, y sale de `kpis` en REPORTES (data.py).
@@ -289,27 +309,31 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # ── LA PILA, PEREZOSA ─────────────────────────────────────────────────
     # Cada sección con su PROPIA key de tarjeta: apiladas, compartir key es
     # una excepción de Streamlit.
-    def _dib_evolucion():
-        with st.container(border=True, key="ajuste_graf_card_izq_mov_evolucion"):
-            _evolucion_movimientos(fam_sel=fam_sel, sub_sel=sub_sel)
-
-    def _dib_proporcion():
-        with st.container(border=True, key="ajuste_graf_card_izq_mov_proporcion"):
-            # Hereda la familia como todo lo demás de la página: desde que
-            # los dos parquets se cargan y recortan acá, un filtro propio
-            # sólo agregaba una segunda fecha que contradecía a la de
-            # arriba (regla #323).
-            _ranking_proporcion_baja(key_prefix="mov_prop", fam_sel=fam_sel)
-
-    def _dib_subalmacen():
-        with st.container(border=True, key="ajuste_graf_card_izq_mov_subalmacen"):
-            if not col_sub:
-                st.info("No hay columnas suficientes para este gráfico.")
-                return
-            _barras_ranking(
-                _met.groupby(d[col_sub].astype(str)).sum().sort_values(),
-                key="mov_g_subalmacen",
-                titulo="Valorizado requerido por sub almacén")
+    def _dib_cadena():
+        # Las CUATRO tablas encadenadas, el mismo componente que Inventario
+        # Valorizado (2026-09-13, a pedido: "cuatro tablas similares a las
+        # de inventario valorizado, y clickeables"). No hay `st.container`
+        # acá: las tres tarjetas las abre `seccion_cadena`, que es la que
+        # sabe cuántas son y con qué key va cada una.
+        #
+        # EL PRIMER NIVEL ES SUB ALMACÉN, que es el área que PIDE
+        # (COCINA/BARRA/SALON/GASTOS…) — `requerimientos.parquet` no trae
+        # una columna "área" aparte, y es la misma que filtran los chips de
+        # la franja, así que la página no se contradice llamándola de dos
+        # maneras. Los otros dos niveles son la jerarquía del producto.
+        #
+        # Sin `abre_en`: el foco por defecto es el sub almacén MAYOR. En
+        # Inventario hubo que nombrarlo (GASTOS era el mayor pero no era
+        # inventario contable, regla #405); acá el mayor es el que más pide,
+        # que es exactamente la primera pantalla que se quiere ver.
+        drill_tablas.seccion_cadena(
+            d, pref="mov", slug="subalm",
+            niveles=((col_sub, "sub almacén"), (col_fam, "familia"),
+                     (col_subfam, "subfamilia")),
+            col_val=col_metrica, col_hoja=col_prod,
+            col_ctx=col_sub, nombre_ctx="Sub almacén",
+            col_cant=col_cant, col_punit=col_punit,
+            titulo_ranking="Valorizado requerido por sub almacén")
 
     def _dib_top_req():
         with st.container(border=True, key="ajuste_graf_card_izq_mov_top_req"):
@@ -378,9 +402,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                 _tabla_salidas(d_sal)
 
     _DIBUJANTES = {
-        "mov_sec_evolucion":   _dib_evolucion,
-        "mov_sec_proporcion":  _dib_proporcion,
-        "mov_sec_subalmacen":  _dib_subalmacen,
+        "mov_sec_cadena":      _dib_cadena,
         "mov_sec_top_req":     _dib_top_req,
         "mov_sec_tabla_req":   _dib_tabla_req,
         "mov_sec_tipo":        _dib_tipo,
