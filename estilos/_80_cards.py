@@ -555,9 +555,15 @@ CSS = """    /* ================================================================
         margin: 0;
         min-width: 0;
     }
+    /* LOS DOS TÍTULOS DE LA FILA DE ABAJO —el insumo y «Semana del … al
+       …»— con MENOS NOTORIEDAD (2026-09-13, a pedido): de .95rem en negrita
+       700 a .85rem en 500 y gris. Son rótulos de lo que va debajo, no la
+       lectura; la lectura son los KPIs, que siguen en negrita. Los dos usan
+       esta clase, así que no se pueden desparejar. */
     .vol-detalle-nom {
-        font-size: .95rem;
-        font-weight: 700;
+        font-size: .85rem;
+        font-weight: 500;
+        color: var(--text-secondary);
         flex: 1 1 130px;
         min-width: 0;
         overflow: hidden;
@@ -587,6 +593,40 @@ CSS = """    /* ================================================================
     .vol-detalle-kpis b {
         font-size: .8rem;
         font-weight: 700;
+    }
+    /* El «±x% vs cierre anterior» del título de la semana: lleva el color
+       del semáforo inline (lo decide Python) y acá sólo el cuerpo. Era
+       negrita 700 a 1rem, más fuerte que el propio título. */
+    .vol-detalle-delta {
+        flex: 0 0 auto;
+        font-size: .8rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    /* ── VOLATILIDAD: la barra para deslizar las velas ────────────────
+       2026-09-13 (regla #402). Es el `rangeslider` de Plotly vacío
+       (`volatilidad.py::_barra_velas`), y de fábrica se lee al revés de
+       una barra de scroll: la ventana es el fondo claro y lo de afuera una
+       máscara gris oscura (`rgba(0,0,0,.4)`, fija en Plotly, sin opción
+       de layout). Acá la máscara pasa a ser el riel claro y la ventana
+       queda con el gris de `SCROLL_THUMB` que le pone Python.
+
+       Las MANIJAS de las puntas (`.rangeslider-handle-*`) se esconden: son
+       para cambiar el ancho de la ventana, o sea zoom, y acá la ventana es
+       de cinco semanas. El área que se agarra (`.rangeslider-grabarea-*`)
+       sigue ahí, invisible como siempre.
+
+       `!important` porque Plotly escribe esos colores como estilo INLINE
+       del elemento SVG, y contra un inline no gana ninguna regla sin él. */
+    [class*="st-key-compras_g_vol_candle_"] .rangeslider-mask-min,
+    [class*="st-key-compras_g_vol_candle_"] .rangeslider-mask-max {
+        fill: var(--bg-primary) !important;
+        fill-opacity: 1 !important;
+    }
+    [class*="st-key-compras_g_vol_candle_"] .rangeslider-handle-min,
+    [class*="st-key-compras_g_vol_candle_"] .rangeslider-handle-max {
+        display: none !important;
     }
 
     /* ── VOLATILIDAD: la grilla ocupa SU columna, siempre ─────────────

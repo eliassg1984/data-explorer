@@ -341,7 +341,13 @@ recortar: es más barato que velas más chatas."""
 # Python, y forzarlo por CSS encoge el iframe pero deja el documento de
 # adentro en su alto — la grilla queda cortada, con su scroll fuera de la
 # vista. Ver arquitectura.md #345.
-RANKING_CON_DRILL = 298
+#
+# 298 -> 250 EL 2026-09-13, a pedido: «reducir 2 filas a la tabla principal
+# de volatilidad». Cada fila son 24 (`tablas/compras_volatilidad.py::
+# ALTO_FILA`), así que son 8 filas a la vista en vez de 10 y la tarjeta baja
+# 48px. Con eso deja de medir lo mismo que «Vs año pasado» (la cuenta de la
+# regla #394) — a pedido, no por olvido. Regla #402.
+RANKING_CON_DRILL = 250
 
 PANEL_JUNTO_A_FIGURA = MINI_CANDLE_DRILL
 """Tope de una tabla de detalle que va AL LADO de una figura, en la misma

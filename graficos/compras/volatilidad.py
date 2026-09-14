@@ -25,7 +25,7 @@ import streamlit as st
 from cortes import MESES_ABR_ES
 from tema import (
     CELDA_POS_TEXTO, ERROR, ERROR_TEXTO, EXITO, GRIS_BORDE, GRIS_TEXTO,
-    GRIS_TEXTO_SUAVE, LAVANDA_FONDO,
+    GRIS_TEXTO_SUAVE, LAVANDA_FONDO, SCROLL_THUMB,
 )
 from graficos.base import (
     _card, _compras_layout, _compras_truncar, _slug,
@@ -33,7 +33,7 @@ from graficos.base import (
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.compras._comun import (
-    CATEGORIA_SEC, GAP_DRILL, PARR, _first_point, documento_legible,
+    CATEGORIA_SEC, PARR, _first_point, documento_legible,
     unidad_corta,
 )
 from graficos import periodo
@@ -105,6 +105,13 @@ Este número manda además sobre el candlestick (cinco velas) y sobre el
 score de volatilidad, que es la suma de las variaciones DE LA VENTANA: con
 cinco semanas los puntajes bajan y el ranking se reordena. Es consecuencia
 del pedido, no un efecto colateral escondido."""
+VELAS_A_LA_VISTA = 5
+"""Cuántas velas muestra el candlestick al ABRIR (2026-09-13). Desde ese día
+el gráfico dibuja toda la historia de la grilla (`semanas_hist`) y se
+desliza de costado; ésta es la ventana inicial. Vale lo mismo que
+`MAX_SEMANAS` para abrir mostrando lo que se veía antes —las semanas que
+miden el puntaje—, pero es otro número: si un día se mide más o menos, lo
+que entra legible en media tarjeta no cambia."""
 MIN_GASTO = 400.0        # S/ gastados en la ventana; filtra ruido de insumos
 MIN_COBERTURA = 0.75     # % de semanas con al menos una compra
 
@@ -513,8 +520,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                             "anteriores: son historia, no entran en el "
                             "puntaje, y el orden no cambia. Las que SÍ "
                             "suman son las de título resaltado; la semana "
-                            "anterior a la primera de ellas es la base (la "
-                            "primera vela del gráfico). El botón "
+                            "anterior a la primera de ellas es la base. El "
+                            "gráfico de velas recorre las mismas semanas: "
+                            "arrastralo, o usá su barra de abajo, para ir "
+                            "hacia atrás. El botón "
                             "**Volatilidad** muestra la columna del "
                             "puntaje; sin ella, se consulta pasando el "
                             "mouse sobre el nombre del insumo."
@@ -717,18 +726,35 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # también escribe unidades, y dos copias se desincronizan.
         unidad = unidad_corta(unidad_raw)
 
-        # La base de la primera vela: el cierre de la semana anterior en la
-        # historia de la ventana y, si la ventana no la trae (Rango), el
-        # último precio del histórico entero.
-        _ch = candidatos[prod_sel]["cierres_hist"]
-        _cierre_previo = _ch[-len(semanas) - 1] if len(_ch) > len(semanas) else None
-        if _cierre_previo is None and d_full is not None:
+        # ── LAS VELAS RECORREN LA MISMA HISTORIA QUE LA GRILLA ───────────
+        # 2026-09-13, a pedido: «que en el gráfico de velas el usuario pueda
+        # hacer scroll horizontal y ver semanas anteriores; que muestre las
+        # semanas que figuran en la tabla superior». Hasta ese día el
+        # candlestick dibujaba sólo `semanas` (las cinco que miden el
+        # puntaje); ahora dibuja `semanas_hist` entera y ABRE mostrando
+        # `VELAS_A_LA_VISTA` — ver el eje X, más abajo. Lo que NO cambia:
+        # los KPIs y el puntaje siguen midiendo las cinco de `semanas`.
+        #
+        # La base de la primera vela es el último precio ANTES de la
+        # ventana, sobre el histórico entero: con la historia a la vista, la
+        # primera vela es la de hace un año, no la de hace cinco semanas.
+        _cierre_previo = None
+        if d_full is not None:
             _cierre_previo = _vol_precio_previo(
                 d_full, prod_sel, col_prod, col_punit, col_fecha, col_moneda,
-                antes_de=semanas[0])
+                antes_de=semanas_hist[0])
         weeks = _vol_detalle_producto(
-            dd_rec, prod_sel, col_prod, col_punit, col_fecha, col_prov,
-            col_cant, semanas, cierre_previo=_cierre_previo, col_docu=col_docu)
+            dd, prod_sel, col_prod, col_punit, col_fecha, col_prov,
+            col_cant, semanas_hist, cierre_previo=_cierre_previo,
+            col_docu=col_docu)
+        # Las semanas de ANTES de la primera compra del insumo no tienen
+        # precio que dibujar: sin recortarlas, `_vol_detalle_producto` las
+        # llena con S/ 0 y el eje baja a cero (el mismo bug que la primera
+        # vela en «S/ −10», 2026-09-12).
+        _k0 = next((i for i, w in enumerate(weeks) if w["rows"] or w["c"] > 0), 0)
+        semanas_v, weeks = semanas_hist[_k0:], weeks[_k0:]
+        # Dónde empiezan, dentro de `weeks`, las semanas que MIDEN.
+        _i_mide = max(0, len(weeks) - n_sem)
 
         # ── LA FILA DE ABAJO: VELAS | SEMANA, MITAD Y MITAD ──────────────
         # 2026-09-12, a pedido (ver el bloque del ranking, más arriba). Cada
@@ -742,7 +768,13 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # columnas-internas: subdivisión DENTRO de la tarjeta (el gráfico y
         # su tabla), no una fila de drill que tenga que caer en el eje de
         # `COLUMNAS_DRILL`; 1/1 porque se pidió «a mitad».
-        col_vela, col_semana = st.columns(2, gap=GAP_DRILL)
+        #
+        # MÁS AIRE ENTRE LAS DOS MITADES (2026-09-13, a pedido: «más espacio
+        # lateral entre el gráfico de velas y la tabla de la semana»): de
+        # `GAP_DRILL` (1rem) a "large" (4rem). No es `GAP_DRILL` a propósito:
+        # ese número ata al mismo eje las filas de drill de una vista, y ésta
+        # es una subdivisión dentro de la tarjeta.
+        col_vela, col_semana = st.columns(2, gap="large")
 
         with col_vela:
             # ── El detalle, en la MISMA tarjeta ──────────────────────────────
@@ -756,7 +788,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # sola, lo único que scrollea es la GRILLA (que ya tenía su scroll
             # interno) y el resto se ve completo. Mismo movimiento que hizo
             # «Vs año pasado» el 2026-09-02, y por el mismo pedido.
-            cierres = [w["c"] for w in weeks]
+            # Sobre las semanas que MIDEN, no sobre toda la historia que
+            # ahora dibuja el gráfico: «Cambio» y «Volatilidad» hablan del
+            # mismo período, el de `periodo_vol`.
+            cierres = [w["c"] for w in weeks[_i_mide:]]
             precio_actual = cierres[-1]
             cambio_total = ((cierres[-1] - cierres[0]) / cierres[0] * 100) if cierres[0] else 0.0
             vol_total = candidatos[prod_sel]["volatilidad"]
@@ -791,7 +826,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 f'<span class="vol-detalle-kpis">'
                 f'<span title="Precio actual: cierre de la ultima semana">'
                 f'<i>Precio</i><b>S/ {precio_actual:,.2f} /{unidad}</b></span>'
-                f'<span title="Cambio total entre la primera y la ultima semana">'
+                f'<span title="Cambio entre la primera y la ultima de las '
+                f'{n_sem} semanas que miden ({periodo_vol})">'
                 f'<i>Cambio</i><b style="color:{color_cambio};">'
                 f'{_sig}{abs(cambio_total):.1f}%</b></span>'
                 f'<span title="Volatilidad: suma de las variaciones % '
@@ -851,26 +887,40 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 if _pi is None and _mp.get("x") is not None:
                     try:
                         _xs = pd.Timestamp(_mp["x"]).normalize()
-                        _pi = next((i for i, s in enumerate(semanas)
+                        _pi = next((i for i, s in enumerate(semanas_v)
                                     if s == _xs), None)
                     except (ValueError, TypeError):
                         _pi = None
                 if _pi is not None and 0 <= _pi < len(weeks):
-                    st.session_state["compras_vol_semfocus"] = _pi
+                    # LA FECHA DE LA SEMANA, NO SU POSICIÓN (2026-09-13): con
+                    # la historia en el gráfico, la posición depende de la
+                    # ventana de la tarjeta y de dónde arranca la serie del
+                    # insumo — pasar de 12m a 3m corría el foco a otra semana.
+                    st.session_state["compras_vol_semfocus"] = semanas_v[_pi]
                     _nclic += 1
                     st.session_state["compras_vol_nclic"] = _nclic
             _chart_key = f"{_key_base}_{_nclic}"
 
-            sem_focus = st.session_state.get("compras_vol_semfocus")
-            if sem_focus is None or not (0 <= sem_focus < len(weeks)):
-                # sin clic: la semana con el mayor movimiento propio (abre→cierra)
-                sem_focus = max(range(len(weeks)), key=lambda i: abs(weeks[i]["c"] - weeks[i]["o"]))
+            _foco = st.session_state.get("compras_vol_semfocus")
+            sem_focus = next((i for i, s in enumerate(semanas_v) if s == _foco),
+                             None)
+            if sem_focus is None:
+                # sin clic: de las semanas que MIDEN, la del mayor movimiento
+                # propio (abre→cierra) — la misma que cuando el gráfico sólo
+                # tenía esas.
+                sem_focus = max(range(_i_mide, len(weeks)),
+                                key=lambda i: abs(weeks[i]["c"] - weeks[i]["o"]))
 
             # El rango de Y, a mano: la barra invisible tiene que ir de
             # borde a borde del área de dibujo, y para eso hace falta saber
             # dónde están los bordes. 12% de aire, como el automático; con
-            # un precio que no se movió en ninguna de las cinco semanas, un
-            # aire mínimo para que la raya no quede pegada al borde.
+            # un precio que no se movió en ninguna semana, un aire mínimo
+            # para que la raya no quede pegada al borde.
+            #
+            # Sobre TODAS las semanas del gráfico, no sólo las que se ven:
+            # Plotly no reacomoda el eje Y al deslizar, así que un rango
+            # tomado de las cinco de la vista dejaría cortadas las velas
+            # viejas más caras o más baratas.
             _lo = min(w["l"] for w in weeks)
             _hi = max(w["h"] for w in weeks)
             _pad = max((_hi - _lo) * 0.12, abs(_hi) * 0.04, 0.5)
@@ -883,17 +933,17 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # (`hoverinfo="text"`, NO "skip": con "skip" Plotly apaga
             # también el clic, regla #388).
             fig.add_trace(go.Bar(
-                x=semanas, base=[_y0] * len(weeks), y=[_y1 - _y0] * len(weeks),
+                x=semanas_v, base=[_y0] * len(weeks), y=[_y1 - _y0] * len(weeks),
                 width=[7 * 24 * 3600 * 1000] * len(weeks),
                 marker=dict(color="rgba(0,0,0,0)", line=dict(width=0)),
-                hovertext=[_hover_vela(s, w) for s, w in zip(semanas, weeks)],
+                hovertext=[_hover_vela(s, w) for s, w in zip(semanas_v, weeks)],
                 hoverinfo="text", showlegend=False, name="",
             ))
             # Traza 1: la vela, sólo para VER. `hoverinfo="skip"` a
             # propósito: el hover y el clic los da la barra de atrás, y dos
             # hovers de la misma semana competirían por quién se muestra.
             fig.add_trace(go.Candlestick(
-                x=semanas, open=[w["o"] for w in weeks], high=[w["h"] for w in weeks],
+                x=semanas_v, open=[w["o"] for w in weeks], high=[w["h"] for w in weeks],
                 low=[w["l"] for w in weeks], close=[w["c"] for w in weeks],
                 increasing=dict(line=dict(color=ERROR), fillcolor=ERROR),
                 decreasing=dict(line=dict(color=EXITO), fillcolor=EXITO),
@@ -901,8 +951,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             ))
             # La semana elegida: una banda lavanda detrás de su vela.
             fig.add_vrect(
-                x0=semanas[sem_focus] - pd.Timedelta(days=3.5),
-                x1=semanas[sem_focus] + pd.Timedelta(days=3.5),
+                x0=semanas_v[sem_focus] - pd.Timedelta(days=3.5),
+                x1=semanas_v[sem_focus] + pd.Timedelta(days=3.5),
                 fillcolor=LAVANDA_FONDO, opacity=1, line_width=0, layer="below")
 
             # ── LOS PRECIOS, ESCRITOS AL COSTADO DE CADA VELA ────────────
@@ -940,7 +990,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             _ult_x, _ult_y, _ult_t, _ult_c = [], [], [], []
             _pri_x, _pri_y, _pri_t = [], [], []
             _dir_prev, _c_prev = "sube", None
-            for s, w in zip(semanas, weeks):
+            for s, w in zip(semanas_v, weeks):
                 if w["c"] > w["o"]:
                     _dir = "sube"
                 elif w["c"] < w["o"]:
@@ -964,14 +1014,19 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 x=_ult_x, y=_ult_y, text=_ult_t, mode="text",
                 textposition="middle right",
                 textfont=dict(size=11, color=_ult_c),
-                hoverinfo="skip", showlegend=False, cliponaxis=False,
+                # RECORTADAS AL ÁREA DE DIBUJO desde que el gráfico se
+                # desliza (2026-09-13): con `cliponaxis=False` las etiquetas
+                # de las semanas fuera de la vista se dibujaban igual, encima
+                # del eje Y y de los márgenes. La de la última vela sigue
+                # entrando: el eje llega 6 días más allá de ella.
+                hoverinfo="skip", showlegend=False, cliponaxis=True,
             ))
             if _pri_x:
                 fig.add_trace(go.Scatter(
                     x=_pri_x, y=_pri_y, text=_pri_t, mode="text",
                     textposition="middle right",
                     textfont=dict(size=10.5, color=GRIS_TEXTO),
-                    hoverinfo="skip", showlegend=False, cliponaxis=False,
+                    hoverinfo="skip", showlegend=False, cliponaxis=True,
                 ))
             _compras_layout(fig, alto=alturas.MINI_CANDLE_DRILL)
             # EL MARGEN SUPERIOR, A 8: `_compras_layout` reserva 30px arriba
@@ -980,7 +1035,14 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # la figura. Bajarlos devuelve casi todo lo que costó el recorte
             # de altura: el área de dibujo queda en ~120px contra los ~140
             # que tenía a 200 con el margen de siempre.
-            fig.update_layout(margin=dict(l=10, r=10, t=8, b=10))
+            #
+            # Y EL DE ABAJO A 2, CON `pad` A 2 (2026-09-13): la barra para
+            # deslizar (ver `_barra_velas`, más abajo) cuesta sus 12px más
+            # 15 que Plotly deja fijos entre los rótulos del eje y ella, y
+            # medido, el área de dibujo bajó de ~103 a 76px. El `pad` (8,
+            # del tema de Streamlit) y el margen inferior son lo único de esa
+            # cuenta que se puede devolver.
+            fig.update_layout(margin=dict(l=10, r=10, t=8, b=2, pad=2))
             # UNA MARCA POR VELA, EN ESPAÑOL. Sin `tickvals` Plotly elige
             # sus propias fechas y las rotula con su locale por defecto —
             # el inglés: el eje decía "Jul 12 / Jul 26 / Aug 9 / Aug 23"
@@ -1001,15 +1063,45 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # la misma semana que la columna, y que la grilla marca las
             # cuatro que miden (`mide` en `cols_sem`). Cinco rótulos de ~95px
             # entran en la mitad de la tarjeta.
+            # ── LA VENTANA A LA VISTA Y LA BARRA PARA DESLIZARLA ─────────
+            # Abre en las `VELAS_A_LA_VISTA` más recientes —lo que dibujaba
+            # antes—, salvo que la semana elegida sea más vieja: entonces la
+            # ventana se corre hasta dejarla en el medio. Hace falta porque
+            # cada clic dibuja el gráfico con una key nueva
+            # (`compras_vol_nclic`) y Plotly olvida hasta dónde se había
+            # deslizado: sin esto, elegir una vela vieja la sacaba de la
+            # vista en el mismo clic.
+            _iv1 = len(weeks) - 1
+            if sem_focus < _iv1 - (VELAS_A_LA_VISTA - 1):
+                _iv1 = min(len(weeks) - 1, sem_focus + VELAS_A_LA_VISTA // 2)
+            _iv0 = max(0, _iv1 - (VELAS_A_LA_VISTA - 1))
+            # La barra es el `rangeslider` de Plotly, VACÍO: su eje Y se fija
+            # en un tramo sin ningún precio (negativo), así que no repite en
+            # miniatura las velas ni sus etiquetas. Queda el riel y la
+            # ventana que se arrastra, que es lo que hace una barra de
+            # scroll. Sólo si hay más semanas que las que entran a la vista.
+            #
+            # Los COLORES van al revés de lo que trae Plotly: por defecto la
+            # ventana es el fondo claro y lo de afuera, una máscara gris
+            # oscura; así se leía como un riel oscuro con un hueco. Acá la
+            # ventana es el gris del scroll de las tablas (`SCROLL_THUMB`) y
+            # la máscara se aclara por CSS (`estilos/_80_cards.py`, que
+            # además esconde las manijas de zoom de las puntas).
+            _barra_velas = (dict(visible=True, thickness=0.08,
+                                 bgcolor=SCROLL_THUMB, bordercolor=GRIS_BORDE,
+                                 borderwidth=1,
+                                 yaxis=dict(rangemode="fixed", range=[-2, -1]))
+                            if len(weeks) > VELAS_A_LA_VISTA
+                            else dict(visible=False))
             fig.update_layout(
                 # El rango de X, a mano: la etiqueta de la ÚLTIMA vela queda
                 # a la derecha de todo, y con el rango automático el texto
                 # se salía por el margen de 10px.
                 xaxis=dict(gridcolor=GRIS_BORDE, showgrid=False,
-                           rangeslider=dict(visible=False),
-                           range=[semanas[0] - pd.Timedelta(days=3.5),
-                                  semanas[-1] + pd.Timedelta(days=6)],
-                           tickmode="array", tickvals=semanas,
+                           rangeslider=_barra_velas,
+                           range=[semanas_v[_iv0] - pd.Timedelta(days=3.5),
+                                  semanas_v[_iv1] + pd.Timedelta(days=6)],
+                           tickmode="array", tickvals=semanas_v,
                            # DOS RENGLONES Y RECTOS (2026-09-12, captura del
                            # usuario): en una columna angosta los cinco
                            # rótulos de ~95px no entraban en uno y Plotly
@@ -1021,10 +1113,14 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                                ("<b>{}</b>" if i == sem_focus else "{}").format(
                                    _vol_fmt_semana_cabecera(s, anio_ref)
                                    .replace(" – ", " –<br>"))
-                               for i, s in enumerate(semanas)],
+                               for i, s in enumerate(semanas_v)],
                            tickangle=0, automargin=True),
                 yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ ",
-                           range=[_y0, _y1]),
+                           range=[_y0, _y1], fixedrange=True),
+                # ARRASTRAR = DESLIZAR: con "pan", arrastrar el gráfico lo
+                # corre de costado (el eje Y está fijo); un clic sin arrastre
+                # sobre una vela sigue eligiéndola.
+                dragmode="pan",
                 showlegend=False,
             )
 
@@ -1033,7 +1129,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                             on_select="rerun", selection_mode="points", config=_cfg)
 
             w = weeks[sem_focus]
-            ini = semanas[sem_focus]
+            ini = semanas_v[sem_focus]
             fin = ini + pd.Timedelta(days=6)
 
             # CONTRA QUÉ SE COMPARA, CON EL PRECIO ESCRITO (2026-09-12, a
@@ -1057,7 +1153,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 _cero = abs(var) < 0.05
                 color = GRIS_TEXTO if _cero else (ERROR if var > 0 else EXITO)
                 _sig = "" if _cero else ("+" if var > 0 else "−")
-                delta_txt = (f' <span style="color:{color}; font-weight:700;">'
+                delta_txt = (f'<span class="vol-detalle-delta" '
+                             f'style="color:{color};">'
                              f'{_sig}{abs(var):.1f}% vs cierre anterior '
                              f'(S/ {_base:,.2f})</span>')
         with col_semana:
@@ -1065,9 +1162,16 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             # renglón de la tabla que va abajo, y sumarle .5rem lo dejaba en
             # 43px para una línea de texto. Los 8px son la mitad de lo que le
             # faltaba a la tarjeta para no sacar barra de scroll.
+            #
+            # EL MISMO RENGLÓN QUE EL DE LA IZQUIERDA (2026-09-13, a pedido:
+            # menos notoriedad para los dos títulos). Era un `<span>` en
+            # negrita 600 al cuerpo del markdown (1rem); ahora usa las clases
+            # del título del insumo (`.vol-detalle-hdr` / `.vol-detalle-nom`),
+            # así que los dos títulos no se pueden desparejar.
             st.markdown(
-                f'<div>'
-                f'<span style="font-weight:600;">Semana del {ini:%d/%m} al {fin:%d/%m}</span>{delta_txt}'
+                f'<div class="vol-detalle-hdr">'
+                f'<span class="vol-detalle-nom">Semana del {ini:%d/%m} al '
+                f'{fin:%d/%m}</span>{delta_txt}'
                 f'</div>', unsafe_allow_html=True,
             )
 

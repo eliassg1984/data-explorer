@@ -347,6 +347,15 @@ def main():
         fig.update_layout(width=ancho, height=alto)
         fig.update_xaxes(automargin=True)
         fig.update_yaxes(automargin=True)
+        # IDA Y VUELTA POR EL JSON DE PLOTLY antes de kaleido (2026-09-13).
+        # kaleido serializa con `orjson`, que no sabe qué es un
+        # `pd.Timestamp`, y el LAYOUT de un gráfico de fechas los trae
+        # sueltos (el `range` del eje, sus `tickvals`, el x0/x1 de un
+        # `add_vrect`): el candlestick de Volatilidad moría con «Type is not
+        # JSON serializable: Timestamp». `to_json` usa el codificador de
+        # Plotly, que los pasa a texto ISO — lo mismo que hace el navegador.
+        import plotly.io as pio
+        fig = pio.from_json(fig.to_json())
         fig.write_image(str(destino), scale=2)
         escritos.append(destino)
         print(f"  → {destino.relative_to(_RAIZ)}  ({ancho}x{alto})")
