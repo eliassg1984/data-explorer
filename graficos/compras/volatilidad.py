@@ -28,12 +28,12 @@ from tema import (
     GRIS_TEXTO_SUAVE, LAVANDA_FONDO,
 )
 from graficos.base import (
-    _card, _compras_layout, _compras_truncar, _slug,
+    _compras_layout, _compras_truncar, _slug,
     preservar_widgets, selector_fecha_tarjeta,
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.compras._comun import (
-    CATEGORIA_SEC, PARR, _first_point, documento_legible,
+    CATEGORIA_SEC, GAP_DRILL, PARR, _first_point, documento_legible,
     unidad_corta,
 )
 from graficos import periodo
@@ -57,7 +57,7 @@ Streamlit lo re-aplica (arquitectura.md regla #212, medida otra vez acá el
 mismo argumento que `selector_escala`: el dueño del dato es esta clave, y
 el widget es una VISTA que se recalcula de ella en cada render."""
 
-_KEYS_WIDGET = ("compras_vol_q", "compras_vol_ver", "compras_vol_tabla_modo",
+_KEYS_WIDGET = ("compras_vol_q", "compras_vol_ver", "compras_vol_tabla_modo_*",
                 "compras_vol_vslider_*")
 """Los controles de esta sección que la escalada NO puede llevarse.
 
@@ -131,13 +131,19 @@ Este número manda además sobre el candlestick (cinco velas) y sobre el
 score de volatilidad, que es la suma de las variaciones DE LA VENTANA: con
 cinco semanas los puntajes bajan y el ranking se reordena. Es consecuencia
 del pedido, no un efecto colateral escondido."""
-VELAS_A_LA_VISTA = 5
-"""Cuántas velas muestra el candlestick al ABRIR (2026-09-13). Desde ese día
-el gráfico dibuja toda la historia de la grilla (`semanas_hist`) y se
-desliza de costado; ésta es la ventana inicial. Vale lo mismo que
-`MAX_SEMANAS` para abrir mostrando lo que se veía antes —las semanas que
-miden el puntaje—, pero es otro número: si un día se mide más o menos, lo
-que entra legible en media tarjeta no cambia."""
+VELAS_A_LA_VISTA = 4
+"""Cuántas velas muestra el candlestick a la vez (2026-09-13). El gráfico
+dibuja toda la historia de la grilla (`semanas_hist`) y el deslizador corre
+esta ventana. Es otro número que `MAX_SEMANAS` a propósito: aquél es lo que
+MIDE el puntaje, éste lo que entra legible en media tarjeta.
+
+5 -> 4 el mismo día, a pedido: «si solo mostramos 4, que el texto de la
+semana que está abajo de la vela salga en una sola línea». Con 5, cada
+semana tenía ~96px de eje y el rótulo («17 Ago – 23 Ago», ~95px) iba en
+dos renglones; con 4 son ~120 y entra en uno. De yapa, al abrir, las 4
+velas son exactamente las 4 columnas resaltadas de la grilla (las que
+suman el puntaje): la semana base, la primera de `MAX_SEMANAS`, queda un
+paso a la izquierda."""
 MIN_GASTO = 400.0        # S/ gastados en la ventana; filtra ruido de insumos
 MIN_COBERTURA = 0.75     # % de semanas con al menos una compra
 
@@ -385,6 +391,114 @@ def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
 # ── Vista principal ──────────────────────────────────────────────────────────
 
 @st.fragment
+def _tarjeta_compras_semana(filas_semana, filas_ventana, titulo_semana,
+                            titulo_ventana, delta_txt, unidad, ver_doc):
+    """La tarjeta de documentos de Volatilidad: título, «1 semana | 4
+    semanas» y la tabla de compras.
+
+    UN FRAGMENT DENTRO DEL FRAGMENT DEL DRILL (2026-09-13, a pedido: «¿por
+    qué cuando hago un cambio en un toggle de una tarjeta se actualizan las
+    tres?»). Las tres tarjetas eran tres SUPERFICIES (#415) pero un solo
+    `@st.fragment`: cualquier control de adentro re-corría la sección entera
+    —el ranking de 12 meses, el candlestick y las dos tablas— y el velo de
+    `data-stale` (#366) cubría las tres. El selector de esta tarjeta es el
+    único control que no le cambia nada a las otras dos, así que corre solo:
+    Streamlit re-ejecuta esta función con los argumentos de la última
+    corrida del drill, que es exactamente lo que hace falta.
+
+    Lo que SÍ tiene que refrescar las tres sigue en el drill: elegir otro
+    insumo (cambia todo), mover la ventana o clickear una vela (la tabla
+    sigue a las velas). Cada vez que el drill corre, vuelve a llamar a esta
+    función con los datos nuevos.
+
+    Su key (`compras_vol_tabla_modo_*`) sigue en `_KEYS_WIDGET` del drill: la
+    escalada de fecha (`st.rerun(scope="app")`) aborta la corrida antes de
+    que esta tarjeta registre su control, y sin eso se lo llevaría.
+
+    `filas_*` son las filas de `_vol_detalle_producto` (fecha, prov, doc,
+    cant, precio) SIN formatear; `delta_txt` es el HTML del «±x% vs cierre
+    anterior», que sólo va con «1 semana». Regla #417."""
+    # ── «1 SEMANA | 4 SEMANAS» (2026-09-13, a pedido) ────────────────────
+    # «una opción minimalista de mostrar varias semanas en la tabla de
+    # documentos del costado, para que pueda estar alineada con el gráfico de
+    # velas». Con «4 semanas» la tabla lista las compras de TODAS las velas a
+    # la vista — la misma ventana del deslizador, que por eso pasó a ser del
+    # servidor (ver `_K_VFIN`). Con «1 semana», la de la vela elegida.
+    #
+    # El título y el control van en UNA fila (`vol_sem_hdr`,
+    # `estilos/_80_cards.py`). El título se escribe DESPUÉS del control —dice
+    # una cosa u otra según lo elegido— en un hueco reservado antes, así en
+    # pantalla va primero. Con las clases del título del insumo
+    # (`.vol-detalle-hdr` / `.vol-detalle-nom`), para que los dos títulos no
+    # se puedan desparejar.
+    _op_modo = ("1 semana", f"{VELAS_A_LA_VISTA} semanas")
+    with st.container(key="vol_sem_hdr"):
+        _hdr_semana = st.empty()
+        # La key lleva el número: si cambia `VELAS_A_LA_VISTA` (pasó de 5 a 4
+        # el 2026-09-13), una sesión abierta con «5 semanas» guardado no
+        # choca contra opciones que ya no lo tienen — nace otro widget.
+        _varias = st.segmented_control(
+            "Compras de", _op_modo,
+            key=f"compras_vol_tabla_modo_{VELAS_A_LA_VISTA}",
+            default=_op_modo[0],
+            label_visibility="collapsed") == _op_modo[1]
+    if _varias:
+        _hdr_semana.markdown(
+            f'<div class="vol-detalle-hdr">'
+            f'<span class="vol-detalle-nom">{titulo_ventana}</span>'
+            f'</div>', unsafe_allow_html=True)
+        _filas = filas_ventana
+    else:
+        _hdr_semana.markdown(
+            f'<div class="vol-detalle-hdr">'
+            f'<span class="vol-detalle-nom">{titulo_semana}</span>{delta_txt}'
+            f'</div>', unsafe_allow_html=True)
+        _filas = filas_semana
+
+    if not _filas:
+        st.caption("Sin compras registradas esta semana — precio repetido "
+                   "del último cierre." if not _varias
+                   else "Sin compras registradas en estas semanas.")
+        return
+
+    tp = pd.DataFrame(_filas)
+    maxp, minp = tp["precio"].max(), tp["precio"].min()
+    # EL SEMÁFORO DEL PRECIO viaja como DATO en la fila (`__tono`) y no como
+    # estilo: la grilla corre en un iframe y su `cellStyle` sólo ve lo que
+    # trae la fila. La compra más cara en rojo, la más barata en verde; con
+    # un solo precio, ninguna. Con «4 semanas», las del tramo entero.
+    tp["__tono"] = [
+        "" if maxp == minp
+        else "max" if p == maxp else "min" if p == minp else ""
+        for p in tp["precio"]]
+
+    # EL DOCUMENTO, AL LADO DE LA FECHA (2026-09-12, a pedido): «E001-1703»,
+    # como se lee en el papel, y no el código de 15 caracteres del parquet —
+    # `documento_legible` es la misma que usan las tablas de Documentos. Sin
+    # columna de documento (el demo local) la columna va oculta.
+    if ver_doc:
+        tp["doc"] = documento_legible(tp["doc"])
+    tp["fecha"] = tp["fecha"].map(lambda v: f"{v:%d/%m/%Y}")
+    tp["cant"] = tp["cant"].map(
+        lambda v: "—" if pd.isna(v) else f"{v:,.2f} {unidad}")
+    tp["precio"] = tp["precio"].map(lambda v: f"S/ {v:,.2f}")
+
+    # EN AGGRID Y NO EN `st.dataframe` (2026-09-12, a pedido: «el mismo
+    # tamaño de filas y diseño» que el ranking de arriba): `st.dataframe`
+    # dibuja sus celdas en un canvas y ni el modo diseño ni `estilos/`
+    # alcanzan sus filas. Regla #396. LA KEY LLEVA EL ALTO (medido):
+    # st_aggrid no le cambia el alto al IFRAME cuando la misma key recibe
+    # otro `height`, y de la tercera compra en adelante no se veían.
+    _alto_tabla = alturas.por_filas(
+        len(tp), px_fila=ALTO_FILA_RANK, extra=CROMO_SEMANA_VOL,
+        minimo=0, rol=alturas.PANEL_JUNTO_A_FIGURA)
+    renderizar_compras_semana(
+        tp[["fecha", "doc", "prov", "cant", "precio", "__tono"]],
+        titulo_precio=f"Precio/{unidad}", altura=_alto_tabla,
+        key=f"compras_vol_semana_grid_{_alto_tabla}", ver_doc=ver_doc)
+
+
+@st.fragment
 def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                                col_valor, col_cant, col_um, col_moneda=None,
                                d_full=None, col_docu=None):
@@ -454,7 +568,17 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
     # recientes CON DATOS. Más velas no es más historia útil, es un gráfico
     # ilegible (ver `_vol_semanas_ventana`).
 
-    with _card("compras_vol"):
+    # TRES TARJETAS Y NO UNA (2026-09-13, a pedido: «dividir la tarjeta de
+    # volatilidad en 3 tarjetas: la tabla arriba, el gráfico de velas abajo
+    # y la tabla de producto al costado, en tarjetas individuales»). El
+    # contenedor de afuera es transparente; las superficies son
+    # `compras_vol_card_rank` (cabecera + ranking), `_velas` y `_semana`,
+    # con el look de las de Producto (`estilos/_80_cards.py`). Cada parte se
+    # cuelga de SU tarjeta sin re-indentar el drill: la cabecera y el hueco
+    # de la tabla con `_tarj_rank.container(...)`, las dos de abajo con
+    # `with col_x, st.container(...)`. Regla #415.
+    with st.container(key="compras_vol_cuerpo"):
+        _tarj_rank = st.container(key="compras_vol_card_rank")
         # ── TÍTULO Y CONTROLES EN UNA FILA ARRIBA; LA TABLA, A TODO EL ANCHO ─
         # 2026-09-12, a pedido: «cambiar el título a "Volatilidad de Insumos"
         # y ponerlo arriba, al lado izquierdo, y los toggles y demás en la
@@ -470,7 +594,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # una grilla que se lee de izquierda a derecha, semana por semana.
         # Los 55px de alto que cuesta la fila los paga la TARJETA —que ahora
         # mide lo mismo que la de «Vs año pasado», a pedido—, no la grilla.
-        with st.container(key="vol_fila_hdr"):
+        with _tarj_rank.container(key="vol_fila_hdr"):
             st.markdown('<p class="chart-card-hdr vol-hdr">Volatilidad de '
                         'Insumos</p>', unsafe_allow_html=True)
 
@@ -563,7 +687,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                             "gráfico de velas recorre las mismas semanas: "
                             "movelo con la línea que tiene arriba (al "
                             "pasarle el mouse dice qué tramo es) para ir "
-                            "hacia atrás, y con «1 semana | 5 semanas» la "
+                            f"hacia atrás, y con «1 semana | "
+                            f"{VELAS_A_LA_VISTA} semanas» la "
                             "tabla "
                             "de al lado lista las compras de la vela "
                             "elegida o las de todas las que se ven. El "
@@ -579,7 +704,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # El hueco de la tabla, a todo el ancho. Se llena más abajo (depende
         # de lo que digan los controles), y los mensajes de «no hay datos»
         # van en él: salen donde iba la tabla.
-        c_tabla = st.container(key="vol_tabla")
+        c_tabla = _tarj_rank.container(key="vol_tabla")
 
         dd = d.copy()
         if col_moneda and col_moneda in dd.columns:
@@ -810,18 +935,19 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # `PANEL_JUNTO_A_FIGURA`), así que la fila termina en una sola
         # línea en vez de en dos.
         #
-        # columnas-internas: subdivisión DENTRO de la tarjeta (el gráfico y
-        # su tabla), no una fila de drill que tenga que caer en el eje de
-        # `COLUMNAS_DRILL`; 1/1 porque se pidió «a mitad».
-        #
-        # MÁS AIRE ENTRE LAS DOS MITADES (2026-09-13, a pedido: «más espacio
-        # lateral entre el gráfico de velas y la tabla de la semana»): de
-        # `GAP_DRILL` (1rem) a "large" (4rem). No es `GAP_DRILL` a propósito:
-        # ese número ata al mismo eje las filas de drill de una vista, y ésta
-        # es una subdivisión dentro de la tarjeta.
-        col_vela, col_semana = st.columns(2, gap="large")
+        # DESDE EL 2026-09-13 ES UNA FILA DE DOS TARJETAS (regla #415), no
+        # una subdivisión dentro de una: el hueco entre ellas es `GAP_DRILL`,
+        # el de todas las filas de drill de Compras (era "large", 4rem,
+        # mientras las dos mitades compartían superficie y el aire lo tenía
+        # que poner el gap). La proporción sigue en 1/1, y NO es
+        # `COLUMNAS_DRILL` (1.6/1) a sabiendas: en la mitad chica la tabla de
+        # la semana quedaba en ~380px útiles contra los 456 que piden sus
+        # columnas (Fecha, Documento, Cantidad y Precio fijos + el mínimo de
+        # Proveedor). Es el «1/1 en volatilidad.py» que ya lista el PENDIENTE
+        # de `test_graficos.py::_pruebas_grilla_horizontal`.
+        col_vela, col_semana = st.columns(2, gap=GAP_DRILL)
 
-        with col_vela:
+        with col_vela, st.container(key="compras_vol_card_velas"):
             # ── El detalle, en la MISMA tarjeta ──────────────────────────────
             # 2026-09-07, a pedido: «no entra en su tarjeta la parte de abajo,
             # el gráfico y su tabla; el usuario no debería hacer scroll en la
@@ -1162,18 +1288,20 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                            range=[semanas_v[_iv0] - pd.Timedelta(days=2),
                                   semanas_v[_iv1] + pd.Timedelta(days=5.2)],
                            tickmode="array", tickvals=semanas_v,
-                           # DOS RENGLONES Y RECTOS (2026-09-12, captura del
-                           # usuario): en una columna angosta los cinco
-                           # rótulos de ~95px no entraban en uno y Plotly
-                           # los torcía a 45°, encima del área de dibujo y
-                           # con el último cortado. Partido en el guion,
-                           # cada rótulo mide ~50px y entra hasta en ~300px
-                           # de columna. La semana elegida, en negrita.
+                           # UN RENGLÓN (2026-09-13, a pedido), a 11px: con
+                           # `VELAS_A_LA_VISTA` en 4 cada semana tiene ~120px
+                           # de eje, y el peor rótulo —con año, «8 Set – 14
+                           # Set ’25»— mide ~113. Hasta ese día iba partido
+                           # en el guion en DOS renglones (2026-09-12,
+                           # captura del usuario): con cinco velas los
+                           # rótulos no entraban en uno y Plotly los torcía
+                           # a 45°. `tickangle=0` sigue para que no los
+                           # tuerza nunca. La semana elegida, en negrita.
                            ticktext=[
                                ("<b>{}</b>" if i == sem_focus else "{}").format(
-                                   _vol_fmt_semana_cabecera(s, anio_ref)
-                                   .replace(" – ", " –<br>"))
+                                   _vol_fmt_semana_cabecera(s, anio_ref))
                                for i, s in enumerate(semanas_v)],
+                           tickfont=dict(size=11),
                            tickangle=0, automargin=True),
                 yaxis=dict(gridcolor=GRIS_BORDE, tickprefix="S/ ",
                            range=[_y0, _y1], fixedrange=True),
@@ -1245,98 +1373,17 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                              f'style="color:{color};">'
                              f'{_sig}{abs(var):.1f}% vs cierre anterior '
                              f'(S/ {_base:,.2f})</span>')
-        with col_semana:
-            # ── «1 SEMANA | 5 SEMANAS» (2026-09-13, a pedido) ────────────
-            # «una opción minimalista de mostrar varias semanas en la tabla
-            # de documentos del costado, para que pueda estar alineada con
-            # el gráfico de velas». Con «5 semanas» la tabla lista las
-            # compras de TODAS las velas a la vista — la misma ventana del
-            # deslizador, que por eso pasó a ser del servidor (ver
-            # `_K_VFIN`). Con «1 semana», la de la vela elegida, como
-            # siempre.
-            #
-            # El título y el control van en UNA fila (`vol_sem_hdr`,
-            # `estilos/_80_cards.py`). El título se escribe DESPUÉS del
-            # control —dice una cosa u otra según lo elegido— en un hueco
-            # reservado antes, así en pantalla va primero.
-            #
-            # EL MISMO RENGLÓN QUE EL DE LA IZQUIERDA (2026-09-13, a pedido:
-            # menos notoriedad para los dos títulos): las clases del título
-            # del insumo (`.vol-detalle-hdr` / `.vol-detalle-nom`), así que
-            # los dos títulos no se pueden desparejar.
-            _op_modo = ("1 semana", f"{VELAS_A_LA_VISTA} semanas")
-            with st.container(key="vol_sem_hdr"):
-                _hdr_semana = st.empty()
-                _varias = st.segmented_control(
-                    "Compras de", _op_modo, key="compras_vol_tabla_modo",
-                    default=_op_modo[0],
-                    label_visibility="collapsed") == _op_modo[1]
-            if _varias:
-                _fin_v = semanas_v[_iv1] + pd.Timedelta(days=6)
-                _hdr_semana.markdown(
-                    f'<div class="vol-detalle-hdr">'
-                    f'<span class="vol-detalle-nom">Semanas del '
-                    f'{semanas_v[_iv0]:%d/%m} al {_fin_v:%d/%m}</span>'
-                    f'</div>', unsafe_allow_html=True)
-                _filas = [r for i in range(_iv0, _iv1 + 1)
-                          for r in weeks[i]["rows"]]
-            else:
-                _hdr_semana.markdown(
-                    f'<div class="vol-detalle-hdr">'
-                    f'<span class="vol-detalle-nom">Semana del {ini:%d/%m} al '
-                    f'{fin:%d/%m}</span>{delta_txt}'
-                    f'</div>', unsafe_allow_html=True)
-                _filas = w["rows"]
-
-            if not _filas:
-                st.caption("Sin compras registradas esta semana — precio "
-                           "repetido del último cierre." if not _varias
-                           else "Sin compras registradas en estas semanas.")
-            else:
-                tp = pd.DataFrame(_filas)
-                maxp, minp = tp["precio"].max(), tp["precio"].min()
-                # EL SEMÁFORO DEL PRECIO viaja como DATO en la fila
-                # (`__tono`) y no como estilo: la grilla corre en un iframe y
-                # su `cellStyle` sólo ve lo que trae la fila. La compra más
-                # cara en rojo, la más barata en verde; con un solo precio,
-                # ninguna. Con «5 semanas», las del tramo entero.
-                tp["__tono"] = [
-                    "" if maxp == minp
-                    else "max" if p == maxp else "min" if p == minp else ""
-                    for p in tp["precio"]]
-
-                # EL DOCUMENTO, AL LADO DE LA FECHA (2026-09-12, a pedido):
-                # «E001-1703», como se lee en el papel, y no el código de 15
-                # caracteres del parquet — `documento_legible` es la misma que
-                # usan las tablas de Documentos. Sin columna de documento
-                # (el demo local) la columna va oculta: una fila de «—» no
-                # dice nada.
-                if col_docu:
-                    tp["doc"] = documento_legible(tp["doc"])
-                tp["fecha"] = tp["fecha"].map(lambda v: f"{v:%d/%m/%Y}")
-                tp["cant"] = tp["cant"].map(
-                    lambda v: "—" if pd.isna(v) else f"{v:,.2f} {unidad}")
-                tp["precio"] = tp["precio"].map(lambda v: f"S/ {v:,.2f}")
-
-                # EN AGGRID Y NO EN `st.dataframe` (2026-09-12, a pedido: «el
-                # mismo tamaño de filas y diseño» que el ranking de arriba).
-                # `st.dataframe` dibuja sus celdas en un canvas: ni el modo
-                # diseño ni `estilos/` alcanzan sus filas, su cabecera o sus
-                # líneas. Es lo que ya mudó a AgGrid los rankings de Proveedor
-                # y de esta misma tarjeta. Las filas de 24 y el look salen de
-                # las constantes del ranking, no de una copia. Regla #396.
-                # LA KEY LLEVA EL ALTO (2026-09-13, medido): st_aggrid no le
-                # cambia el alto al IFRAME cuando la misma key recibe otro
-                # `height` — se quedaba en el de la primera corrida (88, dos
-                # compras) con seis filas adentro, y de la tercera en
-                # adelante no se veían. Con otro alto es otra grilla, y nace
-                # con su iframe a la medida. Mismo arreglo que la key del
-                # candlestick con `compras_vol_nclic`.
-                _alto_tabla = alturas.por_filas(
-                    len(tp), px_fila=ALTO_FILA_RANK, extra=CROMO_SEMANA_VOL,
-                    minimo=0, rol=alturas.PANEL_JUNTO_A_FIGURA)
-                renderizar_compras_semana(
-                    tp[["fecha", "doc", "prov", "cant", "precio", "__tono"]],
-                    titulo_precio=f"Precio/{unidad}", altura=_alto_tabla,
-                    key=f"compras_vol_semana_grid_{_alto_tabla}",
-                    ver_doc=bool(col_docu))
+        with col_semana, st.container(key="compras_vol_card_semana"):
+            # SU PROPIO FRAGMENT (ver `_tarjeta_compras_semana`): se le pasa
+            # todo lo que puede mostrar ya calculado —las compras de la vela
+            # elegida y las de toda la ventana, y los dos títulos—, así el
+            # «1 semana | 4 semanas» decide adentro sin volver a correr esto.
+            _fin_v = semanas_v[_iv1] + pd.Timedelta(days=6)
+            _tarjeta_compras_semana(
+                filas_semana=w["rows"],
+                filas_ventana=[r for i in range(_iv0, _iv1 + 1)
+                               for r in weeks[i]["rows"]],
+                titulo_semana=f"Semana del {ini:%d/%m} al {fin:%d/%m}",
+                titulo_ventana=(f"Semanas del {semanas_v[_iv0]:%d/%m} al "
+                                f"{_fin_v:%d/%m}"),
+                delta_txt=delta_txt, unidad=unidad, ver_doc=bool(col_docu))

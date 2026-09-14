@@ -846,7 +846,11 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                              d_full=d_full)
 
     def _dib_volatilidad():
-            with st.container(border=True, key="ajuste_graf_card_izq_vol"):
+            # Sin borde externo (2026-09-13, a pedido): sus TRES bloques
+            # —ranking, velas, compras de la semana— son tarjetas propias
+            # (`compras_vol_card_*`), como las de Producto. Hasta ese día era
+            # `ajuste_graf_card_izq_vol`, una sola superficie. Regla #415.
+            with st.container(key="compras_vol_drill_wrap"):
                 _compras_volatilidad_drill(_d_sec("compras_sec_volatilidad"),
                                            col_prod, col_prov, col_punit, col_fecha,
                                            col_valor, col_cant, col_um, col_moneda,

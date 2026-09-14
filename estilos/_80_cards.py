@@ -378,7 +378,7 @@ CSS = """    /* ================================================================
        abajo y la grilla tapa la fila. Acá se cierra de verdad.
 
        `margin-bottom: -10px` y no 0: se come también el `gap` de la
-       tarjeta, que es de TODOS sus hijos (`chartcard_compras_vol`) y no se
+       tarjeta, que es de TODOS sus hijos (`compras_vol_card_rank`) y no se
        puede sacar sólo para este par. Y sin la raya de la fila: la grilla
        arranca con su propio borde de 3px (`tablas/compras_volatilidad.py`),
        que ES la separación — con las dos, se leían 4px de línea. En la
@@ -391,49 +391,40 @@ CSS = """    /* ================================================================
     }
     .st-key-vol_hdr_periodo { width: 100% !important; }
 
-    /* ── VOLATILIDAD: la tarjeta fusionada respira menos ──────────────
-       2026-09-07. Sus cuatro bloques —cabecera, grilla, KPIs del detalle
-       y la fila candlestick+tabla— van separados por el gap por defecto
-       de un `stVerticalBlock`, 1rem. Son 48px para una tarjeta que tiene
-       que entrar en una pantalla: 10px la siguen leyendo como cuatro
-       bandas y devuelven 18px, casi media fila del ranking.
+    /* ── VOLATILIDAD: TRES TARJETAS (2026-09-13, regla #415) ───────────
+       Hasta ese día era UNA superficie (`ajuste_graf_card_izq_vol`) con
+       una tarjeta transparente adentro (`chartcard_compras_vol`), y los
+       gaps de acá eran de esa tarjeta: 10px entre sus bloques (desde el
+       2026-09-07, para que entrara en una pantalla) y 18 dentro de cada
+       mitad de la fila de abajo. Se mudaron a las keys nuevas:
 
-       Acotado a ESTA key y no a `chartcard_`, que es la familia genérica
-       de `graficos/base.py::_card` y la usan ~15 tarjetas que no pidieron
-       apretarse (el aviso de CLAUDE.md sobre reglas por familia). */
-    div[class*="st-key-chartcard_compras_vol"] {
-        gap: 10px !important;
-        /* PADDING PROPIO CASI CERO, y no es apretar por apretar: esta
-           tarjeta interna es TRANSPARENTE —el marco, el fondo y la sombra
-           los pone la externa (`ajuste_graf_card_`, con `padding: 8px
-           18px`)—, así que sus 15px por lado eran un segundo marco
-           invisible: 30px verticales encima de los 16 de la madre. Medido,
-           eso solo era la diferencia entre entrar en `alturas.PRESUPUESTO`
-           y sacar barra de scroll.
-
-           En horizontal va a 0 por el mismo motivo, y de paso la fila gana
-           30px: la grilla pasa de 587 a 617 y sus columnas-semana de 81 a
-           ~93, o sea más aire para la segunda línea de precios. */
-        padding: 4px 0 !important;
+       · El cuerpo (`compras_vol_cuerpo`, transparente) separa la tarjeta
+         del ranking de la fila de abajo con los 16px del resto de los
+         drills de Compras.
+       · La tarjeta del ranking, 10 entre la cabecera y la grilla: es el
+         número que se come el `margin-bottom: -10px` de `vol_fila_hdr`
+         (arriba, #395) para dejarlas pegadas.
+       · Las dos de abajo, 18 entre su título y lo suyo (a pedido: «más
+         espacio entre el título y el gráfico de velas, y entre "Semana
+         del … al …" y la tabla»). El look de tarjeta —fondo, radio,
+         sombra, padding— es el de Producto, más abajo. */
+    .st-key-compras_vol_cuerpo {
+        gap: 16px !important;
     }
-    /* Y lo mismo DENTRO de cada columna de la fila, que es un
-       `stVerticalBlock` propio y por lo tanto no heredaba el gap de arriba:
-       sus cuatro bloques —KPIs, candlestick, título de la semana y tabla—
-       iban separados por el 1rem por defecto. Medido: 3 huecos x 6px = 18,
-       que es justo lo que le faltaba a la tarjeta para entrar en
-       `alturas.PRESUPUESTO` y dejar de sacar barra de scroll.
-
-       Desde el 2026-09-12 la fila es OTRA —la de abajo de la grilla, con
-       el candlestick en una mitad y la semana en la otra—, y cada columna
-       lleva dos bloques (título + figura, título + tabla). La regla sigue
-       valiendo tal cual: es la que deja los dos títulos a 10px de lo suyo
-       en las dos mitades, y la cuenta de `alturas.RANKING_CON_DRILL`
-       cuenta ese 10. */
-    div[class*="st-key-chartcard_compras_vol"] [data-testid="stColumn"] > div {
-        /* 10 -> 18 el 2026-09-13, a pedido: «más espacio entre el título y
-           el gráfico de velas, y entre "Semana del … al …" y la tabla». La
-           tarjeta ya no tiene techo (`:not(...izq_vol)`, más abajo): los 8px
-           por hueco los paga la PÁGINA, no una barra de la tarjeta. */
+    /* Y 16px MÁS ARRIBA de toda la sección (2026-09-14, a pedido: «que
+       entre la tarjeta de Vs año pasado y la de volatilidad haya un poco
+       más de espacio, se ven muy pegadas»). Entre secciones de la pila
+       quedan los 16px de su `gap`; con esto, las dos quedan a 32. Sólo
+       este par, que es el que se pidió: si el aire tiene que crecer entre
+       TODAS las secciones, el lugar es el `gap` de la pila, no esto. */
+    .st-key-compras_vol_drill_wrap {
+        margin-top: 16px !important;
+    }
+    .st-key-compras_vol_card_rank {
+        gap: 10px !important;
+    }
+    .st-key-compras_vol_card_velas,
+    .st-key-compras_vol_card_semana {
         gap: 18px !important;
     }
 
@@ -620,7 +611,7 @@ CSS = """    /* ================================================================
        del gráfico —quedaban 2—, y el de la derecha medía 6px de caja con
        21 de texto, así que al centrarlo contra el selector el texto
        colgaba por debajo del botón. */
-    .st-key-chartcard_compras_vol
+    .st-key-compras_vol_cuerpo
         [data-testid="stMarkdownContainer"]:has(.vol-detalle-hdr) {
         margin-bottom: 0 !important;
     }
@@ -636,11 +627,14 @@ CSS = """    /* ================================================================
         min-width: 0 !important;
         width: auto !important;
     }
-    .st-key-vol_sem_hdr > .st-key-compras_vol_tabla_modo {
+    /* Por PREFIJO: la key lleva el número de velas a la vista
+       (`compras_vol_tabla_modo_4`), para que cambiarlo no deje una sesión
+       abierta con una opción que ya no existe. */
+    .st-key-vol_sem_hdr > [class*="st-key-compras_vol_tabla_modo_"] {
         flex: 0 0 auto !important;
         width: auto !important;
     }
-    .st-key-compras_vol_tabla_modo [data-testid="stButtonGroup"] button {
+    [class*="st-key-compras_vol_tabla_modo_"] [data-testid="stButtonGroup"] button {
         min-height: 26px !important;
         height: 26px !important;
         padding: 0 10px !important;
@@ -957,6 +951,8 @@ CSS = """    /* ================================================================
         /* con el techo, en una pantalla baja, salía la barra propia que ya   */
         /* se había pedido quitar. Va con `:not()` y no sacando el prefijo,   */
         /* que es de las tarjetas de los otros siete reportes. Regla #394.    */
+        /* (Desde el 2026-09-13 esa tarjeta no existe: Volatilidad son tres   */
+        /* `compras_vol_card_`, que nunca estuvieron en esta lista. #415.)    */
         /*                                                                    */
         /* `ajuste_graf_card_izq_sem` (Semanal) salió el 2026-09-13, con el   */
         /* mismo pedido en otras palabras: «que su tarjeta sea del tamaño de  */
@@ -965,25 +961,17 @@ CSS = """    /* ================================================================
         /* `--alto-util` y le sacaba barra propia; ahora la figura cede su    */
         /* sitio a la tabla y la tarjeta mide lo mismo con foco o sin él.     */
         /* Regla #398.                                                        */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_vol):not(.st-key-ajuste_graf_card_izq_sem),
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
             overflow-y: auto;
             overflow-x: hidden;
         }
-        /* Y el mismo padding vertical que la de vap (16, no los 8 de la     */
-        /* familia): son 16 de los 28px que la separaban de su alto. Los    */
-        /* otros 12 los pone `alturas.RANKING_CON_DRILL`. Regla #394.        */
-        /*                                                                    */
-        /* Arriba 11 y no 16 (a pedido, «subir esto» sobre la cabecera): la  */
-        /* tarjeta de adentro, `chartcard_compras_vol`, suma 4 de padding y  */
-        /* 1 de borde, así que el título quedaba 5px más abajo que el de vap */
-        /* (23.8 contra 18.8, medido). 11 + 4 + 1 = los 16 de vap. #395.     */
-        div.st-key-ajuste_graf_card_izq_vol {
-            padding-top: 11px !important;
-            padding-bottom: 16px !important;
-        }
+        /* (Acá vivía el padding propio de `ajuste_graf_card_izq_vol` —11     */
+        /* arriba y 16 abajo, para medir lo que vap, #394/#395—. Se fue con   */
+        /* la tarjeta el 2026-09-13: las tres de Volatilidad llevan el        */
+        /* padding de las de Producto. #415.)                                  */
         /* Semanal, el mismo padding que vap por el mismo motivo (#398): 8   */
         /* de la familia contra 16 de vap son píxeles de diferencia que no   */
         /* son contenido. Sin tarjeta interna, acá no hay 5px que restar.    */
@@ -1059,7 +1047,13 @@ CSS = """    /* ================================================================
         /* contra ella (`_ALTO_EVO` en graficos/compras/producto.py): este  */
         /* piso queda de red, igual que en Proveedor.                       */
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-compras_prod_card_"]) {
+        > div:has(> div[class*="st-key-compras_prod_card_"]),
+        /* Las dos tarjetas de abajo de Volatilidad (velas | compras de la  */
+        /* semana), desde que se separaron el 2026-09-13 (#415): la tabla   */
+        /* de la semana mide lo que tenga filas y sin piso cerraba más      */
+        /* arriba que el gráfico.                                            */
+        .stColumn > .stVerticalBlock
+        > div:has(> div[class*="st-key-compras_vol_card_"]) {
             flex: 1 1 auto;
         }
 
@@ -1118,14 +1112,18 @@ CSS = """    /* ================================================================
     /*                                                                       */
     /* No tocar sin revisar `_compras_producto_drill` en graficos/compras/producto.py */
     /* =================================================================== */
-    div[class*="st-key-compras_prod_card_"] {
+    /* Las tres de Volatilidad (`compras_vol_card_`) llevan el MISMO look   */
+    /* desde el 2026-09-13, cuando su tarjeta única se partió en tres. #415 */
+    div[class*="st-key-compras_prod_card_"],
+    div[class*="st-key-compras_vol_card_"] {
         background: var(--bg-card) !important;
         border: none !important;
         border-radius: 20px !important;
         padding: 16px 18px;
         box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
     }
-    div[class*="st-key-compras_prod_card_"] > div {
+    div[class*="st-key-compras_prod_card_"] > div,
+    div[class*="st-key-compras_vol_card_"] > div {
         border: none !important;
     }
     div[class*="st-key-compras_prod_card_"] + div[class*="st-key-compras_prod_card_"] {

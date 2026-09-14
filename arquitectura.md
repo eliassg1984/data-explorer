@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-414 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+418 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (145)
+**CSS y estilos** (146)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -179,8 +179,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#409** — Un boton puede estar en el DOM, habilitado y clickeable, y aun asi estar PERDIDO. Y cuando…
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 - **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
+- **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
 
-**Layout y alturas** (54)
+**Layout y alturas** (56)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -236,6 +237,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#406** — Un contenedor de altura CERO igual consume su gap: cinco de ellos eran los 68px que separaban…
 - **#407** — Una cadena de drill no se modela con un par de argumentos por nivel: se modela con la RUTA
 - **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
+- **#415** — Una tarjeta que se parte en tres no se re-indenta: cada parte se cuelga de SU contenedor
+- **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
 
 **Plotly y figuras** (70)
 
@@ -310,7 +313,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#403** — Un top-N dentro de una tabla ORDENABLE miente por partida doble — y un desglose "sin nada que…
 - **#413** — Una decisión tomada por una restricción se revisa cuando la restricción se va: el eje Y de…
 
-**AgGrid y tablas** (67)
+**AgGrid y tablas** (68)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -379,8 +382,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
 - **#396** — Una tabla que tiene que verse «igual que la de al lado» no puede ser un st.dataframe si la de…
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
+- **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 
-**Streamlit** (109)
+**Streamlit** (110)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -491,6 +495,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#378** — Un control que no cambia nada no se arregla: se saca — y antes de sacarlo, grep para saber si…
 - **#398** — Para que una tarjeta mida lo mismo con detalle o sin él, el alto de la figura depende del…
 - **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
+- **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
 
 **Datos, R2 y DuckDB** (51)
 
@@ -606,7 +611,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (34)
+**Herramientas de desarrollo** (35)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -642,8 +647,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#393** — Un .ag-cell {font-size: X !important} del modo diseño le gana al tamaño que un cellStyle pone…
 - **#395** — Un transform: translate() del modo diseño es una vista previa, no un cambio: se traduce a la…
 - **#414** — Un sufijo sin verbo se pega al número de al lado: −62.6% · la cantidad se lee «la cantidad…
+- **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
 
-**Decisiones de diseño y UX** (71)
+**Decisiones de diseño y UX** (73)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -716,6 +722,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#407** — Una cadena de drill no se modela con un par de argumentos por nivel: se modela con la RUTA
 - **#408** — Un if nuevo se traga el bloque que tenía debajo, y Python no dice nada: la pila de CINCO…
 - **#414** — Un sufijo sin verbo se pega al número de al lado: −62.6% · la cantidad se lee «la cantidad…
+- **#415** — Una tarjeta que se parte en tres no se re-indenta: cada parte se cuelga de SU contenedor
+- **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -35574,6 +35582,130 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-14.)
 
+415. **Una tarjeta que se parte en tres no se re-indenta: cada parte se
+     cuelga de SU contenedor.** Pedido: «dividir la tarjeta de volatilidad
+     en 3 tarjetas, la tabla arriba, el gráfico de velas abajo y la tabla
+     de producto al costado; ojo, en tarjetas individuales». Era UNA
+     superficie (`ajuste_graf_card_izq_vol`, del dispatcher) con una
+     tarjeta transparente adentro (`chartcard_compras_vol`).
+
+     - **El dispatcher pasa a `compras_vol_drill_wrap`, sin marco**, como
+       Producto y Proveedor; las superficies son `compras_vol_card_rank`,
+       `_velas` y `_semana`, con el MISMO look que `compras_prod_card_`
+       (el selector se sumó a esa regla, no se copió).
+     - **Sin re-indentar un drill de 1.300 líneas:** la cabecera y el
+       hueco de la tabla cuelgan de `_tarj_rank.container(key=...)` (un
+       `DeltaGenerator` también abre contenedores), y las dos de abajo de
+       `with col_x, st.container(key=...)` — en un `with A, B:` la B se
+       evalúa ya DENTRO de A. Cambiaron cinco líneas.
+     - **Todo el CSS que colgaba de las keys viejas se mudó o se borró:**
+       los gaps (16 en el cuerpo transparente, 10 en la del ranking —el
+       que se come el `-10px` de #395—, 18 en las dos de abajo), la
+       anulación del −16px de #162, la excepción `:not(izq_vol)` del techo
+       y el padding propio de `izq_vol`. Y las dos de abajo entraron al
+       piso de alto con `:has()` (#145): miden lo mismo con cualquier
+       tabla.
+     - **La fila de abajo es 1/1 y no `COLUMNAS_DRILL`**, a sabiendas: en
+       la mitad chica de 1.6/1 la tabla de la semana quedaba en ~380px
+       útiles contra los 456 que piden sus columnas. Es el «1/1 en
+       volatilidad.py» del PENDIENTE de `_pruebas_grilla_horizontal`.
+     - **Trampa de la verificación:** `preview_start` abre una pestaña que
+       importa los módulos AL ARRANCAR el server. Una edición aplicada
+       después no entra aunque se navegue de nuevo: la tarjeta de velas
+       «no existía» en la primera medición. Reiniciar después de editar.
+
+     Medido a 1272x760: 1141×301 arriba y 563×329 las dos de abajo, con el
+     mismo tope, 16px entre las tres y los bordes de afuera alineados.
+
+     El mismo día, sobre la forma nueva: 4 velas a la vista y no 5
+     (`VELAS_A_LA_VISTA`, «para que el texto de la semana salga en una
+     sola línea»: ~120px de eje por semana, el peor rótulo —con año— mide
+     95 a 11px); las dos tarjetas de abajo más bajas, 329 → 272
+     (`MINI_CANDLE_DRILL` 237 → 180, área de dibujo 210 → 153); y 16px más
+     arriba de toda la sección (`compras_vol_drill_wrap`), sólo entre
+     «Vs año pasado» y Volatilidad, que «se veían muy pegadas»: 32px.
+
+     (2026-09-13/14.)
+
+416. **El look del modo diseño se pega SIN el `.ag-cell {font-size}` —otra
+     vez— y con las cuentas de alto que trae colgadas.** Pedido pegando el
+     bloque que exporta el modo diseño para `compras_vol_rank_grid`:
+     cabecera en `GRIS_BORDE` con los rótulos en `ACENTO_FUERTE` 12px/600,
+     sin las rayas de 3px arriba y abajo del marco, filas de 24 → 27.
+     Entró en `_css_look`, así que vale para las DOS grillas de la
+     tarjeta (se habían pedido «con el mismo diseño»).
+
+     Lo que no se pegó: `.ag-cell {font-size: 13px !important}`. La grilla
+     ya está en 13 y la regla sólo le ganaría al tamaño INLINE del % (12)
+     y de los ceros (10.5) — el aviso de #368 que el propio bloque traía,
+     y lo mismo que se descartó en #393. Medido después: 459 celdas de %
+     en 12px y 529 ceros en 10.5, intactos.
+
+     Lo que vino colgado y no es CSS: sin las rayas, el cromo de la grilla
+     baja 6px (`CROMO_GRID` 55 → 49, `CROMO_SEMANA` 40 → 34), y con filas
+     de 27 las 7 filas que se habían pedido (#402) necesitan
+     `RANKING_CON_DRILL` 226 → 241. Medido: 7 enteras, la tarjeta del
+     ranking +15px, y la tabla de la semana llena su marco sin hueco
+     (cuerpo 55 para 54 de filas).
+
+     (2026-09-13.)
+
+417. **Un control que sólo le cambia algo a SU tarjeta va en su propio
+     fragment, dentro del de la sección.** Pregunta: «¿por qué cuando hago
+     un cambio en un toggle de una tarjeta se actualizan las tres?». Las
+     tres tarjetas de #415 eran tres superficies y UN `@st.fragment`:
+     «1 semana | 4 semanas» re-corría la sección entera —el ranking de 12
+     meses, el candlestick, las dos tablas— y el velo de #366 cubría todo.
+
+     La tarjeta de documentos pasó a `_tarjeta_compras_semana`, un
+     `@st.fragment` que el drill llama con TODO lo que puede mostrar ya
+     calculado (las compras de la vela y las de la ventana, los dos
+     títulos, el delta, la unidad). Un rerun de ese fragment reusa los
+     argumentos de la última corrida del drill, que es lo que hace falta;
+     cuando el drill corre (otro insumo, la ventana, una vela) lo vuelve a
+     llamar con los nuevos. Streamlit 1.59 soporta fragments anidados
+     (`runtime/fragment.py` guarda el que envuelve a cada uno). La key
+     del control sigue en `_KEYS_WIDGET` del drill: la escalada de fecha
+     (#373) aborta la corrida antes de que el anidado la registre.
+
+     Medido con un `MutationObserver` sobre `data-stale`: al tocar
+     «4 semanas» se marcaron 3 elementos, los tres de la tarjeta de
+     documentos, y el gráfico y el ranking eran el MISMO nodo antes y
+     después. Lo que no se aisló, a propósito: elegir insumo, mover la
+     ventana y clickear una vela cambian más de una tarjeta.
+
+     (2026-09-13.)
+
+418. **Cuántas columnas se ven lo decide un número, no el piso de ancho — y
+     el reparto no se deja sólo en manos del `ResizeObserver`.** Pedido:
+     «en el cuadro de volatilidad se muestran 7 semanas, se ve muy
+     apretado; que se muestren 6 o 5». Con 12m son ~52 columnas-semana:
+     `sizeColumnsToFit` no tiene con qué estirarlas y se quedaban en el
+     piso (`_MIN_ANCHO_COL_SEMANA`, 130) — casi siete en ~860px.
+
+     `_SEMANAS_A_LA_VISTA = 5` (las cuatro que suman el puntaje más una de
+     historia): `_AL_MONTAR` reparte el ancho visible del centro entre
+     ese número con `api.setColumnWidths`, con el piso de siempre; con
+     menos columnas que ésas, `sizeColumnsToFit` como antes. Medido: 172px
+     por columna, 5 enteras, la más reciente entera en el borde derecho.
+
+     Tres cosas que costaron la verificación:
+     - **En una pestaña que no se dibuja el `ResizeObserver` no dispara
+       nunca**, y los eventos de AG Grid (`displayedColumnsChanged`)
+       llegan diferidos: un oyente propio no recibió ninguno al mostrar y
+       ocultar una columna. El reparto quedaba en 130 aunque la función
+       de montaje SÍ había corrido. Ahora corre también al montar, antes
+       de ir a la semana más reciente.
+     - **Medir columnas por sus cabeceras en esa pestaña miente:** el
+       scroll de la cabecera se sincroniza al pintar, y la grilla parecía
+       abierta en la semana más vieja con `scrollLeft` en 5.897. Se mide
+       con `col.getLeft()`/`getActualWidth()` contra el `scrollLeft` del
+       viewport del centro.
+     - **`setColumnWidths` funciona aunque la columna sea
+       `resizable: false`**: eso sólo apaga el gesto del usuario.
+
+     (2026-09-14.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -35586,7 +35718,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#415**.
+> próxima regla nueva es la **#419**.
 
 >
 

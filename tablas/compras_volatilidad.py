@@ -25,8 +25,8 @@ un índice de fila que se pueda desalinear contra la lista filtrada.
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, ERROR, ERROR_TEXTO,
-    EXITO, GRIS_BORDE, GRIS_FONDO, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO,
+    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, ERROR,
+    ERROR_TEXTO, EXITO, GRIS_BORDE, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO,
     TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
@@ -116,7 +116,12 @@ Era 170 y bajó a 150 el 2026-09-07, cuando la grilla medía 587px."""
 # la grilla a todo el ancho y pegada a la cabecera: 10 filas a la vista en
 # vez de 6. Entra: el renglón es de 13.8px y los 3+3 del borde transparente
 # de `_STYLE_DELTA` dejan 18 de caja.
-ALTO_FILA = 24
+#
+# 24 -> 27 el 2026-09-13, otra vez del modo diseño, junto con el look nuevo
+# de `_css_look` (regla #416). Vale para las DOS grillas de la tarjeta: la
+# de compras de la semana lo importa, porque se pidió «el mismo tamaño de
+# filas» que el ranking. Su gemela de alto es `alturas.RANKING_CON_DRILL`.
+ALTO_FILA = 27
 _TAM_PRECIOS = "9.5px"
 _GAP_PRECIOS = "5px"
 """Aire entre el % y los dos precios que van a su costado. Entra en la
@@ -614,6 +619,28 @@ def _style_vol(max_vol):
     """)
 
 
+_SEMANAS_A_LA_VISTA = 5
+"""Cuántas columnas-semana muestra el ranking a la vez (2026-09-14, a pedido:
+«se muestran 7 semanas pero se ve muy apretado; que se muestren menos, como
+6 o 5»). Hasta ese día el ancho lo decidía el PISO: con la ventana de 12m
+son ~52 columnas, `sizeColumnsToFit` no tiene con qué estirarlas y se
+quedaban en `_MIN_ANCHO_COL_SEMANA` (130px) — en los ~860px del centro,
+casi siete.
+
+Ahora `_AL_MONTAR` reparte el ancho visible del centro entre ESTE número
+(~172px cada una a 1272 de ventana), con el piso de siempre: si la pantalla
+es tan angosta que 5 no entran a 130, entran las que entren. 5 y no 6
+porque son las cuatro columnas que suman el puntaje (las resaltadas) más
+una de historia; a 6 medían ~143, casi lo mismo que antes. Con menos
+semanas que éstas (una ventana «Rango» corta) no hay nada que dividir: se
+estiran hasta llenar, como siempre.
+
+EL REPARTO CORRE TAMBIÉN AL MONTAR, antes de ir a la semana más reciente,
+y no sólo cuando el `ResizeObserver` avisa. Medido: en una pestaña que no
+se está dibujando el observador no llega nunca (y los eventos de AG Grid
+llegan diferidos), así que las columnas se quedaban en el piso de 130 aunque
+la grilla ya estuviera en su ancho final. Regla #418."""
+
 _AL_MONTAR = JsCode("""
     function(params) {
         var api = params.api;
@@ -634,8 +661,24 @@ _AL_MONTAR = JsCode("""
                 document.body.classList.toggle('vol-sin-scroll', !sobra);
             } catch (e) {}
         };
+        // Con más semanas que `_SEMANAS_A_LA_VISTA`, el ancho del centro se
+        // reparte entre ESE número (con el piso de la columna); con menos,
+        // `sizeColumnsToFit` las estira hasta llenar. `setColumnWidths` no
+        // dispara `displayedColumnsChanged`, así que no hay vuelta.
         var ajustar = function () {
-            try { api.sizeColumnsToFit(); } catch (e) {}
+            try {
+                var cols = centro();
+                var vp = document.querySelector('.ag-center-cols-viewport');
+                var ancho = vp ? vp.clientWidth : 0;
+                if (cols.length > __VISIBLES__ && ancho > 0) {
+                    var w = Math.max(__PISO__, Math.floor(ancho / __VISIBLES__));
+                    api.setColumnWidths(cols.map(function (c) {
+                        return {key: c.getColId(), newWidth: w};
+                    }));
+                } else {
+                    api.sizeColumnsToFit();
+                }
+            } catch (e) {}
             setTimeout(flechas, 0);
             setTimeout(flechas, 250);
         };
@@ -660,9 +703,10 @@ _AL_MONTAR = JsCode("""
                 if (f !== ultima) { ultima = f; setTimeout(alFinal, 0); }
             });
         } catch (e) {}
-        setTimeout(alFinal, 0);
+        setTimeout(function () { ajustar(); alFinal(); }, 0);
     }
-""")
+""".replace("__VISIBLES__", str(_SEMANAS_A_LA_VISTA))
+   .replace("__PISO__", str(_MIN_ANCHO_COL_SEMANA)))
 """Al montar: re-reparte las columnas cada vez que cambia el ANCHO de la
 grilla o su JUEGO DE COLUMNAS, la abre en la semana MÁS RECIENTE, y esconde
 las flechas ‹ › cuando todas las semanas entran.
@@ -710,15 +754,16 @@ muchas, quedan en su piso y sale scroll horizontal, que es el mecanismo
 para ir hacia atrás."""
 
 
-CROMO_GRID = 32 + 8 + 15
-"""Alto de la grilla que NO son filas: la cabecera (32), los bordes (8) y la
+CROMO_GRID = 32 + 2 + 15
+"""Alto de la grilla que NO son filas: la cabecera (32), los bordes (2) y la
 barra de scroll horizontal (15), que desde el 2026-09-12 está siempre — la
 grilla recorre toda la ventana de la tarjeta. Sin sumarla, la barra se come
 media fila de la última línea visible. Es el `extra` de `por_filas` en el
 llamador.
 
 Los bordes eran 4 hasta el look del modo diseño (regla #393): el marco del
-`.ag-root-wrapper` pasó de 1px por lado a 3px arriba y abajo — +4."""
+`.ag-root-wrapper` pasó de 1px por lado a 3px arriba y abajo — +4. Y 8 -> 2
+el 2026-09-13, cuando el look nuevo (#416) le sacó esas dos rayas de 3px."""
 
 
 def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
@@ -926,13 +971,19 @@ def _css_look(css):
       · Las claves que `_css_grid` ya tenía (`.ag-root-wrapper`, `.ag-row`)
         se FUSIONAN: reemplazarlas se llevaría el `overflow: hidden` y el
         `width: 100%` del wrapper (#392)."""
+    # EL LOOK NUEVO (2026-09-13, copiado del modo diseño sobre el ranking,
+    # regla #416): cabecera en el gris de las líneas con los rótulos en el
+    # violeta fuerte, y la tabla SIN las rayas de 3px arriba y abajo — el
+    # borde lo pone ahora la tarjeta que la contiene (`compras_vol_card_*`,
+    # #415). Lo que NO se pegó, otra vez: `.ag-cell {font-size: 13px
+    # !important}`, por lo de siempre (ver arriba y la regla #368).
     css = dict(css)
     css[".ag-header, .ag-header-cell, .ag-header-group-cell"] = {
-        "background-color": f"{GRIS_FONDO} !important",
+        "background-color": f"{GRIS_BORDE} !important",
     }
     css[".ag-header .ag-header-cell .ag-header-cell-text, "
         ".ag-header .ag-header-group-cell .ag-header-group-text"] = {
-        "color": f"{GRIS_TEXTO} !important",
+        "color": f"{ACENTO_FUERTE} !important",
         "font-size": "12px !important",
         "font-weight": "600 !important",
     }
@@ -946,9 +997,9 @@ def _css_look(css):
         **css.get(".ag-root-wrapper", {}),
         "--ag-header-column-border": "none",
         "--ag-column-border": "none",
-        "border-top": f"3px solid {GRIS_BORDE} !important",
+        "border-top": "none !important",
         "border-right": "none !important",
-        "border-bottom": f"3px solid {GRIS_BORDE} !important",
+        "border-bottom": "none !important",
         "border-left": "none !important",
         "border-radius": "0px !important",
     }
@@ -971,9 +1022,10 @@ def _css_look(css):
 # LAS COMPRAS DE LA SEMANA (debajo del ranking, al lado del candlestick)
 # ===========================================================================
 
-CROMO_SEMANA = 32 + 8
+CROMO_SEMANA = 32 + 2
 """Alto de la grilla de compras de la semana que NO son filas: la cabecera
-(32) y los bordes (8), los mismos de `CROMO_GRID`. Sin los 15 de la barra
+(32) y los bordes (2), los mismos de `CROMO_GRID` (eran 8 hasta que el look
+de #416 le sacó al marco sus rayas de 3px arriba y abajo). Sin los 15 de la barra
 horizontal: esta grilla no se desliza de costado, sus columnas se reparten
 el ancho de la media tarjeta. Es el `extra` de `por_filas` en el llamador."""
 
