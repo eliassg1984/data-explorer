@@ -3636,8 +3636,11 @@ def _pruebas_delta_corte():
 
     _mg = _minigraf_cortes([-100.0, 50.0, -900.0])
     check("una columna por corte", _mg.count("border-radius:2px"), 3)
-    check("la última va plena y las pasadas apagadas",
-          _mg.count("opacity:.55") == 2 and _mg.count("opacity:1") == 1, True)
+    # NINGUNA columna se apaga. Se probó al 42% y al 55% para resaltar la
+    # última, y se reportó lo que produce: "las barras se ven como
+    # pálidas, como si estuviesen detrás de algo". Cuál es la de ahora lo
+    # dice el sitio (la de más a la derecha) y el rótulo de esa punta.
+    check("ninguna columna va apagada", "opacity" in _mg, False)
     # Contra "top:13px;left:1px" y no contra "top:13px" a secas: la línea
     # de base también se posiciona en 17px, y sin el sufijo la cuenta le
     # suma una columna negativa que no existe.
@@ -3682,6 +3685,27 @@ def _pruebas_delta_corte():
     check("el panel lista un renglón por corte",
           all(_c["etiqueta_anio"] in _det for _c in _cs), True)
     check("con un solo corte no hay panel", _detalle_cortes([-100.0], _cs[:1]), "")
+
+    # ── La franja del minigráfico, medida en UN solo sitio ──────────────
+    # `_ZONA_GRAF` la usan dos cosas que tienen que coincidir o el bug se
+    # ve como "a veces no aparece la etiqueta": el minigráfico al
+    # dibujarse y el CSS al recortar el botón grande de la mini para
+    # dejarle esa franja al chico (el que recibe el hover). Ver #439.
+    from graficos.ajuste import _cascada as _cas
+
+    check("la zona del gráfico es la suma de lo que se dibuja",
+          _cas._ZONA_GRAF,
+          7 + _cas._ALTO_GRAF + 2 + _cas._ALTO_ROTULOS + _cas._PAD_MINI)
+    check("...y el gráfico se dibuja con ese alto",
+          f"height:{_cas._ALTO_GRAF}px" in _con, True)
+    check("...y los rótulos con el suyo",
+          f"line-height:{_cas._ALTO_ROTULOS}px" in _con, True)
+
+    _css_cas = _cas._css()
+    check("el padding de la mini que asume la cuenta es el que pone el CSS",
+          f"padding: {_cas._PAD_MINI}px" in _css_cas, True)
+    check("los dos botones se reparten la tarjeta por esa misma medida",
+          _css_cas.count(f"{_cas._ZONA_GRAF}px") == 2, True)
 
     return fallos
 

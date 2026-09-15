@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-438 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+439 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (156)
+**CSS y estilos** (157)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -190,6 +190,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#429** — Una manija de resize que mueve el borde de ARRIBA no puede escribir sólo height: compensa con…
 - **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
+- **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 
 **Layout y alturas** (63)
 
@@ -257,7 +258,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 - **#438** — Un title adentro de una tarjeta con botón-overlay no se ve nunca; el :hover del CONTENEDOR sí…
 
-**Plotly y figuras** (73)
+**Plotly y figuras** (74)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -332,6 +333,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#436** — Meter un dato de CONTEXTO en una escala compartida la rompe: lo que no entra se TOPA, no se…
 - **#437** — Dos datos distintos dibujados con la MISMA marca no se distinguen, por más que les cambies el…
 - **#438** — Un title adentro de una tarjeta con botón-overlay no se ve nunca; el :hover del CONTENEDOR sí…
+- **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 
 **AgGrid y tablas** (68)
 
@@ -36798,6 +36800,60 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+439. **Apagar el resto para resaltar uno sale carísimo, y acotar un hover
+     adentro de una tarjeta-botón se hace con DOS botones, no recortando
+     el que hay.** Dos correcciones del minigráfico de la Cascada, el
+     mismo día que nació.
+
+     **1) La opacidad no es un acento, es un velo.** Las columnas pasadas
+     estuvieron al 42% y después al 55% para que la última destacara, y lo
+     que eso produce se reportó tal cual: «las barras se ven como pálidas,
+     como si estuviesen detrás de algo». Es exacto — un elemento
+     translúcido sobre el fondo de la tarjeta se lee como si tuviera algo
+     encima, no como «esto es viejo». Y el precio es desproporcionado:
+     para marcar **una** columna de seis se apagan **cinco**, o sea el 83%
+     del gráfico.
+
+     Van todas a color pleno. Cuál es la de ahora ya lo decía el SITIO —es
+     la de más a la derecha— y lo confirma el rótulo de esa punta, que
+     pasó a negrita y a `GRIS_TEXTO`. **Un acento tipográfico en el eje
+     cuesta un elemento; un velo sobre los datos cuesta todos.**
+
+     **2) Para que el hover valga solo en una zona, esa zona necesita su
+     propio elemento hitteable.** Se pidió que el panel de detalle abriera
+     sobre el minigráfico y no en toda la tarjeta. Adentro de una mini
+     eso no se puede resolver con el div del gráfico: el botón que la hace
+     clickeable está encima con `inset: 0` (#421, #438), así que el div
+     nunca recibe el hover.
+
+     El camino corto —recortar el botón para que no cubra el gráfico— lo
+     arregla y **reintroduce el bug de la #421**: queda una franja de 63px
+     que se ilumina con el resto de la tarjeta y no responde al clic. Ese
+     bug ya costó un rediseño entero; no se vuelve a pagar por un hover.
+
+     Lo que quedó: **dos botones que se reparten la tarjeta sin hueco ni
+     solape**, con la MISMA acción. El chico cubre la franja del
+     minigráfico y es el que contesta `:hover`; el grande, todo lo de
+     arriba. Verificado en la app: 113px + 63px sobre una tarjeta de 178,
+     y el clic enfoca la familia desde las dos zonas. El panel cuelga de
+     `:has(… button:hover)` porque es hermano ANTERIOR del botón en el DOM
+     y no hay combinador que vaya para atrás; donde `:has()` no exista, el
+     panel no abre y no se rompe nada.
+
+     **El corolario que hay que vigilar:** ahora hay una medida
+     (`_ZONA_GRAF`) de la que dependen dos cosas que se escriben en
+     archivos distintos del mismo módulo — el alto con que se DIBUJA el
+     minigráfico y el recorte con que el CSS le hace lugar. Si se
+     desincronizan, el botón grande se come el hover o queda una franja
+     muerta, y el síntoma es «a veces no aparece la etiqueta». Por eso la
+     medida se declara una vez, se arma sumando sus partes
+     (`7 + _ALTO_GRAF + 2 + _ALTO_ROTULOS + _PAD_MINI`), y
+     `test_graficos.py` verifica que el gráfico se dibuje con esos altos y
+     que el CSS use ese número — incluido el `padding` de la minitarjeta,
+     que es parte de la cuenta y vive en otra regla.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36810,7 +36866,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#439**.
+> próxima regla nueva es la **#440**.
 
 >
 

@@ -65,6 +65,16 @@ _TOPN_DRILL = 30
 # columnas en ~180px dan ~28px cada una: se ven de reojo y todavia
 # cuentan una historia. Con doce quedan de 13px y se vuelven ruido.
 _N_HISTORIAL = 6
+# LAS MEDIDAS DEL MINIGRAFICO VIVEN ACA, no sueltas en dos sitios: las usa
+# `_minigraf_cortes` para dibujarlo Y `_css` para recortar el boton grande
+# de la mini justo por encima de el (la zona del grafico es del boton
+# chico, ver #439). Si se desincronizan, el boton grande se come el hover
+# del grafico o deja una franja muerta: el bug se ve como "a veces no
+# aparece la etiqueta".
+_ALTO_GRAF = 34        # el grafico en si (17px de columna a cada lado)
+_ALTO_ROTULOS = 11     # la fila con el primer y el ultimo corte
+_PAD_MINI = 9          # padding inferior de la minitarjeta (ver `_css`)
+_ZONA_GRAF = 7 + _ALTO_GRAF + 2 + _ALTO_ROTULOS + _PAD_MINI
 _K_FOCO = "ajuste_cascada_focus"
 _K_AREA = "ajcas_filtro_area"
 _K_FAMILIA = "ajcas_filtro_familia"
@@ -161,8 +171,15 @@ def _minigraf_cortes(serie, cortes=None):
     la #436: una escala la fija aquello que el grafico vino a comparar.
 
     Cada columna va del color de SU signo (faltante/sobrante), asi que un
-    corte que se dio vuelta se ve como un salto de lado de la linea. Las
-    pasadas al 55%; la ultima, plena.
+    corte que se dio vuelta se ve como un salto de lado de la linea.
+
+    TODAS A COLOR PLENO. Las pasadas estuvieron al 42% y despues al 55%
+    para que la ultima resaltara, y se reporto lo que eso produce de
+    verdad: "las barras se ven como palidas, como si estuviesen detras de
+    algo". Cual es la de ahora ya lo dice el SITIO --es la de mas a la
+    derecha-- y lo confirma el rotulo de esa punta, que va en negrita y
+    mas oscuro. Apagar el 83% del grafico para marcar el 17% restante sale
+    carisimo. Ver regla #439.
 
     Con `cortes` (los dicts de `estado_filtros_vista`) cada columna lleva
     su `title` --el tooltip nativo del navegador, sin JS-- y debajo van
@@ -177,7 +194,6 @@ def _minigraf_cortes(serie, cortes=None):
     _mx = max(abs(_v) for _v in serie) or 1.0
     _cols = []
     for _i, _v in enumerate(serie):
-        _ultima = _i == len(serie) - 1
         _h = max(abs(_v) / _mx * 15.0, 2.0)
         _c = _tono(_v)[1] if abs(_v) > 1e-9 else GRIS_BORDE
         _pos = "bottom:17px" if _v >= 0 else "top:17px"
@@ -192,11 +208,11 @@ def _minigraf_cortes(serie, cortes=None):
         # de columnas. 18px de ancho contra 15 de alto ya es una columna, y
         # el `space-between` del contenedor reparte lo que sobra en aire.
         _cols.append(
-            f"<div style='position:relative;flex:0 1 18px;height:34px'"
-            f"{_tit}>"
+            f"<div style='position:relative;flex:0 1 18px;"
+            f"height:{_ALTO_GRAF}px'{_tit}>"
             f"<div style='position:absolute;{_pos};left:0;right:0;"
-            f"height:{_h:.1f}px;background:{_c};border-radius:2px;"
-            f"opacity:{'1' if _ultima else '.55'}'></div></div>")
+            f"height:{_h:.1f}px;background:{_c};"
+            f"border-radius:2px'></div></div>")
     # La linea de base es `absolute`, o sea que NO es un flex item (queda
     # fuera del flujo) y las columnas no le ceden ancho.
     #
@@ -205,17 +221,24 @@ def _minigraf_cortes(serie, cortes=None):
     # quedan separadas 50px y se leen como puntos sueltos.
     _graf = (
         f"<div style='position:relative;display:flex;max-width:210px;"
-        f"justify-content:space-between;height:34px;margin-top:7px'>"
+        f"justify-content:space-between;height:{_ALTO_GRAF}px;"
+        f"margin-top:7px'>"
         f"<div style='position:absolute;left:0;right:0;top:17px;height:1px;"
         f"background:{GRIS_FONDO}'></div>{''.join(_cols)}</div>")
     if not cortes:
         return _graf
+    # El rotulo de la DERECHA va en negrita y mas oscuro: es el unico
+    # acento que marca cual es "ahora", ahora que las columnas no se
+    # apagan. `line-height` explicito porque de este alto sale `_ZONA_GRAF`
+    # y de ahi el recorte del boton grande.
     return _graf + (
         f"<div style='display:flex;max-width:210px;"
         f"justify-content:space-between;font-size:9px;"
-        f"color:{GRIS_TEXTO_SUAVE};margin-top:2px'>"
+        f"line-height:{_ALTO_ROTULOS}px;color:{GRIS_TEXTO_SUAVE};"
+        f"margin-top:2px'>"
         f"<span>{cortes[0]['etiqueta']}</span>"
-        f"<span>{cortes[-1]['etiqueta']}</span></div>")
+        f"<span style='color:{GRIS_TEXTO};font-weight:600'>"
+        f"{cortes[-1]['etiqueta']}</span></div>")
 
 
 def _detalle_cortes(serie, cortes):
@@ -401,7 +424,6 @@ def _css():
     div[class*="st-key-ajcas_btnmini_"] {{ position: static !important; }}
     div[class*="st-key-ajcas_btnmini_"] button {{
         position: absolute !important; inset: 0 !important;
-        width: 100% !important; height: 100% !important;
         min-height: 0 !important; padding: 0 !important;
         border: none !important; background: transparent !important;
         color: transparent !important; box-shadow: none !important;
@@ -413,6 +435,19 @@ def _css():
         border: none !important; box-shadow: none !important; }}
     div[class*="st-key-ajcas_btnmini_"] button:focus-visible {{
         outline: 2px solid {ACENTO} !important; outline-offset: 1px; }}
+    /* LOS DOS BOTONES SE REPARTEN LA TARJETA, sin hueco ni solape: el
+       chico se queda con la franja del minigrafico (`_ZONA_GRAF`, que
+       sale de las mismas medidas con que se dibuja) y el grande con todo
+       lo de arriba. El recorte del grande va condicionado a que el chico
+       EXISTA: una familia sin historial no dibuja minigrafico, y ahi el
+       grande tiene que seguir cubriendo la tarjeta entera. */
+    div[class*="st-key-ajcas_btnmini_g_"] button {{
+        top: auto !important; height: {_ZONA_GRAF}px !important; }}
+    div[class*="st-key-ajcas_mini_"]:has(
+        div[class*="st-key-ajcas_btnmini_g_"])
+        div[class*="st-key-ajcas_btnmini_"]:not(
+        [class*="st-key-ajcas_btnmini_g_"]) button {{
+        bottom: {_ZONA_GRAF}px !important; }}
     div[class*="st-key-ajcas_mini_"] [data-testid="stMarkdownContainer"] p {{
         margin: 0 !important; }}
 
@@ -439,7 +474,15 @@ def _css():
         transition: opacity .12s ease, transform .12s ease,
                     visibility .12s ease;
         pointer-events: none; z-index: 20; }}
-    div[class*="st-key-ajcas_mini_"]:hover .ajcas-detalle {{
+    /* ABRE SOBRE EL MINIGRAFICO, NO SOBRE LA TARJETA. Se pidio asi, y el
+       unico elemento que puede recibir el hover ahi es el boton chico que
+       cubre esa zona -- todo lo demas esta debajo de un boton. Como el
+       panel es hermano ANTERIOR del boton en el DOM, no hay combinador
+       que vaya para atras: lo resuelve `:has()` desde la tarjeta, que el
+       repo ya usa en `estilos/_80_cards.py`. Donde `:has()` no exista, el
+       panel simplemente no abre; no rompe nada. */
+    div[class*="st-key-ajcas_mini_"]:has(
+        div[class*="st-key-ajcas_btnmini_g_"] button:hover) .ajcas-detalle {{
         opacity: 1; visibility: visible; transform: none; }}
 
     /* ── TARJETA PROTAGONISTA ─────────────────────────────────────────
@@ -824,6 +867,21 @@ def _render_mini(f):
         # cualquier punto de ella. Ver arquitectura.md regla #428.
         if st.button(f"Ver el detalle de {f['cat']}",
                      key=f"ajcas_btnmini_{_slug(f['cat'])}"):
+            st.session_state[_K_FOCO] = f["cat"]
+            st.rerun()
+        # SEGUNDO BOTON, sobre la zona del minigrafico, y hace lo MISMO que
+        # el de arriba. No esta para clickear distinto: esta para que esa
+        # zona tenga un elemento propio al que preguntarle `:hover`.
+        #
+        # Se pidio que el panel de detalle abriera solo sobre el grafico y
+        # no en toda la tarjeta. El camino corto --recortar el boton
+        # grande y dejar que el hover lo reciba el div del grafico-- deja
+        # una franja de 63px que se ilumina y no responde al clic, que es
+        # exactamente el bug de la #421. Con dos botones la tarjeta sigue
+        # siendo clickeable entera y el hover queda acotado. Ver #439.
+        if f.get("serie") and st.button(
+                f"Ver el detalle de {f['cat']} — últimos cortes",
+                key=f"ajcas_btnmini_g_{_slug(f['cat'])}"):
             st.session_state[_K_FOCO] = f["cat"]
             st.rerun()
 
