@@ -17,10 +17,13 @@ con los nombres privados de siempre para no tocar a sus consumidores.
 
 
 import pandas as pd
+import streamlit as st
 
 # Reexports del modulo de raiz. NO son imports muertos: los consumen
 #   _MESES_ABR_ES      -> _pivote.py (cabeceras de mes) y _fmt_corte de acá
-#   _cortes_por_racha  -> _heatmap.py (slider de corte) y _periodo_pivote_ajuste
+#   _cortes_por_racha  -> _periodo_pivote_ajuste, acá abajo (el mapa de calor
+#     lo usaba para su slider de corte hasta el 2026-09-15; hoy elige el
+#     corte con `estado_filtros_vista`, igual que la Cascada)
 #   _etiqueta_corte / _CORTE_MAX_SALTO_DIAS -> nadie hoy, pero son la pareja
 #     del mismo concepto y separarlos obliga a recordar dos rutas de import.
 # Sin el noqa + este comentario, `ruff check --fix` los borra y rompe a sus
@@ -31,8 +34,10 @@ from cortes import (  # noqa: F401
     cortes_por_racha as _cortes_por_racha,
     etiqueta_corte as _etiqueta_corte,
 )
+from cortes import corte_contiguo, cortes_disponibles
+from tema import ACENTO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_SELECCION
 from graficos.base import (
-    _layout,
+    _layout, _slug, filtro_pills, sembrar_seleccion,
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
@@ -84,3 +89,244 @@ def _periodo_pivote_ajuste(fechas, gran):
     else:
         etiqueta = fechas.dt.month.map(lambda m: _MESES_ABR_ES[m - 1])
     return clave, etiqueta
+
+
+# ── FILTROS PROPIOS DE UNA VISTA: corte · familia · área ─────────────────
+#
+# Nacieron adentro de la Cascada (2026-09-14/15) y el 2026-09-15 subieron
+# acá, cuando el Mapa de calor pidió los mismos tres — "así como está el
+# reporte de ajuste por familia". Son UNA pieza, no tres widgets sueltos:
+# el corte decide qué filas hay, las áreas que se ofrecen salen de ese
+# corte, y la familia se siembra sobre lo que quedó. Copiarla a la segunda
+# vista habría dejado dos definiciones de "con qué abre" que se
+# desincronizan a la primera corrección.
+#
+# QUIÉN LOS USA Y QUIÉN NO: las vistas que se filtran solas (Cascada, Mapa
+# de calor) NO pasan por los chips Área/Familia de arriba de la pila —
+# filtrar dos veces deja la vista mostrando la intersección de dos
+# compartimentos con uno solo visible. Las que sí pasan por los chips
+# (Distribución, Por fecha de corte) no llaman a nada de acá.
+# Ver arquitectura.md regla #425.
+
+# Con qué familias ABRE una vista con filtros propios. A pedido
+# (2026-09-14): "alimentos, bebidas, vinos y envases" -- o sea todas menos
+# COSTOS PRODUCCION, que es el 65 % del ajuste del ultimo corte y cuyas
+# areas mas pesadas (GASTOS, LIMPIEZA Y MANTENIMIENTO) tienen valorizado
+# CERO, asi que su ratio contra stock propio no significa nada.
+#
+# Es un DEFAULT, no un filtro fijo: la familia sigue estando en el
+# compartimento a un clic de distancia. Ver la memoria del proyecto sobre
+# "fijo en X es un default".
+FAMILIAS_DE_ENTRADA = (
+    "ALIMENTOS",
+    "BEBIDAS CON ALCOHOL",
+    "BEBIDAS SIN ALCOHOL",
+    "VINOS Y ESPUMANTES",
+    "ENVASES Y EMBALAJES",
+)
+
+
+def areas_con_ajuste(df, col_area, col_ajuste_val):
+    """Las areas que MOVIERON algo, en orden alfabetico.
+
+    El filtro de Area ofrecia las 20 areas del parquet, pero en un corte
+    cualquiera la mitad tiene ajuste 0 en todas sus filas -- son areas que
+    existen en el maestro y no participaron de esa sesion de inventario.
+    Ofrecerlas es ofrecer pastillas que dejan la vista vacia.
+
+    De paso se lleva puestas dos porquerias del dato que se veian como
+    opciones legitimas: un area llamada "---" y otra "CAVA " con un espacio
+    al final (indistinguible de "CAVA" en una pastilla). Las dos tienen
+    ajuste en algun corte, asi que NO se filtran por nombre: se normaliza
+    el texto al construir la lista y el filtrado compara igual. Ver
+    arquitectura.md regla #424.
+    """
+    if not col_area or col_area not in df.columns:
+        return []
+    if not col_ajuste_val or col_ajuste_val not in df.columns:
+        return sorted({str(a).strip() for a in df[col_area].dropna()
+                       if str(a).strip() and str(a).strip() != "---"})
+    _mov = df[df[col_ajuste_val].fillna(0) != 0]
+    return sorted({str(a).strip() for a in _mov[col_area].dropna()
+                   if str(a).strip() and str(a).strip() != "---"})
+
+
+def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
+                         col_ajuste_val, k_corte, k_familia, k_area,
+                         familias=FAMILIAS_DE_ENTRADA):
+    """ESTADO PRIMERO, WIDGETS DESPUES: resuelve los tres filtros sin
+    dibujar nada, y devuelve el dict que consume `render_filtros_vista`.
+
+    Existe separado del dibujo porque las dos vistas que lo usan necesitan
+    el RESULTADO antes que los controles: la Cascada pone los tres en la
+    fila del titulo de la tarjeta protagonista, y ese titulo es el nombre
+    de la familia con foco -- que sale de aplicar estos mismos filtros
+    (huevo y gallina). Se rompe leyendo `session_state` ANTES de dibujar:
+    los widgets escriben su clave y Streamlit rerunea solo, asi que el
+    cambio se ve en la pasada siguiente. Mismo orden que el clic de Plotly
+    en Volatilidad y Semanal (regla #399).
+
+    El corte se resuelve sobre `df_full` (el parquet entero) y no sobre el
+    `df` que llega ya recortado por la franja: con el df recortado, elegir
+    un corte dejaria la lista con ese unico corte y no habria forma de
+    volver a los otros -- el clasico filtro que se come su propio selector.
+    Es la misma razon por la que `app.py` los calcula antes de aplicar el
+    rango. Sin `df_full` (o sin columna de fecha) no hay selector de corte
+    y la vista se queda con el `df` que le dieron.
+
+    Claves del dict: `base` (el corte entero, sin area ni familia: es lo
+    que ofrecen las pastillas), `d` (ya filtrado, lo que dibuja la vista),
+    `corte`, `cortes`, `areas`, `sel_fam`, `sel_area` y las tres keys.
+    """
+    sel_area = list(st.session_state.get(k_area) or [])
+
+    base = df
+    cortes = []
+    if df_full is not None and col_fecha and col_fecha in df_full.columns:
+        base = df_full
+        cortes = cortes_disponibles(
+            pd.to_datetime(df_full[col_fecha], errors="coerce"), maximo=12)
+    corte = None
+    if cortes:
+        _clave = st.session_state.get(k_corte)
+        corte = next((c for c in cortes if c["clave"] == _clave), None)
+        if corte is None:
+            # Abre en el ULTIMO corte: lo que se mira de Ajuste es una
+            # sesion de inventario, no un intervalo de calendario.
+            corte = cortes[-1]
+            st.session_state[k_corte] = corte["clave"]
+        _fechas = pd.to_datetime(base[col_fecha], errors="coerce").dt.date
+        base = base[_fechas.isin(set(corte["dias"]))]
+
+    # NORMALIZAR EL AREA, no solo la lista de opciones: `filtro_pills`
+    # compara la seleccion contra el valor CRUDO, y el maestro trae
+    # "CAVA " con espacio al final. Ver arquitectura.md regla #424.
+    if col_area and col_area in base.columns:
+        base = base.assign(
+            **{col_area: base[col_area].astype(str).str.strip()})
+    areas = areas_con_ajuste(base, col_area, col_ajuste_val)
+    if col_familia and col_familia in base.columns:
+        sembrar_seleccion(base, col_familia, k_familia, list(familias))
+    sel_fam = list(st.session_state.get(k_familia) or [])
+
+    d = base
+    if sel_area and col_area and col_area in d.columns:
+        d = d[d[col_area].astype(str).isin(sel_area)]
+    if sel_fam and col_familia and col_familia in d.columns:
+        d = d[d[col_familia].astype(str).isin(sel_fam)]
+
+    return {"base": base, "d": d, "corte": corte, "cortes": cortes,
+            "areas": areas, "sel_fam": sel_fam, "sel_area": sel_area,
+            "col_familia": col_familia, "col_area": col_area,
+            "k_corte": k_corte, "k_familia": k_familia, "k_area": k_area}
+
+
+def render_filtros_vista(cols, est):
+    """Los tres popovers, uno por columna: corte · familia · area.
+
+    Reciben las columnas ya creadas y no las crean ellos porque el
+    llamador decide en que zona van: en Streamlit la posicion la da el
+    orden en que se CREA el contenedor, no el orden en que se escribe
+    en el. `est` es lo que devolvio `estado_filtros_vista`.
+    """
+    _corte, _cortes = est["corte"], est["cortes"]
+    with cols[0]:
+        _et = _corte["etiqueta_anio"] if _corte else "Sin cortes"
+        with st.popover(f":material/event: {_et}",
+                        use_container_width=True):
+            if not _cortes:
+                st.caption("No hay sesiones de inventario.")
+            else:
+                st.caption("Sesión de inventario")
+                # Del mas reciente al mas viejo: el conteo que se
+                # revisa es casi siempre el ultimo.
+                for _c in reversed(_cortes):
+                    _n = _c["n_dias"]
+                    _tramo = (_c["fin"] - _c["ini"]).days + 1
+                    # Un corte NO tiene por que ser contiguo: decir
+                    # "3 de 5 días" es lo unico que lo deja ver.
+                    _dias = (f"{_n} de {_tramo} días"
+                             if not corte_contiguo(_c)
+                             else f"{_n} día" + ("s" if _n > 1 else ""))
+                    _on = bool(_corte and _c["clave"] == _corte["clave"])
+                    if st.button(
+                            f"{_c['etiqueta_anio']}  ·  {_dias}",
+                            key=f"{est['k_corte']}_{_slug(_c['clave'])}",
+                            use_container_width=True,
+                            type="primary" if _on else "secondary"):
+                        st.session_state[est["k_corte"]] = _c["clave"]
+                        st.rerun()
+    with cols[1]:
+        _n_fam = len(est["sel_fam"])
+        _et_fam = ("todas las familias" if not _n_fam
+                   else est["sel_fam"][0].lower() if _n_fam == 1
+                   else f"{_n_fam} familias")
+        with st.popover(f":material/category: {_et_fam}",
+                        use_container_width=True):
+            filtro_pills(est["base"], est["col_familia"], est["k_familia"],
+                         "Familia")
+    with cols[2]:
+        _n_ar = len(est["sel_area"])
+        _et_ar = ("todas las áreas" if not _n_ar
+                  else est["sel_area"][0].lower() if _n_ar == 1
+                  else f"{_n_ar} áreas")
+        with st.popover(f":material/apartment: {_et_ar}",
+                        use_container_width=True):
+            if est["areas"]:
+                filtro_pills(est["base"], est["col_area"], est["k_area"],
+                             "Área", valores=est["areas"])
+            else:
+                st.caption("Ninguna área movió algo en este corte.")
+
+
+def css_filtros_vista(prefijo_ctrl, prefijo_corte):
+    """Las reglas del trigger minimalista + la lista de cortes, scopeadas
+    al prefijo de key que le toque a cada vista. Devuelve CSS SIN el
+    `<style>`, para concatenar con el resto del bloque del modulo.
+
+    `prefijo_ctrl` es el prefijo de los contenedores propios de cada
+    control ("ajcas_ctrl_", "hm_ctrl_"); `prefijo_corte` el de los botones
+    de la lista de cortes ("ajcas_corte_", "hm_corte_").
+
+    Minimalista = el trigger no se ve como campo de formulario: sin borde,
+    sin fondo, del tamano del texto. El VALOR VIGENTE es la etiqueta
+    ("2 set 2026", "5 familias"), asi que se lee que hay puesto sin abrir
+    nada. Ver regla #427.
+    """
+    return f"""
+    div[class*="st-key-{prefijo_ctrl}"] button[data-testid="stPopoverButton"] {{
+        border: none !important; background: transparent !important;
+        color: {GRIS_TEXTO} !important;
+        min-height: 0 !important; padding: 4px 6px !important;
+        /* EL `min-width: 180px` ES DE STREAMLIT, no del contenido. Con los
+           tres en fila dentro de una tarjeta de 528, las columnas dan ~156
+           y ese piso los hacia desbordar. El texto mas largo ("todas las
+           areas") mide ~124 con su icono y su chevron, asi que 156 alcanza
+           de sobra. Ver regla #434. */
+        min-width: 0 !important;
+        border-radius: 7px !important;
+        /* LA ETIQUETA VA A LA IZQUIERDA. `st.popover` la centra, y con el
+           boton ocupando los 352px de la tarjeta el texto quedaba flotando
+           a 137px de su propio borde -- descolgado del neto y de todo lo
+           demas, que estan alineados a 391. Medido: el texto arrancaba en
+           528. Se reporto como dos intentos de arreglarlo desde el modo
+           diseno (`width: 144px` y un `translate(-7px,-8px)`), y ninguno
+           podia: el ancho no baja de 180 por el `min-width` propio del
+           popover (#430), y el transform mueve el boton entero, no su
+           etiqueta. Ver regla #432. */
+        justify-content: flex-start !important;
+        transition: background .12s ease, color .12s ease !important; }}
+    div[class*="st-key-{prefijo_ctrl}"] button[data-testid="stPopoverButton"] p {{
+        font-size: 11.5px !important; }}
+    div[class*="st-key-{prefijo_ctrl}"] button[data-testid="stPopoverButton"]:hover,
+    div[class*="st-key-{prefijo_ctrl}"] button[data-testid="stPopoverButton"][aria-expanded="true"] {{
+        background: {LAVANDA_SELECCION} !important;
+        color: {ACENTO} !important; }}
+
+    /* La lista de cortes del popover: botones planos, el activo en acento. */
+    div[class*="st-key-{prefijo_corte}"] button {{
+        border: 1px solid {GRIS_BORDE} !important;
+        border-radius: 7px !important; min-height: 0 !important;
+        padding: 5px 10px !important; }}
+    div[class*="st-key-{prefijo_corte}"] button p {{ font-size: 12px !important; }}
+"""

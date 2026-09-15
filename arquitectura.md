@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-434 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+435 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (156)
 
@@ -400,7 +400,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 
-**Streamlit** (114)
+**Streamlit** (115)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -516,6 +516,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
 - **#432** — Si el texto de un control se ve descolgado, mirá si el widget lo CENTRA antes de tocar el…
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
+- **#435** — La SEGUNDA vista que pide «los mismos filtros» los convierte en una pieza — y meter cinco…
 
 **Datos, R2 y DuckDB** (52)
 
@@ -674,7 +675,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (76)
+**Decisiones de diseño y UX** (77)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -752,6 +753,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#419** — Sacar una franja no es sacar lo que vivía en ella: la fecha, Filtros y la única salida de un…
 - **#422** — Un tinte al 8 % de opacidad no es un código de color: es blanco. Antes de discutir qué color…
 - **#425** — Cuando una vista de la pila se queda con sus propios filtros, el df que recibe tiene que ser…
+- **#435** — La SEGUNDA vista que pide «los mismos filtros» los convierte en una pieza — y meter cinco…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -36570,6 +36572,67 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+435. **La SEGUNDA vista que pide «los mismos filtros» los convierte en una
+     pieza — y meter cinco controles en una fila es un presupuesto de
+     píxeles, no un gusto.** El 2026-09-15 el Mapa de calor de Ajuste pidió
+     los tres filtros de la Cascada: «los tres filtros de fecha, familia y
+     área, así como está el reporte de ajuste por familia, que figuren en
+     la misma fila y con los filtros aplicados inicialmente».
+
+     **1) Son UNA pieza, no tres widgets.** El corte decide qué filas hay,
+     las áreas que se ofrecen salen de ese corte (`areas_con_ajuste`, #424)
+     y la familia se siembra sobre lo que quedó. Copiar eso a la segunda
+     vista habría dejado dos definiciones de «con qué abre» —dos listas de
+     familias de entrada, dos criterios de área— que se desincronizan a la
+     primera corrección. Subió entero a `graficos/ajuste/_comun.py`:
+     `FAMILIAS_DE_ENTRADA`, `areas_con_ajuste`, `estado_filtros_vista`
+     (resuelve sin dibujar: estado primero, widgets después, #399),
+     `render_filtros_vista` (los tres popovers) y `css_filtros_vista`
+     (el trigger minimalista, parametrizado por prefijo de key). La
+     Cascada quedó llamando a lo mismo; su CSS se verificó carácter por
+     carácter contra el de antes, y el único cambio es el scope:
+     `ajcas_card_ctrl` (la tarjeta) pasó a `ajcas_ctrl_` (los tres
+     contenedores propios), que alcanza lo mismo con un solo prefijo.
+
+     **Las claves NO se comparten entre vistas.** `ajcas_*` para la
+     Cascada, `hm_*` para el Mapa de calor: filtro por TARJETA, misma idea
+     que el rango por tarjeta de Compras (#363). Cambiar de familia arriba
+     no tiene por qué mover el mapa de abajo.
+
+     **2) Dos dueños del mismo eje es peor que ninguno.** Con filtros
+     propios, el Mapa de calor tuvo que dejar de recibir el df post-chips
+     del dispatcher (pasó a `d_sin_chips`, #425) y perder dos controles de
+     corte que decían lo mismo que el nuevo: su `st.select_slider` de los
+     últimos 8 cortes por racha y la cesión del eje al calendario de la
+     franja (`corte_vigente`, #58). Filtrar por los dos lados deja la vista
+     mostrando la intersección de dos compartimentos con uno solo visible.
+     Corolario del cambio: el aviso de «no hay datos» tuvo que mudarse
+     DEBAJO de los controles y dejar de depender del `_vacio` que calculan
+     los chips — si no, un chip que vacía el df esconde la vista entera,
+     filtros incluidos, y no queda cómo deshacerlo.
+
+     **3) El reparto de la fila sale de medir, no de repartir parejo.**
+     Los cinco controles tienen anchos naturales muy distintos, medidos en
+     la app: un trigger pide **113px** en su peor caso («todas las áreas»,
+     con ícono y chevron), el `st.pills` de Modo pide **256** (dos
+     etiquetas largas) y el de Vista **181**. Suman 792 y una laptop de
+     1024px deja **825** repartibles (857 de fila menos los cuatro huecos
+     de 16): entran, con 33px de sobra. Pero el primer reparto
+     —`[0.85, 0.85, 0.85, 1.5, 1.1]`, que parecía dar «un poco más» a
+     Modo— le dio **237** de los 256 que pide, y las DOS botoneras
+     envolvieron a dos líneas: la fila pasó de 32 a **68px**. Con
+     `[1.0, 1.0, 1.0, 2.2, 1.55]` las columnas salen 114 / 114 / 114 /
+     267 / 184 y la fila vuelve a 32.
+
+     El criterio, que es lo que sobrevive a los números: **en una fila
+     mixta, el que cede es el que TRUNCA, no el que ENVUELVE.** Un popover
+     corta su etiqueta con puntos suspensivos y sigue midiendo un renglón;
+     un `st.pills` sin lugar se parte en dos y duplica el alto de la fila
+     entera. Así que el presupuesto se reparte dándole a cada botonera su
+     ancho natural completo primero, y el resto a los triggers.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36582,7 +36645,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#435**.
+> próxima regla nueva es la **#436**.
 
 >
 

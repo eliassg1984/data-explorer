@@ -197,13 +197,16 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     else:
         d = df_f
 
-    # Cascada NO pasa por estos chips: desde el 2026-09-14 tiene los suyos
-    # adentro de su tarjeta de cabecera (Área acotada a las áreas que
-    # movieron algo, Familia sembrada con cinco). Se guarda el df de acá,
-    # antes de recortar, porque filtrar dos veces dejaría la vista
-    # mostrando la intersección de dos compartimentos y sólo uno visible.
-    # Los chips de arriba siguen gobernando Mapa de calor, Distribución y
-    # Tabla. Ver arquitectura.md regla #425.
+    # Cascada y Mapa de calor NO pasan por estos chips: tienen los suyos
+    # adentro de su propia fila de controles (corte · Área acotada a las
+    # que movieron algo · Familia sembrada con cinco), la misma pieza para
+    # las dos — `graficos.ajuste._comun.estado_filtros_vista`. La Cascada
+    # estrenó los suyos el 2026-09-14 y el Mapa de calor el 2026-09-15, a
+    # pedido. Se guarda el df de acá, antes de recortar, porque filtrar dos
+    # veces dejaría la vista mostrando la intersección de dos
+    # compartimentos y sólo uno visible. Los chips de arriba siguen
+    # gobernando Distribución (y Por fecha de corte, en la otra pila).
+    # Ver arquitectura.md regla #425.
     d_sin_chips = d
 
     if area_sel and col_area and col_area in d.columns:
@@ -254,12 +257,22 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             col_unidad=col_unidad)
 
     def _dib_heatmap():
-        _en_tarjeta("heatmap", lambda: _graf_heatmap_ajuste(
-            d, col_familia, col_area, col_ajuste_val,
-            col_producto=col_producto, col_fecha=col_fecha, df_full=df_full,
-            col_valorizado=col_valorizado, area_sel=area_sel,
-            fam_sel=fam_sel, col_cantidad=col_cantidad,
-            col_unidad=col_unidad))
+        """Mapa de calor: tarjeta a mano, y con `d_sin_chips`.
+
+        No usa `_en_tarjeta` por el `_vacio`, no por la tarjeta: ese flag
+        mira el df de los chips de arriba, que esta vista ya no usa. Con
+        él, un chip que deja `d` sin filas escondería el mapa ENTERO —sus
+        tres filtros incluidos— y con ellos el único modo de deshacer el
+        filtro que lo vació. La vista avisa sola cuando se queda sin datos;
+        la key de la tarjeta es la misma de antes (de su prefijo cuelga el
+        clamp de una pantalla de `estilos/_80_cards.py`).
+        """
+        with st.container(border=True, key="ajuste_graf_card_izq_heatmap"):
+            _graf_heatmap_ajuste(
+                d_sin_chips, col_familia, col_area, col_ajuste_val,
+                col_producto=col_producto, col_fecha=col_fecha,
+                df_full=df_full, col_valorizado=col_valorizado,
+                col_cantidad=col_cantidad, col_unidad=col_unidad)
 
     def _dib_distribucion():
         _en_tarjeta("distribucion", lambda: _graf_distribucion_ajuste(

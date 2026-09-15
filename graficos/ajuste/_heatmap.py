@@ -37,20 +37,31 @@ from graficos.base import (
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
 # duplicar el cálculo de granularidad Semana/Mes (Corte tiene su propio
 # cálculo, ver _cortes_por_racha: no es calendario fijo, son rachas).
-from graficos.ajuste._comun import _cortes_por_racha, _layout_aj
-# El mapa de calor tiene selector de corte PROPIO: consulta el estado de la
-# franja para cederle el eje cuando el calendario ya fijó uno (ver abajo).
-# "visual" es la categoría de rango a la que pertenece el mapa de calor en
-# el rail (graficos.ajuste.categoria_rango_ajuste) — está fija acá porque
-# este módulo ES una vista visual; no hay caso en que se renderice bajo la
-# categoría "tiempo".
-from estado_rango import clave_corte, corte_vigente
+# Los tres filtros propios (corte · familia · área) son los MISMOS que
+# los de la Cascada, misma pieza y mismo default de familias: viven en
+# `_comun.py` desde el 2026-09-15 justamente porque ahora son dos vistas.
+from graficos.ajuste._comun import (
+    _layout_aj, css_filtros_vista, estado_filtros_vista, render_filtros_vista,
+)
 from graficos import alturas
+
+
+# LAS TRES CLAVES DE ESTA VISTA, distintas de las de la Cascada a
+# propósito: rango/filtro por TARJETA, no compartidos (misma idea que el
+# rango por tarjeta de Compras, arquitectura.md regla #363). Cambiar de
+# familia en la Cascada no tiene por qué mover el mapa de calor de abajo.
+_K_CORTE = "hm_corte"
+_K_FAMILIA = "hm_filtro_familia"
+_K_AREA = "hm_filtro_area"
+# UNA KEY POR CONTROL: `st.popover` no emite `st-key-*` propio, así que sin
+# su contenedor el inspector y el modo diseño resuelven hacia arriba hasta
+# la tarjeta entera. Es también el scope del CSS del trigger (#431).
+_K_CTRL = ("hm_ctrl_fecha", "hm_ctrl_familia", "hm_ctrl_area")
 
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                          col_producto=None, col_fecha=None, df_full=None,
-                         col_valorizado=None, area_sel=None, fam_sel=None,
+                         col_valorizado=None,
                          col_cantidad=None, col_unidad=None):
     """Mapa de calor familia × área — modo Ajuste (signado, divergente) o
     Valorizado Total (siempre positivo, secuencial), elegido con un
@@ -76,87 +87,77 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         encabezado directo al ranking de Faltantes/Sobrantes.
 
     Selector de Vista (Mapa / Flujo / Tabla, regla #58 de arquitectura.md):
-    con `df_full` + `col_fecha` disponibles, un `st.select_slider` elige
-    el CORTE real (no calendario — reusa `_cortes_por_racha`, la misma
-    función que ya usa "Por fecha de corte") de los últimos ~8 con datos;
-    `df` pasa a ser el de ese corte para las tres vistas. Ese slider
-    DESAPARECE si el calendario de la franja ya fijó un corte (modo
-    Cortes): ahí el corte lo eligió el usuario arriba y `df` llega
-    filtrado — un eje, un dueño. Flujo (Sankey) y
-    Tabla (grilla HTML con barra-en-celda) son vistas alternativas del
-    MISMO pivot, sin click-drill propio — todo lo de arriba (color por
-    celda, totales, hover, click-drill) sigue siendo exclusivo de Mapa.
+    Flujo (Sankey) y Tabla (grilla HTML con barra-en-celda) son vistas
+    alternativas del MISMO pivot, sin click-drill propio — todo lo de
+    arriba (color por celda, totales, hover, click-drill) sigue siendo
+    exclusivo de Mapa.
+
+    FILTROS PROPIOS (2026-09-15, a pedido: "los tres filtros de fecha,
+    familia y área, así como está el reporte de ajuste por familia"). Los
+    tres viven en la misma fila que Modo y Vista, y son los mismos de la
+    Cascada: `_comun.estado_filtros_vista` los resuelve y
+    `render_filtros_vista` los dibuja, así que abren igual — último corte,
+    las cinco familias de `FAMILIAS_DE_ENTRADA`, todas las áreas que
+    movieron algo.
+
+    Con eso se fueron DOS controles de corte que decían lo mismo: el
+    `st.select_slider` de los últimos 8 cortes por racha y la cesión del
+    eje al calendario de la franja (`corte_vigente`). UN EJE, UN DUEÑO: el
+    corte de esta vista lo elige esta vista, como en la Cascada. `df` llega
+    SIN los chips Área/Familia de arriba de la pila (los sigue usando
+    Distribución) — filtrar por los dos lados dejaba la vista mostrando la
+    intersección de dos compartimentos con uno solo visible.
     """
     if not col_familia or not col_area:
         st.info("Se necesitan columnas de familia y área para el mapa de calor.")
         return
 
-    # ── Precalcular QUÉ controles van a mostrarse, antes de dibujar
-    #    ninguno — hace falta saberlo para decidir cuántas columnas pedir
-    #    (ver bloque de una sola fila más abajo). Ninguno de los dos
-    #    todavía renderiza nada. ─────────────────────────────────────────
-    _hay_valorizado = bool(col_valorizado and col_valorizado in df.columns)
+    st.markdown(f"<style>{css_filtros_vista('hm_ctrl_', 'hm_corte_')}</style>",
+                unsafe_allow_html=True)
 
-    # `df_full` NO trae aplicados los chips Área/Familia de la franja
-    # superior (esos filtran `d` -> `df` en __init__.py, no df_full) —
-    # reaplicarlos ACÁ, mismo criterio exacto que ya usa
-    # `_tabla_pivote_fecha_ajuste` para el mismo problema ("Por fecha de
-    # corte" también parte de df_full). Sin este reaplicado, cambiar de
-    # corte pisaba los chips en silencio: el usuario filtraba Área/
-    # Familia y el mapa/flujo/tabla del corte volvían a mostrar TODO.
+    # ── ESTADO PRIMERO, WIDGETS DESPUES ──────────────────────────────────
+    # El corte sale de `df_full` y no del `df` que llega recortado por la
+    # franja: con el df recortado, elegir un corte dejaría la lista con ese
+    # único corte y no habría forma de volver a los otros. Ver el docstring
+    # de `estado_filtros_vista`.
+    _est = estado_filtros_vista(
+        df, df_full, col_fecha, col_familia, col_area, col_ajuste_val,
+        k_corte=_K_CORTE, k_familia=_K_FAMILIA, k_area=_K_AREA)
+    df = _est["d"]
+
+    # ── Los tres filtros + Modo + Vista, en UNA fila — antes cada control
+    #    vivía en su propio st.pills/slider de ancho completo, apilados con
+    #    el espaciado default de Streamlit entre elementos: ocupaba como un
+    #    tercio de la tarjeta en vertical (reportado 2026-08-09). Se pidió
+    #    explícitamente que los tres filtros nuevos "figuren en la misma
+    #    fila", así que entran acá en vez de estrenar un renglón propio.
     #
-    # UN EJE, UN DUEÑO: si el calendario de la franja ya fijó un corte
-    # (modo Cortes, ver estado_rango.py), este slider no se dibuja y todo
-    # el bloque de abajo se saltea. Dos controles del MISMO concepto no se
-    # pisan el estado —cada uno tiene su clave— pero muestran cortes
-    # distintos a la vez y el usuario no tiene cómo saber cuál manda. Con
-    # el corte global activo `df` ya viene filtrado por app.py: acá solo
-    # hay que no volver a filtrarlo (y ahorrarse el copy() de df_full).
-    # Este slider SOLO se dibuja cuando el corte global está apagado (ver
-    # arriba) — es decir, exactamente cuando el pill de la franja muestra
-    # un RANGO ("1 ago - 5 ago"), no un corte puntual. No hay ningún otro
-    # lugar en pantalla que diga cuál de los últimos 8 cortes quedó
-    # elegido: la burbuja nativa de st.select_slider flota ARRIBA de la
-    # barra y solo es visible mientras se arrastra. Por eso, debajo del
-    # slider, una etiqueta fija con el corte activo (reportado 2026-08-09
-    # comparando contra el mockup original).
-    _corte_global = corte_vigente(clave_corte("Ajuste de Inventario",
-                                              categoria="visual"))
-    _dff = None
-    _cortes = None
-    if _corte_global is None and col_fecha and df_full is not None \
-            and col_fecha in df_full.columns:
-        _dff = df_full.copy()
-        _dff[col_fecha] = pd.to_datetime(_dff[col_fecha], errors="coerce")
-        _dff = _dff.dropna(subset=[col_fecha])
-        if area_sel and col_area and col_area in _dff.columns:
-            _dff = _dff[_dff[col_area].astype(str).isin(area_sel)]
-        if fam_sel and col_familia and col_familia in _dff.columns:
-            _dff = _dff[_dff[col_familia].astype(str).isin(fam_sel)]
-        if not _dff.empty:
-            _fmax_corte = _dff[col_fecha].max()
-            _dff = _dff[_dff[col_fecha] >= _fmax_corte - pd.Timedelta(days=180)]
-        if not _dff.empty:
-            _corte_clave, _corte_etq = _cortes_por_racha(_dff[col_fecha])
-            _dff = _dff.assign(_corte_clave=_corte_clave, _corte_etq=_corte_etq)
-            _cortes_tmp = (_dff[["_corte_clave", "_corte_etq"]].drop_duplicates()
-                          .sort_values("_corte_clave").tail(8))
-            if len(_cortes_tmp) >= 2:
-                _cortes = _cortes_tmp
-    _hay_corte = _cortes is not None
-
-    # ── Modo / Corte / Vista en UNA fila — antes cada uno vivía en su
-    #    propio st.pills/slider de ancho completo, apilados con el
-    #    espaciado default de Streamlit entre elementos: ocupaba como un
-    #    tercio de la tarjeta en vertical (reportado 2026-08-09). Mismo
-    #    truco que ya usan los chips Área/Familia de arriba (__init__.py):
-    #    st.columns en vez de un elemento por fila. Columnas condicionales
-    #    — sin col_valorizado no hay Modo, sin ≥2 cortes no hay slider —
-    #    consumidas en orden con un iterador para no escribir la
-    #    combinatoria de 2×2 a mano. ─────────────────────────────────────
-    _anchos = ([1.3] if _hay_valorizado else []) + \
-        ([1.5] if _hay_corte else []) + [1.0]
+    #    ANCHOS: no son estética, son el punto en que la fila deja de ser
+    #    una fila. Medido en la app con los cinco controles puestos: un
+    #    trigger es texto pelado y pide 113px en su peor caso ("todas las
+    #    áreas", con ícono y chevron); Modo son dos pastillas de etiqueta
+    #    larga y pide 256; Vista, 181. Suman 792 y una laptop de 1024px
+    #    deja 825 repartibles (857 de fila menos los cuatro huecos de 16),
+    #    así que entran las cinco — pero con 33px de sobra, y repartidos
+    #    en partes iguales NO entran: con [0.85, 0.85, 0.85, 1.5, 1.1]
+    #    Modo se quedaba con 237 de los 256 que pide y las dos botoneras
+    #    envolvían a dos líneas, 68px de alto en vez de 32.
+    #
+    #    De ahí este reparto, verificado en la app a 1024: las columnas
+    #    salen 114 / 114 / 114 / 267 / 184 y la fila vuelve a medir 32.
+    #    El trigger de Área queda con 1px de sobra sobre sus 113 — es el
+    #    que cede si algún día falta, truncando con puntos suspensivos
+    #    un nombre largo; una pastilla que envuelve, no.
+    #    Sin col_valorizado no hay Modo y la columna no se pide — las
+    #    columnas se consumen en orden con un iterador para no escribir la
+    #    combinatoria a mano. ────────────────────────────────────────────
+    _hay_valorizado = bool(col_valorizado and col_valorizado in df.columns)
+    # columnas-internas: los tres filtros + Modo + Vista, en fila
+    _anchos = [1.0, 1.0, 1.0] + ([2.2] if _hay_valorizado else []) + [1.55]
     _cols_ctrl = iter(st.columns(_anchos))
+
+    render_filtros_vista(
+        [next(_cols_ctrl).container(key=_k) for _k in _K_CTRL], _est)
 
     _modo_val = False
     if _hay_valorizado:
@@ -169,32 +170,19 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             _modo_val = (_modo == "Valorizado Total")
     col_metrica = col_valorizado if _modo_val else col_ajuste_val
 
-    if _hay_corte:
-        with next(_cols_ctrl):
-            _opciones_corte = _cortes["_corte_etq"].tolist()
-            _etq_sel = st.select_slider(
-                "Corte", options=_opciones_corte,
-                value=_opciones_corte[-1],
-                key="hm_ajuste_corte", label_visibility="collapsed",
-            )
-            st.markdown(
-                f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
-                f"text-align:center;margin-top:-8px'>Corte: "
-                f"<b style='color:{TEXTO_PRINCIPAL}'>{_etq_sel}</b></div>",
-                unsafe_allow_html=True,
-            )
-            _clave_sel = _cortes.loc[
-                _cortes["_corte_etq"] == _etq_sel, "_corte_clave"
-            ].iloc[0]
-            df = _dff[_dff["_corte_clave"] == _clave_sel].drop(
-                columns=["_corte_clave", "_corte_etq"])
-
     with next(_cols_ctrl):
         _vista = st.pills(
             "Vista mapa de calor", ["Mapa", "Flujo", "Tabla"],
             default="Mapa", key="hm_ajuste_vista",
             label_visibility="collapsed",
         ) or "Mapa"
+
+    # El aviso de vacío va DESPUÉS de los controles, nunca antes: si no,
+    # un filtro que deja la vista sin filas se lleva puesto el control que
+    # lo deshace — el callejón sin salida de la Cascada.
+    if df is None or df.empty:
+        st.info("No hay datos para el mapa de calor con estos filtros.")
+        return
 
     pivot = df.pivot_table(
         index=col_familia, columns=col_area,
