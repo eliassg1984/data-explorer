@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-431 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+432 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (156)
 
@@ -398,7 +398,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 
-**Streamlit** (112)
+**Streamlit** (113)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -512,6 +512,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
 - **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
 - **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
+- **#432** — Si el texto de un control se ve descolgado, mirá si el widget lo CENTRA antes de tocar el…
 
 **Datos, R2 y DuckDB** (52)
 
@@ -36461,6 +36462,50 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+432. **Si el texto de un control se ve descolgado, mirá si el widget lo
+     CENTRA antes de tocar el ancho o la posición de su caja.** Reportado
+     con dos bloques del modo diseño sobre el mismo elemento —
+     `width: 144px` y `transform: translate(-7px,-8px)`—, o sea dos
+     intentos de traer una etiqueta hacia la izquierda moviendo su
+     contenedor.
+
+     Medido en la tarjeta de controles de la cascada:
+
+     | | |
+     |---|---|
+     | Los tres contenedores | x = 391, ancho 352 — **alineados** |
+     | Borde interno de la tarjeta | 390 |
+     | El neto, debajo | x = 391 |
+     | **El texto del trigger** | **x = 528** |
+
+     Las cajas estaban perfectas. Lo que estaba descolgado era la etiqueta
+     ADENTRO: `st.popover` la centra, y con el botón ocupando los 352px de
+     la tarjeta el texto flotaba a 137px de su propio borde izquierdo,
+     mientras el neto y todo lo demás arrancaban en 391.
+
+     **Ninguno de los dos intentos podía funcionar**, y por razones
+     distintas que conviene no confundir:
+
+     - `width: 144px` no baja el ancho visible: el popover trae
+       `min-width: 180px` propio (#430), así que el contenedor mide 144 y
+       el botón sigue en 180 — **desborda su propia caja 36px**. Medido.
+     - `transform: translate(...)` mueve el botón entero, etiqueta
+       incluida, así que el texto queda igual de centrado sólo que 7px más
+       allá. Y encima es la trampa de siempre: mueve el píxel sin el hueco
+       (#426) y captura a los hijos `fixed` (#156) — y acá el hijo es el
+       panel del popover.
+
+     **La regla:** `justify-content: flex-start` en el botón. Una línea, y
+     el texto pasó de 528 a 399 (los 8px del `padding` del propio botón),
+     con los tres alineados entre sí. El ancho no se toca.
+
+     El patrón general: cuando algo se ve corrido dentro de un widget de
+     Streamlit, la caja suele estar bien y lo que está centrado es el
+     contenido. Medir el `left` de la caja Y el del texto antes de mover
+     nada — son dos números distintos y arreglan cosas distintas.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36473,7 +36518,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#432**.
+> próxima regla nueva es la **#433**.
 
 >
 

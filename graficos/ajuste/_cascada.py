@@ -254,6 +254,16 @@ def _css():
         color: {GRIS_TEXTO} !important;
         min-height: 0 !important; padding: 4px 8px !important;
         border-radius: 7px !important;
+        /* LA ETIQUETA VA A LA IZQUIERDA. `st.popover` la centra, y con el
+           boton ocupando los 352px de la tarjeta el texto quedaba flotando
+           a 137px de su propio borde -- descolgado del neto y de todo lo
+           demas, que estan alineados a 391. Medido: el texto arrancaba en
+           528. Se reporto como dos intentos de arreglarlo desde el modo
+           diseno (`width: 144px` y un `translate(-7px,-8px)`), y ninguno
+           podia: el ancho no baja de 180 por el `min-width` propio del
+           popover (#430), y el transform mueve el boton entero, no su
+           etiqueta. Ver regla #432. */
+        justify-content: flex-start !important;
         transition: background .12s ease, color .12s ease !important; }}
     div[class*="st-key-ajcas_card_ctrl"] button[data-testid="stPopoverButton"] p {{
         font-size: 11.5px !important; }}
