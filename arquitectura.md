@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-433 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+434 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (156)
 
@@ -191,7 +191,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Layout y alturas** (61)
+**Layout y alturas** (62)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -254,6 +254,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#429** — Una manija de resize que mueve el borde de ARRIBA no puede escribir sólo height: compensa con…
 - **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 - **#433** — Arrastrar una tarjeta por debajo del alto de su contenido no la achica: la hace DERRAMAR
+- **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 
 **Plotly y figuras** (70)
 
@@ -399,7 +400,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 
-**Streamlit** (113)
+**Streamlit** (114)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -514,6 +515,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
 - **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
 - **#432** — Si el texto de un control se ve descolgado, mirá si el widget lo CENTRA antes de tocar el…
+- **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 
 **Datos, R2 y DuckDB** (52)
 
@@ -36538,6 +36540,36 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+434. **Un `min-width` que obligó a apilar deja de obligar cuando el
+     contenedor crece: revisá la decisión, no la heredes.** Los tres
+     filtros de la cascada se apilaron el 2026-09-15 y se volvieron a poner
+     en fila ese mismo día, con el mismo `min-width` de por medio.
+
+     Cuando se apilaron, la zona de controles medía **260px**: tres
+     popovers con el `min-width: 180px` propio de Streamlit daban columnas
+     de 76 con botones de 180 que se pisaban (#430). Después la tarjeta
+     pasó a **528** —otra proporción de fila, y el neto mudado adentro— y
+     ahí el mismo cálculo da otra cosa: tres columnas de ~156, contra un
+     texto que en su caso más largo («todas las áreas», con su icono y su
+     chevron) pide ~124.
+
+     Con `min-width: 0 !important` entran las tres en fila sin solape ni
+     recorte. Medido: 155px cada una, las tres en `top=53`, la última
+     cerrando dentro de la tarjeta.
+
+     **Y resolvió de arriba lo que se venía peleando de abajo.** La misma
+     tarjeta había ido de 227 a 176 apretando `gap` y padding (#433), sin
+     llegar a los 160 pedidos. En fila mide **113**: los tres controles
+     ocupan un renglón en vez de tres. El alto no se arregló achicando el
+     aire — se arregló cambiando la disposición.
+
+     **Regla:** un piso de un widget (`min-width`, `min-height`) que fuerza
+     una decisión de layout hay que releerlo cada vez que cambia el ancho
+     disponible. «No entra» casi nunca es permanente; es una relación entre
+     dos números, y acá los dos se movieron tres veces en un día.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36550,7 +36582,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#434**.
+> próxima regla nueva es la **#435**.
 
 >
 

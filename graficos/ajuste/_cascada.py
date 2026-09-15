@@ -252,7 +252,13 @@ def _css():
     div[class*="st-key-ajcas_card_ctrl"] button[data-testid="stPopoverButton"] {{
         border: none !important; background: transparent !important;
         color: {GRIS_TEXTO} !important;
-        min-height: 0 !important; padding: 4px 8px !important;
+        min-height: 0 !important; padding: 4px 6px !important;
+        /* EL `min-width: 180px` ES DE STREAMLIT, no del contenido. Con los
+           tres en fila dentro de una tarjeta de 528, las columnas dan ~156
+           y ese piso los hacia desbordar. El texto mas largo ("todas las
+           areas") mide ~124 con su icono y su chevron, asi que 156 alcanza
+           de sobra. Ver regla #434. */
+        min-width: 0 !important;
         border-radius: 7px !important;
         /* LA ETIQUETA VA A LA IZQUIERDA. `st.popover` la centra, y con el
            boton ocupando los 352px de la tarjeta el texto quedaba flotando
@@ -543,7 +549,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                "estos filtros.")
             with _z2:
                 with st.container(border=True, key="ajcas_card_ctrl"):
-                    _controles([st.container(key=k) for k in _K_CTRL])
+                    # columnas-internas: los tres filtros, en fila
+                    _cf = st.columns(3, gap="small")
+                    _controles([c.container(key=k)
+                                for c, k in zip(_cf, _K_CTRL)])
         return
 
     # ── Datos por familia ────────────────────────────────────────────────
@@ -630,13 +639,16 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     _render_zona_familia(_act)
             with _z2:
                 with st.container(border=True, key="ajcas_card_ctrl"):
-                    # APILADOS, no en fila. Medido: el popover de Streamlit
-                    # trae `min-width: 180px` propio y la tarjeta mide ~260
-                    # -- tres en fila daban columnas de 76px con botones de
-                    # 180 que se PISABAN (cajas 480-660, 572-752, 664-844)
-                    # y el ultimo se salia 83px. Bajarles el min-width los
-                    # dejaria mas angostos que su texto. Ver regla #430.
-                    _controles([st.container(key=k) for k in _K_CTRL])
+                    # EN FILA, y eso REVIERTE la decision de unas horas
+                    # antes. Cuando se apilaron, la tarjeta medía ~260 y
+                    # tres popovers de `min-width: 180` se PISABAN (#430).
+                    # Ahora mide 528: con el min-width neutralizado entran
+                    # tres columnas de ~156 y el texto mas largo ("todas
+                    # las areas") pide ~124. Ver regla #434.
+                    # columnas-internas: los tres filtros, en fila
+                    _cf = st.columns(3, gap="small")
+                    _controles([c.container(key=k)
+                                for c, k in zip(_cf, _K_CTRL)])
                     _render_total(_total, _base_tot, len(_fams))
             with st.container(border=True, key="ajcas_card_drill"):
                 _drill(_act["cat"], d, grp_col, col_ajuste_val, col_producto,
