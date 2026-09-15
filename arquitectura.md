@@ -36381,15 +36381,26 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      renglones. Sin piso, cada tarjeta pide lo suyo. El precio aceptado es
      un escalón de 64px en la fila.
 
-     **La proporción de la fila es `[0.93, 1]`, no un ancho fijo.** Salió
-     de un redimensionado en el modo diseño: a 1555px de viewport la
-     tarjeta de familia nacía en 611px y se pidió ~510. Lo que se cambia es
-     la PROPORCIÓN — 510px serían correctos en esa pantalla y falsos en una
-     laptop de 1366. Y el espacio que suelta la izquierda se lo queda la
-     derecha (medido: 511 | 550, con los 16px de gap), en vez de dejar el
-     hueco muerto que mostraba el preview: **el modo diseño achica sólo el
-     elemento fijado, no reacomoda a su hermano**, así que su vista previa
-     de un cambio de proporción siempre miente por ese lado.
+     **La proporción de la fila es `[0.69, 1]`, no un ancho fijo.** Salió
+     de dos redimensionados en el modo diseño (~510 a 1555px de viewport, y
+     363 a 1330). Lo que se guarda es la RAZÓN — un ancho en px es correcto
+     en la pantalla donde se arrastró y falso en cualquier otra.
+
+     La cuenta: a 1330px la fila mide 906 con 16 de hueco, o sea 890
+     repartibles; 363/890 = 0,408, y una razón `x/(x+1)` que dé 0,408 es
+     `x = 0,69`. Medido después: 362px, un píxel de redondeo.
+
+     Dos trampas del preview que este ida y vuelta dejó claras:
+
+     - **El modo diseño achica sólo el elemento fijado y no reacomoda a su
+       hermano**, así que muestra el espacio liberado como hueco muerto
+       (~80px en este caso). Al implementarlo se lo queda la tarjeta de al
+       lado. Su vista previa de un cambio de proporción siempre miente por
+       ese lado.
+     - **Medir la fila en un screenshot da 8px de error.** La primera
+       pasada salió `0,67` de calcular sobre la imagen (921px de fila); el
+       DOM decía 906. Medir el DOM, no la captura — que es la misma regla
+       que el resto del proyecto ya aplica a todo lo demás.
 
      Resultado verificado a 1555px: familia 511×162, controles 550×227,
      detalle 1077×316 arrancando debajo de la más alta, y las tres

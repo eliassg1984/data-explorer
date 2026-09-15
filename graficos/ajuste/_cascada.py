@@ -508,7 +508,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # dejo vacia -- un callejon sin salida.
         with st.container(key="ajcas_cuerpo"):
             # columnas-internas: tarjeta de la familia vs. de controles
-            _z1, _z2 = st.columns([0.93, 1])
+            _z1, _z2 = st.columns([0.69, 1])
             with _z1:
                 with st.container(border=True, key="ajcas_card_familia"):
                     st.markdown(
@@ -571,15 +571,24 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # tarjeta no se leen.
         with st.container(key="ajcas_cuerpo"):
             # columnas-internas: tarjeta de la familia vs. de controles
-            # 0.93 : 1 y no 1.35 : 1, a pedido, sobre una medicion del modo
-            # diseno: a 1555px de viewport la de familia salia 611 y se
-            # pidio ~510. Se cambia la PROPORCION y no un ancho fijo --
-            # 510px serian correctos en esa pantalla y falsos en una
-            # laptop de 1366. El espacio que suelta la izquierda se lo
-            # queda la de controles (511 | 550), en vez de dejar el hueco
-            # muerto que mostraba el preview: el modo diseno achica solo
-            # el elemento pineado, no reacomoda a su hermano.
-            _z1, _z2 = st.columns([0.93, 1])
+            # PROPORCION, no ancho fijo. Se pidio dos veces por el modo
+            # diseno: primero ~510 a 1555px de viewport, despues 363 a
+            # ~1330. Un ancho en px seria correcto en la pantalla donde se
+            # arrastro y falso en cualquier otra, asi que lo que se guarda
+            # es la razon entre las dos columnas.
+            #
+            # La cuenta de la ultima: a 1330px la fila mide 906 con 16 de
+            # hueco, o sea 890 repartibles; 363/890 = 0.408, y una razon
+            # x/(x+1) que de 0.408 es x = 0.69. (El 0.67 de la primera
+            # pasada salio de medir la fila en un screenshot: daba 921 y
+            # son 906, o sea 8px cortos. Medir el DOM, no la imagen.)
+            #
+            # Y el espacio que suelta la izquierda se lo queda la derecha.
+            # El preview del modo diseno mostraba ~80px de hueco muerto
+            # entre las dos porque achica SOLO el elemento fijado y no
+            # reacomoda a su hermano: su vista previa de un cambio de
+            # proporcion siempre miente por ese lado.
+            _z1, _z2 = st.columns([0.69, 1])
             with _z1:
                 with st.container(border=True, key="ajcas_card_familia"):
                     _peso = ("&lt;1%" if _act["peso"] < 0.5
