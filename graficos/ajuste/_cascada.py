@@ -261,13 +261,15 @@ def _css():
         padding: 5px 10px !important; }}
     div[class*="st-key-ajcas_corte_"] button p {{ font-size: 12px !important; }}
 
-    /* ── FICHA DEL NETO, arriba del riel ──────────────────────────────
-       Punteada y sin hover a proposito: es la unica pieza del riel que no
-       se puede clickear, y el borde de puntos lo dice sin gastar un
-       rotulo. */
+    /* ── EL NETO, abajo de la zona 2 ──────────────────────────────────
+       Hasta el 2026-09-15 era una ficha punteada arriba del riel. Ahora
+       vive debajo de los tres controles, y el filete de arriba es lo que
+       separa lo que se TOCA de lo que se LEE: son las dos naturalezas que
+       comparten la zona. Alineado a la derecha para que su borde coincida
+       con el de la tarjeta y no flote en el medio. */
     div[class*="st-key-ajcas_total"] {{
-        background: {GRIS_FONDO}; border: 1px dashed {GRIS_BORDE};
-        border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }}
+        border-top: 1px solid {GRIS_FONDO};
+        margin-top: 10px; padding-top: 9px; }}
     div[class*="st-key-ajcas_total"] p {{ margin: 0 !important; }}
 
     /* ── MINI-TARJETA DEL RIEL ────────────────────────────────────────
@@ -415,11 +417,12 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     def _controles(cols):
         """Los tres popovers, uno por columna: corte · familia · area.
 
-        Reciben las columnas ya creadas porque comparten la fila con el
-        nombre de la familia: en Streamlit la posicion la da el orden en
-        que se CREA el contenedor, no el orden en que se escribe en el.
+        Reciben las columnas ya creadas y no las crean ellos porque el
+        llamador decide en que zona van: en Streamlit la posicion la da el
+        orden en que se CREA el contenedor, no el orden en que se escribe
+        en el.
         """
-        with cols[1]:
+        with cols[0]:
             _et = _corte["etiqueta_anio"] if _corte else "Sin cortes"
             with st.popover(f":material/event: {_et}",
                             use_container_width=True):
@@ -445,7 +448,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                 type="primary" if _on else "secondary"):
                             st.session_state[_K_CORTE] = _c["clave"]
                             st.rerun()
-        with cols[2]:
+        with cols[1]:
             _n_fam = len(_sel_fam)
             _et_fam = ("todas las familias" if not _n_fam
                        else _sel_fam[0].lower() if _n_fam == 1
@@ -453,7 +456,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             with st.popover(f":material/category: {_et_fam}",
                             use_container_width=True):
                 filtro_pills(_base, col_familia, _K_FAMILIA, "Familia")
-        with cols[3]:
+        with cols[2]:
             _n_ar = len(_sel_area)
             _et_ar = ("todas las áreas" if not _n_ar
                       else _sel_area[0].lower() if _n_ar == 1
@@ -471,14 +474,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # tres controles y no habria forma de deshacer el filtro que la
         # dejo vacia -- un callejon sin salida.
         with st.container(border=True, key="ajcas_prota"):
-            # columnas-internas: nombre · corte · familia · área
-            _cols = st.columns([2.6, 1, 1, 1], vertical_alignment="center")
-            with _cols[0]:
+            # columnas-internas: zona 1 (la familia) vs. zona 2 (controles)
+            _z1, _z2 = st.columns([1.35, 1])
+            with _z1:
                 st.markdown(
                     f"<div style='font-size:16px;font-weight:600;"
                     f"color:{GRIS_TEXTO_SUAVE}'>Sin datos</div>",
                     unsafe_allow_html=True)
-            _controles(_cols)
+            with _z2:
+                _controles([st.container() for _ in range(3)])
             st.caption("Ninguna familia tiene ajuste con estos filtros.")
         return
 
@@ -520,11 +524,18 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     with _c_pro:
         with st.container(border=True, key="ajcas_prota"):
-            _peso = ("&lt;1%" if _act["peso"] < 0.5
-                     else f"{_act['peso']:.0f}%")
-            # columnas-internas: nombre · corte · familia · área
-            _cols = st.columns([2.6, 1, 1, 1], vertical_alignment="center")
-            with _cols[0]:
+            # TRES ZONAS (2026-09-15, a pedido, variante A de tres
+            # maquetadas): arriba-izquierda la familia con foco,
+            # arriba-derecha los controles y el neto del periodo, y abajo
+            # el detalle a TODO EL ANCHO. El drill queda fuera del
+            # `st.columns` por eso -- dos listas de 30 productos en media
+            # tarjeta no se leen.
+            #
+            # columnas-internas: zona 1 (la familia) vs. zona 2 (controles + neto)
+            _z1, _z2 = st.columns([1.35, 1])
+            with _z1:
+                _peso = ("&lt;1%" if _act["peso"] < 0.5
+                         else f"{_act['peso']:.0f}%")
                 st.markdown(
                     f"<div style='display:flex;align-items:baseline;gap:8px;"
                     f"flex-wrap:wrap'>"
@@ -534,27 +545,40 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     f"<span style='font-size:10.5px;color:{GRIS_TEXTO_SUAVE}'>"
                     f"{_peso} del ajuste del período</span></div>",
                     unsafe_allow_html=True)
-            _controles(_cols)
-            _render_protagonista(
-                _act, d, grp_col, col_ajuste_val, col_producto, col_area,
-                col_cantidad, col_unidad)
+                _render_zona_familia(_act)
+            with _z2:
+                # APILADOS, no en fila. Medido: el popover de Streamlit
+                # trae `min-width: 180px` propio, y la zona 2 mide 260 --
+                # tres en fila daban columnas de 76px con botones de 180
+                # que se PISABAN entre si (cajas 480-660, 572-752,
+                # 664-844) y el ultimo se salia 83px de la tarjeta.
+                # Bajarles el min-width los dejaria en 76px, mas angostos
+                # que su propio texto. Apilados tienen los 260 enteros.
+                # Ver arquitectura.md regla #430.
+                _controles([st.container() for _ in range(3)])
+                _render_total(_total, _base_tot, len(_fams))
+            _drill(_act["cat"], d, grp_col, col_ajuste_val, col_producto,
+                   col_area, col_cantidad, col_unidad)
 
     with _c_riel:
-        _render_total(_total, _base_tot, len(_fams))
+        # El neto ya NO vive aca: se mudo a la zona 2. Sin esa ficha las
+        # minis suben y la primera queda al ras de la tarjeta grande.
         for _f in _resto:
             _render_mini(_f)
 
 
 def _render_total(total, base, n_familias):
-    """El neto del período, arriba del riel.
+    """ZONA 2, abajo: el neto del período, debajo de los tres controles.
 
-    Vivia en la franja de cabecera que se saco (2026-09-15, a pedido). No
-    es de la familia con foco sino de TODAS, o sea el contexto contra el
-    que se lee el monto grande de al lado, asi que no puede ir adentro de
-    la tarjeta protagonista: serian dos totales distintos pegados.
+    No es de la familia con foco sino de TODAS -- es el contexto contra el
+    que se lee el monto grande de la zona 1. Y por eso son DOS TOTALES
+    DISTINTOS en la misma fila: el rotulo "Neto del período" de aca y el
+    "% del ajuste del período" de alla son lo unico que los separa. Con
+    una sola familia filtrada los dos numeros coinciden, que es cuando la
+    etiqueta tiene que trabajar.
 
-    Va punteada y sin hover: es la unica pieza del riel que NO es
-    clickeable, y la linea de puntos es lo que lo dice sin un rotulo.
+    Alineado a la derecha y con un filete arriba que lo despega de los
+    controles: arriba se toca, abajo se lee.
     """
     _col = _tono(total)[0]
     _sig = "+" if total > 0 else "−"
@@ -564,15 +588,17 @@ def _render_total(total, base, n_familias):
         _pct = f"{_p:+.1f}% s/ total · "
     with st.container(key="ajcas_total"):
         st.markdown(
+            f"<div style='text-align:right'>"
             f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
             f"text-transform:uppercase;letter-spacing:.07em;"
             f"font-weight:600'>Neto del período</div>"
-            f"<div style='font-size:17px;font-weight:700;color:{_col};"
+            f"<div style='font-size:22px;font-weight:700;color:{_col};"
             f"font-variant-numeric:tabular-nums;letter-spacing:-.02em;"
-            f"margin-top:1px'>{_sig}S/ {abs(total):,.0f}</div>"
+            f"line-height:1.2;margin-top:1px'>"
+            f"{_sig}S/ {abs(total):,.0f}</div>"
             f"<div style='font-size:10.5px;color:{GRIS_TEXTO}'>"
             f"{_pct}{n_familias} "
-            f"{'familia' if n_familias == 1 else 'familias'}</div>",
+            f"{'familia' if n_familias == 1 else 'familias'}</div></div>",
             unsafe_allow_html=True)
 
 
@@ -610,13 +636,12 @@ def _render_mini(f):
             st.rerun()
 
 
-def _render_protagonista(f, d, grp_col, col_ajuste_val, col_producto,
-                         col_area, col_cantidad, col_unidad):
-    """La familia con foco: monto grande, barra, frase y su drill.
+def _render_zona_familia(f):
+    """ZONA 1: el monto grande de la familia con foco, su barra y su pie.
 
-    El NOMBRE no se dibuja aca: comparte la fila con los tres controles
-    (corte, familia, area), asi que lo pone el llamador dentro de la
-    primera columna de esa fila.
+    NO dibuja el nombre ni el drill. El nombre lo pone el llamador (abre la
+    zona) y el drill es la ZONA 3, que va a todo el ancho de la tarjeta y
+    por lo tanto fuera de esta columna.
     """
     _col = _tono(f["val"])[0]
     _sig = "+" if f["val"] > 0 else "−"
@@ -640,9 +665,6 @@ def _render_protagonista(f, d, grp_col, col_ajuste_val, col_producto,
             f"<div style='font-size:12px;margin-top:8px;display:flex;"
             f"gap:14px;flex-wrap:wrap'>{' · '.join(_pie)}</div>",
             unsafe_allow_html=True)
-
-    _drill(f["cat"], d, grp_col, col_ajuste_val, col_producto, col_area,
-           col_cantidad, col_unidad)
 
 
 def _drill(focus_cat, d, grp_col, col_ajuste_val, col_producto, col_area,

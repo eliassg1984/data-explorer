@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-429 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+430 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (154)
 
@@ -189,7 +189,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#429** — Una manija de resize que mueve el borde de ARRIBA no puede escribir sólo height: compensa con…
 
-**Layout y alturas** (59)
+**Layout y alturas** (60)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -250,6 +250,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#420** — Partir una vista en tarjetas "como Volatilidad" no dice dónde va la cabecera: si sus…
 - **#425** — Cuando una vista de la pila se queda con sus propios filtros, el df que recibe tiene que ser…
 - **#429** — Una manija de resize que mueve el borde de ARRIBA no puede escribir sólo height: compensa con…
+- **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 
 **Plotly y figuras** (70)
 
@@ -395,7 +396,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 
-**Streamlit** (112)
+**Streamlit** (113)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -509,6 +510,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
 - **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
 - **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
+- **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 
 **Datos, R2 y DuckDB** (52)
 
@@ -36320,6 +36322,53 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+430. **El popover de Streamlit trae `min-width: 180px` propio: tres en
+     una columna de 260px no se acomodan, se PISAN.** Y no avisa — el
+     `overflow` es `visible`, así que los botones se dibujan uno encima de
+     otro y el último se sale de la tarjeta sin recortarse.
+
+     Salió de partir la tarjeta protagonista de la cascada en tres zonas
+     (a pedido): arriba-izquierda la familia, arriba-derecha los controles
+     y el neto, abajo el detalle a todo el ancho. Con la zona 2 en 260px y
+     `st.columns(3)` adentro, medido:
+
+     | | |
+     |---|---|
+     | Columna de cada trigger | **76 px** |
+     | `min-width` del botón | **180 px** |
+     | Cajas resultantes | `480→660`, `572→752`, `664→844` |
+     | Borde derecho de la tarjeta | 761 |
+
+     Los tres se solapaban ~88px entre sí y el tercero terminaba 83px
+     FUERA de la tarjeta. El texto entraba de sobra (63-88px): el ancho no
+     lo pedía el contenido, lo imponía el `min-width` de Streamlit.
+
+     **Regla:** tres controles en una columna angosta van APILADOS, no en
+     `st.columns`. Bajarles el `min-width` a la fuerza los dejaría en 76px,
+     más angostos que su propio texto — se cambia un solape por un recorte.
+     Apilados se quedan con los 260px enteros y el label entra completo.
+
+     La maqueta HTML no lo anticipó porque ahí los controles eran un
+     `flex-wrap: wrap` que se reacomoda solo; `st.columns` no envuelve. Es
+     el desfase clásico entre maquetar en HTML y construir en Streamlit:
+     **lo que en CSS es una propiedad, acá es una decisión de estructura.**
+
+     Resultado verificado: triggers apilados en `480→740` (tops 59 / 102 /
+     146, sin solape), zona 1 en 354px y zona 2 en 260px, y el drill de la
+     zona 3 en los 630px del ancho útil. La ficha del neto se fue del riel
+     a la zona 2, así que las mini-tarjetas suben 64px y la primera queda
+     al ras del borde superior de la tarjeta grande.
+
+     **Dos totales en la misma fila, a sabiendas.** El monto grande de la
+     zona 1 es de la familia con foco; el neto de la zona 2 es de todas.
+     Antes se distinguían por vivir en superficies distintas (tarjeta vs.
+     ficha del riel); ahora lo único que los separa son los rótulos —
+     «Neto del período» contra «% del ajuste del período». Con una sola
+     familia filtrada los dos números coinciden, y ahí la etiqueta es todo
+     lo que queda.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36332,7 +36381,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#430**.
+> próxima regla nueva es la **#431**.
 
 >
 
