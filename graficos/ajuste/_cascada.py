@@ -345,16 +345,22 @@ def _css():
         gap: 12px !important; }}
     div[class*="st-key-ajcas_cuerpo"] > div {{ border: none !important; }}
 
-    /* LAS DOS DE ARRIBA MIDEN LO MISMO. El contenedor de elemento que
-       Streamlit mete entre la columna y la tarjeta nace `flex: 0 1 auto`,
-       asi que sin esto la de controles cierra mas arriba que la de la
-       familia y la fila se lee torcida. Es la regla #145, replicada con
-       el prefijo propio para no tocar `estilos/_80_cards.py`. */
-    .stColumn > .stVerticalBlock
-    > div:has(> div[class*="st-key-ajcas_card_familia"]),
-    .stColumn > .stVerticalBlock
-    > div:has(> div[class*="st-key-ajcas_card_ctrl"]) {{
-        flex: 1 1 auto; }}
+    /* CADA TARJETA MIDE SU CONTENIDO, y eso REVIERTE lo que esta misma
+       regla hacia hasta el 2026-09-15 por la tarde.
+       
+       Habia un piso `flex: 1 1 auto` sobre las dos de arriba, replicando
+       la #145 ("dos tarjetas de la misma fila miden lo mismo") con el
+       prefijo propio. Lo puse por iniciativa mia, no a pedido; se saca a
+       pedido, con el CSS del modo diseno pegado: `height: 174px` sobre la
+       de familia.
+       
+       Medido: el alto NATURAL de la de familia es 162px y el de la de
+       controles 227 -- el piso estiraba la primera 65px de aire. No se
+       clava el 174 del preview (12px por encima del contenido, o sea
+       vacio al fondo, y se romperia si un nombre de familia envuelve a
+       dos renglones): sin piso, cada una pide lo suyo y sigue andando.
+       
+       El precio, aceptado: la fila queda con un escalon de 65px. */
 
     </style>"""
 

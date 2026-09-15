@@ -32,7 +32,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 431 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (155)
+**CSS y estilos** (156)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -188,6 +188,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#426** — Un hijo de altura CERO no ocupa alto pero sí cobra el gap. Seis de ellos son 96px de página…
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#429** — Una manija de resize que mueve el borde de ARRIBA no puede escribir sólo height: compensa con…
+- **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
 **Layout y alturas** (60)
@@ -397,7 +398,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 
-**Streamlit** (113)
+**Streamlit** (112)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -511,7 +512,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
 - **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
 - **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
-- **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 
 **Datos, R2 y DuckDB** (52)
 
@@ -36361,11 +36361,25 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      hueco de 12px — mismo idioma que `compras_vap_cuerpo` (#420): las
      tarjetas son las superficies, el cuerpo es el aire.
 
-     Eso trae de vuelta la #145: el contenedor de elemento que Streamlit
-     mete entre la columna y la tarjeta nace `flex: 0 1 auto`, así que sin
-     piso la de controles cerraba más arriba que la de la familia. La regla
-     se replica con el prefijo propio (`ajcas_card_`) en vez de sumar el
-     selector a `estilos/_80_cards.py`.
+     Eso trajo de vuelta la #145 — y después se fue. El contenedor de
+     elemento que Streamlit mete entre la columna y la tarjeta nace
+     `flex: 0 1 auto`, así que sin piso las dos de arriba no miden igual;
+     se replicó el piso con el prefijo propio (`ajcas_card_`) en vez de
+     sumar el selector a `estilos/_80_cards.py`.
+
+     **Y el mismo día se sacó, a pedido**, con el CSS del modo diseño
+     pegado (`height: 174px` sobre la de familia). El piso lo había puesto
+     yo por iniciativa propia, no a pedido: la #145 dice que dos tarjetas
+     de la misma fila miden lo mismo, pero acá el contenido de las dos no
+     tiene nada que ver — una es un monto con su barra, la otra son tres
+     controles apilados más un total. Medido, el piso estiraba la de
+     familia **65px de aire** para alcanzar a la otra.
+
+     No se clavó el `174px` del preview: el alto natural del contenido es
+     **162**, o sea que el número del modo diseño traía 12px de vacío al
+     fondo y además se habría roto si un nombre de familia envolviera a dos
+     renglones. Sin piso, cada tarjeta pide lo suyo. El precio aceptado es
+     un escalón de 64px en la fila.
 
      **La proporción de la fila es `[0.93, 1]`, no un ancho fijo.** Salió
      de un redimensionado en el modo diseño: a 1555px de viewport la
@@ -36377,8 +36391,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      elemento fijado, no reacomoda a su hermano**, así que su vista previa
      de un cambio de proporción siempre miente por ese lado.
 
-     Resultado verificado a 1555px: familia 511×227, controles 550×227
-     —iguales—, detalle 1077 y las tres cerrando en el mismo borde.
+     Resultado verificado a 1555px: familia 511×162, controles 550×227,
+     detalle 1077×316 arrancando debajo de la más alta, y las tres
+     cerrando en el mismo borde derecho.
      Triggers apilados sin solape. La
      ficha del neto se fue del riel a la tarjeta de controles, así que las
      mini-tarjetas suben y la primera queda en `top=40`, al ras de las
