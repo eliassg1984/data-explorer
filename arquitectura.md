@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-435 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+436 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (156)
 
@@ -256,7 +256,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#433** — Arrastrar una tarjeta por debajo del alto de su contenido no la achica: la hace DERRAMAR
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 
-**Plotly y figuras** (70)
+**Plotly y figuras** (71)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -328,6 +328,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#402** — Para deslizar un gráfico de Plotly se mueve la VENTANA de su eje, no un contenedor con…
 - **#403** — Un top-N dentro de una tabla ORDENABLE miente por partida doble — y un desglose "sin nada que…
 - **#413** — Una decisión tomada por una restricción se revisa cuando la restricción se va: el eje Y de…
+- **#436** — Meter un dato de CONTEXTO en una escala compartida la rompe: lo que no entra se TOPA, no se…
 
 **AgGrid y tablas** (68)
 
@@ -675,7 +676,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (77)
+**Decisiones de diseño y UX** (78)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -754,6 +755,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#422** — Un tinte al 8 % de opacidad no es un código de color: es blanco. Antes de discutir qué color…
 - **#425** — Cuando una vista de la pila se queda con sus propios filtros, el df que recibe tiene que ser…
 - **#435** — La SEGUNDA vista que pide «los mismos filtros» los convierte en una pieza — y meter cinco…
+- **#436** — Meter un dato de CONTEXTO en una escala compartida la rompe: lo que no entra se TOPA, no se…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -36633,6 +36635,61 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+436. **Meter un dato de CONTEXTO en una escala compartida la rompe: lo que
+     no entra se TOPA, no se achica todo.** El 2026-09-15 las minitarjetas
+     del riel de la Cascada sumaron la comparación contra el corte anterior
+     («un minigráfico quizás de barra donde se vea la diferencia % y el
+     ajuste comparado con el último corte»): una barra apagada arriba de la
+     de ahora, sobre el mismo cero y la misma escala.
+
+     Mi primer intento fue el razonable en abstracto: si la barra de antes
+     puede ser más larga que cualquiera de ahora, que el máximo de la
+     escala (`_max_abs`) mire los dos cortes y así ninguna se sale del
+     semiancho. **Medido en la app con datos reales, eso arruina la vista.**
+     El máximo saltó de **6.072 a ~28.500** —una sola familia, la
+     protagonista, que en el corte pasado había tenido un faltante
+     enorme— y con él las barras de HOY quedaron en **1 y 4 píxeles de
+     135**. La vista dejó de contar lo que se vino a mirar para que
+     entrara el contexto.
+
+     El agravante que lo vuelve regla y no anécdota: **el valor que
+     estiraba la escala ni siquiera se dibuja.** La familia con foco es la
+     tarjeta protagonista, y esa no lleva barra de comparación — o sea que
+     el máximo lo fijaba un dato que no está en pantalla. Una escala la
+     tienen que fijar las marcas que se VEN.
+
+     Lo que quedó: la escala es la del corte elegido (como siempre), la
+     barra de antes se dibuja encima y, si no entra, **topa en el
+     semiancho con la punta de afuera cuadrada y un tapón opaco** — una
+     punta cuadrada se lee «esto sigue». El número exacto no se pierde
+     porque vive en otro canal: el chip de `_delta_corte`, que no topa
+     nunca.
+
+     **Y el chip mide el TAMAÑO del ajuste, no el valor con signo.** Un
+     faltante que va de -1.000 a -5.000 dice «▲ 400%», que es como se lee
+     en voz alta («el faltante creció»); con el signo adentro daría un
+     «-400%» que se lee como si hubiera mejorado. El cambio de signo no se
+     dice en porcentaje —ahí no significa nada— sino en palabras («pasó a
+     sobrar»), y arriba del 999% pasa a «×N», mismo criterio que
+     `_frase_ratio` (#423). El chip va en GRIS, sin color propio: en esa
+     tarjeta el color ya significa faltante/sobrante y darle una segunda
+     lectura es el error que documenta la misma #423.
+
+     Dos detalles de la misma tanda, los dos de layout:
+
+     · **La leyenda va una vez, no por tarjeta.** «barra clara = 16-18 ago
+       2026» vive en la ficha del neto, junto al resto del contexto de la
+       vista. Repetido en las seis minis sería ruido (#238), y no puede ir
+       como `title` de la barra porque el botón de la mini cubre la
+       tarjeta entera y nada de adentro recibe el hover (#421).
+
+     · **En una fila de monto + chip, el que no se encoge es el monto.**
+       Sin `flex: 0 0 auto`, un chip largo («pasó a sobrar») le come el
+       ancho y «+S/ 1.489» se parte en dos renglones. El chip sí se
+       encoge, con puntos suspensivos.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36645,7 +36702,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#436**.
+> próxima regla nueva es la **#437**.
 
 >
 

@@ -3563,6 +3563,96 @@ def _pruebas_una_sola_nombre_propio():
     return fallos
 
 
+def _pruebas_delta_corte():
+    """La mini del riel contra el corte anterior (graficos/ajuste/_cascada).
+
+    Dos piezas, `_delta_corte` (el chip) y `_barra_cero` (las dos barras).
+
+    Lo que fijan estas pruebas no es aritmética, es QUÉ MIDE el
+    porcentaje: el TAMAÑO del ajuste, no el valor con signo. Un faltante
+    que va de -1.000 a -5.000 creció, y tiene que decir "▲ 400%", no
+    "-400%" — que es la forma en que un signo de más se lee como si el
+    faltante hubiera mejorado.
+
+    Y los tres casos donde un porcentaje mentiría, que por eso NO son un
+    porcentaje: sin corte anterior no hay chip, con un anterior en cero no
+    hay contra qué dividir, y con cambio de signo el % no significa nada
+    (¿-80%? ¿+120%? según de qué lado se mire) — ahí va en palabras.
+    """
+    from graficos.ajuste._cascada import _delta_corte
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    delta · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA delta · {nombre}: got={got!r} exp={exp!r}")
+
+    check("sin corte anterior no hay chip",
+          _delta_corte(-1000.0, None), None)
+    check("el anterior en cero es 'nuevo', no una división por cero",
+          _delta_corte(-1000.0, 0.0), "nuevo")
+
+    # El corazón: el % es sobre la MAGNITUD, y la flecha dice si creció.
+    check("un faltante que se cuadruplica creció (no 'bajó' por el signo)",
+          _delta_corte(-5000.0, -1000.0), "▲ 400%")
+    check("un faltante que se achica, baja",
+          _delta_corte(-1000.0, -5000.0), "▼ 80%")
+    check("un sobrante que crece, sube",
+          _delta_corte(1320.0, 1000.0), "▲ 32%")
+    check("un sobrante que se achica, baja",
+          _delta_corte(800.0, 1000.0), "▼ 20%")
+
+    # Cambio de signo: en palabras, nunca en %.
+    check("de faltante a sobrante", _delta_corte(500.0, -900.0),
+          "pasó a sobrar")
+    check("de sobrante a faltante", _delta_corte(-500.0, 900.0),
+          "pasó a faltar")
+
+    # Los dos bordes de la presentación.
+    check("una diferencia despreciable no inventa un 0%",
+          _delta_corte(-1000.2, -1000.0), "igual")
+    check("arriba del 999% pasa a ×N (un número así se lee como error)",
+          _delta_corte(-50000.0, -100.0), "▲ ×500")
+
+    # ── Las dos barras ──────────────────────────────────────────────────
+    # La escala es la de HOY (`_max_abs` sale de las familias del corte
+    # elegido), así que la barra de antes PUEDE no entrar: ahí topa en el
+    # semiancho y se le cuadra la punta de afuera. Lo contrario —estirar
+    # la escala hasta que entre— se probó el 2026-09-15 con datos reales y
+    # dejaba las barras de hoy en 1-4px de 135. Ver regla #436.
+    from graficos.ajuste._cascada import _barra_cero
+
+    _sola = _barra_cero(-900.0, 25.0)
+    check("sin corte anterior la barra sigue midiendo 18px",
+          "height:18px" in _sola, True)
+    check("...y no dibuja ninguna barra apagada",
+          "opacity:.45" in _sola, False)
+
+    _dos = _barra_cero(-900.0, 25.0, -450.0, 12.5)
+    check("con corte anterior el alto pasa a 26px",
+          "height:26px" in _dos, True)
+    check("la de antes va apagada y arriba",
+          "opacity:.45" in _dos and "top:2px" in _dos, True)
+    check("la de antes que entra conserva las dos puntas redondas",
+          "border-radius:999px;background" in _dos, True)
+
+    # 60 > 50: no entra en el semiancho.
+    _topa_falta = _barra_cero(-900.0, 25.0, -9000.0, 60.0)
+    check("la de antes que no entra topa en el semiancho",
+          "width:50.00%" in _topa_falta, True)
+    check("...y si es faltante cuadra la punta izquierda (la de afuera)",
+          "border-radius:0 999px 999px 0" in _topa_falta, True)
+    _topa_sobra = _barra_cero(-900.0, 25.0, 9000.0, 60.0)
+    check("...y si es sobrante, la derecha",
+          "border-radius:999px 0 0 999px" in _topa_sobra, True)
+
+    return fallos
+
+
 def main():
     df, df_min = _df_completo(), _df_minimo()
     fallos = 0
@@ -3715,6 +3805,9 @@ def main():
     fallos += _pruebas_regla_riel()
 
     fallos += _pruebas_anomalias()
+
+    # ── El chip de la mini contra el corte anterior ──────────────────────
+    fallos += _pruebas_delta_corte()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()

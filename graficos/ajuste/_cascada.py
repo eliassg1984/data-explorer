@@ -106,28 +106,108 @@ def _frase_ratio(val, base):
     return f"{_verbo} <b>{abs(_pct):.0f}%</b> de su stock"
 
 
-def _barra_cero(val, esc):
+def _barra_cero(val, esc, val_prev=None, esc_prev=None):
     """Barra desde el cero central: izquierda falta, derecha sobra.
 
     `esc` es el semiancho en % (0-50) ya normalizado contra el mayor
     |ajuste| de las familias visibles, asi que el largo ES comparable entre
     tarjetas -- que es lo unico que la cascada encadenada hacia bien y que
     habia que no perder al partir en tarjetas.
+
+    Con `val_prev` dibuja DOS barras sobre el MISMO eje (2026-09-15, a
+    pedido: "un minigrafico quizas de barra donde se vea la diferencia % y
+    el ajuste comparado con el ultimo corte"): arriba y apagada la del
+    corte anterior, abajo y plena la de ahora.
+
+    Las dos comparten el cero y la escala, que es la de HOY (ver
+    `_graf_waterfall_ajuste`). Cuando el corte pasado fue mas grande que
+    cualquier familia de ahora, su barra no entra: se TOPA en el semiancho
+    y se le cuadra la punta de afuera, con un tapon al full de opacidad.
+    Una punta cuadrada es "esto sigue"; achicar la escala para que entrara
+    dejaba las barras de hoy en 1-4 pixeles, que es perder lo que se vino
+    a mirar. El numero exacto lo da el chip de `_delta_corte`, que no topa.
+
+    Sin `val_prev` devuelve EXACTAMENTE lo de antes: la usa tambien la
+    tarjeta protagonista (`_render_zona_familia`), que no compara.
     """
     _col = _tono(val)[1]
     _lado = "right:50%" if val < 0 else "left:50%"
+    if val_prev is None:
+        _alto, _antes = 18, ""
+        _hoy = (f"<div style='position:absolute;top:50%;"
+                f"transform:translateY(-50%);{_lado};"
+                f"width:{max(esc, 0.4):.2f}%;height:11px;"
+                f"border-radius:999px;background:{_col}'></div>")
+    else:
+        # 26px: la barra de antes (7px) arriba, el filete del eje en el
+        # medio y la de ahora (11px) abajo. La de antes es mas fina y al
+        # 45% -- no al 8%, que es la opacidad con la que los tintes de
+        # severidad se volvieron invisibles (#422).
+        _alto = 26
+        _neg_p = val_prev < 0
+        _lado_p = "right:50%" if _neg_p else "left:50%"
+        _e_p = max(esc_prev or 0, 0.4)
+        _topa = _e_p > 50.0
+        _e_p = min(_e_p, 50.0)
+        # Punta de afuera cuadrada + tapon opaco: "la barra sigue". El
+        # lado de afuera es el izquierdo si falta y el derecho si sobra.
+        _radio = ("0 999px 999px 0" if _neg_p else "999px 0 0 999px") \
+            if _topa else "999px"
+        _antes = (f"<div style='position:absolute;top:2px;{_lado_p};"
+                  f"width:{_e_p:.2f}%;height:7px;"
+                  f"border-radius:{_radio};background:{_tono(val_prev)[1]};"
+                  f"opacity:.45'></div>")
+        if _topa:
+            _antes += (
+                f"<div style='position:absolute;top:2px;"
+                f"{'left:0' if _neg_p else 'right:0'};width:2px;height:7px;"
+                f"background:{_tono(val_prev)[1]}'></div>")
+        _hoy = (f"<div style='position:absolute;top:14px;{_lado};"
+                f"width:{max(esc, 0.4):.2f}%;height:11px;"
+                f"border-radius:999px;background:{_col}'></div>")
     return (
-        f"<div style='position:relative;height:18px;margin:10px 0 4px'>"
+        f"<div style='position:relative;height:{_alto}px;margin:10px 0 4px'>"
         f"<div style='position:absolute;left:0;right:0;top:50%;height:1px;"
         f"background:{GRIS_FONDO}'></div>"
         f"<div style='position:absolute;top:0;bottom:0;left:50%;width:1px;"
         f"background:{GRIS_BORDE}'></div>"
-        f"<div style='position:absolute;top:50%;transform:translateY(-50%);"
-        f"{_lado};width:{max(esc, 0.4):.2f}%;height:11px;"
-        f"border-radius:999px;background:{_col}'></div></div>"
+        f"{_antes}{_hoy}</div>"
         f"<div style='display:flex;justify-content:space-between;"
         f"font-size:9.5px;color:{GRIS_BORDE};letter-spacing:.04em'>"
         f"<span>falta</span><span>0</span><span>sobra</span></div>")
+
+
+def _delta_corte(val, val_prev):
+    """El texto de la diferencia contra el corte anterior, o None.
+
+    SIN COLOR PROPIO, y es a proposito: en esta tarjeta el color ya
+    significa faltante/sobrante, y darle una segunda lectura ("mejoro" /
+    "empeoro") es el error que documenta la #423 -- varios canales
+    codificando variables distintas en el mismo sitio. El chip dice
+    DIRECCION y MAGNITUD; de que lado esta lo sigue diciendo la barra.
+
+    La flecha es sobre el TAMAÑO del ajuste, no sobre el valor con signo:
+    un faltante que va de -1.000 a -5.000 sale "▲ 400%" (el faltante
+    crecio), que es como se lee en voz alta. Por eso el cambio de signo no
+    se dice en %, que ahi no querria decir nada: se dice en palabras.
+
+    Arriba del 999% el porcentaje deja de leerse como numero y pasa a
+    "×N" -- mismo criterio que `_frase_ratio`, donde un "-177.9 %" se leia
+    como error de calculo.
+    """
+    if val_prev is None:
+        return None
+    if abs(val_prev) < 0.5:
+        return "nuevo"
+    if (val < 0) != (val_prev < 0):
+        return "pasó a sobrar" if val > 0 else "pasó a faltar"
+    _pct = (abs(val) - abs(val_prev)) / abs(val_prev) * 100
+    if abs(_pct) < 0.5:
+        return "igual"
+    _f = "▲" if _pct > 0 else "▼"
+    if abs(_pct) >= 999:
+        return f"{_f} ×{abs(val) / abs(val_prev):.0f}"
+    return f"{_f} {abs(_pct):.0f}%"
 
 
 def _css():
@@ -363,7 +443,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     _est = estado_filtros_vista(
         df, df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         k_corte=_K_CORTE, k_familia=_K_FAMILIA, k_area=_K_AREA,
-        familias=FAMILIAS_DE_ENTRADA)
+        familias=FAMILIAS_DE_ENTRADA, con_corte_previo=True)
     d = _est["d"]
 
     agg = d.groupby(grp_col, as_index=False)[col_ajuste_val].sum()
@@ -412,6 +492,27 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _vv = d.groupby(grp_col)[col_valorizado].sum()
     _total = float(agg[col_ajuste_val].sum())
     _abs_sum = float(agg["_abs"].sum()) or 1.0
+
+    # El mismo ajuste, por familia, en el corte ANTERIOR. `d_prev` ya viene
+    # filtrado igual que `d` (misma area, misma familia): compararlo con
+    # otro filtro seria comparar dos cosas distintas. Una familia que no
+    # aparece ahi no movio nada entonces, que es un 0 y no un "no se".
+    _hay_prev = _est["corte_prev"] is not None
+    _prev = {}
+    _d_prev = _est["d_prev"]
+    if _hay_prev and _d_prev is not None and not _d_prev.empty \
+            and grp_col in _d_prev.columns:
+        _prev = {str(_k): float(_v) for _k, _v
+                 in _d_prev.groupby(grp_col)[col_ajuste_val].sum().items()}
+
+    # LA ESCALA ES LA DE HOY, y eso REVIERTE mi primer intento del mismo
+    # dia. Habia metido los valores del corte anterior en el maximo, para
+    # que la barra de antes no se saliera del semiancho. Medido en la app
+    # con datos reales: el maximo saltaba de 6.072 a ~28.500 -- un corte
+    # pasado con un faltante enorme-- y con el las barras de HOY quedaban
+    # en 1 y 4 pixeles de 135. La barra que hay que poder leer es la de
+    # ahora; la de antes es el contexto. Lo que se hace con la que no
+    # entra es TOPARLA y que se note (`_barra_cero`), no achicar todo.
     _max_abs = float(agg["_abs"].max()) or 1.0
 
     _fams = []
@@ -419,10 +520,13 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         _nom = str(agg[grp_col].iloc[_i])
         _v = float(agg[col_ajuste_val].iloc[_i])
         _bse = float(_vv.get(_nom, 0) or 0) if _vv is not None else 0.0
+        _vp = _prev.get(_nom, 0.0) if _hay_prev else None
         _fams.append({
             "cat": _nom, "val": _v, "base": _bse,
             "peso": abs(_v) / _abs_sum * 100,
             "esc": abs(_v) / _max_abs * 50,
+            "prev": _vp,
+            "esc_prev": (abs(_vp) / _max_abs * 50) if _vp is not None else None,
             "tt": (_v / _base_tot * 100) if abs(_base_tot) > 1e-6 else None,
         })
 
@@ -498,7 +602,8 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     _cf = st.columns(3, gap="small")
                     _controles([c.container(key=k)
                                 for c, k in zip(_cf, _K_CTRL)])
-                    _render_total(_total, _base_tot, len(_fams))
+                    _render_total(_total, _base_tot, len(_fams),
+                                  _est["corte_prev"])
             with st.container(border=True, key="ajcas_card_drill"):
                 _drill(_act["cat"], d, grp_col, col_ajuste_val, col_producto,
                        col_area, col_cantidad, col_unidad)
@@ -510,7 +615,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             _render_mini(_f)
 
 
-def _render_total(total, base, n_familias):
+def _render_total(total, base, n_familias, corte_prev=None):
     """ZONA 2, abajo: el neto del período, debajo de los tres controles.
 
     No es de la familia con foco sino de TODAS -- es el contexto contra el
@@ -522,6 +627,13 @@ def _render_total(total, base, n_familias):
 
     Alineado a la derecha y con un filete arriba que lo despega de los
     controles: arriba se toca, abajo se lee.
+
+    `corte_prev` es la LEYENDA de la barra clara de las minis, y vive acá
+    y no en cada minitarjeta por lo mismo que la #238: un rótulo idéntico
+    repetido en las seis tarjetas es ruido, y el sitio donde se lee el
+    contexto de la vista entera es éste. Tampoco puede ir como `title` de
+    la barra: el botón de la mini cubre la tarjeta completa (#421), así
+    que nada de adentro recibe el hover.
     """
     _col = _tono(total)[0]
     _sig = "+" if total > 0 else "−"
@@ -541,29 +653,52 @@ def _render_total(total, base, n_familias):
             f"{_sig}S/ {abs(total):,.0f}</div>"
             f"<div style='font-size:10.5px;color:{GRIS_TEXTO}'>"
             f"{_pct}{n_familias} "
-            f"{'familia' if n_familias == 1 else 'familias'}</div></div>",
+            f"{'familia' if n_familias == 1 else 'familias'}</div>"
+            + (f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
+               f"margin-top:3px'>barra clara = "
+               f"{corte_prev['etiqueta_anio']}</div>"
+               if corte_prev else "")
+            + "</div>",
             unsafe_allow_html=True)
 
 
 def _render_mini(f):
-    """Una familia del riel: nombre, monto y su barra desde el cero.
+    """Una familia del riel: nombre, monto, diferencia y barras del cero.
 
     El boton va ADENTRO del mismo contenedor que el HTML y el CSS lo estira
     a toda la tarjeta (ver `_css`). Label de un espacio: el texto se
     esconde con `color: transparent` porque un label vacio deja el boton
     sin caja que estirar.
+
+    La comparacion contra el corte anterior (2026-09-15) son dos piezas
+    que dicen lo mismo de dos maneras y por eso van juntas: el chip con la
+    diferencia en % a la derecha del monto, y la barra apagada arriba de
+    la de ahora. Si no hay corte anterior las dos desaparecen y la
+    minitarjeta vuelve a ser la de antes.
     """
     _col = _tono(f["val"])[0]
     _sig = "+" if f["val"] > 0 else "−"
+    _chip = _delta_corte(f["val"], f.get("prev"))
     with st.container(key=f"ajcas_mini_{_slug(f['cat'])}"):
         st.markdown(
             f"<div style='font-size:11px;font-weight:600;"
             f"color:{GRIS_TEXTO_MEDIO};white-space:nowrap;overflow:hidden;"
             f"text-overflow:ellipsis'>{f['cat']}</div>"
-            f"<div style='font-size:14px;font-weight:600;color:{_col};"
+            f"<div style='display:flex;align-items:baseline;gap:6px;"
+            f"justify-content:space-between;margin-top:1px'>"
+            f"<span style='font-size:14px;font-weight:600;color:{_col};"
             f"font-variant-numeric:tabular-nums;letter-spacing:-.02em;"
-            f"margin-top:1px'>{_sig}S/ {abs(f['val']):,.0f}</div>"
-            f"{_barra_cero(f['val'], f['esc'])}",
+            # EL MONTO NO SE ENCOGE Y EL CHIP SI. Sin esto, un chip largo
+            # ("pasó a sobrar") le come el ancho al monto y "+S/ 1,489"
+            # se parte en dos renglones -- visto al angostar la mini.
+            f"white-space:nowrap;flex:0 0 auto'>"
+            f"{_sig}S/ {abs(f['val']):,.0f}</span>"
+            + (f"<span style='font-size:9.5px;font-weight:600;"
+               f"color:{GRIS_TEXTO};white-space:nowrap;min-width:0;"
+               f"overflow:hidden;text-overflow:ellipsis'>{_chip}</span>"
+               if _chip else "")
+            + f"</div>"
+            f"{_barra_cero(f['val'], f['esc'], f.get('prev'), f.get('esc_prev'))}",
             unsafe_allow_html=True)
         # EL LABEL ES EL NOMBRE ACCESIBLE, y por eso no es " ".
         # El boton se esconde con `color: transparent` (ver `_css`), no

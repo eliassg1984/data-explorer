@@ -117,6 +117,12 @@ def _periodo_pivote_ajuste(fechas, gran):
 # Es un DEFAULT, no un filtro fijo: la familia sigue estando en el
 # compartimento a un clic de distancia. Ver la memoria del proyecto sobre
 # "fijo en X es un default".
+# Cuántos cortes ofrece el popover de fecha. Es la ventana OFRECIDA, no
+# la lista completa: `estado_filtros_vista` se guarda todos los cortes del
+# parquet aparte, porque el corte ANTERIOR al más viejo de los doce existe
+# igual y es contra el que hay que comparar.
+MAX_CORTES_OFRECIDOS = 12
+
 FAMILIAS_DE_ENTRADA = (
     "ALIMENTOS",
     "BEBIDAS CON ALCOHOL",
@@ -153,7 +159,7 @@ def areas_con_ajuste(df, col_area, col_ajuste_val):
 
 def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
                          col_ajuste_val, k_corte, k_familia, k_area,
-                         familias=FAMILIAS_DE_ENTRADA):
+                         familias=FAMILIAS_DE_ENTRADA, con_corte_previo=False):
     """ESTADO PRIMERO, WIDGETS DESPUES: resuelve los tres filtros sin
     dibujar nada, y devuelve el dict que consume `render_filtros_vista`.
 
@@ -174,19 +180,34 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     rango. Sin `df_full` (o sin columna de fecha) no hay selector de corte
     y la vista se queda con el `df` que le dieron.
 
+    Con `con_corte_previo` devuelve ademas el corte ANTERIOR al elegido y
+    su df, filtrado EXACTAMENTE igual (misma area, misma familia, misma
+    normalizacion) -- que es todo el punto: comparar dos cortes filtrados
+    distinto no compara nada. Lo usa la Cascada para la mini-barra de
+    "contra el corte pasado" del riel. Es opt-in porque cuesta un filtrado
+    mas sobre el parquet entero y el Mapa de calor no lo necesita.
+
+    El corte anterior sale de la lista COMPLETA, no de los
+    `MAX_CORTES_OFRECIDOS` que ofrece el popover: si no, el mas viejo de
+    los doce se quedaria sin comparacion por un limite que es de la UI.
+
     Claves del dict: `base` (el corte entero, sin area ni familia: es lo
     que ofrecen las pastillas), `d` (ya filtrado, lo que dibuja la vista),
-    `corte`, `cortes`, `areas`, `sel_fam`, `sel_area` y las tres keys.
+    `corte`, `cortes`, `areas`, `sel_fam`, `sel_area`, `corte_prev`,
+    `d_prev` y las tres keys.
     """
     sel_area = list(st.session_state.get(k_area) or [])
 
     base = df
-    cortes = []
+    base_prev = None
+    cortes, _todos, _fechas = [], [], None
     if df_full is not None and col_fecha and col_fecha in df_full.columns:
         base = df_full
-        cortes = cortes_disponibles(
-            pd.to_datetime(df_full[col_fecha], errors="coerce"), maximo=12)
-    corte = None
+        _fechas = pd.to_datetime(df_full[col_fecha], errors="coerce").dt.date
+        _todos = cortes_disponibles(
+            pd.to_datetime(df_full[col_fecha], errors="coerce"))
+        cortes = _todos[-MAX_CORTES_OFRECIDOS:]
+    corte = corte_prev = None
     if cortes:
         _clave = st.session_state.get(k_corte)
         corte = next((c for c in cortes if c["clave"] == _clave), None)
@@ -195,27 +216,43 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
             # sesion de inventario, no un intervalo de calendario.
             corte = cortes[-1]
             st.session_state[k_corte] = corte["clave"]
-        _fechas = pd.to_datetime(base[col_fecha], errors="coerce").dt.date
+        if con_corte_previo:
+            _i = next((i for i, c in enumerate(_todos)
+                       if c["clave"] == corte["clave"]), 0)
+            corte_prev = _todos[_i - 1] if _i > 0 else None
+            if corte_prev is not None:
+                base_prev = base[_fechas.isin(set(corte_prev["dias"]))]
         base = base[_fechas.isin(set(corte["dias"]))]
 
     # NORMALIZAR EL AREA, no solo la lista de opciones: `filtro_pills`
     # compara la seleccion contra el valor CRUDO, y el maestro trae
     # "CAVA " con espacio al final. Ver arquitectura.md regla #424.
-    if col_area and col_area in base.columns:
-        base = base.assign(
-            **{col_area: base[col_area].astype(str).str.strip()})
+    def _normalizar(x):
+        if x is None or not col_area or col_area not in x.columns:
+            return x
+        return x.assign(**{col_area: x[col_area].astype(str).str.strip()})
+
+    base, base_prev = _normalizar(base), _normalizar(base_prev)
+    # Las opciones las decide el corte ELEGIDO, nunca el anterior: ofrecer
+    # un area que no movio nada ahora es ofrecer una pastilla que deja la
+    # vista vacia, y de eso se trata `areas_con_ajuste` (#424).
     areas = areas_con_ajuste(base, col_area, col_ajuste_val)
     if col_familia and col_familia in base.columns:
         sembrar_seleccion(base, col_familia, k_familia, list(familias))
     sel_fam = list(st.session_state.get(k_familia) or [])
 
-    d = base
-    if sel_area and col_area and col_area in d.columns:
-        d = d[d[col_area].astype(str).isin(sel_area)]
-    if sel_fam and col_familia and col_familia in d.columns:
-        d = d[d[col_familia].astype(str).isin(sel_fam)]
+    def _aplicar(x):
+        if x is None:
+            return None
+        if sel_area and col_area and col_area in x.columns:
+            x = x[x[col_area].astype(str).isin(sel_area)]
+        if sel_fam and col_familia and col_familia in x.columns:
+            x = x[x[col_familia].astype(str).isin(sel_fam)]
+        return x
 
-    return {"base": base, "d": d, "corte": corte, "cortes": cortes,
+    return {"base": base, "d": _aplicar(base), "corte": corte,
+            "cortes": cortes, "corte_prev": corte_prev,
+            "d_prev": _aplicar(base_prev),
             "areas": areas, "sel_fam": sel_fam, "sel_area": sel_area,
             "col_familia": col_familia, "col_area": col_area,
             "k_corte": k_corte, "k_familia": k_familia, "k_area": k_area}
