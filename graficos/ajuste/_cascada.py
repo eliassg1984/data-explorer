@@ -502,7 +502,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # dejo vacia -- un callejon sin salida.
         with st.container(key="ajcas_cuerpo"):
             # columnas-internas: tarjeta de la familia vs. de controles
-            _z1, _z2 = st.columns([1.35, 1])
+            _z1, _z2 = st.columns([0.93, 1])
             with _z1:
                 with st.container(border=True, key="ajcas_card_familia"):
                     st.markdown(
@@ -565,7 +565,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # tarjeta no se leen.
         with st.container(key="ajcas_cuerpo"):
             # columnas-internas: tarjeta de la familia vs. de controles
-            _z1, _z2 = st.columns([1.35, 1])
+            # 0.93 : 1 y no 1.35 : 1, a pedido, sobre una medicion del modo
+            # diseno: a 1555px de viewport la de familia salia 611 y se
+            # pidio ~510. Se cambia la PROPORCION y no un ancho fijo --
+            # 510px serian correctos en esa pantalla y falsos en una
+            # laptop de 1366. El espacio que suelta la izquierda se lo
+            # queda la de controles (511 | 550), en vez de dejar el hueco
+            # muerto que mostraba el preview: el modo diseno achica solo
+            # el elemento pineado, no reacomoda a su hermano.
+            _z1, _z2 = st.columns([0.93, 1])
             with _z1:
                 with st.container(border=True, key="ajcas_card_familia"):
                     _peso = ("&lt;1%" if _act["peso"] < 0.5

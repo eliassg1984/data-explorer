@@ -36367,9 +36367,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      se replica con el prefijo propio (`ajcas_card_`) en vez de sumar el
      selector a `estilos/_80_cards.py`.
 
-     Resultado verificado: familia `89→467` (378px), controles `483→761`
-     (278px) — **las dos de 227px de alto, iguales** —, y el detalle
-     `89→761`, los 672px del ancho útil. Triggers apilados sin solape. La
+     **La proporción de la fila es `[0.93, 1]`, no un ancho fijo.** Salió
+     de un redimensionado en el modo diseño: a 1555px de viewport la
+     tarjeta de familia nacía en 611px y se pidió ~510. Lo que se cambia es
+     la PROPORCIÓN — 510px serían correctos en esa pantalla y falsos en una
+     laptop de 1366. Y el espacio que suelta la izquierda se lo queda la
+     derecha (medido: 511 | 550, con los 16px de gap), en vez de dejar el
+     hueco muerto que mostraba el preview: **el modo diseño achica sólo el
+     elemento fijado, no reacomoda a su hermano**, así que su vista previa
+     de un cambio de proporción siempre miente por ese lado.
+
+     Resultado verificado a 1555px: familia 511×227, controles 550×227
+     —iguales—, detalle 1077 y las tres cerrando en el mismo borde.
+     Triggers apilados sin solape. La
      ficha del neto se fue del riel a la tarjeta de controles, así que las
      mini-tarjetas suben y la primera queda en `top=40`, al ras de las
      otras dos.
