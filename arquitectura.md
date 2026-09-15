@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-437 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+438 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (156)
 
@@ -191,7 +191,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Layout y alturas** (62)
+**Layout y alturas** (63)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -255,8 +255,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 - **#433** — Arrastrar una tarjeta por debajo del alto de su contenido no la achica: la hace DERRAMAR
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
+- **#438** — Un title adentro de una tarjeta con botón-overlay no se ve nunca; el :hover del CONTENEDOR sí…
 
-**Plotly y figuras** (72)
+**Plotly y figuras** (73)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -330,6 +331,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#413** — Una decisión tomada por una restricción se revisa cuando la restricción se va: el eje Y de…
 - **#436** — Meter un dato de CONTEXTO en una escala compartida la rompe: lo que no entra se TOPA, no se…
 - **#437** — Dos datos distintos dibujados con la MISMA marca no se distinguen, por más que les cambies el…
+- **#438** — Un title adentro de una tarjeta con botón-overlay no se ve nunca; el :hover del CONTENEDOR sí…
 
 **AgGrid y tablas** (68)
 
@@ -36745,6 +36747,57 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+438. **Un `title` adentro de una tarjeta con botón-overlay no se ve nunca;
+     el `:hover` del CONTENEDOR sí llega.** Las minitarjetas del riel de la
+     Cascada pidieron detalle: «casi no se ve ese gráfico de barras… es
+     posible que tenga alguna etiqueta al pasar, porque solamente se ven
+     como barras pero sin más detalle».
+
+     El reflejo es poner `title` en cada columna del minigráfico. **Ahí no
+     sirve para nada.** Esa tarjeta tiene el botón estirado con
+     `position: absolute; inset: 0` para que TODA su superficie sea
+     clickeable (#421), así que el elemento bajo el cursor es siempre el
+     botón y ningún hijo recibe el hover ni muestra su tooltip. Es la
+     misma familia de problema que la #428, donde `help=` tampoco
+     alcanzaba.
+
+     Lo que sí funciona: **`:hover` sube por los ancestros.** El botón es
+     descendiente del contenedor de la tarjeta, así que el contenedor se
+     pone `:hover` igual, y de ahí se cuelga un panel propio
+     (`_detalle_cortes`) que lista corte por corte. CSS puro, sin JS
+     —`st.markdown` no lo ejecutaría— y con tres condiciones que no son
+     opcionales:
+
+     · **`pointer-events: none` en el panel.** Sin eso el panel se mete
+       entre el cursor y el botón y la tarjeta deja de ser clickeable
+       justo cuando el usuario ya la tiene apuntada — el #421 otra vez,
+       por la puerta de atrás.
+     · **Abre hacia la IZQUIERDA** (`right: calc(100% + 10px)`): el riel
+       es la columna de más a la derecha de la página y un panel hacia
+       afuera se sale de la ventana.
+     · **`visibility` además de `opacity`**, para que no quede un rectángulo
+       invisible capturando nada ni ensuciando el árbol de accesibilidad.
+
+     **Donde el hover SÍ llega, el `title` nativo es lo correcto.** La
+     tarjeta protagonista no tiene botón-overlay, así que ahí cada columna
+     lleva el suyo y no hace falta panel. Dos mecanismos distintos para el
+     mismo dato, y el que decide no es el gusto: es si algo tapa el hover.
+
+     **Y de paso: un gráfico que no dice qué está mostrando no está
+     terminado.** Las columnas sumaron rótulos en las PUNTAS (primero y
+     último corte) — solo las puntas, porque un rótulo de fecha mide ~30px
+     contra los 18 de una columna y seis seguidos se pisan.
+
+     En la misma tanda, la tarjeta protagonista estrenó el chip y el
+     minigráfico que hasta entonces eran solo de las minis. No es
+     simetría decorativa: **sin eso, hacer clic en una mini para ver más
+     detalle HACÍA DESAPARECER la comparación**, que es lo contrario de lo
+     que el clic promete. Cuando una tarjeta "grande" y una "chica"
+     muestran la misma entidad, lo que gana la grande tiene que ser
+     detalle, nunca menos información.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36757,7 +36810,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#438**.
+> próxima regla nueva es la **#439**.
 
 >
 

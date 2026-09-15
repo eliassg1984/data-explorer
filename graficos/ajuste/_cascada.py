@@ -141,7 +141,7 @@ def _barra_cero(val, esc):
         f"<span>falta</span><span>0</span><span>sobra</span></div>")
 
 
-def _minigraf_cortes(serie):
+def _minigraf_cortes(serie, cortes=None):
     """Micro columnas por corte: la historia de la familia, de izquierda a
     derecha, con la de AHORA al final y a color pleno.
 
@@ -151,7 +151,7 @@ def _minigraf_cortes(serie):
     habia como saber cual era cual sin una leyenda. Columnas verticales
     apoyadas en una linea de base se leen como tiempo -- no como "otro
     ajuste"-- y la de mas a la derecha se lee como "hoy" sin que nadie lo
-    explique.
+    explique. Ver regla #437.
 
     ESCALA PROPIA DE LA FAMILIA, y es a proposito: aca lo que se mira es
     la FORMA (venia creciendo, se dio vuelta, es estable), no cuanto pesa
@@ -162,7 +162,15 @@ def _minigraf_cortes(serie):
 
     Cada columna va del color de SU signo (faltante/sobrante), asi que un
     corte que se dio vuelta se ve como un salto de lado de la linea. Las
-    pasadas al 42%; la ultima, plena.
+    pasadas al 55%; la ultima, plena.
+
+    Con `cortes` (los dicts de `estado_filtros_vista`) cada columna lleva
+    su `title` --el tooltip nativo del navegador, sin JS-- y debajo van
+    los rotulos de las PUNTAS, primero y ultimo. Solo las puntas: un
+    rotulo de fecha mide ~30px contra los 18 de una columna, y seis
+    seguidos se pisan. El detalle corte por corte de las minitarjetas lo
+    da `_detalle_cortes`, porque ahi el tooltip nativo no llega (el boton
+    tapa la tarjeta entera, #421).
     """
     if not serie or len(serie) < 2:
         return ""
@@ -170,26 +178,78 @@ def _minigraf_cortes(serie):
     _cols = []
     for _i, _v in enumerate(serie):
         _ultima = _i == len(serie) - 1
-        _h = max(abs(_v) / _mx * 13.0, 1.5)
+        _h = max(abs(_v) / _mx * 15.0, 2.0)
         _c = _tono(_v)[1] if abs(_v) > 1e-9 else GRIS_BORDE
-        _pos = "bottom:15px" if _v >= 0 else "top:15px"
+        _pos = "bottom:17px" if _v >= 0 else "top:17px"
+        _tit = ""
+        if cortes and _i < len(cortes):
+            _sg = "+" if _v > 0 else ("−" if _v < 0 else "")
+            _tit = (f" title='{cortes[_i]['etiqueta_anio']}: "
+                    f"{_sg}S/ {abs(_v):,.0f}'")
         # COLUMNA ANGOSTA CON AIRE AL LADO, no seis bloques pegados que se
         # reparten el ancho. Con `flex:1` daban 27px de ancho por 3-11 de
         # alto: a esa proporcion se leen como guiones, no como un grafico
-        # de columnas. 16px de ancho contra 13 de alto ya es una columna, y
+        # de columnas. 18px de ancho contra 15 de alto ya es una columna, y
         # el `space-between` del contenedor reparte lo que sobra en aire.
         _cols.append(
-            f"<div style='position:relative;flex:0 1 16px;height:30px'>"
+            f"<div style='position:relative;flex:0 1 18px;height:34px'"
+            f"{_tit}>"
             f"<div style='position:absolute;{_pos};left:0;right:0;"
             f"height:{_h:.1f}px;background:{_c};border-radius:2px;"
-            f"opacity:{'1' if _ultima else '.42'}'></div></div>")
+            f"opacity:{'1' if _ultima else '.55'}'></div></div>")
     # La linea de base es `absolute`, o sea que NO es un flex item (queda
     # fuera del flujo) y las columnas no le ceden ancho.
-    return (
-        f"<div style='position:relative;display:flex;"
-        f"justify-content:space-between;height:30px;margin-top:7px'>"
-        f"<div style='position:absolute;left:0;right:0;top:15px;height:1px;"
+    #
+    # `max-width` para que el grafico se vea IGUAL en la mini y en la
+    # protagonista: sin tope, en una tarjeta de 360px las seis columnas
+    # quedan separadas 50px y se leen como puntos sueltos.
+    _graf = (
+        f"<div style='position:relative;display:flex;max-width:210px;"
+        f"justify-content:space-between;height:34px;margin-top:7px'>"
+        f"<div style='position:absolute;left:0;right:0;top:17px;height:1px;"
         f"background:{GRIS_FONDO}'></div>{''.join(_cols)}</div>")
+    if not cortes:
+        return _graf
+    return _graf + (
+        f"<div style='display:flex;max-width:210px;"
+        f"justify-content:space-between;font-size:9px;"
+        f"color:{GRIS_TEXTO_SUAVE};margin-top:2px'>"
+        f"<span>{cortes[0]['etiqueta']}</span>"
+        f"<span>{cortes[-1]['etiqueta']}</span></div>")
+
+
+def _detalle_cortes(serie, cortes):
+    """El panel corte-por-corte que la minitarjeta muestra al pasar el
+    mouse. Se abre y se cierra con CSS puro (ver `_css`), sin JS.
+
+    Existe porque adentro de una mini el tooltip nativo NO llega: el boton
+    que la hace clickeable esta por encima con `inset: 0` (#421), asi que
+    ningun hijo recibe el hover ni puede mostrar su `title`. Lo que si
+    pasa es que el contenedor de la tarjeta se pone `:hover` igual --el
+    boton es su descendiente--, y de ese `:hover` cuelga este panel.
+
+    Reportado como "casi no se ve ese grafico de barras... solamente se
+    ven como barras pero sin mas detalle".
+    """
+    if not serie or not cortes or len(serie) < 2:
+        return ""
+    _filas = []
+    for _v, _c in zip(serie, cortes):
+        _sg = "+" if _v > 0 else ("−" if _v < 0 else "")
+        _col = _tono(_v)[0] if abs(_v) > 1e-9 else GRIS_TEXTO_SUAVE
+        _filas.append(
+            f"<div style='display:flex;justify-content:space-between;"
+            f"gap:14px;white-space:nowrap;line-height:1.55'>"
+            f"<span style='color:{GRIS_TEXTO}'>{_c['etiqueta_anio']}</span>"
+            f"<span style='color:{_col};font-weight:600;"
+            f"font-variant-numeric:tabular-nums'>"
+            f"{_sg}S/ {abs(_v):,.0f}</span></div>")
+    return (
+        f"<div class='ajcas-detalle'>"
+        f"<div style='font-size:9px;color:{GRIS_TEXTO_SUAVE};"
+        f"text-transform:uppercase;letter-spacing:.07em;font-weight:600;"
+        f"margin-bottom:4px'>Últimos {len(serie)} cortes</div>"
+        f"{''.join(_filas)}</div>")
 
 
 def _delta_corte(val, val_prev):
@@ -355,6 +415,32 @@ def _css():
         outline: 2px solid {ACENTO} !important; outline-offset: 1px; }}
     div[class*="st-key-ajcas_mini_"] [data-testid="stMarkdownContainer"] p {{
         margin: 0 !important; }}
+
+    /* ── EL PANEL DE DETALLE DE LA MINI ───────────────────────────────
+       Se abre con el `:hover` de la TARJETA, no con el suyo: adentro de
+       una mini el boton esta por encima con `inset: 0` (#421) y ningun
+       hijo recibe el hover. El contenedor si lo recibe, porque el boton
+       es su descendiente y `:hover` sube por los ancestros.
+
+       `pointer-events: none` no es un detalle: sin eso el panel se mete
+       entre el cursor y el boton, y la mitad de la tarjeta deja de ser
+       clickeable justo cuando el usuario ya la tiene apuntada.
+
+       Va a la IZQUIERDA (`right: 100%`) porque el riel es la columna de
+       mas a la derecha de la pagina: abierto hacia afuera se saldria de
+       la ventana. */
+    div[class*="st-key-ajcas_mini_"] .ajcas-detalle {{
+        position: absolute; right: calc(100% + 10px); top: -6px;
+        min-width: 158px; padding: 9px 11px;
+        font-size: 10.5px; text-align: left;
+        background: {BLANCO}; border: 1px solid {GRIS_BORDE};
+        border-radius: 10px; box-shadow: 0 8px 22px rgba(0,0,0,.12);
+        opacity: 0; visibility: hidden; transform: translateX(6px);
+        transition: opacity .12s ease, transform .12s ease,
+                    visibility .12s ease;
+        pointer-events: none; z-index: 20; }}
+    div[class*="st-key-ajcas_mini_"]:hover .ajcas-detalle {{
+        opacity: 1; visibility: visible; transform: none; }}
 
     /* ── TARJETA PROTAGONISTA ─────────────────────────────────────────
        Blanca como la cabecera y las minis: `var(--bg-card)`, no un
@@ -548,6 +634,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
             "peso": abs(_v) / _abs_sum * 100,
             "esc": abs(_v) / _max_abs * 50,
             "serie": _ser,
+            "cortes": _hist if _ser else None,
             # El chip compara contra el corte anterior, que es la anteultima
             # columna del minigrafico -- el mismo numero, dicho exacto.
             "prev": _ser[-2] if _ser and len(_ser) > 1 else None,
@@ -724,7 +811,8 @@ def _render_mini(f):
                if _chip else "")
             + f"</div>"
             f"{_barra_cero(f['val'], f['esc'])}"
-            f"{_minigraf_cortes(f.get('serie'))}",
+            f"{_minigraf_cortes(f.get('serie'), f.get('cortes'))}"
+            f"{_detalle_cortes(f.get('serie'), f.get('cortes'))}",
             unsafe_allow_html=True)
         # EL LABEL ES EL NOMBRE ACCESIBLE, y por eso no es " ".
         # El boton se esconde con `color: transparent` (ver `_css`), no
@@ -746,15 +834,30 @@ def _render_zona_familia(f):
     NO dibuja el nombre ni el drill. El nombre lo pone el llamador (abre la
     zona) y el drill es la ZONA 3, que va a todo el ancho de la tarjeta y
     por lo tanto fuera de esta columna.
+
+    Lleva el MISMO chip y el MISMO minigrafico que las minis desde el
+    2026-09-15 (a pedido). No es simetria porque si: sin esto, hacer clic
+    en una mini para ver el detalle de una familia HACIA DESAPARECER su
+    comparacion -- la informacion se iba justo cuando el usuario pedia
+    mas. Aca el tooltip nativo de cada columna si funciona, porque esta
+    tarjeta no tiene el boton-overlay que tapa a las minis (#421).
     """
     _col = _tono(f["val"])[0]
     _sig = "+" if f["val"] > 0 else "−"
+    _chip = _delta_corte(f["val"], f.get("prev"))
     st.markdown(
-        f"<div style='font-size:36px;font-weight:600;color:{_col};"
+        f"<div style='display:flex;align-items:baseline;gap:10px;"
+        f"flex-wrap:wrap;margin-top:4px'>"
+        f"<span style='font-size:36px;font-weight:600;color:{_col};"
         f"font-variant-numeric:tabular-nums;letter-spacing:-.03em;"
-        f"line-height:1.15;margin-top:4px'>"
-        f"{_sig}S/ {abs(f['val']):,.0f}</div>"
-        f"{_barra_cero(f['val'], f['esc'])}",
+        f"line-height:1.15'>{_sig}S/ {abs(f['val']):,.0f}</span>"
+        + (f"<span style='font-size:11px;font-weight:600;"
+           f"color:{GRIS_TEXTO};white-space:nowrap'>{_chip} "
+           f"<span style='font-weight:400;color:{GRIS_TEXTO_SUAVE}'>"
+           f"vs. corte anterior</span></span>" if _chip else "")
+        + f"</div>"
+        f"{_barra_cero(f['val'], f['esc'])}"
+        f"{_minigraf_cortes(f.get('serie'), f.get('cortes'))}",
         unsafe_allow_html=True)
 
     _pie = []

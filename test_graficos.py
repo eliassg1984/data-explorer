@@ -3637,13 +3637,13 @@ def _pruebas_delta_corte():
     _mg = _minigraf_cortes([-100.0, 50.0, -900.0])
     check("una columna por corte", _mg.count("border-radius:2px"), 3)
     check("la última va plena y las pasadas apagadas",
-          _mg.count("opacity:.42") == 2 and _mg.count("opacity:1") == 1, True)
+          _mg.count("opacity:.55") == 2 and _mg.count("opacity:1") == 1, True)
     # Contra "top:13px;left:1px" y no contra "top:13px" a secas: la línea
-    # de base también se posiciona en 15px, y sin el sufijo la cuenta le
+    # de base también se posiciona en 17px, y sin el sufijo la cuenta le
     # suma una columna negativa que no existe.
     check("el faltante cuelga de la línea y el sobrante se apoya en ella",
-          _mg.count("top:15px;left:0") == 2
-          and _mg.count("bottom:15px;left:0") == 1, True)
+          _mg.count("top:17px;left:0") == 2
+          and _mg.count("bottom:17px;left:0") == 1, True)
 
     # LA ESCALA ES PROPIA DE LA FAMILIA: la misma forma tiene que dar el
     # mismo dibujo, valga 2 mil o 2 millones. Con escala global (la de la
@@ -3651,8 +3651,37 @@ def _pruebas_delta_corte():
     check("misma forma, mismo dibujo, aunque cambie la magnitud",
           _minigraf_cortes([1000.0, 2000.0]) == _minigraf_cortes(
               [1000000.0, 2000000.0]), True)
-    check("el mayor de la serie llega al tope de 13px",
-          "height:13.0px" in _minigraf_cortes([1000.0, 2000.0]), True)
+    check("el mayor de la serie llega al tope de 15px",
+          "height:15.0px" in _minigraf_cortes([1000.0, 2000.0]), True)
+
+    # ── El detalle al pasar el mouse ────────────────────────────────────
+    # Pedido como "solamente se ven como barras pero sin más detalle". Son
+    # DOS mecanismos y no uno por una razón dura: adentro de una mini el
+    # `title` nativo no se ve nunca, porque el botón que la hace
+    # clickeable la tapa entera (#421). Por eso la mini suma un panel que
+    # abre con el `:hover` del CONTENEDOR, que sí llega.
+    from graficos.ajuste._cascada import _detalle_cortes
+
+    _cs = [{"etiqueta": "16 jun", "etiqueta_anio": "16 jun 2026"},
+           {"etiqueta": "4 jul", "etiqueta_anio": "4 jul 2026"},
+           {"etiqueta": "2 set", "etiqueta_anio": "2 set 2026"}]
+    _con = _minigraf_cortes([-100.0, 50.0, -900.0], _cs)
+    check("cada columna lleva su tooltip nativo",
+          _con.count("title='") == 3, True)
+    check("...con la etiqueta del corte y el monto con signo",
+          "title='2 set 2026: −S/ 900'" in _con, True)
+    # Solo las PUNTAS: seis rótulos de fecha seguidos se pisan entre sí.
+    check("debajo van los rótulos del primero y el último, nada más",
+          _con.count(">16 jun<") == 1 and _con.count(">4 jul<") == 0
+          and _con.count(">2 set<") == 1, True)
+
+    check("sin cortes no hay tooltips ni rótulos",
+          "title='" in _minigraf_cortes([-100.0, 50.0, -900.0]), False)
+
+    _det = _detalle_cortes([-100.0, 50.0, -900.0], _cs)
+    check("el panel lista un renglón por corte",
+          all(_c["etiqueta_anio"] in _det for _c in _cs), True)
+    check("con un solo corte no hay panel", _detalle_cortes([-100.0], _cs[:1]), "")
 
     return fallos
 
