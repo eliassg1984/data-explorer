@@ -1313,6 +1313,12 @@ JS = """
             pos('el-diseno-rh-s', 'bottom', -5, function() { return oy + oh - vh + M; });
             pos('el-diseno-rh-se', 'right', -6, function() { return ox + ow - vw + M; });
             pos('el-diseno-rh-se', 'bottom', -6, function() { return oy + oh - vh + M; });
+            // n/w cuelgan hacia ARRIBA y hacia la IZQUIERDA, o sea el mismo
+            // modo de falla que la perilla de mover (regla #168): con el
+            // elemento pegado al borde de la ventana su posicion negativa
+            // cae fuera del viewport. Mismo clamp que ella.
+            pos('el-diseno-rh-n', 'top', -5, function() { return -oy + M; });
+            pos('el-diseno-rh-w', 'left', -5, function() { return -ox + M; });
         }
 
         // ---- aplicar/retirar cambios sobre el elemento real ----
@@ -2532,6 +2538,12 @@ JS = """
             var startW = r.width, startH = r.height;
             var startTX = ctx.registro.transformState.translateX;
             var startTY = ctx.registro.transformState.translateY;
+            // Los margenes de arranque los necesitan 'n' y 'w': mueven el
+            // borde de arriba/izquierda compensando con margin, asi que
+            // tienen que sumar sobre lo que el elemento ya traia.
+            var csIni = win.getComputedStyle(ctx.el);
+            var startMT = parseFloat(csIni.marginTop) || 0;
+            var startML = parseFloat(csIni.marginLeft) || 0;
             var cursorPrevio = doc.body.style.cursor;
             doc.body.style.userSelect = 'none';
 
@@ -2553,6 +2565,27 @@ JS = """
                     if (modo.indexOf('s') !== -1) {
                         nuevoAlto = Math.max(piso.alto, Math.round(startH + dy));
                         establecerCambio(vivo.el, vivo.registro, 'height', nuevoAlto + 'px');
+                    }
+                    // NORTE / OESTE: mueven el borde de ARRIBA / IZQUIERDA.
+                    // `width`/`height` solos no pueden: hacen crecer la caja
+                    // desde su esquina superior izquierda, que es justamente
+                    // la que aca tiene que moverse. Se compensa con el margen
+                    // en sentido contrario -- el alto EXTERIOR no cambia, asi
+                    // que el borde opuesto se queda quieto y nada de lo que
+                    // sigue en el flujo se corre. Es la unica forma sin
+                    // `transform`, que ademas capturaria a los hijos `fixed`
+                    // (regla #156). Ver regla #429.
+                    if (modo.indexOf('n') !== -1) {
+                        nuevoAlto = Math.max(piso.alto, Math.round(startH - dy));
+                        establecerCambio(vivo.el, vivo.registro, 'height', nuevoAlto + 'px');
+                        establecerCambio(vivo.el, vivo.registro, 'margin-top',
+                            Math.round(startMT + (startH - nuevoAlto)) + 'px');
+                    }
+                    if (modo.indexOf('w') !== -1) {
+                        nuevoAncho = Math.max(piso.ancho, Math.round(startW - dx));
+                        establecerCambio(vivo.el, vivo.registro, 'width', nuevoAncho + 'px');
+                        establecerCambio(vivo.el, vivo.registro, 'margin-left',
+                            Math.round(startML + (startW - nuevoAncho)) + 'px');
                     }
                     // En vivo, arrastrando: mismo mecanismo que el reaplicado
                     // defensivo de aplicarEstado(), pero con los numeros del
@@ -2618,6 +2651,14 @@ JS = """
             crearHandle('el-diseno-rh-e', 'top:50%;right:-5px;width:9px;height:34px;margin-top:-17px;border-radius:2px', 'e', 'ew-resize');
             crearHandle('el-diseno-rh-s', 'bottom:-5px;left:50%;width:34px;height:9px;margin-left:-17px;border-radius:2px', 's', 'ns-resize');
             crearHandle('el-diseno-rh-se', 'bottom:-6px;right:-6px;width:14px;height:14px;border-radius:3px', 'se', 'nwse-resize');
+            // NORTE y OESTE (2026-09-15, a pedido: "no puedo reducir desde
+            // arriba, solo me permite del lado derecho y de abajo"). Van
+            // CENTRADAS en su borde y no en la esquina: la esquina superior
+            // izquierda ya la ocupa la perilla de mover (top/left -13px, 24px
+            // de diametro) y una manija 'nw' ahi seria inagarrable. Por eso
+            // tampoco hay 'nw': el gesto diagonal sigue siendo solo 'se'.
+            crearHandle('el-diseno-rh-n', 'top:-5px;left:50%;width:34px;height:9px;margin-left:-17px;border-radius:2px', 'n', 'ns-resize');
+            crearHandle('el-diseno-rh-w', 'top:50%;left:-5px;width:9px;height:34px;margin-top:-17px;border-radius:2px', 'w', 'ew-resize');
 
             var mover = doc.createElement('div');
             mover.id = 'el-diseno-mover';

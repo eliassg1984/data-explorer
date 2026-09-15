@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-428 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+429 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (153)
+**CSS y estilos** (154)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -187,8 +187,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#424** — Un filtro categórico que ofrece todo el maestro ofrece pastillas que dejan la vista vacía
 - **#426** — Un hijo de altura CERO no ocupa alto pero sí cobra el gap. Seis de ellos son 96px de página…
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
+- **#429** — Una manija de resize que mueve el borde de ARRIBA no puede escribir sólo height: compensa con…
 
-**Layout y alturas** (58)
+**Layout y alturas** (59)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -248,6 +249,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
 - **#420** — Partir una vista en tarjetas "como Volatilidad" no dice dónde va la cabecera: si sus…
 - **#425** — Cuando una vista de la pila se queda con sus propios filtros, el df que recibe tiene que ser…
+- **#429** — Una manija de resize que mueve el borde de ARRIBA no puede escribir sólo height: compensa con…
 
 **Plotly y figuras** (70)
 
@@ -36269,6 +36271,55 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+429. **Una manija de resize que mueve el borde de ARRIBA no puede
+     escribir sólo `height`: compensa con `margin-top` en sentido
+     contrario.** Reportado: «¿por qué no puedo reducir desde arriba? veo
+     que sólo me permite del lado derecho y de abajo».
+
+     No era un bug: el modo diseño tenía exactamente **tres** manijas
+     (`inyecciones/_diseno_js.py::construirHandles`) — `e` (derecha), `s`
+     (abajo) y `se` (esquina) — y ninguna al norte ni al oeste. El arrastre
+     escribía `width`/`height` y nada más, y esas dos hacen crecer la caja
+     **desde su esquina superior izquierda**, que es justo la que hay que
+     mover para achicar desde arriba.
+
+     **La compensación.** Bajar el borde superior `d` píxeles es
+     `height -= d` **y** `margin-top += d` en el mismo gesto: el alto
+     EXTERIOR no cambia, así que el borde inferior se queda quieto y nada
+     de lo que sigue en el flujo se corre. Medido sobre la tarjeta
+     protagonista de la cascada, arrastrando 80px:
+
+     | | antes | después |
+     |---|---|---|
+     | alto | 500 | 420 |
+     | borde superior | 40 | **120** (bajó los 80 pedidos) |
+     | borde inferior | 540 | **540** (quieto) |
+
+     **Con `transform` no.** Sería más corto, pero un `transform` en un
+     ancestro captura a sus hijos `fixed` (#156) y además no mueve el hueco
+     (#426): las dos razones por las que ya se había descartado para subir
+     la cascada.
+
+     **Dos detalles de la implementación que no se ven venir:**
+
+     - **Van CENTRADAS en su borde, no en la esquina.** No hay manija `nw`:
+       la esquina superior izquierda ya la ocupa la perilla de mover
+       (`top/left: -13px`, 24px de diámetro) y una manija ahí sería
+       inagarrable. El gesto diagonal sigue siendo sólo `se`.
+     - **Necesitan su entrada en `clampManijas`.** Cuelgan hacia arriba y
+       hacia la izquierda con offsets negativos, o sea el mismo modo de
+       falla que la perilla de mover (#168): con el elemento pegado al
+       borde de la ventana, la posición negativa cae fuera del viewport y
+       la manija se vuelve inalcanzable. El clamp es por `id`, así que
+       agregar una manija sin agregar su `pos(...)` la deja rota sólo en
+       los casos de borde.
+
+     Y sigue valiendo lo de antes: `width`/`height` no tienen efecto en un
+     item flex hasta neutralizar `flex`, `max-width` y `max-height`
+     (#47) — el arrastre ya lo hacía y las manijas nuevas heredan eso.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36281,7 +36332,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#429**.
+> próxima regla nueva es la **#430**.
 
 >
 
