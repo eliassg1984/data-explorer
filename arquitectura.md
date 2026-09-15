@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-439 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+440 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (157)
 
@@ -258,7 +258,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 - **#438** — Un title adentro de una tarjeta con botón-overlay no se ve nunca; el :hover del CONTENEDOR sí…
 
-**Plotly y figuras** (74)
+**Plotly y figuras** (75)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -334,6 +334,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#437** — Dos datos distintos dibujados con la MISMA marca no se distinguen, por más que les cambies el…
 - **#438** — Un title adentro de una tarjeta con botón-overlay no se ve nunca; el :hover del CONTENEDOR sí…
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
+- **#440** — Una tabla "documento → detalle" marca su fila con un DATO, no con la selección de AG Grid — y…
 
 **AgGrid y tablas** (68)
 
@@ -36854,6 +36855,77 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+440. **Una tabla "documento → detalle" marca su fila con un DATO, no con
+     la selección de AG Grid — y el iframe de un componente se apoya en la
+     línea de base.** Pedido sobre Compras › Semanal: «en la opción de
+     semana, debe mostrar etiquetas en las barras, y que la tabla de abajo
+     se divida en dos: una que muestre el documento, y al hacer clic
+     muestre en otra tabla del costado el detalle; creo que tiene que ser
+     aggrid». Hasta ese día el detalle era UN `st.dataframe` con todas las
+     líneas del período mezcladas (una semana mediana: 267 líneas de 96
+     documentos).
+
+     - **Etiquetas, con cuenta de píxeles** (`semanal._plan_etiquetas`):
+       en Semana, Mes y Año —la barra es la SUMA de un período—, no en Día
+       ni «Por documento» (30-60 barras). Derecha si la etiqueta entra en
+       el slot del período, girada si entra una línea, si no nada: con el
+       mes corrido de entrada salen 6, derechas, ninguna pisada; con 53
+       semanas, ninguna. El techo del eje sale del alto del ÁREA DE TRAZO,
+       y ese alto no es la figura menos un cromo fijo: medido a 1366x768,
+       figura 449 → área 335 y figura 240 → área 164. Un cromo fijo da 114
+       y 76; las dos cierran con `(alto − 40) / 1.22`, porque la leyenda va
+       a `y = −0.22` y Plotly agranda el margen de abajo hasta que entre —
+       o sea que lo que pide la leyenda CRECE con la figura. La constante
+       es una sola (`_LEYENDA_Y`) para el layout y para la cuenta. Medido
+       después: la etiqueta más alta queda 1px dentro del área, en los dos
+       altos; de los 4 de aire de la cuenta, 3 se los come la separación
+       que Plotly deja entre la barra y su texto.
+     - **Dos AgGrid** (`tablas/compras_semanal.py`, con el look de
+       Volatilidad, `_css_look`): a la izquierda una fila por COMPRA del
+       período de la barra —en «Por documento», las del DÍA de la barra: la
+       barra ya es una compra y sola sería una tabla de una fila—; a la
+       derecha, las líneas de la elegida. Sin elegir, la mayor del período
+       (la primera fila), el criterio de `drill_tablas.tabla_ranking(
+       abrir_en_mayor=True)`: la tabla de al lado nunca está vacía. Las dos
+       miden `SEMANAL_TABLA`, lo que medía la tabla única (#398).
+     - **La fila marcada es el dato `__sel`, no la selección.** El documento
+       elegido lo cambian DOS cosas —un clic en la tabla y un clic en un
+       punto del gráfico—, y una grilla que conserva su selección entre
+       corridas (#403) devuelve la vieja cuando el cambio vino del gráfico:
+       la tabla y el estado se contradicen. La key de la grilla lleva el
+       período y la compra elegida (`_clave_grilla`, un hash), así que cada
+       cambio la estrena SIN selección y la marca sale de una clase de fila
+       (`getRowClass` sobre `__sel`) con el mismo look que una fila
+       seleccionada. Cualquier valor que devuelva es un clic de esta
+       vuelta, sin tener que recordar qué devolvió antes. Como se estrena,
+       nace arriba de todo: `onGridReady` hace `ensureNodeVisible` sobre la
+       marcada — y no un `setSelected`, que mandaría un valor de vuelta y
+       costaría una corrida del fragment por nada. El `rerun` tras el clic
+       hace falta: el gráfico de arriba ya se dibujó con la marca vieja
+       (scope decidido, #306).
+     - **El iframe de un componente nace `display: inline`** y su
+       contenedor le suma debajo el hueco de los descendentes (line-height
+       25.6px): iframe 192, contenedor 200, y la tarjeta pasaba de 571 a 578
+       al abrir el detalle. Con `display: block` (sólo estas dos grillas,
+       `estilos/_80_cards.py`) mide 570 con detalle y 571 sin él.
+
+     Medido con datos reales a 1366x768: semana 2026-S35, 51 compras;
+     grillas de 633 y 550px. Clic en la segunda fila (F001-2655, 2 líneas):
+     la grilla se estrena con esa fila marcada, la de al lado muestra sus
+     dos líneas (S/ 1,547.88 + S/ 900.00 = S/ 2,447.88, el total de la
+     fila) y en el gráfico queda un solo punto a opacidad plena, el de esa
+     compra.
+
+     Trampa de la verificación: con la ventana de Claude oculta el panel
+     del navegador no dibuja, y los clics por coordenadas y las capturas
+     fallan («the page did not finish rendering»). El DOM sigue vivo: la
+     píldora se aprieta con `button.click()` y la barra con
+     `pl.emit('plotly_selected', {points: [...]})`, que es lo mismo que
+     emitía el clic real (verificado antes con un oyente en `plotly_click`
+     y `plotly_selected`).
+
+     (2026-09-14/15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36866,7 +36938,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#440**.
+> próxima regla nueva es la **#441**.
 
 >
 

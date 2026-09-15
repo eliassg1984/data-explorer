@@ -715,8 +715,24 @@ CSS = """    /* ================================================================
        semana, que pasó de `st.dataframe` a AgGrid (regla #396) y tiene el
        mismo iframe con el mismo ancho escrito a mano. */
     .st-key-compras_vol_rank_grid iframe,
-    [class*="st-key-compras_vol_semana_grid_"] iframe {
+    [class*="st-key-compras_vol_semana_grid_"] iframe,
+    /* Y las dos del detalle de Semanal (documentos | líneas), desde el
+       2026-09-14 (#440): el mismo componente, el mismo ancho escrito a mano.
+       Por PREFIJO: su key lleva el período y la compra elegida. */
+    [class*="st-key-compras_sem_docs_grid_"] iframe,
+    [class*="st-key-compras_sem_lineas_grid_"] iframe {
         width: 100% !important;
+    }
+    /* Y en BLOQUE, las dos de Semanal: el iframe de un componente nace
+       `display: inline`, apoyado en la línea de base, y su contenedor le
+       suma debajo el hueco de los descendentes (line-height 25.6px). Medido
+       (2026-09-14, #440): iframe 192, contenedor 200 — la tarjeta pasaba de
+       571 a 578 al abrir el detalle, y tiene que medir lo mismo con foco o
+       sin él (#398). Sólo estas dos: las de Volatilidad miden contra ese
+       hueco desde hace días y moverlas es otro cambio. */
+    [class*="st-key-compras_sem_docs_grid_"] iframe,
+    [class*="st-key-compras_sem_lineas_grid_"] iframe {
+        display: block !important;
     }
 
     /* ── TABLA: el selector de ventana, pegado a la derecha ────────────

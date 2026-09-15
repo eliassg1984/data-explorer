@@ -49,7 +49,15 @@ Y una cuarta que no es de puntería sino de recompensa: clic en un punto
 enfoca ESA compra. Antes hacía exactamente lo mismo que clickear la barra
 —las dos trazas devuelven la clave del período—, o sea apuntar al punto no
 servía para nada.
+
+2026-09-14 — ETIQUETAS Y DOS TABLAS (regla #440). En Semana, Mes y Año
+cada barra lleva su total escrito encima, cuando entra (`_plan_etiquetas`).
+Y el detalle de abajo dejó de ser UN `st.dataframe` con todas las líneas
+del período: son dos AgGrid, los DOCUMENTOS del período y, al costado, las
+LÍNEAS del documento elegido (`tablas/compras_semanal.py`).
 """
+
+import hashlib
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -62,12 +70,16 @@ from tema import (
 )
 from graficos import alturas
 from graficos.base import (
-    _compras_layout, _compras_truncar, preservar_widgets,
+    _compras_layout, _compras_truncar, preservar_widgets, scope_rerun,
 )
 from graficos.compras._comun import (
-    CATEGORIA_SEC, _first_point, _periodo_serie, documento_legible,
+    CATEGORIA_SEC, GAP_DRILL, _first_point, _periodo_serie, documento_legible,
     selector_fecha_tarjeta,
 )
+from tablas.compras_semanal import (
+    renderizar_documentos_semanal, renderizar_lineas_semanal,
+)
+from utils import fmt_k
 
 
 # ===========================================================================
@@ -194,6 +206,97 @@ def _tope_puntos(n_periodos):
     px_slot = _LIENZO_PX / max(int(n_periodos), 1)
     caben = int(px_slot * _ANCHO_SLOT // _PASO_PUNTO_PX)
     return max(1, min(_TOPE_PUNTOS, caben))
+
+
+# ===========================================================================
+# ETIQUETAS SOBRE LAS BARRAS (2026-09-14, regla #440)
+# ===========================================================================
+# A pedido: «en la vista semana, la opción de semana, debe mostrar etiquetas
+# en las barras». Van en Semana y también en Mes y Año, que son la misma
+# clase de barra —la SUMA de un período— y abren con menos barras todavía;
+# no en Día ni en «Por documento», donde un mes son 30-60 barras y el número
+# no entra ni girado.
+#
+# «Mostrar» es la palabra que manda, y por eso esto es una CUENTA y no un
+# `text=` suelto: Plotly no oculta la etiqueta que no entra, la encima con
+# la vecina (regla #91, y la misma cuenta que `vs_ano_pasado._plan_etiquetas`,
+# regla #400). La forma sale de los píxeles que le tocan a cada período,
+# contra el mismo `_LIENZO_PX` que decide cuántos puntos caben.
+
+_GRAN_CON_ETIQUETA = ("Semana", "Mes", "Año")
+
+_ETQ_FUENTE = 10
+"""Cuerpo de las etiquetas, en px: el de las de «Vs año pasado» y Producto."""
+
+_ETQ_PX_CARACTER = 5.4
+"""Ancho medio de un carácter a `_ETQ_FUENTE` en DM Sans, MEDIDO para las
+etiquetas de «Vs año pasado» (`vs_ano_pasado._ETQ_PX_CARACTER`), que son
+del mismo formato («S/ 107.9k»). Se usa el techo: sobrar un píxel sólo gira
+antes una etiqueta que entraba derecha."""
+
+_ETQ_ALTO_LINEA = 13
+"""Alto de una línea a `_ETQ_FUENTE` (ascent + descent). Es lo que ocupa una
+etiqueta derecha hacia arriba, y lo que ocupa GIRADA hacia el costado."""
+
+_ETQ_AIRE = 4
+"""Separación entre etiquetas vecinas, y entre la etiqueta y el borde."""
+
+_MARGEN_Y_FIG = 30 + 10
+"""Los márgenes de arriba (el título) y de abajo que pone `_compras_layout`."""
+
+_LEYENDA_Y = 0.22
+"""A qué distancia DEBAJO del área de trazo va la leyenda, en fracción de su
+alto (`legend.y = -_LEYENDA_Y`). Es la misma constante en el layout y en la
+cuenta del alto del área de trazo, porque es la que lo decide: Plotly
+agranda el margen de abajo hasta que entre la leyenda, así que lo que la
+leyenda pide CRECE con la figura. Medido a 1366x768 (2026-09-14): figura
+449 → área 335, figura 240 → área 164. Las dos cierran con
+`(alto − _MARGEN_Y_FIG) / (1 + _LEYENDA_Y)`; un cromo fijo no cierra con
+las dos (salen 114 y 76px)."""
+
+
+def _alto_area_trazo(alto_fig):
+    """Alto del área de trazo de una figura de `alto_fig`. Ver `_LEYENDA_Y`."""
+    return max((alto_fig - _MARGEN_Y_FIG) / (1 + _LEYENDA_Y), 1.0)
+
+
+def _plan_etiquetas(n_periodos, largo_max):
+    """`"derecha"`, `"girada"` o `None`: cómo se escriben los totales de
+    `n_periodos` barras cuya etiqueta más larga tiene `largo_max`
+    caracteres.
+
+    El apretón que manda es la distancia entre dos etiquetas VECINAS, que
+    es el slot entero del período (una sola serie: no hay otra barra en el
+    mismo slot, como sí en «Vs año pasado»). Derecha si la etiqueta entra en
+    el slot; si no, girada, que ocupa una línea de ancho; si ni así, nada —
+    el total sigue en el hover. Con el mes corrido de entrada (4-5 semanas)
+    sale derecha; con 12 meses por semana (53), nada."""
+    if n_periodos <= 0 or largo_max <= 0:
+        return None
+    px_slot = _LIENZO_PX / n_periodos
+    if largo_max * _ETQ_PX_CARACTER + _ETQ_AIRE <= px_slot:
+        return "derecha"
+    if _ETQ_ALTO_LINEA + _ETQ_AIRE <= px_slot:
+        return "girada"
+    return None
+
+
+def _techo_etiquetas(hi, lo, alto_fig, alto_etq):
+    """`[ymin, ymax]` del eje Y con lugar para `alto_etq` px de etiqueta
+    encima de la barra más alta.
+
+    `textposition="outside"` NO agranda el rango solo: la etiqueta de la
+    barra más alta queda contra el borde y se corta. La cuenta es en
+    píxeles, la misma de `vs_ano_pasado._techo_con_etiquetas`: si el área de
+    trazo mide `alto_plot` y la etiqueta necesita `alto_etq`, el dato tiene
+    que ocupar `alto_plot − alto_etq`."""
+    alto_plot = _alto_area_trazo(alto_fig)
+    alto_etq = min(alto_etq, alto_plot * 0.45)
+    base = min(0.0, lo)
+    span = hi - base
+    if span <= 0:
+        return None
+    return [base, base + span * alto_plot / (alto_plot - alto_etq)]
 
 
 # ===========================================================================
@@ -396,54 +499,15 @@ def _clave_del_clic(x, ord_claves):
     return ord_claves[i] if 0 <= i < len(ord_claves) else None
 
 
-def _tabla_detalle(det, hueco):
-    """Vuelca las líneas de `det` en `hueco` con el formato de la vista.
+def _clave_grilla(*partes):
+    """Sufijo corto y estable para la key de una grilla, a partir de lo que
+    tiene que estrenarla cuando cambia (el período, el documento elegido).
 
-    Las dos ramas de foco —un período entero, una sola compra— muestran la
-    MISMA tabla; sin esto el formato se escribiría dos veces y la próxima
-    columna se agregaría en una sola de las dos.
-
-    LA COLUMNA «DOCUMENTO» (2026-09-08, a pedido: "cuando selecciono la
-    granularidad documentos debe aparecer también en la tabla el número del
-    documento") va en las DOS ramas, y no sólo en la que la pidió. La regla
-    del proyecto es contar en cuántas filas dice algo (`arquitectura.md`
-    #238-#239), y medido sobre `compras.parquet` las dos ramas dan lo
-    contrario la una de la otra:
-
-        foco de PERÍODO    una semana trae 267 líneas de 96 documentos
-                           distintos (medianas) — la columna cambia casi
-                           en cada fila y es la que dice de dónde sale
-                           cada línea;
-        foco de COMPRA     una sola compra, el mismo número repetido en
-                           todas sus filas.
-
-    O sea la que la pidió es justo el caso que la regla mandaría a chip.
-    Va igual, y el chip TAMBIÉN: el caption de esa rama nombra el
-    documento. No es redundancia gratis — es la respuesta a "cuál es este
-    documento" en el lugar donde se mira (arriba, junto al proveedor y al
-    total) y en el lugar donde se copia (la celda).
-    """
-    tp = det[["fecha", "doc", "prov", "prod",
-              "cant", "punit", "valor"]].rename(
-        columns={"fecha": "Fecha", "doc": "Documento", "prov": "Proveedor",
-                 "prod": "Producto", "cant": "Cantidad",
-                 "punit": "P. unit.", "valor": "Valor"})
-    fmts = {
-        "Fecha": lambda v: f"{v:%d/%m/%Y}",
-        "Documento": lambda v: (v or "—"),
-        "Cantidad": lambda v: f"{v:,.1f}",
-        "P. unit.": lambda v: ("—" if pd.isna(v) else f"S/ {v:,.2f}"),
-        "Valor": lambda v: f"S/ {v:,.2f}",
-    }
-    # Alto FIJO y no `por_filas` (2026-09-13, regla #398): la tarjeta mide lo
-    # que la de «Vs año pasado» con detalle o sin él, y eso sólo se sostiene
-    # si la tabla no crece con las filas. Lo que no entra lo desliza la tabla
-    # por dentro, que es el único scroll que se permite en una tarjeta.
-    with hueco.container():
-        st.dataframe(
-            tp.style.format(fmts).hide(axis="index"),
-            use_container_width=True, hide_index=True,
-            height=alturas.SEMANAL_TABLA)
+    Un hash y no el texto: la clave de una compra lleva fecha, proveedor y
+    documento («2026-09-12·DISTRIBUIDORA …·F0E001…»), y como key sería un
+    nombre de clase CSS de 80 caracteres con puntos medios adentro."""
+    txt = "|".join(str(p) for p in partes)
+    return hashlib.md5(txt.encode("utf-8")).hexdigest()[:10]
 
 
 @st.fragment
@@ -806,6 +870,23 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                            "<extra></extra>"),
         )
 
+        # ── El total, escrito encima de cada barra (2026-09-14, #440) ────
+        # Sólo cuando entra: ver `_plan_etiquetas`. El techo del eje que
+        # necesita se pone más abajo, cuando se sabe el alto de la figura.
+        # `constraintext="none"`: sin él Plotly ENCOGE la etiqueta que no
+        # entra en la barra en vez de dejarla afuera a su tamaño.
+        _plan_etq, _largo_etq = None, 0
+        if gran in _GRAN_CON_ETIQUETA:
+            _etq = [fmt_k(v) if v else None for v in g["valor"]]
+            _largo_etq = max((len(t) for t in _etq if t), default=0)
+            _plan_etq = _plan_etiquetas(_n_per, _largo_etq)
+            if _plan_etq:
+                fig.data[0].update(
+                    text=_etq, textposition="outside", cliponaxis=False,
+                    constraintext="none",
+                    textangle=-90 if _plan_etq == "girada" else 0,
+                    textfont=dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL))
+
         # ── Los puntos: una COMPRA, no una línea de producto ─────────────
         # Una orden de 5 líneas es un solo punto, no cinco. Se omiten en
         # "Por documento": ahí cada barra YA es una compra y el punto caería
@@ -969,11 +1050,25 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                     else _ATENUADO
                     for _c, _k in zip(_pts["compra"], _pts["clave"])]
 
-        _compras_layout(fig, alto=(alturas.COMPACTO if _con_detalle
-                                   else alturas.SEMANAL_SOLO))
+        _alto_fig = (alturas.COMPACTO if _con_detalle
+                     else alturas.SEMANAL_SOLO)
+        _compras_layout(fig, alto=_alto_fig)
+        if _plan_etq:
+            # Girada ocupa su LARGO hacia arriba; derecha, una línea.
+            _alto_etq = ((_largo_etq * _ETQ_PX_CARACTER
+                          if _plan_etq == "girada" else _ETQ_ALTO_LINEA)
+                         + _ETQ_AIRE)
+            _rng = _techo_etiquetas(float(g["valor"].max()),
+                                    float(g["valor"].min()),
+                                    _alto_fig, _alto_etq)
+            if _rng:
+                fig.update_yaxes(range=_rng)
         fig.update_layout(
             title=_titulo,
-            legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=10)),
+            # `y` sale de `_LEYENDA_Y`: la cuenta del techo de las etiquetas
+            # depende de dónde va la leyenda.
+            legend=dict(orientation="h", y=-_LEYENDA_Y, x=0,
+                        font=dict(size=10)),
             # EXPLÍCITO: con barras y puntos superpuestos, `closest` es lo
             # que hace que el hover de un punto le gane a la barra que tiene
             # abajo. Es el default de Plotly, pero el default de una figura
@@ -1065,36 +1160,129 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # aparte) — no se reutiliza el mismo hueco para el
         # caption.
         # `_focus` y `_doc` ya vienen resueltos de antes de la figura.
+        #
+        # Desde el 2026-09-14 el hueco lleva DOS grillas y no un
+        # `st.dataframe` (regla #440), y la receta del hueco sigue igual: es
+        # suyo, y se vacía con `.empty()` explícito cuando no hay foco.
         _hueco_tabla = st.empty()
-        if _doc_ok:
-            _det = dd[dd["compra"] == _doc].sort_values("valor",
-                                                        ascending=False)
-            _f = _det["fecha"].iloc[0]
-            st.caption(f"Compra · **{_det['prov'].iloc[0]}** · "
-                      f"{_det['doc'].iloc[0]} · {_f:%d/%m/%Y} · "
-                      f"{len(_det)} líneas · S/ {_det['valor'].sum():,.2f} "
-                      "— clic en la barra para volver al período.")
-            _tabla_detalle(_det, _hueco_tabla)
-        elif _foco_ok:
-            _det = dd[dd["clave"] == _focus].sort_values("valor",
-                                                         ascending=False)
-            _et = _det["lbl"].iloc[0]
-            # En «Por documento» la barra clickeada YA es una compra, así que
-            # el caption dice cuál en vez de "1 compras" —que era lo que
-            # decía, y no identificaba nada—. En las otras granularidades la
-            # barra es un período de verdad y el conteo es la información.
-            if gran == "Por documento":
-                _fd = _det["fecha"].iloc[0]
-                st.caption(f"Compra · **{_det['prov'].iloc[0]}** · "
-                          f"{_det['doc'].iloc[0]} · "
-                          f"{cortes.DIAS_ABR_ES[_fd.weekday()].capitalize()} "
-                          f"{_fd:%d/%m/%Y} · {len(_det)} líneas · "
-                          f"S/ {_det['valor'].sum():,.2f}")
-            else:
-                st.caption(f"**{_et}** · {_det['compra'].nunique()} "
-                          f"compras · S/ {_det['valor'].sum():,.2f}")
-            _tabla_detalle(_det, _hueco_tabla)
-        else:
-            st.caption("Tocá una barra para ver el período, o un punto "
+        if not _con_detalle:
+            st.caption("Tocá una barra para ver sus documentos, o un punto "
                       "para ver una compra.")
             _hueco_tabla.empty()
+            return
+
+        # ── EL DETALLE, EN DOS TABLAS (2026-09-14, a pedido, regla #440) ─
+        # «que la tabla de abajo se divida en dos: una que muestre el
+        # documento, y al hacer clic muestre en otra tabla del costado el
+        # detalle». A la izquierda, una fila por COMPRA del período en foco;
+        # a la derecha, las LÍNEAS de la elegida. Las dos miden
+        # `SEMANAL_TABLA`, lo que medía la tabla única: la tarjeta sigue
+        # midiendo lo mismo con foco o sin él (#398).
+        #
+        # QUÉ COMPRAS lista la de la izquierda: las del período de la barra.
+        # En «Por documento» la barra YA es una compra, y listarla sola sería
+        # una tabla de una fila: ahí la lista son las compras de SU DÍA, que
+        # es la unidad que el eje agrupa con las punteadas.
+        if gran == "Por documento":
+            _dia = dd.loc[dd["compra"] == _focus, "fecha"].iloc[0].normalize()
+            _amb = dd[dd["fecha"].dt.normalize() == _dia]
+            _id_amb = f"{_dia:%Y-%m-%d}"
+        else:
+            _id_amb = (_focus if _foco_ok
+                       else dd.loc[dd["compra"] == _doc, "clave"].iloc[0])
+            _amb = dd[dd["clave"] == _id_amb]
+        _docs = (_amb.groupby("compra", as_index=False)
+                     .agg(fecha=("fecha", "min"), doc=("doc", "first"),
+                          prov=("prov", "first"), lineas=("valor", "size"),
+                          valor=("valor", "sum"))
+                     .sort_values(["valor", "compra"], ascending=[False, True])
+                     .reset_index(drop=True))
+
+        # QUÉ COMPRA muestra la de la derecha: la elegida —con un clic en la
+        # tabla o en un punto del gráfico—; en «Por documento», la de la
+        # barra; y si no hay ninguna, la MAYOR del período, que es la primera
+        # fila. Así la tabla de al lado nunca está vacía, el mismo criterio
+        # que `drill_tablas.tabla_ranking(abrir_en_mayor=True)`.
+        if _doc_ok:
+            _sel = _doc
+        elif gran == "Por documento":
+            _sel = _focus
+        else:
+            _sel = _docs["compra"].iloc[0]
+        _lin = _amb[_amb["compra"] == _sel].sort_values("valor",
+                                                        ascending=False)
+
+        _tp_docs = pd.DataFrame({
+            "fecha": _docs["fecha"].dt.strftime("%d/%m/%Y"),
+            "doc": _docs["doc"].fillna("").map(lambda v: v or "—"),
+            "prov": _docs["prov"],
+            "lineas": _docs["lineas"].astype(int).astype(str),
+            "valor": _docs["valor"].map(lambda v: f"S/ {v:,.2f}"),
+            "__compra": _docs["compra"],
+            "__sel": _docs["compra"] == _sel,
+        })
+        _tp_lin = pd.DataFrame({
+            "prod": _lin["prod"],
+            "cant": _lin["cant"].map(lambda v: f"{v:,.1f}"),
+            "punit": _lin["punit"].map(
+                lambda v: "—" if pd.isna(v) else f"S/ {v:,.2f}"),
+            "valor": _lin["valor"].map(lambda v: f"S/ {v:,.2f}"),
+        })
+
+        with _hueco_tabla.container():
+            # columnas-internas: las dos tablas del detalle, DENTRO de la
+            # tarjeta de la vista; no es una fila de drill que tenga que caer
+            # en el eje de `COLUMNAS_DRILL`. La de documentos lleva cinco
+            # columnas contra cuatro, de ahí el 1.15.
+            _c_docs, _c_lin = st.columns([1.15, 1], gap=GAP_DRILL)
+            with _c_docs:
+                # LA KEY LLEVA EL PERÍODO Y LA COMPRA ELEGIDA: cada cambio
+                # estrena grilla, que nace sin selección y marca la fila por
+                # su dato `__sel`. Ver el docstring de
+                # `tablas/compras_semanal.py`.
+                _clic = renderizar_documentos_semanal(
+                    _tp_docs, altura=alturas.SEMANAL_TABLA,
+                    key=f"compras_sem_docs_grid_{_clave_grilla(gran, _id_amb, _sel)}",
+                    ver_fecha=gran != "Por documento",
+                    ver_doc=bool(col_docu))
+            with _c_lin:
+                renderizar_lineas_semanal(
+                    _tp_lin, altura=alturas.SEMANAL_TABLA,
+                    key=f"compras_sem_lineas_grid_{_clave_grilla(_sel)}")
+
+        _n_docs = len(_docs)
+        _n_txt = f"{_n_docs} compra" + ("" if _n_docs == 1 else "s")
+        if gran == "Por documento":
+            _nombre_amb = (f"{cortes.DIAS_ABR_ES[_dia.weekday()].capitalize()} "
+                           f"{_dia:%d/%m/%Y}")
+            _n_txt += " del día"
+        else:
+            _nombre_amb = _amb["lbl"].iloc[0]
+        st.caption(f"**{_nombre_amb}** · {_n_txt} · "
+                   f"S/ {_docs['valor'].sum():,.2f} — clic en una compra "
+                   "para ver sus líneas al costado.")
+
+        # ── El clic en la tabla de documentos ────────────────────────────
+        # Como la grilla nace sin selección, un valor es siempre un clic de
+        # esta vuelta. Volver a clickear la fila MARCADA la suelta: en «Por
+        # documento» cierra el detalle (es lo mismo que volver a tocar su
+        # barra) y en las otras vuelve a la compra mayor.
+        #
+        # En «Por documento» el clic mueve el FOCO y no `compras_sem_doc`:
+        # ahí la barra es la compra, así que el gráfico marca la nueva y un
+        # segundo clic en su barra la cierra, como siempre.
+        #
+        # El `rerun` hace falta porque el gráfico de ARRIBA ya se dibujó con
+        # la marca vieja. Scope decidido y no fijo (regla #306).
+        if _clic is None or _clic not in set(_docs["compra"]):
+            return
+        if gran == "Por documento":
+            st.session_state["compras_sem_focus"] = (
+                None if _clic == _sel else _clic)
+        elif _clic == _sel:
+            if not _doc_ok:
+                return  # ya era la que se mostraba por defecto
+            st.session_state["compras_sem_doc"] = None
+        else:
+            st.session_state["compras_sem_doc"] = _clic
+        st.rerun(scope=scope_rerun())
