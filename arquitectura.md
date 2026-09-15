@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-426 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+427 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (152)
 
@@ -392,7 +392,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 
-**Streamlit** (111)
+**Streamlit** (112)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -505,6 +505,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#412** — Una ventana que otra pieza tiene que SEGUIR no puede moverse en el navegador: el rangeslider…
 - **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
 - **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
+- **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
 
 **Datos, R2 y DuckDB** (52)
 
@@ -604,7 +605,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
 - **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
 
-**Fechas, rangos y cortes** (9)
+**Fechas, rangos y cortes** (10)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -615,6 +616,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#210** — En una página APILADA el rango de fechas es del REPORTE, no de la vista: dos dueños de la…
 - **#219** — Un riel de fechas que abarca todo el histórico no sirve para elegir un día, y la escala fina…
 - **#307** — Un default de fecha "el mes en curso" que se recorta a bounds COLAPSA a un día cuando la data…
+- **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
 
 **Asistente IA** (2)
 
@@ -36149,6 +36151,68 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-14.)
 
+427. **Un control que vive en la fila del título de lo que él mismo
+     elige es un huevo y gallina: se rompe leyendo el estado ANTES de
+     dibujar el widget.** Pedido: «3 filtros minimalistas de fecha de
+     corte, familia y área, en la misma altura que el título interno de la
+     tarjeta principal, no afuera; o sea eliminar la franja actual del
+     título».
+
+     Con eso se borró `ajcas_cab` —la tarjeta de cabecera que tenía el
+     título del reporte, el compartimento de filtros y los KPIs— y la
+     tarjeta protagonista pasó a ser la cabecera. Pero su título es el
+     NOMBRE DE LA FAMILIA CON FOCO, que sale de aplicar esos mismos tres
+     filtros: para dibujar el título hay que haber filtrado, y los
+     controles que filtran están en la fila del título.
+
+     **Regla:** los filtros se leen de `session_state` al principio de la
+     función y se aplican ahí; los widgets se dibujan después, en su
+     posición. Un widget de Streamlit ya escribió su clave cuando el script
+     vuelve a correr, así que leerla primero da el valor vigente, y el
+     cambio se ve en la pasada siguiente — que Streamlit dispara sola. Es
+     el mismo orden que el clic de Plotly en Volatilidad y Semanal (#399):
+     leer el estado antes de dibujar el elemento que lo produce.
+
+     **El corte se calcula sobre `df_full`, no sobre el `df` recortado.**
+     `app.py` ya filtró por el rango de la franja antes de pasar el df; si
+     la lista de cortes saliera de ahí, elegir uno dejaría la lista con ese
+     único corte y no habría forma de volver a los otros — el filtro que se
+     come su propio selector. Es la misma razón por la que `app.py` los
+     calcula antes de aplicar el rango. La vista recibe `df_full` (el
+     parquet entero, 240k filas) y se filtra sola: cortes, luego área,
+     luego familia.
+
+     **Y el corte de la vista NO es `estado_rango.clave_corte`.** Esa es la
+     clave de la FRANJA, compartida por las cuatro vistas de la categoría
+     «visual», y además arrastra el rango, que es la key de un
+     `st.date_input` — escribirla desde una tarjeta obliga a respetar el
+     invariante de orden de ese módulo. Como acá la vista se filtra sola,
+     le alcanza con recordar qué clave de corte eligió (`ajcas_corte`).
+     Consecuencia a sabiendas: la cascada puede estar mostrando un corte
+     distinto al de Mapa de calor, Distribución y Tabla. Es la misma
+     decisión que #425 tomó para los chips.
+
+     **La tarjeta se dibuja aunque no haya datos.** Con los controles
+     adentro de la tarjeta, el aviso de «sin datos» no puede reemplazarla:
+     desaparecerían los tres filtros y no habría forma de deshacer el que
+     la dejó vacía. Callejón sin salida clásico de mover un control adentro
+     de lo que ese control puede vaciar.
+
+     **Minimalista es que el valor vigente SEA la etiqueta.** Los tres
+     triggers dicen «2 set 2026», «5 familias», «todas las áreas» en vez de
+     «Fecha», «Familia», «Área»: se lee qué hay puesto sin abrir nada. Sin
+     borde, sin fondo, 11,5px. Se descartaron dos alternativas maquetadas:
+     una segunda línea bajo el nombre (cuesta ~30px de alto) y tres iconos
+     de 26px (el más compacto y el menos descubrible — qué hay puesto sólo
+     se ve al pasar el mouse).
+
+     Verificado en la app con datos reales: elegir «16-18 ago 2026» da
+     −S/ 30.922 de neto (las cinco familias sembradas, sin COSTOS
+     PRODUCCION) y la lista de áreas de ese corte baja a dos —ALMACEN
+     CENTRAL y PRODUCCION—, que son las únicas que movieron algo ahí.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36161,7 +36225,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#427**.
+> próxima regla nueva es la **#428**.
 
 >
 

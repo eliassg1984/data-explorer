@@ -39,15 +39,16 @@ nuevos y `st.markdown` no ejecuta <script>. Ver regla #423.
 """
 
 
+import pandas as pd
 import streamlit as st
 
+from cortes import corte_contiguo, cortes_disponibles
 from tema import (
     ACENTO, GRIS_BORDE, GRIS_FONDO,
     TEXTO_PRINCIPAL,
     BLANCO, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
     LAVANDA_SELECCION,
     AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO,
-    AJUSTE_CRIT_FONDO, AJUSTE_SOB_FONDO,
 )
 from graficos.base import (
     _slug, filtro_pills, sembrar_seleccion,
@@ -75,6 +76,12 @@ _TOPN_DRILL = 30
 _K_FOCO = "ajuste_cascada_focus"
 _K_AREA = "ajcas_filtro_area"
 _K_FAMILIA = "ajcas_filtro_familia"
+# El corte de ESTA vista. No usa `estado_rango.clave_corte`, que es el
+# estado de la FRANJA del reporte: ahi el corte lo comparten las cuatro
+# vistas de la categoria "visual" y ademas arrastra el rango, que es la key
+# de un `st.date_input`. Aca la vista se filtra sola desde `df_full`, asi
+# que le alcanza con recordar que clave de corte eligio. Ver regla #427.
+_K_CORTE = "ajcas_corte"
 
 
 def areas_con_ajuste(df, col_area, col_ajuste_val):
@@ -223,23 +230,45 @@ def _css():
     div[class*="st-key-aj_sec_cascada"] {{
         margin-top: -108px !important; }}
 
-    /* ── TARJETA DE CABECERA ──────────────────────────────────────────
-       Es una tarjeta propia arriba de las de familia, a pedido. Junta el
-       titulo, los KPIs del conjunto y el compartimento de filtros.
-       Blanca: `var(--bg-card)` y no un `#ffffff` suelto, que es la regla
-       #1 del proyecto (el color sale de la paleta, no del CSS). */
-    div[class*="st-key-ajcas_cab"] {{
-        background: var(--bg-card) !important;
-        /* El borde tambien: sin esto se quedaba con el DEFAULT de
-           `st.container(border=True)` —medido, `rgba(49,51,63,.2)`— que no
-           es el gris de la paleta, asi que la cabecera desentonaba con la
-           protagonista y las minis. Las tres van 1px GRIS_BORDE. */
+    /* ── LOS TRES CONTROLES, EN LA FILA DEL TITULO ────────────────────
+       Se pidio "3 filtros minimalistas en la misma altura que el titulo
+       interno, no afuera", y con eso se fue la tarjeta de cabecera que
+       tenia el titulo del reporte, el compartimento de filtros y los KPIs
+       (`ajcas_cab`, borrada 2026-09-15). Ahora la tarjeta protagonista ES
+       la cabecera.
+
+       Minimalista = el trigger no se ve como campo de formulario: sin
+       borde, sin fondo, del tamano del texto. El VALOR VIGENTE es la
+       etiqueta ("2 set 2026", "5 familias"), asi que se lee que hay puesto
+       sin abrir nada. Ver regla #427. */
+    div[class*="st-key-ajcas_prota"] button[data-testid="stPopoverButton"] {{
+        border: none !important; background: transparent !important;
+        color: {GRIS_TEXTO} !important;
+        min-height: 0 !important; padding: 4px 8px !important;
+        border-radius: 7px !important;
+        transition: background .12s ease, color .12s ease !important; }}
+    div[class*="st-key-ajcas_prota"] button[data-testid="stPopoverButton"] p {{
+        font-size: 11.5px !important; }}
+    div[class*="st-key-ajcas_prota"] button[data-testid="stPopoverButton"]:hover,
+    div[class*="st-key-ajcas_prota"] button[data-testid="stPopoverButton"][aria-expanded="true"] {{
+        background: {LAVANDA_SELECCION} !important;
+        color: {ACENTO} !important; }}
+
+    /* La lista de cortes del popover: botones planos, el activo en acento. */
+    div[class*="st-key-ajcas_corte_"] button {{
         border: 1px solid {GRIS_BORDE} !important;
-        border-radius: 12px !important;
-        /* padding-top 14 -> 8: sube el TITULO sin mover la caja, que ya
-           esta contra el piso de la franja fija. */
-        padding: 8px 16px 10px 16px !important;
-        margin-bottom: 12px !important; }}
+        border-radius: 7px !important; min-height: 0 !important;
+        padding: 5px 10px !important; }}
+    div[class*="st-key-ajcas_corte_"] button p {{ font-size: 12px !important; }}
+
+    /* ── FICHA DEL NETO, arriba del riel ──────────────────────────────
+       Punteada y sin hover a proposito: es la unica pieza del riel que no
+       se puede clickear, y el borde de puntos lo dice sin gastar un
+       rotulo. */
+    div[class*="st-key-ajcas_total"] {{
+        background: {GRIS_FONDO}; border: 1px dashed {GRIS_BORDE};
+        border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }}
+    div[class*="st-key-ajcas_total"] p {{ margin: 0 !important; }}
 
     /* ── MINI-TARJETA DEL RIEL ────────────────────────────────────────
        EL BOTON CUBRE LA TARJETA ENTERA. Es el fix del pestillo de 16x36:
@@ -297,10 +326,6 @@ def _css():
         border-radius: 12px !important;
         padding: 17px 20px 18px 20px !important; }}
 
-    /* El compartimento de filtros de la tarjeta: sin la caja de formulario
-       que Streamlit le pone al popover trigger. */
-    div[class*="st-key-ajcas_filtros_"] button[data-testid="stPopoverButton"] {{
-        border-radius: 8px !important; }}
     </style>"""
 
 
@@ -308,11 +333,15 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                            col_producto=None, col_valorizado=None,
                            col_cantidad=None, df_full=None, col_fecha=None,
                            col_unidad=None):
-    """Cascada por familia: tarjeta de cabecera + una tarjeta por familia.
+    """Cascada por familia: una tarjeta por familia, sin franja de cabecera.
 
-    `df` llega SIN los chips del reporte: esta vista filtra con los suyos
-    (2026-09-14, a pedido). Los de arriba de la pila siguen gobernando Mapa
-    de calor, Distribucion y Tabla.
+    La tarjeta protagonista ES la cabecera: en la fila de su titulo viven
+    los tres controles (corte, familia, area). No hay tarjeta de cabecera
+    desde el 2026-09-15 -- ver arquitectura.md regla #427.
+
+    `df` llega SIN los chips del reporte y la vista se filtra sola desde
+    `df_full`: corte propio, area y familia propias. Los chips de arriba de
+    la pila siguen gobernando Mapa de calor, Distribucion y Tabla.
 
     `col_unidad` es la unidad de Kardex por producto (Kg, Und, Lt...) -- se
     usa solo en el texto de las barras del drill; si no se resuelve, la
@@ -325,96 +354,140 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     st.markdown(_css(), unsafe_allow_html=True)
 
-    # ── Filtros PROPIOS de esta tarjeta ───────────────────────────────────
-    # Van arriba de todo porque `filtro_pills` recorta el df que alimenta
-    # a las tarjetas de abajo. Las opciones de Area salen de las que
-    # movieron algo; las de Familia, del df entero.
+    # ── ESTADO PRIMERO, WIDGETS DESPUES ──────────────────────────────────
+    # Los tres controles viven en la fila del TITULO de la tarjeta
+    # protagonista, y ese titulo es el nombre de la familia con foco -- que
+    # sale de aplicar esos mismos filtros. Huevo y gallina.
     #
-    # NORMALIZAR LA COLUMNA, no solo la lista de opciones. `filtro_pills`
-    # filtra con `df[col].astype(str).isin(sel)`, o sea compara la
-    # seleccion contra el valor CRUDO: con la pastilla diciendo "CAVA" y la
-    # celda valiendo "CAVA " (con espacio al final, asi viene del maestro),
-    # elegirla filtraba a CERO filas. Detectado al verificar en la app, no
-    # en los tests. Ver arquitectura.md regla #424.
-    if col_area and col_area in df.columns:
-        df = df.assign(**{col_area: df[col_area].astype(str).str.strip()})
-    _areas = areas_con_ajuste(df, col_area, col_ajuste_val)
-    if col_familia and col_familia in df.columns:
-        # Sembrar ANTES de dibujar el compartimento: el badge de "Filtros"
-        # se calcula como argumento, o sea antes de que el widget exista.
-        sembrar_seleccion(df, col_familia, _K_FAMILIA,
+    # Se rompe leyendo `session_state` ANTES de dibujar: los widgets
+    # escriben su clave y Streamlit rerunea solo, asi que el cambio se ve
+    # en la pasada siguiente. Mismo orden que el clic de Plotly en
+    # Volatilidad y Semanal (regla #399).
+    _sel_area = list(st.session_state.get(_K_AREA) or [])
+
+    # ── El corte lo resuelve ESTA vista ──────────────────────────────────
+    # Sobre `df_full` (el parquet entero) y no sobre el `df` que llega ya
+    # recortado por la franja: con el df recortado, elegir un corte dejaria
+    # la lista con ese unico corte y no habria forma de volver a los otros
+    # -- el clasico filtro que se come su propio selector. Es la misma
+    # razon por la que `app.py` los calcula antes de aplicar el rango.
+    _base = df
+    _cortes = []
+    if df_full is not None and col_fecha and col_fecha in df_full.columns:
+        _base = df_full
+        _cortes = cortes_disponibles(df_full[col_fecha], maximo=12)
+    _corte = None
+    if _cortes:
+        _clave = st.session_state.get(_K_CORTE)
+        _corte = next((c for c in _cortes if c["clave"] == _clave), None)
+        if _corte is None:
+            # Abre en el ULTIMO corte: lo que se mira de Ajuste es una
+            # sesion de inventario, no un intervalo de calendario.
+            _corte = _cortes[-1]
+            st.session_state[_K_CORTE] = _corte["clave"]
+        _fechas = pd.to_datetime(_base[col_fecha], errors="coerce").dt.date
+        _base = _base[_fechas.isin(set(_corte["dias"]))]
+
+    # NORMALIZAR EL AREA, no solo la lista de opciones: `filtro_pills`
+    # compara la seleccion contra el valor CRUDO, y el maestro trae
+    # "CAVA " con espacio al final. Ver arquitectura.md regla #424.
+    if col_area and col_area in _base.columns:
+        _base = _base.assign(
+            **{col_area: _base[col_area].astype(str).str.strip()})
+    _areas = areas_con_ajuste(_base, col_area, col_ajuste_val)
+    if col_familia and col_familia in _base.columns:
+        sembrar_seleccion(_base, col_familia, _K_FAMILIA,
                           list(FAMILIAS_DE_ENTRADA))
+    _sel_fam = list(st.session_state.get(_K_FAMILIA) or [])
 
-    d = df
-    _sel_area, _sel_fam = [], []
-    with st.container(border=True, key="ajcas_cab"):
-        _c_tit, _c_fil = st.columns([1, 1])  # columnas-internas: título vs. controles
-        with _c_tit:
-            st.markdown(
-                f"<div style='font-size:15.5px;font-weight:600;"
-                f"color:{GRIS_TEXTO_MEDIO};padding-top:2px'>"
-                f"Ajuste valorizado por {grp_col.lower()}</div>",
-                unsafe_allow_html=True)
-        with _c_fil:
-            with st.container(key="ajcas_filtros_wrap"):
-                _n = sum(bool(st.session_state.get(k))
-                         for k in (_K_AREA, _K_FAMILIA))
-                _lbl = (f":material/filter_alt: Filtros :violet-badge[{_n}]"
-                        if _n else ":material/filter_alt: Filtros")
-                with st.popover(_lbl, use_container_width=True):
-                    if _areas:
-                        d, _sel_area = filtro_pills(
-                            d, col_area, _K_AREA, "Área", valores=_areas)
-                    d, _sel_fam = filtro_pills(
-                        d, col_familia, _K_FAMILIA, "Familia")
+    d = _base
+    if _sel_area and col_area and col_area in d.columns:
+        d = d[d[col_area].astype(str).isin(_sel_area)]
+    if _sel_fam and col_familia and col_familia in d.columns:
+        d = d[d[col_familia].astype(str).isin(_sel_fam)]
 
-        # El agregado y los KPIs viven en la MISMA tarjeta que el título,
-        # así que se calculan acá adentro: el neto de abajo tiene que ser
-        # el de lo que efectivamente se dibuja, ya filtrado.
-        agg = (d.groupby(grp_col, as_index=False)[col_ajuste_val]
-               .sum())
-        if not agg.empty:
-            agg["_abs"] = agg[col_ajuste_val].abs()
-            agg = (agg[agg["_abs"] > 0]
-                   .sort_values("_abs", ascending=False))
-        if agg.empty:
-            st.info("No hay datos para los filtros seleccionados.")
-            return
+    agg = d.groupby(grp_col, as_index=False)[col_ajuste_val].sum()
+    if not agg.empty:
+        agg["_abs"] = agg[col_ajuste_val].abs()
+        agg = agg[agg["_abs"] > 0].sort_values("_abs", ascending=False)
 
-        _total = float(agg[col_ajuste_val].sum())
-        _base_tot = 0.0
-        if col_valorizado and col_valorizado in d.columns:
-            _base_tot = float(d[col_valorizado].sum() or 0)
+    def _controles(cols):
+        """Los tres popovers, uno por columna: corte · familia · area.
 
-        def _capsula(fg, bg, contenido):
-            return (f"<span style='display:inline-flex;align-items:baseline;"
-                    f"gap:6px;background:{bg};border-radius:8px;"
-                    f"padding:4px 10px;color:{fg}'>{contenido}</span>")
+        Reciben las columnas ya creadas porque comparten la fila con el
+        nombre de la familia: en Streamlit la posicion la da el orden en
+        que se CREA el contenedor, no el orden en que se escribe en el.
+        """
+        with cols[1]:
+            _et = _corte["etiqueta_anio"] if _corte else "Sin cortes"
+            with st.popover(f":material/event: {_et}",
+                            use_container_width=True):
+                if not _cortes:
+                    st.caption("No hay sesiones de inventario.")
+                else:
+                    st.caption("Sesión de inventario")
+                    # Del mas reciente al mas viejo: el conteo que se
+                    # revisa es casi siempre el ultimo.
+                    for _c in reversed(_cortes):
+                        _n = _c["n_dias"]
+                        _tramo = (_c["fin"] - _c["ini"]).days + 1
+                        # Un corte NO tiene por que ser contiguo: decir
+                        # "3 de 5 días" es lo unico que lo deja ver.
+                        _dias = (f"{_n} de {_tramo} días"
+                                 if not corte_contiguo(_c)
+                                 else f"{_n} día" + ("s" if _n > 1 else ""))
+                        _on = bool(_corte and _c["clave"] == _corte["clave"])
+                        if st.button(
+                                f"{_c['etiqueta_anio']}  ·  {_dias}",
+                                key=f"ajcas_corte_{_slug(_c['clave'])}",
+                                use_container_width=True,
+                                type="primary" if _on else "secondary"):
+                            st.session_state[_K_CORTE] = _c["clave"]
+                            st.rerun()
+        with cols[2]:
+            _n_fam = len(_sel_fam)
+            _et_fam = ("todas las familias" if not _n_fam
+                       else _sel_fam[0].lower() if _n_fam == 1
+                       else f"{_n_fam} familias")
+            with st.popover(f":material/category: {_et_fam}",
+                            use_container_width=True):
+                filtro_pills(_base, col_familia, _K_FAMILIA, "Familia")
+        with cols[3]:
+            _n_ar = len(_sel_area)
+            _et_ar = ("todas las áreas" if not _n_ar
+                      else _sel_area[0].lower() if _n_ar == 1
+                      else f"{_n_ar} áreas")
+            with st.popover(f":material/apartment: {_et_ar}",
+                            use_container_width=True):
+                if _areas:
+                    filtro_pills(_base, col_area, _K_AREA, "Área",
+                                 valores=_areas)
+                else:
+                    st.caption("Ninguna área movió algo en este corte.")
 
-        _fg = AJUSTE_POS_TEXTO if _total > 0 else AJUSTE_NEG_TEXTO
-        _bg = AJUSTE_SOB_FONDO if _total > 0 else AJUSTE_CRIT_FONDO
-        _kpis = _capsula(_fg, _bg, (
-            f"<span style='font-size:11.5px;color:{_fg};opacity:.65'>neto"
-            f"</span> <span style='font-size:15px;font-weight:700;"
-            f"font-variant-numeric:tabular-nums'>"
-            f"{'+' if _total > 0 else '−'}S/ {abs(_total):,.0f}</span>"))
-        if abs(_base_tot) > 1e-6:
-            _p = _total / _base_tot * 100
-            _fgp = AJUSTE_POS_TEXTO if _p > 0 else AJUSTE_NEG_TEXTO
-            _bgp = AJUSTE_SOB_FONDO if _p > 0 else AJUSTE_CRIT_FONDO
-            _kpis += _capsula(_fgp, _bgp, (
-                f"<span style='font-size:15px;font-weight:700;"
-                f"font-variant-numeric:tabular-nums'>{_p:+.1f}%</span> "
-                f"<span style='font-size:11.5px;color:{_fgp};opacity:.65'>"
-                f"s/ total</span>"))
-        st.markdown(
-            f"<div style='display:flex;justify-content:flex-end;gap:10px;"
-            f"flex-wrap:wrap;margin-top:-30px;padding-bottom:4px'>"
-            f"{_kpis}</div>", unsafe_allow_html=True)
+    if agg.empty:
+        # Sin datos la tarjeta se dibuja IGUAL. Si no, desaparecerian los
+        # tres controles y no habria forma de deshacer el filtro que la
+        # dejo vacia -- un callejon sin salida.
+        with st.container(border=True, key="ajcas_prota"):
+            # columnas-internas: nombre · corte · familia · área
+            _cols = st.columns([2.6, 1, 1, 1], vertical_alignment="center")
+            with _cols[0]:
+                st.markdown(
+                    f"<div style='font-size:16px;font-weight:600;"
+                    f"color:{GRIS_TEXTO_SUAVE}'>Sin datos</div>",
+                    unsafe_allow_html=True)
+            _controles(_cols)
+            st.caption("Ninguna familia tiene ajuste con estos filtros.")
+        return
 
     # ── Datos por familia ────────────────────────────────────────────────
-    _vv = (d.groupby(grp_col)[col_valorizado].sum()
-           if col_valorizado and col_valorizado in d.columns else None)
+    _base_tot = 0.0
+    _vv = None
+    if col_valorizado and col_valorizado in d.columns:
+        _base_tot = float(d[col_valorizado].sum() or 0)
+        _vv = d.groupby(grp_col)[col_valorizado].sum()
+    _total = float(agg[col_ajuste_val].sum())
     _abs_sum = float(agg["_abs"].sum()) or 1.0
     _max_abs = float(agg["_abs"].max()) or 1.0
 
@@ -422,9 +495,9 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     for _i in range(len(agg)):
         _nom = str(agg[grp_col].iloc[_i])
         _v = float(agg[col_ajuste_val].iloc[_i])
-        _base = float(_vv.get(_nom, 0) or 0) if _vv is not None else 0.0
+        _bse = float(_vv.get(_nom, 0) or 0) if _vv is not None else 0.0
         _fams.append({
-            "cat": _nom, "val": _v, "base": _base,
+            "cat": _nom, "val": _v, "base": _bse,
             "peso": abs(_v) / _abs_sum * 100,
             "esc": abs(_v) / _max_abs * 50,
             "tt": (_v / _base_tot * 100) if abs(_base_tot) > 1e-6 else None,
@@ -446,13 +519,60 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     with _c_pro:
         with st.container(border=True, key="ajcas_prota"):
+            _peso = ("&lt;1%" if _act["peso"] < 0.5
+                     else f"{_act['peso']:.0f}%")
+            # columnas-internas: nombre · corte · familia · área
+            _cols = st.columns([2.6, 1, 1, 1], vertical_alignment="center")
+            with _cols[0]:
+                st.markdown(
+                    f"<div style='display:flex;align-items:baseline;gap:8px;"
+                    f"flex-wrap:wrap'>"
+                    f"<span style='font-size:16px;font-weight:600;"
+                    f"color:{TEXTO_PRINCIPAL};letter-spacing:-.01em'>"
+                    f"{_act['cat']}</span>"
+                    f"<span style='font-size:10.5px;color:{GRIS_TEXTO_SUAVE}'>"
+                    f"{_peso} del ajuste del período</span></div>",
+                    unsafe_allow_html=True)
+            _controles(_cols)
             _render_protagonista(
                 _act, d, grp_col, col_ajuste_val, col_producto, col_area,
                 col_cantidad, col_unidad)
 
     with _c_riel:
+        _render_total(_total, _base_tot, len(_fams))
         for _f in _resto:
             _render_mini(_f)
+
+
+def _render_total(total, base, n_familias):
+    """El neto del período, arriba del riel.
+
+    Vivia en la franja de cabecera que se saco (2026-09-15, a pedido). No
+    es de la familia con foco sino de TODAS, o sea el contexto contra el
+    que se lee el monto grande de al lado, asi que no puede ir adentro de
+    la tarjeta protagonista: serian dos totales distintos pegados.
+
+    Va punteada y sin hover: es la unica pieza del riel que NO es
+    clickeable, y la linea de puntos es lo que lo dice sin un rotulo.
+    """
+    _col = _tono(total)[0]
+    _sig = "+" if total > 0 else "−"
+    _pct = ""
+    if abs(base) > 1e-6:
+        _p = total / base * 100
+        _pct = f"{_p:+.1f}% s/ total · "
+    with st.container(key="ajcas_total"):
+        st.markdown(
+            f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
+            f"text-transform:uppercase;letter-spacing:.07em;"
+            f"font-weight:600'>Neto del período</div>"
+            f"<div style='font-size:17px;font-weight:700;color:{_col};"
+            f"font-variant-numeric:tabular-nums;letter-spacing:-.02em;"
+            f"margin-top:1px'>{_sig}S/ {abs(total):,.0f}</div>"
+            f"<div style='font-size:10.5px;color:{GRIS_TEXTO}'>"
+            f"{_pct}{n_familias} "
+            f"{'familia' if n_familias == 1 else 'familias'}</div>",
+            unsafe_allow_html=True)
 
 
 def _render_mini(f):
@@ -483,17 +603,15 @@ def _render_mini(f):
 
 def _render_protagonista(f, d, grp_col, col_ajuste_val, col_producto,
                          col_area, col_cantidad, col_unidad):
-    """La familia con foco: monto grande, barra, frase y su drill."""
+    """La familia con foco: monto grande, barra, frase y su drill.
+
+    El NOMBRE no se dibuja aca: comparte la fila con los tres controles
+    (corte, familia, area), asi que lo pone el llamador dentro de la
+    primera columna de esa fila.
+    """
     _col = _tono(f["val"])[0]
     _sig = "+" if f["val"] > 0 else "−"
-    _peso = ("&lt;1%" if f["peso"] < 0.5 else f"{f['peso']:.0f}%")
     st.markdown(
-        f"<div style='display:flex;align-items:baseline;gap:8px;"
-        f"flex-wrap:wrap'>"
-        f"<span style='font-size:16px;font-weight:600;"
-        f"color:{TEXTO_PRINCIPAL};letter-spacing:-.01em'>{f['cat']}</span>"
-        f"<span style='font-size:10.5px;color:{GRIS_TEXTO_SUAVE}'>"
-        f"{_peso} del ajuste del período</span></div>"
         f"<div style='font-size:36px;font-weight:600;color:{_col};"
         f"font-variant-numeric:tabular-nums;letter-spacing:-.03em;"
         f"line-height:1.15;margin-top:4px'>"
