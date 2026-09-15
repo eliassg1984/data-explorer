@@ -36353,11 +36353,24 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      el desfase clásico entre maquetar en HTML y construir en Streamlit:
      **lo que en CSS es una propiedad, acá es una decisión de estructura.**
 
-     Resultado verificado: triggers apilados en `480→740` (tops 59 / 102 /
-     146, sin solape), zona 1 en 354px y zona 2 en 260px, y el drill de la
-     zona 3 en los 630px del ancho útil. La ficha del neto se fue del riel
-     a la zona 2, así que las mini-tarjetas suben 64px y la primera queda
-     al ras del borde superior de la tarjeta grande.
+     **Y terminaron siendo TRES TARJETAS, no tres zonas de una.** Se
+     pidieron zonas primero y «divídelo en 3 tarjetas» después. El cuerpo
+     que las contiene (`ajcas_cuerpo`) es transparente y sólo aporta el
+     hueco de 12px — mismo idioma que `compras_vap_cuerpo` (#420): las
+     tarjetas son las superficies, el cuerpo es el aire.
+
+     Eso trae de vuelta la #145: el contenedor de elemento que Streamlit
+     mete entre la columna y la tarjeta nace `flex: 0 1 auto`, así que sin
+     piso la de controles cerraba más arriba que la de la familia. La regla
+     se replica con el prefijo propio (`ajcas_card_`) en vez de sumar el
+     selector a `estilos/_80_cards.py`.
+
+     Resultado verificado: familia `89→467` (378px), controles `483→761`
+     (278px) — **las dos de 227px de alto, iguales** —, y el detalle
+     `89→761`, los 672px del ancho útil. Triggers apilados sin solape. La
+     ficha del neto se fue del riel a la tarjeta de controles, así que las
+     mini-tarjetas suben y la primera queda en `top=40`, al ras de las
+     otras dos.
 
      **Dos totales en la misma fila, a sabiendas.** El monto grande de la
      zona 1 es de la familia con foco; el neto de la zona 2 es de todas.

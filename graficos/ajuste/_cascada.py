@@ -241,16 +241,16 @@ def _css():
        borde, sin fondo, del tamano del texto. El VALOR VIGENTE es la
        etiqueta ("2 set 2026", "5 familias"), asi que se lee que hay puesto
        sin abrir nada. Ver regla #427. */
-    div[class*="st-key-ajcas_prota"] button[data-testid="stPopoverButton"] {{
+    div[class*="st-key-ajcas_card_ctrl"] button[data-testid="stPopoverButton"] {{
         border: none !important; background: transparent !important;
         color: {GRIS_TEXTO} !important;
         min-height: 0 !important; padding: 4px 8px !important;
         border-radius: 7px !important;
         transition: background .12s ease, color .12s ease !important; }}
-    div[class*="st-key-ajcas_prota"] button[data-testid="stPopoverButton"] p {{
+    div[class*="st-key-ajcas_card_ctrl"] button[data-testid="stPopoverButton"] p {{
         font-size: 11.5px !important; }}
-    div[class*="st-key-ajcas_prota"] button[data-testid="stPopoverButton"]:hover,
-    div[class*="st-key-ajcas_prota"] button[data-testid="stPopoverButton"][aria-expanded="true"] {{
+    div[class*="st-key-ajcas_card_ctrl"] button[data-testid="stPopoverButton"]:hover,
+    div[class*="st-key-ajcas_card_ctrl"] button[data-testid="stPopoverButton"][aria-expanded="true"] {{
         background: {LAVANDA_SELECCION} !important;
         color: {ACENTO} !important; }}
 
@@ -323,11 +323,30 @@ def _css():
        necesita ser evidente, y lo es. El acento se reserva para el HOVER
        de las minis, que si es una senal que hace falta (esas SI son
        clickeables y hay que decirlo). */
-    div[class*="st-key-ajcas_prota"] {{
+    div[class*="st-key-ajcas_card_"] {{
         background: var(--bg-card) !important;
         border: 1px solid {GRIS_BORDE} !important;
         border-radius: 12px !important;
-        padding: 17px 20px 18px 20px !important; }}
+        padding: 15px 18px 16px 18px !important; }}
+
+    /* El CUERPO que las contiene es transparente y solo aporta el hueco.
+       Mismo idioma que `compras_vap_cuerpo` (#420): las tarjetas son las
+       superficies, el cuerpo es el aire entre ellas. */
+    div[class*="st-key-ajcas_cuerpo"] {{
+        background: transparent !important; border: none !important;
+        gap: 12px !important; }}
+    div[class*="st-key-ajcas_cuerpo"] > div {{ border: none !important; }}
+
+    /* LAS DOS DE ARRIBA MIDEN LO MISMO. El contenedor de elemento que
+       Streamlit mete entre la columna y la tarjeta nace `flex: 0 1 auto`,
+       asi que sin esto la de controles cierra mas arriba que la de la
+       familia y la fila se lee torcida. Es la regla #145, replicada con
+       el prefijo propio para no tocar `estilos/_80_cards.py`. */
+    .stColumn > .stVerticalBlock
+    > div:has(> div[class*="st-key-ajcas_card_familia"]),
+    .stColumn > .stVerticalBlock
+    > div:has(> div[class*="st-key-ajcas_card_ctrl"]) {{
+        flex: 1 1 auto; }}
 
     </style>"""
 
@@ -473,17 +492,20 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
         # Sin datos la tarjeta se dibuja IGUAL. Si no, desaparecerian los
         # tres controles y no habria forma de deshacer el filtro que la
         # dejo vacia -- un callejon sin salida.
-        with st.container(border=True, key="ajcas_prota"):
-            # columnas-internas: zona 1 (la familia) vs. zona 2 (controles)
+        with st.container(key="ajcas_cuerpo"):
+            # columnas-internas: tarjeta de la familia vs. de controles
             _z1, _z2 = st.columns([1.35, 1])
             with _z1:
-                st.markdown(
-                    f"<div style='font-size:16px;font-weight:600;"
-                    f"color:{GRIS_TEXTO_SUAVE}'>Sin datos</div>",
-                    unsafe_allow_html=True)
+                with st.container(border=True, key="ajcas_card_familia"):
+                    st.markdown(
+                        f"<div style='font-size:16px;font-weight:600;"
+                        f"color:{GRIS_TEXTO_SUAVE}'>Sin datos</div>",
+                        unsafe_allow_html=True)
+                    st.caption("Ninguna familia tiene ajuste con "
+                               "estos filtros.")
             with _z2:
-                _controles([st.container() for _ in range(3)])
-            st.caption("Ninguna familia tiene ajuste con estos filtros.")
+                with st.container(border=True, key="ajcas_card_ctrl"):
+                    _controles([st.container() for _ in range(3)])
         return
 
     # ── Datos por familia ────────────────────────────────────────────────
@@ -523,42 +545,47 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     _c_pro, _c_riel = st.columns([3.2, 1])
 
     with _c_pro:
-        with st.container(border=True, key="ajcas_prota"):
-            # TRES ZONAS (2026-09-15, a pedido, variante A de tres
-            # maquetadas): arriba-izquierda la familia con foco,
-            # arriba-derecha los controles y el neto del periodo, y abajo
-            # el detalle a TODO EL ANCHO. El drill queda fuera del
-            # `st.columns` por eso -- dos listas de 30 productos en media
-            # tarjeta no se leen.
-            #
-            # columnas-internas: zona 1 (la familia) vs. zona 2 (controles + neto)
+        # TRES TARJETAS, no tres zonas de una (2026-09-15, a pedido:
+        # primero se pidieron zonas y despues "dividelo en 3 tarjetas").
+        # El cuerpo es transparente y solo aporta el hueco de 12px, igual
+        # que `compras_vap_cuerpo` (#420).
+        #
+        #   familia | controles + neto
+        #   ------- detalle, a todo el ancho -------
+        #
+        # El detalle va SOLO y entero: dos listas de 30 productos en media
+        # tarjeta no se leen.
+        with st.container(key="ajcas_cuerpo"):
+            # columnas-internas: tarjeta de la familia vs. de controles
             _z1, _z2 = st.columns([1.35, 1])
             with _z1:
-                _peso = ("&lt;1%" if _act["peso"] < 0.5
-                         else f"{_act['peso']:.0f}%")
-                st.markdown(
-                    f"<div style='display:flex;align-items:baseline;gap:8px;"
-                    f"flex-wrap:wrap'>"
-                    f"<span style='font-size:16px;font-weight:600;"
-                    f"color:{TEXTO_PRINCIPAL};letter-spacing:-.01em'>"
-                    f"{_act['cat']}</span>"
-                    f"<span style='font-size:10.5px;color:{GRIS_TEXTO_SUAVE}'>"
-                    f"{_peso} del ajuste del período</span></div>",
-                    unsafe_allow_html=True)
-                _render_zona_familia(_act)
+                with st.container(border=True, key="ajcas_card_familia"):
+                    _peso = ("&lt;1%" if _act["peso"] < 0.5
+                             else f"{_act['peso']:.0f}%")
+                    st.markdown(
+                        f"<div style='display:flex;align-items:baseline;"
+                        f"gap:8px;flex-wrap:wrap'>"
+                        f"<span style='font-size:16px;font-weight:600;"
+                        f"color:{TEXTO_PRINCIPAL};letter-spacing:-.01em'>"
+                        f"{_act['cat']}</span>"
+                        f"<span style='font-size:10.5px;"
+                        f"color:{GRIS_TEXTO_SUAVE}'>"
+                        f"{_peso} del ajuste del período</span></div>",
+                        unsafe_allow_html=True)
+                    _render_zona_familia(_act)
             with _z2:
-                # APILADOS, no en fila. Medido: el popover de Streamlit
-                # trae `min-width: 180px` propio, y la zona 2 mide 260 --
-                # tres en fila daban columnas de 76px con botones de 180
-                # que se PISABAN entre si (cajas 480-660, 572-752,
-                # 664-844) y el ultimo se salia 83px de la tarjeta.
-                # Bajarles el min-width los dejaria en 76px, mas angostos
-                # que su propio texto. Apilados tienen los 260 enteros.
-                # Ver arquitectura.md regla #430.
-                _controles([st.container() for _ in range(3)])
-                _render_total(_total, _base_tot, len(_fams))
-            _drill(_act["cat"], d, grp_col, col_ajuste_val, col_producto,
-                   col_area, col_cantidad, col_unidad)
+                with st.container(border=True, key="ajcas_card_ctrl"):
+                    # APILADOS, no en fila. Medido: el popover de Streamlit
+                    # trae `min-width: 180px` propio y la tarjeta mide ~260
+                    # -- tres en fila daban columnas de 76px con botones de
+                    # 180 que se PISABAN (cajas 480-660, 572-752, 664-844)
+                    # y el ultimo se salia 83px. Bajarles el min-width los
+                    # dejaria mas angostos que su texto. Ver regla #430.
+                    _controles([st.container() for _ in range(3)])
+                    _render_total(_total, _base_tot, len(_fams))
+            with st.container(border=True, key="ajcas_card_drill"):
+                _drill(_act["cat"], d, grp_col, col_ajuste_val, col_producto,
+                       col_area, col_cantidad, col_unidad)
 
     with _c_riel:
         # El neto ya NO vive aca: se mudo a la zona 2. Sin esa ficha las
@@ -699,10 +726,6 @@ def _drill(focus_cat, d, grp_col, col_ajuste_val, col_producto, col_area,
 
     if _agg_dim.empty or _agg_dim[col_ajuste_val].abs().sum() == 0:
         return
-
-    st.markdown(
-        f"<div style='border-top:1px solid {GRIS_FONDO};margin-top:14px;"
-        f"padding-top:2px'></div>", unsafe_allow_html=True)
 
     def _filas_html(_df, color_bar):
         """Mini barras de progreso (riel + relleno), no un gráfico Plotly.
