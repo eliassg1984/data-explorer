@@ -230,6 +230,11 @@ def _css():
        #1 del proyecto (el color sale de la paleta, no del CSS). */
     div[class*="st-key-ajcas_cab"] {{
         background: var(--bg-card) !important;
+        /* El borde tambien: sin esto se quedaba con el DEFAULT de
+           `st.container(border=True)` —medido, `rgba(49,51,63,.2)`— que no
+           es el gris de la paleta, asi que la cabecera desentonaba con la
+           protagonista y las minis. Las tres van 1px GRIS_BORDE. */
+        border: 1px solid {GRIS_BORDE} !important;
         border-radius: 12px !important;
         /* padding-top 14 -> 8: sube el TITULO sin mover la caja, que ya
            esta contra el piso de la franja fija. */
@@ -246,7 +251,7 @@ def _css():
        Ver arquitectura.md regla #421. */
     div[class*="st-key-ajcas_mini_"] {{
         position: relative !important;
-        border: 1px solid {GRIS_BORDE}; border-radius: 10px;
+        border: 1px solid {GRIS_BORDE}; border-radius: 12px;
         padding: 9px 11px; margin-bottom: 8px; cursor: pointer;
         background: {BLANCO};
         transition: border-color .12s ease, background .12s ease; }}
@@ -259,7 +264,7 @@ def _css():
         min-height: 0 !important; padding: 0 !important;
         border: none !important; background: transparent !important;
         color: transparent !important; box-shadow: none !important;
-        z-index: 3 !important; border-radius: 10px !important; }}
+        z-index: 3 !important; border-radius: 12px !important; }}
     div[class*="st-key-ajcas_btnmini_"] button:hover,
     div[class*="st-key-ajcas_btnmini_"] button:focus {{
         background: transparent !important; color: transparent !important;
@@ -272,10 +277,24 @@ def _css():
     /* ── TARJETA PROTAGONISTA ─────────────────────────────────────────
        Blanca como la cabecera y las minis: `var(--bg-card)`, no un
        `#ffffff` suelto (regla #1 — el color sale de la paleta). Sin esto
-       quedaba con fondo transparente entre dos superficies blancas. */
+       quedaba con fondo transparente entre dos superficies blancas.
+
+       MISMO BORDE QUE LAS MINIS, y eso corrige una decision mia. Llevaba
+       `2px solid ACENTO` para marcar el foco, contra el `1px solid
+       GRIS_BORDE` de las minis: reportado como «la tarjeta protagonista se
+       ve con un borde distinto al de la minitarjeta», y era correcto —
+       diferian en grosor (2 vs 1), color (acento vs gris) Y radio (12 vs
+       10), o sea tres idiomas en la misma fila.
+
+       El acento ahi era redundante: la protagonista ya se distingue por
+       medir 4x y tener el drill adentro. El foco no necesita un anillo,
+       necesita ser evidente, y lo es. El acento se reserva para el HOVER
+       de las minis, que si es una senal que hace falta (esas SI son
+       clickeables y hay que decirlo). */
     div[class*="st-key-ajcas_prota"] {{
         background: var(--bg-card) !important;
-        border: 2px solid {ACENTO} !important; border-radius: 12px !important;
+        border: 1px solid {GRIS_BORDE} !important;
+        border-radius: 12px !important;
         padding: 17px 20px 18px 20px !important; }}
 
     /* El compartimento de filtros de la tarjeta: sin la caja de formulario
