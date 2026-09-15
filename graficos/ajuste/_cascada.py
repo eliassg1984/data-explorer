@@ -287,7 +287,7 @@ def _css():
        con el de la tarjeta y no flote en el medio. */
     div[class*="st-key-ajcas_total"] {{
         border-top: 1px solid {GRIS_FONDO};
-        margin-top: 10px; padding-top: 9px; }}
+        margin-top: 5px; padding-top: 7px; }}
     div[class*="st-key-ajcas_total"] p {{ margin: 0 !important; }}
 
     /* ── MINI-TARJETA DEL RIEL ────────────────────────────────────────
@@ -346,6 +346,20 @@ def _css():
         border: 1px solid {GRIS_BORDE} !important;
         border-radius: 12px !important;
         padding: 15px 18px 16px 18px !important; }}
+
+    /* LA TARJETA DE CONTROLES, APRETADA. Se pidio bajarla a 160px desde el
+       modo diseno; medido, su contenido son 227 y con `height: 160` el
+       bloque del neto se DERRAMA 50px fuera (la tarjeta tiene `overflow:
+       visible`, asi que no recorta: queda flotando sobre la de abajo).
+       227 no era un piso puesto a mano, es lo que mide lo que hay dentro.
+
+       Lo que si se puede es apretar el aire. Los tres controles apilados
+       heredaban el `gap` por defecto de Streamlit (16px) y el padding de
+       la familia de tarjetas esta pensado para una tarjeta grande.
+       Ver arquitectura.md regla #433. */
+    div[class*="st-key-ajcas_card_ctrl"] {{
+        padding: 11px 14px 12px 14px !important;
+        gap: 4px !important; }}
 
     /* El CUERPO que las contiene es transparente y solo aporta el hueco.
        Mismo idioma que `compras_vap_cuerpo` (#420): las tarjetas son las

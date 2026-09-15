@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-432 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+433 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (156)
 
@@ -191,7 +191,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Layout y alturas** (60)
+**Layout y alturas** (61)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -253,6 +253,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#425** — Cuando una vista de la pila se queda con sus propios filtros, el df que recibe tiene que ser…
 - **#429** — Una manija de resize que mueve el borde de ARRIBA no puede escribir sólo height: compensa con…
 - **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
+- **#433** — Arrastrar una tarjeta por debajo del alto de su contenido no la achica: la hace DERRAMAR
 
 **Plotly y figuras** (70)
 
@@ -36506,6 +36507,37 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+433. **Arrastrar una tarjeta por debajo del alto de su contenido no la
+     achica: la hace DERRAMAR.** Las tarjetas del proyecto tienen
+     `overflow: visible`, así que lo que no entra no se recorta — se dibuja
+     encima de lo que sigue.
+
+     Pedido desde el modo diseño: `height: 160px` sobre la tarjeta de
+     controles de la cascada, que medía 227. Aplicado tal cual y medido: el
+     bloque del neto terminaba en y=250 con la tarjeta cerrando en 200,
+     o sea **50px derramados** sobre la tarjeta del detalle.
+
+     Los 227 no eran un piso puesto a mano —eso ya se había sacado en la
+     #430— sino lo que mide el contenido: tres controles apilados de 27px
+     con el `gap` de 16 que Streamlit pone por defecto, más el bloque del
+     neto, más el padding de la familia de tarjetas, que está calibrado
+     para una tarjeta grande.
+
+     **Regla:** ante un alto pedido por debajo del contenido, no se clava
+     el número — se aprieta el AIRE y se informa el piso real. Acá: `gap`
+     de 16 a 4 y padding de 15/18/16 a 11/14/12, más 5px menos de
+     separación del neto. Resultado medido, 227 → **176**, con el neto
+     adentro y 13px de margen. Los 160 pedidos siguen a 16px, y esos 16 ya
+     son tipografía: para llegar habría que sacar algo de la tarjeta.
+
+     Efecto secundario que conviene mirar: el escalón con la tarjeta de al
+     lado pasó de 65px a 14. Y **cambia de signo según el ancho** — a
+     1330px la de familia mide 162 y la de controles 176, pero a 1024 la de
+     familia trepa a 196 (su texto envuelve) y pasa a ser la más alta. Un
+     escalón que se da vuelta solo no se puede "ajustar" con un número.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36518,7 +36550,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#433**.
+> próxima regla nueva es la **#434**.
 
 >
 
