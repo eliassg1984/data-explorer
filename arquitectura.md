@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-430 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+431 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (154)
+**CSS y estilos** (155)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -188,6 +188,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#426** — Un hijo de altura CERO no ocupa alto pero sí cobra el gap. Seis de ellos son 96px de página…
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#429** — Una manija de resize que mueve el borde de ARRIBA no puede escribir sólo height: compensa con…
+- **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
 **Layout y alturas** (60)
 
@@ -628,7 +629,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (37)
+**Herramientas de desarrollo** (38)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -667,6 +668,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
 - **#426** — Un hijo de altura CERO no ocupa alto pero sí cobra el gap. Seis de ellos son 96px de página…
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
+- **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
 **Decisiones de diseño y UX** (76)
 
@@ -36382,6 +36384,47 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+431. **`st.popover` no emite `st-key-*` propio: sin un contenedor que se
+     la preste, el inspector y el modo diseño fijan la tarjeta entera.**
+     Preguntado así: «¿por qué no puedo mover esto?», señalando el trigger
+     de fecha de la cascada.
+
+     No se podía porque nunca estaba fijado. Medido, con dos targets de
+     hover distintos y el mismo resultado:
+
+     | | |
+     |---|---|
+     | El trigger `2 set 2026` | 240 × 27 |
+     | Lo que el modo diseño fijaba | **278 × 227** — la tarjeta completa |
+
+     El inspector resuelve hacia arriba hasta el `st-key-*` más cercano.
+     Con los tres popovers sueltos dentro de `ajcas_card_ctrl`, ese
+     ancestro era la tarjeta: arrastrar movía los tres filtros y el neto en
+     bloque, y la perilla aparecía en la esquina de la tarjeta, lejos del
+     control que uno estaba mirando.
+
+     **Regla:** un widget sin key propia que se quiera poder fijar o
+     estilar por separado va envuelto en su `st.container(key=...)`. Acá
+     son `ajcas_ctrl_fecha` / `_familia` / `_area`, y el contenedor ya
+     existía —se creaba con `st.container()` sin key sólo para apilarlos—,
+     así que fue agregarle el `key=`. Verificado después: el pin pasa a
+     248×35, o sea el control.
+
+     **Tres cosas del modo diseño que salieron de la misma pregunta y
+     conviene saber antes de usarlo para mover algo:**
+
+     - **En modo diseño los clics están bloqueados**, así que un popover no
+       se puede abrir mientras se acomoda. Es a propósito (el bloqueo de
+       clicks de `disenoActivo()`), pero sorprende.
+     - **«Mover» escribe `transform`**, y eso mueve el píxel sin mover el
+       hueco (#426). Sirve para PROBAR dónde queda bien; pegar ese
+       `transform` en `estilos/` es el error que la #426 ya documenta.
+     - **Reubicar de verdad no es CSS.** Dónde vive un control lo decide el
+       orden en que se crean los contenedores en Python. El modo diseño
+       ayuda a decidir el destino, no a implementarlo.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36394,7 +36437,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#431**.
+> próxima regla nueva es la **#432**.
 
 >
 

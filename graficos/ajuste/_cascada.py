@@ -83,6 +83,14 @@ _K_FAMILIA = "ajcas_filtro_familia"
 # que le alcanza con recordar que clave de corte eligio. Ver regla #427.
 _K_CORTE = "ajcas_corte"
 
+# UNA KEY POR CONTROL. `st.popover` no emite `st-key-*` propio: el inspector
+# y el modo diseno resuelven hacia arriba hasta el `st-key-*` mas cercano,
+# que sin esto era la tarjeta ENTERA. Medido: fijar el trigger de fecha
+# (240x27) pineaba `ajcas_card_ctrl` (286x235), asi que "mover" agarraba la
+# tarjeta con los tres filtros y el neto adentro. Con su contenedor propio,
+# cada filtro se fija y se estila por separado. Ver arquitectura.md #431.
+_K_CTRL = ("ajcas_ctrl_fecha", "ajcas_ctrl_familia", "ajcas_ctrl_area")
+
 
 def areas_con_ajuste(df, col_area, col_ajuste_val):
     """Las areas que MOVIERON algo, en orden alfabetico.
@@ -505,7 +513,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                                "estos filtros.")
             with _z2:
                 with st.container(border=True, key="ajcas_card_ctrl"):
-                    _controles([st.container() for _ in range(3)])
+                    _controles([st.container(key=k) for k in _K_CTRL])
         return
 
     # ── Datos por familia ────────────────────────────────────────────────
@@ -581,7 +589,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                     # 180 que se PISABAN (cajas 480-660, 572-752, 664-844)
                     # y el ultimo se salia 83px. Bajarles el min-width los
                     # dejaria mas angostos que su texto. Ver regla #430.
-                    _controles([st.container() for _ in range(3)])
+                    _controles([st.container(key=k) for k in _K_CTRL])
                     _render_total(_total, _base_tot, len(_fams))
             with st.container(border=True, key="ajcas_card_drill"):
                 _drill(_act["cat"], d, grp_col, col_ajuste_val, col_producto,
