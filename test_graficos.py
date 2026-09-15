@@ -3618,37 +3618,41 @@ def _pruebas_delta_corte():
     check("arriba del 999% pasa a ×N (un número así se lee como error)",
           _delta_corte(-50000.0, -100.0), "▲ ×500")
 
-    # ── Las dos barras ──────────────────────────────────────────────────
-    # La escala es la de HOY (`_max_abs` sale de las familias del corte
-    # elegido), así que la barra de antes PUEDE no entrar: ahí topa en el
-    # semiancho y se le cuadra la punta de afuera. Lo contrario —estirar
-    # la escala hasta que entre— se probó el 2026-09-15 con datos reales y
-    # dejaba las barras de hoy en 1-4px de 135. Ver regla #436.
-    from graficos.ajuste._cascada import _barra_cero
+    # ── La barra del cero y el minigráfico ──────────────────────────────
+    # Son DOS gráficos distintos a propósito, y esa es la regla que se
+    # está fijando: la barra comparte escala con las otras tarjetas (para
+    # comparar familias) y el minigráfico tiene la suya (para ver la forma
+    # de ESTA familia). Cuando los dos eran barras horizontales sobre el
+    # mismo eje no se distinguían — ver #437.
+    from graficos.ajuste._cascada import _barra_cero, _minigraf_cortes
 
     _sola = _barra_cero(-900.0, 25.0)
-    check("sin corte anterior la barra sigue midiendo 18px",
-          "height:18px" in _sola, True)
-    check("...y no dibuja ninguna barra apagada",
-          "opacity:.45" in _sola, False)
+    check("la barra del cero mide 18px y no lleva nada apagado",
+          "height:18px" in _sola and "opacity" not in _sola, True)
 
-    _dos = _barra_cero(-900.0, 25.0, -450.0, 12.5)
-    check("con corte anterior el alto pasa a 26px",
-          "height:26px" in _dos, True)
-    check("la de antes va apagada y arriba",
-          "opacity:.45" in _dos and "top:2px" in _dos, True)
-    check("la de antes que entra conserva las dos puntas redondas",
-          "border-radius:999px;background" in _dos, True)
+    check("con un solo corte no hay minigráfico (una columna no es historia)",
+          _minigraf_cortes([-900.0]), "")
+    check("sin serie tampoco", _minigraf_cortes(None), "")
 
-    # 60 > 50: no entra en el semiancho.
-    _topa_falta = _barra_cero(-900.0, 25.0, -9000.0, 60.0)
-    check("la de antes que no entra topa en el semiancho",
-          "width:50.00%" in _topa_falta, True)
-    check("...y si es faltante cuadra la punta izquierda (la de afuera)",
-          "border-radius:0 999px 999px 0" in _topa_falta, True)
-    _topa_sobra = _barra_cero(-900.0, 25.0, 9000.0, 60.0)
-    check("...y si es sobrante, la derecha",
-          "border-radius:999px 0 0 999px" in _topa_sobra, True)
+    _mg = _minigraf_cortes([-100.0, 50.0, -900.0])
+    check("una columna por corte", _mg.count("border-radius:2px"), 3)
+    check("la última va plena y las pasadas apagadas",
+          _mg.count("opacity:.42") == 2 and _mg.count("opacity:1") == 1, True)
+    # Contra "top:13px;left:1px" y no contra "top:13px" a secas: la línea
+    # de base también se posiciona en 15px, y sin el sufijo la cuenta le
+    # suma una columna negativa que no existe.
+    check("el faltante cuelga de la línea y el sobrante se apoya en ella",
+          _mg.count("top:15px;left:0") == 2
+          and _mg.count("bottom:15px;left:0") == 1, True)
+
+    # LA ESCALA ES PROPIA DE LA FAMILIA: la misma forma tiene que dar el
+    # mismo dibujo, valga 2 mil o 2 millones. Con escala global (la de la
+    # barra de arriba) una familia chica saldría plana siempre.
+    check("misma forma, mismo dibujo, aunque cambie la magnitud",
+          _minigraf_cortes([1000.0, 2000.0]) == _minigraf_cortes(
+              [1000000.0, 2000000.0]), True)
+    check("el mayor de la serie llega al tope de 13px",
+          "height:13.0px" in _minigraf_cortes([1000.0, 2000.0]), True)
 
     return fallos
 

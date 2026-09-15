@@ -159,7 +159,7 @@ def areas_con_ajuste(df, col_area, col_ajuste_val):
 
 def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
                          col_ajuste_val, k_corte, k_familia, k_area,
-                         familias=FAMILIAS_DE_ENTRADA, con_corte_previo=False):
+                         familias=FAMILIAS_DE_ENTRADA, historial=0):
     """ESTADO PRIMERO, WIDGETS DESPUES: resuelve los tres filtros sin
     dibujar nada, y devuelve el dict que consume `render_filtros_vista`.
 
@@ -180,26 +180,32 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     rango. Sin `df_full` (o sin columna de fecha) no hay selector de corte
     y la vista se queda con el `df` que le dieron.
 
-    Con `con_corte_previo` devuelve ademas el corte ANTERIOR al elegido y
-    su df, filtrado EXACTAMENTE igual (misma area, misma familia, misma
-    normalizacion) -- que es todo el punto: comparar dos cortes filtrados
-    distinto no compara nada. Lo usa la Cascada para la mini-barra de
-    "contra el corte pasado" del riel. Es opt-in porque cuesta un filtrado
-    mas sobre el parquet entero y el Mapa de calor no lo necesita.
+    `historial=N` trae ademas los N cortes que TERMINAN en el elegido (el
+    elegido incluido), en `historial_cortes`, y sus filas en
+    `d_historial` con una columna `_corte_clave` que dice de cual es cada
+    una. Filtradas EXACTAMENTE igual que `d` (misma area, misma familia,
+    misma normalizacion), que es todo el punto: comparar cortes filtrados
+    distinto no compara nada. Lo usa la Cascada para el minigrafico de
+    cada tarjeta del riel.
 
-    El corte anterior sale de la lista COMPLETA, no de los
+    Es UN filtrado y no N: se toma la union de los dias de los N cortes de
+    una sola pasada y despues se etiqueta cada fila con su corte. Opt-in
+    igual, porque el Mapa de calor no lo necesita.
+
+    Los cortes del historial salen de la lista COMPLETA, no de los
     `MAX_CORTES_OFRECIDOS` que ofrece el popover: si no, el mas viejo de
     los doce se quedaria sin comparacion por un limite que es de la UI.
 
     Claves del dict: `base` (el corte entero, sin area ni familia: es lo
     que ofrecen las pastillas), `d` (ya filtrado, lo que dibuja la vista),
-    `corte`, `cortes`, `areas`, `sel_fam`, `sel_area`, `corte_prev`,
-    `d_prev` y las tres keys.
+    `corte`, `cortes`, `areas`, `sel_fam`, `sel_area`, `corte_prev` (el
+    anterior al elegido, o None), `historial_cortes`, `d_historial` y las
+    tres keys.
     """
     sel_area = list(st.session_state.get(k_area) or [])
 
     base = df
-    base_prev = None
+    base_hist = None
     cortes, _todos, _fechas = [], [], None
     if df_full is not None and col_fecha and col_fecha in df_full.columns:
         base = df_full
@@ -208,6 +214,7 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
             pd.to_datetime(df_full[col_fecha], errors="coerce"))
         cortes = _todos[-MAX_CORTES_OFRECIDOS:]
     corte = corte_prev = None
+    hist_cortes = []
     if cortes:
         _clave = st.session_state.get(k_corte)
         corte = next((c for c in cortes if c["clave"] == _clave), None)
@@ -216,12 +223,17 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
             # sesion de inventario, no un intervalo de calendario.
             corte = cortes[-1]
             st.session_state[k_corte] = corte["clave"]
-        if con_corte_previo:
+        if historial > 0:
             _i = next((i for i, c in enumerate(_todos)
                        if c["clave"] == corte["clave"]), 0)
-            corte_prev = _todos[_i - 1] if _i > 0 else None
-            if corte_prev is not None:
-                base_prev = base[_fechas.isin(set(corte_prev["dias"]))]
+            hist_cortes = _todos[max(0, _i - historial + 1):_i + 1]
+            corte_prev = hist_cortes[-2] if len(hist_cortes) > 1 else None
+            # UN filtrado para los N cortes: la union de sus dias, y
+            # despues cada fila etiquetada con el corte al que cae.
+            _de_dia = {_d: _c["clave"] for _c in hist_cortes
+                       for _d in _c["dias"]}
+            base_hist = base[_fechas.isin(_de_dia)].assign(
+                _corte_clave=_fechas[_fechas.isin(_de_dia)].map(_de_dia))
         base = base[_fechas.isin(set(corte["dias"]))]
 
     # NORMALIZAR EL AREA, no solo la lista de opciones: `filtro_pills`
@@ -232,7 +244,7 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
             return x
         return x.assign(**{col_area: x[col_area].astype(str).str.strip()})
 
-    base, base_prev = _normalizar(base), _normalizar(base_prev)
+    base, base_hist = _normalizar(base), _normalizar(base_hist)
     # Las opciones las decide el corte ELEGIDO, nunca el anterior: ofrecer
     # un area que no movio nada ahora es ofrecer una pastilla que deja la
     # vista vacia, y de eso se trata `areas_con_ajuste` (#424).
@@ -252,7 +264,7 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
 
     return {"base": base, "d": _aplicar(base), "corte": corte,
             "cortes": cortes, "corte_prev": corte_prev,
-            "d_prev": _aplicar(base_prev),
+            "historial_cortes": hist_cortes, "d_historial": _aplicar(base_hist),
             "areas": areas, "sel_fam": sel_fam, "sel_area": sel_area,
             "col_familia": col_familia, "col_area": col_area,
             "k_corte": k_corte, "k_familia": k_familia, "k_area": k_area}

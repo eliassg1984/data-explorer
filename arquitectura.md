@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-436 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+437 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (156)
 
@@ -256,7 +256,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#433** — Arrastrar una tarjeta por debajo del alto de su contenido no la achica: la hace DERRAMAR
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 
-**Plotly y figuras** (71)
+**Plotly y figuras** (72)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -329,6 +329,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#403** — Un top-N dentro de una tabla ORDENABLE miente por partida doble — y un desglose "sin nada que…
 - **#413** — Una decisión tomada por una restricción se revisa cuando la restricción se va: el eje Y de…
 - **#436** — Meter un dato de CONTEXTO en una escala compartida la rompe: lo que no entra se TOPA, no se…
+- **#437** — Dos datos distintos dibujados con la MISMA marca no se distinguen, por más que les cambies el…
 
 **AgGrid y tablas** (68)
 
@@ -36690,6 +36691,60 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+437. **Dos datos distintos dibujados con la MISMA marca no se distinguen,
+     por más que les cambies el color o la opacidad: hay que cambiar el
+     tipo de gráfico.** La comparación contra el corte anterior de las
+     minitarjetas de la Cascada (#436) duró unas horas como segunda barra
+     horizontal y se reportó tal cual: «el usuario ve dos barras de color,
+     creo una de la cascada y la otra no logra identificar».
+
+     La primera versión era, sobre el papel, prolija: misma escala, mismo
+     cero, la de antes más fina (7px contra 11), apagada al 45% y arriba
+     de la de ahora. Nada de eso alcanza, porque **las dos seguían siendo
+     la misma marca** —una barra redondeada horizontal sobre el mismo
+     eje— y con la misma pareja de colores (faltante/sobrante). Grosor y
+     opacidad son diferencias de GRADO; el lector necesita una diferencia
+     de CLASE para saber que está mirando otra variable.
+
+     El síntoma que lo delataba antes de que nadie lo reportara: **hizo
+     falta una leyenda para decir cuál era cuál** («barra clara = 16-18
+     ago 2026»). Una leyenda que existe para desambiguar dos marcas del
+     mismo tipo es el aviso de que el gráfico está mal elegido, no la
+     solución.
+
+     Lo que quedó: la barra del cero se queda sola (vuelve a ser
+     exactamente la de siempre, que también usa la tarjeta protagonista) y
+     debajo va un **minigráfico de columnas verticales apoyadas en una
+     línea de base**, una por corte, de izquierda a derecha, con la de más
+     a la derecha a color pleno y las pasadas al 42%. Columnas verticales
+     se leen como TIEMPO sin que nadie lo explique, y la última se lee
+     como «hoy». La leyenda que quedó ya no desambigua, solo informa:
+     «minigráfico = últimos 6 cortes».
+
+     Dos consecuencias del cambio de tipo, las dos contraintuitivas:
+
+     · **La escala se da vuelta respecto de la #436.** La barra del cero
+       comparte escala con las demás tarjetas, porque está para comparar
+       familias entre sí. El minigráfico usa la escala de SU familia,
+       porque está para mostrar la FORMA (venía creciendo, se dio vuelta,
+       es estable) — con escala global, una familia chica saldría plana
+       siempre y el gráfico no diría nada. La regla detrás de las dos: la
+       escala la fija aquello que ESE gráfico vino a comparar.
+
+     · **Proporción antes que cantidad de píxeles.** Seis columnas con
+       `flex: 1` daban 27px de ancho por 3-11 de alto: a esa proporción se
+       leen como guiones sueltos, no como un gráfico de columnas. Con 16px
+       de ancho, 13 de alto máximo y el aire repartido por
+       `space-between`, las mismas seis columnas se leen como lo que son.
+
+     Y el dato: los N cortes salen de UNA pasada, no de N. `_comun.
+     estado_filtros_vista(historial=N)` toma la unión de los días de los N
+     cortes y después etiqueta cada fila con el suyo (`_corte_clave`), con
+     los mismos filtros de área y familia que el corte vigente — comparar
+     cortes filtrados distinto no compara nada.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36702,7 +36757,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#437**.
+> próxima regla nueva es la **#438**.
 
 >
 
