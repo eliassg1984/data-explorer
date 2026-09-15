@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-427 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+428 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (152)
+**CSS y estilos** (153)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -186,6 +186,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#423** — Una pastilla que dice «Crítico» por TAMAÑO y no por gravedad se contradice con la fila que la…
 - **#424** — Un filtro categórico que ofrece todo el maestro ofrece pastillas que dejan la vista vacía
 - **#426** — Un hijo de altura CERO no ocupa alto pero sí cobra el gap. Seis de ellos son 96px de página…
+- **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 
 **Layout y alturas** (58)
 
@@ -623,7 +624,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (36)
+**Herramientas de desarrollo** (37)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -661,6 +662,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#414** — Un sufijo sin verbo se pega al número de al lado: −62.6% · la cantidad se lee «la cantidad…
 - **#416** — El look del modo diseño se pega SIN el .ag-cell {font-size} —otra vez— y con las cuentas de…
 - **#426** — Un hijo de altura CERO no ocupa alto pero sí cobra el gap. Seis de ellos son 96px de página…
+- **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 
 **Decisiones de diseño y UX** (76)
 
@@ -36213,6 +36215,60 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-15.)
 
+428. **Un botón overlay se esconde con `color: transparent`, no
+     vaciándole el label: el label ES el nombre accesible.** Y su
+     contenedor colapsa a 16×0 — eso no es un bug, es la consecuencia de
+     sacarlo del flujo.
+
+     Salió de una pregunta: «¿por qué con mi herramienta de diseño no puedo
+     arrastrar estas?», sobre `ajcas_btnmini_*`. Medida la cadena entera
+     desde el botón hasta la tarjeta:
+
+     | Nodo | Tamaño | `position` |
+     |---|---|---|
+     | `stBaseButton` (el botón) | **203×106** | `absolute` |
+     | `stTooltipHoverTarget` | 16×0 | static |
+     | `stTooltipIcon` | 16×0 | static |
+     | `stButton` | 16×0 | static |
+     | `stElementContainer` (la key) | **16×0** | static |
+     | `stVerticalBlock` (la tarjeta) | 205×108 | relative |
+
+     El botón está `absolute`, o sea FUERA DEL FLUJO, así que su
+     `stElementContainer` —que es el nodo que lleva la key
+     `st-key-ajcas_btnmini_*`— se queda sin contenido que lo estire y
+     colapsa a lo que sobra: 16px de ancho por el label y 0 de alto. El
+     inspector fija ese contenedor y no hay nada que agarrar.
+
+     **Para arrastrar la tarjeta hay que subir un nivel** (`ajcas_mini_*`,
+     205×108) con las migas de pan de la «Cadena de contenedores st-key».
+     Y el clic derecho SIEMPRE va a agarrar el overlay, porque cubre el
+     100 % de la tarjeta — es el precio del arreglo de #421, no un defecto
+     del inspector.
+
+     **Lo que sí era un bug:** el botón tenía `st.button(" ", help=...)`.
+     Medido, su nombre accesible salía **VACÍO** — `aria-label` en `""`,
+     `title` en `null`, texto visible un espacio— mientras `tabIndex` valía
+     0, así que recibía foco con Tab y un lector de pantalla anunciaba
+     «botón» a secas. **`help=` no arregla eso**: monta un tooltip aparte
+     (las dos capas `stTooltipIcon`/`stTooltipHoverTarget` de la tabla), que
+     además llega VACÍO al DOM hasta el hover y que, con el overlay
+     cubriendo la tarjeta entera, aparecía al pasar el mouse por cualquier
+     punto de ella.
+
+     **Regla:** el label del botón lleva el texto de verdad («Ver el
+     detalle de ALIMENTOS») y se esconde con `color: transparent` +
+     `overflow: hidden` en el CSS del overlay. El nombre accesible sale
+     gratis, se van las dos capas de tooltip, y la pantalla no cambia:
+     medido después, 205×106 sobre una tarjeta de 207×108 (97 % de
+     cobertura), texto en `rgba(0,0,0,0)`, sin desbordar, un solo `<button>`
+     por tarjeta en vez de dos.
+
+     El resaltado lavanda del hover no depende de nada de esto: es
+     `div[class*="st-key-ajcas_mini_"]:hover`, una regla sobre el
+     contenedor.
+
+     (2026-09-15.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36225,7 +36281,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#428**.
+> próxima regla nueva es la **#429**.
 
 >
 

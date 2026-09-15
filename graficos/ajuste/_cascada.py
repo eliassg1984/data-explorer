@@ -293,6 +293,7 @@ def _css():
         min-height: 0 !important; padding: 0 !important;
         border: none !important; background: transparent !important;
         color: transparent !important; box-shadow: none !important;
+        overflow: hidden !important; white-space: nowrap !important;
         z-index: 3 !important; border-radius: 12px !important; }}
     div[class*="st-key-ajcas_btnmini_"] button:hover,
     div[class*="st-key-ajcas_btnmini_"] button:focus {{
@@ -595,8 +596,16 @@ def _render_mini(f):
             f"margin-top:1px'>{_sig}S/ {abs(f['val']):,.0f}</div>"
             f"{_barra_cero(f['val'], f['esc'])}",
             unsafe_allow_html=True)
-        if st.button(" ", key=f"ajcas_btnmini_{_slug(f['cat'])}",
-                     help=f"Ver el detalle de {f['cat']}"):
+        # EL LABEL ES EL NOMBRE ACCESIBLE, y por eso no es " ".
+        # El boton se esconde con `color: transparent` (ver `_css`), no
+        # vaciandolo: medido, con label " " y `help=` el nombre accesible
+        # salia VACIO -- el boton recibe foco con Tab y un lector de
+        # pantalla anunciaba "boton" a secas. `help=` no lo arregla: monta
+        # un tooltip aparte (dos capas de DOM) que ademas, con el overlay
+        # cubriendo la tarjeta entera, aparecia al pasar el mouse por
+        # cualquier punto de ella. Ver arquitectura.md regla #428.
+        if st.button(f"Ver el detalle de {f['cat']}",
+                     key=f"ajcas_btnmini_{_slug(f['cat'])}"):
             st.session_state[_K_FOCO] = f["cat"]
             st.rerun()
 
