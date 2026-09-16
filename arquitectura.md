@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-442 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+443 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (157)
 
@@ -192,7 +192,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 
-**Layout y alturas** (63)
+**Layout y alturas** (64)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -257,6 +257,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#433** — Arrastrar una tarjeta por debajo del alto de su contenido no la achica: la hace DERRAMAR
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 - **#438** — Un title adentro de una tarjeta con botón-overlay no se ve nunca; el :hover del CONTENEDOR sí…
+- **#443** — Una tarjeta que no reacciona no se arregla dándole controles: se arregla viendo de qué EJES…
 
 **Plotly y figuras** (75)
 
@@ -409,7 +410,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 
-**Streamlit** (115)
+**Streamlit** (116)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -526,6 +527,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#432** — Si el texto de un control se ve descolgado, mirá si el widget lo CENTRA antes de tocar el…
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 - **#435** — La SEGUNDA vista que pide «los mismos filtros» los convierte en una pieza — y meter cinco…
+- **#443** — Una tarjeta que no reacciona no se arregla dándole controles: se arregla viendo de qué EJES…
 
 **Datos, R2 y DuckDB** (53)
 
@@ -37068,6 +37070,137 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-16.)
 
+443. **Una tarjeta que no reacciona no se arregla dándole controles: se
+     arregla viendo de qué EJES depende, y repartiéndolos entre quien los
+     mueve.** Dos pedidos del mismo día sobre la cascada de Compras › Vs
+     año pasado: *«¿ese gráfico es solamente del valorizado total?»* y
+     *«solamente veo un valor en moneda»*, y detrás el de fondo — *«no es
+     muy interesante que toda la vista tenga una tarjeta siempre fija
+     cuando el usuario puede estar interactuando con otras tarjetas»*.
+
+     Las dos quejas eran la misma. La tarjeta SÍ cambiaba —con el foco de
+     la tabla— pero no lo decía en ninguna parte, y el ámbito vivía en la
+     cabecera, que es OTRA tarjeta desde la #420. Un puente que no nombra
+     ni su magnitud ni su alcance se lee como un adorno fijo aunque esté
+     recalculándose.
+
+     - **Las cuatro maneras de "hacerla viva" que se dibujaron no eran
+       alternativas.** Se maquetaron cuatro (clic en un mes de la serie /
+       pestañas en la tarjeta / seguir al selector «Ver» / cascada por
+       contribuyentes) y puestas al lado se ve que mueven TRES
+       coordenadas distintas del mismo estado, no cuatro versiones de una:
+
+           magnitud   qué se mide          → el selector «Ver»
+           ámbito     sobre qué            → gestos de las OTRAS tarjetas
+           eje        cómo se parte el Δ   → un control de esta tarjeta
+
+       La cuarta (contribuyentes) es una opción del eje, no una modalidad.
+       De ahí el reparto que quedó: **el ámbito no se toca desde la
+       tarjeta del puente** —lo ponen el clic en la fila de la tabla y el
+       clic en el mes de la serie— y la tarjeta es dueña de UN control.
+       Combinar cuatro propuestas no fue apilar cuatro controles; fue
+       descubrir que tres de ellas ya tenían dueño.
+
+     - **La regla que decide qué cortes se ofrecen tiene una sola línea:
+       un corte se ofrece si la magnitud es ADITIVA en ese eje y el ámbito
+       tiene MÁS DE UN elemento** (`_cortes_disponibles`). De ahí salen
+       los cinco casos sin escribir ninguno a mano: en Precio no se salva
+       ninguno (un precio es un ratio: la suma de tres meses no es el
+       precio del trimestre — la misma trampa que `_por_item` evita desde
+       la #198), en Cantidad se cae «Por qué» (en kilos no hay efecto
+       precio que separar), «Quién» se cae con un solo ítem y «Cuándo»
+       con un solo mes.
+
+     - **Y los descartados se DICEN.** Van al `help` del control con su
+       motivo («*Ahora no aplican: «Quién», ya hay un solo ítem*»), no se
+       tragan: un selector que ofrece tres cosas hoy y una mañana, sin
+       decir por qué, se lee como un bug. Mismo criterio que la opción
+       «Todas» del filtro de Familia (#332), que existe para que el campo
+       diga siempre qué está haciendo. Streamlit no tiene opciones
+       deshabilitadas en un `selectbox`, así que el motivo va al `help` y
+       no a la lista — el mockup las mostraba apagadas y eso no se puede
+       construir con el widget nativo.
+
+     - **El control va en la CABECERA, no en la tarjeta de la que es.**
+       Medido con la vista dibujada (viewport 1280): la tarjeta del puente
+       mide 434px, su área de trazo 378 y su figura 163px de alto
+       (`_ALTO_CASCADA`). Un renglón de control propio le costaba ~44px —
+       más de la cuarta parte del dibujo—, y compartir renglón con el
+       veredicto tampoco: ese texto ya mide 354px y recorta con «…» a
+       1024. La fila de la cabecera es `flex-wrap: wrap` y es su PROPIA
+       tarjeta, así que no le saca un píxel a ninguna figura. **Y entró en
+       UN renglón**: medida después, la fila con los ocho controles da
+       1113×27 a 1280 de viewport, así que el segundo renglón que se temía
+       no aparece hasta bastante más angosto.
+
+     - **El rótulo cuesta 17px y no 33 porque viaja en el mismo
+       `st.markdown` que el veredicto.** Medido: la caja da 14 y su margen
+       3. Un bloque propio pagaría además el gap de 16px que Streamlit mete
+       entre elementos — casi tanto como la línea entera, por nada.
+       `alturas.FRANJA_ROTULO`.
+
+     - **Y la cuenta del ancho de los rótulos me salió mal la primera
+       vez, en las dos variables.** Escribí el partidor de etiquetas
+       suponiendo un eje de 9px y cortando a 12 caracteres, y encima el
+       corte dejaba el PRIMER renglón sin recortar (hasta 22 caracteres).
+       Medido en el DOM con la cascada ya dibujada: el eje rotula en
+       **12px**, el rótulo medía **138px** y la columna **54**, y **cinco
+       de los seis pares se pisaban**. La cura fueron las dos puntas a la
+       vez — 3 barras nombradas en vez de 4 (columna de 63px) y el eje a
+       11px (`_FUENTE_EJE_CASCADA`) —, y recién ahí el rótulo más ancho da
+       59 contra 63. La lección no es el número: es que «rótulo de N
+       caracteres» no es una medida, y que un partidor de texto hay que
+       probarlo con el nombre más largo del parquet antes de creerle.
+
+     - **El rótulo no dice «total».** Con un ítem en foco sería falso, y
+       la mitad de las veces hay uno (en Cantidad y en Precio lo pone la
+       vista sola, ver #401). Escribe el ámbito entero y no afirma nada
+       que el estado no respalde.
+
+     - **Y el veredicto tuvo que aprender a hablar en otra magnitud.**
+       Con la cascada siguiendo a «Ver», una cifra en soles encima de un
+       dibujo en kilos es una contradicción escrita en la misma tarjeta —
+       el mismo defecto que el rótulo vino a tapar, pero al revés. De ahí
+       los `fmt`/`causa` de `_resumen_html`: en kilos el Δ ES la cantidad,
+       así que el sufijo «por comprar menos» se apaga en vez de mentir.
+
+     - **El clic del mes se resuelve ARRIBA DE TODO, no donde está el
+       gráfico**, por dos razones que se suman: la selección de
+       `on_select` persiste entre reruns y hay que leerla antes de dibujar
+       con una key nueva (#399, receta del contador), y además el mes
+       elegido decide qué cortes ofrece la cabecera, que se dibuja ~120
+       líneas antes que la serie. Es el mismo defecto que ya obligó a
+       mudar `agrupar_por`. Se guarda la ETIQUETA del mes y no su
+       posición: la ventana de la tarjeta se mueve con un desplegable.
+
+     - **El mes acota la CASCADA, no la vista.** La serie sigue dibujando
+       la ventana entera —si se recortara no quedaría dónde hacer el clic
+       siguiente— y los meses no elegidos se apagan al 35 %. La selección
+       nativa de Plotly no servía para marcarlo: la pinta el gráfico al
+       seleccionar y se va en el rerun, y acá el gráfico nace SIN
+       selección a propósito.
+
+     - **La barra «otros N» de la cascada por contribuyentes es el
+       veredicto sobre esa forma de mirar, no relleno.** Medido contra el
+       parquet ese día (ventana por defecto, las cuatro familias de
+       entrada), cuánto del Δ llegan a nombrar los cinco más grandes:
+
+           jul 26      31 %        sep 26      58 %
+           ago 26      18 %        trimestre   27 %
+
+       O sea que «Quién» es la lectura correcta en septiembre y una lista
+       de inocentes en agosto, con los mismos 540 ítems. Eso es lo que lo
+       dejó como un corte a elección y no como la forma fija de la
+       tarjeta — que era la propuesta que más prometía antes de medirla.
+
+     - **El corte elegido va por ESPEJO** (`_K_CORTE`) y no por la key del
+       widget: en Precio el selector no se dibuja, y un widget que deja de
+       renderizarse pierde su estado. Sin el espejo, pasar por Precio y
+       volver tiraba lo elegido. Misma forma que el `{k_rango}__eco` de
+       `app.py` (#332).
+
+     (2026-09-16.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37080,7 +37213,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#443**.
+> próxima regla nueva es la **#444**.
 
 >
 

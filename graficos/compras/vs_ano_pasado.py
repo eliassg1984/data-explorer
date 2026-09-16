@@ -99,15 +99,15 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import (
-    ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_BORDE,
-    TEXTO_PRINCIPAL,
+    ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
+    LAVANDA_BORDE, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
     _compras_layout, _compras_truncar, scope_rerun,
 )
 from graficos import alturas, periodo
 from graficos.compras._comun import (
-    COLUMNAS_DRILL, GAP_DRILL, PARR, unidad_corta,
+    COLUMNAS_DRILL, GAP_DRILL, PARR, _first_point, unidad_corta,
 )
 from tablas.compras_vs_ano_pasado import (
     _ALTO_FILA as _ALTO_FILA_DETALLE,
@@ -155,6 +155,20 @@ OJO con el `_FRANJA_VAP` de la cuenta: hoy no muerde. `con_franja` devuelve
 (537 - 30 = 507). Se conserva porque el día que el rol suba, la resta
 vuelve a decidir."""
 
+_ALTO_CASCADA = (_ALTO_FIG_VAP - alturas.FRANJA_VEREDICTO
+                 - alturas.FRANJA_ROTULO)
+"""Alto de la cascada, sea cuál sea el corte que dibuje.
+
+De un solo sitio y no calculado en cada `_fig_*`: las tres cascadas se
+turnan en la MISMA tarjeta, así que si una midiera distinto la fila
+dejaría de terminar en la misma línea al cambiar de corte — el defecto que
+`FRANJA_VEREDICTO` existe para evitar, pero disparado por un clic en vez
+de por el layout.
+
+Son 163px (214 − 34 − 17), y de ahí sale el `_TOPE_CASCADA`: el ancho de
+la columna que resulta es lo que decide cuántos caracteres entran en el
+rótulo de cada barra."""
+
 _CSS = f"""
 <style>
 /* Retoques de los dos controles que mandan sobre la TABLA de abajo: el
@@ -194,6 +208,106 @@ _CSS = f"""
 
 _MODOS = ("Valor", "Cantidad", "Precio")
 _AGRUPADORES = ("Producto", "Familia", "Subfamilia")
+
+_CORTES = ("Por qué", "Quién", "Cuándo")
+"""Con qué eje se parte el Δ de la cascada. Los tres son la MISMA resta —
+este año menos el año pasado— mirada de tres maneras:
+
+  · «Por qué»  → efecto precio + efecto cantidad (la cascada de siempre);
+  · «Quién»    → los ítems que explican la diferencia;
+  · «Cuándo»   → los meses que la explican.
+
+No son tres gráficos distintos que compiten por el sitio: son tres cortes
+del mismo número, y por eso viven en UN control y no en tres. Ver
+`_cortes_disponibles`, que es donde está la parte que importa."""
+
+_CORTE_DEFAULT = _CORTES[0]
+
+_K_CORTE = "compras_vap_corte"
+"""El corte elegido, ESPEJO de la key del selector.
+
+El widget vive en `compras_vap_corte_sel` y no se dibuja cuando ningún
+corte aplica (modo Precio). Un widget que deja de renderizarse pierde su
+estado, así que la preferencia se guarda acá, donde nadie la recolecta.
+Ver el bloque «CON QUÉ EJE SE PARTE EL Δ» de la cabecera."""
+
+_K_MES = "compras_vap_mes"
+"""La etiqueta del mes elegido en la serie ("ago 26"), o None.
+
+Es ÁMBITO, no filtro: recorta lo que explica la cascada de la derecha, y
+no toca ni la serie ni la tabla — las dos siguen mostrando la ventana
+entera, porque el clic es una pregunta sobre un mes, no un zoom."""
+
+_K_NCLIC = "compras_vap_nclic"
+"""Cuántos clics de mes se atendieron. Va en la key del gráfico para que
+cada uno nazca sin selección (regla #399, receta del contador)."""
+
+_OPACIDAD_APAGADA = 0.35
+"""Cuánto queda de un mes que NO es el que explica la cascada.
+
+0.35 y no menos: por debajo de ~0.3 una barra gris sobre fondo blanco deja
+de distinguirse de la cuadrícula, y la serie tiene que seguir leyéndose
+como serie — el mes elegido se destaca, los otros no desaparecen."""
+
+_KEY_SERIE = "compras_g_vap_serie"
+"""Base de la key de la serie mensual, SIN el modo.
+
+Hasta el 2026-09-16 era `compras_g_vap_{modo}`, una key por métrica. Con el
+clic de mes eso no sirve: la key tiene que resolverse arriba de todo, antes
+de que se sepa el modo, y además el contador ya garantiza que cada clic
+estrene widget. Una key por modo, encima, tiraba el mes elegido al cambiar
+de métrica — y el mes es ortogonal a la métrica."""
+
+
+def _cortes_disponibles(modo, un_item, un_mes, unidad=""):
+    """`(los cortes que aplican, {corte descartado: por qué})`.
+
+    UN CORTE SE OFRECE SÓLO SI LA MAGNITUD ES ADITIVA EN ESE EJE Y EL
+    ÁMBITO TIENE MÁS DE UN ELEMENTO. De esa sola regla salen los cinco
+    casos, y ninguno es una excepción escrita a mano:
+
+      · En **Precio** no se salva ninguno. Un precio es un RATIO: la suma
+        de los precios de tres meses no es el precio del trimestre, ni la
+        de dos productos el de la familia. Partirlo por cualquier eje da
+        barras que no suman al total — es la misma trampa que `_por_item`
+        evita desde el 2026-08-24 (ver su docstring: efecto precio
+        −540.105 y efecto cantidad +504.339 para explicar un Δ de −35.766).
+      · En **Cantidad** se cae «Por qué», porque en kilos no hay un efecto
+        precio que separar: el Δ de cantidad ES la cantidad.
+      · «Quién» se cae con un solo ítem y «Cuándo» con un solo mes, por lo
+        mismo que no se dibuja una torta de una porción.
+
+    LOS DESCARTADOS SE DEVUELVEN CON SU MOTIVO, no se tragan: el llamador
+    los escribe en el `help` del control. Un control que ofrece tres cosas
+    hoy y una mañana, sin decir por qué, se lee como un bug — es el mismo
+    criterio que la opción «Todas» del filtro de Familia, que existe para
+    que el campo diga siempre qué está haciendo (ver `_FAM_TODAS`).
+
+    `unidad` es la corta ("kg"): entra en el motivo de Cantidad para que
+    diga "en kg no hay efecto precio" y no una frase de manual.
+    """
+    fuera = {}
+    if modo == "Precio":
+        return (), {c: "un precio no se suma" for c in _CORTES}
+    if modo == "Cantidad":
+        fuera["Por qué"] = f"en {unidad or 'unidades'} no hay efecto precio"
+    if un_item:
+        fuera["Quién"] = "ya hay un solo ítem"
+    if un_mes:
+        fuera["Cuándo"] = "ya hay un solo mes"
+    return tuple(c for c in _CORTES if c not in fuera), fuera
+
+
+def _ayuda_corte(fuera):
+    """El `help` del selector de corte: qué quedó afuera y por qué.
+
+    Vacío si no falta ninguno — un `help` que dice "no pasa nada" es ruido
+    en una fila que ya tiene siete controles."""
+    if not fuera:
+        return ("Con qué eje se parte la diferencia contra el año pasado: "
+                "por efecto precio/cantidad, por ítem o por mes.")
+    return "Con qué eje se parte la diferencia. Ahora no aplican: " + "; ".join(
+        f"«{c}», {fuera[c]}" for c in _CORTES if c in fuera) + "."
 
 _ETIQ_VENTANA = {
     periodo.HEREDA: "📅 Rango",
@@ -374,6 +488,124 @@ def _por_item(g, llave="prod"):
     return (base.groupby(llave, as_index=False)[
         cols + ["ef_precio", "ef_cant", "n_items"]].sum()
         .rename(columns={llave: "item"}))
+
+
+_TOPE_CASCADA = 3
+"""Cuántas barras NOMBRADAS entran en una cascada de «Quién» o «Cuándo».
+
+NO ES UN GUSTO, Y LA PRIMERA CUENTA ESTABA MAL. Medido en el navegador el
+2026-09-16 con la vista ya dibujada (viewport 1280): el área de trazo del
+puente mide **378px**, y el eje rotula en **12px**, no en los 9 que yo
+había supuesto — o sea ~6,9px por carácter. Con 4 nombradas son 7 columnas
+de 54px para rótulos de 67-69px: **cinco de los seis pares se pisaban**,
+contados uno por uno en el DOM.
+
+Con 3 son 6 columnas de 63px, y con el eje bajado a `_FUENTE_EJE_CASCADA`
+el rótulo más ancho mide 59: entra con 4px de holgura. Es el mismo
+criterio de la regla #325 —medir el rótulo contra la columna REAL, no
+contra la declarada— y su corolario de la #352: cuántas columnas caben lo
+decide el dato más ancho.
+
+Se paga en información: la barra «otros N» se lleva más Δ. Por eso el
+nombre entero de cada barra va en el hover (`_hover_cascada`), que es
+gratis en píxeles."""
+
+_FUENTE_EJE_CASCADA = 11
+"""Tamaño del rótulo del eje en las cascadas de «Quién» y «Cuándo».
+
+Un punto menos que el resto de la app (12px, el de `_compras_layout`), y
+sólo acá: es lo que hace entrar 10 caracteres en una columna de 63px
+(medido: 59px contra 63). Bajarlo a 10 daba 6px más de holgura y se leía
+peor; a 12 no entra. `_fig_puente` NO lo toca — sus cuatro rótulos son
+fijos y cortos ("Efecto precio"), así que no tiene por qué encoger."""
+
+
+def _pasos_cascada(partes, valor_aa, valor, tope=_TOPE_CASCADA,
+                   cronologico=False, resto="otros"):
+    """Los pasos de una cascada de contribuyentes, con la cola sumada.
+
+    `partes` es `[(nombre, delta)]`. Entran las `tope` de mayor |Δ| y todo
+    lo demás se suma en UNA barra «otros N».
+
+    ESA BARRA NO ES RELLENO, es el veredicto sobre esta forma de mirar:
+    dice cuánto del Δ no llegó a nombrarse. Medido contra el parquet el
+    2026-09-16, con la ventana por defecto y las cuatro familias de
+    entrada, el reparto cambia el juicio según el mes:
+
+        jul 26   los 5 nombrados explican el 31 % del Δ del mes
+        ago 26                                18 %
+        sep 26                                58 %
+        trimestre                             27 %
+
+    O sea que «Quién» es una LECTURA CORRECTA en septiembre y una lista de
+    inocentes en agosto. Por eso es un corte a elección y no la forma fija
+    de la tarjeta — y por eso el llamador escribe ese porcentaje al lado.
+
+    `cronologico` es para «Cuándo»: los meses se ELIGEN por |Δ| (si no
+    entran todos) pero se DIBUJAN en orden de calendario. Una cascada de
+    tiempo con los meses barajados por tamaño no se puede leer.
+    """
+    orden = sorted(range(len(partes)), key=lambda i: -abs(partes[i][1]))
+    cabeza = orden[:tope]
+    if cronologico:
+        cabeza = sorted(cabeza)
+    cola = [i for i in range(len(partes)) if i not in set(cabeza)]
+    pasos = [{"label": "Año<br>pasado", "medida": "absolute",
+              "valor": float(valor_aa)}]
+    for i in cabeza:
+        pasos.append({"label": _etq_barra(partes[i][0]), "medida": "relative",
+                      "valor": float(partes[i][1])})
+    if cola:
+        pasos.append({"label": f"{resto}<br>{len(cola)}", "medida": "relative",
+                      "valor": float(sum(partes[i][1] for i in cola))})
+    pasos.append({"label": "Este<br>año", "medida": "total",
+                  "valor": float(valor)})
+    return pasos
+
+
+_ANCHO_ETQ_BARRA = 10
+"""Caracteres por renglón del rótulo de una barra de la cascada.
+
+MEDIDO, y la primera versión de esta función estaba mal: cortaba a 12 el
+SEGUNDO renglón pero dejaba el primero de hasta 22 ("Magret De Pato Macho
+x"), así que el rótulo medía 138px donde la columna mide 54 y **cinco de
+los seis pares de rótulos se pisaban** (contados en el DOM el 2026-09-16
+con el eje ya dibujado: 378px de área de trazo / 7 barras).
+
+10 caracteres son ~50px en la fuente del eje (9px), o sea el ancho de una
+columna. Va con nombre propio porque es la contraparte de
+`_TOPE_CASCADA`: cuántas barras entran y cuánto mide cada rótulo son el
+mismo presupuesto mirado por los dos lados."""
+
+
+def _etq_barra(nombre, ancho=_ANCHO_ETQ_BARRA):
+    """El rótulo de una barra de la cascada: corto y en DOS renglones.
+
+    Parte por la última palabra que ENTRA en el renglón, no a la mitad de
+    una — y si la primera palabra ya no entra, trunca con "…" para que el
+    recorte se VEA (misma convención que `_compras_truncar` en el resto de
+    la app: un nombre cortado en seco se lee como un nombre distinto)."""
+    s = str(nombre).strip()
+    if len(s) <= ancho:
+        return s
+    corte = s.rfind(" ", 0, ancho + 1)
+    if corte <= 0:
+        return _compras_truncar(s, ancho)
+    return f"{s[:corte]}<br>{_compras_truncar(s[corte + 1:], ancho)}"
+
+
+def _pasos_simple(valor_aa, valor, etq="Δ"):
+    """Cascada de TRES barras: de dónde a dónde, sin partir nada.
+
+    Es lo que queda cuando ningún corte aplica (ver `_cortes_disponibles`):
+    en Precio siempre, y en Cantidad con un mes elegido. No es un gráfico
+    degradado por accidente — es el techo honesto de esa magnitud, y
+    dibujarlo así lo dice mejor que un párrafo."""
+    return [{"label": "Año<br>pasado", "medida": "absolute",
+             "valor": float(valor_aa)},
+            {"label": etq, "medida": "relative",
+             "valor": float(valor) - float(valor_aa)},
+            {"label": "Este<br>año", "medida": "total", "valor": float(valor)}]
 
 
 def _mes_parcial(fechas):
@@ -629,7 +861,7 @@ def _techo_con_etiquetas(hi, lo, alto_etq, simetrico=False,
 # GRÁFICOS
 # ===========================================================================
 
-def _fig_serie(g, modo, parcial, unidad=None, con_precio=False):
+def _fig_serie(g, modo, parcial, unidad=None, con_precio=False, mes_sel=None):
     """Serie mensual: este año contra el mismo mes del año pasado.
 
     `unidad` ("kg") va pegada a la etiqueta de Cantidad, y `con_precio`
@@ -641,6 +873,14 @@ def _fig_serie(g, modo, parcial, unidad=None, con_precio=False):
     Valor y Cantidad van en barras agrupadas (son magnitudes que se suman y
     la comparación es de altura contra altura). Precio va en líneas: es un
     ratio, no se apila, y lo que interesa es la FORMA de la curva.
+
+    `mes_sel` es la etiqueta del mes que está explicando la cascada de al
+    lado ("ago 26"). Los demás se APAGAN al 35 %, y ésa es toda la marca:
+    la serie no se recorta ni se reordena, porque el clic es una pregunta
+    sobre un mes y no un zoom — si se recortara, no quedaría dónde hacer el
+    clic siguiente. Con la selección nativa de Plotly no alcanzaba: la
+    pinta el gráfico al seleccionar y se va en el rerun, y acá el gráfico
+    nace SIN selección a propósito (regla #399, receta del contador).
     """
     por_mes = g.groupby("mes", as_index=False)[
         ["valor", "cant", "valor_aa", "cant_aa"]].sum().sort_values("mes")
@@ -705,6 +945,14 @@ def _fig_serie(g, modo, parcial, unidad=None, con_precio=False):
     _fnt_act = dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL)
     _fnt_aa = dict(size=_ETQ_FUENTE, color=GRIS_TEXTO)
 
+    # El mes que está explicando la cascada queda entero y el resto se
+    # apaga. Una lista por punto y no una traza aparte: partir la serie en
+    # dos trazas rompe el `barmode="group"` (cada traza pide su ranura, así
+    # que el mes elegido se corría de su columna) y duplicaría las
+    # entradas del hover unificado.
+    _op = ([1.0 if e == mes_sel else _OPACIDAD_APAGADA for e in etiquetas]
+           if mes_sel in list(etiquetas) else None)
+
     fig = go.Figure()
     if modo == "Precio":
         # Cada etiqueta va del lado de AFUERA de su línea: la del precio
@@ -727,7 +975,10 @@ def _fig_serie(g, modo, parcial, unidad=None, con_precio=False):
                         hovertemplate=fmt + "<extra>Año pasado</extra>")
         fig.add_scatter(x=etiquetas, y=y_act, mode="lines+markers+text",
                         name="Este año", line=dict(color=ACENTO, width=2.4),
-                        marker=dict(size=6),
+                        # En líneas el apagado va en el MARCADOR: bajarle la
+                        # opacidad al trazo apagaría la curva entera, que es
+                        # lo único que esta vista tiene para mostrar.
+                        marker=dict(size=6, opacity=_op),
                         text=etq_act, textposition=_pos_act,
                         textfont=_fnt_act, cliponaxis=False,
                         hovertemplate=fmt + "<extra>Este año</extra>")
@@ -739,14 +990,14 @@ def _fig_serie(g, modo, parcial, unidad=None, con_precio=False):
                        constraintext="none",
                        textangle=-90 if plan["girar"] else 0)
         fig.add_bar(x=etiquetas, y=y_aa, name="Año pasado",
-                    marker=dict(color=GRIS_BORDE),
+                    marker=dict(color=GRIS_BORDE, opacity=_op),
                     text=etq_aa, textfont=_fnt_aa, **_kw_etq,
                     customdata=_cd_aa,
                     hovertemplate=fmt + _hov + "<extra>Año pasado</extra>")
         fig.add_bar(
             x=etiquetas, y=y_act, name="Este año",
             marker=dict(
-                color=ACENTO,
+                color=ACENTO, opacity=_op,
                 # Trama sólo en el mes parcial: Plotly acepta un patrón por
                 # punto, así que no hace falta una traza aparte que además
                 # rompería la leyenda en dos "Este año".
@@ -916,9 +1167,10 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant,
     ))
     fig.update_layout(waterfallgap=0.45)
     # Menos alto que la serie de al lado, y por eso terminan a la misma
-    # altura: encima de esta figura va la línea de veredicto, que la empuja
-    # hacia abajo (`alturas.FRANJA_VEREDICTO`, medida en el navegador).
-    _compras_layout(fig, alto=_ALTO_FIG_VAP - alturas.FRANJA_VEREDICTO)
+    # altura: encima de esta figura va la línea de veredicto —y desde el
+    # 2026-09-16 el rótulo que la nombra—, que la empujan hacia abajo
+    # (`_ALTO_CASCADA`, las dos franjas medidas en el navegador).
+    _compras_layout(fig, alto=_ALTO_CASCADA)
     # `title=""` y NO `title=None`: con None, Plotly.js pinta la cadena
     # literal "undefined" donde iría el título (medido en el navegador,
     # 2026-08-24 — salía sobre el waterfall). El título de esta figura
@@ -935,6 +1187,61 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant,
     fig.update_layout(showlegend=False, title="",
                       margin=dict(l=10, r=10, t=16, b=10))
     fig.update_yaxes(showticklabels=False)
+    return fig
+
+
+def _fig_cascada(pasos, fmt, hover=None):
+    """La cascada de un corte que NO es «Por qué»: «Quién», «Cuándo», o las
+    tres barras de `_pasos_simple`.
+
+    `_fig_puente` se quedó aparte y no se generalizó a ésta a propósito: su
+    `hovertext` escribe la CUENTA de cada efecto con la unidad pegada a
+    cada cantidad (seis renglones de reglas ganadas a pulso, ver su
+    docstring y la regla #335). Acá cada barra es un Δ y punto — meterlas
+    en la misma función obligaba a un `if` por renglón de tooltip para no
+    perder ninguna de las dos formas.
+
+    `fmt(valor, medida)` escribe la etiqueta de la barra; lo pasa el
+    llamador porque la MAGNITUD cambia con el modo (soles, kilos o S/ por
+    kilo) y la cascada no tiene por qué saber en cuál está.
+    """
+    medidas = [p["medida"] for p in pasos]
+    valores = [0.0 if p["medida"] == "total" else p["valor"] for p in pasos]
+    fig = go.Figure(go.Waterfall(
+        orientation="v",
+        measure=medidas,
+        x=[p["label"] for p in pasos],
+        y=valores,
+        text=[fmt(p["valor"], p["medida"]) for p in pasos],
+        textposition="outside",
+        cliponaxis=False,
+        # Mismo semáforo invertido que `_fig_puente`: es un COSTO, así que
+        # subir es rojo. Cambiarlo de una cascada a la otra haría que el
+        # mismo gesto —elegir otro corte— diera vuelta los colores sin que
+        # el dato se moviera.
+        increasing=dict(marker=dict(color=ERROR)),
+        decreasing=dict(marker=dict(color=EXITO)),
+        totals=dict(marker=dict(color=ACENTO)),
+        connector=dict(line=dict(color=GRIS_BORDE, width=1)),
+        **({"hovertext": hover, "hovertemplate": "%{hovertext}<extra></extra>"}
+           if hover else {}),
+    ))
+    # `waterfallgap` y no `bargap` (CLAUDE.md § Plotly). Más angosto que el
+    # 0.45 de `_fig_puente`: ahí son cuatro barras y acá hasta siete, y con
+    # el gap grande se vuelven rayas.
+    fig.update_layout(waterfallgap=0.3)
+    _compras_layout(fig, alto=_ALTO_CASCADA)
+    fig.update_layout(showlegend=False, title="",
+                      margin=dict(l=10, r=10, t=16, b=10))
+    fig.update_yaxes(showticklabels=False)
+    # El eje de esta cascada son NOMBRES, no fechas ni números: sin
+    # `type="category"` un rótulo como "2026" se parsea como número y el
+    # eje sale `linear` con ticks inventados (la trampa de la regla #325).
+    #
+    # Y un punto más chico que el resto de la app: es lo que hace entrar el
+    # rótulo en la columna (ver `_FUENTE_EJE_CASCADA`, medido).
+    fig.update_xaxes(type="category", tickangle=0,
+                     tickfont=dict(size=_FUENTE_EJE_CASCADA))
     return fig
 
 
@@ -957,13 +1264,121 @@ def _causa(delta, ef_precio, ef_cant):
     return "por comprar más" if ef_cant > 0 else "por comprar menos"
 
 
-def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa):
+def _fmt_soles(v):
+    """"S/ 16,660", sin signo. El signo lo pone quien arma la frase."""
+    return f"S/ {abs(v):,.0f}"
+
+
+def _fmt_cant(v, unidad):
+    """"592.5 kg", sin signo. Un decimal hasta el millar y ninguno arriba.
+
+    El decimal no es adorno: media docena de productos del parquet se
+    compran en fracciones de kilo, y "0 kg" para 0.4 es un dato borrado.
+    Pasado el millar la fracción no aporta y el número se hace largo, que
+    en una barra de ~41px se paga en rótulos pisados."""
+    a = abs(float(v))
+    return f"{a:,.{1 if a < 1000 else 0}f} {unidad}".strip()
+
+
+def _fmt_precio(v, unidad):
+    """"S/ 74.68/kg", sin signo. DOS decimales siempre: un precio unitario
+    redondeado al sol pierde justo la diferencia que esta vista busca."""
+    a = abs(float(v))
+    return f"S/ {a:,.2f}/{unidad}" if unidad else f"S/ {a:,.2f}"
+
+
+def _etq_cascada(valor, medida, fmt):
+    """La etiqueta de una barra: con signo las del medio, sin signo los
+    bordes. Misma convención que `_fig_puente` — los extremos son TOTALES y
+    las del medio, diferencias."""
+    if medida == "relative":
+        return ("+" if valor >= 0 else "−") + fmt(valor)
+    return fmt(valor)
+
+
+def _hover_cascada(pasos, partes, fmt, delta_total):
+    """El tooltip de cada barra, o None si no hay nada que agregar.
+
+    Dice DOS cosas que la etiqueta no puede:
+
+      · el nombre ENTERO del ítem o del mes, que en el eje va cortado a 12
+        caracteres (`_etq_barra`);
+      · y en la barra del resto, CUÁNTO DEL Δ NO SE NOMBRÓ. Ése es el
+        número que decide si mirar por «Quién» sirve: medido el 2026-09-16
+        sobre el parquet, los cinco nombrados explican el 58 % del Δ de
+        septiembre y el 18 % del de agosto. Sin ese porcentaje la misma
+        figura se lee como una acusación en los dos casos.
+
+    Va al hover y no a un `st.caption` porque la tarjeta no tiene 20px que
+    darle: la cascada ya quedó en `_ALTO_CASCADA` (163px).
+    """
+    if not partes:
+        return None
+    nombres = {_etq_barra(n): n for n, _ in partes}
+    hov = []
+    for p in pasos:
+        etq, val = p["label"], p["valor"]
+        if p["medida"] != "relative":
+            hov.append(f"{etq.replace('<br>', ' ')}: {fmt(val)}")
+            continue
+        if etq.startswith("otros") and delta_total:
+            hov.append(
+                f"El resto: {_etq_cascada(val, 'relative', fmt)}<br>"
+                f"<span style='font-size:11px'>lo nombrado explica el "
+                f"{abs((delta_total - val) / delta_total) * 100:.0f} % "
+                f"de la diferencia</span>")
+        else:
+            hov.append(f"{nombres.get(etq, etq.replace('<br>', ' '))}: "
+                       f"{_etq_cascada(val, 'relative', fmt)}")
+    return hov
+
+
+def _rotulo_html(magnitud, ambito):
+    """El renglón que dice QUÉ mide la cascada y SOBRE QUÉ.
+
+    Nació el 2026-09-16, reportado mirando la tarjeta: *«solamente veo un
+    valor en moneda»*. La cascada medía soles y no lo decía en ninguna
+    parte — el ámbito estaba en la cabecera, que es OTRA tarjeta desde el
+    2026-09-14 (regla #420), así que el puente mirado solo no nombraba ni
+    su magnitud ni su alcance.
+
+    NO DICE «TOTAL», y eso no es economía de palabras: con un ítem en foco
+    sería falso, y la mitad de las veces hay uno (en Cantidad y en Precio
+    lo pone la vista sola). El ámbito se escribe entero y el rótulo no
+    afirma nada que el estado no respalde.
+
+    Va DENTRO del mismo `st.markdown` que el veredicto — de ahí que
+    `alturas.FRANJA_ROTULO` sean 15px y no 31: un bloque propio pagaría
+    además el gap de 16 que Streamlit mete entre elementos.
+    """
+    return (
+        f'<div style="font:500 10.5px/1.25 DM Sans,sans-serif;'
+        f'letter-spacing:.07em;text-transform:uppercase;color:{GRIS_TEXTO};'
+        f'margin:0 0 3px;white-space:nowrap;overflow:hidden;'
+        f'text-overflow:ellipsis">{magnitud}'
+        f'<span style="text-transform:none;letter-spacing:.02em;'
+        f'font-size:11px;color:{GRIS_TEXTO_SUAVE}"> · {ambito}</span></div>'
+    )
+
+
+def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa,
+                  rotulo="", fmt=_fmt_soles, causa=None):
     """Una línea con el veredicto, arriba del puente. Es texto y no `st.metric`
     porque tres métricas nativas ocupan 90px de la tarjeta para decir lo que
     el propio waterfall ya dibuja debajo.
 
     `pct` en None cuando el año pasado no hubo compras: un "+0.0%" ahí
     diría que no cambió nada, y es un ítem nuevo.
+
+    `rotulo` es el HTML de `_rotulo_html`, y viaja por acá en vez de por un
+    `st.markdown` propio por los 16px del gap (ver esa función).
+
+    `fmt` y `causa` existen porque desde el 2026-09-16 la tarjeta no mide
+    siempre soles: con «Ver» en Cantidad mide kilos y en Precio, S/ por
+    kilo. UN VEREDICTO EN SOLES ENCIMA DE UNA CASCADA EN KILOS ES UNA
+    CONTRADICCIÓN, y de las caras — es exactamente el bug que el rótulo
+    vino a tapar, pero al revés. `causa=""` apaga el sufijo donde no hay un
+    efecto precio que nombrar (regla #443).
     """
     color = ERROR if delta > 0 else (EXITO if delta < 0 else GRIS_TEXTO)
     signo = "+" if delta >= 0 else "−"
@@ -984,18 +1399,20 @@ def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa):
     # eso el `ellipsis`: en una laptop angosta se recorta la causa con "…"
     # (se VE recortada), en vez de salirse de la tarjeta o partir el renglón
     # (`alturas.FRANJA_VEREDICTO` cuenta con uno solo).
-    causa = _causa(delta, ef_precio, ef_cant)
+    if causa is None:
+        causa = _causa(delta, ef_precio, ef_cant)
     _chico = (f'font:400 12px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
               f'margin-left:8px')
     _vs = (f"{signo}{abs(pct):.1f}% vs año pasado" if pct is not None
            else "vs año pasado")
-    _cuenta = (f"Este año S/ {valor:,.0f} − año pasado S/ {valor_aa:,.0f}"
-               f" = {signo}S/ {abs(delta):,.0f}")
+    _cuenta = (f"Este año {fmt(valor)} − año pasado {fmt(valor_aa)}"
+               f" = {signo}{fmt(delta)}")
     return (
-        f'<div title="{_cuenta}" '
+        rotulo
+        + f'<div title="{_cuenta}" '
         f'style="font:600 18px/1.25 DM Sans,sans-serif;color:{color};'
         f'margin:0 0 4px;white-space:nowrap;overflow:hidden;'
-        f'text-overflow:ellipsis">{signo}S/ {abs(delta):,.0f}'
+        f'text-overflow:ellipsis">{signo}{fmt(delta)}'
         f'<span style="{_chico}">{_vs}</span>'
         + (f'<span style="{_chico}">· {causa}</span>' if causa else "")
         + '</div>'
@@ -1113,6 +1530,45 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
 
     st.markdown(_CSS, unsafe_allow_html=True)
 
+    # ── EL CLIC EN UN MES SE RESUELVE ANTES DE DIBUJAR NADA ──────────────
+    # 2026-09-16: la serie de la izquierda pasa a ser clickeable y acota la
+    # cascada de al lado a ESE mes. Es el gesto que faltaba para que el
+    # puente dejara de ser una tarjeta quieta — reportado como *«no es muy
+    # interesante que toda la vista tenga una tarjeta siempre fija»*.
+    #
+    # ACÁ ARRIBA Y NO DONDE SE DIBUJA EL GRÁFICO, por dos razones que se
+    # suman:
+    #
+    #   · La selección de `st.plotly_chart(on_select=...)` PERSISTE entre
+    #     reruns. Con key estática, cada rerun re-lee el mismo clic y lo
+    #     togglea para siempre (parpadeo). La cura es la receta de
+    #     CLAUDE.md: leer el clic de `session_state[key]` ANTES de dibujar
+    #     y dibujar con una key NUEVA después de cada uno, con un CONTADOR
+    #     (`_K_NCLIC`) — así el gráfico nace sin selección y un clic sobre
+    #     el mes que ya estaba elegido también se atiende. Reglas #76 y
+    #     #399.
+    #   · El mes elegido decide qué CORTES ofrece la cabecera («Cuándo» se
+    #     cae con un solo mes), y la cabecera se dibuja ~120 líneas más
+    #     arriba que la serie. Resolverlo donde está el gráfico dejaba al
+    #     selector hablando del rerun anterior — el mismo defecto que ya
+    #     costó una mudanza con `agrupar_por` (ver su comentario más
+    #     abajo).
+    #
+    # Se guarda la ETIQUETA del mes ("ago 26") y no su posición: la ventana
+    # de la tarjeta cambia con un desplegable, y una posición apunta a otro
+    # mes en cuanto la ventana se mueve. Es la misma lección que la #399 le
+    # dejó al foco de Volatilidad. Si la etiqueta ya no está en la ventana,
+    # el foco se cae solo más abajo, como el del ítem.
+    _nclic = st.session_state.get(_K_NCLIC, 0)
+    _pt = _first_point(st.session_state.get(f"{_KEY_SERIE}_{_nclic}"))
+    if _pt is not None and _pt.get("x") is not None:
+        _m_clic = str(_pt["x"])
+        st.session_state[_K_MES] = (
+            None if st.session_state.get(_K_MES) == _m_clic else _m_clic)
+        _nclic += 1
+        st.session_state[_K_NCLIC] = _nclic
+    _key_serie = f"{_KEY_SERIE}_{_nclic}"
+
     # 2026-09-02, a pedido: el ámbito ("Todas las compras · últimos 3 meses",
     # o el nombre del ítem en foco) DEJA de ser el `title` de la figura y
     # sube a la fila del título de la tarjeta, al lado de "Vs año pasado".
@@ -1171,6 +1627,48 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                          "Precio se leen sobre UN producto —kilos y litros "
                          "no se suman—: sin uno elegido en la tabla, el de "
                          "mayor gasto.") or "Valor"
+
+            # ── CON QUÉ EJE SE PARTE EL Δ ────────────────────────────────
+            # Va ACÁ y no en la tarjeta del puente, que es de quien es el
+            # control: medida en el navegador, esa tarjeta da 434px de
+            # ancho y su figura 163px de alto, así que un renglón de
+            # control propio le costaba ~44px — más de la cuarta parte del
+            # dibujo. La fila de la cabecera, en cambio, es `flex-wrap:
+            # wrap` y es su PROPIA tarjeta desde el 2026-09-14 (regla
+            # #420): no le saca un píxel a ninguna figura, y con ocho
+            # controles sigue entrando en UN renglón (medido: 1113×27 a
+            # 1280 de viewport).
+            #
+            # `_un_item` se lee de `session_state` y puede venir de un foco
+            # que este run va a soltar (el ítem ya no está en `g`). Cuesta
+            # un run con «Quién» escondido de más, y se arregla solo al
+            # siguiente; resolverlo acá obligaría a recortar el df antes de
+            # la cabecera, o sea a dibujar la cabecera dos veces.
+            _un_item = (st.session_state.get("compras_vap_foco") is not None
+                        or modo != "Valor")
+            _ops_corte, _fuera_corte = _cortes_disponibles(
+                modo, _un_item, st.session_state.get(_K_MES) is not None)
+            corte = None
+            if _ops_corte:
+                # ESPEJO, y no la key del widget a secas: en Precio no
+                # aplica ningún corte y el selector NO SE DIBUJA — y un
+                # widget que deja de renderizarse pierde su estado
+                # (CLAUDE.md). Sin el espejo, pasar por Precio y volver
+                # tiraba el corte elegido. Misma forma que el
+                # `{k_rango}__eco` de `app.py`.
+                _pref = st.session_state.get(_K_CORTE, _CORTE_DEFAULT)
+                if st.session_state.get("compras_vap_corte_sel") \
+                        not in _ops_corte:
+                    st.session_state["compras_vap_corte_sel"] = (
+                        _pref if _pref in _ops_corte else _ops_corte[0])
+                with st.container(key="vap_hdr_corte"):
+                    corte = st.selectbox(
+                        "Partir por", list(_ops_corte),
+                        key="compras_vap_corte_sel",
+                        label_visibility="collapsed",
+                        help=_ayuda_corte(_fuera_corte))
+                st.session_state[_K_CORTE] = corte
+
             with st.container(key="vap_hdr_ventana"):
                 # Default "3m" desde el 2026-09-13, a pedido («debe mostrar
                 # inicialmente 3 meses»); antes "12m", y antes del
@@ -1289,7 +1787,16 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                             "dos suman el Δ exacto." + PARR
                             + "**Clic en una fila** de la tabla enfoca el "
                             "gráfico de arriba; volver a clickearla lo "
-                            "devuelve a todas las compras.")
+                            "devuelve a todas las compras." + PARR
+                            + "**Clic en un mes** de la serie hace que la "
+                            "cascada explique SÓLO ese mes; los demás se "
+                            "apagan y otro clic lo suelta. La serie y la "
+                            "tabla no se recortan: el mes es una pregunta, "
+                            "no un zoom." + PARR
+                            + "**Partir por** elige con qué eje se abre esa "
+                            "diferencia: por efecto precio/cantidad, por "
+                            "ítem o por mes. Sólo ofrece los que aplican — "
+                            "los que no, y por qué, están en su ayuda.")
                         _ayuda_parcial = st.empty()
 
             # ── ⛶ SOLA EN LA PÁGINA (modo "solo") ────────────────────────
@@ -1478,11 +1985,34 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
 
         # Mismo criterio que la tabla: el puente se suma desde los
         # productos, nunca se calcula sobre el agregado (ver `_por_item`).
-        _items = _por_item(g_foco)
-        tot = _items[["valor", "valor_aa", "ef_precio", "ef_cant"]].sum()
+        # EL MES ELEGIDO ACOTA LA CASCADA, NO LA VISTA. La serie sigue
+        # dibujando la ventana entera —si no, el clic sería un zoom y no
+        # habría dónde hacer el siguiente— y la tabla también, porque es el
+        # detalle de la serie. Lo único que se recorta es lo que el puente
+        # explica.
+        #
+        # Y se cae solo si el mes ya no está: pasar de 12m a 3m deja
+        # "sep 25" apuntando a un mes que la ventana no muestra. Mismo
+        # criterio que el foco del ítem doce líneas más arriba.
+        _meses_serie = [_etiqueta_mes(m)
+                        for m in sorted(g_foco["mes"].unique())]
+        mes_sel = st.session_state.get(_K_MES)
+        if mes_sel is not None and mes_sel not in _meses_serie:
+            mes_sel = None
+            st.session_state[_K_MES] = None
+        g_casc = (g_foco if mes_sel is None
+                  else g_foco[g_foco["mes"].map(_etiqueta_mes) == mes_sel])
+
+        # Mismo criterio que la tabla: el puente se suma desde los
+        # productos, nunca se calcula sobre el agregado (ver `_por_item`).
+        _items = _por_item(g_casc)
+        tot = _items[["valor", "cant", "valor_aa", "cant_aa",
+                      "ef_precio", "ef_cant"]].sum()
         ef_p, ef_c = float(tot["ef_precio"]), float(tot["ef_cant"])
-        delta = tot["valor"] - tot["valor_aa"]
-        pct = (delta / tot["valor_aa"] * 100) if tot["valor_aa"] else None
+        # El Δ y su % ya no se calculan acá: los arma la tarjeta del puente
+        # EN SU MAGNITUD (soles, kilos o S/ por kilo), que desde el
+        # 2026-09-16 no siempre es la misma. Ver «LA MAGNITUD, DE UN SOLO
+        # SITIO» más abajo.
 
         # El ámbito dice SÓLO el ítem en foco (2026-09-02, a pedido:
         # "eliminemos el texto que dice Todas las compras, que ya no
@@ -1511,14 +2041,16 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         col_g, col_p = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
         with col_g, st.container(key="compras_vap_card_serie"):
             fig = _fig_serie(g_foco, modo, parcial, unidad=unidad_serie,
-                             con_precio=un_producto)
+                             con_precio=un_producto, mes_sel=mes_sel)
             if fig is not None:
+                # `on_select` y no un widget aparte: el mes se elige donde
+                # se lo ve. El clic ya se resolvió ARRIBA DE TODO (ver «EL
+                # CLIC EN UN MES SE RESUELVE ANTES DE DIBUJAR NADA»), así
+                # que lo que devuelve esta llamada no se lee, a propósito.
                 st.plotly_chart(fig, use_container_width=True,
-                                key=f"compras_g_vap_{modo.lower()}")
+                                on_select="rerun", selection_mode="points",
+                                key=_key_serie)
         with col_p, st.container(key="compras_vap_card_puente"):
-            st.markdown(_resumen_html(delta, pct, ef_p, ef_c,
-                                      tot["valor"], tot["valor_aa"]),
-                        unsafe_allow_html=True)
             # La CANTIDAD sólo viaja si `_items` es un producto solo: ahí
             # hay UNA unidad y el número se puede decir ("246 kilos"). Con
             # varios productos sumaría kilos con litros y con servicios —
@@ -1531,14 +2063,85 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
             _uno = len(_items) == 1
             _um_puente = (_ums_prod.get(str(_items["item"].iloc[0]), "")
                           if _uno else "")
-            st.plotly_chart(_fig_puente(tot["valor"], tot["valor_aa"],
-                                        ef_p, ef_c,
-                                        cant=float(_items["cant"].iloc[0])
-                                        if _uno else None,
-                                        cant_aa=float(_items["cant_aa"].iloc[0])
-                                        if _uno else None,
-                                        unidad=_um_puente),
-                            use_container_width=True, key="compras_g_vap_puente")
+            _um_corta = unidad_corta(_um_puente) or unidad_serie or ""
+
+            # ── LA MAGNITUD, DE UN SOLO SITIO ────────────────────────────
+            # El rótulo, el veredicto y las etiquetas de la cascada tienen
+            # que hablar de lo MISMO. Antes daba igual porque siempre eran
+            # soles; desde que la tarjeta sigue a «Ver», un veredicto en
+            # soles encima de una cascada en kilos es una contradicción
+            # escrita en la misma tarjeta. Sale de acá, una vez.
+            if modo == "Cantidad" and _um_corta:
+                _magnitud = f"Cantidad comprada · {_um_corta}"
+                _fmt_mag = lambda v: _fmt_cant(v, _um_corta)  # noqa: E731
+                _v1, _v0 = float(tot["cant"]), float(tot["cant_aa"])
+            elif modo == "Precio" and _um_corta and tot["cant"] and tot["cant_aa"]:
+                _magnitud = f"Precio unitario · S/ por {_um_corta}"
+                _fmt_mag = lambda v: _fmt_precio(v, _um_corta)  # noqa: E731
+                _v1 = float(tot["valor"]) / float(tot["cant"])
+                _v0 = float(tot["valor_aa"]) / float(tot["cant_aa"])
+            else:
+                # También el caso «Cantidad sin unidad»: sin unidad no se
+                # escribe una cantidad (regla #335), así que la tarjeta se
+                # queda en soles y el rótulo lo dice.
+                _magnitud = "Valorizado de compra"
+                _fmt_mag = _fmt_soles
+                _v1, _v0 = float(tot["valor"]), float(tot["valor_aa"])
+            _d_mag = _v1 - _v0
+            _pct_mag = (_d_mag / _v0 * 100) if _v0 else None
+            _ambito = (foco_titulo if foco_titulo else "todas las compras")
+            if mes_sel:
+                _ambito = f"{_ambito} · {mes_sel}"
+
+            st.markdown(
+                _resumen_html(
+                    _d_mag, _pct_mag, ef_p, ef_c, _v1, _v0,
+                    rotulo=_rotulo_html(_magnitud,
+                                        _compras_truncar(_ambito, 34)),
+                    fmt=_fmt_mag,
+                    # Sin efecto precio que nombrar no se inventa una causa:
+                    # en kilos el Δ ES la cantidad, y un precio no se parte.
+                    causa=None if _fmt_mag is _fmt_soles else ""),
+                unsafe_allow_html=True)
+
+            # ── QUÉ CASCADA SE DIBUJA ────────────────────────────────────
+            # «Por qué» sigue siendo `_fig_puente` y no un caso de
+            # `_fig_cascada`: es la única que tiene algo que explicar
+            # además del número (su `hovertext` escribe la cuenta de los
+            # dos efectos, regla #335). Las otras dos son la misma figura
+            # con otros pasos.
+            if corte == _CORTE_DEFAULT and _fmt_mag is _fmt_soles:
+                _fig_p = _fig_puente(
+                    tot["valor"], tot["valor_aa"], ef_p, ef_c,
+                    cant=float(_items["cant"].iloc[0]) if _uno else None,
+                    cant_aa=float(_items["cant_aa"].iloc[0]) if _uno else None,
+                    unidad=_um_puente)
+            else:
+                _partes = None
+                if corte == "Quién":
+                    _por = _por_item(g_casc, llave_foco)
+                    _partes = [(str(r.item), float(r.valor - r.valor_aa))
+                               for r in _por.itertuples()]
+                    _pasos = _pasos_cascada(_partes, _v0, _v1, resto="otros")
+                elif corte == "Cuándo":
+                    _pm = (g_foco.groupby("mes", as_index=False)
+                           [["valor", "cant", "valor_aa", "cant_aa"]].sum()
+                           .sort_values("mes"))
+                    _col = "cant" if _fmt_mag is not _fmt_soles else "valor"
+                    _partes = [(_etiqueta_mes(r.mes),
+                                float(getattr(r, _col)
+                                      - getattr(r, f"{_col}_aa")))
+                               for r in _pm.itertuples()]
+                    _pasos = _pasos_cascada(_partes, _v0, _v1,
+                                            cronologico=True, resto="otros")
+                else:
+                    _pasos = _pasos_simple(_v0, _v1)
+                _fig_p = _fig_cascada(
+                    _pasos, lambda v, med: _etq_cascada(v, med, _fmt_mag),
+                    hover=_hover_cascada(_pasos, _partes, _fmt_mag,
+                                         _v1 - _v0))
+            st.plotly_chart(_fig_p, use_container_width=True,
+                            key="compras_g_vap_puente")
 
         if parcial is not None:
             # El aviso del mes parcial deja de ser un caption en flujo y

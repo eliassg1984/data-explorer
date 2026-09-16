@@ -175,6 +175,26 @@ CSS = """    /* ================================================================
        el input medía 54: entraba "📅 Rango" y nada más.
        La fila sigue en UN renglón (36px, verificado): los 20px salen del
        hueco del título, que baja de 254 a 234 para un texto de ~110. */
+    /* CON QUÉ EJE SE PARTE EL Δ de la cascada ("Por qué" / "Quién" /
+       "Cuándo"), agregado el 2026-09-16 con la regla #443. Es el OCTAVO
+       control de la fila, y entra acá y no en la tarjeta del puente
+       porque esa tarjeta mide 434px de ancho y su figura 163px de alto
+       (medido): un renglón de control propio le costaba más de la cuarta
+       parte del dibujo. Acá no le saca un píxel a ninguna figura — la
+       cabecera es su propia tarjeta (#420) y esta fila envuelve. Con los
+       ocho controles sigue entrando en UN renglón: 1113x27 medidos a 1280
+       de viewport.
+       100px por el mismo criterio MEDIDO que sus vecinos: el valor más
+       largo que muestra es "Por qué" (~47px en la fuente de la fila, DM
+       Sans 12px) + los 50 de cromo del desplegable. Sus opciones son
+       cortas a propósito: el motivo de las que NO aplican va al `help`,
+       no a la lista, así que el campo no tiene que medir para
+       "Quién — ya hay un solo ítem". */
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_corte) {
+        flex: 0 0 auto !important;
+        width: 100px !important;
+    }
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ventana) {
         flex: 0 0 auto !important;
@@ -256,6 +276,7 @@ CSS = """    /* ================================================================
     }
 
     .st-key-vap_hdr_modo,
+    .st-key-vap_hdr_corte,
     .st-key-vap_hdr_ventana,
     .st-key-vap_hdr_familia,
     .st-key-vap_hdr_agrupar,
@@ -272,6 +293,7 @@ CSS = """    /* ================================================================
        queda un tope invisible que ninguna de las reglas de arriba puede
        superar, y agrandar el hueco no hace nada. */
     .st-key-vap_hdr_modo > [data-testid="stElementContainer"],
+    .st-key-vap_hdr_corte > [data-testid="stElementContainer"],
     .st-key-vap_hdr_ventana > [data-testid="stElementContainer"],
     .st-key-vap_hdr_familia > [data-testid="stElementContainer"],
     .st-key-vap_hdr_agrupar > [data-testid="stElementContainer"],

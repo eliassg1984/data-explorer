@@ -616,6 +616,101 @@ def _pruebas_puras():
           "%" in _vap._resumen_html(500.0, None, 0.0, 500.0, 500.0, 0.0),
           False)
 
+    # ── Los tres cortes de la cascada (regla #443) ──────────────────────
+    # LA REGLA ES UNA SOLA: un corte se ofrece si la magnitud es ADITIVA en
+    # ese eje y el ámbito tiene MÁS DE UN elemento. Lo que se fija acá son
+    # los cinco casos que salen de ella, porque cada uno es un gráfico que
+    # CIERRA pero no significa nada si se cuela (la lección de `_por_item`).
+    check("Valor, todo: los tres cortes",
+          _vap._cortes_disponibles("Valor", False, False)[0],
+          ("Por qué", "Quién", "Cuándo"))
+    check("un solo ítem: «Quién» no tiene a quién nombrar",
+          _vap._cortes_disponibles("Valor", True, False)[0],
+          ("Por qué", "Cuándo"))
+    check("un solo mes: «Cuándo» no tiene cuándo",
+          _vap._cortes_disponibles("Valor", False, True)[0],
+          ("Por qué", "Quién"))
+    check("Cantidad: en kilos no hay efecto precio que separar",
+          _vap._cortes_disponibles("Cantidad", True, False)[0], ("Cuándo",))
+    check("Precio: un precio no se suma por ningún eje",
+          _vap._cortes_disponibles("Precio", False, False)[0], ())
+    # Y los descartados se DICEN, no se tragan: un control que ofrece tres
+    # cosas hoy y una mañana sin decir por qué se lee como un bug.
+    _ops_c, _fuera_c = _vap._cortes_disponibles("Cantidad", True, False, "kg")
+    check("el motivo nombra la unidad real, no 'unidades'",
+          "en kg no hay efecto precio", _fuera_c["Por qué"])
+    check("la ayuda del selector lista los que no aplican",
+          "«Quién», ya hay un solo ítem" in _vap._ayuda_corte(_fuera_c), True)
+    check("sin descartados la ayuda no dice que no pasa nada",
+          "no aplican" in _vap._ayuda_corte({}), False)
+
+    # La cascada de contribuyentes: la cola se suma en UNA barra, y esa
+    # barra es el veredicto sobre esta forma de mirar (cuánto NO se nombró).
+    _partes = [("A", -100.0), ("B", 60.0), ("C", -30.0), ("D", 10.0),
+               ("E", -5.0), ("F", -4.0), ("G", 3.0)]
+    _pasos = _vap._pasos_cascada(_partes, 1000.0, 934.0)
+    # 3 nombradas + resto + los dos bordes = 6. El tope no es un gusto: son
+    # 63px de columna contra un rótulo de 59 (medido, ver `_TOPE_CASCADA`).
+    check("cascada: el tope que se midió sigue siendo 3",
+          _vap._TOPE_CASCADA, 3)
+    check("cascada: bordes + tope + resto", len(_pasos), 6)
+    check("cascada: el resto junta lo que no entró",
+          round(_pasos[-2]["valor"], 6), 4.0)
+    check("cascada: el resto dice cuántos junta", _pasos[-2]["label"],
+          "otros<br>4")
+    check("cascada: los pasos cierran contra el total",
+          round(sum(p["valor"] for p in _pasos[1:-1]), 6),
+          round(934.0 - 1000.0, 6))
+    check("cascada: entran las de mayor |Δ|, sin mirar el signo",
+          [p["label"] for p in _pasos[1:4]], ["A", "B", "C"])
+    # «Cuándo» ELIGE por |Δ| pero DIBUJA en orden de calendario: una
+    # cascada de tiempo con los meses barajados por tamaño no se lee.
+    _meses = [("ene", -5.0), ("feb", -90.0), ("mar", -3.0), ("abr", -70.0),
+              ("may", -40.0), ("jun", -20.0)]
+    _pc = _vap._pasos_cascada(_meses, 1000.0, 772.0, cronologico=True)
+    check("cascada cronológica: los meses no se barajan",
+          [p["label"] for p in _pc[1:4]], ["feb", "abr", "may"])
+    # Y un rótulo que no entra en la columna se corta CON "…", para que el
+    # recorte se vea: un nombre cortado en seco se lee como otro nombre.
+    check("etiqueta de barra: dos renglones que entran en la columna",
+          max(len(l) for l in
+              _vap._etq_barra("Magret De Pato Macho x Kg").split("<br>")),
+          _vap._ANCHO_ETQ_BARRA)
+    check("etiqueta de barra: corta por palabra, no a la mitad",
+          _vap._etq_barra("Lomo fino entero nacional x Kg").split("<br>")[0],
+          "Lomo fino")
+    check("etiqueta de barra: un nombre corto se deja entero",
+          _vap._etq_barra("Cachema"), "Cachema")
+    # Tres barras cuando ningún corte aplica: es el techo honesto de esa
+    # magnitud, no un gráfico roto.
+    _ps = _vap._pasos_simple(61.02, 74.68)
+    check("cascada simple: de dónde a dónde", len(_ps), 3)
+    check("cascada simple: el paso del medio es la resta",
+          round(_ps[1]["valor"], 2), 13.66)
+
+    # La magnitud manda sobre el veredicto: una cifra en soles encima de un
+    # dibujo en kilos es una contradicción en la misma tarjeta.
+    _rk = _vap._resumen_html(-328.9, -35.7, 0.0, 0.0, 592.5, 921.4,
+                             fmt=lambda v: _vap._fmt_cant(v, "kg"), causa="")
+    check("veredicto en kilos, no en soles", "−328.9 kg" in _rk, True)
+    check("veredicto en kilos: sin S/ por ningún lado", "S/" in _rk, False)
+    check("veredicto en kilos: sin causa inventada",
+          "por comprar" in _rk, False)
+    check("el rótulo dice la magnitud y el ámbito",
+          "Valorizado de compra" in _vap._rotulo_html("Valorizado de compra",
+                                                      "todas las compras"),
+          True)
+    check("el rótulo NO dice 'total' (con foco sería falso)",
+          "total" in _vap._rotulo_html("Valorizado de compra",
+                                       "todas las compras").lower(),
+          False)
+    check("la etiqueta de una barra del medio va con signo",
+          _vap._etq_cascada(-16660.0, "relative", _vap._fmt_soles),
+          "−S/ 16,660")
+    check("la de un borde es un total y va sin signo",
+          _vap._etq_cascada(286254.0, "total", _vap._fmt_soles),
+          "S/ 286,254")
+
     # Etiquetas de la serie mensual (regla #400). Lo que se fija es que la
     # etiqueta sea LEGIBLE en cada ventana: con 3 meses (el default) entra
     # derecha, con 12 girada, y con "Todo" ya no caben las dos series.
@@ -3794,6 +3889,25 @@ def main():
                                      con_precio=True), ()),
         ("compras vs año pasado · puente precio/cantidad",
          lambda: _vap_fig._fig_puente(250.0, 450.0, 60.0, -260.0), ()),
+        # Los otros dos cortes de la cascada y el mes elegido (regla #443).
+        ("compras vs año pasado · serie con un mes elegido",
+         lambda: _vap_fig._fig_serie(_g_vap, "Valor", None,
+                                     mes_sel="ago 26"), ()),
+        ("compras vs año pasado · cascada por contribuyentes",
+         lambda: _vap_fig._fig_cascada(
+             _vap_fig._pasos_cascada(
+                 [("Magret de pato", -16660.0), ("Bife angosto", -15876.0),
+                  ("Lomo fino", -11975.0), ("Cachema", 5817.0),
+                  ("Conchas de abanico jumbo x und", 4036.0)],
+                 412393.0, 286254.0),
+             lambda v, m: _vap_fig._etq_cascada(v, m, _vap_fig._fmt_soles)),
+         ()),
+        ("compras vs año pasado · cascada de tres barras (Precio)",
+         lambda: _vap_fig._fig_cascada(
+             _vap_fig._pasos_simple(61.02, 74.68),
+             lambda v, m: _vap_fig._etq_cascada(
+                 v, m, lambda x: _vap_fig._fmt_precio(x, "kg"))),
+         ()),
     ]
 
     for nombre, fn, args in pruebas:

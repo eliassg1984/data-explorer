@@ -284,6 +284,49 @@ resto de `graficos/compras/`.
   `test_graficos.py::_pruebas_widgets_de_fragment_escalado`. Ver
   `arquitectura.md` #373.
 
+## La cascada de «Vs año pasado» tiene TRES coordenadas, no una
+
+Desde el 2026-09-16. La tarjeta del puente medía siempre soles y no lo
+decía: se reportó como «solamente veo un valor en moneda» y, el mismo día,
+como «no es muy interesante que toda la vista tenga una tarjeta siempre
+fija». Eran la misma queja — la tarjeta SÍ cambiaba con el foco de la
+tabla, pero nada en ella lo anunciaba.
+
+Lo que dibuja queda definido por tres cosas, y cada una la mueve quien
+corresponde:
+
+- **Magnitud** — qué se mide. La pone el selector «Ver» (soles / la unidad
+  del producto / S/ por unidad). El **rótulo** de arriba de la cascada la
+  nombra, junto con el ámbito, y **nunca dice «total»**: con un ítem en
+  foco sería falso.
+- **Ámbito** — sobre qué. NO se toca desde esta tarjeta: lo ponen el clic
+  en una fila de la tabla (el ítem) y el clic en un mes de la serie. El
+  mes acota SÓLO la cascada — la serie y la tabla siguen enteras, y los
+  meses no elegidos se apagan.
+- **Eje** — cómo se parte el Δ. Es el único control propio de la tarjeta
+  («Partir por», en la fila de la cabecera): *Por qué* (efecto
+  precio/cantidad), *Quién* (qué ítems) y *Cuándo* (qué meses).
+
+**Un corte se ofrece sólo si la magnitud es ADITIVA en ese eje y el ámbito
+tiene más de un elemento** (`_cortes_disponibles`). De ahí salen los cinco
+casos sin escribir ninguno a mano — en Precio no aplica ninguno y quedan
+tres barras. Los descartados van al `help` del control **con su motivo**:
+un selector que ofrece tres cosas hoy y una mañana sin decir por qué se lee
+como un bug.
+
+Dos cosas que ya costaron una corrección acá:
+
+- **El clic del mes se resuelve ARRIBA DE TODO**, antes de la cabecera: la
+  selección de `on_select` persiste entre reruns (hay que leerla antes de
+  dibujar, con contador en la key) y además el mes decide qué cortes ofrece
+  la cabecera, que se dibuja mucho antes que la serie.
+- **«Rótulo de N caracteres» no es una medida.** El partidor de etiquetas
+  salió suponiendo un eje de 9px; el eje rotula en 12 y el rótulo medía
+  138px contra una columna de 54. Antes de creerle a un corte de texto,
+  medirlo con el nombre más largo del parquet.
+
+Detalle y mediciones en `arquitectura.md` regla #443.
+
 ## En Compras, cada tarjeta tiene SU rango de fecha
 
 Desde el 2026-09-08. Antes los cinco selectores de las cabeceras

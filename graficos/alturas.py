@@ -487,6 +487,21 @@ de la derecha arranca 47px más abajo, termina 47px más abajo, y la fila deja
 de leerse como una grilla — el mismo defecto que `COLUMNAS_DRILL` arregla en
 el eje horizontal."""
 
+FRANJA_ROTULO = 17
+"""Alto del RÓTULO que nombra qué magnitud y qué ámbito dibuja una cascada
+—«Valorizado de compra · Lomo fino entero nacional x Kg»—, MEDIDO en el
+navegador el 2026-09-16: la caja da 14px y su `margin-bottom` 3.
+
+NO lleva el gap de 16px de `FRANJA_VEREDICTO`, y ésa es la razón de que sea
+tan barato: el rótulo se emite DENTRO del mismo `st.markdown` que el
+veredicto (`vs_ano_pasado._resumen_html`), así que Streamlit no mete un
+bloque nuevo entre medio. Ponerlo en su propio `st.markdown` costaría 16px
+más — la mitad de lo que mide la línea entera — por nada.
+
+Nació con la cascada de «Vs año pasado», que medía soles y no lo decía en
+ninguna parte: reportado el 2026-09-16, *«solamente veo un valor en
+moneda»*. Ver `arquitectura.md` regla #443."""
+
 FRANJA_ATAJOS = 24
 """Alto de la fila de atajos de fecha (Esta semana/Este mes/Últimos 30
 días/Este año) agregada DENTRO de la tarjeta de Ranking de Compras ›
