@@ -165,9 +165,8 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
 
     Existe separado del dibujo porque las dos vistas que lo usan necesitan
     el RESULTADO antes que los controles: la Cascada pone los tres en la
-    fila del titulo de la tarjeta protagonista, y ese titulo es el nombre
-    de la familia con foco -- que sale de aplicar estos mismos filtros
-    (huevo y gallina). Se rompe leyendo `session_state` ANTES de dibujar:
+    fila de arriba de su tabla de familias, y esa tabla sale de aplicar
+    estos mismos filtros (huevo y gallina). Se rompe leyendo `session_state` ANTES de dibujar:
     los widgets escriben su clave y Streamlit rerunea solo, asi que el
     cambio se ve en la pasada siguiente. Mismo orden que el clic de Plotly
     en Volatilidad y Semanal (regla #399).
@@ -185,8 +184,8 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     `d_historial` con una columna `_corte_clave` que dice de cual es cada
     una. Filtradas EXACTAMENTE igual que `d` (misma area, misma familia,
     misma normalizacion), que es todo el punto: comparar cortes filtrados
-    distinto no compara nada. Lo usa la Cascada para el minigrafico de
-    cada tarjeta del riel.
+    distinto no compara nada. Lo usa la Cascada para su pestaña «Por
+    corte» (regla #441).
 
     Es UN filtrado y no N: se toma la union de los dias de los N cortes de
     una sola pasada y despues se etiqueta cada fila con su corte. Opt-in

@@ -244,9 +244,9 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         """Cascada va SIN `_en_tarjeta`: dibuja sus propias tarjetas.
 
         Es la única sección de la pila que no entra en una card única —
-        desde el 2026-09-14 son una tarjeta de cabecera más una por
-        familia, así que envolverla daría una tarjeta alrededor de N
-        tarjetas. El chequeo de vacío lo hace ella, después de aplicar sus
+        desde el 2026-09-16 son dos tarjetas, la tabla de familias y el
+        detalle de la que está en foco (regla #441), así que envolverla
+        daría una tarjeta alrededor de otras dos. El chequeo de vacío lo hace ella, después de aplicar sus
         propios filtros: el `_vacio` de acá mira el df de los chips de
         arriba, que la cascada ya no usa.
         """

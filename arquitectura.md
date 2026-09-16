@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-440 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+441 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (157)
 
@@ -336,7 +336,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 - **#440** — Una tabla "documento → detalle" marca su fila con un DATO, no con la selección de AG Grid — y…
 
-**AgGrid y tablas** (68)
+**AgGrid y tablas** (69)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -406,6 +406,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#396** — Una tabla que tiene que verse «igual que la de al lado» no puede ser un st.dataframe si la de…
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
+- **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 
 **Streamlit** (115)
 
@@ -525,7 +526,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 - **#435** — La SEGUNDA vista que pide «los mismos filtros» los convierte en una pieza — y meter cinco…
 
-**Datos, R2 y DuckDB** (52)
+**Datos, R2 y DuckDB** (53)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -579,6 +580,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#411** — Una cadena de tablas que se pide "igual a la de otro reporte" se saca a un módulo — y si ese…
 - **#424** — Un filtro categórico que ofrece todo el maestro ofrece pastillas que dejan la vista vacía
+- **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 
 **SUNAT y SIRE** (40)
 
@@ -36926,6 +36928,84 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-14/15.)
 
+441. **Una tarjeta que dibuja el mismo número de cuatro maneras no dice
+     nada — y el número que dibujaba (el saldo) es el que esconde el
+     descuadre.** Ajuste › Cascada dejó de ser tarjetas por familia y pasó
+     a ser una TABLA de familias + un DETALLE con pestañas
+     (`graficos/ajuste/_cascada.py`, `tablas/ajuste_familias.py`).
+     Reportado: «los gráficos de barras no dicen mucho». Medido: el monto
+     grande, el chip, la barra desde el cero y el minigráfico eran los
+     cuatro el SALDO del corte, o sea la varianza NETA. En ALIMENTOS el 2
+     set 2026 el saldo era +6.072 sobre −54.792 de faltantes y +60.865 de
+     sobrantes: 5,3 % de lo que se descuadró.
+
+     - **Lo que se probó antes y no sirvió, con la objeción literal.**
+       Apilar tres piezas por tarjeta (reparto faltó/sobró, seis cortes a
+       dos lados, concentración): «no es posible que el KPI ocupe más
+       tamaño que el detalle» — 972px de resumen contra 653 de pantalla.
+       Comprimirlas en una fila por familia: «mucho ruido, casi
+       imperceptible» — la columna de seis cortes eran rayitas de 2px y la
+       concentración una mancha. A 283px por familia un gráfico no entra y
+       un número sí. Lo que quedó son números en columnas que se comparan
+       hacia abajo: Faltó · Sobró · Faltó + sobró · Saldo · Productos 80 %
+       · Exactitud, con fila TOTAL. Y «no deseo interpretación, sólo datos
+       intuitivos»: ningún rótulo dice qué significa un número.
+     - **Cada cabecera dice de qué estándar sale** (tooltip,
+       `tablas.ajuste_familias.FUENTES`), porque la tabla la leen
+       profesionales. Varianza absoluta y neta: práctica de conteo cíclico.
+       Productos 80 %: análisis ABC (H. Ford Dickie, General Electric,
+       1951). Exactitud: IRA del APICS Dictionary. Las fuentes se
+       verificaron antes de citarlas; «Mayor» (un ratio de concentración
+       CR1 con nombre inventado) se reemplazó por el 80 % del ABC.
+     - **La exactitud NO cuenta las líneas en cero y cero.** El maestro
+       lista cada producto en cada área: en ALIMENTOS, 4.699 de las 5.674
+       filas del 2 set tienen stock 0 en sistema y en conteo. Contándolas
+       daba 83,3 %; sobre las 975 con stock da 2,9 %. Y la tolerancia va
+       DECLARADA en la cabecera (`_TOL_EXACTITUD`, hoy cero en
+       valorizado): con «menos de S/ 5» la misma familia da 22,7 %, así que
+       un porcentaje sin su tolerancia no dice nada.
+     - **El grano es la línea (producto × área), no el producto.** Con el
+       producto neteado, un faltante en Almacén Central y un sobrante en
+       Cocina se cancelaban y no aparecían en ninguna lista: el problema
+       del saldo, un nivel más abajo. Ahora la columna de faltantes suma el
+       «Faltó» de la fila. El conteo de «productos que faltaron en un área y
+       sobraron en otra» va sin umbral y entre cualquier par de áreas (150
+       en ALIMENTOS); los 23 del prototipo eran sólo Almacén contra Cocina
+       con un mínimo de S/ 50 por lado — otro número, otra definición.
+     - **AG Grid: `getRowClass` agrega clases al refrescar la fila pero no
+       las quita** (está documentado). Semanal lo usa y no lo nota porque
+       estrena grilla en cada clic (#440). Ésta NO la estrena —la key lleva
+       los datos y no el foco—, porque estrenarla le borraría al usuario el
+       orden que eligió en la cabecera. Medido con `getRowClass`: después
+       del primer clic quedaban marcadas la familia vieja y la nueva. Con
+       `rowClassRules`, una sola. El precio de conservar la key es la #410,
+       y se paga igual: el alto del iframe atado desde el documento.
+     - **Dos líneas apiladas sobre la fila TOTAL (la #364 otra vez).** El
+       tema le pone 1px gris a `.ag-floating-bottom` y la fila trae 2px de
+       acento propios. El gris sale del alto de la fila: la TOTAL terminaba
+       1px debajo de la grilla, recortada, y agrandar el iframe no lo
+       arreglaba (la fila bajaba con él). Se apaga el del contenedor.
+     - **En el celular la barra horizontal vuelve.** Semanal la oculta
+       porque sus columnas entran; éstas suman 868px de mínimo y a 375 de
+       ancho se veían 3 de 7 columnas sin forma de llegar al resto. Con
+       `_es_movil()` el nombre queda fijo a la izquierda y el resto se
+       desliza.
+     - **El selector del detalle lleva espejo** (`_K_MODO_ECO`): el clic en
+       la tabla hace `st.rerun()` antes de que el selector se dibuje, y eso
+       se lleva su estado (#211).
+
+     Medido a 1365x653 con datos reales, corte 2 set: resumen 259px,
+     detalle 335px (termina en 645), sin scroll de página. Los números de
+     la tabla coinciden con DuckDB directo contra R2.
+
+     Trampa de la verificación: `javascript_tool` corta a los 45s, pero el
+     script SIGUE corriendo en la página. Uno que venció en medio de la
+     carga siguió haciendo clics mientras corría el siguiente, y la prueba
+     mostró dos filas marcadas que no eran del código. Recargar la página
+     antes de repetir; partir las pruebas largas en llamadas cortas.
+
+     (2026-09-16.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -36938,7 +37018,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#441**.
+> próxima regla nueva es la **#442**.
 
 >
 

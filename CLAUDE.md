@@ -537,6 +537,12 @@ español es `cortes.MESES_ABR_ES` — una sola en todo el repo. Regla #241.
 - **Un cell editor propio rechaza devolviendo lo de antes desde
   `getValue()`, no con `isCancelAfterEnd`.** Cancelar deja el editor
   montado y la celda se ve VACÍA. Regla #228.
+- **`getRowClass` agrega clases al refrescar la fila pero NO las quita.**
+  Una grilla que conserva su key (para no perder el orden que eligió el
+  usuario) y marca su fila en foco con un dato termina con DOS filas
+  marcadas después del primer clic. Ahí va `rowClassRules`, que sí las
+  quita. `getRowClass` sólo alcanza si la grilla se estrena en cada cambio,
+  como Semanal (#440). Regla #441.
 
 ## Dashboards de gráficos
 

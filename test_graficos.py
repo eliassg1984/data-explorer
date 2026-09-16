@@ -3563,149 +3563,104 @@ def _pruebas_una_sola_nombre_propio():
     return fallos
 
 
-def _pruebas_delta_corte():
-    """La mini del riel contra el corte anterior (graficos/ajuste/_cascada).
+def _pruebas_resumen_ajuste():
+    """Las cuentas de Ajuste › Cascada (graficos/ajuste/_cascada.py).
 
-    Dos piezas, `_delta_corte` (el chip) y `_barra_cero` (las dos barras).
+    Lo que fijan no es aritmética suelta, es QUÉ MIDE cada columna — las
+    tres trampas que costaron esta vista (regla #441):
 
-    Lo que fijan estas pruebas no es aritmética, es QUÉ MIDE el
-    porcentaje: el TAMAÑO del ajuste, no el valor con signo. Un faltante
-    que va de -1.000 a -5.000 creció, y tiene que decir "▲ 400%", no
-    "-400%" — que es la forma en que un signo de más se lee como si el
-    faltante hubiera mejorado.
-
-    Y los tres casos donde un porcentaje mentiría, que por eso NO son un
-    porcentaje: sin corte anterior no hay chip, con un anterior en cero no
-    hay contra qué dividir, y con cambio de signo el % no significa nada
-    (¿-80%? ¿+120%? según de qué lado se mire) — ahí va en palabras.
+      · el SALDO no es el descuadre: faltó y sobró se cancelan, y la tabla
+        tiene que mostrar los dos y su suma sin signo;
+      · la EXACTITUD no cuenta las líneas en cero y cero, que el maestro
+        lista por cada producto en cada área (en ALIMENTOS eran 4.699 de
+        5.674: con ellas daba 83 % donde había 3 %);
+      · el grano es la LÍNEA: un producto que faltó en un área y sobró en
+        otra pesa las dos cosas, no se cancela.
     """
-    from graficos.ajuste._cascada import _delta_corte
+    from graficos.ajuste import _cascada as _cas
 
     fallos = 0
 
     def check(nombre, got, exp):
         nonlocal fallos
         if got == exp:
-            print(f"OK    delta · {nombre}")
+            print(f"OK    ajuste resumen · {nombre}")
         else:
             fallos += 1
-            print(f"FALLA delta · {nombre}: got={got!r} exp={exp!r}")
+            print(f"FALLA ajuste resumen · {nombre}: got={got!r} exp={exp!r}")
 
-    check("sin corte anterior no hay chip",
-          _delta_corte(-1000.0, None), None)
-    check("el anterior en cero es 'nuevo', no una división por cero",
-          _delta_corte(-1000.0, 0.0), "nuevo")
+    d = pd.DataFrame({
+        "FAMILIA":  ["A", "A", "A", "A", "A", "B", "B"],
+        "AREA":     ["X", "Y", "X", "Z", "Z", "X", "X"],
+        "PRODUCTO": ["p1", "p1", "p2", "p3", "p4", "q1", "q2"],
+        "AV":       [-100.0, 60.0, 30.0, 0.0, 0.0, -5.0, 0.0],
+        "SIS":      [10.0, 0.0, 5.0, 0.0, 4.0, 1.0, 2.0],
+        "FIS":      [0.0, 6.0, 8.0, 0.0, 4.0, 0.0, 2.0],
+    })
+    fams = _cas.resumen_familias(d, "FAMILIA", "AV", "PRODUCTO", "SIS", "FIS")
+    a = next(f for f in fams if f["familia"] == "A")
 
-    # El corazón: el % es sobre la MAGNITUD, y la flecha dice si creció.
-    check("un faltante que se cuadruplica creció (no 'bajó' por el signo)",
-          _delta_corte(-5000.0, -1000.0), "▲ 400%")
-    check("un faltante que se achica, baja",
-          _delta_corte(-1000.0, -5000.0), "▼ 80%")
-    check("un sobrante que crece, sube",
-          _delta_corte(1320.0, 1000.0), "▲ 32%")
-    check("un sobrante que se achica, baja",
-          _delta_corte(800.0, 1000.0), "▼ 20%")
+    check("faltó es la suma de los negativos", a["falto"], -100.0)
+    check("sobró es la suma de los positivos", a["sobro"], 90.0)
+    check("faltó + sobró va sin signo (no se cancelan)", a["total"], 190.0)
+    check("el saldo sí se cancela", a["saldo"], -10.0)
+    check("de la que más descuadró a la que menos",
+          [f["familia"] for f in fams], ["A", "B"])
 
-    # Cambio de signo: en palabras, nunca en %.
-    check("de faltante a sobrante", _delta_corte(500.0, -900.0),
-          "pasó a sobrar")
-    check("de sobrante a faltante", _delta_corte(-500.0, 900.0),
-          "pasó a faltar")
+    # p3 está en cero y cero: no es una línea contada. p4 tiene stock y no
+    # tiene diferencia: ésa es la única exacta de A.
+    check("la línea en cero y cero no cuenta", a["lineas"], 4)
+    check("líneas con diferencia", a["dif"], 3)
+    check("exactitud sobre las líneas con stock", a["exact"], 25.0)
+    check("sin las columnas de stock, cuenta todas las filas",
+          _cas.metricas(d[d["FAMILIA"] == "A"], "AV", None, None, None)["lineas"],
+          5)
 
-    # Los dos bordes de la presentación.
-    check("una diferencia despreciable no inventa un 0%",
-          _delta_corte(-1000.2, -1000.0), "igual")
-    check("arriba del 999% pasa a ×N (un número así se lee como error)",
-          _delta_corte(-50000.0, -100.0), "▲ ×500")
+    # p1 pesa 160 (100 + 60, sus dos líneas) y p2 30: con 190 de total, p1
+    # solo es el 84 % -> alcanza con un producto para el 80 %.
+    check("productos 80 %: el grano es la línea",
+          (a["n80"], a["de"]), (1, 2))
+    check("sin diferencias no hay productos",
+          _cas.productos_pareto(pd.Series([0.0, 0.0]),
+                                pd.Series(["x", "y"])), (0, 0))
 
-    # ── La barra del cero y el minigráfico ──────────────────────────────
-    # Son DOS gráficos distintos a propósito, y esa es la regla que se
-    # está fijando: la barra comparte escala con las otras tarjetas (para
-    # comparar familias) y el minigráfico tiene la suya (para ver la forma
-    # de ESTA familia). Cuando los dos eran barras horizontales sobre el
-    # mismo eje no se distinguían — ver #437.
-    from graficos.ajuste._cascada import _barra_cero, _minigraf_cortes
+    check("una familia con líneas y sin diferencias se queda (100 % es dato)",
+          _cas.resumen_familias(
+              d[d["PRODUCTO"] == "q2"], "FAMILIA", "AV", "PRODUCTO",
+              "SIS", "FIS")[0]["exact"], 100.0)
 
-    _sola = _barra_cero(-900.0, 25.0)
-    check("la barra del cero mide 18px y no lleva nada apagado",
-          "height:18px" in _sola and "opacity" not in _sola, True)
+    _areas = _cas.desglose_areas(d[d["FAMILIA"] == "A"], "AREA", "AV",
+                                 "SIS", "FIS")
+    check("por área, sin las áreas que no movieron nada",
+          [x["area"] for x in _areas], ["X", "Y"])
 
-    check("con un solo corte no hay minigráfico (una columna no es historia)",
-          _minigraf_cortes([-900.0]), "")
-    check("sin serie tampoco", _minigraf_cortes(None), "")
+    check("p1 faltó en X y sobró en Y: un producto espejo",
+          _cas.productos_espejo(d[d["FAMILIA"] == "A"], "PRODUCTO", "AREA",
+                                "AV"), (1, -100.0, 60.0))
 
-    _mg = _minigraf_cortes([-100.0, 50.0, -900.0])
-    check("una columna por corte", _mg.count("border-radius:2px"), 3)
-    # NINGUNA columna se apaga. Se probó al 42% y al 55% para resaltar la
-    # última, y se reportó lo que produce: "las barras se ven como
-    # pálidas, como si estuviesen detrás de algo". Cuál es la de ahora lo
-    # dice el sitio (la de más a la derecha) y el rótulo de esa punta.
-    check("ninguna columna va apagada", "opacity" in _mg, False)
-    # Contra "top:13px;left:1px" y no contra "top:13px" a secas: la línea
-    # de base también se posiciona en 17px, y sin el sufijo la cuenta le
-    # suma una columna negativa que no existe.
-    check("el faltante cuelga de la línea y el sobrante se apoya en ella",
-          _mg.count("top:17px;left:0") == 2
-          and _mg.count("bottom:17px;left:0") == 1, True)
+    # Por corte: las áreas contadas son las que tienen alguna línea con
+    # stock. Un corte parcial se ve parcial.
+    dh = d[d["FAMILIA"] == "A"].assign(
+        _corte_clave=["c1", "c1", "c2", "c2", "c2"])
+    _cs = [{"clave": "c1", "etiqueta_anio": "1 ago 2026"},
+           {"clave": "c2", "etiqueta_anio": "2 set 2026"}]
+    _cortes = _cas.desglose_cortes(dh, _cs, "AREA", "AV", "SIS", "FIS")
+    check("un renglón por corte, en orden",
+          [c["corte"] for c in _cortes], ["1 ago 2026", "2 set 2026"])
+    # c1: X e Y. c2: X y Z — Z entra por p4, que tiene stock; p3, en cero y
+    # cero, sola no la habría hecho contar.
+    check("áreas con stock por corte", [c["areas"] for c in _cortes], [2, 2])
 
-    # LA ESCALA ES PROPIA DE LA FAMILIA: la misma forma tiene que dar el
-    # mismo dibujo, valga 2 mil o 2 millones. Con escala global (la de la
-    # barra de arriba) una familia chica saldría plana siempre.
-    check("misma forma, mismo dibujo, aunque cambie la magnitud",
-          _minigraf_cortes([1000.0, 2000.0]) == _minigraf_cortes(
-              [1000000.0, 2000000.0]), True)
-    check("el mayor de la serie llega al tope de 15px",
-          "height:15.0px" in _minigraf_cortes([1000.0, 2000.0]), True)
+    # La tolerancia de la exactitud se declara en la cabecera: si el número
+    # cambia, el texto tiene que cambiar con él.
+    check("la tolerancia declarada es la que se usa",
+          _cas._TOL_EXACTITUD == 0.0 and "cero" in _cas._TOL_TEXTO, True)
 
-    # ── El detalle al pasar el mouse ────────────────────────────────────
-    # Pedido como "solamente se ven como barras pero sin más detalle". Son
-    # DOS mecanismos y no uno por una razón dura: adentro de una mini el
-    # `title` nativo no se ve nunca, porque el botón que la hace
-    # clickeable la tapa entera (#421). Por eso la mini suma un panel que
-    # abre con el `:hover` del CONTENEDOR, que sí llega.
-    from graficos.ajuste._cascada import _detalle_cortes
-
-    _cs = [{"etiqueta": "16 jun", "etiqueta_anio": "16 jun 2026"},
-           {"etiqueta": "4 jul", "etiqueta_anio": "4 jul 2026"},
-           {"etiqueta": "2 set", "etiqueta_anio": "2 set 2026"}]
-    _con = _minigraf_cortes([-100.0, 50.0, -900.0], _cs)
-    check("cada columna lleva su tooltip nativo",
-          _con.count("title='") == 3, True)
-    check("...con la etiqueta del corte y el monto con signo",
-          "title='2 set 2026: −S/ 900'" in _con, True)
-    # Solo las PUNTAS: seis rótulos de fecha seguidos se pisan entre sí.
-    check("debajo van los rótulos del primero y el último, nada más",
-          _con.count(">16 jun<") == 1 and _con.count(">4 jul<") == 0
-          and _con.count(">2 set<") == 1, True)
-
-    check("sin cortes no hay tooltips ni rótulos",
-          "title='" in _minigraf_cortes([-100.0, 50.0, -900.0]), False)
-
-    _det = _detalle_cortes([-100.0, 50.0, -900.0], _cs)
-    check("el panel lista un renglón por corte",
-          all(_c["etiqueta_anio"] in _det for _c in _cs), True)
-    check("con un solo corte no hay panel", _detalle_cortes([-100.0], _cs[:1]), "")
-
-    # ── La franja del minigráfico, medida en UN solo sitio ──────────────
-    # `_ZONA_GRAF` la usan dos cosas que tienen que coincidir o el bug se
-    # ve como "a veces no aparece la etiqueta": el minigráfico al
-    # dibujarse y el CSS al recortar el botón grande de la mini para
-    # dejarle esa franja al chico (el que recibe el hover). Ver #439.
-    from graficos.ajuste import _cascada as _cas
-
-    check("la zona del gráfico es la suma de lo que se dibuja",
-          _cas._ZONA_GRAF,
-          7 + _cas._ALTO_GRAF + 2 + _cas._ALTO_ROTULOS + _cas._PAD_MINI)
-    check("...y el gráfico se dibuja con ese alto",
-          f"height:{_cas._ALTO_GRAF}px" in _con, True)
-    check("...y los rótulos con el suyo",
-          f"line-height:{_cas._ALTO_ROTULOS}px" in _con, True)
-
-    _css_cas = _cas._css()
-    check("el padding de la mini que asume la cuenta es el que pone el CSS",
-          f"padding: {_cas._PAD_MINI}px" in _css_cas, True)
-    check("los dos botones se reparten la tarjeta por esa misma medida",
-          _css_cas.count(f"{_cas._ZONA_GRAF}px") == 2, True)
+    # Cada columna de la tabla dice de dónde sale (regla #441).
+    from tablas.ajuste_familias import FUENTES
+    check("el 80 % cita el análisis ABC", "ABC" in FUENTES["n80"], True)
+    check("la exactitud cita APICS y declara su tolerancia",
+          "APICS" in FUENTES["exact"] and "{tol}" in FUENTES["exact"], True)
 
     return fallos
 
@@ -3864,7 +3819,7 @@ def main():
     fallos += _pruebas_anomalias()
 
     # ── El chip de la mini contra el corte anterior ──────────────────────
-    fallos += _pruebas_delta_corte()
+    fallos += _pruebas_resumen_ajuste()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()
