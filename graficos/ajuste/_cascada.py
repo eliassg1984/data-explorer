@@ -39,8 +39,8 @@ import pandas as pd
 import streamlit as st
 
 from tema import (
-    AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO,
-    GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, GRIS_TEXTO_SUAVE, TEXTO_PRINCIPAL,
+    AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_BORDE, GRIS_TEXTO,
+    GRIS_TEXTO_SUAVE, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import _es_movil, _resolver, _slug
@@ -60,12 +60,15 @@ from tablas.compras_semanal import CROMO
 from tablas.compras_volatilidad import ALTO_FILA
 
 
-_TOPN_DRILL = 30
 # Cuántos cortes lista la pestaña «Por corte», del más viejo al elegido.
 _N_HISTORIAL = 6
 # Cuántas filas reserva una grilla de desglose antes de scrollear por dentro:
 # el techo de las tablas-ranking del repo (`drill_tablas.FILAS_RANK`).
 _FILAS_DESGLOSE = 8
+# Las listas de faltantes y sobrantes muestran menos: comparten la pantalla
+# con el resumen y con la fila de pestañas. Medido a 1365x653 con cinco
+# familias, seis filas más la TOTAL dejan las tarjetas dentro de la pantalla.
+_FILAS_LISTA = 6
 
 # «Productos 80 %»: el corte del análisis ABC (Pareto). Ver
 # `tablas.ajuste_familias.FUENTES`.
@@ -254,11 +257,6 @@ def _atar_alto(key, alto):
         unsafe_allow_html=True)
 
 
-def _tono(v):
-    return ((AJUSTE_POS_TEXTO, AJUSTE_POS) if v > 0
-            else (AJUSTE_NEG_TEXTO, AJUSTE_NEG))
-
-
 def _css():
     _CSS_FILTROS = css_filtros_vista("ajcas_ctrl_", "ajcas_corte_")
     return f"""<style>
@@ -280,23 +278,6 @@ def _css():
         font-size: 11.5px !important; color: {TEXTO_PRINCIPAL} !important; }}
     div[class*="st-key-ajcas_buscar_"] [data-testid="stTextInputRootElement"] input::placeholder {{
         color: {GRIS_TEXTO_SUAVE} !important; opacity: 1 !important; }}
-    /* Scroll propio por columna, con scrollbar invisible hasta el hover.
-       No hay forma 100% CSS de mostrarla solo mientras se arrastra
-       (necesitaria JS, y st.markdown no lo ejecuta). */
-    .ajcas-lista-scroll {{
-        max-height: 250px; overflow-y: auto;
-        scrollbar-width: thin; scrollbar-color: transparent transparent;
-        transition: scrollbar-color .15s ease; }}
-    .ajcas-lista-scroll:hover {{
-        scrollbar-color: {GRIS_TEXTO_SUAVE} transparent; }}
-    .ajcas-lista-scroll::-webkit-scrollbar {{ width: 5px; }}
-    .ajcas-lista-scroll::-webkit-scrollbar-track {{ background: transparent; }}
-    .ajcas-lista-scroll::-webkit-scrollbar-thumb {{
-        background: transparent; border-radius: 999px;
-        transition: background-color .15s ease; }}
-    .ajcas-lista-scroll:hover::-webkit-scrollbar-thumb {{
-        background: {GRIS_TEXTO_SUAVE}; }}
-
     /* ── SUBIR LA VISTA ───────────────────────────────────────────────
        -108px deja la primera tarjeta en y=40, a 4px de la franja fija de
        arriba: 96 son el `row-gap` de seis hijos de altura cero (el rail y
@@ -341,8 +322,13 @@ def _css():
     div.st-key-{_K_MODO} [data-testid="stButtonGroup"] button {{
         min-height: 26px !important; height: 26px !important;
         padding: 0 10px !important; font-size: 12px !important; }}
-    div.st-key-{_K_MODO} [data-testid="stButtonGroup"] {{
-        display: flex; justify-content: flex-end; }}
+    /* AL BORDE DERECHO, que es el de las tarjetas de abajo. El contenedor
+       con la key mide lo que su contenido (249px) y su columna lo apoya a la
+       izquierda: medido, terminaba en 1151 con la fila en 1323. Un
+       `justify-content` sobre el `stButtonGroup` no mueve nada, porque ese
+       nodo ya mide lo mismo que sus botones; lo que se corre es el
+       contenedor, con margen automático. */
+    div.st-key-{_K_MODO} {{ margin-left: auto !important; }}
     </style>"""
 
 
@@ -419,9 +405,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 st.session_state[_K_FOCO] = _clic
                 st.rerun()
 
-        with st.container(border=True, key="ajcas_card_drill"):
-            _detalle(foco, d, _est, grp_col, col_ajuste_val, col_producto,
-                     col_area, col_cantidad, col_unidad, col_sis, col_fis)
+        # El detalle dibuja sus propias tarjetas: una en «Por área» y «Por
+        # corte», DOS en «Por producto» (faltantes | sobrantes).
+        _detalle(foco, d, _est, grp_col, col_ajuste_val, col_producto,
+                 col_area, col_cantidad, col_unidad, col_sis, col_fis)
 
 
 def _cobertura(d, est, col_area, col_sis, col_fis):
@@ -478,198 +465,206 @@ def _tabla_familias(d, fams, foco, est, grp_col, col_val, col_prod,
 
 def _detalle(foco, d, est, grp_col, col_val, col_prod, col_area,
              col_cantidad, col_unidad, col_sis, col_fis):
-    """La tarjeta de abajo: la familia en foco, en tres cortes posibles."""
+    """Abajo del resumen: la familia en foco, en tres cortes posibles.
+
+    MISMO FORMATO QUE LA TABLA DE ARRIBA (2026-09-16, a pedido: «darle
+    similar formato que la de arriba, manteniendo sus dos tarjetas
+    independientes»). Hasta ese día «Por producto» eran dos listas HTML con
+    barritas dentro de UNA tarjeta, con el selector flotando a media fila.
+    Ahora son dos grillas iguales a la del resumen, cada una en su tarjeta,
+    y el título con las pestañas va en su propia fila, sin tarjeta. Ver
+    regla #442."""
     _det = d[d[grp_col].astype(str) == foco]
     _m = metricas(_det, col_val, col_prod, col_sis, col_fis)
 
-    # columnas-internas: el título del detalle y su selector
-    _ct, _cm = st.columns([3, 1.5], vertical_alignment="center")
-    with _ct:
-        st.markdown(
-            f"<div style='display:flex;align-items:baseline;gap:10px;"
-            f"flex-wrap:wrap'>"
-            f"<span style='font-size:12px;font-weight:700;letter-spacing:.05em;"
-            f"text-transform:uppercase;color:{TEXTO_PRINCIPAL}'>"
-            f"Detalle · {nombre_propio(foco)}</span>"
-            f"<span style='font-size:11.5px;color:{GRIS_TEXTO}'>"
-            f"{_m['dif']:,} de {_m['lineas']:,} líneas con stock cerraron "
-            f"con diferencia</span></div>",
-            unsafe_allow_html=True)
-    with _cm:
-        _previo = st.session_state.get(_K_MODO_ECO, _MODOS[0])
-        modo = st.segmented_control(
-            "Detalle por", _MODOS, default=_previo, key=_K_MODO,
-            label_visibility="collapsed") or _previo
-        st.session_state[_K_MODO_ECO] = modo
+    with st.container(key="ajcas_detalle_cab"):
+        # columnas-internas: el título del detalle y su selector
+        _ct, _cm = st.columns([3, 1.6], vertical_alignment="center")
+        with _ct:
+            st.markdown(
+                f"<div style='display:flex;align-items:baseline;gap:10px;"
+                f"flex-wrap:wrap;padding-left:2px'>"
+                f"<span style='font-size:12px;font-weight:700;"
+                f"letter-spacing:.05em;text-transform:uppercase;"
+                f"color:{TEXTO_PRINCIPAL}'>Detalle · {nombre_propio(foco)}"
+                f"</span><span style='font-size:11.5px;color:{GRIS_TEXTO}'>"
+                f"{_m['dif']:,} de {_m['lineas']:,} líneas con stock "
+                f"cerraron con diferencia</span></div>",
+                unsafe_allow_html=True)
+        with _cm:
+            _previo = st.session_state.get(_K_MODO_ECO, _MODOS[0])
+            modo = st.segmented_control(
+                "Detalle por", _MODOS, default=_previo, key=_K_MODO,
+                label_visibility="collapsed") or _previo
+            st.session_state[_K_MODO_ECO] = modo
 
     _id = _clave((est["corte"] or {}).get("clave"), est["sel_fam"],
                  est["sel_area"], foco)
-    if modo == "Por área":
-        filas = desglose_areas(_det, col_area, col_val, col_sis, col_fis)
-        if not filas:
-            st.caption("Sin áreas con diferencia en esta familia.")
-            return
-        tp = pd.DataFrame([{
-            "area": f["area"], "falto": f["falto"],
-            "sobro": f["sobro"], "total": f["total"],
-            "saldo": f["saldo"], "lineas": f["dif"],
-            "__sel": False} for f in filas])
-        _key = f"ajcas_grid_areas_{_id}"
-        _alto = _alto_grilla(min(_FILAS_DESGLOSE, len(tp)))
-        _atar_alto(_key, _alto)
-        renderizar_desglose_ajuste(
-            tp, [("area", "Área", "nombre"), ("falto", "Faltó", "falto"),
-                 ("sobro", "Sobró", "sobro"),
-                 ("total", "Faltó + sobró", "total"),
-                 ("saldo", "Saldo", "saldo"),
-                 ("lineas", "Líneas con dif.", "entero")],
-            _alto, _key, movil=_es_movil())
-        _n, _neg, _pos = productos_espejo(_det, col_prod, col_area, col_val)
-        if _n:
-            st.caption(
-                f"{_n} producto{'s' if _n != 1 else ''} faltaron en un área y "
-                f"sobraron en otra en este mismo corte: "
-                f"−S/ {abs(_neg):,.0f} contra +S/ {_pos:,.0f}.")
+    if modo == "Por producto":
+        _listas(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
+                col_unidad)
         return
 
-    if modo == "Por corte":
-        _dh = est.get("d_historial")
-        _cortes = est.get("historial_cortes") or []
-        if _dh is None or not _cortes:
-            st.caption("Sin historial de cortes para comparar.")
-            return
-        _dh = _dh[_dh[grp_col].astype(str) == foco]
-        filas = desglose_cortes(_dh, _cortes, col_area, col_val,
-                                col_sis, col_fis)
-        _ult = len(filas) - 1
-        tp = pd.DataFrame([{
-            "corte": f["corte"], "areas": f["areas"], "lineas": f["dif"],
-            "falto": f["falto"], "sobro": f["sobro"],
-            "saldo": f["saldo"], "__sel": i == _ult}
-            for i, f in enumerate(filas)])
-        _key = f"ajcas_grid_cortes_{_id}"
-        _alto = _alto_grilla(min(_FILAS_DESGLOSE, len(tp)))
-        _atar_alto(_key, _alto)
-        renderizar_desglose_ajuste(
-            tp, [("corte", "Corte", "nombre"),
-                 ("areas", "Áreas con stock", "entero"),
-                 ("lineas", "Líneas con dif.", "entero"),
-                 ("falto", "Faltó", "falto"), ("sobro", "Sobró", "sobro"),
-                 ("saldo", "Saldo", "saldo")],
-            _alto, _key, movil=_es_movil())
-        return
-
-    _drill(foco, _det, col_val, col_prod, col_area, col_cantidad, col_unidad)
+    with st.container(border=True, key="ajcas_card_drill"):
+        if modo == "Por área":
+            _por_area(_det, _m, _id, col_val, col_prod, col_area,
+                      col_sis, col_fis)
+        else:
+            _por_corte(foco, est, _id, grp_col, col_val, col_area,
+                       col_sis, col_fis)
 
 
-def _drill(focus_cat, _det, col_ajuste_val, col_producto, col_area,
-           col_cantidad, col_unidad):
-    """Faltantes y sobrantes de la familia con foco, en dos columnas.
+def _titulo_tarjeta(texto, n, color):
+    """El rótulo de una tarjeta de lista: el nombre y cuántas líneas trae
+    — sin el número, una tabla que scrollea no deja ver si son 12 o 400."""
+    return (f"<div style='display:flex;align-items:baseline;gap:7px;"
+            f"padding-left:2px'><span style='font-size:12px;font-weight:700;"
+            f"letter-spacing:.05em;text-transform:uppercase;color:{color}'>"
+            f"{texto}</span><span style='font-size:11.5px;"
+            f"color:{GRIS_TEXTO_SUAVE}'>{n:,} líneas</span></div>")
 
-    Una fila por LÍNEA (producto × área): así la columna de faltantes suma
+
+def _listas(foco, _det, _id, col_val, col_prod, col_area, col_cantidad,
+            col_unidad):
+    """«Por producto»: faltantes y sobrantes, cada uno en su tarjeta.
+
+    Una fila por LÍNEA (producto × área): así la fila TOTAL de faltantes es
     el «Faltó» de la tabla de arriba y la de sobrantes su «Sobró». Con el
     producto neteado entre áreas, el mismo producto faltando en una y
-    sobrando en otra se cancelaba y no aparecía en ninguna."""
-    dim = col_producto if col_producto in _det.columns else None
-    if not dim:
-        st.caption("No se encontró la columna de producto.")
-        return
+    sobrando en otra se cancelaba y no aparecía en ninguna.
 
-    _has_cant = bool(col_cantidad and col_cantidad in _det.columns)
+    TODAS las líneas, no un top-N: la tabla se ordena, y un top-N ordenable
+    miente (ordenar por cantidad reordena esos N, no las líneas). El scroll
+    lo hace la grilla (regla #403). El buscador filtra ANTES de dibujar, así
+    que una línea que calza aparece aunque esté al fondo."""
+    if not col_prod or col_prod not in _det.columns:
+        with st.container(border=True, key="ajcas_card_drill"):
+            st.caption("No se encontró la columna de producto.")
+        return
     _has_area = bool(col_area and col_area in _det.columns
-                     and col_area != dim)
+                     and col_area != col_prod)
+    _has_cant = bool(col_cantidad and col_cantidad in _det.columns)
     _has_um = bool(col_unidad and col_unidad in _det.columns
-                   and col_unidad != dim)
-    _base = _det.assign(**{col_ajuste_val: _num(_det[col_ajuste_val])})
-    if _has_area:
-        _base = _base.assign(**{col_area: _base[col_area].astype(str)
-                                .str.strip()})
-    _claves = [dim] + ([col_area] if _has_area else [])
-    _agg_map = {col_ajuste_val: "sum"}
-    if _has_cant:
-        _agg_map[col_cantidad] = "sum"
-    if _has_um:
-        _agg_map[col_unidad] = "first"
-    _agg_dim = _base.groupby(_claves, as_index=False).agg(_agg_map)
+                   and col_unidad != col_prod)
 
-    if _agg_dim.empty or _agg_dim[col_ajuste_val].abs().sum() == 0:
-        st.caption("Esta familia no tiene diferencias en el corte.")
-        return
+    _vacia = pd.Series("", index=_det.index)
+    _base = pd.DataFrame({
+        "producto": _det[col_prod].astype(str).str.strip(),
+        "area": (_det[col_area].astype(str).str.strip() if _has_area
+                 else _vacia),
+        "valor": _num(_det[col_val]),
+        "cantidad": (_num(_det[col_cantidad]) if _has_cant
+                     else pd.Series(0.0, index=_det.index)),
+        "um": (_det[col_unidad].astype(str).str.strip() if _has_um
+               else _vacia),
+    })
+    _base["um"] = _base["um"].mask(
+        _base["um"].str.lower().isin(("nan", "none")), "")
+    _g = (_base.groupby(["producto", "area"], as_index=False)
+          .agg(valor=("valor", "sum"), cantidad=("cantidad", "sum"),
+               um=("um", "first"))
+          .rename(columns={"um": "__um"}))
 
-    def _filas_html(_df, color_bar):
-        """Mini barras de progreso (riel + relleno), no un gráfico Plotly.
-        El relleno normaliza contra el mayor |ajuste| de ESTE sub-listado
-        (no del total de la familia)."""
-        _max_abs = float(_df[col_ajuste_val].abs().max()) or 1.0
-        _out = []
-        for _, _r in _df.iterrows():
-            _nom = str(_r[dim])
-            if len(_nom) > 32:
-                _nom = _nom[:31] + "…"
-            _sub = (f"<div style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
-                    f"white-space:nowrap;overflow:hidden;"
-                    f"text-overflow:ellipsis'>{_r[col_area]}</div>"
-                    if _has_area else "")
-            _pct = max(abs(float(_r[col_ajuste_val])) / _max_abs * 100, 3)
-            _t = f"S/ {_r[col_ajuste_val]:,.0f}"
-            if _has_cant:
-                _t += f" · {_r[col_cantidad]:,.1f}"
-                _um = str(_r[col_unidad]).strip() if _has_um else ""
-                if _um and _um.lower() != "nan":
-                    _t += f" {_um}"
-            _tcol = _tono(float(_r[col_ajuste_val]))[0]
-            _out.append(
-                f"<div style='display:flex;align-items:center;gap:8px;"
-                f"padding:3px 0'>"
-                f"<div style='width:38%;min-width:0;flex-shrink:0;"
-                f"overflow:hidden'>"
-                f"<div style='font-size:11.5px;color:{TEXTO_PRINCIPAL};"
-                f"white-space:nowrap;overflow:hidden;"
-                f"text-overflow:ellipsis'>{_nom}</div>{_sub}</div>"
-                f"<div style='flex:1;position:relative;height:16px;"
-                f"min-width:0'>"
-                f"<div style='position:absolute;left:0;right:0;top:50%;"
-                f"transform:translateY(-50%);height:7px;"
-                f"background:{GRIS_FONDO};border-radius:999px'></div>"
-                f"<div style='position:absolute;left:0;width:{_pct:.1f}%;"
-                f"top:50%;transform:translateY(-50%);height:7px;"
-                f"background:{color_bar};border-radius:999px'></div></div>"
-                f"<div style='flex-shrink:0;text-align:right;font-size:11px;"
-                f"font-weight:600;color:{_tcol};"
-                f"font-variant-numeric:tabular-nums;white-space:nowrap'>"
-                f"{_t}</div></div>")
-        return "".join(_out)
-
-    def _lista(signo, color_bar, placeholder, key, vacio):
-        """Filtra ANTES del top _TOPN_DRILL, no la lista ya recortada -- si
-        no, una línea fuera del top actual no aparecería nunca por más que
-        calzara con la búsqueda. Busca en el producto y en el área."""
-        _pool = _agg_dim[_agg_dim[col_ajuste_val] * signo > 0]
-        _q = st.text_input(
-            placeholder, key=key, label_visibility="collapsed",
-            placeholder=f"{placeholder} ({len(_pool):,})").strip().lower()
-        if _q:
-            _txt = _pool[dim].astype(str).str.lower()
+    # columnas-internas: las dos listas, cada una en su tarjeta
+    _ca, _cb = st.columns(2, gap="small")
+    for _col, signo, nombre, clase, orden, color, k in (
+            (_ca, -1, "Faltantes", "falto", "asc", AJUSTE_NEG_TEXTO, "neg"),
+            (_cb, 1, "Sobrantes", "sobro", "desc", AJUSTE_POS_TEXTO, "pos")):
+        _pool = _g[_g["valor"] * signo > _EPS]
+        with _col, st.container(border=True, key=f"ajcas_card_{k}"):
+            # columnas-internas: el rótulo de la lista y su buscador
+            _t, _b = st.columns([1, 1.3], vertical_alignment="center")
+            with _t:
+                st.markdown(_titulo_tarjeta(nombre, len(_pool), color),
+                            unsafe_allow_html=True)
+            with _b:
+                _q = st.text_input(
+                    f"Buscar en {nombre.lower()}",
+                    key=f"ajcas_buscar_{k}_{_slug(foco)}",
+                    placeholder="Buscar producto o área…",
+                    label_visibility="collapsed").strip().lower()
+            if _q:
+                _txt = (_pool["producto"].str.lower() + " "
+                        + _pool["area"].str.lower())
+                _pool = _pool[_txt.str.contains(_q, regex=False)]
+            if _pool.empty:
+                st.caption("Sin coincidencias." if _q
+                           else f"Sin {nombre.lower()} en esta familia.")
+                continue
+            tp = _pool.sort_values("valor", ascending=signo < 0).assign(
+                __sel=False)
+            _cols = [("producto", "Producto", "nombre")]
             if _has_area:
-                _txt = _txt + " " + _pool[col_area].str.lower()
-            _pool = _pool[_txt.str.contains(_q, regex=False)]
-        # Del mayor al menor en magnitud: el más negativo primero en
-        # faltantes, el más positivo primero en sobrantes.
-        _top = (_pool.assign(_abs=_pool[col_ajuste_val].abs())
-                .nlargest(_TOPN_DRILL, "_abs"))
-        if _top.empty:
-            st.caption("Sin coincidencias." if _q else vacio)
-        else:
-            st.markdown(f"<div class='ajcas-lista-scroll'>"
-                        f"{_filas_html(_top, color_bar)}</div>",
-                        unsafe_allow_html=True)
+                _cols.append(("area", "Área", "texto"))
+            if _has_cant:
+                _cols.append(("cantidad", "Cantidad", "cantidad"))
+            _cols.append(("valor", "Valor", clase, orden))
+            # La key lleva el foco y el corte, NO la búsqueda: escribir no
+            # estrena grilla, así el orden elegido sobrevive a cada letra.
+            _key = f"ajcas_grid_{k}_{_id}"
+            _alto = _alto_grilla(min(_FILAS_LISTA, len(tp)) + 1)
+            _atar_alto(_key, _alto)
+            renderizar_desglose_ajuste(
+                tp, _cols, _alto, _key, movil=_es_movil(),
+                total={"producto": "TOTAL",
+                       "valor": float(tp["valor"].sum())})
 
-    _pa, _pb = st.columns(2)  # columnas-internas: faltantes vs. sobrantes
-    with _pa:
-        _lista(-1, AJUSTE_NEG, "Buscar en faltantes…",
-               f"ajcas_buscar_neg_{_slug(focus_cat)}",
-               "Sin faltantes en esta familia.")
-    with _pb:
-        _lista(1, AJUSTE_POS, "Buscar en sobrantes…",
-               f"ajcas_buscar_pos_{_slug(focus_cat)}",
-               "Sin sobrantes en esta familia.")
+
+def _por_area(_det, _m, _id, col_val, col_prod, col_area, col_sis, col_fis):
+    """«Por área»: la familia en foco partida por área."""
+    filas = desglose_areas(_det, col_area, col_val, col_sis, col_fis)
+    if not filas:
+        st.caption("Sin áreas con diferencia en esta familia.")
+        return
+    tp = pd.DataFrame([{
+        "area": f["area"], "falto": f["falto"], "sobro": f["sobro"],
+        "total": f["total"], "saldo": f["saldo"], "lineas": f["dif"],
+        "__sel": False} for f in filas])
+    _key = f"ajcas_grid_areas_{_id}"
+    _alto = _alto_grilla(min(_FILAS_DESGLOSE, len(tp)) + 1)
+    _atar_alto(_key, _alto)
+    renderizar_desglose_ajuste(
+        tp, [("area", "Área", "nombre"), ("falto", "Faltó", "falto"),
+             ("sobro", "Sobró", "sobro"),
+             ("total", "Faltó + sobró", "total"),
+             ("saldo", "Saldo", "saldo"),
+             ("lineas", "Líneas con dif.", "entero")],
+        _alto, _key, movil=_es_movil(),
+        # La misma fila TOTAL que la familia en la tabla de arriba: las
+        # áreas suman exactamente eso.
+        total={"area": "TOTAL", "falto": _m["falto"], "sobro": _m["sobro"],
+               "total": _m["total"], "saldo": _m["saldo"],
+               "lineas": _m["dif"]})
+    _n, _neg, _pos = productos_espejo(_det, col_prod, col_area, col_val)
+    if _n:
+        st.caption(
+            f"{_n} producto{'s' if _n != 1 else ''} faltaron en un área y "
+            f"sobraron en otra en este mismo corte: "
+            f"−S/ {abs(_neg):,.0f} contra +S/ {_pos:,.0f}.")
+
+
+def _por_corte(foco, est, _id, grp_col, col_val, col_area, col_sis, col_fis):
+    """«Por corte»: los últimos cortes de la familia en foco. Sin fila
+    TOTAL: sumar seis cortes no es una medida de nada."""
+    _dh = est.get("d_historial")
+    _cortes = est.get("historial_cortes") or []
+    if _dh is None or not _cortes:
+        st.caption("Sin historial de cortes para comparar.")
+        return
+    _dh = _dh[_dh[grp_col].astype(str) == foco]
+    filas = desglose_cortes(_dh, _cortes, col_area, col_val, col_sis, col_fis)
+    _ult = len(filas) - 1
+    tp = pd.DataFrame([{
+        "corte": f["corte"], "areas": f["areas"], "lineas": f["dif"],
+        "falto": f["falto"], "sobro": f["sobro"], "saldo": f["saldo"],
+        "__sel": i == _ult} for i, f in enumerate(filas)])
+    _key = f"ajcas_grid_cortes_{_id}"
+    _alto = _alto_grilla(min(_FILAS_DESGLOSE, len(tp)))
+    _atar_alto(_key, _alto)
+    renderizar_desglose_ajuste(
+        tp, [("corte", "Corte", "nombre"),
+             ("areas", "Áreas con stock", "entero"),
+             ("lineas", "Líneas con dif.", "entero"),
+             ("falto", "Faltó", "falto"), ("sobro", "Sobró", "sobro"),
+             ("saldo", "Saldo", "saldo")],
+        _alto, _key, movil=_es_movil())

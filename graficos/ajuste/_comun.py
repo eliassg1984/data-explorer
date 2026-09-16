@@ -37,7 +37,7 @@ from cortes import (  # noqa: F401
 from cortes import corte_contiguo, cortes_disponibles
 from tema import ACENTO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_SELECCION
 from graficos.base import (
-    _layout, _slug, filtro_pills, sembrar_seleccion,
+    _layout, _slug, filtro_pills, preservar_widgets, sembrar_seleccion,
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
@@ -248,9 +248,23 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     # un area que no movio nada ahora es ofrecer una pastilla que deja la
     # vista vacia, y de eso se trata `areas_con_ajuste` (#424).
     areas = areas_con_ajuste(base, col_area, col_ajuste_val)
-    if col_familia and col_familia in base.columns:
-        sembrar_seleccion(base, col_familia, k_familia, list(familias))
-    sel_fam = list(st.session_state.get(k_familia) or [])
+    # LAS FAMILIAS SALEN DEL PARQUET ENTERO, no del corte elegido. La semilla
+    # se sembraba con las del corte con que ABRE la vista, que es el último:
+    # el 15 set 2026 no trajo ENVASES Y EMBALAJES, así que la selección
+    # nacía con cuatro y al pasar al 2 set seguía en cuatro — con el TOTAL de
+    # la tabla sumando sin Envases y sin nada que lo avisara. Con las
+    # opciones fijas la selección es la misma en todos los cortes, y una
+    # familia sin líneas en un corte simplemente no aparece en la tabla. Las
+    # ÁREAS sí siguen al corte, a propósito (#424). Ver regla #442.
+    _src_fam = df_full if (df_full is not None and col_familia
+                           and col_familia in df_full.columns) else base
+    opc_fam = (sorted(_src_fam[col_familia].dropna().astype(str).unique())
+               if col_familia and col_familia in _src_fam.columns else [])
+    if opc_fam:
+        sembrar_seleccion(pd.DataFrame({col_familia: opc_fam}), col_familia,
+                          k_familia, list(familias))
+    sel_fam = [f for f in (st.session_state.get(k_familia) or [])
+               if f in opc_fam]
 
     def _aplicar(x):
         if x is None:
@@ -264,7 +278,8 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     return {"base": base, "d": _aplicar(base), "corte": corte,
             "cortes": cortes, "corte_prev": corte_prev,
             "historial_cortes": hist_cortes, "d_historial": _aplicar(base_hist),
-            "areas": areas, "sel_fam": sel_fam, "sel_area": sel_area,
+            "areas": areas, "familias": opc_fam,
+            "sel_fam": sel_fam, "sel_area": sel_area,
             "col_familia": col_familia, "col_area": col_area,
             "k_corte": k_corte, "k_familia": k_familia, "k_area": k_area}
 
@@ -303,6 +318,13 @@ def render_filtros_vista(cols, est):
                             use_container_width=True,
                             type="primary" if _on else "secondary"):
                         st.session_state[est["k_corte"]] = _c["clave"]
+                        # Este rerun corta la corrida antes de que se
+                        # dibujen las pastillas de familia, y eso borra lo
+                        # elegido (#373). Se salva la FAMILIA, cuyas
+                        # opciones no dependen del corte; el ÁREA no,
+                        # porque las suyas sí dependen y una elegida que no
+                        # movió nada en el corte nuevo rompería `st.pills`.
+                        preservar_widgets((est["k_familia"],))
                         st.rerun()
     with cols[1]:
         _n_fam = len(est["sel_fam"])
@@ -312,7 +334,7 @@ def render_filtros_vista(cols, est):
         with st.popover(f":material/category: {_et_fam}",
                         use_container_width=True):
             filtro_pills(est["base"], est["col_familia"], est["k_familia"],
-                         "Familia")
+                         "Familia", valores=est["familias"] or None)
     with cols[2]:
         _n_ar = len(est["sel_area"])
         _et_ar = ("todas las áreas" if not _n_ar

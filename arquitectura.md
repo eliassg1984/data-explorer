@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-441 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+442 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (157)
 
@@ -336,7 +336,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 - **#440** — Una tabla "documento → detalle" marca su fila con un DATO, no con la selección de AG Grid — y…
 
-**AgGrid y tablas** (69)
+**AgGrid y tablas** (70)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -407,6 +407,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
+- **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 
 **Streamlit** (115)
 
@@ -625,7 +626,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
 - **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
 
-**Fechas, rangos y cortes** (10)
+**Fechas, rangos y cortes** (11)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -637,6 +638,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#219** — Un riel de fechas que abarca todo el histórico no sirve para elegir un día, y la escala fina…
 - **#307** — Un default de fecha "el mes en curso" que se recorta a bounds COLAPSA a un día cuando la data…
 - **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
+- **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 
 **Asistente IA** (2)
 
@@ -37006,6 +37008,66 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-16.)
 
+442. **Una selección sembrada con el corte con que ABRE la vista hereda
+     sus huecos — y `GridOptionsBuilder` ordena las columnas como el df,
+     no como las configurás.** Dos cosas de la misma vuelta sobre Ajuste ›
+     Cascada, reportadas con captura: «le falta la familia de envases» y
+     «la parte de abajo descuadra un poco; quisiera darle similar formato
+     que la de arriba, manteniendo sus dos tarjetas independientes».
+
+     - **Envases faltaba sin que nada lo dijera.** El filtro decía «4
+       familias» y el TOTAL daba −62.397, que es el de las cinco menos
+       Envases. `sembrar_seleccion` sólo siembra los valores que EXISTEN en
+       el df que recibe, y `estado_filtros_vista` le pasaba el corte
+       elegido — que al abrir es el último, el 15 set 2026, parcial y sin
+       líneas de Envases. La semilla nacía con cuatro y ninguna corrida
+       posterior la volvía a sembrar (la clave ya existía). Ahora las
+       OPCIONES y la semilla salen del parquet entero (`df_full`): la
+       selección es la misma en todos los cortes, y una familia sin líneas
+       en un corte simplemente no sale en la tabla. Las ÁREAS siguen al
+       corte a propósito (#424). La prueba vive en
+       `test_graficos.py::_pruebas_resumen_ajuste`.
+     - **El cambio de corte se llevaba la selección de familias.** El botón
+       del corte hace `st.rerun()` en medio de `render_filtros_vista`,
+       antes de que se dibujen las pastillas: es la #373. Ahora llama a
+       `preservar_widgets` con la clave de FAMILIA — que ya se puede
+       preservar porque sus opciones no cambian con el corte. La de ÁREA
+       no: sus opciones sí cambian, y un área preservada que no movió nada
+       en el corte nuevo haría reventar `st.pills`.
+     - **El detalle con el formato del resumen.** «Por producto» eran dos
+       listas HTML con barritas dentro de una tarjeta, con el selector
+       flotando a media fila. Ahora son dos tarjetas independientes
+       (`ajcas_card_neg` | `ajcas_card_pos`), cada una con su rótulo, su
+       cantidad de líneas, su buscador y una grilla igual a la del resumen,
+       con fila TOTAL (que es el «Faltó» o el «Sobró» de arriba). Todas las
+       líneas y no un top-30: la grilla se ordena (#403). La key lleva el
+       foco y el corte pero NO la búsqueda, así escribir no le borra al
+       usuario el orden elegido. El título y las pestañas van en su propia
+       fila, sin tarjeta.
+     - **`GridOptionsBuilder.from_dataframe` arma las columnas en el orden
+       del df, y `configure_column` no las mueve.** Pedidas Cantidad ·
+       Valor, salían Valor · Cantidad. `renderizar_desglose_ajuste`
+       reordena el df según la lista de columnas antes de construir.
+     - **Alinear un `segmented_control` a la derecha es mover su
+       contenedor, no el `stButtonGroup`.** El contenedor con la key mide
+       lo que sus botones (249px) y su columna lo apoya a la izquierda:
+       terminaba en 1151 con la fila en 1323. Un `justify-content` sobre el
+       `stButtonGroup` no hace nada porque ese nodo ya mide lo mismo que su
+       contenido; `margin-left: auto` sobre el contenedor sí.
+
+     Medido a 1365x653, corte 2 set con cinco familias: resumen 40–299,
+     fila de pestañas 310–336, las dos tarjetas 347–629 alineadas a los
+     bordes del resumen (89 y 1323), selector 1074–1323. La fila TOTAL de
+     faltantes da −54.792, el «Faltó» de ALIMENTOS.
+
+     Trampa de la verificación: el panel del navegador lo comparte el
+     usuario. En medio de las pruebas el corte pasó a «1-2 jun 2026» sin
+     que el script lo tocara, y una lectura mostró filas de otra familia:
+     era el usuario usando la vista. Antes de atribuirle un estado raro al
+     código, mirar si alguien más está tocando la página.
+
+     (2026-09-16.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37018,7 +37080,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#442**.
+> próxima regla nueva es la **#443**.
 
 >
 

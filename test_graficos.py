@@ -3651,6 +3651,28 @@ def _pruebas_resumen_ajuste():
     # cero, sola no la habría hecho contar.
     check("áreas con stock por corte", [c["areas"] for c in _cortes], [2, 2])
 
+    # LA SEMILLA DE FAMILIAS NO DEPENDE DEL CORTE CON QUE ABRE (regla #442).
+    # La vista abre en el último corte; si ese no trae una familia, la
+    # semilla nacía sin ella y el TOTAL de otro corte sumaba sin avisar.
+    from graficos.ajuste._comun import FAMILIAS_DE_ENTRADA, estado_filtros_vista
+    _full = pd.DataFrame({
+        "F": pd.to_datetime(["2026-09-02"] * 3 + ["2026-09-15"] * 2),
+        "FAMILIA": ["ALIMENTOS", "ENVASES Y EMBALAJES", "VINOS Y ESPUMANTES",
+                    "ALIMENTOS", "VINOS Y ESPUMANTES"],
+        "AREA": ["X"] * 5, "AV": [-1.0, -2.0, 3.0, 4.0, -5.0],
+    })
+    _est = estado_filtros_vista(
+        _full, _full, "F", "FAMILIA", "AREA", "AV",
+        k_corte="test_ajcas_corte", k_familia="test_ajcas_fam",
+        k_area="test_ajcas_area", familias=FAMILIAS_DE_ENTRADA)
+    check("abre en el último corte, que no trae ENVASES",
+          _est["corte"]["etiqueta_anio"], "15 set 2026")
+    check("...y la semilla igual incluye ENVASES",
+          "ENVASES Y EMBALAJES" in _est["sel_fam"], True)
+    check("las opciones de familia son las del parquet entero",
+          _est["familias"],
+          ["ALIMENTOS", "ENVASES Y EMBALAJES", "VINOS Y ESPUMANTES"])
+
     # La tolerancia de la exactitud se declara en la cabecera: si el número
     # cambia, el texto tiene que cambiar con él.
     check("la tolerancia declarada es la que se usa",

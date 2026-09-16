@@ -87,6 +87,14 @@ _JS_PCT = JsCode(
 _JS_DE = JsCode(
     "function(p){ if (p.value==null) return '–';"
     " var n = p.data && p.data.__de; return n ? p.value + ' de ' + n : String(p.value); }")
+# «−96.0 UND»: la cantidad con la unidad de Kardex al lado. La unidad viaja
+# en un campo oculto para que la celda se siga ordenando por el número. La
+# fila TOTAL no trae cantidad: sumar kilos con litros no da una unidad.
+_JS_CANTIDAD = JsCode(
+    "function(p){ if (p.value==null || (p.node && p.node.rowPinned)) return '';"
+    " var v = p.value; var u = (p.data && p.data.__um) || '';"
+    " return (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('es-PE',"
+    " {minimumFractionDigits:1, maximumFractionDigits:1}) + (u ? ' ' + u : ''); }")
 _JS_ENTERO = JsCode(
     "function(p){ return p.value==null ? '' : Math.round(p.value).toLocaleString('es-PE'); }")
 
@@ -232,23 +240,43 @@ def renderizar_familias_ajuste(tp, total, altura, key, tolerancia,
     return None
 
 
-def renderizar_desglose_ajuste(tp, columnas, altura, key, movil=False):
-    """Un desglose de la familia en foco: por área o por corte. Se lee y se
-    ordena; no se clickea.
+def renderizar_desglose_ajuste(tp, columnas, altura, key, movil=False,
+                               total=None):
+    """Un desglose de la familia en foco: sus líneas, sus áreas o sus
+    cortes. Se lee y se ordena; no se clickea.
 
-    `columnas` son tríos `(campo, título, clase)`, donde clase es
-    `"nombre"`, `"falto"`, `"sobro"`, `"total"`, `"saldo"` o `"entero"` —
-    lo que decide formato, color y el tooltip de la cabecera."""
+    `columnas` son tuplas `(campo, título, clase)` o `(campo, título, clase,
+    orden)`, donde clase es `"nombre"`, `"texto"`, `"falto"`, `"sobro"`,
+    `"total"`, `"saldo"`, `"cantidad"` o `"entero"` — lo que decide formato,
+    color y el tooltip de la cabecera — y `orden` («asc»/«desc») es el orden
+    con que abre. `total` es el dict de la fila TOTAL fija, si la lleva."""
+    # EL ORDEN DE LAS COLUMNAS LO DECIDE EL DATAFRAME, no `configure_column`:
+    # `GridOptionsBuilder.from_dataframe` arma las columnas en el orden del
+    # df y configurarlas después no las mueve. Medido: pedidas Cantidad ·
+    # Valor, salían Valor · Cantidad.
+    _orden = [c[0] for c in columnas]
+    tp = tp[_orden + [c for c in tp.columns if c not in _orden]]
     gb = _grid_base(tp)
-    for campo, titulo, clase in columnas:
+    for col in columnas:
+        campo, titulo, clase = col[:3]
+        orden = {"sort": col[3]} if len(col) > 3 else {}
         if clase == "nombre":
             _col_nombre(gb, campo, titulo, movil)
+        elif clase == "texto":
+            gb.configure_column(campo, header_name=titulo, width=132,
+                                minWidth=132, tooltipField=campo,
+                                suppressSizeToFit=True)
+        elif clase == "cantidad":
+            gb.configure_column(campo, header_name=titulo,
+                                type=["numericColumn"],
+                                valueFormatter=_JS_CANTIDAD, width=118,
+                                minWidth=118, suppressSizeToFit=True, **orden)
         elif clase == "falto":
             _col_monto(gb, campo, titulo, FUENTES["falto"],
-                       estilo=_color(AJUSTE_NEG_TEXTO))
+                       estilo=_color(AJUSTE_NEG_TEXTO), **orden)
         elif clase == "sobro":
             _col_monto(gb, campo, titulo, FUENTES["sobro"],
-                       estilo=_color(AJUSTE_POS_TEXTO))
+                       estilo=_color(AJUSTE_POS_TEXTO), **orden)
         elif clase == "total":
             _col_monto(gb, campo, titulo, FUENTES["total"], ancho=124,
                        estilo=JsCode(
@@ -263,10 +291,12 @@ def renderizar_desglose_ajuste(tp, columnas, altura, key, movil=False):
                                 headerTooltip=FUENTES.get(campo, ""),
                                 width=120, minWidth=120,
                                 suppressSizeToFit=True)
+    _extra = ({"getRowStyle": _JS_FILA_TOTAL, "pinnedBottomRowData": [total]}
+              if total else {})
     gb.configure_grid_options(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         suppressCellFocus=True, rowClassRules=_REGLAS_FILA,
-        onGridReady=_AL_MONTAR)
+        onGridReady=_AL_MONTAR, **_extra)
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # arquitectura.md #159
 
