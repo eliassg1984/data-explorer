@@ -30,11 +30,19 @@ mismo look que una fila seleccionada. Dos cosas que salen de eso:
     de la corrida anterior — no hace falta recordar qué devolvió antes.
 
 Ver regla #440.
+
+2026-09-17 — FILA TOTAL FIJA en las dos (regla #454): `total=` es el dict de
+esa fila, ya formateado como el resto. Va por `pinnedBottomRowData`, con la
+paleta de cierre de las tablas-ranking (`JS_FILA_TOTAL`), y no participa de
+la selección: las filas fijas no son parte del modelo de filas y AG Grid no
+las selecciona (lo dice su documentación de «Row Pinning»; no se probó a
+mano), así que un clic en el total no debería devolver nada — la fila no
+trae `__compra` ni `__sel`.
 """
 
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
-from tema import ACENTO, LAVANDA_FONDO
+from tema import ACENTO, ACENTO_TEXTO_OSCURO, LAVANDA_CHIP, LAVANDA_FONDO
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
 # `_css_look` es privado de allá pero lo comparten ya TRES grillas —el
@@ -93,6 +101,24 @@ selección: seleccionar desde acá mandaría un valor de vuelta a Python y
 costaría una corrida entera del fragment por nada."""
 
 
+JS_FILA_TOTAL = JsCode(
+    "function(p){ if(p.node.rowPinned){ return {"
+    f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
+    f"'color':'{ACENTO_TEXTO_OSCURO}'"
+    "}; } }")
+"""La fila TOTAL con la paleta de cierre de las tablas-ranking
+(`drill_tablas.tabla_ranking`). Vive acá y no en `ajuste_familias.py`, que
+la tenía primero, por el mismo motivo que `_css`: ese módulo ya toma el look
+de éste, y dos copias de la fila de cierre se separan al primer retoque."""
+
+
+def _con_total(opciones, total):
+    """Suma la fila TOTAL a `configure_grid_options`, si hay."""
+    if total is not None:
+        opciones.update(getRowStyle=JS_FILA_TOTAL, pinnedBottomRowData=[total])
+    return opciones
+
+
 def _css():
     """El CSS de las dos grillas: el look de Volatilidad más lo propio."""
     css = _css_look(_css_grid(13, cebra=False, cabecera_neutra=True))
@@ -118,11 +144,16 @@ def _css():
     }
     css[f".ag-row.{_CLASE_SEL}"] = _marca
     css[".ag-row.ag-row-selected"] = _marca
+    # UNA SOLA LÍNEA SOBRE LA FILA TOTAL: el tema le pone 1px gris a su
+    # contenedor y ese píxel sale del alto de la fila (medido en
+    # `ajuste_familias.py`, que la tenía primero: la fila terminaba 1px por
+    # debajo de la grilla, recortada). Regla #364.
+    css[".ag-floating-bottom"] = {"border-top": "none !important"}
     return css
 
 
 def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
-                                  ver_doc=True):
+                                  ver_doc=True, total=None):
     """Una fila por COMPRA del período en foco.
 
     `tp` trae `fecha`, `doc`, `prov`, `lineas` y `valor` ya formateados como
@@ -133,6 +164,7 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
     documento» lista las compras del día de la barra): una columna que repite
     la misma fecha en cada fila no dice nada, y el día ya lo dice el caption
     (regla #239). `ver_doc` en False sin columna de documento (el demo).
+    `total` es la fila TOTAL fija (ver el docstring del módulo), o None.
 
     Devuelve la `__compra` de la fila clickeada, o None. Como la grilla nace
     sin selección (ver el docstring del módulo), un valor es siempre un clic
@@ -158,10 +190,10 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
     gb.configure_column("__compra", hide=True)
     gb.configure_column("__sel", hide=True)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    gb.configure_grid_options(
+    gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         suppressCellFocus=True, getRowClass=_CLASE_FILA,
-        onGridReady=_AL_MONTAR)
+        onGridReady=_AL_MONTAR), total))
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
@@ -175,9 +207,10 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
     return None
 
 
-def renderizar_lineas_semanal(tp, altura, key):
+def renderizar_lineas_semanal(tp, altura, key, total=None):
     """Las líneas de UN documento: `prod`, `cant`, `punit` y `valor`, ya
-    formateadas. Sin selección: se lee, no se clickea.
+    formateadas. Sin selección: se lee, no se clickea. `total` es la fila
+    TOTAL fija, o None.
 
     Sin fecha, documento ni proveedor, a propósito: son los mismos en todas
     las filas y ya los dice la fila marcada de al lado."""
@@ -194,11 +227,11 @@ def renderizar_lineas_semanal(tp, altura, key):
                         width=96, minWidth=96, suppressSizeToFit=True)
     gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
                         width=104, minWidth=104, suppressSizeToFit=True)
-    gb.configure_grid_options(
+    gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         # Sin selección un clic no hace nada, pero AG Grid igual le dibuja el
         # recuadro de foco a la celda (lo mismo que en Volatilidad).
-        suppressCellFocus=True, onGridReady=_AL_MONTAR)
+        suppressCellFocus=True, onGridReady=_AL_MONTAR), total))
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # arquitectura.md #159
 

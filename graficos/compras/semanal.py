@@ -58,6 +58,7 @@ LÍNEAS del documento elegido (`tablas/compras_semanal.py`).
 """
 
 import hashlib
+from html import escape
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -66,7 +67,7 @@ import streamlit as st
 import cortes
 from tema import (
     ADVERTENCIA_TEXTO, BLANCO, GRIS_BORDE, GRIS_TEXTO, SERIE_PRINCIPAL,
-    TEXTO_PRINCIPAL,
+    SERIE_TRAMOS, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
@@ -94,8 +95,11 @@ _FAM_TODAS = "Todas las familias"
 _PROD_TODOS = "Todos los productos"
 
 _GRAN_DEFAULT = "Por documento"
-"""Con qué granularidad abre la vista, y a qué vuelve si se suelta la
-píldora activa (Streamlit devuelve `None` al des-elegir un `st.pills`).
+"""Con qué granularidad abre la vista.
+
+Desde el 2026-09-17 el control es un `st.segmented_control(required=True)`
+y ya no se puede soltar: el `or _GRAN_DEFAULT` del drill quedó como red
+para el caso en que la cabecera no llegue a dibujarse.
 
 «Por documento» desde el 2026-09-12, a pedido («debe aparecer
 inicialmente seleccionado "Por documento"»), junto con abrir en el mes en
@@ -104,8 +108,18 @@ mes por documento son ~30-60 barras legibles; doce meses por documento
 serían cientos. Antes era «Semana».
 
 UNA constante para los dos usos a propósito: con el default en el widget y
-el fallback escrito aparte, soltar la píldora mostraba otra granularidad
-que la del arranque."""
+el fallback escrito aparte, soltar la píldora (cuando era `st.pills`)
+mostraba otra granularidad que la del arranque."""
+
+_GRAN_OPCIONES = ("Día", "Semana", "Mes", "Año", "Por documento")
+"""Las granularidades, en el orden en que se leen: de la más fina a la más
+gruesa, y el documento al final porque no es un período sino una compra."""
+
+_GRAN_ROTULO = {"Por documento": "Documento"}
+"""Lo que el toggle ESCRIBE, cuando no es el valor. «Por documento» sigue
+siendo el valor —lo comparan ocho `if` del drill y lo guarda la sesión—,
+pero en un toggle lineal el «Por» sobra: los otros cuatro no lo llevan, y
+un botón más largo que sus vecinos se lee como otra cosa."""
 
 _KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familia",
                 "compras_sem_producto")
@@ -209,6 +223,236 @@ def _tope_puntos(n_periodos):
 
 
 # ===========================================================================
+# LA BARRA DEL DÍA SE PARTE EN TRES (2026-09-17, regla #453)
+# ===========================================================================
+# Reemplaza al punto negro en granularidad Día. El punto decía «ésta es la
+# compra mayor» y no decía nada más; el reparto del día —una compra grande o
+# quince chiquitas— quedaba fuera del gráfico.
+#
+# POR QUÉ SÓLO EN DÍA. Medido con DuckDB contra `compras.parquet`, cuánto se
+# lleva la compra mayor de su período:
+#
+#     Día      42,9 %   (entre 18,1 y 73,2)
+#     Semana   13,7 %
+#     Mes       4,7 %
+#
+# En Mes el tramo de la mayor es el 4,7 % de la barra: 3px que no se leen.
+# El corte en tres sólo tiene sentido donde los tres tramos se ven, y eso es
+# Día — ahí promedian 43 / 40 / 17 %. Semana, Mes y Año siguen con el punto.
+#
+# POR QUÉ TRES Y NO UNA POR COMPRA. El día mediano trae 8,8 compras (mediana
+# histórica 13, máximo 46) y la cola a partir de la cuarta vale el 5 % del
+# total repartido entre todas: apilar una por compra da segmentos sub-píxel
+# y las líneas divisorias se los comen. Tres tramos es el corte más fino que
+# los datos sostienen.
+#
+# EL CLIC NO CAMBIA, y eso NO es una renuncia: la tabla de la derecha ya
+# abría en la compra mayor del período (`_sel = _docs["compra"].iloc[0]`),
+# así que en Día —donde `_tope_puntos` daba 1— clickear el punto hacía lo
+# mismo que clickear su barra. El punto era redundante justo en la
+# granularidad donde más se lo veía. Los tres tramos resuelven como barra
+# (el `and not _pts.empty` de la resolución del clic ya los manda al else).
+
+_GRAN_PARTIDA = ("Día",)
+"""Granularidades cuya barra se parte en tramos. Ver el comentario de arriba:
+la lista sale de una medición, no de un criterio estético."""
+
+_TRAMOS = (
+    (0, 0, "La mayor"),
+    (1, 2, "2ª y 3ª"),
+    (3, None, "El resto"),
+)
+"""Los tres tramos, como (primer rango, último rango, rótulo de leyenda).
+
+El rango es el puesto de la compra dentro de su período ordenado por valor
+descendente, con 0 = la mayor. `None` como tope es «hasta el final»."""
+
+
+def _tramos_del_periodo(dd, ord_claves):
+    """Un DataFrame por tramo, indexado por clave y alineado a `ord_claves`.
+
+    Devuelve una lista de tres DataFrames con las columnas `valor` (la suma
+    del tramo), `n` (cuántas compras lo forman) y el `prov`/`doc` de la
+    primera de cada tramo —que en el primero es la compra mayor. Las claves
+    sin ese tramo —un día de una sola compra no tiene 2ª ni 3ª— salen en 0,
+    que es lo que Plotly necesita para que las tres trazas compartan eje."""
+    docs = (dd.groupby(["clave", "compra"], as_index=False)
+              .agg(valor=("valor", "sum"), prov=("prov", "first"),
+                   doc=("doc", "first")))
+    # `compra` de desempate para que el orden sea ESTABLE entre reruns, por
+    # el mismo motivo que el reparto de los puntos: dos compras del mismo
+    # valor no pueden intercambiarse entre una corrida y la siguiente.
+    docs = docs.sort_values(["clave", "valor", "compra"],
+                            ascending=[True, False, True])
+    docs["k"] = docs.groupby("clave").cumcount()
+
+    salida = []
+    for desde, hasta, _ in _TRAMOS:
+        sel = docs[docs["k"] >= desde]
+        if hasta is not None:
+            sel = sel[sel["k"] <= hasta]
+        agg = (sel.groupby("clave")
+                  .agg(valor=("valor", "sum"), n=("compra", "size"),
+                       prov=("prov", "first"), doc=("doc", "first")))
+        agg = agg.reindex(ord_claves)
+        agg["valor"] = agg["valor"].fillna(0.0)
+        agg["n"] = agg["n"].fillna(0).astype(int)
+        salida.append(agg)
+    return salida
+
+
+def _etiqueta_en_la_punta(tramos, textos):
+    """El texto de cada TRAMO, con la etiqueta del total sólo en el de arriba.
+
+    `tramos` son los de `_tramos_del_periodo` (abajo → arriba) y `textos` el
+    total ya formateado de cada período, alineado al eje. Devuelve una lista
+    por tramo, con `None` donde no va nada.
+
+    Va en el tramo más alto CON VALOR, no en el último: un día de dos compras
+    no tiene «el resto», y Plotly pone el `outside` de una barra apilada sólo
+    en la que termina la pila (`_outmost` en su `cross_trace_calc`; a las
+    demás las trata como `inside`). Colgar la etiqueta siempre del tercer
+    tramo la dejaría, en esos días, dependiendo de cómo Plotly trate una
+    barra de alto cero — y ahí no hay nada que ver."""
+    salida = [[None] * len(textos) for _ in tramos]
+    for j, txt in enumerate(textos):
+        for i in range(len(tramos) - 1, -1, -1):
+            if tramos[i]["valor"].iloc[j]:
+                salida[i][j] = txt
+                break
+    return salida
+
+
+# ===========================================================================
+# EL VALORIZADO POR FAMILIA (2026-09-17, regla #454)
+# ===========================================================================
+# A pedido: «una mini kpi, interno, que me diga el total de la vista, y el
+# total por familia. Y también alguna otra kpi o etiqueta que me muestre el
+# total por familia de la barra, puede ser al pasar el cursor».
+#
+# Son dos preguntas con dos respuestas, y no una respuesta repetida:
+#   · la VISTA —rango + filtros de la tarjeta— va en una fila de KPI dentro
+#     de la cabecera, al lado de la fecha, que es lo que la acota;
+#   · la BARRA va en su hover, que es el único sitio donde cada barra
+#     contesta por sí misma sin ocupar alto.
+#
+# CUÁNTAS FAMILIAS. Medido con DuckDB contra `compras.parquet` (mes corrido
+# al 16/09/2026): son 8, y el reparto es muy desparejo —
+#
+#     ALIMENTOS               S/ 124.0k   79 %
+#     COSTOS PRODUCCION        S/ 15.2k   10 %
+#     VINOS Y ESPUMANTES        S/ 7.4k    5 %
+#     BEBIDAS CON ALCOHOL       S/ 5.3k    3 %
+#     las otras cuatro          S/ 4.6k    3 %   (la última, S/ 8)
+#
+# Las cuatro mayores son el 97 %: una tarjeta por familia gastaría la mitad
+# de la fila en montos que no se leen. Por día aparecen 4 en promedio y 8 de
+# máximo; por documento, 1,09 — de ahí los dos topes de abajo.
+
+_KPI_FAMILIAS = 4
+"""Familias con tarjeta propia en la fila de KPI; el resto va sumado en una.
+
+Ver la medición de arriba. El ancho es el otro techo: el total, cuatro
+familias y «N más» tienen que entrar en el renglón que les deja la
+cabecera junto a la fecha (ver `.st-key-cp_sem_kpi` en
+`_css_proveedor.py`, que trae lo medido)."""
+
+_HOVER_FAMILIAS = 5
+"""Familias que nombra el hover de una barra; el resto va en «N más».
+
+Con 8 de máximo por día, cinco renglones cubren el día típico entero (4) y
+dejan el hover de un día raro en siete renglones en vez de diez."""
+
+
+def _nombre_familia(fam):
+    """«COSTOS PRODUCCION» → «Costos produccion». El parquet las trae en
+    mayúsculas, y en un hover de seis renglones eso se lee a los gritos."""
+    fam = str(fam or "").strip()
+    return fam[:1].upper() + fam[1:].lower() if fam else "Sin familia"
+
+
+def _familias_de(dd):
+    """`(total, [(familia, valor, parte), …], (n_resto, valor_resto))` del
+    valorizado de `dd` por familia, de mayor a menor.
+
+    `parte` es la fracción del total (0-1). La lista trae las
+    `_KPI_FAMILIAS` mayores y el resto va sumado aparte, con cuántas son.
+    Las familias en cero no cuentan: una familia con compras anuladas que
+    suman 0 no es una familia de la vista."""
+    total = float(dd["valor"].sum())
+    s = dd.groupby("fam")["valor"].sum()
+    s = s[s != 0].sort_values(ascending=False)
+    top = [(f, float(v), (float(v) / total) if total else 0.0)
+           for f, v in s.iloc[:_KPI_FAMILIAS].items()]
+    resto = s.iloc[_KPI_FAMILIAS:]
+    return total, top, (len(resto), float(resto.sum()))
+
+
+def _html_kpi_vista(total, n_compras, top, resto):
+    """La fila de KPI de la cabecera: el total y las familias mayores.
+
+    Cada tarjeta lleva el nombre COMPLETO en `title`: el rótulo se recorta
+    con puntos suspensivos a partir de ~13 caracteres («Vinos y espumantes»
+    no entra) y el tooltip nativo es lo que lo devuelve entero. Con una sola
+    familia en la vista no se desglosa nada: el total ya es esa familia, y
+    el título de la figura la nombra."""
+    def _tarjeta(rotulo, valor, sub, clase="", tip=""):
+        return (f'<div class="sem-kpi {clase}" title="{escape(tip or rotulo)}">'
+                f'<span class="sem-kpi-rot">{escape(rotulo)}</span>'
+                f'<span class="sem-kpi-val">{escape(valor)}'
+                f'<span class="sem-kpi-sub">{escape(sub)}</span></span></div>')
+
+    _n = f"{n_compras:,} compra" + ("" if n_compras == 1 else "s")
+    partes = [_tarjeta("Total de la vista", fmt_k(total), _n, "sem-kpi-total",
+                       f"Total de la vista: S/ {total:,.2f} · {_n}")]
+    if len(top) + resto[0] > 1:
+        for fam, v, p in top:
+            nom = _nombre_familia(fam)
+            partes.append(_tarjeta(nom, fmt_k(v), f"{p:.0%}",
+                                   tip=f"{nom}: S/ {v:,.2f} · {p:.1%}"))
+        if resto[0]:
+            _p = resto[1] / total if total else 0.0
+            partes.append(_tarjeta(
+                f"{resto[0]} más", fmt_k(resto[1]), f"{_p:.0%}", "sem-kpi-resto",
+                f"{resto[0]} familias más: S/ {resto[1]:,.2f} · {_p:.1%}"))
+    return '<div class="sem-kpis">' + "".join(partes) + "</div>"
+
+
+def _familias_por_clave(dd):
+    """`{clave: texto}` con el valorizado por familia de cada período, listo
+    para colgar al final de un `hovertemplate` (empieza con `<br>`).
+
+    Vacío si la vista tiene UNA familia: con el filtro de Familia puesto el
+    desglose sería un renglón que repite el total. Vectorizado a propósito:
+    en «Por documento» con el histórico entero son ~15.000 claves, y un
+    bucle de Python por clave tardaba lo que el resto del drill junto."""
+    if dd["fam"].nunique() <= 1:
+        return {}
+    s = dd.groupby(["clave", "fam"], as_index=False)["valor"].sum()
+    s = s[s["valor"] != 0]
+    s["tot"] = s.groupby("clave")["valor"].transform("sum")
+    s = s.sort_values(["clave", "valor"], ascending=[True, False])
+    s["k"] = s.groupby("clave").cumcount()
+
+    top = s[s["k"] < _HOVER_FAMILIAS]
+    _pct = (top["valor"] / top["tot"].where(top["tot"] != 0)).fillna(0)
+    top = top.assign(txt=(
+        top["fam"].map(_nombre_familia) + ": S/ "
+        + top["valor"].map(lambda v: f"{v:,.2f}")
+        + " · " + _pct.map(lambda p: f"{p:.0%}")))
+    lineas = top.groupby("clave")["txt"].agg("<br>".join)
+
+    resto = (s[s["k"] >= _HOVER_FAMILIAS].groupby("clave")
+               .agg(n=("fam", "size"), v=("valor", "sum")))
+    lineas = lineas.to_dict()
+    for clave, fila in resto.iterrows():
+        lineas[clave] += (f"<br>{int(fila['n'])} más: "
+                          f"S/ {fila['v']:,.2f}")
+    _tit = f"<br><span style='color:{GRIS_TEXTO}'>Por familia</span><br>"
+    return {c: _tit + t for c, t in lineas.items()}
+
+
+# ===========================================================================
 # ETIQUETAS SOBRE LAS BARRAS (2026-09-14, regla #440)
 # ===========================================================================
 # A pedido: «en la vista semana, la opción de semana, debe mostrar etiquetas
@@ -222,8 +466,16 @@ def _tope_puntos(n_periodos):
 # la vecina (regla #91, y la misma cuenta que `vs_ano_pasado._plan_etiquetas`,
 # regla #400). La forma sale de los píxeles que le tocan a cada período,
 # contra el mismo `_LIENZO_PX` que decide cuántos puntos caben.
+#
+# 2026-09-17: TAMBIÉN EN DÍA Y «POR DOCUMENTO», a pedido («necesito que las
+# columnas muestren el valorizado»). La exclusión de arriba era una
+# suposición —«el número no entra ni girado»— y la cuenta ya la contestaba
+# sola, barra por barra: un mes corrido son 30 días, 27px por barra, y
+# «S/ 13.4k» (el día más alto de ese mes) entra GIRADO (13 + 4 = 17px). En
+# «Por documento» ese mismo mes son 263 barras de 3px y `_plan_etiquetas`
+# devuelve `None`: ahí el valor sigue en el hover, como siempre.
 
-_GRAN_CON_ETIQUETA = ("Semana", "Mes", "Año")
+_GRAN_CON_ETIQUETA = ("Día", "Semana", "Mes", "Año", "Por documento")
 
 _ETQ_FUENTE = 10
 """Cuerpo de las etiquetas, en px: el de las de «Vs año pasado» y Producto."""
@@ -654,21 +906,33 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         #
         # La granularidad sigue sin `st.columns` alrededor a propósito: eso
         # era del `st.selectbox` que este control reemplazó (un dropdown SE
-        # ESTIRA solo al ancho del contenedor). `st.pills` no se estira
+        # ESTIRA solo al ancho del contenedor). El toggle no se estira
         # —mide su propio contenido— y una columna lo apretaba a 157px,
         # forzando que "Por documento" envuelva a una segunda línea sin
         # necesidad. Medido con el inspector (`?debug=1&diseno=1`) el
         # 2026-09-03.
+        #
+        # 2026-09-17: de `st.pills` a `st.segmented_control`, a pedido («la
+        # granularidad agrupada en un solo toggle que se vea lineal»). Las
+        # píldoras sueltas se leían como cinco filtros que se suman; un
+        # toggle pegado dice «una de cinco». `required=True` porque una
+        # granularidad vacía no existe — con las píldoras, tocar la activa
+        # la soltaba y la vista caía al default sin que nada lo marcara.
+        #
+        # Y la fila de KPI de la vista (regla #454) va en el MISMO flex, entre
+        # los filtros y la fecha: es la suma de lo que esos dos acotan. Se
+        # reserva acá con un `st.empty()` y se llena más abajo, cuando el
+        # recorte ya existe — el orden de ejecución no es el de la pantalla.
         _box = {}
 
         def _controles():
             with st.container(horizontal=True, gap="small",
                               key="cp_sem_filtros"):
-                _box["gran"] = st.pills(
-                    "Agrupar por",
-                    ["Día", "Semana", "Mes", "Año", "Por documento"],
-                    default=_GRAN_DEFAULT, key="compras_sem_gran",
-                    label_visibility="collapsed")
+                _box["gran"] = st.segmented_control(
+                    "Agrupar por", _GRAN_OPCIONES,
+                    default=_GRAN_DEFAULT, required=True,
+                    format_func=lambda g: _GRAN_ROTULO.get(g, g),
+                    key="compras_sem_gran", label_visibility="collapsed")
                 if _hay_fam and len(_ops_fam) > 1:
                     with st.container(key="cp_sem_hdr_familia"):
                         _box["fam"] = st.selectbox(
@@ -686,6 +950,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                              "primero es el que más compraste. «Top N por "
                              "valor» suma los N mayores en una sola serie. "
                              "Se puede escribir para buscar.")
+            with st.container(key="cp_sem_kpi"):
+                _box["kpi"] = st.empty()
 
         if selector_fecha_tarjeta(
                 "cp_sem", "_cp_sem_atajo_pendiente", extra=_controles,
@@ -774,6 +1040,16 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             dd["fecha"].dt.strftime("%Y-%m-%d") + "·" + dd["prov"] + "·" + dd["docn"]
             if _con_doc else dd.index.astype(str))
 
+        # La fila de KPI de la cabecera (regla #454). Sale de `dd` ya
+        # recortado por Familia y Producto: es el total de lo que las barras
+        # suman, no el de la franja.
+        if "kpi" in _box:
+            _tot_v, _top_f, _resto_f = _familias_de(dd)
+            _box["kpi"].markdown(
+                _html_kpi_vista(_tot_v, dd["compra"].nunique(), _top_f,
+                                _resto_f),
+                unsafe_allow_html=True)
+
         if gran == "Por documento":
             dd["clave"] = dd["compra"]
             dd["lbl"] = dd["fecha"].dt.strftime("%d/%m")
@@ -860,32 +1136,88 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         else:
             g["hov"] = g["lbl"]
 
-        fig = go.Figure()
-        fig.add_bar(
-            x=g["ix"], y=g["valor"], name="Valor total",
-            marker=dict(color=SERIE_PRINCIPAL),
-            customdata=g[["hov", "cant"]].to_numpy(),
-            hovertemplate=("%{customdata[0]}<br>Valor: S/ %{y:,.2f}"
-                           "<br>Cantidad: %{customdata[1]:,.1f}"
-                           "<extra></extra>"),
-        )
+        # El desglose por familia de CADA barra, al final de su hover (regla
+        # #454). Mismo texto para los tres tramos de un día: la pregunta es
+        # por la barra, no por el tramo que quedó bajo el cursor.
+        _fam_de = _familias_por_clave(dd)
+        g["fam_hov"] = g["clave"].map(_fam_de).fillna("")
 
-        # ── El total, escrito encima de cada barra (2026-09-14, #440) ────
-        # Sólo cuando entra: ver `_plan_etiquetas`. El techo del eje que
-        # necesita se pone más abajo, cuando se sabe el alto de la figura.
-        # `constraintext="none"`: sin él Plotly ENCOGE la etiqueta que no
-        # entra en la barra en vez de dejarla afuera a su tamaño.
-        _plan_etq, _largo_etq = None, 0
+        # El total de cada barra, formateado, alineado al eje. Lo escriben
+        # las etiquetas de más abajo cuando entran (ver `_plan_etiquetas`).
+        _plan_etq, _largo_etq, _etq, _etq_de = None, 0, [], {}
         if gran in _GRAN_CON_ETIQUETA:
-            _etq = [fmt_k(v) if v else None for v in g["valor"]]
+            _etq_de = {_c: (fmt_k(_v) if _v else None)
+                       for _c, _v in zip(g["clave"], g["valor"])}
+            _etq = [_etq_de.get(_c) for _c in _ord_claves]
             _largo_etq = max((len(t) for t in _etq if t), default=0)
             _plan_etq = _plan_etiquetas(_n_per, _largo_etq)
+        # `constraintext="none"`: sin él Plotly ENCOGE la etiqueta que no
+        # entra en la barra en vez de dejarla afuera a su tamaño.
+        _estilo_etq = dict(
+            textposition="outside", cliponaxis=False, constraintext="none",
+            textangle=-90 if _plan_etq == "girada" else 0,
+            textfont=dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL))
+
+        fig = go.Figure()
+        _partida = gran in _GRAN_PARTIDA
+        if _partida:
+            # ── La barra partida en tres (ver el bloque de `_TRAMOS`) ────
+            # El apilado va de la mayor ABAJO hacia la cola arriba: Plotly
+            # apila en el orden en que se agregan las trazas, y el orden del
+            # color es el orden del dato.
+            _de_g = g.set_index("clave")
+            _hov = _de_g["hov"].reindex(_ord_claves).tolist()
+            _tot = _de_g["valor"].reindex(_ord_claves).tolist()
+            _famh = _de_g["fam_hov"].reindex(_ord_claves).tolist()
+            _tramos = _tramos_del_periodo(dd, _ord_claves)
+            _textos = (_etiqueta_en_la_punta(_tramos, _etq) if _plan_etq
+                       else [None] * len(_tramos))
+            _xs = list(range(_n_per))
+            for _i, (_tr, (_, _, _rot)) in enumerate(zip(_tramos, _TRAMOS)):
+                # El detalle del hover es distinto en el primero: ahí hay UNA
+                # compra y se la puede nombrar. En los otros dos la pregunta
+                # es cuántas son, no cuál.
+                if _i == 0:
+                    _det = [_compras_truncar(_p) + (f" · {_d}" if _d else "")
+                            for _p, _d in zip(_tr["prov"].fillna(""),
+                                              _tr["doc"].fillna(""))]
+                else:
+                    _det = [f"{_n} compra" + ("" if _n == 1 else "s")
+                            for _n in _tr["n"]]
+                fig.add_bar(
+                    x=_xs, y=_tr["valor"], name=_rot,
+                    marker=dict(color=SERIE_TRAMOS[_i]),
+                    customdata=list(zip(_hov, _det, _tot, _famh)),
+                    hovertemplate=("%{customdata[0]}"
+                                   f"<br><b>{_rot}</b>: S/ %{{y:,.2f}}"
+                                   "<br>%{customdata[1]}"
+                                   "<br>Total del día: S/ %{customdata[2]:,.2f}"
+                                   "%{customdata[3]}"
+                                   "<extra></extra>"),
+                )
+                if _plan_etq:
+                    fig.data[-1].update(text=_textos[_i], **_estilo_etq)
+            # `stack` sólo acá: en las otras granularidades la figura tiene
+            # una barra y una nube de puntos, y apilar no significa nada.
+            fig.update_layout(barmode="stack")
+        else:
+            fig.add_bar(
+                x=g["ix"], y=g["valor"], name="Valor total",
+                marker=dict(color=SERIE_PRINCIPAL),
+                customdata=g[["hov", "cant", "fam_hov"]].to_numpy(),
+                hovertemplate=("%{customdata[0]}<br>Valor: S/ %{y:,.2f}"
+                               "<br>Cantidad: %{customdata[1]:,.1f}"
+                               "%{customdata[2]}"
+                               "<extra></extra>"),
+            )
+            # ── El total, escrito encima de cada barra (#440 y #454) ────
+            # Sólo cuando entra: ver `_plan_etiquetas`. El techo del eje que
+            # necesita se pone más abajo, cuando se sabe el alto de la
+            # figura. Por clave y no por posición: la traza va en el orden
+            # de `g`, y `_etq` en el del eje.
             if _plan_etq:
-                fig.data[0].update(
-                    text=_etq, textposition="outside", cliponaxis=False,
-                    constraintext="none",
-                    textangle=-90 if _plan_etq == "girada" else 0,
-                    textfont=dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL))
+                fig.data[0].update(text=[_etq_de.get(_c) for _c in g["clave"]],
+                                   **_estilo_etq)
 
         # ── Los puntos: una COMPRA, no una línea de producto ─────────────
         # Una orden de 5 líneas es un solo punto, no cinco. Se omiten en
@@ -906,7 +1238,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # la x sólo su período.
         _pts = dd.iloc[0:0]
         _recorta = False
-        if gran != "Por documento":
+        if gran != "Por documento" and not _partida:
             docs_g = (dd.groupby(["clave", "compra"], as_index=False)
                      .agg(valor=("valor", "sum"), fecha=("fecha", "min"),
                           prov=("prov", "first"), lineas=("valor", "size")))
@@ -1040,7 +1372,14 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # una barra que Plotly cree seleccionada se DESELECCIONA al tocarla
         # (`selectOnClick` en su código), eso llega como selección vacía, y
         # el clic para cerrar el detalle no haría nada.
-        if _con_detalle:
+        if _con_detalle and _partida:
+            # Las tres trazas comparten el eje `_ord_claves`, así que la
+            # misma lista de opacidades sirve para las tres: lo que se marca
+            # es el PERÍODO, y un período en foco se ilumina entero.
+            _op = [1.0 if _c == _focus else _ATENUADO for _c in _ord_claves]
+            for _tr in fig.data:
+                _tr.marker.opacity = _op
+        elif _con_detalle:
             fig.data[0].marker.opacity = [
                 1.0 if _c == _focus else _ATENUADO for _c in g["clave"]]
             if len(fig.data) > 1:
@@ -1229,6 +1568,33 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             "valor": _lin["valor"].map(lambda v: f"S/ {v:,.2f}"),
         })
 
+        # ── Las filas TOTAL de las dos tablas (2026-09-17, regla #454) ────
+        # A pedido: «la de documentos, totales de líneas y valor, y la de
+        # detalle, total de valor». La de líneas NO suma la cantidad: son
+        # kilos, litros y unidades en la misma columna, y su suma no mide
+        # nada. El rótulo va en la primera columna VISIBLE — en «Por
+        # documento» la fecha está oculta, y un «Total» en una columna oculta
+        # es una fila sin nombre.
+        _n_docs = len(_docs)
+        _tot_docs = {
+            "fecha": "", "doc": "",
+            "prov": f"{_n_docs} compra" + ("" if _n_docs == 1 else "s"),
+            "lineas": f"{int(_docs['lineas'].sum()):,}",
+            "valor": f"S/ {_docs['valor'].sum():,.2f}",
+        }
+        _col_rot = ("fecha" if gran != "Por documento"
+                    else ("doc" if col_docu else None))
+        if _col_rot:
+            _tot_docs[_col_rot] = "Total"
+        else:
+            _tot_docs["prov"] = f"Total · {_tot_docs['prov']}"
+        _n_lin = len(_lin)
+        _tot_lin = {
+            "prod": f"Total · {_n_lin} línea" + ("" if _n_lin == 1 else "s"),
+            "cant": "", "punit": "",
+            "valor": f"S/ {_lin['valor'].sum():,.2f}",
+        }
+
         with _hueco_tabla.container():
             # columnas-internas: las dos tablas del detalle, DENTRO de la
             # tarjeta de la vista; no es una fila de drill que tenga que caer
@@ -1244,23 +1610,28 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                     _tp_docs, altura=alturas.SEMANAL_TABLA,
                     key=f"compras_sem_docs_grid_{_clave_grilla(gran, _id_amb, _sel)}",
                     ver_fecha=gran != "Por documento",
-                    ver_doc=bool(col_docu))
+                    ver_doc=bool(col_docu), total=_tot_docs)
             with _c_lin:
                 renderizar_lineas_semanal(
                     _tp_lin, altura=alturas.SEMANAL_TABLA,
-                    key=f"compras_sem_lineas_grid_{_clave_grilla(_sel)}")
+                    key=f"compras_sem_lineas_grid_{_clave_grilla(_sel)}",
+                    total=_tot_lin)
 
-        _n_docs = len(_docs)
-        _n_txt = f"{_n_docs} compra" + ("" if _n_docs == 1 else "s")
+        # El caption NOMBRA el ámbito y nada más: cuántas compras y cuánto
+        # suman lo dicen ahora las filas TOTAL, y dos lugares con el mismo
+        # número son dos lugares donde pueden diferir.
         if gran == "Por documento":
             _nombre_amb = (f"{cortes.DIAS_ABR_ES[_dia.weekday()].capitalize()} "
-                           f"{_dia:%d/%m/%Y}")
-            _n_txt += " del día"
+                           f"{_dia:%d/%m/%Y} · las compras del día")
+        elif gran == "Día":
+            # El encabezado del hover («Mar 15/09/2026») y no la clave
+            # («2026-09-15»): es el mismo día dicho como lo dice el gráfico.
+            _nombre_amb = dict(zip(g["clave"], g["hov"])).get(
+                _id_amb, _amb["lbl"].iloc[0])
         else:
             _nombre_amb = _amb["lbl"].iloc[0]
-        st.caption(f"**{_nombre_amb}** · {_n_txt} · "
-                   f"S/ {_docs['valor'].sum():,.2f} — clic en una compra "
-                   "para ver sus líneas al costado.")
+        st.caption(f"**{_nombre_amb}** — clic en una compra para ver sus "
+                   "líneas al costado.")
 
         # ── El clic en la tabla de documentos ────────────────────────────
         # Como la grilla nace sin selección, un valor es siempre un clic de

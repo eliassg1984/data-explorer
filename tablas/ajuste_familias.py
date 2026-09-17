@@ -31,10 +31,7 @@ el alto del iframe.
 
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
-from tema import (
-    ACENTO_TEXTO_OSCURO, AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, LAVANDA_CHIP,
-    TEXTO_PRINCIPAL,
-)
+from tema import AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, TEXTO_PRINCIPAL
 from tablas._config import _parchar_iconos
 # `_css`, `_AL_MONTAR` y `_CLASE_SEL` son privados de Semanal y se toman de
 # ahí a propósito: la marca de la fila en foco, el ajuste de columnas al
@@ -42,6 +39,7 @@ from tablas._config import _parchar_iconos
 # retoque (el mismo motivo por el que Semanal toma `_css_look` de
 # Volatilidad).
 from tablas.compras_semanal import _AL_MONTAR, _CLASE_SEL
+from tablas.compras_semanal import JS_FILA_TOTAL as _JS_FILA_TOTAL
 from tablas.compras_semanal import _css as _css_semanal
 from tablas.compras_volatilidad import ALTO_FILA
 
@@ -118,13 +116,9 @@ _JS_COLOR_SALDO = JsCode(
 _REGLAS_FILA = {_CLASE_SEL: JsCode(
     "function(p){ return !!(p.data && p.data.__sel); }")}
 
-# La fila TOTAL con la paleta de cierre de las tablas-ranking
-# (`drill_tablas.tabla_ranking`): dos filas de cierre del mismo idioma.
-_JS_FILA_TOTAL = JsCode(
-    "function(p){ if(p.node.rowPinned){ return {"
-    f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
-    f"'color':'{ACENTO_TEXTO_OSCURO}'"
-    "}; } }")
+# La fila TOTAL (`_JS_FILA_TOTAL`) vivía acá hasta el 2026-09-17: se mudó a
+# `tablas/compras_semanal.py` cuando Semanal sumó la suya (regla #454), junto
+# con la regla de `.ag-floating-bottom` que `_css_semanal()` ya trae.
 
 
 def _grid_base(tp):
@@ -153,12 +147,8 @@ def _css(movil=False):
     # La cabecera de una columna ordenable muestra la flecha: sin aire, en
     # 112px el rótulo «Faltó + sobró» y la flecha se pisan.
     css[".ag-header-cell-label"] = {"gap": "4px"}
-    # UNA SOLA LÍNEA SOBRE LA FILA TOTAL, la de acento que la fila trae
-    # propia. El tema pone además 1px gris en su contenedor, y ese píxel sale
-    # del alto de la fila: medido, la fila TOTAL terminaba 1px por debajo de
-    # la grilla, recortada. Es la regla #364 (dos líneas apiladas: se deja una
-    # y se apaga la otra).
-    css[".ag-floating-bottom"] = {"border-top": "none !important"}
+    # (La regla de `.ag-floating-bottom` —una sola línea sobre la fila TOTAL,
+    # #364— llega con `_css_semanal()` desde el 2026-09-17.)
     if movil:
         # EN EL CELULAR LA BARRA HORIZONTAL VUELVE. Semanal la esconde porque
         # sus columnas entran en media tarjeta de escritorio; éstas suman

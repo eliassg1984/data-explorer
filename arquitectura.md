@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-452 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+454 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (159)
+**CSS y estilos** (160)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -193,6 +193,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 - **#444** — Una fila de controles se ordena por ALCANCE, y el orden es la jerarquía: lo que manda sobre…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
+- **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
 
 **Layout y alturas** (69)
 
@@ -266,7 +267,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 
-**Plotly y figuras** (77)
+**Plotly y figuras** (79)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -345,6 +346,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#440** — Una tabla "documento → detalle" marca su fila con un DATO, no con la selección de AG Grid — y…
 - **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
 - **#452** — st.plotly_chart(on_select=) no ve un Sankey — y no es que el evento no exista
+- **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
+- **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
 
 **AgGrid y tablas** (71)
 
@@ -544,7 +547,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
 - **#452** — st.plotly_chart(on_select=) no ve un Sankey — y no es que el evento no exista
 
-**Datos, R2 y DuckDB** (54)
+**Datos, R2 y DuckDB** (55)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -600,6 +603,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#424** — Un filtro categórico que ofrece todo el maestro ofrece pastillas que dejan la vista vacía
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 - **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
+- **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
 
 **SUNAT y SIRE** (40)
 
@@ -37817,6 +37821,105 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+453. **Una barra que suma un período se parte en tramos sólo donde los
+     tramos SE VEN — y eso se mide, no se elige.** Compras › Semanal, a
+     pedido del 2026-09-17: en granularidad Día el punto negro de «la
+     compra mayor» pasó a ser la barra partida en tres, la mayor / la 2ª y
+     3ª / el resto (`semanal.py::_TRAMOS`, rampa `tema.SERIE_TRAMOS`).
+
+     **Por qué sólo en Día.** Medido con DuckDB contra `compras.parquet`,
+     cuánto se lleva la compra mayor de su período:
+
+     | granularidad | la mayor |
+     |---|---|
+     | Día | 42,9 % (entre 18,1 y 73,2) |
+     | Semana | 13,7 % |
+     | Mes | 4,7 % |
+
+     En Mes el tramo de la mayor serían 3px. En Día los tres promedian
+     43 / 40 / 17 %. Y tres y no uno por compra porque el día mediano trae
+     8,8 compras y de la cuarta en adelante suman el 5 %: una por compra
+     son segmentos sub-píxel que las líneas divisorias se comen.
+
+     **El clic no cambió, y no por pereza.** La tabla de la derecha ya
+     abría en la compra mayor del período, así que en Día —donde el tope
+     de puntos daba 1— el punto hacía exactamente lo mismo que su barra.
+     Era redundante justo donde más se lo veía; los tres tramos resuelven
+     como barra sin una línea nueva.
+
+     **La etiqueta del total va en el tramo más alto CON VALOR**
+     (`_etiqueta_en_la_punta`), no siempre en el tercero: Plotly pone el
+     `textposition="outside"` de una barra apilada sólo en la que termina
+     la pila (`_outmost`) y a las demás las trata como `inside`, y un día
+     de dos compras no tiene «el resto». Verificado en el navegador sobre
+     30 días reales: las 30 etiquetas a la misma distancia de la punta de
+     su pila.
+
+     (2026-09-17.)
+
+454. **Un comentario de CSS cerrado antes de tiempo borra la regla que
+     le sigue, sin error — y un comentario vecino puede jurar lo
+     contrario.** Salió verificando cinco pedidos del 2026-09-17 sobre
+     Compras › Semanal: la granularidad como toggle lineal, una fila de KPI
+     con el total de la vista y el de cada familia, el desglose por familia
+     en el hover de cada barra, el valorizado escrito en las columnas, y
+     filas TOTAL en las dos tablas de abajo.
+
+     **La trampa.** En `graficos/compras/_css_proveedor.py` un comentario
+     largo terminaba en `*/` y el párrafo siguiente —que el autor creía
+     parte del mismo comentario— quedaba afuera, hasta el `*/` del final.
+     Para el navegador eso es un SELECTOR inválido pegado a
+     `.st-key-cp_sem_fila`, y un selector inválido invalida la regla
+     entera: el `flex-wrap: wrap` de la cabecera no existía. Medido en el
+     CSSOM: la única regla con `flex-wrap` sobre esa fila era el `nowrap`
+     de Streamlit. La cabecera nunca bajó de renglón; apretaba — y el
+     comentario de al lado daba por verificado que bajaba. Lo vigila
+     `test_graficos.py::_pruebas_css_comentarios_cerrados`, que borra los
+     comentarios bien cerrados de cada `<style>` escrito en Python y busca
+     un `*/` suelto. Lo cazaba en `HEAD` y da cero con el arreglo.
+
+     **Tres cosas de los pedidos que conviene saber antes de tocarlos:**
+
+       · **La fila de KPI se reserva ARRIBA con un `st.empty()` y se llena
+         ABAJO.** Vive en el flex de la cabecera, entre los filtros y la
+         fecha —es la suma de lo que esos dos acotan—, pero el recorte que
+         suma se arma ochenta líneas después. Es la #445 otra vez: el orden
+         de ejecución no es el de la pantalla. Y su `stMarkdownContainer`
+         trae el `margin-bottom: -16px` de la #162: el bloque reportaba 12px
+         con 28 de contenido y la fila no le hacía lugar.
+       · **Cuántas familias: cuatro con tarjeta y el resto sumado.** Medido
+         en el mes corrido: son 8, ALIMENTOS se lleva el 79 % y las cuatro
+         mayores el 97 %. El hover de una barra nombra cinco (por día
+         aparecen 4 en promedio y 8 de máximo) y está vectorizado: en «Por
+         documento» con el histórico son ~15.000 claves.
+       · **La fila TOTAL de las líneas no suma la cantidad**: son kilos,
+         litros y unidades en la misma columna. Y el rótulo «Total» va en la
+         primera columna VISIBLE — en «Por documento» la fecha está oculta.
+         La paleta de la fila (`JS_FILA_TOTAL`) se mudó de
+         `tablas/ajuste_familias.py` a `tablas/compras_semanal.py`, que es
+         de donde aquél ya tomaba el look.
+
+     **Las etiquetas pasaron a TODAS las granularidades**, y no hizo falta
+     más que sacar la exclusión: `_plan_etiquetas` ya decidía barra por
+     barra. Un mes por día son 27px por barra y entra girada; ese mismo mes
+     por documento son 226 barras y la cuenta devuelve `None`.
+
+     **Y vap había cambiado de alto sin que nadie avisara** — exactamente
+     lo que advertía el comentario de `alturas.SEMANAL_SOLO`. «Vs año
+     pasado» son hoy tres tarjetas que suman 617px a 1366x768, Semanal
+     seguía calibrado a los 571 de antes, y con el renglón del KPI quedó en
+     609 / 608. Se re-midió y se ajustó: 457 y 201.
+
+     **De yapa, una trampa del MEDIR:** en Plotly 6 `gd.data[i].y` viene
+     codificado en binario (`bdata`), así que `gd.data[i].y[j]` en la
+     consola da `undefined` y cualquier cuenta con él sale en cero sin
+     error. La primera verificación de las etiquetas dio «desplazadas en
+     proporción al valor» por eso. Para leer lo que Plotly dibujó está
+     `gd.calcdata[i][j]`, con la base (`b`) y el tamaño (`s`) ya
+     resueltos.
+
+     (2026-09-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37829,7 +37932,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#453**.
+> próxima regla nueva es la **#455**.
 
 >
 

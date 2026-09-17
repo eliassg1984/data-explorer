@@ -118,6 +118,12 @@ la regla que aparece DESPUÉS. `_99_movil` va último a propósito.
 Para cambiar un estilo, ubica la sección por el nombre del módulo. Para
 agregar una, crea el módulo y súmalo a `_SECCIONES` en la posición correcta.
 
+**Un comentario de CSS cerrado antes de tiempo borra la regla que le
+sigue**, sin error: el texto que queda afuera es un selector inválido, y
+eso invalida la regla entera. Le pasó al `flex-wrap` de la cabecera de
+Semanal, con un comentario al lado jurando que funcionaba. Lo vigila
+`test_graficos.py::_pruebas_css_comentarios_cerrados`. Regla #454.
+
 ## Antes de agregar un widget dentro de una tarjeta: grep `estilos/`
 
 El CSS de la app **matchea por prefijo de key**, no por widget. Muchas reglas

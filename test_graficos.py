@@ -1966,6 +1966,48 @@ def _pruebas_estado_y_utils():
     return fallos
 
 
+def _pruebas_css_comentarios_cerrados():
+    """Un comentario de CSS cerrado antes de tiempo se lleva una regla ENTERA.
+
+    Encontrado el 2026-09-17 en `graficos/compras/_css_proveedor.py`: un
+    comentario largo se cerraba con `*/` a mitad de camino, el párrafo
+    siguiente quedaba afuera como si fuera un selector —terminado en el
+    `*/` del final—, y el navegador descartaba la regla que venía pegada
+    (`.st-key-cp_sem_fila { flex-wrap: wrap }`). Sin error ni aviso: la
+    cabecera de Semanal apretaba en vez de bajar de renglón, y un comentario
+    en el mismo fichero juraba lo contrario. Regla #454.
+
+    La forma se caza sin parsear CSS: se borran los comentarios bien
+    cerrados y se busca un `*/` que haya quedado suelto. Barre todo `<style>`
+    escrito en Python.
+    """
+    import pathlib
+    import re
+
+    fallos = 0
+    raiz = pathlib.Path(__file__).parent
+    fuentes = ([raiz / "app.py"] + sorted((raiz / "estilos").glob("*.py"))
+               + sorted((raiz / "graficos").rglob("*.py"))
+               + sorted((raiz / "tablas").rglob("*.py")))
+    sueltos = []
+    for f in fuentes:
+        txt = f.read_text(encoding="utf-8")
+        for m in re.finditer(r"<style>(.*?)</style>", txt, re.S):
+            sin = re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.S)
+            for r in re.finditer(r"\*/", sin):
+                previo = sin[:r.start()].rstrip().splitlines()[-1:] or [""]
+                sueltos.append(f"{f.relative_to(raiz)}: …{previo[0][-60:]}")
+    if sueltos:
+        fallos += 1
+        print("FALLA css · comentario cerrado antes de tiempo (la regla que "
+              "le sigue no existe para el navegador):")
+        for s_ in sueltos:
+            print(f"      {s_}")
+    else:
+        print("OK    css · ningún comentario cerrado antes de tiempo")
+    return fallos
+
+
 def _pruebas_widgets_de_fragment_escalado():
     """Un `st.rerun` al tope de un fragment le borra el estado a SUS widgets.
 
@@ -4046,6 +4088,7 @@ def main():
     # ── Ventana propia de una tarjeta (graficos/periodo.py) ─────────────
     fallos += _pruebas_rango_por_tarjeta()
     fallos += _pruebas_widgets_de_fragment_escalado()
+    fallos += _pruebas_css_comentarios_cerrados()
     fallos += _pruebas_periodo_por_vista()
 
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────

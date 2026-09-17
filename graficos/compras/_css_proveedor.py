@@ -883,7 +883,14 @@ CSS = """        <style>
            alcanzar y la fecha quedaba pegada a la IZQUIERDA — visto en
            pantalla. Con el `auto` se come el hueco del renglon y vuelve al
            borde derecho, que es donde esta en las otras tres tarjetas que
-           usan este mismo selector. */
+           usan este mismo selector.
+
+           OJO (2026-09-17): este comentario se cerraba ACA, antes del
+           parrafo de abajo, y ese parrafo quedaba afuera como si fuera un
+           selector. Un selector invalido invalida la regla ENTERA, asi que
+           el `flex-wrap: wrap` de la fila nunca llego al navegador — medido
+           en el CSSOM: la unica regla con `flex-wrap` sobre la fila era la
+           `nowrap` de Streamlit. La fila no bajaba de renglon: apretaba.
 
            LOS ANCHOS SON MEDIDOS, con el mismo metodo que documenta el
            bloque de `vap_hdr_*`: texto del PEOR caso + 50px de cromo (34
@@ -965,6 +972,90 @@ CSS = """        <style>
         .st-key-cp_sem_hdr_familia .react-aria-ComboBox input,
         .st-key-cp_sem_hdr_producto .react-aria-ComboBox input {
             font-size: 12px !important;
+        }
+        /* ── LA GRANULARIDAD, UN TOGGLE LINEAL (2026-09-17) ─────────────
+           Era `st.pills`; pasó a `st.segmented_control` a pedido («agrupado
+           en un solo toggle que se vea lineal»). Acotado a SU key y no a
+           `cp_sem_filtros`: el aviso de CLAUDE.md sobre reglas del
+           contenedor. A los 32px de los dos desplegables de al lado. */
+        .st-key-compras_sem_gran [data-testid="stButtonGroup"] button {
+            min-height: 32px !important;
+            height: 32px !important;
+            padding: 0 12px !important;
+            font-size: 12px !important;
+        }
+        /* ── LA FILA DE KPI DE LA VISTA (2026-09-17, regla #454) ────────
+           Un item MÁS del flex de la cabecera, entre los filtros y la
+           fecha: es la suma de lo que esos dos acotan. Crece para ocupar
+           el hueco y cede con `min-width: 0`; la base de 360px es la que
+           decide el renglón — si no entran 360 al lado de los filtros,
+           baja al renglón de la fecha, que es donde se lee junto al rango.
+           El item del flex es el `stLayoutWrapper` que envuelve a la key
+           (regla #272), de ahí el `:has`. */
+        .st-key-cp_sem_fila
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_kpi) {
+            flex: 1 1 360px !important;
+            min-width: 0 !important;
+            width: auto !important;
+        }
+        /* Con la fila delante: la regla `... cp_sem_fila
+           [data-testid="stElementContainer"] { width: auto }` de más abajo
+           tiene la misma especificidad que la corta y ganaría por orden. */
+        .st-key-cp_sem_fila .st-key-cp_sem_kpi,
+        .st-key-cp_sem_fila .st-key-cp_sem_kpi
+            > [data-testid="stElementContainer"] {
+            width: 100% !important;
+        }
+        /* Streamlit le pone `margin-bottom: -16px` a todo
+           `stMarkdownContainer` (regla #162): medido, el bloque reportaba
+           12px con 28 de contenido, y la fila no sabía que el KPI ocupaba
+           el resto. */
+        .st-key-cp_sem_kpi [data-testid="stMarkdownContainer"] {
+            margin-bottom: 0 !important;
+        }
+        .st-key-cp_sem_kpi .sem-kpis {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 2px 0;
+        }
+        .st-key-cp_sem_kpi .sem-kpi {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+            max-width: 112px;
+            padding: 0 12px;
+            line-height: 1.2;
+            border-left: 1px solid var(--border);
+        }
+        .st-key-cp_sem_kpi .sem-kpi:first-child {
+            padding-left: 0;
+            border-left: none;
+            max-width: none;
+        }
+        .st-key-cp_sem_kpi .sem-kpi-rot {
+            font-size: 10px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .st-key-cp_sem_kpi .sem-kpi-val {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+        .st-key-cp_sem_kpi .sem-kpi-sub {
+            margin-left: 4px;
+            font-size: 10px;
+            font-weight: 400;
+            color: var(--text-secondary);
+        }
+        .st-key-cp_sem_kpi .sem-kpi-total .sem-kpi-val {
+            color: var(--accent-deep);
+            font-weight: 700;
         }
         /* El TITULO cede, el control no. El `min-width: 0` no es
            decorativo: sin el, un flex item nunca se encoge por debajo de

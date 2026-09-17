@@ -219,6 +219,21 @@ PALETA_SERIES = [
 """Secuencia de colores para múltiples series (antes PALETA_CALLAI).
 Se recorre en orden cuando un gráfico agrupa por una columna de color."""
 
+SERIE_TRAMOS = ["#5a4ad9", "#9385ec", "#cdc6f7"]
+"""Tres tonos del morado de la marca, de oscuro a claro, para PARTIR una
+barra en tramos ordenados por importancia — no para distinguir categorías
+(eso es `PALETA_SERIES`, que son hues distintos).
+
+Lo usa Compras › Semanal en granularidad Día: la barra del día se parte en
+la compra mayor / la 2ª y 3ª / el resto. El orden del color ES el orden del
+dato, así que la rampa va de oscuro (lo que más pesa) a claro.
+
+Los tres están separados a propósito: el medio es el `#9385ec` que ya estaba
+en `PALETA_SERIES`, y los bordes se abren hacia `ACENTO_FUERTE` y hacia el
+lavanda de fondo. Dos tonos más juntos no se distinguen en un tramo de 10px,
+que es lo que mide el tramo chico de una barra mediana. Regla #453."""
+
+
 ESCALA_CONTINUA = "blues"
 """Escala continua de Plotly para treemaps/mapas de calor (valor → intensidad)."""
 

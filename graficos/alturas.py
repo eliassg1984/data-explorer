@@ -195,8 +195,27 @@ MARCO = PRESUPUESTO
 #
 # Si vap cambia de alto, estos dos números se desincronizan EN SILENCIO: nada
 # ata las dos tarjetas más que la cuenta. Se vuelve a medir.
-SEMANAL_SOLO = 449
-SEMANAL_TABLA = 192
+#
+# Y pasó (2026-09-17, medido a 1366x768, regla #454): vap dejó de ser UNA
+# tarjeta y son tres —cabecera 59.2 + 16 + serie/cascada 245.9 + 16 + tabla
+# 279.6—, o sea 617 de punta a punta, y Semanal seguía en los 571 de antes.
+# El mismo día Semanal sumó su fila de KPI, que a ese ancho abre un segundo
+# renglón en la cabecera (+38: 28 del KPI y 10 del gap de la fila), y la
+# tarjeta quedó en 609 sin foco y 608 con él. Los 8 y 9 que faltaban los
+# ponen la figura y la tabla, cada una en su estado:
+#
+#     sin foco   609 + 8  (SEMANAL_SOLO  449 → 457) = 617
+#     con foco   608 + 9  (SEMANAL_TABLA 192 → 201) = 617
+#
+# OJO: el segundo renglón de la cabecera depende del ANCHO de la fila
+# (medidos a 1366: toggle + filtros 801px, fecha 138, gap 10, base del KPI
+# 360). Por debajo de ~950px el renglón ya existía sin el KPI —toggle,
+# filtros y fecha no entran juntos— y el KPI se acomoda en él sin sumar
+# alto; entre ~950 y ~1320 lo abre el KPI, que es el caso de 1366 (fila de
+# 1199); por encima de ~1320 entra todo en uno. Los números de arriba son
+# los de 1366, la ventana de referencia de todo este módulo.
+SEMANAL_SOLO = 457
+SEMANAL_TABLA = 201
 
 MINI_CANDLE_DRILL = 180
 """El candlestick de Volatilidad: la mitad izquierda de la fila de abajo de
