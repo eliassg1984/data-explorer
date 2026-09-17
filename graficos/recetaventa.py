@@ -82,6 +82,19 @@ from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, BLANCO, ERROR, EXITO,
     LAVANDA_CHIP, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
+# El LOOK de una tabla-ranking del repo, en bloque. Nació en el Ranking de
+# proveedores de Compras, cruzó a los tres paneles del drill de Producto
+# (2026-09-11), a Inventario (2026-09-13) y a `drill_tablas.py`; el
+# 2026-09-17 llega a las dos tablas de Receta Venta, que eran de los
+# últimos AgGrid del repo dibujados con el `theme="streamlit"` tal como
+# sale de fábrica. Los cuatro nombres viajan JUNTOS y no se eligen por
+# separado: el alto de fila sin el cuerpo de 11.5px aprieta el texto
+# contra las líneas (docstring de `ALTO_FILA_RANK`), y la regla #404
+# cuenta lo que pasa cuando se copia el componente y no el look.
+from graficos.compras._comun import (
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK,
+)
+from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos import alturas
 from graficos.base import _card, _resolver
 from graficos.recetas_comun import _activo, _hex_a_rgba, _panorama_compras
@@ -397,8 +410,25 @@ def _tabla_composicion_venta(df_f):
     _js_toggle = JsCode(
         "function(e){ e.node.setSelected(!e.node.isSelected(), true); }")
 
-    _ALTO_FILA = 28
-    _ALTO_FRAME = alturas.por_filas(8, px_fila=_ALTO_FILA, extra=45, minimo=0)
+    # Ocho filas a la vista y el resto por scroll interno, con los MISMOS
+    # números que el Ranking de proveedores (24 de fila, 32 de cabecera,
+    # `CROMO_GRID_RANK` de cromo): eran 28 y 34 propios hasta el
+    # 2026-09-17. `extra` no lleva sumando de fila TOTAL porque esta tabla
+    # no tiene — ver el comentario del `AgGrid` de abajo.
+    _ALTO_FRAME = alturas.por_filas(8, px_fila=ALTO_FILA_RANK,
+                                    extra=CROMO_GRID_RANK, minimo=0)
+    # El alto, ATADO desde el documento padre. El `height=` de abajo no
+    # alcanza: st_aggrid mide su contenido y le reporta a Streamlit un
+    # `setFrameHeight` que termina como `style height` INLINE sobre el
+    # iframe y le gana a su propio atributo `height` — con 421 platos en
+    # el df, eso serían miles de píxeles. Son DOS nodos y no sólo el
+    # iframe: Streamlit escribe el alto reportado también sobre el
+    # `stElementContainer` que lo envuelve. Sin guard de "una sola vez"
+    # (regla #59). Ver regla #410, que lo midió en Inventario.
+    st.markdown(
+        "<style>div.st-key-rv_comp_grid, div.st-key-rv_comp_grid iframe "
+        f"{{ height: {_ALTO_FRAME}px !important; }}</style>",
+        unsafe_allow_html=True)
 
     # La tabla va a lo ANCHO ahora (2026-08-31, a pedido: "que la receta se
     # muestre abajo" — antes compartía fila con el panel de receta en 5:2).
@@ -465,13 +495,31 @@ def _tabla_composicion_venta(df_f):
                 "rowSelection": {"mode": "singleRow", "checkboxes": False,
                                  "enableClickSelection": False},
                 "onRowClicked": _js_toggle,
-                "rowHeight": _ALTO_FILA,
-                "headerHeight": 34,
+                "rowHeight": ALTO_FILA_RANK,
+                "headerHeight": ALTO_HEADER_RANK,
                 "suppressCellFocus": True,
                 "suppressMovableColumns": True,
+                # SIN `pinnedBottomRowData`, a diferencia del resto de las
+                # tablas-ranking del repo, y no es un olvido: las seis
+                # columnas numéricas de acá son atributos del PLATO, no
+                # magnitudes que se acumulen. Sumar los precios de 421
+                # platos no significa nada y promediar el %Costo es la
+                # trampa de la #199 (un ratio no se re-pondera sobre el
+                # agregado). Una fila TOTAL vacía en cinco de seis
+                # columnas es peor que no tenerla.
             },
             allow_unsafe_jscode=True,
             theme="streamlit",
+            # El tema de fábrica no alcanza: las filas blancas sin rayado,
+            # la cabecera sin franja lavanda, el cuerpo de 11.5px y el
+            # marco de FRANJA (dos líneas de 3px arriba y abajo, sin
+            # bordes laterales ni líneas verticales) salen de
+            # `CSS_RANKING_GRID`, y el único camino es `custom_css=`
+            # porque el grid vive en un iframe y el `<style>` del padre no
+            # entra. De ahí sale también la marca de la fila SELECCIONADA
+            # (`.ag-row-selected::before`, el acento al 8%), que acá es el
+            # plato cuyo panel de receta se ve abajo.
+            custom_css=CSS_RANKING_GRID,
             height=_ALTO_FRAME,
             update_on=["selectionChanged"],
             key="rv_comp_grid",
@@ -622,12 +670,15 @@ def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
             " Math.round(p.value).toLocaleString('es-PE'); }")
     _js_pct = JsCode(
         "function(p){ return p.value==null ? '' : Math.round(p.value) + '%'; }")
-    # Misma paleta que la fila TOTAL del Ranking de Proveedores.
+    # Misma paleta que la fila TOTAL del Ranking de Proveedores — y desde
+    # el 2026-09-17, también sin su `borderTop`: `CSS_RANKING_GRID` apaga
+    # la línea del tema (`--ag-pinned-row-border: none`) y con las dos
+    # puestas quedaban DOS líneas apiladas de distinto color. El mismo
+    # inline se sacó de `proveedor.py` cuando ese dict nació.
     _js_fila_total = JsCode(
         "function(p){ if(p.node.rowPinned){ return {"
         f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
-        f"'color':'{ACENTO_TEXTO_OSCURO}',"
-        f"'borderTop':'2px solid {ACENTO}'"
+        f"'color':'{ACENTO_TEXTO_OSCURO}'"
         "}; } }")
 
     # Sin filtro de platos en esta vista (a diferencia del Ranking de
@@ -638,14 +689,26 @@ def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
     if col_ins:
         _fila_total["Items"] = int(g["Items"].sum())
 
-    _ALTO_FILA = 28
-    # 10 filas visibles + la fila TOTAL fijada + cabecera(34) + chrome del
-    # tema (~8px). El resto de los platos scrollea DENTRO del grid — a
+    # 10 filas visibles + la fila TOTAL fijada, que reserva su sitio
+    # DENTRO del `height=` (sin ese sumando le come una fila a los datos)
+    # + `CROMO_GRID_RANK`, que es la cabecera y el cromo del tema medidos
+    # en el DOM. El resto de los platos scrollea DENTRO del grid — a
     # diferencia del gráfico que esto reemplaza, ya no hace falta un
     # selector "Mostrar N": acá el scroll hace ese trabajo (mismo criterio
     # que el Ranking de Proveedores de Compras).
+    #
+    # Los números son los del ranking (24/32) desde el 2026-09-17; eran 28
+    # y 34 propios. Siguen siendo DIEZ filas a la vista: lo que se pidió
+    # fue el look, no menos datos — la tarjeta baja de 350 a 303px sola.
     _ALTO_FRAME = alturas.por_filas(
-        10, px_fila=_ALTO_FILA, extra=34 + 8 + _ALTO_FILA, minimo=0)
+        10, px_fila=ALTO_FILA_RANK,
+        extra=CROMO_GRID_RANK + ALTO_FILA_RANK, minimo=0)
+    # El alto, ATADO desde el documento padre — misma razón y mismos DOS
+    # nodos que en `_tabla_composicion_venta`. Ver regla #410.
+    st.markdown(
+        "<style>div.st-key-rv_costeo_grid, div.st-key-rv_costeo_grid iframe "
+        f"{{ height: {_ALTO_FRAME}px !important; }}</style>",
+        unsafe_allow_html=True)
 
     columnas = [
         {"field": "Plato", "width": 420, "tooltipField": "Plato"},
@@ -673,13 +736,18 @@ def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
                 "defaultColDef": {"sortable": True, "resizable": True},
                 "suppressCellFocus": True,
                 "suppressMovableColumns": True,
-                "rowHeight": _ALTO_FILA,
-                "headerHeight": 34,
+                "rowHeight": ALTO_FILA_RANK,
+                "headerHeight": ALTO_HEADER_RANK,
                 "pinnedBottomRowData": [_fila_total],
                 "getRowStyle": _js_fila_total,
             },
             allow_unsafe_jscode=True,
             theme="streamlit",
+            # Mismo dict que la tabla de Composición y que el Ranking de
+            # proveedores del que salió: blanco sin rayado, cabecera sin
+            # franja lavanda, cuerpo de 11.5px y marco de FRANJA. Va por
+            # `custom_css=` porque el grid es un iframe.
+            custom_css=CSS_RANKING_GRID,
             height=_ALTO_FRAME,
             key="rv_costeo_grid",
         )

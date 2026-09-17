@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-449 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+450 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (159)
 
@@ -345,7 +345,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#440** — Una tabla "documento → detalle" marca su fila con un DATO, no con la selección de AG Grid — y…
 - **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
 
-**AgGrid y tablas** (70)
+**AgGrid y tablas** (71)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -417,6 +417,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
+- **#450** — Un AgGrid sin custom_css= no es "el tema por defecto": es el ÚNICO que no se parece a los…
 
 **Streamlit** (119)
 
@@ -37598,6 +37599,71 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+450. **Un AgGrid sin `custom_css=` no es "el tema por defecto": es el
+     ÚNICO que no se parece a los demás — y la migración son cinco líneas
+     con dos trampas.** Pedido del 2026-09-17 sobre Recetas: *«podemos
+     hacer el cuadro de recetas venta del reporte de recetas, como las
+     demás tablas, creo que son aggrid»*. La corazonada del final era
+     correcta y decía todo: las otras SÍ son AgGrid, y lo que las separaba
+     no era el widget sino el `custom_css=` que éstas no tenían.
+
+     Cómo se encuentran, que es la parte reusable: `grep -n
+     'theme=\|custom_css=' graficos/ tablas/` y mirar qué llamadas traen
+     lo primero sin lo segundo. Salían cinco — las dos de
+     `recetaventa.py` (`rv_comp_grid`, `rv_costeo_grid`) y tres de Ventas
+     (`ventas_matriz_grid_*`, `ventas_ranking_grid`, `vh_arbol_*`), que
+     quedan pendientes. Todo el resto del repo pasa por `tablas/_css.py`
+     (`theme="material"`, las tablas de reporte) o por `CSS_RANKING_GRID`
+     (`theme="streamlit"`, las tablas DENTRO de una tarjeta de dashboard).
+     Una tabla dentro de una tarjeta pertenece a la segunda familia: es el
+     mismo rol que el Ranking de proveedores, Inventario y
+     `drill_tablas.py`.
+
+     Lo que viaja, que es lo que ya decía la #404 y acá se aplicó tal
+     cual: `custom_css=CSS_RANKING_GRID` + `rowHeight=ALTO_FILA_RANK` (24,
+     eran 28) + `headerHeight=ALTO_HEADER_RANK` (32, eran 34) +
+     `extra=CROMO_GRID_RANK` en `alturas.por_filas`. Medido después, celda
+     por celda contra `compras_prov_rank_grid`: marco de franja 3px
+     arriba/abajo y 0 a los lados, cabecera de 33px blanca, cuerpo y
+     cabecera en 11.5px, celdas en `ACENTO_TEXTO` sin línea vertical,
+     filas de 24px blancas con separador de 1px, fila TOTAL en
+     `LAVANDA_CHIP` sobre `ACENTO_TEXTO_OSCURO`. Los mismos valores
+     exactos en los tres grids.
+
+     **Trampa 1 — el `borderTop` del `getRowStyle` hay que sacarlo en el
+     mismo commit.** `CSS_RANKING_GRID` apaga la línea del tema
+     (`--ag-pinned-row-border: none`) porque la otra mitad ya vive inline
+     en el `_js_fila_total` de cada llamador; el de Receta Venta venía con
+     `'borderTop':'2px solid ACENTO'` de cuando el tema no la apagaba, así
+     que juntas dan dos líneas apiladas de distinto color. Se borra el
+     inline, no la variable.
+
+     **Trampa 2 — el `<style>` de la #410 deja de ser opcional en cuanto
+     llega este dict.** Es el mismo agujero de siempre (st_aggrid reporta
+     el alto de TODO su contenido y ese número gana como `style` inline
+     sobre el `height=` de Python), sólo que acá el df trae 421 platos:
+     sin atar `div.st-key-<key>` **y** su `iframe`, la tarjeta se estira a
+     miles de píxeles. Verificado en 1440x900: 231px el grid de
+     Composición (8 filas) y 303 el de Costeo (10 + la fila TOTAL), los
+     dos clavados en lo que pidió `alturas.por_filas`.
+
+     **Lo que NO se copió, y el porqué:** la fila TOTAL de la #404 no va
+     en Composición. Sus seis columnas numéricas son atributos del PLATO
+     —precio, precio neto, costo, %costo—, no magnitudes que se acumulen:
+     sumar los precios de 421 platos no significa nada y promediar el
+     %Costo es la trampa de la #199. Una fila de cierre vacía en cinco de
+     seis columnas dice menos que no tenerla.
+
+     **Lo que quedó igual a propósito:** las diez filas a la vista de
+     Costeo (las otras tablas-ranking reservan ocho). Lo pedido fue el
+     look, no menos datos; con la fila de 24 en vez de 28 la tarjeta baja
+     de 350 a 303px sola. Y los anchos de columna siguen FIJOS en las dos,
+     sin `flex` (#193), así que en un monitor ancho las columnas siguen
+     terminando antes que la tarjeta — es de antes de este cambio y no lo
+     tocó.
+
+     (2026-09-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37610,7 +37676,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#450**.
+> próxima regla nueva es la **#451**.
 
 >
 
