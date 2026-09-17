@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-450 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+451 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (159)
 
@@ -419,7 +419,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 - **#450** — Un AgGrid sin custom_css= no es "el tema por defecto": es el ÚNICO que no se parece a los…
 
-**Streamlit** (119)
+**Streamlit** (120)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -540,8 +540,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#445** — En Streamlit, mover un widget de SITIO es moverlo de MOMENTO: el orden de ejecución es el…
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
+- **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
 
-**Datos, R2 y DuckDB** (53)
+**Datos, R2 y DuckDB** (54)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -596,6 +597,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#411** — Una cadena de tablas que se pide "igual a la de otro reporte" se saca a un módulo — y si ese…
 - **#424** — Un filtro categórico que ofrece todo el maestro ofrece pastillas que dejan la vista vacía
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
+- **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
 
 **SUNAT y SIRE** (40)
 
@@ -37664,6 +37666,75 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+451. **Una grilla editable empareja lo tecleado con el estado por
+     POSICIÓN, así que quien arma el frame no puede ordenar — y el bug es
+     mudo hasta que algo cambia de puesto.** Pedido del 2026-09-17 sobre
+     el Sankey de Recetas › Composición: *«¿hay alguna forma de darle
+     alguna interacción o edición, por ejemplo que cambie si cambio algún
+     número o agrego algún producto?»*. Salió un simulador: la tabla de
+     receta de abajo se vuelve `st.data_editor`, y el Sankey, la dona y el
+     %Costo siguen al borrador.
+
+     `st.data_editor` devuelve el frame editado y la vuelta se escribe
+     `for i, linea in enumerate(lineas): fila = editado.iloc[i]`. O sea
+     que **`lineas` y el frame tienen que estar en el mismo orden**.
+     `_receta_simulada` nació con un `sort_values("Costo")` copiado de
+     `_receta_original` —donde sí corresponde, es el orden de lectura— y
+     ahí las dos listas se despegan en cuanto un costo cambia de puesto:
+     editar la primera fila de la grilla escribe en otro insumo, y
+     «Quitar» saca al vecino.
+
+     **Lo que lo hace mudo:** el borrador nace COPIANDO la receta real,
+     que ya viene ordenada por costo, así que las dos listas empiezan
+     iguales y la primera edición anda. Se rompe en la segunda, y sólo si
+     la primera movió una fila de puesto. Se vio sembrando el delta del
+     editor (`session_state[key] = {"edited_rows": {0: {...}}}`, que es el
+     mismo camino que un tecleo): bajarle el precio a la fila 0 dejaba el
+     costo total quieto. Ordena quien DIBUJA — `_panel_receta` le pasa una
+     copia ordenada al Sankey y a la dona, y el editor ve el orden crudo,
+     que además es mejor: las filas no saltan mientras escribís.
+     `test_graficos.py::_pruebas_simulador_receta` monta guardia con tres
+     líneas en orden de costo CRECIENTE, que es lo que hace visible el
+     sort.
+
+     **Tres decisiones del simulador que no son gusto:**
+
+       · **No escribe en el parquet, y lo dice en pantalla.**
+         `recetaventa.parquet` lo genera el ETL desde el SQL de Inforest,
+         fuera del repo; el único camino de vuelta que existe es la
+         PROPUESTA en JSON de `formulario_receta.py`. El rótulo de la
+         tarjeta dice «borrador, no se guarda» mientras está prendido:
+         una tabla editable que se parece a la real y no lo es sería la
+         peor de las mentiras.
+       · **El modelo es Cantidad × Precio unitario, y el precio se
+         DESPEJA** de `TOTAL / CANTIDAD` porque el parquet no lo trae. Es
+         seguro sólo si ninguna línea con cantidad 0 tiene costo — medido
+         sobre las 2.605 filas: 19 tienen `CANTIDAD == 0` y las 19 tienen
+         `TOTAL == 0`.
+       · **`num_rows="fixed"` y no `"dynamic"`**, que parecía el atajo
+         para agregar y borrar sin botones. El editor guarda su delta
+         contra el frame que se le PASÓ, y como acá se reconstruye en
+         cada pasada desde `session_state`, los `added_rows` se
+         re-aplican sobre una lista que ya los tiene y la fila se duplica.
+         Las ediciones de celda se salvan porque son idempotentes. Por eso
+         toda mutación que no venga del editor vacía su key antes de
+         redibujar.
+
+     **Y el catálogo de insumos se mudó a `recetas_comun.catalogo_insumos`
+     antes de que naciera la segunda copia.** Lo tenía
+     `formulario_receta.py`; el simulador necesitaba el mismo para
+     «agregar un insumo», y «agregar Sal De Mesa» no puede significar dos
+     cosas según desde dónde se agregue. Es la #379 atajada de antemano.
+
+     **De yapa, una medición del arnés:** `AppTest` de Streamlit 1.59 NO
+     expone `data_editor`, así que la edición de celda no se puede
+     ejercitar por su API. Se prueba sembrando el delta en
+     `session_state`, que es exactamente lo que manda el navegador. El
+     resto del circuito —toggle, agregar, quitar, volver al original— sí
+     sale por AppTest.
+
+     (2026-09-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37676,7 +37747,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#451**.
+> próxima regla nueva es la **#452**.
 
 >
 

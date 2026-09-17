@@ -111,6 +111,68 @@ def _fuentes_py(raiz):
             continue
 
 
+def _pruebas_simulador_receta():
+    """El simulador de Recetas › Composición (`graficos/recetaventa.py`).
+
+    LO QUE VIGILA ES UN ORDEN, y cuesta verlo: el editor empareja lo
+    tecleado con el borrador **por POSICIÓN** (`editado.iloc[i]` ↔
+    `lineas[i]`), así que `_receta_simulada` NO puede ordenar. Nació
+    ordenando por costo —copiado de `_receta_original`, donde sí
+    corresponde— y el bug es mudo: mientras nada cambie de puesto todo
+    anda, y en cuanto un costo se mueve, editar una fila escribe en otro
+    insumo y «Quitar» saca al vecino. Medido el 2026-09-17 con un editor
+    sembrado. Ordena quien DIBUJA (`_panel_receta`, para el Sankey y la
+    dona), no quien calcula.
+
+    Lo demás son las dos cuentas del borrador: el costo es
+    `Cantidad * Precio` (consecuencia, no dato), y el precio unitario se
+    despeja de `Costo / Cantidad` sin reventar con cantidad 0 — que en el
+    parquet existe, 19 filas, todas con costo 0."""
+    from graficos.recetaventa import _precios_y_pesos, _receta_simulada
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    simulador receta · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA simulador receta · {nombre}: got={got!r} exp={exp!r}")
+
+    # Tres líneas en orden de costo CRECIENTE: si la función ordenara, el
+    # orden de salida sería el inverso del de entrada y se vería enseguida.
+    lineas = [
+        {"Insumo": "barato", "Cantidad": 1.0, "Precio": 1.0},
+        {"Insumo": "medio", "Cantidad": 2.0, "Precio": 2.0},
+        {"Insumo": "caro", "Cantidad": 3.0, "Precio": 10.0},
+    ]
+    r = _receta_simulada(lineas)
+    check("el borrador NO se reordena (el editor empareja por posición)",
+          list(r["Insumo"]), ["barato", "medio", "caro"])
+    check("el costo es Cantidad x Precio", [round(v, 6) for v in r["Costo"]],
+          [1.0, 4.0, 30.0])
+    check("el % se reparte sobre el total del borrador",
+          round(float(r[r["Insumo"] == "caro"]["%"].iloc[0]), 4),
+          round(30.0 / 35.0 * 100, 4))
+
+    lineas[0]["Cantidad"] = 100.0     # ahora "barato" es el más caro
+    r2 = _receta_simulada(lineas)
+    check("y sigue sin reordenarse cuando un costo cambia de puesto",
+          list(r2["Insumo"]), ["barato", "medio", "caro"])
+
+    cero = _precios_y_pesos(pd.DataFrame({
+        "Insumo": ["sin cantidad"], "Cantidad": [0.0], "Costo": [0.0]}))
+    check("cantidad 0 no revienta al despejar el precio unitario",
+          float(cero["Precio"].iloc[0]), 0.0)
+
+    vacio = _receta_simulada([])
+    check("un borrador vacío devuelve las mismas columnas",
+          list(vacio.columns), ["Insumo", "Cantidad", "Costo", "Precio", "%"])
+
+    return fallos
+
+
 def _pruebas_recorrido_fuentes():
     """Que el recorrido de `_fuentes_py` siga VIENDO el repo.
 
@@ -4008,6 +4070,9 @@ def main():
 
     # ── Una sola `nombre_propio`: que no vuelvan a ser dos ──────────────
     fallos += _pruebas_una_sola_nombre_propio()
+
+    # ── El simulador de receta: que nadie vuelva a ordenar el borrador ─
+    fallos += _pruebas_simulador_receta()
 
     # ── El barrido del fuente que usan las guardas de arriba ────────────
     fallos += _pruebas_recorrido_fuentes()

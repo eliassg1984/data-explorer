@@ -62,9 +62,14 @@ import streamlit as st
 from data import cargar as _cargar_reporte
 from data import get_s3_cliente, secrets_disponibles
 from graficos.base import _resolver
-from graficos.recetas_comun import _activo, _chip_fuente
+# El catálogo de insumos y el nombre de SU parquet viajan juntos, y viven
+# allá desde el 2026-09-17 — ver el comentario de `_catalogo_insumos_
+# cacheado` más abajo.
+from graficos.recetas_comun import (
+    ARCHIVO_INVENTARIO as _ARCHIVO_INVENTARIO,
+    _activo, _chip_fuente, catalogo_insumos,
+)
 
-_ARCHIVO_INVENTARIO = "inventariovalorizado.parquet"
 _ARCHIVO_RECETAVENTA = "recetaventa.parquet"
 _IGV = 1.18
 _UMBRAL_COSTO_OK = 30
@@ -98,35 +103,10 @@ def _total_lineas(lineas):
 # ─── Catálogos (normalizados a las mismas 5 columnas: cod/nombre/unidad/
 # precio/activo, para que _buscador_catalogo y _tabla_lineas no necesiten
 # saber de qué parquet vino cada uno) ────────────────────────────────────
-@st.cache_data(ttl=300, show_spinner=False)
-def _catalogo_insumos_cacheado():
-    """Artículos de almacén desde inventariovalorizado.parquet."""
-    df = _cargar_reporte(_ARCHIVO_INVENTARIO)
-    if df is None or df.empty:
-        return None
-
-    col_cod = _resolver(df, ["Codigo Producto", "Código Producto", "COD_PRODUCTO"])
-    col_nombre = _resolver(df, ["Nombre Producto", "NOMBRE_PRODUCTO"])
-    col_unidad = _resolver(df, ["Unidad Kardex", "UNIDAD_KARDEX", "Unidad"])
-    col_precio = _resolver(df, ["Precio Promedio", "PRECIO PROMEDIO", "Precio"])
-    col_activo = _resolver(df, ["Activo", "ACTIVO", "Estado"])
-    if not (col_cod and col_nombre and col_precio):
-        return None
-
-    out = pd.DataFrame({
-        "cod": df[col_cod].astype(str),
-        "nombre": df[col_nombre].astype(str),
-        "unidad": df[col_unidad].astype(str) if col_unidad else "unidad",
-        "precio": pd.to_numeric(df[col_precio], errors="coerce").fillna(0.0),
-    })
-    out["activo"] = _activo(df[col_activo]) if col_activo else None
-    # inventariovalorizado.parquet trae más de una fila para el mismo código
-    # (confirmado en vivo 2026-08-13: "Sal De Mesa" 0000460 repetido) — sin
-    # este drop_duplicates, _buscador_catalogo arma dos botones con la MISMA
-    # key (`add_<cod>`) y Streamlit revienta con StreamlitDuplicateElementKey
-    # en cuanto ambas filas caen dentro del mismo resultado de búsqueda.
-    out = out.drop_duplicates(subset="cod", keep="first").reset_index(drop=True)
-    return out
+# El de insumos ya no vive acá: lo comparte `graficos.recetas_comun`
+# desde el 2026-09-17, porque el simulador de Composición ofrece el MISMO
+# catálogo para "agregar un insumo" y dos copias divergen (regla #379).
+_catalogo_insumos_cacheado = catalogo_insumos
 
 
 @st.cache_data(ttl=300, show_spinner=False)

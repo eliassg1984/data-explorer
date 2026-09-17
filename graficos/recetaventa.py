@@ -97,7 +97,10 @@ from graficos.compras._comun import (
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos import alturas
 from graficos.base import _card, _resolver
-from graficos.recetas_comun import _activo, _hex_a_rgba, _panorama_compras
+from graficos.recetas_comun import (
+    ARCHIVO_INVENTARIO, _activo, _hex_a_rgba, _panorama_compras,
+    catalogo_insumos,
+)
 
 # Umbral de %Costo salón para el semáforo de la barra de progreso de
 # Composición (más abajo): mismo criterio que ya usa formulario_receta.py
@@ -181,20 +184,344 @@ def _panorama_compras_venta(df_f, es_soles):
 # tamaño MINI y sólo del plato en foco, no una vista propia).
 
 
-def _dib_torta_costo_utilidad(fila_foco, foco):
+# ─── El simulador: "¿y si...?" sobre la receta del plato en foco ───────────
+# 2026-09-17, a pedido: «hay alguna forma de darle alguna interacción o
+# edición, por ejemplo que cambie si cambio algún número o agrego algún
+# producto».
+#
+# LO QUE NO HACE, y conviene que se lea antes que lo que sí: NO escribe en
+# recetaventa.parquet. Ese parquet lo genera el pipeline ETL desde el SQL
+# de Inforest, fuera de este repo, y la app nunca escribe parquets fuente —
+# el único camino de vuelta que existe hoy es la PROPUESTA en JSON que
+# guarda `formulario_receta.py` (`_recetas_propuestas/` en R2). Esto es un
+# borrador de sesión: vive en `st.session_state`, se pierde al recargar y
+# no sale de la pantalla de quien lo está mirando. El rótulo de la tarjeta
+# lo dice mientras está prendido, porque una tabla editable que se parece a
+# la real y no lo es sería la peor de las mentiras.
+#
+# EL MODELO DE EDICIÓN es Cantidad × Precio unitario, y el precio unitario
+# NO viene del parquet: se despeja de `TOTAL / CANTIDAD`. Eso sólo es
+# seguro si ninguna línea con cantidad 0 tiene costo — medido contra R2 el
+# 2026-09-17 sobre las 2.605 filas: 19 tienen `CANTIDAD == 0` y las 19
+# tienen `TOTAL == 0`, así que despejar no le borra el costo a nadie. Si
+# algún día aparece una con cantidad 0 y costo > 0, este despeje la pone en
+# cero sin avisar.
+#
+# ES EL MISMO IDIOMA QUE `formulario_receta.py::_tabla_lineas`, a propósito
+# y hasta en los detalles: mismas dos columnas editables, misma columna
+# calculada deshabilitada, mismo `Quitar` con casilla y botón. Se comparte
+# el catálogo de insumos (`recetas_comun.catalogo_insumos`) para que
+# "agregar Sal De Mesa" signifique lo mismo en los dos sitios — ver el
+# comentario de esa función.
+#
+# `num_rows="fixed"` Y NO `"dynamic"`, que parecía el atajo para agregar y
+# borrar filas sin botones: `st.data_editor` guarda su delta contra el
+# frame que se le PASÓ, y como acá el frame se reconstruye en cada pasada
+# desde `session_state`, los `added_rows` del delta se re-aplican sobre una
+# lista que ya los tiene y la fila se duplica. Las ediciones de celda se
+# salvan de eso sólo porque son idempotentes (fijan el mismo valor). Por
+# eso toda mutación que NO venga del editor —agregar del catálogo, quitar,
+# volver al original— vacía la key del editor antes de redibujar.
+_K_SIM = "rv_comp_sim"
+"""`{cod_plato: [{Insumo, Cantidad, Precio}]}` — el borrador por plato. Se
+guarda por plato y no uno solo global para que ir a mirar otro plato y
+volver no borre lo que estabas probando."""
+
+_K_SIM_ON = "rv_comp_sim_on"
+
+
+def _precios_y_pesos(r):
+    """Completa una receta con `Precio` unitario y `%` del costo total.
+
+    `Precio` sale de `Costo / Cantidad` (ver el comentario de arriba sobre
+    por qué es seguro), y `Costo` se recalcula como `Cantidad * Precio` en
+    el camino de vuelta — no al revés."""
+    r = r.copy()
+    cant = pd.to_numeric(r["Cantidad"], errors="coerce").fillna(0.0)
+    costo = pd.to_numeric(r["Costo"], errors="coerce").fillna(0.0)
+    r["Cantidad"] = cant
+    r["Costo"] = costo
+    r["Precio"] = (costo / cant.where(cant > 0)).fillna(0.0)
+    total = costo.sum() or 1.0
+    r["%"] = costo / total * 100
+    return r
+
+
+def _receta_original(df_f, foco, col_cod_plato, col_ins, col_cant, col_total):
+    """La receta tal como está en el parquet. `None` si faltan columnas."""
+    if not (col_ins and col_total):
+        return None
+    items = df_f[df_f[col_cod_plato].astype(str) == foco].reset_index(drop=True)
+    r = pd.DataFrame({
+        "Insumo": items[col_ins].astype(str),
+        "Cantidad": (pd.to_numeric(items[col_cant], errors="coerce").fillna(0.0)
+                     if col_cant else 0.0),
+        "Costo": pd.to_numeric(items[col_total], errors="coerce").fillna(0.0),
+    })
+    r = _precios_y_pesos(r)
+    return r.sort_values("Costo", ascending=False).reset_index(drop=True)
+
+
+def _receta_simulada(lineas):
+    """De las líneas del borrador al mismo frame que `_receta_original`.
+
+    Acá el costo es CONSECUENCIA (`Cantidad * Precio`), que es lo que hace
+    que mover un número mueva el Sankey y la dona.
+
+    **SIN ORDENAR, y es lo único que hay que respetar de esta función.**
+    El frame sale en el orden de `lineas` porque ESE es el orden en que lo
+    ve el editor, y la vuelta (`editado.iloc[i]` → `lineas[i]`) empareja por
+    POSICIÓN. Con un `sort_values("Costo")` acá —que es como nació— las dos
+    listas se despegan en cuanto un costo cambia de puesto: editar la
+    primera fila de la grilla escribía en otro insumo, y lo mismo hacía
+    «Quitar». Medido el 2026-09-17 con un editor sembrado: duplicar la
+    cantidad de la fila 0 y después bajarle el precio dejaba el precio
+    aplicado a un insumo distinto, y el costo total quieto. Ordenar es
+    trabajo de QUIEN DIBUJA (ver `_panel_receta`, que le pasa una copia
+    ordenada al Sankey y a la dona)."""
+    if not lineas:
+        return pd.DataFrame(columns=["Insumo", "Cantidad", "Costo", "Precio", "%"])
+    r = pd.DataFrame(lineas)
+    r["Costo"] = (pd.to_numeric(r["Cantidad"], errors="coerce").fillna(0.0)
+                  * pd.to_numeric(r["Precio"], errors="coerce").fillna(0.0))
+    return _precios_y_pesos(r).reset_index(drop=True)
+
+
+def _sim_borradores():
+    return st.session_state.setdefault(_K_SIM, {})
+
+
+def _sim_key_editor(foco):
+    return f"rv_comp_sim_editor_{foco}"
+
+
+def _sim_reset(foco):
+    """Callback de «Volver al original»: borra el borrador Y la key del
+    editor. Sin lo segundo, el delta del `data_editor` vuelve a aplicarse
+    sobre la receta recién restaurada y el reset no se ve."""
+    _sim_borradores().pop(foco, None)
+    st.session_state.pop(_sim_key_editor(foco), None)
+
+
+def _sim_agregar(foco, cod_sel, catalogo):
+    """Callback de «Agregar»: mete un insumo del catálogo de almacén al
+    borrador, con su precio promedio como precio unitario y cantidad 1.
+
+    Cantidad 1 y no 0 a propósito: con 0 el insumo entra con costo 0, o sea
+    no cambia nada, y el gesto se lee como que no funcionó."""
+    if not cod_sel:
+        return
+    fila = catalogo[catalogo["cod"] == cod_sel]
+    if fila.empty:
+        return
+    lineas = _sim_borradores().get(foco)
+    if lineas is None:
+        return
+    nombre = str(fila["nombre"].iloc[0])
+    if any(l["Insumo"] == nombre for l in lineas):
+        st.session_state["rv_comp_sim_aviso"] = f"«{nombre}» ya está en la receta."
+        return
+    lineas.append({"Insumo": nombre, "Cantidad": 1.0,
+                   "Precio": float(fila["precio"].iloc[0])})
+    st.session_state.pop(_sim_key_editor(foco), None)
+    st.session_state["rv_comp_sim_aviso"] = None
+
+
+def _sim_quitar(foco, marcadas):
+    lineas = _sim_borradores().get(foco)
+    if lineas is None or not marcadas:
+        return
+    _sim_borradores()[foco] = [l for i, l in enumerate(lineas) if i not in marcadas]
+    st.session_state.pop(_sim_key_editor(foco), None)
+
+
+def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
+                  col_total):
+    """La tarjeta de receta del plato en foco, en sus dos modos.
+
+    Devuelve `(r, costo_sim)`: la receta VIGENTE —la del parquet o la del
+    borrador— y el costo simulado, o `None` si no se esta simulando. Las
+    dos las consumen el Sankey y la dona de al lado, que por eso siguen al
+    editor sin saber que existe.
+
+    El modo lectura es el de siempre. El de simulacion cambia tres cosas y
+    ninguna es cosmetica: el rotulo avisa que es un borrador, la tabla pasa
+    a `st.data_editor`, y aparecen el buscador del catalogo de almacen y el
+    boton de volver.
+    """
+    orig = _receta_original(df_f, foco, col_cod_plato, col_ins, col_cant,
+                            col_total)
+    borradores = _sim_borradores()
+    simulando = bool(st.session_state.get(_K_SIM_ON)) and orig is not None
+
+    rotulo = f"Receta \u00b7 {nombre_foco}" if nombre_foco else "Receta"
+    if simulando:
+        rotulo += " \u00b7 borrador, no se guarda"
+
+    with _card("rv_comp_receta", rotulo):
+        if orig is None:
+            st.info("No se reconoci\u00f3 la columna de insumo (INS RV) o "
+                    "de costo (TOTAL) para mostrar la receta.")
+            return None, None
+
+        # El toggle se dibuja SIEMPRE, tambien en modo lectura: un widget
+        # que deja de renderizarse pierde su estado (CLAUDE.md § Streamlit),
+        # y este es justamente el que decide si el resto se dibuja.
+        c_tog, c_vol = st.columns([2, 3], gap="small")
+        with c_tog:
+            st.toggle("Simular", key=_K_SIM_ON,
+                      help="Cambi\u00e1 cantidades y precios para ver c\u00f3mo se "
+                           "mueven el costo y el margen. Es un borrador de "
+                           "esta sesi\u00f3n: no toca los datos ni se guarda.")
+        if not simulando:
+            st.dataframe(
+                orig[["Insumo", "Cantidad", "Costo", "%"]],
+                hide_index=True, use_container_width=True,
+                height=alturas.MINI,
+                column_config={
+                    "Cantidad": st.column_config.NumberColumn(format="%.3f"),
+                    "Costo": st.column_config.NumberColumn(format="S/ %.2f"),
+                    "%": st.column_config.ProgressColumn(
+                        format="%.1f%%", min_value=0, max_value=100),
+                },
+            )
+            return orig, None
+
+        # El borrador nace COPIANDO la receta real la primera vez que se
+        # prende el toggle para este plato.
+        if foco not in borradores:
+            borradores[foco] = [
+                {"Insumo": str(f["Insumo"]), "Cantidad": float(f["Cantidad"]),
+                 "Precio": float(f["Precio"])}
+                for _, f in orig.iterrows()
+            ]
+        lineas = borradores[foco]
+
+        with c_vol:
+            # Sin `use_container_width`: con el ancho del contenedor se
+            # estiraba a 3/5 de la fila, y un bot\u00f3n de deshacer con ese
+            # peso se lee como la acci\u00f3n principal de la tarjeta \u2014 que es
+            # justo lo que no es.
+            st.button("\u21ba Volver al original",
+                      key=f"rv_comp_sim_reset_{foco}",
+                      on_click=_sim_reset, args=(foco,))
+
+        r = _receta_simulada(lineas)
+        editor_key = _sim_key_editor(foco)
+        df_edit = r[["Insumo", "Cantidad", "Precio", "Costo"]].copy()
+        df_edit.insert(0, "Quitar", False)
+        editado = st.data_editor(
+            df_edit, key=editor_key, hide_index=True,
+            use_container_width=True, height=alturas.MINI,
+            disabled=["Insumo", "Costo"],
+            column_config={
+                "Quitar": st.column_config.CheckboxColumn(width="small"),
+                "Cantidad": st.column_config.NumberColumn(
+                    min_value=0.0, step=0.01, format="%.3f"),
+                "Precio": st.column_config.NumberColumn(
+                    "Precio unit.", min_value=0.0, step=0.01,
+                    format="S/ %.4f"),
+                # DESHABILITADA y por lo tanto con UNA pasada de atraso: lo
+                # que se ve aca es `Cantidad * Precio` de la corrida
+                # anterior, porque el frame se arma antes de leer lo
+                # editado. El Sankey y la dona NO tienen ese atraso -- salen
+                # de `lineas`, que si se actualiza mas abajo. Mismo trato
+                # que el «Subtotal» de `formulario_receta.py`.
+                "Costo": st.column_config.NumberColumn(format="S/ %.2f"),
+            },
+        )
+
+        # Lo editado vuelve al borrador EN ESTA MISMA pasada: el editor ya
+        # disparo el rerun que llego hasta aca, asi que el Sankey de al lado
+        # dibuja lo nuevo sin un `st.rerun()` de mas -- que ademas seria
+        # peligroso, porque este panel vive dentro del fragment de
+        # `seccion_perezosa` y un rerun al tope de un fragment le borra el
+        # estado a sus propios widgets (regla #373).
+        for i, linea in enumerate(lineas):
+            fila = editado.iloc[i]
+            cant = fila["Cantidad"]
+            prec = fila["Precio"]
+            linea["Cantidad"] = 0.0 if pd.isna(cant) else float(cant)
+            linea["Precio"] = 0.0 if pd.isna(prec) else float(prec)
+
+        marcadas = {i for i, v in enumerate(editado["Quitar"]) if bool(v)}
+        catalogo = catalogo_insumos()
+
+        c_add, c_btn, c_quit = st.columns([5, 2, 2], gap="small")
+        with c_add:
+            if catalogo is None or catalogo.empty:
+                st.caption("No se pudo leer el cat\u00e1logo de almac\u00e9n "
+                           f"({ARCHIVO_INVENTARIO}): no se pueden agregar "
+                           "insumos nuevos.")
+                cod_sel = None
+            else:
+                etiquetas = dict(zip(
+                    catalogo["cod"],
+                    catalogo["nombre"] + "  \u00b7  S/ "
+                    + catalogo["precio"].map(lambda v: f"{v:,.4f}")))
+                cod_sel = st.selectbox(
+                    "Agregar insumo", catalogo["cod"].tolist(), index=None,
+                    format_func=lambda c: etiquetas.get(c, c),
+                    placeholder="Busc\u00e1 un insumo de almac\u00e9n\u2026",
+                    key=f"rv_comp_sim_add_{foco}",
+                    label_visibility="collapsed")
+        with c_btn:
+            st.button("Agregar", key=f"rv_comp_sim_addbtn_{foco}",
+                      disabled=cod_sel is None, use_container_width=True,
+                      on_click=_sim_agregar, args=(foco, cod_sel, catalogo))
+        with c_quit:
+            st.button(f"Quitar ({len(marcadas)})",
+                      key=f"rv_comp_sim_quitar_{foco}",
+                      disabled=not marcadas, use_container_width=True,
+                      on_click=_sim_quitar, args=(foco, marcadas))
+
+        aviso = st.session_state.get("rv_comp_sim_aviso")
+        if aviso:
+            st.caption(f"\u26a0\ufe0f {aviso}")
+
+        r = _receta_simulada(lineas)
+        costo_sim = float(r["Costo"].sum())
+        costo_real = float(orig["Costo"].sum())
+        delta = costo_sim - costo_real
+        pct = (delta / costo_real * 100) if costo_real else 0.0
+        signo = "+" if delta >= 0 else "\u2212"
+        st.caption(
+            f"Costo del borrador **S/ {costo_sim:,.2f}** \u00b7 "
+            f"real S/ {costo_real:,.2f} \u00b7 "
+            f"{signo}S/ {abs(delta):,.2f} ({signo}{abs(pct):.1f}%)"
+        )
+        # ORDENADA s\u00f3lo ac\u00e1, para el Sankey y la dona. El editor la vio sin
+        # ordenar a prop\u00f3sito (ver `_receta_simulada`): si las filas se
+        # reacomodaran a cada tecla, el `editado.iloc[i]` de arriba dejar\u00eda
+        # de nombrar la misma l\u00ednea y editar una escribir\u00eda en otra.
+        return r.sort_values("Costo", ascending=False).reset_index(drop=True), costo_sim
+
+
+def _dib_torta_costo_utilidad(fila_foco, foco, costo_sim=None):
     """Mini donut Costo/Utilidad del plato en foco: Costo Salón vs.
     (P. Neto Salón − Costo Salón). Si el costo supera al precio neto —pasa
     de verdad: arquitectura.md regla #205 mide bebidas premium con %Costo
     de 300–950%, porque Costo Salón es la BOTELLA entera y P.Venta Salón
     la COPA— la Utilidad da negativa y un donut no puede dibujar eso (una
     porción no puede ser "menos que nada"): se avisa el monto en vez de
-    forzar un gráfico que mentiría."""
+    forzar un gráfico que mentiría.
+
+    `costo_sim`: el costo del BORRADOR del simulador, cuando hay uno. El
+    %Costo se RECALCULA contra el precio neto en vez de leerse de
+    `fila_foco["Pct"]`, que es el del parquet — si no, mover una cantidad
+    cambiaba el tamaño de la porción y dejaba el número del medio quieto,
+    que es justo la contradicción que el velo de la app existe para
+    evitar."""
     if not len(fila_foco):
         st.info("Sin datos para este plato.")
         return
-    costo = float(fila_foco["Costo"].iloc[0])
     neto = float(fila_foco["PrecioNeto"].iloc[0])
-    pct = float(fila_foco["Pct"].iloc[0])
+    if costo_sim is None:
+        costo = float(fila_foco["Costo"].iloc[0])
+        pct = float(fila_foco["Pct"].iloc[0])
+    else:
+        costo = float(costo_sim)
+        pct = (costo / neto * 100) if neto else 0.0
     utilidad = neto - costo
     if costo <= 0 and utilidad <= 0:
         st.info("Sin costo ni precio para graficar.")
@@ -542,53 +869,33 @@ def _tabla_composicion_venta(df_f):
     fila_foco = g[g["_cod"] == foco]
     nombre_foco = str(fila_foco["Plato"].iloc[0]) if len(fila_foco) else ""
 
-    # ── Receta del plato en foco + mini panel (torta/Sankey) ─────────────
+    # ── Receta del plato en foco + mini panel (torta/Sankey) ─────────
     # ABAJO de la tabla, a pedido (2026-08-31) — antes vivía a un costado.
-    # `r` (Insumo/Cantidad/Costo/%) se arma UNA vez acá, no dentro de cada
-    # `with`: la tabla de la izquierda y las dos pestañas de la derecha
-    # muestran la MISMA receta, así que las tres leen el mismo cálculo en
-    # vez de repetirlo (y arriesgar que diverjan).
-    r = None
-    if col_ins and col_total:
-        items = df_f[df_f[col_cod_plato].astype(str) == foco]
-        r = pd.DataFrame({
-            "Insumo": items[col_ins].astype(str),
-            "Cantidad": (pd.to_numeric(items[col_cant], errors="coerce")
-                        if col_cant else None),
-            "Costo": pd.to_numeric(items[col_total], errors="coerce").fillna(0.0),
-        })
-        r = r.sort_values("Costo", ascending=False).reset_index(drop=True)
-        tot_r = r["Costo"].sum() or 1.0
-        r["%"] = r["Costo"] / tot_r * 100
-
+    #
+    # `r` sale de `_panel_receta`, que es quien decide si lo que se ve es la
+    # receta del parquet o el BORRADOR del simulador. Se arma UNA sola vez y
+    # las tres piezas leen ese mismo frame: la tabla de la izquierda, el
+    # Sankey y la dona. Antes se calculaba acá inline; con el simulador eso
+    # dejaba dos fuentes para lo mismo, que es exactamente cómo divergen.
+    #
+    # `costo_sim` viene en `None` mientras no se esté simulando, y la dona lo
+    # usa para saber si el %Costo lo lee del parquet o lo recalcula.
+    #
     # [3, 2]: la tabla de receta necesita más ancho que la torta/Sankey
-    # (nombres de insumo largos en la primera columna); el mini panel no
+    # (nombres de insumo largos en la primera columna, y ahora además las
+    # dos columnas editables y el buscador del catálogo); el mini panel no
     # gana nada con más ancho, un donut/Sankey de 2 niveles no crece en
     # utilidad por estirarse.
     c_receta, c_mini = st.columns([3, 2], gap="medium")
     with c_receta:
-        with _card("rv_comp_receta",
-                   f"Receta · {nombre_foco}" if nombre_foco else "Receta"):
-            if r is None:
-                st.info("No se reconoció la columna de insumo (INS RV) o "
-                       "de costo (TOTAL) para mostrar la receta.")
-            else:
-                st.dataframe(
-                    r, hide_index=True, use_container_width=True,
-                    height=alturas.MINI,
-                    column_config={
-                        "Cantidad": st.column_config.NumberColumn(format="%.3f"),
-                        "Costo": st.column_config.NumberColumn(format="S/ %.2f"),
-                        "%": st.column_config.ProgressColumn(
-                            format="%.1f%%", min_value=0, max_value=100),
-                    },
-                )
+        r, costo_sim = _panel_receta(df_f, foco, nombre_foco, col_cod_plato,
+                                     col_ins, col_cant, col_total)
 
     with c_mini:
         with _card("rv_comp_mini"):
             tab_torta, tab_sankey = st.tabs(["Costo / Utilidad", "Sankey"])
             with tab_torta:
-                _dib_torta_costo_utilidad(fila_foco, foco)
+                _dib_torta_costo_utilidad(fila_foco, foco, costo_sim)
             with tab_sankey:
                 _dib_sankey_insumo_costo(r, nombre_foco, foco)
 

@@ -516,3 +516,56 @@ def _panorama_compras(df_f, es_soles, *, key_prefix,
         tabla = detalle.head(50).copy()
         tabla["Valor"] = tabla["Valor"].map(lambda v: f"{pref}{v:,.2f}")
         st.dataframe(tabla, hide_index=True, use_container_width=True)
+
+
+# ─── El catálogo de insumos de almacén ──────────────────────────────────────
+# Vivía en `formulario_receta.py::_catalogo_insumos_cacheado` y se mudó acá
+# el 2026-09-17, cuando el simulador de Composición (`recetaventa.py::
+# _panel_receta`) necesitó el mismo catálogo para "agregar un insumo". Es el
+# escenario de la regla #379 —dos copias del mismo formateo divergiendo—
+# atajado antes de que naciera la segunda: la herramienta y el dashboard
+# tienen que ofrecer EL MISMO catálogo o "agregar Sal De Mesa" significa dos
+# cosas distintas según desde dónde se agregue.
+#
+# Normaliza a cinco columnas (cod/nombre/unidad/precio/activo) para que
+# quien lo consuma no tenga que saber de qué parquet vino.
+ARCHIVO_INVENTARIO = "inventariovalorizado.parquet"
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def catalogo_insumos():
+    """Artículos de almacén desde inventariovalorizado.parquet.
+
+    OJO con `Activo` en este parquet: a diferencia de recetabase/recetaventa
+    (con sus 4 formatos confirmados contra R2 real, ver `_activo()` arriba y
+    la regla #97), NO se verificó si trae una columna de activo/inactivo ni
+    en qué formato. Candidatos razonables + degradación silenciosa si no
+    aparece — probado contra R2 real: ningún candidato matcheó y la insignia
+    simplemente no sale (regla #100)."""
+    df = _cargar_reporte(ARCHIVO_INVENTARIO)
+    if df is None or df.empty:
+        return None
+
+    col_cod = _resolver(df, ["Codigo Producto", "Código Producto", "COD_PRODUCTO"])
+    col_nombre = _resolver(df, ["Nombre Producto", "NOMBRE_PRODUCTO"])
+    col_unidad = _resolver(df, ["Unidad Kardex", "UNIDAD_KARDEX", "Unidad"])
+    col_precio = _resolver(df, ["Precio Promedio", "PRECIO PROMEDIO", "Precio"])
+    col_activo = _resolver(df, ["Activo", "ACTIVO", "Estado"])
+    if not (col_cod and col_nombre and col_precio):
+        return None
+
+    out = pd.DataFrame({
+        "cod": df[col_cod].astype(str),
+        "nombre": df[col_nombre].astype(str),
+        "unidad": df[col_unidad].astype(str) if col_unidad else "unidad",
+        "precio": pd.to_numeric(df[col_precio], errors="coerce").fillna(0.0),
+    })
+    out["activo"] = _activo(df[col_activo]) if col_activo else None
+    # inventariovalorizado.parquet trae más de una fila para el mismo código
+    # (confirmado en vivo 2026-08-13: "Sal De Mesa" 0000460 repetido) — sin
+    # este drop_duplicates, `_buscador_catalogo` arma dos botones con la
+    # MISMA key (`add_<cod>`) y Streamlit revienta con
+    # StreamlitDuplicateElementKey en cuanto ambas filas caen dentro del
+    # mismo resultado de búsqueda.
+    out = out.drop_duplicates(subset="cod", keep="first").reset_index(drop=True)
+    return out
