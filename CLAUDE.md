@@ -289,6 +289,14 @@ resto de `graficos/compras/`.
   una tupla por tarjeta; lo vigila
   `test_graficos.py::_pruebas_widgets_de_fragment_escalado`. Ver
   `arquitectura.md` #373.
+- **Un `@st.fragment` que se llama ADENTRO de otro lleva
+  `@una_vez_por_corrida` encima** (`graficos/base.py`). Dos clics con
+  el servidor ocupado se juntan en una corrida, y si caen en el padre y
+  en el hijo —el rail y el botón invisible de una sección—, Streamlit
+  anterior a la 1.62 corre al hijo dos veces y la segunda muere con
+  `StreamlitDuplicateElementKey` sobre su primera key. Hoy lo lleva
+  `seccion_perezosa`; las tarjetas con fragment propio dentro de un drill
+  siguen expuestas. Ver `arquitectura.md` #456.
 
 ## La cabecera de «Compra Vs Año Pasado» se lee de global a local
 

@@ -7,6 +7,7 @@ cada dashboard (ajuste.py, compras.py, ...) importa lo que necesita de aquí.
 """
 
 import datetime
+import functools
 import math
 import re
 import unicodedata
@@ -267,6 +268,100 @@ def _activar_seccion(clave):
     st.session_state[f"_pila_activa_{clave}"] = True
 
 
+def _cola_de_esta_corrida():
+    """`(cola, registro)` de la corrida de fragments en curso, o `(None, None)`.
+
+    `None` en una corrida COMPLETA (ahí no hay cola: cada fragment corre
+    una vez, en su sitio), fuera de un servidor (`herramientas/ver_figura.py`
+    importa los dashboards sin él) o si alguna de estas internas se mudó en
+    otra versión. Mismo criterio que `scope_rerun`: ante la duda no se toca
+    nada, y el peor caso es el bug de antes, no uno nuevo.
+
+    La `cola` es la MISMA lista que recorre el bucle de
+    `ScriptRunner._run_script` (se la pasa a `ctx.reset` sin copiarla), y
+    por eso sacarle un id alcanza para que ese fragment no corra.
+
+    Se exige `order_fragment_ids`: sin él la cola sale en orden de llegada y
+    un fragment hijo puede quedar ANTES que su padre. Sacar de la lista un
+    ítem ya recorrido corre los de atrás un lugar y el bucle se saltaría el
+    siguiente. Con el orden, todo lo que se registra durante la corrida del
+    padre está más adelante en la cola que él.
+    """
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        ctx = get_script_run_ctx(suppress_warning=True)
+        cola = getattr(ctx, "fragment_ids_this_run", None)
+        registro = getattr(ctx, "fragment_storage", None)
+        if not cola or not hasattr(registro, "order_fragment_ids"):
+            return None, None
+        return cola, registro
+    except Exception:
+        return None, None
+
+
+def una_vez_por_corrida(fragment):
+    """Para un `@st.fragment` ANIDADO: que no corra dos veces en la misma pasada.
+
+    Va ENCIMA de `@st.fragment`. Nació de un `StreamlitDuplicateElementKey`
+    sobre `compras_prod_drill_wrap` (2026-09-17, regla #456).
+
+    EL BUG ES DE STREAMLIT, y lo arreglaron en la 1.62.0. Dos clics que
+    llegan mientras el servidor está ocupado se juntan en UNA corrida con
+    una cola de fragments (`ScriptRequests.request_rerun`). Si en esa cola
+    están un fragment y uno de sus ancestros —el rail de Compras vive en
+    `_render_contenido`, y la sección en `seccion_perezosa`, adentro—, la
+    1.59 los ordena bien (padre primero) pero corre LOS DOS: el padre ya
+    redibujó a la sección, y después el bucle la vuelve a correr. La key
+    del primer contenedor ya está anotada en esa corrida y se cae la
+    sección entera. Desde la 1.62 el bucle se salta a los descendientes de
+    un fragment que ya corrió (`has_ancestor_in`). En local corre la 1.59.2,
+    y `requirements.txt` admite desde la 1.39.
+
+    CÓMO SE CUBRE EL HUECO. Durante una corrida de fragments, el cuerpo del
+    script no se ejecuta: cualquier LLAMADA a un fragment desde Python es,
+    por fuerza, una llamada anidada en el que el bucle está corriendo. Así
+    que esta envoltura no necesita averiguar si está anidada. Al volver saca
+    de la cola todo lo que la llamada registró —el fragment y sus
+    descendientes—, que ya quedó dibujado con el estado de esta corrida. El
+    bucle no llega a correrlos. Desde la 1.62 no hace nada que el bucle no
+    fuera a hacer igual.
+
+    POR QUÉ NO SE PUEDE, SIMPLEMENTE, NO DIBUJAR LA SEGUNDA VEZ. Al terminar
+    cada ítem de la cola, Streamlit borra del registro a los descendientes
+    que ese ítem no volvió a registrar (`clear_stale_descendants`). Una
+    segunda pasada vacía se llevaría a los drills y tarjetas de la sección,
+    y el próximo clic adentro de ellos caería en «Couldn't find fragment»:
+    no pasaría nada en pantalla.
+
+    Lo que NO cubre: dos fragments de la cola que se anidan sin pasar por
+    una llamada envuelta. Hoy la usa sólo `seccion_perezosa`, que cubre al
+    padre `_render_contenido` contra todo lo que cuelga de una sección. Un
+    drill y la tarjeta con fragment propio que lleva adentro
+    (`volatilidad.py::_tarjeta_compras_semana`,
+    `vs_ano_pasado.py::_tarjeta_cascada`) siguen expuestos en la 1.59: para
+    cubrirlos, se pone esta envoltura sobre la tarjeta.
+    """
+    @functools.wraps(fragment)
+    def llamar(*args, **kwargs):
+        cola, registro = _cola_de_esta_corrida()
+        try:
+            antes = registro.registration_sequence() if cola else None
+        except Exception:
+            antes = None
+        try:
+            return fragment(*args, **kwargs)
+        finally:
+            if antes is not None:
+                try:
+                    for fid in registro.ids_registered_after(antes):
+                        while fid in cola:
+                            cola.remove(fid)
+                except Exception:
+                    pass
+    return llamar
+
+
+@una_vez_por_corrida
 @st.fragment
 def seccion_perezosa(clave, vista, dibujar, activa_de_entrada=False):
     """Una sección de una página apilada: esqueleto hasta que te acercás.
@@ -299,6 +394,12 @@ def seccion_perezosa(clave, vista, dibujar, activa_de_entrada=False):
 
     `activa_de_entrada` la usa la primera sección: arrancar con todo en
     esqueleto dejaría la página vacía al abrir.
+
+    `@una_vez_por_corrida` va encima porque esta sección es un fragment
+    ANIDADO, dentro del de `app.py::_render_contenido`. Sin él, un clic en
+    el rail y el botón invisible de una sección que caen en la misma corrida
+    la dibujaban dos veces, y la segunda moría con
+    `StreamlitDuplicateElementKey` (regla #456).
 
     ENTRE EL ESQUELETO Y EL CONTENIDO NO HABÍA NADA, y ese hueco duraba lo
     suyo. Medido en el navegador el 2026-09-09 (Compras › Vs año pasado,

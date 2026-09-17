@@ -2210,6 +2210,144 @@ def _pruebas_widgets_de_fragment_escalado():
     return fallos
 
 
+_SCRIPT_FRAGMENT_ANIDADO = '''
+import streamlit as st
+from graficos.base import seccion_perezosa
+
+st.session_state.setdefault("n_seccion", 0)
+st.session_state.setdefault("n_drill", 0)
+
+
+@st.fragment
+def _drill():
+    st.session_state["n_drill"] += 1
+    st.button("otro insumo", key="t_drill_btn")
+
+
+def _dibujar():
+    st.session_state["n_seccion"] += 1
+    with st.container(key="t_drill_wrap"):
+        _drill()
+
+
+@st.fragment
+def _contenido():
+    st.button("Semanal", key="t_rail_btn")
+    with st.container(key="t_sec"):
+        seccion_perezosa("t_sec", "Sección", _dibujar)
+
+
+_contenido()
+'''
+
+
+def _pruebas_fragment_anidado_una_vez():
+    """Una sección de la pila no se dibuja dos veces en la misma corrida.
+
+    Bug real, 2026-09-17: `StreamlitDuplicateElementKey` sobre
+    `compras_prod_drill_wrap`, al tocar «Semanal» en el rail mientras la
+    página construía sus secciones. Dos clics que llegan con el servidor
+    ocupado se juntan en UNA corrida con una cola de fragments; si en ella
+    están `_render_contenido` (el del rail) y una sección que cuelga de él
+    (la de su botón invisible), Streamlit 1.59 corre a los dos y la sección
+    se dibuja dos veces. La 1.62 lo arregló; acá lo cubre
+    `base.py::una_vez_por_corrida`. Regla #456.
+
+    AppTest no sabe correr fragments sueltos: sólo hace corridas completas y
+    estrena el registro de fragments en cada una. Por eso esta guarda le
+    pone a su `ScriptRunner` —el real— un registro compartido y la cola que
+    Streamlit arma al juntar los dos clics. Y mira TAMBIÉN el clic
+    siguiente dentro del drill de la sección: el arreglo obvio («no dibujar
+    la segunda vez») hace que Streamlit borre a los fragments hijos del
+    registro, y ese clic no llega a ningún lado.
+    """
+    import pathlib
+    import tempfile
+    from urllib import parse
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    fragment anidado · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA fragment anidado · {nombre}: got={got!r} exp={exp!r}")
+
+    try:
+        import streamlit.testing.v1.local_script_runner as lsr
+        from streamlit.runtime.fragment import MemoryFragmentStorage
+        from streamlit.runtime.scriptrunner_utils.script_requests import RerunData
+        from streamlit.testing.v1 import AppTest
+        from streamlit.testing.v1.element_tree import parse_tree_from_messages
+    except ImportError as e:
+        fallos += 1
+        print(f"FALLA fragment anidado · el arnés no encuentra las internas "
+              f"de esta versión de Streamlit: {e}")
+        return fallos
+
+    registro = MemoryFragmentStorage()
+    cola = []
+
+    def _run(self, widget_state=None, query_params=None, timeout=3,
+             page_hash=""):
+        qs = parse.urlencode(query_params, doseq=True) if query_params else ""
+        self.request_rerun(RerunData(
+            widget_states=widget_state, query_string=qs,
+            page_script_hash=page_hash, fragment_id_queue=list(cola)))
+        if not self._script_thread:
+            self.start()
+        lsr.require_widgets_deltas(self, timeout)
+        return parse_tree_from_messages(self.forward_msgs())
+
+    viejo_registro, viejo_run = lsr.MemoryFragmentStorage, lsr.LocalScriptRunner.run
+    lsr.MemoryFragmentStorage = lambda: registro
+    lsr.LocalScriptRunner.run = _run
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = pathlib.Path(tmp) / "pila_anidada.py"
+            script.write_text(_SCRIPT_FRAGMENT_ANIDADO, encoding="utf-8")
+            at = AppTest.from_file(str(script), default_timeout=30)
+            at.run()
+
+            padres = dict(registro._parent_by_id)
+            raiz = next(f for f, p in padres.items() if p is None)
+            seccion = next(f for f, p in padres.items() if p == raiz)
+
+            # Los dos clics en la MISMA corrida, en el orden de llegada
+            # que no ayuda: primero el hijo.
+            cola[:] = [seccion, raiz]
+            at.button(key="pila_go_t_sec").click()
+            at.button(key="t_rail_btn").click()
+            at.run()
+            check("la corrida doble no revienta",
+                  [e.value for e in at.exception], [])
+            check("la sección se dibuja UNA vez",
+                  at.session_state["n_seccion"], 1)
+
+            drill = [f for f, p in registro._parent_by_id.items()
+                     if p == seccion]
+            check("el drill de la sección sigue registrado", len(drill), 1)
+            if drill:
+                antes = at.session_state["n_drill"]
+                cola[:] = drill
+                at.button(key="t_drill_btn").click()
+                at.run()
+                check("y su clic siguiente lo redibuja",
+                      (at.session_state["n_drill"] - antes,
+                       [e.value for e in at.exception]), (1, []))
+    except Exception as e:  # el arnés en sí: que se vea qué se movió
+        fallos += 1
+        print(f"FALLA fragment anidado · el arnés no corrió: "
+              f"{type(e).__name__}: {e}")
+    finally:
+        lsr.MemoryFragmentStorage = viejo_registro
+        lsr.LocalScriptRunner.run = viejo_run
+
+    return fallos
+
+
 def _pruebas_rango_por_tarjeta():
     """Compras: una categoría de rango por SECCIÓN de la pila (2026-09-08).
 
@@ -4088,6 +4226,7 @@ def main():
     # ── Ventana propia de una tarjeta (graficos/periodo.py) ─────────────
     fallos += _pruebas_rango_por_tarjeta()
     fallos += _pruebas_widgets_de_fragment_escalado()
+    fallos += _pruebas_fragment_anidado_una_vez()
     fallos += _pruebas_css_comentarios_cerrados()
     fallos += _pruebas_periodo_por_vista()
 

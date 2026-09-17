@@ -165,6 +165,7 @@ ok(_pos == sorted(_pos), "el orden que lista CLAUDE.md coincide con el de _SECCI
 _SIMBOLOS = [
     ("publicar_contexto_ia", "graficos/base.py"),
     ("paso_etiquetas", "graficos/base.py"),
+    ("una_vez_por_corrida", "graficos/base.py"),
     ("COLUMNAS_DRILL", "graficos/compras/_comun.py"),
     ("por_filas", "graficos/alturas.py"),
     ("_datos_demo", "data.py"),

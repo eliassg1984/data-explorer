@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-455 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+456 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (160)
 
@@ -424,7 +424,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#450** — Un AgGrid sin custom_css= no es "el tema por defecto": es el ÚNICO que no se parece a los…
 - **#455** — Un JS que busca «el primer AgGrid de la página» toca la tabla equivocada en cuanto la página…
 
-**Streamlit** (121)
+**Streamlit** (122)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -547,6 +547,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
 - **#452** — st.plotly_chart(on_select=) no ve un Sankey — y no es que el evento no exista
+- **#456** — Si un fragment y uno de sus ancestros caen en la misma cola, Streamlit 1.59 corre al hijo DOS…
 
 **Datos, R2 y DuckDB** (55)
 
@@ -709,7 +710,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (79)
+**Decisiones de diseño y UX** (80)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -790,6 +791,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#435** — La SEGUNDA vista que pide «los mismos filtros» los convierte en una pieza — y meter cinco…
 - **#436** — Meter un dato de CONTEXTO en una escala compartida la rompe: lo que no entra se TOPA, no se…
 - **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
+- **#456** — Si un fragment y uno de sus ancestros caen en la misma cola, Streamlit 1.59 corre al hijo DOS…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -37992,6 +37994,117 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+456. **Si un fragment y uno de sus ancestros caen en la misma cola,
+     Streamlit 1.59 corre al hijo DOS veces — y la segunda muere con
+     `StreamlitDuplicateElementKey`.** Salió en una verificación local del
+     2026-09-17 (1366x768, `?reporte=Compras`): `There are multiple
+     elements with the same key='compras_prod_drill_wrap'`, con traza
+     `base.py::seccion_perezosa` → `dibujar()` → `_dib_producto`, justo
+     después de un clic por JS en «Semanal» del rail mientras la pila se
+     construía. No se repitió en tres reinicios: es una carrera. La key
+     venía de código viejo (9ff1942); no era el cambio del día.
+
+     **El mecanismo, leído en el fuente de la 1.59.2:**
+
+       · Dos clics que llegan con el servidor ocupado no hacen dos
+         corridas: `ScriptRequests.request_rerun` los JUNTA en una, con
+         una cola de fragments. Tampoco hace falta que esté ocupado: el
+         primer pedido crea el `ScriptRunner`, y si el segundo llega antes
+         de que su hilo arranque, se suma a la misma cola.
+       · El clic del rail es de `app.py::_render_contenido`, y el botón
+         invisible de la sección es de `seccion_perezosa`, que cuelga de
+         él. `order_fragment_ids` pone al padre primero… y el bucle de
+         `ScriptRunner._run_script` corre a LOS DOS. El padre ya redibujó
+         la sección con el estado de esta corrida; el bucle la vuelve a
+         correr, y `widget_user_keys_this_run` se limpia por corrida, no
+         por fragment. Revienta la primera key de la sección.
+       · Y el clic del rail llega a Streamlit más de lo que parece: el JS
+         de `_render_rail` sólo intercepta un botón lateral cuando su
+         sección ya está en el DOM (`enlazar()`, cada 400 ms), y los
+         botones de la franja horizontal —ocultos en escritorio, pero
+         presentes— no los intercepta nunca.
+
+     **Reproducido tres veces, de tres maneras.** (1) Con un script de
+     treinta líneas de la misma forma y el `ScriptRunner` real: AppTest
+     no sabe correr fragments sueltos, así que se le compartió el
+     registro entre corridas y se le dio la cola a mano. En los dos
+     órdenes de llegada, la misma traza. (2) Con el mismo arnés sobre
+     `app.py` en modo demo: el mismo error, con la misma key. (3) En el
+     navegador, contra una copia de `HEAD` con una sonda que imprime la
+     cola: clic en el rail y, un segundo después, con la corrida en
+     marcha, el botón invisible de Tabla y otra vez el rail. Cola
+     `['c3dd08', '37bf91', '6c51cb']`, la sección Tabla corrida dos veces
+     y `key='tabla_fila_hdr'` en pantalla. Es la primera key de ESA
+     sección: le toca a la que esté en la cola. Con el arreglo, el mismo
+     procedimiento: cola `['37bf91', '6c51cb']`, Tabla dibujada una vez,
+     la sección siguiente de la misma corrida ya ve `['37bf91']`, y la
+     pila sigue cargando perezosa hasta Documentos sin una excepción.
+
+     **Streamlit lo arregló en la 1.62.0**: el bucle se salta a un
+     fragment cuyo ancestro ya corrió (`has_ancestor_in`). No está en la
+     1.60 ni en la 1.61. Local corre la 1.59.2, `requirements.txt` admite
+     desde la 1.39 y en Cloud la versión no está verificada. De ahí el
+     arreglo propio:
+
+     **`graficos/base.py::una_vez_por_corrida`**, un decorador que va
+     ENCIMA de `@st.fragment`. Durante una corrida de fragments el cuerpo
+     del script no se ejecuta, así que toda llamada a un fragment desde
+     Python está anidada en el que corre el bucle. Al volver, la envoltura
+     saca de la cola todo lo que la llamada registró —la sección y sus
+     drills—, porque ya quedó dibujado. Desde la 1.62 no cambia nada.
+
+     Tres decisiones que no son de gusto:
+
+       · **No sirve «no dibujar la segunda vez».** Al terminar cada ítem
+         de la cola, Streamlit borra del registro a los descendientes que
+         no se volvieron a registrar (`clear_stale_descendants`). Una
+         segunda pasada vacía se llevaría a los drills de la sección, y el
+         próximo clic adentro de ellos caería en «Couldn't find fragment»:
+         nada en pantalla. Medido: sin el arreglo, el drill ya se perdía
+         así (3 fragments registrados contra 4).
+       · **Sacar ítems de la lista que el bucle está recorriendo es
+         seguro sólo hacia ADELANTE.** Si se saca uno ya recorrido, los
+         siguientes se corren un lugar y el bucle se salta al próximo.
+         Por eso la envoltura exige `order_fragment_ids`: con él, todo lo
+         que registra una llamada anidada está detrás del ítem en curso.
+       · **Todo va en `try`**, como `scope_rerun`: si esas internas se
+         mudan, el peor caso es el bug de antes, no uno nuevo.
+
+     **Lo que queda expuesto en la 1.59**: un drill y la tarjeta con
+     fragment propio que lleva adentro, si caen juntos en la cola sin que
+     la sección esté en ella —`volatilidad.py::_tarjeta_compras_semana` y
+     `vs_ano_pasado.py::_tarjeta_cascada`—. Dos clics en la misma tarjeta
+     con la corrida en marcha. Se cubre poniendo `@una_vez_por_corrida`
+     sobre la tarjeta, o subiendo el piso a `streamlit>=1.62`.
+
+     **Tres trampas de la MEDICIÓN, cada una costó un intento:**
+
+       · **Dos `.click()` en el mismo tick no reproducen nada.** El
+         frontend junta los disparos de un tick en UN mensaje
+         (`WidgetStateManager.scheduleFlush`) y lo manda con el
+         `fragmentId` del PRIMERO: el rail llegaba como un clic más de la
+         sección. Hay que separarlos (60 ms alcanzan).
+       · **Recargar la pestaña no da una sesión nueva**: Streamlit la
+         reconecta con su `session_state`, y las secciones siguen
+         activas. Sesión limpia = pestaña nueva.
+       · **El temporizador del rail vive en el `window` del iframe.** Un
+         `clearInterval(window.__railTimer)` desde la página no lo frena
+         (los ids de temporizador son por ventana). Mientras tanto seguía
+         activando secciones, y una de ellas se tragó el clic del rail:
+         «Vs año pasado» hace `st.rerun(scope=scope_rerun())` en su
+         primera pasada (corrió tres veces seguidas), y `request_rerun`,
+         cuando el pedido nuevo trae cola propia —la de `st.rerun`—, la
+         pone EN LUGAR de la pendiente. Lo que funcionó fue esperar a que
+         se aquietara y apuntar a una sección a la que no llega sin
+         bajar.
+
+     Lo vigila `test_graficos.py::_pruebas_fragment_anidado_una_vez`, con
+     el arnés de (1): la corrida doble, la sección dibujada una vez, el
+     drill registrado y su clic siguiente. Sin el decorador falla en tres
+     de las cuatro.
+
+     (2026-09-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -38004,7 +38117,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#456**.
+> próxima regla nueva es la **#457**.
 
 >
 
