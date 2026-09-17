@@ -597,7 +597,11 @@ def _pruebas_puras():
     # que cada pedazo diga QUÉ es: "−62.6% · la cantidad" se leía como "la
     # cantidad bajó 62.6%", y ese 62.6% era del gasto. La causa va con verbo
     # y dirección, y el % con contra qué se restó.
-    _r = _vap._resumen_html(-16660.0, -62.6, 235.0, -16895.0, 9933.0, 26594.0)
+    # `solo="pct"` es el renglón del porcentaje; `solo="monto"`, el del
+    # rótulo con su cifra. Se piden por separado porque se dibujan en
+    # bloques distintos (el del monto comparte fila con el corte).
+    _r = _vap._resumen_html(-16660.0, -62.6, 235.0, -16895.0, 9933.0,
+                            26594.0, solo="pct")
     check("veredicto: el % dice contra qué se restó",
           "−62.6% vs año pasado" in _r, True)
     check("veredicto: la causa va con su dirección",
@@ -605,7 +609,9 @@ def _pruebas_puras():
     check("veredicto: sin el sustantivo pelado que se pegaba al %",
           "· la cantidad" in _r, False)
     check("veredicto: el title escribe la resta de la cascada",
-          "Este año S/ 9,933 − año pasado S/ 26,594 = −S/ 16,660" in _r, True)
+          "Este año S/ 9,933 − año pasado S/ 26,594 = −S/ 16,660"
+          in _vap._resumen_html(-16660.0, -62.6, 235.0, -16895.0, 9933.0,
+                                26594.0), True)
     check("causa: precio que manda y sube",
           _vap._causa(300.0, 400.0, -100.0), "por precio más alto")
     check("causa: precio que manda y baja",
@@ -613,7 +619,8 @@ def _pruebas_puras():
     check("causa: sin diferencia no se inventa una",
           _vap._causa(0.0, 100.0, -100.0), "")
     check("veredicto: ítem nuevo, sin un +0.0% que diga 'no cambió'",
-          "%" in _vap._resumen_html(500.0, None, 0.0, 500.0, 500.0, 0.0),
+          "%" in _vap._resumen_html(500.0, None, 0.0, 500.0, 500.0, 0.0,
+                                    solo="pct"),
           False)
 
     # ── Los tres cortes de la cascada (regla #443) ──────────────────────
@@ -704,15 +711,15 @@ def _pruebas_puras():
           "Δ Valorizado de compra" in _rv, True)
     check("el rótulo NO dice 'total' (con foco sería falso)",
           "total" in _rv.lower(), False)
-    check("el monto va más chico que antes (15px, no 18)",
-          "15px" in _rv and "18px" not in _rv, True)
-    check("el % se va a su propio renglón",
-          _rv.count("<div") >= 2, True)
-    # El nombre del ítem es su propio título: negro y centrado.
+    check("el monto va chico (13px), no de titular",
+          "13px" in _rv and "18px" not in _rv, True)
+    check("el renglón del monto NO trae el %",
+          "62.6%" in _rv, False)
+    # El nombre del ítem es el título de la tarjeta: azul y centrado.
     _nom = _vap._nombre_cascada_html("Magret De Pato Macho x Kg")
     check("el nombre del ítem va centrado", "text-align:center" in _nom, True)
-    check("el nombre del ítem va en negro",
-          __import__("tema").TEXTO_PRINCIPAL in _nom, True)
+    check("el nombre del ítem va en el azul de la paleta",
+          __import__("tema").ACENTO_TEXTO in _nom, True)
     check("sin foco no se escribe un nombre",
           _vap._nombre_cascada_html(""), "")
     check("la etiqueta de una barra del medio va con signo",

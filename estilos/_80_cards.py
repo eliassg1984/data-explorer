@@ -86,10 +86,15 @@ CSS = """    /* ================================================================
         flex-wrap: wrap !important;
         align-items: center !important;
         gap: 10px !important;
-        margin: 0 0 0.55rem !important;
-        padding-bottom: 0.5rem !important;
+        margin: 0 0 0.35rem !important;
+        padding-bottom: 0.3rem !important;
         border-bottom: 1px solid var(--border);
     }
+    /* Más delgada desde el 2026-09-17, a pedido («hagamos más delgada
+       verticalmente esa franja»): el margen baja de 0.55rem a 0.35 y el
+       padding de 0.5 a 0.3, o sea 6px menos de aire — que se suman a los
+       13 del `padding-top` que se fue con los rótulos de tramo. La raya de
+       abajo se queda: es lo que separa la cabecera de las tarjetas. */
     /* El TÍTULO cede, los controles no. `min-width: 0` es obligatorio: sin
        él un flex item nunca baja de su contenido, así que un ítem en foco
        de nombre largo empujaría el buscador fuera de la tarjeta en vez de
@@ -239,53 +244,26 @@ CSS = """    /* ================================================================
        `vs_ano_pasado.py`. Si vuelve, vuelven estas tres — sobre todo la
        última, sin la cual el ícono sale DUPLICADO por llevar `help=`. */
 
-    /* ── LOS TRES TRAMOS DE LA FILA (regla #444) ────────────────────────
+    /* ── LOS TRAMOS DE LA FILA (reglas #444 y #449) ─────────────────────
        El orden lo pone Python; acá sólo se PINTA la separación, y a
-       propósito con pseudo-elementos: un `<hr>` o un `st.markdown` vacío
-       serían ítems del flex, se cobrarían su `gap: 10px` y podrían
-       desordenarse si alguien mueve un control de tramo. Un `::before` no
-       ocupa sitio en el flujo y viaja pegado a su control.
+       propósito con un pseudo-elemento: un `<hr>` sería un ítem del flex,
+       se cobraría su `gap: 10px` y podría desordenarse si alguien mueve un
+       control de tramo. Un `::after` no ocupa sitio en el flujo y viaja
+       pegado a su control.
 
-       El rótulo va sobre el PRIMERO de cada tramo y la línea a su
-       izquierda, no sobre el último del tramo anterior. La diferencia
-       importa: «Partir por» DESAPARECE cuando ningún corte aplica (modo
-       Precio), así que anclar la línea al final del tramo la dejaría
-       colgando de un control que no está. */
+       LOS RÓTULOS DE TRAMO SE FUERON el 2026-09-17, a pedido: «quitemos
+       los textos "Qué entra" y "El detalle" y hagamos más delgada
+       verticalmente esa franja». Eran dos `::before` y los 13px de
+       `padding-top` que les hacían sitio — la fila baja de 40 a 27. La
+       línea se queda: separa los tramos sin gastar un renglón, que era lo
+       que los rótulos costaban.
+
+       La línea va sobre el PRIMERO de cada tramo y no sobre el último del
+       anterior: «Partir por» ya no vive en esta fila, pero el criterio
+       vale igual para cualquier control que aparezca y desaparezca. */
     .st-key-vap_fila_hdr > [data-testid="stLayoutWrapper"] {
         position: relative !important;
     }
-    /* Sitio para el rótulo: 13px arriba de la fila. Los paga la tarjeta de
-       la CABECERA, que desde el 2026-09-14 es su propia superficie (#420),
-       así que no le saca alto a la serie, a la cascada ni a la tabla. */
-    .st-key-vap_fila_hdr { padding-top: 13px !important; }
-    .st-key-vap_fila_hdr
-        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ventana)::before,
-    .st-key-vap_fila_hdr
-        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_agrupar)::before {
-        position: absolute;
-        top: -13px;
-        left: 2px;
-        font: 600 9px/1 "DM Sans", sans-serif;
-        letter-spacing: 0.09em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        white-space: nowrap;
-        pointer-events: none;
-    }
-    .st-key-vap_fila_hdr
-        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ventana)::before {
-        content: "Qué entra";
-    }
-    .st-key-vap_fila_hdr
-        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_agrupar)::before {
-        content: "El detalle";
-    }
-    /* (El tramo «Qué se compara» —`Ver` y `Partir por`— se mudó el
-       2026-09-17 a la tarjeta de la serie, que es la que gobierna: ver
-       `vap_serie_hdr` más abajo. En esta fila quedan dos tramos.) */
-    /* La línea, en el medio del `gap: 10px` que ya había: no empuja nada.
-       El primer tramo no lleva — una línea antes del primero separaría el
-       título de su propia fila. */
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_agrupar)::after {
         content: "";
@@ -296,6 +274,17 @@ CSS = """    /* ================================================================
         width: 1px;
         background: var(--border);
         pointer-events: none;
+    }
+
+    /* ── LOS TRES RENGLONES DE LA TARJETA DE LA CASCADA (regla #449) ────
+       nombre · (rótulo+monto | corte) · % · figura. Son CUATRO bloques de
+       Streamlit, y su `gap: 16px` por defecto daría 48px de aire entre
+       cuatro cosas que se leen como una sola ficha. Se baja acá, en la
+       tarjeta, y no con márgenes negativos uno por uno: el margen hay que
+       calibrarlo por bloque y se descalibra en cuanto uno cambia de
+       tamaño; el `gap` vale para todos y sobra para el que venga. */
+    .st-key-compras_vap_card_puente {
+        gap: 4px !important;
     }
 
     .st-key-vap_serie_modo,

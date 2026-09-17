@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-448 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+449 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (158)
 
@@ -193,7 +193,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 - **#444** — Una fila de controles se ordena por ALCANCE, y el orden es la jerarquía: lo que manda sobre…
 
-**Layout y alturas** (68)
+**Layout y alturas** (69)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -263,6 +263,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#445** — En Streamlit, mover un widget de SITIO es moverlo de MOMENTO: el orden de ejecución es el…
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
+- **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 
 **Plotly y figuras** (76)
 
@@ -416,7 +417,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 
-**Streamlit** (119)
+**Streamlit** (120)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -537,6 +538,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#445** — En Streamlit, mover un widget de SITIO es moverlo de MOMENTO: el orden de ejecución es el…
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
+- **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 
 **Datos, R2 y DuckDB** (53)
 
@@ -37540,6 +37542,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+449. **Un renglón que comparte fila con un widget no se puede centrar en la
+     TARJETA, y el reparto de alto entre renglones no se calcula: se mide
+     la tarjeta.** Tercera vuelta del mismo día sobre la cascada de
+     Compras, con captura y cuatro pedidos.
+
+     - **«Al medio de la tarjeta» no es «al medio de su columna».** El
+       nombre del ítem iba centrado dentro de una `st.columns` que
+       compartía con el selector de corte: 287px de 402, o sea corrido a
+       la izquierda. Centrarlo de verdad pide que el renglón sea suyo, y
+       eso obliga a mudar el selector a otra fila. Se fue a la del monto,
+       que es texto chico y se banca perder ancho — **cuando un control y
+       un texto comparten renglón, el que paga es el texto; elegí qué
+       texto puede perder.**
+
+     - **EL REPARTO ENTRE RENGLONES NO SE DEDUCE DE SUS CAJAS.** Al
+       recalibrar las tres franjas sumé lo que devolvía
+       `getBoundingClientRect` de cada renglón —21 + 30 + 19 = 70— y las
+       dos tarjetas saltaron de 246 a **251**. El total real era 75: los
+       renglones traen aire que no está en su caja (line-height, el
+       `margin-bottom: -16px` de la #162, el redondeo de cada bloque de
+       Streamlit). **Lo que se mide es la TARJETA**, y el reparto entre
+       constantes es bookkeeping que tiene que sumar ese número.
+
+     - **Cuatro bloques con el `gap` por defecto son 48px de aire.** La
+       tarjeta pasó a tener cuatro hijos (nombre · fila · % · figura) y
+       Streamlit pone 16px entre cada par. Se baja con un `gap` en la
+       TARJETA y no con márgenes negativos uno por uno: el margen hay que
+       calibrarlo por bloque y se descalibra en cuanto uno cambia de
+       tamaño; el `gap` vale para todos y para el que venga.
+
+     - **Y los rótulos de tramo de la cabecera duraron un día.** Los de la
+       #444 —«Qué entra», «El detalle»— se quitaron a pedido junto con los
+       13px de `padding-top` que les hacían sitio: la fila baja de 40 a
+       27. La línea separadora se queda, que hace el mismo trabajo sin
+       gastar un renglón. No es que la #444 estuviera mal: es que el
+       mismo usuario que pidió la jerarquía prefirió pagarla con una línea
+       en vez de con texto, y eso sólo se sabe viéndola puesta.
+
+     - **El azul del nombre sale de `tema.py`** (`ACENTO_TEXTO`), no de un
+       `#hex`. La paleta no tiene un azul puro: el más cercano es ese
+       violeta oscuro, y si algún día hace falta uno de verdad se agrega
+       ALLÁ, no acá.
+
+     (2026-09-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37552,7 +37599,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#449**.
+> próxima regla nueva es la **#450**.
 
 >
 

@@ -321,14 +321,21 @@ temprano tiene que dibujarse temprano, viva donde viva.
 **La tarjeta de la cascada dice tres cosas, en tres renglones:**
 
 ```
-        Magret De Pato Macho x Kg          [Por qué ▾]   ← negro, centrado
-Δ VALORIZADO DE COMPRA   −S/ 16,660                      ← rótulo y monto JUNTOS
+            Magret De Pato Macho x Kg                ← azul, centrado en la TARJETA
+Δ VALORIZADO DE COMPRA  −S/ 16,660    [Por qué ▾]    ← rótulo y monto JUNTOS
 −62.6% vs año pasado · por comprar menos
 ```
 
 El símbolo **Δ** no es adorno: debajo hay una RESTA, y «valorizado de
 compra: −S/ 16,660» no existe. El monto va **al lado** de su rótulo y no
 debajo — una etiqueta arriba y un número abajo se leen como dos cosas.
+
+Dos cosas que ya costaron una corrección: **«al medio de la tarjeta» no es
+«al medio de su columna»** —el nombre no puede compartir renglón con un
+widget si tiene que centrarse en la tarjeta—, y **el reparto de alto entre
+renglones NO se deduce de sus cajas**: sumar lo que devuelve
+`getBoundingClientRect` de cada uno dio 70 cuando el real era 75, y las
+tarjetas saltaron a 251. Lo que se mide es la TARJETA. Regla #449.
 
 Y las barras de los bordes dicen el **año en número**, sacado de los meses
 que hay en pantalla y no de `today()`: con la ventana de 12 meses son

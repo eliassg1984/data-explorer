@@ -467,10 +467,24 @@ una tarjeta que ya estaba llena, así que los píxeles que ocupan hay que
 restárselos a la figura, o la tarjeta crece y su eje X termina debajo del
 borde (el modo de fallo de `FRANJA_CONTROLES`)."""
 
-FRANJA_VEREDICTO = 34
-"""Alto de una línea de VEREDICTO —una cifra grande con su porcentaje y el
-efecto que manda, todo en UN renglón— puesta encima de una figura, más el
-hueco que Streamlit deja entre bloques. MEDIDO en el navegador.
+FRANJA_VEREDICTO = 24
+"""Alto del renglón del PORCENTAJE de la cascada —«−62.6% vs año pasado ·
+por comprar menos»— más el hueco hasta el bloque siguiente. MEDIDO en el
+navegador.
+
+2026-09-17: de 34 a 24. Era la cifra GRANDE con su % y su causa en un
+renglón; al reordenarse la tarjeta (#449) el monto se fue arriba, al lado
+de su rótulo y a 13px, y acá quedó sólo el porcentaje en 11,5. El nombre
+de la constante sobrevive porque sigue siendo el renglón del veredicto —
+lo que cambió es cuánto veredicto entra en él.
+
+OJO CON REPARTIR ESTOS TRES A OJO: lo que se mide y lo que importa es la
+SUMA (75), porque es lo que se le resta a la figura. El primer intento de
+recalibrarlos los bajó a 70 «porque las cajas daban eso», y las dos
+tarjetas de la fila saltaron de 246 a 251. Los renglones traen aire que no
+se ve en `getBoundingClientRect` — line-height, el `margin-bottom: -16px`
+de la #162, el redondeo de cada bloque. Si se tocan, se vuelve a medir la
+TARJETA, no los renglones.
 
 2026-08-24: 47 = bloque 31 + gap 16, cuando el veredicto eran DOS renglones.
 2026-09-02: 38 = bloque 22 + gap 16, al compactarlo a uno solo a pedido
@@ -511,7 +525,7 @@ su alto se calcula desde `_ALTO_CONTENIDO_VAP` y no desde el de la serie.
 Si se restara dos veces, las dos columnas dejarían de terminar en la misma
 línea. Ver `arquitectura.md` regla #445."""
 
-FRANJA_NOMBRE_CASCADA = 17
+FRANJA_NOMBRE_CASCADA = 21
 """Alto del renglón con el NOMBRE del ítem que explica la cascada —negro,
 centrado, 13px— más su margen. MEDIDO en el navegador el 2026-09-17.
 
@@ -520,14 +534,16 @@ mide lo mismo con ítem y sin él. Reservar el sitio cuesta 17px; no
 reservarlo hace que la figura salte de tamaño cada vez que se enfoca o se
 suelta una fila, que se lee peor que la figura chica. Ver la regla #448."""
 
-FRANJA_ROTULO = 24
+FRANJA_ROTULO = 30
 """Alto del RÓTULO que nombra qué magnitud y qué ámbito dibuja una cascada
 —«Valorizado de compra · Lomo fino entero nacional x Kg»—, MEDIDO en el
-navegador. Son 24 desde el 2026-09-17 y fueron 17 el día anterior, y la
-diferencia la puso un control: el rótulo comparte su renglón con el
-selector de «Partir por», así que quien manda en el alto ya no es el texto
-(14px + 3 de margen) sino el desplegable (26px). Medido: con 17 las dos
-tarjetas de la fila salían de 253 contra los 246 de antes.
+navegador. Fue 17, después 24 y hoy 30, y las tres veces lo movió lo mismo:
+QUIÉN manda en el alto de ese renglón. Con el texto solo eran 14px + 3 de
+margen; al meterse el selector de «Partir por» pasó a mandar el
+desplegable (26px); y con el `gap` de la tarjeta bajado a 4 hay que
+sumarle ese aire, porque la constante mide el renglón MÁS lo que lo separa
+del siguiente. Medido cada vez contra las dos tarjetas de la fila, que
+tienen que dar 246.
 
 NO lleva el gap de 16px de `FRANJA_VEREDICTO`, y ésa es la razón de que sea
 tan barato: el rótulo se emite DENTRO del mismo `st.markdown` que el

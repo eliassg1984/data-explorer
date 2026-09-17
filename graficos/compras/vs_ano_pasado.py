@@ -99,8 +99,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import (
-    ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_BORDE,
-    TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
+    LAVANDA_BORDE, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
     _compras_layout, _compras_truncar, scope_rerun,
@@ -154,7 +154,7 @@ vez y en este nivel porque las dos tarjetas tienen que terminar en la
 misma línea, y cada una gasta sus 214 en cosas distintas:
 
     serie    fila de controles (47)  +  figura (167)
-    cascada  fila rótulo+corte (24) + nombre (17) + veredicto (34)
+    cascada  nombre (21) + fila rótulo+corte (30) + % (24)
              + cascada (139)
 
 El error que esto evita es restar dos veces: si el alto de la cascada
@@ -181,7 +181,7 @@ dejaría de terminar en la misma línea al cambiar de corte — el defecto que
 `FRANJA_VEREDICTO` existe para evitar, pero disparado por un clic en vez
 de por el layout.
 
-Son 139px (214 − 34 − 24 − 17) y NO cambian con la fila de controles de la
+Son 139px (214 − 21 − 30 − 24) y NO cambian con la fila de controles de la
 serie —ésa se le resta sólo a su figura—. De ahí sale el `_TOPE_CASCADA`: el ancho de
 la columna que resulta es lo que decide cuántos caracteres entran en el
 rótulo de cada barra."""
@@ -256,19 +256,6 @@ del mismo número, y por eso viven en UN control y no en tres. Ver
 `_cortes_disponibles`, que es donde está la parte que importa."""
 
 _CORTE_DEFAULT = _CORTES[0]
-
-_SUBE_VEREDICTO = 14
-"""Cuánto sube el veredicto para pegarse al rótulo, en píxeles.
-
-El rótulo y el veredicto eran UN solo `st.markdown` hasta el 2026-09-17;
-al meterse el selector de corte en la fila del rótulo hubo que partirlos, y
-partirlos cuesta el `gap: 16px` que Streamlit pone entre bloques. Este
-margen negativo lo devuelve casi entero — 14 y no 16 porque los dos que
-quedan son el aire que el rótulo ya tenía cuando vivían juntos.
-
-Mismo idioma que la regla #162: el HTML de bloque de `st.markdown` ya
-viaja con un `margin-bottom: -16px` puesto por Streamlit, así que corregir
-el hueco con un margen es lo que este stack espera, no un truco."""
 
 _COLS_PUENTE = [2.86, 1]
 """Cómo se parte la fila de arriba de la cascada: veredicto | corte.
@@ -1483,39 +1470,40 @@ def _nombre_cascada_html(ambito):
     if not ambito:
         return ""
     return (
-        f'<div style="font:600 13px/1.3 DM Sans,sans-serif;'
-        f'color:{TEXTO_PRINCIPAL};text-align:center;margin:0 0 2px;'
+        f'<div style="font:600 13.5px/1.25 DM Sans,sans-serif;'
+        f'color:{ACENTO_TEXTO};text-align:center;margin:0;'
         f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-        f'{_compras_truncar(str(ambito), 42)}</div>'
+        f'{_compras_truncar(str(ambito), 46)}</div>'
     )
 
 
 def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa,
-                  magnitud="", fmt=_fmt_soles, causa=None, sube=0):
+                  magnitud="", fmt=_fmt_soles, causa=None, solo=None):
     """El veredicto de la cascada, en DOS renglones bajo el nombre del ítem.
 
-        Δ VALORIZADO DE COMPRA   −S/ 16,660
-        −62.6% vs año pasado · por comprar menos
+        Δ VALORIZADO DE COMPRA  −S/ 16,660      ← `solo="monto"`
+        −62.6% vs año pasado · por comprar menos ← `solo="pct"`
 
-    TRES VERSIONES EN TRES SEMANAS, y cada una arregló algo que la anterior
-    no veía:
+    `solo` los separa porque NO se dibujan juntos: el de arriba comparte
+    renglón con el selector de corte —así que va dentro de una columna— y
+    el de abajo va al ancho entero de la tarjeta. Sin el parámetro habría
+    que armar el HTML dos veces con la mitad de los datos cada vez.
+
+    CUATRO VERSIONES EN TRES SEMANAS, y cada una arregló lo que la
+    anterior no veía:
 
       · 2026-09-02, «más minimalista»: de dos renglones a UNO.
       · 2026-09-14, con el inspector encima del sufijo: *«¿no es fácil leer
-        de dónde sale?»*. Tres pedazos sin rótulo, y «−62.6% · la cantidad»
-        se leía «la cantidad bajó 62.6%» cuando ese 62.6% era del GASTO.
-        Cada pedazo pasó a decir qué es: «vs año pasado» pegado al %, y la
-        causa con verbo y dirección («por comprar menos»), que no se puede
-        leer como el sujeto del porcentaje. Regla #414.
-      · 2026-09-17, con captura: *«no se ve bien, podemos poner el nombre
-        del producto arriba, abajo izquierda el texto valorizado de compra,
-        con el monto al lado pero más pequeño, y en una tercera línea el
-        %»*. Un solo renglón con el monto a 18px, el rótulo encima y el
-        nombre en el medio no se leía como una jerarquía sino como tres
-        cosas apiladas. Ahora el nombre manda arriba (va aparte, ver
-        `_nombre_cascada_html`), el monto baja a 15px y se pone AL LADO de
-        su rótulo —que es lo que lo hace legible: la etiqueta y su número
-        juntos— y el % se va a su propio renglón.
+        de dónde sale?»*. «−62.6% · la cantidad» se leía «la cantidad bajó
+        62.6%» cuando ese 62.6% era del GASTO. Cada pedazo pasó a decir qué
+        es: «vs año pasado» pegado al %, y la causa con verbo y dirección,
+        que no se puede leer como el sujeto del porcentaje. Regla #414.
+      · 2026-09-17, con captura: *«no se ve bien»*. El nombre subió, el
+        monto se puso AL LADO de su rótulo —etiqueta y número juntos es lo
+        que los hace legibles— y el % se fue a su propio renglón.
+      · El mismo día: el monto baja de 15px a 13 (*«el valor en letra más
+        chica»*). El número grande peleaba con el nombre del ítem por ser
+        el título de la tarjeta, y el título es el nombre.
 
     `pct` en None cuando el año pasado no hubo compras: un "+0.0%" ahí
     diría que no cambió nada, y es un ítem nuevo.
@@ -1524,39 +1512,40 @@ def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa,
     «Ver» en Cantidad mide kilos y en Precio, S/ por kilo. UN VEREDICTO EN
     SOLES ENCIMA DE UNA CASCADA EN KILOS ES UNA CONTRADICCIÓN. `causa=""`
     apaga el sufijo donde no hay un efecto precio que nombrar (#443).
-
-    `sube` se come el `gap` que Streamlit mete entre bloques cuando este
-    HTML no comparte `st.markdown` con lo de arriba (ver
-    `_SUBE_VEREDICTO`).
     """
     if causa is None:
         causa = _causa(delta, ef_precio, ef_cant)
     color = ERROR if delta > 0 else (EXITO if delta < 0 else GRIS_TEXTO)
     signo = "+" if delta >= 0 else "−"
-    _vs = (f"{signo}{abs(pct):.1f}% vs año pasado" if pct is not None
-           else "vs año pasado")
-    # El `title` escribe la resta con los dos totales de la cascada: es la
+
+    if solo == "pct":
+        _vs = (f"{signo}{abs(pct):.1f}% vs año pasado" if pct is not None
+               else "vs año pasado")
+        return (
+            f'<div style="font:400 11.5px/1.3 DM Sans,sans-serif;'
+            f'color:{GRIS_TEXTO};margin:0;white-space:nowrap;'
+            f'overflow:hidden;text-overflow:ellipsis">{_vs}'
+            + (f'<span style="margin-left:7px">· {causa}</span>'
+               if causa else "")
+            + '</div>'
+        )
+
+    # El `title` escribe la resta con los dos totales de la cascada: la
     # cuenta entera, para el que quiera verla sin hacerla.
     _cuenta = (f"Este año {fmt(valor)} − año pasado {fmt(valor_aa)}"
                f" = {signo}{fmt(delta)}")
+    # `align-items: baseline` y no `center`: dos tamaños de letra centrados
+    # por su caja se ven desalineados; lo que el ojo alinea es la línea de
+    # base.
     return (
-        # Renglón 1: el rótulo y su monto, JUNTOS. `align-items: baseline`
-        # y no `center`: dos tamaños de letra centrados por su caja se ven
-        # desalineados: lo que el ojo alinea es la línea de base.
         f'<div title="{_cuenta}" style="display:flex;align-items:baseline;'
-        f'gap:8px;margin:{-sube}px 0 1px;white-space:nowrap;overflow:hidden">'
+        f'gap:7px;margin:0;white-space:nowrap;overflow:hidden">'
         f'<span style="font:500 10.5px/1.3 DM Sans,sans-serif;'
-        f'letter-spacing:.07em;text-transform:uppercase;color:{GRIS_TEXTO};'
+        f'letter-spacing:.06em;text-transform:uppercase;color:{GRIS_TEXTO};'
         f'flex:0 1 auto;overflow:hidden;text-overflow:ellipsis">{magnitud}'
         f'</span>'
-        f'<span style="font:600 15px/1.2 DM Sans,sans-serif;color:{color};'
+        f'<span style="font:600 13px/1.25 DM Sans,sans-serif;color:{color};'
         f'flex:none">{signo}{fmt(delta)}</span></div>'
-        # Renglón 2: el %, con contra qué se restó y la causa.
-        f'<div style="font:400 12px/1.3 DM Sans,sans-serif;'
-        f'color:{GRIS_TEXTO};margin:0 0 3px;white-space:nowrap;'
-        f'overflow:hidden;text-overflow:ellipsis">{_vs}'
-        + (f'<span style="margin-left:7px">· {causa}</span>' if causa else "")
-        + '</div>'
     )
 
 
@@ -1754,11 +1743,18 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
     # secundario, y su ámbito ya lo dice la tarjeta de al lado en
     # 13px negrita: ahí el recorte no cuesta nada.
     #
-    # columnas-internas: el corte al lado del NOMBRE, para que no le
-    # saque alto a la cascada ni ancho al veredicto.
+    # RENGLÓN 1: el nombre, a todo el ancho y centrado EN LA TARJETA
+    # (2026-09-17: «el nombre debe estar más arriba y al medio de la
+    # tarjeta»). Compartía fila con el selector, así que se centraba
+    # dentro de SU columna —287 de 402— y quedaba corrido a la izquierda.
+    # Ahora el selector baja al renglón del monto, que es texto chico y se
+    # banca perder ancho.
+    st.markdown(_nombre_cascada_html(_ambito), unsafe_allow_html=True)
+
+    # columnas-internas: el corte al lado del MONTO, para que no le saque
+    # alto a la cascada ni ancho al nombre.
     _c_rot, _c_corte = st.columns(_COLS_PUENTE, gap="small",
                                   vertical_alignment="center")
-    _c_rot.markdown(_nombre_cascada_html(_ambito), unsafe_allow_html=True)
 
     # `_un_item` mira el foco YA resuelto —a diferencia de cuando el
     # control vivía en la cabecera, donde había que adivinarlo de
@@ -1788,21 +1784,23 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
                 help=_ayuda_corte(_fuera_corte))
         st.session_state[_K_CORTE] = corte
 
-    # El veredicto, a TODO el ancho de la tarjeta y pegado al
-    # rótulo: `sube` le pone un margen negativo que se come el
-    # `gap: 16px` que Streamlit mete entre bloques. Eran un solo
-    # `st.markdown` hasta que el corte se metió en la fila del
-    # rótulo; partirlos cuesta ese gap, y recuperarlo con un margen
-    # es el mismo idioma que la regla #162 documenta para el HTML
-    # de bloque de `st.markdown`.
+    # RENGLÓN 2 (izquierda): el rótulo con su monto al lado. Sin efecto
+    # precio que nombrar no se inventa una causa: en kilos el Δ ES la
+    # cantidad, y un precio no se parte.
+    _causa_mag = None if _fmt_mag is _fmt_soles else ""
+    _c_rot.markdown(
+        _resumen_html(_d_mag, _pct_mag, ef_p, ef_c, _v1, _v0,
+                      magnitud=_magnitud, fmt=_fmt_mag, causa=_causa_mag,
+                      solo="monto"),
+        unsafe_allow_html=True)
+
+    # RENGLÓN 3: el %, a todo el ancho. Los tres renglones son bloques
+    # distintos —el del medio vive en una columna— así que el aire entre
+    # ellos NO se arregla con márgenes uno por uno, sino con el `gap` de la
+    # tarjeta entera (`estilos/_80_cards.py`, `compras_vap_card_puente`).
     st.markdown(
-        _resumen_html(
-            _d_mag, _pct_mag, ef_p, ef_c, _v1, _v0,
-            magnitud=_magnitud, fmt=_fmt_mag,
-            # Sin efecto precio que nombrar no se inventa una causa:
-            # en kilos el Δ ES la cantidad, y un precio no se parte.
-            causa=None if _fmt_mag is _fmt_soles else "",
-            sube=_SUBE_VEREDICTO),
+        _resumen_html(_d_mag, _pct_mag, ef_p, ef_c, _v1, _v0,
+                      fmt=_fmt_mag, causa=_causa_mag, solo="pct"),
         unsafe_allow_html=True)
 
     # Los bordes de la cascada dicen el AÑO en número (2026-09-17, a
