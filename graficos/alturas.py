@@ -511,6 +511,15 @@ su alto se calcula desde `_ALTO_CONTENIDO_VAP` y no desde el de la serie.
 Si se restara dos veces, las dos columnas dejarían de terminar en la misma
 línea. Ver `arquitectura.md` regla #445."""
 
+FRANJA_NOMBRE_CASCADA = 17
+"""Alto del renglón con el NOMBRE del ítem que explica la cascada —negro,
+centrado, 13px— más su margen. MEDIDO en el navegador el 2026-09-17.
+
+Se resta SIEMPRE, aunque sin foco el renglón esté vacío: así la cascada
+mide lo mismo con ítem y sin él. Reservar el sitio cuesta 17px; no
+reservarlo hace que la figura salte de tamaño cada vez que se enfoca o se
+suelta una fila, que se lee peor que la figura chica. Ver la regla #448."""
+
 FRANJA_ROTULO = 24
 """Alto del RÓTULO que nombra qué magnitud y qué ámbito dibuja una cascada
 —«Valorizado de compra · Lomo fino entero nacional x Kg»—, MEDIDO en el

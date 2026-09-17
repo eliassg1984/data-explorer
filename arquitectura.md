@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-447 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+448 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (158)
 
@@ -193,7 +193,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 - **#444** — Una fila de controles se ordena por ALCANCE, y el orden es la jerarquía: lo que manda sobre…
 
-**Layout y alturas** (68)
+**Layout y alturas** (69)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -263,6 +263,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#445** — En Streamlit, mover un widget de SITIO es moverlo de MOMENTO: el orden de ejecución es el…
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
+- **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
 
 **Plotly y figuras** (75)
 
@@ -696,7 +697,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (78)
+**Decisiones de diseño y UX** (79)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -776,6 +777,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#425** — Cuando una vista de la pila se queda con sus propios filtros, el df que recibe tiene que ser…
 - **#435** — La SEGUNDA vista que pide «los mismos filtros» los convierte en una pieza — y meter cinco…
 - **#436** — Meter un dato de CONTEXTO en una escala compartida la rompe: lo que no entra se TOPA, no se…
+- **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -37465,6 +37467,57 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+448. **Un rótulo encima de un número que puede ser NEGATIVO tiene que
+     nombrar una diferencia, no una cantidad.** Reportado el 2026-09-17
+     sobre la cascada de Compras: *«dice de título valorizado de compra…
+     pero a veces sale en negativo y ya no es lógico el nombre»*. Y es
+     cierto: «VALORIZADO DE COMPRA: −S/ 16,660» no existe.
+
+     - **El defecto es de POSICIÓN, no de redacción.** El rótulo nació
+       (#443) para nombrar la TARJETA, cuyas barras de los bordes son
+       totales —S/ 419,059 → S/ 290,947, siempre positivos—, pero está
+       pegado arriba del VEREDICTO, que es una resta. Un rótulo que
+       nombra el contenedor y se lee como pie del número de abajo miente
+       en cuanto ese número cambia de signo.
+
+     - **El símbolo y no la palabra, por ancho MEDIDO.** «DIFERENCIA DE
+       VALORIZADO DE COMPRA» pide 311px y su columna da 291 a 1280 de
+       viewport: el rótulo nuevo nacía recortado. `Δ VALORIZADO DE COMPRA`
+       entra con holgura y además es el idioma que la tabla de abajo ya
+       usa en «Δ S/» y «Δ %» — la vista deja de tener dos vocabularios
+       para lo mismo.
+
+     - **El NOMBRE del ítem salió del rótulo y es un título propio**, en
+       negro y centrado, también a pedido: *«el nombre al que refiere, o
+       sea si es un producto o subfamilia o familia, debería estar en
+       color negro, al medio de la tarjeta»*. Iba en gris, pegado con un
+       «·» y recortándose contra el selector de corte; ahora tiene su
+       renglón.
+       **Los 17px se reservan SIEMPRE**, aunque sin foco el renglón esté
+       vacío: así la cascada mide lo mismo con ítem y sin él. No
+       reservarlos hace que la figura salte de tamaño cada vez que se
+       enfoca o se suelta una fila, y una figura que cambia de alto al
+       clickear se lee peor que una figura chica.
+
+     - **Y «este año» no es `today().year`.** Los bordes de la cascada
+       dicen el año en número desde el mismo día, y el número sale de los
+       MESES QUE HAY EN PANTALLA: «este año» es la ventana de la tarjeta,
+       que puede ir a caballo de dos calendarios.
+
+           3 meses   jul–sep 26      →  «2025»      «2026»
+           12 meses  oct 25–sep 26   →  «2024-25»   «2025-26»
+
+       Con la ventana de 12m —que fue el default hasta el 2026-09-13— y
+       con «Todo», poner «2026» sería falso. Sin meses, `_etq_anios` cae a
+       las palabras de siempre: un año inventado es peor que la palabra.
+
+     - **Ojo con el `<br>`:** las etiquetas de los bordes llevan salto
+       porque van en DOS renglones en el eje, y el mismo texto se reusa en
+       el tooltip, donde un `<br>` parte la frase a la mitad. De ahí
+       `_llano()`.
+
+     (2026-09-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37477,7 +37530,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#448**.
+> próxima regla nueva es la **#449**.
 
 >
 

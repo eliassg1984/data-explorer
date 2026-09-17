@@ -154,7 +154,8 @@ vez y en este nivel porque las dos tarjetas tienen que terminar en la
 misma línea, y cada una gasta sus 214 en cosas distintas:
 
     serie    fila de controles (47)  +  figura (167)
-    cascada  fila rótulo+corte (24) + veredicto (34) + cascada (156)
+    cascada  fila rótulo+corte (24) + nombre (17) + veredicto (34)
+             + cascada (139)
 
 El error que esto evita es restar dos veces: si el alto de la cascada
 saliera del de la SERIE, se comería también los 47 de una fila de
@@ -171,7 +172,7 @@ OJO con el `_FRANJA_VAP` de la cuenta: hoy no muerde. `con_franja` devuelve
 vuelve a decidir."""
 
 _ALTO_CASCADA = (_ALTO_CONTENIDO_VAP - alturas.FRANJA_VEREDICTO
-                 - alturas.FRANJA_ROTULO)
+                 - alturas.FRANJA_ROTULO - alturas.FRANJA_NOMBRE_CASCADA)
 """Alto de la cascada, sea cuál sea el corte que dibuje.
 
 De un solo sitio y no calculado en cada `_fig_*`: las tres cascadas se
@@ -180,7 +181,7 @@ dejaría de terminar en la misma línea al cambiar de corte — el defecto que
 `FRANJA_VEREDICTO` existe para evitar, pero disparado por un clic en vez
 de por el layout.
 
-Son 156px (214 − 34 − 24) y NO cambian con la fila de controles de la
+Son 139px (214 − 34 − 24 − 17) y NO cambian con la fila de controles de la
 serie —ésa se le resta sólo a su figura—. De ahí sale el `_TOPE_CASCADA`: el ancho de
 la columna que resulta es lo que decide cuántos caracteres entran en el
 rótulo de cada barra."""
@@ -555,6 +556,42 @@ def _por_item(g, llave="prod"):
         .rename(columns={llave: "item"}))
 
 
+_ETQ_BORDES = ("Año<br>pasado", "Este<br>año")
+"""Las dos barras de los bordes de cualquier cascada, cuando no se sabe de
+qué años se está hablando. Es el fallback de `_etq_anios`."""
+
+
+def _etq_anios(meses):
+    """`("2025", "2026")` para las barras de los bordes de la cascada.
+
+    2026-09-17, a pedido: *«cuando la cascada diga año pasado y este año,
+    deberá mostrar el año en número»*. «Este año» no es un año calendario
+    sino LA VENTANA de la tarjeta, así que el número sale de los meses que
+    hay en pantalla y no de `today().year`:
+
+        3 meses  jul–sep 26   →  «2025»      «2026»
+        12 meses oct 25–sep 26 → «2024-25»   «2025-26»
+
+    Con la ventana a caballo de dos años calendario decir «2026» sería
+    falso — y es el caso del default anterior (12m) y de «Todo». Sin meses
+    cae a los rótulos de siempre: un año inventado es peor que la palabra.
+    """
+    anios = sorted({m.year for m in meses}) if len(meses) else []
+    if not anios:
+        return _ETQ_BORDES
+    if len(anios) == 1:
+        return (str(anios[0] - 1), str(anios[0]))
+    a, b = anios[0], anios[-1]
+    return (f"{a - 1}-{str(b - 1)[-2:]}", f"{a}-{str(b)[-2:]}")
+
+
+def _llano(etq):
+    """La etiqueta de una barra sin el `<br>` con que se parte en dos
+    renglones: lo que va en el EJE lleva el salto, lo que va en el TOOLTIP
+    no — ahí un `<br>` parte la frase a la mitad."""
+    return str(etq).replace("<br>", " ")
+
+
 _TOPE_CASCADA = 3
 """Cuántas barras NOMBRADAS entran en una cascada de «Quién» o «Cuándo».
 
@@ -586,7 +623,7 @@ fijos y cortos ("Efecto precio"), así que no tiene por qué encoger."""
 
 
 def _pasos_cascada(partes, valor_aa, valor, tope=_TOPE_CASCADA,
-                   cronologico=False, resto="otros"):
+                   cronologico=False, resto="otros", bordes=_ETQ_BORDES):
     """Los pasos de una cascada de contribuyentes, con la cola sumada.
 
     `partes` es `[(nombre, delta)]`. Entran las `tope` de mayor |Δ| y todo
@@ -615,7 +652,7 @@ def _pasos_cascada(partes, valor_aa, valor, tope=_TOPE_CASCADA,
     if cronologico:
         cabeza = sorted(cabeza)
     cola = [i for i in range(len(partes)) if i not in set(cabeza)]
-    pasos = [{"label": "Año<br>pasado", "medida": "absolute",
+    pasos = [{"label": bordes[0], "medida": "absolute",
               "valor": float(valor_aa)}]
     for i in cabeza:
         pasos.append({"label": _etq_barra(partes[i][0]), "medida": "relative",
@@ -623,7 +660,7 @@ def _pasos_cascada(partes, valor_aa, valor, tope=_TOPE_CASCADA,
     if cola:
         pasos.append({"label": f"{resto}<br>{len(cola)}", "medida": "relative",
                       "valor": float(sum(partes[i][1] for i in cola))})
-    pasos.append({"label": "Este<br>año", "medida": "total",
+    pasos.append({"label": bordes[1], "medida": "total",
                   "valor": float(valor)})
     return pasos
 
@@ -659,18 +696,18 @@ def _etq_barra(nombre, ancho=_ANCHO_ETQ_BARRA):
     return f"{s[:corte]}<br>{_compras_truncar(s[corte + 1:], ancho)}"
 
 
-def _pasos_simple(valor_aa, valor, etq="Δ"):
+def _pasos_simple(valor_aa, valor, etq="Δ", bordes=_ETQ_BORDES):
     """Cascada de TRES barras: de dónde a dónde, sin partir nada.
 
     Es lo que queda cuando ningún corte aplica (ver `_cortes_disponibles`):
     en Precio siempre, y en Cantidad con un mes elegido. No es un gráfico
     degradado por accidente — es el techo honesto de esa magnitud, y
     dibujarlo así lo dice mejor que un párrafo."""
-    return [{"label": "Año<br>pasado", "medida": "absolute",
+    return [{"label": bordes[0], "medida": "absolute",
              "valor": float(valor_aa)},
             {"label": etq, "medida": "relative",
              "valor": float(valor) - float(valor_aa)},
-            {"label": "Este<br>año", "medida": "total", "valor": float(valor)}]
+            {"label": bordes[1], "medida": "total", "valor": float(valor)}]
 
 
 def _mes_parcial(fechas):
@@ -1124,7 +1161,8 @@ def _unidades_por(fuente, llave, col_um):
 
 
 def _fig_puente(valor, valor_aa, ef_precio, ef_cant,
-                cant=None, cant_aa=None, unidad=""):
+                cant=None, cant_aa=None, unidad="",
+                bordes=_ETQ_BORDES):
     """Puente: año pasado → efecto precio → efecto cantidad → este año.
 
     `go.Waterfall` ignora `bargap` (CLAUDE.md § Plotly): el grosor se
@@ -1149,8 +1187,8 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant,
     fig = go.Figure(go.Waterfall(
         orientation="v",
         measure=["absolute", "relative", "relative", "total"],
-        x=["Año<br>pasado", "Efecto<br>precio", "Efecto<br>cantidad",
-           "Este<br>año"],
+        x=[bordes[0], "Efecto<br>precio", "Efecto<br>cantidad",
+           bordes[1]],
         y=[valor_aa, ef_precio, ef_cant, 0],
         # Con signo las dos del medio (son diferencias: "+" costó más, "−"
         # costó menos) y sin signo las dos de los bordes, que son totales.
@@ -1201,7 +1239,7 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant,
         # también si falta la unidad: un número pelado es justo lo que se
         # reportó, así que sin unidad no se muestra cantidad.
         hovertext=[
-            f"Año pasado: S/ {valor_aa:,.0f}",
+            f"{_llano(bordes[0])}: S/ {valor_aa:,.0f}",
             f"Efecto precio: {_signo(ef_precio)}<br>"
             "<span style='font-size:11px'>"
             + (f"{cant:,.0f} {_um} × precio de este año = "
@@ -1226,7 +1264,7 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant,
                f"compras del año pasado, a esos mismos precios = "
                f"S/ {valor_aa:,.0f}")
             + "</span>",
-            f"Este año: S/ {valor:,.0f}",
+            f"{_llano(bordes[1])}: S/ {valor:,.0f}",
         ],
         hovertemplate="%{hovertext}<extra></extra>",
     ))
@@ -1423,7 +1461,28 @@ def _nombre_serie_html(item, auto=False):
     )
 
 
-def _rotulo_html(magnitud, ambito):
+def _nombre_cascada_html(ambito):
+    """El ítem que explica la cascada: NEGRO y centrado, en su propia línea.
+
+    2026-09-17, a pedido: *«el nombre al que refiere, o sea si es un
+    producto o subfamilia o familia, debería estar en color negro, al medio
+    de la tarjeta»*. Salió del rótulo —donde iba en gris, pegado con un «·»
+    y recortándose contra el selector de corte— y pasó a ser un título.
+
+    Vacío sin foco: ahí la cascada es de todas las compras y un renglón que
+    dijera «todas» ocuparía sitio para decir que no hay recorte. Mismo
+    criterio que el nombre de la tarjeta de las barras."""
+    if not ambito:
+        return ""
+    return (
+        f'<div style="font:600 13px/1.3 DM Sans,sans-serif;'
+        f'color:{TEXTO_PRINCIPAL};text-align:center;margin:0 0 2px;'
+        f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+        f'{_compras_truncar(str(ambito), 42)}</div>'
+    )
+
+
+def _rotulo_html(magnitud, ambito=""):
     """El renglón que dice QUÉ mide la cascada y SOBRE QUÉ.
 
     Nació el 2026-09-16, reportado mirando la tarjeta: *«solamente veo un
@@ -1446,8 +1505,10 @@ def _rotulo_html(magnitud, ambito):
         f'letter-spacing:.07em;text-transform:uppercase;color:{GRIS_TEXTO};'
         f'margin:0 0 3px;white-space:nowrap;overflow:hidden;'
         f'text-overflow:ellipsis">{magnitud}'
-        f'<span style="text-transform:none;letter-spacing:.02em;'
-        f'font-size:11px;color:{GRIS_TEXTO_SUAVE}"> · {ambito}</span></div>'
+        + (f'<span style="text-transform:none;letter-spacing:.02em;'
+           f'font-size:11px;color:{GRIS_TEXTO_SUAVE}"> · {ambito}</span>'
+           if ambito else "")
+        + '</div>'
     )
 
 
@@ -1639,12 +1700,21 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
     # soles; desde que la tarjeta sigue a «Ver», un veredicto en
     # soles encima de una cascada en kilos es una contradicción
     # escrita en la misma tarjeta. Sale de acá, una vez.
+    #
+    # EMPIEZA CON Δ (2026-09-17, a pedido: «a veces sale en negativo y ya
+    # no es lógico el nombre»). El rótulo nombra la tarjeta pero está
+    # pegado arriba del VEREDICTO, que es una resta: «VALORIZADO DE
+    # COMPRA: −S/ 16,660» no existe. Con el Δ delante, sí.
+    # El símbolo y no la palabra por ancho MEDIDO: «DIFERENCIA DE
+    # VALORIZADO DE COMPRA» pide 311px y su columna da 291 a 1280 de
+    # viewport — se recortaba el rótulo nuevo el día que nació. Además es
+    # el idioma que la tabla de abajo ya usa en «Δ S/» y «Δ %».
     if modo == "Cantidad" and _um_corta:
-        _magnitud = f"Cantidad comprada · {_um_corta}"
+        _magnitud = f"Δ Cantidad comprada ({_um_corta})"
         _fmt_mag = lambda v: _fmt_cant(v, _um_corta)  # noqa: E731
         _v1, _v0 = float(tot["cant"]), float(tot["cant_aa"])
     elif modo == "Precio" and _um_corta and tot["cant"] and tot["cant_aa"]:
-        _magnitud = f"Precio unitario · S/ por {_um_corta}"
+        _magnitud = f"Δ Precio (S/ por {_um_corta})"
         _fmt_mag = lambda v: _fmt_precio(v, _um_corta)  # noqa: E731
         _v1 = float(tot["valor"]) / float(tot["cant"])
         _v0 = float(tot["valor_aa"]) / float(tot["cant_aa"])
@@ -1652,14 +1722,17 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
         # También el caso «Cantidad sin unidad»: sin unidad no se
         # escribe una cantidad (regla #335), así que la tarjeta se
         # queda en soles y el rótulo lo dice.
-        _magnitud = "Valorizado de compra"
+        _magnitud = "Δ Valorizado de compra"
         _fmt_mag = _fmt_soles
         _v1, _v0 = float(tot["valor"]), float(tot["valor_aa"])
     _d_mag = _v1 - _v0
     _pct_mag = (_d_mag / _v0 * 100) if _v0 else None
-    _ambito = (foco_titulo if foco_titulo else "todas las compras")
+    # El ÍTEM va solo, en su propia línea negra y centrada; el MES, si lo
+    # hay, se le pega — es parte de "sobre qué" y no de "qué se mide".
+    # Sin foco no se escribe nada (ver `_nombre_cascada_html`).
+    _ambito = foco_titulo or ""
     if mes_sel:
-        _ambito = f"{_ambito} · {mes_sel}"
+        _ambito = f"{_ambito} · {mes_sel}" if _ambito else mes_sel
 
     # ── EL CORTE, AL LADO DEL VEREDICTO ──────────────────────────
     # 2026-09-17, segunda mudanza del día: «hagamos que ese corte
@@ -1695,9 +1768,7 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
     # le saque alto a la cascada ni ancho al veredicto.
     _c_rot, _c_corte = st.columns(_COLS_PUENTE, gap="small",
                                   vertical_alignment="center")
-    _c_rot.markdown(
-        _rotulo_html(_magnitud, _compras_truncar(_ambito, 34)),
-        unsafe_allow_html=True)
+    _c_rot.markdown(_rotulo_html(_magnitud), unsafe_allow_html=True)
 
     # `_un_item` mira el foco YA resuelto —a diferencia de cuando el
     # control vivía en la cabecera, donde había que adivinarlo de
@@ -1735,7 +1806,8 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
     # es el mismo idioma que la regla #162 documenta para el HTML
     # de bloque de `st.markdown`.
     st.markdown(
-        _resumen_html(
+        _nombre_cascada_html(_ambito)
+        + _resumen_html(
             _d_mag, _pct_mag, ef_p, ef_c, _v1, _v0,
             fmt=_fmt_mag,
             # Sin efecto precio que nombrar no se inventa una causa:
@@ -1743,6 +1815,12 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
             causa=None if _fmt_mag is _fmt_soles else "",
             sube=_SUBE_VEREDICTO),
         unsafe_allow_html=True)
+
+    # Los bordes de la cascada dicen el AÑO en número (2026-09-17, a
+    # pedido). Sale de `g_casc` —los meses que la cascada explica, ya
+    # recortados por el mes elegido— y no de la fecha de hoy: «este año» es
+    # la ventana de la tarjeta, que puede ir a caballo de dos calendarios.
+    _bordes = _etq_anios(g_casc["mes"].unique() if not g_casc.empty else [])
 
     # ── QUÉ CASCADA SE DIBUJA ────────────────────────────────────
     # «Por qué» sigue siendo `_fig_puente` y no un caso de
@@ -1755,14 +1833,15 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
             tot["valor"], tot["valor_aa"], ef_p, ef_c,
             cant=float(items["cant"].iloc[0]) if _uno else None,
             cant_aa=float(items["cant_aa"].iloc[0]) if _uno else None,
-            unidad=_um_puente)
+            unidad=_um_puente, bordes=_bordes)
     else:
         _partes = None
         if corte == "Quién":
             _por = _por_item(g_casc, llave_foco)
             _partes = [(str(r.item), float(r.valor - r.valor_aa))
                        for r in _por.itertuples()]
-            _pasos = _pasos_cascada(_partes, _v0, _v1, resto="otros")
+            _pasos = _pasos_cascada(_partes, _v0, _v1, resto="otros",
+                                    bordes=_bordes)
         elif corte == "Cuándo":
             _pm = (g_foco.groupby("mes", as_index=False)
                    [["valor", "cant", "valor_aa", "cant_aa"]].sum()
@@ -1772,10 +1851,10 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
                         float(getattr(r, _col)
                               - getattr(r, f"{_col}_aa")))
                        for r in _pm.itertuples()]
-            _pasos = _pasos_cascada(_partes, _v0, _v1,
-                                    cronologico=True, resto="otros")
+            _pasos = _pasos_cascada(_partes, _v0, _v1, cronologico=True,
+                                    resto="otros", bordes=_bordes)
         else:
-            _pasos = _pasos_simple(_v0, _v1)
+            _pasos = _pasos_simple(_v0, _v1, bordes=_bordes)
         _fig_p = _fig_cascada(
             _pasos, lambda v, med: _etq_cascada(v, med, _fmt_mag),
             hover=_hover_cascada(_pasos, _partes, _fmt_mag,

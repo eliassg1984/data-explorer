@@ -318,6 +318,16 @@ rellenan ochenta líneas después: **en Streamlit el orden de ejecución es
 el orden en que se leen los valores**, así que un widget que hace falta
 temprano tiene que dibujarse temprano, viva donde viva.
 
+**La tarjeta de la cascada dice tres cosas, en tres renglones:** el
+rótulo gris con la magnitud —`Δ VALORIZADO DE COMPRA`, con el símbolo
+porque debajo hay una RESTA y «valorizado de compra: −S/ 16,660» no
+existe—, el **nombre del ítem en negro y centrado**, y el veredicto. Sus
+17px se reservan aunque no haya foco, para que la figura no salte de alto
+al enfocar. Y las barras de los bordes dicen el **año en número**, sacado
+de los meses que hay en pantalla y no de `today()`: con la ventana de 12
+meses son «2024-25» y «2025-26», porque va a caballo de dos calendarios.
+Regla #448.
+
 **La cascada tiene además su propio `@st.fragment`** (`_tarjeta_cascada`),
 para que `Partir por` no redibuje las otras tres — mismo patrón que
 `volatilidad.py::_tarjeta_compras_semana` y por la misma queja. La
