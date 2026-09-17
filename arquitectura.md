@@ -193,7 +193,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 - **#444** — Una fila de controles se ordena por ALCANCE, y el orden es la jerarquía: lo que manda sobre…
 
-**Layout y alturas** (69)
+**Layout y alturas** (68)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -263,9 +263,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#445** — En Streamlit, mover un widget de SITIO es moverlo de MOMENTO: el orden de ejecución es el…
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
-- **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
 
-**Plotly y figuras** (75)
+**Plotly y figuras** (76)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -342,6 +341,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#438** — Un title adentro de una tarjeta con botón-overlay no se ve nunca; el :hover del CONTENEDOR sí…
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 - **#440** — Una tabla "documento → detalle" marca su fila con un DATO, no con la selección de AG Grid — y…
+- **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
 
 **AgGrid y tablas** (70)
 
@@ -37515,6 +37515,28 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        porque van en DOS renglones en el eje, y el mismo texto se reusa en
        el tooltip, donde un `<br>` parte la frase a la mitad. De ahí
        `_llano()`.
+
+     - **Y PONER AÑOS EN EL EJE ROMPIÓ LA CASCADA, que es la #325 mordiendo
+       otra vez.** `_fig_puente` nunca había necesitado `type="category"`
+       porque sus cuatro rótulos eran palabras. Con "2025" y "2026" Plotly
+       los parsea como NÚMEROS, el eje sale `linear` —con un tick "2,025.5"
+       en el medio— y **las dos barras de efectos, cuyas x son texto, no se
+       dibujan**: la cascada quedó en dos barras sueltas. Se vio en una
+       captura del usuario, no en los tests: el `test_graficos` construye
+       la figura y no revienta, porque Plotly no falla, sólo dibuja otra
+       cosa.
+       La lección no es «acordate del `type`». Es que **cambiar un rótulo
+       puede cambiar el TIPO de un eje**, y que la única prueba que lo ve
+       es mirar la figura — la #91 otra vez, dicha desde otro lado.
+
+     - **El orden final del texto lo puso el ojo, no la teoría.** Rótulo
+       arriba, nombre en el medio, monto de 18px abajo: tres cosas
+       apiladas, ninguna mandando. Reportado como *«no se ve bien»* con la
+       captura, y el arreglo fue del usuario: nombre ARRIBA, el rótulo con
+       su MONTO AL LADO —etiqueta y número juntos, que es lo que los hace
+       legibles— y el % en su propio renglón. El monto bajó de 18px a 15
+       en el camino y la tarjeta se lee mejor con el número más chico,
+       porque ahora se sabe de qué es.
 
      (2026-09-17.)
 

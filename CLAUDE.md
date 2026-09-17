@@ -318,15 +318,26 @@ rellenan ochenta líneas después: **en Streamlit el orden de ejecución es
 el orden en que se leen los valores**, así que un widget que hace falta
 temprano tiene que dibujarse temprano, viva donde viva.
 
-**La tarjeta de la cascada dice tres cosas, en tres renglones:** el
-rótulo gris con la magnitud —`Δ VALORIZADO DE COMPRA`, con el símbolo
-porque debajo hay una RESTA y «valorizado de compra: −S/ 16,660» no
-existe—, el **nombre del ítem en negro y centrado**, y el veredicto. Sus
-17px se reservan aunque no haya foco, para que la figura no salte de alto
-al enfocar. Y las barras de los bordes dicen el **año en número**, sacado
-de los meses que hay en pantalla y no de `today()`: con la ventana de 12
-meses son «2024-25» y «2025-26», porque va a caballo de dos calendarios.
-Regla #448.
+**La tarjeta de la cascada dice tres cosas, en tres renglones:**
+
+```
+        Magret De Pato Macho x Kg          [Por qué ▾]   ← negro, centrado
+Δ VALORIZADO DE COMPRA   −S/ 16,660                      ← rótulo y monto JUNTOS
+−62.6% vs año pasado · por comprar menos
+```
+
+El símbolo **Δ** no es adorno: debajo hay una RESTA, y «valorizado de
+compra: −S/ 16,660» no existe. El monto va **al lado** de su rótulo y no
+debajo — una etiqueta arriba y un número abajo se leen como dos cosas.
+
+Y las barras de los bordes dicen el **año en número**, sacado de los meses
+que hay en pantalla y no de `today()`: con la ventana de 12 meses son
+«2024-25» y «2025-26», porque va a caballo de dos calendarios. **Ojo:** eso
+obligó a poner `type="category"` en `_fig_puente` — sin él Plotly parsea
+«2025» como número, el eje sale `linear` y **las dos barras de efectos no
+se dibujan**. Es la #325 mordiendo de nuevo: cambiar un rótulo puede
+cambiar el TIPO de un eje, y los tests no lo ven porque la figura se
+construye igual. Regla #448.
 
 **La cascada tiene además su propio `@st.fragment`** (`_tarjeta_cascada`),
 para que `Partir por` no redibuje las otras tres — mismo patrón que

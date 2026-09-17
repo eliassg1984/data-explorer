@@ -99,8 +99,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import (
-    ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
-    LAVANDA_BORDE, TEXTO_PRINCIPAL,
+    ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_BORDE,
+    TEXTO_PRINCIPAL,
 )
 from graficos.base import (
     _compras_layout, _compras_truncar, scope_rerun,
@@ -1290,6 +1290,14 @@ def _fig_puente(valor, valor_aa, ef_precio, ef_cant,
     fig.update_layout(showlegend=False, title="",
                       margin=dict(l=10, r=10, t=16, b=10))
     fig.update_yaxes(showticklabels=False)
+    # `type="category"` NO ES OPCIONAL desde que los bordes dicen el año en
+    # número (#448). Sin esto Plotly parsea "2025" y "2026" como NÚMEROS,
+    # el eje sale `linear` —con un tick "2,025.5" en el medio— y las dos
+    # barras de efectos, cuyas x son texto, no se dibujan: la cascada
+    # quedaba en dos barras sueltas. Es la trampa de la #325 vista de
+    # nuevo, y esta figura se salvaba sólo porque sus cuatro rótulos eran
+    # palabras. Reportado con captura el 2026-09-17.
+    fig.update_xaxes(type="category", tickangle=0)
     return fig
 
 
@@ -1482,90 +1490,72 @@ def _nombre_cascada_html(ambito):
     )
 
 
-def _rotulo_html(magnitud, ambito=""):
-    """El renglón que dice QUÉ mide la cascada y SOBRE QUÉ.
-
-    Nació el 2026-09-16, reportado mirando la tarjeta: *«solamente veo un
-    valor en moneda»*. La cascada medía soles y no lo decía en ninguna
-    parte — el ámbito estaba en la cabecera, que es OTRA tarjeta desde el
-    2026-09-14 (regla #420), así que el puente mirado solo no nombraba ni
-    su magnitud ni su alcance.
-
-    NO DICE «TOTAL», y eso no es economía de palabras: con un ítem en foco
-    sería falso, y la mitad de las veces hay uno (en Cantidad y en Precio
-    lo pone la vista sola). El ámbito se escribe entero y el rótulo no
-    afirma nada que el estado no respalde.
-
-    Va DENTRO del mismo `st.markdown` que el veredicto — de ahí que
-    `alturas.FRANJA_ROTULO` sean 15px y no 31: un bloque propio pagaría
-    además el gap de 16 que Streamlit mete entre elementos.
-    """
-    return (
-        f'<div style="font:500 10.5px/1.25 DM Sans,sans-serif;'
-        f'letter-spacing:.07em;text-transform:uppercase;color:{GRIS_TEXTO};'
-        f'margin:0 0 3px;white-space:nowrap;overflow:hidden;'
-        f'text-overflow:ellipsis">{magnitud}'
-        + (f'<span style="text-transform:none;letter-spacing:.02em;'
-           f'font-size:11px;color:{GRIS_TEXTO_SUAVE}"> · {ambito}</span>'
-           if ambito else "")
-        + '</div>'
-    )
-
-
 def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa,
-                  rotulo="", fmt=_fmt_soles, causa=None, sube=0):
-    """Una línea con el veredicto, arriba del puente. Es texto y no `st.metric`
-    porque tres métricas nativas ocupan 90px de la tarjeta para decir lo que
-    el propio waterfall ya dibuja debajo.
+                  magnitud="", fmt=_fmt_soles, causa=None, sube=0):
+    """El veredicto de la cascada, en DOS renglones bajo el nombre del ítem.
+
+        Δ VALORIZADO DE COMPRA   −S/ 16,660
+        −62.6% vs año pasado · por comprar menos
+
+    TRES VERSIONES EN TRES SEMANAS, y cada una arregló algo que la anterior
+    no veía:
+
+      · 2026-09-02, «más minimalista»: de dos renglones a UNO.
+      · 2026-09-14, con el inspector encima del sufijo: *«¿no es fácil leer
+        de dónde sale?»*. Tres pedazos sin rótulo, y «−62.6% · la cantidad»
+        se leía «la cantidad bajó 62.6%» cuando ese 62.6% era del GASTO.
+        Cada pedazo pasó a decir qué es: «vs año pasado» pegado al %, y la
+        causa con verbo y dirección («por comprar menos»), que no se puede
+        leer como el sujeto del porcentaje. Regla #414.
+      · 2026-09-17, con captura: *«no se ve bien, podemos poner el nombre
+        del producto arriba, abajo izquierda el texto valorizado de compra,
+        con el monto al lado pero más pequeño, y en una tercera línea el
+        %»*. Un solo renglón con el monto a 18px, el rótulo encima y el
+        nombre en el medio no se leía como una jerarquía sino como tres
+        cosas apiladas. Ahora el nombre manda arriba (va aparte, ver
+        `_nombre_cascada_html`), el monto baja a 15px y se pone AL LADO de
+        su rótulo —que es lo que lo hace legible: la etiqueta y su número
+        juntos— y el % se va a su propio renglón.
 
     `pct` en None cuando el año pasado no hubo compras: un "+0.0%" ahí
     diría que no cambió nada, y es un ítem nuevo.
 
-    `rotulo` es el HTML de `_rotulo_html`, y viaja por acá en vez de por un
-    `st.markdown` propio por los 16px del gap (ver esa función).
+    `fmt` y `causa` existen porque la tarjeta no mide siempre soles: con
+    «Ver» en Cantidad mide kilos y en Precio, S/ por kilo. UN VEREDICTO EN
+    SOLES ENCIMA DE UNA CASCADA EN KILOS ES UNA CONTRADICCIÓN. `causa=""`
+    apaga el sufijo donde no hay un efecto precio que nombrar (#443).
 
-    `fmt` y `causa` existen porque desde el 2026-09-16 la tarjeta no mide
-    siempre soles: con «Ver» en Cantidad mide kilos y en Precio, S/ por
-    kilo. UN VEREDICTO EN SOLES ENCIMA DE UNA CASCADA EN KILOS ES UNA
-    CONTRADICCIÓN, y de las caras — es exactamente el bug que el rótulo
-    vino a tapar, pero al revés. `causa=""` apaga el sufijo donde no hay un
-    efecto precio que nombrar (regla #443).
+    `sube` se come el `gap` que Streamlit mete entre bloques cuando este
+    HTML no comparte `st.markdown` con lo de arriba (ver
+    `_SUBE_VEREDICTO`).
     """
-    color = ERROR if delta > 0 else (EXITO if delta < 0 else GRIS_TEXTO)
-    signo = "+" if delta >= 0 else "−"
-    # 2026-09-02, a pedido ("más minimalista"): de DOS renglones a UNO, y
-    # el sufijo quedó en un sustantivo pelado: `−S/ 16,660 −62.6% · la
-    # cantidad`. 2026-09-14, señalado con el inspector sobre ese sufijo:
-    # «¿no es fácil leer de dónde sale?». Tres pedazos sin rótulo, y el
-    # tercero se pega al de al lado — "−62.6% · la cantidad" se lee "la
-    # cantidad bajó 62.6%", cuando el 62.6% es del GASTO (la cantidad
-    # había bajado otro número). Regla #414. Sigue siendo un renglón, pero
-    # cada pedazo dice qué es:
-    #   · "vs año pasado" pegado al %: nombra contra qué se restó.
-    #   · la causa con su dirección ("por comprar menos"): un verbo no se
-    #     puede leer como el sujeto del porcentaje.
-    #   · el `title` escribe la resta con los dos totales de la cascada.
-    # Cuesta ancho: medido con el monto de todas las compras, 354px contra
-    # 450 de columna a 1358 de ventana — pero 351 a 1100 y 322 a 1024. Por
-    # eso el `ellipsis`: en una laptop angosta se recorta la causa con "…"
-    # (se VE recortada), en vez de salirse de la tarjeta o partir el renglón
-    # (`alturas.FRANJA_VEREDICTO` cuenta con uno solo).
     if causa is None:
         causa = _causa(delta, ef_precio, ef_cant)
-    _chico = (f'font:400 12px/1 DM Sans,sans-serif;color:{GRIS_TEXTO};'
-              f'margin-left:8px')
+    color = ERROR if delta > 0 else (EXITO if delta < 0 else GRIS_TEXTO)
+    signo = "+" if delta >= 0 else "−"
     _vs = (f"{signo}{abs(pct):.1f}% vs año pasado" if pct is not None
            else "vs año pasado")
+    # El `title` escribe la resta con los dos totales de la cascada: es la
+    # cuenta entera, para el que quiera verla sin hacerla.
     _cuenta = (f"Este año {fmt(valor)} − año pasado {fmt(valor_aa)}"
                f" = {signo}{fmt(delta)}")
     return (
-        rotulo
-        + f'<div title="{_cuenta}" '
-        f'style="font:600 18px/1.25 DM Sans,sans-serif;color:{color};'
-        f'margin:{-sube}px 0 4px;white-space:nowrap;overflow:hidden;'
-        f'text-overflow:ellipsis">{signo}{fmt(delta)}'
-        f'<span style="{_chico}">{_vs}</span>'
-        + (f'<span style="{_chico}">· {causa}</span>' if causa else "")
+        # Renglón 1: el rótulo y su monto, JUNTOS. `align-items: baseline`
+        # y no `center`: dos tamaños de letra centrados por su caja se ven
+        # desalineados: lo que el ojo alinea es la línea de base.
+        f'<div title="{_cuenta}" style="display:flex;align-items:baseline;'
+        f'gap:8px;margin:{-sube}px 0 1px;white-space:nowrap;overflow:hidden">'
+        f'<span style="font:500 10.5px/1.3 DM Sans,sans-serif;'
+        f'letter-spacing:.07em;text-transform:uppercase;color:{GRIS_TEXTO};'
+        f'flex:0 1 auto;overflow:hidden;text-overflow:ellipsis">{magnitud}'
+        f'</span>'
+        f'<span style="font:600 15px/1.2 DM Sans,sans-serif;color:{color};'
+        f'flex:none">{signo}{fmt(delta)}</span></div>'
+        # Renglón 2: el %, con contra qué se restó y la causa.
+        f'<div style="font:400 12px/1.3 DM Sans,sans-serif;'
+        f'color:{GRIS_TEXTO};margin:0 0 3px;white-space:nowrap;'
+        f'overflow:hidden;text-overflow:ellipsis">{_vs}'
+        + (f'<span style="margin-left:7px">· {causa}</span>' if causa else "")
         + '</div>'
     )
 
@@ -1764,11 +1754,11 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
     # secundario, y su ámbito ya lo dice la tarjeta de al lado en
     # 13px negrita: ahí el recorte no cuesta nada.
     #
-    # columnas-internas: el corte al lado del rótulo, para que no
-    # le saque alto a la cascada ni ancho al veredicto.
+    # columnas-internas: el corte al lado del NOMBRE, para que no le
+    # saque alto a la cascada ni ancho al veredicto.
     _c_rot, _c_corte = st.columns(_COLS_PUENTE, gap="small",
                                   vertical_alignment="center")
-    _c_rot.markdown(_rotulo_html(_magnitud), unsafe_allow_html=True)
+    _c_rot.markdown(_nombre_cascada_html(_ambito), unsafe_allow_html=True)
 
     # `_un_item` mira el foco YA resuelto —a diferencia de cuando el
     # control vivía en la cabecera, donde había que adivinarlo de
@@ -1806,10 +1796,9 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
     # es el mismo idioma que la regla #162 documenta para el HTML
     # de bloque de `st.markdown`.
     st.markdown(
-        _nombre_cascada_html(_ambito)
-        + _resumen_html(
+        _resumen_html(
             _d_mag, _pct_mag, ef_p, ef_c, _v1, _v0,
-            fmt=_fmt_mag,
+            magnitud=_magnitud, fmt=_fmt_mag,
             # Sin efecto precio que nombrar no se inventa una causa:
             # en kilos el Δ ES la cantidad, y un precio no se parte.
             causa=None if _fmt_mag is _fmt_soles else "",

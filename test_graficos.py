@@ -696,14 +696,25 @@ def _pruebas_puras():
     check("veredicto en kilos: sin S/ por ningún lado", "S/" in _rk, False)
     check("veredicto en kilos: sin causa inventada",
           "por comprar" in _rk, False)
-    check("el rótulo dice la magnitud y el ámbito",
-          "Valorizado de compra" in _vap._rotulo_html("Valorizado de compra",
-                                                      "todas las compras"),
-          True)
+    # El rótulo va PEGADO a su monto y en el mismo renglón (regla #448):
+    # una etiqueta arriba y el número abajo se leen como dos cosas.
+    _rv = _vap._resumen_html(-16660.0, -62.6, 235.0, -16895.0, 9933.0,
+                             26594.0, magnitud="Δ Valorizado de compra")
+    check("el veredicto lleva su rótulo adentro",
+          "Δ Valorizado de compra" in _rv, True)
     check("el rótulo NO dice 'total' (con foco sería falso)",
-          "total" in _vap._rotulo_html("Valorizado de compra",
-                                       "todas las compras").lower(),
-          False)
+          "total" in _rv.lower(), False)
+    check("el monto va más chico que antes (15px, no 18)",
+          "15px" in _rv and "18px" not in _rv, True)
+    check("el % se va a su propio renglón",
+          _rv.count("<div") >= 2, True)
+    # El nombre del ítem es su propio título: negro y centrado.
+    _nom = _vap._nombre_cascada_html("Magret De Pato Macho x Kg")
+    check("el nombre del ítem va centrado", "text-align:center" in _nom, True)
+    check("el nombre del ítem va en negro",
+          __import__("tema").TEXTO_PRINCIPAL in _nom, True)
+    check("sin foco no se escribe un nombre",
+          _vap._nombre_cascada_html(""), "")
     check("la etiqueta de una barra del medio va con signo",
           _vap._etq_cascada(-16660.0, "relative", _vap._fmt_soles),
           "−S/ 16,660")
