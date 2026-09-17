@@ -251,17 +251,21 @@ def renderizar_aggrid_compras(df_grid: pd.DataFrame, font_px: int = 14):
     ] = {"overflow": "visible !important"}
 
     perf.set_df_info(df_grid, label="AgGrid (Compras)")
+    # La misma key va a las inyecciones de abajo: sin ella estiraban y le
+    # ponían el ⛶ al PRIMER AgGrid de la página, que en la pila de Compras
+    # es el Ranking de proveedores (regla #455).
+    _clave_grid = "grid_Compras"
     with perf.phase("AgGrid render"):
         AgGrid(
             df_grid, gridOptions=grid_options, height=600,
             theme="material", custom_css=custom_css,
             fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
-            enable_enterprise_modules=True, key="grid_Compras",
+            enable_enterprise_modules=True, key=_clave_grid,
         )
 
     # ── CAMBIO 2: usa_pagination_v2=True en renderizar_aggrid_compras ─────
     inject_grid_health_check(usa_pagination_v2=True)
     inject_pagination_v2()
-    inject_maximize_aggrid()
-    inject_dynamic_grid_height(offset_px=260, min_px=320)
-    inject_fix_column_panel_ajuste()
+    inject_maximize_aggrid(_clave_grid)
+    inject_dynamic_grid_height(_clave_grid, offset_px=260, min_px=320)
+    inject_fix_column_panel_ajuste(_clave_grid)

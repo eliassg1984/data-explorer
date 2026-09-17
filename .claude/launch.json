@@ -42,6 +42,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.headless=true", "--server.port=8509", "--server.fileWatcherType=none"],
       "port": 8509
+    },
+    {
+      "name": "app-8514-sin-watcher",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.headless=true", "--server.port=8514", "--server.fileWatcherType=none"],
+      "port": 8514
     }
   ]
 }

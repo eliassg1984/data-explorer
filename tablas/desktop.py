@@ -810,6 +810,10 @@ def renderizar_aggrid_desktop(df_grid, cols_mostrar, reporte, font_px=14,
         }
 
     perf.set_df_info(df_grid, label=f"AgGrid ({reporte})")
+    # La misma key va a las inyecciones de abajo, que sin ella tocaban el
+    # PRIMER AgGrid de la página — el ranking de Inventario o de
+    # Movimientos, que se dibujan antes que esta tabla (regla #455).
+    _clave_grid = f"grid_{reporte}"
     with perf.phase("AgGrid render"):
         AgGrid(
             df_grid, gridOptions=grid_options,
@@ -818,16 +822,16 @@ def renderizar_aggrid_desktop(df_grid, cols_mostrar, reporte, font_px=14,
             height=(620 if es_requerimientos else 420),
             theme=tema_grid, custom_css=custom_css,
             fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
-            enable_enterprise_modules=True, key=f"grid_{reporte}",
+            enable_enterprise_modules=True, key=_clave_grid,
         )
 
     # ── CAMBIO 1: pasa usa_pagination_v2 según el reporte ─────────────────
     inject_grid_health_check(usa_pagination_v2=True)
 
     inject_pagination_v2()
-    inject_maximize_aggrid()
-    inject_dynamic_grid_height(offset_px=260, min_px=320)
-    inject_fix_column_panel_ajuste()
+    inject_maximize_aggrid(_clave_grid)
+    inject_dynamic_grid_height(_clave_grid, offset_px=260, min_px=320)
+    inject_fix_column_panel_ajuste(_clave_grid)
 
     if filtros_grid is not None:
         # El sello identifica al modelo: si no cambio respecto del rerun

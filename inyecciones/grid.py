@@ -8,7 +8,7 @@ el hover de AgGrid y la tabla parpadea o colapsa (arquitectura.md #4).
 """
 
 import json
-from inyecciones._fragmentos import _FS_CSS_IFRAME, _JS_BUSCAR_IFRAME_FN, _PAG_CSS_BASE, _PAG_CSS_NATIVA
+from inyecciones._fragmentos import _FS_CSS_IFRAME, _PAG_CSS_BASE, _PAG_CSS_NATIVA, js_buscar_iframe
 from inyecciones._iframe import inyectar_html
 
 
@@ -101,11 +101,15 @@ def inject_grid_health_check(usa_pagination_v2=False):
     })();
     </script>
     """, height=0)
-def inject_maximize_aggrid():
+def inject_maximize_aggrid(clave_grid):
     """
     Botón ⛶ para poner la tabla AgGrid en PANTALLA COMPLETA NATIVA (Fullscreen
     API). El fullscreen se pide desde el documento padre sobre el ELEMENTO
     iframe (iframe.requestFullscreen()), así que NO hace falta allow="fullscreen".
+
+    `clave_grid` es la `key=` del AgGrid al que va el botón. Obligatoria: sin
+    ella el botón caía en la PRIMERA tabla de la página, que en una página
+    con varias es la de otro (regla #455).
 
     UBICACIÓN DEL BOTÓN (cambio nuevo):
     - Con sidebar: el ⛶ se ancla como PRIMER ítem del riel (.ag-side-buttons),
@@ -143,7 +147,7 @@ def inject_maximize_aggrid():
         var btnFlotante = null;   // SOLO se crea si la tabla no tiene riel
 
         var FS_CSS = """ + fs_css_js + """;
-        """ + _JS_BUSCAR_IFRAME_FN + """
+        """ + js_buscar_iframe(clave_grid) + """
 
         function elementoFS() {
             return doc.fullscreenElement || doc.webkitFullscreenElement || null;
@@ -350,10 +354,17 @@ def inject_maximize_aggrid():
     })();
     </script>
     """, height=0)
-def inject_dynamic_grid_height(offset_px: int = 260, min_px: int = 320):
+def inject_dynamic_grid_height(clave_grid, offset_px: int = 260, min_px: int = 320):
     """
     Estira la tabla AgGrid para que ocupe el alto de pantalla disponible,
     en lugar del height=... fijo con el que se renderiza.
+
+    `clave_grid` es la `key=` de ESA tabla, y es obligatoria. Esta función
+    escribe `style.height` inline sobre el iframe y tres ancestros: con
+    "el primer AgGrid de la página" (lo que hacía hasta el 2026-09-17) el
+    estirón le caía a otra tabla — en Compras, al Ranking de proveedores,
+    que quedaba con ~350px de blanco debajo de una grilla de 255 y
+    arrastraba a la Evolución de al lado. Regla #455.
 
     DISEÑO SEGURO (mismo espíritu que inject_maximize_aggrid):
     - El grid se sigue creando con su height fijo en tablas/desktop.py. Esta función
@@ -389,7 +400,7 @@ def inject_dynamic_grid_height(offset_px: int = 260, min_px: int = 320):
         """ + config_js + """
         var tries = 0;
         var MAX = 40;
-        """ + _JS_BUSCAR_IFRAME_FN + """
+        """ + js_buscar_iframe(clave_grid) + """
 
         function aplicarAltura() {
             var iframe = buscarIframe();
@@ -462,10 +473,12 @@ def inject_dynamic_grid_height(offset_px: int = 260, min_px: int = 320):
     })();
     </script>
     """, height=0)
-def inject_fix_column_panel_ajuste():
+def inject_fix_column_panel_ajuste(clave_grid):
     """
     Fuerza el PRIMER dibujado de la lista virtual de los paneles laterales
-    (Columnas y Modo pivote).
+    (Columnas y Modo pivote) del AgGrid con key `clave_grid` (regla #455:
+    sin la key miraba la primera tabla de la página, que puede no tener
+    paneles, y se rendía sin tocar la que sí los tiene).
 
     AG Grid dibuja esa lista una sola vez, con el panel todavía oculto
     (`display:none` → viewport de alto 0): calcula 0 filas visibles y no la
@@ -535,12 +548,12 @@ def inject_fix_column_panel_ajuste():
             reposicionar(fdoc);
         }
 
-        """ + _JS_BUSCAR_IFRAME_FN + """
+        """ + js_buscar_iframe(clave_grid) + """
 
         function check() {
             tries++;
             var iframe = buscarIframe();
-            // La constante estándar devuelve el ELEMENTO iframe (no el
+            // El localizador estándar devuelve el ELEMENTO iframe (no el
             // contentDocument). Aquí necesitamos el documento para instalar
             // el observer sobre .ag-side-bar, así que accedemos a .contentDocument.
             // buscarIframe() ya validó que .ag-root-wrapper existe, así que

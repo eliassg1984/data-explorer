@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-454 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+455 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (160)
 
@@ -195,7 +195,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
 
-**Layout y alturas** (69)
+**Layout y alturas** (68)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -250,7 +250,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#405** — "Abrir en X" es un default del FOCO, y el default es del primer nivel: si el segundo tambien…
 - **#406** — Un contenedor de altura CERO igual consume su gap: cinco de ellos eran los 68px que separaban…
 - **#407** — Una cadena de drill no se modela con un par de argumentos por nivel: se modela con la RUTA
-- **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 - **#415** — Una tarjeta que se parte en tres no se re-indenta: cada parte se cuelga de SU contenedor
 - **#417** — Un control que sólo le cambia algo a SU tarjeta va en su propio fragment, dentro del de la…
 - **#420** — Partir una vista en tarjetas "como Volatilidad" no dice dónde va la cabecera: si sus…
@@ -349,7 +348,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
 - **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
 
-**AgGrid y tablas** (71)
+**AgGrid y tablas** (73)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -418,10 +417,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#391** — Una línea fina al pie de un número se lee como un trazo sobre el papel, no como un dato: la…
 - **#396** — Una tabla que tiene que verse «igual que la de al lado» no puede ser un st.dataframe si la de…
 - **#401** — Una unidad sólo se escribe si el número TIENE una unidad: antes de pegarle «kg» a una suma,…
+- **#410** — El alto de un componente lo decide lo que el componente REPORTA, no lo que Python le pide — y…
 - **#418** — Cuántas columnas se ven lo decide un número, no el piso de ancho — y el reparto no se deja…
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 - **#450** — Un AgGrid sin custom_css= no es "el tema por defecto": es el ÚNICO que no se parece a los…
+- **#455** — Un JS que busca «el primer AgGrid de la página» toca la tabla equivocada en cuanto la página…
 
 **Streamlit** (121)
 
@@ -35485,6 +35486,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-13.)
 
+     **CORRECCIÓN (2026-09-17): el alto inline NO lo reportaba st_aggrid.**
+     Lo escribía `inject_dynamic_grid_height` de la tabla de detalle, que
+     estiraba «el primer AgGrid de la página» a `innerHeight − 260` — el
+     508 es eso con una ventana de 768. El `<style>` de acá lo tapaba con
+     `!important`. Causa, medición y arreglo en la #455.
+
 411. **Una cadena de tablas que se pide "igual a la de otro reporte" se saca
      a un módulo — y si ese día no se puede migrar al original, se escribe
      dónde quedó la otra copia.** Pedido del 2026-09-13 sobre Movimientos:
@@ -37920,6 +37927,71 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+455. **Un JS que busca «el primer AgGrid de la página» toca la tabla
+     equivocada en cuanto la página tiene dos — y la #410 era esto, no
+     st_aggrid.** Reportado con captura sobre Compras › Proveedor: «mis
+     tarjetas de ranking de proveedores y evolución a veces se quedan así,
+     largas hacia abajo». Las dos medían ~780px con la grilla (255) y el
+     gráfico (259) en su sitio y blanco debajo.
+
+     **El mecanismo.** `inyecciones/_fragmentos.py::_JS_BUSCAR_IFRAME_FN`
+     devolvía el PRIMER iframe con `.ag-root-wrapper` del documento. Lo
+     usan tres inyecciones que la tabla grande llama después de dibujarse
+     (`tablas/compras.py`, `desktop.py`, `ajuste_pivote.py`):
+     `inject_dynamic_grid_height` le escribe `style.height = innerHeight −
+     260` al iframe y a tres ancestros, `inject_maximize_aggrid` le cuelga
+     el ⛶ y `inject_fix_column_panel_ajuste` le mira el panel lateral.
+     Nacieron cuando cada vista tenía UNA tabla. En la pila de Compras hay
+     siete y la primera es el Ranking de proveedores, así que al
+     construirse la sección Tabla (perezosa: recién al bajar, por eso «a
+     veces») el estirón caía en el Ranking. Su grilla no crecía —el
+     `max-height: 100%` de `CSS_RANKING_GRID` la sostiene en 255— pero el
+     iframe sí, transparente, y la Evolución lo seguía por el piso de
+     `_80_cards.py` (#145). El ⛶ flotante que se ve en la captura, arriba a
+     la derecha de la grilla, es el de la Tabla (y el de Documentos por
+     proveedor, que decía «el drill tiene UN solo AgGrid»), caído en el
+     mismo sitio. Y la tabla que SÍ tenía que estirarse no se tocaba.
+
+     Medido en el navegador, viewport 1900x865: antes de bajar, las dos
+     tarjetas en 337; ~5 s después de construirse la Tabla, el iframe del
+     Ranking con `style="height: 605px"` (865 − 260), su
+     `stElementContainer` igual, las dos tarjetas en 679 y `grid_Compras`
+     sin `style`. En Inventario, con el código viejo: `inv_rank_grid_area`
+     con el mismo `605px` inline y `grid_Inventario-Valorizado` en sus 420.
+
+     **La #410 diagnosticó esto como «st_aggrid reporta el alto de todo su
+     contenido».** No lo hace: su bundle (1.2.1) sólo llama
+     `setFrameHeight(#gridContainer.clientHeight)`, y ese contenedor lleva
+     el `height=` de Python fijo en su `style`. El «508» de aquella
+     medición es `innerHeight − 260` con una ventana de 768, y «apareció
+     después del primer clic» en Movimientos es la tabla de detalle
+     construyéndose después. El `<style>` con `!important` que dejó la
+     #410 en `drill_tablas.py` e `inventario.py` le gana al inline y por
+     eso curaba el síntoma; queda como red, pero la causa está acá.
+
+     **El arreglo: `js_buscar_iframe(clave_grid)`, por la key, sin
+     fallback.** Las tres inyecciones reciben la `key=` de SU AgGrid como
+     argumento obligatorio y buscan `st-key-<key>` armado como lo arma
+     Streamlit (`key.trim()` y todo lo que no sea `[a-zA-Z0-9_-]` a `-`:
+     `grid_Inventario Valorizado` → `st-key-grid_Inventario-Valorizado`).
+     Sin la key, `TypeError` en Python; con una key que no aparece, no se
+     toca nada — "el primero de la página" era justamente el bug. Cada
+     llamador guarda la key en una variable que usan el `AgGrid` y las
+     inyecciones, para que no puedan divergir.
+
+     **Efecto colateral buscado:** las tablas grandes vuelven a recibir su
+     alto dinámico y su ⛶ en el riel, que en toda página con un ranking
+     antes (Compras, Inventario, Movimientos) llevaban semanas sin
+     aplicarse sin que nadie lo notara.
+
+     **Para la próxima inyección que necesite «su» tabla:** la key como
+     argumento, no un selector genérico. `inject_pagination_v2` y
+     `inject_grid_health_check` siguen recorriendo TODOS los iframes a
+     propósito (la primera filtra por `.ag-paging-panel`, la segunda sólo
+     comprueba que monten).
+
+     (2026-09-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37932,7 +38004,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#455**.
+> próxima regla nueva es la **#456**.
 
 >
 

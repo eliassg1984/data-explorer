@@ -1,12 +1,14 @@
 """inyecciones._fragmentos - CSS y JS compartido por varias inyecciones.
 
-_JS_BUSCAR_IFRAME_FN es el localizador de iframes que usan las inyecciones
-que tienen que alcanzar el documento del AgGrid. Los _*_CSS_* son bloques de
-estilo que se insertan dentro de ese iframe.
+js_buscar_iframe(clave_grid) es el localizador de iframes que usan las
+inyecciones que tienen que alcanzar el documento del AgGrid. Los _*_CSS_* son
+bloques de estilo que se insertan dentro de ese iframe.
 
 No formatear con % en estas plantillas (arquitectura.md #3): el CSS legitimo
 trae % y choca con el operador de Python.
 """
+
+import json
 
 from tema import (
     ACENTO, ACENTO_FUERTE,
@@ -17,14 +19,35 @@ from tema import (
 )
 
 
-_JS_BUSCAR_IFRAME_FN = """
+def js_buscar_iframe(clave_grid):
+    """JS de `buscarIframe()`: el iframe del AgGrid con key `clave_grid`.
+
+    POR LA KEY, NO "EL PRIMERO DE LA PÁGINA" (regla #455). Hasta el
+    2026-09-17 devolvía el primer iframe con `.ag-root-wrapper` del
+    documento, que era el de la tabla que llamaba sólo cuando la página
+    tenía UNA tabla. Desde que Compras se lee apilada tiene siete, y el
+    primero es el Ranking de proveedores: la sección Tabla, al construirse,
+    le estiraba el iframe a `innerHeight - 260` (`inject_dynamic_grid_height`)
+    y le colgaba su ⛶ flotante — el Ranking y la Evolución de al lado
+    quedaban «largas hacia abajo» con blanco debajo de la grilla, y la tabla
+    que tenía que estirarse no se tocaba. Sin fallback a "el primero": una
+    tabla que no aparece es un no-op, una equivocada es el bug.
+
+    La clase se arma como la arma Streamlit (`st-key-` + la key con todo lo
+    que no sea `[a-zA-Z0-9_-]` pasado a `-`, medido en su bundle) y se busca
+    con `getElementsByClassName`, que no necesita escapar nada.
+    """
+    return """
+        var GRID_KEY_CLASE = 'st-key-' + """ + json.dumps(str(clave_grid)) + """
+            .trim().replace(/[^a-zA-Z0-9_-]/g, '-');
         function buscarIframe() {
-            var frames = doc.querySelectorAll('iframe[src*="st_aggrid"]');
-            if (!frames.length) frames = doc.querySelectorAll('iframe');
-            for (var i = 0; i < frames.length; i++) {
+            var conts = doc.getElementsByClassName(GRID_KEY_CLASE);
+            for (var i = 0; i < conts.length; i++) {
+                var f = conts[i].querySelector('iframe');
+                if (!f) continue;
                 try {
-                    var d = frames[i].contentDocument;
-                    if (d && d.querySelector('.ag-root-wrapper')) return frames[i];
+                    var d = f.contentDocument;
+                    if (d && d.querySelector('.ag-root-wrapper')) return f;
                 } catch(e) {}
             }
             return null;

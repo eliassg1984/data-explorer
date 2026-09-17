@@ -438,15 +438,17 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
     }
 
     perf.set_df_info(df_wide, label="AgGrid (Ajuste pivote fecha)")
+    # La misma key va a las inyecciones de abajo (regla #455).
+    _clave_grid = "grid_ajuste_pivote_fecha"
     with perf.phase("AgGrid render"):
         AgGrid(
             df_wide, gridOptions=grid_options, height=520,
             theme="material", custom_css=custom_css,
             fit_columns_on_grid_load=True, allow_unsafe_jscode=True,
-            enable_enterprise_modules=True, key="grid_ajuste_pivote_fecha",
+            enable_enterprise_modules=True, key=_clave_grid,
         )
 
     inject_grid_health_check(usa_pagination_v2=False)
-    inject_maximize_aggrid()
-    inject_dynamic_grid_height(offset_px=260, min_px=320)
-    inject_fix_column_panel_ajuste()
+    inject_maximize_aggrid(_clave_grid)
+    inject_dynamic_grid_height(_clave_grid, offset_px=260, min_px=320)
+    inject_fix_column_panel_ajuste(_clave_grid)

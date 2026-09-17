@@ -408,6 +408,7 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
             }
             # Alto del iframe inline (no fullscreen). En fullscreen lo
             # sobrescribe _FS_CSS_IFRAME a 100vh.
+            _clave_pv = f"cp_prov_pivot_docs_{gran}"
             with _pv_box:
                 _cabecera()
                 AgGrid(
@@ -423,13 +424,14 @@ def tabla_documentos(base, top_provs, gran, periodos, col_docu, col_punit):
                     height=_ALTO_PIVOT,
                     enable_enterprise_modules=True,
                     fit_columns_on_grid_load=True,
-                    key=f"cp_prov_pivot_docs_{gran}",
+                    key=_clave_pv,
                 )
                 # Botón ⛶ de pantalla completa nativa (mismo patrón que las
                 # tablas de tablas/): ancla el ⛶ en el riel de la tabla y usa
                 # la Fullscreen API sobre el iframe. En móvil se toca y se gira
                 # el teléfono a horizontal para ver todas las columnas; Esc / ✕
-                # restauran. Como el drill de Proveedor tiene UN solo AgGrid,
-                # buscarIframe() da con este.
-                inject_maximize_aggrid()
+                # restauran. Va con la key: acá decía "el drill de Proveedor
+                # tiene UN solo AgGrid" y desde la pila la página tiene siete —
+                # el ⛶ le caía al Ranking de proveedores (regla #455).
+                inject_maximize_aggrid(_clave_pv)
 

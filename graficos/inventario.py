@@ -390,27 +390,27 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     _alto = alturas.por_filas(_filas, px_fila=ALTO_FILA_RANK,
                               extra=CROMO_GRID_RANK + ALTO_FILA_RANK,
                               minimo=0)
-    # El alto, ATADO desde el documento padre. El `height=` de abajo ya se
-    # lo dice al componente, y no alcanza: st_aggrid mide su contenido y le
-    # reporta a Streamlit un `setFrameHeight`, que termina como `style
-    # height` INLINE sobre el iframe y le gana a su propio atributo
-    # `height`. Medido el 2026-09-13 en «Valorizado por área»: atributo 255
-    # (8 filas), inline 508 (las 21 áreas enteras), tarjeta de 554 contra
-    # los 308 de sus dos vecinas — el pedido fue "veo que es más larga
-    # verticalmente".
+    # El alto, ATADO desde el documento padre. Medido el 2026-09-13 en
+    # «Valorizado por área»: atributo 255 (8 filas), `style height` INLINE
+    # de 508, tarjeta de 554 contra los 308 de sus dos vecinas — el pedido
+    # fue "veo que es más larga verticalmente".
     #
-    # Se arregla en DOS sitios porque son dos capas distintas y las dos
-    # fallan solas: `CSS_RANKING_GRID` le pone `height: 100%` al
-    # `.ag-root-wrapper` (que sin eso computa `auto` y se desborda de su
-    # contenedor), y esta regla ata el IFRAME, porque el componente ya
-    # reportó su número antes de que ese CSS llegara y Streamlit no lo
-    # vuelve a preguntar. Sin guard de "una sola vez": un `st.markdown` de
-    # estilos con ese guard desaparece en el rerun siguiente (regla #59).
-    # Los DOS nodos, no sólo el iframe: Streamlit escribe el alto que el
-    # componente reporta sobre el `stElementContainer` que lo envuelve Y
-    # sobre el iframe. Atando sólo el de adentro, el de afuera se queda con
-    # los 508 y la tarjeta sigue midiendo igual — medido, con el iframe ya
-    # en 255 el contenedor seguía en 508.
+    # CORREGIDO el 2026-09-17: ese inline NO lo reportaba st_aggrid (así
+    # decía este comentario). Lo escribía `inject_dynamic_grid_height` de la
+    # tabla de detalle, que estiraba "el primer AgGrid de la página" —éste—
+    # a `innerHeight - 260`. Ya busca su tabla por key (regla #455); lo de
+    # abajo queda de red, y lo que dice de las dos capas sigue valiendo
+    # para quien escriba un `style` inline sobre un componente.
+    #
+    # Son dos capas: `CSS_RANKING_GRID` le pone `height: 100%` +
+    # `max-height: 100%` al `.ag-root-wrapper`, que es lo que mantiene la
+    # GRILLA en su alto aunque el iframe crezca, y esta regla ata el IFRAME.
+    # Sin guard de "una sola vez": un `st.markdown` de estilos con ese guard
+    # desaparece en el rerun siguiente (regla #59). Los DOS nodos, no sólo
+    # el iframe: el inline se escribía sobre el `stElementContainer` que lo
+    # envuelve Y sobre el iframe. Atando sólo el de adentro, el de afuera se
+    # quedaba con los 508 y la tarjeta seguía midiendo igual — medido, con
+    # el iframe ya en 255 el contenedor seguía en 508.
     st.markdown(
         f"<style>div.st-key-{key}, div.st-key-{key} iframe "
         f"{{ height: {_alto}px !important; }}</style>",
