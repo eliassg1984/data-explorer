@@ -148,11 +148,6 @@ CSS = """    /* ================================================================
        abajo queda como red para el renglón ya partido.
        `flex-wrap` en la fila (arriba) es esa red: si el viewport se
        angosta, los controles bajan de renglón en vez de desbordar. */
-    .st-key-vap_fila_hdr
-        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_modo) {
-        flex: 0 0 auto !important;
-        width: 106px !important;
-    }
     /* La ventana pasó de "12m" a "📅 Últimos 12 meses" el 2026-09-07
        (`vs_ano_pasado._ETIQ_VENTANA`: era el único control de la fila que
        nombra un período y con el nombre corto no se distinguía de los otros
@@ -177,24 +172,11 @@ CSS = """    /* ================================================================
        hueco del título, que baja de 254 a 234 para un texto de ~110. */
     /* CON QUÉ EJE SE PARTE EL Δ de la cascada ("Por qué" / "Quién" /
        "Cuándo"), agregado el 2026-09-16 con la regla #443. Es el OCTAVO
-       control de la fila, y entra acá y no en la tarjeta del puente
-       porque esa tarjeta mide 434px de ancho y su figura 163px de alto
-       (medido): un renglón de control propio le costaba más de la cuarta
-       parte del dibujo. Acá no le saca un píxel a ninguna figura — la
-       cabecera es su propia tarjeta (#420) y esta fila envuelve. Con los
-       ocho controles sigue entrando en UN renglón: 1113x27 medidos a 1280
-       de viewport.
-       100px por el mismo criterio MEDIDO que sus vecinos: el valor más
-       largo que muestra es "Por qué" (~47px en la fuente de la fila, DM
-       Sans 12px) + los 50 de cromo del desplegable. Sus opciones son
-       cortas a propósito: el motivo de las que NO aplican va al `help`,
-       no a la lista, así que el campo no tiene que medir para
-       "Quién — ya hay un solo ítem". */
-    .st-key-vap_fila_hdr
-        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_corte) {
-        flex: 0 0 auto !important;
-        width: 100px !important;
-    }
+       control de la fila. Vivió acá un día: el 2026-09-17 bajó, con `Ver`,
+       a la tarjeta de la serie — ver `vap_serie_hdr` al final de este
+       bloque. Sus anchos MEDIDOS se fueron con ellos (106 para "Cantidad",
+       100 para "Por qué"), y siguen siendo el mismo criterio: el texto más
+       largo que puede mostrar + los 50 de cromo del desplegable. */
     .st-key-vap_fila_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ventana) {
         flex: 0 0 auto !important;
@@ -249,34 +231,75 @@ CSS = """    /* ================================================================
         [data-testid="stIconMaterial"]) {
         display: none !important;
     }
-    /* ── ⛶ "sola en la página": mismo trato que el ícono de ayuda ───────
-       Último ítem de la fila y mide su contenido, o su `stLayoutWrapper`
-       nace con `width: 100%` y se come el hueco del título (el mismo
-       problema que documenta la regla de `vap_hdr_ayuda` acá arriba). */
+    /* (ACÁ VIVÍAN LAS TRES REGLAS DEL ⛶ "sola en la página" — el ancho
+       auto de su wrapper, el alto del botón y la defensa anti-tooltip-
+       fantasma de la regla #164. El botón se quitó de la cabecera el
+       2026-09-17, a pedido, y el mecanismo `compras_pila_solo` quedó sin
+       nadie que lo encienda: ver el hueco que dejó en
+       `vs_ano_pasado.py`. Si vuelve, vuelven estas tres — sobre todo la
+       última, sin la cual el ícono sale DUPLICADO por llevar `help=`. */
+
+    /* ── LOS TRES TRAMOS DE LA FILA (regla #444) ────────────────────────
+       El orden lo pone Python; acá sólo se PINTA la separación, y a
+       propósito con pseudo-elementos: un `<hr>` o un `st.markdown` vacío
+       serían ítems del flex, se cobrarían su `gap: 10px` y podrían
+       desordenarse si alguien mueve un control de tramo. Un `::before` no
+       ocupa sitio en el flujo y viaja pegado a su control.
+
+       El rótulo va sobre el PRIMERO de cada tramo y la línea a su
+       izquierda, no sobre el último del tramo anterior. La diferencia
+       importa: «Partir por» DESAPARECE cuando ningún corte aplica (modo
+       Precio), así que anclar la línea al final del tramo la dejaría
+       colgando de un control que no está. */
+    .st-key-vap_fila_hdr > [data-testid="stLayoutWrapper"] {
+        position: relative !important;
+    }
+    /* Sitio para el rótulo: 13px arriba de la fila. Los paga la tarjeta de
+       la CABECERA, que desde el 2026-09-14 es su propia superficie (#420),
+       así que no le saca alto a la serie, a la cascada ni a la tabla. */
+    .st-key-vap_fila_hdr { padding-top: 13px !important; }
     .st-key-vap_fila_hdr
-        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_solo) {
-        flex: 0 0 auto !important;
-        width: auto !important;
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ventana)::before,
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_agrupar)::before {
+        position: absolute;
+        top: -13px;
+        left: 2px;
+        font: 600 9px/1 "DM Sans", sans-serif;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        white-space: nowrap;
+        pointer-events: none;
     }
-    .st-key-vap_hdr_solo button {
-        min-height: 26px !important;
-        height: 26px !important;
-        min-width: 0 !important;
-        padding: 0 6px !important;
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_ventana)::before {
+        content: "Qué entra";
     }
-    /* DEFENSA ANTI-TOOLTIP-FANTASMA (regla #164, y la copia que ya vive en
-       `_20_compras_rail.py`): este botón lleva `help=`, así que Streamlit
-       deja una COPIA suelta sin envolver dentro del mismo `stButton`.
-       Es invisible hasta que algo le da alto explícito — y el `height:
-       26px` de acá arriba se lo daría, porque matchea los DOS `button`.
-       Sin esta regla el ⛶ sale duplicado. */
-    .st-key-vap_hdr_solo [data-testid="stButton"]:has(.stTooltipIcon)
-        > div:not(:has(.stTooltipIcon)) {
-        display: none !important;
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_agrupar)::before {
+        content: "El detalle";
+    }
+    /* (El tramo «Qué se compara» —`Ver` y `Partir por`— se mudó el
+       2026-09-17 a la tarjeta de la serie, que es la que gobierna: ver
+       `vap_serie_hdr` más abajo. En esta fila quedan dos tramos.) */
+    /* La línea, en el medio del `gap: 10px` que ya había: no empuja nada.
+       El primer tramo no lleva — una línea antes del primero separaría el
+       título de su propia fila. */
+    .st-key-vap_fila_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_hdr_agrupar)::after {
+        content: "";
+        position: absolute;
+        left: -6px;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: var(--border);
+        pointer-events: none;
     }
 
-    .st-key-vap_hdr_modo,
-    .st-key-vap_hdr_corte,
+    .st-key-vap_serie_modo,
+    .st-key-vap_puente_corte,
     .st-key-vap_hdr_ventana,
     .st-key-vap_hdr_familia,
     .st-key-vap_hdr_agrupar,
@@ -292,8 +315,8 @@ CSS = """    /* ================================================================
        título es lo que se quiere; para un campo con ancho reservado, no:
        queda un tope invisible que ninguna de las reglas de arriba puede
        superar, y agrandar el hueco no hace nada. */
-    .st-key-vap_hdr_modo > [data-testid="stElementContainer"],
-    .st-key-vap_hdr_corte > [data-testid="stElementContainer"],
+    .st-key-vap_serie_modo > [data-testid="stElementContainer"],
+    .st-key-vap_puente_corte > [data-testid="stElementContainer"],
     .st-key-vap_hdr_ventana > [data-testid="stElementContainer"],
     .st-key-vap_hdr_familia > [data-testid="stElementContainer"],
     .st-key-vap_hdr_agrupar > [data-testid="stElementContainer"],
@@ -312,6 +335,10 @@ CSS = """    /* ================================================================
        `st.text_input` y el `st.selectbox` de la MISMA fila necesitan dos
        ganchos distintos; no se puede asumir que comparten API. */
     .st-key-vap_fila_hdr .react-aria-ComboBox,
+    .st-key-vap_serie_hdr .react-aria-ComboBox,
+    .st-key-vap_puente_corte .react-aria-ComboBox,
+    .st-key-vap_puente_corte .react-aria-ComboBox > div,
+    .st-key-vap_serie_hdr .react-aria-ComboBox > div,
     .st-key-vap_fila_hdr .react-aria-ComboBox > div,
     .st-key-vap_fila_hdr [data-baseweb="select"] > div,
     .st-key-vap_fila_hdr [data-testid="stTextInputRootElement"],
@@ -323,6 +350,10 @@ CSS = """    /* ================================================================
         font-size: 12px !important;
     }
     .st-key-vap_fila_hdr .react-aria-ComboBox [role="button"],
+    .st-key-vap_serie_hdr .react-aria-ComboBox [role="button"],
+    .st-key-vap_puente_corte .react-aria-ComboBox [role="button"],
+    .st-key-vap_puente_corte .react-aria-ComboBox input,
+    .st-key-vap_serie_hdr .react-aria-ComboBox input,
     .st-key-vap_fila_hdr .react-aria-ComboBox input,
     .st-key-vol_fila_hdr .react-aria-ComboBox [role="button"],
     .st-key-vol_fila_hdr .react-aria-ComboBox input {
@@ -340,6 +371,7 @@ CSS = """    /* ================================================================
        compensaba el centrado. Anulando el margen la caja vuelve a medir su
        texto y el centrado del flex hace lo suyo, sin transform. */
     .st-key-vap_fila_hdr [data-testid="stMarkdownContainer"],
+    .st-key-vap_serie_hdr [data-testid="stMarkdownContainer"],
     .st-key-vol_fila_hdr [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
@@ -349,6 +381,51 @@ CSS = """    /* ================================================================
     }
     .st-key-vap_fila_hdr [data-testid="stElementContainer"] {
         width: auto;
+    }
+
+    /* ── LA FILA DE LA TARJETA DE LAS BARRAS (regla #445) ───────────────
+       `Ver` y `Partir por` bajaron acá el 2026-09-17, a pedido, con la
+       condición de que la tarjeta NO creciera: sus píxeles salen de la
+       FIGURA (`alturas.FRANJA_CTRL_SERIE`), no del alto de la tarjeta.
+
+       A la izquierda el nombre del ítem, elástico y truncable; a la
+       derecha los dos controles, que miden lo suyo. `min-width: 0` en el
+       nombre es obligatorio: sin él un flex item nunca baja de su
+       contenido, así que un producto de nombre largo empujaría los
+       controles fuera de la tarjeta en vez de truncarse.
+
+       Sin `flex-wrap`, al revés que la cabecera: ahí envolver es la red
+       que evita el desborde, pero acá un segundo renglón rompería la
+       promesa de no crecer — la tarjeta mide 246px y la figura cuenta con
+       exactamente 170. Que el nombre se trunque es el precio correcto. */
+    .st-key-vap_serie_hdr {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 8px !important;
+        margin: 0 0 0.3rem !important;
+    }
+    .st-key-vap_serie_hdr > [data-testid="stElementContainer"]:first-child {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    /* El mismo ancho MEDIDO que tenía en la cabecera: el texto más largo
+       que puede mostrar ("Cantidad") + los 50 de cromo del desplegable.
+       Ver la regla #318. Quedó uno solo: «Partir por» se mudó a la tarjeta
+       de la cascada el mismo día (#446), donde no necesita esta regla
+       porque el ancho se lo da su COLUMNA (`_COLS_PUENTE`). */
+    .st-key-vap_serie_hdr
+        > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_serie_modo) {
+        flex: 0 0 auto !important;
+        width: 106px !important;
+    }
+    /* El hueco del nombre existe aunque esté VACÍO (sin foco): es un
+       `st.empty()`, y si colapsara a cero el control saltaría a la
+       izquierda al soltar el foco. La fila mide siempre lo mismo. */
+    .st-key-vap_serie_hdr [data-testid="stMarkdownContainer"] {
+        min-height: 17px !important;
     }
 
     /* El `<p>` ya no pone la raya ni el margen: los pone la fila. Se queda

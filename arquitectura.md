@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-443 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+447 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (157)
+**CSS y estilos** (158)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -191,8 +191,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#430** — El popover de Streamlit trae min-width: 180px propio: tres en una columna de 260px no se…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
+- **#444** — Una fila de controles se ordena por ALCANCE, y el orden es la jerarquía: lo que manda sobre…
 
-**Layout y alturas** (64)
+**Layout y alturas** (68)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -258,6 +259,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 - **#438** — Un title adentro de una tarjeta con botón-overlay no se ve nunca; el :hover del CONTENEDOR sí…
 - **#443** — Una tarjeta que no reacciona no se arregla dándole controles: se arregla viendo de qué EJES…
+- **#444** — Una fila de controles se ordena por ALCANCE, y el orden es la jerarquía: lo que manda sobre…
+- **#445** — En Streamlit, mover un widget de SITIO es moverlo de MOMENTO: el orden de ejecución es el…
+- **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
+- **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 
 **Plotly y figuras** (75)
 
@@ -410,7 +415,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 
-**Streamlit** (116)
+**Streamlit** (119)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -528,6 +533,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#434** — Un min-width que obligó a apilar deja de obligar cuando el contenedor crece: revisá la…
 - **#435** — La SEGUNDA vista que pide «los mismos filtros» los convierte en una pieza — y meter cinco…
 - **#443** — Una tarjeta que no reacciona no se arregla dándole controles: se arregla viendo de qué EJES…
+- **#445** — En Streamlit, mover un widget de SITIO es moverlo de MOMENTO: el orden de ejecución es el…
+- **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
+- **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 
 **Datos, R2 y DuckDB** (53)
 
@@ -37201,6 +37209,262 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-16.)
 
+444. **Una fila de controles se ordena por ALCANCE, y el orden es la
+     jerarquía: lo que manda sobre todo primero, lo que toca una sola cosa
+     al final.** Reportado el 2026-09-17 mirando la cabecera de Compras ›
+     Vs año pasado: *«creo tener muchos filtros en una sola franja y quizás
+     no todos afecten a las 3 tarjetas»*. Era cierto y se puede contar.
+
+     - **De los siete controles, sólo DOS mandaban sobre las tres
+       tarjetas.** Verificado leyendo a quién llega cada valor:
+
+           ventana, Familia      las tres          (definen `g`)
+           Ver                   serie + cascada   (`_tabla_detalle` NO
+                                                    recibe `modo`)
+           Partir por            sólo la cascada
+           agrupador             la tabla; a las otras dos de rebote
+                                 (`llave_foco` y el corte «Quién»)
+           buscador              sólo la tabla (`g_tabla`, y los rangos de
+                                 la cabecera salen de `g` a propósito)
+
+       Y el orden en pantalla iba **2 → 1 → 3 → 3 → 1 → 1**: los dos que
+       cambian el titular estaban terceros y cuartos, entre medio de los
+       que tocan una sola tarjeta. Reordenado a *Qué entra · Qué se
+       compara · El detalle*, el orden ya no hay que explicarlo.
+
+     - **EL ORDEN LO PONE PYTHON, NO EL CSS.** La fila es un flex y
+       Streamlit apila los `st.container` en el orden en que se crean, así
+       que mover un control de tramo es moverlo en el `.py`. En
+       `estilos/_80_cards.py` viven sólo el ancho de cada uno, el rótulo
+       del tramo y la línea que lo separa. Es la misma división que
+       `_SECCIONES` en `estilos/__init__.py`, donde el orden también es
+       comportamiento y no estética.
+
+     - **El rótulo y la línea son PSEUDO-ELEMENTOS, y no por gusto.** Un
+       `<hr>` o un `st.markdown` vacío serían ítems del flex: se cobrarían
+       su `gap: 10px`, contarían para el reparto y podrían desordenarse si
+       alguien mueve un control. Un `::before` no ocupa sitio en el flujo y
+       viaja pegado a su control. La línea vive DENTRO del gap de 10px que
+       ya existía (`left: -6px`), así que no empuja nada.
+
+     - **El rótulo va sobre el PRIMERO de cada tramo, no sobre el último
+       del anterior**, y la diferencia no es de gusto: «Partir por»
+       desaparece cuando ningún corte aplica (modo Precio, #443), así que
+       anclar la línea al final del tramo la dejaría colgando de un
+       control que no está en el DOM.
+
+     - **Tres rótulos y no seis.** Etiquetar control por control sería
+       mejor en abstracto, y no entra: el filtro de Familia ya mide 190px
+       por «BEBIDAS CON ALCOHOL» (#318) y «Familia: BEBIDAS CON ALCOHOL»
+       pediría ~245 en una fila que suma 784 de controles sobre 1113. Un
+       rótulo por tramo cuesta **13px de un renglón** y los paga la
+       tarjeta de la CABECERA, que desde la #420 es su propia superficie.
+       Medido después del cambio: la fila pasa de 1113×27 a 1113×40 y las
+       tres tarjetas de abajo siguen midiendo 246 / 246 / 280 — **ni un
+       píxel**.
+
+     - **Misma vuelta, dos cambios pedidos que se pagan entre sí.** El
+       título pasó de «Vs año pasado» a «Compra Vs Año Pasado» (~110px →
+       ~175) y se quitó el ⛶ del modo «solo» (26 del botón + 10 del gap =
+       36). El título es el elástico de la fila (`flex: 1 1 auto`), así
+       que lo uno financia lo otro y la fila sigue entrando en un renglón:
+       236px para un texto de 175.
+
+     - **El nombre de la tarjeta y el del rail no tienen por qué ser el
+       mismo.** El rail reparte su ancho entre siete ítems y ahí el nombre
+       largo se trunca; la cabecera lo tiene de sobra. El `_PILA` y la
+       clave `compras_sec_vs_ano_pasado` se quedaron con el corto.
+
+     - **Y quitar un botón puede dejar un mecanismo sin quien lo
+       encienda.** `compras_pila_solo` lo sigue leyendo el bucle de
+       `graficos/compras/__init__.py` y de él cuelgan las reglas de
+       `_20_compras_rail.py` que sueltan `--rail-der-res`, pero el ⛶ era
+       el ÚNICO que lo escribía. Se conservó a propósito —sus comentarios
+       guardan mediciones contra Cloud que no se recuperan borrándolas— y
+       el hueco que dejó el botón lo dice con todas las letras, que es lo
+       que la #53 exige de un símbolo sin consumidor: no que no exista,
+       sino que no se pueda confundir con algo vivo.
+
+     - **Lo que se perdió, dicho antes de que se note:** esta vista parte
+       la fila con `COLUMNAS_DRILL`, así que en una laptop angosta la
+       tarjeta del puente cae a ~290px, y el ⛶ era la única salida para
+       darle ancho.
+
+     (2026-09-17.)
+
+445. **En Streamlit, mover un widget de SITIO es moverlo de MOMENTO: el
+     orden de ejecución es el orden en que se leen los valores.** Pedido
+     del 2026-09-17 sobre Compras › Compra Vs Año Pasado: *«coloquemos los
+     widget de valor y cuándo en la tarjeta de las barras, ojo esto no debe
+     aumentar el tamaño de la tarjeta»*, más *«cuando se elija la opción de
+     "El detalle" Producto, inicialmente debe seleccionarse el primero, y
+     el nombre del producto debe aparecer en la tarjeta de barras»*.
+
+     - **Las columnas hay que abrirlas ARRIBA.** `Ver` y `Partir por`
+       bajaron de la cabecera compartida a la tarjeta de la serie. Pero
+       `modo` hace falta ~80 líneas más abajo (el auto-foco, la magnitud,
+       la figura), así que su `selectbox` tiene que CORRER antes — y si el
+       widget vive dentro de la tarjeta, la tarjeta tiene que EXISTIR
+       antes. De ahí que `st.columns(COLUMNAS_DRILL)` y los dos
+       `st.container` se creen junto al cálculo y se RELLENEN ochenta
+       líneas después.
+       Leerlo de `session_state` y dibujarlo al final NO sirve: el valor
+       que llega es el del rerun anterior. Es el mismo bug que ya costó
+       mudar `agrupar_por` el 2026-09-02, y es la contracara de la #211 —
+       allá el problema era dibujar de más, acá es leer de menos.
+       Lo que lo hace seguro acá: los tres `return` tempranos escriben en
+       `_tarj_hdr`, no en el punto de ejecución, así que ninguno puede
+       dejar las tarjetas a medio dibujar.
+
+     - **«No debe aumentar el tamaño» se cumple restándole a la FIGURA, y
+       la resta hay que MEDIRLA.** `alturas.FRANJA_CTRL_SERIE` salió 44 de
+       cuenta y 47 de navegador: la fila mide 26px, su `margin-bottom` de
+       0.3rem son 4.8 más, y Streamlit agrega su `gap: 16px` entre los dos
+       hijos de la tarjeta. Con 44 la tarjeta daba **249 contra los 246 de
+       antes** — tres píxeles que rompen la condición y que a ojo no se
+       ven. Con 47 da 246 clavados.
+
+     - **Y la resta no se hereda.** Las dos tarjetas de la fila tienen que
+       terminar en la misma línea, pero gastan sus 214px de contenido en
+       cosas distintas: la serie en `fila (47) + figura (167)`, la cascada
+       en `rótulo (17) + veredicto (34) + cascada (163)`. Por eso apareció
+       `_ALTO_CONTENIDO_VAP`: si el alto de la cascada siguiera saliendo
+       del de la SERIE —como salía—, se comería también los 47 de una fila
+       que la cascada no tiene, y la columna derecha terminaría 47px más
+       arriba.
+
+     - **SEMBRAR UN FOCO QUE LA GRILLA NO CONOCE ES UN BUCLE DE RERUNS.**
+       La primera versión de «que inicialmente se seleccione el primero»
+       escribía el ítem en `compras_vap_foco`. Esa clave es el ESPEJO de lo
+       que tiene seleccionado AG Grid, y la grilla no sabía nada de la
+       siembra: al final de la corrida devolvía `None`, el
+       `if clic != st.session_state.get(...)` lo leía como una deselección,
+       escribía None y llamaba a `st.rerun` — que volvía a sembrar. Se vio
+       como la sección VACÍA y en el log:
+
+           RuntimeError: Could not find current_fragment_id in
+           fragment_id_queue. This should never happen.
+
+       …que es lo que pasa cuando un fragment se rerunea a sí mismo sin
+       parar. La cura: **el foco sembrado vive sólo en la variable local
+       del run**, y no toca el espejo de la grilla.
+
+     - **«Sin foco» son DOS estados distintos** y una sola clave no los
+       distingue: *nadie eligió todavía* (hay que sembrar) y *el usuario
+       soltó el foco* (hay que respetarlo). De ahí `_K_FOCO_TOCADO`, que
+       pone el handler de la tabla en cuanto hay un clic —en los dos
+       sentidos—. Sin esa marca, soltar el foco es imposible: el rerun
+       siguiente lo vuelve a poner. Es la misma forma del `__eco` de la
+       #332, pero al revés: allá se guarda un valor que el widget pierde,
+       acá se guarda que el widget YA HABLÓ.
+
+     - **Queda una asimetría visible, y es el precio de no reventar:** la
+       fila sembrada no sale resaltada en la tabla, porque resaltarla es
+       decirle a la grilla que la tenga seleccionada y eso es justo lo que
+       dispara el bucle. La vista abre mostrando el ítem —nombre en la
+       tarjeta de barras, rótulo en la cascada, serie y puente acotados— y
+       la tabla lo tiene primero pero sin pintar. El primer clic sobre esa
+       fila parece no hacer nada: ya estaba mirándose.
+
+     - **«El primero» es el de mayor |Δ S/|**, que es como ordena
+       `_tabla_detalle`, y NO el de mayor gasto — ése es el que elige
+       `_auto` para Cantidad y Precio (#401). Son dos preguntas distintas y
+       conviene no confundirlas al leer el código.
+
+     (2026-09-17.)
+
+446. **Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la
+     tarjeta se elige por qué texto se puede permitir perder ancho.**
+     Segunda mudanza del mismo día, preguntada primero: *«el por qué, quién
+     y cuándo entiendo que afecta solo al gráfico derecho, ¿verdad?»*. Sí —
+     `corte` se lee en UN solo sitio, el `if` que elige qué cascada
+     dibujar—, así que bajó de la tarjeta de las barras a la de la cascada.
+
+     - **Una fila propia le costaba la cuarta parte del dibujo.** La
+       cascada mide 163px de alto contra los 214 de la serie, así que
+       repetir ahí el patrón de `FRANJA_CTRL_SERIE` (47px) la dejaba en
+       116. Lo que se hizo en cambio fue meter el control en un renglón que
+       YA EXISTÍA, con `st.columns` interna: el alto lo manda el más alto
+       de los dos, y un desplegable de 26px contra un bloque de texto de 27
+       no agrega nada.
+
+     - **Pero elegir MAL el renglón cuesta lo mismo en horizontal.** Primer
+       intento: el control al lado del VEREDICTO. Medido en el navegador,
+       la columna del texto cayó a 287px y el veredicto pide 350 — se
+       recortaba en «… · por co…», o sea que lo que se comía el `ellipsis`
+       era **la causa**, el único pedazo que explica algo (#414). Segundo
+       intento, el que quedó: el control al lado del **rótulo**, que mide
+       10,5px, es secundario y cuyo ámbito además ya lo dice la tarjeta de
+       al lado en 13px negrita. Ahí el recorte no cuesta nada: pierde
+       «x Kg» del nombre y listo.
+       LA REGLA GENERAL: cuando un control se mete en una fila de texto, el
+       que paga el ancho es el texto de esa fila. Elegí la fila por lo que
+       estés dispuesto a perder, no por la que tenga el hueco más grande.
+
+     - **Partir un `st.markdown` en dos cuesta el `gap: 16px`**, y se
+       recupera con un margen negativo en el HTML propio
+       (`_SUBE_VEREDICTO`). Es el mismo idioma que la #162: el HTML de
+       bloque de `st.markdown` ya viaja con un `margin-bottom: -16px`
+       puesto por Streamlit, así que corregir huecos con márgenes es lo que
+       este stack espera.
+
+     - **Y la franja cambia de dueño sin cambiar de nombre.**
+       `alturas.FRANJA_ROTULO` pasó de 17 a 24 el día después de nacer,
+       porque quien manda en el alto de ese renglón ya no es el texto (14 +
+       3 de margen) sino el desplegable (26). Con 17 las dos tarjetas de la
+       fila salían de **253 contra los 246 de antes** — siete píxeles que
+       rompen la condición del pedido y que no se ven a ojo. La constante
+       mide UN RENGLÓN, no un texto: cuando al renglón le entra un widget,
+       hay que volver a medirlo.
+
+     - **Resultado, medido:** serie 246 / cascada 246 / figura 167 / 156, y
+       el veredicto entero sin recortar (398 de 398). La cascada pagó 7px
+       de los 163 que tenía — contra los 47 que habría costado hacerle una
+       fila propia.
+
+     (2026-09-17.)
+
+447. **Un control que no le cambia nada a las tarjetas vecinas va en su
+     propio `@st.fragment`, o el velo las tapa a todas.** Reportado el
+     2026-09-17: *«veo que hace rerun en las tres tarjetas, ¿podemos hacer
+     que sólo sea en la que afecta?»*. Es la MISMA queja que el 2026-09-13
+     hizo nacer `volatilidad.py::_tarjeta_compras_semana` —*«¿por qué
+     cuando hago un cambio en un toggle de una tarjeta se actualizan las
+     tres?»*—, y la cura es la misma, así que conviene leerlas juntas.
+
+     - **Cuatro superficies no son cuatro fragments.** «Vs año pasado»
+       tiene cuatro tarjetas desde la #420 pero era un solo
+       `@st.fragment`: cualquier widget de adentro re-corría la sección
+       entera y el `data-stale` de la #366 pintaba el velo sobre todas.
+       `Partir por` es el caso extremo — se lee en UN sitio, el `if` que
+       elige qué cascada dibujar— y aun así redibujaba la serie y la tabla.
+
+     - **La condición para poder aislarlo es que el fragment sea CERRADO
+       sobre sus argumentos**: Streamlit lo re-ejecuta con los de la última
+       corrida del drill, así que todo lo que el control no cambia tiene
+       que entrar por la firma y nada puede leerse del scope de afuera.
+       `_tarjeta_cascada` recibe doce cosas y no toca ninguna otra; se
+       verifica con `ast` en dos líneas (nombres cargados − parámetros −
+       asignados − globales), y vale la pena hacerlo antes de confiar.
+
+     - **Y el widget tiene que estar DENTRO.** Es la otra cara de la #445:
+       allá el problema era que un widget se lee cuando se dibuja, acá que
+       un widget dispara el fragment donde vive. Por eso esta regla y la
+       mudanza de la #446 son la misma jugada vista dos veces — el control
+       se va a la tarjeta que gobierna, y recién ahí se puede envolver esa
+       tarjeta en un fragment que valga la pena.
+
+     - **Lo que NO se puede aislar, y por qué.** El buscador toca sólo las
+       filas de la tabla, pero vive en la cabecera compartida: para que
+       corriera solo habría que bajarlo a la tarjeta de la tabla, y esa
+       tarjeta perdió su cabecera a pedido el 2026-09-02. `Ver` afecta a
+       DOS tarjetas, así que aislarlo pide un fragment que envuelva a las
+       dos —y con él, mudar adentro la resolución del clic de mes, que hoy
+       vive al tope del drill (#443)—. Ninguna de las dos se hizo: quedan
+       anotadas para cuando molesten.
+
+     (2026-09-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37213,7 +37477,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#444**.
+> próxima regla nueva es la **#448**.
 
 >
 

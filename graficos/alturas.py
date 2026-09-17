@@ -487,10 +487,38 @@ de la derecha arranca 47px más abajo, termina 47px más abajo, y la fila deja
 de leerse como una grilla — el mismo defecto que `COLUMNAS_DRILL` arregla en
 el eje horizontal."""
 
-FRANJA_ROTULO = 17
+FRANJA_CTRL_SERIE = 47
+"""Alto de la fila de controles que la SERIE de «Compra Vs Año Pasado»
+lleva en su propia tarjeta —el nombre del ítem a la izquierda, «Ver» y
+«Partir por» a la derecha—, más el hueco que Streamlit deja hasta la
+figura. MEDIDO en el navegador el 2026-09-17.
+
+Existe por la condición que vino con el pedido: *«ojo esto no debe
+aumentar el tamaño de la tarjeta»*. Los dos controles bajaron de la
+cabecera compartida a la tarjeta de las barras, y sus píxeles salen de la
+FIGURA, no del alto de la tarjeta — que es el modo de fallo de
+`FRANJA_CONTROLES` y la razón de que exista toda esta familia de
+constantes.
+
+SON 47 Y NO 44, y la diferencia la puso el navegador: la fila mide 26px,
+su `margin-bottom` de 0.3rem son 4.8 más, y Streamlit agrega su `gap: 16px`
+entre los dos hijos de la tarjeta. Con 44 la tarjeta salía de 249 contra
+los 246 de antes — tres píxeles que rompían la condición del pedido («no
+debe aumentar el tamaño de la tarjeta»), y que no se ven a ojo.
+
+Ojo con el hermano: la tarjeta de la cascada NO lleva esta fila, así que
+su alto se calcula desde `_ALTO_CONTENIDO_VAP` y no desde el de la serie.
+Si se restara dos veces, las dos columnas dejarían de terminar en la misma
+línea. Ver `arquitectura.md` regla #445."""
+
+FRANJA_ROTULO = 24
 """Alto del RÓTULO que nombra qué magnitud y qué ámbito dibuja una cascada
 —«Valorizado de compra · Lomo fino entero nacional x Kg»—, MEDIDO en el
-navegador el 2026-09-16: la caja da 14px y su `margin-bottom` 3.
+navegador. Son 24 desde el 2026-09-17 y fueron 17 el día anterior, y la
+diferencia la puso un control: el rótulo comparte su renglón con el
+selector de «Partir por», así que quien manda en el alto ya no es el texto
+(14px + 3 de margen) sino el desplegable (26px). Medido: con 17 las dos
+tarjetas de la fila salían de 253 contra los 246 de antes.
 
 NO lleva el gap de 16px de `FRANJA_VEREDICTO`, y ésa es la razón de que sea
 tan barato: el rótulo se emite DENTRO del mismo `st.markdown` que el

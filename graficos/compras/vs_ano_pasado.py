@@ -145,17 +145,32 @@ rompería."""
 
 _FRANJA_VAP = alturas.FRANJA_CTRL_EVO
 
-_ALTO_FIG_VAP = alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP) - _LEYENDA_VAP
-"""Alto de las DOS figuras de la fila, del mismo sitio para que terminen en
-la misma línea. El waterfall le resta además `alturas.FRANJA_VEREDICTO`,
-que es lo que ocupa la cifra grande encima suyo.
+_ALTO_CONTENIDO_VAP = (alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP)
+                       - _LEYENDA_VAP)
+"""Lo que mide el CONTENIDO de cada una de las dos tarjetas de la fila.
+
+Son 214px, y de acá salen los dos altos de abajo. La cuenta se hace UNA
+vez y en este nivel porque las dos tarjetas tienen que terminar en la
+misma línea, y cada una gasta sus 214 en cosas distintas:
+
+    serie    fila de controles (47)  +  figura (167)
+    cascada  fila rótulo+corte (24) + veredicto (34) + cascada (156)
+
+El error que esto evita es restar dos veces: si el alto de la cascada
+saliera del de la SERIE, se comería también los 47 de una fila de
+controles que la cascada no tiene, y la columna derecha terminaría 47px
+más arriba."""
+
+_ALTO_FIG_VAP = _ALTO_CONTENIDO_VAP - alturas.FRANJA_CTRL_SERIE
+"""Alto de la SERIE mensual: el contenido de su tarjeta menos la fila de
+controles que lleva encima desde el 2026-09-17 (regla #445).
 
 OJO con el `_FRANJA_VAP` de la cuenta: hoy no muerde. `con_franja` devuelve
 `min(rol, CONTENIDO - franja)` y con COMPACTO en 240 gana siempre el rol
 (537 - 30 = 507). Se conserva porque el día que el rol suba, la resta
 vuelve a decidir."""
 
-_ALTO_CASCADA = (_ALTO_FIG_VAP - alturas.FRANJA_VEREDICTO
+_ALTO_CASCADA = (_ALTO_CONTENIDO_VAP - alturas.FRANJA_VEREDICTO
                  - alturas.FRANJA_ROTULO)
 """Alto de la cascada, sea cuál sea el corte que dibuje.
 
@@ -165,7 +180,8 @@ dejaría de terminar en la misma línea al cambiar de corte — el defecto que
 `FRANJA_VEREDICTO` existe para evitar, pero disparado por un clic en vez
 de por el layout.
 
-Son 163px (214 − 34 − 17), y de ahí sale el `_TOPE_CASCADA`: el ancho de
+Son 156px (214 − 34 − 24) y NO cambian con la fila de controles de la
+serie —ésa se le resta sólo a su figura—. De ahí sale el `_TOPE_CASCADA`: el ancho de
 la columna que resulta es lo que decide cuántos caracteres entran en el
 rótulo de cada barra."""
 
@@ -209,6 +225,23 @@ _CSS = f"""
 _MODOS = ("Valor", "Cantidad", "Precio")
 _AGRUPADORES = ("Producto", "Familia", "Subfamilia")
 
+_TITULO = "Compra Vs Año Pasado"
+"""Cómo se llama la tarjeta EN PANTALLA.
+
+"Vs año pasado" hasta el 2026-09-17: se renombró a pedido, para que el
+título diga de qué son las compras y no sólo contra qué se comparan.
+
+El nombre de la SECCIÓN del rail sigue siendo el corto ("Vs año pasado",
+en `graficos/compras/__init__.py::_PILA`) y la clave interna también
+(`compras_sec_vs_ano_pasado`). No es un descuido: el rail reparte su ancho
+entre siete ítems y ahí el nombre largo se trunca, mientras que en la
+cabecera es el elástico de la fila y tiene sitio. Un título de tarjeta y
+una etiqueta de navegación no tienen por qué medir lo mismo.
+
+Cuesta ancho: de ~110px a ~175 en la fuente de la fila. Lo paga el hueco
+del título, que es `flex: 1 1 auto` — y el ⛶ que se fue el mismo día
+devolvió 36, así que la fila sigue entrando en un renglón."""
+
 _CORTES = ("Por qué", "Quién", "Cuándo")
 """Con qué eje se parte el Δ de la cascada. Los tres son la MISMA resta —
 este año menos el año pasado— mirada de tres maneras:
@@ -222,6 +255,38 @@ del mismo número, y por eso viven en UN control y no en tres. Ver
 `_cortes_disponibles`, que es donde está la parte que importa."""
 
 _CORTE_DEFAULT = _CORTES[0]
+
+_SUBE_VEREDICTO = 14
+"""Cuánto sube el veredicto para pegarse al rótulo, en píxeles.
+
+El rótulo y el veredicto eran UN solo `st.markdown` hasta el 2026-09-17;
+al meterse el selector de corte en la fila del rótulo hubo que partirlos, y
+partirlos cuesta el `gap: 16px` que Streamlit pone entre bloques. Este
+margen negativo lo devuelve casi entero — 14 y no 16 porque los dos que
+quedan son el aire que el rótulo ya tenía cuando vivían juntos.
+
+Mismo idioma que la regla #162: el HTML de bloque de `st.markdown` ya
+viaja con un `margin-bottom: -16px` puesto por Streamlit, así que corregir
+el hueco con un margen es lo que este stack espera, no un truco."""
+
+_COLS_PUENTE = [2.86, 1]
+"""Cómo se parte la fila de arriba de la cascada: veredicto | corte.
+
+No es un `COLUMNAS_DRILL` disfrazado —eso rige el eje de la PÁGINA— sino
+una subdivisión interna, de las que el proyecto marca con
+`# columnas-internas:`. Sale de una cuenta: la tarjeta mide 434px, su
+contenido 402, el `gap="small"` se lleva 16 y el desplegable necesita 100
+(el mismo ancho MEDIDO que tenía en la cabecera). Quedan 286 para el
+texto, y 286/100 = 2.86."""
+
+_K_FOCO_TOCADO = "compras_vap_foco_tocado"
+"""Si el usuario ya tocó la selección de la tabla, en cualquier sentido.
+
+Existe para distinguir los dos "sin foco" que `compras_vap_foco` no
+distingue: **nadie eligió todavía** (hay que sembrar el primer ítem) y
+**el usuario soltó el foco** (hay que respetarlo y mostrar todas las
+compras). Sin esta marca, soltar el foco sería imposible: el rerun
+siguiente lo volvería a sembrar. Ver la regla #445."""
 
 _K_CORTE = "compras_vap_corte"
 """El corte elegido, ESPEJO de la key del selector.
@@ -1333,6 +1398,31 @@ def _hover_cascada(pasos, partes, fmt, delta_total):
     return hov
 
 
+def _nombre_serie_html(item, auto=False):
+    """El nombre del ítem que dibuja la serie, en su propia tarjeta.
+
+    Vacío cuando no hay foco: la serie muestra todas las compras y no hay
+    nada que aclarar — un rótulo que dijera «todas» ocuparía el renglón
+    para decir que no hay recorte. El hueco igual se reserva, porque el
+    renglón lo comparte con los dos controles.
+
+    `auto` marca el ítem que eligió la VISTA y no el usuario (Cantidad y
+    Precio sin foco, ver regla #401): sin ese aviso, un producto solo en el
+    gráfico se lee como un clic que nadie hizo.
+    """
+    if not item:
+        return ""
+    return (
+        f'<div style="font:600 13px/1.3 DM Sans,sans-serif;'
+        f'color:{TEXTO_PRINCIPAL};white-space:nowrap;overflow:hidden;'
+        f'text-overflow:ellipsis">{_compras_truncar(str(item), 38)}'
+        + (f'<span style="font:400 11px/1 DM Sans,sans-serif;'
+           f'color:{GRIS_TEXTO};margin-left:7px">· mayor gasto</span>'
+           if auto else "")
+        + '</div>'
+    )
+
+
 def _rotulo_html(magnitud, ambito):
     """El renglón que dice QUÉ mide la cascada y SOBRE QUÉ.
 
@@ -1362,7 +1452,7 @@ def _rotulo_html(magnitud, ambito):
 
 
 def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa,
-                  rotulo="", fmt=_fmt_soles, causa=None):
+                  rotulo="", fmt=_fmt_soles, causa=None, sube=0):
     """Una línea con el veredicto, arriba del puente. Es texto y no `st.metric`
     porque tres métricas nativas ocupan 90px de la tarjeta para decir lo que
     el propio waterfall ya dibuja debajo.
@@ -1411,7 +1501,7 @@ def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa,
         rotulo
         + f'<div title="{_cuenta}" '
         f'style="font:600 18px/1.25 DM Sans,sans-serif;color:{color};'
-        f'margin:0 0 4px;white-space:nowrap;overflow:hidden;'
+        f'margin:{-sube}px 0 4px;white-space:nowrap;overflow:hidden;'
         f'text-overflow:ellipsis">{signo}{fmt(delta)}'
         f'<span style="{_chico}">{_vs}</span>'
         + (f'<span style="{_chico}">· {causa}</span>' if causa else "")
@@ -1506,6 +1596,192 @@ def _tabla_detalle(g, agrupar_por, col_um_valores, key_grid, rangos=None):
         rango_act=rangos[0] if rangos else None,
         rango_aa=rangos[1] if rangos else None,
     )
+
+
+@st.fragment
+def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
+                     mes_sel, ef_p, ef_c, g_casc, g_foco, llave_foco):
+    """La tarjeta de la cascada: rótulo, corte, veredicto y el waterfall.
+
+    UN FRAGMENT DENTRO DEL FRAGMENT DEL DRILL, igual que
+    `volatilidad.py::_tarjeta_compras_semana` y por la misma queja
+    (2026-09-17): *«veo que hace rerun en las tres tarjetas, ¿podemos
+    hacer que sólo sea en la que afecta?»*. Las cuatro superficies eran un
+    solo `@st.fragment`, así que cambiar «Partir por» —que no le toca nada
+    a la serie ni a la tabla— re-corría la sección entera y el velo de
+    `data-stale` (#366) cubría las tres.
+
+    Streamlit re-ejecuta esta función con los argumentos de la última
+    corrida del drill, que es exactamente lo que hace falta: el corte no
+    cambia ni un dato de los que entran por acá.
+
+    Lo que SÍ tiene que refrescar las tres sigue en el drill: la ventana,
+    la familia, el agrupador, «Ver», el clic en un mes y el clic en una
+    fila. Ver la regla #447.
+    """
+    # La CANTIDAD sólo viaja si `items` es un producto solo: ahí
+    # hay UNA unidad y el número se puede decir ("246 kilos"). Con
+    # varios productos sumaría kilos con litros y con servicios —
+    # la misma trampa que `_por_item` evita para el precio del
+    # grupo. Sin cantidad el tooltip lo dice todo en plata.
+    #
+    # Y va con su UNIDAD o no va: `_fig_puente` ignora la cantidad
+    # si la unidad viene vacía. Un "246" pelado en una tarjeta de
+    # soles se lee como soles (reportado el 2026-09-06, regla #335).
+    _uno = len(items) == 1
+    _um_puente = (ums_prod.get(str(items["item"].iloc[0]), "")
+                  if _uno else "")
+    _um_corta = unidad_corta(_um_puente) or unidad_serie or ""
+
+    # ── LA MAGNITUD, DE UN SOLO SITIO ────────────────────────────
+    # El rótulo, el veredicto y las etiquetas de la cascada tienen
+    # que hablar de lo MISMO. Antes daba igual porque siempre eran
+    # soles; desde que la tarjeta sigue a «Ver», un veredicto en
+    # soles encima de una cascada en kilos es una contradicción
+    # escrita en la misma tarjeta. Sale de acá, una vez.
+    if modo == "Cantidad" and _um_corta:
+        _magnitud = f"Cantidad comprada · {_um_corta}"
+        _fmt_mag = lambda v: _fmt_cant(v, _um_corta)  # noqa: E731
+        _v1, _v0 = float(tot["cant"]), float(tot["cant_aa"])
+    elif modo == "Precio" and _um_corta and tot["cant"] and tot["cant_aa"]:
+        _magnitud = f"Precio unitario · S/ por {_um_corta}"
+        _fmt_mag = lambda v: _fmt_precio(v, _um_corta)  # noqa: E731
+        _v1 = float(tot["valor"]) / float(tot["cant"])
+        _v0 = float(tot["valor_aa"]) / float(tot["cant_aa"])
+    else:
+        # También el caso «Cantidad sin unidad»: sin unidad no se
+        # escribe una cantidad (regla #335), así que la tarjeta se
+        # queda en soles y el rótulo lo dice.
+        _magnitud = "Valorizado de compra"
+        _fmt_mag = _fmt_soles
+        _v1, _v0 = float(tot["valor"]), float(tot["valor_aa"])
+    _d_mag = _v1 - _v0
+    _pct_mag = (_d_mag / _v0 * 100) if _v0 else None
+    _ambito = (foco_titulo if foco_titulo else "todas las compras")
+    if mes_sel:
+        _ambito = f"{_ambito} · {mes_sel}"
+
+    # ── EL CORTE, AL LADO DEL VEREDICTO ──────────────────────────
+    # 2026-09-17, segunda mudanza del día: «hagamos que ese corte
+    # ahora esté en la tarjeta de las cascadas, ya no en el
+    # izquierdo». Tiene razón y es su único consumidor — `corte` se
+    # lee en UN sitio, el `if` de acá abajo.
+    #
+    # VA EN LA FILA DEL VEREDICTO Y NO EN UNA PROPIA, y eso no es
+    # estética: una fila propia le costaría a la cascada los 47px
+    # de `FRANJA_CTRL_SERIE` sobre 163 — más de la cuarta parte del
+    # dibujo, en la figura más chica de la vista. Acá el alto ya
+    # existe (el bloque de texto mide 27 y el desplegable 26), así
+    # que el control entra en el hueco que había a la derecha y
+    # cuesta CERO.
+    #
+    # Lo que sí cuesta es ANCHO: el veredicto pasa de ~402px de
+    # columna a ~286, y con el monto de todas las compras se le
+    # recorta la causa con "…". Es el mismo `ellipsis` que ya
+    # gobierna este texto en pantallas angostas (regla #414) — se
+    # VE recortado, no se parte el renglón ni se sale de la
+    # tarjeta.
+    #
+    # VA EN LA LÍNEA DEL RÓTULO Y NO EN LA DEL VEREDICTO, y esto
+    # se midió las dos veces. Con el control al lado del veredicto
+    # la columna del texto caía a 287px y el veredicto pide 350:
+    # se recortaba en «−S/ 16,660 −62.6% vs año pasado · por co…»,
+    # o sea que el pedazo que se comía era LA CAUSA — el único que
+    # explica algo. El rótulo, en cambio, mide 10,5px, es
+    # secundario, y su ámbito ya lo dice la tarjeta de al lado en
+    # 13px negrita: ahí el recorte no cuesta nada.
+    #
+    # columnas-internas: el corte al lado del rótulo, para que no
+    # le saque alto a la cascada ni ancho al veredicto.
+    _c_rot, _c_corte = st.columns(_COLS_PUENTE, gap="small",
+                                  vertical_alignment="center")
+    _c_rot.markdown(
+        _rotulo_html(_magnitud, _compras_truncar(_ambito, 34)),
+        unsafe_allow_html=True)
+
+    # `_un_item` mira el foco YA resuelto —a diferencia de cuando el
+    # control vivía en la cabecera, donde había que adivinarlo de
+    # `session_state`—, así que acá los cortes que se ofrecen son
+    # exactos: éste es el sitio donde el estado ya está completo.
+    _ops_corte, _fuera_corte = _cortes_disponibles(
+        modo, foco_titulo is not None, mes_sel is not None,
+        unidad=_um_corta)
+    corte = None
+    if _ops_corte:
+        # ESPEJO, y no la key del widget a secas: en Precio no
+        # aplica ningún corte y el selector NO SE DIBUJA — y un
+        # widget que deja de renderizarse pierde su estado
+        # (CLAUDE.md). Sin el espejo, pasar por Precio y volver
+        # tiraba el corte elegido. Misma forma que el
+        # `{k_rango}__eco` de `app.py`.
+        _pref = st.session_state.get(_K_CORTE, _CORTE_DEFAULT)
+        if st.session_state.get("compras_vap_corte_sel") \
+                not in _ops_corte:
+            st.session_state["compras_vap_corte_sel"] = (
+                _pref if _pref in _ops_corte else _ops_corte[0])
+        with _c_corte, st.container(key="vap_puente_corte"):
+            corte = st.selectbox(
+                "Partir por", list(_ops_corte),
+                key="compras_vap_corte_sel",
+                label_visibility="collapsed",
+                help=_ayuda_corte(_fuera_corte))
+        st.session_state[_K_CORTE] = corte
+
+    # El veredicto, a TODO el ancho de la tarjeta y pegado al
+    # rótulo: `sube` le pone un margen negativo que se come el
+    # `gap: 16px` que Streamlit mete entre bloques. Eran un solo
+    # `st.markdown` hasta que el corte se metió en la fila del
+    # rótulo; partirlos cuesta ese gap, y recuperarlo con un margen
+    # es el mismo idioma que la regla #162 documenta para el HTML
+    # de bloque de `st.markdown`.
+    st.markdown(
+        _resumen_html(
+            _d_mag, _pct_mag, ef_p, ef_c, _v1, _v0,
+            fmt=_fmt_mag,
+            # Sin efecto precio que nombrar no se inventa una causa:
+            # en kilos el Δ ES la cantidad, y un precio no se parte.
+            causa=None if _fmt_mag is _fmt_soles else "",
+            sube=_SUBE_VEREDICTO),
+        unsafe_allow_html=True)
+
+    # ── QUÉ CASCADA SE DIBUJA ────────────────────────────────────
+    # «Por qué» sigue siendo `_fig_puente` y no un caso de
+    # `_fig_cascada`: es la única que tiene algo que explicar
+    # además del número (su `hovertext` escribe la cuenta de los
+    # dos efectos, regla #335). Las otras dos son la misma figura
+    # con otros pasos.
+    if corte == _CORTE_DEFAULT and _fmt_mag is _fmt_soles:
+        _fig_p = _fig_puente(
+            tot["valor"], tot["valor_aa"], ef_p, ef_c,
+            cant=float(items["cant"].iloc[0]) if _uno else None,
+            cant_aa=float(items["cant_aa"].iloc[0]) if _uno else None,
+            unidad=_um_puente)
+    else:
+        _partes = None
+        if corte == "Quién":
+            _por = _por_item(g_casc, llave_foco)
+            _partes = [(str(r.item), float(r.valor - r.valor_aa))
+                       for r in _por.itertuples()]
+            _pasos = _pasos_cascada(_partes, _v0, _v1, resto="otros")
+        elif corte == "Cuándo":
+            _pm = (g_foco.groupby("mes", as_index=False)
+                   [["valor", "cant", "valor_aa", "cant_aa"]].sum()
+                   .sort_values("mes"))
+            _col = "cant" if _fmt_mag is not _fmt_soles else "valor"
+            _partes = [(_etiqueta_mes(r.mes),
+                        float(getattr(r, _col)
+                              - getattr(r, f"{_col}_aa")))
+                       for r in _pm.itertuples()]
+            _pasos = _pasos_cascada(_partes, _v0, _v1,
+                                    cronologico=True, resto="otros")
+        else:
+            _pasos = _pasos_simple(_v0, _v1)
+        _fig_p = _fig_cascada(
+            _pasos, lambda v, med: _etq_cascada(v, med, _fmt_mag),
+            hover=_hover_cascada(_pasos, _partes, _fmt_mag,
+                                 _v1 - _v0))
+    st.plotly_chart(_fig_p, use_container_width=True,
+                    key="compras_g_vap_puente")
 
 
 @st.fragment
@@ -1604,71 +1880,46 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         _tarj_hdr = st.container(key="compras_vap_card_hdr")
         with _tarj_hdr.container(key="vap_fila_hdr"):
             _hdr = st.empty()
-            _pinta_hdr = lambda amb=None: _hdr.markdown(  # noqa: E731
-                '<p class="chart-card-hdr vap-hdr">Vs año pasado'
-                + (f'<span>{amb}</span>' if amb else "")
-                + '</p>', unsafe_allow_html=True)
-            _pinta_hdr()
-            # Métrica y ventana, en la MISMA fila del título (2026-09-02, a
-            # pedido: "que las opciones para elegir Valor Cantidad y Precio
-            # figuren arriba en línea con el título, en una lista
-            # minimalista"). Vivían en un renglón propio debajo, que con
-            # esto DESAPARECE — y eso es lo que sube los gráficos.
-            #
-            # `st.pills` -> `st.selectbox`: tres pastillas de texto ocupaban
-            # el ancho de media tarjeta para una elección que casi nunca se
-            # toca. La lista pesa ~110px y se lee igual que el agrupador de
-            # al lado, que es el otro control de "por qué corte miro esto".
-            with st.container(key="vap_hdr_modo"):
-                modo = st.selectbox(
-                    "Ver", list(_MODOS), key="compras_vap_modo_sel",
-                    label_visibility="collapsed",
-                    help="Qué se compara contra el año pasado. Cantidad y "
-                         "Precio se leen sobre UN producto —kilos y litros "
-                         "no se suman—: sin uno elegido en la tabla, el de "
-                         "mayor gasto.") or "Valor"
+            # EL TÍTULO YA NO LLEVA EL ÁMBITO (2026-09-17). Nombra la
+            # VISTA; el ítem en foco lo dice cada tarjeta por su cuenta —
+            # la serie en su fila de controles y la cascada en su rótulo
+            # (#443)—, que es adónde mira el que lo necesita. Sigue yendo
+            # por un `st.empty()` y no por el parámetro `titulo` de la
+            # tarjeta porque los tres `return` tempranos de más abajo
+            # escriben avisos en este mismo contenedor.
+            _hdr.markdown(f'<p class="chart-card-hdr vap-hdr">{_TITULO}</p>',
+                          unsafe_allow_html=True)
 
-            # ── CON QUÉ EJE SE PARTE EL Δ ────────────────────────────────
-            # Va ACÁ y no en la tarjeta del puente, que es de quien es el
-            # control: medida en el navegador, esa tarjeta da 434px de
-            # ancho y su figura 163px de alto, así que un renglón de
-            # control propio le costaba ~44px — más de la cuarta parte del
-            # dibujo. La fila de la cabecera, en cambio, es `flex-wrap:
-            # wrap` y es su PROPIA tarjeta desde el 2026-09-14 (regla
-            # #420): no le saca un píxel a ninguna figura, y con ocho
-            # controles sigue entrando en UN renglón (medido: 1113×27 a
-            # 1280 de viewport).
+            # ═══ LA FILA VA DE LO GLOBAL A LO LOCAL, EN TRES TRAMOS ═══
+            # 2026-09-17, a pedido: «creo tener muchos filtros en una sola
+            # franja y quizás no todos afecten a las 3 tarjetas».
             #
-            # `_un_item` se lee de `session_state` y puede venir de un foco
-            # que este run va a soltar (el ítem ya no está en `g`). Cuesta
-            # un run con «Quién» escondido de más, y se arregla solo al
-            # siguiente; resolverlo acá obligaría a recortar el df antes de
-            # la cabecera, o sea a dibujar la cabecera dos veces.
-            _un_item = (st.session_state.get("compras_vap_foco") is not None
-                        or modo != "Valor")
-            _ops_corte, _fuera_corte = _cortes_disponibles(
-                modo, _un_item, st.session_state.get(_K_MES) is not None)
-            corte = None
-            if _ops_corte:
-                # ESPEJO, y no la key del widget a secas: en Precio no
-                # aplica ningún corte y el selector NO SE DIBUJA — y un
-                # widget que deja de renderizarse pierde su estado
-                # (CLAUDE.md). Sin el espejo, pasar por Precio y volver
-                # tiraba el corte elegido. Misma forma que el
-                # `{k_rango}__eco` de `app.py`.
-                _pref = st.session_state.get(_K_CORTE, _CORTE_DEFAULT)
-                if st.session_state.get("compras_vap_corte_sel") \
-                        not in _ops_corte:
-                    st.session_state["compras_vap_corte_sel"] = (
-                        _pref if _pref in _ops_corte else _ops_corte[0])
-                with st.container(key="vap_hdr_corte"):
-                    corte = st.selectbox(
-                        "Partir por", list(_ops_corte),
-                        key="compras_vap_corte_sel",
-                        label_visibility="collapsed",
-                        help=_ayuda_corte(_fuera_corte))
-                st.session_state[_K_CORTE] = corte
+            # Y era cierto: de los siete controles, sólo DOS mandan sobre
+            # las tres tarjetas de abajo. El orden que había —Ver, Partir
+            # por, ventana, Familia, agrupador, buscador— iba 2 → 1 → 3 →
+            # 3 → 1 → 1, o sea ninguno. Ahora se lee de afuera hacia
+            # adentro, y el orden ES la jerarquía:
+            #
+            #   QUÉ ENTRA       ventana, Familia    → las tres tarjetas
+            #   QUÉ SE COMPARA  Ver, Partir por     → la serie y la cascada
+            #   EL DETALLE      agrupador, buscador → la tabla
+            #
+            # EL ORDEN DE ESTOS BLOQUES ES EL ORDEN EN PANTALLA, igual que
+            # `_SECCIONES` en `estilos/`: la fila es un flex y Streamlit
+            # los apila en el orden en que se crean. Mover uno de tramo es
+            # moverlo acá, no en el CSS — allá sólo viven el ancho de cada
+            # uno, el rótulo del tramo y la línea que los separa (los dos
+            # últimos son pseudo-elementos, así que no ocupan un ítem del
+            # flex ni pueden desordenarlo). Ver la regla #444.
+            #
+            # Los rótulos son TRES y no seis, uno por control: el texto
+            # más largo del filtro de Familia («BEBIDAS CON ALCOHOL») ya
+            # pide 190px, y «Familia: BEBIDAS CON ALCOHOL» pediría ~245 en
+            # una fila que suma 784 de controles sobre 1113. Un rótulo por
+            # tramo cuesta un renglón de 13px en ESTA tarjeta, que es la
+            # de la cabecera y no la de ninguna figura.
 
+            # ── TRAMO 1: QUÉ ENTRA (manda sobre las tres tarjetas) ───────
             with st.container(key="vap_hdr_ventana"):
                 # Default "3m" desde el 2026-09-13, a pedido («debe mostrar
                 # inicialmente 3 meses»); antes "12m", y antes del
@@ -1677,11 +1928,13 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                 # cuatro opciones siguen ahí (memoria «fijo en X»).
                 #
                 # `format_func`: el texto largo con el ícono de calendario.
-                # Es el ÚNICO de los cinco controles de la fila que nombra
-                # un período, y con "12m" suelto no se distinguía de los
-                # otros cuatro desplegables sin etiqueta — reportado el
-                # 2026-09-07 ("¿quizás es mejor tener el selector de
-                # fecha?", sobre un selector de fecha que ya estaba ahí).
+                # Es el ÚNICO control de la fila que nombra un período, y
+                # con "12m" suelto no se distinguía de los otros cinco
+                # desplegables — reportado el 2026-09-07 ("¿quizás es mejor
+                # tener el selector de fecha?", sobre un selector de fecha
+                # que ya estaba ahí). Los rótulos de tramo del 2026-09-17
+                # ayudan pero no lo reemplazan: «Qué entra» dice de qué
+                # MANDA el tramo, no que éste sea el del calendario.
                 # Cambia el TEXTO, nunca el valor: las comparaciones
                 # `ventana == periodo.HEREDA` de más abajo siguen viendo la
                 # cadena literal (ver el docstring de `periodo.selector`).
@@ -1689,18 +1942,7 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                                            default="3m", widget="lista",
                                            format_func=_etiq_ventana)
 
-            # Agrupador + buscador, en la MISMA fila del título (2026-09-02, a
-            # pedido). Vivían en la tarjeta de abajo, que era la de la tabla;
-            # al fusionarse las dos (ver más abajo) esa tarjeta ya no tiene
-            # cabecera propia donde apoyarse, y además son controles que mandan
-            # sobre las DOS mitades: el agrupador decide las filas de la tabla
-            # Y qué significa el foco del gráfico.
-            #
-            # Dibujarlos ACÁ ARRIBA es de paso un arreglo: `agrupar_por` se lee
-            # de `session_state` ~60 líneas más abajo para resolver el foco, y
-            # mientras el widget se dibujaba DESPUÉS ese valor era el del rerun
-            # anterior. Ahora los dos hablan del mismo run.
-            # ── Familia: filtro PROPIO de la tarjeta ────────────────
+            # ── Familia: filtro PROPIO de la tarjeta ─────────────────────
             # 2026-09-05, a pedido. No le disputa nada a los chips de la
             # franja: se aplica ENCIMA de ellos y sus opciones salen de lo
             # que los chips dejaron pasar, así que acá no se puede elegir
@@ -1737,6 +1979,25 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                              "las que los chips dejan pasar.")
                     fam_vap = None if _fam_sel == _FAM_TODAS else _fam_sel
 
+
+            # ── TRAMO 3: EL DETALLE (la tabla) ───────────────────────────
+            # Agrupador y buscador subieron a la fila del título el
+            # 2026-09-02, a pedido. Vivían en la tarjeta de abajo, que era
+            # la de la tabla; al fusionarse las dos esa tarjeta ya no tiene
+            # cabecera propia donde apoyarse.
+            #
+            # SON LOS DOS MÁS LOCALES DE LA FILA, y por eso van últimos
+            # desde el 2026-09-17: el buscador toca SÓLO las filas de la
+            # tabla, y el agrupador las decide (a las otras dos tarjetas
+            # las alcanza de rebote, por lo que significa un clic y por lo
+            # que nombra la cascada en el corte «Quién»).
+            #
+            # Dibujarlos en la cabecera es de paso un arreglo: `agrupar_por`
+            # se lee de `session_state` ~150 líneas más abajo para resolver
+            # el foco, y mientras el widget se dibujaba DESPUÉS ese valor
+            # era el del rerun anterior. Ahora los dos hablan del mismo run
+            # — y el reordenamiento no lo rompe, porque «abajo» sigue
+            # estando abajo.
             _ops_ag = [a for a in _AGRUPADORES
                        if a == "Producto"
                        or (a == "Familia" and col_fam)
@@ -1799,35 +2060,27 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                             "los que no, y por qué, están en su ayuda.")
                         _ayuda_parcial = st.empty()
 
-            # ── ⛶ SOLA EN LA PÁGINA (modo "solo") ────────────────────────
-            # Último ítem de la fila, como en Grafana: el control de
-            # maximizar vive en la cabecera del panel, no flotando encima.
+            # (ACÁ VIVÍA EL ⛶ DEL MODO "SOLO", hasta el 2026-09-17. Se
+            # quitó a pedido, en la misma vuelta que le dio jerarquía a
+            # esta fila: era el octavo ítem de un renglón que ya tenía
+            # siete, y devolverlo suma 36px —26 del botón y 10 del gap—
+            # justo cuando el título creció de "Vs año pasado" a "Compra
+            # Vs Año Pasado".
             #
-            # Lo que hace NO es un fullscreen del navegador: escribe
-            # `compras_pila_solo` y el bucle de la pila
-            # (`graficos/compras/__init__.py`) deja de dibujar las otras
-            # cinco secciones. El ancho —que es lo que esta tarjeta
-            # necesita, no alto: parte en dos con `COLUMNAS_DRILL`— lo dan
-            # las dos reglas de `estilos/_20_compras_rail.py` que esconden
-            # el rail y sueltan su reserva (`--rail-der-res`).
+            # EL MECANISMO SIGUE ENTERO y no es código muerto por
+            # descuido: `compras_pila_solo` lo lee el bucle de
+            # `graficos/compras/__init__.py` y de él cuelgan las reglas de
+            # `estilos/_20_compras_rail.py` que sueltan `--rail-der-res`.
+            # Lo que falta es QUIEN LO ENCIENDA. Se conserva porque sus
+            # comentarios guardan mediciones hechas contra Cloud que no se
+            # recuperan borrándolas y volviéndolas a hacer; para
+            # reactivarlo alcanza con un `st.button` que escriba esa clave
+            # con la key de la sección y haga `st.rerun(scope="app")`.
             #
-            # `scope="app"` y no "fragment": el bucle de secciones vive
-            # AFUERA del fragment de esta sección, así que un rerun de
-            # fragment lo dejaría igual. Y "fragment" es ilegal fuera de un
-            # rerun de fragment (regla #306), que es justo el caso cuando
-            # se entra por deep-link.
-            with st.container(key="vap_hdr_solo"):
-                _solo_on = (st.session_state.get("compras_pila_solo")
-                            == "compras_sec_vs_ano_pasado")
-                if st.button(":material/close_fullscreen:" if _solo_on
-                             else ":material/open_in_full:",
-                             key="vap_hdr_solo_btn",
-                             help=("Volver a la pila completa" if _solo_on
-                                   else "Ver sólo esta tarjeta, a todo el "
-                                        "ancho")):
-                    st.session_state["compras_pila_solo"] = (
-                        None if _solo_on else "compras_sec_vs_ano_pasado")
-                    st.rerun(scope="app")
+            # Lo que se pierde: esta vista parte la fila con
+            # `COLUMNAS_DRILL`, así que en una laptop angosta la tarjeta
+            # del puente cae a ~290px y el ⛶ era la única salida para
+            # darle ancho. Ver la regla #444.
         # (Acá vivía el renglón `st.columns([1, 1])` con la métrica y la
         # ventana, uno pegado a cada borde. Los dos subieron a la fila del
         # título el 2026-09-02 y el renglón se fue con ellos: son los ~56px
@@ -1934,6 +2187,56 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
             g = g.copy()
             g["grupo"] = g["prod"].map(_mapa).fillna(g["prod"])
 
+        # ═══ LA FILA DE TARJETAS SE ABRE ACÁ, NO DONDE SE DIBUJA ═══
+        # 2026-09-17, a pedido: «coloquemos los widget de valor y cuándo en
+        # la tarjeta de las barras». Los dos controles de «Qué se compara»
+        # bajaron de la cabecera compartida a la tarjeta de la serie, que
+        # es la que gobiernan (con su vecina: «Partir por» dibuja la
+        # cascada de al lado — las dos tarjetas son UNA unidad de lectura,
+        # como el ranking y su detalle en Proveedor).
+        #
+        # Y POR ESO LAS COLUMNAS SE CREAN ACÁ ARRIBA. En Streamlit el orden
+        # de EJECUCIÓN es el orden en que se leen los widgets: `modo` hace
+        # falta ~80 líneas más abajo (el auto-foco, la magnitud, la
+        # figura), así que su `selectbox` tiene que correr ANTES. Como el
+        # widget ahora vive dentro de la tarjeta de la serie, la tarjeta
+        # tiene que existir ANTES. Leerlo de `session_state` y dibujarlo
+        # después NO sirve: es exactamente el bug que ya se pagó con
+        # `agrupar_por` —el valor que llega es el del rerun anterior— y
+        # está documentado veinte líneas más arriba.
+        #
+        # Que las columnas se creen acá no cambia el DOM: los tres `return`
+        # tempranos de más arriba escriben en `_tarj_hdr`, no en el punto
+        # de ejecución, así que ninguno puede dejar estas tarjetas a medio
+        # dibujar. Después de este punto ya no hay returns hasta que las
+        # dos están llenas.
+        col_g, col_p = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
+        _tarj_serie = col_g.container(key="compras_vap_card_serie")
+        _tarj_puente = col_p.container(key="compras_vap_card_puente")
+
+        with _tarj_serie.container(key="vap_serie_hdr"):
+            # El nombre del ítem va por un HUECO: depende del foco, que se
+            # resuelve abajo. Mismo mecanismo que el ámbito del título
+            # cuando vivía en la cabecera, y por el mismo motivo.
+            _nom_serie = st.empty()
+
+            # `st.pills` -> `st.selectbox` (2026-09-02): tres pastillas de
+            # texto ocupaban el ancho de media tarjeta para una elección
+            # que casi nunca se toca.
+            with st.container(key="vap_serie_modo"):
+                modo = st.selectbox(
+                    "Ver", list(_MODOS), key="compras_vap_modo_sel",
+                    label_visibility="collapsed",
+                    help="Qué se compara contra el año pasado. Cantidad y "
+                         "Precio se leen sobre UN producto —kilos y litros "
+                         "no se suman—: sin uno elegido en la tabla, el de "
+                         "mayor gasto.") or "Valor"
+            # («Partir por» estuvo acá unas horas el 2026-09-17 y se mudó a
+            # la tarjeta de la cascada el mismo día, preguntado: «el por
+            # qué, quién y cuándo entiendo que afecta solo al gráfico
+            # derecho, ¿verdad?». Sí — es su único consumidor, así que
+            # vive donde dibuja. Ver la regla #446.)
+
         # ── Foco: el ítem clickeado en la tabla de abajo ─────────────────
         foco = st.session_state.get("compras_vap_foco")
         llave_foco = "prod" if agrupar_por == "Producto" else "grupo"
@@ -1944,6 +2247,42 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         # afuera). Los dos casos se sueltan igual — volver a "todas".
         if foco is not None and g_foco.empty:
             foco, g_foco = None, g
+
+        # ── LA VISTA ABRE CON EL PRIMER ÍTEM ELEGIDO ─────────────────────
+        # 2026-09-17, a pedido: «cuando se elija la opción de "El detalle"
+        # Producto, inicialmente debe seleccionarse el primero, y el nombre
+        # del producto debe aparecer en la tarjeta de barras».
+        #
+        # "El primero" es el primero DE LA TABLA, que se ordena por |Δ S/|
+        # descendente (ver `_tabla_detalle`): el que más movió la aguja. No
+        # el de mayor gasto — ése es el que elige `_auto` para Cantidad y
+        # Precio, y son dos preguntas distintas.
+        #
+        # ES UN DEFAULT, NO UN CANDADO: volver a clickear la fila lo suelta
+        # y la vista vuelve a "todas las compras", como siempre. Lo que
+        # distingue "nadie eligió todavía" de "el usuario soltó el foco" es
+        # `_K_FOCO_TOCADO`, que lo pone el handler de la tabla en cuanto
+        # hay un clic — en los DOS sentidos.
+        #
+        # Y LA SIEMBRA NO ESCRIBE `compras_vap_foco`. Esa clave es el
+        # espejo de lo que tiene SELECCIONADO la grilla, y la grilla no
+        # sabe nada de esta siembra: al final de la corrida devuelve None,
+        # el `if clic != ...` de abajo lo lee como una deselección, escribe
+        # None y llama a `st.rerun` — que vuelve a sembrar, y otra vez. Se
+        # vio como un bucle de reruns que terminaba reventando el fragment
+        # con «Could not find current_fragment_id in fragment_id_queue»
+        # (2026-09-17, en la primera pasada de este cambio). El foco
+        # sembrado vive SÓLO en la variable local de este run.
+        _tocado = st.session_state.get(_K_FOCO_TOCADO, False)
+        if foco is None and not _tocado and not g.empty:
+            _orden = _por_item(g, llave_foco)
+            if not _orden.empty:
+                _prim = str(_orden.loc[
+                    (_orden["valor"] - _orden["valor_aa"]).abs().idxmax(),
+                    "item"])
+                _g_prim = g[g[llave_foco].astype(str) == _prim]
+                if not _g_prim.empty:
+                    foco, g_foco = _prim, _g_prim
 
         # Precio es un RATIO y Cantidad suma UNIDADES: sobre todas las
         # compras ninguno de los dos es una magnitud real. Medido el
@@ -2020,26 +2359,24 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         # clase:
         #   · "Todas las compras" nombraba el estado por DEFECTO — o sea,
         #     ocupaba el renglón para decir que no había nada elegido.
-        #   · "· últimos 3 meses" repetía lo que dice la lista de ventana,
-        #     que ahora está en esa misma fila a dos controles de distancia.
-        # Sin foco el `<span>` no se dibuja (`_pinta_hdr` lo omite si el
-        # texto viene vacío) y el título queda solo, que es lo correcto:
-        # cuando no hay recorte, no hay nada que aclarar.
-        # Cuando el ítem lo eligió la VISTA y no el usuario (Cantidad o
-        # Precio sin foco), la cabecera lo avisa: sin eso, un producto solo
-        # en el gráfico se lee como un clic que nadie hizo.
-        if _auto:
-            _pinta_hdr(_compras_truncar(foco_titulo, 26) + " · mayor gasto")
-        else:
-            _pinta_hdr(_compras_truncar(foco_titulo, 34) if foco_titulo
-                       else "")
+        #   · "· últimos 3 meses" repetía lo que dice la lista de ventana.
+        # El criterio sobrevivió a la mudanza del 2026-09-17: sin foco no
+        # se escribe nada, acá tampoco.
+        # EL NOMBRE VIVE EN LA TARJETA DE LAS BARRAS, no al lado del título
+        # (2026-09-17, a pedido). El título de la cabecera quedó solo:
+        # nombra la VISTA, y el ámbito es de cada tarjeta — la cascada ya
+        # lo decía en su rótulo desde la #443, y la serie no lo decía en
+        # ninguna parte. Sin foco no se escribe nada: cuando no hay
+        # recorte, no hay nada que aclarar.
+        _nom_serie.markdown(
+            _nombre_serie_html(foco_titulo, auto=_auto),
+            unsafe_allow_html=True)
 
-        # Una fila de DOS TARJETAS desde el 2026-09-14 (#420), y por eso
-        # ahora sí es una fila de drill de verdad: `COLUMNAS_DRILL` la ata al
-        # mismo eje que las de Proveedor y Producto. El piso de alto de
+        # Las dos tarjetas de la fila ya están abiertas (ver «LA FILA DE
+        # TARJETAS SE ABRE ACÁ»): acá se RELLENAN. `COLUMNAS_DRILL` las ata
+        # al mismo eje que las de Proveedor y Producto, y el piso de alto de
         # `estilos/_80_cards.py` (#145) las hace terminar en la misma línea.
-        col_g, col_p = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
-        with col_g, st.container(key="compras_vap_card_serie"):
+        with _tarj_serie:
             fig = _fig_serie(g_foco, modo, parcial, unidad=unidad_serie,
                              con_precio=un_producto, mes_sel=mes_sel)
             if fig is not None:
@@ -2050,98 +2387,13 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
                 st.plotly_chart(fig, use_container_width=True,
                                 on_select="rerun", selection_mode="points",
                                 key=_key_serie)
-        with col_p, st.container(key="compras_vap_card_puente"):
-            # La CANTIDAD sólo viaja si `_items` es un producto solo: ahí
-            # hay UNA unidad y el número se puede decir ("246 kilos"). Con
-            # varios productos sumaría kilos con litros y con servicios —
-            # la misma trampa que `_por_item` evita para el precio del
-            # grupo. Sin cantidad el tooltip lo dice todo en plata.
-            #
-            # Y va con su UNIDAD o no va: `_fig_puente` ignora la cantidad
-            # si la unidad viene vacía. Un "246" pelado en una tarjeta de
-            # soles se lee como soles (reportado el 2026-09-06, regla #335).
-            _uno = len(_items) == 1
-            _um_puente = (_ums_prod.get(str(_items["item"].iloc[0]), "")
-                          if _uno else "")
-            _um_corta = unidad_corta(_um_puente) or unidad_serie or ""
-
-            # ── LA MAGNITUD, DE UN SOLO SITIO ────────────────────────────
-            # El rótulo, el veredicto y las etiquetas de la cascada tienen
-            # que hablar de lo MISMO. Antes daba igual porque siempre eran
-            # soles; desde que la tarjeta sigue a «Ver», un veredicto en
-            # soles encima de una cascada en kilos es una contradicción
-            # escrita en la misma tarjeta. Sale de acá, una vez.
-            if modo == "Cantidad" and _um_corta:
-                _magnitud = f"Cantidad comprada · {_um_corta}"
-                _fmt_mag = lambda v: _fmt_cant(v, _um_corta)  # noqa: E731
-                _v1, _v0 = float(tot["cant"]), float(tot["cant_aa"])
-            elif modo == "Precio" and _um_corta and tot["cant"] and tot["cant_aa"]:
-                _magnitud = f"Precio unitario · S/ por {_um_corta}"
-                _fmt_mag = lambda v: _fmt_precio(v, _um_corta)  # noqa: E731
-                _v1 = float(tot["valor"]) / float(tot["cant"])
-                _v0 = float(tot["valor_aa"]) / float(tot["cant_aa"])
-            else:
-                # También el caso «Cantidad sin unidad»: sin unidad no se
-                # escribe una cantidad (regla #335), así que la tarjeta se
-                # queda en soles y el rótulo lo dice.
-                _magnitud = "Valorizado de compra"
-                _fmt_mag = _fmt_soles
-                _v1, _v0 = float(tot["valor"]), float(tot["valor_aa"])
-            _d_mag = _v1 - _v0
-            _pct_mag = (_d_mag / _v0 * 100) if _v0 else None
-            _ambito = (foco_titulo if foco_titulo else "todas las compras")
-            if mes_sel:
-                _ambito = f"{_ambito} · {mes_sel}"
-
-            st.markdown(
-                _resumen_html(
-                    _d_mag, _pct_mag, ef_p, ef_c, _v1, _v0,
-                    rotulo=_rotulo_html(_magnitud,
-                                        _compras_truncar(_ambito, 34)),
-                    fmt=_fmt_mag,
-                    # Sin efecto precio que nombrar no se inventa una causa:
-                    # en kilos el Δ ES la cantidad, y un precio no se parte.
-                    causa=None if _fmt_mag is _fmt_soles else ""),
-                unsafe_allow_html=True)
-
-            # ── QUÉ CASCADA SE DIBUJA ────────────────────────────────────
-            # «Por qué» sigue siendo `_fig_puente` y no un caso de
-            # `_fig_cascada`: es la única que tiene algo que explicar
-            # además del número (su `hovertext` escribe la cuenta de los
-            # dos efectos, regla #335). Las otras dos son la misma figura
-            # con otros pasos.
-            if corte == _CORTE_DEFAULT and _fmt_mag is _fmt_soles:
-                _fig_p = _fig_puente(
-                    tot["valor"], tot["valor_aa"], ef_p, ef_c,
-                    cant=float(_items["cant"].iloc[0]) if _uno else None,
-                    cant_aa=float(_items["cant_aa"].iloc[0]) if _uno else None,
-                    unidad=_um_puente)
-            else:
-                _partes = None
-                if corte == "Quién":
-                    _por = _por_item(g_casc, llave_foco)
-                    _partes = [(str(r.item), float(r.valor - r.valor_aa))
-                               for r in _por.itertuples()]
-                    _pasos = _pasos_cascada(_partes, _v0, _v1, resto="otros")
-                elif corte == "Cuándo":
-                    _pm = (g_foco.groupby("mes", as_index=False)
-                           [["valor", "cant", "valor_aa", "cant_aa"]].sum()
-                           .sort_values("mes"))
-                    _col = "cant" if _fmt_mag is not _fmt_soles else "valor"
-                    _partes = [(_etiqueta_mes(r.mes),
-                                float(getattr(r, _col)
-                                      - getattr(r, f"{_col}_aa")))
-                               for r in _pm.itertuples()]
-                    _pasos = _pasos_cascada(_partes, _v0, _v1,
-                                            cronologico=True, resto="otros")
-                else:
-                    _pasos = _pasos_simple(_v0, _v1)
-                _fig_p = _fig_cascada(
-                    _pasos, lambda v, med: _etq_cascada(v, med, _fmt_mag),
-                    hover=_hover_cascada(_pasos, _partes, _fmt_mag,
-                                         _v1 - _v0))
-            st.plotly_chart(_fig_p, use_container_width=True,
-                            key="compras_g_vap_puente")
+        with _tarj_puente:
+            _tarjeta_cascada(
+                items=_items, ums_prod=_ums_prod,
+                unidad_serie=unidad_serie, modo=modo, tot=tot,
+                foco_titulo=foco_titulo, mes_sel=mes_sel,
+                ef_p=ef_p, ef_c=ef_c, g_casc=g_casc, g_foco=g_foco,
+                llave_foco=llave_foco)
 
         if parcial is not None:
             # El aviso del mes parcial deja de ser un caption en flujo y
@@ -2217,6 +2469,10 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         # "todas las compras" — es un gesto explícito, se respeta.
         if clic != st.session_state.get("compras_vap_foco"):
             st.session_state["compras_vap_foco"] = clic
+            # Desde acá la siembra del primer ítem no vuelve a correr: el
+            # usuario ya eligió, y "sin foco" pasa a significar "soltó el
+            # foco" y no "todavía no eligió" (ver `_K_FOCO_TOCADO`).
+            st.session_state[_K_FOCO_TOCADO] = True
             # EL SCOPE SE DECIDE, no se fija. `scope="fragment"` sólo es
             # legal durante un rerun DE fragment; en una corrida completa
             # del script Streamlit lo prohíbe y se cae la pantalla entera

@@ -284,6 +284,84 @@ resto de `graficos/compras/`.
   `test_graficos.py::_pruebas_widgets_de_fragment_escalado`. Ver
   `arquitectura.md` #373.
 
+## La cabecera de «Compra Vs Año Pasado» se lee de global a local
+
+Sus siete controles NO mandan todos sobre lo mismo, y desde el 2026-09-17
+el orden lo dice. Tres tramos, separados por una línea y con un rótulo
+cada uno:
+
+| Control | Dónde vive | Manda sobre |
+|---|---|---|
+| ventana, Familia («Qué entra») | la cabecera | las tres tarjetas |
+| **Ver** | la tarjeta de la serie | la serie y la cascada |
+| **Partir por** | la tarjeta de la cascada | sólo la cascada |
+| agrupador, buscador («El detalle») | la cabecera | la tabla |
+
+**Cada control bajó a la tarjeta que gobierna** el 2026-09-17, a pedido,
+con la condición de que las tarjetas no crecieran. De dónde salen sus
+píxeles:
+
+- **`Ver`** abre una fila propia en la tarjeta de la serie y la paga la
+  FIGURA: `alturas.FRANJA_CTRL_SERIE` son 47px medidos — 26 de la fila,
+  4,8 de su margen y los 16 del gap de Streamlit.
+- **`Partir por`** NO abre fila: se mete en el renglón del rótulo de la
+  cascada, que ya existía. Una fila propia le habría costado 47 de los 163
+  que mide esa figura; así cuesta 7 (`FRANJA_ROTULO`, de 17 a 24, porque
+  ahora quien manda en ese renglón es el desplegable y no el texto).
+- **Y va en la fila del RÓTULO y no en la del veredicto**: medido, con el
+  control al lado del veredicto la columna cae a 287px, el veredicto pide
+  350 y lo que se come el «…» es la causa. El rótulo es 10,5px y
+  secundario. Reglas #445 y #446.
+
+Y por eso `st.columns` se crea arriba, junto al cálculo, y las tarjetas se
+rellenan ochenta líneas después: **en Streamlit el orden de ejecución es
+el orden en que se leen los valores**, así que un widget que hace falta
+temprano tiene que dibujarse temprano, viva donde viva.
+
+**La cascada tiene además su propio `@st.fragment`** (`_tarjeta_cascada`),
+para que `Partir por` no redibuje las otras tres — mismo patrón que
+`volatilidad.py::_tarjeta_compras_semana` y por la misma queja. La
+condición es que el fragment sea **cerrado sobre sus argumentos**:
+Streamlit lo re-ejecuta con los de la última corrida del drill, así que
+nada puede leerse del scope de afuera. Quedan sin aislar el buscador (toca
+sólo la tabla pero vive en la cabecera) y `Ver` (toca dos tarjetas). Regla
+#447.
+
+La vista **abre con el primer ítem de la tabla enfocado** (el de mayor
+|Δ S/|) y su nombre en la tarjeta de barras. Dos trampas ahí:
+
+- **El foco sembrado NO se escribe en `compras_vap_foco`**: esa clave es
+  el espejo de lo que tiene seleccionado AG Grid, y sembrarla sin decirle
+  nada a la grilla es un bucle de reruns que revienta el fragment.
+- **«Sin foco» son dos estados** —nadie eligió todavía / el usuario lo
+  soltó— y los distingue `compras_vap_foco_tocado`. Sin esa marca, soltar
+  el foco es imposible.
+
+Consecuencia visible y aceptada: la fila sembrada no sale resaltada en la
+tabla, así que el primer clic sobre ella parece no hacer nada.
+
+**El orden lo pone `vs_ano_pasado.py`, no el CSS**: la fila es un flex y
+Streamlit apila los `st.container` en el orden en que se crean. En
+`estilos/_80_cards.py` viven sólo el ancho de cada control, el rótulo del
+tramo y la línea — los dos últimos son **pseudo-elementos**, para que no
+cuenten como ítems del flex ni se cobren el `gap`. El rótulo y la línea
+van sobre el PRIMERO de cada tramo: «Partir por» desaparece en modo
+Precio, así que anclarlos al último dejaría la línea colgando de un
+control que no está.
+
+Dos cosas que conviene saber antes de tocar esta fila:
+
+- **El título dice «Compra Vs Año Pasado» y el rail sigue diciendo «Vs año
+  pasado».** No es un descuido: el rail reparte su ancho entre siete ítems
+  y ahí el nombre largo se trunca. El título sale de `_TITULO`.
+- **El ⛶ del modo «solo» ya no está** (se quitó a pedido el 2026-09-17),
+  pero `compras_pila_solo` sigue vivo en el dispatcher y en
+  `_20_compras_rail.py`: lo que falta es quién lo encienda. Si lo
+  reactivás, mirá el hueco que dejó el botón — sin la defensa
+  anti-tooltip-fantasma, el ícono sale duplicado.
+
+Detalle y mediciones en `arquitectura.md` regla #444.
+
 ## La cascada de «Vs año pasado» tiene TRES coordenadas, no una
 
 Desde el 2026-09-16. La tarjeta del puente medía siempre soles y no lo
