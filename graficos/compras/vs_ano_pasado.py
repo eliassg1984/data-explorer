@@ -1540,8 +1540,15 @@ def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa,
     return (
         f'<div title="{_cuenta}" style="display:flex;align-items:baseline;'
         f'gap:7px;margin:0;white-space:nowrap;overflow:hidden">'
-        f'<span style="font:500 10.5px/1.3 DM Sans,sans-serif;'
-        f'letter-spacing:.06em;text-transform:uppercase;color:{GRIS_TEXTO};'
+        # SIN `text-transform: uppercase` (2026-09-17): el texto está
+        # escrito «Valorizado de Compra» y el CSS lo servía en versalitas,
+        # así que se leía como una etiqueta de formulario y no como el
+        # NOMBRE de lo que mide la tarjeta — reportado tal cual: «no
+        # pusiste el texto como nombre propio, lo veo todo en mayúscula».
+        # De paso entra en menos ancho: minúsculas a 11,5px miden ~130px
+        # contra los ~200 de las mayúsculas con `letter-spacing`.
+        f'<span style="font:500 11.5px/1.3 DM Sans,sans-serif;'
+        f'color:{GRIS_TEXTO};'
         f'flex:0 1 auto;overflow:hidden;text-overflow:ellipsis">{magnitud}'
         f'</span>'
         f'<span style="font:600 13px/1.25 DM Sans,sans-serif;color:{color};'
@@ -1689,11 +1696,11 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
     # viewport — se recortaba el rótulo nuevo el día que nació. Además es
     # el idioma que la tabla de abajo ya usa en «Δ S/» y «Δ %».
     if modo == "Cantidad" and _um_corta:
-        _magnitud = f"Δ Cantidad comprada ({_um_corta})"
+        _magnitud = f"Δ Cantidad Comprada ({_um_corta})"
         _fmt_mag = lambda v: _fmt_cant(v, _um_corta)  # noqa: E731
         _v1, _v0 = float(tot["cant"]), float(tot["cant_aa"])
     elif modo == "Precio" and _um_corta and tot["cant"] and tot["cant_aa"]:
-        _magnitud = f"Δ Precio (S/ por {_um_corta})"
+        _magnitud = f"Δ Precio Unitario (S/ por {_um_corta})"
         _fmt_mag = lambda v: _fmt_precio(v, _um_corta)  # noqa: E731
         _v1 = float(tot["valor"]) / float(tot["cant"])
         _v0 = float(tot["valor_aa"]) / float(tot["cant_aa"])
@@ -1701,7 +1708,7 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
         # También el caso «Cantidad sin unidad»: sin unidad no se
         # escribe una cantidad (regla #335), así que la tarjeta se
         # queda en soles y el rótulo lo dice.
-        _magnitud = "Δ Valorizado de compra"
+        _magnitud = "Δ Valorizado de Compra"
         _fmt_mag = _fmt_soles
         _v1, _v0 = float(tot["valor"]), float(tot["valor_aa"])
     _d_mag = _v1 - _v0

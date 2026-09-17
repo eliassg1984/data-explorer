@@ -706,9 +706,13 @@ def _pruebas_puras():
     # El rótulo va PEGADO a su monto y en el mismo renglón (regla #448):
     # una etiqueta arriba y el número abajo se leen como dos cosas.
     _rv = _vap._resumen_html(-16660.0, -62.6, 235.0, -16895.0, 9933.0,
-                             26594.0, magnitud="Δ Valorizado de compra")
+                             26594.0, magnitud="Δ Valorizado de Compra")
     check("el veredicto lleva su rótulo adentro",
-          "Δ Valorizado de compra" in _rv, True)
+          "Δ Valorizado de Compra" in _rv, True)
+    # El rótulo es un NOMBRE, no una etiqueta en versalitas: el CSS no
+    # puede pasarlo a mayúsculas o se lee como un campo de formulario.
+    check("el rótulo se sirve tal como se escribe",
+          "text-transform:uppercase" in _rv, False)
     check("el rótulo NO dice 'total' (con foco sería falso)",
           "total" in _rv.lower(), False)
     check("el monto va chico (13px), no de titular",

@@ -32,7 +32,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 449 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (158)
+**CSS y estilos** (159)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -192,6 +192,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 - **#444** — Una fila de controles se ordena por ALCANCE, y el orden es la jerarquía: lo que manda sobre…
+- **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 
 **Layout y alturas** (69)
 
@@ -417,7 +418,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 
-**Streamlit** (120)
+**Streamlit** (119)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -538,7 +539,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#445** — En Streamlit, mover un widget de SITIO es moverlo de MOMENTO: el orden de ejecución es el…
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
-- **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 
 **Datos, R2 y DuckDB** (53)
 
@@ -37584,6 +37584,17 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        `#hex`. La paleta no tiene un azul puro: el más cercano es ese
        violeta oscuro, y si algún día hace falta uno de verdad se agrega
        ALLÁ, no acá.
+
+     - **Y `text-transform: uppercase` no es neutro.** El rótulo decía
+       «Valorizado de Compra» en el código y salía «VALORIZADO DE COMPRA»
+       en pantalla: reportado como *«no pusiste el texto como nombre
+       propio, lo veo todo en mayúscula»*. Las versalitas dicen «etiqueta
+       de formulario»; este texto es el NOMBRE de lo que mide la tarjeta,
+       así que va como se escribe. De paso entra en menos ancho —
+       minúsculas a 11,5px miden ~130px contra los ~200 de las mayúsculas
+       con `letter-spacing`. La regla general: si el texto de un rótulo
+       está escrito con mayúsculas y minúsculas a propósito, el CSS no
+       puede decidir otra cosa por él.
 
      (2026-09-17.)
 

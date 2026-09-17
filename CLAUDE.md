@@ -322,13 +322,16 @@ temprano tiene que dibujarse temprano, viva donde viva.
 
 ```
             Magret De Pato Macho x Kg                ← azul, centrado en la TARJETA
-Δ VALORIZADO DE COMPRA  −S/ 16,660    [Por qué ▾]    ← rótulo y monto JUNTOS
+Δ Valorizado de Compra  −S/ 16,660    [Por qué ▾]    ← rótulo y monto JUNTOS
 −62.6% vs año pasado · por comprar menos
 ```
 
 El símbolo **Δ** no es adorno: debajo hay una RESTA, y «valorizado de
 compra: −S/ 16,660» no existe. El monto va **al lado** de su rótulo y no
-debajo — una etiqueta arriba y un número abajo se leen como dos cosas.
+debajo — una etiqueta arriba y un número abajo se leen como dos cosas. Y el
+rótulo **se sirve tal como se escribe**: sin `text-transform: uppercase`,
+porque en versalitas se lee como etiqueta de formulario y no como el NOMBRE
+de lo que mide la tarjeta.
 
 Dos cosas que ya costaron una corrección: **«al medio de la tarjeta» no es
 «al medio de su columna»** —el nombre no puede compartir renglón con un
