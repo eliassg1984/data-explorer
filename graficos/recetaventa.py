@@ -72,15 +72,33 @@ tienen equivalente en recetabase.parquet (`_tabla_composicion_venta`,
 recetas base siguen viniendo de `graficos.recetas_comun`.
 """
 
+import json
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
+# El ÚNICO uso del paquete en el repo, y está acotado a este Sankey: es el
+# único gráfico del proyecto que necesita clic y que
+# `st.plotly_chart(on_select=)` no puede escuchar (regla #452).
+#
+# BAJO `try`, Y NO ES PARANOIA DE MANUAL: el paquete no se toca desde 2021
+# y trae su propio frontend bundleado. Un `import` suelto arriba de este
+# módulo lo convierte en requisito de ARRANQUE del reporte Recetas entero
+# —`graficos/__init__.py` importa este módulo—, así que el día que su
+# instalación falle en Cloud no se cae el Sankey: se cae la página, con un
+# `ImportError` de una línea y sin nada que pushear (regla #357). Con el
+# guard, lo que se pierde es el CLIC, y el Sankey vuelve a dibujarse con
+# `st.plotly_chart` — que es exactamente lo que había antes.
+try:
+    from streamlit_plotly_events import plotly_events
+except Exception:                                      # pragma: no cover
+    plotly_events = None
 
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, BLANCO, ERROR, EXITO,
-    LAVANDA_CHIP, PALETA_SERIES, TEXTO_PRINCIPAL,
+    GRIS_LINEA, LAVANDA_CHIP, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 # El LOOK de una tabla-ranking del repo, en bloque. Nació en el Ranking de
 # proveedores de Compras, cruzó a los tres paneles del drill de Producto
@@ -327,6 +345,35 @@ def _sim_agregar(foco, cod_sel, catalogo):
     st.session_state["rv_comp_sim_aviso"] = None
 
 
+def _sim_escalar(foco, insumo, factor):
+    """Callback de los atajos −10 %/+10 % del Sankey: mueve la CANTIDAD,
+    no el precio.
+
+    Es lo que se pregunta mirando un Sankey — «¿y si le pongo menos?»—,
+    y además es la cuenta que el borrador puede deshacer sin perder nada:
+    el precio unitario viene despejado del parquet y pisarlo lo borra."""
+    lineas = _sim_borradores().get(foco)
+    if lineas is None:
+        return
+    for linea in lineas:
+        if linea["Insumo"] == insumo:
+            linea["Cantidad"] = float(linea["Cantidad"]) * factor
+            break
+    st.session_state.pop(_sim_key_editor(foco), None)
+
+
+def _sim_quitar_insumo(foco, insumo):
+    """Callback de «Quitar» del Sankey — por NOMBRE, no por posición: el
+    Sankey dibuja sólo los insumos con costo > 0 y ordenados, así que su
+    índice no es el de `lineas` (la trampa de la #451, del otro lado)."""
+    lineas = _sim_borradores().get(foco)
+    if lineas is None:
+        return
+    _sim_borradores()[foco] = [l for l in lineas if l["Insumo"] != insumo]
+    st.session_state.pop(_sim_key_editor(foco), None)
+    st.session_state[_K_SANKEY_FOCO] = None
+
+
 def _sim_quitar(foco, marcadas):
     lineas = _sim_borradores().get(foco)
     if lineas is None or not marcadas:
@@ -556,12 +603,72 @@ def _dib_torta_costo_utilidad(fila_foco, foco, costo_sim=None):
     st.plotly_chart(fig, use_container_width=True, key=f"rv_comp_torta_{foco}")
 
 
-def _dib_sankey_insumo_costo(r, nombre_foco, foco):
+# ─── El Sankey, que acá también es un CONTROL ──────────────────────
+# 2026-09-17. `st.plotly_chart(on_select=...)` NO VE un Sankey — medido, y
+# no es que el evento no exista: Plotly SÍ emite `plotly_click` sobre un
+# enlace, y sobre un nodo también si el `arrangement` no lo deja arrastrar.
+# Lo que no pasa es la traducción a selección de Streamlit, que se arma de
+# `plotly_selected`/`plotly_deselect` y un Sankey no tiene selección. Se
+# verificó con un `go.Bar` de control en la misma página, que sí llegó.
+# Detalle en la regla #452.
+#
+# De ahí `streamlit-plotly-events`, que trae su propio frontend. Tres cosas
+# suyas que hay que respetar:
+#
+#   1. `arrangement="fixed"` Y NO `"snap"`. Con snap el nodo es
+#      ARRASTRABLE y el drag se come el clic: medido, cero eventos sobre
+#      los nodos y las etiquetas cambiadas de sitio. De paso se arregla algo
+#      que ya molestaba — hasta hoy, un clic en una barrita la movía.
+#   2. El payload es `{curveNumber, pointNumber}` y NADA MÁS: no dice si se
+#      clickeó un nodo o un enlace, y el índice de uno no es el del otro.
+#      Por eso el nodo del PLATO va ÚLTIMO y los insumos ocupan 0..N-1: así
+#      `link j` apunta a `node j` y las dos lecturas nombran al mismo
+#      insumo. Verificado clickeando el nodo y su cinta: los dos devuelven
+#      el mismo número.
+#   3. Re-emite el ÚLTIMO clic en CADA rerun (la trampa de la #399). Por eso
+#      la key lleva un contador que sube cada vez que se procesa uno.
+_K_SANKEY_FOCO = "rv_comp_sankey_foco"
+_K_SANKEY_NCLIC = "rv_comp_sankey_nclic"
+
+
+def _indice_clickeado(bruto):
+    """El índice del punto clickeado en el Sankey, o `None` si no hubo clic.
+
+    **LO QUE `plotly_events` DEJA EN `session_state` ES UN STRING JSON, NO
+    UNA LISTA.** El paquete hace el `loads()` recién en su valor de
+    retorno; lo que guarda bajo la key es lo crudo, y su `default` es el
+    string `"[]"`. O sea que un `if ev: ev[0].get(...)` —que es lo natural
+    de escribir— revienta con `AttributeError` apenas se carga la vista:
+    `"[]"` es un string NO vacío, así que entra al `if`, y `ev[0]` es el
+    carácter `'['`. Se veía leyendo la fuente del paquete, no probando el
+    camino feliz.
+
+    Acepta las dos formas igual (string o lista ya parseada) para no
+    depender de un detalle interno de un paquete sin mantenimiento desde
+    2021."""
+    if isinstance(bruto, str):
+        try:
+            bruto = json.loads(bruto)
+        except ValueError:
+            return None
+    if not bruto:
+        return None
+    try:
+        return int(bruto[0]["pointNumber"])
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+
+
+def _dib_sankey_insumo_costo(r, nombre_foco, foco, simulando=False):
     """Mini Sankey plato→insumo del plato en foco, ancho del flujo
     proporcional al costo del insumo — mismo cálculo que tenía
     `_sankey_contenedor` (recetas_comun.py, borrada el 2026-08-30 al
     quedarse sin llamadores), reescrito acá a tamaño MINI: ya no es una
-    vista propia, es una pestaña de este panel."""
+    vista propia, es una pestaña de este panel.
+
+    Y desde el 2026-09-17 es además un CONTROL: clic en un insumo (su
+    barrita o su cinta) lo enfoca, reclic lo suelta, y con el simulador
+    prendido el foco trae tres atajos — −10 %, +10 % y quitar."""
     if r is None:
         st.info("No se reconoció la columna de insumo o de costo para "
                "graficar.")
@@ -572,21 +679,55 @@ def _dib_sankey_insumo_costo(r, nombre_foco, foco):
         return
     insumos = r_pos["Insumo"].tolist()
     valores = [float(v) for v in r_pos["Costo"].tolist()]
-    labels = [nombre_foco or "Plato"] + insumos
-    node_colors = [ACENTO] + [PALETA_SERIES[i % len(PALETA_SERIES)]
-                              for i in range(len(insumos))]
-    link_colors = [_hex_a_rgba(PALETA_SERIES[i % len(PALETA_SERIES)], 0.45)
-                   for i in range(len(insumos))]
+    n = len(insumos)
+
+    # EL CLIC SE LEE ANTES DE DIBUJAR, con el contador en la key: el
+    # componente devuelve el último clic en cada pasada, así que leerlo
+    # después de dibujar re-procesaría el mismo gesto para siempre.
+    nclic = st.session_state.get(_K_SANKEY_NCLIC, 0)
+    key_sankey = f"rv_comp_sankey_{foco}_{nclic}"
+    idx = _indice_clickeado(st.session_state.get(key_sankey))
+    if idx is not None:
+        if 0 <= idx < n:
+            elegido = insumos[idx]
+            # Toggle: reclic en el mismo insumo lo suelta.
+            st.session_state[_K_SANKEY_FOCO] = (
+                None if st.session_state.get(_K_SANKEY_FOCO) == elegido
+                else elegido)
+        else:
+            # El nodo del plato (índice n) no es un insumo: suelta el foco.
+            st.session_state[_K_SANKEY_FOCO] = None
+        st.session_state[_K_SANKEY_NCLIC] = nclic + 1
+        nclic += 1
+        key_sankey = f"rv_comp_sankey_{foco}_{nclic}"
+
+    en_foco = st.session_state.get(_K_SANKEY_FOCO)
+    if en_foco not in insumos:
+        en_foco = None
+
+    # EL PLATO VA DE ÚLTIMO — ver el comentario de arriba, punto 2.
+    labels = insumos + [nombre_foco or "Plato"]
+    base = [PALETA_SERIES[i % len(PALETA_SERIES)] for i in range(n)]
+    if en_foco is None:
+        node_colors = base + [ACENTO]
+        link_colors = [_hex_a_rgba(c, 0.45) for c in base]
+    else:
+        # Con algo en foco, el resto se apaga en vez de taparse: lo que
+        # importa es la comparación, no esconder los otros.
+        node_colors = [c if insumos[i] == en_foco else GRIS_LINEA
+                       for i, c in enumerate(base)] + [ACENTO]
+        link_colors = [_hex_a_rgba(c, 0.75 if insumos[i] == en_foco else 0.12)
+                       for i, c in enumerate(base)]
+
     fig = go.Figure(go.Sankey(
-        arrangement="snap",
+        arrangement="fixed",
         node=dict(
             label=labels, color=node_colors, pad=12, thickness=12,
             line=dict(color=BLANCO, width=0.5),
             hovertemplate="%{label}<extra></extra>",
         ),
         link=dict(
-            source=[0] * len(insumos),
-            target=list(range(1, len(insumos) + 1)),
+            source=[n] * n, target=list(range(n)),
             value=valores, color=link_colors,
             hovertemplate="%{target.label}<br>S/ %{value:,.2f}<extra></extra>",
         ),
@@ -597,7 +738,44 @@ def _dib_sankey_insumo_costo(r, nombre_foco, foco):
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=10),
     )
-    st.plotly_chart(fig, use_container_width=True, key=f"rv_comp_sankey_{foco}")
+    if plotly_events is None:
+        # Sin el componente, el Sankey es el de siempre: se ve igual y no
+        # escucha. Se avisa en vez de dejar un gráfico que no responde a un
+        # clic que el pie invita a dar.
+        st.plotly_chart(fig, use_container_width=True, key=key_sankey)
+        st.caption("El clic sobre el Sankey no está disponible "
+                   "(falta `streamlit-plotly-events`).")
+        return
+
+    plotly_events(fig, click_event=True, hover_event=False, select_event=False,
+                  override_height=alturas.MINI, key=key_sankey)
+
+    if en_foco is None:
+        st.caption("Clic en un insumo para enfocarlo."
+                   + ("" if simulando else
+                      " Con **Simular** prendido, además se puede ajustar "
+                      "desde acá."))
+        return
+
+    fila = r_pos[r_pos["Insumo"] == en_foco].iloc[0]
+    st.caption(f"**{en_foco}** · S/ {float(fila['Costo']):,.2f} · "
+               f"{float(fila['%']):.1f} % del costo")
+    if not simulando:
+        return
+
+    c1, c2, c3 = st.columns(3, gap="small")
+    with c1:
+        st.button("−10 %", key=f"rv_comp_sk_menos_{foco}_{nclic}",
+                  use_container_width=True,
+                  on_click=_sim_escalar, args=(foco, en_foco, 0.9))
+    with c2:
+        st.button("+10 %", key=f"rv_comp_sk_mas_{foco}_{nclic}",
+                  use_container_width=True,
+                  on_click=_sim_escalar, args=(foco, en_foco, 1.1))
+    with c3:
+        st.button("Quitar", key=f"rv_comp_sk_quitar_{foco}_{nclic}",
+                  use_container_width=True,
+                  on_click=_sim_quitar_insumo, args=(foco, en_foco))
 
 
 def _tabla_composicion_venta(df_f):
@@ -897,7 +1075,8 @@ def _tabla_composicion_venta(df_f):
             with tab_torta:
                 _dib_torta_costo_utilidad(fila_foco, foco, costo_sim)
             with tab_sankey:
-                _dib_sankey_insumo_costo(r, nombre_foco, foco)
+                _dib_sankey_insumo_costo(
+                    r, nombre_foco, foco, costo_sim is not None)
 
 
 # ─── Costeo Receta Venta: ranking de platos por costo, en tabla ────────────

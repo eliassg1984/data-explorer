@@ -20,3 +20,16 @@ pypdfium2>=4.30,<5
 # que hace falta (nadie LEE xlsx en esta app). Se eligio sobre openpyxl,
 # que ademas sabe leer y pesa mas, por eso mismo.
 xlsxwriter>=3.2,<4
+# El clic sobre el Sankey de Recetas > Composicion. `st.plotly_chart(
+# on_select=)` no ve un Sankey: Plotly emite el `plotly_click` pero
+# Streamlit arma su seleccion de `plotly_selected`, que un Sankey no
+# tiene. Medido contra un go.Bar de control en la misma pagina, que si
+# llega. Ver arquitectura.md regla #452.
+#
+# OJO, lo que se acepta al depender de esto: el paquete no se toca desde
+# 2021 y trae su propio frontend bundleado (14,8 MB). Se probo contra
+# Streamlit 1.59 + Plotly 6 antes de sumarlo -- carga, dibuja el Sankey y
+# conserva los colores de tema.py. Su payload es {curveNumber,
+# pointNumber} y nada mas, asi que no distingue nodo de enlace: el modulo
+# acomoda los indices para que de igual (regla #452).
+streamlit-plotly-events>=0.0.6,<0.1

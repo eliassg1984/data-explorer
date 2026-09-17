@@ -66,8 +66,20 @@ CSS = """
     /* Streamlit ya deja el contenedor en `position: relative` (medido), pero
        de eso dependen las dos capas de abajo: se declara para que un cambio
        suyo no las mande a posicionarse contra el viewport. */
+
+    /* EL TERCERO es el Sankey clickeable de Recetas > Composicion
+       (`streamlit-plotly-events`, regla #452). No entra por
+       `[data-testid="stPlotlyChart"]`: ese componente NO es un
+       `st.plotly_chart`, es un componente de terceros con su propio
+       iframe, asi que hay que nombrarlo por el titulo que le pone
+       Streamlit, que es `<modulo>.<nombre declarado>` y NO solo el
+       nombre declarado -- medido en el DOM, no deducido:
+       `streamlit_plotly_events.plotly_events`. Sin esto, el unico grafico de la
+       pagina que el usuario puede tocar era tambien el unico que no
+       avisaba que se estaba rehaciendo. */
     [data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stPlotlyChart"]),
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"]) {
+    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"]),
+    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="streamlit_plotly_events.plotly_events"]) {
         position: relative;
     }
 
@@ -88,7 +100,8 @@ CSS = """
        `pointer-events: none` a propósito: esto AVISA, no bloquea. Un velo
        que se come los clics convierte un rerun lento en una app trabada. */
     [data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stPlotlyChart"])::before,
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"])::before {
+    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"])::before,
+    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="streamlit_plotly_events.plotly_events"])::before {
         content: "Actualizando…";
         position: absolute;
         inset: 0;
@@ -117,7 +130,8 @@ CSS = """
        esqueletos. Va ARRIBA del centro (margin-top negativo mayor que medio
        alto) para dejarle sitio a la palabra. */
     [data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stPlotlyChart"])::after,
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"])::after {
+    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"])::after,
+    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="streamlit_plotly_events.plotly_events"])::after {
         content: "";
         position: absolute;
         top: 50%;
@@ -142,7 +156,8 @@ CSS = """
        sigue diciendo lo mismo, igual que el hueco quieto de `_27_pila.py`. */
     @media (prefers-reduced-motion: reduce) {
         [data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stPlotlyChart"])::after,
-        [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"])::after {
+        [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"])::after,
+    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="streamlit_plotly_events.plotly_events"])::after {
             animation: carga_entrar .18s ease-out .4s forwards;
         }
     }

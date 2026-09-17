@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-451 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+452 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (159)
 
@@ -266,7 +266,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 
-**Plotly y figuras** (76)
+**Plotly y figuras** (77)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -344,6 +344,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#439** — Apagar el resto para resaltar uno sale carísimo, y acotar un hover adentro de una…
 - **#440** — Una tabla "documento → detalle" marca su fila con un DATO, no con la selección de AG Grid — y…
 - **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
+- **#452** — st.plotly_chart(on_select=) no ve un Sankey — y no es que el evento no exista
 
 **AgGrid y tablas** (71)
 
@@ -419,7 +420,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 - **#450** — Un AgGrid sin custom_css= no es "el tema por defecto": es el ÚNICO que no se parece a los…
 
-**Streamlit** (120)
+**Streamlit** (121)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -541,6 +542,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
+- **#452** — st.plotly_chart(on_select=) no ve un Sankey — y no es que el evento no exista
 
 **Datos, R2 y DuckDB** (54)
 
@@ -37735,6 +37737,86 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+452. **`st.plotly_chart(on_select=)` no ve un Sankey — y no es que el
+     evento no exista.** Segunda mitad del pedido del 2026-09-17 sobre
+     Recetas › Composición: que el Sankey también se pudiera tocar.
+
+     Medido en una página aparte, con un `go.Bar` de control al lado para
+     no confundir "no llega" con "mi prueba está mal":
+
+     | gesto | `plotly_click` nativo | `on_select` de Streamlit |
+     |---|---|---|
+     | Sankey, nodo, `arrangement="snap"` | **no** — lo come el arrastre | vacío |
+     | Sankey, nodo, `arrangement="fixed"` | sí (`label`, `value`) | vacío |
+     | Sankey, enlace | sí (`source`, `target`, `value`) | vacío |
+     | Barra (control) | sí | **sí** |
+
+     O sea que Plotly emite todo lo que hace falta y lo que no pasa es la
+     traducción: Streamlit arma su selección de `plotly_selected` /
+     `plotly_deselect`, y un Sankey no tiene selección. El
+     `clickmode: "event+select"` estaba bien puesto en los dos, verificado
+     en el `_fullLayout`.
+
+     De paso: **hasta hoy, un clic en una barrita de nuestro Sankey la
+     ARRASTRABA.** Es `arrangement="snap"`, que la hace movible; el drag se
+     come el clic. Con `"fixed"` deja de moverse y empieza a responder.
+
+     **La salida fue `streamlit-plotly-events`**, que trae su propio
+     frontend. Tres cosas suyas, todas medidas, y ninguna está en su
+     README:
+
+       1. **El payload es `{curveNumber, pointNumber}` y NADA MÁS.** No
+          dice si se clickeó un nodo o un enlace, y el índice de uno no es
+          el del otro. Se arregla ACOMODANDO LOS ÍNDICES: el nodo del plato
+          va ÚLTIMO y los insumos ocupan 0..N-1, así `link j` apunta a
+          `node j` y las dos lecturas nombran al mismo insumo. Verificado
+          clickeando el nodo y su cinta: los dos devuelven el mismo número.
+       2. **Lo que deja en `session_state` es un STRING JSON, no una
+          lista**, y su default es el string `"[]"`. El `loads()` lo hace
+          recién en el valor de retorno. Así que un `if ev: ev[0].get(...)`
+          —lo natural de escribir, y lo que había escrito— revienta con
+          `AttributeError` apenas se carga la vista: `"[]"` es un string NO
+          vacío. Se vio leyendo la fuente del paquete, no probando el
+          camino feliz; el test lo había tapado sembrando una lista ya
+          parseada. Lo cubre `_indice_clickeado`, y hoy el guard siembra la
+          forma real.
+       3. **Re-emite el ÚLTIMO clic en cada rerun**, o sea la #399 de nuevo.
+          Misma receta que Volatilidad y Semanal: leer el clic de
+          `session_state` ANTES de dibujar, con un contador en la key que
+          sube cada vez que se procesa uno.
+
+     **Y el import va bajo `try`.** El paquete no se toca desde 2021 y
+     `graficos/__init__.py` importa este módulo, así que un `import` suelto
+     lo vuelve requisito de ARRANQUE del reporte entero: el día que su
+     instalación falle en Cloud no se cae el Sankey, se cae la página, con
+     un `ImportError` de una línea y sin nada que pushear (#357). Con el
+     guard se pierde el clic y el Sankey vuelve a `st.plotly_chart`, que es
+     lo que había antes, con un pie que lo dice.
+
+     **El velo de `data-stale` NO lo cubría, y hacía falta nombrarlo por su
+     iframe.** `estilos/_88_cargando.py` matchea
+     `[data-testid="stPlotlyChart"]` y el iframe de AgGrid; un componente
+     de terceros no es ninguno de los dos. El título que le pone Streamlit
+     es `<módulo>.<nombre declarado>`, o sea
+     `streamlit_plotly_events.plotly_events` — **leído del DOM, no
+     deducido**: la primera versión decía `plotly_events.plotly_events`, que
+     es el nombre declarado a secas, y no matcheaba nada. Sin esto, el
+     único gráfico de la página que el usuario puede tocar era también el
+     único que no avisaba que se estaba rehaciendo.
+
+     Lo que el clic HACE, que es lo único que no salió de una medición
+     sino de una decisión: enfoca el insumo (reclic lo suelta, el nodo del
+     plato también), apaga los otros en vez de esconderlos, y con el
+     simulador prendido trae tres atajos — −10 %, +10 % y quitar. Los dos
+     primeros mueven la CANTIDAD y no el precio: es lo que uno se pregunta
+     mirando un Sankey, y es la cuenta que el borrador puede deshacer sin
+     perder nada (el precio unitario viene despejado del parquet, pisarlo
+     lo borra). «Quitar» saca por NOMBRE y no por posición — el Sankey
+     dibuja sólo los insumos con costo > 0, así que su índice no es el de
+     `lineas`: la #451 mordiendo del otro lado.
+
+     (2026-09-17.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -37747,7 +37829,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#452**.
+> próxima regla nueva es la **#453**.
 
 >
 

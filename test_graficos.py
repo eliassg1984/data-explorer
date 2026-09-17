@@ -170,6 +170,25 @@ def _pruebas_simulador_receta():
     check("un borrador vacío devuelve las mismas columnas",
           list(vacio.columns), ["Insumo", "Cantidad", "Costo", "Precio", "%"])
 
+    # ── El clic del Sankey ──────────────────────────────────────
+    # `plotly_events` deja en `session_state` un STRING JSON, no una lista:
+    # el `loads()` lo hace recién en su valor de retorno, y su default es
+    # el string "[]". Un `if ev: ev[0].get(...)` —lo natural de escribir—
+    # revienta con AttributeError apenas se carga la vista, porque "[]" es
+    # un string NO vacío y `ev[0]` es el carácter '['. Ver regla #452.
+    from graficos.recetaventa import _indice_clickeado
+
+    check("el default \"[]\" del componente no es un clic",
+          _indice_clickeado("[]"), None)
+    check("un clic llega como STRING JSON",
+          _indice_clickeado('[{"curveNumber":0,"pointNumber":2}]'), 2)
+    check("y también se acepta ya parseado",
+          _indice_clickeado([{"curveNumber": 0, "pointNumber": 2}]), 2)
+    check("sin valor todavía, no hay clic", _indice_clickeado(None), None)
+    check("basura no rompe la vista", _indice_clickeado("no es json"), None)
+    check("un payload sin pointNumber tampoco",
+          _indice_clickeado('[{"curveNumber":0}]'), None)
+
     return fallos
 
 
