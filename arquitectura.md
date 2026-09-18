@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-463 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+464 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (163)
+**CSS y estilos** (164)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -197,6 +197,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#457** — Una key que es CROMO en ocho reportes y CONTROL en una tarjeta no puede compartir el CSS de…
 - **#459** — El jalón que sube la primera tarjeta de Compras nombra un wrap por su KEY, así que una vista…
 - **#460** — Una tira de totales puede colgarse del hover de las COLUMNAS de su tabla, y el truco está en…
+- **#464** — Juntar controles en UN renglón se paga en ancho, y el presupuesto se mide contra el peor…
 
 **Layout y alturas** (68)
 
@@ -430,7 +431,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#460** — Una tira de totales puede colgarse del hover de las COLUMNAS de su tabla, y el truco está en…
 - **#462** — Una tabla con dos altos de fila se lee como dos tablas pegadas: la segunda línea se abre AL…
 
-**Streamlit** (124)
+**Streamlit** (125)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -556,6 +557,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#456** — Si un fragment y uno de sus ancestros caen en la misma cola, Streamlit 1.59 corre al hijo DOS…
 - **#458** — El espejo que salva el rango de la recolección de Streamlit no sobrevive a un rerun de…
 - **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
+- **#464** — Juntar controles en UN renglón se paga en ancho, y el presupuesto se mide contra el peor…
 
 **Datos, R2 y DuckDB** (55)
 
@@ -38481,6 +38483,82 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
+464. **Juntar controles en UN renglón se paga en ancho, y el presupuesto se
+     mide contra el peor contenido de cada uno — no contra el que se ve
+     hoy.** 2026-09-18, a pedido: «que los filtros figuren en la misma fila
+     que el filtro de fecha de la tarjeta». En Documentos SUNAT el pill de
+     fecha iba arriba y los tres filtros debajo, dentro de una columna de
+     622px; ahora los cuatro comparten fila con la botonera.
+
+     **De dónde salieron los píxeles: la tira de KPIs bajó al segundo
+     renglón, y GANA con la mudanza.** Medido (viewport 1358, tarjeta de
+     1227 = 1191 de contenido):
+
+       · lo que pide cada control en su peor caso: el pill 200 —se planta
+         en 210 y no lo da el `width: 100%`: 16 del ícono + 151 de
+         «17 sep 2025 – 16 sep 2026» + 16 del chevron—, «Mes en SUNAT» 135
+         («Mes presentado» + 32 de cromo del selectbox), el de proveedor
+         195 (su piso histórico), el de estado 192 («Todos los estados
+         (4,646)» + cromo) y la botonera 78. Son 800.
+       · la tira, a lo ancho de la tarjeta, mete su grupo más largo —los
+         cuatro estados con sus montos, 654px de texto— en UN renglón de
+         20px, contra los 64 que medía envuelto en tres dentro de una
+         columna de 365. O sea que la cabecera NO crece por tener dos
+         renglones: 26 + 20 contra los 64 que imponía la tira sola. La
+         tarjeta pasó de 404 a 381.
+
+     De paso la tira queda justo encima de la tabla, que es donde se lee
+     mejor: cada grupo resume una COLUMNA (regla #460).
+
+     **TRES COSAS QUE SE ROMPIERON EN EL CAMINO, y las tres son de flexbox:**
+
+       1. **Un `st.markdown` de bloque en su propio renglón mide de menos.**
+          Su `stMarkdownContainer` trae `margin-bottom: -16px` (regla #162,
+          puesto para cancelar el 1rem que Streamlit deja detrás). Dentro de
+          una columna daba igual —lo absorbía el alto de la fila—; en un
+          renglón propio el contenedor salía de 4px (20 de contenido menos
+          16) mientras la tira seguía dibujando 20, así que se montaba 10px
+          SOBRE la tabla. Con el gap de la tarjeta en 6px ese -16 ya no
+          cancela nada: se anula.
+       2. **Un `:has(<key>)` sobre columnas alcanza también a las
+          ANIDADAS.** La botonera lleva adentro otro `st.columns(2)`, y sus
+          columnas también contienen `st-key-sunat_actualizar`: el
+          `flex: 0 0 78px` les caía a ellas, el par se quedaba sin sitio y
+          los dos iconos salían UNO DEBAJO DEL OTRO, con la cabecera en
+          76px de alto en vez de 30. Se acota pidiendo las DOS keys a la vez
+          (`:has(.st-key-sunat_actualizar):has(.st-key-sunat_dl_xlsx)`), que
+          sólo cumple la columna de afuera.
+       3. **Un widget que se planta en su ancho natural DESBORDA su
+          columna, no la encoge.** Medido en 1024: el pill seguía en 210
+          dentro de una columna de 176 y se metía 18px sobre el filtro
+          vecino. Su `width: 100%` resolvía contra el `stLayoutWrapper` que
+          Streamlit le mete alrededor, que nace en `fit-content` — o sea
+          210, mida lo que mida la columna. El arreglo es el wrapper al
+          100%, no el botón.
+
+     **EL CORTE DE LÍNEA NO LO DECIDE EL PISO, LO DECIDE LA BASE.** Streamlit
+     le da a cada columna `flex: 1 1 calc(<su %> - 16px)`, con el % sacado de
+     los números de `st.columns`, y flexbox rompe la línea usando la base ya
+     clampeada por `min-width` pero ANTES de encoger a nadie. En 1024 el de
+     proveedor pide 245 de base —más que sus 195 de piso—, así que la suma
+     hipotética da 890 contra los 857 de la fila y el último ítem baja. Por
+     eso a 1366 y 1280 va en un renglón (275/187/380/249, con 75px de holgura
+     sobre el pill) y **a 1024 envuelve**: pill/mes/proveedor arriba, estado
+     y la botonera debajo, sin cortar ni pisar nada.
+
+     Se dejó así a propósito. Forzar el renglón único a 1024 es fijarle
+     `flex-basis` a las cuatro columnas, y con eso los números de
+     `st.columns` dejan de significar nada: el ancho lo decidiría entero el
+     CSS y el `.py` mentiría. Un piso a 1px de su contenido —el otro camino—
+     se rompe con la próxima etiqueta que crezca.
+
+     **Lo que sí se recuperó sin coste: el GAP.** De los 16px de fábrica a
+     10 entre los cinco controles y 6 entre los tres renglones de la
+     tarjeta. Son cuatro filtros de la MISMA tabla, no cuatro secciones, y
+     el 1rem de Streamlit los separaba como si lo fueran.
+
+     (2026-09-18.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -38493,7 +38571,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#464**.
+> próxima regla nueva es la **#465**.
 
 >
 

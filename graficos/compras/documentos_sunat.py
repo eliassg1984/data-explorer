@@ -3963,29 +3963,41 @@ def renderizar_documentos_sunat(d, col_fecha):
     estado = {"doc": None, "vis": None, "cruce": None}
 
     with st.container(border=True, key="sunat_card_izq"):
-        # 2.6 y no 1.5 desde que son DOS filtros y no uno: el de proveedor
-        # necesita ancho o el ellipsis se come el nombre entero (queda en
-        # 195px; a menos de eso ya no se distingue un proveedor de otro).
+        # UN SOLO RENGLÓN CON LOS CUATRO FILTROS, a pedido (2026-09-18:
+        # «que los filtros figuren en la misma fila que el filtro de fecha
+        # de la tarjeta»). Hasta hoy la fecha iba arriba y los otros tres
+        # debajo, dentro de una columna de 622px.
         #
-        # LO PAGABA LA TIRA DE KPIs, con esta aritmética (medida en el
-        # navegador, viewport 1358, tarjeta de 945): la tira medía 91px de
-        # alto mientras tuviera 530px de ancho y saltaba a 126 por debajo de
-        # eso, así que cada píxel que se le quitaba se lo quitaba a la
-        # TABLA. **Ya no aplica desde el 2026-09-18**: los seis grupos se
-        # apilan en una celda de grid y el hueco mide siempre lo que el más
-        # alto, sea cual sea el ancho. Queda el apunte porque la cuenta
-        # vuelve a valer el día que la tira deje de ser una pila.
+        # PARA QUE CUPIERAN, LA TIRA DE KPIs BAJÓ AL SEGUNDO RENGLÓN, y las
+        # dos mitades del cambio se leen juntas. Medido en el navegador
+        # (viewport 1358, tarjeta de 1227 = 1191 de contenido):
         #
-        # 2026-09-18: 2.6/0.8/3.0 -> 3.4/0.8/2.2. Los dos cambios del día se
-        # pagan uno con el otro y hay que leerlos juntos: entra un TERCER
-        # filtro («Está vs Sistema»), que necesita ~200px, y la tira de KPIs
-        # pasa a mostrar UN grupo por vez (el de la columna con el cursor),
-        # así que ya no necesita los 530px que pedía para caber en dos
-        # líneas. Medido: con 2.2 le quedan ~400px y el grupo más ancho —los
-        # cuatro estados con sus montos— envuelve a dos renglones, que es
-        # justo el alto que la pila reserva.
-        c_sel, c_act, c_kpi = st.columns([3.4, 0.8, 2.2])
-        with c_sel:
+        #   · lo que pide cada control en su PEOR caso — el pill 210 (se
+        #     planta en ese ancho, no lo da el `width: 100%`: 16 del ícono
+        #     + 151 de «17 sep 2025 – 16 sep 2026» + 16 del chevron),
+        #     «Mes en SUNAT» 133 («Mes presentado» + 32 de cromo), el de
+        #     proveedor 195 (su piso, ver `_opciones_proveedor`), el de
+        #     estado 191 («Todos los estados (4,646)» + cromo) y los dos
+        #     iconos 138. Son 867 de los 1.127 útiles, así que sobran 260
+        #     que se van casi todos al de proveedor, que es el único cuyo
+        #     contenido es un nombre largo.
+        #   · la tira, en cambio, GANA bajando: a lo ancho de la tarjeta su
+        #     grupo más largo (los cuatro estados con sus montos, 654px de
+        #     texto) entra en UN renglón y mide 20px, contra los 64 que
+        #     medía envuelto en tres dentro de una columna de 365. O sea que
+        #     la cabecera no crece por tener dos renglones: 26 + 20 contra
+        #     los 64 que imponía la tira.
+        #
+        # Y la tira queda justo encima de la tabla, que es una mejora de
+        # paso y no un accidente: cada grupo resume una COLUMNA (regla
+        # #460), así que se lee mejor apoyada sobre ellas que en la esquina.
+        #
+        # columnas-internas: la cabecera de la tarjeta — los cuatro filtros
+        # y la botonera. No es una fila de un drill, así que no va con
+        # `COLUMNAS_DRILL`.
+        c_fecha, c_mes, c_prov, c_est, c_act = st.columns(
+            [1.5, 1.0, 2.1, 1.35, 0.95])
+        with c_fecha:
             # El pill de fecha, DENTRO de la tarjeta. Acá la fecha no es
             # contexto global: es EL filtro de la tabla — el rango que se
             # le consulta al SIRE. NO es una copia del de la franja: es la
@@ -3995,42 +4007,31 @@ def renderizar_documentos_sunat(d, col_fecha):
             # rango. O sea que ésta es la única tarjeta de todo el reporte
             # que trae el calendario entero; las demás tocan ese mismo
             # rango con `base.py::selector_fecha_tarjeta`.
-            franja_fecha.render()
+            #
             # El selector «Ver» que había acá bajó al panel del gráfico
             # (`_panel_grafico`), que es lo único que controlaba.
-            # columnas-internas: los TRES filtros de la tabla, uno al lado
-            # del otro. Van en la misma fila y no apilados para no sumarle
-            # 46px de alto a la tarjeta.
-            #
-            # El reparto está medido contra el peor caso de cada uno: el de
-            # proveedor no puede bajar de ~195px (a menos de eso el ellipsis
-            # se come el nombre y no se distingue un proveedor de otro, ver
-            # `_opciones_proveedor`), y el de estado necesita ~200 para que
-            # entre «Todos los estados (244)» sin cortarse — que es la
-            # etiqueta que lleva el censo. 1/1.5/1.2 sobre los ~620px de
-            # esta columna da 168/252/202.
-            c_mes, c_prov, c_est = st.columns([1, 1.5, 1.2])
-            with c_mes:
-                mes_sunat = st.selectbox(
-                    "Mes en SUNAT", list(_MES_SUNAT), key="sunat_mes_sunat",
-                    label_visibility="collapsed",
-                    help="El estado del PERÍODO tributario en SUNAT, no del "
-                         "documento. «Mes abierto» = SUNAT ya ve la compra "
-                         "pero el registro de ese mes todavía no se "
-                         "presentó: es crédito fiscal sin tomar. Si está "
-                         "cargado o no en tu sistema lo dice «Está vs "
-                         "Sistema».",
-                )
-            with c_prov:
-                # Mismo truco que el botón de Excel de al lado: el hueco se
-                # reserva acá y lo rellena `_cuerpo`, que es quien tiene la
-                # lista de proveedores. Ver `_filtro_proveedor`.
-                _slot_prov = st.empty()
-            with c_est:
-                # Y el de estado igual, por el mismo motivo: sus etiquetas
-                # llevan el conteo de cada estado, y eso sale del cruce, que
-                # se calcula abajo. Ver `_filtro_estado`.
-                _slot_est = st.empty()
+            franja_fecha.render()
+        with c_mes:
+            mes_sunat = st.selectbox(
+                "Mes en SUNAT", list(_MES_SUNAT), key="sunat_mes_sunat",
+                label_visibility="collapsed",
+                help="El estado del PERÍODO tributario en SUNAT, no del "
+                     "documento. «Mes abierto» = SUNAT ya ve la compra "
+                     "pero el registro de ese mes todavía no se "
+                     "presentó: es crédito fiscal sin tomar. Si está "
+                     "cargado o no en tu sistema lo dice «Está vs "
+                     "Sistema».",
+            )
+        with c_prov:
+            # Mismo truco que el botón de Excel de al lado: el hueco se
+            # reserva acá y lo rellena `_cuerpo`, que es quien tiene la
+            # lista de proveedores. Ver `_filtro_proveedor`.
+            _slot_prov = st.empty()
+        with c_est:
+            # Y el de estado igual, por el mismo motivo: sus etiquetas
+            # llevan el conteo de cada estado, y eso sale del cruce, que
+            # se calcula abajo. Ver `_filtro_estado`.
+            _slot_est = st.empty()
         with c_act:
             _c_ref, _c_xls = st.columns(2)  # columnas-internas: 2 iconos de accion
         with _c_ref:
@@ -4060,6 +4061,20 @@ def renderizar_documentos_sunat(d, col_fecha):
             # forma de tener un control arriba que dependa de algo de
             # abajo sin partir el flujo en dos reruns.
             _slot_excel = st.empty()
+
+        # SEGUNDO RENGLÓN: la tira de KPIs, a lo ancho de la tarjeta y
+        # pegada a la tabla. Es un hueco reservado como los otros tres —
+        # `_cuerpo` lo rellena cuando ya tiene el cruce— y va en un
+        # `st.container` con key y no en un `st.empty()` porque es un
+        # BLOQUE (el markdown de la tira) y porque esa key es el ancla del
+        # CSS que le aprieta el gap contra la tabla.
+        #
+        # Si `_cuerpo` sale temprano (sin rango, SUNAT caído, rango vacío)
+        # nadie lo rellena y Streamlit poda el contenedor vacío en el render
+        # siguiente (regla #338). Acá eso es lo correcto y no un bug: sin
+        # cruce no hay nada que resumir, y el hueco no tiene que quedar
+        # reservado en blanco.
+        _slot_kpi = st.container(key="sunat_kpis_fila")
 
         def _cuerpo():
             """La tabla y su dato. Deja en `estado` lo que necesitan las
@@ -4142,7 +4157,7 @@ def renderizar_documentos_sunat(d, col_fecha):
                         set(df_cruce["car"].astype(str)))]
             estado["vis"], estado["cruce"] = vis, df_cruce
 
-            with c_kpi:
+            with _slot_kpi:
                 _kpis_cruce(_cruce_censo, _origen, n_tabla=len(df_cruce),
                             n_provs=_claves.loc[_cruce_censo.index]
                             .nunique())
