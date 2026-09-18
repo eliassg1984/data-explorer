@@ -109,14 +109,22 @@ _ESPERA = "220ms"
 # No hace falta: la franja de reportes esta pegada encima —desde el
 # 2026-09-13 tambien aparece con el cursor, pero la capa entera se abre y se
 # cierra junta—, y sobre un rotulo no hay nada que ir a tocar.
+#
+# Y EL PILL DE FECHA VA ACOTADO A `fila_ajuste_top`, que es el contenedor de
+# la franja (`app.py` lo dibuja adentro). La MISMA key la usa una tarjeta:
+# Compras > Documentos SUNAT llama a `franja_fecha.render()` dentro de
+# `sunat_card_izq`, donde el pill no es cromo sino EL filtro de la tabla.
+# Sin acotar, pasar el cursor por ese control —o abrir su calendario, que
+# deja `aria-expanded="true"` puesto todo el rato— abría la capa de la
+# cabecera desde el medio de la página. Ver regla #457.
 _DISPARADORES = """.st-key-nav_franja_rep:hover,
             .st-key-nav_franja_rep :focus-visible,
             .st-key-nav_rail:hover,
             .st-key-chips_ajuste_tabla:hover,
-            .st-key-fecha_ajuste_pill:hover,
+            .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill:hover,
             .st-key-fecha_corte_nav:hover,
             .st-key-chips_ajuste_tabla [aria-expanded="true"],
-            .st-key-fecha_ajuste_pill [aria-expanded="true"]"""
+            .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill [aria-expanded="true"]"""
 
 CSS = f"""
 @media screen and (min-width: 769px) {{

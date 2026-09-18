@@ -82,7 +82,7 @@ from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, JsCode
 
 import sunat
 from cortes import MESES_ABR_ES
-from estado_rango import clave_rango
+from estado_rango import clave_rango, restaurar_eco
 import franja_fecha
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, ERROR_FONDO, ERROR_TEXTO,
@@ -91,8 +91,10 @@ from tema import (
 )
 from graficos.base import _compras_layout, _compras_truncar
 from graficos.compras._comun import (
-    COLUMNAS_COTEJO, GAP_DRILL,
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, COLUMNAS_COTEJO, CROMO_GRID_RANK,
+    GAP_DRILL,
 )
+from graficos.compras._css_proveedor import CSS_RANKING_GRID
 # REEXPORT, no import muerto: `_llave_documento_parquet` vivia definida aca
 # y se movio a `_comun.py` el 2026-09-08, cuando el drill Semanal la pidio
 # para mostrar el N de documento en su tabla (ver el comentario largo que la
@@ -139,6 +141,18 @@ chica real por encima del umbral es S/0,06 — remedido con `total_pq` y
 `COL_TOTAL_PARQUET` / `COL_BASE_PARQUET`), no de la suma por línea. 5
 centavos sigue alcanzando para cubrir ruido de redondeo sin tapar
 diferencias de negocio reales."""
+
+
+_ALTO_FILA_DOS = ALTO_FILA_RANK + 14
+"""Alto de una fila de la tabla que necesita DOS líneas (el importe de
+SUNAT arriba y lo que dice el sistema, o la conversión al papel, debajo).
+
+Los 14 son la caja de la segunda línea: `_JS_IMPORTE` la escribe en 10.5px
+con `line-height: 1.18`, o sea 12.4px, y sobran 1.6 de aire. No es un alto
+suelto: sale de `ALTO_FILA_RANK` (el de todas las tablas-ranking de
+Compras) y lo sigue si ése cambia. El delta es el MISMO que tenía cuando
+la tabla iba a 30/44, porque lo que se apiló no cambió — la fila de una
+línea es la que adelgazó."""
 
 
 COL_RUC_PARQUET = "INDICADOR TRIBUTARIO"
@@ -928,6 +942,13 @@ def _tabla_documentos(df_cruce, df_sire):
     `df_sire` entra porque el cruce no trae todos los campos de SUNAT: el
     tipo, la moneda, el tipo de cambio y la detracción se traen de ahí por
     `car`, que es la única clave sin colisiones (ver `_fila_de`).
+
+    EL LOOK ES EL DEL RANKING DE PROVEEDORES desde el 2026-09-18, a pedido
+    ("que tenga similar diseño... color, tamaño, alto de filas"): tema
+    `streamlit` + `CSS_RANKING_GRID` en vez de `material` + `_css_grid`, o
+    sea franja en vez de caja, cabecera blanca, sin líneas verticales,
+    cuerpo 11.5 y el texto en violeta. Con las filas a 24 en vez de 30 se
+    ven 14 documentos donde se veían 11, en el mismo alto de tarjeta.
     """
     if df_cruce is None or df_cruce.empty:
         st.info("No hay comprobantes que mostrar en el rango.")
@@ -968,8 +989,9 @@ def _tabla_documentos(df_cruce, df_sire):
                                 _num(r.get("total_sistema")))
         base_u, igv_u = _num(r.get("base_sunat")), _num(r.get("igv_sunat"))
         # Si la fila va a necesitar DOS lineas en alguna celda, la fila
-        # entera mide 44 en vez de 30 (`getRowHeight`). Se decide aca y no
-        # en JS para no repetir la comparacion en tres renderers.
+        # entera mide `_ALTO_FILA_DOS` en vez de `ALTO_FILA_RANK`
+        # (`getRowHeight`). Se decide aca y no en JS para no repetir la
+        # comparacion en tres renderers.
         dos = bool(conv) or any(
             a is not None and b is not None
             and abs(a - b) > _TOLERANCIA_CENTAVOS
@@ -1046,23 +1068,46 @@ def _tabla_documentos(df_cruce, df_sire):
             % (ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO)))
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(
-        headerHeight=32,
-        # Sólo las filas con segunda línea miden 44; las demás siguen en
-        # 30. Uniformar a 44 gastaría 14 px por fila en las 291 que no la
-        # tienen — en una tabla de 326, media pantalla.
+        headerHeight=ALTO_HEADER_RANK,
+        # Sólo las filas con segunda línea miden `_ALTO_FILA_DOS`; las demás
+        # siguen en `ALTO_FILA_RANK`. Uniformar gastaría 14 px por fila en
+        # las 291 que no la tienen — en una tabla de 326, media pantalla.
         getRowHeight=JsCode(
-            "function(p){ return (p.data && p.data._dos) ? 44 : 30; }"),
+            "function(p){ return (p.data && p.data._dos) ? %d : %d; }"
+            % (_ALTO_FILA_DOS, ALTO_FILA_RANK)),
         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
     )
 
     resp = AgGrid(
         tv, gridOptions=gb.build(),
-        height=alturas.por_filas(len(tv), px_fila=32, rol=alturas.APOYO),
-        theme="material",
-        custom_css={**_css_grid(13, cebra=False),
+        # El mismo alto ÚTIL que antes (`APOYO` es el techo y con ~4.600
+        # comprobantes siempre se llega a él), pero repartido en filas de 24
+        # y no de 30: entran 14 documentos donde se veían 11.
+        height=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
+                                 extra=CROMO_GRID_RANK, rol=alturas.APOYO,
+                                 minimo=0),
+        theme="streamlit",
+        # El look del Ranking de proveedores, a pedido (2026-09-18): franja
+        # en vez de caja, cabecera blanca, sin líneas verticales, cuerpo
+        # 11.5 y el texto en violeta. Es el MISMO dict, no una copia — un
+        # grid vive en un iframe y el `<style>` del padre no lo alcanza, así
+        # que `custom_css=` es la única vía. El alto de fila y este dict son
+        # UNA decisión y viajan juntos (regla #404): sin el cuerpo de 11.5
+        # las filas de 24 aprietan el texto contra las líneas.
+        #
+        # LOS COLORES DE DATO SOBREVIVEN, y sale gratis: el violeta de
+        # `.ag-cell` va SIN `!important` a propósito (ver `_css_proveedor`),
+        # así que el ámbar/rojo que `cellStyle` pone INLINE en «D» y en «Está
+        # vs Sistema» le gana, y las dos segundas líneas de `_JS_IMPORTE`
+        # también (se pintan desde el renderer).
+        custom_css={**CSS_RANKING_GRID,
                     # Con las filas de un blanco uniforme hay que marcar la
                     # SELECCIONADA: de esta tabla cuelga todo lo de abajo.
-                    # Ver `arquitectura.md` regla #235.
+                    # El tema pinta un `::before` con el acento al 12%, que
+                    # en el ranking alcanza porque ahí la selección sólo
+                    # colorea una serie; acá decide TRES tarjetas, así que
+                    # se queda la banda lavanda explícita. Ver
+                    # `arquitectura.md` regla #235.
                     ".ag-row-selected": {
                         "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
                         "font-weight": "600 !important",
@@ -1128,11 +1173,20 @@ def _sello_origen(origen):
             f'{pd.Timestamp(fecha):%d/%m/%Y %H:%M} UTC">{cuando}</span>')
 
 
-# Alto de una fila del ranking de proveedores. Mismo número que el ranking
-# de `proveedor.py`: es la misma lectura —un proveedor por fila, ordenado
-# por valor— y con filas más gordas entran tres proveedores donde antes se
-# veían diez barras.
-_ALTO_FILA_RANK = 28
+# Alto de una fila del ranking de proveedores del PANEL DEL GRÁFICO (el modo
+# «Por proveedor»). Nació copiando el del ranking de `proveedor.py` —es la
+# misma lectura: un proveedor por fila, ordenado por valor— y quedó DESFASADO
+# el 2026-09-11, cuando ese número se mudó a `_comun.ALTO_FILA_RANK` y bajó a
+# 24 con el resto del look de tabla-ranking (`CSS_RANKING_GRID`).
+#
+# Sigue en 28 con el tema `material` a propósito de nada: es deuda, no
+# decisión. El 2026-09-18 se pidió ese look para LA TABLA de esta vista (la
+# de documentos, arriba) y sólo se migró ésa. Cuando le toque a este panel,
+# el cambio son tres líneas —`ALTO_FILA_RANK`, `ALTO_HEADER_RANK` y
+# `CSS_RANKING_GRID`— y el alto y el CSS viajan JUNTOS (regla #404). El
+# nombre lleva el sufijo para que no se confunda con el importado, que vale
+# otra cosa.
+_ALTO_FILA_PANEL_PROVS = 28
 
 
 def _ranking_proveedores(df):
@@ -1309,7 +1363,8 @@ def _ranking_proveedores(df):
     # barra se queda con el largo de un ancho que ya no existe. No entra en
     # bucle: `refreshCells` no dispara ninguno de los dos eventos.
     gb.configure_grid_options(
-        rowHeight=_ALTO_FILA_RANK, headerHeight=32, suppressCellFocus=True,
+        rowHeight=_ALTO_FILA_PANEL_PROVS, headerHeight=32,
+        suppressCellFocus=True,
         onGridSizeChanged=JsCode(
             "function(p){ p.api.sizeColumnsToFit();"
             " p.api.refreshCells({force:true, columns:['Total']}); }"),
@@ -1327,8 +1382,8 @@ def _ranking_proveedores(df):
         # ficha, y esta vista ya se pasaba de pantalla (ver el docstring de
         # `renderizar_documentos_sunat`). Lo que no entra en el frame
         # scrollea dentro del grid.
-        height=alturas.por_filas(len(tv), px_fila=_ALTO_FILA_RANK, extra=45,
-                                 rol=alturas.MINI),
+        height=alturas.por_filas(len(tv), px_fila=_ALTO_FILA_PANEL_PROVS,
+                                 extra=45, rol=alturas.MINI),
         theme="material", custom_css=dict(_css_grid(13)),
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
         key="sunat_rank_prov",
@@ -3599,9 +3654,16 @@ def _rango_vigente():
     así que ésta es la única que lo tiene—, el mensaje pedía elegir una fecha en un
     control que él mismo acababa de borrar de la pantalla: sin salida,
     salvo cambiar de vista. Ver `arquitectura.md` regla #115.
+
+    EL ESPEJO SE RESTAURA ACÁ, y no alcanzaba con el de `app.py`: la clave
+    del rango es la KEY del `date_input` que dibuja esta tarjeta, así que al
+    salir de la vista Streamlit se la lleva — y volver es un clic en el
+    rail, que es un `@st.fragment` y NO re-ejecuta `app.py`. Sin esto la
+    tarjeta reaparecía con «Elegí una fecha…» y el rango elegido perdido.
+    Ver `arquitectura.md` regla #458.
     """
     return _dia_o_rango(
-        st.session_state.get(clave_rango("Compras", usa_carga_rango=False)))
+        restaurar_eco(clave_rango("Compras", usa_carga_rango=False)))
 
 
 def _dia_o_rango(rango):

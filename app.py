@@ -17,7 +17,7 @@ from tema import ADVERTENCIA_TEXTO
 from estilos import TAM_FUENTE, inject_css
 from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
-    clave_corte, corte_vigente, aplicar_corte,
+    clave_corte, corte_vigente, aplicar_corte, restaurar_eco,
 )
 from cortes import cortes_disponibles
 import franja_fecha
@@ -622,17 +622,21 @@ _rango_default_cat = (
 # El espejo es una clave normal (nadie la recolecta) y se restaura ANTES de
 # sembrar. Va para todos los reportes: es barato y el modo de fallo es el
 # mismo en cualquiera que algún día mueva su pill a una tarjeta.
-_k_rango_eco = f"{_k_rango_franja}__eco"
+#
+# Las dos mitades —restaurar y refrescar— viven en
+# `estado_rango.restaurar_eco`, que es el dueño único de la clave. Se
+# escribían acá inline hasta el 2026-09-18, y con eso el drill de Documentos
+# SUNAT no tenía forma de repetirlas: su rail es un `@st.fragment` y un clic
+# suyo no vuelve a pasar por este archivo. Ver regla #458.
 if _franja_con_fecha:
-    if _k_rango_franja not in st.session_state and _k_rango_eco in st.session_state:
-        st.session_state[_k_rango_franja] = st.session_state[_k_rango_eco]
+    restaurar_eco(_k_rango_franja)
     asegurar_rango(
         _k_rango_franja,
         default=(fecha_ini_default, fecha_fin_default),
         bounds=(fecha_min_full, fecha_max_full),
         reporte=reporte, usa_carga_rango=_usa_carga_rango,
     )
-    st.session_state[_k_rango_eco] = st.session_state.get(_k_rango_franja)
+    restaurar_eco(_k_rango_franja)
 
 # ── Modo CORTES de la franja (solo reportes con "cortes" en REPORTES) ──
 # Las claves del corte y del modo salen del mismo dueño único que el rango

@@ -279,8 +279,13 @@ resto de `graficos/compras/`.
   borraría la clave del rango del reporte. **Compras ya no lo dibuja
   arriba** (2026-09-06): sus tarjetas traen el selector y el único que
   dibuja el calendario entero es Documentos SUNAT, dentro de su tarjeta —
-  de ahí el espejo `{k_rango}__eco` de `app.py`, que es lo que evita que
-  el rango se pierda al salir de esa vista. Ver `arquitectura.md` #332.
+  de ahí el espejo `{k_rango}__eco`, que es lo que evita que el rango se
+  pierda al salir de esa vista. Vive en `estado_rango.restaurar_eco`
+  (dueño único) y lo llaman DOS: `app.py` en cada rerun completo y el
+  propio drill antes de leer el rango, porque el rail de Compras es un
+  `@st.fragment` y un clic suyo NO re-ejecuta `app.py` — con el espejo
+  sólo arriba, volver a la vista la dejaba pidiendo una fecha. Ver
+  `arquitectura.md` #332 y #458.
 - **Y un `st.rerun` al tope de un fragment los esconde a TODOS**: aborta la
   corrida antes de que se registren, así que la escalada de fecha de una
   tarjeta le borraba lo elegido a sus propios controles — la granularidad

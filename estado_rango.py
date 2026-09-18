@@ -96,6 +96,46 @@ def clave_rango(reporte, usa_carga_rango, categoria=None):
     return f"rango_franja_{reporte}"
 
 
+def clave_eco(clave):
+    """La clave ESPEJO de `clave`: una copia que Streamlit no recolecta.
+
+    La clave del rango es también la KEY de un `st.date_input`, y Streamlit
+    se lleva el estado de un widget que deja de renderizarse. Mientras el
+    pill vivía en la franja siempre había alguien dibujándolo; desde que
+    Compras no lo dibuja arriba (2026-09-06) el único render que lo instancia
+    es la tarjeta de Documentos SUNAT, así que al salir de esa vista la clave
+    queda huérfana y la recolección se la lleva con el rango que el usuario
+    acababa de elegir.
+
+    El espejo es una clave normal —nadie la recolecta— y se restaura ANTES de
+    sembrar el default. Ver regla #332."""
+    return f"{clave}__eco"
+
+
+def restaurar_eco(clave):
+    """Devuelve el rango desde el espejo si la clave quedó huérfana, y
+    refresca el espejo con lo que haya vigente. Idempotente.
+
+    Se llama en DOS sitios y no es duplicación: `app.py` lo hace en cada
+    rerun completo, y `documentos_sunat.py` otra vez antes de leer el rango
+    —porque el rail de Compras es un `@st.fragment` y un clic suyo NO
+    re-ejecuta `app.py`, así que entre salir de la vista y volver a ella
+    nadie pasa por la restauración de arriba. Sin esto la tarjeta volvía
+    mostrando «Elegí una fecha…» con el calendario que ella misma dibuja
+    justo encima (regla #115 otra vez).
+
+    Escribe la clave de un widget ANTES de instanciarlo, que es el patrón
+    sancionado (mismo que `aplicar_corte`): hacerlo DESPUÉS es un error de
+    Streamlit.
+    """
+    eco = clave_eco(clave)
+    if clave not in st.session_state and eco in st.session_state:
+        st.session_state[clave] = st.session_state[eco]
+    if clave in st.session_state:
+        st.session_state[eco] = st.session_state[clave]
+    return st.session_state.get(clave)
+
+
 def _recortar_media(clave, cur, bounds):
     """Una media selección se queda a medias, pero dentro de bounds.
 

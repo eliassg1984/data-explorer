@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-456 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+459 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (160)
+**CSS y estilos** (162)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -194,6 +194,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#444** — Una fila de controles se ordena por ALCANCE, y el orden es la jerarquía: lo que manda sobre…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
+- **#457** — Una key que es CROMO en ocho reportes y CONTROL en una tarjeta no puede compartir el CSS de…
+- **#459** — El jalón que sube la primera tarjeta de Compras nombra un wrap por su KEY, así que una vista…
 
 **Layout y alturas** (68)
 
@@ -424,7 +426,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#450** — Un AgGrid sin custom_css= no es "el tema por defecto": es el ÚNICO que no se parece a los…
 - **#455** — Un JS que busca «el primer AgGrid de la página» toca la tabla equivocada en cuanto la página…
 
-**Streamlit** (122)
+**Streamlit** (123)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -548,6 +550,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
 - **#452** — st.plotly_chart(on_select=) no ve un Sankey — y no es que el evento no exista
 - **#456** — Si un fragment y uno de sus ancestros caen en la misma cola, Streamlit 1.59 corre al hijo DOS…
+- **#458** — El espejo que salva el rango de la recolección de Streamlit no sobrevive a un rerun de…
 
 **Datos, R2 y DuckDB** (55)
 
@@ -607,7 +610,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
 - **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
 
-**SUNAT y SIRE** (40)
+**SUNAT y SIRE** (41)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -649,6 +652,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
 - **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
 - **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
+- **#458** — El espejo que salva el rango de la recolección de Streamlit no sobrevive a un rerun de…
 
 **Fechas, rangos y cortes** (11)
 
@@ -710,7 +714,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (80)
+**Decisiones de diseño y UX** (81)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -792,6 +796,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#436** — Meter un dato de CONTEXTO en una escala compartida la rompe: lo que no entra se TOPA, no se…
 - **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
 - **#456** — Si un fragment y uno de sus ancestros caen en la misma cola, Streamlit 1.59 corre al hijo DOS…
+- **#459** — El jalón que sube la primera tarjeta de Compras nombra un wrap por su KEY, así que una vista…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -38121,6 +38126,149 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+457. **Una key que es CROMO en ocho reportes y CONTROL en una tarjeta no
+     puede compartir el CSS de reposo: la capa de la cabecera apagó el
+     único calendario de Documentos SUNAT.** Reportado el 2026-09-18 como
+     «creo que se perdió el toggle de fecha acá», y en el DOM el widget
+     estaba entero: `st-key-fecha_ajuste_pill` en su sitio, 473x26 px, con
+     `opacity: 0`, `visibility: hidden` y `pointer-events: none`
+     computados. No faltaba nada, estaba apagado.
+
+     **Quién lo apagaba:** el reposo de «LA CAPA DE LA CABECERA»
+     (`estilos/_26_rails_scroll.py`), que desde el 2026-09-13 esconde los
+     controles del reporte hasta que el cursor toca la franja —
+     `.st-key-chips_ajuste_tabla, .st-key-fecha_ajuste_pill,
+     .st-key-fecha_corte_nav { opacity: 0; visibility: hidden;
+     pointer-events: none }`.
+
+     Correcto para la franja, falso acá: `franja_fecha.render()` es UNA
+     función y la llaman dos sitios —`app.py` dentro de `fila_ajuste_top`,
+     y `documentos_sunat.py` dentro de `sunat_card_izq`—, así que la key
+     es la misma y el selector no distingue el cromo del control. En esa
+     tarjeta el pill no es cromo: es EL filtro de la tabla, el rango que
+     se le consulta al SIRE, y es el único calendario de todo el reporte
+     Compras desde el 2026-09-06 (regla #332). Sin él la vista se quedaba
+     sin forma de elegir fecha — la regla #115 otra vez, esta vez por CSS.
+
+     **El arreglo son DOS mitades, y hacen cosas distintas:**
+
+       · **Prender el pill de la tarjeta**, en el bloque que ya lo
+         reposiciona (`estilos/_30_filtros.py`, scopeado por
+         `sunat_card_izq`): `opacity`/`visibility`/`pointer-events` con
+         `!important` y `transition: none`. **El `!important` no es
+         pereza:** la regla de reveal y la de reposo tienen la MISMA
+         especificidad y el empate lo rompe el orden del fichero, donde el
+         reposo va DESPUÉS. Un descendiente sin `!important` (0,2,0 contra
+         0,1,0) le gana al reposo pero también al reveal, o sea que el
+         pill de la FRANJA se quedaría prendido; con `!important` sólo se
+         toca el de la tarjeta.
+       · **Acotar el DISPARADOR a `fila_ajuste_top`**, que es el
+         contenedor de la franja:
+         `.st-key-fila_ajuste_top .st-key-fecha_ajuste_pill:hover` y lo
+         mismo para su `[aria-expanded="true"]`. Sin esto, pasar el cursor
+         por un control que vive a mitad de la tarjeta abría la cabecera
+         entera, y abrir su calendario la dejaba abierta todo el rato (el
+         `aria-expanded` queda puesto mientras el popover vive).
+
+     **Verificado en el navegador, por `clip-path` y `pointer-events` y no
+     por opacidad** (regla #353): con el cursor sobre el pill de la
+     tarjeta, `nav_franja_rep` sigue en
+     `inset(0px 0px calc(100% - 12px))` —cerrada—; con el cursor sobre el
+     pill de la franja en Ajuste, en `inset(0px)` —abierta—, y el pill en
+     `pointer-events: auto`. Ojo al medir: en reposo la franja está
+     RECORTADA a sus 12px de arriba, así que un hover a y=16 no la
+     despierta y parece que la regla no existe.
+
+     **Regla general:** antes de esconder por CSS una key de un widget
+     compartido, `grep` quién más la dibuja. Si un `render()` se llama de
+     dos sitios, el selector tiene que nombrar el CONTENEDOR, no la key.
+
+     (2026-09-18.)
+
+458. **El espejo que salva el rango de la recolección de Streamlit no
+     sobrevive a un rerun de FRAGMENT: lo escribía `app.py`, y el rail de
+     Compras no vuelve a pasar por ahí.** Salir de Documentos SUNAT y
+     volver dejaba la tarjeta con «Elegí una fecha en el calendario de acá
+     arriba» y el rango elegido perdido. Reproducido tres veces: cargar la
+     vista (rango vivo, 4.618 comprobantes), clic en Proveedor en el rail,
+     clic de vuelta en Documentos → sin rango.
+
+     **La cadena completa**, que son tres mecanismos ya documentados
+     encadenados:
+
+       1. La clave canónica del rango es también la KEY de un
+          `st.date_input`, y Streamlit recolecta el estado de un widget
+          que deja de renderizarse (regla #211).
+       2. Desde el 2026-09-06 el ÚNICO render que instancia ese widget en
+          Compras es la tarjeta de Documentos SUNAT (regla #332). Al salir
+          de la vista, la clave queda huérfana y se la lleva la
+          recolección.
+       3. El espejo `{clave}__eco` existía justo para eso… pero vivía
+          inline en `app.py`, y el rail es un `@st.fragment`: un clic suyo
+          NO re-ejecuta el cuerpo del script, así que entre salir y volver
+          nadie pasaba por la restauración.
+
+     **El arreglo: `estado_rango.clave_eco` / `restaurar_eco`**, en el
+     dueño único de la clave, y se llama de los DOS lados — `app.py` en
+     cada rerun completo y `documentos_sunat.py::_rango_vigente` antes de
+     leer. No es duplicación: son dos momentos distintos, y el segundo es
+     el único que existe durante una corrida de fragments. Escribe la key
+     de un widget ANTES de instanciarlo, que es el patrón sancionado (el
+     mismo de `aplicar_corte`).
+
+     Verificado con un rango ELEGIDO a mano, que es el caso que dolía: el
+     atajo «Últimos 30 días» (20 ago – 18 sep 2026, 415 comprobantes),
+     salir a Semanal, volver — mismo rango, mismos 415.
+
+     **Lo que enseña, más allá de esta vista:** un parche contra la
+     recolección de widgets tiene que vivir donde corre el RENDER que
+     dibuja el widget, no en el script. Cualquier estado que hoy se
+     siembre o se repare sólo en `app.py` y que consuma una tarjeta con
+     fragment tiene el mismo agujero.
+
+     (2026-09-18.)
+
+459. **El jalón que sube la primera tarjeta de Compras nombra un wrap por
+     su KEY, así que una vista que no está en la pila no lo recibe — y
+     abre 120px más abajo que todas las demás.** Reportado el 2026-09-18
+     como «subamos también la tarjeta, está muy baja», sobre Documentos
+     SUNAT.
+
+     Medido en el navegador (1358x900): `compras_sunat_drill_wrap`
+     arrancaba en **y=148** contra los **y=28** de `compras_sec_proveedor`
+     — y las dos tarjetas son la que ABRE la página en su vista. Los 148
+     salen de la cuenta que documenta `estilos/_20_compras_rail.py`: 52px
+     de `--cab-offset-contenido` + **6 bloques fantasma x 16px** de `gap`
+     (`rail_rotulo_rep`, `rail_pestillo_plegado`, `nav_franja_rep`,
+     `nav_franja_kpis`, `compras_tabs_row` y `fila_ajuste_top`, todos
+     `position: fixed` o escondidos, todos flex items de alto 0). El
+     `margin-top: -120px` que recupera esos 96 nombraba sólo
+     `.st-key-compras_prov_drill_wrap`.
+
+     **Por qué se le pasó:** «Documentos SUNAT» no está en `_PILA` — es un
+     destino aparte, con su propio wrap, precisamente porque dibuja el
+     pill de fecha entero (ver #332). Todas las secciones de la pila
+     cuelgan del wrap de Proveedor, así que la única vista con wrap propio
+     era la única sin jalón. Nadie lo vio en tres semanas porque el hueco
+     es blanco: no se solapa nada, no hay error, la tarjeta simplemente
+     empieza tarde.
+
+     **El arreglo es sumar la key al mismo selector, con el MISMO número**
+     —verificado, no supuesto: los seis bloques fantasma son los mismos en
+     esa vista, incluido `fila_ajuste_top`, que ahí va en `display: none`
+     pero cuenta igual porque lo oculto es el contenedor de adentro y el
+     `stLayoutWrapper` que Streamlit pone por fuera sigue siendo flex item
+     de alto 0. Medido después: y=28, igual que Proveedor. Va también en
+     el reset móvil, que neutraliza el jalón cuando el rail deja de ser
+     fijo.
+
+     **Para la próxima vista que se agregue fuera de la pila:** el jalón
+     no se hereda. Si tiene wrap propio, va en esa lista — y si además
+     esconde alguno de los seis bloques, el número es otro (ver la cuenta
+     del modo «solo», que es la misma fórmula con dos sumandos menos).
+
+     (2026-09-18.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -38133,7 +38281,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#457**.
+> próxima regla nueva es la **#460**.
 
 >
 

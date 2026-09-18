@@ -107,6 +107,26 @@ CSS = """    /* ================================================================
         max-width: none !important;
         margin: 0 0 2px 0 !important;
         z-index: auto !important;
+        /* Y SE VE SIEMPRE. La misma key es cromo de la CABECERA en los
+           otros ocho reportes, y desde el 2026-09-13 esa cabecera es una
+           capa que aparece con el cursor: `_26_rails_scroll.py` deja en
+           reposo `opacity: 0; visibility: hidden; pointer-events: none`
+           sobre `.st-key-fecha_ajuste_pill` a secas. Acá el pill NO es
+           cromo —es EL filtro de la tarjeta, el rango que se le consulta
+           al SIRE— y esa regla lo apagaba: se reportó como "se perdió el
+           toggle de fecha acá" (2026-09-18) y en el DOM el contenedor
+           estaba en su sitio, invisible, con la fila de arriba de la
+           tarjeta vacía por la izquierda.
+           `!important` y no especificidad: la regla de reposo y la de
+           reveal tienen la misma, así que el empate lo rompe el orden del
+           fichero y un descendiente sin `!important` perdería contra el
+           reposo — que va DESPUÉS del reveal. `transition: none` porque el
+           fade de 160ms de esa capa acá no tiene nada que anunciar. Ver
+           `arquitectura.md` regla #457. */
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transition: none !important;
     }
     /* El trigger, con el mismo lenguaje que los dos selectores de al lado:
        texto + icono, sin caja. Sin esto entra con el marco de 210px de

@@ -545,8 +545,13 @@ CSS = """    /* ================================================================
        solo a los contenedores que sí viven en el flujo del dashboard de
        Compras. Ahora que la franja es transparente el gap se ve mas, por
        eso -100 en vez de -60. */
-    /* Solo la PRIMERA tarjeta sube bajo el rail. En Compras es
-       compras_prov_drill_wrap; en Ajuste (ahora APILADO) es la tarjeta izq
+    /* Solo la PRIMERA tarjeta sube bajo el rail. En Compras son
+       compras_prov_drill_wrap (el que abre la PILA) y
+       compras_sunat_drill_wrap (el destino aparte de Documentos SUNAT, que
+       no entra en la pila y por eso necesita nombrarse: hasta el
+       2026-09-18 no estaba y su tarjeta abría en y=148 contra los y=28 de
+       todas las demás — 120px de blanco, reportado como "subamos la
+       tarjeta, está muy baja"); en Ajuste (ahora APILADO) es la tarjeta izq
        (gráfico principal). La tarjeta der (panel de análisis) NO lleva el
        jalón: va en flujo debajo, y un -68px extra la solaparía con la de
        arriba. Reglas separadas (mismo valor base -60px) para poder afinar
@@ -594,8 +599,16 @@ CSS = """    /* ================================================================
        bajó los mismos 12 (88 -> 76): el jalón NO cambia, porque el aire se
        mide contra la franja y las dos cosas se movieron juntas.
        Si algún día esos bloques dejan de ocupar gap (o aparece un séptimo),
-       este número cambia: son las dos caras de la misma cuenta. */
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap {
+       este número cambia: son las dos caras de la misma cuenta.
+       2026-09-18: se suma `compras_sunat_drill_wrap` con el MISMO número,
+       y eso está verificado en el navegador, no supuesto — los seis bloques
+       fantasma son los mismos en esa vista. `fila_ajuste_top` cuenta igual
+       aunque ahí vaya en `display: none` (`_40_ajuste_franja.py`): lo
+       oculto es el contenedor de adentro, y el `stLayoutWrapper` que
+       Streamlit le pone por fuera sigue siendo flex item de alto 0.
+       Medido: 52 (offset) + 6x16 = 148, y con el jalón y=28. */
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
+    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_sunat_drill_wrap {
         margin-top: -120px !important;
     }
     /* 2026-08-17, a pedido: ensanchar la tarjeta para que las columnas de
@@ -1118,6 +1131,7 @@ CSS = """    /* ================================================================
         /* Sin el rail fijo arriba, la vieja compensación negativa de las
            tarjetas dejaría un solape: se neutraliza. */
         [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
+        [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_sunat_drill_wrap,
         [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"],
         [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_der_"] {
             margin-top: 0 !important;
