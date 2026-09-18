@@ -53,7 +53,9 @@ from tema import (
     LAVANDA_CHIP, LAVANDA_FILA, LAVANDA_SELECCION,
 )
 from graficos import alturas
-from graficos.base import _es_movil
+from graficos.base import (
+    _es_movil, poner_seleccion, recortar_seleccion, seleccion_en_panel,
+)
 # El disparador minimalista de los filtros (regla #427) nació en Ajuste y es
 # genérico: sólo pide el prefijo de key de sus contenedores. El segundo
 # prefijo (la lista de cortes) acá no tiene a quién estilar.
@@ -534,51 +536,15 @@ def renderizar_listado(filas, total, key, movil=False):
 # ═══════════════════════════════════════════════════════════════════════
 
 # ── EL VALOR DE UN FILTRO NO VIVE EN LA KEY DE SU WIDGET ────────────────
-# Los tres widgets de categoría viven adentro de un `st.popover`, y el
-# navegador NO monta el contenido de un popover mientras está cerrado
-# (medido: con el panel cerrado no hay un solo nodo de sus píldoras en el
-# DOM). Streamlit le avisa al widget que Python le cambió el valor UNA sola
-# vez —`proto.set_value`, en la corrida del cambio—; si en ese momento el
-# widget no está montado, el aviso se pierde, y al abrir el panel el widget
-# arranca de su `default`. Así nacieron las cinco áreas de entrada: filtraban
-# (la tabla decía 741 productos) pero en el panel salían sin marcar, y el
-# primer clic las reemplazaba por UNA. Ver regla #467.
-#
-# Por eso el valor vigente vive en `key` (estado propio, no de widget), y el
-# widget lo recibe como `default=` bajo una key con VERSIÓN: `_poner()` —lo
-# único que escribe desde Python: la siembra no, los botones y el recorte
-# sí— sube la versión, y el widget nace de nuevo ya marcado. Un clic del
-# usuario no la sube: lo copia `on_change` y el widget sigue siendo el mismo.
-
-def _poner(key, valor):
-    """Escribe el valor de un filtro DESDE PYTHON (botones, recorte)."""
-    st.session_state[key] = list(valor)
-    st.session_state[f"{key}__v"] = st.session_state.get(f"{key}__v", 0) + 1
-
-
-def _clamp_lista(key, opciones):
-    """Lo elegido que ya no está entre las opciones se suelta: `st.pills`
-    revienta con un valor que no está entre las suyas. Pasa al cambiar de
-    familia (sus subfamilias ya no son las mismas) y al mover los filtros
-    globales del dashboard, que recortan `d`."""
-    v = st.session_state.get(key)
-    if v is None:
-        return
-    ok = [x for x in v if x in opciones] if isinstance(v, list) else []
-    if ok != v:
-        _poner(key, ok)
-
-
-def _widget_multi(widget, rotulo, key, opciones, **kw):
-    """`st.pills`/`st.multiselect` de selección múltiple atado a `key`."""
-    wkey = f"{key}__w{st.session_state.get(f'{key}__v', 0)}"
-
-    def _copiar():
-        st.session_state[key] = list(st.session_state.get(wkey) or [])
-
-    return widget(rotulo, opciones,
-                  default=st.session_state.get(key) or [], key=wkey,
-                  on_change=_copiar, label_visibility="collapsed", **kw)
+# Los tres widgets de categoría viven adentro de un `st.popover`, y un
+# widget en un panel cerrado no se entera de lo que Python le escribe: así
+# nacieron las cinco áreas de entrada que filtraban (la tabla decía 741
+# productos) pero en el panel salían sin marcar, y el primer clic las
+# reemplazaba por UNA. El valor vigente vive en su clave propia y el widget
+# lo recibe por `default=`: `graficos/base.py::seleccion_en_panel`, que
+# nació acá y desde la regla #467 usan también los filtros del
+# compartimento. Lo único que escribe desde Python —los botones y el
+# recorte— pasa por `poner_seleccion`.
 
 
 def _rotulo_area(a):
@@ -636,15 +602,15 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
     if _K_AREAS not in st.session_state:
         st.session_state[_K_AREAS] = [a for a in AREAS_DE_ENTRADA
                                       if a in ops_area]
-    _clamp_lista(_K_AREAS, ops_area)
+    recortar_seleccion(_K_AREAS, ops_area)
     ops_fam = sorted(set(_texto(d, col_fam)) - {""})
-    _clamp_lista(_K_FAMILIAS, ops_fam)
+    recortar_seleccion(_K_FAMILIAS, ops_fam)
     # La subfamilia se elige DENTRO de las familias elegidas: ofrecer las
     # 128 con una familia puesta deja armar combinaciones vacías.
     _fams = st.session_state.get(_K_FAMILIAS) or []
     _d_fam = d[_texto(d, col_fam).isin(_fams)] if _fams else d
     ops_sub = sorted(set(_texto(_d_fam, col_subfam)) - {""})
-    _clamp_lista(_K_SUBFAMILIAS, ops_sub)
+    recortar_seleccion(_K_SUBFAMILIAS, ops_sub)
 
     # columnas-internas: el título y los cinco controles de la tabla, en el
     # renglón de arriba de la misma tarjeta.
@@ -652,23 +618,25 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         [1.3, 0.95, 0.95, 1.05, 1.45, 0.8], vertical_alignment="center")
 
     def _dib_area():
-        _widget_multi(st.pills, "Área", _K_AREAS, ops_area,
-                      selection_mode="multi", format_func=_rotulo_area)
+        seleccion_en_panel(st.pills, "Área", _K_AREAS, ops_area,
+                           selection_mode="multi", format_func=_rotulo_area,
+                           label_visibility="collapsed")
         # Soltar cinco píldoras de a una para ver todo es tedioso, y volver
         # a las de entrada sin recordar cuáles eran, más.
         with st.container(horizontal=True, gap="small"):
             st.button("Todas", key="inv_prod_areas_todas", type="tertiary",
-                      on_click=_poner, args=(_K_AREAS, []))
+                      on_click=poner_seleccion, args=(_K_AREAS, []))
             st.button("Las principales", key="inv_prod_areas_base",
-                      type="tertiary", on_click=_poner,
+                      type="tertiary", on_click=poner_seleccion,
                       args=(_K_AREAS, [a for a in AREAS_DE_ENTRADA
                                        if a in ops_area]))
         st.caption("Sin ninguna marcada entran todas. La cantidad y el "
                    "valorizado son los de las áreas marcadas.")
 
     def _dib_fam():
-        _widget_multi(st.pills, "Familia", _K_FAMILIAS, ops_fam,
-                      selection_mode="multi", format_func=nombre_propio)
+        seleccion_en_panel(st.pills, "Familia", _K_FAMILIAS, ops_fam,
+                           selection_mode="multi", format_func=nombre_propio,
+                           label_visibility="collapsed")
         st.caption("Sin ninguna marcada entran todas.")
 
     def _dib_sub():
@@ -676,9 +644,10 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         # Ancho FIJO: el panel de un popover mide lo que su contenido, y un
         # multiselect `stretch` en un panel sin ancho se encoge hasta cortar
         # su propio placeholder («Buscar subfa…», medido a 1366).
-        _widget_multi(st.multiselect, "Subfamilia", _K_SUBFAMILIAS, ops_sub,
-                      format_func=nombre_propio,
-                      placeholder="Buscar subfamilia…", width=320)
+        seleccion_en_panel(st.multiselect, "Subfamilia", _K_SUBFAMILIAS,
+                           ops_sub, format_func=nombre_propio,
+                           placeholder="Buscar subfamilia…", width=320,
+                           label_visibility="collapsed")
         st.caption("Las de " + ", ".join(nombre_propio(f) for f in _fams)
                    + "." if _fams else "Sin ninguna elegida entran todas.")
 

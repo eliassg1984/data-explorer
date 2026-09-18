@@ -38788,11 +38788,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      de «para bugs de estado usar AppTest», al revés: sirve para la lógica,
      no para lo que el navegador hace con ella.
 
-     **El arreglo (`graficos/inventario_productos.py::_widget_multi`):** el
+     **El arreglo (nació en `inventario_productos.py`; desde la tarde del
+     mismo día es `graficos/base.py::seleccion_en_panel`, ver abajo):** el
      valor vigente vive en una clave PROPIA que ningún widget usa, y el
      widget lo recibe como `default=` bajo una key con VERSIÓN
-     (`inv_prod_areas__w3`). `_poner()` —lo único que escribe desde Python:
-     los botones «Todas» / «Las principales» y el recorte— sube la versión,
+     (`inv_prod_areas__w3`). `poner_seleccion()` —lo único que escribe desde
+     Python: los botones «Todas» / «Las principales» y el recorte— sube la versión,
      y el widget nace de nuevo, ya marcado, la próxima vez que se monte. Un
      clic del usuario no la sube: `on_change` lo copia a la clave propia y el
      widget sigue siendo el mismo. Dos cosas que hacen que esto no rompa
@@ -38812,12 +38813,84 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      widget + display auxiliar; esto es otro problema, y la key cambia sólo
      cuando Python reescribe el valor.
 
-     **Misma forma, sin verificar:** `graficos/base.py::sembrar_seleccion`
-     siembra `session_state` para unas píldoras que viven adentro del
-     popover de `compartimento_filtros` (Compras siembra dos familias por
-     esa vía; Ajuste, `_comun.py`). Si el mecanismo es el mismo, esas
-     píldoras abren sin marcar aunque el filtro aplique, y el primer clic
-     borra la siembra.
+     **Compras y Ajuste tenían la misma forma, y se verificó en el
+     navegador** (mismo día, datos reales de R2): `base.sembrar_seleccion`
+     sembraba `session_state` para las píldoras de `filtro_pills`, que viven
+     adentro de un popover —el compartimento en Compras, los disparadores
+     de la Cascada y del Mapa de calor en Ajuste—.
+
+     La prueba obvia DIO BIEN, y es la trampa de medición de esta regla:
+     sesión nueva, abrir el panel sin tocar nada → las cinco familias
+     marcadas, en los dos reportes. El aviso de Streamlit NO se pierde por
+     estar el panel cerrado: el navegador se guarda el proto de la última
+     corrida que DIBUJÓ el widget, y el widget lo lee al montarse. Lo que
+     lo pierde es una corrida posterior que lo vuelva a dibujar, porque ésa
+     ya no trae `set_value`. Y lo que corre después de cargar Compras es
+     todo de fragment (el rail, las secciones perezosas), que no re-manda
+     lo que está fuera del fragment. Aislado en una app de veinte líneas:
+
+       | Antes de abrir el panel       | Píldoras   | El filtro aplica |
+       |-------------------------------|------------|------------------|
+       | nada                          | marcadas   | `['A','B']`      |
+       | sólo reruns de fragment       | marcadas   | `['A','B']`      |
+       | UNA corrida completa          | SIN marcar | `['A','B']`      |
+       | …+ abrir, cerrar y otra más   | sin marcar | **`[]`**         |
+
+     Los gestos que lo disparan en la app son de todos los días: en
+     Compras, un atajo de fecha del Ranking de proveedores (escala a
+     `st.rerun(scope="app")`) → las 8 píldoras en `false` con el badge en
+     «Filtros 1» y la Subfamilia ofreciendo las 33 de las cinco familias;
+     el primer clic, sobre GASTOS VENTAS, dejó sólo esa (la Subfamilia bajó
+     a 9). En Ajuste basta elegir un Área en la Cascada —rerun de la MISMA
+     sección— para que Familia abra con el disparador diciendo «5 familias»
+     y las seis píldoras en `false`.
+
+     La última fila de la tabla es la peor y no se había visto en
+     Inventario: **abrir el panel y cerrarlo sin tocar nada borra el
+     filtro**, a la corrida siguiente. Al montarse, el widget registra su
+     `default` vacío en el navegador, y el navegador lo manda con el
+     próximo rerun como si fuera un clic.
+
+     **El arreglo se generalizó a `graficos/base.py`:** `seleccion_en_panel`
+     (el widget), `poner_seleccion` (toda escritura desde Python, incluida
+     la siembra) y `recortar_seleccion` (el clamp, que con la key del widget
+     hacía Streamlit solo y con `default=` hay que hacer a mano: `st.pills`
+     revienta con un default fuera de sus opciones). `filtro_pills` los usa
+     por dentro, así que lo heredan TODOS los filtros del compartimento
+     —Ventas, Movimientos, Inventario, las tablas de `app.py`—, e
+     `inventario_productos.py` pasó a usar los mismos. Verificado en el
+     navegador después del cambio: tras el atajo de fecha, las cinco
+     familias de Compras salen marcadas y un clic en GASTOS VENTAS deja
+     seis (Subfamilia de 33 a 42); cerrar y otra corrida completa, siguen
+     seis. En Ajuste, tras elegir COCINA, Familia abre con las cinco y
+     COSTOS PRODUCCION suma la sexta.
+
+     **Tres consecuencias de que la selección ya no sea estado de widget:**
+
+       · **Sobrevive a dejar de dibujarse.** Streamlit recolectaba el
+         estado del widget que no se dibujaba en una corrida (medido en la
+         app mínima: la selección vieja vuelve vacía, la nueva vuelve
+         intacta), así que un filtro del compartimento ahora se recuerda
+         al ir a otro reporte y volver. Es lo que el proyecto ya persigue
+         con el rango (#332, #458).
+       · **Ajuste perdió su `preservar_widgets` del corte.** Estaba porque
+         el `st.rerun` del botón de corte le borraba la Familia al widget
+         (#373); con el valor afuera no hay nada que salvar. Y el ÁREA, que
+         no se preservaba —una elegida que no movió nada en el corte nuevo
+         rompía `st.pills`—, ahora sobrevive recortada: con COCINA + SALÓN
+         en «2 set», volver a «15-17 set» deja COCINA sola, y
+         `estado_filtros_vista` la recorta ANTES de filtrar para que la
+         vista no salga vacía una corrida.
+       · **La key del widget ya no es la clave del filtro**
+         (`compras_graf_filtro_fam__w1`): el CSS que la nombraba con clase
+         exacta (`estilos/_40_ajuste_franja.py`) pasó a prefijo.
+
+     **Regla:** un widget que vive adentro de un `st.popover` NO recibe
+     valores de Python por `st.session_state[key] = ...`. Si Python tiene
+     que ponerle un valor —sembrar, resetear, recortar—, el valor vive en
+     una clave propia y viaja por `default=` (`seleccion_en_panel` para
+     selección múltiple). Y para probarlo en el navegador, la secuencia es
+     «corrida completa → abrir»; «abrir sin tocar nada» no prueba nada.
 
      **Dos detalles del mismo cambio:** una etiqueta de `st.pills` es
      Markdown, y el ERP tiene un área llamada «---», que sola se dibuja como

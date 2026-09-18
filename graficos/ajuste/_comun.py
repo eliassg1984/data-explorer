@@ -37,7 +37,7 @@ from cortes import (  # noqa: F401
 from cortes import corte_contiguo, cortes_disponibles
 from tema import ACENTO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_SELECCION
 from graficos.base import (
-    _layout, _slug, filtro_pills, preservar_widgets, sembrar_seleccion,
+    _layout, _slug, filtro_pills, sembrar_seleccion,
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
@@ -248,6 +248,11 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     # un area que no movio nada ahora es ofrecer una pastilla que deja la
     # vista vacia, y de eso se trata `areas_con_ajuste` (#424).
     areas = areas_con_ajuste(base, col_area, col_ajuste_val)
+    # Un área elegida en otro corte que en éste no movió nada se suelta
+    # ANTES de filtrar: la selección sobrevive al cambio de corte (#467), y
+    # sin esto la vista saldría vacía una corrida — hasta que el recorte de
+    # `filtro_pills`, que corre al dibujar, la alcanzara.
+    sel_area = [a for a in sel_area if a in areas]
     # LAS FAMILIAS SALEN DEL PARQUET ENTERO, no del corte elegido. La semilla
     # se sembraba con las del corte con que ABRE la vista, que es el último:
     # el 15 set 2026 no trajo ENVASES Y EMBALAJES, así que la selección
@@ -319,12 +324,14 @@ def render_filtros_vista(cols, est):
                             type="primary" if _on else "secondary"):
                         st.session_state[est["k_corte"]] = _c["clave"]
                         # Este rerun corta la corrida antes de que se
-                        # dibujen las pastillas de familia, y eso borra lo
-                        # elegido (#373). Se salva la FAMILIA, cuyas
-                        # opciones no dependen del corte; el ÁREA no,
-                        # porque las suyas sí dependen y una elegida que no
-                        # movió nada en el corte nuevo rompería `st.pills`.
-                        preservar_widgets((est["k_familia"],))
+                        # dibujen las pastillas, y eso le borraba lo
+                        # elegido al widget (#373) — acá iba un
+                        # `preservar_widgets` de la familia. Desde la #467
+                        # la selección vive FUERA del widget
+                        # (`base.seleccion_en_panel`) y el corte no la
+                        # toca: sobreviven las dos, y el área se recorta a
+                        # las que movieron algo en el corte nuevo
+                        # (`estado_filtros_vista`).
                         st.rerun()
     with cols[1]:
         _n_fam = len(est["sel_fam"])

@@ -444,7 +444,10 @@ _PILA = (
 # (por eso la siembra va antes de `contar_filtros`, ver
 # `base.sembrar_seleccion`). Verificado en el navegador el 2026-09-05: la
 # primera carga trae los cinco chips prendidos y el badge en 1; al soltarlos
-# todos queda en cero y NO se vuelven a sembrar.
+# todos queda en cero y NO se vuelven a sembrar. Ese «prendidos» valía sólo
+# hasta la primera corrida completa: después de un atajo de fecha el panel
+# abría con los ocho chips apagados y el filtro aplicando igual (regla #467,
+# arreglado en `base.seleccion_en_panel`).
 #
 # Efecto lateral medido y aceptado: con Familia elegida la cascada de
 # Subfamilia ya no está vacía al abrir — son 33 de las 95 del histórico,

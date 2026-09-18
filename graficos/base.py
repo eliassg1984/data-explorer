@@ -181,6 +181,70 @@ def compartimento_filtros(n_activos=0, etiqueta="Filtros"):
                 yield
 
 
+# ── LA SELECCIÓN DE UN FILTRO NO VIVE EN LA KEY DE SU WIDGET ─────────────
+# Todo `filtro_pills` vive adentro de un `st.popover` (el compartimento, o
+# los disparadores de Ajuste), y el navegador NO monta el contenido de un
+# popover mientras está cerrado. Streamlit le avisa al widget que Python le
+# cambió el valor UNA vez —`proto.set_value`, en la corrida del cambio—, y
+# el widget se monta con el proto de la ÚLTIMA corrida que lo dibujó. Si
+# esa corrida ya no traía el aviso, arranca de su `default`.
+#
+# Medido el 2026-09-18 en Compras y en Ajuste (regla #467): basta UNA
+# corrida que vuelva a dibujar las píldoras antes de abrir el panel —un
+# atajo de fecha del Ranking, elegir un Área en la Cascada— para que las
+# cinco familias de entrada salgan sin marcar mientras el filtro las sigue
+# aplicando. El primer clic las reemplaza por UNA, y peor: abrir y cerrar
+# el panel sin tocar nada deja el filtro en `[]` a la corrida siguiente,
+# porque al montarse el widget registra su default vacío y el navegador lo
+# manda.
+#
+# Por eso la selección vigente vive en `clave` —estado propio, que ningún
+# widget usa— y el widget la recibe como `default=` bajo una key con
+# VERSIÓN. Lo único que escribe desde Python es `poner_seleccion()`, que
+# sube la versión: el widget nace de nuevo, ya marcado, la próxima vez que
+# se monte. Un clic del usuario no la sube: lo copia `on_change` y el
+# widget sigue siendo el mismo. Nació en `inventario_productos.py`.
+
+def poner_seleccion(clave, valor):
+    """Escribe DESDE PYTHON la selección de un filtro de panel (siembra,
+    botones «Todas», recortes). Nunca `st.session_state[clave] = ...` a
+    secas: sin subir la versión, el widget ya montado no se entera."""
+    st.session_state[clave] = list(valor)
+    st.session_state[f"{clave}__v"] = st.session_state.get(f"{clave}__v", 0) + 1
+
+
+def recortar_seleccion(clave, opciones):
+    """Suelta lo elegido que ya no está entre las opciones.
+
+    Con la key del widget esto lo hacía Streamlit solo y en silencio; con
+    `default=` no: `st.pills` revienta con un default que no está entre las
+    suyas. Pasa al cambiar la familia de una cascada, al angostar el rango
+    y al cambiar el corte de Ajuste. Va ANTES del widget."""
+    v = st.session_state.get(clave)
+    if v is None:
+        return
+    ok = [x for x in v if x in opciones] if isinstance(v, (list, tuple)) else []
+    if ok != list(v or []):
+        poner_seleccion(clave, ok)
+
+
+def seleccion_en_panel(widget, rotulo, clave, opciones, **kw):
+    """`st.pills`/`st.multiselect` de selección MÚLTIPLE que vive adentro de
+    un `st.popover`, atado a `clave` (ver el comentario de arriba).
+
+    `clave` tiene siempre la selección vigente —la leen `contar_filtros`,
+    las etiquetas de los disparadores y el filtrado—, así que da igual si el
+    panel se abrió alguna vez. `recortar_seleccion` va antes."""
+    wkey = f"{clave}__w{st.session_state.get(f'{clave}__v', 0)}"
+
+    def _copiar():
+        st.session_state[clave] = list(st.session_state.get(wkey) or [])
+
+    return widget(rotulo, opciones,
+                  default=st.session_state.get(clave) or [], key=wkey,
+                  on_change=_copiar, **kw)
+
+
 def filtro_pills(df, col, clave, etiqueta, valores=None):
     """Un filtro categorico PLANO, para adentro de `compartimento_filtros()`.
 
@@ -191,17 +255,23 @@ def filtro_pills(df, col, clave, etiqueta, valores=None):
     `valores` permite pasar una lista ya calculada — lo necesitan las cascadas
     (Subfamilia depende de Familia), donde las opciones no salen del df que se
     esta filtrando sino de uno ya recortado por el filtro de arriba.
+
+    La selección vive en `st.session_state[clave]` y NO es la key del widget
+    (`seleccion_en_panel`, regla #467): para escribirla desde Python,
+    `poner_seleccion`.
     """
     if not col or col not in df.columns:
         return df, []
     if valores is None:
         valores = sorted(df[col].dropna().astype(str).unique().tolist())
+    recortar_seleccion(clave, valores)
     if not valores:
         return df, []
     st.markdown(f'<div class="filtro-rotulo">{html.escape(etiqueta)}</div>',
                 unsafe_allow_html=True)
-    sel = st.pills(etiqueta, valores, selection_mode="multi",
-                   key=clave, label_visibility="collapsed") or []
+    seleccion_en_panel(st.pills, etiqueta, clave, valores,
+                       selection_mode="multi", label_visibility="collapsed")
+    sel = list(st.session_state.get(clave) or [])
     if sel:
         df = df[df[col].astype(str).isin(sel)]
     return df, sel
@@ -216,10 +286,9 @@ def sembrar_seleccion(df, col, clave, valores):
     PRIMERA carga mostraría "Filtros 0" con dos familias ya filtrando, y
     recién el rerun siguiente diría la verdad.
 
-    Siembra `session_state` en vez de pasar `default=` a `st.pills` por lo
-    mismo y por una segunda razón: `default=` se ignora en cuanto la clave
-    existe, así que los dos caminos se comportan igual, pero sólo éste deja
-    el valor visible para quien lo lea antes de dibujar.
+    Escribe con `poner_seleccion` y no con `st.session_state[clave] = ...`:
+    la siembra llega al widget por su `default=`, no por el aviso de
+    Streamlit, que se pierde con el panel cerrado (regla #467).
 
     Sólo siembra los valores que EXISTEN en la columna: `st.pills` revienta
     con un default que no está entre sus opciones, y el modo demo de
@@ -234,7 +303,7 @@ def sembrar_seleccion(df, col, clave, valores):
     disponibles = set(df[col].dropna().astype(str))
     elegidos = [v for v in valores if v in disponibles]
     if elegidos:
-        st.session_state[clave] = elegidos
+        poner_seleccion(clave, elegidos)
 
 
 def vista_activa(categorias, state_key):

@@ -509,14 +509,17 @@ CSS = """    /* ================================================================
        `graficos/compras/_css_proveedor.py`), sólo que ahí el contenido ya
        venía angosto y acá hay que forzarlo. `stPopoverBody` es un PORTAL
        (fuera de `chips_ajuste_tabla`), así que se alcanza con `:has()`
-       sobre la key del `st.pills` de adentro, no colgando del contenedor. */
-    [data-testid="stPopoverBody"]:has(.st-key-compras_graf_filtro_fam),
-    [data-testid="stPopoverBody"]:has(.st-key-compras_graf_filtro_sub) {
+       sobre la key del `st.pills` de adentro, no colgando del contenedor.
+       Por PREFIJO y no por clase exacta: la key del widget lleva versión
+       (`compras_graf_filtro_fam__w1`, `graficos/base.py::seleccion_en_panel`,
+       regla #467). */
+    [data-testid="stPopoverBody"]:has([class*="st-key-compras_graf_filtro_fam__w"]),
+    [data-testid="stPopoverBody"]:has([class*="st-key-compras_graf_filtro_sub__w"]) {
         width: 300px !important;
         max-width: 300px !important;
     }
-    .st-key-compras_graf_filtro_fam [data-testid="stButtonGroup"],
-    .st-key-compras_graf_filtro_sub [data-testid="stButtonGroup"] {
+    [class*="st-key-compras_graf_filtro_fam__w"] [data-testid="stButtonGroup"],
+    [class*="st-key-compras_graf_filtro_sub__w"] [data-testid="stButtonGroup"] {
         flex-wrap: wrap !important;
         width: 100% !important;
     }
