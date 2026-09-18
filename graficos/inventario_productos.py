@@ -54,6 +54,10 @@ from tema import (
 )
 from graficos import alturas
 from graficos.base import _es_movil
+# El disparador minimalista de los filtros (regla #427) nació en Ajuste y es
+# genérico: sólo pide el prefijo de key de sus contenedores. El segundo
+# prefijo (la lista de cortes) acá no tiene a quién estilar.
+from graficos.ajuste._comun import css_filtros_vista
 # El look de las otras tres tablas del dashboard (regla #404): mismo alto de
 # fila, misma cabecera, mismo CSS. Una tabla ancha con otro idioma de grilla
 # debajo de tres que comparten uno se lee como otro reporte.
@@ -76,10 +80,25 @@ FILAS_LISTADO = 14
 _EPS = 1e-9
 _VACIOS = ("", "nan", "none", "nat", "<na>", "null")
 
-_K_FAMILIA = "inv_prod_familia"
-_K_SUBFAMILIA = "inv_prod_subfamilia"
+# Las tres de categoría son LISTAS (selección múltiple) desde el
+# 2026-09-18. Llevan nombre nuevo y no el de cuando eran un `st.selectbox`
+# («inv_prod_familia»): una sesión abierta antes del deploy traería en esa
+# clave un string suelto, y `st.pills` en modo multi revienta con eso.
+_K_AREAS = "inv_prod_areas"
+_K_FAMILIAS = "inv_prod_familias"
+_K_SUBFAMILIAS = "inv_prod_subfamilias"
 _K_BUSCAR = "inv_prod_buscar"
 _K_SIN_STOCK = "inv_prod_sin_stock"
+
+# Con qué áreas ABRE el listado (2026-09-18, a pedido: «debe filtrar
+# inicialmente Almacén central, cocina, bar, producción, salón»). Es un
+# DEFAULT, no un piso: se siembra una sola vez y el usuario las cambia, o las
+# suelta todas para ver el inventario entero. «Bar» es BARRA, como la
+# escribe el ERP. Las que no estén en los datos no se siembran (`st.pills`
+# revienta con un valor que no está entre sus opciones), y si no queda
+# ninguna la tabla abre sin filtro de área.
+AREAS_DE_ENTRADA = ("ALMACEN CENTRAL", "COCINA", "BARRA", "PRODUCCION",
+                    "SALON")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -107,7 +126,7 @@ class Listado:
     `productos` va indexado por código, con `areas` = en cuántas áreas tiene
     stock. `areas` es una fila por (código, área) con stock. `sin_stock` es
     cuántos productos del recorte quedaron FUERA por no tener stock en
-    ninguna área — lo que el interruptor «Incluir sin stock» agregaría."""
+    ninguna área — lo que el interruptor «Ver sin stock» agregaría."""
     productos: pd.DataFrame
     areas: pd.DataFrame
     sin_stock: int
@@ -115,8 +134,8 @@ class Listado:
 
 def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
                   col_area=None, col_unidad=None, col_punit=None,
-                  col_cant=None, col_val=None, familia=None,
-                  subfamilia=None, texto="", incluir_sin_stock=False):
+                  col_cant=None, col_val=None, areas=(), familias=(),
+                  subfamilias=(), texto="", incluir_sin_stock=False):
     """El parquet (una fila por producto × área) llevado a un PRODUCTO por
     fila, más sus áreas aparte.
 
@@ -137,6 +156,14 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
     esta misma sección mostrándolos —, y `sin_stock` dice cuántos son para
     que el interruptor lo pueda anunciar.
 
+    LOS RECORTES son listas y una lista vacía es «todas»: `areas`,
+    `familias` y `subfamilias` admiten varios valores a la vez (Alimentos y
+    Vinos juntos). El de ÁREA no es como los otros dos: familia y subfamilia
+    son del producto y sólo deciden si entra, pero el área es de la FILA, así
+    que además cambia sus números — la cantidad y el valorizado de cada
+    producto pasan a ser los de las áreas elegidas, y lo que se despliega
+    son sólo esas.
+
     Sin `col_cod`, la clave es el nombre (hay 9 nombres repetidos entre
     códigos distintos en el parquet real: sin código se fundirían)."""
     nombre = _texto(d, col_prod)
@@ -154,13 +181,16 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
                        if col_val else 0.0),
         "area": _texto(d, col_area),
     })
-    # Los recortes de familia y subfamilia van sobre las filas: son
-    # atributos del producto, así que da lo mismo que hacerlos después y
-    # agrupa menos.
-    if familia:
-        base = base[base["familia"] == familia]
-    if subfamilia:
-        base = base[base["subfamilia"] == subfamilia]
+    # Los tres recortes van sobre las FILAS, antes de agrupar. Familia y
+    # subfamilia son atributos del producto (da lo mismo hacerlos antes o
+    # después, y antes agrupa menos); el área no, y tiene que ir antes: es
+    # lo que hace que los totales del producto sean los de SUS áreas.
+    if areas:
+        base = base[base["area"].isin(list(areas))]
+    if familias:
+        base = base[base["familia"].isin(list(familias))]
+    if subfamilias:
+        base = base[base["subfamilia"].isin(list(subfamilias))]
 
     prods = base.groupby("codigo", sort=False).agg(
         familia=("familia", "first"), subfamilia=("subfamilia", "first"),
@@ -178,12 +208,12 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
         prods = prods[[all(p in h for p in palabras) for h in pajar]]
 
     activo = (base["cantidad"].abs() > _EPS) | (base["valorizado"].abs() > _EPS)
-    areas = (base[activo & base["codigo"].isin(prods.index)]
-             .groupby(["codigo", "area"], as_index=False, sort=False)
-             .agg(cantidad=("cantidad", "sum"),
-                  valorizado=("valorizado", "sum")))
+    en_areas = (base[activo & base["codigo"].isin(prods.index)]
+                .groupby(["codigo", "area"], as_index=False, sort=False)
+                .agg(cantidad=("cantidad", "sum"),
+                     valorizado=("valorizado", "sum")))
     prods = prods.assign(
-        areas=prods.index.map(areas.groupby("codigo").size())
+        areas=prods.index.map(en_areas.groupby("codigo").size())
         .fillna(0).astype(int))
 
     sin_stock = int((prods["areas"] == 0).sum())
@@ -193,8 +223,9 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
     # Las áreas, igual dentro de cada producto.
     prods = prods.sort_values(["valorizado", "nombre"],
                               ascending=[False, True], kind="stable")
-    areas = areas.sort_values("valorizado", ascending=False, kind="stable")
-    return Listado(prods, areas.reset_index(drop=True), sin_stock)
+    en_areas = en_areas.sort_values("valorizado", ascending=False,
+                                    kind="stable")
+    return Listado(prods, en_areas.reset_index(drop=True), sin_stock)
 
 
 def filas_grilla(listado):
@@ -443,12 +474,13 @@ def renderizar_listado(filas, total, key, movil=False):
         _col("cantidad", "Cantidad", type=num, width=86, minWidth=86,
              suppressSizeToFit=True,
              valueFormatter=js(_JS_CANTIDAD), cellStyle=js(_JS_SIGNO),
-             headerTooltip="Stock al día, sumado entre las áreas."),
+             headerTooltip="Stock al día, sumado entre las áreas "
+                           "elegidas."),
         _col("valorizado", "Valorizado total", type=num, width=124,
              minWidth=124, suppressSizeToFit=True, sort="desc", valueFormatter=js(_JS_SOLES),
              cellStyle=js(_JS_SIGNO),
              headerTooltip="Cantidad × precio unitario, sumado entre las "
-                           "áreas."),
+                           "áreas elegidas."),
     ]
     # Las ocultas: sin columna no llegan al JS en todas las versiones del
     # componente, y el despliegue entero cuelga de ellas.
@@ -501,57 +533,183 @@ def renderizar_listado(filas, total, key, movil=False):
 # SECCIÓN
 # ═══════════════════════════════════════════════════════════════════════
 
-def _clamp(key, opciones):
-    """Un valor que ya no está entre las opciones vuelve a «todas». Va
-    justo antes del widget (CLAUDE.md): después, Streamlit no deja
-    escribir su clave."""
-    if st.session_state.get(key) not in opciones:
-        st.session_state[key] = None
+# ── EL VALOR DE UN FILTRO NO VIVE EN LA KEY DE SU WIDGET ────────────────
+# Los tres widgets de categoría viven adentro de un `st.popover`, y el
+# navegador NO monta el contenido de un popover mientras está cerrado
+# (medido: con el panel cerrado no hay un solo nodo de sus píldoras en el
+# DOM). Streamlit le avisa al widget que Python le cambió el valor UNA sola
+# vez —`proto.set_value`, en la corrida del cambio—; si en ese momento el
+# widget no está montado, el aviso se pierde, y al abrir el panel el widget
+# arranca de su `default`. Así nacieron las cinco áreas de entrada: filtraban
+# (la tabla decía 741 productos) pero en el panel salían sin marcar, y el
+# primer clic las reemplazaba por UNA. Ver regla #467.
+#
+# Por eso el valor vigente vive en `key` (estado propio, no de widget), y el
+# widget lo recibe como `default=` bajo una key con VERSIÓN: `_poner()` —lo
+# único que escribe desde Python: la siembra no, los botones y el recorte
+# sí— sube la versión, y el widget nace de nuevo ya marcado. Un clic del
+# usuario no la sube: lo copia `on_change` y el widget sigue siendo el mismo.
+
+def _poner(key, valor):
+    """Escribe el valor de un filtro DESDE PYTHON (botones, recorte)."""
+    st.session_state[key] = list(valor)
+    st.session_state[f"{key}__v"] = st.session_state.get(f"{key}__v", 0) + 1
+
+
+def _clamp_lista(key, opciones):
+    """Lo elegido que ya no está entre las opciones se suelta: `st.pills`
+    revienta con un valor que no está entre las suyas. Pasa al cambiar de
+    familia (sus subfamilias ya no son las mismas) y al mover los filtros
+    globales del dashboard, que recortan `d`."""
+    v = st.session_state.get(key)
+    if v is None:
+        return
+    ok = [x for x in v if x in opciones] if isinstance(v, list) else []
+    if ok != v:
+        _poner(key, ok)
+
+
+def _widget_multi(widget, rotulo, key, opciones, **kw):
+    """`st.pills`/`st.multiselect` de selección múltiple atado a `key`."""
+    wkey = f"{key}__w{st.session_state.get(f'{key}__v', 0)}"
+
+    def _copiar():
+        st.session_state[key] = list(st.session_state.get(wkey) or [])
+
+    return widget(rotulo, opciones,
+                  default=st.session_state.get(key) or [], key=wkey,
+                  on_change=_copiar, label_visibility="collapsed", **kw)
+
+
+def _rotulo_area(a):
+    """El área como se escribe. Una sola excepción: el ERP tiene un área que
+    se llama «---», y una etiqueta de `st.pills` es Markdown — sola, se
+    dibuja como una línea horizontal y la píldora sale vacía."""
+    return a if a.strip("-*_ ") else f"Sin nombre ({a})"
+
+
+def _etiqueta(sel, plural, fmt=str):
+    """Lo que dice el disparador: el VALOR vigente, para que se lea qué hay
+    puesto sin abrir nada (regla #427). Una sola, por su nombre; varias,
+    cuántas; ninguna, «todas»."""
+    if not sel:
+        return f"todas las {plural}"
+    if len(sel) == 1:
+        return fmt(sel[0]).lower()
+    return f"{len(sel)} {plural}"
+
+
+def _filtro(col, nombre, icono, etiqueta, dibujar):
+    """Un filtro de la fila: disparador compacto + panel. El contenedor con
+    `inv_prod_ctrl_` es de donde cuelga el look minimalista; el popover
+    lleva key para que no se cierre al marcar una opción (la etiqueta
+    cambia con cada clic, y sin key cambiaría también su identidad)."""
+    with col, st.container(key=f"inv_prod_ctrl_{nombre}"):
+        with st.popover(f"{icono} {etiqueta}", key=f"inv_prod_pop_{nombre}",
+                        use_container_width=True):
+            dibujar()
 
 
 def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
                       col_area, col_unidad, col_punit, col_cant, col_val):
-    """La tarjeta entera: título y filtros en una fila, la tabla debajo."""
+    """La tarjeta entera: título y filtros en una fila, la tabla debajo.
+
+    Área, Familia y Subfamilia son de selección MÚLTIPLE (2026-09-18, a
+    pedido: «un usuario puede querer filtrar alimentos y vinos a la vez»), y
+    no son tres desplegables anchos sino el disparador minimalista de Ajuste
+    (regla #427): el texto dice lo elegido y el panel se abre al clic. Con
+    cinco áreas marcadas de entrada, un `st.multiselect` suelto en la fila
+    habría envuelto sus chips en dos o tres renglones."""
     if not (col_prod and col_val):
         st.info("Faltan las columnas de producto o de valorizado para este "
                 "listado.")
         return
 
-    fams = sorted(set(_texto(d, col_fam)) - {""})
-    # columnas-internas: el título y los cuatro filtros de la tabla, en el
+    # Sin guard de "una sola vez" (regla #59).
+    st.markdown("<style>"
+                + css_filtros_vista("inv_prod_ctrl_", "inv_prod_corte_")
+                + "</style>", unsafe_allow_html=True)
+
+    # ── Opciones y estado, ANTES de dibujar: las etiquetas de los
+    # disparadores leen lo elegido, y Streamlit las fija al construirlos.
+    ops_area = sorted(set(_texto(d, col_area)) - {""})
+    if _K_AREAS not in st.session_state:
+        st.session_state[_K_AREAS] = [a for a in AREAS_DE_ENTRADA
+                                      if a in ops_area]
+    _clamp_lista(_K_AREAS, ops_area)
+    ops_fam = sorted(set(_texto(d, col_fam)) - {""})
+    _clamp_lista(_K_FAMILIAS, ops_fam)
+    # La subfamilia se elige DENTRO de las familias elegidas: ofrecer las
+    # 128 con una familia puesta deja armar combinaciones vacías.
+    _fams = st.session_state.get(_K_FAMILIAS) or []
+    _d_fam = d[_texto(d, col_fam).isin(_fams)] if _fams else d
+    ops_sub = sorted(set(_texto(_d_fam, col_subfam)) - {""})
+    _clamp_lista(_K_SUBFAMILIAS, ops_sub)
+
+    # columnas-internas: el título y los cinco controles de la tabla, en el
     # renglón de arriba de la misma tarjeta.
-    c_tit, c_fam, c_sub, c_q, c_cero = st.columns(
-        [1.25, 1, 1.25, 1.35, 0.95], vertical_alignment="center")
-    with c_fam:
-        _clamp(_K_FAMILIA, fams)
-        familia = st.selectbox(
-            "Familia", fams, index=None, key=_K_FAMILIA,
-            format_func=nombre_propio, placeholder="Todas las familias",
-            label_visibility="collapsed", disabled=not fams)
-    with c_sub:
-        # La subfamilia se elige DENTRO de la familia elegida: ofrecer las
-        # 128 con una familia puesta deja elegir combinaciones vacías.
-        _d_fam = d if not familia else d[_texto(d, col_fam) == familia]
-        subs = sorted(set(_texto(_d_fam, col_subfam)) - {""})
-        _clamp(_K_SUBFAMILIA, subs)
-        subfamilia = st.selectbox(
-            "Subfamilia", subs, index=None, key=_K_SUBFAMILIA,
-            format_func=nombre_propio, placeholder="Todas las subfamilias",
-            label_visibility="collapsed", disabled=not subs)
+    c_tit, c_area, c_fam, c_sub, c_q, c_cero = st.columns(
+        [1.3, 0.95, 0.95, 1.05, 1.45, 0.8], vertical_alignment="center")
+
+    def _dib_area():
+        _widget_multi(st.pills, "Área", _K_AREAS, ops_area,
+                      selection_mode="multi", format_func=_rotulo_area)
+        # Soltar cinco píldoras de a una para ver todo es tedioso, y volver
+        # a las de entrada sin recordar cuáles eran, más.
+        with st.container(horizontal=True, gap="small"):
+            st.button("Todas", key="inv_prod_areas_todas", type="tertiary",
+                      on_click=_poner, args=(_K_AREAS, []))
+            st.button("Las principales", key="inv_prod_areas_base",
+                      type="tertiary", on_click=_poner,
+                      args=(_K_AREAS, [a for a in AREAS_DE_ENTRADA
+                                       if a in ops_area]))
+        st.caption("Sin ninguna marcada entran todas. La cantidad y el "
+                   "valorizado son los de las áreas marcadas.")
+
+    def _dib_fam():
+        _widget_multi(st.pills, "Familia", _K_FAMILIAS, ops_fam,
+                      selection_mode="multi", format_func=nombre_propio)
+        st.caption("Sin ninguna marcada entran todas.")
+
+    def _dib_sub():
+        # Lista con buscador y no píldoras: sin familia elegida son 128.
+        # Ancho FIJO: el panel de un popover mide lo que su contenido, y un
+        # multiselect `stretch` en un panel sin ancho se encoge hasta cortar
+        # su propio placeholder («Buscar subfa…», medido a 1366).
+        _widget_multi(st.multiselect, "Subfamilia", _K_SUBFAMILIAS, ops_sub,
+                      format_func=nombre_propio,
+                      placeholder="Buscar subfamilia…", width=320)
+        st.caption("Las de " + ", ".join(nombre_propio(f) for f in _fams)
+                   + "." if _fams else "Sin ninguna elegida entran todas.")
+
+    _filtro(c_area, "area", ":material/apartment:",
+            _etiqueta(st.session_state.get(_K_AREAS), "áreas",
+                      _rotulo_area), _dib_area)
+    _filtro(c_fam, "familia", ":material/category:",
+            _etiqueta(_fams, "familias", nombre_propio), _dib_fam)
+    _filtro(c_sub, "subfamilia", ":material/label:",
+            _etiqueta(st.session_state.get(_K_SUBFAMILIAS), "subfamilias",
+                      nombre_propio), _dib_sub)
     with c_q:
         texto = st.text_input(
             "Buscar producto", key=_K_BUSCAR,
             placeholder="Buscar producto o código…",
             label_visibility="collapsed")
     with c_cero:
-        incluir = st.toggle("Incluir sin stock", key=_K_SIN_STOCK)
+        # Sin `help=`: su ícono partía el rótulo en dos renglones en una
+        # columna de 141px. Qué hace lo dice el `title` del título, que
+        # cuenta cuántos productos esconde.
+        incluir = st.toggle("Ver sin stock", key=_K_SIN_STOCK)
 
+    areas = st.session_state.get(_K_AREAS) or []
+    familias = st.session_state.get(_K_FAMILIAS) or []
+    subfamilias = st.session_state.get(_K_SUBFAMILIAS) or []
     listado = armar_listado(
         d, col_cod=col_cod, col_prod=col_prod, col_fam=col_fam,
         col_subfam=col_subfam, col_area=col_area, col_unidad=col_unidad,
         col_punit=col_punit, col_cant=col_cant, col_val=col_val,
-        familia=familia, subfamilia=subfamilia, texto=texto,
-        incluir_sin_stock=incluir)
+        areas=areas, familias=familias, subfamilias=subfamilias,
+        texto=texto, incluir_sin_stock=incluir)
     n = len(listado.productos)
 
     with c_tit:
@@ -562,7 +720,7 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         # que agrandaría la fila de los filtros.
         _ocultos = 0 if incluir else listado.sin_stock
         _cuenta = f"{n:,} de {n + _ocultos:,}" if _ocultos else f"{n:,}"
-        _nota = (f"{_ocultos:,} sin stock ocultos: «Incluir sin stock» "
+        _nota = (f"{_ocultos:,} sin stock ocultos: «Ver sin stock» "
                  "los muestra." if _ocultos else "")
         st.markdown(
             f'<div class="inv-rank-tit" style="margin:0" title="{_nota}">'
@@ -571,7 +729,7 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
 
     if not n:
         st.info("Ningún producto coincide con los filtros."
-                if (familia or subfamilia or texto.strip())
+                if (areas or familias or subfamilias or texto.strip())
                 else "No hay productos con stock en este recorte.")
         return
 
@@ -580,7 +738,8 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
     # hash y no el texto: el buscador admite cualquier cosa, y la key
     # termina en una clase CSS (`st-key-...`) que el `<style>` de arriba
     # tiene que poder escribir igual que Streamlit.
-    recorte = "|".join([familia or "", subfamilia or "", texto.strip(),
+    recorte = "|".join([",".join(sorted(areas)), ",".join(sorted(familias)),
+                        ",".join(sorted(subfamilias)), texto.strip(),
                         str(incluir), str(len(d))])
     key = f"inv_prod_grid_{zlib.crc32(recorte.encode('utf-8')):08x}"
     renderizar_listado(filas_grilla(listado),

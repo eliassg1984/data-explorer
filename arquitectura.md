@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-466 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+467 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (165)
 
@@ -433,7 +433,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#462** — Una tabla con dos altos de fila se lee como dos tablas pegadas: la segunda línea se abre AL…
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 
-**Streamlit** (125)
+**Streamlit** (126)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -560,6 +560,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#458** — El espejo que salva el rango de la recolección de Streamlit no sobrevive a un rerun de…
 - **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
 - **#464** — Juntar controles en UN renglón se paga en ancho, y el presupuesto se mide contra el peor…
+- **#467** — Un widget adentro de un st.popover no se entera de lo que Python le escribe mientras el panel…
 
 **Datos, R2 y DuckDB** (55)
 
@@ -38703,7 +38704,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      texto obliga a escribir la familia a mano. La subfamilia se ofrece
      DENTRO de la familia elegida, con el clamp justo antes del widget: al
      cambiar de familia, una subfamilia que ya no pertenece vuelve a
-     «todas» (verificado con `AppTest`). El buscador pide TODAS las palabras,
+     «todas» (verificado con `AppTest`). **Desde el 2026-09-18 los tres de
+     categoría son de selección múltiple y hay uno de ÁREA, que abre en
+     cinco áreas** — y ahí apareció la trampa de la #467. El buscador pide
+     TODAS las palabras,
      en nombre o código, sin tildes. La key de la grilla lleva un `crc32`
      del recorte, por la #227.
 
@@ -38745,6 +38749,85 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
+467. **Un widget adentro de un `st.popover` no se entera de lo que Python le
+     escribe mientras el panel está cerrado: su valor tiene que viajar en el
+     `default=`, no sólo en `session_state`.** 2026-09-18, en el mismo día que
+     el listado de la #466 sumó el filtro de Área con cinco áreas de entrada
+     (pedido: *«el filtro de área debe filtrar inicialmente Almacén central,
+     cocina, bar, producción, salón»*) y pasó Familia y Subfamilia a
+     selección múltiple (*«un usuario puede querer filtrar alimentos y vinos
+     a la vez»*).
+
+     **El síntoma, medido en el navegador:** la tabla decía «Productos 741 de
+     3,874» —el filtro de las cinco áreas APLICABA— y el disparador decía
+     «5 áreas», pero al abrir el panel las 21 píldoras tenían
+     `aria-pressed=false`. El primer clic, sobre CALIENTES, dejó el filtro en
+     `['CALIENTES']` y la tabla en 10 productos: las cinco de entrada se
+     perdieron sin que nadie las soltara.
+
+     **El mecanismo, en dos piezas:**
+
+       · el navegador NO monta el contenido de un popover mientras está
+         cerrado — medido: con el panel cerrado, cero nodos de sus
+         píldoras en el DOM;
+       · Streamlit le avisa al widget que Python le cambió el valor UNA sola
+         vez, con `proto.set_value = True` en la corrida del cambio
+         (`streamlit/elements/widgets/button_group.py`, 1.59.2: sólo si
+         `widget_state.value_changed`). Las corridas siguientes mandan el
+         proto sin el aviso.
+
+     Así que la siembra `st.session_state[key] = [...]` antes del widget
+     llegaba con el panel cerrado, el aviso se perdía, y al abrir el panel el
+     widget se montaba con el proto de la ÚLTIMA corrida —sin valor— y caía a
+     su `default`, que era vacío. Lo mismo le pasaba a todo lo que Python
+     escribe con el panel cerrado: el recorte de la subfamilia al cambiar de
+     familia dejaba el chip viejo en el multiselect.
+
+     **`AppTest` no lo ve:** no tiene navegador ni popovers que se monten
+     tarde, y dio verde con el bug adentro. Es la misma lección que la nota
+     de «para bugs de estado usar AppTest», al revés: sirve para la lógica,
+     no para lo que el navegador hace con ella.
+
+     **El arreglo (`graficos/inventario_productos.py::_widget_multi`):** el
+     valor vigente vive en una clave PROPIA que ningún widget usa, y el
+     widget lo recibe como `default=` bajo una key con VERSIÓN
+     (`inv_prod_areas__w3`). `_poner()` —lo único que escribe desde Python:
+     los botones «Todas» / «Las principales» y el recorte— sube la versión,
+     y el widget nace de nuevo, ya marcado, la próxima vez que se monte. Un
+     clic del usuario no la sube: `on_change` lo copia a la clave propia y el
+     widget sigue siendo el mismo. Dos cosas que hacen que esto no rompa
+     nada:
+
+       · `st.pills` identifica al widget sólo por la key y `click_mode`
+         (`key_as_main_identity={"click_mode"}`), así que cambiar el
+         `default=` entre corridas no lo resetea;
+       · el aviso de «widget con default y también con valor por Session
+         State» sale sólo si la key del WIDGET se escribió por la API
+         (`is_new_state_value`), y ésa no la escribe nadie.
+
+     Verificado en el navegador: las cinco de entrada salen marcadas al
+     abrir; sumar CALIENTES deja seis; «Las principales» vuelve a cinco con
+     el panel abierto; y una subfamilia recortada con su panel cerrado ya no
+     aparece al reabrirlo. La CLAUDE.md dice «sin key dinámica» para el par
+     widget + display auxiliar; esto es otro problema, y la key cambia sólo
+     cuando Python reescribe el valor.
+
+     **Misma forma, sin verificar:** `graficos/base.py::sembrar_seleccion`
+     siembra `session_state` para unas píldoras que viven adentro del
+     popover de `compartimento_filtros` (Compras siembra dos familias por
+     esa vía; Ajuste, `_comun.py`). Si el mecanismo es el mismo, esas
+     píldoras abren sin marcar aunque el filtro aplique, y el primer clic
+     borra la siembra.
+
+     **Dos detalles del mismo cambio:** una etiqueta de `st.pills` es
+     Markdown, y el ERP tiene un área llamada «---», que sola se dibuja como
+     una línea horizontal — la píldora salía vacía (`_rotulo_area` la
+     escribe «Sin nombre (---)»). Y el `help=` de un `st.toggle` suma un
+     ícono que partía «VER SIN STOCK» en dos renglones en una columna de
+     141px; se fue, y el `title` del título dice cuántos esconde.
+
+     (2026-09-18.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -38757,7 +38840,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#467**.
+> próxima regla nueva es la **#468**.
 
 >
 

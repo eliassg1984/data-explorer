@@ -4262,15 +4262,34 @@ def _pruebas_listado_inventario():
           int(L.productos.loc["04", "areas"]), 2)
     check("el producto sin stock queda fuera y se cuenta",
           ("03" in L.productos.index, L.sin_stock), (False, 1))
-    check("«Incluir sin stock» lo trae, sin áreas que desplegar",
+    check("«Ver sin stock» lo trae, sin áreas que desplegar",
           int(armar_listado(d, **cols, incluir_sin_stock=True)
               .productos.loc["03", "areas"]), 0)
 
-    check("familia", armar_listado(d, **cols, familia="BEBIDAS CON ALCOHOL")
+    check("familia", armar_listado(d, **cols, familias=["BEBIDAS CON ALCOHOL"])
           .productos.index.tolist(), ["02"])
-    check("subfamilia", armar_listado(d, **cols, familia="ALIMENTOS",
-                                      subfamilia="ABARROTES")
+    check("varias familias a la vez", sorted(
+        armar_listado(d, **cols, familias=["BEBIDAS CON ALCOHOL", "ALIMENTOS"])
+        .productos.index), ["01", "02", "04"])
+    check("subfamilia", armar_listado(d, **cols, familias=["ALIMENTOS"],
+                                      subfamilias=["ABARROTES"])
           .productos.index.tolist(), ["04"])
+
+    # El área no es como familia y subfamilia: es de la FILA, así que además
+    # de decidir qué productos entran cambia sus números y lo que despliegan.
+    La = armar_listado(d, **cols, areas=["COCINA"])
+    check("área: entran los que tienen stock ahí",
+          sorted(La.productos.index), ["01", "04"])
+    check("área: los totales son los de esa área, no los del producto",
+          (La.productos.loc["01", "cantidad"], La.productos.loc["04", "valorizado"]),
+          (2.0, 10.0))
+    check("área: se despliega sólo esa",
+          sorted(set(La.areas["area"])), ["COCINA"])
+    check("área: el que está en cero AHÍ cuenta como sin stock",
+          La.sin_stock, 1)
+    check("varias áreas suman entre ellas",
+          armar_listado(d, **cols, areas=["COCINA", "BARRA"])
+          .productos.loc["04", "cantidad"], 4.0)
     check("buscador sin tildes ni mayúsculas",
           armar_listado(d, **cols, texto="AZUCAR").productos.index.tolist(),
           ["04"])

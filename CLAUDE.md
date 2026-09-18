@@ -311,6 +311,15 @@ resto de `graficos/compras/`.
   deja de ser seleccionable. Ver `arquitectura.md` #421.
 - **Widget + display auxiliar del mismo valor:** UNA sola key compartida (sin
   `value=`, sin key dinámica). El clamp de bounds va justo antes del widget.
+- **Un widget adentro de un `st.popover` no se entera de lo que Python le
+  escribe con el panel cerrado.** El navegador no monta el contenido de un
+  popover cerrado, y Streamlit avisa el cambio (`set_value`) UNA vez: una
+  siembra por `session_state` filtraba la tabla y el panel abría con todo
+  sin marcar — el primer clic borraba la siembra. `AppTest` no lo ve. El
+  valor vive en una clave propia y viaja en `default=`, con una key de
+  widget que cambia sólo cuando Python reescribe:
+  `graficos/inventario_productos.py::_widget_multi`. Ver
+  `arquitectura.md` #467.
 - **Detección móvil server-side:** para texto que Plotly dibuja en servidor,
   User-Agent vía `st.context.headers`. El layout va por CSS `@media`.
 - **Un widget que deja de renderizarse pierde su estado.** Por eso el
