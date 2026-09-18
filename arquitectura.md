@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-459 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+463 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (162)
+**CSS y estilos** (163)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -196,6 +196,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
 - **#457** — Una key que es CROMO en ocho reportes y CONTROL en una tarjeta no puede compartir el CSS de…
 - **#459** — El jalón que sube la primera tarjeta de Compras nombra un wrap por su KEY, así que una vista…
+- **#460** — Una tira de totales puede colgarse del hover de las COLUMNAS de su tabla, y el truco está en…
 
 **Layout y alturas** (68)
 
@@ -268,7 +269,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 
-**Plotly y figuras** (79)
+**Plotly y figuras** (80)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -349,8 +350,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#452** — st.plotly_chart(on_select=) no ve un Sankey — y no es que el evento no exista
 - **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
 - **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
+- **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
 
-**AgGrid y tablas** (73)
+**AgGrid y tablas** (75)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -425,8 +427,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 - **#450** — Un AgGrid sin custom_css= no es "el tema por defecto": es el ÚNICO que no se parece a los…
 - **#455** — Un JS que busca «el primer AgGrid de la página» toca la tabla equivocada en cuanto la página…
+- **#460** — Una tira de totales puede colgarse del hover de las COLUMNAS de su tabla, y el truco está en…
+- **#462** — Una tabla con dos altos de fila se lee como dos tablas pegadas: la segunda línea se abre AL…
 
-**Streamlit** (123)
+**Streamlit** (124)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -551,6 +555,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#452** — st.plotly_chart(on_select=) no ve un Sankey — y no es que el evento no exista
 - **#456** — Si un fragment y uno de sus ancestros caen en la misma cola, Streamlit 1.59 corre al hijo DOS…
 - **#458** — El espejo que salva el rango de la recolección de Streamlit no sobrevive a un rerun de…
+- **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
 
 **Datos, R2 y DuckDB** (55)
 
@@ -610,7 +615,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
 - **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
 
-**SUNAT y SIRE** (41)
+**SUNAT y SIRE** (42)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -653,6 +658,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
 - **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
 - **#458** — El espejo que salva el rango de la recolección de Streamlit no sobrevive a un rerun de…
+- **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 
 **Fechas, rangos y cortes** (11)
 
@@ -714,7 +720,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (81)
+**Decisiones de diseño y UX** (82)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -797,6 +803,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
 - **#456** — Si un fragment y uno de sus ancestros caen en la misma cola, Streamlit 1.59 corre al hijo DOS…
 - **#459** — El jalón que sube la primera tarjeta de Compras nombra un wrap por su KEY, así que una vista…
+- **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -38269,6 +38276,211 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
+460. **Una tira de totales puede colgarse del hover de las COLUMNAS de su
+     tabla, y el truco está en que la pila mida siempre lo mismo.**
+     2026-09-18, a pedido: «que los datos del recuadro rojo sólo aparezcan
+     al pasar el cursor sobre sus columnas». La tira de KPIs de Documentos
+     SUNAT tenía siete cifras a la vista compitiendo con la tabla; ahora
+     cada grupo resume UNA columna y se enciende el de la columna que tiene
+     el cursor encima.
+
+     **El reparto columna → grupo es un dict de Python**
+     (`_COL_A_GRUPO_KPI`), y el `col-id` del DOM de AG Grid es el nombre del
+     campo tal cual, así que el mapa se escribe con los mismos nombres que
+     el `GridOptionsBuilder`. Seis grupos: Documento→docs,
+     Proveedor→proveedores, Base, IGV, Total y «Está vs Sistema»→los cuatro
+     estados. «Fecha» y «D» no tienen grupo a propósito: una columna sin
+     grupo deja la tira en reposo, que es mejor que encender un grupo que no
+     la resume.
+
+     **La pila es un `grid` de UNA celda, no `position: absolute`.** Los
+     seis grupos van en `grid-area: 1 / 1`, y los cinco inactivos en
+     `visibility: hidden` —no `display: none`—, así que SIGUEN MIDIENDO: el
+     hueco mide lo que el grupo más alto y la cabecera no salta al pasar de
+     una columna a otra. Con `absolute` el contenedor mediría 0 y habría que
+     adivinar un alto fijo; adivinarlo mal recorta el grupo más largo justo
+     cuando se lo quiere leer. Medido: el grupo de los cuatro estados mide
+     365x64 (tres renglones) y los otros cinco entre 60 y 117 de ancho por
+     20 de alto, así que el hueco queda en 64 — contra los 91-126 que medía
+     la tira entera antes.
+
+     **UN FLEX POR GRUPO, o el texto no tiene dónde cortar.** Cada cifra es
+     un `<span>` con `white-space: nowrap` y el `·` que las separa es otro
+     span, SIN un espacio en medio — como texto inline no hay ni una
+     oportunidad de salto. Medido en el primer intento: el grupo de los
+     estados salía de 670px en una sola línea dentro de una celda de 368 y
+     se iba por el costado de la tarjeta. Con `display: flex` +
+     `flex-wrap`, cada cifra es un ítem y el salto ocurre entre ítems.
+
+     **El CSS NO SABE cómo se llaman los grupos**, y eso fue una corrección
+     sobre la marcha: la primera versión tenía una regla
+     `[data-activo="X"] [data-grupo="X"]` por grupo, o sea los seis nombres
+     escritos también en `estilos/`. Dos listas que se desincronizan el día
+     que alguien agregue una columna. Ahora el JS mueve una clase
+     (`kpi-activo`) y el CSS tiene UNA regla; los nombres viven sólo en
+     Python. Mismo criterio que el `clonar_prefijo` de `_css_proveedor`: si
+     el CSS puede no saber algo, mejor que no lo sepa.
+
+     **El enganche va en el documento DEL IFRAME, delegado, y la salida la
+     avisa el PADRE.** AG Grid virtualiza filas, así que engancharse a cada
+     celda deja sin listener a todo lo que se dibuje al scrollear: un solo
+     `mouseover` en el documento del iframe más `closest('[col-id]')` cubre
+     celdas Y cabecera y sobrevive al reciclado de nodos. Para la salida,
+     `mouseleave` no burbujea y dentro del iframe llega mal; el iframe
+     ENTERO, visto desde el padre, sí emite uno limpio. Es la misma trampa
+     que la #370 documenta para `plotly_unhover`: unas cifras congeladas en
+     una columna que ya no está debajo del cursor son peores que no tener la
+     función, porque no se nota.
+
+     **El grupo de reposo lo dibuja Python con la clase ya puesta.** No es
+     redundante con el JS: si la inyección no engancha —iframe que tarda,
+     Cloud lento, un rerun que la deja a medias— la tira degrada a «siempre
+     muestra docs» en vez de quedarse en blanco. Y el sello de origen
+     («hoy», «faltan los últimos días») va FUERA de la pila y siempre
+     visible: no es un total de columna, es la única señal de que lo que hay
+     en pantalla puede estar incompleto (#197), y eso no se esconde detrás
+     de un gesto que hay que descubrir.
+
+     **Lo que se cedió, y se dice acá porque fue una decisión y no un
+     olvido:** el reposo NO está vacío, muestra el grupo «docs». Vacío sería
+     más fiel al pedido, pero un hueco que no muestra nada no tiene cómo
+     anunciar que ahí hay algo — nadie adivina que hay que pasar el cursor
+     por una columna. «docs» es el más corto y el único que no está ya
+     escrito en alguna celda.
+
+     `inyecciones/hover_kpis.py::inject_hover_kpis_grid`. Verificado en el
+     navegador con puntero real: IGV → «S/ 456,749.34 IGV», «Está vs
+     Sistema» → los cuatro estados, Fecha y D → reposo, y salir del grid →
+     reposo.
+
+     (2026-09-18.)
+
+461. **Un filtro cuyo censo es la tira de KPIs de al lado no puede
+     recortarla: la dejaría repitiendo la elección y sin denominador.** El
+     filtro de «Está vs Sistema» (2026-09-18, a pedido) es la CUARTA cosa
+     que recorta la tabla de Documentos SUNAT, y la única de las cuatro que
+     no toca esa tira.
+
+     La regla vigente de esa tarjeta era categórica: «un KPI que cuenta 65
+     documentos sobre una tabla que muestra 3 es la app contradiciéndose
+     sola», y los otros tres filtros (fecha, «Mes en SUNAT», proveedor)
+     recortan todo. Pero esa tira ES el censo de los estados —«2.747
+     coinciden · 217 con diferencia · 1.371 solo en SUNAT · 311 solo en el
+     sistema»— o sea la lista de la que este filtro elige un renglón.
+     Recortándola con él, elegir «Diferencia» dejaba «217 docs · 217 con
+     diferencia» y los otros tres conteos en cero: el censo desaparecía
+     justo cuando sirve para decidir el filtro siguiente.
+
+     **Lo que lo hace legible sin contradecirse es UN token:** el grupo
+     «docs» pasa a decir «217 de 4.646 docs» mientras el filtro está
+     puesto. La tira sigue describiendo el rango, la tabla su subconjunto, y
+     el número que los une está escrito. Verificado en el navegador: con
+     «Diferencia (217)» elegido, la tabla muestra sólo esas filas, el grupo
+     «estado» conserva el censo completo y «docs» dice «217 de 4,646».
+
+     **Dos cosas más del filtro que no son de gusto:**
+
+       · **La etiqueta lleva el conteo** («Diferencia (217)»), al contrario
+         que la de proveedor — donde se midió que el ellipsis se comía justo
+         el número, ver el docstring de `_opciones_proveedor`. Acá el texto
+         más largo entra en los ~200px de la
+         columna, y hace falta que entre: desde que la tira sólo se ve al
+         pasar el cursor, el desplegable es el único sitio donde el censo
+         está a la vista sin buscarlo. Como la etiqueta cambia con el rango,
+         el estado va en un ESPEJO del VALOR y no de la etiqueta, igual que
+         el de proveedor.
+       · **Los cuatro estados se declaran en Python, no se derivan del df.**
+         Derivándolos, un estado sin filas ese día desaparecería del
+         desplegable: el control cambiaría de forma según el dato y el
+         usuario no podría enterarse de que ese estado existe y hoy está en
+         cero. Con la lista fija, el «(0)» lo dice.
+
+     **Y el orden de los tres recortes importa:** el de estado va ÚLTIMO,
+     porque sus conteos tienen que salir del cruce ya recortado por período
+     y proveedor — un «Diferencia (14)» del rango entero al lado de una
+     tabla de un solo proveedor es un número que no se puede verificar en
+     pantalla. Los gráficos de abajo se recortan por los `car` que
+     sobreviven y no por el estado (`vis` es el lado SIRE y no tiene esa
+     columna); con «Solo sistema» quedan vacíos a propósito — son justo los
+     comprobantes que SUNAT no tiene.
+
+     (2026-09-18.)
+
+462. **Una tabla con dos altos de fila se lee como dos tablas pegadas: la
+     segunda línea se abre AL CLIC y se mide con `resetRowHeights`.**
+     Documentos SUNAT ponía una segunda línea en la celda de importe cuando
+     el sistema decía otro número, así que 1 de cada 10 filas medía 38px y
+     el resto 24. A pedido (2026-09-18) esa línea pasa a aparecer sólo en la
+     fila ELEGIDA.
+
+     **No se pierde la señal**: la columna «Está vs Sistema» sigue diciendo
+     «Diferencia» en ámbar en todas, así que la fila sigue marcada — lo que
+     cuesta un clic es ver el NÚMERO del otro lado.
+
+     **Tres piezas, y las tres hacen falta:**
+
+       · `getRowHeight` mira `p.node.isSelected()` además de `_dos`.
+       · el `cellRenderer` sólo agrega el segundo `<div>` si la fila está
+         elegida.
+       · un handler que, tras el clic, llame a `api.resetRowHeights()` (AG
+         Grid no vuelve a preguntar el alto por su cuenta) y a
+         `api.refreshCells({force: true, columns: [...]})` (tampoco re-corre
+         los renderers al cambiar la selección).
+
+     **El handler va en `onRowClicked`, NO en `onSelectionChanged`.**
+     `selectionChanged` es uno de los cuatro eventos del `update_on` por
+     defecto de `st_aggrid` —`["cellValueChanged", "selectionChanged",
+     "filterChanged", "sortChanged"]`, leído en su fuente—, y de ese rerun
+     cuelgan las tres tarjetas de abajo de esta vista: pisárselo es
+     romperlas. `onRowClicked` en `gridOptions` sí es libre (lo usa igual el
+     ranking de `proveedor.py`).
+
+     **Y va DIFERIDO con `setTimeout(..., 0)`.** AG Grid despacha
+     `rowClicked` dentro del mismo manejador que resuelve la selección, así
+     que `isSelected()` leído en el acto puede ser el de ANTES del clic y la
+     fila se abriría un clic tarde. Diferido, corre con la selección ya
+     asentada.
+
+     Verificado en el navegador: al clickear una fila «Diferencia» pasa de
+     24 a 38 y sus celdas Base e IGV muestran «sist. …»; al clickear otra,
+     la anterior vuelve a 24 y queda UNA sola fila alta y UNA sola con
+     segunda línea. La celda Total de esa fila sigue en una línea porque su
+     total SÍ coincide — la diferencia estaba en el reparto base/IGV, que es
+     exactamente lo que la función tiene que mostrar.
+
+     (2026-09-18.)
+
+463. **`"a" + b + "c".replace(x, y)` reemplaza sólo en `"c"`: una inyección
+     con el marcador sin sustituir compila perfecto y no hace NADA.** Salió
+     el 2026-09-18 escribiendo `inject_hover_kpis_grid`, que arma su script
+     en tres tramos —cabecera, el fragmento compartido `js_buscar_iframe()`,
+     cuerpo— y cerraba con `.replace("__DATOS__", datos)`. Por precedencia
+     de Python el `.replace` se aplica al ÚLTIMO literal, y `__DATOS__` vive
+     en el PRIMERO.
+
+     **Por qué no se ve:** el `srcdoc` sale con `var D = __DATOS__;` tal
+     cual. Eso es JavaScript VÁLIDO —un identificador sin declarar—, así que
+     no hay error de sintaxis; revienta con un `ReferenceError` en tiempo de
+     ejecución DENTRO del iframe de la inyección, que es un iframe de alto 0
+     cuya consola nadie mira. Sin traza en Python, sin nada en los logs del
+     server, sin marca en pantalla: la función simplemente no existía. Se
+     encontró leyendo el `srcdoc` desde la consola del padre y viendo que
+     `window.__hoverKpisGridTimer` seguía `undefined`.
+
+     **El arreglo son dos paréntesis** —`inyectar_html(("""…""" + frag +
+     """…""").replace(...))`— y la comprobación que lo fija es de tres
+     líneas: generar el HTML con un `streamlit` de mentira y afirmar que
+     `"__DATOS__" not in html`.
+
+     **Las otras once inyecciones del paquete no tienen el bug**, y por
+     casualidad: o arman el script en UN literal (`inject_hover_kpis`), o
+     interpolan sus datos con f-string / concatenación en vez de un
+     marcador. El riesgo vuelve con la próxima que mezcle un fragmento
+     compartido con un placeholder — de ahí esta regla y el comentario en el
+     sitio.
+
+     (2026-09-18.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -38281,7 +38493,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#460**.
+> próxima regla nueva es la **#464**.
 
 >
 

@@ -95,6 +95,7 @@ from graficos.compras._comun import (
     GAP_DRILL,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
+from inyecciones import inject_hover_kpis_grid
 # REEXPORT, no import muerto: `_llave_documento_parquet` vivia definida aca
 # y se movio a `_comun.py` el 2026-09-08, cuando el drill Semanal la pidio
 # para mostrar el N de documento en su tabla (ver el comentario largo que la
@@ -141,6 +142,24 @@ chica real por encima del umbral es S/0,06 — remedido con `total_pq` y
 `COL_TOTAL_PARQUET` / `COL_BASE_PARQUET`), no de la suma por línea. 5
 centavos sigue alcanzando para cubrir ruido de redondeo sin tapar
 diferencias de negocio reales."""
+
+
+_KEY_GRID_DOCS = "sunat_docs_grid"
+"""La `key=` del AgGrid de documentos. Constante y no literal porque la usan
+DOS: el propio grid y la inyección que le escucha el hover para encender los
+KPIs de cada columna — que lo busca por esa key y no por «el primer AgGrid
+de la página», que en esta página es otro (regla #455)."""
+
+
+_FILAS_DOCS = 10
+"""Filas que RESERVA la tabla de documentos. Un techo, no un alto: lo que
+sobra scrollea adentro (y sobra casi siempre — 244 comprobantes en un mes
+corriente, 4.618 en doce meses).
+
+10 a pedido (2026-09-18, «mostremos menos filas en el cuadro, solo 10»).
+Venía de `alturas.APOYO` como techo, que a 24px por fila daba 14. Mismo
+patrón —y mismo nombre— que `_FILAS_PROD` y `_FILAS_RANK` del resto de
+Compras: el alto de una tabla-ranking se declara en FILAS, no en px."""
 
 
 _ALTO_FILA_DOS = ALTO_FILA_RANK + 14
@@ -645,7 +664,104 @@ def _filtro_proveedor(slot, df_cruce, claves):
     return mapa.get(sel)
 
 
-def _kpis_cruce(df, origen=None):
+_TODOS_ESTADOS = "Todos los estados"
+
+_ESTADOS_CRUCE = ("Coincide", "Diferencia", "Solo SUNAT", "Solo sistema")
+"""Los cuatro valores de la columna `estado` que produce
+`cruzar_con_parquet`, EN ORDEN DE LECTURA y no alfabético: primero lo que
+está bien, después lo que hay que revisar de menos a más grave. Es el mismo
+orden en que los enumera la tira de KPIs.
+
+Se declaran acá y no se derivan del df a propósito: la lista de opciones del
+filtro tiene que ser la MISMA en todos los rangos. Derivándola, un estado
+sin filas ese día desaparecería del desplegable y el control cambiaría de
+forma según el dato — y encima el usuario no podría enterarse de que ese
+estado existe y hoy está en cero. Con la lista fija, el «(0)» lo dice."""
+
+
+def _filtro_estado(slot, df_cruce):
+    """El filtro de «Está vs Sistema». Devuelve el estado elegido, o `None`
+    (= todos).
+
+    MISMO MOLDE que `_filtro_proveedor` —hueco reservado arriba, relleno acá
+    abajo con un espejo del VALOR y no de la etiqueta—, y por las mismas dos
+    razones: se dibuja dentro de `_cuerpo`, que tiene salidas tempranas (un
+    widget que deja de renderizarse pierde su estado, regla #211), y la
+    etiqueta cambia sola porque LLEVA EL CONTEO.
+
+    **La etiqueta sí lleva el conteo**, al contrario que la de proveedor (ver
+    su docstring: ahí el ellipsis se comía justo el número). Acá el texto más
+    largo es «Solo sistema (108)» y la columna mide ~200px, así que entra — y
+    hace falta que entre: desde que la tira de KPIs sólo se ve al pasar el
+    cursor por su columna, el desplegable es el único sitio donde el censo de
+    los cuatro estados está a la vista sin buscarlo.
+
+    Filtra la TABLA, el Excel y los gráficos de abajo, pero **NO la tira de
+    KPIs**, que es la única excepción de las cuatro de esta tarjeta. Es a
+    propósito y no contradice a la regla de «un KPI que cuenta 65 sobre una
+    tabla que muestra 3»: esa tira ES el censo del que este filtro elige un
+    renglón, así que recortarla con él la dejaría repitiendo la elección
+    («14 docs · 14 con diferencia») y sin el denominador. Lo que evita
+    cualquier duda es que el grupo «docs» pasa a decir «14 de 244 docs»
+    mientras el filtro está puesto. Ver `arquitectura.md` regla #461.
+    """
+    conteos = (df_cruce["estado"].value_counts()
+               if df_cruce is not None and not df_cruce.empty
+               else pd.Series(dtype="int64"))
+    et_todos = f"{_TODOS_ESTADOS} ({len(df_cruce):,})"
+    etiquetas, mapa = [et_todos], {et_todos: None}
+    for _e in _ESTADOS_CRUCE:
+        _et = f"{_e} ({int(conteos.get(_e, 0)):,})"
+        etiquetas.append(_et)
+        mapa[_et] = _e
+    inverso = {v: k for k, v in mapa.items()}
+    k_w, k_eco = "sunat_estado", "sunat_estado__eco"
+    if st.session_state.get(k_w) not in etiquetas:
+        st.session_state[k_w] = inverso.get(st.session_state.get(k_eco),
+                                            et_todos)
+    with slot:
+        sel = st.selectbox(
+            "Está vs Sistema", etiquetas, key=k_w,
+            label_visibility="collapsed",
+            help="Filtra la tabla, el Excel y los gráficos de abajo por el "
+                 "estado del cruce. «Coincide» es lo normal; los otros tres "
+                 "son lo que hay que revisar — un comprobante que SUNAT ve y "
+                 "el sistema no, uno cargado sin comprobante detrás, o los "
+                 "dos con importes distintos. El número entre paréntesis es "
+                 "cuántos hay en el rango y el proveedor elegidos.",
+        )
+    st.session_state[k_eco] = mapa.get(sel)
+    return mapa.get(sel)
+
+
+# Qué columna de la tabla resume cada grupo de la tira de KPIs. Lo consume
+# `inyecciones.hover_kpis.inject_hover_kpis_grid`, que traduce el `col-id`
+# del DOM de AG Grid —que es el nombre del campo, tal cual— al grupo que hay
+# que encender.
+#
+# «Fecha» y «D» no están y no es un olvido: el rango ya lo dice el pill de
+# arriba, y la detracción no tiene cifra en la tira. Una columna sin grupo
+# deja la tira en su estado de reposo, que es lo correcto — mejor no decir
+# nada que encender un grupo que no la resume.
+_COL_A_GRUPO_KPI = {
+    "Documento": "docs",
+    "Proveedor": "provs",
+    "Base": "base",
+    "IGV": "igv",
+    "Total": "total",
+    _COL_ESTADO: "estado",
+}
+
+_GRUPO_KPI_REPOSO = "docs"
+"""Qué grupo se ve sin cursor encima. Vacío sería más fiel al pedido («que
+sólo aparezcan al pasar el cursor»), pero un hueco que no muestra NADA no
+tiene cómo anunciar que ahí hay algo: nadie adivina que hay que pasar el
+cursor por una columna. «docs» es el más corto y el menos redundante de los
+seis —el único que no está ya escrito en alguna celda— así que es el que
+paga menos por quedarse."""
+
+
+def _kpis_cruce(df, origen=None, n_tabla=None, n_provs=None):
     """Resumen de UNA línea del cruce: cuántos documentos coinciden,
     difieren, o faltan de un lado u otro. Mismo criterio compacto que
     `_kpis` — ver su docstring sobre por qué no son `st.metric`.
@@ -655,9 +771,29 @@ def _kpis_cruce(df, origen=None):
     sello de dónde salió el dato (parquet o API) que antes mostraba
     `_kpis`. Sin eso, el usuario perdía la única señal de que está viendo
     una copia y no lo que SUNAT dice ahora mismo.
+
+    LOS SEIS GRUPOS SE APILAN Y SE VE UNO, el de la columna que tenga el
+    cursor encima (2026-09-18, a pedido: «que los datos del recuadro rojo
+    sólo aparezcan al pasar el cursor sobre sus columnas»). Acá sólo se
+    marca cada grupo con su `data-grupo`; quién los prende es
+    `inyecciones.hover_kpis.inject_hover_kpis_grid` —pone `data-activo` en
+    el contenedor desde el hover de AG Grid— y el CSS que los esconde vive
+    en `estilos/_30_filtros.py`. Apilados con un `grid` de una sola celda y
+    no con `position: absolute`: así el hueco mide lo que el grupo MÁS ALTO
+    y la cabecera no salta al cambiar de columna. Ver regla #460.
+
+    **El sello de origen queda FUERA de la pila y siempre a la vista.** No
+    es un total de columna: es la única señal de que lo que se está mirando
+    puede estar incompleto (regla #197), y eso no se esconde detrás de un
+    gesto que hay que descubrir.
+
+    `n_tabla` es cuántas filas muestra la tabla cuando el filtro de estado
+    está puesto. La tira se calcula SIN ese filtro a propósito —ver
+    `_filtro_estado`— y este número es lo que evita que se lea como una
+    contradicción: el grupo «docs» dice «14 de 244».
     """
     if df is None or df.empty:
-        st.markdown('<div style="min-height:38px;"></div>',
+        st.markdown('<div class="sunat-kpis-fila"></div>',
                     unsafe_allow_html=True)
         return
     conteos = df["estado"].value_counts()
@@ -668,6 +804,18 @@ def _kpis_cruce(df, origen=None):
                 f'<b style="color:{c};font-weight:600;">{valor}</b>'
                 f'<span style="color:{GRIS_TEXTO};"> {etiqueta}</span></span>')
 
+    def grupo(nombre, *partes_grupo):
+        # El grupo de reposo nace con la clase puesta, y eso no es
+        # redundante con el JS: si la inyección no engancha —iframe que
+        # tarda, Cloud lento, un rerun que la deja a medias— la tira
+        # degrada a «siempre muestra docs» en vez de quedarse en blanco.
+        # La clase la mueve `inject_hover_kpis_grid`; el CSS no sabe los
+        # nombres de los grupos (viven sólo acá).
+        act = " kpi-activo" if nombre == _GRUPO_KPI_REPOSO else ""
+        return (f'<span class="sunat-kpi-grupo{act}" data-grupo="{nombre}">'
+                + f'<span style="color:{GRIS_BORDE};">·</span>'.join(partes_grupo)
+                + '</span>')
+
     # El VOLUMEN del rango va primero -- lo mostraba `_kpis`, que murió al
     # fundirse las dos tablas (2026-08-28) y se llevaba puestos el total y
     # el IGV del período. Se suma el lado SUNAT, que es el original; las
@@ -675,10 +823,33 @@ def _kpis_cruce(df, origen=None):
     # lo correcto: no son comprobantes del SIRE.
     _tot = float(pd.to_numeric(df.get("total_sunat"), errors="coerce").sum())
     _igv = float(pd.to_numeric(df.get("igv_sunat"), errors="coerce").sum())
+    # La BASE no estaba hasta el 2026-09-18 y entra con el hover: la tabla
+    # tiene una columna «Base» y una columna que al pasar el cursor no dice
+    # nada se lee como que la función está rota, no como que ese dato no
+    # existe. Mismo lado que las otras dos sumas (el del SIRE).
+    _base = float(pd.to_numeric(df.get("base_sunat"), errors="coerce").sum())
+    # Cuántos proveedores distintos, para la columna «Proveedor». Por RUC y
+    # no por razón social, mismo criterio que `_ranking_proveedores`: basta
+    # una tilde distinta entre períodos para partir un proveedor en dos.
+    #
+    # LO PASA EL LLAMADOR porque `_claves_proveedor_cruce` recorre el df con
+    # `iterrows()` y el filtro de proveedor ya lo llamó en este mismo
+    # render: recalcularlo acá son ~4.600 filas de bucle Python de más por
+    # rerun. El fallback existe para que la función siga siendo llamable
+    # sola (los tests), no para usarse.
+    _provs = int(n_provs if n_provs is not None
+                 else _claves_proveedor_cruce(df).nunique())
+    _docs = (f"{n_tabla:,} de {len(df):,}" if n_tabla is not None
+             and n_tabla != len(df) else f"{len(df):,}")
+    grupos = [
+        grupo("docs", dato(_docs, "docs")),
+        grupo("provs", dato(f"{_provs:,}",
+                            "proveedor" if _provs == 1 else "proveedores")),
+        grupo("base", dato(f"S/ {_base:,.2f}", "base")),
+        grupo("igv", dato(f"S/ {_igv:,.2f}", "IGV")),
+        grupo("total", dato(f"S/ {_tot:,.2f}", "total")),
+    ]
     partes = [
-        dato(f"{len(df):,}", "docs"),
-        dato(f"S/ {_tot:,.2f}", "total"),
-        dato(f"S/ {_igv:,.2f}", "IGV"),
         dato(f'{int(conteos.get("Coincide", 0)):,}', "coinciden"),
     ]
 
@@ -725,13 +896,19 @@ def _kpis_cruce(df, origen=None):
         partes.append(dato(f"{n_ssi:,}", f"solo en el sistema (S/ {mto:,.2f})",
                            ERROR))
 
-    if origen:
-        partes.append(_sello_origen(origen))
+    # Los cuatro estados son UN grupo, el de la columna «Está vs Sistema»:
+    # se leen juntos o no se leen (99 coinciden no significa nada sin saber
+    # sobre cuántos). Es además el grupo más ancho, así que es el que fija
+    # el alto del hueco.
+    grupos.append(grupo("estado", *partes))
 
     st.markdown(
-        '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;'
-        'justify-content:flex-end;font-size:12.5px;min-height:38px;">'
-        + f'<span style="color:{GRIS_BORDE};">·</span>'.join(partes)
+        '<div class="sunat-kpis-fila">'
+        f'<span class="sunat-kpis" data-activo="{_GRUPO_KPI_REPOSO}">'
+        + "".join(grupos)
+        + '</span>'
+        + (f'<span class="sunat-kpi-sello">{_sello_origen(origen)}</span>'
+           if origen else "")
         + '</div>',
         unsafe_allow_html=True,
     )
@@ -770,7 +947,14 @@ class ImporteCelda {
             texto = '\\u2248 ' + d[p.campoConv];
             color = '__GRIS__';
         }
-        if (texto) {
+        // SOLO EN LA FILA ELEGIDA (2026-09-18, a pedido). La segunda linea
+        // hacia que 1 de cada 10 filas midiera 38 y las otras 24, y una
+        // tabla con dos altos de fila se lee como dos tablas pegadas. Que
+        // la fila se ABRA al clickearla no pierde la senial: la columna
+        // «Esta vs Sistema» sigue diciendo «Diferencia» en ambar en todas.
+        // Quien vuelve a medir la fila y a repintar la celda es el
+        // `onRowClicked` de mas abajo. Ver arquitectura.md #462.
+        if (texto && p.node && p.node.isSelected()) {
             var b = document.createElement('div');
             b.textContent = texto;
             b.style.fontSize = '10.5px';
@@ -1069,23 +1253,45 @@ def _tabla_documentos(df_cruce, df_sire):
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(
         headerHeight=ALTO_HEADER_RANK,
-        # Sólo las filas con segunda línea miden `_ALTO_FILA_DOS`; las demás
-        # siguen en `ALTO_FILA_RANK`. Uniformar gastaría 14 px por fila en
-        # las 291 que no la tienen — en una tabla de 326, media pantalla.
+        # TODAS las filas miden `ALTO_FILA_RANK`; sólo la ELEGIDA, y sólo si
+        # tiene segunda línea, se abre a `_ALTO_FILA_DOS`. Hasta el
+        # 2026-09-18 se abrían todas las que tuvieran algo que decir, y con
+        # eso la tabla tenía dos altos de fila mezclados.
         getRowHeight=JsCode(
-            "function(p){ return (p.data && p.data._dos) ? %d : %d; }"
+            "function(p){ return (p.data && p.data._dos"
+            " && p.node && p.node.isSelected()) ? %d : %d; }"
             % (_ALTO_FILA_DOS, ALTO_FILA_RANK)),
+        # Lo que hace que el clic ABRA la fila. Va en `onRowClicked` y no en
+        # `onSelectionChanged` a propósito: ese último es uno de los cuatro
+        # eventos del `update_on` por defecto de st_aggrid, y pisárselo
+        # rompería el rerun del que cuelgan las tarjetas de abajo.
+        # `onRowClicked` en `gridOptions` sí es libre (lo usa igual el
+        # ranking de `proveedor.py`).
+        #
+        # El `setTimeout(0)` no es cosmético: AG Grid despacha `rowClicked`
+        # dentro del mismo manejador que resuelve la selección, así que
+        # `isSelected()` leído en el acto puede ser el de ANTES del clic —
+        # la fila se abriría un clic tarde. Diferido, corre con la
+        # selección ya asentada.
+        onRowClicked=JsCode(
+            "function(e){ var a=e.api; setTimeout(function(){ try {"
+            " a.resetRowHeights();"
+            " a.refreshCells({force:true,"
+            " columns:['Base','IGV','Total']});"
+            " } catch(x) {} }, 0); }"),
         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
     )
 
     resp = AgGrid(
         tv, gridOptions=gb.build(),
-        # El mismo alto ÚTIL que antes (`APOYO` es el techo y con ~4.600
-        # comprobantes siempre se llega a él), pero repartido en filas de 24
-        # y no de 30: entran 14 documentos donde se veían 11.
-        height=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
-                                 extra=CROMO_GRID_RANK, rol=alturas.APOYO,
-                                 minimo=0),
+        # DIEZ filas y lo que sobre scrollea adentro, a pedido (2026-09-18:
+        # «mostremos menos filas en el cuadro, solo 10»). Antes el techo era
+        # `alturas.APOYO`, o sea 380px ≈ 14 filas. Mismo patrón que
+        # `_FILAS_RANK`/`_FILAS_PROD` del resto de Compras: un techo, no un
+        # alto — con menos de 10 comprobantes la grilla se encoge.
+        height=alturas.por_filas(min(len(tv), _FILAS_DOCS),
+                                 px_fila=ALTO_FILA_RANK,
+                                 extra=CROMO_GRID_RANK, minimo=0),
         theme="streamlit",
         # El look del Ranking de proveedores, a pedido (2026-09-18): franja
         # en vez de caja, cabecera blanca, sin líneas verticales, cuerpo
@@ -1113,8 +1319,14 @@ def _tabla_documentos(df_cruce, df_sire):
                         "font-weight": "600 !important",
                     }},
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
-        key="sunat_docs_grid",
+        key=_KEY_GRID_DOCS,
     )
+    # El puente entre el hover de esta grilla y la tira de KPIs de la
+    # cabecera. Va DESPUÉS del AgGrid porque busca su iframe: antes no
+    # existe. Es un no-op si no lo encuentra — la tira se queda en su grupo
+    # de reposo, que es lo que Python ya dibujó.
+    inject_hover_kpis_grid(_KEY_GRID_DOCS, "sunat_card_izq",
+                           _COL_A_GRUPO_KPI, reposo=_GRUPO_KPI_REPOSO)
     sel = resp.selected_rows
     if sel is None or (hasattr(sel, "empty") and sel.empty) or len(sel) == 0:
         return None
@@ -3721,11 +3933,17 @@ def renderizar_documentos_sunat(d, col_fecha):
     porque `_parquet_agrupado_por_documento` y el propio registro están
     cacheados.
 
-    LOS TRES FILTROS (fecha, «Mes en SUNAT» y proveedor) SON DE LA TABLA:
-    recortan también los KPIs de al lado, el Excel que se baja y los dos
-    gráficos de rango del panel de abajo. Es a propósito — un KPI que
+    LOS CUATRO FILTROS (fecha, «Mes en SUNAT», proveedor y «Está vs
+    Sistema») SON DE LA TABLA: recortan también el Excel que se baja y los
+    dos gráficos de rango del panel de abajo. Es a propósito — un KPI que
     cuenta 65 documentos sobre una tabla que muestra 3 es la app
     contradiciéndose sola.
+
+    LA TIRA DE KPIs LA RECORTAN TRES DE LOS CUATRO. El de estado no, y es
+    la única excepción: esa tira ES el censo de los estados, así que
+    recortarla con él la dejaría repitiendo la elección y sin denominador.
+    Lo que lo hace legible es que el grupo «docs» dice «14 de 244» mientras
+    el filtro está puesto. Ver `_filtro_estado` y la regla #461.
 
     LOS CONTROLES VIVEN DENTRO DE LA TARJETA, no en una franja aparte
     arriba — mismo criterio que el selector "La semana empieza" del drill
@@ -3749,18 +3967,24 @@ def renderizar_documentos_sunat(d, col_fecha):
         # necesita ancho o el ellipsis se come el nombre entero (queda en
         # 195px; a menos de eso ya no se distingue un proveedor de otro).
         #
-        # LO PAGA LA TIRA DE KPIs, y está medido en el navegador (viewport
-        # 1358, tarjeta de 945): la tira mide 91px de alto mientras tenga
-        # 530px de ancho y salta a 126 por debajo de eso, así que pasarla
-        # de 562 a 415 le suma ~34px a la fila — media pantalla de tabla,
-        # no cero. Se aceptó igual porque las otras dos formas de meter el
-        # filtro cuestan MÁS: una tercera fila de controles son 38px fijos,
-        # y dejarle a la tira sus 530px obliga a partir los controles en
-        # dos `st.columns` apilados, que son 137. Y el costo sólo lo paga
-        # el caso SIN filtrar: elegido un proveedor desaparecen la mitad de
-        # los KPIs (los conteos van dentro de un `if`) y la fila baja a 72,
-        # o sea 19px MENOS que antes de este cambio.
-        c_sel, c_act, c_kpi = st.columns([2.6, 0.8, 3.0])
+        # LO PAGABA LA TIRA DE KPIs, con esta aritmética (medida en el
+        # navegador, viewport 1358, tarjeta de 945): la tira medía 91px de
+        # alto mientras tuviera 530px de ancho y saltaba a 126 por debajo de
+        # eso, así que cada píxel que se le quitaba se lo quitaba a la
+        # TABLA. **Ya no aplica desde el 2026-09-18**: los seis grupos se
+        # apilan en una celda de grid y el hueco mide siempre lo que el más
+        # alto, sea cual sea el ancho. Queda el apunte porque la cuenta
+        # vuelve a valer el día que la tira deje de ser una pila.
+        #
+        # 2026-09-18: 2.6/0.8/3.0 -> 3.4/0.8/2.2. Los dos cambios del día se
+        # pagan uno con el otro y hay que leerlos juntos: entra un TERCER
+        # filtro («Está vs Sistema»), que necesita ~200px, y la tira de KPIs
+        # pasa a mostrar UN grupo por vez (el de la columna con el cursor),
+        # así que ya no necesita los 530px que pedía para caber en dos
+        # líneas. Medido: con 2.2 le quedan ~400px y el grupo más ancho —los
+        # cuatro estados con sus montos— envuelve a dos renglones, que es
+        # justo el alto que la pila reserva.
+        c_sel, c_act, c_kpi = st.columns([3.4, 0.8, 2.2])
         with c_sel:
             # El pill de fecha, DENTRO de la tarjeta. Acá la fecha no es
             # contexto global: es EL filtro de la tabla — el rango que se
@@ -3774,11 +3998,18 @@ def renderizar_documentos_sunat(d, col_fecha):
             franja_fecha.render()
             # El selector «Ver» que había acá bajó al panel del gráfico
             # (`_panel_grafico`), que es lo único que controlaba.
-            # columnas-internas: los dos filtros de la tabla, uno al lado
+            # columnas-internas: los TRES filtros de la tabla, uno al lado
             # del otro. Van en la misma fila y no apilados para no sumarle
-            # 46px de alto a la tarjeta — que es alto que le sale a la
-            # TABLA, porque la tarjeta está clampeada a `--alto-util`.
-            c_mes, c_prov = st.columns([1, 1.3])
+            # 46px de alto a la tarjeta.
+            #
+            # El reparto está medido contra el peor caso de cada uno: el de
+            # proveedor no puede bajar de ~195px (a menos de eso el ellipsis
+            # se come el nombre y no se distingue un proveedor de otro, ver
+            # `_opciones_proveedor`), y el de estado necesita ~200 para que
+            # entre «Todos los estados (244)» sin cortarse — que es la
+            # etiqueta que lleva el censo. 1/1.5/1.2 sobre los ~620px de
+            # esta columna da 168/252/202.
+            c_mes, c_prov, c_est = st.columns([1, 1.5, 1.2])
             with c_mes:
                 mes_sunat = st.selectbox(
                     "Mes en SUNAT", list(_MES_SUNAT), key="sunat_mes_sunat",
@@ -3795,6 +4026,11 @@ def renderizar_documentos_sunat(d, col_fecha):
                 # reserva acá y lo rellena `_cuerpo`, que es quien tiene la
                 # lista de proveedores. Ver `_filtro_proveedor`.
                 _slot_prov = st.empty()
+            with c_est:
+                # Y el de estado igual, por el mismo motivo: sus etiquetas
+                # llevan el conteo de cada estado, y eso sale del cruce, que
+                # se calcula abajo. Ver `_filtro_estado`.
+                _slot_est = st.empty()
         with c_act:
             _c_ref, _c_xls = st.columns(2)  # columnas-internas: 2 iconos de accion
         with _c_ref:
@@ -3875,10 +4111,41 @@ def renderizar_documentos_sunat(d, col_fecha):
                 # gráfico del período completo al lado de una tabla de un
                 # solo proveedor, y la pantalla se contradiría sola.
                 vis = vis[_claves_proveedor_sire(vis) == _prov]
+
+            # EL FILTRO DE ESTADO VA ÚLTIMO, y el orden importa: sus
+            # etiquetas llevan el conteo de cada estado, así que tienen que
+            # contarse sobre el cruce ya recortado por período y proveedor
+            # — un «Diferencia (14)» del rango entero al lado de una tabla
+            # de un solo proveedor sería un número que no se puede
+            # verificar en pantalla.
+            #
+            # `df_cruce` se guarda ANTES de aplicarlo: es lo que resume la
+            # tira de KPIs, que es el censo del que este filtro elige (ver
+            # `_filtro_estado`). Es la única de las cuatro que no se recorta.
+            _cruce_censo = df_cruce
+            _est = _filtro_estado(_slot_est, df_cruce)
+            if _est:
+                df_cruce = df_cruce[df_cruce["estado"] == _est]
+                # `vis` se recorta por los `car` que sobreviven, no por el
+                # estado: `vis` es el lado SIRE y no tiene esa columna. Con
+                # «Solo sistema» queda vacío a propósito — son justo los
+                # comprobantes que SUNAT no tiene, y los gráficos de abajo
+                # lo dicen con su cartel de "sin datos" en vez de mentir.
+                #
+                # El guard de columna no es paranoia: `_tabla_documentos`
+                # lleva el mismo (`if "car" in df_sire.columns`) porque
+                # `cruzar_con_parquet` es pública y los tests la llaman con
+                # df armados a mano. Sin él, un df sin `car` cambia un
+                # gráfico incompleto por un KeyError que se lleva la vista.
+                if "car" in vis.columns and "car" in df_cruce.columns:
+                    vis = vis[vis["car"].astype(str).isin(
+                        set(df_cruce["car"].astype(str)))]
             estado["vis"], estado["cruce"] = vis, df_cruce
 
             with c_kpi:
-                _kpis_cruce(df_cruce, _origen)
+                _kpis_cruce(_cruce_censo, _origen, n_tabla=len(df_cruce),
+                            n_provs=_claves.loc[_cruce_censo.index]
+                            .nunique())
             doc = _tabla_documentos(df_cruce, vis)
 
             # Se rellena el hueco reservado ARRIBA. Se exporta el CRUCE,

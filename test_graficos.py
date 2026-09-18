@@ -192,6 +192,137 @@ def _pruebas_simulador_receta():
     return fallos
 
 
+
+def _pruebas_placeholder_de_inyeccion():
+    """`"a" + b + "c".replace(tok, val)` reemplaza SOLO en `"c"`.
+
+    Encontrado el 2026-09-18 escribiendo `inject_hover_kpis_grid`, que arma
+    su script en tres tramos —cabecera, el fragmento compartido
+    `js_buscar_iframe()`, cuerpo— y cerraba con
+    `.replace("__DATOS__", datos)`. Por precedencia de Python el `.replace`
+    se aplica al ÚLTIMO literal y el marcador vive en el PRIMERO, así que el
+    `srcdoc` salía con `var D = __DATOS__;` tal cual: JavaScript válido (un
+    identificador sin declarar), sin error de sintaxis, que revienta con un
+    `ReferenceError` dentro de un iframe de alto 0 cuya consola nadie mira.
+    Sin traza en Python y sin nada en los logs: la inyección simplemente no
+    existía. Regla #463.
+
+    DOS GUARDAS, una por cada mitad del fallo:
+
+      1. **La FORMA**, con `ast` sobre `inyecciones/`: un `inyectar_html(...)`
+         cuyo argumento es una CONCATENACIÓN cuyo último tramo es un
+         `.replace(tok, …)`, con `tok` apareciendo además en los tramos de la
+         izquierda. Ése es el bug exacto. La versión correcta
+         —`(a + b + c).replace(...)`— es un `Call` en la raíz y no matchea,
+         así que no hay falso positivo. Se exige el token en la izquierda a
+         propósito: `"a" + b.replace(...)` a secas puede ser intencional.
+      2. **El RESULTADO** de las dos inyecciones de `hover_kpis.py`, que son
+         las que usan el patrón: se generan con un `streamlit` de mentira y
+         no puede quedar ningún `__TOKEN__` en el HTML.
+    """
+    import ast
+    import json
+    import pathlib
+    import re
+    import sys
+    import types
+
+    fallos = 0
+    raiz = pathlib.Path(__file__).parent
+
+    # ── 1. La forma, en todo `inyecciones/` ────────────────────────────
+    sospechosos = []
+    for f in sorted((raiz / "inyecciones").glob("*.py")):
+        txt = f.read_text(encoding="utf-8")
+        arbol = ast.parse(txt)
+        for nodo in ast.walk(arbol):
+            if not (isinstance(nodo, ast.Call)
+                    and isinstance(nodo.func, ast.Name)
+                    and nodo.func.id == "inyectar_html"
+                    and nodo.args):
+                continue
+            arg = nodo.args[0]
+            # La forma buggy: la raíz es una SUMA y su tramo derecho es un
+            # `.replace(...)`. Con paréntesis la raíz sería el `Call`.
+            if not (isinstance(arg, ast.BinOp) and isinstance(arg.op, ast.Add)):
+                continue
+            der = arg.right
+            if not (isinstance(der, ast.Call)
+                    and isinstance(der.func, ast.Attribute)
+                    and der.func.attr == "replace" and der.args):
+                continue
+            tok = der.args[0]
+            if not (isinstance(tok, ast.Constant)
+                    and isinstance(tok.value, str)):
+                continue
+            izq = ast.get_source_segment(txt, arg.left) or ""
+            if tok.value in izq:
+                sospechosos.append(
+                    f"{f.relative_to(raiz)}:{nodo.lineno} — "
+                    f"'{tok.value}' aparece a la izquierda del `+` y el "
+                    f".replace() sólo alcanza al último tramo")
+    if sospechosos:
+        fallos += 1
+        print("FALLA inyecciones · un .replace() que no alcanza al marcador "
+              "(faltan paréntesis alrededor de la concatenación):")
+        for s_ in sospechosos:
+            print(f"      {s_}")
+    else:
+        print("OK    inyecciones · ningún .replace() suelto al final de una "
+              "concatenación")
+
+    # ── 2. El resultado de las dos de hover_kpis ───────────────────────
+    guardado = sys.modules.get("streamlit")
+    capt = []
+    falso = types.ModuleType("streamlit")
+    falso.iframe = lambda html, height=1: capt.append(html)
+    sys.modules["streamlit"] = falso
+    try:
+        for m in [k for k in list(sys.modules)
+                  if k.startswith("inyecciones")]:
+            del sys.modules[m]
+        from inyecciones.hover_kpis import (inject_hover_kpis,
+                                            inject_hover_kpis_grid)
+        inject_hover_kpis_grid("una_grilla", "una_tarjeta",
+                               {"Total": "total", "Está vs Sistema": "estado"})
+        inject_hover_kpis("una_tarjeta",
+                          [{"tit": "ene", "vals": ["1"]},
+                           {"tit": "feb", "vals": ["2"]}])
+    finally:
+        if guardado is not None:
+            sys.modules["streamlit"] = guardado
+        else:
+            del sys.modules["streamlit"]
+        for m in [k for k in list(sys.modules) if k.startswith("inyecciones")]:
+            del sys.modules[m]
+
+    if len(capt) != 2:
+        fallos += 1
+        print(f"FALLA hover_kpis · se esperaban 2 inyecciones, salieron "
+              f"{len(capt)}")
+    else:
+        crudos = [t for h in capt for t in re.findall(r"__[A-Z_]+__", h)]
+        if crudos:
+            fallos += 1
+            print("FALLA hover_kpis · quedó un marcador sin sustituir en el "
+                  f"srcdoc: {sorted(set(crudos))}")
+        elif not all('"total"' in h or "'total'" in h
+                     for h in capt[:1]):
+            fallos += 1
+            print("FALLA hover_kpis · el mapa de columnas no viajó al srcdoc")
+        else:
+            print("OK    hover_kpis · las dos inyecciones sustituyen su "
+                  "marcador")
+        # Y que el JSON del mapa sea legible del otro lado (acentos incluidos).
+        if capt and json.dumps("Está vs Sistema", ensure_ascii=False)[1:-1] \
+                not in capt[0]:
+            fallos += 1
+            print("FALLA hover_kpis · el nombre de columna con acento no "
+                  "sobrevivió al srcdoc")
+        else:
+            print("OK    hover_kpis · el col-id con acento viaja entero")
+    return fallos
+
 def _pruebas_recorrido_fuentes():
     """Que el recorrido de `_fuentes_py` siga VIENDO el repo.
 
@@ -4274,6 +4405,9 @@ def main():
 
     # ── El simulador de receta: que nadie vuelva a ordenar el borrador ─
     fallos += _pruebas_simulador_receta()
+
+    # ── El marcador de una inyección: que el .replace() lo alcance ─────
+    fallos += _pruebas_placeholder_de_inyeccion()
 
     # ── El barrido del fuente que usan las guardas de arriba ────────────
     fallos += _pruebas_recorrido_fuentes()

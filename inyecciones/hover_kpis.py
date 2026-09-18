@@ -1,4 +1,17 @@
-"""inyecciones.hover_kpis - la pila de KPIs sigue al cursor sobre un Plotly.
+"""inyecciones.hover_kpis - unas cifras de resumen siguen al cursor.
+
+DOS inyecciones, el mismo reparto de trabajo: los valores viajan con la
+página y el intercambio pasa entero en el navegador.
+
+  · `inject_hover_kpis`      — sobre un gráfico PLOTLY: las cifras resumen
+                               el punto que tiene el cursor encima.
+  · `inject_hover_kpis_grid` — sobre un AGGRID: cada grupo de cifras resume
+                               una COLUMNA, y se enciende el de la columna
+                               que tiene el cursor encima (2026-09-18, ver
+                               arquitectura.md #460).
+
+Lo que sigue describe la primera, que es la que estrenó el patrón; la
+segunda tiene su propio docstring y repite sólo lo que cambia.
 
 Un gráfico y, a su lado, cuatro cifras que resumen UN punto de ese gráfico.
 En reposo resumen el último; con el cursor encima de un punto, ese. El caso
@@ -41,6 +54,7 @@ Ver arquitectura.md regla #370.
 import hashlib
 import json
 
+from inyecciones._fragmentos import js_buscar_iframe
 from inyecciones._iframe import inyectar_html
 
 
@@ -148,3 +162,108 @@ def inject_hover_kpis(clave_tarjeta, valores,
           }, 300);
         })();
         </script>""".replace("__DATOS__", datos))
+
+
+def inject_hover_kpis_grid(clave_grid, clave_tarjeta, mapa,
+                           reposo="docs", sel_tira=".sunat-kpis"):
+    """Enciende el grupo de KPIs de la COLUMNA que tiene el cursor encima.
+
+    Hermana de `inject_hover_kpis`, con el mismo reparto de trabajo (los
+    valores viajan con la página, el intercambio pasa entero en el
+    navegador) y la misma razón para existir: AG Grid no reporta hover del
+    lado de Streamlit, y aunque lo hiciera, un rerun de esta app tarda 3-6s.
+
+    · `clave_grid` — la `key=` del AgGrid. Se busca su iframe POR LA KEY
+      (`js_buscar_iframe`, regla #455): esta página tiene siete grillas y
+      «la primera con `.ag-root-wrapper`» es otra.
+    · `clave_tarjeta` — la key del `st.container` donde vive la tira.
+    · `mapa` — `{col-id: grupo}`. El `col-id` del DOM de AG Grid es el
+      nombre del campo tal cual, así que el mapa se escribe con los mismos
+      nombres de columna que el `GridOptionsBuilder`.
+    · `reposo` — el grupo que queda encendido sin cursor encima.
+
+    TRES COSAS QUE HAY QUE SABER SI SE TOCA ESTO
+
+    **El listener va en el documento DEL IFRAME, delegado y en captura.**
+    AG Grid virtualiza filas: engancharse a cada celda dejaría sin listener
+    a todo lo que se dibuje al scrollear. Un solo `mouseover` en el
+    documento y `closest('[col-id]')` sobre el target cubre celdas Y
+    cabecera —las dos llevan `col-id`— y sobrevive a que AG Grid recicle
+    los nodos.
+
+    **La salida del grid la avisa el PADRE, no el iframe.** `mouseleave` no
+    burbujea y dentro del iframe llega de forma poco fiable; el iframe
+    ENTERO, visto desde el documento padre, sí emite un `mouseleave`
+    limpio cuando el cursor se va. Misma trampa que documenta
+    `inject_hover_kpis` para `plotly_unhover`: unos KPIs congelados en una
+    columna que ya no está debajo del cursor son peores que no tener la
+    función, porque no se nota.
+
+    **El enganche se REINTENTA con un temporizador y lleva sello.** El
+    iframe del componente se reemplaza en cada rerun, así que no alcanza
+    con engancharse una vez; y el sello evita re-enganchar el mismo
+    documento en cada tick.
+    """
+    if not mapa:
+        return
+    cuerpo = {"tarjeta": clave_tarjeta, "mapa": dict(mapa),
+              "reposo": reposo, "tira": sel_tira}
+    # Mismo criterio que `inject_hover_kpis`: `md5` y no `hash()`, que está
+    # aleatorizado por proceso y haría imposible depurar un re-enganche.
+    cuerpo["sello"] = hashlib.md5(
+        json.dumps(cuerpo, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:12]
+    datos = json.dumps(cuerpo, ensure_ascii=False)
+    # LOS PARÉNTESIS NO SON DE ADORNO: sin ellos `.replace` se aplica sólo
+    # al ÚLTIMO literal de la concatenación (precedencia de Python), y
+    # `__DATOS__` vive en el PRIMERO. El script salía con
+    # `var D = __DATOS__` tal cual: compila perfecto, revienta con un
+    # ReferenceError dentro del iframe y la función no hace nada — sin
+    # error en pantalla, sin nada en los logs del server. Se encontró
+    # leyendo el `srcdoc` del iframe en el navegador. Ver regla #463.
+    inyectar_html(("""<script>
+    (function () {
+      var w = window.parent, doc = w.document;
+      var D = __DATOS__;
+      """ + js_buscar_iframe(clave_grid) + """
+
+      function activar(g) {
+        var raiz = doc.querySelector(
+            '[class*="st-key-' + D.tarjeta + '"] ' + D.tira);
+        if (!raiz) return;
+        var quiere = g || D.reposo;
+        // `data-activo` no lo lee ningun CSS: queda en el DOM para que el
+        // inspector del proyecto diga en que estado esta la tira.
+        raiz.setAttribute('data-activo', quiere);
+        var gs = raiz.querySelectorAll('.sunat-kpi-grupo');
+        for (var i = 0; i < gs.length; i++) {
+          gs[i].classList.toggle(
+              'kpi-activo', gs[i].getAttribute('data-grupo') === quiere);
+        }
+      }
+
+      if (w.__hoverKpisGridTimer) clearInterval(w.__hoverKpisGridTimer);
+      w.__hoverKpisGridTimer = setInterval(function () {
+        var f = buscarIframe();
+        if (!f) return;
+        var idoc = null;
+        try { idoc = f.contentDocument; } catch (e) { return; }
+        if (!idoc || !idoc.body) return;
+        if (idoc.__hoverKpisGrid !== D.sello) {
+          idoc.__hoverKpisGrid = D.sello;
+          idoc.addEventListener('mouseover', function (ev) {
+            var t = ev.target;
+            var el = (t && t.closest) ? t.closest('[col-id]') : null;
+            var id = el ? el.getAttribute('col-id') : null;
+            // Una columna sin grupo (Fecha, D) deja la tira en reposo: es
+            // mejor no decir nada que encender un grupo que no la resume.
+            activar((id && D.mapa[id]) ? D.mapa[id] : null);
+          }, true);
+        }
+        if (!f.__hoverKpisGridSalida) {
+          f.__hoverKpisGridSalida = true;
+          f.addEventListener('mouseleave', function () { activar(null); });
+        }
+      }, 300);
+    })();
+    </script>""").replace("__DATOS__", datos))

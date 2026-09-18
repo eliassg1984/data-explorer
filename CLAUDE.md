@@ -672,7 +672,16 @@ tenía 1848px de ancho mínimo contra los ~1010 de una laptop:
   el valor o venía vacía en 291 de 326 filas. La diferencia va DENTRO de
   la celda, en una segunda línea que aparece sólo cuando difiere — con la
   MISMA tolerancia que decide el estado, o la app se contradice sola.
-  Regla #238.
+  Regla #238. **Y desde el 2026-09-18 aparece sólo en la fila ELEGIDA**:
+  con ella siempre puesta, 1 de cada 10 filas medía 38px y el resto 24, y
+  una tabla con dos altos de fila se lee como dos tablas pegadas. La señal
+  no se pierde —«Está vs Sistema» sigue diciendo «Diferencia» en ámbar en
+  todas— y lo que cuesta un clic es ver el número del otro lado. Ojo si lo
+  tocás: hacen falta las TRES piezas (el `getRowHeight`, el
+  `cellRenderer` y un `onRowClicked` diferido que llame a
+  `resetRowHeights` + `refreshCells`), y el handler NO puede ir en
+  `onSelectionChanged` — es uno de los eventos del `update_on` de
+  `st_aggrid` y de ese rerun cuelgan las tarjetas de abajo. Regla #462.
 - Una columna donde el **97,6%** de las filas repite la misma palabra
   («Factura») es un **chip para la excepción**, no una columna. Regla
   #239. Para ordenar o filtrar por algo que es chip, la columna sigue
