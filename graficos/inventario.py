@@ -6,19 +6,16 @@ v3 (2026-08-10) reemplaza las 4 vistas de v2 (Área y familia / Torta / Top
 valor / Top cantidad) por 3: **Por área**, **Por familia** (mismo ranking
 ordenado para las dos — desde 2026-08-23 una TABLA con barra de progreso en
 la celda, como el Ranking de proveedores de Compras; la torta se rompía
-apenas una familia concentraba >70% del total) y **Buscar producto**
-(nueva: ficha de un producto puntual, o de un grupo — Subfamilia — completo,
-con cantidad + valorizado + precio promedio + unidad de medida por área).
+apenas una familia concentraba >70% del total) y una tercera que fue
+"Buscar producto" hasta el 2026-09-17: una ficha de UN producto o de UN
+grupo, con una barra por producto. Hoy es **Productos**, el listado entero
+como tabla con las áreas de cada producto desplegables en su fila y filtros
+de familia, subfamilia y producto — vive en `inventario_productos.py`, ver
+la regla #466.
 El KPI "Valorizado total" vivía DENTRO de la card izquierda (no en una
 franja aparte arriba: se probó así y quedaba la card muy abajo). Se retiró
 de las cuatro secciones el 2026-09-13, a pedido: en las dos de ranking lo
-dice la fila TOTAL de la tabla, y en "Buscar producto" era el valorizado de
-todo el inventario en una ficha de UN producto. Ver regla #404.
-El panel lateral de la derecha (Mayor cantidad/Precio más alto)
-se mantiene igual en Por área/Por familia, pero en Buscar producto pasa a
-mostrar productos relacionados (misma subfamilia/familia) en vez de un top
-genérico — repetir el mismo top ahí era redundante con lo que ya se ve a la
-izquierda para el producto elegido.
+dice la fila TOTAL de la tabla. Ver regla #404.
 
 2026-09-13, a pedido: Por área y Por familia son TABLAS de punta a punta, y
 las tres son clickeables en cadena. Ranking (izquierda) → desglose del nivel
@@ -29,7 +26,6 @@ tabla, el usuario puede hacer scroll". Ver `arquitectura.md` regla #403.
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 
@@ -56,10 +52,11 @@ from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
-    _compras_layout, _compras_truncar, _render_rail,
+    _render_rail,
     _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos import alturas
+from graficos.inventario_productos import seccion_productos
 
 # Los títulos de las tarjetas de ranking, con los MISMOS cuatro valores que
 # `.cp-rank-tit` de `graficos/compras/_css_proveedor.py`: las dos se mueven
@@ -112,8 +109,7 @@ ABRE_EN_AREA = ("ALMACEN CENTRAL",)
 # y por lo tanto ya no parten la fila en el mismo sitio que la de tres. Es a
 # propósito: alinear los cortes obligaría a darle 772px al único cuadro de
 # desglose de "Por familia" —una tabla de tres columnas ocupando media
-# pantalla— y a dejar la ficha de "Buscar producto" más angosta que su panel
-# de apoyo. El bug del eje corrido que ataja `COLUMNAS_DRILL` en Compras es
+# pantalla—. El bug del eje corrido que ataja `COLUMNAS_DRILL` en Compras es
 # entre filas de UNA vista; acá son secciones distintas de la pila, cada una
 # con su título y 16px de gap.
 _COLUMNAS_NIVELES = {2: (1.7, 1), 3: (1.2, 1, 1)}
@@ -185,7 +181,7 @@ _FILAS_RANK = 8
 _INVENTARIO_RAIL_CATEGORIAS = (
     ("Vista", (("Por área",        "Por área"),
                ("Por familia",     "Por familia"),
-               ("Buscar producto", "Buscar producto"))),
+               ("Productos",       "Productos"))),
     ("Datos", (("Tabla", "Tabla"),)),
 )
 
@@ -196,30 +192,9 @@ _INVENTARIO_RAIL_CATEGORIAS = (
 _PILA = (
     ("inv_sec_area",    "Por área"),
     ("inv_sec_familia", "Por familia"),
-    ("inv_sec_buscar",  "Buscar producto"),
+    ("inv_sec_productos", "Productos"),
     ("inv_sec_tabla",   "Tabla"),
 )
-
-
-def _rango_con_holgura(*series, factor=0.28):
-    """Rango de eje X con holgura para que el texto `outside` de la barra
-    más larga no se corte contra el borde del gráfico — con `cliponaxis=
-    False` Plotly no recorta en el eje, pero SÍ recorta contra el margen
-    fijo de `_compras_layout` (r=10px) si la barra ya ocupa casi el 100%
-    del ancho. Bug real: "Por área" con `GASTOS` en S/ 161,816 (barra al
-    tope) mostraba la etiqueta cortada en "S/ 16…". `factor` más alto para
-    etiquetas largas (p.ej. "S/ x · y unidad" en la ficha de un producto).
-
-    Holgura SOLO del lado que se usa: con todo >= 0 (regla #80 — barras
-    convertidas a magnitud, negativo se lee por color no por dirección)
-    `lo` da 0 y no hace falta reservarle aire — eso dejaba una franja en
-    blanco entre las etiquetas del eje Y y el arranque de las barras."""
-    valores = [v for s in series for v in s]
-    if not valores:
-        return None
-    lo, hi = min(0, min(valores)), max(0, max(valores))
-    pad = max(abs(hi), abs(lo), 1) * factor
-    return [lo - pad if lo < 0 else 0, hi + pad]
 
 
 def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
@@ -525,226 +500,6 @@ def _tabla_detalle_foco(d, col_next, nombre_next, col_val, key, ruta=(),
         **(formato or _FORMATO_DETALLE[2]))
 
 
-def _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant,
-                     col_unidad):
-    """Cantidad + valorizado + precio promedio por área para UN producto —
-    siempre las tres cifras juntas, sin toggle (no hay "elegir métrica"
-    cuando ya elegiste el producto)."""
-    dd = d[d[col_prod].astype(str) == prod_sel]
-    _v = pd.to_numeric(dd[col_val], errors="coerce").fillna(0)
-    _c = pd.to_numeric(dd[col_cant], errors="coerce").fillna(0) if col_cant else None
-    unidad = (str(dd[col_unidad].dropna().iloc[0])
-              if col_unidad and dd[col_unidad].notna().any() else "u")
-
-    total_val = float(_v.sum())
-    total_cant = float(_c.sum()) if _c is not None else None
-    precio_prom = (total_val / total_cant) if total_cant else None
-
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Cantidad total",
-              f"{total_cant:,.0f} {unidad}" if total_cant is not None else "—")
-    k2.metric("Valorizado total", f"S/ {total_val:,.0f}")
-    k3.metric("Precio promedio",
-              f"S/ {precio_prom:,.2f}/{unidad}" if precio_prom else "—")
-    k4.metric("Áreas", f"{dd[col_area].nunique():,}")
-
-    g = (pd.DataFrame({"area": dd[col_area].astype(str), "val": _v,
-                       "cant": _c if _c is not None else 0})
-         .groupby("area", as_index=False).agg(val=("val", "sum"), cant=("cant", "sum")))
-    # Áreas sin nada de este producto (val=0 y cant=0: "inactivas" para él)
-    # no suman una barra — solo ruido, la mayoría de las áreas ni lo tienen.
-    g = g[(g["val"] != 0) | (g["cant"] != 0)].sort_values("val")
-    if g.empty:
-        st.info("Sin stock ni valorizado activo para este producto en ninguna área.")
-        return
-    _texto = [f"S/ {v:,.0f}  ·  {c:,.0f} {unidad}" for v, c in zip(g["val"], g["cant"])]
-    # Mismo criterio que _grafico_ranking: negativo va hacia la derecha
-    # como el resto (largo = magnitud), diferenciado por color en vez de
-    # descentrar el gráfico dibujando hacia la izquierda.
-    color = [AJUSTE_NEG if v < 0 else ACENTO for v in g["val"]]
-    fig = go.Figure(go.Bar(
-        x=g["val"].abs(), y=[_compras_truncar(a, 30) for a in g["area"]],
-        orientation="h", marker=dict(color=color, opacity=0.85),
-        text=_texto, textposition="outside", cliponaxis=False,
-        customdata=np.stack([g["val"], g["cant"]], axis=-1),
-        hovertemplate=("%{y}<br>Valorizado: S/ %{customdata[0]:,.2f}<br>Cantidad: "
-                       "%{customdata[1]:,.1f} " + unidad + "<extra></extra>"),
-    ))
-    _compras_layout(fig, alto=alturas.por_filas(
-        len(g), px_fila=40, minimo=320, extra=80, enmarcada=True))
-    fig.update_layout(title=f"{prod_sel} — cantidad y valorizado por área")
-    fig.update_xaxes(visible=False, range=_rango_con_holgura(g["val"].abs(), factor=0.35))
-    fig.update_yaxes(showgrid=False)  # eje Y = nombres de área, no valores
-    st.plotly_chart(fig, use_container_width=True, key="inv_g_producto")
-
-
-def _ficha_subfamilia(d, subfam_sel, col_subfam, col_prod, col_area,
-                       col_val, col_cant, col_unidad):
-    """Todos los productos de una subfamilia — un bar por producto (sumado
-    entre áreas; ya no desglosado por área — el color lo necesita el signo,
-    ver abajo). Cada barra muestra precio + unidad + % de participación.
-    Solo 2 KPIs (Valorizado total, Productos): Cantidad total/Precio
-    promedio se sacaron a pedido — mezclaban unidades entre productos
-    (kg, und, Lt) y el número agregado no representaba nada accionable.
-
-    Negativo va a la derecha, diferenciado por color — mismo criterio que
-    `_grafico_ranking`/`_ficha_producto` (regla #80). Antes esta ficha era
-    la única sin ese tratamiento porque el color codificaba ÁREA (barra
-    apilada); al pasar a un bar por producto, el color queda libre para
-    codificar signo como en el resto del dashboard."""
-    dd = d[d[col_subfam].astype(str) == subfam_sel]
-    _v = pd.to_numeric(dd[col_val], errors="coerce").fillna(0)
-    _c = pd.to_numeric(dd[col_cant], errors="coerce").fillna(0) if col_cant else None
-
-    total_val = float(_v.sum())
-    n_prod = dd[col_prod].nunique() if col_prod else 0
-
-    k1, k2 = st.columns(2)
-    k1.metric("Valorizado total", f"S/ {total_val:,.0f}")
-    k2.metric("Productos", f"{n_prod:,}")
-
-    if not col_prod or dd.empty:
-        st.info("Sin datos para este grupo.")
-        return
-    base = pd.DataFrame({
-        "prod": dd[col_prod].astype(str),
-        "val": _v,
-        "cant": _c if _c is not None else 0,
-        "unidad": dd[col_unidad].astype(str) if col_unidad else "",
-    })
-    g = base.groupby("prod").agg(
-        val=("val", "sum"), cant=("cant", "sum"),
-        unidad=("unidad", lambda s: next(iter(s.dropna()), "")),
-    )
-    # Productos sin stock ni valorizado ("inactivos" para esta subfamilia)
-    # no entran — regla #78.
-    g = g[(g["val"] != 0) | (g["cant"] != 0)]
-    if g.empty:
-        st.info("Ningún producto de este grupo tiene stock o valorizado activo.")
-        return
-
-    _precio = np.where(g["cant"] != 0, g["val"] / g["cant"], np.nan)
-    _pct = (g["val"] / total_val * 100) if total_val else pd.Series(0.0, index=g.index)
-    _texto = []
-    for _precio_v, _pct_v, _unidad_v in zip(_precio, _pct, g["unidad"]):
-        if pd.notna(_precio_v):
-            _precio_txt = (f"S/ {_precio_v:,.2f}/{_unidad_v}" if _unidad_v
-                           else f"S/ {_precio_v:,.2f}")
-        else:
-            _precio_txt = "—"
-        _texto.append(f"{_precio_txt} · {_pct_v:.1f}%")
-    g["_texto"] = _texto
-
-    # Ascendente: en un go.Bar (a diferencia del px.bar que usaba esta
-    # ficha antes) el primer elemento del array `y` pinta ABAJO — mayor a
-    # menor leyendo de arriba hacia abajo pide el más grande AL FINAL de
-    # la lista. Mismo criterio que _grafico_ranking/_ficha_producto.
-    g = g.sort_values("val", ascending=True)
-    color = [AJUSTE_NEG if v < 0 else ACENTO for v in g["val"]]
-
-    fig = go.Figure(go.Bar(
-        x=np.abs(g["val"]), y=[_compras_truncar(p, 30) for p in g.index],
-        orientation="h", marker=dict(color=color, opacity=0.85),
-        text=g["_texto"], textposition="outside", cliponaxis=False,
-        customdata=g["val"],
-        hovertemplate="%{y}<br>S/ %{customdata:,.2f}<extra></extra>",
-    ))
-    _compras_layout(fig, alto=alturas.por_filas(
-        len(g), px_fila=34, minimo=360, extra=60, enmarcada=True))
-    fig.update_layout(title=f"{subfam_sel} — valorizado por producto")
-    fig.update_xaxes(visible=False, range=_rango_con_holgura(np.abs(g["val"]), factor=0.5))
-    fig.update_yaxes(showgrid=False)  # eje Y = nombres de producto, no valores
-    st.plotly_chart(fig, use_container_width=True, key="inv_g_subfamilia")
-
-
-def _limpiar_subfam():
-    st.session_state["inv_buscar_subfamilia"] = None
-
-
-def _limpiar_producto():
-    st.session_state["inv_buscar_producto"] = None
-
-
-def _render_buscar_producto(d, col_prod, col_area, col_subfam, col_val,
-                            col_cant, col_unidad):
-    """Buscador de producto puntual O de un grupo (Subfamilia) completo —
-    mutuamente excluyentes: elegir uno limpia el otro (callback, antes del
-    rerun, mismo patrón que `_rail_set` en graficos/base.py)."""
-    if not col_prod or not col_area:
-        st.info("Faltan columnas de producto o área para este buscador.")
-        return
-
-    productos = sorted(d[col_prod].dropna().astype(str).unique().tolist())
-    c1, c2 = st.columns(2)
-    with c1:
-        st.selectbox("Producto", productos, index=None,
-                     placeholder="Buscar producto por nombre…",
-                     key="inv_buscar_producto", on_change=_limpiar_subfam)
-    if col_subfam:
-        subfams = sorted(d[col_subfam].dropna().astype(str).unique().tolist())
-        with c2:
-            st.selectbox("Grupo (Subfamilia)", subfams, index=None,
-                         placeholder="…o un grupo completo",
-                         key="inv_buscar_subfamilia", on_change=_limpiar_producto)
-
-    prod_sel = st.session_state.get("inv_buscar_producto")
-    subfam_sel = st.session_state.get("inv_buscar_subfamilia") if col_subfam else None
-
-    if not prod_sel and not subfam_sel:
-        st.info("Buscá un producto o elegí un grupo para ver cuánto hay y en qué área.")
-        return
-
-    if prod_sel:
-        _ficha_producto(d, prod_sel, col_prod, col_area, col_val, col_cant, col_unidad)
-    else:
-        _ficha_subfamilia(d, subfam_sel, col_subfam, col_prod, col_area,
-                          col_val, col_cant, col_unidad)
-
-
-def _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val):
-    """Panel lateral de Buscar producto: en vez de repetir el top-10
-    genérico (redundante con la ficha que ya está a la izquierda), muestra
-    otros productos de la misma subfamilia/familia que el seleccionado."""
-    prod_sel = st.session_state.get("inv_buscar_producto")
-    subfam_sel = st.session_state.get("inv_buscar_subfamilia") if col_subfam else None
-    col_grp = col_subfam or col_fam
-    etiqueta = "subfamilia" if col_subfam else "familia"
-
-    if prod_sel and col_grp:
-        fila = d[d[col_prod].astype(str) == prod_sel]
-        grupo_val = (str(fila[col_grp].dropna().iloc[0])
-                     if not fila.empty and fila[col_grp].notna().any() else None)
-        if not grupo_val:
-            st.caption("Sin más contexto disponible.")
-            return
-        st.markdown(f"**Otros productos de la misma {etiqueta}**")
-        st.caption(grupo_val)
-        dd = d[(d[col_grp].astype(str) == grupo_val) & (d[col_prod].astype(str) != prod_sel)]
-        _v = pd.to_numeric(dd[col_val], errors="coerce").fillna(0)
-        serie = _v.groupby(dd[col_prod].astype(str)).sum().nlargest(8).sort_values()
-        if serie.empty:
-            st.info("No hay más productos en este grupo.")
-        else:
-            fig = go.Figure(go.Bar(
-                x=serie.values, y=[_compras_truncar(i, 24) for i in serie.index],
-                orientation="h", marker=dict(color=ACENTO, opacity=0.85),
-                text=[f"S/ {v:,.0f}" for v in serie.values],
-                textposition="outside", cliponaxis=False,
-            ))
-            fig.update_layout(
-                height=alturas.APOYO, margin=dict(l=4, r=60, t=10, b=10),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=11),
-            )
-            fig.update_xaxes(visible=False, range=_rango_con_holgura(serie.values))
-            st.plotly_chart(fig, use_container_width=True, key="inv_relacionados")
-    elif subfam_sel:
-        st.caption("Todos los productos del grupo ya están a la izquierda, "
-                   "con su desglose por área.")
-    else:
-        st.caption("Elegí un producto o un grupo para ver contexto relacionado acá.")
-
-
 def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
                col_unidad=None):
     """Productos de Por área/Por familia — tabla ordenable, no un
@@ -1010,6 +765,8 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     col_val    = _resolver(df_f, ["Valorizado total", "VALORIZADO TOTAL",
                                   "Valorizado"])
     col_punit  = _resolver(df_f, ["Precio Promedio", "PRECIO PROMEDIO", "Precio"])
+    col_cod    = _resolver(df_f, ["Codigo Producto", "CODIGO PRODUCTO",
+                                  "Cod Producto"])
     col_unidad = _resolver(df_f, ["Unidad Kardex", "UNIDAD KARDEX",
                                   "Unidad Medida", "Unidad"])
 
@@ -1158,22 +915,19 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         _seccion_grupo("familia",
                        ((col_fam, "familia"), (col_subfam, "subfamilia")))
 
-    def _dib_buscar():
-        # columnas-internas: el mismo reparto que una sección de ranking de
-        # dos cuadros. Sale de `_COLUMNAS_NIVELES` y no de un literal para
-        # que las dos se muevan juntas si ese reparto cambia.
-        col_izq, col_der = st.columns(_COLUMNAS_NIVELES[2])
-        with col_izq:
-            with st.container(border=True, key="ajuste_graf_card_izq_inv_buscar"):
-                # Sin KPI, como las otras tres secciones (2026-09-13). Acá
-                # no hay fila TOTAL que lo herede: el número se fue, y es
-                # lo pedido — en una ficha de UN producto, el valorizado de
-                # todo el inventario no era el dato de la pantalla.
-                _render_buscar_producto(d, col_prod, col_area, col_subfam,
-                                        col_val, col_cant, col_unidad)
-        with col_der:
-            with st.container(border=True, key="ajuste_graf_card_der_inv_buscar"):
-                _panel_relacionados(d, col_prod, col_fam, col_subfam, col_val)
+    def _dib_productos():
+        # UNA tarjeta a lo ancho y no el par ficha + panel de apoyo de
+        # "Buscar producto": son ocho columnas, y en dos tercios de pantalla
+        # el nombre del producto no entraba. El panel de "productos
+        # relacionados" no tiene reemplazo a propósito: con el listado
+        # entero y el filtro de subfamilia, los relacionados son la tabla.
+        with st.container(border=True,
+                          key="ajuste_graf_card_izq_inv_productos"):
+            seccion_productos(
+                d, col_cod=col_cod, col_prod=col_prod, col_fam=col_fam,
+                col_subfam=col_subfam, col_area=col_area,
+                col_unidad=col_unidad, col_punit=col_punit,
+                col_cant=col_cant, col_val=col_val)
 
     def _dib_tabla():
         with st.container(border=True, key="ajuste_graf_card_izq_inv_tabla"):
@@ -1185,7 +939,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     _DIBUJANTES = {
         "inv_sec_area":    _dib_area,
         "inv_sec_familia": _dib_familia,
-        "inv_sec_buscar":  _dib_buscar,
+        "inv_sec_productos": _dib_productos,
         "inv_sec_tabla":   _dib_tabla,
     }
 

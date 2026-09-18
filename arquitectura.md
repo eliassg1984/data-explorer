@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-465 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+466 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (165)
 
@@ -354,7 +354,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
 - **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
 
-**AgGrid y tablas** (75)
+**AgGrid y tablas** (76)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -431,6 +431,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#455** — Un JS que busca «el primer AgGrid de la página» toca la tabla equivocada en cuanto la página…
 - **#460** — Una tira de totales puede colgarse del hover de las COLUMNAS de su tabla, y el truco está en…
 - **#462** — Una tabla con dos altos de fila se lee como dos tablas pegadas: la segunda línea se abre AL…
+- **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 
 **Streamlit** (125)
 
@@ -38660,6 +38661,90 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
+466. **Una fila que se DESPLIEGA en AG Grid Community son filas planas de
+     dos tipos, un filtro externo y un `postSortRows` — no el master/detail,
+     que es Enterprise.** 2026-09-17, a pedido y con captura de «Buscar
+     producto» de Inventario: *«reemplacemos esto por una tabla aggrid, que
+     me muestre todo el listado de productos con el orden de columnas así:
+     Código, Familia, Subfamilia, Nombre, Unidad kardex, Precio unitario,
+     Cantidad, Valorizado total, y que me permita mediante un click o
+     despliegue en cada ítem ver el área en donde existe. Esto debe tener la
+     opción de filtrar familia, subfamilia, producto»*. La sección pasa a
+     llamarse **Productos** y vive en `graficos/inventario_productos.py`.
+
+     **El despliegue.** Master/detail, tree data y el agrupado de filas son
+     de AG Grid Enterprise, que está descartado (es de pago). Lo que hay es
+     UN `rowData` con dos tipos de fila: una por producto (`__tipo="p"`) y
+     una por cada área donde tiene stock (`__tipo="a"`, `__padre` = el
+     código). Tres piezas, todas de Community:
+
+       · `isExternalFilterPresent`/`doesExternalFilterPass`: la fila de área
+         pasa sólo si su producto está en `window.__invAbiertos` (el
+         `window` del iframe de la grilla, que es propio de cada AgGrid);
+       · `onRowClicked` abre o cierra el producto, llama a
+         `api.onFilterChanged()` y `redrawRows` sobre su fila — `redraw` y
+         no `refreshCells` porque también cambia la CLASE de la fila, y las
+         clases sólo se reevalúan al redibujar;
+       · `postSortRows` vuelve a colgar cada área debajo de su producto. Sin
+         él, ordenar por «Valorizado total» reparte las áreas entre los
+         productos. AG Grid lo llama SIEMPRE, haya orden activo o no:
+         verificado en el bundle de st_aggrid 1.2.1 (AG Grid 34.3.1), el
+         sort stage lo invoca después de armar `childrenAfterSort` en las
+         dos ramas, y `params.nodes` ES ese array — se reescribe en el sitio.
+
+     **Y `update_on=[]`, que es lo que lo vuelve instantáneo.** El default de
+     st_aggrid incluye `filterChanged`: con él, cada `onFilterChanged()` del
+     clic le avisaría a Python y el despliegue costaría un rerun de 3-6 s.
+     Medido en el navegador: abrir, cerrar y ordenar no marcan ningún
+     contenedor `data-stale`.
+
+     **Los filtros son de Streamlit**, en la fila del título: el filtro de
+     lista de AG Grid (valores con casillas) también es Enterprise, y el de
+     texto obliga a escribir la familia a mano. La subfamilia se ofrece
+     DENTRO de la familia elegida, con el clamp justo antes del widget: al
+     cambiar de familia, una subfamilia que ya no pertenece vuelve a
+     «todas» (verificado con `AppTest`). El buscador pide TODAS las palabras,
+     en nombre o código, sin tildes. La key de la grilla lleva un `crc32`
+     del recorte, por la #227.
+
+     **El grano, medido contra R2 el 2026-09-17:** 15.379 filas, 3.874
+     códigos. Nombre, familia, subfamilia, unidad y PRECIO PROMEDIO no
+     varían dentro de un código — son del producto y van con `first`;
+     cantidad y valorizado son del área y se suman. «Donde existe» es donde
+     hay stock (cantidad o valorizado ≠ 0, negativo incluido): el kardex
+     registra cada producto en ~4 áreas, casi todas en cero. 3.008 productos
+     están en cero en todas; quedan fuera salvo el interruptor «Incluir sin
+     stock» —la #78 nació de esta misma sección mostrándolos— y el título lo
+     dice: «Productos 832 de 3,874».
+
+     **Dos trampas de medición que se cruzaron en el camino:**
+
+       · Con el panel del navegador oculto, TODAS las grillas `flex` de la
+         página —las de «Por área», que están en producción, incluidas— se
+         quedaron con sus columnas de texto en 200px, el default de AG
+         Grid, y 160-220px de desborde. Las armadas con `GridOptionsBuilder`
+         (que pone `autoSizeStrategy: fitGridWidth`) llenaron su ancho
+         exacto. Ésta usa `fitGridWidth` + `suppressSizeToFit` en las
+         columnas de número, como `tablas/ajuste_familias.py`: por la #350
+         el iframe no cambia de ancho después de dibujarse, así que `flex`
+         no compraba nada. Las `flex` de la pila NO se tocaron: en una
+         ventana visible se reparten bien.
+       · `innerText` de las celdas devolvió `""` en las 18 filas de una
+         grilla recién montada, con los datos perfectos: el iframe todavía
+         no se había pintado. Para leer una grilla desde afuera,
+         `textContent`.
+
+     **Los anchos**, medidos con la fuente de la grilla (11.5px): celda =
+     texto + 14 de padding; cabecera = rótulo + 16 + 20 de la flecha de
+     orden en la columna ordenada. Fijas 520 + mínimos de texto 366 = 886,
+     que entran en los 910px de la grilla con la ventana en 1024. A 1366,
+     Familia 161 / Subfamilia 197 / Nombre 359, sin desborde, y 1 de 243
+     celdas con «…» (el nombre entero va al tooltip). La tarjeta mide 471px
+     sin barra propia; en el celular, la flecha y el nombre van fijos a la
+     izquierda y el resto se desliza.
+
+     (2026-09-18.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -38672,7 +38757,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#466**.
+> próxima regla nueva es la **#467**.
 
 >
 

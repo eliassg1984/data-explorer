@@ -4205,6 +4205,95 @@ def _pruebas_resumen_ajuste():
     return fallos
 
 
+def _pruebas_listado_inventario():
+    """El listado de Inventario › Productos (graficos/inventario_productos.py).
+
+    Lo que fija es el GRANO y el despliegue (regla #466): el parquet trae
+    una fila por producto × área, la tabla una por producto, y lo que se
+    despliega son las áreas donde hay stock — no las ~4 donde el kardex lo
+    registra en cero. Y el orden del `rowData`: cada producto seguido de sus
+    áreas, que es de lo que cuelga el `postSortRows` del navegador.
+    """
+    from graficos.inventario_productos import armar_listado, filas_grilla
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    inventario listado · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA inventario listado · {nombre}: got={got!r} exp={exp!r}")
+
+    d = pd.DataFrame({
+        "COD":  ["01", "01", "01", "02", "03", "04", "04"],
+        "PROD": ["Pollo x Kg", "Pollo x Kg", "Pollo x Kg", "Pisco Quebranta",
+                 "Arroz Añejo", "Azúcar", "Azúcar"],
+        "FAM":  ["ALIMENTOS", "ALIMENTOS", "ALIMENTOS",
+                 "BEBIDAS CON ALCOHOL", "ALIMENTOS", "ALIMENTOS", "ALIMENTOS"],
+        "SUB":  ["AVES", "AVES", "AVES", "PISCO", "ABARROTES", "ABARROTES",
+                 "ABARROTES"],
+        "AREA": ["COCINA", "BARRA", "CAVA", "BARRA", "COCINA", "COCINA",
+                 "BARRA"],
+        "UM":   ["KILOS"] * 3 + ["LITROS", "KILOS", "KILOS", "KILOS"],
+        "PU":   [10.0, 10.0, 10.0, 30.0, 4.0, 2.0, 2.0],
+        # CAVA en cero: registrado pero sin stock, no es "donde existe". El
+        # Azúcar sale negativo en BARRA: un descuadre SÍ es existencia.
+        "STK":  [2.0, 1.0, 0.0, 3.0, 0.0, 5.0, -1.0],
+        "VAL":  [20.0, 10.0, 0.0, 90.0, 0.0, 10.0, -2.0],
+    })
+    cols = dict(col_cod="COD", col_prod="PROD", col_fam="FAM",
+                col_subfam="SUB", col_area="AREA", col_unidad="UM",
+                col_punit="PU", col_cant="STK", col_val="VAL")
+
+    L = armar_listado(d, **cols)
+    check("un producto por código, mayor valorizado arriba",
+          L.productos.index.tolist(), ["02", "01", "04"])
+    check("cantidad y valorizado se suman entre áreas",
+          (L.productos.loc["01", "cantidad"], L.productos.loc["01", "valorizado"]),
+          (3.0, 30.0))
+    check("el precio es el del kardex, no se suma",
+          L.productos.loc["01", "precio"], 10.0)
+    check("las áreas son las que tienen stock (CAVA en cero no)",
+          sorted(L.areas.loc[L.areas["codigo"] == "01", "area"]),
+          ["BARRA", "COCINA"])
+    check("un stock negativo también es existencia",
+          int(L.productos.loc["04", "areas"]), 2)
+    check("el producto sin stock queda fuera y se cuenta",
+          ("03" in L.productos.index, L.sin_stock), (False, 1))
+    check("«Incluir sin stock» lo trae, sin áreas que desplegar",
+          int(armar_listado(d, **cols, incluir_sin_stock=True)
+              .productos.loc["03", "areas"]), 0)
+
+    check("familia", armar_listado(d, **cols, familia="BEBIDAS CON ALCOHOL")
+          .productos.index.tolist(), ["02"])
+    check("subfamilia", armar_listado(d, **cols, familia="ALIMENTOS",
+                                      subfamilia="ABARROTES")
+          .productos.index.tolist(), ["04"])
+    check("buscador sin tildes ni mayúsculas",
+          armar_listado(d, **cols, texto="AZUCAR").productos.index.tolist(),
+          ["04"])
+    check("buscador: todas las palabras, en cualquier orden",
+          armar_listado(d, **cols, texto="kg pollo").productos.index.tolist(),
+          ["01"])
+    check("buscador por código",
+          armar_listado(d, **cols, texto="02").productos.index.tolist(),
+          ["02"])
+
+    f = filas_grilla(L)
+    check("rowData: cada producto seguido de sus áreas",
+          list(zip(f["__tipo"], f["__padre"])),
+          [("p", ""), ("a", "02"), ("p", ""), ("a", "01"), ("a", "01"),
+           ("p", ""), ("a", "04"), ("a", "04")])
+    check("la fila de área lleva el ÁREA en «nombre» y deja vacío lo del "
+          "producto", tuple(f.loc[3, ["nombre", "familia", "codigo"]]),
+          ("COCINA", "", ""))
+    check("familia y subfamilia se escriben como nombre propio",
+          f.loc[0, "familia"], "Bebidas con Alcohol")
+    return fallos
+
+
 def main():
     df, df_min = _df_completo(), _df_minimo()
     fallos = 0
@@ -4381,6 +4470,9 @@ def main():
 
     # ── El chip de la mini contra el corte anterior ──────────────────────
     fallos += _pruebas_resumen_ajuste()
+
+    # ── Inventario › Productos: el grano y el despliegue de áreas ────────
+    fallos += _pruebas_listado_inventario()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()
