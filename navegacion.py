@@ -393,22 +393,12 @@ _CSS_FRANJA_VISTAS = f"""
     flex-shrink:0 !important;
     white-space:nowrap !important;
 }}
-/* EL KPI EN LINEA de cada vista (2026-09-01, a pedido). Lo mete
-   `graficos/base.py::_render_rail` dentro del label como `:violet[...]`,
-   que Streamlit renderiza en un `<span>` con su color de tema; acá se le
-   baja el cuerpo y se le pone el aire, para que se lea como DATO al lado
-   del nombre y no como parte del nombre.
-
-   Se alcanza por el color que pone Streamlit y no por una clase propia
-   porque el label de un `st.button` no admite HTML: markdown es lo unico
-   que hay. Si algun dia el tema cambia ese color, este selector deja de
-   matchear — es el precio de pintar dentro de un label. */
-.st-key-nav_rail [data-testid="stButton"] button p span {{
-    font-size:11px !important;
-    font-weight:700 !important;
-    margin-left:2px !important;
-    opacity:.85 !important;
-}}
+/* ACA VIVIA EL KPI EN LINEA de cada vista (2026-09-01 .. 2026-09-18). Lo
+   metia `graficos/base.py::_render_rail` dentro del label como
+   `:violet[...]` y esta regla le bajaba el cuerpo para que se leyera como
+   DATO al lado del nombre. Se retiro con el KPI («quitemos todos los KPIs
+   de las vistas del rail lateral»): sin `:violet[...]` el label no emite
+   ningun `<span>` y la regla no matcheaba nada. Ver regla #465. */
 .st-key-nav_rail [data-testid="stButton"] button:hover {{
     background:var(--accent-tint) !important; color:var(--accent) !important;
 }}
@@ -866,24 +856,28 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     #    modo se apaga solo (regla #338, medido). Este contenedor nunca
     #    está vacío, lleva el botón adentro.
     #
-    # 4. **ARRANCA PLEGADO** (2026-09-08, a pedido: "que inicie oculto por
-    #    defecto, no extendido"). El default no es cosmético: son 234px de
-    #    ancho que la sesión le regala al contenido antes de que el usuario
-    #    toque nada — la reserva se deriva sola de `--rail-der-w`
-    #    (`estilos/_00_base.py`), así que no hay ningún padding que ajustar.
-    #    Lo que sí hay que sostener es la salida: con TODA sesión naciendo
-    #    en el estado plegado, la regla #216 deja de ser una precaución
-    #    para el que plegó a propósito y pasa a ser el camino de entrada de
-    #    todos. Por eso el chevron «›» de acá abajo se dibuja en la
-    #    cabecera del riel y no dentro de una fila que el plegado esconde.
-    #    Ver regla #365.
+    # 4. **ARRANCA DESPLEGADO** (2026-09-18). Arrancó PLEGADO del
+    #    2026-09-08 a esa fecha, a pedido ("que inicie oculto por defecto,
+    #    no extendido"), y el motivo era el ancho: plegar le regalaba 234px
+    #    al contenido antes de que el usuario tocara nada, porque la
+    #    reserva se derivaba de `--rail-der-w`.
+    #
+    #    Ese motivo se fue con la capa: desde el 2026-09-18 la columna está
+    #    OCULTA hasta que el cursor toca el borde izquierdo
+    #    (`estilos/_26_rails_scroll.py`) y el contenido ya no le reserva su
+    #    ancho, sólo la tira de `--rail-reserva`. O sea que plegar dejó de
+    #    ganar un píxel — lo único que hace hoy es que el panel aparezca sin
+    #    los nombres, y eso en un panel que sólo se ve mientras lo mirás es
+    #    una peor versión de lo mismo. El pestillo se queda (nadie pidió
+    #    quitarlo, y el modo icono sirve si un día la lista crece), pero ya
+    #    no es por donde se entra. Ver reglas #365 y #465.
     #
     # Se dibuja SIEMPRE, en todos los reportes, y por eso el estado no
     # puede quedar encerrado: la regla #216 (escrita al retirar el
     # anterior) dice que un estado "plegado" sin control visible que lo
     # deshaga es un usuario sin salida. Acá el control es el mismo botón,
     # y en plegado sigue en pantalla.
-    _plegado = bool(st.session_state.get("rail_plegado", True))
+    _plegado = bool(st.session_state.get("rail_plegado", False))
     with st.container(key="rail_pestillo_"
                       + ("plegado" if _plegado else "abierto")):
         if st.button(":material/chevron_right:" if _plegado

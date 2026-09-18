@@ -3388,16 +3388,25 @@ def _pruebas_presupuesto_vertical():
         if py.name in _duenos or py.name == pathlib.Path(__file__).name:
             continue
         for i, linea in enumerate(texto.split("\n"), 1):
-            if re.search(r"--rail-(izq|der)-w\s*:|--rail-der-res\s*:", linea):
+            if re.search(r"--rail-(izq|der)-w\s*:|--rail-der-res\s*:"
+                         r"|--rail-reserva\s*:", linea):
                 intrusos.append(f"{py.relative_to(raiz_repo).as_posix()}:{i}")
     check("los anchos de rail solo los declara _00_base",
           not intrusos, ", ".join(intrusos[:6]))
 
-    # El ancho reservado a la derecha se DERIVA del ancho del rail — mismo
-    # motivo que antes de que el rail dejara de plegarse: un valor fijo en
-    # otro sitio se desincroniza en cuanto --rail-der-w cambie.
-    check("--rail-der-res se deriva de --rail-der-w, no es un px suelto",
-          re.search(r"--rail-der-res:\s*calc\([^)]*--rail-der-w", css) is not None)
+    # La reserva del contenido se DERIVA, no se escribe: un valor fijo en
+    # otro sitio se desincroniza en cuanto cambie de quién depende.
+    #
+    # De quién depende cambió el 2026-09-18: hasta entonces la columna
+    # ocupaba su ancho (`--rail-der-w`) y el contenido se lo reservaba
+    # entero; desde que es una CAPA que aparece con el cursor
+    # (`_26_rails_scroll.py`) lo único que reserva es la tira por donde se
+    # la despierta (`--rail-reserva`), igual que hizo la franja de reportes
+    # al pasar a capa. Lo que la guarda vigila es lo mismo de siempre: que
+    # sea un `calc()` sobre la variable y no un número medido a ojo.
+    check("--rail-der-res se deriva de --rail-reserva, no es un px suelto",
+          re.search(r"--rail-der-res:\s*calc\([^)]*--rail-reserva",
+                    css) is not None)
 
     return fallos
 

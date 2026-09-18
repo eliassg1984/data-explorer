@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-464 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+465 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (164)
+**CSS y estilos** (165)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -198,6 +198,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#459** — El jalón que sube la primera tarjeta de Compras nombra un wrap por su KEY, así que una vista…
 - **#460** — Una tira de totales puede colgarse del hover de las COLUMNAS de su tabla, y el truco está en…
 - **#464** — Juntar controles en UN renglón se paga en ancho, y el presupuesto se mide contra el peor…
+- **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
 
 **Layout y alturas** (68)
 
@@ -722,7 +723,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (82)
+**Decisiones de diseño y UX** (83)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -806,6 +807,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#456** — Si un fragment y uno de sus ancestros caen en la misma cola, Streamlit 1.59 corre al hijo DOS…
 - **#459** — El jalón que sube la primera tarjeta de Compras nombra un wrap por su KEY, así que una vista…
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
+- **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -38559,6 +38561,105 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
+465. **Una columna que aparece con el cursor no puede MOVERSE al aparecer,
+     y su tira tiene que despertar sin activar.** 2026-09-18, dos pedidos en
+     el mismo mensaje: *«quitemos todos los KPIs de las vistas del rail
+     lateral, no del reporte, solo de las vistas»* y *«hagamos que esa franja
+     esté oculta desde el inicio y solo aparezca al pasar el cursor, como
+     actualmente es la barra superior de reporte»*.
+
+     **La primera mitad es una línea.** `graficos/base.py::_render_rail`
+     pierde el parámetro `kpis` y sus dos
+     `st.button(f"{label}  :violet[{_kpi}]")` vuelven a ser
+     `st.button(label)`. Lo que NO se va: los KPI del REPORTE —la cabecera de
+     la columna y los ítems del rail de Reportes, que son otra cosa— y el
+     SEMÁFORO, el punto de color por fila. El punto se sigue DERIVANDO del
+     texto que ya no se dibuja (`_kpis_vistas` calcula igual el par y el
+     dashboard lee sólo el segundo), porque derivarlo es lo que garantiza que
+     el punto no diga verde donde el número decía rojo. Con el KPI se fue
+     también su CSS: el `button p span` de `navegacion.py` alcanzaba al
+     `<span>` que Streamlit emite por el `:violet[...]`, y sin `:violet[...]`
+     ese span no existe.
+
+     **La segunda es la capa de la franja de reportes girada 90 grados**
+     (`estilos/_26_rails_scroll.py`, la misma mecánica de la #397):
+     `opacity: 0` —invisible pero hit-testeable, porque con
+     `visibility: hidden` el navegador no la hit-testea y entonces no podría
+     estar `:hover` NUNCA— y un `clip-path` que recorta el rail a una tira de
+     `--rail-reserva` (12px) contra el borde izquierdo. El recorte recorta
+     también el hit-testing, así que los 280px dejan de ser una tapa
+     invisible sobre la tarjeta. Y trae la misma consecuencia de layout que
+     allá: la columna dejó de RESERVAR su ancho. `--rail-der-res` pasó de
+     `--rail-der-w + 19 + 24` a `--rail-reserva + 24`, o sea de 89px
+     (plegada) o 323 (abierta) a **36**, y el rail se dibuja ENCIMA de la
+     tarjeta cuando aparece.
+
+     Tres cosas que se midieron y no se dedujeron:
+
+     · **LO QUE ABRE UNA CAPA NO PUEDE MOVERSE AL ABRIRSE.** El rail se
+       dibuja en `left: 19px`, así que una tira que empiece ahí deja muertos
+       los 19px pegados al vidrio — que es justo donde termina el cursor
+       cuando uno lo tira contra el borde. El primer intento fue animar el
+       `left` de 0 a 19 al abrir (invisible en reposo, el salto no se ve) y
+       falla de la forma más tonta: el rail se corre 19px a la derecha en el
+       mismo instante en que aparece, o sea que se va de abajo del cursor que
+       lo acaba de abrir. Medido: `matches(':hover')` daba `false` con el
+       `clip-path` ya soltado y el `left` ya en 19 — la capa se cierra sola.
+       La caja se queda entonces QUIETA en `left: 0` con 19px de ancho de
+       más, y esos 19px son un `border-left` TRANSPARENTE: cuentan para el
+       hit-testing y no pintan nada. `background-clip: padding-box` evita que
+       el fondo se meta abajo de ese borde y `box-shadow: inset 1px 0 0`
+       devuelve la línea de 1px que el borde reemplazó. Lo que se VE queda en
+       x=19 —alineado con la cabecera, el rótulo y el pestillo, que no se
+       tocan— y lo que se TOCA llega al vidrio.
+     · **LA TIRA DESPIERTA, PERO NO NAVEGA.** `elementFromPoint(5, 400)` no
+       devuelve "el rail": devuelve el BOTÓN de un reporte, porque los ítems
+       arrancan en x=0 y el recorte no los corta, los recorta. O sea que un
+       clic contra el borde izquierdo, con la columna todavía invisible,
+       cambiaba de reporte. Se apaga con `pointer-events: none` en los HIJOS
+       y no en el rail: el hit-test cae entonces en el contenedor, que sigue
+       en `auto`, así que la tira sigue abriendo la capa. Y en los hijos
+       TODOS (`*`), no en el `button`, que fue el primer intento: con `help=`
+       puesto, Streamlit envuelve al botón en un `stTooltipHoverTarget` que
+       NO es descendiente suyo sino su padre, y el punto medido caía ahí.
+     · **EL RAIL MIDE SU CONTENIDO, ASÍ QUE LA TIRA NO LLEGA ABAJO.**
+       `height: auto` son ~550px de los 900 de la ventana: sin un
+       `bottom: 8px` en reposo, el gesto funciona o no según a qué altura
+       pases el cursor. Estirado, la tira es el borde ENTERO.
+
+     **El disparador es una lista propia** (`_DISP_COLUMNA`), no la de la
+     cabecera: son dos capas independientes y pasar por la franja de reportes
+     no tiene por qué desplegar la columna encima de la primera tarjeta.
+     Lleva los dos railes, sus `:focus-visible` y —esto no es defensivo— el
+     PESTILLO: vive por encima de los dos (z-index 902), así que pararse en
+     él no cuenta como pararse en el rail, y sin él en la lista ir a plegar
+     la columna la cerraba en el camino. No lleva el rótulo, que es
+     `pointer-events: none` a propósito y no puede estar `:hover` nunca —
+     mismo caso que la franja de KPIs en la lista de al lado.
+
+     **Y el pestillo cambia de default, no de existencia** (#365): arrancaba
+     PLEGADO desde el 2026-09-08 y el motivo era el ancho — plegar le
+     regalaba 234px al contenido antes de que el usuario tocara nada. Con la
+     columna fuera del layout ese motivo ya no existe, y plegar sólo serviría
+     para que la capa aparezca sin los nombres, que en un panel que sólo se
+     ve mientras lo mirás es una peor versión de lo mismo. Arranca
+     desplegado; el control sigue donde estaba.
+
+     **Lo que se pierde:** los ítems del rail ACTIVO siguen en el árbol de
+     accesibilidad y en el orden de tabulación aunque no se vean, que es
+     justo lo que evitaba el `visibility: hidden` (que sigue valiendo para el
+     rail inactivo, el que no es el de este scroll). Es el precio de que la
+     columna pueda despertar sola, el mismo que ya paga la franja de
+     reportes; a cambio, el foco de teclado la abre.
+
+     **Cómo se verifica** — es la #353 otra vez: en el navegador automatizado
+     las transiciones NO avanzan, así que `opacity` devuelve 0 con la regla
+     aplicando perfecto y el `clip-path` se queda congelado a mitad de
+     camino. Lo que dice la verdad es lo que no tiene transición: el
+     `pointer-events` del pestillo y de los ítems, y `elementFromPoint`.
+
+     (2026-09-18.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -38571,7 +38672,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#465**.
+> próxima regla nueva es la **#466**.
 
 >
 

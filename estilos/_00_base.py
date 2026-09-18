@@ -340,14 +340,35 @@ CSS = """    <style>
            padding vertical del botón (_20_compras_rail.py). El texto/
            ícono (2) se queda: ese sí era el pedido correcto. */
         --rail-der-w: 280px;
+        /* LO QUE LA COLUMNA DEJA AL DESCUBIERTO EN REPOSO (2026-09-18).
+           Gemela exacta de --franja-rep-reserva, un eje más allá: a pedido
+           («que esa franja esté oculta desde el inicio y solo aparezca al
+           pasar el cursor, como actualmente es la barra superior de
+           reporte») la columna izquierda dejó de ser una columna y pasó a
+           ser una CAPA (`_26_rails_scroll.py`). Sigue midiendo
+           --rail-der-w cuando se abre; en reposo sólo queda esta tira
+           pegada al borde izquierdo de la ventana, que es por donde entra
+           el cursor.
+
+           12px, el mismo número que arriba y por el mismo motivo: es un
+           blanco cómodo contra el borde y no puede ir sobre contenido —el
+           `clip-path` de la capa recorta también el hit-testing, así que
+           lo que quede debajo de la tira sería inalcanzable. El contenido
+           arranca después de ella. */
+        --rail-reserva: 12px;
         /* 2026-08-25: el canal entre el rail y las tarjetas baja de 54px
-           a 24px, a pedido ("pierdo mucho espacio"). Los sumandos dicen lo
-           que son: 19px es el `left` del rail (_20_compras_rail.py) y 24px
-           el canal visible. Antes eran 15+54 = 69, con el 15 sin
-           corresponderse ya con ese `left` — el rail terminaba en x=299 y
-           las tarjetas arrancaban en 349. Ahora arrancan en 323 y el
-           contenido gana 26px de ancho. */
-        --rail-der-res: calc(var(--rail-der-w) + 19px + 24px);
+           a 24px, a pedido ("pierdo mucho espacio"). Antes eran 15+54 = 69,
+           con el 15 sin corresponderse ya con el `left` del rail — el rail
+           terminaba en x=299 y las tarjetas arrancaban en 349.
+
+           2026-09-18: el primer sumando pasa a ser lo que la columna
+           RESERVA (12), no lo que mide abierta (--rail-der-w + su `left`).
+           Misma cuenta que le hizo la franja de reportes al pasar a capa,
+           y mismo resultado: las tarjetas arrancan en 36 en vez de 89
+           (plegada) o 323 (abierta), y el rail se dibuja ENCIMA cuando
+           aparece. El 24 sigue siendo el canal visible, que ahora separa
+           la tarjeta de la tira en vez de separarla del rail. */
+        --rail-der-res: calc(var(--rail-reserva) + 24px);
 
         /* ── EL MARGEN DERECHO DEL CONTENIDO ────────────────────────────
            Gemelo de `--rail-der-res`, del otro lado, y por el mismo motivo:

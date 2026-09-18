@@ -1,17 +1,19 @@
 """Intercambio de rails al hacer scroll (2026-08-24).
 
-Desde el 2026-09-07/08 el modulo tiene DOS disparadores, no uno, y hacen
-cosas distintas:
+Desde el 2026-09-18 el modulo tiene TRES disparadores, y hacen cosas
+distintas:
 
-  · el SCROLL (todo lo de abajo) elige QUE va en la banda de 40px que hay
-    bajo la franja de reportes: arriba de todo las vistas, al bajar los KPIs
-    del reporte;
-  · el HOVER sobre la cabecera elige SI se ve algo — en reposo esa banda
-    esta vacia y el contenido ocupa su sitio. Ver "LA CAPA DE LA CABECERA".
+  · el SCROLL (todo lo de abajo) elige QUE va en la columna izquierda y en
+    la banda que hay bajo la franja de reportes: arriba de todo los
+    reportes y las vistas, al bajar las vistas y los KPIs del reporte;
+  · el HOVER sobre la cabecera elige SI se ve algo en esa banda — en reposo
+    esta vacia y el contenido ocupa su sitio. Ver "LA CAPA DE LA CABECERA";
+  · el HOVER sobre el borde IZQUIERDO elige si se ve la columna, con el
+    mismo mecanismo girado 90 grados. Ver "LA CAPA DE LA COLUMNA".
 
-Comparten modulo porque comparten elemento: los dos apagan y prenden las
-mismas dos franjas, y dos modulos declarando `opacity` sobre el mismo
-elemento es el bug que advierte el indice de `estilos/__init__.py`.
+Comparten modulo porque comparten elemento: los tres apagan y prenden las
+mismas franjas, y dos modulos declarando `opacity` sobre el mismo elemento
+es el bug que advierte el indice de `estilos/__init__.py`.
 
 La columna izquierda muestra DOS cosas distintas segun donde estes:
 
@@ -117,6 +119,34 @@ _ESPERA = "220ms"
 # Sin acotar, pasar el cursor por ese control —o abrir su calendario, que
 # deja `aria-expanded="true"` puesto todo el rato— abría la capa de la
 # cabecera desde el medio de la página. Ver regla #457.
+# QUE ABRE LA CAPA DE LA COLUMNA (2026-09-18). La gemela de _DISPARADORES,
+# para el otro eje. Se declara aparte y no se suma a aquella porque son dos
+# capas independientes: pasar por la franja de reportes no tiene por que
+# desplegar la columna encima de la primera tarjeta.
+#
+#   · los dos railes    -> son los que ocupan la columna, por turnos. En
+#                          reposo estan recortados a la tira del borde, asi
+#                          que hoverear "el rail" es hoverear esa tira;
+#   · el PESTILLO       -> vive por encima de los dos (z-index 902), asi que
+#                          pararse en el NO cuenta como pararse en el rail.
+#                          Sin esto, ir a plegar la columna la cierra en el
+#                          camino;
+#   · el foco de TECLADO-> mismo motivo que en la franja de reportes:
+#                          tabular a un boton no puede dejar operando uno
+#                          invisible. `:focus-visible` y no `:focus`, para
+#                          que un clic no deje la columna abierta.
+#
+# NO ESTA el rotulo ("Reportes"): `_20_compras_rail.py` le pone
+# `pointer-events: none` a proposito —es un rotulo, no un control— y un
+# elemento que el navegador no hit-testea no puede estar :hover NUNCA.
+# Mismo caso que la franja de KPIs en la lista de abajo.
+_DISP_COLUMNA = """.st-key-compras_tabs_row:hover,
+            .st-key-nav_rail_lateral:hover,
+            .st-key-rail_pestillo_abierto:hover,
+            .st-key-rail_pestillo_plegado:hover,
+            .st-key-compras_tabs_row :focus-visible,
+            .st-key-nav_rail_lateral :focus-visible"""
+
 _DISPARADORES = """.st-key-nav_franja_rep:hover,
             .st-key-nav_franja_rep :focus-visible,
             .st-key-nav_rail:hover,
@@ -535,12 +565,204 @@ CSS = f"""
     }}
     .st-key-nav_rail_lateral::-webkit-scrollbar {{ display: none !important; }}
 
+    /* ══ LA CAPA DE LA COLUMNA ═════════════════════════════════════════
+       2026-09-18, a pedido: *"hagamos que esa franja este oculta desde el
+       inicio y solo aparezca al pasar el cursor, como actualmente es la
+       barra superior de reporte"*. Es EL MISMO mecanismo del punto 0 de
+       "LA CAPA DE LA CABECERA", girado 90 grados: lo que alla es una tira
+       de `--franja-rep-reserva` en el borde de arriba, aca es una tira de
+       `--rail-reserva` en el borde izquierdo.
+
+       Y trae la misma consecuencia de layout que aquel: la columna dejo de
+       RESERVAR su ancho. `--rail-der-res` bajo a `--rail-reserva` + el
+       canal (`_00_base.py`), o sea que las tarjetas arrancan en x=36 en vez
+       de 89 (plegada) o 323 (abierta) y el rail se dibuja ENCIMA cuando
+       aparece. De paso deja sin sentido el default del pestillo, que
+       plegaba para ganar ese ancho: desde hoy la columna abre desplegada
+       (`navegacion.py`).
+
+       EN REPOSO NO PUEDE IRSE ENTERA, y ese es todo el truco, igual que
+       arriba: con `visibility: hidden` el navegador no la hit-testea, asi
+       que no podria estar `:hover` NUNCA y no tendria como volver. Se queda
+       con `opacity: 0` (invisible pero hit-testeable) y un `clip-path` que
+       la recorta a esa tira. El recorte recorta tambien el hit-testing: sin
+       el, los 280px del rail serian una tapa invisible sobre la tarjeta.
+
+       TRES COSAS QUE NO SON DECORACION
+
+       · LA CAJA LLEGA AL VIDRIO Y NO SE MUEVE NUNCA (`left: 0` + 19px de
+         BORDE IZQUIERDO TRANSPARENTE). El rail se dibuja en x=19; si la
+         tira empezara ahi, los 19px pegados al borde de la ventana no
+         despertarian nada — y ahi es justo donde termina el cursor cuando
+         uno lo tira contra el vidrio.
+
+         El primer intento fue correr el `left` de 0 a 19 al abrir, y NO
+         SIRVE: medido el 2026-09-18, el rail se corre 19px a la derecha en
+         el mismo instante en que aparece, o sea que se va de abajo del
+         cursor que lo acaba de abrir — `:hover` se apaga solo y la capa
+         parpadea. LO QUE ABRE UNA CAPA NO PUEDE MOVERSE AL ABRIRSE.
+
+         La caja se queda entonces en x=0 con 19px de mas de ANCHO, y esos
+         19px son un `border-left` TRANSPARENTE: cuentan para el
+         hit-testing y no pintan nada. El fondo se recorta con
+         `background-clip: padding-box` para que no se meta abajo de ese
+         borde, y la linea de 1px que el borde reemplaza vuelve como
+         `box-shadow: inset`. Lo que se VE queda exactamente donde estaba
+         —x=19, alineado con la cabecera, el rotulo y el pestillo, que no se
+         tocan— y lo que se TOCA llega al vidrio.
+       · `bottom: 8px` EN REPOSO. El rail mide su CONTENIDO (`height: auto`,
+         ~550px de los ~800 de la ventana): sin esto, la mitad de abajo del
+         borde no despierta nada y el gesto funciona o no segun a que altura
+         pases. Estirado, la tira es el borde ENTERO.
+       · LOS DOS RAILES, cada uno en SU estado. `compras_tabs_row` (Reportes)
+         es el activo arriba de todo y `nav_rail_lateral` (Vistas) al bajar;
+         el otro sigue con su `visibility: hidden` de siempre, porque un
+         rail que no es el de este scroll no tiene que poder despertar.
+
+       LO QUE SE PIERDE: los items del rail activo siguen en el arbol de
+       accesibilidad y en el orden de tabulacion aunque no se vean, que es
+       justo lo que evitaba el `visibility: hidden` (ver "OCULTO DE VERDAD"
+       aca arriba, que sigue valiendo para el rail INACTIVO). Es el precio
+       de que la columna pueda despertar sola, el mismo que ya paga la
+       franja de reportes. A cambio, el foco de TECLADO la abre.
+
+       COMO SE VERIFICA: por `document.elementFromPoint` y no por la
+       opacidad (#353) — con el recorte puesto, a x=200 tiene que devolver
+       la tarjeta, y a x=5 el rail. Ver regla #465. */
+    /* LA CAJA, IGUAL EN LOS DOS ESTADOS (ver "LA CAJA LLEGA AL VIDRIO").
+       El 19px es el `left` que tenian los dos railes y que ahora es su
+       borde: el mismo literal duplicado a proposito que ya documentan
+       `_20_compras_rail.py` y la geometria acoplada de mas abajo. Va
+       DESPUES de las dos reglas que lo declaraban —la de `_20` para
+       Reportes y la de este fichero para Vistas—, que es como gana: misma
+       especificidad, mas tarde en la cascada. */
+    .st-key-compras_tabs_row,
+    .st-key-nav_rail_lateral {{
+        left: 0 !important;
+        width: calc(var(--rail-der-w) + 19px) !important;
+        border-left: 19px solid transparent !important;
+        background-clip: padding-box !important;
+        box-shadow: inset 1px 0 0 0 var(--border) !important;
+    }}
+
     :root.rails-scrolled .st-key-nav_rail_lateral {{
-        opacity: 1;
+        opacity: 0;
         visibility: visible;
         pointer-events: auto;
+        bottom: 8px !important;
+        clip-path: inset(0 calc(100% - 19px - var(--rail-reserva)) 0 0);
+        transition: opacity {_TRANS} linear {_ESPERA},
+                    top {_TRANS} cubic-bezier(.4,0,.2,1),
+                    visibility 0s linear 0s,
+                    clip-path 0s linear calc({_TRANS} + {_ESPERA}),
+                    bottom 0s linear calc({_TRANS} + {_ESPERA});
+    }}
+    :root.rails-scrolled:has({_DISP_COLUMNA}
+        ) .st-key-nav_rail_lateral {{
+        opacity: 1;
+        bottom: auto !important;
+        clip-path: inset(0);
+        /* Al ENTRAR no hay espera, misma razon que la capa de la cabecera:
+           aparecer tarde se siente roto. La espera vive en el reposo. */
         transition: opacity {_TRANS} linear,
-                    visibility 0s linear 0s;
+                    top {_TRANS} cubic-bezier(.4,0,.2,1),
+                    clip-path 0s linear 0s,
+                    bottom 0s linear 0s;
+    }}
+
+    /* El rail de REPORTES, que es el activo arriba de todo, con el MISMO
+       reposo. Acotado con `:not(.rails-scrolled)` y no por especificidad:
+       habiendo bajado ya lo esconde su propia regla (unas lineas mas
+       arriba), y dos mecanicas sobre el mismo elemento tienen que
+       excluirse por construccion. */
+    :root:not(.rails-scrolled) .st-key-compras_tabs_row {{
+        opacity: 0;
+        bottom: 8px !important;
+        clip-path: inset(0 calc(100% - 19px - var(--rail-reserva)) 0 0);
+        transition: opacity {_TRANS} linear {_ESPERA},
+                    clip-path 0s linear calc({_TRANS} + {_ESPERA}),
+                    bottom 0s linear calc({_TRANS} + {_ESPERA});
+    }}
+    :root:not(.rails-scrolled):has({_DISP_COLUMNA}
+        ) .st-key-compras_tabs_row {{
+        opacity: 1;
+        bottom: auto !important;
+        clip-path: inset(0);
+        transition: opacity {_TRANS} linear,
+                    clip-path 0s linear 0s,
+                    bottom 0s linear 0s;
+    }}
+
+    /* Y EL ROTULO CON ELLOS. No hace falta recortarlo —ya es
+       `pointer-events: none`, mismo caso que el sello de
+       «Ultima actualizacion»— asi que le alcanza con la opacidad. Va
+       acotado a `:not(.rails-scrolled)` porque al bajar lo esconde su
+       propia regla: la columna sube a tocar la franja de reportes y la
+       banda donde vivia deja de existir. */
+    :root:not(.rails-scrolled) .st-key-rail_rotulo_rep {{
+        opacity: 0;
+        transition: opacity {_TRANS} linear {_ESPERA};
+    }}
+    :root:not(.rails-scrolled):has({_DISP_COLUMNA}
+        ) .st-key-rail_rotulo_rep {{
+        opacity: 1;
+        transition: opacity {_TRANS} linear;
+    }}
+
+    /* ── LA TIRA DESPIERTA, PERO NO NAVEGA ────────────────────────────
+       Medido el 2026-09-18 con `elementFromPoint(5, 400)`: lo que hay bajo
+       la tira no es "el rail", es el BOTON de un reporte — los items
+       arrancan en x=0 y el recorte no los corta, los recorta. O sea que un
+       clic contra el borde izquierdo, con la columna todavia invisible,
+       cambiaba de reporte. Arriba el mismo mecanismo se lo permite (su tira
+       son 12px y sus botones estan ahi), pero aca la tira mide 850px de
+       alto y pasa por encima de NUEVE botones: lo que alla es raro, aca
+       pasa sola.
+
+       `pointer-events: none` en los HIJOS y no en el rail: el hit-test cae
+       entonces en el contenedor, que sigue en `auto`, asi que la tira sigue
+       despertando la capa — lo unico que se pierde es poder activar a
+       ciegas lo que todavia no se ve.
+
+       Y en los hijos TODOS (`*`) y no en el `button`, que fue el primer
+       intento: con `help=` puesto, Streamlit envuelve al boton en un
+       `stTooltipHoverTarget` que NO es descendiente suyo sino su padre, y
+       el punto medido caia justo ahi. Descendiente amplio a proposito, el
+       mismo criterio que el bloque de `visibility: inherit` de arriba: lo
+       que se quiere es capturar tambien a los widgets que se agreguen
+       despues. */
+    :root:not(.rails-scrolled) .st-key-compras_tabs_row *,
+    :root.rails-scrolled .st-key-nav_rail_lateral * {{
+        pointer-events: none;
+    }}
+    :root:has({_DISP_COLUMNA}
+        ) :is(.st-key-compras_tabs_row, .st-key-nav_rail_lateral) * {{
+        pointer-events: auto;
+    }}
+
+    /* EL PESTILLO TAMBIEN, en los dos estados del scroll: es la cabecera de
+       la columna, no cromo suelto, y dejarlo encendido sobre el lienzo
+       seria un boton flotando sin nada de que colgar.
+
+       `pointer-events: none` en reposo y no un `clip-path`: el pestillo
+       mide 33x33 y no tiene una tira que dejar viva —no es el que despierta
+       la capa, la despierta el borde—, asi que lo unico que hace falta es
+       que no se coma los clics de la tarjeta que tiene debajo. Y cuando la
+       capa esta abierta vuelve a ser hit-testeable, que es lo que lo pone
+       en `_DISP_COLUMNA`: sin eso, ir a plegar la columna la cerraria en el
+       camino. */
+    .st-key-rail_pestillo_abierto,
+    .st-key-rail_pestillo_plegado {{
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity {_TRANS} linear {_ESPERA};
+    }}
+    :root:has({_DISP_COLUMNA}
+        ) :is(.st-key-rail_pestillo_abierto,
+              .st-key-rail_pestillo_plegado) {{
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity {_TRANS} linear;
     }}
 
     /* Reposo OCULTO y sin `!important`, por el mismo motivo que el rail que

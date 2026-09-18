@@ -171,6 +171,45 @@ Dos cosas que no son negociables si tocás esto: el velo entra **a los
 contenedores y eso es una feria. Detalle y mediciones en `arquitectura.md`
 regla #366.
 
+## El cromo no está: aparece con el cursor
+
+Dos capas, la misma mecánica, `estilos/_26_rails_scroll.py`:
+
+- la **franja de reportes** (arriba) deja una tira de `--franja-rep-reserva`
+  (12px) contra el borde superior;
+- la **columna de la izquierda** —el rail, que se turna entre Reportes y
+  Vistas— deja una tira de `--rail-reserva` (12px) contra el izquierdo
+  (2026-09-18).
+
+Ninguna de las dos reserva sitio: el contenido arranca en 36px del borde
+izquierdo y ellas se dibujan ENCIMA. Y ninguna se esconde con
+`visibility: hidden`, que sería lo obvio: un elemento que el navegador no
+hit-testea no puede estar `:hover` NUNCA, así que no tendría cómo volver.
+Van con `opacity: 0` + un `clip-path` que las recorta a su tira — el
+recorte recorta también el hit-testing, que es lo que evita que los 280px
+del rail sean una tapa invisible sobre la tarjeta.
+
+Tres cosas que cuestan un bug si se tocan sin leerlas:
+
+- **Lo que abre una capa no puede MOVERSE al abrirse.** El rail se dibuja
+  en `left: 19px`, pero su caja vive en `left: 0` con 19px de
+  `border-left` transparente. Correr el `left` al abrir —que fue el primer
+  intento— saca al rail de abajo del cursor que lo acaba de abrir, y la
+  capa parpadea.
+- **La tira despierta, pero no activa.** Debajo de ella hay BOTONES: sin
+  `pointer-events: none` en los hijos del rail, un clic contra el borde
+  cambia de reporte a ciegas.
+- **En el navegador automatizado las transiciones no avanzan**, así que
+  `opacity` da 0 con la regla aplicando perfecto (regla #353). Se verifica
+  con lo que no tiene transición: `pointer-events` y `elementFromPoint`.
+
+El **rail no muestra KPI por vista** desde el 2026-09-18 (sí los del
+REPORTE: la cabecera de la columna y los ítems del rail de Reportes). Lo
+que queda por fila es el punto del semáforo, que sale de `estados` en
+`_render_rail`. Y el **pestillo** (el chevron que pliega la columna a 46px)
+sigue ahí, pero arranca DESPLEGADO: plegar ya no le gana ancho a nadie.
+Detalle y mediciones en `arquitectura.md` regla #465.
+
 ## Colores: nunca un `#hex` suelto
 
 Dos caras de la misma paleta, hay que mantener ambas:

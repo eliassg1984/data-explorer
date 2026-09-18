@@ -112,12 +112,14 @@ def _delta(hoy, ant):
 
 def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
                  col_punit, col_docu, col_fecha):
-    """`({id_vista: texto}, {id_vista: estado})` para `_render_rail`.
+    """`({id_vista: texto}, {id_vista: estado})`; hoy se usa el SEGUNDO.
 
-    El segundo dict es el SEMAFORO (2026-09-07, a pedido: "mas KPI"). Es
-    lo unico del KPI que sobrevive al riel PLEGADO —en 46px no entra un
-    numero, pero si un punto de color— asi que responde de un vistazo la
-    pregunta que importa con la columna cerrada: hay algo que mirar?
+    El segundo dict es el SEMAFORO (2026-09-07, a pedido: "mas KPI"). Nacio
+    como lo unico del KPI que sobrevivia al riel PLEGADO —en 46px no entra
+    un numero, pero si un punto de color— y desde el 2026-09-18 es lo unico
+    que sobrevive y punto: el texto ya no se dibuja en el rail (#465). Se
+    sigue calculando porque el punto SE DERIVA de el; responde de un vistazo
+    la pregunta que importa con la columna cerrada: hay algo que mirar?
 
     Los valores son NOMBRES DE VARIABLE CSS (`success`/`danger`/
     `warning`), no colores ni estados propios: `_render_rail` los mete
@@ -679,12 +681,16 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # `secciones`: la pila de esta página. Con eso el rail vertical de la
     # izquierda sabe qué botón encender según lo que haya en pantalla, y
     # aparece a partir de la segunda sección. Ver `base.py::_render_rail`.
-    _kpis_rail, _estados_rail = _kpis_vistas(_df_de_vista, d_full, col_valor,
-                                             col_prov, col_fam, col_prod,
-                                             col_punit, col_docu, col_fecha)
+    # DEL PAR SOLO VIAJA EL SEMAFORO (2026-09-18, a pedido: "quitemos todos
+    # los KPIs de las vistas del rail lateral"). El texto se sigue armando
+    # porque el punto de color se DERIVA de el —es lo que garantiza que el
+    # punto no diga verde donde el numero decia rojo— pero ya no se dibuja.
+    # Ver regla #465.
+    _, _estados_rail = _kpis_vistas(_df_de_vista, d_full, col_valor,
+                                    col_prov, col_fam, col_prod,
+                                    col_punit, col_docu, col_fecha)
     graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo",
-                        secciones=_PILA,
-                        kpis=_kpis_rail, estados=_estados_rail)
+                        secciones=_PILA, estados=_estados_rail)
     if graf not in opciones:
         graf = opciones[0]
 

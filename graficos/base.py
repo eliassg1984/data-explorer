@@ -1633,7 +1633,7 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
 
 
 def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
-                 secciones=None, kpis=None, estados=None):
+                 secciones=None, estados=None):
     """Vistas del reporte activo — fila de TABS DE TEXTO en la franja
     superior. Selector de tipo de gráfico/pantalla dentro de un reporte.
 
@@ -1708,21 +1708,20 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         for _cat_nombre, items in categorias:
             for item in items:
                 oid, label = item[0], item[1]
-                # KPI EN LINEA, opcional y por vista (2026-09-01, a pedido).
-                # Va DENTRO del label y no como un elemento aparte porque
-                # `st.button` no admite hijos: el label es lo unico que se
-                # puede pintar. Streamlit lo interpreta como markdown, asi
-                # que `:violet[...]` alcanza para el color sin CSS — y el
-                # espacio doble antes es lo que el CSS usa para separarlo.
+                # ACA VIVIA EL KPI EN LINEA DE CADA VISTA (2026-09-01), un
+                # `:violet[...]` pegado al label. Se fue el 2026-09-18, a
+                # pedido: "quitemos todos los KPIs de las vistas del rail
+                # lateral, no del reporte, solo de las vistas". Con la
+                # columna oculta hasta el hover (`_26_rails_scroll.py`) el
+                # rail dejo de ser un tablero y volvio a ser lo que dice su
+                # nombre: la lista de a donde se puede ir.
                 #
-                # El dashboard lo pasa ya FORMATEADO: acá no hay df ni forma
-                # de saber que significa cada vista. Una vista sin entrada
-                # en el dict queda como estaba, que es el caso de Tabla (a
-                # pedido: "todos, pero a Tabla no") y el de los 8 dashboards
-                # que no pasan nada.
-                _kpi = (kpis or {}).get(oid)
+                # Lo que NO se fue: los KPIs del REPORTE (la cabecera de la
+                # columna y los items del rail de Reportes, `navegacion.py`)
+                # y el semaforo — el punto de color por fila, que sigue
+                # saliendo de `estados`. Ver regla #465.
                 st.button(
-                    f"{label}  :violet[{_kpi}]" if _kpi else label,
+                    label,
                     key=f"{btn_prefix}{_slug(oid)}",
                     type=("primary" if oid == sel else "secondary"),
                     on_click=_rail_set, args=(state_key, oid),
@@ -1825,15 +1824,14 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     # intercambio se ve como un salto de formato.
                     # 3er elemento opcional: hay rails con tuplas de 2.
                     icono = item[2] if len(item) > 2 else None
-                    # EL KPI TAMBIEN ACA (2026-09-07, a pedido: "mas
-                    # KPI"). Hasta hoy la copia lateral mostraba solo
-                    # icono + nombre: el dato existia pero vivia unicamente
-                    # en la franja horizontal de arriba, que es la que se
-                    # VA al scrollear. O sea que justo cuando esta columna
-                    # toma el relevo, el numero desaparecia.
-                    _k = (kpis or {}).get(oid)
+                    # SIN KPI, igual que la franja horizontal (ver arriba).
+                    # Lo tuvo del 2026-09-07 al 2026-09-18 — llego aca
+                    # porque la franja de arriba se va al scrollear y el
+                    # numero desaparecia justo cuando esta columna toma el
+                    # relevo; se fue cuando la columna entera paso a
+                    # aparecer solo con el cursor encima.
                     st.button(
-                        f"{label}  :violet[{_k}]" if _k else label,
+                        label,
                         key=f"{btn_prefix}lat_{_slug_url(oid)}",
                         type="secondary",
                         on_click=_rail_set, args=(state_key, oid),
@@ -1847,13 +1845,15 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
     # en el medio que se pueda desincronizar del dict que la llena.
     #
     # POR QUE UN `::after` Y NO TEXTO EN EL LABEL: plegado, el label
-    # entero esta en `display:none` (es donde vive el nombre Y el KPI, ver
-    # `_20_compras_rail.py`). Un punto dentro del label se iria con el. El
-    # pseudo cuelga del BOTON, que sigue ahi — y ese es justo el sentido
-    # del semaforo: es lo que queda cuando no queda nada mas.
+    # entero esta en `display:none` (ver `_20_compras_rail.py`). Un punto
+    # dentro del label se iria con el. El pseudo cuelga del BOTON, que
+    # sigue ahi — y ese es justo el sentido del semaforo: es lo que queda
+    # cuando no queda nada mas. Desde el 2026-09-18 es ademas lo UNICO que
+    # queda: el KPI en linea se retiro de las dos copias del rail (#465),
+    # asi que el punto es toda la senal que da esta lista.
     #
     # Se emite una variable por key y NO una regla por key: el color
-    # cambia en cada render (los KPI son del rango vigente) y una regla
+    # cambia en cada render (los estados son del rango vigente) y una regla
     # nueva por render infla el `<style>`. Con la variable, la regla que
     # dibuja el punto es UNA sola y vive en `estilos/`, que es donde el
     # proyecto quiere el CSS.
