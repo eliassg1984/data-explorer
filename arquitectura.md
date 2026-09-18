@@ -37832,23 +37832,39 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 453. **Una barra que suma un período se parte en tramos sólo donde los
      tramos SE VEN — y eso se mide, no se elige.** Compras › Semanal, a
-     pedido del 2026-09-17: en granularidad Día el punto negro de «la
-     compra mayor» pasó a ser la barra partida en tres, la mayor / la 2ª y
-     3ª / el resto (`semanal.py::_TRAMOS`, rampa `tema.SERIE_TRAMOS`).
+     pedido del 2026-09-17: el punto negro de «la compra mayor» pasó a ser
+     la barra partida en tres, la mayor / la 2ª y 3ª / el resto
+     (`semanal.py::_TRAMOS`, rampa `tema.SERIE_TRAMOS`). Primero sólo en
+     Día; **Semana se sumó el mismo día**, mirando la vista publicada.
 
-     **Por qué sólo en Día.** Medido con DuckDB contra `compras.parquet`,
-     cuánto se lleva la compra mayor de su período:
+     **Dónde entra.** Medido con DuckDB contra `compras.parquet`, el
+     reparto MEDIO de cada período entre los tres tramos:
 
-     | granularidad | la mayor |
-     |---|---|
-     | Día | 42,9 % (entre 18,1 y 73,2) |
-     | Semana | 13,7 % |
-     | Mes | 4,7 % |
+     | granularidad | la mayor | 2ª y 3ª | el resto | rango de la mayor |
+     |---|---|---|---|---|
+     | Día | 42,9 % | 38,5 % | 21,4 % | 18,1 – 73,2 (30 per.) |
+     | Semana | 13,7 % | 17,6 % | 68,7 % | 6,5 – 28,7 (53 per.) |
+     | Mes | 4,7 % | — | — | no entra |
 
-     En Mes el tramo de la mayor serían 3px. En Día los tres promedian
-     43 / 40 / 17 %. Y tres y no uno por compra porque el día mediano trae
-     8,8 compras y de la cuarta en adelante suman el 5 %: una por compra
-     son segmentos sub-píxel que las líneas divisorias se comen.
+     En Mes el tramo de la mayor serían 3px. En Semana el peor caso es
+     6,5 %, pero sus barras son sumas de ~61 compras y llegan altas, así
+     que eso sigue dando ~8px. Y tres y no uno por compra porque el día
+     mediano trae 8,8 compras y de la cuarta en adelante suman el 5 %: una
+     por compra son segmentos sub-píxel que las líneas divisorias se comen.
+
+     **Lo que cambia entre Día y Semana no es si se ve, es qué dice**, y
+     por eso las dos llevan el mismo dibujo: en Día manda la mayor (43 %) y
+     la barra se lee «hubo una compra grande»; en Semana manda la cola
+     (69 %) y se lee «la semana son muchas compras medianas». Las dos
+     contestan de qué está hecho el período. Lo que empujó a sumar Semana
+     fue ver la vista publicada: los 8 puntos caían todos entre 0 y 5k
+     contra barras de 28-33k — el amontonamiento contra el cero que
+     `_tope_puntos` mitiga pero no cura.
+
+     **Y al sumar una granularidad hay un literal que se vuelve falso sin
+     avisar:** el hover decía «Total del día», y sobre una semana el
+     número era correcto y el rótulo no. Vive en `_TOTAL_DEL_PERIODO`, al
+     lado de `_GRAN_PARTIDA`, para que sumar una sea tocar las dos.
 
      **El clic no cambió, y no por pereza.** La tabla de la derecha ya
      abría en la compra mayor del período, así que en Día —donde el tope

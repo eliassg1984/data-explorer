@@ -200,7 +200,9 @@ def _tope_puntos(n_periodos):
     """Cuántas compras por período CABEN, no cuántas se querrían mostrar.
 
     Nació de una medición que tiró abajo la premisa del reparto dentro del
-    slot (2026-09-08). Con la franja en 53 semanas y el tope fijo en 8:
+    slot (2026-09-08). El ejemplo es de cuando Semana dibujaba puntos —hoy
+    va partida (#453) y esto gobierna Mes y Año—, pero la cuenta es la
+    misma. Con la franja en 53 períodos y el tope fijo en 8:
 
         px por slot        18,6      (988px de lienzo / 53)
         reparto            11,5px    (el 62% del slot)
@@ -223,22 +225,32 @@ def _tope_puntos(n_periodos):
 
 
 # ===========================================================================
-# LA BARRA DEL DÍA SE PARTE EN TRES (2026-09-17, regla #453)
+# LA BARRA SE PARTE EN TRES (2026-09-17, regla #453)
 # ===========================================================================
-# Reemplaza al punto negro en granularidad Día. El punto decía «ésta es la
-# compra mayor» y no decía nada más; el reparto del día —una compra grande o
-# quince chiquitas— quedaba fuera del gráfico.
+# Reemplaza al punto negro. El punto decía «ésta es la compra mayor» y no
+# decía nada más; el reparto del período —una compra grande o quince
+# chiquitas— quedaba fuera del gráfico.
 #
-# POR QUÉ SÓLO EN DÍA. Medido con DuckDB contra `compras.parquet`, cuánto se
-# lleva la compra mayor de su período:
+# DÍA Y SEMANA SÍ, MES Y AÑO NO. Medido con DuckDB contra `compras.parquet`,
+# el reparto MEDIO de cada período entre los tres tramos (y el rango del
+# primero, que es el que puede quedar fino):
 #
-#     Día      42,9 %   (entre 18,1 y 73,2)
-#     Semana   13,7 %
-#     Mes       4,7 %
+#     Día      42,9 / 38,5 / 21,4 %   la mayor entre 18,1 y 73,2   (30 per.)
+#     Semana   13,7 / 17,6 / 68,7 %   la mayor entre  6,5 y 28,7   (53 per.)
+#     Mes       4,7 / ...                                          — no entra
 #
-# En Mes el tramo de la mayor es el 4,7 % de la barra: 3px que no se leen.
-# El corte en tres sólo tiene sentido donde los tres tramos se ven, y eso es
-# Día — ahí promedian 43 / 40 / 17 %. Semana, Mes y Año siguen con el punto.
+# En Mes la mayor es el 4,7 % de la barra: 3px que no se leen. En Semana el
+# peor caso es 6,5 %, pero sobre barras semanales —que son sumas de ~61
+# compras y llegan altas— eso sigue dando ~8px. Entra.
+#
+# LO QUE CAMBIA ENTRE LAS DOS NO ES SI SE VE, ES QUÉ DICE. En Día manda la
+# mayor (43 %) y la barra se lee «hubo una compra grande»; en Semana manda la
+# cola (69 %) y se lee «la semana son muchas compras medianas». Las dos son
+# ciertas y las dos son la misma pregunta —de qué está hecho este período—,
+# así que van con el mismo dibujo. Semana se sumó a pedido el 2026-09-17,
+# mirando la vista publicada: ahí los 8 puntos caían todos entre 0 y 5k
+# contra barras de 28-33k, o sea amontonados contra el cero, que es el bug
+# que el tope de `_tope_puntos` vino a mitigar y no a curar.
 #
 # POR QUÉ TRES Y NO UNA POR COMPRA. El día mediano trae 8,8 compras (mediana
 # histórica 13, máximo 46) y la cola a partir de la cuarta vale el 5 % del
@@ -253,9 +265,21 @@ def _tope_puntos(n_periodos):
 # granularidad donde más se lo veía. Los tres tramos resuelven como barra
 # (el `and not _pts.empty` de la resolución del clic ya los manda al else).
 
-_GRAN_PARTIDA = ("Día",)
+_GRAN_PARTIDA = ("Día", "Semana")
 """Granularidades cuya barra se parte en tramos. Ver el comentario de arriba:
-la lista sale de una medición, no de un criterio estético."""
+la lista sale de una medición, no de un criterio estético — entra la
+granularidad donde los tres tramos SE VEN, y Mes y Año no llegan.
+
+Sumar una es sumarla acá y darle su entrada en `_TOTAL_DEL_PERIODO`, que es
+lo que evita que el hover diga «Total del día» sobre una semana."""
+
+_TOTAL_DEL_PERIODO = {"Día": "Total del día", "Semana": "Total de la semana",
+                      "Mes": "Total del mes", "Año": "Total del año"}
+"""Cómo nombra el hover al total del período, por granularidad.
+
+Era el literal «Total del día» mientras la barra partida vivía sólo en Día.
+Al sumar Semana pasó a ser falso sin dar ningún error: el número era el de
+la semana y el rótulo decía día."""
 
 _TRAMOS = (
     (0, 0, "La mayor"),
@@ -1169,6 +1193,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             _hov = _de_g["hov"].reindex(_ord_claves).tolist()
             _tot = _de_g["valor"].reindex(_ord_claves).tolist()
             _famh = _de_g["fam_hov"].reindex(_ord_claves).tolist()
+            _rot_total = _TOTAL_DEL_PERIODO.get(gran, "Total del período")
             _tramos = _tramos_del_periodo(dd, _ord_claves)
             _textos = (_etiqueta_en_la_punta(_tramos, _etq) if _plan_etq
                        else [None] * len(_tramos))
@@ -1191,7 +1216,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                     hovertemplate=("%{customdata[0]}"
                                    f"<br><b>{_rot}</b>: S/ %{{y:,.2f}}"
                                    "<br>%{customdata[1]}"
-                                   "<br>Total del día: S/ %{customdata[2]:,.2f}"
+                                   f"<br>{_rot_total}: "
+                                   "S/ %{customdata[2]:,.2f}"
                                    "%{customdata[3]}"
                                    "<extra></extra>"),
                 )
@@ -1220,9 +1246,11 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                                    **_estilo_etq)
 
         # ── Los puntos: una COMPRA, no una línea de producto ─────────────
-        # Una orden de 5 líneas es un solo punto, no cinco. Se omiten en
-        # "Por documento": ahí cada barra YA es una compra y el punto caería
-        # pegado a su propia punta, sin sumar información.
+        # Una orden de 5 líneas es un solo punto, no cinco. Hoy los dibujan
+        # sólo Mes y Año: en «Por documento» cada barra YA es una compra y el
+        # punto caería pegado a su propia punta, y en Día y Semana los
+        # reemplazó la barra partida (`_GRAN_PARTIDA`) — que es donde los
+        # puntos peor se portaban, amontonados contra el cero.
         #
         # 2026-09-08, y es el corazón del cambio (la medición está en el
         # docstring del módulo): TOPE por período + REPARTO dentro del slot.
