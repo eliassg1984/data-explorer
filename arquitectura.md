@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-468 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+469 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (166)
+**CSS y estilos** (167)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -200,6 +200,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#464** — Juntar controles en UN renglón se paga en ancho, y el presupuesto se mide contra el peor…
 - **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
+- **#469** — Con los :has() de estilos/, cambiar UNA clase en CUALQUIER elemento recalcula los estilos de…
 
 **Layout y alturas** (68)
 
@@ -38999,6 +39000,95 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
+469. **Con los `:has()` de `estilos/`, cambiar UNA clase en CUALQUIER
+     elemento recalcula los estilos de la página entera: ~100 ms en la
+     laptop del usuario. Un temporizador no puede escribir el DOM si nada
+     cambió, y un rerun se paga en segundos de página congelada.**
+     Reportado 2026-09-18: *«al hacer click a veces se queda pasmada, como
+     que no responde, y responde después largo rato»*.
+
+     **Lo que se midió primero, antes de mirar el código.** Con la app de
+     Cloud abierta en Edge, un proceso del navegador (la pestaña) estuvo al
+     75 % de un núcleo en promedio durante 13 minutos, y por encima del
+     90 % en 275 de 566 segundos, sin que nadie tocara nada. No era el
+     servidor: la pestaña quemaba CPU sola.
+
+     **Lo que se midió después, en local** (Compras, datos reales de R2,
+     1.620 nodos en el documento, 1.536 reglas CSS, 142 de ellas con
+     `:has()`), cronometrando `classList.toggle` + `getBoundingClientRect`:
+
+       | cambio | con los `:has()` | sin ellos |
+       |---|---|---|
+       | clase inventada en un `<p>` cualquiera | 99 ms | 0,1 ms |
+       | quitar y poner `vista-en-pantalla` en un botón del rail | 73–83 ms | 0,2 ms |
+       | un `data-*` o el texto de un nodo | ~0 ms | ~0 ms |
+
+     Y el gesto real —Mes → Semana en la granularidad de Producto,
+     tareas largas del hilo principal con un `PerformanceObserver`
+     (`longtask`)—:
+
+       | | con los `:has()` | sin ellos |
+       |---|---|---|
+       | tiempo total congelado | 14,7 s | 0,95 s |
+       | peor tramo seguido | **10,5 s** | 0,4 s |
+
+     Los 10,5 s caen justo cuando llega la respuesta del servidor: es
+     Streamlit aplicando el rerun, y cada cambio de clase que emotion y
+     React hacen en el camino paga el recálculo entero. El tiempo del
+     SERVIDOR (3-6 s en Cloud, #366) es otro y va aparte: ése es la espera
+     con el velo «Actualizando…»; lo que se reportó como «pasmada» es la
+     página que no responde ni al scroll.
+
+     **El goteo constante era el temporizador del rail** (`base.py::
+     _render_rail`, cada 400 ms): quitaba `vista-en-pantalla` de todos los
+     botones y se la volvía a poner al mismo, en CADA vuelta. En la
+     medición aparece como una tarea de ~110 ms cada ~400 ms, para
+     siempre: un cuarto de núcleo quemado con la página quieta, y hasta
+     110 ms de demora en cualquier clic que caiga encima. Ahora escribe
+     sólo si el botón marcado cambió. La guarda ya existía en la rama del
+     destino aparte (`FUERA`), que la tenía desde la #419; la rama normal no.
+
+     **Y hay un segundo goteo, que NO se arregló acá: `app.py::
+     _vigilar_refresco`** (`@st.fragment(run_every=4)`, montado siempre a
+     propósito; ver `mapa.md`). Con la página quieta corre cada 4 s, dura
+     ~200 ms y no cambia nada visible — pero Streamlit pasa la app a
+     `running` y el `stStatusWidget` (escondido por `_70_chrome.py`, pero
+     montado) recorre sus clases de transición: nueve cambios de clase por
+     corrida. Medido con el arreglo del rail ya puesto: un racimo de
+     ~800 ms de tareas largas cada 4 s, clavado al ritmo del fragment. Un
+     clic que cae encima espera ese racimo. Esconder algo con CSS no le
+     quita el costo de sus cambios de clase.
+
+     **Lo que NO se arregló acá, y es lo grande: el costo de los `:has()`
+     mismos.** No es aditivo, y eso engaña. Probadas una por una (con un
+     recálculo de calentamiento después de insertarla, porque si no se
+     mide el costo de INSERTAR la regla), diez cuestan 40–74 ms solas —casi
+     todas `[data-testid="stPopoverBody"]:has([class*="st-key-cp_…"])`,
+     más `div[class*="st-key-ajuste_graf_card_"]:has([class*="st-key-ventas_g_dia"])`
+     y la de `stMainBlockContainer:has(.st-key-compras_tabs_row)`—, pero
+     **sacar esas diez y dejar las otras 132 sigue costando 95 ms**. Sacando
+     de a 20 desde el final: 132 → 111 ms, 92 → 106, 72 → 44, 52 → 47,
+     32 → 0,1. O sea que hay combinaciones que vuelven cara a una regla
+     que sola es barata. La sospecha, sin confirmar: un `[class*="…"]`
+     dentro de un `:has()` no se puede indexar como una clase, y pasado
+     cierto número el navegador deja de acotar y re-evalúa todo. El arreglo
+     de fondo es reescribir esos `:has()` sobre la clase EXACTA que da la
+     key (`.st-key-foo` en vez de `[class*="st-key-foo"]`) o sobre un
+     `data-*`, y medir con el mismo cronómetro de arriba después de cada
+     tanda — no hay forma de saber cuál sobra sin medir.
+
+     **Regla, en dos partes:**
+     - Un temporizador o un observer que toca el DOM escribe sólo si el
+       valor CAMBIÓ (`contains` antes de `add`, comparar antes de
+       `setAttribute`). En esta página ninguna escritura de clase es
+       barata.
+     - Antes de sumar un `:has()`, cronometrar el toggle de una clase
+       cualquiera con y sin la regla nueva: el costo no está en la regla
+       sino en lo que le hace al resto. El «2,3 ms, se paga» de la #366 se
+       midió con una sola regla y ya no describe la página.
+
+     (2026-09-18.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39011,7 +39101,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#469**.
+> próxima regla nueva es la **#470**.
 
 >
 

@@ -2055,13 +2055,23 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                       doc.documentElement.classList.toggle(
                         'rails-scrolled',
                         !!primera && mejor.sec !== MAPA[0].sec);
-                      var previos = doc.querySelectorAll('.vista-en-pantalla');
-                      for (var i = 0; i < previos.length; i++) {{
-                        previos[i].classList.remove('vista-en-pantalla');
-                      }}
+                      // Se escribe SOLO lo que cambia. Quitar y volver a poner
+                      // la misma clase no es gratis: con los `:has()` de
+                      // estilos/, cualquier cambio de clase recalcula los
+                      // estilos de la pagina entera — medido, ~100 ms en la
+                      // laptop del usuario, o sea un cuarto de nucleo
+                      // quemado para siempre a 400 ms por vuelta. Regla #469.
                       var b = doc.querySelector(
                         '[class*="st-key-' + mejor.btn + '"] button');
-                      if (b) b.classList.add('vista-en-pantalla');
+                      var previos = doc.querySelectorAll('.vista-en-pantalla');
+                      for (var i = 0; i < previos.length; i++) {{
+                        if (previos[i] !== b) {{
+                          previos[i].classList.remove('vista-en-pantalla');
+                        }}
+                      }}
+                      if (b && !b.classList.contains('vista-en-pantalla')) {{
+                        b.classList.add('vista-en-pantalla');
+                      }}
                     }}
 
                     // ── 2. Activar la proxima, de a una ─────────────────
