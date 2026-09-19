@@ -14,22 +14,35 @@ fila por compra, y la de la derecha «qué había en esa compra».
 EL LOOK es el de las grillas de Volatilidad (`_css_look`, filas de
 `ALTO_FILA`): su tabla de compras de la semana es la misma pregunta, y dos
 tablas de compras con dos looks distintos en la misma página no se leen
-como la misma cosa (regla #404). Las celdas llegan YA FORMATEADAS desde el
-drill, como allá: ninguna de las dos se ordena, así que no hace falta que
-el monto viaje como número.
+como la misma cosa (regla #404).
 
-LA FILA MARCADA NO ES LA SELECCIÓN DE AG GRID. La key de la grilla de
-documentos lleva el documento elegido (la arma el drill), así que cada
-cambio estrena grilla y ésta nace SIN selección: lo que se ve marcado es
-una clase de fila que sale de `__sel`, un dato que viaja en la fila, con el
-mismo look que una fila seleccionada. Dos cosas que salen de eso:
+LAS DOS SE ORDENAN desde el 2026-09-19, a pedido («que ambas tablas tengan
+opciones de ordenar por columnas»), con clic en la cabecera. Hasta ese día
+las celdas llegaban YA FORMATEADAS desde el drill, como texto, y un
+«S/ 4,425.14» ordenado como texto queda debajo de «S/ 443.00». Ahora el
+número y la fecha viajan crudos —la fecha en ISO, que ordena bien como
+texto— y el formato lo pone un `valueFormatter`, igual que en
+`tablas/ajuste_familias.py`. Ordenar no manda nada a Python (`update_on`
+sólo escucha la selección): es gratis.
 
-  · la grilla no puede contradecir al estado del drill, que también lo
-    cambia un clic en el GRÁFICO (un punto de la serie es una compra);
-  · cualquier selección que devuelva es un clic de verdad, nunca un resto
-    de la corrida anterior — no hace falta recordar qué devolvió antes.
+LA FILA MARCADA NO ES LA SELECCIÓN DE AG GRID: es una clase de fila que sale
+de `__sel`, un dato que viaja en la fila, con el mismo look que una fila
+seleccionada. Así la grilla no puede contradecir al estado del drill, que
+también lo cambia un clic en el GRÁFICO.
 
-Ver regla #440.
+Y LA KEY YA NO LLEVA EL DOCUMENTO ELEGIDO (2026-09-19). La llevaba para que
+cada clic estrenara grilla, y eso borraba en cada clic el orden que el
+usuario acababa de elegir. La arma el drill con lo que cambia las FILAS
+(período, filtros, rango, clic en el gráfico) y no con la fila elegida:
+
+  · la marca va por `rowClassRules` y no por `getRowClass`, que al
+    refrescar una fila agrega clases pero no las quita (regla #441: con la
+    key estable quedaban DOS filas marcadas);
+  · lo que devuelve es la selección VIGENTE, no un clic de esta vuelta: el
+    drill la compara contra la compra que ya muestra y sólo actúa si
+    difiere.
+
+Ver reglas #440 y #471.
 
 2026-09-17 — FILA TOTAL FIJA en las dos (regla #454): `total=` es el dict de
 esa fila, ya formateado como el resto. Va por `pinnedBottomRowData`, con la
@@ -62,10 +75,47 @@ cinco columnas se comerían 160px de aire."""
 
 _CLASE_SEL = "sem-doc-sel"
 
-_CLASE_FILA = JsCode(
-    "function(p){ return p.data && p.data.__sel ? '" + _CLASE_SEL + "' : ''; }")
+REGLAS_FILA = {_CLASE_SEL: JsCode(
+    "function(p){ return !!(p.data && p.data.__sel); }")}
 """La fila del documento que muestra la tabla de al lado. Ver «LA FILA
-MARCADA NO ES LA SELECCIÓN DE AG GRID» en el docstring del módulo."""
+MARCADA NO ES LA SELECCIÓN DE AG GRID» en el docstring del módulo.
+
+`rowClassRules` y no `getRowClass`: con la key estable la fila se REFRESCA
+en vez de estrenarse, y `getRowClass` agrega clases al refrescar pero no las
+quita (regla #441). La usa también `tablas/ajuste_familias.py`, que fue el
+que lo midió: una sola regla para las dos marcas."""
+
+# ── Formatos: el dato viaja crudo para que la columna se ORDENE ─────────
+# Los cuatro dejan pasar tal cual lo que no es del tipo esperado: la fila
+# TOTAL fija llega ya formateada como texto («Total», «564», «S/ 74,972.27»)
+# y no se ordena (las filas fijas no son parte del modelo de filas).
+_JS_FECHA = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'string' || v.length < 10 || v.charAt(4) !== '-')"
+    " return v == null ? '' : String(v);"
+    " return v.slice(8, 10) + '/' + v.slice(5, 7) + '/' + v.slice(0, 4); }")
+"""«2026-09-01» → «01/09/2026». La fecha viaja en ISO porque ISO ordenado
+como texto ES el orden de las fechas; «01/09» ordenado como texto no."""
+
+_JS_ENTERO = JsCode(
+    "function(p){ var v = p.value; if (typeof v !== 'number')"
+    " return v == null ? '' : String(v);"
+    " return Math.round(v).toLocaleString('es-PE'); }")
+
+_JS_CANTIDAD = JsCode(
+    "function(p){ var v = p.value; if (typeof v !== 'number')"
+    " return v == null ? '' : String(v);"
+    " return v.toLocaleString('es-PE',"
+    " {minimumFractionDigits: 1, maximumFractionDigits: 1}); }")
+
+_JS_SOLES = JsCode(
+    "function(p){ var v = p.value; if (v == null) return '—';"
+    " if (typeof v !== 'number') return String(v);"
+    " return (v < 0 ? '−' : '') + 'S/ ' + Math.abs(v).toLocaleString('es-PE',"
+    " {minimumFractionDigits: 2, maximumFractionDigits: 2}); }")
+"""«S/ 4,425.14», con dos decimales como el resto de Semanal (`es-PE` agrupa
+con coma y separa decimales con punto, igual que el `:,.2f` de Python). Un
+valor vacío —el precio unitario que no vino— es «—»."""
 
 _AL_MONTAR = JsCode("""
     function(params) {
@@ -149,6 +199,9 @@ def _css():
     # `ajuste_familias.py`, que la tenía primero: la fila terminaba 1px por
     # debajo de la grilla, recortada). Regla #364.
     css[".ag-floating-bottom"] = {"border-top": "none !important"}
+    # La cabecera de una columna ordenable muestra la flecha: sin aire, el
+    # rótulo y la flecha se pisan (el mismo arreglo que `ajuste_familias`).
+    css[".ag-header-cell-label"] = {"gap": "4px"}
     return css
 
 
@@ -156,8 +209,9 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
                                   ver_doc=True, total=None):
     """Una fila por COMPRA del período en foco.
 
-    `tp` trae `fecha`, `doc`, `prov`, `lineas` y `valor` ya formateados como
-    texto, más dos ocultas: `__compra` (la clave de la compra, la misma de
+    `tp` trae `fecha` (texto ISO), `doc`, `prov`, `lineas` y `valor`
+    (números crudos: el formato lo pone la grilla, para que se ordenen), más
+    dos ocultas: `__compra` (la clave de la compra, la misma de
     `semanal.py`) y `__sel` (True en la que muestra la tabla de al lado).
 
     `ver_fecha` en False cuando todas las filas son del mismo día («Por
@@ -166,16 +220,20 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
     (regla #239). `ver_doc` en False sin columna de documento (el demo).
     `total` es la fila TOTAL fija (ver el docstring del módulo), o None.
 
-    Devuelve la `__compra` de la fila clickeada, o None. Como la grilla nace
-    sin selección (ver el docstring del módulo), un valor es siempre un clic
-    de esta vuelta."""
+    Devuelve la `__compra` de la fila SELECCIONADA, o None. Es la selección
+    vigente y no un clic de esta vuelta (la key no cambia con la fila
+    elegida, ver el docstring del módulo): el llamador la compara contra la
+    compra que ya muestra."""
     gb = GridOptionsBuilder.from_dataframe(tp)
     gb.configure_default_column(
-        resizable=False, sortable=False, filter=False, editable=False,
+        resizable=False, sortable=True, filter=False, editable=False,
         suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
     )
+    # Los anchos de las columnas ordenables suman la flecha (12px) y su aire
+    # (4px) al rótulo: «Fecha» pasó de 86 a 94 y «Líneas» de 62 a 76.
     gb.configure_column("fecha", header_name="Fecha", hide=not ver_fecha,
-                        width=86, minWidth=86, suppressSizeToFit=True)
+                        valueFormatter=_JS_FECHA,
+                        width=94, minWidth=94, suppressSizeToFit=True)
     # 104: los 87px de «FF01-00012345» a 13px más los 8+8 de padding — la
     # misma cuenta que la columna de Volatilidad.
     gb.configure_column("doc", header_name="Documento", hide=not ver_doc,
@@ -183,23 +241,40 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
     gb.configure_column("prov", header_name="Proveedor", width=140,
                         minWidth=80, tooltipField="prov")
     gb.configure_column("lineas", header_name="Líneas", type=["numericColumn"],
-                        width=62, minWidth=62, suppressSizeToFit=True)
-    # 104: «S/ 123,456.78» mide ~86px a 13px, más el padding.
+                        valueFormatter=_JS_ENTERO,
+                        width=76, minWidth=76, suppressSizeToFit=True)
+    # 112: «S/ 123,456.78» mide ~86px a 13px, más el padding y la flecha.
+    # Abre ordenada por acá, que es el orden en que el drill ya las
+    # mandaba: la flecha dice por qué columna está ordenada antes de que
+    # nadie toque nada.
+    #
+    # `initialSort` y NO `sort`, y es lo que hace que el orden sobreviva al
+    # clic. st_aggrid le vuelve a pasar las `columnDefs` a la grilla en cada
+    # corrida aunque la key no cambie, y AG Grid re-aplica `sort` cada vez
+    # que las recibe: medido el 2026-09-19, ordenar por Proveedor y
+    # clickear un documento devolvía la tabla a Valor ↓. `initialSort` sólo
+    # cuenta cuando la columna se crea (regla #471).
     gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
-                        width=104, minWidth=104, suppressSizeToFit=True)
+                        valueFormatter=_JS_SOLES, initialSort="desc",
+                        width=112, minWidth=112, suppressSizeToFit=True)
     gb.configure_column("__compra", hide=True)
     gb.configure_column("__sel", hide=True)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
-        suppressCellFocus=True, getRowClass=_CLASE_FILA,
+        suppressCellFocus=True, rowClassRules=REGLAS_FILA,
         onGridReady=_AL_MONTAR), total))
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
 
+    # `update_on` sólo la selección: el default de st_aggrid suma
+    # `sortChanged`, y cada clic en una cabecera costaría una corrida entera
+    # del fragment (3-6 s en Cloud) para reordenar algo que el navegador ya
+    # reordenó.
     resp = AgGrid(
         tp, gridOptions=grid_options, height=altura, theme="material",
         custom_css=_css(), allow_unsafe_jscode=True, key=key,
+        update_on=["selectionChanged"],
     )
     sel = resp.selected_rows
     if sel is not None and not sel.empty:
@@ -208,25 +283,29 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
 
 
 def renderizar_lineas_semanal(tp, altura, key, total=None):
-    """Las líneas de UN documento: `prod`, `cant`, `punit` y `valor`, ya
-    formateadas. Sin selección: se lee, no se clickea. `total` es la fila
-    TOTAL fija, o None.
+    """Las líneas de UN documento: `prod` y los números crudos `cant`,
+    `punit` (vacío si no vino) y `valor` — el formato lo pone la grilla,
+    para que se ordenen. Sin selección: se lee, no se clickea. `total` es
+    la fila TOTAL fija, o None.
 
     Sin fecha, documento ni proveedor, a propósito: son los mismos en todas
     las filas y ya los dice la fila marcada de al lado."""
     gb = GridOptionsBuilder.from_dataframe(tp)
     gb.configure_default_column(
-        resizable=False, sortable=False, filter=False, editable=False,
+        resizable=False, sortable=True, filter=False, editable=False,
         suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
     )
     gb.configure_column("prod", header_name="Producto", width=180,
                         minWidth=100, tooltipField="prod")
     gb.configure_column("cant", header_name="Cantidad", type=["numericColumn"],
-                        width=86, minWidth=86, suppressSizeToFit=True)
+                        valueFormatter=_JS_CANTIDAD,
+                        width=98, minWidth=98, suppressSizeToFit=True)
     gb.configure_column("punit", header_name="P. unit.", type=["numericColumn"],
-                        width=96, minWidth=96, suppressSizeToFit=True)
+                        valueFormatter=_JS_SOLES,
+                        width=100, minWidth=100, suppressSizeToFit=True)
     gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
-                        width=104, minWidth=104, suppressSizeToFit=True)
+                        valueFormatter=_JS_SOLES, initialSort="desc",
+                        width=112, minWidth=112, suppressSizeToFit=True)
     gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         # Sin selección un clic no hace nada, pero AG Grid igual le dibuja el
@@ -235,7 +314,10 @@ def renderizar_lineas_semanal(tp, altura, key, total=None):
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # arquitectura.md #159
 
+    # Sin `update_on`: no hay nada que esta grilla le tenga que decir a
+    # Python — ni la selección, que no tiene, ni el orden.
     AgGrid(
         tp, gridOptions=grid_options, height=altura, theme="material",
-        custom_css=_css(), allow_unsafe_jscode=True, key=key,
+        custom_css=_css(), allow_unsafe_jscode=True, key=key, update_on=[],
     )
+

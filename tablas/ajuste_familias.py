@@ -17,11 +17,12 @@ EL LOOK Y LA FILA MARCADA son los de Compras › Semanal
 (`tablas/compras_semanal.py`), no una copia: la familia en foco la marca el
 dato `__sel`, con el mismo look que una fila seleccionada (regla #440).
 
-LO QUE CAMBIA RESPECTO DE SEMANAL ES LA KEY, y por una razón: éstas SÍ se
-ordenan —clic en la cabecera—, así que los montos viajan como número y el
-formato lo pone un `valueFormatter`. Allá la key lleva el documento elegido
-y cada clic estrena grilla; acá eso le borraría al usuario el orden que
-acaba de elegir, en cada clic. Como el foco de esta vista sólo lo cambia
+LA KEY NO LLEVA EL FOCO, y por una razón: éstas se ordenan —clic en la
+cabecera—, así que los montos viajan como número y el formato lo pone un
+`valueFormatter`. Una key con el foco estrenaría grilla en cada clic y le
+borraría al usuario el orden que acaba de elegir. (Semanal la llevaba y
+dejó de hacerlo el 2026-09-19, cuando sus tablas también pasaron a
+ordenarse: ver regla #471.) Como el foco de esta vista sólo lo cambia
 esta misma grilla, la key lleva los DATOS (corte, familias, áreas) y no el
 foco: una selección que vuelve es la vigente, y coincide con el foco
 después del primer rerun. El precio es el de la regla #410 —una grilla que
@@ -38,7 +39,8 @@ from tablas._config import _parchar_iconos
 # ancho y el look son UNA decisión, y dos copias se separan al primer
 # retoque (el mismo motivo por el que Semanal toma `_css_look` de
 # Volatilidad).
-from tablas.compras_semanal import _AL_MONTAR, _CLASE_SEL
+from tablas.compras_semanal import _AL_MONTAR
+from tablas.compras_semanal import REGLAS_FILA as _REGLAS_FILA
 from tablas.compras_semanal import JS_FILA_TOTAL as _JS_FILA_TOTAL
 from tablas.compras_semanal import _css as _css_semanal
 from tablas.compras_volatilidad import ALTO_FILA
@@ -108,13 +110,14 @@ _JS_COLOR_SALDO = JsCode(
     " 'fontWeight':'600'};}")
 
 # LA MARCA DE LA FILA EN FOCO VA POR `rowClassRules`, NO POR `getRowClass`.
-# Semanal usa lo segundo y le alcanza porque estrena grilla en cada clic.
 # Ésta conserva su key, y AG Grid documenta que las clases de `getRowClass`
 # se AGREGAN al refrescar la fila pero no se QUITAN: medido, después del
 # primer clic quedaban marcadas la familia vieja y la nueva. `rowClassRules`
 # evalúa la regla en cada refresco y quita la clase cuando deja de cumplirse.
-_REGLAS_FILA = {_CLASE_SEL: JsCode(
-    "function(p){ return !!(p.data && p.data.__sel); }")}
+# La regla vive en `tablas/compras_semanal.py` desde el 2026-09-19, cuando
+# Semanal también dejó de estrenar grilla en cada clic para que sus tablas
+# se pudieran ordenar (#471): una sola regla para las dos marcas.
+
 
 # La fila TOTAL (`_JS_FILA_TOTAL`) vivía acá hasta el 2026-09-17: se mudó a
 # `tablas/compras_semanal.py` cuando Semanal sumó la suya (regla #454), junto

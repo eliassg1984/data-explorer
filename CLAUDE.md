@@ -806,6 +806,12 @@ español es `cortes.MESES_ABR_ES` — una sola en todo el repo. Regla #241.
 - **Un cell editor propio rechaza devolviendo lo de antes desde
   `getValue()`, no con `isCancelAfterEnd`.** Cancelar deja el editor
   montado y la celda se ve VACÍA. Regla #228.
+- **Una grilla adentro de un `st.empty()` se re-monta en CADA corrida**,
+  aunque su key no cambie: el `st.empty()` manda su elemento vacío y ése
+  reemplaza al bloque de antes. Se ve como «ordeno la tabla y al hacer clic
+  vuelve al orden de antes». El `st.empty()` va sólo en la rama que vacía;
+  y el orden de entrada de una columna, en `initialSort` (st_aggrid
+  re-aplica `sort` cada vez que cambian las `gridOptions`). Regla #471.
 - **`getRowClass` agrega clases al refrescar la fila pero NO las quita.**
   Una grilla que conserva su key (para no perder el orden que eligió el
   usuario) y marca su fila en foco con un dato termina con DOS filas

@@ -934,13 +934,17 @@ CSS = """        <style>
            adentro no alcanza — el que reparte es el padre (regla #272). */
         .st-key-cp_sem_filtros
             > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_hdr_familia) {
-            flex: 0 0 auto !important;
-            width: 190px !important;
+            flex: 1 1 150px !important;
+            min-width: 0 !important;
+            width: auto !important;
+            max-width: 190px !important;
         }
         .st-key-cp_sem_filtros
             > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_hdr_producto) {
-            flex: 0 0 auto !important;
-            width: 210px !important;
+            flex: 1 1 150px !important;
+            min-width: 0 !important;
+            width: auto !important;
+            max-width: 210px !important;
         }
         /* SUBFAMILIA y PROVEEDOR (2026-09-19, a pedido), con el mismo método
            de arriba —texto del peor caso + 50 de cromo— pero sin llegar al
@@ -951,16 +955,47 @@ CSS = """        <style>
            que antes, `alturas.SEMANAL_SOLO`). Quedan 399 para los dos:
            Subfamilia 180 y Proveedor 200. Lo que no entra es un recorte
            ACEPTADO, por el mismo motivo que Producto: el buscador filtra
-           sobre el nombre entero. */
+           sobre el nombre entero.
+
+           2026-09-19 (2), a pedido: «reducir horizontalmente los filtros
+           para que entre en la misma fila el widget de fecha». Con los
+           cuatro a ancho fijo el grupo medía 1131px y la fecha (138) no
+           entraba al lado en los 1252 de la fila a 1366: bajaba al renglón
+           de la KPI. Ahora los anchos de arriba son TOPES, no anchos: cada
+           desplegable arranca en 150 (`flex-basis`, que es lo que cuenta
+           para decidir si el grupo parte renglón) y crece hasta su tope con
+           lo que deje la fecha. Medido a 1366: el grupo entra en 1104 y los
+           cuatro quedan a ~190, casi su tope. Por debajo de 951 (toggle +
+           4 × 150 + gaps) el grupo sí parte renglón, que es la red de
+           siempre. Regla #471. */
         .st-key-cp_sem_filtros
             > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_hdr_subfamilia) {
-            flex: 0 0 auto !important;
-            width: 180px !important;
+            flex: 1 1 150px !important;
+            min-width: 0 !important;
+            width: auto !important;
+            max-width: 180px !important;
         }
         .st-key-cp_sem_filtros
             > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_hdr_proveedor) {
-            flex: 0 0 auto !important;
-            width: 200px !important;
+            flex: 1 1 150px !important;
+            min-width: 0 !important;
+            width: auto !important;
+            max-width: 200px !important;
+        }
+        /* EL GRUPO DE FILTROS TOMA LO QUE DEJA LA FECHA, en el mismo
+           renglón. `flex-basis: 0` + `min-width` es lo que lo hace: al
+           partir renglones el navegador cuenta el mínimo (620) y no los
+           1131 de su contenido, así que la fecha le entra al lado; después
+           crece hasta llenar. Si la fila no da ni para el mínimo más la
+           fecha, la fecha baja — la misma red de antes. El item del flex es
+           el `stLayoutWrapper` que envuelve a la key (regla #272). */
+        .st-key-cp_sem_fila
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_filtros) {
+            flex: 1 1 0 !important;
+            /* `min()` por el celular: 620 fijos desbordarían una fila
+               de 340. */
+            min-width: min(620px, 100%) !important;
+            width: auto !important;
         }
         /* Y el contenedor de elemento de adentro TAMBIEN, o el campo no
            llena el ancho reservado: la regla `width: auto` de mas abajo
@@ -1020,12 +1055,20 @@ CSS = """        <style>
            baja al renglón de la fecha, que es donde se lee junto al rango.
            El item del flex es el `stLayoutWrapper` que envuelve a la key
            (regla #272), de ahí el `:has`. */
+        /* 2026-09-19 (2): la KPI va SIEMPRE en su propio renglón, debajo.
+           En el DOM está entre los filtros y la fecha (la dibuja el mismo
+           `extra` que los filtros), así que para que la fecha suba al lado
+           de los filtros la KPI se corre al final con `order` y ocupa el
+           renglón entero. A 1366 ya iba abajo —junto a la fecha—, así que
+           la tarjeta mide lo mismo (617). */
         .st-key-cp_sem_fila
             > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_kpi) {
-            flex: 1 1 360px !important;
+            order: 2 !important;
+            flex: 1 1 100% !important;
             min-width: 0 !important;
             width: auto !important;
         }
+
         /* Con la fila delante: la regla `... cp_sem_fila
            [data-testid="stElementContainer"] { width: auto }` de más abajo
            tiene la misma especificidad que la corta y ganaría por orden. */

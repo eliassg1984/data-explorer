@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-470 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+471 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (167)
 
@@ -357,7 +357,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
 - **#470** — Una variación contra la barra anterior no se calcula si alguna de las dos es un período que…
 
-**AgGrid y tablas** (76)
+**AgGrid y tablas** (77)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -435,6 +435,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#460** — Una tira de totales puede colgarse del hover de las COLUMNAS de su tabla, y el truco está en…
 - **#462** — Una tabla con dos altos de fila se lee como dos tablas pegadas: la segunda línea se abre AL…
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
+- **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 
 **Streamlit** (128)
 
@@ -39265,6 +39266,92 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-19.)
 
+471. **Una grilla que tiene que recordar algo del navegador —el orden que
+     eligió el usuario— no puede vivir adentro de un `st.empty()`: el
+     `st.empty()` manda en CADA corrida un elemento vacío que reemplaza al
+     bloque de antes, y todo lo de adentro se re-monta aunque su key no
+     cambie. Y en una columna de AG Grid, el orden de entrada va en
+     `initialSort`, no en `sort`.**
+     Pedido el 2026-09-19 sobre Compras › Semanal, mirando el detalle de
+     la vista: *«que ambas tablas tengan opciones de ordenar por columnas.
+     Asimismo, reducir horizontalmente los filtros para que pueda entrar en
+     la misma fila el widget de fecha»*.
+
+     **Ordenar era lo fácil**: `sortable=True` y que los montos y la fecha
+     viajen crudos —la fecha en ISO, que ordenada como texto ES el orden de
+     las fechas— con un `valueFormatter` que los escribe, como ya hacía
+     `tablas/ajuste_familias.py`. Hasta ese día llegaban formateados como
+     texto, y «S/ 4,425.14» ordenado como texto queda debajo de «S/ 443».
+     Y `update_on=["selectionChanged"]`: el default de st_aggrid suma
+     `sortChanged`, o sea una corrida entera del fragment (3-6 s en Cloud)
+     por cada clic en una cabecera.
+
+     **Lo difícil fue que el orden SOBREVIVIERA al clic en un documento.**
+     Tres causas, encontradas una detrás de otra, las tres medidas en el
+     navegador marcando nodos del DOM (`dataset`) antes del clic y mirando
+     cuáles seguían después:
+
+     1. **La key llevaba la compra elegida** (#440), así que cada clic
+        estrenaba grilla. Se sacó: ahora lleva lo que cambia las FILAS
+        —período, filtros, rango y el contador de clics del gráfico—, la
+        marca va por `rowClassRules` (la de `getRowClass` no se quita al
+        refrescar, #441) y el drill actúa sólo si la selección que vuelve
+        DIFIERE de la compra que ya muestra. El contador está porque un
+        clic en la barra del mismo período devuelve el foco al período
+        entero: sin estrenar la grilla, la selección vieja que ésta sigue
+        devolviendo lo volvía a llevar a la compra de antes.
+     2. **Con la key fija, el iframe se reemplazaba igual.** Streamlit no
+        era: con `key`, el id de un componente sólo depende de la key
+        (`key_as_main_identity={"name", "url"}` en `custom_component.py`).
+        Marcando la cadena de ancestros del iframe, se perdían todos hasta
+        el contenedor del `st.empty()` que envolvía las dos tablas desde
+        el 2026-09-03 (la cura del huérfano, #70). `st.empty()` emite su
+        elemento vacío en cada corrida y ése REEMPLAZA al bloque. Arreglo:
+        el `st.empty()` queda sólo en la rama SIN detalle —es lo que borra
+        las tablas al cerrarlo, sin huérfanos: verificado, 0 grillas y la
+        tarjeta en 617— y la rama con detalle pone, en la misma posición,
+        un `st.container(key="cp_sem_detalle")`, que entre dos corridas
+        con detalle es el mismo bloque.
+     3. **`sort="desc"` en la columna de entrada.** st_aggrid, cuando
+        cambian las `gridOptions`, llama `updateGridOptions` con las
+        `columnDefs` (lo dice su `componentDidUpdate`), y AG Grid re-aplica
+        `sort` cada vez que las recibe. En la tabla de líneas cambian en
+        cada clic —la fila TOTAL viaja en `pinnedBottomRowData`— así que
+        el orden volvía a Valor ↓. `initialSort` sólo cuenta al crear la
+        columna.
+
+     Resultado medido a 1366: ordenar Documentos por Proveedor y
+     clickear otro documento deja el MISMO iframe, el orden intacto, una
+     sola fila marcada y las líneas del nuevo; ordenar Líneas por
+     Cantidad y cambiar de documento deja las líneas nuevas ordenadas por
+     cantidad y la fila TOTAL con el documento nuevo (22 líneas,
+     S/ 2,374.64). El precio: volver a tocar la fila marcada ya no la
+     suelta (AG Grid no deselecciona con un clic simple); cerrar y volver
+     a la compra mayor siguen a un clic, en la barra.
+
+     **La fecha en la fila de los filtros.** Con los cuatro desplegables a
+     ancho fijo el grupo medía 1131px y la fecha (138) no entraba al lado
+     en los 1252 de la fila: bajaba al renglón de la KPI. Tres piezas de
+     CSS en `_css_proveedor.py`: el grupo es `flex: 1 1 0` con
+     `min-width: min(620px, 100%)` —al partir renglones cuenta el mínimo y
+     no su contenido, así que la fecha le entra al lado—; cada desplegable
+     arranca en 150 y crece hasta su ancho de antes (que pasa a ser tope);
+     y la KPI, que en el DOM está entre los filtros y la fecha, se corre
+     al final con `order: 2` y ocupa su renglón. Medido a 1366: filtros y
+     fecha en un renglón (la fecha en 1168-1306), la KPI sola abajo, la
+     fila en 70px como antes y la tarjeta en 617.
+
+     **Regla:**
+     - Nada que guarde estado del lado del navegador (una grilla ordenada,
+       un scroll, un panel abierto) adentro de un `st.empty()` que se
+       vuelve a crear en cada corrida. Si hace falta el `st.empty()` para
+       vaciar, que viva sólo en la rama que vacía.
+     - La key de una grilla ordenable lleva lo que cambia sus filas, no la
+       fila elegida; lo que devuelve es la selección vigente y se compara.
+     - El orden de entrada de una columna, en `initialSort`.
+
+     (2026-09-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39277,7 +39364,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#471**.
+> próxima regla nueva es la **#472**.
 
 >
 

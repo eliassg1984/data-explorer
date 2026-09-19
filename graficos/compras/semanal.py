@@ -1801,13 +1801,26 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # `_focus` y `_doc` ya vienen resueltos de antes de la figura.
         #
         # Desde el 2026-09-14 el hueco lleva DOS grillas y no un
-        # `st.dataframe` (regla #440), y la receta del hueco sigue igual: es
-        # suyo, y se vacía con `.empty()` explícito cuando no hay foco.
-        _hueco_tabla = st.empty()
+        # `st.dataframe` (regla #440).
+        #
+        # 2026-09-19: EL `st.empty()` QUEDA SÓLO EN LA RAMA SIN DETALLE, y es
+        # lo que hace que las tablas se puedan ordenar (regla #471).
+        # `st.empty()` manda en CADA corrida un elemento vacío a su lugar, y
+        # ese elemento REEMPLAZA al bloque que había: todo lo de adentro se
+        # re-monta. Medido en el navegador marcando los nodos: tras un clic en
+        # un documento se reemplazaba el iframe de la grilla —con la MISMA
+        # key— y con él se perdía el orden que el usuario acababa de elegir.
+        # Ahora, en la misma posición, la rama con detalle pone un
+        # `st.container` con key, que entre dos corridas con detalle es el
+        # mismo bloque; y la rama sin detalle sigue poniendo el `st.empty()`,
+        # que es lo que borra las grillas al cerrar el detalle sin dejar
+        # huérfanos (#70). Mismo conteo de elementos en las dos ramas: hueco
+        # y caption.
         if not _con_detalle:
+            st.empty()
             st.caption("Tocá una barra para ver sus documentos.")
-            _hueco_tabla.empty()
             return
+        _hueco_tabla = st.container(key="cp_sem_detalle")
 
         # ── EL DETALLE, EN DOS TABLAS (2026-09-14, a pedido, regla #440) ─
         # «que la tabla de abajo se divida en dos: una que muestre el
@@ -1850,21 +1863,24 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _lin = _amb[_amb["compra"] == _sel].sort_values("valor",
                                                         ascending=False)
 
+        # Los números y la fecha viajan CRUDOS (la fecha en ISO) desde el
+        # 2026-09-19: las dos tablas se ordenan con clic en la cabecera, y
+        # un monto ya formateado se ordena como texto. El formato lo pone la
+        # grilla (`tablas/compras_semanal.py`, regla #471).
         _tp_docs = pd.DataFrame({
-            "fecha": _docs["fecha"].dt.strftime("%d/%m/%Y"),
+            "fecha": _docs["fecha"].dt.strftime("%Y-%m-%d"),
             "doc": _docs["doc"].fillna("").map(lambda v: v or "—"),
             "prov": _docs["prov"],
-            "lineas": _docs["lineas"].astype(int).astype(str),
-            "valor": _docs["valor"].map(lambda v: f"S/ {v:,.2f}"),
+            "lineas": _docs["lineas"].astype(int),
+            "valor": _docs["valor"].astype(float).round(2),
             "__compra": _docs["compra"],
             "__sel": _docs["compra"] == _sel,
         })
         _tp_lin = pd.DataFrame({
             "prod": _lin["prod"],
-            "cant": _lin["cant"].map(lambda v: f"{v:,.1f}"),
-            "punit": _lin["punit"].map(
-                lambda v: "—" if pd.isna(v) else f"S/ {v:,.2f}"),
-            "valor": _lin["valor"].map(lambda v: f"S/ {v:,.2f}"),
+            "cant": pd.to_numeric(_lin["cant"], errors="coerce").round(3),
+            "punit": pd.to_numeric(_lin["punit"], errors="coerce").round(4),
+            "valor": _lin["valor"].astype(float).round(2),
         })
 
         # ── Las filas TOTAL de las dos tablas (2026-09-17, regla #454) ────
@@ -1894,26 +1910,39 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             "valor": f"S/ {_lin['valor'].sum():,.2f}",
         }
 
-        with _hueco_tabla.container():
+        with _hueco_tabla:
+
             # columnas-internas: las dos tablas del detalle, DENTRO de la
             # tarjeta de la vista; no es una fila de drill que tenga que caer
             # en el eje de `COLUMNAS_DRILL`. La de documentos lleva cinco
             # columnas contra cuatro, de ahí el 1.15.
             _c_docs, _c_lin = st.columns([1.15, 1], gap=GAP_DRILL)
             with _c_docs:
-                # LA KEY LLEVA EL PERÍODO Y LA COMPRA ELEGIDA: cada cambio
-                # estrena grilla, que nace sin selección y marca la fila por
-                # su dato `__sel`. Ver el docstring de
-                # `tablas/compras_semanal.py`.
+                # LA KEY LLEVA LO QUE CAMBIA LAS FILAS, NO LA FILA ELEGIDA
+                # (2026-09-19, regla #471): el período, los filtros, el rango
+                # y el contador de clics del gráfico. Con la compra elegida
+                # adentro —como era hasta ese día— cada clic estrenaba grilla
+                # y le borraba al usuario el orden que acababa de elegir. El
+                # contador está porque un clic en la barra del MISMO período
+                # le devuelve el foco al período entero: sin estrenar la
+                # grilla, la selección vieja que ésta sigue devolviendo lo
+                # volvería a llevar a la compra de antes.
+                _k_tablas = _clave_grilla(gran, _id_amb, _ctx, _rng, _nclic)
                 _clic = renderizar_documentos_semanal(
                     _tp_docs, altura=alturas.SEMANAL_TABLA,
-                    key=f"compras_sem_docs_grid_{_clave_grilla(gran, _id_amb, _sel)}",
+                    key=f"compras_sem_docs_grid_{_k_tablas}",
                     ver_fecha=gran != "Por documento",
                     ver_doc=bool(col_docu), total=_tot_docs)
             with _c_lin:
+                # La MISMA key que la de al lado, sin la compra elegida: sus
+                # filas cambian con cada clic, pero el orden que el usuario
+                # eligió para las líneas (por cantidad, por precio) se
+                # mantiene al pasar de un documento a otro. Las filas nuevas
+                # y la fila TOTAL las recibe la grilla viva (`st_aggrid` le
+                # pasa `rowData` y `gridOptions` sin re-montarla).
                 renderizar_lineas_semanal(
                     _tp_lin, altura=alturas.SEMANAL_TABLA,
-                    key=f"compras_sem_lineas_grid_{_clave_grilla(_sel)}",
+                    key=f"compras_sem_lineas_grid_{_k_tablas}",
                     total=_tot_lin)
 
         # El caption NOMBRA el ámbito y nada más: cuántas compras y cuánto
@@ -1935,26 +1964,29 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                    "líneas al costado.")
 
         # ── El clic en la tabla de documentos ────────────────────────────
-        # Como la grilla nace sin selección, un valor es siempre un clic de
-        # esta vuelta. Volver a clickear la fila MARCADA la suelta: en «Por
-        # documento» cierra el detalle (es lo mismo que volver a tocar su
-        # barra) y en las otras vuelve a la compra mayor.
+        # Lo que devuelve la grilla es su selección VIGENTE, no un clic de
+        # esta vuelta: desde que conserva su key (ver arriba) la sigue
+        # devolviendo en cada corrida. Por eso se actúa sólo si difiere de la
+        # compra que ya se muestra — si no, cada corrida volvería a aplicar
+        # el mismo clic.
+        #
+        # El precio, aceptado: volver a tocar la fila MARCADA ya no la
+        # suelta (AG Grid no deselecciona con un clic simple). Hasta el
+        # 2026-09-19 eso cerraba el detalle en «Por documento» y volvía a la
+        # compra mayor en las otras; las dos cosas siguen a un clic, en la
+        # barra del gráfico.
         #
         # En «Por documento» el clic mueve el FOCO y no `compras_sem_doc`:
-        # ahí la barra es la compra, así que el gráfico marca la nueva y un
-        # segundo clic en su barra la cierra, como siempre.
+        # ahí la barra es la compra, así que el gráfico marca la nueva.
         #
         # El `rerun` hace falta porque el gráfico de ARRIBA ya se dibujó con
         # la marca vieja. Scope decidido y no fijo (regla #306).
-        if _clic is None or _clic not in set(_docs["compra"]):
+        if (_clic is None or _clic == _sel
+                or _clic not in set(_docs["compra"])):
             return
         if gran == "Por documento":
-            st.session_state["compras_sem_focus"] = (
-                None if _clic == _sel else _clic)
-        elif _clic == _sel:
-            if not _doc_ok:
-                return  # ya era la que se mostraba por defecto
-            st.session_state["compras_sem_doc"] = None
+            st.session_state["compras_sem_focus"] = _clic
         else:
             st.session_state["compras_sem_doc"] = _clic
         st.rerun(scope=scope_rerun())
+
