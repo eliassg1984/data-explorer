@@ -283,8 +283,9 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
                       if prev is not None and col_docu in prev.columns else None)
         kpis["Documentos SUNAT"] = _texto(_txt, _delta(_n_sis, _prev_docs))
 
-    # SEMANAL: la mejor semana del rango, contra la mejor de antes.
-    d_v, val, prev = _vista("Semanal")
+    # COMPRAS POR PERÍODO (la vieja «Semanal», renombrada el 2026-09-19): la
+    # mejor semana del rango, contra la mejor de antes.
+    d_v, val, prev = _vista("Compras por período")
     if d_v is not None and col_fecha and col_fecha in d_v.columns:
         f = pd.to_datetime(d_v[col_fecha], errors="coerce")
         s = val.groupby(f.dt.to_period("W")).sum().dropna()
@@ -295,7 +296,7 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
                 _vp = pd.to_numeric(prev[col_valor], errors="coerce")
                 _sp = _vp.groupby(_fp.dt.to_period("W")).sum().dropna()
                 _ant = float(_sp.max()) if len(_sp) else None
-            kpis["Semanal"] = _texto(fmt_k(float(s.max())),
+            kpis["Compras por período"] = _texto(fmt_k(float(s.max())),
                                      _delta(float(s.max()), _ant))
 
     # VS AÑO PASADO: la familia que mas vario. El año pasado NO sale de este
@@ -356,14 +357,23 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
     return kpis, estados
 
 
+# «Compras por período» va PRIMERA, en Dimensión (2026-09-19, a pedido: «que
+# la vista por semana figure como la primera vista, y dado que tiene más
+# detalle que sólo la vista semanal, sugiéreme un nombre»). Se llamaba
+# «Semanal» y ya no era sólo semanal —día, semana, mes, año o por documento,
+# con el detalle hasta las líneas—. Va en Dimensión y no en un grupo propio
+# porque el TIEMPO es la tercera forma de partir las compras, al lado de
+# Proveedor y Producto. El nombre interno sigue siendo «semanal»
+# (`compras_sec_semanal`, `semanal.py`, las keys `compras_sem_*`): cambiarlo
+# era renombrar estado de sesión y CSS para que nadie lo vea.
 _COMPRAS_RAIL_CATEGORIAS = (
-    ("Dimensión", (("Proveedor",        "Proveedor",     ":material/local_shipping:"),
+    ("Dimensión", (("Compras por período", "Por período", ":material/calendar_view_week:"),
+                   ("Proveedor",        "Proveedor",     ":material/local_shipping:"),
                    ("Producto",         "Producto",      ":material/inventory_2:"))),
     ("Precios",   (("Vs año pasado",    "Vs año pasado", ":material/compare_arrows:"),
                    ("Volatilidad",      "Volatilidad",   ":material/candlestick_chart:"))),
     ("SUNAT",     (("Documentos SUNAT", "Documentos",    ":material/receipt_long:"),)),
-    ("Más",       (("Semanal",          "Semanal",       ":material/calendar_view_week:"),
-                   ("Tabla",            "Tabla",         ":material/table_rows:"),
+    ("Más",       (("Tabla",            "Tabla",         ":material/table_rows:"),
                    # El rótulo corto dice «Documentos» a secas y el largo
                    # aclara de qué: en el riel plegado no entra más, y
                    # «Documentos SUNAT» ya se llama así dos grupos más
@@ -413,12 +423,18 @@ _VISTAS_CON_BOUNDS_SUNAT = {"Documentos SUNAT"}
 # tarjeta que cerraba la sección Proveedor, que ahora tiene sitio y botón
 # propios. Comparte el rango de Proveedor por `CATEGORIA_SEC`, así que sigue
 # hablando del mismo período que el ranking del que sale.
+#
+# 2026-09-19, a pedido: «Compras por período» (la vieja «Semanal») sube a la
+# PRIMERA sección. La primera es la que se construye al abrir el reporte
+# (`activa_de_entrada`); las demás esperan a que uno se acerque. Ninguna
+# depende de que Proveedor se construya antes: «Documentos por proveedor»
+# recorta con el mismo rango (`CATEGORIA_SEC`), no con estado de sesión.
 _PILA = (
+    ("compras_sec_semanal",       "Compras por período"),
     ("compras_sec_proveedor",     "Proveedor"),
     ("compras_sec_producto",      "Producto"),
     ("compras_sec_vs_ano_pasado", "Vs año pasado"),
     ("compras_sec_volatilidad",   "Volatilidad"),
-    ("compras_sec_semanal",       "Semanal"),
     ("compras_sec_tabla",         "Tabla"),
     ("compras_sec_documentos",    "Documentos por proveedor"),
 )
@@ -674,9 +690,10 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
 
-    opciones = ["Proveedor", "Producto", "Vs año pasado", "Volatilidad",
-                "Documentos SUNAT", "Semanal", "Tabla",
+    opciones = ["Compras por período", "Proveedor", "Producto",
+                "Vs año pasado", "Volatilidad", "Documentos SUNAT", "Tabla",
                 "Documentos por proveedor"]
+
 
     # Rail vertical fijo al borde DERECHO (componente compartido _render_rail):
     # selector de tipo de gráfico agrupado por categoría. El activo se marca
