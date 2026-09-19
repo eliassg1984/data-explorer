@@ -10,7 +10,7 @@ ultimos 200 commits, 2,7x el siguiente) y sus dos funciones mayores
     _evolucion.py        categoria Tiempo: serie temporal + comparativa
     _pivote.py           tabla "Por fecha de corte"
     _cascada.py          vista Cascada (la mas grande)
-    _heatmap.py          vista Mapa de calor
+    _heatmap.py          vista "Mapa de calor" (hoy una tabla Familia x Area, #468)
     _distribucion.py     vista Distribucion
 
 Este __init__ se queda con lo que define el dashboard como tal: la

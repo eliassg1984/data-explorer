@@ -1,55 +1,52 @@
-"""graficos.ajuste._heatmap - vista Mapa de calor.
+"""graficos.ajuste._heatmap - la matriz Familia × Área de Ajuste.
 
-Tiene DOS modos (ver arquitectura.md regla #42) y TRES vistas — Mapa,
-Flujo (Sankey) y Tabla — sobre el mismo corte seleccionado (regla #58).
+UNA vista desde el 2026-09-18: una TABLA con la barra dentro de la celda,
+clickeable en los dos modos (Ajuste Valorizado y Valorizado Total). Hasta
+ese día eran tres vistas del mismo pivot —Mapa (celdas pintadas), Flujo
+(Sankey) y Tabla— y se retiraron las dos primeras a pedido, después de
+compararlas: la tabla dice lo mismo con una barra, que se compara mejor
+que un color; es sobria donde el mapa rojo/verde se leía «muy colorido»;
+y mide la mitad de alto. Lo único que le faltaba era el clic del mapa, y
+lo heredó. Regla #468.
 
-Mapa NO es un trace de Plotly (regla #66): es una grilla de `st.button`,
-una celda de dato real cada uno, coloreada con `plotly.colors.
-sample_colorscale` + CSS por key. `go.Heatmap` rasteriza a PNG (sin rect
-por celda en el DOM — verificado inspeccionando el SVG en vivo) así que
-no había forma de redondear cada celda por separado, solo el contorno
-general; un `st.button` real ya viene redondeado por la regla global de
-`estilos/_00_base.py`, gratis. El click-drill usa el mismo patrón
-botón + `session_state` + `st.rerun()` que ya usa el chevron de cada
-fila en la Cascada, en vez de `on_select` (regla #11: no confiable para
-trazas que no sean Bar/Scatter).
+El módulo conserva su nombre (`_heatmap.py`, `_graf_heatmap_ajuste`, las
+keys `hm_*` y la sección `aj_sec_heatmap`): es lo que citan el rail, el
+CSS y las reglas #42, #58 y #66.
+
+CÓMO SE HACE CLICKEABLE UNA TABLA SIN JS. `st.markdown` no ejecuta
+`<script>`, así que una celda de un `<table>` no tiene cómo avisar un
+clic. La tabla es una grilla de `st.columns` y cada celda con registros
+es un `st.button` real —el patrón que nació en el Mapa, regla #66—. La
+barra no puede ser un `<div>` adentro del botón (su label es texto): es
+el `::before` del botón, con el largo y el color en variables CSS por
+key.
 """
 
 
 import pandas as pd
 import plotly.colors as pc
-import plotly.graph_objects as go
 import streamlit as st
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, GRIS_BORDE, GRIS_FONDO,
-    TEXTO_PRINCIPAL,
-    AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO,
-    BLANCO, CELDA_POS_TEXTO,
-    DANGER_TEXT, ERROR, ERROR_FONDO, ESCALA_CONTINUA, EXITO, EXITO_FONDO,
-    GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
-    LAVANDA_CABECERA_GRUPO, LAVANDA_SELECCION,
+    ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS,
+    AJUSTE_POS_TEXTO, BLANCO, ESCALA_CONTINUA, GRIS_BORDE, GRIS_FONDO,
+    GRIS_TEXTO_SUAVE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
     _card,
 )
-# _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
-# graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
-# duplicar el cálculo de granularidad Semana/Mes (Corte tiene su propio
-# cálculo, ver _cortes_por_racha: no es calendario fijo, son rachas).
 # Los tres filtros propios (corte · familia · área) son los MISMOS que
 # los de la Cascada, misma pieza y mismo default de familias: viven en
-# `_comun.py` desde el 2026-09-15 justamente porque ahora son dos vistas.
+# `_comun.py` desde el 2026-09-15 justamente porque son dos vistas.
 from graficos.ajuste._comun import (
-    _layout_aj, css_filtros_vista, estado_filtros_vista, render_filtros_vista,
+    css_filtros_vista, estado_filtros_vista, render_filtros_vista,
 )
-from graficos import alturas
 
 
 # LAS TRES CLAVES DE ESTA VISTA, distintas de las de la Cascada a
 # propósito: rango/filtro por TARJETA, no compartidos (misma idea que el
 # rango por tarjeta de Compras, arquitectura.md regla #363). Cambiar de
-# familia en la Cascada no tiene por qué mover el mapa de calor de abajo.
+# familia en la Cascada no tiene por qué mover esta tabla.
 _K_CORTE = "hm_corte"
 _K_FAMILIA = "hm_filtro_familia"
 _K_AREA = "hm_filtro_area"
@@ -57,59 +54,163 @@ _K_AREA = "hm_filtro_area"
 # su contenedor el inspector y el modo diseño resuelven hacia arriba hasta
 # la tarjeta entera. Es también el scope del CSS del trigger (#431).
 _K_CTRL = ("hm_ctrl_fecha", "hm_ctrl_familia", "hm_ctrl_area")
+# La celda en foco, `(familia, área)` o None. Es la misma clave que usaba
+# el Mapa: un foco guardado de antes sigue valiendo.
+_K_FOCO = "hm_ajuste_focus"
+
+# El azul de Valorizado Total sale de la MISMA escala con que el mapa
+# pintaba ese modo (`ESCALA_CONTINUA`), no de un hex nuevo: es el color que
+# se pidió conservar. 0.65 para la barra —a 35 % de opacidad, como las de
+# Ajuste— y 0.9 para el número, que sobre blanco tiene que leerse.
+_AZUL_BARRA, _AZUL_TEXTO = pc.sample_colorscale(ESCALA_CONTINUA, [0.65, 0.9])
+
+# Alto de una fila de la tabla, en px. Lo comparten el botón de una celda
+# de dato y el `<div>` de una de Total: si difieren, la fila se escalona.
+_ALTO_CELDA = 24
+
+
+def _rgb(color):
+    """`#rrggbb` o `rgb(r, g, b)` -> (r, g, b)."""
+    if color.startswith("#"):
+        _h = color.lstrip("#")
+        return tuple(int(_h[i:i + 2], 16) for i in (0, 2, 4))
+    _dentro = color[color.index("(") + 1:color.index(")")]
+    return tuple(int(float(_n)) for _n in _dentro.split(","))
+
+
+def _rgba(color, alfa=0.35):
+    _r, _g, _b = _rgb(color)
+    return f"rgba({_r},{_g},{_b},{alfa})"
+
+
+def _paleta(v, modo_val):
+    """(color de la barra, color del número) de una celda.
+
+    Ajuste: la pareja terracota/salvia de la casa, por SIGNO — la misma de
+    la Cascada, y no ERROR/EXITO, que a tope eran lo «muy colorido» que
+    se reportó del mapa. Valorizado Total: azul. Ahí no hay signo, y el
+    verde que llevaba la tabla vieja en ese modo decía «sobrante» de algo
+    que no lo es."""
+    if modo_val:
+        return _AZUL_BARRA, _AZUL_TEXTO
+    if v < 0:
+        return AJUSTE_NEG, AJUSTE_NEG_TEXTO
+    return AJUSTE_POS, AJUSTE_POS_TEXTO
+
+
+def _pct(v, max_abs):
+    """Largo de la barra, en % de la celda. Piso de 4 para que un monto
+    chico no desaparezca: cuánto es lo dice el número."""
+    return max(abs(v) / (max_abs or 1.0) * 100, 4)
+
+
+def _alternar_foco(celda):
+    """Callback del clic. Corre ANTES de la corrida, así que la tabla ya se
+    dibuja con el foco nuevo y no hace falta el `st.rerun()` que llevaba el
+    Mapa — que, dentro del fragment de la sección, era una corrida de la
+    app ENTERA por cada clic."""
+    st.session_state[_K_FOCO] = (
+        None if st.session_state.get(_K_FOCO) == celda else celda)
+
+
+def _celda_total_html(v, max_abs, modo_val):
+    """Una celda de la columna o de la fila Total: lavanda, con su barra.
+
+    Es un `<div>` y no un botón: un agregado no abre detalle (en el Mapa
+    tampoco), porque no tiene UN ranking de productos que mostrar."""
+    _bar, _txt = _paleta(v, modo_val)
+    _barra = "" if abs(v) < 0.5 else (
+        f"<div style='position:absolute;left:0;top:2px;bottom:2px;"
+        f"width:{_pct(v, max_abs):.1f}%;background:{_rgba(_bar)};"
+        f"border-radius:4px'></div>")
+    return (
+        f"<div style='background:{LAVANDA_CABECERA_GRUPO};"
+        f"border-radius:6px;padding:0 3px'>"
+        f"<div style='position:relative;height:{_ALTO_CELDA}px'>{_barra}"
+        f"<div style='position:relative;line-height:{_ALTO_CELDA}px;"
+        f"padding-left:6px;font-size:11px;font-weight:600;color:{_txt};"
+        f"font-variant-numeric:tabular-nums;white-space:nowrap'>"
+        f"S/ {v:,.0f}</div></div></div>"
+    )
+
+
+def _tendencias(df, df_full, col_fecha, col_familia, col_area, col_metrica):
+    """`{(familia, área): texto}` con la tendencia de los últimos cortes,
+    para el `help=` de cada celda.
+
+    Mira `df_full` y no sólo el corte elegido —mismo espíritu que el delta
+    de la Cascada: cómo veníamos llegando—, acotado a 120 días hacia atrás
+    para no pivotear el historial entero en cada rerun. Es texto plano
+    (sparkline de caracteres Unicode): el `help=` de un botón no pinta
+    HTML."""
+    _bloques = "▁▂▃▄▅▆▇█"
+    _n_cortes = 7
+    _spark = {}
+    if not (col_fecha and df_full is not None
+            and col_fecha in df_full.columns):
+        return _spark
+    _dfe = df_full.copy()
+    _dfe[col_fecha] = pd.to_datetime(_dfe[col_fecha], errors="coerce")
+    _fmax = None
+    if col_fecha in df.columns:
+        _fserie = pd.to_datetime(df[col_fecha], errors="coerce").dropna()
+        _fmax = _fserie.max() if not _fserie.empty else None
+    if _fmax is not None:
+        _dfe = _dfe[(_dfe[col_fecha] <= _fmax) &
+                    (_dfe[col_fecha] >= _fmax - pd.Timedelta(days=120))]
+    _dfe = _dfe.dropna(subset=[col_fecha, col_familia, col_area])
+    if _dfe.empty:
+        return _spark
+    _piv_t = _dfe.pivot_table(
+        index=[col_familia, col_area], columns=col_fecha,
+        values=col_metrica, aggfunc="sum", fill_value=0.0,
+    )
+    _cortes_cols = sorted(_piv_t.columns)[-_n_cortes:]
+    for _key in _piv_t.index:
+        _vals = [float(_piv_t.loc[_key, c]) for c in _cortes_cols]
+        if len(_vals) < 2:
+            continue
+        _lo, _hi = min(_vals), max(_vals)
+        _rng = (_hi - _lo) or 1.0
+        _linea = "".join(
+            _bloques[min(7, int((v - _lo) / _rng * 8))] for v in _vals)
+        _flecha = "▲" if _vals[-1] >= _vals[-2] else "▼"
+        _spark[_key] = f" · Tendencia ({len(_vals)} cortes): {_linea} {_flecha}"
+    return _spark
 
 
 def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                          col_producto=None, col_fecha=None, df_full=None,
                          col_valorizado=None,
                          col_cantidad=None, col_unidad=None):
-    """Mapa de calor familia × área — modo Ajuste (signado, divergente) o
-    Valorizado Total (siempre positivo, secuencial), elegido con un
-    `st.pills` al tope del gráfico.
+    """Tabla familia × área — modo Ajuste (signado) o Valorizado Total
+    (siempre positivo), elegido con un `st.pills` al tope. Cada celda con
+    registros abre, al clic, el detalle de sus productos debajo de la
+    tarjeta; otro clic en la misma lo cierra.
 
-    Capas sobre la grilla de botones (regla #66 de arquitectura.md) — se
-    combinan en el mismo grid / el mismo click-drill, no son piezas aparte:
-      · Color por celda: cada celda a su color pleno, proporcional a SU
-        propio valor (`_color_celda`) — sin resaltado por ranking (regla
-        #67: el mockup original tampoco lo tiene, es proporcional puro,
-        sin concepto de "top N" ni de atenuar el resto).
-      · Totales al borde: fila/columna "TOTAL" — `pivot.sum(axis=...)`
-        aparte del pivot (no participan del colorscale/_vmax: si
-        entraran, un total podría superar a la celda individual más
-        extrema y le robaría saturación al resto del mapa), pintadas con
-        `_celda_html` en el mismo tono lavanda que usa el resto del
-        dashboard para "agregado".
-      · Tendencia: sparkline de caracteres Unicode con los últimos cortes
-        de `df_full`, en el `help=` de cada botón (texto plano, sin JS).
-        Vivía también como mini gráfico de líneas real dentro del
-        click-drill; se sacó de ahí a pedido (2026-08-09, "eliminemos
-        ese gráfico que está debajo del mapa") — el drill pasa del
-        encabezado directo al ranking de Faltantes/Sobrantes.
-
-    Selector de Vista (Mapa / Flujo / Tabla, regla #58 de arquitectura.md):
-    Flujo (Sankey) y Tabla (grilla HTML con barra-en-celda) son vistas
-    alternativas del MISMO pivot, sin click-drill propio — todo lo de
-    arriba (color por celda, totales, hover, click-drill) sigue siendo
-    exclusivo de Mapa.
+    Lo que dice la tabla (regla #468):
+      · UNA escala para todas las celdas de dato. La tabla vieja escalaba
+        cada columna contra su propio máximo, y en Valorizado Total
+        Producción S/ 5,533 tenía la barra tan larga como Almacén central
+        S/ 21,100: una barra que no se puede comparar con la de al lado no
+        es una barra. La columna y la fila Total llevan cada una la suya,
+        porque son otra magnitud.
+      · Fila Total abajo: el total por área y el general, que el Mapa
+        tenía y la tabla no.
+      · Filas por |total de familia|, de mayor a menor: arriba lo que pesa.
 
     FILTROS PROPIOS (2026-09-15, a pedido: "los tres filtros de fecha,
-    familia y área, así como está el reporte de ajuste por familia"). Los
-    tres viven en la misma fila que Modo y Vista, y son los mismos de la
-    Cascada: `_comun.estado_filtros_vista` los resuelve y
+    familia y área, así como está el reporte de ajuste por familia"). Son
+    los mismos de la Cascada: `_comun.estado_filtros_vista` los resuelve y
     `render_filtros_vista` los dibuja, así que abren igual — último corte,
     las cinco familias de `FAMILIAS_DE_ENTRADA`, todas las áreas que
-    movieron algo.
-
-    Con eso se fueron DOS controles de corte que decían lo mismo: el
-    `st.select_slider` de los últimos 8 cortes por racha y la cesión del
-    eje al calendario de la franja (`corte_vigente`). UN EJE, UN DUEÑO: el
-    corte de esta vista lo elige esta vista, como en la Cascada. `df` llega
-    SIN los chips Área/Familia de arriba de la pila (los sigue usando
-    Distribución) — filtrar por los dos lados dejaba la vista mostrando la
-    intersección de dos compartimentos con uno solo visible.
+    movieron algo. `df` llega SIN los chips Área/Familia de arriba de la
+    pila (los sigue usando Distribución) — filtrar por los dos lados dejaba
+    la vista mostrando la intersección de dos compartimentos con uno solo
+    visible.
     """
     if not col_familia or not col_area:
-        st.info("Se necesitan columnas de familia y área para el mapa de calor.")
+        st.info("Se necesitan columnas de familia y área para esta tabla.")
         return
 
     st.markdown(f"<style>{css_filtros_vista('hm_ctrl_', 'hm_corte_')}</style>",
@@ -125,43 +226,22 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         k_corte=_K_CORTE, k_familia=_K_FAMILIA, k_area=_K_AREA)
     df = _est["d"]
 
-    # ── Los tres filtros + Modo + Vista, en UNA fila — antes cada control
-    #    vivía en su propio st.pills/slider de ancho completo, apilados con
-    #    el espaciado default de Streamlit entre elementos: ocupaba como un
-    #    tercio de la tarjeta en vertical (reportado 2026-08-09). Se pidió
-    #    explícitamente que los tres filtros nuevos "figuren en la misma
-    #    fila", así que entran acá en vez de estrenar un renglón propio.
-    #
-    #    ANCHOS: no son estética, son el punto en que la fila deja de ser
-    #    una fila. Medido en la app con los cinco controles puestos: un
-    #    trigger es texto pelado y pide 113px en su peor caso ("todas las
-    #    áreas", con ícono y chevron); Modo son dos pastillas de etiqueta
-    #    larga y pide 256; Vista, 181. Suman 792 y una laptop de 1024px
-    #    deja 825 repartibles (857 de fila menos los cuatro huecos de 16),
-    #    así que entran las cinco — pero con 33px de sobra, y repartidos
-    #    en partes iguales NO entran: con [0.85, 0.85, 0.85, 1.5, 1.1]
-    #    Modo se quedaba con 237 de los 256 que pide y las dos botoneras
-    #    envolvían a dos líneas, 68px de alto en vez de 32.
-    #
-    #    De ahí este reparto, verificado en la app a 1024: las columnas
-    #    salen 114 / 114 / 114 / 267 / 184 y la fila vuelve a medir 32.
-    #    El trigger de Área queda con 1px de sobra sobre sus 113 — es el
-    #    que cede si algún día falta, truncando con puntos suspensivos
-    #    un nombre largo; una pastilla que envuelve, no.
-    #    Sin col_valorizado no hay Modo y la columna no se pide — las
-    #    columnas se consumen en orden con un iterador para no escribir la
-    #    combinatoria a mano. ────────────────────────────────────────────
+    # ── Los tres filtros + Modo, en UNA fila. Hasta el 2026-09-18 la fila
+    #    llevaba también el selector de Vista (Mapa/Flujo/Tabla) y los
+    #    anchos estaban medidos al píxel para que entraran los cinco a
+    #    1024px (el Modo pide 256 y envuelve a dos líneas si no los tiene).
+    #    Sin la Vista sobran ~200px: a 1024 las columnas salen 156 / 156 /
+    #    156 / 342. La cuarta columna existe aunque no haya Modo, para que
+    #    los triggers no se estiren a un tercio de la fila cada uno. ───────
     _hay_valorizado = bool(col_valorizado and col_valorizado in df.columns)
-    # columnas-internas: los tres filtros + Modo + Vista, en fila
-    _anchos = [1.0, 1.0, 1.0] + ([2.2] if _hay_valorizado else []) + [1.55]
-    _cols_ctrl = iter(st.columns(_anchos))
-
+    # columnas-internas: los tres filtros + Modo, en fila
+    _cols_ctrl = st.columns([1.0, 1.0, 1.0, 2.2])
     render_filtros_vista(
-        [next(_cols_ctrl).container(key=_k) for _k in _K_CTRL], _est)
+        [_c.container(key=_k) for _c, _k in zip(_cols_ctrl, _K_CTRL)], _est)
 
     _modo_val = False
     if _hay_valorizado:
-        with next(_cols_ctrl):
+        with _cols_ctrl[3]:
             _modo = st.pills(
                 "Modo mapa de calor", ["Ajuste Valorizado", "Valorizado Total"],
                 default="Ajuste Valorizado", key="hm_ajuste_modo",
@@ -170,18 +250,11 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             _modo_val = (_modo == "Valorizado Total")
     col_metrica = col_valorizado if _modo_val else col_ajuste_val
 
-    with next(_cols_ctrl):
-        _vista = st.pills(
-            "Vista mapa de calor", ["Mapa", "Flujo", "Tabla"],
-            default="Mapa", key="hm_ajuste_vista",
-            label_visibility="collapsed",
-        ) or "Mapa"
-
     # El aviso de vacío va DESPUÉS de los controles, nunca antes: si no,
     # un filtro que deja la vista sin filas se lleva puesto el control que
     # lo deshace — el callejón sin salida de la Cascada.
     if df is None or df.empty:
-        st.info("No hay datos para el mapa de calor con estos filtros.")
+        st.info("No hay datos para esta tabla con estos filtros.")
         return
 
     pivot = df.pivot_table(
@@ -189,641 +262,332 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         values=col_metrica, aggfunc="sum", fill_value=0,
     )
     if pivot.empty:
-        st.info("No hay datos para el mapa de calor en el rango seleccionado.")
+        st.info("No hay datos para esta tabla en el rango seleccionado.")
         return
-    _vmax = float(abs(pivot.values).max()) or 1.0
-    _fams = pivot.index.tolist()
+    # Qué celdas tienen registros: una celda en 0 CON registros (faltantes
+    # y sobrantes que se cancelan) abre su detalle; una sin registros no
+    # tiene nada que abrir y va vacía, sin botón.
+    _n_reg = df.groupby([col_familia, col_area]).size()
+
     _areas = pivot.columns.tolist()
-    _n, _m = len(_fams), len(_areas)
+    _tot_fam = pivot.sum(axis=1)
+    _tot_fam = _tot_fam.reindex(_tot_fam.abs().sort_values(ascending=False).index)
+    _fams = _tot_fam.index.tolist()
+    _tot_area = pivot.sum(axis=0)
+    _tot_gral = float(pivot.values.sum())
+    _max_celda = float(abs(pivot.values).max()) or 1.0
+    _max_tot_fam = float(_tot_fam.abs().max()) or 1.0
+    _max_tot_area = float(_tot_area.abs().max()) or 1.0
 
     _titulo_metrica = "Valorizado Total" if _modo_val else "Ajuste Valorizado"
+    _spark = _tendencias(df, df_full, col_fecha, col_familia, col_area,
+                         col_metrica)
 
-    # ── Vista Flujo (Sankey) — misma matriz Familia×Área que el mapa,
-    #    grosor de la cinta = magnitud, color = signo (pastel AJUSTE_NEG/
-    #    AJUSTE_POS, la misma pareja que ya usa la Cascada — no ERROR/
-    #    EXITO, muy saturados para un área grande). Nodos de familia
-    #    tonalizados como la franja TOTAL del heatmap; nodos de área en
-    #    gris neutro (mismo tipo -> mismo color en todo el dashboard).
-    #    SIN click-drill: `on_select` sobre trazas no-Bar/Scatter no está
-    #    verificado en este entorno (regla #11: ni siquiera go.Heatmap lo
-    #    tenía sin el overlay de Scatter invisible; regla #44 deja
-    #    constancia del mismo riesgo para go.Histogram) — Flujo se queda
-    #    con hover rico y sin apostar a un click que no se pudo probar. ──
-    if _vista == "Flujo":
-        _sk_src, _sk_tgt, _sk_val, _sk_color, _sk_hover = [], [], [], [], []
-        for _i, _fam in enumerate(_fams):
-            for _j, _area in enumerate(_areas):
-                _v = float(pivot.values[_i][_j])
-                if abs(_v) < 0.5:
-                    continue
-                _sk_src.append(_i)
-                _sk_tgt.append(_n + _j)
-                _sk_val.append(abs(_v))
-                _sk_color.append(AJUSTE_NEG if _v < 0 else AJUSTE_POS)
-                _sk_hover.append(f"{_fam} → {_area}<br>S/ {_v:,.0f}")
+    _foco = st.session_state.get(_K_FOCO)
+    if _foco is not None and (_foco[0] not in _fams or _foco[1] not in _areas):
+        _foco = None
+        st.session_state[_K_FOCO] = None
 
-        fig_sk = go.Figure(go.Sankey(
-            node=dict(
-                label=_fams + _areas, pad=14, thickness=14,
-                color=([LAVANDA_CABECERA_GRUPO] * _n + [GRIS_FONDO] * _m),
-                line=dict(color=GRIS_BORDE, width=0.5),
-            ),
-            link=dict(
-                source=_sk_src, target=_sk_tgt, value=_sk_val,
-                color=_sk_color, customdata=_sk_hover,
-                hovertemplate="%{customdata}<extra></extra>",
-            ),
-        ))
-        # margin l/r generoso: Plotly ubica las etiquetas de nodo AFUERA del
-        # diagrama solo si el margen les deja lugar -- con poco margen (10px,
-        # el valor anterior) no entran y las escribe encima de las cintas de
-        # color, ilegibles sobre fondo saturado (reportado con captura,
-        # 2026-08-09). 140px alcanza para el nombre mas largo de familia o
-        # area a la fuente default de Sankey (~12px).
-        fig_sk.update_layout(**_layout_aj(
-            height=alturas.por_filas(_n + _m, px_fila=22,
-                                     minimo=280, extra=110),
-            margin=dict(l=140, r=140, t=20, b=10),
-        ))
-        with _card("heatmap", f"Flujo {_titulo_metrica}"):
-            st.plotly_chart(fig_sk, use_container_width=True,
-                            key="heatmap_ajuste_sankey")
-        return
-
-    # ── Vista Tabla — grilla HTML compacta (Familia × Área + columna
-    #    Total), barra-riel-relleno en cada celda: mismo patrón que ya usa
-    #    esta función para el ranking de productos del drill
-    #    (`_filas_drill_html` más abajo), no una AgGrid nueva — un
-    #    cellRenderer con barra-en-celda en AgGrid pide la interfaz de
-    #    Component completa (regla #25), mucho más código que reusar un
-    #    patrón ya probado en este mismo archivo. Filas ordenadas por
-    #    |total familia| descendente; sin orden interactivo por columna en
-    #    esta primera versión (pedirlo por clic necesita JS, que
-    #    `st.markdown` no ejecuta, o un control Streamlit aparte que
-    #    rerun-ea — se deja para más adelante si hace falta de verdad). ──
-    if _vista == "Tabla":
-        _row_tot_tb = pivot.sum(axis=1)
-        _row_tot_tb = _row_tot_tb.reindex(
-            _row_tot_tb.abs().sort_values(ascending=False).index)
-        _col_max_tb = {_area: float(pivot[_area].abs().max()) or 1.0
-                       for _area in _areas}
-        _tot_max_tb = float(_row_tot_tb.abs().max()) or 1.0
-
-        def _celda_tabla_html(_v, _max_abs):
-            if abs(_v) < 0.5:
-                return "<div style='height:20px'></div>"
-            _pct = max(abs(_v) / _max_abs * 100, 5)
-            _bg = AJUSTE_NEG if _v < 0 else AJUSTE_POS
-            _tcol = AJUSTE_NEG_TEXTO if _v < 0 else AJUSTE_POS_TEXTO
-            return (
-                f"<div style='position:relative;height:20px'>"
-                f"<div style='position:absolute;left:0;top:2px;bottom:2px;"
-                f"width:{_pct:.1f}%;background:{_bg};opacity:.35;"
-                f"border-radius:4px'></div>"
-                f"<div style='position:relative;font-size:11px;"
-                f"line-height:20px;padding-left:6px;color:{_tcol};"
-                f"font-weight:600;font-variant-numeric:tabular-nums;"
-                f"white-space:nowrap'>S/ {_v:,.0f}</div></div>"
-            )
-
-        _filas_tb_html = []
-        for _fam in _row_tot_tb.index:
-            _celdas_tb = "".join(
-                f"<td style='padding:2px 6px'>"
-                f"{_celda_tabla_html(float(pivot.loc[_fam, _area]), _col_max_tb[_area])}"
-                f"</td>"
-                for _area in _areas
-            )
-            _tot_tb = _celda_tabla_html(float(_row_tot_tb.loc[_fam]), _tot_max_tb)
-            _nom_fam = str(_fam)
-            _filas_tb_html.append(
-                f"<tr><td style='padding:2px 8px;font-size:11.5px;"
-                f"font-weight:500;color:{TEXTO_PRINCIPAL};white-space:nowrap'>"
-                f"{_nom_fam}</td>{_celdas_tb}"
-                f"<td style='padding:2px 6px;background:{LAVANDA_CABECERA_GRUPO};"
-                f"border-radius:6px'>{_tot_tb}</td></tr>"
-            )
-
-        _head_tb = "".join(
-            f"<th style='padding:0 6px 6px;font-size:10px;font-weight:600;"
-            f"color:{GRIS_TEXTO_SUAVE};text-align:left;white-space:nowrap'>"
-            f"{_area}</th>"
-            for _area in _areas
-        )
-        _tabla_html = (
-            f"<div style='overflow-x:auto'>"
-            f"<table style='border-collapse:collapse;width:100%'>"
-            f"<thead><tr><th></th>{_head_tb}"
-            f"<th style='padding:0 6px 6px;font-size:10px;font-weight:600;"
-            f"color:{ACENTO_TEXTO_OSCURO};text-align:left'>Total</th>"
-            f"</tr></thead><tbody>{''.join(_filas_tb_html)}</tbody></table>"
-            f"</div>"
-        )
-        with _card("heatmap", f"Tabla {_titulo_metrica}"):
-            st.markdown(_tabla_html, unsafe_allow_html=True)
-        return
-
-
-    # ── Totales de fila/columna — mismo pivot, fuera de _vmax a propósito
-    #    (ver docstring). ─────────────────────────────────────────────────
-    _row_tot = pivot.sum(axis=1)
-    _col_tot = pivot.sum(axis=0)
-    _grand_tot = float(pivot.values.sum())
-
-    # ── Tendencia por celda: últimos cortes de df_full (no solo el rango
-    #    filtrado) — mismo espíritu que el delta de la Cascada, mirar más
-    #    atrás que el rango activo para decir "cómo veníamos llegando". La
-    #    columna de fecha ya está en el df (la usan Evolución y la tabla
-    #    dinámica); esto es un groupby más, no una fuente de datos nueva.
-    #    Acotado a 120 días hacia atrás para no pivotear el historial
-    #    completo en cada rerun. Antes alimentaba un hovertemplate de
-    #    Plotly (HTML, `<br>`); ahora va al `help=` de un `st.button`
-    #    (texto plano) — mismo cálculo, separador " · " en vez de `<br>`. ──
-    _BLOQUES = "▁▂▃▄▅▆▇█"
-    _N_CORTES = 7
-    _spark_map = {}
-    _piv_t = None
-    if col_fecha and df_full is not None and col_fecha in df_full.columns:
-        _dfe = df_full.copy()
-        _dfe[col_fecha] = pd.to_datetime(_dfe[col_fecha], errors="coerce")
-        _fmax = None
-        if col_fecha in df.columns:
-            _fserie = pd.to_datetime(df[col_fecha], errors="coerce").dropna()
-            _fmax = _fserie.max() if not _fserie.empty else None
-        if _fmax is not None:
-            _dfe = _dfe[(_dfe[col_fecha] <= _fmax) &
-                       (_dfe[col_fecha] >= _fmax - pd.Timedelta(days=120))]
-        _dfe = _dfe.dropna(subset=[col_fecha, col_familia, col_area])
-        if not _dfe.empty:
-            _piv_t = _dfe.pivot_table(
-                index=[col_familia, col_area], columns=col_fecha,
-                values=col_metrica, aggfunc="sum", fill_value=0.0,
-            )
-            _cortes_cols = sorted(_piv_t.columns)[-_N_CORTES:]
-            for _key in _piv_t.index:
-                _vals = [float(_piv_t.loc[_key, c]) for c in _cortes_cols]
-                if len(_vals) < 2:
-                    continue
-                _lo, _hi = min(_vals), max(_vals)
-                _rng = (_hi - _lo) or 1.0
-                _spark = "".join(
-                    _BLOQUES[min(7, int((v - _lo) / _rng * 8))] for v in _vals
-                )
-                _flecha = "▲" if _vals[-1] >= _vals[-2] else "▼"
-                _spark_map[_key] = (
-                    f" · Tendencia ({len(_vals)} cortes): {_spark} {_flecha}"
-                )
-
-    _TITULO_HM = f"Mapa {_titulo_metrica}"
-
-    # ── Colorscale: divergente centrada en cero para Ajuste (el signo
-    #    importa: faltante/sobrante) vs secuencial anclada en cero para
-    #    Valorizado Total (magnitud, nunca negativo) — misma definición
-    #    que antes, solo que ahora la consume `sample_colorscale` en vez
-    #    de un trace `go.Heatmap` (ver docstring del módulo, regla #66). ──
-    if _modo_val:
-        _colorscale_hm = ESCALA_CONTINUA
-        _zmin_hm, _zmax_hm = 0.0, _vmax
-    else:
-        _colorscale_hm = [
-            [0.00, ERROR],
-            [0.35, ERROR_FONDO],
-            [0.50, LAVANDA_SELECCION],
-            [0.65, EXITO_FONDO],
-            [1.00, EXITO],
-        ]
-        _zmin_hm, _zmax_hm = -_vmax, _vmax
-
-    def _rgb_de(rgb_str):
-        # sample_colorscale devuelve siempre "rgb(r, g, b)" (colortype
-        # default) -- partir por los separadores es más liviano que traer
-        # `re` solo para esto.
-        _inner = rgb_str[rgb_str.index("(") + 1:rgb_str.index(")")]
-        return tuple(int(_n) for _n in _inner.split(","))
-
-    def _hex_a_rgb(_hex):
-        _h = _hex.lstrip("#")
-        return tuple(int(_h[i:i + 2], 16) for i in (0, 2, 4))
-
-    def _color_celda(v):
-        # Sin top-3 ni atenuado (regla #67 de arquitectura.md): cada celda
-        # a color pleno, proporcional a SU propio valor -- igual que el
-        # mockup original (`diverge()` ahí, sin ningún concepto de "top N").
-        _t = (v - _zmin_hm) / ((_zmax_hm - _zmin_hm) or 1.0)
-        _t = max(0.0, min(1.0, _t))
-        return _rgb_de(pc.sample_colorscale(_colorscale_hm, [_t])[0])
-
-    def _color_total_hm(v):
-        if _modo_val:
-            return ACENTO_TEXTO_OSCURO
-        return DANGER_TEXT if v < 0 else CELDA_POS_TEXTO
-
-    def _celda_html(_bg_rgb, _fg, _texto, _borde):
-        # Mismo padding/min-height/box-sizing que el botón real de la
-        # celda de dato (más abajo) -- son divs, no <button>, así que sin
-        # esto el min-height:40px nativo del botón los deja más ALTOS que
-        # el total/gran total y el grid se ve escalonado (reportado
-        # 2026-08-09). display:flex + align-items centra el texto como lo
-        # hacía el padding vertical de sobra en la versión anterior.
-        # font-size 10.5px -- igual que el botón de celda de dato, la
-        # cabecera de área y el "TOTAL" de la esquina (mismo esquema que
-        # el mockup: .hm-head/.hm-val/.hm-tot van los tres a 10.5px, solo
-        # .hm-row -- los NOMBRES, no los valores -- va más grande a 11px;
-        # reportado 2026-08-10, "todas las celdas deben tener el mismo
-        # tamaño de letra").
-        # La clase `hm-celda` existe para que _99_movil.py pueda subirle el
-        # min-height a 44px en móvil (donde el botón de celda lo toma solo,
-        # por área de toque) sin depender del anidado exacto del DOM de
-        # Streamlit.
-        _r, _g, _b = _bg_rgb
-        return (
-            f"<div class='hm-celda' style='background:rgb({_r},{_g},{_b});border:{_borde};"
-            f"border-radius:8px;padding:4px 2px;text-align:center;"
-            f"font-size:10.5px;font-weight:600;color:{_fg};"
-            f"font-variant-numeric:tabular-nums;white-space:nowrap;"
-            f"overflow:hidden;text-overflow:ellipsis;min-height:40px;"
-            f"box-sizing:border-box;display:flex;align-items:center;"
-            f"justify-content:center'>{_texto}</div>"
-        )
-
-    # ── Click-drill: qué celda tiene el foco. Reemplaza el `on_select` de
-    #    Plotly (regla #11: `go.Heatmap` no es seleccionable) por el mismo
-    #    patrón botón + session_state + rerun que ya usa el chevron de cada
-    #    fila en la Cascada — más simple y, a diferencia de `on_select`,
-    #    100% confiable (es un st.button real, no una traza). ─────────────
-    _focus_key = "hm_ajuste_focus"
-    _focus = st.session_state.get(_focus_key)
-    if _focus is not None and (
-            _focus[0] not in _fams or _focus[1] not in _areas):
-        _focus = None
-        st.session_state[_focus_key] = None
-
-    # TOTAL con el mismo ancho que cualquier columna de dato -- en el
-    # mockup ocupa el mismo cellW, más angosta por el margen interno de
-    # su rect, no por una fracción de columna más grande (reportado
-    # 2026-08-09: se veía visiblemente más larga que el resto).
-    _anchos_grid = [1.3] + [1.0] * _m + [1.0]
-    # El gap default entre bloques de Streamlit (16px, propiedad flex
-    # `gap` del propio .stVerticalBlock de la card) se aplica ENTRE CADA
-    # fila -- cabecera->fila1, fila->fila, ultima fila->TOTAL -- porque
-    # cada una es un st.columns() (=bloque) distinto. En el mockup el
-    # grid es un solo <svg>, sin ese gap: cabecera a 6px de la primera
-    # fila (reportado 2026-08-09, "los nombres de las areas estan muy
-    # separadas del cuadro"). Se angosta aca, scoped a esta grilla
-    # nomas -- la leyenda y el drill de abajo, que SI son bloques
-    # distintos entre si, se quedan con el espaciado normal.
-    #
-    # Columna de familia a ancho FIJO en px, no a fracción -- bajar la
-    # fracción de 1.7 a 1.3 (commit anterior) seguía siendo un % del
-    # ancho disponible, y en una ventana ancha (reportado 2026-08-09 con
-    # el inspector: viewport 1912px) ese % igual da una columna enorme
-    # para un texto corto ("ALIMENTOS"), empujando las celdas. El
-    # mockup nunca tuvo este problema porque `labelW=132` ahí es un
-    # valor fijo en px, no una fracción del contenedor. st.columns() no
-    # tiene una opción nativa de "ancho fijo", así que se fuerza por
-    # CSS: flex-basis fijo en la PRIMERA columna de cada fila del grid
-    # (`:first-child`, alcanza cabecera/filas/TOTAL con un solo
-    # selector) -- las demás columnas, todas con el mismo peso 1.0 entre
-    # sí, se reparten lo que sobra en partes iguales, como el mockup.
-    # `estilos/_00_base.py` pone la fuente del proyecto (DM Sans/Inter) en
-    # `html, body, [class*="css"]` pero SIN !important -- el CSS interno
-    # de Streamlit para contenido de markdown le gana esa pulseada y cae
-    # a su Source Sans por default. A un st.button no le pasa (Streamlit
-    # no le pone su propia font-family), por eso los NÚMEROS de celda
-    # (botones reales) salían bien y todo lo demás en este grid (creado
-    # con st.markdown, incluidas las celdas TOTAL) salía en la fuente
-    # equivocada -- mismo tamaño en px pero letra distinta, con menor
-    # x-height, se lee más chica (reportado 2026-08-10, comparando
-    # números de TOTAL contra números de celda). El problema de fondo es
-    # de `_00_base.py`, pero corregirlo ahí es un cambio de alcance para
-    # toda la app; acá se lo fuerza scoped a esta tarjeta nomás.
-    # Con muchas áreas (o ventana angosta) las columnas de dato no tenían
-    # piso: st.columns() las deja encoger hasta que el texto del botón
-    # ya no entra en una línea, envuelve a 2, y la fila entera se pone
-    # más alta que el gap ajustado de arriba -- la fila siguiente le
-    # queda pisada encima (reportado 2026-08-10 con captura, "TOTAL" de
-    # la cabecera solapado con la fila de ALIMENTOS). El mockup resuelve
-    # esto con scroll horizontal (`.scroll-x`) en vez de encoger sin
-    # límite; acá se replica: cada columna de dato tiene un piso de 70px
-    # (`flex-shrink:0`, no puede achicarse más), la fila no envuelve
-    # (`flex-wrap:nowrap`), y `hm_grid_filas` sí puede desbordar en X
-    # con scroll -- las filas se salen del ancho de la tarjeta en vez de
-    # aplastarse, y aparece una barra de scroll para verlas todas.
-    _css_celdas = [
-        '.st-key-hm_grid_filas[class*="stVerticalBlock"] { gap: 7px '
-        '!important; overflow-x: auto !important; }',
-        '.st-key-hm_grid_filas [data-testid="stHorizontalBlock"] { '
-        'flex-wrap: nowrap !important; }',
-        '.st-key-hm_grid_filas [data-testid="stHorizontalBlock"] '
-        '> [data-testid="stColumn"]:first-child { flex: 0 0 130px '
-        '!important; max-width: 130px !important; min-width: 130px '
+    # ── CSS de la grilla. Tiene que leerse como TABLA y no como una pila
+    #    de tarjetas: sin el gap de 16px de Streamlit —ni entre filas ni
+    #    entre columnas— y con las líneas del cuadriculado puestas a mano
+    #    (el `<table>` de markdown de la tabla vieja las traía del CSS
+    #    interno de Streamlit; una grilla de `st.columns` no trae ninguna).
+    #    La columna de nombres va a ancho FIJO y las de dato con un piso:
+    #    sin piso, `st.columns` las encoge hasta que el monto envuelve a
+    #    dos líneas y la fila se escalona. Lo que no entra se scrollea en X
+    #    (`overflow-x`), como hacía el Mapa. ───────────────────────────────
+    _css = [
+        f'.st-key-hm_tabla[class*="stVerticalBlock"] {{ gap: 0 !important; '
+        f'overflow-x: auto !important; border: 1px solid {GRIS_BORDE}; '
+        f'border-bottom: none; }}',
+        f'.st-key-hm_tabla [data-testid="stHorizontalBlock"] {{ gap: 0 '
+        f'!important; flex-wrap: nowrap !important; border-bottom: 1px '
+        f'solid {GRIS_BORDE}; }}',
+        '.st-key-hm_tabla [data-testid="stColumn"] { padding: 2px 4px '
         '!important; }',
-        '.st-key-hm_grid_filas [data-testid="stHorizontalBlock"] '
-        '> [data-testid="stColumn"]:not(:first-child) { flex: 1 0 70px '
-        '!important; min-width: 70px !important; }',
-        '.st-key-hm_grid_filas button { white-space: nowrap !important; '
-        'overflow: hidden !important; text-overflow: ellipsis !important; }',
-        # El texto del botón NO vive en el <button>: Streamlit lo envuelve
-        # en un <p> con su propio font-size:14px/weight:400, y font-size no
-        # cascadea a través de un elemento que define el suyo -- todo lo
-        # que se le ponga al <button> lo pisa ese <p>. Por eso las celdas
-        # de dato salían en 14px/400 mientras las celdas TOTAL (divs de
-        # _celda_html, sin <p> de por medio) salían en los 10.5px/600
-        # pedidos: mismo "font-size" declarado, distinto tamaño real
-        # (reportado 2026-08-10; ver regla #68 de arquitectura.md). El
-        # selector `button p` es el que ya usa el resto del repo para
-        # esto (_20_compras_rail.py, _40_ajuste_franja.py).
-        '.st-key-hm_grid_filas button p { font-size: 10.5px !important; '
-        'font-weight: 600 !important; line-height: 1.6 !important; '
-        'margin: 0 !important; }',
+        # EL CORTE DE LA FILA TOTAL. Streamlit le pone `margin-bottom:
+        # -16px` a todo `stMarkdownContainer` (compensa el margen de su
+        # `<p>`), así que un `<div>` de 24px en markdown cuenta como 8. Una
+        # fila de botones no lo nota —el botón manda—, pero la fila Total
+        # es TODA markdown: medía 13px con 26 de contenido, y el
+        # `overflow-x: auto` de la grilla (que vuelve `auto` también el eje
+        # Y) recortaba lo que sobraba. Era el mismo corte que se reportó
+        # del Mapa, con captura. Es la #162 mordiendo por tercera vez;
+        # medido 2026-09-18, regla #468.
+        '.st-key-hm_tabla [data-testid="stMarkdownContainer"] { '
+        'margin-bottom: 0 !important; }',
+        # Lo mismo en las listas del detalle de abajo, que viven fuera de
+        # la grilla: sin techo en la tarjeta, sus 16px descontados dejaban
+        # la última fila 8px por fuera del borde inferior (medido).
+        '[data-testid="stMarkdownContainer"]:has(.hm-det-filas) { '
+        'margin-bottom: 0 !important; }',
+        '.st-key-hm_tabla [data-testid="stHorizontalBlock"] '
+        '> [data-testid="stColumn"]:first-child { flex: 0 0 170px '
+        '!important; max-width: 170px !important; min-width: 170px '
+        '!important; }',
+        f'.st-key-hm_tabla [data-testid="stHorizontalBlock"] '
+        f'> [data-testid="stColumn"]:not(:first-child) {{ flex: 1 0 88px '
+        f'!important; min-width: 88px !important; border-left: 1px solid '
+        f'{GRIS_BORDE}; }}',
+        # El botón de una celda de dato: transparente, del alto de la fila,
+        # con el monto a la izquierda. La barra es su `::before` —con el
+        # largo y el color que le pone cada celda en `--hm-pct` y
+        # `--hm-barra`— y el texto va por encima (`z-index`).
+        f'.st-key-hm_tabla button {{ position: relative !important; '
+        f'overflow: hidden !important; background: transparent !important; '
+        f'border: 1px solid transparent !important; border-radius: 4px '
+        f'!important; box-shadow: none !important; min-height: '
+        f'{_ALTO_CELDA}px !important; height: {_ALTO_CELDA}px !important; '
+        f'padding: 0 6px !important; justify-content: flex-start '
+        f'!important; }}',
+        f'.st-key-hm_tabla button:hover {{ border-color: {ACENTO} '
+        f'!important; background: transparent !important; }}',
+        '.st-key-hm_tabla button::before { content: ""; position: absolute; '
+        'left: 0; top: 2px; bottom: 2px; width: var(--hm-pct, 0%); '
+        'background: var(--hm-barra, transparent); border-radius: 4px; }',
+        '.st-key-hm_tabla button > div { position: relative; z-index: 1; }',
+        # El texto del botón vive en un <p> con su propio font-size (regla
+        # #68): sin esto las celdas salen en los 14px de Streamlit.
+        # El monto va a la IZQUIERDA, donde arranca su barra. El
+        # `justify-content` del botón no alcanza: el <div> del label ocupa
+        # todo el ancho y el <p> centraba adentro.
+        '.st-key-hm_tabla button p { font-size: 11px !important; '
+        'font-weight: 600 !important; line-height: 1 !important; margin: 0 '
+        '!important; color: inherit !important; text-align: left '
+        '!important; white-space: nowrap; '
+        'font-variant-numeric: tabular-nums; }',
+        # `estilos/_00_base.py` pone la fuente del proyecto SIN !important y
+        # el CSS de markdown de Streamlit le gana: los nombres y los Total
+        # (markdown) salían en Source Sans y los montos (botones) no.
         '.st-key-chartcard_heatmap * { font-family: "DM Sans", "Inter", '
         '-apple-system, BlinkMacSystemFont, sans-serif !important; }',
     ]
 
-    with _card("heatmap", _TITULO_HM):
-        with st.container(key="hm_grid_filas"):
-            # Cabecera: nombres de área, sin botón (no son clickeables).
-            _cols_h = st.columns(_anchos_grid)
+    def _rotulo(texto, color, peso=500, tam=11.5, titulo=""):
+        _t = f" title='{titulo}'" if titulo else ""
+        return (
+            f"<div style='font-size:{tam}px;font-weight:{peso};color:{color};"
+            f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+            f"line-height:{_ALTO_CELDA}px;padding-left:4px'{_t}>{texto}</div>")
+
+    with _card("heatmap", f"{_titulo_metrica} por familia y área"):
+        with st.container(key="hm_tabla"):
+            # Cabecera: los nombres de área no son clickeables.
+            # columnas-internas: nombre + una por área + Total (anchos por CSS)
+            _cols_h = st.columns(len(_areas) + 2, vertical_alignment="center")
             with _cols_h[0]:
-                st.markdown("&nbsp;", unsafe_allow_html=True)
+                # Un `<div>`, no un "&nbsp;" pelado: eso es un `<p>`, con
+                # su margen de 16px, y la cabecera medía 47 en vez de 29.
+                st.markdown(_rotulo("&nbsp;", GRIS_TEXTO_SUAVE),
+                            unsafe_allow_html=True)
             for _j, _area in enumerate(_areas):
                 with _cols_h[_j + 1]:
-                    st.markdown(
-                        f"<div style='font-size:10.5px;font-weight:500;"
-                        f"color:{GRIS_TEXTO};text-align:center;"
-                        f"line-height:1.2;padding-bottom:4px'>{_area}</div>",
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown(_rotulo(_area, GRIS_TEXTO_SUAVE, 600, 10,
+                                        _area), unsafe_allow_html=True)
             with _cols_h[-1]:
-                st.markdown(
-                    f"<div style='font-size:10.5px;font-weight:700;"
-                    f"color:{ACENTO_TEXTO_OSCURO};text-align:center;"
-                    f"padding-bottom:4px'>TOTAL</div>",
-                    unsafe_allow_html=True,
-                )
+                st.markdown(_rotulo("Total", ACENTO_TEXTO_OSCURO, 700, 10),
+                            unsafe_allow_html=True)
 
-            # Una fila por familia — nombre + un st.button real por CADA celda
-            # (incluidas las de valor 0: antes quedaban en blanco, pero el
-            # go.Heatmap original también las coloreaba — el fondo por CSS
-            # scoped a su key, ver más abajo — no hay motivo para esconderlas)
-            # + total.
             for _i, _fam in enumerate(_fams):
-                _cols_r = st.columns(_anchos_grid)
+                # columnas-internas: nombre + una por área + Total (anchos por CSS)
+                _cols_r = st.columns(len(_areas) + 2,
+                                     vertical_alignment="center")
                 with _cols_r[0]:
-                    st.markdown(
-                        f"<div style='font-size:11px;font-weight:500;"
-                        f"color:{TEXTO_PRINCIPAL};white-space:nowrap;"
-                        f"overflow:hidden;text-overflow:ellipsis;"
-                        f"text-align:right;padding-top:9px;padding-right:8px'"
-                        f" title='{_fam}'>{_fam}</div>",
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown(_rotulo(_fam, TEXTO_PRINCIPAL, titulo=_fam),
+                                unsafe_allow_html=True)
                 for _j, _area in enumerate(_areas):
-                    _v = float(pivot.values[_i][_j])
-                    if abs(_v) < 0.5:
-                        _v = 0.0  # evita el "S/ -0" de :.0f sobre p.ej. -0.3
                     with _cols_r[_j + 1]:
-                        _key = f"hm_cell_{_i}_{_j}"
-                        _bg_rgb = _color_celda(_v)
-                        # Contraste por luminancia, no por ranking -- con TODA
-                        # celda a color pleno (arriba), el texto oscuro ya no
-                        # alcanza sobre los tonos más saturados de las puntas
-                        # de la escala (mismo corte 0.55 que "light" en el
-                        # mockup, aplicado acá sobre luma real en vez de |v|
-                        # normalizado -- más preciso cerca de los extremos).
-                        _luma = (0.299 * _bg_rgb[0] + 0.587 * _bg_rgb[1]
-                                 + 0.114 * _bg_rgb[2])
-                        _fg = BLANCO if _luma < 150 else GRIS_TEXTO_MEDIO
-                        _es_foco = (_focus == (_fam, _area))
-                        _borde = (f"2px solid {ACENTO}" if _es_foco
-                                 else "1px solid transparent")
-                        _r, _g, _b = _bg_rgb
-                        _css_celdas.append(
-                            f'.st-key-{_key} button {{ background:'
-                            f'rgb({_r},{_g},{_b}) !important; color:{_fg} '
-                            f'!important; border:{_borde} !important; '
-                            f'font-size:10.5px !important; font-weight:600 '
-                            f'!important; padding:4px 2px !important; '
-                            f'font-variant-numeric:tabular-nums !important; }}'
-                        )
-                        _tip = f"{_fam} × {_area}: S/ {_v:,.0f}"
-                        _tip += _spark_map.get((_fam, _area), "")
-                        # En cero no hay nada que leer -- el color ya dice
-                        # "neutro" y el número sobra (reportado 2026-08-09). La
-                        # celda sigue coloreada y clickeable (regla de arriba),
-                        # solo se le vacía la etiqueta visible.
-                        _label = " " if _v == 0 else f"S/ {_v:,.0f}"
-                        if st.button(_label, key=_key, help=_tip,
-                                    use_container_width=True):
-                            st.session_state[_focus_key] = (
-                                None if _es_foco else (_fam, _area))
-                            st.rerun()
+                        if not _n_reg.get((_fam, _area), 0):
+                            st.markdown(
+                                f"<div style='height:{_ALTO_CELDA}px'></div>",
+                                unsafe_allow_html=True)
+                            continue
+                        _v = float(pivot.loc[_fam, _area])
+                        _cero = abs(_v) < 0.5
+                        _key = f"hm_tb_{_i}_{_j}"
+                        _bar, _txt = _paleta(_v, _modo_val)
+                        _es_foco = (_foco == (_fam, _area))
+                        _css.append(
+                            f'.st-key-hm_tabla .st-key-{_key} button {{ '
+                            f'--hm-pct: {0 if _cero else _pct(_v, _max_celda):.1f}%; '
+                            f'--hm-barra: {_rgba(_bar)}; color: {_txt} '
+                            f'!important;'
+                            # 2px y no 1.5: con pantalla de densidad 1 el
+                            # navegador redondea a 1, y el foco se confundía
+                            # con el borde del :hover (medido).
+                            + (f' border: 2px solid {ACENTO} !important;'
+                               if _es_foco else '')
+                            + ' }')
+                        # En cero no hay nada que leer (reportado sobre el
+                        # Mapa, 2026-08-09): la celda sigue clickeable, sólo
+                        # se le vacía la etiqueta.
+                        st.button(
+                            " " if _cero else f"S/ {_v:,.0f}", key=_key,
+                            help=(f"{_fam} × {_area}: S/ {_v:,.0f}"
+                                  + _spark.get((_fam, _area), "")),
+                            on_click=_alternar_foco, args=((_fam, _area),),
+                            width="stretch")
                 with _cols_r[-1]:
-                    _vt = float(_row_tot.iloc[_i])
                     st.markdown(
-                        _celda_html(_hex_a_rgb(LAVANDA_CABECERA_GRUPO), _color_total_hm(_vt),
-                                   f"S/ {_vt:,.0f}", "none"),
-                        unsafe_allow_html=True,
-                    )
+                        _celda_total_html(float(_tot_fam.loc[_fam]),
+                                          _max_tot_fam, _modo_val),
+                        unsafe_allow_html=True)
 
-            # Fila TOTAL — mismo tono lavanda que la columna, celdas no
-            # clickeables (clic en el resumen nunca abrió detalle de producto).
-            _cols_tot = st.columns(_anchos_grid)
-            with _cols_tot[0]:
-                st.markdown(
-                    f"<div style='font-size:11px;font-weight:700;"
-                    f"color:{ACENTO_TEXTO_OSCURO};text-align:right;"
-                    f"padding-top:9px;padding-right:8px'>TOTAL</div>",
-                    unsafe_allow_html=True,
-                )
+            # Fila Total: por área y el general, no clickeables.
+            # columnas-internas: nombre + una por área + Total (anchos por CSS)
+            _cols_t = st.columns(len(_areas) + 2, vertical_alignment="center")
+            with _cols_t[0]:
+                st.markdown(_rotulo("Total", ACENTO_TEXTO_OSCURO, 700),
+                            unsafe_allow_html=True)
             for _j, _area in enumerate(_areas):
-                with _cols_tot[_j + 1]:
-                    _vt = float(_col_tot.iloc[_j])
+                with _cols_t[_j + 1]:
                     st.markdown(
-                        _celda_html(_hex_a_rgb(LAVANDA_CABECERA_GRUPO), _color_total_hm(_vt),
-                                   f"S/ {_vt:,.0f}", "none"),
-                        unsafe_allow_html=True,
-                    )
-            with _cols_tot[-1]:
+                        _celda_total_html(float(_tot_area.loc[_area]),
+                                          _max_tot_area, _modo_val),
+                        unsafe_allow_html=True)
+            with _cols_t[-1]:
                 st.markdown(
-                    _celda_html(_hex_a_rgb(ACENTO), "#ffffff",
-                               f"S/ {_grand_tot:,.0f}", "none"),
-                    unsafe_allow_html=True,
-                )
+                    f"<div style='background:{ACENTO};"
+                    f"border-radius:6px;height:{_ALTO_CELDA}px;"
+                    f"line-height:{_ALTO_CELDA}px;padding-left:9px;"
+                    f"font-size:11px;font-weight:700;color:{BLANCO};"
+                    f"font-variant-numeric:tabular-nums;white-space:nowrap'>"
+                    f"S/ {_tot_gral:,.0f}</div>",
+                    unsafe_allow_html=True)
 
-            # CSS de todas las celdas con dato en UN solo bloque (streamlit
-            # emite un <style> por st.markdown -- más liviano que uno por
-            # celda). border-radius no hace falta pedirlo: button[kind=
-            # "secondary"] ya lo trae en 8px por la regla global de
-            # estilos/_00_base.py — es justo lo que un st.button da gratis y
-            # go.Heatmap no podía dar (ver docstring del módulo). El color
-            # SÍ hace falta por celda: es continuo, no hay paleta fija de
-            # unas pocas clases como en la Cascada.
-            st.markdown(f"<style>{''.join(_css_celdas)}</style>",
-                       unsafe_allow_html=True)
+            # CSS de todas las celdas en UN solo bloque (Streamlit emite un
+            # <style> por st.markdown: más liviano que uno por celda).
+            st.markdown(f"<style>{''.join(_css)}</style>",
+                        unsafe_allow_html=True)
 
-        # Leyenda: gradiente CSS con los mismos 5 stops que ya usa
-        # _color_celda -- reemplaza la colorbar nativa que traía
-        # go.Heatmap (perdida al dejar de usar esa traza).
-        _leyenda_izq = "Faltante" if not _modo_val else "S/ 0"
-        _leyenda_der = "Sobrante" if not _modo_val else f"S/ {_vmax:,.0f}"
-        _stops_css = ",".join(
-            pc.sample_colorscale(_colorscale_hm, [k / 4])[0] for k in range(5)
-        )
+    if _foco is not None:
+        _detalle_celda(df, pivot, _foco, col_familia, col_area, col_producto,
+                       col_metrica, col_cantidad, col_unidad, _modo_val)
+
+
+def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
+                   col_metrica, col_cantidad, col_unidad, modo_val):
+    """El detalle de la celda en foco, debajo de la tarjeta: encabezado
+    (familia × área, monto, registros) y el ranking de sus productos —
+    Faltantes | Sobrantes en Ajuste, un solo Top en Valorizado Total, que
+    no tiene signo que separar. Con los colores de la tabla: el detalle es
+    la continuación del clic, no otra vista."""
+    _fam_sel, _area_sel = foco
+    _val_sel = float(pivot.loc[_fam_sel, _area_sel])
+    _det = df[
+        (df[col_familia].astype(str) == str(_fam_sel)) &
+        (df[col_area].astype(str) == str(_area_sel))
+    ]
+
+    _color_total = _paleta(_val_sel, modo_val)[1]
+    st.markdown(
+        f"**{_fam_sel}** × **{_area_sel}** · "
+        f"<span style='color:{_color_total};font-weight:600'>"
+        f"S/ {_val_sel:,.0f}</span> · "
+        f"{len(_det)} registros",
+        unsafe_allow_html=True,
+    )
+
+    if not (col_producto and col_producto in _det.columns):
+        st.caption("No hay columna de producto para desglosar.")
+        return
+
+    # cantidad/unidad al lado del monto — mismo criterio que ya usa el
+    # drill de la Cascada (_filas_split_html): sum() para cantidad, "first"
+    # para unidad (constante por producto, no hay nada que sumar).
+    _has_cant = bool(col_cantidad and col_cantidad in _det.columns)
+    _has_um = bool(col_unidad and col_unidad in _det.columns)
+    _agg = {col_metrica: "sum"}
+    if _has_cant:
+        _agg[col_cantidad] = "sum"
+    if _has_um:
+        _agg[col_unidad] = "first"
+    _sub_prod = _det.groupby(col_producto, as_index=False).agg(_agg)
+    _sub_prod["_abs"] = _sub_prod[col_metrica].abs()
+    _sub_prod = _sub_prod.sort_values("_abs", ascending=False).head(30)
+
+    def _filas_html(_df_d):
+        """Mini barras de progreso (riel + relleno) — mismo patrón que la
+        columna Cascada acumulada, en vez de un gráfico Plotly de barras
+        gruesas."""
+        if _df_d.empty:
+            return ""
+        _max_abs = float(_df_d[col_metrica].abs().max()) or 1.0
+        _filas = []
+        for _, _r in _df_d.iterrows():
+            _v = float(_r[col_metrica])
+            _nom = str(_r[col_producto])
+            if len(_nom) > 32:
+                _nom = _nom[:31] + "…"
+            _bar, _tcol = _paleta(_v, modo_val)
+            _t = f"S/ {_v:,.0f}"
+            if _has_cant:
+                _t += f" · {_r[col_cantidad]:,.1f}"
+                _um = str(_r[col_unidad]).strip() if _has_um else ""
+                if _um and _um.lower() != "nan":
+                    _t += f" {_um}"
+            _filas.append(
+                f"<div style='display:flex;align-items:center;"
+                f"gap:8px;padding:3px 0'>"
+                f"<div style='width:38%;min-width:0;"
+                f"flex-shrink:0;overflow:hidden'>"
+                f"<div style='font-size:10.5px;"
+                f"color:{TEXTO_PRINCIPAL};white-space:nowrap;"
+                f"overflow:hidden;text-overflow:ellipsis'>"
+                f"{_nom}</div></div>"
+                f"<div style='flex:1;position:relative;"
+                f"height:16px;min-width:0'>"
+                f"<div style='position:absolute;left:0;"
+                f"right:0;top:50%;transform:translateY(-50%);"
+                f"height:7px;background:{GRIS_FONDO};"
+                f"border-radius:999px'></div>"
+                f"<div style='position:absolute;left:0;"
+                f"width:{_pct(_v, _max_abs):.1f}%;top:50%;transform:"
+                f"translateY(-50%);height:7px;"
+                f"background:{_bar};"
+                f"border-radius:999px'></div></div>"
+                f"<div style='flex-shrink:0;text-align:right;"
+                f"font-size:10px;font-weight:600;"
+                f"color:{_tcol};font-variant-numeric:"
+                f"tabular-nums;white-space:nowrap'>"
+                f"{_t}</div></div>")
+        # La clase la lee el CSS de abajo: sin ella, la #162 descuenta 16px
+        # de esta lista y su última fila se sale por debajo de la tarjeta.
+        return f"<div class='hm-det-filas'>{''.join(_filas)}</div>"
+
+    def _titulo(texto, color):
         st.markdown(
-            f"<div style='display:flex;align-items:center;gap:8px;"
-            f"margin-top:10px'>"
-            f"<span style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
-            f"white-space:nowrap'>{_leyenda_izq}</span>"
-            f"<div style='flex:1;max-width:220px;height:6px;"
-            f"border-radius:999px;background:linear-gradient(to right,"
-            f"{_stops_css})'></div>"
-            f"<span style='font-size:9.5px;color:{GRIS_TEXTO_SUAVE};"
-            f"white-space:nowrap'>{_leyenda_der}</span></div>",
+            f"<div style='font-size:9px;font-weight:600;"
+            f"color:{color};letter-spacing:.08em;"
+            f"text-transform:uppercase;margin:4px 0 -8px 0'>"
+            f"{texto}</div>",
             unsafe_allow_html=True,
         )
 
-    if _focus is not None:
-        _fam_sel, _area_sel = _focus
-        _val_sel = float(pivot.loc[_fam_sel, _area_sel])
+    if modo_val:
+        _titulo("Top productos", _AZUL_TEXTO)
+        st.markdown(_filas_html(_sub_prod), unsafe_allow_html=True)
+        return
 
-        if _fam_sel and _area_sel:
-            _det = df[
-                (df[col_familia].astype(str) == str(_fam_sel)) &
-                (df[col_area].astype(str) == str(_area_sel))
-            ]
+    # ascending: True para negativos (el más negativo primero -> arriba en
+    # el HTML), False para positivos (el mayor primero).
+    _neg = _sub_prod[_sub_prod[col_metrica] < 0].sort_values(
+        col_metrica, ascending=True)
+    _pos = _sub_prod[_sub_prod[col_metrica] > 0].sort_values(
+        col_metrica, ascending=False)
 
-            _color_total = (ACENTO_TEXTO_OSCURO if _modo_val else
-                           (DANGER_TEXT if (_val_sel or 0) < 0
-                            else CELDA_POS_TEXTO))
-            st.markdown(
-                f"**{_fam_sel}** × **{_area_sel}** · "
-                f"<span style='color:{_color_total};font-weight:600'>"
-                f"S/ {(_val_sel or 0):,.0f}</span> · "
-                f"{len(_det)} registros",
-                unsafe_allow_html=True,
-            )
-
-            if col_producto and col_producto in _det.columns:
-                # cantidad/unidad al lado del monto — mismo criterio que ya
-                # usa el drill de la Cascada (_filas_split_html): sum() para
-                # cantidad, "first" para unidad (constante por producto, no
-                # hay nada que sumar). _has_cant/_has_um en False si no
-                # llegó la columna: el drill se comporta como antes.
-                _has_cant = bool(col_cantidad and col_cantidad in _det.columns)
-                _has_um = bool(col_unidad and col_unidad in _det.columns)
-                _agg_map_hm = {col_metrica: "sum"}
-                if _has_cant:
-                    _agg_map_hm[col_cantidad] = "sum"
-                if _has_um:
-                    _agg_map_hm[col_unidad] = "first"
-                _sub_prod = _det.groupby(col_producto, as_index=False).agg(_agg_map_hm)
-                _sub_prod["_abs"] = _sub_prod[col_metrica].abs()
-                _sub_prod = _sub_prod.sort_values(
-                    "_abs", ascending=False).head(30)
-
-                def _filas_drill_html(_df_d, _color_bar):
-                    """Mini barras de progreso (riel + relleno) — mismo
-                    patron que la columna Cascada acumulada, en vez de un
-                    grafico Plotly de barras gruesas."""
-                    if _df_d.empty:
-                        return ""
-                    _max_abs = float(
-                        _df_d[col_metrica].abs().max()) or 1.0
-                    _filas_html = []
-                    for _, _r in _df_d.iterrows():
-                        _nom = str(_r[col_producto])
-                        if len(_nom) > 32:
-                            _nom = _nom[:31] + "…"
-                        _pct = max(
-                            abs(float(_r[col_metrica])) / _max_abs * 100,
-                            3)
-                        _tcol = (ACENTO_TEXTO_OSCURO if _modo_val else
-                                 (DANGER_TEXT if _r[col_metrica] < 0
-                                  else CELDA_POS_TEXTO))
-                        _t = f"S/ {_r[col_metrica]:,.0f}"
-                        if _has_cant:
-                            _t += f" · {_r[col_cantidad]:,.1f}"
-                            _um = (str(_r[col_unidad]).strip()
-                                   if _has_um else "")
-                            if _um and _um.lower() != "nan":
-                                _t += f" {_um}"
-                        _filas_html.append(
-                            f"<div style='display:flex;align-items:center;"
-                            f"gap:8px;padding:3px 0'>"
-                            f"<div style='width:38%;min-width:0;"
-                            f"flex-shrink:0;overflow:hidden'>"
-                            f"<div style='font-size:10.5px;"
-                            f"color:{TEXTO_PRINCIPAL};white-space:nowrap;"
-                            f"overflow:hidden;text-overflow:ellipsis'>"
-                            f"{_nom}</div></div>"
-                            f"<div style='flex:1;position:relative;"
-                            f"height:16px;min-width:0'>"
-                            f"<div style='position:absolute;left:0;"
-                            f"right:0;top:50%;transform:translateY(-50%);"
-                            f"height:7px;background:{GRIS_FONDO};"
-                            f"border-radius:999px'></div>"
-                            f"<div style='position:absolute;left:0;"
-                            f"width:{_pct:.1f}%;top:50%;transform:"
-                            f"translateY(-50%);height:7px;"
-                            f"background:{_color_bar};"
-                            f"border-radius:999px'></div></div>"
-                            f"<div style='flex-shrink:0;text-align:right;"
-                            f"font-size:10px;font-weight:600;"
-                            f"color:{_tcol};font-variant-numeric:"
-                            f"tabular-nums;white-space:nowrap'>"
-                            f"{_t}</div></div>")
-                    return "".join(_filas_html)
-
-                if _modo_val:
-                    # Sin signo que separar: un solo ranking, no el split
-                    # Faltantes/Sobrantes de más abajo.
-                    st.markdown(
-                        f"<div style='font-size:9px;font-weight:600;"
-                        f"color:{ACENTO_TEXTO_OSCURO};letter-spacing:.08em;"
-                        f"text-transform:uppercase;margin:4px 0 -8px 0'>"
-                        f"Top productos</div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(_filas_drill_html(_sub_prod, ACENTO),
-                               unsafe_allow_html=True)
-                else:
-                    # ascending: True para negativos (el mas negativo primero
-                    # -> arriba en el HTML), False para positivos (el mayor
-                    # primero) -- el HTML renderiza top-a-bottom en el orden
-                    # del DataFrame, al reves de como Plotly ubicaba las
-                    # categorias en un bar horizontal.
-                    _neg = _sub_prod[_sub_prod[col_metrica] < 0].sort_values(
-                        col_metrica, ascending=True)
-                    _pos = _sub_prod[_sub_prod[col_metrica] > 0].sort_values(
-                        col_metrica, ascending=False)
-
-                    _pa, _pb = st.columns(2)
-                    with _pa:
-                        st.markdown(
-                            f"<div style='font-size:9px;font-weight:600;"
-                            f"color:{DANGER_TEXT};letter-spacing:.08em;"
-                            f"text-transform:uppercase;margin:4px 0 -8px 0'>"
-                            f"Faltantes</div>",
-                            unsafe_allow_html=True,
-                        )
-                        if _neg.empty:
-                            st.caption("Sin faltantes.")
-                        else:
-                            st.markdown(_filas_drill_html(_neg, ERROR),
-                                       unsafe_allow_html=True)
-                    with _pb:
-                        st.markdown(
-                            f"<div style='font-size:9px;font-weight:600;"
-                            f"color:{CELDA_POS_TEXTO};letter-spacing:.08em;"
-                            f"text-transform:uppercase;margin:4px 0 -8px 0'>"
-                            f"Sobrantes</div>",
-                            unsafe_allow_html=True,
-                        )
-                        if _pos.empty:
-                            st.caption("Sin sobrantes.")
-                        else:
-                            st.markdown(_filas_drill_html(_pos, EXITO),
-                                       unsafe_allow_html=True)
-            else:
-                st.caption("No hay columna de producto para desglosar.")
+    # columnas-internas: Faltantes | Sobrantes, mitad y mitad
+    _pa, _pb = st.columns(2)
+    with _pa:
+        _titulo("Faltantes", AJUSTE_NEG_TEXTO)
+        if _neg.empty:
+            st.caption("Sin faltantes.")
+        else:
+            st.markdown(_filas_html(_neg), unsafe_allow_html=True)
+    with _pb:
+        _titulo("Sobrantes", AJUSTE_POS_TEXTO)
+        if _pos.empty:
+            st.caption("Sin sobrantes.")
+        else:
+            st.markdown(_filas_html(_pos), unsafe_allow_html=True)

@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-467 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+468 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (165)
+**CSS y estilos** (166)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -199,6 +199,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#460** — Una tira de totales puede colgarse del hover de las COLUMNAS de su tabla, y el truco está en…
 - **#464** — Juntar controles en UN renglón se paga en ancho, y el presupuesto se mide contra el peor…
 - **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
+- **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
 
 **Layout y alturas** (68)
 
@@ -433,7 +434,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#462** — Una tabla con dos altos de fila se lee como dos tablas pegadas: la segunda línea se abre AL…
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 
-**Streamlit** (126)
+**Streamlit** (127)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -561,6 +562,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
 - **#464** — Juntar controles en UN renglón se paga en ancho, y el presupuesto se mide contra el peor…
 - **#467** — Un widget adentro de un st.popover no se entera de lo que Python le escribe mientras el panel…
+- **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
 
 **Datos, R2 y DuckDB** (55)
 
@@ -4442,6 +4444,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
     un click que nadie pudo confirmar que llega. Si hace falta de verdad,
 
     se verifica aparte antes de construirlo.
+
+    **Retirado el 2026-09-18:** Mapa y Flujo se fueron y quedó sólo la
+
+    Tabla, clickeable, con una sola escala y fila Total; el selector de
+
+    Vista ya no existe. Ver #468.
 
 
 
@@ -38901,6 +38909,96 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
+468. **Una fila de `st.columns` hecha SÓLO de `st.markdown` mide 16px menos
+     por celda de lo que pinta (#162), y dentro de un contenedor con
+     `overflow` eso deja de ser un solapamiento y pasa a ser un RECORTE.**
+     2026-09-18, al retirar Mapa y Flujo de la matriz Familia × Área de
+     Ajuste (`graficos/ajuste/_heatmap.py`) y dejar sólo la Tabla,
+     clickeable (pedido: *«retira el mapa y el flujo y deja solo la tabla,
+     obviamente, con la funcionalidad clickeable»*, *«tanto en ajuste
+     valorizado como en valorizado total»*).
+
+     **El corte que se reportó con captura** —la fila Total del Mapa
+     partida al medio— se había diagnosticado como un scroll anidado bajo
+     el techo `--alto-util` de la tarjeta, y la tarjeta se sacó del techo.
+     No alcanzó: medido en la tabla nueva, SIN ningún `max-height` en toda
+     la cadena de ancestros, la grilla medía 190px con 202 de contenido, y
+     la fila Total 13px con 26 adentro. La causa era la #162: la fila Total
+     no tiene botones —un agregado no abre detalle—, cada celda es un
+     `<div>` en `st.markdown`, y el `margin-bottom: -16px` de
+     `stMarkdownContainer` la hace contar 8px. Las filas de datos no lo
+     notan porque el botón manda en su alto. La grilla lleva
+     `overflow-x: auto` (las áreas se scrollean en X en vez de aplastarse),
+     que vuelve `auto` también el eje Y: lo que la fila Total pintaba por
+     debajo de su caja quedaba fuera del área visible. Con
+     `.st-key-hm_tabla [data-testid="stMarkdownContainer"] { margin-bottom:
+     0 }` las siete filas miden 29 y la grilla 204 para 203 de contenido.
+     La cabecera tenía el mismo defecto al revés: su primera celda era un
+     `"&nbsp;"` pelado, o sea un `<p>` con su margen, y la fila medía 47.
+     Y el detalle que abre el clic tenía el tercero: sus listas de
+     productos son `<div>` en `st.markdown`, y con la tarjeta ya sin
+     techo la última fila se dibujaba 8px por fuera del borde inferior
+     (medido: 524px de caja, 540 de contenido). Esas listas llevan la
+     clase `hm-det-filas` y un `:has()` les anula el margen.
+
+     **Por qué quedó la Tabla** (se comparó con un boceto antes de tocar
+     nada). Las dos vistas leían el mismo pivot, pero no decían lo mismo:
+
+       | | Mapa | Tabla vieja |
+       |---|---|---|
+       | Clic → detalle | sí | no |
+       | Escala | una para toda la matriz | una POR COLUMNA |
+       | Fila Total | sí | no tenía |
+       | Color en Valorizado Total | azul | verde («sobrante») |
+       | Alto por fila | ~47px | ~25px |
+
+     La escala por columna era una mentira callada: en Valorizado Total,
+     Producción S/ 5,533 tenía la barra tan larga como Almacén central
+     S/ 21,100. Una barra que no se compara con la de al lado no es una
+     barra. El largo, además, se lee con más precisión que la intensidad de
+     un color (Cleveland y McGill, «Graphical Perception», *Journal of the
+     American Statistical Association*, 1984), y el Mapa en modo Ajuste
+     usaba ERROR/EXITO a tope, que se reportó como «muy colorido».
+
+     **La tabla nueva:** UNA escala para todas las celdas de dato (la
+     columna y la fila Total, cada una la suya: son otra magnitud); fila
+     Total abajo; filas por |total de familia|; Ajuste en la pareja
+     `AJUSTE_NEG`/`AJUSTE_POS` de la Cascada y Valorizado Total en el azul
+     de `ESCALA_CONTINUA` —el del mapa, que se pidió conservar—, sacado con
+     `sample_colorscale` y no con un hex nuevo. El detalle de la celda usa
+     los mismos colores: es la continuación del clic, no otra vista.
+
+     **Cómo se hace clickeable una tabla sin JS:** `st.markdown` no ejecuta
+     `<script>`, así que una grilla de `st.columns` con un `st.button` por
+     celda con registros —el patrón que nació en el Mapa, #66—. La barra no
+     cabe como `<div>` adentro del botón (su label es texto): es su
+     `::before`, con `--hm-pct` y `--hm-barra` puestos por key. Y el monto a
+     la izquierda pide `text-align` en el `<p>`: el `justify-content` del
+     botón no alcanza, porque el `<div>` del label ocupa todo el ancho. Una
+     celda sin registros es un `<div>` vacío; una en 0 CON registros
+     (faltantes y sobrantes que se cancelan) sigue siendo botón, sin
+     etiqueta.
+
+     **El clic va por `on_click`, no por `st.rerun()`.** El callback corre
+     antes de la corrida, así que la tabla ya se dibuja con el foco nuevo.
+     El Mapa escribía el foco y llamaba `st.rerun()`, que dentro del
+     fragment de `seccion_perezosa` es una corrida de la app ENTERA —3 a 6
+     segundos— por cada clic.
+
+     **La tarjeta sigue sin techo**, aunque la tabla quepa: el clic abre el
+     detalle —hasta 30 productos— DENTRO de la tarjeta, y con techo le
+     saldría barra propia (mismo criterio que Semanal, #398, y que Compras
+     › Producto, #382).
+
+     **Regla:** en una grilla de `st.columns`, una fila sin ningún widget
+     mide 16px menos por celda de lo que pinta. Si el contenedor tiene
+     `overflow` distinto de `visible` —y `overflow-x: auto` cuenta—, eso es
+     un recorte y no un solapamiento. Anular el margen scoped a la grilla y
+     medir `scrollHeight` contra `offsetHeight` FILA POR FILA: el total de
+     la grilla puede cuadrar y una fila no.
+
+     (2026-09-18.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -38913,7 +39011,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#468**.
+> próxima regla nueva es la **#469**.
 
 >
 

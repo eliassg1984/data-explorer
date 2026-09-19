@@ -201,33 +201,21 @@ CSS = """    /* ================================================================
             width: calc(50% - 8px) !important;
         }
 
-        /* ===== Mapa de calor (Ajuste): la grilla SIGUE siendo grilla =====
+        /* ===== Familia × Área (Ajuste): la tabla SIGUE siendo tabla =====
            Misma trampa que tenía la vieja fila de la Cascada: el bloque
            de arriba de este archivo pone `flex-direction: column` a TODO
-           stHorizontalBlock en móvil, y cada fila del mapa es un
-           st.columns() — sin esto las 14 celdas de una fila se apilan
-           una debajo de otra y el "mapa" pasa a ser una lista vertical de
-           ~10.000px de alto (reportado 2026-08-10, medido en 375px).
-           La grilla ya trae `overflow-x: auto` desde _heatmap.py, así que
-           al mantener la fila en `row` el desborde se navega con scroll
-           horizontal, que es como el mockup resuelve las matrices anchas.
-           Los anchos de columna (130px la de familia, 70px las de dato)
-           los fija _heatmap.py y ganan por especificidad: acá solo se
-           corrige la DIRECCIÓN. */
-        .st-key-hm_grid_filas [data-testid="stHorizontalBlock"] {
+           stHorizontalBlock en móvil, y cada fila de la tabla es un
+           st.columns() — sin esto las celdas de una fila se apilan una
+           debajo de otra y la tabla pasa a ser una lista vertical (lo
+           reportado sobre el Mapa el 2026-08-10: ~10.000px de alto medido
+           en 375px). La grilla ya trae `overflow-x: auto` desde
+           _heatmap.py, así que al mantener la fila en `row` el desborde se
+           navega con scroll horizontal. Los anchos de columna (170px la
+           de familia, 88px las de dato) los fija _heatmap.py y ganan por
+           especificidad: acá sólo se corrige la DIRECCIÓN. Regla #468. */
+        .st-key-hm_tabla [data-testid="stHorizontalBlock"] {
             flex-direction: row !important;
             flex-wrap: nowrap !important;
-        }
-        /* El botón de celda toma min-height:44px del bloque de arriba
-           (área de toque). Las celdas TOTAL son <div> (clase propia
-           `hm-celda`, puesta en _heatmap.py::_celda_html) con
-           min-height:40px inline, así que sin esto la fila/columna TOTAL
-           queda 4px más baja que el resto y el grid se ve escalonado —
-           mismo problema que la regla #66 ya resolvió en desktop, pero
-           con el 44px de móvil. Un `!important` de hoja de estilos gana
-           al style inline. */
-        .st-key-hm_grid_filas .hm-celda {
-            min-height: 44px !important;
         }
 
         /* El sello de «Última actualización» se apoya sobre la barra nav
