@@ -73,7 +73,13 @@ VIEWPORT_OBJETIVO = 657
 # cursor (`--franja-vistas-reserva: 0`, estilos/_26_rails_scroll.py). Su
 # gemelo CSS es `--cab-offset-contenido`. Junto con los 40 que devolvio la
 # franja inferior el mismo dia, el presupuesto sube de 465 a 545.
-_CAB_OFFSET = 52    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
+# 2026-09-19: 52 -> 20, a pedido («que la franja superior se oculte y solo
+# salga cuando se ubique el cursor... luego de esto hay que subir la
+# tarjeta»). La franja de contexto volvió a ser CAPA y en reposo sólo deja su
+# tira de 12px (`--franja-rep-reserva`), así que arriba quedan 12 + 8 de aire
+# en vez de 52. Las tarjetas suben esos 32px y el presupuesto los gana.
+# Regla #472.
+_CAB_OFFSET = 20    # padding-top del block-container   (_00_base.py, --cab-offset-contenido)
                     # 2026-08-31: 80 -> 118, los 38px de la franja de reportes
                     # 2026-09-01: 118 -> 128, la franja paso de 38 a 48
                     # 2026-09-07: 128 -> 88, la franja de vistas no reserva

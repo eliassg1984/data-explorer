@@ -5,9 +5,12 @@ La «opción 5» del prototipo, elegida por el usuario, y la regla #472. Desde
 
   · AL COSTADO, A DÓNDE IR. Una columna siempre visible con los reportes y,
     anidadas bajo el activo, sus vistas. No cambia de contenido al bajar.
-  · ARRIBA, DÓNDE ESTÁS. Una franja fija de 44px con el reporte, la vista en
+  · ARRIBA, DÓNDE ESTÁS. Una franja de 44px con el reporte, la vista en
     pantalla y sus KPIs, y a la derecha la fecha, Filtros, la hora del dato y
-    Actualizar.
+    Actualizar. NO ESTÁ EN REPOSO (2026-09-19, a pedido): deja una tira de
+    `--franja-rep-reserva` (12px) contra el borde de arriba y aparece —con
+    sus controles— cuando el cursor la toca, igual que la columna. Por eso el
+    contenido arranca en 20px (`--cab-offset-contenido`) y no en 52.
 
 Hasta hoy las dos eran CAPAS que aparecían con el cursor (`_26_rails_scroll`),
 la columna alternaba Reportes/Vistas con el scroll, y la franja repetía los
@@ -53,7 +56,9 @@ COMO SE VERIFICA
 ----------------
 Con el navegador automatizado las transiciones no avanzan (#353): para medir
 anchos hay que apagarlas antes (`* { transition: none !important }` desde la
-consola). El hueco del árbol se verifica midiendo que el borde de abajo del
+consola). Y ojo con MEDIR MIENTRAS LA APP CORRE: con un rerun en curso la
+columna devolvía 1366px de ancho —su valor de antes de la transición— con la
+regla aplicando perfecto; medir con el indicador de «corriendo» apagado. El hueco del árbol se verifica midiendo que el borde de abajo del
 contenedor de vistas coincida con el de la fila activa, en los 6 reportes.
 """
 
@@ -73,6 +78,16 @@ CSS = """
         .st-key-nav_franja_rep [data-testid="stElementContainer"]:has(.barra-ctx) {
             display: none !important;
         }
+    }
+
+    /* DEFENSA ANTI-TOOLTIP-FANTASMA en las VISTAS (2026-09-19): desde que
+       llevan su KPI en `help=` (`base.py::_render_rail`), Streamlit envuelve
+       el botón con el tooltip y deja una COPIA suelta en el mismo `stButton`,
+       la trampa de la regla #164. El que lleva el tooltip es siempre el
+       primero; sin `help=` hay un solo `div` y esto no elige nada. Sin
+       `@media`: la copia aparece en cualquier ancho. */
+    .st-key-nav_rail_lateral [data-testid="stButton"] > div + div {
+        display: none !important;
     }
 
     @media screen and (min-width: 901px) {
@@ -274,9 +289,13 @@ CSS = """
         font-weight: 400 !important;
         overflow: hidden !important;
     }
+    /* El ícono de un REPORTE es el grande de la columna: 21px y del color
+       del texto principal de la fila. El de una VISTA mide 15 y va apagado
+       (más abajo) — plegada la columna, esa diferencia de tamaño y de tono
+       es lo único que dice quién cuelga de quién. */
     .st-key-graf_tipo_chips [data-testid="stButton"] button [data-testid="stIconMaterial"] {
-        font-size: 20px !important;
-        width: 20px !important;
+        font-size: 21px !important;
+        width: 21px !important;
         color: inherit !important;
         flex: 0 0 auto !important;
         margin: 0 !important;
@@ -372,7 +391,11 @@ CSS = """
         min-height: 0 !important;
         width: calc(100% - 12px) !important;
         margin: 0 6px !important;
-        padding: 0 10px 0 calc(var(--icono-x) - 14px) !important;   /* == los reportes */
+        /* SANGRADAS: el ícono de una vista cae 10px a la derecha del de su
+           reporte, colgando de la línea guía. Plegada la columna es el
+           gesto que dice «esto es hijo de aquello»; desplegada, el ícono se
+           apaga y la sangría la toma el nombre. */
+        padding: 0 10px 0 calc(var(--icono-x) - 14px + 10px) !important;
         gap: 10px !important;
         display: flex !important;
         justify-content: flex-start !important;
@@ -392,12 +415,16 @@ CSS = """
         max-width: 100% !important;
     }
     .st-key-nav_rail_lateral [data-testid="stButton"] button [data-testid="stIconMaterial"] {
-        font-size: 19px !important;
-        width: 20px !important;
+        font-size: 15px !important;
+        width: 15px !important;
         margin: 0 !important;
-        color: inherit !important;
+        color: var(--text-muted) !important;
         flex: 0 0 auto !important;
         transition: opacity 120ms linear;
+    }
+    .st-key-nav_rail_lateral [data-testid="stButton"] button:hover [data-testid="stIconMaterial"],
+    .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla [data-testid="stIconMaterial"] {
+        color: inherit !important;
     }
     .st-key-nav_rail_lateral [data-testid="stButton"] button p {
         margin: 0 !important;
@@ -429,6 +456,8 @@ CSS = """
     }
     /* Desplegado: el ícono se apaga, el nombre entra con 8px de sangría y
        una línea guía cuelga del ícono del reporte padre. */
+    /* La línea guía cuelga del ícono del reporte padre y se ve SIEMPRE —
+       plegada es la otra mitad de la sangría. */
     .st-key-nav_rail_lateral::before {
         content: "";
         position: absolute;
@@ -437,14 +466,7 @@ CSS = """
         bottom: 6px;
         width: 1px;
         background: var(--border);
-        opacity: 0;
-        transition: opacity 120ms linear;
         pointer-events: none;
-    }
-    :root:has(.st-key-rail_pestillo_abierto) .st-key-nav_rail_lateral::before,
-    :root[data-capa-col] .st-key-nav_rail_lateral::before {
-        opacity: 1;
-        transition-delay: 120ms;
     }
     :root:has(.st-key-rail_pestillo_abierto) .st-key-nav_rail_lateral [data-testid="stButton"] button [data-testid="stIconMaterial"],
     :root[data-capa-col] .st-key-nav_rail_lateral [data-testid="stButton"] button [data-testid="stIconMaterial"] {
@@ -466,7 +488,7 @@ CSS = """
     .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla::before {
         content: "";
         position: absolute;
-        left: calc(var(--icono-x) - 6px - 1px);
+        left: calc(var(--icono-x) - 6px - 1px + 10px);
         top: 6px;
         bottom: 6px;
         width: 2px;
@@ -511,9 +533,51 @@ CSS = """
         background: var(--bg-card) !important;
         border-bottom: 1px solid var(--border) !important;
         overflow: hidden !important;
-        opacity: 1 !important;
-        clip-path: none !important;
         z-index: 1000001 !important;
+        /* ── NO ESTÁ: APARECE CON EL CURSOR (2026-09-19, a pedido) ─────
+           Mismo mecanismo que tenía antes del árbol y el mismo motivo para
+           no usar `visibility: hidden`: un elemento que el navegador no
+           hit-testea no puede estar `:hover` NUNCA, así que no tendría cómo
+           volver. Se queda con `opacity: 0` y un `clip-path` que la recorta
+           a la tira de `--franja-rep-reserva` — el recorte recorta también
+           el hit-testing, así que en reposo sólo despiertan esos 12px de
+           arriba y lo que quedó debajo (la primera tarjeta, que subió 32px)
+           sigue recibiendo sus clics. El recorte se suelta AL INSTANTE al
+           abrir y vuelve al FINAL del fundido de salida. */
+        opacity: 0;
+        clip-path: inset(0 0 calc(100% - var(--franja-rep-reserva)) 0);
+        transition: opacity 160ms linear 220ms,
+                    clip-path 0s linear 380ms;
+    }
+    :root[data-capa-cab] .st-key-nav_franja_rep {
+        opacity: 1;
+        clip-path: inset(0);
+        /* Al ENTRAR no hay espera: aparecer tarde se siente roto. */
+        transition: opacity 160ms linear,
+                    clip-path 0s linear 0s;
+    }
+    /* Y LOS CONTROLES CON ELLA. Son fijos y viven fuera de la franja (cada
+       uno lo dibuja un sitio distinto), así que no heredan su opacidad: se
+       apagan y encienden con la misma marca. El pill de fecha va acotado a
+       `fila_ajuste_top` — la misma key la usa Compras › Documentos SUNAT
+       DENTRO de su tarjeta, donde no es cromo sino el filtro de la tabla
+       (regla #457). El sello ya es `pointer-events: none`. */
+    .st-key-chips_ajuste_tabla,
+    .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill,
+    .st-key-fecha_corte_nav,
+    .st-key-rail_refresh,
+    #sello-actualizacion {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 160ms linear 220ms;
+    }
+    :root[data-capa-cab] :is(.st-key-chips_ajuste_tabla,
+        .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill,
+        .st-key-fecha_corte_nav, .st-key-rail_refresh,
+        #sello-actualizacion) {
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 160ms linear;
     }
     /* La botonera de reportes queda para 769-900px (ver el docstring de
        `navegacion.py`, «FRANJA DE REPORTES»). */
@@ -689,6 +753,41 @@ CSS = """
         top: calc((var(--franja-rep-alto) - 30px) / 2) !important;
         right: var(--barra-f) !important;
     }
+
+    /* ══ LOS SEIS CONTENEDORES FANTASMA DEJAN DE COBRAR GAP ═════════════
+       Entre el borde de arriba y la primera tarjeta hay seis bloques que no
+       dibujan NADA en el flujo —el rótulo de la columna, el pestillo, la
+       franja, los KPIs, el rail y la fila de la fecha: todos `position:
+       fixed`— pero Streamlit los envuelve en un `stLayoutWrapper` y el
+       bloque vertical le cobra a cada uno sus 16px de `gap`. Son 96px de
+       aire, y hasta hoy cada reporte los compensaba con un jalón negativo
+       propio, medido a mano y distinto en cada uno (-120 en Compras, -48 en
+       las tarjetas, -68 en Inventario). Por eso unos abrían en y=20 y otros
+       en y=68 con el mismo CSS.
+
+       `display: contents` hace desaparecer la CAJA del envoltorio dejando
+       vivos a los hijos: sin caja no hay flex item, y sin flex item no hay
+       gap. Es el mismo recurso que `_26_rails_scroll.py` ya usa para los
+       otros cuatro envoltorios de cromo fijo. Con los 96px fuera, los
+       jalones sobran y se anulan acá abajo: la primera tarjeta arranca
+       donde dice `--cab-offset-contenido` y en ningún lado hay un número
+       medido a ojo.
+
+       Por `data-testid` y NO por `.stLayoutWrapper`: el envoltorio lleva ese
+       testid pero su `class` son hashes de emotion, que cambian entre
+       versiones de Streamlit. */
+    [data-testid="stLayoutWrapper"]:has(> .st-key-rail_rotulo_rep),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-rail_pestillo_abierto),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-rail_pestillo_plegado),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-nav_franja_rep),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-nav_franja_kpis),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-compras_tabs_row),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-fila_ajuste_top) {
+        display: contents !important;
+    }
+       Los jalones que compensaban esos 96px se borraron de donde vivían
+       (`_20_compras_rail.py` y `_40_ajuste_franja.py`): anularlos desde acá
+       habría dejado dos reglas discutiendo por el mismo margen.
 
     /* Una sección a la que se llega por código (`base.py::scroll_a_seccion`,
        `scrollIntoView`) se detiene DEBAJO de la franja, no detrás. Las

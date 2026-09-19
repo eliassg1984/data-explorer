@@ -128,7 +128,15 @@ CSS = """    <style>
            que dejo de ocupar: la primera tarjeta, de y=52 a y=28, con los
            mismos 16px de aire. En MOVIL este valor no se usa: `_99_movil.py`
            le devuelve el de antes (alla no hay franja que se haya ido). */
-        --cab-offset-contenido: 52px;
+        /* 2026-09-19: 52 -> 20 (regla #472, segunda vuelta). La franja de
+           contexto volvió a ser CAPA —se esconde y aparece con el cursor,
+           `_28_arbol.py`— así que arriba sólo quedan su tira de 12 y 8 de
+           aire. Las tarjetas suben 32px y `graficos/alturas.py::_CAB_OFFSET`
+           los suma al presupuesto vertical (test_graficos lo coteja).
+           El tramo de 769 a 900px se queda en 52: ahí arriba sigue habiendo
+           una banda que pinta (`_40_ajuste_franja.py::before`) y el contenido
+           tiene que arrancar debajo de ella. */
+        --cab-offset-contenido: 20px;
 
         /* ==================================================================
            PRESUPUESTO VERTICAL — cuánto mide "una pantalla" de contenido
@@ -468,10 +476,17 @@ CSS = """    <style>
          --rail-der-res     la reserva + 16px de canal, que deja las tarjetas
              en x=84 (plegado) o x=264 (fijado). En 1366 la tarjeta mide
              1240px plegada y ~1060 fijada, contra 1288 con la capa. */
+    @media (min-width: 769px) and (max-width: 900px) {
+        :root { --cab-offset-contenido: 52px; }
+    }
     @media (min-width: 901px) {
         :root {
             --franja-rep-alto: 44px;
-            --franja-rep-reserva: 44px;
+            /* Lo que la franja RESERVA en reposo: su tira de arriba, por
+               donde entra el cursor (2026-09-19). Mismo desdoblamiento que
+               tenía antes del árbol y el mismo número: 12px es un blanco
+               cómodo contra el borde y no puede pisar contenido. */
+            --franja-rep-reserva: 12px;
             --rail-der-w: 248px;
             --rail-plegado-w: 68px;
             --rail-reserva: var(--rail-plegado-w);

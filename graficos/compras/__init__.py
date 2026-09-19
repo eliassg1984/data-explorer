@@ -86,15 +86,6 @@ from graficos import periodo
 # vista se queda sin KPI y las demás no se enteran. Un KPI es decoración
 # informativa; ninguno vale romper la navegación.
 
-def _inic(nombre, n=5):
-    """Las iniciales de un nombre largo de proveedor, para que entre en la
-    franja. `VIBEJ COLIBRI SAC` -> `VIBEJ`. Se corta la PRIMERA palabra en
-    vez de armar una sigla con las iniciales de todas: medido sobre los
-    proveedores reales, la sigla ("VCS", "DGR") es irreconocible y la primera
-    palabra casi siempre alcanza para identificarlos."""
-    return str(nombre).strip().split()[0][:n].upper() if str(nombre).strip() else ""
-
-
 def _delta(hoy, ant):
     """`(flecha, texto, color)` de una variacion, o None si no hay con que
     comparar. La convencion de color es la MISMA que usa el drill Vs año
@@ -196,13 +187,24 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
         s = s[s > 0]
         return (s.idxmax(), float(s.max())) if len(s) else None
 
-    def _texto(valor, delta):
-        """`:blue[valor] :red[▲12%]` — dos colores a proposito: el dato en
-        azul, que lo separa del lavanda del nombre de la vista (fue el
-        pedido), y la variacion en verde/rojo por signo."""
-        _t = f":blue[{valor}]"
+    def _texto(que, valor, delta, contra="el período anterior"):
+        """El texto del TOOLTIP de la vista: qué se mide, el número y contra
+        qué se compara, en una frase que se entienda sola.
+
+        Hasta el 2026-09-18 esto era la etiqueta en línea del rail
+        (`:blue[VIBEJ S/ 25.9k] :red[▲12%]`, iniciales incluidas para que
+        entrara en la fila). Se retiró del rail (#465) y desde el
+        2026-09-19 vuelve como tooltip de la vista: el punto de color de la
+        fila sale de este mismo texto, y sin él no había forma de saber qué
+        decía — se reportó así: «veo que algunas vistas tienen un punto
+        rojo, eso qué significa?». En un tooltip hay sitio, así que va el
+        nombre COMPLETO y no las iniciales.
+
+        La variación sigue en `:red[…]`/`:green[…]`, que es de donde se
+        derivan los `estados` más abajo."""
+        _t = f"**{que}:** {valor}"
         if delta:
-            _t += f" :{delta[2]}[{delta[0]}{delta[1]}]"
+            _t += (f" · :{delta[2]}[{delta[0]}{delta[1]}] contra {contra}")
         return _t
 
     # PROVEEDOR: el que mas compro, contra lo que ESE MISMO compro antes.
@@ -210,15 +212,16 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
     _t = _top(d_v, val, col_prov)
     if _t:
         kpis["Proveedor"] = _texto(
-            f"{_inic(_t[0])} {fmt_k(_t[1])}",
-            _delta(_t[1], _suma(prev, col_prov, _t[0])))
+            "Proveedor al que más le compraste", f"{_t[0]} — {fmt_k(_t[1])}",
+            _delta(_t[1], _suma(prev, col_prov, _t[0])),
+            "lo que le compraste en el período anterior")
 
     # PRODUCTO: la familia que mas compro, contra esa misma familia antes.
     d_v, val, prev = _vista("Producto")
     _t = _top(d_v, val, col_fam)
     if _t:
         kpis["Producto"] = _texto(
-            f"{str(_t[0])[:3].upper()} {fmt_k(_t[1])}",
+            "Familia que más se compró", f"{_t[0]} — {fmt_k(_t[1])}",
             _delta(_t[1], _suma(prev, col_fam, _t[0])))
 
     # VOLATILIDAD: QUE producto y cuanto (2026-09-01, a pedido: antes iba
@@ -248,11 +251,12 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
             # el producto que nombra el rail puede no ser el primero de la
             # tabla. Unificarlas es un cambio aparte.
             _n_alta = int((cv >= 1.0).sum())
-            _txt_vol = f"{_compras_truncar(str(_p), 14)} ±{cv[_p] * 100:.0f}%"
+            _txt_vol = f"{_p} (su precio varía ±{cv[_p] * 100:.0f}%)"
             if _n_alta > 1:
-                _txt_vol += f" · {_n_alta} altos"
+                _txt_vol += (f" · {_n_alta} productos con un precio que varía "
+                             "tanto como vale")
                 estados["Volatilidad"] = "warning"
-            kpis["Volatilidad"] = _texto(_txt_vol, None)
+            kpis["Volatilidad"] = _texto("Precio más inestable", _txt_vol, None)
 
     # DOCUMENTOS: cuantos en el SISTEMA y cuantos en SUNAT (2026-09-01, a
     # pedido). El del sistema sale de aca, que es barato. El de SUNAT no:
@@ -265,9 +269,9 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
     if d_v is not None and col_docu and col_docu in d_v.columns:
         _n_sis = int(d_v[col_docu].nunique())
         _cruce = st.session_state.get("_cp_docs_cruce") or {}
-        _txt = f"sis {_n_sis:,}".replace(",", ".")
+        _txt = f"{_n_sis:,} en el sistema".replace(",", ".")
         if _cruce.get("sunat") is not None:
-            _txt += f" · sun {_cruce['sunat']:,}".replace(",", ".")
+            _txt += f" · {_cruce['sunat']:,} en SUNAT".replace(",", ".")
         # Lo que NO cuadra, que es lo unico accionable de esta vista.
         # Viaja por `session_state` desde `documentos_sunat.py` igual que
         # los dos totales de arriba, y por el mismo motivo: el lado SUNAT
@@ -277,11 +281,12 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
         # inventado.
         _n_rev = _cruce.get("revisar")
         if _n_rev:
-            _txt += f" · {_n_rev} a revisar"
+            _txt += f" · {_n_rev} con diferencias a revisar"
             estados["Documentos SUNAT"] = "warning"
         _prev_docs = (int(prev[col_docu].nunique())
                       if prev is not None and col_docu in prev.columns else None)
-        kpis["Documentos SUNAT"] = _texto(_txt, _delta(_n_sis, _prev_docs))
+        kpis["Documentos SUNAT"] = _texto("Documentos", _txt,
+                                          _delta(_n_sis, _prev_docs))
 
     # COMPRAS POR PERÍODO (la vieja «Semanal», renombrada el 2026-09-19): la
     # mejor semana del rango, contra la mejor de antes.
@@ -296,8 +301,10 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
                 _vp = pd.to_numeric(prev[col_valor], errors="coerce")
                 _sp = _vp.groupby(_fp.dt.to_period("W")).sum().dropna()
                 _ant = float(_sp.max()) if len(_sp) else None
-            kpis["Compras por período"] = _texto(fmt_k(float(s.max())),
-                                     _delta(float(s.max()), _ant))
+            kpis["Compras por período"] = _texto(
+                "Mejor semana", fmt_k(float(s.max())),
+                _delta(float(s.max()), _ant),
+                "la mejor semana del período anterior")
 
     # VS AÑO PASADO: la familia que mas vario. El año pasado NO sale de este
     # df —esta filtrado por el rango vigente, que es justo lo que esa vista
@@ -336,7 +343,7 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
                 _ft = _var.abs().idxmax()
                 _sube = _var[_ft] > 0
                 kpis["Vs año pasado"] = (
-                    f":blue[{str(_ft)[:3].upper()}] "
+                    f"**Familia que más cambió contra el año pasado:** {_ft} · "
                     f":{'red' if _sube else 'green'}"
                     f"[{'▲' if _sube else '▼'}{abs(_var[_ft]):.0f}%]")
     # El semaforo, derivado del texto que se acaba de armar. La excepcion
@@ -354,6 +361,17 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
             estados[_vista] = "danger"
         elif ":green[" in _t:
             estados[_vista] = "success"
+    # Y el tooltip termina diciendo qué significa SU punto. En Compras el
+    # rojo es GASTAR MÁS (ver arriba): sin decirlo, un punto rojo junto a
+    # «la mejor semana» se lee como una alarma y no como «subió».
+    _que_dice = {
+        "danger": ":red[●] **rojo:** subió — en Compras, se gastó más",
+        "success": ":green[●] **verde:** bajó — en Compras, se gastó menos",
+        "warning": ":orange[●] **ámbar:** hay algo que revisar",
+    }
+    for _vista in kpis:
+        if estados.get(_vista) in _que_dice:
+            kpis[_vista] += "\n\n" + _que_dice[estados[_vista]]
     return kpis, estados
 
 
@@ -706,11 +724,12 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # porque el punto de color se DERIVA de el —es lo que garantiza que el
     # punto no diga verde donde el numero decia rojo— pero ya no se dibuja.
     # Ver regla #465.
-    _, _estados_rail = _kpis_vistas(_df_de_vista, d_full, col_valor,
+    _kpis_rail, _estados_rail = _kpis_vistas(_df_de_vista, d_full, col_valor,
                                     col_prov, col_fam, col_prod,
                                     col_punit, col_docu, col_fecha)
     graf = _render_rail(_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo",
-                        secciones=_PILA, estados=_estados_rail)
+                        secciones=_PILA, estados=_estados_rail,
+                        kpis=_kpis_rail)
     if graf not in opciones:
         graf = opciones[0]
 

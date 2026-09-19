@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-472 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+473 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (168)
 
@@ -732,7 +732,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (84)
+**Decisiones de diseño y UX** (85)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -818,6 +818,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 - **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
 - **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
+- **#473** — Un jalón negativo que compensa un gap fantasma es deuda con intereses: el día que el gap…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -39436,6 +39437,73 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-19.)
 
+473. **Un jalón negativo que compensa un `gap` fantasma es deuda con
+     intereses: el día que el gap desaparece, cada reporte abre a una
+     altura distinta. Se arregla en la CAUSA (`display: contents` en los
+     envoltorios) y se borran los jalones, no al revés.**
+     Segunda vuelta del rail en árbol (#472), el mismo día y a pedido:
+     *«podemos hacer que la franja superior se oculte automáticamente, y
+     solo salga cuando se ubique el cursor... luego de esto hay que subir la
+     tarjeta»*.
+
+     **La franja volvió a ser CAPA** con el mecanismo de siempre (`opacity:
+     0` + `clip-path` a la tira de 12px, que recorta también el
+     hit-testing) y sus cuatro controles fijos —fecha, Filtros, la hora del
+     dato y Actualizar— se apagan y encienden con ella: no son hijos suyos,
+     así que no heredaban su opacidad. Actualizar entró en
+     `DISPARADORES_CABECERA`: es el único control que, estando encendido, el
+     cursor tiene que poder alcanzar sin que la capa se cierre en el camino.
+
+     **Y ahí saltó lo otro.** Con la franja fuera, `--cab-offset-contenido`
+     bajó de 52 a 20 (12 de la tira + 8 de aire) y `alturas._CAB_OFFSET` con
+     él: el presupuesto vertical gana 32px. Pero las tarjetas NO abrían
+     todas a la misma altura — medido a 1366×657: Compras 68, Movimientos
+     68, Ventas 28, Inventario 20, Ajuste 19, Recetas 113.
+
+     **La causa son seis contenedores de alto CERO** —el rótulo de la
+     columna, el pestillo, la franja, los KPIs, el rail y la fila de la
+     fecha, todos `position: fixed`— que Streamlit envuelve en un
+     `stLayoutWrapper` y a los que el bloque vertical le cobra su `gap` de
+     16px: 96px de aire. Cada reporte los venía compensando con un jalón
+     propio, medido a ojo y en su día: -120 en el wrap de Compras, -48 en
+     las tarjetas, -68 en Inventario, -108 en la cascada de Ajuste. Cuatro
+     números que decían la misma cuenta y envejecían por separado.
+
+     El arreglo es una sola regla —`display: contents` en esos seis
+     envoltorios, el mismo recurso que `_26_rails_scroll.py` ya usaba para
+     otros cuatro— y el borrado de los cuatro jalones, cada uno en su
+     fichero. Los de 769-900px se conservan acotados con `@media`: ahí los
+     envoltorios siguen cobrando. Medido después: Compras 18, Movimientos
+     23, Ventas 23, Ajuste 39, Inventario 48; todas visibles bajo la tira y
+     dentro de 30px entre sí, sin un solo número medido a ojo.
+
+     **Dos cosas más del mismo pedido:**
+
+     · **Los íconos de reporte y de vista se distinguen por TRES cosas a la
+       vez** —21px contra 15, tinta contra gris apagado, y 10px de sangría
+       colgando de la línea guía—, porque plegada la columna es lo único que
+       dice quién cuelga de quién. Con un solo eje (el tamaño) no se leía:
+       se reportó como «al parecer tienen el mismo tamaño».
+     · **El punto de color de una vista no se explica solo.** Se reportó
+       como «veo que algunas vistas tienen un punto rojo, eso qué
+       significa?». El punto se deriva del KPI de esa vista, que el rail
+       dejó de mostrar el 2026-09-18 (#465), así que volvió como TOOLTIP
+       (`help=` del botón) y reescrito en lenguaje llano —nombre completo
+       del proveedor en vez de sus iniciales, contra qué se compara, y un
+       renglón final que dice qué significa el color: rojo subió (en
+       Compras, se gastó más), verde bajó, ámbar hay algo que revisar.
+
+     **Y una trampa de MEDICIÓN que costó media hora:** con un rerun en
+     curso, la columna devolvía 1366px de ancho —su valor de antes— con la
+     regla aplicando perfecto y `!important` incluido; ni siquiera un
+     `style` inline la movía. Es la #353 con otra cara: en el navegador
+     automatizado la transición no avanza, y una transición en curso gana
+     sobre cualquier declaración. Antes de creerle a una medida de ancho:
+     apagar transiciones Y esperar a que el indicador de «corriendo» se
+     apague.
+
+     (2026-09-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39448,7 +39516,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#473**.
+> próxima regla nueva es la **#474**.
 
 >
 

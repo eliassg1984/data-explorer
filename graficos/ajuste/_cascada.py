@@ -286,8 +286,15 @@ def _css():
        mete la tarjeta debajo. MARGIN y no transform: un transform en un
        ancestro captura a los hijos `fixed` (regla #156), y el popover de
        los filtros lo es. Ver arquitectura.md regla #426. */
-    div[class*="st-key-aj_sec_cascada"] {{
-        margin-top: -108px !important; }}
+    /* 2026-09-19: SÓLO HASTA 900px (regla #472). Desde 901 los seis
+       envoltorios de cromo fijo dejaron de cobrar su `gap`
+       (`estilos/_28_arbol.py`), así que no hay 96px que recuperar: con el
+       jalón puesto, la cascada arrancaba en y=-69, o sea fuera de la
+       pantalla por arriba. */
+    @media (max-width: 900px) {{
+        div[class*="st-key-aj_sec_cascada"] {{
+            margin-top: -108px !important; }}
+    }}
 
     /* ── LOS TRES CONTROLES, EN LA FILA DE ARRIBA DE LA TABLA ────────
        Las reglas del trigger y de la lista de cortes las escribe

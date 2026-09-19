@@ -211,10 +211,13 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   default) es una tira de 68px de íconos; con el cursor se despliega a
   248px ENCIMA del contenido; el pestillo la **fija** abierta y ahí el
   contenido le reserva el ancho (`--rail-reserva`, en `_00_base.py`).
-- **Arriba, dónde estás.** La franja (`nav_franja_rep`, 44px, fija) lleva
-  el reporte, la vista en pantalla y sus KPIs a la izquierda, y la fecha,
+- **Arriba, dónde estás.** La franja (`nav_franja_rep`, 44px) lleva el
+  reporte, la vista en pantalla y sus KPIs a la izquierda, y la fecha,
   Filtros, la hora del dato y Actualizar a la derecha, cada uno a la
   izquierda del anterior (`--barra-f`, `--barra-fecha`, `--barra-corte`).
+  **No está en reposo**: deja una tira de 12px contra el borde de arriba y
+  aparece —con sus controles— cuando el cursor la toca. Por eso el
+  contenido arranca en 20px y no en 52 (regla #473).
 
 Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
 
@@ -233,6 +236,16 @@ Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
 - **La vista de la franja la escribe el temporizador de `_render_rail`**
   (`.barra-vista`, con el rótulo corto de la vista). Toda vista nueva lleva
   ícono (tercer elemento de su tupla): plegado, es lo único que se ve.
+- **Ningún jalón negativo arriba de la primera tarjeta.** Los seis
+  contenedores de cromo fijo van en `display: contents` y no cobran `gap`,
+  así que la tarjeta abre donde dice `--cab-offset-contenido`. Si aparece
+  un séptimo, se suma a esa lista — no se compensa con un `margin-top`
+  negativo por reporte, que es lo que hubo hasta el 2026-09-19 y hacía que
+  cada reporte abriera a una altura distinta (regla #473).
+- **El punto de color de una vista sale de su KPI**, y el KPI vive en el
+  `help=` del botón: rojo subió (en Compras, gastar más), verde bajó,
+  ámbar hay algo que revisar. Los arma `graficos/compras/__init__.py::
+  _kpis_vistas`; el texto es el tooltip, así que se escribe para leerse.
 - **En el navegador automatizado las transiciones no avanzan** (#353): para
   medir anchos, apagarlas antes desde la consola.
 - **Quién despliega no es el CSS**: `navegacion.py::_SCRIPT_CAPAS` evalúa

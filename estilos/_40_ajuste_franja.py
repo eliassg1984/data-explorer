@@ -359,16 +359,12 @@ CSS = """    /* ================================================================
        en este reporte, asi que no necesita el scope del marker.
        (2026-09-13, a pedido: "subamos las tarjetas, sobra espacio arriba".)
        Ver arquitectura.md regla #406. */
-    @media (min-width: 769px) {
+    /* 2026-09-19: sólo hasta 900px. Desde 901 los seis envoltorios de
+       cromo fijo dejaron de cobrar `gap` (`_28_arbol.py`, regla #472), así
+       que no hay 80px que recuperar: con el jalón puesto, Inventario
+       arrancaba por DEBAJO de la franja. */
+    @media (min-width: 769px) and (max-width: 900px) {
         .st-key-inv_sec_area { margin-top: -68px !important; }
-    }
-    /* 2026-09-19: desde 901px, 24px menos de jalón. La franja de arriba
-       pasó a ser FIJA y opaca (44px, rail en árbol, regla #472), y con -68
-       las tarjetas quedaban en y=28 — medido: 16px de su borde y de sus
-       títulos debajo de la franja. Con -44 arrancan en y=52, la misma
-       línea que Compras (44 de franja + 8 de aire). */
-    @media (min-width: 901px) {
-        .st-key-inv_sec_area { margin-top: -44px !important; }
     }
 
     /* ================================================================== */

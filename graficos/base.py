@@ -1719,7 +1719,7 @@ def selector_escala(clave, ctx, bandera=None, escalas=ESCALAS,
 
 
 def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
-                 secciones=None, estados=None):
+                 secciones=None, estados=None, kpis=None):
     """Vistas del reporte activo — fila de TABS DE TEXTO en la franja
     superior. Selector de tipo de gráfico/pantalla dentro de un reporte.
 
@@ -1922,12 +1922,24 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     # numero desaparecia justo cuando esta columna toma el
                     # relevo; se fue cuando la columna entera paso a
                     # aparecer solo con el cursor encima.
+                    # EL KPI COMO TOOLTIP, no como texto (2026-09-19). El
+                    # punto de color de la fila (`estados`) se deriva de este
+                    # mismo número —sube, baja, o hay algo que revisar— y sin
+                    # él no hay forma de saber qué dice: se reportó tal cual,
+                    # «veo que algunas vistas tienen un punto rojo, eso qué
+                    # significa?». Va en `help=` y no en el label porque el
+                    # KPI en línea se retiró a pedido el 2026-09-18 (#465):
+                    # así el dato está cuando se lo busca y no ensucia la
+                    # lista. Markdown incluido: el texto ya viene con
+                    # `:red[▲12%]` de quien lo armó.
+                    _ayuda = (kpis or {}).get(oid)
                     st.button(
                         label,
                         key=f"{btn_prefix}lat_{_slug_url(oid)}",
                         type="secondary",
                         on_click=_rail_set, args=(state_key, oid),
                         **({"icon": icono} if icono else {}),
+                        **({"help": _ayuda} if _ayuda else {}),
                     )
         # El alto del hueco que abre la fila activa del árbol lo calcula el
         # CSS con estos dos conteos y los altos de fila que viven allá

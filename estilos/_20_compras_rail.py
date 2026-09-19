@@ -607,10 +607,13 @@ CSS = """    /* ================================================================
        oculto es el contenedor de adentro, y el `stLayoutWrapper` que
        Streamlit le pone por fuera sigue siendo flex item de alto 0.
        Medido: 52 (offset) + 6x16 = 148, y con el jalón y=28. */
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_prov_drill_wrap,
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) .st-key-compras_sunat_drill_wrap {
-        margin-top: -120px !important;
-    }
+    /* 2026-09-19: EL JALÓN SE FUE (regla #472, segunda vuelta). Existía
+       para recuperar los 96px que cobraban de `gap` los seis contenedores
+       de alto cero de arriba — el aire que documenta toda la cuenta de acá
+       arriba. Desde que esos envoltorios van en `display: contents`
+       (`_28_arbol.py`) no cobran nada, así que el jalón ya no compensa: la
+       tarjeta arranca donde dice `--cab-offset-contenido`. Abajo de 901px
+       el bloque móvil de este archivo ya lo ponía en 0. */
     /* 2026-08-17, a pedido: ensanchar la tarjeta para que las columnas de
        proveedor.py (ranking-tabla + evolución; nació pensado para 3 —
        ranking, tabla y evolución separadas — antes de que las dos
@@ -663,9 +666,7 @@ CSS = """    /* ================================================================
                bordes son los del contenedor en cualquier viewport. */
         }
     }
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_izq_"] {
-        margin-top: -48px !important;
-    }
+    /* (El -48px de la primera tarjeta se fue con el de arriba, 2026-09-19.) */
     /* La tarjeta der (panel lateral, p.ej. Mayor cantidad/Precio más alto de
        Inventario o los mini-tops de Compras) es hermana de la izq en la
        misma fila — mismo jalón, si no arranca 56px más abajo que su
@@ -673,9 +674,7 @@ CSS = """    /* ================================================================
        Por área/Por familia: la izq creció con el detalle del click-drill y
        el desnivel saltó a la vista). Reseteada a 0 en el media query de
        abajo, igual que la izq. */
-    [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row) [class*="st-key-ajuste_graf_card_der_"] {
-        margin-top: -48px !important;
-    }
+    /* (Y el de su hermana de la derecha, por lo mismo.) */
     /* (Acá vivió, unas horas del 2026-09-05, la excepción al jalón para la
        primera tarjeta de Movimientos: ese dashboard metía una fila de KPIs
        EN FLUJO justo encima y el -48px se la comía, con el título del Plotly
@@ -1493,6 +1492,13 @@ CSS = """    /* ================================================================
        número cambia con él: son la misma cuenta. DERIVADO, no medido: la
        pila completa sí se midió en el navegador (y=64), ésta se despejó de
        la misma fórmula. */
+    /* 2026-09-19: este número quedó DESACTUALIZADO y se deja anotado en vez
+       de recalcularlo a ciegas. Los seis envoltorios de cromo fijo dejaron
+       de cobrar su `gap` desde 901px (`_28_arbol.py`, regla #472), así que
+       la cuenta de arriba ya no da. El modo solo hoy no tiene quién lo
+       encienda (el ⛶ se retiró el 2026-09-17), así que la regla no se
+       dispara; si se reactiva, hay que MEDIR de nuevo dónde abre la
+       tarjeta antes de creerle a este -88. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_solo_on)
         .st-key-compras_vap_drill_wrap {
         margin-top: -88px !important;

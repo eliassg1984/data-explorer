@@ -160,6 +160,7 @@ DISPARADORES_COLUMNA = """.st-key-compras_tabs_row:hover,
 
 DISPARADORES_CABECERA = """.st-key-nav_franja_rep:hover,
             .st-key-nav_franja_rep :focus-visible,
+            .st-key-rail_refresh:hover,
             .st-key-nav_rail:hover,
             .st-key-chips_ajuste_tabla:hover,
             .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill:hover,
