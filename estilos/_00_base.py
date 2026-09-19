@@ -22,6 +22,11 @@ CSS = """    <style>
            de Compras = cambiar esta línea. */
         --bg-card-tenue: var(--bg-primary);
         --bg-hover: #f0edfe;        /* hover lavanda suave */
+        --rail-fondo: #f7f6fb;      /* == tema.LAVANDA_FILA: la columna del rail en árbol (regla #472) */
+        /* Sombra de lo que se despliega ENCIMA del contenido (el árbol
+           asomado, regla #472): hacia la derecha, porque es de ese lado
+           donde tapa. */
+        --sombra-capa: 8px 0 28px rgba(16, 16, 20, 0.12);
         --text-primary: #18181d;    /* casi negro */
         --text-secondary: #71717a;
         --text-muted: #a2a2ad;
@@ -404,9 +409,12 @@ CSS = """    <style>
        estado (`navegacion.py`). No hay un marcador aparte a proposito:
        un `st.container` vacio se poda en el render siguiente (regla
        #338) y el plegado se apagaria solo. */
-    :root:has(.st-key-rail_pestillo_plegado) {
-        --rail-der-w: 46px;
-    }
+    /* 2026-09-19: ACA VIVIA `:root:has(.st-key-rail_pestillo_plegado)
+       { --rail-der-w: 46px }`, el ancho de la columna vieja plegada. Se
+       retiro con el rail en arbol (regla #472): desde 901px el plegado es
+       la tira de `--rail-plegado-w` (abajo), y como el arbol arranca
+       plegado, esta regla sin `@media` le achicaba a 46px la columna del
+       tramo de 769 a 900px, donde la columna no se pliega. */
     /* ── MODO "SOLO": sin rail, la reserva se suelta (2026-09-04) ────────
        Cuando una sección de Compras se queda con la página (el ⛶ de la
        cabecera de «Vs año pasado» → `compras_pila_solo`), el rail se
@@ -426,6 +434,52 @@ CSS = """    <style>
        margen derecho cambia, éste cambia con él. */
     :root:has(.st-key-compras_solo_on) {
         --rail-der-res: 90px;
+    }
+
+    /* ── DESDE 901px: RAIL EN ÁRBOL + UNA SOLA FRANJA (2026-09-19) ───────
+       Regla #472, la «opción 5» del prototipo. La columna y la franja de
+       reportes DEJAN DE SER CAPAS que aparecen con el cursor (lo eran desde
+       el 2026-09-13 y el 2026-09-18) y vuelven a ser cromo fijo, cada una
+       con su trabajo: al costado A DÓNDE IR (reportes y, anidadas bajo el
+       activo, sus vistas), arriba DÓNDE ESTÁS (reporte, vista, KPIs, fecha,
+       Actualizar). Lo que se gana es que nada esté escondido ni cambie de
+       contenido al bajar; lo que se paga, medido abajo, es ancho.
+
+       Las variables de siempre, con el valor nuevo. No se inventan otras
+       donde el concepto es el mismo, porque todo `estilos/` ya deriva de
+       éstas:
+
+         --franja-rep-alto / --franja-rep-reserva   44px las dos: la franja
+             ya no es capa, así que lo que mide y lo que reserva es lo mismo.
+             `--cab-offset-contenido` NO cambia (52 = 44 + 8 de aire): la
+             franja ocupa la banda que la cabecera ya reservaba y que en
+             reposo quedaba vacía. Medido en 1366x657 antes del cambio: la
+             primera tarjeta arrancaba en y=52, con los 12..52 en blanco.
+         --rail-der-w       248px, el árbol desplegado. Fijo en los dos
+             estados del pestillo: plegar ya no achica el árbol, lo esconde
+             detrás de la tira de íconos (ver `--rail-plegado-w`).
+         --rail-plegado-w   68px, la tira de íconos.
+         --rail-reserva     lo que la columna le quita al contenido: la tira
+             plegada, o el árbol entero si el pestillo lo FIJA abierto. Al
+             pasar el cursor por la columna plegada, el árbol se dibuja
+             ENCIMA (`_28_arbol.py`) y el contenido no se mueve — cambiar el
+             ancho de la página en un hover haría que Plotly y AgGrid se
+             re-midan (regla #350).
+         --rail-der-res     la reserva + 16px de canal, que deja las tarjetas
+             en x=84 (plegado) o x=264 (fijado). En 1366 la tarjeta mide
+             1240px plegada y ~1060 fijada, contra 1288 con la capa. */
+    @media (min-width: 901px) {
+        :root {
+            --franja-rep-alto: 44px;
+            --franja-rep-reserva: 44px;
+            --rail-der-w: 248px;
+            --rail-plegado-w: 68px;
+            --rail-reserva: var(--rail-plegado-w);
+            --rail-der-res: calc(var(--rail-reserva) + 16px);
+        }
+        :root:has(.st-key-rail_pestillo_abierto) {
+            --rail-reserva: var(--rail-der-w);
+        }
     }
 
     /* ============ HEADER NATIVO + ESPACIO SUPERIOR ============ */

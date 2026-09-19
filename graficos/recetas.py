@@ -71,15 +71,15 @@ from graficos.recetaventa import (
 # existían en los dos lados y al juntarlas quedaban dos items con el mismo
 # nombre.
 _RAIL_CATEGORIAS = (
-    ("Platos", (("Composición del plato",              "Composición"),
-                ("Costeo Receta Venta",                "Costeo"),
-                ("Ingredientes clave",                 "Ingredientes"),
-                ("Panorama de compras · platos",       "Panorama"),
-                ("Tabla · platos",                     "Tabla"))),
-    ("Recetas base", (("Ranking de recetas base",            "Ranking · base"),
-                      ("Insumos clave · recetas base",       "Insumos · base"),
-                      ("Panorama de compras · recetas base", "Panorama · base"),
-                      ("Tabla · recetas base",               "Tabla · base"))),
+    ("Platos", (("Composición del plato",              "Composición",     ":material/donut_small:"),
+                ("Costeo Receta Venta",                "Costeo",          ":material/calculate:"),
+                ("Ingredientes clave",                 "Ingredientes",    ":material/eco:"),
+                ("Panorama de compras · platos",       "Panorama",        ":material/area_chart:"),
+                ("Tabla · platos",                     "Tabla",           ":material/table_rows:"))),
+    ("Recetas base", (("Ranking de recetas base",            "Ranking · base",  ":material/leaderboard:"),
+                      ("Insumos clave · recetas base",       "Insumos · base",  ":material/nutrition:"),
+                      ("Panorama de compras · recetas base", "Panorama · base", ":material/stacked_line_chart:"),
+                      ("Tabla · recetas base",               "Tabla · base",    ":material/table_view:"))),
 )
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA

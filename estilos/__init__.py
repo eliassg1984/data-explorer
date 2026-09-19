@@ -7,11 +7,15 @@ Estilos globales de la app: CSS, tamaños de fuente e inyección del tema.
                         botones, expander, alertas, header nativo
     _20_compras_rail    rail vertical derecho (selector de gráfico) —
                         compartido por TODOS los reportes pese al nombre
-    _26_rails_scroll    la columna izquierda cambia de Reportes a Vistas
-                        segun la seccion que este en pantalla; y la banda
-                        bajo la franja de reportes (vistas / KPIs / filtros)
-                        solo aparece al pasar el cursor por la cabecera
+    _26_rails_scroll    (769-900px) la columna izquierda cambia de Reportes
+                        a Vistas segun la seccion que este en pantalla; y
+                        la banda bajo la franja de reportes (vistas / KPIs /
+                        filtros) solo aparece al pasar el cursor
     _27_pila            esqueletos de carga de la pagina apilada
+    _28_arbol           desde 901px: el rail en ARBOL (reportes + vistas del
+                        activo, plegado / asomado / fijado) y la franja de
+                        contexto de arriba. Va despues de _20 y _26 porque
+                        pisa su geometria de la columna
     _30_filtros         botón/popover de filtros
     _40_ajuste_franja   franja superior sticky + chips de filtro
     _50_fecha           pill de fecha y su panel (atajos + calendario)
@@ -105,6 +109,7 @@ from ._00_base import CSS as _CSS_BASE
 from ._20_compras_rail import CSS as _CSS_COMPRAS_RAIL
 from ._26_rails_scroll import CSS as _CSS_RAILS_SCROLL
 from ._27_pila import CSS as _CSS_PILA
+from ._28_arbol import CSS as _CSS_ARBOL
 from ._30_filtros import CSS as _CSS_FILTROS
 from ._40_ajuste_franja import CSS as _CSS_AJUSTE_FRANJA
 from ._50_fecha import CSS as _CSS_FECHA
@@ -122,6 +127,7 @@ _SECCIONES = (
     _CSS_COMPRAS_RAIL,
     _CSS_RAILS_SCROLL,
     _CSS_PILA,
+    _CSS_ARBOL,
     _CSS_FILTROS,
     _CSS_AJUSTE_FRANJA,
     _CSS_FECHA,

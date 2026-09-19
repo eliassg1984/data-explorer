@@ -28,17 +28,17 @@ _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
 # ver graficos/base.py) — reemplaza el st.pills que vivia ANTES en medio
 # del dashboard. Mismo patron que Compras/Ajuste.
 _VENTAS_RAIL_CATEGORIAS = (
-    ("Resumen",  (("Resumen ejecutivo", "Resumen"),)),
-    ("Tiempo",   (("Venta por día",              "Por día"),
-                  ("Mapa por hora",               "Por hora"),
-                  ("Comparativo vs Año Pasado",   "Año Pasado"),
-                  ("Venta vs Compra",            "Vs Compra"),
-                  ("Familia/Subfamilia semanal",  "Semanal"),
-                  ("Histórica subfamilia",        "Histórica"))),
-    ("Análisis", (("Matriz agrupada",     "Matriz"),
-                  ("Ranking & FoodCost",  "Ranking"),
-                  ("Meseros",             "Meseros"))),
-    ("Datos",    (("Tabla",  "Tabla"),)),
+    ("Resumen",  (("Resumen ejecutivo", "Resumen", ":material/summarize:"),)),
+    ("Tiempo",   (("Venta por día",              "Por día",    ":material/calendar_today:"),
+                  ("Mapa por hora",               "Por hora",   ":material/schedule:"),
+                  ("Comparativo vs Año Pasado",   "Año Pasado", ":material/compare_arrows:"),
+                  ("Venta vs Compra",            "Vs Compra",  ":material/balance:"),
+                  ("Familia/Subfamilia semanal",  "Semanal",    ":material/calendar_view_week:"),
+                  ("Histórica subfamilia",        "Histórica",  ":material/history:"))),
+    ("Análisis", (("Matriz agrupada",     "Matriz",  ":material/grid_on:"),
+                  ("Ranking & FoodCost",  "Ranking", ":material/leaderboard:"),
+                  ("Meseros",             "Meseros", ":material/groups:"))),
+    ("Datos",    (("Tabla",  "Tabla", ":material/table_rows:"),)),
 )
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA

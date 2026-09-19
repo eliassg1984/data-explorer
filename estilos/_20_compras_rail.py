@@ -1368,15 +1368,9 @@ CSS = """    /* ================================================================
         background: var(--punto, transparent);
         pointer-events: none;
     }
-    /* Plegado el boton mide 46px y el chevron ya no esta: el punto se
-       centra arriba del icono en vez de pelear por la esquina. */
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-compras_tabs_row
-        button::after,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral
-        button::after {
-        top: 5px;
-        right: 5px;
-    }
+    /* (Aca vivia la posicion del punto con la columna plegada a 46px; se
+       fue con el resto del plegado viejo, ver «PLEGADO» mas abajo. En el
+       arbol la ubica `_28_arbol.py`.) */
     /* ── AL SCROLLEAR, EL PESTILLO BAJA CON LA COLUMNA ──────────────────
        Medido en Cloud el 2026-09-07, que es como se encontro el bug:
 
@@ -1401,51 +1395,32 @@ CSS = """    /* ================================================================
        Gana por ESPECIFICIDAD, no por orden: `_26_rails_scroll.py` va
        DESPUES de este modulo y declara el `padding` de
        `.st-key-nav_rail_lateral` (0,1,0); estas reglas son (0,2,1). */
-    :root.rails-scrolled .st-key-rail_pestillo_abierto,
-    :root.rails-scrolled .st-key-rail_pestillo_plegado {
-        top: var(--franja-rep-reserva) !important;   /* == los railes, _26 */
+    /* 2026-09-19: sólo de 769 a 900px, el único tramo donde la columna
+       todavía cruza al scrollear. Desde 901px el rail es un árbol que no
+       cambia con el scroll (`_28_arbol.py`, regla #472), y este
+       `padding-top` le corría las filas justo al bajar. */
+    @media (min-width: 769px) and (max-width: 900px) {
+        :root.rails-scrolled .st-key-rail_pestillo_abierto,
+        :root.rails-scrolled .st-key-rail_pestillo_plegado {
+            top: var(--franja-rep-reserva) !important;   /* == los railes, _26 */
+        }
+        :root.rails-scrolled .st-key-compras_tabs_row,
+        :root.rails-scrolled .st-key-nav_rail_lateral {
+            padding-top: var(--rail-cab-alto) !important;
+        }
     }
-    :root.rails-scrolled .st-key-compras_tabs_row,
-    :root.rails-scrolled .st-key-nav_rail_lateral {
-        padding-top: var(--rail-cab-alto) !important;
-    }
-    /* ── PLEGADO: sobrevive el icono, se va el texto ────────────────────
-       Los dos railes de la columna se tratan juntos: `compras_tabs_row`
-       (Reportes) y `nav_rail_lateral` (Vistas) se TURNAN al scrollear
-       (`_26_rails_scroll.py`), asi que estilar solo el visible deja al
-       otro listo para aparecer mal — es exactamente el bug que costo el
-       modo solo (regla #334).
-
-       Que se esconde: el `stMarkdownContainer` del label, que es donde
-       vive el nombre Y el KPI. El icono es un nodo hermano
-       (`stIconMaterial`), asi que queda. Verificado en el DOM el
-       2026-09-04:
-
-           button > div > span > span > span[stIconMaterial]
-                                     > div[stMarkdownContainer] > p
-
-       El rotulo de la cabecera ("Reportes"/"Vistas") tambien se va: en
-       46px no entra, y el pestillo ya ocupa esa banda. */
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-compras_tabs_row
-        [data-testid="stMarkdownContainer"],
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral
-        [data-testid="stMarkdownContainer"] {
-        display: none !important;
-    }
-    /* Solo hay UN rotulo: el gemelo "Vistas" se retiro el 2026-09-01
-       (ver `base.py::_render_rail`), asi que aca no hay par. */
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-rail_rotulo_rep
-        .rail-rotulo {
-        display: none !important;
-    }
-    /* El icono, centrado: sin el label que lo empujaba, un boton alineado
-       a la izquierda deja el icono contra el borde. */
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-compras_tabs_row button,
-    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral button {
-        justify-content: center !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-    }
+    /* ── PLEGADO (2026-09-04 .. 2026-09-19) ────────────────────────────
+       Aca vivian las reglas del plegado de la columna vieja: con
+       `:root:has(.st-key-rail_pestillo_plegado)` escondian el label de los
+       dos railes y el rotulo, y centraban el icono. Se retiraron con el rail
+       en arbol (regla #472), por dos motivos:
+         · desde 901px el plegado es OTRA cosa —una tira de iconos que se
+           despliega con el cursor— y vive entera en `_28_arbol.py`;
+         · no tenian `@media`, y el arbol arranca PLEGADO: con ellas puestas
+           la tira de reportes del CELULAR (que es este mismo contenedor,
+           ver el bloque de <=900px) se quedaba sin nombres, solo iconos.
+       Abajo de 901px el pestillo se esconde (`_28_arbol.py`): ahi la
+       columna no se pliega. */
     /* =================================================================== */
     /* MODO "SOLO" — una sección se queda con la página (2026-09-04)        */
     /*                                                                      */

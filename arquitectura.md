@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-471 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+472 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (167)
+**CSS y estilos** (168)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -201,6 +201,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
+- **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
 
 **Layout y alturas** (68)
 
@@ -731,7 +732,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (83)
+**Decisiones de diseño y UX** (84)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -816,6 +817,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#459** — El jalón que sube la primera tarjeta de Compras nombra un wrap por su KEY, así que una vista…
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 - **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
+- **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -39352,6 +39354,88 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-19.)
 
+472. **Una columna lateral y una franja de arriba conviven si cada una hace UN
+     trabajo: al costado a dónde ir, arriba dónde estás. Y cuando el árbol
+     se arma con dos contenedores de Streamlit, el anidado es de GEOMETRÍA
+     —alturas fijas y un hueco calculado—, no de DOM.**
+     Pedido el 2026-09-19, eligiendo la «opción 5» de un prototipo navegable
+     (el rail en árbol + una sola franja) después de preguntar si la franja
+     superior tenía sentido con un rail lateral.
+
+     **El diagnóstico que lo motivó, medido en el código:** los reportes
+     salían DOS veces (franja de reportes y rail), las vistas DOS (franja de
+     vistas y rail al bajar) y los KPIs del reporte TRES (fila del rail,
+     cabecera del rail, franja de KPIs). Cada pieza era el parche de la
+     anterior: la franja de reportes nació (2026-08-31) porque el rail
+     cambiaba a Vistas al bajar y el usuario se quedaba sin cómo cambiar de
+     reporte. El origen de todo era que la columna ALTERNABA.
+
+     **Qué quedó, desde 901px** (`estilos/_28_arbol.py`; el tramo de 769 a
+     900 y el celular siguen como estaban):
+     · la columna es SIEMPRE la misma lista: reportes y, anidadas bajo el
+       activo, sus vistas. Plegada es una tira de 68px de íconos; con el
+       cursor se despliega a 248 ENCIMA del contenido (sin empujarlo); el
+       pestillo la fija abierta y ahí sí empuja;
+     · la franja de reportes es la franja de CONTEXTO: fija, 44px, con el
+       reporte, la vista en pantalla (la escribe el temporizador de
+       `_render_rail` en `.barra-vista`) y sus KPIs; a la derecha fecha,
+       Filtros, la hora del dato y Actualizar, cada uno a la izquierda del
+       anterior con `right` (`--barra-f`, `--barra-fecha`, `--barra-corte`).
+
+     **El árbol son dos contenedores.** Los reportes los dibuja
+     `navegacion.py` ANTES del fragment (un clic tiene que recalcular
+     `df_f`) y las vistas `_render_rail` ADENTRO; no pueden ser hermanos.
+     Python publica tres datos como variables —`--arbol-idx` (en qué fila
+     está el activo), `--arbol-activa` (sólo en esa fila) y
+     `--arbol-n`/`--arbol-seps` (filas y separadores de la lista de
+     vistas)— y el CSS estira la fila activa lo que mide la lista y ubica
+     la lista en ese hueco. Medido a 1366×657: el borde de abajo de la
+     lista coincide AL PÍXEL con el de la fila activa en Compras (332/332),
+     Ajuste, Recetas y Ventas (547/547, con 11 vistas). Funciona porque
+     todo alto de adentro es `height`, no `min-height`, y nada lleva margen
+     propio.
+
+     **Cuatro cosas que costaron una vuelta:**
+     1. **Las reglas del plegado VIEJO no tenían `@media`**, y el árbol
+        arranca plegado: con ellas la tira de reportes del CELULAR (el
+        mismo contenedor) se quedaba sin nombres. Se retiraron; y la de
+        `--rail-der-w: 46px`, que le achicaba la columna al tramo tablet.
+     2. **Lo que abre la capa no puede moverse al abrirla (#465), así que
+        el PESTILLO tampoco.** A la derecha de la cabecera, al desplegarse
+        se habría corrido 190px — justo bajo el cursor que iba a
+        clickearlo. Quedó arriba a la izquierda, con su centro en el mismo
+        x (34) que todos los íconos de la columna.
+     3. **Streamlit mete el ícono de Material en una caja de 16px y el
+        glifo mide 20**: desborda 2px por lado. El centro medido daba 32
+        contra los 34 del pestillo; el relleno compensa esos 2.
+     4. **Inventario quedó con la primera fila de tarjetas DEBAJO de la
+        franja** (y=28, 16px tapados): su jalón de -68px (#406) se midió
+        cuando arriba no había nada visible. Desde 901px es -44 y arranca
+        en 52, como Compras. Los demás no cambiaron de altura: la franja
+        ocupa la banda de 52px que `--cab-offset-contenido` ya reservaba y
+        que en reposo quedaba vacía.
+
+     **Fijar la columna cambia el ancho del contenido**, que es el caso de
+     la #350. Medido tres veces seguidas (fijar y plegar, también con la
+     página recién cargada): los iframes de AgGrid y los SVG de Plotly
+     siguen a su contenedor (608 = 608, 1024 = 1024). En la PRIMERA prueba
+     de la sesión las grillas se quedaron con su ancho viejo y dos de 352px
+     se montaron 40px; no se pudo reproducir. Si vuelve a verse, el
+     sospechoso es ése. Asomar NO cambia el ancho: por eso se despliega
+     encima.
+
+     **Y el tooltip de `help=` se fue de los botones de reporte**: con el
+     árbol desplegado salía encima de la lista repitiendo el nombre que ya
+     se lee en la fila. El nombre completo del activo está en la franja.
+
+     **Ojo al buscar el fin de las reglas desde un script:** la cadena
+     `<!-- REGLAS:FIN` aparece citada DENTRO de una regla vieja. Insertar
+     en su primera aparición parte el archivo y el índice pasa a contar
+     163 reglas; el marcador de verdad es el que abre renglón, que es como
+     lo busca `herramientas/indice_reglas.py` (`^` con `re.M`).
+
+     (2026-09-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39364,7 +39448,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#472**.
+> próxima regla nueva es la **#473**.
 
 >
 

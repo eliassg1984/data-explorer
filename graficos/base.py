@@ -1895,6 +1895,10 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
             # posición fija.
             _ids_pila = {_oid for _, _oid in secciones}
             _prev_en_pila = None
+            # Cuántas filas y cuántos separadores lleva esta lista: desde
+            # 901px el árbol le abre a la fila del reporte activo un hueco
+            # de ese alto (`estilos/_28_arbol.py`, regla #472).
+            _n_filas = _n_seps = 0
             for _cat_nombre, items in categorias:
                 for item in items:
                     oid, label = item[0], item[1]
@@ -1902,7 +1906,9 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     if _prev_en_pila is not None and _en_pila != _prev_en_pila:
                         st.markdown('<div class="nav-rail-lat-sep"></div>',
                                    unsafe_allow_html=True)
+                        _n_seps += 1
                     _prev_en_pila = _en_pila
+                    _n_filas += 1
                     # El icono SÍ se dibuja acá (a diferencia de la franja
                     # horizontal, que lo ignora por falta de alto): esta copia
                     # es vertical y tiene sitio. Y hace falta — el rail que
@@ -1923,6 +1929,14 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                         on_click=_rail_set, args=(state_key, oid),
                         **({"icon": icono} if icono else {}),
                     )
+        # El alto del hueco que abre la fila activa del árbol lo calcula el
+        # CSS con estos dos conteos y los altos de fila que viven allá
+        # (`_28_arbol.py`). Fuera del contenedor del rail: adentro sería una
+        # fila más de la lista, y el `<style>` se esconde solo en la raíz
+        # (`navegacion.py::_CSS_AJUSTE`, punto 3).
+        st.markdown(f"<style>:root{{--arbol-n:{_n_filas};"
+                    f"--arbol-seps:{_n_seps};}}</style>",
+                    unsafe_allow_html=True)
 
         # ── SEMAFORO: un punto por fila ──────────────────────────────────
     # `estados` es `{id_vista: "success"|"danger"|"warning"}` y lo unico
@@ -1975,8 +1989,12 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         # Va en `inyectar_html` y no en `st.markdown` porque markdown NO
         # ejecuta `<script>` (regla #4); ese primitivo mete un iframe de
         # verdad y reemplaza a `components.html` (regla #204).
+        # `lbl` es el rótulo corto de la vista: el temporizador lo escribe en
+        # la franja superior cuando esa sección pasa a ser la de pantalla
+        # (`navegacion.py::_html_barra_contexto`, regla #472).
+        _rotulos = {item[0]: item[1] for _, items in categorias for item in items}
         _mapa = [{"sec": _cl, "btn": f"{btn_prefix}lat_{_slug_url(_oid)}",
-                   "go": f"pila_go_{_cl}"}
+                   "go": f"pila_go_{_cl}", "lbl": _rotulos.get(_oid, _oid)}
                  for _cl, _oid in secciones]
         # ¿La vista elegida es un DESTINO APARTE? (Compras › Documentos
         # SUNAT: no está en `secciones`, y estando ahí la pila no se dibuja.)
@@ -1984,6 +2002,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         # qué secciones hay en el DOM. Ver el paso 0 del temporizador.
         _fuera = sel not in {_oid for _, _oid in secciones}
         _btn_act = f"{btn_prefix}lat_{_slug_url(sel)}"
+        _lbl_act = _rotulos.get(sel, sel)
         with st.container(key="rail_scroll_hook"):
             inyectar_html(
                 f"""<script>
@@ -1992,8 +2011,18 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                   var MAPA = {json.dumps(_mapa, ensure_ascii=False)};
                   var FUERA = {json.dumps(_fuera)};
                   var ACT = {json.dumps(_btn_act, ensure_ascii=False)};
+                  var LBL_ACT = {json.dumps(_lbl_act, ensure_ascii=False)};
                   var raiz = doc.querySelector('[data-testid="stMain"]');
                   if (!raiz) return;
+
+                  // La vista en pantalla, escrita en la franja superior
+                  // (`navegacion.py::_html_barra_contexto`, regla #472).
+                  // Sólo si cambió: es texto dentro de un bloque que React
+                  // no vuelve a pintar mientras el reporte no cambie.
+                  function rotular(txt) {{
+                    var v = doc.querySelector('.barra-vista');
+                    if (v && v.textContent !== txt) v.textContent = txt;
+                  }}
 
                   // UN SOLO TEMPORIZADOR POR GEOMETRIA, no observers.
                   //
@@ -2028,6 +2057,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     // vuelta a la pila. Ahora la columna pasa a Vistas —con
                     // la elegida marcada— igual que al bajar. Regla #419.
                     if (FUERA) {{
+                      rotular(LBL_ACT);
                       doc.documentElement.classList.add('rails-scrolled');
                       var act = doc.querySelector(
                         '[class*="st-key-' + ACT + '"] button');
@@ -2052,6 +2082,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                       if (vis > mejorPx) {{ mejorPx = vis; mejor = m; }}
                     }});
                     if (mejor) {{
+                      rotular(mejor.lbl);
                       // El rail de la columna cambia de Reportes a Vistas en
                       // cuanto dejas la primera seccion.
                       //

@@ -71,13 +71,13 @@ from graficos.ajuste._distribucion import _graf_distribucion_ajuste  # noqa: F40
 # (misma idea que Compras): al elegirlo se renderiza la tabla AgGrid vía el
 # callback `tabla_cb` que inyecta app.py.
 _AJUSTE_RAIL_CATEGORIAS = (
-    ("Visual", (("Cascada",        "Cascada"),
-                     ("Mapa de calor",  "Mapa de calor"),
-                     ("Distribución",   "Distribución"))),
-    ("Tiempo",      (("Evolución",           "Evolución"),
-                     ("Comparativa mensual", "Comparativa"),
-                     ("Por fecha de corte",  "Por fecha"))),
-    ("Datos",       (("Tabla",          "Tabla"),)),
+    ("Visual", (("Cascada",        "Cascada",       ":material/waterfall_chart:"),
+                     ("Mapa de calor",  "Mapa de calor", ":material/grid_on:"),
+                     ("Distribución",   "Distribución",  ":material/bar_chart:"))),
+    ("Tiempo",      (("Evolución",           "Evolución",   ":material/show_chart:"),
+                     ("Comparativa mensual", "Comparativa", ":material/calendar_month:"),
+                     ("Por fecha de corte",  "Por fecha",   ":material/event:"))),
+    ("Datos",       (("Tabla",          "Tabla",         ":material/table_rows:"),)),
 )
 
 
@@ -127,7 +127,10 @@ def categoria_rango_ajuste(graf_id):
     rango sin pisar al otro. Única fuente de verdad: `_AJUSTE_RAIL_CATEGORIAS`
     de arriba; si se agrega un item nuevo al rail, esto no hay que tocarlo."""
     for cat_nombre, items in _AJUSTE_RAIL_CATEGORIAS:
-        if cat_nombre == "Tiempo" and any(oid == graf_id for oid, _ in items):
+        # `item[0]` y no `for oid, _ in items`: desde el 2026-09-19 cada
+        # item lleva un tercer elemento (el ícono del rail en árbol) y el
+        # desempaque de a dos reventaba con ValueError.
+        if cat_nombre == "Tiempo" and any(item[0] == graf_id for item in items):
             return "tiempo"
     return "visual"
 

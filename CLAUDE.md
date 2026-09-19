@@ -107,7 +107,7 @@ pública no cambió: `from estilos import TAM_FUENTE, inject_css`.
 
 Cada sección tiene su módulo, con prefijo numérico que marca el orden:
 `_00_base` → `_20_compras_rail` →
-`_26_rails_scroll` → `_27_pila` → `_30_filtros` →
+`_26_rails_scroll` → `_27_pila` → `_28_arbol` → `_30_filtros` →
 `_40_ajuste_franja` → `_50_fecha` → `_60_calendario` → `_70_chrome` →
 `_80_cards` → `_85_asistente` → `_88_cargando` → `_99_movil`.
 
@@ -201,52 +201,51 @@ Dos cosas que no son negociables si tocás esto: el velo entra **a los
 contenedores y eso es una feria. Detalle y mediciones en `arquitectura.md`
 regla #366.
 
-## El cromo no está: aparece con el cursor
+## Desde 901px: el rail es un árbol y la franja dice dónde estás
 
-Dos capas, la misma mecánica, `estilos/_26_rails_scroll.py`:
+Desde el 2026-09-19 (regla #472), en escritorio el cromo se reparte como en
+cualquier app con barra lateral, cada pieza con UN trabajo:
 
-- la **franja de reportes** (arriba) deja una tira de `--franja-rep-reserva`
-  (12px) contra el borde superior;
-- la **columna de la izquierda** —el rail, que se turna entre Reportes y
-  Vistas— deja una tira de `--rail-reserva` (12px) contra el izquierdo
-  (2026-09-18).
+- **Al costado, a dónde ir.** La columna lista los reportes y, anidadas
+  bajo el activo, sus vistas. No cambia de contenido al bajar. Plegada (el
+  default) es una tira de 68px de íconos; con el cursor se despliega a
+  248px ENCIMA del contenido; el pestillo la **fija** abierta y ahí el
+  contenido le reserva el ancho (`--rail-reserva`, en `_00_base.py`).
+- **Arriba, dónde estás.** La franja (`nav_franja_rep`, 44px, fija) lleva
+  el reporte, la vista en pantalla y sus KPIs a la izquierda, y la fecha,
+  Filtros, la hora del dato y Actualizar a la derecha, cada uno a la
+  izquierda del anterior (`--barra-f`, `--barra-fecha`, `--barra-corte`).
 
-Ninguna de las dos reserva sitio: el contenido arranca en 36px del borde
-izquierdo y ellas se dibujan ENCIMA. Y ninguna se esconde con
-`visibility: hidden`, que sería lo obvio: un elemento que el navegador no
-hit-testea no puede estar `:hover` NUNCA, así que no tendría cómo volver.
-Van con `opacity: 0` + un `clip-path` que las recorta a su tira — el
-recorte recorta también el hit-testing, que es lo que evita que los 280px
-del rail sean una tapa invisible sobre la tarjeta.
+Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
 
-Tres cosas que cuestan un bug si se tocan sin leerlas:
+- **El árbol son DOS contenedores**: los reportes se dibujan antes del
+  fragment (`navegacion.py`) y las vistas adentro (`_render_rail`). El
+  anidado es de geometría: Python publica `--arbol-idx`/`--arbol-activa` y
+  `--arbol-n`/`--arbol-seps`, y el CSS estira la fila activa lo que mide la
+  lista. Todo alto de adentro es `height`, sin márgenes propios: un píxel
+  de más se acumula y la última vista pisa al reporte siguiente.
+- **Lo que abre una capa no puede MOVERSE al abrirse** (#465). Los íconos
+  de la columna y el pestillo tienen su centro en el mismo x (34) en los
+  tres estados; desplegar sólo agrega a la derecha.
+- **Asomar no cambia el ancho del contenido; fijar sí.** Por eso asomar va
+  encima: un cambio de ancho obliga a Plotly y AgGrid a re-medirse (#350).
+  Verificado que al fijar siguen a su contenedor.
+- **La vista de la franja la escribe el temporizador de `_render_rail`**
+  (`.barra-vista`, con el rótulo corto de la vista). Toda vista nueva lleva
+  ícono (tercer elemento de su tupla): plegado, es lo único que se ve.
+- **En el navegador automatizado las transiciones no avanzan** (#353): para
+  medir anchos, apagarlas antes desde la consola.
+- **Quién despliega no es el CSS**: `navegacion.py::_SCRIPT_CAPAS` evalúa
+  `DISPARADORES_COLUMNA` (de `_26_rails_scroll.py`) con `querySelector` y
+  marca `<html data-capa-col>`. Un `:hover` adentro de un `:has()` costaba
+  80 ms por inserción (#469).
 
-- **Lo que abre una capa no puede MOVERSE al abrirse.** El rail se dibuja
-  en `left: 19px`, pero su caja vive en `left: 0` con 19px de
-  `border-left` transparente. Correr el `left` al abrir —que fue el primer
-  intento— saca al rail de abajo del cursor que lo acaba de abrir, y la
-  capa parpadea.
-- **La tira despierta, pero no activa.** Debajo de ella hay BOTONES: sin
-  `pointer-events: none` en los hijos del rail, un clic contra el borde
-  cambia de reporte a ciegas.
-- **En el navegador automatizado las transiciones no avanzan**, así que
-  `opacity` da 0 con la regla aplicando perfecto (regla #353). Se verifica
-  con lo que no tiene transición: `pointer-events` y `elementFromPoint`.
-- **Quién abre la capa no es el CSS** desde el 2026-09-18: un script
-  (`navegacion.py::_SCRIPT_CAPAS`) evalúa las listas `DISPARADORES_CABECERA`
-  / `DISPARADORES_COLUMNA` de `_26_rails_scroll.py` con `querySelector` y
-  marca `<html data-capa-cab>` / `data-capa-col`. Antes era un
-  `:root:has()` con `:hover` adentro, y costaba 80 ms por cada elemento que
-  un rerun inserta (regla #469). El cursor no se puede simular acá: se
-  prueba poniendo `aria-expanded="true"` en un botón de
-  `chips_ajuste_tabla`, que también está en la lista.
-
-El **rail no muestra KPI por vista** desde el 2026-09-18 (sí los del
-REPORTE: la cabecera de la columna y los ítems del rail de Reportes). Lo
-que queda por fila es el punto del semáforo, que sale de `estados` en
-`_render_rail`. Y el **pestillo** (el chevron que pliega la columna a 46px)
-sigue ahí, pero arranca DESPLEGADO: plegar ya no le gana ancho a nadie.
-Detalle y mediciones en `arquitectura.md` regla #465.
+**Entre 769 y 900px sigue el esquema anterior**: la franja de reportes y la
+columna son capas que aparecen con el cursor (`opacity: 0` + un
+`clip-path` que las recorta a una tira de 12px), y la columna alterna
+Reportes/Vistas con el scroll — `_26_rails_scroll.py`, regla #465, que
+lista `DISPARADORES_CABECERA` para la franja. En el celular, la tira de
+chips y la barra inferior.
 
 ## Colores: nunca un `#hex` suelto
 

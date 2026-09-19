@@ -105,12 +105,12 @@ _RAIL_CATEGORIAS = (
     # 2026-09-13. No hereda el nombre de aquel ranking —que era UN cuadro—
     # porque ahora son cuatro tablas encadenadas: el ítem del rail nombra la
     # cadena, no su primer eslabón.
-    ("Requerimientos", (("Por sub almacén",           "Sub almacén"),
-                        ("Top productos · requerim.", "Top prod. · req."),
-                        ("Tabla · requerim.",         "Tabla · req."))),
-    ("Salidas", (("Tipo de descargo",       "Tipo descargo"),
-                 ("Top productos · salidas", "Top prod. · sal."),
-                 ("Tabla · salidas",         "Tabla · sal."))),
+    ("Requerimientos", (("Por sub almacén",           "Sub almacén",      ":material/warehouse:"),
+                        ("Top productos · requerim.", "Top prod. · req.", ":material/format_list_numbered:"),
+                        ("Tabla · requerim.",         "Tabla · req.",     ":material/table_rows:"))),
+    ("Salidas", (("Tipo de descargo",       "Tipo descargo",    ":material/category:"),
+                 ("Top productos · salidas", "Top prod. · sal.", ":material/leaderboard:"),
+                 ("Tabla · salidas",         "Tabla · sal.",     ":material/table_view:"))),
 )
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla

@@ -179,10 +179,10 @@ _FILAS_RANK = 8
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
 # ver graficos/base.py).
 _INVENTARIO_RAIL_CATEGORIAS = (
-    ("Vista", (("Por área",        "Por área"),
-               ("Por familia",     "Por familia"),
-               ("Productos",       "Productos"))),
-    ("Datos", (("Tabla", "Tabla"),)),
+    ("Vista", (("Por área",        "Por área",    ":material/space_dashboard:"),
+               ("Por familia",     "Por familia", ":material/account_tree:"),
+               ("Productos",       "Productos",   ":material/inventory_2:"))),
+    ("Datos", (("Tabla", "Tabla", ":material/table_rows:"),)),
 )
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA

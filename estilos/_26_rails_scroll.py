@@ -143,8 +143,16 @@ _ESPERA = "220ms"
 # `pointer-events: none` a proposito —es un rotulo, no un control— y un
 # elemento que el navegador no hit-testea no puede estar :hover NUNCA.
 # Mismo caso que la franja de KPIs en la lista de abajo.
+#
+# 2026-09-19: desde 901px la lista hace otro trabajo con la MISMA marca
+# (`data-capa-col`): ya no despierta una columna invisible, DESPLIEGA el
+# árbol plegado encima del contenido (`_28_arbol.py`, regla #472). Y suma
+# el rótulo: en el árbol es la cabecera de la columna y sí recibe el cursor
+# (allá se le devuelve el `pointer-events`); sin él, pasar por la cabecera
+# plegaría el árbol en el camino hacia el pestillo.
 DISPARADORES_COLUMNA = """.st-key-compras_tabs_row:hover,
             .st-key-nav_rail_lateral:hover,
+            .st-key-rail_rotulo_rep:hover,
             .st-key-rail_pestillo_abierto:hover,
             .st-key-rail_pestillo_plegado:hover,
             .st-key-compras_tabs_row :focus-visible,
@@ -160,7 +168,13 @@ DISPARADORES_CABECERA = """.st-key-nav_franja_rep:hover,
             .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill [aria-expanded="true"]"""
 
 CSS = f"""
-@media screen and (min-width: 769px) {{
+/* 2026-09-19: TODO este bloque —el cruce por scroll y las dos capas que
+   aparecen con el cursor— quedó para el tramo de 769 a 900px. Desde 901px
+   el rail es un árbol siempre visible y la franja de reportes una cabecera
+   fija (`_28_arbol.py`, regla #472): no hay nada que cruzar ni que
+   despertar. Se acota el `@media` en vez de borrar para no tocar el tramo
+   de tablet, que sigue funcionando como hasta hoy. */
+@media screen and (min-width: 769px) and (max-width: 900px) {{
 
     /* ── LOS HIJOS SIGUEN AL RAIL ─────────────────────────────────────
        `visibility` se hereda, pero Streamlit la RE-DECLARA: el wrapper que

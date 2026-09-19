@@ -362,6 +362,14 @@ CSS = """    /* ================================================================
     @media (min-width: 769px) {
         .st-key-inv_sec_area { margin-top: -68px !important; }
     }
+    /* 2026-09-19: desde 901px, 24px menos de jalón. La franja de arriba
+       pasó a ser FIJA y opaca (44px, rail en árbol, regla #472), y con -68
+       las tarjetas quedaban en y=28 — medido: 16px de su borde y de sus
+       títulos debajo de la franja. Con -44 arrancan en y=52, la misma
+       línea que Compras (44 de franja + 8 de aire). */
+    @media (min-width: 901px) {
+        .st-key-inv_sec_area { margin-top: -44px !important; }
+    }
 
     /* ================================================================== */
     /* CHIPS DE FILTRO EN LA FRANJA BLANCA — Área / Familia / Ajuste /     */

@@ -209,6 +209,59 @@ def _kpis_franja(info):
     return pares or None
 
 
+def _html_barra_contexto(reporte_activo, info, par):
+    """El contenido de la franja superior desde 901px (2026-09-19, regla
+    #472): ícono y nombre del reporte, la vista en pantalla y sus KPIs.
+
+    La VISTA sale vacía a propósito: la escribe el temporizador de
+    `graficos/base.py::_render_rail` en `.barra-vista`, porque qué sección
+    está en pantalla sólo lo sabe el navegador. La flecha que la separa del
+    nombre es un `::before` que sólo existe con texto (`_28_arbol.py`), así
+    que mientras no llega no queda un «›» colgando.
+
+    LOS KPIs, en dos tramos:
+      · el principal del reporte —el mismo `par` que mostraba su fila del
+        rail, que en el árbol ya no lo repite—, grande y con su segundo
+        renglón al lado;
+      · los que el reporte declare APARTE para la franja (`kpis_franja`, hoy
+        sólo Compras: Alimentos, Bebidas, Vino), cada uno con su rótulo
+        encima. Los que repiten un rótulo del principal se saltean: el
+        «Documentos» de Compras ya está en «135 docs».
+    Un reporte sin `kpis_franja` muestra sólo el principal; sin KPIs (las
+    herramientas), sólo el nombre.
+
+    Todo con `html.escape`: el nombre del reporte y los rótulos son texto,
+    y este bloque va por `unsafe_allow_html`."""
+    icono = (info.get("icono") or "").removeprefix(":material/").removesuffix(":")
+    partes = ['<div class="barra-ctx">']
+    if icono:
+        partes.append(f'<span class="barra-ico" aria-hidden="true">{html.escape(icono)}</span>')
+    partes.append(f'<span class="barra-nom">{html.escape(reporte_activo)}</span>')
+    partes.append('<span class="barra-vista"></span>')
+    kpis_html = []
+    if par:
+        primario, secundario, negativo = par
+        kpis_html.append(
+            '<span class="barra-kpi">'
+            f'<b class="barra-kpi-val{" kpi-neg" if negativo else ""}">{html.escape(primario)}</b>'
+            + (f'<small class="barra-kpi-sec">{html.escape(secundario)}</small>' if secundario else "")
+            + '</span>')
+    if par and info.get("kpis_franja"):
+        ya = {k[0] for k in info.get("kpis") or ()}
+        for et, txt, neg in _kpis_franja(info) or ():
+            if et in ya:
+                continue
+            kpis_html.append(
+                '<span class="barra-par">'
+                f'<i class="barra-par-rot">{html.escape(et)}</i>'
+                f'<b class="barra-par-val{" kpi-neg" if neg else ""}">{html.escape(txt)}</b>'
+                '</span>')
+    if kpis_html:
+        partes.append('<span class="barra-kpis">' + "".join(kpis_html) + '</span>')
+    partes.append('</div>')
+    return "".join(partes)
+
+
 def _formatear_kpis(info):
     """(primario, secundario) para el ítem del rail — estilo lista de
     cotizaciones (referencia: el panel "Vistos recientemente" de MSN Money,
@@ -953,13 +1006,22 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # anterior) dice que un estado "plegado" sin control visible que lo
     # deshaga es un usuario sin salida. Acá el control es el mismo botón,
     # y en plegado sigue en pantalla.
-    _plegado = bool(st.session_state.get("rail_plegado", False))
+    #
+    # 5. **ARRANCA PLEGADO OTRA VEZ** (2026-09-19, rail en árbol — regla
+    #    #472). Desde 901px la columna volvió a ser COLUMNA: siempre
+    #    visible, y el contenido le reserva su ancho. Plegada mide 68px y
+    #    al pasar el cursor se despliega ENCIMA del contenido, sin empujar
+    #    a nadie; este botón la FIJA abierta (248px), y ahí sí empuja. En
+    #    una laptop de 1366 fijarla le cuesta a la tarjeta 180px de ancho,
+    #    así que el default es no hacerlo. El chevron sigue apuntando al
+    #    destino: plegada dice «›» (fijar abierta), fijada dice «‹».
+    _plegado = bool(st.session_state.get("rail_plegado", True))
     with st.container(key="rail_pestillo_"
                       + ("plegado" if _plegado else "abierto")):
         if st.button(":material/chevron_right:" if _plegado
                      else ":material/chevron_left:",
                      key="rail_pestillo_btn",
-                     help=("Desplegar el panel" if _plegado
+                     help=("Fijar el panel abierto" if _plegado
                            else "Plegar el panel")):
             st.session_state["rail_plegado"] = not _plegado
             st.rerun()
@@ -976,7 +1038,19 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # Los mismos `_on_nav_click` y `reporte_activo` que el rail: dos vistas
     # del mismo estado, no dos navegaciones. Sin KPIs y sin agrupar — en 38px
     # no entran, y el rail ya los da.
+    #
+    # 2026-09-19 — DESDE 901px ES LA FRANJA DE CONTEXTO (rail en árbol,
+    # regla #472). Con el rail siempre visible y los reportes en él, esta
+    # fila de botones repetía la columna de al lado: en escritorio se
+    # esconde (`estilos/_28_arbol.py`) y en su lugar la franja dice DÓNDE
+    # ESTÁS y CON QUÉ DATOS — el reporte, la vista en pantalla (la escribe
+    # el temporizador de `graficos/base.py::_render_rail`) y sus KPIs. Es el
+    # reparto estándar de una app con barra lateral: al costado a dónde ir,
+    # arriba dónde estás. Los botones siguen dibujándose para el tramo de
+    # 769 a 900px, donde la franja sigue siendo la de siempre.
+    _arbol_barra = _html_barra_contexto(reporte_activo, _info_act, _par_act)
     with st.container(key="nav_franja_rep"):
+        st.markdown(_arbol_barra, unsafe_allow_html=True)
         _grupos_franja = set()
         for nombre, info in visibles.items():
             grupo = info.get("grupo_nav")
@@ -1037,6 +1111,41 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                 unsafe_allow_html=True,
             )
 
+    # ── EL ÁRBOL: qué fila le abre el hueco a las vistas (2026-09-19) ─────
+    # Desde 901px las vistas del reporte activo se dibujan DEBAJO de su fila,
+    # como hijas en un árbol (`estilos/_28_arbol.py`). Son dos contenedores
+    # distintos —los reportes se dibujan acá, antes del fragment, y las vistas
+    # adentro, en `graficos/base.py::_render_rail`— así que el anidado es de
+    # geometría: la fila activa se estira lo que miden las vistas y el
+    # contenedor de las vistas se ubica en ese hueco. Para eso el CSS necesita
+    # dos datos que sólo Python sabe: CUÁL es la fila activa y en qué
+    # POSICIÓN está. Se publican como variables y no como reglas: el mismo
+    # criterio que el semáforo de `_render_rail`, una regla fija en estilos/
+    # y el dato que cambia por render entra por `var(--…)`.
+    _filas = []
+    _idx_activa = None
+    _grupos_arbol = set()
+    for nombre, info in visibles.items():
+        grupo = info.get("grupo_nav")
+        if grupo:
+            if grupo in _grupos_arbol:
+                continue
+            _grupos_arbol.add(grupo)
+            if reporte_activo in [n for n, i in visibles.items()
+                                  if i.get("grupo_nav") == grupo]:
+                _idx_activa = len(_filas)
+            _filas.append(_slug(grupo))
+            continue
+        if nombre == reporte_activo:
+            _idx_activa = len(_filas)
+        _filas.append(_slug(nombre))
+    if _idx_activa is not None:
+        st.markdown(
+            f"<style>:root{{--arbol-idx:{_idx_activa};}}"
+            f".st-key-navitem_{_filas[_idx_activa]}{{--arbol-activa:1;}}</style>",
+            unsafe_allow_html=True,
+        )
+
     _grupos_dibujados = set()
     with st.container(key="compras_tabs_row"):
         with st.container(key="graf_tipo_chips"):
@@ -1069,7 +1178,6 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                         st.button(
                             grupo,
                             key=f"navbtn_{_slug(grupo)}",
-                            help=grupo,
                             icon=info.get("icono"),
                             type="primary" if reporte_activo in miembros else "secondary",
                             use_container_width=True,
@@ -1079,10 +1187,13 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                     continue
                 etiqueta = info.get("label_corto") or nombre.split()[0][:10]
                 with st.container(key=f"navitem_{_slug(nombre)}"):
+                    # SIN `help=` desde el 2026-09-19 (regla #472): en el
+                    # árbol desplegado el tooltip de Streamlit salía encima de
+                    # la lista repitiendo el nombre que ya se lee en la fila,
+                    # y el nombre completo del activo ya está en la franja.
                     st.button(
                         etiqueta,
                         key=f"navbtn_{_slug(nombre)}",
-                        help=nombre,
                         icon=info.get("icono"),
                         type="primary" if nombre == reporte_activo else "secondary",
                         use_container_width=True,
