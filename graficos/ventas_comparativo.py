@@ -50,8 +50,47 @@ from tema import (
     LAVANDA_BORDE, PALETA_SERIES,
 )
 from graficos.base import _card, _es_movil, titulo_en_franja
+from inyecciones._iframe import inyectar_html
 from graficos.compras._comun import _first_point
 from graficos import alturas
+
+
+# Los switches del panel «Detalle» pintan su pista con el color de la serie
+# cuando están PRENDIDOS (`estilos/_80_cards.py`). Hasta el 2026-09-18 el CSS
+# lo preguntaba con `label:has(input:checked)`: una pseudo-clase adentro de
+# un `:has()` hace que cada elemento que un rerun inserta —en CUALQUIER
+# reporte, porque la regla es global— recalcule los estilos de la página
+# entera (regla #469). No hay combinador que llegue sin `:has()`: el
+# `input` vive adentro de un `span` y la pista es hermana del `span`. Así
+# que este script copia el estado a `label[data-on]`, en el cambio y cada
+# 300 ms (Python también los reescribe en un rerun), y escribe sólo si
+# cambió.
+_JS_ESPEJO_SWITCH = """<script>
+(function () {
+  var w = window.parent, doc = w.document;
+  var SEL = '[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"] input[type="checkbox"]';
+  function espejar() {
+    var ins = doc.querySelectorAll(SEL);
+    for (var i = 0; i < ins.length; i++) {
+      var lab = ins[i].closest("label");
+      if (!lab || lab.hasAttribute("data-on") === ins[i].checked) continue;
+      if (ins[i].checked) lab.setAttribute("data-on", "");
+      else lab.removeAttribute("data-on");
+    }
+  }
+  try { if (w.__switchApagar) w.__switchApagar(); } catch (e) {}
+  function pronto() { setTimeout(espejar, 0); }
+  doc.addEventListener("change", pronto, true);
+  doc.addEventListener("click", pronto, true);
+  var reloj = setInterval(espejar, 300);
+  w.__switchApagar = function () {
+    doc.removeEventListener("change", pronto, true);
+    doc.removeEventListener("click", pronto, true);
+    clearInterval(reloj);
+  };
+  espejar();
+})();
+</script>"""
 
 GRANOS = ("Día", "Semana", "Mes")
 VENTANAS = {"Día": (7, 14, 30), "Semana": (4, 8, 13), "Mes": (3, 6, 12)}
@@ -946,6 +985,8 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                                         f'font-weight:600;text-align:right;'
                                         f'color:{_pc};">{_pt}</div>',
                                         unsafe_allow_html=True)
+                            # El estado del switch, espejado en su `label`.
+                            inyectar_html(_JS_ESPEJO_SWITCH)
         _mp = _first_point(evt)
         if _mp is not None:
             _pi = _mp.get("point_index", _mp.get("point_number"))

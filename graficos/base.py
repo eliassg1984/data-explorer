@@ -267,8 +267,13 @@ def filtro_pills(df, col, clave, etiqueta, valores=None):
     recortar_seleccion(clave, valores)
     if not valores:
         return df, []
-    st.markdown(f'<div class="filtro-rotulo">{html.escape(etiqueta)}</div>',
-                unsafe_allow_html=True)
+    # `filtro-<clave>`: la clase FIJA por filtro, para el CSS que tiene que
+    # alcanzar el popover de UNO solo (un portal: no cuelga de nada nuestro).
+    # La key del widget no sirve, lleva versión (`__w1`), y un `[class*=...]`
+    # adentro de un `:has()` recalcula la página entera en cada cambio de
+    # clase (regla #469).
+    st.markdown(f'<div class="filtro-rotulo filtro-{clave}">'
+                f'{html.escape(etiqueta)}</div>', unsafe_allow_html=True)
     seleccion_en_panel(st.pills, etiqueta, clave, valores,
                        selection_mode="multi", label_visibility="collapsed")
     sel = list(st.session_state.get(clave) or [])
@@ -499,6 +504,18 @@ def seccion_perezosa(clave, vista, dibujar, activa_de_entrada=False):
     que los meses de Plotly (regla #241). El ícono gira, que es lo que
     hacía falta para que no se lea como colgado.
     """
+    # Marca FIJA de "esta sección NO es la primera de la pila", para la
+    # excepción del jalón de `_20_compras_rail.py`. Antes esa regla
+    # reconocía las secciones por el infijo de su key, `[class*="_sec_"]`
+    # adentro de un `:has()`, y un atributo ahí adentro hace que CUALQUIER
+    # cambio de clase de la página recalcule los estilos enteros: ~100 ms
+    # por clic en la laptop del usuario. `activa_de_entrada` es justo "soy
+    # la primera": los seis dashboards la pasan como `_i == 0`. Su
+    # contenedor lo colapsa `_00_base.py`. Regla #469.
+    if not activa_de_entrada:
+        st.markdown('<span class="pila-seccion-siguiente"></span>',
+                    unsafe_allow_html=True)
+
     k = f"_pila_activa_{clave}"
     if activa_de_entrada:
         st.session_state[k] = True

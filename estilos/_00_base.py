@@ -474,7 +474,7 @@ CSS = """    <style>
         min-height: 0 !important;
         display: block !important;
     }
-    [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
+    [data-testid="stElementContainer"]:has(.stIFrame) {
         height: 0 !important;
         min-height: 0 !important;
         margin: 0 !important;
@@ -488,7 +488,7 @@ CSS = """    <style>
         min-height: 300px !important;
         display: block !important;
     }
-    .st-key-perf_browser_expander [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
+    .st-key-perf_browser_expander [data-testid="stElementContainer"]:has(.stIFrame) {
         height: auto !important;
         min-height: 300px !important;
         margin: 0 !important;
@@ -755,8 +755,15 @@ CSS = """    <style>
        el div vive dentro de un stElementContainer que Streamlit envuelve;
        el div en si ya tiene display:none pero el wrapper del elemento sigue
        ocupando margin/padding vertical. Aca colapsamos el stElementContainer
-       entero cuando su unico proposito es contener el marker. */
-    [data-testid="stElementContainer"]:has(> [data-testid="stMarkdown"] [class*="st-key-app_reporte_"]) {
+       entero cuando su unico proposito es contener el marker.
+       Adentro del `:has()` va la clase FIJA `marca-reporte` y no un
+       `[class*="st-key-app_reporte_"]`: dentro de un `:has()` sólo clases,
+       o cada cambio de clase de la pagina recalcula todo (regla #469). Y
+       sólo la clase de la MARCA, sin `.stMarkdown` delante: una clase de
+       Streamlit ahí adentro re-evalúa la regla con cada markdown que un
+       rerun inserta. La otra marca, `pila-seccion-siguiente`, la pone
+       `graficos/base.py::seccion_perezosa`. */
+    [data-testid="stElementContainer"]:has(.marca-reporte, .pila-seccion-siguiente) {
         display: none !important;
     }
 """

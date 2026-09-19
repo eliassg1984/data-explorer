@@ -76,10 +76,20 @@ CSS = """
        nombre declarado -- medido en el DOM, no deducido:
        `streamlit_plotly_events.plotly_events`. Sin esto, el unico grafico de la
        pagina que el usuario puede tocar era tambien el unico que no
-       avisaba que se estaba rehaciendo. */
-    [data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stPlotlyChart"]),
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"]),
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="streamlit_plotly_events.plotly_events"]) {
+       avisaba que se estaba rehaciendo.
+
+       DESDE EL 2026-09-18 NO SE NOMBRAN POR EL TITULO sino por la clase
+       que Streamlit le pone a TODO iframe de componente,
+       `.stCustomComponentV1` (medido en el DOM), y a Plotly por la suya,
+       `.stPlotlyChart`. Un atributo adentro de un `:has()` —`[title=...]`,
+       `[data-testid=...]`— hacia que cada elemento que un rerun inserta
+       recalculara los estilos de la pagina entera: 80 ms por insercion en
+       la laptop del usuario (regla #469). Es la misma cobertura: los
+       unicos componentes de terceros de la app son AgGrid y
+       plotly_events (`streamlit-option-menu` esta en requirements.txt
+       pero ningun `.py` lo usa). Un componente nuevo va a llevar el velo
+       solo, que es lo que se quiere de algo que muestra datos. */
+    [data-testid="stElementContainer"][data-stale="true"]:has(.stPlotlyChart, .stCustomComponentV1) {
         position: relative;
     }
 
@@ -99,9 +109,7 @@ CSS = """
 
        `pointer-events: none` a propósito: esto AVISA, no bloquea. Un velo
        que se come los clics convierte un rerun lento en una app trabada. */
-    [data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stPlotlyChart"])::before,
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"])::before,
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="streamlit_plotly_events.plotly_events"])::before {
+    [data-testid="stElementContainer"][data-stale="true"]:has(.stPlotlyChart, .stCustomComponentV1)::before {
         content: "Actualizando…";
         position: absolute;
         inset: 0;
@@ -129,9 +137,7 @@ CSS = """
        "cargando", el mismo registro que el brillo de `_27_pila.py` para los
        esqueletos. Va ARRIBA del centro (margin-top negativo mayor que medio
        alto) para dejarle sitio a la palabra. */
-    [data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stPlotlyChart"])::after,
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"])::after,
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="streamlit_plotly_events.plotly_events"])::after {
+    [data-testid="stElementContainer"][data-stale="true"]:has(.stPlotlyChart, .stCustomComponentV1)::after {
         content: "";
         position: absolute;
         top: 50%;
@@ -155,9 +161,7 @@ CSS = """
     /* Movimiento reducido: el anillo se queda quieto pero se ve. Sin giro
        sigue diciendo lo mismo, igual que el hueco quieto de `_27_pila.py`. */
     @media (prefers-reduced-motion: reduce) {
-        [data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stPlotlyChart"])::after,
-        [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="st_aggrid.AgGrid.agGrid"])::after,
-    [data-testid="stElementContainer"][data-stale="true"]:has(iframe[title="streamlit_plotly_events.plotly_events"])::after {
+        [data-testid="stElementContainer"][data-stale="true"]:has(.stPlotlyChart, .stCustomComponentV1)::after {
             animation: carga_entrar .18s ease-out .4s forwards;
         }
     }

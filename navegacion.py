@@ -56,6 +56,7 @@ hacer caso"). app.py lee la selección desde st.session_state["_nav_reporte"].
 """
 
 import html
+import json
 import re
 import streamlit as st
 import datetime
@@ -66,8 +67,78 @@ from data import (
 )
 from utils import fmt_k
 from tema import GRIS_BORDE
+from estilos._26_rails_scroll import DISPARADORES_CABECERA, DISPARADORES_COLUMNA
+from inyecciones._iframe import inyectar_html
 
 ZONA_PERU = ZoneInfo("America/Lima")
+
+
+# ── Las capas que aparecen con el cursor: el estado sube a <html> ─────────
+# La franja de reportes, las vistas, los KPIs y la columna de la izquierda
+# se abren al pasar el cursor por sus disparadores (`estilos/
+# _26_rails_scroll.py`, «EL ESTADO VIVE EN LA RAIZ»). Hasta el 2026-09-18
+# eso lo hacía un `:root:has()` con `:hover` adentro, sin JS; costaba 80 ms por cada
+# elemento que un rerun inserta en la página (regla #469).
+#
+# Este script evalúa las MISMAS listas de disparadores —importadas, no
+# copiadas— con `querySelector`, que entiende `:hover`, `:focus-visible` y
+# `[aria-expanded]` igual que el CSS, y marca `<html data-capa-cab>` /
+# `data-capa-col`. Tres cosas:
+#   · se recalcula en los eventos que pueden cambiar la respuesta (cursor,
+#     foco, clic, tecla) y además cada 300 ms: un popover que se cierra o un
+#     elemento que un rerun reemplaza bajo el cursor no avisan con ningún
+#     evento propio;
+#   · escribe SOLO si cambió (la otra mitad de la #469);
+#   · un `data-*` y no una clase: cambiarle una clase a `<html>` invalida
+#     todo lo que cuelga de un `[class*=...]` de estilos/.
+_SCRIPT_CAPAS = """<script>
+(function () {
+  var w = window.parent, doc = w.document, raiz = doc.documentElement;
+  var CAPAS = [["data-capa-cab", __CAB__], ["data-capa-col", __COL__]]
+    .filter(function (c) {
+      try { doc.querySelector(c[1]); return true; } catch (e) { return false; }
+    });
+  function recalcular() {
+    for (var i = 0; i < CAPAS.length; i++) {
+      var abierta = !!doc.querySelector(CAPAS[i][1]);
+      if (raiz.hasAttribute(CAPAS[i][0]) !== abierta) {
+        if (abierta) raiz.setAttribute(CAPAS[i][0], "");
+        else raiz.removeAttribute(CAPAS[i][0]);
+      }
+    }
+  }
+  var pendiente = false;
+  function pronto() {
+    if (pendiente) return;
+    pendiente = true;
+    setTimeout(function () { pendiente = false; recalcular(); }, 0);
+  }
+  // `aria-expanded` lo escribe React DESPUÉS del clic: una segunda pasada.
+  function despues() { pronto(); setTimeout(recalcular, 80); }
+  // Un rerun que cambie este iframe deja al anterior colgado del documento:
+  // se lo desengancha antes de enganchar el nuevo.
+  try { if (w.__capasApagar) w.__capasApagar(); } catch (e) {}
+  var EVENTOS = [["mouseover", pronto], ["mouseout", pronto],
+                 ["focusin", pronto], ["focusout", pronto],
+                 ["click", despues], ["keyup", despues]];
+  EVENTOS.forEach(function (e) { doc.addEventListener(e[0], e[1], true); });
+  var reloj = setInterval(recalcular, 300);
+  w.__capasApagar = function () {
+    EVENTOS.forEach(function (e) { doc.removeEventListener(e[0], e[1], true); });
+    clearInterval(reloj);
+  };
+  recalcular();
+})();
+</script>"""
+
+
+def _script_capas():
+    """El script de arriba con las dos listas de disparadores adentro, como
+    strings de JS (`json.dumps` escapa comillas y saltos de línea)."""
+    return (_SCRIPT_CAPAS
+            .replace("__CAB__", json.dumps(" ".join(DISPARADORES_CABECERA.split())))
+            .replace("__COL__", json.dumps(" ".join(DISPARADORES_COLUMNA.split()))))
+
 
 # Sufijo de unidad para los KPIs que son un CONTEO (no un monto — esos usan
 # fmt_k, que ya trae su propio "S/"). Vive acá y no en data.py::REPORTES
@@ -561,12 +632,13 @@ _CSS_KPIS = """
    mismo tratamiento que el label del botón en ese estado. El botón y el
    texto de valores NO son hermanos directos (cada uno cuelga de su propio
    stElementContainer dentro de navitem_), así que no sirve un combinador
-   `~` entre ellos: se sube al ANCESTRO común (`navitem_`) con `:has()` y
-   se baja de nuevo a los dos textos. */
-.st-key-graf_tipo_chips [class*="st-key-navitem_"]:has(button[kind="primary"])
-    .nav-kpis-primario,
-.st-key-graf_tipo_chips [class*="st-key-navitem_"]:has(button[kind="primary"])
-    .nav-kpis-secundario {
+   `~` entre ellos. Hasta el 2026-09-18 se subía al ancestro común con
+   `:has()` que preguntaba por el `kind` del botón; ahora el estado lo escribe Python en la
+   clase `nav-kpis-activo`, porque Python YA SABE cuál es el activo y un
+   atributo adentro de un `:has()` hace que cada inserción de la página
+   recalcule los estilos enteros (regla #469). */
+.st-key-graf_tipo_chips .nav-kpis-activo .nav-kpis-primario,
+.st-key-graf_tipo_chips .nav-kpis-activo .nav-kpis-secundario {
     color: var(--accent-deep) !important;
 }
 /* KPI primario negativo (hoy: sólo Ajuste Valorizado, ver docstring de
@@ -578,8 +650,7 @@ _CSS_KPIS = """
    `.kpi-neg`: a propósito MÁS específico que ese, así el rojo gana incluso
    si el reporte negativo (Ajuste) está también activo. */
 .st-key-graf_tipo_chips .nav-kpis-primario.kpi-neg,
-.st-key-graf_tipo_chips [class*="st-key-navitem_"]:has(button[kind="primary"])
-    .nav-kpis-primario.kpi-neg {
+.st-key-graf_tipo_chips .nav-kpis-activo .nav-kpis-primario.kpi-neg {
     color: var(--danger-text) !important;
 }
 </style>
@@ -628,8 +699,8 @@ html body .block-container {
    Cada uno aporta un "gap" del bloque vertical y, sumados, forman la franja
    blanca. Ocultar su wrapper elimina ese gap SIN desactivar el CSS (un
    <style> aplica igual aunque esté en display:none). */
-html body [data-testid="stElementContainer"]:has([data-testid="stMarkdown"] style),
-html body [data-testid="stElementContainer"]:has([data-testid="stIFrame"]) {
+html body [data-testid="stElementContainer"]:has(style),
+html body [data-testid="stElementContainer"]:has(.stIFrame) {
     display: none !important;
 }
 
@@ -761,6 +832,11 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # DISEÑO UNIFICADO: la cabecera fija (antes exclusiva de Ajuste de
     # Inventario) aplica a TODOS los reportes; el título vive en la franja.
     st.markdown(_CSS_AJUSTE, unsafe_allow_html=True)
+
+    # Quién abre las capas de la cabecera y de la columna (ver
+    # `_SCRIPT_CAPAS`). Va acá porque esta función corre en TODOS los
+    # reportes, igual que la franja que la capa de la cabecera encabeza.
+    inyectar_html(_script_capas())
 
     # Contexto del botón de refresco: se dibuja al PIE de este mismo rail,
     # más abajo en esta misma función (ver boton_refresco()).
@@ -1022,8 +1098,11 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                     if par:
                         primario, secundario, negativo = par
                         clase_primario = "nav-kpis-primario kpi-neg" if negativo else "nav-kpis-primario"
+                        _clase_valores = ("nav-kpis-valores nav-kpis-activo"
+                                          if nombre == reporte_activo
+                                          else "nav-kpis-valores")
                         st.markdown(
-                            '<div class="nav-kpis-valores">'
+                            f'<div class="{_clase_valores}">'
                             f'<span class="{clase_primario}">{primario}</span>'
                             + (f'<span class="nav-kpis-secundario">{secundario}</span>'
                                if secundario else '')

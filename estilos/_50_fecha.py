@@ -648,11 +648,17 @@ CSS = """    /* ================================================================
         display: none !important;   /* oculto por defecto; ver abajo */
     }
     @media (min-width: 1220px) {
-        [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
+        /* El `:has()` pregunta por el TÍTULO y no por la tarjeta
+           (`chartcard_ventas_comparativo_<grano>`): los dos los crea
+           `ventas_comparativo.py` en la misma pasada, y la key de la
+           tarjeta lleva el grano, así que sólo se alcanzaba con un
+           `[class*=...]`, que adentro de un `:has()` recalcula la página
+           entera en cada cambio de clase (regla #469). */
+        [data-testid="stAppViewContainer"]:has(.st-key-ventas_comp_titulo_franja)
             .st-key-ventas_comp_titulo_franja {
             display: block !important;
         }
-        [data-testid="stAppViewContainer"]:has([class*="st-key-chartcard_ventas_comparativo_"])
+        [data-testid="stAppViewContainer"]:has(.st-key-ventas_comp_titulo_franja)
             .st-key-ventas_comp_titulo_franja [data-testid="stMarkdownContainer"] p {
             margin: 0 !important;
             overflow: hidden !important;

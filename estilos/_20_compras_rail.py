@@ -718,12 +718,23 @@ CSS = """    /* ================================================================
        `inv_sec_`, `mov_sec_`, `rec_sec_` — y no hay ninguna
        otra key del repo con ese infijo), así que un `:has()` las reconoce a
        todas sin enumerarlas, incluidas las del dashboard que se agregue
-       mañana si respeta la convención. */
+       mañana si respeta la convención.
+
+       Desde el 2026-09-18 no las reconoce por la key sino por la marca
+       `.pila-seccion-siguiente` que `base.py::seccion_perezosa` pone al
+       principio de toda sección que NO es la primera: un `[class*=...]`
+       adentro de un `:has()` hacía que cualquier cambio de clase de la
+       página recalculara los estilos enteros (regla #469). La marca es el
+       primer elemento de la sección y la tarjeta va en uno de los que
+       siguen, así que alcanza con `~ *` desde su contenedor, sin subir al
+       wrapper. El `:has()` lleva SÓLO la clase de la marca: una clase de
+       Streamlit ahí adentro (`.stMarkdown`, `.stElementContainer`) haría
+       que cada rerun, que inserta cientos de esos, re-evaluara la regla. */
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row)
-    div:has(> [class*="st-key-"][class*="_sec_"]) ~ div
+    .stElementContainer:has(.pila-seccion-siguiente) ~ *
     [class*="st-key-ajuste_graf_card_izq_"],
     [data-testid="stMainBlockContainer"]:has(.st-key-compras_tabs_row)
-    div:has(> [class*="st-key-"][class*="_sec_"]) ~ div
+    .stElementContainer:has(.pila-seccion-siguiente) ~ *
     [class*="st-key-ajuste_graf_card_der_"] {
         margin-top: 0 !important;
     }
@@ -1257,9 +1268,16 @@ CSS = """    /* ================================================================
     /* lleva. Ver el detalle completo en el docstring original,             */
     /* arquitectura.md regla #164 (ahí se documentó por primera vez, para    */
     /* la franja horizontal; acá es la misma trampa, mismo mecanismo,        */
-    /* aplicada al rail vertical porque Reportes se mudó a él). */
-    .st-key-graf_tipo_chips [data-testid="stButton"]:has(.stTooltipIcon)
-        > div:not(:has(.stTooltipIcon)) {
+    /* aplicada al rail vertical porque Reportes se mudó a él).           */
+    /*                                                                      */
+    /* `> div + div` y no `:has(.stTooltipIcon) > div:not(:has(...))`       */
+    /* desde el 2026-09-18: medido en los 7 botones con `help=`, el que     */
+    /* lleva el tooltip es SIEMPRE el primero y la copia el segundo; sin    */
+    /* `help=` hay un solo `div` y no se elige nada. Un `:has()` con la     */
+    /* clase del tooltip adentro se re-evalúa con cada tooltip que un       */
+    /* rerun inserta (regla #469). */
+    .st-key-graf_tipo_chips [data-testid="stButton"]
+        > div + div {
         display: none !important;
     }
 
@@ -1313,10 +1331,10 @@ CSS = """    /* ================================================================
        asi que Streamlit deja una copia suelta dentro del mismo `stButton`.
        Es invisible hasta que algo le da tamano explicito — y el `width/
        height` de aca arriba se lo daria, duplicando el chevron. */
-    .st-key-rail_pestillo_abierto [data-testid="stButton"]:has(.stTooltipIcon)
-        > div:not(:has(.stTooltipIcon)),
-    .st-key-rail_pestillo_plegado [data-testid="stButton"]:has(.stTooltipIcon)
-        > div:not(:has(.stTooltipIcon)) {
+    .st-key-rail_pestillo_abierto [data-testid="stButton"]
+        > div + div,
+    .st-key-rail_pestillo_plegado [data-testid="stButton"]
+        > div + div {
         display: none !important;
     }
 

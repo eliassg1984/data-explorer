@@ -238,7 +238,7 @@ _CSS_SELECTOR_FECHA = """<style>
     font-size: 12px !important;
     white-space: nowrap !important;
 }
-.st-key-mov_evo_escala button > div > div:has( [data-testid="stIconMaterial"]) {
+.st-key-mov_evo_escala button > div > div:last-child:not(:first-child) {
     display: none !important;
 }
 [data-testid="stPopoverBody"]:has(.st-key-mov_evo_escala_panel) {
@@ -262,14 +262,14 @@ _CSS_SELECTOR_FECHA = """<style>
     margin-top: -4px !important;
     font-size: 11px !important;
 }
-[data-testid="stPopoverBody"]:has([class*="st-key-mov_evo_esc_gran"]) {
+[data-testid="stPopoverBody"]:has(.st-key-mov_evo_esc_gran) {
     padding-top: 8px !important;
     padding-bottom: 8px !important;
 }
-[data-testid="stPopoverBody"]:has([class*="st-key-mov_evo_esc_gran"]) [data-testid="stVerticalBlock"] {
+[data-testid="stPopoverBody"]:has(.st-key-mov_evo_esc_gran) [data-testid="stVerticalBlock"] {
     gap: 4px !important;
 }
-[data-testid="stPopoverBody"]:has([class*="st-key-mov_evo_esc_gran"]) [class*="st-key-mov_evo_atajo_sel"] {
+[data-testid="stPopoverBody"]:has(.st-key-mov_evo_esc_gran) [class*="st-key-mov_evo_atajo_sel"] {
     margin-bottom: 0 !important;
 }
 .cp-riel-mes {

@@ -232,8 +232,7 @@ CSS = """    /* ================================================================
        `stIconMaterial` sin miedo a llevarse el ícono del label, porque ese
        entra por el shortcode del LABEL y sale como `stMarkdownContainer`
        — son dos nodos distintos (medido: label 14x22, chevron 16x16). */
-    .st-key-vap_hdr_ayuda button > div > div:has(
-        [data-testid="stIconMaterial"]) {
+    .st-key-vap_hdr_ayuda button > div > div:last-child:not(:first-child) {
         display: none !important;
     }
     /* (ACÁ VIVÍAN LAS TRES REGLAS DEL ⛶ "sola en la página" — el ancho
@@ -566,8 +565,7 @@ CSS = """    /* ================================================================
     /* El CHEVRON del popover, igual que en `vap_hdr_ayuda`: se esconde el
        WRAPPER, no el glifo — el ícono del label entra por el shortcode y
        sale como `stMarkdownContainer`, que es otro nodo. */
-    .st-key-vol_hdr_ayuda button > div > div:has(
-        [data-testid="stIconMaterial"]) {
+    .st-key-vol_hdr_ayuda button > div > div:last-child:not(:first-child) {
         display: none !important;
     }
     /* ── VOLATILIDAD: la pastilla que muestra la columna del puntaje ──
@@ -1130,6 +1128,14 @@ CSS = """    /* ================================================================
         /* que se puede seleccionar por su hijo. Un navegador sin `:has()`  */
         /* ignora la regla y vuelve al escalón — degrada, no rompe.         */
         /*                                                                  */
+        /* Las tarjetas van ENUMERADAS por su key exacta desde el           */
+        /* 2026-09-18, y no por prefijo (`[class*="st-key-compras_prov_     */
+        /* card_"]`): un atributo adentro de un `:has()` hace que cada      */
+        /* cambio de clase de la página recalcule los estilos enteros —     */
+        /* ~100 ms por cambio en la laptop del usuario, regla #469. Una     */
+        /* tarjeta nueva de estas familias tiene que sumarse acá: lo vigila */
+        /* `test_graficos.py::_pruebas_has_solo_clases`.                    */
+        /*                                                                  */
         /* `sunat_card_` se sumó el 2026-08-28, al ganar Documentos SUNAT  */
         /* su primera fila de dos columnas (ficha | gráfico). Medido ahí   */
         /* mismo: la ficha llegaba a su techo de 576px y el gráfico se     */
@@ -1138,9 +1144,9 @@ CSS = """    /* ================================================================
         /* sus tarjetas no comparten fila, así que no hay nada que igualar.*/
         /* ─────────────────────────────────────────────────────────────── */
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-compras_prov_card_"]),
+        > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_evo, > .st-key-compras_prov_card_prods, > .st-key-compras_prov_card_provde, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-sunat_card_"]),
+        > div:has(> .st-key-sunat_card_conversor, > .st-key-sunat_card_doc, > .st-key-sunat_card_graf, > .st-key-sunat_card_izq, > .st-key-sunat_card_sis),
         /* Las dos mitades del conversor entraron acá el 2026-08-29, al   */
         /* ganar cada una un pie de totales de largo distinto: la de      */
         /* SUNAT medía 388px y la del sistema 349 en el documento de      */
@@ -1148,7 +1154,7 @@ CSS = """    /* ================================================================
         /* Mientras los dos lados tuvieron contenido simétrico el piso no */
         /* hizo falta; en cuanto uno pudo crecer solo, sí.                */
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-sunat_conv_"]),
+        > div:has(> .st-key-sunat_conv_izq, > .st-key-sunat_conv_der),
         /* `compras_prod_card_` entró el 2026-09-02, cuando el Ranking de   */
         /* Productos partió su tarjeta única en dos (tabla | gráfico) y     */
         /* pasó a tener, por primera vez, una FILA de dos tarjetas. Sin el  */
@@ -1160,18 +1166,18 @@ CSS = """    /* ================================================================
         /* contra ella (`_ALTO_EVO` en graficos/compras/producto.py): este  */
         /* piso queda de red, igual que en Proveedor.                       */
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-compras_prod_card_"]),
+        > div:has(> .st-key-compras_prod_card_evo, > .st-key-compras_prod_card_ranking, > .st-key-compras_prod_card_vacio),
         /* Las dos tarjetas de abajo de Volatilidad (velas | compras de la  */
         /* semana), desde que se separaron el 2026-09-13 (#415): la tabla   */
         /* de la semana mide lo que tenga filas y sin piso cerraba más      */
         /* arriba que el gráfico.                                            */
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-compras_vol_card_"]),
+        > div:has(> .st-key-compras_vol_card_rank, > .st-key-compras_vol_card_semana, > .st-key-compras_vol_card_velas),
         /* Y las dos del medio de Vs año pasado (serie | puente), desde el   */
         /* 2026-09-14 (#420). Hoy nacen del mismo alto (`_ALTO_FIG_VAP`, el */
         /* puente le resta su veredicto); el piso queda de red.             */
         .stColumn > .stVerticalBlock
-        > div:has(> div[class*="st-key-compras_vap_card_"]) {
+        > div:has(> .st-key-compras_vap_card_hdr, > .st-key-compras_vap_card_puente, > .st-key-compras_vap_card_serie, > .st-key-compras_vap_card_tabla) {
             flex: 1 1 auto;
         }
 
@@ -1406,8 +1412,12 @@ CSS = """    /* ================================================================
         justify-content: flex-start !important;
         transition: background-color 0.15s ease !important;
     }
+    /* Prendido. `data-on` lo pone `ventas_comparativo.py::_JS_ESPEJO_SWITCH`
+       — hasta el 2026-09-18 esto era `label:has(input:checked)`, y una
+       pseudo-clase adentro de un `:has()` recalcula la página entera en
+       cada inserción, en todos los reportes (regla #469). */
     div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"]
-        label:has(input:checked) > div:not([data-testid]) {
+        label[data-on] > div:not([data-testid]) {
         background-color: var(--sw-color) !important;
         justify-content: flex-end !important;
     }
@@ -1425,7 +1435,7 @@ CSS = """    /* ================================================================
         transition: none !important;
     }
     div[class*="st-key-ventas_comp_sw_"] [data-testid="stCheckbox"]
-        label:has(input:checked) > div:not([data-testid]) > div {
+        label[data-on] > div:not([data-testid]) > div {
         background-color: var(--bg-secondary) !important;
     }
     /* El alto mínimo de 24px del checkbox es lo que estiraba cada fila:
@@ -1930,7 +1940,7 @@ CSS = """    /* ================================================================
        Consecuencia conocida en móvil: sin alto de CSS ni de Python, Plotly
        cae a su default de 450px, que con scroll de página es aceptable. */
     @media screen and (min-width: 769px) {
-    div[class*="st-key-ajuste_graf_card_"]:has([class*="st-key-ventas_g_dia"]) {
+    div[class*="st-key-ajuste_graf_card_"]:has(.st-key-ventas_g_dia) {
         /* flex: 0 0 auto es OBLIGATORIO: los bloques de Streamlit son flex
            items con `flex: 1 1 0%` y ahí `height` se ignora en silencio
            (regla #101). Sin esto, la regla de abajo no hace nada. */
@@ -1942,9 +1952,9 @@ CSS = """    /* ================================================================
        cae a su default de 450px. Los dos niveles son reales, medidos en el
        navegador: la tarjeta envuelve un stLayoutWrapper y ese un
        stVerticalBlock. */
-    div[class*="st-key-ajuste_graf_card_"]:has([class*="st-key-ventas_g_dia"])
+    div[class*="st-key-ajuste_graf_card_"]:has(.st-key-ventas_g_dia)
         > [data-testid="stLayoutWrapper"],
-    div[class*="st-key-ajuste_graf_card_"]:has([class*="st-key-ventas_g_dia"])
+    div[class*="st-key-ajuste_graf_card_"]:has(.st-key-ventas_g_dia)
         > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
         height: 100% !important;
     }

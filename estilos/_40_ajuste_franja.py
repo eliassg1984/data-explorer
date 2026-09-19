@@ -510,11 +510,13 @@ CSS = """    /* ================================================================
        venía angosto y acá hay que forzarlo. `stPopoverBody` es un PORTAL
        (fuera de `chips_ajuste_tabla`), así que se alcanza con `:has()`
        sobre la key del `st.pills` de adentro, no colgando del contenedor.
-       Por PREFIJO y no por clase exacta: la key del widget lleva versión
-       (`compras_graf_filtro_fam__w1`, `graficos/base.py::seleccion_en_panel`,
-       regla #467). */
-    [data-testid="stPopoverBody"]:has([class*="st-key-compras_graf_filtro_fam__w"]),
-    [data-testid="stPopoverBody"]:has([class*="st-key-compras_graf_filtro_sub__w"]) {
+       Por la clase `filtro-<clave>` del rótulo y no por la key del widget:
+       la key lleva versión (`compras_graf_filtro_fam__w1`, `graficos/
+       base.py::seleccion_en_panel`, regla #467), y un `[class*=...]`
+       adentro de un `:has()` recalcula la página entera en cada cambio de
+       clase (regla #469). */
+    [data-testid="stPopoverBody"]:has(.filtro-compras_graf_filtro_fam),
+    [data-testid="stPopoverBody"]:has(.filtro-compras_graf_filtro_sub) {
         width: 300px !important;
         max-width: 300px !important;
     }

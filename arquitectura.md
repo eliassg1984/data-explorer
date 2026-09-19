@@ -200,7 +200,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#464** — Juntar controles en UN renglón se paga en ancho, y el presupuesto se mide contra el peor…
 - **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
-- **#469** — Con los :has() de estilos/, cambiar UNA clase en CUALQUIER elemento recalcula los estilos de…
+- **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 
 **Layout y alturas** (68)
 
@@ -435,7 +435,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#462** — Una tabla con dos altos de fila se lee como dos tablas pegadas: la segunda línea se abre AL…
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 
-**Streamlit** (127)
+**Streamlit** (128)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -564,6 +564,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#464** — Juntar controles en UN renglón se paga en ancho, y el presupuesto se mide contra el peor…
 - **#467** — Un widget adentro de un st.popover no se entera de lo que Python le escribe mientras el panel…
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
+- **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 
 **Datos, R2 y DuckDB** (55)
 
@@ -39000,10 +39001,11 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
-469. **Con los `:has()` de `estilos/`, cambiar UNA clase en CUALQUIER
-     elemento recalcula los estilos de la página entera: ~100 ms en la
-     laptop del usuario. Un temporizador no puede escribir el DOM si nada
-     cambió, y un rerun se paga en segundos de página congelada.**
+469. **Adentro de un `:has()`, sólo clases. Un atributo o una
+     pseudo-clase ahí adentro hace que cada cambio de clase —o cada
+     elemento insertado— recalcule los estilos de la página entera: ~100 ms
+     en la laptop del usuario, y un rerun la congelaba 10 s seguidos. Y un
+     temporizador no escribe el DOM si nada cambió.**
      Reportado 2026-09-18: *«al hacer click a veces se queda pasmada, como
      que no responde, y responde después largo rato»*.
 
@@ -39048,44 +39050,128 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      sólo si el botón marcado cambió. La guarda ya existía en la rama del
      destino aparte (`FUERA`), que la tenía desde la #419; la rama normal no.
 
-     **Y hay un segundo goteo, que NO se arregló acá: `app.py::
-     _vigilar_refresco`** (`@st.fragment(run_every=4)`, montado siempre a
-     propósito; ver `mapa.md`). Con la página quieta corre cada 4 s, dura
-     ~200 ms y no cambia nada visible — pero Streamlit pasa la app a
-     `running` y el `stStatusWidget` (escondido por `_70_chrome.py`, pero
-     montado) recorre sus clases de transición: nueve cambios de clase por
-     corrida. Medido con el arreglo del rail ya puesto: un racimo de
-     ~800 ms de tareas largas cada 4 s, clavado al ritmo del fragment. Un
-     clic que cae encima espera ese racimo. Esconder algo con CSS no le
-     quita el costo de sus cambios de clase.
+     **Segunda parte, el mismo día: el costo de los `:has()` mismos.** No
+     está en el `:has()` sino en lo que lleva ADENTRO. Medido insertando
+     una regla de prueba sobre la página ya limpia (costo de insertar y
+     quitar un elemento, base 6,5 ms):
 
-     **Lo que NO se arregló acá, y es lo grande: el costo de los `:has()`
-     mismos.** No es aditivo, y eso engaña. Probadas una por una (con un
-     recálculo de calentamiento después de insertarla, porque si no se
-     mide el costo de INSERTAR la regla), diez cuestan 40–74 ms solas —casi
-     todas `[data-testid="stPopoverBody"]:has([class*="st-key-cp_…"])`,
-     más `div[class*="st-key-ajuste_graf_card_"]:has([class*="st-key-ventas_g_dia"])`
-     y la de `stMainBlockContainer:has(.st-key-compras_tabs_row)`—, pero
-     **sacar esas diez y dejar las otras 132 sigue costando 95 ms**. Sacando
-     de a 20 desde el final: 132 → 111 ms, 92 → 106, 72 → 44, 52 → 47,
-     32 → 0,1. O sea que hay combinaciones que vuelven cara a una regla
-     que sola es barata. La sospecha, sin confirmar: un `[class*="…"]`
-     dentro de un `:has()` no se puede indexar como una clase, y pasado
-     cierto número el navegador deja de acotar y re-evalúa todo. El arreglo
-     de fondo es reescribir esos `:has()` sobre la clase EXACTA que da la
-     key (`.st-key-foo` en vez de `[class*="st-key-foo"]`) o sobre un
-     `data-*`, y medir con el mismo cronómetro de arriba después de cada
-     tanda — no hay forma de saber cuál sobra sin medir.
+       | adentro del `:has()` | por inserción |
+       |---|---|
+       | `.clase` | 6 ms |
+       | `.clase:hover` | 81 ms |
+       | `[data-testid=...]`, `[title=...]` | 83–89 ms |
+       | `.clase [aria-expanded="true"]` | 168 ms |
 
-     **Regla, en dos partes:**
+     Y NO ES ADITIVO, que es lo que lo escondió: probadas de a una (con un
+     recálculo de calentamiento después de insertarla, o se mide el costo
+     de INSERTAR la regla), diez reglas costaban 40–74 ms y el resto casi
+     nada — pero sacar esas diez dejaba las otras 132 costando 95 ms. Una
+     regla aporta el DISPARADOR (lo que tiene adentro decide ante qué
+     cambios hay que re-evaluar) y otra el COSTO (cuánto hay que recalcular
+     cuando pasa). Una regla barata sola puede ser el disparador de las
+     demás. Por tipo de cambio:
+
+       - cambio de clase: lo disparaba cualquier `[class*=...]` adentro de
+         un `:has()` — sin ninguno, 53 → 0,2 ms;
+       - `aria-expanded`: `[aria-expanded="true"]` en la lista de la capa
+         de la cabecera — 57 → 0,9 ms;
+       - inserción: pseudo-clases (`:hover`, `:focus-visible`, `:checked`)
+         y atributos adentro, y también las CLASES DE STREAMLIT
+         (`.stMarkdown`, `.stElementContainer`) cuando la regla tiene un
+         `~` detrás, porque un rerun inserta cientos de esas.
+
+     **Lo que se cambió** (todo en el mismo commit):
+       - `[class*="st-key-X"]` → `.st-key-X` donde X es una key exacta
+         (verificadas contra el código una por una); `[data-testid="stX"]`
+         → `.stX`, la clase que Streamlit pone al lado (no la tiene
+         `stIconMaterial`).
+       - Las familias por prefijo, cada una con su salida: el piso de alto
+         de `_80_cards.py` ENUMERA sus 23 tarjetas; el popover de Familia
+         busca la clase `filtro-<clave>` que ahora pone el rótulo de
+         `filtro_pills` (la key del widget lleva versión); el título del
+         comparativo de Ventas se busca a sí mismo en vez de a la tarjeta
+         (`chartcard_ventas_comparativo_d-a`: el slug se come la tilde); la
+         excepción del jalón busca la marca `pila-seccion-siguiente` que
+         `seccion_perezosa` pone en toda sección que no es la primera
+         (`activa_de_entrada` es justo eso en los seis dashboards).
+         Verificado en Inventario: las tarjetas de la primera sección con
+         −48 px, las de las otras tres con 0.
+       - Las capas con cursor: `navegacion.py::_SCRIPT_CAPAS` evalúa las
+         MISMAS listas (`DISPARADORES_CABECERA`/`_COLUMNA`, importadas) con
+         `querySelector` y marca `<html data-capa-cab>` / `data-capa-col`.
+         Un `data-*` y no una clase: cambiarle una clase a `<html>` cuesta
+         70 ms (invalida todo lo que cuelga de un `[class*=...]`).
+       - El switch de Ventas: `label:has(input:checked)` →
+         `label[data-on]`, que copia `ventas_comparativo.py::
+         _JS_ESPEJO_SWITCH`. No hay combinador que llegue sin `:has()`: el
+         `input` vive adentro de un `span` y la pista es hermana del `span`.
+       - El velo: `:has(.stPlotlyChart, .stCustomComponentV1)` en vez de
+         nombrar los iframes por `title`.
+       - Sin `:has()`: el calendario (BaseWeb dibuja los presets ADENTRO de
+         `[data-baseweb="calendar"]`, leído en el bundle), el chevron de los
+         popovers (`div:last-child:not(:first-child)`, medido) y la copia
+         fantasma del tooltip (`> div + div`: medido en los 7 botones, el
+         del tooltip es siempre el primero).
+
+     **Antes y después**, mismo método en las dos (un latido con
+     `MessageChannel` que anota cada hueco de más de 50 ms del hilo
+     principal), mismo reporte (Compras), misma ventana (1366×768), el
+     código original levantado aparte desde `157a6bc`:
+
+       | | original | ahora |
+       |---|---|---|
+       | página quieta, 10 s | 4,9 s trabada, tramo de 1,1 s | 1,1 s, tramo de 0,4 s |
+       | clic Mes → Semana, total | 10,9 s | 1,5–2,7 s |
+       | clic Mes → Semana, peor tramo | **7,6 s** | 0,55–1,2 s |
+
+     El piso —sin NINGÚN `:has()`— era 0,95 s y 0,4 s: lo que queda es
+     sobre todo Plotly dibujando.
+
+     **Tres trampas de medición que costaron una vuelta cada una:**
+       - una inserción de prueba tiene que llevar las clases REALES de
+         Streamlit: un `<div data-testid="stMarkdown">` sin la clase
+         `stMarkdown` no dispara las reglas que la nombran. Lo que sirve es
+         sacar y reponer una tarjeta de verdad;
+       - el `PerformanceObserver` de `longtask` dejó de reportar después de
+         un `location.reload()` en el panel oculto —ni una tarea de 120 ms
+         provocada a propósito—. Un «cero» sin validar el cronómetro no es
+         un dato;
+       - la búsqueda codiciosa (sacar todas, devolver de a una, apartar la
+         que hace saltar el costo) con umbral ABSOLUTO aparta reglas
+         inocentes cuando la base sube; con la prueba realista, además,
+         el ruido es de ±10 ms y terminó apartando reglas de la propia
+         Streamlit. Sirvió para encontrar la dirección, no para decidir.
+
+     **`app.py::_vigilar_refresco` se dejó como estaba.** Con la página
+     quieta corre cada 4 s (`@st.fragment(run_every=4)`, montado siempre a
+     propósito; ver `mapa.md`), y antes de esto cada corrida costaba
+     ~800 ms: pasa la app a `running` y el `stStatusWidget`, escondido pero
+     montado, recorre nueve clases de transición. Con los cambios de clase
+     en 0,2 ms eso ya no pesa, y cambiar el flujo de «Refrescar» para
+     montarlo sólo con un refresco pendiente no se puede probar sin
+     disparar el job de la máquina Windows. Esconder algo con CSS no le
+     quita el costo de sus cambios de clase: si vuelve a aparecer un
+     costo por clase, este es el primer sospechoso.
+
+     **Sin verificar acá, a propósito:** el `:hover` no se puede simular en
+     el navegador automatizado. La capa de la cabecera se probó por la otra
+     entrada de su lista —`aria-expanded="true"` en un botón de
+     `chips_ajuste_tabla`: abre, `pointer-events` pasa a `auto`, cierra—;
+     la de la columna usa el mismo código con otra lista. Se confirma
+     pasando el cursor en Cloud.
+
+     **Regla, en tres partes:**
+     - Adentro de un `:has()`, sólo clases: nada de atributos, nada de
+       pseudo-clases, y cuidado con las clases de Streamlit si la regla
+       tiene un `~` detrás. Lo vigila `test_graficos.py::
+       _pruebas_has_solo_clases`, que también verifica que el piso de alto
+       enumere todas sus tarjetas.
+     - Un estado que el CSS sólo alcanza con una pseudo-clase o desde
+       lejos, lo sube un script a un `data-*`, escribiendo sólo si cambió.
      - Un temporizador o un observer que toca el DOM escribe sólo si el
        valor CAMBIÓ (`contains` antes de `add`, comparar antes de
-       `setAttribute`). En esta página ninguna escritura de clase es
-       barata.
-     - Antes de sumar un `:has()`, cronometrar el toggle de una clase
-       cualquiera con y sin la regla nueva: el costo no está en la regla
-       sino en lo que le hace al resto. El «2,3 ms, se paga» de la #366 se
-       midió con una sola regla y ya no describe la página.
+       `setAttribute`). El «2,3 ms, se paga» de la #366 se midió con una
+       sola regla, y una sola regla nunca es la medida.
 
      (2026-09-18.)
 

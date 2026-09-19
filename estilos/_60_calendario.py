@@ -18,10 +18,17 @@ CSS = """    /* ================================================================
     div[data-baseweb="calendar"] button svg {
         fill: var(--accent) !important;
     }
-    div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) [data-baseweb="select"] {
+    /* Sin `:has()` desde el 2026-09-18. Antes se subía al popover que
+       CONTIENE un calendario y se bajaba de nuevo; un atributo adentro de un
+       `:has()` hace que cada elemento que un rerun inserta recalcule los
+       estilos de la página entera (regla #469). No hace falta subir: BaseWeb
+       dibuja los presets (`renderQuickSelect`, el único `select` de ese
+       popover) ADENTRO de la raíz `data-baseweb="calendar"` — leído en el
+       bundle de Streamlit, no supuesto. */
+    div[data-baseweb="calendar"] [data-baseweb="select"] {
         display: none !important;
     }
-    div[data-baseweb="popover"]:has(div[data-baseweb="calendar"]) div[data-baseweb="calendar"] + div {
+    div[data-baseweb="popover"] div[data-baseweb="calendar"] + div {
         display: none !important;
     }
 """

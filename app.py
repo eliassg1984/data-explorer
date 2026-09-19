@@ -152,7 +152,11 @@ cfg = REPORTES[reporte]
 # usan el mismo rail. Ver arquitectura.md regla #16.
 _reporte_slug = reporte.lower().replace(" ", "_")
 st.markdown(
-    f'<div class="st-key-app_reporte_{_reporte_slug}" style="display:none"></div>',
+    # `marca-reporte` es la clase FIJA del marker: la que usa el `:has()` de
+    # `_00_base.py` para colapsar su contenedor. Un `[class*="st-key-app_
+    # reporte_"]` adentro de un `:has()` hacía que CUALQUIER cambio de clase
+    # de la página recalculara los estilos enteros. Regla #469.
+    f'<div class="st-key-app_reporte_{_reporte_slug} marca-reporte" style="display:none"></div>',
     unsafe_allow_html=True,
 )
 

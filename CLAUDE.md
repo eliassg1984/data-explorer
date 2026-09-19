@@ -124,6 +124,35 @@ eso invalida la regla entera. Le pasó al `flex-wrap` de la cabecera de
 Semanal, con un comentario al lado jurando que funcionaba. Lo vigila
 `test_graficos.py::_pruebas_css_comentarios_cerrados`. Regla #454.
 
+## Adentro de un `:has()`, sólo clases
+
+Es la causa de «al hacer clic se queda pasmada» (2026-09-18): un clic
+congelaba la página **10,5 s seguidos**. No era el servidor, era el CSS. Un
+atributo (`[class*=...]`, `[data-testid=...]`, `[title=...]`) o una
+pseudo-clase (`:hover`, `:checked`) **adentro** de un `:has()` hace que el
+navegador lo re-evalúe ante cualquier cambio de clase o inserción de la
+página entera. Una clase sola no. Medido en la laptop del usuario:
+`:root:has(.X) .Y` 7 ms por inserción, `:root:has(.X:hover) .Y` 80 ms, y
+un rerun inserta cientos.
+
+- Clase de la key EXACTA (`.st-key-foo`), no un `[class*="st-key-foo"]`. Si
+  la key lleva algo variable (versión, grano), buscá otra clase fija: el
+  rótulo de `filtro_pills` lleva `filtro-<clave>`, `seccion_perezosa` pone
+  la marca `pila-seccion-siguiente`.
+- Las clases de Streamlit en vez del `data-testid` (`.stPlotlyChart`,
+  `.stButton`, `.stCustomComponentV1`…). `stIconMaterial` NO tiene clase.
+- Un estado que el CSS sólo puede preguntar con una pseudo-clase (`:hover`
+  lejos del elemento, `:checked`) lo sube un script a un `data-*`, que es
+  barato de cambiar (una CLASE en `<html>` no lo es). Así funcionan las
+  capas con cursor (`navegacion.py::_SCRIPT_CAPAS`) y los switches de
+  Ventas (`ventas_comparativo.py::_JS_ESPEJO_SWITCH`).
+
+**No es aditivo**, y por eso no se ve revisando de a una: una regla que sola
+cuesta 3 ms puede ser la que dispara el recálculo que pagan las otras. Lo
+vigila `test_graficos.py::_pruebas_has_solo_clases`. Y un temporizador que
+toca el DOM escribe **sólo si el valor cambió**: quitar y poner la misma
+clase no es gratis. Mediciones y método en `arquitectura.md` regla #469.
+
 ## Antes de agregar un widget dentro de una tarjeta: grep `estilos/`
 
 El CSS de la app **matchea por prefijo de key**, no por widget. Muchas reglas
@@ -157,7 +186,8 @@ Hay tres piezas, una por hueco, y **la señal es distinta en cada momento**:
 - **Algo que se está RECALCULANDO** — hay contenido en pantalla y Streamlit
   ya lo marca con `data-stale="true"` en su `stElementContainer`, con
   precisión de fragment. De ahí cuelga `estilos/_88_cargando.py`: velo +
-  círculo + «Actualizando…», **sólo sobre Plotly y AgGrid**. Nada de JS.
+  círculo + «Actualizando…», **sólo sobre Plotly y los componentes**
+  (AgGrid, plotly_events: `.stCustomComponentV1`). Nada de JS.
 - **Una sección de la pila que se construye por primera vez** — no hay nada
   que marcar. Lo pone `graficos/base.py::seccion_perezosa` con `st.spinner`,
   y **sólo en la primera pasada**: después el velo es mejor señal porque
@@ -202,6 +232,14 @@ Tres cosas que cuestan un bug si se tocan sin leerlas:
 - **En el navegador automatizado las transiciones no avanzan**, así que
   `opacity` da 0 con la regla aplicando perfecto (regla #353). Se verifica
   con lo que no tiene transición: `pointer-events` y `elementFromPoint`.
+- **Quién abre la capa no es el CSS** desde el 2026-09-18: un script
+  (`navegacion.py::_SCRIPT_CAPAS`) evalúa las listas `DISPARADORES_CABECERA`
+  / `DISPARADORES_COLUMNA` de `_26_rails_scroll.py` con `querySelector` y
+  marca `<html data-capa-cab>` / `data-capa-col`. Antes era un
+  `:root:has()` con `:hover` adentro, y costaba 80 ms por cada elemento que
+  un rerun inserta (regla #469). El cursor no se puede simular acá: se
+  prueba poniendo `aria-expanded="true"` en un botón de
+  `chips_ajuste_tabla`, que también está en la lista.
 
 El **rail no muestra KPI por vista** desde el 2026-09-18 (sí los del
 REPORTE: la cabecera de la columna y los ítems del rail de Reportes). Lo

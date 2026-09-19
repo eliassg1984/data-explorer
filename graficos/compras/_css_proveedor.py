@@ -580,16 +580,16 @@ CSS = """        <style>
            ese `:has()` esto apretaría TODOS los popovers de la app —el
            error contra el que avisa CLAUDE.md—, incluido el de la escala,
            que ya trae su propio bloque compacto más abajo. */
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"]),
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_prov_lista"]) {
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prov_lista),
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_prov_lista) {
             width: 250px !important;
             min-width: 250px !important;
             max-width: 250px !important;
             padding: 10px 12px !important;
         }
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prov_lista)
             [data-testid="stVerticalBlock"],
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_prov_lista"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_prov_lista)
             [data-testid="stVerticalBlock"] {
             gap: 7px !important;
         }
@@ -622,17 +622,17 @@ CSS = """        <style>
            `stTextInputRootElement` sigue midiendo 40 (medido) — el marco
            es el que trae el alto, no el campo, y sin la segunda regla el
            buscador quedaba de lejos la pieza más alta del panel. */
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prov_lista)
             [data-testid="stTextInput"] input,
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_prov_lista"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_prov_lista)
             [data-testid="stTextInput"] input {
             padding: 3px 8px !important;
             font-size: 12px !important;
             line-height: 1.3 !important;
         }
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prov_lista"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prov_lista)
             [data-testid="stTextInputRootElement"],
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_prov_lista"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_prov_lista)
             [data-testid="stTextInputRootElement"] {
             min-height: 0 !important;
             height: 28px !important;
@@ -1182,12 +1182,9 @@ CSS = """        <style>
            su div padre ocupando 16px y el boton seguia desbordando
            (scrollWidth 30 sobre clientWidth 22, medido). De ahi el
            `:has()`. */
-        .st-key-cp_rank_escala button > div > div:has(
-            [data-testid="stIconMaterial"]),
-        .st-key-cp_sem_escala button > div > div:has(
-            [data-testid="stIconMaterial"]),
-        .st-key-cp_vol_escala button > div > div:has(
-            [data-testid="stIconMaterial"]) {
+        .st-key-cp_rank_escala button > div > div:last-child:not(:first-child),
+        .st-key-cp_sem_escala button > div > div:last-child:not(:first-child),
+        .st-key-cp_vol_escala button > div > div:last-child:not(:first-child) {
             display: none !important;
         }
 
@@ -1281,20 +1278,20 @@ CSS = """        <style>
            estilos/_40_ajuste_franja.py. Sin ese `:has()` esto apretaría
            TODOS los popovers de la app, que es justo el error que
            CLAUDE.md advierte de las reglas colgadas de un contenedor. */
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"]),
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"]),
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"]),
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_vol_esc_gran"]) {
+        [data-testid="stPopoverBody"]:has(.st-key-cp_rank_esc_gran),
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_esc_gran),
+        [data-testid="stPopoverBody"]:has(.st-key-cp_sem_esc_gran),
+        [data-testid="stPopoverBody"]:has(.st-key-cp_vol_esc_gran) {
             padding-top: 8px !important;
             padding-bottom: 8px !important;
         }
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_rank_esc_gran)
             [data-testid="stVerticalBlock"],
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_esc_gran)
             [data-testid="stVerticalBlock"],
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_sem_esc_gran)
             [data-testid="stVerticalBlock"],
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_vol_esc_gran"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_vol_esc_gran)
             [data-testid="stVerticalBlock"] {
             gap: 4px !important;
         }
@@ -1308,13 +1305,13 @@ CSS = """        <style>
            dentro de este popover. Es el error que CLAUDE.md advierte de
            las reglas por familia, y lo cometió el script que duplicó estos
            selectores para el prefijo `cp_prod` (2026-08-26). */
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_rank_esc_gran"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_rank_esc_gran)
             [class*="st-key-cp_rank_atajo_sel"],
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_prod_esc_gran"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_esc_gran)
             [class*="st-key-cp_prod_atajo_sel"],
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_sem_esc_gran"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_sem_esc_gran)
             [class*="st-key-cp_sem_atajo_sel"],
-        [data-testid="stPopoverBody"]:has([class*="st-key-cp_vol_esc_gran"])
+        [data-testid="stPopoverBody"]:has(.st-key-cp_vol_esc_gran)
             [class*="st-key-cp_vol_atajo_sel"] {
             margin-bottom: 0 !important;
         }
@@ -2229,8 +2226,7 @@ CSS = """        <style>
            div padre ocupando 16px y el boton sigue desbordando). Esta
            regla no se pudo generar duplicando la de arriba porque su
            selector se parte en varias lineas. */
-        .st-key-cp_prod_escala button > div > div:has(
-            [data-testid="stIconMaterial"]) {
+        .st-key-cp_prod_escala button > div > div:last-child:not(:first-child) {
             display: none !important;
         }
 

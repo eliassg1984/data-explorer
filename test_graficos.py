@@ -2139,6 +2139,89 @@ def _pruebas_css_comentarios_cerrados():
     return fallos
 
 
+def _pruebas_has_solo_clases():
+    """Adentro de un `:has()` sólo van clases. Regla #469.
+
+    Reportado el 2026-09-18 como «al hacer clic a veces se queda pasmada».
+    Medido: un clic congelaba la página 10,5 s seguidos, y la causa era el
+    CSS — con 142 reglas `:has()`, cambiar UNA clase en cualquier elemento
+    costaba ~100 ms de recálculo de estilos, y un rerun cambia cientos. Lo
+    que lo dispara no es el `:has()` sino lo que lleva ADENTRO: un atributo
+    (`[class*=...]`, `[data-testid=...]`, `[title=...]`) o una pseudo-clase
+    (`:hover`, `:checked`) hacen que el navegador lo re-evalúe ante cada
+    cambio de clase o cada inserción de la página entera. Una clase sola
+    no: sólo cuando cambia ESA clase. Medido: `:root:has(.X) .Y` 7 ms por
+    inserción, `:root:has(.X:hover) .Y` 80 ms.
+
+    Y no es aditivo, que es lo que hace falta esta guarda: una regla que
+    sola cuesta 3 ms puede ser la que DISPARA el recálculo que pagan las
+    demás. Revisarlas de a una en el navegador no lo ve.
+
+    Segunda comprobación, de la misma cura: el piso de alto de
+    `estilos/_80_cards.py` enumera sus tarjetas por key EXACTA (antes iban
+    por prefijo, con un `[class*=...]` adentro del `:has()`), así que una
+    tarjeta nueva de esas familias que no se sume a la lista vuelve callada
+    al escalón.
+    """
+    import pathlib
+    import re
+
+    fallos = 0
+    raiz = pathlib.Path(__file__).parent
+    fuentes = ([raiz / "app.py", raiz / "navegacion.py", raiz / "asistente.py"]
+               + sorted((raiz / "estilos").glob("*.py"))
+               + sorted((raiz / "graficos").rglob("*.py"))
+               + sorted((raiz / "tablas").rglob("*.py")))
+    etiquetas = r"(?:div|span|p|a|button|input|label|svg|li|ul)"
+    malos = []
+    for f in fuentes:
+        txt = f.read_text(encoding="utf-8")
+        txt = re.sub(r"/\*.*?\*/", "", txt, flags=re.S)            # CSS
+        txt = re.sub(r"(?m)^\s*#.*$", "", txt)                     # Python
+        i = 0
+        while (i := txt.find(":has(", i)) != -1:
+            j, d = i + 5, 1
+            while j < len(txt) and d:
+                d += (txt[j] == "(") - (txt[j] == ")")
+                j += 1
+            arg = txt[i + 5:j - 1]
+            if ("[" in arg or re.search(r":[a-z-]+", arg)
+                    or re.search(rf"(^|[\s>+~,(]){etiquetas}(?=[\[.:#\s),]|$)",
+                                 arg)):
+                linea = txt.count("\n", 0, i) + 1
+                malos.append(f"{f.relative_to(raiz)}:{linea}  "
+                             f":has({' '.join(arg.split())[:80]})")
+            i = j
+    if malos:
+        fallos += 1
+        print("FALLA css · :has() con algo que no es una clase adentro "
+              "(recalcula la página entera en cada cambio, regla #469):")
+        for m_ in malos:
+            print(f"      {m_}")
+    else:
+        print("OK    css · todo :has() lleva sólo clases adentro")
+
+    cards = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
+    familias = ("compras_prov_card_", "sunat_card_", "sunat_conv_",
+                "compras_prod_card_", "compras_vol_card_",
+                "compras_vap_card_")
+    faltan = []
+    for f in sorted((raiz / "graficos").rglob("*.py")):
+        for k in re.findall(r'key="((?:%s)\w+)"' % "|".join(familias),
+                            f.read_text(encoding="utf-8")):
+            if f".st-key-{k}," not in cards and f".st-key-{k})" not in cards:
+                faltan.append(f"{k} ({f.relative_to(raiz)})")
+    if faltan:
+        fallos += 1
+        print("FALLA css · tarjeta de una familia del piso de alto que no está "
+              "enumerada en _80_cards.py (vuelve al escalón):")
+        for k in faltan:
+            print(f"      {k}")
+    else:
+        print("OK    css · el piso de alto enumera todas sus tarjetas")
+    return fallos
+
+
 def _pruebas_widgets_de_fragment_escalado():
     """Un `st.rerun` al tope de un fragment le borra el estado a SUS widgets.
 
@@ -4476,6 +4559,7 @@ def main():
     fallos += _pruebas_widgets_de_fragment_escalado()
     fallos += _pruebas_fragment_anidado_una_vez()
     fallos += _pruebas_css_comentarios_cerrados()
+    fallos += _pruebas_has_solo_clases()
     fallos += _pruebas_periodo_por_vista()
 
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────

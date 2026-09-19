@@ -85,7 +85,10 @@ _ESPERA = "220ms"
 # QUE ABRE LA CAPA DE LA CABECERA. Se declara una sola vez porque la
 # comparten las TRES reglas de reveal (vistas, KPIs y los controles del
 # reporte): tres listas copiadas es la garantia de que un dia se
-# desincronizan. Va en `:has()`, que acepta una lista de selectores.
+# desincronizan. Es una lista de selectores CSS, pero desde el 2026-09-18 no
+# la evalua el CSS sino `navegacion.py::_SCRIPT_CAPAS`, con `querySelector`,
+# y la traduce en `<html data-capa-cab>` (ver "EL ESTADO VIVE EN LA RAIZ",
+# mas abajo). Por eso el nombre es publico: se importa desde alla.
 #
 #   · la botonera de reportes  -> el pedido literal;
 #   · la capa misma            -> sin esto se cierra en cuanto el cursor
@@ -119,7 +122,7 @@ _ESPERA = "220ms"
 # Sin acotar, pasar el cursor por ese control —o abrir su calendario, que
 # deja `aria-expanded="true"` puesto todo el rato— abría la capa de la
 # cabecera desde el medio de la página. Ver regla #457.
-# QUE ABRE LA CAPA DE LA COLUMNA (2026-09-18). La gemela de _DISPARADORES,
+# QUE ABRE LA CAPA DE LA COLUMNA (2026-09-18). La gemela de DISPARADORES_CABECERA,
 # para el otro eje. Se declara aparte y no se suma a aquella porque son dos
 # capas independientes: pasar por la franja de reportes no tiene por que
 # desplegar la columna encima de la primera tarjeta.
@@ -140,14 +143,14 @@ _ESPERA = "220ms"
 # `pointer-events: none` a proposito —es un rotulo, no un control— y un
 # elemento que el navegador no hit-testea no puede estar :hover NUNCA.
 # Mismo caso que la franja de KPIs en la lista de abajo.
-_DISP_COLUMNA = """.st-key-compras_tabs_row:hover,
+DISPARADORES_COLUMNA = """.st-key-compras_tabs_row:hover,
             .st-key-nav_rail_lateral:hover,
             .st-key-rail_pestillo_abierto:hover,
             .st-key-rail_pestillo_plegado:hover,
             .st-key-compras_tabs_row :focus-visible,
             .st-key-nav_rail_lateral :focus-visible"""
 
-_DISPARADORES = """.st-key-nav_franja_rep:hover,
+DISPARADORES_CABECERA = """.st-key-nav_franja_rep:hover,
             .st-key-nav_franja_rep :focus-visible,
             .st-key-nav_rail:hover,
             .st-key-chips_ajuste_tabla:hover,
@@ -359,12 +362,25 @@ CSS = f"""
        tienen que excluirse por construccion, o el dia que alguien toque un
        selector se pisan calladas.
 
-       EL DISPARADOR ES `:has(... :hover)` EN `:root`, no un `>` ni un `~`:
-       la franja de reportes no es ni ancestro ni hermana de las otras dos
-       —una la dibuja `inject_navegacion` ANTES del fragment y las otras
-       `_render_rail` adentro—, asi que la unica forma de que el hover de
-       una alcance a las otras es subir el estado a la raiz y bajar desde
-       ahi. Sin JS y sin clase que poner, a diferencia del cruce.
+       EL ESTADO VIVE EN LA RAIZ, no en un `>` ni un `~`: la franja de
+       reportes no es ni ancestro ni hermana de las otras dos —una la dibuja
+       `inject_navegacion` ANTES del fragment y las otras `_render_rail`
+       adentro—, asi que la unica forma de que el hover de una alcance a las
+       otras es subir el estado a la raiz y bajar desde ahi.
+
+       HASTA EL 2026-09-18 LO SUBIA UN `:root:has()` con `:hover` adentro, sin JS. Se
+       cambio por lo que costaba: una pseudo-clase adentro de un `:has()`
+       obliga al navegador a re-evaluarlo ante CUALQUIER insercion en la
+       pagina —medido: 80 ms por elemento insertado en la laptop del
+       usuario, y un rerun inserta cientos—. Era la mitad del congelamiento
+       de 10 s que se reporto como «al hacer clic se queda pasmada». Ahora
+       `navegacion.py::_SCRIPT_CAPAS` evalua EXACTAMENTE estas mismas
+       listas (`DISPARADORES_CABECERA`/`_COLUMNA`, que importa de aca) con
+       `querySelector` —que entiende `:hover`, `:focus-visible` y
+       `[aria-expanded]` igual que el CSS— y marca `<html data-capa-cab>` /
+       `data-capa-col`. Un `data-*` y no una clase: cambiarle una clase a
+       `<html>` invalida todo lo que cuelga de un `[class*=...]`. Regla
+       #469.
 
        COMO SE VERIFICA: en el navegador automatizado las transiciones no
        avanzan y `getComputedStyle(...).opacity` devuelve 0 con la regla
@@ -397,7 +413,7 @@ CSS = f"""
           Lo que se pierde: los nombres de los reportes siguen en el arbol de
           accesibilidad aunque no se vean. Es el precio de que la franja
           pueda despertar sola. A cambio, el foco de TECLADO la abre (esta en
-          `_DISPARADORES`): tabular a un boton no deja operando uno invisible.
+          `DISPARADORES_CABECERA`): tabular a un boton no deja operando uno invisible.
 
           COMO SE VERIFICA: igual que el resto de la capa, por
           `document.elementFromPoint` y no por la opacidad (#353): con el
@@ -408,8 +424,7 @@ CSS = f"""
         transition: opacity {_TRANS} linear {_ESPERA},
                     clip-path 0s linear calc({_TRANS} + {_ESPERA});
     }}
-    :root:has({_DISPARADORES}
-        ) .st-key-nav_franja_rep {{
+    :root[data-capa-cab] .st-key-nav_franja_rep {{
         opacity: 1;
         clip-path: inset(0);
         transition: opacity {_TRANS} linear,
@@ -425,8 +440,7 @@ CSS = f"""
         opacity: 0;
         transition: opacity {_TRANS} linear {_ESPERA};
     }}
-    :root:has({_DISPARADORES}
-        ) #sello-actualizacion {{
+    :root[data-capa-cab] #sello-actualizacion {{
         opacity: 1;
         transition: opacity {_TRANS} linear;
     }}
@@ -434,8 +448,7 @@ CSS = f"""
     /* 1. LOS CONTROLES DEL REPORTE. Se ven en los dos estados: no dependen
           de donde estes en la pagina, y hasta hoy seguian pinchados arriba
           tambien al scrollear. */
-    :root:has({_DISPARADORES}
-        ) :is(.st-key-chips_ajuste_tabla, .st-key-fecha_ajuste_pill,
+    :root[data-capa-cab] :is(.st-key-chips_ajuste_tabla, .st-key-fecha_ajuste_pill,
               .st-key-fecha_corte_nav) {{
         opacity: 1;
         visibility: visible;
@@ -445,8 +458,7 @@ CSS = f"""
     }}
 
     /* 2. LAS VISTAS, arriba de todo. */
-    :root:not(.rails-scrolled):has({_DISPARADORES}
-        ) .st-key-nav_rail {{
+    :root:not(.rails-scrolled)[data-capa-cab] .st-key-nav_rail {{
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
@@ -458,9 +470,8 @@ CSS = f"""
 
     /* 3. LOS KPIs, habiendo bajado. Sin `pointer-events`: son un ROTULO y
           `_20_compras_rail.py` se los quita con `!important` a proposito
-          (ver la nota de `_DISPARADORES`). */
-    :root.rails-scrolled:has({_DISPARADORES}
-        ) .st-key-nav_franja_kpis {{
+          (ver la nota de `DISPARADORES_CABECERA`). */
+    :root.rails-scrolled[data-capa-cab] .st-key-nav_franja_kpis {{
         opacity: 1;
         visibility: visible;
         transition: opacity {_TRANS} linear,
@@ -657,8 +668,7 @@ CSS = f"""
                     clip-path 0s linear calc({_TRANS} + {_ESPERA}),
                     bottom 0s linear calc({_TRANS} + {_ESPERA});
     }}
-    :root.rails-scrolled:has({_DISP_COLUMNA}
-        ) .st-key-nav_rail_lateral {{
+    :root.rails-scrolled[data-capa-col] .st-key-nav_rail_lateral {{
         opacity: 1;
         bottom: auto !important;
         clip-path: inset(0);
@@ -683,8 +693,7 @@ CSS = f"""
                     clip-path 0s linear calc({_TRANS} + {_ESPERA}),
                     bottom 0s linear calc({_TRANS} + {_ESPERA});
     }}
-    :root:not(.rails-scrolled):has({_DISP_COLUMNA}
-        ) .st-key-compras_tabs_row {{
+    :root:not(.rails-scrolled)[data-capa-col] .st-key-compras_tabs_row {{
         opacity: 1;
         bottom: auto !important;
         clip-path: inset(0);
@@ -703,8 +712,7 @@ CSS = f"""
         opacity: 0;
         transition: opacity {_TRANS} linear {_ESPERA};
     }}
-    :root:not(.rails-scrolled):has({_DISP_COLUMNA}
-        ) .st-key-rail_rotulo_rep {{
+    :root:not(.rails-scrolled)[data-capa-col] .st-key-rail_rotulo_rep {{
         opacity: 1;
         transition: opacity {_TRANS} linear;
     }}
@@ -735,8 +743,7 @@ CSS = f"""
     :root.rails-scrolled .st-key-nav_rail_lateral * {{
         pointer-events: none;
     }}
-    :root:has({_DISP_COLUMNA}
-        ) :is(.st-key-compras_tabs_row, .st-key-nav_rail_lateral) * {{
+    :root[data-capa-col] :is(.st-key-compras_tabs_row, .st-key-nav_rail_lateral) * {{
         pointer-events: auto;
     }}
 
@@ -749,7 +756,7 @@ CSS = f"""
        la capa, la despierta el borde—, asi que lo unico que hace falta es
        que no se coma los clics de la tarjeta que tiene debajo. Y cuando la
        capa esta abierta vuelve a ser hit-testeable, que es lo que lo pone
-       en `_DISP_COLUMNA`: sin eso, ir a plegar la columna la cerraria en el
+       en `DISPARADORES_COLUMNA`: sin eso, ir a plegar la columna la cerraria en el
        camino. */
     .st-key-rail_pestillo_abierto,
     .st-key-rail_pestillo_plegado {{
@@ -757,8 +764,7 @@ CSS = f"""
         pointer-events: none;
         transition: opacity {_TRANS} linear {_ESPERA};
     }}
-    :root:has({_DISP_COLUMNA}
-        ) :is(.st-key-rail_pestillo_abierto,
+    :root[data-capa-col] :is(.st-key-rail_pestillo_abierto,
               .st-key-rail_pestillo_plegado) {{
         opacity: 1;
         pointer-events: auto;
@@ -928,14 +934,14 @@ CSS = f"""
        ítem, apagado en el último. La diferencia de selector (`:has(...)`
        en vez de `> div`) es porque acá los ítems NO están envueltos en un
        `navitem_<slug>` propio (Reportes sí); el `stElementContainer` del
-       propio `st.button` hace de unidad. `:has([data-testid="stButton"])`
+       propio `st.button` hace de unidad. `:has(.stButton)`
        excluye a la cabecera (`.rail-cab`, un `st.markdown` sin botón) y al
        separador de "destino aparte" de abajo (tampoco tiene botón), que
        ya ponen su propia línea y no necesitan una segunda. */
-    .st-key-nav_rail_lateral [data-testid="stElementContainer"]:has([data-testid="stButton"]) {{
+    .st-key-nav_rail_lateral [data-testid="stElementContainer"]:has(.stButton) {{
         border-bottom: 1px solid var(--border) !important;
     }}
-    .st-key-nav_rail_lateral [data-testid="stElementContainer"]:has([data-testid="stButton"]):last-child {{
+    .st-key-nav_rail_lateral [data-testid="stElementContainer"]:has(.stButton):last-child {{
         border-bottom: none !important;
     }}
     /* ── SEPARADOR: scroll-to vs destino aparte ───────────────────────
@@ -977,10 +983,10 @@ CSS = f"""
 /* Por `data-testid` y NO por `.stLayoutWrapper`: el envoltorio lleva ese
    testid pero su `class` son hashes de emotion, que cambian entre versiones
    de Streamlit. Apuntar a la clase no matcheaba nada (primer intento). */
-[data-testid="stLayoutWrapper"]:has(> [class*="st-key-nav_rail_lateral"]),
-[data-testid="stLayoutWrapper"]:has(> [class*="st-key-rail_scroll_hook"]),
-[data-testid="stLayoutWrapper"]:has(> [class*="st-key-nav_rail"]),
-[data-testid="stLayoutWrapper"]:has(> [class*="st-key-chips_ajuste_tabla"]) {{
+[data-testid="stLayoutWrapper"]:has(> .st-key-nav_rail_lateral),
+[data-testid="stLayoutWrapper"]:has(> .st-key-rail_scroll_hook),
+[data-testid="stLayoutWrapper"]:has(> .st-key-nav_rail),
+[data-testid="stLayoutWrapper"]:has(> .st-key-chips_ajuste_tabla) {{
     display: contents !important;
 }}
 
