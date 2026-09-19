@@ -883,11 +883,13 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # hace desaparecer al angostar la fecha, y Streamlit borra la
             # selección en silencio (el bug medido del bloque de chips, más
             # arriba). Los datos que se grafican siguen saliendo de `d`.
+            # `col_subfam` (2026-09-19) es del filtro de Subfamilia, que se
+            # sumó junto con el de Proveedor (este usa `col_prov`).
             _compras_semanal_drill(_d_sec("compras_sec_semanal"),
                                    col_prod, col_fecha, col_cant,
                                    col_punit, col_prov, col_docu,
                                    col_valor, col_fam=col_fam,
-                                   d_full=d_full)
+                                   d_full=d_full, col_subfam=col_subfam)
 
     def _dib_tabla():
             # Cierra la página con el detalle: el mismo AgGrid de la vista

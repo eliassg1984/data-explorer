@@ -171,7 +171,7 @@ MARCO = PRESUPUESTO
 # vecina que cambió de alto.)
 
 # «Semanal» (compras/semanal.py): la figura de la serie por período SIN foco,
-# y la tabla de detalle que aparece al tocar una barra o un punto. Con foco la
+# y la tabla de detalle que aparece al tocar una barra. Con foco la
 # figura baja a COMPACTO, que es justo el rol de «figura con un segundo bloque
 # del mismo peso debajo».
 #

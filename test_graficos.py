@@ -1951,6 +1951,98 @@ def _pruebas_puras():
     check("documento_legible · deja pasar lo que no tiene esa forma",
           _doclbl(pd.Series(["F0001-123"])).iloc[0], "F0001-123")
 
+    # ── Semanal: el período con nombre y la variación (regla #470) ───────
+    from graficos import alturas as _alto
+    # «no debe decir 2026-S37»: la semana ISO se desarma en lunes-domingo,
+    # con el mes del final y, si cruza, los dos.
+    check("semana · límites ISO de lunes a domingo",
+          _sem._limites_periodo("2026-S38", "Semana"),
+          (_dt.date(2026, 9, 14), _dt.date(2026, 9, 20)))
+    check("semana · la semana 1 puede arrancar el año anterior",
+          _sem._limites_periodo("2026-S01", "Semana"),
+          (_dt.date(2025, 12, 29), _dt.date(2026, 1, 4)))
+    check("mes · último día de diciembre sin pasarse de año",
+          _sem._limites_periodo("2025-12", "Mes"),
+          (_dt.date(2025, 12, 1), _dt.date(2025, 12, 31)))
+    check("rótulo · semana dentro de un mes",
+          _sem._rotulo_periodo("2026-S38", "Semana"),
+          ("14–20 set", "Semana del lun 14 al dom 20 set 2026"))
+    check("rótulo · semana que cruza de mes",
+          _sem._rotulo_periodo("2026-S36", "Semana"),
+          ("31 ago–6 set", "Semana del lun 31 ago al dom 6 set 2026"))
+    check("rótulo · semana que cruza de año lleva los dos años",
+          _sem._rotulo_periodo("2026-S01", "Semana")[1],
+          "Semana del lun 29 dic 2025 al dom 4 ene 2026")
+    check("rótulo · el año debajo de la semana, doble si cruza",
+          (_sem._anio_semana("2026-S38"), _sem._anio_semana("2026-S01")),
+          ("2026", "2025-26"))
+    check("rótulo · mes en palabras, no «2026-09»",
+          _sem._rotulo_periodo("2026-09", "Mes"), ("set 2026", "Set 2026"))
+
+    # La variación NO se calcula contra un período cortado: con el rango del
+    # mes corrido (20 ago – 18 set) la primera y la última semana están a
+    # medias, y la segunda compara contra una a medias.
+    _rg = (_dt.date(2026, 8, 20), _dt.date(2026, 9, 18))
+    _sems = ["2026-S34", "2026-S35", "2026-S36", "2026-S37", "2026-S38"]
+    _vs = _sem._variaciones(_sems, [17.9, 31.2, 32.1, 33.8, 18.7],
+                            "Semana", _rg)
+    check("variación · estados con las dos puntas cortadas",
+          [_v[0] for _v in _vs],
+          ["parcial", "ant_parcial", "ok", "ok", "parcial"])
+    check("variación · contra la barra anterior, en %",
+          round(_vs[3][1], 1), round((33.8 - 32.1) / 32.1 * 100, 1))
+    check("variación · cobertura de la semana en curso",
+          _sem._cobertura("2026-S38", "Semana", _rg), (5, 7))
+    check("variación · sin rango conocido nada es parcial",
+          [_v[0] for _v in _sem._variaciones(_sems[:2], [1, 2], "Semana",
+                                             None)],
+          ["primera", "ok"])
+    check("variación · contra cero no hay porcentaje",
+          _sem._variaciones(["2026-09-14", "2026-09-15"], [0, 5], "Día",
+                            None)[1][0], "sin_base")
+    check("variación · formato: signo, decimal bajo 10 %, rojo si sube",
+          (_sem._fmt_variacion(4.66), _sem._fmt_variacion(-143.2),
+           _sem._fmt_variacion(0.04)[0]),
+          (("+4.7%", _tema.ERROR), ("−143%", _tema.EXITO), "0%"))
+
+    # Los renglones de la etiqueta: total, docs debajo, y la variación sólo
+    # en Día/Semana/Mes. En «Por documento» ni docs ni variación.
+    check("etiqueta · tres renglones en Semana",
+          [_p for _p, _ in _sem._renglones_etiqueta(
+              "S/ 33.8k", 45, ("ok", 5.1, 2), "Semana")],
+          ["S/ 33.8k", "45 docs", "+5.1%"])
+    check("etiqueta · la parcial dice «parcial», no un porcentaje",
+          [_p for _p, _ in _sem._renglones_etiqueta(
+              "S/ 18.7k", 28, ("parcial", None, 3), "Semana")][-1],
+          "parcial")
+    check("etiqueta · Año lleva docs pero no variación",
+          [_p for _p, _ in _sem._renglones_etiqueta(
+              "S/ 2.0M", 4413, ("ok", 3.0, 0), "Año")],
+          ["S/ 2.0M", "4,413 docs"])
+    check("etiqueta · «Por documento» sólo el total",
+          [_p for _p, _ in _sem._renglones_etiqueta(
+              "S/ 900", 1, None, "Por documento")], ["S/ 900"])
+
+    # El plan: cuántos renglones entran y de qué forma. Los tres casos que
+    # se vieron en los PNG de `ver_figura.py` (2026-09-19).
+    _r3 = [["S/ 33.8k", "45 docs", "+5.1%"]] * 5
+    check("plan · 5 semanas: derecha con los tres renglones",
+          _sem._plan_etiquetas(5, _r3, _alto.SEMANAL_SOLO)[:2],
+          ("derecha", 3))
+    _r3d = [["S/ 13.3k", "16 docs", "+446%"]] * 28
+    check("plan · 28 días: una sola línea girada con los tres",
+          _sem._plan_etiquetas(28, _r3d, _alto.SEMANAL_SOLO)[:2],
+          ("unida", 3))
+    _fk, _kk, _ak = _sem._plan_etiquetas(28, _r3d, _alto.COMPACTO)
+    check("plan · con el detalle abierto se cae lo que no entra",
+          (_fk, _kk), ("girada", 1))
+    check("plan · y nunca se pasa del techo del área de trazo",
+          _ak <= _sem._alto_area_trazo(_alto.COMPACTO) * _sem._ETQ_TECHO,
+          True)
+    check("plan · 263 documentos: nada, queda en el hover",
+          _sem._plan_etiquetas(263, [["S/ 900"]] * 263,
+                               _alto.SEMANAL_SOLO)[0], None)
+
     return fallos
 
 

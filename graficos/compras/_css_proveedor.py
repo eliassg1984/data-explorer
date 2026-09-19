@@ -942,6 +942,26 @@ CSS = """        <style>
             flex: 0 0 auto !important;
             width: 210px !important;
         }
+        /* SUBFAMILIA y PROVEEDOR (2026-09-19, a pedido), con el mismo método
+           de arriba —texto del peor caso + 50 de cromo— pero sin llegar al
+           peor caso: la fila no da. Toggle 354 + Familia 190 + estos dos +
+           Producto 210 + cuatro gaps de 10 tienen que entrar en los 1199px
+           de la fila a 1366, que es lo que deja la KPI y la fecha en el
+           segundo renglón y NO abre un tercero (la tarjeta mide lo mismo
+           que antes, `alturas.SEMANAL_SOLO`). Quedan 399 para los dos:
+           Subfamilia 180 y Proveedor 200. Lo que no entra es un recorte
+           ACEPTADO, por el mismo motivo que Producto: el buscador filtra
+           sobre el nombre entero. */
+        .st-key-cp_sem_filtros
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_hdr_subfamilia) {
+            flex: 0 0 auto !important;
+            width: 180px !important;
+        }
+        .st-key-cp_sem_filtros
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_hdr_proveedor) {
+            flex: 0 0 auto !important;
+            width: 200px !important;
+        }
         /* Y el contenedor de elemento de adentro TAMBIEN, o el campo no
            llena el ancho reservado: la regla `width: auto` de mas abajo
            —que existe para que cada item mida su contenido— en un
@@ -950,8 +970,12 @@ CSS = """        <style>
            agrandar el hueco no supera. Es la misma trampa medida que
            documenta el bloque de `vap_hdr_*`. */
         .st-key-cp_sem_hdr_familia,
+        .st-key-cp_sem_hdr_subfamilia,
+        .st-key-cp_sem_hdr_proveedor,
         .st-key-cp_sem_hdr_producto { width: 100% !important; }
         .st-key-cp_sem_hdr_familia > [data-testid="stElementContainer"],
+        .st-key-cp_sem_hdr_subfamilia > [data-testid="stElementContainer"],
+        .st-key-cp_sem_hdr_proveedor > [data-testid="stElementContainer"],
         .st-key-cp_sem_hdr_producto > [data-testid="stElementContainer"] {
             width: 100% !important;
         }
@@ -965,11 +989,15 @@ CSS = """        <style>
            esta version de Streamlit el combobox NO es
            `[data-baseweb="select"]` sino `.react-aria-ComboBox`. */
         .st-key-cp_sem_hdr_familia .react-aria-ComboBox,
+        .st-key-cp_sem_hdr_subfamilia .react-aria-ComboBox,
+        .st-key-cp_sem_hdr_proveedor .react-aria-ComboBox,
         .st-key-cp_sem_hdr_producto .react-aria-ComboBox {
             min-height: 32px !important;
             height: 32px !important;
         }
         .st-key-cp_sem_hdr_familia .react-aria-ComboBox input,
+        .st-key-cp_sem_hdr_subfamilia .react-aria-ComboBox input,
+        .st-key-cp_sem_hdr_proveedor .react-aria-ComboBox input,
         .st-key-cp_sem_hdr_producto .react-aria-ComboBox input {
             font-size: 12px !important;
         }

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-469 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+470 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (167)
 
@@ -273,7 +273,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 
-**Plotly y figuras** (80)
+**Plotly y figuras** (81)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -355,6 +355,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
 - **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
 - **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
+- **#470** — Una variación contra la barra anterior no se calcula si alguna de las dos es un período que…
 
 **AgGrid y tablas** (76)
 
@@ -39175,6 +39176,95 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
+470. **Una variación contra la barra anterior no se calcula si alguna de
+     las dos es un período que el RANGO corta: dice «parcial». Y la
+     etiqueta de una barra con varios renglones es un PLAN — cuántos
+     entran y de qué forma —, no un `text=` con saltos de línea.**
+     Pedido el 2026-09-19 sobre Compras › Semanal, en un solo mensaje:
+     *«en la opción de día debe mostrar la cantidad de documentos, debajo
+     del total. En la opción por semana, también, y no debe decir
+     2026-S37 […] Añadamos un filtro de proveedor y un filtro de
+     subfamilia. En la opción por Mes y por Año, quitemos los puntos […]
+     Optemos la mejor opción para que en día, semana y mes la barra pueda
+     mostrar el % variación + o − respecto a la barra anterior»*.
+
+     **El «parcial» no es un adorno, es la mitad del pedido.** La tarjeta
+     abre en un mes corrido (`SEC_ABRE_EN_EL_MES`, #376), así que por
+     semana la primera y la última barra suelen ser semanas A MEDIAS y por
+     mes lo son las dos. Medido con datos reales (rango 20 ago – 18 set
+     2026, en el PNG de `ver_figura.py`): la semana en curso tenía 5 de 7
+     días en el rango y habría dicho **−45 %** contra la anterior sin que
+     nada hubiera cambiado — en la barra que más se mira. Por mes, con un
+     año de rango, «set 2026» (18 de 30 días) habría dicho −38 % contra
+     agosto.
+     Las dos dicen ahora «parcial» en gris, la de al lado de una parcial
+     no dice nada, y el hover explica cuál de las dos cosas pasó y
+     cuántos días faltan. El rango sale de `base.rango_tarjeta` —el mismo
+     dueño que recortó el df en el dispatcher—, así que la marca y el
+     recorte no pueden discrepar. Sin rango conocido nada se marca: la
+     falla barata es mostrar un porcentaje de más, no esconder uno.
+
+     **«La barra anterior» es la anterior DIBUJADA**, no el período
+     anterior del calendario: así lo dijo el pedido y así se lee. Un lunes
+     se compara con el sábado si el domingo no hubo compras (no hay barra
+     de cero), y el hover nombra contra cuál: «vs Sáb 12/09».
+
+     **El color es el de «Vs año pasado»: rojo si se compró MÁS.** En un
+     reporte de gasto, subir no es la buena noticia, y Compras ya lo decía
+     así en sus dos cascadas y en su veredicto. El signo va escrito igual,
+     así que el color nunca es la única señal.
+
+     **La etiqueta pasó a tener tres renglones** —total, «N docs», la
+     variación— y la cuenta de «¿entra?» de la #440 dejó de alcanzar: esa
+     medía UN texto contra el ancho del slot. `_plan_etiquetas` ahora
+     prueba, de más a menos renglones, tres formas: derecha (apilados), girada
+     (cada renglón es una línea de ANCHO) y **unida** (girada en una sola
+     línea con « · »), y además respeta un techo de alto: la etiqueta no
+     pasa del 45 % del área de trazo. Los casos medidos en los PNG:
+
+       | vista | slot | forma | renglones |
+       |---|---|---|---|
+       | 5 semanas | 164 px | derecha | 3 |
+       | 13 meses | 63 px | derecha | 3 |
+       | 28 días | 29 px | unida | 3 (una línea de ~140 px) |
+       | 28 días con el detalle abierto | 29 px | girada | 1 (sólo el total) |
+
+     Sin el techo, la «unida» de Día con la figura en COMPACTO (164 px de
+     área de trazo) pedía 140 px de etiqueta: las barras quedaban en 24.
+
+     **Mes y Año pasan a la barra partida** y se van los puntos de todas
+     las granularidades — y con ellos `_tope_puntos` y la rama del clic
+     que resolvía la traza de puntos. La medición de la #453 sigue en pie
+     (en Mes la compra mayor es ~5 % de la barra, en Año ~0,3 %): la barra
+     no promete «ver la mayor», dice de qué está hecho el período. En Año
+     eso es casi todo «El resto», que es cierto.
+
+     **Los filtros nuevos**, Subfamilia y Proveedor, siguen a los que ya
+     había: Subfamilia como Familia (opciones del HISTÓRICO, en cascada
+     bajo la familia elegida) y Proveedor como Producto (del RANGO,
+     ordenados por valor, lo elegido no se pierde al angostar la fecha).
+     El orden de la fila es el de la cascada —cada lista ofrece lo que
+     dejan los filtros de su izquierda—. Entran en el primer renglón de la
+     cabecera a 1366 (medido: termina en 1185 de 1252px) y la tarjeta
+     sigue en 617, lo que mide «Vs año pasado» (`alturas.SEMANAL_SOLO`).
+
+     **De paso, medido y NO cambiado:** `_LIENZO_PX` dice 820 y el lienzo
+     real a 1366 mide **1192 px** — desde el 2026-09-18 el rail no reserva
+     ancho (#465). La constante quedó del lado seguro (sobra aire, nada se
+     pisa); corregirla movería también el calendario de los días, y eso es
+     otro cambio.
+
+     **Regla:**
+     - Una variación entre períodos se calcula sólo entre períodos
+       ENTEROS dentro del rango. El incompleto se marca y se explica; no
+       se normaliza por días (las compras no se reparten parejo en la
+       semana: dividir por días inventaría un dato).
+     - Una etiqueta de varios renglones se planifica contra los píxeles
+       del slot Y contra el alto de la figura, y lo que no entra cae en
+       orden de importancia — el hover sigue diciéndolo todo.
+
+     (2026-09-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39187,7 +39277,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#470**.
+> próxima regla nueva es la **#471**.
 
 >
 
