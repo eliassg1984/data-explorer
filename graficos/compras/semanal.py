@@ -121,18 +121,21 @@ _SUB_TODAS = "Todas las subfamilias"
 _PROV_TODOS = "Todos los proveedores"
 _PROD_TODOS = "Todos los productos"
 
-_GRAN_DEFAULT = "Por documento"
+_GRAN_DEFAULT = "Semana"
 """Con qué granularidad abre la vista.
 
 Desde el 2026-09-17 el control es un `st.segmented_control(required=True)`
 y ya no se puede soltar: el `or _GRAN_DEFAULT` del drill quedó como red
 para el caso en que la cabecera no llegue a dibujarse.
 
-«Por documento» desde el 2026-09-12, a pedido («debe aparecer
-inicialmente seleccionado "Por documento"»), junto con abrir en el mes en
-curso (`SEC_ABRE_EN_EL_MES` en `_comun.py`): las dos cosas van juntas, un
-mes por documento son ~30-60 barras legibles; doce meses por documento
-serían cientos. Antes era «Semana».
+«Semana» desde el 2026-09-20, a pedido («que inicie con la agrupación por
+semana»). Es donde había estado hasta el 2026-09-12, cuando pasó a «Por
+documento» junto con abrir en el mes en curso — el argumento de entonces
+(un mes por documento son ~30-60 barras legibles, doce meses serían
+cientos) sigue siendo cierto y no se pierde: el rango de la tarjeta no
+cambia (`SEC_ABRE_EN_EL_MES` en `_comun.py`, un mes corrido), y sobre ese
+mes «Semana» son 4-5 barras. Lo que cambia es con qué pregunta abre: en
+qué semanas se gastó, no qué documentos entraron.
 
 UNA constante para los dos usos a propósito: con el default en el widget y
 el fallback escrito aparte, soltar la píldora (cuando era `st.pills`)

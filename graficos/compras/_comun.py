@@ -326,9 +326,10 @@ CATEGORIA_SEC = {
 # 2026-09-12, a pedido, se suman dos: «el selector de fecha de la tabla de
 # compras por familia debe mostrar el mes actual seleccionado» (Producto) y
 # la vista Semanal, «seleccionado el mes actual en su selector de fecha
-# inicialmente» — que además abre en «Por documento» (`_GRAN_DEFAULT` en
-# semanal.py). Quedan en los 12 meses del reporte Volatilidad, que tiene su
-# propia ventana, y las secciones sin selector.
+# inicialmente» — que además abría en «Por documento» (`_GRAN_DEFAULT` en
+# semanal.py; desde el 2026-09-20 abre en «Semana», a pedido: el rango es
+# el mismo, cambia sólo el grano). Quedan en los 12 meses del reporte
+# Volatilidad, que tiene su propia ventana, y las secciones sin selector.
 #
 # 2026-09-12, más tarde: «el selector de fecha debe estar como mínimo
 # mostrando un mes inicialmente». «El mes» dejó de ser «lo que va del mes»

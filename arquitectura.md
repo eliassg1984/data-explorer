@@ -33515,6 +33515,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      recargar la página. Queda en 12 meses sólo Volatilidad, que mira su
      ventana propia.
 
+     **Addendum 2026-09-20:** `_GRAN_DEFAULT` vuelve a «Semana», a pedido
+     («que inicie con la agrupación por semana, el selector de fecha con el
+     mes actual»). El rango NO se toca: `sec_semanal` ya estaba en
+     `SEC_ABRE_EN_EL_MES` desde el addendum de arriba, o sea que la segunda
+     mitad del pedido ya se cumplía — «el mes actual» acá es el mes CORRIDO
+     que termina en el último día con compras, que es lo que el mismo
+     usuario pidió el 2026-09-12 («como mínimo un mes»). Lo único que
+     cambia es el grano de entrada: sobre ese mes, «Semana» son 4-5 barras
+     contra las ~61 de «Por documento». Las dos decisiones son
+     independientes y se tocan en sitios distintos —el grano en
+     `semanal.py::_GRAN_DEFAULT`, el rango en `_comun.py::
+     SEC_ABRE_EN_EL_MES`—, que es justo lo que esta regla separó.
+
 
 377. **Una tarjeta por ítem es un formato, no una ley: cuando la lista
      crece, la fila gana — y el clic que la abre no necesita JS.** Pedido
