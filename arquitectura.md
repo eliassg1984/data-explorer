@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-476 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+477 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (169)
 
@@ -202,9 +202,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 - **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
-- **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
+- **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
 
-**Layout y alturas** (68)
+**Layout y alturas** (69)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -274,6 +274,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
+- **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 
 **Plotly y figuras** (82)
 
@@ -440,7 +441,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 
-**Streamlit** (129)
+**Streamlit** (130)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -571,6 +572,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 - **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
+- **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -39730,7 +39732,85 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      cambiar es QUÉ dice: una columna de «parcial» y «—» sin motivo se lee
      como datos faltantes.
 
-     (2026-09-19.)
+     **2026-09-20, TRES AÑADIDOS a pedido, y los tres con la misma forma —
+     lo que ya existía manda:**
+
+     · **Una columna por familia**, y son las MISMAS que las tarjetas de
+       KPI de la cabecera: salen de la misma `_familias_de` (las cuatro
+       mayores y «N más»), con el mismo `fmt_k` y, con una sola familia en
+       la vista, sin desglosar — igual que la KPI. Dos listas de familias
+       distintas en la misma tarjeta se leen como dos cosas distintas.
+       **Lo compacto no es gusto, es lo que las hace entrar:** con el
+       formato de dos decimales cada una pide 118px y cinco se comen 590
+       de los 1.204 de la tarjeta, dejando la columna del período en 106 —
+       menos de lo que mide «17–23 ago 2026». A 94px entran las cinco y al
+       período le quedan 193 (medido). El valor exacto y su % de la barra
+       van en el tooltip de la celda, y el nombre entero —«Vinos y
+       espumantes» pide 106px de rótulo y tiene 74— en el de la cabecera,
+       que es la misma solución que ya usaban las tarjetas de KPI. La
+       columna del resto NO se vuelve a sumar por familia: es el total de
+       la barra menos las cuatro, así que la fila cierra por construcción.
+     · **«Del … al …» y cómo está agrupado**, con la condición explícita
+       de *«no agregar alguna fila más, usemos alguna fila que ya
+       exista»*: van en el caption de la fila de modo (que ya existía y en
+       el modo Detalle nombra el ámbito) y en la fila TOTAL, que pasó a
+       decir «Total · 5 semanas» en vez de «5 períodos» — la palabra con
+       la que se cuentan las filas ES el grano, así que declarar el
+       agrupamiento no cuesta ni una fila ni una columna.
+       **Y el rango sale de las BARRAS, no de la tarjeta:** «me refiero a
+       todo el rango de barras que está mostrando la tabla resumen». Los
+       dos coinciden casi siempre y se separan justo donde importa — con
+       el rango abierto más allá del dato, la tarjeta promete un mes que
+       la tabla no tiene. Son los días CON COMPRAS y no los bordes del
+       primer y el último período: la semana del 14 al 20 set con datos
+       hasta el 16 cierra «al 16 set», porque es hasta ahí que suma la
+       columna de al lado, y que ese período esté cortado ya lo dice su
+       fila con «parcial».
+     · **El proveedor, como nombre propio** (`nombre_propio`, la única del
+       repo, #379) en las dos tablas y en el hover del gráfico. Es sólo
+       para MOSTRAR: la clave con la que esta vista compara —`compra`, que
+       es fecha + proveedor + documento— sigue llevando el nombre crudo
+       del ERP. El filtro «Proveedor» de la cabecera sí queda gritando, y
+       a propósito: su valor ES el que compara el filtro, y formatearlo
+       con `format_func` rompería el buscador del `st.selectbox` (#318).
+
+     (2026-09-19, ampliada el 2026-09-20.)
+
+477. **Achicar un `st.selectbox` por su `.react-aria-ComboBox` NO achica
+     lo que se ve: la caja con el borde es su HIJO, y sobresale.** Los
+     cuatro filtros de la cabecera de «Compra por período» tenían desde el
+     2026-09-02 una regla de `height: 32px` sobre el combobox, puesta para
+     igualarlos al toggle de granularidad de al lado, y el escalón seguía
+     en pantalla — reportado el 2026-09-20: *«hagamos también que los
+     casilleros de los filtros tengan el mismo alto vertical que los
+     selectores Día Semana Mes Año Documento»*.
+
+     Medido en el navegador, de afuera hacia adentro:
+
+         .react-aria-ComboBox            32   ← la regla SÍ entraba
+           > div (borde + fondo blanco)  40   ← lo que se ve
+             input                       38     (22 de línea + 8+8 de padding)
+             button (la flecha)          38
+
+     O sea: el hijo medía 40 dentro de un padre de 32 y **sobresalía 8px**,
+     que es exactamente el escalón que se veía. Un `overflow` que sale no
+     agranda al padre, así que la fila seguía reportando 32 y la tarjeta
+     no cambiaba de alto: el bug no aparecía en ninguna medición de las
+     que este módulo suele hacer. **Lo que hay que medir cuando un alto no
+     obedece es el elemento que dibuja el borde, no el que lleva la
+     clase.**
+
+     La cura son tres reglas: la caja a 32, y el `<input>` y el botón de
+     la flecha a 30 (32 menos los dos bordes) con el padding vertical en
+     cero — el alto de la caja lo pone su contenido. Al hijo se llega por
+     `> div` y no por su clase, que es generada
+     (`st-emotion-cache-flnmog`) y cambia con la versión de Streamlit.
+
+     Hermana de la advertencia de CLAUDE.md sobre el selector del
+     combobox, que ya había costado una vuelta: en esta versión de
+     Streamlit **no** es `[data-baseweb="select"]`.
+
+     (2026-09-20.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
@@ -39744,7 +39824,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#477**.
+> próxima regla nueva es la **#478**.
 
 >
 

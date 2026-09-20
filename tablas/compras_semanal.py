@@ -65,6 +65,12 @@ escrito como tabla: una fila por barra, en el mismo orden del eje, con lo
 que dice su etiqueta (total, documentos, variación) más el % del total de
 la vista y las líneas. Comparte el look, los formatos y la fila TOTAL con
 sus dos hermanas — es la misma zona de la misma tarjeta.
+
+2026-09-20 — Y UNA COLUMNA POR FAMILIA, las mismas que las tarjetas de KPI
+de la cabecera y con su mismo formato compacto (`_JS_COMPACTO`): es lo que
+las hace entrar al lado de las otras seis. La fila TOTAL dice además con
+qué grano están agrupadas las filas («Total · 5 semanas»), y el rango que
+cubren lo dice el caption de la fila de modo. Misma regla #476.
 """
 
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
@@ -145,6 +151,43 @@ UN decimal y no cero, al revés que las tarjetas de KPI de la cabecera: acá
 la columna se lee HACIA ABAJO contra un total de 100%, y con enteros veinte
 filas redondeadas suman 98 o 103 — un error de redondeo que en una columna
 se lee como una cuenta mal hecha."""
+
+_JS_COMPACTO = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'number') return v == null ? '' : String(v);"
+    " if (v === 0) return '\u2014';"
+    " var m = Math.abs(v);"
+    " if (m >= 1000000) return 'S/ ' + (v / 1000000).toFixed(1) + 'M';"
+    " if (m >= 1000) return 'S/ ' + (v / 1000).toFixed(1) + 'k';"
+    " return 'S/ ' + v.toFixed(0); }")
+"""«S/ 126.7k»: el formato de `utils.fmt_k`, escrito en JS.
+
+LO COMPACTO NO ES CAPRICHO, es lo que hace que las columnas de familia
+entren: con el formato de `_JS_SOLES` cada una pediría 118px y cinco se
+comerían 590 de los 1.204 de la tarjeta, dejando la columna del período en
+106 — menos de lo que mide «17–23 ago 2026». Y es el MISMO formato de las
+tarjetas de KPI de la cabecera, que son las mismas familias: la tabla
+escribe los números como la fila de arriba. El valor exacto y su % van en
+el tooltip de la celda.
+
+Un cero es «—» y no «S/ 0»: una familia sin compras en ese período no es un
+monto, es una ausencia, y veinte filas de «S/ 0» tapan a las que sí."""
+
+_TOOLTIP_FAMILIA = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'number' || v === 0) return '';"
+    " var t = p.data ? p.data.valor : null;"
+    " var s = 'S/ ' + v.toLocaleString('es-PE',"
+    " {minimumFractionDigits: 2, maximumFractionDigits: 2});"
+    " if (typeof t === 'number' && t) {"
+    "   s += ' \u00b7 ' + (v / t * 100).toFixed(1) + '% de la barra'; }"
+    " return s; }")
+"""El valor exacto de la celda compacta, y cuánto pesa en SU barra.
+
+Contra `data.valor` —el total de la fila— y no contra el de la vista: esa
+otra cuenta ya la da la columna «% del total». En la fila TOTAL fija,
+`valor` llega como texto ya formateado, y de ahí el `typeof`: ahí el
+tooltip se calla en vez de mentir un porcentaje."""
 
 # El semáforo de la variación, en el mismo idioma que la etiqueta de la
 # barra (`semanal._fmt_variacion`): un decimal por debajo del 10%, ninguno
@@ -422,7 +465,7 @@ def renderizar_lineas_semanal(tp, altura, key, total=None):
 
 def renderizar_periodos_semanal(tp, altura, key, rotulo_periodo="Período",
                                 ver_docs=True, ver_variacion=True,
-                                total=None):
+                                familias=(), total=None):
     """Una fila por BARRA del gráfico, en el orden del eje.
 
     `tp` trae `periodo` (el nombre de la barra, ya legible), los números
@@ -441,6 +484,13 @@ def renderizar_periodos_semanal(tp, altura, key, rotulo_periodo="Período",
     gráfico en Día, Semana y Mes — una columna entera de «—» es ruido. Lo
     que no se pierde es el TOTAL de las dos: sigue en la fila fija y en el
     caption de la fila de modo.
+
+    `familias` son las columnas del desglose, como `(columna, rótulo)` y en
+    el orden en que van: las arma el drill con las MISMAS familias que las
+    tarjetas de KPI de la cabecera (las cuatro mayores y «N más»), y viene
+    vacío cuando la vista tiene una sola familia. Van al final, después de
+    la variación: primero lo que dice la etiqueta de la barra, después de
+    qué está hecha.
 
     SIN `initialSort`, a diferencia de sus dos hermanas: las filas abren en
     el orden del EJE —que es el del `tp` que manda el drill— porque la
@@ -482,6 +532,19 @@ def renderizar_periodos_semanal(tp, altura, key, rotulo_periodo="Período",
                                       "gráfico, no contra el período "
                                       "anterior del calendario",
                         width=104, minWidth=104, suppressSizeToFit=True)
+    # Las de familia, al final. 94px: «S/ 126.7k» mide ~60 a 13px, más los
+    # 8+8 de padding y los 16 de la flecha de ordenar. El rótulo que no
+    # entra se corta con «…» y sale entero en el tooltip de la cabecera —
+    # la misma solución que las tarjetas de KPI, que tampoco pueden
+    # escribir «Vinos y espumantes» en su ancho.
+    for _col, _rotulo in familias:
+        gb.configure_column(_col, header_name=_rotulo,
+                            type=["numericColumn"],
+                            valueFormatter=_JS_COMPACTO,
+                            tooltipValueGetter=_TOOLTIP_FAMILIA,
+                            headerTooltip=f"{_rotulo} · valorizado de compra "
+                                          "de esa familia en cada barra",
+                            width=94, minWidth=94, suppressSizeToFit=True)
     for oculta in ("__vtxt", "__nota", "__sel"):
         gb.configure_column(oculta, hide=True)
     gb.configure_grid_options(**_con_total(dict(

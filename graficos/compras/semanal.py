@@ -95,6 +95,12 @@ from graficos.compras._comun import (
     CATEGORIA_SEC, GAP_DRILL, _first_point, _periodo_serie, documento_legible,
     selector_fecha_tarjeta,
 )
+# EL NOMBRE DEL PROVEEDOR SE ESCRIBE COMO NOMBRE PROPIO, no como lo grita el
+# ERP (2026-09-20, a pedido: «pongamos el nombre del proveedor en
+# minúscula»). Es la ÚNICA del repo y es sólo para MOSTRAR: la clave con la
+# que esta vista compara (`dd["compra"]`) sigue llevando el nombre crudo.
+# Ver `_etiquetas_proveedor.nombre_propio` y `arquitectura.md` #379.
+from graficos.compras._etiquetas_proveedor import nombre_propio
 from tablas.compras_semanal import (
     renderizar_documentos_semanal, renderizar_lineas_semanal,
     renderizar_periodos_semanal,
@@ -679,6 +685,52 @@ Año no, porque no se pidió: con el rango de entrada es una sola barra."""
 _INCOMPLETO = {"Semana": "Semana incompleta", "Mes": "Mes incompleto",
                "Año": "Año incompleto"}
 """Cómo el hover nombra a un período que el rango corta (el género manda)."""
+
+_UNIDAD_GRAN = {"Día": ("día", "días"), "Semana": ("semana", "semanas"),
+                "Mes": ("mes", "meses"), "Año": ("año", "años"),
+                "Por documento": ("documento", "documentos")}
+"""Cómo se cuenta una BARRA en cada granularidad, en singular y plural.
+
+La fila TOTAL del modo Resumen dice «Total · 5 semanas» y no «5 períodos»,
+y con eso la tabla ya declara cómo está agrupada: la palabra con la que se
+cuentan las filas ES el grano (2026-09-20, a pedido)."""
+
+_AGRUPADO_GRAN = {"Día": "día", "Semana": "semana", "Mes": "mes",
+                  "Año": "año", "Por documento": "documento"}
+"""Cómo lo dice el caption: «agrupado por semana». Separado de
+`_UNIDAD_GRAN` porque ahí la palabra se pluraliza y acá nunca."""
+
+
+def _del_al(fechas):
+    """«Del 17 ago al 16 sep 2026»: qué cubren las BARRAS de la tabla.
+
+    Sale de las compras dibujadas —`dd["fecha"]`, o sea las filas que
+    forman las barras— y no del rango de la tarjeta, que es lo que pide el
+    pedido: «me refiero a todo el rango de barras que está mostrando la
+    tabla resumen» (2026-09-20). Los dos coinciden casi siempre y se
+    separan justo donde importa: con el rango abierto más allá del dato, la
+    tarjeta promete un mes que la tabla no tiene.
+
+    Y son los días CON COMPRAS, no los bordes del primer y el último
+    período: la semana del 14 al 20 set con datos hasta el 16 cierra «al 16
+    set», porque es hasta ahí que suma la columna de al lado. Que ese
+    período esté cortado ya lo dice su fila, con «parcial».
+
+    El año va una sola vez cuando los dos extremos caen en el mismo, igual
+    que `franja_fecha.fmt_rango_es` — de la que se diferencia sólo en las
+    palabras, porque el pedido fue literal: «la tabla debe indicar Del…Al».
+    """
+    if fechas is None or not len(fechas):
+        return "Todo el rango"
+    ini, fin = fechas.min().date(), fechas.max().date()
+    _m = cortes.MESES_ABR_ES
+    if ini == fin:
+        return f"El {ini.day} {_m[ini.month - 1]} {ini.year}"
+    if ini.year == fin.year:
+        return (f"Del {ini.day} {_m[ini.month - 1]} al "
+                f"{fin.day} {_m[fin.month - 1]} {fin.year}")
+    return (f"Del {ini.day} {_m[ini.month - 1]} {ini.year} al "
+            f"{fin.day} {_m[fin.month - 1]} {fin.year}")
 
 
 def _limites_periodo(clave, gran):
@@ -1427,7 +1479,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                     None if fam_sel == _FAM_TODAS else fam_sel,
                     None if sub_sel == _SUB_TODAS else sub_sel,
                     (None if prov_sel == _PROV_TODOS
-                     else _compras_truncar(prov_sel)),
+                     else _compras_truncar(nombre_propio(prov_sel))),
                     None if prod_sel == _PROD_TODOS else prod_sel)
                 if _a]
         _tit_gran = {"Día": "por día", "Semana": "por semana",
@@ -1563,7 +1615,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                             + g["clave"].map(_de_compra["doc"]).fillna("")
                             + " · "
                             + g["clave"].map(_de_compra["prov"]).fillna("")
-                                        .map(_compras_truncar))
+                                        .map(lambda _p: _compras_truncar(
+                                            nombre_propio(_p))))
         else:
             g["hov"] = g["clave"].map(lambda _c: _rot_de[_c][1])
 
@@ -1715,7 +1768,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 # compra y se la puede nombrar. En los otros dos la pregunta
                 # es cuántas son, no cuál.
                 if _i == 0:
-                    _det = [_compras_truncar(_p) + (f" · {_d}" if _d else "")
+                    _det = [_compras_truncar(nombre_propio(_p))
+                            + (f" · {_d}" if _d else "")
                             for _p, _d in zip(_tr["prov"].fillna(""),
                                               _tr["doc"].fillna(""))]
                 else:
@@ -1927,10 +1981,11 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 _hov_de = dict(zip(g["clave"], g["hov"]))
                 _lbl_fila = [_hov_de.get(_c, _c) for _c in _ord_claves]
             elif gran == "Por documento" and _de_compra is not None:
+                _prov_de = _de_compra["prov"]
                 _lbl_fila = [
                     f"{_dia_de[_c]:%d/%m/%Y} · "
                     f"{_de_compra['doc'].get(_c) or '—'} · "
-                    f"{_compras_truncar(_de_compra['prov'].get(_c, ''))}"
+                    f"{_compras_truncar(nombre_propio(_prov_de.get(_c, '')))}"
                     for _c in _ord_claves]
             else:
                 _lbl_fila = list(_ord_lbls)
@@ -1938,8 +1993,45 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             _nlin = (dd.groupby("clave").size().reindex(_ord_claves)
                        .fillna(0).astype(int).tolist())
             _tot_vista = float(sum(_tot))
-            _uni = ("documento" if gran == "Por documento" else "período")
-            _uni = _uni if _n_per == 1 else _uni + "s"
+            _uni = _UNIDAD_GRAN[gran][0 if _n_per == 1 else 1]
+
+            # ── UNA COLUMNA POR FAMILIA (2026-09-20, a pedido) ───────────
+            # «Añadamos los datos por familia a la tabla». Son LAS MISMAS
+            # que las tarjetas de KPI de la cabecera —salen de la misma
+            # `_familias_de`, o sea las cuatro mayores y el resto sumado—,
+            # y eso no es economía de código: la cabecera ya las nombra, y
+            # dos listas de familias distintas en la misma tarjeta se leen
+            # como dos cosas distintas.
+            #
+            # Con UNA sola familia en la vista no se desglosa nada, por lo
+            # mismo que la KPI no lo hace: la columna repetiría Valorizado.
+            _, _top_f, _resto_f = _familias_de(dd)
+            _cols_fam, _dat_fam, _tot_fam = [], {}, {}
+            if len(_top_f) + _resto_f[0] > 1:
+                _por_fam = (dd.groupby(["clave", "fam"])["valor"].sum()
+                              .unstack("fam").reindex(_ord_claves)
+                              .fillna(0.0))
+                _acum = [0.0] * _n_per
+                for _i, (_f, _v, _) in enumerate(_top_f):
+                    _col = f"fam_{_i}"
+                    _serie = (_por_fam[_f] if _f in _por_fam.columns
+                              else pd.Series(0.0, index=_por_fam.index))
+                    _vals = [float(_x) for _x in _serie]
+                    _dat_fam[_col] = _vals
+                    _acum = [_a + _x for _a, _x in zip(_acum, _vals)]
+                    _cols_fam.append((_col, _nombre_familia(_f)))
+                    _tot_fam[_col] = fmt_k(_v)
+                if _resto_f[0]:
+                    # El resto NO se vuelve a sumar por familia: es lo que
+                    # queda del total de la barra, que ya está calculado.
+                    # Así la fila cierra por construcción — las columnas
+                    # suman Valorizado exacto, sin un centavo de diferencia
+                    # por redondeo.
+                    _col = f"fam_{len(_top_f)}"
+                    _dat_fam[_col] = [max(float(_t) - float(_a), 0.0)
+                                      for _t, _a in zip(_tot, _acum)]
+                    _cols_fam.append((_col, f"{_resto_f[0]} más"))
+                    _tot_fam[_col] = fmt_k(_resto_f[1])
             # La variación viaja como NÚMERO para que la columna se ordene;
             # el motivo de las que no tienen, en dos columnas ocultas (qué
             # escribir y por qué). Mismo criterio que la etiqueta de la
@@ -1960,9 +2052,18 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                               for _v in _vars],
                 "__vtxt": [("parcial" if _v and _v[0] == "parcial" else "—")
                            for _v in _vars],
+                **_dat_fam,
                 "__nota": _notas,
                 "__sel": [_c == _focus for _c in _ord_claves],
             })
+            # LA FILA TOTAL DICE ADEMÁS DE QUÉ HABLA LA TABLA: cuántas
+            # filas, con qué grano están agrupadas y qué rango cubren
+            # (2026-09-20, a pedido: «la tabla debe indicar Del…Al y cómo
+            # está agrupado. No debe agregar alguna fila más, usemos alguna
+            # fila que ya exista»). Va acá y en el caption de la fila de
+            # modo, que son las dos filas que YA existían; el grano lo dice
+            # la unidad («5 semanas»), que es la misma palabra con la que
+            # se cuentan las filas.
             _tot_per = {
                 "periodo": f"Total · {_n_per:,} {_uni}",
                 "valor": f"S/ {_tot_vista:,.2f}",
@@ -1976,6 +2077,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 # no mide nada, y el total del rango no tiene contra qué
                 # compararse acá.
                 "variacion": "", "__vtxt": "", "__nota": "", "__sel": False,
+                **_tot_fam,
             }
             # La key NO lleva el foco: la fila marcada la pone
             # `rowClassRules` sobre la grilla viva (regla #441), y
@@ -1990,10 +2092,12 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                     rotulo_periodo=("Documento" if gran == "Por documento"
                                     else "Período"),
                     ver_docs=gran in _GRAN_CON_DOCS,
-                    ver_variacion=gran in _GRAN_VARIACION, total=_tot_per)
+                    ver_variacion=gran in _GRAN_VARIACION,
+                    familias=_cols_fam, total=_tot_per)
             _pie.caption(
-                f"Una fila por barra ({_n_per:,} {_uni}) — el orden es el "
-                "del eje, y un clic en la cabecera lo cambia.")
+                f"**{_del_al(dd['fecha'])}** · agrupado por "
+                f"{_AGRUPADO_GRAN[gran]} — una fila por barra, en el orden "
+                "del eje; un clic en la cabecera lo cambia.")
             return
 
         # El CAPTION es un elemento simple: un `if/else`
@@ -2090,7 +2194,9 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _tp_docs = pd.DataFrame({
             "fecha": _docs["fecha"].dt.strftime("%Y-%m-%d"),
             "doc": _docs["doc"].fillna("").map(lambda v: v or "—"),
-            "prov": _docs["prov"],
+            # Como nombre propio, que es lo que se MUESTRA; la clave de
+            # la compra sigue con el nombre crudo.
+            "prov": [nombre_propio(_p) for _p in _docs["prov"]],
             "lineas": _docs["lineas"].astype(int),
             "valor": _docs["valor"].astype(float).round(2),
             "__compra": _docs["compra"],

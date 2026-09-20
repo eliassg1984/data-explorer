@@ -1030,6 +1030,42 @@ CSS = """        <style>
             min-height: 32px !important;
             height: 32px !important;
         }
+        /* Y LA CAJA QUE SE VE, que no es la de arriba (2026-09-20,
+           regla #477). La
+           regla de acá arriba achicaba el ENVOLTORIO y el escalón seguía
+           en pantalla: reportado como «que los casilleros de los filtros
+           tengan el mismo alto que los selectores Día/Semana/Mes…».
+           Medido en el navegador: `.react-aria-ComboBox` daba 32 —la regla
+           sí entraba— pero su hijo directo, el div con el borde y el fondo
+           blanco, medía 40 y SOBRESALÍA 8px de su padre, que es lo que se
+           ve y lo que estiraba la fila a 40. El alto de ese div lo pone su
+           contenido: el `<input>` mide 38 (22 de línea + 8+8 de padding)
+           más 1+1 de borde.
+
+           Por eso van los tres: la caja a 32, y el input y el botón de la
+           flecha a 30 (32 menos los dos bordes) con el padding vertical en
+           cero. Al hijo se llega por `> div` y no por su clase, que es
+           generada (`st-emotion-cache-…`) y cambia con la versión. */
+        .st-key-cp_sem_hdr_familia .react-aria-ComboBox > div,
+        .st-key-cp_sem_hdr_subfamilia .react-aria-ComboBox > div,
+        .st-key-cp_sem_hdr_proveedor .react-aria-ComboBox > div,
+        .st-key-cp_sem_hdr_producto .react-aria-ComboBox > div {
+            min-height: 32px !important;
+            height: 32px !important;
+        }
+        .st-key-cp_sem_hdr_familia .react-aria-ComboBox input,
+        .st-key-cp_sem_hdr_subfamilia .react-aria-ComboBox input,
+        .st-key-cp_sem_hdr_proveedor .react-aria-ComboBox input,
+        .st-key-cp_sem_hdr_producto .react-aria-ComboBox input,
+        .st-key-cp_sem_hdr_familia .react-aria-ComboBox > div > button,
+        .st-key-cp_sem_hdr_subfamilia .react-aria-ComboBox > div > button,
+        .st-key-cp_sem_hdr_proveedor .react-aria-ComboBox > div > button,
+        .st-key-cp_sem_hdr_producto .react-aria-ComboBox > div > button {
+            height: 30px !important;
+            min-height: 30px !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
         .st-key-cp_sem_hdr_familia .react-aria-ComboBox input,
         .st-key-cp_sem_hdr_subfamilia .react-aria-ComboBox input,
         .st-key-cp_sem_hdr_proveedor .react-aria-ComboBox input,
