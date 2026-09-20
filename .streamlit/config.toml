@@ -2,3 +2,15 @@
 # Color primario indigo (tema CallAI) -> recolorea el calendario nativo
 # (día seleccionado, relleno del rango y marcador de hoy).
 primaryColor = "#6c5ce7"
+
+[global]
+# CUÁNTAS CORRIDAS SOBREVIVE UN MENSAJE EN LA CACHÉ DEL NAVEGADOR sin que el
+# servidor se lo vuelva a mandar. Streamlit trae 2 y lo mide en "corridas
+# terminadas", no en segundos: cada rerun —completo o de un fragment— envejece
+# todo lo cacheado. Acá los mensajes grandes son las grillas de AgGrid (450 KB
+# la mayor, 2,3 MB en una sola vista), así que un barrido de esa caché no es
+# sólo tráfico: si el servidor contesta con `ref_hash` a algo que el navegador
+# acaba de tirar, la app muere con «Cached ForwardMsg MISS» y el clic se
+# pierde. 10 deja margen sin que la caché crezca sin techo. Ver arquitectura.md
+# regla #474.
+maxCachedMessageAge = 10

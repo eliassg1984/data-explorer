@@ -161,25 +161,38 @@ st.markdown(
 )
 
 # ── VIGILAR REFRESCO PENDIENTE ──
-# Se llama SIEMPRE (aunque no haya nada pendiente todavía): así el fragment
-# queda montado desde el principio, escuchando solo con su propio run_every=4.
-# Motivo: el botón de refresco vive en SU PROPIO fragment (navegacion.py), así
-# que su clic ya NO dispara un rerun completo de app.py. Si esta llamada
-# siguiera condicionada a "ya hay algo pendiente", este bloque nunca volvería
-# a evaluarse tras el clic y _vigilar_refresco jamás se enteraría del refresco
-# solicitado. _vigilar_refresco ya hace `if not info: return` internamente,
-# así que llamarlo sin condición es seguro y no hace nada hasta que sí hay
-# un refresco pendiente para ese archivo.
+# SÓLO si hay algo que vigilar. Estuvo montado SIEMPRE hasta el 2026-09-19
+# —"escuchando" con su `run_every=4` aunque no hubiera ningún refresco
+# pedido— y ese reloj no era gratis: cada tic es un rerun de fragment, y
+# cada rerun de fragment le adelanta AL NAVEGADOR el contador con el que
+# decide qué mensajes de su caché vencieron. Con un tic cada 4 s y
+# `maxCachedMessageAge` en 2, todo mensaje cacheado quedaba vencido a los
+# 8 s (medido: 20 mensajes, 2,3 MB, con edades de 50-53 estando la app
+# quieta), y el navegador los tiraba TODOS al terminar cada corrida
+# completa. Si en ese instante el servidor tenía pedida otra corrida con la
+# lista de hashes de ANTES del barrido, contestaba con `ref_hash` a
+# mensajes recién tirados: «Cached ForwardMsg MISS», cartel de Connection
+# error y el clic perdido. Ver arquitectura.md regla #474.
+#
+# Quién lo monta ahora: `navegacion.py::boton_refresco` pide un rerun
+# COMPLETO al registrar el pedido, y por eso este bloque vuelve a
+# evaluarse. Los parquets SECUNDARIOS (`archivos_extra`, hoy solo Recetas
+# con recetabase.parquet) llevan cada uno el suyo: atender_solicitudes.py
+# los regenera de a uno y cada uno limpia SU caché cuando llega. El aviso
+# visible lo dibuja solo el principal (ver el docstring de
+# _vigilar_refresco).
 _archivo_actual = cfg.get("archivo")
-if _archivo_actual:
-    _vigilar_refresco(_archivo_actual, f"_refresco_pendiente_{_archivo_actual}")
-# Parquets SECUNDARIOS del reporte (`archivos_extra`, hoy solo Recetas con
-# recetabase.parquet). Cada uno se resuelve por su cuenta — atender_
-# solicitudes.py los regenera de a uno — así que cada uno lleva su propio
-# vigilante para limpiar SU caché cuando llegue. El aviso visible lo dibuja
-# solo el principal, ver el docstring de _vigilar_refresco.
-for _extra in cfg.get("archivos_extra", ()):
-    _vigilar_refresco(_extra, f"_refresco_pendiente_{_extra}", mostrar_aviso=False)
+for _a in (_archivo_actual, *cfg.get("archivos_extra", ())):
+    if _a and st.session_state.get(f"_refresco_pendiente_{_a}"):
+        _vigilar_refresco(_a, f"_refresco_pendiente_{_a}",
+                          mostrar_aviso=_a == _archivo_actual)
+
+# El acuse del botón lo pinta ACÁ la corrida completa, no el botón: un
+# `st.toast` seguido de un `st.rerun()` no se ve NUNCA (medido — el rerun
+# se lleva el toast antes de que llegue a pintarse). Ver regla #474.
+_acuse_refresco = st.session_state.pop("_toast_refresco", None)
+if _acuse_refresco:
+    st.toast(_acuse_refresco, icon="🔄")
 
 
 # ===========================================================================

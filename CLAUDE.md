@@ -328,6 +328,24 @@ resto de `graficos/compras/`.
   «Última actualización: hoy» — ese rótulo mide el ARCHIVO en R2, no el df
   cargado. Toda cacheable que lea R2 recibe `data.sello_datos(archivo)` como
   segundo argumento. Ver `arquitectura.md` regla #367.
+- **Un `run_every` que tictaquea siempre le VENCE al navegador la caché de
+  MENSAJES** (otra caché: no es la de datos de arriba). Streamlit manda un
+  `ref_hash` en vez del mensaje entero cuando el navegador dice tenerlo, y
+  el navegador mide el vencimiento en CORRIDAS, no en segundos
+  (`global.maxCachedMessageAge`, por defecto 2): con un fragment
+  tictaqueando cada 4 s, todo lo cacheado queda vencido a los 8 s y se
+  borra DE GOLPE al terminar la siguiente corrida completa. Un clic
+  encolado en ese instante se contesta con referencias a lo recién
+  borrado: «Cached ForwardMsg MISS», cartel de *Connection error* y el
+  clic perdido — se reporta como «hago clic y no pasa nada, y a los 10
+  segundos sale un error». Por eso `_vigilar_refresco` (`app.py`) se monta
+  SÓLO si hay un refresco pendiente, y quien lo pide
+  (`navegacion.py::boton_refresco`) fuerza un rerun completo. Antes de
+  poner un `run_every`, preguntarse si tiene algo que mirar. Ver
+  `arquitectura.md` regla #474.
+- **Un `st.toast` seguido de un `st.rerun()` no se ve NUNCA** (medido): el
+  rerun se lo lleva antes de pintarlo. El acuse viaja por `session_state`
+  y lo pinta la corrida siguiente. Misma #474.
 - **`hoverinfo="skip"` apaga también el CLIC.** Un `go.Scatter` invisible
   puesto encima para "capturar" clics con esa opción no recibe ninguno
   (sólo `"none"` oculta la etiqueta y sigue emitiendo). El candlestick de

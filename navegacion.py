@@ -862,10 +862,24 @@ def boton_refresco():
             }
             enviados.append(_a)
 
-    if enviados:
-        st.toast(f"📨 Solicitud enviada para «{reporte_activo}», procesando...", icon="🔄")
-    else:
+    if not enviados:
         st.error("⚠️ No se pudo enviar la solicitud de refresco.")
+        return
+
+    # RERUN COMPLETO, y no es cosmético: el vigilante (`_vigilar_refresco`)
+    # se monta en app.py SÓLO si hay un refresco pendiente, y un clic de
+    # este fragment no re-ejecuta app.py. Sin esto el pedido queda anotado
+    # en session_state y nadie lo mira nunca. Antes el vigilante estaba
+    # montado siempre y su `run_every=4` tictaqueaba de gratis toda la
+    # sesión — que es lo que rompía la caché de mensajes del navegador
+    # (arquitectura.md regla #474).
+    #
+    # El acuse NO se pinta acá: un `st.toast` seguido de `st.rerun()` no se
+    # ve nunca (medido). Viaja por session_state y lo pinta app.py.
+    st.session_state["_toast_refresco"] = (
+        f"📨 Solicitud enviada para «{reporte_activo}», procesando..."
+    )
+    st.rerun(scope="app")
 
 
 def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):

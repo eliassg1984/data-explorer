@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-473 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+474 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (168)
 
@@ -438,7 +438,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 
-**Streamlit** (128)
+**Streamlit** (129)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -568,8 +568,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#467** — Un widget adentro de un st.popover no se entera de lo que Python le escribe mientras el panel…
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
+- **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
 
-**Datos, R2 y DuckDB** (55)
+**Datos, R2 y DuckDB** (56)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -626,6 +627,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#441** — Una tarjeta que dibuja el mismo número de cuatro maneras no dice nada — y el número que…
 - **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
 - **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
+- **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
 
 **SUNAT y SIRE** (42)
 
@@ -39504,6 +39506,80 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-19.)
 
+474. **Un `run_every` que tictaquea de gratis no cuesta sólo CPU: le
+     VENCE AL NAVEGADOR la caché de mensajes de Streamlit, y entonces un
+     clic que llega en el momento equivocado muere con «Cached ForwardMsg
+     MISS» — cartel de Connection error y la corrida entera perdida.**
+     Se reportó con captura (2026-09-19): *«en el reporte de ajuste de
+     inventario hago clic en el cuadro superior, clickeo vinos y
+     espumantes y no ocurre nada, a los 10 segundos aparece este
+     mensaje»*, y el mensaje era «Failed to process a Websocket message.
+     Error: Cached ForwardMsg MISS [hash=8b1d5295…]».
+
+     **QUÉ ES ESA CACHÉ.** Streamlit no vuelve a mandar entero un mensaje
+     grande que el navegador ya tiene. El navegador le manda en cada
+     `rerunScript` la LISTA de hashes que guarda (`cachedMessageHashes`) y
+     el servidor contesta con un `ref_hash` a todo lo que esté en esa
+     lista (`runtime/scriptrunner_utils/script_run_context.py::enqueue` →
+     `create_reference_msg`). Si el ref llega y el hash ya no está, el
+     frontend TIRA UNA EXCEPCIÓN al procesar el mensaje: se ve el cartel y
+     la actualización no se aplica. «Hago clic y no pasa nada» es eso.
+
+     **QUÉ LO VENCÍA.** El navegador mide la edad en CORRIDAS TERMINADAS,
+     no en segundos —`global.maxCachedMessageAge`, que Streamlit trae en
+     **2**— y cada rerun de fragment cuenta como una corrida. `app.py`
+     tenía montado SIEMPRE `_vigilar_refresco` con `run_every=4`, y a
+     propósito: el botón de refresco vive en su propio fragment
+     (`navegacion.py::boton_refresco`) y su clic no re-ejecuta `app.py`,
+     así que montarlo bajo condición lo habría dejado sordo.
+
+     Medido en Ajuste › Cascada, con la app QUIETA y sin tocar nada: el
+     contador subía 3 en 12 s (un tic cada 4 s) y los 20 mensajes
+     cacheados —2,3 MB, el mayor una grilla de AgGrid de 450 KB— tenían
+     edades de **50 a 53 contra un límite de 2**. Todo vencido a los 8 s
+     de sesión, siempre.
+
+     No se borraban en el tic porque un rerun de fragment sólo desaloja lo
+     de SU fragment; se borraban TODOS juntos al terminar la siguiente
+     corrida completa (medido: tandas de 8 y 9 «Removing expired» por
+     clic). Y ésa es la ventana: si en ese instante el servidor tiene
+     pedida otra corrida —el segundo clic de un usuario impaciente, que
+     queda ENCOLADO porque un rerun de fragment no interrumpe al script en
+     curso— la contesta con la lista de hashes de ANTES del barrido.
+     Referencias a mensajes que el navegador acaba de tirar.
+
+     **EL ARREGLO VA EN LA CAUSA**, que es el reloj de gratis:
+     `_vigilar_refresco` se monta sólo si hay un refresco pendiente para
+     ese parquet, y `boton_refresco` pide un `st.rerun(scope="app")` al
+     registrar el pedido para que `app.py` vuelva a evaluarse y lo monte.
+     Medido después: **0 tics en 20 s con la app quieta**, edades de 1, y
+     una sesión entera de clics sin un solo desalojo. De yapa,
+     `.streamlit/config.toml` sube `maxCachedMessageAge` a 10.
+
+     **Lo que NO arregla:** la carrera es de Streamlit (contestar una
+     corrida encolada con una lista de hashes vieja), así que esto la
+     vuelve rara, no imposible. Si reapareciera, el martillo es
+     `global.minCachedMessageSize` altísimo —nada se cachea, nunca hay
+     refs— y se paga re-mandando esos 2,3 MB en cada rerun.
+
+     **Dos cosas que se aprendieron midiendo y sirven aparte:**
+
+     · **Un `st.toast` seguido de un `st.rerun()` no se ve NUNCA.** Medido
+       con una app mínima, muestreando el DOM cada 150 ms durante 3,6 s:
+       cero toasts en pantalla, y el rerun sí pasó. Por eso el acuse
+       «Solicitud enviada» viaja en `session_state` y lo pinta `app.py`.
+     · **Cómo mirar esa caché desde la consola**, que no tiene puerta
+       propia: `localStorage.setItem('loglevel:ForwardMessageCache',
+       'INFO')` + recargar deja en la consola los «Caching / HIT /
+       Removing expired»; y para los tamaños y las edades hay que entrar
+       por el fiber de React — desde `#root` seguir la clave
+       `__reactContainer$…`, bajar hasta el nodo cuyo `stateNode` tenga
+       `connectionManager`, y de ahí
+       `.websocketConnection.cache.messages` (un Map de hash →
+       `{encodedMsg, scriptRunCount}`) y `.scriptRunCount`.
+
+     (2026-09-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39516,7 +39592,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#474**.
+> próxima regla nueva es la **#475**.
 
 >
 
