@@ -1,6 +1,11 @@
-"""tablas.compras_semanal - las dos grillas del detalle de «Compra por
-período» (graficos/compras/semanal.py): los DOCUMENTOS del período en foco
-a la izquierda y, al costado, las LÍNEAS del documento elegido.
+"""tablas.compras_semanal - las grillas de la zona de abajo de «Compra por
+período» (graficos/compras/semanal.py), que desde el 2026-09-19 tiene DOS
+modos y tres grillas:
+
+  · «Detalle» — los DOCUMENTOS del período en foco a la izquierda y, al
+    costado, las LÍNEAS del documento elegido.
+  · «Resumen» — UNA grilla con una fila por BARRA del gráfico
+    (`renderizar_periodos_semanal`), más su fila TOTAL.
 
 Nacieron el 2026-09-14, a pedido: «que la tabla de abajo se divida en dos,
 una que muestre el documento, y al hacer clic muestre en otra tabla del
@@ -51,11 +56,23 @@ la selección: las filas fijas no son parte del modelo de filas y AG Grid no
 las selecciona (lo dice su documentación de «Row Pinning»; no se probó a
 mano), así que un clic en el total no debería devolver nada — la fila no
 trae `__compra` ni `__sel`.
+
+2026-09-19 — LA TERCERA GRILLA, «Resumen» (regla #476). A pedido: «podemos
+alternar esa zona donde aparecen estas dos tarjetas abajo, con una donde
+aparezca la información de las columnas pero por fila; si en el gráfico
+muestra 20 columnas, debe mostrar 20 filas, más su total». Es el GRÁFICO
+escrito como tabla: una fila por barra, en el mismo orden del eje, con lo
+que dice su etiqueta (total, documentos, variación) más el % del total de
+la vista y las líneas. Comparte el look, los formatos y la fila TOTAL con
+sus dos hermanas — es la misma zona de la misma tarjeta.
 """
 
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
-from tema import ACENTO, ACENTO_TEXTO_OSCURO, LAVANDA_CHIP, LAVANDA_FONDO
+from tema import (
+    ACENTO, ACENTO_TEXTO_OSCURO, ERROR, EXITO, GRIS_TEXTO, LAVANDA_CHIP,
+    LAVANDA_FONDO,
+)
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
 # `_css_look` es privado de allá pero lo comparten ya TRES grillas —el
@@ -117,6 +134,59 @@ _JS_SOLES = JsCode(
 con coma y separa decimales con punto, igual que el `:,.2f` de Python). Un
 valor vacío —el precio unitario que no vino— es «—»."""
 
+_JS_PARTE = JsCode(
+    "function(p){ var v = p.value; if (typeof v !== 'number')"
+    " return v == null ? '' : String(v);"
+    " return (v * 100).toLocaleString('es-PE',"
+    " {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%'; }")
+"""La fracción del total, de 0 a 1, escrita «12.3%».
+
+UN decimal y no cero, al revés que las tarjetas de KPI de la cabecera: acá
+la columna se lee HACIA ABAJO contra un total de 100%, y con enteros veinte
+filas redondeadas suman 98 o 103 — un error de redondeo que en una columna
+se lee como una cuenta mal hecha."""
+
+# El semáforo de la variación, en el mismo idioma que la etiqueta de la
+# barra (`semanal._fmt_variacion`): un decimal por debajo del 10%, ninguno
+# arriba, el menos tipográfico, y el color de COSTO —rojo si se compró más,
+# verde si menos—. Escrito con `replace` y no con un f-string por las llaves
+# de JavaScript, igual que `compras_vs_ano_pasado._style_costo`.
+_JS_VARIACION = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'number') {"
+    "   var t = p.data ? p.data.__vtxt : null;"
+    "   return t == null ? '\\u2014' : t; }"
+    " var dec = Math.abs(v) < 10 ? 1 : 0;"
+    " var a = Math.abs(v);"
+    " if (Number(a.toFixed(dec)) === 0) return '0%';"
+    " return (v > 0 ? '+' : '\\u2212') + a.toFixed(dec) + '%'; }")
+"""«+8.2%», «−3.0%», y lo que el drill haya dejado en `__vtxt` («parcial»)
+cuando no hay porcentaje que escribir. El «—» es el último recurso: una
+fila sin valor Y sin motivo."""
+
+_STYLE_VARIACION = JsCode("""
+    function(p){
+        if (p.node && p.node.rowPinned) return null;
+        var base = {textAlign: 'right'};
+        var v = p.value;
+        if (typeof v !== 'number') {
+            base.color = '__GRIS__'; base.fontStyle = 'italic'; return base;
+        }
+        var dec = Math.abs(v) < 10 ? 1 : 0;
+        if (Number(Math.abs(v).toFixed(dec)) === 0) {
+            base.color = '__GRIS__'; return base;
+        }
+        base.color = v > 0 ? '__SUBE__' : '__BAJA__';
+        base.fontWeight = '600';
+        return base;
+    }
+""".replace("__GRIS__", GRIS_TEXTO)
+   .replace("__SUBE__", ERROR).replace("__BAJA__", EXITO))
+"""El color de la variación. `null` en la fila fija: si devolviera un color
+le ganaría al `getRowStyle` del TOTAL y esa celda saldría de otro color que
+sus vecinas (el total no lleva variación — sumar porcentajes de períodos
+distintos no mide nada)."""
+
 _AL_MONTAR = JsCode("""
     function(params) {
         var api = params.api;
@@ -149,6 +219,33 @@ grilla se monta fuera de pantalla, y ésta vive en una `seccion_perezosa`),
 más llevar a la vista la fila marcada. `ensureNodeVisible` y no una
 selección: seleccionar desde acá mandaría un valor de vuelta a Python y
 costaría una corrida entera del fragment por nada."""
+
+_AL_CAMBIAR_FILAS = JsCode("""
+    function(params) {
+        try {
+            var api = params.api, sel = null;
+            api.forEachNode(function (n) { if (n.data && n.data.__sel) sel = n; });
+            var marca = sel ? String(sel.data.periodo) : null;
+            if (marca === window.__semPerMarca) return;
+            window.__semPerMarca = marca;
+            if (sel) api.ensureNodeVisible(sel, 'middle');
+        } catch (e) {}
+    }
+""")
+"""Lleva a la vista la fila marcada CUANDO CAMBIA la marca, y sólo entonces.
+
+Hace falta en la grilla de Resumen y no en sus hermanas porque ésta NO se
+estrena con cada clic: su key no lleva el foco (para no perder el orden que
+el usuario eligió, regla #471), así que `onGridReady` —donde las otras
+resuelven esto— no vuelve a correr. Sin esto, tocar una barra de un día que
+cae en la fila 11 de 30 marca una fila que no está en pantalla, y el gesto
+se lee como que no pasó nada.
+
+EL GUARD NO ES DECORATIVO: `rowDataUpdated` se dispara en CADA corrida del
+fragment, porque Python le vuelve a pasar las filas aunque no hayan
+cambiado. Sin comparar contra la marca anterior, cualquier rerun le
+arrastraría el scroll al usuario. `window` es el del iframe de ESTA grilla,
+así que la marca no se mezcla con la de ninguna otra."""
 
 
 JS_FILA_TOTAL = JsCode(
@@ -321,3 +418,82 @@ def renderizar_lineas_semanal(tp, altura, key, total=None):
         custom_css=_css(), allow_unsafe_jscode=True, key=key, update_on=[],
     )
 
+
+
+def renderizar_periodos_semanal(tp, altura, key, rotulo_periodo="Período",
+                                ver_docs=True, ver_variacion=True,
+                                total=None):
+    """Una fila por BARRA del gráfico, en el orden del eje.
+
+    `tp` trae `periodo` (el nombre de la barra, ya legible), los números
+    crudos `valor`, `parte` (0-1), `docs` y `lineas`, la `variacion` en %
+    (o vacía) y tres ocultas: `__vtxt` (qué escribir cuando no hay
+    porcentaje — «parcial»), `__nota` (el tooltip que dice por qué) y
+    `__sel` (True en la barra que el gráfico tiene en foco).
+
+    `rotulo_periodo` es el encabezado de la primera columna: lo pone el
+    drill porque depende de la granularidad («Período» en Día/Semana/Mes/
+    Año, «Documento» cuando cada barra es una compra).
+
+    `ver_docs` y `ver_variacion` en False donde esa columna no dice nada
+    (regla #239): en «Por documento» cada barra ES un documento, así que
+    la cuenta da 1 en TODAS las filas, y la variación sólo la escribe el
+    gráfico en Día, Semana y Mes — una columna entera de «—» es ruido. Lo
+    que no se pierde es el TOTAL de las dos: sigue en la fila fija y en el
+    caption de la fila de modo.
+
+    SIN `initialSort`, a diferencia de sus dos hermanas: las filas abren en
+    el orden del EJE —que es el del `tp` que manda el drill— porque la
+    tabla es el gráfico escrito. Las columnas se ordenan igual con un clic
+    en la cabecera, que no cuesta ninguna corrida (`update_on=[]`).
+
+    No devuelve nada: se lee, no se clickea. El foco lo sigue moviendo el
+    clic en la barra, que es de donde salen estas filas."""
+    gb = GridOptionsBuilder.from_dataframe(tp)
+    gb.configure_default_column(
+        resizable=False, sortable=True, filter=False, editable=False,
+        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
+    )
+    # La única que se estira: el resto mide lo que dice su peor dato (ver
+    # los anchos de las hermanas, misma cuenta a 13px + 8+8 de padding + la
+    # flecha de ordenar).
+    gb.configure_column("periodo", header_name=rotulo_periodo, minWidth=180,
+                        tooltipField="periodo")
+    gb.configure_column("valor", header_name="Valorizado",
+                        type=["numericColumn"], valueFormatter=_JS_SOLES,
+                        width=130, minWidth=130, suppressSizeToFit=True)
+    gb.configure_column("parte", header_name="% del total",
+                        type=["numericColumn"], valueFormatter=_JS_PARTE,
+                        headerTooltip="Cuánto pesa esta barra en el total "
+                                      "de la vista (el de la cabecera)",
+                        width=104, minWidth=104, suppressSizeToFit=True)
+    gb.configure_column("docs", header_name="Documentos",
+                        hide=not ver_docs,
+                        type=["numericColumn"], valueFormatter=_JS_ENTERO,
+                        width=106, minWidth=106, suppressSizeToFit=True)
+    gb.configure_column("lineas", header_name="Líneas",
+                        type=["numericColumn"], valueFormatter=_JS_ENTERO,
+                        width=82, minWidth=82, suppressSizeToFit=True)
+    gb.configure_column("variacion", header_name="Variación",
+                        hide=not ver_variacion, type=["numericColumn"],
+                        valueFormatter=_JS_VARIACION,
+                        cellStyle=_STYLE_VARIACION, tooltipField="__nota",
+                        headerTooltip="Contra la barra ANTERIOR del "
+                                      "gráfico, no contra el período "
+                                      "anterior del calendario",
+                        width=104, minWidth=104, suppressSizeToFit=True)
+    for oculta in ("__vtxt", "__nota", "__sel"):
+        gb.configure_column(oculta, hide=True)
+    gb.configure_grid_options(**_con_total(dict(
+        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
+        # Sin selección: un clic no hace nada, pero AG Grid igual le dibuja
+        # el recuadro de foco a la celda (lo mismo que en las hermanas).
+        suppressCellFocus=True, rowClassRules=REGLAS_FILA,
+        onGridReady=_AL_MONTAR, onRowDataUpdated=_AL_CAMBIAR_FILAS), total))
+    grid_options = gb.build()
+    _parchar_iconos(grid_options)  # arquitectura.md #159
+
+    AgGrid(
+        tp, gridOptions=grid_options, height=altura, theme="material",
+        custom_css=_css(), allow_unsafe_jscode=True, key=key, update_on=[],
+    )

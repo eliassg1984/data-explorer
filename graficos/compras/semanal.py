@@ -56,6 +56,14 @@ Y el detalle de abajo dejó de ser UN `st.dataframe` con todas las líneas
 del período: son dos AgGrid, los DOCUMENTOS del período y, al costado, las
 LÍNEAS del documento elegido (`tablas/compras_semanal.py`).
 
+2026-09-19 (2) — LA ZONA DE ABAJO SE ALTERNA (regla #476). El detalle del
+período dejó de ser lo único que puede aparecer debajo del gráfico: un
+toggle —«Detalle» / «Resumen», en el renglón que antes gastaba solo el
+caption— cambia las dos grillas por UNA con una fila por BARRA, en el
+orden del eje y con lo que dice su etiqueta (total, documentos, variación)
+más el % de la vista y las líneas. «Resumen» no necesita foco: son todas
+las barras.
+
 2026-09-19 — SIN PUNTOS, CON VARIACIÓN (regla #470). Todo lo de arriba
 sobre los puntos es historia: Mes y Año pasaron a la barra partida, como
 Día y Semana, y no queda ninguna traza de compras sueltas. La etiqueta de
@@ -89,6 +97,7 @@ from graficos.compras._comun import (
 )
 from tablas.compras_semanal import (
     renderizar_documentos_semanal, renderizar_lineas_semanal,
+    renderizar_periodos_semanal,
 )
 from utils import fmt_k
 
@@ -133,12 +142,42 @@ siendo el valor —lo comparan ocho `if` del drill y lo guarda la sesión—,
 pero en un toggle lineal el «Por» sobra: los otros cuatro no lo llevan, y
 un botón más largo que sus vecinos se lee como otra cosa."""
 
+_MODO_DETALLE = "Detalle"
+_MODO_RESUMEN = "Resumen"
+_MODO_OPCIONES = (_MODO_DETALLE, _MODO_RESUMEN)
+_MODO_DEFAULT = _MODO_DETALLE
+"""Los dos modos de la zona de abajo (2026-09-19, regla #476).
+
+«Detalle» son las dos grillas de siempre —los documentos del período que se
+toca en el gráfico y las líneas del que se elija—, y necesita una barra en
+foco: sin ella la zona está vacía y lo dice. «Resumen» es el GRÁFICO
+escrito como tabla: una fila por barra, en el orden del eje, más su TOTAL;
+no depende del foco, así que la zona nunca está vacía en ese modo.
+
+Los nombres NO son «Documentos» y «Por período» (el primer intento): en la
+granularidad «Por documento» cada barra ES un documento y los dos rótulos
+habrían dicho lo mismo. «Detalle» y «Resumen» se sostienen en las cinco.
+
+El default es Detalle porque es lo que la vista hacía hasta hoy: un modo
+nuevo no cambia con qué abre una vista que la gente ya conoce."""
+
+_AYUDA_MODO = (
+    "Qué se ve debajo del gráfico. **Detalle**: los documentos de la barra "
+    "que toques y las líneas del que elijas. **Resumen**: una fila por "
+    "barra —con su total, su % de la vista, sus documentos y su "
+    "variación— más el total de todas."
+)
+
 _KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familia",
                 "compras_sem_subfamilia", "compras_sem_proveedor",
-                "compras_sem_producto")
-"""Los controles de la cabecera, para que la escalada no se los lleve.
+                "compras_sem_producto", "compras_sem_modo")
+"""Los controles de la tarjeta, para que la escalada no se los lleve.
 
-Eran tres hasta el 2026-09-19, cuando se sumaron Subfamilia y Proveedor.
+Eran tres hasta el 2026-09-19, cuando se sumaron Subfamilia y Proveedor;
+el sexto, el modo de la zona de abajo, llegó el mismo día. Los cinco
+primeros viven en la cabecera y el último debajo del gráfico: lo que los
+junta acá no es dónde están sino de quién son — todos son widgets de ESTE
+fragment, y el `rerun` los recolecta a todos por igual.
 
 No es una lista decorativa: la consume `preservar_widgets` en el
 `st.rerun(scope="app")` de más abajo, y sin ella mover la fecha de la
@@ -183,6 +222,16 @@ lo barato: sobra aire, nada se pisa.
 
 (Hasta el 2026-09-19 lo usaba además `_tope_puntos`, que decidía cuántos
 puntos de compra cabían en una barra de Mes y Año. Se fue con los puntos.)"""
+
+# ── Lo que paga la fila de modo (2026-09-19, regla #476) ───────────────────
+# La fila que elige Detalle/Resumen es nueva, así que nadie le había hecho
+# lugar: sus píxeles salen de la figura cuando no hay tabla y de la tabla
+# cuando la hay, para que la tarjeta siga midiendo lo que la de «Vs año
+# pasado» en los dos estados (`alturas.SEMANAL_SOLO`, regla #398). Es el
+# mismo mecanismo que `FRANJA_CTRL_SERIE` en «Vs año pasado» y por el mismo
+# motivo: restar acá o crecer allá son las dos únicas salidas.
+_ALTO_FIG_SOLO = alturas.SEMANAL_SOLO - alturas.FRANJA_MODO_SEMANAL
+_ALTO_TABLA = alturas.SEMANAL_TABLA - alturas.FRANJA_MODO_SEMANAL
 
 
 # ===========================================================================
@@ -793,6 +842,32 @@ def _hover_variacion(var, gran, clave, nombre_ant, rango):
     if estado == "sin_base":
         return f"<br><i>Sin variación: {nombre_ant} no suma compras</i>"
     return "<br><i>Primera barra del rango: sin anterior para comparar</i>"
+
+
+def _nota_variacion(var, gran, clave, nombre_ant, rango):
+    """Lo mismo que `_hover_variacion`, en texto PLANO: es el tooltip de la
+    columna «Variación» de la tabla Resumen (regla #476).
+
+    Dos formatos para el mismo dato porque los dos destinos son distintos:
+    el hover de Plotly entiende HTML y el `tooltipField` de AG Grid no —
+    ahí un `<br>` se ve escrito. Lo que NO cambia es qué se dice: si la
+    tabla callara el motivo, una columna de «parcial» y «—» se leería como
+    datos faltantes."""
+    if gran not in _GRAN_VARIACION or not var:
+        return ""
+    estado, pct, _ = var
+    if estado == "ok":
+        return f"vs {nombre_ant}: {_fmt_variacion(pct)[0]}"
+    if estado == "parcial":
+        _n, _m = _cobertura(clave, gran, rango)
+        return (f"{_INCOMPLETO.get(gran, 'Período incompleto')} en el rango "
+                f"({_n} de {_m} días): sin variación")
+    if estado == "ant_parcial":
+        return (f"Sin variación: la barra anterior ({nombre_ant}) está "
+                "incompleta en el rango")
+    if estado == "sin_base":
+        return f"Sin variación: {nombre_ant} no suma compras"
+    return "Primera barra del rango: sin anterior para comparar"
 
 
 _TICK_PX_CARACTER = 6.3
@@ -1462,6 +1537,13 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # que el eje no puede decir con una barra por documento. Es el mismo
         # número de documento de la tabla y del caption: uno solo en toda la
         # vista, salido de `dd["doc"]`.
+        #
+        # `_de_compra` nace acá y lo vuelve a leer la tabla del modo Resumen,
+        # que nombra sus filas igual que este hover. Se declara afuera del
+        # `if` porque en las otras granularidades no existe, y allá la
+        # pregunta «¿hay quién y cuál?» se contesta con `is None` y no
+        # dependiendo de qué rama corrió.
+        _de_compra = None
         if gran in ("Por documento", "Día"):
             _dias_g = g["clave"].map(_dia_de)
             # El feriado también se dice acá, y no por adorno: la anotación
@@ -1554,8 +1636,21 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _doc_ok = _doc is not None and _doc in set(dd["compra"])
         _foco_ok = _focus in set(dd["clave"])
         _con_detalle = _doc_ok or _foco_ok
-        _alto_fig = (alturas.COMPACTO if _con_detalle
-                     else alturas.SEMANAL_SOLO)
+        # EL MODO SE LEE DE `session_state` Y NO DEL WIDGET, por lo mismo que
+        # el clic de acá arriba: el toggle se dibuja DEBAJO de la figura
+        # —que es donde gobierna— y el alto de la figura depende de él. Una
+        # clave con `key` se lee sin dibujarla, y en la corrida del clic ya
+        # trae el valor nuevo, así que leerla acá no atrasa un gesto. El
+        # widget de más abajo no devuelve nada distinto: por eso se ignora
+        # lo que devuelve, igual que `st.plotly_chart`.
+        _modo = st.session_state.get("compras_sem_modo")
+        if _modo not in _MODO_OPCIONES:
+            _modo = _MODO_DEFAULT
+        # Resumen no necesita foco: su tabla son TODAS las barras. Por eso
+        # la figura cede su sitio también ahí, y la zona de abajo deja de
+        # tener un estado vacío.
+        _con_tabla = _con_detalle or _modo == _MODO_RESUMEN
+        _alto_fig = (alturas.COMPACTO if _con_tabla else _ALTO_FIG_SOLO)
 
         # ── LA ETIQUETA DE CADA BARRA (#440, #454 y #470) ────────────────
         # El total, los documentos debajo y la variación contra la barra
@@ -1776,6 +1871,131 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             fig, use_container_width=True, on_select="rerun",
             selection_mode="points", key=_key_graf)
 
+        # ── LA FILA QUE ELIGE QUÉ SE VE ABAJO (2026-09-19, regla #476) ───
+        # A pedido: «podemos alternar esa zona donde aparecen estas dos
+        # tarjetas abajo, con una donde aparezca la información de las
+        # columnas pero por fila».
+        #
+        # VA DEBAJO DEL GRÁFICO Y NO EN LA CABECERA, que es donde gobierna:
+        # la cabecera dice QUÉ ENTRA en las barras (fecha, familia,
+        # producto) y esta fila dice QUÉ SE LEE de ellas. Mismo criterio que
+        # los controles de «Vs año pasado», que bajaron a la tarjeta que
+        # mandan (regla #445).
+        #
+        # Y COMPARTE RENGLÓN CON EL CAPTION del ámbito, que hasta hoy vivía
+        # al pie de la tarjeta: un renglón propio habría costado 47px de
+        # figura y compartido cuesta 10 (`alturas.FRANJA_MODO_SEMANAL`).
+        # De paso el caption pasó a leerse como el título de las tablas, que
+        # es lo que siempre fue.
+        #
+        # El caption se RESERVA acá y se escribe al final: su texto nombra
+        # el ámbito, que en modo Detalle sale del período en foco — ochenta
+        # líneas más abajo. Mismo `st.empty()` que la fila de KPI de la
+        # cabecera, y por lo mismo: el orden de ejecución no es el de la
+        # pantalla.
+        #
+        # Lo que devuelve el toggle se IGNORA a propósito: el modo ya se
+        # leyó de `session_state` antes de la figura, porque su alto depende
+        # de él (ver «EL MODO SE LEE DE session_state»).
+        with st.container(horizontal=True, gap="small", key="cp_sem_pie"):
+            st.segmented_control(
+                "Qué se ve abajo", _MODO_OPCIONES, default=_MODO_DEFAULT,
+                required=True, key="compras_sem_modo",
+                label_visibility="collapsed", help=_AYUDA_MODO)
+            _pie = st.empty()
+
+        # ── MODO RESUMEN: el gráfico escrito como tabla ──────────────────
+        # Una fila por BARRA, en el orden del eje, con lo que dice su
+        # etiqueta (total, documentos, variación) más el % de la vista y las
+        # líneas — y la fila TOTAL abajo. No depende del foco: son todas las
+        # barras, así que esta rama no tiene estado vacío.
+        if _modo == _MODO_RESUMEN:
+            # EL NOMBRE DE CADA FILA es el de su barra, dicho como lo dice
+            # el gráfico y no como lo guarda la clave: la tabla y el eje
+            # tienen que poder leerse uno contra el otro. La semana suma el
+            # año que el eje escribe aparte (`_anio_semana`), porque en una
+            # columna no hay un renglón de abajo donde ponerlo; el día trae
+            # el encabezado de su hover, que ya dice «Mar 15/09/2026» y el
+            # feriado; y en «Por documento» la barra es una compra, así que
+            # se la nombra con fecha, documento y proveedor.
+            if gran == "Semana":
+                _lbl_fila = [f"{_l} {_anio_semana(_c)}"
+                             for _c, _l in zip(_ord_claves, _ord_lbls)]
+            elif gran == "Mes":
+                _lbl_fila = [_rot_de[_c][1] for _c in _ord_claves]
+            elif gran == "Día":
+                _hov_de = dict(zip(g["clave"], g["hov"]))
+                _lbl_fila = [_hov_de.get(_c, _c) for _c in _ord_claves]
+            elif gran == "Por documento" and _de_compra is not None:
+                _lbl_fila = [
+                    f"{_dia_de[_c]:%d/%m/%Y} · "
+                    f"{_de_compra['doc'].get(_c) or '—'} · "
+                    f"{_compras_truncar(_de_compra['prov'].get(_c, ''))}"
+                    for _c in _ord_claves]
+            else:
+                _lbl_fila = list(_ord_lbls)
+
+            _nlin = (dd.groupby("clave").size().reindex(_ord_claves)
+                       .fillna(0).astype(int).tolist())
+            _tot_vista = float(sum(_tot))
+            _uni = ("documento" if gran == "Por documento" else "período")
+            _uni = _uni if _n_per == 1 else _uni + "s"
+            # La variación viaja como NÚMERO para que la columna se ordene;
+            # el motivo de las que no tienen, en dos columnas ocultas (qué
+            # escribir y por qué). Mismo criterio que la etiqueta de la
+            # barra: «parcial» no es un dato faltante, es una respuesta.
+            _notas = [
+                _nota_variacion(_v, gran, _c,
+                                (_nombre_corto[_v[2]]
+                                 if _v and _v[2] is not None else ""), _rng)
+                for _c, _v in zip(_ord_claves, _vars)]
+            _tp_per = pd.DataFrame({
+                "periodo": _lbl_fila,
+                "valor": [float(_v) for _v in _tot],
+                "parte": [(_v / _tot_vista if _tot_vista else 0.0)
+                          for _v in _tot],
+                "docs": _ndocs,
+                "lineas": _nlin,
+                "variacion": [(_v[1] if _v and _v[0] == "ok" else None)
+                              for _v in _vars],
+                "__vtxt": [("parcial" if _v and _v[0] == "parcial" else "—")
+                           for _v in _vars],
+                "__nota": _notas,
+                "__sel": [_c == _focus for _c in _ord_claves],
+            })
+            _tot_per = {
+                "periodo": f"Total · {_n_per:,} {_uni}",
+                "valor": f"S/ {_tot_vista:,.2f}",
+                # El 100% se escribe entero y no con el decimal de la
+                # columna: es la definición del total, no una cuenta que
+                # pueda dar 99.9.
+                "parte": "100%",
+                "docs": f"{sum(_ndocs):,}",
+                "lineas": f"{sum(_nlin):,}",
+                # Sin variación: sumar los porcentajes de períodos distintos
+                # no mide nada, y el total del rango no tiene contra qué
+                # compararse acá.
+                "variacion": "", "__vtxt": "", "__nota": "", "__sel": False,
+            }
+            # La key NO lleva el foco: la fila marcada la pone
+            # `rowClassRules` sobre la grilla viva (regla #441), y
+            # estrenarla en cada clic le borraría al usuario el orden que
+            # acaba de elegir (regla #471). Sí lleva lo que cambia las
+            # FILAS: la granularidad, los filtros y el rango.
+            with st.container(key="cp_sem_resumen"):
+                renderizar_periodos_semanal(
+                    _tp_per, altura=_ALTO_TABLA,
+                    key=("compras_sem_per_grid_"
+                         + _clave_grilla(gran, _ctx, _rng)),
+                    rotulo_periodo=("Documento" if gran == "Por documento"
+                                    else "Período"),
+                    ver_docs=gran in _GRAN_CON_DOCS,
+                    ver_variacion=gran in _GRAN_VARIACION, total=_tot_per)
+            _pie.caption(
+                f"Una fila por barra ({_n_per:,} {_uni}) — el orden es el "
+                "del eje, y un clic en la cabecera lo cambia.")
+            return
+
         # El CAPTION es un elemento simple: un `if/else`
         # desnudo lo reconcilia bien (mismo conteo de
         # elementos en los tres branches, sólo cambia el
@@ -1818,7 +2038,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # y caption.
         if not _con_detalle:
             st.empty()
-            st.caption("Tocá una barra para ver sus documentos.")
+            _pie.caption("Tocá una barra para ver sus documentos.")
             return
         _hueco_tabla = st.container(key="cp_sem_detalle")
 
@@ -1929,7 +2149,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 # volvería a llevar a la compra de antes.
                 _k_tablas = _clave_grilla(gran, _id_amb, _ctx, _rng, _nclic)
                 _clic = renderizar_documentos_semanal(
-                    _tp_docs, altura=alturas.SEMANAL_TABLA,
+                    _tp_docs, altura=_ALTO_TABLA,
                     key=f"compras_sem_docs_grid_{_k_tablas}",
                     ver_fecha=gran != "Por documento",
                     ver_doc=bool(col_docu), total=_tot_docs)
@@ -1941,7 +2161,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 # y la fila TOTAL las recibe la grilla viva (`st_aggrid` le
                 # pasa `rowData` y `gridOptions` sin re-montarla).
                 renderizar_lineas_semanal(
-                    _tp_lin, altura=alturas.SEMANAL_TABLA,
+                    _tp_lin, altura=_ALTO_TABLA,
                     key=f"compras_sem_lineas_grid_{_k_tablas}",
                     total=_tot_lin)
 
@@ -1960,8 +2180,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             # «Semana del lun 14 al dom 20 set 2026», no «14–20 set» (#470):
             # el caption no compite por ancho, así que va el nombre largo.
             _nombre_amb = _rot_de.get(_id_amb, (None, _id_amb))[1]
-        st.caption(f"**{_nombre_amb}** — clic en una compra para ver sus "
-                   "líneas al costado.")
+        _pie.caption(f"**{_nombre_amb}** — clic en una compra para ver sus "
+                     "líneas al costado.")
 
         # ── El clic en la tabla de documentos ────────────────────────────
         # Lo que devuelve la grilla es su selección VIGENTE, no un clic de

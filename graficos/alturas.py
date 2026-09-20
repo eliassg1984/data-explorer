@@ -223,6 +223,36 @@ MARCO = PRESUPUESTO
 SEMANAL_SOLO = 457
 SEMANAL_TABLA = 201
 
+FRANJA_MODO_SEMANAL = 10
+"""Lo que le cuesta a «Compra por período» la fila que ELIGE qué se ve
+abajo — «Detalle» (las dos grillas) o «Resumen» (una fila por barra) —,
+MEDIDO en el navegador a 1366x768 el 2026-09-19.
+
+Misma familia —y mismo motivo— que `FRANJA_CTRL_SERIE`: los píxeles salen
+de la FIGURA (sin tabla) o de la TABLA (con ella), no del alto de la
+tarjeta, que tiene que seguir midiendo lo que la de «Vs año pasado» (617)
+en los dos estados. Ver `SEMANAL_SOLO` acá arriba y las dos restas en
+`graficos/compras/semanal.py`.
+
+SON 10 Y NO 48, y la diferencia es de dónde sale la fila: el toggle no
+abre un renglón nuevo, se mete en el que ya gastaba el caption del ámbito
+—que pasó a ser su vecino de fila— y lo único que se paga es la diferencia
+de ALTO entre los dos, medida en el navegador: el caption mide 22.4 y el
+toggle 32, o sea 9.6, que redondea a 10. Es la misma cuenta que
+`FRANJA_ROTULO`: una fila que se comparte cuesta la diferencia, una fila
+propia cuesta 47 (`FRANJA_CTRL_SERIE`).
+
+Las dos restas, medidas a 1366x768 con el toggle ya puesto:
+
+    sin tabla   16 + cab 73.6 + fig 447 + pie 32 + hueco 0 + 3 gaps = 616.6
+    con tabla   16 + cab 73.6 + fig 240 + pie 32 + tabla 191 + 3 gaps
+                + 16 de padding de abajo = 616.6
+
+Los 617 de las dos de antes salían con el caption ÚLTIMO, cuyo
+`margin-bottom: -16px` (regla #162) se comía el padding de abajo; ahora el
+último es la tabla y ese padding se paga — de ahí que la cuenta con tabla
+sume los 16 y la otra no (su último hijo sigue siendo el `st.empty()`)."""
+
 MINI_CANDLE_DRILL = 180
 """El candlestick de Volatilidad: la mitad izquierda de la fila de abajo de
 su tarjeta, al lado de la tabla de la semana (`PANEL_JUNTO_A_FIGURA`, que

@@ -1047,6 +1047,37 @@ CSS = """        <style>
             padding: 0 12px !important;
             font-size: 12px !important;
         }
+        /* ── LA FILA QUE ELIGE QUÉ SE VE ABAJO (2026-09-19, regla #476) ──
+           Detalle/Resumen a la izquierda y, al lado, el caption que nombra
+           el ámbito — que hasta hoy vivía al pie de la tarjeta y ahora es
+           el título de las tablas. Comparten renglón para que la fila
+           cueste 10px de figura y no 47 (`alturas.FRANJA_MODO_SEMANAL`).
+
+           El toggle a los mismos 32px que el de la granularidad: son el
+           mismo widget haciendo el mismo trabajo, uno arriba y otro abajo
+           de la figura. El caption, centrado contra él y sin el
+           `margin-bottom: -16px` de la regla #162, que en una fila flex
+           deja de ser un margen de abajo y se vuelve un desbalance. */
+        .st-key-compras_sem_modo [data-testid="stButtonGroup"] button {
+            min-height: 32px !important;
+            height: 32px !important;
+            padding: 0 12px !important;
+            font-size: 12px !important;
+        }
+        .st-key-cp_sem_pie { align-items: center !important; }
+        .st-key-cp_sem_pie [data-testid="stMarkdownContainer"] {
+            margin-bottom: 0 !important;
+        }
+        /* UN IFRAME ES INLINE, y por eso se apoya en la línea base: debajo
+           le queda el hueco del descendente. Medido: la grilla de Resumen
+           pedía 191px y su contenedor daba 198.6, y esos 7.6 se le sumaban
+           a la tarjeta. Las dos grillas del modo Detalle no lo tienen
+           porque viven dentro de un `st.columns`, que es flex — y en un
+           flex los hijos dejan de ser inline. Acá la grilla es hija de un
+           bloque normal, así que se le dice `block` a mano. */
+        .st-key-cp_sem_resumen .stCustomComponentV1 {
+            display: block !important;
+        }
         /* ── LA FILA DE KPI DE LA VISTA (2026-09-17, regla #454) ────────
            Un item MÁS del flex de la cabecera, entre los filtros y la
            fecha: es la suma de lo que esos dos acotan. Crece para ocupar

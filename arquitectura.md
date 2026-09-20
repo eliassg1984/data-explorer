@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-475 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+476 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (168)
+**CSS y estilos** (169)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -202,6 +202,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 - **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
+- **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 
 **Layout y alturas** (68)
 
@@ -274,7 +275,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 
-**Plotly y figuras** (81)
+**Plotly y figuras** (82)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -357,6 +358,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#454** — Un comentario de CSS cerrado antes de tiempo borra la regla que le sigue, sin error — y un…
 - **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
 - **#470** — Una variación contra la barra anterior no se calcula si alguna de las dos es un período que…
+- **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 
 **AgGrid y tablas** (77)
 
@@ -39646,6 +39648,90 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-19.)
 
+476. **Una zona que se ALTERNA no necesita un renglón nuevo: el control
+     entra en el renglón que ya gastaba su caption, y ahí cuesta la
+     diferencia de alto (10px) en vez de una fila propia (47).** Pedido el
+     2026-09-19 sobre «Compra por período»: *«podemos alternar esa zona
+     donde aparecen estas dos tarjetas abajo, con una donde aparezca la
+     información de las columnas pero por fila; si en el gráfico muestra
+     20 columnas, debe mostrar 20 filas, más su total, con datos como los
+     de las etiquetas»*. La zona de abajo pasó a tener dos modos —
+     **Detalle** (los documentos del período en foco y las líneas del que
+     se elija, las dos grillas de la #440) y **Resumen** (una fila por
+     barra, con su total, su % de la vista, sus documentos, sus líneas y
+     su variación, más la fila TOTAL).
+
+     **El problema no era la tabla, era el alto.** Esa tarjeta mide lo que
+     la de «Vs año pasado» en todos sus estados, a pedido (#398), y un
+     `st.segmented_control` en su propio renglón son 32px más el `gap` de
+     16 de Streamlit: 48 sobre 617, que hay que sacarle a la figura (240
+     con tabla, ya en el piso de `COMPACTO`) o a la tabla (201, o sea
+     menos de cinco filas). La salida fue mudar el caption del ámbito —que
+     vivía al PIE de la tarjeta— al mismo renglón del toggle, arriba de
+     las tablas, donde además se lee como su título. Medido a 1366×768:
+     el caption mide 22.4 y el toggle 32, o sea **9.6 de diferencia**, y
+     eso es todo lo que se le resta a la figura (sin tabla) o a la tabla
+     (con ella) — `alturas.FRANJA_MODO_SEMANAL = 10`.
+
+         sin tabla   16 + cab 73.6 + fig 447 + pie 32 + hueco 0 + 3 gaps
+         con tabla   16 + cab 73.6 + fig 240 + pie 32 + tabla 191 + 3 gaps
+                     + 16 de padding de abajo
+
+     Las tres dan **616.6**, los mismos que antes del cambio. Ojo con el
+     padding de abajo, que no es el mismo en las dos: el `margin-bottom:
+     -16px` de un `stMarkdownContainer` (#162) se lo comía mientras el
+     caption era el ÚLTIMO hijo de la tarjeta; ahora el último es la
+     tabla y ese padding se paga, y la cuenta sin tabla cierra sin él
+     porque su último hijo es el `st.empty()` de 0px. Se vuelve a medir
+     antes de creerle a cualquiera de las dos.
+
+     **UN IFRAME ES INLINE Y SE APOYA EN LA LÍNEA BASE**, así que debajo
+     le queda el hueco del descendente: la grilla de Resumen pedía 191px
+     y su contenedor daba **198.6**. Las dos grillas del modo Detalle no
+     lo tienen, y no porque sean otra cosa: viven dentro de un
+     `st.columns`, que es un flex, y en un flex los hijos dejan de ser
+     inline. La de Resumen es hija de un bloque normal, así que se le dice
+     `display: block` a mano (`.st-key-cp_sem_resumen .stCustomComponentV1`
+     en `graficos/compras/_css_proveedor.py`). Es el mismo modo de fallo
+     de los 7.6px que no se ven a ojo y sí en la suma de la tarjeta.
+
+     **EL MODO SE LEE DE `session_state`, NO DEL WIDGET.** El toggle se
+     dibuja DEBAJO de la figura —que es donde gobierna: la cabecera dice
+     qué entra en las barras, esta fila dice qué se lee de ellas— pero el
+     alto de la figura depende de él, y eso se decide antes. Una clave con
+     `key` se lee sin dibujarla y en la corrida del clic ya trae el valor
+     nuevo, así que leerla arriba no atrasa un gesto: es la misma receta
+     con la que esa tarjeta resuelve el clic del gráfico antes de armarlo
+     (#399). Lo que devuelve el widget se ignora, por lo mismo.
+
+     **LA TABLA ES EL GRÁFICO ESCRITO, y eso decide tres cosas:**
+
+     · **El orden es el del EJE**, no el del valor. Sus dos hermanas abren
+       ordenadas por Valor ↓ (`initialSort`); ésta no lleva ninguno,
+       porque una fila tiene que poder buscarse contra la barra que se
+       está mirando. Ordenar por una columna sigue a un clic.
+     · **Los nombres son los del gráfico**: la semana suma el año que el
+       eje escribe aparte («14–20 set 2026»), el día trae el encabezado de
+       su hover («Lun 17/08/2026», con el feriado si lo es) y en «Por
+       documento» la barra es una compra, así que se la nombra con fecha,
+       documento y proveedor.
+     · **Las columnas que el gráfico no escribe, no están** (#239 otra
+       vez): en «Por documento» la cuenta de documentos da 1 en TODAS las
+       filas y la variación no se dibuja ni en el gráfico, así que las dos
+       se ocultan ahí. El total de ambas sigue en la fila TOTAL y en el
+       caption.
+
+     Y la variación viaja como NÚMERO para que la columna se ordene, con
+     el motivo de las que no tienen en dos columnas ocultas: qué escribir
+     («parcial») y por qué («Semana incompleta en el rango (5 de 7 días):
+     sin variación»), que es el `tooltipField`. El hover de Plotly entiende
+     HTML y el tooltip de AG Grid no, así que el mismo dato se escribe dos
+     veces —`_hover_variacion` y `_nota_variacion`— y lo que no puede
+     cambiar es QUÉ dice: una columna de «parcial» y «—» sin motivo se lee
+     como datos faltantes.
+
+     (2026-09-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39658,7 +39744,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#476**.
+> próxima regla nueva es la **#477**.
 
 >
 
