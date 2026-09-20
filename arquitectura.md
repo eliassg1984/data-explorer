@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-477 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+478 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (169)
 
@@ -276,7 +276,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 
-**Plotly y figuras** (82)
+**Plotly y figuras** (83)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -360,6 +360,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#463** — "a" + b + "c".replace(x, y) reemplaza sólo en "c": una inyección con el marcador sin…
 - **#470** — Una variación contra la barra anterior no se calcula si alguna de las dos es un período que…
 - **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
+- **#478** — Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una vela por compra es plana…
 
 **AgGrid y tablas** (77)
 
@@ -739,7 +740,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (86)
+**Decisiones de diseño y UX** (87)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -827,6 +828,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
 - **#473** — Un jalón negativo que compensa un gap fantasma es deuda con intereses: el día que el gap…
 - **#475** — Un salto del rail SOBREVUELA la pila, y una pila que construye «lo que tengas cerca» lee ese…
+- **#478** — Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una vela por compra es plana…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -39812,6 +39814,117 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-20.)
 
+478. **Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una
+     vela por compra es plana siempre.** Volatilidad de insumos se pedía
+     «poder alternar y presentarla por compra o por día», y lo primero que
+     había que medir no era el layout sino el dato.
+
+     Medido contra `compras.parquet` (47 insumos candidatos, ventana de
+     12 meses al 16/09/2026):
+
+     | | producto-día | producto-semana |
+     |---|---|---|
+     | con una sola compra | **96,7 %** | 56,7 % |
+     | con ≥2 precios distintos | **2,1 %** | 19,7 % |
+
+     De ahí salen las tres decisiones de la vista:
+
+     · **El candlestick no sobrevive al grano.** El 86 % de las velas que
+       ya dibujaba salían sin cuerpo (68 % entre los ocho primeros del
+       ranking, que es lo que se mira); por compra serían el 100 %, porque
+       una compra tiene UN precio. El grano Compra dibuja puntos y una
+       línea escalonada (`_fig_serie_compras`). Un mark que promete OHLC
+       sobre un dato que no lo tiene miente aunque los números estén bien.
+
+     · **«Por día» no llegó a ser una opción**, y no por trabajo: dibuja el
+       96,5 % de los mismos puntos que el grano Compra y lo único que hace
+       distinto es ESCONDER el caso que motivó el cambio — el 16/09 hubo
+       cinco compras de hielo al mismo proveedor entre S/ 1.95 y S/ 2.97, y
+       por día son un punto. Un tercer estado que cambia el 3 % de los
+       puntos y tapa lo interesante no se agrega.
+
+     · **El color y el tamaño no son decoración.** El 45 % de los insumos
+       le compra a dos proveedores o más en la misma ventana, con un spread
+       mediano del 27 % entre los precios medianos de cada uno: sin el
+       color por proveedor, el zigzag de «Chirimoya» (S/ 7.00 de La Cesta
+       contra S/ 11.48 de Food Retail, alternándose) se lee como un precio
+       que se mueve cuando dice que se compra lo mismo a dos precios. Y el
+       16 % del sobrecosto medido sale de compras que pesan menos del 5 %
+       de la cantidad del período — sin el tamaño por monto, la compra de
+       1,055 kg de «Limón Criollo» a S/ 12.70 (S/ 13 en total) grita igual
+       que una de 50 kg.
+
+     **El clic obliga a dibujar la serie ENTERA.** Medido en el navegador
+     el 2026-09-20 con la primera versión, que le pasaba a la figura sólo
+     el tramo a la vista: el `point_index` que devuelve un clic era la
+     posición en la VENTANA y se usaba contra la serie, así que clickear la
+     última compra visible enfocaba la octava del insumo. Y peor —la
+     selección de `on_select` persiste entre reruns (#399)—, un clic viejo
+     sobrevive en el estado y se re-interpreta contra otra ventana después
+     de mover el deslizador. La cura es la misma que la #412 le dio al
+     candlestick: la figura recibe todo y recorta con el RANGO del eje, así
+     el índice es absoluto. Lo que sí se mide sobre el tramo es el tamaño
+     de los puntos, el rango del eje Y (#413) y qué precios llevan rótulo.
+
+     **Los KPIs NO se recalculan por grano**, y es lo contrario de un
+     olvido: «Cambio» y «Volatilidad» son los números que la fila de ese
+     insumo muestra en la grilla de arriba, y una tarjeta que dijera
+     «volatilidad 258» sobre una fila que dice «0.0» se contradice sola —
+     el mismo agujero que la #385 tuvo que tapar cuando el puntaje y la
+     grilla medían series distintas. Lo que cambia es QUÉ se puede medir
+     con las compras a la vista: **Rango** y **Sobrecosto**.
+
+     **El sobrecosto lleva su advertencia escrita.** Es la forma del
+     *price variance* del costeo estándar —«material price variance» en la
+     terminología de CIMA, «purchase price variance» en el diccionario de
+     ASCM/APICS: (precio real − precio estándar) × cantidad— pero con el
+     mejor precio EFECTIVAMENTE pagado en el período donde el libro pone un
+     precio presupuestado. Es un techo, no un ahorro: supone ese precio
+     siempre disponible e ignora calidad, presentación, urgencia y escala.
+     Medido: S/ 4.655 sobre S/ 99.674 en 5 semanas (4,7 %), con el 68 % en
+     insumos de dos proveedores o más. Un indicador con nombre prestado y
+     base cambiada sin decirlo es un indicador inventado.
+
+     **El ranking NO puede cambiar de grano, y por eso necesita otra
+     columna.** Su grilla es una matriz de columnas COMUNES a todos los
+     insumos: por compra no hay eje compartido (cada insumo compra en
+     fechas distintas) y por día serían ~365 columnas con el 85 % de las
+     celdas vacías (un insumo del ranking compra 56 días de 365). Lo que
+     entra en su lugar es **Dispersión** (el coeficiente de variación de
+     los precios, `_vol_dispersion`), que mide cuánto se APARTAN entre sí y
+     no cuánto se movieron en el tiempo. Sin ella el grano nuevo no tiene
+     puerta de entrada: «Limón Criollo» puntúa **0.0** de volatilidad
+     semanal —cierra en S/ 4.00 todas las semanas— y **56 %** de
+     dispersión, así que con el orden de siempre queda último de 47 y nadie
+     lo clickea. Prenderla ORDENA por ella, y lo dice su `help`: un control
+     rotulado «Mostrar» que además reordena sin avisar se lee como un bug.
+
+     De yapa cierra una divergencia que ya estaba admitida en un comentario
+     de `graficos/compras/__init__.py::_kpis_vistas`: el KPI del rail usaba
+     el CV por compra y la tabla ordenaba por el puntaje semanal, así que
+     el rail nombraba «Beterraga» y la tabla abría con «Azúcar Blanca»
+     (coincidían 5 de 8). Ahora las dos columnas miden lo mismo, con el
+     mismo piso de compras (`MIN_COMPRAS_CV`).
+
+     **Y los píxeles salieron de un renglón que ya existía.** El toggle y
+     la leyenda de proveedores van en la fila del deslizador —que era una
+     raya de 6px— y no en la de los KPIs, que ya mide 473px de contenido
+     nowrap contra los 454 de la columna. La fila entera cuesta ~20px de
+     los 180 de figura. La leyenda en HTML y no como legend de Plotly:
+     adentro de la figura costaría ~16px más. Es el movimiento de la #445
+     («Partir por» metiéndose en el renglón del rótulo en vez de abrir uno
+     de 47px).
+
+     Vive en `graficos/compras/volatilidad.py` (`_OP_GRANO`,
+     `COMPRAS_A_LA_VISTA`, `_fig_serie_compras`, `_vol_dispersion`,
+     `_vol_sobrecosto`, `_vol_x_compras`, `_vol_ids_compras`), en
+     `tablas/compras_volatilidad.py` (la columna «Dispersión», «vs
+     anterior» y la fila en foco con `rowClassRules` — #441) y en
+     `estilos/_80_cards.py` (`.st-key-vol_grano_fila`, `.vol-leyenda`).
+     Lo vigila `test_graficos.py`, sección «El grano COMPRA».
+
+     (2026-09-20.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39824,7 +39937,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#478**.
+> próxima regla nueva es la **#479**.
 
 >
 

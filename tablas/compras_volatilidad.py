@@ -22,12 +22,14 @@ buscador de arriba puede filtrar sin ningún truco de key dinámica: no hay
 un índice de fila que se pueda desalinear contra la lista filtrada.
 """
 
+import pandas as pd
+
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from tema import (
     ACENTO, ACENTO_FUERTE, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, ERROR,
     ERROR_TEXTO, EXITO, GRIS_BORDE, GRIS_LINEA, GRIS_TEXTO, GRIS_TEXTO_MEDIO,
-    TEXTO_PRINCIPAL,
+    GRIS_TEXTO_SUAVE, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
@@ -175,6 +177,22 @@ _FMT_1DEC = JsCode("""
         return params.value == null ? '' : Number(params.value).toFixed(1);
     }
 """)
+
+_FMT_CV = JsCode("""
+    function(params) {
+        if (params.value === null || params.value === undefined) return '—';
+        return Math.round(Number(params.value) * 100) + '%';
+    }
+""")
+"""La dispersión: una FRACCIÓN (0.58) que se escribe «58%».
+
+SIN DECIMALES, por lo mismo que `_FMT_PCT`: es un escáner, y el decimal de
+un coeficiente de variación es falsa precisión — cambia con una compra más.
+
+Y la raya EM para el vacío, no la celda en blanco: una celda vacía en una
+columna de números se lee como un cero. Vacío acá quiere decir «este insumo
+no tiene bastantes compras para calcularlo» (`MIN_COMPRAS_CV`), que es
+distinto de «no se mueve», y eso lo dice el tooltip de la cabecera."""
 
 # Un cambio que redondea a "0%" es RUIDO: ocupa el mismo ancho que un
 # +12% y compite por la mirada en una tabla donde lo que importan son los
@@ -767,7 +785,8 @@ el 2026-09-13, cuando el look nuevo (#416) le sacó esas dos rayas de 3px."""
 
 
 def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
-                                   periodo_vol="", n_sem=None):
+                                   periodo_vol="", n_sem=None,
+                                   ver_disp=False, min_compras_cv=None):
     """`tv`: columnas Insumo, __insumo_full (oculta, nombre sin truncar),
     __tip_insumo (oculta, el tooltip del nombre), una columna FLOAT por
     semana, __prev_i/__cur_i por semana (ocultas, cierre anterior/actual --
@@ -784,6 +803,14 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     `periodo_vol` debajo del título); oculta es el default desde el
     2026-09-12. `n_sem` son las semanas que mide el puntaje, para el tooltip
     de la cabecera.
+
+    `ver_disp` hace lo mismo con «Dispersión» (2026-09-20), que mide OTRA
+    cosa —el coeficiente de variación de los precios, compra por compra— y
+    por eso va en su propia columna y no reemplaza a la de al lado. Su valor
+    es una FRACCIÓN; `min_compras_cv` es sólo para el tooltip, que tiene que
+    explicar las rayas: un insumo con menos compras que ése no tiene
+    dispersión calculable. Quien la calcula es
+    `graficos/compras/volatilidad.py::_vol_dispersion`.
 
     Devuelve el nombre completo del insumo de la fila clickeada en ESTA
     corrida (`__insumo_full`), o None si no hubo clic."""
@@ -833,6 +860,32 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
                        "anteriores que se ven al deslizar no entran en este "
                        "número." if n_sem else None),
         valueFormatter=_FMT_1DEC, cellStyle=_style_vol(max_vol))
+
+    # «Dispersión», a la derecha de «Volatilidad» y con su misma forma: la
+    # cabecera de dos renglones (el mismo componente, que ya toma el título
+    # de `displayName`) y la barra fina proporcional al máximo de la tabla.
+    # Que se vean iguales es deliberado: son dos lecturas del mismo insumo
+    # en el mismo período, y lo único que las distingue tiene que ser el
+    # título y el número, no el estilo.
+    _disp = [float(v) for v in tv["Dispersión"] if v is not None
+             and not pd.isna(v)]
+    max_disp = max(_disp, default=0.0) or 1.0
+    gb.configure_column(
+        "Dispersión", type=["numericColumn"], pinned="right",
+        hide=not ver_disp, width=_ANCHO_COL_VOL, minWidth=_ANCHO_COL_VOL,
+        suppressSizeToFit=True, headerClass=_CLASE_HDR_COMPACTA,
+        headerComponent=_HDR_VOL,
+        headerComponentParams={"periodo": periodo_vol},
+        headerTooltip=(
+            "Desvío ÷ promedio de los precios pagados en el período "
+            f"({periodo_vol}): cuánto se apartan entre sí, sin importar "
+            "cuándo. Un insumo puede cerrar todas las semanas en el mismo "
+            "precio (volatilidad 0) y tener una dispersión alta si adentro "
+            "de la semana se compró a precios distintos."
+            + (f" La raya (—) es un insumo con menos de {min_compras_cv} "
+               "compras en el período: con tan pocas, el número es ruido."
+               if min_compras_cv else "")),
+        valueFormatter=_FMT_CV, cellStyle=_style_vol(max_disp))
 
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(
@@ -1075,13 +1128,61 @@ grilla se monta fuera de pantalla (esta vista es una `seccion_perezosa`), y
 `onGridSizeChanged` no llega (st_aggrid no reenvía el del usuario)."""
 
 
-def renderizar_compras_semana(tp, titulo_precio, altura, key, ver_doc=True):
+_FMT_DELTA_COMPRA = JsCode("""
+    function(params) {
+        if (params.value === null || params.value === undefined) return '—';
+        var v = Number(params.value);
+        if (Math.abs(v) < 0.05) return '0.0%';
+        return (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%';
+    }
+""")
+"""«+64.0%» / «−38.9%» / «0.0%» / «—».
+
+CON un decimal, al revés que las celdas del ranking (`_FMT_PCT`): esta
+columna mide 74px y no 34, así que el decimal entra — y acá sí dice algo,
+porque se lee de a una fila y no de un golpe.
+
+El menos es el SIGNO MENOS (U+2212), no un guion: el guion se confunde con
+la raya del vacío en la misma columna. Y sin signo cuando redondea a cero,
+por lo de siempre: «+0.0%» afirma una subida sobre un número que dice que
+no pasó nada."""
+
+_STYLE_DELTA_COMPRA = JsCode(f"""
+    function(params) {{
+        var base = {{padding: '0 {_PAD_X_CELDA_SEMANA}'}};
+        if (params.value === null || params.value === undefined) {{
+            base.color = '{GRIS_TEXTO_SUAVE}';
+            return base;
+        }}
+        var v = Number(params.value);
+        if (Math.abs(v) < 0.05) {{ base.color = '{GRIS_TEXTO}'; return base; }}
+        base.color = v > 0 ? '{ERROR_TEXTO}' : '{CELDA_POS_TEXTO}';
+        base.fontWeight = '600';
+        return base;
+    }}
+""")
+"""El semáforo del delta: subir es malo (rojo), bajar es bueno (verde) —
+misma convención que el resto de la vista, porque el dato es un costo."""
+
+
+def renderizar_compras_semana(tp, titulo_precio, altura, key, ver_doc=True,
+                              ver_delta=False):
     """Las compras que formaron la semana en foco: una fila por compra.
 
     `tp` trae las columnas `fecha`, `doc`, `prov`, `cant` y `precio` YA
     FORMATEADAS como texto (las formatea `volatilidad.py`, que sabe la
     unidad) y `__tono` (oculta: `max`/`min`/vacío, ver
-    `_STYLE_PRECIO_SEMANA`). `titulo_precio` es el rótulo de la columna del
+    `_STYLE_PRECIO_SEMANA`).
+
+    Desde el 2026-09-20 trae además, para el grano Compra, `delta` (un
+    NÚMERO y no texto: lo escribe `_FMT_DELTA_COMPRA`, que necesita el signo)
+    y `__foco` (oculta, bool: la compra elegida en el gráfico de al lado).
+    Las dos son opcionales en la práctica — `delta` se oculta con
+    `ver_delta=False` y `__foco` en False no marca ninguna fila—, pero las
+    dos columnas tienen que ESTAR en el DataFrame: `GridOptionsBuilder.
+    from_dataframe` sólo configura las que existen.
+
+    `titulo_precio` es el rótulo de la columna del
     precio («Precio/kg»): va en la cabecera y no en el nombre de la columna,
     así la grilla no cambia de juego de columnas al pasar de un insumo en kg
     a uno en litros.
@@ -1111,13 +1212,37 @@ def renderizar_compras_semana(tp, titulo_precio, altura, key, ver_doc=True):
     gb.configure_column("precio", header_name=titulo_precio,
                         type=["numericColumn"], width=90, minWidth=90,
                         suppressSizeToFit=True, cellStyle=_STYLE_PRECIO_SEMANA)
+    # «vs anterior» sólo en el grano Compra (2026-09-20). En el grano Semana
+    # la tabla lista las compras de UNA semana, donde «la anterior» son dos
+    # cosas distintas según la fila (la compra de antes, dentro o fuera de la
+    # semana) y la respuesta que importa —contra el cierre de la semana
+    # pasada— ya está escrita arriba del título, una vez.
+    #
+    # Pasa el filtro de «contá en cuántas filas dice algo»: dice algo en
+    # todas menos en la primera de la serie del insumo, y ni siquiera en
+    # ésa cuando hay una compra anterior fuera de la ventana.
+    gb.configure_column("delta", header_name="vs anterior", hide=not ver_delta,
+                        type=["numericColumn"], width=94, minWidth=94,
+                        suppressSizeToFit=True,
+                        valueFormatter=_FMT_DELTA_COMPRA,
+                        cellStyle=_STYLE_DELTA_COMPRA,
+                        headerTooltip="Variación contra el precio de la "
+                                      "compra anterior del mismo insumo, "
+                                      "esté o no dentro de la ventana que "
+                                      "se ve.")
     gb.configure_column("__tono", hide=True)
+    gb.configure_column("__foco", hide=True)
     gb.configure_grid_options(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         # Sin selección configurada un clic no hace nada, pero AG Grid igual
         # le dibuja el recuadro de foco a la celda: en una tabla que sólo se
         # lee, ese recuadro parece un estado que no existe.
         suppressCellFocus=True,
+        # LA FILA ELEGIDA, con `rowClassRules` y no con `getRowClass`: aquél
+        # AGREGA clases al refrescar la fila pero no las quita, así que con
+        # una grilla que conserva su key terminarían DOS filas marcadas
+        # después del primer clic. Regla #441.
+        rowClassRules={"vol-fila-foco": "data.__foco === true"},
         onGridReady=_AL_MONTAR_SEMANA)
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # cuadrados negros en Chrome < 120: arquitectura.md #159
@@ -1148,6 +1273,15 @@ def renderizar_compras_semana(tp, titulo_precio, altura, key, ver_doc=True):
     # igual que en el ranking, donde el canal vertical mide 2px.
     custom_css[".ag-body-horizontal-scroll, .ag-body-vertical-scroll"] = {
         "display": "none !important",
+    }
+    # La fila de la compra elegida en el gráfico: el mismo lavanda con el que
+    # la vista marca lo elegido en todas partes (la banda detrás de la vela,
+    # la fila del ranking). `!important` porque compite con el fondo que el
+    # tema le pinta a la fila, y el marcador de 3px va por `box-shadow` para
+    # no correr el texto de la celda.
+    custom_css[".ag-row.vol-fila-foco"] = {
+        "background-color": f"{LAVANDA_FONDO} !important",
+        "box-shadow": f"inset 3px 0 0 {ACENTO} !important",
     }
 
     AgGrid(

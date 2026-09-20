@@ -723,7 +723,89 @@ CSS = """    /* ================================================================
         padding: 0 10px !important;
         font-size: 12px !important;
     }
-    /* El deslizador de la ventana de las velas (`volatilidad.py::_K_VFIN`):
+    /* ── VOLATILIDAD: LA FILA DE LA SERIE ─────────────────────────────
+       2026-09-20. Un renglón para los controles de la SERIE: el grano
+       (`Semana | Compra`), el deslizador de la ventana y, en el grano
+       Compra, la leyenda de proveedores.
+
+       LOS TRES EN UNA FILA Y NO EN TRES RENGLONES porque el presupuesto de
+       esta tarjeta ya estaba cerrado: la figura mide 180px
+       (`alturas.MINI_CANDLE_DRILL`) y la fila de los KPIs de arriba mide
+       473px de contenido nowrap contra los 454 de la columna. El
+       deslizador ya vivía acá siendo una raya de 6px; el toggle y la
+       leyenda se le suman al costado y la fila entera cuesta ~20px.
+
+       El deslizador es el ELÁSTICO: mide lo que sobra. Los otros dos miden
+       su contenido. Y el `margin-bottom: -10px` con el que el deslizador
+       se pegaba a las velas ahora lo lleva la FILA, no él: adentro de un
+       flex, un margen negativo en un ítem le corre la línea de base a sus
+       vecinos. */
+    .st-key-vol_grano_fila {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 10px !important;
+        margin-bottom: -10px !important;
+    }
+    .st-key-vol_grano_fila > [data-testid="stElementContainer"] {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    .st-key-vol_grano_fila [class*="st-key-compras_vol_vslider_"] {
+        flex: 1 1 auto !important;
+        min-width: 60px !important;
+        margin-bottom: 0 !important;
+    }
+    .st-key-vol_grano_fila [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    /* El toggle del grano, con el alto y la letra de las otras dos
+       botoneras de la vista (`compras_vol_tabla_modo_`, `vol_hdr_ver`):
+       tres controles del mismo tamaño no se leen como tres componentes
+       distintos. */
+    .st-key-compras_vol_grano [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
+    /* La leyenda de proveedores del grano Compra. El color del punto llega
+       INLINE en `--punto` (lo escribe `volatilidad.py::
+       _vol_colores_proveedor`, que lo saca de `tema.PALETA_SERIES`): es un
+       dato, no un estilo, y por eso no puede vivir acá — cuál proveedor se
+       lleva cuál color depende de a quién se le compró más. */
+    .vol-leyenda {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        white-space: nowrap;
+        overflow: hidden;
+        font-size: 10px;
+        color: var(--text-secondary);
+    }
+    .vol-leyenda > span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .vol-leyenda > span::before {
+        content: "";
+        flex: 0 0 auto;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--punto, var(--accent));
+    }
+
+    /* El deslizador de la ventana (`volatilidad.py::_K_VFIN` en el grano
+       Semana, `_K_CFIN` en el de Compra — los dos llevan el mismo prefijo
+       de key a propósito, para que este bloque no tenga que duplicarse):
        la etiqueta sobre el tirador, a la talla de los rótulos del eje del
        gráfico que tiene encima, no a la del cuerpo. */
     [class*="st-key-compras_vol_vslider_"] [data-testid="stSliderThumbValue"] {
@@ -757,9 +839,9 @@ CSS = """    /* ================================================================
 
        El riel es el primer hijo del div con padding, sin testid propio
        (medido en Streamlit 1.59). Regla #412. */
-    [class*="st-key-compras_vol_vslider_"] {
-        margin-bottom: -10px !important;
-    }
+    /* El `-10px` con el que se pegaba a las velas se mudó a la FILA
+       (`.st-key-vol_grano_fila`, arriba) el 2026-09-20: adentro de un flex
+       le corría la línea de base al toggle y a la leyenda. */
     [class*="st-key-compras_vol_vslider_"] [role="group"] {
         padding: 0 10px 0 35px !important;
     }

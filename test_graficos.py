@@ -670,6 +670,142 @@ def _pruebas_puras():
     check("_vol_score una sola semana", _vol._vol_score([100]), 0.0)
     check("_vol_score vacía", _vol._vol_score([]), 0.0)
 
+    # ── El grano COMPRA (2026-09-20, regla #478) ────────────────────────
+    from tema import PALETA_SERIES
+    from graficos import alturas
+    # La dispersión es OTRA pregunta que el puntaje semanal: mide cuánto se
+    # apartan los precios entre sí, no cuánto se movieron en el tiempo. El
+    # caso que lo justifica está acá abajo con números de «Limón Criollo».
+    check("_vol_dispersion: desvío muestral / promedio",
+          round(_vol._vol_dispersion([10, 10, 10, 10, 20], minimo=5), 4),
+          0.3727)
+    check("_vol_dispersion: precio plano → 0",
+          _vol._vol_dispersion([7.0] * 5, minimo=5), 0.0)
+    check("_vol_dispersion: con menos compras que el piso → None",
+          _vol._vol_dispersion([10, 20, 30], minimo=5), None)
+    check("_vol_dispersion: filtra ceros y NaN antes de contar",
+          _vol._vol_dispersion([7, 7, 0, float("nan"), 7], minimo=5), None)
+    # Lo que ve un grano y no ve el otro, con el caso real: cuatro cierres
+    # semanales idénticos (score 0) sobre compras que fueron 4.00 y 12.70.
+    check("dispersión ve lo que el cierre semanal no",
+          (_vol._vol_score([4.0, 4.0, 4.0, 4.0]),
+           round(_vol._vol_dispersion([4.39, 12.70, 4, 4, 4, 4, 4, 4, 4]), 2)),
+          (0.0, 0.58))
+
+    # Un id por compra, estable aunque el día repita.
+    _cmp = [{"fecha": pd.Timestamp("2026-09-16")} for _ in range(3)]
+    _cmp.append({"fecha": pd.Timestamp("2026-09-17")})
+    check("_vol_ids_compras: el orden dentro del día desempata",
+          _vol._vol_ids_compras(_cmp),
+          ["20260916#0", "20260916#1", "20260916#2", "20260917#0"])
+
+    # Las X: el eje sigue siendo el calendario (los huecos son dato) y las
+    # compras del mismo día se separan contra el PASO de la ventana.
+    _xs = _vol._vol_x_compras([pd.Timestamp("2026-09-01"),
+                               pd.Timestamp("2026-09-16"),
+                               pd.Timestamp("2026-09-16")])
+    check("_vol_x_compras: una compra sola se queda en su fecha",
+          _xs[0], pd.Timestamp("2026-09-01"))
+    check("_vol_x_compras: dos del mismo día no comparten X",
+          _xs[1] != _xs[2], True)
+    check("_vol_x_compras: el grupo no invade el día vecino",
+          all(abs((x - pd.Timestamp("2026-09-16")).total_seconds()) <= 86400
+              for x in _xs[1:]), True)
+    check("_vol_x_compras: sin repetidos cuando hay cinco el mismo día",
+          len(set(_vol._vol_x_compras([pd.Timestamp("2026-09-16")] * 5))), 5)
+
+    # El sobrecosto: (precio − mínimo) × cantidad. Los números son los ocho
+    # de «Chirimoya» medidos el 2026-09-20 contra el parquet.
+    _cc = [{"precio": 7.0, "cant": 12.0}, {"precio": 11.4625, "cant": 1.265},
+           {"precio": 7.0, "cant": 5.0}]
+    _sob, _gas, _pct = _vol._vol_sobrecosto(_cc)
+    check("_vol_sobrecosto: contra el mejor precio del período",
+          round(_sob, 2), 5.65)
+    check("_vol_sobrecosto: el gasto es precio × cantidad",
+          round(_gas, 2), 133.5)
+    check("_vol_sobrecosto: un solo precio no tiene sobrecosto",
+          _vol._vol_sobrecosto([{"precio": 7.0, "cant": 3.0}]),
+          (0.0, 21.0, 0.0))
+    check("_vol_sobrecosto: sin filas no revienta",
+          _vol._vol_sobrecosto([]), (0.0, 0.0, 0.0))
+
+    # El proveedor que más pesa se lleva el morado de la marca.
+    _col = _vol._vol_colores_proveedor([
+        {"prov": "Chico", "monto": 10.0}, {"prov": "Grande", "monto": 90.0}])
+    check("_vol_colores_proveedor: manda el GASTO, no el orden de aparición",
+          _col["Grande"], PALETA_SERIES[0])
+    check("_vol_colores_proveedor: y el otro no repite color",
+          _col["Chico"] != _col["Grande"], True)
+
+    # Las etiquetas de precio: seis compras al mismo precio no se rotulan
+    # seis veces, pero las puntas siempre llevan la suya.
+    # Y el REGRESO también se rotula: 7 → 11.5 → 7 escribe los tres, porque
+    # la comparación es contra el último ROTULADO y no contra el vecino. Sin
+    # eso, el punto que vuelve al precio de siempre queda mudo y la serie se
+    # lee como si el precio se hubiera quedado arriba. No se pisan: un
+    # rótulo y el siguiente están a un hueco entero de distancia, y los dos
+    # que sí comparten altura nunca son vecinos (su diferencia es 0).
+    _rot = _vol._vol_etiquetas_precio([7.0, 7.0, 7.0, 11.5, 7.0, 7.0], 5.0)
+    check("_vol_etiquetas_precio: las puntas, lo que se aparta y lo que vuelve",
+          _rot, [True, False, False, True, True, True])
+    check("_vol_etiquetas_precio: dos vecinos al mismo precio no se rotulan "
+          "los dos",
+          _vol._vol_etiquetas_precio([7.0, 7.0, 7.0, 7.0], 5.0),
+          [True, False, False, True])
+    check("_vol_etiquetas_precio: una sola compra lleva su rótulo",
+          _vol._vol_etiquetas_precio([7.0], 1.0), [True])
+    check("_vol_etiquetas_precio: sin compras, sin rótulos",
+          _vol._vol_etiquetas_precio([], 1.0), [])
+
+    # La figura del grano Compra: la traza 0 tiene que seguir siendo el
+    # blanco del clic (de ahí cuelga `curve_number == 0` en el drill) y la
+    # vela no puede aparecer acá — una compra tiene UN precio.
+    _fc = [{"fecha": pd.Timestamp("2026-09-01"), "precio": 7.0, "cant": 2.0,
+            "monto": 14.0, "prov": "A", "doc": "F001-1"},
+           {"fecha": pd.Timestamp("2026-09-04"), "precio": 11.5, "cant": 1.0,
+            "monto": 11.5, "prov": "B", "doc": "F001-2"}]
+    _figc = _vol._fig_serie_compras(
+        _fc, _vol._vol_x_compras([r["fecha"] for r in _fc]), 0, 1, 1,
+        _vol._vol_colores_proveedor(_fc), "kg", 6.0, 12.5)
+    check("_fig_serie_compras: la traza 0 es el blanco del clic",
+          _figc.data[0].type, "bar")
+    check("_fig_serie_compras: el blanco del clic es invisible",
+          _figc.data[0].marker.color, "rgba(0,0,0,0)")
+    check("_fig_serie_compras: y sigue emitiendo hover (no 'skip', #388)",
+          _figc.data[0].hoverinfo, "text")
+    check("_fig_serie_compras: sin velas en el grano Compra",
+          [t.type for t in _figc.data].count("candlestick"), 0)
+    check("_fig_serie_compras: la línea es escalonada",
+          _figc.data[1].line.shape, "hv")
+    check("_fig_serie_compras: un color por proveedor, punto a punto",
+          len(set(_figc.data[2].marker.color)), 2)
+    check("_fig_serie_compras: el eje X es de fechas, no de ranuras",
+          _figc.layout.xaxis.type in (None, "date"), True)
+    check("_fig_serie_compras: los dos ejes fijos (la ventana la manda el "
+          "servidor)",
+          (_figc.layout.xaxis.fixedrange, _figc.layout.yaxis.fixedrange),
+          (True, True))
+    check("_fig_serie_compras: una marca por DÍA con compra",
+          len(_figc.layout.xaxis.tickvals), 2)
+    check("_fig_serie_compras: el alto sale de alturas.py",
+          _figc.layout.height, alturas.MINI_CANDLE_DRILL)
+    # Y EL CLIC TIENE QUE SER ABSOLUTO: con una ventana que no arranca en 0,
+    # el blanco del clic sigue teniendo un punto por compra de la SERIE
+    # —así `point_index` no depende de la ventana— mientras los puntos
+    # dibujados son los del tramo. Es el bug que se midió en el navegador el
+    # 2026-09-20: el clic en la última compra a la vista enfocaba otra.
+    _fc3 = _fc + [{"fecha": pd.Timestamp("2026-09-09"), "precio": 8.0,
+                   "cant": 3.0, "monto": 24.0, "prov": "A", "doc": "F001-3"}]
+    _figv = _vol._fig_serie_compras(
+        _fc3, _vol._vol_x_compras([r["fecha"] for r in _fc3]), 1, 2, 2,
+        _vol._vol_colores_proveedor(_fc3), "kg", 6.0, 12.5)
+    check("_fig_serie_compras: el blanco del clic cubre la SERIE entera",
+          len(_figv.data[0].x), 3)
+    check("_fig_serie_compras: y se dibuja sólo la ventana",
+          len(_figv.data[2].x), 2)
+    check("_fig_serie_compras: el anillo del foco cae en el punto dibujado",
+          list(_figv.data[2].marker.line.width), [0, 1.8])
+
     _fe5 = pd.Series(pd.to_datetime(
         ["2026-06-15", "2026-06-22", "2026-06-29", "2026-07-06", "2026-07-13"]))
     _sem5 = _vol._vol_semanas_ventana(_fe5, minimo=4)
