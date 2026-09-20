@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-478 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+479 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (169)
 
@@ -276,7 +276,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 
-**Plotly y figuras** (83)
+**Plotly y figuras** (84)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -361,6 +361,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#470** — Una variación contra la barra anterior no se calcula si alguna de las dos es un período que…
 - **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 - **#478** — Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una vela por compra es plana…
+- **#479** — Una ventana RODANTE corta su primera y su última barra SIEMPRE, así que ahí «parcial» no es…
 
 **AgGrid y tablas** (77)
 
@@ -39938,6 +39939,109 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-20.)
 
+479. **Una ventana RODANTE corta su primera y su última barra SIEMPRE, así
+     que ahí «parcial» no es el caso raro: es el default. Y la guarda que
+     lo tapa vale para una SUMA, no para un promedio.**
+     Pedido el 2026-09-20 sobre Compras › Producto, en un mensaje que traía
+     tres cosas y una pregunta: *«que el gráfico tenga en las barras también
+     el dato del porcentaje de variación respecto a la barra anterior así
+     como el total de documentos, y poder ver quizás en la etiqueta los
+     proveedores que atendieron para esa barra. Aparte en la leyenda que
+     está arriba del gráfico dice actual y un valor, ¿a qué se refiere con
+     la actualidad, al precio actual?»*.
+
+     **El mismo pedido que la #470, un día después y en otra tarjeta.** La
+     primera versión escribió su propia cuenta de «% contra la anterior» y
+     volvió a nacer el bug que esa regla ya había medido: con la ventana de
+     3 meses por Mes, «jul» decía **+181 %** contra un «jun» que eran **11
+     de 30 días**. Lo que cambia acá —y es la regla— es la FRECUENCIA: en
+     Semanal el rango lo elige el usuario y a veces cae redondo; esta
+     ventana es rodante («los últimos 3 meses» terminan el último día CON
+     DATOS, `periodo.ventana`), así que los dos bordes están cortados
+     siempre, en todas las granularidades. Medido en la ventana por
+     defecto: de 4 barras, **una sola** puede decir un porcentaje (la
+     primera dice «parcial», la segunda calla porque su anterior lo está, y
+     la última dice «parcial»). Por semana son 11 de 14, que es lo que hace
+     usable la vista.
+
+     Por eso las cinco funciones de la #470 —`_limites_periodo`,
+     `_cobertura`, `_variaciones`, `_fmt_variacion` y `_hover_variacion`—
+     se mudaron de `semanal.py` a `graficos/compras/_comun.py`, al lado de
+     `_periodo_serie`, que es la que ESCRIBE las claves que ellas
+     desarman. Dos definiciones de «qué es un mes entero» en el mismo
+     reporte no se ven hasta que dos tarjetas dicen cosas distintas del
+     mismo dato.
+
+     **LA GUARDA ES PARA LA SUMA, NO PARA EL PROMEDIO**, y esto es nuevo:
+     esta tarjeta dibuja DOS magnitudes por barra —el valor comprado
+     (suma) y el precio unitario promedio (media)—. Medio mes suma la
+     mitad, pero promedia igual de bien: el precio de un mes cortado es un
+     precio tan válido como el de uno entero, con menos compras detrás. Así
+     que la variación del valor se calla en las barras parciales y la del
+     precio no, y por eso el hover de una barra «parcial» igual contesta
+     algo («precio prom. S/ 74.50 +3.3%»). La pregunta «¿este período está
+     cortado?» no se hace sobre el PERÍODO: se hace sobre lo que se mide en
+     él.
+
+     **DÓNDE VA CADA DATO LO DECIDE SU ANCHO.** Los tres pedazos no caben
+     en el mismo sitio, y el reparto está medido (1366x768, panel de 429px
+     de área útil):
+
+     | dato | dónde | por qué |
+     |---|---|---|
+     | precio, valor, variación, documentos | encima de la barra | 4 números cortos: el renglón más ancho mide 57px |
+     | proveedores | hover | son NOMBRES — el más largo del parquet mide 40 caracteres |
+
+     Con ≤6 barras la etiqueta va en tres renglones (57px de ancho, 39 de
+     alto) y arriba de eso girada, en uno solo (13px de ancho, hasta 148 de
+     alto): es la #91 otra vez — Plotly no oculta ni corta la etiqueta que
+     no entra, la ESCALA hasta que deja de leerse, y el DOM no lo canta.
+     El umbral viejo era 8 porque la etiqueta medía 38px; la cuenta no
+     cambió, cambió el numerador.
+
+     **UN DOCUMENTO ES (NÚMERO, PROVEEDOR), NO EL NÚMERO SOLO.** Medido
+     sobre `compras.parquet`: **14.555** `NUM_DOCUMENTO` distintos contra
+     **17.988** pares (número, proveedor). Contar el número pelado se come
+     el **19 %** de los comprobantes, porque dos proveedores numeran su
+     «F001-123» cada uno por su cuenta. El TIPO no agrega nada (los mismos
+     14.555 con o sin él). El error no se ve: devuelve un número creíble.
+
+     Los proveedores caben en el hover porque son pocos, y eso también se
+     midió: de los **1.409** grupos producto-mes del último trimestre,
+     **1.063** tienen UN solo proveedor y el máximo es 7. Se listan de
+     mayor a menor con su monto EXACTO (no el compacto de la barra: «S/ 4k»
+     por S/ 4.354 en el sitio donde se comparan dos proveedores es esconder
+     la diferencia), cortados en 4 y con el resto contado.
+
+     **«ACTUAL» NO ES UNA FECHA, Y ENCIMA SE CONTRADECÍA CON LAS BARRAS.**
+     La cifra de arriba de la tarjeta decía «actual S/ 15.85/KILOS» y la
+     pregunta del pedido estaba bien hecha: no es el precio de hoy ni un
+     promedio, es el precio unitario de la ÚLTIMA COMPRA dentro de la
+     ventana. Con una compra suelta a otra unidad, esa cifra y las barras
+     se separan tanto que parecen de productos distintos — medido en vivo:
+     «actual S/ 15.85» debajo de barras de S/ 74.50, que son el PROMEDIO
+     del mes. Ahora dice «última compra S/ 15.85/KILOS · −78.7% desde la
+     1ª del período», con la aclaración completa en el `title`. Un rótulo
+     de una palabra que nombra un momento («actual», «hoy», «último») tiene
+     que decir de qué VENTANA habla, o el lector le pone la suya.
+
+     **De yapa, la #241 mordiendo otra vez:** el eje decía «Aug 2026». El
+     `tickformat` de Plotly rotula con SU locale; los rótulos pasaron a
+     `tickvals`/`ticktext` escritos desde Python sobre `cortes.MESES_ABR_ES`
+     (`_rotulo_periodo`), que además deja el `dtick` sin trabajo: los ticks
+     caen sobre los buckets reales, así que no hay que anclar un `tick0`
+     semanal ni Plotly puede irse a sub-segundos con un solo punto.
+     Verificado que Plotly sigue rotando los rótulos 30° cuando no entran:
+     el `tickmode="array"` no le quita esa defensa.
+
+     Vive en `graficos/compras/producto.py` (`_prod_serie_periodo` con
+     `col_docu`/`col_prov`, `_etiquetas_barras`, `_hover_barras`,
+     `_var_precio`, `_rotulo_periodo`, `_UMBRAL_BARRAS_ROTADAS`) y en
+     `graficos/compras/_comun.py` (las cinco de la #470). Lo vigila
+     `test_graficos.py::_pruebas_etiqueta_barras_producto`.
+
+     (2026-09-20.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39950,7 +40054,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#479**.
+> próxima regla nueva es la **#480**.
 
 >
 

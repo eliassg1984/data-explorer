@@ -4224,6 +4224,159 @@ def _pruebas_drill_familia_subfamilia():
     return fallos
 
 
+def _pruebas_etiqueta_barras_producto():
+    """Lo que dicen las barras de la Evolución de Producto (2026-09-20).
+
+    Las funciones son puras, así que se prueban por valor: sin Streamlit,
+    sin R2, sin navegador.
+
+    Lo que se puede romper en silencio y acá falla ruidoso:
+
+      1. Que el conteo de documentos vuelva a ser `nunique` del NÚMERO
+         pelado. Medido sobre compras.parquet el 2026-09-20: 14.555 números
+         distintos contra 17.988 pares (número, proveedor) — el número solo
+         se come el 19% de los comprobantes, porque dos proveedores numeran
+         su "F001-123" cada uno por su cuenta. Un conteo bajo no se ve: es
+         un número creíble.
+      2. Que la variación del VALOR deje de pasar por la #470 y vuelva a
+         compararse contra un período que la ventana corta. La ventana de
+         esta tarjeta es RODANTE, así que la primera y la última barra están
+         cortadas siempre: medido, «jul» decía +181% contra un «jun» que
+         eran 11 días de mes.
+      3. Que la del PRECIO se le pegue a esa guarda. Es lo contrario: el
+         valor es una suma (medio mes suma la mitad) y el precio un
+         promedio (medio mes promedia igual de bien), así que el precio
+         conserva su variación donde el valor la pierde.
+      4. Que la etiqueta rotada vuelva a tener saltos de línea. Rotada, cada
+         renglón se apila a lo ANCHO y el hueco por barra son 30px: la
+         etiqueta de tres renglones deja de leerse (regla #91, Plotly la
+         ESCALA en vez de ocultarla, así que el DOM no lo canta).
+      5. Que un parquet sin columna de documento o sin proveedor reviente.
+         Pasa en modo demo y en cualquier reporte al que le falte la
+         columna: los dos pedazos son opcionales y se caen solos.
+      6. Que el eje o el hover vuelvan a rotular el mes en INGLÉS (#241).
+    """
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    barras producto · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA barras producto · {nombre}"
+                  f"{': ' + detalle if detalle else ''}")
+
+    from datetime import date
+
+    from graficos.compras._comun import _variaciones
+    from graficos.compras.producto import (
+        _etiquetas_barras, _fmt_docs, _hover_barras, _prod_serie_periodo,
+        _rotulo_periodo, _var_precio,
+    )
+
+    # Trampa 1: el MISMO número de documento en dos proveedores distintos,
+    # el mismo mes. Son DOS comprobantes.
+    df = pd.DataFrame({
+        "FECHA": pd.to_datetime(["2026-08-01", "2026-08-02", "2026-08-03",
+                                 "2026-09-01"]),
+        "PUNIT": [10.0, 12.0, 14.0, 20.0],
+        "CANT": [1.0, 2.0, 3.0, 4.0],
+        "VAL": [100.0, 200.0, 300.0, 700.0],
+        "DOC": ["F001-1", "F001-1", "F001-1", "F001-2"],
+        "PROV": ["Alfa", "Beta", "Alfa", "Alfa"],
+    })
+    agg = _prod_serie_periodo(df, "FECHA", "PUNIT", "CANT", "VAL", "Mes",
+                              col_docu="DOC", col_prov="PROV")
+    check("un documento es (número, proveedor), no el número solo",
+          int(agg["docs"].iloc[0]) == 2, f"{agg['docs'].iloc[0]}")
+    check("los proveedores del período van de mayor a menor",
+          [n for n, _ in agg["provs"].iloc[0]] == ["Alfa", "Beta"],
+          str(agg["provs"].iloc[0]))
+    check("y con su valor, no con su conteo",
+          abs(agg["provs"].iloc[0][0][1] - 400.0) < 1e-9,
+          str(agg["provs"].iloc[0]))
+
+    # Trampa 5: sin columna de documento ni de proveedor.
+    flaca = _prod_serie_periodo(df, "FECHA", "PUNIT", "CANT", "VAL", "Mes")
+    check("sin columnas de documento/proveedor la serie no revienta",
+          bool(flaca["docs"].isna().all()) and bool(flaca["provs"].isna().all()))
+
+    # Trampa 2: la ventana rodante corta el primer mes y el último. Sólo la
+    # barra del medio puede decir un porcentaje.
+    claves = ["2026-06", "2026-07", "2026-08", "2026-09"]
+    valores = [6000.0, 17000.0, 18700.0, 9000.0]
+    rng = (date(2026, 6, 20), date(2026, 9, 19))
+    var = _variaciones(claves, valores, "Mes", rng)
+    check("un mes que la ventana corta dice «parcial», no un %",
+          [v[0] for v in var] == ["parcial", "ant_parcial", "ok", "parcial"],
+          str([v[0] for v in var]))
+    check("y el que sí, es % contra la barra ANTERIOR",
+          abs(var[2][1] - 10.0) < 1e-9, str(var[2]))
+
+    et = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, [1, 3, 9, 2],
+                           variaciones=var)
+    check("la etiqueta lleva precio, valor y documentos",
+          all(x in et[2] for x in ("S/ 14.00", "S/ 19k", "9 docs")), et[2])
+    check("la variación va pegada al VALOR, que es el alto de la barra",
+          "S/ 19k <span" in et[2], et[2])
+    check("la barra cortada dice «parcial» en vez del %",
+          "parcial" in et[0] and "%" not in et[0], et[0])
+    check("y la de al lado de una parcial no dice nada",
+          "%" not in et[1] and "parcial" not in et[1], et[1])
+    check("el singular de documento no dice '1 docs'",
+          _fmt_docs(1) == "1 doc" and _fmt_docs(2) == "2 docs")
+    # Trampa 4.
+    rot = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, [1, 3, 9, 2],
+                            variaciones=var, rotada=True)
+    check("rotada, la etiqueta es UN renglón", "<br>" not in rot[2], rot[2])
+    check("rotada dice lo mismo",
+          all(x in rot[2] for x in ("S/ 14.00", "S/ 19k", "9 docs", "10%")),
+          rot[2])
+
+    # Trampa 3: el precio conserva su variación en TODAS, incluidas las
+    # parciales — es un promedio, no una suma.
+    check("la variación del precio no se calcula con la guarda de parcial",
+          [round(v, 1) if v is not None else None
+           for v in _var_precio([10.0, 12.0, 14.0, 20.0])]
+          == [None, 20.0, 16.7, 42.9],
+          str(_var_precio([10.0, 12.0, 14.0, 20.0])))
+
+    hov = _hover_barras([_rotulo_periodo(f"{c}-01", "Mes") for c in claves],
+                        [10.0, 12.0, 14.0, 20.0], valores, [1, 3, 9, 2],
+                        [[("ALFA SAC", 6000.0)], [("ALFA SAC", 17000.0)],
+                         [("ALFA SAC", 12000.0), ("BETA EIRL", 6700.0)],
+                         [("ALFA SAC", 9000.0)]],
+                        variaciones=var, claves=claves, gran="Mes", rango=rng)
+    check("el hover NOMBRA a los proveedores",
+          "Alfa SAC" in hov[2] and "Beta EIRL" in hov[2], hov[2])
+    check("el hover dice contra QUÉ barra se comparó",
+          "vs jul 2026" in hov[2], hov[2])
+    check("y en una parcial, por qué no hay variación",
+          "sin variación" in hov[0].lower() and "días" in hov[0], hov[0])
+    check("el precio lleva su variación aunque el mes esté cortado",
+          "precio prom. S/ 20.00 <span" in hov[3], hov[3])
+    check("el hover da el valor exacto, no el compacto",
+          "S/ 18,700.00" in hov[2], hov[2])
+    # Trampa 5, del otro lado.
+    check("un hover sin documentos ni proveedores no revienta",
+          "valor S/ 100.00" in _hover_barras(["ago"], [10.0], [100.0],
+                                             None, None)[0])
+    corte = _hover_barras(["ago"], [10.0], [100.0], [9],
+                          [[(f"PROV {i}", 10.0 - i) for i in range(7)]])[0]
+    check("con muchos proveedores, el hover corta y CUENTA el resto",
+          "y 3 más" in corte, corte)
+
+    # Trampa 6.
+    check("el rótulo del período va en español",
+          (_rotulo_periodo("2026-08-01", "Mes") == "ago 2026"
+           and _rotulo_periodo("2026-08-31", "Semana") == "31 ago"
+           and _rotulo_periodo("2026-01-01", "Año") == "2026"),
+          _rotulo_periodo("2026-08-01", "Mes"))
+
+    return fallos
+
+
 def _pruebas_grilla_horizontal():
     """El contrato de la GRILLA (graficos/compras/_comun.py).
 
@@ -4816,6 +4969,9 @@ def main():
 
     # ── Drill Familia › Subfamilia › Producto: que los 3 niveles cuadren ─
     fallos += _pruebas_drill_familia_subfamilia()
+
+    # ── Lo que dice cada barra de la Evolución de Producto ──────────────
+    fallos += _pruebas_etiqueta_barras_producto()
 
     # ── Container queries: que ninguna se quede sin contenedor ──────────
     fallos += _pruebas_container_queries()

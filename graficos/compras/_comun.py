@@ -9,12 +9,14 @@ en dos una fila de un drill. Vive aca y no en cada modulo porque el eje
 vertical tiene que caer en el mismo sitio en TODAS las filas de una vista.
 """
 
+from datetime import date, timedelta
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import ACENTO, TEXTO_PRINCIPAL
+from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _compras_truncar, _slug
 # REEXPORT, no import muerto: `_es_movil` vivía definida acá y se movió a
 # graficos/base.py (2026-08-07, ver su docstring) porque graficos/ajuste.py
@@ -233,6 +235,145 @@ def _periodo_serie(fe, gran):
     if gran == "Año":
         return fe.dt.year.astype("Int64").astype(str)
     return fe.dt.to_period("M").astype(str)  # Mes
+
+
+# ===========================================================================
+# UNA VARIACIÓN CONTRA LA BARRA ANTERIOR NO SE CALCULA SOBRE UN PERÍODO QUE
+# EL RANGO CORTA
+# ===========================================================================
+# Regla #470, nacida en Semanal el 2026-09-19 y mudada acá el 2026-09-20,
+# cuando la Evolución de Producto pidió el mismo «% de variación respecto a
+# la barra anterior». Son la vuelta de `_periodo_serie` (de acá arriba): esa
+# arma la clave del período, éstas la desarman para saber QUÉ DÍAS cubre.
+#
+# LO QUE VIGILAN. Toda vista de Compras mira una ventana —un mes corrido en
+# Semanal, los últimos 3 meses en Producto—, y una ventana corta por los dos
+# lados: la primera y la última barra suelen ser períodos A MEDIAS. Medido
+# con datos reales en Semanal (20 ago – 18 set 2026): la semana en curso
+# tenía 5 de 7 días y habría dicho «−45 %» contra la anterior sin que nada
+# hubiera cambiado, en la barra que más se mira. Esas barras dicen «parcial»
+# en vez de un porcentaje, la de al lado de una parcial no dice nada, y el
+# hover explica cuál de las dos cosas pasó y cuántos días faltan.
+#
+# El porcentaje NO se normaliza por días: las compras no se reparten parejo
+# en la semana, así que dividir por días inventaría un dato.
+#
+# «LA BARRA ANTERIOR» ES LA ANTERIOR DIBUJADA, no el período anterior del
+# calendario: un lunes se compara con el sábado si el domingo no hubo
+# compras (no hay barra de cero). Por eso `_variaciones` devuelve también el
+# ÍNDICE del que usó, para que el hover pueda nombrarlo.
+_INCOMPLETO = {"Semana": "Semana incompleta", "Mes": "Mes incompleto",
+               "Año": "Año incompleto"}
+"""Cómo el hover nombra a un período que el rango corta (el género manda)."""
+
+
+def _limites_periodo(clave, gran):
+    """`(primer día, último día)` del período `clave`, como `date`.
+
+    `clave` es la de `_periodo_serie`: «2026-09-15», «2026-S38», «2026-09» o
+    «2026». La semana es ISO —de lunes a domingo, con el año ISO, que en la
+    semana 1 puede ser el siguiente al del lunes—, así que se desarma con
+    `fromisocalendar` y no sumando días desde el 1º de enero."""
+    if gran == "Semana":
+        _a, _s = clave.split("-S")
+        ini = date.fromisocalendar(int(_a), int(_s), 1)
+        return ini, ini + timedelta(days=6)
+    if gran == "Mes":
+        _a, _m = (int(_x) for _x in clave.split("-"))
+        return (date(_a, _m, 1),
+                date(_a + _m // 12, _m % 12 + 1, 1) - timedelta(days=1))
+    if gran == "Año":
+        return date(int(clave), 1, 1), date(int(clave), 12, 31)
+    _d = date.fromisoformat(clave)
+    return _d, _d
+
+
+def _cobertura(clave, gran, rango):
+    """`(días del período dentro del rango, días del período)`.
+
+    Sin rango conocido el período cuenta como entero: no marcar «parcial»
+    es la falla barata — sólo se ve un porcentaje que no se debería."""
+    ini, fin = _limites_periodo(clave, gran)
+    dias = (fin - ini).days + 1
+    if not rango:
+        return dias, dias
+    a, b = max(ini, rango[0]), min(fin, rango[1])
+    return max((b - a).days + 1, 0), dias
+
+
+def _variaciones(claves, valores, gran, rango):
+    """Por barra, `(estado, pct, i_ant)` contra la barra ANTERIOR dibujada.
+
+    `estado` es "ok" (con `pct` en %), "parcial" (el rango corta ESTE
+    período), "ant_parcial" (corta el anterior), "primera" o "sin_base" (el
+    anterior suma ≤ 0: no hay porcentaje contra cero). `i_ant` es el índice
+    de la barra contra la que se comparó, para nombrarla en el hover."""
+    parcial = [_c[0] < _c[1] for _c in
+               (_cobertura(k, gran, rango) for k in claves)]
+    salida = []
+    for i, v in enumerate(valores):
+        ant = i - 1 if i else None
+        if parcial[i]:
+            salida.append(("parcial", None, ant))
+        elif ant is None:
+            salida.append(("primera", None, None))
+        elif parcial[ant]:
+            salida.append(("ant_parcial", None, ant))
+        elif not valores[ant] or valores[ant] <= 0:
+            salida.append(("sin_base", None, ant))
+        else:
+            salida.append(("ok", (v - valores[ant]) / valores[ant] * 100, ant))
+    return salida
+
+
+def _fmt_variacion(pct):
+    """`(texto, color)`: «+12%» / «−4.7%» y su color.
+
+    Un decimal por debajo del 10 % y ninguno arriba: «+4.7%» dice algo,
+    «+143.2%» no dice más que «+143%». Con signo siempre —el menos
+    tipográfico, como el resto de Compras— y «0%» gris cuando redondea a
+    cero, que con signo sería un cambio que no hubo.
+
+    EL COLOR ES EL DE «VS AÑO PASADO»: rojo si se compró MÁS, verde si
+    menos. En un reporte de GASTO subir no es la buena noticia, y Compras ya
+    lo dice así en sus dos cascadas, en su veredicto y en el punto de color
+    del rail. El signo va escrito igual, así que el color nunca es la única
+    señal."""
+    dec = 1 if abs(pct) < 10 else 0
+    if round(abs(pct), dec) == 0:
+        return "0%", GRIS_TEXTO
+    txt = f"{abs(pct):.{dec}f}%"
+    return ("+" + txt, ERROR) if pct > 0 else ("−" + txt, EXITO)
+
+
+def _hover_variacion(var, gran, clave, nombre_ant, rango):
+    """El renglón del hover que dice la variación, o POR QUÉ no la hay.
+
+    Empieza con `<br>` (o es vacío), listo para colgar de un
+    `hovertemplate`. Es el único lugar donde una barra «parcial» dice
+    CUÁNTO le falta, y donde la de al lado dice por qué calla — sin eso, una
+    etiqueta sin porcentaje se lee como un dato que falta.
+
+    NO filtra por granularidad: quien no quiera variación en una pasa
+    `None` en `var` (que es lo que hace Semanal con «Año», donde su rango de
+    entrada da una sola barra)."""
+    if not var:
+        return ""
+    estado, pct, _ = var
+    if estado == "ok":
+        _t, _c = _fmt_variacion(pct)
+        return (f"<br>vs {nombre_ant}: "
+                f"<span style='color:{_c}'><b>{_t}</b></span>")
+    if estado == "parcial":
+        _n, _m = _cobertura(clave, gran, rango)
+        return (f"<br><i>{_INCOMPLETO.get(gran, 'Período incompleto')} en "
+                f"el rango ({_n} de {_m} días): sin variación</i>")
+    if estado == "ant_parcial":
+        return (f"<br><i>Sin variación: la barra anterior ({nombre_ant}) "
+                "está incompleta en el rango</i>")
+    if estado == "sin_base":
+        return f"<br><i>Sin variación: {nombre_ant} no suma compras</i>"
+    return "<br><i>Primera barra del rango: sin anterior para comparar</i>"
 
 
 # ===========================================================================

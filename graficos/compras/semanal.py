@@ -74,7 +74,6 @@ el rango corta el período. La semana se nombra «14–20 set» y no
 """
 
 import hashlib
-from datetime import date, timedelta
 from html import escape
 
 import pandas as pd
@@ -83,13 +82,23 @@ import streamlit as st
 
 import cortes
 from tema import (
-    ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO, SERIE_PRINCIPAL,
+    ADVERTENCIA_TEXTO, GRIS_BORDE, GRIS_TEXTO, SERIE_PRINCIPAL,
     SERIE_TRAMOS, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
     _compras_layout, _compras_truncar, preservar_widgets, rango_tarjeta,
     scope_rerun,
+)
+# Las cinco de la variación contra la barra anterior (#470) NACIERON acá y
+# se mudaron a `_comun.py` el 2026-09-20, cuando la Evolución de Producto
+# pidió lo mismo: «que las barras tengan el % de variación respecto a la
+# barra anterior». Se importan con su nombre de siempre, así que el resto
+# de este módulo no se enteró de la mudanza — y no hay dos definiciones de
+# qué es un período PARCIAL, que es lo que la regla vigila.
+from graficos.compras._comun import (
+    _INCOMPLETO, _cobertura, _fmt_variacion, _hover_variacion,
+    _limites_periodo, _variaciones,
 )
 from graficos.compras._comun import (
     CATEGORIA_SEC, GAP_DRILL, _first_point, _periodo_serie, documento_legible,
@@ -685,10 +694,6 @@ _GRAN_VARIACION = ("Día", "Semana", "Mes")
 """Granularidades cuya etiqueta dice cuánto cambió contra la barra anterior.
 Año no, porque no se pidió: con el rango de entrada es una sola barra."""
 
-_INCOMPLETO = {"Semana": "Semana incompleta", "Mes": "Mes incompleto",
-               "Año": "Año incompleto"}
-"""Cómo el hover nombra a un período que el rango corta (el género manda)."""
-
 _UNIDAD_GRAN = {"Día": ("día", "días"), "Semana": ("semana", "semanas"),
                 "Mes": ("mes", "meses"), "Año": ("año", "años"),
                 "Por documento": ("documento", "documentos")}
@@ -736,27 +741,6 @@ def _del_al(fechas):
             f"{fin.day} {_m[fin.month - 1]} {fin.year}")
 
 
-def _limites_periodo(clave, gran):
-    """`(primer día, último día)` del período `clave`, como `date`.
-
-    `clave` es la de `_periodo_serie`: «2026-09-15», «2026-S38», «2026-09» o
-    «2026». La semana es ISO —de lunes a domingo, con el año ISO, que en la
-    semana 1 puede ser el siguiente al del lunes—, así que se desarma con
-    `fromisocalendar` y no sumando días desde el 1º de enero."""
-    if gran == "Semana":
-        _a, _s = clave.split("-S")
-        ini = date.fromisocalendar(int(_a), int(_s), 1)
-        return ini, ini + timedelta(days=6)
-    if gran == "Mes":
-        _a, _m = (int(_x) for _x in clave.split("-"))
-        return (date(_a, _m, 1),
-                date(_a + _m // 12, _m % 12 + 1, 1) - timedelta(days=1))
-    if gran == "Año":
-        return date(int(clave), 1, 1), date(int(clave), 12, 31)
-    _d = date.fromisoformat(clave)
-    return _d, _d
-
-
 def _rotulo_periodo(clave, gran):
     """`(eje, largo)`: cómo se nombra el período en el eje y en el hover.
 
@@ -796,58 +780,6 @@ def _anio_semana(clave):
     return f"{ini.year}-{fin.year % 100:02d}"
 
 
-def _cobertura(clave, gran, rango):
-    """`(días del período dentro del rango, días del período)`.
-
-    Sin rango conocido el período cuenta como entero: no marcar «parcial»
-    es la falla barata — sólo se ve un porcentaje que no se debería."""
-    ini, fin = _limites_periodo(clave, gran)
-    dias = (fin - ini).days + 1
-    if not rango:
-        return dias, dias
-    a, b = max(ini, rango[0]), min(fin, rango[1])
-    return max((b - a).days + 1, 0), dias
-
-
-def _variaciones(claves, valores, gran, rango):
-    """Por barra, `(estado, pct, i_ant)` contra la barra ANTERIOR dibujada.
-
-    `estado` es "ok" (con `pct` en %), "parcial" (el rango corta ESTE
-    período), "ant_parcial" (corta el anterior), "primera" o "sin_base" (el
-    anterior suma ≤ 0: no hay porcentaje contra cero). `i_ant` es el índice
-    de la barra contra la que se comparó, para nombrarla en el hover."""
-    parcial = [_c[0] < _c[1] for _c in
-               (_cobertura(k, gran, rango) for k in claves)]
-    salida = []
-    for i, v in enumerate(valores):
-        ant = i - 1 if i else None
-        if parcial[i]:
-            salida.append(("parcial", None, ant))
-        elif ant is None:
-            salida.append(("primera", None, None))
-        elif parcial[ant]:
-            salida.append(("ant_parcial", None, ant))
-        elif not valores[ant] or valores[ant] <= 0:
-            salida.append(("sin_base", None, ant))
-        else:
-            salida.append(("ok", (v - valores[ant]) / valores[ant] * 100, ant))
-    return salida
-
-
-def _fmt_variacion(pct):
-    """`(texto, color)`: «+12%» / «−4.7%» y su color.
-
-    Un decimal por debajo del 10 % y ninguno arriba: «+4.7%» dice algo,
-    «+143.2%» no dice más que «+143%». Con signo siempre —el menos
-    tipográfico, como el resto de Compras— y «0%» gris cuando redondea a
-    cero, que con signo sería un cambio que no hubo."""
-    dec = 1 if abs(pct) < 10 else 0
-    if round(abs(pct), dec) == 0:
-        return "0%", GRIS_TEXTO
-    txt = f"{abs(pct):.{dec}f}%"
-    return ("+" + txt, ERROR) if pct > 0 else ("−" + txt, EXITO)
-
-
 def _renglones_etiqueta(total, n_docs, var, gran):
     """Los renglones de la etiqueta de UNA barra, como `(plano, html)` y en
     orden de importancia: el total, los documentos, la variación.
@@ -872,31 +804,6 @@ def _renglones_etiqueta(total, n_docs, var, gran):
                            f"<span style='color:{GRIS_TEXTO}'><i>parcial</i>"
                            "</span>"))
     return salida
-
-
-def _hover_variacion(var, gran, clave, nombre_ant, rango):
-    """El renglón del hover que dice la variación, o por qué no la hay.
-
-    Empieza con `<br>` (o es vacío), listo para colgar de un
-    `hovertemplate`. Es el único lugar donde una barra «parcial» dice
-    CUÁNTO le falta, y donde la de al lado dice por qué calla."""
-    if gran not in _GRAN_VARIACION or not var:
-        return ""
-    estado, pct, _ = var
-    if estado == "ok":
-        _t, _c = _fmt_variacion(pct)
-        return (f"<br>vs {nombre_ant}: "
-                f"<span style='color:{_c}'><b>{_t}</b></span>")
-    if estado == "parcial":
-        _n, _m = _cobertura(clave, gran, rango)
-        return (f"<br><i>{_INCOMPLETO.get(gran, 'Período incompleto')} en "
-                f"el rango ({_n} de {_m} días): sin variación</i>")
-    if estado == "ant_parcial":
-        return (f"<br><i>Sin variación: la barra anterior ({nombre_ant}) "
-                "está incompleta en el rango</i>")
-    if estado == "sin_base":
-        return f"<br><i>Sin variación: {nombre_ant} no suma compras</i>"
-    return "<br><i>Primera barra del rango: sin anterior para comparar</i>"
 
 
 def _nota_variacion(var, gran, clave, nombre_ant, rango):

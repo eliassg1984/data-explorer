@@ -45,14 +45,19 @@ import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
 
+from cortes import MESES_ABR_ES
 from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import (
     _compras_layout, _compras_truncar, _slug, preservar_widgets,
+    rango_tarjeta,
 )
 from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
     ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL_ESPEJO,
     CROMO_GRID_RANK, GAP_DRILL, selector_fecha_tarjeta,
+    # Las tres de la variación contra la barra anterior (#470): nacieron en
+    # Semanal y viven en `_comun` desde que esta tarjeta pidió lo mismo.
+    _fmt_variacion, _hover_variacion, _periodo_serie, _variaciones,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos.compras._etiquetas_proveedor import nombre_propio
@@ -162,17 +167,24 @@ _EJE_X_GRAN = {
 
 
 def _eje_x_kwargs(gran, agg):
-    """`_EJE_X_GRAN[gran]`, con `tick0` anclado al primer bucket real de
-    ESTE gráfico para "Semana". "M1"/"M12" (Mes/Año) se alinean solos al
-    calendario sin importar `tick0`, pero un paso semanal en milisegundos
-    no: sin un `tick0` que caiga sobre un bucket real, con pocos datos
-    Plotly puede no dibujar NINGÚN tick semanal (rango angosto, ninguna
-    posición de la grilla cae dentro) — visto en vivo con una sola semana
-    de compras."""
-    kw = dict(_EJE_X_GRAN[gran])
-    if gran == "Semana" and not agg.empty:
-        kw["tick0"] = agg.index.min()
-    return kw
+    """Un tick por BARRA, rotulado en español.
+
+    Hasta el 2026-09-20 esto era `_EJE_X_GRAN[gran]` —un `dtick` de
+    calendario más un `tickformat`— y el eje decía «Aug 2026»: Plotly
+    rotula en INGLÉS con su locale por defecto, que es la regla #241. Con
+    `tickvals`/`ticktext` el rótulo lo escribe Python
+    (`_rotulo_periodo`, sobre `cortes.MESES_ABR_ES`) y de paso se va la
+    razón de ser del `dtick`: los ticks caen sobre los buckets REALES, así
+    que ni hay que anclar un `tick0` semanal ni Plotly puede irse a
+    sub-segundos ("23:59:59.9995 Jul 31, 2026") cuando hay un solo punto.
+
+    `_EJE_X_GRAN` queda como respaldo del caso vacío, que no tiene buckets
+    de los que sacar los ticks."""
+    if agg.empty:
+        return dict(_EJE_X_GRAN[gran])
+    _vals = list(agg.index)
+    return dict(tickmode="array", tickvals=_vals,
+                ticktext=[_rotulo_periodo(_t, gran) for _t in _vals])
 
 
 # Selector de texto plano (Semana/Mes/Año, Precio/Cantidad/Valor): mismo
@@ -372,13 +384,33 @@ def _prod_ranking(dd, col_prod, col_fecha, col_valor, col_cant, col_punit, col_u
     return out
 
 
-def _prod_serie_periodo(g, col_fecha, col_punit, col_cant, col_valor, gran):
+def _prod_serie_periodo(g, col_fecha, col_punit, col_cant, col_valor, gran,
+                        col_docu=None, col_prov=None):
     """Serie por período (Semana/Mes/Año) de UN producto ya filtrado: precio
     promedio (relleno hacia adelante y hacia atrás en los huecos, para que
-    la línea no corte), cantidad total y valor total. Indexada por la fecha
+    la línea no corte), cantidad total, valor total, CUÁNTOS DOCUMENTOS lo
+    respaldan y QUÉ PROVEEDORES lo atendieron. Indexada por la fecha
     de INICIO del período (eje real, no etiquetas de texto), así el
     promedio y las compras reales conviven en el mismo eje sin importar la
-    granularidad elegida."""
+    granularidad elegida.
+
+    `docs` y `provs` son del 2026-09-20, a pedido («que las barras tengan
+    también el total de documentos, y ver los proveedores que atendieron
+    esa barra»). Las dos son opcionales: sin `col_docu`/`col_prov` la
+    columna sale vacía y la etiqueta la omite sola, que es lo que pasa con
+    un parquet al que le falte la columna.
+
+    UN DOCUMENTO ES (número, proveedor), NO EL NÚMERO SOLO. Medido sobre
+    compras.parquet el 2026-09-20: 14.555 `NUM_DOCUMENTO` distintos contra
+    17.988 pares (número, proveedor) — o sea que contar el número pelado se
+    come el 19% de los comprobantes, porque dos proveedores numeran su
+    "F001-123" cada uno por su cuenta. El TIPO no agrega nada (los mismos
+    14.555 con o sin él), así que no se pide.
+
+    `provs` es una lista de `(proveedor, valor)` ordenada de mayor a menor,
+    no un número: el hover los NOMBRA. Caben porque son pocos — de los
+    1.409 grupos producto-mes del último trimestre, 1.063 tienen UN solo
+    proveedor y el máximo es 7."""
     fe = pd.to_datetime(g[col_fecha], errors="coerce")
     if gran == "Semana":
         bucket = (fe - pd.to_timedelta(fe.dt.weekday, unit="D")).dt.normalize()
@@ -387,20 +419,223 @@ def _prod_serie_periodo(g, col_fecha, col_punit, col_cant, col_valor, gran):
                                 errors="coerce")
     else:  # Mes
         bucket = fe.dt.to_period("M").dt.to_timestamp()
-    base = pd.DataFrame({
+    _hay_prov = bool(col_prov and col_prov in g.columns)
+    _cols = {
         "bucket": bucket,
         "precio": pd.to_numeric(g[col_punit], errors="coerce"),
         "cantidad": (pd.to_numeric(g[col_cant], errors="coerce").fillna(0)
                      if col_cant else 0.0),
         "valor": pd.to_numeric(g[col_valor], errors="coerce").fillna(0),
-    }).dropna(subset=["bucket"])
+    }
+    if _hay_prov:
+        _cols["prov"] = g[col_prov].astype(str).str.strip()
+    if col_docu and col_docu in g.columns:
+        _doc = g[col_docu].astype(str).str.strip()
+        # La llave, no el número: ver el docstring.
+        _cols["doc"] = (_doc + "|" + _cols["prov"]) if _hay_prov else _doc
+    base = pd.DataFrame(_cols).dropna(subset=["bucket"])
     if base.empty:
-        return base.set_index("bucket")
+        out = base.set_index("bucket")
+        out["docs"] = pd.Series(dtype="float")
+        out["provs"] = pd.Series(dtype="object")
+        return out
     agg = base.groupby("bucket").agg(precio=("precio", "mean"),
                                      cantidad=("cantidad", "sum"),
                                      valor=("valor", "sum")).sort_index()
     agg["precio"] = agg["precio"].ffill().bfill()
+    agg["docs"] = (base.groupby("bucket")["doc"].nunique()
+                   if "doc" in base.columns else pd.NA)
+    if _hay_prov:
+        _pv = base.groupby(["bucket", "prov"], as_index=False)["valor"].sum()
+        _pv = _pv.sort_values(["bucket", "valor"], ascending=[True, False])
+        _pares = {_b: list(zip(_d["prov"].tolist(), _d["valor"].tolist()))
+                  for _b, _d in _pv.groupby("bucket")}
+    else:
+        _pares = {}
+    # `pd.Series(dict)` y no un `map`: con listas adentro, `Index.map`
+    # intenta desempacarlas y devuelve un MultiIndex.
+    agg["provs"] = pd.Series(_pares, dtype="object").reindex(agg.index)
     return agg
+
+
+# ── LO QUE DICE CADA BARRA ────────────────────────────────────────────────
+# 2026-09-20, a pedido: «que las barras tengan también el porcentaje de
+# variación respecto a la barra anterior, así como el total de documentos, y
+# poder ver en la etiqueta los proveedores que atendieron esa barra».
+#
+# Los tres datos NO van al mismo sitio, y el reparto es el que cabe:
+#
+#   · variación y documentos → ENCIMA de la barra. Son un número corto cada
+#     uno y contestan de un vistazo («subí 10%, en 16 comprobantes»).
+#   · proveedores → al HOVER. Son NOMBRES: el más largo del parquet mide 40
+#     caracteres y la barra da 60px. Ahí también va el detalle fino (el
+#     valor exacto, contra qué barra se comparó, y la variación del PRECIO,
+#     que arriba no entra sin que la etiqueta deje de leerse).
+#
+# LA VARIACIÓN DE LA ETIQUETA ES LA DEL VALOR, o sea la de la ALTURA de la
+# barra: es lo que "respecto a la barra anterior" significa mirando el
+# gráfico. Sale de `_comun._variaciones`, la misma de Semanal, y con ella
+# viene la regla #470: un período que la VENTANA corta dice «parcial» en vez
+# de un porcentaje, y el de al lado calla. No es un detalle acá — la ventana
+# de esta tarjeta es rodante («los últimos 3 meses» terminan el último día
+# con datos), así que la primera y la última barra están cortadas SIEMPRE.
+# Medido el 2026-09-20 con la ventana de 3 meses por Mes: «jul» decía +181%
+# contra un «jun» que eran 11 días de mes.
+#
+# LA DEL PRECIO NO PASA POR AHÍ, y no es un olvido: el valor es una SUMA
+# (medio mes suma la mitad) y el precio un PROMEDIO (medio mes promedia
+# igual de bien). Por eso el precio conserva su variación en las barras
+# cortadas, y por eso vive en el hover pegada a su propio número: dos
+# porcentajes sueltos encima de una barra no dicen de qué son.
+_UMBRAL_BARRAS_ROTADAS = 6
+"""Desde cuántas barras la etiqueta se rota a un solo renglón.
+
+MEDIDO (1366x768, 2026-09-20): el panel del gráfico da 429px de área útil y
+el renglón más ancho de la etiqueta nueva («S/ 74.50 +182%») mide ~57px, así
+que entran 7 — 429/7 = 61px por barra. Con 8 el hueco baja a 53 y las
+etiquetas se pisan. Era 8 cuando la etiqueta medía 38px (dos renglones de
+sólo cifras) y el panel 312: la cuenta es la misma, cambió el numerador.
+
+Rotada, la etiqueta necesita ~13px de ancho, así que arriba de este umbral
+entra siempre. Es la regla #91: Plotly NO oculta ni corta una etiqueta que
+no entra, la ESCALA hasta que deja de leerse — y eso no se ve en el DOM.
+
+La forma completa —probar tres disposiciones contra el slot y contra el alto
+de la figura— es `semanal._plan_etiquetas`. Acá alcanza el umbral: estas
+barras son siempre las de UN producto en una ventana de 3 a 24 meses (4 a 25
+barras), no las 263 de «Por documento»."""
+
+
+def _var_precio(precios):
+    """% de variación del PRECIO de cada barra contra la anterior.
+
+    Sin la guarda de «parcial» de `_comun._variaciones` a propósito: ver el
+    comentario de arriba. El primero no tiene contra qué compararse y una
+    base en cero o negativa tampoco (el % no significaría nada): los dos dan
+    None, que el hover omite en vez de escribir un "+inf%"."""
+    out = []
+    previo = None
+    for v in precios:
+        if previo is not None and previo > 0 and not pd.isna(v):
+            out.append((float(v) - previo) / previo * 100.0)
+        else:
+            out.append(None)
+        previo = (float(v) if not pd.isna(v) else None)
+    return out
+
+
+def _fmt_docs(n, largo=False):
+    """'16 docs' / '1 doc' (o 'documentos', en el hover). Vacío si el parquet
+    no trae columna de documento: la etiqueta se arma igual sin ella."""
+    if n is None or pd.isna(n) or int(n) <= 0:
+        return ""
+    n = int(n)
+    if largo:
+        return f"{n:,} documentos" if n != 1 else "1 documento"
+    return f"{n:,} docs" if n != 1 else "1 doc"
+
+
+def _etiquetas_barras(precios, valores, docs, variaciones=None, rotada=False):
+    """El texto que Plotly dibuja SOBRE cada barra.
+
+    Sin rotar son tres renglones —precio promedio, valor con su variación,
+    documentos—; rotada es uno solo con los tres separados por «·», porque
+    de costado los renglones se apilan a lo ANCHO y ahí el hueco por barra
+    son 30px.
+
+    `variaciones` son las tuplas de `_comun._variaciones`: con estado «ok»
+    va el porcentaje, con «parcial» va la palabra —que no es un dato
+    faltante, es la respuesta— y con los demás no va nada (el hover dice por
+    qué). `docs` puede ser None, y entonces ese renglón no existe."""
+    out = []
+    for i, (pr, val) in enumerate(zip(precios, valores)):
+        _pr = ("" if pr is None or pd.isna(pr) else f"S/ {pr:,.2f}")
+        _val = _fmt_soles_compacto(val)
+        _var = variaciones[i] if variaciones else None
+        if _var and _var[0] == "ok":
+            _t, _c = _fmt_variacion(_var[1])
+            _val += f" <span style='color:{_c}'>{_t}</span>"
+        elif _var and _var[0] == "parcial":
+            _val += f" <span style='color:{GRIS_TEXTO}'><i>parcial</i></span>"
+        _doc = _fmt_docs(None if docs is None else docs[i])
+        if rotada:
+            out.append(" · ".join(x for x in (_pr, _val, _doc) if x))
+        else:
+            _doc = (f"<span style='font-size:9.5px'>{_doc}</span>"
+                    if _doc else "")
+            out.append("<br>".join(x for x in (_pr, _val, _doc) if x))
+    return out
+
+
+def _hover_barras(rotulos, precios, valores, docs, provs, variaciones=None,
+                  claves=None, gran=None, rango=None, tope_provs=4):
+    """Una cadena por barra para el `hovertemplate`: lo que no entra arriba.
+
+    El valor va exacto, la variación dice contra QUÉ barra se comparó (o por
+    qué no la hay, que es lo que salva a «parcial» de leerse como un dato
+    faltante), el precio trae SU propia variación y abajo van los
+    proveedores que atendieron el período con cuánto puso cada uno —
+    ordenados de mayor a menor, cortados en `tope_provs` y con el resto
+    contado.
+
+    `provs` es la columna que arma `_prod_serie_periodo`: una lista de
+    `(nombre, valor)` por barra, o NaN si el parquet no trae proveedor."""
+    var_pre = _var_precio(list(precios))
+    out = []
+    for i, rot in enumerate(rotulos):
+        lineas = [f"<b>{rot}</b>", f"valor S/ {valores[i]:,.2f}"]
+        _v = variaciones[i] if variaciones else None
+        if _v:
+            _ant = (rotulos[_v[2]] if _v[2] is not None else "")
+            # Llega con su propio `<br>` adelante, así que no va a `lineas`.
+            lineas[-1] += _hover_variacion(
+                _v, gran, (claves[i] if claves else None), _ant, rango)
+        if not pd.isna(precios[i]):
+            _p = ("" if var_pre[i] is None
+                  else " {}".format(
+                      "<span style='color:{1}'>{0}</span>".format(
+                          *_fmt_variacion(var_pre[i]))))
+            lineas.append(f"precio prom. S/ {precios[i]:,.2f}{_p}")
+        _lista = provs[i] if provs is not None else None
+        if _lista is None or not isinstance(_lista, (list, tuple)):
+            _lista = []
+        _cab = [x for x in (_fmt_docs(None if docs is None else docs[i],
+                                      largo=True),
+                            (f"{len(_lista):,} proveedores" if len(_lista) > 1
+                             else ("1 proveedor" if _lista else "")))
+                if x]
+        if _cab:
+            lineas.append(" · ".join(_cab))
+        for _nom, _val in _lista[:tope_provs]:
+            # 30 y no los 26 de siempre: MEDIDO, el hover con tres
+            # proveedores mide 226px y el renglón más ancho es el del
+            # nombre + su monto, así que hay sitio — con 26 se cortaba
+            # «Compañia Food Retail S.A.C.», que entra entero.
+            _nom = _compras_truncar(nombre_propio(_nom), 30)
+            # El monto VA EXACTO y no compacto como en la barra: acá hay
+            # sitio, y "S/ 4k" por S/ 4,354.51 en el sitio donde se va a
+            # comparar un proveedor contra otro es esconder la diferencia.
+            lineas.append(f"<span style='color:{GRIS_TEXTO}'>{_nom} · "
+                          f"S/ {_val:,.0f}</span>")
+        if len(_lista) > tope_provs:
+            lineas.append(f"<span style='color:{GRIS_TEXTO}'>y "
+                          f"{len(_lista) - tope_provs} más</span>")
+        out.append("<br>".join(lineas))
+    return out
+
+
+def _rotulo_periodo(ts, gran):
+    """El período en español, para el hover y para el eje.
+
+    Plotly rotula en INGLÉS con `tickformat` («Aug 2026»): usa su locale por
+    defecto. La lista de meses en español es `cortes.MESES_ABR_ES`, una sola
+    en todo el repo. Ver la regla #241."""
+    ts = pd.Timestamp(ts)
+    if gran == "Año":
+        return str(ts.year)
+    if gran == "Semana":
+        return f"{ts.day:02d} {MESES_ABR_ES[ts.month - 1]}"
+    return f"{MESES_ABR_ES[ts.month - 1]} {ts.year}"
 
 
 def _sin_gritar(nombre):
@@ -856,7 +1091,7 @@ def _paneles_familia(dd, col_fam, col_subfam, col_prod, col_valor,
 
 def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit,
                             col_um, col_fecha, col_prov=None, d_full=None,
-                            col_subfam=None):
+                            col_subfam=None, col_docu=None):
     """Una fila de dos tarjetas: a la izquierda Familia | Subfamilia y,
     debajo, el ranking de productos que esos dos recortan; a la derecha la
     evolución del producto en foco.
@@ -867,7 +1102,11 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     viejo (regla #357). Con default, la firma vieja sigue siendo válida.
 
     `d_full` es el histórico sin la fecha de la sección: de ahí sale la
-    ventana fija de 3 meses del gráfico, que no depende del rango elegido."""
+    ventana fija de 3 meses del gráfico, que no depende del rango elegido.
+
+    `col_docu` va DESPUÉS de `col_subfam` y con default, por lo mismo que
+    aquélla (regla #357): sólo la usa la etiqueta de las barras, y sin ella
+    la etiqueta se arma igual, sin la línea de documentos."""
     if not (col_prod and col_valor and col_punit and col_fecha):
         st.info("Faltan columnas (Producto, Valor, Precio unitario o Fecha) "
                 "para este gráfico.")
@@ -1196,6 +1435,26 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     _src_evo = _src_evo.dropna(subset=[col_fecha, col_prod])
                 else:
                     _src_evo = dd
+                # EL RANGO QUE SE ESTÁ MIRANDO, como dos `date`. Lo necesita
+                # la variación contra la barra anterior para saber qué
+                # período quedó CORTADO (#470), y sale del mismo sitio que
+                # recortó el df — si saliera de los datos, un mes con
+                # compras sólo hasta el 12 se leería como mes entero.
+                #
+                # Las dos ramas son las dos fuentes de `_src_evo`: la
+                # ventana propia de esta tarjeta, o el rango de la sección
+                # (el selector de la tarjeta de al lado) cuando hereda.
+                if _op_prod != periodo.HEREDA and d_full is not None:
+                    _f_full = pd.to_datetime(d_full[col_fecha],
+                                             errors="coerce")
+                    _rng_evo = periodo.ventana(_op_prod, _f_full.max(),
+                                               minimo=_f_full.min())
+                else:
+                    _rng_evo = rango_tarjeta(
+                        CATEGORIA_SEC["compras_sec_producto"])
+                _rng_evo = (tuple(pd.Timestamp(_x).date() for _x in _rng_evo)
+                            if _rng_evo and all(_x is not None
+                                                for _x in _rng_evo) else None)
                 with _c_gran:
                     with st.container(key="compras_prod_gran"):
                         gran = st.pills("Agrupar por", ["Semana", "Mes", "Año"],
@@ -1211,7 +1470,8 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                 fila = _prod_stats(g, col_fecha, col_punit, col_cant, col_valor,
                                    col_um)
                 agg = _prod_serie_periodo(g, col_fecha, col_punit, col_cant,
-                                          col_valor, gran)
+                                          col_valor, gran, col_docu=col_docu,
+                                          col_prov=col_prov)
 
                 if agg.empty or fila is None:
                     # Con la ventana propia es un caso NORMAL, no un borde:
@@ -1238,12 +1498,26 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                             f'margin:0 0 2px;">fluctuó entre '
                             f'<b>S/ {fila["minimo"]:,.2f}</b> y '
                             f'<b>S/ {fila["maximo"]:,.2f}</b></div>')
+                    # DICE "última compra" Y NO "actual" desde el
+                    # 2026-09-20. Se preguntó qué era («dice actual y un
+                    # valor, ¿a qué se refiere, al precio actual?») y la
+                    # pregunta estaba bien hecha: son DOS cosas distintas.
+                    # Esta cifra es el precio unitario de la ÚLTIMA compra
+                    # dentro de la ventana del gráfico — no un promedio, no
+                    # el precio de hoy, y no lo que dicen las barras (que es
+                    # el promedio del período). Con una compra suelta a otra
+                    # unidad de medida las dos cifras se separan tanto que
+                    # parecen de productos distintos: medido en vivo, «actual
+                    # S/ 15.85» debajo de barras de S/ 74.50.
                     st.markdown(
-                        f'<div style="font-size:12px;color:{GRIS_TEXTO};margin:0 0 2px;">'
-                        f'actual <b>S/ {fila["fin"]:,.2f}{_um}</b> · '
+                        f'<div style="font-size:12px;color:{GRIS_TEXTO};margin:0 0 2px;"'
+                        f' title="Precio unitario de la última compra dentro de'
+                        f' la ventana del gráfico. Las barras muestran el'
+                        f' promedio de cada período.">'
+                        f'última compra <b>S/ {fila["fin"]:,.2f}{_um}</b> · '
                         f'<b style="color:{color_var};">'
                         f'{"+" if (var_pct or 0) >= 0 else "−"}{abs(var_pct or 0):.1f}%'
-                        f'</b> 1ª → última compra</div>'
+                        f'</b> desde la 1ª del período</div>'
                         f'{_rango_txt}',
                         unsafe_allow_html=True)
 
@@ -1262,50 +1536,64 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     fig = go.Figure()
                     _precio = agg["precio"].tolist()
                     _valor = agg["valor"].tolist()
-                    # LA ETIQUETA ROTA SI NO ENTRA, no se encoge. MEDIDO en
-                    # vivo: el panel da 312px de ancho y la etiqueta de dos
-                    # renglones ocupa 34-36px, así que entran hasta ~8 barras.
-                    # Con 13 (la ventana de 12 meses por Mes) Plotly no la
-                    # oculta ni la corta: la ESCALA hasta 13px de ancho por 8
-                    # de alto — sigue en el DOM y ya no se lee. Es la trampa de
-                    # la regla #91, y la razón de que este umbral esté acá y no
-                    # a ojo.
-                    #
-                    # Rotada, la etiqueta necesita ~10px de ancho en vez de 36,
-                    # así que entra siempre. Se paga leyéndola de costado, que
-                    # es mejor que no leerla: el pedido fue "etiqueta SIEMPRE
-                    # visible".
-                    _muchas = len(agg) > 8
-                    if _muchas:
-                        _etiquetas = [f"S/ {pr:,.2f} · {_fmt_soles_compacto(v)}"
-                                      for pr, v in zip(_precio, _valor)]
-                    else:
-                        _etiquetas = [f"S/ {pr:,.2f}<br>{_fmt_soles_compacto(v)}"
-                                      for pr, v in zip(_precio, _valor)]
+                    _docs = (agg["docs"].tolist() if "docs" in agg.columns
+                             else None)
+                    _provs = (agg["provs"].tolist() if "provs" in agg.columns
+                              else None)
+                    # LA ETIQUETA ROTA SI NO ENTRA, no se encoge: Plotly la
+                    # ESCALA hasta que deja de leerse y sigue en el DOM (regla
+                    # #91). El umbral y su medición, en `_UMBRAL_BARRAS_ROTADAS`.
+                    # Rotada se paga leyéndola de costado, que es mejor que no
+                    # leerla: el pedido fue "etiqueta SIEMPRE visible".
+                    _muchas = len(agg) > _UMBRAL_BARRAS_ROTADAS
+                    # Las claves («2026-S38», «2026-09») son lo que sabe
+                    # desarmar `_cobertura` para decidir si la VENTANA corta
+                    # ese período. Las arma `_periodo_serie`, la misma que
+                    # las escribe en Semanal: dos formatos distintos de la
+                    # misma clave serían dos definiciones de "un mes".
+                    _claves = list(_periodo_serie(pd.Series(agg.index), gran))
+                    _vars = _variaciones(_claves, _valor, gran, _rng_evo)
+                    _rotulos = [_rotulo_periodo(_t, gran) for _t in agg.index]
+                    _etiquetas = _etiquetas_barras(_precio, _valor, _docs,
+                                                   variaciones=_vars,
+                                                   rotada=_muchas)
+                    _hover = _hover_barras(
+                        _rotulos, _precio, _valor, _docs, _provs,
+                        variaciones=_vars, claves=_claves, gran=gran,
+                        rango=_rng_evo)
                     fig.add_bar(
                         x=agg.index, y=_valor, marker_color=ACENTO,
                         text=_etiquetas, textposition="outside",
                         textangle=-90 if _muchas else 0,
                         textfont=dict(size=10, color=GRIS_TEXTO),
                         cliponaxis=False, constraintext="none",
-                        customdata=_precio,
-                        hovertemplate=("%{x|%d/%m/%Y}<br>valor S/ %{y:,.2f}"
-                                       "<br>precio prom. S/ %{customdata:,.2f}"
-                                       "<extra></extra>"),
+                        # El hover se arma ENTERO en Python (nombres de
+                        # proveedor, meses en español, los dos porcentajes):
+                        # `%{x|...}` rotularía el mes en inglés, y un
+                        # `customdata` por dato obligaría a repetir acá el
+                        # formato que ya sabe `_hover_barras`.
+                        customdata=[[h] for h in _hover],
+                        hovertemplate="%{customdata[0]}<extra></extra>",
                     )
                     _compras_layout(fig, alto=_ALTO_EVO)
                     fig.update_layout(showlegend=False,
                                       yaxis=dict(showticklabels=False),
                                       bargap=0.35)
-                    # Techo con aire para que la etiqueta de DOS renglones
-                    # quepa encima de la barra más alta: `textposition=
-                    # "outside"` no expande el rango solo, y sin esto la
-                    # etiqueta del máximo se corta contra el borde.
-                    # Rotada, la etiqueta ocupa ALTO en vez de ancho, así que
-                    # el techo tiene que dar más aire.
+                    # Techo con aire para que la etiqueta quepa encima de
+                    # la barra más alta: `textposition="outside"` no expande
+                    # el rango solo, y sin esto la etiqueta del máximo se
+                    # corta contra el borde.
+                    #
+                    # Rotada la etiqueta ocupa ALTO en vez de ancho, así que
+                    # el techo tiene que dar más aire — y desde el 2026-09-20
+                    # lleva dos pedazos más (variación y documentos), que de
+                    # costado son más alto todavía: MEDIDO, 16 caracteres son
+                    # 70px, y la línea rotada llega a ~32 (140px) contra los
+                    # 335px de área útil. 1.90 deja 159px de aire; 1.75 dejaba
+                    # 144 y la cortaba por poco.
                     if max(_valor) > 0:
                         fig.update_yaxes(
-                            range=[0, max(_valor) * (1.75 if _muchas else 1.28)])
+                            range=[0, max(_valor) * (1.90 if _muchas else 1.34)])
                     fig.update_xaxes(**_eje_x_kwargs(gran, agg))
                     st.plotly_chart(fig, use_container_width=True,
                                     key=f"compras_g_prod_{gran}")
