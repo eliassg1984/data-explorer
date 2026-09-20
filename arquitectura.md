@@ -1,4 +1,4 @@
-# Reglas del proyecto (aprendidas de bugs reales)
+﻿# Reglas del proyecto (aprendidas de bugs reales)
 
 
 
@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-474 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+475 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (168)
 
@@ -570,7 +570,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 - **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
 
-**Datos, R2 y DuckDB** (56)
+**Datos, R2 y DuckDB** (57)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -628,6 +628,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#451** — Una grilla editable empareja lo tecleado con el estado por POSICIÓN, así que quien arma el…
 - **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
 - **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
+- **#475** — Un salto del rail SOBREVUELA la pila, y una pila que construye «lo que tengas cerca» lee ese…
 
 **SUNAT y SIRE** (42)
 
@@ -734,7 +735,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 
-**Decisiones de diseño y UX** (85)
+**Decisiones de diseño y UX** (86)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -821,6 +822,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
 - **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
 - **#473** — Un jalón negativo que compensa un gap fantasma es deuda con intereses: el día que el gap…
+- **#475** — Un salto del rail SOBREVUELA la pila, y una pila que construye «lo que tengas cerca» lee ese…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -39580,6 +39582,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-19.)
 
+475. **Un salto del rail SOBREVUELA la pila, y una pila que construye «lo
+     que tengas cerca» lee ese sobrevuelo como una visita: el viaje
+     construye todo lo que cruza la pantalla.** Medido en Ventas el
+     2026-09-19, app recién cargada, 1366×768 y datos reales: saltar del
+     Resumen a «Tabla» —la 11.ª— construía las ONCE secciones, una por
+     una, y la vista destino recién estaba lista a los **28,8 s**. De
+     yapa el scroll bailaba entre 5.246 y 6.715px mientras las de arriba
+     cambiaban de alto.
+
+     **Y lo construido no se paga una vez: se paga en cada rerun
+     completo.** Una sección activada queda activada para toda la sesión
+     (`_pila_activa_*` no lo borra nadie), así que el costo de mover la
+     fecha o un filtro global crece con lo que exploraste. Mismo gesto
+     (Filtros › Grupo › Alimentos), del clic hasta que el DOM queda
+     quieto:
+
+         secciones construidas        3            11
+         aplicar el filtro          6,8 s        20,0 s
+         quitarlo                  10,8 s        18,5 s
+         peor bloqueo del hilo    5,3-6,6 s    12,7-14,2 s
+
+     El servidor explica sólo una parte: con `AppTest` sobre `app.py`, la
+     corrida completa cuesta 0,9-1,4 s con una sección y 3,9-5,0 s con
+     once (1,9-2,1 s contra 5,8-8,8 s si además cambia el rango, que en
+     Ventas vuelve a filtrar el parquet). El resto lo pone el navegador
+     montando once Plotly y diecisiete iframes: es la #211 otra vez,
+     ahora con número.
+
+     **Las dos causas, las dos en `_render_rail`:**
+
+     · La ventana de activación sólo descartaba lo que faltaba MUCHO para
+       llegar (`top - caja.bottom > 900`). Lo que quedaba ARRIBA pasaba
+       siempre, así que aterrizar abajo arrastraba la pila entera. Ahora
+       se descartan los dos lados.
+     · El viaje en sí. El clic del rail hace `scrollTo` con
+       `behavior: 'smooth'` y en el camino cada sección entra y sale de
+       esa ventana. Antes de arrancar se publica `window.__railSalto`
+       (ahora + 1400 ms) y el paso 2 del temporizador no activa nada
+       mientras siga vigente. Lo mismo hace `scroll_a_seccion`.
+
+     **Medido después, mismo gesto y misma máquina:** la vista destino
+     lista a los **8,2 s**, **7** secciones construidas en vez de once
+     —las cuatro del medio se quedan en esqueleto— y filtrar ahí cuesta
+     **10,3 s**.
+
+     **Lo que NO arregla:** las tres secciones que dejó la carga inicial
+     siguen vivas arriba de todo, lejos de la pantalla y sin que nadie
+     las suelte; son la mitad de esos 10,3 s. Soltar lo que ya no se mira
+     —invalidación perezosa al cambiar fecha o filtros— es otro cambio, y
+     trae su propia trampa: el esqueleto no mide lo mismo que la sección
+     construida (7.423px contra 6.486px de página en Ventas), así que hay
+     que anclar el scroll o la página salta bajo el cursor.
+
+     **Cómo se mide sin capturas:** `AppTest` sobre `app.py` para el lado
+     servidor —prendiendo a mano las banderas `_pila_activa_*`, y con una
+     ventana de fechas distinta en cada corrida para que ninguna se
+     beneficie de una caché tibia—, y en el navegador un
+     `MutationObserver` más el conteo de `[data-stale="true"]`: el gesto
+     terminó cuando no queda nada marcado y el DOM lleva 900 ms quieto.
+     El bloqueo del hilo principal, con un latido de `MessageChannel`
+     (ojo: esta laptop mide picos de 0,6 s hasta en reposo).
+
+     (2026-09-19.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -39592,7 +39658,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#475**.
+> próxima regla nueva es la **#476**.
 
 >
 

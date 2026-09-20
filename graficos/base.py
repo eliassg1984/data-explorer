@@ -596,6 +596,9 @@ def scroll_a_seccion(clave):
         intentos++;
         var el = doc.querySelector('[class*="st-key-{clave}"]');
         if (!el) {{ if (intentos < 20) w.setTimeout(ir, 100); return; }}
+        // Mismo aviso que el salto del rail: durante el viaje, el
+        // temporizador no activa lo que cruza la pantalla (regla #475).
+        w.__railSalto = Date.now() + 1400;
         el.scrollIntoView({{behavior: 'smooth', block: 'start'}});
       }}
       ir();
@@ -2135,12 +2138,29 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     }}
 
                     // ── 2. Activar la proxima, de a una ─────────────────
+                    //
+                    // MIENTRAS UN SALTO ESTA EN VUELO NO SE ACTIVA NADA. El
+                    // scroll suave del rail sobrevuela la pila entera, y sin
+                    // esta guarda cada seccion que cruza la pantalla pide su
+                    // turno en el camino. Regla #475.
+                    if (w.__railSalto && Date.now() < w.__railSalto) return;
                     if (doc.querySelector('[data-testid="stStatusWidget"]')) return;
                     for (var j = 0; j < MAPA.length; j++) {{
                       var m2 = MAPA[j];
                       var s2 = doc.querySelector('[class*="st-key-' + m2.sec + '"]');
                       if (!s2 || !s2.querySelector('.pila-hueco')) continue;
-                      if (s2.getBoundingClientRect().top - caja.bottom > 900) continue;
+                      var r2 = s2.getBoundingClientRect();
+                      // SE CONSTRUYE LO QUE ESTA CERCA, DE LOS DOS LADOS.
+                      // Hasta el 2026-09-19 solo se descartaba lo que faltaba
+                      // mucho para llegar (mas de 900px por debajo), asi que
+                      // todo lo que quedaba ARRIBA entraba igual: aterrizar
+                      // en una vista lejana arrastraba a la pila entera.
+                      // Medido en Ventas: la vista destino recien estaba
+                      // lista a los 28,8s, y de ahi en adelante cada cambio
+                      // de filtro pagaba por las once (20s contra 6,8s con
+                      // tres vivas). Regla #475.
+                      if (r2.top - caja.bottom > 900) continue;
+                      if (caja.top - r2.bottom > 900) continue;
                       var g = doc.querySelector(
                         '[class*="st-key-' + m2.go + '"] button');
                       if (g) {{ g.click(); return; }}
@@ -2199,6 +2219,11 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                         var y = s.getBoundingClientRect().top
                               - raiz.getBoundingClientRect().top
                               + raiz.scrollTop - techo - 8;
+                        // El viaje sobrevuela la pila: se avisa para que el
+                        // paso 2 del temporizador no active lo que cruza la
+                        // pantalla de paso. 1400ms cubre el scroll suave mas
+                        // lo que tarda en frenar. Regla #475.
+                        w.__railSalto = Date.now() + 1400;
                         raiz.scrollTo({{ top: Math.max(0, y), behavior: 'smooth' }});
                       }}, true);
                     }});
