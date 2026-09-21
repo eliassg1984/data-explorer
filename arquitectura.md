@@ -205,7 +205,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
 - **#480** — La tabla que describe un gráfico no es otra tarjeta de la fila: va DEBAJO y a lo ancho. Y en…
 
-**Layout y alturas** (69)
+**Layout y alturas** (68)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -275,7 +275,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
-- **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 
 **Plotly y figuras** (85)
 
@@ -445,7 +444,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 
-**Streamlit** (130)
+**Streamlit** (131)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -576,6 +575,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 - **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
+- **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
 
 **Datos, R2 y DuckDB** (57)
@@ -39791,6 +39791,29 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        del ERP. El filtro «Proveedor» de la cabecera sí queda gritando, y
        a propósito: su valor ES el que compara el filtro, y formatearlo
        con `format_func` rompería el buscador del `st.selectbox` (#318).
+
+     **UN CLIC EN UNA BARRA DESDE RESUMEN LLEVA A DETALLE** (2026-09-20).
+     Reportado como un crash: *«cuando estoy en la vista resumen y hago
+     clic en una barra, me sale este error [`Cannot read properties of
+     undefined (reading 'textfont')`, de Plotly], creo que debería
+     enviarme a la vista de detalle de esa barra»*. Resumen es la tabla de
+     TODAS las barras; el gesto natural sobre UNA de ellas es «mostrame
+     ésta», que es lo que hace Detalle — no re-marcar su fila y quedarse en
+     Resumen, que era lo que hacía y lo que además dejaba a la figura
+     rindiendo el estado que disparaba el error (barras apiladas con texto
+     `outside` + opacidad por punto, que Plotly re-dibuja mal de forma
+     intermitente; **no se pudo reproducir en local con el mismo commit que
+     el deploy**, así que la cura ataca la interacción y no el render de
+     Plotly). Ahora el clic ENFOCA el período y cambia el modo a Detalle —
+     `st.session_state["compras_sem_modo"] = "Detalle"` escrito ANTES de
+     que el `st.segmented_control` se dibuje, que es lo que Streamlit
+     respeta, más `_modo` local a Detalle para que la MISMA corrida ya lo
+     rinda. No se togglea: desde Resumen el clic siempre ABRE (a Detalle no
+     se llega para volver a salir con el mismo gesto). El modo se lee de
+     `session_state` ANTES del bloque del clic, por eso: el clic necesita
+     saber en qué modo está para decidir si cambia. El foco sobrevive al
+     volver a Resumen —su fila queda marcada—, así que la tabla sigue
+     diciendo qué período se miró último.
 
      (2026-09-19, ampliada el 2026-09-20.)
 

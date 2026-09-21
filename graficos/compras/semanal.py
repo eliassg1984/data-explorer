@@ -1519,6 +1519,17 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # próximo clic. Es la receta de Volatilidad (`compras_vol_nclic`).
         _foco_antes = st.session_state.get("compras_sem_focus")
         _doc_antes = st.session_state.get("compras_sem_doc")
+        # EL MODO SE LEE DE `session_state` Y NO DEL WIDGET, por lo mismo que
+        # el clic de acá abajo: el toggle se dibuja DEBAJO de la figura —que es
+        # donde gobierna— y el alto de la figura depende de él. Una clave con
+        # `key` se lee sin dibujarla, y en la corrida del clic ya trae el valor
+        # nuevo, así que leerla acá no atrasa un gesto. El widget de más abajo
+        # no devuelve nada distinto: por eso se ignora lo que devuelve, igual
+        # que `st.plotly_chart`. Se lee ANTES del clic porque un clic en la
+        # barra desde Resumen CAMBIA el modo (ver la rama de abajo).
+        _modo = st.session_state.get("compras_sem_modo")
+        if _modo not in _MODO_OPCIONES:
+            _modo = _MODO_DEFAULT
         _nclic = st.session_state.get("compras_sem_nclic", 0)
         _key_base = f"compras_g_semanal_{gran}"
         _pt = _first_point(st.session_state.get(f"{_key_base}_{_nclic}"))
@@ -1537,6 +1548,22 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             # dos clics para deshacer uno.
             if _clic is None:
                 pass
+            elif _modo == _MODO_RESUMEN:
+                # UN CLIC EN UNA BARRA DESDE RESUMEN LLEVA A DETALLE (regla
+                # #476, 2026-09-20). A pedido: «cuando estoy en la vista
+                # resumen y hago clic en una barra, debería enviarme a la
+                # vista de detalle de esa barra». Resumen es la tabla de TODAS
+                # las barras; el gesto sobre una de ellas es «mostrame ÉSTA»,
+                # que es lo que hace Detalle. Se ENFOCA el período (no se
+                # togglea: desde Resumen el clic siempre ABRE) y se cambia el
+                # modo escribiendo su clave de widget ANTES de que el
+                # `st.segmented_control` de más abajo se dibuje —que es lo que
+                # Streamlit respeta—; `_modo` local pasa a Detalle para que la
+                # figura y la zona de abajo de ESTA misma corrida ya lo rindan.
+                st.session_state["compras_sem_doc"] = None
+                st.session_state["compras_sem_focus"] = _clic
+                st.session_state["compras_sem_modo"] = _MODO_DETALLE
+                _modo = _MODO_DETALLE
             elif _doc_antes:
                 st.session_state["compras_sem_doc"] = None
                 st.session_state["compras_sem_focus"] = _clic
@@ -1552,16 +1579,6 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _doc_ok = _doc is not None and _doc in set(dd["compra"])
         _foco_ok = _focus in set(dd["clave"])
         _con_detalle = _doc_ok or _foco_ok
-        # EL MODO SE LEE DE `session_state` Y NO DEL WIDGET, por lo mismo que
-        # el clic de acá arriba: el toggle se dibuja DEBAJO de la figura
-        # —que es donde gobierna— y el alto de la figura depende de él. Una
-        # clave con `key` se lee sin dibujarla, y en la corrida del clic ya
-        # trae el valor nuevo, así que leerla acá no atrasa un gesto. El
-        # widget de más abajo no devuelve nada distinto: por eso se ignora
-        # lo que devuelve, igual que `st.plotly_chart`.
-        _modo = st.session_state.get("compras_sem_modo")
-        if _modo not in _MODO_OPCIONES:
-            _modo = _MODO_DEFAULT
         # Resumen no necesita foco: su tabla son TODAS las barras. Por eso
         # la figura cede su sitio también ahí, y la zona de abajo deja de
         # tener un estado vacío.
@@ -1686,14 +1703,27 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # una barra que Plotly cree seleccionada se DESELECCIONA al tocarla
         # (`selectOnClick` en su código), eso llega como selección vacía, y
         # el clic para cerrar el detalle no haría nada.
-        if _con_detalle and _partida:
+        #
+        # EN RESUMEN NO SE ATENÚA (regla #476, 2026-09-20). Resumen «no
+        # necesita foco: su tabla son TODAS las barras» —y la fila del
+        # período elegido ya va marcada con `__sel`—, así que el gráfico
+        # de arriba se queda con todas las barras enteras. Además es una
+        # cura: una `marker.opacity` POR PUNTO sobre las barras apiladas
+        # con texto `outside` es el estado que hacía crashear a Plotly en
+        # Resumen («Cannot read properties of undefined (reading
+        # 'textfont')»), al que se llegaba enfocando en Detalle y
+        # alternando a Resumen. Sin foco en Resumen, ese estado no existe;
+        # un clic en una barra desde Resumen ya cambia a Detalle (arriba),
+        # donde atenuar es la interacción de siempre y no crashea.
+        _marcar_foco = _con_detalle and _modo != _MODO_RESUMEN
+        if _marcar_foco and _partida:
             # Las tres trazas comparten el eje `_ord_claves`, así que la
             # misma lista de opacidades sirve para las tres: lo que se marca
             # es el PERÍODO, y un período en foco se ilumina entero.
             _op = [1.0 if _c == _focus else _ATENUADO for _c in _ord_claves]
             for _tr in fig.data:
                 _tr.marker.opacity = _op
-        elif _con_detalle:
+        elif _marcar_foco:
             fig.data[0].marker.opacity = [
                 1.0 if _c == _focus else _ATENUADO for _c in g["clave"]]
 
