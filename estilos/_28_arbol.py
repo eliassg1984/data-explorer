@@ -80,15 +80,14 @@ CSS = """
         }
     }
 
-    /* DEFENSA ANTI-TOOLTIP-FANTASMA en las VISTAS (2026-09-19): desde que
-       llevan su KPI en `help=` (`base.py::_render_rail`), Streamlit envuelve
-       el botón con el tooltip y deja una COPIA suelta en el mismo `stButton`,
-       la trampa de la regla #164. El que lleva el tooltip es siempre el
-       primero; sin `help=` hay un solo `div` y esto no elige nada. Sin
-       `@media`: la copia aparece en cualquier ancho. */
-    .st-key-nav_rail_lateral [data-testid="stButton"] > div + div {
-        display: none !important;
-    }
+    /* DEFENSA ANTI-TOOLTIP-FANTASMA en las VISTAS: se fue con el `help=`
+       el 2026-09-21 (regla #482). Mientras el KPI viajó en `help=`
+       (2026-09-19 a 2026-09-21) Streamlit envolvía el botón con su tooltip
+       y dejaba una COPIA suelta en el mismo `stButton` —la trampa de la
+       regla #164—, y hacía falta un `> div + div { display: none }`. Hoy
+       los botones de la columna no llevan `help=`: hay un solo `div` y el
+       selector no elegiría nada. Si algún día vuelve un `help=` acá, el
+       ícono duplicado es lo primero que se ve. */
 
     @media screen and (min-width: 901px) {
 
@@ -97,6 +96,10 @@ CSS = """
         --fila-rep: 36px;
         --fila-vis: 30px;
         --sep-vis: 13px;             /* 1px de línea + 6 de aire arriba y abajo */
+        /* El alto de fila con el que `_20_compras_rail.py` centra el punto
+           de una vista. Acá la fila es la de una vista; entre 769 y 900px
+           lo define `_26_rails_scroll.py` con el suyo. */
+        --rail-fila-alto: var(--fila-vis);
         --arbol-cab: 6px;            /* aire entre la cabecera y el primer reporte */
         --arbol-alto: calc(var(--arbol-n, 0) * var(--fila-vis)
                            + var(--arbol-seps, 0) * var(--sep-vis)
@@ -164,7 +167,12 @@ CSS = """
         display: flex !important;
         flex-direction: column !important;
         gap: 0 !important;
-        overflow: hidden !important;
+        /* VISIBLE y no `hidden` desde el 2026-09-21 (regla #482): el panel
+           del KPI de una vista sale por la derecha de la columna y un
+           recorte acá se lo comía. Nada más se sale: el que clipea el
+           nombre con la columna plegada es el `overflow: hidden` de cada
+           `<button>`, no éste. */
+        overflow: visible !important;
         opacity: 1 !important;
         visibility: visible !important;
         clip-path: none !important;
@@ -505,10 +513,29 @@ CSS = """
     :root[data-capa-col] .st-key-nav_rail_lateral .nav-rail-lat-sep {
         margin-left: calc(var(--icono-x) + 16px) !important;
     }
-    /* El punto del semáforo: centrado en la fila, contra el borde derecho. */
-    .st-key-nav_rail_lateral button::after {
-        top: calc(50% - 3px);
-        right: 8px;
+    /* EL PUNTO DE UNA VISTA SÓLO CON LA COLUMNA DESPLEGADA (2026-09-21,
+       a pedido: «cuando esté oculto, el punto rojo no se vea»). Plegada,
+       la columna son 68px de íconos y el punto quedaba flotando al lado
+       del ícono sin nada que lo explique: el KPI se abre con el cursor
+       ENCIMA del punto, y ahí no hay dónde ponerlo. Así el punto aparece
+       con el nombre de su vista, que es cuando se puede interrogar.
+
+       `pointer-events` además de `opacity`: un punto invisible pero
+       hit-testeable seguiría abriendo el panel sobre el lienzo.
+       El pseudo del semáforo (`button::after`) ya no se dibuja acá — el
+       punto es el `stElementContainer` de `railkpi_<slug>`, ver el bloque
+       «EL PUNTO DE UNA VISTA» de `_20_compras_rail.py`. */
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"]
+        > [data-testid="stElementContainer"] {
+        opacity: 0;
+        pointer-events: none !important;
+        transition: opacity 120ms linear;
+    }
+    :root:has(.st-key-rail_pestillo_abierto) .st-key-nav_rail_lateral [class*="st-key-railkpi_"] > [data-testid="stElementContainer"],
+    :root[data-capa-col] .st-key-nav_rail_lateral [class*="st-key-railkpi_"] > [data-testid="stElementContainer"] {
+        opacity: 1;
+        pointer-events: auto !important;
+        transition-delay: 120ms;
     }
 
     /* ══ LA FRANJA DE CONTEXTO ══════════════════════════════════════════

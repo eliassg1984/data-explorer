@@ -1350,13 +1350,20 @@ CSS = """    /* ================================================================
        Cuelga del BOTON y no del label: plegado el label esta en
        `display:none` y el punto se iria con el. Es justo al reves de lo
        que tiene que pasar — el punto es lo que queda cuando no queda
-       nada mas. */
+       nada mas.
+
+       EN LA COLUMNA DE VISTAS YA NO ES ESTE PSEUDO (2026-09-21, regla
+       #482): ahi el punto tiene que poder recibir el cursor —el KPI se
+       abre con el hover ENCIMA DEL PUNTO y no en cualquier parte de la
+       fila— y un pseudo no se puede hover por separado. Lo dibuja el
+       bloque «EL PUNTO DE UNA VISTA» de aca abajo, sobre el contenedor
+       `railkpi_<slug>` que emite `base.py::_render_rail`. Este pseudo
+       queda para la franja horizontal, que no tiene panel que abrir. */
     .st-key-compras_tabs_row button,
     .st-key-nav_rail_lateral button {
         position: relative !important;
     }
-    .st-key-compras_tabs_row button::after,
-    .st-key-nav_rail_lateral button::after {
+    .st-key-compras_tabs_row button::after {
         content: "";
         position: absolute;
         top: 7px;
@@ -1370,6 +1377,126 @@ CSS = """    /* ================================================================
     /* (Aca vivia la posicion del punto con la columna plegada a 46px; se
        fue con el resto del plegado viejo, ver «PLEGADO» mas abajo. En el
        arbol la ubica `_28_arbol.py`.) */
+
+    /* ── EL PUNTO DE UNA VISTA, Y EL KPI QUE CUELGA DE EL (2026-09-21) ──
+       Reemplaza al `help=` de Streamlit en la columna de vistas. Lo que
+       se pidio, en tres partes: que la etiqueta salga SOLO con el cursor
+       sobre el punto, que no sea tan larga, y que plegada la columna el
+       punto no se vea (esto ultimo vive en `_28_arbol.py`, que es quien
+       sabe cuando esta plegada).
+
+       El DOM es el de `st.container(key="railkpi_<slug>")` con un
+       `st.markdown` adentro, dibujado JUSTO DEBAJO de su boton:
+
+         · el contenedor mide CERO de alto y no empuja la lista;
+         · su `stElementContainer` es el PUNTO — se sube media fila con
+           `--rail-fila-alto`, que cada tramo define con su propio alto
+           de fila (`_28_arbol.py` desde 901px, `_26_rails_scroll.py`
+           entre 769 y 900);
+         · el `stMarkdown` de adentro es el PANEL, apagado hasta que el
+           punto recibe el cursor.
+
+       El punto se dibuja con un `::after` y no con el fondo del propio
+       contenedor: asi la zona que recibe el cursor mide 16px —se puede
+       apuntar— y el circulo sigue midiendo 7. */
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"] {
+        position: relative !important;
+        display: block !important;
+        width: 100% !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+    }
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"]
+        > [data-testid="stElementContainer"] {
+        position: absolute !important;
+        /* 9 y no 8: el contenedor mide lo que la COLUMNA y el boton lleva
+           6px de margen, asi el centro del circulo cae donde caia el del
+           pseudo (`right: 8px` contra el borde del boton). */
+        right: 9px !important;
+        /* Centrado en la fila de ARRIBA: el contenedor tiene alto 0 y su
+           borde de abajo es el borde de abajo del boton. */
+        bottom: calc(var(--rail-fila-alto, 30px) / 2 - 8px) !important;
+        width: 16px !important;
+        height: 16px !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        z-index: 2 !important;
+        /* El clic lo reenvia al boton de su fila el script de
+           `base.py::_render_rail`: el punto tapa 16px del boton y sin eso
+           serian 16px que se iluminan y no llevan a ningun lado (#421). */
+        cursor: pointer !important;
+    }
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"]
+        > [data-testid="stElementContainer"]::after {
+        content: "";
+        position: absolute;
+        top: calc(50% - 3.5px);
+        left: calc(50% - 3.5px);
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        /* Sin estado el punto es gris: el KPI existe igual (hay vistas
+           cuyo numero no tiene con que compararse) y sin algo que tocar
+           no habria como leerlo. */
+        background: var(--punto, var(--text-muted));
+        pointer-events: none;
+        transition: transform 120ms linear;
+    }
+    /* Con el cursor encima el punto crece: la fila NO se ilumina —el
+       cursor esta sobre un elemento que no es el boton— asi que sin esto
+       nada avisa que ahi hay algo que tocar. */
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"]
+        > [data-testid="stElementContainer"]:hover::after {
+        transform: scale(1.45);
+    }
+    /* EL PANEL. Sale por la DERECHA del punto, al lado de lo que explica
+       —el `help=` lo clavaba en la esquina de la pantalla— y con un ancho
+       fijo: el texto envuelve en vez de estirarse a 464px. */
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"] [data-testid="stMarkdown"] {
+        position: absolute !important;
+        left: calc(100% + 16px) !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        width: 250px !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 8px 10px !important;
+        box-sizing: border-box !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        background: var(--bg-card) !important;
+        box-shadow: var(--shadow-md) !important;
+        color: var(--text-secondary) !important;
+        opacity: 0;
+        /* SIEMPRE apagado para el cursor: un panel invisible pero
+           hit-testeable taparia la tarjeta de al lado. */
+        pointer-events: none !important;
+        z-index: 3 !important;
+        transition: opacity 120ms linear;
+    }
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"] [data-testid="stMarkdown"] p {
+        margin: 0 0 4px 0 !important;
+        font-size: 12px !important;
+        line-height: 1.4 !important;
+        white-space: normal !important;
+    }
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"] [data-testid="stMarkdown"] p:last-child {
+        margin-bottom: 0 !important;
+        color: var(--text-muted) !important;
+    }
+    /* La espera de 260ms es la misma idea que el velo de `data-stale`: sin
+       ella el panel parpadea al cruzar la columna y deja de significar
+       algo. Al salir se apaga sin espera. */
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"]
+        > [data-testid="stElementContainer"]:hover [data-testid="stMarkdown"] {
+        opacity: 1;
+        transition: opacity 120ms linear 260ms;
+    }
     /* ── AL SCROLLEAR, EL PESTILLO BAJA CON LA COLUMNA ──────────────────
        Medido en Cloud el 2026-09-07, que es como se encontro el bug:
 

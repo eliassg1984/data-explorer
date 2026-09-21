@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-481 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+482 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (169)
 
@@ -444,7 +444,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 
-**Streamlit** (132)
+**Streamlit** (133)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -578,6 +578,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
+- **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -745,7 +746,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (87)
+**Decisiones de diseño y UX** (88)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -834,6 +835,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#473** — Un jalón negativo que compensa un gap fantasma es deuda con intereses: el día que el gap…
 - **#475** — Un salto del rail SOBREVUELA la pila, y una pila que construye «lo que tengas cerca» lee ese…
 - **#478** — Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una vela por compra es plana…
+- **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -40260,6 +40262,93 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-20.)
 
+482. **Un tooltip de Streamlit (`help=`) lo dispara el WIDGET ENTERO. Si
+     lo que tiene que explicarse es una marca de 7px adentro de ese
+     widget, el tooltip no puede ser el de Streamlit: tiene que ser un
+     elemento propio, y la marca tiene que ser un elemento también — un
+     pseudo no se puede hover por separado.**
+
+     Reportado el 2026-09-21 con captura: *«esa etiqueta que aparece
+     cuando el cursor pasa por la vista, que solo aparezca cuando el
+     cursor se posicione sobre el punto rojo y que no sea tan larga
+     horizontalmente. Y también que cuando esté oculto, el punto rojo no
+     se vea»*. Tres quejas, una sola causa: el KPI de cada vista viajaba
+     en el `help=` del `st.button` de la columna (así lo dejó la #465 el
+     2026-09-19).
+
+     **Qué se midió antes de tocar nada** (1366x768, Compras, columna
+     desplegada):
+
+     | | con `help=` | con el panel propio |
+     |---|---|---|
+     | dispara con el cursor en | los 236x30 de la fila | los 16x16 del punto |
+     | ancho del panel | 464px (`max-width: 672px`) | 250px |
+     | dónde sale | (8, 5) — la esquina de la pantalla | pegado al punto |
+
+     Los 464px no son configurables sin tocar a TODOS los tooltips de la
+     app: baseweb lo monta en un portal al final del `<body>`, así que no
+     hay ancestro por el que acotar una regla. Y el (8,5) es el mismo
+     portal resolviendo que arriba del ancla no entra: la etiqueta que
+     explica un punto salía a 90px de él.
+
+     **La forma que quedó.** `base.py::_render_rail` dibuja, justo DEBAJO
+     de cada botón de vista, un `st.container(key="railkpi_<slug>")` con
+     un `st.markdown` adentro. El CSS (`_20_compras_rail.py`, bloque «EL
+     PUNTO DE UNA VISTA») lo convierte en dos cosas:
+
+     · el contenedor mide **cero de alto** y no empuja la lista — su
+       `stElementContainer` es el PUNTO, subido media fila con
+       `--rail-fila-alto` (`_28_arbol.py` la define desde 901px,
+       `_26_rails_scroll.py` entre 769 y 900, donde la fila mide 62);
+     · el `stMarkdown` de adentro es el PANEL, apagado hasta que el punto
+       recibe el cursor.
+
+     **Por qué un contenedor de alto cero y no envolver cada fila:** hay
+     reglas colgadas de que el `stElementContainer` del `st.button` sea la
+     unidad del rail — el hairline por ítem de `_26_rails_scroll.py` usa
+     `:has(.stButton)` y un `:last-child`. Envolver la fila los rompe a
+     los dos en silencio.
+
+     **Por qué `st.markdown` y no HTML armado a mano:** el texto ya viene
+     con `**negrita**` y `:red[▲3%]` de `_kpis_vistas`, y el color de esa
+     flecha es la mitad del dato. Un conversor propio a HTML se queda
+     viejo con el primer KPI que use otra marca.
+
+     **Tres cosas que costaron una vuelta cada una:**
+
+     · **El rail recortaba el panel.** `.st-key-nav_rail_lateral` estaba
+       en `overflow: hidden`; el panel sale por la derecha de la columna y
+       se cortaba entero (verificado con una sonda: `elementFromPoint` en
+       su centro devolvía lo de atrás). Pasó a `visible` — lo que clipea el
+       nombre con la columna plegada es el `overflow` de cada `<button>`,
+       no el del rail. Entre 769 y 900px no se puede: ahí el rail es
+       scrollable (`overflow-x: hidden`), así que el panel cae DEBAJO del
+       punto, adentro de la columna.
+     · **El punto se come 16px del botón.** La fila se ilumina entera y
+       ahí no pasaría nada al hacer clic: la regla #421 otra vez. El clic
+       se reenvía al botón de la fila —su hermano ANTERIOR— desde el mismo
+       `enlazar()` que ya corre cada 400ms, y el punto crece con el cursor
+       encima porque la fila ya no se ilumina cuando estás sobre él.
+     · **Sin estado, el punto es gris.** Hay KPIs que no tienen con qué
+       compararse (Volatilidad sin delta), y con el punto transparente el
+       texto quedaba sin nada que tocar: ilegible en vez de discreto.
+
+     **Y plegada, el punto no se ve** (`_28_arbol.py`): con la columna en
+     68px de íconos el punto quedaba al lado del ícono sin nada que lo
+     explique — el KPI se abre con el cursor ENCIMA del punto, y ahí no
+     hay dónde ponerlo. `pointer-events: none` además de `opacity: 0`: un
+     punto invisible pero hit-testeable seguiría abriendo el panel sobre
+     el lienzo.
+
+     Esto **revierte la mitad** de la #465, que había puesto el KPI en
+     `help=`; el motivo de aquella —el punto de color no se podía
+     interrogar— sigue en pie y es lo que este panel contesta mejor. Con
+     el `help=` se fue también la defensa anti-tooltip-fantasma de las
+     vistas (#164): sin `help=` Streamlit deja un solo `div` y no hay
+     copia que esconder.
+
+     (2026-09-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -40272,7 +40361,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#482**.
+> próxima regla nueva es la **#483**.
 
 >
 

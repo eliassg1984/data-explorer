@@ -1930,11 +1930,18 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     # mismo número —sube, baja, o hay algo que revisar— y sin
                     # él no hay forma de saber qué dice: se reportó tal cual,
                     # «veo que algunas vistas tienen un punto rojo, eso qué
-                    # significa?». Va en `help=` y no en el label porque el
-                    # KPI en línea se retiró a pedido el 2026-09-18 (#465):
-                    # así el dato está cuando se lo busca y no ensucia la
-                    # lista. Markdown incluido: el texto ya viene con
-                    # `:red[▲12%]` de quien lo armó.
+                    # significa?». En línea no va porque el KPI en el label se
+                    # retiró a pedido el 2026-09-18 (#465): así el dato está
+                    # cuando se lo busca y no ensucia la lista.
+                    #
+                    # Y NO ES EL `help=` DE STREAMLIT desde el 2026-09-21
+                    # (#482), a pedido: ese tooltip lo dispara el BOTÓN
+                    # entero —hover en cualquier parte de la fila—, sale a
+                    # 464px de ancho y baseweb lo clava en la esquina de la
+                    # pantalla, lejos del punto que explica. Acá el punto es
+                    # un elemento de verdad y el panel cuelga de ÉL: se
+                    # muestra sólo con el cursor encima del punto, mide lo
+                    # que dice `estilos/`, y aparece a su lado.
                     _ayuda = (kpis or {}).get(oid)
                     st.button(
                         label,
@@ -1942,8 +1949,28 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                         type="secondary",
                         on_click=_rail_set, args=(state_key, oid),
                         **({"icon": icono} if icono else {}),
-                        **({"help": _ayuda} if _ayuda else {}),
                     )
+                    # EL PUNTO Y SU PANEL, en un contenedor de alto CERO
+                    # pegado DEBAJO de su botón: el CSS lo sube media fila
+                    # (`--rail-fila-alto`) y así no empuja la lista ni pide
+                    # envolver cada fila —hay reglas colgadas de que el
+                    # `stElementContainer` del botón sea la unidad del rail
+                    # (el hairline de `_26_rails_scroll.py`)—.
+                    #
+                    # El texto va por `st.markdown` y no por HTML armado a
+                    # mano para que lo renderice Streamlit: ya viene con
+                    # `**negrita**` y `:red[▲12%]` de quien lo escribió, y
+                    # un conversor propio se quedaría viejo con el primer
+                    # KPI que use otra marca.
+                    #
+                    # Se dibuja si hay KPI *o* si hay estado: hoy en Compras
+                    # todo estado trae su texto, pero un dashboard podría
+                    # pasar sólo `estados` y ahí el punto sigue siendo la
+                    # señal, sin panel que abrir.
+                    if _ayuda or (estados or {}).get(oid):
+                        with st.container(key=f"railkpi_{_slug_url(oid)}"):
+                            if _ayuda:
+                                st.markdown(_ayuda)
         # El alto del hueco que abre la fila activa del árbol lo calcula el
         # CSS con estos dos conteos y los altos de fila que viven allá
         # (`_28_arbol.py`). Fuera del contenedor del rail: adentro sería una
@@ -1959,13 +1986,18 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
     # variable CSS a proposito, para que no haya una tabla de traduccion
     # en el medio que se pueda desincronizar del dict que la llena.
     #
-    # POR QUE UN `::after` Y NO TEXTO EN EL LABEL: plegado, el label
-    # entero esta en `display:none` (ver `_20_compras_rail.py`). Un punto
-    # dentro del label se iria con el. El pseudo cuelga del BOTON, que
-    # sigue ahi — y ese es justo el sentido del semaforo: es lo que queda
-    # cuando no queda nada mas. Desde el 2026-09-18 es ademas lo UNICO que
-    # queda: el KPI en linea se retiro de las dos copias del rail (#465),
-    # asi que el punto es toda la senal que da esta lista.
+    # EN LA COLUMNA ES UN ELEMENTO, NO UN `::after` (2026-09-21, #482).
+    # Un pseudo no se puede hover por separado, y lo que se pidio es que el
+    # KPI aparezca SOLO con el cursor sobre el punto: el punto pasa a ser
+    # el contenedor `railkpi_<slug>` que se dibuja arriba, y el panel
+    # cuelga de el. En la franja horizontal (`nav_rail`) sigue siendo el
+    # `::after` del boton, que ahi no tiene panel que abrir.
+    #
+    # Antes el pseudo colgaba del BOTON y no del label porque plegado el
+    # label esta en `display:none` y el punto se iria con el. Eso dejo de
+    # ser una virtud el 2026-09-21: plegada la columna el punto se esconde
+    # a proposito (misma #482), porque una tira de iconos con puntos que no
+    # se pueden interrogar es ruido.
     #
     # Se emite una variable por key y NO una regla por key: el color
     # cambia en cada render (los estados son del rango vigente) y una regla
@@ -1978,7 +2010,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
             if _est not in ("success", "danger", "warning"):
                 continue
             _sl = _slug_url(_oid)
-            for _k in (f"{btn_prefix}{_slug(_oid)}", f"{btn_prefix}lat_{_sl}"):
+            for _k in (f"{btn_prefix}{_slug(_oid)}", f"railkpi_{_sl}"):
                 _vars.append(f".st-key-{_k} {{ --punto: var(--{_est}); }}")
         if _vars:
             st.markdown("<style>" + "".join(_vars) + "</style>",
@@ -2226,6 +2258,26 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                         w.__railSalto = Date.now() + 1400;
                         raiz.scrollTo({{ top: Math.max(0, y), behavior: 'smooth' }});
                       }}, true);
+                    }});
+
+                    // EL PUNTO TAMBIEN LLEVA A SU VISTA (2026-09-21, #482).
+                    // El punto es un elemento propio encima del borde
+                    // derecho del boton, asi que se come el clic de esos
+                    // 16px: la fila se ilumina entera y ahi no pasaria nada
+                    // — exactamente la queja de la regla #421. Se reenvia
+                    // al boton de la fila, que es su hermano ANTERIOR (el
+                    // contenedor del punto se dibuja justo despues).
+                    doc.querySelectorAll('.st-key-nav_rail_lateral '
+                      + '[class*="st-key-railkpi_"]').forEach(function (k) {{
+                      var zona = k.querySelector('[data-testid="stElementContainer"]');
+                      if (!zona || zona.__railPunto) return;
+                      zona.__railPunto = true;
+                      zona.addEventListener('click', function () {{
+                        var caja = k.closest('[data-testid="stLayoutWrapper"]') || k;
+                        var fila = caja.previousElementSibling;
+                        var bf = fila && fila.querySelector('button');
+                        if (bf) bf.click();
+                      }});
                     }});
                   }}
                   enlazar();

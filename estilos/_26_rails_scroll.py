@@ -806,12 +806,19 @@ CSS = f"""
     .st-key-nav_rail_lateral [data-testid="stButton"] {{
         width: 100% !important;
     }}
+    /* El alto de fila de ESTE tramo, con el que `_20_compras_rail.py`
+       centra el punto de una vista (regla #482). Es la misma medida que el
+       `min-height` del botón de acá abajo, declarada una sola vez para que
+       no se puedan desincronizar. Desde 901px la define `_28_arbol.py`. */
+    :root {{
+        --rail-fila-alto: 62px;
+    }}
     .st-key-nav_rail_lateral [data-testid="stButton"] button {{
         width: 100% !important;
         /* min-height y no height: el texto tiene que poder centrarse
            verticalmente adentro (align-items:center), no solo caber. Con
            height a secas el label quedaba pegado arriba del hueco. */
-        min-height: 62px !important;              /* == navitem_ de Reportes, medido */
+        min-height: var(--rail-fila-alto) !important;   /* == navitem_ de Reportes, medido */
         display: flex !important;
         justify-content: flex-start !important;
         align-items: center !important;
@@ -959,6 +966,21 @@ CSS = f"""
     .st-key-nav_rail_lateral [data-testid="stElementContainer"]:has(.stButton):last-child {{
         border-bottom: none !important;
     }}
+    /* ── EL PANEL DEL KPI, ADENTRO DE LA COLUMNA ──────────────────────
+       Desde 901px el panel sale por la DERECHA del punto, al lado de la
+       columna (`_20_compras_rail.py`). Acá no puede: el rail recorta
+       (`overflow-x: hidden`, y es scrollable), así que lo que salga del
+       ancho se corta. Cae DEBAJO del punto y contra el borde derecho, que
+       es el mismo gesto —el panel toca el punto— en el único sitio que
+       queda. Ver regla #482. */
+    .st-key-nav_rail_lateral [class*="st-key-railkpi_"] [data-testid="stMarkdown"] {{
+        left: auto !important;
+        right: 0 !important;
+        top: calc(100% + 6px) !important;
+        transform: none !important;
+        width: 240px !important;
+    }}
+
     /* ── SEPARADOR: scroll-to vs destino aparte ───────────────────────
        2026-08-26, a pedido ("el reporte de documentos sunat no aparece
        al hacer scroll"): no era un bug, era que el rail no avisaba que

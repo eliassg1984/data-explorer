@@ -251,10 +251,15 @@ Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
   un séptimo, se suma a esa lista — no se compensa con un `margin-top`
   negativo por reporte, que es lo que hubo hasta el 2026-09-19 y hacía que
   cada reporte abriera a una altura distinta (regla #473).
-- **El punto de color de una vista sale de su KPI**, y el KPI vive en el
-  `help=` del botón: rojo subió (en Compras, gastar más), verde bajó,
-  ámbar hay algo que revisar. Los arma `graficos/compras/__init__.py::
-  _kpis_vistas`; el texto es el tooltip, así que se escribe para leerse.
+- **El punto de color de una vista sale de su KPI**: rojo subió (en
+  Compras, gastar más), verde bajó, ámbar hay algo que revisar. Los arma
+  `graficos/compras/__init__.py::_kpis_vistas`; el texto es el tooltip,
+  así que se escribe para leerse. **El punto es un elemento de verdad
+  —`railkpi_<slug>`, un contenedor de alto cero pegado debajo de su
+  botón— y el KPI es un panel que cuelga de él**, no el `help=` de
+  Streamlit: ése lo dispara el botón entero, sale a 464px y baseweb lo
+  clava en la esquina de la pantalla. Se abre SÓLO con el cursor sobre el
+  punto, y plegada la columna el punto no se ve. Ver regla #482.
 - **En el navegador automatizado las transiciones no avanzan** (#353): para
   medir anchos, apagarlas antes desde la consola.
 - **Quién despliega no es el CSS**: `navegacion.py::_SCRIPT_CAPAS` evalúa
