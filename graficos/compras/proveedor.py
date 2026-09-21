@@ -1815,26 +1815,55 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                        else f"Proveedores de · {_compras_truncar(_prod_ver, 26)}")
                 with _card("prov_prov_de_prod", _tb, titulo_arriba=True):
                     # Toggle de ámbito de fecha, alojado en la cabecera (dcha.):
-                    # "En rango" respeta el filtro superior; "Todo" recalcula con
-                    # el histórico completo (d_full), ignorando el filtro de fecha.
+                    # "Año Actual" mira SOLO el año calendario en curso; "Todo"
+                    # recalcula con el histórico completo (d_full). Los dos
+                    # IGNORAN el filtro de fecha de la cabecera a propósito: el
+                    # panel elige su propia ventana. "Año calendario" —no una
+                    # ventana móvil de 12 meses— es el mismo criterio que el
+                    # atajo "Este año" de `estado_rango.atajos_rango`; rotular
+                    # "actual" una ventana móvil induce a error (regla #361).
+                    #
+                    # Sesiones viejas guardaron "En rango" (el ámbito anterior),
+                    # que ya no es una opción: `st.pills` REVIENTA si su
+                    # session_state cae fuera de `options`, así que se descarta
+                    # antes de dibujar (mismo problema que el seed de #373). El
+                    # `get` devuelve None tanto si falta la clave como si es
+                    # None; en ese caso no hay nada que borrar.
+                    if st.session_state.get("compras_prov_prov_scope") not in (
+                            None, "Año Actual", "Todo"):
+                        del st.session_state["compras_prov_prov_scope"]
                     with st.container(key="panelb_scope_float"):
                         _scope = st.pills(
-                            "Ámbito de fecha", ["En rango", "Todo"],
-                            default="En rango", key="compras_prov_prov_scope",
+                            "Ámbito de fecha", ["Año Actual", "Todo"],
+                            default="Año Actual", key="compras_prov_prov_scope",
                             label_visibility="collapsed",
-                        ) or "En rango"
+                        ) or "Año Actual"
                     if _prod_ver is None:
                         pass
                     else:
-                        # `_todo_hist` solo elige la FUENTE. El caption que lo
-                        # anunciaba ("📅 Todo el histórico — ignora el filtro
-                        # de fecha de arriba") se quitó a pedido: el pill
-                        # "Todo" ya está marcado ahí mismo, en la cabecera del
-                        # panel, así que la leyenda repetía lo que el propio
-                        # control mostraba — y encima aparecía y desaparecía,
-                        # moviendo las tarjetas de abajo en cada cambio.
-                        _todo_hist = (_scope == "Todo" and d_full is not None)
-                        _srcB = _base_prov_de(d_full) if _todo_hist else base
+                        # El ámbito elige la FUENTE. El caption que lo anunciaba
+                        # ("📅 Todo el histórico — ignora el filtro de fecha de
+                        # arriba") se quitó a pedido: el pill ya está marcado ahí
+                        # mismo, en la cabecera del panel, así que la leyenda
+                        # repetía lo que el propio control mostraba — y encima
+                        # aparecía y desaparecía, moviendo las tarjetas de abajo.
+                        #
+                        # "Año Actual" filtra `d_full` (histórico SIN recorte de
+                        # fecha) al año en curso, no `base` (que ya viene
+                        # recortado por la franja): así el ámbito no depende del
+                        # rango de arriba. Sin `d_full` o sin columna de fecha
+                        # cae a `base` — sin histórico no hay de dónde sacar el
+                        # año. Mismo idiom que `_kpis_vistas` (__init__.py).
+                        if _scope == "Todo" and d_full is not None:
+                            _srcB = _base_prov_de(d_full)
+                        elif (_scope == "Año Actual" and d_full is not None
+                              and col_fecha):
+                            _ff = pd.to_datetime(d_full[col_fecha],
+                                                 errors="coerce")
+                            _srcB = _base_prov_de(
+                                d_full[_ff.dt.year == pd.Timestamp.now().year])
+                        else:
+                            _srcB = base
                         sub2 = _srcB[_srcB["prod"] == _prod_ver]
                         # Color por proveedor: los del top toman su color de la
                         # paleta (el mismo que en el chart principal); los que
