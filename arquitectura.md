@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-480 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+481 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (169)
 
@@ -444,7 +444,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 
-**Streamlit** (131)
+**Streamlit** (132)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -577,6 +577,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
 - **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
+- **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -702,7 +703,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (38)
+**Herramientas de desarrollo** (39)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -742,6 +743,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#426** — Un hijo de altura CERO no ocupa alto pero sí cobra el gap. Seis de ellos son 96px de página…
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
+- **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
 **Decisiones de diseño y UX** (87)
 
@@ -40207,6 +40209,57 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-20.)
 
+481. **La máquina de desarrollo NO corre las versiones de
+     `requirements.txt`. «Pasa en local» no es evidencia sobre Cloud, y el
+     hueco se ve en la FORMA de un DataFrame, no en un error de import.**
+     Medido el 2026-09-20: local tiene **pandas 3.0.3** y `requirements.txt`
+     pide **`pandas>=2.2,<2.3`**, que es lo que instala Streamlit Cloud. Dos
+     mayores de distancia, y nada avisa — la app arranca igual en los dos
+     lados.
+
+     **Cómo mordió.** `_compras_del_periodo` (Compras › Producto) agrupaba
+     por `[_g[col_docu].astype(str), "__prov"]` —una Series suelta y un
+     nombre de columna— con `as_index=False`, y después reescribía
+     `_d.columns` con una lista de cinco. En pandas 3 el frame sale con las
+     dos claves como columnas y los cinco nombres calzan; en pandas 2 la
+     clave que es una Series SUELTA no se inserta, salen cuatro, y la
+     asignación muere con `ValueError: Length mismatch`. Las cuatro suites
+     pasaban en verde y la app publicada tiraba un cartel rojo al tocar una
+     barra. Se reportó con captura: el gráfico dibujado, la barra en foco, y
+     el error donde tendría que estar la tabla.
+
+     **La regla que sale de ahí no es «probá en Cloud», es: no le preguntes
+     la FORMA a pandas.** Renombrar por posición es apostar a la forma del
+     resultado; agrupar por columnas de verdad y renombrar por NOMBRE no
+     depende de ninguna versión:
+
+         _g["__doc"] = _g[col_docu].astype(str)
+         _d = (_g.groupby(["__doc", "__prov"], as_index=False)
+                 .agg(...)
+                 .rename(columns={"__prov": "prov"}))
+
+     Y el test que lo ataja tampoco es «correr dos pandas»: es afirmar las
+     COLUMNAS POR NOMBRE, no sólo cuántas filas salieron. El test original
+     comprobaba `len(_det) == 2` y por eso pasó — la forma equivocada tiene
+     las mismas filas.
+
+     **Dónde más está el patrón, revisado el mismo día:** `graficos/
+     ventas.py` (dos sitios) e `inspector.py` renombran columnas por
+     posición, pero en los tres el ancho queda FIJADO en la línea anterior
+     (un `[[...]]` explícito, un `reset_index` de índice conocido), así que
+     no dependen de la versión. El único frágil era el del groupby con
+     clave-Series.
+
+     **Ojo con lo que NO se pudo hacer:** instalar pandas 2.2 en esta
+     máquina para reproducirlo. No hay wheel para Python 3.14 y compilarlo
+     desde fuente falla, así que el mecanismo se estableció por descarte —
+     `_d.columns = [...]` es la ÚNICA línea de esa función que puede tirar
+     un `ValueError`— y la cura vale para las dos versiones. Si algún día
+     hace falta reproducir de verdad un bug así, el camino es un Python 3.11
+     o 3.12 aparte con `requirements.txt` puesto.
+
+     (2026-09-20.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -40219,7 +40272,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#481**.
+> próxima regla nueva es la **#482**.
 
 >
 

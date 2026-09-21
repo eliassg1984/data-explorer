@@ -825,10 +825,21 @@ def _compras_del_periodo(g, clave, gran, col_fecha, col_punit, col_cant,
                     and col_prov in _g.columns else "")
     _g["__cant"] = pd.to_numeric(_g[col_cant], errors="coerce").fillna(0.0)
     _g["__val"] = pd.to_numeric(_g[col_valor], errors="coerce").fillna(0.0)
-    _d = (_g.groupby([_g[col_docu].astype(str), "__prov"], as_index=False)
+    # SE AGRUPA POR DOS COLUMNAS DE VERDAD, y el renombre es POR NOMBRE.
+    # La primera versión agrupaba por `[_g[col_docu].astype(str), "__prov"]`
+    # —una Series suelta y un nombre— y después reescribía `_d.columns` con
+    # una lista de cinco. Funcionaba en la máquina de desarrollo (pandas 3,
+    # que deja la clave-Series como columna) y reventaba en Cloud con un
+    # `ValueError: Length mismatch`, porque ahí corre la versión de
+    # `requirements.txt` (pandas 2.2) y el frame sale con otra forma.
+    # Renombrar por POSICIÓN es apostar a la forma; por nombre, no. Ver la
+    # regla #481, que es sobre el desfase de versiones y no sobre esta
+    # función.
+    _g["__doc"] = _g[col_docu].astype(str)
+    _d = (_g.groupby(["__doc", "__prov"], as_index=False)
             .agg(fecha=(col_fecha, "min"), cant=("__cant", "sum"),
-                 valor=("__val", "sum")))
-    _d.columns = ["__doc", "prov", "fecha", "cant", "valor"]
+                 valor=("__val", "sum"))
+            .rename(columns={"__prov": "prov"}))
     _d["punit"] = [(_v / _c if _c else None)
                    for _v, _c in zip(_d["valor"], _d["cant"])]
     _d["prov"] = [nombre_propio(_n) if _n else "—" for _n in _d["prov"]]

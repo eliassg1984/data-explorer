@@ -4385,6 +4385,15 @@ def _pruebas_etiqueta_barras_producto():
         df, "2026-08", "Mes", "FECHA", "PUNIT", "CANT", "VAL", "DOC", "PROV")
     check("el detalle lista una fila por (documento, proveedor)",
           len(_det) == 2, str(None if _det is None else len(_det)))
+    # LAS COLUMNAS POR NOMBRE, y no sólo cuántas filas salieron: la primera
+    # versión de `_compras_del_periodo` renombraba el resultado del groupby
+    # por POSICIÓN y la forma de ese frame cambia entre pandas 2 y 3 — pasó
+    # los tests en la máquina de desarrollo (pandas 3) y reventó en Cloud
+    # (pandas 2.2) con un `ValueError: Length mismatch`. Regla #481.
+    check("y con las columnas que la grilla espera, por nombre",
+          list(_det.columns) == ["fecha", "prov", "cant", "punit", "valor",
+                                 "__doc"],
+          str(list(_det.columns)))
     check("y no se cuela ninguna compra de otro período",
           set(_det["fecha"]) <= {"2026-08-01", "2026-08-02", "2026-08-03"},
           str(list(_det["fecha"])))

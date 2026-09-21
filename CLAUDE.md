@@ -38,6 +38,15 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
   pushear un cambio así, **avisarlo**. Ver `arquitectura.md` regla #357.
 - Cada cambio se pushea y se confirma explícitamente. Si algo NO se pusheó,
   decirlo — si no, se diagnostican "conflictos" que no existen.
+- **Los tests en verde NO prueban que ande en Cloud: esta máquina corre
+  pandas 3 y `requirements.txt` pide `pandas>=2.2,<2.3`.** Dos mayores de
+  distancia, y el hueco no se ve como un error de import sino como la FORMA
+  de un DataFrame: un `groupby` cuya clave es una Series suelta devuelve
+  cinco columnas acá y cuatro allá. Nunca renombrar columnas por POSICIÓN
+  (`df.columns = [...]`) después de un groupby o un pivot — agrupar por
+  columnas de verdad y renombrar por nombre. Y que el test afirme las
+  columnas POR NOMBRE, no sólo cuántas filas salieron. Ver `arquitectura.md`
+  regla #481.
 
 Antes de pushear, dos comandos (segundos, no minutos):
 
