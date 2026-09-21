@@ -447,7 +447,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 
-**Streamlit** (134)
+**Streamlit** (133)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -578,7 +578,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#468** — Una fila de st.columns hecha SÓLO de st.markdown mide 16px menos por celda de lo que pinta…
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 - **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
-- **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
@@ -39823,7 +39822,31 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      volver a Resumen —su fila queda marcada—, así que la tabla sigue
      diciendo qué período se miró último.
 
-     (2026-09-19, ampliada el 2026-09-20.)
+     **Y AHORA LA CURA ATACA EL RENDER, NO SÓLO LA INTERACCIÓN**
+     (2026-09-21). La de arriba tapó el crash en Resumen mandando el clic a
+     Detalle, pero el estado que lo dispara —barras con texto `outside` +
+     **`marker.opacity` por punto** (la lista que atenúa lo que no está en
+     foco)— seguía vivo en Detalle. Reportado con captura desde
+     **Detalle › Documento**: una barra en foco (lila) y el resto atenuado,
+     y seis `Cannot read properties of undefined (reading 'textfont')` en la
+     consola. O sea el comentario del código que decía «en Detalle atenuar
+     no crashea» estaba equivocado: crashea igual, sólo que ahí la
+     atenuación es la interacción de siempre y no se la podía quitar.
+
+     La cura es **no usar `marker.opacity` como array**: se atenúa por
+     COLOR. `semanal.py::_con_alpha` convierte el hex de la serie a
+     `rgba(r,g,b,a)` y el foco pinta `marker.color` por punto —tono pleno
+     para el período en foco, el mismo tono con `alpha=_ATENUADO` para el
+     resto—. Da el mismo gris sin tocar `opacity`, así que el estado
+     buggeado de Plotly no existe. Vale para las dos ramas: la partida (tres
+     tramos, cada uno conserva su tono de `SERIE_TRAMOS`) y la de una sola
+     traza (`SERIE_PRINCIPAL`, que es la de «Por documento»). El crash es
+     de Plotly.js en el navegador: ni `ver_figura.py` (kaleido, sin JS) ni
+     los tests que sólo CONSTRUYEN la figura lo ven — por eso «no se pudo
+     reproducir en local» antes; se reproduce clickeando en un navegador de
+     verdad.
+
+     (2026-09-19, ampliada el 2026-09-20 y el 2026-09-21.)
 
 477. **Achicar un `st.selectbox` por su `.react-aria-ComboBox` NO achica
      lo que se ve: la caja con el borde es su HIJO, y sobresale.** Los

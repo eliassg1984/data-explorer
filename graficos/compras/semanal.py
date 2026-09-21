@@ -221,6 +221,16 @@ sigue filtrando sobre él."""
 # a mano reemplaza a la selección de Plotly (ver «EL FOCO SE MARCA A MANO»).
 _ATENUADO = 0.2
 
+
+def _con_alpha(_hex, _a):
+    """`#rrggbb` → `rgba(r,g,b,a)`. El foco se atenúa por COLOR y no con
+    `marker.opacity` por punto: esa lista sobre barras con texto `outside`
+    crashea Plotly en el navegador («Cannot read properties of undefined
+    (reading 'textfont')»). Ver `arquitectura.md` regla #476."""
+    _h = _hex.lstrip("#")
+    _r, _g, _b = (int(_h[_i:_i + 2], 16) for _i in (0, 2, 4))
+    return f"rgba({_r},{_g},{_b},{_a})"
+
 _LIENZO_PX = 820
 """Ancho útil del lienzo de esta figura, en píxeles. MEDIDO, no estimado.
 
@@ -1707,25 +1717,32 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # EN RESUMEN NO SE ATENÚA (regla #476, 2026-09-20). Resumen «no
         # necesita foco: su tabla son TODAS las barras» —y la fila del
         # período elegido ya va marcada con `__sel`—, así que el gráfico
-        # de arriba se queda con todas las barras enteras. Además es una
-        # cura: una `marker.opacity` POR PUNTO sobre las barras apiladas
-        # con texto `outside` es el estado que hacía crashear a Plotly en
-        # Resumen («Cannot read properties of undefined (reading
-        # 'textfont')»), al que se llegaba enfocando en Detalle y
-        # alternando a Resumen. Sin foco en Resumen, ese estado no existe;
-        # un clic en una barra desde Resumen ya cambia a Detalle (arriba),
-        # donde atenuar es la interacción de siempre y no crashea.
+        # de arriba se queda con todas las barras enteras.
+        #
+        # Y el foco se marca por COLOR, no con `marker.opacity` por punto
+        # (2026-09-21). Esa lista sobre barras con texto `outside` crashea
+        # Plotly en el navegador («Cannot read properties of undefined
+        # (reading 'textfont')»). La #476 lo tapó SÓLO en Resumen —creía
+        # que en Detalle «atenuar no crashea»—, pero Detalle › Documento
+        # lo reventaba igual: una barra en foco + texto encima = el mismo
+        # estado. Atenuar el color (rgba con alpha) da el mismo gris sin
+        # tocar `opacity`, así que el bug no existe. Ver regla #476.
         _marcar_foco = _con_detalle and _modo != _MODO_RESUMEN
         if _marcar_foco and _partida:
-            # Las tres trazas comparten el eje `_ord_claves`, así que la
-            # misma lista de opacidades sirve para las tres: lo que se marca
-            # es el PERÍODO, y un período en foco se ilumina entero.
-            _op = [1.0 if _c == _focus else _ATENUADO for _c in _ord_claves]
-            for _tr in fig.data:
-                _tr.marker.opacity = _op
+            # Las tres trazas comparten el eje `_ord_claves`, así que el
+            # mismo criterio sirve para las tres: lo que se marca es el
+            # PERÍODO, y un período en foco se ilumina entero. Cada tramo
+            # conserva su tono; sólo se atenúa el de los períodos sin foco.
+            for _i, _tr in enumerate(fig.data):
+                _base = SERIE_TRAMOS[_i]
+                _dim = _con_alpha(_base, _ATENUADO)
+                _tr.marker.color = [_base if _c == _focus else _dim
+                                    for _c in _ord_claves]
         elif _marcar_foco:
-            fig.data[0].marker.opacity = [
-                1.0 if _c == _focus else _ATENUADO for _c in g["clave"]]
+            _dim = _con_alpha(SERIE_PRINCIPAL, _ATENUADO)
+            fig.data[0].marker.color = [
+                SERIE_PRINCIPAL if _c == _focus else _dim
+                for _c in g["clave"]]
 
         _compras_layout(fig, alto=_alto_fig)
         if _plan_etq:
