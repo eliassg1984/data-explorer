@@ -127,6 +127,8 @@ salvo `icono`):
 |---|---|---|
 | `archivo` | str | Nombre del parquet en R2. Sin esta clave, el reporte es una herramienta (`tool`). |
 | `icono` | str | Shortcode Material Symbols (`":material/nombre:"`) para el rail de Reportes. Estuvo sin usar 2026-08-18→2026-08-22 mientras Reportes era la franja horizontal solo-texto (regla #132); la #170 lo devolvió a la navegación con los valores traducidos de Bootstrap Icons a Material. |
+| `label_corto` | str | Nombre CORTO del reporte, el que dibuja el rail (angosto). Sin él, `navegacion.py` cae en la clave del dict recortada. |
+| `label_largo` | str | Nombre de MOSTRAR en la franja de contexto y la cabecera del rail (anchas, ≥769px). Sin él cae en la CLAVE del dict — que es lo que ve el resto de los reportes. Existe para renombrar lo que ve el usuario sin tocar la clave interna (dispatcher, asistente, slug CSS, citas de `arquitectura.md`): hoy solo "Inventario Valorizado", que sale como **Stock e Inventario**. Las vistas de ese reporte también se rebautizaron a «Stock por Producto/Área/Familia» cambiando SÓLO el rótulo de sus tuplas del rail, no el id interno (`graficos/inventario.py::_INVENTARIO_RAIL_CATEGORIAS`). |
 | `tool` | bool | Si `True`, `app.py` delega a `inspector.py` en vez de intentar cargar un parquet. |
 | `columnas` | list | Columnas a mostrar (en orden). Si no existe, se muestran todas. |
 | `filtros_cat` | list | Columnas categóricas que aparecen como multiselect en el popover de filtros. |

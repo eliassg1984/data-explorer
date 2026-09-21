@@ -236,7 +236,12 @@ def _html_barra_contexto(reporte_activo, info, par):
     partes = ['<div class="barra-ctx">']
     if icono:
         partes.append(f'<span class="barra-ico" aria-hidden="true">{html.escape(icono)}</span>')
-    partes.append(f'<span class="barra-nom">{html.escape(reporte_activo)}</span>')
+    # `label_largo` es el nombre de MOSTRAR (ancho), que puede diferir de la
+    # clave interna: hoy sólo lo declara "Inventario Valorizado" para salir
+    # como "Stock e Inventario" sin renombrar la clave (ver data.py). Sin él,
+    # cae en la clave, que es lo que muestra el resto de los reportes.
+    _nom = info.get("label_largo") or reporte_activo
+    partes.append(f'<span class="barra-nom">{html.escape(_nom)}</span>')
     partes.append('<span class="barra-vista"></span>')
     kpis_html = []
     if par:
@@ -933,7 +938,8 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     _info_act = visibles.get(reporte_activo, {})
     _par_act = _formatear_kpis(_info_act) if not _info_act.get("tool") else None
     st.session_state[CLAVE_CABECERA] = {
-        "nombre": reporte_activo,
+        # El nombre de MOSTRAR (ver data.py::label_largo), no la clave interna.
+        "nombre": _info_act.get("label_largo") or reporte_activo,
         "icono": _info_act.get("icono"),
         "primario": _par_act[0] if _par_act else None,
         "secundario": _par_act[1] if _par_act else None,
@@ -1115,10 +1121,11 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
             '</span>'
             for _et, _txt, _neg in _kpis_arriba
         )
+        _nom_kpis = _info_act.get("label_largo") or reporte_activo
         with st.container(key="nav_franja_kpis"):
             st.markdown(
                 '<div class="franja-kpis">'
-                f'<span class="franjakpi-nom">{html.escape(reporte_activo)}</span>'
+                f'<span class="franjakpi-nom">{html.escape(_nom_kpis)}</span>'
                 '<span class="franjakpi-sep"></span>'
                 f'{_piezas}'
                 '</div>',

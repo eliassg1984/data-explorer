@@ -178,10 +178,18 @@ _FILAS_RANK = 8
 
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
 # ver graficos/base.py).
+# El elemento 0 de cada tupla (`oid`) es la IDENTIDAD interna de la vista:
+# el valor que se persiste en `inv_graf_tipo`, el slug de la key del botón,
+# el `id_vista` con que la aparea `_PILA`, y el deep-link `?vista=`. El
+# elemento 1 es lo único que ve el usuario. Por eso el rótulo se reescribió
+# a "Stock por …" (a pedido, 2026-09-21) SIN tocar el `oid` — cambiarlo
+# habría roto el apareo con `_PILA` y los enlaces guardados. El rótulo
+# también es lo que el temporizador de `_render_rail` escribe en la franja
+# de contexto (`.barra-vista`), así que la franja queda consistente sola.
 _INVENTARIO_RAIL_CATEGORIAS = (
-    ("Vista", (("Productos",       "Productos",   ":material/inventory_2:"),
-               ("Por área",        "Por área",    ":material/space_dashboard:"),
-               ("Por familia",     "Por familia", ":material/account_tree:"))),
+    ("Vista", (("Productos",   "Stock por Producto", ":material/inventory_2:"),
+               ("Por área",    "Stock por Área",     ":material/space_dashboard:"),
+               ("Por familia", "Stock por Familia",  ":material/account_tree:"))),
     ("Datos", (("Tabla", "Tabla", ":material/table_rows:"),)),
 )
 

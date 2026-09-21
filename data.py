@@ -18,6 +18,11 @@ from datetime import datetime, timezone
 # Claves que lee app.py (todas opcionales salvo `archivo`):
 #
 #   archivo, label_corto, icono      identidad del reporte
+#   label_largo                      nombre de MOSTRAR en la franja de contexto
+#                                    (ancha); cae en la CLAVE del dict si falta.
+#                                    Existe para nombrar un reporte distinto de
+#                                    su clave interna sin renombrarla — hoy solo
+#                                    "Inventario Valorizado" → "Stock e Inventario".
 #   fecha                            columna de fecha; None = sin filtro
 #   carga_por_rango                  filtra en DuckDB antes de materializar
 #   filtros_cat, buscador, agrupar   filtros genericos
@@ -224,7 +229,19 @@ REPORTES = {
         ],
     },
     "Inventario Valorizado": {
-        "label_corto": "Inventario",
+        # La clave "Inventario Valorizado" es la IDENTIDAD INTERNA del reporte
+        # (dispatcher de graficos/, _sugerencias del asistente, el slug CSS
+        # `app_reporte_inventario_valorizado` de estilos/_40_ajuste_franja.py,
+        # las comparaciones de tablas/ y las citas de arquitectura.md): NO se
+        # renombra. Lo que ve el usuario es "Stock e Inventario" (a pedido,
+        # 2026-09-21), en dos sitios con distinto ancho: el rail lo toma de
+        # `label_corto` y la franja de contexto de `label_largo` (que
+        # `navegacion.py::_html_barra_contexto` y la cabecera del rail
+        # prefieren sobre la clave). Coinciden a propósito — el nombre pedido
+        # ya es corto; el par existe para no regresar a "Movimientos"→"Movim."
+        # en la franja del resto de los reportes, que no declaran `label_largo`.
+        "label_corto": "Stock e Inventario",
+        "label_largo": "Stock e Inventario",
         "archivo": "inventariovalorizado.parquet",
         "icono": ":material/inventory_2:",
         # Foto sin fecha (igual que Recetas): kpi_fecha ausente a
