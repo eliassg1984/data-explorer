@@ -39611,6 +39611,33 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-19.)
 
+     **Addendum (2026-09-21): 10 tampoco alcanzaba, y el gatillo no era el
+     `run_every` sino el SCROLL.** El mismo veneno lo produce cualquier
+     ráfaga de reruns de fragment, y construir la pila es justo eso: cada
+     sección se arma en su propio rerun (`graficos/base.py::seccion_perezosa`)
+     y el rail las activa de a una al bajar. Reportado sin tocar Actualizar:
+     «hago clic en un toggle y no responde» después de scrollear y ver
+     aparecer otras vistas. Ventas tiene 11 secciones
+     (`graficos/ventas.py::_PILA`), así que un solo scroll de arriba a abajo
+     hace 11 reruns de fragment y pasa el tope de 10 — los mensajes cacheados
+     al abrir (las grillas de AgGrid) quedan con edad 11 y se caen; el próximo
+     clic contesta a un hash borrado y muere con el MISS. El techo real no es
+     «11 secciones»: es TODOS los reruns de fragment entre dos corridas
+     completas —sólo una corrida completa (cambiar de reporte, mover la
+     fecha/filtro global) re-manda todo y resetea las edades; scrollear y
+     togglear vistas sólo envejecen—, así que una sesión de navegación normal
+     pasa de 10 sin esfuerzo. Bajar el número de reruns NO es opción:
+     construir de a una sección por rerun es deliberado (regla #211 — armar
+     todas juntas satura el navegador). Así que se sube el aguante de la
+     caché: `.streamlit/config.toml` pasa `maxCachedMessageAge` de 10 a
+     **100**, que cubre una sesión entera con margen; el techo de memoria lo
+     pone cuántos mensajes DISTINTOS genera la app (finitos: los reportes y
+     sus grillas), no este número. Cambia sólo el navegador —ni lógica ni
+     servidor—, y como es `config.toml` hay que **Reboot app** en Cloud para
+     que lo tome.
+
+     (2026-09-21.)
+
 475. **Un salto del rail SOBREVUELA la pila, y una pila que construye «lo
      que tengas cerca» lee ese sobrevuelo como una visita: el viaje
      construye todo lo que cruza la pantalla.** Medido en Ventas el

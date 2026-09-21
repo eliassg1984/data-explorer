@@ -11,6 +11,17 @@ primaryColor = "#6c5ce7"
 # la mayor, 2,3 MB en una sola vista), así que un barrido de esa caché no es
 # sólo tráfico: si el servidor contesta con `ref_hash` a algo que el navegador
 # acaba de tirar, la app muere con «Cached ForwardMsg MISS» y el clic se
-# pierde. 10 deja margen sin que la caché crezca sin techo. Ver arquitectura.md
-# regla #474.
-maxCachedMessageAge = 10
+# pierde.
+#
+# POR QUÉ 100 Y NO 10: cada sección de una pila se CONSTRUYE en su propio rerun
+# de fragment (graficos/base.py::seccion_perezosa), y al scrollear el rail las
+# activa de a una. Un reporte grande —Ventas, 11 secciones— pasa de 10 en un
+# solo scroll de arriba a abajo, y ahí los mensajes cacheados al abrir se caen y
+# el próximo clic muere con el MISS (reportado sin tocar Actualizar: «hago clic
+# en un toggle y no responde»). El techo real no es "11 secciones": es TODOS los
+# reruns de fragment entre dos corridas completas —sólo una corrida completa
+# (cambiar de reporte, mover la fecha/filtro global) re-manda todo y resetea las
+# edades; scrollear y togglear vistas sólo envejecen—. 100 cubre una sesión
+# entera de navegación con margen; el techo de memoria lo pone cuántos mensajes
+# DISTINTOS genera la app, no este número. Ver arquitectura.md regla #474.
+maxCachedMessageAge = 100
