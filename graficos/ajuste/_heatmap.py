@@ -120,28 +120,42 @@ def _pct(v, max_abs):
     return max(abs(v) / (max_abs or 1.0) * 100, 4)
 
 
-def _alternar_foco(celda):
-    """Callback del clic. Corre ANTES de la corrida, así que la tabla ya se
-    dibuja con el foco nuevo y no hace falta el `st.rerun()` que llevaba el
-    Mapa — que, dentro del fragment de la sección, era una corrida de la
-    app ENTERA por cada clic."""
-    st.session_state[_K_FOCO] = (
-        None if st.session_state.get(_K_FOCO) == celda else celda)
+def _seleccionar_foco(celda):
+    """Callback del clic: MUEVE el foco a la celda, nunca lo cierra.
+
+    La tabla de detalle está SIEMPRE visible (a pedido, 2026-09-21), así que
+    el clic no alterna —volver a clickear la celda enfocada, o un doble clic,
+    la deja abierta en vez de cerrarla—. Corre ANTES de la corrida, así que
+    la tabla ya se dibuja con el foco nuevo y no hace falta un `st.rerun()`
+    (que, dentro del fragment de la sección, sería una corrida de la app
+    ENTERA por cada clic)."""
+    st.session_state[_K_FOCO] = celda
 
 
-def _foco_inicial(fams, areas, n_reg):
-    """`(familia, área)` con que ABRE la vista, o None si no está disponible.
+def _foco_inicial(fams, areas, pivot, n_reg):
+    """`(familia, área)` con que SE MUESTRA el detalle. NUNCA None mientras la
+    tabla tenga una celda con registros (el detalle está siempre visible).
 
-    ALIMENTOS × Almacén Central (`_FAM_INICIAL`/`_AREA_INICIAL`) emparejadas
-    por texto normalizado contra las filas y columnas presentes de la tabla,
-    sólo si esa celda tiene registros que desglosar —una celda sin registros
-    no abre nada—. Sin match (otro corte, la familia filtrada fuera), None:
-    la vista arranca sin detalle, igual que antes de sembrar el foco."""
+    Prefiere ALIMENTOS × Almacén Central (`_FAM_INICIAL`/`_AREA_INICIAL`),
+    emparejadas por texto normalizado contra las filas y columnas presentes,
+    si esa celda tiene registros que desglosar. Sin ella —otro corte, la
+    familia filtrada fuera— cae a la celda con registros y mayor |monto| (la
+    que más descuadró), mismo criterio que la Cascada. Sólo None si ninguna
+    celda tiene registros, que no ocurre con la tabla ya dibujada (el vacío
+    vuelve antes)."""
     _fam = next((f for f in fams if _norm(f) == _norm(_FAM_INICIAL)), None)
     _area = next((a for a in areas if _norm(a) == _norm(_AREA_INICIAL)), None)
     if _fam is not None and _area is not None and n_reg.get((_fam, _area), 0):
         return (_fam, _area)
-    return None
+    _mejor, _mejor_abs = None, -1.0
+    for _f in fams:
+        for _a in areas:
+            if not n_reg.get((_f, _a), 0):
+                continue
+            _v = abs(float(pivot.loc[_f, _a]))
+            if _v > _mejor_abs:
+                _mejor, _mejor_abs = (_f, _a), _v
+    return _mejor
 
 
 def _celda_total_html(v, max_abs, modo_val):
@@ -215,9 +229,11 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                          col_valorizado=None,
                          col_cantidad=None, col_unidad=None):
     """Tabla familia × área — modo Ajuste (signado) o Valorizado Total
-    (siempre positivo), elegido con un `st.pills` al tope. Cada celda con
-    registros abre, al clic, el detalle de sus productos debajo de la
-    tarjeta; otro clic en la misma lo cierra.
+    (siempre positivo), elegido con un `st.pills` al tope. El detalle de los
+    productos de UNA celda está SIEMPRE visible debajo de la tarjeta; al
+    clickear otra celda con registros el detalle se MUEVE a ella (no se
+    cierra: un doble clic la deja abierta). Abre en ALIMENTOS × Almacén
+    Central por defecto.
 
     Lo que dice la tabla (regla #468):
       · UNA escala para todas las celdas de dato. La tabla vieja escalaba
@@ -314,22 +330,18 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     _spark = _tendencias(df, df_full, col_fecha, col_familia, col_area,
                          col_metrica)
 
-    # ── FOCO INICIAL: la vista abre con el detalle de ALIMENTOS × Almacén
-    #    Central ya desplegado. La AUSENCIA de la clave —no su valor None—
-    #    es la marca de "nadie tocó todavía": el callback SIEMPRE la escribe
-    #    (una celda o None), así que cerrar el detalle la deja en None y no
-    #    se re-siembra. Es el mismo distingo de dos "sin foco" que el
-    #    `_tocado` del foco sembrado de «Vs año pasado» (CLAUDE.md), acá con
-    #    la presencia de la clave de testigo —que se puede porque este foco
-    #    ES el estado, no el espejo de una grilla de AG Grid—. Se siembra una
-    #    sola vez, igual que las familias por defecto (`sembrar_seleccion`).
-    if _K_FOCO not in st.session_state:
-        st.session_state[_K_FOCO] = _foco_inicial(_fams, _areas, _n_reg)
-
+    # ── LA TABLA DE DETALLE SIEMPRE ESTÁ VISIBLE (a pedido, 2026-09-21):
+    #    hay UNA celda en foco en todo momento, nunca "sin detalle". Si la
+    #    guardada no vale —primera carga, o la familia/área quedó filtrada
+    #    fuera— cae al default: ALIMENTOS × Almacén Central, o la celda con
+    #    registros y más peso. El clic MUEVE el foco, no lo alterna
+    #    (`_seleccionar_foco`), así que un doble clic sobre la misma celda la
+    #    deja abierta. Mismo modelo que la Cascada (`_cascada.py`, "la que
+    #    más descuadró"), no el toggle que tenía el Mapa.
     _foco = st.session_state.get(_K_FOCO)
-    if _foco is not None and (_foco[0] not in _fams or _foco[1] not in _areas):
-        _foco = None
-        st.session_state[_K_FOCO] = None
+    if _foco is None or _foco[0] not in _fams or _foco[1] not in _areas:
+        _foco = _foco_inicial(_fams, _areas, pivot, _n_reg)
+        st.session_state[_K_FOCO] = _foco
 
     # ── CSS de la grilla. Tiene que leerse como TABLA y no como una pila
     #    de tarjetas: sin el gap de 16px de Streamlit —ni entre filas ni
@@ -464,7 +476,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                             " " if _cero else f"S/ {_v:,.0f}", key=_key,
                             help=(f"{_fam} × {_area}: S/ {_v:,.0f}"
                                   + _spark.get((_fam, _area), "")),
-                            on_click=_alternar_foco, args=((_fam, _area),),
+                            on_click=_seleccionar_foco, args=((_fam, _area),),
                             width="stretch")
                 with _cols_r[-1]:
                     st.markdown(

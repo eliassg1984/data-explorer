@@ -446,9 +446,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
-- **#485** — El Mapa de calor de Ajuste ABRE con el detalle de ALIMENTOS × Almacén Central desplegado, y…
+- **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (134)
+**Streamlit** (133)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -583,7 +583,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
 - **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
-- **#485** — El Mapa de calor de Ajuste ABRE con el detalle de ALIMENTOS × Almacén Central desplegado, y…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -40514,34 +40513,32 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      lados, semáforo invertido, la celda vacía de Precio y el caso sin
      meses). (2026-09-21.)
 
-485. **El Mapa de calor de Ajuste ABRE con el detalle de ALIMENTOS ×
-     Almacén Central desplegado, y la marca de «ya se tocó» es la PRESENCIA
-     de la clave del foco, no un flag aparte.**
+485. **El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una
+     celda en foco en todo momento, el clic la MUEVE y nunca la cierra, y
+     abre en ALIMENTOS × Almacén Central.**
 
-     A pedido (2026-09-21): que las tablas de detalle del Mapa de calor se
-     vean de entrada, con la familia Alimentos y el área Almacén Central —
-     antes el detalle (Faltantes | Sobrantes, regla #483) sólo aparecía al
-     clickear una celda. Lo siembra `_foco_inicial`: empareja ALIMENTOS ×
-     ALMACEN CENTRAL con `_norm` contra las filas y columnas PRESENTES de la
-     tabla —el parquet trae la familia en mayúsculas y el área SIN tilde,
-     igual que `inventario.py::ABRE_EN_AREA`— y sólo si esa celda tiene
-     registros que desglosar. Sin match (otro corte, la familia filtrada
-     fuera) arranca sin detalle, como antes de la siembra.
+     A pedido (2026-09-21, en dos pasos): primero, que las tablas de detalle
+     (Faltantes | Sobrantes, regla #483) se vieran de entrada con la familia
+     Alimentos y el área Almacén Central —antes sólo aparecían al clickear
+     una celda—; y enseguida, que «la tabla siempre debe estar visible, no
+     debería ocultarse al hacer un doble click». O sea NO el toggle que tenía
+     el Mapa (clic en la celda enfocada = cerrar), sino el modelo de la
+     Cascada, donde SIEMPRE hay una fila en foco. `_seleccionar_foco` escribe
+     la celda clickeada sin alternar, así que un segundo clic sobre la misma
+     —o un doble clic— la deja abierta en vez de cerrarla.
 
-     **La marca de «nadie tocó todavía» es la AUSENCIA de la clave `_K_FOCO`
-     (`hm_ajuste_focus`), no su valor `None`.** El callback `_alternar_foco`
-     SIEMPRE la escribe (una celda o `None`), así que cerrar el detalle la
-     deja en `None` y la siembra —`if _K_FOCO not in st.session_state`— no
-     vuelve a correr: se puede cerrar y queda cerrado. Es el mismo distingo
-     de dos «sin foco» que el `_tocado` del foco sembrado de «Vs año pasado»
-     (CLAUDE.md), pero acá alcanza con la presencia de la clave PORQUE este
-     foco ES el estado, no el espejo de una AgGrid — sembrar el espejo sin
-     avisarle a la grilla es un bucle de reruns, y por eso allá hizo falta
-     un flag aparte. Mismo patrón «sembrar una sola vez» que las familias
-     por defecto (`sembrar_seleccion`).
+     Con qué celda abre lo decide `_foco_inicial`, que NUNCA devuelve `None`
+     mientras la tabla tenga una celda con registros: prefiere ALIMENTOS ×
+     ALMACEN CENTRAL —emparejadas con `_norm` contra las filas y columnas
+     PRESENTES, porque el parquet trae la familia en mayúsculas y el área SIN
+     tilde, igual que `inventario.py::ABRE_EN_AREA`— y si no está (otro
+     corte, la familia filtrada fuera) cae a la celda con registros y mayor
+     |monto|, la que más descuadró, mismo criterio que la Cascada. Se
+     re-evalúa en CADA corrida: si el foco guardado dejó de ser válido se
+     reemplaza por el default en vez de quedar en `None` (que dejaría el
+     detalle oculto). Sólo una celda sin registros no abre nada, y eso no
+     pasa con la tabla ya dibujada porque el vacío vuelve antes.
 
-     Es un DEFAULT, no un fijo: la celda sigue a un clic de cerrarse o de
-     moverse a otra (ver la memoria del proyecto «fijo en X es un default»).
      Extiende la #468 (la tabla clickeable) y la #483 (el detalle como
      grillas de desglose). (2026-09-21.)
 
