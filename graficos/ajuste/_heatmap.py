@@ -522,7 +522,13 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     (familia × área, monto, registros) y el ranking de sus productos —
     Faltantes | Sobrantes en Ajuste, un solo Top en Valorizado Total, que
     no tiene signo que separar. Con los colores de la tabla: el detalle es
-    la continuación del clic, no otra vista."""
+    la continuación del clic, no otra vista.
+
+    Cada cuadro lleva su BUSCADOR arriba (a pedido, 2026-09-21: "así como lo
+    tienen los cuadros de la vista de ajuste por familia"), igual que la
+    Cascada (`_cascada._listas`): filtra sus productos por nombre ANTES de
+    dibujar, así que uno que calza aparece aunque no esté entre los primeros.
+    """
     _fam_sel, _area_sel = foco
     _val_sel = float(pivot.loc[_fam_sel, _area_sel])
     _det = df[
@@ -555,7 +561,14 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
         _agg[col_unidad] = "first"
     _sub_prod = _det.groupby(col_producto, as_index=False).agg(_agg)
     _sub_prod["_abs"] = _sub_prod[col_metrica].abs()
-    _sub_prod = _sub_prod.sort_values("_abs", ascending=False).head(30)
+    # TODAS las líneas del lado, no un top-N: el buscador (más abajo) filtra
+    # ANTES de dibujar —igual que la Cascada (`_listas`)—, así que un producto
+    # que calza aparece aunque no esté entre los primeros. La grilla scrollea
+    # por dentro las que no entran en las 8 filas visibles.
+    _sub_prod = _sub_prod.sort_values("_abs", ascending=False)
+    # Clave estable del foco para las keys de grilla y de buscador: NO lleva
+    # el nº de filas (ver `_grilla`), así el filtro no re-monta nada.
+    _foco_id = _clave(_fam_sel, _area_sel, col_metrica)
 
     # UNA GRILLA POR LADO, como la Cascada (regla #483): antes eran listas
     # HTML con barritas; ahora son las MISMAS AgGrid de desglose
@@ -604,17 +617,69 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
 
     def _grilla(_df_d, lado, color_barra, color_texto):
         tp = _tp_lado(_df_d)
-        _key = "hm_det_" + lado + "_" + _clave(
-            _fam_sel, _area_sel, col_metrica, len(tp))
+        # La key NO lleva el nº de filas: el buscador cambia cuántas quedan, y
+        # una key que se mueve con el filtro estrenaría grilla en cada letra y
+        # le borraría al usuario el orden que eligió (reglas #410 y #471). El
+        # foco + la métrica (`_foco_id`) son estables mientras dura la
+        # búsqueda; el alto sí se recomputa y `_atar_alto` lo fuerza.
+        _key = "hm_det_" + lado + "_" + _foco_id
         _alto = _alto_grilla(min(8, max(1, len(tp))))
         _atar_alto(_key, _alto)
         renderizar_desglose_ajuste(
             tp, _cols(), _alto, _key, movil=_es_movil(),
             barra=("valor", _rgba(color_barra), color_texto))
 
+    # ── EL BUSCADOR DE CADA CUADRO (a pedido, 2026-09-21) ────────────────
+    #    Mismo patrón y mismo look que la Cascada (`_listas`), scopeado al
+    #    prefijo propio `hm_buscar_` porque su CSS lo inyecta esa vista y
+    #    puede no estar en la página (la pila arma las secciones perezosas).
+    #    La caja real es `stTextInputRootElement`: se aplana ella
+    #    (transparente, sólo la línea de abajo), no el <input>.
+    st.markdown(f"""<style>
+    div[class*="st-key-hm_buscar_"] [data-testid="stTextInputRootElement"] {{
+        height: auto !important; background: transparent !important;
+        border: none !important; border-radius: 0 !important;
+        border-bottom: 1px solid {GRIS_BORDE} !important;
+        transition: border-color .12s ease; }}
+    div[class*="st-key-hm_buscar_neg_"] [data-testid="stTextInputRootElement"]:focus-within {{
+        border-bottom-color: {AJUSTE_NEG_TEXTO} !important; }}
+    div[class*="st-key-hm_buscar_pos_"] [data-testid="stTextInputRootElement"]:focus-within {{
+        border-bottom-color: {AJUSTE_POS_TEXTO} !important; }}
+    div[class*="st-key-hm_buscar_top_"] [data-testid="stTextInputRootElement"]:focus-within {{
+        border-bottom-color: {_AZUL_TEXTO} !important; }}
+    div[class*="st-key-hm_buscar_"] [data-testid="stTextInputRootElement"] input {{
+        height: auto !important; padding: 2px 2px 4px 2px !important;
+        font-size: 11.5px !important; color: {TEXTO_PRINCIPAL} !important; }}
+    div[class*="st-key-hm_buscar_"] [data-testid="stTextInputRootElement"] input::placeholder {{
+        color: {GRIS_TEXTO_SUAVE} !important; opacity: 1 !important; }}
+    </style>""", unsafe_allow_html=True)
+
+    def _caja(_pool, lado, nombre, color_barra, color_texto, vacio):
+        """Un cuadro del detalle: su rótulo y su buscador arriba, la grilla
+        debajo. El buscador filtra el pool COMPLETO del lado por nombre de
+        producto ANTES de dibujar, como la Cascada. El rótulo siempre está
+        (aunque el lado esté vacío), para que los dos cuadros midan igual."""
+        # columnas-internas: el rótulo del cuadro y su buscador (como la Cascada)
+        _t, _b = st.columns([1, 1.3], vertical_alignment="center")
+        with _t:
+            _titulo(nombre, color_texto)
+        with _b:
+            _q = st.text_input(
+                f"Buscar en {nombre.lower()}",
+                key=f"hm_buscar_{lado}_{_foco_id}",
+                placeholder="Buscar producto…",
+                label_visibility="collapsed").strip().lower()
+        if _q:
+            _pool = _pool[_pool[col_producto].astype(str).str.lower()
+                          .str.contains(_q, regex=False)]
+        if _pool.empty:
+            st.caption("Sin coincidencias." if _q else vacio)
+            return
+        _grilla(_pool, lado, color_barra, color_texto)
+
     if modo_val:
-        _titulo("Top productos", _AZUL_TEXTO)
-        _grilla(_sub_prod, "top", _AZUL_BARRA, _AZUL_TEXTO)
+        _caja(_sub_prod, "top", "Top productos", _AZUL_BARRA, _AZUL_TEXTO,
+              "Sin productos para desglosar.")
         return
 
     _neg = _sub_prod[_sub_prod[col_metrica] < 0].sort_values(
@@ -625,14 +690,8 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     # columnas-internas: Faltantes | Sobrantes, mitad y mitad
     _pa, _pb = st.columns(2)
     with _pa:
-        _titulo("Faltantes", AJUSTE_NEG_TEXTO)
-        if _neg.empty:
-            st.caption("Sin faltantes.")
-        else:
-            _grilla(_neg, "neg", AJUSTE_NEG, AJUSTE_NEG_TEXTO)
+        _caja(_neg, "neg", "Faltantes", AJUSTE_NEG, AJUSTE_NEG_TEXTO,
+              "Sin faltantes.")
     with _pb:
-        _titulo("Sobrantes", AJUSTE_POS_TEXTO)
-        if _pos.empty:
-            st.caption("Sin sobrantes.")
-        else:
-            _grilla(_pos, "pos", AJUSTE_POS, AJUSTE_POS_TEXTO)
+        _caja(_pos, "pos", "Sobrantes", AJUSTE_POS, AJUSTE_POS_TEXTO,
+              "Sin sobrantes.")

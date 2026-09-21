@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-485 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+486 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (170)
+**CSS y estilos** (171)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -204,6 +204,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
 - **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
+- **#486** — El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro (Faltantes | Sobrantes, y el…
 
 **Layout y alturas** (68)
 
@@ -749,7 +750,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (89)
+**Decisiones de diseño y UX** (90)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -840,6 +841,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#475** — Un salto del rail SOBREVUELA la pila, y una pila que construye «lo que tengas cerca» lee ese…
 - **#478** — Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una vela por compra es plana…
 - **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
+- **#486** — El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro (Faltantes | Sobrantes, y el…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -40549,6 +40551,50 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Extiende la #468 (la tabla clickeable) y la #483 (el detalle como
      grillas de desglose). (2026-09-21.)
 
+486. **El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro
+     (Faltantes | Sobrantes, y el Top de Valorizado Total), como la
+     Cascada.**
+
+     A pedido (2026-09-21): «los cuadros de sobrante y faltante también
+     deben tener un buscador arriba, así como lo tienen los cuadros de la
+     vista de ajuste por familia». Es la MISMA pieza que
+     `_cascada._listas`: un `st.text_input` aplanado (transparente, sólo la
+     línea de abajo) en la fila del rótulo de cada cuadro, que filtra sus
+     productos por nombre ANTES de dibujar la grilla. Vive en
+     `_heatmap._detalle_celda::_caja`.
+
+     Tres cosas que hubo que cambiar para que el buscador no mienta ni
+     rompa nada:
+
+     · **Filtra el pool COMPLETO del lado, no un top-N.** Antes el detalle
+       recortaba `_sub_prod` con `.head(30)` y de ahí salían los dos lados;
+       con eso, un producto en el puesto 45 no se podía encontrar aunque
+       calzara. Se quitó el `.head(30)`: el orden por |monto| queda igual,
+       la grilla scrollea por dentro las que no entran en las 8 filas
+       visibles, y el buscador ve TODO — mismo espíritu que la Cascada
+       («una línea que calza aparece aunque esté al fondo», #483). Medido
+       en el navegador: buscar «aceite» en Faltantes de ALIMENTOS ×
+       Almacén Central deja «Aceite Vegetal» y «Aceite Frituras», y no
+       toca la grilla de Sobrantes (los dos buscadores son independientes).
+
+     · **La key de la grilla NO puede llevar el nº de filas.** Llevaba
+       `len(tp)` dentro de `_clave(...)`; como el buscador cambia cuántas
+       filas quedan, la key se movía en cada letra, estrenaba grilla y le
+       borraba al usuario el orden que había elegido (reglas #410 y #471).
+       Ahora es sólo foco + métrica (`_foco_id`, estable mientras dura la
+       búsqueda); el alto sí se recomputa y `_atar_alto` lo fuerza con
+       `!important`.
+
+     · **El CSS del buscador lo inyecta ESTE módulo, scopeado a su propio
+       prefijo `hm_buscar_`** — no se reusa el de la Cascada
+       (`ajcas_buscar_`). La pila arma las secciones perezosamente
+       (regla #211), así que la vista Cascada puede no estar en la página
+       cuando se mira el Mapa de calor, y con ella tampoco su `<style>`.
+
+     La key del `text_input` lleva el `_foco_id`, así que cambiar de celda
+     resetea la búsqueda: una búsqueda es de la celda que estás mirando.
+     Extiende la #483 y la #485. (2026-09-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -40561,7 +40607,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#485**.
+> próxima regla nueva es la **#487**.
 
 >
 
