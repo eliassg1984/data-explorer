@@ -115,7 +115,15 @@ REPORTES = {
     # filas contra 17.355), el único que trae Sub Almacen, y el que tiene la
     # tabla con tratamiento propio.
     "Movimientos": {
-        "label_corto": "Movim.",
+        # Lo que ve el usuario es "Movimientos de Almacén" (a pedido,
+        # 2026-09-21). La clave "Movimientos" es la IDENTIDAD INTERNA del
+        # reporte (dispatcher de graficos/, slug CSS, `_ultimo_<grupo>`) y NO
+        # se renombra. Mismo par que "Inventario Valorizado": `label_corto` lo
+        # toman el ítem del rail y la franja de reportes; `label_largo`, la
+        # franja de contexto, la cabecera del rail y la franja de KPIs (que si
+        # no, caerían en la clave "Movimientos" y contradecirían al rail).
+        "label_corto": "Movimientos de Almacén",
+        "label_largo": "Movimientos de Almacén",
         "archivo": "requerimientos.parquet",
         # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
         # (`archivo`) y pasandolo como df_f; salidas.parquet lo carga
@@ -191,7 +199,12 @@ REPORTES = {
         "tool": True,
     },
     "Ajuste de Inventario": {
-        "label_corto": "Ajuste",
+        # El rail muestra "Ajuste de Inventario" (a pedido, 2026-09-21). La
+        # clave ya era ese nombre, así que la franja de contexto y la cabecera
+        # del rail (que usan `label_largo` y caen en la clave) ya lo mostraban;
+        # sólo faltaba el ítem del rail, que toma `label_corto`. Sin
+        # `label_largo` porque la clave ya coincide con el nombre a mostrar.
+        "label_corto": "Ajuste de Inventario",
         "archivo": "ajusteinventario.parquet",
         "icono": ":material/tune:",
         "kpis": (("Ajuste Valoriz.", "AJUSTE VALORIZADO", "sum"),),
