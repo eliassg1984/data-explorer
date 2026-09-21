@@ -534,9 +534,15 @@ control que no está.
 
 Dos cosas que conviene saber antes de tocar esta fila:
 
-- **El título dice «Compra Vs Año Pasado» y el rail sigue diciendo «Vs año
-  pasado».** No es un descuido: el rail reparte su ancho entre siete ítems
-  y ahí el nombre largo se trunca. El título sale de `_TITULO`.
+- **Tres nombres para esta vista, cada uno en su sitio:** el título de la
+  tarjeta dice «Compra Vs Año Pasado» (de `_TITULO`); el rail, «Comparación
+  Año Pasado» (rótulo de `_COMPRAS_RAIL_CATEGORIAS`); y el id interno —el que
+  usan `_PILA`, la key `compras_sec_vs_ano_pasado`, el esqueleto y los dicts
+  de KPI— sigue siendo el corto «Vs año pasado». Hasta el 2026-09-21 el rail
+  también decía «Vs año pasado» (más corto, porque a 769–900px la franja
+  reparte su ancho entre siete ítems); se alargó a pedido y entra en el árbol
+  de escritorio con el `ellipsis` de `_28_arbol.py` como red. Renombrar el
+  rail es cambiar SÓLO ese rótulo, nunca el id.
 - **El ⛶ del modo «solo» ya no está** (se quitó a pedido el 2026-09-17),
   pero `compras_pila_solo` sigue vivo en el dispatcher y en
   `_20_compras_rail.py`: lo que falta es quién lo encienda. Si lo

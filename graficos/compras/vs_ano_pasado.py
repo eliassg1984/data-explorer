@@ -232,12 +232,13 @@ _TITULO = "Compra Vs Año Pasado"
 "Vs año pasado" hasta el 2026-09-17: se renombró a pedido, para que el
 título diga de qué son las compras y no sólo contra qué se comparan.
 
-El nombre de la SECCIÓN del rail sigue siendo el corto ("Vs año pasado",
-en `graficos/compras/__init__.py::_PILA`) y la clave interna también
-(`compras_sec_vs_ano_pasado`). No es un descuido: el rail reparte su ancho
-entre siete ítems y ahí el nombre largo se trunca, mientras que en la
-cabecera es el elástico de la fila y tiene sitio. Un título de tarjeta y
-una etiqueta de navegación no tienen por qué medir lo mismo.
+El rail dice "Comparación Año Pasado" desde el 2026-09-21 (a pedido, en
+`graficos/compras/__init__.py::_COMPRAS_RAIL_CATEGORIAS`); antes decía el
+corto "Vs año pasado". El id INTERNO, en cambio, sigue siendo el corto: lo
+usan `_PILA`, la clave `compras_sec_vs_ano_pasado`, el esqueleto y los dicts
+de KPI, así que renombrar el rótulo del rail no lo toca. Un título de
+tarjeta, una etiqueta de navegación y un id interno no tienen por qué medir
+—ni decir— lo mismo.
 
 Cuesta ancho: de ~110px a ~175 en la fuente de la fila. Lo paga el hueco
 del título, que es `flex: 1 1 auto` — y el ⛶ que se fue el mismo día

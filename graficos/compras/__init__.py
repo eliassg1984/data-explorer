@@ -384,20 +384,27 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
 # Proveedor y Producto. El nombre interno sigue siendo «semanal»
 # (`compras_sec_semanal`, `semanal.py`, las keys `compras_sem_*`): cambiarlo
 # era renombrar estado de sesión y CSS para que nadie lo vea.
+# LOS RÓTULOS (2º elemento) SON LO QUE VE EL USUARIO; el id (1º) es lo que
+# consume el resto del código (keys, slug del scrollspy, `_PILA`, los dicts de
+# KPI/estado). Por eso renombrar la etiqueta del rail es un cambio de una sola
+# columna: 2026-09-21, a pedido, se alargaron cinco —«Por Proveedor», «Por
+# Producto», «Comparación Año Pasado», «Volatilidad de Precios», «Documentos
+# SUNAT»— sin tocar ningún id. Entran en la columna desplegada (~183px al
+# rótulo, 13px de fuente) con el `text-overflow: ellipsis` de `_28_arbol.py`
+# como red; plegada sólo se ve el ícono.
 _COMPRAS_RAIL_CATEGORIAS = (
-    ("Dimensión", (("Compras por período", "Por período", ":material/calendar_view_week:"),
-                   ("Proveedor",        "Proveedor",     ":material/local_shipping:"),
-                   ("Producto",         "Producto",      ":material/inventory_2:"))),
-    ("Precios",   (("Vs año pasado",    "Vs año pasado", ":material/compare_arrows:"),
-                   ("Volatilidad",      "Volatilidad",   ":material/candlestick_chart:"))),
-    ("SUNAT",     (("Documentos SUNAT", "Documentos",    ":material/receipt_long:"),)),
-    ("Más",       (("Tabla",            "Tabla",         ":material/table_rows:"),
-                   # El rótulo corto dice «Documentos» a secas y el largo
-                   # aclara de qué: en el riel plegado no entra más, y
-                   # «Documentos SUNAT» ya se llama así dos grupos más
-                   # arriba. Se distinguen por el ícono y por el grupo.
-                   ("Documentos por proveedor", "Detalle docs.",
-                    ":material/list_alt:"))),
+    ("Dimensión", (("Compras por período", "Por período",   ":material/calendar_view_week:"),
+                   ("Proveedor",           "Por Proveedor", ":material/local_shipping:"),
+                   ("Producto",            "Por Producto",  ":material/inventory_2:"))),
+    ("Precios",   (("Vs año pasado", "Comparación Año Pasado", ":material/compare_arrows:"),
+                   ("Volatilidad",   "Volatilidad de Precios", ":material/candlestick_chart:"))),
+    ("SUNAT",     (("Documentos SUNAT", "Documentos SUNAT", ":material/receipt_long:"),)),
+    ("Más",       (("Tabla",                     "Tabla",         ":material/table_rows:"),
+                   # «Detalle docs.» (id «Documentos por proveedor») NO es la
+                   # «Documentos SUNAT» del grupo de arriba: aquélla son los
+                   # comprobantes del SIRE; ésta, el detalle por proveedor que
+                   # sale del parquet. Se distinguen por rótulo, ícono y grupo.
+                   ("Documentos por proveedor", "Detalle docs.", ":material/list_alt:"))),
 )
 
 # Vistas de Compras que se quedan el selector de fecha DENTRO de su tarjeta
