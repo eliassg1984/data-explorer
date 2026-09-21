@@ -4281,8 +4281,8 @@ def _pruebas_etiqueta_barras_producto():
 
     from graficos.compras._comun import _variaciones
     from graficos.compras.producto import (
-        _etiquetas_barras, _fmt_docs, _hover_barras, _prod_serie_periodo,
-        _rotulo_periodo, _var_precio,
+        _compras_del_periodo, _etiquetas_barras, _fmt_docs, _hover_barras,
+        _periodo_del_clic, _prod_serie_periodo, _rotulo_periodo, _var_precio,
     )
 
     # Trampa 1: el MISMO número de documento en dos proveedores distintos,
@@ -4324,25 +4324,82 @@ def _pruebas_etiqueta_barras_producto():
     check("y el que sí, es % contra la barra ANTERIOR",
           abs(var[2][1] - 10.0) < 1e-9, str(var[2]))
 
-    et = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, [1, 3, 9, 2],
-                           variaciones=var)
-    check("la etiqueta lleva precio, valor y documentos",
-          all(x in et[2] for x in ("S/ 14.00", "S/ 19k", "9 docs")), et[2])
-    check("la variación va pegada al VALOR, que es el alto de la barra",
-          "S/ 19k <span" in et[2], et[2])
-    check("la barra cortada dice «parcial» en vez del %",
-          "parcial" in et[0] and "%" not in et[0], et[0])
-    check("y la de al lado de una parcial no dice nada",
-          "%" not in et[1] and "parcial" not in et[1], et[1])
+    # LA ETIQUETA SON DOS CIFRAS, no cuatro (2026-09-20, regla #480): la
+    # variación y los documentos salieron de la barra a pedido —«la etiqueta
+    # de datos es bastante larga»— y viven en el hover y en la tabla de
+    # abajo, que desde ese día está siempre a la vista dentro de la tarjeta.
+    # Que NO estén es lo que se vigila acá: volver a meterlas es volver a
+    # comerse el 45% del alto del gráfico.
+    et = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores)
+    check("la etiqueta lleva precio y valor",
+          all(x in et[2] for x in ("S/ 14.00", "S/ 19k")), et[2])
+    check("y NO lleva ni documentos ni variación",
+          all(x not in et[2] for x in ("docs", "%", "parcial")), et[2])
+    check("sin rotar, la etiqueta son dos renglones",
+          et[2].count("<br>") == 1, et[2])
     check("el singular de documento no dice '1 docs'",
           _fmt_docs(1) == "1 doc" and _fmt_docs(2) == "2 docs")
     # Trampa 4.
-    rot = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, [1, 3, 9, 2],
-                            variaciones=var, rotada=True)
+    rot = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, rotada=True)
     check("rotada, la etiqueta es UN renglón", "<br>" not in rot[2], rot[2])
     check("rotada dice lo mismo",
-          all(x in rot[2] for x in ("S/ 14.00", "S/ 19k", "9 docs", "10%")),
-          rot[2])
+          all(x in rot[2] for x in ("S/ 14.00", "S/ 19k")), rot[2])
+
+    # ── EL CLIC EN UNA BARRA → SU PERÍODO (2026-09-20, regla #480) ─────
+    # Acá el eje NO es lineal (`_eje_x_kwargs` dibuja sobre los timestamps
+    # de los buckets), así que la `x` del evento vuelve como FECHA y no como
+    # índice: la prima de Semanal (`_clave_del_clic`) no sirve. Lo que se
+    # mira primero es la posición, que Streamlit manda en `point_index`
+    # —snake_case, ver el docstring de `st.plotly_chart`— y no depende del
+    # tipo de eje.
+    #
+    # Se prueba acá y no clickeando en el navegador porque un clic que «no
+    # hace nada» tiene dos causas posibles —no llegó, o llegó y el mapeo
+    # devolvió None— y desde afuera son indistinguibles. Esto separa las dos.
+    _momentos = pd.to_datetime(["2026-06-01", "2026-07-01",
+                                "2026-08-01", "2026-09-01"])
+    check("el clic se resuelve por la POSICIÓN que manda Streamlit",
+          _periodo_del_clic({"curve_number": 0, "point_number": 2,
+                             "point_index": 2, "x": "2026-08-01", "y": 1.0},
+                            claves, _momentos) == "2026-08",
+          str(_periodo_del_clic({"point_index": 2}, claves, _momentos)))
+    check("la primera barra es la 0, no la 1",
+          _periodo_del_clic({"point_index": 0}, claves, _momentos)
+          == "2026-06")
+    check("una posición fuera de rango es un no-op, no una excepción",
+          _periodo_del_clic({"point_index": 99}, claves, _momentos) is None)
+    check("sin posición, la FECHA del punto alcanza",
+          _periodo_del_clic({"x": "2026-07-01"}, claves, _momentos)
+          == "2026-07")
+    check("y una x que no casa con ningún bucket tampoco revienta",
+          _periodo_del_clic({"x": "no es una fecha"}, claves,
+                            _momentos) is None)
+
+    # ── EL DETALLE DE UNA BARRA: una fila por COMPRA ───────────────────
+    # El mismo `df` de arriba: tres compras en agosto, y dos de ellas
+    # comparten el número «F001-1» con proveedores distintos. Son DOS
+    # comprobantes, no uno (la trampa 1, otra vez, pero del lado del
+    # detalle: si acá se contara el número pelado, la tabla diría dos filas
+    # donde el gráfico dice tres documentos y las dos se contradirían).
+    _det, _tot_det = _compras_del_periodo(
+        df, "2026-08", "Mes", "FECHA", "PUNIT", "CANT", "VAL", "DOC", "PROV")
+    check("el detalle lista una fila por (documento, proveedor)",
+          len(_det) == 2, str(None if _det is None else len(_det)))
+    check("y no se cuela ninguna compra de otro período",
+          set(_det["fecha"]) <= {"2026-08-01", "2026-08-02", "2026-08-03"},
+          str(list(_det["fecha"])))
+    # Alfa compró 1+3=4 unidades por 100+300=400 → 100.00 exactos. El
+    # promedio SIMPLE de sus dos líneas sería (10+14)/2 = 12, un precio que
+    # nadie pagó: el ponderado es la única definición que sobrevive al
+    # agregado (misma advertencia que la regla #199).
+    _alfa = _det[_det["prov"].str.upper().str.startswith("ALFA")].iloc[0]
+    check("el precio de una compra es el PONDERADO, no el promedio simple",
+          abs(float(_alfa["punit"]) - 100.0) < 1e-9, str(_alfa["punit"]))
+    check("el total tampoco promedia precios: divide valor entre cantidad",
+          _tot_det["punit"] == "S/ 100.00", str(_tot_det["punit"]))
+    check("sin columna de documento no hay detalle que armar, y lo dice",
+          _compras_del_periodo(df, "2026-08", "Mes", "FECHA", "PUNIT",
+                               "CANT", "VAL", None, "PROV") == (None, None))
 
     # Trampa 3: el precio conserva su variación en TODAS, incluidas las
     # parciales — es un promedio, no una suma.

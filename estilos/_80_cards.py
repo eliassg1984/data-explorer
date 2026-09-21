@@ -1339,19 +1339,6 @@ CSS = """    /* ================================================================
     div[class*="st-key-compras_prod_card_"] + div[class*="st-key-compras_prod_card_"] {
         margin-top: 16px;
     }
-    /* =================================================================== */
-    /* LA TABLA «UNA FILA POR BARRA» DE PRODUCTO (2026-09-20)               */
-    /*                                                                     */
-    /* Va DEBAJO de la fila de dos tarjetas y a lo ancho, así que no        */
-    /* comparte fila con nadie: queda fuera del piso de alto de más arriba  */
-    /* fuera-del-piso: compras_prod_card_detalle                            */
-    /* —no hay nada que igualar— y lo único suyo es separarse de la fila,   */
-    /* que termina en el MARCO y no en una tarjeta (la regla de acá arriba  */
-    /* empareja tarjeta con tarjeta y no la alcanza).                       */
-    /* =================================================================== */
-    .st-key-compras_prod_marco + .st-key-compras_prod_card_detalle {
-        margin-top: 16px;
-    }
 
     /* =================================================================== */
     /* TARJETAS DEL DRILL DE DOCUMENTOS SUNAT (Compras)                      */

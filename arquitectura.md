@@ -32,7 +32,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 480 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (170)
+**CSS y estilos** (169)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -203,9 +203,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 - **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
-- **#480** — La tabla que describe un gráfico no es otra tarjeta de la fila: va DEBAJO y a lo ancho. Y en…
 
-**Layout y alturas** (68)
+**Layout y alturas** (69)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -275,6 +274,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#446** — Un control se muda a la tarjeta que dibuja, y el sitio DENTRO de la tarjeta se elige por qué…
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
+- **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 
 **Plotly y figuras** (85)
 
@@ -362,7 +362,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 - **#478** — Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una vela por compra es plana…
 - **#479** — Una ventana RODANTE corta su primera y su última barra SIEMPRE, así que ahí «parcial» no es…
-- **#480** — La tabla que describe un gráfico no es otra tarjeta de la fila: va DEBAJO y a lo ancho. Y en…
+- **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 
 **AgGrid y tablas** (77)
 
@@ -40067,93 +40067,143 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-20.)
 
-480. **La tabla que describe un gráfico no es otra tarjeta de la fila: va
-     DEBAJO y a lo ancho. Y en cuanto ella dice el dato, la etiqueta de la
-     barra tiene que SOLTARLO.**
-     Pedido el 2026-09-20 sobre Compras › Producto: *«puedo hacer que ese
+480. **Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo
+     de él, y entonces el alto deja de ser un dato: es un reparto. Y en
+     cuanto la tabla dice el dato, la etiqueta de la barra tiene que
+     SOLTARLO.**
+     Dos pedidos del 2026-09-20 sobre Compras › Producto, el segundo
+     corrigiendo al primero el mismo día. Primero: *«puedo hacer que ese
      gráfico de barras del período tenga la opción de mostrar en la parte de
-     abajo una tabla con el detalle de cada barra, creo tengo algo similar
-     en la vista por [semanal]; veo que cuando todas [son] barras altas la
-     etiqueta de datos es bastante larga, hay alguna opción de [...] hacer
-     más cortas verticalmente esas barras o [...] hacerlo visible con el
-     paso del cursor o alguna otra idea»*. Son dos pedidos y uno resuelve al
-     otro: la etiqueta es larga porque lleva cuatro datos (#479), y con la
-     tabla abierta dos de esos cuatro están escritos abajo.
+     abajo una tabla con el detalle de cada barra [...]; veo que cuando
+     todas [son] barras altas la etiqueta de datos es bastante larga, hay
+     alguna opción de [...] hacer más cortas verticalmente esas barras o
+     [...] hacerlo visible con el paso del cursor»*. Y después, sobre lo que
+     salió de eso: *«no deseo la tabla de toda la vista Producto, la tabla
+     debe estar debajo del gráfico y formar parte de la tarjeta del gráfico,
+     asimismo quitemos la columna de proveedores. Y al hacer click en una
+     columna debe mostrar la información de esa columna, algo similar a lo
+     que ya tengo en la vista por período»*.
 
      **NO SE ACORTA LA BARRA, SE ACORTA LA ETIQUETA.** «Hacer más cortas
      verticalmente las barras» es bajar el techo del eje, y eso no devuelve
      píxeles: la etiqueta girada seguiría midiendo lo mismo y taparía más.
-     Lo que se quitó es lo que la tabla repite. MEDIDO en el navegador
-     (1366×768, 14 barras semanales, área de trazo de 317px): la etiqueta
-     girada mide **144px — el 45 % del alto del gráfico** con los cuatro
-     datos, y **70px — el 22 %** con dos. El techo del eje baja con ella
-     (`1.90 → 1.75` girada, `1.34 → 1.28` derecha): el aire de más existía
-     para que entrara la etiqueta larga.
+     Lo que se quitó es lo que la tabla repite — y lo propuso el propio
+     pedido con «hacerlo visible con el paso del cursor», porque el hover ya
+     lo decía todo. La etiqueta volvió a sus dos cifras (precio y valor) y
+     la variación y los documentos viven en el hover y en la tabla. MEDIDO
+     (1366×768, 14 barras semanales, área de trazo de 317px): de **144px —
+     el 45 % del alto del gráfico— a 70px, el 22 %**.
 
-     **LA TABLA NO CABE ADENTRO DE LA TARJETA DEL GRÁFICO.** Sus siete
-     columnas piden **942px** de anchos declarados y el panel del gráfico
-     da **429**. Meterla ahí era elegir entre cortar columnas o angostar el
-     gráfico que describe. Va en una tarjeta propia
-     (`compras_prod_card_detalle`), DEBAJO de la fila y a lo ancho de los
-     1240px: así la fila no cambia de alto al abrirla y el Ranking no se
-     estira con blanco al pie (el piso `:has()` de `estilos/_80_cards.py`,
-     #145 — verificado: las dos tarjetas siguen midiendo 528px con el
-     detalle abierto y cerrado). Se arma DENTRO de la tarjeta del gráfico,
-     que es quien sabe qué barras hay, y se dibuja después.
+     **EL ALTO DEJA DE SER UN DATO Y PASA A SER UNA RESTA.** La tarjeta mide
+     lo que mide la del Ranking de al lado (`_ALTO_EVO` se despeja contra
+     ella), y ese total no cambia porque la tabla se haya mudado adentro:
+     entonces la figura y la zona se reparten el mismo presupuesto. La
+     cuenta, MEDIDA bloque por bloque en el navegador:
 
-     **EL PESTILLO ENTRA EN EL RENGLÓN QUE YA EXISTÍA**, junto a la ventana
-     y la granularidad: es la cuenta de la #445 —una fila propia cuesta
-     47px, una compartida cuesta la diferencia de alto— y acá la diferencia
-     es cero… siempre que el rótulo no parta en dos. **MEDIDO, y así se
-     encontró:** sin `white-space: nowrap` la palabra «Detalle» se parte, el
-     `stCheckbox` pasa de 24 a 42px, la fila de controles de 32 a 50, y como
-     el alto de la FIGURA se despeja contra la tarjeta de al lado
-     (`_ALTO_EVO`), esos 18px terminan siendo 18px de blanco al pie del
-     Ranking. Un rótulo que se parte no es un problema de tipografía acá: es
-     un problema de altura en la tarjeta vecina.
+         padding                                       32
+         fila 1 (nombre + ventana + granularidad)      22
+         las dos líneas de cifras                      26,4
+         rótulo de la zona                              5,2
+         el wrapper de la grilla, sobre el iframe       7,6
+         CUATRO gaps de 16                             64
+                                                      ────
+         cromo                                        157,2   + ZONA 147
+         figura = 528 − 157 − 147                     = 224
 
-     **EL PESTILLO VA EN `_KEYS_WIDGET`** (#373): la escalada de fecha de
-     esta tarjeta hace `st.rerun` al tope del fragment, y sin
-     `preservar_widgets` cambiar la granularidad apagaba el detalle
-     recién encendido. Verificado en el navegador: Mes → Semana con el
-     detalle abierto lo deja abierto.
+     **Tres de esos números no se pueden deducir, y la primera cuenta los
+     erró los tres** — salió 144 en vez de 157 y la tarjeta quedó 13px más
+     alta que su vecina, con esos 13px de blanco al pie del Ranking (el piso
+     `:has()` de `estilos/_80_cards.py`, #145): la fila de controles mide
+     **22 y no 32** (los dos selectores van aplanados a texto), el bloque de
+     la grilla suma **7,6 propios** al alto del iframe, y los gaps son
+     **cuatro y no tres**, porque la zona agregó uno. Moraleja de la #449
+     otra vez: el reparto de alto entre renglones NO se deduce de sus cajas,
+     se mide.
 
-     **DOS COLUMNAS QUE NO ESTÁN, Y NINGUNA POR OLVIDO.** «Líneas»: medido
-     sobre `compras.parquet`, en los **1.295** grupos producto-mes del
-     último trimestre las líneas son EXACTAMENTE los documentos (diferencia
-     máxima 0) — un producto entra una vez por comprobante, y una columna
-     que repite a su vecina en el 100 % de las filas es ruido (#239). Y el
-     precio en la fila TOTAL, que va «—»: un promedio de promedios no mide
-     nada, y el promedio ponderado de verdad sería OTRA definición de
-     «precio» en la misma columna (misma advertencia que la #199).
+     **DE DÓNDE SALIÓ EL RENGLÓN QUE PAGA LA TABLA:** la granularidad era un
+     `st.pills` de tres rótulos en línea (~146px) y pasó a `st.selectbox`
+     (74px), que es lo que deja sitio para el nombre del producto al lado —
+     *«hagamos minimalista la granulación de semana mes año, en una línea
+     desplegable y pongámosla en la misma fila del título»*. Se pierde ver
+     las tres opciones sin abrir el control; es el precio del renglón.
 
-     **LA TABLA ES LA MISMA QUE LA DE «Compra por período»**, y por eso
-     `renderizar_periodos_semanal` pasó a llamarse `renderizar_periodos`:
-     es la tabla de «el gráfico escrito» —una fila por barra, en el orden
-     del eje— y la usan dos vistas. Cada una manda las columnas que su
-     gráfico tiene (las columnas salen del `tp`, no de la función), y las
-     que no manda no se configuran: de ahí el helper `_si()`. Producto
-     agrega las dos que Semanal no tiene, el precio promedio del período y
-     los proveedores que lo atendieron. **Ese rename y las tres mudanzas a
-     `_comun` (`_nota_variacion`, `_clave_grilla`, `_UNIDAD_GRAN`) son
-     exactamente el caso de la #357: al pushear hay que avisar que Cloud
-     necesita «Reboot app».**
+     **Y EL PISO DE LA FIGURA DEJA DE SER `alturas.MINI`.** Con 224 la resta
+     queda por debajo de los 240 de MINI, y subirla ahí costaría desnivelar
+     la fila. Por eso `alturas.FIG_CON_SU_TABLA` (180): MINI dice «existe
+     para apoyar una lectura, no para leerse sola» y vale para una figura
+     que ocupa su tarjeta ENTERA; ésta tiene debajo una tabla que dice lo
+     mismo en números. Verificado con `herramientas/ver_figura.py`: 14
+     barras semanales con la etiqueta girada entran en 224px sin recortarse.
+
+     **EL ANCHO: SEIS COLUMNAS EN 433px, CON EL RÓTULO ABREVIADO.** A lo
+     ancho de la vista la tabla tenía 1240px; dentro de la tarjeta tiene
+     **433**, y las seis con el rótulo entero piden **742**. Los anchos
+     salen de MEDIR el peor dato de cada una con la tipografía de la grilla
+     (celda 13px, cabecera 12px semibold), no de tantear — la tabla está en
+     `_COLS_ESTRECHA` (`tablas/compras_semanal.py`). Las cinco fijas suman
+     336 (Precio 72, Valorizado 88, % 58, Docs. 60, Var. 58) y a Período le
+     quedan 97. El nombre entero va al `headerTooltip`, que es lo que ya
+     hacen las tarjetas de KPI con «Vinos y espumantes». Lo que NO se
+     abrevia es «Valorizado»: es la columna que se lee, y «Valor» se
+     confunde con el valor unitario.
+
+     **EL CLIC EN LA BARRA ES EL ÚNICO CONTROL DE LA ZONA**, que alterna
+     entre Resumen (una fila por barra) y Detalle (una fila por compra del
+     período tocado), como «Compra por período» (#476). No hay pestillo: lo
+     había —un toggle «Detalle»— y se quitó en el segundo pedido, así que
+     tocar la MISMA barra es lo que vuelve al Resumen. Eso hay que decirlo
+     en pantalla o no se descubre: el rótulo de la zona lo dice en los dos
+     estados («tocá una barra para ver sus compras» / «tocá la misma barra
+     para volver al resumen»). La barra en foco se queda con el acento y las
+     demás se apagan a `LAVANDA_FOCO`.
+
+     **LAS DOS TABLAS DE LA ZONA MIDEN LO MISMO** (#398): si midieran
+     distinto, tocar una barra cambiaría el alto de la tarjeta y la fila
+     entera bailaría con cada clic.
+
+     **EL CLIC NO SE RESUELVE COMO EN SEMANAL, y la diferencia es el EJE.**
+     Allá el eje es lineal y la `x` del evento ES el índice
+     (`_clave_del_clic`); acá `_eje_x_kwargs` dibuja sobre los timestamps de
+     los buckets, así que la `x` vuelve como FECHA. Lo que sirve en los dos
+     casos es la POSICIÓN, que Streamlit manda en **`point_index`** —
+     snake_case, documentado en el docstring de `st.plotly_chart`— y no
+     depende del tipo de eje; la fecha queda de respaldo. Lo vigila
+     `test_graficos.py`, y se prueba ahí y no clickeando en el navegador
+     porque un clic que «no hace nada» tiene dos causas indistinguibles
+     desde afuera: no llegó, o llegó y el mapeo devolvió None. Lo demás es
+     la #399 de siempre: leer el evento ANTES de dibujar, con un contador en
+     la key y no el foco.
+
+     **TRES COLUMNAS QUE NO ESTÁN, y ninguna por olvido.** «Proveedores»
+     estuvo un día y se fue a pedido; el dato no se perdió, está en el
+     Detalle con una fila por comprobante, que es donde el nombre se lee
+     entero. «Líneas»: medido sobre `compras.parquet`, en los 1.295 grupos
+     producto-mes del último trimestre las líneas son EXACTAMENTE los
+     documentos, y una columna que repite a su vecina en el 100 % de las
+     filas es ruido (#239). Y el precio en la fila TOTAL, que va «—»: un
+     promedio de promedios no mide nada. En el Detalle, en cambio, el total
+     SÍ trae precio, porque ahí se puede definir sin mentir — valor dividido
+     cantidad, el ponderado; el promedio simple de las líneas de un
+     comprobante daría un precio que nadie pagó (#199).
 
      **LO QUE NO SE ARREGLÓ, Y ESTÁ MEDIDO:** en el celular (375px) los
-     942px de columnas entran en un iframe de 291 y `_css()` apaga el canal
+     432px de columnas entran en un iframe de ~291 y `_css()` apaga el canal
      horizontal (`.ag-body-horizontal-scroll { display: none }`, heredado de
-     Volatilidad), así que las tres últimas columnas —Documentos, Variación,
-     Proveedores— **no se pueden alcanzar**. No es nuevo ni es sólo de acá:
-     en la misma pantalla ya pasa con `compras_prov_rank_grid` (560 contra
-     291), `compras_prod_rank_tab` (405) y `compras_vap_detalle_grid` (308).
-     Esta es la peor de las cuatro. Arreglarlo es una decisión de las cuatro
-     juntas —esconder columnas en móvil con `_es_movil`, o devolverle el
-     canal a estas grillas— y no de una.
+     Volatilidad, donde Chrome lo dibujaba sin nada que deslizar y le robaba
+     el alto a la última fila), así que las dos últimas columnas no se
+     pueden alcanzar. No es nuevo ni es sólo de acá: en la misma pantalla ya
+     pasa con `compras_prov_rank_grid` (560 contra 291),
+     `compras_prod_rank_tab` (405) y `compras_vap_detalle_grid` (308).
+     Arreglarlo es una decisión de las cuatro juntas —esconder columnas en
+     móvil con `_es_movil`, o devolverle el canal a estas grillas— y no de
+     una.
 
-     Vive en `graficos/compras/producto.py` (`_tabla_periodos`, el
-     `compras_prod_detalle` y el `compacta=` de `_etiquetas_barras`), en
-     `tablas/compras_semanal.py` (`renderizar_periodos`, con `_si()`) y en
-     `estilos/_80_cards.py` (`.st-key-compras_prod_card_detalle`).
+     Vive en `graficos/compras/producto.py` (`_CROMO_CARD_EVO`,
+     `_FILAS_ZONA`, `_periodo_del_clic`, `_tabla_periodos`,
+     `_compras_del_periodo`, `_etiquetas_barras`), en
+     `graficos/alturas.py` (`FIG_CON_SU_TABLA`) y en
+     `tablas/compras_semanal.py` (`_COLS_ESTRECHA`, el `estrecha=` de
+     `renderizar_periodos` y `renderizar_compras_producto`).
 
      (2026-09-20.)
 

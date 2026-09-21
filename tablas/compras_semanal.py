@@ -1,11 +1,21 @@
-"""tablas.compras_semanal - las grillas de la zona de abajo de «Compra por
-período» (graficos/compras/semanal.py), que desde el 2026-09-19 tiene DOS
-modos y tres grillas:
+"""tablas.compras_semanal - las grillas de la ZONA DE ABAJO de un gráfico
+de barras por período. Son cuatro y las reparten DOS vistas.
+
+«Compra por período» (graficos/compras/semanal.py) tiene desde el
+2026-09-19 dos modos y tres grillas:
 
   · «Detalle» — los DOCUMENTOS del período en foco a la izquierda y, al
     costado, las LÍNEAS del documento elegido.
   · «Resumen» — UNA grilla con una fila por BARRA del gráfico
     (`renderizar_periodos`), más su fila TOTAL.
+
+Y desde el 2026-09-20 la Evolución de Producto (graficos/compras/
+producto.py) alterna los mismos dos modos dentro de la tarjeta de su
+gráfico: reusa `renderizar_periodos` en su juego de anchos estrecho
+(`estrecha=True`, 433px contra los 1240 de allá) y tiene grilla propia para
+el detalle, `renderizar_compras_producto` — una fila por COMPRA, porque con
+el producto ya elegido cada comprobante trae una sola línea suya. El nombre
+del módulo quedó de cuando era de una sola vista; ver la regla #480.
 
 Nacieron el 2026-09-14, a pedido: «que la tabla de abajo se divida en dos,
 una que muestre el documento, y al hacer clic muestre en otra tabla del
@@ -131,6 +141,20 @@ _JS_CANTIDAD = JsCode(
     " return v.toLocaleString('es-PE',"
     " {minimumFractionDigits: 1, maximumFractionDigits: 1}); }")
 
+_JS_CANT = JsCode(
+    "function(p){ var v = p.value;"
+    " if (v == null || isNaN(v)) return p.node && p.node.rowPinned"
+    "   ? (v == null ? '' : v) : '\u2014';"
+    " var dec = Math.abs(v) < 100 && v % 1 !== 0 ? 2 : 0;"
+    " return v.toLocaleString('es-PE', {minimumFractionDigits: dec,"
+    "                                   maximumFractionDigits: dec}); }")
+"""Cantidad: dos decimales sólo cuando los tiene y el número es chico.
+
+«260» y «0.75», no «260.00» y «0.75»: en una columna de 62px los dos
+decimales de un entero son ruido que empuja el resto. La fila fija manda su
+total ya escrito, así que un valor que no es número se devuelve tal cual
+cuando viene de ella."""
+
 _JS_SOLES = JsCode(
     "function(p){ var v = p.value; if (v == null) return '—';"
     " if (typeof v !== 'number') return String(v);"
@@ -229,6 +253,45 @@ _STYLE_VARIACION = JsCode("""
 le ganaría al `getRowStyle` del TOTAL y esa celda saldría de otro color que
 sus vecinas (el total no lleva variación — sumar porcentajes de períodos
 distintos no mide nada)."""
+
+_COLS_ANCHA = {
+    "periodo": ("", 180), "precio": ("Precio prom.", 118),
+    "valor": ("Valorizado", 130), "parte": ("% del total", 104),
+    "docs": ("Documentos", 106), "lineas": ("Líneas", 82),
+    "variacion": ("Variación", 104),
+}
+"""Rótulo y ancho de cada columna cuando la tabla ocupa una tarjeta a lo
+ancho (el caso de «Compra por período»). Los anchos son la cuenta de
+siempre: lo que mide el peor dato a 13px, más 8+8 de padding y los ~14 de
+la flecha de ordenar."""
+
+_COLS_ESTRECHA = {
+    "periodo": ("", 96), "precio": ("Precio", 72),
+    "valor": ("Valorizado", 88), "parte": ("%", 58),
+    "docs": ("Docs.", 60), "lineas": ("Líneas", 62),
+    "variacion": ("Var.", 58),
+}
+"""Lo mismo para media tarjeta, donde el rótulo entero no entra.
+
+Nació el 2026-09-20 con la Evolución de Producto, que dibuja esta tabla
+DENTRO de la tarjeta de su gráfico: ahí el panel da **433px** y las seis
+columnas con el rótulo entero piden **742**. Los anchos salen de MEDIR el
+peor dato de cada una con la tipografía de la grilla (13px la celda, 12px
+semibold la cabecera), no de tantear:
+
+    columna      celda peor caso        rótulo   ancho
+    Período      «set 2026»        49   41       96  (la que se estira)
+    Precio       «S/ 100.12»       54   33       72
+    Valorizado   «S/ 50,444.52»    71   56       88
+    %            «100.0%»          42   10       58
+    Docs.        «35»              14   30       60
+    Var.         «+188%»           41   19       58
+
+Las cinco fijas suman 336 y a «Período» le quedan 97 — de ahí el 96 de
+mínimo. El rótulo abreviado NO pierde información: el nombre entero va al
+`headerTooltip`, que es lo que ya hacen las tarjetas de KPI con «Vinos y
+espumantes». Lo que NO se abrevia es «Valorizado»: es la columna que se
+lee, y «Valor» se confunde con el valor unitario."""
 
 _AL_MONTAR = JsCode("""
     function(params) {
@@ -422,6 +485,76 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
     return None
 
 
+def renderizar_compras_producto(tp, altura, key, total=None):
+    """Una fila por COMPRA del período en foco, para la Evolución de Producto.
+
+    Prima de `renderizar_documentos_semanal` y no la misma función, porque
+    la vista es otra: allá cada fila es un comprobante de un período con
+    MUCHOS productos, y lo que se cuenta son sus líneas; acá el producto ya
+    está elegido y cada comprobante trae UNA línea suya (medido sobre
+    `compras.parquet`: en los 1.295 grupos producto-mes del último
+    trimestre las líneas son exactamente los documentos). Así que «Líneas»
+    no dice nada y su sitio lo ocupan las dos columnas que acá sí importan:
+    cuánto se compró y a cuánto la unidad.
+
+    `tp` trae `fecha` (texto ISO), `prov`, `cant`, `punit` y `valor` en
+    crudo —el formato lo pone la grilla, para que se ordenen— más `__doc`,
+    que es el número de comprobante y viaja al TOOLTIP de la fecha en vez
+    de a una columna propia: en 433px una columna de 104 para «F001-4717»
+    se come el ancho del proveedor, y el número se mira de a uno.
+
+    EL ANCHO, MEDIDO como el de `_COLS_ESTRECHA`: las cuatro fijas suman
+    300 (fecha 82, cantidad 62, precio 72, valor 84) y el proveedor se
+    queda con los ~133 que sobran de los 433 del panel. Es la única de
+    texto libre y por eso la única que se estira, igual que en sus
+    hermanas; el nombre que no entra se corta con «…» y sale entero en el
+    tooltip.
+
+    No devuelve nada y no tiene selección: es la hoja del camino. El foco
+    lo mueve el clic en la barra, que es de donde salen estas filas."""
+    gb = GridOptionsBuilder.from_dataframe(tp)
+    gb.configure_default_column(
+        resizable=False, sortable=True, filter=False, editable=False,
+        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
+    )
+    gb.configure_column("fecha", header_name="Fecha",
+                        valueFormatter=_JS_FECHA, tooltipField="__doc",
+                        headerTooltip="Fecha de emisión del comprobante. "
+                                      "Su número, en el tooltip de la celda",
+                        width=82, minWidth=82, suppressSizeToFit=True)
+    gb.configure_column("prov", header_name="Proveedor", minWidth=110,
+                        tooltipField="prov")
+    gb.configure_column("cant", header_name="Cant.", type=["numericColumn"],
+                        valueFormatter=_JS_CANT,
+                        headerTooltip="Cantidad comprada, en la unidad de "
+                                      "medida del producto",
+                        width=62, minWidth=62, suppressSizeToFit=True)
+    gb.configure_column("punit", header_name="Precio",
+                        type=["numericColumn"], valueFormatter=_JS_SOLES,
+                        headerTooltip="Precio unitario de ESTA compra, no el "
+                                      "promedio del período",
+                        width=72, minWidth=72, suppressSizeToFit=True)
+    # Abre ordenada por acá con `initialSort` y no con `sort`: st_aggrid le
+    # vuelve a pasar las `columnDefs` a la grilla en cada corrida y AG Grid
+    # re-aplica `sort` cada vez que las recibe, así que con `sort` el orden
+    # que elija el usuario se perdería en el rerun siguiente (regla #471).
+    gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
+                        valueFormatter=_JS_SOLES, initialSort="desc",
+                        width=84, minWidth=84, suppressSizeToFit=True)
+    gb.configure_column("__doc", hide=True)
+    gb.configure_grid_options(**_con_total(dict(
+        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
+        suppressCellFocus=True,
+        onGridReady=_AL_MONTAR, onRowDataUpdated=_AL_CAMBIAR_FILAS), total))
+    grid_options = gb.build()
+    _parchar_iconos(grid_options)  # arquitectura.md #159
+
+    AgGrid(
+        tp, gridOptions=grid_options, height=altura, theme="material",
+        custom_css=_css(), allow_unsafe_jscode=True, key=key, update_on=[],
+    )
+
+
 def renderizar_lineas_semanal(tp, altura, key, total=None):
     """Las líneas de UN documento: `prod` y los números crudos `cant`,
     `punit` (vacío si no vino) y `valor` — el formato lo pone la grilla,
@@ -465,7 +598,7 @@ def renderizar_lineas_semanal(tp, altura, key, total=None):
 
 def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
                         ver_docs=True, ver_variacion=True,
-                        familias=(), total=None):
+                        familias=(), total=None, estrecha=False):
     """Una fila por BARRA del gráfico, en el orden del eje.
 
     La usan DOS vistas desde el 2026-09-20 —«Compra por período» y la
@@ -495,6 +628,13 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
     que no se pierde es el TOTAL de las dos: sigue en la fila fija y en el
     caption de la fila de modo.
 
+    `estrecha` cambia el juego de anchos y rótulos: los de media tarjeta
+    (`_COLS_ESTRECHA`) en vez de los de una tarjeta a lo ancho. Lo enciende
+    la Evolución de Producto, que dibuja esta tabla DENTRO de la tarjeta de
+    su gráfico — 433px contra los 742 que piden las seis columnas con el
+    rótulo entero. No es un modo «apretado» genérico: son dos juegos
+    MEDIDOS, y cada uno sirve al ancho para el que se midió.
+
     `familias` son las columnas del desglose, como `(columna, rótulo)` y en
     el orden en que van: las arma el drill con las MISMAS familias que las
     tarjetas de KPI de la cabecera (las cuatro mayores y «N más»), y viene
@@ -523,44 +663,43 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
         falta el dato o falta la columna."""
         if col in _cols:
             gb.configure_column(col, **kw)
+    _A = _COLS_ESTRECHA if estrecha else _COLS_ANCHA
+
+    def _fijo(col, **kw):
+        """`_si` con el rótulo y el ancho del juego que toca."""
+        _rot, _w = _A[col]
+        _si(col, header_name=kw.pop("header_name", None) or _rot,
+            width=_w, minWidth=_w, suppressSizeToFit=True, **kw)
+
     # La única que se estira: el resto mide lo que dice su peor dato (ver
-    # los anchos de las hermanas, misma cuenta a 13px + 8+8 de padding + la
-    # flecha de ordenar).
-    _si("periodo", header_name=rotulo_periodo, minWidth=180,
+    # `_COLS_ANCHA` y `_COLS_ESTRECHA`, que traen la cuenta).
+    _si("periodo", header_name=rotulo_periodo, minWidth=_A["periodo"][1],
         tooltipField="periodo")
     # El precio es un PROMEDIO, así que no se suma ni se promedia de nuevo:
     # la fila TOTAL lo deja en «—» a propósito (ver `_JS_SOLES`). Un
     # promedio de promedios no mide nada — la regla #199 es la misma
     # advertencia sobre un ratio re-ponderado.
-    _si("precio", header_name="Precio prom.", type=["numericColumn"],
-        valueFormatter=_JS_SOLES,
-        headerTooltip="Promedio de los precios unitarios de compra del "
-                      "período. El total no lo promedia: un promedio de "
-                      "promedios no mide nada",
-        width=118, minWidth=118, suppressSizeToFit=True)
-    _si("valor", header_name="Valorizado",
-        type=["numericColumn"], valueFormatter=_JS_SOLES,
-        width=130, minWidth=130, suppressSizeToFit=True)
-    _si("parte", header_name="% del total",
-        type=["numericColumn"], valueFormatter=_JS_PARTE,
-        headerTooltip="Cuánto pesa esta barra en el total "
-                      "de la vista (el de la cabecera)",
-        width=104, minWidth=104, suppressSizeToFit=True)
-    _si("docs", header_name="Documentos",
-        hide=not ver_docs,
-        type=["numericColumn"], valueFormatter=_JS_ENTERO,
-        width=106, minWidth=106, suppressSizeToFit=True)
-    _si("lineas", header_name="Líneas",
-        type=["numericColumn"], valueFormatter=_JS_ENTERO,
-        width=82, minWidth=82, suppressSizeToFit=True)
-    _si("variacion", header_name="Variación",
-        hide=not ver_variacion, type=["numericColumn"],
-        valueFormatter=_JS_VARIACION,
-        cellStyle=_STYLE_VARIACION, tooltipField="__nota",
-        headerTooltip="Contra la barra ANTERIOR del "
-                      "gráfico, no contra el período "
-                      "anterior del calendario",
-        width=104, minWidth=104, suppressSizeToFit=True)
+    _fijo("precio", type=["numericColumn"], valueFormatter=_JS_SOLES,
+          headerTooltip="Precio promedio · promedio de los precios "
+                        "unitarios de compra del período. El total no lo "
+                        "promedia: un promedio de promedios no mide nada")
+    _fijo("valor", type=["numericColumn"], valueFormatter=_JS_SOLES,
+          headerTooltip="Valorizado de compra del período")
+    _fijo("parte", type=["numericColumn"], valueFormatter=_JS_PARTE,
+          headerTooltip="% del total · cuánto pesa esta barra en el total "
+                        "de la vista (el de la cabecera)")
+    _fijo("docs", hide=not ver_docs,
+          type=["numericColumn"], valueFormatter=_JS_ENTERO,
+          headerTooltip="Documentos · en cuántos comprobantes se repartió "
+                        "la compra del período")
+    _fijo("lineas", type=["numericColumn"], valueFormatter=_JS_ENTERO,
+          headerTooltip="Líneas de compra del período")
+    _fijo("variacion", hide=not ver_variacion, type=["numericColumn"],
+          valueFormatter=_JS_VARIACION,
+          cellStyle=_STYLE_VARIACION, tooltipField="__nota",
+          headerTooltip="Variación contra la barra ANTERIOR del "
+                        "gráfico, no contra el período "
+                        "anterior del calendario")
     # La ÚNICA de texto libre, y la única que se estira: los nombres miden
     # 26 caracteres de media y 37 en el percentil 90 (medido sobre los 773
     # proveedores del parquet), así que un ancho fijo o sobra o corta. El

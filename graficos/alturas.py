@@ -253,6 +253,31 @@ Los 617 de las dos de antes salían con el caption ÚLTIMO, cuyo
 último es la tabla y ese padding se paga — de ahí que la cuenta con tabla
 sume los 16 y la otra no (su último hijo sigue siendo el `st.empty()`)."""
 
+FIG_CON_SU_TABLA = 180
+"""Piso de una figura que comparte su tarjeta con la TABLA que la describe,
+y cuyo alto sale del reparto y no de un rol.
+
+Lo estrenó la Evolución de Producto el 2026-09-20, cuando la tabla «una
+fila por barra» bajó adentro de su tarjeta a pedido («la tabla debe estar
+debajo del gráfico y formar parte de la tarjeta del gráfico»). Ahí el alto
+de la figura es una RESTA —lo que la tarjeta mide menos su cromo y menos la
+zona de abajo— y con los números de hoy da 237, tres píxeles por debajo de
+`MINI` (240). Subirla a 240 no es gratis: la tarjeta crecería 3px sobre la
+del Ranking de al lado y el piso `:has()` de `estilos/_80_cards.py` le
+pondría esos 3px de blanco al pie (regla #145). Entre respetar un piso al
+píxel y dejar la fila pareja, gana la fila.
+
+Por qué 180 y no 240: `MINI` dice «existe para apoyar una lectura, no para
+leerse sola» y sigue siendo el piso de una figura que ocupa su tarjeta
+ENTERA. Ésta no: debajo tiene una tabla que dice lo mismo en números, así
+que la figura puede bajar más sin dejar a nadie sin respuesta — es el mismo
+razonamiento que llevó `MINI_CANDLE_DRILL` de 237 a 180. El piso no es
+decorativo: si la tarjeta de al lado se achicara, la resta podría dar un
+número que no dibuja nada.
+
+No es el alto de nadie: es el MÍNIMO de una resta. Quien lo use lo hace
+con `max(FIG_CON_SU_TABLA, <la resta>)`."""
+
 MINI_CANDLE_DRILL = 180
 """El candlestick de Volatilidad: la mitad izquierda de la fila de abajo de
 su tarjeta, al lado de la tabla de la semana (`PANEL_JUNTO_A_FIGURA`, que
