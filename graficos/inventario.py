@@ -179,9 +179,9 @@ _FILAS_RANK = 8
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
 # ver graficos/base.py).
 _INVENTARIO_RAIL_CATEGORIAS = (
-    ("Vista", (("Por área",        "Por área",    ":material/space_dashboard:"),
-               ("Por familia",     "Por familia", ":material/account_tree:"),
-               ("Productos",       "Productos",   ":material/inventory_2:"))),
+    ("Vista", (("Productos",       "Productos",   ":material/inventory_2:"),
+               ("Por área",        "Por área",    ":material/space_dashboard:"),
+               ("Por familia",     "Por familia", ":material/account_tree:"))),
     ("Datos", (("Tabla", "Tabla", ":material/table_rows:"),)),
 )
 
@@ -190,9 +190,9 @@ _INVENTARIO_RAIL_CATEGORIAS = (
 # Las cuatro vistas de Inventario comparten el mismo rango de fecha, así
 # que a diferencia de Ajuste acá va UNA sola pila con todo adentro.
 _PILA = (
+    ("inv_sec_productos", "Productos"),
     ("inv_sec_area",    "Por área"),
     ("inv_sec_familia", "Por familia"),
-    ("inv_sec_productos", "Productos"),
     ("inv_sec_tabla",   "Tabla"),
 )
 
