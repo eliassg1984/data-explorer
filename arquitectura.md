@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-482 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+483 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (169)
 
@@ -276,7 +276,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 
-**Plotly y figuras** (85)
+**Plotly y figuras** (86)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -363,8 +363,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#478** — Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una vela por compra es plana…
 - **#479** — Una ventana RODANTE corta su primera y su última barra SIEMPRE, así que ahí «parcial» no es…
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
+- **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 
-**AgGrid y tablas** (77)
+**AgGrid y tablas** (78)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -443,6 +444,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#462** — Una tabla con dos altos de fila se lee como dos tablas pegadas: la segunda línea se abre AL…
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
+- **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 
 **Streamlit** (133)
 
@@ -40349,6 +40351,59 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-21.)
 
+483. **Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una
+     columna de ESCALA en la tabla, «Por corte» = TODO el año, y el detalle
+     del mapa como TABLA con barra de severidad.**
+
+     **1. «Valorizado total» en la tabla de familias.** `metricas` suma
+     `VALORIZADO TOTAL` por LÍNEA (es sumable — el Mapa de calor e
+     Inventario › Productos ya lo agregan así; NO es un total de grupo
+     repetido como las `*_ANO_ANTERIOR`, ver regla #198). La columna va
+     DESPUÉS de Saldo, entre los soles y las de calidad (Productos 80 %,
+     Exactitud): es la escala contra la que se leen los ajustes — un
+     descuadre de S/ 30.000 pesa distinto sobre S/ 2 millones que sobre
+     S/ 50.000. El orden de columnas lo decide el DATAFRAME, no
+     `configure_column` (`GridOptionsBuilder.from_dataframe`), así que
+     `_tabla_familias` la inserta en esa posición del dict de cada fila y
+     `renderizar_familias_ajuste(..., con_valorizado=True)` sólo la
+     configura. Opcional: sin la columna en el parquet, la tabla se dibuja
+     igual.
+
+     **2. «Por corte» son TODOS los cortes del AÑO, del más nuevo al más
+     viejo** (antes: los últimos `_N_HISTORIAL`=6, del más viejo al
+     elegido). «Año presente» se leyó como el AÑO DEL CORTE ELEGIDO, no
+     `today().year`: quien mira un corte de 2025 quiere los cortes de 2025.
+     `estado_filtros_vista(anio_cortes=True)` lo trae en `cortes_anio` +
+     `d_anio`, con la misma máquina que `historial`/`d_historial` (unión de
+     días, cada fila con su `_corte_clave`, mismo filtrado que `d`),
+     calculado sobre `df_full` ANTES de recortar `base` al corte elegido.
+     Los dos conviven a propósito: `d_historial` sigue alimentando la
+     COBERTURA de la cabecera (áreas contadas en los últimos 6), `d_anio` la
+     pestaña. `_por_corte` invierte `cortes_anio` (viene viejo→nuevo) y
+     marca el corte que la vista tiene abierto. Sin fila TOTAL: sumar los
+     cortes de un año no mide nada.
+
+     **3. El detalle del Mapa de calor es una TABLA como la de la Cascada,
+     con barra de severidad detrás del monto** (a pedido: «que se vea como
+     tabla, similar a la de la Cascada, pero con barra de color para la
+     severidad»). Eran listas de HTML con barritas; pasaron a las MISMAS
+     AgGrid de desglose (`renderizar_desglose_ajuste`): Faltantes | Sobrantes
+     en Ajuste, un solo Top en Valorizado Total. La barra NO es un
+     `cellRenderer` —eso se ve como texto escapado (regla #25)— sino un
+     `cellStyle` con `linear-gradient`, la misma técnica que
+     `tablas/desktop.py::_pct_bar_style`. El largo (0-100) viaja en una
+     columna OCULTA `__barpct` que arma el llamador, NUNCA dentro del
+     `JsCode` (regla #226). `renderizar_desglose_ajuste(barra=(campo, color,
+     texto))` lo activa; la Cascada no lo pasa, así que sus desgloses siguen
+     sin barra.
+
+     Los helpers de alto/key de las grillas (`_alto_grilla`, `_atar_alto`,
+     `_clave`) los importa `_heatmap` desde `_cascada`: no hay ciclo
+     (`_cascada` no importa `_heatmap`, y `__init__` importa `_cascada`
+     antes).
+
+     (2026-09-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -40361,7 +40416,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#483**.
+> próxima regla nueva es la **#484**.
 
 >
 

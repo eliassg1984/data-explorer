@@ -159,7 +159,8 @@ def areas_con_ajuste(df, col_area, col_ajuste_val):
 
 def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
                          col_ajuste_val, k_corte, k_familia, k_area,
-                         familias=FAMILIAS_DE_ENTRADA, historial=0):
+                         familias=FAMILIAS_DE_ENTRADA, historial=0,
+                         anio_cortes=False):
     """ESTADO PRIMERO, WIDGETS DESPUES: resuelve los tres filtros sin
     dibujar nada, y devuelve el dict que consume `render_filtros_vista`.
 
@@ -184,8 +185,16 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     `d_historial` con una columna `_corte_clave` que dice de cual es cada
     una. Filtradas EXACTAMENTE igual que `d` (misma area, misma familia,
     misma normalizacion), que es todo el punto: comparar cortes filtrados
-    distinto no compara nada. Lo usa la Cascada para su pestaña «Por
-    corte» (regla #441).
+    distinto no compara nada. Lo usa la Cascada para la COBERTURA (cuantas
+    areas se contaron en los ultimos N cortes) — regla #441.
+
+    `anio_cortes=True` trae TODOS los cortes del AÑO del corte elegido (no
+    los ultimos N: la pestaña «Por corte» los quiere todos, del mas nuevo
+    al mas viejo), en `cortes_anio`, y sus filas en `d_anio` con la misma
+    columna `_corte_clave` y el mismo filtrado que `d_historial`. El año
+    sale del corte elegido y no de `today()`: quien mira un corte de 2025
+    quiere los cortes de 2025, no los del calendario en curso. Ver regla
+    #483.
 
     Es UN filtrado y no N: se toma la union de los dias de los N cortes de
     una sola pasada y despues se etiqueta cada fila con su corte. Opt-in
@@ -214,6 +223,7 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
         cortes = _todos[-MAX_CORTES_OFRECIDOS:]
     corte = corte_prev = None
     hist_cortes = []
+    cortes_anio, base_anio = [], None
     if cortes:
         _clave = st.session_state.get(k_corte)
         corte = next((c for c in cortes if c["clave"] == _clave), None)
@@ -233,6 +243,16 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
                        for _d in _c["dias"]}
             base_hist = base[_fechas.isin(_de_dia)].assign(
                 _corte_clave=_fechas[_fechas.isin(_de_dia)].map(_de_dia))
+        if anio_cortes:
+            # TODOS los cortes del año del elegido, mismo etiquetado por día
+            # que el historial. Se calcula sobre `base` (aún = df_full) antes
+            # de recortarla al corte elegido, unas líneas abajo.
+            _anio = corte["fin"].year
+            cortes_anio = [c for c in _todos if c["fin"].year == _anio]
+            _de_dia_a = {_d: _c["clave"] for _c in cortes_anio
+                         for _d in _c["dias"]}
+            base_anio = base[_fechas.isin(_de_dia_a)].assign(
+                _corte_clave=_fechas[_fechas.isin(_de_dia_a)].map(_de_dia_a))
         base = base[_fechas.isin(set(corte["dias"]))]
 
     # NORMALIZAR EL AREA, no solo la lista de opciones: `filtro_pills`
@@ -244,6 +264,7 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
         return x.assign(**{col_area: x[col_area].astype(str).str.strip()})
 
     base, base_hist = _normalizar(base), _normalizar(base_hist)
+    base_anio = _normalizar(base_anio)
     # Las opciones las decide el corte ELEGIDO, nunca el anterior: ofrecer
     # un area que no movio nada ahora es ofrecer una pastilla que deja la
     # vista vacia, y de eso se trata `areas_con_ajuste` (#424).
@@ -283,6 +304,7 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     return {"base": base, "d": _aplicar(base), "corte": corte,
             "cortes": cortes, "corte_prev": corte_prev,
             "historial_cortes": hist_cortes, "d_historial": _aplicar(base_hist),
+            "cortes_anio": cortes_anio, "d_anio": _aplicar(base_anio),
             "areas": areas, "familias": opc_fam,
             "sel_fam": sel_fam, "sel_area": sel_area,
             "col_familia": col_familia, "col_area": col_area,

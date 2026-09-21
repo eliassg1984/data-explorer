@@ -67,6 +67,10 @@ FUENTES = {
               "Tolerancia: {tol}. No cuenta las líneas en cero y cero."),
     "lineas": "Líneas con stock que cerraron con diferencia.",
     "areas": "Áreas con al menos una línea con stock en ese corte.",
+    "valorizado": ("Valor del stock contado en el corte, a precio de "
+                   "kardex. Es la escala contra la que se leen los "
+                   "ajustes: un descuadre de S/ 30.000 pesa distinto sobre "
+                   "S/ 2 millones que sobre S/ 50.000."),
 }
 
 # ── Formatos (el número viaja crudo para que la columna se ordene) ───────
@@ -108,6 +112,31 @@ _JS_COLOR_SALDO = JsCode(
     f" return {{'color':'{TEXTO_PRINCIPAL}'}};"
     f" return {{'color': p.value < 0 ? '{AJUSTE_NEG_TEXTO}' : '{AJUSTE_POS_TEXTO}',"
     " 'fontWeight':'600'};}")
+
+
+def _barra_valor_style(pct_field, color_barra, color_texto):
+    """cellStyle de una celda de monto CON barra de severidad detrás: la
+    misma técnica de gradiente que `tablas/desktop.py::_pct_bar_style` (sin
+    cellRenderer, que acá se ve como texto escapado — regla #25). El largo
+    lo trae la fila en un campo oculto (`pct_field`, 0-100) para no meter
+    datos dentro del `JsCode` (regla #226). El número va a la derecha; la
+    barra crece desde la izquierda. Lo usa el detalle del Mapa de calor,
+    regla #483."""
+    return JsCode(f"""
+        function(p){{
+            var st = {{ color: '{color_texto}', fontWeight: '600',
+                        textAlign: 'right', paddingRight: '10px' }};
+            if (p.value == null || (p.node && p.node.rowPinned)) return st;
+            var pct = (p.data && p.data['{pct_field}']) || 0;
+            st.backgroundImage = 'linear-gradient(to right, {color_barra} 0%, '
+                + '{color_barra} ' + pct + '%, transparent ' + pct + '%, '
+                + 'transparent 100%)';
+            st.backgroundRepeat = 'no-repeat';
+            st.backgroundSize = '100% 68%';
+            st.backgroundPosition = 'left center';
+            return st;
+        }}
+    """)
 
 # LA MARCA DE LA FILA EN FOCO VA POR `rowClassRules`, NO POR `getRowClass`.
 # Ésta conserva su key, y AG Grid documenta que las clases de `getRowClass`
@@ -178,7 +207,7 @@ def _col_nombre(gb, campo, titulo, movil, ancho_movil=128):
 
 
 def renderizar_familias_ajuste(tp, total, altura, key, tolerancia,
-                               movil=False):
+                               movil=False, con_valorizado=False):
     """Una fila por FAMILIA del corte, con la fila TOTAL fija abajo.
 
     `tp` trae `familia`, `falto`, `sobro`, `total`, `saldo`, `n80`,
@@ -186,6 +215,10 @@ def renderizar_familias_ajuste(tp, total, altura, key, tolerancia,
     columna del 80 %) y `__sel` (True en la familia que muestra el
     detalle). `total` es el dict de la fila fija, con las mismas claves.
     `tolerancia` es el texto que la cabecera de «Exactitud» declara.
+    `con_valorizado=True` agrega la columna «Valorizado total» (soles, en
+    `tp["valorizado"]`), que va DESPUÉS de Saldo — el llamador la pone en
+    esa posición del df porque el orden de columnas lo decide
+    `from_dataframe`, no `configure_column`.
 
     Devuelve la familia de la fila seleccionada, o None. Es la selección
     VIGENTE (la key no cambia con el foco, ver el docstring del módulo): el
@@ -203,6 +236,10 @@ def renderizar_familias_ajuste(tp, total, altura, key, tolerancia,
                sort="desc")
     _col_monto(gb, "saldo", "Saldo", FUENTES["saldo"], formato=_JS_SALDO,
                estilo=_JS_COLOR_SALDO)
+    if con_valorizado:
+        # Neutra (no es un descuadre): número de la casa, sin rojo/verde.
+        _col_monto(gb, "valorizado", "Valorizado total", FUENTES["valorizado"],
+                   ancho=132, estilo=_color(TEXTO_PRINCIPAL))
     gb.configure_column("n80", header_name="Productos 80 %",
                         type=["numericColumn"], valueFormatter=_JS_DE,
                         headerTooltip=FUENTES["n80"], width=124, minWidth=124,
@@ -234,7 +271,7 @@ def renderizar_familias_ajuste(tp, total, altura, key, tolerancia,
 
 
 def renderizar_desglose_ajuste(tp, columnas, altura, key, movil=False,
-                               total=None):
+                               total=None, barra=None):
     """Un desglose de la familia en foco: sus líneas, sus áreas o sus
     cortes. Se lee y se ordena; no se clickea.
 
@@ -242,7 +279,13 @@ def renderizar_desglose_ajuste(tp, columnas, altura, key, movil=False,
     orden)`, donde clase es `"nombre"`, `"texto"`, `"falto"`, `"sobro"`,
     `"total"`, `"saldo"`, `"cantidad"` o `"entero"` — lo que decide formato,
     color y el tooltip de la cabecera — y `orden` («asc»/«desc») es el orden
-    con que abre. `total` es el dict de la fila TOTAL fija, si la lleva."""
+    con que abre. `total` es el dict de la fila TOTAL fija, si la lleva.
+
+    `barra=(campo, color_barra, color_texto)` dibuja una barra de severidad
+    detrás de ese campo (soles), con el largo en la columna oculta
+    `tp["__barpct"]` (0-100, la pone el llamador). Anula la clase de esa
+    columna. Lo usa el detalle del Mapa de calor (regla #483); la Cascada no
+    lo pasa, así que sus desgloses quedan sin barra."""
     # EL ORDEN DE LAS COLUMNAS LO DECIDE EL DATAFRAME, no `configure_column`:
     # `GridOptionsBuilder.from_dataframe` arma las columnas en el orden del
     # df y configurarlas después no las mueve. Medido: pedidas Cantidad ·
@@ -253,7 +296,12 @@ def renderizar_desglose_ajuste(tp, columnas, altura, key, movil=False,
     for col in columnas:
         campo, titulo, clase = col[:3]
         orden = {"sort": col[3]} if len(col) > 3 else {}
-        if clase == "nombre":
+        if barra is not None and campo == barra[0]:
+            _col_monto(gb, campo, titulo, FUENTES.get(clase, ""),
+                       estilo=_barra_valor_style("__barpct", barra[1],
+                                                 barra[2]),
+                       ancho=132, **orden)
+        elif clase == "nombre":
             _col_nombre(gb, campo, titulo, movil)
         elif clase == "texto":
             gb.configure_column(campo, header_name=titulo, width=132,

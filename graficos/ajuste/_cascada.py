@@ -145,8 +145,12 @@ def productos_pareto(valores, productos, umbral=_PARETO):
     return int((acum < umbral - _EPS).sum()) + 1, len(a)
 
 
-def metricas(d, col_val, col_prod, col_sistema, col_fisico):
-    """Las columnas de una fila de la tabla, para el recorte `d`."""
+def metricas(d, col_val, col_prod, col_sistema, col_fisico, col_valorizado=None):
+    """Las columnas de una fila de la tabla, para el recorte `d`.
+
+    `col_valorizado` (opcional) es el valor del stock contado: se suma por
+    LÍNEA — es sumable, la app lo agrega así en el mapa de calor y en
+    Inventario › Productos. `None` cuando la columna no está."""
     v = _num(d[col_val])
     falto = float(v[v < 0].sum())
     sobro = float(v[v > 0].sum())
@@ -156,20 +160,25 @@ def metricas(d, col_val, col_prod, col_sistema, col_fisico):
     cs = lineas_con_stock(d, col_sistema, col_fisico)
     n_cs = len(cs)
     n_dif = int((_num(cs[col_val]).abs() > _TOL_EXACTITUD + _EPS).sum())
+    valorizado = (float(_num(d[col_valorizado]).sum())
+                  if col_valorizado and col_valorizado in d.columns else None)
     return {"falto": falto, "sobro": sobro, "total": abs(falto) + sobro,
             "saldo": falto + sobro, "n80": n80, "de": de,
+            "valorizado": valorizado,
             "lineas": n_cs, "dif": n_dif,
             "exact": (n_cs - n_dif) / n_cs * 100 if n_cs else None}
 
 
-def resumen_familias(d, grp_col, col_val, col_prod, col_sistema, col_fisico):
+def resumen_familias(d, grp_col, col_val, col_prod, col_sistema, col_fisico,
+                     col_valorizado=None):
     """Una fila por familia, de la que más descuadró a la que menos.
 
     Una familia sin diferencias pero con líneas contadas SE QUEDA: su 100 %
     de exactitud es un dato. Sólo se va la que no tiene nada."""
     filas = []
     for fam, g in d.groupby(d[grp_col].astype(str), sort=False):
-        m = metricas(g, col_val, col_prod, col_sistema, col_fisico)
+        m = metricas(g, col_val, col_prod, col_sistema, col_fisico,
+                     col_valorizado)
         if m["total"] > _EPS or m["lineas"]:
             filas.append({"familia": fam, **m})
     return sorted(filas, key=lambda f: (-f["total"], f["familia"]))
@@ -351,8 +360,10 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     de stock no llegan por parámetro: se resuelven acá, sobre `df`, porque
     cambiar la firma obligaría a tocar `__init__` en el mismo push.
 
-    `col_valorizado` ya no se usa (era el «% de su stock» de la tarjeta);
-    queda en la firma porque la pasa el dispatcher.
+    `col_valorizado` es el valor del stock contado (`VALORIZADO TOTAL`): se
+    suma por familia y sale como columna «Valorizado total» de la tabla —
+    la escala contra la que se leen los ajustes (regla #483). Sin la
+    columna, la tabla se dibuja igual, sin ese campo.
 
     `col_unidad` es la unidad de Kardex por producto (Kg, Und, Lt...) -- se
     usa solo en el texto de las listas; si no se resuelve, la cantidad va
@@ -370,12 +381,14 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     _est = estado_filtros_vista(
         df, df_full, col_fecha, col_familia, col_area, col_ajuste_val,
         k_corte=_K_CORTE, k_familia=_K_FAMILIA, k_area=_K_AREA,
-        familias=FAMILIAS_DE_ENTRADA, historial=_N_HISTORIAL)
+        familias=FAMILIAS_DE_ENTRADA, historial=_N_HISTORIAL,
+        anio_cortes=True)
     d = _est["d"]
     col_sis = _resolver(d, _COL_SISTEMA)
     col_fis = _resolver(d, _COL_FISICO)
     fams = (resumen_familias(d, grp_col, col_ajuste_val, col_producto,
-                             col_sis, col_fis) if not d.empty else [])
+                             col_sis, col_fis, col_valorizado)
+            if not d.empty else [])
 
     with st.container(key="ajcas_cuerpo"):
         with st.container(border=True, key="ajcas_card_resumen"):
@@ -405,7 +418,7 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
                 st.session_state[_K_FOCO] = foco
             _clic = _tabla_familias(d, fams, foco, _est, grp_col,
                                     col_ajuste_val, col_producto,
-                                    col_sis, col_fis)
+                                    col_sis, col_fis, col_valorizado)
             if _clic and _clic != foco and _clic in nombres:
                 # El rerun hace falta: la tabla ya se dibujó con la marca
                 # vieja (regla #440).
@@ -440,17 +453,25 @@ def _cobertura(d, est, col_area, col_sis, col_fis):
 
 
 def _tabla_familias(d, fams, foco, est, grp_col, col_val, col_prod,
-                    col_sis, col_fis):
+                    col_sis, col_fis, col_valorizado=None):
     """La tabla del resumen. Devuelve la familia seleccionada, o None."""
-    _tot = metricas(d, col_val, col_prod, col_sis, col_fis)
+    _tot = metricas(d, col_val, col_prod, col_sis, col_fis, col_valorizado)
+    _con_val = bool(col_valorizado)
 
     # SIN REDONDEAR ACÁ: el formato de la grilla redondea al entero, y
     # redondear antes a dos decimales cambia el resultado. Medido: el saldo
     # de ALIMENTOS del 2 set es 6.072,498 -> 6.072,50 -> «+S/ 6,073».
+    # «Valorizado total» va DESPUÉS de Saldo (los soles juntos) y solo si
+    # llega la columna; el orden del dict es el de las columnas de la
+    # grilla (`from_dataframe`), ver `tablas.ajuste_familias`.
     def _fila(nom, m, sel):
-        return {"familia": nom, "falto": m["falto"], "sobro": m["sobro"],
-                "total": m["total"], "saldo": m["saldo"], "n80": m["n80"],
-                "exact": m["exact"], "__de": m["de"], "__sel": sel}
+        f = {"familia": nom, "falto": m["falto"], "sobro": m["sobro"],
+             "total": m["total"], "saldo": m["saldo"]}
+        if _con_val:
+            f["valorizado"] = m["valorizado"]
+        f.update({"n80": m["n80"], "exact": m["exact"],
+                  "__de": m["de"], "__sel": sel})
+        return f
 
     tp = pd.DataFrame([
         {**_fila(nombre_propio(f["familia"]), f, f["familia"] == foco),
@@ -467,7 +488,7 @@ def _tabla_familias(d, fams, foco, est, grp_col, col_val, col_prod,
     _alto = _alto_grilla(len(tp) + 1)
     _atar_alto(_key, _alto)
     return renderizar_familias_ajuste(tp, total, _alto, _key, _TOL_TEXTO,
-                                      movil=_es_movil())
+                                      movil=_es_movil(), con_valorizado=_con_val)
 
 
 def _detalle(foco, d, est, grp_col, col_val, col_prod, col_area,
@@ -651,20 +672,27 @@ def _por_area(_det, _m, _id, col_val, col_prod, col_area, col_sis, col_fis):
 
 
 def _por_corte(foco, est, _id, grp_col, col_val, col_area, col_sis, col_fis):
-    """«Por corte»: los últimos cortes de la familia en foco. Sin fila
-    TOTAL: sumar seis cortes no es una medida de nada."""
-    _dh = est.get("d_historial")
-    _cortes = est.get("historial_cortes") or []
+    """«Por corte»: TODOS los cortes del año de la familia en foco, del más
+    nuevo al más viejo (a pedido, 2026-09-21). Sin fila TOTAL: sumar los
+    cortes de un año no es una medida de nada. El corte que la vista tiene
+    abierto va marcado (`__sel`). Ver regla #483."""
+    _dh = est.get("d_anio")
+    _cortes = est.get("cortes_anio") or []
     if _dh is None or not _cortes:
-        st.caption("Sin historial de cortes para comparar.")
+        st.caption("Sin cortes del año para comparar.")
         return
     _dh = _dh[_dh[grp_col].astype(str) == foco]
+    # `cortes_anio` viene del más viejo al más nuevo; se invierte para
+    # listarlos del más nuevo al más viejo. `desglose_cortes` respeta el
+    # orden de entrada.
+    _cortes = list(reversed(_cortes))
+    _sel_clave = (est.get("corte") or {}).get("clave")
     filas = desglose_cortes(_dh, _cortes, col_area, col_val, col_sis, col_fis)
-    _ult = len(filas) - 1
     tp = pd.DataFrame([{
         "corte": f["corte"], "areas": f["areas"], "lineas": f["dif"],
         "falto": f["falto"], "sobro": f["sobro"], "saldo": f["saldo"],
-        "__sel": i == _ult} for i, f in enumerate(filas)])
+        "__sel": c["clave"] == _sel_clave}
+        for f, c in zip(filas, _cortes)])
     _key = f"ajcas_grid_cortes_{_id}"
     _alto = _alto_grilla(min(_FILAS_DESGLOSE, len(tp)))
     _atar_alto(_key, _alto)

@@ -4742,6 +4742,33 @@ def _pruebas_resumen_ajuste():
     check("la exactitud cita APICS y declara su tolerancia",
           "APICS" in FUENTES["exact"] and "{tol}" in FUENTES["exact"], True)
 
+    # «Valorizado total»: se suma por línea; None sin la columna (regla #483).
+    _dv = pd.DataFrame({"AV": [-1.0, 2.0], "VT": [100.0, 50.0]})
+    check("valorizado total suma por línea",
+          _cas.metricas(_dv, "AV", None, None, None, "VT")["valorizado"], 150.0)
+    check("sin columna de valorizado, el campo es None",
+          _cas.metricas(_dv, "AV", None, None, None)["valorizado"], None)
+    check("«Valorizado total» declara que es la escala del stock",
+          "escala" in FUENTES["valorizado"], True)
+
+    # «Por corte» = TODOS los cortes del AÑO del elegido (regla #483), no un
+    # historial de N. Con cortes en dos años y el último elegido, sólo entran
+    # los de ese año y `d_anio` trae sus filas.
+    _multi = pd.DataFrame({
+        "F": pd.to_datetime(["2025-03-10", "2026-02-05", "2026-09-15"]),
+        "FAMILIA": ["ALIMENTOS"] * 3, "AREA": ["X"] * 3, "AV": [-1.0, -2.0, -3.0],
+    })
+    _e2 = estado_filtros_vista(
+        _multi, _multi, "F", "FAMILIA", "AREA", "AV",
+        k_corte="test_ac_corte", k_familia="test_ac_fam",
+        k_area="test_ac_area", familias=("ALIMENTOS",), anio_cortes=True)
+    check("por corte: sólo los cortes del año del elegido (2026)",
+          [c["fin"].year for c in _e2["cortes_anio"]], [2026, 2026])
+    check("por corte: d_anio trae una fila por cada corte del año",
+          _e2["d_anio"]["_corte_clave"].nunique(), 2)
+    check("por corte: la fila de 2025 queda fuera de d_anio",
+          len(_e2["d_anio"]), 2)
+
     return fallos
 
 

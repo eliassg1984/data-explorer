@@ -29,11 +29,11 @@ import streamlit as st
 
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS,
-    AJUSTE_POS_TEXTO, BLANCO, ESCALA_CONTINUA, GRIS_BORDE, GRIS_FONDO,
+    AJUSTE_POS_TEXTO, BLANCO, ESCALA_CONTINUA, GRIS_BORDE,
     GRIS_TEXTO_SUAVE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
-    _card,
+    _card, _es_movil,
 )
 # Los tres filtros propios (corte · familia · área) son los MISMOS que
 # los de la Cascada, misma pieza y mismo default de familias: viven en
@@ -41,6 +41,12 @@ from graficos.base import (
 from graficos.ajuste._comun import (
     css_filtros_vista, estado_filtros_vista, render_filtros_vista,
 )
+# Los helpers de alto/key de las grillas viven en `_cascada` (no hay ciclo:
+# `_cascada` no importa este módulo, y `__init__` importa `_cascada` antes).
+# El detalle del Mapa de calor usa las MISMAS grillas de desglose que la
+# Cascada, con una barra de severidad detrás del monto (regla #483).
+from graficos.ajuste._cascada import _alto_grilla, _atar_alto, _clave
+from tablas.ajuste_familias import renderizar_desglose_ajuste
 
 
 # LAS TRES CLAVES DE ESTA VISTA, distintas de las de la Cascada a
@@ -317,11 +323,6 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         # medido 2026-09-18, regla #468.
         '.st-key-hm_tabla [data-testid="stMarkdownContainer"] { '
         'margin-bottom: 0 !important; }',
-        # Lo mismo en las listas del detalle de abajo, que viven fuera de
-        # la grilla: sin techo en la tarjeta, sus 16px descontados dejaban
-        # la última fila 8px por fuera del borde inferior (medido).
-        '[data-testid="stMarkdownContainer"]:has(.hm-det-filas) { '
-        'margin-bottom: 0 !important; }',
         '.st-key-hm_tabla [data-testid="stHorizontalBlock"] '
         '> [data-testid="stColumn"]:first-child { flex: 0 0 170px '
         '!important; max-width: 170px !important; min-width: 170px '
@@ -507,71 +508,66 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     _sub_prod["_abs"] = _sub_prod[col_metrica].abs()
     _sub_prod = _sub_prod.sort_values("_abs", ascending=False).head(30)
 
-    def _filas_html(_df_d):
-        """Mini barras de progreso (riel + relleno) — mismo patrón que la
-        columna Cascada acumulada, en vez de un gráfico Plotly de barras
-        gruesas."""
-        if _df_d.empty:
-            return ""
-        _max_abs = float(_df_d[col_metrica].abs().max()) or 1.0
-        _filas = []
-        for _, _r in _df_d.iterrows():
-            _v = float(_r[col_metrica])
-            _nom = str(_r[col_producto])
-            if len(_nom) > 32:
-                _nom = _nom[:31] + "…"
-            _bar, _tcol = _paleta(_v, modo_val)
-            _t = f"S/ {_v:,.0f}"
-            if _has_cant:
-                _t += f" · {_r[col_cantidad]:,.1f}"
-                _um = str(_r[col_unidad]).strip() if _has_um else ""
-                if _um and _um.lower() != "nan":
-                    _t += f" {_um}"
-            _filas.append(
-                f"<div style='display:flex;align-items:center;"
-                f"gap:8px;padding:3px 0'>"
-                f"<div style='width:38%;min-width:0;"
-                f"flex-shrink:0;overflow:hidden'>"
-                f"<div style='font-size:10.5px;"
-                f"color:{TEXTO_PRINCIPAL};white-space:nowrap;"
-                f"overflow:hidden;text-overflow:ellipsis'>"
-                f"{_nom}</div></div>"
-                f"<div style='flex:1;position:relative;"
-                f"height:16px;min-width:0'>"
-                f"<div style='position:absolute;left:0;"
-                f"right:0;top:50%;transform:translateY(-50%);"
-                f"height:7px;background:{GRIS_FONDO};"
-                f"border-radius:999px'></div>"
-                f"<div style='position:absolute;left:0;"
-                f"width:{_pct(_v, _max_abs):.1f}%;top:50%;transform:"
-                f"translateY(-50%);height:7px;"
-                f"background:{_bar};"
-                f"border-radius:999px'></div></div>"
-                f"<div style='flex-shrink:0;text-align:right;"
-                f"font-size:10px;font-weight:600;"
-                f"color:{_tcol};font-variant-numeric:"
-                f"tabular-nums;white-space:nowrap'>"
-                f"{_t}</div></div>")
-        # La clase la lee el CSS de abajo: sin ella, la #162 descuenta 16px
-        # de esta lista y su última fila se sale por debajo de la tarjeta.
-        return f"<div class='hm-det-filas'>{''.join(_filas)}</div>"
+    # UNA GRILLA POR LADO, como la Cascada (regla #483): antes eran listas
+    # HTML con barritas; ahora son las MISMAS AgGrid de desglose
+    # (`renderizar_desglose_ajuste`), con una barra de severidad detrás del
+    # monto. «Se vea como tabla, similar a la de la Cascada, pero con barra
+    # de color para la severidad» (a pedido, 2026-09-21).
+    def _tp_lado(_df_d):
+        """DataFrame de una grilla de desglose: producto · (cantidad) ·
+        valor. `__barpct` es el largo de la barra, 0-100 contra el máximo
+        absoluto del lado, con piso de 4 para que un monto chico no
+        desaparezca (mismo criterio que las celdas de la tabla, `_pct`).
+        `__um` viaja oculta para que `Cantidad` muestre la unidad y siga
+        ordenando por el número."""
+        tp = pd.DataFrame({
+            "producto": _df_d[col_producto].astype(str),
+            "valor": pd.to_numeric(_df_d[col_metrica],
+                                   errors="coerce").fillna(0.0),
+        })
+        if _has_cant:
+            tp["cantidad"] = pd.to_numeric(_df_d[col_cantidad],
+                                           errors="coerce").fillna(0.0)
+            _um = (_df_d[col_unidad].astype(str).str.strip() if _has_um
+                   else pd.Series("", index=_df_d.index))
+            tp["__um"] = _um.mask(_um.str.lower().isin(("nan", "none")),
+                                  "").values
+        _mx = float(tp["valor"].abs().max()) or 1.0
+        tp["__barpct"] = (tp["valor"].abs() / _mx * 100).clip(lower=4)
+        tp["__sel"] = False
+        return tp
+
+    def _cols():
+        _c = [("producto", "Producto", "nombre")]
+        if _has_cant:
+            _c.append(("cantidad", "Cantidad", "cantidad"))
+        _c.append(("valor", "Valor", "total"))
+        return _c
 
     def _titulo(texto, color):
         st.markdown(
             f"<div style='font-size:9px;font-weight:600;"
             f"color:{color};letter-spacing:.08em;"
-            f"text-transform:uppercase;margin:4px 0 -8px 0'>"
+            f"text-transform:uppercase;margin:4px 0 2px 0'>"
             f"{texto}</div>",
             unsafe_allow_html=True,
         )
 
+    def _grilla(_df_d, lado, color_barra, color_texto):
+        tp = _tp_lado(_df_d)
+        _key = "hm_det_" + lado + "_" + _clave(
+            _fam_sel, _area_sel, col_metrica, len(tp))
+        _alto = _alto_grilla(min(8, max(1, len(tp))))
+        _atar_alto(_key, _alto)
+        renderizar_desglose_ajuste(
+            tp, _cols(), _alto, _key, movil=_es_movil(),
+            barra=("valor", _rgba(color_barra), color_texto))
+
     if modo_val:
         _titulo("Top productos", _AZUL_TEXTO)
-        st.markdown(_filas_html(_sub_prod), unsafe_allow_html=True)
+        _grilla(_sub_prod, "top", _AZUL_BARRA, _AZUL_TEXTO)
         return
 
-    # ascending: True para negativos (el más negativo primero -> arriba en
-    # el HTML), False para positivos (el mayor primero).
     _neg = _sub_prod[_sub_prod[col_metrica] < 0].sort_values(
         col_metrica, ascending=True)
     _pos = _sub_prod[_sub_prod[col_metrica] > 0].sort_values(
@@ -584,10 +580,10 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
         if _neg.empty:
             st.caption("Sin faltantes.")
         else:
-            st.markdown(_filas_html(_neg), unsafe_allow_html=True)
+            _grilla(_neg, "neg", AJUSTE_NEG, AJUSTE_NEG_TEXTO)
     with _pb:
         _titulo("Sobrantes", AJUSTE_POS_TEXTO)
         if _pos.empty:
             st.caption("Sin sobrantes.")
         else:
-            st.markdown(_filas_html(_pos), unsafe_allow_html=True)
+            _grilla(_pos, "pos", AJUSTE_POS, AJUSTE_POS_TEXTO)
