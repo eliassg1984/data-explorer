@@ -971,6 +971,42 @@ def _pruebas_puras():
                                     solo="pct"),
           False)
 
+    # ── La tabla mes a mes que ALTERNA con el waterfall (regla #484) ────
+    # Es el espejo escrito de la serie de la izquierda: una fila por mes,
+    # cronológica (no por |Δ| como la de abajo), con el semáforo invertido
+    # de la casa (subir un costo es rojo).
+    _gt = pd.DataFrame({
+        "mes": [pd.Period("2026-08", "M"), pd.Period("2026-07", "M")],
+        "valor": [150.0, 100.0], "cant": [12.0, 10.0],
+        "valor_aa": [200.0, 90.0], "cant_aa": [15.0, 9.0],
+    })
+    _ht = _vap._tabla_mensual_html(_gt, "Valor", "", _vap._fmt_soles,
+                                   ("2025", "2026"))
+    check("tabla mensual: una fila por mes, ambos presentes",
+          ("jul 26" in _ht) and ("ago 26" in _ht), True)
+    check("tabla mensual: cronológica (jul antes que ago), no por |Δ|",
+          _ht.index("jul 26") < _ht.index("ago 26"), True)
+    check("tabla mensual: este año y año pasado, tal cual la serie",
+          ("S/ 100" in _ht) and ("S/ 90" in _ht), True)
+    check("tabla mensual: el Δ que sube va con + y en rojo (es un costo)",
+          f"color:{_vap.ERROR}'>+S/ 10" in _ht, True)
+    check("tabla mensual: el Δ que baja va con − y en verde",
+          f"color:{_vap.EXITO}'>−S/ 50" in _ht, True)
+    check("tabla mensual: la cabecera dice los años del waterfall",
+          ("2026" in _ht) and ("2025" in _ht), True)
+    # Precio es un RATIO por mes: un mes sin cantidad no tiene precio y la
+    # celda queda vacía («—»), no en 0 (mismo criterio que `_fig_serie`).
+    _hp = _vap._tabla_mensual_html(
+        pd.DataFrame({"mes": [pd.Period("2026-07", "M")], "valor": [100.0],
+                      "cant": [0.0], "valor_aa": [90.0], "cant_aa": [9.0]}),
+        "Precio", "kg", lambda v: _vap._fmt_precio(v, "kg"), ("2025", "2026"))
+    check("tabla mensual (Precio): mes sin cantidad, celda vacía no cero",
+          ("—" in _hp) and ("S/ 10.00/kg" in _hp), True)
+    check("tabla mensual: sin meses lo dice, no revienta",
+          "Sin meses" in _vap._tabla_mensual_html(
+              _gt.iloc[0:0], "Valor", "", _vap._fmt_soles, ("2025", "2026")),
+          True)
+
     # ── Los tres cortes de la cascada (regla #443) ──────────────────────
     # LA REGLA ES UNA SOLA: un corte se ofrece si la magnitud es ADITIVA en
     # ese eje y el ámbito tiene MÁS DE UN elemento. Lo que se fija acá son

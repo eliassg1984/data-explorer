@@ -286,8 +286,84 @@ CSS = """    /* ================================================================
         gap: 4px !important;
     }
 
+    /* ── El toggle Gráfico/Tabla de la tarjeta de la cascada (regla    */
+    /*    #484). A la altura de sus vecinos (26px, como el corte y el    */
+    /*    buscador) y sin el ancho suelto del stButtonGroup, que si no   */
+    /*    empuja al corte fuera de la fila. Son dos botones de ícono.    */
+    .st-key-vap_puente_vista [data-testid="stButtonGroup"] {
+        min-height: 26px !important;
+        gap: 0 !important;
+    }
+    .st-key-vap_puente_vista [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 8px !important;
+    }
+    .st-key-vap_puente_vista [data-testid="stButtonGroup"]
+        button [data-testid="stIconMaterial"] {
+        font-size: 16px !important;
+    }
+
+    /* ── La tabla mes a mes que ALTERNA con el waterfall (regla #484).  */
+    /*    Ocupa el alto del waterfall (139px, `_ALTO_CASCADA`) y lo que  */
+    /*    no entra scrollea DENTRO, para que la tarjeta no cambie de     */
+    /*    tamaño al alternar y siga terminando en la línea de la serie   */
+    /*    (regla #145). Los colores del Δ los pinta Python inline (desde */
+    /*    `tema.py`), como el resto del veredicto.                       */
+    .st-key-compras_vap_card_puente .vap-tbl-wrap {
+        /* Alto FIJO = el del waterfall (`_ALTO_CASCADA`/`stPlotlyChart`,
+           medido 139px), no `max-height`: con pocos meses una tabla más
+           baja encogía la tarjeta y la fila SALTABA ~30px al alternar
+           (medido 2026-09-21). Con alto fijo la tarjeta mide igual en los
+           dos modos; lo que no entra scrollea dentro. */
+        height: 139px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .st-key-compras_vap_card_puente .vap-tbl {
+        width: 100%;
+        border-collapse: collapse;
+        font: 400 11.5px/1.2 "DM Sans", sans-serif;
+        color: var(--text-primary);
+        table-layout: fixed;
+    }
+    .st-key-compras_vap_card_puente .vap-tbl th,
+    .st-key-compras_vap_card_puente .vap-tbl td {
+        text-align: right;
+        padding: 2.5px 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-variant-numeric: tabular-nums;
+    }
+    .st-key-compras_vap_card_puente .vap-tbl thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--bg-card);
+        font-weight: 600;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border);
+    }
+    .st-key-compras_vap_card_puente .vap-tbl td {
+        border-bottom: 1px solid var(--line-soft);
+    }
+    .st-key-compras_vap_card_puente .vap-tbl .vap-tbl-mes {
+        text-align: left;
+    }
+    .st-key-compras_vap_card_puente .vap-tbl .vap-tbl-aa {
+        color: var(--text-secondary);
+    }
+    .st-key-compras_vap_card_puente .vap-tbl-vacia {
+        font: 400 12px "DM Sans", sans-serif;
+        color: var(--text-secondary);
+        text-align: center;
+        padding: 24px 0;
+    }
+
     .st-key-vap_serie_modo,
     .st-key-vap_puente_corte,
+    .st-key-vap_puente_vista,
     .st-key-vap_hdr_ventana,
     .st-key-vap_hdr_familia,
     .st-key-vap_hdr_agrupar,

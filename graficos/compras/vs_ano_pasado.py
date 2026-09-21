@@ -257,15 +257,21 @@ del mismo número, y por eso viven en UN control y no en tres. Ver
 
 _CORTE_DEFAULT = _CORTES[0]
 
-_COLS_PUENTE = [2.86, 1]
-"""Cómo se parte la fila de arriba de la cascada: veredicto | corte.
+_COLS_PUENTE = [2.0, 0.7, 1]
+"""Cómo se parte la fila de arriba de la cascada: veredicto | toggle | corte.
 
 No es un `COLUMNAS_DRILL` disfrazado —eso rige el eje de la PÁGINA— sino
 una subdivisión interna, de las que el proyecto marca con
 `# columnas-internas:`. Sale de una cuenta: la tarjeta mide 434px, su
-contenido 402, el `gap="small"` se lleva 16 y el desplegable necesita 100
-(el mismo ancho MEDIDO que tenía en la cabecera). Quedan 286 para el
-texto, y 286/100 = 2.86."""
+contenido 402, los dos `gap="small"` se llevan 16 y quedan 386 para tres
+controles: el corte necesita ~108 (era 100 en dos columnas), el toggle
+Gráfico/Tabla ~76 (dos íconos) y el resto —217— es el veredicto.
+
+Hasta el 2026-09-21 eran DOS columnas (`[2.86, 1]`, veredicto 286 | corte
+100): el toggle de vista se metió en el medio, y su ancho lo pagó el
+veredicto —de 286 a 217— porque ahí lo que se recorta es el RÓTULO de la
+magnitud (`flex: 0 1 auto`, con ellipsis), no el monto (`flex: none`), que
+es el número que hay que leer. Ver la regla #484."""
 
 _K_FOCO_TOCADO = "compras_vap_foco_tocado"
 """Si el usuario ya tocó la selección de la tabla, en cualquier sentido.
@@ -275,6 +281,22 @@ distingue: **nadie eligió todavía** (hay que sembrar el primer ítem) y
 **el usuario soltó el foco** (hay que respetarlo y mostrar todas las
 compras). Sin esta marca, soltar el foco sería imposible: el rerun
 siguiente lo volvería a sembrar. Ver la regla #445."""
+
+_VISTAS = ("Gráfico", "Tabla")
+"""El toggle de la tarjeta de la cascada: el waterfall, o la tabla mes a
+mes que detalla las barras de la serie de la izquierda (el "gráfico
+escrito", mismo trato que la tabla de Producto). 2026-09-21, regla #484."""
+
+_K_VISTA = "compras_vap_vista_sel"
+"""Key del toggle Gráfico/Tabla. No necesita espejo como `_K_CORTE`: el
+control se dibuja SIEMPRE (en los dos modos y en Precio), así que nunca
+deja de renderizarse ni pierde su estado."""
+
+_VISTA_ICONO = {"Gráfico": ":material/bar_chart:",
+                "Tabla": ":material/table_rows:"}
+"""Sólo íconos: en la columna del toggle (~76px) no entran dos rótulos de
+texto, y el gesto —gráfico vs. tabla— se lee de un ícono. El texto va en el
+`help` del control."""
 
 _K_CORTE = "compras_vap_corte"
 """El corte elegido, ESPEJO de la key del selector.
@@ -1556,6 +1578,74 @@ def _resumen_html(delta, pct, ef_precio, ef_cant, valor, valor_aa,
     )
 
 
+_ALTO_TABLA_MENSUAL = _ALTO_CASCADA
+"""Alto del área de la tabla mes a mes: el MISMO que el waterfall al que
+reemplaza (`_ALTO_CASCADA`, 139px), para que la tarjeta de la cascada no
+cambie de tamaño al alternar y siga terminando en la línea de la serie
+(regla #145). Lo que no entra scrollea DENTRO de la tabla."""
+
+
+def _tabla_mensual_html(g, modo, unidad, fmt_mag, bordes):
+    """La tabla que ALTERNA con el waterfall: una fila por mes, el detalle
+    de las barras de la serie de la izquierda.
+
+    Es el "gráfico escrito" de la serie —el mismo trato que la tabla de
+    Producto—: este año, el año pasado y la diferencia, con su signo y su
+    color (semáforo invertido: subir un costo es rojo). Respeta «Ver»
+    reusando el `fmt_mag` que ya arma el veredicto de la tarjeta, así la
+    tabla y la cascada no pueden contar magnitudes distintas.
+
+    CRONOLÓGICA y no por |Δ|, al revés de `_tabla_detalle`: acá la pregunta
+    es "cómo vino mes a mes", que es lo que dicen las barras de la serie —
+    "qué explica la diferencia" la contesta la tabla de abajo.
+
+    En **Precio** cada celda es un ratio del mes (valor/cant), no una suma:
+    mismo criterio que `_fig_serie`, y por eso puede quedar vacía («—») un
+    mes sin cantidad cargada. `bordes` son los años («2025-26») que ya
+    rotulan el waterfall, para que la cabecera diga lo mismo.
+    """
+    if g is None or g.empty:
+        return ("<div class='vap-tbl-vacia'>Sin meses en esta ventana.</div>")
+    por = (g.groupby("mes", as_index=False)[
+        ["valor", "cant", "valor_aa", "cant_aa"]].sum().sort_values("mes"))
+
+    def _celda(v):
+        return fmt_mag(v) if v is not None else "—"
+
+    filas = []
+    for r in por.itertuples():
+        if modo == "Cantidad":
+            act, aa = float(r.cant), float(r.cant_aa)
+        elif modo == "Precio":
+            act = float(r.valor) / float(r.cant) if r.cant else None
+            aa = float(r.valor_aa) / float(r.cant_aa) if r.cant_aa else None
+        else:
+            act, aa = float(r.valor), float(r.valor_aa)
+        delta = (act - aa) if (act is not None and aa is not None) else None
+        pct = (delta / aa * 100) if (delta is not None and aa) else None
+        color = (ERROR if delta and delta > 0
+                 else EXITO if delta and delta < 0 else GRIS_TEXTO)
+        signo = "−" if (delta is not None and delta < 0) else "+"
+        _delta = f"{signo}{fmt_mag(delta)}" if delta is not None else "—"
+        _pct = f"{signo}{abs(pct):.1f}%" if pct is not None else "—"
+        filas.append(
+            "<tr>"
+            f"<td class='vap-tbl-mes'>{_etiqueta_mes(r.mes)}</td>"
+            f"<td>{_celda(act)}</td>"
+            f"<td class='vap-tbl-aa'>{_celda(aa)}</td>"
+            f"<td style='color:{color}'>{_delta}</td>"
+            f"<td style='color:{color}'>{_pct}</td>"
+            "</tr>")
+    return (
+        "<div class='vap-tbl-wrap'><table class='vap-tbl'>"
+        "<thead><tr>"
+        "<th class='vap-tbl-mes'>Mes</th>"
+        f"<th>{_llano(bordes[1])}</th>"
+        f"<th class='vap-tbl-aa'>{_llano(bordes[0])}</th>"
+        "<th>Δ</th><th>Δ %</th>"
+        "</tr></thead><tbody>" + "".join(filas) + "</tbody></table></div>")
+
+
 def _tabla_detalle(g, agrupar_por, col_um_valores, key_grid, rangos=None):
     """Tabla de abajo: una fila por ítem, con el puente abierto.
 
@@ -1758,10 +1848,31 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
     # banca perder ancho.
     st.markdown(_nombre_cascada_html(_ambito), unsafe_allow_html=True)
 
-    # columnas-internas: el corte al lado del MONTO, para que no le saque
-    # alto a la cascada ni ancho al nombre.
-    _c_rot, _c_corte = st.columns(_COLS_PUENTE, gap="small",
-                                  vertical_alignment="center")
+    # columnas-internas: veredicto | toggle vista | corte, al lado del
+    # MONTO para que no le saquen alto a la cascada ni ancho al nombre.
+    _c_rot, _c_vista, _c_corte = st.columns(_COLS_PUENTE, gap="small",
+                                            vertical_alignment="center")
+
+    # ── EL TOGGLE Gráfico / Tabla (2026-09-21, regla #484) ───────
+    # Alterna el waterfall con la tabla mes a mes que detalla las barras
+    # de la serie de la izquierda —lo pidió el usuario, «algo así como el
+    # gráfico de Productos». Vive ACÁ, en la fila que ya existe, y no en
+    # una propia: una fila nueva le costaría a la cascada los ~47px de
+    # `FRANJA_CTRL_SERIE` sobre 139 (regla #445).
+    #
+    # `required=True`: una vista vacía no existe, y sin él tocar el ícono
+    # activo lo soltaría y la tarjeta caería al default sin marcarlo
+    # (misma lección que la granularidad de Semanal). Se dibuja SIEMPRE
+    # —en los dos modos y en Precio—, así que no necesita el espejo que sí
+    # lleva el corte.
+    with _c_vista, st.container(key="vap_puente_vista"):
+        vista = st.segmented_control(
+            "Vista", list(_VISTAS), default=_VISTAS[0], required=True,
+            format_func=lambda v: _VISTA_ICONO.get(v, v),
+            key=_K_VISTA, label_visibility="collapsed",
+            help="Alterna entre el gráfico de cascada y la tabla mes a "
+                 "mes que detalla las barras de la serie.")
+    es_tabla = (vista or _VISTAS[0]) == "Tabla"
 
     # `_un_item` mira el foco YA resuelto —a diferencia de cuando el
     # control vivía en la cabecera, donde había que adivinarlo de
@@ -1771,7 +1882,10 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
         modo, foco_titulo is not None, mes_sel is not None,
         unidad=_um_corta)
     corte = None
-    if _ops_corte:
+    # El corte parte el WATERFALL: en modo Tabla no aplica y su columna
+    # queda vacía. No se toca `_K_CORTE` cuando no se dibuja, para no
+    # pisar la preferencia con un None (misma razón que el espejo).
+    if not es_tabla and _ops_corte:
         # ESPEJO, y no la key del widget a secas: en Precio no
         # aplica ningún corte y el selector NO SE DIBUJA — y un
         # widget que deja de renderizarse pierde su estado
@@ -1809,6 +1923,21 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
         _resumen_html(_d_mag, _pct_mag, ef_p, ef_c, _v1, _v0,
                       fmt=_fmt_mag, causa=_causa_mag, solo="pct"),
         unsafe_allow_html=True)
+
+    # ── MODO TABLA: el "gráfico escrito" de la serie ─────────────
+    # La tabla detalla las barras de la SERIE ENTERA (`g_foco`), no de
+    # `g_casc`: es el espejo de lo que se ve a la izquierda, y la serie
+    # muestra siempre la ventana completa aunque haya un mes elegido. Sus
+    # bordes salen por eso de `g_foco`. Ocupa el mismo alto que el
+    # waterfall (`_ALTO_TABLA_MENSUAL`), así la tarjeta no salta.
+    if es_tabla:
+        _bordes_tabla = _etq_anios(
+            g_foco["mes"].unique() if not g_foco.empty else [])
+        st.markdown(
+            _tabla_mensual_html(g_foco, modo, _um_corta, _fmt_mag,
+                                _bordes_tabla),
+            unsafe_allow_html=True)
+        return
 
     # Los bordes de la cascada dicen el AÑO en número (2026-09-17, a
     # pedido). Sale de `g_casc` —los meses que la cascada explica, ya

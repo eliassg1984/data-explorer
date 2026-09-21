@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-483 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+484 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (169)
+**CSS y estilos** (170)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -203,6 +203,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 - **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
+- **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
 
 **Layout y alturas** (69)
 
@@ -446,7 +447,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 
-**Streamlit** (133)
+**Streamlit** (134)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -581,6 +582,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
+- **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -40404,6 +40406,62 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-21.)
 
+484. **La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el
+     waterfall con una tabla mes a mes (el "gráfico escrito" de la serie),
+     y el toggle no le cuesta alto porque va en el renglón que ya existe.**
+
+     A pedido (2026-09-21): *«que el gráfico de cascada alterne también con
+     una vista de tabla del detalle de las barras del gráfico de la
+     izquierda, algo así como Productos»*. La tabla es el ESPEJO ESCRITO de
+     la serie mensual: una fila por mes, con este año, el año pasado, el Δ y
+     el Δ%, cronológica (como las barras) y no por |Δ| como la tabla de
+     abajo — la pregunta acá es «cómo vino mes a mes», no «qué explica la
+     diferencia».
+
+     **Detalla `g_foco`, no `g_casc`.** La serie de la izquierda muestra
+     SIEMPRE la ventana entera aunque haya un mes elegido (el clic sólo
+     apaga los otros meses y acota el waterfall, regla #443), así que su
+     espejo escrito también: la tabla agrupa `g_foco` por mes. Sus bordes de
+     año salen de `g_foco`, no de `g_casc`.
+
+     **El toggle vive en la fila que ya existe (la del veredicto), no en una
+     propia** — misma lección que la #476. Una fila nueva le costaría a la
+     cascada los ~47px de `FRANJA_CTRL_SERIE` sobre 139, más de la cuarta
+     parte del dibujo. Entró como tercera columna de `_COLS_PUENTE`
+     (veredicto | toggle | corte, `[2.0, 0.7, 1]`), y su ancho lo pagó el
+     VEREDICTO —de 286 a 217px—, no el monto: el rótulo de la magnitud es
+     `flex: 0 1 auto` con ellipsis y se recorta, el número es `flex: none` y
+     queda entero. Es `st.segmented_control(required=True)` de dos íconos
+     (una vista vacía no existe; sin `required` tocar el ícono activo la
+     soltaría y la tarjeta caería al default sin marcarlo, como la
+     granularidad de Semanal). Se dibuja SIEMPRE —en los dos modos y en
+     Precio—, así que no necesita el espejo `session_state` que sí lleva el
+     corte. En modo Tabla, «Partir por» (que parte el waterfall) no aplica y
+     su columna queda vacía; no se toca `_K_CORTE` para no pisar la
+     preferencia con un None.
+
+     **Es una tabla HTML (`st.markdown`), NO una AgGrid.** El slot mide 139px
+     fijos (`_ALTO_CASCADA`, para que serie y cascada terminen en la misma
+     línea, regla #145) y una AgGrid ahí no entra: tiene piso práctico de
+     ~200px + cabecera, y su iframe se re-mide mal en un contenedor angosto
+     (reglas #349/#350). Además la tarjeta es un `@st.fragment` anidado
+     (`_tarjeta_cascada`) y una grilla dentro de un contenedor que se
+     redibuja al alternar se re-monta (regla #471). La tabla HTML honra
+     `max-height` + scroll interno y no tiene nada de eso. Su CSS vive en
+     `estilos/_80_cards.py` colgado de `.st-key-compras_vap_card_puente`
+     (no inline); los colores del Δ los pinta Python inline desde `tema.py`
+     (`ERROR`/`EXITO`/`GRIS_TEXTO`), como el resto del veredicto — es la cara
+     Python de la regla de colores, no un `#hex` suelto.
+
+     **Respeta «Ver» reusando el `fmt_mag` del veredicto**, así la tabla y la
+     cascada nunca cuentan magnitudes distintas. En Precio cada celda es un
+     RATIO del mes (valor/cant), no una suma: mismo criterio que `_fig_serie`,
+     y por eso un mes sin cantidad cargada queda en «—», no en 0.
+
+     Lo fija `test_graficos.py` (`_tabla_mensual_html`: cronología, ambos
+     lados, semáforo invertido, la celda vacía de Precio y el caso sin
+     meses). (2026-09-21.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -40416,7 +40474,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#484**.
+> próxima regla nueva es la **#485**.
 
 >
 
