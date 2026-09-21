@@ -55,11 +55,18 @@ from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
     ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL_ESPEJO,
     CROMO_GRID_RANK, GAP_DRILL, selector_fecha_tarjeta,
-    # Las tres de la variación contra la barra anterior (#470): nacieron en
+    # Las de la variación contra la barra anterior (#470): nacieron en
     # Semanal y viven en `_comun` desde que esta tarjeta pidió lo mismo.
-    _fmt_variacion, _hover_variacion, _periodo_serie, _variaciones,
+    _UNIDAD_GRAN, _clave_grilla, _fmt_variacion, _hover_variacion,
+    _nota_variacion, _periodo_serie, _variaciones,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
+# LA TABLA DE ABAJO ES LA MISMA QUE LA DE «Compra por período», y por eso su
+# módulo dejó de llamarse `_semanal` el 2026-09-20: es la tabla de «el
+# gráfico escrito» —una fila por barra, en el orden del eje— y la usan las
+# dos vistas. `ALTO_FILA` viaja con ella porque el alto de la tarjeta se
+# despeja contra el alto de SU fila, no contra un número copiado.
+from tablas.compras_semanal import ALTO_FILA, renderizar_periodos
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos import alturas, periodo
 
@@ -142,7 +149,21 @@ no el «Rango» pelado de las otras tarjetas: acá el rango que hereda vive
 en la tarjeta de AL LADO (el selector de «Compras por familia»), y
 «Rango» a secas no dice cuál."""
 
-_KEYS_WIDGET = ("compras_prod_gran_pills", "compras_prod_periodo")
+_TOPE_FILAS_DET = 10
+"""Cuántas filas de la tabla de detalle se ven sin deslizar.
+
+Es un TECHO, no un alto: lo que sobra scrollea DENTRO de la grilla, que es
+el único sitio de esta vista donde se permite una barra (las tarjetas de
+Producto no tienen techo desde la regla #382, así que la que scrollea es la
+tabla y nunca la tarjeta).
+
+10 sale de los dos casos que se ven de verdad: la ventana por defecto por
+Mes son 4 barras —entran todas, y la tarjeta mide lo que ellas— y por
+Semana son 14. Con 25 (24 meses) la tabla mediría 714px, más que la
+pantalla del gráfico que describe."""
+
+_KEYS_WIDGET = ("compras_prod_gran_pills", "compras_prod_periodo",
+                "compras_prod_detalle")
 """Los controles de esta sección, para que la escalada no se los lleve.
 
 La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo:
@@ -254,6 +275,21 @@ _CSS_SELECTOR_TEXTO = f"""
     background: transparent !important;
     box-shadow: none !important;
     flex: 0 0 auto !important;
+}}
+/* EL PESTILLO DEL DETALLE, con el cuerpo de la granularidad de al lado y
+   en UN renglón. El `nowrap` no es estética: sin él «Detalle» parte en dos,
+   el `stCheckbox` pasa de 24px a 42 y la fila de controles de 32 a 50 —y el
+   alto de esta fila sale de la FIGURA, que se despeja contra la tarjeta de
+   al lado (`_ALTO_EVO`), así que esos 18px terminan siendo 18px de blanco
+   al pie del Ranking (el piso `:has()` de estilos/_80_cards.py). MEDIDO en
+   el navegador el 2026-09-20, que es como se encontró. */
+.st-key-compras_prod_det_wrap [data-testid="stWidgetLabel"] p {{
+    font-size: 12.5px !important;
+    white-space: nowrap !important;
+    color: {GRIS_TEXTO} !important;
+}}
+.st-key-compras_prod_det_wrap [data-testid="stCheckbox"] {{
+    justify-content: flex-end !important;
 }}
 /* El nombre del producto en foco. Recorta con puntos suspensivos y el
    nombre entero va en el `title`: un corte fijo en N caracteres no sigue
@@ -535,7 +571,8 @@ def _fmt_docs(n, largo=False):
     return f"{n:,} docs" if n != 1 else "1 doc"
 
 
-def _etiquetas_barras(precios, valores, docs, variaciones=None, rotada=False):
+def _etiquetas_barras(precios, valores, docs, variaciones=None, rotada=False,
+                     compacta=False):
     """El texto que Plotly dibuja SOBRE cada barra.
 
     Sin rotar son tres renglones —precio promedio, valor con su variación,
@@ -543,10 +580,20 @@ def _etiquetas_barras(precios, valores, docs, variaciones=None, rotada=False):
     de costado los renglones se apilan a lo ANCHO y ahí el hueco por barra
     son 30px.
 
+    `compacta` la deja en las DOS cifras de siempre (precio y valor) y suelta
+    la variación y los documentos. La enciende el detalle de abajo, y es la
+    respuesta a «la etiqueta de datos es bastante larga» (2026-09-20): con
+    la tabla abierta esos dos datos están escritos en su propia columna, una
+    fila por barra, así que arriba sólo sobran píxeles. MEDIDO: la etiqueta
+    girada baja de 148px a 70 sobre un área de trazo de 317, o sea de
+    comerse el 47% del gráfico a un 22%.
+
     `variaciones` son las tuplas de `_comun._variaciones`: con estado «ok»
     va el porcentaje, con «parcial» va la palabra —que no es un dato
     faltante, es la respuesta— y con los demás no va nada (el hover dice por
     qué). `docs` puede ser None, y entonces ese renglón no existe."""
+    if compacta:
+        variaciones, docs = None, None
     out = []
     for i, (pr, val) in enumerate(zip(precios, valores)):
         _pr = ("" if pr is None or pd.isna(pr) else f"S/ {pr:,.2f}")
@@ -622,6 +669,86 @@ def _hover_barras(rotulos, precios, valores, docs, provs, variaciones=None,
                           f"{len(_lista) - tope_provs} más</span>")
         out.append("<br>".join(lineas))
     return out
+
+
+def _tabla_periodos(rotulos, precios, valores, docs, provs, variaciones,
+                    claves, gran, rango):
+    """Las filas de la tabla de detalle: una por BARRA, en el orden del eje.
+
+    Es «el gráfico escrito», el mismo trato que la tabla Resumen de «Compra
+    por período» —y la misma grilla, `tablas.compras_semanal.
+    renderizar_periodos`—: lo que la barra dice arriba, en columnas que se
+    pueden ordenar y leer hacia abajo.
+
+    Devuelve `(filas, total)`. En `total` los valores van ya FORMATEADOS
+    como texto: es una fila fija (`pinnedBottomRowData`), no entra al modelo
+    de filas y no se ordena.
+
+    DOS COLUMNAS QUE NO ESTÁN, y ninguna por olvido:
+
+      · «Líneas». Medido sobre compras.parquet el 2026-09-20: en los 1.295
+        grupos producto-mes del último trimestre las líneas son EXACTAMENTE
+        los documentos (diferencia máxima 0) — un producto entra una vez por
+        comprobante. Una columna que repite a su vecina en el 100% de las
+        filas es ruido (regla #239).
+      · El precio en la fila TOTAL. Un promedio de promedios no mide nada, y
+        el promedio ponderado de verdad (valorizado/cantidad) sería OTRA
+        definición de «precio» en la misma columna. Va «—», que es lo que
+        `_JS_SOLES` escribe con un None.
+    """
+    _tot = float(sum(valores))
+    filas = {
+        "periodo": list(rotulos),
+        "precio": [(None if pd.isna(pr) else float(pr)) for pr in precios],
+        "valor": [float(v) for v in valores],
+        "parte": [(float(v) / _tot if _tot else 0.0) for v in valores],
+    }
+    if docs is not None:
+        filas["docs"] = [(0 if d is None or pd.isna(d) else int(d))
+                         for d in docs]
+    filas["variacion"] = [(_v[1] if _v and _v[0] == "ok" else None)
+                          for _v in variaciones]
+    _nombres = []
+    if provs is not None:
+        for _lista in provs:
+            if not isinstance(_lista, (list, tuple)):
+                _lista = []
+            _nombres.append([(nombre_propio(_n), _v) for _n, _v in _lista])
+        filas["proveedores"] = [" · ".join(_n for _n, _ in _l)
+                                for _l in _nombres]
+        filas["__pnota"] = [
+            " · ".join(f"{_n}: S/ {_v:,.0f}" for _n, _v in _l) or ""
+            for _l in _nombres]
+    # «parcial» no es un dato faltante, es la respuesta: por eso viaja como
+    # texto propio y con su motivo al lado, igual que en la barra.
+    filas["__vtxt"] = [("parcial" if _v and _v[0] == "parcial" else "—")
+                       for _v in variaciones]
+    filas["__nota"] = [
+        _nota_variacion(_v, gran, claves[_i],
+                        (rotulos[_v[2]] if _v and _v[2] is not None else ""),
+                        rango)
+        for _i, _v in enumerate(variaciones)]
+    filas["__sel"] = [False] * len(valores)
+
+    _uni = _UNIDAD_GRAN.get(gran, ("período", "períodos"))
+    _n = len(valores)
+    total = {
+        "periodo": f"Total · {_n:,} {_uni[0] if _n == 1 else _uni[1]}",
+        "precio": None,
+        "valor": f"S/ {_tot:,.2f}",
+        "parte": "100.0%",
+        "variacion": None,
+        "__vtxt": "",
+        "__nota": "",
+    }
+    if "docs" in filas:
+        total["docs"] = f"{sum(filas['docs']):,}"
+    if "proveedores" in filas:
+        _distintos = {_n for _l in _nombres for _n, _ in _l}
+        total["proveedores"] = (f"{len(_distintos):,} proveedores"
+                                if len(_distintos) != 1 else "1 proveedor")
+        total["__pnota"] = ""
+    return pd.DataFrame(filas), total
 
 
 def _rotulo_periodo(ts, gran):
@@ -1198,6 +1325,13 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     # y las dos tarjetas dejaron de scrollear por dentro (ver
     # estilos/_80_cards.py y la regla #382).
     hay_fam = bool(col_fam and col_fam in dd.columns)
+    # LA TABLA DE DETALLE SE ARMA ARRIBA Y SE DIBUJA ABAJO. Se arma donde
+    # están los datos —dentro de la tarjeta del gráfico, que es quien sabe
+    # qué barras hay— y se dibuja DESPUÉS de la fila, a lo ancho: sus siete
+    # columnas piden 744px de anchos fijos y el panel del gráfico da 429.
+    # Meterla adentro habría sido elegir entre cortar columnas o angostar
+    # el gráfico que describe.
+    _detalle = None
     with st.container(key="compras_prod_marco"):
         col_detalle, col_tabla = st.columns(COLUMNAS_DRILL_ESPEJO,
                                             gap=GAP_DRILL)
@@ -1413,10 +1547,15 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                 # (ver el docstring de `graficos/periodo.py`). La ventana se
                 # recorta de `d_full`, el histórico sin la fecha de la
                 # sección: con `dd` quedaría dentro del rango elegido.
-                # columnas-internas: ventana y granularidad, dentro de la
-                # tarjeta. No es una fila de drill.
-                _c_win, _c_gran = st.columns([1.1, 1],
-                                             vertical_alignment="center")
+                # EL TOGGLE ENTRA EN EL RENGLÓN QUE YA EXISTÍA y no abre uno
+                # nuevo: es la cuenta de la regla #445 (una fila que se
+                # comparte cuesta la diferencia de alto; una propia cuesta
+                # 47px). Los tres controles miden ~335 de los 429 del panel.
+                #
+                # columnas-internas: ventana, granularidad y el pestillo del
+                # detalle, dentro de la tarjeta. No es una fila de drill.
+                _c_win, _c_gran, _c_det = st.columns([1.0, 0.85, 0.77],
+                                                     vertical_alignment="center")
                 with _c_win:
                     with st.container(key="compras_prod_periodo_wrap"):
                         _op_prod = periodo.selector(
@@ -1461,6 +1600,18 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                                         default="Mes",
                                         key="compras_prod_gran_pills",
                                         label_visibility="collapsed") or "Mes"
+                with _c_det:
+                    with st.container(key="compras_prod_det_wrap"):
+                        _ver_det = st.toggle(
+                            "Detalle", value=False, key="compras_prod_detalle",
+                            help="Una fila por barra debajo del gráfico, en "
+                                 "el orden del eje: el precio promedio del "
+                                 "período, cuánto se compró, en cuántos "
+                                 "documentos, cuánto cambió contra la barra "
+                                 "anterior y qué proveedores lo atendieron.\n\n"
+                                 "Con el detalle abierto las barras escriben "
+                                 "sólo el precio y el valor: lo demás está en "
+                                 "la tabla.")
 
                 g = _src_evo[_src_evo[col_prod].astype(str) == prod_foco]
                 # Las cifras del encabezado salen de `g`, o sea de la MISMA
@@ -1556,7 +1707,8 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     _rotulos = [_rotulo_periodo(_t, gran) for _t in agg.index]
                     _etiquetas = _etiquetas_barras(_precio, _valor, _docs,
                                                    variaciones=_vars,
-                                                   rotada=_muchas)
+                                                   rotada=_muchas,
+                                                   compacta=_ver_det)
                     _hover = _hover_barras(
                         _rotulos, _precio, _valor, _docs, _provs,
                         variaciones=_vars, claves=_claves, gran=gran,
@@ -1591,10 +1743,55 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     # 70px, y la línea rotada llega a ~32 (140px) contra los
                     # 335px de área útil. 1.90 deja 159px de aire; 1.75 dejaba
                     # 144 y la cortaba por poco.
+                    #
+                    # Con el detalle abierto la etiqueta vuelve a ser las dos
+                    # cifras de siempre, así que el techo vuelve a los dos
+                    # números con los que nació: 1.75 giradas (144px de aire
+                    # para 70 de etiqueta) y 1.28 derechas.
                     if max(_valor) > 0:
-                        fig.update_yaxes(
-                            range=[0, max(_valor) * (1.90 if _muchas else 1.34)])
+                        _aire = ((1.75 if _muchas else 1.28) if _ver_det
+                                 else (1.90 if _muchas else 1.34))
+                        fig.update_yaxes(range=[0, max(_valor) * _aire])
                     fig.update_xaxes(**_eje_x_kwargs(gran, agg))
                     st.plotly_chart(fig, use_container_width=True,
                                     key=f"compras_g_prod_{gran}")
 
+                    if _ver_det:
+                        _filas_det, _tot_det = _tabla_periodos(
+                            _rotulos, _precio, _valor, _docs, _provs,
+                            _vars, _claves, gran, _rng_evo)
+                        _detalle = (_filas_det, _tot_det, prod_foco)
+
+    # ── EL GRÁFICO ESCRITO: una fila por barra ──────────────────────────
+    # 2026-09-20, a pedido: «que ese gráfico de barras tenga la opción de
+    # mostrar en la parte de abajo una tabla con el detalle de cada barra,
+    # creo tengo algo similar en la vista [semanal]». Es la misma tabla y la
+    # misma grilla que allá (`renderizar_periodos`), con las dos columnas
+    # que este gráfico tiene y aquél no: el precio promedio del período y
+    # los proveedores que lo atendieron.
+    #
+    # TARJETA PROPIA Y A LO ANCHO, no un bloque dentro de la del gráfico:
+    # ver el comentario de `_detalle` más arriba. Va DEBAJO de la fila, así
+    # que la fila no cambia de alto al abrirla y la tarjeta del Ranking no
+    # se estira con blanco al pie (el piso `:has()` de estilos/_80_cards.py,
+    # regla #145).
+    if _detalle is not None:
+        _filas_det, _tot_det, _prod_det = _detalle
+        _alto_det = alturas.por_filas(
+            min(len(_filas_det), _TOPE_FILAS_DET),
+            px_fila=ALTO_FILA, extra=CROMO_GRID_RANK, minimo=0)
+        with st.container(border=True, key="compras_prod_card_detalle"):
+            _tit = html.escape(_compras_truncar(str(_prod_det), 60))
+            st.markdown(
+                f'<div class="cp-prod-rank-tit">Detalle por período'
+                f'<span class="cp-prod-rank-amb"> · {_tit}</span></div>',
+                unsafe_allow_html=True)
+            renderizar_periodos(
+                _filas_det, altura=_alto_det,
+                # La key la ESTRENA todo lo que cambia las filas: el
+                # producto, la granularidad, la ventana y el rango. Con key
+                # estable la grilla se refresca y el navegador puede
+                # quedarse con los datos de antes (regla #227).
+                key="compras_prod_det_grid_" + _clave_grilla(
+                    _prod_det, gran, _op_prod, _rng_evo, len(_filas_det)),
+                rotulo_periodo="Período", total=_tot_det)

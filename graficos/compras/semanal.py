@@ -73,7 +73,6 @@ el rango corta el período. La semana se nombra «14–20 set» y no
 «2026-S38». Y la cabecera suma dos filtros: Subfamilia y Proveedor.
 """
 
-import hashlib
 from html import escape
 
 import pandas as pd
@@ -97,8 +96,8 @@ from graficos.base import (
 # de este módulo no se enteró de la mudanza — y no hay dos definiciones de
 # qué es un período PARCIAL, que es lo que la regla vigila.
 from graficos.compras._comun import (
-    _INCOMPLETO, _cobertura, _fmt_variacion, _hover_variacion,
-    _limites_periodo, _variaciones,
+    _UNIDAD_GRAN, _clave_grilla, _fmt_variacion, _hover_variacion,
+    _limites_periodo, _nota_variacion, _variaciones,
 )
 from graficos.compras._comun import (
     CATEGORIA_SEC, GAP_DRILL, _first_point, _periodo_serie, documento_legible,
@@ -112,7 +111,7 @@ from graficos.compras._comun import (
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from tablas.compras_semanal import (
     renderizar_documentos_semanal, renderizar_lineas_semanal,
-    renderizar_periodos_semanal,
+    renderizar_periodos,
 )
 from utils import fmt_k
 
@@ -694,15 +693,6 @@ _GRAN_VARIACION = ("Día", "Semana", "Mes")
 """Granularidades cuya etiqueta dice cuánto cambió contra la barra anterior.
 Año no, porque no se pidió: con el rango de entrada es una sola barra."""
 
-_UNIDAD_GRAN = {"Día": ("día", "días"), "Semana": ("semana", "semanas"),
-                "Mes": ("mes", "meses"), "Año": ("año", "años"),
-                "Por documento": ("documento", "documentos")}
-"""Cómo se cuenta una BARRA en cada granularidad, en singular y plural.
-
-La fila TOTAL del modo Resumen dice «Total · 5 semanas» y no «5 períodos»,
-y con eso la tabla ya declara cómo está agrupada: la palabra con la que se
-cuentan las filas ES el grano (2026-09-20, a pedido)."""
-
 _AGRUPADO_GRAN = {"Día": "día", "Semana": "semana", "Mes": "mes",
                   "Año": "año", "Por documento": "documento"}
 """Cómo lo dice el caption: «agrupado por semana». Separado de
@@ -804,32 +794,6 @@ def _renglones_etiqueta(total, n_docs, var, gran):
                            f"<span style='color:{GRIS_TEXTO}'><i>parcial</i>"
                            "</span>"))
     return salida
-
-
-def _nota_variacion(var, gran, clave, nombre_ant, rango):
-    """Lo mismo que `_hover_variacion`, en texto PLANO: es el tooltip de la
-    columna «Variación» de la tabla Resumen (regla #476).
-
-    Dos formatos para el mismo dato porque los dos destinos son distintos:
-    el hover de Plotly entiende HTML y el `tooltipField` de AG Grid no —
-    ahí un `<br>` se ve escrito. Lo que NO cambia es qué se dice: si la
-    tabla callara el motivo, una columna de «parcial» y «—» se leería como
-    datos faltantes."""
-    if gran not in _GRAN_VARIACION or not var:
-        return ""
-    estado, pct, _ = var
-    if estado == "ok":
-        return f"vs {nombre_ant}: {_fmt_variacion(pct)[0]}"
-    if estado == "parcial":
-        _n, _m = _cobertura(clave, gran, rango)
-        return (f"{_INCOMPLETO.get(gran, 'Período incompleto')} en el rango "
-                f"({_n} de {_m} días): sin variación")
-    if estado == "ant_parcial":
-        return (f"Sin variación: la barra anterior ({nombre_ant}) está "
-                "incompleta en el rango")
-    if estado == "sin_base":
-        return f"Sin variación: {nombre_ant} no suma compras"
-    return "Primera barra del rango: sin anterior para comparar"
 
 
 _TICK_PX_CARACTER = 6.3
@@ -1040,17 +1004,6 @@ def _clave_del_clic(x, ord_claves):
     except (TypeError, ValueError):
         return None
     return ord_claves[i] if 0 <= i < len(ord_claves) else None
-
-
-def _clave_grilla(*partes):
-    """Sufijo corto y estable para la key de una grilla, a partir de lo que
-    tiene que estrenarla cuando cambia (el período, el documento elegido).
-
-    Un hash y no el texto: la clave de una compra lleva fecha, proveedor y
-    documento («2026-09-12·DISTRIBUIDORA …·F0E001…»), y como key sería un
-    nombre de clase CSS de 80 caracteres con puntos medios adentro."""
-    txt = "|".join(str(p) for p in partes)
-    return hashlib.md5(txt.encode("utf-8")).hexdigest()[:10]
 
 
 @st.fragment
@@ -1995,7 +1948,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             # acaba de elegir (regla #471). Sí lleva lo que cambia las
             # FILAS: la granularidad, los filtros y el rango.
             with st.container(key="cp_sem_resumen"):
-                renderizar_periodos_semanal(
+                renderizar_periodos(
                     _tp_per, altura=_ALTO_TABLA,
                     key=("compras_sem_per_grid_"
                          + _clave_grilla(gran, _ctx, _rng)),

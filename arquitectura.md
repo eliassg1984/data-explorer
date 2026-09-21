@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-479 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+480 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (169)
+**CSS y estilos** (170)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -203,6 +203,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#469** — Adentro de un :has(), sólo clases. Un atributo o una pseudo-clase ahí adentro hace que cada…
 - **#472** — Una columna lateral y una franja de arriba conviven si cada una hace UN trabajo: al costado a…
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
+- **#480** — La tabla que describe un gráfico no es otra tarjeta de la fila: va DEBAJO y a lo ancho. Y en…
 
 **Layout y alturas** (69)
 
@@ -276,7 +277,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 
-**Plotly y figuras** (84)
+**Plotly y figuras** (85)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -362,6 +363,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#476** — Una zona que se ALTERNA no necesita un renglón nuevo: el control entra en el renglón que ya…
 - **#478** — Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una vela por compra es plana…
 - **#479** — Una ventana RODANTE corta su primera y su última barra SIEMPRE, así que ahí «parcial» no es…
+- **#480** — La tabla que describe un gráfico no es otra tarjeta de la fila: va DEBAJO y a lo ancho. Y en…
 
 **AgGrid y tablas** (77)
 
@@ -40042,6 +40044,96 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-20.)
 
+480. **La tabla que describe un gráfico no es otra tarjeta de la fila: va
+     DEBAJO y a lo ancho. Y en cuanto ella dice el dato, la etiqueta de la
+     barra tiene que SOLTARLO.**
+     Pedido el 2026-09-20 sobre Compras › Producto: *«puedo hacer que ese
+     gráfico de barras del período tenga la opción de mostrar en la parte de
+     abajo una tabla con el detalle de cada barra, creo tengo algo similar
+     en la vista por [semanal]; veo que cuando todas [son] barras altas la
+     etiqueta de datos es bastante larga, hay alguna opción de [...] hacer
+     más cortas verticalmente esas barras o [...] hacerlo visible con el
+     paso del cursor o alguna otra idea»*. Son dos pedidos y uno resuelve al
+     otro: la etiqueta es larga porque lleva cuatro datos (#479), y con la
+     tabla abierta dos de esos cuatro están escritos abajo.
+
+     **NO SE ACORTA LA BARRA, SE ACORTA LA ETIQUETA.** «Hacer más cortas
+     verticalmente las barras» es bajar el techo del eje, y eso no devuelve
+     píxeles: la etiqueta girada seguiría midiendo lo mismo y taparía más.
+     Lo que se quitó es lo que la tabla repite. MEDIDO en el navegador
+     (1366×768, 14 barras semanales, área de trazo de 317px): la etiqueta
+     girada mide **144px — el 45 % del alto del gráfico** con los cuatro
+     datos, y **70px — el 22 %** con dos. El techo del eje baja con ella
+     (`1.90 → 1.75` girada, `1.34 → 1.28` derecha): el aire de más existía
+     para que entrara la etiqueta larga.
+
+     **LA TABLA NO CABE ADENTRO DE LA TARJETA DEL GRÁFICO.** Sus siete
+     columnas piden **942px** de anchos declarados y el panel del gráfico
+     da **429**. Meterla ahí era elegir entre cortar columnas o angostar el
+     gráfico que describe. Va en una tarjeta propia
+     (`compras_prod_card_detalle`), DEBAJO de la fila y a lo ancho de los
+     1240px: así la fila no cambia de alto al abrirla y el Ranking no se
+     estira con blanco al pie (el piso `:has()` de `estilos/_80_cards.py`,
+     #145 — verificado: las dos tarjetas siguen midiendo 528px con el
+     detalle abierto y cerrado). Se arma DENTRO de la tarjeta del gráfico,
+     que es quien sabe qué barras hay, y se dibuja después.
+
+     **EL PESTILLO ENTRA EN EL RENGLÓN QUE YA EXISTÍA**, junto a la ventana
+     y la granularidad: es la cuenta de la #445 —una fila propia cuesta
+     47px, una compartida cuesta la diferencia de alto— y acá la diferencia
+     es cero… siempre que el rótulo no parta en dos. **MEDIDO, y así se
+     encontró:** sin `white-space: nowrap` la palabra «Detalle» se parte, el
+     `stCheckbox` pasa de 24 a 42px, la fila de controles de 32 a 50, y como
+     el alto de la FIGURA se despeja contra la tarjeta de al lado
+     (`_ALTO_EVO`), esos 18px terminan siendo 18px de blanco al pie del
+     Ranking. Un rótulo que se parte no es un problema de tipografía acá: es
+     un problema de altura en la tarjeta vecina.
+
+     **EL PESTILLO VA EN `_KEYS_WIDGET`** (#373): la escalada de fecha de
+     esta tarjeta hace `st.rerun` al tope del fragment, y sin
+     `preservar_widgets` cambiar la granularidad apagaba el detalle
+     recién encendido. Verificado en el navegador: Mes → Semana con el
+     detalle abierto lo deja abierto.
+
+     **DOS COLUMNAS QUE NO ESTÁN, Y NINGUNA POR OLVIDO.** «Líneas»: medido
+     sobre `compras.parquet`, en los **1.295** grupos producto-mes del
+     último trimestre las líneas son EXACTAMENTE los documentos (diferencia
+     máxima 0) — un producto entra una vez por comprobante, y una columna
+     que repite a su vecina en el 100 % de las filas es ruido (#239). Y el
+     precio en la fila TOTAL, que va «—»: un promedio de promedios no mide
+     nada, y el promedio ponderado de verdad sería OTRA definición de
+     «precio» en la misma columna (misma advertencia que la #199).
+
+     **LA TABLA ES LA MISMA QUE LA DE «Compra por período»**, y por eso
+     `renderizar_periodos_semanal` pasó a llamarse `renderizar_periodos`:
+     es la tabla de «el gráfico escrito» —una fila por barra, en el orden
+     del eje— y la usan dos vistas. Cada una manda las columnas que su
+     gráfico tiene (las columnas salen del `tp`, no de la función), y las
+     que no manda no se configuran: de ahí el helper `_si()`. Producto
+     agrega las dos que Semanal no tiene, el precio promedio del período y
+     los proveedores que lo atendieron. **Ese rename y las tres mudanzas a
+     `_comun` (`_nota_variacion`, `_clave_grilla`, `_UNIDAD_GRAN`) son
+     exactamente el caso de la #357: al pushear hay que avisar que Cloud
+     necesita «Reboot app».**
+
+     **LO QUE NO SE ARREGLÓ, Y ESTÁ MEDIDO:** en el celular (375px) los
+     942px de columnas entran en un iframe de 291 y `_css()` apaga el canal
+     horizontal (`.ag-body-horizontal-scroll { display: none }`, heredado de
+     Volatilidad), así que las tres últimas columnas —Documentos, Variación,
+     Proveedores— **no se pueden alcanzar**. No es nuevo ni es sólo de acá:
+     en la misma pantalla ya pasa con `compras_prov_rank_grid` (560 contra
+     291), `compras_prod_rank_tab` (405) y `compras_vap_detalle_grid` (308).
+     Esta es la peor de las cuatro. Arreglarlo es una decisión de las cuatro
+     juntas —esconder columnas en móvil con `_es_movil`, o devolverle el
+     canal a estas grillas— y no de una.
+
+     Vive en `graficos/compras/producto.py` (`_tabla_periodos`, el
+     `compras_prod_detalle` y el `compacta=` de `_etiquetas_barras`), en
+     `tablas/compras_semanal.py` (`renderizar_periodos`, con `_si()`) y en
+     `estilos/_80_cards.py` (`.st-key-compras_prod_card_detalle`).
+
+     (2026-09-20.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -40054,7 +40146,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#480**.
+> próxima regla nueva es la **#481**.
 
 >
 

@@ -1981,6 +1981,7 @@ def _pruebas_puras():
     # líneas se dibujan como efecto y se irían sin que nadie se entere.
     import plotly.graph_objects as _go
     import tema as _tema
+    from graficos.compras import _comun as _com_compras
     from graficos.compras import semanal as _sem
 
     check("calendario · agrupa días contiguos, no todos los iguales",
@@ -2128,7 +2129,7 @@ def _pruebas_puras():
     check("variación · contra la barra anterior, en %",
           round(_vs[3][1], 1), round((33.8 - 32.1) / 32.1 * 100, 1))
     check("variación · cobertura de la semana en curso",
-          _sem._cobertura("2026-S38", "Semana", _rg), (5, 7))
+          _com_compras._cobertura("2026-S38", "Semana", _rg), (5, 7))
     check("variación · sin rango conocido nada es parcial",
           [_v[0] for _v in _sem._variaciones(_sems[:2], [1, 2], "Semana",
                                              None)],
@@ -2389,7 +2390,9 @@ def _pruebas_has_solo_clases():
     `estilos/_80_cards.py` enumera sus tarjetas por key EXACTA (antes iban
     por prefijo, con un `[class*=...]` adentro del `:has()`), así que una
     tarjeta nueva de esas familias que no se sume a la lista vuelve callada
-    al escalón.
+    al escalón. La salida es declarada: una tarjeta que no comparte fila
+    lleva `fuera-del-piso: <key>` en `_80_cards.py`, al lado de la regla que
+    explica por qué.
     """
     import pathlib
     import re
@@ -2437,7 +2440,14 @@ def _pruebas_has_solo_clases():
     for f in sorted((raiz / "graficos").rglob("*.py")):
         for k in re.findall(r'key="((?:%s)\w+)"' % "|".join(familias),
                             f.read_text(encoding="utf-8")):
-            if f".st-key-{k}," not in cards and f".st-key-{k})" not in cards:
+            # `fuera-del-piso: <key>` es la salida declarada, y pide un
+            # motivo al lado: una tarjeta que NO comparte fila no tiene
+            # nada que igualar, así que sumarla al `:has()` sería un
+            # selector que no matchea nunca — una regla que miente. La
+            # marca vive en `_80_cards.py`, junto a la regla que la
+            # explica, con el mismo criterio que `# columnas-internas:`.
+            if (f".st-key-{k}," not in cards and f".st-key-{k})" not in cards
+                    and f"fuera-del-piso: {k}" not in cards):
                 faltan.append(f"{k} ({f.relative_to(raiz)})")
     if faltan:
         fallos += 1

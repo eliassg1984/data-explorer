@@ -9,6 +9,7 @@ en dos una fila de un drill. Vive aca y no en cada modulo porque el eje
 vertical tiene que caer en el mismo sitio en TODAS las filas de una vista.
 """
 
+import hashlib
 from datetime import date, timedelta
 
 import numpy as np
@@ -374,6 +375,58 @@ def _hover_variacion(var, gran, clave, nombre_ant, rango):
     if estado == "sin_base":
         return f"<br><i>Sin variación: {nombre_ant} no suma compras</i>"
     return "<br><i>Primera barra del rango: sin anterior para comparar</i>"
+
+
+def _clave_grilla(*partes):
+    """Sufijo corto y estable para la key de una grilla, a partir de lo que
+    tiene que ESTRENARLA cuando cambia (el período, el producto elegido).
+
+    Una grilla que conserva su key se REFRESCA, y con el `client_wins` de
+    fábrica el navegador puede quedarse con los datos de antes (regla
+    #227). Lo que decide es qué se le pasa acá.
+
+    Un hash y no el texto: la clave de una compra lleva fecha, proveedor y
+    documento («2026-09-12·DISTRIBUIDORA …·F0E001…»), y como key sería un
+    nombre de clase CSS de 80 caracteres con puntos medios adentro."""
+    txt = "|".join(str(p) for p in partes)
+    return hashlib.md5(txt.encode("utf-8")).hexdigest()[:10]
+
+
+def _nota_variacion(var, gran, clave, nombre_ant, rango):
+    """Lo mismo que `_hover_variacion`, en texto PLANO: es el `tooltipField`
+    de la columna «Variación» de las tablas (regla #476).
+
+    Dos formatos para el mismo dato porque los dos destinos son distintos:
+    el hover de Plotly entiende HTML y el de AG Grid no — ahí un `<br>` se
+    ve escrito. Lo que NO cambia es qué se dice: si la tabla callara el
+    motivo, una columna de «parcial» y «—» se leería como datos faltantes.
+    """
+    if not var:
+        return ""
+    estado, pct, _ = var
+    if estado == "ok":
+        return f"vs {nombre_ant}: {_fmt_variacion(pct)[0]}"
+    if estado == "parcial":
+        _n, _m = _cobertura(clave, gran, rango)
+        return (f"{_INCOMPLETO.get(gran, 'Período incompleto')} en el rango "
+                f"({_n} de {_m} días): sin variación")
+    if estado == "ant_parcial":
+        return (f"Sin variación: la barra anterior ({nombre_ant}) está "
+                "incompleta en el rango")
+    if estado == "sin_base":
+        return f"Sin variación: {nombre_ant} no suma compras"
+    return "Primera barra del rango: sin anterior para comparar"
+
+
+_UNIDAD_GRAN = {"Día": ("día", "días"), "Semana": ("semana", "semanas"),
+                "Mes": ("mes", "meses"), "Año": ("año", "años"),
+                "Por documento": ("documento", "documentos")}
+"""Cómo se cuenta una BARRA en cada granularidad, en singular y plural.
+
+La fila TOTAL de una tabla «una fila por barra» dice «Total · 5 semanas» y
+no «5 períodos», y con eso la tabla ya declara cómo está agrupada: la
+palabra con la que se cuentan las filas ES el grano (2026-09-20, a pedido).
+"""
 
 
 # ===========================================================================

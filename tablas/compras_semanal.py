@@ -5,7 +5,7 @@ modos y tres grillas:
   · «Detalle» — los DOCUMENTOS del período en foco a la izquierda y, al
     costado, las LÍNEAS del documento elegido.
   · «Resumen» — UNA grilla con una fila por BARRA del gráfico
-    (`renderizar_periodos_semanal`), más su fila TOTAL.
+    (`renderizar_periodos`), más su fila TOTAL.
 
 Nacieron el 2026-09-14, a pedido: «que la tabla de abajo se divida en dos,
 una que muestre el documento, y al hacer clic muestre en otra tabla del
@@ -463,16 +463,26 @@ def renderizar_lineas_semanal(tp, altura, key, total=None):
 
 
 
-def renderizar_periodos_semanal(tp, altura, key, rotulo_periodo="Período",
-                                ver_docs=True, ver_variacion=True,
-                                familias=(), total=None):
+def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
+                        ver_docs=True, ver_variacion=True,
+                        familias=(), total=None):
     """Una fila por BARRA del gráfico, en el orden del eje.
 
+    La usan DOS vistas desde el 2026-09-20 —«Compra por período» y la
+    Evolución de Producto—, y por eso dejó de llamarse `_semanal`: es la
+    tabla de «el gráfico escrito», no la de un drill. Cada una manda las
+    columnas que su gráfico tiene, EN EL ORDEN EN QUE LAS QUIERE (las
+    columnas salen del `tp`, no de las llamadas de acá abajo); las que no
+    manda, no se configuran.
+
     `tp` trae `periodo` (el nombre de la barra, ya legible), los números
-    crudos `valor`, `parte` (0-1), `docs` y `lineas`, la `variacion` en %
-    (o vacía) y tres ocultas: `__vtxt` (qué escribir cuando no hay
-    porcentaje — «parcial»), `__nota` (el tooltip que dice por qué) y
-    `__sel` (True en la barra que el gráfico tiene en foco).
+    crudos `valor`, `parte` (0-1) y, si su gráfico los tiene, `precio`
+    (promedio del período), `docs`, `lineas` y `proveedores` (los nombres,
+    ya escritos); la `variacion` en % (o vacía) y hasta cuatro ocultas:
+    `__vtxt` (qué escribir cuando no hay porcentaje — «parcial»), `__nota`
+    (el tooltip que dice por qué), `__pnota` (el desglose de proveedores
+    con su monto) y `__sel` (True en la barra que el gráfico tiene en
+    foco).
 
     `rotulo_periodo` es el encabezado de la primera columna: lo pone el
     drill porque depende de la granularidad («Período» en Día/Semana/Mes/
@@ -504,34 +514,63 @@ def renderizar_periodos_semanal(tp, altura, key, rotulo_periodo="Período",
         resizable=False, sortable=True, filter=False, editable=False,
         suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
     )
+    _cols = set(tp.columns)
+
+    def _si(col, **kw):
+        """Configura la columna sólo si el llamador la mandó. Sin esto, un
+        `configure_column` de una columna que no existe deja una columna
+        VACÍA en la grilla — y el que la mire no tiene forma de saber si
+        falta el dato o falta la columna."""
+        if col in _cols:
+            gb.configure_column(col, **kw)
     # La única que se estira: el resto mide lo que dice su peor dato (ver
     # los anchos de las hermanas, misma cuenta a 13px + 8+8 de padding + la
     # flecha de ordenar).
-    gb.configure_column("periodo", header_name=rotulo_periodo, minWidth=180,
-                        tooltipField="periodo")
-    gb.configure_column("valor", header_name="Valorizado",
-                        type=["numericColumn"], valueFormatter=_JS_SOLES,
-                        width=130, minWidth=130, suppressSizeToFit=True)
-    gb.configure_column("parte", header_name="% del total",
-                        type=["numericColumn"], valueFormatter=_JS_PARTE,
-                        headerTooltip="Cuánto pesa esta barra en el total "
-                                      "de la vista (el de la cabecera)",
-                        width=104, minWidth=104, suppressSizeToFit=True)
-    gb.configure_column("docs", header_name="Documentos",
-                        hide=not ver_docs,
-                        type=["numericColumn"], valueFormatter=_JS_ENTERO,
-                        width=106, minWidth=106, suppressSizeToFit=True)
-    gb.configure_column("lineas", header_name="Líneas",
-                        type=["numericColumn"], valueFormatter=_JS_ENTERO,
-                        width=82, minWidth=82, suppressSizeToFit=True)
-    gb.configure_column("variacion", header_name="Variación",
-                        hide=not ver_variacion, type=["numericColumn"],
-                        valueFormatter=_JS_VARIACION,
-                        cellStyle=_STYLE_VARIACION, tooltipField="__nota",
-                        headerTooltip="Contra la barra ANTERIOR del "
-                                      "gráfico, no contra el período "
-                                      "anterior del calendario",
-                        width=104, minWidth=104, suppressSizeToFit=True)
+    _si("periodo", header_name=rotulo_periodo, minWidth=180,
+        tooltipField="periodo")
+    # El precio es un PROMEDIO, así que no se suma ni se promedia de nuevo:
+    # la fila TOTAL lo deja en «—» a propósito (ver `_JS_SOLES`). Un
+    # promedio de promedios no mide nada — la regla #199 es la misma
+    # advertencia sobre un ratio re-ponderado.
+    _si("precio", header_name="Precio prom.", type=["numericColumn"],
+        valueFormatter=_JS_SOLES,
+        headerTooltip="Promedio de los precios unitarios de compra del "
+                      "período. El total no lo promedia: un promedio de "
+                      "promedios no mide nada",
+        width=118, minWidth=118, suppressSizeToFit=True)
+    _si("valor", header_name="Valorizado",
+        type=["numericColumn"], valueFormatter=_JS_SOLES,
+        width=130, minWidth=130, suppressSizeToFit=True)
+    _si("parte", header_name="% del total",
+        type=["numericColumn"], valueFormatter=_JS_PARTE,
+        headerTooltip="Cuánto pesa esta barra en el total "
+                      "de la vista (el de la cabecera)",
+        width=104, minWidth=104, suppressSizeToFit=True)
+    _si("docs", header_name="Documentos",
+        hide=not ver_docs,
+        type=["numericColumn"], valueFormatter=_JS_ENTERO,
+        width=106, minWidth=106, suppressSizeToFit=True)
+    _si("lineas", header_name="Líneas",
+        type=["numericColumn"], valueFormatter=_JS_ENTERO,
+        width=82, minWidth=82, suppressSizeToFit=True)
+    _si("variacion", header_name="Variación",
+        hide=not ver_variacion, type=["numericColumn"],
+        valueFormatter=_JS_VARIACION,
+        cellStyle=_STYLE_VARIACION, tooltipField="__nota",
+        headerTooltip="Contra la barra ANTERIOR del "
+                      "gráfico, no contra el período "
+                      "anterior del calendario",
+        width=104, minWidth=104, suppressSizeToFit=True)
+    # La ÚNICA de texto libre, y la única que se estira: los nombres miden
+    # 26 caracteres de media y 37 en el percentil 90 (medido sobre los 773
+    # proveedores del parquet), así que un ancho fijo o sobra o corta. El
+    # monto de cada uno va al tooltip: en la celda serían dos datos
+    # peleando por el mismo sitio.
+    _si("proveedores", header_name="Proveedores", minWidth=200,
+        tooltipField="__pnota",
+        headerTooltip="Quién atendió el período, de mayor a menor "
+                      "valorizado. El monto de cada uno, en el tooltip de "
+                      "la celda")
     # Las de familia, al final. 94px: «S/ 126.7k» mide ~60 a 13px, más los
     # 8+8 de padding y los 16 de la flecha de ordenar. El rótulo que no
     # entra se corta con «…» y sale entero en el tooltip de la cabecera —
@@ -545,8 +584,8 @@ def renderizar_periodos_semanal(tp, altura, key, rotulo_periodo="Período",
                             headerTooltip=f"{_rotulo} · valorizado de compra "
                                           "de esa familia en cada barra",
                             width=94, minWidth=94, suppressSizeToFit=True)
-    for oculta in ("__vtxt", "__nota", "__sel"):
-        gb.configure_column(oculta, hide=True)
+    for oculta in ("__vtxt", "__nota", "__pnota", "__sel"):
+        _si(oculta, hide=True)
     gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         # Sin selección: un clic no hace nada, pero AG Grid igual le dibuja
