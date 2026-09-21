@@ -40593,6 +40593,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      La key del `text_input` lleva el `_foco_id`, así que cambiar de celda
      resetea la búsqueda: una búsqueda es de la celda que estás mirando.
+
+     Y cada cuadro cierra con una fila TOTAL fija al pie, como los de la
+     Cascada (`renderizar_desglose_ajuste(total=...)`, misma pieza): suma el
+     `valor` del lado YA filtrado por el buscador, así el total sigue a lo
+     que se muestra. Sólo `valor` —sumar cantidades de distinta unidad no da
+     una unidad, y esa celda queda en blanco en la fila fija—, y el alto
+     reserva su renglón con un `+ 1` para no comerse una fila del cuerpo.
      Extiende la #483 y la #485. (2026-09-21.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->

@@ -623,11 +623,19 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
         # foco + la métrica (`_foco_id`) son estables mientras dura la
         # búsqueda; el alto sí se recomputa y `_atar_alto` lo fuerza.
         _key = "hm_det_" + lado + "_" + _foco_id
-        _alto = _alto_grilla(min(8, max(1, len(tp))))
+        # +1 por la fila TOTAL fija (como la Cascada): reserva su renglón para
+        # que no se coma una fila del cuerpo.
+        _alto = _alto_grilla(min(8, max(1, len(tp))) + 1)
         _atar_alto(_key, _alto)
+        # TOTAL al pie, como los cuadros de la Cascada (a pedido, 2026-09-21):
+        # suma del lado YA filtrado por el buscador (el total sigue a lo que se
+        # muestra). Sólo `valor`: sumar cantidades de distinta unidad no da una
+        # unidad, y `renderizar_desglose_ajuste` deja esa celda en blanco en la
+        # fila fija.
         renderizar_desglose_ajuste(
             tp, _cols(), _alto, _key, movil=_es_movil(),
-            barra=("valor", _rgba(color_barra), color_texto))
+            barra=("valor", _rgba(color_barra), color_texto),
+            total={"producto": "TOTAL", "valor": float(tp["valor"].sum())})
 
     # ── EL BUSCADOR DE CADA CUADRO (a pedido, 2026-09-21) ────────────────
     #    Mismo patrón y mismo look que la Cascada (`_listas`), scopeado al
