@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-484 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+485 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (170)
 
@@ -366,7 +366,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 
-**AgGrid y tablas** (78)
+**AgGrid y tablas** (79)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -446,8 +446,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#466** — Una fila que se DESPLIEGA en AG Grid Community son filas planas de dos tipos, un filtro…
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
+- **#485** — El Mapa de calor de Ajuste ABRE con el detalle de ALIMENTOS × Almacén Central desplegado, y…
 
-**Streamlit** (133)
+**Streamlit** (134)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -582,6 +583,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
 - **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
+- **#485** — El Mapa de calor de Ajuste ABRE con el detalle de ALIMENTOS × Almacén Central desplegado, y…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -40511,6 +40513,37 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Lo fija `test_graficos.py` (`_tabla_mensual_html`: cronología, ambos
      lados, semáforo invertido, la celda vacía de Precio y el caso sin
      meses). (2026-09-21.)
+
+485. **El Mapa de calor de Ajuste ABRE con el detalle de ALIMENTOS ×
+     Almacén Central desplegado, y la marca de «ya se tocó» es la PRESENCIA
+     de la clave del foco, no un flag aparte.**
+
+     A pedido (2026-09-21): que las tablas de detalle del Mapa de calor se
+     vean de entrada, con la familia Alimentos y el área Almacén Central —
+     antes el detalle (Faltantes | Sobrantes, regla #483) sólo aparecía al
+     clickear una celda. Lo siembra `_foco_inicial`: empareja ALIMENTOS ×
+     ALMACEN CENTRAL con `_norm` contra las filas y columnas PRESENTES de la
+     tabla —el parquet trae la familia en mayúsculas y el área SIN tilde,
+     igual que `inventario.py::ABRE_EN_AREA`— y sólo si esa celda tiene
+     registros que desglosar. Sin match (otro corte, la familia filtrada
+     fuera) arranca sin detalle, como antes de la siembra.
+
+     **La marca de «nadie tocó todavía» es la AUSENCIA de la clave `_K_FOCO`
+     (`hm_ajuste_focus`), no su valor `None`.** El callback `_alternar_foco`
+     SIEMPRE la escribe (una celda o `None`), así que cerrar el detalle la
+     deja en `None` y la siembra —`if _K_FOCO not in st.session_state`— no
+     vuelve a correr: se puede cerrar y queda cerrado. Es el mismo distingo
+     de dos «sin foco» que el `_tocado` del foco sembrado de «Vs año pasado»
+     (CLAUDE.md), pero acá alcanza con la presencia de la clave PORQUE este
+     foco ES el estado, no el espejo de una AgGrid — sembrar el espejo sin
+     avisarle a la grilla es un bucle de reruns, y por eso allá hizo falta
+     un flag aparte. Mismo patrón «sembrar una sola vez» que las familias
+     por defecto (`sembrar_seleccion`).
+
+     Es un DEFAULT, no un fijo: la celda sigue a un clic de cerrarse o de
+     moverse a otra (ver la memoria del proyecto «fijo en X es un default»).
+     Extiende la #468 (la tabla clickeable) y la #483 (el detalle como
+     grillas de desglose). (2026-09-21.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

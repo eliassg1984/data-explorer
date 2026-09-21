@@ -27,6 +27,7 @@ import pandas as pd
 import plotly.colors as pc
 import streamlit as st
 
+from utils import _norm
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS,
     AJUSTE_POS_TEXTO, BLANCO, ESCALA_CONTINUA, GRIS_BORDE,
@@ -63,6 +64,15 @@ _K_CTRL = ("hm_ctrl_fecha", "hm_ctrl_familia", "hm_ctrl_area")
 # La celda en foco, `(familia, área)` o None. Es la misma clave que usaba
 # el Mapa: un foco guardado de antes sigue valiendo.
 _K_FOCO = "hm_ajuste_focus"
+
+# CON QUÉ CELDA ABRE LA VISTA (a pedido, 2026-09-21): el detalle de
+# ALIMENTOS × Almacén Central ya desplegado. Se emparejan por texto
+# NORMALIZADO contra las filas/columnas presentes —el parquet trae la
+# familia en mayúsculas y el área SIN tilde ("ALMACEN CENTRAL", igual que
+# `inventario.py::ABRE_EN_AREA`)—, no por el literal, para que un cambio de
+# formato del maestro no rompa el default en silencio.
+_FAM_INICIAL = "Alimentos"
+_AREA_INICIAL = "Almacén Central"
 
 # El azul de Valorizado Total sale de la MISMA escala con que el mapa
 # pintaba ese modo (`ESCALA_CONTINUA`), no de un hex nuevo: es el color que
@@ -117,6 +127,21 @@ def _alternar_foco(celda):
     app ENTERA por cada clic."""
     st.session_state[_K_FOCO] = (
         None if st.session_state.get(_K_FOCO) == celda else celda)
+
+
+def _foco_inicial(fams, areas, n_reg):
+    """`(familia, área)` con que ABRE la vista, o None si no está disponible.
+
+    ALIMENTOS × Almacén Central (`_FAM_INICIAL`/`_AREA_INICIAL`) emparejadas
+    por texto normalizado contra las filas y columnas presentes de la tabla,
+    sólo si esa celda tiene registros que desglosar —una celda sin registros
+    no abre nada—. Sin match (otro corte, la familia filtrada fuera), None:
+    la vista arranca sin detalle, igual que antes de sembrar el foco."""
+    _fam = next((f for f in fams if _norm(f) == _norm(_FAM_INICIAL)), None)
+    _area = next((a for a in areas if _norm(a) == _norm(_AREA_INICIAL)), None)
+    if _fam is not None and _area is not None and n_reg.get((_fam, _area), 0):
+        return (_fam, _area)
+    return None
 
 
 def _celda_total_html(v, max_abs, modo_val):
@@ -288,6 +313,18 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     _titulo_metrica = "Valorizado Total" if _modo_val else "Ajuste Valorizado"
     _spark = _tendencias(df, df_full, col_fecha, col_familia, col_area,
                          col_metrica)
+
+    # ── FOCO INICIAL: la vista abre con el detalle de ALIMENTOS × Almacén
+    #    Central ya desplegado. La AUSENCIA de la clave —no su valor None—
+    #    es la marca de "nadie tocó todavía": el callback SIEMPRE la escribe
+    #    (una celda o None), así que cerrar el detalle la deja en None y no
+    #    se re-siembra. Es el mismo distingo de dos "sin foco" que el
+    #    `_tocado` del foco sembrado de «Vs año pasado» (CLAUDE.md), acá con
+    #    la presencia de la clave de testigo —que se puede porque este foco
+    #    ES el estado, no el espejo de una grilla de AG Grid—. Se siembra una
+    #    sola vez, igual que las familias por defecto (`sembrar_seleccion`).
+    if _K_FOCO not in st.session_state:
+        st.session_state[_K_FOCO] = _foco_inicial(_fams, _areas, _n_reg)
 
     _foco = st.session_state.get(_K_FOCO)
     if _foco is not None and (_foco[0] not in _fams or _foco[1] not in _areas):
