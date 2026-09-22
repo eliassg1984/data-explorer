@@ -29,8 +29,8 @@ import streamlit as st
 
 from utils import _norm
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS,
-    AJUSTE_POS_TEXTO, BLANCO, ESCALA_CONTINUA, GRIS_BORDE,
+    ACENTO, ACENTO_FUERTE, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, AJUSTE_NEG_TEXTO,
+    AJUSTE_POS, AJUSTE_POS_TEXTO, BLANCO, ESCALA_CONTINUA, GRIS_BORDE,
     GRIS_TEXTO_SUAVE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
 )
 from graficos.base import (
@@ -433,7 +433,12 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
                             unsafe_allow_html=True)
             for _j, _area in enumerate(_areas):
                 with _cols_h[_j + 1]:
-                    st.markdown(_rotulo(_area, GRIS_TEXTO_SUAVE, 600, 10,
+                    # Rótulos de área en el violeta de las grillas de Ajuste ›
+                    # Cascada (`ACENTO_FUERTE`, el header de `_css_look`), a
+                    # pedido (2026-09-22): que la cabecera de esta tabla y la
+                    # de «ajuste por familia» estén «en juego». El gris suave
+                    # de antes leía apagado al lado de aquélla.
+                    st.markdown(_rotulo(_area, ACENTO_FUERTE, 600, 10,
                                         _area), unsafe_allow_html=True)
             with _cols_h[-1]:
                 st.markdown(_rotulo("Total", ACENTO_TEXTO_OSCURO, 700, 10),
