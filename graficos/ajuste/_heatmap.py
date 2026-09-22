@@ -31,7 +31,7 @@ from utils import _norm
 from tema import (
     ACENTO, ACENTO_FUERTE, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, AJUSTE_NEG_TEXTO,
     AJUSTE_POS, AJUSTE_POS_TEXTO, BLANCO, ESCALA_CONTINUA, GRIS_BORDE,
-    GRIS_TEXTO_SUAVE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
+    GRIS_TEXTO, GRIS_TEXTO_SUAVE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
 )
 from graficos.base import _es_movil
 # Los tres filtros propios (corte · familia · área) son los MISMOS que
@@ -587,12 +587,20 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
         (df[col_area].astype(str) == str(_area_sel))
     ]
 
+    # MISMO TAMAÑO que la cabecera de detalle de la Cascada (`_cascada._detalle`,
+    # a pedido 2026-09-22: el `**markdown**` de antes salía en los ~16px del
+    # markdown de Streamlit, el doble). El nombre en 12px versalita y el resto
+    # —monto (con su color) y registros— en 11.5px gris, en la misma fila.
     _color_total = _paleta(_val_sel, modo_val)[1]
     st.markdown(
-        f"**{_fam_sel}** × **{_area_sel}** · "
+        f"<div style='display:flex;align-items:baseline;gap:10px;"
+        f"flex-wrap:wrap;padding-left:2px'>"
+        f"<span style='font-size:12px;font-weight:700;letter-spacing:.05em;"
+        f"text-transform:uppercase;color:{TEXTO_PRINCIPAL}'>"
+        f"{_fam_sel} × {_area_sel}</span>"
+        f"<span style='font-size:11.5px;color:{GRIS_TEXTO}'>"
         f"<span style='color:{_color_total};font-weight:600'>"
-        f"S/ {_val_sel:,.0f}</span> · "
-        f"{len(_det)} registros",
+        f"S/ {_val_sel:,.0f}</span> · {len(_det):,} registros</span></div>",
         unsafe_allow_html=True,
     )
 
