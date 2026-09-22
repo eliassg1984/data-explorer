@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-487 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+488 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (171)
 
@@ -277,7 +277,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 
-**Plotly y figuras** (87)
+**Plotly y figuras** (88)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -366,6 +366,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#487** — La serie de «Compra Vs Año Pasado» rotula las TRES métricas por barra, dice el AÑO en una…
+- **#488** — La selección por clic de st.plotly_chart(on_select=...) NO llega a las trazas de un…
 
 **AgGrid y tablas** (79)
 
@@ -449,7 +450,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (133)
+**Streamlit** (134)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -584,6 +585,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
 - **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
+- **#488** — La selección por clic de st.plotly_chart(on_select=...) NO llega a las trazas de un…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -40671,6 +40673,43 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Cantidad, Precio) y a 3 y 12 meses: sin recortes, sin solapamientos.
      (2026-09-21.)
 
+488. **La selección por clic de `st.plotly_chart(on_select=...)` NO llega a
+     las trazas de un `make_subplots`: para que un gráfico sea clickeable
+     tiene que ser una figura ÚNICA, y con `dragmode="pan"`.** Dos trampas
+     encadenadas, las dos medidas el 2026-09-22 armando el drill de la
+     «Tendencia diaria» del Resumen de Ventas
+     (`graficos/ventas_resumen.py`).
+
+     · **Subplots.** El primer intento dibujaba la venta y el volumen de
+       clientes en un `make_subplots` de dos filas. Al clickear una barra,
+       `evt.selection.points` volvía SIEMPRE vacío —medido con un
+       `st.caption(f"{evt}")` de diagnóstico—, así que el foco no se fijaba
+       nunca. Todas las vistas clickeables del repo que SÍ funcionan son
+       figuras únicas (`compras/semanal.py`, `ventas_comparativo.py`,
+       `ajuste/_distribucion.py`). Se pasó el volumen de subplot propio a
+       una línea punteada sobre un eje Y secundario (`yaxis2`, `overlaying`),
+       como `ventas.py::_ventas_grafico_dia` dibuja Pax.
+
+     · **Dragmode.** Con la figura ya única, el clic SEGUÍA sin registrar:
+       es la #388 de nuevo. Al poner `on_select`, Streamlit deja el
+       `dragmode` en «select» (caja), y con ese modo un clic SUELTO no
+       selecciona nada. La cura es la misma que el histograma de Ajuste ›
+       Distribución: `fig.update_layout(dragmode="pan")` + los dos ejes
+       `fixedrange=True` — en «pan» Streamlit pone `clickmode="event+select"`
+       y el clic vuelve a abrir el detalle; los ejes fijos dejan quieto el
+       arrastre. Con las dos cosas, verificado en el navegador: clic en la
+       barra del 03/09 → `foco=2` → «Detalle de Jue 03/09 · 2026 (99 platos ·
+       S/ 30,346)», que cuadra con el KPI «Mejor».
+
+     La tercera pieza —que la selección PERSISTE entre reruns y por eso el
+     foco va en la key del gráfico y el clic se procesa DESPUÉS de dibujar—
+     no es nueva: es la #399, la misma receta de `ventas_comparativo.py`. Y
+     un detalle de la tabla de abajo: `st.dataframe` sobre un Styler muestra
+     «None» para un NaN de una columna NUMÉRICA (el primer día no tiene
+     variación) ignorando el `format` del Styler, así que las celdas de la
+     tabla Resumen se pre-formatean a STRING y el color de la variación sale
+     del signo del texto. (2026-09-22.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -40683,7 +40722,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> próxima regla nueva es la **#487**.
+> última regla es la **#488**; la próxima toma el número siguiente.
 
 >
 

@@ -10,6 +10,28 @@ básicamente al azar (sin relación real entre sí, a diferencia de un precio
 de acción) y el color resultante no tenía señal. Ver arquitectura.md
 regla #85 para el detalle de por qué se dio de baja.
 
+2026-09-22 — TRES AGREGADOS a pedido (mirando la vista publicada):
+  1. Un SELECTOR DE FECHA propio, el mismo trigger-con-rango-escrito de
+     Compras (`base.selector_fecha_tarjeta`). No es un filtro paralelo: con
+     `categoria=None` escribe la MISMA clave canónica que la píldora de la
+     franja, o sea que mover la fecha acá RECARGA el parquet del rango
+     nuevo desde R2 (Ventas usa `carga_por_rango`, ver `app.py`). Es la
+     segunda puerta al mismo dato — cómoda porque cae en la vista y no
+     arriba de todo. De ahí el `st.rerun(scope="app")` del arranque: sin la
+     corrida completa el `d` que recibe esta función seguiría siendo el del
+     rango viejo.
+  2. Dos filtros LOCALES de la vista, Grupo y Servicio, que recortan el `d`
+     de esta tarjeta (los de la franja siguen existiendo y se COMPONEN con
+     estos — el usuario pidió tenerlos a mano en la vista).
+  3. Las barras de "Tendencia diaria" son CLICKEABLES, con un toggle
+     Resumen/Detalle debajo — el mismo par que la vista «Compras por
+     período» (arquitectura.md regla #476): «Resumen» es el gráfico escrito
+     como tabla (una fila por día + total), «Detalle» es el desglose del
+     día que se toca (sus platos). El clic sigue el patrón de foco-en-la-key
+     de `ventas_comparativo.py` (regla #399): la selección de
+     `st.plotly_chart(on_select=...)` persiste entre reruns, así que la key
+     lleva el foco y cada clic procesado dispara un rerun de fragment.
+
 El detalle profundo por producto (FoodCost, sparklines, %Var vs Año Pasado)
 sigue viviendo en "Ranking & FoodCost" — este panel es la foto rápida de un
 vistazo, no su reemplazo.
@@ -19,10 +41,14 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
 
-from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
-from graficos.base import _card, _compras_layout, _compras_truncar
+from tema import (ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
+                  TEXTO_PRINCIPAL)
+from graficos.base import (
+    _card, _compras_layout, _compras_truncar, preservar_widgets,
+    scope_rerun, selector_fecha_tarjeta,
+)
+from graficos.compras._comun import _first_point
 from graficos import alturas
 
 MIN_DIAS = 5     # con menos, la tendencia día-a-día no dice nada
@@ -32,15 +58,90 @@ MAX_DIAS = 30    # tope de barras legibles. Mismo espíritu que MAX_SEMANAS de
                  # sí — con un rango de "todo el año" cargado, esta vista
                  # sigue mostrando solo los últimos 30 días CON datos.
 
+# Los controles propios de la vista, para que la recarga de fecha
+# (`st.rerun(scope="app")`) no se los lleve. Es el mismo mecanismo que
+# `_KEYS_WIDGET` de `compras/semanal.py` (arquitectura.md regla #373): ese
+# rerun aborta la corrida antes de que estos widgets se registren, y
+# Streamlit recolecta el estado de todo widget del fragment que no se
+# dibujó. `preservar_widgets` los re-escribe sobre sí mismos antes de
+# escalar.
+_KEYS_WIDGET_RESUMEN = ("vt_resumen_grupo", "vt_resumen_serv",
+                        "vt_resumen_modo", "ventas_resumen_top_metrica")
+
+_MODO_DETALLE = "Detalle"
+_MODO_RESUMEN = "Resumen"
+_MODO_OPCIONES = (_MODO_RESUMEN, _MODO_DETALLE)
+_MODO_DEFAULT = _MODO_RESUMEN   # "Resumen" no necesita un día en foco: la
+                                # tabla del día completo se ve al abrir, y el
+                                # clic queda para pasar a "Detalle".
+
+_AYUDA_MODO = (
+    "Qué se ve debajo del gráfico. **Resumen**: una fila por día —con su "
+    "venta, sus clientes, su ticket y la variación contra el día anterior— "
+    "más el total. **Detalle**: los platos del día que toques en el gráfico."
+)
+
+# Abreviaturas en español para el eje/tabla — Plotly y pandas rotulan en
+# inglés si no se les dice otra cosa (misma trampa que arquitectura.md #241).
+_DIAS_ABR_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+
+def _fmt_dia(dt):
+    """`Timestamp` → «Sáb 20/09», con el día de semana en español."""
+    return f"{_DIAS_ABR_ES[dt.weekday()]} {dt.day:02d}/{dt.month:02d}"
+
 
 @st.fragment
-def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_cant):
-    """"Resumen ejecutivo": KPIs + venta diaria + volumen + ticket promedio +
-    top platos, todas las piezas sobre la MISMA ventana de días (últimos
-    `MAX_DIAS` con datos) para que cuenten la misma historia.
+def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
+                    col_cant, col_fam=None, col_serv=None):
+    """"Resumen ejecutivo": selector de fecha + filtros de Grupo/Servicio +
+    KPIs + venta diaria clickeable + ticket promedio + top platos, todas las
+    piezas sobre la MISMA ventana de días (últimos `MAX_DIAS` con datos)
+    para que cuenten la misma historia.
     """
+    # ── 0) La fecha cambió: recargar el parquet del rango nuevo ───────────
+    # El selector escribe la clave canónica del rango (`categoria=None`), que
+    # es la que lee `carga_por_rango` en `app.py`. Como el `d` de esta
+    # función ya está materializado con el rango VIEJO, hay que escalar a una
+    # corrida completa para que se vuelva a bajar. Va PRIMERO —antes de
+    # dibujar nada— porque el rerun aborta lo que venga después, y
+    # `preservar_widgets` salva los controles de la vista de la recolección.
+    if st.session_state.pop("vt_resumen_fecha_flag", False):
+        preservar_widgets(_KEYS_WIDGET_RESUMEN)
+        st.rerun(scope="app")
+
     if not (col_venta and col_fecha):
         st.info("Faltan columnas (Venta, Fecha) para el resumen ejecutivo.")
+        return
+
+    # ── 1) Fila de controles: Grupo · Servicio · … · fecha ────────────────
+    # Grupo y Servicio son filtros LOCALES de esta vista (se componen con los
+    # de la franja). La fecha es el trigger de Compras: apretarlo abre atajos
+    # + escala de tiempo, y al aplicar uno recarga (ver el bloque 0).
+    _ctrl = st.columns([1.6, 1.6, 3, 2.4], vertical_alignment="center")
+    grupo_sel, serv_sel = [], []
+    with _ctrl[0]:
+        if col_fam and col_fam in d.columns:
+            _grupos = sorted(d[col_fam].dropna().astype(str).unique().tolist())
+            grupo_sel = st.multiselect(
+                "Grupo", _grupos, key="vt_resumen_grupo",
+                placeholder="Grupo: todos", label_visibility="collapsed")
+    with _ctrl[1]:
+        if col_serv and col_serv in d.columns:
+            _servs = sorted(d[col_serv].dropna().astype(str).unique().tolist())
+            serv_sel = st.multiselect(
+                "Servicio", _servs, key="vt_resumen_serv",
+                placeholder="Servicio: todos", label_visibility="collapsed")
+    with _ctrl[3]:
+        selector_fecha_tarjeta("vt_resumen", "vt_resumen_fecha_flag",
+                               categoria=None)
+
+    if grupo_sel and col_fam:
+        d = d[d[col_fam].astype(str).isin(grupo_sel)]
+    if serv_sel and col_serv:
+        d = d[d[col_serv].astype(str).isin(serv_sel)]
+    if d is None or d.empty:
+        st.info("No hay datos para los filtros de Grupo/Servicio elegidos.")
         return
 
     fecha = pd.to_datetime(d[col_fecha], errors="coerce")
@@ -137,7 +238,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
         st.metric("Días en alza", f"{alzas}/{len(g) - 1}",
                   help="Días con más venta que el día anterior")
 
-    # ── Venta total por día (barras) + volumen ───────────────────────────
+    # ── Venta total por día (barras clickeables) + volumen ────────────────
     # Coloreadas por tendencia día-a-día (mismo criterio que el KPI "Días en
     # alza": total de hoy vs. total de ayer) — no por apertura/cierre de
     # transacciones sueltas (eso era el candlestick que reemplaza esta
@@ -152,34 +253,50 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
         for f, t, p in zip(g["dia"], g["total"], g["pct_vs_ayer"])
     ]
 
+    # El día en foco (índice en `g`), leído ANTES de dibujar: la selección de
+    # `on_select` persiste entre reruns, así que va en la key del gráfico y se
+    # valida contra el largo actual (un rango nuevo puede tener menos días).
+    foco = st.session_state.get("vt_resumen_foco")
+    if foco is not None and not (0 <= foco < len(g)):
+        foco = None
+        st.session_state["vt_resumen_foco"] = None
+
+    # Marca del día en foco: un borde, no un cambio de color (el color ya
+    # dice la tendencia). Va como lista para no tocar los demás.
+    _line_w = [2.4 if (foco is not None and i == foco) else 0
+               for i in range(len(g))]
+
     with _card("ventas_resumen_dia", "Tendencia diaria de venta",
                titulo_arriba=True):
-        filas_sub = 2 if vol_label else 1
-        # `row_h` y no `alturas`: este nombre tapaba al módulo
-        # graficos.alturas dentro de la función y `alturas.MINI` reventaba
-        # con AttributeError sobre una lista (lo cazó ruff en la migración
-        # del 2026-08-13). Son proporciones de fila, no píxeles.
-        row_h = [0.72, 0.28] if vol_label else [1.0]
-        fig = make_subplots(rows=filas_sub, cols=1, shared_xaxes=True,
-                            row_heights=row_h, vertical_spacing=0.06)
+        # UNA sola figura (no make_subplots): la selección por clic de
+        # `st.plotly_chart(on_select=...)` NO llega a las trazas de un
+        # subplot —medido el 2026-09-22, `evt.selection.points` volvía
+        # SIEMPRE vacío al clickear una barra de un `make_subplots`, y con
+        # eso el drill no abría nunca—. Todas las vistas clickeables del
+        # repo son figuras únicas (semanal, comparativo, volatilidad); acá
+        # el volumen baja de subplot propio a una línea punteada sobre un
+        # eje Y secundario, que es como `ventas.py::_ventas_grafico_dia`
+        # dibuja Pax. Ver arquitectura.md regla #488.
+        fig = go.Figure()
         fig.add_trace(go.Bar(
-            x=g["dia"], y=g["total"], marker=dict(color=colores),
-            hovertext=hover_dia, hoverinfo="text", name="",
-        ), row=1, col=1)
+            x=g["dia"], y=g["total"], name="Venta", yaxis="y",
+            marker=dict(color=colores,
+                        line=dict(color=TEXTO_PRINCIPAL, width=_line_w)),
+            hovertext=hover_dia, hoverinfo="text",
+        ))
         if vol_label:
-            fig.add_trace(go.Bar(
-                x=g["dia"], y=g["pax"], name=vol_label,
-                marker=dict(color=GRIS_BORDE),
+            fig.add_trace(go.Scatter(
+                x=g["dia"], y=g["pax"], name=vol_label, mode="lines",
+                line=dict(color=GRIS_TEXTO, width=1.5, dash="dot"),
+                yaxis="y2",
                 hovertemplate=("%{x|%d/%m/%Y}<br>" + vol_label
                                + ": %{y:,.0f}<extra></extra>"),
-            ), row=2, col=1)
+            ))
 
         # División sutil entre semanas (un lunes = arranca semana nueva):
-        # línea punteada gris clara, yref="paper" para que cruce las DOS
-        # filas del subplot (barra + volumen) aunque solo haya una xaxis
-        # con nombre propio ("x", fila 1) — paper va de 0 a 1 en TODA la
-        # figura, no por fila. Se salta el lunes que coincide con el primer
-        # día mostrado (una línea pegada al borde izquierdo no divide nada).
+        # línea punteada gris clara, yref="paper" para que cruce la figura
+        # de arriba abajo. Se salta el lunes que coincide con el primer día
+        # mostrado (una línea pegada al borde izquierdo no divide nada).
         _lunes = pd.date_range(g["dia"].min(), g["dia"].max(), freq="W-MON")
         for _l in _lunes:
             if _l <= g["dia"].min():
@@ -192,23 +309,65 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
                 opacity=0.8, layer="below",
             )
 
-        _compras_layout(fig, alto=alturas.apilado(alturas.MINI, filas_sub))
+        _compras_layout(fig, alto=alturas.APOYO)
         fig.update_layout(
-            showlegend=False,
+            showlegend=bool(vol_label),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+            margin=dict(l=10, r=(50 if vol_label else 10), t=30, b=10),
             yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE),
+            yaxis2=dict(overlaying="y", side="right", showgrid=False,
+                        title=vol_label or "", tickformat=",.0f",
+                        visible=bool(vol_label)),
         )
         fig.update_xaxes(
             type="date", tickmode="linear", tick0=g["dia"].min(),
             dtick=86400000.0, tickformat="%d/%m", tickangle=-45,
-            tickfont=dict(size=10), row=filas_sub, col=1,
+            tickfont=dict(size=10),
         )
-        if vol_label:
-            fig.update_yaxes(title=vol_label, tickformat=",.0f", row=2, col=1)
-        st.plotly_chart(fig, use_container_width=True, key="ventas_g_resumen_dia")
+        # MODO CLIC, no "select": al poner `on_select`, Streamlit deja el
+        # dragmode en "select" (caja), y con eso un clic SUELTO no selecciona
+        # nada (arquitectura.md regla #388). En "pan" Streamlit pone
+        # clickmode="event+select" y el clic vuelve a abrir el detalle; los
+        # ejes fijos dejan quieto el arrastre. Medido el 2026-09-22: sin esto
+        # `evt.selection.points` volvía siempre vacío al clickear una barra.
+        fig.update_layout(dragmode="pan")
+        fig.update_xaxes(fixedrange=True)
+        fig.update_yaxes(fixedrange=True)
+        # on_select="rerun" + key con el foco: sin rotar la key el mismo clic
+        # se re-procesa en cada rerun y el foco parpadea (regla #399).
+        evt = st.plotly_chart(
+            fig, use_container_width=True,
+            key=f"ventas_g_resumen_dia_{foco if foco is not None else 'none'}",
+            on_select="rerun", selection_mode="points",
+            config={"displaylogo": False, "displayModeBar": False})
         st.caption(
             "Verde = vendió más que el día anterior · rojo = vendió menos "
-            "(el primer día del rango no tiene con qué compararse)."
+            "(el primer día del rango no tiene con qué compararse). "
+            "Clic en una barra para ver el detalle del día."
             + _nota_recorte)
+
+        # Procesar el clic DESPUÉS de dibujar: se enfoca el día (o se suelta
+        # si ya estaba enfocado) y se rerunea con la key nueva. La guarda
+        # contra `vt_resumen_click` evita re-disparar el mismo clic.
+        _mp = _first_point(evt)
+        if _mp is not None:
+            _pi = _mp.get("point_index", _mp.get("point_number"))
+            if _pi is not None and st.session_state.get("vt_resumen_click") != _pi:
+                st.session_state["vt_resumen_click"] = _pi
+                st.session_state["vt_resumen_foco"] = (
+                    None if foco == _pi else int(_pi))
+                st.rerun(scope=scope_rerun())
+
+    # ── Zona de abajo: Resumen (tabla por día) / Detalle (platos del día) ──
+    _modo = st.segmented_control(
+        "Vista de la tabla", _MODO_OPCIONES, default=_MODO_DEFAULT,
+        key="vt_resumen_modo", label_visibility="collapsed",
+        help=_AYUDA_MODO) or _MODO_DEFAULT
+
+    if _modo == _MODO_RESUMEN:
+        _tabla_resumen(g, vol_label)
+    else:
+        _tabla_detalle(tabla, g, foco, col_prod, col_cant)
 
     # ── Ticket promedio diario ───────────────────────────────────────────
     if vol_label:
@@ -267,3 +426,112 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod, col_
                 )
                 st.plotly_chart(fig_p, use_container_width=True,
                                 key="ventas_g_resumen_top")
+
+
+def _fmt_pct(v):
+    return "—" if pd.isna(v) else f"{v:+.0f}%"
+
+
+def _tabla_resumen(g, vol_label):
+    """El gráfico escrito como tabla: una fila por día (en el orden del eje)
+    con venta, volumen, ticket y la variación contra el día anterior, más
+    una fila TOTAL al pie. No depende del foco: se ve siempre.
+
+    Las celdas se pre-formatean a STRING (no se deja el formateo al Styler):
+    `st.dataframe` muestra «None» para un NaN de una columna numérica
+    ignorando el `format` del Styler —el primer día no tiene variación—, y
+    con la columna ya en texto eso se vuelve «—» de verdad. El color de la
+    variación se decide por el signo del texto, que es lo único que queda."""
+    filas = []
+    for _, r in g.iterrows():
+        fila = {"Día": _fmt_dia(r["dia"]),
+                "Venta": f"S/ {r['total']:,.0f}",
+                "Δ vs día ant.": _fmt_pct(r.get("pct_vs_ayer", np.nan))}
+        if vol_label:
+            fila[vol_label] = f"{r['pax']:,.0f}"
+            _t = r.get("ticket", np.nan)
+            fila["Ticket"] = "—" if pd.isna(_t) else f"S/ {_t:,.2f}"
+        filas.append(fila)
+
+    _tp = g["pax"].sum() if vol_label else 0
+    total = {"Día": "Total", "Venta": f"S/ {g['total'].sum():,.0f}",
+             "Δ vs día ant.": ""}
+    if vol_label:
+        total[vol_label] = f"{_tp:,.0f}"
+        total["Ticket"] = (f"S/ {g['total'].sum() / _tp:,.2f}"
+                           if _tp else "—")
+    filas.append(total)
+    tv = pd.DataFrame(filas)
+
+    # Orden de columnas: Día · Venta · [Clientes · Ticket] · Δ
+    orden = ["Día", "Venta"] + (
+        [vol_label, "Ticket"] if vol_label else []) + ["Δ vs día ant."]
+    tv = tv[orden]
+
+    def _sty_fila(row):
+        # La última fila (Total) en negrita; el resto normal.
+        return ["font-weight:600" if row["Día"] == "Total" else ""
+                for _ in row]
+
+    def _color_delta(s):
+        # El color sale del signo del texto ya formateado.
+        if s.startswith("+"):
+            return f"color:{EXITO}"
+        if s.startswith("-"):
+            return f"color:{ERROR}"
+        return f"color:{GRIS_TEXTO}"
+
+    sty = (tv.style
+           .apply(_sty_fila, axis=1)
+           .map(_color_delta, subset=["Δ vs día ant."]))
+    st.dataframe(sty, use_container_width=True, hide_index=True,
+                 height=alturas.por_filas(len(tv), px_fila=34,
+                                          extra=48, minimo=0))
+
+
+def _tabla_detalle(tabla, g, foco, col_prod, col_cant):
+    """Los platos del día en foco: Producto · Cantidad · Ingreso · % del día,
+    de mayor a menor ingreso. Sin foco (nadie tocó una barra todavía), lo
+    dice en vez de mostrar una tabla vacía."""
+    if foco is None:
+        st.info("Tocá una barra del gráfico para ver el detalle de ese día.")
+        return
+    if not col_prod or "prod" not in tabla.columns:
+        st.info("Este parquet no trae la columna de producto: no hay detalle "
+                "por plato.")
+        return
+
+    dia_foco = g["dia"].iloc[foco]
+    dd = tabla[tabla["dia"] == dia_foco]
+    if dd.empty:
+        st.info("Sin líneas de venta para ese día.")
+        return
+
+    agg = {"Ingreso": ("venta", "sum")}
+    if "cant" in dd.columns:
+        agg["Cantidad"] = ("cant", "sum")
+    det = dd.groupby("prod").agg(**agg).reset_index()
+    det = det.rename(columns={"prod": "Producto"})
+    _tot = det["Ingreso"].sum()
+    det["% del día"] = (det["Ingreso"] / _tot * 100) if _tot else 0.0
+    det = det.sort_values("Ingreso", ascending=False).reset_index(drop=True)
+
+    orden = ["Producto"] + (["Cantidad"] if "Cantidad" in det.columns
+                            else []) + ["Ingreso", "% del día"]
+    det = det[orden]
+
+    st.markdown(
+        f'<div style="font-size:14px;font-weight:600;color:{TEXTO_PRINCIPAL};'
+        f'margin:2px 0 6px;">Detalle de {_fmt_dia(dia_foco)} · '
+        f'{dia_foco.year} <span style="color:{GRIS_TEXTO};font-weight:400;">'
+        f'({len(det):,} platos · S/ {_tot:,.0f})</span></div>',
+        unsafe_allow_html=True)
+
+    fmt = {"Ingreso": "S/ {:,.0f}", "% del día": "{:.1f}%"}
+    if "Cantidad" in det.columns:
+        fmt["Cantidad"] = "{:,.0f}"
+    sty = det.style.format(fmt).bar(
+        subset=["Ingreso"], color=f"{ACENTO}33", align="left")
+    st.dataframe(sty, use_container_width=True, hide_index=True,
+                 height=alturas.por_filas(min(len(det), 15), px_fila=34,
+                                          extra=48, minimo=0))
