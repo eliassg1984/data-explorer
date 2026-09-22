@@ -31,6 +31,7 @@ from graficos.base import (_render_rail, compartimento_filtros,
 from graficos.ajuste import categoria_rango_ajuste
 from asistente import inject_asistente
 from navegacion import inject_navegacion
+from aviso_ingreso import procesar_aviso_ingreso
 from perf import perf                                                       # ⚡ PERF
 
 ZONA_PERU = ZoneInfo("America/Lima")  # UTC-5 fijo, sin horario de verano
@@ -50,6 +51,8 @@ st.set_page_config(
         'About': "Panel de Reportes v2.0 - Inventario & Compras"
     }
 )
+
+procesar_aviso_ingreso()
 
 inject_css()
 inject_error_overlay()

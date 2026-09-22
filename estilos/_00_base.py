@@ -835,4 +835,18 @@ CSS = """    <style>
     [data-testid="stElementContainer"]:has(.marca-reporte, .pila-seccion-siguiente) {
         display: none !important;
     }
+
+    /* Relevo de `aviso_ingreso.py`: un `st.text_input` que JS llena con la
+       geolocalización (mismo patrón que `pila_go_` en `_27_pila.py`). Tiene
+       que seguir RENDERIZADO — `display:none` lo saca del DOM y Streamlit
+       deja de reconocerlo — así que se esconde con opacity + tamaño 1px. */
+    [class*="st-key-aviso_ingreso_geo"] {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        overflow: hidden !important;
+        opacity: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
 """
