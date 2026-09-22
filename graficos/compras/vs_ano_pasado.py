@@ -154,7 +154,7 @@ Son 240px, y de acá salen los dos altos de abajo. La cuenta se hace UNA
 vez y en este nivel porque las dos tarjetas tienen que terminar en la
 misma línea, y cada una gasta sus 240 en cosas distintas:
 
-    serie    nombre (21) + toggle «Ver» (45)  +  figura (174)
+    serie    nombre + toggle «Ver», misma fila (45)  +  figura (195)
     cascada  nombre (21) + fila rótulo+corte (30) + % (24)
              + cascada (165)
 
@@ -168,18 +168,20 @@ El error que esto evita es restar dos veces: si el alto de la cascada
 saliera del de la SERIE, se comería también la fila de controles que la
 cascada no tiene, y la columna derecha terminaría más arriba."""
 
-_ALTO_FIG_VAP = (_ALTO_CONTENIDO_VAP - alturas.FRANJA_NOMBRE_CASCADA
-                 - alturas.FRANJA_CTRL_SERIE)
-"""Alto de la SERIE mensual: el contenido de su tarjeta menos los dos
-renglones que lleva encima desde el 2026-09-21 (regla #445): el NOMBRE del
-ítem (centrado y azul, igual que la cascada — de ahí que reuse
-`FRANJA_NOMBRE_CASCADA`) y el toggle «Ver» en su propia fila.
+_ALTO_FIG_VAP = _ALTO_CONTENIDO_VAP - alturas.FRANJA_CTRL_SERIE
+"""Alto de la SERIE mensual: el contenido de su tarjeta menos el ÚNICO
+renglón que lleva encima — el nombre del ítem y el toggle «Ver» COMPARTEN
+fila (`FRANJA_CTRL_SERIE`).
 
-Hasta ese día el nombre y el toggle iban en UN renglón (`FRANJA_CTRL_SERIE`
-valía 47, los dos juntos). Se partieron para poder centrar el nombre EN LA
-TARJETA y no en su columna (regla #449): un nombre no se centra en la
-tarjeta si comparte fila con un widget. Cuesta un renglón, y sale de la
-figura.
+2026-09-22, a pedido («el gráfico es muy corto verticalmente, subamos el
+selector para que figure en la fila del título»): el toggle volvió a la
+fila del nombre y la figura recuperó ese renglón. Entre el 2026-09-21 y hoy
+iban en renglones separados (se restaba también `FRANJA_NOMBRE_CASCADA`)
+para centrar el nombre EN LA TARJETA; eso se conserva SIN gastar un renglón
+porque el toggle va superpuesto a la izquierda (`position: absolute`), fuera
+del flujo, así que el nombre sigue centrado sobre el ancho entero de la
+tarjeta. Ver la regla #445 y el layout de `vap_serie_hdr` en
+`estilos/_80_cards.py`.
 
 OJO con el `_FRANJA_VAP` de la cuenta: hoy no muerde. `con_franja` devuelve
 `min(rol, CONTENIDO - franja)` y con COMPACTO en 240 gana siempre el rol
@@ -826,19 +828,20 @@ caso angosto: en modo solo (⛶) la tarjeta crece y sobra lugar. En
 ventanas más angostas que 1366 las etiquetas pueden rozarse; el hover
 sigue diciendo el número exacto."""
 
-_ALTO_PLOT_VAP = 108
+_ALTO_PLOT_VAP = 121
 """Alto del área de trazo (`.nsewdrag`) de la serie mensual, MEDIDO en el
-navegador a 1366x768 (`.nsewdrag`: 108px). Es contra lo que se reparte el
+navegador a 1366x768 (`.nsewdrag`: 121px). Es contra lo que se reparte el
 techo que necesitan las etiquetas (`_techo_con_etiquetas`): si acá dijera
 más de lo real, ese techo reservaría muy poco y las etiquetas de la barra
 más alta se cortarían por arriba — por eso se toma el valor MEDIDO, no uno
 redondeado hacia arriba.
 
-2026-09-21: de 149 a 108. La figura es 174 (`_ALTO_FIG_VAP`) y de ahí salen
-el margen superior (10, sin título), el inferior con la leyenda de años
-(`_LEYENDA_MARGEN_B` + `_LEYENDA_VAP`) y los rótulos del eje de meses. El
-área que queda para las barras es más chica que antes: es el precio de
-sumarle la leyenda al pie y las etiquetas de tres renglones."""
+2026-09-22: de 108 a 121. La figura subió de 174 a 195 (`_ALTO_FIG_VAP`)
+al devolver el toggle «Ver» a la fila del nombre; de esos 21px al área de
+trazo llegan 13 (el resto lo reparten el `gap` y los márgenes del pie). El
+margen superior (10, sin título) y el inferior con la leyenda de años
+(`_LEYENDA_MARGEN_B` + `_LEYENDA_VAP`) más los rótulos del eje de meses no
+cambian. MEDIR de nuevo si se toca `_ALTO_FIG_VAP` o el pie de la figura."""
 
 _BARGAP_VAP = 0.28
 """`bargap` de la serie. Vive acá y no sólo en el `update_layout` porque
@@ -2520,12 +2523,15 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         _tarj_serie = col_g.container(key="compras_vap_card_serie")
         _tarj_puente = col_p.container(key="compras_vap_card_puente")
 
-        # Los dos renglones de la cabecera de la serie (2026-09-21, regla
-        # #449): el NOMBRE del ítem arriba —centrado en la tarjeta y azul,
-        # igual que la cascada de al lado— y el toggle «Ver» debajo. Van en
-        # renglones separados a propósito: un nombre no se centra en la
-        # TARJETA si comparte fila con un widget (se centraría en su
-        # columna). El alto de los dos sale de la figura (`_ALTO_FIG_VAP`).
+        # La cabecera de la serie es UN renglón (2026-09-22, a pedido: «el
+        # gráfico es muy corto verticalmente, subamos el selector para que
+        # figure en la fila del título»): el NOMBRE del ítem —centrado en la
+        # tarjeta y azul, igual que la cascada de al lado— y el toggle «Ver»
+        # en la MISMA fila. El nombre sigue centrado sobre la tarjeta entera
+        # (regla #449) porque el toggle va superpuesto a la izquierda, fuera
+        # del flujo (`position: absolute`, en `estilos/_80_cards.py`), así
+        # que no le corre el centro. El alto del renglón sale de la figura
+        # (`_ALTO_FIG_VAP`), que recuperó los ~21px del renglón que sobraba.
         with _tarj_serie.container(key="vap_serie_hdr"):
             # El nombre del ítem va por un HUECO: depende del foco, que se
             # resuelve abajo. Mismo mecanismo que el ámbito del título

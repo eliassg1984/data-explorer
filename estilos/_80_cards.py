@@ -448,37 +448,53 @@ CSS = """    /* ================================================================
     }
 
     /* ── LA CABECERA DE LA TARJETA DE LAS BARRAS (reglas #445, #449) ─────
-       DOS renglones apilados desde el 2026-09-21: el NOMBRE del ítem
-       arriba —centrado en la tarjeta y azul, igual que la cascada de al
-       lado (`_nombre_serie_html`)— y el toggle «Ver» debajo.
+       UN renglón desde el 2026-09-22 (a pedido: «el gráfico es muy corto
+       verticalmente, subamos el selector para que figure en la fila del
+       título»): el NOMBRE del ítem —centrado en la tarjeta y azul, igual que
+       la cascada de al lado (`_nombre_serie_html`)— y el toggle «Ver» en la
+       MISMA fila.
 
-       Antes era UNA fila [nombre | Ver]. Se partió porque un nombre no se
-       centra en la TARJETA si comparte fila con un widget: se centra en su
-       columna y queda corrido (regla #449). Cuesta un renglón, y sale de la
-       figura (`alturas.FRANJA_NOMBRE_CASCADA` + `FRANJA_CTRL_SERIE`).
+       Entre el 2026-09-21 y hoy eran DOS renglones apilados: se partieron
+       porque un nombre no se centra en la TARJETA si comparte fila con un
+       widget EN EL FLUJO — se centra en su columna y queda corrido (regla
+       #449). La vuelta a un renglón conserva el centrado esquivando eso: el
+       nombre ocupa el ancho entero de la tarjeta y el toggle va SUPERPUESTO
+       a la izquierda (`position: absolute`), fuera del flujo, así que no le
+       corre el centro. El renglón que se ahorra vuelve a la figura
+       (`alturas.FRANJA_CTRL_SERIE`, sin `FRANJA_NOMBRE_CASCADA`).
 
-       Columna, no fila: cada hijo a todo el ancho y apilado. El nombre se
-       trunca solo (ellipsis) y se centra; el toggle mide su ancho fijo. */
+       `position: relative` para anclar el toggle; `align-items: center`
+       para centrarlo verticalmente contra el nombre; `min-height` = alto
+       del desplegable (26px), o sin foco el renglón colapsa al nombre y el
+       toggle se sale por arriba. */
     .st-key-vap_serie_hdr {
+        position: relative !important;
         display: flex !important;
-        flex-direction: column !important;
-        gap: 2px !important;
+        align-items: center !important;
+        min-height: 26px !important;
         margin: 0 0 0.3rem !important;
     }
-    /* RENGLÓN 1: el nombre, a todo el ancho para centrarse EN LA TARJETA. */
+    /* El nombre, a todo el ancho para centrarse EN LA TARJETA. */
     .st-key-vap_serie_hdr > [data-testid="stElementContainer"]:first-child {
         width: 100% !important;
     }
-    /* RENGLÓN 2: el toggle «Ver». Ancho para «Cantidad Comprada» —el rótulo
-       más largo desde el rename (#484)— más el cromo del desplegable. En su
-       propia fila no le compite ancho al nombre. */
+    /* El toggle «Ver», SUPERPUESTO a la izquierda: fuera del flujo, no le
+       compite ancho ni centro al nombre. Ancho para «Cantidad Comprada» —el
+       rótulo más largo desde el rename (#484)— más el cromo del desplegable.
+       `top: 50%` + `translateY` lo centra en el renglón sea cual sea el alto
+       exacto del desplegable. */
     .st-key-vap_serie_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_serie_modo) {
+        position: absolute !important;
+        left: 0 !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
         width: 176px !important;
+        z-index: 2 !important;
     }
     /* El hueco del nombre existe aunque esté VACÍO (sin foco): es un
-       `st.empty()`, y si colapsara a cero el toggle saltaría hacia arriba
-       al soltar el foco. La cabecera mide siempre lo mismo. */
+       `st.empty()`, y si colapsara a cero el renglón mediría menos. La
+       cabecera mide siempre lo mismo. */
     .st-key-vap_serie_hdr [data-testid="stMarkdownContainer"] {
         min-height: 17px !important;
     }

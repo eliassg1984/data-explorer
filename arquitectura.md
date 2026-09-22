@@ -37672,6 +37672,24 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        un texto comparten renglón, el que paga es el texto; elegí qué
        texto puede perder.**
 
+       **Matiz (2026-09-22):** «no se puede centrar si comparte fila»
+       vale sólo mientras el widget esté EN EL FLUJO. La serie de «Vs año
+       pasado» volvió a poner el toggle «Ver» en la fila del nombre —a
+       pedido: «el gráfico es muy corto verticalmente, subamos el selector
+       para que figure en la fila del título»— SIN descentrar el nombre:
+       el nombre ocupa el ancho entero de la tarjeta y el toggle va
+       superpuesto a la izquierda (`position: absolute`, fuera del flujo),
+       así que no le corre el centro. Un renglón menos, ~21px de vuelta a
+       la figura (174 → 195: `FRANJA_CTRL_SERIE`, que se queda en 45, deja
+       de sumarse a `FRANJA_NOMBRE_CASCADA`). El
+       precio: un nombre muy largo puede rozar el toggle por la izquierda
+       —el nombre trunca a 46 caracteres y se centra, así que sólo pasa si
+       el texto centrado llega hasta los 176px del toggle. Cuando el texto
+       centrado NO puede convivir con el control (porque el control va a la
+       DERECHA, donde el texto sí llega), la partición en dos renglones
+       sigue siendo la única salida — que es el caso de la cascada de acá
+       abajo. Ver `vap_serie_hdr` en `estilos/_80_cards.py`.
+
      - **EL REPARTO ENTRE RENGLONES NO SE DEDUCE DE SUS CAJAS.** Al
        recalibrar las tres franjas sumé lo que devolvía
        `getBoundingClientRect` de cada renglón —21 + 30 + 19 = 70— y las
@@ -40678,6 +40696,17 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      verificado en el navegador a 1366×768 en los tres modos (Valor,
      Cantidad, Precio) y a 3 y 12 meses: sin recortes, sin solapamientos.
      (2026-09-21.)
+
+     **Actualización (2026-09-22):** el toggle «Ver» volvió a la fila del
+     nombre —a pedido, «el gráfico es muy corto verticalmente»— así que
+     `vap_serie_hdr` dejó de ser `flex-direction: column` y es UN renglón
+     con el toggle superpuesto a la izquierda (`position: absolute`). El
+     nombre sigue centrado en la tarjeta porque el toggle salió del flujo
+     (ver el matiz de la #449). El presupuesto: la serie gasta sólo
+     `FRANJA_CTRL_SERIE` (se queda en 45, ahora el renglón compartido) sin
+     `FRANJA_NOMBRE_CASCADA`, y la figura subió de 174 a 195; el área de
+     trazo, de 108 a 121 (MEDIDO). Las dos tarjetas siguen terminando en la
+     misma línea (274px medidos). Verificado a 1366×768.
 
 488. **La selección por clic de `st.plotly_chart(on_select=...)` NO llega a
      las trazas de un `make_subplots`: para que un gráfico sea clickeable

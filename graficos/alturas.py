@@ -582,26 +582,30 @@ de leerse como una grilla — el mismo defecto que `COLUMNAS_DRILL` arregla en
 el eje horizontal."""
 
 FRANJA_CTRL_SERIE = 45
-"""Alto del RENGLÓN del toggle «Ver» que la SERIE de «Compra Vs Año Pasado»
-lleva bajo el nombre del ítem, más el hueco que Streamlit deja hasta la
-figura. MEDIDO en el navegador.
+"""Alto del ÚNICO renglón de cabecera que la SERIE de «Compra Vs Año
+Pasado» lleva encima de la figura —el nombre del ítem y el toggle «Ver»
+COMPARTEN fila— más el hueco que Streamlit deja hasta la figura. MEDIDO en
+el navegador.
 
-2026-09-21: era 47 y cubría el nombre Y «Ver» en la MISMA fila; hoy el
-nombre subió a su propio renglón (`FRANJA_NOMBRE_CASCADA`, centrado y azul
-como la cascada — regla #449) y esta constante cubre sólo la fila del
-toggle. El alto de la serie es `_ALTO_CONTENIDO_VAP − FRANJA_NOMBRE_CASCADA
-− FRANJA_CTRL_SERIE`, así que las dos se suman.
+2026-09-22: el toggle «Ver» volvió a la fila del nombre (a pedido: «el
+gráfico es muy corto verticalmente»), así que esta constante vuelve a
+cubrir la cabecera ENTERA y `FRANJA_NOMBRE_CASCADA` deja de restarse. El
+nombre sigue centrado en la tarjeta porque el toggle va superpuesto a la
+izquierda, fuera del flujo (`position: absolute`, ver el matiz de la regla
+#449). Entre el 2026-09-21 y esa fecha fueron DOS renglones (valía lo
+mismo, pero se restaba también `FRANJA_NOMBRE_CASCADA`). El alto de la
+serie es `_ALTO_CONTENIDO_VAP − FRANJA_CTRL_SERIE`.
 
-45 = desplegable 26 + su `gap: 2px` bajo el nombre + `margin-bottom` 0.3rem
-(4.8) + el `gap: 16px` que Streamlit deja hasta la figura. MEDIDO — si se
-toca el layout de `vap_serie_hdr` en `estilos/_80_cards.py`, se vuelve a
-medir la TARJETA (que tiene que dar lo mismo que la cascada), no este
-renglón suelto.
+45 = la cabecera (el desplegable manda con 26) + `margin-bottom` 0.3rem
+(4.8) + el `gap: 16px` que Streamlit deja hasta la figura. Es bookkeeping:
+lo que importa es que la TARJETA de la serie dé lo mismo que la cascada
+(medido: las dos, 274px). Si se toca el layout de `vap_serie_hdr` en
+`estilos/_80_cards.py`, se vuelve a medir la tarjeta, no este renglón.
 
 Ojo con el hermano: la tarjeta de la cascada NO lleva esta fila, así que
 su alto se calcula desde `_ALTO_CONTENIDO_VAP` y no desde el de la serie.
 Si se restara dos veces, las dos columnas dejarían de terminar en la misma
-línea. Ver `arquitectura.md` regla #445."""
+línea. Ver `arquitectura.md` reglas #445 y #449."""
 
 FRANJA_NOMBRE_CASCADA = 21
 """Alto del renglón con el NOMBRE del ítem que explica la cascada —negro,
