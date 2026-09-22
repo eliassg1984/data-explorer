@@ -36230,6 +36230,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-14.)
 
+     **(2026-09-21) Y después se sumaron las otras dos vistas por familia.**
+     Donde arriba dice «los de arriba siguen gobernando Mapa de calor,
+     Distribución y Tabla», ya quedó viejo: el Mapa de calor estrenó sus tres
+     filtros propios el 2026-09-15 (#444) y Distribución un filtro de Familia
+     propio el 2026-09-21 —las mismas cinco familias de entrada—, así que las
+     dos también reciben `d_sin_chips`. Distribución dejó de ir envuelta en
+     `_en_tarjeta` por lo mismo que el Mapa de calor: ese `_vacio` mira el `d`
+     post-chips que ya no usa, y con él un chip que vacía `d` escondería la
+     vista entera con su propio filtro adentro. Hoy el `d` post-chips sólo
+     alimenta `publicar_contexto_ia` y «Por fecha de corte» (la Tabla siempre
+     usó `df_f`, no `d`). El default de familias es la constante única
+     `FAMILIAS_DE_ENTRADA` de `_comun.py`, compartida por las tres vistas.
+
 426. **Un hijo de altura CERO no ocupa alto pero sí cobra el `gap`. Seis
      de ellos son 96px de página en blanco.** Reportado como «está muy
      abajo», con el CSS que propuso el modo diseño pegado en el mensaje.

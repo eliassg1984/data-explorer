@@ -15,18 +15,21 @@ from tema import (
     ADVERTENCIA, GRIS_BORDE, SERIE_PRINCIPAL, ERROR, EXITO, GRIS_TEXTO_SUAVE,
 )
 from graficos.base import (
-    _card, _wrap_cat,
+    _card, _wrap_cat, filtro_pills, sembrar_seleccion,
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
 # duplicar el cálculo de granularidad Semana/Mes (Corte tiene su propio
 # cálculo, ver _cortes_por_racha: no es calendario fijo, son rachas).
-from graficos.ajuste._comun import _fmt_corte, _layout_aj
+# FAMILIAS_DE_ENTRADA: la MISMA semilla de Cascada y Mapa de calor (constante
+# única — "alimentos, bebidas, vinos y embalajes"), para que las tres vistas
+# del bloque Visual abran con el mismo recorte de familias.
+from graficos.ajuste._comun import FAMILIAS_DE_ENTRADA, _fmt_corte, _layout_aj
 
 
 def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto,
                               col_codigo=None, col_cantidad=None, col_fecha=None,
-                              col_unidad=None):
+                              col_unidad=None, df_full=None):
     """Vista con toggle (Distribución / Histograma, `st.pills`) — cada una a
     ANCHO COMPLETO. Antes vivían a medias en `st.columns(2)`; esa mitad de
     ancho apretaba tanto el strip (categorías largas, se solapaban) como el
@@ -87,6 +90,26 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     sin rehacer el binning en pandas. Hasta esa fecha llevaba un overlay de
     `go.Scatter` invisible por analogía con el Heatmap (reglas #11 y #44),
     con `hoverinfo="skip"`, que no recibió nunca un clic."""
+    # Filtro de Familia PROPIO de la vista (2026-09-21): abre sembrado con
+    # FAMILIAS_DE_ENTRADA — las mismas cinco de Cascada y Mapa de calor. Con
+    # filtro propio, esta vista deja de pasar por los chips Área/Familia de
+    # arriba de la pila (los recibe como `d_sin_chips`), igual que sus
+    # hermanas del bloque Visual: filtrar dos veces por familia dejaría la
+    # vista mostrando la intersección de dos compartimentos con uno solo
+    # visible (regla #425). Va ANTES de `df_nz` para que las dos ramas
+    # (Distribución/Histograma) y el "sin ajustes" respeten el recorte. Las
+    # OPCIONES salen del parquet entero (`df_full`) y no del df ya recortado
+    # por la franja, así la lista de familias no cambia con el rango; la
+    # siembra sólo prende las que existen (`sembrar_seleccion` lo garantiza).
+    if col_familia and col_familia in df.columns:
+        _src_fam = (df_full if (df_full is not None
+                                and col_familia in df_full.columns) else df)
+        _opc_fam = sorted(_src_fam[col_familia].dropna().astype(str).unique().tolist())
+        sembrar_seleccion(pd.DataFrame({col_familia: _opc_fam}), col_familia,
+                          "ajuste_dist_filtro_familia", list(FAMILIAS_DE_ENTRADA))
+        df, _ = filtro_pills(df, col_familia, "ajuste_dist_filtro_familia",
+                             "Familia", valores=_opc_fam or None)
+
     grp = col_familia or col_area
 
     n_total = len(df)

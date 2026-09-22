@@ -200,16 +200,17 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     else:
         d = df_f
 
-    # Cascada y Mapa de calor NO pasan por estos chips: tienen los suyos
-    # adentro de su propia fila de controles (corte · Área acotada a las
-    # que movieron algo · Familia sembrada con cinco), la misma pieza para
-    # las dos — `graficos.ajuste._comun.estado_filtros_vista`. La Cascada
-    # estrenó los suyos el 2026-09-14 y el Mapa de calor el 2026-09-15, a
-    # pedido. Se guarda el df de acá, antes de recortar, porque filtrar dos
-    # veces dejaría la vista mostrando la intersección de dos
-    # compartimentos y sólo uno visible. Los chips de arriba siguen
-    # gobernando Distribución (y Por fecha de corte, en la otra pila).
-    # Ver arquitectura.md regla #425.
+    # Cascada, Mapa de calor y Distribución NO pasan por estos chips: tienen
+    # los suyos. Cascada y Mapa de calor traen la fila entera de tres (corte ·
+    # Área acotada a las que movieron algo · Familia sembrada con cinco), la
+    # misma pieza — `graficos.ajuste._comun.estado_filtros_vista`; la
+    # estrenaron el 2026-09-14/15, a pedido. Distribución sumó un filtro de
+    # Familia propio el 2026-09-21 (mismas cinco familias de entrada) y se
+    # sumó al mismo régimen. Se guarda el df de acá, antes de recortar, porque
+    # filtrar dos veces dejaría la vista mostrando la intersección de dos
+    # compartimentos y sólo uno visible. De los chips de arriba hoy sólo
+    # cuelga «Por fecha de corte» (en la otra pila). Ver arquitectura.md
+    # regla #425.
     d_sin_chips = d
 
     if area_sel and col_area and col_area in d.columns:
@@ -278,10 +279,18 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 col_cantidad=col_cantidad, col_unidad=col_unidad)
 
     def _dib_distribucion():
-        _en_tarjeta("distribucion", lambda: _graf_distribucion_ajuste(
-            d, col_familia, col_area, col_ajuste_val, col_producto,
-            col_codigo=col_codigo, col_cantidad=col_cantidad,
-            col_fecha=col_fecha, col_unidad=col_unidad))
+        """Distribución: tarjeta a mano y con `d_sin_chips`, como el Mapa de
+        calor. Desde el 2026-09-21 tiene filtro de Familia propio, así que NO
+        usa `_en_tarjeta`: su `_vacio` mira el df de los chips de arriba —que
+        esta vista ya no usa— y con él un chip que deja `d` sin filas
+        escondería la vista ENTERA, su propio filtro incluido. La vista avisa
+        sola cuando se queda sin datos; la key de la tarjeta se conserva (de
+        su prefijo cuelga el clamp de una pantalla de estilos/_80_cards.py)."""
+        with st.container(border=True, key="ajuste_graf_card_izq_distribucion"):
+            _graf_distribucion_ajuste(
+                d_sin_chips, col_familia, col_area, col_ajuste_val, col_producto,
+                col_codigo=col_codigo, col_cantidad=col_cantidad,
+                col_fecha=col_fecha, col_unidad=col_unidad, df_full=df_full)
 
     def _dib_evolucion():
         _en_tarjeta("evolucion", lambda: _graf_evolucion_ajuste(
