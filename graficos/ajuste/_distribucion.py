@@ -1,6 +1,10 @@
 """graficos.ajuste._distribucion - vista Distribucion.
 
-El toggle (`st.pills`) tiene TRES modos, cada uno responde otra pregunta:
+La fila de encabezado (título · modo · familia, 2026-09-22) lleva el modo
+como `st.selectbox` y la familia como `st.popover`, los dos "líneas
+desplegables" con el trigger minimalista de Cascada/Mapa (`css_filtros_vista`)
+en vez de botoneras. El modo tiene TRES valores, cada uno responde otra
+pregunta:
   · Distribucion — strip por familia (caja/lazo -> detalle). ¿Como se
     reparten los desvios dentro de cada familia?
   · Histograma — frecuencia del ajuste valorizado. ¿Que FORMA tiene la
@@ -25,8 +29,9 @@ import streamlit as st
 
 from tema import (
     ACENTO, ADVERTENCIA, GRIS_BORDE, GRIS_TEXTO_MEDIO, SERIE_PRINCIPAL,
-    ERROR, EXITO, GRIS_TEXTO_SUAVE,
+    ERROR, EXITO, GRIS_TEXTO_SUAVE, TEXTO_PRINCIPAL,
 )
+from graficos import alturas
 from graficos.base import (
     _card, _wrap_cat, filtro_pills, sembrar_seleccion,
 )
@@ -37,7 +42,36 @@ from graficos.base import (
 # FAMILIAS_DE_ENTRADA: la MISMA semilla de Cascada y Mapa de calor (constante
 # única — "alimentos, bebidas, vinos y embalajes"), para que las tres vistas
 # del bloque Visual abran con el mismo recorte de familias.
-from graficos.ajuste._comun import FAMILIAS_DE_ENTRADA, _fmt_corte, _layout_aj
+from graficos.ajuste._comun import (
+    FAMILIAS_DE_ENTRADA, css_filtros_vista, _fmt_corte, _layout_aj,
+)
+
+
+# Alto de la figura, más largo que el default (APOYO=380) a pedido
+# (2026-09-22). `con_franja` reserva la fila de encabezado (título + los dos
+# desplegables) y topa en PROTAGONISTA (430), el máximo que entra en una
+# tarjeta de una pantalla. NO es un literal: sale de `alturas` (regla del
+# presupuesto vertical), así que `test_graficos.py` no lo marca.
+_ALTO_FIG = alturas.con_franja(alturas.PROTAGONISTA, alturas.FRANJA_UNA_LINEA)
+
+# CSS del encabezado: el título de la vista y el aplanado del selectbox de
+# modo a "línea" (para que combine con el trigger minimalista del popover de
+# familia, que lo pone `css_filtros_vista`). Se inyecta cada render, sin
+# guard de "una sola vez" (regla #59).
+_CSS_ENCABEZADO = f"""
+    .ajdist-titulo {{ font-size: 15px; font-weight: 500;
+        color: {TEXTO_PRINCIPAL}; line-height: 2.2;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    /* El `st.selectbox` de modo es un `react-aria-ComboBox` (Streamlit
+       reciente), NO un baseweb select: se aplana su control a una "línea"
+       —sin borde ni fondo— para que combine con el trigger minimalista del
+       popover de familia. Verificado el selector en el navegador. */
+    div[class*="st-key-ajuste_dist_vista"] .react-aria-ComboBox > div {{
+        border-color: transparent !important; background: transparent !important;
+        box-shadow: none !important; min-height: 0 !important; }}
+    div[class*="st-key-ajuste_dist_vista"] .react-aria-ComboBox input {{
+        font-size: 11.5px !important; }}
+"""
 
 
 _PARETO_TOP_N = 8
@@ -115,7 +149,7 @@ def _fig_pareto_ajuste(df, col_ajuste_val, col_producto, top_n=_PARETO_TOP_N):
                   annotation_text="80% del faltante",
                   annotation_position="top left")
     fig.update_layout(**_layout_aj(
-        title="Dónde se concentra el faltante",
+        height=_ALTO_FIG,
         showlegend=False,
         yaxis=dict(showticklabels=True, tickprefix="S/ ", tickformat=",.0f",
                    gridcolor=GRIS_BORDE),
@@ -145,7 +179,7 @@ def _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
     fig.update_layout(dragmode="pan")
     fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
-    with _card("dist_pareto", "Pareto de faltantes"):
+    with _card("dist_pareto", ""):
         _ev = st.plotly_chart(
             fig, use_container_width=True, key="ajuste_dist_pareto",
             on_select="rerun", selection_mode="points",
@@ -178,11 +212,11 @@ def _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
 def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto,
                               col_codigo=None, col_cantidad=None, col_fecha=None,
                               col_unidad=None, df_full=None):
-    """Vista con toggle (Distribución / Histograma, `st.pills`) — cada una a
-    ANCHO COMPLETO. Antes vivían a medias en `st.columns(2)`; esa mitad de
-    ancho apretaba tanto el strip (categorías largas, se solapaban) como el
-    histograma (bins finos, difíciles de leer). Ambas ramas excluyen los
-    ajustes en cero.
+    """Tres modos (Distribución / Histograma / Valor (Pareto)), elegidos en
+    el `st.selectbox` de la fila de encabezado, cada uno a ANCHO COMPLETO.
+    Antes vivían a medias en `st.columns(2)`; esa mitad de ancho apretaba
+    tanto el strip (categorías largas, se solapaban) como el histograma (bins
+    finos, difíciles de leer). Las tres ramas excluyen los ajustes en cero.
 
     **Distribución** = strip plot coloreado (faltante/sobrante) por
     familia/área; si no hay columna de grupo, cae a un histograma de
@@ -238,25 +272,56 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     sin rehacer el binning en pandas. Hasta esa fecha llevaba un overlay de
     `go.Scatter` invisible por analogía con el Heatmap (reglas #11 y #44),
     con `hoverinfo="skip"`, que no recibió nunca un clic."""
-    # Filtro de Familia PROPIO de la vista (2026-09-21): abre sembrado con
-    # FAMILIAS_DE_ENTRADA — las mismas cinco de Cascada y Mapa de calor. Con
-    # filtro propio, esta vista deja de pasar por los chips Área/Familia de
-    # arriba de la pila (los recibe como `d_sin_chips`), igual que sus
-    # hermanas del bloque Visual: filtrar dos veces por familia dejaría la
-    # vista mostrando la intersección de dos compartimentos con uno solo
-    # visible (regla #425). Va ANTES de `df_nz` para que las dos ramas
-    # (Distribución/Histograma) y el "sin ajustes" respeten el recorte. Las
-    # OPCIONES salen del parquet entero (`df_full`) y no del df ya recortado
-    # por la franja, así la lista de familias no cambia con el rango; la
-    # siembra sólo prende las que existen (`sembrar_seleccion` lo garantiza).
-    if col_familia and col_familia in df.columns:
+    # ── FILA DE ENCABEZADO: título · modo · familia, todo en una línea ──
+    # (2026-09-22, a pedido). El modo y la familia dejaron de ser botoneras y
+    # pasaron a "líneas desplegables": el modo es un `st.selectbox`; la
+    # familia, un `st.popover` con las pills adentro. Los dos con el trigger
+    # minimalista de Cascada/Mapa (`css_filtros_vista`), así que el rótulo ES
+    # el valor vigente. El título vive en esta fila —los gráficos ya no llevan
+    # `title=`— y la figura de abajo gana alto (`_ALTO_FIG`).
+    st.markdown(f"<style>{css_filtros_vista('ajdist_ctrl_', 'ajdist_nolist_')}"
+                f"{_CSS_ENCABEZADO}</style>", unsafe_allow_html=True)
+
+    # Semilla y opciones de familia. Del parquet ENTERO (`df_full`) para que
+    # la lista no cambie con el rango; la siembra sólo prende las que existen.
+    # Con filtro propio, la vista NO pasa por los chips Área/Familia de arriba
+    # (recibe `d_sin_chips`): filtrar dos veces daría la intersección de dos
+    # compartimentos con uno solo visible (regla #425).
+    _tiene_fam = bool(col_familia and col_familia in df.columns)
+    _opc_fam = []
+    if _tiene_fam:
         _src_fam = (df_full if (df_full is not None
                                 and col_familia in df_full.columns) else df)
         _opc_fam = sorted(_src_fam[col_familia].dropna().astype(str).unique().tolist())
         sembrar_seleccion(pd.DataFrame({col_familia: _opc_fam}), col_familia,
                           "ajuste_dist_filtro_familia", list(FAMILIAS_DE_ENTRADA))
-        df, _ = filtro_pills(df, col_familia, "ajuste_dist_filtro_familia",
-                             "Familia", valores=_opc_fam or None)
+
+    _c_tit, _c_modo, _c_fam = st.columns([3, 1.5, 1.6],
+                                         vertical_alignment="center")
+    with _c_modo:
+        _vista = st.selectbox(
+            "Vista", ["Distribución", "Histograma", "Valor (Pareto)"],
+            key="ajuste_dist_vista", label_visibility="collapsed",
+        ) or "Distribución"
+    # El rótulo del popover ES la selección vigente (lag de un rerun, igual
+    # que Cascada). El widget vive DENTRO del popover con el patrón #467-safe
+    # de `filtro_pills` (`seleccion_en_panel`), y filtra `df` en la misma
+    # pasada leyendo `session_state`, esté el panel abierto o cerrado.
+    with _c_fam.container(key="ajdist_ctrl_familia"):
+        _sel = [f for f in (st.session_state.get("ajuste_dist_filtro_familia")
+                            or []) if f in _opc_fam]
+        _et = ("todas las familias" if not _sel
+               else f"{len(_sel)} familias" if len(_sel) > 1 else _sel[0].lower())
+        with st.popover(f":material/category: {_et}", use_container_width=True):
+            if _tiene_fam:
+                df, _ = filtro_pills(df, col_familia, "ajuste_dist_filtro_familia",
+                                     "Familia", valores=_opc_fam or None)
+    with _c_tit:
+        _TITULO = {"Distribución": "Distribución del ajuste",
+                   "Histograma": "Histograma de frecuencias",
+                   "Valor (Pareto)": "Dónde se concentra el faltante"}.get(_vista, "")
+        st.markdown(f'<div class="ajdist-titulo">{_TITULO}</div>',
+                    unsafe_allow_html=True)
 
     grp = col_familia or col_area
 
@@ -267,12 +332,6 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     if df_nz.empty:
         st.info("Ningún producto tuvo ajuste distinto de cero en este rango.")
         return
-
-    _vista = st.pills(
-        "Vista distribución", ["Distribución", "Histograma", "Valor (Pareto)"],
-        default="Distribución", key="ajuste_dist_vista",
-        label_visibility="collapsed",
-    ) or "Distribución"
 
     if _vista == "Distribución":
         _es_strip = bool(grp and grp in df_nz.columns)
@@ -314,13 +373,13 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             fig = px.strip(
                 d, x=grp, y=col_ajuste_val, color="_signo",
                 color_discrete_map={"Faltante": ERROR, "Sobrante": EXITO},
-                title=f"Distribución del ajuste por {grp}",
                 labels={col_ajuste_val: "Ajuste S/", grp: "", "_signo": ""},
                 custom_data=_cd_cols,
             )
             fig.add_hline(y=0, line_dash="dot", line_color=GRIS_TEXTO_SUAVE,
                           annotation_text="Cero", annotation_position="top right")
             fig.update_layout(**_layout_aj(
+                height=_ALTO_FIG,
                 legend=dict(orientation="h", yanchor="bottom", y=1.02,
                             xanchor="right", x=1, title=None),
                 xaxis=dict(tickangle=-30, gridcolor=GRIS_BORDE),
@@ -353,12 +412,12 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             # — ver docstring. `y=` en vez de `x=` es lo que voltea px.histogram.
             fig = px.histogram(
                 df_nz, y=col_ajuste_val, nbins=30,
-                title="Distribución de ajustes valorizados",
                 color_discrete_sequence=[SERIE_PRINCIPAL],
             )
             fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
                           annotation_text="Cero")
             fig.update_layout(**_layout_aj(
+                height=_ALTO_FIG,
                 yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
                 xaxis=dict(gridcolor=GRIS_BORDE),
             ))
@@ -380,7 +439,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         else:
             _cfg_strip["displayModeBar"] = False
 
-        with _card("dist_grupo", "Distribución por grupo"):
+        with _card("dist_grupo", ""):
             _evento_dist = st.plotly_chart(
                 fig, use_container_width=True, key="ajuste_dist_strip",
                 on_select="rerun" if _hay_prod else "ignore",
@@ -450,7 +509,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         fig2.add_vline(x=media, line_dash="dot", line_color=ADVERTENCIA, line_width=2)
         fig2.add_vline(x=mediana, line_dash="dash", line_color=EXITO, line_width=2)
         fig2.update_layout(**_layout_aj(
-            title="Histograma de frecuencias",
+            height=_ALTO_FIG,
             xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
                        title="Ajuste Valorizado", range=[p_lo, p_hi]),
             yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
@@ -473,7 +532,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         # tampoco dibuja el botón de pan), y shift+clic ya cubre un tramo.
         _cfg_hist = {"displaylogo": False, "displayModeBar": False}
 
-        with _card("dist_hist", "Histograma"):
+        with _card("dist_hist", ""):
             st.markdown(
                 f"<div style='display:flex;gap:16px;font-size:11px;"
                 f"font-weight:600;margin:0 0 4px 2px'>"

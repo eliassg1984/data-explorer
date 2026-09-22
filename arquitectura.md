@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-489 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+490 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (171)
+**CSS y estilos** (172)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -205,6 +205,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#477** — Achicar un st.selectbox por su .react-aria-ComboBox NO achica lo que se ve: la caja con el…
 - **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
 - **#486** — El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro (Faltantes | Sobrantes, y el…
+- **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
 
 **Layout y alturas** (68)
 
@@ -451,7 +452,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (134)
+**Streamlit** (135)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -587,6 +588,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
 - **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
 - **#488** — La selección por clic de st.plotly_chart(on_select=...) NO llega a las trazas de un…
+- **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -40749,6 +40751,35 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Respeta el filtro de Familia propio de la vista (opera sobre el
      `df_nz` ya recortado, #425). El histograma no se tocó: es otra
      pregunta, y las tres conviven en el mismo toggle. (2026-09-22.)
+
+490. **Un `st.selectbox` reciente NO es un baseweb select: es un
+     `react-aria-ComboBox` basado en `<input>`, y aplanarlo o leer su valor
+     por el camino viejo falla EN SILENCIO.** Salió al rehacer la fila de
+     encabezado de Ajuste › Distribución (2026-09-22, a pedido): el modo
+     (Distribución/Histograma/Pareto) y la familia dejaron de ser botoneras
+     y pasaron a «líneas desplegables» —el modo un `st.selectbox`, la familia
+     un `st.popover` con las pills adentro—, las dos con el trigger
+     minimalista de `css_filtros_vista`, todo en la misma fila del título
+     (`st.columns([3, 1.5, 1.6])`), y la figura más alta
+     (`alturas.con_franja(PROTAGONISTA, FRANJA_UNA_LINEA)` = 430; el título
+     salió de las figuras y vive en la fila).
+
+     Dos trampas MEDIDAS en el navegador, las dos del cambio de Streamlit:
+
+     - **Aplanarlo.** El CSS `div[data-baseweb="select"]` no matchea nada:
+       el control es `div[class*="st-key-<key>"] .react-aria-ComboBox > div`
+       (ahí viven el borde y el fondo que hay que hacer transparentes). Con
+       el selector viejo el selectbox se queda con su caja mientras el
+       popover de al lado ya es una línea, y no hay error que lo cante.
+     - **Leer su valor.** El valor elegido está en `input.value`, no en el
+       `innerText` del contenedor (que da ""): es un `<input>` con
+       `placeholder="Choose an option"`. Un chequeo por texto lo da por
+       vacío aunque haya selección. (El `_vista` de Python sí llega bien;
+       lo que engaña es inspeccionar el DOM.)
+
+     Es pariente de la #325 y la #448: un cambio que no toca la lógica
+     —acá, una versión de Streamlit— cambia el DOM, y los tests, que sólo
+     construyen la figura, no lo ven. Se verifica en el navegador. (2026-09-22.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
