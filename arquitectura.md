@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-490 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+491 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (172)
 
@@ -452,7 +452,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (135)
+**Streamlit** (136)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -589,6 +589,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
 - **#488** — La selección por clic de st.plotly_chart(on_select=...) NO llega a las trazas de un…
 - **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
+- **#491** — Un helper que abre un st.container(key=...) con la key FIJA sólo sobrevive si se lo llama UNA…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -756,7 +757,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (91)
+**Decisiones de diseño y UX** (92)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -849,6 +850,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
 - **#486** — El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro (Faltantes | Sobrantes, y el…
 - **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
+- **#491** — Un helper que abre un st.container(key=...) con la key FIJA sólo sobrevive si se lo llama UNA…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -40780,6 +40782,36 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Es pariente de la #325 y la #448: un cambio que no toca la lógica
      —acá, una versión de Streamlit— cambia el DOM, y los tests, que sólo
      construyen la figura, no lo ven. Se verifica en el navegador. (2026-09-22.)
+
+491. **Un helper que abre un `st.container(key=...)` con la key FIJA sólo
+     sobrevive si se lo llama UNA vez por corrida — el día que se lo llama
+     dos, revienta con `StreamlitDuplicateElementKey`, y los tests no lo
+     ven.** `graficos.base.compartimento_filtros` clavaba
+     `key="chips_ajuste_tabla"` (y `chipwrap_filtros_on|off`) desde que nació
+     el 2026-08-31: era el único compartimento visible por vista, así que la
+     colisión era latente. Ajuste lo llama DOS veces —los chips de arriba de
+     la pila (`graficos/ajuste/__init__.py`, siempre) y los de la sección
+     Tabla (`app.py::_filtros_chips_ajuste_tabla`, vía
+     `_cb_chips_en_navegador`)—, y cuando la pila construyó la Tabla en la
+     misma corrida que los de arriba, las dos keys chocaron. Se manifestó en
+     Cloud como un `StreamlitDuplicateElementKey` de una sola línea en
+     `?vista=distribucion` (la traza moría en `_dib_tabla`), no en local:
+     `AppTest` construye cada compartimento por separado y nunca los dos
+     juntos.
+
+     El arreglo (2026-09-22, opción mínima a pedido): `compartimento_filtros`
+     toma `key`/`wrap_key`, con el default `chips_ajuste_tabla` — así TODOS
+     los demás llamadores (Compras, Inventario, Movimientos, Ventas y los
+     chips de arriba de Ajuste) siguen en la franja sin tocar una línea de
+     CSS ni de estilos —, y sólo el compartimento de la Tabla pide una key
+     propia (`chips_tabla_grid`), con lo que cae INLINE en su tarjeta en vez
+     de pelear por el hueco fijo de la franja. Verificado en el navegador:
+     `franja=1`, `tabla=1`, sin excepción, con las dos secciones construidas
+     a la vez. La causa raíz de fondo (dos sets de filtros distintos que
+     quieren el ÚNICO botón «Filtros» de la franja) sigue ahí: la opción C
+     —que la franja muestre el set de la vista activa— quedó pendiente.
+     Pariente de la #163 (keys que se comparten por accidente) y la #456
+     (un mismo elemento dibujado dos veces por corrida).
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

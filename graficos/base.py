@@ -162,7 +162,9 @@ def contar_filtros(*claves, neutro="Todos"):
 
 
 @contextmanager
-def compartimento_filtros(n_activos=0, etiqueta="Filtros"):
+def compartimento_filtros(n_activos=0, etiqueta="Filtros",
+                          key="chips_ajuste_tabla",
+                          wrap_key="chipwrap_filtros"):
     """El compartimento de filtros de la franja: UN popover a su derecha.
 
     `n_activos` sale de `contar_filtros()` y se pinta como badge — es lo unico
@@ -172,11 +174,20 @@ def compartimento_filtros(n_activos=0, etiqueta="Filtros"):
     contrato de key que ya usaban los chips sueltos, asi que el estado activo
     (subrayado de acento, `estilos/_50_fecha.py`) se hereda sin escribir una
     regla nueva.
+
+    `key`/`wrap_key` existen porque las keys eran FIJAS y Ajuste lo llama DOS
+    veces por corrida —los chips de arriba de la pila y los de la sección
+    Tabla—: cuando la pila construía las dos a la vez, `st.container(key=...)`
+    reventaba con `StreamlitDuplicateElementKey` (arquitectura.md #163/#456).
+    El default es la key de la franja (la que estiliza `_40_ajuste_franja.py`),
+    así que TODOS los demás llamadores siguen en la franja sin cambiar nada;
+    sólo el compartimento de la Tabla pide una key propia y cae inline en su
+    tarjeta.
     """
     _lbl = (f":material/filter_alt: {etiqueta} :violet-badge[{n_activos}]"
             if n_activos else f":material/filter_alt: {etiqueta}")
-    with st.container(key="chips_ajuste_tabla"):
-        with st.container(key=f"chipwrap_filtros_{'on' if n_activos else 'off'}"):
+    with st.container(key=key):
+        with st.container(key=f"{wrap_key}_{'on' if n_activos else 'off'}"):
             with st.popover(_lbl, use_container_width=True):
                 yield
 

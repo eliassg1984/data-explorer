@@ -1095,9 +1095,15 @@ def _filtros_chips_ajuste_tabla(df_in):
     col_ajval = buscar_columna(df_in, "Ajuste Valorizado", "AJUSTE VALORIZADO")
 
     modelo = {}
+    # Key propia: este compartimento NO va a la franja (esa es la de los chips
+    # de arriba de la pila, línea ~184 de graficos/ajuste). Comparten el
+    # default `chips_ajuste_tabla` reventaba con DuplicateElementKey cuando la
+    # pila construía la sección Tabla y los filtros de arriba en la misma
+    # corrida. Con key propia, éste cae inline en la tarjeta de la Tabla.
     with compartimento_filtros(contar_filtros(
             "ajuste_tabla_filtro_area", "ajuste_tabla_filtro_familia",
-            "ajuste_tabla_filtro_ajuste", "ajuste_tabla_filtro_ajusteval")):
+            "ajuste_tabla_filtro_ajuste", "ajuste_tabla_filtro_ajusteval"),
+            key="chips_tabla_grid", wrap_key="chipwrap_tabla_grid"):
         df_in, _sel = filtro_pills(df_in, col_area,
                                    "ajuste_tabla_filtro_area", "Área")
         if _sel:
