@@ -28,13 +28,20 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import (
-    ACENTO, ADVERTENCIA, GRIS_BORDE, GRIS_TEXTO_MEDIO, SERIE_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO, ADVERTENCIA, AJUSTE_NEG, AJUSTE_NEG_TEXTO,
+    GRIS_BORDE, GRIS_TEXTO_MEDIO, SERIE_PRINCIPAL,
     ERROR, EXITO, GRIS_TEXTO_SUAVE, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
-    _card, _wrap_cat, filtro_pills, sembrar_seleccion,
+    _card, _es_movil, _wrap_cat, filtro_pills, sembrar_seleccion,
 )
+# Las tablas de la derecha usan las MISMAS grillas de desglose que la Cascada
+# y el Mapa de calor (regla #483): producto · (cantidad) · valor, con barra de
+# severidad y fila TOTAL. `_alto_grilla`/`_atar_alto` fijan el alto (tope 6
+# filas, a pedido).
+from graficos.ajuste._cascada import _alto_grilla, _atar_alto
+from tablas.ajuste_familias import renderizar_desglose_ajuste
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
 # duplicar el cálculo de granularidad Semana/Mes (Corte tiene su propio
@@ -108,6 +115,50 @@ def _forzar_ancho(card_slug, ancho):
         f"div[class*='st-key-chartcard_{card_slug}'] [data-testid='stFullScreenFrame']"
         f"{{width:{int(ancho)}px !important;}}</style>",
         unsafe_allow_html=True)
+
+
+def _rgba(color, alfa=0.35):
+    """`#rrggbb`/`rgb(...)` -> `rgba(...)` con la alfa dada. Igual que el helper
+    del Mapa de calor: la barra de severidad va translúcida."""
+    if color.startswith("#"):
+        _h = color.lstrip("#")
+        _r, _g, _b = (int(_h[i:i + 2], 16) for i in (0, 2, 4))
+    else:
+        _dentro = color[color.index("(") + 1:color.index(")")]
+        _r, _g, _b = (int(float(_n)) for _n in _dentro.split(","))
+    return f"rgba({_r},{_g},{_b},{alfa})"
+
+
+def _grilla_desglose(df_std, key, color_barra, color_texto):
+    """Tabla de la columna derecha, con el ESTILO de las de la Cascada/Mapa de
+    calor (regla #483): grilla de desglose producto · (cantidad) · valor, con
+    una barra de severidad detrás del valor y una fila TOTAL al pie. Muestra
+    hasta 6 filas de cuerpo; el resto scrollea por dentro (a pedido,
+    2026-09-22). `df_std` trae 'producto', 'valor' y, opcional,
+    'cantidad'/'__um' (la unidad viaja oculta, como en el Mapa de calor)."""
+    tp = df_std.copy()
+    tp["producto"] = tp["producto"].astype(str)
+    tp["valor"] = pd.to_numeric(tp["valor"], errors="coerce").fillna(0.0)
+    _has_cant = "cantidad" in tp.columns
+    if _has_cant:
+        tp["cantidad"] = pd.to_numeric(tp["cantidad"], errors="coerce").fillna(0.0)
+        if "__um" not in tp.columns:
+            tp["__um"] = ""
+        tp["__um"] = tp["__um"].fillna("").astype(str)
+    _mx = float(tp["valor"].abs().max()) or 1.0
+    tp["__barpct"] = (tp["valor"].abs() / _mx * 100).clip(lower=4)
+    tp["__sel"] = False
+    _cols = [("producto", "Producto", "nombre")]
+    if _has_cant:
+        _cols.append(("cantidad", "Cantidad", "cantidad"))
+    _cols.append(("valor", "Valor", "total"))
+    # +1 por la fila TOTAL fija, como la Cascada; el cuerpo topa en 6.
+    _alto = _alto_grilla(min(6, max(1, len(tp))) + 1)
+    _atar_alto(key, _alto)
+    renderizar_desglose_ajuste(
+        tp, _cols, _alto, key, movil=_es_movil(),
+        barra=("valor", _rgba(color_barra), color_texto),
+        total={"producto": "TOTAL", "valor": float(tp["valor"].sum())})
 
 
 _PARETO_TOP_N = 8
@@ -239,20 +290,19 @@ def _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
     _sel = df_nz[df_nz[col_producto].astype(str).isin([str(x) for x in _prods])]
     if _sel.empty:
         return None
-    _det = pd.DataFrame({"Producto": _sel[col_producto].astype(str)})
-    if col_area and col_area in _sel.columns:
-        _det["Área"] = _sel[col_area].astype(str)
-    _det["Ajuste S/"] = _sel[col_ajuste_val]
+    _det = pd.DataFrame({
+        "producto": _sel[col_producto].astype(str),
+        "valor": _sel[col_ajuste_val],
+    })
     if col_cantidad and col_cantidad in _sel.columns:
-        _det["Cantidad"] = _sel[col_cantidad]
-    if col_fecha and col_fecha in _sel.columns:
-        _f = pd.to_datetime(_sel[col_fecha], errors="coerce")
-        _det["Corte"] = _f.map(lambda x: _fmt_corte(x) if pd.notna(x) else "")
-    _det = _det.sort_values("Ajuste S/")
-    _tot = float(_det["Ajuste S/"].sum())
-    _fmt = _det.copy()
-    _fmt["Ajuste S/"] = _fmt["Ajuste S/"].map(lambda v: f"S/ {v:,.2f}")
-    return (f"{len(_det)} líneas · ajuste neto S/ {_tot:,.2f}", _fmt)
+        _det["cantidad"] = _sel[col_cantidad]
+        if col_unidad and col_unidad in _sel.columns:
+            _det["__um"] = _sel[col_unidad].astype(str)
+    _det = (_det.assign(_a=pd.to_numeric(_det["valor"], errors="coerce").abs())
+            .sort_values("_a", ascending=False).drop(columns="_a"))
+    _tot = float(pd.to_numeric(_det["valor"], errors="coerce").sum())
+    return (f"{len(_det)} líneas · ajuste neto S/ {_tot:,.2f}",
+            _det, AJUSTE_NEG, AJUSTE_NEG_TEXTO)
 
 
 def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto,
@@ -549,24 +599,23 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             if _hay_prod:
                 _puntos = ((_evento_dist or {}).get("selection", {}) or {}).get("points", [])
                 if _puntos:
+                    _tiene_cant = bool(col_cantidad and col_cantidad in d.columns)
                     _filas = []
                     for _p in _puntos:
                         _cd = _p.get("customdata") or []
-                        _filas.append({
-                            "Producto": _cd[0] if len(_cd) > 0 else "",
-                            grp: _p.get("x"),
-                            "Ajuste S/": _p.get("y"),
-                            "Cantidad": _cd[3] if len(_cd) > 3 else None,
-                            "Corte": _cd[5] if len(_cd) > 5 else "",
-                        })
-                    _det = pd.DataFrame(_filas).sort_values("Ajuste S/")
-                    _total = float(_det["Ajuste S/"].sum())
-                    _det_fmt = _det.copy()
-                    _det_fmt["Ajuste S/"] = _det_fmt["Ajuste S/"].map(
-                        lambda v: f"S/ {v:,.2f}")
+                        _row = {"producto": _cd[0] if len(_cd) > 0 else "",
+                                "valor": _p.get("y")}
+                        if _tiene_cant:
+                            _row["cantidad"] = _cd[3] if len(_cd) > 3 else None
+                            _row["__um"] = (_cd[4] if len(_cd) > 4 else "").strip()
+                        _filas.append(_row)
+                    _det = pd.DataFrame(_filas)
+                    _det = (_det.assign(_a=_det["valor"].abs())
+                            .sort_values("_a", ascending=False).drop(columns="_a"))
+                    _total = float(pd.to_numeric(_det["valor"], errors="coerce").sum())
                     _detalle = (
                         f"{len(_det)} seleccionados · ajuste neto S/ {_total:,.2f}",
-                        _det_fmt)
+                        _det, ACENTO, ACENTO_TEXTO)
 
         elif _vista == "Histograma":
             media   = float(df_nz[col_ajuste_val].mean())
@@ -658,24 +707,21 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                                if 0 <= int(i) < len(d_hist)})
                 _sel_hist = d_hist.iloc[_idx]
                 if not _sel_hist.empty:
-                    _det2 = pd.DataFrame({"Producto": _sel_hist[col_producto]})
-                    if grp and grp in _sel_hist.columns:
-                        _det2[grp] = _sel_hist[grp]
-                    _det2["Ajuste S/"] = _sel_hist[col_ajuste_val]
+                    _det2 = pd.DataFrame({
+                        "producto": _sel_hist[col_producto].astype(str),
+                        "valor": _sel_hist[col_ajuste_val],
+                    })
                     if col_cantidad and col_cantidad in _sel_hist.columns:
-                        _det2["Cantidad"] = _sel_hist[col_cantidad]
-                    if col_fecha and col_fecha in _sel_hist.columns:
-                        _fecha_dt2 = pd.to_datetime(_sel_hist[col_fecha], errors="coerce")
-                        _det2["Corte"] = _fecha_dt2.map(
-                            lambda x: _fmt_corte(x) if pd.notna(x) else "")
-                    _det2 = _det2.sort_values("Ajuste S/")
-                    _total2 = float(_det2["Ajuste S/"].sum())
-                    _det2_fmt = _det2.copy()
-                    _det2_fmt["Ajuste S/"] = _det2_fmt["Ajuste S/"].map(
-                        lambda v: f"S/ {v:,.2f}")
+                        _det2["cantidad"] = _sel_hist[col_cantidad]
+                        if col_unidad and col_unidad in _sel_hist.columns:
+                            _det2["__um"] = _sel_hist[col_unidad].astype(str)
+                    _det2 = (_det2.assign(
+                                 _a=pd.to_numeric(_det2["valor"], errors="coerce").abs())
+                             .sort_values("_a", ascending=False).drop(columns="_a"))
+                    _total2 = float(pd.to_numeric(_det2["valor"], errors="coerce").sum())
                     _detalle = (
                         f"{len(_det2)} seleccionados · ajuste neto S/ {_total2:,.2f}",
-                        _det2_fmt)
+                        _det2, ACENTO, ACENTO_TEXTO)
 
         else:  # "Valor (Pareto)"
             _detalle = _pareto_valor(
@@ -693,8 +739,8 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             _hay_tabla = False
             if _detalle is not None:
                 st.caption(_detalle[0])
-                st.dataframe(_detalle[1], hide_index=True,
-                             use_container_width=True)
+                _grilla_desglose(_detalle[1], "ajdist_grid_det",
+                                 _detalle[2], _detalle[3])
                 _hay_tabla = True
             if not _es_pareto and col_producto and col_producto in df.columns:
                 umbral = float(df[col_ajuste_val].quantile(0.05))
@@ -704,18 +750,13 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                         f"**⚠️ Productos en el 5% inferior del ajuste "
                         f"(< S/ {umbral:,.2f})**"
                     )
-                    cols_tabla = [col_producto, col_ajuste_val]
-                    for c in (grp,):
-                        if c and c in outliers.columns and c not in cols_tabla:
-                            cols_tabla.append(c)
-                    out_df = (outliers[cols_tabla]
-                              .sort_values(col_ajuste_val)
-                              .head(10)
-                              .copy())
-                    out_df[col_ajuste_val] = out_df[col_ajuste_val].map(
-                        lambda v: f"S/ {v:,.2f}"
-                    )
-                    st.dataframe(out_df, hide_index=True, use_container_width=True)
+                    _df5 = pd.DataFrame({
+                        "producto": outliers[col_producto].astype(str),
+                        "valor": pd.to_numeric(outliers[col_ajuste_val],
+                                               errors="coerce"),
+                    }).sort_values("valor").head(15)
+                    _grilla_desglose(_df5, "ajdist_grid_5pct",
+                                     AJUSTE_NEG, AJUSTE_NEG_TEXTO)
                     _hay_tabla = True
             if not _hay_tabla:
                 st.caption("Seleccioná en el gráfico para ver el detalle acá.")

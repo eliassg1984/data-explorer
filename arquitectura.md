@@ -761,7 +761,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (92)
+**Decisiones de diseño y UX** (93)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -855,6 +855,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#486** — El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro (Faltantes | Sobrantes, y el…
 - **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
 - **#491** — Un helper que abre un st.container(key=...) con la key FIJA sólo sobrevive si se lo llama UNA…
+- **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -40967,6 +40968,18 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      scopeado a esas keys, como el Mapa de calor — con el borde sobre la
      tarjeta y su hijo directo a `none`. Sin card envolvente tampoco hay clamp
      de una pantalla: lo que no entra lo scrollea la página.
+
+     **Las dos tablas usan las MISMAS grillas de desglose que la Cascada y el
+     Mapa de calor** (regla #483, a pedido: «similares al estilo de las tablas
+     de la Cascada»): `_grilla_desglose` arma un `renderizar_desglose_ajuste`
+     —producto · (cantidad) · valor, con barra de severidad detrás del valor y
+     fila TOTAL— en vez de un `st.dataframe`. Muestra hasta **6 filas** de
+     cuerpo (a pedido) y el resto scrollea por dentro (`_alto_grilla(min(6,
+     …)+1)`, el `+1` por la fila TOTAL). El detalle de la selección va en
+     ACENTO; el «5% inferior» en `AJUSTE_NEG`. Cada capturador (strip/
+     histograma/`_pareto_valor`) devuelve `(caption, df_std, color_barra,
+     color_texto)` con `df_std` en columnas `producto`/`valor`/opcional
+     `cantidad`+`__um`, ordenado por |valor|.
 
      **El Pareto también se parte** ahora: `_pareto_valor` dibuja su figura en
      la tarjeta izquierda y DEVUELVE `(caption, DataFrame)` del detalle al
