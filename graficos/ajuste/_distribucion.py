@@ -22,6 +22,8 @@ cubra con un df minimo a proposito).
 """
 
 
+import contextlib
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -60,11 +62,16 @@ _ALTO_FIG = alturas.con_franja(alturas.PROTAGONISTA, alturas.FRANJA_UNA_LINEA)
 # (regla del presupuesto vertical); los ANCHOS de acá NO son altos, así que
 # `test_graficos.py` no los toca. Son px por unidad del eje X en modo ampliado:
 # el ancho total de la figura es `_EJE_PX + n * px`, y la tarjeta scrollea en
-# horizontal lo que no entra. En modo normal la figura sigue siendo elástica
-# (`use_container_width=True`, ancho completo como siempre). Ver regla #494.
+# horizontal lo que no entra. Distribución e Histograma parten la fila con la
+# tabla a la derecha, así que su gráfico es MÁS ANGOSTO y se desliza para ver
+# los lados YA en modo normal (px `_NORM`); Ampliar sólo lo agranda más
+# (px `_AMP`). El Pareto va a ancho completo: sólo desliza al ampliar. Ver
+# regla #494.
 _EJE_PX = 60           # ancho reservado para el eje Y y su rótulo
+_PX_STRIP_NORM = 220   # px por familia en el strip normal (columna izquierda)
 _PX_STRIP_AMP = 300    # px por familia en el strip ampliado
 _PX_PARETO_AMP = 210   # px por barra en el Pareto ampliado
+_PX_BIN_NORM = 30      # px por bin (30) en el histograma normal
 _PX_BIN_AMP = 46       # px por bin (30) en el histograma ampliado
 
 # CSS del encabezado: el título de la vista y el aplanado del selectbox de
@@ -401,286 +408,305 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         st.info("Ningún producto tuvo ajuste distinto de cero en este rango.")
         return
 
-    if _vista == "Distribución":
-        _es_strip = bool(grp and grp in df_nz.columns)
-        _hay_prod = _es_strip and bool(col_producto and col_producto in df_nz.columns)
-        _cap_dist = f"{n_nz} de {n_total} productos con diferencia"
-        if _hay_prod:
-            _cap_dist += " · arrastrá para seleccionar y ver el detalle abajo"
-        if _amp:
-            _cap_dist += " · deslizá la tarjeta para ver el resto"
-        st.caption(_cap_dist)
+    # ── LAYOUT: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA ──
+    # (2026-09-22, a pedido: «pon la tabla al lado derecho» + «el gráfico debe
+    # poder ser deslizable para ver los lados»). Distribución e Histograma
+    # parten la fila: el gráfico —más angosto por la tabla— se DESLIZA en
+    # horizontal para ver las familias/bins de los lados (ancho forzado por
+    # CSS, no por `fig.layout.width`, que Streamlit pisa — ver `_forzar_ancho`),
+    # y a la derecha van APILADAS la tabla del detalle de la selección (arriba)
+    # y la del «5% inferior» (abajo). El Pareto NO se parte: ya ES un ranking y
+    # su detalle abre al clic debajo. Ver regla #494.
+    _dos_col = _vista != "Valor (Pareto)"
+    if _dos_col:
+        _col_g, _col_t = st.columns([1.9, 1], gap="medium")
+        _ctx_graf = _col_g
+    else:
+        _col_t = None
+        _ctx_graf = contextlib.nullcontext()
 
-        if _es_strip:
-            d = df_nz.copy()
-            d["_signo"] = d[col_ajuste_val].lt(0).map(
-                {True: "Faltante", False: "Sobrante"})
+    _detalle = None  # (caption, DataFrame) de la selección → columna derecha
 
-            _cd_cols = None
+    with _ctx_graf:
+        if _vista == "Distribución":
+            _es_strip = bool(grp and grp in df_nz.columns)
+            _hay_prod = _es_strip and bool(col_producto and col_producto in df_nz.columns)
+            _cap_dist = f"{n_nz} de {n_total} productos con diferencia"
             if _hay_prod:
-                def _col_o_vacia(col):
-                    return (d[col].astype(str) if (col and col in d.columns)
-                            else pd.Series([""] * len(d), index=d.index))
+                _cap_dist += " · arrastrá para seleccionar (detalle a la derecha)"
+            _cap_dist += " · deslizá para ver los lados"
+            st.caption(_cap_dist)
 
-                d["_hover_prod"] = _col_o_vacia(col_producto)
-                d["_hover_cod"] = _col_o_vacia(col_codigo)
-                d["_hover_area"] = _col_o_vacia(col_area)
-                d["_hover_cant"] = (d[col_cantidad] if
-                                    (col_cantidad and col_cantidad in d.columns)
-                                    else float("nan"))
-                d["_hover_um"] = (
-                    " " + d[col_unidad].fillna("").astype(str)
-                    if (col_unidad and col_unidad in d.columns) else "")
-                if col_fecha and col_fecha in d.columns:
-                    _fecha_dt = pd.to_datetime(d[col_fecha], errors="coerce")
-                    d["_hover_fecha"] = _fecha_dt.map(
-                        lambda x: _fmt_corte(x) if pd.notna(x) else "")
+            if _es_strip:
+                d = df_nz.copy()
+                d["_signo"] = d[col_ajuste_val].lt(0).map(
+                    {True: "Faltante", False: "Sobrante"})
+
+                _cd_cols = None
+                if _hay_prod:
+                    def _col_o_vacia(col):
+                        return (d[col].astype(str) if (col and col in d.columns)
+                                else pd.Series([""] * len(d), index=d.index))
+
+                    d["_hover_prod"] = _col_o_vacia(col_producto)
+                    d["_hover_cod"] = _col_o_vacia(col_codigo)
+                    d["_hover_area"] = _col_o_vacia(col_area)
+                    d["_hover_cant"] = (d[col_cantidad] if
+                                        (col_cantidad and col_cantidad in d.columns)
+                                        else float("nan"))
+                    d["_hover_um"] = (
+                        " " + d[col_unidad].fillna("").astype(str)
+                        if (col_unidad and col_unidad in d.columns) else "")
+                    if col_fecha and col_fecha in d.columns:
+                        _fecha_dt = pd.to_datetime(d[col_fecha], errors="coerce")
+                        d["_hover_fecha"] = _fecha_dt.map(
+                            lambda x: _fmt_corte(x) if pd.notna(x) else "")
+                    else:
+                        d["_hover_fecha"] = ""
+                    _cd_cols = ["_hover_prod", "_hover_cod", "_hover_area",
+                               "_hover_cant", "_hover_um", "_hover_fecha"]
+
+                fig = px.strip(
+                    d, x=grp, y=col_ajuste_val, color="_signo",
+                    color_discrete_map={"Faltante": ERROR, "Sobrante": EXITO},
+                    labels={col_ajuste_val: "Ajuste S/", grp: "", "_signo": ""},
+                    custom_data=_cd_cols,
+                )
+                fig.add_hline(y=0, line_dash="dot", line_color=GRIS_TEXTO_SUAVE,
+                              annotation_text="Cero", annotation_position="top right")
+                fig.update_layout(**_layout_aj(
+                    height=_alto,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                xanchor="right", x=1, title=None),
+                    xaxis=dict(tickangle=-30, gridcolor=GRIS_BORDE),
+                    yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
+                ))
+                if _hay_prod:
+                    # Sin esto el dragmode por default de Plotly es "pan":
+                    # arrastrar sobre el gráfico corre la vista en vez de
+                    # seleccionar. "select" lo deja listo sin tocar la barra. El
+                    # precio: un clic suelto NO selecciona (arquitectura.md #388).
+                    fig.update_layout(dragmode="select")
+                    _linea_ajuste = "Ajuste: <b>S/ %{y:,.2f}</b>"
+                    if col_cantidad and col_cantidad in d.columns:
+                        _linea_ajuste += " (%{customdata[3]:+.1f}%{customdata[4]})"
+                    _hovertemplate = "<br>".join([
+                        "<b>%{customdata[0]}</b>",
+                        "%{customdata[1]} · %{x} · %{customdata[2]}",
+                        _linea_ajuste,
+                        "Corte: %{customdata[5]}",
+                    ]) + "<extra></extra>"
                 else:
-                    d["_hover_fecha"] = ""
-                _cd_cols = ["_hover_prod", "_hover_cod", "_hover_area",
-                           "_hover_cant", "_hover_um", "_hover_fecha"]
-
-            fig = px.strip(
-                d, x=grp, y=col_ajuste_val, color="_signo",
-                color_discrete_map={"Faltante": ERROR, "Sobrante": EXITO},
-                labels={col_ajuste_val: "Ajuste S/", grp: "", "_signo": ""},
-                custom_data=_cd_cols,
-            )
-            fig.add_hline(y=0, line_dash="dot", line_color=GRIS_TEXTO_SUAVE,
-                          annotation_text="Cero", annotation_position="top right")
-            fig.update_layout(**_layout_aj(
-                height=_alto,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                            xanchor="right", x=1, title=None),
-                xaxis=dict(tickangle=-30, gridcolor=GRIS_BORDE),
-                yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
-            ))
-            if _hay_prod:
-                # Sin esto el dragmode por default de Plotly es "pan": arrastrar
-                # sobre el gráfico corre la vista en vez de seleccionar. "select"
-                # lo deja listo para usar sin tocar ningún botón de la barra.
-                # El precio: en este modo un clic suelto NO selecciona (ver
-                # docstring y arquitectura.md #388) — el gesto es la caja.
-                fig.update_layout(dragmode="select")
-                _linea_ajuste = "Ajuste: <b>S/ %{y:,.2f}</b>"
-                if col_cantidad and col_cantidad in d.columns:
-                    _linea_ajuste += " (%{customdata[3]:+.1f}%{customdata[4]})"
-                _hovertemplate = "<br>".join([
-                    "<b>%{customdata[0]}</b>",
-                    "%{customdata[1]} · %{x} · %{customdata[2]}",
-                    _linea_ajuste,
-                    "Corte: %{customdata[5]}",
-                ]) + "<extra></extra>"
+                    _hovertemplate = "%{x}<br>S/ %{y:,.2f}<extra></extra>"
+                fig.update_traces(marker=dict(size=7), hovertemplate=_hovertemplate)
+                _xcats = list(pd.unique(d[grp].astype(str)))
+                fig.update_xaxes(tickmode="array", tickvals=_xcats,
+                                 ticktext=_wrap_cat(_xcats))
+                # Ancho forzado SIEMPRE (no sólo al ampliar): en la columna
+                # izquierda el gráfico es más angosto y tiene que deslizarse
+                # para ver todas las familias.
+                _px_fam = _PX_STRIP_AMP if _amp else _PX_STRIP_NORM
+                _ancho_dist = _EJE_PX + max(len(_xcats), 1) * _px_fam
             else:
-                _hovertemplate = "%{x}<br>S/ %{y:,.2f}<extra></extra>"
-            fig.update_traces(marker=dict(size=7), hovertemplate=_hovertemplate)
-            _xcats = list(pd.unique(d[grp].astype(str)))
-            fig.update_xaxes(tickmode="array", tickvals=_xcats,
-                             ticktext=_wrap_cat(_xcats))
-            _ancho_dist = (_EJE_PX + max(len(_xcats), 1) * _PX_STRIP_AMP
-                           if _amp else None)
-        else:
-            # value en Y (vertical) a propósito, igual que el strip de arriba
-            # — ver docstring. `y=` en vez de `x=` es lo que voltea px.histogram.
-            fig = px.histogram(
-                df_nz, y=col_ajuste_val, nbins=30,
-                color_discrete_sequence=[SERIE_PRINCIPAL],
-            )
-            fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
-                          annotation_text="Cero")
-            fig.update_layout(**_layout_aj(
-                height=_alto,
-                yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
-                xaxis=dict(gridcolor=GRIS_BORDE),
-            ))
-            # Fallback sin grupos: son 30 bins; en Ampliar se ensancha como el
-            # histograma para que las barras no queden pegadas.
-            _ancho_dist = _EJE_PX + 30 * _PX_BIN_AMP if _amp else None
+                # value en Y (vertical) a propósito, igual que el strip de arriba
+                # — ver docstring. `y=` en vez de `x=` es lo que voltea px.histogram.
+                fig = px.histogram(
+                    df_nz, y=col_ajuste_val, nbins=30,
+                    color_discrete_sequence=[SERIE_PRINCIPAL],
+                )
+                fig.add_hline(y=0, line_dash="dash", line_color="#ef4444",
+                              annotation_text="Cero")
+                fig.update_layout(**_layout_aj(
+                    height=_alto,
+                    yaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE),
+                    xaxis=dict(gridcolor=GRIS_BORDE),
+                ))
+                _ancho_dist = _EJE_PX + 30 * (_PX_BIN_AMP if _amp else _PX_BIN_NORM)
 
-        # Barra de Plotly recortada a lo que este gráfico realmente usa — con
-        # los 10 botones de default (zoom/pan/lasso/autoscale/reset/...) nadie
-        # sabe cuál toca, y el modo activo por default ("pan") hace que
-        # arrastrar corra la vista en vez de seleccionar (fácil terminar
-        # viendo una sola familia y creer que el resto no tiene datos).
-        # displayModeBar=True en vez de "hover" (el default): que se vea
-        # siempre, sin que el usuario tenga que saber que ahí hay algo para
-        # pasar el mouse por encima.
-        _cfg_strip = {"displaylogo": False}
-        if _hay_prod:
-            _cfg_strip["displayModeBar"] = True
-            _cfg_strip["modeBarButtonsToRemove"] = [
-                "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d",
-            ]
-        else:
-            _cfg_strip["displayModeBar"] = False
+            # Barra de Plotly recortada a lo que este gráfico realmente usa —
+            # con los 10 botones de default nadie sabe cuál toca, y el modo
+            # "pan" hace que arrastrar corra la vista en vez de seleccionar.
+            _cfg_strip = {"displaylogo": False}
+            if _hay_prod:
+                _cfg_strip["displayModeBar"] = True
+                _cfg_strip["modeBarButtonsToRemove"] = [
+                    "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d",
+                ]
+            else:
+                _cfg_strip["displayModeBar"] = False
 
-        if _ancho_dist is not None:
             _forzar_ancho("dist_grupo", _ancho_dist)
-        with _card("dist_grupo", ""):
-            _evento_dist = st.plotly_chart(
-                fig, use_container_width=True, key="ajuste_dist_strip",
-                on_select="rerun" if _hay_prod else "ignore",
-                selection_mode=["points", "box", "lasso"],
-                config=_cfg_strip,
-            )
+            with _card("dist_grupo", ""):
+                _evento_dist = st.plotly_chart(
+                    fig, use_container_width=True, key="ajuste_dist_strip",
+                    on_select="rerun" if _hay_prod else "ignore",
+                    selection_mode=["points", "box", "lasso"],
+                    config=_cfg_strip,
+                )
 
-        if _hay_prod:
-            _puntos = ((_evento_dist or {}).get("selection", {}) or {}).get("points", [])
-            if _puntos:
-                _filas = []
-                for _p in _puntos:
-                    _cd = _p.get("customdata") or []
-                    _filas.append({
-                        "Producto": _cd[0] if len(_cd) > 0 else "",
-                        grp: _p.get("x"),
-                        "Ajuste S/": _p.get("y"),
-                        "Cantidad": _cd[3] if len(_cd) > 3 else None,
-                        "Corte": _cd[5] if len(_cd) > 5 else "",
-                    })
-                _det = pd.DataFrame(_filas).sort_values("Ajuste S/")
-                _total = float(_det["Ajuste S/"].sum())
-                st.caption(f"{len(_det)} seleccionados · ajuste neto S/ {_total:,.2f}")
-                _det_fmt = _det.copy()
-                _det_fmt["Ajuste S/"] = _det_fmt["Ajuste S/"].map(
-                    lambda v: f"S/ {v:,.2f}")
-                st.dataframe(_det_fmt, hide_index=True, use_container_width=True)
+            if _hay_prod:
+                _puntos = ((_evento_dist or {}).get("selection", {}) or {}).get("points", [])
+                if _puntos:
+                    _filas = []
+                    for _p in _puntos:
+                        _cd = _p.get("customdata") or []
+                        _filas.append({
+                            "Producto": _cd[0] if len(_cd) > 0 else "",
+                            grp: _p.get("x"),
+                            "Ajuste S/": _p.get("y"),
+                            "Cantidad": _cd[3] if len(_cd) > 3 else None,
+                            "Corte": _cd[5] if len(_cd) > 5 else "",
+                        })
+                    _det = pd.DataFrame(_filas).sort_values("Ajuste S/")
+                    _total = float(_det["Ajuste S/"].sum())
+                    _det_fmt = _det.copy()
+                    _det_fmt["Ajuste S/"] = _det_fmt["Ajuste S/"].map(
+                        lambda v: f"S/ {v:,.2f}")
+                    _detalle = (
+                        f"{len(_det)} seleccionados · ajuste neto S/ {_total:,.2f}",
+                        _det_fmt)
 
-    elif _vista == "Histograma":
-        media   = float(df_nz[col_ajuste_val].mean())
-        mediana = float(df_nz[col_ajuste_val].median())
+        elif _vista == "Histograma":
+            media   = float(df_nz[col_ajuste_val].mean())
+            mediana = float(df_nz[col_ajuste_val].median())
 
-        # Uno o dos ajustes puntuales muy grandes estiran el eje y aplastan
-        # el grueso de la distribución (que vive cerca de cero) en 1-2
-        # barras. Se acota la vista al percentil 1-99 (ampliado si hiciera
-        # falta para no dejar fuera a la media o la mediana) y esos outliers
-        # se cuentan aparte como texto — mismo criterio que el conteo de cero.
-        p_lo, p_hi = df_nz[col_ajuste_val].quantile([0.01, 0.99])
-        p_lo = min(p_lo, media, mediana, 0.0)
-        p_hi = max(p_hi, media, mediana, 0.0)
-        if p_hi <= p_lo:
-            p_hi = p_lo + 1.0
-        d_hist = df_nz[df_nz[col_ajuste_val].between(p_lo, p_hi)]
-        n_fuera = n_nz - len(d_hist)
+            # Uno o dos ajustes puntuales muy grandes estiran el eje y aplastan
+            # el grueso de la distribución (que vive cerca de cero) en 1-2
+            # barras. Se acota la vista al percentil 1-99 (ampliado si hiciera
+            # falta para no dejar fuera a la media o la mediana) y esos outliers
+            # se cuentan aparte como texto — mismo criterio que el conteo de cero.
+            p_lo, p_hi = df_nz[col_ajuste_val].quantile([0.01, 0.99])
+            p_lo = min(p_lo, media, mediana, 0.0)
+            p_hi = max(p_hi, media, mediana, 0.0)
+            if p_hi <= p_lo:
+                p_hi = p_lo + 1.0
+            d_hist = df_nz[df_nz[col_ajuste_val].between(p_lo, p_hi)]
+            n_fuera = n_nz - len(d_hist)
 
-        _hay_prod_hist = bool(col_producto and col_producto in df_nz.columns)
-        _cap = f"{n_total - n_nz} productos en cero, excluidos del cálculo"
-        if n_fuera:
-            _cap += f" · {n_fuera} outliers fuera de este rango"
-        if _hay_prod_hist:
-            _cap += (" · clic en una barra para ver sus productos abajo"
-                     " (shift+clic suma otras)")
-        st.caption(_cap)
+            _hay_prod_hist = bool(col_producto and col_producto in df_nz.columns)
+            _cap = f"{n_total - n_nz} productos en cero, excluidos del cálculo"
+            if n_fuera:
+                _cap += f" · {n_fuera} outliers fuera de este rango"
+            if _hay_prod_hist:
+                _cap += (" · clic en una barra para ver sus productos a la derecha"
+                         " (shift+clic suma otras)")
+            _cap += " · deslizá para ver los lados"
+            st.caption(_cap)
 
-        _n_bins = 30
-        _paso = (p_hi - p_lo) / _n_bins
+            _n_bins = 30
+            _paso = (p_hi - p_lo) / _n_bins
 
-        fig2 = go.Figure()
-        fig2.add_trace(go.Histogram(
-            x=d_hist[col_ajuste_val],
-            xbins=dict(start=p_lo, end=p_hi, size=_paso),
-            name="Frecuencia",
-            marker_color=SERIE_PRINCIPAL, opacity=0.75,
-            hovertemplate="Valor: S/ %{x:,.2f}<br>Frecuencia: %{y}<extra></extra>",
-        ))
-        fig2.add_vline(x=0, line_dash="solid", line_color=ERROR, line_width=2)
-        fig2.add_vline(x=media, line_dash="dot", line_color=ADVERTENCIA, line_width=2)
-        fig2.add_vline(x=mediana, line_dash="dash", line_color=EXITO, line_width=2)
-        fig2.update_layout(**_layout_aj(
-            height=_alto,
-            xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
-                       title="Ajuste Valorizado", range=[p_lo, p_hi]),
-            yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
-            hovermode="closest",
-            showlegend=False,
-        ))
-        if _hay_prod_hist:
-            # Modo CLIC, a propósito NO "select" como el strip: en select
-            # Streamlit apaga la selección por clic y la barra clickeada no
-            # llegaba nunca a la tabla (regla #388). En "pan" Streamlit pone
-            # clickmode="event+select", y los ejes fijos dejan quieto el
-            # arrastre, que si no correría los bins fuera de la vista.
-            fig2.update_layout(dragmode="pan")
-            fig2.update_xaxes(fixedrange=True)
-            fig2.update_yaxes(fixedrange=True)
+            fig2 = go.Figure()
+            fig2.add_trace(go.Histogram(
+                x=d_hist[col_ajuste_val],
+                xbins=dict(start=p_lo, end=p_hi, size=_paso),
+                name="Frecuencia",
+                marker_color=SERIE_PRINCIPAL, opacity=0.75,
+                hovertemplate="Valor: S/ %{x:,.2f}<br>Frecuencia: %{y}<extra></extra>",
+            ))
+            fig2.add_vline(x=0, line_dash="solid", line_color=ERROR, line_width=2)
+            fig2.add_vline(x=media, line_dash="dot", line_color=ADVERTENCIA, line_width=2)
+            fig2.add_vline(x=mediana, line_dash="dash", line_color=EXITO, line_width=2)
+            fig2.update_layout(**_layout_aj(
+                height=_alto,
+                xaxis=dict(tickprefix="S/ ", tickformat=",.2f", gridcolor=GRIS_BORDE,
+                           title="Ajuste Valorizado", range=[p_lo, p_hi]),
+                yaxis=dict(title="Frecuencia", gridcolor=GRIS_BORDE),
+                hovermode="closest",
+                showlegend=False,
+            ))
+            if _hay_prod_hist:
+                # Modo CLIC, a propósito NO "select" como el strip: en select
+                # Streamlit apaga la selección por clic y la barra clickeada no
+                # llegaba nunca a la tabla (regla #388). En "pan" Streamlit pone
+                # clickmode="event+select", y los ejes fijos dejan quieto el
+                # arrastre, que si no correría los bins fuera de la vista.
+                fig2.update_layout(dragmode="pan")
+                fig2.update_xaxes(fixedrange=True)
+                fig2.update_yaxes(fixedrange=True)
 
-        # Sin barra de Plotly: con los ejes fijos no hay zoom ni paneo que
-        # ofrecer, y la caja NO se ofrece a propósito — quien la eligiera
-        # quedaría sin forma de volver al clic (con los dos ejes fijos Plotly
-        # tampoco dibuja el botón de pan), y shift+clic ya cubre un tramo.
-        _cfg_hist = {"displaylogo": False, "displayModeBar": False}
+            _cfg_hist = {"displaylogo": False, "displayModeBar": False}
 
-        if _amp:
-            _forzar_ancho("dist_hist", _EJE_PX + _n_bins * _PX_BIN_AMP)
-        with _card("dist_hist", ""):
-            st.markdown(
-                f"<div style='display:flex;gap:16px;font-size:11px;"
-                f"font-weight:600;margin:0 0 4px 2px'>"
-                f"<span style='color:{ERROR}'>● Cero</span>"
-                f"<span style='color:{ADVERTENCIA}'>● Media S/ {media:,.0f}</span>"
-                f"<span style='color:{EXITO}'>● Mediana S/ {mediana:,.0f}</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-            _evento_hist = st.plotly_chart(
-                fig2, use_container_width=True, key="ajuste_dist_hist",
-                on_select="rerun" if _hay_prod_hist else "ignore",
-                selection_mode="points",
-                config=_cfg_hist,
-            )
+            _forzar_ancho("dist_hist", _EJE_PX + _n_bins * (
+                _PX_BIN_AMP if _amp else _PX_BIN_NORM))
+            with _card("dist_hist", ""):
+                st.markdown(
+                    f"<div style='display:flex;gap:16px;font-size:11px;"
+                    f"font-weight:600;margin:0 0 4px 2px'>"
+                    f"<span style='color:{ERROR}'>● Cero</span>"
+                    f"<span style='color:{ADVERTENCIA}'>● Media S/ {media:,.0f}</span>"
+                    f"<span style='color:{EXITO}'>● Mediana S/ {mediana:,.0f}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                _evento_hist = st.plotly_chart(
+                    fig2, use_container_width=True, key="ajuste_dist_hist",
+                    on_select="rerun" if _hay_prod_hist else "ignore",
+                    selection_mode="points",
+                    config=_cfg_hist,
+                )
 
-        if _hay_prod_hist:
-            # `point_indices` junta las filas de TODAS las barras elegidas:
-            # posiciones en `d_hist`, que es el `x` de la traza. No se usa el
-            # `bin_number` de cada punto: Plotly recorta los bins vacíos de
-            # los bordes y lo numera desde el primero con datos, no desde p_lo.
-            _sel = ((_evento_hist or {}).get("selection", {}) or {})
-            _idx = sorted({int(i) for i in (_sel.get("point_indices") or [])
-                           if 0 <= int(i) < len(d_hist)})
-            _sel_hist = d_hist.iloc[_idx]
-            if not _sel_hist.empty:
-                _det2 = pd.DataFrame({"Producto": _sel_hist[col_producto]})
-                if grp and grp in _sel_hist.columns:
-                    _det2[grp] = _sel_hist[grp]
-                _det2["Ajuste S/"] = _sel_hist[col_ajuste_val]
-                if col_cantidad and col_cantidad in _sel_hist.columns:
-                    _det2["Cantidad"] = _sel_hist[col_cantidad]
-                if col_fecha and col_fecha in _sel_hist.columns:
-                    _fecha_dt2 = pd.to_datetime(_sel_hist[col_fecha], errors="coerce")
-                    _det2["Corte"] = _fecha_dt2.map(
-                        lambda x: _fmt_corte(x) if pd.notna(x) else "")
-                _det2 = _det2.sort_values("Ajuste S/")
-                _total2 = float(_det2["Ajuste S/"].sum())
-                st.caption(f"{len(_det2)} seleccionados · ajuste neto S/ {_total2:,.2f}")
-                _det2_fmt = _det2.copy()
-                _det2_fmt["Ajuste S/"] = _det2_fmt["Ajuste S/"].map(
-                    lambda v: f"S/ {v:,.2f}")
-                st.dataframe(_det2_fmt, hide_index=True, use_container_width=True)
+            if _hay_prod_hist:
+                # `point_indices` junta las filas de TODAS las barras elegidas:
+                # posiciones en `d_hist`, que es el `x` de la traza. No se usa el
+                # `bin_number`: Plotly recorta los bins vacíos de los bordes y lo
+                # numera desde el primero con datos, no desde p_lo.
+                _sel = ((_evento_hist or {}).get("selection", {}) or {})
+                _idx = sorted({int(i) for i in (_sel.get("point_indices") or [])
+                               if 0 <= int(i) < len(d_hist)})
+                _sel_hist = d_hist.iloc[_idx]
+                if not _sel_hist.empty:
+                    _det2 = pd.DataFrame({"Producto": _sel_hist[col_producto]})
+                    if grp and grp in _sel_hist.columns:
+                        _det2[grp] = _sel_hist[grp]
+                    _det2["Ajuste S/"] = _sel_hist[col_ajuste_val]
+                    if col_cantidad and col_cantidad in _sel_hist.columns:
+                        _det2["Cantidad"] = _sel_hist[col_cantidad]
+                    if col_fecha and col_fecha in _sel_hist.columns:
+                        _fecha_dt2 = pd.to_datetime(_sel_hist[col_fecha], errors="coerce")
+                        _det2["Corte"] = _fecha_dt2.map(
+                            lambda x: _fmt_corte(x) if pd.notna(x) else "")
+                    _det2 = _det2.sort_values("Ajuste S/")
+                    _total2 = float(_det2["Ajuste S/"].sum())
+                    _det2_fmt = _det2.copy()
+                    _det2_fmt["Ajuste S/"] = _det2_fmt["Ajuste S/"].map(
+                        lambda v: f"S/ {v:,.2f}")
+                    _detalle = (
+                        f"{len(_det2)} seleccionados · ajuste neto S/ {_total2:,.2f}",
+                        _det2_fmt)
 
-    else:  # "Valor (Pareto)"
-        _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
-                      col_cantidad=col_cantidad, col_fecha=col_fecha,
-                      col_unidad=col_unidad, alto=_alto, amp=_amp)
+        else:  # "Valor (Pareto)"
+            _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
+                          col_cantidad=col_cantidad, col_fecha=col_fecha,
+                          col_unidad=col_unidad, alto=_alto, amp=_amp)
 
-    # La tabla del «5% inferior» acompaña a Distribución e Histograma; en el
-    # Pareto sobra —la vista YA es el ranking de faltantes— y se leería como
-    # dos rankings pegados.
-    if _vista != "Valor (Pareto)" and col_producto and col_producto in df.columns:
-        umbral = float(df[col_ajuste_val].quantile(0.05))
-        outliers = df[df[col_ajuste_val] <= umbral].copy()
-        if not outliers.empty:
-            st.markdown(
-                f"**⚠️ Productos en el 5% inferior del ajuste "
-                f"(< S/ {umbral:,.2f})**"
-            )
-            cols_tabla = [col_producto, col_ajuste_val]
-            for c in (grp,):
-                if c and c in outliers.columns and c not in cols_tabla:
-                    cols_tabla.append(c)
-            out_df = (outliers[cols_tabla]
-                      .sort_values(col_ajuste_val)
-                      .head(10)
-                      .copy())
-            out_df[col_ajuste_val] = out_df[col_ajuste_val].map(
-                lambda v: f"S/ {v:,.2f}"
-            )
-            st.dataframe(out_df, hide_index=True, use_container_width=True)
+    # ── COLUMNA DERECHA: detalle de la selección (arriba) + «5% inferior»
+    # (abajo), apiladas. El «5% inferior» acompaña a Distribución e Histograma;
+    # en el Pareto sobra —la vista YA es el ranking de faltantes— y por eso
+    # tampoco hay columna derecha. ──
+    if _dos_col:
+        with _col_t:
+            if _detalle is not None:
+                st.caption(_detalle[0])
+                st.dataframe(_detalle[1], hide_index=True,
+                             use_container_width=True)
+            if col_producto and col_producto in df.columns:
+                umbral = float(df[col_ajuste_val].quantile(0.05))
+                outliers = df[df[col_ajuste_val] <= umbral].copy()
+                if not outliers.empty:
+                    st.markdown(
+                        f"**⚠️ Productos en el 5% inferior del ajuste "
+                        f"(< S/ {umbral:,.2f})**"
+                    )
+                    cols_tabla = [col_producto, col_ajuste_val]
+                    for c in (grp,):
+                        if c and c in outliers.columns and c not in cols_tabla:
+                            cols_tabla.append(c)
+                    out_df = (outliers[cols_tabla]
+                              .sort_values(col_ajuste_val)
+                              .head(10)
+                              .copy())
+                    out_df[col_ajuste_val] = out_df[col_ajuste_val].map(
+                        lambda v: f"S/ {v:,.2f}"
+                    )
+                    st.dataframe(out_df, hide_index=True, use_container_width=True)
