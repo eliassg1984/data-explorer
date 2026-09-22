@@ -1,8 +1,20 @@
 """graficos.ajuste._distribucion - vista Distribucion.
 
-Caja por familia cuando hay columna de familia; histograma cuando no
-(esa rama `else` casi nunca se ejerce a mano, de ahi que
-test_graficos.py la cubra con un df minimo a proposito).
+El toggle (`st.pills`) tiene TRES modos, cada uno responde otra pregunta:
+  · Distribucion — strip por familia (caja/lazo -> detalle). ¿Como se
+    reparten los desvios dentro de cada familia?
+  · Histograma — frecuencia del ajuste valorizado. ¿Que FORMA tiene la
+    distribucion (apretada al cero, colas gordas)?
+  · Valor (Pareto) — barras por producto ordenadas por soles de faltante +
+    linea de % acumulado (2026-09-22). ¿DONDE esta la plata y que corregir
+    primero? Con miles de items de distinto precio/cantidad, el histograma
+    cuenta ITEMS (una barra alta cerca del cero = muchos desvios chicos,
+    poca plata); el Pareto los ordena por PLATA. El soles es el comun
+    denominador que hace comparables items de escalas distintas.
+
+Cuando no hay columna de familia el modo Distribucion cae a un histograma
+(esa rama `else` casi nunca se ejerce a mano, de ahi que test_graficos.py la
+cubra con un df minimo a proposito).
 """
 
 
@@ -12,7 +24,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tema import (
-    ADVERTENCIA, GRIS_BORDE, SERIE_PRINCIPAL, ERROR, EXITO, GRIS_TEXTO_SUAVE,
+    ACENTO, ADVERTENCIA, GRIS_BORDE, GRIS_TEXTO_MEDIO, SERIE_PRINCIPAL,
+    ERROR, EXITO, GRIS_TEXTO_SUAVE,
 )
 from graficos.base import (
     _card, _wrap_cat, filtro_pills, sembrar_seleccion,
@@ -25,6 +38,141 @@ from graficos.base import (
 # única — "alimentos, bebidas, vinos y embalajes"), para que las tres vistas
 # del bloque Visual abran con el mismo recorte de familias.
 from graficos.ajuste._comun import FAMILIAS_DE_ENTRADA, _fmt_corte, _layout_aj
+
+
+_PARETO_TOP_N = 8
+
+
+def _pareto_datos(df, col_ajuste_val, col_producto, top_n=_PARETO_TOP_N):
+    """Agrega el ajuste NETO por producto, se queda con los FALTANTES
+    (neto < 0), ordena por magnitud y agrupa la cola en «Otros (N)».
+
+    El grano del df es la LÍNEA (producto × área); sumar sus líneas por
+    producto es legítimo porque `AJUSTE VALORIZADO` es un valor por línea
+    (a diferencia de las columnas *_ANO_ANTERIOR, que vienen repetidas por
+    grupo — CLAUDE.md). Los valores salen como MAGNITUD positiva del
+    faltante, en soles, para que la barra y el acumulado crezcan hacia
+    arriba. Devuelve `(etiquetas, valores, acumulado, pct, pct_acum)`, todo
+    en el mismo orden; listas vacías si no hay ningún faltante.
+
+    «Sólo faltantes» es el default a pedido (2026-09-22): la pregunta es
+    dónde se PIERDE plata. Un producto con sobrante neto no entra."""
+    if not col_producto or col_producto not in df.columns:
+        return [], [], [], [], []
+    g = df.groupby(col_producto)[col_ajuste_val].sum()
+    falt = g[g < 0]
+    if falt.empty:
+        return [], [], [], [], []
+    mags = (-falt).sort_values(ascending=False)
+    top = mags.iloc[:top_n]
+    resto = mags.iloc[top_n:]
+    etiquetas = [str(p) for p in top.index]
+    valores = [float(v) for v in top.values]
+    if len(resto) > 0:
+        etiquetas.append(f"Otros ({len(resto)})")
+        valores.append(float(resto.sum()))
+    total = sum(valores) or 1.0
+    acum, run = [], 0.0
+    for v in valores:
+        run += v
+        acum.append(run)
+    pct = [v / total * 100 for v in valores]
+    pct_acum = [a / total * 100 for a in acum]
+    return etiquetas, valores, acum, pct, pct_acum
+
+
+def _fig_pareto_ajuste(df, col_ajuste_val, col_producto, top_n=_PARETO_TOP_N):
+    """Pareto del faltante: barras por producto (soles) + línea de acumulado.
+
+    UN SOLO eje Y, en soles (la plata es lo que se pregunta): las barras son
+    el faltante de cada producto y la línea es el acumulado corriendo hacia
+    el total. El % vive en el hover y en la línea de referencia del 80% — no
+    en un segundo eje (evita el eje doble y el choque de `_LAYOUT_BASE` con
+    dos `yaxis`). Los nombres van horizontales y partidos con `_wrap_cat`
+    porque `_layout` fuerza `tickangle=0` (regla #325). Devuelve None si no
+    hay faltante que mostrar."""
+    etiquetas, valores, acum, pct, pct_acum = _pareto_datos(
+        df, col_ajuste_val, col_producto, top_n)
+    if not etiquetas:
+        return None
+    colores = [ERROR] * len(valores)
+    if etiquetas[-1].startswith("Otros"):
+        colores[-1] = GRIS_TEXTO_MEDIO
+    fig = go.Figure()
+    fig.add_bar(
+        x=etiquetas, y=valores, marker_color=colores, name="Faltante",
+        customdata=[[p] for p in pct],
+        hovertemplate="<b>%{x}</b><br>Faltante: S/ %{y:,.2f}"
+                      "<br>%{customdata[0]:.1f}% del faltante total<extra></extra>")
+    fig.add_scatter(
+        x=etiquetas, y=acum, name="Acumulado", mode="lines+markers",
+        line=dict(color=ACENTO, width=2), marker=dict(size=6),
+        customdata=[[pa] for pa in pct_acum],
+        hovertemplate="Acumulado: S/ %{y:,.2f}"
+                      "<br>%{customdata[0]:.1f}% del faltante<extra></extra>")
+    total = acum[-1] if acum else 0.0
+    fig.add_hline(y=0.8 * total, line_dash="dash", line_color=GRIS_TEXTO_SUAVE,
+                  annotation_text="80% del faltante",
+                  annotation_position="top left")
+    fig.update_layout(**_layout_aj(
+        title="Dónde se concentra el faltante",
+        showlegend=False,
+        yaxis=dict(showticklabels=True, tickprefix="S/ ", tickformat=",.0f",
+                   gridcolor=GRIS_BORDE),
+    ))
+    fig.update_xaxes(tickmode="array", tickvals=etiquetas,
+                     ticktext=_wrap_cat(etiquetas))
+    return fig
+
+
+def _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
+                  col_cantidad=None, col_fecha=None, col_unidad=None):
+    """Modo «Valor (Pareto)» del toggle: la figura + el detalle al clic.
+
+    Clic en la barra de un producto -> tabla con sus líneas (por área)
+    debajo. La key es ESTÁTICA a propósito: la selección sólo pinta la tabla
+    de abajo, no realimenta la figura, así que no aplica la trampa de la key
+    dinámica (regla #399). Y abre en modo CLIC (`dragmode="pan"` + ejes
+    fijos): en «select» Streamlit apaga el clic suelto y la barra no llegaría
+    a la tabla (regla #388). La barra «Otros» no abre detalle: es la cola."""
+    _hay_prod = bool(col_producto and col_producto in df_nz.columns)
+    fig = _fig_pareto_ajuste(df_nz, col_ajuste_val, col_producto) if _hay_prod else None
+    if fig is None:
+        st.info("Ningún producto quedó con faltante neto en este rango.")
+        return
+    st.caption("Productos ordenados por soles de faltante · la línea marca el "
+               "% acumulado · clic en una barra para ver sus áreas abajo")
+    fig.update_layout(dragmode="pan")
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+    with _card("dist_pareto", "Pareto de faltantes"):
+        _ev = st.plotly_chart(
+            fig, use_container_width=True, key="ajuste_dist_pareto",
+            on_select="rerun", selection_mode="points",
+            config={"displaylogo": False, "displayModeBar": False})
+    _pts = ((_ev or {}).get("selection", {}) or {}).get("points", [])
+    _prods = [p.get("x") for p in _pts
+              if p.get("x") and not str(p.get("x")).startswith("Otros")]
+    if not _prods:
+        return
+    _sel = df_nz[df_nz[col_producto].astype(str).isin([str(x) for x in _prods])]
+    if _sel.empty:
+        return
+    _det = pd.DataFrame({"Producto": _sel[col_producto].astype(str)})
+    if col_area and col_area in _sel.columns:
+        _det["Área"] = _sel[col_area].astype(str)
+    _det["Ajuste S/"] = _sel[col_ajuste_val]
+    if col_cantidad and col_cantidad in _sel.columns:
+        _det["Cantidad"] = _sel[col_cantidad]
+    if col_fecha and col_fecha in _sel.columns:
+        _f = pd.to_datetime(_sel[col_fecha], errors="coerce")
+        _det["Corte"] = _f.map(lambda x: _fmt_corte(x) if pd.notna(x) else "")
+    _det = _det.sort_values("Ajuste S/")
+    _tot = float(_det["Ajuste S/"].sum())
+    st.caption(f"{len(_det)} líneas · ajuste neto S/ {_tot:,.2f}")
+    _fmt = _det.copy()
+    _fmt["Ajuste S/"] = _fmt["Ajuste S/"].map(lambda v: f"S/ {v:,.2f}")
+    st.dataframe(_fmt, hide_index=True, use_container_width=True)
 
 
 def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto,
@@ -121,7 +269,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         return
 
     _vista = st.pills(
-        "Vista distribución", ["Distribución", "Histograma"],
+        "Vista distribución", ["Distribución", "Histograma", "Valor (Pareto)"],
         default="Distribución", key="ajuste_dist_vista",
         label_visibility="collapsed",
     ) or "Distribución"
@@ -261,7 +409,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                     lambda v: f"S/ {v:,.2f}")
                 st.dataframe(_det_fmt, hide_index=True, use_container_width=True)
 
-    else:  # "Histograma"
+    elif _vista == "Histograma":
         media   = float(df_nz[col_ajuste_val].mean())
         mediana = float(df_nz[col_ajuste_val].median())
 
@@ -370,7 +518,15 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                     lambda v: f"S/ {v:,.2f}")
                 st.dataframe(_det2_fmt, hide_index=True, use_container_width=True)
 
-    if col_producto and col_producto in df.columns:
+    else:  # "Valor (Pareto)"
+        _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
+                      col_cantidad=col_cantidad, col_fecha=col_fecha,
+                      col_unidad=col_unidad)
+
+    # La tabla del «5% inferior» acompaña a Distribución e Histograma; en el
+    # Pareto sobra —la vista YA es el ranking de faltantes— y se leería como
+    # dos rankings pegados.
+    if _vista != "Valor (Pareto)" and col_producto and col_producto in df.columns:
         umbral = float(df[col_ajuste_val].quantile(0.05))
         outliers = df[df[col_ajuste_val] <= umbral].copy()
         if not outliers.empty:

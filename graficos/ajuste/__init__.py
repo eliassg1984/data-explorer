@@ -62,7 +62,9 @@ from graficos.ajuste._evolucion import (  # noqa: F401
 from graficos.ajuste._pivote import _tabla_pivote_fecha_ajuste  # noqa: F401
 from graficos.ajuste._cascada import _graf_waterfall_ajuste  # noqa: F401
 from graficos.ajuste._heatmap import _graf_heatmap_ajuste  # noqa: F401
-from graficos.ajuste._distribucion import _graf_distribucion_ajuste  # noqa: F401
+from graficos.ajuste._distribucion import (  # noqa: F401
+    _graf_distribucion_ajuste, _fig_pareto_ajuste, _pareto_datos,
+)
 
 
 # Rail derecho de Ajuste (mismo componente compartido que Compras). El id

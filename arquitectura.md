@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-488 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+489 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (171)
 
@@ -277,7 +277,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 
-**Plotly y figuras** (88)
+**Plotly y figuras** (89)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -367,6 +367,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#487** — La serie de «Compra Vs Año Pasado» rotula las TRES métricas por barra, dice el AÑO en una…
 - **#488** — La selección por clic de st.plotly_chart(on_select=...) NO llega a las trazas de un…
+- **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
 
 **AgGrid y tablas** (79)
 
@@ -753,7 +754,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (90)
+**Decisiones de diseño y UX** (91)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -845,6 +846,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#478** — Cambiar el GRANO de una serie cambia el MARK, no sólo el eje: una vela por compra es plana…
 - **#482** — Un tooltip de Streamlit (help=) lo dispara el WIDGET ENTERO. Si lo que tiene que explicarse…
 - **#486** — El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro (Faltantes | Sobrantes, y el…
+- **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -40709,6 +40711,44 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      variación) ignorando el `format` del Styler, así que las celdas de la
      tabla Resumen se pre-formatean a STRING y el color de la variación sale
      del signo del texto. (2026-09-22.)
+
+489. **Con muchos ítems de distinto precio y cantidad, el ranking que sirve
+     es por PLATA, no por frecuencia — el tercer modo de Ajuste ›
+     Distribución es un Pareto.** Se preguntó, con 340+ productos, si un
+     histograma estaba bien. Está bien para leer la FORMA (qué tan apretada
+     al cero está la distribución), pero para «¿dónde se me va el dinero?»
+     engaña: cuenta LÍNEAS, así que una barra alta pegada al cero son muchos
+     desvíos chicos —poca plata— y el dinero vive en las barras cortas de
+     los extremos.
+
+     El modo «Valor (Pareto)» (`_distribucion.py::_fig_pareto_ajuste`,
+     datos en `_pareto_datos`) ordena por soles: barras por producto de
+     mayor a menor faltante + línea de % acumulado, con la referencia del
+     80% (análisis ABC). Cuatro decisiones, cada una con su motivo:
+
+     - **Un solo eje Y, en soles.** Un Pareto «de manual» lleva dos ejes
+       (soles + % acumulado), pero el eje doble está vedado y, peor, la
+       #488 midió que el clic de `on_select` NO llega a las trazas de un
+       `make_subplots`: para que la barra sea clickeable la figura tiene que
+       ser ÚNICA. Así que la línea corre en soles hasta el total y el % vive
+       en el hover y en el rótulo del 80%.
+     - **Sólo faltantes** (neto < 0), a pedido: la pregunta es dónde se
+       PIERDE. Un producto con sobrante neto no entra.
+     - **El grano de entrada es la LÍNEA (producto × área); se suma a
+       producto.** Es legítimo porque `AJUSTE VALORIZADO` es por línea —a
+       diferencia de las columnas `*_ANO_ANTERIOR`, repetidas por grupo
+       (reglas #198-#200). Valorizar a soles es lo que hace comparables
+       ítems de escalas distintas: el error habría sido un histograma de
+       CANTIDAD cruda (kg + unidades + botellas en el mismo eje).
+     - **Clic en una barra → sus áreas debajo**, con la misma receta que el
+       histograma vecino: key estática porque la selección sólo pinta la
+       tabla (no realimenta la figura, #399), y `dragmode="pan"` + ejes
+       `fixedrange` porque en «select» el clic suelto no dispara (#388,
+       #488). La barra «Otros (N)» —la cola— no abre detalle.
+
+     Respeta el filtro de Familia propio de la vista (opera sobre el
+     `df_nz` ya recortado, #425). El histograma no se tocó: es otra
+     pregunta, y las tres conviven en el mismo toggle. (2026-09-22.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

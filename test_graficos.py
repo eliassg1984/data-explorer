@@ -4808,6 +4808,28 @@ def _pruebas_resumen_ajuste():
     check("por corte: la fila de 2025 queda fuera de d_anio",
           len(_e2["d_anio"]), 2)
 
+    # ── Pareto del faltante (modo «Valor (Pareto)» de Distribución, #489) ──
+    # Agrega por producto el ajuste NETO, se queda con los faltantes, ordena
+    # por magnitud y agrupa la cola en «Otros». El grano de entrada es la
+    # LÍNEA (dos filas de p1 se suman a un solo producto).
+    from graficos.ajuste import _pareto_datos
+    _dp = pd.DataFrame({
+        "P":  ["p1", "p1", "p2", "p3", "p4", "p5"],
+        "AV": [-300.0, -100.0, -50.0, -10.0, 40.0, -5.0],
+    })
+    _et, _val, _acu, _pct, _pacu = _pareto_datos(_dp, "AV", "P", top_n=3)
+    check("pareto: sólo faltantes, por magnitud, cola en Otros",
+          _et, ["p1", "p2", "p3", "Otros (1)"])
+    check("pareto: la barra es la MAGNITUD del faltante (soles positivos)",
+          _val, [400.0, 50.0, 10.0, 5.0])
+    check("pareto: un producto con sobrante neto no entra", "p4" in _et, False)
+    check("pareto: el acumulado corre hasta el total del faltante",
+          _acu[-1], 465.0)
+    check("pareto: el acumulado llega al 100 %", round(_pacu[-1]), 100)
+    check("pareto: sin faltantes no hay nada que graficar",
+          _pareto_datos(pd.DataFrame({"P": ["a", "b"], "AV": [10.0, 20.0]}),
+                        "AV", "P"), ([], [], [], [], []))
+
     return fallos
 
 
@@ -4942,6 +4964,8 @@ def main():
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
         ("distribucion (rama else: histograma)", _aj._graf_distribucion_ajuste,
             (df_min, None, None, "AJUSTE VALORIZADO", None)),
+        ("pareto valor (Ajuste)", _aj._fig_pareto_ajuste,
+            (df, "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
     ]
 
     # ── Constructores compartidos de Receta Base / Receta Venta ─────────
