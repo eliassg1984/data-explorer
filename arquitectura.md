@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-492 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+493 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (172)
+**CSS y estilos** (173)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -206,6 +206,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#484** — La tarjeta de la cascada de «Compra Vs Año Pasado» ALTERNA el waterfall con una tabla mes a…
 - **#486** — El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro (Faltantes | Sobrantes, y el…
 - **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
+- **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
 
 **Layout y alturas** (68)
 
@@ -452,7 +453,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (137)
+**Streamlit** (138)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -591,6 +592,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
 - **#491** — Un helper que abre un st.container(key=...) con la key FIJA sólo sobrevive si se lo llama UNA…
 - **#492** — El aviso de ingreso por Telegram (aviso_ingreso.py, 2026-09-22) cuenta "entrar" como sesión…
+- **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -40882,6 +40884,65 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      excepción, ni log, silencio total (mismo criterio que
      `secrets_disponibles()` de `data.py` con los de R2). Antes de asumir
      que el módulo está roto, confirmar que esos dos secrets existen.
+
+493. **El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la
+     Cascada — ya no una card única alrededor de todo.** 2026-09-22, a
+     pedido: *«manejemos la misma distribución de 3 tarjetas, o sea la tabla
+     arriba y los detalles sus propias tarjetas abajo»*, mirando a la vista
+     «ajuste por familia» / Cascada de al lado. Hasta ese día el dispatcher
+     (`graficos/ajuste/__init__.py::_dib_heatmap`) envolvía la vista en
+     `st.container(border=True, key="ajuste_graf_card_izq_heatmap")` — una
+     superficie blanca sin borde (radio 20, sombra) con adentro la tabla (su
+     `chartcard_heatmap` con el borde SUPRIMIDO por la regla de
+     `st-key-ajuste_graf_card_ chartcard_` de `estilos/_80_cards.py`) y los
+     dos detalles PELADOS. O sea: se leía como UNA caja, no como tres.
+
+     El arreglo espeja a `_dib_cascada` (regla #441): la vista dibuja sus
+     propias tarjetas y el dispatcher ya NO la envuelve. Tres cambios:
+
+       · **`__init__.py`**: `_dib_heatmap` deja de abrir la card envolvente y
+         llama a `_graf_heatmap_ajuste` a secas — igual que la Cascada, que
+         no usa `_en_tarjeta` porque envolverla daría una tarjeta alrededor
+         de otras tres. Con eso `ajuste_graf_card_izq_heatmap` desaparece del
+         DOM, así que salió del `:not(...)` del clamp de `--alto-util` en
+         `_80_cards.py` (ya no hace falta excluir una key que no existe; los
+         dos motivos por los que estaba excluida —el `overflow-x:auto` de la
+         grilla y el detalle que abre adentro— siguen valiendo para su nueva
+         tabla, ver #468).
+
+       · **La tabla y sus detalles, cada uno en su `st.container(border=True)`**
+         (`_heatmap.py`). La tabla usa la key `chartcard_heatmap` de siempre
+         (de ella cuelgan la fuente de la grilla y todo el CSS de `hm_tabla`),
+         pero ya NO vía `_card()`: se abre por HANDLE (`_card_tabla =
+         st.container(...)`, reentrado con `with` dos veces) para meter primero
+         los filtros + el Modo y después la tabla en la MISMA tarjeta sin
+         reindentar el cálculo del medio — el título al pie lo pone a mano un
+         `<p class="chart-card-pie">` donde antes lo ponía `_card`. Cada
+         detalle va en `hm_card_<lado>` (`neg`/`pos`/`top`), como
+         `_cascada._listas` con `ajcas_card_neg`/`_pos` (regla #442). La
+         cabecera del detalle (familia × área · registros) queda PELADA entre
+         medio, como el `ajcas_detalle_cab` de la Cascada.
+
+       · **El look de tarjeta lo inyecta la vista, no `estilos/`.** Un
+         `st.container(border=True)` a secas sale con el look POR DEFECTO de
+         Streamlit (fondo transparente, borde `rgba(49,51,63,.2)`, radio 8),
+         que NO casa con las de la Cascada (blancas, borde `GRIS_BORDE`, radio
+         12). Ese look de la Cascada no vive en `estilos/`: lo inyecta
+         `_cascada.py` con una regla scopeada a `st-key-ajcas_card_`. El Mapa
+         de calor hace lo mismo, scopeado a `chartcard_heatmap` y `hm_card_`,
+         con el borde sobre el elemento Y su hijo directo a `none` para no
+         doblar la línea (el wrapper de Streamlit trae la suya). Medido tras
+         el cambio: las tres tarjetas del Mapa y las de la Cascada dan el
+         mismo `border 1px solid rgb(230,230,235), radius 12px, bg #fff`. El
+         color sale de la paleta (regla #1), no de un hex suelto.
+
+     Lo que NO cambió: el clic de una celda mueve el foco y el detalle lo
+     sigue (`_seleccionar_foco`, verificado en el navegador: clic en
+     ALIMENTOS × COCINA → el detalle pasó a esa celda). Y la fila de filtros,
+     que antes flotaba pelada arriba de la tabla, ahora vive DENTRO de la
+     tarjeta de la tabla, como en la Cascada — por eso la regla de fuente
+     `DM Sans` se acotó de `chartcard_heatmap` a `hm_tabla`, o el comodín les
+     cambiaría la letra también a los filtros.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

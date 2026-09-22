@@ -33,9 +33,7 @@ from tema import (
     AJUSTE_POS, AJUSTE_POS_TEXTO, BLANCO, ESCALA_CONTINUA, GRIS_BORDE,
     GRIS_TEXTO_SUAVE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
 )
-from graficos.base import (
-    _card, _es_movil,
-)
+from graficos.base import _es_movil
 # Los tres filtros propios (corte · familia · área) son los MISMOS que
 # los de la Cascada, misma pieza y mismo default de familias: viven en
 # `_comun.py` desde el 2026-09-15 justamente porque son dos vistas.
@@ -263,6 +261,28 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     st.markdown(f"<style>{css_filtros_vista('hm_ctrl_', 'hm_corte_')}</style>",
                 unsafe_allow_html=True)
 
+    # ── LAS TRES TARJETAS, CON EL LOOK DE LAS DE LA CASCADA ───────────────
+    #    Blancas, borde gris, radio 12 y el mismo padding — el color sale de
+    #    la paleta (regla #1). Es la MISMA regla que `_cascada.py` scopea a
+    #    `st-key-ajcas_card_`, acá scopeada a las keys de esta vista
+    #    (`chartcard_heatmap`, la tabla; `hm_card_`, los detalles). Sin esto
+    #    salían con el look por defecto de `st.container(border=True)`
+    #    —transparente, radio 8, borde tenue— que no casa con las tarjetas de
+    #    «ajuste por familia» de al lado. El borde va sobre el wrapper Y sobre
+    #    su hijo directo, y este último a `none`, para no doblar la línea.
+    st.markdown(
+        '<style>'
+        'div[class*="st-key-chartcard_heatmap"], '
+        'div[class*="st-key-hm_card_"] { '
+        'background: var(--bg-card) !important; '
+        f'border: 1px solid {GRIS_BORDE} !important; '
+        'border-radius: 12px !important; '
+        'padding: 12px 16px 14px 16px !important; }'
+        'div[class*="st-key-chartcard_heatmap"] > div, '
+        'div[class*="st-key-hm_card_"] > div { border: none !important; }'
+        '</style>',
+        unsafe_allow_html=True)
+
     # ── ESTADO PRIMERO, WIDGETS DESPUES ──────────────────────────────────
     # El corte sale de `df_full` y no del `df` que llega recortado por la
     # franja: con el df recortado, elegir un corte dejaría la lista con ese
@@ -281,35 +301,51 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     #    156 / 342. La cuarta columna existe aunque no haya Modo, para que
     #    los triggers no se estiren a un tercio de la fila cada uno. ───────
     _hay_valorizado = bool(col_valorizado and col_valorizado in df.columns)
-    # columnas-internas: los tres filtros + Modo, en fila
-    _cols_ctrl = st.columns([1.0, 1.0, 1.0, 2.2])
-    render_filtros_vista(
-        [_c.container(key=_k) for _c, _k in zip(_cols_ctrl, _K_CTRL)], _est)
 
-    _modo_val = False
-    if _hay_valorizado:
-        with _cols_ctrl[3]:
-            _modo = st.pills(
-                "Modo mapa de calor", ["Ajuste Valorizado", "Valorizado Total"],
-                default="Ajuste Valorizado", key="hm_ajuste_modo",
-                label_visibility="collapsed",
-            ) or "Ajuste Valorizado"
-            _modo_val = (_modo == "Valorizado Total")
-    col_metrica = col_valorizado if _modo_val else col_ajuste_val
+    # ── LAS TRES TARJETAS (2026-09-22, a pedido: «la misma distribución de
+    #    3 tarjetas» que la Cascada). La tabla —con sus filtros y el Modo—
+    #    arriba, en SU tarjeta; abajo, cada detalle en la suya
+    #    (`_detalle_celda`: Faltantes | Sobrantes). Hasta ese día era UNA card
+    #    envolvente (`ajuste_graf_card_izq_heatmap`, la ponía el dispatcher)
+    #    con la tabla y los detalles pelados adentro — una sola superficie. Ya
+    #    no: es el modelo de la Cascada, la vista dibuja sus propias tarjetas.
+    #    El contenedor se abre por HANDLE y se reentra dos veces (filtros
+    #    primero, tabla después) para no reindentar el cálculo del medio; la
+    #    key sigue siendo `chartcard_heatmap` (de ella cuelga la fuente de la
+    #    grilla y el CSS de `hm_tabla`). Ver `graficos/ajuste/__init__.py`. ───
+    _card_tabla = st.container(border=True, key="chartcard_heatmap")
+    with _card_tabla:
+        # columnas-internas: los tres filtros + Modo, en fila
+        _cols_ctrl = st.columns([1.0, 1.0, 1.0, 2.2])
+        render_filtros_vista(
+            [_c.container(key=_k) for _c, _k in zip(_cols_ctrl, _K_CTRL)], _est)
 
-    # El aviso de vacío va DESPUÉS de los controles, nunca antes: si no,
-    # un filtro que deja la vista sin filas se lleva puesto el control que
-    # lo deshace — el callejón sin salida de la Cascada.
-    if df is None or df.empty:
-        st.info("No hay datos para esta tabla con estos filtros.")
-        return
+        _modo_val = False
+        if _hay_valorizado:
+            with _cols_ctrl[3]:
+                _modo = st.pills(
+                    "Modo mapa de calor",
+                    ["Ajuste Valorizado", "Valorizado Total"],
+                    default="Ajuste Valorizado", key="hm_ajuste_modo",
+                    label_visibility="collapsed",
+                ) or "Ajuste Valorizado"
+                _modo_val = (_modo == "Valorizado Total")
+        col_metrica = col_valorizado if _modo_val else col_ajuste_val
+
+        # El aviso de vacío va DESPUÉS de los controles, nunca antes: si no,
+        # un filtro que deja la vista sin filas se lleva puesto el control que
+        # lo deshace — el callejón sin salida de la Cascada.
+        if df is None or df.empty:
+            st.info("No hay datos para esta tabla con estos filtros.")
+            return
 
     pivot = df.pivot_table(
         index=col_familia, columns=col_area,
         values=col_metrica, aggfunc="sum", fill_value=0,
     )
     if pivot.empty:
-        st.info("No hay datos para esta tabla en el rango seleccionado.")
+        with _card_tabla:
+            st.info("No hay datos para esta tabla en el rango seleccionado.")
         return
     # Qué celdas tienen registros: una celda en 0 CON registros (faltantes
     # y sobrantes que se cancelan) abre su detalle; una sin registros no
@@ -409,8 +445,11 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
         'font-variant-numeric: tabular-nums; }',
         # `estilos/_00_base.py` pone la fuente del proyecto SIN !important y
         # el CSS de markdown de Streamlit le gana: los nombres y los Total
-        # (markdown) salían en Source Sans y los montos (botones) no.
-        '.st-key-chartcard_heatmap * { font-family: "DM Sans", "Inter", '
+        # (markdown) salían en Source Sans y los montos (botones) no. Va sobre
+        # `hm_tabla` y ya no sobre `chartcard_heatmap`: desde que los filtros
+        # viven DENTRO de esa tarjeta (las tres tarjetas, 2026-09-22), el
+        # comodín les cambiaría también la fuente a ellos.
+        '.st-key-hm_tabla * { font-family: "DM Sans", "Inter", '
         '-apple-system, BlinkMacSystemFont, sans-serif !important; }',
     ]
 
@@ -421,7 +460,7 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
             f"line-height:{_ALTO_CELDA}px;padding-left:4px'{_t}>{texto}</div>")
 
-    with _card("heatmap", f"{_titulo_metrica} por familia y área"):
+    with _card_tabla:
         with st.container(key="hm_tabla"):
             # Cabecera: los nombres de área no son clickeables.
             # columnas-internas: nombre + una por área + Total (anchos por CSS)
@@ -515,6 +554,13 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
             # <style> por st.markdown: más liviano que uno por celda).
             st.markdown(f"<style>{''.join(_css)}</style>",
                         unsafe_allow_html=True)
+
+        # Título al pie de la tarjeta, como lo ponía `_card(...)` antes de que
+        # la vista pasara a reabrir su contenedor por handle (`.chart-card-pie`
+        # lo estiliza en `estilos/_80_cards.py`).
+        st.markdown(
+            f'<p class="chart-card-pie">{_titulo_metrica} por familia y área'
+            f'</p>', unsafe_allow_html=True)
 
     if _foco is not None:
         _detalle_celda(df, pivot, _foco, col_familia, col_area, col_producto,
@@ -668,27 +714,35 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     </style>""", unsafe_allow_html=True)
 
     def _caja(_pool, lado, nombre, color_barra, color_texto, vacio):
-        """Un cuadro del detalle: su rótulo y su buscador arriba, la grilla
+        """Un cuadro del detalle, EN SU PROPIA TARJETA (2026-09-22, a pedido:
+        «la misma distribución de 3 tarjetas» que la Cascada — la tabla arriba
+        y cada detalle en su tarjeta, como `_cascada._listas` con
+        `ajcas_card_neg`/`_pos`). Su rótulo y su buscador arriba, la grilla
         debajo. El buscador filtra el pool COMPLETO del lado por nombre de
         producto ANTES de dibujar, como la Cascada. El rótulo siempre está
-        (aunque el lado esté vacío), para que los dos cuadros midan igual."""
-        # columnas-internas: el rótulo del cuadro y su buscador (como la Cascada)
-        _t, _b = st.columns([1, 1.3], vertical_alignment="center")
-        with _t:
-            _titulo(nombre, color_texto)
-        with _b:
-            _q = st.text_input(
-                f"Buscar en {nombre.lower()}",
-                key=f"hm_buscar_{lado}_{_foco_id}",
-                placeholder="Buscar producto…",
-                label_visibility="collapsed").strip().lower()
-        if _q:
-            _pool = _pool[_pool[col_producto].astype(str).str.lower()
-                          .str.contains(_q, regex=False)]
-        if _pool.empty:
-            st.caption("Sin coincidencias." if _q else vacio)
-            return
-        _grilla(_pool, lado, color_barra, color_texto)
+        (aunque el lado esté vacío), para que los dos cuadros midan igual. La
+        key `hm_card_<lado>` es fija (una por render): de las de la Cascada
+        (`ajcas_card_*`) no cuelga CSS —son `st.container(border=True)` puros—
+        y estas tampoco, así que heredan el mismo look de tarjeta por defecto.
+        """
+        with st.container(border=True, key=f"hm_card_{lado}"):
+            # columnas-internas: el rótulo del cuadro y su buscador (como la Cascada)
+            _t, _b = st.columns([1, 1.3], vertical_alignment="center")
+            with _t:
+                _titulo(nombre, color_texto)
+            with _b:
+                _q = st.text_input(
+                    f"Buscar en {nombre.lower()}",
+                    key=f"hm_buscar_{lado}_{_foco_id}",
+                    placeholder="Buscar producto…",
+                    label_visibility="collapsed").strip().lower()
+            if _q:
+                _pool = _pool[_pool[col_producto].astype(str).str.lower()
+                              .str.contains(_q, regex=False)]
+            if _pool.empty:
+                st.caption("Sin coincidencias." if _q else vacio)
+                return
+            _grilla(_pool, lado, color_barra, color_texto)
 
     if modo_val:
         _caja(_sub_prod, "top", "Top productos", _AZUL_BARRA, _AZUL_TEXTO,

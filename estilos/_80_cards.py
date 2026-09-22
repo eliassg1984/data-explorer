@@ -1226,18 +1226,18 @@ CSS = """    /* ================================================================
         /* sitio a la tabla y la tarjeta mide lo mismo con foco o sin él.     */
         /* Regla #398.                                                        */
         /*                                                                    */
-        /* `ajuste_graf_card_izq_heatmap` (Familia × Área) salió el           */
-        /* 2026-09-18, por dos motivos. El que se REPORTÓ CON CAPTURA: la     */
-        /* fila Total del Mapa se veía partida al medio. No era el scroll de  */
-        /* la tarjeta sino uno ANIDADO: la grilla lleva `overflow-x: auto`    */
-        /* (las áreas se scrollean en X en vez de aplastarse), un eje en      */
-        /* `auto` computa el otro a `auto` también, y como flex item de una   */
-        /* tarjeta con techo se encogía y se volvía ÉL el scroller. La tabla  */
-        /* que lo reemplazó cabe, pero el segundo motivo sigue: el clic en    */
-        /* una celda abre el detalle —hasta 30 productos— DENTRO de esta      */
-        /* tarjeta, y con techo le saldría barra propia, que es justo lo que  */
-        /* se pidió no tener. Mismo criterio que Semanal. Regla #468.         */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_heatmap),
+        /* El Mapa de calor YA NO ESTÁ en esta lista, y no por un `:not()`:   */
+        /* desde el 2026-09-22 no tiene una card única (`ajuste_graf_card_    */
+        /* izq_heatmap` desapareció) — dibuja sus propias tarjetas como la    */
+        /* Cascada (la tabla y sus dos detalles, ver `graficos/ajuste/        */
+        /* _heatmap.py`), ninguna con este prefijo. Antes iba excluido con    */
+        /* `:not(...izq_heatmap)` por dos motivos que siguen valiendo para su */
+        /* nueva tabla `chartcard_heatmap`: la grilla lleva `overflow-x:auto` */
+        /* (las áreas se scrollean en X) y un eje en `auto` computa el otro a */
+        /* `auto`, así que con techo la tabla se volvía ÉL el scroller y la   */
+        /* fila Total se partía (reportado con captura); y el detalle abre    */
+        /* DENTRO, con lo que un techo le daría barra propia. Regla #468.     */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
