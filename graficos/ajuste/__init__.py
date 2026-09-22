@@ -280,18 +280,19 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             col_cantidad=col_cantidad, col_unidad=col_unidad)
 
     def _dib_distribucion():
-        """Distribución: tarjeta a mano y con `d_sin_chips`, como el Mapa de
-        calor. Desde el 2026-09-21 tiene filtro de Familia propio, así que NO
-        usa `_en_tarjeta`: su `_vacio` mira el df de los chips de arriba —que
-        esta vista ya no usa— y con él un chip que deja `d` sin filas
-        escondería la vista ENTERA, su propio filtro incluido. La vista avisa
-        sola cuando se queda sin datos; la key de la tarjeta se conserva (de
-        su prefijo cuelga el clamp de una pantalla de estilos/_80_cards.py)."""
-        with st.container(border=True, key="ajuste_graf_card_izq_distribucion"):
-            _graf_distribucion_ajuste(
-                d_sin_chips, col_familia, col_area, col_ajuste_val, col_producto,
-                col_codigo=col_codigo, col_cantidad=col_cantidad,
-                col_fecha=col_fecha, col_unidad=col_unidad, df_full=df_full)
+        """Distribución: dibuja sus PROPIAS tarjetas (el gráfico en la suya a la
+        izquierda y las tablas en la suya a la derecha), como la Cascada y el
+        Mapa de calor — ya NO una card única alrededor (2026-09-22, a pedido:
+        «que el gráfico en sus tres modos figuren en su propia tarjeta y las
+        tablas en una tarjeta, a la derecha»). Por eso no usa `_en_tarjeta`,
+        igual que `_dib_cascada`/`_dib_heatmap`: envolverla daría una tarjeta
+        alrededor de otras dos. Y como ellas, su `_vacio` mira el df de los
+        chips de arriba —que esta vista ya no usa—: recibe `d_sin_chips` y avisa
+        sola cuando se queda sin datos. Ver regla #494."""
+        _graf_distribucion_ajuste(
+            d_sin_chips, col_familia, col_area, col_ajuste_val, col_producto,
+            col_codigo=col_codigo, col_cantidad=col_cantidad,
+            col_fecha=col_fecha, col_unidad=col_unidad, df_full=df_full)
 
     def _dib_evolucion():
         _en_tarjeta("evolucion", lambda: _graf_evolucion_ajuste(

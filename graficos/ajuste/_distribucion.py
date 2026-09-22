@@ -22,8 +22,6 @@ cubra con un df minimo a proposito).
 """
 
 
-import contextlib
-
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -70,6 +68,7 @@ _ALTO_FIG = alturas.con_franja(alturas.PROTAGONISTA, alturas.FRANJA_UNA_LINEA)
 _EJE_PX = 60           # ancho reservado para el eje Y y su rótulo
 _PX_STRIP_NORM = 150   # px por familia en el strip normal (columna izquierda)
 _PX_STRIP_AMP = 260    # px por familia en el strip ampliado
+_PX_PARETO_NORM = 120  # px por barra en el Pareto normal (columna izquierda)
 _PX_PARETO_AMP = 210   # px por barra en el Pareto ampliado
 _PX_BIN_NORM = 30      # px por bin (30) en el histograma normal
 _PX_BIN_AMP = 46       # px por bin (30) en el histograma ampliado
@@ -200,31 +199,33 @@ def _fig_pareto_ajuste(df, col_ajuste_val, col_producto, top_n=_PARETO_TOP_N,
 def _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
                   col_cantidad=None, col_fecha=None, col_unidad=None,
                   alto=_ALTO_FIG, amp=False):
-    """Modo «Valor (Pareto)» del toggle: la figura + el detalle al clic.
+    """Modo «Valor (Pareto)»: dibuja la figura en su tarjeta (a la izquierda) y
+    DEVUELVE `(caption, DataFrame)` del detalle al clic —para la tarjeta de la
+    derecha— o None.
 
-    Clic en la barra de un producto -> tabla con sus líneas (por área)
-    debajo. La key es ESTÁTICA a propósito: la selección sólo pinta la tabla
-    de abajo, no realimenta la figura, así que no aplica la trampa de la key
-    dinámica (regla #399). Y abre en modo CLIC (`dragmode="pan"` + ejes
-    fijos): en «select» Streamlit apaga el clic suelto y la barra no llegaría
-    a la tabla (regla #388). La barra «Otros» no abre detalle: es la cola."""
+    Clic en la barra de un producto -> el detalle son sus líneas (por área).
+    La key es ESTÁTICA a propósito: la selección sólo pinta la tabla, no
+    realimenta la figura, así que no aplica la trampa de la key dinámica
+    (regla #399). Y abre en modo CLIC (`dragmode="pan"` + ejes fijos): en
+    «select» Streamlit apaga el clic suelto y la barra no llegaría a la tabla
+    (regla #388). La barra «Otros» no abre detalle: es la cola. Igual que el
+    strip/histograma, se fuerza el ancho SIEMPRE para que la figura se deslice
+    dentro de su columna (ver `_forzar_ancho`)."""
     _hay_prod = bool(col_producto and col_producto in df_nz.columns)
     fig = (_fig_pareto_ajuste(df_nz, col_ajuste_val, col_producto, height=alto)
            if _hay_prod else None)
     if fig is None:
         st.info("Ningún producto quedó con faltante neto en este rango.")
-        return
-    _cap_par = ("Productos ordenados por soles de faltante · la línea marca el "
-                "% acumulado · clic en una barra para ver sus áreas abajo")
-    if amp:
-        _cap_par += " · deslizá la tarjeta para ver el resto"
-    st.caption(_cap_par)
+        return None
+    st.caption("Productos ordenados por soles de faltante · la línea marca el "
+               "% acumulado · clic en una barra para ver sus áreas a la derecha"
+               " · deslizá para ver los lados")
     fig.update_layout(dragmode="pan")
     fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
-    if amp:
-        _n = len(fig.data[0].x) if fig.data else 1
-        _forzar_ancho("dist_pareto", _EJE_PX + max(_n, 1) * _PX_PARETO_AMP)
+    _n = len(fig.data[0].x) if fig.data else 1
+    _forzar_ancho("dist_pareto", _EJE_PX + max(_n, 1) * (
+        _PX_PARETO_AMP if amp else _PX_PARETO_NORM))
     with _card("dist_pareto", ""):
         _ev = st.plotly_chart(
             fig, use_container_width=True, key="ajuste_dist_pareto",
@@ -234,10 +235,10 @@ def _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
     _prods = [p.get("x") for p in _pts
               if p.get("x") and not str(p.get("x")).startswith("Otros")]
     if not _prods:
-        return
+        return None
     _sel = df_nz[df_nz[col_producto].astype(str).isin([str(x) for x in _prods])]
     if _sel.empty:
-        return
+        return None
     _det = pd.DataFrame({"Producto": _sel[col_producto].astype(str)})
     if col_area and col_area in _sel.columns:
         _det["Área"] = _sel[col_area].astype(str)
@@ -249,10 +250,9 @@ def _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
         _det["Corte"] = _f.map(lambda x: _fmt_corte(x) if pd.notna(x) else "")
     _det = _det.sort_values("Ajuste S/")
     _tot = float(_det["Ajuste S/"].sum())
-    st.caption(f"{len(_det)} líneas · ajuste neto S/ {_tot:,.2f}")
     _fmt = _det.copy()
     _fmt["Ajuste S/"] = _fmt["Ajuste S/"].map(lambda v: f"S/ {v:,.2f}")
-    st.dataframe(_fmt, hide_index=True, use_container_width=True)
+    return (f"{len(_det)} líneas · ajuste neto S/ {_tot:,.2f}", _fmt)
 
 
 def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_producto,
@@ -325,31 +325,39 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     # minimalista de Cascada/Mapa (`css_filtros_vista`), así que el rótulo ES
     # el valor vigente. El título vive en esta fila —los gráficos ya no llevan
     # `title=`— y la figura de abajo gana alto (`_ALTO_FIG`).
-    # Estado de AMPLIAR: se lee de `session_state` ANTES de crear el toggle,
-    # porque el CSS de abajo (un-clamp de la tarjeta) depende de él y el widget
-    # se dibuja más abajo, en su columna. El alto de las figuras también:
-    # AMPLIADO supera una pantalla a propósito (ver `alturas`, regla #494).
+    # Estado de AMPLIAR: sube el alto de la figura a `alturas.AMPLIADO`, que
+    # supera una pantalla a propósito (ver `alturas`, regla #494). Sin card
+    # envolvente que la clampee, la tarjeta crece y la página scrollea.
     _amp = bool(st.session_state.get("ajuste_dist_ampliar", False))
     _alto = alturas.AMPLIADO if _amp else _ALTO_FIG
 
-    # Las tres tarjetas de esta vista scrollean en X cuando la figura excede el
-    # ancho (sólo pasa en modo Ampliar; en normal la figura es elástica y llena
-    # el ancho, así que el overflow no hace nada). Y en Ampliar la tarjeta
-    # externa sale del techo de una pantalla —`estilos/_80_cards.py` la clampea
-    # a `--alto-util`— y crece; lo que no entra lo scrollea la página, igual que
-    # las tarjetas enmarcadas. Ver regla #494.
-    _css_scroll = (
+    # DOS TARJETAS PROPIAS —gráfico (`chartcard_dist_*`) | tablas
+    # (`ajdist_card_tablas`)—, con el look de la Cascada: blancas, borde gris,
+    # radio 12, el color de la paleta (regla #1). Es la MISMA regla que el Mapa
+    # de calor scopea a sus keys (regla #493): el borde va sobre la tarjeta y su
+    # hijo directo a `none` para no doblar la línea. Ya NO hay card envolvente
+    # (`ajuste_graf_card_izq_distribucion` se fue del dispatcher), así que
+    # tampoco el clamp de una pantalla: lo que no entra lo scrollea la página,
+    # como Cascada/Mapa de calor. El gráfico scrollea en X porque la figura se
+    # fuerza más ancha que su tarjeta (`_forzar_ancho`). Ver regla #494.
+    _css_cards = (
+        'div[class*="st-key-chartcard_dist_grupo"],'
+        'div[class*="st-key-chartcard_dist_hist"],'
+        'div[class*="st-key-chartcard_dist_pareto"],'
+        'div[class*="st-key-ajdist_card_tablas"]{'
+        'background:var(--bg-card) !important;'
+        f'border:1px solid {GRIS_BORDE} !important;'
+        'border-radius:12px !important;padding:10px 14px 12px 14px !important;}'
+        'div[class*="st-key-chartcard_dist_grupo"]>div,'
+        'div[class*="st-key-chartcard_dist_hist"]>div,'
+        'div[class*="st-key-chartcard_dist_pareto"]>div,'
+        'div[class*="st-key-ajdist_card_tablas"]>div{border:none !important;}'
         'div[class*="st-key-chartcard_dist_grupo"],'
         'div[class*="st-key-chartcard_dist_hist"],'
         'div[class*="st-key-chartcard_dist_pareto"]{overflow-x:auto;}'
     )
-    if _amp:
-        _css_scroll += (
-            "div.st-key-ajuste_graf_card_izq_distribucion{"
-            "max-height:none !important;overflow-y:visible !important;}"
-        )
     st.markdown(f"<style>{css_filtros_vista('ajdist_ctrl_', 'ajdist_nolist_')}"
-                f"{_CSS_ENCABEZADO}{_css_scroll}</style>", unsafe_allow_html=True)
+                f"{_CSS_ENCABEZADO}{_css_cards}</style>", unsafe_allow_html=True)
 
     # Semilla y opciones de familia. Del parquet ENTERO (`df_full`) para que
     # la lista no cambie con el rango; la siembra sólo prende las que existen.
@@ -408,26 +416,20 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         st.info("Ningún producto tuvo ajuste distinto de cero en este rango.")
         return
 
-    # ── LAYOUT: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA ──
-    # (2026-09-22, a pedido: «pon la tabla al lado derecho» + «el gráfico debe
-    # poder ser deslizable para ver los lados»). Distribución e Histograma
-    # parten la fila: el gráfico —más angosto por la tabla— se DESLIZA en
-    # horizontal para ver las familias/bins de los lados (ancho forzado por
-    # CSS, no por `fig.layout.width`, que Streamlit pisa — ver `_forzar_ancho`),
-    # y a la derecha van APILADAS la tabla del detalle de la selección (arriba)
-    # y la del «5% inferior» (abajo). El Pareto NO se parte: ya ES un ranking y
-    # su detalle abre al clic debajo. Ver regla #494.
-    _dos_col = _vista != "Valor (Pareto)"
-    if _dos_col:
-        _col_g, _col_t = st.columns([1.45, 1], gap="medium")
-        _ctx_graf = _col_g
-    else:
-        _col_t = None
-        _ctx_graf = contextlib.nullcontext()
-
+    # ── LAYOUT: gráfico en SU tarjeta a la IZQUIERDA, tablas en SU tarjeta a
+    # la DERECHA — los TRES modos (2026-09-22, a pedido: «que el gráfico en sus
+    # tres modos figuren en su propia tarjeta y las tablas en una tarjeta, a la
+    # derecha»). El gráfico —más angosto por la tabla— se DESLIZA en horizontal
+    # para ver las familias/bins/barras de los lados (ancho forzado por CSS, no
+    # por `fig.layout.width`, que Streamlit pisa — ver `_forzar_ancho`). A la
+    # derecha van APILADAS la tabla del detalle de la selección (arriba) y la
+    # del «5% inferior» (abajo, sólo Distribución/Histograma; el Pareto ya ES un
+    # ranking). Ver regla #494.
+    _col_g, _col_t = st.columns([1.45, 1], gap="medium")
     _detalle = None  # (caption, DataFrame) de la selección → columna derecha
+    _es_pareto = _vista == "Valor (Pareto)"
 
-    with _ctx_graf:
+    with _col_g:
         if _vista == "Distribución":
             _es_strip = bool(grp and grp in df_nz.columns)
             _hay_prod = _es_strip and bool(col_producto and col_producto in df_nz.columns)
@@ -676,21 +678,25 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                         _det2_fmt)
 
         else:  # "Valor (Pareto)"
-            _pareto_valor(df_nz, col_ajuste_val, col_producto, col_area,
-                          col_cantidad=col_cantidad, col_fecha=col_fecha,
-                          col_unidad=col_unidad, alto=_alto, amp=_amp)
+            _detalle = _pareto_valor(
+                df_nz, col_ajuste_val, col_producto, col_area,
+                col_cantidad=col_cantidad, col_fecha=col_fecha,
+                col_unidad=col_unidad, alto=_alto, amp=_amp)
 
-    # ── COLUMNA DERECHA: detalle de la selección (arriba) + «5% inferior»
-    # (abajo), apiladas. El «5% inferior» acompaña a Distribución e Histograma;
-    # en el Pareto sobra —la vista YA es el ranking de faltantes— y por eso
-    # tampoco hay columna derecha. ──
-    if _dos_col:
-        with _col_t:
+    # ── COLUMNA DERECHA, EN SU TARJETA: detalle de la selección (arriba) +
+    # «5% inferior» (abajo), apiladas. El «5% inferior» acompaña a Distribución
+    # e Histograma; en el Pareto sobra —la vista YA es el ranking de faltantes.
+    # Si no hay nada que mostrar (Pareto sin clic, o sin selección y sin
+    # outliers), la tarjeta lleva una línea de ayuda para no quedar vacía. ──
+    with _col_t:
+        with st.container(border=True, key="ajdist_card_tablas"):
+            _hay_tabla = False
             if _detalle is not None:
                 st.caption(_detalle[0])
                 st.dataframe(_detalle[1], hide_index=True,
                              use_container_width=True)
-            if col_producto and col_producto in df.columns:
+                _hay_tabla = True
+            if not _es_pareto and col_producto and col_producto in df.columns:
                 umbral = float(df[col_ajuste_val].quantile(0.05))
                 outliers = df[df[col_ajuste_val] <= umbral].copy()
                 if not outliers.empty:
@@ -710,3 +716,6 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
                         lambda v: f"S/ {v:,.2f}"
                     )
                     st.dataframe(out_df, hide_index=True, use_container_width=True)
+                    _hay_tabla = True
+            if not _hay_tabla:
+                st.caption("Seleccioná en el gráfico para ver el detalle acá.")

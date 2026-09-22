@@ -32,7 +32,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 494 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (174)
+**CSS y estilos** (173)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -207,7 +207,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#486** — El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro (Faltantes | Sobrantes, y el…
 - **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
 - **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
-- **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
 
 **Layout y alturas** (69)
 
@@ -40952,24 +40951,34 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      —*«verlos así a lo largo horizontal no es muy intuitivo»*—; después
      *«que esté dentro de una tarjeta y que pueda ser deslizable para ver
      otros grupos o ampliar»*; y al final *«pon la tabla al lado derecho»* +
-     *«el gráfico debe poder ser deslizable para ver los lados»*. El
-     resultado combina las tres cosas.
+     *«el gráfico debe poder ser deslizable para ver los lados»*; y por
+     último *«que el gráfico en sus tres modos figuren en su propia tarjeta y
+     las tablas en una tarjeta, a la derecha»*. El resultado combina todo.
 
-     **El layout (Distribución e Histograma) parte la fila en dos columnas**
-     `st.columns([1.9, 1])`: el gráfico a la izquierda y, apiladas a la
-     derecha, la tabla del detalle de la selección (arriba) y la del «5%
-     inferior» (abajo). El **Pareto NO se parte** (`_dos_col = _vista !=
-     "Valor (Pareto)"`): ya ES un ranking y su detalle abre al clic debajo;
-     su contexto de gráfico es `contextlib.nullcontext()`, así que dibuja a
-     ancho completo. El detalle de la selección se CAPTURA en `_detalle`
-     dentro de la columna del gráfico (se lee del evento de Plotly, que sólo
-     existe tras dibujarlo) y se RINDE después en la columna derecha.
+     **DOS TARJETAS PROPIAS, los TRES modos** (`st.columns([1.45, 1])`): el
+     gráfico en la suya a la izquierda (la de `_card`, `chartcard_dist_*`) y
+     las tablas en la suya a la derecha (`ajdist_card_tablas`), apiladas: el
+     detalle de la selección (arriba) y el «5% inferior» (abajo, sólo
+     Distribución/Histograma; el Pareto ya ES un ranking). Ya NO hay card
+     envolvente: `_dib_distribucion` dejó de abrir
+     `ajuste_graf_card_izq_distribucion` y la vista dibuja sus propias
+     tarjetas, igual que Cascada y Mapa de calor (reglas #441 y #493). El look
+     de tarjeta (blanca, borde `GRIS_BORDE`, radio 12) lo inyecta la vista
+     scopeado a esas keys, como el Mapa de calor — con el borde sobre la
+     tarjeta y su hijo directo a `none`. Sin card envolvente tampoco hay clamp
+     de una pantalla: lo que no entra lo scrollea la página.
+
+     **El Pareto también se parte** ahora: `_pareto_valor` dibuja su figura en
+     la tarjeta izquierda y DEVUELVE `(caption, DataFrame)` del detalle al
+     clic (o None) en vez de renderizarlo — el main lo pone en la tarjeta
+     derecha, igual que el strip/histograma capturan `_detalle`. Si no hay
+     nada que mostrar (Pareto sin clic, o sin selección ni outliers), la
+     tarjeta derecha lleva una línea de ayuda para no quedar vacía.
 
      **El gráfico se desliza para ver los lados YA en modo normal**, no sólo
-     al ampliar: como la tabla le quita ancho, el strip/histograma se fuerzan
-     a un ancho fijo `_EJE_PX + n * px_por_unidad` (px `_NORM` normal, `_AMP`
-     ampliado) que desborda la columna, y la tarjeta scrollea en X. El Pareto,
-     a ancho completo, sólo se fuerza al ampliar.
+     al ampliar: como la tabla le quita ancho, la figura se fuerza a un ancho
+     fijo `_EJE_PX + n * px_por_unidad` (px `_NORM` normal, `_AMP` ampliado)
+     que desborda la tarjeta, y ésta scrollea en X. Vale para los tres modos.
 
      **El ancho NO se puede fijar con `fig.layout.width`: Streamlit lo pisa
      con el ancho del contenedor** (verificado en el navegador — sólo respeta
@@ -40985,15 +40994,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      función porque el CSS depende de él) agranda el alto a `alturas.AMPLIADO`
      (620) —que SUPERA el presupuesto de una pantalla a propósito; es un modo
      de inspección, por eso no entra en los asserts de `alturas.py`— y sube
-     los px por grupo. Además, sólo con `_amp`, el CSS le saca a
-     `ajuste_graf_card_izq_distribucion` el `max-height: var(--alto-util)` de
-     `estilos/_80_cards.py` para que la tarjeta crezca y lo que no entra lo
-     scrollee la PÁGINA (mismo criterio que Semanal/Volatilidad, ver #398). El
-     usuario aceptó que la tarjeta deje de caber en una pantalla ampliada.
+     los px por grupo. No hace falta ningún un-clamp: al no existir ya la card
+     envolvente `ajuste_graf_card_` no hay `max-height: var(--alto-util)` que
+     quitar, la tarjeta crece y la página scrollea (mismo criterio que
+     Cascada/Mapa de calor). El usuario aceptó que deje de caber en una
+     pantalla ampliada.
 
      El alto sale de `alturas` (no un literal — regla del presupuesto
      vertical); los ANCHOS (`_PX_STRIP_NORM/_AMP`, `_PX_BIN_NORM/_AMP`,
-     `_PX_PARETO_AMP`, `_EJE_PX`) NO son altos, así que la guarda de
+     `_PX_PARETO_NORM/_AMP`, `_EJE_PX`) NO son altos, así que la guarda de
      `test_graficos.py` no los marca.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
