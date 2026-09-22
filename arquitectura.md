@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-493 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+494 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (173)
 
@@ -208,7 +208,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
 - **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
 
-**Layout y alturas** (68)
+**Layout y alturas** (69)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -278,8 +278,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#447** — Un control que no le cambia nada a las tarjetas vecinas va en su propio @st.fragment, o el…
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
+- **#494** — Ajuste › Distribución: la tarjeta es DESLIZABLE y tiene un toggle «Ampliar»
 
-**Plotly y figuras** (89)
+**Plotly y figuras** (90)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -370,6 +371,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#487** — La serie de «Compra Vs Año Pasado» rotula las TRES métricas por barra, dice el AÑO en una…
 - **#488** — La selección por clic de st.plotly_chart(on_select=...) NO llega a las trazas de un…
 - **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
+- **#494** — Ajuste › Distribución: la tarjeta es DESLIZABLE y tiene un toggle «Ampliar»
 
 **AgGrid y tablas** (79)
 
@@ -40943,6 +40945,54 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      tarjeta de la tabla, como en la Cascada — por eso la regla de fuente
      `DM Sans` se acotó de `chartcard_heatmap` a `hm_tabla`, o el comodín les
      cambiaría la letra también a los filtros.
+
+494. **Ajuste › Distribución: la tarjeta es DESLIZABLE y tiene un toggle
+     «Ampliar».** 2026-09-22, a pedido: primero se probó gráfico y tabla
+     lado a lado en horizontal y se descartó por poco intuitivo —*«verlos
+     así a lo largo horizontal no es muy intuitivo»*—; el pedido final fue
+     *«que esté dentro de una tarjeta y que pueda ser deslizable para ver
+     otros grupos o ampliar»*. Aplica a los TRES modos (Distribución/strip,
+     Histograma, Pareto), a pedido.
+
+     **En modo normal no cambia nada:** la figura sigue elástica
+     (`use_container_width=True`, ancho completo) y con su alto de siempre
+     (`_ALTO_FIG`). El toggle vive en `session_state["ajuste_dist_ampliar"]`
+     y se lee ARRIBA de la función —antes de crear el widget, que se dibuja
+     en su columna de la cabecera— porque el CSS depende de él.
+
+     **En Ampliar la figura se agranda y la tarjeta scrollea en X.** Dos
+     piezas, cada una con su dueño:
+
+       · **Alto:** `alturas.AMPLIADO` (620), que SUPERA el presupuesto de una
+         pantalla a propósito — es un modo de inspección que se enciende y
+         apaga, no un rol que deba caber en el laptop objetivo. Por eso no
+         entra en los asserts de coherencia de `alturas.py`.
+       · **Ancho:** fijo en px = `_EJE_PX + n * px_por_unidad`, con
+         `use_container_width=False`. Es la ÚNICA forma de que Plotly mida
+         más ancho que su contenedor (misma lógica que el alto: Plotly sólo
+         obedece `fig.layout.width/height`, ignora el contenedor — ver la
+         cabecera de `alturas.py`). `n` es familias (strip), barras (Pareto)
+         o los 30 bins (Histograma); los px por unidad son
+         `_PX_STRIP_AMP`/`_PX_PARETO_AMP`/`_PX_BIN_AMP` en `_distribucion.py`.
+         NO son altos, así que la guarda de `test_graficos.py` no los marca.
+
+     **El scroll y el un-clamp los pone el CSS que la vista inyecta cada
+     render** (dentro del `st.markdown` de `_CSS_ENCABEZADO`, sin guard de
+     «una sola vez», regla #59): `overflow-x:auto` sobre las tres
+     `chartcard_dist_*` (inofensivo en normal: ahí la figura es 100% de
+     ancho y no desborda), y —SÓLO cuando `_amp`— un override que le saca a
+     `ajuste_graf_card_izq_distribucion` el `max-height: var(--alto-util)`
+     que le pone `estilos/_80_cards.py`, para que la tarjeta crezca y lo que
+     no entra lo scrollee la PÁGINA (mismo criterio que las tarjetas
+     enmarcadas y que Semanal/Volatilidad, ver #398). El usuario aceptó
+     explícitamente que la tarjeta deje de caber en una pantalla mientras
+     esté ampliada.
+
+     **La altura NO depende de `n`, sólo de `_amp`** (`_alto = AMPLIADO if
+     _amp else _ALTO_FIG`), así que se calcula una vez arriba y se pasa a los
+     cuatro `_layout_aj(height=_alto)`; el ancho, que sí depende de `n`, se
+     aplica con `fig.update_layout(width=...)` justo antes de cada
+     `st.plotly_chart`, cuando ya se conoce el número de grupos/barras/bins.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
