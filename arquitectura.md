@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-491 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+492 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (172)
 
@@ -452,7 +452,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (136)
+**Streamlit** (137)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -590,6 +590,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#488** — La selección por clic de st.plotly_chart(on_select=...) NO llega a las trazas de un…
 - **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
 - **#491** — Un helper que abre un st.container(key=...) con la key FIJA sólo sobrevive si se lo llama UNA…
+- **#492** — El aviso de ingreso por Telegram (aviso_ingreso.py, 2026-09-22) cuenta "entrar" como sesión…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -40841,6 +40842,46 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      —que la franja muestre el set de la vista activa— quedó pendiente.
      Pariente de la #163 (keys que se comparten por accidente) y la #456
      (un mismo elemento dibujado dos veces por corrida).
+
+492. **El aviso de ingreso por Telegram (`aviso_ingreso.py`, 2026-09-22)
+     cuenta "entrar" como sesión de Streamlit, no como login.** El login
+     con Google/GitHub/correo de la app privada (regla #163 de
+     `restricciones-despliegue`, en memoria) vive del lado de Streamlit
+     Cloud y persiste por cookie; la sesión de Streamlit (`session_state`)
+     es otra cosa y se reinicia en cada F5. Con la guardia de
+     `_aviso_ingreso_enviado` en `session_state`, eso significa un aviso
+     por cada recarga de página, no uno por login — a propósito, para no
+     complicar el módulo con un segundo mecanismo de deduplicación (ej.
+     `localStorage`) por dos usuarios conocidos. Si en algún momento se
+     siente ruidoso, la solución no es tocar la guardia de `session_state`
+     — es agregar una ventana de deduplicación aparte.
+
+     **`st.user.email` puede volver vacío por un bug conocido de
+     Streamlit** (issue #11373 de streamlit/streamlit): la documentación
+     dice que en una app privada de Community Cloud SIN `[auth]` propio en
+     secrets, `st.user` trae sólo `email` — pero hay una regresión
+     reportada donde vuelve `{}`. `_viewer_email()` no revienta: cae a
+     `"desconocido"`. Si el aviso llega siempre con ese texto en vez del
+     correo real, no es un bug de este módulo — es ese issue de upstream,
+     y no hay workaround estable: el header `X-Streamlit-User` que algunos
+     hilos del foro mencionan como alternativa es explícitamente interno,
+     sin formato documentado y sujeto a cambiar sin aviso.
+
+     **El relevo de geolocalización (`aviso_ingreso_geo`) usa el mismo
+     truco que `graficos/base.py::_arrastrar_ventana_riel`**: un
+     `st.text_input` oculto que JS llena con el valor y confirma con un
+     Enter de teclado de verdad (`keydown`+`keyup`), porque ni `input` ni
+     `change` ni `blur` programático disparan el `on_change` de un
+     `st.text_input` (react-aria). Se esconde con `opacity/width/height` en
+     `estilos/_00_base.py` — nunca `display:none`, que lo saca del DOM y
+     Streamlit deja de reconocerlo (mismo criterio que `pila_go_` en
+     `_27_pila.py`).
+
+     Sin `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` en los secrets de
+     Streamlit Cloud, `procesar_aviso_ingreso()` no hace nada — ni
+     excepción, ni log, silencio total (mismo criterio que
+     `secrets_disponibles()` de `data.py` con los de R2). Antes de asumir
+     que el módulo está roto, confirmar que esos dos secrets existen.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
