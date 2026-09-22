@@ -1130,28 +1130,31 @@ def _pruebas_puras():
           _vap._fmt_etiqueta(0.0, "Valor"), None)
     check("3 meses: etiquetas derechas en las dos series",
           _vap._plan_etiquetas(3, 9, "Valor"),
-          {"girar": False, "ambas": True, "paso": 1, "sec": False})
+          {"girar": False, "ambas": True, "paso": 1, "n_sec": 0})
     check("12 meses: no entran derechas, van giradas",
           _vap._plan_etiquetas(12, 9, "Valor"),
-          {"girar": True, "ambas": True, "paso": 1, "sec": False})
-    # Segundo renglón con el precio (regla #401): entra con 3 meses; con 12
-    # cede él, no la etiqueta del año pasado.
-    check("3 meses con precio: dos renglones derechos",
-          _vap._plan_etiquetas(3, 9, "Cantidad", largo_sec=11),
-          {"girar": False, "ambas": True, "paso": 1, "sec": True})
-    check("12 meses con precio: el precio cede, las dos series quedan",
-          _vap._plan_etiquetas(12, 9, "Cantidad", largo_sec=11),
-          {"girar": True, "ambas": True, "paso": 1, "sec": False})
+          {"girar": True, "ambas": True, "paso": 1, "n_sec": 0})
+    # Renglones secundarios con las otras métricas (reglas #401, #484):
+    # entran los dos con 3 meses; con 12 ceden, no la etiqueta del año
+    # pasado.
+    check("3 meses con secundarias: los tres renglones derechos",
+          _vap._plan_etiquetas(3, 9, "Cantidad", largo_sec=11, n_sec=2),
+          {"girar": False, "ambas": True, "paso": 1, "n_sec": 2})
+    check("12 meses con secundarias: ceden, las dos series quedan",
+          _vap._plan_etiquetas(12, 9, "Cantidad", largo_sec=11, n_sec=2),
+          {"girar": True, "ambas": True, "paso": 1, "n_sec": 0})
     check("cantidad con unidad va entera",
           _vap._fmt_etiqueta(4300.0, "Cantidad", "kg"), "4,300 kg")
     check("cantidad con unidad y muchos miles, compacta",
           _vap._fmt_etiqueta(123456.0, "Cantidad", "und"), "123.5k und")
     check("precio por unidad", _vap._fmt_etiqueta(12.345, "Precio", "kg"),
           "S/ 12.35/kg")
-    check("segundo renglón debajo del principal",
-          _vap._con_segundo("300 kg", "S/ 12.35/kg").split("<br>")[0], "300 kg")
+    check("secundarias debajo del principal",
+          _vap._apilar("300 kg", ["S/ 12.35/kg"]).split("<br>")[0], "300 kg")
+    check("dos secundarias apiladas",
+          _vap._apilar("S/ 13.5k", ["157 kg", "S/ 86.11/kg"]).count("<br>"), 2)
     check("sin principal no hay etiqueta",
-          _vap._con_segundo(None, "S/ 12.35/kg"), None)
+          _vap._apilar(None, ["S/ 12.35/kg"]), None)
     from graficos.compras._comun import unidad_corta as _uc
     check("unidad_corta KILOS", _uc("KILOS"), "kg")
     # "Lt" y no "L": el símbolo SI no es el vocabulario de la casa — el
@@ -1168,7 +1171,7 @@ def _pruebas_puras():
     # meses (21 px por mes) una etiqueta de 47 px necesita 3 meses de lugar.
     check("precio con 32 meses ralea en vez de alternar",
           _vap._plan_etiquetas(32, 8, "Precio"),
-          {"girar": False, "ambas": False, "paso": 3, "sec": False})
+          {"girar": False, "ambas": False, "paso": 3, "n_sec": 0})
     check("_ralear conserva siempre el último mes",
           _vap._ralear(["a", "b", "c", "d", "e"], 2), ["a", None, "c", None, "e"])
     _techo = _vap._techo_con_etiquetas(100.0, 0.0, 17, alto_plot=149)

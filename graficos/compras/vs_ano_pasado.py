@@ -121,18 +121,20 @@ from tablas.compras_vs_ano_pasado import (
 # `alturas.FRANJA_CTRL_EVO` — los píxeles de un control nuevo salen de la
 # figura, o la tarjeta crece y su eje X se va debajo del borde.
 _LEYENDA_VAP = 26
-"""Alto de la leyenda que la serie mensual dibujaba ARRIBA de las barras
-("Año pasado" gris / "Este año" acento), MEDIDA en el navegador.
+"""Alto de la leyenda de AÑOS que la serie mensual dibuja debajo de las
+barras («2024-25 · año pasado» gris / «2025-26 · este año» acento), MEDIDA
+en el navegador.
 
-Se retiró el 2026-09-02, a pedido. No hacía falta: los dos colores son la
-convención de toda la app (gris = lo que pasó, acento = lo vigente), el
-título de la tarjeta ya dice "Vs año pasado", y el hover —`hovermode:
-x unified`— nombra las dos series al pasar por encima.
+Vive DENTRO de la figura (leyenda de Plotly, `orientation="h"` al pie), no
+como un bloque aparte: por eso NO se le resta al contenido de la tarjeta —
+se le resta al ÁREA DE TRAZO (`_ALTO_PLOT_VAP`), que es lo que la figura
+deja para las barras una vez puestos los márgenes y esta leyenda.
 
-El número sigue existiendo porque se le RESTA a la figura: sin la resta, la
-leyenda desaparecía y su hueco quedaba de aire. Es el mismo mecanismo que
-las `alturas.FRANJA_*`, pero al revés — no se descuenta lo que ocupa otro
-bloque, se descuenta lo que la figura dejó de necesitar."""
+Estuvo retirada entre el 2026-09-02 y el 2026-09-21: los dos colores son la
+convención de la app (gris = lo que pasó, acento = lo vigente) y el hover
+los nombraba. Volvió a pedido —«indicar cuál columna es de qué año»— y
+ahora dice el AÑO en número, igual que los bordes de la cascada de al lado
+(`_etq_anios`), que es la parte que el color solo no podía decir."""
 
 _FAM_TODAS = "Todas"
 """Primera opción del filtro de Familia de la cabecera: no filtrar.
@@ -145,30 +147,43 @@ rompería."""
 
 _FRANJA_VAP = alturas.FRANJA_CTRL_EVO
 
-_ALTO_CONTENIDO_VAP = (alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP)
-                       - _LEYENDA_VAP)
+_ALTO_CONTENIDO_VAP = alturas.con_franja(alturas.COMPACTO, _FRANJA_VAP)
 """Lo que mide el CONTENIDO de cada una de las dos tarjetas de la fila.
 
-Son 214px, y de acá salen los dos altos de abajo. La cuenta se hace UNA
+Son 240px, y de acá salen los dos altos de abajo. La cuenta se hace UNA
 vez y en este nivel porque las dos tarjetas tienen que terminar en la
-misma línea, y cada una gasta sus 214 en cosas distintas:
+misma línea, y cada una gasta sus 240 en cosas distintas:
 
-    serie    fila de controles (47)  +  figura (167)
+    serie    nombre (21) + toggle «Ver» (45)  +  figura (174)
     cascada  nombre (21) + fila rótulo+corte (30) + % (24)
-             + cascada (139)
+             + cascada (165)
+
+Hasta el 2026-09-21 eran 214: se le restaba `_LEYENDA_VAP` (la serie no
+tenía leyenda). Con la leyenda de años de vuelta (al PIE de la figura, no
+como bloque aparte) esa resta desaparece — el espacio lo usa la leyenda
+DENTRO de la figura, vía `_ALTO_PLOT_VAP`. Las dos tarjetas crecen 26px
+parejas, así que siguen terminando en la misma línea.
 
 El error que esto evita es restar dos veces: si el alto de la cascada
-saliera del de la SERIE, se comería también los 47 de una fila de
-controles que la cascada no tiene, y la columna derecha terminaría 47px
-más arriba."""
+saliera del de la SERIE, se comería también la fila de controles que la
+cascada no tiene, y la columna derecha terminaría más arriba."""
 
-_ALTO_FIG_VAP = _ALTO_CONTENIDO_VAP - alturas.FRANJA_CTRL_SERIE
-"""Alto de la SERIE mensual: el contenido de su tarjeta menos la fila de
-controles que lleva encima desde el 2026-09-17 (regla #445).
+_ALTO_FIG_VAP = (_ALTO_CONTENIDO_VAP - alturas.FRANJA_NOMBRE_CASCADA
+                 - alturas.FRANJA_CTRL_SERIE)
+"""Alto de la SERIE mensual: el contenido de su tarjeta menos los dos
+renglones que lleva encima desde el 2026-09-21 (regla #445): el NOMBRE del
+ítem (centrado y azul, igual que la cascada — de ahí que reuse
+`FRANJA_NOMBRE_CASCADA`) y el toggle «Ver» en su propia fila.
+
+Hasta ese día el nombre y el toggle iban en UN renglón (`FRANJA_CTRL_SERIE`
+valía 47, los dos juntos). Se partieron para poder centrar el nombre EN LA
+TARJETA y no en su columna (regla #449): un nombre no se centra en la
+tarjeta si comparte fila con un widget. Cuesta un renglón, y sale de la
+figura.
 
 OJO con el `_FRANJA_VAP` de la cuenta: hoy no muerde. `con_franja` devuelve
 `min(rol, CONTENIDO - franja)` y con COMPACTO en 240 gana siempre el rol
-(537 - 30 = 507). Se conserva porque el día que el rol suba, la resta
+(511 - 30 = 481). Se conserva porque el día que el rol suba, la resta
 vuelve a decidir."""
 
 _ALTO_CASCADA = (_ALTO_CONTENIDO_VAP - alturas.FRANJA_VEREDICTO
@@ -224,6 +239,22 @@ _CSS = f"""
 """
 
 _MODOS = ("Valor", "Cantidad", "Precio")
+
+_MODO_ETIQUETA = {
+    "Valor": "Valor Comprado",
+    "Cantidad": "Cantidad Comprada",
+    "Precio": "Precio Promedio",
+}
+"""Cómo se LEE cada métrica en el toggle «Ver» (2026-09-21, a pedido: «debe
+decir Valor Comprado, Cantidad Comprada, Precio Promedio»). Los VALORES
+internos siguen siendo los cortos ("Valor"/"Cantidad"/"Precio") — los
+compara medio módulo (`modo == "Valor"`), así que sólo cambia la ETIQUETA,
+vía `format_func`. El nombre largo ya lo usaba la cascada en su rótulo
+(`_tarjeta_cascada`), y por eso «Precio Promedio» reemplaza al «Precio
+Unitario» de allá: el mismo dato no puede llamarse de dos maneras en la
+misma vista. Es un promedio ponderado (Σvalor/Σcantidad), no un precio de
+lista, así que «Promedio» es más honesto que «Unitario»."""
+
 _AGRUPADORES = ("Producto", "Familia", "Subfamilia")
 
 _TITULO = "Compra Vs Año Pasado"
@@ -795,15 +826,34 @@ caso angosto: en modo solo (⛶) la tarjeta crece y sobra lugar. En
 ventanas más angostas que 1366 las etiquetas pueden rozarse; el hover
 sigue diciendo el número exacto."""
 
-_ALTO_PLOT_VAP = 149
-"""Alto del área de trazo de la serie mensual, MEDIDO en el navegador
-(figura 214 − márgenes 30+10 − rótulos del eje X). Es contra lo que se
-reparte el techo que necesitan las etiquetas (`_techo_con_etiquetas`)."""
+_ALTO_PLOT_VAP = 108
+"""Alto del área de trazo (`.nsewdrag`) de la serie mensual, MEDIDO en el
+navegador a 1366x768 (`.nsewdrag`: 108px). Es contra lo que se reparte el
+techo que necesitan las etiquetas (`_techo_con_etiquetas`): si acá dijera
+más de lo real, ese techo reservaría muy poco y las etiquetas de la barra
+más alta se cortarían por arriba — por eso se toma el valor MEDIDO, no uno
+redondeado hacia arriba.
+
+2026-09-21: de 149 a 108. La figura es 174 (`_ALTO_FIG_VAP`) y de ahí salen
+el margen superior (10, sin título), el inferior con la leyenda de años
+(`_LEYENDA_MARGEN_B` + `_LEYENDA_VAP`) y los rótulos del eje de meses. El
+área que queda para las barras es más chica que antes: es el precio de
+sumarle la leyenda al pie y las etiquetas de tres renglones."""
 
 _BARGAP_VAP = 0.28
 """`bargap` de la serie. Vive acá y no sólo en el `update_layout` porque
 decide cuánto espacio hay entre dos columnas del mismo mes, que es contra
 lo que se mide si una etiqueta entra derecha."""
+
+_LEYENDA_Y = -0.16
+"""Posición vertical de la leyenda de años (fracción del área de trazo,
+medida desde abajo). Negativa: va DEBAJO del eje X. Ajustada en el
+navegador para que quede pegada al eje sin pisar los rótulos de mes."""
+
+_LEYENDA_MARGEN_B = 34
+"""Margen inferior de la figura (`_compras_layout` deja 10). La leyenda al
+pie necesita este aire, o Plotly la dibuja fuera del lienzo y se corta.
+MEDIDO en el navegador."""
 
 
 def _fmt_etiqueta(v, modo, unidad=None):
@@ -847,67 +897,65 @@ def _fmt_etiqueta(v, modo, unidad=None):
 
 
 def _plan_etiquetas(n, largo_max, modo, ancho_plot=_ANCHO_PLOT_VAP,
-                    largo_sec=0):
-    """Cómo se dibujan las etiquetas de `n` meses cuya etiqueta más larga
-    tiene `largo_max` caracteres. Devuelve un dict:
+                    largo_sec=0, n_sec=0):
+    """Cómo se dibujan las etiquetas de `n` meses. Devuelve un dict:
 
       · `girar`: la etiqueta va vertical (sólo barras).
       · `ambas`: rotulan las DOS series; si no, sólo "Este año".
       · `paso`: se rotula uno de cada `paso` meses (1 = todos).
-      · `sec`: la etiqueta lleva el SEGUNDO renglón (el precio unitario,
-        `largo_sec` caracteres). Es lo primero que cede: con 12 meses las
-        dos series siguen rotuladas y el precio pasa al hover, porque el
+      · `n_sec`: cuántas líneas SECUNDARIAS entran debajo del número
+        principal (las OTRAS métricas del toggle, `n_sec` disponibles). Son
+        lo primero que cede: si el bloque de `1 + n_sec` líneas no entra
+        derecho, se cae a sólo el principal, y recién después se gira o se
+        ralea. Las secundarias perdidas siguen en el hover, porque el
         gráfico es una COMPARACIÓN y perder la etiqueta del año pasado es
-        perder la mitad de la lectura. Sólo con "Este año" solo (24m,
-        Todo) vuelve, si entra girado en el mes entero.
+        perder la mitad de la lectura.
+
+    `largo_max` es el ancho en caracteres de la línea PRINCIPAL; `largo_sec`,
+    el de la secundaria más ancha; `n_sec`, cuántas secundarias hay para
+    mostrar (0/1/2).
 
     Barras: dos columnas del MISMO mes están a `grupo·(1−bargap)/2` px de
-    centro a centro, y ése es el apretón que manda. Derecha si la etiqueta
-    entra en ese hueco; si no, girada (ocupa `_ETQ_ALTO_LINEA` de ancho);
-    si ni así, sólo "Este año", girada, cuyas vecinas están a un mes
-    entero de distancia. Con 3 meses sale derecha, con 12 girada, con 32
-    ("Todo") sólo este año.
+    centro a centro, y ése es el apretón que manda. El BLOQUE de etiquetas
+    va arriba de la columna, así que lo que decide es su ANCHO: derecho si
+    la línea más ancha (principal o secundaria) entra en ese hueco; si el
+    bloque entero no entra pero sí el principal solo, van sólo el principal;
+    si ni el principal, girado (ocupa `_ETQ_ALTO_LINEA` de ancho); si ni
+    así, sólo "Este año", girada. Con 3 meses entran los tres números
+    derechos, con 12 sólo el principal girado, con 32 ("Todo") sólo este año.
 
     Precio: los dos puntos de un mes se rotulan uno arriba y otro abajo
     (ver `_fig_serie`), así que no chocan entre sí: chocan con el mes de al
-    lado, que está a `grupo` px. Si no entran, queda sólo "Este año",
-    arriba, uno de cada `paso` meses.
-    NO se alterna arriba/abajo, y se probó: con 24 meses daba 3 choques
-    medidos en el navegador. Dos vecinas en lados OPUESTOS siguen a un mes
-    de distancia, y cuando la línea salta la de abajo del mes alto cae
-    justo sobre la de arriba del mes bajo — la alternancia sólo separa las
-    del mismo lado, y el choque venía del otro.
+    lado, que está a `grupo` px. Mismo orden de cesión: bloque entero →
+    sólo principal → sólo "Este año" raleado.
 
     El `paso` es el último recurso, para históricos tan largos que ni eso
     alcanza: mejor la mitad de los números legibles que todos encimados.
     """
-    plan = {"girar": False, "ambas": True, "paso": 1, "sec": False}
+    plan = {"girar": False, "ambas": True, "paso": 1, "n_sec": 0}
     if n <= 0:
         return plan
     grupo = ancho_plot / n
-    txt_px = largo_max * _ETQ_PX_CARACTER + _ETQ_AIRE
+    _ancho = max(largo_max, largo_sec) if n_sec else largo_max
+    txt_px = _ancho * _ETQ_PX_CARACTER + _ETQ_AIRE
+    prim_px = largo_max * _ETQ_PX_CARACTER + _ETQ_AIRE
     lin_px = _ETQ_ALTO_LINEA + _ETQ_AIRE
     if modo == "Precio":
         if txt_px <= grupo:
+            return dict(plan, n_sec=n_sec)
+        if prim_px <= grupo:
             return plan
-        plan.update(ambas=False, paso=max(1, math.ceil(txt_px / grupo)))
+        plan.update(ambas=False, paso=max(1, math.ceil(prim_px / grupo)))
         return plan
     hueco = grupo * (1 - _BARGAP_VAP) / 2
-    lin2_px = 2 * _ETQ_ALTO_LINEA + _ETQ_AIRE
-    if largo_sec:
-        txt2_px = max(largo_max, largo_sec) * _ETQ_PX_CARACTER + _ETQ_AIRE
-        if txt2_px <= hueco:
-            return dict(plan, sec=True)
-        if lin2_px <= hueco:
-            return dict(plan, girar=True, sec=True)
     if txt_px <= hueco:
+        return dict(plan, n_sec=n_sec)
+    if prim_px <= hueco:
         return plan
     plan["girar"] = True
     if lin_px <= hueco:
         return plan
     plan["ambas"] = False
-    if largo_sec and lin2_px <= grupo:
-        return dict(plan, sec=True)
     plan["paso"] = max(1, math.ceil(lin_px / grupo))
     return plan
 
@@ -917,18 +965,24 @@ _ETQ_FUENTE_SEC = 9
 y en gris, para que se lea como dato de apoyo y no como otra serie."""
 
 
-def _con_segundo(principal, segundo):
-    """El principal y, debajo, el segundo renglón en chico y apagado.
+def _apilar(principal, secundarias):
+    """El número principal y, debajo, cada secundaria en chico y apagada.
 
-    Sin principal no hay etiqueta (la columna no existe) y sin segundo queda
-    el principal solo — p. ej. un mes con valor pero sin cantidad cargada,
-    donde el precio no se puede calcular. El `<span style>` lo entiende el
-    texto de una traza de Plotly: es su subconjunto de HTML, el mismo del
-    `<br>`."""
-    if not principal or not segundo:
+    `secundarias` es una lista (las OTRAS métricas del toggle): 0, 1 o 2
+    renglones. Sin principal no hay etiqueta (la columna no existe); sin
+    secundarias queda el principal solo — p. ej. un mes con valor pero sin
+    cantidad cargada, donde no hay precio que calcular. El `<span style>` lo
+    entiende el texto de una traza de Plotly: es su subconjunto de HTML, el
+    mismo del `<br>`."""
+    if not principal:
+        return None
+    filas = [s for s in secundarias if s]
+    if not filas:
         return principal
-    return (f"{principal}<br><span style='font-size:{_ETQ_FUENTE_SEC}px;"
-            f"color:{GRIS_TEXTO}'>{segundo}</span>")
+    cuerpo = "<br>".join(
+        f"<span style='font-size:{_ETQ_FUENTE_SEC}px;color:{GRIS_TEXTO}'>"
+        f"{s}</span>" for s in filas)
+    return f"{principal}<br>{cuerpo}"
 
 
 def _ralear(etiquetas, paso):
@@ -976,15 +1030,21 @@ def _techo_con_etiquetas(hi, lo, alto_etq, simetrico=False,
 def _fig_serie(g, modo, parcial, unidad=None, con_precio=False, mes_sel=None):
     """Serie mensual: este año contra el mismo mes del año pasado.
 
-    `unidad` ("kg") va pegada a la etiqueta de Cantidad, y `con_precio`
-    agrega debajo de cada etiqueta de Valor/Cantidad el precio unitario de
-    ese mes. Los dos los decide el llamador, que es el que sabe si la serie
-    es UN producto con UNA unidad (ver regla #401): esta función no puede
-    distinguir 4.300 kg de 4.300 "cosas".
+    Cada barra/punto rotula las TRES métricas —valor, cantidad y precio— con
+    la del toggle (`modo`) arriba y las otras dos debajo, en chico
+    (2026-09-21, a pedido). `unidad` ("kg") va pegada a la cantidad y al
+    precio; `con_precio` decide si se muestran las secundarias: sólo tienen
+    sentido si la serie es UN producto con UNA unidad (ver regla #401),
+    porque kilos de una familia no se suman ni el precio de un grupo
+    significa nada. Sin eso, va sólo la métrica del toggle. Cuántas entran y
+    cómo (derechas, giradas, en el hover) lo decide `_plan_etiquetas`.
 
     Valor y Cantidad van en barras agrupadas (son magnitudes que se suman y
     la comparación es de altura contra altura). Precio va en líneas: es un
     ratio, no se apila, y lo que interesa es la FORMA de la curva.
+
+    La leyenda al PIE dice qué año es cada serie en número («2024-25» /
+    «2025-26»), igual que los bordes de la cascada de al lado.
 
     `mes_sel` es la etiqueta del mes que está explicando la cascada de al
     lado ("ago 26"). Los demás se APAGAN al 35 %, y ésa es toda la marca:
@@ -1020,38 +1080,61 @@ def _fig_serie(g, modo, parcial, unidad=None, con_precio=False, mes_sel=None):
     # caption al pie: el que lo tiene que ver está mirando la última barra.
     es_parcial = [parcial is not None and m == parcial[0] for m in por_mes["mes"]]
 
-    # ── Etiquetas de valor (2026-09-13, a pedido). La forma sale de los
-    # píxeles por mes: ver `_plan_etiquetas` y regla #400.
+    # Los años de las dos series, para la leyenda al pie ("2024-25" /
+    # "2025-26"): salen de los meses en pantalla, igual que los bordes de la
+    # cascada (`_etq_anios`).
+    _anios = _etq_anios(por_mes["mes"])
+    _nom_aa = f"Año pasado · {_anios[0]}"
+    _nom_act = f"Este año · {_anios[1]}"
+
+    # ── Etiquetas de valor: los TRES números (2026-09-21, a pedido:
+    # «siempre deben mostrar Cantidad, Valor y Precio, en orden según el
+    # toggle»). La métrica del toggle va ARRIBA (grande) y las OTRAS dos
+    # debajo, en chico y apagadas, en el orden de `_MODOS`. La forma —cuántas
+    # entran, derechas o giradas— sale de los píxeles por mes: ver
+    # `_plan_etiquetas` y regla #400.
     #
-    # Segunda vuelta del pedido, el mismo día: Cantidad dice su UNIDAD
-    # ("4,300 kg") y Valor y Cantidad llevan un SEGUNDO renglón con el
-    # precio unitario del mes ("S/ 12.35/kg"). Precio no cambia: su número
-    # ya es el precio, y "/kg" le haría perder la etiqueta del año pasado
-    # desde los 12 meses.
-    _um_etq = unidad if modo == "Cantidad" else None
-    etq_act = [_fmt_etiqueta(v, modo, _um_etq) for v in y_act]
-    etq_aa = [_fmt_etiqueta(v, modo, _um_etq) for v in y_aa]
-    sec_act = sec_aa = [None] * len(por_mes)
-    _con_sec = con_precio and modo != "Precio"
-    if _con_sec:
-        _p = por_mes["valor"] / por_mes["cant"].where(por_mes["cant"] > 0)
-        _p_aa = por_mes["valor_aa"] / por_mes["cant_aa"].where(
-            por_mes["cant_aa"] > 0)
-        sec_act = [_fmt_etiqueta(p, "Precio", unidad) for p in _p]
-        sec_aa = [_fmt_etiqueta(p, "Precio", unidad) for p in _p_aa]
-    _largo = max((len(t) for t in etq_act + etq_aa if t), default=0)
-    _largo_sec = max((len(t) for t in sec_act + sec_aa if t), default=0)
-    plan = _plan_etiquetas(len(por_mes), _largo, modo, largo_sec=_largo_sec)
-    if plan["sec"]:
-        etq_act = [_con_segundo(t, s) for t, s in zip(etq_act, sec_act)]
-        etq_aa = [_con_segundo(t, s) for t, s in zip(etq_aa, sec_aa)]
+    # Las secundarias sólo si la serie es UN producto (`con_precio`): kilos
+    # de una familia no se suman y el precio de un grupo se mueve con la
+    # mezcla (la trampa de `_por_item`, regla #401). En un agregado va sólo
+    # la métrica principal, como hasta el 2026-09-20.
+    _um = unidad or ""
+    _otras = [m for m in _MODOS if m != modo] if con_precio else []
+
+    def _tres(valor, cant):
+        """(principal, [secundarias]) de una barra, según el toggle: la
+        métrica elegida primero, las otras dos en el orden de `_MODOS`."""
+        _pr = (float(valor) / float(cant)) if cant else None
+        disp = {"Valor": _fmt_etiqueta(valor, "Valor"),
+                "Cantidad": _fmt_etiqueta(cant, "Cantidad", _um),
+                "Precio": _fmt_etiqueta(_pr, "Precio", _um)}
+        return disp[modo], [disp[m] for m in _otras]
+
+    prim_act, secs_act, prim_aa, secs_aa = [], [], [], []
+    for r in por_mes.itertuples():
+        _pa, _sa = _tres(r.valor, r.cant)
+        _pb, _sb = _tres(r.valor_aa, r.cant_aa)
+        prim_act.append(_pa); secs_act.append(_sa)
+        prim_aa.append(_pb); secs_aa.append(_sb)
+
+    _largo = max((len(t) for t in prim_act + prim_aa if t), default=0)
+    _largo_sec = max((len(t) for s in secs_act + secs_aa for t in s if t),
+                     default=0)
+    plan = _plan_etiquetas(len(por_mes), _largo, modo, largo_sec=_largo_sec,
+                           n_sec=len(_otras))
+    _ns = plan["n_sec"]
+    if _ns:
+        etq_act = [_apilar(p, s[:_ns]) for p, s in zip(prim_act, secs_act)]
+        etq_aa = [_apilar(p, s[:_ns]) for p, s in zip(prim_aa, secs_aa)]
+    else:
+        etq_act, etq_aa = list(prim_act), list(prim_aa)
     etq_act = _ralear(etq_act, plan["paso"])
     etq_aa = _ralear(etq_aa, plan["paso"]) if plan["ambas"] else None
-    # El precio va SIEMPRE en el hover, haya entrado o no en la etiqueta:
-    # es donde queda cuando el segundo renglón cede su sitio (12 meses).
-    _hov = "  ·  %{customdata}" if _con_sec else ""
-    _cd_act = [s or "" for s in sec_act]
-    _cd_aa = [s or "" for s in sec_aa]
+    # Las secundarias que no entraron en la etiqueta siguen en el hover, que
+    # es donde queda todo lo que la etiqueta cede (12 meses, "Todo").
+    _hov = "  ·  %{customdata}" if _otras else ""
+    _cd_act = [" · ".join(t for t in s if t) for s in secs_act]
+    _cd_aa = [" · ".join(t for t in s if t) for s in secs_aa]
     # "Este año" en el color del texto y "Año pasado" apagado: la misma
     # jerarquía que las dos columnas (acento contra gris).
     _fnt_act = dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL)
@@ -1079,21 +1162,22 @@ def _fig_serie(g, modo, parcial, unidad=None, con_precio=False, mes_sel=None):
                     for up in _act_arriba]
         _pos_aa = ["bottom center" if up else "top center"
                    for up in _act_arriba]
-        fig.add_scatter(x=etiquetas, y=y_aa, name="Año pasado",
+        fig.add_scatter(x=etiquetas, y=y_aa, name=_nom_aa,
                         mode="lines+text" if etq_aa else "lines",
                         line=dict(color=GRIS_TEXTO, width=2, dash="dot"),
                         text=etq_aa, textposition=_pos_aa, textfont=_fnt_aa,
-                        cliponaxis=False,
-                        hovertemplate=fmt + "<extra>Año pasado</extra>")
+                        customdata=_cd_aa, cliponaxis=False,
+                        hovertemplate=fmt + _hov + "<extra>Año pasado</extra>")
         fig.add_scatter(x=etiquetas, y=y_act, mode="lines+markers+text",
-                        name="Este año", line=dict(color=ACENTO, width=2.4),
+                        name=_nom_act, line=dict(color=ACENTO, width=2.4),
                         # En líneas el apagado va en el MARCADOR: bajarle la
                         # opacidad al trazo apagaría la curva entera, que es
                         # lo único que esta vista tiene para mostrar.
                         marker=dict(size=6, opacity=_op),
                         text=etq_act, textposition=_pos_act,
-                        textfont=_fnt_act, cliponaxis=False,
-                        hovertemplate=fmt + "<extra>Este año</extra>")
+                        textfont=_fnt_act, customdata=_cd_act,
+                        cliponaxis=False,
+                        hovertemplate=fmt + _hov + "<extra>Este año</extra>")
     else:
         # `constraintext="none"`: sin él Plotly ENCOGE la etiqueta que no
         # entra en vez de avisar (regla #91) — la cuenta de `_plan_etiquetas`
@@ -1101,13 +1185,13 @@ def _fig_serie(g, modo, parcial, unidad=None, con_precio=False, mes_sel=None):
         _kw_etq = dict(textposition="outside", cliponaxis=False,
                        constraintext="none",
                        textangle=-90 if plan["girar"] else 0)
-        fig.add_bar(x=etiquetas, y=y_aa, name="Año pasado",
+        fig.add_bar(x=etiquetas, y=y_aa, name=_nom_aa,
                     marker=dict(color=GRIS_BORDE, opacity=_op),
                     text=etq_aa, textfont=_fnt_aa, **_kw_etq,
                     customdata=_cd_aa,
                     hovertemplate=fmt + _hov + "<extra>Año pasado</extra>")
         fig.add_bar(
-            x=etiquetas, y=y_act, name="Este año",
+            x=etiquetas, y=y_act, name=_nom_act,
             marker=dict(
                 color=ACENTO, opacity=_op,
                 # Trama sólo en el mes parcial: Plotly acepta un patrón por
@@ -1121,28 +1205,38 @@ def _fig_serie(g, modo, parcial, unidad=None, con_precio=False, mes_sel=None):
             hovertemplate=fmt + _hov + "<extra>Este año</extra>")
 
     _compras_layout(fig, alto=_ALTO_FIG_VAP)
-    # SIN `title`: el ámbito vive en la cabecera de la tarjeta desde el
-    # 2026-09-02 (ver el `st.empty()` del drill). Lo que gana la figura no
-    # es sólo el alto del texto — Plotly reserva margen superior para el
-    # título aunque esté vacío, así que el margen se fija explícito abajo.
+    # SIN `title`: el nombre del ítem vive en la cabecera de la tarjeta
+    # (`_nombre_serie_html`). Sin título, el margen superior de
+    # `_compras_layout` (30px) es aire muerto: se baja a 10 y esos 20px
+    # vuelven al área de trazo, que con las etiquetas de 3 renglones y la
+    # leyenda al pie andaba justa. Las etiquetas quedan dentro del plot por
+    # el techo de `_techo_con_etiquetas`, así que no hace falta margen
+    # arriba para que no se corten.
     fig.update_layout(
         barmode="group", bargap=_BARGAP_VAP, bargroupgap=0.08,
         hovermode="x unified",
-        # La leyenda se fue (ver `_LEYENDA_VAP`): gris = año pasado, acento
-        # = este año es la convención de la app, y el hover unificado nombra
-        # las dos series al pasar por encima.
-        showlegend=False,
+        # La leyenda de AÑOS va al PIE (2026-09-21, a pedido: «indicar cuál
+        # columna es de qué año»). Horizontal y centrada, con los años en
+        # número («2024-25 · año pasado» / «2025-26 · este año») — el color
+        # solo (gris/acento) no podía decir el año. Vive dentro de la figura;
+        # su alto sale de `_ALTO_PLOT_VAP` (ver `_LEYENDA_VAP`), y por eso
+        # abajo el margen se agranda para que no pise el eje de meses.
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="top", y=_LEYENDA_Y,
+                    x=0.5, xanchor="center", font=dict(size=11),
+                    bgcolor="rgba(0,0,0,0)", borderwidth=0),
     )
+    fig.update_layout(margin=dict(t=10, b=_LEYENDA_MARGEN_B))
     fig.update_xaxes(type="category", tickangle=0)
     # Techo para las etiquetas: `textposition="outside"` no agranda el
     # rango solo, y la de la columna más alta se cortaba contra el borde.
     # Girada ocupa su LARGO hacia arriba; derecha, una línea.
     _vis = [v for v in list(y_act) + list(y_aa) if pd.notna(v)]
     if _vis:
-        # Con el segundo renglón, derecha ocupa DOS líneas y girada ocupa
-        # lo que el más largo de los dos.
-        _largo_vis = max(_largo, _largo_sec) if plan["sec"] else _largo
-        _renglones = 2 if plan["sec"] else 1
+        # Con secundarias, derecha ocupa `1 + n_sec` líneas y girada ocupa
+        # lo que el renglón más ancho de los que se muestran.
+        _largo_vis = max(_largo, _largo_sec) if plan["n_sec"] else _largo
+        _renglones = 1 + plan["n_sec"]
         _alto_etq = ((_largo_vis * _ETQ_PX_CARACTER) if plan["girar"]
                      else _renglones * _ETQ_ALTO_LINEA) + _ETQ_AIRE
         _rng = _techo_con_etiquetas(max(_vis), min(_vis), _alto_etq,
@@ -1465,13 +1559,19 @@ def _nombre_serie_html(item, auto=False):
     `auto` marca el ítem que eligió la VISTA y no el usuario (Cantidad y
     Precio sin foco, ver regla #401): sin ese aviso, un producto solo en el
     gráfico se lee como un clic que nadie hizo.
+
+    AZUL Y CENTRADO EN LA TARJETA (2026-09-21, a pedido: «que el título
+    figure al medio del gráfico, en letras azul, como el de al lado»):
+    mismo trato que `_nombre_cascada_html`, así las dos tarjetas de la fila
+    se leen como una pareja. Por eso va SOLO en su renglón (regla #449).
     """
     if not item:
         return ""
     return (
-        f'<div style="font:600 13px/1.3 DM Sans,sans-serif;'
-        f'color:{TEXTO_PRINCIPAL};white-space:nowrap;overflow:hidden;'
-        f'text-overflow:ellipsis">{_compras_truncar(str(item), 38)}'
+        f'<div style="font:600 13.5px/1.25 DM Sans,sans-serif;'
+        f'color:{ACENTO_TEXTO};text-align:center;margin:0;'
+        f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+        f'{_compras_truncar(str(item), 46)}'
         + (f'<span style="font:400 11px/1 DM Sans,sans-serif;'
            f'color:{GRIS_TEXTO};margin-left:7px">· mayor gasto</span>'
            if auto else "")
@@ -1791,7 +1891,10 @@ def _tarjeta_cascada(items, ums_prod, unidad_serie, modo, tot, foco_titulo,
         _fmt_mag = lambda v: _fmt_cant(v, _um_corta)  # noqa: E731
         _v1, _v0 = float(tot["cant"]), float(tot["cant_aa"])
     elif modo == "Precio" and _um_corta and tot["cant"] and tot["cant_aa"]:
-        _magnitud = f"Δ Precio Unitario (S/ por {_um_corta})"
+        # «Promedio» y no «Unitario», igual que el toggle (`_MODO_ETIQUETA`):
+        # es Σvalor/Σcantidad, un promedio ponderado — el mismo dato no puede
+        # llamarse de dos maneras en la misma vista.
+        _magnitud = f"Δ Precio Promedio (S/ por {_um_corta})"
         _fmt_mag = lambda v: _fmt_precio(v, _um_corta)  # noqa: E731
         _v1 = float(tot["valor"]) / float(tot["cant"])
         _v0 = float(tot["valor_aa"]) / float(tot["cant_aa"])
@@ -2417,6 +2520,12 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
         _tarj_serie = col_g.container(key="compras_vap_card_serie")
         _tarj_puente = col_p.container(key="compras_vap_card_puente")
 
+        # Los dos renglones de la cabecera de la serie (2026-09-21, regla
+        # #449): el NOMBRE del ítem arriba —centrado en la tarjeta y azul,
+        # igual que la cascada de al lado— y el toggle «Ver» debajo. Van en
+        # renglones separados a propósito: un nombre no se centra en la
+        # TARJETA si comparte fila con un widget (se centraría en su
+        # columna). El alto de los dos sale de la figura (`_ALTO_FIG_VAP`).
         with _tarj_serie.container(key="vap_serie_hdr"):
             # El nombre del ítem va por un HUECO: depende del foco, que se
             # resuelve abajo. Mismo mecanismo que el ámbito del título
@@ -2425,10 +2534,13 @@ def _compras_vs_ano_pasado_drill(d, col_prod, col_cant, col_fecha, col_valor,
 
             # `st.pills` -> `st.selectbox` (2026-09-02): tres pastillas de
             # texto ocupaban el ancho de media tarjeta para una elección
-            # que casi nunca se toca.
+            # que casi nunca se toca. `format_func`: el nombre largo
+            # («Valor Comprado»…), los valores internos siguen cortos
+            # (`_MODO_ETIQUETA`).
             with st.container(key="vap_serie_modo"):
                 modo = st.selectbox(
                     "Ver", list(_MODOS), key="compras_vap_modo_sel",
+                    format_func=lambda m: _MODO_ETIQUETA.get(m, m),
                     label_visibility="collapsed",
                     help="Qué se compara contra el año pasado. Cantidad y "
                          "Precio se leen sobre UN producto —kilos y litros "

@@ -581,24 +581,22 @@ de la derecha arranca 47px más abajo, termina 47px más abajo, y la fila deja
 de leerse como una grilla — el mismo defecto que `COLUMNAS_DRILL` arregla en
 el eje horizontal."""
 
-FRANJA_CTRL_SERIE = 47
-"""Alto de la fila de controles que la SERIE de «Compra Vs Año Pasado»
-lleva en su propia tarjeta —el nombre del ítem a la izquierda, «Ver» y
-«Partir por» a la derecha—, más el hueco que Streamlit deja hasta la
-figura. MEDIDO en el navegador el 2026-09-17.
+FRANJA_CTRL_SERIE = 45
+"""Alto del RENGLÓN del toggle «Ver» que la SERIE de «Compra Vs Año Pasado»
+lleva bajo el nombre del ítem, más el hueco que Streamlit deja hasta la
+figura. MEDIDO en el navegador.
 
-Existe por la condición que vino con el pedido: *«ojo esto no debe
-aumentar el tamaño de la tarjeta»*. Los dos controles bajaron de la
-cabecera compartida a la tarjeta de las barras, y sus píxeles salen de la
-FIGURA, no del alto de la tarjeta — que es el modo de fallo de
-`FRANJA_CONTROLES` y la razón de que exista toda esta familia de
-constantes.
+2026-09-21: era 47 y cubría el nombre Y «Ver» en la MISMA fila; hoy el
+nombre subió a su propio renglón (`FRANJA_NOMBRE_CASCADA`, centrado y azul
+como la cascada — regla #449) y esta constante cubre sólo la fila del
+toggle. El alto de la serie es `_ALTO_CONTENIDO_VAP − FRANJA_NOMBRE_CASCADA
+− FRANJA_CTRL_SERIE`, así que las dos se suman.
 
-SON 47 Y NO 44, y la diferencia la puso el navegador: la fila mide 26px,
-su `margin-bottom` de 0.3rem son 4.8 más, y Streamlit agrega su `gap: 16px`
-entre los dos hijos de la tarjeta. Con 44 la tarjeta salía de 249 contra
-los 246 de antes — tres píxeles que rompían la condición del pedido («no
-debe aumentar el tamaño de la tarjeta»), y que no se ven a ojo.
+45 = desplegable 26 + su `gap: 2px` bajo el nombre + `margin-bottom` 0.3rem
+(4.8) + el `gap: 16px` que Streamlit deja hasta la figura. MEDIDO — si se
+toca el layout de `vap_serie_hdr` en `estilos/_80_cards.py`, se vuelve a
+medir la TARJETA (que tiene que dar lo mismo que la cascada), no este
+renglón suelto.
 
 Ojo con el hermano: la tarjeta de la cascada NO lleva esta fila, así que
 su alto se calcula desde `_ALTO_CONTENIDO_VAP` y no desde el de la serie.

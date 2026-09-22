@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-486 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+487 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (171)
 
@@ -277,7 +277,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 
-**Plotly y figuras** (86)
+**Plotly y figuras** (87)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -365,6 +365,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#479** — Una ventana RODANTE corta su primera y su última barra SIEMPRE, así que ahí «parcial» no es…
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
+- **#487** — La serie de «Compra Vs Año Pasado» rotula las TRES métricas por barra, dice el AÑO en una…
 
 **AgGrid y tablas** (79)
 
@@ -40601,6 +40602,61 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      una unidad, y esa celda queda en blanco en la fila fija—, y el alto
      reserva su renglón con un `+ 1` para no comerse una fila del cuerpo.
      Extiende la #483 y la #485. (2026-09-21.)
+
+487. **La serie de «Compra Vs Año Pasado» rotula las TRES métricas por
+     barra, dice el AÑO en una leyenda al pie, y su título va centrado y
+     azul como la cascada.** Cuatro cambios a pedido el mismo día, todos en
+     la tarjeta de las barras (`graficos/compras/vs_ano_pasado.py`).
+
+     · **Los tres números en cada barra, en orden según el toggle**
+       («siempre deben mostrar Cantidad, Valor y Precio»). La métrica de
+       «Ver» va arriba (grande) y las OTRAS dos debajo, en 9px y gris, en
+       el orden de `_MODOS`. En las DOS barras (este año y año pasado), a
+       elección del usuario. Sólo cuando la serie es UN producto
+       (`con_precio`): kilos de una familia no se suman ni el precio de un
+       grupo significa nada (regla #401) — en un agregado va sólo la
+       principal. Lo arma `_fig_serie` con `_apilar(principal,
+       secundarias)` (generaliza al viejo `_con_segundo`), y
+       `_plan_etiquetas` devuelve ahora `n_sec` (cuántas secundarias
+       entran: 0/1/2) en vez del `sec` booleano — con 3 meses entran las
+       dos, con 12 ceden y quedan en el hover, como cedía el precio antes.
+
+     · **La leyenda de años, al PIE** («indicar cuál columna es de qué
+       año»). Las trazas se nombran «Año pasado · 2024-25» / «Este año ·
+       2025-26» con `_etq_anios` (los mismos años que los bordes de la
+       cascada; una ventana a caballo de dos calendarios sale «2024-25», no
+       «2026»). Vive DENTRO de la figura (`showlegend=True`,
+       `orientation="h"`, `y=_LEYENDA_Y`), así que su alto sale del área de
+       trazo (`_ALTO_PLOT_VAP`), no de un bloque aparte. `_LEYENDA_VAP`
+       volvió a su sentido literal: el alto de la leyenda, ya no una resta
+       para tapar su ausencia.
+
+     · **El título centrado y azul, como la cascada de al lado.**
+       `_nombre_serie_html` pasó de negro/izquierda a `ACENTO_TEXTO`/
+       centrado, igual que `_nombre_cascada_html`. Para centrarse EN LA
+       TARJETA y no en su columna (regla #449), el nombre bajó a su propio
+       renglón y el toggle «Ver» al de abajo: `vap_serie_hdr` es ahora
+       `flex-direction: column` (`estilos/_80_cards.py`).
+
+     · **El toggle dice el nombre completo** («Valor Comprado», «Cantidad
+       Comprada», «Precio Promedio»), vía `format_func` + `_MODO_ETIQUETA`;
+       los valores internos siguen cortos. «Precio Promedio» y no
+       «Unitario» porque es Σvalor/Σcantidad, un promedio ponderado — y por
+       lo mismo la cascada cambió su rótulo «Δ Precio Unitario» → «Δ Precio
+       Promedio», que el mismo dato no puede llamarse de dos maneras.
+
+     EL PRESUPUESTO VERTICAL SE REACOMODÓ, y las dos tarjetas siguen
+     terminando en la misma línea (medido: `mismaLinea = 0`). El contenido
+     subió de 214 a 240 (`_ALTO_CONTENIDO_VAP` dejó de restar
+     `_LEYENDA_VAP`, que ahora la leyenda usa de verdad); la serie gasta
+     `FRANJA_NOMBRE_CASCADA` (nombre) + `FRANJA_CTRL_SERIE` (toggle, de 47 a
+     45 al quedarse sólo con el renglón del toggle) y el resto es figura
+     (174). Sin `title` en la figura, el margen superior baja a 10 y esos
+     20px vuelven al área de trazo, que con tres renglones de etiqueta y la
+     leyenda al pie andaba justa (`_ALTO_PLOT_VAP` 149 → 108, MEDIDO). Todo
+     verificado en el navegador a 1366×768 en los tres modos (Valor,
+     Cantidad, Precio) y a 3 y 12 meses: sin recortes, sin solapamientos.
+     (2026-09-21.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

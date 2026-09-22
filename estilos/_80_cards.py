@@ -447,47 +447,38 @@ CSS = """    /* ================================================================
         width: auto;
     }
 
-    /* ── LA FILA DE LA TARJETA DE LAS BARRAS (regla #445) ───────────────
-       `Ver` y `Partir por` bajaron acá el 2026-09-17, a pedido, con la
-       condición de que la tarjeta NO creciera: sus píxeles salen de la
-       FIGURA (`alturas.FRANJA_CTRL_SERIE`), no del alto de la tarjeta.
+    /* ── LA CABECERA DE LA TARJETA DE LAS BARRAS (reglas #445, #449) ─────
+       DOS renglones apilados desde el 2026-09-21: el NOMBRE del ítem
+       arriba —centrado en la tarjeta y azul, igual que la cascada de al
+       lado (`_nombre_serie_html`)— y el toggle «Ver» debajo.
 
-       A la izquierda el nombre del ítem, elástico y truncable; a la
-       derecha los dos controles, que miden lo suyo. `min-width: 0` en el
-       nombre es obligatorio: sin él un flex item nunca baja de su
-       contenido, así que un producto de nombre largo empujaría los
-       controles fuera de la tarjeta en vez de truncarse.
+       Antes era UNA fila [nombre | Ver]. Se partió porque un nombre no se
+       centra en la TARJETA si comparte fila con un widget: se centra en su
+       columna y queda corrido (regla #449). Cuesta un renglón, y sale de la
+       figura (`alturas.FRANJA_NOMBRE_CASCADA` + `FRANJA_CTRL_SERIE`).
 
-       Sin `flex-wrap`, al revés que la cabecera: ahí envolver es la red
-       que evita el desborde, pero acá un segundo renglón rompería la
-       promesa de no crecer — la tarjeta mide 246px y la figura cuenta con
-       exactamente 170. Que el nombre se trunque es el precio correcto. */
+       Columna, no fila: cada hijo a todo el ancho y apilado. El nombre se
+       trunca solo (ellipsis) y se centra; el toggle mide su ancho fijo. */
     .st-key-vap_serie_hdr {
         display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: center !important;
-        gap: 8px !important;
+        flex-direction: column !important;
+        gap: 2px !important;
         margin: 0 0 0.3rem !important;
     }
+    /* RENGLÓN 1: el nombre, a todo el ancho para centrarse EN LA TARJETA. */
     .st-key-vap_serie_hdr > [data-testid="stElementContainer"]:first-child {
-        flex: 1 1 auto !important;
-        min-width: 0 !important;
-        width: auto !important;
+        width: 100% !important;
     }
-    /* El mismo ancho MEDIDO que tenía en la cabecera: el texto más largo
-       que puede mostrar ("Cantidad") + los 50 de cromo del desplegable.
-       Ver la regla #318. Quedó uno solo: «Partir por» se mudó a la tarjeta
-       de la cascada el mismo día (#446), donde no necesita esta regla
-       porque el ancho se lo da su COLUMNA (`_COLS_PUENTE`). */
+    /* RENGLÓN 2: el toggle «Ver». Ancho para «Cantidad Comprada» —el rótulo
+       más largo desde el rename (#484)— más el cromo del desplegable. En su
+       propia fila no le compite ancho al nombre. */
     .st-key-vap_serie_hdr
         > [data-testid="stLayoutWrapper"]:has(> .st-key-vap_serie_modo) {
-        flex: 0 0 auto !important;
-        width: 106px !important;
+        width: 176px !important;
     }
     /* El hueco del nombre existe aunque esté VACÍO (sin foco): es un
-       `st.empty()`, y si colapsara a cero el control saltaría a la
-       izquierda al soltar el foco. La fila mide siempre lo mismo. */
+       `st.empty()`, y si colapsara a cero el toggle saltaría hacia arriba
+       al soltar el foco. La cabecera mide siempre lo mismo. */
     .st-key-vap_serie_hdr [data-testid="stMarkdownContainer"] {
         min-height: 17px !important;
     }
