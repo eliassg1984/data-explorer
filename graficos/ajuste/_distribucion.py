@@ -68,8 +68,8 @@ _ALTO_FIG = alturas.con_franja(alturas.PROTAGONISTA, alturas.FRANJA_UNA_LINEA)
 # (px `_AMP`). El Pareto va a ancho completo: sólo desliza al ampliar. Ver
 # regla #494.
 _EJE_PX = 60           # ancho reservado para el eje Y y su rótulo
-_PX_STRIP_NORM = 220   # px por familia en el strip normal (columna izquierda)
-_PX_STRIP_AMP = 300    # px por familia en el strip ampliado
+_PX_STRIP_NORM = 150   # px por familia en el strip normal (columna izquierda)
+_PX_STRIP_AMP = 260    # px por familia en el strip ampliado
 _PX_PARETO_AMP = 210   # px por barra en el Pareto ampliado
 _PX_BIN_NORM = 30      # px por bin (30) en el histograma normal
 _PX_BIN_AMP = 46       # px por bin (30) en el histograma ampliado
@@ -419,7 +419,7 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     # su detalle abre al clic debajo. Ver regla #494.
     _dos_col = _vista != "Valor (Pareto)"
     if _dos_col:
-        _col_g, _col_t = st.columns([1.9, 1], gap="medium")
+        _col_g, _col_t = st.columns([1.45, 1], gap="medium")
         _ctx_graf = _col_g
     else:
         _col_t = None
