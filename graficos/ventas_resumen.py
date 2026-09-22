@@ -42,7 +42,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import (ACENTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
+from tema import (ACENTO, ADVERTENCIA, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
                   TEXTO_PRINCIPAL)
 from graficos.base import (
     _card, _compras_layout, _compras_truncar, preservar_widgets,
@@ -84,6 +84,19 @@ _AYUDA_MODO = (
 # Abreviaturas en español para el eje/tabla — Plotly y pandas rotulan en
 # inglés si no se les dice otra cosa (misma trampa que arquitectura.md #241).
 _DIAS_ABR_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+# Opacidad de las barras SIN foco cuando hay un día clickeado. Misma que
+# `compras/semanal.py::_ATENUADO` y por el mismo motivo (regla #476).
+_ATENUADO = 0.2
+
+
+def _con_alpha(_hex, _a):
+    """`#rrggbb` → `rgba(r,g,b,a)`. El foco se atenúa por COLOR y no con
+    `marker.opacity` por punto: esa lista sobre barras crashea Plotly en el
+    navegador. Copia de `compras/semanal.py::_con_alpha` (regla #476)."""
+    _h = _hex.lstrip("#")
+    _r, _g, _b = (int(_h[_i:_i + 2], 16) for _i in (0, 2, 4))
+    return f"rgba({_r},{_g},{_b},{_a})"
 
 
 def _fmt_dia(dt):
@@ -200,53 +213,24 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     if vol_label:
         g["ticket"] = g["total"] / g["pax"].replace(0, np.nan)
 
-    # ── KPIs ──────────────────────────────────────────────────────────────
-    total_venta = float(tabla["venta"].sum())
-    total_pax = float(g["pax"].sum()) if vol_label else None
-    ticket_prom = (total_venta / total_pax) if total_pax else None
-    idx_mejor = g["total"].idxmax()
-    mejor_dia, mejor_valor = g.loc[idx_mejor, "dia"], g.loc[idx_mejor, "total"]
-    alzas = int((g["total"].diff() >= 0).sum())  # NaN del primer día no cuenta
-
+    # Los KPIs de arriba (Ventas/Clientes/Ticket/Mejor/Días en alza) se
+    # quitaron a pedido el 2026-09-22: el gráfico sube y es el protagonista,
+    # y esos mismos números viven en la tabla «Resumen» (una fila por día +
+    # total) que va debajo. El ticket, que era un KPI y una tarjeta aparte,
+    # ahora es una línea sobre el propio gráfico.
     _nota_recorte = ("" if len(dias_disponibles) <= MAX_DIAS else
                      f" Recortado a los últimos {MAX_DIAS} días con ventas "
                      "del rango cargado.")
 
-    # Contenedores minimalistas: st.container(border=True) nativo, sin CSS
-    # nuevo para el borde en sí — a diferencia de los `_card()` (key
-    # "chartcard_*"), estos NO matchean la regla de estilos/_80_cards.py que
-    # transparenta los cards internos, así que conservan su borde propio
-    # dentro de la card grande. Tamaño/radius sí llevan CSS propio, acotado
-    # al prefijo de key "ventas_resumen_kpi_" (estilos/_80_cards.py).
-    # Labels cortos y sin delta: en una columna angosta, un label largo
-    # ("Ventas totales") + un valor de varios dígitos no entra en una sola
-    # línea aunque el CSS ponga stMetric en flex-row. El contexto extra
-    # (fecha del mejor día, qué significa "en alza") pasa a `help=` — un
-    # tooltip no consume ancho de línea.
-    k1, k2, k3, k4, k5 = st.columns(5)
-    with k1.container(border=True, key="ventas_resumen_kpi_venta"):
-        st.metric("Ventas", f"S/ {total_venta:,.0f}")
-    with k2.container(border=True, key="ventas_resumen_kpi_vol"):
-        st.metric(vol_label or "Clientes",
-                  f"{total_pax:,.0f}" if vol_label else "—")
-    with k3.container(border=True, key="ventas_resumen_kpi_ticket"):
-        st.metric("Ticket", f"S/ {ticket_prom:,.2f}" if ticket_prom else "—")
-    with k4.container(border=True, key="ventas_resumen_kpi_mejor"):
-        st.metric("Mejor", f"S/ {mejor_valor:,.0f}",
-                  help=f"{mejor_dia:%d/%m/%Y}")
-    with k5.container(border=True, key="ventas_resumen_kpi_alza"):
-        st.metric("Días en alza", f"{alzas}/{len(g) - 1}",
-                  help="Días con más venta que el día anterior")
-
-    # ── Venta total por día (barras clickeables) + volumen ────────────────
+    # ── Venta total por día (barras clickeables) + volumen + ticket ───────
     # Coloreadas por tendencia día-a-día (mismo criterio que el KPI "Días en
     # alza": total de hoy vs. total de ayer) — no por apertura/cierre de
     # transacciones sueltas (eso era el candlestick que reemplaza esta
     # vista, ver arquitectura.md regla #85). El primer día no tiene día
     # anterior con el que compararse: color neutro (ACENTO), ni sube ni baja.
     g["pct_vs_ayer"] = g["total"].pct_change() * 100
-    colores = [ACENTO if pd.isna(p) else (EXITO if p >= 0 else ERROR)
-               for p in g["pct_vs_ayer"]]
+    _colores_base = [ACENTO if pd.isna(p) else (EXITO if p >= 0 else ERROR)
+                     for p in g["pct_vs_ayer"]]
     hover_dia = [
         f"{f:%d/%m/%Y} · S/ {t:,.0f}<br>"
         + ("Primer día del rango" if pd.isna(p) else f"{p:+.1f}% vs. día anterior")
@@ -261,10 +245,16 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         foco = None
         st.session_state["vt_resumen_foco"] = None
 
-    # Marca del día en foco: un borde, no un cambio de color (el color ya
-    # dice la tendencia). Va como lista para no tocar los demás.
-    _line_w = [2.4 if (foco is not None and i == foco) else 0
-               for i in range(len(g))]
+    # AL HACER CLIC, ESA BARRA SE ILUMINA Y EL RESTO SE ATENÚA — el mismo
+    # gesto que «Compras por período» (arquitectura.md regla #476): el foco
+    # se marca por COLOR (las sin foco van a `_ATENUADO` de alfa) y no con
+    # `marker.opacity` por punto, que sobre barras crashea Plotly. Sin foco,
+    # todas a tono pleno.
+    if foco is not None:
+        colores = [c if i == foco else _con_alpha(c, _ATENUADO)
+                   for i, c in enumerate(_colores_base)]
+    else:
+        colores = _colores_base
 
     with _card("ventas_resumen_dia", "Tendencia diaria de venta",
                titulo_arriba=True):
@@ -277,11 +267,11 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # el volumen baja de subplot propio a una línea punteada sobre un
         # eje Y secundario, que es como `ventas.py::_ventas_grafico_dia`
         # dibuja Pax. Ver arquitectura.md regla #488.
+        _hay_ticket = vol_label and "ticket" in g.columns
         fig = go.Figure()
         fig.add_trace(go.Bar(
             x=g["dia"], y=g["total"], name="Venta", yaxis="y",
-            marker=dict(color=colores,
-                        line=dict(color=TEXTO_PRINCIPAL, width=_line_w)),
+            marker=dict(color=colores),
             hovertext=hover_dia, hoverinfo="text",
         ))
         if vol_label:
@@ -291,6 +281,19 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                 yaxis="y2",
                 hovertemplate=("%{x|%d/%m/%Y}<br>" + vol_label
                                + ": %{y:,.0f}<extra></extra>"),
+            ))
+        # Ticket promedio como línea + puntos sobre un TERCER eje (soles,
+        # pero otra escala que la venta: ~S/ 180 contra ~S/ 25.000). Va en su
+        # propio eje a la derecha —igual que `ventas.py::_ventas_grafico_dia`
+        # con Pax/Venta— para que las escalas no se aplasten. Antes era una
+        # tarjeta aparte; se subió acá a pedido el 2026-09-22.
+        if _hay_ticket:
+            fig.add_trace(go.Scatter(
+                x=g["dia"], y=g["ticket"], name="Ticket", mode="lines+markers",
+                line=dict(color=ADVERTENCIA, width=2), marker=dict(size=5),
+                yaxis="y3",
+                hovertemplate=("%{x|%d/%m/%Y}<br>Ticket: S/ %{y:,.2f}"
+                               "<extra></extra>"),
             ))
 
         # División sutil entre semanas (un lunes = arranca semana nueva):
@@ -309,17 +312,28 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                 opacity=0.8, layer="below",
             )
 
-        _compras_layout(fig, alto=alturas.APOYO)
+        # El gráfico es el protagonista de la vista (sin KPIs arriba): alto
+        # PROTAGONISTA. `_xright` recorta el dominio del eje X para hacerle
+        # lugar al tercer eje (el del ticket) a la derecha, como
+        # `_ventas_grafico_dia`.
+        _xright = 0.88 if _hay_ticket else 1.0
+        _compras_layout(fig, alto=alturas.PROTAGONISTA)
         fig.update_layout(
             showlegend=bool(vol_label),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-            margin=dict(l=10, r=(50 if vol_label else 10), t=30, b=10),
+            margin=dict(l=10, r=(70 if _hay_ticket else 50 if vol_label else 10),
+                        t=30, b=10),
             yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE),
             yaxis2=dict(overlaying="y", side="right", showgrid=False,
                         title=vol_label or "", tickformat=",.0f",
                         visible=bool(vol_label)),
+            yaxis3=dict(overlaying="y", side="right", anchor="free",
+                        position=1.0, showgrid=False, tickprefix="S/ ",
+                        tickformat=",.0f", title="Ticket",
+                        visible=bool(_hay_ticket)),
         )
         fig.update_xaxes(
+            domain=[0.0, _xright],
             type="date", tickmode="linear", tick0=g["dia"].min(),
             dtick=86400000.0, tickformat="%d/%m", tickangle=-45,
             tickfont=dict(size=10),
@@ -369,26 +383,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     else:
         _tabla_detalle(tabla, g, foco, col_prod, col_cant)
 
-    # ── Ticket promedio diario ───────────────────────────────────────────
-    if vol_label:
-        with _card("ventas_resumen_ticket", "Ticket promedio diario",
-                   titulo_arriba=True):
-            gt = g.dropna(subset=["ticket"])
-            if gt.empty:
-                st.info("Sin datos de ticket promedio en el rango.")
-            else:
-                fig_t = go.Figure(go.Scatter(
-                    x=gt["dia"], y=gt["ticket"], mode="lines+markers",
-                    line=dict(color=ACENTO, width=2.2),
-                    hovertemplate="%{x|%d/%m/%Y}<br>Ticket: S/ %{y:.2f}<extra></extra>",
-                ))
-                _compras_layout(fig_t, alto=alturas.MINI)
-                fig_t.update_layout(showlegend=False,
-                                    yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE))
-                fig_t.update_xaxes(type="date", tickformat="%d/%m", tickangle=-45,
-                                   tickfont=dict(size=10))
-                st.plotly_chart(fig_t, use_container_width=True,
-                                key="ventas_g_resumen_ticket")
+    # (La tarjeta «Ticket promedio diario» que vivía acá se quitó el
+    # 2026-09-22: el ticket es ahora la línea naranja del gráfico de arriba.)
 
     # ── Top platos (Ingreso / Cantidad) ──────────────────────────────────
     if col_prod:
