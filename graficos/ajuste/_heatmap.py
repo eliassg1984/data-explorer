@@ -623,7 +623,7 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     # TODAS las líneas del lado, no un top-N: el buscador (más abajo) filtra
     # ANTES de dibujar —igual que la Cascada (`_listas`)—, así que un producto
     # que calza aparece aunque no esté entre los primeros. La grilla scrollea
-    # por dentro las que no entran en las 8 filas visibles.
+    # por dentro las que no entran en las 6 filas visibles.
     _sub_prod = _sub_prod.sort_values("_abs", ascending=False)
     # Clave estable del foco para las keys de grilla y de buscador: NO lleva
     # el nº de filas (ver `_grilla`), así el filtro no re-monta nada.
@@ -683,8 +683,9 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
         # búsqueda; el alto sí se recomputa y `_atar_alto` lo fuerza.
         _key = "hm_det_" + lado + "_" + _foco_id
         # +1 por la fila TOTAL fija (como la Cascada): reserva su renglón para
-        # que no se coma una fila del cuerpo.
-        _alto = _alto_grilla(min(8, max(1, len(tp))) + 1)
+        # que no se coma una fila del cuerpo. Tope 6 filas de cuerpo a pedido
+        # (2026-09-22): los cuadros de detalle muestran 6 y el resto scrollea.
+        _alto = _alto_grilla(min(6, max(1, len(tp))) + 1)
         _atar_alto(_key, _alto)
         # TOTAL al pie, como los cuadros de la Cascada (a pedido, 2026-09-21):
         # suma del lado YA filtrado por el buscador (el total sigue a lo que se
