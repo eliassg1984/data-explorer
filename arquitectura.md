@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-496 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+497 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (174)
+**CSS y estilos** (175)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -208,6 +208,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
 - **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
 - **#495** — Plegada la columna del árbol, cada vista es un PUNTO, no su ícono (opción B)
+- **#497** — Segundo pase del formulario Nueva receta: tarjeta blanca, botón «+» al costado del buscador,…
 
 **Layout y alturas** (69)
 
@@ -455,7 +456,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (139)
+**Streamlit** (140)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -596,6 +597,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#492** — El aviso de ingreso por Telegram (aviso_ingreso.py, 2026-09-22) cuenta "entrar" como sesión…
 - **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
 - **#496** — «Nueva receta» ya no es un reporte hermano, es una VISTA del reporte Recetas
+- **#497** — Segundo pase del formulario Nueva receta: tarjeta blanca, botón «+» al costado del buscador,…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -41127,6 +41129,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        trabajo se movió a un `st.expander("¿No está en la lista? Agregar
        como <etiqueta>")` compacto debajo — cerrado por defecto, no cobra
        vertical mientras nadie lo abre.
+
+497. **Segundo pase del formulario Nueva receta: tarjeta blanca, botón
+     «+» al costado del buscador, KPIs angostos.** 2026-09-22, mismo día
+     que la #496 y después del primer roundtrip con el usuario. Tres
+     pedidos concretos, tres arreglos que valen por separado:
+
+     - **La tarjeta no salía blanca.** El `st.container(border=True,
+       key="rec_card_nueva")` viene con el marco POR DEFECTO de
+       Streamlit — fondo transparente y una línea `rgba(49,51,63,.2)` —,
+       así que la sección se veía distinta al resto del reporte, que ya
+       tenía look «tarjeta blanca» en varias familias (Documentos SUNAT,
+       drills de Compras, Ventas resumen). Se sumó a `estilos/
+       _80_cards.py` un bloque `st-key-rec_card_nueva` con los MISMOS
+       valores que el bloque `sunat_card_*` (`--bg-card`, sin borde,
+       radio 20, sombra tenue). Sin este bloque no había CSS propio y
+       Streamlit ganaba por default.
+
+     - **El buscador es un `st.selectbox`, pero la gente esperaba un
+       gesto explícito.** `st.selectbox(index=None)` auto-agregaba la
+       línea al elegir del dropdown, y eso se reportó como «no hay forma
+       intuitiva de agregar, y el Enter demora» (mezclado con el
+       recuerdo del `text_input` viejo). Se cambió a: el selectbox filtra
+       y GUARDA la selección, y un `st.button("➕")` al costado
+       (`st.columns([9, 1])`, key `_key(modo, "add_sel")`) la agrega
+       cuando la persona lo pide. El «+» arranca disabled y sólo se
+       activa cuando hay una opción elegida — no admite "agregar sin
+       elegir". La rama de «agregar como nuevo» del expander de abajo
+       usa el MISMO gesto (text_input + «+»), así el modelo mental es
+       uno solo.
+
+     - **Los KPIs tomaban todo el largo con aire suelto.** `st.columns(3)`
+       estiraba «Costo total / Costo por porción / Precio de venta» al
+       tercio de la tarjeta cada uno y sobraba espacio entre etiqueta y
+       valor. Se pasó a `st.columns([1, 1, 1.4, 3])`: los tres controles
+       ocupan la izquierda y el resto queda vacío, más chico. Además, en
+       `estilos/_80_cards.py`, los `stMetricLabel/Value` de esta tarjeta
+       bajan de los defaults de Streamlit (label 14→11, valor 32→16),
+       mismo criterio que el KPI compacto de Inventario (regla #481) y
+       los KPIs chicos de Ventas resumen.
+
+     El buscador, además, subió a UNA FILA PROPIA a lo ancho de la
+     tarjeta — protagonista del proceso —, y los campos de identidad
+     (nombre + porciones) se bajaron a una fila secundaria. El orden
+     visual coincide con el orden del trabajo: primero se buscan y
+     agregan los ítems, después se ponen nombre y precio de venta.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

@@ -1455,6 +1455,50 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
+    /* TARJETA «Nueva receta» (Recetas y Costos)                             */
+    /*                                                                       */
+    /* Misma familia de look que Documentos SUNAT y las tarjetas de Compras: */
+    /* fondo blanco (`--bg-card`), sin borde, esquinas redondeadas y sombra  */
+    /* tenue. Sin esto, el `st.container(border=True)` que la envuelve       */
+    /* sale con el marco POR DEFECTO de Streamlit —fondo transparente y una  */
+    /* línea gris (`rgba(49,51,63,.2)`)— y la sección se lee como si tuviera */
+    /* otro material que el resto del reporte.                               */
+    /*                                                                       */
+    /* Además: KPIs de esta tarjeta más chicos (label 10, valor 15) — los    */
+    /* tres métricos «Costo total / Costo por porción / Precio de venta»     */
+    /* con el tamaño default de Streamlit tomaban toda la franja horizontal  */
+    /* y aire suelto entre cada campo. Regla nueva #497 en arquitectura.md.  */
+    /* =================================================================== */
+    div[class*="st-key-rec_card_nueva"] {
+        background: var(--bg-card) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        padding: 16px 18px;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+    div[class*="st-key-rec_card_nueva"] > div {
+        border: none !important;
+    }
+    /* KPIs compactos: label chico, valor más pequeño que el default. */
+    div[class*="st-key-rec_card_nueva"] [data-testid="stMetricLabel"] {
+        font-size: 11px !important;
+    }
+    div[class*="st-key-rec_card_nueva"] [data-testid="stMetricValue"] {
+        font-size: 16px !important;
+        line-height: 1.2 !important;
+    }
+    div[class*="st-key-rec_card_nueva"] [data-testid="stMetric"] {
+        gap: 2px !important;
+    }
+    /* Botón "+" al costado del buscador: alto igual al selectbox
+       (~40px) y ancho fijo por su glifo. La key exacta la escribe
+       `formulario_receta._key(modo, "add_sel")`. */
+    div[class^="st-key-form_receta_"][class$="_add_sel"] button {
+        min-height: 38px !important;
+        padding: 0 10px !important;
+    }
+
+    /* =================================================================== */
     /* KPI "Valorizado total" DE INVENTARIO — minimalista                    */
     /*                                                                       */
     /* Único st.metric de esa tarjeta (.st-key-ajuste_graf_card_izq_inv,     */
