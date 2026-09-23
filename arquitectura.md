@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-500 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+501 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (176)
 
@@ -376,7 +376,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 
-**AgGrid y tablas** (79)
+**AgGrid y tablas** (80)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -457,6 +457,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#471** — Una grilla que tiene que recordar algo del navegador —el orden que eligió el usuario— no…
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
+- **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
 
 **Streamlit** (142)
 
@@ -771,7 +772,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (95)
+**Decisiones de diseño y UX** (96)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -868,6 +869,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
 - **#495** — Plegada la columna del árbol, cada vista es un PUNTO, no su ícono (opción B)
 - **#496** — «Nueva receta» ya no es un reporte hermano, es una VISTA del reporte Recetas
+- **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -41357,6 +41359,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - El panel del navegador del editor, si está oculto, no pinta y
        los clics dan timeout: para medir interacción, Playwright
        headless contra el server local.
+
+501. **Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los
+     mini-gráficos por familia y la tabla, con el mismo grano y el mismo
+     rango.** 2026-09-23, a pedido: «explícame estas 3 vistas, creo que
+     dan similar información». Evolución, Comparativa mensual y Por fecha
+     de corte miraban el MISMO cubo —ajuste valorizado × tiempo ×
+     familia/producto— con tres formas: Comparativa era la fila Total de
+     la tabla con «Mes», Evolución su nivel Familia con «Corte».
+
+     **Lo que hay ahora** (`graficos/ajuste/_evolucion.py`):
+     - La SERIE: sobrante hacia arriba, faltante hacia abajo y el neto
+       como línea. Las tres vistas viejas sumaban el NETO, y set 2026
+       (+S/ 105k de sobrante, −S/ 116k de faltante, todas las familias)
+       salía como −S/ 11k — un mes tranquilo que era el peor del año.
+     - Los MINI-GRÁFICOS por familia (`fig_familias`), la misma serie una
+       vez por familia y cada uno con SU escala: la pregunta es cómo se
+       mueve cada una, y con escala compartida Alimentos (~20× Vinos) deja
+       a las demás planas. Por eso ahí sí se ven los ticks del eje Y.
+     - La TABLA pivote de antes (`_pivote.py` + `tablas/ajuste_pivote.py`),
+       con los períodos que le pasa la serie (`periodos_ajuste`), no con
+       una cuenta propia. Un grupo de columnas por año.
+     - Un clic en una barra la pone en foco: apaga los otros períodos en
+       la serie y en los paneles, y marca y trae a la vista su columna en
+       la tabla. Otro clic en la misma la suelta.
+
+     **Tres trampas que costó:**
+     - **El rango.** «Por fecha» ignoraba la franja y se anclaba al año en
+       curso porque la categoría Tiempo abría con el MES en curso — una
+       tabla por períodos con un mes no dice nada. Ahora la categoría abre
+       en 12 meses de calendario (`app.py`, 1 del mes once meses atrás; no
+       `periodo.ventana("12m")`, que deja el primer mes a medias, #470) y
+       todo sigue a la franja.
+     - **El cambio de categoría desde el rail no refiltraba.** El rail vive
+       en el fragment `_render_contenido`; el filtro de fecha, afuera. Un
+       clic de Cascada a Evolución re-ejecutaba sólo el fragment y la
+       Evolución recibía el `df_f` del corte de un día de Cascada — una
+       barra. Lo mismo con `?vista=evolucion` en la primera carga. `app.py`
+       deja en `_ajuste_cat_rango_aplicada` con qué categoría filtró, y el
+       dashboard escala a `st.rerun(scope="app")` si no coincide. Era así
+       desde que las categorías tienen rango propio (#220): «Por fecha» no
+       lo sufría porque no leía la franja.
+     - **Traer la columna en foco a la vista.** La grilla conserva su key
+       (para no perder lo expandido); `onFirstDataRendered` no vuelve a
+       disparar con opciones nuevas y el segundo foco quedaba fuera de
+       pantalla. El foco viaja en `gridOptions.context` y un vigilante
+       puesto en `onGridReady` llama a `ensureColumnVisible` sólo cuando
+       cambia. Ojo al medirlo: el rectángulo de la CABECERA de AG Grid no
+       sigue al scroll horizontal — hay que medir una celda del cuerpo.
+
+     **Sin modo «%», y es una decisión, no un pendiente.** Se propuso un
+     «% de merma» y se midió contra el parquet (5 familias, oct 25 – set
+     26): sobre el valor contado, ago 26 da −65 %; sobre el valor en
+     sistema, set 26 da −99 %, porque 10.188 filas tienen stock en sistema
+     NEGATIVO. Y el 73 % del sobrante (S/ 358k de 487k) sale de esas filas:
+     no es mercadería que apareció, es el conteo corrigiendo un stock
+     negativo. Cualquier % con el dato así le miente al lector.
+
+     Los chips Familia de arriba de la pila (sólo los usa Tiempo) abren con
+     las cinco de `FAMILIAS_DE_ENTRADA`, como Cascada/Mapa/Distribución:
+     si no, dos vistas del mismo reporte cuentan dos totales.
+
+     **Para la próxima:** antes de sumar una vista a una categoría, mirar
+     si no es otra FORMA de una que ya existe. Y un indicador en % se mide
+     contra el parquet ANTES de ofrecerlo: el denominador es donde miente.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

@@ -7,8 +7,8 @@ ultimos 200 commits, 2,7x el siguiente) y sus dos funciones mayores
 —cascada y mapa de calor— eran el 60% del archivo.
 
     _comun.py            layout del rail, fechas de corte, periodos
-    _evolucion.py        categoria Tiempo: serie temporal + comparativa
-    _pivote.py           tabla "Por fecha de corte"
+    _evolucion.py        categoria Tiempo: serie + mini-graficos + tabla (#501)
+    _pivote.py           la tabla pivote de esa vista
     _cascada.py          vista Cascada (la mas grande)
     _heatmap.py          vista "Mapa de calor" (hoy una tabla Familia x Area, #468)
     _distribucion.py     vista Distribucion
@@ -42,7 +42,7 @@ from tema import (
     AJUSTE_SOB_FONDO, AJUSTE_SOB_BORDE,
 )
 from graficos.base import (
-    compartimento_filtros, contar_filtros, filtro_pills,
+    compartimento_filtros, contar_filtros, filtro_pills, sembrar_seleccion,
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
     publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
@@ -55,11 +55,14 @@ from graficos.compras import _periodo_serie
 # Re-exports de las vistas. El entry point de abajo las llama, y
 # test_graficos.py las prueba una por una como `_aj._graf_*` — por eso
 # entran al namespace del paquete y no solo al del modulo que las define.
-from graficos.ajuste._comun import _fmt_corte, _layout_aj  # noqa: F401
-from graficos.ajuste._evolucion import (  # noqa: F401
-    _graf_comparativa_mensual, _graf_evolucion_ajuste,
+from graficos.ajuste._comun import (  # noqa: F401
+    FAMILIAS_DE_ENTRADA, _fmt_corte, _layout_aj,
 )
-from graficos.ajuste._pivote import _tabla_pivote_fecha_ajuste  # noqa: F401
+from graficos.ajuste._evolucion import (  # noqa: F401
+    fig_familias, fig_serie, periodos_ajuste, serie_ajuste,
+    vista_evolucion_ajuste,
+)
+from graficos.ajuste._pivote import _armar_tabla_pivote_ajuste  # noqa: F401
 from graficos.ajuste._cascada import _graf_waterfall_ajuste  # noqa: F401
 from graficos.ajuste._heatmap import _graf_heatmap_ajuste  # noqa: F401
 from graficos.ajuste._distribucion import (  # noqa: F401
@@ -76,9 +79,10 @@ _AJUSTE_RAIL_CATEGORIAS = (
     ("Visual", (("Cascada",        "Cascada",       ":material/waterfall_chart:"),
                      ("Mapa de calor",  "Mapa de calor", ":material/grid_on:"),
                      ("Distribución",   "Distribución",  ":material/bar_chart:"))),
-    ("Tiempo",      (("Evolución",           "Evolución",   ":material/show_chart:"),
-                     ("Comparativa mensual", "Comparativa", ":material/calendar_month:"),
-                     ("Por fecha de corte",  "Por fecha",   ":material/event:"))),
+    # UN solo item desde el 2026-09-23: «Comparativa mensual» y «Por fecha
+    # de corte» miraban el mismo dato que Evolución y se fusionaron en ella
+    # (serie + mini-gráficos por familia + tabla). Regla #501.
+    ("Tiempo",      (("Evolución",           "Evolución",   ":material/show_chart:"),)),
     ("Datos",       (("Tabla",          "Tabla",         ":material/table_rows:"),)),
 )
 
@@ -89,8 +93,8 @@ _AJUSTE_RAIL_CATEGORIAS = (
 # bajando. Ajuste no puede: cada categoría del rail recuerda su PROPIO rango
 # de fecha (`estado_rango.clave_rango(categoria=...)`, alimentada por
 # `categoria_rango_ajuste` de abajo) porque Cascada/Mapa de calor/
-# Distribución/Tabla se leen acotadas a un período y Evolución/Comparativa/
-# Por fecha necesitan varios meses o un año. Antes compartían una sola clave
+# Distribución/Tabla se leen acotadas a un período y Evolución necesita
+# varios meses o un año. Antes compartían una sola clave
 # y se pisaban el rango entre sí — apilar las siete juntas sería volver a
 # ESE bug, con la página mostrando a la vez dos vistas que piden rangos
 # distintos y una sola fecha activa para las dos.
@@ -111,16 +115,14 @@ _PILA_VISUAL = (
 )
 _PILA_TIEMPO = (
     ("aj_sec_evolucion",   "Evolución"),
-    ("aj_sec_comparativa", "Comparativa mensual"),
-    ("aj_sec_porfecha",    "Por fecha de corte"),
 )
 _PILAS = {"visual": _PILA_VISUAL, "tiempo": _PILA_TIEMPO}
 
 
 def categoria_rango_ajuste(graf_id):
     """A qué categoría de rango de fecha pertenece un item del rail de
-    Ajuste: "tiempo" (Evolución/Comparativa — necesitan varios meses o un
-    año para decir algo) o "visual" (Cascada/Mapa de calor/Distribución/
+    Ajuste: "tiempo" (Evolución — necesita varios meses o un año para decir
+    algo; abre en los últimos 12, ver `app.py`) o "visual" (Cascada/Mapa de calor/Distribución/
     Tabla — snapshot de un período, tiene sentido acotado a un mes).
 
     `app.py` usa esto para decidir qué clave de `session_state` lee/escribe
@@ -178,8 +180,33 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     _render_rail(_AJUSTE_RAIL_CATEGORIAS, "ajuste_graf_tipo",
                  btn_prefix="aj_rail_btn_", secciones=_pila)
 
+    # ¿EL RANGO CON QUE LLEGÓ `df_f` ES EL DE ESTA CATEGORÍA? El rail vive
+    # dentro del fragment de `app.py::_render_contenido`, así que un clic que
+    # cambia de categoría (Cascada → Evolución) re-ejecuta SÓLO el fragment,
+    # y el filtro de fecha —que está afuera— sigue siendo el de la otra: la
+    # Evolución abría con el corte de un día que tenía Cascada, o sea una
+    # barra. Mismo caso para un `?vista=evolucion` en la primera carga: el
+    # rail recién resuelve la vista acá, después de que `app.py` filtró.
+    # Se escala a una corrida completa; los widgets que se pierden en el
+    # corte son los de la pila que se deja, que no se iban a dibujar igual
+    # (#373). Regla #501.
+    _cat_rail = categoria_rango_ajuste(st.session_state.get("ajuste_graf_tipo"))
+    _cat_aplicada = st.session_state.get("_ajuste_cat_rango_aplicada")
+    if _cat_aplicada is not None and _cat_rail != _cat_aplicada:
+        st.rerun(scope="app")
+
     ambito = "actual"
 
+    # Los chips de arriba sólo los usa la categoría Tiempo (las vistas de
+    # Visual traen sus filtros propios, #425), y abren con las MISMAS cinco
+    # familias que ellas: sin COSTOS PRODUCCION. Si Cascada abre sin esa
+    # familia y Evolución con ella, dos vistas del mismo reporte cuentan dos
+    # totales distintos. Y es la familia de los castigos grandes: el 10 set
+    # 2025 son -S/ 594k en 138 filas, que con un rango que lo incluya
+    # aplastan la serie entera contra el cero. Es un default, no un piso
+    # (#501).
+    sembrar_seleccion(df_f, col_familia, "ajuste_graf_filtro_familia",
+                      list(FAMILIAS_DE_ENTRADA))
     area_sel, fam_sel = [], []
     with compartimento_filtros(contar_filtros("ajuste_graf_filtro_area",
                                               "ajuste_graf_filtro_familia")):
@@ -211,8 +238,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # sumó al mismo régimen. Se guarda el df de acá, antes de recortar, porque
     # filtrar dos veces dejaría la vista mostrando la intersección de dos
     # compartimentos y sólo uno visible. De los chips de arriba hoy sólo
-    # cuelga «Por fecha de corte» (en la otra pila). Ver arquitectura.md
-    # regla #425.
+    # cuelga Evolución (en la otra pila). Ver arquitectura.md regla #425.
     d_sin_chips = d
 
     if area_sel and col_area and col_area in d.columns:
@@ -295,19 +321,15 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             col_fecha=col_fecha, col_unidad=col_unidad, df_full=df_full)
 
     def _dib_evolucion():
-        _en_tarjeta("evolucion", lambda: _graf_evolucion_ajuste(
-            d, col_fecha, col_familia, col_ajuste_val, col_valorizado))
-
-    def _dib_comparativa():
-        _en_tarjeta("comparativa", lambda: _graf_comparativa_mensual(
-            d, col_fecha, col_ajuste_val))
-
-    def _dib_porfecha():
-        _en_tarjeta("porfecha", lambda: _tabla_pivote_fecha_ajuste(
-            df_full if df_full is not None else d,
-            col_familia, col_ajuste_val, col_producto, col_cantidad,
-            col_fecha, col_area=col_area, area_sel=area_sel,
-            fam_sel=fam_sel))
+        """Evolución dibuja sus TRES tarjetas (serie, familias, tabla), así
+        que no va en `_en_tarjeta`, igual que Cascada/Mapa/Distribución.
+        Recibe `d`: rango de la franja + chips de arriba."""
+        if _vacio:
+            with st.container(border=True, key="ajuste_graf_card_izq_evo_vacio"):
+                st.info("No hay datos para los filtros seleccionados.")
+            return
+        vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
+                               col_valorizado, col_producto, col_cantidad)
 
     def _dib_tabla():
         # `df_f` y no `d`: Ajuste no tiene chips propios para la Tabla —
@@ -327,8 +349,6 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         "aj_sec_distribucion": _dib_distribucion,
         "aj_sec_tabla":        _dib_tabla,
         "aj_sec_evolucion":    _dib_evolucion,
-        "aj_sec_comparativa":  _dib_comparativa,
-        "aj_sec_porfecha":     _dib_porfecha,
     }
 
     # El contenedor con la key va AFUERA del fragment: es el que observan el

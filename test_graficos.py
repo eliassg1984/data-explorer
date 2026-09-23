@@ -4660,6 +4660,89 @@ def _pruebas_una_sola_nombre_propio():
     return fallos
 
 
+def _pruebas_evolucion_ajuste():
+    """Las cuentas de Ajuste › Evolución (graficos/ajuste/_evolucion.py).
+
+    Lo que fijan son las decisiones de la fusión de las tres vistas de
+    Tiempo (regla #501), no aritmética suelta:
+
+      · sobrante y faltante van SEPARADOS: el neto se cancela y ahí se
+        escondía el peor mes del año;
+      · «Mes» rellena los meses sin conteo, y el rótulo del eje lleva el año
+        cuando el rango cruza de año (si no, dos «set» son una categoría);
+      · las columnas se afirman POR NOMBRE: una clave suelta en un groupby
+        da otra forma en pandas 2 (Cloud) que en 3 (acá), regla #481.
+    """
+    from graficos.ajuste import _evolucion as _ev
+    from graficos.ajuste import _pivote as _pv
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ajuste evolución · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ajuste evolución · {nombre}: got={got!r} exp={exp!r}")
+
+    d = pd.DataFrame({
+        "F": pd.to_datetime(["2025-11-03", "2025-11-03", "2025-11-04",
+                             "2026-01-10", "2026-01-10", "2026-01-11"]),
+        "FAM": ["A", "B", "A", "A", "B", None],
+        "PROD": ["p1", "q1", "p2", "p1", "q1", "z"],
+        "AV": [100.0, -40.0, -160.0, 5.0, -5.0, 1.0],
+        "VT": [1000.0, 0.0, 1000.0, 500.0, 0.0, 10.0],
+        "AJ": [1.0, -1.0, -2.0, 1.0, -1.0, 1.0],
+    })
+
+    dp, orden = _ev.periodos_ajuste(d, "F", "Mes")
+    check("Mes: rellena diciembre, que no tuvo conteo",
+          orden["_clave"].tolist(), ["2025-11", "2025-12", "2026-01"])
+    check("columnas de orden, por nombre",
+          list(orden.columns), ["_clave", "etq", "eje", "anio"])
+    check("el eje lleva el año cuando el rango cruza de año",
+          orden["eje"].tolist(), ["nov 25", "dic 25", "ene 26"])
+
+    s = _ev.serie_ajuste(dp, orden, "AV", "VT").set_index("_clave")
+    check("columnas de la serie, por nombre",
+          list(s.reset_index().columns),
+          ["_clave", "etq", "eje", "anio", "sobrante", "faltante", "neto",
+           "contado"])
+    check("sobrante y faltante no se cancelan",
+          (s.loc["2025-11", "sobrante"], s.loc["2025-11", "faltante"],
+           s.loc["2025-11", "neto"]), (100.0, -200.0, -100.0))
+    check("el valor contado es la suma de lo contado del período",
+          s.loc["2025-11", "contado"], 2000.0)
+    check("el mes sin conteo queda vacío, no en cero",
+          bool(pd.isna(s.loc["2025-12", "neto"])), True)
+
+    sf = _ev.serie_ajuste(dp, orden, "AV", "VT", col_grupo="FAM")
+    check("por familia: sin panel para la familia vacía",
+          sorted(sf["grupo"].unique()), ["A", "B"])
+    b_ene = sf[(sf["grupo"] == "B") & (sf["_clave"] == "2026-01")].iloc[0]
+    check("por familia: cada grupo con su sobrante y su faltante",
+          (b_ene["sobrante"], b_ene["faltante"]), (0.0, -5.0))
+
+    _, orden_c = _ev.periodos_ajuste(d, "F", "Corte")
+    check("Corte: una sesión por racha de días",
+          len(orden_c), 2)
+
+    # La tabla parte el tiempo con los MISMOS períodos que la serie.
+    wide, periodos = _pv._armar_tabla_pivote_ajuste(
+        dp.dropna(subset=["FAM"]), orden, "FAM", None, "PROD", "AJ", "AV")
+    check("la tabla lleva una columna por período de la serie",
+          [p["clave"] for p in periodos], orden["_clave"].tolist())
+    check("cada columna sabe su año (grupo de cabecera)",
+          [p["anio"] for p in periodos], [2025, 2025, 2026])
+    # La tabla es un árbol por Familia: la fila sin familia no tiene dónde
+    # colgar y se cae (en el parquet real son 122 filas, todas con ajuste
+    # cero). La serie sí la cuenta: -99 contra -100.
+    check("total de la tabla = neto de la serie de las filas con familia",
+          round(float(wide["tot_ajv"].sum()), 2), -100.0)
+    return fallos
+
+
 def _pruebas_resumen_ajuste():
     """Las cuentas de Ajuste › Cascada (graficos/ajuste/_cascada.py).
 
@@ -4951,11 +5034,21 @@ def main():
     from graficos import ajuste as _aj
 
     pruebas = [
-        ("evolucion (por familia)", _aj._graf_evolucion_ajuste,
-            (df, "FECHA APERTURA INVENTARIO", "FAMILIA",
-             "AJUSTE VALORIZADO", "VALORIZADO TOTAL")),
-        ("evolucion (rama else, sin familia)", _aj._graf_evolucion_ajuste,
-            (df_min, "FECHA APERTURA INVENTARIO", None, "AJUSTE VALORIZADO", None)),
+        # Evolución (regla #501): las figuras puras, en sus dos magnitudes
+        # y con un período en foco. La vista entera lleva AgGrid.
+        ("evolucion · serie con foco", lambda: _aj.fig_serie(
+            _aj.serie_ajuste(*_aj.periodos_ajuste(
+                df, "FECHA APERTURA INVENTARIO", "Mes"),
+                "AJUSTE VALORIZADO", "VALORIZADO TOTAL"), "2024-03"), ()),
+        ("evolucion · familias por corte", lambda: _aj.fig_familias(
+            _aj.serie_ajuste(*_aj.periodos_ajuste(
+                df, "FECHA APERTURA INVENTARIO", "Corte"),
+                "AJUSTE VALORIZADO", "VALORIZADO TOTAL", col_grupo="FAMILIA")),
+         ()),
+        ("evolucion · serie sin valorizado (rama else)", lambda: _aj.fig_serie(
+            _aj.serie_ajuste(*_aj.periodos_ajuste(
+                df_min, "FECHA APERTURA INVENTARIO", "Semana"),
+                "AJUSTE VALORIZADO")), ()),
         ("waterfall (Cascada)", _aj._graf_waterfall_ajuste,
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO")),
         ("heatmap (Mapa de calor)", _aj._graf_heatmap_ajuste,
@@ -5120,6 +5213,9 @@ def main():
 
     # ── El chip de la mini contra el corte anterior ──────────────────────
     fallos += _pruebas_resumen_ajuste()
+
+    # ── Ajuste › Evolución: períodos compartidos, sobrante/faltante/% ────
+    fallos += _pruebas_evolucion_ajuste()
 
     # ── Inventario › Productos: el grano y el despliegue de áreas ────────
     fallos += _pruebas_listado_inventario()

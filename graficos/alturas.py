@@ -556,6 +556,18 @@ una tarjeta que ya estaba llena, así que los píxeles que ocupan hay que
 restárselos a la figura, o la tarjeta crece y su eje X termina debajo del
 borde (el modo de fallo de `FRANJA_CONTROLES`)."""
 
+FILA_MULTIPLOS = 150
+"""Alto de UNA fila de mini-gráficos (small multiples) de Ajuste ›
+Evolución: los paneles por familia, tres por fila. Nació el 2026-09-23 con
+la fusión de las tres vistas de Tiempo (regla #501).
+
+Con las cinco familias con que abre la vista son dos filas: 2 × 150 + 46 de
+leyenda y márgenes = 346, por debajo de `APOYO`. MEDIDO en el navegador a
+1366x768 con datos reales: 109px de trazo por panel (el eje Y de cada uno)
+y la tarjeta entera en 380. Se pide con
+`por_filas(filas, px_fila=FILA_MULTIPLOS, ...)`, así que con más familias
+el techo lo sigue poniendo `PROTAGONISTA`."""
+
 FRANJA_VEREDICTO = 24
 """Alto del renglón del PORCENTAJE de la cascada —«−62.6% vs año pasado ·
 por comprar menos»— más el hueco hasta el bloque siguiente. MEDIDO en el

@@ -476,6 +476,14 @@ _categoria_ajuste_rango = (
 )
 _k_rango_franja = clave_rango(reporte, _usa_carga_rango,
                               categoria=_categoria_ajuste_rango)
+# Con qué categoría se FILTRÓ `df_f` en esta corrida. El rail de Ajuste vive
+# dentro del fragment `_render_contenido`: un clic suyo re-ejecuta sólo el
+# fragment, y si cambia de categoría el dashboard recibía el `df_f` filtrado
+# con el rango de la OTRA — Evolución abría con el corte de un día de
+# Cascada. El dashboard compara contra esto y escala a una corrida completa
+# (`graficos/ajuste/__init__.py`, regla #501).
+if es_ajuste:
+    st.session_state["_ajuste_cat_rango_aplicada"] = _categoria_ajuste_rango
 _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
 
 # EL TOPE DEL PARQUET, ANTES DE QUE LO ENSANCHE UNA VISTA (2026-09-11). El
@@ -603,6 +611,26 @@ if reporte == "Compras" and fecha_min_full and fecha_max_full:
     _v12 = periodo.ventana("12m", _ancla_mes, minimo=fecha_min_full)
     if _v12:
         fecha_ini_default, fecha_fin_default = _v12[0].date(), _v12[1].date()
+
+# AJUSTE › TIEMPO ABRE EN LOS ÚLTIMOS 12 MESES (2026-09-23, regla #501). El
+# default de arriba —el mes en curso— es el de Cascada, Mapa y Distribución,
+# que miran un período. Evolución mira una SERIE, y con un mes le queda una
+# barra: por eso la vieja «Por fecha de corte» ignoraba la franja y se
+# anclaba al año en curso. Con la fusión de las tres vistas de Tiempo la
+# tabla y la serie siguen al MISMO rango, y el default de esa categoría es
+# el que la serie necesita. Cada categoría guarda su rango en su propia
+# clave (`categoria_rango_ajuste`), así que esto no toca a la otra.
+#
+# DOCE MESES DE CALENDARIO, no `periodo.ventana("12m")`: ésa arranca el día
+# siguiente de hace un año (18 set 2025 – 17 set 2026), y en «Mes» la
+# primera barra sería un septiembre A MEDIAS al lado de uno entero — la
+# trampa de la regla #470. Acá arranca el 1 del mes, once meses atrás.
+if (es_ajuste and _categoria_ajuste_rango == "tiempo"
+        and fecha_min_full and fecha_max_full):
+    fecha_ini_default = max(
+        fecha_min_full,
+        (pd.Timestamp(_ancla_mes).to_period("M") - 11).to_timestamp().date())
+    fecha_fin_default = _ancla_mes
 
 # ...Y UNA TARJETA PUEDE ABRIR EN OTRO (2026-09-11, a pedido). El default de
 # arriba es el del REPORTE: el que ve una sección sin selector de fecha

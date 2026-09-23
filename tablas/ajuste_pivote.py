@@ -1,5 +1,6 @@
-"""tablas.ajuste_pivote - grilla AgGrid de la tabla dinámica "Por fecha" de
-Ajuste de Inventario (graficos/ajuste.py::_tabla_pivote_fecha_ajuste).
+"""tablas.ajuste_pivote - grilla AgGrid de la tabla dinámica de Ajuste ›
+Evolución (graficos/ajuste/_pivote.py::_tabla_pivote_fecha_ajuste; hasta el
+2026-09-23 era la vista suelta «Por fecha de corte», regla #501).
 
 Árbol de filas nativo (rowGroup: Familia > Subfamilia > Producto) + una
 columna por periodo con Ajuste Valorizado (grande) y Ajuste (chico, debajo)
@@ -33,7 +34,7 @@ from perf import perf
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, DANGER_TEXT,
     GRIS_TEXTO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE,
-    LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
+    LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, LAVANDA_SELECCION, TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
 from tablas._css import _css_base, _css_franjas_sidebar
@@ -187,17 +188,21 @@ def _col_periodo(col_id, headerName, field_ajv, field_aj, es_total=False,
 
 def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
                                      col_subfamilia, col_producto,
-                                     font_px: int = 13, anio=None):
+                                     font_px: int = 13, foco=None):
     """`df_wide`: una fila por Familia+Subfamilia+Producto, más las
-    columnas de `periodos` (lista de dicts field_ajv/field_aj/label, en
-    orden cronológico) y tot_ajv/tot_aj. Arma el grid: filas agrupadas
-    nativas + una columna sintética por periodo con celda compacta.
+    columnas de `periodos` (lista de dicts field_ajv/field_aj/label/anio/
+    clave, en orden cronológico) y tot_ajv/tot_aj. Arma el grid: filas
+    agrupadas nativas + una columna sintética por periodo con celda
+    compacta.
 
-    `anio` (opcional): la vista siempre acota a UN año (ver
-    graficos/ajuste.py::_tabla_pivote_fecha_ajuste), así que en vez de
-    repetirlo en cada cabecera de periodo ("ene 2026", "feb 2026"...) va
-    UNA sola vez como grupo de columna por encima de Día/Semana/Mes --
-    Total queda afuera del grupo, es un cierre de fila, no parte del año."""
+    El AÑO no se repite en cada cabecera ("ene 2026", "feb 2026"...): va
+    UNA vez por año como grupo de columna por encima de los periodos. Hasta
+    el 2026-09-23 la tabla miraba siempre UN año (el en curso) y había un
+    solo grupo; desde que sigue al rango de la franja —12 meses que cruzan
+    de año— hay uno por año. Total queda afuera: es un cierre de fila.
+
+    `foco` es la `clave` del periodo marcado en la serie de arriba: su
+    columna sale resaltada y la grilla la trae a la vista al dibujarse."""
     gb = GridOptionsBuilder.from_dataframe(df_wide)
     gb.configure_default_column(
         resizable=True, sortable=True, filter=True, editable=False,
@@ -374,8 +379,37 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
         # tablas/desktop.py (arquitectura.md regla #33) -- deja inspeccionar
         # el estado real del grid (nodos, expand/collapse, aggData) desde la
         # consola sin adivinar por el DOM.
-        onGridReady=JsCode(
-            "function(params){ window.__agApiPivoteAjuste = params.api; }"),
+        # TRAER LA COLUMNA EN FOCO A LA VISTA. Con 12+ periodos la marcada
+        # puede quedar fuera, a la derecha del scroll horizontal. No alcanza
+        # con un evento: la grilla CONSERVA su key (para no perder lo que el
+        # usuario expandió u ordenó), así que al marcar otro periodo no se
+        # vuelve a montar — le llegan opciones nuevas, y `onFirstDataRendered`
+        # no vuelve a disparar (visto en el navegador: el primer foco se
+        # traía, el segundo quedaba fuera). En vez de apostar a qué evento
+        # dispara st_aggrid al actualizar opciones, un vigilante lee
+        # `context.foco` y se mueve SÓLO cuando cambia: leer
+        # una opción es gratis, y no toca el DOM si no hay nada que hacer
+        # (CLAUDE.md: un temporizador escribe sólo si el valor cambió).
+        # Regla #501.
+        onGridReady=JsCode("""
+            function(params) {
+                window.__agApiPivoteAjuste = params.api;
+                var ultimo = null;
+                var t = setInterval(function() {
+                    try {
+                        if (params.api.isDestroyed && params.api.isDestroyed()) {
+                            clearInterval(t); return;
+                        }
+                        var c = params.api.getGridOption('context') || {};
+                        var f = c.foco || null;
+                        if (f !== ultimo) {
+                            ultimo = f;
+                            if (f) params.api.ensureColumnVisible(f, 'middle');
+                        }
+                    } catch (e) {}
+                }, 400);
+            }
+        """),
         onGridSizeChanged=JsCode(
             "function(params){ params.api.sizeColumnsToFit(); }"),
         onToolPanelVisibleChanged=JsCode("""
@@ -396,20 +430,29 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
     # construido porque GridOptionsBuilder.configure_column exige que la
     # columna ya exista como field del dataframe (ver arquitectura.md
     # regla #26) -- estas no tienen field, viven de valueGetter + aggFunc.
-    _cols_periodo = [
-        _col_periodo(f"periodo_{i}", p["label"], p["field_ajv"], p["field_aj"])
-        for i, p in enumerate(periodos)
-    ]
-    if anio:
-        # El año va UNA vez como grupo de columna (no repetido en cada
-        # cabecera) -- Total queda afuera, no es parte del año, es el
-        # cierre de la fila.
+    _col_foco = None
+    _por_anio = {}
+    for i, p in enumerate(periodos):
+        _c = _col_periodo(f"periodo_{i}", p["label"], p["field_ajv"],
+                          p["field_aj"])
+        if foco is not None and p.get("clave") == foco:
+            _c["headerClass"] = "aj-periodo-foco"
+            _c["cellClass"] = "aj-periodo-foco"
+            _col_foco = _c["colId"]
+        # dict conserva el orden de inserción y los periodos llegan en
+        # orden cronológico: los grupos salen en orden de año.
+        _por_anio.setdefault(p.get("anio"), []).append(_c)
+    for _anio, _hijas in _por_anio.items():
+        if _anio is None:
+            grid_options["columnDefs"].extend(_hijas)
+            continue
         grid_options["columnDefs"].append({
-            "groupId": f"anio_{anio}", "headerName": str(anio),
-            "children": _cols_periodo,
+            "groupId": f"anio_{_anio}", "headerName": str(_anio),
+            "children": _hijas,
         })
-    else:
-        grid_options["columnDefs"].extend(_cols_periodo)
+    # El periodo en foco viaja como DATO, en `context` (regla #226), y lo
+    # lee el vigilante que `onGridReady` deja puesto (ver abajo).
+    grid_options["context"] = {"foco": _col_foco}
     grid_options["columnDefs"].append(_col_periodo(
         _COL_TOTAL_ID, "Total", "tot_ajv", "tot_aj" if _tiene_aj else None,
         es_total=True, minWidth=110, pinned="right",
@@ -430,6 +473,13 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
     custom_css[".ag-header-group-cell"] = {
         "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
         "border-bottom": f"1px solid {LAVANDA_BORDE} !important",
+    }
+    # La columna del periodo en foco (clic en la serie de arriba).
+    custom_css[".ag-cell.aj-periodo-foco"] = {
+        "background-color": f"{LAVANDA_SELECCION} !important",
+    }
+    custom_css[".ag-header-cell.aj-periodo-foco"] = {
+        "background-color": f"{LAVANDA_BORDE} !important",
     }
     custom_css[".ag-header-group-cell-label"] = {
         "color": f"{ACENTO_TEXTO_OSCURO} !important",
