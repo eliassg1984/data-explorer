@@ -2,13 +2,18 @@
 envio_receta.py — la receta o el combo de «Nueva receta», listos para
 mandar por correo DESDE EL GMAIL DE QUIEN ESTÁ LOGUEADO.
 
-Tres piezas puras (sin Streamlit), que reciben un `resumen` ya armado por
+Piezas puras (sin Streamlit), que reciben un `resumen` ya armado por
 `formulario_receta._resumen_envio`:
 
   - `pdf_receta(resumen)`   → bytes del PDF (A4, una tabla + el desglose).
   - `excel_receta(resumen)` → bytes del .xlsx (misma información, editable).
-  - `url_gmail(resumen, correo)` → el enlace que abre la ventana «Redactar»
-    de Gmail con el asunto y el cuerpo ya escritos.
+  - `armar_correo` + `enviar_correo` → el envío AUTOMÁTICO con los dos
+    adjuntos, por el SMTP de Gmail. Es el camino principal desde que se
+    pidió «debe adjuntarlo automáticamente» (regla #503); necesita
+    `GMAIL_REMITENTE` y `GMAIL_APP_PASSWORD` en secrets.
+  - `url_gmail(resumen, correo)` → el camino de reserva, SIN esos secrets:
+    abre «Redactar» del Gmail del usuario con asunto y cuerpo escritos, y
+    los adjuntos van a mano. Lo que sigue explica por qué nació así.
 
 POR QUÉ «ABRIR SU GMAIL» Y NO ENVIAR DESDE EL SERVIDOR (2026-09-23). Se
 pidió que el correo salga con la dirección de quien está logueado. El login
@@ -39,7 +44,9 @@ El PDF se dibuja con matplotlib (ya es dependencia; mismo criterio que
 
 import io
 import re
+import smtplib
 import unicodedata
+from email.message import EmailMessage
 from urllib.parse import quote, urlencode
 
 # Cuántas líneas entran en el CUERPO del correo antes de cortar con «y N
@@ -263,3 +270,62 @@ def url_gmail(resumen, correo=None):
     if correo:
         params["authuser"] = correo
     return "https://mail.google.com/mail/?" + urlencode(params, quote_via=quote)
+
+
+# ─── Envío automático con adjuntos (SMTP de Gmail) ──────────────────────
+# Pedido 2026-09-23, al ver el primer camino: «debe adjuntarlo
+# automáticamente». Abrir el Gmail del usuario NO puede adjuntar, así que
+# con los secrets configurados la app manda el correo ella misma, desde la
+# cuenta de `GMAIL_REMITENTE` con su contraseña de aplicación. Sale SIEMPRE
+# de esa cuenta — quien apretó el botón va en «Responder a» y en el cuerpo.
+# Regla #503.
+_RE_CORREO = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
+MAX_DESTINATARIOS = 10
+
+
+def separar_destinatarios(texto):
+    """«a@x.com, b@y.pe; c@z.com» → (válidos, inválidos). Acepta coma,
+    punto y coma o espacios como separador, y descarta repetidos."""
+    partes = [p.strip() for p in re.split(r"[,;\s]+", texto or "") if p.strip()]
+    validos, invalidos, vistos = [], [], set()
+    for p in partes:
+        if not _RE_CORREO.match(p):
+            invalidos.append(p)
+        elif p.lower() not in vistos:
+            vistos.add(p.lower())
+            validos.append(p)
+    return validos, invalidos
+
+
+def armar_correo(resumen, remitente, destinatarios, responder_a=None,
+                 pdf=None, xlsx=None):
+    """El `EmailMessage` listo: texto + el PDF y el Excel adjuntos. Se
+    separa de `enviar_correo` para poder probarlo sin red."""
+    titulo, _ = _encabezado(resumen)
+    msg = EmailMessage()
+    msg["Subject"] = titulo
+    msg["From"] = remitente
+    msg["To"] = ", ".join(destinatarios)
+    if responder_a and responder_a.lower() != remitente.lower():
+        msg["Reply-To"] = responder_a
+    msg.set_content(cuerpo_correo(resumen))
+    msg.add_attachment(pdf if pdf is not None else pdf_receta(resumen),
+                       maintype="application", subtype="pdf",
+                       filename=nombre_archivo(resumen, "pdf"))
+    msg.add_attachment(
+        xlsx if xlsx is not None else excel_receta(resumen),
+        maintype="application",
+        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=nombre_archivo(resumen, "xlsx"))
+    return msg
+
+
+def enviar_correo(msg, remitente, clave_app):
+    """Manda `msg` por el SMTP de Gmail (SSL, puerto 465). `clave_app` es
+    la CONTRASEÑA DE APLICACIÓN de 16 letras, no la de la cuenta: Gmail
+    rechaza la normal por SMTP. Gmail guarda una copia en «Enviados» de
+    esa cuenta. Levanta la excepción de `smtplib` tal cual: el llamador
+    decide qué decirle al usuario."""
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
+        smtp.login(remitente, clave_app.replace(" ", ""))
+        smtp.send_message(msg)

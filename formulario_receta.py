@@ -55,6 +55,7 @@ simplemente no sale, arquitectura.md regla #100).
 """
 
 import json
+import smtplib
 import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -588,16 +589,32 @@ def _resumen_envio(tipo, nombre, autor, lineas, precio_venta):
     }
 
 
-def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta):
-    """PDF · Excel · «Enviar desde mi Gmail», en las tres columnas `cols`
-    de la fila de Guardar. El correo sale de la cuenta de QUIEN ESTÁ
-    LOGUEADO porque lo manda él desde su Gmail — el porqué de este camino
-    y no un envío desde el servidor está en el docstring de
-    `envio_receta.py`.
+def _credenciales_correo():
+    """(remitente, contraseña de aplicación) de los secrets, o None si
+    faltan — mismo criterio que `aviso_ingreso.py`: un secret ausente no
+    rompe nada, sólo apaga el envío automático."""
+    try:
+        rem = st.secrets.get("GMAIL_REMITENTE")
+        clave = st.secrets.get("GMAIL_APP_PASSWORD")
+    except Exception:
+        return None
+    return (rem, clave) if rem and clave else None
 
-    Los archivos se arman AL HACER CLIC (`data=` recibe una función), no en
-    cada corrida: un PDF de matplotlib cuesta cientos de ms y esta fila se
-    redibuja con cada «+» del buscador (regla #499)."""
+
+def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta):
+    """PDF · Excel · «Enviar por correo», en las tres columnas `cols` de la
+    fila de Guardar.
+
+    Con `GMAIL_REMITENTE` + `GMAIL_APP_PASSWORD` en secrets, el tercer
+    botón abre una fila de envío (`_fila_envio`) y la app manda el correo
+    ELLA MISMA con el PDF y el Excel adjuntos (pedido: «debe adjuntarlo
+    automáticamente»). Sin esos secrets queda el camino anterior: abrir el
+    Gmail del usuario con el correo escrito, adjuntando a mano. Por qué
+    cada uno, en el docstring de `envio_receta.py` y las reglas #502/#503.
+
+    Los archivos de ⬇ se arman AL HACER CLIC (`data=` recibe una función),
+    no en cada corrida: un PDF de matplotlib cuesta cientos de ms y esta
+    fila se redibuja con cada «+» del buscador (regla #499)."""
     correo = _correo_usuario()
     listo = bool(nombre.strip()) and bool(lineas)
     falta = ("Ponle nombre y agrega al menos un ítem." if not listo else None)
@@ -621,16 +638,93 @@ def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta)
             use_container_width=True,
             help=falta or "Descargar la receta en Excel",
         )
+
+    cred = _credenciales_correo()
+    k_abierto = _key(modo, "envio_abierto")
     with c_mail:
-        st.link_button(
-            "✉ Enviar desde mi Gmail",
-            envio_receta.url_gmail(resumen, correo) if listo else "https://mail.google.com",
-            disabled=not listo, use_container_width=True,
-            help=falta or (
-                f"Abre {'el Gmail de ' + correo if correo else 'tu Gmail'} con el "
-                "correo ya escrito. Escribe a quién, arrastra el PDF y el "
-                "Excel que descargaste y dale Enviar."),
+        if cred is None:
+            st.link_button(
+                "✉ Enviar desde mi Gmail",
+                envio_receta.url_gmail(resumen, correo) if listo else "https://mail.google.com",
+                disabled=not listo, use_container_width=True,
+                help=falta or (
+                    f"Abre {'el Gmail de ' + correo if correo else 'tu Gmail'} con "
+                    "el correo ya escrito. Escribe a quién, arrastra el PDF y el "
+                    "Excel que descargaste y dale Enviar."),
+            )
+        elif st.button("✉ Enviar por correo", key=_key(modo, "envio_abrir"),
+                       disabled=not listo, use_container_width=True,
+                       help=falta or "Mandar la receta con el PDF y el Excel adjuntos"):
+            st.session_state[k_abierto] = not st.session_state.get(k_abierto, False)
+
+    # El acuse de un envío ya hecho: viaja por session_state porque el
+    # envío cierra la fila con un rerun, y lo que se pinta antes de un
+    # rerun no se ve nunca (regla #474).
+    acuse = st.session_state.pop(_key(modo, "envio_acuse"), None)
+    if acuse:
+        st.success(acuse)
+    if cred is not None and listo and st.session_state.get(k_abierto):
+        _fila_envio(modo, resumen, cred, correo)
+
+
+def _fila_envio(modo, resumen, cred, correo):
+    """Para · Enviar · Cancelar, debajo de la fila de Guardar. No es un
+    `st.popover`: el CSS global de `_30_filtros.py` vuelve píldora de 180px
+    a todo botón de popover, y un widget adentro de uno cerrado no se
+    entera de lo que Python le escribe (regla #467)."""
+    remitente, clave = cred
+    k_ver = _key(modo, "envio_ver")
+    ver = st.session_state.setdefault(k_ver, 0)
+    # columnas-internas: el campo de destinatarios es lo único que necesita ancho.
+    c_para, c_env, c_canc, _pad = st.columns([5, 1.6, 1.2, 2.2],
+                                             vertical_alignment="center")
+    with c_para:
+        para = st.text_input(
+            "Para", key=_key(modo, f"envio_para_v{ver}"),
+            placeholder="correo@ejemplo.com, otro@ejemplo.com",
+            label_visibility="collapsed",
         )
+    with c_env:
+        enviar = st.button("Enviar", type="primary", key=_key(modo, "envio_ok"),
+                           use_container_width=True)
+    with c_canc:
+        if st.button("Cancelar", key=_key(modo, "envio_cancelar"),
+                     type="tertiary", use_container_width=True):
+            st.session_state[_key(modo, "envio_abierto")] = False
+            st.rerun(scope="fragment")
+    st.caption(f"Sale desde **{remitente}** con el PDF y el Excel adjuntos"
+               + (f"; las respuestas llegan a {correo}." if correo
+                  and correo.lower() != remitente.lower() else "."))
+    if not enviar:
+        return
+
+    validos, invalidos = envio_receta.separar_destinatarios(para)
+    if invalidos:
+        st.warning("Revisa estas direcciones: " + ", ".join(invalidos))
+        return
+    if not validos:
+        st.warning("Escribe al menos un destinatario.")
+        return
+    if len(validos) > envio_receta.MAX_DESTINATARIOS:
+        st.warning(f"Máximo {envio_receta.MAX_DESTINATARIOS} destinatarios por envío.")
+        return
+    try:
+        with st.spinner("Enviando…"):
+            msg = envio_receta.armar_correo(resumen, remitente, validos,
+                                            responder_a=correo)
+            envio_receta.enviar_correo(msg, remitente, clave)
+    except smtplib.SMTPAuthenticationError:
+        st.error("Gmail rechazó la contraseña de aplicación de "
+                 f"{remitente}. Revisa GMAIL_APP_PASSWORD en Secrets.")
+        return
+    except Exception as e:                             # red, SMTP, etc.
+        st.error(f"No se pudo enviar: {e}")
+        return
+    st.session_state[_key(modo, "envio_acuse")] = (
+        f"✉ Enviado a {', '.join(validos)} con el PDF y el Excel adjuntos.")
+    st.session_state[_key(modo, "envio_abierto")] = False
+    st.session_state[k_ver] = ver + 1                  # el «Para» arranca vacío
+    st.rerun(scope="fragment")
 
 
 def _guardar_propuesta(tipo, nombre, guardado_por, lineas, extra=None):

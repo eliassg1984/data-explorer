@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-502 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+503 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (176)
 
@@ -459,7 +459,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 - **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
 
-**Streamlit** (143)
+**Streamlit** (144)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -604,6 +604,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 - **#499** — Quinto pase de Nueva receta: @st.fragment para que el «+» responda en 100 ms y no en un…
 - **#502** — «Que el correo salga con MI dirección» no se resuelve mandando desde el servidor: se abre el…
+- **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
 
 **Datos, R2 y DuckDB** (58)
 
@@ -41479,6 +41480,48 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      Si algún día hace falta que salga SIN el paso de arrastrar, el camino
      es la Gmail API, y `pdf_receta`/`excel_receta` se reusan tal cual.
+
+503. **El correo de «Nueva receta» se manda desde el servidor, con los
+     adjuntos, por el SMTP de Gmail y una contraseña de aplicación.** El
+     mismo 2026-09-23, horas después de la #502: al ver el Gmail abierto
+     con el cuerpo escrito y sin archivos, el pedido fue «debe adjuntarlo
+     automáticamente». La #502 ya lo había anticipado: una página web no
+     puede adjuntar en el Gmail de otro.
+
+     **Qué se eligió y qué se resignó.** De los tres caminos de la #502,
+     el SMTP es el único que adjunta sin configurar Google Cloud ni tocar
+     el login. Lo que se resigna: el correo sale SIEMPRE de la cuenta de
+     `GMAIL_REMITENTE`, apriete quien apriete el botón. Para que no se
+     pierda quién lo mandó, el cuerpo lleva «Propuesta de <nombre>» y, si
+     `st.user.email` viene lleno y es otro, va en `Reply-To`. Hoy la app la
+     ven dos personas y el dueño es quien más manda; si la otra tiene que
+     mandar desde SU cuenta, el camino es la Gmail API (#502).
+
+     **Cómo quedó** (`formulario_receta._botones_envio` / `_fila_envio`):
+     - Con los dos secrets, el tercer botón es «✉ Enviar por correo» y
+       abre DEBAJO una fila «Para · Enviar · Cancelar». No es un
+       `st.popover`: el CSS global de `_30_filtros.py` vuelve píldora de
+       180px a todo botón de popover (#467 aparte).
+     - Sin los secrets queda el enlace de la #502. El cambio es solo: se
+       pegan los secrets y el botón cambia, sin deploy.
+     - Destinatarios separados por coma, punto y coma o espacio, hasta 10,
+       validados antes de armar nada (`separar_destinatarios`).
+     - `SMTPAuthenticationError` se dice con nombre: casi siempre es que
+       se pegó la contraseña NORMAL de la cuenta, que Gmail rechaza por
+       SMTP. La de aplicación son 16 letras y los espacios no importan
+       (`enviar_correo` los quita).
+     - El «Enviado a …» viaja por `session_state` y lo pinta la corrida
+       siguiente: el envío cierra la fila con un `st.rerun`, y lo pintado
+       antes de un rerun no se ve (#474).
+
+     **Probado sin red** con `AppTest` + secrets inyectados +
+     `enviar_correo` reemplazado: sin secrets sale el enlace; con secrets,
+     el botón, la fila, el aviso por dirección inválida y el mensaje
+     armado (`To`, `Reply-To`, `receta_<nombre>.pdf` y `.xlsx`). El envío
+     REAL contra smtp.gmail.com no se probó desde acá: necesita la
+     contraseña de aplicación, que la crea y la pega el dueño de la cuenta.
+     `AppTest` no corre fragments, así que el `st.rerun(scope="fragment")`
+     del final revienta en el arnés y no en la app.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
