@@ -761,6 +761,25 @@ seis —el único que no está ya escrito en alguna celda— así que es el que
 paga menos por quedarse."""
 
 
+def _pct_del_sire(n, n_sire):
+    """`n` como porcentaje de los comprobantes que reporta SUNAT, con un
+    decimal, para el grupo de estados de `_kpis_cruce`. None si SUNAT no
+    reporta ninguno —todo es «Solo sistema»—: no hay sobre qué.
+
+    Los dos bordes no se redondean. 1 de 4.320 es el 0,02 %, y «0.0% 1 con
+    diferencia» se lee como una contradicción: sale «<0.1%». Igual arriba:
+    4.319 de 4.320 no es «100.0%» con uno al lado que no coincide.
+    """
+    if not n_sire:
+        return None
+    p = n / n_sire * 100
+    if 0 < p < 0.05:
+        return "<0.1%"
+    if 99.95 <= p < 100:
+        return ">99.9%"
+    return f"{p:.1f}%"
+
+
 def _kpis_cruce(df, origen=None, n_tabla=None, n_provs=None):
     """Resumen de UNA línea del cruce: cuántos documentos coinciden,
     difieren, o faltan de un lado u otro. Mismo criterio compacto que
@@ -798,10 +817,15 @@ def _kpis_cruce(df, origen=None, n_tabla=None, n_provs=None):
         return
     conteos = df["estado"].value_counts()
 
-    def dato(valor, etiqueta, color=None):
+    def dato(valor, etiqueta, color=None, pct=None):
         c = color or TEXTO_PRINCIPAL
-        return (f'<span style="white-space:nowrap;">'
-                f'<b style="color:{c};font-weight:600;">{valor}</b>'
+        cifra = f'<b style="color:{c};font-weight:600;">{pct or valor}</b>'
+        if pct:
+            # El % va primero y se lleva la negrita y el color del estado;
+            # la cantidad queda al lado, en peso normal. Dos cifras en
+            # negrita pegadas se leen como un solo número.
+            cifra += f'<span style="color:{TEXTO_PRINCIPAL};"> {valor}</span>'
+        return (f'<span style="white-space:nowrap;">{cifra}'
                 f'<span style="color:{GRIS_TEXTO};"> {etiqueta}</span></span>')
 
     def grupo(nombre, *partes_grupo):
@@ -849,9 +873,6 @@ def _kpis_cruce(df, origen=None, n_tabla=None, n_provs=None):
         grupo("igv", dato(f"S/ {_igv:,.2f}", "IGV")),
         grupo("total", dato(f"S/ {_tot:,.2f}", "total")),
     ]
-    partes = [
-        dato(f'{int(conteos.get("Coincide", 0)):,}', "coinciden"),
-    ]
 
     # Los conteos, prestados al KPI de la franja de vistas (2026-09-01, a
     # pedido: "cuantos estan en SUNAT y cuantos en sistema"). Se PUBLICAN
@@ -878,23 +899,30 @@ def _kpis_cruce(df, origen=None, n_tabla=None, n_provs=None):
                       + conteos.get("Diferencia", 0)),
     }
 
+    # PORCENTAJE Y CANTIDAD, SIN MONTOS (2026-09-23, a pedido: «quitemos los
+    # valorizados, mantengamos las cantidades y añadamos %»), en ese orden.
+    #
+    # EL % ES SOBRE LO QUE REPORTA SUNAT —coinciden + con diferencia + solo
+    # en SUNAT—, no sobre las filas de la tabla: esos tres suman 100 y se
+    # leen como «de lo que dice SUNAT, cuánto cuadra». «Solo en el sistema»
+    # va sin % a propósito (también a pedido): no es parte de ese universo,
+    # y un % suyo sobre el mismo denominador haría sumar la tira más de 100.
+    n_coi = int(conteos.get("Coincide", 0))
     n_dif = int(conteos.get("Diferencia", 0))
-    if n_dif:
-        mto = float(df.loc[df["estado"] == "Diferencia", "dif_total"].abs().sum())
-        partes.append(dato(f"{n_dif:,}", f"con diferencia (S/ {mto:,.2f})",
-                           ADVERTENCIA_TEXTO))
-
     n_ssu = int(conteos.get("Solo SUNAT", 0))
-    if n_ssu:
-        mto = float(df.loc[df["estado"] == "Solo SUNAT", "total_sunat"].sum())
-        partes.append(dato(f"{n_ssu:,}", f"solo en SUNAT (S/ {mto:,.2f})",
-                           ADVERTENCIA_TEXTO))
-
     n_ssi = int(conteos.get("Solo sistema", 0))
+    n_sire = n_coi + n_dif + n_ssu
+
+    partes = [dato(f"{n_coi:,}", "coinciden",
+                   pct=_pct_del_sire(n_coi, n_sire))]
+    if n_dif:
+        partes.append(dato(f"{n_dif:,}", "con diferencia", ADVERTENCIA_TEXTO,
+                           pct=_pct_del_sire(n_dif, n_sire)))
+    if n_ssu:
+        partes.append(dato(f"{n_ssu:,}", "solo en SUNAT", ADVERTENCIA_TEXTO,
+                           pct=_pct_del_sire(n_ssu, n_sire)))
     if n_ssi:
-        mto = float(df.loc[df["estado"] == "Solo sistema", "total_sistema"].sum())
-        partes.append(dato(f"{n_ssi:,}", f"solo en el sistema (S/ {mto:,.2f})",
-                           ERROR))
+        partes.append(dato(f"{n_ssi:,}", "solo en el sistema", ERROR))
 
     # Los cuatro estados son UN grupo, el de la columna «Está vs Sistema»:
     # se leen juntos o no se leen (99 coinciden no significa nada sin saber

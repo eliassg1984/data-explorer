@@ -38535,6 +38535,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-18.)
 
+     **Addendum (2026-09-23): el denominador ahora está escrito, y es el
+     del registro, no el de la tabla.** A pedido, el grupo «estado» dejó
+     los montos entre paréntesis y pasó a porcentaje + cantidad: «62.9%
+     2,710 coinciden · 5.1% 218 con diferencia · 32.0% 1,379 solo en SUNAT
+     · 316 solo en el sistema». El % es sobre los tres primeros estados
+     —lo que trae el registro, que suman 100—, y «solo en el sistema» va
+     sin % porque no está en ese universo (también a pedido). Sale del
+     CENSO, igual que los conteos: con el filtro de estado puesto, la tira
+     sigue diciendo qué parte del registro es cada estado, no un 100 % del
+     subconjunto elegido. Los bordes no se redondean (`<0.1%`, `>99.9%`):
+     «0.0% 1 con diferencia» se leería como una contradicción. La cuenta es
+     `_pct_del_sire`, y `test_graficos.py` fija el texto exacto de la tira.
+
 462. **Una tabla con dos altos de fila se lee como dos tablas pegadas: la
      segunda línea se abre AL CLIC y se mide con `resetRowHeights`.**
      Documentos SUNAT ponía una segunda línea en la celda de importe cuando

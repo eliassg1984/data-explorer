@@ -1507,6 +1507,31 @@ def _pruebas_puras():
     check("cruce: sin filas de más (5 SIRE + 3 solo-sistema reales)",
           len(_cruce), 8)
 
+    # La tira de estados de arriba de la tabla: % y cantidad, SIN montos
+    # (2026-09-23, a pedido). El % es sobre lo que reporta SUNAT —los tres
+    # estados que lo conocen suman 100— y «solo en el sistema» va sin %,
+    # porque no está en ese universo. `_cruce` trae 3 coinciden, 1 con
+    # diferencia y 1 solo en SUNAT (los 5 del SIRE) más 3 solo en el sistema.
+    check("% con un decimal (220 de 4.320)",
+          _ds._pct_del_sire(220, 4320), "5.1%")
+    check("1 de 4.320 no se redondea a 0.0%",
+          _ds._pct_del_sire(1, 4320), "<0.1%")
+    check("ni 4.319 de 4.320 a 100.0%",
+          _ds._pct_del_sire(4319, 4320), ">99.9%")
+    check("todos es 100.0%", _ds._pct_del_sire(5, 5), "100.0%")
+    check("sin nada del SIRE no hay %", _ds._pct_del_sire(0, 0), None)
+
+    import re as _re
+    from unittest import mock as _mock
+    with _mock.patch.object(_ds.st, "markdown") as _md:
+        _ds._kpis_cruce(_cruce, n_provs=1)
+    _ds.st.session_state.pop("_cp_docs_cruce", None)
+    _estado = _md.call_args[0][0].split('data-grupo="estado">', 1)[1]
+    check("tira de estados: %, cantidad y estado, en el orden pedido",
+          _re.sub(r"<[^>]+>", "", _estado),
+          "60.0% 3 coinciden·20.0% 1 con diferencia·20.0% 1 solo en SUNAT"
+          "·3 solo en el sistema")
+
     # ── Comparativo vs Año Pasado (Ventas) ──────────────────────────────
     import datetime as _dt
     from graficos import ventas_comparativo as _vc
