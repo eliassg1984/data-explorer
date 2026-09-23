@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-501 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+502 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (176)
 
@@ -459,7 +459,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 - **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
 
-**Streamlit** (142)
+**Streamlit** (143)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -603,6 +603,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#497** — Segundo pase del formulario Nueva receta: tarjeta blanca, botón «+» al costado del buscador,…
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 - **#499** — Quinto pase de Nueva receta: @st.fragment para que el «+» responda en 100 ms y no en un…
+- **#502** — «Que el correo salga con MI dirección» no se resuelve mandando desde el servidor: se abre el…
 
 **Datos, R2 y DuckDB** (58)
 
@@ -41423,6 +41424,61 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      **Para la próxima:** antes de sumar una vista a una categoría, mirar
      si no es otra FORMA de una que ya existe. Y un indicador en % se mide
      contra el parquet ANTES de ofrecerlo: el denominador es donde miente.
+
+502. **«Que el correo salga con MI dirección» no se resuelve mandando desde
+     el servidor: se abre el Gmail del usuario con el correo ya escrito.**
+     2026-09-23, pedido: «quiero enviar la receta o el combo que el usuario
+     ha creado en la vista nueva de receta… que salga su correo».
+
+     **Lo que el login NO da.** El acceso a la app es el de Streamlit
+     Community Cloud («Only specific people can view this app»). Llena
+     `st.user.email` — la app sabe QUIÉN es — pero no le da permiso para
+     mandar correo en su nombre. Los dos caminos «de servidor» se midieron
+     contra eso y los dos pierden:
+     - **SMTP + contraseña de aplicación**: manda desde UNA cuenta fija.
+       El correo diría la dirección del dueño de la contraseña, no la de
+       quien apretó el botón. No cumple el pedido.
+     - **Gmail API con `gmail.send` por usuario**: sí sale de su cuenta,
+       pero exige un `[auth]` propio en secrets (proyecto de Google Cloud,
+       pantalla de consentimiento, los 5 Gmails como usuarios de prueba) y
+       con eso Cloud deja de llenar `st.user.email` como hoy — se rompe el
+       aviso de ingreso por Telegram (docstring de `aviso_ingreso.py`). Y
+       el permiso vence a la hora.
+
+     **Lo que se hizo** (`envio_receta.py` + la fila de Guardar de
+     `formulario_receta.py`): tres botones — `⬇ PDF`, `⬇ Excel` y
+     `✉ Enviar desde mi Gmail`, un `st.link_button` a
+     `mail.google.com/mail/?view=cm&fs=1&authuser=<su correo>&su=…&body=…`.
+     Abre «Redactar» en SU cuenta con asunto y resumen escritos; los
+     destinatarios los pone él, con el autocompletado de sus contactos. Lo
+     único que una página web no puede hacer es ADJUNTAR en su Gmail: los
+     archivos se descargan con un clic y se arrastran.
+
+     Tres detalles que costarían un bug si se tocan:
+     - **`authuser=<correo>` no es adorno**: sin él Gmail abre la PRIMERA
+       sesión de Google del navegador, y el correo saldría de otra cuenta.
+       Si `st.user.email` viene vacío (pasa en local, y a veces en Cloud)
+       se omite y Gmail elige.
+     - **Los archivos se arman AL HACER CLIC** (`st.download_button(data=
+       <función>)`, que existe desde Streamlit 1.52 — por eso
+       `requirements.txt` pasó de `>=1.39` a `>=1.52`). Con bytes armados
+       en cada corrida, el PDF de matplotlib (~0,3 s; 2,8 s la primera vez,
+       por el import) se pagaba en cada «+» del buscador, que es justo lo
+       que la #499 sacó de la ruta caliente. Medido después: el «+» sigue
+       en ~1,2 s.
+     - **La función corre en OTRO hilo**, así que el PDF usa
+       `matplotlib.figure.Figure` y no `pyplot` (estado global), y el
+       `resumen` que recibe es una COPIA de las líneas: para cuando se hace
+       clic, las de `session_state` pueden haber cambiado.
+
+     El cuerpo del correo corta en 25 ítems («… y N más, ver adjuntos»): el
+     enlace viaja como URL. El desglose de precio (neto, recargo, IGV) sale
+     de `formulario_receta._desglose`, la MISMA función que usa el panel de
+     precios — antes estaba escrito dentro del panel, y una segunda copia
+     para el correo habría divergido.
+
+     Si algún día hace falta que salga SIN el paso de arrastrar, el camino
+     es la Gmail API, y `pdf_receta`/`excel_receta` se reusan tal cual.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

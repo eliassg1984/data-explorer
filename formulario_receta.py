@@ -34,10 +34,12 @@ Guardar es una PROPUESTA en R2 (_recetas_propuestas/), nunca una escritura
 a recetaventa.parquet — mismo principio que solicitar_refresco() en
 data.py, que tampoco toca los parquets fuente directamente.
 
+Desde el 2026-09-23 la receta/combo se descarga en PDF y Excel y se manda
+«desde mi Gmail» (la fila de Guardar; ver `envio_receta.py` para el porqué
+de abrir el Gmail del usuario en vez de mandar desde el servidor).
+
 Afuera de este commit a propósito (quedan para commits siguientes):
   - Crear/editar una Receta Base desde acá.
-  - Envío por correo (necesita SMTP_USER/SMTP_APP_PASSWORD en secrets).
-  - Exportar a Excel/PDF.
   - "Cargar de vuelta en el editor" desde una propuesta guardada (el visor
     de este commit es de solo lectura).
   - Grupo/SubGrupo (sin fuente real definida para esa taxonomía todavía).
@@ -55,9 +57,12 @@ simplemente no sale, arquitectura.md regla #100).
 import json
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
+
+import envio_receta
 
 from data import cargar as _cargar_reporte
 from data import get_s3_cliente, secrets_disponibles
@@ -71,6 +76,7 @@ from graficos.recetas_comun import (
 )
 
 _ARCHIVO_RECETAVENTA = "recetaventa.parquet"
+_ZONA_LIMA = ZoneInfo("America/Lima")   # Cloud corre en UTC
 _IGV = 0.18       # 18 %
 _RECARGO = 0.10   # 10 % servicio, convención de restaurantes en Perú
 _UMBRAL_COSTO_OK = 30
@@ -443,6 +449,17 @@ def _tabla_lineas(modo):
     return lineas
 
 
+def _desglose(pv):
+    """(precio neto, monto de recargo, monto de IGV) del precio de venta
+    `pv`. UNA sola copia de la fórmula: la usan el panel de precios y el
+    envío por correo (`_resumen_envio`), y dos copias divergen."""
+    if pv <= 0:
+        return 0.0, 0.0, 0.0
+    base = pv / ((1 + _RECARGO) * (1 + _IGV))
+    m_recargo = base * _RECARGO
+    return base, m_recargo, (base + m_recargo) * _IGV
+
+
 def _pricing_panel(modo, costo_total):
     """Panel de precios de la derecha, al COSTADO del ítem-list — pedido
     2026-09-23: «tabla editable al costado, no abajo». Cinco filas:
@@ -481,12 +498,7 @@ def _pricing_panel(modo, costo_total):
     pv = float(st.session_state[key_pv])
     ver = st.session_state[key_ver]
 
-    if pv > 0:
-        base = pv / ((1 + _RECARGO) * (1 + _IGV))
-        m_recargo = base * _RECARGO
-        m_igv = (base + m_recargo) * _IGV
-    else:
-        base = m_recargo = m_igv = 0.0
+    base, m_recargo, m_igv = _desglose(pv)
 
     df = pd.DataFrame([
         {"Concepto": "Costo total",                              "S/": round(costo_total, 2)},
@@ -549,6 +561,76 @@ def _pricing_panel(modo, costo_total):
         st.caption("Ingresá un precio de venta para ver la descomposición.")
 
     return pv
+
+
+def _correo_usuario():
+    """El Gmail con el que entró (lo llena el login de Streamlit Cloud), o
+    None: en local no hay login, y Cloud a veces lo devuelve vacío (ver
+    `aviso_ingreso.py`)."""
+    try:
+        return getattr(st.user, "email", None) or None
+    except Exception:
+        return None
+
+
+def _resumen_envio(tipo, nombre, autor, lineas, precio_venta):
+    """Todo lo que `envio_receta` necesita, COPIADO: el PDF y el Excel se
+    arman recién al hacer clic, en otro hilo, y para entonces las líneas de
+    `session_state` pueden haber cambiado."""
+    base, m_recargo, m_igv = _desglose(precio_venta)
+    return {
+        "tipo": tipo, "nombre": nombre.strip(), "autor": autor,
+        "fecha": datetime.now(_ZONA_LIMA).strftime("%d/%m/%Y %H:%M"),
+        "lineas": [dict(l) for l in lineas],
+        "costo_total": _total_lineas(lineas), "precio_venta": precio_venta,
+        "base": base, "recargo": m_recargo, "igv": m_igv,
+        "pct_recargo": _RECARGO * 100, "pct_igv": _IGV * 100,
+    }
+
+
+def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta):
+    """PDF · Excel · «Enviar desde mi Gmail», en las tres columnas `cols`
+    de la fila de Guardar. El correo sale de la cuenta de QUIEN ESTÁ
+    LOGUEADO porque lo manda él desde su Gmail — el porqué de este camino
+    y no un envío desde el servidor está en el docstring de
+    `envio_receta.py`.
+
+    Los archivos se arman AL HACER CLIC (`data=` recibe una función), no en
+    cada corrida: un PDF de matplotlib cuesta cientos de ms y esta fila se
+    redibuja con cada «+» del buscador (regla #499)."""
+    correo = _correo_usuario()
+    listo = bool(nombre.strip()) and bool(lineas)
+    falta = ("Ponle nombre y agrega al menos un ítem." if not listo else None)
+    resumen = _resumen_envio(tipo, nombre, guardado_por.strip() or correo or "",
+                             lineas, precio_venta)
+    c_pdf, c_xls, c_mail = cols
+    with c_pdf:
+        st.download_button(
+            "⬇ PDF", data=lambda: envio_receta.pdf_receta(resumen),
+            file_name=envio_receta.nombre_archivo(resumen, "pdf"),
+            mime="application/pdf", key=_key(modo, "dl_pdf"),
+            on_click="ignore", disabled=not listo, use_container_width=True,
+            help=falta or "Descargar la receta en PDF",
+        )
+    with c_xls:
+        st.download_button(
+            "⬇ Excel", data=lambda: envio_receta.excel_receta(resumen),
+            file_name=envio_receta.nombre_archivo(resumen, "xlsx"),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=_key(modo, "dl_xlsx"), on_click="ignore", disabled=not listo,
+            use_container_width=True,
+            help=falta or "Descargar la receta en Excel",
+        )
+    with c_mail:
+        st.link_button(
+            "✉ Enviar desde mi Gmail",
+            envio_receta.url_gmail(resumen, correo) if listo else "https://mail.google.com",
+            disabled=not listo, use_container_width=True,
+            help=falta or (
+                f"Abre {'el Gmail de ' + correo if correo else 'tu Gmail'} con el "
+                "correo ya escrito. Escribe a quién, arrastra el PDF y el "
+                "Excel que descargaste y dale Enviar."),
+        )
 
 
 def _guardar_propuesta(tipo, nombre, guardado_por, lineas, extra=None):
@@ -649,7 +731,9 @@ def _render_receta_venta(slot_nombre):
         precio_venta = _pricing_panel(modo, total)
 
     # Fila 4: guardado por + botón (acotado con _pad a la mitad izquierda).
-    c_guarda, c_boton, _pad = st.columns([3, 2, 5])
+    # columnas-internas: Guardar y los tres de envío comparten la fila del
+    # pie de la tarjeta; el nombre de quien guarda es lo más ancho.
+    c_guarda, c_boton, c_pdf, c_xls, c_mail = st.columns([3, 2, 1.1, 1.1, 2.3])
     with c_guarda:
         guardado_por = st.text_input(
             "Guardado por (tu nombre)", key=_key(modo, "guardado_por"),
@@ -660,6 +744,8 @@ def _render_receta_venta(slot_nombre):
             "💾 Guardar propuesta", type="primary",
             key=_key(modo, "guardar"), use_container_width=True,
         )
+    _botones_envio(modo, (c_pdf, c_xls, c_mail), "Receta de Venta", nombre,
+                   guardado_por, lineas, precio_venta)
     if guardar:
         if not nombre.strip():
             st.warning("Ponele un nombre a la receta.")
@@ -710,7 +796,9 @@ def _render_combo(slot_nombre):
     with c_pricing:
         precio_venta = _pricing_panel(modo, total)
 
-    c_guarda, c_boton, _pad = st.columns([3, 2, 5])
+    # columnas-internas: Guardar y los tres de envío comparten la fila del
+    # pie de la tarjeta; el nombre de quien guarda es lo más ancho.
+    c_guarda, c_boton, c_pdf, c_xls, c_mail = st.columns([3, 2, 1.1, 1.1, 2.3])
     with c_guarda:
         guardado_por = st.text_input(
             "Guardado por (tu nombre)", key=_key(modo, "guardado_por"),
@@ -721,6 +809,8 @@ def _render_combo(slot_nombre):
             "💾 Guardar propuesta", type="primary",
             key=_key(modo, "guardar"), use_container_width=True,
         )
+    _botones_envio(modo, (c_pdf, c_xls, c_mail), "Combo", nombre,
+                   guardado_por, lineas, precio_venta)
     if guardar:
         if not nombre.strip():
             st.warning("Ponele un nombre al combo.")

@@ -1,4 +1,6 @@
-streamlit>=1.39,<2
+# >=1.52: st.download_button(data=<funcion>) arma el PDF/Excel de Nueva receta
+# recien al hacer clic (envio_receta.py); antes de la 1.52 no existe.
+streamlit>=1.52,<2
 duckdb>=1.0.0
 pandas>=2.2,<2.3
 numpy>=1.26,<2.2
