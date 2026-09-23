@@ -1221,26 +1221,13 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                         on_click=_on_nav_click,
                         args=(nombre,),
                     )
-                    # Valores del KPI, superpuestos a la derecha de ESTE
-                    # MISMO botón vía CSS — ver el docstring de _CSS_KPIS
-                    # para por qué no van dentro del label (st.button
-                    # escapa el HTML) y por qué hace falta el
-                    # `navitem_<slug>` que los envuelve a los dos.
-                    par = _formatear_kpis(info) if not info.get("tool") else None
-                    if par:
-                        primario, secundario, negativo = par
-                        clase_primario = "nav-kpis-primario kpi-neg" if negativo else "nav-kpis-primario"
-                        _clase_valores = ("nav-kpis-valores nav-kpis-activo"
-                                          if nombre == reporte_activo
-                                          else "nav-kpis-valores")
-                        st.markdown(
-                            f'<div class="{_clase_valores}">'
-                            f'<span class="{clase_primario}">{primario}</span>'
-                            + (f'<span class="nav-kpis-secundario">{secundario}</span>'
-                               if secundario else '')
-                            + '</div>',
-                            unsafe_allow_html=True,
-                        )
+                    # Los KPIs (los montos S/ a la derecha de cada reporte) se
+                    # QUITARON del rail el 2026-09-22, a pedido. La señal no se
+                    # pierde: la franja superior de contexto sigue mostrando el
+                    # KPI del reporte ACTIVO (`_html_barra_contexto`, alimentada
+                    # por `_par_act`). El `navitem_<slug>` que envuelve al botón
+                    # se mantiene igual — es el ancestro que asume el hairline
+                    # entre ítems (estilos/_20_compras_rail.py).
         # PIE DEL RAIL — Refrescar, la única ACCIÓN (no un reporte). Fuera de
         # graf_tipo_chips por lo mismo que el pestillo (regla #6).
         boton_refresco()

@@ -87,116 +87,41 @@ REPORTES = {
         ),
         "kpi_fecha": "FECHA_EMISION_DOC",
     },
-    # Requerimientos y Salidas comparten UN ítem de nav ("Movimientos", ver
-    # `grupo_nav` en navegacion.py::inject_navegacion) — el par describe un
-    # flujo real: Requerimiento es la salida de stock de Almacén Central
-    # HACIA un área de producción; Salidas es la BAJA que esa misma área
-    # registra después (consumo/merma/evento — ver `Tipo Descargo`). No hay
-    # llave que una un Requerimiento con la Salida que lo "cierra" (numeran
-    # documentos en secuencias independientes), así que el cruce entre
-    # ambos (`graficos/movimientos_comun.py`, sus dos vistas de «Ambos») es
-    # agregado por producto/familia/período, nunca documento a documento.
-    # Confirmado con DuckDB directo contra R2 real (no demo) 2026-08-13:
-    # 726 de los 968 productos de Salidas (75%) también aparecen en
-    # Requerimientos — hay overlap real de producto entre los dos parquets
-    # (0% overlap, por eso esas dos nunca se cruzan). Detalle en
-    # arquitectura.md § Unificación Movimientos.
-    # UN SOLO reporte de Movimientos desde el 2026-09-05. Hasta esa fecha
-    # eran DOS entradas ("Requerimientos" y "Salidas") que un chip alternaba,
-    # con `grupo_nav` para que el rail mostrara un solo botón. Se fusionaron a
-    # pedido, el día después de que la Evolución empezara a dibujar los dos
-    # lados en una figura: "esto ya no debería estar, ya que ahora muestra
-    # ambos". Las ocho vistas viven hoy en una sola página, ver
-    # graficos/movimientos.py y arquitectura.md regla #322.
-    #
-    # `archivo` es el de REQUERIMIENTOS y no es indistinto: de él salen los
-    # KPIs de la franja, el rango de fecha, los chips (`filtros_cat`), el
-    # buscador y las columnas de la Tabla pivote. Es el lado grande (144.636
-    # filas contra 17.355), el único que trae Sub Almacen, y el que tiene la
-    # tabla con tratamiento propio.
-    "Movimientos": {
-        # Lo que ve el usuario es "Movimientos de Almacén" (a pedido,
-        # 2026-09-21). La clave "Movimientos" es la IDENTIDAD INTERNA del
-        # reporte (dispatcher de graficos/, slug CSS, `_ultimo_<grupo>`) y NO
-        # se renombra. Mismo par que "Inventario Valorizado": `label_corto` lo
-        # toman el ítem del rail y la franja de reportes; `label_largo`, la
-        # franja de contexto, la cabecera del rail y la franja de KPIs (que si
-        # no, caerían en la clave "Movimientos" y contradecirían al rail).
-        "label_corto": "Movimientos de Almacén",
-        "label_largo": "Movimientos de Almacén",
-        "archivo": "requerimientos.parquet",
-        # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
-        # (`archivo`) y pasandolo como df_f; salidas.parquet lo carga
-        # graficos/movimientos.py con data.cargar. Esta clave existe para que
-        # el boton de refresco sepa que hay mas de un parquet detras del
-        # reporte - sin ella, "Refrescar" dejaria las salidas viejas y no
-        # habria forma de actualizarlas desde la UI. Ver
-        # navegacion.py::boton_refresco.
-        "archivos_extra": ("salidas.parquet",),
-        "icono": ":material/sync_alt:",
-        "kpis": (("Valorizado", "VALOR ITEM", "sum"),
-                 ("Requerim.", "COD REQUERIMIENTO", "count_distinct")),
-        "kpi_fecha": "FECHA REGISTRO",
-        # Columnas confirmadas contra el parquet real (2026-08-13, DuckDB
-        # directo): destino del requerimiento es "Sub Almacen" (el área de
-        # producción que lo pide — Cocina/Barra/Pastelería/...), cantidad/
-        # valorizado son "Cantidad" / "Valor Item", el estado es "Nombre
-        # Estado Requerimiento" (Procesado/Anulado/Generado), y la jerarquía
-        # de producto es Nombre Familia > Nombre Subfamilia > Nombre
-        # Producto — mismos nombres de columna "amigables" que salidas
-        # (ambos vienen del mismo ERP, SAPIENS), aunque el código de
-        # producto real es CODIGO PRODUCTO acá vs COD PRODUCTO en salidas.
-        "fecha": "Fecha Registro",
-        "filtros_cat": ["Sub Almacen", "Nombre Familia"],
+    "Inventario Valorizado": {
+        # La clave "Inventario Valorizado" es la IDENTIDAD INTERNA del reporte
+        # (dispatcher de graficos/, _sugerencias del asistente, el slug CSS
+        # `app_reporte_inventario_valorizado` de estilos/_40_ajuste_franja.py,
+        # las comparaciones de tablas/ y las citas de arquitectura.md): NO se
+        # renombra. Lo que ve el usuario es "Stock e Inventario" (a pedido,
+        # 2026-09-21), en dos sitios con distinto ancho: el rail lo toma de
+        # `label_corto` y la franja de contexto de `label_largo` (que
+        # `navegacion.py::_html_barra_contexto` y la cabecera del rail
+        # prefieren sobre la clave). Coinciden a propósito — el nombre pedido
+        # ya es corto; el par existe para no regresar a "Movimientos"→"Movim."
+        # en la franja del resto de los reportes, que no declaran `label_largo`.
+        "label_corto": "Stock e Inventario",
+        "label_largo": "Stock e Inventario",
+        "archivo": "inventariovalorizado.parquet",
+        "icono": ":material/inventory_2:",
+        # Foto sin fecha (igual que Recetas): kpi_fecha ausente a
+        # propósito, resumen_kpis() agrega la tabla entera.
+        "kpis": (("Valorizado", "VALORIZADO TOTAL", "sum"),),
+        "columnas": [
+            "Nombre Familia", "Nombre Subfamilia", "Nombre Producto",
+            "Unidad Kardex", "Codigo Producto", "Nombre Area", "Codigo Area", "Stock al Dia", "Precio Promedio", "Valorizado total"
+        ],
+        "filtros_cat": ["Nombre Area", "Nombre Familia"],
         "buscador": "Nombre Producto",
+        "fecha": None,
+        "agrupar": ["Nombre Area", "Nombre Familia", "Nombre Subfamilia"],
+        "columnas_iniciales": [
+            "Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total",
+        ],
         "columnas_movil": [
-            "Nombre Producto", "Cantidad", "Valor Item", "Sub Almacen",
+            "Nombre Producto", "Stock al dia", "Precio Promedio",
+            "Valorizado total", "Nombre Area",
         ],
         "columnas_fijas_movil": 2,
-    },
-    # UN SOLO reporte de Recetas desde el 2026-09-04. Hasta esa fecha eran
-    # DOS entradas ("Receta Base" y "Receta Venta") que un chip Base/Venta
-    # alternaba, apoyadas en una medición equivocada que decía que los dos
-    # parquets no se cruzaban (comparó `COD RB`, el ID interno, en vez de
-    # `COD PROD RB` — ver arquitectura.md regla #303). Se fusionaron a
-    # pedido: "quiero que las visualizaciones de estos toggles figuren todas
-    # juntas". Las nueve vistas viven hoy en una sola página, ver
-    # graficos/recetas.py.
-    #
-    # Sigue compartiendo ítem de nav con "Nueva Receta" (`grupo_nav`, ver
-    # navegacion.py::inject_navegacion): el chip que queda es el puente
-    # hacia ese formulario, no un selector de fuente de datos.
-    "Recetas": {
-        "fecha": None,  # catálogo (foto completa): sin filtro de fecha
-        "label_corto": "Recetas",
-        "grupo_nav": "Recetas",
-        "archivo": "recetaventa.parquet",
-        # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
-        # (`archivo`) y pasándolo como df_f; recetabase.parquet lo carga
-        # graficos/recetas.py con data.cargar. Esta clave existe para que el
-        # botón de refresco sepa que hay más de un parquet detrás del
-        # reporte — sin ella, "Refrescar" dejaría las recetas base viejas y
-        # no habría forma de actualizarlas desde la UI. Ver
-        # navegacion.py::boton_refresco.
-        "archivos_extra": ("recetabase.parquet",),
-        "icono": ":material/receipt_long:",
-        # Catálogo sin fecha: el KPI es un conteo, no un agregado por período
-        # (kpi_fecha ausente a propósito — resumen_kpis() agrega la tabla
-        # entera cuando no hay fecha, igual que hace este reporte mismo).
-        # Solo "Platos": el KPI "Recetas" (count_distinct de COD RB) se fue
-        # con la fusión porque resumen_kpis() agrega el df del `archivo`, y
-        # COD RB vive en el parquet secundario.
-        "kpis": (("Platos", "COD RV", "count_distinct"),),
-    },
-    "Nueva Receta": {
-        "label_corto": "+ Nueva",
-        "grupo_nav": "Recetas",
-        "icono": ":material/receipt_long:",
-        # No es un parquet: arma y costea una receta de venta a mano contra
-        # inventariovalorizado.parquet, y la guarda como PROPUESTA en R2
-        # (_recetas_propuestas/), sin tocar recetaventa.parquet directo. Ver
-        # formulario_receta.py.
-        "tool": True,
     },
     "Ajuste de Inventario": {
         # El rail muestra "Ajuste de Inventario" (a pedido, 2026-09-21). La
@@ -241,41 +166,125 @@ REPORTES = {
              "tickangle": -45},
         ],
     },
-    "Inventario Valorizado": {
-        # La clave "Inventario Valorizado" es la IDENTIDAD INTERNA del reporte
-        # (dispatcher de graficos/, _sugerencias del asistente, el slug CSS
-        # `app_reporte_inventario_valorizado` de estilos/_40_ajuste_franja.py,
-        # las comparaciones de tablas/ y las citas de arquitectura.md): NO se
-        # renombra. Lo que ve el usuario es "Stock e Inventario" (a pedido,
-        # 2026-09-21), en dos sitios con distinto ancho: el rail lo toma de
-        # `label_corto` y la franja de contexto de `label_largo` (que
-        # `navegacion.py::_html_barra_contexto` y la cabecera del rail
-        # prefieren sobre la clave). Coinciden a propósito — el nombre pedido
-        # ya es corto; el par existe para no regresar a "Movimientos"→"Movim."
-        # en la franja del resto de los reportes, que no declaran `label_largo`.
-        "label_corto": "Stock e Inventario",
-        "label_largo": "Stock e Inventario",
-        "archivo": "inventariovalorizado.parquet",
-        "icono": ":material/inventory_2:",
-        # Foto sin fecha (igual que Recetas): kpi_fecha ausente a
-        # propósito, resumen_kpis() agrega la tabla entera.
-        "kpis": (("Valorizado", "VALORIZADO TOTAL", "sum"),),
-        "columnas": [
-            "Nombre Familia", "Nombre Subfamilia", "Nombre Producto",
-            "Unidad Kardex", "Codigo Producto", "Nombre Area", "Codigo Area", "Stock al Dia", "Precio Promedio", "Valorizado total"
-        ],
-        "filtros_cat": ["Nombre Area", "Nombre Familia"],
+    # Requerimientos y Salidas comparten UN ítem de nav ("Movimientos", ver
+    # `grupo_nav` en navegacion.py::inject_navegacion) — el par describe un
+    # flujo real: Requerimiento es la salida de stock de Almacén Central
+    # HACIA un área de producción; Salidas es la BAJA que esa misma área
+    # registra después (consumo/merma/evento — ver `Tipo Descargo`). No hay
+    # llave que una un Requerimiento con la Salida que lo "cierra" (numeran
+    # documentos en secuencias independientes), así que el cruce entre
+    # ambos (`graficos/movimientos_comun.py`, sus dos vistas de «Ambos») es
+    # agregado por producto/familia/período, nunca documento a documento.
+    # Confirmado con DuckDB directo contra R2 real (no demo) 2026-08-13:
+    # 726 de los 968 productos de Salidas (75%) también aparecen en
+    # Requerimientos — hay overlap real de producto entre los dos parquets
+    # (0% overlap, por eso esas dos nunca se cruzan). Detalle en
+    # arquitectura.md § Unificación Movimientos.
+    # UN SOLO reporte de Movimientos desde el 2026-09-05. Hasta esa fecha
+    # eran DOS entradas ("Requerimientos" y "Salidas") que un chip alternaba,
+    # con `grupo_nav` para que el rail mostrara un solo botón. Se fusionaron a
+    # pedido, el día después de que la Evolución empezara a dibujar los dos
+    # lados en una figura: "esto ya no debería estar, ya que ahora muestra
+    # ambos". Las ocho vistas viven hoy en una sola página, ver
+    # graficos/movimientos.py y arquitectura.md regla #322.
+    #
+    # `archivo` es el de REQUERIMIENTOS y no es indistinto: de él salen los
+    # KPIs de la franja, el rango de fecha, los chips (`filtros_cat`), el
+    # buscador y las columnas de la Tabla pivote. Es el lado grande (144.636
+    # filas contra 17.355), el único que trae Sub Almacen, y el que tiene la
+    # tabla con tratamiento propio.
+    "Movimientos": {
+        # Lo que ve el usuario es "Movimientos" (a pedido, 2026-09-22; antes
+        # "Movimientos de Almacén"). La clave "Movimientos" es la IDENTIDAD
+        # INTERNA del reporte (dispatcher de graficos/, slug CSS,
+        # `_ultimo_<grupo>`) y coincide con el nombre a mostrar. Se declaran
+        # igual los dos labels de todos modos: sin `label_corto` el rail cae en
+        # `nombre.split()[0][:10]` y recortaría "Movimientos" a "Movimiento".
+        "label_corto": "Movimientos",
+        "label_largo": "Movimientos",
+        "archivo": "requerimientos.parquet",
+        # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
+        # (`archivo`) y pasandolo como df_f; salidas.parquet lo carga
+        # graficos/movimientos.py con data.cargar. Esta clave existe para que
+        # el boton de refresco sepa que hay mas de un parquet detras del
+        # reporte - sin ella, "Refrescar" dejaria las salidas viejas y no
+        # habria forma de actualizarlas desde la UI. Ver
+        # navegacion.py::boton_refresco.
+        "archivos_extra": ("salidas.parquet",),
+        "icono": ":material/sync_alt:",
+        "kpis": (("Valorizado", "VALOR ITEM", "sum"),
+                 ("Requerim.", "COD REQUERIMIENTO", "count_distinct")),
+        "kpi_fecha": "FECHA REGISTRO",
+        # Columnas confirmadas contra el parquet real (2026-08-13, DuckDB
+        # directo): destino del requerimiento es "Sub Almacen" (el área de
+        # producción que lo pide — Cocina/Barra/Pastelería/...), cantidad/
+        # valorizado son "Cantidad" / "Valor Item", el estado es "Nombre
+        # Estado Requerimiento" (Procesado/Anulado/Generado), y la jerarquía
+        # de producto es Nombre Familia > Nombre Subfamilia > Nombre
+        # Producto — mismos nombres de columna "amigables" que salidas
+        # (ambos vienen del mismo ERP, SAPIENS), aunque el código de
+        # producto real es CODIGO PRODUCTO acá vs COD PRODUCTO en salidas.
+        "fecha": "Fecha Registro",
+        "filtros_cat": ["Sub Almacen", "Nombre Familia"],
         "buscador": "Nombre Producto",
-        "fecha": None,
-        "agrupar": ["Nombre Area", "Nombre Familia", "Nombre Subfamilia"],
-        "columnas_iniciales": [
-            "Nombre Producto", "Stock al Dia", "Nombre Area", "Valorizado total",
-        ],
         "columnas_movil": [
-            "Nombre Producto", "Stock al dia", "Precio Promedio",
-            "Valorizado total", "Nombre Area",
+            "Nombre Producto", "Cantidad", "Valor Item", "Sub Almacen",
         ],
         "columnas_fijas_movil": 2,
+    },
+    # UN SOLO reporte de Recetas desde el 2026-09-04. Hasta esa fecha eran
+    # DOS entradas ("Receta Base" y "Receta Venta") que un chip Base/Venta
+    # alternaba, apoyadas en una medición equivocada que decía que los dos
+    # parquets no se cruzaban (comparó `COD RB`, el ID interno, en vez de
+    # `COD PROD RB` — ver arquitectura.md regla #303). Se fusionaron a
+    # pedido: "quiero que las visualizaciones de estos toggles figuren todas
+    # juntas". Las nueve vistas viven hoy en una sola página, ver
+    # graficos/recetas.py.
+    #
+    # Sigue compartiendo ítem de nav con "Nueva Receta" (`grupo_nav`, ver
+    # navegacion.py::inject_navegacion): el chip que queda es el puente
+    # hacia ese formulario, no un selector de fuente de datos.
+    "Recetas": {
+        "fecha": None,  # catálogo (foto completa): sin filtro de fecha
+        # Lo que ve el usuario es "Recetas y Costos" (a pedido, 2026-09-22;
+        # antes "Recetas"). La CLAVE del dict sigue siendo "Recetas": es la
+        # identidad interna (dispatcher de graficos/, slug CSS
+        # `app_reporte_recetas`, citas de arquitectura.md) y NO se renombra.
+        # `grupo_nav` es el rótulo del botón AGRUPADO del rail (Recetas +
+        # Nueva Receta se dibujan como uno solo, `navegacion.py` usa el string
+        # del grupo como etiqueta), así que renombrarlo acá renombra el rail;
+        # va en las DOS entradas del grupo. `label_largo` renombra la franja
+        # de contexto (que si no cae en la clave "Recetas").
+        "label_corto": "Recetas y Costos",
+        "label_largo": "Recetas y Costos",
+        "grupo_nav": "Recetas y Costos",
+        "archivo": "recetaventa.parquet",
+        # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
+        # (`archivo`) y pasándolo como df_f; recetabase.parquet lo carga
+        # graficos/recetas.py con data.cargar. Esta clave existe para que el
+        # botón de refresco sepa que hay más de un parquet detrás del
+        # reporte — sin ella, "Refrescar" dejaría las recetas base viejas y
+        # no habría forma de actualizarlas desde la UI. Ver
+        # navegacion.py::boton_refresco.
+        "archivos_extra": ("recetabase.parquet",),
+        "icono": ":material/receipt_long:",
+        # Catálogo sin fecha: el KPI es un conteo, no un agregado por período
+        # (kpi_fecha ausente a propósito — resumen_kpis() agrega la tabla
+        # entera cuando no hay fecha, igual que hace este reporte mismo).
+        # Solo "Platos": el KPI "Recetas" (count_distinct de COD RB) se fue
+        # con la fusión porque resumen_kpis() agrega el df del `archivo`, y
+        # COD RB vive en el parquet secundario.
+        "kpis": (("Platos", "COD RV", "count_distinct"),),
+    },
+    "Nueva Receta": {
+        "label_corto": "+ Nueva",
+        "grupo_nav": "Recetas y Costos",
+        "icono": ":material/receipt_long:",
+        # No es un parquet: arma y costea una receta de venta a mano contra
+        # inventariovalorizado.parquet, y la guarda como PROPUESTA en R2
+        # (_recetas_propuestas/), sin tocar recetaventa.parquet directo. Ver
+        # formulario_receta.py.
+        "tool": True,
     },
     "Ventas": {
         "label_corto": "Ventas",
