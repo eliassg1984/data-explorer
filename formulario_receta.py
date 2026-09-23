@@ -1,17 +1,17 @@
 """
-formulario_receta.py — herramienta "Nueva Receta": arma y costea una receta
-de venta o un combo, y los deja guardados como propuesta en R2 para que
-otra persona los revise.
+formulario_receta.py — "Nueva receta": arma y costea una receta de venta o
+un combo, y los deja guardados como propuesta en R2 para que otra persona
+los revise.
 
 Punto de entrada público: render_formulario_receta().
 
-Vive en el mismo grupo de nav "Recetas" que el reporte «Recetas»
-(`grupo_nav` en data.py) — el chip de arriba (`_chip_fuente` en
-graficos/recetas_comun.py) navega entre los dos. Eran TRES entradas hasta
-el 2026-09-04, cuando Receta Base y Receta Venta se fusionaron en un solo
-reporte (ver `arquitectura.md` regla #303). A diferencia de aquél,
-esta NO es un reporte de parquet con fecha/filtros: entra por `tool: True`
-(igual que Inspector, ver app.py), no por el pipeline de carga de app.py.
+Desde el 2026-09-22 es una VISTA del reporte «Recetas y Costos» (rail
+interno, primera sección), no un reporte hermano tool:True. Hasta ese día
+era un reporte propio del `grupo_nav: "Recetas"` que el chip `_chip_fuente`
+alternaba con el analítico. Se bajó a vista a pedido («deseo que figure
+como una vista de mi reporte de recetas») y el chip desapareció con la
+mudanza. El punto de entrada sigue siendo el mismo — lo consume ahora
+`graficos/recetas.py::_dib_nueva`, no `app.py::_TOOLS`.
 
 Tres modos, un segmented_control propio (interno, no confundir con el chip
 Base/Venta/Nueva de arriba, que elige ENTRE reportes):
@@ -67,7 +67,7 @@ from graficos.base import _resolver
 # cacheado` más abajo.
 from graficos.recetas_comun import (
     ARCHIVO_INVENTARIO as _ARCHIVO_INVENTARIO,
-    _activo, _chip_fuente, catalogo_insumos,
+    _activo, catalogo_insumos,
 )
 
 _ARCHIVO_RECETAVENTA = "recetaventa.parquet"
@@ -176,46 +176,73 @@ def _agregar_linea(modo, cod, nombre, unidad, precio, activo, tipo):
     })
 
 
-def _buscador_catalogo(modo, df_cat, *, etiqueta, placeholder, etiqueta_nuevo, unidad_nueva="unidad"):
-    """Buscador con botón "Agregar" por resultado — más simple en Streamlit
-    que un dropdown custom (eso tenía sentido en JS para el mockup; acá el
-    widget nativo ya resuelve filtro + scroll)."""
-    texto = st.text_input(etiqueta, placeholder=placeholder, key=_key(modo, "buscador")).strip()
-    if not texto:
-        return
+def _buscador_catalogo(modo, df_cat, *, etiqueta, placeholder,
+                       etiqueta_nuevo, unidad_nueva="unidad"):
+    """Buscador SUGESTIVO: `st.selectbox` con `index=None`, filtra a medida
+    que el usuario escribe (client-side, sin Enter). Al elegir una opción,
+    la línea entra a la tabla y el widget se resetea vía key incremental
+    (`_key(modo, "buscador_v<n>")`): Streamlit borra el estado del widget
+    anterior y el próximo render arranca en None.
 
-    mask = (
-        df_cat["nombre"].str.contains(texto, case=False, na=False, regex=False)
-        | df_cat["cod"].str.contains(texto, case=False, na=False, regex=False)
-    )
-    resultados = df_cat[mask].head(8)
+    Reemplaza al esquema anterior de `st.text_input` + fila de resultados
+    con un botón "Agregar" cada una — el text_input pedía Enter/blur para
+    aceptar cada carácter, así que el catálogo no se filtraba hasta que la
+    persona confirmaba. Motivo del cambio: pedido de 2026-09-22 («la opción
+    para búsqueda y selección de insumos o platos debe ser sugestiva al
+    digitar, no debe esperar Enter»).
+
+    La rama de «Agregar como nuevo» (para un insumo/plato que todavía no
+    está en el catálogo) sobrevive como un input aparte compacto debajo,
+    porque el selectbox sólo devuelve opciones existentes — sin este puente
+    se pierde el flujo de dar de alta un ítem que va a la propuesta con
+    precio 0 para que después alguien lo complete."""
+    contador_key = _key(modo, "buscador_ver")
+    st.session_state.setdefault(contador_key, 0)
+    ver = st.session_state[contador_key]
+
     lineas_actuales = {l["cod"] for l in st.session_state[_key_lineas(modo)]}
+    opciones = []
+    meta = {}
+    for _, fila in df_cat.iterrows():
+        cod = fila["cod"]
+        if cod in lineas_actuales:
+            continue  # ya está en la tabla, no ofrecerlo de vuelta
+        nombre, unidad, precio = fila["nombre"], fila["unidad"], float(fila["precio"])
+        activo = _es_activo_valor(fila)
+        etiqueta_fila = f"{nombre} · {cod} · {unidad} · {_fmt(precio)}"
+        if activo is False:
+            etiqueta_fila += " · Inactivo"
+        opciones.append(etiqueta_fila)
+        meta[etiqueta_fila] = (cod, nombre, unidad, precio, activo)
 
-    if resultados.empty:
-        st.caption(f"Sin resultados para «{texto}».")
+    if opciones:
+        elegido = st.selectbox(
+            etiqueta, opciones, index=None, placeholder=placeholder,
+            key=_key(modo, f"buscador_v{ver}"),
+        )
+        if elegido:
+            cod, nombre, unidad, precio, activo = meta[elegido]
+            _agregar_linea(modo, cod, nombre, unidad, precio, activo, "almacen")
+            st.session_state[contador_key] = ver + 1
+            st.rerun()
     else:
-        for _, fila in resultados.iterrows():
-            cod, nombre, unidad, precio = fila["cod"], fila["nombre"], fila["unidad"], float(fila["precio"])
-            activo = _es_activo_valor(fila)
+        st.caption("Todos los ítems del catálogo ya están agregados.")
 
-            c1, c2 = st.columns([5, 1])
-            etiqueta_fila = f"{nombre} · {cod} · {unidad} · {_fmt(precio)}"
-            if activo is False:
-                etiqueta_fila += " · 🔸 Inactivo"
-            c1.write(etiqueta_fila)
-            ya_agregado = cod in lineas_actuales
-            if c2.button(
-                "Agregada" if ya_agregado else "Agregar",
-                key=_key(modo, f"add_{cod}"), disabled=ya_agregado, use_container_width=True,
-            ):
-                _agregar_linea(modo, cod, nombre, unidad, precio, activo, "almacen")
+    with st.expander(f"¿No está en la lista? Agregar como {etiqueta_nuevo}", expanded=False):
+        c_txt, c_btn = st.columns([4, 1])
+        with c_txt:
+            nuevo_nombre = st.text_input(
+                "Nombre", key=_key(modo, f"nuevo_nombre_v{ver}"),
+                placeholder="nombre del ítem nuevo…", label_visibility="collapsed",
+            ).strip()
+        with c_btn:
+            if st.button("Agregar", key=_key(modo, "add_nuevo"),
+                         disabled=not nuevo_nombre, use_container_width=True):
+                st.session_state["form_receta_contador_nuevo"] += 1
+                n = st.session_state["form_receta_contador_nuevo"]
+                _agregar_linea(modo, f"NUEVO-{n}", nuevo_nombre, unidad_nueva, 0.0, None, "nuevo")
+                st.session_state[contador_key] = ver + 1
                 st.rerun()
-
-    if st.button(f"➕ Agregar «{texto}» como {etiqueta_nuevo}", key=_key(modo, "add_nuevo")):
-        st.session_state["form_receta_contador_nuevo"] += 1
-        n = st.session_state["form_receta_contador_nuevo"]
-        _agregar_linea(modo, f"NUEVO-{n}", texto, unidad_nueva, 0.0, None, "nuevo")
-        st.rerun()
 
 
 def _tabla_lineas(modo):
@@ -380,37 +407,58 @@ def _render_receta_venta():
         )
         return
 
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        nombre = st.text_input("Nombre de la receta", key=_key(modo, "nombre"))
-    with c2:
-        porciones = st.number_input("Porciones", min_value=0, step=1, value=0, key=_key(modo, "porciones"))
+    # Fila única: nombre + porciones + buscador. Antes eran tres renglones
+    # (nombre/porciones en uno, buscador aparte); apilada en el rail junto a
+    # las nueve secciones del reporte, cada línea de arriba empuja el resto
+    # fuera de la primera pantalla — pedido de 2026-09-22 («todo el proceso
+    # entre en una sola ventana de la pantalla de una laptop»).
+    c_nom, c_por, c_buscar = st.columns([3, 1, 4])
+    with c_nom:
+        nombre = st.text_input("Nombre de la receta", key=_key(modo, "nombre"),
+                               placeholder="nombre de la receta…")
+    with c_por:
+        porciones = st.number_input("Porciones", min_value=0, step=1, value=0,
+                                    key=_key(modo, "porciones"))
+    with c_buscar:
+        _buscador_catalogo(
+            modo, df_cat, etiqueta="Buscar artículo del almacén",
+            placeholder="empezá a escribir para filtrar…",
+            etiqueta_nuevo="artículo nuevo",
+        )
 
-    _buscador_catalogo(
-        modo, df_cat, etiqueta="Buscar artículo del almacén",
-        placeholder="nombre o código…", etiqueta_nuevo="artículo nuevo",
-    )
     lineas = _tabla_lineas(modo)
 
     total = _total_lineas(lineas)
     costo_porcion = (total / porciones) if porciones > 0 else None
 
-    m1, m2 = st.columns(2)
-    m1.metric("Costo total", _fmt(total))
-    m2.metric("Costo por porción", _fmt(costo_porcion) if costo_porcion is not None else "—")
+    # Costos + precio + pricing en una sola franja, sin dividers: cada
+    # `st.divider` cobraba unos 30-40px y multiplicaba lo que había que
+    # scrollear para llegar al botón de Guardar.
+    c_total, c_porc, c_precio = st.columns(3)
+    c_total.metric("Costo total", _fmt(total))
+    c_porc.metric("Costo por porción",
+                  _fmt(costo_porcion) if costo_porcion is not None else "—")
+    with c_precio:
+        precio_venta = st.number_input(
+            "Precio de venta (por porción, con IGV)",
+            min_value=0.0, step=0.10, key=_key(modo, "precio_venta"),
+        )
 
-    st.divider()
-    precio_venta = st.number_input(
-        "Precio de venta (por porción, con IGV)", min_value=0.0, step=0.10, key=_key(modo, "precio_venta"),
-    )
     _mostrar_pricing(
         costo_porcion, precio_venta,
         msg_sin_base="Ingresá las porciones (arriba) para poder calcular esto.",
     )
 
-    st.divider()
-    guardado_por = st.text_input("Guardado por (tu nombre)", key=_key(modo, "guardado_por"))
-    if st.button("💾 Guardar como propuesta", type="primary", key=_key(modo, "guardar")):
+    c_guarda, c_boton = st.columns([3, 1])
+    with c_guarda:
+        guardado_por = st.text_input("Guardado por (tu nombre)",
+                                     key=_key(modo, "guardado_por"),
+                                     placeholder="tu nombre…")
+    with c_boton:
+        st.write("")  # alinea el botón con el input
+        guardar = st.button("💾 Guardar propuesta", type="primary",
+                            key=_key(modo, "guardar"), use_container_width=True)
+    if guardar:
         if not nombre.strip():
             st.warning("Ponele un nombre a la receta.")
         elif not guardado_por.strip():
@@ -436,28 +484,43 @@ def _render_combo():
         )
         return
 
-    nombre = st.text_input("Nombre del combo", key=_key(modo, "nombre"))
+    # Fila única: nombre + buscador (Combo no tiene "porciones" — un combo
+    # se costea entero, no por porción). Mismo criterio compacto que
+    # `_render_receta_venta`.
+    c_nom, c_buscar = st.columns([3, 4])
+    with c_nom:
+        nombre = st.text_input("Nombre del combo", key=_key(modo, "nombre"),
+                               placeholder="nombre del combo…")
+    with c_buscar:
+        _buscador_catalogo(
+            modo, df_prod, etiqueta="Buscar producto de venta",
+            placeholder="empezá a escribir el nombre del plato…",
+            etiqueta_nuevo="producto nuevo", unidad_nueva="porción",
+        )
 
-    _buscador_catalogo(
-        modo, df_prod, etiqueta="Buscar producto de venta",
-        placeholder="nombre del plato…", etiqueta_nuevo="producto nuevo",
-        unidad_nueva="porción",
-    )
-    st.caption("Un combo se arma con productos de venta ya costeados (platos) — no con insumos sueltos.")
     lineas = _tabla_lineas(modo)
 
     total = _total_lineas(lineas)
-    st.metric("Costo total del combo", _fmt(total))
+    c_total, c_precio = st.columns(2)
+    c_total.metric("Costo total del combo", _fmt(total))
+    with c_precio:
+        precio_venta = st.number_input(
+            "Precio de venta del combo (con IGV)",
+            min_value=0.0, step=0.10, key=_key(modo, "precio_venta"),
+        )
 
-    st.divider()
-    precio_venta = st.number_input(
-        "Precio de venta del combo (con IGV)", min_value=0.0, step=0.10, key=_key(modo, "precio_venta"),
-    )
     _mostrar_pricing(total if lineas else None, precio_venta)
 
-    st.divider()
-    guardado_por = st.text_input("Guardado por (tu nombre)", key=_key(modo, "guardado_por"))
-    if st.button("💾 Guardar como propuesta", type="primary", key=_key(modo, "guardar")):
+    c_guarda, c_boton = st.columns([3, 1])
+    with c_guarda:
+        guardado_por = st.text_input("Guardado por (tu nombre)",
+                                     key=_key(modo, "guardado_por"),
+                                     placeholder="tu nombre…")
+    with c_boton:
+        st.write("")
+        guardar = st.button("💾 Guardar propuesta", type="primary",
+                            key=_key(modo, "guardar"), use_container_width=True)
+    if guardar:
         if not nombre.strip():
             st.warning("Ponele un nombre al combo.")
         elif not guardado_por.strip():
@@ -555,18 +618,18 @@ def _render_guardadas():
 
 # ─── Punto de entrada público ───────────────────────────────────────────────
 def render_formulario_receta():
+    """Entrada del formulario, tal como lo consume `graficos/recetas.py` desde
+    su sección "Nueva receta". Sin `st.subheader` propio ni caption largo: la
+    tarjeta blanca la aporta el dispatcher (`st.container(border=True,
+    key="rec_card_nueva")`) y el título de la sección ya lo pone el rail —
+    un h2 acá sumaba unos 60px y sacaba al buscador de la primera pantalla
+    en una laptop (pedido 2026-09-22)."""
     _init_estado()
-    _chip_fuente("Nueva Receta")
-
-    st.subheader("Nueva Receta")
-    st.caption(
-        "Armá una receta de venta o un combo, mirá el costo en vivo, "
-        "y guardalo como propuesta para que otra persona lo revise."
-    )
 
     modo_label = st.segmented_control(
         "Tipo", ["Receta de venta", "Combo", "Guardadas"],
-        default="Receta de venta", key="form_receta_modo", label_visibility="collapsed",
+        default="Receta de venta", key="form_receta_modo",
+        label_visibility="collapsed",
     )
 
     if modo_label == "Combo":

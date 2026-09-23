@@ -267,10 +267,8 @@ if 'tabla_tam' not in st.session_state:
 # cadena de if/elif ni atar este bloque al nombre de una en particular.
 if cfg.get("tool"):
     from inspector import render_inspector
-    from formulario_receta import render_formulario_receta
     _TOOLS = {
         "Inspector": render_inspector,
-        "Nueva Receta": render_formulario_receta,
     }
     _TOOLS[reporte]()
     perf.end()                                                              # ⚡ PERF

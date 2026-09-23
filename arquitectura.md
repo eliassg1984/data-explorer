@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-495 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+496 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (174)
 
@@ -455,7 +455,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (138)
+**Streamlit** (139)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -595,6 +595,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#491** — Un helper que abre un st.container(key=...) con la key FIJA sólo sobrevive si se lo llama UNA…
 - **#492** — El aviso de ingreso por Telegram (aviso_ingreso.py, 2026-09-22) cuenta "entrar" como sesión…
 - **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
+- **#496** — «Nueva receta» ya no es un reporte hermano, es una VISTA del reporte Recetas
 
 **Datos, R2 y DuckDB** (57)
 
@@ -762,7 +763,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (94)
+**Decisiones de diseño y UX** (95)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -858,6 +859,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#491** — Un helper que abre un st.container(key=...) con la key FIJA sólo sobrevive si se lo llama UNA…
 - **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
 - **#495** — Plegada la columna del árbol, cada vista es un PUNTO, no su ícono (opción B)
+- **#496** — «Nueva receta» ya no es un reporte hermano, es una VISTA del reporte Recetas
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -41071,6 +41073,60 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      PERSISTENTE de session_state: ahí `dot opacity` da 0 y el nombre 1,
      medido. Es la misma familia que la regla #353 (las transiciones no
      avanzan en el navegador automatizado).
+
+496. **«Nueva receta» ya no es un reporte hermano, es una VISTA del reporte
+     Recetas.** 2026-09-22, a pedido: «actualmente la opción de nueva
+     receta dentro del reporte de recetas, está como parte de un toggle;
+     deseo que figure como una vista de mi reporte de recetas». Hasta ese
+     día era una entrada propia de `data.py::REPORTES` (`tool: True`) que
+     `app.py::_TOOLS` despachaba a `formulario_receta.render_formulario_
+     receta()`, y el chip `_chip_fuente` de `graficos/recetas_comun.py`
+     alternaba entre ella y «Recetas» (las dos con `grupo_nav: "Recetas y
+     Costos"`, dibujadas como UN solo botón del rail). Ahora es la PRIMERA
+     sección de `graficos/recetas.py::_PILA` (`rec_sec_nueva`), con su
+     entrada en `_RAIL_CATEGORIAS` bajo la categoría «Nueva» y su tarjeta
+     blanca (`st.container(border=True, key="rec_card_nueva")`), como
+     cualquier otra vista. `grupo_nav` de Recetas se retiró (un grupo de
+     un solo miembro son pasos de más, mismo criterio que Requerimientos/
+     Salidas la #322) y con él el chip `_chip_fuente` — no queda a dónde
+     chipear. La navegación entre secciones ya la hace el rail lateral,
+     mismo mecanismo que Compras/Ajuste. El punto de entrada
+     `render_formulario_receta` sigue igual: sólo cambió quién lo llama.
+
+     **Tres cosas que costaron los cambios del formulario mismo, en el
+     mismo commit:**
+
+     - **Fit-en-una-pantalla-de-laptop.** Apilado en un rail de 10
+       secciones, cada renglón de arriba empuja al buscador y a la tabla
+       fuera de la primera vista. Se sacó el `st.subheader("Nueva Receta")`
+       y el caption largo (la tarjeta ya tiene borde, y el título de la
+       sección lo pone el rail); Nombre + Porciones + Buscador se
+       agruparon en UNA fila (`st.columns([3, 1, 4])`), y Costo/Precio en
+       otra (`st.columns(3)`). Los tres `st.divider()` que había — cada
+       uno cobraba ~30-40px — se retiraron.
+
+     - **Buscador SUGESTIVO, sin Enter.** `st.text_input` pedía Enter/blur
+       para aceptar cada carácter, así que el catálogo no se filtraba
+       hasta que la persona confirmaba. Se cambió a `st.selectbox` con
+       `index=None` + `placeholder`: Streamlit filtra las opciones
+       client-side a medida que el usuario tipea. Al elegir una, la línea
+       entra a la tabla y el widget se resetea vía key incremental
+       (`_key(modo, "buscador_v<n>")` con `n = st.session_state[
+       "..._ver"] += 1`): Streamlit descarta el estado del widget viejo
+       y el próximo render arranca en None. Sin esa key incremental el
+       selectbox se queda con la última opción marcada y el usuario NO
+       puede volver a elegirla (mismo modo de dolor que la clave dinámica
+       de `st.plotly_chart(on_select=...)`, ver «trampas de Streamlit» en
+       `CLAUDE.md`).
+
+     - **La rama de «agregar como nuevo» sobrevive aparte.** El
+       `st.text_input` original hacía DOBLE deber: filtraba el catálogo Y
+       aportaba el nombre para dar de alta un ítem que no existía todavía
+       («NUEVO-1», precio 0, para que después alguien lo complete). El
+       selectbox devuelve sólo opciones existentes, así que ese segundo
+       trabajo se movió a un `st.expander("¿No está en la lista? Agregar
+       como <etiqueta>")` compacto debajo — cerrado por defecto, no cobra
+       vertical mientras nadie lo abre.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

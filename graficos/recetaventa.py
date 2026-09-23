@@ -11,7 +11,7 @@ del parquet y llama a los gráficos compartidos de `graficos.recetas_comun`
 junto con la versión de `recetabase.py` (el mismo tipo de dato: un BOM
 plato→insumos vs. receta base→insumos). Desde 2026-08-13 Receta Base y
 Receta Venta comparten ítem de nav ("Recetas") y un chip Base/Venta arriba
-del rail — ver `_chip_fuente` en recetas_comun.py y `arquitectura.md` §
+del rail — ver `_chip_fuente` en recetas_comun.py (retirado 2026-09-22, ver ahí) y `arquitectura.md` §
 Unificación Recetas.
 
 "Composición" DEJÓ de ser compartida el 2026-08-24: acá es

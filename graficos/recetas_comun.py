@@ -115,50 +115,15 @@ def _activo(serie):
     return ~vacio & ~s.str.contains("INAC")
 
 
-# ─── Chip de fuente (Opción A del rail unificado) ──────────────────────────
-def _chip_fuente(reporte_activo):
-    """Segmented control Recetas/+ Nueva arriba del rail — separa las dos
-    entradas del mismo ítem de nav ("Recetas", ver
-    navegacion.py::grupo_nav).
-
-    **Eran TRES hasta el 2026-09-04** (Receta base / Receta venta / +
-    Nueva): el chip era el selector que alternaba entre los dos parquets de
-    receta. Al fusionarse las nueve vistas en una sola página
-    (`graficos/recetas.py`) ese trabajo desapareció — ya no hay dos
-    destinos que alternar — y lo que queda es el puente hacia "+ Nueva",
-    que NO es una vista sino el formulario de alta. Se conserva el widget
-    en vez de un `st.button` porque el ida-y-vuelta tiene que funcionar en
-    los dos sentidos: desde el formulario, este mismo chip es la única
-    forma de volver.
-
-    Clic en el lado NO activo NAVEGA (mismo
-    mecanismo que el rail de navegación: session_state['_nav_reporte'] +
-    rerun) en vez de filtrar — así reusa TODO el pipeline de carga de
-    app.py (cfg, archivo, fecha_ultima_actualizacion, refresco...) sin
-    duplicar ni un `if` ahí. "Nueva Receta" es `tool: True` (no un parquet,
-    ver formulario_receta.py) — igual navega por el mismo mecanismo, app.py
-    la desvía antes de tocar el pipeline de carga.
-
-    La key incluye `reporte_activo` a propósito: si el usuario entra por el
-    RAIL de navegación (no por este chip) — p.ej. volviendo de otro reporte
-    — una key fija dejaría "pegado" el valor de la sesión anterior. Mismo
-    patrón que la key de `st.plotly_chart(on_select=...)` en
-    graficos/ajuste (CLAUDE.md § trampas de Streamlit)."""
-    etiquetas = {
-        "Recetas": "Recetas",
-        "Nueva Receta": "+ Nueva",
-    }
-    inverso = {v: k for k, v in etiquetas.items()}
-    sel = st.segmented_control(
-        "Fuente", list(etiquetas.values()),
-        default=etiquetas.get(reporte_activo, "Recetas"),
-        key=f"recetas_fuente_chip_{reporte_activo}",
-        label_visibility="collapsed",
-    )
-    destino = inverso.get(sel, reporte_activo)
-    if destino != reporte_activo:
-        st.session_state["_nav_reporte"] = destino
-        st.rerun()
+# El chip Recetas/+ Nueva (`_chip_fuente`) vivió acá desde su nacimiento
+# hasta el 2026-09-22. Nació el 2026-08-30 como Opción A del rail unificado,
+# separando las TRES entradas de nav Receta base / Receta venta / + Nueva;
+# el 2026-09-04 se fundió a DOS al fusionarse los dos parquets en una sola
+# página (regla #303); y desapareció al bajar "+ Nueva" a ser una VISTA más
+# del reporte Recetas (`graficos/recetas.py::_RAIL_CATEGORIAS`), con lo que
+# el grupo_nav de Recetas quedó de un solo miembro y no había a dónde
+# chipear. La navegación entre secciones ahora la hace el rail lateral, con
+# el mismo mecanismo que Compras/Ajuste.
 
 
 # ─── 1. Ranking de contenedores por costo ───────────────────────────────────

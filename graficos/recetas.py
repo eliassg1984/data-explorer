@@ -55,11 +55,12 @@ from tablas import renderizar_aggrid_desktop
 from graficos.base import (
     _render_rail, _resolver, renderizar_graficos_genericos, seccion_perezosa,
 )
-from graficos.recetas_comun import _chip_fuente, _items_clave, _ranking_contenedores
+from graficos.recetas_comun import _items_clave, _ranking_contenedores
 from graficos.recetabase import _panorama_compras_base
 from graficos.recetaventa import (
     _panorama_compras_venta, _tabla_composicion_venta, _tabla_costeo_venta,
 )
+from formulario_receta import render_formulario_receta
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es
 # horizontal y aplana las categorías a una sola fila (ver
@@ -71,6 +72,14 @@ from graficos.recetaventa import (
 # existían en los dos lados y al juntarlas quedaban dos items con el mismo
 # nombre.
 _RAIL_CATEGORIAS = (
+    # "Nueva receta" es una VISTA del reporte desde el 2026-09-22 — hasta ese
+    # día era un reporte hermano (tool: True) que el chip Recetas/+ Nueva
+    # `_chip_fuente` alternaba con éste. Se bajó a vista propia a pedido
+    # («deseo que figure como una vista de mi reporte de recetas»); acá se
+    # dibuja como cualquiera de las demás, con su `st.container(border=True)`
+    # (tarjeta blanca) y el proceso completo pensado para caber en una sola
+    # pantalla de laptop — ver `formulario_receta.py::render_formulario_receta`.
+    ("Nueva",  (("Nueva receta",                        "Nueva",           ":material/add_circle:"),)),
     ("Platos", (("Composición del plato",              "Composición",     ":material/donut_small:"),
                 ("Costeo Receta Venta",                "Costeo",          ":material/calculate:"),
                 ("Ingredientes clave",                 "Ingredientes",    ":material/eco:"),
@@ -90,6 +99,7 @@ _RAIL_CATEGORIAS = (
 # usuario describió el dominio («los platos... formados por ingredientes e
 # incluso recetas base»).
 _PILA = (
+    ("rec_sec_nueva",        "Nueva receta"),
     ("rec_sec_composicion",  "Composición del plato"),
     ("rec_sec_costeo",       "Costeo Receta Venta"),
     ("rec_sec_ingredientes", "Ingredientes clave"),
@@ -183,10 +193,10 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     _render_rail(_RAIL_CATEGORIAS, "rec_graf_tipo", btn_prefix="rec_rail_btn_",
                  secciones=_PILA)
 
-    # El chip ya no separa Base/Venta — las dos están en esta página. Queda
-    # como puente hacia «+ Nueva», que no es una vista sino el formulario de
-    # alta (`formulario_receta.py`, `tool: True` en REPORTES).
-    _chip_fuente(nombre_reporte)
+    # El chip Recetas/+ Nueva (`_chip_fuente`) que vivía acá se retiró el
+    # 2026-09-22: «+ Nueva» dejó de ser un reporte hermano y bajó a ser una
+    # vista más de esta pila (ver `_RAIL_CATEGORIAS`), así que no queda a
+    # dónde chipear.
 
     # Medir por: SIEMPRE costo, en las DOS mitades. Receta Venta ya no tenía
     # el radio (se sacó el 2026-08-30 a pedido: «por defecto siempre debe ser
@@ -203,6 +213,10 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # ── LA PILA, PEREZOSA ─────────────────────────────────────────────────
     # Cada sección con su PROPIA key de tarjeta: apiladas, compartir key es
     # una excepción de Streamlit.
+    def _dib_nueva():
+        with st.container(border=True, key="rec_card_nueva"):
+            render_formulario_receta()
+
     def _dib_composicion():
         with st.container(border=True, key="rec_card_composicion"):
             _tabla_composicion_venta(df_f)
@@ -272,6 +286,7 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                 _tabla_recetabase(df_rb)
 
     _DIBUJANTES = {
+        "rec_sec_nueva":        _dib_nueva,
         "rec_sec_composicion":  _dib_composicion,
         "rec_sec_costeo":       _dib_costeo,
         "rec_sec_ingredientes": _dib_ingredientes,

@@ -250,14 +250,15 @@ REPORTES = {
         # antes "Recetas"). La CLAVE del dict sigue siendo "Recetas": es la
         # identidad interna (dispatcher de graficos/, slug CSS
         # `app_reporte_recetas`, citas de arquitectura.md) y NO se renombra.
-        # `grupo_nav` es el rótulo del botón AGRUPADO del rail (Recetas +
-        # Nueva Receta se dibujan como uno solo, `navegacion.py` usa el string
-        # del grupo como etiqueta), así que renombrarlo acá renombra el rail;
-        # va en las DOS entradas del grupo. `label_largo` renombra la franja
-        # de contexto (que si no cae en la clave "Recetas").
+        # `label_largo` renombra la franja de contexto (que si no cae en la
+        # clave "Recetas"). Hasta el 2026-09-22 vivía además `grupo_nav`:
+        # "Nueva Receta" era un reporte hermano (tool: True) y los dos se
+        # dibujaban como UN solo botón del rail. Al bajar "Nueva receta" a ser
+        # una VISTA de este mismo reporte (rail interno, ver
+        # `graficos/recetas.py::_RAIL_CATEGORIAS`), el grupo quedó de un solo
+        # miembro y desapareció junto con el chip Recetas/+ Nueva.
         "label_corto": "Recetas y Costos",
         "label_largo": "Recetas y Costos",
-        "grupo_nav": "Recetas y Costos",
         "archivo": "recetaventa.parquet",
         # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
         # (`archivo`) y pasándolo como df_f; recetabase.parquet lo carga
@@ -275,16 +276,6 @@ REPORTES = {
         # con la fusión porque resumen_kpis() agrega el df del `archivo`, y
         # COD RB vive en el parquet secundario.
         "kpis": (("Platos", "COD RV", "count_distinct"),),
-    },
-    "Nueva Receta": {
-        "label_corto": "+ Nueva",
-        "grupo_nav": "Recetas y Costos",
-        "icono": ":material/receipt_long:",
-        # No es un parquet: arma y costea una receta de venta a mano contra
-        # inventariovalorizado.parquet, y la guarda como PROPUESTA en R2
-        # (_recetas_propuestas/), sin tocar recetaventa.parquet directo. Ver
-        # formulario_receta.py.
-        "tool": True,
     },
     "Ventas": {
         "label_corto": "Ventas",
