@@ -40957,17 +40957,33 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      las tablas en una tarjeta, a la derecha»*. El resultado combina todo.
 
      **DOS TARJETAS PROPIAS, los TRES modos** (`st.columns([1.45, 1])`): el
-     gráfico en la suya a la izquierda (la de `_card`, `chartcard_dist_*`) y
-     las tablas en la suya a la derecha (`ajdist_card_tablas`), apiladas: el
-     detalle de la selección (arriba) y el «5% inferior» (abajo, sólo
-     Distribución/Histograma; el Pareto ya ES un ranking). Ya NO hay card
-     envolvente: `_dib_distribucion` dejó de abrir
-     `ajuste_graf_card_izq_distribucion` y la vista dibuja sus propias
-     tarjetas, igual que Cascada y Mapa de calor (reglas #441 y #493). El look
-     de tarjeta (blanca, borde `GRIS_BORDE`, radio 12) lo inyecta la vista
-     scopeado a esas keys, como el Mapa de calor — con el borde sobre la
+     gráfico en la suya a la izquierda (`ajdist_card_grafico`) y las tablas en
+     la suya a la derecha (`ajdist_card_tablas`), apiladas: el detalle de la
+     selección (arriba) y el «5% inferior» (abajo, sólo Distribución/Histograma;
+     el Pareto ya ES un ranking). Ya NO hay card envolvente: `_dib_distribucion`
+     dejó de abrir `ajuste_graf_card_izq_distribucion` y la vista dibuja sus
+     propias tarjetas, igual que Cascada y Mapa de calor (reglas #441 y #493).
+     El look de tarjeta (blanca, borde `GRIS_BORDE`, radio 12) lo inyecta la
+     vista scopeado a esas keys, como el Mapa de calor — con el borde sobre la
      tarjeta y su hijo directo a `none`. Sin card envolvente tampoco hay clamp
      de una pantalla: lo que no entra lo scrollea la página.
+
+     **La fila de encabezado va DENTRO de la tarjeta del gráfico**
+     (2026-09-22, segunda vuelta, a pedido: «que el título, el filtro, el
+     toggle y el selector de tipo de gráfico queden dentro de la tarjeta, no
+     afuera; y las dos tarjetas al mismo nivel»). Antes flotaba a lo ancho
+     ARRIBA de las dos columnas —el título a la izquierda y los controles
+     colgando por encima de la tarjeta de tablas—; ahora es la primera fila
+     DENTRO de `ajdist_card_grafico`, así que las dos tarjetas arrancan a la
+     misma altura (son columnas del mismo `st.columns`). Los widgets se
+     dibujan ANTES de la figura, dentro de esa tarjeta, porque en Streamlit el
+     orden de ejecución es el orden en que se leen los valores (`_vista` decide
+     qué figura; la familia filtra `df`). Consecuencia en el CSS:
+     `ajdist_card_grafico` es ahora la tarjeta VISIBLE (borde + fondo +
+     padding), y los `chartcard_dist_*` de `_card` pasaron a ser sólo el
+     envoltorio de SCROLL en X (sin borde ni fondo ni padding) ANIDADO adentro
+     — así la figura forzada más ancha se desliza sin arrastrar la fila de
+     encabezado, que queda quieta fuera del scroll.
 
      **Las dos tablas usan las MISMAS grillas de desglose que la Cascada y el
      Mapa de calor** (regla #483, a pedido: «similares al estilo de las tablas

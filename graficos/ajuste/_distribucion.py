@@ -390,21 +390,29 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     # tampoco el clamp de una pantalla: lo que no entra lo scrollea la página,
     # como Cascada/Mapa de calor. El gráfico scrollea en X porque la figura se
     # fuerza más ancha que su tarjeta (`_forzar_ancho`). Ver regla #494.
+    # Las DOS tarjetas visibles son la ENVOLVENTE del gráfico
+    # (`ajdist_card_grafico`, que lleva la fila de encabezado adentro,
+    # 2026-09-22) y la de las tablas (`ajdist_card_tablas`): blancas, borde
+    # gris, radio 12, color de la paleta (regla #1), scopeadas a sus keys como
+    # el Mapa de calor (regla #493) — el borde sobre la tarjeta y su hijo
+    # directo a `none` para no doblar la línea. Los `chartcard_dist_*` DEJARON
+    # de ser tarjetas visibles: ahora son sólo el envoltorio de SCROLL en X
+    # (sin borde ni fondo ni padding) DENTRO de la tarjeta del gráfico, para
+    # que la figura forzada más ancha se deslice sin arrastrar la fila de
+    # encabezado (que queda quieta, fuera del scroll). Ver regla #494.
     _css_cards = (
-        'div[class*="st-key-chartcard_dist_grupo"],'
-        'div[class*="st-key-chartcard_dist_hist"],'
-        'div[class*="st-key-chartcard_dist_pareto"],'
+        'div[class*="st-key-ajdist_card_grafico"],'
         'div[class*="st-key-ajdist_card_tablas"]{'
         'background:var(--bg-card) !important;'
         f'border:1px solid {GRIS_BORDE} !important;'
         'border-radius:12px !important;padding:10px 14px 12px 14px !important;}'
-        'div[class*="st-key-chartcard_dist_grupo"]>div,'
-        'div[class*="st-key-chartcard_dist_hist"]>div,'
-        'div[class*="st-key-chartcard_dist_pareto"]>div,'
+        'div[class*="st-key-ajdist_card_grafico"]>div,'
         'div[class*="st-key-ajdist_card_tablas"]>div{border:none !important;}'
         'div[class*="st-key-chartcard_dist_grupo"],'
         'div[class*="st-key-chartcard_dist_hist"],'
-        'div[class*="st-key-chartcard_dist_pareto"]{overflow-x:auto;}'
+        'div[class*="st-key-chartcard_dist_pareto"]{'
+        'border:none !important;background:transparent !important;'
+        'padding:0 !important;overflow-x:auto;}'
     )
     st.markdown(f"<style>{css_filtros_vista('ajdist_ctrl_', 'ajdist_nolist_')}"
                 f"{_CSS_ENCABEZADO}{_css_cards}</style>", unsafe_allow_html=True)
@@ -423,63 +431,76 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
         sembrar_seleccion(pd.DataFrame({col_familia: _opc_fam}), col_familia,
                           "ajuste_dist_filtro_familia", list(FAMILIAS_DE_ENTRADA))
 
-    _c_tit, _c_modo, _c_fam, _c_amp = st.columns([3, 1.4, 1.5, 1.15],
-                                                 vertical_alignment="center")
-    with _c_amp:
-        st.toggle(
-            "Ampliar", key="ajuste_dist_ampliar",
-            help="Agranda el gráfico y hace la tarjeta deslizable, para ver los "
-                 "grupos con más aire. La tarjeta deja de caber en una pantalla "
-                 "mientras esté ampliada.")
-    with _c_modo:
-        _vista = st.selectbox(
-            "Vista", ["Distribución", "Histograma", "Valor (Pareto)"],
-            key="ajuste_dist_vista", label_visibility="collapsed",
-        ) or "Distribución"
-    # El rótulo del popover ES la selección vigente (lag de un rerun, igual
-    # que Cascada). El widget vive DENTRO del popover con el patrón #467-safe
-    # de `filtro_pills` (`seleccion_en_panel`), y filtra `df` en la misma
-    # pasada leyendo `session_state`, esté el panel abierto o cerrado.
-    with _c_fam.container(key="ajdist_ctrl_familia"):
-        _sel = [f for f in (st.session_state.get("ajuste_dist_filtro_familia")
-                            or []) if f in _opc_fam]
-        _et = ("todas las familias" if not _sel
-               else f"{len(_sel)} familias" if len(_sel) > 1 else _sel[0].lower())
-        with st.popover(f":material/category: {_et}", use_container_width=True):
-            if _tiene_fam:
-                df, _ = filtro_pills(df, col_familia, "ajuste_dist_filtro_familia",
-                                     "Familia", valores=_opc_fam or None)
-    with _c_tit:
-        _TITULO = {"Distribución": "Distribución del ajuste",
-                   "Histograma": "Histograma de frecuencias",
-                   "Valor (Pareto)": "Dónde se concentra el faltante"}.get(_vista, "")
-        st.markdown(f'<div class="ajdist-titulo">{_TITULO}</div>',
-                    unsafe_allow_html=True)
-
-    grp = col_familia or col_area
-
-    n_total = len(df)
-    df_nz = df[df[col_ajuste_val] != 0]
-    n_nz = len(df_nz)
-
-    if df_nz.empty:
-        st.info("Ningún producto tuvo ajuste distinto de cero en este rango.")
-        return
-
-    # ── LAYOUT: gráfico en SU tarjeta a la IZQUIERDA, tablas en SU tarjeta a
-    # la DERECHA — los TRES modos (2026-09-22, a pedido: «que el gráfico en sus
-    # tres modos figuren en su propia tarjeta y las tablas en una tarjeta, a la
-    # derecha»). El gráfico —más angosto por la tabla— se DESLIZA en horizontal
-    # para ver las familias/bins/barras de los lados (ancho forzado por CSS, no
-    # por `fig.layout.width`, que Streamlit pisa — ver `_forzar_ancho`). A la
-    # derecha van APILADAS la tabla del detalle de la selección (arriba) y la
-    # del «5% inferior» (abajo, sólo Distribución/Histograma; el Pareto ya ES un
+    # ── LAYOUT: dos tarjetas al MISMO nivel — el gráfico (con su fila de
+    # encabezado ADENTRO) a la IZQUIERDA, las tablas a la DERECHA. La fila de
+    # encabezado (título · modo · familia · Ampliar) dejó de flotar a lo ancho
+    # ARRIBA de las dos tarjetas y ahora vive DENTRO de la tarjeta del gráfico
+    # (2026-09-22, a pedido: «que el título, el filtro, el toggle y el selector
+    # de tipo de gráfico queden dentro de la tarjeta, no afuera; y las dos
+    # tarjetas al mismo nivel»). Las dos arrancan a la misma altura porque son
+    # las columnas de un mismo `st.columns`. El gráfico —más angosto por la
+    # tabla— se DESLIZA en horizontal dentro de su tarjeta (ancho forzado por
+    # CSS, no por `fig.layout.width`, que Streamlit pisa — ver `_forzar_ancho`).
+    # A la derecha van APILADAS el detalle de la selección (arriba) y el «5%
+    # inferior» (abajo, sólo Distribución/Histograma; el Pareto ya ES un
     # ranking). Ver regla #494.
     _col_g, _col_t = st.columns([1.45, 1], gap="medium")
-    _detalle = None  # (caption, DataFrame) de la selección → columna derecha
-    _es_pareto = _vista == "Valor (Pareto)"
+    _detalle = None  # (caption, df_std, color_barra, color_texto) de la selección
+    _es_pareto = False
 
-    with _col_g:
+    with _col_g, st.container(border=True, key="ajdist_card_grafico"):
+        # FILA DE ENCABEZADO, adentro de la tarjeta: título · modo · familia ·
+        # Ampliar, en una línea. El modo es un `st.selectbox`; la familia, un
+        # `st.popover` con las pills adentro; los dos con el trigger minimalista
+        # de Cascada/Mapa (`css_filtros_vista`), así que el rótulo ES el valor
+        # vigente. El título vive en esta fila —los gráficos ya no llevan
+        # `title=`—. Se dibuja ANTES de la figura porque en Streamlit el orden de
+        # ejecución es el orden en que se leen los valores (`_vista` decide qué
+        # figura; la familia filtra `df`).
+        _c_tit, _c_modo, _c_fam, _c_amp = st.columns([3, 1.4, 1.5, 1.15],
+                                                     vertical_alignment="center")
+        with _c_amp:
+            st.toggle(
+                "Ampliar", key="ajuste_dist_ampliar",
+                help="Agranda el gráfico y hace la tarjeta deslizable, para ver "
+                     "los grupos con más aire. La tarjeta deja de caber en una "
+                     "pantalla mientras esté ampliada.")
+        with _c_modo:
+            _vista = st.selectbox(
+                "Vista", ["Distribución", "Histograma", "Valor (Pareto)"],
+                key="ajuste_dist_vista", label_visibility="collapsed",
+            ) or "Distribución"
+        # El rótulo del popover ES la selección vigente (lag de un rerun, igual
+        # que Cascada). El widget vive DENTRO del popover con el patrón #467-safe
+        # de `filtro_pills` (`seleccion_en_panel`), y filtra `df` en la misma
+        # pasada leyendo `session_state`, esté el panel abierto o cerrado.
+        with _c_fam.container(key="ajdist_ctrl_familia"):
+            _sel = [f for f in (st.session_state.get("ajuste_dist_filtro_familia")
+                                or []) if f in _opc_fam]
+            _et = ("todas las familias" if not _sel
+                   else f"{len(_sel)} familias" if len(_sel) > 1 else _sel[0].lower())
+            with st.popover(f":material/category: {_et}", use_container_width=True):
+                if _tiene_fam:
+                    df, _ = filtro_pills(df, col_familia,
+                                         "ajuste_dist_filtro_familia",
+                                         "Familia", valores=_opc_fam or None)
+        with _c_tit:
+            _TITULO = {"Distribución": "Distribución del ajuste",
+                       "Histograma": "Histograma de frecuencias",
+                       "Valor (Pareto)": "Dónde se concentra el faltante"}.get(_vista, "")
+            st.markdown(f'<div class="ajdist-titulo">{_TITULO}</div>',
+                        unsafe_allow_html=True)
+
+        _es_pareto = _vista == "Valor (Pareto)"
+        grp = col_familia or col_area
+        n_total = len(df)
+        df_nz = df[df[col_ajuste_val] != 0]
+        n_nz = len(df_nz)
+
+        if df_nz.empty:
+            st.info("Ningún producto tuvo ajuste distinto de cero en este rango.")
+            return
+
         if _vista == "Distribución":
             _es_strip = bool(grp and grp in df_nz.columns)
             _hay_prod = _es_strip and bool(col_producto and col_producto in df_nz.columns)
