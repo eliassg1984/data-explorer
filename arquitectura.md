@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-494 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+495 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (173)
+**CSS y estilos** (174)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -207,6 +207,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#486** — El detalle del Mapa de calor lleva un BUSCADOR sobre cada cuadro (Faltantes | Sobrantes, y el…
 - **#490** — Un st.selectbox reciente NO es un baseweb select: es un react-aria-ComboBox basado en…
 - **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
+- **#495** — Plegada la columna del árbol, cada vista es un PUNTO, no su ícono (opción B)
 
 **Layout y alturas** (69)
 
@@ -761,7 +762,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (93)
+**Decisiones de diseño y UX** (94)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -856,6 +857,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
 - **#491** — Un helper que abre un st.container(key=...) con la key FIJA sólo sobrevive si se lo llama UNA…
 - **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
+- **#495** — Plegada la columna del árbol, cada vista es un PUNTO, no su ícono (opción B)
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -41033,6 +41035,42 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      vertical); los ANCHOS (`_PX_STRIP_NORM/_AMP`, `_PX_BIN_NORM/_AMP`,
      `_PX_PARETO_NORM/_AMP`, `_EJE_PX`) NO son altos, así que la guarda de
      `test_graficos.py` no los marca.
+
+495. **Plegada la columna del árbol, cada vista es un PUNTO, no su ícono
+     (opción B).** 2026-09-22, a pedido: «el rail con las vistas desplegadas
+     mostrando los íconos no me dice mucho». Plegada, la columna son 68px y
+     bajo el reporte activo colgaban los íconos de sus vistas a 15px y
+     apagados — crípticos y sin rótulo, no decían qué vista era ni cuántas
+     había. Se cambiaron por una columna de PUNTOS sobre la línea guía: uno
+     por vista, gris (`--text-muted`, 5px), y el de la vista EN PANTALLA lleno
+     en acento y más grande (7px). Es un índice de posición («hay N, vas en la
+     M»); desplegada la columna el punto se apaga y manda el nombre, como
+     siempre. Todo en `estilos/_28_arbol.py`, sólo CSS.
+
+     **NO es el semáforo de KPI** (`railkpi_<slug>`, regla #482): ése sigue
+     oculto en plegado e intacto. El punto de posición cuelga del `::after`
+     del botón de la vista —libre en la columna desde que el semáforo se mudó
+     al elemento `railkpi_` (`_20_compras_rail.py`)— y el botón ya es
+     `position: relative` (allá mismo). Se centra en `--icono-x`; el `-6px`
+     pasa de coords de columna a coords del botón (su margen), igual que el
+     `::before` de la barra activa. El ícono de la vista se apaga siempre
+     (`opacity: 0`): plegada manda el punto, desplegada el nombre.
+
+     **Dos trampas que costaron la verificación.** (1) `--border-strong` NO
+     existe en este proyecto —es un token de CDS, no del `:root` de
+     `_00_base.py`—: `background: var(--border-strong)` sin fallback compila a
+     `transparent` y los puntos apagados desaparecían. Los grises salen de
+     `--text-muted` (#a2a2ad). (2) El estado ASOMADO no se puede probar
+     forzando `data-capa-col` por consola: `navegacion.py::_SCRIPT_CAPAS` corre
+     en un timer y lo BORRA a los pocos ms porque el cursor no está sobre la
+     columna, así que toda medición diferida cae en plegado. Y matar
+     transiciones con `*::after {transition:none !important}` no alcanza: la
+     regla base del punto trae su propio `transition: … !important` de mayor
+     especificidad y le gana al comodín. Se verifica con el PESTILLO
+     (`rail_pestillo_abierto`), que fija la columna abierta en un estado
+     PERSISTENTE de session_state: ahí `dot opacity` da 0 y el nombre 1,
+     medido. Es la misma familia que la regla #353 (las transiciones no
+     avanzan en el navegador automatizado).
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

@@ -422,12 +422,18 @@ CSS = """
         width: auto !important;
         max-width: 100% !important;
     }
+    /* PLEGADA la columna, el ícono de la vista YA NO SE VE (2026-09-22,
+       opción B): en su lugar va un PUNTO de posición (bloque de abajo).
+       Chico y apagado, el ícono no decía qué vista era; el punto al menos
+       dice cuántas hay y en cuál estás. Se apaga siempre —desplegada manda
+       el nombre, plegada el punto— así que `opacity: 0` de base. */
     .st-key-nav_rail_lateral [data-testid="stButton"] button [data-testid="stIconMaterial"] {
         font-size: 15px !important;
         width: 15px !important;
         margin: 0 !important;
         color: var(--text-muted) !important;
         flex: 0 0 auto !important;
+        opacity: 0 !important;
         transition: opacity 120ms linear;
     }
     .st-key-nav_rail_lateral [data-testid="stButton"] button:hover [data-testid="stIconMaterial"],
@@ -450,11 +456,53 @@ CSS = """
         color: var(--accent-deep) !important;
     }
     /* La vista EN PANTALLA la marca el temporizador de `_render_rail` con
-       una clase; plegado es una píldora tenue bajo el ícono. */
+       una clase. PLEGADO ya no es una píldora: la marca es el PUNTO lleno
+       (bloque de abajo), así que el fondo va transparente para que la tira
+       sea sólo puntos sobre la línea guía. Desplegado sí vuelve la píldora
+       (`--accent-light`, más abajo). */
     .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla {
-        background: var(--accent-tint) !important;
+        background: transparent !important;
         color: var(--accent) !important;
         box-shadow: none !important;
+    }
+    /* ── OPCIÓN B: UN PUNTO POR VISTA, PLEGADA LA COLUMNA (2026-09-22) ────
+       A pedido: los íconos de vista chiquitos no decían nada. En su lugar,
+       una columna de puntos sobre la línea guía —uno por vista, apagado— y
+       el de la vista EN PANTALLA lleno y más grande. Es un índice de
+       posición («hay N, vas en la M»), NO el semáforo de KPI (`railkpi_`),
+       que sigue oculto en plegado (regla #482) y que acá no se toca.
+
+       El punto cuelga del `::after` del botón —libre en la columna: el
+       semáforo se mudó al elemento `railkpi_` (`_20_compras_rail.py`,
+       regla #482)— y el botón ya es `position: relative` (allá mismo). Se
+       centra en `--icono-x`; el `-6px` pasa de coords de columna a coords
+       del botón (su margen), igual que el `::before` de la barra activa. */
+    .st-key-nav_rail_lateral [data-testid="stButton"] button::after {
+        content: "";
+        position: absolute;
+        left: calc(var(--icono-x) - 6px) !important;
+        top: 50% !important;
+        width: 5px !important;
+        height: 5px !important;
+        border-radius: 50% !important;
+        background: var(--text-muted) !important;
+        transform: translate(-50%, -50%) !important;
+        transition: opacity 120ms linear, width 120ms linear,
+                    height 120ms linear, background 120ms linear !important;
+        pointer-events: none !important;
+    }
+    .st-key-nav_rail_lateral [data-testid="stButton"] button:hover::after {
+        background: var(--accent) !important;
+    }
+    .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla::after {
+        width: 7px !important;
+        height: 7px !important;
+        background: var(--accent) !important;
+    }
+    /* Desplegada, el punto se va: manda el nombre, sangrado sobre la guía. */
+    :root:has(.st-key-rail_pestillo_abierto) .st-key-nav_rail_lateral [data-testid="stButton"] button::after,
+    :root[data-capa-col] .st-key-nav_rail_lateral [data-testid="stButton"] button::after {
+        opacity: 0 !important;
     }
     .st-key-nav_rail_lateral .nav-rail-lat-sep {
         height: 1px !important;
