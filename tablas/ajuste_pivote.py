@@ -32,12 +32,17 @@ from inyecciones import (
 )
 from perf import perf
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, DANGER_TEXT,
-    GRIS_TEXTO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_BORDE,
-    LAVANDA_CABECERA_GRUPO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
+    ACENTO_TEXTO_OSCURO, BLANCO, CELDA_POS_TEXTO, DANGER_TEXT,
+    GRIS_TEXTO, GRIS_TEXTO_SUAVE, ICON_MUTED, LAVANDA_CHIP, TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
-from tablas._css import _css_base, _css_franjas_sidebar
+from tablas._css import (
+    _css_franjas_sidebar, _css_grid, _css_panel_columnas, _css_panel_filtros,
+    _css_sidebar_marco,
+)
+# `_css_look` es privado de allá pero ya lo comparten Semanal, las familias
+# de Cascada y ésta: el look de las tablas de Compras tiene un solo dueño.
+from tablas.compras_volatilidad import _css_look
 
 _COL_TOTAL_ID = "periodo_total"
 
@@ -277,20 +282,24 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
         }}
     """)
 
+    # EL LOOK DE COMPRAS (2026-09-23, a pedido: «darle el mismo estilo que
+    # las tablas del reporte de compras, ya que lo veo muy cargado de
+    # color», regla #505). Hasta ese día cada nivel del árbol tenía su
+    # fondo lavanda —familia, subfamilia, producto— y la fila total otro
+    # más con una raya violeta: cuatro lavandas en una tabla. Ahora las
+    # filas son blancas y el nivel lo dice el PESO de la letra; el único
+    # fondo es el de la fila TOTAL, el mismo cierre que `JS_FILA_TOTAL` de
+    # las tablas de Compras (`tablas/compras_semanal.py`).
     get_row_style = JsCode(f"""
         function(params) {{
             if (params.node.rowPinned) {{
-                return {{ fontWeight:'700', backgroundColor:'{LAVANDA_CABECERA_GRUPO}',
-                         color:'{ACENTO_TEXTO_OSCURO}', borderTop:'2px solid {ACENTO}',
-                         fontSize:'13px' }};
+                return {{ fontWeight:'700', background:'{LAVANDA_CHIP}',
+                         color:'{ACENTO_TEXTO_OSCURO}' }};
             }}
             if (params.node.group) {{
-                var nivel = params.node.level;
-                if (nivel === 0) return {{ backgroundColor:'{LAVANDA_BORDE}', fontWeight:'600' }};
-                if (nivel === 1) return {{ backgroundColor:'{LAVANDA_CABECERA_GRUPO}', fontWeight:'600' }};
-                return {{ backgroundColor:'{LAVANDA_FONDO}', fontWeight:'500' }};
+                return {{ fontWeight: params.node.level === 0 ? '600' : '500' }};
             }}
-            return {{ backgroundColor:'{BLANCO}' }};
+            return null;
         }}
     """)
 
@@ -425,25 +434,23 @@ def renderizar_aggrid_pivote_ajuste(df_wide, periodos, col_familia,
         es_total=True, minWidth=110, pinned="right",
     ))
 
-    custom_css = _css_base(font_px)
+    # El look de las tablas de Compras (`_css_look`: cabecera gris con
+    # rótulos violeta, filas blancas con una línea gris de 2px, sin líneas
+    # verticales ni marco — el marco lo pone la tarjeta). Se le suman los
+    # paneles laterales, que esta grilla sí tiene (Columnas / Filtros).
+    custom_css = _css_look(_css_grid(font_px, cebra=False,
+                                     cabecera_neutra=True))
+    custom_css.update(_css_sidebar_marco())
+    custom_css.update(_css_panel_columnas())
+    custom_css.update(_css_panel_filtros())
     custom_css.update(_css_franjas_sidebar())
-    custom_css[".ag-row-pinned"] = {
-        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-        "border-top": f"2px solid {ACENTO} !important",
-        "color": f"{ACENTO_TEXTO_OSCURO} !important",
-    }
-    # _css_grid ya estila .ag-header-cell (la fila de Día/Semana/Mes) en
-    # lavanda -- acá no había fila de GRUPO hasta agregar `anio`, así que
-    # nadie la había estilado todavía. Un tono más (LAVANDA_CABECERA_GRUPO,
-    # el mismo que ya usan las filas de grupo del árbol) la distingue de
-    # la fila de abajo sin desentonar.
+    # El año, centrado sobre sus periodos y con una línea que lo separa de
+    # ellos: con el gris de `_css_look` en las dos filas de cabecera, sin
+    # esa línea se leían como una sola.
     custom_css[".ag-header-group-cell"] = {
-        "background-color": f"{LAVANDA_CABECERA_GRUPO} !important",
-        "border-bottom": f"1px solid {LAVANDA_BORDE} !important",
+        "border-bottom": f"1px solid {BLANCO} !important",
     }
     custom_css[".ag-header-group-cell-label"] = {
-        "color": f"{ACENTO_TEXTO_OSCURO} !important",
-        "font-weight": "600",
         "justify-content": "center",
     }
 

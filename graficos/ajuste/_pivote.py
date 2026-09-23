@@ -20,6 +20,7 @@ import streamlit as st
 
 from tema import GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _resolver
+from graficos.ajuste._comun import css_filtros_vista, filtro_area_en_titulo
 from graficos.ajuste._evolucion import GRANOS, periodos_ajuste
 
 
@@ -108,19 +109,25 @@ def _tabla_pivote_fecha_ajuste(d, orden, col_familia, col_ajuste_val,
 # Grano propio de esta vista: desde que la tabla es su propia vista ya no
 # lo comparte con la serie (regla #504).
 _K_GRAN_DETALLE = "ajuste_det_gran"
+# Y área propia, en la fila del título como Evolución (regla #505).
+_K_AREA_DETALLE = "ajuste_det_filtro_area"
 
 
-def vista_detalle_ajuste(d, col_fecha, col_familia, col_ajuste_val,
+def vista_detalle_ajuste(d, col_fecha, col_familia, col_area, col_ajuste_val,
                          col_producto, col_cantidad):
     """«Detalle por producto»: la tabla pivote en su propia tarjeta, con su
-    selector Corte / Semana / Mes en la cabecera. Misma categoría del rail
-    que Evolución, así que el mismo rango de la franja y los mismos chips."""
+    área y su selector Corte / Semana / Mes en la cabecera. Misma categoría
+    del rail que Evolución, así que el mismo rango de la franja y la misma
+    Familia del compartimento de arriba."""
     if not col_fecha or col_fecha not in d.columns:
         st.info("Sin columna de fecha: no se puede armar el detalle.")
         return
+    st.markdown(f"<style>{css_filtros_vista('ajdet_ctrl_', 'ajdet_corte_')}"
+                "</style>", unsafe_allow_html=True)
     with st.container(border=True, key="ajuste_graf_card_izq_detalle"):
-        c_tit, c_gran = st.columns([3, 1.1],  # columnas-internas: titulo | grano
-                                   vertical_alignment="center")
+        c_tit, c_area, c_gran = st.columns(
+            [3, 0.95, 1.1],  # columnas-internas: titulo | area | grano
+            vertical_alignment="center")
         with c_gran:
             gran = st.segmented_control(
                 "Agrupar columnas por", GRANOS, default="Mes",
@@ -128,6 +135,8 @@ def vista_detalle_ajuste(d, col_fecha, col_familia, col_ajuste_val,
                 help="Una columna por período. «Corte» es cada sesión de "
                      "inventario.",
             ) or "Mes"
+        d = filtro_area_en_titulo(c_area, d, col_area, col_ajuste_val,
+                                  _K_AREA_DETALLE, "ajdet_ctrl_area")
         with c_tit:
             st.markdown(
                 f"<div style='font-size:14px;font-weight:600;"

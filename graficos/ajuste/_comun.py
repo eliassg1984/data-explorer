@@ -157,6 +157,40 @@ def areas_con_ajuste(df, col_area, col_ajuste_val):
                    if str(a).strip() and str(a).strip() != "---"})
 
 
+def filtro_area_en_titulo(col, df, col_area, col_ajuste_val, clave, key_ctrl):
+    """El filtro de Área de una vista de Tiempo, en la fila de su TÍTULO.
+
+    Mismo disparador minimalista que Cascada/Mapa/Distribución (la etiqueta
+    ES el valor vigente: «todas las áreas», «barra», «3 áreas»; lo estila
+    `css_filtros_vista` por el prefijo de `key_ctrl`) y mismas opciones: las
+    áreas que MOVIERON algo en lo que la vista ya tiene (#424). Nació el
+    2026-09-23 al mudar el Área del compartimento de arriba de la pila a
+    cada vista de Tiempo (regla #505), así que la selección es de ESTA
+    vista, en su propia `clave`.
+
+    `col` es la columna donde va el disparador: el llamador decide la
+    posición (en Streamlit la da el orden en que se CREA el contenedor).
+    Devuelve `df` ya filtrado, con el área normalizada (sin el espacio de
+    «CAVA »): `filtro_pills` compara contra el valor crudo.
+    """
+    if not col_area or col_area not in df.columns:
+        return df
+    df = df.assign(**{col_area: df[col_area].astype(str).str.strip()})
+    areas = areas_con_ajuste(df, col_area, col_ajuste_val)
+    sel = [a for a in (st.session_state.get(clave) or []) if a in areas]
+    etq = ("todas las áreas" if not sel
+           else sel[0].lower() if len(sel) == 1 else f"{len(sel)} áreas")
+    with col.container(key=key_ctrl):
+        with st.popover(f":material/apartment: {etq}",
+                        use_container_width=True):
+            if areas:
+                df, _ = filtro_pills(df, col_area, clave, "Área",
+                                     valores=areas)
+            else:
+                st.caption("Ninguna área movió algo en este rango.")
+    return df
+
+
 def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
                          col_ajuste_val, k_corte, k_familia, k_area,
                          familias=FAMILIAS_DE_ENTRADA, historial=0,

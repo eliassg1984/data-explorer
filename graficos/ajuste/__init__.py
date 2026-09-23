@@ -212,11 +212,13 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # (#501).
     sembrar_seleccion(df_f, col_familia, "ajuste_graf_filtro_familia",
                       list(FAMILIAS_DE_ENTRADA))
+    # SÓLO FAMILIA desde el 2026-09-23. El Área se mudó a la fila del título
+    # de cada vista de Tiempo, a pedido («añadamos un filtro de áreas, en la
+    # misma fila del título»), con su propia clave: Evolución y Detalle son
+    # vistas independientes (#504) y un área elegida en una no tiene por qué
+    # recortar la otra sin decirlo. Regla #505.
     area_sel, fam_sel = [], []
-    with compartimento_filtros(contar_filtros("ajuste_graf_filtro_area",
-                                              "ajuste_graf_filtro_familia")):
-        _, area_sel = filtro_pills(df_f, col_area,
-                                   "ajuste_graf_filtro_area", "Área")
+    with compartimento_filtros(contar_filtros("ajuste_graf_filtro_familia")):
         _, fam_sel = filtro_pills(df_f, col_familia,
                                   "ajuste_graf_filtro_familia", "Familia")
 
@@ -332,8 +334,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             with st.container(border=True, key="ajuste_graf_card_izq_evo_vacio"):
                 st.info("No hay datos para los filtros seleccionados.")
             return
-        vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
-                               col_valorizado)
+        vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
+                               col_ajuste_val, col_valorizado)
 
     def _dib_detalle():
         """La tabla por producto, con su propio grano (#504). Mismo `d`."""
@@ -341,8 +343,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             with st.container(border=True, key="ajuste_graf_card_izq_det_vacio"):
                 st.info("No hay datos para los filtros seleccionados.")
             return
-        vista_detalle_ajuste(d, col_fecha, col_familia, col_ajuste_val,
-                             col_producto, col_cantidad)
+        vista_detalle_ajuste(d, col_fecha, col_familia, col_area,
+                             col_ajuste_val, col_producto, col_cantidad)
 
     def _dib_tabla():
         # `df_f` y no `d`: Ajuste no tiene chips propios para la Tabla —

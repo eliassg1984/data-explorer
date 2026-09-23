@@ -1114,7 +1114,22 @@ CSS = """    /* ================================================================
        período está resaltado. Las dos por su key/clase exacta. */
     .ajevo-divisor {
         border-top: 1px solid var(--border);
-        margin: 2px 0 6px;
+        padding-top: 6px;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    /* La fila de mini-gráficos se desliza de costado (regla #505): el
+       ancho de la figura lo fuerza un <style> por render desde
+       `_evolucion.py` (n familias × PX_PANEL). QUIEN DESLIZA NO ES
+       `ajevo_multiplos` sino el `stElementContainer` de la figura, que ya
+       nace con `overflow-x: auto` (medido: 1204 de ancho, 2000 de
+       contenido). Acá sólo se le afina la barra. */
+    .st-key-ajevo_multiplos [data-testid="stElementContainer"]::-webkit-scrollbar {
+        height: 6px;
+    }
+    .st-key-ajevo_multiplos [data-testid="stElementContainer"]::-webkit-scrollbar-thumb {
+        background: var(--scroll-thumb);
+        border-radius: 3px;
     }
     .st-key-ajuste_evo_soltar button {
         min-height: 0 !important;

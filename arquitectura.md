@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-504 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+505 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (176)
+**CSS y estilos** (177)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -210,6 +210,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#495** — Plegada la columna del árbol, cada vista es un PUNTO, no su ícono (opción B)
 - **#497** — Segundo pase del formulario Nueva receta: tarjeta blanca, botón «+» al costado del buscador,…
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
+- **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 
 **Layout y alturas** (70)
 
@@ -284,7 +285,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
 - **#504** — Lo que depende va en UNA tarjeta; lo que no, a su propia vista — y el filtro activo se ESCRIBE
 
-**Plotly y figuras** (90)
+**Plotly y figuras** (91)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -376,6 +377,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#488** — La selección por clic de st.plotly_chart(on_select=...) NO llega a las trazas de un…
 - **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
+- **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 
 **AgGrid y tablas** (80)
 
@@ -41560,6 +41562,59 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      que comparten se escribe en su cabecera; si no manda, cada una en su
      vista. Dos tarjetas separadas por el gap de siempre se leen como
      independientes aunque el código las ate.
+
+505. **Ajuste › Evolución entra en la laptop: leyenda en el título, serie
+     más baja y las familias en UNA fila que se desliza. El Área, en la
+     fila del título de cada vista; y el Detalle, con el look de Compras.**
+     2026-09-23, a pedido: «creo es más grande que una pantalla de laptop
+     … que los minigráficos se muestren abajo en una sola fila y se puedan
+     desplazar, mostrando primero alimentos, luego bebidas y luego vinos …
+     poner las leyendas en la misma fila del título … añadamos un filtro de
+     áreas … a la tabla de Detalle darle el mismo estilo que las tablas del
+     reporte de compras, ya que lo veo muy cargado de color».
+
+     **Medido** a 1366×657 (la laptop con el cromo del navegador,
+     `--alto-util` = 613): la tarjeta pasó de **840 a 560px**. De dónde:
+     - Las dos leyendas de Plotly (serie y paneles) se fueron a la fila
+       del título como HTML (`_leyenda_html`), con los mismos colores.
+     - La serie, de 380 a `alturas.EVO_SERIE` = 270.
+     - Los paneles, de una rejilla de 3×2 (346) a UNA fila
+       (`FILA_MULTIPLOS` + `EXTRA_MULTIPLOS` = 184), `PX_PANEL` = 400 por
+       familia: a 1366 entran tres y el cuarto asoma.
+     - El título «Por familia» y la línea son UN `st.markdown`
+       (`.ajevo-divisor`), no dos: un bloque menos, un gap de 16 menos.
+
+     **Quién desliza.** El ancho de la fila se fuerza con CSS sobre el
+     contenedor de la figura (`st.plotly_chart` pisa `fig.layout.width`,
+     #494). El que tiene el scroll NO es el `st.container` que la envuelve
+     (`ajevo_multiplos`) sino el `stElementContainer` de la figura, que ya
+     nace con `overflow-x: auto` — medido: 1204 de ancho, 2000 de
+     contenido. La barra fina se le pone a ése.
+
+     **Orden de los paneles** (`orden_familias`): primero
+     `FAMILIAS_DE_ENTRADA` en su orden (Alimentos, las dos bebidas, Vinos,
+     Envases) y después el resto por ajuste bruto. Antes era por bruto
+     puro, y Alimentos no siempre quedaba primero.
+
+     **El Área salió del compartimento de arriba de la pila** y pasó a la
+     fila del título de CADA vista de Tiempo, con su propia clave
+     (`ajuste_evo_filtro_area`, `ajuste_det_filtro_area`) y el disparador
+     minimalista de Cascada (`_comun.filtro_area_en_titulo`, opciones =
+     las áreas que movieron algo, #424). Una clave por vista porque son
+     independientes (#504): un área elegida en Evolución no puede recortar
+     el Detalle sin decirlo. El compartimento queda sólo con Familia, que
+     sí es de las dos. Evolución publica su df filtrado al asistente IA.
+
+     **El Detalle, con `_css_look`** (el de Semanal/Volatilidad): filas
+     blancas con línea gris de 2px, cabecera gris con rótulos violeta, sin
+     líneas verticales. El nivel del árbol lo dice el PESO de la letra (600
+     familia, 500 el resto), no cuatro fondos lavanda; el único fondo es la
+     fila TOTAL, con la paleta de `JS_FILA_TOTAL`.
+
+     **Para la próxima:** una tarjeta que «no entra» se mide contra
+     `--alto-util` a 1366×657, no a ojo, y lo primero que se busca son los
+     renglones que no son dato: leyendas, títulos en bloque propio, gaps.
+     Acá esos se llevaban ~150 de los 227 px que sobraban.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

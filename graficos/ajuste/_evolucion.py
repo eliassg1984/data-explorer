@@ -55,9 +55,11 @@ import streamlit as st
 from tema import (
     AJUSTE_NEG, AJUSTE_POS, GRIS_BORDE, GRIS_TEXTO, TEXTO_PRINCIPAL,
 )
+from graficos.base import publicar_contexto_ia
 from graficos import alturas
 from graficos.ajuste._comun import (
-    _MESES_ABR_ES, _layout_aj, _periodo_pivote_ajuste,
+    FAMILIAS_DE_ENTRADA, _MESES_ABR_ES, _layout_aj, _periodo_pivote_ajuste,
+    css_filtros_vista, filtro_area_en_titulo,
 )
 from utils import fmt_k
 
@@ -242,6 +244,11 @@ def _marcas_eje(ejes, maximo):
 _ROTULOS_SERIE = 12
 _ROTULOS_PANEL = 4
 
+# Ancho de UN panel de familia. A 1366 la tarjeta deja ~1.230px útiles:
+# entran tres paneles enteros y el cuarto asoma, que es lo que avisa que la
+# fila se desliza (regla #505).
+PX_PANEL = 400
+
 
 def fig_serie(s, foco=None, alto=alturas.APOYO):
     """La serie grande: barras divergentes + neto, en eje de CATEGORIAS.
@@ -255,9 +262,11 @@ def fig_serie(s, foco=None, alto=alturas.APOYO):
         bargap=0.35,
         hovermode="x unified",
         height=alto,
-        margin=dict(l=10, r=10, t=36, b=10),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="left", x=0, font=dict(size=11)),
+        # Sin leyenda: la dice la fila del título (`_leyenda_html`), que ya
+        # existía — una leyenda de Plotly arriba del trazo costaba ~30px de
+        # un alto que no alcanza para entrar en la laptop (regla #505).
+        showlegend=False,
+        margin=dict(l=10, r=10, t=18, b=10),
         xaxis=dict(type="category", gridcolor=GRIS_BORDE),
         yaxis=dict(gridcolor=GRIS_BORDE, zeroline=False),
     ))
@@ -267,56 +276,66 @@ def fig_serie(s, foco=None, alto=alturas.APOYO):
     return fig
 
 
-def fig_familias(sf, foco=None, max_cols=3):
-    """Mini-graficos (small multiples): la misma serie, una vez por familia.
+def orden_familias(sf):
+    """Las familias en el orden en que se leen los paneles.
 
-    CADA UNO CON SU ESCALA, a proposito: la pregunta de esta tarjeta es
-    como se MUEVE cada familia (Alimentos sube mientras Bebidas baja), y con
-    la escala compartida el ajuste de Alimentos —~20 veces el de Vinos—
-    deja a las otras cinco como lineas planas. Por eso los ticks del eje Y
-    SI se ven aca (contra la convencion de `_layout`): con escalas
+    Primero las de `FAMILIAS_DE_ENTRADA`, en SU orden —Alimentos, las dos
+    bebidas, Vinos, Envases—, a pedido (2026-09-23: «mostrando primero
+    alimentos, luego bebidas y luego vinos»): es el orden en que se piensa
+    el negocio, y con la fila deslizable lo primero que se ve es lo que más
+    se mira. Las demás (Costos producción, si el filtro la trae) van
+    después, de mayor a menor ajuste BRUTO (|sobrante| + |faltante|)."""
+    presentes = set(sf["grupo"])
+    fijas = [f for f in FAMILIAS_DE_ENTRADA if f in presentes]
+    resto = (sf[~sf["grupo"].isin(fijas)]
+             .assign(_b=lambda x: x["sobrante"].fillna(0) - x["faltante"].fillna(0))
+             .groupby("grupo", as_index=False)["_b"].sum()
+             .sort_values("_b", ascending=False)["grupo"].tolist())
+    return fijas + resto
+
+
+def fig_familias(sf, foco=None):
+    """Mini-graficos (small multiples): la misma serie, una vez por familia,
+    en UNA fila que se desliza de costado (el ancho lo fuerza el CSS de
+    `vista_evolucion_ajuste`, `PX_PANEL` por familia).
+
+    UNA FILA y no una rejilla de tres, a pedido (2026-09-23): con dos filas
+    la tarjeta medía 840px y no entraba en la laptop; con una, los paneles
+    se leen de izquierda a derecha en el orden de `orden_familias` y el
+    alto es el de un solo panel (regla #505).
+
+    CADA UNO CON SU ESCALA, a proposito: la pregunta es como se MUEVE cada
+    familia, y con la escala compartida el ajuste de Alimentos —~20 veces
+    el de Vinos— deja a las demás como lineas planas. Por eso los ticks del
+    eje Y SI se ven aca (contra la convencion de `_layout`): con escalas
     distintas, una figura sin numeros compararia alturas que no son
     comparables. La magnitud entre familias la da el titulo de cada panel
-    (su neto del rango) y la tabla de abajo.
-
-    Orden: de mayor a menor ajuste BRUTO (|sobrante| + |faltante|), que es
-    lo que mide cuanto se movio, no el neto que se cancela."""
-    bruto = (sf.assign(_b=sf["sobrante"].fillna(0) - sf["faltante"].fillna(0))
-               .groupby("grupo", as_index=False)["_b"].sum()
-               .sort_values("_b", ascending=False))
-    grupos = bruto["grupo"].tolist()
-    n = len(grupos)
-    cols = max(1, min(max_cols, n))
-    filas = max(1, math.ceil(n / cols))
-
-    titulos = []
-    for g in grupos:
-        sg = sf[sf["grupo"] == g]
-        titulos.append(f"<b>{g.capitalize()}</b> · neto {fmt_k(sg['neto'].sum())}")
-
-    fig = make_subplots(rows=filas, cols=cols, subplot_titles=titulos,
-                        shared_xaxes=True, horizontal_spacing=0.06,
-                        vertical_spacing=0.16 if filas > 1 else 0.1)
+    (su neto del rango)."""
+    grupos = orden_familias(sf)
+    n = max(1, len(grupos))
+    titulos = [f"<b>{g.capitalize()}</b> · neto "
+               f"{fmt_k(sf.loc[sf['grupo'] == g, 'neto'].sum())}"
+               for g in grupos]
+    # El hueco entre paneles en PÍXELES, no en fracción: la figura mide
+    # `n * PX_PANEL` y una fracción fija daría huecos distintos con 2 o 6
+    # familias. 44px es lo que piden los ticks del eje Y del panel de la
+    # derecha («-50k»).
+    fig = make_subplots(rows=1, cols=n, subplot_titles=titulos,
+                        horizontal_spacing=min(0.2, 44 / (n * PX_PANEL)))
     for i, g in enumerate(grupos):
-        r, c = i // cols + 1, i % cols + 1
         sg = sf[sf["grupo"] == g]
-        for t in _trazas(sg, foco, leyenda=(i == 0), rotulos=False):
-            fig.add_trace(t, row=r, col=c)
-        if i + cols >= n and r < filas:
-            # Nadie debajo (cinco familias en tres columnas): con el eje X
-            # compartido sólo rotula la fila de abajo, y este panel quedaba
-            # sin fechas.
-            fig.update_xaxes(showticklabels=True, row=r, col=c)
+        for t in _trazas(sg, foco, leyenda=False, rotulos=False):
+            fig.add_trace(t, row=1, col=i + 1)
 
     fig.update_layout(**_layout_aj(
         barmode="relative",
         bargap=0.3,
         hovermode="x unified",
-        height=alturas.por_filas(filas, px_fila=alturas.FILA_MULTIPLOS,
-                                 extra=46, minimo=alturas.FILA_MULTIPLOS),
-        margin=dict(l=10, r=10, t=46, b=10),
-        legend=dict(orientation="h", yanchor="bottom", y=1.06,
-                    xanchor="left", x=0, font=dict(size=11)),
+        showlegend=False,
+        height=alturas.por_filas(1, px_fila=alturas.FILA_MULTIPLOS,
+                                 extra=alturas.EXTRA_MULTIPLOS,
+                                 minimo=alturas.FILA_MULTIPLOS),
+        margin=dict(l=10, r=10, t=24, b=6),
     ))
     _marcas = _marcas_eje(sf.drop_duplicates("_clave")["eje"], _ROTULOS_PANEL)
     fig.update_xaxes(type="category", showgrid=False, tickangle=0,
@@ -344,6 +363,25 @@ def _titulo(texto, sub=""):
     )
 
 
+def _leyenda_html():
+    """La leyenda de la serie y de los paneles, escrita en la fila del
+    título: dos cuadritos y una raya, con los MISMOS colores de las trazas.
+    Reemplaza a las dos leyendas de Plotly (una por figura), que se comían
+    ~60px de alto entre las dos (regla #505)."""
+    def _item(muestra, texto):
+        return (f"<span style='display:inline-flex;align-items:center;"
+                f"gap:4px;margin-left:12px'>{muestra}"
+                f"<span style='font-size:11.5px;color:{GRIS_TEXTO};"
+                f"font-weight:400'>{texto}</span></span>")
+    _cuad = ("<span style='width:9px;height:9px;border-radius:2px;"
+             "background:{c};display:inline-block'></span>")
+    _raya = (f"<span style='width:14px;height:2px;background:{TEXTO_PRINCIPAL};"
+             "display:inline-block'></span>")
+    return (_item(_cuad.format(c=AJUSTE_POS), "Sobrante")
+            + _item(_cuad.format(c=AJUSTE_NEG), "Faltante")
+            + _item(_raya, "Neto"))
+
+
 def _soltar_foco():
     """Callback de la pastilla «jul 26 ✕»: suelta el periodo en foco.
 
@@ -354,38 +392,44 @@ def _soltar_foco():
     st.session_state[_K_NCLIC] = st.session_state.get(_K_NCLIC, 0) + 1
 
 
-def vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
-                           col_valorizado):
+_K_AREA = "ajuste_evo_filtro_area"
+
+
+def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
+                           col_ajuste_val, col_valorizado):
     """UNA tarjeta: la serie y, debajo, quien la explica (las familias).
 
     Son una sola superficie a proposito (2026-09-23, a pedido, regla #504):
-    dependen de verdad —el grano y el periodo en foco mandan en las dos— y
-    la dependencia tiene que VERSE. Por eso el control del grano va en la
-    cabecera de la tarjeta, arriba de las dos, y el periodo en foco se
-    escribe en una pastilla «jul 26 ✕» en esa misma cabecera: el filtro
-    activo queda dicho, no hay que deducirlo de las barras apagadas.
+    dependen de verdad —el grano, el área y el periodo en foco mandan en
+    las dos— y la dependencia tiene que VERSE. Por eso los controles van en
+    la cabecera, arriba de las dos, y el periodo en foco se escribe en una
+    pastilla «jul 26 ✕»: el filtro activo queda dicho, no hay que deducirlo
+    de las barras apagadas.
 
-    La tabla ya NO vive aca: es su propia vista del rail («Detalle por
-    producto», `_pivote.vista_detalle_ajuste`). Lo unico que recibia de
-    esta tarjeta era una marca de columna que casi no se veia.
+    ENTRA EN UNA LAPTOP (regla #505): la leyenda va en la fila del título,
+    la serie mide `alturas.EVO_SERIE` y los paneles son UNA fila que se
+    desliza de costado. Medía 840px; ahora cabe en el `--alto-util` de
+    1366x768.
 
-    `d` ya viene recortado por el rango de la franja y por los chips
-    Área/Familia de arriba de la pila.
+    `d` ya viene recortado por el rango de la franja y por la Familia del
+    compartimento de arriba de la pila. El Área la filtra la propia vista.
     """
     if not col_fecha or col_fecha not in d.columns:
         st.info("Sin columna de fecha: no se puede armar la evolución.")
         return
 
-    # Sin techo de alto (`estilos/_80_cards.py`): serie + familias miden
-    # ~800px y con el techo de una pantalla la tarjeta sacaba barra propia,
-    # que es justo lo que no se quiere (regla #382).
+    st.markdown(f"<style>{css_filtros_vista('ajevo_ctrl_', 'ajevo_corte_')}"
+                "</style>", unsafe_allow_html=True)
+
+    # Sin techo de alto (`estilos/_80_cards.py`): si la ventana es más baja
+    # que una laptop, lo que sobra lo scrollea la PÁGINA y no la tarjeta.
     with st.container(border=True, key="ajuste_graf_card_izq_evo"):
         # Los controles se dibujan ANTES de calcular nada: en Streamlit el
         # orden de ejecucion es el orden en que se leen los valores. Las
         # columnas se crean aca y la pastilla se llena mas abajo, cuando ya
         # se sabe si hay foco.
-        c_tit, c_foco, c_gran = st.columns(
-            [2.6, 0.9, 1.1],  # columnas-internas: titulo | foco | grano
+        c_tit, c_area, c_foco, c_gran = st.columns(
+            [2.5, 0.95, 0.75, 1.1],  # columnas-internas: titulo | area | foco | grano
             vertical_alignment="center")
         with c_gran:
             gran = st.segmented_control(
@@ -394,12 +438,19 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
                 help="Agrupa la serie y los mini-gráficos por familia. "
                      "«Corte» es cada sesión de inventario.",
             ) or "Mes"
+        d = filtro_area_en_titulo(c_area, d, col_area, col_ajuste_val,
+                                  _K_AREA, "ajevo_ctrl_area")
+        # El asistente IA tiene que ver lo que ESTA tarjeta muestra (CLAUDE.md
+        # § El asistente IA): el Área ya no está en el compartimento.
+        publicar_contexto_ia("Ajuste de Inventario", d, {
+            "Familia": st.session_state.get("ajuste_graf_filtro_familia"),
+            "Área": st.session_state.get(_K_AREA)})
 
         dp, orden = periodos_ajuste(d, col_fecha, gran)
         if orden.empty:
             with c_tit:
                 _titulo("Sobrante, faltante y neto")
-            st.info("Sin fechas válidas en el rango seleccionado.")
+            st.info("Sin datos en el rango y el área seleccionados.")
             return
 
         # El clic se resuelve ANTES de dibujar (regla #399).
@@ -420,9 +471,12 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
             st.session_state[_K_FOCO] = None
 
         with c_tit:
-            _titulo("Sobrante, faltante y neto",
-                    "" if foco is not None
-                    else "clic en una barra para resaltar ese período")
+            st.markdown(
+                f"<div style='font-size:14px;font-weight:600;"
+                f"color:{TEXTO_PRINCIPAL};line-height:1.3;white-space:nowrap' "
+                f"title='Clic en una barra para resaltar ese período'>"
+                f"Sobrante, faltante y neto{_leyenda_html()}</div>",
+                unsafe_allow_html=True)
         if foco is not None:
             with c_foco:
                 st.button(
@@ -435,9 +489,7 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
 
         s = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado)
         st.plotly_chart(
-            fig_serie(s, foco,
-                      alto=alturas.con_franja(alturas.APOYO,
-                                              alturas.FRANJA_CTRL_EVO)),
+            fig_serie(s, foco, alto=alturas.EVO_SERIE),
             use_container_width=True, key=k_fig,
             on_select="rerun", selection_mode="points",
             config={"displayModeBar": False},
@@ -448,10 +500,25 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
                 and dp[col_familia].nunique() > 1):
             sf = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
                               col_grupo=col_familia)
-            st.markdown('<div class="ajevo-divisor"></div>',
-                        unsafe_allow_html=True)
-            _titulo("Por familia", "cada panel con su propia escala")
-            st.plotly_chart(fig_familias(sf, foco),
-                            use_container_width=True,
-                            key="ajuste_evo_familias",
-                            config={"displayModeBar": False})
+            _n = sf["grupo"].nunique()
+            _desliza = " · deslizá para ver las demás →" if _n > 3 else ""
+            st.markdown(
+                f'<div class="ajevo-divisor">Por familia · cada panel con su '
+                f'propia escala{_desliza}</div>', unsafe_allow_html=True)
+            # El ancho de la fila lo fuerza el CSS sobre el CONTENEDOR:
+            # `st.plotly_chart` pisa `fig.layout.width` con el de su
+            # contenedor, y agrandando el contenedor el ResizeObserver de
+            # Streamlit redimensiona la figura (mismo camino que
+            # `_distribucion._forzar_ancho`, regla #494). El `overflow-x`
+            # del envoltorio deja deslizar lo que sobra. Sin guard de «una
+            # sola vez» (regla #59).
+            st.markdown(
+                "<style>.st-key-ajevo_multiplos [data-testid='stPlotlyChart'],"
+                ".st-key-ajevo_multiplos [data-testid='stFullScreenFrame']"
+                f"{{width:max(100%, {_n * PX_PANEL}px) !important;}}</style>",
+                unsafe_allow_html=True)
+            with st.container(key="ajevo_multiplos"):
+                st.plotly_chart(fig_familias(sf, foco),
+                                use_container_width=True,
+                                key="ajuste_evo_familias",
+                                config={"displayModeBar": False})

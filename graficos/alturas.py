@@ -557,16 +557,26 @@ restárselos a la figura, o la tarjeta crece y su eje X termina debajo del
 borde (el modo de fallo de `FRANJA_CONTROLES`)."""
 
 FILA_MULTIPLOS = 150
-"""Alto de UNA fila de mini-gráficos (small multiples) de Ajuste ›
-Evolución: los paneles por familia, tres por fila. Nació el 2026-09-23 con
-la fusión de las tres vistas de Tiempo (regla #501).
+"""Alto del trazo + ejes de la fila de mini-gráficos (small multiples) de
+Ajuste › Evolución: los paneles por familia. Nació el 2026-09-23 con la
+fusión de las tres vistas de Tiempo (regla #501), en una rejilla de tres
+por fila; el mismo día pasó a UNA sola fila deslizable para que la tarjeta
+entrara en la laptop (regla #505). La figura mide
+`por_filas(1, px_fila=FILA_MULTIPLOS, extra=EXTRA_MULTIPLOS)`."""
 
-Con las cinco familias con que abre la vista son dos filas: 2 × 150 + 46 de
-leyenda y márgenes = 346, por debajo de `APOYO`. MEDIDO en el navegador a
-1366x768 con datos reales: 109px de trazo por panel (el eje Y de cada uno)
-y la tarjeta entera en 380. Se pide con
-`por_filas(filas, px_fila=FILA_MULTIPLOS, ...)`, así que con más familias
-el techo lo sigue poniendo `PROTAGONISTA`."""
+EXTRA_MULTIPLOS = 34
+"""Lo que la fila de mini-gráficos suma a `FILA_MULTIPLOS`: el título de
+cada panel (subplot title, 11px) y su margen. Sin leyenda: la leyenda vive
+en la fila del título de la tarjeta (regla #505)."""
+
+EVO_SERIE = 270
+"""Alto de la serie de sobrante/faltante/neto de Ajuste › Evolución, que
+comparte tarjeta con la fila de mini-gráficos (`FILA_MULTIPLOS`) y tiene
+que entrar con ella en el `--alto-util` de la laptop objetivo (613px a
+1366x768 con el cromo del navegador). Era `con_franja(APOYO,
+FRANJA_CTRL_EVO)` = 380 con la leyenda de Plotly adentro; bajó el
+2026-09-23 a pedido («es más grande que una pantalla de laptop»), junto
+con la leyenda, que se mudó a la fila del título. Regla #505."""
 
 FRANJA_VEREDICTO = 24
 """Alto del renglón del PORCENTAJE de la cascada —«−62.6% vs año pasado ·
