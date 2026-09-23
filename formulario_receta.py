@@ -61,7 +61,7 @@ import streamlit as st
 
 from data import cargar as _cargar_reporte
 from data import get_s3_cliente, secrets_disponibles
-from graficos.base import _resolver
+from graficos.base import _resolver, una_vez_por_corrida
 # El catálogo de insumos y el nombre de SU parquet viajan juntos, y viven
 # allá desde el 2026-09-17 — ver el comentario de `_catalogo_insumos_
 # cacheado` más abajo.
@@ -180,8 +180,69 @@ def _agregar_linea(modo, cod, nombre, unidad, precio, activo, tipo):
 _SENTINEL_NUEVO = "➕  Agregar un ítem nuevo (no está en la lista)…"
 
 
-def _buscador_catalogo(modo, df_cat, *, placeholder, unidad_nueva="unidad"):
+@st.cache_data(ttl=300, show_spinner=False)
+def _opciones_precomputadas(kind: str):
+    """Precomputa la lista de opciones del selectbox una vez por catálogo.
+
+    Antes vivía como `for _, fila in df_cat.iterrows(): …` DENTRO del
+    buscador. Con miles de filas, `df.iterrows()` sobre pandas más un
+    f-string por fila costaba varios segundos en cada rerun — y como
+    `st.rerun()` era `scope="app"` hasta 2026-09-23, cada clic del
+    botón «+» pagaba ese costo. Reportado con captura: «al intentar
+    agregar un ítem el botón se bloquea y responde después de casi 1
+    minuto». Con la vectorización + `scope="fragment"` el ida-y-vuelta
+    baja al orden de 100 ms.
+
+    Devuelve una tupla `(opciones_ordenadas, meta_por_etiqueta,
+    cod_por_etiqueta)`. Cacheado por `kind` (nombre del catálogo) con
+    el mismo TTL de 300 s que usan `catalogo_insumos` y
+    `_catalogo_productos_venta_cacheado`."""
+    if kind == "insumos":
+        df = catalogo_insumos()
+    elif kind == "productos_venta":
+        df = _catalogo_productos_venta_cacheado()
+    else:
+        return [], {}, {}
+    if df is None or df.empty:
+        return [], {}, {}
+
+    d = df.copy()
+    d["cod"] = d["cod"].astype(str)
+    d["nombre"] = d["nombre"].astype(str)
+    d["unidad"] = d["unidad"].astype(str)
+    d["precio_num"] = pd.to_numeric(d["precio"], errors="coerce").fillna(0.0)
+    d["precio_fmt"] = d["precio_num"].map(lambda p: f"S/ {p:,.2f}")
+    d["etiq"] = d["nombre"] + " · " + d["cod"] + " · " + d["unidad"] + " · " + d["precio_fmt"]
+    if "activo" in d.columns:
+        inactivo = d["activo"].apply(
+            lambda v: (v is False) or (isinstance(v, bool) and not v)
+        )
+        d.loc[inactivo, "etiq"] = d.loc[inactivo, "etiq"] + " · Inactivo"
+
+    opciones = d["etiq"].tolist()
+    meta = {}
+    for cod, nombre, unidad, precio, etiq, activo_val in zip(
+        d["cod"].tolist(), d["nombre"].tolist(), d["unidad"].tolist(),
+        d["precio_num"].tolist(), d["etiq"].tolist(),
+        (d["activo"].tolist() if "activo" in d.columns else [None] * len(d)),
+    ):
+        # Normaliza el `activo` al mismo espíritu que `_es_activo_valor`.
+        if activo_val is None or (isinstance(activo_val, float) and pd.isna(activo_val)):
+            activo_norm = None
+        else:
+            activo_norm = bool(activo_val)
+        meta[etiq] = (cod, nombre, unidad, float(precio), activo_norm)
+    cod_por_etiq = {etiq: cod for etiq, (cod, *_rest) in meta.items()}
+    return opciones, meta, cod_por_etiq
+
+
+def _buscador_catalogo(modo, kind, *, placeholder, unidad_nueva="unidad"):
     """Buscador SUGESTIVO unificado con el alta de ítem nuevo.
+
+    `kind` es el nombre del catálogo (`"insumos"` o `"productos_venta"`)
+    para `_opciones_precomputadas`, que ya trae la lista y el meta en un
+    formato listo para el selectbox — pre-2026-09-23 iteraba con
+    `df.iterrows()` en cada rerun y era el bottleneck del "+".
 
     Una sola fila: `st.selectbox` con los ítems del catálogo MÁS la opción
     centinela `_SENTINEL_NUEVO` al final. El widget filtra client-side a
@@ -217,19 +278,15 @@ def _buscador_catalogo(modo, df_cat, *, placeholder, unidad_nueva="unidad"):
     modo_nuevo = st.session_state.get(modo_nuevo_key, False)
 
     lineas_actuales = {l["cod"] for l in st.session_state[_key_lineas(modo)]}
-    opciones = []
-    meta = {}
-    for _, fila in df_cat.iterrows():
-        cod = fila["cod"]
-        if cod in lineas_actuales:
-            continue  # ya está en la tabla, no ofrecerlo de vuelta
-        nombre, unidad, precio = fila["nombre"], fila["unidad"], float(fila["precio"])
-        activo = _es_activo_valor(fila)
-        etiqueta_fila = f"{nombre} · {cod} · {unidad} · {_fmt(precio)}"
-        if activo is False:
-            etiqueta_fila += " · Inactivo"
-        opciones.append(etiqueta_fila)
-        meta[etiqueta_fila] = (cod, nombre, unidad, precio, activo)
+    todas_opciones, meta_total, cod_por_etiq = _opciones_precomputadas(kind)
+    if not todas_opciones:
+        # Catálogo vacío o no disponible: nada que ofrecer.
+        opciones = []
+        meta = {}
+    else:
+        # Filtrado O(N) sobre listas Python: sin `df.iterrows()` en la ruta caliente.
+        opciones = [op for op in todas_opciones if cod_por_etiq[op] not in lineas_actuales]
+        meta = meta_total  # el meta completo alcanza; sólo iteramos las opciones filtradas
 
     # Los dos modos comparten el mismo layout: buscador ~40% + «+» ~10%
     # + _pad ~50%, para no comerse el ancho entero de la tarjeta.
@@ -255,14 +312,14 @@ def _buscador_catalogo(modo, df_cat, *, placeholder, unidad_nueva="unidad"):
                          type="tertiary" if hasattr(st, "tertiary") else "secondary"):
                 st.session_state[modo_nuevo_key] = False
                 st.session_state[contador_key] = ver + 1
-                st.rerun()
+                st.rerun(scope="fragment")
         if agregar_n and nuevo_nombre:
             st.session_state["form_receta_contador_nuevo"] += 1
             n = st.session_state["form_receta_contador_nuevo"]
             _agregar_linea(modo, f"NUEVO-{n}", nuevo_nombre, unidad_nueva, 0.0, None, "nuevo")
             st.session_state[modo_nuevo_key] = False
             st.session_state[contador_key] = ver + 1
-            st.rerun()
+            st.rerun(scope="fragment")
         return
 
     opciones_completas = opciones + [_SENTINEL_NUEVO]
@@ -284,12 +341,12 @@ def _buscador_catalogo(modo, df_cat, *, placeholder, unidad_nueva="unidad"):
         # en el mismo lugar del buscador.
         st.session_state[modo_nuevo_key] = True
         st.session_state[contador_key] = ver + 1
-        st.rerun()
+        st.rerun(scope="fragment")
     elif agregar and elegido:
         cod, nombre, unidad, precio, activo = meta[elegido]
         _agregar_linea(modo, cod, nombre, unidad, precio, activo, "almacen")
         st.session_state[contador_key] = ver + 1
-        st.rerun()
+        st.rerun(scope="fragment")
 
 
 def _tabla_lineas(modo):
@@ -357,12 +414,12 @@ def _tabla_lineas(modo):
             if a_quitar:
                 st.session_state[_key_lineas(modo)] = [l for i, l in enumerate(lineas) if i not in a_quitar]
                 st.session_state.pop(editor_key, None)
-                st.rerun()
+                st.rerun(scope="fragment")
     with c2:
         if st.button("Vaciar", key=_key(modo, "vaciar")):
             st.session_state[_key_lineas(modo)] = []
             st.session_state.pop(editor_key, None)
-            st.rerun()
+            st.rerun(scope="fragment")
 
     return lineas
 
@@ -420,6 +477,12 @@ def _pricing_panel(modo, costo_total):
         {"Concepto": f"IGV ({int(_IGV*100)}%)",                    "S/": round(m_igv, 2)},
     ])
 
+    # `row_height` compacta las filas del data_editor — pedido 2026-09-23
+    # («hagamos las filas más delgadas»). Streamlit soporta el parámetro
+    # desde 1.36 y este proyecto pide `streamlit>=1.39`. Además le pasamos
+    # `height` explícito: alto de la cabecera (~35) + 5 filas × 28 + 6 de
+    # aire, para que el data_editor NO scrollee interno y muestre las
+    # cinco de un vistazo.
     edited = st.data_editor(
         df,
         hide_index=True,
@@ -432,6 +495,8 @@ def _pricing_panel(modo, costo_total):
         },
         key=_key(modo, f"pricing_editor_v{ver}"),
         use_container_width=True,
+        row_height=28,
+        height=35 + 5 * 28 + 6,
     )
 
     # Sólo la fila 1 (Precio de venta) es la que persistimos como fuente
@@ -440,7 +505,7 @@ def _pricing_panel(modo, costo_total):
     if abs(nueva_pv - pv) > 0.001:
         st.session_state[key_pv] = nueva_pv
         st.session_state[key_ver] = ver + 1
-        st.rerun()
+        st.rerun(scope="fragment")
 
     # Si el usuario edita alguna de las filas calculadas (0, 2, 3, 4), el
     # cambio se descarta bumpeando la key del widget: el próximo render
@@ -448,7 +513,7 @@ def _pricing_panel(modo, costo_total):
     for i in (0, 2, 3, 4):
         if abs(float(edited.iloc[i]["S/"]) - float(df.iloc[i]["S/"])) > 0.001:
             st.session_state[key_ver] = ver + 1
-            st.rerun()
+            st.rerun(scope="fragment")
 
     # Semáforo del % de costo sobre el neto (referencia orientativa, mismo
     # criterio y umbrales que el `_mostrar_pricing` retirado).
@@ -547,7 +612,7 @@ def _render_receta_venta():
     # Fila 2: buscador del almacén con «+» y sentinel de nuevo (incluye la
     # rama «agregar como nuevo», ya no vive en un expander aparte).
     _buscador_catalogo(
-        modo, df_cat,
+        modo, "insumos",
         placeholder="Buscar artículo del almacén…",
         unidad_nueva="unidad",
     )
@@ -615,7 +680,7 @@ def _render_combo():
         )
 
     _buscador_catalogo(
-        modo, df_prod,
+        modo, "productos_venta",
         placeholder="Buscar producto de venta (plato)…",
         unidad_nueva="porción",
     )
@@ -695,7 +760,7 @@ def _render_guardadas():
 
     if st.button("🔄 Actualizar lista", key="form_receta_guardadas_refresh"):
         _listar_propuestas_guardadas.clear()
-        st.rerun()
+        st.rerun(scope="fragment")
 
     propuestas = _listar_propuestas_guardadas()
     if not propuestas:
@@ -735,13 +800,21 @@ def _render_guardadas():
 
 
 # ─── Punto de entrada público ───────────────────────────────────────────────
-def render_formulario_receta():
-    """Entrada del formulario, tal como lo consume `graficos/recetas.py` desde
-    su sección "Nueva receta". Sin `st.subheader` propio ni caption largo: la
-    tarjeta blanca la aporta el dispatcher (`st.container(border=True,
-    key="rec_card_nueva")`) y el título de la sección ya lo pone el rail —
-    un h2 acá sumaba unos 60px y sacaba al buscador de la primera pantalla
-    en una laptop (pedido 2026-09-22)."""
+@una_vez_por_corrida
+@st.fragment
+def _fragment_nueva_receta():
+    """El formulario entero vive dentro de un `@st.fragment` desde el
+    2026-09-23. Sin él, cada clic del «+» del buscador dispara un
+    `st.rerun()` sin scope → re-ejecuta `app.py` + `graficos/recetas.py`
+    entero (rail de 10 secciones + carga de `recetabase.parquet` +
+    iteración del catálogo) y el usuario ve un botón trabado durante
+    casi un minuto en Cloud (reportado con captura). Todos los
+    `st.rerun()` internos usan `scope="fragment"` explícito (el default
+    de Streamlit sigue siendo `"app"`).
+
+    Va `@una_vez_por_corrida` encima porque este fragment se llama
+    ADENTRO del fragment de `seccion_perezosa` — mismo criterio que las
+    tarjetas de Compras (regla #456)."""
     _init_estado()
 
     modo_label = st.segmented_control(
@@ -756,3 +829,17 @@ def render_formulario_receta():
         _render_guardadas()
     else:
         _render_receta_venta()
+
+
+def render_formulario_receta():
+    """Entrada del formulario, tal como lo consume `graficos/recetas.py` desde
+    su sección "Nueva receta". Sin `st.subheader` propio ni caption largo: la
+    tarjeta blanca la aporta el dispatcher (`st.container(border=True,
+    key="rec_card_nueva")`) y el título de la sección ya lo pone el rail —
+    un h2 acá sumaba unos 60px y sacaba al buscador de la primera pantalla
+    en una laptop (pedido 2026-09-22).
+
+    Es una envoltura fina sobre `_fragment_nueva_receta` — el fragment
+    absorbe los reruns del buscador para que el "+" responda en el
+    orden de 100 ms en vez de re-ejecutar el reporte entero."""
+    _fragment_nueva_receta()

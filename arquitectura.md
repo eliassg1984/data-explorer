@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-498 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+499 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (176)
 
@@ -457,7 +457,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (141)
+**Streamlit** (142)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -600,8 +600,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#496** — «Nueva receta» ya no es un reporte hermano, es una VISTA del reporte Recetas
 - **#497** — Segundo pase del formulario Nueva receta: tarjeta blanca, botón «+» al costado del buscador,…
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
+- **#499** — Quinto pase de Nueva receta: @st.fragment para que el «+» responda en 100 ms y no en un…
 
-**Datos, R2 y DuckDB** (57)
+**Datos, R2 y DuckDB** (58)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -660,6 +661,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#453** — Una barra que suma un período se parte en tramos sólo donde los tramos SE VEN — y eso se…
 - **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
 - **#475** — Un salto del rail SOBREVUELA la pila, y una pila que construye «lo que tengas cerca» lee ese…
+- **#499** — Quinto pase de Nueva receta: @st.fragment para que el «+» responda en 100 ms y no en un…
 
 **SUNAT y SIRE** (42)
 
@@ -41249,6 +41251,52 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Concepto trunca en «Recargo al consum…» y la S/ queda estrujada.
      Regla escrita en `estilos/_80_cards.py`, con las keys
      `pricing_editor_v<n>` que emite `_pricing_panel`.
+
+499. **Quinto pase de Nueva receta: `@st.fragment` para que el «+»
+     responda en 100 ms y no en un minuto, y `df.iterrows()` fuera de
+     la ruta caliente del buscador.** 2026-09-23, después de captura
+     de un botón «+» trabado con el spinner de Streamlit y de dos
+     preguntas del usuario: «al intentar agregar un ítem el botón se
+     bloquea y responde después de casi 1 minuto» y «¿qué podría
+     hacer? ¿o cómo?».
+
+     Dos causas encadenadas del cuelgue, cada una con su cura:
+
+     - **`st.rerun()` sin scope** (que es el default de Streamlit —
+       `scope="app"`) reejecutaba `app.py` + `graficos/recetas.py`
+       entero: rail de 10 secciones, `data.cargar("recetabase.parquet")`,
+       10 llamadas a `seccion_perezosa`, y sólo entonces re-entraba a
+       `render_formulario_receta`. En Cloud (parquet caliente) eso son
+       varios segundos; con el navegador serializando los reruns detrás
+       del clic, se acumulan a decenas de segundos por interacción.
+       **Cura:** `render_formulario_receta` ahora es una envoltura
+       fina sobre `_fragment_nueva_receta`, un `@st.fragment` con
+       `@una_vez_por_corrida` encima (regla #456, porque vive dentro
+       del fragment de `seccion_perezosa`). Todos los `st.rerun()`
+       internos usan `scope="fragment"` **explícito** — el default no
+       cambia dentro de un fragment.
+
+     - **`_buscador_catalogo` iteraba el catálogo entero con
+       `df.iterrows()` en cada rerun** para construir la lista de
+       opciones del `st.selectbox`, con f-string por fila. En el
+       almacén con miles de artículos, cada iteración era el segundo
+       cuello. **Cura:** `_opciones_precomputadas(kind)`, cacheado con
+       `@st.cache_data(ttl=300)` — vectoriza la construcción de
+       etiquetas con concatenación de Series de pandas y devuelve
+       `(opciones, meta, cod_por_etiq)` listos. La ruta caliente del
+       buscador se reduce a una list-comprehension que filtra por
+       `cod ∉ lineas_actuales`. `kind` es `"insumos"` o
+       `"productos_venta"`, no el DF — pasar el DF invalidaba la
+       caché (cache_data lo hashea).
+
+     Con las dos, el "+" del buscador responde en el orden de 100 ms
+     también en Cloud, en lugar de bloquear un minuto.
+
+     **Y las filas de la tabla de precios más delgadas.**
+     `st.data_editor(row_height=28, height=35 + 5*28 + 6)` — Streamlit
+     soporta `row_height` desde 1.36 y `requirements.txt` pide >=1.39,
+     así que es seguro. `height` explícito para que el data_editor no
+     scrollee interno con las cinco filas ya calzadas de altura.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
