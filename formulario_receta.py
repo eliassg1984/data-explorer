@@ -222,8 +222,14 @@ def _buscador_catalogo(modo, df_cat, *, placeholder,
         opciones.append(etiqueta_fila)
         meta[etiqueta_fila] = (cod, nombre, unidad, precio, activo)
 
+    # Todos los controles del buscador y del expander viven en la MITAD
+    # izquierda de la tarjeta: `st.columns([4, 1, 5])` = buscador 40% +
+    # botón 10% + `_pad` vacío 50%. Sin ese `_pad`, cada widget se estira a
+    # su columna y ocupa casi el ancho entero — reportado 2026-09-23 como
+    # «exageradamente largo, espacio perdido». Los KPIs (más abajo) siguen
+    # el mismo criterio con su propio _pad.
     if opciones:
-        c_sel, c_btn = st.columns([9, 1])
+        c_sel, c_btn, _pad = st.columns([4, 1, 5])
         with c_sel:
             elegido = st.selectbox(
                 "Buscar", opciones, index=None, placeholder=placeholder,
@@ -244,22 +250,26 @@ def _buscador_catalogo(modo, df_cat, *, placeholder,
     else:
         st.caption("Todos los ítems del catálogo ya están agregados.")
 
-    with st.expander(f"¿No está en la lista? Agregar como {etiqueta_nuevo}", expanded=False):
-        c_txt, c_btn = st.columns([9, 1])
-        with c_txt:
-            nuevo_nombre = st.text_input(
-                "Nombre", key=_key(modo, f"nuevo_nombre_v{ver}"),
-                placeholder="nombre del ítem nuevo…", label_visibility="collapsed",
-            ).strip()
-        with c_btn:
-            if st.button("➕", key=_key(modo, "add_nuevo"),
-                         disabled=not nuevo_nombre, use_container_width=True,
-                         help="Agregar como ítem nuevo (precio 0 para completar después)"):
-                st.session_state["form_receta_contador_nuevo"] += 1
-                n = st.session_state["form_receta_contador_nuevo"]
-                _agregar_linea(modo, f"NUEVO-{n}", nuevo_nombre, unidad_nueva, 0.0, None, "nuevo")
-                st.session_state[contador_key] = ver + 1
-                st.rerun()
+    # El expander mismo también se acota a la mitad izquierda: sin envolver
+    # el header ocupa el ancho entero de la tarjeta.
+    c_exp, _pad_exp = st.columns([5, 5])
+    with c_exp:
+        with st.expander(f"¿No está en la lista? Agregar como {etiqueta_nuevo}", expanded=False):
+            c_txt, c_btn2 = st.columns([4, 1])
+            with c_txt:
+                nuevo_nombre = st.text_input(
+                    "Nombre", key=_key(modo, f"nuevo_nombre_v{ver}"),
+                    placeholder="nombre del ítem nuevo…", label_visibility="collapsed",
+                ).strip()
+            with c_btn2:
+                if st.button("➕", key=_key(modo, "add_nuevo"),
+                             disabled=not nuevo_nombre, use_container_width=True,
+                             help="Agregar como ítem nuevo (precio 0 para completar después)"):
+                    st.session_state["form_receta_contador_nuevo"] += 1
+                    n = st.session_state["form_receta_contador_nuevo"]
+                    _agregar_linea(modo, f"NUEVO-{n}", nuevo_nombre, unidad_nueva, 0.0, None, "nuevo")
+                    st.session_state[contador_key] = ver + 1
+                    st.rerun()
 
 
 def _tabla_lineas(modo):
@@ -432,8 +442,11 @@ def _render_receta_venta():
         etiqueta_nuevo="artículo nuevo",
     )
 
-    # Fila 2: identidad de la receta (nombre + porciones), narrower.
-    c_nom, c_por = st.columns([3, 1])
+    # Fila 2: identidad de la receta (nombre + porciones) acotada a la
+    # mitad izquierda con `_pad` a la derecha (mismo patrón que el
+    # buscador). Sin `_pad` el input de nombre se estiraba a ~75% del
+    # ancho de la tarjeta.
+    c_nom, c_por, _pad = st.columns([3, 2, 5])
     with c_nom:
         nombre = st.text_input("Nombre de la receta", key=_key(modo, "nombre"),
                                placeholder="nombre de la receta…",
@@ -452,8 +465,9 @@ def _render_receta_venta():
     # métrico a un tercio del ancho de la tarjeta y quedaba mucho aire suelto
     # entre etiqueta y valor. Los métricos ya arrancan chicos por el CSS de
     # `estilos/_80_cards.py` (label 11px, valor 16px). Pedido 2026-09-22
-    # («no tiene lógica que tres campos ocupen todo el largo»).
-    c_total, c_porc, c_precio, _pad = st.columns([1, 1, 1.4, 3])
+    # («no tiene lógica que tres campos ocupen todo el largo»); ratios
+    # afinados el 2026-09-23 para caber en la mitad izquierda de la tarjeta.
+    c_total, c_porc, c_precio, _pad = st.columns([1, 1, 2, 6])
     c_total.metric("Costo total", _fmt(total))
     c_porc.metric("Costo por porción",
                   _fmt(costo_porcion) if costo_porcion is not None else "—")
@@ -468,7 +482,7 @@ def _render_receta_venta():
         msg_sin_base="Ingresá las porciones para poder calcular esto.",
     )
 
-    c_guarda, c_boton = st.columns([3, 1])
+    c_guarda, c_boton, _pad = st.columns([3, 2, 5])
     with c_guarda:
         guardado_por = st.text_input("Guardado por (tu nombre)",
                                      key=_key(modo, "guardado_por"),
@@ -510,17 +524,18 @@ def _render_combo():
         etiqueta_nuevo="producto nuevo", unidad_nueva="porción",
     )
 
-    nombre = st.text_input("Nombre del combo", key=_key(modo, "nombre"),
-                           placeholder="nombre del combo…",
-                           label_visibility="collapsed")
+    c_nom, _pad_nom = st.columns([5, 5])
+    with c_nom:
+        nombre = st.text_input("Nombre del combo", key=_key(modo, "nombre"),
+                               placeholder="nombre del combo…",
+                               label_visibility="collapsed")
 
     lineas = _tabla_lineas(modo)
 
     total = _total_lineas(lineas)
     # KPIs angostos (Combo no tiene "porciones", así que sólo dos: costo
-    # total + precio). Mismo criterio que Receta de venta — pedido
-    # 2026-09-22.
-    c_total, c_precio, _pad = st.columns([1, 1.4, 4])
+    # total + precio). Mismo criterio y ratios que Receta de venta.
+    c_total, c_precio, _pad = st.columns([1, 2, 7])
     c_total.metric("Costo total", _fmt(total))
     with c_precio:
         precio_venta = st.number_input(
@@ -530,7 +545,7 @@ def _render_combo():
 
     _mostrar_pricing(total if lineas else None, precio_venta)
 
-    c_guarda, c_boton = st.columns([3, 1])
+    c_guarda, c_boton, _pad = st.columns([3, 2, 5])
     with c_guarda:
         guardado_por = st.text_input("Guardado por (tu nombre)",
                                      key=_key(modo, "guardado_por"),

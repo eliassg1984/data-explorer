@@ -41169,11 +41169,25 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        mismo criterio que el KPI compacto de Inventario (regla #481) y
        los KPIs chicos de Ventas resumen.
 
-     El buscador, además, subió a UNA FILA PROPIA a lo ancho de la
-     tarjeta — protagonista del proceso —, y los campos de identidad
-     (nombre + porciones) se bajaron a una fila secundaria. El orden
-     visual coincide con el orden del trabajo: primero se buscan y
-     agregan los ítems, después se ponen nombre y precio de venta.
+     El buscador, además, subió a UNA FILA PROPIA — protagonista del
+     proceso —, y los campos de identidad (nombre + porciones) se
+     bajaron a una fila secundaria. El orden visual coincide con el
+     orden del trabajo: primero se buscan y agregan los ítems, después
+     se ponen nombre y precio de venta.
+
+     **Corrección del mismo día:** en el primer intento el buscador
+     ocupaba `st.columns([9, 1])` (90 % del ancho de la tarjeta), y el
+     resto de las filas usaban `[3, 1]` sin `_pad` — cada widget se
+     estiraba a su columna y ocupaba casi el ancho entero, reportado
+     como «exageradamente largo, espacio perdido» con captura. Cada
+     fila ahora lleva un `_pad` a la derecha que la acota a la mitad
+     izquierda de la tarjeta: buscador `[4, 1, 5]`, identidad
+     `[3, 2, 5]`, KPIs `[1, 1, 2, 6]`, guardar `[3, 2, 5]`, y el
+     expander «¿No está en la lista?» va DENTRO de un `[5, 5]` (sin
+     eso su cabecera cobra todo el ancho de la tarjeta). Regla del
+     dominio: **un `st.columns([a, b])` sin `_pad` a la derecha estira
+     sus widgets al ancho entero del contenedor** — para acotarlos a la
+     mitad, hay que declarar el hueco a la derecha explícitamente.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
