@@ -84,8 +84,8 @@ from tema import ACENTO
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
     PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, renderizar_graficos_genericos,
-    seccion_perezosa,
+    _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
+    renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.movimientos_comun import _rango_vigente
 from graficos import alturas, drill_tablas
@@ -99,7 +99,11 @@ from graficos import alturas, drill_tablas
 # El sufijo « · req.» / « · sal.» es el desambiguador: «Top productos» y
 # «Tabla» existían en los dos lados y al juntarlas quedaban dos ítems con el
 # mismo nombre.
-_RAIL_CATEGORIAS = (
+#
+# Las dos «Tabla» están OCULTAS desde el 2026-09-23, con las de los demás
+# reportes: `rail_sin_tablas` acá y `pila_sin_tablas` en `_PILA`, de a par
+# (regla #507).
+_RAIL_CATEGORIAS = rail_sin_tablas((
     # «Por sub almacén» ocupa el sitio que tenían «Evolución», «Proporción
     # dada de baja» y el ranking «Sub Almacén», que se retiraron el
     # 2026-09-13. No hereda el nombre de aquel ranking —que era UN cuadro—
@@ -111,7 +115,7 @@ _RAIL_CATEGORIAS = (
     ("Salidas", (("Tipo de descargo",       "Tipo descargo",    ":material/category:"),
                  ("Top productos · salidas", "Top prod. · sal.", ":material/leaderboard:"),
                  ("Tabla · salidas",         "Tabla · sal.",     ":material/table_view:"))),
-)
+))
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla
 # (el porqué, en `graficos/compras/__init__.py::_PILA`).
@@ -125,14 +129,14 @@ _RAIL_CATEGORIAS = (
 # la Evolución, que se retiró el 2026-09-13. Manda la píldora de la franja,
 # que este reporte sí dibuja (`app.py`: `_franja_dibuja_fecha = reporte !=
 # "Compras"`), y las secciones de Salidas la leen con `_rango_vigente()`.
-_PILA = (
+_PILA = pila_sin_tablas((
     ("mov_sec_cadena",      "Por sub almacén"),
     ("mov_sec_top_req",     "Top productos · requerim."),
     ("mov_sec_tabla_req",   "Tabla · requerim."),
     ("mov_sec_tipo",        "Tipo de descargo"),
     ("mov_sec_top_sal",     "Top productos · salidas"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
-)
+))
 
 
 def _barras_ranking(serie, *, key, titulo, truncar=28):

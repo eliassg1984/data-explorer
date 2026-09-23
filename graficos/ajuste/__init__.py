@@ -44,7 +44,8 @@ from tema import (
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills, sembrar_seleccion,
     _card, _es_movil, _layout, _render_rail, _resolver, _slug, _wrap_cat,
-    publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
+    pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
+    renderizar_graficos_genericos, seccion_perezosa,
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
@@ -76,8 +77,10 @@ from graficos.ajuste._distribucion import (  # noqa: F401
 # (izquierda) es el string que consume el dispatch de gráficos; el label
 # (derecha) es lo que se pinta en el botón. "Tabla" es un item más del rail
 # (misma idea que Compras): al elegirlo se renderiza la tabla AgGrid vía el
-# callback `tabla_cb` que inyecta app.py.
-_AJUSTE_RAIL_CATEGORIAS = (
+# callback `tabla_cb` que inyecta app.py. Oculta desde el 2026-09-23 junto
+# con las de los demás reportes: `rail_sin_tablas` aquí y `pila_sin_tablas`
+# en las dos pilas, siempre de a par (regla #507).
+_AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Visual", (("Cascada",        "Cascada",       ":material/waterfall_chart:"),
                      ("Mapa de calor",  "Mapa de calor", ":material/grid_on:"),
                      ("Distribución",   "Distribución",  ":material/bar_chart:"))),
@@ -88,7 +91,7 @@ _AJUSTE_RAIL_CATEGORIAS = (
     ("Tiempo",      (("Evolución",            "Evolución", ":material/show_chart:"),
                      ("Detalle por producto", "Detalle",   ":material/table_view:"))),
     ("Datos",       (("Tabla",          "Tabla",         ":material/table_rows:"),)),
-)
+))
 
 
 # ORDEN DE LAS PILAS — UNA POR CATEGORÍA DE RANGO, y eso no es capricho.
@@ -111,16 +114,16 @@ _AJUSTE_RAIL_CATEGORIAS = (
 # `_render_rail` ya dibuja la línea que separa los ítems de la pila activa
 # de los que son destino aparte (nació para Documentos SUNAT en Compras),
 # así que la frontera entre categorías se ve sin agregar nada.
-_PILA_VISUAL = (
+_PILA_VISUAL = pila_sin_tablas((
     ("aj_sec_cascada",      "Cascada"),
     ("aj_sec_heatmap",      "Mapa de calor"),
     ("aj_sec_distribucion", "Distribución"),
     ("aj_sec_tabla",        "Tabla"),
-)
-_PILA_TIEMPO = (
+))
+_PILA_TIEMPO = pila_sin_tablas((
     ("aj_sec_evolucion",   "Evolución"),
     ("aj_sec_detalle",     "Detalle por producto"),
-)
+))
 _PILAS = {"visual": _PILA_VISUAL, "tiempo": _PILA_TIEMPO}
 
 

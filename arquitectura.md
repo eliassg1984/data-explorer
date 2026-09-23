@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-506 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+507 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (177)
 
@@ -779,7 +779,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (97)
+**Decisiones de diseño y UX** (98)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -878,6 +878,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#496** — «Nueva receta» ya no es un reporte hermano, es una VISTA del reporte Recetas
 - **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
 - **#504** — Lo que depende va en UNA tarjeta; lo que no, a su propia vista — y el filtro activo se ESCRIBE
+- **#507** — Las vistas «Tabla» están OCULTAS hasta nuevo aviso: un interruptor…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -41677,6 +41678,77 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      probarla contra el parquet. Si un selector cambia el monto y no la
      cantidad, en uno de los dos modos la cantidad mide otra cosa.
 
+507. **Las vistas «Tabla» están OCULTAS hasta nuevo aviso: un interruptor
+     (`graficos/base.py::MOSTRAR_VISTAS_TABLA`) y un filtro en la
+     DECLARACIÓN de cada rail y cada pila, siempre de a par.**
+     2026-09-23, a pedido: «creo que todos los reportes tienen una vista
+     llamada "Tabla" que es un cuadro aggrid en la última vista, si es así,
+     podemos ocultarlas hasta nuevo aviso».
+
+     **Eran ocho, no seis.** Una por reporte en Ajuste, Compras, Inventario
+     y Ventas, y dos en los que juntan dos parquets: Recetas («Tabla ·
+     platos», «Tabla · recetas base») y Movimientos («Tabla · requerim.»,
+     «Tabla · salidas»). La de Compras, además, no era la última: debajo va
+     «Detalle docs.». Se QUEDAN las dos AgGrid que no se llaman Tabla,
+     porque no son el volcado del parquet sino vistas hechas a propósito:
+     Ajuste › «Detalle por producto» y Compras › «Documentos por proveedor».
+
+     **Qué es «la Tabla»: el NOMBRE** (`es_vista_tabla`), «Tabla» a secas
+     o «Tabla · <lado>», el desambiguador que ya usaban Recetas y
+     Movimientos. Una lista de ids se desincronizaría con el primer
+     renombre y esa tabla volvería a salir sin que nadie lo decida. El
+     costo, dicho: mientras dure esto, una vista NUEVA que se llame así
+     nace oculta.
+
+     **Dónde se filtra, y por qué ahí.** En la declaración, en los seis
+     dashboards: `_X_RAIL_CATEGORIAS = rail_sin_tablas((…))` y
+     `_PILA = pila_sin_tablas((…))`. No en `_render_rail`: la pila la
+     recorre cada dashboard en su propio bucle, y hay quien lee esas tuplas
+     sin dibujar el rail (`vista_activa`, `categoria_rango_ajuste`, el
+     `_SEC_DE_VISTA` de Compras). Y los dos SIEMPRE juntos, porque cada
+     mitad sola rompe algo distinto:
+     - sólo el rail → la sección se sigue dibujando al pie de la página,
+       sin botón que la nombre;
+     - sólo la pila → `_render_rail` separa con una línea lo que no está en
+       `secciones`, así que la Tabla sale como destino aparte, con nada
+       detrás.
+     Una categoría que se queda vacía se va entera («Datos»).
+
+     **Lo que NO se tocó.** Los `_dib_tabla`, el `tabla_cb` del
+     dispatcher y los tres `_cb_*` de `app.py` siguen en su sitio; el
+     `_DIBUJANTES` de cada dashboard conserva la entrada, sólo que el bucle
+     ya no la visita. Tampoco la rama «SIN DASHBOARD» de `app.py`, con su
+     rail de dos ítems Gráficos/Tabla: no la usa ningún reporte, y
+     filtrarla obligaba a `app.py` a importar un nombre NUEVO de
+     `graficos.base` — el `ImportError` de la #357 en Cloud. Si un reporte
+     sin dashboard aparece mientras esto dure, su Tabla se va a ver.
+
+     **Un enlace guardado con `?vista=tabla`** cae en la primera vista del
+     reporte, como cualquier id que ya no existe (`vista_activa`), y la URL
+     se reescribe sola (en Ventas, a `vista=resumen_ejecutivo`).
+
+     **Medido en el navegador** (local, datos de R2, 1366×768), los seis
+     reportes: ninguna sección de Tabla en el DOM, ningún botón «Tabla» en
+     la columna ni en la franja horizontal, ninguna excepción. La columna
+     de Compras quedó «las 5 de la pila │ Documentos SUNAT │ Detalle
+     docs.», con `--arbol-n` en 7 y sus dos separadores. La de Ajuste, 5
+     filas y UN separador en sus dos pilas; por código le tocaban dos,
+     porque la Tabla era de la pila Visual pero su botón iba después de los
+     de Tiempo.
+
+     **La guarda**: `test_graficos.py::_pruebas_vistas_tabla_ocultas`, por
+     `ast`. Que todo rail y toda pila de cada dashboard se declaren con su
+     filtro; que toda vista de la pila tenga botón en el rail; que con el
+     interruptor apagado no quede ninguna Tabla a la vista — y que las OCHO
+     sigan declaradas, con nombre y apellido: el día que se prenda tienen
+     que volver todas, así que borrar una por creerla código muerto es
+     cambiar la prueba, no un descuido. Probada con dos mutaciones sobre
+     una copia del repo (una pila sin filtro, una Tabla borrada del rail):
+     cinco FALLA, cada una diciendo cuál.
+
+     **Para devolverlas**: `MOSTRAR_VISTAS_TABLA = True`, y nada más.
+     Probado sobre la copia: vuelven las ocho y la guarda sigue en verde.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -41689,7 +41761,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#506**; la próxima toma el número siguiente.
+> última regla es la **#507**; la próxima toma el número siguiente.
 
 >
 

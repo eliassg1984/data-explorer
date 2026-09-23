@@ -14,7 +14,8 @@ from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
+    _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
+    renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.ventas_resumen import _ventas_resumen
 from graficos.ventas_comparativo import _ventas_comparativo
@@ -27,7 +28,10 @@ _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
 # ver graficos/base.py) — reemplaza el st.pills que vivia ANTES en medio
 # del dashboard. Mismo patron que Compras/Ajuste.
-_VENTAS_RAIL_CATEGORIAS = (
+#
+# La «Tabla» esta OCULTA desde el 2026-09-23, con las de los demas reportes:
+# `rail_sin_tablas` aca y `pila_sin_tablas` en `_PILA`, de a par (#507).
+_VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Resumen",  (("Resumen ejecutivo", "Resumen", ":material/summarize:"),)),
     ("Tiempo",   (("Venta por día",              "Por día",    ":material/calendar_today:"),
                   ("Mapa por hora",               "Por hora",   ":material/schedule:"),
@@ -39,7 +43,7 @@ _VENTAS_RAIL_CATEGORIAS = (
                   ("Ranking & FoodCost",  "Ranking", ":material/leaderboard:"),
                   ("Meseros",             "Meseros", ":material/groups:"))),
     ("Datos",    (("Tabla",  "Tabla", ":material/table_rows:"),)),
-)
+))
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
 # tupla (el porqué está en `graficos/compras/__init__.py::_PILA`).
@@ -49,7 +53,7 @@ _VENTAS_RAIL_CATEGORIAS = (
 # separan la clave del rango — Ventas usa `carga_por_rango`, o sea UNA
 # clave por reporte, la misma que decide qué se baja de R2. El rail aplana
 # las categorías igual que siempre, así que la pila las lee seguidas.
-_PILA = (
+_PILA = pila_sin_tablas((
     ("vt_sec_resumen",    "Resumen ejecutivo"),
     ("vt_sec_dia",        "Venta por día"),
     ("vt_sec_hora",       "Mapa por hora"),
@@ -61,7 +65,7 @@ _PILA = (
     ("vt_sec_ranking",    "Ranking & FoodCost"),
     ("vt_sec_meseros",    "Meseros"),
     ("vt_sec_tabla",      "Tabla"),
-)
+))
 
 
 @st.fragment

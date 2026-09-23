@@ -3958,6 +3958,154 @@ def _pruebas_hook_del_rail_bajo_secciones():
     return fallos
 
 
+def _pruebas_vistas_tabla_ocultas():
+    """Las vistas «Tabla» siguen ocultas, y siguen DECLARADAS.
+
+    2026-09-23, a pedido («podemos ocultarlas hasta nuevo aviso»): las ocho
+    vistas «Tabla» —el volcado AgGrid del parquet, una por reporte y dos en
+    Recetas y en Movimientos— salen del rail y de la pila con el interruptor
+    `graficos.base.MOSTRAR_VISTAS_TABLA`. Cada dashboard las sigue
+    declarando y las filtra en la declaración, con `rail_sin_tablas` y
+    `pila_sin_tablas` (regla #507).
+
+    Lo que se vigila es lo que se rompe EN SILENCIO:
+      · un rail o una pila declarados SIN el filtro (un dashboard nuevo, o
+        uno reescrito): su Tabla volvería a salir sin que nadie lo decida;
+      · el filtro en una sola mitad. Con la Tabla en la pila y no en el
+        rail, la sección se dibuja al pie de la página sin botón que la
+        nombre; al revés, el rail la muestra como destino aparte, con su
+        línea divisoria y nada detrás. Por eso: toda vista de la pila tiene
+        su botón en el rail;
+      · que alguien BORRE una declaración por creerla código muerto. El día
+        que se prenda el interruptor tienen que volver las ocho, así que la
+        lista va con nombre y apellido: sacar una de verdad es tocar esta
+        prueba, a conciencia.
+    """
+    import ast
+    import inspect
+    import graficos.base as gb
+    from graficos import _DASHBOARDS
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    tablas · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA tablas · {nombre}{': ' + detalle if detalle else ''}")
+
+    # ── Qué es «la Tabla»: el nombre, y nada más que el nombre ───────────
+    for oid, esperado in (("Tabla", True), ("Tabla · platos", True),
+                          ("Tabla · requerim.", True), ("Tablas", False),
+                          ("Tabla dinámica", False),
+                          ("Detalle por producto", False),
+                          ("Documentos por proveedor", False)):
+        check(f"es_vista_tabla({oid!r}) es {esperado}",
+              gb.es_vista_tabla(oid) is esperado)
+
+    # ── Los filtros, con el interruptor en las dos posiciones ───────────
+    # Los dos casos que existen de verdad: una categoría que sólo tenía la
+    # Tabla («Datos» de Ajuste/Inventario/Ventas) se va entera; una que la
+    # comparte («Más» de Compras) se queda con lo demás.
+    rail = (("Vista", (("A", "A"),)),
+            ("Datos", (("Tabla", "Tabla"),)),
+            ("Más", (("Tabla · x", "Tabla"), ("B", "B"))))
+    pila = (("sec_a", "A"), ("sec_t", "Tabla"), ("sec_tx", "Tabla · x"),
+            ("sec_b", "B"))
+    _antes = gb.MOSTRAR_VISTAS_TABLA
+    try:
+        gb.MOSTRAR_VISTAS_TABLA = False
+        check("apagadas: el rail pierde la Tabla y la categoría que quedó vacía",
+              gb.rail_sin_tablas(rail)
+              == (("Vista", (("A", "A"),)), ("Más", (("B", "B"),))),
+              repr(gb.rail_sin_tablas(rail)))
+        check("apagadas: la pila pierde sus secciones de Tabla",
+              gb.pila_sin_tablas(pila) == (("sec_a", "A"), ("sec_b", "B")),
+              repr(gb.pila_sin_tablas(pila)))
+        gb.MOSTRAR_VISTAS_TABLA = True
+        check("prendidas: el rail vuelve tal cual",
+              gb.rail_sin_tablas(rail) is rail)
+        check("prendidas: la pila vuelve tal cual",
+              gb.pila_sin_tablas(pila) is pila)
+    finally:
+        gb.MOSTRAR_VISTAS_TABLA = _antes
+
+    # ── Los seis dashboards de verdad ────────────────────────────────────
+    # Las ocho que se ocultaron el 2026-09-23. Tienen que seguir DECLARADAS
+    # en el rail y en la pila de su reporte: el interruptor las devuelve
+    # sólo si siguen ahí.
+    _ESPERADAS = {
+        ("Ajuste de Inventario", "Tabla"),
+        ("Compras", "Tabla"),
+        ("Inventario Valorizado", "Tabla"),
+        ("Ventas", "Tabla"),
+        ("Recetas", "Tabla · platos"),
+        ("Recetas", "Tabla · recetas base"),
+        ("Movimientos", "Tabla · requerim."),
+        ("Movimientos", "Tabla · salidas"),
+    }
+    decl_rail, decl_pila = set(), set()
+    for reporte, fn in sorted(_DASHBOARDS.items()):
+        mod = sys.modules[fn.__module__]
+        rails = {k: v for k, v in vars(mod).items()
+                 if k.endswith("RAIL_CATEGORIAS") and isinstance(v, tuple)}
+        pilas = {k: v for k, v in vars(mod).items()
+                 if k.startswith("_PILA") and isinstance(v, tuple)}
+        check(f"{reporte}: un rail y al menos una pila a nivel de módulo",
+              len(rails) == 1 and len(pilas) >= 1,
+              f"rails={sorted(rails)} pilas={sorted(pilas)} en {fn.__module__}")
+
+        # Cómo se DECLARÓ cada constante: por `ast`, que ve la llamada al
+        # filtro y el literal que recibe (el texto, con sus comentarios,
+        # mentiría en cuanto alguien nombrara la función en uno).
+        envueltas = {}
+        for nodo in ast.parse(inspect.getsource(mod)).body:
+            if (isinstance(nodo, ast.Assign) and len(nodo.targets) == 1
+                    and isinstance(nodo.targets[0], ast.Name)
+                    and isinstance(nodo.value, ast.Call)
+                    and isinstance(nodo.value.func, ast.Name)
+                    and len(nodo.value.args) == 1):
+                envueltas[nodo.targets[0].id] = (
+                    nodo.value.func.id, nodo.value.args[0])
+        for nombre in rails:
+            func, arg = envueltas.get(nombre, (None, None))
+            check(f"{reporte}: {nombre} se declara con rail_sin_tablas",
+                  func == "rail_sin_tablas", f"se declara con {func!r}")
+            if func == "rail_sin_tablas":
+                decl_rail |= {(reporte, it[0])
+                              for _, items in ast.literal_eval(arg)
+                              for it in items if gb.es_vista_tabla(it[0])}
+        for nombre in pilas:
+            func, arg = envueltas.get(nombre, (None, None))
+            check(f"{reporte}: {nombre} se declara con pila_sin_tablas",
+                  func == "pila_sin_tablas", f"se declara con {func!r}")
+            if func == "pila_sin_tablas":
+                decl_pila |= {(reporte, s[1]) for s in ast.literal_eval(arg)
+                              if gb.es_vista_tabla(s[1])}
+
+        ids_rail = {it[0] for v in rails.values()
+                    for _, items in v for it in items}
+        ids_pila = {s[1] for v in pilas.values() for s in v}
+        check(f"{reporte}: toda vista de la pila tiene su botón en el rail",
+              ids_pila <= ids_rail, f"sin botón: {sorted(ids_pila - ids_rail)}")
+        if not gb.MOSTRAR_VISTAS_TABLA:
+            _quedan = sorted(o for o in ids_rail | ids_pila
+                             if gb.es_vista_tabla(o))
+            check(f"{reporte}: ninguna «Tabla» a la vista", not _quedan,
+                  f"quedaron: {_quedan}")
+
+    check("las ocho Tablas siguen declaradas en su rail",
+          decl_rail == _ESPERADAS,
+          f"faltan {sorted(_ESPERADAS - decl_rail)}, "
+          f"sobran {sorted(decl_rail - _ESPERADAS)}")
+    check("y en su pila", decl_pila == _ESPERADAS,
+          f"faltan {sorted(_ESPERADAS - decl_pila)}, "
+          f"sobran {sorted(decl_pila - _ESPERADAS)}")
+    return fallos
+
+
 def _pruebas_jscode_barato():
     """Que nadie vuelva a meter un payload de DATOS dentro de un `JsCode`.
 
@@ -5342,6 +5490,9 @@ def main():
 
     # ── El hook del scrollspy: que siga colgando de `secciones` ────────
     fallos += _pruebas_hook_del_rail_bajo_secciones()
+
+    # ── Las vistas «Tabla»: ocultas, pero todavía declaradas ────────────
+    fallos += _pruebas_vistas_tabla_ocultas()
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()

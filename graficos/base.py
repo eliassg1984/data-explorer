@@ -88,6 +88,67 @@ def _rail_set(state_key, opcion_id):
     st.session_state[state_key] = opcion_id
 
 
+# ── LAS VISTAS «TABLA», OCULTAS HASTA NUEVO AVISO ───────────────────────────
+# 2026-09-23, a pedido: «todos los reportes tienen una vista llamada "Tabla"
+# que es un cuadro aggrid en la última vista … podemos ocultarlas hasta nuevo
+# aviso». Son el volcado AgGrid del parquet: ocho en los seis dashboards, una
+# por reporte y dos donde el reporte junta dos parquets (Recetas y
+# Movimientos, una por lado).
+#
+# NINGUNA SE BORRÓ. Sus `_dib_tabla`, el `tabla_cb` del dispatcher y los
+# callbacks de `app.py` siguen en su sitio; lo único que cambia es que no
+# entran al rail ni a la pila de su dashboard. Para devolverlas, `True` acá
+# y nada más. Regla #507.
+MOSTRAR_VISTAS_TABLA = False
+
+
+def es_vista_tabla(id_vista):
+    """True si `id_vista` es la vista «Tabla» de un rail.
+
+    Por el NOMBRE y no por una lista de ids: es «Tabla» a secas en cuatro
+    reportes y «Tabla · <lado>» en los dos que juntan dos parquets (el « · »
+    es el desambiguador que ya usan `recetas.py` y `movimientos.py`). Una
+    lista aparte se desincronizaría con el primer id que alguien renombre, y
+    esa tabla volvería a salir sin que nadie lo decidiera.
+    """
+    return id_vista == "Tabla" or id_vista.startswith("Tabla ·")
+
+
+def rail_sin_tablas(categorias):
+    """Las `categorias` de un rail sin sus vistas «Tabla», si están apagadas.
+
+    Una categoría que se queda sin ítems se va entera: en Ajuste, Inventario
+    y Ventas, «Datos» tenía sólo la Tabla.
+
+    Va en la DECLARACIÓN del rail de cada dashboard, y siempre de a par con
+    `pila_sin_tablas` sobre su `_PILA`. Filtrar sólo el rail no alcanza: la
+    sección se seguiría dibujando al pie de la página. Filtrar sólo la pila
+    es peor: `_render_rail` separa con una línea los ítems que no están en
+    `secciones`, así que la Tabla saldría como un destino aparte sin nada
+    detrás. Y en la declaración, no en `_render_rail`, para que coincidan
+    también los que leen esas tuplas sin dibujar el rail (`vista_activa`,
+    `categoria_rango_ajuste`): un `?vista=tabla` guardado cae en la primera
+    vista, como cualquier id que ya no existe.
+    """
+    if MOSTRAR_VISTAS_TABLA:
+        return categorias
+    salida = []
+    for nombre, items in categorias:
+        items = tuple(it for it in items if not es_vista_tabla(it[0]))
+        if items:
+            salida.append((nombre, items))
+    return tuple(salida)
+
+
+def pila_sin_tablas(pila):
+    """La `_PILA` de un dashboard sin las secciones de sus vistas «Tabla».
+
+    Gemela de `rail_sin_tablas`: ver ahí por qué van siempre juntas."""
+    if MOSTRAR_VISTAS_TABLA:
+        return pila
+    return tuple(s for s in pila if not es_vista_tabla(s[1]))
+
+
 def publicar_contexto_ia(reporte, df, filtros=None):
     """Publica el df EFECTIVO (con los chips ya aplicados) para el asistente IA.
 

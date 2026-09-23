@@ -52,7 +52,7 @@ from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
-    _render_rail,
+    _render_rail, pila_sin_tablas, rail_sin_tablas,
     _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos import alturas
@@ -186,23 +186,26 @@ _FILAS_RANK = 8
 # habría roto el apareo con `_PILA` y los enlaces guardados. El rótulo
 # también es lo que el temporizador de `_render_rail` escribe en la franja
 # de contexto (`.barra-vista`), así que la franja queda consistente sola.
-_INVENTARIO_RAIL_CATEGORIAS = (
+#
+# La «Tabla» está OCULTA desde el 2026-09-23, con las de los demás reportes:
+# `rail_sin_tablas` acá y `pila_sin_tablas` en `_PILA`, de a par (#507).
+_INVENTARIO_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Vista", (("Productos",   "Stock por Producto", ":material/inventory_2:"),
                ("Por área",    "Stock por Área",     ":material/space_dashboard:"),
                ("Por familia", "Stock por Familia",  ":material/account_tree:"))),
     ("Datos", (("Tabla", "Tabla", ":material/table_rows:"),)),
-)
+))
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
 # tupla (el porqué, largo, está en `graficos/compras/__init__.py::_PILA`).
 # Las cuatro vistas de Inventario comparten el mismo rango de fecha, así
 # que a diferencia de Ajuste acá va UNA sola pila con todo adentro.
-_PILA = (
+_PILA = pila_sin_tablas((
     ("inv_sec_productos", "Productos"),
     ("inv_sec_area",    "Por área"),
     ("inv_sec_familia", "Por familia"),
     ("inv_sec_tabla",   "Tabla"),
-)
+))
 
 
 def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,

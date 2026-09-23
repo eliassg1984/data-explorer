@@ -53,7 +53,8 @@ from data import cargar as _cargar_reporte
 from estilos import TAM_FUENTE
 from tablas import renderizar_aggrid_desktop
 from graficos.base import (
-    _render_rail, _resolver, renderizar_graficos_genericos, seccion_perezosa,
+    _render_rail, _resolver, pila_sin_tablas, rail_sin_tablas,
+    renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.recetas_comun import _items_clave, _ranking_contenedores
 from graficos.recetabase import _panorama_compras_base
@@ -71,7 +72,11 @@ from formulario_receta import render_formulario_receta
 # El sufijo « · base» es el desambiguador: «Panorama de compras» y «Tabla»
 # existían en los dos lados y al juntarlas quedaban dos items con el mismo
 # nombre.
-_RAIL_CATEGORIAS = (
+#
+# Las dos «Tabla» están OCULTAS desde el 2026-09-23, con las de los demás
+# reportes: `rail_sin_tablas` acá y `pila_sin_tablas` en `_PILA`, de a par
+# (regla #507).
+_RAIL_CATEGORIAS = rail_sin_tablas((
     # "Nueva receta" es una VISTA del reporte desde el 2026-09-22 — hasta ese
     # día era un reporte hermano (tool: True) que el chip Recetas/+ Nueva
     # `_chip_fuente` alternaba con éste. Se bajó a vista propia a pedido
@@ -89,7 +94,7 @@ _RAIL_CATEGORIAS = (
                       ("Insumos clave · recetas base",       "Insumos · base",  ":material/nutrition:"),
                       ("Panorama de compras · recetas base", "Panorama · base", ":material/stacked_line_chart:"),
                       ("Tabla · recetas base",               "Tabla · base",    ":material/table_view:"))),
-)
+))
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
 # tupla (el porqué, en `graficos/compras/__init__.py::_PILA`).
@@ -98,7 +103,7 @@ _RAIL_CATEGORIAS = (
 # lee de lo vendible hacia sus componentes, que es el orden en que el
 # usuario describió el dominio («los platos... formados por ingredientes e
 # incluso recetas base»).
-_PILA = (
+_PILA = pila_sin_tablas((
     ("rec_sec_nueva",        "Nueva receta"),
     ("rec_sec_composicion",  "Composición del plato"),
     ("rec_sec_costeo",       "Costeo Receta Venta"),
@@ -109,7 +114,7 @@ _PILA = (
     ("rec_sec_insumos_rb",   "Insumos clave · recetas base"),
     ("rec_sec_panorama_rb",  "Panorama de compras · recetas base"),
     ("rec_sec_tabla_rb",     "Tabla · recetas base"),
-)
+))
 
 
 def _tabla_recetabase(df_rb):

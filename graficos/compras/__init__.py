@@ -32,8 +32,8 @@ from utils import _norm, fmt_k
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
     _compras_layout, _compras_truncar, _render_rail,
-    _resolver, publicar_contexto_ia, recortar_por_tarjeta,
-    sembrar_seleccion, seccion_perezosa,
+    _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
+    recortar_por_tarjeta, sembrar_seleccion, seccion_perezosa,
     renderizar_graficos_genericos, vista_activa,
 )
 from graficos.compras._comun import (  # noqa: F401  (re-export)
@@ -392,7 +392,11 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
 # SUNAT»— sin tocar ningún id. Entran en la columna desplegada (~183px al
 # rótulo, 13px de fuente) con el `text-overflow: ellipsis` de `_28_arbol.py`
 # como red; plegada sólo se ve el ícono.
-_COMPRAS_RAIL_CATEGORIAS = (
+#
+# La «Tabla» de «Más» está OCULTA desde el 2026-09-23, con las de los demás
+# reportes: `rail_sin_tablas` acá y `pila_sin_tablas` en `_PILA`, siempre de
+# a par (regla #507). «Detalle docs.» se queda: no es la Tabla.
+_COMPRAS_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Dimensión", (("Compras por período", "Por período",   ":material/calendar_view_week:"),
                    ("Proveedor",           "Por Proveedor", ":material/local_shipping:"),
                    ("Producto",            "Por Producto",  ":material/inventory_2:"))),
@@ -405,7 +409,7 @@ _COMPRAS_RAIL_CATEGORIAS = (
                    # comprobantes del SIRE; ésta, el detalle por proveedor que
                    # sale del parquet. Se distinguen por rótulo, ícono y grupo.
                    ("Documentos por proveedor", "Detalle docs.", ":material/list_alt:"))),
-)
+))
 
 # Vistas de Compras que se quedan el selector de fecha DENTRO de su tarjeta
 # en vez de dejarlo en la franja superior. Hoy solo Documentos SUNAT: ahi la
@@ -454,7 +458,7 @@ _VISTAS_CON_BOUNDS_SUNAT = {"Documentos SUNAT"}
 # (`activa_de_entrada`); las demás esperan a que uno se acerque. Ninguna
 # depende de que Proveedor se construya antes: «Documentos por proveedor»
 # recorta con el mismo rango (`CATEGORIA_SEC`), no con estado de sesión.
-_PILA = (
+_PILA = pila_sin_tablas((
     ("compras_sec_semanal",       "Compras por período"),
     ("compras_sec_proveedor",     "Proveedor"),
     ("compras_sec_producto",      "Producto"),
@@ -462,7 +466,7 @@ _PILA = (
     ("compras_sec_volatilidad",   "Volatilidad"),
     ("compras_sec_tabla",         "Tabla"),
     ("compras_sec_documentos",    "Documentos por proveedor"),
-)
+))
 
 # ── Con qué familias abre Compras ─────────────────────────────────────────
 # 2026-09-05, a pedido: "alimentos, bebidas, vinos y envases". Son los

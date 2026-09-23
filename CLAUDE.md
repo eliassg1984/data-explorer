@@ -912,6 +912,16 @@ fecha (`estado_rango.clave_rango(categoria=...)`), porque Cascada quiere un
 mes y Evolución quiere un año. Se apila la categoría activa y la otra queda
 como destino aparte. Ver regla #220.
 
+**Las vistas «Tabla» están OCULTAS hasta nuevo aviso** (2026-09-23, a
+pedido). Las gobierna un interruptor, `graficos/base.py::MOSTRAR_VISTAS_TABLA`,
+y cada dashboard declara su rail con `rail_sin_tablas((...))` y su `_PILA`
+con `pila_sin_tablas((...))` — **siempre los dos**: con uno solo, la Tabla
+queda dibujada al pie sin botón que la nombre, o con botón y nada detrás.
+El filtro va por NOMBRE («Tabla» o «Tabla · …»), así que una vista nueva
+que se llame así nace oculta. Las ocho siguen declaradas y
+`test_graficos.py::_pruebas_vistas_tabla_ocultas` lo exige: para
+devolverlas, `True` y nada más. Regla #507.
+
 ## Auditar el layout antes de proponer píxeles
 
 La app **sí corre en local** en modo demo (`data.py::_datos_demo` cuando no

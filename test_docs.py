@@ -173,6 +173,10 @@ _SIMBOLOS = [
     ("inject_herramientas", "inyecciones/herramientas.py"),
     ("en_moneda_del_papel", "sunat.py"),
     ("_vigilar_refresco", "app.py"),
+    ("MOSTRAR_VISTAS_TABLA", "graficos/base.py"),
+    ("rail_sin_tablas", "graficos/base.py"),
+    ("pila_sin_tablas", "graficos/base.py"),
+    ("_pruebas_vistas_tabla_ocultas", "test_graficos.py"),
 ]
 for simbolo, modulo in _SIMBOLOS:
     ruta = RAIZ / modulo
