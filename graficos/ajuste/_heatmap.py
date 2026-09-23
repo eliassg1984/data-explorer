@@ -33,7 +33,7 @@ from tema import (
     AJUSTE_POS, AJUSTE_POS_TEXTO, BLANCO, ESCALA_CONTINUA, GRIS_BORDE,
     GRIS_TEXTO, GRIS_TEXTO_SUAVE, LAVANDA_CABECERA_GRUPO, TEXTO_PRINCIPAL,
 )
-from graficos.base import _es_movil
+from graficos.base import _es_movil, _resolver
 # Los tres filtros propios (corte · familia · área) son los MISMOS que
 # los de la Cascada, misma pieza y mismo default de familias: viven en
 # `_comun.py` desde el 2026-09-15 justamente porque son dos vistas.
@@ -43,8 +43,12 @@ from graficos.ajuste._comun import (
 # Los helpers de alto/key de las grillas viven en `_cascada` (no hay ciclo:
 # `_cascada` no importa este módulo, y `__init__` importa `_cascada` antes).
 # El detalle del Mapa de calor usa las MISMAS grillas de desglose que la
-# Cascada, con una barra de severidad detrás del monto (regla #483).
-from graficos.ajuste._cascada import _alto_grilla, _atar_alto, _clave
+# Cascada, con una barra de severidad detrás del monto (regla #483). De ahí
+# sale también la lista de nombres de lo CONTADO (`_COL_FISICO`), que la
+# Cascada usa para la exactitud y este detalle para su cantidad.
+from graficos.ajuste._cascada import (
+    _COL_FISICO, _alto_grilla, _atar_alto, _clave,
+)
 from tablas.ajuste_familias import renderizar_desglose_ajuste
 
 
@@ -116,6 +120,25 @@ def _pct(v, max_abs):
     """Largo de la barra, en % de la celda. Piso de 4 para que un monto
     chico no desaparezca: cuánto es lo dice el número."""
     return max(abs(v) / (max_abs or 1.0) * 100, 4)
+
+
+def _col_cantidad_del_modo(df, col_cantidad, modo_val):
+    """La cantidad que va al lado del monto en el detalle: la que ESE monto
+    multiplica por el precio. No es la misma en los dos modos:
+
+      · Ajuste Valorizado = AJUSTE × precio → el AJUSTE, lo que sobró o
+        faltó (contado − sistema).
+      · Valorizado Total = STOCK DECLARADO × precio → lo CONTADO.
+
+    Hasta el 2026-09-23 el detalle mostraba el AJUSTE en los dos modos, y en
+    Valorizado Total se leía «Bife Ancho Argentino · 0.0 KILOS · S/ 2,520»:
+    13.524 kg contados a S/ 186/kg, sin diferencia con el sistema. Las dos
+    cuentas se verificaron sobre las 244.040 filas del parquet, sin una
+    sola excepción. Sin columna de lo contado devuelve None: mejor sin
+    columna que con la de otro concepto. Regla #506."""
+    if not modo_val:
+        return col_cantidad
+    return _resolver(df, _COL_FISICO)
 
 
 def _seleccionar_foco(celda):
@@ -564,7 +587,9 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
 
     if _foco is not None:
         _detalle_celda(df, pivot, _foco, col_familia, col_area, col_producto,
-                       col_metrica, col_cantidad, col_unidad, _modo_val)
+                       col_metrica,
+                       _col_cantidad_del_modo(df, col_cantidad, _modo_val),
+                       col_unidad, _modo_val)
 
 
 def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
@@ -610,7 +635,9 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
 
     # cantidad/unidad al lado del monto — mismo criterio que ya usa el
     # drill de la Cascada (_filas_split_html): sum() para cantidad, "first"
-    # para unidad (constante por producto, no hay nada que sumar).
+    # para unidad (constante por producto, no hay nada que sumar). QUÉ
+    # cantidad es la elige el llamador según el modo: el ajuste o lo
+    # contado (`_col_cantidad_del_modo`).
     _has_cant = bool(col_cantidad and col_cantidad in _det.columns)
     _has_um = bool(col_unidad and col_unidad in _det.columns)
     _agg = {col_metrica: "sum"}
@@ -661,7 +688,10 @@ def _detalle_celda(df, pivot, foco, col_familia, col_area, col_producto,
     def _cols():
         _c = [("producto", "Producto", "nombre")]
         if _has_cant:
-            _c.append(("cantidad", "Cantidad", "cantidad"))
+            # En Valorizado Total la cabecera dice QUÉ cantidad es: con
+            # «Cantidad» a secas se leía como el ajuste de la otra vista.
+            _c.append(("cantidad", "Stock contado" if modo_val else "Cantidad",
+                       "cantidad"))
         _c.append(("valor", "Valor", "total"))
         return _c
 

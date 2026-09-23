@@ -4768,6 +4768,77 @@ def _pruebas_evolucion_ajuste():
     return fallos
 
 
+def _pruebas_cantidad_del_mapa_ajuste():
+    """La cantidad del detalle del Mapa de calor es la que su monto
+    multiplica (graficos/ajuste/_heatmap.py, regla #506).
+
+    Nació de una captura de Valorizado Total: «Bife Ancho Argentino · 0.0
+    KILOS · S/ 2,520». El monto era lo CONTADO × precio y la cantidad, el
+    AJUSTE. Las tres filas son las reales de ALIMENTOS × PRODUCCION del
+    16-sep-2026. Se afirma la CUENTA —monto = cantidad × precio, fila por
+    fila y en los dos modos—, no sólo el nombre de la columna.
+    """
+    from unittest import mock as _mock
+    from graficos.ajuste import _heatmap as _hm
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ajuste mapa · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ajuste mapa · {nombre}: got={got!r} exp={exp!r}")
+
+    d = pd.DataFrame({
+        "FAMILIA": ["ALIMENTOS"] * 3,
+        "AREA": ["PRODUCCION"] * 3,
+        "PRODUCTO": ["Bife Ancho Argentino x Kg",
+                     "(Rs) Marca chorizo de pato x Kg",
+                     "(Rs) Marca Chorizo Criollo x Kg"],
+        "UNIDAD MEDIDA": ["KILOS"] * 3,
+        "STOCK AL CIERRE": [13.524, 8.442, 24.46],
+        "STOCK DECLARADO": [13.524, 10.8, 22.1],
+        "AJUSTE": [0.0, 2.358, -2.36],
+        "PRECIO PROMEDIO": [186.356583259185, 210.7352220870235,
+                            11.62684747163018],
+        "AJUSTE VALORIZADO": [0.0, 496.9136536812014, -27.439360033047222],
+        "VALORIZADO TOTAL": [2520.2864319972177, 2275.940398539854,
+                             256.953329123027],
+    })
+
+    for modo_val, metrica, esperada in (
+            (False, "AJUSTE VALORIZADO", "AJUSTE"),
+            (True, "VALORIZADO TOTAL", "STOCK DECLARADO")):
+        col = _hm._col_cantidad_del_modo(d, "AJUSTE", modo_val)
+        check(f"{metrica}: la cantidad es {esperada}", col, esperada)
+        check(f"{metrica} = cantidad × precio, fila por fila",
+              bool(((d[metrica] - d[col] * d["PRECIO PROMEDIO"]).abs()
+                    < 0.01).all()), True)
+    check("sin columna de lo contado, sin cantidad (no la del ajuste)",
+          _hm._col_cantidad_del_modo(d.drop(columns="STOCK DECLARADO"),
+                                     "AJUSTE", True), None)
+
+    # Lo que le llega a la grilla del detalle, en Valorizado Total.
+    pivot = d.pivot_table(index="FAMILIA", columns="AREA",
+                          values="VALORIZADO TOTAL", aggfunc="sum")
+    with _mock.patch.object(_hm, "renderizar_desglose_ajuste") as _rd:
+        _hm._detalle_celda(
+            d, pivot, ("ALIMENTOS", "PRODUCCION"), "FAMILIA", "AREA",
+            "PRODUCTO", "VALORIZADO TOTAL",
+            _hm._col_cantidad_del_modo(d, "AJUSTE", True),
+            "UNIDAD MEDIDA", True)
+    tp, columnas = _rd.call_args[0][0], _rd.call_args[0][1]
+    _bife = tp.set_index("producto").loc["Bife Ancho Argentino x Kg"]
+    check("el bife: 13.524 kg contados al lado de sus S/ 2,520",
+          (round(float(_bife["cantidad"]), 3), round(float(_bife["valor"]))),
+          (13.524, 2520))
+    check("la cabecera dice qué cantidad es",
+          [c[1] for c in columnas], ["Producto", "Stock contado", "Valor"])
+    return fallos
+
+
 def _pruebas_resumen_ajuste():
     """Las cuentas de Ajuste › Cascada (graficos/ajuste/_cascada.py).
 
@@ -5241,6 +5312,9 @@ def main():
 
     # ── Ajuste › Evolución: períodos compartidos, sobrante/faltante/% ────
     fallos += _pruebas_evolucion_ajuste()
+
+    # ── Ajuste › Mapa de calor: la cantidad es la que el monto multiplica ─
+    fallos += _pruebas_cantidad_del_mapa_ajuste()
 
     # ── Inventario › Productos: el grano y el despliegue de áreas ────────
     fallos += _pruebas_listado_inventario()

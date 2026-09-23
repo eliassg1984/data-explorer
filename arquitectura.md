@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-505 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+506 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (177)
 
@@ -379,7 +379,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 
-**AgGrid y tablas** (80)
+**AgGrid y tablas** (81)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -461,6 +461,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 - **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
+- **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
 
 **Streamlit** (144)
 
@@ -609,7 +610,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#502** — «Que el correo salga con MI dirección» no se resuelve mandando desde el servidor: se abre el…
 - **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
 
-**Datos, R2 y DuckDB** (58)
+**Datos, R2 y DuckDB** (59)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -669,6 +670,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#474** — Un run_every que tictaquea de gratis no cuesta sólo CPU: le VENCE AL NAVEGADOR la caché de…
 - **#475** — Un salto del rail SOBREVUELA la pila, y una pila que construye «lo que tengas cerca» lee ese…
 - **#499** — Quinto pase de Nueva receta: @st.fragment para que el «+» responda en 100 ms y no en un…
+- **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
 
 **SUNAT y SIRE** (43)
 
@@ -41629,6 +41631,52 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      renglones que no son dato: leyendas, títulos en bloque propio, gaps.
      Acá esos se llevaban ~150 de los 227 px que sobraban.
 
+506. **La cantidad al lado de un monto es la que ESE monto multiplica. En
+     Ajuste son dos: «Ajuste Valorizado» es el AJUSTE × precio y «Valorizado
+     Total» es lo CONTADO × precio.**
+     2026-09-23, con captura: «explícame esto, 0 kilos, tiene un valor de
+     2520?». Mapa de calor en Valorizado Total, ALIMENTOS × PRODUCCION:
+     «Bife Ancho Argentino x Kg · 0.0 KILOS · S/ 2,520».
+
+     **No era un dato malo: era una fila con dos conceptos.** El detalle de
+     la celda (`_heatmap.py::_detalle_celda`) sumaba el monto DEL MODO, pero
+     la cantidad salía siempre de `AJUSTE`. El bife del 16-sep: 13.524 kg en
+     el sistema, 13.524 contados, ajuste 0, a S/ 186.36/kg → S/ 2,520 de
+     stock y S/ 0 de ajuste. La fila juntaba el cero de una cuenta con los
+     S/ 2,520 de la otra. En esa celda, 18 de los 45 productos con valor
+     decían «0.0» al lado de un monto; y los demás también mentían, sólo que
+     menos a la vista: «chorizo de pato · 2.4 KILOS · S/ 2,276» son S/ 948
+     por kilo, cuando eran 10.8 kg a S/ 210.
+
+     **Las dos cuentas, medidas sobre las 244.040 filas del parquet, sin
+     una sola excepción:** `VALORIZADO TOTAL = STOCK DECLARADO × PRECIO
+     PROMEDIO` y `AJUSTE VALORIZADO = AJUSTE × PRECIO PROMEDIO`.
+     (`AJUSTE = STOCK DECLARADO − STOCK AL CIERRE` vale en todas menos 228.)
+
+     **El arreglo:** `_col_cantidad_del_modo` elige la columna según el
+     modo —`AJUSTE` en Ajuste, lo contado (`_cascada._COL_FISICO`) en
+     Valorizado Total— y la cabecera dice cuál: «Stock contado». Sin la
+     columna de lo contado no hay cantidad: mejor sin columna que con la de
+     otro concepto. Se resuelve ADENTRO de la vista, como la Cascada
+     resuelve la suya, sin tocar la firma de `_graf_heatmap_ajuste` (#357).
+     `test_graficos.py::_pruebas_cantidad_del_mapa_ajuste` afirma la CUENTA
+     —monto = cantidad × precio, fila por fila, en los dos modos— con las
+     filas reales del bife; contra el código viejo da exactamente lo de la
+     captura, `(0.0, 2520)`.
+
+     **Y un segundo camino al mismo síntoma: el redondeo.** `_JS_CANTIDAD`
+     (`tablas/ajuste_familias.py`) mostraba un decimal, así que 40 g de
+     pimentón a S/ 569/kg salían «0.0 KILOS · S/ 23». Desde junio, 491 de
+     6.983 ajustes y 152 de 6.005 stocks contados con valor se leían como
+     cero. Debajo de 1 lleva ahora hasta tres decimales, los del Kardex
+     («0.04 KILOS», «−0.026 KILOS»). Es el formato de todos los desgloses
+     de Ajuste: Cascada, Mapa de calor y Distribución.
+
+     **Para la próxima:** antes de poner una cantidad al lado de un monto,
+     escribir la cuenta que los une (`monto = cantidad × precio`) y
+     probarla contra el parquet. Si un selector cambia el monto y no la
+     cantidad, en uno de los dos modos la cantidad mide otra cosa.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -41641,7 +41689,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#488**; la próxima toma el número siguiente.
+> última regla es la **#506**; la próxima toma el número siguiente.
 
 >
 

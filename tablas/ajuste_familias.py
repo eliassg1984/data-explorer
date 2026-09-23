@@ -94,11 +94,16 @@ _JS_DE = JsCode(
 # «−96.0 UND»: la cantidad con la unidad de Kardex al lado. La unidad viaja
 # en un campo oculto para que la celda se siga ordenando por el número. La
 # fila TOTAL no trae cantidad: sumar kilos con litros no da una unidad.
+# DEBAJO DE 1, HASTA TRES DECIMALES (los del Kardex): con uno solo, 26 g
+# salían «−0.0 KILOS» al lado de un monto, y 40 g de pimentón a S/ 569/kg,
+# «0.0 KILOS · S/ 23». Medido desde junio 2026: 491 de 6.983 ajustes y 152
+# de 6.005 stocks contados con valor se leían como cero. Regla #506.
 _JS_CANTIDAD = JsCode(
     "function(p){ if (p.value==null || (p.node && p.node.rowPinned)) return '';"
     " var v = p.value; var u = (p.data && p.data.__um) || '';"
-    " return (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('es-PE',"
-    " {minimumFractionDigits:1, maximumFractionDigits:1}) + (u ? ' ' + u : ''); }")
+    " var a = Math.abs(v); var d = (a > 0 && a < 1) ? 3 : 1;"
+    " return (v < 0 ? '−' : '') + a.toLocaleString('es-PE',"
+    " {minimumFractionDigits:1, maximumFractionDigits:d}) + (u ? ' ' + u : ''); }")
 _JS_ENTERO = JsCode(
     "function(p){ return p.value==null ? '' : Math.round(p.value).toLocaleString('es-PE'); }")
 
