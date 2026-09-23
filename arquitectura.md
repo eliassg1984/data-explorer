@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-503 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+504 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (176)
 
@@ -211,7 +211,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#497** — Segundo pase del formulario Nueva receta: tarjeta blanca, botón «+» al costado del buscador,…
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 
-**Layout y alturas** (69)
+**Layout y alturas** (70)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -282,6 +282,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#449** — Un renglón que comparte fila con un widget no se puede centrar en la TARJETA, y el reparto de…
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 - **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
+- **#504** — Lo que depende va en UNA tarjeta; lo que no, a su propia vista — y el filtro activo se ESCRIBE
 
 **Plotly y figuras** (90)
 
@@ -774,7 +775,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (96)
+**Decisiones de diseño y UX** (97)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -872,6 +873,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#495** — Plegada la columna del árbol, cada vista es un PUNTO, no su ícono (opción B)
 - **#496** — «Nueva receta» ya no es un reporte hermano, es una VISTA del reporte Recetas
 - **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
+- **#504** — Lo que depende va en UNA tarjeta; lo que no, a su propia vista — y el filtro activo se ESCRIBE
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -41522,6 +41524,42 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      contraseña de aplicación, que la crea y la pega el dueño de la cuenta.
      `AppTest` no corre fragments, así que el `st.rerun(scope="fragment")`
      del final revienta en el arnés y no en la app.
+
+504. **Lo que depende va en UNA tarjeta; lo que no, a su propia vista —
+     y el filtro activo se ESCRIBE.** 2026-09-23, horas después de la
+     #501 y a pedido: «veo que las dos tarjetas de arriba interactúan
+     entre sí, y la tabla de abajo es independiente, ¿es verdad?». Era
+     verdad a medias: la tabla recibía el foco de la serie, pero como un
+     fondo `#f5f3fe` que sobre las filas lavanda de familia se leía como
+     un hueco, no como una marca. Una dependencia que no se ve es, para
+     quien mira, una independencia.
+
+     **Cómo quedó Ajuste › Tiempo:**
+     - **Evolución** (`_evolucion.vista_evolucion_ajuste`): UNA tarjeta,
+       `ajuste_graf_card_izq_evo`, con la serie arriba y los mini-gráficos
+       por familia abajo, separados por una línea (`.ajevo-divisor`), no
+       por un hueco entre tarjetas. El grano va en la cabecera, arriba de
+       las dos. El período en foco se escribe en una pastilla «jul 26 ✕»
+       (`ajuste_evo_soltar`) en esa misma cabecera: el filtro activo queda
+       dicho, como el cross-filter de Power BI, y la ✕ lo suelta (con el
+       contador de la key subido, #399, o el rerun vuelve a leer el clic).
+     - **Detalle por producto** (`_pivote.vista_detalle_ajuste`): su propio
+       ítem del rail y su propio grano (`ajuste_det_gran`). Mismo rango y
+       mismos chips: es de la misma categoría.
+
+     **Sin techo de alto** la tarjeta de Evolución (`:not(...izq_evo)` en
+     `estilos/_80_cards.py`): mide ~840px y con el techo de una pantalla
+     sacaba barra propia (#382). La del Detalle sí lo conserva.
+
+     **Se fue** todo el andamiaje del foco en la grilla (`context.foco`, el
+     vigilante de `onGridReady`, la clase `aj-periodo-foco`): sin la serie
+     arriba no hay quién marque. Lo que enseñó sigue en la #501.
+
+     **Para la próxima:** antes de apilar dos tarjetas, preguntarse si una
+     manda sobre la otra. Si manda, van en la misma superficie y el estado
+     que comparten se escribe en su cabecera; si no manda, cada una en su
+     vista. Dos tarjetas separadas por el gap de siempre se leen como
+     independientes aunque el código las ate.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

@@ -7,8 +7,8 @@ ultimos 200 commits, 2,7x el siguiente) y sus dos funciones mayores
 —cascada y mapa de calor— eran el 60% del archivo.
 
     _comun.py            layout del rail, fechas de corte, periodos
-    _evolucion.py        categoria Tiempo: serie + mini-graficos + tabla (#501)
-    _pivote.py           la tabla pivote de esa vista
+    _evolucion.py        Tiempo › Evolucion: serie + mini-graficos, UNA tarjeta (#501/#504)
+    _pivote.py           Tiempo › Detalle por producto: la tabla pivote (#504)
     _cascada.py          vista Cascada (la mas grande)
     _heatmap.py          vista "Mapa de calor" (hoy una tabla Familia x Area, #468)
     _distribucion.py     vista Distribucion
@@ -62,7 +62,9 @@ from graficos.ajuste._evolucion import (  # noqa: F401
     fig_familias, fig_serie, periodos_ajuste, serie_ajuste,
     vista_evolucion_ajuste,
 )
-from graficos.ajuste._pivote import _armar_tabla_pivote_ajuste  # noqa: F401
+from graficos.ajuste._pivote import (  # noqa: F401
+    _armar_tabla_pivote_ajuste, vista_detalle_ajuste,
+)
 from graficos.ajuste._cascada import _graf_waterfall_ajuste  # noqa: F401
 from graficos.ajuste._heatmap import _graf_heatmap_ajuste  # noqa: F401
 from graficos.ajuste._distribucion import (  # noqa: F401
@@ -79,10 +81,12 @@ _AJUSTE_RAIL_CATEGORIAS = (
     ("Visual", (("Cascada",        "Cascada",       ":material/waterfall_chart:"),
                      ("Mapa de calor",  "Mapa de calor", ":material/grid_on:"),
                      ("Distribución",   "Distribución",  ":material/bar_chart:"))),
-    # UN solo item desde el 2026-09-23: «Comparativa mensual» y «Por fecha
-    # de corte» miraban el mismo dato que Evolución y se fusionaron en ella
-    # (serie + mini-gráficos por familia + tabla). Regla #501.
-    ("Tiempo",      (("Evolución",           "Evolución",   ":material/show_chart:"),)),
+    # Desde el 2026-09-23 «Comparativa mensual» y «Por fecha de corte» no
+    # existen: miraban el mismo dato que Evolución y se fusionaron en ella
+    # (#501). El mismo día la tabla volvió a salir de Evolución como vista
+    # propia, porque no dependía de la serie (#504).
+    ("Tiempo",      (("Evolución",            "Evolución", ":material/show_chart:"),
+                     ("Detalle por producto", "Detalle",   ":material/table_view:"))),
     ("Datos",       (("Tabla",          "Tabla",         ":material/table_rows:"),)),
 )
 
@@ -115,6 +119,7 @@ _PILA_VISUAL = (
 )
 _PILA_TIEMPO = (
     ("aj_sec_evolucion",   "Evolución"),
+    ("aj_sec_detalle",     "Detalle por producto"),
 )
 _PILAS = {"visual": _PILA_VISUAL, "tiempo": _PILA_TIEMPO}
 
@@ -321,15 +326,23 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             col_fecha=col_fecha, col_unidad=col_unidad, df_full=df_full)
 
     def _dib_evolucion():
-        """Evolución dibuja sus TRES tarjetas (serie, familias, tabla), así
-        que no va en `_en_tarjeta`, igual que Cascada/Mapa/Distribución.
-        Recibe `d`: rango de la franja + chips de arriba."""
+        """Evolución dibuja su propia tarjeta (serie + familias), así que no
+        va en `_en_tarjeta`. Recibe `d`: rango de la franja + chips."""
         if _vacio:
             with st.container(border=True, key="ajuste_graf_card_izq_evo_vacio"):
                 st.info("No hay datos para los filtros seleccionados.")
             return
         vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
-                               col_valorizado, col_producto, col_cantidad)
+                               col_valorizado)
+
+    def _dib_detalle():
+        """La tabla por producto, con su propio grano (#504). Mismo `d`."""
+        if _vacio:
+            with st.container(border=True, key="ajuste_graf_card_izq_det_vacio"):
+                st.info("No hay datos para los filtros seleccionados.")
+            return
+        vista_detalle_ajuste(d, col_fecha, col_familia, col_ajuste_val,
+                             col_producto, col_cantidad)
 
     def _dib_tabla():
         # `df_f` y no `d`: Ajuste no tiene chips propios para la Tabla —
@@ -349,6 +362,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         "aj_sec_distribucion": _dib_distribucion,
         "aj_sec_tabla":        _dib_tabla,
         "aj_sec_evolucion":    _dib_evolucion,
+        "aj_sec_detalle":      _dib_detalle,
     }
 
     # El contenedor con la key va AFUERA del fragment: es el que observan el

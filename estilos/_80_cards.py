@@ -1107,6 +1107,30 @@ CSS = """    /* ================================================================
     div[class*="st-key-ajuste_graf_card_"] > div {
         border: none !important;
     }
+
+    /* AJUSTE › EVOLUCIÓN (regla #504): la línea que separa la serie de los
+       mini-gráficos DENTRO de la misma tarjeta — una tarjeta con dos
+       lecturas, no dos tarjetas —, y la pastilla «jul 26 ✕» que dice qué
+       período está resaltado. Las dos por su key/clase exacta. */
+    .ajevo-divisor {
+        border-top: 1px solid var(--border);
+        margin: 2px 0 6px;
+    }
+    .st-key-ajuste_evo_soltar button {
+        min-height: 0 !important;
+        padding: 3px 10px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--accent) !important;
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-ajuste_evo_soltar button p {
+        font-size: 12px !important;
+        font-weight: 600 !important;
+    }
+    .st-key-ajuste_evo_soltar button:hover {
+        background: var(--accent-light) !important;
+    }
     /* Cards internos (Paneles A/B via `_card()`): dejar transparentes para
        que no se doble-marquen dentro del contenedor externo. */
     div[class*="st-key-ajuste_graf_card_"] [class*="st-key-chartcard_"],
@@ -1237,7 +1261,7 @@ CSS = """    /* ================================================================
         /* `auto`, así que con techo la tabla se volvía ÉL el scroller y la   */
         /* fila Total se partía (reportado con captura); y el detalle abre    */
         /* DENTRO, con lo que un techo le daría barra propia. Regla #468.     */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem),
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1255,6 +1279,12 @@ CSS = """    /* ================================================================
             padding-top: 16px !important;
             padding-bottom: 16px !important;
         }
+        /* `ajuste_graf_card_izq_evo` (Ajuste › Evolución) salió el         */
+        /* 2026-09-23: es UNA tarjeta con la serie y los mini-gráficos por   */
+        /* familia debajo (~800px), a pedido, para que se vea que dependen   */
+        /* una de otra. Con el techo de una pantalla sacaba barra propia; sin */
+        /* él mide su contenido y lo que sobra lo scrollea la PÁGINA, igual  */
+        /* que las de Producto (#382). Regla #504.                            */
         /* Barra fina y discreta, igual criterio que el panel del asistente
            (_85_asistente.py): la tarjeta ya es un marco, la barra no tiene
            que competir con el contenido. */

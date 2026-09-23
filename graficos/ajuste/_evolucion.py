@@ -19,12 +19,15 @@ pedido («creo que dan similar informacion») en esta vista:
     2. Los MINI-GRAFICOS por familia (small multiples), la misma serie una
        vez por familia, cada uno con su escala. Reemplazan a las lineas
        enredadas de la Evolucion vieja.
-    3. La TABLA pivote de siempre (`_pivote.py`), con las MISMAS columnas
-       que la serie: un clic en una barra marca su columna en la tabla.
+    3. La TABLA pivote de siempre (`_pivote.py`), con los MISMOS periodos
+       (`periodos_ajuste`, de aca).
 
-Un solo control de granularidad (Corte / Semana / Mes) manda sobre las
-tres, y un solo rango: el de la franja, que para esta categoria abre en
-los ultimos 12 meses (`app.py`, regla #501).
+Serie y familias van en UNA tarjeta, con el grano y el periodo en foco en
+su cabecera; la tabla, desde el mismo dia, es su propia vista del rail
+(«Detalle por producto»), con su propio grano: de esta tarjeta solo
+recibia una marca de columna que casi no se veia (regla #504). Las dos
+miran el mismo rango: el de la franja, que para esta categoria abre en los
+ultimos 12 meses (`app.py`, regla #501).
 
 SIN MODO «%», Y NO POR OLVIDO. Se propuso un «% de merma» (ajuste sobre
 el valor del periodo, a la manera de la tasa de shrink del National Retail
@@ -56,7 +59,6 @@ from graficos import alturas
 from graficos.ajuste._comun import (
     _MESES_ABR_ES, _layout_aj, _periodo_pivote_ajuste,
 )
-from graficos.ajuste._pivote import _tabla_pivote_fecha_ajuste
 from utils import fmt_k
 
 GRANOS = ("Corte", "Semana", "Mes")
@@ -342,27 +344,55 @@ def _titulo(texto, sub=""):
     )
 
 
+def _soltar_foco():
+    """Callback de la pastilla «jul 26 ✕»: suelta el periodo en foco.
+
+    Sube además el contador de la key de la serie: la seleccion de
+    `on_select` persiste en la key vieja, y sin el cambio el rerun volveria
+    a leer el clic y a poner el foco que se acaba de soltar (#399)."""
+    st.session_state[_K_FOCO] = None
+    st.session_state[_K_NCLIC] = st.session_state.get(_K_NCLIC, 0) + 1
+
+
 def vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
-                           col_valorizado, col_producto, col_cantidad):
-    """Las tres tarjetas de la categoria Tiempo. `d` ya viene recortado por
-    el rango de la franja y por los chips Área/Familia de arriba de la pila.
+                           col_valorizado):
+    """UNA tarjeta: la serie y, debajo, quien la explica (las familias).
+
+    Son una sola superficie a proposito (2026-09-23, a pedido, regla #504):
+    dependen de verdad —el grano y el periodo en foco mandan en las dos— y
+    la dependencia tiene que VERSE. Por eso el control del grano va en la
+    cabecera de la tarjeta, arriba de las dos, y el periodo en foco se
+    escribe en una pastilla «jul 26 ✕» en esa misma cabecera: el filtro
+    activo queda dicho, no hay que deducirlo de las barras apagadas.
+
+    La tabla ya NO vive aca: es su propia vista del rail («Detalle por
+    producto», `_pivote.vista_detalle_ajuste`). Lo unico que recibia de
+    esta tarjeta era una marca de columna que casi no se veia.
+
+    `d` ya viene recortado por el rango de la franja y por los chips
+    Área/Familia de arriba de la pila.
     """
     if not col_fecha or col_fecha not in d.columns:
         st.info("Sin columna de fecha: no se puede armar la evolución.")
         return
 
-    # ── Tarjeta 1: la serie, con el control que manda en las tres ────────
-    with st.container(border=True, key="ajuste_graf_card_izq_evo_serie"):
-        # El control se dibuja ANTES de calcular nada: en Streamlit el orden
-        # de ejecucion es el orden en que se leen los valores.
-        c_tit, c_gran = st.columns([3, 1.1],  # columnas-internas: titulo | grano
-                                   vertical_alignment="center")
+    # Sin techo de alto (`estilos/_80_cards.py`): serie + familias miden
+    # ~800px y con el techo de una pantalla la tarjeta sacaba barra propia,
+    # que es justo lo que no se quiere (regla #382).
+    with st.container(border=True, key="ajuste_graf_card_izq_evo"):
+        # Los controles se dibujan ANTES de calcular nada: en Streamlit el
+        # orden de ejecucion es el orden en que se leen los valores. Las
+        # columnas se crean aca y la pastilla se llena mas abajo, cuando ya
+        # se sabe si hay foco.
+        c_tit, c_foco, c_gran = st.columns(
+            [2.6, 0.9, 1.1],  # columnas-internas: titulo | foco | grano
+            vertical_alignment="center")
         with c_gran:
             gran = st.segmented_control(
                 "Agrupar por", GRANOS, default="Mes", key=_K_GRAN,
                 label_visibility="collapsed",
-                help="Agrupa la serie, los mini-gráficos y las columnas de la "
-                     "tabla. «Corte» es cada sesión de inventario.",
+                help="Agrupa la serie y los mini-gráficos por familia. "
+                     "«Corte» es cada sesión de inventario.",
             ) or "Mes"
 
         dp, orden = periodos_ajuste(d, col_fecha, gran)
@@ -389,13 +419,21 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
             foco = None
             st.session_state[_K_FOCO] = None
 
-        s = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado)
         with c_tit:
-            _sub = "clic en una barra para marcarla en la tabla"
-            if foco is not None:
-                _sub = f"{orden.loc[orden['_clave'] == foco, 'eje'].iloc[0]} en foco"
-            _titulo("Sobrante, faltante y neto", _sub)
+            _titulo("Sobrante, faltante y neto",
+                    "" if foco is not None
+                    else "clic en una barra para resaltar ese período")
+        if foco is not None:
+            with c_foco:
+                st.button(
+                    orden.loc[orden["_clave"] == foco, "eje"].iloc[0],
+                    icon=":material/close:", key="ajuste_evo_soltar",
+                    on_click=_soltar_foco,
+                    help="Período resaltado en la serie y en las familias. "
+                         "Clic para soltarlo.",
+                )
 
+        s = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado)
         st.plotly_chart(
             fig_serie(s, foco,
                       alto=alturas.con_franja(alturas.APOYO,
@@ -405,21 +443,15 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_ajuste_val,
             config={"displayModeBar": False},
         )
 
-    # ── Tarjeta 2: los mini-graficos por familia ─────────────────────────
-    if col_familia and col_familia in dp.columns and dp[col_familia].nunique() > 1:
-        sf = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
-                          col_grupo=col_familia)
-        with st.container(border=True, key="ajuste_graf_card_izq_evo_familias"):
+        # ── Debajo, en la MISMA tarjeta: quien explica cada periodo ──────
+        if (col_familia and col_familia in dp.columns
+                and dp[col_familia].nunique() > 1):
+            sf = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
+                              col_grupo=col_familia)
+            st.markdown('<div class="ajevo-divisor"></div>',
+                        unsafe_allow_html=True)
             _titulo("Por familia", "cada panel con su propia escala")
             st.plotly_chart(fig_familias(sf, foco),
                             use_container_width=True,
                             key="ajuste_evo_familias",
                             config={"displayModeBar": False})
-
-    # ── Tarjeta 3: la tabla, con las MISMAS columnas ─────────────────────
-    with st.container(border=True, key="ajuste_graf_card_izq_evo_tabla"):
-        _titulo("Detalle por producto",
-                "mismas columnas que la serie · S/ arriba, cantidad abajo")
-        _tabla_pivote_fecha_ajuste(
-            dp, orden, col_familia, col_ajuste_val, col_producto,
-            col_cantidad, foco=foco)

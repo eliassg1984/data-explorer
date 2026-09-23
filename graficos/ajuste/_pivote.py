@@ -1,10 +1,11 @@
-"""graficos.ajuste._pivote - la tabla pivote de la vista Evolucion.
+"""graficos.ajuste._pivote - la vista «Detalle por producto» de Ajuste.
 
 Arma la matriz Familia/Subfamilia/Producto x periodo y la renderiza. Los
-periodos NO se calculan aca: llegan hechos desde `_evolucion.py`
-(`periodos_ajuste`), los MISMOS que dibuja la serie de arriba — que la
-tabla y el grafico partan el tiempo con dos cuentas distintas es justo lo
-que la fusion del 2026-09-23 vino a evitar (regla #501).
+periodos salen de `_evolucion.periodos_ajuste`, la MISMA cuenta que usa la
+serie de Evolucion: que la tabla y el grafico partan el tiempo con dos
+cuentas distintas es justo lo que la fusion del 2026-09-23 vino a evitar
+(regla #501). El mismo dia la tabla dejo de vivir debajo de la serie y
+paso a ser su propio item del rail, con su propio grano (regla #504).
 
 Hasta esa fecha era la vista suelta «Por fecha de corte», con el año en
 curso FIJO (ignoraba el rango de la franja) y los doce meses Ene..Dic
@@ -17,7 +18,9 @@ rango como todo lo demas.
 import pandas as pd
 import streamlit as st
 
+from tema import GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _resolver
+from graficos.ajuste._evolucion import GRANOS, periodos_ajuste
 
 
 def _armar_tabla_pivote_ajuste(d, orden, col_familia, col_subfamilia,
@@ -65,16 +68,14 @@ def _armar_tabla_pivote_ajuste(d, orden, col_familia, col_subfamilia,
 
 
 def _tabla_pivote_fecha_ajuste(d, orden, col_familia, col_ajuste_val,
-                                col_producto, col_ajuste, foco=None):
+                                col_producto, col_ajuste):
     """Tabla dinámica de Ajuste — AgGrid real (no HTML a mano): Familia >
     Subfamilia > Producto como árbol nativo (expandir/colapsar de AG Grid),
     una columna por periodo con Ajuste Valorizado + Ajuste combinados en una
     celda compacta (tablas/ajuste_pivote.py).
 
     `d` y `orden` salen de `_evolucion.periodos_ajuste`: mismo rango (el de
-    la franja), mismos chips y mismos periodos que la serie de arriba.
-    `foco` es la `_clave` del periodo que se marcó con un clic en la serie:
-    su columna sale resaltada y la grilla la trae a la vista."""
+    la franja) y mismos chips que la serie de Evolución."""
     if not (col_familia and col_producto and col_ajuste_val):
         st.info("Se necesita familia, producto y ajuste valorizado "
                 "para la tabla dinámica.")
@@ -100,5 +101,44 @@ def _tabla_pivote_fecha_ajuste(d, orden, col_familia, col_ajuste_val,
 
     from tablas import renderizar_aggrid_pivote_ajuste
     renderizar_aggrid_pivote_ajuste(
-        wide, periodos, col_familia, _sub, col_producto, foco=foco,
+        wide, periodos, col_familia, _sub, col_producto,
     )
+
+
+# Grano propio de esta vista: desde que la tabla es su propia vista ya no
+# lo comparte con la serie (regla #504).
+_K_GRAN_DETALLE = "ajuste_det_gran"
+
+
+def vista_detalle_ajuste(d, col_fecha, col_familia, col_ajuste_val,
+                         col_producto, col_cantidad):
+    """«Detalle por producto»: la tabla pivote en su propia tarjeta, con su
+    selector Corte / Semana / Mes en la cabecera. Misma categoría del rail
+    que Evolución, así que el mismo rango de la franja y los mismos chips."""
+    if not col_fecha or col_fecha not in d.columns:
+        st.info("Sin columna de fecha: no se puede armar el detalle.")
+        return
+    with st.container(border=True, key="ajuste_graf_card_izq_detalle"):
+        c_tit, c_gran = st.columns([3, 1.1],  # columnas-internas: titulo | grano
+                                   vertical_alignment="center")
+        with c_gran:
+            gran = st.segmented_control(
+                "Agrupar columnas por", GRANOS, default="Mes",
+                key=_K_GRAN_DETALLE, label_visibility="collapsed",
+                help="Una columna por período. «Corte» es cada sesión de "
+                     "inventario.",
+            ) or "Mes"
+        with c_tit:
+            st.markdown(
+                f"<div style='font-size:14px;font-weight:600;"
+                f"color:{TEXTO_PRINCIPAL};line-height:1.3'>Detalle por producto"
+                f"<span style='font-weight:400;color:{GRIS_TEXTO};"
+                f"font-size:12px'> · S/ arriba, cantidad abajo</span></div>",
+                unsafe_allow_html=True,
+            )
+        dp, orden = periodos_ajuste(d, col_fecha, gran)
+        if orden.empty:
+            st.info("Sin fechas válidas en el rango seleccionado.")
+            return
+        _tabla_pivote_fecha_ajuste(dp, orden, col_familia, col_ajuste_val,
+                                   col_producto, col_cantidad)
