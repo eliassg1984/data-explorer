@@ -1071,12 +1071,24 @@ def _tabla_composicion_venta(df_f):
 
     with c_mini:
         with _card("rv_comp_mini"):
-            tab_torta, tab_sankey = st.tabs(["Costo / Utilidad", "Sankey"])
-            with tab_torta:
-                _dib_torta_costo_utilidad(fila_foco, foco, costo_sim)
-            with tab_sankey:
+            # NO `st.tabs`: dibuja las DOS pestañas y esconde la otra con
+            # `display: none`, y el Sankey es un `plotly_events` (iframe).
+            # Escondido, su iframe mide 0 y el componente alterna
+            # `setFrameHeight` 240 ↔ 0 sin fin — medido: ~750 mensajes/s,
+            # cada uno re-dibuja el Sankey, el hilo del navegador no
+            # suelta nunca y TODA la página de Recetas se traba (se
+            # reportó como «Nueva receta se bloquea al agregar ítems»,
+            # 2026-09-23). Acá sólo existe el panel elegido. Regla #500.
+            vista = st.segmented_control(
+                "Vista", ["Costo / Utilidad", "Sankey"],
+                default="Costo / Utilidad", key="rv_comp_mini_vista",
+                label_visibility="collapsed",
+            )
+            if vista == "Sankey":
                 _dib_sankey_insumo_costo(
                     r, nombre_foco, foco, costo_sim is not None)
+            else:
+                _dib_torta_costo_utilidad(fila_foco, foco, costo_sim)
 
 
 # ─── Costeo Receta Venta: ranking de platos por costo, en tabla ────────────

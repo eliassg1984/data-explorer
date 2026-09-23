@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-499 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+500 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (176)
 
@@ -283,7 +283,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 - **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
 
-**Plotly y figuras** (89)
+**Plotly y figuras** (90)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -374,6 +374,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#487** — La serie de «Compra Vs Año Pasado» rotula las TRES métricas por barra, dice el AÑO en una…
 - **#488** — La selección por clic de st.plotly_chart(on_select=...) NO llega a las trazas de un…
 - **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
+- **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 
 **AgGrid y tablas** (79)
 
@@ -663,7 +664,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#475** — Un salto del rail SOBREVUELA la pila, y una pila que construye «lo que tengas cerca» lee ese…
 - **#499** — Quinto pase de Nueva receta: @st.fragment para que el «+» responda en 100 ms y no en un…
 
-**SUNAT y SIRE** (42)
+**SUNAT y SIRE** (43)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -707,6 +708,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
 - **#458** — El espejo que salva el rango de la recolección de Streamlit no sobrevive a un rerun de…
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
+- **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 
 **Fechas, rangos y cortes** (11)
 
@@ -41297,6 +41299,64 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      soporta `row_height` desde 1.36 y `requirements.txt` pide >=1.39,
      así que es seguro. `height` explícito para que el data_editor no
      scrollee interno con las cinco filas ya calzadas de altura.
+
+500. **Un componente con iframe (`plotly_events`) NO va adentro de una
+     pestaña de `st.tabs` que pueda estar escondida: alterna
+     `setFrameHeight` 240 ↔ 0 sin fin y traba la página ENTERA.**
+     2026-09-23, reportado como «la vista para agregar receta venta
+     nueva demora y se bloquea al momento de agregar los ítems» —
+     horas después de la #499, que había curado el lado del SERVIDOR.
+     El cuelgue que quedaba era del NAVEGADOR, y no estaba en Nueva
+     receta.
+
+     **Qué pasaba.** `st.tabs` dibuja TODAS las pestañas y esconde las
+     no elegidas con `display: none`. La tarjeta mini de Composición
+     (`chartcard_rv_comp_mini`) tenía «Costo / Utilidad | Sankey», y
+     desde el commit `03921a2` (2026-09-17) el Sankey es un `plotly_events`
+     para escuchar el clic. Escondido, su iframe mide 0×0: el
+     componente llama `setFrameHeight(override_height)` = 240 en cada
+     `render()`, algo del ciclo le contesta con `scrollHeight` = 0, y
+     como la librería sólo deduplica contra el ÚLTIMO valor, el
+     vaivén no termina. Cada mensaje re-renderiza el componente y
+     Plotly vuelve a dibujar el Sankey.
+
+     **Medido** (Playwright headless, 1366×768, datos reales, página
+     quieta con `?reporte=Recetas&vista=nueva_receta`):
+
+     | | antes | después |
+     |---|---|---|
+     | `setFrameHeight` del iframe | ~750/s (240, 0, 240, 0…) | 0 |
+     | heap JS | 269 MB | 123 MB |
+     | CPU del renderer | pegado (457 s de CPU; la pestaña terminó en «Target crashed») | en reposo |
+     | clic en el buscador | timeout de 30 s | 0,56 s |
+     | «+» → ítem en la tabla | nunca | ~1,1 s |
+
+     El perfil de CPU (CDP `Profiler`) lo decía sin ambigüedad: con la
+     página QUIETA, lo más caro era `r.plot` / `drawData` /
+     `setFrameHeight` dentro de `ComponentInstance`. Cualquier clic —el
+     «+» de Nueva receta incluido— esperaba en cola detrás de eso.
+     Como Composición es otra sección de la MISMA pila, se ve en
+     cualquier vista de Recetas en cuanto esa sección se construye.
+
+     **Cura:** `st.segmented_control` (`rv_comp_mini_vista`) en lugar de
+     `st.tabs`, y sólo se dibuja el panel elegido. El foco del Sankey
+     no se pierde al alternar: vive en `rv_comp_sankey_foco`, no en el
+     widget.
+
+     **Para la próxima:**
+     - Un «se traba al hacer clic» que el servidor no explica se mide
+       con la página QUIETA: si el hilo del navegador está ocupado sin
+       que nadie toque nada, el culpable no es el clic. Contar mensajes
+       `postMessage` por iframe (listener de `message` en la ventana de
+       arriba) lo encuentra en diez segundos.
+     - `st.tabs` NO es perezoso: todo lo de todas las pestañas existe y
+       corre. Para un componente con iframe (`plotly_events`, y
+       cualquier `components.declare_component` que ajuste su alto),
+       un selector que dibuje sólo lo elegido. AgGrid en pestaña
+       escondida no mostró el problema (un solo `componentReady`).
+     - El panel del navegador del editor, si está oculto, no pinta y
+       los clics dan timeout: para medir interacción, Playwright
+       headless contra el server local.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
