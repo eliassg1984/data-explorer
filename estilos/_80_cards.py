@@ -1491,11 +1491,28 @@ CSS = """    /* ================================================================
         gap: 2px !important;
     }
     /* Botón "+" al costado del buscador: alto igual al selectbox
-       (~40px) y ancho fijo por su glifo. La key exacta la escribe
-       `formulario_receta._key(modo, "add_sel")`. */
-    div[class^="st-key-form_receta_"][class$="_add_sel"] button {
+       (~40px) y ancho fijo por su glifo. Las keys (2) las escribe
+       `formulario_receta._key(modo, "add_sel"/"add_nuevo")`. */
+    div[class^="st-key-form_receta_"][class$="_add_sel"] button,
+    div[class^="st-key-form_receta_"][class$="_add_nuevo"] button {
         min-height: 38px !important;
         padding: 0 10px !important;
+    }
+    /* Tabla editable de precios (`_pricing_panel`, `st.data_editor` con
+       key `form_receta_*_pricing_editor_v<n>`). Vive a la DERECHA del
+       ítem-list en `st.columns([3, 2])`, así que el iframe del componente
+       tiene ~360 px de ancho — sin este `min-width` la columna Concepto
+       trunca en «Recargo al consum…» y la S/ queda estrujada.
+
+       El wrapper del data_editor de Streamlit lleva `overflow-x: hidden`
+       por defecto: lo abrimos para que si el iframe reserva más ancho del
+       que la columna tiene, el navegador deslice horizontalmente en vez
+       de recortar. */
+    div[class^="st-key-form_receta_"][class*="_pricing_editor_v"] {
+        overflow-x: auto !important;
+    }
+    div[class^="st-key-form_receta_"][class*="_pricing_editor_v"] iframe {
+        min-width: 340px !important;
     }
 
     /* =================================================================== */

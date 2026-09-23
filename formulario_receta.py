@@ -71,7 +71,8 @@ from graficos.recetas_comun import (
 )
 
 _ARCHIVO_RECETAVENTA = "recetaventa.parquet"
-_IGV = 1.18
+_IGV = 0.18       # 18 %
+_RECARGO = 0.10   # 10 % servicio, convención de restaurantes en Perú
 _UMBRAL_COSTO_OK = 30
 _UMBRAL_COSTO_WARN = 35
 
@@ -176,36 +177,44 @@ def _agregar_linea(modo, cod, nombre, unidad, precio, activo, tipo):
     })
 
 
-def _buscador_catalogo(modo, df_cat, *, placeholder,
-                       etiqueta_nuevo, unidad_nueva="unidad"):
-    """Buscador SUGESTIVO con botón «+» al costado.
+_SENTINEL_NUEVO = "➕  Agregar un ítem nuevo (no está en la lista)…"
 
-    `st.selectbox` filtra a medida que el usuario tipea (client-side, sin
-    Enter). El botón «+» al lado toma la selección vigente y agrega la
-    línea — así el gesto de agregar es explícito y no depende de que la
-    persona sepa que "elegir del dropdown auto-agrega". Después del clic el
-    widget se resetea vía key incremental (`_key(modo, "buscador_v<n>")`
-    con `n` en session_state): Streamlit borra el estado del widget viejo
-    y el próximo render arranca en None. La misma key incremental sirve al
-    input de «agregar como nuevo» del expander de abajo.
 
-    Reemplaza al esquema anterior de `st.text_input` + fila de resultados
-    con un botón "Agregar" cada una — el text_input pedía Enter/blur para
-    aceptar cada carácter, así que el catálogo no se filtraba hasta que la
-    persona confirmaba. Motivo del cambio: pedido de 2026-09-22 («la
-    opción para búsqueda y selección de insumos o platos debe ser
-    sugestiva al digitar, no debe esperar Enter»); ampliado en el mismo
-    día a «podemos tener un ícono o mini-botón pal costado para agregarlo»
-    — de ahí el «+» aparte en vez del auto-add-on-selection.
+def _buscador_catalogo(modo, df_cat, *, placeholder, unidad_nueva="unidad"):
+    """Buscador SUGESTIVO unificado con el alta de ítem nuevo.
 
-    La rama de «Agregar como nuevo» (para un insumo/plato que todavía no
-    está en el catálogo) sobrevive en un `st.expander` compacto debajo,
-    cerrado por defecto: el selectbox sólo devuelve opciones existentes,
-    así que sin este puente se pierde el flujo de dar de alta un ítem que
-    va a la propuesta con precio 0 para que después alguien lo complete."""
+    Una sola fila: `st.selectbox` con los ítems del catálogo MÁS la opción
+    centinela `_SENTINEL_NUEVO` al final. El widget filtra client-side a
+    medida que el usuario tipea (sin Enter). El botón «+» al costado
+    confirma la línea.
+
+    Dos modos, alternados por session_state[`modo_nuevo`]:
+      · **buscar** (default): selectbox de opciones + «+». Elegir la
+        opción centinela lleva a buscar → nuevo.
+      · **nuevo**: mismo lugar, pero un `st.text_input` para el nombre
+        del ítem que no está + «+». Un enlace «← volver a buscar» debajo
+        vuelve a buscar.
+
+    Reemplaza al esquema anterior (`st.expander` aparte con su propio
+    input) del pedido de 2026-09-23: «"¿No está en la lista?" debe ser
+    una funcionalidad del buscador de artículos de almacén de arriba, no
+    un cuadrante aparte. Al escribir un producto nuevo, debe consultarte
+    si lo creamos como un artículo nuevo». `st.selectbox` no expone al
+    Python el texto tipeado en el filtro (el filtrado es puro
+    client-side), así que la señal «acá no hay nada» la da el usuario
+    eligiendo la opción centinela desde el mismo dropdown.
+
+    La key del widget lleva un contador incremental por modo, para que
+    después de cada agregado el widget arranque limpio (Streamlit descarta
+    el estado de la key vieja). Sin eso, la última opción marcada queda
+    "pegada" y no se puede volver a elegir. Historia completa en
+    `arquitectura.md` regla #497."""
     contador_key = _key(modo, "buscador_ver")
     st.session_state.setdefault(contador_key, 0)
     ver = st.session_state[contador_key]
+
+    modo_nuevo_key = _key(modo, "modo_nuevo")
+    modo_nuevo = st.session_state.get(modo_nuevo_key, False)
 
     lineas_actuales = {l["cod"] for l in st.session_state[_key_lineas(modo)]}
     opciones = []
@@ -222,64 +231,80 @@ def _buscador_catalogo(modo, df_cat, *, placeholder,
         opciones.append(etiqueta_fila)
         meta[etiqueta_fila] = (cod, nombre, unidad, precio, activo)
 
-    # Todos los controles del buscador y del expander viven en la MITAD
-    # izquierda de la tarjeta: `st.columns([4, 1, 5])` = buscador 40% +
-    # botón 10% + `_pad` vacío 50%. Sin ese `_pad`, cada widget se estira a
-    # su columna y ocupa casi el ancho entero — reportado 2026-09-23 como
-    # «exageradamente largo, espacio perdido». Los KPIs (más abajo) siguen
-    # el mismo criterio con su propio _pad.
-    if opciones:
-        c_sel, c_btn, _pad = st.columns([4, 1, 5])
-        with c_sel:
-            elegido = st.selectbox(
-                "Buscar", opciones, index=None, placeholder=placeholder,
-                key=_key(modo, f"buscador_v{ver}"),
+    # Los dos modos comparten el mismo layout: buscador ~40% + «+» ~10%
+    # + _pad ~50%, para no comerse el ancho entero de la tarjeta.
+    c_main, c_btn, _pad = st.columns([4, 1, 5])
+
+    if modo_nuevo:
+        with c_main:
+            nuevo_nombre = st.text_input(
+                "Nombre del nuevo ítem",
+                key=_key(modo, f"nuevo_nombre_v{ver}"),
+                placeholder="nombre del ítem nuevo (no está en el almacén)…",
                 label_visibility="collapsed",
-            )
+            ).strip()
         with c_btn:
-            agregar = st.button(
-                "➕", key=_key(modo, "add_sel"),
-                disabled=elegido is None, use_container_width=True,
-                help="Agregar el ítem seleccionado a la lista",
+            agregar_n = st.button(
+                "➕", key=_key(modo, "add_nuevo"),
+                disabled=not nuevo_nombre, use_container_width=True,
+                help="Confirmar como ítem nuevo (precio 0, se completa después)",
             )
-        if agregar and elegido:
-            cod, nombre, unidad, precio, activo = meta[elegido]
-            _agregar_linea(modo, cod, nombre, unidad, precio, activo, "almacen")
+        c_hint, _pad2 = st.columns([5, 5])
+        with c_hint:
+            if st.button("← Volver a buscar", key=_key(modo, "cancel_nuevo"),
+                         type="tertiary" if hasattr(st, "tertiary") else "secondary"):
+                st.session_state[modo_nuevo_key] = False
+                st.session_state[contador_key] = ver + 1
+                st.rerun()
+        if agregar_n and nuevo_nombre:
+            st.session_state["form_receta_contador_nuevo"] += 1
+            n = st.session_state["form_receta_contador_nuevo"]
+            _agregar_linea(modo, f"NUEVO-{n}", nuevo_nombre, unidad_nueva, 0.0, None, "nuevo")
+            st.session_state[modo_nuevo_key] = False
             st.session_state[contador_key] = ver + 1
             st.rerun()
-    else:
-        st.caption("Todos los ítems del catálogo ya están agregados.")
+        return
 
-    # El expander mismo también se acota a la mitad izquierda: sin envolver
-    # el header ocupa el ancho entero de la tarjeta.
-    c_exp, _pad_exp = st.columns([5, 5])
-    with c_exp:
-        with st.expander(f"¿No está en la lista? Agregar como {etiqueta_nuevo}", expanded=False):
-            c_txt, c_btn2 = st.columns([4, 1])
-            with c_txt:
-                nuevo_nombre = st.text_input(
-                    "Nombre", key=_key(modo, f"nuevo_nombre_v{ver}"),
-                    placeholder="nombre del ítem nuevo…", label_visibility="collapsed",
-                ).strip()
-            with c_btn2:
-                if st.button("➕", key=_key(modo, "add_nuevo"),
-                             disabled=not nuevo_nombre, use_container_width=True,
-                             help="Agregar como ítem nuevo (precio 0 para completar después)"):
-                    st.session_state["form_receta_contador_nuevo"] += 1
-                    n = st.session_state["form_receta_contador_nuevo"]
-                    _agregar_linea(modo, f"NUEVO-{n}", nuevo_nombre, unidad_nueva, 0.0, None, "nuevo")
-                    st.session_state[contador_key] = ver + 1
-                    st.rerun()
+    opciones_completas = opciones + [_SENTINEL_NUEVO]
+    with c_main:
+        elegido = st.selectbox(
+            "Buscar", opciones_completas, index=None, placeholder=placeholder,
+            key=_key(modo, f"buscador_v{ver}"),
+            label_visibility="collapsed",
+        )
+    with c_btn:
+        agregar = st.button(
+            "➕", key=_key(modo, "add_sel"),
+            disabled=elegido is None or elegido == _SENTINEL_NUEVO,
+            use_container_width=True,
+            help="Agregar el ítem seleccionado a la lista",
+        )
+    if elegido == _SENTINEL_NUEVO:
+        # Cambia de modo: en el próximo render aparece el input de nombre
+        # en el mismo lugar del buscador.
+        st.session_state[modo_nuevo_key] = True
+        st.session_state[contador_key] = ver + 1
+        st.rerun()
+    elif agregar and elegido:
+        cod, nombre, unidad, precio, activo = meta[elegido]
+        _agregar_linea(modo, cod, nombre, unidad, precio, activo, "almacen")
+        st.session_state[contador_key] = ver + 1
+        st.rerun()
 
 
 def _tabla_lineas(modo):
     """Devuelve las líneas YA sincronizadas con lo que el usuario haya
     editado en el data_editor durante ESTE mismo rerun (no hace falta un
     st.rerun() extra: el propio data_editor ya disparó el rerun que llegó
-    hasta acá; el llamador usa el valor devuelto, no una copia vieja)."""
+    hasta acá; el llamador usa el valor devuelto, no una copia vieja).
+
+    Con el listado vacío no se dibuja el `st.info` que había hasta el
+    2026-09-23 («Todavía no agregaste ítems…», franja azul a todo el
+    ancho): se reportó como «franja fea en azul». La ausencia del data
+    editor ya cuenta el estado — el buscador de arriba y el panel de
+    precios de la derecha siguen visibles."""
     lineas = st.session_state[_key_lineas(modo)]
     if not lineas:
-        st.info("Todavía no agregaste ítems. Buscá uno arriba para empezar.")
         return lineas
 
     total = _total_lineas(lineas)
@@ -342,34 +367,104 @@ def _tabla_lineas(modo):
     return lineas
 
 
-def _mostrar_pricing(costo_base, precio_venta, *, msg_sin_base="Agregá ítems para poder calcular esto."):
-    """costo_base: costo por porción (Receta de Venta) o costo del combo
-    entero (Combo, no hay porciones que dividir ahí) — al llamador le toca
-    decidir cuál de los dos pasar y qué mensaje mostrar mientras no hay
-    costo_base (los dos modos tienen motivos distintos para no tenerlo
-    todavía: a Receta de Venta le faltan las porciones, a Combo le faltan
-    ítems agregados)."""
-    if costo_base is None:
-        st.caption(msg_sin_base)
-        return
-    if not precio_venta:
-        st.caption("Ingresá un precio de venta para calcular el precio neto y el % de costo.")
-        return
+def _pricing_panel(modo, costo_total):
+    """Panel de precios de la derecha, al COSTADO del ítem-list — pedido
+    2026-09-23: «tabla editable al costado, no abajo». Cinco filas:
+    Costo total · Precio de venta · Precio neto · Recargo al consumo · IGV.
 
-    precio_neto = precio_venta / _IGV
-    pct = costo_base / precio_neto * 100 if precio_neto else 0.0
-    margen = precio_neto - costo_base
+    De las cinco, sólo **Precio de venta** es el input real del usuario
+    (número en soles, con IGV y recargo incluidos, tal como aparece en la
+    carta). Las otras cuatro son valores CALCULADOS que se muestran en el
+    mismo `st.data_editor` para que la lectura sea de tabla — el usuario
+    ve costo total, precio de venta, y su descomposición.
 
-    p1, p2, p3 = st.columns(3)
-    p1.metric("Precio neto (sin IGV 18%)", _fmt(precio_neto))
-    p2.metric("% de costo", f"{pct:.1f}%")
-    p3.metric("Margen", _fmt(margen))
-    if pct <= _UMBRAL_COSTO_OK:
-        st.caption("🟢 % de costo muy bueno (referencia orientativa, no una regla del negocio).")
-    elif pct <= _UMBRAL_COSTO_WARN:
-        st.caption("🟠 % de costo aceptable (referencia orientativa).")
+    Fórmula peruana estándar (recargo sobre base, IGV sobre base+recargo):
+
+        Precio de venta = base · (1 + recargo%) · (1 + IGV%)
+        Precio neto (base) = Precio de venta / ((1+recargo%) · (1+IGV%))
+        Monto recargo = base · recargo%
+        Monto IGV = (base + monto_recargo) · IGV%
+
+    con recargo 10 % e IGV 18 % (constantes de módulo).
+
+    **Tabla editable, no editable-de-verdad para todas las filas.**
+    `st.data_editor` no soporta editabilidad por celda — sólo por
+    columna. Se deja la columna «S/» abierta a la edición para que la
+    persona pueda TIPEAR el Precio de venta ahí adentro (más intuitivo
+    que un input aparte); si por error edita otra fila, se detecta y se
+    revierte bumpeando `pricing_ver` (que es parte de la key del widget)
+    → Streamlit descarta el estado del widget viejo y el próximo render
+    muestra el valor calculado.
+
+    Devuelve el Precio de venta vigente (para que el llamador lo pase a
+    `_guardar_propuesta`)."""
+    key_pv = _key(modo, "precio_venta_val")
+    key_ver = _key(modo, "pricing_ver")
+    st.session_state.setdefault(key_pv, 0.0)
+    st.session_state.setdefault(key_ver, 0)
+    pv = float(st.session_state[key_pv])
+    ver = st.session_state[key_ver]
+
+    if pv > 0:
+        base = pv / ((1 + _RECARGO) * (1 + _IGV))
+        m_recargo = base * _RECARGO
+        m_igv = (base + m_recargo) * _IGV
     else:
-        st.caption("🔴 % de costo alto para la mayoría de restaurantes (referencia orientativa).")
+        base = m_recargo = m_igv = 0.0
+
+    df = pd.DataFrame([
+        {"Concepto": "Costo total",                              "S/": round(costo_total, 2)},
+        {"Concepto": "Precio de venta",                          "S/": round(pv, 2)},
+        {"Concepto": "Precio neto (base)",                       "S/": round(base, 2)},
+        {"Concepto": f"Recargo al consumo ({int(_RECARGO*100)}%)", "S/": round(m_recargo, 2)},
+        {"Concepto": f"IGV ({int(_IGV*100)}%)",                    "S/": round(m_igv, 2)},
+    ])
+
+    edited = st.data_editor(
+        df,
+        hide_index=True,
+        disabled=["Concepto"],
+        column_config={
+            "Concepto": st.column_config.TextColumn("Concepto", disabled=True),
+            "S/": st.column_config.NumberColumn(
+                "S/", format="%.2f", min_value=0.0, step=0.01,
+            ),
+        },
+        key=_key(modo, f"pricing_editor_v{ver}"),
+        use_container_width=True,
+    )
+
+    # Sólo la fila 1 (Precio de venta) es la que persistimos como fuente
+    # de verdad. El resto se recalcula.
+    nueva_pv = float(edited.iloc[1]["S/"])
+    if abs(nueva_pv - pv) > 0.001:
+        st.session_state[key_pv] = nueva_pv
+        st.session_state[key_ver] = ver + 1
+        st.rerun()
+
+    # Si el usuario edita alguna de las filas calculadas (0, 2, 3, 4), el
+    # cambio se descarta bumpeando la key del widget: el próximo render
+    # arranca con los valores derivados de `pv`.
+    for i in (0, 2, 3, 4):
+        if abs(float(edited.iloc[i]["S/"]) - float(df.iloc[i]["S/"])) > 0.001:
+            st.session_state[key_ver] = ver + 1
+            st.rerun()
+
+    # Semáforo del % de costo sobre el neto (referencia orientativa, mismo
+    # criterio y umbrales que el `_mostrar_pricing` retirado).
+    if pv > 0 and base > 0:
+        pct = costo_total / base * 100
+        if pct <= _UMBRAL_COSTO_OK:
+            emoji, texto = "🟢", "muy bueno"
+        elif pct <= _UMBRAL_COSTO_WARN:
+            emoji, texto = "🟠", "aceptable"
+        else:
+            emoji, texto = "🔴", "alto"
+        st.caption(f"{emoji} % de costo sobre neto: **{pct:.1f}%** ({texto}, orientativo)")
+    elif costo_total > 0:
+        st.caption("Ingresá un precio de venta para ver la descomposición.")
+
+    return pv
 
 
 def _guardar_propuesta(tipo, nombre, guardado_por, lineas, extra=None):
@@ -414,13 +509,17 @@ def _guardar_propuesta(tipo, nombre, guardado_por, lineas, extra=None):
 def _limpiar_modo(modo):
     """Tras guardar con éxito: vacía la receta/combo actual para la próxima.
     Deja 'guardado_por' tal cual (la persona probablemente guarde varias
-    seguidas) pero limpia nombre/porciones/precio — son de ESTA receta, y
-    dejarlos puestos invita a re-guardar por error con el título viejo."""
+    seguidas) pero limpia nombre + precio_venta + estado del pricing
+    editor — son de ESTA receta, y dejarlos puestos invita a re-guardar
+    por error con el título viejo."""
     st.session_state[_key_lineas(modo)] = []
     st.session_state.pop(_key(modo, "editor"), None)
     st.session_state.pop(_key(modo, "nombre"), None)
-    st.session_state.pop(_key(modo, "porciones"), None)
-    st.session_state.pop(_key(modo, "precio_venta"), None)
+    st.session_state.pop(_key(modo, "precio_venta_val"), None)
+    # Bumpea la versión del pricing editor para que su widget se resetee.
+    st.session_state[_key(modo, "pricing_ver")] = (
+        st.session_state.get(_key(modo, "pricing_ver"), 0) + 1
+    )
 
 
 # ─── Receta de venta ─────────────────────────────────────────────────────
@@ -434,63 +533,49 @@ def _render_receta_venta():
         )
         return
 
-    # Fila 1: buscador del almacén (protagonista del proceso) a lo ancho de
-    # la tarjeta + botón «+» al costado.
+    # Fila 1: nombre de la receta (justo debajo del toggle Receta/Combo/…).
+    # El campo «Porciones» se retiró el 2026-09-23 a pedido: el pricing va
+    # sobre la RECETA entera, no per-porción.
+    c_nom, _pad = st.columns([5, 5])
+    with c_nom:
+        nombre = st.text_input(
+            "Nombre de la receta", key=_key(modo, "nombre"),
+            placeholder="nombre de la receta…",
+            label_visibility="collapsed",
+        )
+
+    # Fila 2: buscador del almacén con «+» y sentinel de nuevo (incluye la
+    # rama «agregar como nuevo», ya no vive en un expander aparte).
     _buscador_catalogo(
         modo, df_cat,
         placeholder="Buscar artículo del almacén…",
-        etiqueta_nuevo="artículo nuevo",
+        unidad_nueva="unidad",
     )
 
-    # Fila 2: identidad de la receta (nombre + porciones) acotada a la
-    # mitad izquierda con `_pad` a la derecha (mismo patrón que el
-    # buscador). Sin `_pad` el input de nombre se estiraba a ~75% del
-    # ancho de la tarjeta.
-    c_nom, c_por, _pad = st.columns([3, 2, 5])
-    with c_nom:
-        nombre = st.text_input("Nombre de la receta", key=_key(modo, "nombre"),
-                               placeholder="nombre de la receta…",
-                               label_visibility="collapsed")
-    with c_por:
-        porciones = st.number_input("Porciones", min_value=0, step=1, value=0,
-                                    key=_key(modo, "porciones"))
-
-    lineas = _tabla_lineas(modo)
-
+    # Fila 3: ítems a la izquierda, panel de precios a la derecha — pedido
+    # 2026-09-23: «costo total, precio de venta, precio neto, recargo al
+    # consumo, IGV deben estar como una tabla editable al costado, no
+    # abajo». Ratio [3, 2] porque el items table tiene 8 columnas y necesita
+    # más ancho.
+    c_items, c_pricing = st.columns([3, 2])
+    with c_items:
+        lineas = _tabla_lineas(modo)
     total = _total_lineas(lineas)
-    costo_porcion = (total / porciones) if porciones > 0 else None
+    with c_pricing:
+        precio_venta = _pricing_panel(modo, total)
 
-    # KPIs + precio en columnas ANGOSTAS: se apilan a la izquierda y dejan
-    # el resto de la franja vacía. Sin esto, `st.columns(3)` estiraba cada
-    # métrico a un tercio del ancho de la tarjeta y quedaba mucho aire suelto
-    # entre etiqueta y valor. Los métricos ya arrancan chicos por el CSS de
-    # `estilos/_80_cards.py` (label 11px, valor 16px). Pedido 2026-09-22
-    # («no tiene lógica que tres campos ocupen todo el largo»); ratios
-    # afinados el 2026-09-23 para caber en la mitad izquierda de la tarjeta.
-    c_total, c_porc, c_precio, _pad = st.columns([1, 1, 2, 6])
-    c_total.metric("Costo total", _fmt(total))
-    c_porc.metric("Costo por porción",
-                  _fmt(costo_porcion) if costo_porcion is not None else "—")
-    with c_precio:
-        precio_venta = st.number_input(
-            "Precio venta (con IGV)",
-            min_value=0.0, step=0.10, key=_key(modo, "precio_venta"),
-        )
-
-    _mostrar_pricing(
-        costo_porcion, precio_venta,
-        msg_sin_base="Ingresá las porciones para poder calcular esto.",
-    )
-
+    # Fila 4: guardado por + botón (acotado con _pad a la mitad izquierda).
     c_guarda, c_boton, _pad = st.columns([3, 2, 5])
     with c_guarda:
-        guardado_por = st.text_input("Guardado por (tu nombre)",
-                                     key=_key(modo, "guardado_por"),
-                                     placeholder="tu nombre…",
-                                     label_visibility="collapsed")
+        guardado_por = st.text_input(
+            "Guardado por (tu nombre)", key=_key(modo, "guardado_por"),
+            placeholder="tu nombre…", label_visibility="collapsed",
+        )
     with c_boton:
-        guardar = st.button("💾 Guardar propuesta", type="primary",
-                            key=_key(modo, "guardar"), use_container_width=True)
+        guardar = st.button(
+            "💾 Guardar propuesta", type="primary",
+            key=_key(modo, "guardar"), use_container_width=True,
+        )
     if guardar:
         if not nombre.strip():
             st.warning("Ponele un nombre a la receta.")
@@ -500,7 +585,7 @@ def _render_receta_venta():
             st.warning("Agregá al menos un ingrediente.")
         elif _guardar_propuesta(
             "Receta de Venta", nombre.strip(), guardado_por.strip(), lineas,
-            extra={"porciones": porciones, "precio_venta": precio_venta},
+            extra={"precio_venta": precio_venta},
         ):
             st.success(f"«{nombre}» se guardó como propuesta.")
             _limpiar_modo(modo)
@@ -517,43 +602,42 @@ def _render_combo():
         )
         return
 
-    # Buscador arriba a lo ancho + botón «+», como en Receta de venta.
+    # Mismo esquema que _render_receta_venta: nombre debajo del toggle,
+    # buscador después, ítems a la izquierda + panel de precios al costado,
+    # y por último guardar. Combo no tiene "porciones" (un combo se costea
+    # entero), así que no hay diferencia estructural con Receta de venta.
+    c_nom, _pad = st.columns([5, 5])
+    with c_nom:
+        nombre = st.text_input(
+            "Nombre del combo", key=_key(modo, "nombre"),
+            placeholder="nombre del combo…",
+            label_visibility="collapsed",
+        )
+
     _buscador_catalogo(
         modo, df_prod,
         placeholder="Buscar producto de venta (plato)…",
-        etiqueta_nuevo="producto nuevo", unidad_nueva="porción",
+        unidad_nueva="porción",
     )
 
-    c_nom, _pad_nom = st.columns([5, 5])
-    with c_nom:
-        nombre = st.text_input("Nombre del combo", key=_key(modo, "nombre"),
-                               placeholder="nombre del combo…",
-                               label_visibility="collapsed")
-
-    lineas = _tabla_lineas(modo)
-
+    c_items, c_pricing = st.columns([3, 2])
+    with c_items:
+        lineas = _tabla_lineas(modo)
     total = _total_lineas(lineas)
-    # KPIs angostos (Combo no tiene "porciones", así que sólo dos: costo
-    # total + precio). Mismo criterio y ratios que Receta de venta.
-    c_total, c_precio, _pad = st.columns([1, 2, 7])
-    c_total.metric("Costo total", _fmt(total))
-    with c_precio:
-        precio_venta = st.number_input(
-            "Precio venta (con IGV)",
-            min_value=0.0, step=0.10, key=_key(modo, "precio_venta"),
-        )
-
-    _mostrar_pricing(total if lineas else None, precio_venta)
+    with c_pricing:
+        precio_venta = _pricing_panel(modo, total)
 
     c_guarda, c_boton, _pad = st.columns([3, 2, 5])
     with c_guarda:
-        guardado_por = st.text_input("Guardado por (tu nombre)",
-                                     key=_key(modo, "guardado_por"),
-                                     placeholder="tu nombre…",
-                                     label_visibility="collapsed")
+        guardado_por = st.text_input(
+            "Guardado por (tu nombre)", key=_key(modo, "guardado_por"),
+            placeholder="tu nombre…", label_visibility="collapsed",
+        )
     with c_boton:
-        guardar = st.button("💾 Guardar propuesta", type="primary",
-                            key=_key(modo, "guardar"), use_container_width=True)
+        guardar = st.button(
+            "💾 Guardar propuesta", type="primary",
+            key=_key(modo, "guardar"), use_container_width=True,
+        )
     if guardar:
         if not nombre.strip():
             st.warning("Ponele un nombre al combo.")

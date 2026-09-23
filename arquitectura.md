@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-497 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+498 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (175)
+**CSS y estilos** (176)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -209,6 +209,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
 - **#495** — Plegada la columna del árbol, cada vista es un PUNTO, no su ícono (opción B)
 - **#497** — Segundo pase del formulario Nueva receta: tarjeta blanca, botón «+» al costado del buscador,…
+- **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 
 **Layout y alturas** (69)
 
@@ -456,7 +457,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#483** — Ajuste › Cascada y Mapa de calor, tres pedidos del 2026-09-21: una columna de ESCALA en la…
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 
-**Streamlit** (140)
+**Streamlit** (141)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -598,6 +599,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#493** — El Mapa de calor de Ajuste dibuja TRES tarjetas propias, como la Cascada — ya no una card…
 - **#496** — «Nueva receta» ya no es un reporte hermano, es una VISTA del reporte Recetas
 - **#497** — Segundo pase del formulario Nueva receta: tarjeta blanca, botón «+» al costado del buscador,…
+- **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 
 **Datos, R2 y DuckDB** (57)
 
@@ -41188,6 +41190,65 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      dominio: **un `st.columns([a, b])` sin `_pad` a la derecha estira
      sus widgets al ancho entero del contenedor** — para acotarlos a la
      mitad, hay que declarar el hueco a la derecha explícitamente.
+
+498. **Cuarto pase de Nueva receta: pricing como tabla editable AL
+     COSTADO, sin porciones, sin franja azul, «agregar como nuevo»
+     dentro del buscador.** 2026-09-23, después de captura con cinco
+     flechas rojas apuntando a widgets muy anchos y una banda azul. Los
+     cinco pedidos concretos:
+
+     - **Pricing como tabla editable al COSTADO del ítem-list, no
+       abajo.** `st.columns([3, 2])`: ítems a la izquierda, panel de
+       precios a la derecha. El panel es un `st.data_editor` con cinco
+       filas — Costo total, Precio de venta, Precio neto (base),
+       Recargo al consumo (10 %), IGV (18 %). Fórmula peruana estándar:
+       `Precio de venta = base · (1 + recargo%) · (1 + IGV%)`, IGV
+       sobre `base + recargo`. Sólo la fila «Precio de venta» es la
+       fuente de verdad (persiste en `precio_venta_val`); las otras
+       cuatro se recalculan cada render.
+
+     - **`st.data_editor` no soporta editabilidad POR CELDA, sólo por
+       columna.** Dejar la columna «S/» editable permite tipear el
+       Precio de venta dentro de la tabla (más intuitivo que un input
+       aparte). Si la persona edita por error otra fila (Costo total,
+       Precio neto, Recargo o IGV), el diff se descarta bumpeando
+       `pricing_ver`, que es parte de la key del widget → Streamlit
+       borra el estado de la key vieja y el próximo render muestra el
+       valor calculado. Bumpear la versión sirve también para
+       aceptar la edición legítima al Precio de venta (mismo patrón que
+       la #497 con el buscador). Sin este mecanismo, un valor tipeado
+       en una fila calculada quedaría "pegado" en el widget aunque el
+       Python siguiera calculando el correcto.
+
+     - **Se quita el campo «Porciones».** El pricing ahora es sobre la
+       RECETA entera, no per-porción. Se retiró también el KPI «Costo
+       por porción» — con porciones=0 siempre daba «—», y sin
+       porciones no tiene sentido. Consecuencia: `_guardar_propuesta`
+       ya no recibe `porciones` en el `extra` de Receta de Venta.
+
+     - **Se quita la franja azul «Todavía no agregaste ítems».**
+       Reportada como «franja fea». La ausencia del `st.data_editor`
+       ya cuenta el estado — el buscador de arriba y el panel de
+       precios de la derecha siguen visibles.
+
+     - **«¿No está en la lista?» se fusiona al buscador.** Antes vivía
+       en un `st.expander` aparte debajo (el «cuadrante»). Ahora es
+       una opción centinela `➕ Agregar un ítem nuevo…` al final del
+       dropdown del `st.selectbox` — al elegirla, la MISMA fila
+       cambia a un `st.text_input` para el nombre del ítem nuevo + el
+       mismo botón «+»; un enlace «← Volver a buscar» revierte. La
+       señal «acá no hay nada» la da el usuario eligiendo el centinela
+       desde el mismo dropdown: `st.selectbox` filtra client-side y NO
+       expone el texto tipeado a Python, así que no se puede detectar
+       «no hay resultados» de forma directa (limitación de Streamlit,
+       no del diseño).
+
+     Corolario del `st.data_editor` en la columna DERECHA: el iframe
+     del componente tiene ~360 px, y sin `min-width: 340px !important`
+     en su iframe (y `overflow-x: auto` en el wrapper) la columna
+     Concepto trunca en «Recargo al consum…» y la S/ queda estrujada.
+     Regla escrita en `estilos/_80_cards.py`, con las keys
+     `pricing_editor_v<n>` que emite `_pricing_panel`.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
