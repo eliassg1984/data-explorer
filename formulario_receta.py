@@ -394,11 +394,30 @@ def _tabla_lineas(modo):
         hide_index=True,
         use_container_width=True,
         disabled=["Código", "Producto", "Subtotal (S/)", "% del total"],
+        # Cabeceras ABREVIADAS y anchos fijos (pedido 2026-09-23: «más
+        # angostas las columnas de los insumos»). El data_editor no parte
+        # una cabecera en dos renglones, así que se acorta el rótulo y el
+        # nombre completo va al `help` (tooltip de la cabecera). Se cambia
+        # sólo la ETIQUETA: la columna del df conserva su nombre, que es
+        # lo que leen `editado["Cantidad"]` y compañía más abajo. Lo que
+        # sobra de ancho lo reparte Streamlit entre todas.
         column_config={
-            "Quitar": st.column_config.CheckboxColumn(width="small"),
-            "Cantidad": st.column_config.NumberColumn(min_value=0.0, step=0.01, format="%.2f"),
-            "Precio unit. (S/)": st.column_config.NumberColumn(min_value=0.0, step=0.01, format="%.2f"),
-            "Unidad": st.column_config.TextColumn(width="small"),
+            "Quitar": st.column_config.CheckboxColumn(
+                "✕", width=36, help="Marcar para quitar"),
+            "Código": st.column_config.TextColumn("Cód.", width=68),
+            "Producto": st.column_config.TextColumn("Producto", width=170),
+            "Unidad": st.column_config.TextColumn(
+                "Und.", width=62, help="Unidad"),
+            "Cantidad": st.column_config.NumberColumn(
+                "Cant.", width=62, help="Cantidad",
+                min_value=0.0, step=0.01, format="%.2f"),
+            "Precio unit. (S/)": st.column_config.NumberColumn(
+                "P. unit.", width=72, help="Precio unitario (S/)",
+                min_value=0.0, step=0.01, format="%.2f"),
+            "Subtotal (S/)": st.column_config.NumberColumn(
+                "Subtot.", width=72, help="Subtotal (S/)", format="%.2f"),
+            "% del total": st.column_config.NumberColumn(
+                "%", width=48, help="% del costo total", format="%.1f"),
         },
     )
 
@@ -588,7 +607,7 @@ def _limpiar_modo(modo):
 
 
 # ─── Receta de venta ─────────────────────────────────────────────────────
-def _render_receta_venta():
+def _render_receta_venta(slot_nombre):
     modo = "venta"
     df_cat = _catalogo_insumos_cacheado()
     if df_cat is None:
@@ -598,11 +617,11 @@ def _render_receta_venta():
         )
         return
 
-    # Fila 1: nombre de la receta (justo debajo del toggle Receta/Combo/…).
-    # El campo «Porciones» se retiró el 2026-09-23 a pedido: el pricing va
-    # sobre la RECETA entera, no per-porción.
-    c_nom, _pad = st.columns([5, 5])
-    with c_nom:
+    # Fila 1: el nombre va en la MISMA fila que el toggle Receta/Combo/…
+    # (`slot_nombre`, lo abre `_fragment_nueva_receta`). El campo
+    # «Porciones» se retiró el 2026-09-23 a pedido: el pricing va sobre la
+    # RECETA entera, no per-porción.
+    with slot_nombre:
         nombre = st.text_input(
             "Nombre de la receta", key=_key(modo, "nombre"),
             placeholder="nombre de la receta…",
@@ -657,7 +676,7 @@ def _render_receta_venta():
 
 
 # ─── Combo ───────────────────────────────────────────────────────────────
-def _render_combo():
+def _render_combo(slot_nombre):
     modo = "combo"
     df_prod = _catalogo_productos_venta_cacheado()
     if df_prod is None:
@@ -667,12 +686,11 @@ def _render_combo():
         )
         return
 
-    # Mismo esquema que _render_receta_venta: nombre debajo del toggle,
+    # Mismo esquema que _render_receta_venta: nombre al lado del toggle,
     # buscador después, ítems a la izquierda + panel de precios al costado,
     # y por último guardar. Combo no tiene "porciones" (un combo se costea
     # entero), así que no hay diferencia estructural con Receta de venta.
-    c_nom, _pad = st.columns([5, 5])
-    with c_nom:
+    with slot_nombre:
         nombre = st.text_input(
             "Nombre del combo", key=_key(modo, "nombre"),
             placeholder="nombre del combo…",
@@ -817,18 +835,25 @@ def _fragment_nueva_receta():
     tarjetas de Compras (regla #456)."""
     _init_estado()
 
-    modo_label = st.segmented_control(
-        "Tipo", ["Receta de venta", "Combo", "Guardadas"],
-        default="Receta de venta", key="form_receta_modo",
-        label_visibility="collapsed",
-    )
+    # Nombre y toggle en UNA fila (pedido 2026-09-23): el nombre a la
+    # izquierda, acortado, y el toggle al lado. Las columnas se abren ACÁ,
+    # antes de saber el modo, porque el toggle decide qué renderer corre y
+    # el nombre lo dibuja el renderer (su key es por modo). En «Guardadas»
+    # el hueco del nombre queda vacío y el toggle no se mueve de sitio.
+    c_nom, c_tipo, _pad = st.columns([3, 3, 4], vertical_alignment="center")
+    with c_tipo:
+        modo_label = st.segmented_control(
+            "Tipo", ["Receta de venta", "Combo", "Guardadas"],
+            default="Receta de venta", key="form_receta_modo",
+            label_visibility="collapsed",
+        )
 
     if modo_label == "Combo":
-        _render_combo()
+        _render_combo(c_nom)
     elif modo_label == "Guardadas":
         _render_guardadas()
     else:
-        _render_receta_venta()
+        _render_receta_venta(c_nom)
 
 
 def render_formulario_receta():
