@@ -1877,6 +1877,69 @@ CSS = """    /* ================================================================
         white-space: nowrap !important;
     }
 
+    /* Fila de KPI de «Tendencia diaria de venta» (2026-09-24, regla #515):
+       el total de la vista y lo de cada canal. Es el mismo dibujo que la
+       `.sem-kpis` de «Compras por período» (`_css_proveedor.py`), con una
+       marca de color por canal —la de su tramo en la barra— para que la
+       fila haga también de leyenda. Vive acá y no allá porque ese CSS sólo
+       se inyecta en Compras. */
+    .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-vt_resumen_kpi .vt-kpis {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 2px 0;
+    }
+    .st-key-vt_resumen_kpi .vt-kpi {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+        max-width: 132px;
+        padding: 0 12px;
+        line-height: 1.2;
+        border-left: 1px solid var(--border);
+    }
+    .st-key-vt_resumen_kpi .vt-kpi:first-child {
+        padding-left: 0;
+        border-left: none;
+        max-width: none;
+    }
+    .st-key-vt_resumen_kpi .vt-kpi-rot {
+        font-size: 10px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .st-key-vt_resumen_kpi .vt-kpi[style] .vt-kpi-rot::before {
+        content: "";
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: 4px;
+        border-radius: 2px;
+        background: var(--vt-kpi-color);
+    }
+    .st-key-vt_resumen_kpi .vt-kpi-val {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+    .st-key-vt_resumen_kpi .vt-kpi-sub {
+        margin-left: 4px;
+        font-size: 10px;
+        font-weight: 400;
+        color: var(--text-secondary);
+    }
+    .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val {
+        color: var(--accent-deep);
+        font-weight: 700;
+    }
+
     /* =================================================================== */
     /* Panel "Detalle" del comparativo de Ventas (graficos/ventas_comparativo)*/
     /*                                                                       */

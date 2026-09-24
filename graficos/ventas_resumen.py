@@ -1,7 +1,8 @@
 """
 graficos.ventas_resumen — vista "Resumen ejecutivo" del dashboard de Ventas:
-KPIs del rango + venta total por día (barras coloreadas por tendencia
-día-a-día) + volumen de Pax, ticket promedio diario y top platos.
+venta total por día (barras partidas por canal de venta, con el total y la
+variación día-a-día encima) + volumen de Pax, ticket promedio diario y top
+platos.
 
 Nació como un candlestick (mockup tipo "panel bursátil" para restaurantes)
 con apertura/cierre = primera/última línea de venta del día — se reemplazó
@@ -37,19 +38,31 @@ sigue viviendo en "Ranking & FoodCost" — este panel es la foto rápida de un
 vistazo, no su reemplazo.
 """
 
+from html import escape
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from tema import (ACENTO, ADVERTENCIA, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
-                  TEXTO_PRINCIPAL)
+                  PALETA_SERIES, SERIE_PRINCIPAL, TEXTO_PRINCIPAL)
 from graficos.base import (
     _card, _compras_layout, _compras_truncar, preservar_widgets,
     scope_rerun, selector_fecha_tarjeta,
 )
 from graficos.compras._comun import _first_point
+# LA BARRA PARTIDA POR CANAL ES LA DE «COMPRAS POR PERÍODO» (2026-09-24, a
+# pedido: «similar estilo y tamaño»). No se copian las cuentas, se importan:
+# el alto de la figura, dónde va la leyenda y el plan de las etiquetas de
+# encima de la barra son UNA cuenta (`semanal._alto_area_trazo`), y dos
+# copias se desincronizan a la primera que se toque. Regla #515.
+from graficos.compras.semanal import (
+    _ALTO_FIG_SOLO, _ETQ_FUENTE, _ETQ_SEP, _LEYENDA_Y, _etiqueta_en_la_punta,
+    _plan_etiquetas, _techo_etiquetas,
+)
 from graficos import alturas
+from utils import fmt_k
 
 MIN_DIAS = 5     # con menos, la tendencia día-a-día no dice nada
 MAX_DIAS = 30    # tope de barras legibles. Mismo espíritu que MAX_SEMANAS de
@@ -89,6 +102,22 @@ _DIAS_ABR_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 # `compras/semanal.py::_ATENUADO` y por el mismo motivo (regla #476).
 _ATENUADO = 0.2
 
+# ── Los colores de los canales ─────────────────────────────────────────────
+# Son CATEGORÍAS (local, Rappi, Pedidos Ya…), no tramos ordenados, así que
+# van con hues distintos de `PALETA_SERIES` y no con la rampa `SERIE_TRAMOS`.
+# Se saltan el naranja y el verde: el naranja ya es la línea del Ticket, y
+# el verde dice «subió» en la etiqueta de la barra. El primero —el canal
+# que más vende, abajo de la pila— es el morado de la marca.
+_COLORES_CANAL = [PALETA_SERIES[_i] for _i in (0, 1, 2, 5, 6, 7)]
+
+_SIN_CANAL = "Sin canal"
+
+_KPI_CANALES = 4
+"""Canales con tarjeta propia en la fila de KPI; el resto va sumado. Medido
+el 2026-09-24 en `ventas.parquet`: son cuatro en todo el histórico (En el
+Local 97 %, Rappi 3 %, Pedidos Ya y Para Llevar casi nada), así que hoy el
+«N más» no aparece — está para el día que se sume un quinto."""
+
 
 def _con_alpha(_hex, _a):
     """`#rrggbb` → `rgba(r,g,b,a)`. El foco se atenúa por COLOR y no con
@@ -104,9 +133,74 @@ def _fmt_dia(dt):
     return f"{_DIAS_ABR_ES[dt.weekday()]} {dt.day:02d}/{dt.month:02d}"
 
 
+def _canal_legible(s):
+    """La columna de canal como texto, con los nulos nombrados. Pasa por
+    `object` antes del `where` porque el parquet puede traerla como
+    categórica, y a una categórica no se le escribe un valor que no tenía."""
+    s = s.astype("object")
+    return s.where(s.notna(), _SIN_CANAL).astype(str).str.strip()
+
+
+def _renglones_barra(total, pct):
+    """Los renglones de la etiqueta de una barra, como `(plano, html)`: el
+    total y la variación contra el día anterior. Misma forma que
+    `semanal._renglones_etiqueta`, con el color al revés: en VENTAS subir
+    es la buena noticia (en Compras, gastar más es rojo)."""
+    if not total:
+        return []
+    _t = fmt_k(total)
+    salida = [(_t, _t)]
+    if not pd.isna(pct):
+        _v = f"{pct:+.0f}%"
+        _c = EXITO if pct >= 0 else ERROR
+        salida.append((_v, f"<span style='color:{_c}'><b>{_v}</b></span>"))
+    return salida
+
+
+def _html_kpi_canales(total, n_dias, canales):
+    """La fila de KPI de la tarjeta: el total de la vista y lo de cada canal.
+
+    Mismo dibujo que la de «Compras por período»
+    (`semanal._html_kpi_vista`), con canales en vez de familias. `canales`
+    es `[(nombre, valor), …]` de mayor a menor. Con un solo canal no se
+    desglosa nada: el total ya es ese canal."""
+    def _tarjeta(rotulo, valor, sub, clase="", tip=""):
+        return (f'<div class="vt-kpi {clase}" title="{escape(tip or rotulo)}">'
+                f'<span class="vt-kpi-rot">{escape(rotulo)}</span>'
+                f'<span class="vt-kpi-val">{escape(valor)}'
+                f'<span class="vt-kpi-sub">{escape(sub)}</span></span></div>')
+
+    _n = f"{n_dias:,} día" + ("" if n_dias == 1 else "s")
+    partes = [_tarjeta("Venta de la vista", fmt_k(total), _n, "vt-kpi-total",
+                       f"Venta de la vista: S/ {total:,.2f} · {_n}")]
+    if len(canales) > 1:
+        for (nom, v), color in zip(canales[:_KPI_CANALES],
+                                   _colores_de(len(canales))):
+            p = v / total if total else 0.0
+            partes.append(
+                f'<div class="vt-kpi" style="--vt-kpi-color:{color}" '
+                f'title="{escape(nom)}: S/ {v:,.2f} · {p:.1%}">'
+                f'<span class="vt-kpi-rot">{escape(nom)}</span>'
+                f'<span class="vt-kpi-val">{escape(fmt_k(v))}'
+                f'<span class="vt-kpi-sub">{p:.0%}</span></span></div>')
+        resto = canales[_KPI_CANALES:]
+        if resto:
+            _v = sum(v for _, v in resto)
+            _p = _v / total if total else 0.0
+            partes.append(_tarjeta(
+                f"{len(resto)} más", fmt_k(_v), f"{_p:.0%}", "",
+                f"{len(resto)} canales más: S/ {_v:,.2f} · {_p:.1%}"))
+    return '<div class="vt-kpis">' + "".join(partes) + "</div>"
+
+
+def _colores_de(n):
+    """Un color por canal, en el orden de la pila (el que más vende primero)."""
+    return [_COLORES_CANAL[_i % len(_COLORES_CANAL)] for _i in range(n)]
+
+
 @st.fragment
 def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
-                    col_cant, col_fam=None, col_serv=None):
+                    col_cant, col_fam=None, col_serv=None, col_canal=None):
     """"Resumen ejecutivo": selector de fecha + filtros de Grupo/Servicio +
     KPIs + venta diaria clickeable + ticket promedio + top platos, todas las
     piezas sobre la MISMA ventana de días (últimos `MAX_DIAS` con datos)
@@ -170,6 +264,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         cols["pax"] = pd.to_numeric(d[col_pax], errors="coerce")
     if col_pedido:
         cols["ped"] = d[col_pedido].astype(str)
+    if col_canal and col_canal in d.columns:
+        cols["canal"] = _canal_legible(d[col_canal])
     tabla_full = pd.DataFrame(cols).dropna(subset=["dia", "venta"])
     if tabla_full.empty:
         st.info("Sin datos en el rango cargado.")
@@ -223,19 +319,46 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                      "del rango cargado.")
 
     # ── Venta total por día (barras clickeables) + volumen + ticket ───────
-    # Coloreadas por tendencia día-a-día (mismo criterio que el KPI "Días en
-    # alza": total de hoy vs. total de ayer) — no por apertura/cierre de
-    # transacciones sueltas (eso era el candlestick que reemplaza esta
-    # vista, ver arquitectura.md regla #85). El primer día no tiene día
-    # anterior con el que compararse: color neutro (ACENTO), ni sube ni baja.
+    # LA BARRA SE PARTE POR CANAL DE VENTA (2026-09-24, regla #515): «En el
+    # Local» abajo y los de delivery encima, como la barra partida de
+    # «Compras por período». Hasta ese día la barra era una sola, pintada
+    # verde/roja según subía o bajaba contra el día anterior; ese dato no se
+    # fue, pasó a la etiqueta de encima de la barra (`_renglones_barra`),
+    # porque un color no puede decir las dos cosas a la vez.
     g["pct_vs_ayer"] = g["total"].pct_change() * 100
-    _colores_base = [ACENTO if pd.isna(p) else (EXITO if p >= 0 else ERROR)
-                     for p in g["pct_vs_ayer"]]
-    hover_dia = [
-        f"{f:%d/%m/%Y} · S/ {t:,.0f}<br>"
-        + ("Primer día del rango" if pd.isna(p) else f"{p:+.1f}% vs. día anterior")
-        for f, t, p in zip(g["dia"], g["total"], g["pct_vs_ayer"])
-    ]
+    _var_hov = ["Primer día de la vista" if pd.isna(p)
+                else f"{p:+.1f}% vs. día anterior" for p in g["pct_vs_ayer"]]
+
+    # Venta por día × canal, ALINEADA a `g["dia"]` (una fila por barra) y
+    # con las columnas por NOMBRE, no por posición (regla #481). Los canales
+    # en orden de venta: el que más vende abajo de la pila, como la compra
+    # mayor en la barra de Compras.
+    if "canal" in tabla.columns:
+        por_canal = (tabla.pivot_table(index="dia", columns="canal",
+                                       values="venta", aggfunc="sum")
+                     .reindex(g["dia"]).fillna(0.0))
+        _tot_canal = por_canal.sum().sort_values(ascending=False)
+        canales = [c for c in _tot_canal.index if _tot_canal[c] != 0]
+    else:
+        por_canal = pd.DataFrame({"Venta": g["total"].to_numpy()},
+                                 index=g["dia"])
+        canales = ["Venta"]
+    _partida = len(canales) > 1
+    _colores = _colores_de(len(canales)) if _partida else [SERIE_PRINCIPAL]
+
+    # El reparto del día, para colgar al final del hover de CADA tramo: el
+    # hover de un tramo dice su canal, pero la pregunta de quien lo mira es
+    # «¿y los otros?». Con un solo canal no hay reparto que contar.
+    if _partida:
+        _reparto = []
+        for _j, _t in enumerate(g["total"]):
+            _ls = [f"{c}: S/ {por_canal[c].iloc[_j]:,.0f}"
+                   + (f" · {por_canal[c].iloc[_j] / _t:.0%}" if _t else "")
+                   for c in canales if por_canal[c].iloc[_j]]
+            _reparto.append(f"<br><span style='color:{GRIS_TEXTO}'>"
+                            "Por canal</span><br>" + "<br>".join(_ls))
+    else:
+        _reparto = [""] * len(g)
 
     # El día en foco (índice en `g`), leído ANTES de dibujar: la selección de
     # `on_select` persiste entre reruns, así que va en la key del gráfico y se
@@ -245,19 +368,16 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         foco = None
         st.session_state["vt_resumen_foco"] = None
 
-    # AL HACER CLIC, ESA BARRA SE ILUMINA Y EL RESTO SE ATENÚA — el mismo
-    # gesto que «Compras por período» (arquitectura.md regla #476): el foco
-    # se marca por COLOR (las sin foco van a `_ATENUADO` de alfa) y no con
-    # `marker.opacity` por punto, que sobre barras crashea Plotly. Sin foco,
-    # todas a tono pleno.
-    if foco is not None:
-        colores = [c if i == foco else _con_alpha(c, _ATENUADO)
-                   for i, c in enumerate(_colores_base)]
-    else:
-        colores = _colores_base
-
     with _card("ventas_resumen_dia", "Tendencia diaria de venta",
                titulo_arriba=True):
+        # La fila de KPI: el total de la vista y lo de cada canal. Misma
+        # pieza que la de «Compras por período», con canales por familias.
+        with st.container(key="vt_resumen_kpi"):
+            st.markdown(_html_kpi_canales(
+                float(g["total"].sum()), len(g),
+                [(c, float(_tot_canal[c])) for c in canales]
+                if _partida else []), unsafe_allow_html=True)
+
         # UNA sola figura (no make_subplots): la selección por clic de
         # `st.plotly_chart(on_select=...)` NO llega a las trazas de un
         # subplot —medido el 2026-09-22, `evt.selection.points` volvía
@@ -268,12 +388,56 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # eje Y secundario, que es como `ventas.py::_ventas_grafico_dia`
         # dibuja Pax. Ver arquitectura.md regla #488.
         _hay_ticket = vol_label and "ticket" in g.columns
+        _alto_fig = _ALTO_FIG_SOLO
+
+        # ── La etiqueta de encima: total + variación (plan de Compras) ──
+        # `_plan_etiquetas` decide la forma (derecha / girada / unida) y
+        # cuántos renglones entran, contra los píxeles de cada barra; lo que
+        # no entra sigue en el hover.
+        _reng = [_renglones_barra(t, p)
+                 for t, p in zip(g["total"], g["pct_vs_ayer"])]
+        _plan_etq, _k_etq, _alto_etq = _plan_etiquetas(
+            len(g), [[_p for _p, _ in _r] for _r in _reng], _alto_fig)
+        _textos = [None] * len(g)
+        if _plan_etq:
+            _sep = _ETQ_SEP if _plan_etq == "unida" else "<br>"
+            _textos = [(_sep.join(_h for _, _h in _r[:_k_etq]) or None)
+                       for _r in _reng]
+        _tramos = [pd.DataFrame({"valor": por_canal[c].to_numpy()})
+                   for c in canales]
+        _textos_tr = (_etiqueta_en_la_punta(_tramos, _textos) if _plan_etq
+                      else [None] * len(canales))
+        # `constraintext="none"`: sin él Plotly ENCOGE la etiqueta que no
+        # entra en la barra en vez de dejarla afuera a su tamaño.
+        _estilo_etq = dict(
+            textposition="outside", cliponaxis=False, constraintext="none",
+            textangle=-90 if _plan_etq in ("girada", "unida") else 0,
+            textfont=dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL))
+
         fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=g["dia"], y=g["total"], name="Venta", yaxis="y",
-            marker=dict(color=colores),
-            hovertext=hover_dia, hoverinfo="text",
-        ))
+        _cd = list(zip([f"{_fmt_dia(f)}/{f.year}" for f in g["dia"]],
+                       g["total"], _var_hov, _reparto))
+        for _i, (c, _col) in enumerate(zip(canales, _colores)):
+            # AL HACER CLIC, ESE DÍA SE ILUMINA Y EL RESTO SE ATENÚA — el
+            # mismo gesto que «Compras por período» (regla #476): por COLOR
+            # (alfa `_ATENUADO`), nunca con `marker.opacity` por punto, que
+            # sobre barras con texto encima crashea Plotly. Cada canal
+            # conserva su tono; lo que se marca es el DÍA entero.
+            _color = ([_col if _j == foco else _con_alpha(_col, _ATENUADO)
+                       for _j in range(len(g))] if foco is not None else _col)
+            fig.add_trace(go.Bar(
+                x=g["dia"], y=por_canal[c].to_numpy(), name=c, yaxis="y",
+                marker=dict(color=_color), customdata=_cd,
+                hovertemplate=(
+                    "%{customdata[0]}"
+                    + (f"<br><b>{escape(c)}</b>: S/ %{{y:,.0f}}"
+                       if _partida else "")
+                    + "<br>Total del día: S/ %{customdata[1]:,.0f}"
+                    "<br>%{customdata[2]}%{customdata[3]}<extra></extra>"),
+            ))
+            if _plan_etq:
+                fig.data[-1].update(text=_textos_tr[_i], **_estilo_etq)
+        fig.update_layout(barmode="stack")
         if vol_label:
             fig.add_trace(go.Scatter(
                 x=g["dia"], y=g["pax"], name=vol_label, mode="lines",
@@ -312,18 +476,27 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                 opacity=0.8, layer="below",
             )
 
-        # El gráfico es el protagonista de la vista (sin KPIs arriba): alto
-        # PROTAGONISTA. `_xright` recorta el dominio del eje X para hacerle
-        # lugar al tercer eje (el del ticket) a la derecha, como
-        # `_ventas_grafico_dia`.
+        # El alto es el de la figura de «Compras por período» (pedido:
+        # «similar tamaño»), y la leyenda va DEBAJO como allá: el techo de
+        # las etiquetas se calcula con esa leyenda en ese lugar
+        # (`semanal._LEYENDA_Y`). `_xright` recorta el dominio del eje X
+        # para hacerle lugar al tercer eje (el del ticket) a la derecha,
+        # como `_ventas_grafico_dia`.
         _xright = 0.88 if _hay_ticket else 1.0
-        _compras_layout(fig, alto=alturas.PROTAGONISTA)
+        _compras_layout(fig, alto=_alto_fig)
+        _rng_y = (_techo_etiquetas(float(g["total"].max()), 0.0, _alto_fig,
+                                   _alto_etq) if _plan_etq else None)
         fig.update_layout(
-            showlegend=bool(vol_label),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+            showlegend=bool(vol_label) or _partida,
+            # `traceorder="normal"`: con barras apiladas Plotly invierte la
+            # leyenda por defecto, y salía «Ticket · Clientes · Rappi · En
+            # el Local» — el canal principal al final.
+            legend=dict(orientation="h", y=-_LEYENDA_Y, x=0,
+                        font=dict(size=10), traceorder="normal"),
             margin=dict(l=10, r=(70 if _hay_ticket else 50 if vol_label else 10),
                         t=30, b=10),
-            yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE),
+            yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE,
+                       **({"range": _rng_y} if _rng_y else {})),
             yaxis2=dict(overlaying="y", side="right", showgrid=False,
                         title=vol_label or "", tickformat=",.0f",
                         visible=bool(vol_label)),
@@ -355,8 +528,9 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             on_select="rerun", selection_mode="points",
             config={"displaylogo": False, "displayModeBar": False})
         st.caption(
-            "Verde = vendió más que el día anterior · rojo = vendió menos "
-            "(el primer día del rango no tiene con qué compararse). "
+            ("Cada barra se parte por canal de venta. " if _partida else "")
+            + "Encima, el total del día y cuánto cambió contra el día "
+            "anterior (verde = vendió más, rojo = vendió menos). "
             "Clic en una barra para ver el detalle del día."
             + _nota_recorte)
 
@@ -379,7 +553,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         help=_AYUDA_MODO) or _MODO_DEFAULT
 
     if _modo == _MODO_RESUMEN:
-        _tabla_resumen(g, vol_label)
+        _tabla_resumen(g, vol_label,
+                       por_canal[canales] if _partida else None)
     else:
         _tabla_detalle(tabla, g, foco, col_prod, col_cant)
 
@@ -428,7 +603,7 @@ def _fmt_pct(v):
     return "—" if pd.isna(v) else f"{v:+.0f}%"
 
 
-def _tabla_resumen(g, vol_label):
+def _tabla_resumen(g, vol_label, por_canal=None):
     """El gráfico escrito como tabla: una fila por día (en el orden del eje)
     con venta, volumen, ticket y la variación contra el día anterior, más
     una fila TOTAL al pie. No depende del foco: se ve siempre.
@@ -438,11 +613,16 @@ def _tabla_resumen(g, vol_label):
     ignorando el `format` del Styler —el primer día no tiene variación—, y
     con la columna ya en texto eso se vuelve «—» de verdad. El color de la
     variación se decide por el signo del texto, que es lo único que queda."""
+    # Con la barra partida, una columna por canal entre la Venta y el
+    # volumen: la tabla sigue siendo el gráfico escrito (regla #515).
+    canales = [] if por_canal is None else list(por_canal.columns)
     filas = []
-    for _, r in g.iterrows():
+    for _j, (_, r) in enumerate(g.iterrows()):
         fila = {"Día": _fmt_dia(r["dia"]),
                 "Venta": f"S/ {r['total']:,.0f}",
                 "Δ vs día ant.": _fmt_pct(r.get("pct_vs_ayer", np.nan))}
+        for c in canales:
+            fila[c] = f"S/ {por_canal[c].iloc[_j]:,.0f}"
         if vol_label:
             fila[vol_label] = f"{r['pax']:,.0f}"
             _t = r.get("ticket", np.nan)
@@ -452,6 +632,8 @@ def _tabla_resumen(g, vol_label):
     _tp = g["pax"].sum() if vol_label else 0
     total = {"Día": "Total", "Venta": f"S/ {g['total'].sum():,.0f}",
              "Δ vs día ant.": ""}
+    for c in canales:
+        total[c] = f"S/ {por_canal[c].sum():,.0f}"
     if vol_label:
         total[vol_label] = f"{_tp:,.0f}"
         total["Ticket"] = (f"S/ {g['total'].sum() / _tp:,.2f}"
@@ -459,8 +641,8 @@ def _tabla_resumen(g, vol_label):
     filas.append(total)
     tv = pd.DataFrame(filas)
 
-    # Orden de columnas: Día · Venta · [Clientes · Ticket] · Δ
-    orden = ["Día", "Venta"] + (
+    # Orden de columnas: Día · Venta · [canales] · [Clientes · Ticket] · Δ
+    orden = ["Día", "Venta"] + canales + (
         [vol_label, "Ticket"] if vol_label else []) + ["Δ vs día ant."]
     tv = tv[orden]
 

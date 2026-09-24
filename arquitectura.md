@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-514 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+515 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (178)
 
@@ -289,7 +289,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#509** — «Salidas por período» es la MISMA tarjeta que la de requerimientos, con otro Lado. El área…
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 
-**Plotly y figuras** (92)
+**Plotly y figuras** (93)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -383,6 +383,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 - **#508** — Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o líneas se descartan…
+- **#515** — La barra de «Tendencia diaria de venta» se parte por canal, y copia las CUENTAS de «Compras…
 
 **AgGrid y tablas** (82)
 
@@ -42293,6 +42294,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      despejarla de ahí. Dos cuentas «razonables» en dos vistas eran dos
      maneras de discrepar con el sistema.
 
+515. **La barra de «Tendencia diaria de venta» se parte por canal, y copia
+     las CUENTAS de «Compras por período» importándolas, no pegándolas.**
+     2026-09-24, a pedido: «partir la barra mostrando información de los
+     canales de venta, osea local, delivery, rappi, etc, y hacerla de
+     similar estilo y tamaño que la vista de compras por periodo».
+
+     **Qué hay para partir.** Medido en `ventas.parquet`: cuatro canales en
+     todo el histórico, y muy desparejos — En el Local 97 %, Rappi 3 %,
+     Pedidos Ya (sólo 2025) y Para Llevar casi nada. En septiembre 2026 el
+     tramo de Rappi es ~1,5 % de la barra: se ve como un filo cian encima
+     del morado, no como una mitad. Eso ES el dato; la fila de KPI de la
+     tarjeta (total de la vista + un casillero por canal con su % y su
+     color) es la que dice el número, y el hover de cada tramo trae el
+     reparto completo del día.
+
+     **El verde/rojo no se perdió, se mudó.** La barra entera iba verde o
+     roja según subía o bajaba contra el día anterior. Un tramo no puede
+     llevar dos colores (el del canal y el de la tendencia), así que la
+     tendencia pasó a la etiqueta de encima: el total del día y el «+12 %»
+     coloreado. **En Ventas el verde es subir** — en Compras es al revés
+     (gastar más es rojo), por eso `_renglones_barra` no reusa
+     `semanal._renglones_etiqueta`.
+
+     **Qué se importa de `compras/semanal.py`:** `_ALTO_FIG_SOLO` (el alto
+     de la figura), `_LEYENDA_Y` (la leyenda va DEBAJO), `_plan_etiquetas`,
+     `_techo_etiquetas` y `_etiqueta_en_la_punta`. No es comodidad: el techo
+     de las etiquetas se calcula con la leyenda en `-_LEYENDA_Y` y el alto
+     del área de trazo sale de las dos (`_alto_area_trazo`). Una copia que
+     moviera la leyenda sin mover la cuenta corta la etiqueta de la barra
+     más alta sin dar error.
+
+     **Tres trampas que aparecieron:**
+     - Con barras apiladas Plotly INVIERTE la leyenda por defecto: salía
+       «Ticket · Clientes · Rappi · En el Local». `traceorder="normal"`.
+     - La columna de canal puede venir categórica: nombrar los nulos
+       («Sin canal») pasa por `astype("object")` antes del `where`.
+     - Los colores de canal saltan el naranja (ya es la línea del Ticket) y
+       el verde (es «subió» en la etiqueta) de `PALETA_SERIES`.
+
+     **Lo que queda aceptado:** la línea del Ticket y la de Clientes
+     cruzan las etiquetas giradas de algunos días — viven en ejes propios
+     que no saben dónde terminan las barras. Y la tabla «Resumen» suma una
+     columna por canal entre Venta y Clientes: sigue siendo el gráfico
+     escrito como tabla.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42305,7 +42351,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#514**; la próxima toma el número siguiente.
+> última regla es la **#515**; la próxima toma el número siguiente.
 
 >
 
