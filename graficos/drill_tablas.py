@@ -21,6 +21,10 @@ QUÉ ES CADA PIEZA
     % de selección que se recalcula en vivo contra lo tildado.
   · `seccion_cadena` — las cuatro juntas: arma las columnas, acumula la
     ruta y dibuja. Una sección de la pila en una sola llamada.
+  · `seccion_cuadros` — la variante SIN tabla de hojas: todos los niveles
+    son cuadros, repartidos en filas, y ninguno abre con foco. La estrenó
+    «Detalle de salidas» (Movimientos, 2026-09-24): tipo de baja › área ›
+    familia › subfamilia › producto, tres arriba y dos abajo. Regla #511.
 
 EL LOOK NO SE INVENTA ACÁ: sale de Compras (`ALTO_FILA_RANK`,
 `CROMO_GRID_RANK`, `CSS_RANKING_GRID`), que es donde nació con el Ranking de
@@ -39,6 +43,8 @@ módulo lo formateara). Migrar Inventario a este módulo es el paso pendiente
 y es mecánico: sus cuatro funciones pasan a ser una llamada a
 `seccion_cadena` por sección. Ver regla #411.
 """
+
+from html import escape
 
 import numpy as np
 import pandas as pd
@@ -127,6 +133,30 @@ FORMATO_RANKING = {
     2: {},  # los defaults de `tabla_ranking`: 80 / flex 2 / barra 0.62
     3: {"ancho_pct": 64, "flex_nombre": 3, "ancho_barra": 0.45},
 }
+
+
+def formato_por_ancho(frac):
+    """El formato de un cuadro por la FRACCIÓN de la fila que ocupa.
+
+    Son los tres formatos de `FORMATO_RANKING` y `FORMATO_DETALLE`, que se
+    midieron contando cuadros por fila, puestos en la escala que de verdad
+    los decide: el ancho (regla #349). Reproduce los cuatro repartos de
+    `seccion_cadena` —(1.7, 1) da 0.63 y 0.37; (1.2, 1, 1), 0.375 y
+    0.31— y sirve para los que no son una fila sola, como los de
+    `seccion_cuadros`:
+
+      ≥ 0.55  el ranking de dos cuadros (~770px de tarjeta a 1366)
+              → los defaults de `tabla_ranking`: 80 / flex 2 / barra 0.62
+      ≥ 0.34  el ranking de tres, o el desglose de dos (~450px)
+              → 64 / flex 3 / barra 0.45
+      resto   un desglose de tres (306px de grilla)
+              → 52 / flex 5 / barra 0.30 y el monto a miles ("S/ 39.2k")
+    """
+    if frac >= 0.55:
+        return FORMATO_RANKING[2]
+    if frac >= 0.34:
+        return FORMATO_RANKING[3]
+    return FORMATO_DETALLE[3]
 
 # Qué categorías se ESCRIBEN como nombre propio en vez de como las grita el
 # ERP (pedido del 2026-09-13: "que las letras en el cuadro de familia y
@@ -376,8 +406,12 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
         tabla,
         gridOptions={
             "columnDefs": [
-                {"field": col_nombre, "flex": flex_nombre,
-                 "tooltipField": col_nombre},
+                # `headerName` explícito: sin él AG Grid arma la cabecera
+                # desde el `field` y le sube la inicial a CADA palabra —
+                # «Tipo De Baja», «Sub Almacén»—, contra el «Precio unitario»
+                # del resto de las tablas del repo (2026-09-24, #511).
+                {"field": col_nombre, "headerName": col_nombre,
+                 "flex": flex_nombre, "tooltipField": col_nombre},
                 {"field": etiqueta_valor, "flex": 2, "type": "numericColumn",
                  "cellStyle": _js_barra, "valueFormatter": _js_soles},
                 {"field": "%", "width": ancho_pct, "type": "numericColumn",
@@ -430,10 +464,17 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
 
 
 def tabla_detalle(d, col_next, nombre_next, col_val, key, ruta=(),
-                  formato=None, etiqueta_valor="Valorizado"):
+                  formato=None, etiqueta_valor="Valorizado", con_cuenta=False):
     """Un eslabón más de la cadena: el desglose del recorte que ya está en
     foco — la pregunta natural después de "cuánto pidió COCINA" es "de qué se
     compone".
+
+    Sin nada elegido a su izquierda (los cuadros de `seccion_cuadros`, que no
+    abren con foco) desglosa el recorte entero y el título nombra la medida
+    —«Valorizado por área»— en vez de un eslabón que no hay. `con_cuenta`
+    suma al título cuántas filas trae la tabla cuando pasan de las que se
+    ven (`FILAS_RANK`): en una tabla que scrollea, sin el número no se ve si
+    son 12 o 400 (el criterio de `tabla_hojas`).
 
     Es la MISMA tabla que el ranking de la izquierda (`tabla_ranking`), no
     una copia: sólo cambia el reparto de anchos. Y tiene clic propio:
@@ -463,9 +504,14 @@ def tabla_detalle(d, col_next, nombre_next, col_val, key, ruta=(),
         st.caption(f"Sin desglose adicional para {_de}." if _de
                    else "Sin desglose adicional.")
         return None
+    _n = claves(dd, col_next).nunique() if con_cuenta else 0
     st.markdown(
         f'<div class="inv-rank-tit" title="{_ruta_txt.replace(chr(34), "")}">'
-        f'{_de} — por {nombre_next}</div>', unsafe_allow_html=True)
+        + (f"{_de} — por {nombre_next}" if _de
+           else f"{etiqueta_valor} por {nombre_next}")
+        + (f' <span class="inv-rank-tit-n">{_n:,}</span>'
+           if _n > FILAS_RANK else "")
+        + "</div>", unsafe_allow_html=True)
     return tabla_ranking(
         dd, col_next, col_val, nombre_next, key,
         nombre_bonito=nombre_next in CATEGORIAS_NOMBRE_PROPIO,
@@ -819,3 +865,117 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
                     nombre_ctx=nombre_ctx, col_cant=col_cant,
                     col_punit=col_punit, col_unidad=col_unidad,
                     etiqueta_valor=etiqueta_valor)
+
+
+def claves_tarjetas_cuadros(pref, slug, n):
+    """Las keys de las `n` tarjetas de `seccion_cuadros`, en orden.
+
+    Con los prefijos de `seccion_cadena` —`ajuste_graf_card_izq_` la
+    primera, `ajuste_graf_card_der_` las demás, con `_n<i>` desde la
+    tercera—, porque de esos prefijos cuelga el CSS de tarjeta
+    (`estilos/_80_cards.py` y `_20_compras_rail.py`). Es función y no un
+    f-string suelto porque las nombra DOS sitios: la sección que las dibuja
+    y el piso de alto de `_80_cards.py`, que las enumera por key exacta
+    (un atributo adentro de un `:has()` es la regla #469) — y
+    `test_graficos.py::_pruebas_detalle_salidas` compara uno contra otro."""
+    return [f"ajuste_graf_card_izq_{pref}_{slug}"] + [
+        f"ajuste_graf_card_der_{pref}_{slug}" + ("" if i == 1 else f"_n{i}")
+        for i in range(1, n)]
+
+
+def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
+                    etiqueta_valor="Valorizado", titulo=None, nota=None):
+    """Todos los niveles como CUADROS, repartidos en filas, y ninguno abre
+    con foco.
+
+    La estrenó «Detalle de salidas» (Movimientos, 2026-09-24), a pedido:
+    «cuadros clickeables […] tipo de baja, área, familia, subfamilia y
+    producto, valorizado y porcentaje […] similar estilo a los cuadros de
+    la vista de stock por área». Es la cadena de `seccion_cadena` —el mismo
+    cuadro (`tabla_ranking`), el mismo clic, la misma ruta— con dos
+    diferencias, y las dos salen del pedido:
+
+      · NO HAY TABLA DE HOJAS. El último nivel es un cuadro más, con su
+        nombre, su valorizado y su %: sin cantidad ni precio unitario —lo
+        que trae la tabla de hojas— no hay nada que pida la franja ancha.
+      · NINGÚN CUADRO ABRE CON FOCO. Sin nada elegido a su izquierda, un
+        cuadro reparte el recorte ENTERO (el rango y los chips de la
+        franja), así que las cinco preguntas se contestan al abrir, sin un
+        clic. El foco de entrada de `seccion_cadena` (`abre_en`) existe por
+        la tabla de hojas, que sin él listaba el universo con scroll
+        horizontal (regla #405); acá no hay tabla ancha que proteger, y un
+        primer nivel pre-elegido escondería el reparto de los otros cuatro
+        —soltarlo vuelve al mismo default, nunca a «todo»—.
+
+    Clic en una fila = TOGGLE: recorta los cuadros que SIGUEN en `niveles`
+    (a su derecha y la fila de abajo), nunca los de antes. Se pueden saltar
+    niveles: con un tipo de baja y una familia elegidos y ningún área, la
+    subfamilia reparte ese tipo, en esa familia, en todas las áreas. Y cada
+    cuadro lleva la ruta en la key, así que al cambiar lo de antes nace sin
+    selección: un sub-foco no sobrevive al recorte que lo justificaba (el
+    mismo criterio que la cadena, regla #403).
+
+    `niveles` son pares (columna, nombre) en orden de lectura. `filas`, el
+    reparto de `st.columns` de cada fila; los cuadros las llenan en orden:
+    ((1.2, 1, 1), (1.2, 2)) son tres arriba y dos abajo, con el corte de la
+    primera columna en el mismo sitio en las dos filas. El formato de cada
+    cuadro sale de la fracción de la fila que ocupa (`formato_por_ancho`).
+
+    `titulo` es el del primer cuadro (por defecto, «Valorizado por
+    <nivel>»), y `nota`, un `(corto, largo)` que va pegado a él en letra
+    chica, con el largo de tooltip: lo que el recorte NO suma."""
+    if sum(len(f) for f in filas) != len(niveles):
+        raise ValueError(f"`filas` reparte {sum(len(f) for f in filas)} "
+                         f"cuadros y `niveles` trae {len(niveles)}")
+    # Sin guard de "inyectar una sola vez": un `st.markdown` de estilos con
+    # ese guard DESAPARECE en el rerun siguiente (regla #59).
+    st.markdown(CSS_TITULOS_DRILL, unsafe_allow_html=True)
+    tarjetas = claves_tarjetas_cuadros(pref, slug, len(niveles))
+    # La RUTA, como en `seccion_cadena`: tríos (columna, clave, texto), uno
+    # por cuadro ya dibujado — con None en la clave si ese cuadro no tiene
+    # fila elegida.
+    ruta = []
+    i = 0
+    for reparto in filas:
+        # columnas-internas: los cuadros de la sección, fila por fila. No es
+        # una fila de drill de Compras: COLUMNAS_DRILL no aplica.
+        cols = st.columns(reparto)
+        for j, peso in enumerate(reparto):
+            col_n, nombre_n = niveles[i]
+            formato = formato_por_ancho(peso / float(sum(reparto)))
+            foco = None
+            with cols[j]:
+                with st.container(border=True, key=tarjetas[i]):
+                    if not col_n:
+                        st.info(f"No se encontró la columna de {nombre_n}.")
+                    elif i == 0:
+                        _n = claves(d, col_n).nunique()
+                        st.markdown(
+                            '<div class="inv-rank-tit">'
+                            + escape(titulo or f"{etiqueta_valor} por "
+                                              f"{nombre_n}")
+                            + (f' <span class="inv-rank-tit-n">{_n:,}</span>'
+                               if _n > FILAS_RANK else "")
+                            + (f' <span class="inv-rank-tit-n" title="'
+                               f'{escape(nota[1])}">{escape(nota[0])}</span>'
+                               if nota else "")
+                            + "</div>", unsafe_allow_html=True)
+                        foco = tabla_ranking(
+                            d, col_n, col_val, nombre_n,
+                            key=f"{pref}_rank_grid_{slug}",
+                            nombre_bonito=nombre_n in CATEGORIAS_NOMBRE_PROPIO,
+                            etiqueta_valor=etiqueta_valor, **formato)
+                    else:
+                        # La key lleva la ruta con la POSICIÓN de cada
+                        # eslabón: acá se pueden saltar niveles, y sin la
+                        # posición un área y una familia que se llamaran
+                        # igual darían la misma key para dos recortes.
+                        _k = _slug("_".join(f"{p}_{v}" for p, (_, v, _t)
+                                            in enumerate(ruta) if v))
+                        foco = tabla_detalle(
+                            d, col_n, nombre_n, col_val,
+                            key=f"{pref}_det_grid_{slug}_{i}_{_k or 'todo'}",
+                            ruta=tuple(ruta), formato=formato,
+                            etiqueta_valor=etiqueta_valor, con_cuenta=True)
+            ruta.append((col_n, foco, texto_cat(nombre_n, foco)))
+            i += 1

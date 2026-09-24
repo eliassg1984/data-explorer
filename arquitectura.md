@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-510 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+511 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (177)
 
@@ -382,7 +382,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 - **#508** — Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o líneas se descartan…
 
-**AgGrid y tablas** (81)
+**AgGrid y tablas** (82)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -465,6 +465,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#485** — El detalle del Mapa de calor de Ajuste está SIEMPRE visible: hay una celda en foco en todo…
 - **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
 - **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
+- **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 
 **Streamlit** (144)
 
@@ -784,7 +785,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (99)
+**Decisiones de diseño y UX** (100)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -885,6 +886,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#504** — Lo que depende va en UNA tarjeta; lo que no, a su propia vista — y el filtro activo se ESCRIBE
 - **#507** — Las vistas «Tabla» están OCULTAS hasta nuevo aviso: un interruptor…
 - **#510** — «Porcionamientos» es la tercera tarjeta «por período» y la primera que no mide un valorizado:…
+- **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -42000,6 +42002,116 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      vuelve «[omitida]», el problema es el nombre de la fila, no la
      consulta: `--probar` lo dice en un minuto.
 
+511. **«Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN
+     foco de entrada — y suma lo mismo que su vecina de salidas, no lo
+     mismo que la vista a la que reemplazó.**
+     2026-09-24, a pedido: «hay una vista que dice top 10 de productos por
+     valorizado de baja. eliminemos o reemplacemos eso por una vista
+     llamada detalle de salidas donde hayan cuadros clickeables […] tipo de
+     baja […] área […] familia […] subfamilia […] producto, valorizado y
+     porcentaje […] similar estilo a los cuadros de la vista de stock por
+     área». Se fue «Top productos · salidas» (un `go.Bar` con los diez
+     mayores) y con ella `movimientos.py::_barras_ranking`, que no tenía
+     otro llamador. El top no se perdió: es el quinto cuadro, ordenado por
+     valorizado y sin corte en diez.
+
+     **El componente es `drill_tablas.seccion_cuadros`**, al lado de
+     `seccion_cadena` y con sus mismas piezas —el cuadro es `tabla_ranking`
+     (barra de fondo, % entero, fila TOTAL, clic = toggle) y cada eslabón
+     lleva la ruta en la key, así que un sub-foco no sobrevive al recorte
+     que lo justificaba (#403)—. Cambian dos cosas, y las dos salen del
+     pedido:
+
+       · **No hay tabla de hojas.** El producto es un cuadro más: nombre,
+         valorizado y %. Sin cantidad ni precio unitario no hay nada que
+         pida la franja ancha de `tabla_hojas`.
+       · **Ningún cuadro abre con foco.** Sin nada elegido a su izquierda,
+         un cuadro reparte el recorte entero, así que las cinco preguntas se
+         contestan al abrir. El `abre_en` de la cadena existe por la tabla
+         de hojas, que sin foco listaba el universo con scroll horizontal
+         (#405); acá no hay tabla ancha que proteger, y un tipo de baja
+         pre-elegido escondería el reparto de los otros cuatro niveles
+         —soltarlo vuelve al default, nunca a «todo»—. Un clic recorta sólo
+         los cuadros que SIGUEN en `niveles`, y se pueden saltar niveles:
+         una familia elegida sin tipo ni área recorta subfamilia y producto
+         en todas las áreas. Por eso la key de cada cuadro lleva la ruta
+         CON la posición de cada eslabón: sin ella, un área y una familia
+         que se llamaran igual darían la misma key para dos recortes.
+
+     **Tres arriba y dos abajo**, `((1.2, 1, 1), (1.2, 2))`
+     (`movimientos.py::_FILAS_DETALLE_SAL`). Cinco en una fila dejan
+     ~230px de grilla por cuadro a 1366, y las áreas llegan a 180px de
+     nombre («LIMPIEZA Y MANTENIMIENTO») antes del monto y el %. La fila de
+     arriba es la de «Stock por área»; el producto —los nombres más largos
+     del parquet, «(P) Chistorra de pato Mayta x und 25gr (Producción)»—
+     se queda con dos tercios de la de abajo (731px de grilla, 391 de
+     nombre). El 1.2 de las dos filas es el mismo corte, y aun así la
+     primera columna termina a 538px arriba y a 541 abajo: Streamlit le da
+     a cada columna `flex: 1 1 calc(p% - 16px)`, y el sobrante que dejan
+     los `-16px` se reparte en partes iguales entre las columnas de la
+     fila — en la de tres cada una recibe 5,3px y en la de dos, 8. Son
+     2,7px constantes a cualquier ancho: alinearlos exacto pedía anidar
+     columnas y un segundo piso de alto, y no se hizo.
+
+     **El formato de cada cuadro sale de su ANCHO, no de cuántos hay en la
+     fila** (`drill_tablas.formato_por_ancho`, la #349 en la escala que la
+     decide). Los tres formatos medidos para la cadena, puestos por
+     fracción de fila: ≥ 0.55, los defaults; ≥ 0.34, flex 3 y barra 0.45;
+     el resto, flex 5, barra 0.30 y el monto a miles. Reproduce los cuatro
+     repartos de `seccion_cadena` —la guarda lo comprueba— y resuelve los
+     de dos filas sin otro diccionario.
+
+     **Qué suma: sin anuladas ni líneas sin producto**, el criterio de
+     «Salidas por período» (`movimientos.py::salidas_que_suman`, que
+     importa de allá `_ANULADO` y el `Lado`). La vista reemplazada sumaba
+     las anuladas, y la Tabla de salidas las sigue sumando; pero la vecina
+     de sección es la tarjeta por período, y dos secciones de salidas con
+     totales distintos para el mismo rango se leen como un error. Medido
+     del 1 de enero al 23 de septiembre de 2026: S/ 135.449 en los cinco
+     cuadros y «Total de la vista S/ 135.4k» en la tarjeta, con las mismas
+     37 anuladas afuera — en doce meses son 52, por S/ 11.129 (el 5,7 % de
+     lo que sí se dio de baja). Lo que no suma se dice junto al título del
+     primer cuadro, en letra chica («37 anuladas no suman», con el monto de
+     tooltip); las líneas sin producto no se nombran: valen cero y no
+     tienen nada que mostrar en ningún cuadro.
+
+     **Dos tarjetas de la misma fila miden lo mismo (#145), y esta es la
+     primera fila de `ajuste_graf_card_` que entra en el piso** de
+     `_80_cards.py`: cada grilla mide las filas que trae hasta ocho, y con
+     7 tipos, 10 áreas y 6 familias la fila de arriba cerraba en escalón.
+     Con el piso, las cinco miden 301px a 1366. Las keys las arma
+     `drill_tablas.claves_tarjetas_cuadros` y el piso las enumera por key
+     exacta (#469); la cadena de Inventario y la de «Por sub almacén»
+     siguen sin piso (#411).
+
+     **Una cabecera que AG Grid escribe sola.** Sin `headerName`, AG Grid
+     arma la cabecera desde el `field` y le sube la inicial a CADA palabra:
+     el primer cuadro decía «Tipo De Baja». `tabla_ranking` lo pasa
+     explícito desde ese día, y de rebote la cabecera de «Por sub almacén»
+     pasó de «Sub Almacén» a «Sub almacén», como el «Precio unitario» del
+     resto de las tablas del repo.
+
+     **Un límite que queda anotado y no medido:** los cuadros angostos le
+     dan al monto 78px de columna a 1366 y 53 con la ventana en 1032 (la
+     cuenta de la cadena, que es la misma). A 1366, con el rango del año,
+     la captura los muestra enteros («S/ 135.4k» en la fila TOTAL); con la
+     ventana más angosta y montos del año no se pudo medir —el panel del
+     navegador dejó de componer, y sin eso AG Grid deja las columnas en
+     200px—. Un monto que no entra se recorta por la IZQUIERDA (#349): el
+     día que haga falta, lo que cede es el nombre (un `minWidth` en la
+     columna del valor), porque un nombre cortado dice «…» y un número
+     cortado no dice nada.
+
+     La guarda es `test_graficos.py::_pruebas_detalle_salidas`: el total
+     contra `_validas` de la tarjeta vecina, la cuenta de anuladas contra
+     su `no_suman`, los formatos por ancho contra los de la cadena, el
+     corte común de las dos filas, las keys de toda llamada a
+     `seccion_cuadros` contra el piso, y el rail y la pila.
+
+     **Para la próxima:** una vista que REEMPLAZA a otra hereda su lugar en
+     el rail, no su cuenta. Antes de copiar qué suma la vieja, mirar qué
+     suma la vecina de sección: es con ésa con la que se va a comparar.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42012,7 +42124,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#510**; la próxima toma el número siguiente.
+> última regla es la **#511**; la próxima toma el número siguiente.
 
 >
 

@@ -1397,7 +1397,18 @@ CSS = """    /* ================================================================
         /* 2026-09-14 (#420). Hoy nacen del mismo alto (`_ALTO_FIG_VAP`, el */
         /* puente le resta su veredicto); el piso queda de red.             */
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-compras_vap_card_hdr, > .st-key-compras_vap_card_puente, > .st-key-compras_vap_card_serie, > .st-key-compras_vap_card_tabla) {
+        > div:has(> .st-key-compras_vap_card_hdr, > .st-key-compras_vap_card_puente, > .st-key-compras_vap_card_serie, > .st-key-compras_vap_card_tabla),
+        /* Los cinco cuadros de Movimientos › «Detalle de salidas»          */
+        /* (2026-09-24, regla #511), tres arriba y dos abajo. Cada grilla   */
+        /* mide las filas que trae hasta ocho, así que sin piso la fila de  */
+        /* arriba cerraba en escalón: 7 tipos de baja, 10 áreas, 6          */
+        /* familias. Son la primera fila de `ajuste_graf_card_` que entra   */
+        /* acá; las de la cadena de Inventario y de «Por sub almacén»       */
+        /* siguen sin piso (#411). Las keys las arma                        */
+        /* `drill_tablas.claves_tarjetas_cuadros`, y                        */
+        /* `test_graficos.py::_pruebas_detalle_salidas` exige verlas acá.   */
+        .stColumn > .stVerticalBlock
+        > div:has(> .st-key-ajuste_graf_card_izq_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal_n2, > .st-key-ajuste_graf_card_der_mov_detsal_n3, > .st-key-ajuste_graf_card_der_mov_detsal_n4) {
             flex: 1 1 auto;
         }
 

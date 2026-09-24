@@ -5268,6 +5268,153 @@ def _pruebas_listado_inventario():
     return fallos
 
 
+def _pruebas_detalle_salidas():
+    """Movimientos › «Detalle de salidas» (regla #511).
+
+    Los cinco cuadros en cadena que reemplazaron a «Top productos ·
+    salidas» el 2026-09-24. Cuatro cosas que se rompen sin que nada avise:
+
+      1. QUÉ SUMA. Su total tiene que ser el de «Salidas por período» para
+         las mismas líneas: sin anuladas ni líneas sin producto. Se compara
+         contra `_validas` de ESA tarjeta y no contra un número escrito acá,
+         que es lo que haría falta si las dos dejaran de coincidir.
+      2. EL FORMATO POR ANCHO. `formato_por_ancho` tiene que devolver lo que
+         la cadena ya mide por cantidad de cuadros —si no, «Por sub almacén»
+         y «Detalle de salidas» dejarían de leerse igual—, y las dos filas
+         del Detalle tienen que cortar la primera columna en el mismo sitio.
+      3. EL PISO. Las keys de toda llamada a `seccion_cuadros` tienen que
+         estar enumeradas en `estilos/_80_cards.py` (una key suelta vuelve
+         al escalón; un `[class*=…]` en el `:has()` es la regla #469).
+      4. EL RAIL Y LA PILA: la vista nueva en los dos, la vieja en ninguno.
+    """
+    import ast
+    import pathlib
+
+    from graficos import drill_tablas as dt
+    from graficos import movimientos as mov
+    from graficos import movimientos_periodo as mp
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    detalle de salidas · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA detalle de salidas · {nombre}: "
+                  f"got={got!r} exp={exp!r}")
+
+    # ── 1) Qué suma ───────────────────────────────────────────────────────
+    # S1 de Cocina con dos líneas; S2 ANULADA con valor (no todas valen 0);
+    # S3 generada SIN ÍTEMS; S4 de Barra; S5 anulada Y sin ítems (cuenta
+    # como anulada, una sola vez: la regla de `no_suman`).
+    d = pd.DataFrame({
+        "FECHA REGISTRO": pd.to_datetime(
+            ["2026-09-07 10:00", "2026-09-07 10:00", "2026-09-08 11:00",
+             "2026-09-09 12:00", "2026-09-10 09:00", "2026-09-11 10:00"]),
+        "COD SALIDA": ["S1", "S1", "S2", "S3", "S4", "S5"],
+        "NOMBRE ESTADO SALIDA": ["PROCESADO", "PROCESADO", "ANULADO",
+                                 "GENERADO", "PROCESADO", "anulado "],
+        "AREA": ["COCINA", "COCINA", "COCINA PERSONAL", "BARRA", "BARRA",
+                 "COCINA"],
+        "TIPO DESCARGO": ["Bajas", "Bajas", "Comida Personal", "Bajas",
+                          "Uso en el Area", "Bajas"],
+        "NOMBRE FAMILIA": ["ALIMENTOS", "ALIMENTOS", "ALIMENTOS", None,
+                           "BEBIDAS SIN ALCOHOL", None],
+        "NOMBRE SUBFAMILIA": ["CARNES", "VERDURAS", "CARNES", None, "AGUAS",
+                              None],
+        "NOMBRE PRODUCTO": ["A", "B", "C", None, "D", "  "],
+        "CANT SALIDA": [1.0, 2.0, 3.0, None, 4.0, None],
+        "VALOR NETO": [10.0, 20.0, 30.0, 0.0, 40.0, 0.0],
+    })
+    validas, nota = mov.salidas_que_suman(
+        d, col_estado="NOMBRE ESTADO SALIDA", col_prod="NOMBRE PRODUCTO",
+        col_doc="COD SALIDA", col_val="VALOR NETO")
+    check("suma sin anuladas ni líneas sin producto",
+          sorted(validas["COD SALIDA"]), ["S1", "S1", "S4"])
+    bl = mp.lineas_documentos(
+        d, fecha="FECHA REGISTRO", doc="COD SALIDA", area="AREA",
+        estado="NOMBRE ESTADO SALIDA", fam="NOMBRE FAMILIA",
+        prod="NOMBRE PRODUCTO", cant="CANT SALIDA", val="VALOR NETO",
+        tipo="TIPO DESCARGO")
+    check("el total es el de «Salidas por período»",
+          float(validas["VALOR NETO"].sum()),
+          float(mp._validas(bl)["valor"].sum()))
+    # El texto con que la tarjeta de salidas cuenta sus anuladas
+    # (`Lado.anulados`), sobre SU cuenta: la guarda compara contra ella.
+    check("cuenta las anuladas por salida, como la fila de KPI de su vecina",
+          nota[0], f"{mp.SALIDAS.anulados(mp.no_suman(bl)[0])} no suman")
+    check("el tooltip dice cuánto no suma", "S/ 30" in nota[1], True)
+    _sin_anuladas, _nota_vacia = mov.salidas_que_suman(
+        d[d["COD SALIDA"] != "S2"].iloc[:2], col_estado="NOMBRE ESTADO SALIDA",
+        col_prod="NOMBRE PRODUCTO", col_doc="COD SALIDA", col_val="VALOR NETO")
+    check("sin anuladas en el recorte no hay nota", _nota_vacia, None)
+    _todo, _ = mov.salidas_que_suman(
+        d.drop(columns=["NOMBRE ESTADO SALIDA"]), col_estado=None,
+        col_prod="NOMBRE PRODUCTO", col_doc="COD SALIDA", col_val="VALOR NETO")
+    check("sin columna de estado suma todo lo que trae producto",
+          len(_todo), 4)
+
+    # ── 2) El formato por ancho ───────────────────────────────────────────
+    check("formato · ranking de dos cuadros (1.7 de 2.7)",
+          dt.formato_por_ancho(1.7 / 2.7), dt.FORMATO_RANKING[2])
+    check("formato · desglose de dos cuadros (1 de 2.7)",
+          dt.formato_por_ancho(1 / 2.7), dt.FORMATO_DETALLE[2])
+    check("formato · ranking de tres cuadros (1.2 de 3.2)",
+          dt.formato_por_ancho(1.2 / 3.2), dt.FORMATO_RANKING[3])
+    check("formato · desglose de tres cuadros (1 de 3.2)",
+          dt.formato_por_ancho(1 / 3.2), dt.FORMATO_DETALLE[3])
+    filas = mov._FILAS_DETALLE_SAL
+    check("cinco cuadros en las filas del Detalle",
+          sum(len(f) for f in filas), 5)
+    check("las dos filas cortan la primera columna en el mismo sitio",
+          len({round(f[0] / sum(f), 6) for f in filas}), 1)
+
+    # ── 3) Las tarjetas de toda `seccion_cuadros`, en el piso ─────────────
+    raiz = pathlib.Path(__file__).parent
+    cards = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
+    llamadas = []
+    for py, texto in _fuentes_py(raiz / "graficos"):
+        for nodo in ast.walk(ast.parse(texto)):
+            if not (isinstance(nodo, ast.Call)
+                    and getattr(nodo.func, "attr",
+                                getattr(nodo.func, "id", None))
+                    == "seccion_cuadros"):
+                continue
+            kw = {k.arg: k.value for k in nodo.keywords}
+            try:
+                pref = ast.literal_eval(kw["pref"])
+                slug = ast.literal_eval(kw["slug"])
+                n = len(kw["niveles"].elts)
+            except (KeyError, ValueError, AttributeError):
+                fallos += 1
+                print(f"FALLA detalle de salidas · {py.name}: una llamada a "
+                      "`seccion_cuadros` sin `pref`/`slug` literales ni "
+                      "`niveles` en tupla — la guarda no puede leerla")
+                continue
+            llamadas.append((py.name, pref, slug, n))
+    check("hay UNA llamada a seccion_cuadros (la de Movimientos)",
+          [(a, p, s, n) for a, p, s, n in llamadas],
+          [("movimientos.py", "mov", "detsal", 5)])
+    faltan = [k for _a, p, s, n in llamadas
+              for k in dt.claves_tarjetas_cuadros(p, s, n)
+              if f".st-key-{k}," not in cards and f".st-key-{k})" not in cards]
+    check("sus tarjetas están enumeradas en el piso de _80_cards.py",
+          faltan, [])
+
+    # ── 4) El rail y la pila ──────────────────────────────────────────────
+    ids_rail = [v[0] for _cat, vistas in mov._RAIL_CATEGORIAS for v in vistas]
+    ids_pila = [v for _k, v in mov._PILA]
+    check("«Detalle de salidas» en el rail y en la pila",
+          ("Detalle de salidas" in ids_rail, "Detalle de salidas" in ids_pila),
+          (True, True))
+    check("«Top productos · salidas» ya no está",
+          ("Top productos · salidas" in ids_rail
+           or "Top productos · salidas" in ids_pila), False)
+    return fallos
+
+
 def _pruebas_movimientos_periodo():
     """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
 
@@ -5808,6 +5955,9 @@ def main():
 
     # ── Movimientos › las tarjetas «por período»: qué cuenta y qué no ────
     fallos += _pruebas_movimientos_periodo()
+
+    # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
+    fallos += _pruebas_detalle_salidas()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()

@@ -10,9 +10,21 @@ que ahora muestra ambos».
 
     Requerimientos (requerimientos)    Por período · Por sub almacén (la
                                        cadena de tablas) · Tabla
-    Salidas (salidas.parquet)          Por período · Top productos · Tabla
+    Salidas (salidas.parquet)          Por período · Detalle de salidas (los
+                                       cinco cuadros) · Tabla
     Porcionamientos                    Porcionamientos (la merma por período)
       (porcionamientos.parquet)
+
+QUÉ PASÓ EL 2026-09-24 (2). «Top productos · salidas» —un gráfico de barras
+con los diez productos de mayor valorizado dado de baja— se retiró a pedido
+y en su lugar entró «Detalle de salidas»: cinco cuadros clickeables en
+cadena, tipo de baja › área › familia › subfamilia › producto, cada uno con
+su valorizado y su %, con el look de los de «Stock por área» de Inventario
+(`graficos/drill_tablas.py::seccion_cuadros`). El top de productos no se
+perdió: es el quinto cuadro, ordenado por valorizado y sin corte en diez.
+Suma lo MISMO que «Salidas por período» —sin las anuladas ni las líneas sin
+producto (`salidas_que_suman`)—, así que las dos secciones de salidas dan
+el mismo total para el mismo rango. Ver `arquitectura.md` regla #511.
 
 QUÉ PASÓ EL 2026-09-24. Entró «Porcionamientos», a pedido y aprobada sobre
 un mockup: la MISMA tarjeta de las dos «por período», con un tercer `Lado`
@@ -93,38 +105,44 @@ Las dos Tablas NO se dibujan igual, y no es un descuido:
 QUÉ EXCLUYE CADA SECCIÓN, que es donde la página puede contradecirse:
 las dos tarjetas «por período» (2026-09-23, a pedido) descartan los
 documentos ANULADOS y los SIN ÍTEMS —una línea sin producto ni valor— y los
-nombran en su fila de KPI (reglas #508 y #509). Las demás miran sus datos
-con anulados incluidos, así que el valorizado de requerimientos es el mismo
-en la cadena de tablas y en la Tabla pivote, y el de salidas en su Top y su
-Tabla. Los requerimientos anulados son S/ 174.939 de S/ 8.481.700 en el
-histórico (2,1%, medido contra R2 el 2026-09-13) y S/ 15.868 en 2026 (0,9%):
-lo que puede separar el total de «Requerimientos por período» del de «Por
-sub almacén». Las otras no se cambiaron porque mover números que nadie pidió
-mover es otra decisión; queda anotado en la regla #322.
+nombran en su fila de KPI (reglas #508 y #509). «Detalle de salidas»
+(2026-09-24) nació con el mismo criterio que su vecina de salidas y nombra
+las anuladas junto al título de su primer cuadro (#511). Las demás miran sus
+datos con anulados incluidos, así que el valorizado de requerimientos es el
+mismo en la cadena de tablas y en la Tabla pivote. Las salidas anuladas de
+los últimos doce meses son 52, por S/ 11.129 (el 5,7 % de lo que sí se dio
+de baja, medido el 2026-09-24): lo que separa el total de la Tabla de
+salidas del de sus dos vecinas. Los requerimientos anulados son S/ 174.939
+de S/ 8.481.700 en el histórico (2,1%, medido contra R2 el 2026-09-13) y
+S/ 15.868 en 2026 (0,9%): lo que puede separar el total de «Requerimientos
+por período» del de «Por sub almacén». Las otras no se cambiaron porque
+mover números que nadie pidió mover es otra decisión; queda anotado en la
+regla #322.
 
 Punto de entrada público: renderizar_graficos_movimientos().
 """
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 from data import cargar as _cargar_reporte
 from estilos import TAM_FUENTE
 from tablas import renderizar_aggrid_desktop
-from tema import ACENTO
 from graficos.base import (
-    compartimento_filtros, contar_filtros, filtro_pills,
-    _compras_layout, _compras_truncar, _render_rail,
+    compartimento_filtros, contar_filtros, filtro_pills, _render_rail,
     _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
     renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.movimientos_comun import _rango_vigente
+# `_ANULADO` y `SALIDAS` son de la tarjeta «Salidas por período»: el
+# «Detalle de salidas» suma lo mismo que ella, y dos copias de «qué es una
+# salida anulada» —o de cómo se escribe «3 anuladas»— se separan al primer
+# retoque.
 from graficos.movimientos_periodo import (
-    orden_areas, tarjeta_porcionamientos_periodo,
+    _ANULADO, SALIDAS, orden_areas, tarjeta_porcionamientos_periodo,
     tarjeta_requerimientos_periodo, tarjeta_salidas_periodo,
 )
-from graficos import alturas, drill_tablas
+from graficos import drill_tablas
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es horizontal
 # y aplana las categorías a una sola fila (ver `base.py::_render_rail`), así
@@ -132,9 +150,9 @@ from graficos import alturas, drill_tablas
 # nombre largo vive en el id — que es lo que viaja en `?vista=` y lo que
 # empareja con `_PILA`.
 #
-# El sufijo « · req.» / « · sal.» es el desambiguador: «Top productos» y
-# «Tabla» existían en los dos lados y al juntarlas quedaban dos ítems con el
-# mismo nombre.
+# El sufijo « · req.» / « · sal.» es el desambiguador: «Por período» y
+# «Tabla» existen en los dos lados (y «Top productos» existió en los dos
+# hasta el 2026-09-24) y al juntarlas quedaban dos ítems con el mismo nombre.
 #
 # Las dos «Tabla» están OCULTAS desde el 2026-09-23, con las de los demás
 # reportes: `rail_sin_tablas` acá y `pila_sin_tablas` en `_PILA`, de a par
@@ -155,9 +173,13 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     ("Requerimientos", (("Requerimientos por período", "Por período · req.", ":material/calendar_view_week:"),
                         ("Por sub almacén",            "Sub almacén",        ":material/warehouse:"),
                         ("Tabla · requerim.",          "Tabla · req.",       ":material/table_rows:"))),
-    ("Salidas", (("Salidas por período",     "Por período · sal.", ":material/calendar_view_week:"),
-                 ("Top productos · salidas", "Top prod. · sal.",   ":material/leaderboard:"),
-                 ("Tabla · salidas",         "Tabla · sal.",       ":material/table_view:"))),
+    # «Detalle de salidas» (2026-09-24, regla #511) ocupa el sitio de «Top
+    # productos · salidas», que se retiró ese día. Nombre sin sufijo: no
+    # tiene gemela del lado de requerimientos. El ícono es el de un tablero
+    # partido en paneles, que es lo que dibuja —cinco cuadros, 3 + 2—.
+    ("Salidas", (("Salidas por período", "Por período · sal.", ":material/calendar_view_week:"),
+                 ("Detalle de salidas",  "Detalle de salidas", ":material/view_quilt:"),
+                 ("Tabla · salidas",     "Tabla · sal.",       ":material/table_view:"))),
     # «Porcionamientos» (2026-09-24, regla #510): tercer grupo, al final, a
     # pedido. Una sola vista, con el nombre que se pidió; el ícono son las
     # tijeras del corte.
@@ -180,41 +202,60 @@ _PILA = pila_sin_tablas((
     ("mov_sec_cadena",      "Por sub almacén"),
     ("mov_sec_tabla_req",   "Tabla · requerim."),
     ("mov_sec_sal_periodo", "Salidas por período"),
-    ("mov_sec_top_sal",     "Top productos · salidas"),
+    ("mov_sec_detalle_sal", "Detalle de salidas"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
     ("mov_sec_porc",        "Porcionamientos"),
 ))
 
 
-def _barras_ranking(serie, *, key, titulo, truncar=28):
-    """Barras horizontales con el valor al lado — el ranking de siempre.
+# (Acá vivía `_barras_ranking`, las barras horizontales de los rankings de
+# esta página. Se fue el 2026-09-24 con el último que la usaba, «Top
+# productos · salidas»: el de Sub Almacén se había ido el 2026-09-13 y el
+# Top de requerimientos el 2026-09-23. Regla #511.)
 
-    Los cuatro rankings de esta página (Sub Almacén y los dos Top productos)
-    eran el mismo bloque de 14 líneas copiado en `requerimientos.py` y
-    `salidas.py`. Al juntarse en un módulo el copiado se ve, así que va una
-    sola vez. Mide SIEMPRE en soles: las dos mitades reportan valorizado (ver
-    el comentario de la métrica en el entry point).
 
-    Hoy queda UNO: el de Sub Almacén se fue el 2026-09-13 y el Top de
-    requerimientos el 2026-09-23 (lo reemplazó «Requerimientos por
-    período»). Lo usa sólo el Top de salidas.
+def salidas_que_suman(d, *, col_estado, col_prod, col_doc=None,
+                      col_val=None):
+    """`(validas, nota)`: las líneas de salidas que SUMAN y, si en el
+    recorte hay salidas anuladas, lo que no se sumó, para decirlo.
+
+    El criterio es el de «Salidas por período»
+    (`movimientos_periodo._validas`): una línea suma si trae producto y su
+    salida no está anulada. Las que no traen producto son las 91 salidas
+    sin ítems del histórico —48 generadas que todavía no movieron el
+    kardex, 42 anuladas y una procesada—, que valen cero; las anuladas en
+    conjunto no: 52 en los últimos doce meses, por S/ 11.129 (medido el
+    2026-09-24). Con el mismo criterio las dos secciones de
+    salidas dan el mismo total para el mismo rango, que es lo que la guarda
+    de `test_graficos.py::_pruebas_detalle_salidas` compara.
+
+    `nota` es `(corto, largo)` —la forma de `nota_no_suman`— o None: sólo
+    nombra las anuladas, porque las líneas sin producto no tienen nada que
+    mostrar en ningún cuadro. Las cuenta por SALIDA (`col_doc`), no por
+    línea, como la fila de KPI de su vecina; sin código, cada línea es una.
+    Sin columna de estado todo suma, que es lo que hace `lineas_documentos`.
     """
-    if serie.empty:
-        st.info("Sin datos.")
-        return
-    fig = go.Figure(go.Bar(
-        x=serie.values,
-        y=[_compras_truncar(i, truncar) for i in serie.index],
-        orientation="h",
-        marker=dict(color=ACENTO, opacity=0.85),
-        text=[f"S/ {v:,.0f}" for v in serie.values],
-        textposition="outside", cliponaxis=False,
-    ))
-    _compras_layout(fig, alto=alturas.PROTAGONISTA)
-    fig.update_layout(title=titulo)
-    # El eje X se oculta a propósito: el número ya está al lado de la barra.
-    fig.update_xaxes(visible=False)
-    st.plotly_chart(fig, use_container_width=True, key=key)
+    idx = d.index
+    if col_estado and col_estado in d.columns:
+        estado = d[col_estado].fillna("").astype(str).str.strip().str.upper()
+    else:
+        estado = pd.Series("", index=idx)
+    prod = (d[col_prod].fillna("").astype(str).str.strip()
+            if col_prod and col_prod in d.columns else pd.Series("", index=idx))
+    anulada = estado == _ANULADO
+    validas = d[~anulada & (prod != "")]
+    if not anulada.any():
+        return validas, None
+    an = d[anulada]
+    n = (int(an[col_doc].nunique()) if col_doc and col_doc in an.columns
+         else len(an))
+    valor = (float(pd.to_numeric(an[col_val], errors="coerce").fillna(0).sum())
+             if col_val and col_val in an.columns else 0.0)
+    corto = f"{SALIDAS.anulados(n)} no suman"
+    largo = (f"No suman en ningún cuadro: {SALIDAS.anulados(n)}"
+             + (f", por S/ {valor:,.0f}" if valor else "")
+             + ". El mismo criterio que «Salidas por período».")
+    return validas, (corto, largo)
 
 
 def _tabla_salidas(df_sal):
@@ -239,6 +280,15 @@ _COLS_AREA_SALIDAS = ["AREA", "Area", "SUB ALMACEN", "Sub Almacen"]
 """Cómo se llama el área en `salidas.parquet`. La trae desde el 2026-09-23
 su consulta (`vArea.Descripcion` por `MSUBSALIDA.tCodigoArea`, regla #509)
 con el nombre `AREA`; «Sub Almacen» es el del demo de `data.py`."""
+
+_FILAS_DETALLE_SAL = ((1.2, 1, 1), (1.2, 2))
+"""El reparto de los cinco cuadros de «Detalle de salidas»: tipo de baja,
+área y familia arriba; subfamilia y producto abajo. El 1.2 de las dos filas
+es el mismo corte —la primera columna termina en el mismo sitio arriba y
+abajo, a 2,7px: Streamlit le suma a cada columna su parte del sobrante del
+flex, y en la fila de tres la parte es menor (medido a 1366: 538 y 541)—, y
+la fila de arriba es la de «Stock por área» (`drill_tablas.
+COLUMNAS_NIVELES[3]`). Regla #511."""
 
 
 def _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel=()):
@@ -414,8 +464,6 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     col_tipo = _col_sal("Tipo Descargo", "TIPO DESCARGO")
     col_prod_sal = _col_sal("Nombre Producto", "NOMBRE PRODUCTO")
     col_val_sal = _col_sal("Valor Neto", "VALOR NETO")
-    _met_sal = (pd.to_numeric(d_sal[col_val_sal], errors="coerce").fillna(0)
-                if (d_sal is not None and col_val_sal) else None)
 
     # El orden de las áreas que reparte los COLORES de las dos tarjetas «por
     # período»: el del histórico de requerimientos, para las dos. Así Cocina
@@ -514,19 +562,47 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
             else:
                 st.info("La tabla no está disponible en este contexto.")
 
-    def _dib_top_sal():
-        with st.container(border=True, key="ajuste_graf_card_izq_mov_top_sal"):
-            if d_sal is None:
+    def _dib_detalle_sal():
+        # Los CINCO cuadros en cadena (2026-09-24, a pedido, en lugar de «Top
+        # productos · salidas»): tipo de baja › área › familia › subfamilia ›
+        # producto, cada uno con su valorizado y su %, «similar estilo a los
+        # cuadros de la vista de stock por área». Tres arriba y dos abajo:
+        # cinco en una fila no entran en 1366px sin cortar los nombres, y el
+        # producto —los nombres más largos del parquet— se queda con dos
+        # tercios de la fila de abajo. El corte de la primera columna es el
+        # mismo en las dos filas (1.2 de 3.2), así que se leen como una
+        # grilla. Regla #511.
+        #
+        # «Tipo de baja» es el TIPO DESCARGO del ERP, con el nombre que se
+        # pidió; «Área», la que dio de baja, como en «Salidas por período».
+        vacia = "ajuste_graf_card_izq_mov_detsal_vacia"
+        if d_sal is None:
+            with st.container(border=True, key=vacia):
                 _sin_salidas()
-                return
-            if not col_prod_sal or _met_sal is None:
-                st.info("No hay columnas suficientes para este gráfico.")
-                return
-            _barras_ranking(
-                _met_sal.groupby(d_sal[col_prod_sal].astype(str)).sum()
-                        .nlargest(10).sort_values(),
-                key="mov_g_top_sal", truncar=34,
-                titulo="Top 10 productos por valorizado dado de baja")
+            return
+        if not (col_val_sal and col_prod_sal):
+            with st.container(border=True, key=vacia):
+                st.info("No hay columnas suficientes para esta sección.")
+            return
+        validas, nota = salidas_que_suman(
+            d_sal, col_estado=_col_sal("Nombre Estado Salida",
+                                       "NOMBRE ESTADO SALIDA"),
+            col_prod=col_prod_sal, col_doc=_col_sal("Cod Salida", "COD SALIDA"),
+            col_val=col_val_sal)
+        if validas.empty:
+            with st.container(border=True, key=vacia):
+                st.info("Sin salidas en el rango de fechas. Ampliá el rango "
+                        "en la franja de arriba.")
+            return
+        drill_tablas.seccion_cuadros(
+            validas, pref="mov", slug="detsal",
+            niveles=((col_tipo, "tipo de baja"),
+                     (_col_sal(*_COLS_AREA_SALIDAS), "área"),
+                     (_col_sal("Nombre Familia", "NOMBRE FAMILIA"), "familia"),
+                     (_col_sal("Nombre Subfamilia", "NOMBRE SUBFAMILIA"),
+                      "subfamilia"),
+                     (col_prod_sal, "producto")),
+            filas=_FILAS_DETALLE_SAL, col_val=col_val_sal, nota=nota)
 
     def _dib_tabla_sal():
         with st.container(border=True, key="ajuste_graf_card_izq_mov_tabla_sal"):
@@ -558,7 +634,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         "mov_sec_cadena":      _dib_cadena,
         "mov_sec_tabla_req":   _dib_tabla_req,
         "mov_sec_sal_periodo": _dib_sal_periodo,
-        "mov_sec_top_sal":     _dib_top_sal,
+        "mov_sec_detalle_sal": _dib_detalle_sal,
         "mov_sec_tabla_sal":   _dib_tabla_sal,
         "mov_sec_porc":        _dib_porc,
     }
