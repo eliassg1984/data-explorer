@@ -5415,6 +5415,77 @@ def _pruebas_detalle_salidas():
     return fallos
 
 
+def _pruebas_ventas_un_item_una_vez():
+    """Ventas › un ítem se cuenta una vez (regla #517).
+
+    `ventas.parquet` trae una fila por ítem Y POR FORMA DE PAGO. Fija dos
+    cosas: que `unico_por_item` se quede con una fila por llave sin tocar
+    las filas SIN llave, y que el dispatcher se la aplique a todo lo que
+    suma venta — incluidos los df que Año Pasado y Mapa por hora traen
+    aparte de R2 por `filtrar_cb` — mientras Meseros sigue recibiendo las
+    filas por pago, que es de donde sale la propina.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    from graficos import ventas as _v
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · un ítem una vez · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · un ítem una vez · {nombre}: "
+                  f"got={got!r} exp={exp!r}")
+
+    # A pagado con dos formas (dos filas con su venta ENTERA), B con una,
+    # y dos filas sin llave, que no son "la misma" por no tenerla.
+    d = pd.DataFrame({
+        "LLAVE LOCAL DOCUMENTO ITEM": ["A", "A", "B", None, None],
+        "CORRELATIVO PAGO": ["1", "2", "1", None, None],
+        "VENTA ITEM DDOCUMENTO": [50.0, 50.0, 30.0, 7.0, 3.0],
+    })
+    u = _v.unico_por_item(d)
+    check("filas: A una vez, B, y las dos sin llave", len(u), 4)
+    check("venta 50 + 30 + 7 + 3", float(u["VENTA ITEM DDOCUMENTO"].sum()),
+          90.0)
+    check("no toca el df de entrada", len(d), 5)
+    sin_llave = d.drop(columns=["LLAVE LOCAL DOCUMENTO ITEM"])
+    check("sin la columna devuelve el mismo df",
+          _v.unico_por_item(sin_llave) is sin_llave, True)
+    check("resuelve el nombre sin importar mayúsculas",
+          len(_v.unico_por_item(d.rename(columns={
+              "LLAVE LOCAL DOCUMENTO ITEM": "Llave Local Documento Item"}))),
+          4)
+
+    # ── El cableado del dispatcher, leído del código ──────────────────────
+    fuente = textwrap.dedent(inspect.getsource(_v.renderizar_graficos_ventas))
+    arbol = ast.parse(fuente)
+    asignaciones = {
+        n.targets[0].id: ast.unparse(n.value) for n in ast.walk(arbol)
+        if isinstance(n, ast.Assign) and len(n.targets) == 1
+        and isinstance(n.targets[0], ast.Name)}
+    check("`d` es el df post-chips con un ítem una vez",
+          asignaciones.get("d"), "unico_por_item(d_pagos)")
+    llamadas = {}
+    for n in ast.walk(arbol):
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name):
+            llamadas.setdefault(n.func.id, []).append(n)
+    for vista in ("_ventas_comparativo", "_ventas_horario"):
+        kws = {k.arg: ast.unparse(k.value)
+               for c in llamadas.get(vista, []) for k in c.keywords}
+        check(f"{vista} recarga con filtrar_cb=_filtrar_items",
+              kws.get("filtrar_cb"), "_filtrar_items")
+    mes = llamadas.get("_ventas_ranking_meseros", [])
+    check("Meseros recibe las filas POR PAGO (la propina es del pago)",
+          [ast.unparse(c.args[0]) for c in mes], ["d_pagos"])
+    return fallos
+
+
 def _pruebas_movimientos_periodo():
     """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
 
@@ -5955,6 +6026,9 @@ def main():
 
     # ── Movimientos › las tarjetas «por período»: qué cuenta y qué no ────
     fallos += _pruebas_movimientos_periodo()
+
+    # ── Ventas › un ítem una vez, aunque se haya pagado con dos formas ───
+    fallos += _pruebas_ventas_un_item_una_vez()
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()

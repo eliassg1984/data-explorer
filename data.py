@@ -296,6 +296,11 @@ REPORTES = {
                  ("Pax", "CANT PAX", "sum_dedup")),
         "kpi_fecha": "FEC REG DOCUMENTO",
         "kpi_dedup": "LLAVE LOCAL PEDIDO",
+        # Y ANTES de eso, un ítem una vez: el parquet trae una fila por ítem
+        # Y POR FORMA DE PAGO, así que la venta de un plato pagado con dos
+        # formas sumaba doble (+17 % en septiembre 2026, regla #517). Es la
+        # misma llave que usa `graficos/ventas.py::unico_por_item`.
+        "kpi_item": "LLAVE LOCAL DOCUMENTO ITEM",
         # Carga filtrada por rango de fechas DENTRO de DuckDB (no baja todo
         # el parquet). Al primer acceso: 01-del-mes-actual → hoy. El rango
         # aplicado vive en st.session_state[f"rango_carga_{reporte}"] y el
@@ -1173,7 +1178,8 @@ def _expr_fecha_kpi(col_fecha):
 
 
 @st.cache_data(ttl=3600, persist="disk")
-def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup):
+def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
+                            col_item=None):
     """Agregados SUM/COUNT DISTINCT directo en DuckDB, sin materializar
     filas — mismo espíritu que `_rango_fechas_cacheable`. Acota al MES EN
     CURSO cuando `col_fecha` viene dado (mismo default que usa la franja de
@@ -1192,6 +1198,14 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup):
         ini = hoy.replace(day=1)
         where = f"WHERE {_expr_fecha_kpi(col_fecha)} BETWEEN '{ini}' AND '{hoy}'"
 
+    # Un ítem una vez (regla #517): la fuente pasa a ser el parquet con UNA
+    # fila por `col_item`. Las filas sin llave se quedan todas, igual que en
+    # `graficos/ventas.py::unico_por_item`.
+    fuente = f"read_parquet('{url}') {where}"
+    if col_item:
+        fuente = (f'(SELECT * FROM {fuente} QUALIFY "{col_item}" IS NULL '
+                  f'OR ROW_NUMBER() OVER (PARTITION BY "{col_item}") = 1)')
+
     if col_dedup:
         # Dedup: agrupar por col_dedup ANTES de agregar (ver docstring de
         # REPORTES["Ventas"]["kpi_dedup"] en data.py — una columna que se
@@ -1202,7 +1216,7 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup):
             for i, kpi in enumerate(kpis)
         )
         sql = (f'SELECT {", ".join(f"SUM(k{i}) AS k{i}" for i in range(len(kpis)))} '
-               f'FROM (SELECT {selects} FROM read_parquet(\'{url}\') {where} '
+               f'FROM (SELECT {selects} FROM {fuente} '
                f'GROUP BY "{col_dedup}")')
     else:
         partes = []
@@ -1229,7 +1243,7 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup):
                               f'FILTER (WHERE "{col_f}" IN ({lista})) AS k{i}')
             else:
                 partes.append(f'{fn}("{col}"){cierre} AS k{i}')
-        sql = f'SELECT {", ".join(partes)} FROM read_parquet(\'{url}\') {where}'
+        sql = f'SELECT {", ".join(partes)} FROM {fuente}'
 
     fila = con.execute(sql).fetchone()
     return {kpi[0]: fila[i] for i, kpi in enumerate(kpis)}
@@ -1251,8 +1265,14 @@ def resumen_kpis(archivo, kpis, col_fecha=None, col_dedup=None):
     los KPIs del rail. Mismo patrón que `cargar()`/`rango_fechas()`."""
     if not kpis:
         return {}
+    # La llave del ítem sale de REPORTES y no de un argumento: los dos
+    # llamadores (navegacion.py) no cambian, y en Cloud un cambio de firma
+    # entre módulos ya importados es una caída (CLAUDE.md, regla #357).
+    col_item = next((i.get("kpi_item") for i in REPORTES.values()
+                     if i.get("archivo") == archivo and i.get("kpi_item")),
+                    None)
     try:
         return _resumen_kpis_cacheable(archivo, sello_datos(archivo),
-                                       kpis, col_fecha, col_dedup)
+                                       kpis, col_fecha, col_dedup, col_item)
     except Exception:
         return {}

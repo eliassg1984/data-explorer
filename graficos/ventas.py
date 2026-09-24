@@ -25,6 +25,31 @@ from graficos import alturas
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
              "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
+
+def unico_por_item(df):
+    """Una fila por ÍTEM del comprobante (regla #517 de arquitectura.md).
+
+    `ventas.parquet` trae una fila por ítem Y POR FORMA DE PAGO: pagado con
+    cheque + tarjeta, cada plato sale dos veces con su venta, su costo y su
+    cantidad enteros. Sumar filas infla — medido en septiembre 2026, S/
+    390.272 contra S/ 332.807 reales (+17 %); en el histórico, +22 %.
+
+    Se queda con la primera fila de cada `Llave Local Documento Item`. Las
+    filas SIN llave (22 en todo el histórico) se conservan todas: no hay con
+    qué decir que son la misma. No toca el parquet ni el df cargado —
+    devuelve otro df—, así que lo que analiza FORMAS DE PAGO o PROPINAS
+    (Meseros, el asistente IA) sigue recibiendo las filas por pago.
+
+    Sin la columna (demo, otro parquet) devuelve el df tal cual."""
+    if df is None or df.empty:
+        return df
+    col = _resolver(df, ["Llave Local Documento Item"])
+    if not col:
+        return df
+    llave = df[col]
+    repetida = llave.duplicated() & llave.notna()
+    return df[~repetida] if repetida.any() else df
+
 # Rail vertical fijo al borde DERECHO (componente compartido _render_rail,
 # ver graficos/base.py) — reemplaza el st.pills que vivia ANTES en medio
 # del dashboard. Mismo patron que Compras/Ajuste.
@@ -910,15 +935,21 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
     # ── Agregar a nivel de PEDIDO: Pax/Hora/Mesero son del pedido, no de
     # la línea — mismo criterio que Pax en "Venta por día" más arriba
     # (Cant Pax se repite por línea, se toma 1 valor por pedido).
+    #
+    # DOS GRANOS (regla #517): esta vista recibe las filas POR PAGO porque
+    # la propina es del pago, pero la VENTA se cuenta un ítem una vez —
+    # sumada por pago, un plato pagado con dos formas pesaba doble y el
+    # % de propina salía más bajo de lo que fue.
+    di = unico_por_item(d)
     ped = d[col_pedido].astype(str)
-    fecha = pd.to_datetime(d[col_fecha], errors="coerce")
+    fecha = pd.to_datetime(di[col_fecha], errors="coerce")
     base = pd.DataFrame({
-        "ped":    ped,
-        "mesero": d[col_mesero].astype(str).str.strip().str.title(),
-        "pax":    pd.to_numeric(d[col_pax], errors="coerce"),
+        "ped":    di[col_pedido].astype(str),
+        "mesero": di[col_mesero].astype(str).str.strip().str.title(),
+        "pax":    pd.to_numeric(di[col_pax], errors="coerce"),
         "hora":   fecha.dt.hour + fecha.dt.minute / 60.0,
         "finde":  fecha.dt.day_name().isin(["Friday", "Saturday", "Sunday"]),
-        "venta":  pd.to_numeric(d[col_venta], errors="coerce").fillna(0),
+        "venta":  pd.to_numeric(di[col_venta], errors="coerce").fillna(0),
     }).dropna(subset=["pax", "hora"])
     base = base[(base["mesero"] != "") & (base["mesero"].str.lower() != "nan")
                & (base["pax"] > 0) & (base["pax"] <= 20)]
@@ -930,7 +961,12 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
     # por pedido completo — una mesa con pago dividido (2+ métodos) tiene
     # más de un monto distinto. Sumar por (pedido, Correlativo Pago) único
     # antes de sumar por pedido evita contar la misma propina una vez por
-    # cada línea de producto de ese pago.
+    # cada línea de producto de ese pago (sumada por fila, x11: regla
+    # #517). La llave del pago va primero porque es por COMPROBANTE: un
+    # pedido partido en dos boletas tiene dos «pago 1», y (pedido, correlativo)
+    # se quedaba con la propina de una sola.
+    col_llave_pago = _resolver(d, ["Llave Local Documento Correlativo Pago"])
+    col_corr = col_llave_pago or col_corr
     if col_corr and col_corr in d.columns:
         pagos = (pd.DataFrame({
             "ped": ped, "corr": d[col_corr].astype(str),
@@ -1085,10 +1121,23 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 df = df[df[_col].astype(str).isin(_sel)]
         return df
 
-    d = _aplicar_chips(df_f)
+    # DOS GRANOS DEL MISMO df (regla #517). `d_pagos` es el parquet tal
+    # cual: una fila por ítem Y por forma de pago. `d` es una fila por
+    # ítem, y es lo que reciben TODAS las vistas que suman venta, costo o
+    # cantidad. Sólo dos cosas miran `d_pagos`: Meseros (la propina es del
+    # PAGO) y el asistente IA (que también responde por formas de pago, y
+    # recibe la nota del grano en `asistente_datos.nota_de_grano`).
+    d_pagos = _aplicar_chips(df_f)
+    d = unico_por_item(d_pagos)
+
+    def _filtrar_items(df):
+        """`_aplicar_chips` + un ítem una vez, para los df que las vistas
+        traen APARTE de R2 (Año Pasado, Mapa por hora): sin el segundo
+        paso, esas dos vistas volverían a sumar filas por pago."""
+        return unico_por_item(_aplicar_chips(df))
 
     # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
-    publicar_contexto_ia("Ventas", d, {
+    publicar_contexto_ia("Ventas", d_pagos, {
         "Grupo": fam_sel, "Sub Grupo": sub_sel,
         "Canal": canal_sel, "Servicio": serv_sel,
     })
@@ -1166,23 +1215,23 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
 
         # ── 1a-bis) Mapa de calor día × hora, hasta 4 períodos ───────────
         # Trae sus propios tramos (uno por período comparado) con
-        # data.cargar_rango y les aplica _aplicar_chips, igual que el
+        # data.cargar_rango y les aplica _filtrar_items, igual que el
         # comparativo: el `d` de acá está acotado al rango de la franja y los
         # períodos que se comparan pueden caer fuera de él.
         elif graf == "Mapa por hora":
             _ventas_horario(d, col_venta, col_fecha, col_pax=col_pax,
                             col_pedido=col_pedido, col_prod=col_prod,
                             col_cant=col_cant, col_fam=col_fam,
-                            col_sub=col_sub, filtrar_cb=_aplicar_chips)
+                            col_sub=col_sub, filtrar_cb=_filtrar_items)
 
         # ── 1a) Comparativo día a día vs Año Pasado ──────────────────────
         # Trae su propio df del año pasado (data.cargar_rango) y le pasa
-        # _aplicar_chips para que quede filtrado igual que `d`.
+        # _filtrar_items para que quede filtrado igual que `d`.
         elif graf == "Comparativo vs Año Pasado":
             _ventas_comparativo(d, col_venta, col_fecha, col_pax=col_pax,
                                 col_pedido=col_pedido, col_prod=col_prod,
                                 col_cant=col_cant, col_fam=col_fam,
-                                col_sub=col_sub, filtrar_cb=_aplicar_chips)
+                                col_sub=col_sub, filtrar_cb=_filtrar_items)
 
         # ── 1b) Venta vs Compra por día (líneas arriba, Pax en barras abajo) ─
         # Vista aparte de "Venta por día": mismo espíritu que un gráfico
@@ -1323,7 +1372,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
 
         # ── 6) Meseros: propina real vs. esperada (regresión en vivo) ───
         elif graf == "Meseros":
-            _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
+            _ventas_ranking_meseros(d_pagos, col_mesero, col_propina, col_pedido,
                                     col_corr, col_pax, col_fecha, col_venta)
         else:
             st.info("No hay columnas suficientes para este gráfico.")

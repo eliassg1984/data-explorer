@@ -119,9 +119,13 @@ def esquema_para_prompt(df: pd.DataFrame) -> str:
 
 # ─── Resumen de arranque ───────────────────────────────────────────────────
 def _col_valor(df: pd.DataFrame) -> str | None:
-    """La columna numérica que mejor representa "el dinero" del reporte."""
-    for kw in ("ajuste valorizado", "valorizado total", "importe", "valorizado",
-               "total", "monto", "precio"):
+    """La columna numérica que mejor representa "el dinero" del reporte.
+
+    "venta item" va antes que "total": en Ventas, la primera columna con
+    "total" es TOTAL MDOCUMENTO, la cabecera del comprobante repetida en
+    cada ítem — su suma no significa nada (regla #517)."""
+    for kw in ("ajuste valorizado", "valorizado total", "venta item", "importe",
+               "valorizado", "total", "monto", "precio"):
         for c in df.columns:
             if kw in str(c).lower() and pd.api.types.is_numeric_dtype(df[c]):
                 return c
@@ -162,14 +166,69 @@ def resumen_para_prompt(df: pd.DataFrame, reporte: str,
                 pass
             break
 
+    grano = nota_de_grano(df)
     cv = _col_valor(df)
     if cv:
         try:
-            partes.append(f"Suma de \"{cv}\": S/ {df[cv].sum():,.2f}")
+            if grano:
+                llave = _columna(df, _LLAVE_ITEM)
+                unicos = df[~(df[llave].duplicated() & df[llave].notna())]
+                partes.append(f"Suma de \"{cv}\" (cada ítem una vez): "
+                              f"S/ {unicos[cv].sum():,.2f}")
+            else:
+                partes.append(f"Suma de \"{cv}\": S/ {df[cv].sum():,.2f}")
         except Exception:
             pass
+    if grano:
+        partes.append(grano)
 
     return "\n".join(partes)
+
+
+# ─── Grano de la tabla ─────────────────────────────────────────────────────
+# `ventas.parquet` trae una fila por ÍTEM Y POR FORMA DE PAGO del
+# comprobante (regla #517). El modelo recibe esas filas tal cual —sin ellas
+# no podría responder por formas de pago ni propinas—, así que hay que
+# decirle cómo sumar cada cosa. Medido en septiembre 2026: la venta sumada
+# por fila sale +17 %, el monto de pago x11 y la propina x11.
+_LLAVE_ITEM = "LLAVE LOCAL DOCUMENTO ITEM"
+_LLAVE_PAGO = "LLAVE LOCAL DOCUMENTO CORRELATIVO PAGO"
+_LLAVE_DOC = "LLAVE LOCAL DOCUMENTO"
+
+
+def _columna(df: pd.DataFrame, nombre: str) -> str | None:
+    """El nombre real de la columna `nombre`, sin distinguir mayúsculas."""
+    for c in df.columns:
+        if str(c).strip().lower() == nombre.lower():
+            return c
+    return None
+
+
+def nota_de_grano(df: pd.DataFrame) -> str | None:
+    """La nota de GRANO para el prompt, o None si la tabla no la necesita.
+
+    Sale sólo cuando están las dos llaves (ítem y pago): es la forma de
+    `ventas.parquet`, y ningún otro reporte las tiene. Los nombres van con
+    el caso REAL de las columnas, para que el modelo los copie tal cual.
+    """
+    if df is None or df.empty:
+        return None
+    item, pago = _columna(df, _LLAVE_ITEM), _columna(df, _LLAVE_PAGO)
+    if not (item and pago):
+        return None
+    doc = _columna(df, _LLAVE_DOC) or _LLAVE_DOC
+    return (
+        "GRANO DE `datos` — LEER ANTES DE SUMAR: hay una fila por ÍTEM Y POR "
+        "FORMA DE PAGO del comprobante. Un plato pagado con dos formas de "
+        "pago aparece DOS veces, con su venta, costo y cantidad enteros.\n"
+        f"· Venta, costo, cantidad, platos: cuenta cada \"{item}\" UNA vez — "
+        f"FROM (SELECT * FROM datos QUALIFY \"{item}\" IS NULL OR "
+        f"ROW_NUMBER() OVER (PARTITION BY \"{item}\") = 1).\n"
+        "· Formas de pago y propinas (MONTO TIPO PAGO DOC, MONTO PROPINA, "
+        f"NOMBRE TIPO PAGO): son del PAGO y se repiten en cada ítem; cuenta "
+        f"cada \"{pago}\" UNA vez. Los ítems sin pago tienen esa llave vacía.\n"
+        "· Cabecera del comprobante (TOTAL/NETO/IGV MDOCUMENTO): se repite en "
+        f"cada fila; cuenta cada \"{doc}\" UNA vez.")
 
 
 # ─── Ejecución de SQL ──────────────────────────────────────────────────────

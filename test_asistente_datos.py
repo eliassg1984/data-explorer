@@ -18,6 +18,7 @@ from asistente_datos import (
     columnas_sin_comillas,
     ejecutar_sql,
     esquema_para_prompt,
+    nota_de_grano,
     resumen_para_prompt,
 )
 
@@ -174,6 +175,42 @@ res3 = resumen_para_prompt(d, "X", {"Área": []})
 ok("ninguno" in res3, "un filtro con lista vacía NO cuenta como activo")
 ok("no devuelve ninguna fila" in resumen_para_prompt(pd.DataFrame(), "X", {}),
    "df vacío se explica en el resumen")
+
+# ── Grano de Ventas: una fila por ítem Y por forma de pago (regla #517) ───
+# A pagado con dos formas: dos filas, cada una con la venta ENTERA del
+# plato y la propina ENTERA de su pago. B, un solo pago. Un ítem sin pago.
+dv = pd.DataFrame({
+    "LLAVE LOCAL DOCUMENTO": ["D1", "D1", "D1", "D2"],
+    "LLAVE LOCAL DOCUMENTO ITEM": ["A", "A", "B", "C"],
+    "LLAVE LOCAL DOCUMENTO CORRELATIVO PAGO": ["D1-1", "D1-2", "D1-1", None],
+    "NOMBRE TIPO PAGO": ["CHEQUE", "TARJETA", "CHEQUE", None],
+    "MONTO PROPINA": [5.0, 2.0, 5.0, 0.0],
+    "TOTAL MDOCUMENTO": [130.0, 130.0, 130.0, 20.0],
+    "VENTA ITEM DDOCUMENTO": [100.0, 100.0, 30.0, 20.0],
+})
+nota = nota_de_grano(dv)
+ok(nota is not None and "LLAVE LOCAL DOCUMENTO ITEM" in nota
+   and "LLAVE LOCAL DOCUMENTO CORRELATIVO PAGO" in nota,
+   "ventas: la nota de grano nombra las dos llaves")
+ok(nota_de_grano(d) is None, "otro reporte: sin nota de grano")
+rv = resumen_para_prompt(dv, "Ventas", {})
+ok("VENTA ITEM DDOCUMENTO" in rv and "150.00" in rv and "250.00" not in rv,
+   "ventas: el resumen suma la VENTA un ítem una vez (150, no 250)")
+ok("TOTAL MDOCUMENTO" not in rv.split("GRANO")[0],
+   "ventas: el resumen no suma la cabecera repetida")
+# El SQL que la nota le enseña al modelo tiene que correr y dar lo correcto.
+r = ejecutar_sql(dv, 'SELECT SUM("VENTA ITEM DDOCUMENTO") AS v FROM (SELECT * '
+                 'FROM datos QUALIFY "LLAVE LOCAL DOCUMENTO ITEM" IS NULL OR '
+                 'ROW_NUMBER() OVER (PARTITION BY "LLAVE LOCAL DOCUMENTO ITEM")'
+                 ' = 1)')
+ok(r.get("ok") and r["filas"][0]["v"] == 150.0,
+   "ventas: el QUALIFY de la nota pasa el validador y suma 150")
+r = ejecutar_sql(dv, 'SELECT SUM(p) AS p FROM (SELECT ANY_VALUE("MONTO PROPINA")'
+                 ' AS p FROM datos WHERE "LLAVE LOCAL DOCUMENTO CORRELATIVO '
+                 'PAGO" IS NOT NULL GROUP BY "LLAVE LOCAL DOCUMENTO CORRELATIVO'
+                 ' PAGO")')
+ok(r.get("ok") and r["filas"][0]["p"] == 7.0,
+   "ventas: la propina por pago suma 7 (por fila serían 12)")
 
 # ── Cierre ─────────────────────────────────────────────────────────────────
 print()

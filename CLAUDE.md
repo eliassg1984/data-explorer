@@ -715,6 +715,16 @@ entró (validado contra lo pagado en compras). Su tarjeta, «Porcionamientos»,
 es la tercera «por período» de Movimientos y la única que mide merma y no
 un valorizado. Regla #510.
 
+La cuarta, `ventas.parquet`: **una fila por ÍTEM Y POR FORMA DE PAGO**. Un
+plato pagado con cheque + tarjeta sale dos veces con su venta entera: sumar
+filas da +17 % en septiembre 2026 y +22 % en el histórico. Toda vista que
+suma venta, costo o cantidad recibe el `d` de
+`graficos/ventas.py::unico_por_item` (un `LLAVE LOCAL DOCUMENTO ITEM` una
+vez), y lo que la vista trae APARTE de R2 pasa por `_filtrar_items`. La
+propina y los montos de pago son del PAGO (x11 por fila): Meseros y el
+asistente IA reciben las filas por pago y cuentan cada `LLAVE LOCAL
+DOCUMENTO CORRELATIVO PAGO` una vez. El parquet no se toca. Regla #517.
+
 ## El eje temporal tiene TRES modos, y un solo dueño
 
 El calendario de la franja tiene tres modos: **Rango** (intervalo),

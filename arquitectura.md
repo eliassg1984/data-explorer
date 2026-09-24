@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-516 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+517 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (178)
 
@@ -620,7 +620,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 
-**Datos, R2 y DuckDB** (62)
+**Datos, R2 y DuckDB** (63)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -684,6 +684,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#509** — «Salidas por período» es la MISMA tarjeta que la de requerimientos, con otro Lado. El área…
 - **#510** — «Porcionamientos» es la tercera tarjeta «por período» y la primera que no mide un valorizado:…
 - **#514** — El «neto» del sistema es precio ÷ 1,235: IGV y recargo se SUMAN sobre el neto, y el IGV de…
+- **#517** — En ventas.parquet un ítem sale UNA VEZ POR FORMA DE PAGO: toda suma de venta, costo o…
 
 **SUNAT y SIRE** (43)
 
@@ -42385,6 +42386,79 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        vistas de Ventas siguen sumando filas** y quedan pendientes (las de
        formas de pago y propinas necesitan las filas por pago).
 
+517. **En `ventas.parquet` un ítem sale UNA VEZ POR FORMA DE PAGO: toda
+     suma de venta, costo o cantidad cuenta cada `LLAVE LOCAL DOCUMENTO
+     ITEM` una vez; la propina y los montos de pago, cada pago una vez.**
+     2026-09-24. Gemela de las #198 (compras), #508 (requerimientos) y
+     #510 (porcionamientos): una columna que parece de la fila y es de un
+     grupo. Generaliza a todo Ventas lo que la #516 hizo sólo en el
+     Resumen: su `drop_duplicates` local queda como una no-op, porque el
+     `d` que recibe ya viene con un ítem una vez.
+
+     **El grano.** El parquet trae una fila por ítem del comprobante Y POR
+     CADA FORMA DE PAGO: pagado con cheque + tarjeta, cada plato sale dos
+     veces, cada una con su `VENTA ITEM DDOCUMENTO` ENTERA (distinto
+     `CORRELATIVO PAGO`, misma llave del ítem). Venta, costo y cantidad son
+     constantes dentro de la llave (medido: `count(DISTINCT ...)` = 1 en
+     las 191k llaves). Medido con DuckDB sobre R2:
+
+     | | por filas | un ítem una vez | inflado |
+     |---|---:|---:|---:|
+     | Venta, septiembre 2026 | S/ 390.272 | S/ 332.807 | +17 % |
+     | Costo, septiembre 2026 | S/ 90.064 | S/ 79.812 | +13 % |
+     | Cantidad, septiembre 2026 | 11.048 | 9.544 | +16 % |
+     | Venta, histórico (ene 2025 →) | S/ 11,74 M | S/ 9,63 M | +22 % |
+     | Propina, septiembre 2026 | S/ 245.108 | S/ 21.735 (por pago) | x11 |
+
+     La prueba de que la llave es la buena: la venta de ítems únicos del
+     histórico (S/ 9.627.730) queda a 0,3 % de `TOTAL MDOCUMENTO` tomado
+     una vez por comprobante (S/ 9.599.080). Sumada por filas se pasaba
+     2,1 millones.
+
+     **Dónde se corrige, y es UN lugar por capa:**
+     - `graficos/ventas.py::unico_por_item` sobre el `d` post-chips del
+       dispatcher. Todas las vistas que suman (Resumen, Por día, Vs Compra,
+       Semanal, Histórica, Matriz, Ranking & FoodCost, la Tabla) reciben
+       ese `d`. Año Pasado y Mapa por hora traen su propio df de R2 por
+       `filtrar_cb`: les llega `_filtrar_items`, que es `_aplicar_chips` +
+       `unico_por_item`. Sin eso, las dos volvían a sumar filas por pago en
+       silencio, porque no leen el `d`.
+     - Los KPIs del rail (`data.resumen_kpis`): `REPORTES["Ventas"]["kpi_item"]`
+       y un `QUALIFY ROW_NUMBER() OVER (PARTITION BY llave) = 1` antes del
+       agrupado por pedido. La llave sale de `REPORTES` por `archivo` y no
+       de un argumento nuevo: `navegacion.py` no cambia (en Cloud, cambiar
+       una firma entre módulos importados es una caída, #357).
+     - El asistente IA (`asistente_datos.nota_de_grano`): el modelo SIGUE
+       viendo las filas por pago —sin ellas no puede contestar «¿cuánto
+       entró con tarjeta?»— y el prompt le dice cómo sumar cada cosa. El
+       «Suma de …» del resumen ya no toma `TOTAL MDOCUMENTO` (la cabecera,
+       repetida en cada ítem) sino la venta, un ítem una vez.
+
+     **Lo que NO se deduplica así:** lo que es del PAGO. `MONTO PROPINA` y
+     `MONTO TIPO PAGO DOC` son constantes dentro de `LLAVE LOCAL DOCUMENTO
+     CORRELATIVO PAGO` y se repiten en cada ítem de ese pago. Meseros
+     recibe `d_pagos` (las filas por pago) y cuenta la propina una vez por
+     pago; su VENTA sí pasa por `unico_por_item`, porque sumada por pago
+     inflaba el denominador y el % de propina salía más bajo de lo que fue
+     (en septiembre, 5,6 % contra 6,5 % en el agregado). De paso, la propina
+     se agrupa por la llave del pago, que es por COMPROBANTE, y no por
+     `(pedido, CORRELATIVO PAGO)`: un pedido partido en dos boletas tiene
+     dos «pago 1» y se quedaba con la propina de una sola (S/ 136 en todo
+     el histórico; poco, pero era un error).
+
+     **Las filas sin llave de ítem (22 en el histórico) se quedan todas**:
+     no hay con qué decir que son la misma. Y los ítems SIN pago
+     (`CORRELATIVO PAGO` vacío: 519 en septiembre, S/ 32.713, cortesías,
+     cuentas por cobrar y anulados) tienen una sola fila y no cambian.
+
+     **Nada de esto toca el parquet ni el df cargado**: `unico_por_item`
+     devuelve otro df. El análisis por forma de pago sigue teniendo las
+     filas por pago donde las necesita.
+
+     **La comprobación son diez segundos de DuckDB**, igual que en la #198:
+     `SELECT count(*), count(DISTINCT "LLAVE LOCAL DOCUMENTO ITEM") FROM
+     ventas`. Si no dan lo mismo, la fila no es el ítem.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42397,7 +42471,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#516**; la próxima toma el número siguiente.
+> última regla es la **#517**; la próxima toma el número siguiente.
 
 >
 
