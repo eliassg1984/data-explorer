@@ -659,6 +659,10 @@ GROUP BY COD_PRODUCTO, date_trunc('month', FECHA_EMISION_DOC)
 
 Si da 1, la columna es del grupo, no de la fila. `Vs año pasado` ya no las
 usa: calcula el año pasado desplazando su propia serie mensual 12 meses.
+Detalle en `arquitectura.md` reglas #198 a #200, que además cubren las otras
+dos trampas del mismo cambio — un ratio (precio unitario) **no** se re-pondera
+sobre el agregado, y una vista que COMPARA períodos no puede heredar el rango
+de la franja (le deja el otro lado de la comparación fuera del df).
 
 Gemela en `requerimientos.parquet`: **contar requerimientos no es contar
 filas**. Un requerimiento es su `COD REQUERIMIENTO` (con UNA área, UN estado
@@ -667,13 +671,11 @@ y UNA fecha), y dos cosas inflan cualquier conteo sin sumar un sol: el
 cantidad ni valor, casi todos de GASTOS— y los **anulados**, que valen poco
 pero no cero (S/ 15.868 en 2026). «Requerimientos por período»
 (`graficos/movimientos_periodo.py::tarjeta_requerimientos_periodo`) descarta
-los dos y lo dice en su fila de KPI; el resto de Movimientos los suma. Y esa
-tarjeta IMPORTA las cuentas de «Compras por período» (`semanal.py`): tocar
-una allá la cambia acá, a propósito. Regla #508.
-Detalle en `arquitectura.md` reglas #198 a #200, que además cubren las otras
-dos trampas del mismo cambio — un ratio (precio unitario) **no** se re-pondera
-sobre el agregado, y una vista que COMPARA períodos no puede heredar el rango
-de la franja (le deja el otro lado de la comparación fuera del df).
+los dos y lo dice en su fila de KPI; el resto de Movimientos los suma. Su
+gemela `tarjeta_salidas_periodo` es la MISMA tarjeta con otro `Lado` (en
+salidas el «sin procesar» no tiene ítems: sus líneas salen del kardex), y
+las dos IMPORTAN las cuentas de «Compras por período» (`semanal.py`): tocar
+una allá la cambia acá, a propósito. Reglas #508 y #509.
 
 ## El eje temporal tiene TRES modos, y un solo dueño
 

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-508 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+509 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (177)
 
@@ -212,7 +212,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 
-**Layout y alturas** (71)
+**Layout y alturas** (72)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -285,6 +285,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
 - **#504** — Lo que depende va en UNA tarjeta; lo que no, a su propia vista — y el filtro activo se ESCRIBE
 - **#508** — Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o líneas se descartan…
+- **#509** — «Salidas por período» es la MISMA tarjeta que la de requerimientos, con otro Lado. El área…
 
 **Plotly y figuras** (92)
 
@@ -612,7 +613,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#502** — «Que el correo salga con MI dirección» no se resuelve mandando desde el servidor: se abre el…
 - **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
 
-**Datos, R2 y DuckDB** (59)
+**Datos, R2 y DuckDB** (60)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -673,6 +674,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#475** — Un salto del rail SOBREVUELA la pila, y una pila que construye «lo que tengas cerca» lee ese…
 - **#499** — Quinto pase de Nueva receta: @st.fragment para que el «+» responda en 100 ms y no en un…
 - **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
+- **#509** — «Salidas por período» es la MISMA tarjeta que la de requerimientos, con otro Lado. El área…
 
 **SUNAT y SIRE** (43)
 
@@ -41829,7 +41831,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      «Top productos · requerim.» se retiró: el top es ahora un recorte de
      esta tarjeta («Top 5/10/20 por valor» en su selector de Producto) y el
      ranking completo sigue al pie de «Por sub almacén». La guarda es
-     `test_graficos.py::_pruebas_requerimientos_periodo`, que fija las
+     `test_graficos.py::_pruebas_movimientos_periodo`, que fija las
      cuentas de arriba por NOMBRE de columna.
 
      **Una trampa de la verificación, no de la tarjeta:** un clic
@@ -41844,6 +41846,76 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (acá, sin producto). Un 15 % de cabeceras vacías no da error: da un
      conteo que sube sin que nada haya pasado.
 
+509. **«Salidas por período» es la MISMA tarjeta que la de requerimientos,
+     con otro `Lado`. El área que faltaba estaba a un JOIN de distancia
+     (`vArea` por `MSUBSALIDA.tCodigoArea`), y en salidas el documento sin
+     procesar no tiene ítems.**
+     2026-09-23, a pedido: «hagamos algo así para salidas, en reemplazo de
+     la vista Tipo Descargo, debe mostrar el área del cual se da la
+     descarga». Reemplazó a la dona de «Tipo de descargo».
+
+     **El área no la traía el parquet porque no la pedía la consulta.** Se
+     buscó en la réplica local del Almacén (`.\SQL2022 / ALMACEN_VACIO`): la
+     cabecera `MSUBSALIDA` la guarda en `tCodigoArea`, y las vistas del
+     propio ERP —`vCSubSalida`, y `vCRequerimiento` para los
+     requerimientos— la traducen con `vGrupoArea`, que es `TTABLA` con
+     `tTabla='AREA'` y `lActivo=1`. La consulta usa `vArea`: la misma tabla
+     SIN el filtro de activas, para que una salida vieja de un área dada de
+     baja conserve su nombre. El usuario sumó a su consulta
+     `LEFT JOIN ALMACEN.DBO.vArea ON MSUBSALIDA.tCodigoArea = vArea.Codigo`
+     y `vArea.Descripcion AS 'AREA'` —validada antes contra la réplica— y la
+     trajo con «Refrescar». Medido el parquet nuevo: las 17.397 filas traen
+     área, cada salida UNA, y las 16 áreas están entre las de
+     requerimientos: el mismo catálogo, «CAVA » con su espacio incluido.
+
+     **Una tarjeta, dos lados.** `graficos/movimientos_periodo.py` se
+     generalizó en vez de copiarse. Lo que distingue a las tarjetas —los
+     nombres, el género («anulado» / «anulada»), las keys de widget
+     (`mov_per_*` / `mov_psal_*`) y de contenedor (`mp_*` / `mps_*`), el
+     filtro de tipo de descargo— vive en un `Lado` (`REQUERIMIENTOS`,
+     `SALIDAS`). El CSS es UN molde con los prefijos de cada lado (`_css`):
+     las dos tarjetas conviven en la página y sus keys no pueden coincidir.
+     El color de cada área es el MISMO en las dos, porque las dos reciben el
+     orden del histórico de requerimientos (`orden_areas`): Cocina se lee
+     igual en la que pide y en la que da de baja.
+
+     **Lo que no se perdió de la dona:** el tipo de descargo es un filtro de
+     la cabecera —entre Área y Familia— y una columna del Detalle. Y el chip
+     «Sub Almacén» de la franja recorta ahora también las salidas
+     (`_cargar_salidas_del_rango`): antes no podía, y la página lo
+     documentaba como un límite (#98).
+
+     **Lo que es distinto en salidas, medido sobre sus 5.579 documentos:**
+     97,9 % procesadas, 69 anuladas (S/ 12.225) y 48 GENERADAS —sin
+     procesar— que NO tienen ítems: sus líneas salen del kardex
+     (`MSUBKARDEX`, por `'NS-' + tSubSalida`) y una salida sin procesar
+     todavía no lo movió. En requerimientos el Generado sí trae líneas, y
+     suma. Por eso lo que no suma se cuenta por DOCUMENTO y con precedencia
+     (`no_suman`): anulado manda; «sin procesar» es el Generado SIN ítems;
+     «sin ítems», el resto de los vacíos. Y el Detalle los LISTA, apagados,
+     con lo que son escrito en la celda del valor («Anulada», «Sin
+     procesar», «Sin ítems»): quien abre un período con «2 anuladas» en el
+     Resumen tiene que poder ver cuáles. Salidas tampoco trae precio
+     unitario: se despeja de la línea (valor ÷ cantidad), y queda vacío en
+     las 106 líneas con cantidad 0.
+
+     **Una advertencia de volumen que no es de la tarjeta:** las salidas
+     registradas cayeron de 170-330 por mes (set 2025 – abr 2026) a 44 en
+     agosto y 25 en lo que va de septiembre. Se le preguntó al usuario si se
+     dejaron de registrar; mientras tanto, una tarjeta casi vacía en el mes
+     en curso ES el dato, no un error.
+
+     La guarda de las dos tarjetas es
+     `test_graficos.py::_pruebas_movimientos_periodo` (la de la #508 creció
+     con el lado de salidas: género, tipo, precio despejado, sin procesar).
+
+     **Para la próxima:** una columna que «el parquet no trae» casi siempre
+     la tiene el ERP a un JOIN de distancia. Buscarla en la réplica
+     (`sys.columns` de la cabecera, y `OBJECT_DEFINITION` de la vista que
+     usa la pantalla del ERP) y validar la consulta nueva contra la réplica
+     ANTES de que el usuario la pegue en la hoja: un nombre mal escrito no da
+     error hasta que corre la extracción.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -41856,7 +41928,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#508**; la próxima toma el número siguiente.
+> última regla es la **#509**; la próxima toma el número siguiente.
 
 >
 

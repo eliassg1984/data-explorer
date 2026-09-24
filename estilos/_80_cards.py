@@ -1280,8 +1280,9 @@ CSS = """    /* ================================================================
         /* `ajuste_graf_card_izq_mov_periodo` (Movimientos › Requerimientos   */
         /* por período) salió al nacer, el 2026-09-23: es la gemela de        */
         /* Semanal y mide lo que ella (`alturas.SEMANAL_*`), con la figura    */
-        /* cediéndole su sitio a la tabla. Regla #508.                        */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo),
+        /* cediéndole su sitio a la tabla. Regla #508. Y su hermana de        */
+        /* salidas, `…_mov_sal_periodo`, el mismo día. Regla #509.            */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1296,7 +1297,8 @@ CSS = """    /* ================================================================
         /* de la familia contra 16 de vap son píxeles de diferencia que no   */
         /* son contenido. Sin tarjeta interna, acá no hay 5px que restar.    */
         div.st-key-ajuste_graf_card_izq_sem,
-        div.st-key-ajuste_graf_card_izq_mov_periodo {
+        div.st-key-ajuste_graf_card_izq_mov_periodo,
+        div.st-key-ajuste_graf_card_izq_mov_sal_periodo {
             padding-top: 16px !important;
             padding-bottom: 16px !important;
         }

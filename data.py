@@ -191,8 +191,9 @@ REPORTES = {
     # `archivo` es el de REQUERIMIENTOS y no es indistinto: de él salen los
     # KPIs de la franja, el rango de fecha, los chips (`filtros_cat`), el
     # buscador y las columnas de la Tabla pivote. Es el lado grande (144.636
-    # filas contra 17.355), el único que trae Sub Almacen, y el que tiene la
-    # tabla con tratamiento propio.
+    # filas contra 17.355) y el que tiene la tabla con tratamiento propio.
+    # (Hasta el 2026-09-23 era además el único con área: desde ese día la
+    # consulta de salidas trae `AREA`, ver arquitectura.md regla #509.)
     "Movimientos": {
         # Lo que ve el usuario es "Movimientos" (a pedido, 2026-09-22; antes
         # "Movimientos de Almacén"). La clave "Movimientos" es la IDENTIDAD

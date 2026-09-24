@@ -5268,16 +5268,19 @@ def _pruebas_listado_inventario():
     return fallos
 
 
-def _pruebas_requerimientos_periodo():
-    """Movimientos › Requerimientos por período (graficos/movimientos_periodo.py).
+def _pruebas_movimientos_periodo():
+    """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
 
-    Lo que fija son las CUENTAS de la regla #508, que son las que se leen
-    distinto de lo que parecen: un requerimiento es un CÓDIGO y no una fila;
+    Lo que fija son las CUENTAS de las reglas #508 y #509, que son las que se
+    leen distinto de lo que parecen: un documento es un CÓDIGO y no una fila;
     los anulados no suman pero se cuentan (y se listan en el Detalle); el
-    requerimiento sin ítems —una línea sin producto ni valor, el 15 % del
-    histórico— no cuenta ni como requerimiento ni como línea; la barra se
-    parte en las tres áreas mayores y «Resto», y cierra con el total; y el
-    color sigue al área aunque el filtro cambie quién es la mayor.
+    documento sin ítems —una línea sin producto ni valor, el 15 % de los
+    requerimientos del histórico— no cuenta ni como documento ni como
+    línea; la barra se parte en las tres áreas mayores y «Resto», y cierra
+    con el total; el color sigue al área aunque el filtro cambie quién es la
+    mayor. Y el lado de SALIDAS: el mismo código con otro género
+    («anulada»), el tipo de descargo en el Detalle, el precio unitario
+    despejado de la línea y la salida sin procesar, que no tiene ítems.
 
     Todo por NOMBRE de columna, no por posición (CLAUDE.md: acá corre
     pandas 3 y en Cloud la 2.2).
@@ -5294,63 +5297,75 @@ def _pruebas_requerimientos_periodo():
     def check(nombre, got, exp):
         nonlocal fallos
         if got == exp:
-            print(f"OK    requerimientos por período · {nombre}")
+            print(f"OK    movimientos por período · {nombre}")
         else:
             fallos += 1
-            print(f"FALLA requerimientos por período · {nombre}: "
+            print(f"FALLA movimientos por período · {nombre}: "
                   f"got={got!r} exp={exp!r}")
 
+    # ── REQUERIMIENTOS ────────────────────────────────────────────────────
     # Semana 37 (7-13 set 2026): R1 de Cocina con dos líneas, R2 de
-    # Producción, R3 de Cocina ANULADO (con valor: no todos valen 0) y R4 de
-    # Gastos SIN ÍTEMS. Semana 38 (14-20 set): R5 de Barra sin procesar
-    # (estado Generado), R6 de Cava y R7 de Salón.
+    # Producción, R3 de Cocina ANULADO (con valor: no todos valen 0), R4 de
+    # Gastos SIN ÍTEMS y R8, anulado Y sin ítems (cuenta como anulado, una
+    # sola vez). Semana 38 (14-20 set): R5 de Barra sin procesar (estado
+    # Generado, CON ítems: suma), R6 de Cava y R7 de Salón.
     d = pd.DataFrame({
         "FECHA REGISTRO": pd.to_datetime(
             ["2026-09-07 10:00", "2026-09-07 10:00", "2026-09-08 11:00",
              "2026-09-09 12:00", "2026-09-10 09:00", "2026-09-15 08:00",
-             "2026-09-16 08:00", "2026-09-16 09:30"]),
-        "COD REQUERIMIENTO": ["R1", "R1", "R2", "R3", "R4", "R5", "R6", "R7"],
+             "2026-09-16 08:00", "2026-09-16 09:30", "2026-09-11 10:00"]),
+        "COD REQUERIMIENTO": ["R1", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
+                              "R8"],
         "SUB ALMACEN": ["COCINA", "COCINA", "PRODUCCION", "COCINA", "GASTOS",
-                        "BARRA", "CAVA ", "SALON"],
+                        "BARRA", "CAVA ", "SALON", "GASTOS"],
         "NOMBRE ESTADO REQUERIMIENTO": ["PROCESADO", "PROCESADO", "PROCESADO",
                                         "ANULADO", "PROCESADO", "GENERADO",
-                                        "PROCESADO", "PROCESADO"],
+                                        "PROCESADO", "PROCESADO", "ANULADO"],
         "NOMBRE FAMILIA": ["ALIMENTOS"] * 4 + [None, "BEBIDAS", "BEBIDAS",
-                                               "ALIMENTOS"],
-        "NOMBRE PRODUCTO": ["A", "B", "C", "A", None, "D", "E", "F"],
-        "CANTIDAD": [1.0, 2.0, 3.0, 1.0, None, 4.0, 1.0, 0.5],
-        "PRECIO UNIT": [100.0, 25.0, 100.0, 20.0, None, 10.0, 10.0, 10.0],
-        "VALOR ITEM": [100.0, 50.0, 300.0, 20.0, None, 40.0, 10.0, 5.0],
+                                               "ALIMENTOS", None],
+        "NOMBRE PRODUCTO": ["A", "B", "C", "A", None, "D", "E", "F", None],
+        "CANTIDAD": [1.0, 2.0, 3.0, 1.0, None, 4.0, 1.0, 0.5, None],
+        "PRECIO UNIT": [100.0, 25.0, 100.0, 20.0, None, 10.0, 10.0, 10.0,
+                        None],
+        "VALOR ITEM": [100.0, 50.0, 300.0, 20.0, None, 40.0, 10.0, 5.0, None],
     })
-    cols = dict(fecha="FECHA REGISTRO", req="COD REQUERIMIENTO",
+    cols = dict(fecha="FECHA REGISTRO", doc="COD REQUERIMIENTO",
                 area="SUB ALMACEN", estado="NOMBRE ESTADO REQUERIMIENTO",
                 fam="NOMBRE FAMILIA", prod="NOMBRE PRODUCTO", cant="CANTIDAD",
                 punit="PRECIO UNIT", val="VALOR ITEM")
 
-    base = mp.lineas_requerimientos(d, **cols)
-    check("la línea sin producto es la del requerimiento sin ítems",
-          base.loc[base["vacio"], "req"].tolist(), ["R4"])
+    base = mp.lineas_documentos(d, **cols)
+    check("las líneas sin producto son las de los documentos sin ítems",
+          sorted(base.loc[base["vacio"], "doc"]), ["R4", "R8"])
     check("el área se limpia (el ERP deja espacios: «CAVA »)",
           sorted(set(base["area"])),
           ["BARRA", "CAVA", "COCINA", "GASTOS", "PRODUCCION", "SALON"])
 
-    lin = base[~base["vacio"]].copy()
-    lin["clave"] = _periodo_serie(lin["fecha"], "Semana")
-    res = mp.resumen_por_periodo(lin)
+    bl = base.copy()
+    bl["clave"] = _periodo_serie(bl["fecha"], "Semana")
+    res = mp.resumen_por_periodo(bl)
     check("un período por semana, en orden", res.index.tolist(),
           ["2026-S37", "2026-S38"])
-    check("semana 37: sin el anulado ni el vacío (por nombre)",
-          res.loc["2026-S37", ["valor", "lineas", "reqs", "areas",
+    check("semana 37: sin anulados ni vacíos; los dos anulados se cuentan",
+          res.loc["2026-S37", ["valor", "lineas", "docs", "areas",
                                "anulados", "sin_procesar"]].tolist(),
-          [450.0, 3, 2, 2, 1, 0])
-    check("semana 38: el Generado suma y se cuenta «sin procesar»",
-          res.loc["2026-S38", ["valor", "lineas", "reqs", "areas",
+          [450.0, 3, 2, 2, 2, 0])
+    check("semana 38: el Generado con ítems suma y se cuenta «sin procesar»",
+          res.loc["2026-S38", ["valor", "lineas", "docs", "areas",
                                "anulados", "sin_procesar"]].tolist(),
           [55.0, 3, 3, 3, 0, 1])
+    check("lo que no suma, contado una vez: 2 anulados, 0 sin procesar, "
+          "1 sin ítems", mp.no_suman(bl), (2, 0, 1))
+    check("la nota de la KPI nombra los dos",
+          mp.nota_no_suman(bl, mp.REQUERIMIENTOS)[0],
+          "2 anulados · 1 sin ítems")
+    check("con familia o producto puestos, los vacíos no se nombran",
+          mp.nota_no_suman(bl, mp.REQUERIMIENTOS,
+                           vacios_nombrables=False)[0], "2 anulados")
 
     orden = ["COCINA", "PRODUCCION", "GASTOS", "BARRA", "CAVA", "SALON"]
     rango = (dt.date(2026, 9, 7), dt.date(2026, 9, 20))
-    v = mp.vista_periodos(lin, "Semana", rango, orden)
+    v = mp.vista_periodos(bl, "Semana", rango, orden, mp.REQUERIMIENTOS)
     tr = v["trazas"]
     check("tramos: las 3 áreas mayores de la VISTA y «Resto»",
           [t[0] for t in tr], ["PRODUCCION", "COCINA", "BARRA", "Resto"])
@@ -5374,24 +5389,27 @@ def _pruebas_requerimientos_periodo():
     filas, total = mp.tabla_resumen(v, foco="2026-S38")
     check("Resumen: el Estado escribe sólo la excepción",
           list(zip(filas["estado"], filas["__eclase"])),
-          [("1 anulado", "anul"), ("1 sin procesar", "sinp")])
+          [("2 anulados", "anul"), ("1 sin procesar", "sinp")])
     check("Resumen: la fila marcada es la del foco",
           filas["__sel"].tolist(), [False, True])
-    check("Resumen: el total cuenta requerimientos, no filas",
-          (total["reqs"], total["lineas"], total["valor"], total["estado"]),
-          ("5", "6", "S/ 505.00", "1 anulado · 1 sin procesar"))
-    check("sin novedad, un ✓", mp._texto_estado(0, 0), ("✓", "ok"))
+    check("Resumen: el total cuenta documentos, no filas",
+          (total["docs"], total["lineas"], total["valor"], total["estado"]),
+          ("5", "6", "S/ 505.00", "2 anulados · 1 sin procesar"))
+    check("sin novedad, un ✓",
+          mp._texto_estado(0, 0, mp.REQUERIMIENTOS), ("✓", "ok"))
 
-    amb = lin[lin["clave"] == "2026-S37"]
+    amb = bl[bl["clave"] == "2026-S37"]
     check("Detalle: abre en el mayor válido, no en el anulado",
           mp._mayor_valido(amb), "R2")
-    fr, tot_r = mp.tabla_requerimientos(amb, "R2")
-    check("Detalle: el anulado se LISTA",
-          sorted(zip(fr["codigo"], fr["__estado"])),
-          [("R1", ""), ("R2", ""), ("R3", "anulado")])
-    check("Detalle: …pero no suma en el total",
+    fr, tot_r = mp.tabla_documentos(amb, "R2", mp.REQUERIMIENTOS)
+    check("Detalle: se LISTAN todos, cada uno con su estado",
+          sorted(zip(fr["codigo"], fr["__estado"], fr["__elbl"])),
+          [("R1", "", ""), ("R2", "", ""), ("R3", "anulado", "Anulado"),
+           ("R4", "sin ítems", "Sin ítems"),
+           ("R8", "anulado", "Anulado")])
+    check("Detalle: …pero el total suma sólo los que suman",
           (tot_r["codigo"], tot_r["area"], tot_r["lineas"], tot_r["valor"]),
-          ("2 req.", "+1 anulado", "3", "S/ 450.00"))
+          ("2 req.", "+3 no suman", "3", "S/ 450.00"))
     check("Detalle: registro con hora, en ISO",
           fr.loc[fr["codigo"] == "R1", "registro"].tolist(),
           ["2026-09-07 10:00"])
@@ -5406,14 +5424,75 @@ def _pruebas_requerimientos_periodo():
           and fig.data[0].marker.color[0] == PALETA_SERIES[1]
           and fig.data[0].marker.color[1].startswith("rgba("), True)
     for gran in ("Día", "Mes", "Año"):
-        _l = lin.copy()
+        _l = base.copy()
         _l["clave"] = _periodo_serie(_l["fecha"], gran)
         try:
-            mp.figura_periodos(mp.vista_periodos(_l, gran, rango, orden),
-                               alturas.COMPACTO)
+            mp.figura_periodos(
+                mp.vista_periodos(_l, gran, rango, orden, mp.REQUERIMIENTOS),
+                alturas.COMPACTO)
             check(f"figura en {gran}", True, True)
         except Exception as e:  # que se vea el tipo
             check(f"figura en {gran}", f"{type(e).__name__}: {e}", True)
+
+    # ── SALIDAS: el mismo código, el otro lado ───────────────────────────
+    # S1 de Cocina (Bajas) con dos líneas, S2 de Cocina personal (Comida
+    # personal), S3 ANULADA de Cocina, y S4 SIN PROCESAR: en salidas el
+    # Generado no tiene ítems, porque sus líneas salen del kardex.
+    ds = pd.DataFrame({
+        "FECHA REGISTRO": pd.to_datetime(
+            ["2026-09-07 10:00", "2026-09-07 10:00", "2026-09-08 11:00",
+             "2026-09-09 12:00", "2026-09-10 09:00"]),
+        "COD SALIDA": ["S1", "S1", "S2", "S3", "S4"],
+        "AREA": ["COCINA", "COCINA", "COCINA PERSONAL", "COCINA", "BARRA"],
+        "NOMBRE ESTADO SALIDA": ["PROCESADO", "PROCESADO", "PROCESADO",
+                                 "ANULADO", "GENERADO"],
+        "TIPO DESCARGO": ["Bajas", "Bajas", "Comida Personal", "Bajas",
+                          "Prueba"],
+        "NOMBRE FAMILIA": ["ALIMENTOS"] * 4 + [None],
+        "NOMBRE PRODUCTO": ["A", "B", "C", "A", None],
+        "CANT SALIDA": [2.0, 0.0, 4.0, 1.0, None],
+        "VALOR NETO": [30.0, 5.0, 20.0, 8.0, None],
+    })
+    cs = dict(fecha="FECHA REGISTRO", doc="COD SALIDA", area="AREA",
+              estado="NOMBRE ESTADO SALIDA", fam="NOMBRE FAMILIA",
+              prod="NOMBRE PRODUCTO", cant="CANT SALIDA", val="VALOR NETO",
+              tipo="TIPO DESCARGO")
+    bs = mp.lineas_documentos(ds, **cs)
+    check("salidas: sin precio en el parquet se despeja de la línea "
+          "(y la cantidad 0 no da precio)",
+          [None if pd.isna(x) else x for x in bs["punit"].tolist()[:3]],
+          [15.0, None, 5.0])
+    check("salidas: el tipo de descargo viaja por línea",
+          bs["tipo"].tolist()[:3], ["Bajas", "Bajas", "Comida Personal"])
+    bs["clave"] = _periodo_serie(bs["fecha"], "Semana")
+    check("salidas: la anulada y la sin procesar no suman, cada una en lo "
+          "suyo", mp.no_suman(bs), (1, 1, 0))
+    check("salidas: la nota habla en femenino",
+          mp.nota_no_suman(bs, mp.SALIDAS)[0],
+          "1 anulada · 1 sin procesar")
+    vs = mp.vista_periodos(bs, "Semana", rango, orden, mp.SALIDAS)
+    fs, ts = mp.tabla_resumen(vs)
+    check("salidas: Resumen con el estado en femenino",
+          (fs["docs"].tolist(), fs["estado"].tolist(), ts["valor"]),
+          ([2], ["1 anulada · 1 sin procesar"], "S/ 55.00"))
+    fd, td = mp.tabla_documentos(bs, None, mp.SALIDAS)
+    check("salidas: el Detalle lista el tipo y rotula la anulada y la sin "
+          "procesar", sorted(zip(fd["codigo"], fd["tipo"], fd["__elbl"])),
+          [("S1", "Bajas", ""), ("S2", "Comida Personal", ""),
+           ("S3", "Bajas", "Anulada"), ("S4", "Prueba", "Sin procesar")])
+    check("salidas: el total del Detalle",
+          (td["codigo"], td["area"], td["valor"]),
+          ("2 sal.", "+2 no suman", "S/ 55.00"))
+    check("salidas: el hover dice «sal.»",
+          "2 sal." in str(mp.figura_periodos(vs, alturas.COMPACTO)
+                          .data[-1].customdata[0][3]), True)
+    check("salidas: sin columna de área todo es «Sin área», sin romper",
+          sorted(set(mp.lineas_documentos(ds, **{**cs, "area": None})
+                     ["area"])), ["Sin área"])
+    check("salidas: el CSS sale del molde con SUS prefijos",
+          (".st-key-mps_fila" in mp._css(mp.SALIDAS),
+           ".st-key-mov_psal_gran" in mp._css(mp.SALIDAS),
+           "__C__" in mp._css(mp.SALIDAS)), (True, True, False))
     return fallos
 
 
@@ -5616,8 +5695,8 @@ def main():
     # ── Inventario › Productos: el grano y el despliegue de áreas ────────
     fallos += _pruebas_listado_inventario()
 
-    # ── Movimientos › Requerimientos por período: qué cuenta y qué no ────
-    fallos += _pruebas_requerimientos_periodo()
+    # ── Movimientos › las tarjetas «por período»: qué cuenta y qué no ────
+    fallos += _pruebas_movimientos_periodo()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()

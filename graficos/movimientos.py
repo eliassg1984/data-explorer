@@ -9,7 +9,7 @@ muestra ambos».
 
     Requerimientos (requerimientos)    Por período · Por sub almacén (la
                                        cadena de tablas) · Tabla
-    Salidas (salidas.parquet)          Tipo de descargo · Top productos · Tabla
+    Salidas (salidas.parquet)          Por período · Top productos · Tabla
 
 QUÉ PASÓ EL 2026-09-23. «Top productos · requerim.» se retiró a pedido y en
 su lugar —y primera de la pila— entró «Requerimientos por período»
@@ -19,6 +19,13 @@ Detalle de los requerimientos de la que se toque. El top de productos no se
 perdió: es un recorte de esa tarjeta («Top 5/10/20 por valor» en su selector
 de Producto) y sigue la tabla de productos al pie de «Por sub almacén».
 Ver `arquitectura.md` regla #508.
+
+El mismo día, y también a pedido, la dona de «Tipo de descargo» dejó su
+lugar a «Salidas por período»: la MISMA tarjeta sobre salidas.parquet, con
+las barras partidas por el área que dio de baja —que el parquet trae desde
+ese día, `AREA`— y el tipo de descargo como filtro y como columna del
+Detalle. Y el chip «Sub Almacén» de la franja pasó a recortar también las
+salidas. Ver `arquitectura.md` regla #509.
 
 QUÉ PASÓ EL 2026-09-13. La página abría con TRES gráficos —Evolución
 (requerido vs dado de baja), Proporción dada de baja y el ranking de Sub
@@ -49,14 +56,15 @@ MUERTAS. «Subalmacén» y «Subalm. × tipo» colgaban de una columna que
 dibujaban «No hay columnas suficientes para este gráfico» desde que nacieron.
 La regla #98 ya había medido esto en 2026-08-13 («el chip/agrupar de Sub
 Almacén en Salidas no hace nada, en silencio») y lo dejó como tarea aparte;
-esta fusión es esa tarea.
+esta fusión es esa tarea. (El área que faltaba llegó el 2026-09-23: la
+consulta de salidas trae desde entonces `AREA`, regla #509.)
 
 DOS PARQUETS EN UNA PÁGINA. `app.py` carga UNO por reporte y lo pasa como
 `df_f`; el segundo se carga acá con `data.cargar`, que es el patrón de
 `recetas.py` y de `recetas_comun.py::_cargar_flujo_compras`. `df_f` es el de
 REQUERIMIENTOS (el reporte «Movimientos» apunta a requerimientos.parquet):
-es el lado grande —144.636 filas contra 17.355—, el que trae Sub Almacén, y
-el dueño de la Tabla pivote.
+es el lado grande —144.636 filas contra 17.355— y el dueño de la Tabla
+pivote. (Hasta el 2026-09-23 era también el único que traía el área.)
 
 Las dos Tablas NO se dibujan igual, y no es un descuido:
   · la de requerimientos va por `tabla_cb`, que app.py resuelve a
@@ -71,16 +79,16 @@ Las dos Tablas NO se dibujan igual, y no es un descuido:
     que los dos comportamientos se conservan tal cual estaban.
 
 QUÉ EXCLUYE CADA SECCIÓN, que es donde la página puede contradecirse:
-UNA SOLA descarta los comprobantes ANULADOS, y lo dice: «Requerimientos por
-período» (2026-09-23, a pedido), que tampoco cuenta los requerimientos SIN
-ÍTEMS —una línea sin producto ni valor— y nombra los dos en su fila de KPI
-(regla #508). Las demás miran el mismo `d` post-chips con anulados
-incluidos, así que su valorizado es el mismo en la cadena de tablas y en la
-Tabla pivote. Los anulados son S/ 174.939 de S/ 8.481.700 en el histórico
-(2,1%, medido contra R2 el 2026-09-13) y S/ 15.868 en 2026 (0,9%): lo que
-puede separar el total de la tarjeta nueva del de «Por sub almacén». Las
-otras no se cambiaron porque mover números que nadie pidió mover es otra
-decisión; queda anotado en la regla #322.
+las dos tarjetas «por período» (2026-09-23, a pedido) descartan los
+documentos ANULADOS y los SIN ÍTEMS —una línea sin producto ni valor— y los
+nombran en su fila de KPI (reglas #508 y #509). Las demás miran sus datos
+con anulados incluidos, así que el valorizado de requerimientos es el mismo
+en la cadena de tablas y en la Tabla pivote, y el de salidas en su Top y su
+Tabla. Los requerimientos anulados son S/ 174.939 de S/ 8.481.700 en el
+histórico (2,1%, medido contra R2 el 2026-09-13) y S/ 15.868 en 2026 (0,9%):
+lo que puede separar el total de «Requerimientos por período» del de «Por
+sub almacén». Las otras no se cambiaron porque mover números que nadie pidió
+mover es otra decisión; queda anotado en la regla #322.
 
 Punto de entrada público: renderizar_graficos_movimientos().
 """
@@ -95,12 +103,14 @@ from tablas import renderizar_aggrid_desktop
 from tema import ACENTO
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
-    PALETA_CALLAI, _compras_layout, _compras_truncar, _render_rail,
+    _compras_layout, _compras_truncar, _render_rail,
     _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
     renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.movimientos_comun import _rango_vigente
-from graficos.movimientos_periodo import tarjeta_requerimientos_periodo
+from graficos.movimientos_periodo import (
+    orden_areas, tarjeta_requerimientos_periodo, tarjeta_salidas_periodo,
+)
 from graficos import alturas, drill_tablas
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es horizontal
@@ -118,21 +128,23 @@ from graficos import alturas, drill_tablas
 # (regla #507).
 _RAIL_CATEGORIAS = rail_sin_tablas((
     # «Requerimientos por período» va PRIMERA desde el 2026-09-23, a pedido,
-    # y ocupa el lugar de «Top productos · requerim.», que se retiró ese día
-    # (ver `graficos/movimientos_periodo.py`). Rótulo e ícono son los de su
-    # gemela de Compras, «Compras por período».
+    # y ocupa el lugar de «Top productos · requerim.», que se retiró ese día;
+    # «Salidas por período», su gemela, reemplazó a «Tipo de descargo» el
+    # mismo día (ver `graficos/movimientos_periodo.py`). Rótulo e ícono son
+    # los de «Compras por período», con el sufijo de su lado: dos «Por
+    # período» sueltos serían dos ítems con el mismo nombre.
     #
     # «Por sub almacén» ocupa el sitio que tenían «Evolución», «Proporción
     # dada de baja» y el ranking «Sub Almacén», que se retiraron el
     # 2026-09-13. No hereda el nombre de aquel ranking —que era UN cuadro—
     # porque ahora son cuatro tablas encadenadas: el ítem del rail nombra la
     # cadena, no su primer eslabón.
-    ("Requerimientos", (("Requerimientos por período", "Por período",      ":material/calendar_view_week:"),
-                        ("Por sub almacén",            "Sub almacén",      ":material/warehouse:"),
-                        ("Tabla · requerim.",          "Tabla · req.",     ":material/table_rows:"))),
-    ("Salidas", (("Tipo de descargo",       "Tipo descargo",    ":material/category:"),
-                 ("Top productos · salidas", "Top prod. · sal.", ":material/leaderboard:"),
-                 ("Tabla · salidas",         "Tabla · sal.",     ":material/table_view:"))),
+    ("Requerimientos", (("Requerimientos por período", "Por período · req.", ":material/calendar_view_week:"),
+                        ("Por sub almacén",            "Sub almacén",        ":material/warehouse:"),
+                        ("Tabla · requerim.",          "Tabla · req.",       ":material/table_rows:"))),
+    ("Salidas", (("Salidas por período",     "Por período · sal.", ":material/calendar_view_week:"),
+                 ("Top productos · salidas", "Top prod. · sal.",   ":material/leaderboard:"),
+                 ("Tabla · salidas",         "Tabla · sal.",       ":material/table_view:"))),
 ))
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla
@@ -140,8 +152,7 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 #
 # Cada lado con sus vistas y su Tabla al final del bloque, igual que
 # `recetas.py`. Requerimientos va primero por lo mismo que era el `archivo`
-# del reporte: es el lado grande (144.636 filas contra 17.355) y el único que
-# trae Sub Almacén.
+# del reporte: es el lado grande (144.636 filas contra 17.355).
 #
 # La FECHA ya no la gobierna ninguna sección: el selector de tarjeta vivía en
 # la Evolución, que se retiró el 2026-09-13. Manda la píldora de la franja,
@@ -151,7 +162,7 @@ _PILA = pila_sin_tablas((
     ("mov_sec_periodo",     "Requerimientos por período"),
     ("mov_sec_cadena",      "Por sub almacén"),
     ("mov_sec_tabla_req",   "Tabla · requerim."),
-    ("mov_sec_tipo",        "Tipo de descargo"),
+    ("mov_sec_sal_periodo", "Salidas por período"),
     ("mov_sec_top_sal",     "Top productos · salidas"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
 ))
@@ -206,15 +217,29 @@ def _tabla_salidas(df_sal):
                               cols_visibles=None)
 
 
-def _cargar_salidas_del_rango(col_fam_sal, fam_sel):
-    """`salidas.parquet` recortado al MISMO rango y familia que el resto.
+_COLS_AREA_SALIDAS = ["AREA", "Area", "SUB ALMACEN", "Sub Almacen"]
+"""Cómo se llama el área en `salidas.parquet`. La trae desde el 2026-09-23
+su consulta (`vArea.Descripcion` por `MSUBSALIDA.tCodigoArea`, regla #509)
+con el nombre `AREA`; «Sub Almacen» es el del demo de `data.py`."""
+
+
+def _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel=()):
+    """`salidas.parquet` recortado al MISMO rango, familia y área que el
+    resto.
 
     Defensivo igual que `recetas.py` con recetabase: si el parquet no está o
-    no trae su fecha, las tres secciones de Salidas avisan y el resto de la
+    no trae su fecha, las secciones de Salidas avisan y el resto de la
     página sigue funcionando.
 
     El borde superior va como `< fin + 1 día` porque `FECHA REGISTRO` trae
     hora en las 17.101 filas — ver regla #321, que es donde se midió.
+
+    EL CHIP «SUB ALMACÉN» TAMBIÉN RECORTA LAS SALIDAS desde que el parquet
+    trae su área (2026-09-23, regla #509). Antes no podía —la columna no
+    existía— y la página lo decía; ahora son el MISMO catálogo de áreas
+    (las 16 de salidas están entre las de requerimientos, «CAVA » con su
+    espacio incluido), así que la comparación va sin espacios de los dos
+    lados. Sin la columna (un parquet viejo), el chip no recorta, como antes.
     """
     df = _cargar_reporte("salidas.parquet")
     if df is None or df.empty:
@@ -231,6 +256,10 @@ def _cargar_salidas_del_rango(col_fam_sal, fam_sel):
         d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
     if fam_sel and col_fam_sal and col_fam_sal in d.columns:
         d = d[d[col_fam_sal].astype(str).isin(fam_sel)]
+    col_area = _resolver(d, _COLS_AREA_SALIDAS)
+    if sub_sel and col_area:
+        _elegidas = {str(s).strip() for s in sub_sel}
+        d = d[d[col_area].fillna("").astype(str).str.strip().isin(_elegidas)]
     return d
 
 
@@ -270,11 +299,11 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         return
 
     # ── Filtros Sub Almacén / Familia como chips en la franja ─────────────
-    # SUB ALMACÉN es de requerimientos y sólo de ahí: salidas.parquet no trae
-    # el área que dio de baja. Las secciones de Salidas lo ignoran, y la
-    # Evolución —que compara los dos lados— lo canta en su caption cuando
-    # está puesto, porque filtrar un solo lado invalida una comparación.
-    # FAMILIA sí existe en los dos, con las mismas seis familias.
+    # SUB ALMACÉN recorta los DOS lados desde el 2026-09-23: hasta ese día
+    # salidas.parquet no traía el área que dio de baja y sus secciones lo
+    # ignoraban; ahora la trae (`AREA`, regla #509) y es el mismo catálogo.
+    # Sus opciones siguen saliendo de requerimientos, que es el `archivo`
+    # del reporte. FAMILIA existe en los dos, con las mismas seis familias.
     with compartimento_filtros(contar_filtros("mov_graf_filtro_sub",
                                               "mov_graf_filtro_fam")):
         _, sub_sel = filtro_pills(df_f, col_sub,
@@ -308,12 +337,22 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
 
     # ── El otro parquet ───────────────────────────────────────────────────
     col_fam_sal = "NOMBRE FAMILIA"
-    d_sal = _cargar_salidas_del_rango(col_fam_sal, fam_sel)
-    col_tipo = _resolver(d_sal, ["Tipo Descargo", "TIPO DESCARGO"]) if d_sal is not None else None
-    col_prod_sal = _resolver(d_sal, ["Nombre Producto", "NOMBRE PRODUCTO"]) if d_sal is not None else None
-    col_val_sal = _resolver(d_sal, ["Valor Neto", "VALOR NETO"]) if d_sal is not None else None
+    d_sal = _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel)
+
+    def _col_sal(*nombres):
+        return _resolver(d_sal, list(nombres)) if d_sal is not None else None
+
+    col_tipo = _col_sal("Tipo Descargo", "TIPO DESCARGO")
+    col_prod_sal = _col_sal("Nombre Producto", "NOMBRE PRODUCTO")
+    col_val_sal = _col_sal("Valor Neto", "VALOR NETO")
     _met_sal = (pd.to_numeric(d_sal[col_val_sal], errors="coerce").fillna(0)
                 if (d_sal is not None and col_val_sal) else None)
+
+    # El orden de las áreas que reparte los COLORES de las dos tarjetas «por
+    # período»: el del histórico de requerimientos, para las dos. Así Cocina
+    # es del mismo color en la que pide y en la que da de baja (regla #509).
+    orden = orden_areas(df_full if df_full is not None else df_f,
+                        col_sub, col_val)
 
     # ── SIN BANDA DE KPIs, a propósito (2026-09-05) ───────────────────────
     # Acá había tres `st.metric` (Requerido / Dado de baja / Baja÷Requerido)
@@ -372,10 +411,32 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # tarjetas) y sus grillas: vive entera en su módulo, como las de
         # Compras. La fecha es la de la franja: ya viene recortada en `d`.
         tarjeta_requerimientos_periodo(
-            d, d_hist=df_full,
-            cols=dict(fecha=col_fecha, req=col_req, area=col_sub,
+            d, orden=orden,
+            cols=dict(fecha=col_fecha, doc=col_req, area=col_sub,
                       estado=col_estado, fam=col_fam, prod=col_prod,
                       cant=col_cant, punit=col_punit, val=col_val))
+
+    def _dib_sal_periodo():
+        # La MISMA tarjeta sobre salidas (2026-09-23, en lugar de la dona de
+        # «Tipo de descargo»): el área que dio de baja parte la barra, y el
+        # tipo de descargo queda como filtro y como columna del Detalle. Sin
+        # precio unitario en el parquet: lo despeja la tarjeta.
+        if d_sal is None:
+            with st.container(border=True,
+                              key="ajuste_graf_card_izq_mov_sal_vacia"):
+                _sin_salidas()
+            return
+        tarjeta_salidas_periodo(
+            d_sal, orden=orden,
+            cols=dict(fecha=_col_sal("Fecha registro", "FECHA REGISTRO"),
+                      doc=_col_sal("Cod Salida", "COD SALIDA"),
+                      area=_col_sal(*_COLS_AREA_SALIDAS),
+                      estado=_col_sal("Nombre Estado Salida",
+                                      "NOMBRE ESTADO SALIDA"),
+                      fam=_col_sal("Nombre Familia", "NOMBRE FAMILIA"),
+                      prod=col_prod_sal,
+                      cant=_col_sal("Cant Salida", "CANT SALIDA"),
+                      val=col_val_sal, tipo=col_tipo))
 
     def _dib_tabla_req():
         with st.container(border=True, key="ajuste_graf_card_izq_mov_tabla_req"):
@@ -383,32 +444,6 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                 tabla_cb(d)
             else:
                 st.info("La tabla no está disponible en este contexto.")
-
-    def _dib_tipo():
-        with st.container(border=True, key="ajuste_graf_card_izq_mov_tipo"):
-            if d_sal is None:
-                _sin_salidas()
-                return
-            if not col_tipo or _met_sal is None:
-                st.info("No hay columnas suficientes para este gráfico.")
-                return
-            serie = (_met_sal.groupby(d_sal[col_tipo].astype(str)).sum()
-                     .sort_values(ascending=False))
-            if serie.empty:
-                st.info("Sin datos.")
-                return
-            fig = go.Figure(go.Pie(
-                labels=serie.index, values=serie.values, hole=0.45,
-                marker=dict(colors=PALETA_CALLAI * 4),
-                textinfo="label+percent",
-                hovertemplate=("%{label}<br>S/ %{value:,.2f} "
-                               "(%{percent})<extra></extra>"),
-            ))
-            _compras_layout(fig, alto=alturas.PROTAGONISTA)
-            fig.update_layout(
-                title="Participación del valorizado dado de baja por tipo de descargo",
-                showlegend=False)
-            st.plotly_chart(fig, use_container_width=True, key="mov_g_tipo")
 
     def _dib_top_sal():
         with st.container(border=True, key="ajuste_graf_card_izq_mov_top_sal"):
@@ -437,7 +472,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         "mov_sec_periodo":     _dib_periodo,
         "mov_sec_cadena":      _dib_cadena,
         "mov_sec_tabla_req":   _dib_tabla_req,
-        "mov_sec_tipo":        _dib_tipo,
+        "mov_sec_sal_periodo": _dib_sal_periodo,
         "mov_sec_top_sal":     _dib_top_sal,
         "mov_sec_tabla_sal":   _dib_tabla_sal,
     }
