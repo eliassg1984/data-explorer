@@ -1889,6 +1889,24 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
+    /* El título y los KPI en un renglón (regla #519): el look de
+       `.chart-card-hdr` —mismo cuerpo, peso y color, y la línea abajo— pero
+       compartiendo el flex con los KPI. */
+    .st-key-vt_resumen_kpi .vt-cab {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 22px;
+        padding: 0 0 6px;
+        border-bottom: 1px solid var(--border);
+    }
+    .st-key-vt_resumen_kpi .vt-cab-tit {
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.35;
+        color: var(--accent-deep);
+        white-space: nowrap;
+    }
     .st-key-vt_resumen_kpi .vt-kpis {
         display: flex;
         flex-wrap: wrap;
@@ -1974,8 +1992,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_serv [data-baseweb="select"] > div,
     .st-key-vt_resumen_canal [data-baseweb="select"] > div,
     .st-key-vt_resumen_tdoc [data-baseweb="select"] > div {
-        min-height: 32px !important;
-        height: 32px !important;
+        min-height: 28px !important;
+        height: 28px !important;
         font-size: 12px !important;
     }
     .st-key-vt_resumen_grupo [data-baseweb="select"] > div > div,
@@ -1984,12 +2002,21 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_tdoc [data-baseweb="select"] > div > div {
         padding-top: 0 !important;
         padding-bottom: 0 !important;
-        max-height: 30px !important;
+        max-height: 26px !important;
         overflow: hidden !important;
     }
+    /* Segunda pasada, el mismo día: «es muy grueso, hagámoslo más
+       delgado». De 32 a 28, y el toggle de granularidad con ellos: seis
+       controles en una fila tienen que medir lo mismo. */
+    .st-key-vt_resumen_gran [data-testid="stButtonGroup"] button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 12px !important;
+        font-size: 12px !important;
+    }
     .st-key-vt_resumen_escala button {
-        min-height: 32px !important;
-        height: 32px !important;
+        min-height: 28px !important;
+        height: 28px !important;
         padding: 0 14px !important;
         font-size: 12px !important;
     }

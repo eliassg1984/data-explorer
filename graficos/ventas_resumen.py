@@ -683,15 +683,22 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     _titulo = {"Día": "Tendencia diaria de venta",
                "Semana": "Venta por semana", "Mes": "Venta por mes",
                "Año": "Venta por año"}[gran]
-    with _card("ventas_resumen_dia", _titulo, titulo_arriba=True):
-        # La fila de KPI: el total de la vista y lo de cada canal. Misma
-        # pieza que la de «Compras por período», con canales por familias.
+    with _card("ventas_resumen_dia"):
+        # EL TÍTULO Y LOS KPI EN UN RENGLÓN (2026-09-24, a pedido: «poner
+        # los kpis en la misma fila que el título, para que mi gráfico suba
+        # un poco más»). Eran dos: el título de `_card(titulo_arriba=True)`
+        # con su línea abajo, y la fila de KPI debajo. Ahora el título es el
+        # primer ítem del mismo flex y la línea va debajo de los dos; si no
+        # entran en el ancho, los KPI bajan solos (flex-wrap). Regla #519.
         with st.container(key="vt_resumen_kpi"):
-            st.markdown(_html_kpi_canales(
-                float(g["total"].sum()), int(tabla["dia"].nunique()),
-                [(c, float(_tot_canal[c])) for c in canales]
-                if _partida else [], _kpis_extra(g)),
-                unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="vt-cab"><span class="vt-cab-tit">'
+                f'{escape(_titulo)}</span>'
+                + _html_kpi_canales(
+                    float(g["total"].sum()), int(tabla["dia"].nunique()),
+                    [(c, float(_tot_canal[c])) for c in canales]
+                    if _partida else [], _kpis_extra(g))
+                + "</div>", unsafe_allow_html=True)
 
         # UNA sola figura (no make_subplots): la selección por clic de
         # `st.plotly_chart(on_select=...)` NO llega a las trazas de un

@@ -32,7 +32,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 519 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (178)
+**CSS y estilos** (179)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -212,6 +212,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 - **#513** — Un recorte de padding-top scopeado a un reporte se vuelve un AGREGADO el día que la regla…
+- **#519** — El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre todas las filas, para…
 
 **Layout y alturas** (74)
 
@@ -387,7 +388,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#515** — La barra de «Tendencia diaria de venta» se parte por canal, y copia las CUENTAS de «Compras…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
-**AgGrid y tablas** (84)
+**AgGrid y tablas** (83)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -472,7 +473,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
-- **#519** — El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre todas las filas, para…
 
 **Streamlit** (145)
 
@@ -42566,6 +42566,18 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (cabecera y bordes + 7 filas + la TOTAL fija), para el Resumen y las
      dos grillas del Detalle. Era la de Compras (191, cinco filas); la
      tarjeta crece 59px y los 18 de la fila de filtros pagan una parte.
+
+     **Segunda pasada, el mismo día** («es muy grueso, hagámoslo más
+     delgado» y «los KPI en la misma fila que el título»): los seis
+     controles a 28px (la fila mide 30) y el título pasa a ser el primer
+     ítem del flex de los KPI (`.vt-cab`), con la línea debajo de los dos.
+     Medido a 1366: título + KPI en UN renglón de 35px; el gráfico empieza
+     64px más arriba que antes de la regla y la vista entra entera en la
+     pantalla, del filtro a la fila Total.
+     **En Cloud, un cambio en `estilos/` no se ve hasta «Reboot app»**: es
+     un paquete ya importado (CLAUDE.md). La primera pasada se reportó
+     «todavía gruesa» con una captura de la app publicada, cuando en local
+     ya medía 32.
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
