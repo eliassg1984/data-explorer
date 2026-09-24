@@ -33,7 +33,8 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_BORDE, ADVERTENCIA_FONDO,
     ADVERTENCIA_TEXTO, BLANCO, ERROR, ERROR_FONDO, EXITO, GRIS_BORDE,
-    GRIS_TEXTO, GRIS_TEXTO_MEDIO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
+    GRIS_TEXTO, GRIS_TEXTO_MEDIO, LAVANDA_BORDE, LAVANDA_FONDO,
+    PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from tablas._config import _parchar_iconos
 # Privados de allá, a propósito: son el look y los formatos de las grillas de
@@ -85,12 +86,17 @@ _JS_SOLES0 = JsCode(
 Neto, Costo) los dos decimales costaban 24px cada una, y en una fila de
 día los céntimos no dicen nada. El total fijo llega ya escrito."""
 
+_FORMATOS = {"soles0": _JS_SOLES0, "soles": _JS_SOLES, "entero": _JS_ENTERO}
+"""Los formatos simples de una columna de subvista (ver `columnas` en
+`renderizar_dias_venta`)."""
+
 # ── Celda con valor + nota (la variación al lado del número) ───────────────
 # Un solo componente para todas las celdas compuestas (regla #226: un JsCode,
 # no uno por columna). Lee de la fila, que Python ya dejó escrita:
 #   __t_<col>   el texto principal          __c_<col>  su clase
 #   __v_<col>   la nota chica (variación)   __vc_<col> su clase
 #   __b_<col>   una bandera («revisar»)
+#   __w_<col>   la barrita (0-1)            __wc_<col> su tono
 # La fila TOTAL fija no trae esos campos y cae al valor tal cual.
 _R_CELDA = JsCode("""
 class CeldaVenta {
@@ -107,6 +113,15 @@ class CeldaVenta {
             : (p.valueFormatted != null ? p.valueFormatted
                : (p.value == null ? '' : String(p.value)));
         if (d['__c_' + c]) a.className = d['__c_' + c];
+        // La BARRITA de comparación (regla #519): el valor contra el mayor
+        // de la columna, pintado de fondo de la celda. Deja comparar un
+        // período con los demás sin leer los números.
+        var w = d['__w_' + c];
+        if (w != null) {
+            a.className += ' vr-bar ' + (d['__wc_' + c] || '');
+            a.style.setProperty('--w',
+                (Math.max(0, Math.min(1, w)) * 100).toFixed(1) + '%');
+        }
         this.e.appendChild(a);
         if (d['__v_' + c]) {
             var v = document.createElement('span');
@@ -206,6 +221,17 @@ def _css_dias():
         "background-color": f"{LAVANDA_FONDO} !important",
         "box-shadow": f"inset 3px 0 0 0 {ACENTO} !important"}
     css[".vr-nota"] = {"font-size": "11px", "margin-left": "5px"}
+    _barra = "linear-gradient(to left, {c} var(--w), transparent var(--w))"
+    css[".vr-bar"] = {"display": "inline-block", "min-width": "58px",
+                      "padding": "0 4px", "border-radius": "3px",
+                      "text-align": "right", "line-height": "18px",
+                      "background": _barra.format(c=LAVANDA_BORDE)}
+    css[".vr-bar.vr-bar-cian"] = {
+        "background": _barra.format(c=PALETA_SERIES[1] + "59")}
+    css[".vr-bar.vr-bar-ambar"] = {
+        "background": _barra.format(c=ADVERTENCIA_BORDE)}
+    css[".vr-bar.vr-bar-roja"] = {"background": _barra.format(c=ERROR_FONDO),
+                                  "box-shadow": f"inset 0 0 0 1px {ERROR}"}
     css[".vr-sube"] = {"color": f"{EXITO} !important", "font-weight": "600"}
     css[".vr-baja"] = {"color": f"{ERROR} !important", "font-weight": "600"}
     css[".vr-neutro"] = {"color": f"{GRIS_TEXTO} !important"}
@@ -261,8 +287,8 @@ def _css_dias():
     return css
 
 
-def renderizar_dias_venta(tp, altura, key, rotulo_periodo="Día",
-                          vol_label=None, total=None):
+def renderizar_dias_venta(tp, altura, key, columnas, rotulo_periodo="Día",
+                          total=None):
     """Una fila por barra del gráfico, en el orden del eje: la opción «B» del
     mockup (2026-09-24, regla #518).
 
@@ -278,61 +304,52 @@ def renderizar_dias_venta(tp, altura, key, rotulo_periodo="Día",
     `__vtxt`, `__nota`, `__sel` y los `__t_/__v_/__c_/__vc_/__b_` de las
     celdas compuestas (ver `_R_CELDA`).
 
+    `columnas` es la SUBVISTA (2026-09-24, regla #519): `(campo, rótulo,
+    tipo, ancho, tooltip)` en el orden en que se ven, con `tipo` uno de
+    «soles0», «soles», «entero», «celda» (`_R_CELDA`), «var» (la variación
+    de la venta) o «texto» (la única que se estira). Lo que no está en la
+    lista viaja oculto.
+
     Devuelve la `__clave` de la fila SELECCIONADA, o None: la selección la
     hace sólo el botón «Ver pedidos» de la franja (el clic en la fila la
     despliega), y el llamador abre el Detalle."""
+    # El ORDEN de las columnas es el del DataFrame, no el de las llamadas a
+    # `configure_column`: sin reordenar, «Venta» salía después de «Costo».
+    _orden = ["periodo"] + [c[0] for c in columnas if c[0] in tp.columns]
+    tp = tp[_orden + [c for c in tp.columns if c not in _orden]]
     gb = GridOptionsBuilder.from_dataframe(tp)
     gb.configure_default_column(
         resizable=False, sortable=True, filter=False, editable=False,
         suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
     )
-    _cols = set(tp.columns)
-
-    def _si(col, **kw):
-        if col in _cols:
-            gb.configure_column(col, **kw)
-
-    _si("periodo", header_name=rotulo_periodo, minWidth=120,
-        tooltipField="__tip", cellRenderer=_R_CELDA)
-    # Los cuatro precios: sin céntimos, 104px («S/ 459,612» a 13px + padding
-    # + la flecha de ordenar).
-    for col, rot, tip in (
-            ("carta", "Carta", "Venta a precio de CARTA: lo que se habría "
-                               "cobrado sin descuentos"),
-            ("valor", "Venta", "Venta cobrada, con IGV y recargo. Sin "
-                               "cortesías ni anulados"),
-            ("neto", "Neto", "Venta sin IGV ni recargo: la base del % de "
-                             "costo"),
-            ("costo", "Costo", "Costo de receta de lo vendido: precio de "
-                               "costo × cantidad")):
-        _si(col, header_name=rot, type=["numericColumn"],
-            valueFormatter=_JS_SOLES0, headerTooltip=tip,
-            width=104, minWidth=104, suppressSizeToFit=True)
-    _si("pcosto", header_name="% costo", type=["numericColumn"],
-        cellRenderer=_R_CELDA,
-        headerTooltip="Costo ÷ Neto, y su cambio en puntos (pp) contra la "
-                      "barra anterior. «revisar»: un plato con costo mayor "
-                      "a su precio infla el período",
-        width=150, minWidth=150, suppressSizeToFit=True)
-    if vol_label:
-        _si("pax", header_name="Pax" if vol_label == "Clientes" else vol_label,
-            type=["numericColumn"], valueFormatter=_JS_ENTERO,
-            headerTooltip=f"{vol_label} del período",
-            width=72, minWidth=72, suppressSizeToFit=True)
-        _si("ticket", header_name="Ticket", type=["numericColumn"],
-            cellRenderer=_R_CELDA,
-            headerTooltip=f"Venta ÷ {vol_label.lower()}, y su variación "
-                          "contra la barra anterior",
-            width=132, minWidth=132, suppressSizeToFit=True)
-    _si("variacion", header_name="Var. venta", type=["numericColumn"],
-        valueFormatter=_JS_VARIACION, cellStyle=_STYLE_VARIACION_VENTA,
-        tooltipField="__nota",
-        headerTooltip="Variación de la venta contra la barra ANTERIOR del "
-                      "gráfico. Un período que el rango corta dice «parcial»",
-        width=104, minWidth=104, suppressSizeToFit=True)
-    for oculta in tp.columns:
-        if oculta.startswith("__"):
-            gb.configure_column(oculta, hide=True)
+    gb.configure_column("periodo", header_name=rotulo_periodo, minWidth=120,
+                        tooltipField="__tip", cellRenderer=_R_CELDA)
+    visibles = {"periodo"}
+    for campo, rotulo, tipo, ancho, tip in columnas:
+        if campo not in tp.columns:
+            continue
+        visibles.add(campo)
+        kw = dict(header_name=rotulo, headerTooltip=tip)
+        if tipo == "texto":
+            # La única que se estira: un nombre de plato no tiene ancho fijo.
+            kw.update(minWidth=ancho, tooltipField=campo)
+        else:
+            kw.update(type=["numericColumn"], width=ancho, minWidth=ancho,
+                      suppressSizeToFit=True)
+            if tipo == "celda":
+                kw["cellRenderer"] = _R_CELDA
+            elif tipo == "var":
+                kw.update(valueFormatter=_JS_VARIACION,
+                          cellStyle=_STYLE_VARIACION_VENTA,
+                          tooltipField="__nota")
+            else:
+                kw["valueFormatter"] = _FORMATOS[tipo]
+        gb.configure_column(campo, **kw)
+    # Lo que la subvista no muestra viaja igual (la franja y el orden lo
+    # usan), oculto.
+    for col in tp.columns:
+        if col not in visibles:
+            gb.configure_column(col, hide=True)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,

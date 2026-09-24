@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-518 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+519 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (178)
 
@@ -387,7 +387,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#515** — La barra de «Tendencia diaria de venta» se parte por canal, y copia las CUENTAS de «Compras…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
-**AgGrid y tablas** (83)
+**AgGrid y tablas** (84)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -472,6 +472,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
+- **#519** — El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre todas las filas, para…
 
 **Streamlit** (145)
 
@@ -794,7 +795,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (102)
+**Decisiones de diseño y UX** (103)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -898,6 +899,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 - **#514** — El «neto» del sistema es precio ÷ 1,235: IGV y recargo se SUMAN sobre el neto, y el IGV de…
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
+- **#519** — El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre todas las filas, para…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -42525,6 +42527,46 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      (gris y ámbar, rótulo «feriado»); en Semana/Mes/Año se cuenta cuántos
      feriados trae el período. En la tabla, el día feriado lo dice al lado.
 
+519. **El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre
+     todas las filas, para comparar un período con los demás. Y la fila de
+     filtros de arriba mide 32px, y las grillas de abajo muestran 7 filas.**
+     2026-09-24, a pedido, con mockup: «poder alternar subvistas o agrupar
+     columnas, de manera que visualmente pueda comparar la fila de un
+     período con las demás; ahora visualmente se centra sólo en la que
+     desplegó». La franja desplegable (#518) muestra TODO de un período; la
+     subvista, UNA cosa de todos.
+
+     **Las seis:** Venta (las nueve columnas de #518) · Canales (monto y %
+     de cada canal, con variación y pp) · Propinas · Descuentos ·
+     Cortesías · Costo (neto, costo, % costo, venta sin costo cargado y el
+     plato a revisar). Sólo se ofrecen las que el parquet permite
+     (`_subvistas`). La columna principal de cada una lleva una BARRITA de
+     fondo contra el mayor de la columna (`__w_<col>` en `_R_CELDA`).
+     Medido al implementar: el 01/09 tiene 56 % de su venta sin costo
+     cargado (S/ 7.378), y por eso su % de costo sale en 15 %.
+
+     **Tres cosas que costaron una medición:**
+     - **AG Grid dibuja las columnas en el orden del DataFrame**, no en el
+       de `configure_column`: «Venta» salía después de «Costo».
+       `renderizar_dias_venta` reordena el `tp` según la subvista.
+     - **La subvista va en la key de la grilla**: unas `columnDefs` nuevas
+       sobre una grilla viva no cambian qué se ve.
+     - **El selector se dibuja sólo en Resumen, y por eso tiene ECO**
+       (`_vt_resumen_sub_eco`, vuelve por `default=`): un widget que deja
+       de dibujarse pierde su estado, y al volver de Detalle abría en
+       «Venta». Verificado: Canales → Detalle → Resumen sigue en Canales.
+
+     **La fila de controles, a 32px.** Medido antes: los multiselect en 42 y
+     el trigger de la fecha en 52 (relleno 14 arriba y abajo), que le daba
+     el alto a la fila. Ahora mide 34 y el título sube 18px. Las reglas van
+     acotadas a cada key (`vt_resumen_grupo`, `_serv`, `_canal`, `_tdoc`,
+     `_escala`) en `estilos/_80_cards.py`.
+
+     **Siete filas:** `alturas.VENTAS_RESUMEN_TABLA` = 34 + 8 × 27 = 250
+     (cabecera y bordes + 7 filas + la TOTAL fija), para el Resumen y las
+     dos grillas del Detalle. Era la de Compras (191, cinco filas); la
+     tarjeta crece 59px y los 18 de la fila de filtros pagan una parte.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42537,7 +42579,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#518**; la próxima toma el número siguiente.
+> última regla es la **#519**; la próxima toma el número siguiente.
 
 >
 

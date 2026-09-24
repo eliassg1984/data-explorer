@@ -262,6 +262,18 @@ Los 617 de las dos de antes salían con el caption ÚLTIMO, cuyo
 último es la tabla y ese padding se paga — de ahí que la cuenta con tabla
 sume los 16 y la otra no (su último hijo sigue siendo el `st.empty()`)."""
 
+VENTAS_RESUMEN_TABLA = 34 + 8 * 27
+"""Alto de las grillas de abajo de Ventas › Resumen ejecutivo (Resumen y las
+dos del Detalle): SIETE filas visibles, a pedido (2026-09-24: «las tablas de
+abajo que actualmente muestran 5 filas, ahora muestren 7»).
+
+La cuenta es la de las grillas de Compras (`tablas/compras_semanal.CROMO` =
+cabecera 32 + bordes 2, filas de `compras_volatilidad.ALTO_FILA` = 27): 34 +
+7 filas + la fila TOTAL fija = 34 + 8 × 27 = 250. Hasta ese día usaban
+`SEMANAL_TABLA − FRANJA_MODO_SEMANAL` (191), que da cinco. Las 59 que suma
+se pagan en parte con la fila de filtros más delgada (regla #519)."""
+
+
 FIG_CON_SU_TABLA = 180
 """Piso de una figura que comparte su tarjeta con la TABLA que la describe,
 y cuyo alto sale del reparto y no de un rol.

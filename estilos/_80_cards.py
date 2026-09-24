@@ -1962,6 +1962,43 @@ CSS = """    /* ================================================================
         padding: 0 12px !important;
         font-size: 12px !important;
     }
+    /* LA FILA DE CONTROLES, A 32px (2026-09-24, a pedido: «adelgazar los
+       cuadrantes de las listas desplegables de arriba … y subir así el
+       título, el gráfico»). Medido antes: los cuatro multiselect en 42px y
+       el trigger de la fecha en 52 (relleno 14px arriba y abajo), que era
+       el que le daba el alto a la fila entera. Ahora los seis miden lo
+       que el toggle de granularidad: 32. Regla #519.
+       Acotado a CADA key (CLAUDE.md: una regla colgada del contenedor
+       captura los widgets que vengan después). */
+    .st-key-vt_resumen_grupo [data-baseweb="select"] > div,
+    .st-key-vt_resumen_serv [data-baseweb="select"] > div,
+    .st-key-vt_resumen_canal [data-baseweb="select"] > div,
+    .st-key-vt_resumen_tdoc [data-baseweb="select"] > div {
+        min-height: 32px !important;
+        height: 32px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_resumen_grupo [data-baseweb="select"] > div > div,
+    .st-key-vt_resumen_serv [data-baseweb="select"] > div > div,
+    .st-key-vt_resumen_canal [data-baseweb="select"] > div > div,
+    .st-key-vt_resumen_tdoc [data-baseweb="select"] > div > div {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        max-height: 30px !important;
+        overflow: hidden !important;
+    }
+    .st-key-vt_resumen_escala button {
+        min-height: 32px !important;
+        height: 32px !important;
+        padding: 0 14px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_resumen_sub [data-testid="stButtonGroup"] button {
+        min-height: 32px !important;
+        height: 32px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
     .st-key-vt_resumen_pie { align-items: center !important; }
     .st-key-vt_resumen_pie [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;

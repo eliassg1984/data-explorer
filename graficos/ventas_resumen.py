@@ -70,7 +70,7 @@ from graficos.compras._comun import (
 # encima de la barra son UNA cuenta (`semanal._alto_area_trazo`), y dos
 # copias se desincronizan a la primera que se toque. Regla #515.
 from graficos.compras.semanal import (
-    _ALTO_FIG_SOLO, _ALTO_TABLA, _ETQ_FUENTE, _ETQ_SEP, _LEYENDA_Y, _LIENZO_PX,
+    _ALTO_FIG_SOLO, _ETQ_FUENTE, _ETQ_SEP, _LEYENDA_Y, _LIENZO_PX,
     _del_al, _etiqueta_en_la_punta, _plan_etiquetas, _rotulo_periodo, _techo_etiquetas,
 )
 from graficos import alturas
@@ -96,7 +96,7 @@ MAX_DIAS = 30    # tope de barras legibles. Mismo espíritu que MAX_SEMANAS de
 _KEYS_WIDGET_RESUMEN = ("vt_resumen_gran", "vt_resumen_grupo",
                         "vt_resumen_serv", "vt_resumen_canal",
                         "vt_resumen_tdoc", "vt_resumen_modo",
-                        "ventas_resumen_top_metrica")
+                        "vt_resumen_sub", "ventas_resumen_top_metrica")
 
 # Las granularidades de «Compras por período», sin «Documento»: en Ventas
 # una barra por comprobante son ~60 por día y no se lee ninguna. Abre en
@@ -104,6 +104,12 @@ _KEYS_WIDGET_RESUMEN = ("vt_resumen_gran", "vt_resumen_grupo",
 # («Tendencia diaria»): quien vuelve la encuentra igual.
 _GRAN_OPCIONES = ("Día", "Semana", "Mes", "Año")
 _GRAN_DEFAULT = "Día"
+
+_SUBVISTAS = ("Venta", "Canales", "Propinas", "Descuentos", "Cortesías",
+              "Costo")
+"""Los grupos de columnas del Resumen (regla #519). Una subvista que el
+parquet no permite (sin propina, un solo canal) no se ofrece de más: la
+tabla cae a «Venta» — ver `_subvistas`."""
 
 _MODO_DETALLE = "Detalle"
 _MODO_RESUMEN = "Resumen"
@@ -699,7 +705,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         _hay_ticket = vol_label and "ticket" in g.columns
         # LA FIGURA SE ACORTA CUANDO HAY TABLA (regla #516): los mismos dos
         # altos que «Compras por período» — el suyo entero sin tabla y
-        # COMPACTO con ella, que le deja a la grilla `_ALTO_TABLA`.
+        # COMPACTO con ella, que le deja a la grilla `_ALTO_TABLA_VR`.
         _alto_fig = alturas.COMPACTO if _con_tabla else _ALTO_FIG_SOLO
 
         # ── La etiqueta de encima: total + variación (plan de Compras) ──
@@ -923,6 +929,30 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                 "Qué se ve abajo", _MODO_OPCIONES, default=_MODO_DEFAULT,
                 required=True, key="vt_resumen_modo",
                 label_visibility="collapsed", help=_AYUDA_MODO)
+            # LAS SUBVISTAS DEL RESUMEN (regla #519): qué grupo de columnas
+            # muestra la tabla. Sólo en Resumen, y por eso con ECO: un widget
+            # que deja de dibujarse pierde su estado (CLAUDE.md), y al volver
+            # de Detalle abriría otra vez en «Venta». El eco guarda la
+            # elección y vuelve por `default=`.
+            if _modo == _MODO_RESUMEN:
+                _hay = set(g.columns)
+                _ops = [x for x, ok in zip(_SUBVISTAS, (
+                    True, _partida, "propina" in _hay,
+                    {"desc", "carta"} <= _hay, "cort_s" in _hay,
+                    "pcosto" in _hay)) if ok]
+                _eco = st.session_state.get("_vt_resumen_sub_eco", "Venta")
+                if _eco not in _ops:
+                    _eco = "Venta"
+                if st.session_state.get("vt_resumen_sub") not in (None, *_ops):
+                    st.session_state["vt_resumen_sub"] = _eco
+                _sub = st.segmented_control(
+                    "Columnas del Resumen", _ops, default=_eco,
+                    required=True, key="vt_resumen_sub",
+                    label_visibility="collapsed",
+                    help="Qué grupo de columnas muestra la tabla. Todas las "
+                         "filas quedan a la vista, para comparar un período "
+                         "con los demás.")
+                st.session_state["_vt_resumen_sub_eco"] = _sub or _eco
             _pie = st.empty()
 
         if _modo == _MODO_RESUMEN:
@@ -985,7 +1015,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
 # ===========================================================================
 # LA ZONA DE ABAJO: Resumen y Detalle (2026-09-24, regla #516)
 # ===========================================================================
-# Las de «Compras por período», adentro de la tarjeta y a `_ALTO_TABLA`:
+# Las de «Compras por período», adentro de la tarjeta y a `_ALTO_TABLA_VR`:
 # la figura baja a COMPACTO cuando están, así que la tarjeta mide lo mismo
 # en Resumen y en Detalle. Las grillas viven en `tablas/ventas_resumen.py`.
 
@@ -1033,30 +1063,34 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
             return None
         return (serie[i] - serie[v[2]]) / serie[v[2]] * 100
 
-    def _txt_pp(p, malo_si_sube=True):
-        """`(texto, clase)` de un cambio en pp."""
+    def _txt_pp(p, malo_si_sube=True, neutro=False):
+        """`(texto, clase)` de un cambio en pp. `neutro`: sin color (el peso
+        de un canal no es bueno ni malo por subir)."""
         if p is None:
             return "", ""
         if abs(p) < 0.05:
             return "±0 pp", "vr-neutro"
         malo = p > 0 if malo_si_sube else p < 0
         return (f"{'+' if p > 0 else '−'}{abs(p):.1f} pp",
-                "vr-baja" if malo else "vr-sube")
+                "vr-neutro" if neutro else ("vr-baja" if malo else "vr-sube"))
 
-    def _txt_var(v):
+    def _txt_var(v, malo_si_sube=False, neutro=False):
+        """`(texto, clase)` de una variación de monto. Subir es verde salvo
+        en lo que resta (descuentos, cortesías: `malo_si_sube`)."""
         if v is None:
             return "", ""
         if abs(v) < 0.5:
             return "0%", "vr-neutro"
+        malo = v > 0 if malo_si_sube else v < 0
         return (f"{'+' if v > 0 else '−'}{abs(v):.0f}%",
-                "vr-sube" if v > 0 else "vr-baja")
+                "vr-neutro" if neutro else ("vr-baja" if malo else "vr-sube"))
 
     def _span(txt, clase):
         return f'<span class="vr-nota {clase}">{escape(txt)}</span>' if txt else ""
 
     def _bloque(titulo, grande, fino, aviso=False):
         # El número va en el renglón del título: un renglón menos por
-        # bloque, y la franja entra en la grilla de `_ALTO_TABLA`.
+        # bloque, y la franja entra en la grilla de `_ALTO_TABLA_VR`.
         return (f'<div class="vr-b{" vr-aviso" if aviso else ""}">'
                 f'<span class="vr-cab"><span class="vr-h">{escape(titulo)}'
                 f'</span><span class="vr-g">{grande}</span></span>'
@@ -1125,34 +1159,109 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
                       '</button></div>')
         return "".join(partes)
 
+    def _max(serie):
+        vals = [x for x in serie if x is not None and not pd.isna(x)]
+        return max(vals) if vals else 0.0
+
+    def _barra(r, campo, valor, tope, tono=""):
+        """La barrita de comparación de una celda (regla #519)."""
+        if valor is not None and tope:
+            r[f"__w_{campo}"] = max(valor, 0.0) / tope
+            if tono:
+                r[f"__wc_{campo}"] = tono
+
+    def _celda(r, campo, valor, texto, nota=("", "")):
+        r[campo] = valor
+        r[f"__t_{campo}"] = texto
+        if nota[0]:
+            r[f"__v_{campo}"], r[f"__vc_{campo}"] = nota
+
+    psin = _ratio(sin_costo, tot)
+    ptrx = _ratio(n_desc, n_docs)
+    prop_cli = _ratio(prop, pax) if vol_label == "Clientes" else [None] * n
+    _serie_canal = {c: por_canal[c].astype(float).tolist() for c in canales}
+    _share = {c: [(v / t if t else 0.0) for v, t in zip(_serie_canal[c], tot)]
+              for c in canales}
+
     filas = []
     for i, c in enumerate(claves):
         v = variaciones[i]
         r = {"periodo": fila[i], "__tip": fila[i]}
         if gran == "Día" and pd.Timestamp(c).date() in feriados:
             r["__v_periodo"], r["__vc_periodo"] = "feriado", "vr-alto"
-        for k, serie in (("carta", carta), ("valor", tot), ("neto", neto),
-                         ("costo", costo)):
+        for k, serie in (("carta", carta), ("neto", neto), ("costo", costo)):
             if serie[i] is not None:
                 r[k] = round(serie[i], 2)
+        _celda(r, "valor", round(tot[i], 2), f"S/ {tot[i]:,.0f}")
+        _barra(r, "valor", tot[i], _max(tot))
         if pcosto[i] is not None:
-            r["pcosto"] = round(pcosto[i], 4)
-            r["__t_pcosto"] = f"{pcosto[i]:.1%}"
+            _celda(r, "pcosto", round(pcosto[i], 4), f"{pcosto[i]:.1%}",
+                   _txt_pp(_pp(pcosto, i)))
             r["__c_pcosto"] = ("vr-roto" if pcosto[i] > _COSTO_ROTO
                                else "vr-alto" if pcosto[i] > _COSTO_ALTO else "")
-            r["__v_pcosto"], r["__vc_pcosto"] = _txt_pp(_pp(pcosto, i))
+            _barra(r, "pcosto", min(pcosto[i], 1.0), 1.0,
+                   "vr-bar-roja" if pcosto[i] > _COSTO_ROTO
+                   else "vr-bar-ambar" if pcosto[i] > _COSTO_ALTO else "")
             if pcosto[i] > _COSTO_ROTO:
                 r["__b_pcosto"] = "revisar"
+            _celda(r, "costo_v", round(costo[i], 2), f"S/ {costo[i]:,.0f}",
+                   _txt_var(_var(costo, i), neutro=True))
+            _cul = culpables.get(c)
+            r["revisar"] = (_cul[0] if (_cul and pcosto[i] > _COSTO_ROTO)
+                            else "")
+        if sin_costo[i] is not None:
+            r["sin_costo"] = round(sin_costo[i], 2)
+            _celda(r, "psin", round(psin[i], 4), f"{psin[i]:.0%}")
+            _barra(r, "psin", psin[i], _max(psin),
+                   "vr-bar-ambar" if psin[i] > 0.3 else "")
         if vol_label:
             r["pax"] = pax[i]
-            r["ticket"] = None if ticket[i] is None or pd.isna(ticket[i]) \
+            _tk = None if ticket[i] is None or pd.isna(ticket[i]) \
                 else round(ticket[i], 2)
-            r["__t_ticket"] = ("—" if r["ticket"] is None
-                               else f"S/ {r['ticket']:,.2f}")
-            _vt = (None if (v[0] != "ok" or r["ticket"] is None
+            _vt = (None if (v[0] != "ok" or _tk is None
                             or not ticket[v[2]] or pd.isna(ticket[v[2]]))
                    else (ticket[i] - ticket[v[2]]) / ticket[v[2]] * 100)
-            r["__v_ticket"], r["__vc_ticket"] = _txt_var(_vt)
+            _celda(r, "ticket", _tk, "—" if _tk is None else f"S/ {_tk:,.2f}",
+                   _txt_var(_vt))
+        # Canales: monto (con su variación) y % del período (con su cambio).
+        for k, cn in enumerate(canales):
+            _m = _serie_canal[cn]
+            _celda(r, f"c{k}_v", round(_m[i], 2), f"S/ {_m[i]:,.0f}",
+                   _txt_var(_var(_m, i)))
+            _sh = _share[cn]
+            _celda(r, f"c{k}_p", round(_sh[i], 4), f"{_sh[i]:.1%}",
+                   _txt_pp(_pp(_sh, i), neutro=True))
+            _barra(r, f"c{k}_p", _sh[i], _max(_sh),
+                   "" if k == 0 else "vr-bar-cian")
+        if prop[i] is not None:
+            _celda(r, "propina", round(prop[i], 2), f"S/ {prop[i]:,.0f}",
+                   _txt_var(_var(prop, i)))
+            _celda(r, "pprop", round(pprop[i], 4), f"{pprop[i]:.1%}",
+                   _txt_pp(_pp(pprop, i), malo_si_sube=False))
+            _barra(r, "pprop", pprop[i], _max(pprop))
+            r["n_prop"] = int(n_prop[i] or 0)
+            if prop_cli[i] is not None:
+                r["prop_cli"] = round(prop_cli[i], 2)
+        if pdesc[i] is not None:
+            _celda(r, "desc", round(desc[i], 2), f"S/ {desc[i]:,.0f}",
+                   _txt_var(_var(desc, i), malo_si_sube=True))
+            _celda(r, "pdesc", round(pdesc[i], 4), f"{pdesc[i]:.1%}",
+                   _txt_pp(_pp(pdesc, i)))
+            _barra(r, "pdesc", pdesc[i], _max(pdesc))
+            if n_docs[i]:
+                _celda(r, "n_desc", int(n_desc[i] or 0),
+                       f"{int(n_desc[i] or 0)} / {int(n_docs[i])}")
+                _celda(r, "ptrx", round(ptrx[i], 4), f"{ptrx[i]:.0%}",
+                       _txt_pp(_pp(ptrx, i)))
+        if pcort[i] is not None:
+            _celda(r, "cort", round(cort[i], 2), f"S/ {cort[i]:,.0f}",
+                   _txt_var(_var(cort, i), malo_si_sube=True))
+            _celda(r, "pcort", round(pcort[i], 4), f"{pcort[i]:.1%}",
+                   _txt_pp(_pp(pcort, i)))
+            _barra(r, "pcort", pcort[i], _max(pcort))
+            r["n_cort"] = int(n_cort[i] or 0)
+            if costo_cort[i] is not None:
+                r["costo_cort"] = round(costo_cort[i], 2)
         r["variacion"] = v[1] if v[0] == "ok" else None
         r["__vtxt"] = "parcial" if v[0] == "parcial" else "—"
         r["__nota"] = _nota_var_venta(v, fila[v[2]] if v[2] is not None else "")
@@ -1162,35 +1271,182 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
         filas.append(r)
     tp = pd.DataFrame(filas)
 
+    # ── La fila TOTAL, con lo de todas las subvistas ──────────────────────
+    def _s(nombre):
+        return float(g[nombre].sum()) if nombre in hay else 0.0
+
     uni = _UNIDAD_GRAN[gran][0 if n == 1 else 1]
     total = {"__id": "__total", "periodo": f"Total · {n:,} {uni}",
              "valor": f"S/ {tot_vista:,.0f}", "variacion": ""}
     for k in ("carta", "neto", "costo"):
         if k in hay:
-            total[k] = f"S/ {float(g[k].sum()):,.0f}"
-    if "pcosto" in hay and float(g["neto"].sum()):
-        total["pcosto"] = f"{float(g['costo'].sum()) / float(g['neto'].sum()):.1%}"
+            total[k] = f"S/ {_s(k):,.0f}"
+    if "pcosto" in hay and _s("neto"):
+        total["pcosto"] = f"{_s('costo') / _s('neto'):.1%}"
+        total["costo_v"] = f"S/ {_s('costo'):,.0f}"
+    if "venta_sin_costo" in hay:
+        total["sin_costo"] = f"S/ {_s('venta_sin_costo'):,.0f}"
+        total["psin"] = f"{_s('venta_sin_costo') / tot_vista:.0%}" if tot_vista else ""
     if vol_label:
-        _tp = float(g["pax"].sum())
+        _tp = _s("pax")
         total["pax"] = f"{_tp:,.0f}"
         total["ticket"] = f"S/ {tot_vista / _tp:,.2f}" if _tp else "—"
+    for k, cn in enumerate(canales):
+        _m = float(por_canal[cn].sum())
+        total[f"c{k}_v"] = f"S/ {_m:,.0f}"
+        total[f"c{k}_p"] = f"{_m / tot_vista:.1%}" if tot_vista else ""
+    if "propina" in hay:
+        total["propina"] = f"S/ {_s('propina'):,.0f}"
+        total["pprop"] = f"{_s('propina') / tot_vista:.1%}" if tot_vista else ""
+        total["n_prop"] = f"{_s('n_prop'):,.0f}"
+        if vol_label == "Clientes" and _s("pax"):
+            total["prop_cli"] = f"S/ {_s('propina') / _s('pax'):,.2f}"
+    if "desc" in hay and _s("carta"):
+        total["desc"] = f"S/ {_s('desc'):,.0f}"
+        total["pdesc"] = f"{_s('desc') / _s('carta'):.1%}"
+        if _s("n_docs"):
+            total["n_desc"] = f"{_s('n_desc'):,.0f} / {_s('n_docs'):,.0f}"
+            total["ptrx"] = f"{_s('n_desc') / _s('n_docs'):.0%}"
+    if "cort_s" in hay and _s("carta"):
+        total["cort"] = f"S/ {_s('cort_s'):,.0f}"
+        total["pcort"] = f"{_s('cort_s') / _s('carta'):.1%}"
+        total["n_cort"] = f"{_s('n_cort'):,.0f}"
+        total["costo_cort"] = f"S/ {_s('costo_cort'):,.0f}"
+
+    # ── Las subvistas: qué grupo de columnas se ve (regla #519) ───────────
+    subs = _subvistas(vol_label, canales, set(tp.columns))
+    sub = st.session_state.get("vt_resumen_sub")
+    if sub not in subs:
+        sub = next(iter(subs))
+    columnas, ayuda = subs[sub]
 
     n_res = st.session_state.get("vt_resumen_nres", 0)
     with st.container(key="vt_resumen_resumen"):
         clic_fila = renderizar_dias_venta(
-            tp, altura=_ALTO_TABLA,
-            key="vt_resumen_res_grid_" + _clave_grilla(ctx, n_res),
-            rotulo_periodo=gran, vol_label=vol_label, total=total)
+            tp, altura=_ALTO_TABLA_VR, columnas=columnas,
+            # La subvista va en la key: cambiar de grupo de columnas estrena
+            # la grilla (las `columnDefs` nuevas no se aplican sobre una viva).
+            key="vt_resumen_res_grid_" + _clave_grilla(ctx, n_res, sub),
+            rotulo_periodo=gran, total=total)
     pie.caption(
-        f"**{_del_al(pd.Series(pd.to_datetime(list(rango))))}** · agrupado "
-        f"por {gran.lower()} — clic en una fila para ver canales, propinas, "
-        "descuentos, cortesías y costo; «Ver pedidos» abre el Detalle."
-        + nota_recorte)
+        f"**{_del_al(pd.Series(pd.to_datetime(list(rango))))}** · {ayuda} "
+        "Clic en una fila para verla entera." + nota_recorte)
     if clic_fila in set(claves):
         st.session_state["_vt_resumen_ir_detalle"] = clic_fila
         st.session_state["vt_resumen_nres"] = n_res + 1
         st.rerun(scope=scope_rerun())
 
+
+def _subvistas(vol_label, canales, hay):
+    """`{nombre: (columnas, ayuda)}` de las subvistas del Resumen (regla #519),
+    sólo las que el parquet permite. Cada columna es `(campo, rótulo, tipo,
+    ancho, tooltip)` — ver `tablas.ventas_resumen.renderizar_dias_venta`.
+
+    Nació a pedido («poder alternar subvistas o agrupar columnas, de manera
+    que visualmente pueda comparar la fila de un período con las demás»): la
+    franja desplegable mostraba todo de UN período, y lo que se pedía era
+    mirar una sola cosa en TODOS."""
+    S = 104   # «S/ 459,612» a 13px + padding + la flecha de ordenar
+    # «116.6% +80.4 pp revisar»: con 150 la bandera salía cortada en «r.»
+    # (medido en el 12/09). Es el peor caso de la columna.
+    _ANCHO_PCOSTO = 176
+    out = {}
+    venta = [
+        ("carta", "Carta", "soles0", S, "Venta a precio de CARTA: lo que se "
+                                         "habría cobrado sin descuentos"),
+        ("valor", "Venta", "celda", 118, "Venta cobrada, con IGV y recargo. "
+                                         "Sin cortesías ni anulados"),
+        ("neto", "Neto", "soles0", S, "Venta sin IGV ni recargo: la base del "
+                                      "% de costo"),
+        ("costo", "Costo", "soles0", S, "Costo de receta de lo vendido"),
+        ("pcosto", "% costo", "celda", _ANCHO_PCOSTO, "Costo ÷ Neto, y su cambio en pp "
+                                            "contra la barra anterior"),
+    ]
+    if vol_label:
+        venta += [
+            ("pax", "Pax" if vol_label == "Clientes" else vol_label, "entero",
+             72, f"{vol_label} del período"),
+            ("ticket", "Ticket", "celda", 132,
+             f"Venta ÷ {vol_label.lower()}, y su variación"),
+        ]
+    venta.append(("variacion", "Var. venta", "var", S,
+                  "Variación de la venta contra la barra anterior"))
+    out["Venta"] = (venta, "Los cuatro precios, el % de costo, clientes, "
+                           "ticket y la variación.")
+    if len(canales) > 1:
+        cols = [("valor", "Venta", "celda", 118, "Venta cobrada")]
+        for k, cn in enumerate(canales):
+            cols += [(f"c{k}_v", cn, "celda", 128,
+                      f"Venta de {cn} y su variación contra la barra anterior"),
+                     (f"c{k}_p", f"% {cn}", "celda", 118,
+                      f"Qué parte de la venta fue de {cn}, y su cambio en pp")]
+        out["Canales"] = (cols, "Cuánto vendió cada canal y qué parte del "
+                                "período fue suya.")
+    if "propina" in hay:
+        cols = [("valor", "Venta", "celda", 118, "Venta cobrada"),
+                ("propina", "Propina", "celda", 118,
+                 "Propinas del período (una por pago) y su variación"),
+                ("pprop", "% de la venta", "celda", 132,
+                 "Propina ÷ venta, y su cambio en pp")]
+        if "prop_cli" in hay:
+            cols.append(("prop_cli", "Por cliente", "soles", 104,
+                         "Propina ÷ clientes"))
+        cols.append(("n_prop", "Pagos c/propina", "entero", 124,
+                     "Pagos que dejaron propina"))
+        if vol_label:
+            cols.append(("pax", "Pax", "entero", 72, "Clientes del período"))
+        out["Propinas"] = (cols, "La propina se cuenta una vez por pago.")
+    if "pdesc" in hay:
+        cols = [("carta", "Carta", "soles0", S, "Venta a precio de carta"),
+                ("valor", "Venta", "celda", 118, "Venta cobrada"),
+                ("desc", "Descuento", "celda", 118,
+                 "Carta − Venta, y su variación"),
+                ("pdesc", "% desc.", "celda", 132,
+                 "Descuento ÷ carta, y su cambio en pp")]
+        if "n_desc" in hay:
+            cols += [("n_desc", "Comprob. c/desc.", "celda", 128,
+                      "Comprobantes con algún descuento, de todos los del "
+                      "período"),
+                     ("ptrx", "% comprob.", "celda", 112,
+                      "Qué parte de los comprobantes tuvo descuento")]
+        out["Descuentos"] = (cols, "Carta − Venta: cuánto y en cuántos "
+                                   "comprobantes.")
+    if "pcort" in hay:
+        cols = [("carta", "Carta vendida", "soles0", 112,
+                 "Venta a precio de carta (sin cortesías)"),
+                ("cort", "Cortesías", "celda", 118,
+                 "Cortesías a precio carta, y su variación"),
+                ("pcort", "% cortesía", "celda", 132,
+                 "Cortesías ÷ carta vendida, y su cambio en pp"),
+                ("n_cort", "Comprob.", "entero", 92,
+                 "Comprobantes tipo CORTESIA"),
+                ("costo_cort", "Costaron", "soles0", S,
+                 "Costo de receta de las cortesías")]
+        out["Cortesías"] = (cols, "Comprobantes tipo CORTESIA, a precio "
+                                  "carta: no suman a la venta.")
+    if "pcosto" in hay:
+        cols = [("neto", "Neto", "soles0", S, "Venta sin IGV ni recargo"),
+                ("costo_v", "Costo", "celda", 118,
+                 "Costo de receta de lo vendido, y su variación"),
+                ("pcosto", "% costo", "celda", _ANCHO_PCOSTO,
+                 "Costo ÷ Neto, y su cambio en pp. «revisar»: un plato con "
+                 "costo mayor a su precio infla el período")]
+        if "psin" in hay:
+            cols += [("sin_costo", "Sin costo", "soles0", S,
+                      "Venta de platos SIN costo cargado: baja el % de costo"),
+                     ("psin", "% venta sin costo", "celda", 132,
+                      "Qué parte de la venta no tiene costo cargado")]
+        cols.append(("revisar", "A revisar", "texto", 180,
+                     "El plato con mayor exceso de costo sobre su precio, en "
+                     "los períodos marcados «revisar»"))
+        out["Costo"] = (cols, "Costo de receta sobre el neto; «sin costo» baja "
+                              "el % de ese período.")
+    return out
+
+_ALTO_TABLA_VR = alturas.VENTAS_RESUMEN_TABLA
+"""Las grillas de abajo muestran SIETE filas (2026-09-24, a pedido: «las
+tablas de abajo que muestran 5 filas, ahora muestren 7»). Era `_ALTO_TABLA`,
+el de Compras (191px, cinco filas); ver `alturas.VENTAS_RESUMEN_TABLA`."""
 
 _COSTO_ALTO = 0.45
 """% de costo sobre el neto a partir del cual la celda va en ámbar."""
@@ -1327,12 +1583,12 @@ def _zona_detalle(tabla, foco, nombre, gran, partida, ctx, nclic, pie):
         k_tablas = _clave_grilla(ctx, foco, nclic)
         with c_peds:
             clic = renderizar_pedidos_venta(
-                tp_peds, altura=_ALTO_TABLA,
+                tp_peds, altura=_ALTO_TABLA_VR,
                 key=f"vt_resumen_ped_grid_{k_tablas}",
                 ver_canal=partida, ver_mesero="mesero" in peds,
                 solo_hora=gran == "Día", total=tot_peds)
         with c_lin:
-            renderizar_lineas_mov(tp_lin, altura=_ALTO_TABLA,
+            renderizar_lineas_mov(tp_lin, altura=_ALTO_TABLA_VR,
                                   key=f"vt_resumen_lin_grid_{k_tablas}",
                                   total=tot_lin)
     pie.caption(f"**{nombre}** — clic en un pedido para ver sus platos al "
