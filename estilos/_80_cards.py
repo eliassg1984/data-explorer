@@ -1521,40 +1521,63 @@ CSS = """    /* ================================================================
     }
 
     /* =================================================================== */
-    /* TARJETA «Nueva receta» (Recetas y Costos)                             */
+    /* «Nueva receta» (Recetas y Costos): DOS tarjetas                      */
     /*                                                                       */
-    /* Misma familia de look que Documentos SUNAT y las tarjetas de Compras: */
-    /* fondo blanco (`--bg-card`), sin borde, esquinas redondeadas y sombra  */
-    /* tenue. Sin esto, el `st.container(border=True)` que la envuelve       */
-    /* sale con el marco POR DEFECTO de Streamlit —fondo transparente y una  */
-    /* línea gris (`rgba(49,51,63,.2)`)— y la sección se lee como si tuviera */
-    /* otro material que el resto del reporte.                               */
-    /*                                                                       */
-    /* Además: KPIs de esta tarjeta más chicos (label 10, valor 15) — los    */
-    /* tres métricos «Costo total / Costo por porción / Precio de venta»     */
-    /* con el tamaño default de Streamlit tomaban toda la franja horizontal  */
-    /* y aire suelto entre cada campo. Regla nueva #497 en arquitectura.md.  */
+    /* Desde el 2026-09-24 (mockup aprobado ese día) la vista son dos       */
+    /* tarjetas lado a lado: «Receta» (form_receta_card_receta) y «Precio   */
+    /* de venta» (form_receta_card_precio). El `rec_card_nueva` que pone el */
+    /* dispatcher sigue envolviéndolas, pero ya no pinta nada: si llevara   */
+    /* el fondo blanco, las dos tarjetas se leerían como una caja con dos   */
+    /* cajas adentro. Las dos miden al menos una pantalla (`--alto-util`)   */
+    /* en escritorio; el alto de la tabla de insumos y de la torta lo pone  */
+    /* Python para que ese mínimo sea también lo justo. Regla #512.         */
     /* =================================================================== */
-    div[class*="st-key-rec_card_nueva"] {
-        background: var(--bg-card) !important;
+    div.st-key-rec_card_nueva {
+        background: transparent !important;
         border: none !important;
-        border-radius: 20px !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+    }
+    div.st-key-rec_card_nueva > div {
+        border: none !important;
+    }
+    .st-key-form_receta_card_receta,
+    .st-key-form_receta_card_precio {
+        background: var(--bg-card);
+        border-radius: 20px;
         padding: 16px 18px;
         box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+        gap: 12px !important;
     }
-    div[class*="st-key-rec_card_nueva"] > div {
-        border: none !important;
+    @media screen and (min-width: 769px) {
+        .st-key-form_receta_card_receta,
+        .st-key-form_receta_card_precio {
+            min-height: var(--alto-util);
+        }
     }
-    /* KPIs compactos: label chico, valor más pequeño que el default. */
-    div[class*="st-key-rec_card_nueva"] [data-testid="stMetricLabel"] {
-        font-size: 11px !important;
+    /* Nada adentro se encoge: si el contenido pasa del alto de la tarjeta,
+       Streamlit aplasta sus hijos (`flex: 0 1 auto`) y la tabla de precios
+       se recortaba por abajo en vez de crecer la tarjeta. */
+    .st-key-form_receta_card_receta > *,
+    .st-key-form_receta_card_precio > *,
+    .st-key-form_receta_ptabla > * {
+        flex-shrink: 0 !important;
     }
-    div[class*="st-key-rec_card_nueva"] [data-testid="stMetricValue"] {
-        font-size: 16px !important;
-        line-height: 1.2 !important;
+    /* Streamlit le pone `margin-bottom: -1rem` al stMarkdownContainer para
+       comerse el margen del último <p>. Acá los st.markdown son <div>, sin
+       ese margen: el -16 montaba cada fila sobre la siguiente (la del
+       precio de venta tapaba la del costo). Regla #162. */
+    .st-key-form_receta_card_receta [data-testid="stMarkdownContainer"],
+    .st-key-form_receta_card_precio [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
     }
-    div[class*="st-key-rec_card_nueva"] [data-testid="stMetric"] {
-        gap: 2px !important;
+    /* El pie (Guardar, PDF, Excel, correo) va contra el borde de abajo de
+       la tarjeta aunque en una pantalla grande sobre alto. */
+    .st-key-form_receta_pie {
+        margin-top: auto;
+        padding-top: 12px;
+        border-top: 1px solid var(--line-soft);
     }
     /* Botón "+" al costado del buscador: alto igual al selectbox
        (~40px) y ancho fijo por su glifo. Las keys (2) las escribe
@@ -1564,21 +1587,232 @@ CSS = """    /* ================================================================
         min-height: 38px !important;
         padding: 0 10px !important;
     }
-    /* Tabla editable de precios (`_pricing_panel`, `st.data_editor` con
-       key `form_receta_*_pricing_editor_v<n>`). Vive a la DERECHA del
-       ítem-list en `st.columns([3, 2])`, así que el iframe del componente
-       tiene ~360 px de ancho — sin este `min-width` la columna Concepto
-       trunca en «Recargo al consum…» y la S/ queda estrujada.
 
-       El wrapper del data_editor de Streamlit lleva `overflow-x: hidden`
-       por defecto: lo abrimos para que si el iframe reserva más ancho del
-       que la columna tiene, el navegador deslice horizontalmente en vez
-       de recortar. */
-    div[class^="st-key-form_receta_"][class*="_pricing_editor_v"] {
-        overflow-x: auto !important;
+    /* Rótulos sueltos de las dos tarjetas (los escribe formulario_receta
+       como HTML en st.markdown). */
+    .fr-titulo {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary);
     }
-    div[class^="st-key-form_receta_"][class*="_pricing_editor_v"] iframe {
-        min-width: 340px !important;
+    .fr-titulo-2 {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .fr-cab {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 32px;
+    }
+    .fr-sub, .fr-pista, .fr-nota {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+    .fr-resumen {
+        text-align: right;
+        white-space: nowrap;
+        font-size: 12.5px;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    .fr-chip {
+        display: inline-block;
+        max-width: 100%;
+        box-sizing: border-box;
+        height: 26px;
+        line-height: 26px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: var(--accent-tint);
+        color: var(--accent-deep);
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-variant-numeric: tabular-nums;
+    }
+    /* El hueco de una tabla o de la torta sin datos: mide lo mismo que lo
+       que reemplaza, para que la tarjeta no salte. */
+    .fr-vacio {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        padding: 24px;
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        text-align: center;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--text-muted);
+    }
+    .fr-perdida {
+        padding: 10px 12px;
+        border: 1px solid var(--warning-border);
+        border-radius: 8px;
+        background: var(--warning-bg);
+        color: var(--warning-text);
+        font-size: 13px;
+        line-height: 1.45;
+    }
+    .fr-punto {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        flex-shrink: 0;
+        border-radius: 50%;
+    }
+
+    /* TABLA DE PRECIOS. HTML, salvo la fila del precio de venta, que es un
+       st.number_input dentro de `form_receta_prow` (st.columns sin gap con
+       las MISMAS proporciones que estas grillas: 2.3/1.4 con una columna
+       de montos y 2.3/1/1.2 con Actual y Nuevo). Si cambia una, cambia la
+       otra, o la celda editable deja de caer bajo su cabecera. */
+    .st-key-form_receta_ptabla {
+        flex: 0 0 auto !important;
+        gap: 0 !important;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .fr-p-fila {
+        display: grid;
+        grid-template-columns: 2.3fr 1.4fr;
+        align-items: center;
+        height: 32px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 13.5px;
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+    }
+    .fr-p-dos .fr-p-fila {
+        grid-template-columns: 2.3fr 1fr 1.2fr;
+    }
+    .fr-p-fila > div {
+        min-width: 0;
+        padding: 0 10px;
+    }
+    .fr-p-dos .fr-p-fila > div:nth-child(2) {
+        color: var(--text-secondary);
+    }
+    .fr-p-cab {
+        background: var(--bg-primary);
+        border-bottom-color: var(--border);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+    .fr-p-una > .fr-p-fila:last-child,
+    .fr-p-dos > .fr-p-fila:last-child {
+        border-bottom: none;
+    }
+    .fr-p-num {
+        text-align: right;
+    }
+    .fr-p-neg {
+        color: var(--danger-text) !important;
+    }
+    .fr-p-concepto {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .fr-p-concepto > span:last-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .st-key-form_receta_prow {
+        height: 36px;
+        justify-content: center;
+        background: var(--rail-fondo);
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+    }
+    .st-key-form_receta_prow .fr-p-concepto,
+    .st-key-form_receta_prow .fr-p-num {
+        padding: 0 10px;
+    }
+    .st-key-form_receta_prow .fr-p-num {
+        font-weight: 400;
+        color: var(--text-secondary);
+    }
+    .st-key-form_receta_prow [data-testid="stNumberInputStepDown"],
+    .st-key-form_receta_prow [data-testid="stNumberInputStepUp"] {
+        display: none !important;
+    }
+    .st-key-form_receta_prow [data-testid="stNumberInputContainer"] {
+        height: 28px !important;
+        margin-right: 6px;
+        border-color: var(--focus-lavender) !important;
+        border-radius: 6px !important;
+    }
+    .st-key-form_receta_prow input {
+        text-align: right;
+        font-weight: 600;
+        font-size: 13.5px !important;
+        padding: 0 8px !important;
+    }
+
+    /* Semáforo del % de costo y leyenda de la torta. */
+    .fr-semaforo {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        color: var(--text-secondary);
+    }
+    .fr-semaforo b {
+        font-weight: 600;
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+    }
+    .fr-flecha {
+        color: var(--text-muted);
+    }
+    .fr-ley-fila {
+        display: grid;
+        grid-template-columns: 10px minmax(0, 1fr) auto 44px;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+    }
+    .fr-ley-fila .fr-punto {
+        width: 10px;
+        height: 10px;
+    }
+    .fr-ley-rot {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--text-primary);
+    }
+    .fr-ley-num {
+        text-align: right;
+        color: var(--text-primary);
+    }
+    .fr-ley-pct {
+        text-align: right;
+        color: var(--text-secondary);
+    }
+    .fr-ley-total {
+        margin-top: 4px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        font-weight: 600;
+    }
+    .fr-ley-total .fr-ley-pct {
+        font-weight: 400;
     }
 
     /* =================================================================== */

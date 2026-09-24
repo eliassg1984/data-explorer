@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-511 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+512 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (177)
 
@@ -212,7 +212,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 
-**Layout y alturas** (72)
+**Layout y alturas** (73)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -286,6 +286,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#504** — Lo que depende va en UNA tarjeta; lo que no, a su propia vista — y el filtro activo se ESCRIBE
 - **#508** — Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o líneas se descartan…
 - **#509** — «Salidas por período» es la MISMA tarjeta que la de requerimientos, con otro Lado. El área…
+- **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 
 **Plotly y figuras** (92)
 
@@ -467,7 +468,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 
-**Streamlit** (144)
+**Streamlit** (145)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -613,6 +614,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#499** — Quinto pase de Nueva receta: @st.fragment para que el «+» responda en 100 ms y no en un…
 - **#502** — «Que el correo salga con MI dirección» no se resuelve mandando desde el servidor: se abre el…
 - **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
+- **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 
 **Datos, R2 y DuckDB** (61)
 
@@ -42112,6 +42114,100 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      el rail, no su cuenta. Antes de copiar qué suma la vieja, mirar qué
      suma la vecina de sección: es con ésa con la que se va a comparar.
 
+512. **«Nueva receta» son DOS tarjetas a la altura de la pantalla, con
+     «Modificar» para editar una receta del sistema; la tabla de precios es
+     HTML con una sola celda de verdad, y el formato `plain` de un
+     `NumberColumn` muestra el ruido de coma flotante.**
+     2026-09-24, a pedido y sobre un mockup aprobado: «hagamos más grande
+     verticalmente la tarjeta […] separarlo en tarjetas la de la receta y
+     la del cuadro de igv costo, precio […] una botonera que diga
+     modificar, y que me permite importar […] una receta, para poder
+     editarla […] editar el precio, añadir una columna más a la tabla
+     derecha […] un gráfico de torta», y al implementar: «recuerda colocar
+     los puntos de color».
+
+     **Las dos tarjetas.** `formulario_receta` abre `st.columns([1.6, 1])`
+     con `form_receta_card_receta` y `form_receta_card_precio`, cada una
+     con `min-height: var(--alto-util)` en escritorio. El `rec_card_nueva`
+     del dispatcher sigue envolviéndolas pero quedó transparente: una caja
+     blanca con dos cajas blancas adentro se lee como una tarjeta rota.
+     La tabla de insumos y la torta son lo que se estira, y su alto sale
+     de Python (`_ALTO_TABLA`, `_ALTO_TORTA`) restando a
+     `alturas.PRESUPUESTO` el cromo de cada tarjeta, MEDIDO a 1366×657:
+     245 y 412 px, más 83 en «Modificar» (fila de importar y nota). Con
+     esas cuentas las dos tarjetas miden 613, justo `--alto-util`. Si se
+     suma una fila a una tarjeta, se suma su alto a su cromo; si no, la
+     tarjeta crece por encima de la pantalla sin avisar.
+
+     **Dos trampas del layout, las dos medidas:**
+
+       · Los hijos de un bloque de Streamlit nacen con `flex: 0 1 auto`:
+         cuando el contenido pasa del alto de la tarjeta, el navegador los
+         APLASTA en vez de crecerla, y la tabla de precios se recortaba
+         por abajo. Van con `flex-shrink: 0`.
+       · El `margin-bottom: -16px` del `stMarkdownContainer` (#162) montaba
+         cada fila HTML de la tabla sobre la siguiente: la del precio de
+         venta tapaba la del costo. Dentro de las dos tarjetas va en 0,
+         porque ahí todos los `st.markdown` son `<div>`.
+
+     **Por qué la tabla de precios dejó de ser un `st.data_editor`.** Se
+     pidió un punto de color por fila, el mismo de su trozo en la torta
+     (costo ACENTO, utilidad EXITO, recargo e IGV los dos siguientes de
+     `PALETA_SERIES`), y una grilla de Glide sólo pinta texto. Ahora es
+     HTML en tres `st.markdown`, salvo la fila del precio de venta, que es
+     un `st.container(key="form_receta_prow")` con `st.columns(gap=None)`
+     y un `st.number_input` adentro. Las proporciones de esas columnas
+     (2.3/1.4, o 2.3/1/1.2 con Actual y Nuevo) son las mismas que las de
+     la grilla CSS de las filas HTML: si cambia una y no la otra, la celda
+     editable deja de caer bajo su cabecera. De paso se fue el parche que
+     revertía una edición en las filas calculadas (`pricing_ver`): ya no
+     hay dónde escribirlas.
+
+     **«Modificar»** es la cuarta opción del segmented control. Importa un
+     plato ACTIVO de `recetaventa.parquet` (`_platos_sistema`) con sus
+     insumos activos, en la unidad de COSTEO del sistema (`UNID COSTO`,
+     casi siempre gramos, y `P.UNIT COSTO` por gramo), no en la de kardex
+     del buscador: es la que tiene la receta, y convertirla sería inventar
+     un factor. Un insumo que el sistema trae en dos líneas (Lomo a la
+     Pimienta: Sal Maldon ×2) se junta en una sumando la cantidad —el
+     código es la clave con la que cada línea se compara contra el
+     sistema— y la nota lo dice. Verificado: el costo importado, 24,76, es
+     el `CST SALON` del parquet. La tabla gana la columna «Antes» con la
+     cantidad del sistema tachada (U+0336 en los caracteres: el
+     `data_editor` sólo acepta color y fondo, y sólo en columnas no
+     editables); la de precios gana «Actual» (costo y precio de salón de
+     hoy) al lado de «Nuevo»; «Volver al original» cuenta como cambio
+     también el precio de venta. Se guarda como propuesta de tipo
+     «Modificación de receta», con el plato y los valores del sistema.
+
+     **El % de costo sigue siendo sobre el neto SIN recargo** (precio /
+     1,10 / 1,18), como tuvo siempre esta herramienta. Composición del
+     plato lo calcula sólo sin IGV (precio / 1,18), así que para el mismo
+     plato una dice 40,7 % y la otra 37,0 %. Quedó señalado al entregar el
+     mockup y no se decidió; si se unifica, es `_desglose`.
+
+     **Cantidades y precios unitarios van SIN `format` ni `step`.** Con
+     `%.2f` los 3 g de pimienta a S/ 0,0381 salían «0.04»; y
+     `format="plain"`, que parecía la salida, le pide a numbro 20
+     decimales (`formatNumber` del frontend de Streamlit): 38,1356 salía
+     «38.135600000000004» — y como la celda es angosta y alinea a la
+     derecha, lo que se veía era «…00000000004». Sin formato, el editor
+     usa hasta 4 decimales sin ceros de relleno. Como lo que se muestra
+     está redondeado a 4, al leer de vuelta sólo cuenta como edición lo
+     que difiere de lo mostrado: pisar sin más le cambiaría el costo a
+     toda línea de más decimales al primer clic. El PDF, el Excel y el
+     correo usan el mismo criterio (`envio_receta._num`).
+
+     **Para probarlo:** la grilla de Glide no se deja editar a clics desde
+     el navegador automatizado (el doble clic mueve la selección y no abre
+     el editor), así que los flujos de estado —importar, precio, volver
+     al original, vaciar, los cuatro modos— se prueban con `AppTest`
+     simulando la edición sobre `session_state`. Dos cosas de `AppTest`:
+     importar `graficos` ANTES que `formulario_receta` (al revés hay un
+     ciclo de import que la app nunca recorre) y neutralizar el
+     `scope="fragment"` de `st.rerun`, porque `AppTest` corre la app
+     entera en cada clic.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42124,7 +42220,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#511**; la próxima toma el número siguiente.
+> última regla es la **#512**; la próxima toma el número siguiente.
 
 >
 

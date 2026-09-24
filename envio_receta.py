@@ -61,6 +61,14 @@ def _soles(v):
     return f"S/ {v:,.2f}"
 
 
+def _num(v):
+    """Cantidad o precio unitario, sin ceros de relleno y hasta 4
+    decimales: las recetas del sistema vienen en gramos (0,0381 soles el
+    gramo) y con `:,.2f` salían «0.04». Mismo criterio que la tabla de
+    `formulario_receta._num`."""
+    return f"{round(float(v), 4):,.4f}".rstrip("0").rstrip(".")
+
+
 def nombre_archivo(resumen, extension):
     """«receta_lomo-saltado.pdf»: sin tildes ni espacios, para que el
     adjunto no llegue con el nombre roto en otro cliente de correo."""
@@ -92,7 +100,8 @@ def _pct_costo(resumen):
 
 
 def _encabezado(resumen):
-    tipo = "Combo" if resumen["tipo"] == "Combo" else "Receta de venta"
+    tipo = {"Combo": "Combo", "Modificación de receta": "Modificación de receta"}.get(
+        resumen["tipo"], "Receta de venta")
     quien = f"Propuesta de {resumen['autor']}" if resumen["autor"] else "Propuesta"
     return (f"{tipo}: {resumen['nombre'] or '(sin nombre)'}",
             f"{quien} · {resumen['fecha']}")
@@ -116,7 +125,7 @@ def pdf_receta(resumen):
         sub = l["cantidad"] * l["precio"]
         filas.append([
             str(l["cod"]), str(l["nombre"])[:48], str(l["unidad"]),
-            f"{l['cantidad']:,.2f}", f"{l['precio']:,.2f}", f"{sub:,.2f}",
+            _num(l["cantidad"]), _num(l["precio"]), f"{sub:,.2f}",
             f"{(sub / total * 100) if total > 0 else 0:.1f}",
         ])
     paginas = [filas[i:i + _FILAS_POR_PAGINA]
@@ -187,6 +196,8 @@ def excel_receta(resumen):
     f_sub = wb.add_format({"font_color": GRIS_TEXTO})
     f_cab = wb.add_format({"bold": True, "bg_color": GRIS_FONDO, "bottom": 1})
     f_num = wb.add_format({"num_format": "#,##0.00"})
+    # Cantidad y precio unitario con hasta 4 decimales (gramos del sistema).
+    f_fino = wb.add_format({"num_format": "#,##0.####"})
     f_pct = wb.add_format({"num_format": "0.0"})
     f_tot = wb.add_format({"bold": True, "num_format": "#,##0.00", "top": 1})
     f_tot_txt = wb.add_format({"bold": True, "top": 1})
@@ -205,8 +216,8 @@ def excel_receta(resumen):
         ws.write(r, 0, str(l["cod"]))
         ws.write(r, 1, str(l["nombre"]))
         ws.write(r, 2, str(l["unidad"]))
-        ws.write_number(r, 3, l["cantidad"], f_num)
-        ws.write_number(r, 4, l["precio"], f_num)
+        ws.write_number(r, 3, l["cantidad"], f_fino)
+        ws.write_number(r, 4, l["precio"], f_fino)
         # Fórmulas, no valores: si alguien corrige una cantidad en el
         # Excel, el subtotal y el total lo siguen.
         ws.write_formula(r, 5, f"=D{r + 1}*E{r + 1}", f_num, sub)
@@ -245,7 +256,7 @@ def cuerpo_correo(resumen):
     lineas = resumen["lineas"]
     for l in lineas[:_MAX_LINEAS_CUERPO]:
         sub = l["cantidad"] * l["precio"]
-        txt.append(f"- {l['nombre']} · {l['cantidad']:,.2f} {l['unidad']} · {_soles(sub)}")
+        txt.append(f"- {l['nombre']} · {_num(l['cantidad'])} {l['unidad']} · {_soles(sub)}")
     if len(lineas) > _MAX_LINEAS_CUERPO:
         txt.append(f"… y {len(lineas) - _MAX_LINEAS_CUERPO} más (ver adjuntos).")
     txt.append("")
