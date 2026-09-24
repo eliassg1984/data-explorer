@@ -20,18 +20,28 @@ El look, los formatos, la fila TOTAL fija, la fila marcada por
 tablas gemelas con dos looks no se leen como la misma cosa (regla #404).
 Lo único al revés es el COLOR de la variación: en Ventas subir es la buena
 noticia (verde), en Compras gastar más es rojo. Regla #516.
+
+2026-09-24 (2) — EL RESUMEN ES LA «B» DEL MOCKUP (regla #518): nueve
+columnas (los cuatro precios, % de costo, pax, ticket y la variación) y una
+franja que se despliega en el navegador al hacer clic en la fila, con los
+canales, propinas, descuentos, cortesías y el costo. «Ver pedidos» en la
+franja abre el Detalle.
 """
 
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
-from tema import ERROR, EXITO, GRIS_TEXTO
+from tema import (
+    ACENTO, ACENTO_TEXTO, ADVERTENCIA_BORDE, ADVERTENCIA_FONDO,
+    ADVERTENCIA_TEXTO, BLANCO, ERROR, ERROR_FONDO, EXITO, GRIS_BORDE,
+    GRIS_TEXTO, GRIS_TEXTO_MEDIO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
+)
 from tablas._config import _parchar_iconos
 # Privados de allá, a propósito: son el look y los formatos de las grillas de
 # «Compra por período», que éstas calcan. Mismo criterio que
 # `tablas/movimientos_periodo.py`.
 from tablas.compras_semanal import (
-    _AL_CAMBIAR_FILAS, _AL_MONTAR, _JS_COMPACTO, _JS_ENTERO, _JS_PARTE,
-    _JS_SOLES, _JS_VARIACION, _TOOLTIP_FAMILIA, _con_total, _css, REGLAS_FILA,
+    _AL_CAMBIAR_FILAS, _AL_MONTAR, _JS_ENTERO, _JS_SOLES, _JS_VARIACION,
+    _con_total, _css, REGLAS_FILA,
 )
 from tablas.compras_volatilidad import ALTO_FILA
 from tablas.movimientos_periodo import _JS_FECHA_HORA
@@ -65,89 +75,284 @@ _STYLE_VARIACION_VENTA = JsCode("""
 vendió más que el día anterior. Es el mismo color de la etiqueta de la
 barra (`ventas_resumen._renglones_barra`)."""
 
-_JS_TICKET = JsCode(
+
+_JS_SOLES0 = JsCode(
     "function(p){ var v = p.value; if (v == null) return '—';"
     " if (typeof v !== 'number') return String(v);"
-    " return 'S/ ' + v.toLocaleString('es-PE',"
-    " {minimumFractionDigits: 2, maximumFractionDigits: 2}); }")
+    " return (v < 0 ? '−' : '') + 'S/ ' + Math.round(Math.abs(v))"
+    ".toLocaleString('es-PE'); }")
+"""«S/ 14,807», sin céntimos: con cuatro columnas de soles (Carta, Venta,
+Neto, Costo) los dos decimales costaban 24px cada una, y en una fila de
+día los céntimos no dicen nada. El total fijo llega ya escrito."""
+
+# ── Celda con valor + nota (la variación al lado del número) ───────────────
+# Un solo componente para todas las celdas compuestas (regla #226: un JsCode,
+# no uno por columna). Lee de la fila, que Python ya dejó escrita:
+#   __t_<col>   el texto principal          __c_<col>  su clase
+#   __v_<col>   la nota chica (variación)   __vc_<col> su clase
+#   __b_<col>   una bandera («revisar»)
+# La fila TOTAL fija no trae esos campos y cae al valor tal cual.
+_R_CELDA = JsCode("""
+class CeldaVenta {
+    init(p) {
+        var d = p.data || {}, c = p.colDef.field;
+        this.e = document.createElement('span');
+        var t = d['__t_' + c];
+        var a = document.createElement('span');
+        // La fila TOTAL fija manda su valor YA escrito: en una columna que
+        // AG Grid infiere numérica, `valueFormatted` de un texto sale
+        // «Invalid Number». El texto va tal cual.
+        a.textContent = (t != null) ? t
+            : (typeof p.value === 'string') ? p.value
+            : (p.valueFormatted != null ? p.valueFormatted
+               : (p.value == null ? '' : String(p.value)));
+        if (d['__c_' + c]) a.className = d['__c_' + c];
+        this.e.appendChild(a);
+        if (d['__v_' + c]) {
+            var v = document.createElement('span');
+            v.textContent = d['__v_' + c];
+            v.className = 'vr-nota ' + (d['__vc_' + c] || '');
+            this.e.appendChild(v);
+        }
+        if (d['__b_' + c]) {
+            var b = document.createElement('span');
+            b.textContent = d['__b_' + c];
+            b.className = 'vr-bandera';
+            this.e.appendChild(b);
+        }
+    }
+    getGui() { return this.e; }
+    refresh() { return false; }
+}
+""")
+
+# ── La franja que se despliega debajo de un día ─────────────────────────────
+# Es una FILA DE ANCHO COMPLETO (Full Width Rows, AG Grid Community) que se
+# agrega y se quita en el navegador con una transacción: abrir un día no le
+# cuesta ninguna corrida a Python. El contenido lo escribe Python en
+# `__html` —texto que arma él mismo, con los nombres escapados— y viaja
+# como dato de la fila (regla #226: nunca datos adentro de un JsCode).
+# El botón «Ver pedidos» SELECCIONA la fila del día: eso sí llega a Python
+# (`update_on=["selectionChanged"]`) y abre el Detalle.
+_R_FRANJA = JsCode("""
+class FranjaVenta {
+    init(p) {
+        var e = document.createElement('div');
+        e.className = 'vr-franja';
+        e.innerHTML = (p.data && p.data.__html) || '';
+        var boton = e.querySelector('.vr-ver');
+        if (boton) {
+            boton.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                var n = p.api.getRowNode(p.data.__padre);
+                if (n) n.setSelected(true, true);
+            });
+        }
+        this.e = e;
+        // El alto sale del contenido: los bloques se reacomodan con el ancho
+        // (a 1366 van en una línea, más angosto en dos) y un alto fijo
+        // cortaría o dejaría aire.
+        setTimeout(function () {
+            try {
+                var h = Math.ceil(e.scrollHeight) + 2;
+                if (Math.abs((p.node.rowHeight || 0) - h) > 1) {
+                    p.node.setRowHeight(h);
+                    p.api.onRowHeightChanged();
+                }
+            } catch (x) {}
+        }, 0);
+    }
+    getGui() { return this.e; }
+    refresh() { return false; }
+}
+""")
+
+_AL_CLIC_DIA = JsCode("""
+function(e) {
+    var d = e.data, api = e.api;
+    if (!d || d.__detalle || (e.node && e.node.rowPinned)) return;
+    var id = d.__id + '__det', yaEstaba = !!api.getRowNode(id);
+    var quitar = [], marcadas = [];
+    api.forEachNode(function (n) {
+        if (!n.data) return;
+        if (n.data.__detalle) quitar.push(n.data);
+        if (n.data.__abierta) { n.data.__abierta = false; marcadas.push(n); }
+    });
+    if (quitar.length) api.applyTransaction({remove: quitar});
+    if (!yaEstaba) {
+        // La franja copia los números del día: si el usuario ordenó por una
+        // columna, cae pegada a su día y no en otro lado de la tabla.
+        var det = Object.assign({}, d, {__id: id, __detalle: true,
+                                        __padre: d.__id, __sel: false});
+        api.applyTransaction({add: [det], addIndex: e.rowIndex + 1});
+        d.__abierta = true; marcadas.push(e.node);
+        setTimeout(function () {
+            var n = api.getRowNode(id);
+            if (n) api.ensureNodeVisible(n, 'bottom');
+        }, 30);
+    }
+    if (marcadas.length) api.redrawRows({rowNodes: marcadas});
+}
+""")
+
+_REGLAS_DIA = {**REGLAS_FILA, "vr-abierta": JsCode(
+    "function(p){ return !!(p.data && p.data.__abierta); }")}
 
 
-def renderizar_dias_venta(tp, altura, key, rotulo_periodo="Día", canales=(),
+def _css_dias():
+    """El look de Compras más la franja y las notas de variación."""
+    css = _css()
+    css[".ag-row.vr-abierta"] = {
+        "background-color": f"{LAVANDA_FONDO} !important",
+        "box-shadow": f"inset 3px 0 0 0 {ACENTO} !important"}
+    css[".vr-nota"] = {"font-size": "11px", "margin-left": "5px"}
+    css[".vr-sube"] = {"color": f"{EXITO} !important", "font-weight": "600"}
+    css[".vr-baja"] = {"color": f"{ERROR} !important", "font-weight": "600"}
+    css[".vr-neutro"] = {"color": f"{GRIS_TEXTO} !important"}
+    css[".vr-alto"] = {"color": f"{ADVERTENCIA_TEXTO} !important",
+                       "font-weight": "600"}
+    css[".vr-roto"] = {"color": f"{ERROR} !important", "font-weight": "700"}
+    css[".vr-bandera"] = {
+        "font-size": "10px", "font-weight": "700", "margin-left": "5px",
+        "padding": "0 6px", "border-radius": "8px", "line-height": "16px",
+        "background": ERROR_FONDO, "color": ERROR}
+    css[".vr-franja"] = {
+        "display": "grid", "gap": "6px", "padding": "6px 12px 6px 28px",
+        "grid-template-columns": "repeat(auto-fit, minmax(170px, 1fr))",
+        "white-space": "normal", "line-height": "1.35",
+        "border-bottom": f"1px solid {GRIS_BORDE}", "background": BLANCO,
+        "font-size": "12.5px", "color": TEXTO_PRINCIPAL,
+        "font-variant-numeric": "tabular-nums"}
+    css[".vr-b"] = {"border": f"1px solid {GRIS_BORDE}", "border-radius": "8px",
+                    "padding": "4px 8px", "display": "flex",
+                    "flex-direction": "column", "gap": "1px", "min-width": "0"}
+    css[".vr-b.vr-aviso"] = {"border-color": ADVERTENCIA_BORDE,
+                             "background": ADVERTENCIA_FONDO}
+    css[".vr-h"] = {"font-size": "10px", "font-weight": "600",
+                    "letter-spacing": ".06em", "text-transform": "uppercase",
+                    "color": GRIS_TEXTO}
+    css[".vr-cab"] = {"display": "flex", "gap": "8px",
+                      "align-items": "baseline", "white-space": "nowrap"}
+    css[".vr-g"] = {"font-size": "14px", "font-weight": "700",
+                    "line-height": "1.25"}
+    # Los canales, un renglón por canal: el bloque ocupa DOS columnas de la
+    # franja para que «● En el Local S/ 19,252 · 98% −0.6 pp +106%» entre
+    # en una línea (medido: en una sola columna, 217px, partía en cuatro y
+    # la franja llegaba a 172px dentro de una grilla de 191).
+    css[".vr-b.vr-ancho"] = {"grid-column": "span 2"}
+    css[".vr-f"] = {"font-size": "11.5px", "color": GRIS_TEXTO_MEDIO}
+    css[".vr-canal"] = {"display": "flex", "gap": "6px", "white-space": "nowrap",
+                        "align-items": "baseline", "font-size": "12.5px"}
+    css[".vr-canal i"] = {"display": "inline-block", "width": "8px",
+                          "height": "8px", "border-radius": "2px"}
+    css[".vr-canal b"] = {"font-weight": "600", "flex": "1 1 auto",
+                          "min-width": "0", "overflow": "hidden",
+                          "text-overflow": "ellipsis", "white-space": "nowrap"}
+    css[".vr-pie"] = {"grid-column": "1 / -1", "display": "flex",
+                      "flex-wrap": "wrap", "gap": "4px 14px",
+                      "align-items": "baseline"}
+    css[".vr-revisar"] = {"font-size": "12px", "font-weight": "600",
+                          "color": ERROR}
+    css[".vr-ver"] = {"font": "inherit", "font-size": "12px",
+                      "font-weight": "600", "color": ACENTO_TEXTO,
+                      "background": "none", "border": "0", "padding": "0",
+                      "cursor": "pointer"}
+    css[".vr-ver:hover"] = {"text-decoration": "underline"}
+    return css
+
+
+def renderizar_dias_venta(tp, altura, key, rotulo_periodo="Día",
                           vol_label=None, total=None):
-    """Una fila por DÍA del gráfico, en el orden del eje.
+    """Una fila por barra del gráfico, en el orden del eje: la opción «B» del
+    mockup (2026-09-24, regla #518).
 
-    `tp` trae `periodo` (el día, ya legible: «Mié 03/09»), los números
-    crudos `valor`, `parte` (0-1), una columna por canal (`canales` son
-    `(columna, rótulo)` en el orden de la pila), `pax` y `ticket` si hay
-    volumen (`vol_label` es su rótulo: «Clientes» o «Pedidos») y la
-    `variacion` en % (o vacía), más cuatro ocultas: `__vtxt` (qué escribir
-    sin porcentaje), `__nota` (por qué no lo hay), `__clave` (la clave del
-    período, la del eje) y `__sel` (el período en foco). `rotulo_periodo`
-    es la cabecera de la primera columna: la granularidad.
+    Nueve columnas —Día, Carta, Venta, Neto, Costo, % costo, Pax, Ticket y la
+    variación de la venta— y el resto (canales, propinas, descuentos,
+    cortesías y el detalle del costo) en una FRANJA que se despliega al
+    hacer clic en la fila, sin pasar por Python.
 
-    Sin `initialSort`: la tabla es el gráfico escrito y abre en su orden.
-    Devuelve la `__clave` de la fila SELECCIONADA, o None — un clic en una
-    fila abre su Detalle, como en Movimientos. Es la selección VIGENTE; el
-    llamador estrena la grilla (su key) cada vez que actúa sobre ella."""
+    `tp` trae `periodo`, los números crudos `carta`, `valor`, `neto`,
+    `costo`, `pcosto`, `pax`, `ticket` y `variacion` —los que el parquet no
+    trae pueden faltar y su columna no se dibuja—, más las ocultas: `__id`
+    (la clave del período, que es también `__clave`), `__html` (la franja),
+    `__vtxt`, `__nota`, `__sel` y los `__t_/__v_/__c_/__vc_/__b_` de las
+    celdas compuestas (ver `_R_CELDA`).
+
+    Devuelve la `__clave` de la fila SELECCIONADA, o None: la selección la
+    hace sólo el botón «Ver pedidos» de la franja (el clic en la fila la
+    despliega), y el llamador abre el Detalle."""
     gb = GridOptionsBuilder.from_dataframe(tp)
     gb.configure_default_column(
         resizable=False, sortable=True, filter=False, editable=False,
         suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
     )
-    # Anchos con la cuenta de Compras (`compras_semanal._COLS_ANCHA`): el
-    # peor dato a 13px, más 8+8 de padding y los ~14 de la flecha de
-    # ordenar. «Día» es la única que se estira.
-    gb.configure_column("periodo", header_name=rotulo_periodo, minWidth=110,
-                        tooltipField="periodo")
-    gb.configure_column("valor", header_name="Venta", type=["numericColumn"],
-                        valueFormatter=_JS_SOLES,
-                        headerTooltip="Venta del día",
-                        width=120, minWidth=120, suppressSizeToFit=True)
-    gb.configure_column("parte", header_name="% del total",
-                        type=["numericColumn"], valueFormatter=_JS_PARTE,
-                        headerTooltip="Cuánto pesa este día en el total de "
-                                      "la vista (el de la fila de arriba)",
-                        width=104, minWidth=104, suppressSizeToFit=True)
-    # Los canales, con el formato compacto de las familias de Compras: el
-    # valor exacto y su % de la barra van al tooltip de la celda.
-    for _col, _rot in canales:
-        gb.configure_column(_col, header_name=_rot, type=["numericColumn"],
-                            valueFormatter=_JS_COMPACTO,
-                            tooltipValueGetter=_TOOLTIP_FAMILIA,
-                            headerTooltip=f"{_rot} · venta de ese canal en "
-                                          "cada día",
-                            width=104, minWidth=94, suppressSizeToFit=True)
+    _cols = set(tp.columns)
+
+    def _si(col, **kw):
+        if col in _cols:
+            gb.configure_column(col, **kw)
+
+    _si("periodo", header_name=rotulo_periodo, minWidth=120,
+        tooltipField="__tip", cellRenderer=_R_CELDA)
+    # Los cuatro precios: sin céntimos, 104px («S/ 459,612» a 13px + padding
+    # + la flecha de ordenar).
+    for col, rot, tip in (
+            ("carta", "Carta", "Venta a precio de CARTA: lo que se habría "
+                               "cobrado sin descuentos"),
+            ("valor", "Venta", "Venta cobrada, con IGV y recargo. Sin "
+                               "cortesías ni anulados"),
+            ("neto", "Neto", "Venta sin IGV ni recargo: la base del % de "
+                             "costo"),
+            ("costo", "Costo", "Costo de receta de lo vendido: precio de "
+                               "costo × cantidad")):
+        _si(col, header_name=rot, type=["numericColumn"],
+            valueFormatter=_JS_SOLES0, headerTooltip=tip,
+            width=104, minWidth=104, suppressSizeToFit=True)
+    _si("pcosto", header_name="% costo", type=["numericColumn"],
+        cellRenderer=_R_CELDA,
+        headerTooltip="Costo ÷ Neto, y su cambio en puntos (pp) contra la "
+                      "barra anterior. «revisar»: un plato con costo mayor "
+                      "a su precio infla el período",
+        width=150, minWidth=150, suppressSizeToFit=True)
     if vol_label:
-        gb.configure_column("pax", header_name=vol_label,
-                            type=["numericColumn"], valueFormatter=_JS_ENTERO,
-                            width=92, minWidth=92, suppressSizeToFit=True)
-        gb.configure_column("ticket", header_name="Ticket",
-                            type=["numericColumn"], valueFormatter=_JS_TICKET,
-                            headerTooltip=f"Venta ÷ {vol_label.lower()} del "
-                                          "día",
-                            width=100, minWidth=100, suppressSizeToFit=True)
-    gb.configure_column("variacion", header_name="Variación",
-                        type=["numericColumn"], valueFormatter=_JS_VARIACION,
-                        cellStyle=_STYLE_VARIACION_VENTA,
-                        tooltipField="__nota",
-                        headerTooltip="Variación contra la barra ANTERIOR "
-                                      "del gráfico. Un período que el rango "
-                                      "corta dice «parcial»",
-                        width=104, minWidth=104, suppressSizeToFit=True)
-    for oculta in ("__vtxt", "__nota", "__clave", "__sel"):
-        if oculta in tp.columns:
+        _si("pax", header_name="Pax" if vol_label == "Clientes" else vol_label,
+            type=["numericColumn"], valueFormatter=_JS_ENTERO,
+            headerTooltip=f"{vol_label} del período",
+            width=72, minWidth=72, suppressSizeToFit=True)
+        _si("ticket", header_name="Ticket", type=["numericColumn"],
+            cellRenderer=_R_CELDA,
+            headerTooltip=f"Venta ÷ {vol_label.lower()}, y su variación "
+                          "contra la barra anterior",
+            width=132, minWidth=132, suppressSizeToFit=True)
+    _si("variacion", header_name="Var. venta", type=["numericColumn"],
+        valueFormatter=_JS_VARIACION, cellStyle=_STYLE_VARIACION_VENTA,
+        tooltipField="__nota",
+        headerTooltip="Variación de la venta contra la barra ANTERIOR del "
+                      "gráfico. Un período que el rango corta dice «parcial»",
+        width=104, minWidth=104, suppressSizeToFit=True)
+    for oculta in tp.columns:
+        if oculta.startswith("__"):
             gb.configure_column(oculta, hide=True)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
-        suppressCellFocus=True, rowClassRules=REGLAS_FILA,
+        suppressCellFocus=True, rowClassRules=_REGLAS_DIA,
+        # El clic en la fila DESPLIEGA, no selecciona: la selección es el
+        # pedido de abrir el Detalle, y la hace el botón de la franja.
+        suppressRowClickSelection=True,
+        getRowId=JsCode("function(p){ return String(p.data.__id); }"),
+        isFullWidthRow=JsCode(
+            "function(p){ return !!(p.rowNode && p.rowNode.data"
+            " && p.rowNode.data.__detalle); }"),
+        fullWidthCellRenderer=_R_FRANJA,
+        onRowClicked=_AL_CLIC_DIA,
         onGridReady=_AL_MONTAR, onRowDataUpdated=_AL_CAMBIAR_FILAS), total))
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # arquitectura.md #159
 
     resp = AgGrid(
         tp, gridOptions=grid_options, height=altura, theme="material",
-        custom_css=_css(), allow_unsafe_jscode=True, key=key,
+        custom_css=_css_dias(), allow_unsafe_jscode=True, key=key,
         update_on=["selectionChanged"],
     )
     sel = resp.selected_rows

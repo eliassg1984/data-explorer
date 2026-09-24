@@ -1170,7 +1170,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
             _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido,
                             col_prod, col_cant, col_fam=col_fam,
                             col_serv=col_serv, col_canal=col_canal,
-                            col_mesero=col_mesero)
+                            col_mesero=col_mesero, d_pagos=d_pagos)
 
         # ── 1) Venta bruta por día (Venta / Costo / Pax / Pax·Venta) ─────
         # Venta y Costo comparten el eje IZQUIERDO (soles). Pax va a un eje

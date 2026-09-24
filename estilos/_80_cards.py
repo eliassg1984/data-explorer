@@ -1942,6 +1942,9 @@ CSS = """    /* ================================================================
         color: var(--accent-deep);
         font-weight: 700;
     }
+    .st-key-vt_resumen_kpi .vt-kpi-alerta .vt-kpi-val {
+        color: var(--warning-text);
+    }
 
     /* La zona de abajo de «Tendencia diaria de venta» (2026-09-24, regla
        #516): la de «Compras por período» (`cp_sem_*` en

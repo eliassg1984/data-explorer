@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-517 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+518 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (178)
 
@@ -387,7 +387,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#515** — La barra de «Tendencia diaria de venta» se parte por canal, y copia las CUENTAS de «Compras…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
-**AgGrid y tablas** (82)
+**AgGrid y tablas** (83)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -471,6 +471,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
 - **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
+- **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
 
 **Streamlit** (145)
 
@@ -793,7 +794,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (101)
+**Decisiones de diseño y UX** (102)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -896,6 +897,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#510** — «Porcionamientos» es la tercera tarjeta «por período» y la primera que no mide un valorizado:…
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 - **#514** — El «neto» del sistema es precio ÷ 1,235: IGV y recargo se SUMAN sobre el neto, y el IGV de…
+- **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -42459,6 +42461,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `SELECT count(*), count(DISTINCT "LLAVE LOCAL DOCUMENTO ITEM") FROM
      ventas`. Si no dan lo mismo, la fila no es el ítem.
 
+518. **El Resumen de «Tendencia diaria de venta» lee la venta en cuatro
+     precios, y lo que no cabe en nueve columnas se DESPLIEGA en la fila.
+     Cortesías y anulados no son venta.**
+     2026-09-24, a pedido, con mockup de por medio (se eligió la «B»):
+     «diferenciar Venta Precio Carta, Precio Venta, Precio Neto, Precio
+     Costo; % de descuento, transacciones con descuento, % y cantidad de
+     cortesías, costo y % de costo vs el neto; variación a los que
+     consideres; los % como desplegable de la fila», y después «añadamos
+     propinas», «pax y ticket» y «la venta por canales con su % y
+     variación».
+
+     **Las nueve columnas:** Día · Carta · Venta · Neto · Costo · % costo
+     (con su cambio en pp y la bandera «revisar») · Pax · Ticket (con su
+     variación) · Var. venta. **La franja** (un clic en la fila): Venta por
+     canal (monto, % del día, cambio del % en pp, variación del monto),
+     Propinas, Descuentos, Cortesías y Costo, más «Ver pedidos».
+
+     **Qué es cada precio, medido en el parquet:** `PRECIO OFICIAL` y
+     `PRECIO COSTO` vienen POR UNIDAD (× cantidad); `NETO TOTAL ITEM` y
+     `DESCUENTO ITEM` ya son de la LÍNEA («Sudado a la leña» ×2: carta 59,
+     descuento de línea 11,77 = 2 × 5,88). Carta − Venta = descuentos, al
+     céntimo. El % de costo es contra el NETO, como en Recetas (#514).
+
+     **Cortesías y anulados salen de la venta — del gráfico, los KPIs y la
+     tabla.** Las cortesías llegan como comprobantes tipo CORTESIA
+     valorizados a precio carta DENTRO de `VENTA ITEM` (S/ 15.025 del 25 ago
+     al 23 set 2026); los anulados sumaban S/ 6.521. Las cortesías tienen su
+     bloque en la franja (a precio carta y lo que costaron). **El resto de
+     Ventas todavía los suma.**
+
+     **La propina es del PAGO** (#517): sale de `d_pagos`, que `ventas.py`
+     ahora le pasa a `_ventas_resumen`, una vez por `Llave Local Documento
+     Correlativo Pago`. S/ 27.552 en esos 30 días (6,8 % de la venta).
+
+     **La franja no pasa por Python.** Es una fila de ANCHO COMPLETO (Full
+     Width Rows, AG Grid Community) que `onRowClicked` agrega y quita con
+     una transacción; su HTML lo arma Python y viaja en la fila (`__html`,
+     nunca adentro de un JsCode: #226). El clic en la fila NO selecciona
+     (`suppressRowClickSelection`): la selección es el pedido de abrir el
+     Detalle, y la hace el botón «Ver pedidos» seleccionando al padre.
+     Tres cosas que costaron una medición:
+     - **Tiene que entrar en `_ALTO_TABLA`** (191px: 132 de filas). La
+       primera versión medía 172px: el bloque de canales partía en cuatro
+       renglones (va a DOS columnas, un renglón por canal) y el número de
+       cada bloque iba en su propio renglón (va al del título). Queda en
+       110px. Y el plato que dispara el costo va en el renglón del botón,
+       no en su bloque: ahí la llevaba a 156px.
+     - **La fila TOTAL decía «Invalid Number»** en las columnas con
+       `cellRenderer`: AG Grid infiere la columna numérica y el
+       `valueFormatted` de un texto ya escrito sale así. El renderer usa el
+       texto tal cual cuando el valor es un string.
+     - **La franja copia los números de su día**, así que si el usuario
+       ordenó la tabla cae pegada a él y no en otro lado.
+
+     **«Revisar»** cuando el costo pasa el 70 % del neto: por encima no es
+     un día caro, es un costo mal cargado. La franja nombra el plato de
+     mayor exceso de costo sobre su precio: el 12/09 llegó al 117 % por
+     «Menu Sapiens SAT 2026» (costo S/ 765,31, precio S/ 175). Y dice cuánto
+     de la venta no tiene costo cargado (1.191 de 8.706 líneas en 30 días).
+
+     **Fin de semana y feriado:** las bandas de «Comparativo vs año pasado»
+     (gris y ámbar, rótulo «feriado»); en Semana/Mes/Año se cuenta cuántos
+     feriados trae el período. En la tabla, el día feriado lo dice al lado.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42471,7 +42537,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#517**; la próxima toma el número siguiente.
+> última regla es la **#518**; la próxima toma el número siguiente.
 
 >
 
