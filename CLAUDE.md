@@ -642,6 +642,29 @@ por **unidad de lectura**, no por trigger — y esa unidad puede ocupar dos
 sitios de la página. `test_graficos.py` declara ese par por nombre: un share
 por copiar y pegar sigue fallando.
 
+## Para ver un dato de producción: `herramientas/sql_restaurante.py`
+
+La app sólo lee parquets; el SQL Server de donde salen es el del
+restaurante (`SRCA65DADDFC` = 26.94.118.165, por Radmin). Desde el
+2026-09-24 se le puede preguntar directo, sin sumar una fila al Sheet ni
+esperar el refresco:
+
+```bash
+python herramientas/sql_restaurante.py --probar
+python herramientas/sql_restaurante.py -f consulta.sql --base INFOREST
+```
+
+- **Entra con el login `lectura`, no con `sa`**: sólo lectura en ALMACEN,
+  INFOREST y ALMACENPRUEBA1. La clave la toma del Administrador de
+  credenciales de Windows (`sql-restaurante`), donde la guardó el usuario:
+  Claude no escribe contraseñas, ni aunque se las pasen por el chat.
+- **Además, todo se revierte al terminar** (cada corrida es una transacción
+  que se deshace) y lee en READ UNCOMMITTED, para no trabar al POS en pleno
+  servicio.
+- **Las bases están en compatibilidad 100** (SQL Server 2008) aunque el
+  motor sea 2019: no hay `STRING_AGG`, `IIF`, `CONCAT`, `TRY_CAST`,
+  `LAG`/`LEAD` ni `OFFSET/FETCH`.
+
 ## Antes de sumar una columna "comparable": mirá su GRANO
 
 `compras.parquet` trae `VALOR_ANO_ANTERIOR`, `CANTIDAD_ANO_ANTERIOR` y

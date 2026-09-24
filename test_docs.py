@@ -188,7 +188,7 @@ for simbolo, modulo in _SIMBOLOS:
 # Las herramientas que CLAUDE.md manda pegar/usar tienen que existir: son la
 # primera cosa que alguien intenta al leer el documento.
 for nombre in ("auditar_layout.js", "auditar_graficos.js", "rayos_x.js",
-               "ver_figura.py"):
+               "ver_figura.py", "sql_restaurante.py"):
     ok((RAIZ / "herramientas" / nombre).exists(),
        f"herramientas/{nombre} existe (CLAUDE.md lo nombra)")
 

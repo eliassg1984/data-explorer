@@ -19,3 +19,8 @@ kaleido>=1.0,<2
 # vez hay que instalarle el navegador, una sola vez por máquina:
 #     playwright install chromium
 playwright>=1.47,<2
+
+# Consultas de solo lectura al SQL Server del restaurante
+# (herramientas/sql_restaurante.py). Usa el «ODBC Driver 17 for SQL Server»,
+# que ya viene instalado en la laptop.
+pyodbc>=5,<6
