@@ -495,11 +495,89 @@ def _panorama_compras(df_f, es_soles, *, key_prefix,
 # Normaliza a cinco columnas (cod/nombre/unidad/precio/activo) para que
 # quien lo consuma no tenga que saber de qué parquet vino.
 ARCHIVO_INVENTARIO = "inventariovalorizado.parquet"
+ARCHIVO_RECETAVENTA = "recetaventa.parquet"
+
+
+# ─── Precio neto: lo que el sistema llama «neto» ─────────────────────────
+# El precio de carta es neto + IGV + recargo al consumo, los dos SUMADOS
+# sobre el neto (no uno encima del otro). Medido el 2026-09-24 en las
+# boletas del POS (INFOREST.DDOCUMENTO: `nPrecioImpuesto1/nPrecioNeto` =
+# 0,105 y `nPrecioImpuesto2/nPrecioNeto` = 0,13 en todas) y en el parquet:
+# `P.VENTA × %CST / CST` da 1,235 en los 839 platos y en los cuatro
+# canales. Hasta ese día la app dividía por 1,18 (Composición) o por
+# 1,18 × 1,10 (Nueva receta), y el % de costo no coincidía con el del
+# sistema. El IGV de restaurantes cambia por ley año a año (fue 18 %, 10 %
+# y hoy 10,5 %), así que el divisor se LEE del parquet; lo fijo es el
+# recargo, que pone el restaurante. Regla #514.
+TASA_RECARGO = 0.13
+DIVISOR_NETO_RESPALDO = 1.235
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def divisor_neto():
+    """Precio de carta ÷ precio neto, tal como lo usa el sistema para su
+    `%CST`: la mediana de `P.VENTA SALON × %CST SALON / CST SALON`. Si el
+    parquet no lo deja calcular, el último medido (1,235)."""
+    df = _cargar_reporte(ARCHIVO_RECETAVENTA)
+    if df is None or df.empty:
+        return DIVISOR_NETO_RESPALDO
+    c_pv = _resolver(df, ["P.VENTA SALON", "P VENTA SALON"])
+    c_cst = _resolver(df, ["CST SALON", "Costo Salon"])
+    c_pct = _resolver(df, ["%CST SALON", "% CST SALON", "PCT CST SALON"])
+    if not (c_pv and c_cst and c_pct):
+        return DIVISOR_NETO_RESPALDO
+    pv = pd.to_numeric(df[c_pv], errors="coerce")
+    cst = pd.to_numeric(df[c_cst], errors="coerce")
+    pct = pd.to_numeric(df[c_pct], errors="coerce")
+    ok = (pv > 0) & (cst > 0) & (pct > 0)
+    if not ok.any():
+        return DIVISOR_NETO_RESPALDO
+    d = float((pv[ok] * pct[ok] / cst[ok]).median())
+    return d if 1.0 < d < 2.0 else DIVISOR_NETO_RESPALDO
+
+
+def tasa_igv():
+    """El IGV que queda dentro del divisor, una vez sacado el recargo."""
+    return max(divisor_neto() - 1 - TASA_RECARGO, 0.0)
+
+
+# Conversión de la unidad de KARDEX a la de COSTEO cuando el insumo no
+# aparece en ninguna receta de venta: la misma que usa el sistema en esos
+# pares (1.255 filas KILOS→GRAMOS y 480 LITROS→MILILITROS con FACTOR 1000).
+_CONVERSION_ESTANDAR = {"KILOS": ("GRAMOS", 1000.0),
+                        "LITROS": ("MILILITROS", 1000.0)}
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def unidades_de_costeo():
+    """{COD INS: (UNID COSTO, FACTOR)} tal como lo usan las recetas de
+    venta: el par más frecuente de cada insumo. `P.UNIT COSTO` es
+    exactamente `PREC PROM / FACTOR` en todo el parquet (medido)."""
+    df = _cargar_reporte(ARCHIVO_RECETAVENTA)
+    if df is None or df.empty:
+        return {}
+    c_ins = _resolver(df, ["COD INS", "Cod Ins"])
+    c_und = _resolver(df, ["UNID COSTO", "Unid Costo"])
+    c_fac = _resolver(df, ["FACTOR", "Factor"])
+    if not (c_ins and c_und and c_fac):
+        return {}
+    d = pd.DataFrame({
+        "cod": df[c_ins].astype(str),
+        "und": df[c_und].astype(str).str.strip(),
+        "fac": pd.to_numeric(df[c_fac], errors="coerce"),
+    })
+    d = d[(d["und"] != "") & (d["fac"] > 0) & (d["cod"].str.strip() != "")]
+    if d.empty:
+        return {}
+    par = (d.groupby(["cod", "und", "fac"]).size().rename("n").reset_index()
+           .sort_values("n", ascending=False).drop_duplicates("cod"))
+    return {c: (u, float(f)) for c, u, f in zip(par["cod"], par["und"], par["fac"])}
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def catalogo_insumos():
-    """Artículos de almacén desde inventariovalorizado.parquet.
+    """Artículos de almacén desde inventariovalorizado.parquet, con unidad
+    y precio en la unidad de COSTEO de las recetas (ver abajo).
 
     OJO con `Activo` en este parquet: a diferencia de recetabase/recetaventa
     (con sus 4 formatos confirmados contra R2 real, ver `_activo()` arriba y
@@ -525,6 +603,19 @@ def catalogo_insumos():
         "unidad": df[col_unidad].astype(str) if col_unidad else "unidad",
         "precio": pd.to_numeric(df[col_precio], errors="coerce").fillna(0.0),
     })
+    # En la unidad de COSTEO de las recetas (GRAMOS, MILILITROS, ONZAS…) y
+    # no en la de kardex (2026-09-24, a pedido: «las unidades deben estar
+    # tal cual el sistema»). Antes el buscador agregaba en KILOS a S/ 38 el
+    # kilo, y 3 g de pimienta se escribían 0,003 — y el simulador de
+    # Composición mezclaba ese precio por kilo con recetas en gramos.
+    costeo = unidades_de_costeo()
+    unidades, factores = [], []
+    for cod, und in zip(out["cod"], out["unidad"].str.strip()):
+        par = costeo.get(cod) or _CONVERSION_ESTANDAR.get(und.upper())
+        unidades.append(par[0] if par else und)
+        factores.append(par[1] if par else 1.0)
+    out["unidad"] = unidades
+    out["precio"] = out["precio"] / pd.Series(factores, index=out.index)
     out["activo"] = _activo(df[col_activo]) if col_activo else None
     # inventariovalorizado.parquet trae más de una fila para el mismo código
     # (confirmado en vivo 2026-08-13: "Sal De Mesa" 0000460 repetido) — sin

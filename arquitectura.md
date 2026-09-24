@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-513 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+514 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (178)
 
@@ -617,7 +617,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 
-**Datos, R2 y DuckDB** (61)
+**Datos, R2 y DuckDB** (62)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -680,6 +680,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
 - **#509** — «Salidas por período» es la MISMA tarjeta que la de requerimientos, con otro Lado. El área…
 - **#510** — «Porcionamientos» es la tercera tarjeta «por período» y la primera que no mide un valorizado:…
+- **#514** — El «neto» del sistema es precio ÷ 1,235: IGV y recargo se SUMAN sobre el neto, y el IGV de…
 
 **SUNAT y SIRE** (43)
 
@@ -788,7 +789,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (100)
+**Decisiones de diseño y UX** (101)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -890,6 +891,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#507** — Las vistas «Tabla» están OCULTAS hasta nuevo aviso: un interruptor…
 - **#510** — «Porcionamientos» es la tercera tarjeta «por período» y la primera que no mide un valorizado:…
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
+- **#514** — El «neto» del sistema es precio ÷ 1,235: IGV y recargo se SUMAN sobre el neto, y el IGV de…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -42170,10 +42172,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      casi siempre gramos, y `P.UNIT COSTO` por gramo), no en la de kardex
      del buscador: es la que tiene la receta, y convertirla sería inventar
      un factor. Un insumo que el sistema trae en dos líneas (Lomo a la
-     Pimienta: Sal Maldon ×2) se junta en una sumando la cantidad —el
-     código es la clave con la que cada línea se compara contra el
-     sistema— y la nota lo dice. Verificado: el costo importado, 24,76, es
-     el `CST SALON` del parquet. La tabla gana la columna «Antes» con la
+     Pimienta: Sal Maldon ×2) queda en DOS líneas —el primer día se
+     juntaban en una; se revirtió a pedido el mismo 2026-09-24: «los
+     insumos repetidos no los agrupes»—, así que cada línea lleva `sid`
+     (su posición en la receta) y es con él, no con el código, que se
+     compara contra el sistema. La unidad va escrita como la escribe el
+     sistema («GRAMOS», «MILILITROS»), sin pasarla a minúsculas.
+     Verificado: el costo importado, 24,76, es el `CST SALON` del parquet. La tabla gana la columna «Antes» con la
      cantidad del sistema tachada (U+0336 en los caracteres: el
      `data_editor` sólo acepta color y fondo, y sólo en columnas no
      editables); la de precios gana «Actual» (costo y precio de salón de
@@ -42181,11 +42186,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      también el precio de venta. Se guarda como propuesta de tipo
      «Modificación de receta», con el plato y los valores del sistema.
 
-     **El % de costo sigue siendo sobre el neto SIN recargo** (precio /
-     1,10 / 1,18), como tuvo siempre esta herramienta. Composición del
-     plato lo calcula sólo sin IGV (precio / 1,18), así que para el mismo
-     plato una dice 40,7 % y la otra 37,0 %. Quedó señalado al entregar el
-     mockup y no se decidió; si se unifica, es `_desglose`.
+     **El % de costo es neto contra neto, con el neto del SISTEMA** — ver
+     la #514, que corrigió la cuenta el mismo día.
 
      **Cantidades y precios unitarios van SIN `format` ni `step`.** Con
      `%.2f` los 3 g de pimienta a S/ 0,0381 salían «0.04»; y
@@ -42246,6 +42248,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Compras incluido — los envoltorios de cromo de altura cero vuelven a
      cobrar `gap` en ese tramo (#406, #472). Es otro cambio.
 
+514. **El «neto» del sistema es precio ÷ 1,235: IGV y recargo se SUMAN
+     sobre el neto, y el IGV de restaurantes cambia por ley. Y los insumos
+     del almacén se ofrecen en la unidad de COSTEO de las recetas.**
+     2026-09-24, a pedido: «el porcentaje del costo debe ser neto contra
+     neto, y los insumos repetidos no los agrupes, las unidades deben estar
+     tal cual el sistema o sea en gramos mililitros tal cual dice la
+     receta».
+
+     **Qué divide el sistema.** La app tenía DOS cuentas y ninguna era la
+     del sistema: Nueva receta dividía por 1,18 × 1,10 = 1,298 (40,7 % en
+     Lomo a la Pimienta) y Composición por 1,18 (37,0 %). El `%CST SALON`
+     del parquet dice 38,70 %. Medido: `P.VENTA × %CST / CST` da **1,235
+     en los 839 platos y en los cuatro canales**, sin desvío. El reparto
+     sale del POS (`herramientas/sql_restaurante.py`): en
+     `INFOREST.DDOCUMENTO`, `nPrecioImpuesto1 / nPrecioNeto` = 0,105 y
+     `nPrecioImpuesto2 / nPrecioNeto` = 0,13 en cada boleta reciente del
+     plato — IGV 10,5 % y recargo 13 %, los dos SOBRE EL NETO, no uno
+     encima del otro. S/ 79 = 63,97 neto + 6,72 IGV + 8,32 recargo.
+
+     **El IGV no es fijo.** En `TLOG_MODPRECIO` el mismo esquema aparece
+     con 18 % + 13 % en 2022–2023 y 10 % + 13 % en octubre de 2025: es la
+     tasa reducida de restaurantes, que cambia por ley. Por eso
+     `recetas_comun.divisor_neto()` LEE el divisor del parquet (la mediana
+     de esa cuenta, con 1,235 de respaldo) y `tasa_igv()` es lo que queda
+     después del recargo, que sí es una constante del restaurante
+     (`TASA_RECARGO`). Lo usan las dos vistas: `formulario_receta._desglose`
+     y la columna «P. Neto Salón» de Composición, que hasta hoy no cuadraba
+     con el %Costo de su propia fila.
+
+     **Unidades.** `catalogo_insumos` —el del buscador de Nueva receta y el
+     del simulador de Composición— pasó de la unidad de KARDEX a la de
+     COSTEO: por insumo, el par `UNID COSTO`/`FACTOR` más usado en
+     recetaventa (`unidades_de_costeo`; `P.UNIT COSTO` es exactamente
+     `PREC PROM / FACTOR` en todo el parquet), y para un insumo que no está
+     en ninguna receta, KILOS→GRAMOS y LITROS→MILILITROS ×1000, los pares
+     que usa el sistema. Antes el buscador agregaba Pimienta en KILOS a
+     S/ 38,14 el kilo, y el simulador de Composición metía ese precio por
+     kilo en recetas escritas en gramos. Lo que no tiene conversión
+     conocida (UND, PORCION, BOTELLA) queda como viene.
+
+     **Para la próxima:** antes de escribir una tasa en el código, buscar
+     si el parquet ya trae un número calculado con ella (acá, `%CST`) y
+     despejarla de ahí. Dos cuentas «razonables» en dos vistas eran dos
+     maneras de discrepar con el sistema.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42258,7 +42305,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#513**; la próxima toma el número siguiente.
+> última regla es la **#514**; la próxima toma el número siguiente.
 
 >
 

@@ -86,8 +86,8 @@ def _filas_desglose(resumen):
         filas += [
             ("Precio de venta", resumen["precio_venta"]),
             ("Precio neto (base)", resumen["base"]),
-            (f"Recargo al consumo ({resumen['pct_recargo']:.0f}%)", resumen["recargo"]),
-            (f"IGV ({resumen['pct_igv']:.0f}%)", resumen["igv"]),
+            (f"Recargo al consumo ({round(resumen['pct_recargo'], 2):g}%)", resumen["recargo"]),
+            (f"IGV ({round(resumen['pct_igv'], 2):g}%)", resumen["igv"]),
         ]
     return filas
 

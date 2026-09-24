@@ -117,7 +117,7 @@ from graficos import alturas
 from graficos.base import _card, _resolver
 from graficos.recetas_comun import (
     ARCHIVO_INVENTARIO, _activo, _hex_a_rgba, _panorama_compras,
-    catalogo_insumos,
+    catalogo_insumos, divisor_neto,
 )
 
 # Umbral de %Costo salón para el semáforo de la barra de progreso de
@@ -182,8 +182,8 @@ def _panorama_compras_venta(df_f, es_soles):
 # `_tabla_costeo_venta`, más abajo.
 #
 # Y el 2026-08-30 se sumaron tres columnas más a pedido: P. Neto Salón
-# (= P.VENTA SALON / 1.18, IGV 18% — mismo criterio que
-# `formulario_receta.py::_IGV`, ver el comentario de `_IGV` más abajo),
+# (= P.VENTA SALON / 1.18 entonces; desde el 2026-09-24, ÷ el divisor del
+# sistema, `recetas_comun.divisor_neto` — regla #514),
 # Actualizado y Última Venta (ésta, la última columna de la tabla, a
 # pedido explícito) — las dos de columnas NATIVAS del parquet (`FECH
 # MODIF` / `ULTIMA VENT`), NO de cruzar contra ventas.parquet. Ver
@@ -845,16 +845,15 @@ def _tabla_composicion_venta(df_f):
     g["Costo"] = pd.to_numeric(g["Costo"], errors="coerce").fillna(0.0)
     g["Pct"] = pd.to_numeric(g["Pct"], errors="coerce").fillna(0.0) * 100
     g["_cod"] = g[col_cod_plato].astype(str)
-    # IGV Perú, 18% — misma constante que `formulario_receta.py::_IGV`, NO
-    # importada desde ahí a propósito: dashboard y herramienta son dos
-    # módulos separados que coinciden en la referencia de negocio, no en
-    # código que debieran compartir (mismo criterio que `_UMBRAL_COSTO_OK`/
-    # `_UMBRAL_COSTO_WARN` de `recetaventa.py::_tabla_costeo_venta`). Se
-    # calcula ACÁ, antes del filtro de precios centinela de más abajo, así
-    # que un P.VENTA SALON centinela (~0) da un Precio Neto ~0 y no una
-    # división que reviente — el filtro de abajo igual lo saca de la tabla.
-    _IGV = 1.18
-    g["PrecioNeto"] = g["Precio"] / _IGV
+    # Precio NETO como lo entiende el sistema: sin IGV NI recargo, los dos
+    # sumados sobre el neto (÷ 1,235 hoy). Hasta el 2026-09-24 era ÷ 1,18 y
+    # «P. Neto Salón» no cuadraba con el %Costo de la misma fila, que sí es
+    # el del sistema. El divisor es el MISMO que usa Nueva receta, y vive en
+    # `recetas_comun.divisor_neto` (regla #514). Se calcula ACÁ, antes del
+    # filtro de precios centinela de más abajo, así que un P.VENTA SALON
+    # centinela (~0) da un Precio Neto ~0 y no una división que reviente —
+    # el filtro de abajo igual lo saca de la tabla.
+    g["PrecioNeto"] = g["Precio"] / divisor_neto()
     # Fechas nativas del parquet, formateadas a texto DD/MM/AAAA (mismo
     # patrón que `graficos/compras/documentos_sunat.py`, columna "Fecha").
     if col_ult_venta:

@@ -87,13 +87,15 @@ from tema import (
 # cacheado` más abajo.
 from graficos.recetas_comun import (
     ARCHIVO_INVENTARIO as _ARCHIVO_INVENTARIO,
-    _activo, catalogo_insumos,
+    TASA_RECARGO, _activo, catalogo_insumos, divisor_neto, tasa_igv,
 )
 
 _ARCHIVO_RECETAVENTA = "recetaventa.parquet"
 _ZONA_LIMA = ZoneInfo("America/Lima")   # Cloud corre en UTC
-_IGV = 0.18       # 18 %
-_RECARGO = 0.10   # 10 % servicio, convención de restaurantes en Perú
+# IGV y recargo al consumo: los del SISTEMA, sumados sobre el neto (hoy
+# 10,5 % + 13 %, precio ÷ 1,235). Viven en `recetas_comun` porque
+# Composición usa la misma cuenta; regla #514.
+_RECARGO = TASA_RECARGO
 _UMBRAL_COSTO_OK = 30
 _UMBRAL_COSTO_WARN = 35
 
@@ -134,6 +136,11 @@ def _alto_tabla(modo):
 
 def _fmt(v):
     return f"S/ {v:,.2f}"
+
+
+def _tasa(t):
+    """0.105 → «10.5 %», 0.13 → «13 %»."""
+    return f"{round(t * 100, 2):g} %"
 
 
 def _key(modo, sufijo):
@@ -267,7 +274,9 @@ def _opciones_precomputadas(kind: str):
     d["nombre"] = d["nombre"].astype(str)
     d["unidad"] = d["unidad"].astype(str)
     d["precio_num"] = pd.to_numeric(d["precio"], errors="coerce").fillna(0.0)
-    d["precio_fmt"] = d["precio_num"].map(lambda p: f"S/ {p:,.2f}")
+    # Hasta 4 decimales: el catálogo de insumos va en unidad de COSTEO
+    # (S/ 0,0381 el gramo), y con 2 se leía «S/ 0.04».
+    d["precio_fmt"] = d["precio_num"].map(lambda p: f"S/ {_num(p)}")
     d["etiq"] = d["nombre"] + " · " + d["cod"] + " · " + d["unidad"] + " · " + d["precio_fmt"]
     if "activo" in d.columns:
         inactivo = d["activo"].apply(
@@ -426,12 +435,12 @@ def _cambios_vs_sistema(lineas, origen, pv=None):
     orig = origen["lineas"]
     n = 1 if pv is not None and abs(pv - origen["pv"]) > 0.004 else 0
     for l in lineas:
-        o = orig.get(l["cod"])
+        o = orig.get(l.get("sid"))
         if o is None:
             n += 1
         elif abs(l["cantidad"] - o[0]) > 1e-9 or abs(l["precio"] - o[1]) > 1e-9:
             n += 1
-    presentes = {l["cod"] for l in lineas}
+    presentes = {l.get("sid") for l in lineas}
     return n + sum(1 for c in orig if c not in presentes)
 
 
@@ -479,7 +488,7 @@ def _tabla_lineas(modo, origen=None):
         badges = []
         if l["tipo"] == "nuevo":
             badges.append("🆕 Nuevo")
-        elif origen and l["cod"] not in orig:
+        elif origen and l.get("sid") not in orig:
             badges.append("agregado")
         if l.get("activo") is False:
             badges.append("🔸 Inactivo")
@@ -491,7 +500,7 @@ def _tabla_lineas(modo, origen=None):
             "Unidad": l["unidad"],
         }
         if origen:
-            o = orig.get(l["cod"])
+            o = orig.get(l.get("sid"))
             cambio = o is not None and abs(l["cantidad"] - o[0]) > 1e-9
             fila["Antes"] = _tachado(_num(o[0])) if cambio else ""
         # Se MUESTRAN redondeados a 4 decimales; al leer de vuelta sólo
@@ -535,7 +544,7 @@ def _tabla_lineas(modo, origen=None):
             "Código": st.column_config.TextColumn("Cód.", width=64),
             "Producto": st.column_config.TextColumn("Producto", width=190),
             "Unidad": st.column_config.TextColumn(
-                "Und.", width=62, help="Unidad"),
+                "Und.", width=84, help="Unidad, tal cual la escribe el sistema"),
             "Antes": st.column_config.TextColumn(
                 "Antes", width=52,
                 help="Cantidad que tiene hoy el sistema, si la cambiaste"),
@@ -572,9 +581,10 @@ def _desglose(pv):
     envío por correo (`_resumen_envio`), y dos copias divergen."""
     if pv <= 0:
         return 0.0, 0.0, 0.0
-    base = pv / ((1 + _RECARGO) * (1 + _IGV))
-    m_recargo = base * _RECARGO
-    return base, m_recargo, (base + m_recargo) * _IGV
+    # Neto = precio ÷ divisor del sistema; IGV y recargo se calculan los
+    # dos sobre el neto, no uno encima del otro (así los cobra el POS).
+    base = pv / divisor_neto()
+    return base, base * _RECARGO, base * tasa_igv()
 
 
 def _botonera_tabla(modo, lineas, marcadas, origen=None):
@@ -624,10 +634,6 @@ def _botonera_tabla(modo, lineas, marcadas, origen=None):
         nota = ("Sin cambios respecto del sistema." if not cambios else
                 f"{cambios} {'cambio' if cambios == 1 else 'cambios'} "
                 "respecto del sistema.")
-        if origen["dup"]:
-            dup = ", ".join(origen["dup"])
-            nota += (f" {dup} {'venía' if len(origen['dup']) == 1 else 'venían'}"
-                     " en dos líneas; al importar se juntaron en una.")
         st.markdown(f'<div class="fr-nota">{html.escape(nota)}</div>',
                     unsafe_allow_html=True)
 
@@ -709,8 +715,8 @@ def _panel_precio(modo, costo, origen=None):
 
     st.markdown(
         '<div class="fr-cab"><span class="fr-titulo">Precio de venta</span>'
-        f'<span class="fr-sub">IGV {_IGV*100:.0f} % · recargo al consumo '
-        f'{_RECARGO*100:.0f} %</span></div>', unsafe_allow_html=True)
+        f'<span class="fr-sub">IGV {_tasa(tasa_igv())} · recargo al consumo '
+        f'{_tasa(_RECARGO)}, sobre el neto</span></div>', unsafe_allow_html=True)
 
     cols_cls = "fr-p-dos" if A else "fr-p-una"
     with st.container(key="form_receta_ptabla"):
@@ -755,8 +761,8 @@ def _panel_precio(modo, costo, origen=None):
         filas = [
             ("Precio neto (base)", "transparent", "base", False),
             ("Utilidad (neto − costo)", _COLOR_UTIL, "util", True),
-            (f"Recargo al consumo ({_RECARGO*100:.0f} %)", _COLOR_RECARGO, "recargo", False),
-            (f"IGV ({_IGV*100:.0f} %)", _COLOR_IGV, "igv", False),
+            (f"Recargo al consumo ({_tasa(_RECARGO)})", _COLOR_RECARGO, "recargo", False),
+            (f"IGV ({_tasa(tasa_igv())})", _COLOR_IGV, "igv", False),
         ]
         cuerpo = ""
         for concepto, color, campo, puede_neg in filas:
@@ -825,8 +831,8 @@ def _torta(modo, N, A):
     trozos = [
         ("Costo", T["costo"], _COLOR_COSTO),
         ("Utilidad", T["util"], _COLOR_UTIL),
-        (f"Recargo {_RECARGO*100:.0f} %", T["recargo"], _COLOR_RECARGO),
-        (f"IGV {_IGV*100:.0f} %", T["igv"], _COLOR_IGV),
+        (f"Recargo {_tasa(_RECARGO)}", T["recargo"], _COLOR_RECARGO),
+        (f"IGV {_tasa(tasa_igv())}", T["igv"], _COLOR_IGV),
     ]
     # `sort=False` y sentido horario desde las 12: el orden (y el color)
     # de cada trozo no salta de un precio a otro.
@@ -891,7 +897,7 @@ def _resumen_envio(tipo, nombre, autor, lineas, precio_venta):
         "lineas": [dict(l) for l in lineas],
         "costo_total": _total_lineas(lineas), "precio_venta": precio_venta,
         "base": base, "recargo": m_recargo, "igv": m_igv,
-        "pct_recargo": _RECARGO * 100, "pct_igv": _IGV * 100,
+        "pct_recargo": _RECARGO * 100, "pct_igv": tasa_igv() * 100,
     }
 
 
@@ -1093,16 +1099,18 @@ def _platos_sistema():
     su receta lista para cargar en la tabla.
 
     Cada plato trae nombre, subgrupo, precio de salón (`P.VENTA SALON`),
-    costo y sus líneas `{COD INS: (cantidad, precio unit.)}` en la unidad
-    de COSTEO del sistema (`UNID COSTO`, casi siempre gramos, con
-    `P.UNIT COSTO` por gramo) — no en la unidad de kardex del buscador:
-    es la que tiene la receta, y convertirla sería inventar un factor.
+    costo y sus líneas en la unidad de COSTEO del sistema (`UNID COSTO`:
+    GRAMOS, MILILITROS, ONZAS, UND…, con `P.UNIT COSTO` por esa unidad),
+    la misma en que el buscador ofrece los artículos del almacén
+    (`recetas_comun.catalogo_insumos`).
 
-    Sólo insumos activos, mismo criterio que el catálogo de Combo. Y un
-    insumo que el sistema trae en DOS líneas (Lomo a la Pimienta: Sal
-    Maldon ×2, 2026-09-24) se junta en una, sumando la cantidad: el costo
-    no cambia y la tabla no repite el código — que además es la clave con
-    la que se compara cada línea contra el sistema."""
+    Sólo insumos activos, mismo criterio que el catálogo de Combo. Las
+    líneas van TAL CUAL las trae el sistema, en su orden y con su unidad
+    escrita como allá («GRAMOS», «MILILITROS»): un insumo que la receta
+    trae en dos líneas (Lomo a la Pimienta: Sal Maldon ×2) queda en dos
+    líneas — a pedido, 2026-09-24. Por eso cada línea lleva `sid`, su
+    posición en la receta, y es con él (no con el código, que se repite)
+    que se compara contra el sistema."""
     df = _cargar_reporte(_ARCHIVO_RECETAVENTA)
     if df is None or df.empty:
         return {}
@@ -1138,28 +1146,20 @@ def _platos_sistema():
 
     platos = {}
     for cod, g in d.groupby("_cod", sort=False):
-        veces = g["_ins"].value_counts()
-        lineas = (g.groupby("_ins", sort=False)
-                  .agg(nombre=(c_ins_nom, "first"),
-                       unidad=("_und", "first"),
-                       cant=("_cant", "sum"), pu=("_pu", "first"))
-                  .reset_index())
-        lineas["sub"] = lineas["cant"] * lineas["pu"]
-        lineas = lineas.sort_values("sub", ascending=False)
+        lineas = [
+            {"sid": f"{cod}:{i}", "cod": ins, "nombre": str(nom),
+             "unidad": str(und).strip() or "unidad",
+             "cantidad": float(cant), "precio": float(pu)}
+            for i, (ins, nom, und, cant, pu) in enumerate(zip(
+                g["_ins"], g[c_ins_nom], g["_und"], g["_cant"], g["_pu"]))
+        ]
         platos[cod] = {
             "cod": cod,
             "nombre": str(g[c_nom].iloc[0]).strip(),
             "subgrupo": str(g[c_sub].iloc[0]) if c_sub else "",
             "pv": float(g["_pv"].iloc[0]),
-            "costo": float(lineas["sub"].sum()),
-            "lineas": [
-                {"cod": r["_ins"], "nombre": str(r["nombre"]),
-                 "unidad": str(r["unidad"]).strip().lower() or "unidad",
-                 "cantidad": float(r["cant"]), "precio": float(r["pu"])}
-                for _, r in lineas.iterrows()
-            ],
-            "dup": [str(g.loc[g["_ins"] == c, c_ins_nom].iloc[0])
-                    for c in veces[veces > 1].index],
+            "costo": sum(l["cantidad"] * l["precio"] for l in lineas),
+            "lineas": lineas,
         }
     return dict(sorted(platos.items(), key=lambda kv: kv[1]["nombre"].lower()))
 
@@ -1180,8 +1180,8 @@ def _importar(cod_plato, con_nombre=True):
     st.session_state[_key(modo, "origen")] = {
         "cod": plato["cod"], "nombre": plato["nombre"],
         "subgrupo": plato["subgrupo"], "pv": plato["pv"],
-        "costo": plato["costo"], "dup": list(plato["dup"]),
-        "lineas": {l["cod"]: (l["cantidad"], l["precio"]) for l in plato["lineas"]},
+        "costo": plato["costo"],
+        "lineas": {l["sid"]: (l["cantidad"], l["precio"]) for l in plato["lineas"]},
     }
     st.session_state[_key(modo, "pv")] = round(plato["pv"], 2)
     st.session_state.pop(_key(modo, "editor"), None)
