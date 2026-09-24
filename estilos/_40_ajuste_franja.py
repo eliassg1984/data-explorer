@@ -304,20 +304,9 @@ CSS = """    /* ================================================================
     /* la franja está oculto por pedido (app.py) — no queda nada adentro,  */
     /* solo la banda decorativa. A pedido (2026-08-24) se oculta ENTERA    */
     /* (:has() apaga el contenedor y con él su ::before, sin tocar Python) */
-    /* y en desktop se recorta el padding-top que el contenido reserva     */
-    /* para ella.                                                          */
-    /* Ese padding-top vive en navegacion.py y es GLOBAL — los 8 reportes  */
-    /* comparten --cab-offset-contenido, y test_graficos.py compara su     */
-    /* valor literal contra graficos/alturas.py::_CAB_OFFSET. Por eso el   */
-    /* recorte va ACÁ, scopeado con el mismo marker `app_reporte_<slug>`   */
-    /* que ya usa Compras (_20_compras_rail.py), y pisa el padding-top     */
-    /* directo — nunca la variable — para no desincronizar ese contrato    */
-    /* en los reportes que sí usan la franja.                              */
-    /* Solo desktop (min-width acá abajo): en móvil `_99_movil.py` ya deja */
-    /* la franja en 0 de flujo para TODOS los reportes, y los 108px de     */
-    /* padding-top de navegacion.py ahí reservan para otros fijos (pill de */
-    /* fecha, banda) que comparten presupuesto — recortarlos a ciegas, sin */
-    /* poder medir reporte por reporte, es más riesgo que la ganancia.     */
+    /* El padding-top de arriba es el GLOBAL de navegacion.py            */
+    /* (--cab-offset-contenido), igual que en los otros reportes: el     */
+    /* recorte propio que tuvieron hasta la #473 ya no existe (#513).     */
     /* Inventario Valorizado se suma el 2026-09-13, a pedido ("subamos las
        tarjetas, ya eliminamos los KPIs y sobra espacio arriba"): medido en
        1366x768, su franja reservaba 52px de alto con CERO hijos con altura
@@ -331,19 +320,15 @@ CSS = """    /* ================================================================
     [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado) .st-key-fila_ajuste_top {
         display: none !important;
     }
-    @media (min-width: 769px) {
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) [data-testid="stMainBlockContainer"],
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .stMainBlockContainer,
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_recetas) .block-container,
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado) [data-testid="stMainBlockContainer"],
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado) .stMainBlockContainer,
-        [data-testid="stAppViewContainer"]:has(.st-key-app_reporte_inventario_valorizado) .block-container {
-            /* --nav-top-alto (40px) despeja la barra de navegación fija;
-               +8px es el mismo respiro que usan _50_fecha.py/_40_ajuste_
-               franja.py para lo que ancla contra esa variable. */
-            padding-top: calc(var(--nav-top-alto) + 8px) !important;
-        }
-    }
+    /* Hasta el 2026-09-24 venía acá, además, un `padding-top: calc(
+       --nav-top-alto + 8px)` = 48px para estos dos reportes: era el
+       RECORTE de cuando la cabecera global reservaba más (la franja de
+       navegación ocupaba 40px fijos arriba). Desde la regla #473 la
+       cabecera reserva 20px y el recorte pasó a ser un AGREGADO: con
+       especificidad 0,3,0 le ganaba a la regla general y dejaba a Recetas
+       e Inventario 28px más abajo que el resto, con tarjetas que miden
+       --alto-util (calculado con 20) y se salían por abajo de la ventana.
+       Ahora heredan --cab-offset-contenido como todos. Regla #513. */
 
     /* Y aun sin franja, la primera tarjeta de Inventario arrancaba 68px
        mas abajo que la de Compras (96 contra 28, medido en 1366x768). No

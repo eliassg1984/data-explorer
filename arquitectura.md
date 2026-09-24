@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-512 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+513 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (177)
+**CSS y estilos** (178)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -211,6 +211,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#497** — Segundo pase del formulario Nueva receta: tarjeta blanca, botón «+» al costado del buscador,…
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
+- **#513** — Un recorte de padding-top scopeado a un reporte se vuelve un AGREGADO el día que la regla…
 
 **Layout y alturas** (73)
 
@@ -42208,6 +42209,43 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      `scope="fragment"` de `st.rerun`, porque `AppTest` corre la app
      entera en cada clic.
 
+513. **Un recorte de padding-top scopeado a un reporte se vuelve un
+     AGREGADO el día que la regla general baja por debajo de él: cuando
+     cambia `--cab-offset-contenido`, buscar los que la pisan.**
+     2026-09-24. Recetas y Costos e Inventario Valorizado arrancaban su
+     contenido en y=48 y el resto en y=20 (medido a 1366×657). La causa
+     era un `padding-top: calc(var(--nav-top-alto) + 8px) !important`
+     en `estilos/_40_ajuste_franja.py`, scopeado con
+     `:has(.st-key-app_reporte_recetas)` y el de inventario. Nació el
+     2026-08-24 como RECORTE: la cabecera global reservaba más y estos
+     dos reportes, que no tienen fecha ni franja propia, bajaban a 48.
+     La #473 llevó la reserva general a 20 y nadie volvió a mirar el
+     recorte: con especificidad 0,3,0 le seguía ganando a
+     `html body [data-testid="stMainBlockContainer"]` y ahora EMPUJABA
+     28px. Como `--alto-util` se calcula con 20, las tarjetas quedaban
+     del alto justo pero corridas: «Nueva receta» terminaba en y=661 con
+     una ventana de 657.
+
+     Se quitó el bloque entero (también de 769 a 900px, donde la
+     reserva general es 52 y el recorte dejaba 48: 4px, sin nada que lo
+     pida). El `display: none` de `.st-key-fila_ajuste_top` sigue: ése es
+     el que esconde la franja vacía. Medido después, sin el cartel del
+     modo demo: Recetas 20→633 (613 = `--alto-util`), Inventario 20,
+     Compras 18, Ventas 23; la franja en reposo es una tira de 12px
+     (`clip-path`), así que no tapa nada.
+
+     **Para la próxima:** pisar el padding-top directo —nunca la
+     variable— era lo correcto para no romper el contrato con
+     `alturas._CAB_OFFSET`, pero deja el valor fuera de la variable que
+     cambia. Al tocar `--cab-offset-contenido`, un
+     `grep -n "padding-top" estilos/` por los selectores con
+     `app_reporte_` encuentra estos restos.
+
+     Visto de paso y NO arreglado acá: entre 769 y 900px (medido a 850)
+     la primera tarjeta arranca en y≈210-260 en TODOS los reportes,
+     Compras incluido — los envoltorios de cromo de altura cero vuelven a
+     cobrar `gap` en ese tramo (#406, #472). Es otro cambio.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42220,7 +42258,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#512**; la próxima toma el número siguiente.
+> última regla es la **#513**; la próxima toma el número siguiente.
 
 >
 
