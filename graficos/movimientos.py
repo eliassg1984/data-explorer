@@ -1,15 +1,27 @@
 """
-graficos.movimientos — dashboard ÚNICO de Movimientos (requerimientos + salidas).
+graficos.movimientos — dashboard ÚNICO de Movimientos (requerimientos,
+salidas y porcionamientos).
 
-Una sola página con las SEIS vistas de los dos parquets del flujo de stock,
-que hasta el 2026-09-05 vivían repartidas en dos reportes que un chip
-Requerimiento/Salidas alternaba. A pedido, al ver que la Evolución ya
-mostraba los dos lados juntos: «esto ya no debería estar, ya que ahora
-muestra ambos».
+Una sola página con las SIETE vistas de los tres parquets del flujo de
+stock. Las de requerimientos y salidas vivían hasta el 2026-09-05 en dos
+reportes que un chip Requerimiento/Salidas alternaba. A pedido, al ver que
+la Evolución ya mostraba los dos lados juntos: «esto ya no debería estar, ya
+que ahora muestra ambos».
 
     Requerimientos (requerimientos)    Por período · Por sub almacén (la
                                        cadena de tablas) · Tabla
     Salidas (salidas.parquet)          Por período · Top productos · Tabla
+    Porcionamientos                    Porcionamientos (la merma por período)
+      (porcionamientos.parquet)
+
+QUÉ PASÓ EL 2026-09-24. Entró «Porcionamientos», a pedido y aprobada sobre
+un mockup: la MISMA tarjeta de las dos «por período», con un tercer `Lado`
+que en vez de un valorizado mide la MERMA EN SOLES de cada porcionamiento
+(`graficos/movimientos_periodo.py::tarjeta_porcionamientos_periodo`). Va
+como tercer grupo, al final. Su parquet lo carga la sección misma
+(`_cargar_porcionamientos_del_rango`) y lo recorta el chip «Sub Almacén»,
+no el de Familia: la consulta no trae la familia. Ver `arquitectura.md`
+regla #510.
 
 QUÉ PASÓ EL 2026-09-23. «Top productos · requerim.» se retiró a pedido y en
 su lugar —y primera de la pila— entró «Requerimientos por período»
@@ -109,7 +121,8 @@ from graficos.base import (
 )
 from graficos.movimientos_comun import _rango_vigente
 from graficos.movimientos_periodo import (
-    orden_areas, tarjeta_requerimientos_periodo, tarjeta_salidas_periodo,
+    orden_areas, tarjeta_porcionamientos_periodo,
+    tarjeta_requerimientos_periodo, tarjeta_salidas_periodo,
 )
 from graficos import alturas, drill_tablas
 
@@ -145,6 +158,10 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     ("Salidas", (("Salidas por período",     "Por período · sal.", ":material/calendar_view_week:"),
                  ("Top productos · salidas", "Top prod. · sal.",   ":material/leaderboard:"),
                  ("Tabla · salidas",         "Tabla · sal.",       ":material/table_view:"))),
+    # «Porcionamientos» (2026-09-24, regla #510): tercer grupo, al final, a
+    # pedido. Una sola vista, con el nombre que se pidió; el ícono son las
+    # tijeras del corte.
+    ("Porcionamientos", (("Porcionamientos", "Porcionamientos", ":material/content_cut:"),)),
 ))
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla
@@ -165,6 +182,7 @@ _PILA = pila_sin_tablas((
     ("mov_sec_sal_periodo", "Salidas por período"),
     ("mov_sec_top_sal",     "Top productos · salidas"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
+    ("mov_sec_porc",        "Porcionamientos"),
 ))
 
 
@@ -257,6 +275,57 @@ def _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel=()):
     if fam_sel and col_fam_sal and col_fam_sal in d.columns:
         d = d[d[col_fam_sal].astype(str).isin(fam_sel)]
     col_area = _resolver(d, _COLS_AREA_SALIDAS)
+    if sub_sel and col_area:
+        _elegidas = {str(s).strip() for s in sub_sel}
+        d = d[d[col_area].fillna("").astype(str).str.strip().isin(_elegidas)]
+    return d
+
+
+_COLS_PORC = {
+    "fecha": "FEC REGIST",
+    "doc": "COD PORC",
+    "area": "SUB ALMACEN",
+    "tipo": "USUARIO REG",
+    "prod": "PROD INICIAL",
+    "unid": "UNID PROD INIC",
+    "cant": "CANT A PORCIONAR",
+    "merma": "CANT MERMA",
+    "fin": "PROD FINAL RESULT",
+    "cant_fin": "CANT RESULT",
+    "unid_fin": "UNID PROD FIN",
+    "pprom": "PREC PROM PROD FIN",
+    "peso": "PESO RESULT",
+}
+"""Las columnas de `porcionamientos.parquet` (la fila 9 del Sheet de
+consultas, 2026-09-23) por el nombre que pide `lineas_porcionamientos`.
+`_resolver` compara sin mayúsculas ni espacios, así que «Fec Regist» (el
+demo de `data.py`) también las encuentra."""
+
+
+def _cargar_porcionamientos_del_rango(sub_sel=()):
+    """`porcionamientos.parquet` recortado al rango de la franja y al chip
+    «Sub Almacén», o None si no está o no trae su fecha.
+
+    El borde superior va como `< fin + 1 día` por lo mismo que salidas:
+    `FEC REGIST` trae hora (regla #321). EL CHIP «FAMILIA» NO RECORTA ESTA
+    SECCIÓN: la consulta no trae la familia del producto (se dejó para más
+    adelante, regla #510), y filtrar por un dato que no está sería vaciarla
+    en silencio. El de Sub Almacén sí: `SUB ALMACEN` es el mismo catálogo
+    de áreas (`vArea`) que el de requerimientos."""
+    df = _cargar_reporte("porcionamientos.parquet")
+    if df is None or df.empty:
+        return None
+    col_fecha = _resolver(df, _COLS_PORC["fecha"])
+    if not col_fecha:
+        return None
+    d = df.copy()
+    d["_fecha"] = pd.to_datetime(d[col_fecha], errors="coerce")
+    d = d.dropna(subset=["_fecha"])
+    rango = _rango_vigente()
+    if rango:
+        _ini, _fin = rango
+        d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
+    col_area = _resolver(d, _COLS_PORC["area"])
     if sub_sel and col_area:
         _elegidas = {str(s).strip() for s in sub_sel}
         d = d[d[col_area].fillna("").astype(str).str.strip().isin(_elegidas)]
@@ -468,6 +537,22 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
             else:
                 _tabla_salidas(d_sal)
 
+    def _dib_porc():
+        # El tercer parquet se carga ACÁ y no arriba con el de salidas: sólo
+        # hace falta cuando esta sección sale del esqueleto (la última de la
+        # pila). `data.cargar` lo cachea igual.
+        d_porc = _cargar_porcionamientos_del_rango(sub_sel)
+        if d_porc is None:
+            with st.container(border=True,
+                              key="ajuste_graf_card_izq_mov_porc_vacia"):
+                st.info("No se pudo cargar porcionamientos.parquet: esta "
+                        "sección queda vacía.")
+            return
+        tarjeta_porcionamientos_periodo(
+            d_porc, orden=orden,
+            cols={nombre: _resolver(d_porc, columna)
+                  for nombre, columna in _COLS_PORC.items()})
+
     _DIBUJANTES = {
         "mov_sec_periodo":     _dib_periodo,
         "mov_sec_cadena":      _dib_cadena,
@@ -475,6 +560,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         "mov_sec_sal_periodo": _dib_sal_periodo,
         "mov_sec_top_sal":     _dib_top_sal,
         "mov_sec_tabla_sal":   _dib_tabla_sal,
+        "mov_sec_porc":        _dib_porc,
     }
 
     # El contenedor con la key va AFUERA del fragment a propósito: es el que

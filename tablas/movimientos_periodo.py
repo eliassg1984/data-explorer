@@ -1,6 +1,12 @@
-"""tablas.movimientos_periodo - las tres grillas de las tarjetas «por
-período» de Movimientos (graficos/movimientos_periodo.py): la de
-requerimientos y la de salidas, que son la misma tarjeta con dos lados.
+"""tablas.movimientos_periodo - las grillas de las tarjetas «por período»
+de Movimientos (graficos/movimientos_periodo.py): la de requerimientos, la
+de salidas y la de porcionamientos, que son la misma tarjeta con tres lados.
+
+Porcionamientos (2026-09-24, regla #510) tiene sus propias tres grillas
+—`renderizar_periodos_porc`, `renderizar_porcionamientos_mov` y
+`renderizar_cortes_mov`— porque cuenta otras cosas: lo porcionado, la
+merma y su %, y los CORTES de un porcionamiento en vez de las líneas de un
+documento. El look y los formatos son los de abajo.
 
 Las tarjetas son gemelas de «Compra por período» (graficos/compras/
 semanal.py), y su zona de abajo también: «Resumen» —una fila por barra— y
@@ -316,6 +322,226 @@ def renderizar_documentos_mov(tp, altura, key, rotulo_tipo="", total=None):
     if sel is not None and not sel.empty:
         return str(sel.iloc[0]["__doc"])
     return None
+
+
+def _js_cant_con(campo_unidad):
+    """La cantidad de `_JS_CANT_MOV` con su unidad al lado, leída de una
+    columna oculta de la fila («21 kg», «25 und»). El número viaja crudo
+    para que la columna se ordene por número y no como texto."""
+    return JsCode(
+        "function(p){ var v = p.value;"
+        " if (typeof v !== 'number' || isNaN(v))"
+        "   return v == null ? (p.node && p.node.rowPinned ? '' : '—')"
+        "                    : String(v);"
+        f" var u = p.data && p.data['{campo_unidad}'] ? ' ' + p.data['{campo_unidad}'] : '';"
+        " return v.toLocaleString('es-PE', {minimumFractionDigits: 0,"
+        "                                   maximumFractionDigits: 3}) + u; }")
+
+
+_JS_CANT_UNID = _js_cant_con("__unid")
+_JS_PESO_UNID = _js_cant_con("__unid_ini")
+
+_JS_DIA = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'string' || v.length < 10 || v.charAt(4) !== '-')"
+    " return v == null ? '' : String(v);"
+    " return v.slice(8, 10) + '/' + v.slice(5, 7); }")
+_TIP_DIA_HORA = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'string' || v.length < 16) return '';"
+    " return v.slice(8, 10) + '/' + v.slice(5, 7) + '/' + v.slice(0, 4)"
+    " + ' ' + v.slice(11, 16); }")
+"""La lista de porcionamientos escribe sólo el DÍA («14/09») y deja la hora
+al tooltip: con siete columnas, tres de ellas nombres, la hora le quitaba al
+producto el ancho que necesita (medido a 1366px: «Magret De P…»). El valor
+sigue en ISO para que la columna se ordene por el tiempo."""
+
+
+def renderizar_periodos_porc(tp, altura, key, rotulo_periodo="Período",
+                             ver_variacion=True, total=None):
+    """El Resumen de PORCIONAMIENTOS: una fila por barra, en el orden del eje.
+
+    `tp` trae `periodo`, los números crudos `docs` (porcionamientos),
+    `cortes`, `areas`, `costo` (lo porcionado), `valor` (la merma: la
+    barra), `pm` (merma ÷ porcionado, 0-1), `parte` (0-1) y `variacion`, y
+    las ocultas de `renderizar_periodos_mov` salvo `__eclase`: no hay
+    columna Estado, la consulta trae sólo procesados (regla #510).
+
+    Devuelve la `__clave` de la fila seleccionada, o None — el mismo
+    contrato que `renderizar_periodos_mov`."""
+    gb = GridOptionsBuilder.from_dataframe(tp)
+    gb.configure_default_column(
+        resizable=False, sortable=True, filter=False, editable=False,
+        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
+    )
+    gb.configure_column("periodo", header_name=rotulo_periodo, minWidth=160,
+                        tooltipField="periodo")
+    gb.configure_column("docs", header_name="Porc.", type=["numericColumn"],
+                        valueFormatter=_JS_ENTERO,
+                        headerTooltip="Porcionamientos del período",
+                        width=80, minWidth=80, suppressSizeToFit=True)
+    gb.configure_column("cortes", header_name="Cortes", type=["numericColumn"],
+                        valueFormatter=_JS_ENTERO,
+                        headerTooltip="Productos que salieron de esos "
+                                      "porcionamientos",
+                        width=82, minWidth=82, suppressSizeToFit=True)
+    gb.configure_column("areas", header_name="Áreas", type=["numericColumn"],
+                        valueFormatter=_JS_ENTERO, tooltipField="__anota",
+                        headerTooltip="Cuántas áreas porcionaron. Cuáles, en "
+                                      "el tooltip de la celda",
+                        width=78, minWidth=78, suppressSizeToFit=True)
+    gb.configure_column("costo", header_name="Porcionado",
+                        type=["numericColumn"], valueFormatter=_JS_SOLES,
+                        headerTooltip="Costo de lo que entró a porcionar",
+                        width=124, minWidth=124, suppressSizeToFit=True)
+    gb.configure_column("valor", header_name="Merma",
+                        type=["numericColumn"], valueFormatter=_JS_SOLES,
+                        headerTooltip="Merma en soles: la parte de lo "
+                                      "porcionado que se perdió",
+                        width=116, minWidth=116, suppressSizeToFit=True)
+    gb.configure_column("pm", header_name="% merma", type=["numericColumn"],
+                        valueFormatter=_JS_PARTE,
+                        headerTooltip="Merma ÷ lo porcionado, en soles",
+                        width=94, minWidth=94, suppressSizeToFit=True)
+    gb.configure_column("parte", header_name="% del total",
+                        type=["numericColumn"], valueFormatter=_JS_PARTE,
+                        headerTooltip="Cuánto pesa esta barra en la merma "
+                                      "de la vista",
+                        width=104, minWidth=104, suppressSizeToFit=True)
+    gb.configure_column("variacion", header_name="Variación",
+                        hide=not ver_variacion, type=["numericColumn"],
+                        valueFormatter=_JS_VARIACION,
+                        cellStyle=_STYLE_VARIACION, tooltipField="__nota",
+                        headerTooltip="Variación de la merma contra la barra "
+                                      "ANTERIOR del gráfico, no contra el "
+                                      "período anterior del calendario",
+                        width=104, minWidth=104, suppressSizeToFit=True)
+    for oculta in ("__vtxt", "__nota", "__anota", "__clave", "__sel"):
+        if oculta in tp.columns:
+            gb.configure_column(oculta, hide=True)
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
+    gb.configure_grid_options(**_con_total(dict(
+        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
+        suppressCellFocus=True, rowClassRules=REGLAS_FILA,
+        onGridReady=_AL_MONTAR, onRowDataUpdated=_AL_CAMBIAR_FILAS), total))
+    grid_options = gb.build()
+    _parchar_iconos(grid_options)  # arquitectura.md #159
+
+    resp = AgGrid(
+        tp, gridOptions=grid_options, height=altura, theme="material",
+        custom_css=_css_mov(), allow_unsafe_jscode=True, key=key,
+        update_on=["selectionChanged"],
+    )
+    sel = resp.selected_rows
+    if sel is not None and not sel.empty and "__clave" in sel.columns:
+        return str(sel.iloc[0]["__clave"])
+    return None
+
+
+def renderizar_porcionamientos_mov(tp, altura, key, total=None):
+    """Una fila por PORCIONAMIENTO del período en foco.
+
+    `tp` trae `registro` (ISO, con hora), `prod` (el producto inicial),
+    `area`, `tipo` (el usuario), los números crudos `cant`, `pm` (0-1) y
+    `valor` (la merma en soles), y tres ocultas: `__unid` (la unidad de la
+    cantidad, ya corta), `__doc` (el código, que es lo que devuelve) y
+    `__sel`. Abre ordenada por merma, de mayor a menor.
+
+    Devuelve el `__doc` de la fila seleccionada, o None: la selección
+    vigente, como `renderizar_documentos_mov`."""
+    gb = GridOptionsBuilder.from_dataframe(tp)
+    gb.configure_default_column(
+        resizable=False, sortable=True, filter=False, editable=False,
+        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
+    )
+    gb.configure_column("registro", header_name="Fecha",
+                        valueFormatter=_JS_DIA,
+                        tooltipValueGetter=_TIP_DIA_HORA,
+                        headerTooltip="Día de registro (la hora, en el "
+                                      "tooltip)",
+                        width=74, minWidth=74, suppressSizeToFit=True)
+    gb.configure_column("prod", header_name="Producto inicial", width=220,
+                        minWidth=110, tooltipField="prod")
+    gb.configure_column("area", header_name="Área", width=96, minWidth=70,
+                        tooltipField="area")
+    gb.configure_column("tipo", header_name="Usuario", width=90, minWidth=70,
+                        tooltipField="tipo")
+    gb.configure_column("cant", header_name="Cantidad", type=["numericColumn"],
+                        valueFormatter=_JS_CANT_UNID,
+                        headerTooltip="Lo que entró a porcionar, en la unidad "
+                                      "del producto",
+                        width=96, minWidth=96, suppressSizeToFit=True)
+    gb.configure_column("pm", header_name="% merma", type=["numericColumn"],
+                        valueFormatter=_JS_PARTE,
+                        headerTooltip="Merma ÷ lo que entró",
+                        width=86, minWidth=86, suppressSizeToFit=True)
+    # `initialSort`, no `sort` (regla #471): el orden que elija el usuario
+    # sobrevive a que st_aggrid le vuelva a pasar las columnas.
+    gb.configure_column("valor", header_name="Merma", type=["numericColumn"],
+                        valueFormatter=_JS_SOLES, initialSort="desc",
+                        headerTooltip="Merma en soles",
+                        width=104, minWidth=104, suppressSizeToFit=True)
+    for oculta in ("__unid", "__doc", "__sel"):
+        gb.configure_column(oculta, hide=True)
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
+    gb.configure_grid_options(**_con_total(dict(
+        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
+        suppressCellFocus=True, rowClassRules=REGLAS_FILA,
+        onGridReady=_AL_MONTAR), total))
+    grid_options = gb.build()
+    _parchar_iconos(grid_options)  # arquitectura.md #159
+
+    resp = AgGrid(
+        tp, gridOptions=grid_options, height=altura, theme="material",
+        custom_css=_css_mov(), allow_unsafe_jscode=True, key=key,
+        update_on=["selectionChanged"],
+    )
+    sel = resp.selected_rows
+    if sel is not None and not sel.empty:
+        return str(sel.iloc[0]["__doc"])
+    return None
+
+
+def renderizar_cortes_mov(tp, altura, key, total=None):
+    """Los CORTES de un porcionamiento: `fin` (el producto que salió) y los
+    números crudos `cant` (en su unidad, `__unid`), `peso` (en la del
+    producto inicial, `__unid_ini`: sumado es lo aprovechado), `pprom` y
+    `valor`. Sin selección: se lee, no se clickea."""
+    gb = GridOptionsBuilder.from_dataframe(tp)
+    gb.configure_default_column(
+        resizable=False, sortable=True, filter=False, editable=False,
+        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
+    )
+    gb.configure_column("fin", header_name="Producto final", width=180,
+                        minWidth=100, tooltipField="fin")
+    gb.configure_column("cant", header_name="Cantidad", type=["numericColumn"],
+                        valueFormatter=_JS_CANT_UNID,
+                        width=96, minWidth=96, suppressSizeToFit=True)
+    gb.configure_column("peso", header_name="Peso", type=["numericColumn"],
+                        valueFormatter=_JS_PESO_UNID,
+                        headerTooltip="Lo que se llevó este corte, en la "
+                                      "unidad del producto inicial",
+                        width=90, minWidth=90, suppressSizeToFit=True)
+    gb.configure_column("pprom", header_name="P. prom.", type=["numericColumn"],
+                        valueFormatter=_JS_SOLES,
+                        headerTooltip="Costo por unidad del corte: incluye "
+                                      "su parte de la merma",
+                        width=96, minWidth=96, suppressSizeToFit=True)
+    gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
+                        valueFormatter=_JS_SOLES, initialSort="desc",
+                        width=108, minWidth=108, suppressSizeToFit=True)
+    for oculta in ("__unid", "__unid_ini"):
+        gb.configure_column(oculta, hide=True)
+    gb.configure_grid_options(**_con_total(dict(
+        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
+        suppressCellFocus=True, onGridReady=_AL_MONTAR), total))
+    grid_options = gb.build()
+    _parchar_iconos(grid_options)  # arquitectura.md #159
+
+    AgGrid(
+        tp, gridOptions=grid_options, height=altura, theme="material",
+        custom_css=_css_mov(), allow_unsafe_jscode=True, key=key, update_on=[],
+    )
 
 
 def renderizar_lineas_mov(tp, altura, key, total=None):

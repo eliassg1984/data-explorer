@@ -677,6 +677,15 @@ salidas el «sin procesar» no tiene ítems: sus líneas salen del kardex), y
 las dos IMPORTAN las cuentas de «Compras por período» (`semanal.py`): tocar
 una allá la cambia acá, a propósito. Reglas #508 y #509.
 
+La tercera, `porcionamientos.parquet`: **una fila por CORTE, con la cabecera
+del porcionamiento repetida en cada una** — sumar `CANT MERMA` por fila da
+x4,3 en el lomo fino. `graficos/movimientos_periodo.py::lineas_porcionamientos`
+toma la cabecera una vez por `COD PORC`, y la merma en soles sale de los
+cortes: Σ(`CANT RESULT` × `PREC PROM PROD FIN`) es lo que costó lo que
+entró (validado contra lo pagado en compras). Su tarjeta, «Porcionamientos»,
+es la tercera «por período» de Movimientos y la única que mide merma y no
+un valorizado. Regla #510.
+
 ## El eje temporal tiene TRES modos, y un solo dueño
 
 El calendario de la franja tiene tres modos: **Rango** (intervalo),

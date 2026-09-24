@@ -1281,8 +1281,9 @@ CSS = """    /* ================================================================
         /* por período) salió al nacer, el 2026-09-23: es la gemela de        */
         /* Semanal y mide lo que ella (`alturas.SEMANAL_*`), con la figura    */
         /* cediéndole su sitio a la tabla. Regla #508. Y su hermana de        */
-        /* salidas, `…_mov_sal_periodo`, el mismo día. Regla #509.            */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo),
+        /* salidas, `…_mov_sal_periodo`, el mismo día. Regla #509. Y la de    */
+        /* porcionamientos, `…_mov_porc_periodo`, el 2026-09-24. Regla #510.  */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1298,7 +1299,8 @@ CSS = """    /* ================================================================
         /* son contenido. Sin tarjeta interna, acá no hay 5px que restar.    */
         div.st-key-ajuste_graf_card_izq_sem,
         div.st-key-ajuste_graf_card_izq_mov_periodo,
-        div.st-key-ajuste_graf_card_izq_mov_sal_periodo {
+        div.st-key-ajuste_graf_card_izq_mov_sal_periodo,
+        div.st-key-ajuste_graf_card_izq_mov_porc_periodo {
             padding-top: 16px !important;
             padding-bottom: 16px !important;
         }

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-509 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+510 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (177)
 
@@ -613,7 +613,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#502** — «Que el correo salga con MI dirección» no se resuelve mandando desde el servidor: se abre el…
 - **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
 
-**Datos, R2 y DuckDB** (60)
+**Datos, R2 y DuckDB** (61)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -675,6 +675,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#499** — Quinto pase de Nueva receta: @st.fragment para que el «+» responda en 100 ms y no en un…
 - **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
 - **#509** — «Salidas por período» es la MISMA tarjeta que la de requerimientos, con otro Lado. El área…
+- **#510** — «Porcionamientos» es la tercera tarjeta «por período» y la primera que no mide un valorizado:…
 
 **SUNAT y SIRE** (43)
 
@@ -783,7 +784,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (98)
+**Decisiones de diseño y UX** (99)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -883,6 +884,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#501** — Ajuste › Tiempo es UNA vista (Evolución): la serie divergente, los mini-gráficos por familia…
 - **#504** — Lo que depende va en UNA tarjeta; lo que no, a su propia vista — y el filtro activo se ESCRIBE
 - **#507** — Las vistas «Tabla» están OCULTAS hasta nuevo aviso: un interruptor…
+- **#510** — «Porcionamientos» es la tercera tarjeta «por período» y la primera que no mide un valorizado:…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -39842,7 +39844,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      inline. La de Resumen es hija de un bloque normal, así que se le dice
      `display: block` a mano (`.st-key-cp_sem_resumen .stCustomComponentV1`
      en `graficos/compras/_css_proveedor.py`). Es el mismo modo de fallo
-     de los 7.6px que no se ven a ojo y sí en la suma de la tarjeta.
+     de los 7.6px que no se ven a ojo y sí en la suma de la tarjeta. (Ojo:
+     en las tarjetas «por período» de Movimientos lo del flex NO se
+     cumplió — cada columna es `display: block` y el Detalle tenía el
+     hueco; medido y corregido en la #510. Esta no se volvió a medir.)
 
      **EL MODO SE LEE DE `session_state`, NO DEL WIDGET.** El toggle se
      dibuja DEBAJO de la figura —que es donde gobierna: la cabecera dice
@@ -41916,6 +41921,85 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      ANTES de que el usuario la pegue en la hoja: un nombre mal escrito no da
      error hasta que corre la extracción.
 
+510. **«Porcionamientos» es la tercera tarjeta «por período» y la primera
+     que no mide un valorizado: la barra es la MERMA EN SOLES. Y su parquet
+     trae la cabecera del porcionamiento REPETIDA en cada corte: la
+     cantidad y la merma se toman una vez por código, nunca por fila.**
+     2026-09-24, a pedido: «agrega como una vista "Porcionamientos", quizás
+     pueda manejar el mismo diseño, estilo, funcionalidad e interacción que
+     tengo con mi vista por período». Se aprobó sobre un mockup con los
+     datos reales («vamos con tu sugerencia, no incluyamos la subfamilia
+     por ahora»). Va como tercer grupo del rail, al final.
+
+     **La consulta** es la fila 9 del Sheet, con `nombre` en PLURAL:
+     `porcionamientos`. El refresco pide el archivo por ese nombre exacto, y
+     dos pedidos de `porcionamiento.parquet` volvieron «[omitida]» del
+     servidor antes de encontrarlo con `Extraer a parquet.py --probar`, que
+     lista cómo ve el extractor cada fila. Trae sólo el estado 02
+     (Procesado), el criterio de `SpReporteMerma`, el reporte de merma del
+     propio Almacén: un porcionamiento anulado conserva su fila, con otro
+     estado y `fAnula`.
+
+     **El grano.** Una fila por CORTE —cada producto que salió—, con la
+     cabecera repetida en cada una: 1,61 filas por porcionamiento en
+     promedio, hasta 7. Sumar `CANT MERMA` por fila la multiplica: medido
+     sobre el histórico, el lomo fino da 5.734 kg contra 1.342 reales
+     (x4,3). `lineas_porcionamientos` toma la cabecera UNA vez por
+     `COD PORC` y devuelve los cortes aparte, con la forma de
+     `lineas_documentos` para que el resto de la tarjeta no distinga el
+     lado. Es la #198 con otra cara: una columna del grupo, repetida en la
+     fila.
+
+     **El costo sale de los cortes.** El Almacén le carga a cada corte su
+     parte del costo del producto inicial —merma incluida—, así que
+     Σ(`CANT RESULT` × `PREC PROM PROD FIN`) ES lo que costó lo que entró.
+     Validado contra lo pagado en compras.parquet en los 60 días previos,
+     sobre 2.666 porcionamientos del último año: mediana 1,00, p10 0,91,
+     p90 1,10, el 82 % dentro de ±10 %. La merma en soles es `costo × merma
+     ÷ cantidad`. En los últimos 12 meses: S/ 223.456 de S/ 1,02 millones
+     porcionados (21,9 %).
+
+     **Lo que cambia contra sus gemelas lo decide `Lado.merma`, y son cinco
+     cosas:** cómo se leen las filas; el segundo renglón de la etiqueta,
+     que es el % de merma y no la cuenta (una semana con más
+     porcionamientos pierde más soles sin que se trabaje peor); la KPI
+     «Porcionado» al final de la fila, con el % PROPIO de cada área en su
+     tooltip —Producción concentra el 89 % de la merma porque porciona casi
+     todo, pero Cocina y Barra pierden el 43 % y el 48 % de lo que
+     porcionan, contra el 22 % de Producción—; y las grillas del Resumen y
+     del Detalle, que listan porcionamientos y sus cortes
+     (`tablas/movimientos_periodo.py`). El hueco del tipo de descargo lo
+     ocupa el Usuario que porcionó, y no hay Familia: la consulta no la
+     trae (`Lado.con_familia`). Por lo mismo el chip «Familia» de la franja
+     no recorta esta sección; el de «Sub Almacén» sí, porque `SUB ALMACEN`
+     es el mismo catálogo `vArea` — la única área que no está en
+     requerimientos es ALMACEN CENTRAL, que no pide.
+
+     **Un hueco de 7,6px que tenían las tres.** Al pasar de Resumen a
+     Detalle la tarjeta crecía 7,6px. Es el descendente de la #476, que el
+     molde ya le quitaba al Resumen con un comentario que decía que las
+     grillas del Detalle no lo necesitaban porque «viven en un
+     `st.columns`, que es flex». Medido en estas tarjetas: la FILA es flex,
+     pero cada columna es `display: block` y adentro el iframe vuelve a ser
+     inline — la zona medía 198,6 para grillas de 191. El molde se lo quita
+     ahora también al Detalle (`_CSS_MOLDE`, `…_detalle
+     .stCustomComponentV1`), y con eso a las tres tarjetas: Resumen y
+     Detalle miden los dos 628,6. (La de «Compras por período», de la que
+     sale la #476, no se volvió a medir.) Y la lista de porcionamientos escribe
+     sólo el día, con la hora en el tooltip, y toma 1,3 del ancho contra 1
+     de los cortes: a 1366px, con la hora y el reparto de las gemelas, el
+     producto, el área y el usuario salían en «Prod…».
+
+     La guarda es `test_graficos.py::_pruebas_movimientos_periodo`, que
+     sumó el lado de porcionamientos: la cabecera una vez, el costo por los
+     cortes, la merma en soles, el Resumen por nombre de columna, el
+     renglón del %, la KPI y los cortes.
+
+     **Para la próxima:** antes de mirar un parquet nuevo del Sheet, mirar
+     su grano —`count(DISTINCT columna)` por código—, y si un refresco
+     vuelve «[omitida]», el problema es el nombre de la fila, no la
+     consulta: `--probar` lo dice en un minuto.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -41928,7 +42012,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#509**; la próxima toma el número siguiente.
+> última regla es la **#510**; la próxima toma el número siguiente.
 
 >
 

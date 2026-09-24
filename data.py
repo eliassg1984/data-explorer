@@ -210,8 +210,10 @@ REPORTES = {
         # el boton de refresco sepa que hay mas de un parquet detras del
         # reporte - sin ella, "Refrescar" dejaria las salidas viejas y no
         # habria forma de actualizarlas desde la UI. Ver
-        # navegacion.py::boton_refresco.
-        "archivos_extra": ("salidas.parquet",),
+        # navegacion.py::boton_refresco. El TERCERO, porcionamientos.parquet,
+        # llego el 2026-09-24 con la seccion "Porcionamientos" (regla #510):
+        # lo carga la seccion misma, y va aca por lo mismo que salidas.
+        "archivos_extra": ("salidas.parquet", "porcionamientos.parquet"),
         "icono": ":material/sync_alt:",
         "kpis": (("Valorizado", "VALOR ITEM", "sum"),
                  ("Requerim.", "COD REQUERIMIENTO", "count_distinct")),
@@ -590,6 +592,64 @@ def _datos_demo(archivo, filas=60):
             "Cant Salida": cant,
         })
         df["Valor Neto"] = (cant * precio).round(2)
+        return df
+
+    if archivo == "porcionamientos.parquet":
+        # El GRANO REAL, que es la trampa de este parquet (regla #510): una
+        # fila por CORTE —cada producto que salió—, con la cabecera del
+        # porcionamiento repetida en cada una. Y los cuadres del real:
+        # cantidad = aprovechado + merma, los pesos de los cortes suman lo
+        # aprovechado, y cantidad × precio de los cortes suma el costo de lo
+        # que entró. Mismas fechas y áreas que el demo de requerimientos,
+        # para que se vea con el rango de la franja y los mismos colores.
+        _insumos = [("P00001", "Lomo fino entero x Kg", 65.0,
+                     [("Lomo fino porción 180 gr", "UND", 0.18),
+                      ("Recorte de lomo x Kg", "KILOS", 1.0)]),
+                    ("P00002", "Entraña fina importada x Kg", 108.0,
+                     [("Entraña porción 250 gr", "UND", 0.25)]),
+                    ("P00003", "Chirimoya", 8.0,
+                     [("(P) Pulpa de chirimoya x Kg", "KILOS", 1.0)]),
+                    ("P00004", "Pulpo fresco entero x Kg", 55.0,
+                     [("Pulpo limpio x Kg", "KILOS", 1.0),
+                      ("Tentáculo de pulpo x Kg", "KILOS", 1.0)])]
+        filas = []
+        for i, fecha in enumerate(pd.date_range("2025-01-01", periods=n,
+                                                freq="D")):
+            cod, nombre, precio, salen = _insumos[int(rng.integers(0, 4))]
+            cant = float(rng.uniform(2, 25).round(3))
+            merma = round(cant * float(rng.uniform(0.08, 0.45)), 3)
+            util = round(cant - merma, 3)
+            costo = cant * precio
+            partes = rng.dirichlet(np.ones(len(salen)))
+            for (fin, unid_fin, kg_unidad), parte in zip(salen, partes):
+                peso = round(util * float(parte), 3)
+                cant_fin = (round(peso / kg_unidad) if unid_fin == "UND"
+                            else peso) or 1
+                filas.append({
+                    "COD PORC": f"25{fecha.month:02d}{i:06d}",
+                    "COD PROD INIC": cod, "PROD INICIAL": nombre,
+                    "FEC REGIST": fecha + pd.Timedelta(
+                        minutes=int(rng.integers(420, 1200))),
+                    "USUARIO REG": rng.choice(["CARLOS", "MMASIAS",
+                                               "MQUISPE"]),
+                    "UNID PROD INIC": "KILOS",
+                    "CANT A PORCIONAR": cant, "CANT TOT RESUL": util,
+                    "CANT MERMA": merma, "COD AREA": "003",
+                    "SUB ALMACEN": rng.choice(["Producción", "Cocina",
+                                               "Bar"], p=[0.7, 0.2, 0.1]),
+                    "COD PROD FINAL": f"F{cod[1:]}{len(filas):03d}",
+                    "PROD FINAL RESULT": fin, "CANT RESULT": cant_fin,
+                    "UNID PROD FIN": unid_fin,
+                    "PREC PROM PROD FIN": round(costo * float(parte)
+                                                / cant_fin, 4),
+                    "PESO RESULT": peso,
+                })
+        df = pd.DataFrame(filas)
+        # La cabecera es UNA por porcionamiento: el área y el usuario del
+        # primer corte valen para todos (en el real no cambian de un corte a
+        # otro, y un demo que los mezclara enseñaría otra cosa).
+        for col in ("SUB ALMACEN", "USUARIO REG"):
+            df[col] = df.groupby("COD PORC")[col].transform("first")
         return df
 
     if archivo == "requerimientos.parquet":

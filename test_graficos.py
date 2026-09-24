@@ -5493,6 +5493,117 @@ def _pruebas_movimientos_periodo():
           (".st-key-mps_fila" in mp._css(mp.SALIDAS),
            ".st-key-mov_psal_gran" in mp._css(mp.SALIDAS),
            "__C__" in mp._css(mp.SALIDAS)), (True, True, False))
+
+    # ── PORCIONAMIENTOS: una fila por CORTE, la cabecera repetida (#510) ──
+    # P1 (Producción, 10 kg de lomo, 2 de merma) salió en TRES cortes: la
+    # cantidad y la merma vienen repetidas en las tres filas. Sus cortes
+    # cuestan 400 + 100 + 100 = 600, lo que costó lo que entró; la merma en
+    # soles es 600 × 2 ÷ 10 = 120. P2 (Cocina, 4 kg de limón, 2 de merma)
+    # cuesta 8 → merma 4. P3, de la semana siguiente (Barra, 2 kg de pulpo,
+    # 0,5 de merma): cuesta 60 → merma 15.
+    dp = pd.DataFrame({
+        "COD PORC": ["P1", "P1", "P1", "P2", "P3"],
+        "FEC REGIST": pd.to_datetime(
+            ["2026-09-08 09:00"] * 3 + ["2026-09-09 10:00",
+                                        "2026-09-15 11:00"]),
+        "SUB ALMACEN": ["PRODUCCION"] * 3 + ["COCINA ", "BARRA"],
+        "USUARIO REG": ["CARLOS"] * 3 + ["MMASIAS", "CARLOS"],
+        "PROD INICIAL": ["Lomo"] * 3 + ["Limon", "Pulpo"],
+        "UNID PROD INIC": ["KILOS"] * 5,
+        "CANT A PORCIONAR": [10.0] * 3 + [4.0, 2.0],
+        "CANT MERMA": [2.0] * 3 + [2.0, 0.5],
+        "PROD FINAL RESULT": ["Lomo porción", "Lomo recorte", "Lomo cabeza",
+                              "Jugo", "Pulpo limpio"],
+        "CANT RESULT": [20.0, 2.0, 1.0, 2.0, 1.5],
+        "UNID PROD FIN": ["UND", "KILOS", "KILOS", "LITROS", "KILOS"],
+        "PREC PROM PROD FIN": [20.0, 50.0, 100.0, 4.0, 40.0],
+        "PESO RESULT": [5.0, 2.0, 1.0, 2.0, 1.5],
+    })
+    cp = dict(fecha="FEC REGIST", doc="COD PORC", area="SUB ALMACEN",
+              tipo="USUARIO REG", prod="PROD INICIAL", unid="UNID PROD INIC",
+              cant="CANT A PORCIONAR", merma="CANT MERMA",
+              fin="PROD FINAL RESULT", cant_fin="CANT RESULT",
+              unid_fin="UNID PROD FIN", pprom="PREC PROM PROD FIN",
+              peso="PESO RESULT")
+    bp, cortes = mp.lineas_porcionamientos(dp, **cp)
+    check("porc.: UNA fila por porcionamiento, no una por corte",
+          bp["doc"].tolist(), ["P1", "P2", "P3"])
+    check("porc.: la merma de la cabecera se toma UNA vez (sumada por fila "
+          "daría 6 kg en P1, no 2)",
+          (bp.loc[bp["doc"] == "P1", "merma_cant"].tolist(),
+           float(dp.loc[dp["COD PORC"] == "P1", "CANT MERMA"].sum())),
+          ([2.0], 6.0))
+    check("porc.: el costo es la suma de los cortes; la merma en soles, su "
+          "parte", (bp["costo"].tolist(), bp["valor"].tolist()),
+          ([600.0, 8.0, 60.0], [120.0, 4.0, 15.0]))
+    check("porc.: cortes contados y área limpia",
+          (bp["cortes"].tolist(), bp["area"].tolist()),
+          ([3, 1, 1], ["PRODUCCION", "COCINA", "BARRA"]))
+    check("porc.: el usuario viaja como el «tipo» del lado",
+          bp["tipo"].tolist(), ["CARLOS", "MMASIAS", "CARLOS"])
+    check("porc.: los cortes, uno por fila, con su valor",
+          (len(cortes), float(cortes.loc[cortes["doc"] == "P1", "valor"].sum())),
+          (5, 600.0))
+    bp["clave"] = _periodo_serie(bp["fecha"], "Semana")
+    rp = mp.resumen_por_periodo(bp)
+    check("porc.: el Resumen suma lo porcionado y los cortes, por nombre",
+          rp.loc["2026-S37", ["valor", "docs", "costo", "cortes", "areas"]]
+            .tolist(),
+          [124.0, 2, 608.0, 4, 2])
+    check("porc.: nada queda fuera de las barras",
+          (mp.no_suman(bp), mp.nota_no_suman(bp, mp.PORCIONAMIENTOS)),
+          ((0, 0, 0), None))
+    vp = mp.vista_periodos(bp, "Semana", rango, orden, mp.PORCIONAMIENTOS)
+    fp, tp_ = mp.tabla_resumen_porc(vp, foco="2026-S37")
+    check("porc.: el Resumen, por nombre de columna",
+          (fp["docs"].tolist(), fp["cortes"].tolist(), fp["costo"].tolist(),
+           fp["valor"].tolist(), [round(x, 4) for x in fp["pm"]],
+           fp["__sel"].tolist()),
+          ([2, 1], [4, 1], [608.0, 60.0], [124.0, 15.0], [0.2039, 0.25],
+           [True, False]))
+    check("porc.: el total del Resumen dice el % de merma de la vista",
+          (tp_["docs"], tp_["cortes"], tp_["costo"], tp_["valor"], tp_["pm"]),
+          ("3", "5", "S/ 668.00", "S/ 139.00", "20.8%"))
+    fig_p = mp.figura_periodos(vp, alturas.SEMANAL_SOLO)
+    # La etiqueta va en el tramo de ARRIBA de cada barra, que no es el mismo
+    # trazo en las dos semanas: se juntan todas antes de mirar.
+    etq = " ".join(t for tr in fig_p.data for t in (tr.text or []) if t)
+    check("porc.: el 2º renglón de la etiqueta es el % de merma, no la cuenta",
+          ("20% merma" in etq, "25% merma" in etq, "porc." in etq),
+          (True, True, False))
+    check("porc.: el hover cuenta porcionamientos y cortes",
+          "2 porc. · 4 cortes" in str(fig_p.data[-1].customdata[0][3]), True)
+    amb_p = bp[bp["clave"] == "2026-S37"]
+    check("porc.: el Detalle abre en el de mayor merma", mp._mayor_valido(amb_p),
+          "P1")
+    fd_p, td_p = mp.tabla_porcionamientos(amb_p, "P1")
+    check("porc.: la lista, con la unidad aparte y el % por porcionamiento",
+          (fd_p["__unid"].tolist(), fd_p["pm"].tolist(), fd_p["valor"].tolist(),
+           td_p["prod"], td_p["pm"], td_p["valor"]),
+          (["kg", "kg"], [0.2, 0.5], [120.0, 4.0], "2 porc.", "20.4%",
+           "S/ 124.00"))
+    fc_p, tc_p = mp.tabla_cortes(cortes[cortes["doc"] == "P1"], "KILOS")
+    check("porc.: los cortes de P1, del más caro al más barato, y el peso "
+          "útil en la unidad del inicial",
+          (fc_p["fin"].tolist()[0], fc_p["__unid"].tolist()[0],
+           tc_p["peso"], tc_p["valor"]),
+          ("Lomo porción", "und", "8 kg", "S/ 600.00"))
+    kpi_p = mp._html_kpi(139.0, 3, vp["trazas"], None, None,
+                         mp.PORCIONAMIENTOS, costo=668.0,
+                         costo_area={"PRODUCCION": 600.0})
+    check("porc.: la fila de KPI abre con la merma y cierra con lo porcionado",
+          ("Merma de la vista" in kpi_p, "Porcionado" in kpi_p,
+           "20.8% merma" in kpi_p,
+           "su merma es el 20.0% de lo que porcionó" in kpi_p),
+          (True, True, True, True))
+    check("porc.: unidades cortas y cantidades con sus decimales",
+          (mp.unidad_corta("KILOS"), mp.unidad_corta("UND"),
+           mp.unidad_corta("CAJA"), mp.fmt_cant(12.175), mp.fmt_cant(21.0)),
+          ("kg", "und", "caja", "12.175", "21"))
+    check("porc.: el CSS sale del molde con SUS prefijos",
+          (".st-key-mpp_fila" in mp._css(mp.PORCIONAMIENTOS),
+           ".st-key-mov_pporc_gran" in mp._css(mp.PORCIONAMIENTOS)),
+          (True, True))
     return fallos
 
 
