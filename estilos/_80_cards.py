@@ -1276,7 +1276,12 @@ CSS = """    /* ================================================================
         /* `auto`, así que con techo la tabla se volvía ÉL el scroller y la   */
         /* fila Total se partía (reportado con captura); y el detalle abre    */
         /* DENTRO, con lo que un techo le daría barra propia. Regla #468.     */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo),
+        /*                                                                    */
+        /* `ajuste_graf_card_izq_mov_periodo` (Movimientos › Requerimientos   */
+        /* por período) salió al nacer, el 2026-09-23: es la gemela de        */
+        /* Semanal y mide lo que ella (`alturas.SEMANAL_*`), con la figura    */
+        /* cediéndole su sitio a la tabla. Regla #508.                        */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1290,7 +1295,8 @@ CSS = """    /* ================================================================
         /* Semanal, el mismo padding que vap por el mismo motivo (#398): 8   */
         /* de la familia contra 16 de vap son píxeles de diferencia que no   */
         /* son contenido. Sin tarjeta interna, acá no hay 5px que restar.    */
-        div.st-key-ajuste_graf_card_izq_sem {
+        div.st-key-ajuste_graf_card_izq_sem,
+        div.st-key-ajuste_graf_card_izq_mov_periodo {
             padding-top: 16px !important;
             padding-bottom: 16px !important;
         }

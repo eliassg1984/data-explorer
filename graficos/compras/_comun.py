@@ -347,7 +347,7 @@ def _fmt_variacion(pct):
     return ("+" + txt, ERROR) if pct > 0 else ("−" + txt, EXITO)
 
 
-def _hover_variacion(var, gran, clave, nombre_ant, rango):
+def _hover_variacion(var, gran, clave, nombre_ant, rango, sustantivo="compras"):
     """El renglón del hover que dice la variación, o POR QUÉ no la hay.
 
     Empieza con `<br>` (o es vacío), listo para colgar de un
@@ -357,7 +357,11 @@ def _hover_variacion(var, gran, clave, nombre_ant, rango):
 
     NO filtra por granularidad: quien no quiera variación en una pasa
     `None` en `var` (que es lo que hace Semanal con «Año», donde su rango de
-    entrada da una sola barra)."""
+    entrada da una sola barra).
+
+    `sustantivo` es lo que la barra suma, para el caso «no suma …»: lo usa
+    también Movimientos › Requerimientos por período (2026-09-23), cuyas
+    barras suman requerimientos y no compras."""
     if not var:
         return ""
     estado, pct, _ = var
@@ -373,7 +377,7 @@ def _hover_variacion(var, gran, clave, nombre_ant, rango):
         return (f"<br><i>Sin variación: la barra anterior ({nombre_ant}) "
                 "está incompleta en el rango</i>")
     if estado == "sin_base":
-        return f"<br><i>Sin variación: {nombre_ant} no suma compras</i>"
+        return f"<br><i>Sin variación: {nombre_ant} no suma {sustantivo}</i>"
     return "<br><i>Primera barra del rango: sin anterior para comparar</i>"
 
 
@@ -392,7 +396,7 @@ def _clave_grilla(*partes):
     return hashlib.md5(txt.encode("utf-8")).hexdigest()[:10]
 
 
-def _nota_variacion(var, gran, clave, nombre_ant, rango):
+def _nota_variacion(var, gran, clave, nombre_ant, rango, sustantivo="compras"):
     """Lo mismo que `_hover_variacion`, en texto PLANO: es el `tooltipField`
     de la columna «Variación» de las tablas (regla #476).
 
@@ -414,7 +418,7 @@ def _nota_variacion(var, gran, clave, nombre_ant, rango):
         return (f"Sin variación: la barra anterior ({nombre_ant}) está "
                 "incompleta en el rango")
     if estado == "sin_base":
-        return f"Sin variación: {nombre_ant} no suma compras"
+        return f"Sin variación: {nombre_ant} no suma {sustantivo}"
     return "Primera barra del rango: sin anterior para comparar"
 
 

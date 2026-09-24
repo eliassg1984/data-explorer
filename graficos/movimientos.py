@@ -7,9 +7,18 @@ Requerimiento/Salidas alternaba. A pedido, al ver que la Evolución ya
 mostraba los dos lados juntos: «esto ya no debería estar, ya que ahora
 muestra ambos».
 
-    Requerimientos (requerimientos)    Por sub almacén (la cadena de tablas)
-                                       Top productos · Tabla
+    Requerimientos (requerimientos)    Por período · Por sub almacén (la
+                                       cadena de tablas) · Tabla
     Salidas (salidas.parquet)          Tipo de descargo · Top productos · Tabla
+
+QUÉ PASÓ EL 2026-09-23. «Top productos · requerim.» se retiró a pedido y en
+su lugar —y primera de la pila— entró «Requerimientos por período»
+(`graficos/movimientos_periodo.py`): la gemela de «Compras por período»,
+con las barras partidas por área, un Resumen de una fila por barra y el
+Detalle de los requerimientos de la que se toque. El top de productos no se
+perdió: es un recorte de esa tarjeta («Top 5/10/20 por valor» en su selector
+de Producto) y sigue la tabla de productos al pie de «Por sub almacén».
+Ver `arquitectura.md` regla #508.
 
 QUÉ PASÓ EL 2026-09-13. La página abría con TRES gráficos —Evolución
 (requerido vs dado de baja), Proporción dada de baja y el ranking de Sub
@@ -62,13 +71,16 @@ Las dos Tablas NO se dibujan igual, y no es un descuido:
     que los dos comportamientos se conservan tal cual estaban.
 
 QUÉ EXCLUYE CADA SECCIÓN, que es donde la página puede contradecirse:
-NINGUNA descarta hoy los comprobantes ANULADOS. Las dos que sí lo hacían
-eran las de «Ambos», que se retiraron el 2026-09-13; las seis que quedan
-miran el mismo `d` post-chips, así que el valorizado que dicen es el mismo
-en la cadena de tablas, en el Top de productos y en la Tabla pivote. Son
-S/ 174.939 de S/ 8.481.700 (2,1%, medido contra R2 el 2026-09-13). No se
-cambió acá porque es la conducta que estas seis ya tenían y mover números
-que nadie pidió mover es otra decisión; queda anotado en la regla #322.
+UNA SOLA descarta los comprobantes ANULADOS, y lo dice: «Requerimientos por
+período» (2026-09-23, a pedido), que tampoco cuenta los requerimientos SIN
+ÍTEMS —una línea sin producto ni valor— y nombra los dos en su fila de KPI
+(regla #508). Las demás miran el mismo `d` post-chips con anulados
+incluidos, así que su valorizado es el mismo en la cadena de tablas y en la
+Tabla pivote. Los anulados son S/ 174.939 de S/ 8.481.700 en el histórico
+(2,1%, medido contra R2 el 2026-09-13) y S/ 15.868 en 2026 (0,9%): lo que
+puede separar el total de la tarjeta nueva del de «Por sub almacén». Las
+otras no se cambiaron porque mover números que nadie pidió mover es otra
+decisión; queda anotado en la regla #322.
 
 Punto de entrada público: renderizar_graficos_movimientos().
 """
@@ -88,6 +100,7 @@ from graficos.base import (
     renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.movimientos_comun import _rango_vigente
+from graficos.movimientos_periodo import tarjeta_requerimientos_periodo
 from graficos import alturas, drill_tablas
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es horizontal
@@ -104,14 +117,19 @@ from graficos import alturas, drill_tablas
 # reportes: `rail_sin_tablas` acá y `pila_sin_tablas` en `_PILA`, de a par
 # (regla #507).
 _RAIL_CATEGORIAS = rail_sin_tablas((
+    # «Requerimientos por período» va PRIMERA desde el 2026-09-23, a pedido,
+    # y ocupa el lugar de «Top productos · requerim.», que se retiró ese día
+    # (ver `graficos/movimientos_periodo.py`). Rótulo e ícono son los de su
+    # gemela de Compras, «Compras por período».
+    #
     # «Por sub almacén» ocupa el sitio que tenían «Evolución», «Proporción
     # dada de baja» y el ranking «Sub Almacén», que se retiraron el
     # 2026-09-13. No hereda el nombre de aquel ranking —que era UN cuadro—
     # porque ahora son cuatro tablas encadenadas: el ítem del rail nombra la
     # cadena, no su primer eslabón.
-    ("Requerimientos", (("Por sub almacén",           "Sub almacén",      ":material/warehouse:"),
-                        ("Top productos · requerim.", "Top prod. · req.", ":material/format_list_numbered:"),
-                        ("Tabla · requerim.",         "Tabla · req.",     ":material/table_rows:"))),
+    ("Requerimientos", (("Requerimientos por período", "Por período",      ":material/calendar_view_week:"),
+                        ("Por sub almacén",            "Sub almacén",      ":material/warehouse:"),
+                        ("Tabla · requerim.",          "Tabla · req.",     ":material/table_rows:"))),
     ("Salidas", (("Tipo de descargo",       "Tipo descargo",    ":material/category:"),
                  ("Top productos · salidas", "Top prod. · sal.", ":material/leaderboard:"),
                  ("Tabla · salidas",         "Tabla · sal.",     ":material/table_view:"))),
@@ -130,8 +148,8 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 # que este reporte sí dibuja (`app.py`: `_franja_dibuja_fecha = reporte !=
 # "Compras"`), y las secciones de Salidas la leen con `_rango_vigente()`.
 _PILA = pila_sin_tablas((
+    ("mov_sec_periodo",     "Requerimientos por período"),
     ("mov_sec_cadena",      "Por sub almacén"),
-    ("mov_sec_top_req",     "Top productos · requerim."),
     ("mov_sec_tabla_req",   "Tabla · requerim."),
     ("mov_sec_tipo",        "Tipo de descargo"),
     ("mov_sec_top_sal",     "Top productos · salidas"),
@@ -147,6 +165,10 @@ def _barras_ranking(serie, *, key, titulo, truncar=28):
     `salidas.py`. Al juntarse en un módulo el copiado se ve, así que va una
     sola vez. Mide SIEMPRE en soles: las dos mitades reportan valorizado (ver
     el comentario de la métrica en el entry point).
+
+    Hoy queda UNO: el de Sub Almacén se fue el 2026-09-13 y el Top de
+    requerimientos el 2026-09-23 (lo reemplazó «Requerimientos por
+    período»). Lo usa sólo el Top de salidas.
     """
     if serie.empty:
         st.info("Sin datos.")
@@ -233,6 +255,13 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     col_val = _resolver(df_f, ["Valor Item", "VALOR ITEM", "Valorizado"])
     col_punit = _resolver(df_f, ["Precio Unit", "PRECIO UNIT",
                                  "Precio Unitario"])
+    # Las tres que usa sólo «Requerimientos por período»: la fecha que
+    # agrupa las barras, el código que cuenta requerimientos (el demo no lo
+    # trae: ahí cada fila cuenta como uno) y el estado.
+    col_fecha = _resolver(df_f, ["Fecha Registro", "FECHA REGISTRO"])
+    col_req = _resolver(df_f, ["Cod Requerimiento", "COD REQUERIMIENTO"])
+    col_estado = _resolver(df_f, ["Nombre Estado Requerimiento",
+                                  "NOMBRE ESTADO REQUERIMIENTO"])
 
     if not col_val and not col_cant:
         st.warning("No se encontraron las columnas de cantidad/valor del "
@@ -276,7 +305,6 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # pero no hay UI para elegir Cantidad — y no la puede haber barata: las
     # dos mitades cuentan unidades distintas y sumarlas no significa nada.
     col_metrica = col_val or col_cant
-    _met = pd.to_numeric(d[col_metrica], errors="coerce").fillna(0)
 
     # ── El otro parquet ───────────────────────────────────────────────────
     col_fam_sal = "NOMBRE FAMILIA"
@@ -339,15 +367,15 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
             col_cant=col_cant, col_punit=col_punit,
             titulo_ranking="Valorizado requerido por sub almacén")
 
-    def _dib_top_req():
-        with st.container(border=True, key="ajuste_graf_card_izq_mov_top_req"):
-            if not col_prod:
-                st.info("No hay columnas suficientes para este gráfico.")
-                return
-            _barras_ranking(
-                _met.groupby(d[col_prod].astype(str)).sum().nlargest(10).sort_values(),
-                key="mov_g_top_req", truncar=34,
-                titulo="Top 10 productos por valorizado requerido")
+    def _dib_periodo():
+        # La tarjeta abre su propio contenedor (con la key de su familia de
+        # tarjetas) y sus grillas: vive entera en su módulo, como las de
+        # Compras. La fecha es la de la franja: ya viene recortada en `d`.
+        tarjeta_requerimientos_periodo(
+            d, d_hist=df_full,
+            cols=dict(fecha=col_fecha, req=col_req, area=col_sub,
+                      estado=col_estado, fam=col_fam, prod=col_prod,
+                      cant=col_cant, punit=col_punit, val=col_val))
 
     def _dib_tabla_req():
         with st.container(border=True, key="ajuste_graf_card_izq_mov_tabla_req"):
@@ -406,8 +434,8 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                 _tabla_salidas(d_sal)
 
     _DIBUJANTES = {
+        "mov_sec_periodo":     _dib_periodo,
         "mov_sec_cadena":      _dib_cadena,
-        "mov_sec_top_req":     _dib_top_req,
         "mov_sec_tabla_req":   _dib_tabla_req,
         "mov_sec_tipo":        _dib_tipo,
         "mov_sec_top_sal":     _dib_top_sal,

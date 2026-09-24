@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-507 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+508 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (177)
 
@@ -212,7 +212,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#498** — Cuarto pase de Nueva receta: pricing como tabla editable AL COSTADO, sin porciones, sin…
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 
-**Layout y alturas** (70)
+**Layout y alturas** (71)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -284,8 +284,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#480** — Una tabla que describe un gráfico va DENTRO de su tarjeta y debajo de él, y entonces el alto…
 - **#494** — Ajuste › Distribución: gráfico deslizable a la IZQUIERDA, tablas a la DERECHA, con un toggle…
 - **#504** — Lo que depende va en UNA tarjeta; lo que no, a su propia vista — y el filtro activo se ESCRIBE
+- **#508** — Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o líneas se descartan…
 
-**Plotly y figuras** (91)
+**Plotly y figuras** (92)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -378,6 +379,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#489** — Con muchos ítems de distinto precio y cantidad, el ranking que sirve es por PLATA, no por…
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
+- **#508** — Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o líneas se descartan…
 
 **AgGrid y tablas** (81)
 
@@ -41749,6 +41751,99 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      **Para devolverlas**: `MOSTRAR_VISTAS_TABLA = True`, y nada más.
      Probado sobre la copia: vuelven las ocho y la guarda sigue en verde.
 
+508. **Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o
+     líneas se descartan los que vienen SIN ÍTEMS (el 15 % del histórico) y
+     los anulados se cuentan aparte. «Requerimientos por período», la gemela
+     de «Compras por período», reemplaza a «Top productos · requerim.».**
+     2026-09-23, a pedido: «en el reporte de movimientos, podemos eliminar o
+     modificar la vista que dice top prod req. y poner en primera vista una
+     tarjeta […] como la que tengo para la vista compras por periodo […]
+     donde el grafico de barra sea de los requerimientos. Y abajo pueda
+     alternar entre una vista resumida y detallado». Antes de dibujar nada se
+     midió `requerimientos.parquet` con DuckDB (20.086 requerimientos,
+     146.781 líneas), y cuatro medidas cambiaron el diseño:
+
+     **1. Cada requerimiento tiene UNA sola área (Sub Almacén), UN estado y
+     UNA fecha de registro** — los 20.086, sin excepción: son datos de la
+     cabecera, repetidos en cada línea. El área es al requerimiento lo que
+     el proveedor a una compra, así que la tarjeta calca a la de Compras y
+     la barra se parte POR ÁREA —las tres mayores de la vista y «Resto»—,
+     que es la pregunta de un requerimiento: quién pidió. El color sigue al
+     área por su puesto en el HISTÓRICO (`colores_area`), no en la vista:
+     filtrar no repinta.
+
+     **2. El estado casi nunca varía**: 96,8 % PROCESADO, 2,9 % ANULADO y
+     0,35 % GENERADO (este último sin `FECHA PROCESADO` en ninguna de sus
+     266 líneas: la tarjeta lo llama «sin procesar», que es lo único que se
+     sabe de él). Una columna «Estado» diría «Procesado» en casi todas las
+     filas, así que escribe sólo la EXCEPCIÓN (regla #239): «3 anulados»,
+     «1 sin procesar», y un «✓» gris en el resto. Partir la barra por estado
+     tampoco servía: el último mes, los anulados eran S/ 60 de S/ 201.717.
+
+     **3. Los anulados valen poco, pero no cero.** La mitad de sus líneas
+     llega con cantidad 0 (170 de 314 en 2026), pero los de 2026 suman
+     S/ 15.868 (0,9 % del año) y los de 2023, el 6,3 %. La tarjeta NO los
+     suma —ni en la barra ni en los totales—, los cuenta en Estado y los
+     LISTA apagados en el Detalle, con «Anulado» en la celda del valor y el
+     monto en su tooltip. Es la única sección de Movimientos que los
+     descarta, así que su total puede quedar un poco por debajo del de «Por
+     sub almacén» (regla #322, que dejó esa decisión abierta).
+
+     **4. Hay requerimientos SIN ÍTEMS: una sola línea sin producto, sin
+     cantidad y sin valor.** 2.962 en el histórico (14,7 %), 447 en los
+     últimos 12 meses y 53 de 550 en el último mes, 49 de ellos de GASTOS.
+     No se sabe si el detalle de un pedido de gasto vive en otra tabla del
+     ERP; lo que se sabe es que contarlos infla «requerimientos» y «líneas»
+     sin sumar un sol. La tarjeta no los cuenta y lo dice en su fila de KPI
+     («No suman: 18 anulados · 34 sin ítems», el detalle en el tooltip).
+
+     **Y una de volumen:** ~17 requerimientos por día (79 el día pico), con
+     una mediana de 4 líneas. Por eso NO tiene la granularidad «Por
+     requerimiento» (el «Por documento» de Compras): un mes son ~480 barras.
+     Quedan Día, Semana (con la que abre), Mes y Año.
+
+     **Cómo quedó.** `graficos/movimientos_periodo.py` (la tarjeta y sus
+     piezas puras) y `tablas/movimientos_periodo.py` (sus tres grillas). Las
+     cuentas de la gemela —plan de las etiquetas, techo del eje, nombres de
+     los períodos, calendario de Día, variación contra la barra anterior— se
+     IMPORTAN de `graficos/compras/semanal.py` y `_comun.py` en vez de
+     copiarse: las dos tarjetas se leen igual, y un retoque allá llega acá.
+     Mide lo que aquélla (`alturas.SEMANAL_*`: 613px a 1366×768, contra 617)
+     y salió del techo `--alto-util` por lo mismo (#398). Lo que cambia:
+       · abre en **Resumen**, que nunca está vacío, y un clic en una FILA
+         del Resumen también abre su Detalle. Como la key del toggle de modo
+         ya se dibujó cuando la grilla devuelve el clic —y escribirla ahí es
+         una excepción de Streamlit—, el pedido viaja por
+         `_mov_per_ir_detalle` a la corrida siguiente, que lo aplica antes
+         del toggle;
+       · **sin leyenda de Plotly**: la fila de KPI nombra cada tramo con su
+         color, su monto y su % — y la leyenda, con la figura en COMPACTO,
+         se montaba sobre los rótulos de dos renglones del eje (visto en el
+         navegador, en Semana y en Día);
+       · **sin fragment propio**: la fecha es la de la franja, así que
+         ningún control escala a una corrida completa (#311) y alcanza con
+         el de `seccion_perezosa`;
+       · la cantidad de las líneas lleva los decimales que tiene
+         (`_JS_CANT_REQ`): una cocina pide gramos (#506).
+
+     «Top productos · requerim.» se retiró: el top es ahora un recorte de
+     esta tarjeta («Top 5/10/20 por valor» en su selector de Producto) y el
+     ranking completo sigue al pie de «Por sub almacén». La guarda es
+     `test_graficos.py::_pruebas_requerimientos_periodo`, que fija las
+     cuentas de arriba por NOMBRE de columna.
+
+     **Una trampa de la verificación, no de la tarjeta:** un clic
+     automatizado sobre una barra que llega SIN mover antes el cursor
+     dispara `plotly_click` pero no `plotly_selected` — Plotly selecciona
+     con los datos del hover, y sin `mousemove` no los hay. Se lee como «el
+     clic no hace nada». Con un `hover` antes del clic, anda; una persona
+     siempre mueve el mouse.
+
+     **Para la próxima:** antes de contar «cuántos X» en un parquet de
+     líneas, contar cuántos X tienen alguna línea SIN el dato que los define
+     (acá, sin producto). Un 15 % de cabeceras vacías no da error: da un
+     conteo que sube sin que nada haya pasado.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -41761,7 +41856,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#507**; la próxima toma el número siguiente.
+> última regla es la **#508**; la próxima toma el número siguiente.
 
 >
 

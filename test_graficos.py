@@ -5268,6 +5268,155 @@ def _pruebas_listado_inventario():
     return fallos
 
 
+def _pruebas_requerimientos_periodo():
+    """Movimientos › Requerimientos por período (graficos/movimientos_periodo.py).
+
+    Lo que fija son las CUENTAS de la regla #508, que son las que se leen
+    distinto de lo que parecen: un requerimiento es un CÓDIGO y no una fila;
+    los anulados no suman pero se cuentan (y se listan en el Detalle); el
+    requerimiento sin ítems —una línea sin producto ni valor, el 15 % del
+    histórico— no cuenta ni como requerimiento ni como línea; la barra se
+    parte en las tres áreas mayores y «Resto», y cierra con el total; y el
+    color sigue al área aunque el filtro cambie quién es la mayor.
+
+    Todo por NOMBRE de columna, no por posición (CLAUDE.md: acá corre
+    pandas 3 y en Cloud la 2.2).
+    """
+    import datetime as dt
+
+    from graficos import alturas
+    from graficos.compras._comun import _periodo_serie
+    from graficos import movimientos_periodo as mp
+    from tema import GRIS_TEXTO_SUAVE, PALETA_SERIES
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    requerimientos por período · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA requerimientos por período · {nombre}: "
+                  f"got={got!r} exp={exp!r}")
+
+    # Semana 37 (7-13 set 2026): R1 de Cocina con dos líneas, R2 de
+    # Producción, R3 de Cocina ANULADO (con valor: no todos valen 0) y R4 de
+    # Gastos SIN ÍTEMS. Semana 38 (14-20 set): R5 de Barra sin procesar
+    # (estado Generado), R6 de Cava y R7 de Salón.
+    d = pd.DataFrame({
+        "FECHA REGISTRO": pd.to_datetime(
+            ["2026-09-07 10:00", "2026-09-07 10:00", "2026-09-08 11:00",
+             "2026-09-09 12:00", "2026-09-10 09:00", "2026-09-15 08:00",
+             "2026-09-16 08:00", "2026-09-16 09:30"]),
+        "COD REQUERIMIENTO": ["R1", "R1", "R2", "R3", "R4", "R5", "R6", "R7"],
+        "SUB ALMACEN": ["COCINA", "COCINA", "PRODUCCION", "COCINA", "GASTOS",
+                        "BARRA", "CAVA ", "SALON"],
+        "NOMBRE ESTADO REQUERIMIENTO": ["PROCESADO", "PROCESADO", "PROCESADO",
+                                        "ANULADO", "PROCESADO", "GENERADO",
+                                        "PROCESADO", "PROCESADO"],
+        "NOMBRE FAMILIA": ["ALIMENTOS"] * 4 + [None, "BEBIDAS", "BEBIDAS",
+                                               "ALIMENTOS"],
+        "NOMBRE PRODUCTO": ["A", "B", "C", "A", None, "D", "E", "F"],
+        "CANTIDAD": [1.0, 2.0, 3.0, 1.0, None, 4.0, 1.0, 0.5],
+        "PRECIO UNIT": [100.0, 25.0, 100.0, 20.0, None, 10.0, 10.0, 10.0],
+        "VALOR ITEM": [100.0, 50.0, 300.0, 20.0, None, 40.0, 10.0, 5.0],
+    })
+    cols = dict(fecha="FECHA REGISTRO", req="COD REQUERIMIENTO",
+                area="SUB ALMACEN", estado="NOMBRE ESTADO REQUERIMIENTO",
+                fam="NOMBRE FAMILIA", prod="NOMBRE PRODUCTO", cant="CANTIDAD",
+                punit="PRECIO UNIT", val="VALOR ITEM")
+
+    base = mp.lineas_requerimientos(d, **cols)
+    check("la línea sin producto es la del requerimiento sin ítems",
+          base.loc[base["vacio"], "req"].tolist(), ["R4"])
+    check("el área se limpia (el ERP deja espacios: «CAVA »)",
+          sorted(set(base["area"])),
+          ["BARRA", "CAVA", "COCINA", "GASTOS", "PRODUCCION", "SALON"])
+
+    lin = base[~base["vacio"]].copy()
+    lin["clave"] = _periodo_serie(lin["fecha"], "Semana")
+    res = mp.resumen_por_periodo(lin)
+    check("un período por semana, en orden", res.index.tolist(),
+          ["2026-S37", "2026-S38"])
+    check("semana 37: sin el anulado ni el vacío (por nombre)",
+          res.loc["2026-S37", ["valor", "lineas", "reqs", "areas",
+                               "anulados", "sin_procesar"]].tolist(),
+          [450.0, 3, 2, 2, 1, 0])
+    check("semana 38: el Generado suma y se cuenta «sin procesar»",
+          res.loc["2026-S38", ["valor", "lineas", "reqs", "areas",
+                               "anulados", "sin_procesar"]].tolist(),
+          [55.0, 3, 3, 3, 0, 1])
+
+    orden = ["COCINA", "PRODUCCION", "GASTOS", "BARRA", "CAVA", "SALON"]
+    rango = (dt.date(2026, 9, 7), dt.date(2026, 9, 20))
+    v = mp.vista_periodos(lin, "Semana", rango, orden)
+    tr = v["trazas"]
+    check("tramos: las 3 áreas mayores de la VISTA y «Resto»",
+          [t[0] for t in tr], ["PRODUCCION", "COCINA", "BARRA", "Resto"])
+    check("«Resto» junta Cava y Salón, y el color es el gris",
+          (tr[-1][2], tr[-1][1]), ([0.0, 15.0], GRIS_TEXTO_SUAVE))
+    check("cada barra cierra con su total",
+          [round(sum(t[2][i] for t in tr), 2) for i in range(2)],
+          [450.0, 55.0])
+    check("el color sigue al área (su puesto en el histórico)",
+          (tr[0][1], tr[1][1], tr[2][1]),
+          (PALETA_SERIES[1], PALETA_SERIES[0], PALETA_SERIES[3]))
+    check("…aunque el filtro la deje sola en la vista",
+          mp.colores_area(orden, ["BARRA"]), {"BARRA": PALETA_SERIES[3]})
+    check("variación contra la barra anterior",
+          [(x[0], round(x[1], 1) if x[1] is not None else None)
+           for x in v["variaciones"]],
+          [("primera", None), ("ok", -87.8)])
+    check("la fila de la semana dice su año", v["fila"],
+          ["7–13 set 2026", "14–20 set 2026"])
+
+    filas, total = mp.tabla_resumen(v, foco="2026-S38")
+    check("Resumen: el Estado escribe sólo la excepción",
+          list(zip(filas["estado"], filas["__eclase"])),
+          [("1 anulado", "anul"), ("1 sin procesar", "sinp")])
+    check("Resumen: la fila marcada es la del foco",
+          filas["__sel"].tolist(), [False, True])
+    check("Resumen: el total cuenta requerimientos, no filas",
+          (total["reqs"], total["lineas"], total["valor"], total["estado"]),
+          ("5", "6", "S/ 505.00", "1 anulado · 1 sin procesar"))
+    check("sin novedad, un ✓", mp._texto_estado(0, 0), ("✓", "ok"))
+
+    amb = lin[lin["clave"] == "2026-S37"]
+    check("Detalle: abre en el mayor válido, no en el anulado",
+          mp._mayor_valido(amb), "R2")
+    fr, tot_r = mp.tabla_requerimientos(amb, "R2")
+    check("Detalle: el anulado se LISTA",
+          sorted(zip(fr["codigo"], fr["__estado"])),
+          [("R1", ""), ("R2", ""), ("R3", "anulado")])
+    check("Detalle: …pero no suma en el total",
+          (tot_r["codigo"], tot_r["area"], tot_r["lineas"], tot_r["valor"]),
+          ("2 req.", "+1 anulado", "3", "S/ 450.00"))
+    check("Detalle: registro con hora, en ISO",
+          fr.loc[fr["codigo"] == "R1", "registro"].tolist(),
+          ["2026-09-07 10:00"])
+
+    fig = mp.figura_periodos(v, alturas.COMPACTO, titulo="t", foco="2026-S37")
+    check("figura: un trazo por tramo y sin leyenda (la fila de KPI lo es)",
+          (len(fig.data), fig.layout.showlegend), (4, False))
+    check("figura: la etiqueta va en el tramo de más arriba con valor",
+          [i for i, t in enumerate(fig.data) if t.text and t.text[1]], [3])
+    check("figura: el foco atenúa las otras barras por COLOR",
+          isinstance(fig.data[0].marker.color, tuple)
+          and fig.data[0].marker.color[0] == PALETA_SERIES[1]
+          and fig.data[0].marker.color[1].startswith("rgba("), True)
+    for gran in ("Día", "Mes", "Año"):
+        _l = lin.copy()
+        _l["clave"] = _periodo_serie(_l["fecha"], gran)
+        try:
+            mp.figura_periodos(mp.vista_periodos(_l, gran, rango, orden),
+                               alturas.COMPACTO)
+            check(f"figura en {gran}", True, True)
+        except Exception as e:  # que se vea el tipo
+            check(f"figura en {gran}", f"{type(e).__name__}: {e}", True)
+    return fallos
+
+
 def main():
     df, df_min = _df_completo(), _df_minimo()
     fallos = 0
@@ -5466,6 +5615,9 @@ def main():
 
     # ── Inventario › Productos: el grano y el despliegue de áreas ────────
     fallos += _pruebas_listado_inventario()
+
+    # ── Movimientos › Requerimientos por período: qué cuenta y qué no ────
+    fallos += _pruebas_requerimientos_periodo()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()
