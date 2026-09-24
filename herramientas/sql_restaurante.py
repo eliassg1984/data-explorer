@@ -1,6 +1,6 @@
 """
 herramientas/sql_restaurante.py — consultas directas al SQL Server del
-restaurante (SRCA65DADDFC = 26.94.118.165), sin que nadie escriba la clave.
+restaurante, sin que nadie escriba la clave.
 
 QUÉ HACE Y POR QUÉ EXISTE
 --------------------------
@@ -9,36 +9,40 @@ parquet exigía sumar una fila al Sheet y pedir el refresco por R2: minutos
 por pregunta, y una consulta de más en el extractor. Esto responde en
 segundos y no deja nada detrás.
 
-EL LOGIN SÓLO PUEDE LEER
-------------------------
-Es `lectura`, no `sa`: db_datareader + VIEW DEFINITION en ALMACEN,
-INFOREST y ALMACENPRUEBA1, nada más. Lo crea el usuario en SSMS, conectado
-como sa (`sp_addrolemember` y no `ALTER ROLE … ADD MEMBER`: las bases están
-en compatibilidad 100):
+LOS DATOS DE CONEXIÓN NO ESTÁN EN EL REPO
+-----------------------------------------
+El repo es PÚBLICO. La dirección del servidor vive en
+`%USERPROFILE%\\.sql_restaurante.json` (`{"servidor": "…"}`); el login y su
+clave, en el Administrador de credenciales de Windows, como credencial
+genérica «sql-restaurante». Ninguno de los tres se escribe en el repo: ni en
+el código, ni en CLAUDE.md, ni en un mensaje de commit.
 
-    CREATE LOGIN lectura WITH PASSWORD = N'…', DEFAULT_DATABASE = ALMACEN;
-    -- y en cada base:
-    CREATE USER lectura FOR LOGIN lectura;
-    EXEC sp_addrolemember 'db_datareader', 'lectura';
-    GRANT VIEW DEFINITION TO lectura;
+La credencial la carga el usuario, una vez:
 
-`--probar` dice con qué login entró y, base por base, si puede escribir.
-
-LA CLAVE NO PASA POR ACÁ
-------------------------
-El login y su clave viven en el Administrador de credenciales de Windows de
-la laptop, como credencial genérica «sql-restaurante». Los carga el usuario:
-
-    cmdkey /generic:sql-restaurante /user:lectura /pass
+    cmdkey /generic:sql-restaurante /user:<login> /pass
 
 — sin valor después de /pass, cmdkey la pide sin mostrarla. El script la lee
-de ahí al conectar: no está en el repo, ni en un archivo, ni en la línea de
-comandos, y nunca se imprime. Claude no escribe contraseñas.
+de ahí al conectar y nunca la imprime. Claude no escribe contraseñas.
 
-Por qué no autenticación de Windows: el servidor ve a esta laptop como
-`SRCA65DADDFC\\Invitado` (el usuario `pc` no existe allá). Arreglarlo pedía
+Por qué no autenticación de Windows: el servidor ve a esta laptop como su
+cuenta Invitado (el usuario de la laptop no existe allá). Arreglarlo pedía
 una cuenta de Windows espejo en el servidor, con la misma clave que la de la
 laptop y sincronizada para siempre.
+
+EL LOGIN SÓLO PUEDE LEER
+------------------------
+Es uno propio, no `sa`: db_datareader + VIEW DEFINITION en ALMACEN, INFOREST
+y ALMACENPRUEBA1, nada más. Se crea en SSMS, conectado como sa
+(`sp_addrolemember` y no `ALTER ROLE … ADD MEMBER`: las bases están en
+compatibilidad 100):
+
+    CREATE LOGIN <login> WITH PASSWORD = N'…', DEFAULT_DATABASE = ALMACEN;
+    -- y en cada base:
+    CREATE USER <login> FOR LOGIN <login>;
+    EXEC sp_addrolemember 'db_datareader', '<login>';
+    GRANT VIEW DEFINITION TO <login>;
+
+`--probar` dice con qué login entró y, base por base, si puede escribir.
 
 Y ADEMÁS, TODO SE DESHACE
 -------------------------
@@ -77,6 +81,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import ctypes
+import json
 import pathlib
 import re
 import sys
@@ -87,9 +92,17 @@ import pyodbc
 if hasattr(sys.stdout, "reconfigure"):      # consola cp1252 de Windows
     sys.stdout.reconfigure(encoding="utf-8")
 
-SERVIDOR = "26.94.118.165"
 CREDENCIAL = "sql-restaurante"
+# Fuera del repo, que es público: en la carpeta del usuario de Windows.
+_LOCAL = pathlib.Path.home() / ".sql_restaurante.json"
 _DRIVERS = ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server")
+
+
+def _servidor_local() -> str | None:
+    try:
+        return json.loads(_LOCAL.read_text(encoding="utf-8"))["servidor"]
+    except (OSError, ValueError, KeyError):
+        return None
 
 
 class _CREDENTIAL(ctypes.Structure):
@@ -152,15 +165,15 @@ def _abrir(cadena: str, timeout: int, escribir: bool) -> pyodbc.Connection:
     return cn
 
 
-def conectar(base: str, timeout: int, servidor: str = SERVIDOR,
-             credencial: str = CREDENCIAL, escribir: bool = False) -> pyodbc.Connection:
+def conectar(base: str, timeout: int, servidor: str, credencial: str = CREDENCIAL,
+             escribir: bool = False) -> pyodbc.Connection:
     cred = _leer_credencial(credencial)
     if cred is None:
         sys.exit(
             f"No está la credencial «{credencial}» en el Administrador de "
             "credenciales de Windows. Se carga UNA vez, en una terminal (pide "
             "la clave sin mostrarla):\n\n"
-            f"    cmdkey /generic:{credencial} /user:lectura /pass\n")
+            f"    cmdkey /generic:{credencial} /user:<login> /pass\n")
     usuario, clave = cred
     driver = next((d for d in _DRIVERS if d in pyodbc.drivers()), None)
     if driver is None:
@@ -299,12 +312,17 @@ def main() -> None:
     ap.add_argument("--timeout", type=int, default=120, help="segundos por consulta")
     ap.add_argument("--escribir", action="store_true",
                     help="que los cambios QUEDEN grabados; sólo si el usuario pidió ese cambio")
-    ap.add_argument("--servidor", default=SERVIDOR)
+    ap.add_argument("--servidor", help=f"por defecto, el de {_LOCAL}")
     ap.add_argument("--credencial", default=CREDENCIAL,
                     help="nombre de la credencial genérica de Windows")
     a = ap.parse_args()
 
-    cn = conectar(a.base, a.timeout, a.servidor, a.credencial, a.escribir)
+    servidor = a.servidor or _servidor_local()
+    if not servidor:
+        sys.exit(f"Falta la dirección del servidor. Va en {_LOCAL}, fuera del "
+                 'repo (que es público), como {"servidor": "<ip o nombre>"}; '
+                 "o en --servidor.")
+    cn = conectar(a.base, a.timeout, servidor, a.credencial, a.escribir)
     try:
         if a.probar:
             probar(cn)

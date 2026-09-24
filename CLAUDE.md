@@ -22,6 +22,11 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 ## Flujo de trabajo
 
 - Push directo a `main`. No hay staging: se valida en Streamlit Cloud.
+- **El repo es PÚBLICO.** Nada de IPs, nombres de máquina, usuarios ni
+  claves en un commit, tampoco en el mensaje: lo que sólo se usa en la
+  laptop vive en archivos fuera de git. Y en esta carpeta trabajan varias
+  sesiones a la vez, así que un commit local lo sube el push de cualquiera
+  de ellas: commitear ya es publicar.
 - El preview local **no siempre toma cambios al navegar/rerunear** si el
   server ya estaba corriendo de antes — confirmado con `estilos/`, y
   también con un módulo de herramienta normal (`formulario_receta.py`,
@@ -645,22 +650,23 @@ por copiar y pegar sigue fallando.
 ## Para ver un dato de producción: `herramientas/sql_restaurante.py`
 
 La app sólo lee parquets; el SQL Server de donde salen es el del
-restaurante (`SRCA65DADDFC` = 26.94.118.165, por Radmin). Desde el
-2026-09-24 se le puede preguntar directo, sin sumar una fila al Sheet ni
-esperar el refresco:
+restaurante. Desde el 2026-09-24 se le puede preguntar directo, sin sumar
+una fila al Sheet ni esperar el refresco:
 
 ```bash
 python herramientas/sql_restaurante.py --probar
 python herramientas/sql_restaurante.py -f consulta.sql --base INFOREST
 ```
 
-- **Entra con el login `lectura`, no con `sa`**: sólo lectura en ALMACEN,
-  INFOREST y ALMACENPRUEBA1. La clave la toma del Administrador de
-  credenciales de Windows (`sql-restaurante`), donde la guardó el usuario:
-  Claude no escribe contraseñas, ni aunque se las pasen por el chat.
-- **Además, todo se revierte al terminar** (cada corrida es una transacción
-  que se deshace) y lee en READ UNCOMMITTED, para no trabar al POS en pleno
-  servicio.
+- **Los datos de conexión viven sólo en la laptop.** La dirección del
+  servidor, en `%USERPROFILE%\.sql_restaurante.json`; el login y su clave,
+  en el Administrador de credenciales de Windows (`sql-restaurante`), donde
+  los guardó el usuario. Claude no escribe contraseñas, ni aunque se las
+  pasen por el chat.
+- **El login es de solo lectura, no `sa`** (ALMACEN, INFOREST y
+  ALMACENPRUEBA1), y además todo se revierte al terminar: cada corrida es una
+  transacción que se deshace. Lee en READ UNCOMMITTED, para no trabar al POS
+  en pleno servicio.
 - **Las bases están en compatibilidad 100** (SQL Server 2008) aunque el
   motor sea 2019: no hay `STRING_AGG`, `IIF`, `CONCAT`, `TRY_CAST`,
   `LAG`/`LEAD` ni `OFFSET/FETCH`.
