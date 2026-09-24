@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-515 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+516 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (178)
 
@@ -213,7 +213,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 - **#513** — Un recorte de padding-top scopeado a un reporte se vuelve un AGREGADO el día que la regla…
 
-**Layout y alturas** (73)
+**Layout y alturas** (74)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -288,8 +288,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#508** — Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o líneas se descartan…
 - **#509** — «Salidas por período» es la MISMA tarjeta que la de requerimientos, con otro Lado. El área…
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
+- **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
-**Plotly y figuras** (93)
+**Plotly y figuras** (94)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -384,6 +385,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 - **#508** — Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o líneas se descartan…
 - **#515** — La barra de «Tendencia diaria de venta» se parte por canal, y copia las CUENTAS de «Compras…
+- **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
 **AgGrid y tablas** (82)
 
@@ -42339,6 +42341,50 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      columna por canal entre Venta y Clientes: sigue siendo el gráfico
      escrito como tabla.
 
+516. **«Tendencia diaria de venta» interactúa como «Compras por período»:
+     la figura se ACORTA cuando aparece la tabla, y la tabla vive DENTRO de
+     la tarjeta. Y en `ventas.parquet` un ítem se repite por cada forma de
+     pago.**
+     2026-09-24, a pedido, mirando la vista junto a la de Compras: «le falta
+     la similitud respecto a interactuar con las tablas de abajo, o sea que
+     se acorte; las tablas de abajo no se parecen en estilo», y en el mismo
+     pedido «al gráfico de barras le falta granularidad; añade también un
+     filtro de canal de venta y tipo de documento».
+
+     **Qué se calcó de Compras (y de Movimientos, su gemela más nueva):**
+     - La figura mide `_ALTO_FIG_SOLO` sin tabla y `alturas.COMPACTO` con
+       ella; la grilla, `_ALTO_TABLA`. Modo, foco y clic se resuelven ANTES
+       de armar la figura (el alto depende de ellos): el modo se lee de
+       `session_state`, y el clic de la key que se DIBUJÓ la corrida anterior
+       con un contador (`vt_resumen_nclic`, regla #399).
+     - Desde Resumen, un clic en una barra o en una FILA abre su Detalle. La
+       fila viaja por `_vt_resumen_ir_detalle` hasta antes del toggle: la key
+       de un widget ya dibujado no se puede escribir.
+     - Las grillas son AgGrid con el look y los formatos de
+       `tablas/compras_semanal.py` (`tablas/ventas_resumen.py`); los platos
+       son `movimientos_periodo.renderizar_lineas_mov`. La variación va VERDE
+       al subir: en Ventas subir es la buena noticia.
+     - La granularidad usa `_periodo_serie`, `_variaciones` (un período que
+       el rango corta dice «parcial») y `_rotulo_periodo` de Compras. El eje
+       es LINEAL por índice, con los rótulos a mano.
+     - La sección `ajuste_graf_card_izq_ventas_resumen` salió del techo
+       `--alto-util`, como las tarjetas «por período» (con techo sacaba
+       barra propia).
+
+     **Dos cosas que aparecieron al medir:**
+     - Con `legend.y` negativo, `yanchor` «auto» ancla la leyenda por ABAJO,
+       así que crece hacia el eje: en COMPACTO se comía 15px de los rótulos.
+       `yanchor="top"`. Y los rótulos del eje van horizontales, con el paso
+       que entra (girados a −45° chocaban con la leyenda).
+     - **`ventas.parquet` repite cada ítem por forma de pago**: un
+       comprobante pagado con cheque + tarjeta trae cada plato dos veces con
+       su `VENTA ITEM DDOCUMENTO` entero (misma `LLAVE LOCAL DOCUMENTO ITEM`,
+       distinto `CORRELATIVO PAGO`). Medido en septiembre 2026: 8.198 filas
+       para 6.991 ítems, S/ 390.272 sumando filas contra S/ 332.807 reales
+       (**+17 %**). Esta vista deduplica por la llave del ítem; **las demás
+       vistas de Ventas siguen sumando filas** y quedan pendientes (las de
+       formas de pago y propinas necesitan las filas por pago).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42351,7 +42397,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#515**; la próxima toma el número siguiente.
+> última regla es la **#516**; la próxima toma el número siguiente.
 
 >
 

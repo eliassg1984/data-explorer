@@ -1283,7 +1283,10 @@ CSS = """    /* ================================================================
         /* cediéndole su sitio a la tabla. Regla #508. Y su hermana de        */
         /* salidas, `…_mov_sal_periodo`, el mismo día. Regla #509. Y la de    */
         /* porcionamientos, `…_mov_porc_periodo`, el 2026-09-24. Regla #510.  */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo),
+        /* Y `…_izq_ventas_resumen` (Ventas › Resumen ejecutivo) el mismo     */
+        /* día: su barra por período ahora es la de Compras, con la tabla     */
+        /* DENTRO de la tarjeta; con el techo sacaba barra propia. #516.      */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1938,6 +1941,36 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val {
         color: var(--accent-deep);
         font-weight: 700;
+    }
+
+    /* La zona de abajo de «Tendencia diaria de venta» (2026-09-24, regla
+       #516): la de «Compras por período» (`cp_sem_*` en
+       `graficos/compras/_css_proveedor.py`, que sólo se inyecta en
+       Compras). Los dos toggles —granularidad arriba, modo abajo— a 32px y
+       acotados a SU key; la fila de modo con su caption centrado y sin el
+       `margin-bottom: -16px` de la regla #162; y las grillas en BLOQUE: el
+       iframe de un componente nace inline y su contenedor le suma el hueco
+       del descendente (7.6px medidos en Compras), que haría crecer la
+       tarjeta al abrir la tabla. */
+    .st-key-vt_resumen_gran [data-testid="stButtonGroup"] button,
+    .st-key-vt_resumen_modo [data-testid="stButtonGroup"] button {
+        min-height: 32px !important;
+        height: 32px !important;
+        padding: 0 12px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_resumen_pie { align-items: center !important; }
+    .st-key-vt_resumen_pie [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-vt_resumen_resumen .stCustomComponentV1,
+    .st-key-vt_resumen_detalle .stCustomComponentV1 {
+        display: block !important;
+    }
+    [class*="st-key-vt_resumen_res_grid_"] iframe,
+    [class*="st-key-vt_resumen_ped_grid_"] iframe,
+    [class*="st-key-vt_resumen_lin_grid_"] iframe {
+        width: 100% !important;
     }
 
     /* =================================================================== */
