@@ -1399,7 +1399,10 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 st.info("La tabla no está disponible en este contexto.")
 
     _DIBUJANTES = {
-        "vt_sec_resumen":    _seccion("resumen", "Resumen ejecutivo"),
+        # El Resumen arma SUS tarjetas (la del gráfico y la del Top
+        # platos): envuelto en una `ajuste_graf_card_` las dos se leían
+        # como una sola caja. Regla #521.
+        "vt_sec_resumen":    lambda: _cuerpo_grafico("Resumen ejecutivo"),
         "vt_sec_dia":        _seccion("dia", "Venta por día"),
         "vt_sec_hora":       _seccion("hora", "Mapa por hora"),
         "vt_sec_ano_pasado": _seccion("ano_pasado", "Comparativo vs Año Pasado"),

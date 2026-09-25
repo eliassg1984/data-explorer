@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-520 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+521 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (180)
 
@@ -292,7 +292,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
-**Plotly y figuras** (95)
+**Plotly y figuras** (96)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -389,6 +389,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#515** — La barra de «Tendencia diaria de venta» se parte por canal, y copia las CUENTAS de «Compras…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 - **#520** — La leyenda del gráfico del Resumen de Ventas es una pastilla «Detalle · <período>» que flota…
+- **#521** — El Resumen de Ventas: un solo eje a la derecha, su propia tarjeta, y el techo de las…
 
 **AgGrid y tablas** (83)
 
@@ -42646,6 +42647,38 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      figura en 210 y el MISMO área de trazo (156). Se hizo por aire y no
      achicando nada que se lea.
 
+521. **El Resumen de Ventas: un solo eje a la derecha, su propia tarjeta, y
+     el techo de las etiquetas contra el área REAL.**
+     2026-09-24, tres pedidos seguidos sobre la vista publicada.
+
+     **«El segundo eje, Ticket, descuadra la simetría»:** la línea del
+     Ticket sigue en su propia escala (S/ 180 contra 100 clientes no
+     comparten ninguna) pero SIN eje; su último punto lleva el valor
+     escrito («Ticket S/ 221») y el resto está en el hover, en la pastilla
+     «Detalle» y en la tabla. Las barras recuperan el 12 % del ancho que
+     les comía el tercer eje (`domain` 0,88 → 1).
+
+     **«Que esta vista sea una tarjeta propia, separada del Top platos»:**
+     `ventas.py` envolvía la sección en UNA `ajuste_graf_card_` y el CSS
+     (`_80_cards.py`, «Cards internos») vuelve transparentes las
+     `chartcard_` de adentro: el gráfico y el Top platos se leían como una
+     sola caja. Ahora la sección no trae tarjeta y `_ventas_resumen` arma
+     las dos: `ajuste_graf_card_izq_ventas_resumen` (filtros, gráfico,
+     tablas) y `…_resumen_top`.
+
+     **«Mucho espacio arriba — ¿es por el eje del Ticket?»:** no. Medido:
+     la barra más alta empezaba 53px debajo del borde del área de 156, con
+     37 de etiqueta girada encima y 16 de aire de nadie. La línea del
+     Ticket va en su escala y no mueve el eje de las barras. El aire salía
+     de `semanal._techo_etiquetas`, que deduce el área suponiendo la
+     leyenda al PIE (139px, no 156) y mide a 5,4px por carácter (la cuenta
+     de etiquetas derechas; la girada de acá mide un 20 % menos). El techo
+     se calcula ahora acá, con `_alto_fig − _MARGEN_ARRIBA − _PIE_EJE` y la
+     etiqueta × 0,8: la barra más alta empieza a 38px y su etiqueta llega
+     al borde. **Una cuenta importada vale para el layout que la midió**:
+     la #515 la trajo de Compras con leyenda al pie, y la #520 sacó la
+     leyenda sin tocarla.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42658,7 +42691,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#520**; la próxima toma el número siguiente.
+> última regla es la **#521**; la próxima toma el número siguiente.
 
 >
 

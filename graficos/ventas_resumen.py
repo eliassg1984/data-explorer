@@ -71,7 +71,7 @@ from graficos.compras._comun import (
 # copias se desincronizan a la primera que se toque. Regla #515.
 from graficos.compras.semanal import (
     _ALTO_FIG_SOLO, _ETQ_FUENTE, _ETQ_SEP, _LIENZO_PX,
-    _del_al, _etiqueta_en_la_punta, _plan_etiquetas, _rotulo_periodo, _techo_etiquetas,
+    _del_al, _etiqueta_en_la_punta, _plan_etiquetas, _rotulo_periodo,
 )
 from graficos import alturas
 from tablas.movimientos_periodo import renderizar_lineas_mov
@@ -93,6 +93,14 @@ MAX_DIAS = 30    # tope de barras legibles. Mismo espíritu que MAX_SEMANAS de
 # Streamlit recolecta el estado de todo widget del fragment que no se
 # dibujó. `preservar_widgets` los re-escribe sobre sí mismos antes de
 # escalar.
+_MARGEN_ARRIBA = 28
+"""Margen de arriba de la figura del Resumen: lo que ocupa la pastilla
+«Detalle» cerrada (26) y 2 de aire (regla #520)."""
+
+_PIE_EJE = 26
+"""Lo que ocupa, debajo del área de trazo, el renglón de rótulos del eje X
+más el margen de abajo (4). Medido: rótulos 22px a 10px de cuerpo."""
+
 _SERIES_APAGABLES = ("desc", "pax", "ticket")
 """Las series que la pastilla «Detalle» deja apagar (regla #520). Los canales
 no: son la barra misma."""
@@ -340,8 +348,18 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     # filtros son LOCALES de esta vista y se componen con los chips de la
     # franja; Canal y Tipo de documento se sumaron el mismo día, a pedido.
     # La fecha es el trigger de Compras: al aplicar un atajo recarga (ver 0).
-    _ctrl = st.columns([2.2, 1.25, 1.25, 1.25, 1.25, 2.1],
-                       vertical_alignment="center")
+    # DOS TARJETAS Y NO UNA (2026-09-24, regla #521, a pedido: «que esta
+    # vista sea una tarjeta propia, separada del gráfico de abajo, Top
+    # platos vendidos»). Hasta ese día `ventas.py` envolvía la sección
+    # entera en UNA `ajuste_graf_card_` y el CSS vuelve transparentes las
+    # tarjetas de adentro, así que el gráfico y el Top platos se leían como
+    # una sola caja. Ahora la sección no trae tarjeta y la función arma las
+    # suyas: ésta (filtros, gráfico, tablas) y la del Top platos, al final.
+    _tarjeta = st.container(border=True,
+                            key="ajuste_graf_card_izq_ventas_resumen")
+    with _tarjeta:
+        _ctrl = st.columns([2.2, 1.25, 1.25, 1.25, 1.25, 2.1],
+                           vertical_alignment="center")
     with _ctrl[0]:
         gran = st.segmented_control(
             "Agrupar por", _GRAN_OPCIONES, default=_GRAN_DEFAULT,
@@ -388,7 +406,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     d = _recorte(d)
     d_pagos = _recorte(d_pagos)
     if d is None or d.empty:
-        st.info("No hay ventas para los filtros elegidos.")
+        _tarjeta.info("No hay ventas para los filtros elegidos.")
         return
 
     def _num(col):
@@ -446,7 +464,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     tabla = todo[~todo["es_cort"] & ~todo["anul"]]
     cortesias = todo[todo["es_cort"] & ~todo["anul"]]
     if tabla.empty:
-        st.info("Sin ventas en el rango cargado (sólo cortesías o anulados).")
+        _tarjeta.info("Sin ventas en el rango cargado (sólo cortesías o "
+                      "anulados).")
         return
 
     # En Día, los últimos `MAX_DIAS` días con ventas: más barras que eso no
@@ -689,7 +708,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     _titulo = {"Día": "Tendencia diaria de venta",
                "Semana": "Venta por semana", "Mes": "Venta por mes",
                "Año": "Venta por año"}[gran]
-    with _card("ventas_resumen_dia"):
+    with _tarjeta, _card("ventas_resumen_dia"):
         # EL TÍTULO Y LOS KPI EN UN RENGLÓN (2026-09-24, a pedido: «poner
         # los kpis en la misma fila que el título, para que mi gráfico suba
         # un poco más»). Eran dos: el título de `_card(titulo_arriba=True)`
@@ -830,6 +849,13 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                 hovertemplate=("%{customdata}<br>Ticket: S/ %{y:,.2f}"
                                "<extra></extra>"),
             ))
+            _ult = g["ticket"].iloc[-1]
+            if not pd.isna(_ult):
+                fig.add_annotation(
+                    x=n_per - 1, y=float(_ult), xref="x", yref="y3",
+                    text=f"Ticket S/ {float(_ult):,.0f}", showarrow=False,
+                    xanchor="right", yanchor="bottom", yshift=6,
+                    font=dict(size=10, color=ADVERTENCIA))
 
         # FIN DE SEMANA Y FERIADO (regla #518): la banda de «Comparativo vs
         # año pasado» (`ventas_comparativo.py`), mismos colores y mismo
@@ -882,11 +908,32 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # (`semanal._LEYENDA_Y`). `_xright` recorta el dominio del eje X
         # para hacerle lugar al tercer eje (el del ticket) a la derecha,
         # como `_ventas_grafico_dia`.
-        _xright = 0.88 if _hay_ticket else 1.0
+        # UN SOLO EJE A LA DERECHA, el de Clientes (regla #521, a pedido:
+        # «este segundo eje que dice Ticket descuadra la simetría de la
+        # vista»). La línea del Ticket sigue en su propia escala —S/ 180
+        # contra 100 clientes no comparten ninguna—, pero SIN eje: su
+        # último punto lleva el valor escrito, y los demás están en el
+        # hover, en la pastilla «Detalle» y en la tabla. Con eso las barras
+        # recuperan el 12 % del ancho que les comía el tercer eje.
+        _xright = 1.0
         _compras_layout(fig, alto=_alto_fig)
-        _rng_y = (_techo_etiquetas(
-            float(g["carta"].max() if _hay_tapa else g["total"].max()), 0.0,
-            _alto_fig, _alto_etq) if _plan_etq else None)
+        # EL TECHO, CON EL ÁREA REAL (regla #521, a pedido: «el gráfico
+        # tiene mucho espacio arriba»). `semanal._techo_etiquetas` deduce el
+        # alto del área de trazo suponiendo la leyenda al PIE, y acá ya no
+        # hay leyenda: calculaba 139px sobre 156 reales y reservaba de más.
+        # Medido: la barra más alta empezaba 53px debajo del borde, con 37
+        # de etiqueta y 16 de aire que no era de nadie. La línea del Ticket
+        # no tenía nada que ver — va en su propia escala.
+        _rng_y = None
+        if _plan_etq:
+            _area = _alto_fig - _MARGEN_ARRIBA - _PIE_EJE
+            # × 0,8: `_plan_etiquetas` mide a 5,4px por carácter (la cuenta
+            # de Compras, para etiquetas derechas) y la etiqueta GIRADA de
+            # acá mide menos — medido, 37px donde estimaba 47.
+            _etq = min(_alto_etq * 0.8, _area * 0.45)
+            _hi = float(g["carta"].max() if _hay_tapa else g["total"].max())
+            if _hi > 0 and _area > _etq:
+                _rng_y = [0.0, _hi * _area / (_area - _etq)]
         fig.update_layout(
             # SIN LEYENDA DE PLOTLY (regla #520): la hace la pastilla
             # «Detalle» que flota arriba a la izquierda, como en Comparativo
@@ -895,8 +942,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             # 28 arriba: la pastilla cerrada mide 26 y flota a 1px del
             # borde, sobre el margen y no sobre las barras. 4 abajo: debajo
             # de los rótulos del eje no va nada (regla #520, 2da pasada).
-            margin=dict(l=10, r=(70 if _hay_ticket else 50 if vol_label else 10),
-                        t=28, b=4),
+            margin=dict(l=10, r=(50 if vol_label else 10), t=_MARGEN_ARRIBA,
+                        b=4),
             yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE,
                        **({"range": _rng_y} if _rng_y else {})),
             yaxis2=dict(overlaying="y", side="right", showgrid=False,
@@ -905,7 +952,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             yaxis3=dict(overlaying="y", side="right", anchor="free",
                         position=1.0, showgrid=False, tickprefix="S/ ",
                         tickformat=",.0f", title="Ticket",
-                        visible=bool(_hay_ticket) and _ver["ticket"]),
+                        visible=False),
         )
         # Un rótulo por período sólo mientras entren HORIZONTALES: girados
         # a −45° se metían en la leyenda de abajo con la figura en COMPACTO.
@@ -1009,7 +1056,10 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
 
     # ── Top platos (Ingreso / Cantidad) ──────────────────────────────────
     if col_prod:
-        with _card("ventas_resumen_top", "Top platos vendidos", titulo_arriba=True):
+        with st.container(border=True,
+                          key="ajuste_graf_card_izq_ventas_resumen_top"), \
+                _card("ventas_resumen_top", "Top platos vendidos",
+                      titulo_arriba=True):
             agg = {"ingreso": ("venta", "sum")}
             agg["cantidad"] = ("cant", "sum") if col_cant else ("venta", "count")
             top = tabla.groupby("prod").agg(**agg).reset_index()
