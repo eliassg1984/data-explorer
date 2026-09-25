@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-527 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+528 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (182)
 
@@ -217,7 +217,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#523** — Un gráfico que rotula CADA barra congela el navegador cuando el rango crece, y lo congela…
 - **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
 
-**Layout y alturas** (75)
+**Layout y alturas** (76)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -294,6 +294,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 - **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
+- **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 
 **Plotly y figuras** (99)
 
@@ -806,7 +807,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (107)
+**Decisiones de diseño y UX** (108)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -915,6 +916,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#524** — La venta tiene UNA definición y vive en definicion_venta.py: facturas y boletas pagadas o por…
 - **#525** — El Resumen de Ventas muestra lo que la definición deja afuera: una subvista «Cuadre», los KPI…
 - **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
+- **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -43053,6 +43055,26 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        segundo, comparar subgrupos a través de julio engaña, en esta vista
        y en las que ya existían.
 
+528. **Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de
+     platos ya tenía dónde leerse, y mejor.**
+     2026-09-25, a pedido, el mismo día que entró «Mix de carta» (#527).
+     Eran barras horizontales con los 8 platos del rango, por ingreso o
+     cantidad, en una segunda tarjeta debajo de la del Resumen (#521).
+
+     - **Lo que el usuario no pierde**: el mismo ranking está en «Mix de
+       carta» —nivel Producto de cualquier subgrupo, y «Lo más vendido» en
+       el Detalle de cada período— y en «Ranking & FoodCost». Lo que se
+       fue es la versión suelta, sin período ni comparación.
+     - **Se fue entero**: su bloque en `ventas_resumen.py`, la key
+       `ventas_resumen_top_metrica` de `_KEYS_WIDGET_RESUMEN` (una key
+       preservada que ya no se dibuja es una mentira que envejece) y las
+       menciones en `ventas.py` y `mapa.md`. La tarjeta propia del Resumen
+       (#521) se queda: el motivo era no leerse junto con la vecina, y la
+       siguiente sección de la pila es otra tarjeta.
+     - **Qué la reemplaza está en discusión**: se pidió «opciones» con la
+       forma de «Mapa por hora» —un mapa de calor que compara períodos—
+       para mirar los platos. Si una se implementa, va con regla propia.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43065,7 +43087,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#527**; la próxima toma el número siguiente.
+> última regla es la **#528**; la próxima toma el número siguiente.
 
 >
 

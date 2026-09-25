@@ -1,8 +1,8 @@
 """
 graficos.ventas_resumen — vista "Resumen ejecutivo" del dashboard de Ventas:
 venta total por día (barras partidas por canal de venta, con el total y la
-variación día-a-día encima) + volumen de Pax, ticket promedio diario y top
-platos.
+variación día-a-día encima) + volumen de Pax y ticket promedio. (El top de
+platos se quitó el 2026-09-25: regla #528.)
 
 Nació como un candlestick (mockup tipo "panel bursátil" para restaurantes)
 con apertura/cierre = primera/última línea de venta del día — se reemplazó
@@ -56,11 +56,11 @@ import streamlit as st
 
 import cortes
 import definicion_venta as dv
-from tema import (ACENTO, ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR, EXITO,
+from tema import (ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR, EXITO,
                   GRIS_BORDE, GRIS_TEXTO, LAVANDA_BORDE, PALETA_SERIES,
                   SERIE_PRINCIPAL, TEXTO_PRINCIPAL)
 from graficos.base import (
-    _card, _compras_layout, _compras_truncar, _resolver, preservar_widgets,
+    _card, _compras_layout, _resolver, preservar_widgets,
     scope_rerun, selector_fecha_tarjeta,
 )
 from graficos.compras._comun import (
@@ -114,7 +114,7 @@ _KEYS_WIDGET_RESUMEN = ("vt_resumen_gran", "vt_resumen_grupo",
                         "vt_resumen_ver_ticket",
                         "vt_resumen_serv", "vt_resumen_canal",
                         "vt_resumen_tdoc", "vt_resumen_modo",
-                        "vt_resumen_sub", "ventas_resumen_top_metrica")
+                        "vt_resumen_sub")
 
 # Las granularidades de «Compras por período», sin «Documento»: en Ventas
 # una barra por comprobante son ~60 por día y no se lee ninguna. Abre en
@@ -309,7 +309,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                     col_mesero=None, d_pagos=None):
     """"Resumen ejecutivo": selector de fecha + granularidad + filtros de
     Grupo/Servicio/Canal/Tipo de documento + la venta por período partida
-    por canal, con su Resumen/Detalle debajo + top platos, todas las piezas
+    por canal, con su Resumen/Detalle debajo, todas las piezas
     sobre el MISMO recorte para que cuenten la misma historia.
     """
     # ── 0) La fecha cambió: recargar el parquet del rango nuevo ───────────
@@ -355,8 +355,9 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     # platos vendidos»). Hasta ese día `ventas.py` envolvía la sección
     # entera en UNA `ajuste_graf_card_` y el CSS vuelve transparentes las
     # tarjetas de adentro, así que el gráfico y el Top platos se leían como
-    # una sola caja. Ahora la sección no trae tarjeta y la función arma las
-    # suyas: ésta (filtros, gráfico, tablas) y la del Top platos, al final.
+    # una sola caja. Ahora la sección no trae tarjeta y la función arma la
+    # suya (filtros, gráfico, tablas). La del Top platos se quitó el
+    # 2026-09-25 (regla #528); la tarjeta propia se queda.
     _tarjeta = st.container(border=True,
                             key="ajuste_graf_card_izq_ventas_resumen")
     with _tarjeta:
@@ -1116,46 +1117,10 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     # (La tarjeta «Ticket promedio diario» que vivía acá se quitó el
     # 2026-09-22: el ticket es ahora la línea naranja del gráfico de arriba.)
 
-    # ── Top platos (Ingreso / Cantidad) ──────────────────────────────────
-    if col_prod:
-        with st.container(border=True,
-                          key="ajuste_graf_card_izq_ventas_resumen_top"), \
-                _card("ventas_resumen_top", "Top platos vendidos",
-                      titulo_arriba=True):
-            agg = {"ingreso": ("venta", "sum")}
-            agg["cantidad"] = ("cant", "sum") if col_cant else ("venta", "count")
-            top = tabla.groupby("prod").agg(**agg).reset_index()
-
-            metrica = st.pills(
-                "Métrica", ["Ingreso", "Cantidad"], default="Ingreso",
-                key="ventas_resumen_top_metrica", label_visibility="collapsed",
-            ) or "Ingreso"
-            campo = "ingreso" if metrica == "Ingreso" else "cantidad"
-            top = top.sort_values(campo, ascending=False).head(8).sort_values(campo)
-
-            if top.empty:
-                st.info("Sin datos de productos en el rango.")
-            else:
-                _txt = ([f"S/ {v:,.0f}" for v in top[campo]] if metrica == "Ingreso"
-                        else [f"{v:,.0f} uds" for v in top[campo]])
-                fig_p = go.Figure(go.Bar(
-                    x=top[campo], y=[_compras_truncar(p, 26) for p in top["prod"]],
-                    orientation="h", marker=dict(color=ACENTO),
-                    text=_txt, textposition="outside", cliponaxis=False,
-                    hovertemplate=("%{y}<br>" + ("S/ %{x:,.0f}" if metrica == "Ingreso"
-                                                 else "%{x:,.0f} unidades")
-                                  + "<extra></extra>"),
-                ))
-                _compras_layout(fig_p, alto=alturas.por_filas(
-                    len(top), px_fila=40, minimo=240, extra=60,
-                    rol=alturas.APOYO))
-                fig_p.update_layout(
-                    showlegend=False, margin=dict(l=10, r=90, t=10, b=10),
-                    xaxis=dict(tickprefix="S/ " if metrica == "Ingreso" else ""),
-                )
-                st.plotly_chart(fig_p, use_container_width=True,
-                                key="ventas_g_resumen_top")
-
+    # (La tarjeta «Top platos vendidos» que vivía acá se quitó el
+    # 2026-09-25, a pedido. El ranking de platos sigue en «Mix de carta»
+    # —nivel Producto, y «Lo más vendido» en su Detalle— y en «Ranking &
+    # FoodCost». Regla #528.)
 
 # ===========================================================================
 # LA ZONA DE ABAJO: Resumen y Detalle (2026-09-24, regla #516)
