@@ -42,7 +42,8 @@ from tema import (ACENTO, AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO,
                   GRIS_TEXTO_SUAVE, LAVANDA_BORDE, PALETA_SERIES,
                   TEXTO_PRINCIPAL)
 from graficos import alturas
-from graficos.base import _compras_layout, _compras_truncar
+from graficos.base import (_compras_layout, _compras_truncar,
+                           preservar_widgets, scroll_a_seccion)
 from graficos.compras._comun import _first_point
 from graficos.ventas_horario import (_COLOR_MARCA, _claves_hacia_atras,
                                      _etiqueta_clave, _rango_de_clave)
@@ -65,6 +66,12 @@ _MOSTRAR_DEFAULT = "Top 15"
 _TOPE_GRAFICO = 20
 """Con «Todos» la tabla lista cada plato del ámbito; el gráfico de puestos se
 queda con los 20 primeros: 300 líneas no se leen."""
+
+_KEYS_WIDGET_PL = ("vt_pl_corte", "vt_pl_medida", "vt_pl_mostrar",
+                   "vt_pl_per_*", "vt_pl_ambito", "vt_pl_cual_*",
+                   "vt_pl_elegidos")
+"""Los controles de la vista, para que el salto a «Por hora»
+(`st.rerun(scope="app")`) no se los lleve (regla #373)."""
 
 _COLORES_ELEGIDOS = tuple(PALETA_SERIES)
 MAX_ELEGIDOS = len(_COLORES_ELEGIDOS)
@@ -212,6 +219,18 @@ def _soltar_foco():
     st.session_state["vt_pl_foco"] = None
 
 
+def _ir_a_hora(nombre):
+    """«Ver a qué hora se vende»: deja pedida la ficha del plato en «Por
+    hora» (filas «Platos») y marca el salto. El salto necesita una corrida
+    COMPLETA —«Por hora» es otra sección, con su propio fragment— y el
+    scroll va en la corrida siguiente a ésa (ver `_ventas_platos`)."""
+    ss = st.session_state
+    ss["vh_op_filas"] = "Platos"
+    ss["vh_op_cols"] = "Por hora"
+    ss["_vh_ficha_pedida"] = nombre
+    ss["_vt_pl_ir_hora"] = 1
+
+
 # ===========================================================================
 # LA VISTA
 # ===========================================================================
@@ -219,6 +238,15 @@ def _soltar_foco():
 @st.fragment
 def _ventas_platos(d, filtrar_cb=None):
     """«Análisis de platos»: el ranking de platos entre hasta 4 períodos."""
+    ss = st.session_state
+    # El salto a «Por hora», en dos pasos: una corrida completa para que esa
+    # sección se redibuje con la ficha pedida, y en ESA corrida el scroll.
+    if ss.get("_vt_pl_ir_hora") == 1:
+        ss["_vt_pl_ir_hora"] = 2
+        preservar_widgets(_KEYS_WIDGET_PL)
+        st.rerun(scope="app")
+    if ss.pop("_vt_pl_ir_hora", None) == 2:
+        scroll_a_seccion("vt_sec_hora")
     cols_d = columnas(d)
     if not (cols_d["fecha"] and cols_d["prod"] and cols_d["venta"]):
         st.info("Faltan columnas (Fecha, Plato, Venta) para el ranking.")
@@ -547,7 +575,9 @@ def _evolucion(nombre, corte, lista, etq, sel, ancla, filtrar_cb, d, m, info,
                elegidos):
     """La segunda tarjeta: el plato en foco en TODO el corte, por día."""
     with st.container(border=True, key="ajuste_graf_card_izq_ventas_platos_evo"):
-        c1, c2, c3 = st.columns([3, 1.1, 0.8], vertical_alignment="center")
+        # columnas-internas: el título de la evolución y sus tres botones
+        c1, c2, c4, c3 = st.columns([2.6, 1.1, 1.3, 0.7],
+                                    vertical_alignment="center")
         sub = (f"{info.loc[nombre, 'grupo']} › {info.loc[nombre, 'sub']}"
                if nombre in info.index else "")
         with c1:
@@ -561,6 +591,12 @@ def _evolucion(nombre, corte, lista, etq, sel, ancla, filtrar_cb, d, m, info,
                       else "Agregar a elegidos", key="vt_pl_btn_elegir",
                       on_click=_alternar_elegido, args=(nombre,),
                       use_container_width=True)
+        with c4:
+            st.button("Ver a qué hora se vende →", key="vt_pl_btn_hora",
+                      on_click=_ir_a_hora, args=(nombre,),
+                      use_container_width=True,
+                      help="Lleva a «Por hora» con este plato abierto en su "
+                           "ficha.")
         with c3:
             st.button("Cerrar", key="vt_pl_btn_soltar", on_click=_soltar_foco,
                       use_container_width=True)

@@ -86,13 +86,15 @@ import streamlit as st
 import definicion_venta as dv
 from data import REPORTES, cargar_rango
 from tema import (
-    ACENTO, ADVERTENCIA_TEXTO, ERROR, ESCALA_CONTINUA, EXITO, GRIS_CUADRICULA,
-    GRIS_LINEA, GRIS_TEXTO, PALETA_SERIES, TEXTO_PRINCIPAL,
+    ACENTO, ADVERTENCIA_TEXTO, AJUSTE_NEG, AJUSTE_POS, BLANCO, ERROR,
+    ESCALA_CONTINUA, EXITO, GRIS_CUADRICULA, GRIS_LINEA, GRIS_TEXTO,
+    PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
     _card, _resolver, franja_linea_inferior, paso_etiquetas, publicar_var_px,
 )
+from graficos.compras._comun import _first_point
 # Los helpers de calendario NO se duplican: son los mismos que usa la vista
 # "Año Pasado" y ya están cubiertos por test_graficos.py. Acá sólo se extienden
 # para la granularidad Año, que allá no existe (comparar 2025 contra 2024 es
@@ -509,6 +511,10 @@ def _prep_tramo(df, c, grano, ini, fin):
     out = pd.DataFrame({
         "col":  _columna_de_fecha(fe, grano).astype("int64").values,
         "hora": fe.dt.hour.astype("int64").values,
+        # El día de semana y la fecha los usan las filas «Platos» y «Grupos»
+        # (columnas por día de semana, y «Por día»), regla #530.
+        "dow":  fe.dt.weekday.astype("int64").values,
+        "dia":  fe.dt.normalize().values,
         "venta": pd.to_numeric(df.loc[m, c["venta"]],
                                errors="coerce").fillna(0.0).values,
     })
@@ -694,15 +700,47 @@ def _paso_etiquetas(total_columnas, largo_etiqueta, ancho=None):
                           _ANCHO_UTIL if ancho is None else ancho)
 
 
+def _fmt_delta(d, medida):
+    """«+S/ 1,240», «−3», «+S/ 12.50»: la resta de una celda, con su signo."""
+    s = "+" if d > 0 else "−" if d < 0 else ""
+    a = abs(d)
+    if medida in ("venta", "desc"):
+        return f"{s}S/ {a:,.0f}"
+    if medida == "ticket":
+        return f"{s}S/ {a:,.2f}"
+    return f"{s}{a:,.0f}"
+
+
+def _heatmap_dif(z, x, y, **kw):
+    """La capa de las RESTAS: rojo lo que bajó, verde lo que subió, blanco
+    lo igual. La escala la pone el percentil 90 de las restas y no la
+    mayor: un solo caso extremo dejaba todo lo demás casi blanco (medido
+    en el mockup). Lo que pasa de ahí sale con el color entero."""
+    v = np.abs(z[~np.isnan(z)])
+    lim = float(np.percentile(v, 90)) if v.size else 1.0
+    lim = lim or (float(v.max()) if v.size else 1.0) or 1.0
+    return go.Heatmap(
+        z=z, x=x, y=y, zmin=-lim, zmax=lim, zmid=0, hoverinfo="skip",
+        colorscale=[[0.0, AJUSTE_NEG], [0.5, BLANCO], [1.0, AJUSTE_POS]],
+        colorbar=dict(thickness=10, outlinewidth=0, len=0.42, y=0.22,
+                      title=dict(text="Δ", font=dict(size=10)),
+                      tickfont=dict(size=10, color=GRIS_TEXTO)), **kw)
+
+
 def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
-              alto=None):
+              alto=None, dif=False):
     """Mapa de calor de los N paneles en una sola figura, con la capa de
     selección transparente encima y un rectángulo por marca.
 
     Los paneles se concatenan en el eje X con UNA columna de hueco entre
     ellos (NaN, que Plotly deja sin pintar): así el eje de horas es uno solo
     a la izquierda y comparar es barrer la vista, sin tener que emparejar
-    cuatro ejes distintos."""
+    cuatro ejes distintos.
+
+    Con `dif` (regla #530) cada panel desde el segundo se pinta como su
+    RESTA contra el primero, celda por celda —la misma columna y la misma
+    hora—, en rojo y verde; el primero sigue en azul. Sólo tiene sentido con
+    columnas que se corresponden, y por eso el llamador no la pide en Mes."""
     n_horas = len(horas)
     h_idx = {h: i for i, h in enumerate(horas)}
     # Eje Y CATEGÓRICO y no numérico: `horas` viene ordenado por día de
@@ -765,23 +803,46 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     total = max(total, 1)
 
     z = np.full((n_horas, total), np.nan)
-    xs, ys, cd = [], [], []
+    dif = dif and len(paneles) > 1
+    z_dif = np.full((n_horas, total), np.nan)
+
+    def _num(v):
+        return 0.0 if v is None or pd.isna(v) else float(v)
+    base = ({(int(f.col), int(f.hora)): _num(getattr(f, medida, np.nan))
+             for f in paneles[0].itertuples(index=False)}
+            if dif and paneles[0] is not None and not paneles[0].empty else {})
+    xs, ys, cd, dtxt = [], [], [], []
+    _et_base = _etiqueta_clave(claves[0], grano) if claves else ""
     for s, celdas in enumerate(paneles):
         if celdas is None or celdas.empty:
-            continue
+            celdas = pd.DataFrame(columns=["col", "hora"])
         n, _et = _columnas(claves[s], grano, ancla)
+        vistos = set()
         for fila in celdas.itertuples(index=False):
             if fila.hora not in h_idx or fila.col >= n:
                 continue
             x = offs[s] + int(fila.col)
             valor = getattr(fila, medida, np.nan)
-            z[h_idx[fila.hora], x] = valor
+            vistos.add((int(fila.col), int(fila.hora)))
+            if dif and s > 0:
+                _d = _num(valor) - base.get((int(fila.col), int(fila.hora)), 0.0)
+                z_dif[h_idx[fila.hora], x] = _d
+                dtxt.append(f"<br><b>Δ vs {_et_base}: "
+                            f"{_fmt_delta(_d, medida)}</b>")
+            else:
+                z[h_idx[fila.hora], x] = valor
+                dtxt.append("")
             xs.append(x)
             ys.append(y_cat[h_idx[fila.hora]])
             cd.append([s, int(fila.col), int(fila.hora),
                        float(fila.venta), float(fila.pax),
                        float(fila.cant), float(fila.desc),
                        float(fila.ticket) if pd.notna(fila.ticket) else 0.0])
+        if dif and s > 0:
+            for (col, hora), bv in base.items():
+                if (col, hora) not in vistos and col < n and hora in h_idx \
+                        and bv:
+                    z_dif[h_idx[hora], offs[s] + col] = -bv
 
     fig = go.Figure()
 
@@ -813,9 +874,13 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
         # a través), así que un píxel más de aire vertical convierte cada
         # hora en una franja legible sin dibujar una sola línea.
         xgap=1, ygap=2,
-        colorbar=dict(thickness=10, outlinewidth=0, len=0.85,
+        colorbar=dict(thickness=10, outlinewidth=0,
+                      len=0.42 if dif else 0.85, y=0.78 if dif else 0.5,
                       tickfont=dict(size=10, color=GRIS_TEXTO)),
     ))
+    if dif:
+        fig.add_trace(_heatmap_dif(z_dif, list(range(total)), y_cat,
+                                   xgap=1, ygap=2))
     # CUADRÍCULA (2026-08-15, pedido: "una ligera cuadrícula para tener
     # referencia de la fecha y hora"). Las líneas caen en los BORDES de la
     # celda (i ± 0.5), nunca en su centro: ahí es donde el xgap/ygap del
@@ -917,14 +982,20 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
                 x for x in (_etiqueta_clave(claves[s], grano), _c,
                             {"feriado": "feriado",
                              "finde": "fin de semana"}.get(_m, "")) if x))
-        fig.data[-1].customdata = [c + [n] for c, n in zip(cd, _nombres)]
+        fig.data[-1].customdata = [c + [n, dt] for c, n, dt
+                                   in zip(cd, _nombres, dtxt)]
+        if dif:
+            fig.data[-1].hovertemplate = fig.data[-1].hovertemplate.replace(
+                "<extra></extra>", "%{customdata[9]}<extra></extra>")
 
     # El rótulo del panel se dibuja SÓLO si hay más de uno: con varios es lo
     # único que dice cuál banda es cuál, pero con uno solo repite el título de
     # la tarjeta y se lleva 24px de alto del gráfico. Con un panel, ese
     # nombre viaja al título (ver `_ventas_horario`).
     if len(claves) > 1:
-        for x, txt in titulos:
+        for s, (x, txt) in enumerate(titulos):
+            if dif and s > 0:
+                txt = f"{txt} − {_et_base}"
             fig.add_annotation(x=x, y=1.0, xref="x", yref="paper",
                                yanchor="bottom", showarrow=False, text=txt,
                                font=dict(size=12, color=TEXTO_PRINCIPAL))
@@ -1031,6 +1102,282 @@ def _puntos_de_evento(evt):
             continue
         out.append((cd[0], cd[1], cd[2]))
     return out
+
+
+# ── Filas «Platos» y «Grupos» (2026-09-25, regla #530) ──────────────────────
+# El mismo mapa, con otra pregunta. «Días × horas» (el de siempre) mide la
+# AFLUENCIA: cuánta gente llega y cuánto gasta, día por día y hora por hora.
+# «Platos» y «Grupos» miden PREFERENCIAS: qué se pide y cuándo. Por eso Pax
+# y Ticket no existen ahí —son del pedido, no del plato: una mesa de cuatro
+# no le reparte «un pax» a cada plato— y el mapa cae a Venta y lo dice.
+
+_FILAS = ("Días × horas", "Platos", "Grupos")
+_COLS_FILAS = ("Por hora", "Por día de semana")
+_HORA_OP = ("Hora del pedido", "Hora del cobro")
+_LECTURAS = ("Lado a lado", "Diferencia")
+_ESCALAS = ("Suma", "Por día")
+_TOP_PLATOS = 20
+_MED_FILAS = ("venta", "cant", "desc")
+_NOCHE_DESDE = 18
+_K_FICHA = "vh_ficha"
+# Lo que ocupa la segunda fila de controles (la de «Filas», «Hora»…) con el
+# gap de la tarjeta. Entra en la resta del panel de abajo (`vh-alto-arriba`).
+_FILA_CONTROLES = 30
+
+
+def _items_filas(tramos, que):
+    """Las filas del mapa: los 20 platos que más vendieron en el período MÁS
+    NUEVO de los elegidos, o todos los grupos por venta. Las mismas filas en
+    todos los paneles: si no, «Diferencia» restaría platos distintos."""
+    con = [x for x in tramos if x is not None and not x.empty
+           and que in x.columns]
+    if not con:
+        return []
+    if que == "prod":
+        return (con[-1].groupby("prod")["venta"].sum()
+                .nlargest(_TOP_PLATOS).index.tolist())
+    return (pd.concat(con).groupby(que)["venta"].sum()
+            .sort_values(ascending=False).index.tolist())
+
+
+def _matriz_filas(tramo, que, items, por_hora, medida, horas, por_dia):
+    """Filas × columnas de UN período: las horas (en orden de servicio) o
+    los siete días de semana. Con `por_dia`, dividido por los días CON
+    VENTA del período (o por cuántos lunes, martes… tuvo), para comparar un
+    mes entero con uno en curso."""
+    n_col = len(horas) if por_hora else 7
+    m = np.zeros((len(items), n_col))
+    if tramo is None or tramo.empty or que not in tramo.columns or not items:
+        return m
+    col = "hora" if por_hora else "dow"
+    pos = {h: i for i, h in enumerate(horas)} if por_hora else None
+    ix = {n: i for i, n in enumerate(items)}
+    g = (tramo[tramo[que].isin(ix)]
+         .groupby([que, col], as_index=False)[medida].sum())
+    for f in g.itertuples(index=False):
+        c = int(getattr(f, col))
+        c = pos.get(c) if por_hora else c
+        if c is not None:
+            m[ix[getattr(f, que)], c] = float(getattr(f, medida))
+    if por_dia:
+        if por_hora:
+            n = tramo["dia"].nunique()
+            m = m / n if n else m
+        else:
+            cuenta = tramo.drop_duplicates("dia")["dow"].value_counts()
+            den = np.array([cuenta.get(w, 0) for w in range(7)], dtype=float)
+            m = np.divide(m, den, out=np.zeros_like(m), where=den > 0)
+    return m
+
+
+def _fmt_valor(v, medida, por_dia):
+    etq = {"venta": "Venta", "cant": "Cantidad", "desc": "Descuento"}[medida]
+    txt = (f"S/ {v:,.0f}" if medida in ("venta", "desc")
+           else f"{v:,.1f}" if por_dia else f"{v:,.0f}")
+    return f"{etq}: {txt}" + (" por día" if por_dia else "")
+
+
+def _fig_filas(items, mats, etq_cols, claves, grano, medida, dif, foco,
+               por_dia):
+    """El mapa de «Platos»/«Grupos»: una fila por plato (o grupo), una
+    columna por hora (o día de semana), un panel por período, concatenados
+    como en `_fig_mapa`. Encima, la capa de hover y CLIC —un heatmap no
+    emite eventos (trampa 1 del docstring)—, que abre la ficha de la fila."""
+    n_it, n_c = len(items), len(etq_cols)
+    dif = dif and len(mats) > 1
+    offs = [s * (n_c + 1) for s in range(len(mats))]
+    total = len(mats) * (n_c + 1) - 1
+    z = np.full((n_it, total), np.nan)
+    z_dif = np.full((n_it, total), np.nan)
+    for s, m in enumerate(mats):
+        for i in range(n_it):
+            for c in range(n_c):
+                v = m[i, c]
+                if dif and s > 0:
+                    z_dif[i, offs[s] + c] = v - mats[0][i, c]
+                elif v:
+                    z[i, offs[s] + c] = v
+    fig = go.Figure()
+    fig.add_trace(go.Heatmap(
+        z=z, x=list(range(total)), y=items, colorscale=ESCALA_CONTINUA,
+        hoverinfo="skip", xgap=1, ygap=2,
+        colorbar=dict(thickness=10, outlinewidth=0,
+                      len=0.42 if dif else 0.85, y=0.78 if dif else 0.5,
+                      tickfont=dict(size=10, color=GRIS_TEXTO))))
+    if dif:
+        fig.add_trace(_heatmap_dif(z_dif, list(range(total)), items,
+                                   xgap=1, ygap=2))
+    _base = _etiqueta_clave(claves[0], grano)
+    xs, ys, cd = [], [], []
+    for s, m in enumerate(mats):
+        per = _etiqueta_clave(claves[s], grano)
+        for i, n in enumerate(items):
+            for c in range(n_c):
+                v = m[i, c]
+                d = (f"<br><b>Δ vs {_base}: "
+                     f"{_fmt_delta(v - mats[0][i, c], medida)}</b>"
+                     if dif and s > 0 else "")
+                xs.append(offs[s] + c)
+                ys.append(n)
+                cd.append([n, per, etq_cols[c],
+                           _fmt_valor(v, medida, por_dia), d])
+    # `hoverinfo` NO es «skip»: eso apaga también el clic (#388). La
+    # etiqueta la da el hovertemplate.
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, mode="markers", showlegend=False,
+        marker=dict(size=13, color="rgba(0,0,0,0)", line=dict(width=0)),
+        customdata=cd,
+        hovertemplate=("<b>%{customdata[0]}</b><br>%{customdata[1]} · "
+                       "%{customdata[2]}<br>%{customdata[3]}"
+                       "%{customdata[4]}<extra></extra>")))
+    paso = _paso_etiquetas(total, max(len(e) for e in etq_cols))
+    tv, tt = [], []
+    for s in range(len(mats)):
+        for c in range(0, n_c, paso):
+            tv.append(offs[s] + c)
+            tt.append(etq_cols[c])
+    if len(claves) > 1:
+        for s in range(len(mats)):
+            txt = _etiqueta_clave(claves[s], grano)
+            if dif and s > 0:
+                txt = f"{txt} − {_base}"
+            fig.add_annotation(x=offs[s] + (n_c - 1) / 2, y=1.0, xref="x",
+                               yref="paper", yanchor="bottom",
+                               showarrow=False, text=txt,
+                               font=dict(size=12, color=TEXTO_PRINCIPAL))
+    if foco in items:
+        i = items.index(foco)
+        fig.add_shape(type="rect", x0=-0.5, x1=total - 0.5, y0=i - 0.5,
+                      y1=i + 0.5, layer="above", fillcolor="rgba(0,0,0,0)",
+                      line=dict(color=ACENTO, width=2))
+    varios = len(claves) > 1
+    fig.update_layout(
+        height=alturas.por_filas(
+            n_it, px_fila=_PX_HORA, rol=alturas.PROTAGONISTA,
+            extra=(_AIRE_MAPA if varios else _AIRE_MAPA_SOLO),
+            minimo=_ALTO_MIN),
+        margin=dict(l=10, r=10, t=(34 if varios else 10), b=2),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL,
+                  size=12),
+        # MODO CLIC (#388): con «select» un clic suelto no selecciona nada.
+        dragmode="pan", showlegend=False)
+    fig.update_xaxes(fixedrange=True, ticks="", tickvals=tv, ticktext=tt,
+                     showgrid=False, zeroline=False,
+                     range=[-0.5, total - 0.5],
+                     tickfont=dict(size=10, color=GRIS_TEXTO))
+    fig.update_yaxes(type="category", autorange="reversed", fixedrange=True,
+                     showgrid=False, zeroline=False, automargin=True,
+                     tickfont=dict(size=10.5, color=TEXTO_PRINCIPAL))
+    return fig
+
+
+def _punto_fila(evt):
+    """El nombre de la fila (plato o grupo) de un clic en `_fig_filas`."""
+    p = _first_point(evt)
+    cd = p.get("customdata") if isinstance(p, dict) else None
+    return cd[0] if cd else None
+
+
+def _clic_filas(base_key):
+    """El clic de la corrida anterior, leído ANTES de dibujar y con un
+    contador en la key (regla #399): la ficha tiene que abrir en la MISMA
+    corrida que el clic, y el mapa se dibuja con la key nueva."""
+    n = st.session_state.get(f"_{base_key}_n", 0)
+    nombre = _punto_fila(st.session_state.get(f"{base_key}_{n}"))
+    if nombre is not None:
+        st.session_state[f"_{base_key}_n"] = n + 1
+        st.session_state[_K_FICHA] = (
+            None if st.session_state.get(_K_FICHA) == nombre else nombre)
+    return f"{base_key}_{st.session_state.get(f'_{base_key}_n', 0)}"
+
+
+def _a_dias_horas():
+    """El atajo del aviso de Pax y Ticket: los lleva a donde sí existen."""
+    st.session_state["vh_op_filas"] = _FILAS[0]
+
+
+def _ficha_filas(tramos, claves, grano, que, nombre, medida, horas):
+    """La ficha de una fila de «Platos»/«Grupos»: en cada período, cuánto,
+    cuánto por día, su puesto, su hora pico, cuánto vende de noche y de
+    viernes a domingo; y su curva por hora y por día de semana."""
+    etq = {"venta": "venta", "cant": "unidades", "desc": "descuento"}[medida]
+    st.markdown(
+        f'<p class="vh-ficha-tit"><b>{nombre}</b> · {etq} en cada período '
+        f'elegido</p>', unsafe_allow_html=True)
+    filas, curvas, semanas = [], [], []
+    for s, (k, tr) in enumerate(zip(claves, tramos)):
+        per = _etiqueta_clave(k, grano)
+        if tr is None or tr.empty or que not in tr.columns:
+            continue
+        x = tr[tr[que] == nombre]
+        n_dias = tr["dia"].nunique() or 1
+        tot = float(x[medida].sum())
+        ph = x.groupby("hora")[medida].sum().reindex(horas, fill_value=0.0)
+        pw = x.groupby("dow")[medida].sum().reindex(range(7), fill_value=0.0)
+        cuenta = tr.drop_duplicates("dia")["dow"].value_counts()
+        den = np.array([cuenta.get(w, 0) for w in range(7)], dtype=float)
+        puesto = "—"
+        if tot:
+            _rk = tr.groupby(que)["venta"].sum().rank(ascending=False,
+                                                      method="min")
+            puesto = f"#{int(_rk.get(nombre))}" if nombre in _rk else "—"
+        noche = (float(ph[[h for h in horas if h >= _NOCHE_DESDE or h < 6]]
+                       .sum()) / tot if tot else 0.0)
+        finde = float(pw[[4, 5, 6]].sum()) / tot if tot else 0.0
+        pico = _etiqueta_hora(int(ph.idxmax())) if tot else "—"
+        _v = (lambda v: f"S/ {v:,.0f}") if medida != "cant" else (
+            lambda v: f"{v:,.0f}")
+        filas.append({"Período": per, "Total": _v(tot),
+                      "Por día": _v(tot / n_dias), "Puesto": puesto,
+                      "Pico": pico, "Noche (6 pm+)": f"{noche:.0%}",
+                      "Vie–Dom": f"{finde:.0%}"})
+        color = _COLOR_MARCA[s % len(_COLOR_MARCA)]
+        curvas.append(go.Scatter(
+            x=[_etiqueta_hora(h) for h in horas], y=ph.values / n_dias,
+            mode="lines+markers", name=per, line=dict(color=color, width=2),
+            marker=dict(size=5),
+            hovertemplate=f"{per} · %{{x}}<br>%{{y:,.0f}} por día"
+                          "<extra></extra>"))
+        semanas.append(go.Bar(
+            x=list(_DIAS_ES), y=np.divide(pw.values, den,
+                                          out=np.zeros(7), where=den > 0),
+            name=per, marker=dict(color=color),
+            hovertemplate=f"{per} · %{{x}}<br>%{{y:,.0f}} por día"
+                          "<extra></extra>"))
+    if not filas:
+        st.caption("Sin ventas de esa fila en los períodos elegidos.")
+        return
+    st.dataframe(pd.DataFrame(filas), hide_index=True, row_height=27,
+                 height=alturas.por_filas(len(filas), px_fila=27, extra=40,
+                                          rol=alturas.MINI, minimo=70))
+    # columnas-internas: la curva por hora y la de día de semana
+    c1, c2 = st.columns([1.6, 1], gap="small")
+    for col, trazas, titulo in ((c1, curvas, "Por hora · promedio por día"),
+                                (c2, semanas, "Por día de semana · "
+                                              "promedio")):
+        with col:
+            f = go.Figure(trazas)
+            _compras_layout_min(f, titulo)
+            st.plotly_chart(f, key=f"vh_ficha_{titulo[:9]}",
+                            config={"displaylogo": False,
+                                    "displayModeBar": False})
+
+
+def _compras_layout_min(fig, titulo):
+    """El layout de los dos mini gráficos de la ficha."""
+    fig.update_layout(
+        height=alturas.MINI, margin=dict(l=10, r=10, t=26, b=4),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL,
+                  size=11),
+        showlegend=False, barmode="group", bargap=0.25, dragmode=False,
+        title=dict(text=titulo, font=dict(size=12), x=0, xanchor="left"))
+    fig.update_xaxes(fixedrange=True, type="category",
+                     tickfont=dict(size=9.5, color=GRIS_TEXTO))
+    fig.update_yaxes(fixedrange=True, gridcolor=GRIS_CUADRICULA,
+                     tickfont=dict(size=9.5, color=GRIS_TEXTO),
+                     tickformat=",.0f")
 
 
 # ── UI: selector de períodos ────────────────────────────────────────────────
@@ -1367,6 +1714,49 @@ def _tabla_arbol(marcas, tramos, claves, grano, orden, medidas_arbol,
         "compara cada fila ENTRE marcas.")
 
 
+def _dibujar_filas(tramos, claves, grano, medida, filas, cols_filas, lectura,
+                   escala, horas):
+    """El mapa de «Platos» o «Grupos». Devuelve el alto de la figura, que
+    entra en la resta del panel de abajo."""
+    que = "prod" if filas == "Platos" else "grupo"
+    if medida not in _MED_FILAS:
+        # PAX Y TICKET SON DEL PEDIDO (regla #530): no se apagan en
+        # silencio, se dice por qué y se ofrece el camino a donde sí están.
+        # columnas-internas: el aviso y su atajo
+        _a, _b = st.columns([3.2, 1], vertical_alignment="center")
+        with _a:
+            st.caption(f"{_MED_LABEL[medida]} es del pedido, no del "
+                       f"{'plato' if que == 'prod' else 'grupo'}: una mesa "
+                       "de cuatro no le reparte un pax a cada plato. El mapa "
+                       "muestra la venta.")
+        with _b:
+            st.button("Ver en Días × horas", key="vh_btn_a_dias",
+                      on_click=_a_dias_horas, use_container_width=True)
+        medida = "venta"
+    items = _items_filas(tramos, que)
+    if not items:
+        st.info("Sin ventas con plato en los períodos elegidos.")
+        return _ALTO_MIN
+    por_hora = cols_filas == _COLS_FILAS[0]
+    por_dia = escala == _ESCALAS[1]
+    mats = [_matriz_filas(x, que, items, por_hora, medida, horas, por_dia)
+            for x in tramos]
+    etq = ([_etiqueta_hora(h) for h in horas] if por_hora
+           else list(_DIAS_ES))
+    dif = lectura == _LECTURAS[1] and len(claves) > 1
+    if lectura == _LECTURAS[1] and len(claves) < 2:
+        st.caption("Elegí otro período en «Comparar» para ver la diferencia.")
+    elif dif and not por_dia:
+        st.caption("En «Suma», un período en curso sale rojo aunque nada haya "
+                   "cambiado: «Por día» lo compara parejo.")
+    key = _clic_filas(f"vh_filas_g_{que}_{grano}")
+    fig = _fig_filas(items, mats, etq, claves, grano, medida, dif,
+                     st.session_state.get(_K_FICHA), por_dia)
+    st.plotly_chart(fig, key=key, on_select="rerun", selection_mode="points",
+                    config={"displaylogo": False, "displayModeBar": False})
+    return int(fig.layout.height)
+
+
 # ── Vista ───────────────────────────────────────────────────────────────────
 
 @st.fragment
@@ -1398,6 +1788,12 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             "pedido": col_pedido, "prod": col_prod, "cant": col_cant,
             "fam": col_fam, "sub": col_sub, "desc": col_desc,
             "tipo_desc": col_tipo}
+    # LA HORA DEL PEDIDO (regla #530). `FEC REG DOCUMENTO` es la del COBRO,
+    # que llega 1 h 38 min después (mediana, medido el 2026-09-25) y corría
+    # el pico de la noche de las 7 pm a las 10 pm. La del pedido es cuando
+    # se ABRIÓ la mesa: un postre pedido después queda en esa misma hora.
+    col_hora_ped = _resolver(d, ["Fecha Registro Pedido"])
+    st.session_state.setdefault("vh_op_filas", _FILAS[0])
 
     _grano_prev = st.session_state.get("vh_grano") or _GRANO_DEF
     with _card(f"ventas_horario_{_grano_prev}"):
@@ -1459,13 +1855,73 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
 
         with c3:
             _boton_selector(claves)
+        # ── LA SEGUNDA FILA: qué mira el mapa (2026-09-25, regla #530) ──
+        # Mismo idioma que la primera (pestañas subrayadas, `vh_op_*` en
+        # estilos/_80_cards.py). «Filas» decide la pregunta: «Días × horas»
+        # es la afluencia de siempre; «Platos» y «Grupos», qué se pide y
+        # cuándo. «Columnas» y «Escala» sólo existen para esas dos: en «Días
+        # × horas» las columnas las pone la granularidad y cada celda ya es
+        # un día.
+        # columnas-internas: la segunda fila de controles de la franja
+        f1, f2, f3, f4, f5 = st.columns([2.3, 2.1, 2.2, 2.3, 1.5],
+                                        vertical_alignment="center")
+        with f1:
+            filas = st.pills("Filas", list(_FILAS), key="vh_op_filas",
+                             label_visibility="collapsed") or _FILAS[0]
+        en_filas = filas != _FILAS[0]
+        with f2:
+            hora = (st.pills(
+                "Hora", list(_HORA_OP), default=_HORA_OP[0], key="vh_op_hora",
+                label_visibility="collapsed",
+                help="**Hora del pedido**: cuando se abrió la mesa, que es "
+                     "cuando la cocina trabaja. **Hora del cobro**: cuando se "
+                     "pagó, 1 h 38 min después (mediana).") or _HORA_OP[0]
+                    ) if col_hora_ped else _HORA_OP[1]
+        with f3:
+            lectura = st.pills(
+                "Leer", list(_LECTURAS), default=_LECTURAS[0],
+                key="vh_op_lect", label_visibility="collapsed",
+                help="**Diferencia**: cada período contra el primero, celda "
+                     "por celda, en verde lo que subió y en rojo lo que "
+                     "bajó.") or _LECTURAS[0]
+        cols_filas, escala = _COLS_FILAS[0], _ESCALAS[0]
+        if en_filas:
+            with f4:
+                cols_filas = st.pills(
+                    "Columnas", list(_COLS_FILAS), default=_COLS_FILAS[0],
+                    key="vh_op_cols",
+                    label_visibility="collapsed") or _COLS_FILAS[0]
+            with f5:
+                escala = st.pills(
+                    "Escala", list(_ESCALAS), default=_ESCALAS[0],
+                    key="vh_op_esc", label_visibility="collapsed",
+                    help="**Por día**: divide por los días con venta, para "
+                         "comparar un mes entero con uno en curso.") \
+                    or _ESCALAS[0]
+        cols["fecha"] = col_hora_ped if hora == _HORA_OP[0] else col_fecha
+        # Cambiar la hora cambia a qué CELDA va cada venta: las marcas viejas
+        # apuntarían a otras. Y cambiar de filas cambia de qué es la ficha.
+        if st.session_state.get("vh_hora_aplicada") != hora:
+            st.session_state["vh_hora_aplicada"] = hora
+            st.session_state[_K_MARCAS] = []
+            st.session_state[_K_SEL] = None
+        # El salto desde «Análisis de platos» («Ver a qué hora se vende»)
+        # deja pedida la ficha de su plato.
+        _pedida = st.session_state.pop("_vh_ficha_pedida", None)
+        if st.session_state.get("vh_filas_aplicada") != filas or _pedida:
+            st.session_state["vh_filas_aplicada"] = filas
+            st.session_state[_K_FICHA] = _pedida
+
         # El PANEL va fuera de las columnas, a lo ancho de la tarjeta: dentro
         # de `c3` (168px) sus cinco columnas daban 30px por botón y los
         # períodos salían escritos en vertical, una letra por línea.
         claves = _panel_selector(ancla, grano, claves)
 
+        _nombre = ("Mapa por día y hora" if not en_filas else
+                   f"{filas} por " + ("hora" if cols_filas == _COLS_FILAS[0]
+                                      else "día de semana"))
         _ph_titulo.markdown(
-            '<p class="vh-titulo">Mapa por día y hora'
+            f'<p class="vh-titulo">{_nombre}'
             + (f'<span> · {_etiqueta_clave(claves[0], grano)}</span>'
                if len(claves) == 1 else '')
             + '</p>', unsafe_allow_html=True)
@@ -1506,48 +1962,67 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.info("Sin ventas con hora en los períodos elegidos.")
             return
 
-        # ── La selección se lee ANTES de dibujar, no después ─────────────
-        # Un arrastre costaba DOS pasadas del script: la que dispara
-        # `on_select="rerun"`, que dibujaba el mapa todavía sin la marca y
-        # recién al final la guardaba, y la de `st.rerun()` que hacía falta
-        # para volver a dibujarlo con la marca puesta. Dos pasadas son dos
-        # veces que Streamlit apaga y repinta la tarjeta — eso era el
-        # parpadeo que se reportó el 2026-08-15.
-        #
-        # Con la key quieta (ver `_firma`) la key se puede calcular ANTES del
-        # widget, y con ella se lee del `session_state` la selección que dejó
-        # el render anterior. Así la marca ya está decidida cuando se arma la
-        # figura y una sola pasada alcanza.
-        #
-        # La HUELLA sigue siendo imprescindible: mientras el widget siga
-        # montado, esa misma selección vuelve en CADA rerun (los del rail,
-        # los de los chips, los del propio drill), y sin ella la marca se
-        # re-aplicaría sola una y otra vez.
-        _clave_mapa = f"vh_mapa_{_firma(grano, claves, medida)}"
-        puntos = _puntos_de_evento(st.session_state.get(_clave_mapa))
-        _huella = repr(sorted(puntos))
-        if puntos and _huella != st.session_state.get(_K_SEL):
-            st.session_state[_K_SEL] = _huella
-            st.session_state[_K_MARCAS] = _agregar_marcas(
-                [m for m in st.session_state.get(_K_MARCAS, [])
-                 if m["sel"] < len(claves)],
-                _marcas_de_seleccion(puntos, horas))
+        if en_filas:
+            marcas = []
+            _alto = _dibujar_filas(tramos, claves, grano, medida, filas,
+                                   cols_filas, lectura, escala, horas)
+        else:
+            # ── La selección se lee ANTES de dibujar, no después ─────────────
+            # Un arrastre costaba DOS pasadas del script: la que dispara
+            # `on_select="rerun"`, que dibujaba el mapa todavía sin la marca y
+            # recién al final la guardaba, y la de `st.rerun()` que hacía falta
+            # para volver a dibujarlo con la marca puesta. Dos pasadas son dos
+            # veces que Streamlit apaga y repinta la tarjeta — eso era el
+            # parpadeo que se reportó el 2026-08-15.
+            #
+            # Con la key quieta (ver `_firma`) la key se puede calcular ANTES del
+            # widget, y con ella se lee del `session_state` la selección que dejó
+            # el render anterior. Así la marca ya está decidida cuando se arma la
+            # figura y una sola pasada alcanza.
+            #
+            # La HUELLA sigue siendo imprescindible: mientras el widget siga
+            # montado, esa misma selección vuelve en CADA rerun (los del rail,
+            # los de los chips, los del propio drill), y sin ella la marca se
+            # re-aplicaría sola una y otra vez.
+            # «Diferencia» pide columnas que se correspondan: en Mes el 1 de
+            # un mes no es el mismo día de semana que el 1 del otro.
+            _dif = (lectura == _LECTURAS[1] and grano != "Mes"
+                    and len(claves) > 1)
+            if lectura == _LECTURAS[1] and not _dif:
+                st.caption(
+                    "«Diferencia» no está en Mes: el 1 de un mes no es el mismo "
+                    "día de semana que el 1 del otro. En Semana o Año las "
+                    "columnas sí se corresponden." if grano == "Mes" else
+                    "Elegí otro período en «Comparar» para ver la diferencia.")
+            # La hora y la diferencia van en la key: cambian QUÉ mapa es (las
+            # coordenadas de una selección vieja serían de otro).
+            _clave_mapa = (f"vh_mapa_{_firma(grano, claves, medida)}"
+                           f"_{'p' if hora == _HORA_OP[0] else 'c'}"
+                           f"{'_d' if _dif else ''}")
+            puntos = _puntos_de_evento(st.session_state.get(_clave_mapa))
+            _huella = repr(sorted(puntos))
+            if puntos and _huella != st.session_state.get(_K_SEL):
+                st.session_state[_K_SEL] = _huella
+                st.session_state[_K_MARCAS] = _agregar_marcas(
+                    [m for m in st.session_state.get(_K_MARCAS, [])
+                     if m["sel"] < len(claves)],
+                    _marcas_de_seleccion(puntos, horas))
 
-        marcas = [m for m in st.session_state.get(_K_MARCAS, [])
-                  if m["sel"] < len(claves)]
-        # REPARTO. Con marcas puestas el mapa se comprime y el detalle ocupa
-        # el resto de la pantalla con scroll propio, en vez de apilarse
-        # debajo y empujar el gráfico fuera de la vista (1.312px de scroll
-        # medidos antes de esto). El objetivo del usuario, textual: "que no
-        # pierda enfoque en el gráfico principal y que haga el mínimo scroll".
-        _alto = _alto_mapa(len(horas), con_drill=bool(marcas),
-                           varios=len(claves) > 1)
-        fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla,
-                        alto=_alto)
-        st.plotly_chart(
-            fig, use_container_width=True, key=_clave_mapa,
-            on_select="rerun", selection_mode=("points", "box"),
-            config={"displaylogo": False, "displayModeBar": False})
+            marcas = [m for m in st.session_state.get(_K_MARCAS, [])
+                      if m["sel"] < len(claves)]
+            # REPARTO. Con marcas puestas el mapa se comprime y el detalle ocupa
+            # el resto de la pantalla con scroll propio, en vez de apilarse
+            # debajo y empujar el gráfico fuera de la vista (1.312px de scroll
+            # medidos antes de esto). El objetivo del usuario, textual: "que no
+            # pierda enfoque en el gráfico principal y que haga el mínimo scroll".
+            _alto = _alto_mapa(len(horas), con_drill=bool(marcas),
+                               varios=len(claves) > 1)
+            fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla,
+                            alto=_alto, dif=_dif)
+            st.plotly_chart(
+                fig, use_container_width=True, key=_clave_mapa,
+                on_select="rerun", selection_mode=("points", "box"),
+                config={"displaylogo": False, "displayModeBar": False})
 
         # ── Pastillas de marcas: deseleccionar una la quita ─────────────
         # Las pastillas de marcas YA NO viven acá: se mudaron a la primera
@@ -1579,11 +2054,12 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # un monitor grande. Ver `alturas.py` § LA RESTA NO SE HACE ACÁ.
     publicar_var_px(
         "vh-alto-arriba",
-        alturas.FRANJA_UNA_LINEA + _alto + _CROMO_TARJETA)
+        alturas.FRANJA_UNA_LINEA + _FILA_CONTROLES + _alto + _CROMO_TARJETA)
     # El piso del panel también se publica en vez de vivir suelto en el CSS:
     # con marcas evita que en una pantalla apretada quede una tira ilegible;
     # SIN marcas tiene que ser 0, o el panel vacío se come 150px de tarjeta.
-    publicar_var_px("vh-panel-min", _PANEL_MIN if marcas else 0)
+    _ficha = en_filas and st.session_state.get(_K_FICHA)
+    publicar_var_px("vh-panel-min", _PANEL_MIN if (marcas or _ficha) else 0)
     # Key ESTABLE, sin `_on`/`_off`. Alternarla dejaba el contenedor viejo
     # huérfano en el DOM (regla #70) y no hace falta: con el panel vacío el
     # `max-height` no molesta a nadie.
@@ -1646,3 +2122,14 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                                  if _MED_LABEL[m] in (_sela or [])} or {"venta"}
                 _tabla_arbol(marcas, tramos, claves, grano, horas,
                              medidas_arbol, expandir=_exp, colapsar=_col)
+
+        # ── La ficha de una fila de «Platos»/«Grupos» (regla #530) ──────
+        # Se abre SIEMPRE, vacía cuando no hay ficha, por la regla #70: un
+        # contenedor con key que deja de dibujarse retiene a sus hijos.
+        with _card("ventas_horario_ficha", "", titulo_arriba=True):
+            if _ficha:
+                _ficha_filas(tramos, claves, grano,
+                             "prod" if filas == "Platos" else "grupo",
+                             st.session_state[_K_FICHA],
+                             medida if medida in _MED_FILAS else "venta",
+                             horas)

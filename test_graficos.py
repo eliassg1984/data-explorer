@@ -5707,6 +5707,63 @@ def _pruebas_ventas_platos():
     return fallos
 
 
+def _pruebas_por_hora_filas():
+    """Ventas › Por hora: las filas «Platos» y «Grupos» (regla #530).
+
+    Fija las cuentas que no se ven hasta que mienten: que la matriz ponga
+    cada venta en SU hora (en orden de servicio) o en su día de semana, que
+    «Por día» divida por los días CON VENTA —o por cuántos lunes, martes…
+    tuvo el período—, que las filas sean los platos del período MÁS NUEVO
+    (las mismas en todos los paneles, o la diferencia restaría platos
+    distintos), y el signo de la resta.
+    """
+    from graficos import ventas_horario as _h
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    por hora · filas · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA por hora · filas · {nombre}: got={got!r} exp={exp!r}")
+
+    # Lunes 3 y martes 4 de agosto de 2026; el 0 es la medianoche.
+    t = pd.DataFrame({
+        "hora": [13, 20, 20, 0, 13],
+        "dow": [0, 0, 1, 1, 1],
+        "dia": pd.to_datetime(["2026-08-03", "2026-08-03", "2026-08-04",
+                               "2026-08-04", "2026-08-04"]),
+        "prod": ["Lomo", "Lomo", "Lomo", "Pisco", "Pisco"],
+        "grupo": ["Alimentos", "Alimentos", "Alimentos", "Bebidas",
+                  "Bebidas"],
+        "venta": [100.0, 60.0, 40.0, 30.0, 10.0],
+        "cant": [2.0, 1.0, 1.0, 3.0, 1.0], "desc": 0.0,
+    })
+    horas = [13, 20, 0]
+    m = _h._matriz_filas(t, "prod", ["Lomo", "Pisco"], True, "venta", horas,
+                         False)
+    check("cada venta en su hora, en orden de servicio",
+          m.tolist(), [[100.0, 100.0, 0.0], [10.0, 0.0, 30.0]])
+    m = _h._matriz_filas(t, "prod", ["Lomo", "Pisco"], True, "venta", horas,
+                         True)
+    check("«Por día» divide por los dos días con venta",
+          m.tolist(), [[50.0, 50.0, 0.0], [5.0, 0.0, 15.0]])
+    m = _h._matriz_filas(t, "prod", ["Lomo"], False, "venta", horas, True)
+    check("por día de semana: lunes y martes, uno de cada uno",
+          m.tolist()[0][:3], [160.0, 40.0, 0.0])
+    viejo = t.assign(prod="Ceviche")
+    check("las filas son los platos del período MÁS NUEVO",
+          _h._items_filas([viejo, t], "prod"), ["Lomo", "Pisco"])
+    check("la resta lleva su signo", (_h._fmt_delta(-1240.0, "venta"),
+                                      _h._fmt_delta(3.0, "cant")),
+          ("−S/ 1,240", "+3"))
+    check("Pax y Ticket no son medidas de las filas",
+          set(_h._MED_FILAS) & {"pax", "ticket"}, set())
+    return fallos
+
+
 def _pruebas_movimientos_periodo():
     """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
 
@@ -6256,6 +6313,9 @@ def main():
 
     # ── Ventas › Análisis de platos: puestos, movimiento, por día ────────
     fallos += _pruebas_ventas_platos()
+
+    # ── Ventas › Por hora: las filas «Platos» y «Grupos» ─────────────────
+    fallos += _pruebas_por_hora_filas()
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()

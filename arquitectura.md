@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-529 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+530 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (182)
 
@@ -296,7 +296,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 
-**Plotly y figuras** (99)
+**Plotly y figuras** (100)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -397,6 +397,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#522** — El renglón del título del Resumen de Ventas lleva los KPI en UNA línea deslizable y la…
 - **#523** — Un gráfico que rotula CADA barra congela el navegador cuando el rango crece, y lo congela…
 - **#525** — El Resumen de Ventas muestra lo que la definición deja afuera: una subvista «Cuadre», los KPI…
+- **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
 
 **AgGrid y tablas** (83)
 
@@ -808,7 +809,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (109)
+**Decisiones de diseño y UX** (110)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -919,6 +920,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 - **#529** — «Análisis de platos»: el ranking de platos entre hasta cuatro períodos, en lugar del Top…
+- **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -43124,6 +43126,62 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - Medido a 1366×768 con datos reales: la tarjeta del ranking mide
        594px contra 724 de alto útil.
 
+530. **«Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué
+     hora, y la diferencia celda por celda. Pax y Ticket no se reparten por
+     plato.**
+     2026-09-25, a pedido, sobre el mockup aprobado. Todo en
+     `graficos/ventas_horario.py`, en una segunda fila de controles con el
+     mismo idioma que la primera (pestañas subrayadas, `vh_op_*` en
+     `estilos/_80_cards.py`); la guarda es
+     `test_graficos.py::_pruebas_por_hora_filas`.
+
+     - **Abre en la hora del pedido** (`FECHA REGISTRO PEDIDO`), no la del
+       cobro (`FEC REG DOCUMENTO`), que llega 1 h 38 min después (mediana,
+       medido): con la del cobro el pico de la noche caía a las 10 pm cuando
+       la cocina lo vive a las 7. Un postre pedido más tarde queda en la
+       hora en que se abrió la mesa. «Hora del cobro» sigue a un clic.
+       Cambiar la hora **borra las marcas**: la misma coordenada es otra
+       celda.
+     - **Filas: «Días × horas» (la afluencia de siempre), «Platos» (top 20)
+       y «Grupos».** En las dos nuevas las columnas son las horas o los días
+       de semana, y la «Escala» puede ser «Por día» (divide por los días con
+       venta, o por cuántos lunes hubo, en la columna del lunes), que es lo
+       que hace comparable un mes en curso con uno entero.
+     - **Pax y Ticket son del PEDIDO** (el grano de `ventas.parquet` es el
+       ítem, #517): una mesa de cuatro no le reparte un pax a cada plato. En
+       «Platos»/«Grupos» no se apagan en silencio: un aviso dice por qué, el
+       mapa muestra la venta y un botón lleva a «Días × horas», donde sí
+       están. Cortesías fuera, por la definición de venta (#524).
+     - **«Diferencia»** pinta cada período desde el segundo como su RESTA
+       contra el primero, celda por celda, en rojo/verde (`AJUSTE_NEG`/
+       `AJUSTE_POS`, blanco en cero), con la escala en el **percentil 90**
+       de las restas y no en la mayor —con la mayor, un solo caso extremo
+       dejaba todo lo demás casi blanco—. Una celda que el primero tenía y
+       el otro no cuenta como caída a cero. En «Días × horas» **no existe
+       en Mes**: el 1 de un mes no es el mismo día de semana que el 1 del
+       otro, así que la resta mezclaría un sábado con un martes; se dice en
+       un caption. En Semana y Año las columnas sí se corresponden.
+     - **Un clic en una fila de «Platos»/«Grupos» abre su ficha** en el
+       panel de abajo: por período, total, por día, puesto, hora pico, % de
+       noche (6 pm+) y de viernes a domingo, y sus dos curvas. El clic se
+       lee arriba con contador en la key (#399) y un segundo clic en la
+       misma fila la cierra. La capa que recibe el clic es un scatter
+       transparente con `hoverinfo` normal: con `"skip"` no llega (#388).
+       La tarjeta de la ficha se abre SIEMPRE, vacía sin ficha (#70).
+     - **Desde «Análisis de platos», «Ver a qué hora se vende →»** deja
+       pedida la ficha del plato (`_vh_ficha_pedida`), pone Platos/Por
+       hora y salta. Son dos corridas: «Por hora» es otra sección, así que
+       el salto necesita un `st.rerun(scope="app")` —con
+       `preservar_widgets` antes, #373— y el `scroll_a_seccion` va en la
+       corrida siguiente a ésa.
+     - **Probar el clic sin mouse**: con el panel del navegador oculto los
+       clics simulados no llegan al gráfico. `gd.emit('plotly_selected',
+       {points: [...]})` sobre el `.js-plotly-plot` los reemplaza, con
+       `curveNumber`, `pointNumber` y `customdata` del punto: es el evento
+       que escucha Streamlit.
+     - Medido a 1366×768 con datos reales: la tarjeta del mapa mide 529px
+       en «Platos» (20 filas) y la ficha 337 debajo.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43136,7 +43194,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#529**; la próxima toma el número siguiente.
+> última regla es la **#530**; la próxima toma el número siguiente.
 
 >
 

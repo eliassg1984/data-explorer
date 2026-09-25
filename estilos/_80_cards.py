@@ -2239,6 +2239,7 @@ CSS = """    /* ================================================================
         font-size: 12px !important;
     }
     .st-key-vt_pl_btn_elegir button,
+    .st-key-vt_pl_btn_hora button,
     .st-key-vt_pl_btn_soltar button {
         min-height: 28px !important;
         height: 28px !important;
@@ -3069,6 +3070,8 @@ CSS = """    /* ================================================================
     div[class*="st-key-vh_grano"] [data-testid="stButtonGroup"]
         button[data-variant="pills"],
     div[class*="st-key-vh_medida_mapa"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"],
+    div[class*="st-key-vh_op_"] [data-testid="stButtonGroup"]
         button[data-variant="pills"] {
         background: transparent !important;
         border: none !important;
@@ -3095,6 +3098,8 @@ CSS = """    /* ================================================================
     div[class*="st-key-vh_grano"] [data-testid="stButtonGroup"]
         button[data-variant="pills"][data-selected="true"],
     div[class*="st-key-vh_medida_mapa"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"][data-selected="true"],
+    div[class*="st-key-vh_op_"] [data-testid="stButtonGroup"]
         button[data-variant="pills"][data-selected="true"] {
         border-bottom-color: var(--accent) !important;
         color: var(--accent-deep) !important;
@@ -3103,20 +3108,25 @@ CSS = """    /* ================================================================
     /* El gap real va en el hijo directo de stButtonGroup (que es
        display:block), no en él — mismo hallazgo que en Ventas › Por día. */
     div[class*="st-key-vh_grano"] [data-testid="stButtonGroup"] > div,
-    div[class*="st-key-vh_medida_mapa"] [data-testid="stButtonGroup"] > div {
+    div[class*="st-key-vh_medida_mapa"] [data-testid="stButtonGroup"] > div,
+    div[class*="st-key-vh_op_"] [data-testid="stButtonGroup"] > div {
         gap: 16px !important;
         flex-wrap: nowrap !important;
     }
     /* Separador colgado de cada grupo a su IZQUIERDA, no por posición: el
        título es el primero y no lleva. */
     div[class*="st-key-vh_grano"],
-    div[class*="st-key-vh_medida_mapa"] {
+    div[class*="st-key-vh_medida_mapa"],
+    .st-key-vh_op_hora, .st-key-vh_op_lect,
+    .st-key-vh_op_cols, .st-key-vh_op_esc {
         position: relative;
         padding-left: 16px !important;
     }
     div[class*="st-key-vh_grano"]::before,
     div[class*="st-key-vh_medida_mapa"]::before,
-    div[class*="st-key-vh_btn_selector"]::before {
+    div[class*="st-key-vh_btn_selector"]::before,
+    .st-key-vh_op_hora::before, .st-key-vh_op_lect::before,
+    .st-key-vh_op_cols::before, .st-key-vh_op_esc::before {
         content: "";
         position: absolute;
         left: 0;
@@ -3161,6 +3171,25 @@ CSS = """    /* ================================================================
        !important porque un estilo inline sin !important pierde contra uno
        con él. Los -18px horizontales NO se tocan: son los que hacen que la
        línea toque el borde real de la tarjeta. */
+    /* La SEGUNDA fila de la franja de «Por hora» (regla #530): «Filas»,
+       «Hora», «Leer», «Columnas» y «Escala», con el mismo idioma de pestaña
+       que la primera (las reglas de arriba llevan `vh_op_`), un poco más
+       chica porque es la fila secundaria. El separador va en todas menos
+       la primera, como en la de arriba el título no lleva. */
+    div[class*="st-key-vh_op_"] [data-testid="stButtonGroup"]
+        button[data-variant="pills"] {
+        font-size: 13px !important;
+    }
+    /* El título de la ficha de un plato, en el panel de abajo. */
+    div[class*="st-key-chartcard_ventas_horario_ficha"] .vh-ficha-tit {
+        margin: 2px 0 4px !important;
+        font-size: 13px !important;
+        color: var(--text-secondary) !important;
+    }
+    div[class*="st-key-chartcard_ventas_horario_ficha"] .vh-ficha-tit b {
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
     div[class*="st-key-chartcard_ventas_horario_"] {
         padding-top: 2px !important;
         padding-bottom: 4px !important;
