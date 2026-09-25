@@ -958,9 +958,13 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                     label_visibility="collapsed",
                     help="Qué grupo de columnas muestra la tabla. Todas las "
                          "filas quedan a la vista, para comparar un período "
-                         "con los demás.")
+                         "con los demás. Un clic en una fila la despliega "
+                         "entera; «Ver pedidos» abre su Detalle.")
                 st.session_state["_vt_resumen_sub_eco"] = _sub or _eco
-            _pie = st.empty()
+            # La leyenda con KEY propia: el CSS le da el resto del renglón
+            # por su CLASE, no con un `:has([data-testid=…])` (#469).
+            with st.container(key="vt_resumen_leyenda"):
+                _pie = st.empty()
 
         if _modo == _MODO_RESUMEN:
             _zona_resumen(g, claves, fila, _vars, foco if _foco_ok else None,
@@ -1335,9 +1339,12 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
             # la grilla (las `columnDefs` nuevas no se aplican sobre una viva).
             key="vt_resumen_res_grid_" + _clave_grilla(ctx, n_res, sub),
             rotulo_periodo=gran, total=total)
+    # Una línea corta: va en el renglón de los toggles y se corta con «…»
+    # si no entra (regla #519). «Clic en una fila…» pasó al `help` del
+    # selector de subvistas.
     pie.caption(
-        f"**{_del_al(pd.Series(pd.to_datetime(list(rango))))}** · {ayuda} "
-        "Clic en una fila para verla entera." + nota_recorte)
+        f"**{_del_al(pd.Series(pd.to_datetime(list(rango))))}** · {ayuda}"
+        + nota_recorte)
     if clic_fila in set(claves):
         st.session_state["_vt_resumen_ir_detalle"] = clic_fila
         st.session_state["vt_resumen_nres"] = n_res + 1
@@ -1378,8 +1385,7 @@ def _subvistas(vol_label, canales, hay):
         ]
     venta.append(("variacion", "Var. venta", "var", S,
                   "Variación de la venta contra la barra anterior"))
-    out["Venta"] = (venta, "Los cuatro precios, el % de costo, clientes, "
-                           "ticket y la variación.")
+    out["Venta"] = (venta, "Precios, % de costo, clientes, ticket y variación.")
     if len(canales) > 1:
         cols = [("valor", "Venta", "celda", 118, "Venta cobrada")]
         for k, cn in enumerate(canales):
@@ -1387,8 +1393,7 @@ def _subvistas(vol_label, canales, hay):
                       f"Venta de {cn} y su variación contra la barra anterior"),
                      (f"c{k}_p", f"% {cn}", "celda", 118,
                       f"Qué parte de la venta fue de {cn}, y su cambio en pp")]
-        out["Canales"] = (cols, "Cuánto vendió cada canal y qué parte del "
-                                "período fue suya.")
+        out["Canales"] = (cols, "Venta y peso de cada canal.")
     if "propina" in hay:
         cols = [("valor", "Venta", "celda", 118, "Venta cobrada"),
                 ("propina", "Propina", "celda", 118,
@@ -1402,7 +1407,7 @@ def _subvistas(vol_label, canales, hay):
                      "Pagos que dejaron propina"))
         if vol_label:
             cols.append(("pax", "Pax", "entero", 72, "Clientes del período"))
-        out["Propinas"] = (cols, "La propina se cuenta una vez por pago.")
+        out["Propinas"] = (cols, "Una propina por pago.")
     if "pdesc" in hay:
         cols = [("carta", "Carta", "soles0", S, "Venta a precio de carta"),
                 ("valor", "Venta", "celda", 118, "Venta cobrada"),
@@ -1416,8 +1421,7 @@ def _subvistas(vol_label, canales, hay):
                       "período"),
                      ("ptrx", "% comprob.", "celda", 112,
                       "Qué parte de los comprobantes tuvo descuento")]
-        out["Descuentos"] = (cols, "Carta − Venta: cuánto y en cuántos "
-                                   "comprobantes.")
+        out["Descuentos"] = (cols, "Carta − Venta, y en cuántos comprobantes.")
     if "pcort" in hay:
         cols = [("carta", "Carta vendida", "soles0", 112,
                  "Venta a precio de carta (sin cortesías)"),
@@ -1429,8 +1433,7 @@ def _subvistas(vol_label, canales, hay):
                  "Comprobantes tipo CORTESIA"),
                 ("costo_cort", "Costaron", "soles0", S,
                  "Costo de receta de las cortesías")]
-        out["Cortesías"] = (cols, "Comprobantes tipo CORTESIA, a precio "
-                                  "carta: no suman a la venta.")
+        out["Cortesías"] = (cols, "A precio carta; no suman a la venta.")
     if "pcosto" in hay:
         cols = [("neto", "Neto", "soles0", S, "Venta sin IGV ni recargo"),
                 ("costo_v", "Costo", "celda", 118,
@@ -1446,8 +1449,7 @@ def _subvistas(vol_label, canales, hay):
         cols.append(("revisar", "A revisar", "texto", 180,
                      "El plato con mayor exceso de costo sobre su precio, en "
                      "los períodos marcados «revisar»"))
-        out["Costo"] = (cols, "Costo de receta sobre el neto; «sin costo» baja "
-                              "el % de ese período.")
+        out["Costo"] = (cols, "Costo sobre neto; «sin costo» baja el %.")
     return out
 
 _ALTO_TABLA_VR = alturas.VENTAS_RESUMEN_TABLA

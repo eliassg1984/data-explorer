@@ -42579,6 +42579,26 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      «todavía gruesa» con una captura de la app publicada, cuando en local
      ya medía 32.
 
+     **Tercera pasada: no era la caché, era la VERSIÓN.** La captura
+     siguiente mostraba la fecha ya fina y los desplegables todavía en 40:
+     el CSS nuevo SÍ había llegado. `requirements.txt` pide
+     `streamlit>=1.52,<2`, así que Cloud instala la última (1.64) y esta
+     máquina tiene 1.59. En la 1.64 el multiselect es un
+     `.react-aria-ComboBox` cuya caja con borde es su hijo, con
+     `min-height: 40px` (la trampa de la #477), y `[data-baseweb="select"]`
+     no existe. Se midió levantando la app con la 1.64 aparte, sin tocar
+     la instalación de la máquina:
+         pip install --target <carpeta> --no-deps streamlit==1.64.0
+         python -c "import sys; sys.path.insert(0, r'<carpeta>'); ..."
+     con `--global.developmentMode=false` (corriendo desde una carpeta
+     suelta Streamlit se cree en modo desarrollo y rechaza `server.port`).
+     Las reglas van para las dos versiones. **Antes de dar por buena una
+     regla de CSS sobre un widget de Streamlit, medirla con la versión que
+     corre en Cloud.**
+     Y la leyenda del Resumen pasó al renglón de los toggles de modo y de
+     subvista: una línea corta que se corta con «…» en vez de bajar (bajar
+     era lo que empujaba la tabla).
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 

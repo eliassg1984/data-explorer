@@ -2005,6 +2005,47 @@ CSS = """    /* ================================================================
         max-height: 26px !important;
         overflow: hidden !important;
     }
+    /* LA STREAMLIT DE CLOUD NO ES LA DE ACÁ (regla #519, tercera pasada).
+       `requirements.txt` pide `streamlit>=1.52,<2`: Cloud instala la
+       última (1.64 el 2026-09-24) y en esta máquina hay 1.59. En la 1.64 el
+       multiselect es un `.react-aria-ComboBox` y la caja con el borde es
+       su HIJO, con `min-height: 40px` — la misma trampa de la regla #477.
+       Las reglas de `[data-baseweb="select"]` de arriba no la tocaban: en
+       la app publicada los cuatro desplegables seguían en 40 mientras en
+       local medían 32. Medido levantando la app con la 1.64 aparte:
+           .react-aria-ComboBox > div   40  (borde 1, min-height 40)
+             stMultiSelectTagsContainer 38  (padding-top 5)
+               input                    28
+             button (la flecha)         22
+       Van las dos formas: la de la 1.59 (arriba) y la de la 1.64 (acá). */
+    .st-key-vt_resumen_grupo .react-aria-ComboBox > div,
+    .st-key-vt_resumen_serv .react-aria-ComboBox > div,
+    .st-key-vt_resumen_canal .react-aria-ComboBox > div,
+    .st-key-vt_resumen_tdoc .react-aria-ComboBox > div {
+        min-height: 28px !important;
+        height: 28px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_resumen_grupo [data-testid="stMultiSelectTagsContainer"],
+    .st-key-vt_resumen_serv [data-testid="stMultiSelectTagsContainer"],
+    .st-key-vt_resumen_canal [data-testid="stMultiSelectTagsContainer"],
+    .st-key-vt_resumen_tdoc [data-testid="stMultiSelectTagsContainer"] {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        height: 26px !important;
+        align-items: center !important;
+        overflow: hidden !important;
+    }
+    .st-key-vt_resumen_grupo .react-aria-ComboBox input,
+    .st-key-vt_resumen_serv .react-aria-ComboBox input,
+    .st-key-vt_resumen_canal .react-aria-ComboBox input,
+    .st-key-vt_resumen_tdoc .react-aria-ComboBox input {
+        height: 24px !important;
+        min-height: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        font-size: 12px !important;
+    }
     /* Segunda pasada, el mismo día: «es muy grueso, hagámoslo más
        delgado». De 32 a 28, y el toggle de granularidad con ellos: seis
        controles en una fila tienen que medir lo mismo. */
@@ -2027,6 +2068,29 @@ CSS = """    /* ================================================================
         font-size: 12px !important;
     }
     .st-key-vt_resumen_pie { align-items: center !important; }
+    /* La leyenda del Resumen en el MISMO renglón que los toggles (regla
+       #519, a pedido: «que esté en la misma fila de los toggles de las
+       subvistas, para que pueda subir el cuadro de abajo»). Toma lo que
+       sobra y, si no entra, se corta con «…» en vez de bajar a otro
+       renglón — bajar es lo que empujaba la tabla. La leyenda vive en su
+       contenedor con key (`vt_resumen_leyenda`), y el `:has()` lleva sólo
+       esa CLASE (#469: un atributo adentro de un `:has()` recalcula la
+       página entera en cada cambio). Por si Streamlit mete un envoltorio
+       entre la fila y el contenedor (#272), van las dos formas. */
+    .st-key-vt_resumen_pie > .st-key-vt_resumen_leyenda,
+    .st-key-vt_resumen_pie > :has(> .st-key-vt_resumen_leyenda) {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    .st-key-vt_resumen_pie [data-testid="stCaptionContainer"],
+    .st-key-vt_resumen_pie [data-testid="stCaptionContainer"] p {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        font-size: 11.5px !important;
+        margin: 0 !important;
+    }
     .st-key-vt_resumen_pie [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
