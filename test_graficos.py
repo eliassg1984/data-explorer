@@ -5616,6 +5616,97 @@ def _pruebas_ventas_mix():
     return fallos
 
 
+def _pruebas_ventas_platos():
+    """Ventas › Análisis de platos (regla #529): las cuentas del ranking.
+
+    Fija lo que no se ve hasta que miente: el puesto con empates (los dos
+    empatados se quedan con el puesto más alto), que un plato sin venta no
+    tenga puesto, el movimiento entre el primer y el último período, que la
+    variación sea POR DÍA (un mes en curso contra uno entero no es una
+    caída), cuántos períodos ofrece cada corte, y que el dispatcher le pase
+    `_filtrar_items`: los períodos vienen aparte de R2.
+    """
+    import ast
+    import inspect
+    import textwrap
+    from datetime import date
+
+    from graficos import ventas as _v
+    from graficos import ventas_platos as _p
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · platos · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · platos · {nombre}: got={got!r} exp={exp!r}")
+
+    v = pd.Series({"Lomo": 500.0, "Pulpo": 300.0, "Ceviche": 300.0,
+                   "Agua": 10.0, "Postre": 0.0})
+    p = _p.puestos(v)
+    check("puestos con empate: los dos empatados son 2º",
+          p.to_dict(), {"Lomo": 1, "Pulpo": 2, "Ceviche": 2, "Agua": 4})
+    check("sin venta no hay puesto", "Postre" in p.index, False)
+
+    check("sube 5 puestos: verde", _p.movimiento(8, 3), ("▲ 5", "sube"))
+    check("sube 1: se escribe, pero no se pinta", _p.movimiento(4, 3),
+          ("▲ 1", "igual"))
+    check("baja 4: rojo", _p.movimiento(2, 6), ("▼ 4", "baja"))
+    check("no vendía en el primero: entra", _p.movimiento(None, 7),
+          ("entra", "entra"))
+    check("dejó de vender: sale", _p.movimiento(3, None), ("sale", "sale"))
+
+    check("la variación es POR DÍA: 23 días que venden lo mismo por día "
+          "que 31 no son una caída",
+          _p.var_por_dia(3100.0, 31, 2300.0, 23), 0.0)
+    check("sin base, sin porcentaje", _p.var_por_dia(0.0, 31, 500.0, 23),
+          None)
+
+    ancla, primero = date(2026, 9, 24), date(2025, 1, 1)
+    check("Mes ofrece 13 meses: el mismo mes del año pasado entra",
+          [_p.periodos("Mes", ancla, primero)[i] for i in (0, -1)],
+          [(2025, 9), (2026, 9)])
+    check("Año ofrece todos los años con dato",
+          _p.periodos("Año", ancla, primero), [2025, 2026])
+    check("Día ofrece 14 días", len(_p.periodos("Día", ancla, primero)), 14)
+    check("Semana ofrece 10 semanas",
+          len(_p.periodos("Semana", ancla, primero)), 10)
+
+    b = pd.DataFrame({
+        "fecha": pd.to_datetime(["2026-09-01", "2026-09-02", "2026-09-02"]),
+        "grupo": ["Alimentos", "Alimentos", "Bebidas"],
+        "sub": ["Fondos", "Fondos", "Cocteles"],
+        "prod": ["Lomo", "Lomo", "Pisco Sour"],
+        "venta": [100.0, 50.0, 30.0], "cant": [2.0, 1.0, 3.0],
+        "costo": 0.0, "neto": 0.0})
+    a = _p.agregar(b)
+    check("el agregado trae sus columnas por nombre",
+          list(a.columns), ["prod", "grupo", "sub", "venta", "cant"])
+    check("Lomo suma sus dos líneas",
+          a.set_index("prod").loc["Lomo", ["venta", "cant"]].tolist(),
+          [150.0, 3.0])
+
+    fuente = textwrap.dedent(inspect.getsource(_v.renderizar_graficos_ventas))
+    llamadas = [n for n in ast.walk(ast.parse(fuente))
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "_ventas_platos"]
+    check("el dispatcher lo llama una vez", len(llamadas), 1)
+    for c in llamadas:
+        check("con `d` y filtrar_cb=_filtrar_items",
+              ([ast.unparse(x) for x in c.args],
+               {k.arg: ast.unparse(k.value) for k in c.keywords}
+               .get("filtrar_cb")), (["d"], "_filtrar_items"))
+    analisis = dict(_v._VENTAS_RAIL_CATEGORIAS).get("Análisis", ())
+    check("es la primera vista de «Análisis» en el rail",
+          analisis[0][0] if analisis else None, "Análisis de platos")
+    check("y tiene su sección en la pila",
+          "Análisis de platos" in dict(_v._PILA).values(), True)
+    return fallos
+
+
 def _pruebas_movimientos_periodo():
     """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
 
@@ -6162,6 +6253,9 @@ def main():
 
     # ── Ventas › Mix de carta: las cuentas por nombre y el año pasado ────
     fallos += _pruebas_ventas_mix()
+
+    # ── Ventas › Análisis de platos: puestos, movimiento, por día ────────
+    fallos += _pruebas_ventas_platos()
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()

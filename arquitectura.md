@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-528 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+529 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (182)
 
@@ -633,7 +633,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
 
-**Datos, R2 y DuckDB** (64)
+**Datos, R2 y DuckDB** (65)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -699,6 +699,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#514** — El «neto» del sistema es precio ÷ 1,235: IGV y recargo se SUMAN sobre el neto, y el IGV de…
 - **#517** — En ventas.parquet un ítem sale UNA VEZ POR FORMA DE PAGO: toda suma de venta, costo o…
 - **#524** — La venta tiene UNA definición y vive en definicion_venta.py: facturas y boletas pagadas o por…
+- **#529** — «Análisis de platos»: el ranking de platos entre hasta cuatro períodos, en lugar del Top…
 
 **SUNAT y SIRE** (43)
 
@@ -807,7 +808,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (108)
+**Decisiones de diseño y UX** (109)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -917,6 +918,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#525** — El Resumen de Ventas muestra lo que la definición deja afuera: una subvista «Cuadre», los KPI…
 - **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
+- **#529** — «Análisis de platos»: el ranking de platos entre hasta cuatro períodos, en lugar del Top…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -43075,6 +43077,53 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        forma de «Mapa por hora» —un mapa de calor que compara períodos—
        para mirar los platos. Si una se implementa, va con regla propia.
 
+529. **«Análisis de platos»: el ranking de platos entre hasta cuatro
+     períodos, en lugar del Top platos. Y un vacío en `st.dataframe` se ve
+     «None» aunque el Styler diga otra cosa.**
+     2026-09-25, a pedido, sobre un mockup aprobado. Vive en
+     `graficos/ventas_platos.py`, primera vista de «Análisis» en el rail
+     («Platos»); la guarda es `test_graficos.py::_pruebas_ventas_platos`. La
+     Ingeniería de menú (popularidad × margen) va a ser su segunda pieza.
+
+     - **Qué hace**: corte Día, Semana, Mes (abre así) o Año; cada uno
+       ofrece sus períodos (14 días, 10 semanas, 13 meses —el mismo mes del
+       año pasado entra—, los años con dato) y se eligen hasta 4, no
+       seguidos. Ámbito: toda la carta, un grupo o un subgrupo. Mostrar: top
+       10/15/20, todos o los **elegidos** a mano (hasta 8, con el color de
+       `PALETA_SERIES`). Un gráfico de puestos (bump chart) y una tabla lado
+       a lado; un clic en cualquiera de los dos abre, en una segunda
+       tarjeta, la evolución del plato en TODO el corte.
+     - **Los períodos vienen aparte de R2**, uno por uno con
+       `cargar_rango` + `_filtrar_items` (como Año Pasado y Por hora): el `d`
+       de la franja es un mes. Y el calendario es el de «Por hora»
+       (`ventas_horario._claves_hacia_atras`/`_rango_de_clave`/
+       `_etiqueta_clave`), así el mismo mes se llama igual en las dos.
+     - **El puesto se calcula dentro del ámbito** («3º de Fondos») y con
+       empates van los dos al puesto más alto (`rank(method="min")`).
+     - **La variación es POR DÍA con venta**: set 2026 llega al 24 y en
+       soles saldría rojo. El título trae lo mismo para el ámbito entero
+       («toda la carta por día +31 %»), que es la vara: un plato con +40 %
+       en un local que creció +31 % creció, pero menos de lo que parece.
+     - **«Sube más» y «Baja más» miran el top 20** (el de hoy y el de antes,
+       respectivamente): sin ese corte los ganaban platos marginales que
+       pasaban del puesto 150 al 84.
+     - **El eje de puestos es logarítmico cuando hay puestos lejanos** (un
+       elegido en el 162): del 1 al 10 conservan su lugar. Lo que cae fuera
+       del eje se apoya en la fila «fuera», con el puesto real en el hover.
+     - **Un vacío en `st.dataframe` se pinta «None», con Styler o sin él.**
+       Medido: ni el NA de pandas ni un NaN de numpy respetan el
+       `format(...)` del Styler —los dos viajan a la grilla como nulo—. La
+       tabla no lleva vacíos: sin venta va 0 (se escribe «—») y la variación
+       de un plato que no vendía antes va +∞ (se escribe «nuevo»), así la
+       columna sigue siendo numérica y se puede ordenar.
+     - **Los anchos de la tabla van en píxeles**: con «small»/«medium», a
+       1366 la última columna quedaba fuera de la tarjeta.
+     - **Como el Resumen (#521), la vista arma SUS tarjetas** (la sección
+       no va envuelta en `_seccion`): la del ranking, y la de la evolución
+       debajo, que no puede ir anidada.
+     - Medido a 1366×768 con datos reales: la tarjeta del ranking mide
+       594px contra 724 de alto útil.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43087,7 +43136,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#528**; la próxima toma el número siguiente.
+> última regla es la **#529**; la próxima toma el número siguiente.
 
 >
 

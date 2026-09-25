@@ -307,6 +307,13 @@ de `st.dataframe`, el alto de fila de las grillas de la app) más la
 cabecera y los bordes. Son dos filas menos que las siete del Resumen
 (`VENTAS_RESUMEN_TABLA`): la figura de arriba mide 54 más."""
 
+VENTAS_PLATOS = 27 * 15 + 3
+"""Alto del gráfico de puestos y de la tabla de Ventas › Análisis de platos
+(2026-09-25, regla #529), que van lado a lado y miden lo mismo: catorce
+filas de 27 (`row_height` de `st.dataframe`) más la cabecera. En el gráfico
+son 26px por puesto con el top 15, lo que pide la escalera de líneas para
+no pisarse."""
+
 FIG_CON_SU_TABLA = 180
 """Piso de una figura que comparte su tarjeta con la TABLA que la describe,
 y cuyo alto sale del reparto y no de un rol.

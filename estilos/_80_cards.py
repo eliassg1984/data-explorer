@@ -1887,14 +1887,16 @@ CSS = """    /* ================================================================
        fila haga también de leyenda. Vive acá y no allá porque ese CSS sólo
        se inyecta en Compras. */
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],
-    .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"] {
+    .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"],
+    .st-key-vt_pl_cabfila [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     /* El título y los KPI en un renglón (regla #519): el look de
        `.chart-card-hdr` —mismo cuerpo, peso y color, y la línea abajo— pero
        compartiendo el flex con los KPI. */
     .st-key-vt_resumen_kpi .vt-cab,
-    .st-key-vt_mix_cabfila .vt-cab {
+    .st-key-vt_mix_cabfila .vt-cab,
+    .st-key-vt_pl_cabfila .vt-cab {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -1903,7 +1905,8 @@ CSS = """    /* ================================================================
         border-bottom: 1px solid var(--border);
     }
     .st-key-vt_resumen_kpi .vt-cab-tit,
-    .st-key-vt_mix_cabfila .vt-cab-tit {
+    .st-key-vt_mix_cabfila .vt-cab-tit,
+    .st-key-vt_pl_cabfila .vt-cab-tit {
         font-size: 13px;
         font-weight: 600;
         line-height: 1.35;
@@ -1911,14 +1914,16 @@ CSS = """    /* ================================================================
         white-space: nowrap;
     }
     .st-key-vt_resumen_kpi .vt-kpis,
-    .st-key-vt_mix_cabfila .vt-kpis {
+    .st-key-vt_mix_cabfila .vt-kpis,
+    .st-key-vt_pl_cabfila .vt-kpis {
         display: flex;
         flex-wrap: wrap;
         align-items: stretch;
         gap: 2px 0;
     }
     .st-key-vt_resumen_kpi .vt-kpi,
-    .st-key-vt_mix_cabfila .vt-kpi {
+    .st-key-vt_mix_cabfila .vt-kpi,
+    .st-key-vt_pl_cabfila .vt-kpi {
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -1929,13 +1934,15 @@ CSS = """    /* ================================================================
         border-left: 1px solid var(--border);
     }
     .st-key-vt_resumen_kpi .vt-kpi:first-child,
-    .st-key-vt_mix_cabfila .vt-kpi:first-child {
+    .st-key-vt_mix_cabfila .vt-kpi:first-child,
+    .st-key-vt_pl_cabfila .vt-kpi:first-child {
         padding-left: 0;
         border-left: none;
         max-width: none;
     }
     .st-key-vt_resumen_kpi .vt-kpi-rot,
-    .st-key-vt_mix_cabfila .vt-kpi-rot {
+    .st-key-vt_mix_cabfila .vt-kpi-rot,
+    .st-key-vt_pl_cabfila .vt-kpi-rot {
         font-size: 10px;
         color: var(--text-secondary);
         white-space: nowrap;
@@ -1943,7 +1950,8 @@ CSS = """    /* ================================================================
         text-overflow: ellipsis;
     }
     .st-key-vt_resumen_kpi .vt-kpi[style] .vt-kpi-rot::before,
-    .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before {
+    .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before,
+    .st-key-vt_pl_cabfila .vt-kpi[style] .vt-kpi-rot::before {
         content: "";
         display: inline-block;
         width: 8px;
@@ -1953,26 +1961,30 @@ CSS = """    /* ================================================================
         background: var(--vt-kpi-color);
     }
     .st-key-vt_resumen_kpi .vt-kpi-val,
-    .st-key-vt_mix_cabfila .vt-kpi-val {
+    .st-key-vt_mix_cabfila .vt-kpi-val,
+    .st-key-vt_pl_cabfila .vt-kpi-val {
         font-size: 13px;
         font-weight: 600;
         color: var(--text-primary);
         white-space: nowrap;
     }
     .st-key-vt_resumen_kpi .vt-kpi-sub,
-    .st-key-vt_mix_cabfila .vt-kpi-sub {
+    .st-key-vt_mix_cabfila .vt-kpi-sub,
+    .st-key-vt_pl_cabfila .vt-kpi-sub {
         margin-left: 4px;
         font-size: 10px;
         font-weight: 400;
         color: var(--text-secondary);
     }
     .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val,
-    .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val {
+    .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val,
+    .st-key-vt_pl_cabfila .vt-kpi-total .vt-kpi-val {
         color: var(--accent-deep);
         font-weight: 700;
     }
     .st-key-vt_resumen_kpi .vt-kpi-alerta .vt-kpi-val,
-    .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val {
+    .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val,
+    .st-key-vt_pl_cabfila .vt-kpi-alerta .vt-kpi-val {
         color: var(--warning-text);
     }
 
@@ -2088,7 +2100,8 @@ CSS = """    /* ================================================================
        migas que suben y un botón por tramo de la barra, que hace de
        leyenda. Todo acotado a SU key (CLAUDE.md). */
     .st-key-ajuste_graf_card_izq_ventas_mix { gap: 8px !important; }
-    .st-key-vt_mix_cabfila {
+    .st-key-vt_mix_cabfila,
+    .st-key-vt_pl_cabfila {
         border-bottom: 1px solid var(--border);
         padding-bottom: 5px !important;
     }
@@ -2192,6 +2205,54 @@ CSS = """    /* ================================================================
         font-size: 11px !important;
         margin: 4px 6px 0 !important;
     }
+    /* VENTAS › ANÁLISIS DE PLATOS (2026-09-25, regla #529). Copia la
+       tarjeta del Mix: el renglón del título con los KPI (las reglas
+       `.vt-cab` de arriba llevan también `vt_pl_cabfila`) y los controles a
+       28px, cada uno por SU key. La evolución del plato en foco es una
+       segunda tarjeta, aparte (como el Resumen, #521). */
+    .st-key-ajuste_graf_card_izq_ventas_platos,
+    .st-key-ajuste_graf_card_izq_ventas_platos_evo { gap: 8px !important; }
+    .st-key-vt_pl_corte [data-testid="stButtonGroup"] button,
+    .st-key-vt_pl_medida [data-testid="stButtonGroup"] button,
+    .st-key-vt_pl_mostrar [data-testid="stButtonGroup"] button,
+    .st-key-vt_pl_ambito [data-testid="stButtonGroup"] button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
+    /* Las pastillas de los períodos, más chicas: en Mes son trece. */
+    div[class*="st-key-vt_pl_per_"] [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 9px !important;
+        font-size: 11.5px !important;
+    }
+    /* El desplegable del ámbito y el buscador de platos: sin alto fijo en
+       el buscador, que crece con cada plato elegido. Las dos formas del
+       desplegable, la de la 1.59 y la de la 1.64 (regla #519). */
+    div[class*="st-key-vt_pl_cual_"] [data-baseweb="select"] > div,
+    div[class*="st-key-vt_pl_cual_"] .react-aria-ComboBox > div,
+    .st-key-vt_pl_elegidos [data-baseweb="select"] > div,
+    .st-key-vt_pl_elegidos .react-aria-ComboBox > div {
+        min-height: 28px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_pl_btn_elegir button,
+    .st-key-vt_pl_btn_soltar button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
+    .st-key-ajuste_graf_card_izq_ventas_platos_evo .vt-pl-evo-tit {
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_platos_evo .vt-pl-evo-tit b {
+        color: var(--accent-deep);
+        font-weight: 600;
+    }
     /* LA PASTILLA «DETALLE» DEL RESUMEN (2026-09-24, regla #520): la
        leyenda del gráfico, flotando arriba a la izquierda como la de
        Comparativo › Descomposición (`ventas_comp_detalle_float`, más
@@ -2225,13 +2286,15 @@ CSS = """    /* ================================================================
        que hay más. Medido a 1366: los diez piden ~1.450px contra ~700
        libres al lado del título. */
     .st-key-vt_resumen_kpi .vt-cab,
-    .st-key-vt_mix_cabfila .vt-cab {
+    .st-key-vt_mix_cabfila .vt-cab,
+    .st-key-vt_pl_cabfila .vt-cab {
         flex-wrap: nowrap !important;
         border-bottom: none !important;
         padding-bottom: 0 !important;
     }
     .st-key-vt_resumen_kpi .vt-kpis,
-    .st-key-vt_mix_cabfila .vt-kpis {
+    .st-key-vt_mix_cabfila .vt-kpis,
+    .st-key-vt_pl_cabfila .vt-kpis {
         flex: 1 1 auto;
         min-width: 0;
         flex-wrap: nowrap !important;
@@ -2243,7 +2306,8 @@ CSS = """    /* ================================================================
         padding-right: 24px;
     }
     .st-key-vt_resumen_kpi .vt-kpi,
-    .st-key-vt_mix_cabfila .vt-kpi {
+    .st-key-vt_mix_cabfila .vt-kpi,
+    .st-key-vt_pl_cabfila .vt-kpi {
         flex-direction: row !important;
         align-items: baseline !important;
         gap: 5px;
@@ -2251,7 +2315,8 @@ CSS = """    /* ================================================================
         flex: 0 0 auto;
     }
     .st-key-vt_resumen_kpi .vt-kpi-rot,
-    .st-key-vt_mix_cabfila .vt-kpi-rot { overflow: visible !important; }
+    .st-key-vt_mix_cabfila .vt-kpi-rot,
+    .st-key-vt_pl_cabfila .vt-kpi-rot { overflow: visible !important; }
     /* La línea que separaba el renglón del gráfico, ahora debajo del
        renglón entero (título, KPI y pastilla). */
     .st-key-vt_resumen_cabfila {

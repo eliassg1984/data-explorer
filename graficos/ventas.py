@@ -22,6 +22,7 @@ from graficos.ventas_resumen import _ventas_resumen
 from graficos.ventas_comparativo import _ventas_comparativo
 from graficos.ventas_horario import _ventas_horario
 from graficos.ventas_mix import _ventas_mix
+from graficos.ventas_platos import _ventas_platos
 from graficos import alturas
 
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -62,6 +63,8 @@ def unico_por_item(df):
 # «Mix de carta» entro el 2026-09-25 en el lugar de «Venta por dia», y ese
 # mismo dia se fue «Familia/Subfamilia semanal»: la barra semanal partida por
 # familia es la del Mix, que ademas baja a Subgrupo y Producto (regla #527).
+# «Analisis de platos» entro ese mismo dia en lugar del Top platos del
+# Resumen (#528): el ranking entre hasta 4 periodos (regla #529).
 _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Resumen",  (("Resumen ejecutivo", "Resumen", ":material/summarize:"),)),
     ("Tiempo",   (("Mix de carta",               "Mix",        ":material/stacked_bar_chart:"),
@@ -69,7 +72,8 @@ _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
                   ("Comparativo vs Año Pasado",   "Año Pasado", ":material/compare_arrows:"),
                   ("Venta vs Compra",            "Vs Compra",  ":material/balance:"),
                   ("Histórica subfamilia",        "Histórica",  ":material/history:"))),
-    ("Análisis", (("Matriz agrupada",     "Matriz",  ":material/grid_on:"),
+    ("Análisis", (("Análisis de platos",  "Platos",  ":material/restaurant_menu:"),
+                  ("Matriz agrupada",     "Matriz",  ":material/grid_on:"),
                   ("Ranking & FoodCost",  "Ranking", ":material/leaderboard:"),
                   ("Meseros",             "Meseros", ":material/groups:"))),
     ("Datos",    (("Tabla",  "Tabla", ":material/table_rows:"),)),
@@ -78,7 +82,7 @@ _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
 # tupla (el porqué está en `graficos/compras/__init__.py::_PILA`).
 #
-# Las 10 van en UNA sola pila: a diferencia de Ajuste, acá las categorías
+# Las 11 van en UNA sola pila: a diferencia de Ajuste, acá las categorías
 # del rail ("Resumen"/"Tiempo"/"Análisis") son sólo agrupación visual y no
 # separan la clave del rango — Ventas usa `carga_por_rango`, o sea UNA
 # clave por reporte, la misma que decide qué se baja de R2. El rail aplana
@@ -90,6 +94,7 @@ _PILA = pila_sin_tablas((
     ("vt_sec_ano_pasado", "Comparativo vs Año Pasado"),
     ("vt_sec_vs_compra",  "Venta vs Compra"),
     ("vt_sec_historica",  "Histórica subfamilia"),
+    ("vt_sec_platos",     "Análisis de platos"),
     ("vt_sec_matriz",     "Matriz agrupada"),
     ("vt_sec_ranking",    "Ranking & FoodCost"),
     ("vt_sec_meseros",    "Meseros"),
@@ -1177,6 +1182,12 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 st.caption("Histórica sobre el rango de fechas cargado. Para ver "
                            "más meses, amplía el rango en el selector de fecha.")
 
+        # ── 3b) Análisis de platos: el ranking entre hasta 4 períodos
+        # (graficos/ventas_platos.py, regla #529). Trae sus períodos aparte
+        # de R2, así que recibe `_filtrar_items` como Año Pasado.
+        elif graf == "Análisis de platos":
+            _ventas_platos(d, filtrar_cb=_filtrar_items)
+
         # ── 4) Matriz agrupada (Nivel × Mes, vs Año Pasado) ─────────────
         elif graf == "Matriz agrupada":
             _ventas_matriz_agrupada(d, col_venta, col_costo, col_fam,
@@ -1225,6 +1236,9 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         "vt_sec_ano_pasado": _seccion("ano_pasado", "Comparativo vs Año Pasado"),
         "vt_sec_vs_compra":  _seccion("vs_compra", "Venta vs Compra"),
         "vt_sec_historica":  _seccion("historica", "Histórica subfamilia"),
+        # Como el Resumen, arma SUS tarjetas: la del ranking y, con un
+        # plato en foco, la de su evolución debajo (regla #529).
+        "vt_sec_platos":     lambda: _cuerpo_grafico("Análisis de platos"),
         "vt_sec_matriz":     _seccion("matriz", "Matriz agrupada"),
         "vt_sec_ranking":    _seccion("ranking", "Ranking & FoodCost"),
         "vt_sec_meseros":    _seccion("meseros", "Meseros"),

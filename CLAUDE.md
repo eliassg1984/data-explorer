@@ -406,6 +406,11 @@ resto de `graficos/compras/`.
   deja de ser seleccionable. Ver `arquitectura.md` #421.
 - **Widget + display auxiliar del mismo valor:** UNA sola key compartida (sin
   `value=`, sin key dinámica). El clamp de bounds va justo antes del widget.
+- **Un vacío en `st.dataframe` se pinta «None», con Styler o sin él**: el
+  NA de pandas y el NaN de numpy viajan a la grilla como nulo y el
+  `format(...)` del Styler no los alcanza (medido). Para un «—», la celda
+  lleva un valor (0, ±∞) que el Styler escribe como «—». Ver
+  `arquitectura.md` #529.
 - **`selector_fecha_tarjeta(clave, …)` es dueño de su prefijo**: arma
   `{clave}_escala`, `{clave}_fila`, `{clave}_atajo_sel`…, así que `clave`
   no puede ser el prefijo de los widgets de la vista — `"vt_mix"` chocó con
