@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-522 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+523 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (180)
+**CSS y estilos** (181)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -214,6 +214,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#513** — Un recorte de padding-top scopeado a un reporte se vuelve un AGREGADO el día que la regla…
 - **#519** — El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre todas las filas, para…
 - **#520** — La leyenda del gráfico del Resumen de Ventas es una pastilla «Detalle · <período>» que flota…
+- **#523** — Un gráfico que rotula CADA barra congela el navegador cuando el rango crece, y lo congela…
 
 **Layout y alturas** (74)
 
@@ -292,7 +293,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
-**Plotly y figuras** (97)
+**Plotly y figuras** (98)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -391,6 +392,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#520** — La leyenda del gráfico del Resumen de Ventas es una pastilla «Detalle · <período>» que flota…
 - **#521** — El Resumen de Ventas: un solo eje a la derecha, su propia tarjeta, y el techo de las…
 - **#522** — El renglón del título del Resumen de Ventas lleva los KPI en UNA línea deslizable y la…
+- **#523** — Un gráfico que rotula CADA barra congela el navegador cuando el rango crece, y lo congela…
 
 **AgGrid y tablas** (83)
 
@@ -42705,6 +42707,40 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      El ancho del flex se reparte por las CLASES de las keys (`:has(> …)`
      con clase sola, #469): el bloque de KPI se estira, el ancla no.
 
+523. **Un gráfico que rotula CADA barra congela el navegador cuando el rango
+     crece, y lo congela aunque se esté mirando OTRA vista: la pila
+     precarga la sección de al lado.**
+     2026-09-24, reportado en el Resumen de Ventas: «cuando selecciono ver
+     1 año se me cuelga».
+
+     **No era el Resumen.** Python tardaba 3,9 s con el año en caché (el
+     Resumen, 0,5) y 38 s la primera vez, bajando el año de R2. La traba
+     era del NAVEGADOR: medido al pasar de «Mes» a «Año», dos tareas de
+     9,3 y 5,6 s con el hilo principal bloqueado, y al terminar cada una
+     39.218 y 14.295 cambios de DOM en `ventas_g_dia` — el gráfico «Venta
+     por día», que es la sección SIGUIENTE de la pila y se construye por
+     cercanía. Ponía el monto encima de CADA barra (Venta y Costo:
+     ~528 rótulos con un año) y un tick por día (264 girados), y Plotly
+     mide y acomoda cada rótulo.
+
+     **La cura** (`ventas.py::_ventas_grafico_dia`): los rótulos sólo hasta
+     `_MAX_DIAS_CON_ROTULO` (35) días —con más se pisan igual y el monto
+     está en el hover— y el eje salta días para no pasar de
+     `_MAX_TICKS_DIA` (31) rótulos. Medido después: la traba más larga
+     bajó a 2,4 s y los cambios de DOM a 8.956.
+
+     **Cómo se midió, y las dos trampas del camino:**
+     - Con el panel del navegador oculto, `setTimeout` se frena y un latido
+       hecho con él «mide» trabas que no existen (salieron 106 s). El
+       latido va con `MessageChannel`, y el `PerformanceObserver` de
+       `longtask` a veces queda mudo (memoria del proyecto).
+     - Para saber QUIÉN, un `MutationObserver` que anota qué `st-key-*`
+       cambia justo al terminar cada tarea larga: el gráfico que se
+       redibuja al final de la traba es el que la causó.
+     - La versión de antes de este día (commit `612344f`, en un worktree
+       aparte) se trababa igual: el problema es anterior a las reglas
+       #515-#522, sólo que un rango de un año lo destapa.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42717,7 +42753,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#522**; la próxima toma el número siguiente.
+> última regla es la **#523**; la próxima toma el número siguiente.
 
 >
 

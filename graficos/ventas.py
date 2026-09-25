@@ -93,6 +93,16 @@ _PILA = pila_sin_tablas((
 ))
 
 
+_MAX_DIAS_CON_ROTULO = 35
+"""Hasta cuántos días «Venta por día» escribe el monto encima de cada barra.
+Un mes corrido entra; más allá los rótulos se pisan y, con un año, Plotly
+tardaba segundos en acomodarlos (regla #523). El monto sigue en el hover."""
+
+_MAX_TICKS_DIA = 31
+"""Rótulos del eje de «Venta por día»: uno por día hasta 31, y después uno
+cada N días. Con 264 días y un tick por día el eje era una mancha girada."""
+
+
 @st.fragment
 def _ventas_grafico_dia(g, col_costo, col_pax):
     """Gráfico 'Venta bruta por día' aislado en su PROPIO @st.fragment.
@@ -166,27 +176,39 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
     _need_y2 = "Pax" in sel and "pax" in g.columns
     _need_y3 = "Pax/Venta" in sel and "ratio" in g.columns
 
+    # CON UN AÑO, ESTE GRÁFICO CONGELABA LA PÁGINA (2026-09-24, regla #523).
+    # Rotulaba CADA barra (Venta y Costo) y ponía un tick por día: con el
+    # rango de un año son ~528 rótulos y 264 ticks girados, y Plotly los
+    # mide y acomoda uno por uno. Medido en el navegador: 9,3 s + 5,6 s de
+    # hilo principal bloqueado y 53.000 cambios de DOM — y pasaba mirando
+    # OTRA vista, porque la pila precarga la sección de al lado (el Resumen
+    # ejecutivo, que es la primera). Ahora los rótulos van sólo mientras
+    # entran, y el eje salta días para no pasar de `_MAX_TICKS_DIA` rótulos.
+    _n_dias = len(g)
+    _rotular = _n_dias <= _MAX_DIAS_CON_ROTULO
+    _txt = (dict(texttemplate="S/ %{y:,.0f}", textposition="outside",
+                 textfont=dict(size=13), cliponaxis=False)
+            if _rotular else {})
+    _paso_ticks = max(1, -(-_n_dias // _MAX_TICKS_DIA))
+
     fig = go.Figure()
     if "Venta" in sel:
         fig.add_bar(
             x=g["dia"], y=g["venta"], name="Venta",
-            marker=dict(color=ACENTO), yaxis="y",
-            texttemplate="S/ %{y:,.0f}", textposition="outside",
-            textfont=dict(size=13), cliponaxis=False,
+            marker=dict(color=ACENTO), yaxis="y", **_txt,
             hovertemplate="%{x|%d/%m/%Y}<br>Venta: S/ %{y:,.2f}<extra></extra>")
     if "Costo" in sel and "costo" in g.columns:
         fig.add_bar(
             x=g["dia"], y=g["costo"], name="Costo",
-            marker=dict(color=PALETA_CALLAI[1]), yaxis="y",
-            texttemplate="S/ %{y:,.0f}", textposition="outside",
-            textfont=dict(size=13), cliponaxis=False,
+            marker=dict(color=PALETA_CALLAI[1]), yaxis="y", **_txt,
             hovertemplate="%{x|%d/%m/%Y}<br>Costo: S/ %{y:,.2f}<extra></extra>")
     if _need_y2:
         fig.add_trace(go.Scatter(
             x=g["dia"], y=g["pax"], name="Pax",
-            mode="lines+markers+text",
-            text=g["pax"], texttemplate="%{y:,.0f}",
-            textposition="top center", textfont=dict(size=12),
+            **(dict(mode="lines+markers+text", text=g["pax"],
+                    texttemplate="%{y:,.0f}", textposition="top center",
+                    textfont=dict(size=12))
+               if _rotular else dict(mode="lines+markers")),
             line=dict(color=PALETA_CALLAI[2], width=2.5), yaxis="y2",
             hovertemplate="%{x|%d/%m/%Y}<br>Pax: %{y:,.0f}<extra></extra>"))
     if _need_y3:
@@ -211,7 +233,8 @@ def _ventas_grafico_dia(g, col_costo, col_pax):
         barmode="group",
         xaxis=dict(
             domain=[0.0, _xright], type="date",
-            tickmode="linear", tick0=g["dia"].min(), dtick=86400000.0,
+            tickmode="linear", tick0=g["dia"].min(),
+            dtick=86400000.0 * _paso_ticks,
             tickformat="%d/%m", tickangle=-45, tickfont=dict(size=10),
         ),
         yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
