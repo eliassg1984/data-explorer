@@ -378,6 +378,13 @@ def renderizar_dias_venta(tp, altura, key, columnas, rotulo_periodo="Día",
     return None
 
 
+# Clic en una fila = elegirla o SOLTARLA. `rowPinned` afuera: la fila Total
+# no es un pedido.
+_JS_ALTERNAR = JsCode(
+    "function(e){ if (e.node.rowPinned) return;"
+    " e.node.setSelected(!e.node.isSelected(), true); }")
+
+
 def renderizar_pedidos_venta(tp, altura, key, ver_canal=False,
                              ver_mesero=True, solo_hora=True, total=None):
     """Una fila por PEDIDO del día en foco.
@@ -392,7 +399,13 @@ def renderizar_pedidos_venta(tp, altura, key, ver_canal=False,
     «En el Local» en cada fila es ruido (regla #239).
 
     Devuelve el `__ped` de la fila SELECCIONADA, o None — la selección
-    vigente: el llamador la compara contra el pedido que ya muestra."""
+    vigente: el llamador la compara contra el pedido que ya muestra.
+
+    EL CLIC ALTERNA (regla #525): un segundo clic en el pedido elegido lo
+    suelta, y la tabla de al lado vuelve a los platos del período entero.
+    AG Grid por sí solo no deselecciona al reclickear (pide Ctrl+clic, que
+    nadie descubre): la selección la maneja `_JS_ALTERNAR`, el mismo
+    handler del ranking de Proveedor (`compras/proveedor.py`)."""
     gb = GridOptionsBuilder.from_dataframe(tp)
     gb.configure_default_column(
         resizable=False, sortable=True, filter=False, editable=False,
@@ -434,6 +447,13 @@ def renderizar_pedidos_venta(tp, altura, key, ver_canal=False,
         onGridReady=_AL_MONTAR), total))
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # arquitectura.md #159
+    for _legado in ("rowMultiSelectWithClick", "suppressRowDeselection",
+                    "suppressRowClickSelection", "groupSelectsChildren",
+                    "groupSelectsFiltered"):
+        grid_options.pop(_legado, None)
+    grid_options["rowSelection"] = {"mode": "singleRow", "checkboxes": False,
+                                    "enableClickSelection": False}
+    grid_options["onRowClicked"] = _JS_ALTERNAR
 
     resp = AgGrid(
         tp, gridOptions=grid_options, height=altura, theme="material",

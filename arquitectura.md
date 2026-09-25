@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-523 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+525 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (181)
 
@@ -293,7 +293,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
-**Plotly y figuras** (98)
+**Plotly y figuras** (99)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -393,6 +393,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#521** — El Resumen de Ventas: un solo eje a la derecha, su propia tarjeta, y el techo de las…
 - **#522** — El renglón del título del Resumen de Ventas lleva los KPI en UNA línea deslizable y la…
 - **#523** — Un gráfico que rotula CADA barra congela el navegador cuando el rango crece, y lo congela…
+- **#525** — El Resumen de Ventas muestra lo que la definición deja afuera: una subvista «Cuadre», los KPI…
 
 **AgGrid y tablas** (83)
 
@@ -628,7 +629,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 
-**Datos, R2 y DuckDB** (63)
+**Datos, R2 y DuckDB** (64)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -693,6 +694,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#510** — «Porcionamientos» es la tercera tarjeta «por período» y la primera que no mide un valorizado:…
 - **#514** — El «neto» del sistema es precio ÷ 1,235: IGV y recargo se SUMAN sobre el neto, y el IGV de…
 - **#517** — En ventas.parquet un ítem sale UNA VEZ POR FORMA DE PAGO: toda suma de venta, costo o…
+- **#524** — La venta tiene UNA definición y vive en definicion_venta.py: facturas y boletas pagadas o por…
 
 **SUNAT y SIRE** (43)
 
@@ -801,7 +803,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (104)
+**Decisiones de diseño y UX** (106)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -907,6 +909,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
 - **#519** — El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre todas las filas, para…
 - **#522** — El renglón del título del Resumen de Ventas lleva los KPI en UNA línea deslizable y la…
+- **#524** — La venta tiene UNA definición y vive en definicion_venta.py: facturas y boletas pagadas o por…
+- **#525** — El Resumen de Ventas muestra lo que la definición deja afuera: una subvista «Cuadre», los KPI…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -42741,6 +42745,154 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        aparte) se trababa igual: el problema es anterior a las reglas
        #515-#522, sólo que un rango de un año lo destapa.
 
+524. **La venta tiene UNA definición y vive en `definicion_venta.py`:
+     facturas y boletas pagadas o por cobrar, MENOS notas de crédito;
+     cortesías y anulados aparte. Se aplica AL CARGAR, en `data.py`, así
+     que ninguna vista la escribe de nuevo — y así se cuadró al céntimo
+     contra el POS.**
+     2026-09-24, a pedido: «qué es lo más profesional, seguro, no importa
+     la inversión, quiero la mejor práctica».
+
+     **Lo que había.** Cada vista de Ventas sumaba `VENTA ITEM DDOCUMENTO`
+     a su manera. El Resumen sacaba cortesías y anulados (#518); las otras
+     nueve vistas, los KPIs del rail y el asistente los sumaban — unos
+     S/ 16.000 más al mes, el mismo día con dos montos según dónde se
+     mirara. Nadie restaba las notas de crédito. Y el costo: `PRECIO COSTO`
+     viene POR UNIDAD (el Lomo a 24,17, vendido por 2) y cuatro vistas lo
+     sumaban suelto — el FoodCost de «Ranking & FoodCost» salía 24,2 % en
+     septiembre, cuando era 34,5 %.
+
+     **El cuadre contra el POS** (`herramientas/sql_restaurante.py`, 30
+     días, del 25 ago al 23 set 2026): facturas y boletas, cortesías,
+     anulados, notas de crédito, propinas y clientes, día por día, iguales
+     al céntimo. Lo que costó llegar ahí:
+     - El estado 03 del POS es **POR COBRAR** (en el parquet, «C.POR
+       COBRAR»), no anulado: es venta. `vEstadoDocumento` dice 01 EMITIDO,
+       02 PAGADO, 03 POR COBRAR, 04 ANULADO, 05 PROCESADO. Leerlo como
+       anulado inventó una diferencia de S/ 13.900 al mes que no existía.
+     - Las notas de crédito NO están en `MDOCUMENTO` (viven en
+       `MNOTACREDITO`, con su motivo: «CAMBIO POR FACTURA»), así que
+       «cuadrar con `MDOCUMENTO`» cuadra una venta que las cuenta dos
+       veces. En el parquet llegan como un documento SIN ítems (tipo «NC B
+       Electronica» / «NC F Electronica», `TOTAL MDOCUMENTO` negativo); el
+       anulado trae el número de la nota en `NOTA CREDITO` y su fecha en
+       `FECH REG NC`. Son 22 en el histórico (S/ 28.649), todas por el
+       total, y 17 con el pedido reemitido: el canje de boleta por factura
+       —la venta, sus clientes y sus platos, dos veces—.
+     - `CANT PAX` son los ADULTOS (`MPEDIDO.nAdulto`); el POS cuenta
+       `nAdulto + nNino`. Los cinco días que no cuadraban eran exactamente
+       los nueve pedidos con niños. **Decisión del usuario: por ahora,
+       clientes = adultos.** Si cambia, es una columna en la consulta del
+       Sheet (`MPEDIDO.nNino`) y sumarla en `pax_por`.
+
+     **La definición, en `definicion_venta.preparar(df, ini, fin)`:**
+     - Agrega `CLASE VENTA` a cada fila: Venta, Nota de crédito, Cortesía
+       o Anulado. La cortesía es tipo CORTESIA (o `MOTIVO CORTESIA`); el
+       anulado gana a todo.
+     - Cada nota de crédito deja de ser un documento sin ítems y pasa a ser
+       los ÍTEMS del documento que anula, en negativo (montos de línea y
+       cantidad; los precios unitarios no se tocan: carta y costo salen
+       negativos solos), con la fecha, el número y la cabecera de la nota,
+       llaves de ítem propias, sin pago ni propina, y pax negativo. Resta
+       en SU fecha, como en el Registro de Ventas de SUNAT: el día del
+       canje queda en cero y el día de la boleta conserva lo que se comió.
+       Una nota sin el anulado a mano resta al menos su monto.
+     - Agrega `COSTO VENTA` = `PRECIO COSTO` × cantidad.
+     - `data._cargar_rango_cacheable` trae además los documentos que una
+       nota DEL RANGO anula aunque sean de antes (`_donde_rango`), y
+       `preparar` los saca después de espejarlos.
+
+     **Dónde se aplica:** `data._PREPARAR = {"ventas.parquet":
+     definicion_venta}`. Lo que sale de `data.cargar_rango` ya viene
+     preparado, así que lo reciben igual las vistas, los tramos que Año
+     Pasado y Mapa por hora cargan aparte, y el asistente. Los KPIs del
+     rail NO agregan en SQL —sería una segunda copia de la definición, y
+     así es como el rail sumaba cortesías—: bajan las ~30 columnas que la
+     definición lee (`definicion_venta.COLUMNAS`) y resumen con
+     `definicion_venta.resumir`. El Inspector sigue leyendo el parquet
+     crudo con `cargar()`: para eso existe.
+
+     En `graficos/ventas.py`, `d_todo` es un ítem una vez con todas las
+     clases (lo recibe el Resumen, que muestra cortesías, anulados y el
+     cuadre) y `d = dv.solo_venta(d_todo)` es lo que suman las otras
+     vistas; `_filtrar_items` pasa por lo mismo.
+
+     **Clientes con una nota que resta** (`definicion_venta.pax_por`). La
+     regla vieja —`max()` del pax por pedido— contaba el canje dos veces.
+     La primera arreglada —el mayor positivo más el menor negativo— daba
+     bien el DÍA pero CERO en un rango con el canje entero: la boleta y la
+     factura son el mismo pedido. La que quedó cuenta COMPROBANTES por
+     pedido: si los que suman superan a las notas, la mesa cuenta; si se
+     empatan, cero; si hay más notas, resta. Por día y por rango da lo
+     mismo sumado (tabla en su docstring). `documentos_por` hace lo mismo
+     con los comprobantes: el canje es una venta, no tres documentos.
+
+     **La versión de la definición va en la clave de la caché**
+     (`definicion=_version_preparar(archivo)`): la caché de disco no
+     caduca, y sin eso un cambio de definición seguiría sirviendo el df
+     preparado con la regla vieja hasta que cambie el parquet. Al cambiar
+     la definición, subir `definicion_venta.VERSION`.
+
+     **Los candados:**
+     - `test_definicion_venta.py`: las cuentas sobre un parquet de mentira
+       con cada caso real (canje, cuenta dividida, devolución, nota por
+       menos del total, dos formas de pago, cortesía, anulado), y el
+       cableado leído con `ast`: que ninguna vista de `graficos/ventas*.py`
+       compare contra "CORTESIA"/"ANULADO" ni cuente clientes con
+       `["pax"].max()`, que `d` sea `dv.solo_venta(d_todo)` y que toda
+       llamada a las cacheables pase la versión.
+     - `herramientas/cuadrar_ventas.py`: el cuadre contra el POS hecho
+       herramienta, por la MISMA carga que usa la app. Sale con código 1
+       si un día no cuadra. Correrlo después de tocar la definición o la
+       consulta del Sheet.
+     - `requirements.txt` fija `streamlit==1.64.0` (era `>=1.52,<2`): un
+       «Reboot app» ya no instala una versión que nadie probó.
+
+     **Dos trampas del camino:**
+     - Vaciar una columna de FECHAS con `= np.nan` la vuelve float, y al
+       juntarla con las demás filas queda `object`: cualquier `.dt` de más
+       adelante revienta. Se vacía con `where(False)`, que conserva el
+       tipo.
+     - Un df con índice repetido rompe los `.loc[...]` de las vistas (el
+       Resumen hace `_cant.loc[_ex.index]`): el `concat` de las notas va
+       con `ignore_index=True`.
+
+525. **El Resumen de Ventas muestra lo que la definición deja afuera: una
+     subvista «Cuadre», los KPI de anulados y notas de crédito, un
+     interruptor por canal en la pastilla, y en Detalle los platos del
+     período entero.**
+     2026-09-24, lo que el usuario perdía con las reglas #516 a #522
+     (preguntado: «¿el usuario perderá alguna vista, funcionalidad o
+     dato?»), más el cuadre de la #524.
+
+     - **«Cuadre»** es la séptima subvista (#519): Facturas y boletas ·
+       Notas de crédito · = Venta · Cortesías · Anulados, una fila por
+       período; la fila Total es el cuadre de la vista. Un cero se escribe
+       «—»: en columnas donde casi todo es cero, lo que tiene que verse es
+       lo que no. «Facturas y boletas» es lo que registra el POS.
+     - **KPI «Anulados»** siempre (un anulado que nadie ve es justo el que
+       conviene mirar) y **«Notas de crédito»** sólo cuando hay.
+     - **Un interruptor por canal** en la pastilla «Detalle» (#520): antes
+       un clic en «Rappi» en la leyenda de Plotly lo ocultaba. Apagar un
+       canal es MIRAR sin él: la barra, su etiqueta, su variación y la tapa
+       del descuento pasan a ser los de los canales que quedan (la carta
+       por canal sale de un segundo `pivot_table`). Los KPI y la tabla no
+       cambian — para sacarlo de todo está el filtro «Canal». El estado
+       vive en `_vt_resumen_ver_canal_<slug>` (un eco, como las otras
+       series) y el slug sale sin tildes ni espacios porque la key de un
+       widget es una clase CSS.
+     - **En Detalle, sin pedido elegido, la tabla de al lado lista los
+       platos del PERÍODO** (sumados por plato); con un pedido, los suyos,
+       y un segundo clic en ese pedido lo suelta. AG Grid no deselecciona
+       al reclickear (pide Ctrl+clic): la selección la maneja un
+       `onRowClicked` con `setSelected(!isSelected())`, el de Compras ›
+       Proveedor. La grilla se estrena sólo cuando `vt_resumen_ped` ya
+       volvió a None, así que un `None` con pedido puesto es que lo
+       soltaron.
+     - **Una nota de crédito es SU fila** en la lista de pedidos, con el
+       pedido que anula y « · NC»: en un canje se ven la factura (+) y la
+       nota (−), no un pedido de S/ 0 con el doble de platos.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42753,7 +42905,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#523**; la próxima toma el número siguiente.
+> última regla es la **#525**; la próxima toma el número siguiente.
 
 >
 

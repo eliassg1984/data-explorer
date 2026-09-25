@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_docs.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -98,6 +98,14 @@ y `limpiar_cache` las vacía a todas. Es la misma forma que el `categoria=` de
 las tarjetas de Compras — un argumento que si falta no rompe nada, sólo hace
 que la app sirva el parquet de hace días con cara de dato de hoy. Análisis
 estático con `ast`: sin secrets, sin red. Ver `arquitectura.md` regla #367.
+
+`test_definicion_venta.py` vigila QUÉ ES VENTA: las cuentas de
+`definicion_venta.py` sobre un parquet de mentira con cada caso real (el
+canje de boleta por factura, una cuenta dividida, una devolución, una
+cortesía, un anulado) y, con `ast`, que ninguna vista de Ventas vuelva a
+definirla por su cuenta. Sin secrets, sin red. La cifra contra el POS de
+verdad la da `herramientas/cuadrar_ventas.py`. Ver `arquitectura.md` regla
+#524.
 
 ## El asistente IA no adivina: consulta
 
@@ -724,6 +732,37 @@ vez), y lo que la vista trae APARTE de R2 pasa por `_filtrar_items`. La
 propina y los montos de pago son del PAGO (x11 por fila): Meseros y el
 asistente IA reciben las filas por pago y cuentan cada `LLAVE LOCAL
 DOCUMENTO CORRELATIVO PAGO` una vez. El parquet no se toca. Regla #517.
+
+## La venta tiene UNA definición: `definicion_venta.py`
+
+Desde el 2026-09-24, y cuadrada al céntimo contra el POS (30 días: facturas
+y boletas, notas de crédito, cortesías, anulados, propinas y clientes):
+
+    Venta = facturas y boletas pagadas o POR COBRAR − notas de crédito
+
+Cortesías (a precio carta) y anulados van aparte. Hasta ese día el Resumen
+los sacaba y las otras nueve vistas, el rail y el asistente no — el mismo
+día con dos montos —, nadie restaba las notas de crédito, y el costo se
+sumaba POR UNIDAD (FoodCost 24 % donde era 34,5 %).
+
+- **Se aplica al CARGAR**: `data._PREPARAR` manda `ventas.parquet` a
+  `definicion_venta.preparar`, que agrega `CLASE VENTA` y `COSTO VENTA` y
+  convierte cada nota de crédito en los ítems del documento que anula, en
+  NEGATIVO y en SU fecha (como el Registro de Ventas de SUNAT). Una vista
+  que suma venta filtra con `solo_venta`; una que cuenta clientes o
+  comprobantes usa `pax_por` / `documentos_por`. **Nunca comparar contra
+  "CORTESIA" o "ANULADO" en una vista**: lo ataja el test.
+- **El estado 03 del POS es POR COBRAR, no anulado.** Y las notas de
+  crédito no están en `MDOCUMENTO` (están en `MNOTACREDITO`): cuadrar sólo
+  contra `MDOCUMENTO` cuadra una venta que cuenta los canjes dos veces.
+- **Clientes = adultos** (`CANT PAX` es `MPEDIDO.nAdulto`; el POS suma
+  niños). Decisión del usuario, por ahora.
+- **Tocar la definición es subir `definicion_venta.VERSION`** (va en la
+  clave de la caché de disco, que no caduca) y correr
+  `python herramientas/cuadrar_ventas.py`, que la cuadra contra el POS por
+  la misma carga que usa la app.
+
+Detalle en `arquitectura.md` reglas #524 y #525.
 
 ## El eje temporal tiene TRES modos, y un solo dueño
 

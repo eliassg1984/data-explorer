@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
+import definicion_venta as dv
 from data import cargar as _cargar_reporte
 from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, TEXTO_PRINCIPAL
 from graficos.base import (
@@ -716,8 +717,11 @@ def _ventas_ranking_foodcost(d, col_venta, col_costo, col_cant,
     con %VAR vs Año Pasado y semáforo de FoodCost (Styler), y un ranking por
     Producto con sparklines de tendencia mensual (AgGrid + cellRenderer SVG).
 
-    v1: FoodCost = Precio Costo / Venta (el "FC Receta" teórico queda para
-    después). Cantidad y Costo son opcionales; si faltan, se omiten.
+    v1: FoodCost = Costo / Venta, con el costo de la LÍNEA (`COSTO VENTA`,
+    unitario × cantidad — regla #524; hasta el 2026-09-24 sumaba el
+    unitario y el FoodCost salía diez puntos más bajo). El "FC Receta"
+    teórico queda para después. Cantidad y Costo son opcionales; si
+    faltan, se omiten.
     """
     from st_aggrid import AgGrid, JsCode  # noqa: E402
 
@@ -963,6 +967,10 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
     # la propina es del pago, pero la VENTA se cuenta un ítem una vez —
     # sumada por pago, un plato pagado con dos formas pesaba doble y el
     # % de propina salía más bajo de lo que fue.
+    # Y sin cortesías ni anulados (regla #524): una cortesía es un pedido
+    # con «venta» a precio de carta y cero propina, y tiraba abajo la
+    # propina esperada de quien las atendió.
+    d = dv.solo_venta(d)
     di = unico_por_item(d)
     ped = d[col_pedido].astype(str)
     fecha = pd.to_datetime(di[col_fecha], errors="coerce")
@@ -974,8 +982,10 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
         "finde":  fecha.dt.day_name().isin(["Friday", "Saturday", "Sunday"]),
         "venta":  pd.to_numeric(di[col_venta], errors="coerce").fillna(0),
     }).dropna(subset=["pax", "hora"])
-    base = base[(base["mesero"] != "") & (base["mesero"].str.lower() != "nan")
-               & (base["pax"] > 0) & (base["pax"] <= 20)]
+    # El filtro de pax va por PEDIDO, más abajo: por fila se llevaba los
+    # ítems de una nota de crédito (pax negativo) y el pedido del canje
+    # quedaba con la venta de la boleta Y la de la factura.
+    base = base[(base["mesero"] != "") & (base["mesero"].str.lower() != "nan")]
     if base.empty:
         st.info("Sin datos de mesero en el rango cargado.")
         return
@@ -1008,7 +1018,8 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
                     venta=("venta", "sum")))
     pedidos = pedidos.merge(propina_ped, on="ped", how="left")
     pedidos["propina"] = pedidos["propina"].fillna(0)
-    pedidos = pedidos[pedidos["venta"] > 0]
+    pedidos = pedidos[(pedidos["venta"] > 0) & (pedidos["pax"] > 0)
+                      & (pedidos["pax"] <= 20)]
     if len(pedidos) < 30:
         st.info("Muy pocos pedidos con mesero/propina en este rango para "
                 "un ranking confiable — ampliá el rango de fechas.")
@@ -1078,7 +1089,12 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_sub   = _resolver(df_f, ["Sub Grupo", "Sub_Grupo", "Subgrupo"])
     col_fecha = _resolver(df_f, ["Fec Reg Documento", "Fec_Reg_Documento",
                                  "Fecha Registro", "FECHA"])
-    col_costo  = _resolver(df_f, ["Precio Costo", "Costo Item Ddocumento", "Costo"])
+    # El costo de la LÍNEA (unitario × cantidad) que arma `definicion_venta`
+    # (regla #524): «Precio Costo» es POR UNIDAD, y sumarlo suelto daba un
+    # FoodCost de 24 % donde era 34,5 %. Queda de respaldo para un df sin
+    # preparar.
+    col_costo  = _resolver(df_f, ["Costo Venta", "Precio Costo",
+                                  "Costo Item Ddocumento", "Costo"])
     col_pax    = _resolver(df_f, ["Cant Pax", "Cantidad Pax", "Pax"])
     col_pedido = _resolver(df_f, ["Llave Local Pedido", "Llave_Local_Pedido",
                                   "Nro Pedido", "Numero Pedido"])
@@ -1093,6 +1109,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_mesero  = _resolver(df_f, ["Nombre Mesero", "Nomb Mesero"])
     col_propina = _resolver(df_f, ["Monto Propina", "Propina"])
     col_corr    = _resolver(df_f, ["Correlativo Pago"])
+    col_ldoc    = _resolver(df_f, ["Llave Local Documento"])
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]):
@@ -1150,14 +1167,27 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # cantidad. Sólo dos cosas miran `d_pagos`: Meseros (la propina es del
     # PAGO) y el asistente IA (que también responde por formas de pago, y
     # recibe la nota del grano en `asistente_datos.nota_de_grano`).
+    #
+    # Y UNA DEFINICIÓN DE VENTA (regla #524): `df_f` llega de
+    # `data.cargar_rango` con la columna `CLASE VENTA` y las notas de
+    # crédito como ítems negativos. `d` es sólo lo que ES venta —sin
+    # cortesías ni anulados, con las notas restando— y es lo que suman las
+    # vistas. `d_todo` conserva todas las clases: lo usa el Resumen, que
+    # muestra cortesías y anulados aparte y arma el puente de la venta.
+    if dv.columna(df_f, dv.CLASE) is None:
+        # Un df que no vino de `data.cargar_rango` (los tests, una
+        # herramienta): la definición se aplica acá, igual.
+        df_f = dv.preparar(df_f)
     d_pagos = _aplicar_chips(df_f)
-    d = unico_por_item(d_pagos)
+    d_todo = unico_por_item(d_pagos)
+    d = dv.solo_venta(d_todo)
 
     def _filtrar_items(df):
-        """`_aplicar_chips` + un ítem una vez, para los df que las vistas
-        traen APARTE de R2 (Año Pasado, Mapa por hora): sin el segundo
-        paso, esas dos vistas volverían a sumar filas por pago."""
-        return unico_por_item(_aplicar_chips(df))
+        """`_aplicar_chips` + un ítem una vez + sólo venta, para los df que
+        las vistas traen APARTE de R2 (Año Pasado, Mapa por hora): sin los
+        dos últimos pasos, esas vistas volverían a sumar filas por pago,
+        cortesías y anulados."""
+        return dv.solo_venta(unico_por_item(_aplicar_chips(df)))
 
     # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
     publicar_contexto_ia("Ventas", d_pagos, {
@@ -1190,7 +1220,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         # de arquitectura.md — esa regla solo aplica a contenido en flujo
         # POR FUERA de `ajuste_graf_card_izq_ventas`.
         if graf == "Resumen ejecutivo":
-            _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido,
+            _ventas_resumen(d_todo, col_venta, col_fecha, col_pax, col_pedido,
                             col_prod, col_cant, col_fam=col_fam,
                             col_serv=col_serv, col_canal=col_canal,
                             col_mesero=col_mesero, d_pagos=d_pagos)
@@ -1219,11 +1249,16 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                     "pax": pd.to_numeric(d[col_pax], errors="coerce").fillna(0),
                 })
                 if col_pedido:
+                    # Un valor por pedido, y el de una nota de crédito
+                    # resta (regla #524): ver `definicion_venta.pax_por`.
                     _pdf["ped"] = d[col_pedido].astype(str)
+                    if col_ldoc:
+                        _pdf["doc"] = d[col_ldoc].astype(str)
                     _pdf = _pdf.dropna(subset=["dia"])
-                    _pax_dia = (_pdf.groupby(["dia", "ped"], as_index=False)["pax"]
-                                .max()
-                                .groupby("dia", as_index=False)["pax"].sum())
+                    _pax_dia = (dv.pax_por(_pdf, "ped", "pax",
+                                           doc="doc" if col_ldoc else None,
+                                           por="dia")
+                                .rename("pax").reset_index())
                 else:
                     _pdf = _pdf.dropna(subset=["dia"])
                     _pax_dia = _pdf.groupby("dia", as_index=False)["pax"].sum()
@@ -1278,11 +1313,16 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                     "pax": pd.to_numeric(d[col_pax], errors="coerce").fillna(0),
                 })
                 if col_pedido:
+                    # Un valor por pedido, y el de una nota de crédito
+                    # resta (regla #524): ver `definicion_venta.pax_por`.
                     _pdf["ped"] = d[col_pedido].astype(str)
+                    if col_ldoc:
+                        _pdf["doc"] = d[col_ldoc].astype(str)
                     _pdf = _pdf.dropna(subset=["dia"])
-                    _pax_dia = (_pdf.groupby(["dia", "ped"], as_index=False)["pax"]
-                                .max()
-                                .groupby("dia", as_index=False)["pax"].sum())
+                    _pax_dia = (dv.pax_por(_pdf, "ped", "pax",
+                                           doc="doc" if col_ldoc else None,
+                                           por="dia")
+                                .rename("pax").reset_index())
                 else:
                     _pdf = _pdf.dropna(subset=["dia"])
                     _pax_dia = _pdf.groupby("dia", as_index=False)["pax"].sum()

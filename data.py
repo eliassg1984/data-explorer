@@ -11,6 +11,8 @@ import json
 import zlib
 from datetime import datetime, timezone
 
+import definicion_venta
+
 
 # ===========================================================================
 # CONFIGURACIÓN DE REPORTES
@@ -1056,37 +1058,79 @@ def limpiar_cache(archivo):
     _SELLOS.pop(archivo, None)
 
 
-@st.cache_data(ttl=3600, persist="disk")
-def _cargar_rango_cacheable(archivo, sello, col_fecha, ini, fin):
-    """Lectura filtrada por rango. Si falla, LANZA — @st.cache_data no cachea el
-    fracaso. Ver `cargar()` para el porqué del split cacheada/wrapper.
+# ── Qué se le hace a un parquet ENTRE leerlo de R2 y entregarlo ─────────
+# Hoy sólo a ventas: la DEFINICIÓN DE VENTA (regla #524) —qué es venta,
+# cortesía, anulado y nota de crédito— vive en `definicion_venta.py` y se
+# aplica acá, al cargar, para que TODO consumidor reciba el mismo df: las
+# vistas, los KPIs del rail, el asistente y los tramos que Año Pasado y
+# Mapa por hora cargan aparte. Aplicarla en cada vista era cómo cada una
+# había terminado con su propia versión.
+_PREPARAR = {"ventas.parquet": definicion_venta}
 
-    `sello` no se usa en el cuerpo: ES la clave (ver el bloque del sello).
 
-    `persist="disk"` por lo mismo que `_cargar_cacheable`: la clave incluye el
-    rango, así que cada ventana que ya se miró una vez queda en disco y
-    sobrevive al reinicio del server."""
-    # ── Modo demo: sin credenciales R2 → datos sintéticos filtrados ──
-    if not secrets_disponibles():
-        df = _datos_demo(archivo)
-        col = "Fecha" if "Fecha" in df.columns else None
-        if col:
-            m = (df[col].dt.date >= ini) & (df[col].dt.date <= fin)
-            return df[m]
-        return df
-    con = get_conn()
-    bucket = st.secrets["R2_BUCKET"]
-    url = f"s3://{bucket}/{archivo}"
+def _version_preparar(archivo):
+    """La versión de la definición que se le aplica a `archivo`: va en la
+    clave de la caché para que un cambio de definición no siga sirviendo
+    el df preparado con la regla vieja (la caché de disco no caduca)."""
+    prep = _PREPARAR.get(archivo)
+    return prep.VERSION if prep else None
+
+
+def _donde_rango(con, url, col_fecha, prep):
+    """(WHERE, parámetros) de una carga por rango de `ini` a `fin`.
+
+    Con una definición que arma notas de crédito, además de lo del rango
+    trae los documentos que una nota DEL RANGO anula aunque sean de antes:
+    la nota resta sus ítems, y sin ellos sólo podría restar el monto. Los
+    saca `preparar(df, ini, fin)` después de espejarlos."""
     expr = (
         f'COALESCE('
         f'TRY_CAST("{col_fecha}" AS DATE), '
         f'TRY_CAST(TRY_STRPTIME(CAST("{col_fecha}" AS VARCHAR), \'%d/%m/%Y\') AS DATE)'
         f')'
     )
-    return con.execute(
-        f"SELECT * FROM read_parquet('{url}') WHERE {expr} BETWEEN ? AND ?",
-        [ini, fin],
+    donde, n = f"{expr} BETWEEN ? AND ?", 1
+    if prep is not None:
+        nombres = [r[0] for r in con.execute(
+            f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()]
+        c_nc = prep.columna(pd.DataFrame(columns=nombres), prep.NC_FECHA)
+        if c_nc:
+            donde = f'({donde} OR TRY_CAST("{c_nc}" AS DATE) BETWEEN ? AND ?)'
+            n = 2
+    return donde, n
+
+
+@st.cache_data(ttl=3600, persist="disk")
+def _cargar_rango_cacheable(archivo, sello, col_fecha, ini, fin,
+                            definicion=None):
+    """Lectura filtrada por rango. Si falla, LANZA — @st.cache_data no cachea el
+    fracaso. Ver `cargar()` para el porqué del split cacheada/wrapper.
+
+    `sello` no se usa en el cuerpo: ES la clave (ver el bloque del sello).
+    `definicion` tampoco: es la versión de `_PREPARAR[archivo]`, por lo
+    mismo (ver `_version_preparar`).
+
+    `persist="disk"` por lo mismo que `_cargar_cacheable`: la clave incluye el
+    rango, así que cada ventana que ya se miró una vez queda en disco y
+    sobrevive al reinicio del server."""
+    prep = _PREPARAR.get(archivo)
+    # ── Modo demo: sin credenciales R2 → datos sintéticos filtrados ──
+    if not secrets_disponibles():
+        df = _datos_demo(archivo)
+        col = "Fecha" if "Fecha" in df.columns else None
+        if col:
+            m = (df[col].dt.date >= ini) & (df[col].dt.date <= fin)
+            df = df[m]
+        return prep.preparar(df) if prep else df
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+    donde, n = _donde_rango(con, url, col_fecha, prep)
+    df = con.execute(
+        f"SELECT * FROM read_parquet('{url}') WHERE {donde}",
+        [ini, fin] * n,
     ).df()
+    return prep.preparar(df, ini, fin) if prep else df
 
 
 def cargar_rango(archivo, col_fecha, ini, fin):
@@ -1101,12 +1145,18 @@ def cargar_rango(archivo, col_fecha, ini, fin):
     Maneja col_fecha tanto si es DATE/TIMESTAMP real como si viene como
     texto tipo '05/07/2026' (dd/mm/yyyy): COALESCE de dos intentos de cast.
 
+    ventas.parquet llega PREPARADO (`_PREPARAR`, regla #524): con la
+    columna `CLASE VENTA` y las notas de crédito como ítems negativos. Lo
+    que sale de acá ya no es el parquet fila por fila — para eso está el
+    Inspector, que usa `cargar()`.
+
     No cacheada a propósito (la capa interna sí): un fallo transitorio NO debe
     quedar cacheado 1h como None. Mismo patrón que cargar().
     """
     try:
         return _cargar_rango_cacheable(archivo, sello_datos(archivo),
-                                       col_fecha, ini, fin)
+                                       col_fecha, ini, fin,
+                                       definicion=_version_preparar(archivo))
     except Exception as e:
         st.error(f"Error cargando {archivo}: {str(e)}")
         return None
@@ -1179,18 +1229,47 @@ def _expr_fecha_kpi(col_fecha):
 
 @st.cache_data(ttl=3600, persist="disk")
 def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
-                            col_item=None):
+                            col_item=None, definicion=None):
     """Agregados SUM/COUNT DISTINCT directo en DuckDB, sin materializar
     filas — mismo espíritu que `_rango_fechas_cacheable`. Acota al MES EN
     CURSO cuando `col_fecha` viene dado (mismo default que usa la franja de
     fecha en app.py: `hoy.replace(day=1)` → hoy); si no, agrega la tabla
     entera — es el caso de los catálogos sin fecha (Recetas,
-    Inventario Valorizado)."""
+    Inventario Valorizado).
+
+    `definicion` no se usa en el cuerpo: es la versión de la definición
+    del archivo (`_version_preparar`), en la clave por el mismo motivo que
+    el sello."""
     if not secrets_disponibles():
         return {}
     con = get_conn()
     bucket = st.secrets["R2_BUCKET"]
     url = f"s3://{bucket}/{archivo}"
+
+    prep = _PREPARAR.get(archivo)
+    if prep is not None and col_fecha:
+        # CON DEFINICIÓN (ventas, regla #524): el rail tiene que decir la
+        # misma venta que la vista, así que no se agrega en SQL —sería una
+        # segunda copia de la definición, que es justo cómo el rail sumaba
+        # cortesías y anulados—. Se bajan sólo las columnas que la
+        # definición y los KPIs leen (unas 30 de 60, un mes) y se resume
+        # con `prep.resumir`.
+        hoy = datetime.now(timezone.utc).date()
+        ini = hoy.replace(day=1)
+        nombres = [r[0] for r in con.execute(
+            f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()]
+        vacio = pd.DataFrame(columns=nombres)
+        quiero = [*prep.COLUMNAS, col_fecha, col_dedup, col_item,
+                  *(k[1] for k in kpis)]
+        reales = list(dict.fromkeys(
+            c for c in (prep.columna(vacio, q) for q in quiero if q) if c))
+        lista = ", ".join(f'"{c}"' for c in reales)
+        donde, n = _donde_rango(con, url, col_fecha, prep)
+        df = con.execute(
+            f"SELECT {lista} FROM read_parquet('{url}') WHERE {donde}",
+            [ini, hoy] * n).df()
+        return prep.resumir(prep.preparar(df, ini, hoy), kpis,
+                            col_ped=col_dedup, col_item=col_item)
 
     where = ""
     if col_fecha:
@@ -1273,6 +1352,7 @@ def resumen_kpis(archivo, kpis, col_fecha=None, col_dedup=None):
                     None)
     try:
         return _resumen_kpis_cacheable(archivo, sello_datos(archivo),
-                                       kpis, col_fecha, col_dedup, col_item)
+                                       kpis, col_fecha, col_dedup, col_item,
+                                       definicion=_version_preparar(archivo))
     except Exception:
         return {}

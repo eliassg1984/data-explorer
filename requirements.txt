@@ -1,6 +1,11 @@
-# >=1.52: st.download_button(data=<funcion>) arma el PDF/Excel de Nueva receta
-# recien al hacer clic (envio_receta.py); antes de la 1.52 no existe.
-streamlit>=1.52,<2
+# EXACTA desde el 2026-09-24 (regla #524). Con un rango, cada «Reboot app»
+# instalaba la ultima que hubiera, sin que nadie la probara: asi llego la
+# 1.64 a Cloud mientras la laptop corria la 1.59, y los desplegables salieron
+# gruesos solo alla (otro DOM, react-aria; regla #521). Subirla es un cambio
+# a proposito, probado antes en local.
+# >=1.52 hace falta igual: st.download_button(data=<funcion>) arma el
+# PDF/Excel de Nueva receta recien al hacer clic (envio_receta.py).
+streamlit==1.64.0
 duckdb>=1.0.0
 pandas>=2.2,<2.3
 numpy>=1.26,<2.2

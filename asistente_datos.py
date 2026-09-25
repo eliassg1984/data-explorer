@@ -44,6 +44,8 @@ import re
 
 import pandas as pd
 
+import definicion_venta
+
 # Tope de filas que se le devuelven al modelo por consulta. No es por
 # seguridad sino por CONTEXTO: 60 filas de JSON ya son ~4k caracteres, y
 # pasado eso el modelo empieza a resumir mal y a perder las primeras.
@@ -217,7 +219,7 @@ def nota_de_grano(df: pd.DataFrame) -> str | None:
     if not (item and pago):
         return None
     doc = _columna(df, _LLAVE_DOC) or _LLAVE_DOC
-    return (
+    nota = (
         "GRANO DE `datos` — LEER ANTES DE SUMAR: hay una fila por ÍTEM Y POR "
         "FORMA DE PAGO del comprobante. Un plato pagado con dos formas de "
         "pago aparece DOS veces, con su venta, costo y cantidad enteros.\n"
@@ -229,6 +231,23 @@ def nota_de_grano(df: pd.DataFrame) -> str | None:
         f"cada \"{pago}\" UNA vez. Los ítems sin pago tienen esa llave vacía.\n"
         "· Cabecera del comprobante (TOTAL/NETO/IGV MDOCUMENTO): se repite en "
         f"cada fila; cuenta cada \"{doc}\" UNA vez.")
+    # QUÉ ES VENTA (regla #524): la misma definición que las vistas. Sin
+    # esto el modelo sumaba cortesías y anulados, y respondía un total que
+    # contradecía la pantalla.
+    clase = _columna(df, definicion_venta.CLASE)
+    if clase:
+        nota += (
+            "\nQUÉ ES VENTA — la columna \"" + clase + "\" clasifica cada "
+            "fila: VENTA es sólo "
+            f"WHERE \"{clase}\" IN ('{definicion_venta.VENTA}', "
+            f"'{definicion_venta.NOTA_CREDITO}'). Las notas de crédito ya "
+            "vienen con venta, cantidad y pax NEGATIVOS en su fecha: se suman "
+            f"tal cual. '{definicion_venta.CORTESIA}' (valorizada a precio de "
+            f"carta) y '{definicion_venta.ANULADO}' NO son venta: "
+            "infórmalas aparte si las preguntan. Costo de una línea: "
+            f"\"{definicion_venta.COSTO}\" (PRECIO COSTO es por UNIDAD). "
+            "Clientes (pax): un valor por pedido; la nota de crédito lo resta.")
+    return nota
 
 
 # ─── Ejecución de SQL ──────────────────────────────────────────────────────

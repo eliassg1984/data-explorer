@@ -44,6 +44,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import cortes
+import definicion_venta as dv
 from data import REPORTES, cargar_rango
 from tema import (
     ACENTO, ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
@@ -309,6 +310,9 @@ def _series_por_rangos(archivo, col_parquet, col_fecha, col_venta, col_pax,
     if hay_pax:
         cols["pax"] = pd.to_numeric(df[col_pax], errors="coerce")
         cols["ped"] = df[col_pedido].astype(str)
+        _c_doc = dv.columna(df, dv.LLAVE_DOC)
+        if _c_doc:
+            cols["doc"] = df[_c_doc].astype(str)
     base = pd.DataFrame(cols).dropna(subset=["f", "venta"])
     if base.empty:
         return {}, {}
@@ -318,8 +322,12 @@ def _series_por_rangos(archivo, col_parquet, col_fecha, col_venta, col_pax,
         m = (fechas >= ini) & (fechas <= fin)
         ventas[clave] = float(base.loc[m, "venta"].sum())
         if hay_pax:
-            _t = base.loc[m, ["ped", "pax"]].dropna(subset=["pax"])
-            paxes[clave] = (float(_t.groupby("ped")["pax"].max().sum())
+            _t = base.loc[m, [c for c in ("ped", "pax", "doc")
+                              if c in base.columns]].dropna(subset=["pax"])
+            # Un valor por pedido y la nota de crédito resta (regla #524).
+            paxes[clave] = (dv.pax_por(_t, "ped", "pax",
+                                       doc="doc" if "doc" in _t.columns
+                                       else None)
                             if not _t.empty else 0.0)
     return ventas, paxes
 

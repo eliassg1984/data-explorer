@@ -83,6 +83,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import definicion_venta as dv
 from data import REPORTES, cargar_rango
 from tema import (
     ACENTO, ADVERTENCIA_TEXTO, ERROR, ESCALA_CONTINUA, EXITO, GRIS_CUADRICULA,
@@ -524,6 +525,11 @@ def _prep_tramo(df, c, grano, ini, fin):
             and c["pax"] in df.columns and c["pedido"] in df.columns:
         out["pax"] = pd.to_numeric(df.loc[m, c["pax"]], errors="coerce").values
         out["ped"] = df.loc[m, c["pedido"]].astype(str).values
+        # El comprobante, para que la nota de crédito reste sin descontar a
+        # la mesa que sí vino (`definicion_venta.pax_por`).
+        _c_doc = dv.columna(df, dv.LLAVE_DOC)
+        if _c_doc:
+            out["doc"] = df.loc[m, _c_doc].astype(str).values
     for _id, _col in (("grupo", "fam"), ("sub", "sub"), ("prod", "prod")):
         if c.get(_col) and c[_col] in df.columns:
             out[_id] = df.loc[m, c[_col]].astype(str).values
@@ -552,8 +558,11 @@ def _celdas(tramo):
     if "pax" in tramo.columns:
         _t = tramo.dropna(subset=["pax"])
         if not _t.empty:
-            _p = (_t.groupby(["col", "hora", "ped"], as_index=False)["pax"].max()
-                  .groupby(["col", "hora"], as_index=False)["pax"].sum())
+            # Un valor por pedido y la nota de crédito resta (regla #524).
+            _p = (dv.pax_por(_t, "ped", "pax",
+                             doc="doc" if "doc" in _t.columns else None,
+                             por=["col", "hora"])
+                  .rename("pax").reset_index())
             g = g.merge(_p, on=["col", "hora"], how="left")
     if "pax" not in g.columns:
         g["pax"] = np.nan
@@ -590,7 +599,8 @@ def _agregar_marca(tramo, pin, orden):
     }
     if "pax" in t.columns:
         _t = t.dropna(subset=["pax"])
-        out["pax"] = (float(_t.groupby("ped")["pax"].max().sum())
+        out["pax"] = (dv.pax_por(_t, "ped", "pax",
+                                 doc="doc" if "doc" in _t.columns else None)
                       if not _t.empty else 0.0)
     else:
         out["pax"] = 0.0

@@ -5469,8 +5469,13 @@ def _pruebas_ventas_un_item_una_vez():
         n.targets[0].id: ast.unparse(n.value) for n in ast.walk(arbol)
         if isinstance(n, ast.Assign) and len(n.targets) == 1
         and isinstance(n.targets[0], ast.Name)}
-    check("`d` es el df post-chips con un ítem una vez",
-          asignaciones.get("d"), "unico_por_item(d_pagos)")
+    # Desde la regla #524 hay un paso más: `d` es SÓLO venta (sin cortesías
+    # ni anulados) sobre `d_todo`, que es el df post-chips un ítem una vez.
+    # Lo de la definición lo vigila `test_definicion_venta.py`.
+    check("`d_todo` es el df post-chips con un ítem una vez",
+          asignaciones.get("d_todo"), "unico_por_item(d_pagos)")
+    check("`d` es sólo la venta de `d_todo`",
+          asignaciones.get("d"), "dv.solo_venta(d_todo)")
     llamadas = {}
     for n in ast.walk(arbol):
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Name):
