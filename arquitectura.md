@@ -42638,6 +42638,14 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - Verificado con las dos Streamlit (1.59 local, 1.64 de Cloud; #519):
        26 cerrada, 146 abierta, filas de 22, en las dos.
 
+     **Segunda pasada** («subir estos dos cuadrantes y subir algo las
+     tablas»). Medido a 1366, el aire vertical de la tarjeta era: 16 de
+     relleno arriba, 16 de gap entre título, gráfico, toggles y tabla, y
+     34/10 de márgenes en la figura. Quedó en 6 de relleno, 8 de gap
+     (sólo en `chartcard_ventas_resumen_dia`) y 28/4 de márgenes, con la
+     figura en 210 y el MISMO área de trazo (156). Se hizo por aire y no
+     achicando nada que se lea.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 

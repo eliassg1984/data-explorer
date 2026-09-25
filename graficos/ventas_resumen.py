@@ -892,10 +892,11 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             # «Detalle» que flota arriba a la izquierda, como en Comparativo
             # › Descomposición. Al pie se comía 38px de la figura.
             showlegend=False,
-            # 34 arriba: la pastilla cerrada mide ~26 y flota a 4px del
-            # borde, sobre el margen y no sobre las barras.
+            # 28 arriba: la pastilla cerrada mide 26 y flota a 1px del
+            # borde, sobre el margen y no sobre las barras. 4 abajo: debajo
+            # de los rótulos del eje no va nada (regla #520, 2da pasada).
             margin=dict(l=10, r=(70 if _hay_ticket else 50 if vol_label else 10),
-                        t=34, b=10),
+                        t=28, b=4),
             yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE,
                        **({"range": _rng_y} if _rng_y else {})),
             yaxis2=dict(overlaying="y", side="right", showgrid=False,

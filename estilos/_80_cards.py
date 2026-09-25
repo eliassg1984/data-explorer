@@ -2077,9 +2077,20 @@ CSS = """    /* ================================================================
     /* `gap: 0`: la pastilla es `absolute` pero su envoltorio sigue en el
        flex, y el gap de 16 de Streamlit empujaba el gráfico 16px abajo. */
     .st-key-vt_resumen_chart_slot { position: relative; gap: 0 !important; }
+    /* LA TARJETA, MÁS APRETADA (2026-09-24, a pedido: «subir estos dos
+       cuadrantes —el título con los KPI y el gráfico— y subir algo las
+       tablas»). Medido a 1366: 16px de relleno arriba y 16 de gap entre
+       el renglón de título, el gráfico, la fila de toggles y la tabla. Con
+       6 y 8, el título sube 10 y la tabla ~46 (con los márgenes de la
+       figura, ver `alturas.VENTAS_RESUMEN_FIG`). Acotado a ESTA tarjeta:
+       las demás `chartcard_` conservan su aire. Regla #520. */
+    .st-key-chartcard_ventas_resumen_dia {
+        padding-top: 6px !important;
+        gap: 8px !important;
+    }
     .st-key-vt_resumen_chart_slot .st-key-vt_resumen_ley_float {
         position: absolute;
-        top: 4px; left: 8px; z-index: 5;
+        top: 1px; left: 8px; z-index: 5;
         width: 250px !important;
         overflow: hidden;
         padding: 1px 0;

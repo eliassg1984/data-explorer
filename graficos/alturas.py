@@ -273,7 +273,7 @@ cabecera 32 + bordes 2, filas de `compras_volatilidad.ALTO_FILA` = 27): 34 +
 `SEMANAL_TABLA − FRANJA_MODO_SEMANAL` (191), que da cinco. Las 59 que suma
 se pagan en parte con la fila de filtros más delgada (regla #519)."""
 
-VENTAS_RESUMEN_FIG = 222
+VENTAS_RESUMEN_FIG = 210
 """Alto de la figura de Ventas › Resumen ejecutivo con la tabla debajo
 (2026-09-24, regla #520). Era `COMPACTO` (240) con la leyenda de Plotly al
 pie, que se comía 38px de la figura (medido: área de trazo 140 de 240, la
@@ -281,7 +281,11 @@ leyenda de 201 a 230). La leyenda pasó a una pastilla flotante arriba
 («Detalle · <día>», como Comparativo › Descomposición) y la figura se
 reparte así: la tabla sube 18px y el área de trazo CRECE de 140 a ~160,
 a pedido: «no debe reducir tamaño del gráfico, es más, creo que mi gráfico
-puede crecer verticalmente hacia arriba un poco»."""
+puede crecer verticalmente hacia arriba un poco».
+
+Y 210 y no 222 desde la pasada siguiente, el mismo día («subir estos dos
+cuadrantes y subir algo las tablas»): los márgenes de la figura bajaron de
+34/10 a 28/4, y el área de trazo se quedó en los mismos 156."""
 
 
 
