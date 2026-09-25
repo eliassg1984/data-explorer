@@ -2067,6 +2067,137 @@ CSS = """    /* ================================================================
         padding: 0 10px !important;
         font-size: 12px !important;
     }
+    /* LA PASTILLA «DETALLE» DEL RESUMEN (2026-09-24, regla #520): la
+       leyenda del gráfico, flotando arriba a la izquierda como la de
+       Comparativo › Descomposición (`ventas_comp_detalle_float`, más
+       abajo en esta hoja, con la historia de cada decisión). Mismo vidrio,
+       mismo botón-título y mismo ancho fijo; sólo cambia la key. Flota
+       sobre el margen de arriba de la figura (34px), así que no ocupa
+       lugar: la leyenda de Plotly al pie se comía 38. */
+    /* `gap: 0`: la pastilla es `absolute` pero su envoltorio sigue en el
+       flex, y el gap de 16 de Streamlit empujaba el gráfico 16px abajo. */
+    .st-key-vt_resumen_chart_slot { position: relative; gap: 0 !important; }
+    .st-key-vt_resumen_chart_slot .st-key-vt_resumen_ley_float {
+        position: absolute;
+        top: 4px; left: 8px; z-index: 5;
+        width: 250px !important;
+        overflow: hidden;
+        padding: 1px 0;
+        gap: 0 !important;
+        background: rgba(113, 113, 122, 0.08) !important;
+        background: color-mix(in srgb, var(--text-secondary) 8%, transparent) !important;
+        backdrop-filter: saturate(1.15) !important;
+        -webkit-backdrop-filter: saturate(1.15) !important;
+        border: 1px solid rgba(113, 113, 122, 0.12) !important;
+        border: 1px solid color-mix(in srgb, var(--text-secondary) 12%, transparent) !important;
+        border-radius: 6px !important;
+        box-shadow: 0 2px 10px rgba(16, 16, 20, 0.05) !important;
+    }
+    .st-key-vt_resumen_ley_float [data-testid="stElementToolbar"] {
+        display: none;
+    }
+    .st-key-vt_resumen_ley_float [data-testid="stButton"] button {
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        line-height: 1.35 !important;
+        gap: 4px !important;
+        padding: 3px 10px !important;
+        margin: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-vt_resumen_ley_float [data-testid="stButton"] button:hover {
+        background: color-mix(in srgb, var(--text-primary) 5%, transparent) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-vt_resumen_ley_float [data-testid="stButton"] button p {
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        margin: 0 !important;
+    }
+    .st-key-vt_resumen_ley_float [data-testid="stButton"]
+        [data-testid="stIconMaterial"] {
+        font-size: 17px !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-vt_resumen_ley_float .st-key-vt_resumen_ley_panel {
+        padding: 4px 10px 6px !important;
+    }
+    .st-key-vt_resumen_ley_panel [data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+        gap: 6px !important;
+        /* 22 y no los 32 que daba Streamlit: con cinco series la pastilla
+           abierta medía 196px encima del gráfico (medido). `max-height` y
+           no `height`: un bloque de Streamlit es un ítem flex y `height`
+           no le aplica (CLAUDE.md, regla #101) — medido, seguía en 32. */
+        max-height: 22px !important;
+        min-height: 0 !important;
+    }
+    .st-key-vt_resumen_ley_panel > [data-testid="stLayoutWrapper"] {
+        max-height: 22px !important;
+        min-height: 0 !important;
+    }
+    .st-key-vt_resumen_ley_panel [data-testid="stColumn"],
+    .st-key-vt_resumen_ley_panel [data-testid="stColumn"] > div,
+    .st-key-vt_resumen_ley_panel [data-testid="stElementContainer"] {
+        min-height: 0 !important;
+        height: auto !important;
+        justify-content: center !important;
+    }
+    .st-key-vt_resumen_ley_panel [data-testid="stCheckbox"] {
+        transform: scale(0.8);
+        transform-origin: left center;
+    }
+    /* ABIERTA, con fondo: el vidrio al 8 % de Comparativo sirve cerrada
+       (una barra sobre el margen), pero abierta cae encima de las barras
+       y los montos se leían mezclados con las etiquetas de atrás. El
+       `:has()` lleva sólo la clase del panel (#469). */
+    .st-key-vt_resumen_chart_slot
+        .st-key-vt_resumen_ley_float:has(.st-key-vt_resumen_ley_panel) {
+        background: var(--bg-card) !important;
+        box-shadow: 0 4px 16px rgba(16, 16, 20, 0.10) !important;
+    }
+    .st-key-vt_resumen_ley_panel [data-testid="stMarkdownContainer"],
+    .st-key-vt_resumen_ley_panel [data-testid="stMarkdownContainer"] div {
+        line-height: 1 !important;
+    }
+    .st-key-vt_resumen_ley_panel [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-vt_resumen_ley_panel .vt-ley-sw {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+    }
+    .st-key-vt_resumen_ley_panel .vt-ley-rot {
+        font-size: 12.5px;
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+    .st-key-vt_resumen_ley_panel .vt-ley-val {
+        display: block;
+        text-align: right;
+        font-size: 12.5px;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    @media (max-width: 640px) {
+        .st-key-vt_resumen_chart_slot .st-key-vt_resumen_ley_float {
+            position: static !important;
+            width: 100% !important;
+            margin: 0 0 6px !important;
+        }
+    }
     .st-key-vt_resumen_pie { align-items: center !important; }
     /* La leyenda del Resumen en el MISMO renglón que los toggles (regla
        #519, a pedido: «que esté en la misma fila de los toggles de las

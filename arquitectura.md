@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-519 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+520 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (179)
+**CSS y estilos** (180)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -213,6 +213,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#505** — Ajuste › Evolución entra en la laptop: leyenda en el título, serie más baja y las familias en…
 - **#513** — Un recorte de padding-top scopeado a un reporte se vuelve un AGREGADO el día que la regla…
 - **#519** — El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre todas las filas, para…
+- **#520** — La leyenda del gráfico del Resumen de Ventas es una pastilla «Detalle · <período>» que flota…
 
 **Layout y alturas** (74)
 
@@ -291,7 +292,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
-**Plotly y figuras** (94)
+**Plotly y figuras** (95)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -387,6 +388,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#508** — Un requerimiento es un CÓDIGO, no una fila: al contar requerimientos o líneas se descartan…
 - **#515** — La barra de «Tendencia diaria de venta» se parte por canal, y copia las CUENTAS de «Compras…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
+- **#520** — La leyenda del gráfico del Resumen de Ventas es una pastilla «Detalle · <período>» que flota…
 
 **AgGrid y tablas** (83)
 
@@ -42599,6 +42601,43 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      subvista: una línea corta que se corta con «…» en vez de bajar (bajar
      era lo que empujaba la tabla).
 
+520. **La leyenda del gráfico del Resumen de Ventas es una pastilla
+     «Detalle · <período>» que flota arriba, como la de Comparativo ›
+     Descomposición. La de Plotly al pie se comía 38px.**
+     2026-09-24, a pedido: «que la leyenda sea similar a la de comparativo
+     vs año pasado en descomposición; mi objetivo es que figure en la parte
+     superior del gráfico, para que mi tabla suba; ojo, no debe reducir el
+     tamaño del gráfico, es más, puede crecer verticalmente un poco».
+
+     **La cuenta:** medido con la leyenda al pie, la figura de 240 tenía
+     140 de área de trazo y la leyenda iba de 201 a 230. Sin ella la figura
+     pasa a `alturas.VENTAS_RESUMEN_FIG` = 222 con 156 de área: el gráfico
+     CRECE 16px y la tabla sube 18.
+
+     **La pastilla** (`_leyenda_flotante`, CSS `vt_resumen_ley_float`) copia
+     el patrón de `ventas_comparativo.py`: un contenedor `absolute` sobre
+     el margen de arriba de la figura (34px), un botón con `on_click` que la
+     abre (el chevron no llega un clic tarde) y, abierta, una fila por serie
+     con su color y su valor en el período enfocado, o en el último. Los
+     canales no se apagan (son la barra); Descuento, Clientes y Ticket traen
+     un interruptor, con ECO (`_vt_resumen_ver_<serie>`), porque sólo se
+     dibujan con la pastilla abierta.
+
+     **Cuatro cosas medidas al armarla:**
+     - **La pastilla quedaba 16px por ENCIMA del gráfico**: es `absolute`,
+       pero su envoltorio sigue en el flex del contenedor y cobra el gap de
+       Streamlit. `gap: 0` en `vt_resumen_chart_slot`.
+     - **Las filas no bajaban de 32 con `height: 22px`**: un bloque de
+       Streamlit es un ítem flex y `height` no le aplica (#101). Con
+       `max-height` sobre la fila y su envoltorio, 22; la pastilla abierta
+       pasó de 196 a 146.
+     - **El vidrio al 8 % de Comparativo sirve CERRADA** (una barra sobre el
+       margen) **pero no abierta**: cae encima de las barras y los montos se
+       leían mezclados con las etiquetas. Abierta lleva fondo de tarjeta
+       (`:has(.st-key-vt_resumen_ley_panel)`, sólo clase: #469).
+     - Verificado con las dos Streamlit (1.59 local, 1.64 de Cloud; #519):
+       26 cerrada, 146 abierta, filas de 22, en las dos.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42611,7 +42650,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#519**; la próxima toma el número siguiente.
+> última regla es la **#520**; la próxima toma el número siguiente.
 
 >
 

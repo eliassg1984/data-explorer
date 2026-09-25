@@ -70,7 +70,7 @@ from graficos.compras._comun import (
 # encima de la barra son UNA cuenta (`semanal._alto_area_trazo`), y dos
 # copias se desincronizan a la primera que se toque. Regla #515.
 from graficos.compras.semanal import (
-    _ALTO_FIG_SOLO, _ETQ_FUENTE, _ETQ_SEP, _LEYENDA_Y, _LIENZO_PX,
+    _ALTO_FIG_SOLO, _ETQ_FUENTE, _ETQ_SEP, _LIENZO_PX,
     _del_al, _etiqueta_en_la_punta, _plan_etiquetas, _rotulo_periodo, _techo_etiquetas,
 )
 from graficos import alturas
@@ -93,7 +93,13 @@ MAX_DIAS = 30    # tope de barras legibles. Mismo espíritu que MAX_SEMANAS de
 # Streamlit recolecta el estado de todo widget del fragment que no se
 # dibujó. `preservar_widgets` los re-escribe sobre sí mismos antes de
 # escalar.
+_SERIES_APAGABLES = ("desc", "pax", "ticket")
+"""Las series que la pastilla «Detalle» deja apagar (regla #520). Los canales
+no: son la barra misma."""
+
 _KEYS_WIDGET_RESUMEN = ("vt_resumen_gran", "vt_resumen_grupo",
+                        "vt_resumen_ver_desc", "vt_resumen_ver_pax",
+                        "vt_resumen_ver_ticket",
                         "vt_resumen_serv", "vt_resumen_canal",
                         "vt_resumen_tdoc", "vt_resumen_modo",
                         "vt_resumen_sub", "ventas_resumen_top_metrica")
@@ -713,7 +719,13 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # LA FIGURA SE ACORTA CUANDO HAY TABLA (regla #516): los mismos dos
         # altos que «Compras por período» — el suyo entero sin tabla y
         # COMPACTO con ella, que le deja a la grilla `_ALTO_TABLA_VR`.
-        _alto_fig = alturas.COMPACTO if _con_tabla else _ALTO_FIG_SOLO
+        _alto_fig = (alturas.VENTAS_RESUMEN_FIG if _con_tabla
+                     else _ALTO_FIG_SOLO)
+        # Lo que la pastilla «Detalle» tiene apagado (regla #520). Se lee
+        # del ECO y no de los interruptores: esos se dibujan sólo con la
+        # pastilla abierta, y un widget que no se dibuja pierde su estado.
+        _ver = {k: st.session_state.get(f"_vt_resumen_ver_{k}", True)
+                for k in _SERIES_APAGABLES}
 
         # ── La etiqueta de encima: total + variación (plan de Compras) ──
         # `_plan_etiquetas` decide la forma (derecha / girada / unida) y
@@ -731,7 +743,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # faltó para llegar a precio carta. La barra entera mide la carta y
         # la parte llena, lo cobrado. La etiqueta sube a la punta de la tapa
         # (`_etiqueta_en_la_punta` la pone en el tramo más alto con valor).
-        _hay_tapa = "carta" in g.columns and float(g["carta"].sum()) > 0
+        _hay_tapa = ("carta" in g.columns and float(g["carta"].sum()) > 0
+                     and _ver["desc"])
         _tapa = ((g["carta"] - g["total"]).clip(lower=0).to_numpy()
                  if _hay_tapa else None)
         _tramos = [pd.DataFrame({"valor": por_canal[c].to_numpy()})
@@ -796,7 +809,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             if _plan_etq:
                 fig.data[-1].update(text=_textos_tr[-1], **_estilo_etq)
         fig.update_layout(barmode="stack")
-        if vol_label:
+        if vol_label and _ver["pax"]:
             fig.add_trace(go.Scatter(
                 x=_xs, y=g["pax"], name=vol_label, mode="lines",
                 line=dict(color=GRIS_TEXTO, width=1.5, dash="dot"),
@@ -809,7 +822,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # propio eje a la derecha —igual que `ventas.py::_ventas_grafico_dia`
         # con Pax/Venta— para que las escalas no se aplasten. Antes era una
         # tarjeta aparte; se subió acá a pedido el 2026-09-22.
-        if _hay_ticket:
+        if _hay_ticket and _ver["ticket"]:
             fig.add_trace(go.Scatter(
                 x=_xs, y=g["ticket"], name="Ticket", mode="lines+markers",
                 line=dict(color=ADVERTENCIA, width=2), marker=dict(size=5),
@@ -875,26 +888,23 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             float(g["carta"].max() if _hay_tapa else g["total"].max()), 0.0,
             _alto_fig, _alto_etq) if _plan_etq else None)
         fig.update_layout(
-            showlegend=bool(vol_label) or _partida or _hay_tapa,
-            # `traceorder="normal"`: con barras apiladas Plotly invierte la
-            # leyenda por defecto, y salía «Ticket · Clientes · Rappi · En
-            # el Local» — el canal principal al final.
-            # `yanchor="top"`: con `y` negativo Plotly ancla la leyenda por
-            # ABAJO («auto» debajo de 1/3), así que crece hacia el eje y en
-            # COMPACTO se comía los rótulos (medido: 15px encima).
-            legend=dict(orientation="h", y=-_LEYENDA_Y, yanchor="top", x=0,
-                        font=dict(size=10), traceorder="normal"),
+            # SIN LEYENDA DE PLOTLY (regla #520): la hace la pastilla
+            # «Detalle» que flota arriba a la izquierda, como en Comparativo
+            # › Descomposición. Al pie se comía 38px de la figura.
+            showlegend=False,
+            # 34 arriba: la pastilla cerrada mide ~26 y flota a 4px del
+            # borde, sobre el margen y no sobre las barras.
             margin=dict(l=10, r=(70 if _hay_ticket else 50 if vol_label else 10),
-                        t=30, b=10),
+                        t=34, b=10),
             yaxis=dict(tickprefix="S/ ", gridcolor=GRIS_BORDE,
                        **({"range": _rng_y} if _rng_y else {})),
             yaxis2=dict(overlaying="y", side="right", showgrid=False,
                         title=vol_label or "", tickformat=",.0f",
-                        visible=bool(vol_label)),
+                        visible=bool(vol_label) and _ver["pax"]),
             yaxis3=dict(overlaying="y", side="right", anchor="free",
                         position=1.0, showgrid=False, tickprefix="S/ ",
                         tickformat=",.0f", title="Ticket",
-                        visible=bool(_hay_ticket)),
+                        visible=bool(_hay_ticket) and _ver["ticket"]),
         )
         # Un rótulo por período sólo mientras entren HORIZONTALES: girados
         # a −45° se metían en la leyenda de abajo con la figura en COMPACTO.
@@ -919,12 +929,23 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         fig.update_layout(dragmode="pan")
         fig.update_xaxes(fixedrange=True)
         fig.update_yaxes(fixedrange=True)
-        # Lo que devuelve se IGNORA: el clic ya se leyó arriba, antes de
-        # armar la figura (ver «Foco, modo y clic»).
-        st.plotly_chart(
-            fig, use_container_width=True, key=f"{_key_base}_{_nclic}",
-            on_select="rerun", selection_mode="points",
-            config={"displaylogo": False, "displayModeBar": False})
+        # El gráfico y su pastilla «Detalle» comparten un contenedor
+        # `position: relative`: la pastilla flota sobre él sin ocupar lugar
+        # (estilos/_80_cards.py, regla #520).
+        _ix_ley = (_foco_ix if _foco_ix is not None
+                   else (claves.index(foco) if _foco_ok else n_per - 1))
+        with st.container(key="vt_resumen_chart_slot"):
+            _leyenda_flotante(
+                fila[_ix_ley], _ix_ley, canales if _partida else [],
+                _colores, por_canal, g, vol_label,
+                hay_tapa="carta" in g.columns and float(g["carta"].sum()) > 0,
+                hay_ticket=bool(_hay_ticket))
+            # Lo que devuelve se IGNORA: el clic ya se leyó arriba, antes de
+            # armar la figura (ver «Foco, modo y clic»).
+            st.plotly_chart(
+                fig, use_container_width=True, key=f"{_key_base}_{_nclic}",
+                on_select="rerun", selection_mode="points",
+                config={"displaylogo": False, "displayModeBar": False})
 
         # ── LA FILA QUE ELIGE QUÉ SE VE ABAJO, DENTRO de la tarjeta ──────
         # El toggle y, al lado, el caption que nombra el ámbito: la fila
@@ -1464,6 +1485,81 @@ _COSTO_ROTO = 0.70
 """Y a partir del cual el período sale con «revisar»: por encima de eso no es
 un día caro, es un costo mal cargado (medido: el 12/09 llegó al 117 % por
 un menú con costo S/ 765,31 y precio S/ 175)."""
+
+
+def _leyenda_flotante(nombre, i, canales, colores, por_canal, g, vol_label,
+                      hay_tapa, hay_ticket):
+    """La pastilla «Detalle · <período>» que flota arriba a la izquierda del
+    gráfico: ES la leyenda (regla #520), a pedido, «similar a la de
+    Comparativo vs año pasado en Descomposición».
+
+    Cerrada es una barra de una línea. Abierta, una fila por serie con su
+    color y su valor en el período `i` (el enfocado, o el último): los
+    canales, el descuento, los clientes y el ticket. Descuento, Clientes y
+    Ticket traen un interruptor que los prende y apaga en el gráfico; su
+    estado vive en `_vt_resumen_ver_<serie>` (un ECO) porque el interruptor
+    sólo se dibuja con la pastilla abierta.
+
+    El patrón y sus trampas —el botón con `on_click` para que el chevron no
+    llegue un clic tarde, y un solo contenedor para el título y las filas
+    para que no se vea como dos piezas— son los de
+    `ventas_comparativo.py` (panel «Detalle»)."""
+    def _alternar():
+        st.session_state["vt_resumen_ley_abierta"] = not st.session_state.get(
+            "vt_resumen_ley_abierta", False)
+
+    def _copiar(k):
+        st.session_state[f"_vt_resumen_ver_{k}"] = st.session_state.get(
+            f"vt_resumen_ver_{k}", True)
+
+    abierta = st.session_state.get("vt_resumen_ley_abierta", False)
+    with st.container(key="vt_resumen_ley_float"):
+        st.button(f"Detalle · {nombre}", key="vt_resumen_ley_toggle",
+                  icon=(":material/keyboard_arrow_up:" if abierta
+                        else ":material/keyboard_arrow_down:"),
+                  on_click=_alternar)
+        if not abierta:
+            return
+        filas = []   # (color, rótulo, valor, serie apagable o None)
+        for c, color in zip(canales, colores):
+            filas.append((color, c, f"S/ {float(por_canal[c].iloc[i]):,.0f}",
+                          None))
+        if not canales:
+            filas.append((SERIE_PRINCIPAL, "Venta",
+                          f"S/ {float(g['total'].iloc[i]):,.0f}", None))
+        if hay_tapa:
+            _d = float(g["carta"].iloc[i] - g["total"].iloc[i])
+            filas.append((LAVANDA_BORDE, "Descuento", f"S/ {max(_d, 0):,.0f}",
+                          "desc"))
+        if vol_label:
+            filas.append((GRIS_TEXTO, vol_label,
+                          f"{float(g['pax'].iloc[i]):,.0f}", "pax"))
+        if hay_ticket:
+            _t = g["ticket"].iloc[i]
+            filas.append((ADVERTENCIA, "Ticket",
+                          "—" if pd.isna(_t) else f"S/ {float(_t):,.2f}",
+                          "ticket"))
+        with st.container(key="vt_resumen_ley_panel", gap=None):
+            for color, rot, val, serie in filas:
+                # columnas-internas: una fila de la pastilla, [interruptor |
+                # color | nombre | valor], como el panel de Comparativo.
+                _c = st.columns([0.9, 0.3, 3, 2], vertical_alignment="center")
+                with _c[0]:
+                    if serie:
+                        st.toggle(rot, key=f"vt_resumen_ver_{serie}",
+                                  value=st.session_state.get(
+                                      f"_vt_resumen_ver_{serie}", True),
+                                  on_change=_copiar, args=(serie,),
+                                  label_visibility="collapsed")
+                with _c[1]:
+                    st.markdown(f'<span class="vt-ley-sw" style="background:'
+                                f'{color}"></span>', unsafe_allow_html=True)
+                with _c[2]:
+                    st.markdown(f'<span class="vt-ley-rot">{escape(rot)}'
+                                '</span>', unsafe_allow_html=True)
+                with _c[3]:
+                    st.markdown(f'<span class="vt-ley-val">{escape(val)}'
+                                '</span>', unsafe_allow_html=True)
 
 
 def _feriados_de(claves, gran):
