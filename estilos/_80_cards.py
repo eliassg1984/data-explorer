@@ -2717,44 +2717,29 @@ CSS = """    /* ================================================================
        franja y su llegada la tarjeta se quedaba con 90px de alto y volvía a
        subir después — mitad del "sube y baja" que se ve en cada clic (ver
        regla #108).
-       El número sale de las piezas reales: 32 de padding + 52 de franja de
-       controles + 340 de figura = 424. Es min-height, no height: el caption
-       y el panel "Detalle" pueden hacerla más alta sin problema.
-       2026-08-15: el término "42 de cabecera" que este número traía se sacó
-       — el título se mudó a la franja superior (fuera de la tarjeta, ver
-       ventas_comp_titulo_franja en estilos/_50_fecha.py), así que la
-       tarjeta ya no reserva alto para él.
+       El número sale de las piezas reales: 32 de padding + 26 de título +
+       52 de franja de controles + 340 de figura = 450. Es min-height, no
+       height: el caption y el panel "Detalle" pueden hacerla más alta sin
+       problema.
+       El título salió de la tarjeta el 2026-08-15 (a la franja de arriba) y
+       volvió el 2026-09-25 (regla #526). Sus 26px son MEDIDOS: la tarjeta
+       entera pasó de 525 a 551 a 1366×768, no los 32 que mide la caja del
+       título, porque `franja_cabecera` sube 6px con margen negativo.
        Sólo desktop — en móvil la figura mide 260 y el patrón es scroll de
        página, mismo criterio que el resto del encuadre. */
     @media screen and (min-width: 769px) {
         div[class*="st-key-chartcard_ventas_comparativo"] {
-            min-height: 424px;
+            min-height: 450px;
         }
     }
 
-    /* `ventas_comp_titulo_franja` (el título que se mudó a la franja
-       superior, ver estilos/_50_fecha.py) se dibuja como HERMANO, justo
-       antes de esta tarjeta — y aunque es position:fixed y colapsa a 0px
-       de alto, su wrapper de Streamlit sigue contando como flex item del
-       bloque vertical que los contiene: el `gap:16px` de ese flex se
-       aplica IGUAL entre "un item de 0px" y el siguiente, así que la
-       tarjeta quedaba 16px más abajo de lo que estaba antes de que el
-       título tuviera un hermano invisible.
-       2026-08-15, 2da pasada (inspector: "esto debe subir" + "así como
-       los controles arriba"): -16px solo cancelaba el gap del flex. El
-       padre real, `ajuste_graf_card_izq_ventas`, es OTRA tarjeta —
-       redondeada, con su propio padding-top:8px (estilos/_80_cards.py,
-       regla de familia `st-key-ajuste_graf_card_*` — el inspector avisa
-       que es wildcard, así que NO se toca esa: movería las tarjetas de
-       los otros 7 reportes). Esos 8px se suman al gap ya cancelado:
-       -16 - 8 = -24px, medido en vivo hasta que el borde de esta tarjeta
-       quedó pegado al de su padre (que a su vez ya está pegado a la
-       franja por el -48px de _20_compras_rail.py). Con eso suben juntos
-       la tarjeta Y los controles de adentro (Día/Semana/Mes, Ventana,
-       Vista) — son el mismo elemento, no hace falta una regla aparte. */
-    div[class*="st-key-chartcard_ventas_comparativo"] {
-        margin-top: -24px !important;
-    }
+    /* 2026-09-25: acá había un `margin-top: -24px` para esta tarjeta. Pagaba
+       el `gap` de 16px del hermano fantasma que tenía delante (el título
+       `position: fixed`, que colapsa a 0px pero su envoltorio sigue siendo
+       flex item) más los 8px de padding de su padre. El título volvió
+       adentro de la tarjeta y el hermano ya no existe: con el jalón puesto,
+       la tarjeta se habría salido 16px por arriba de su sección. Sin él
+       abre a 8px, igual que la de Mapa por hora. Regla #526. */
 
     /* =================================================================== */
     /* FRANJA DE CONTROLES DE VENTAS › AÑO PASADO                            */

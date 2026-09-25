@@ -588,83 +588,15 @@ CSS = """    /* ================================================================
         }
     }
 
-    /* =================================================================== */
-    /* TÍTULO DE VENTAS › COMPARATIVO EN LA FRANJA (2026-08-15)             */
-    /*                                                                      */
-    /* `ventas_comp_titulo_franja` (graficos/ventas_comparativo.py) vive    */
-    /* FUERA de la tarjeta pero se ancla acá con el mismo truco que la      */
-    /* fecha/los chips: position:fixed, ajeno a su lugar real en el DOM.    */
-    /* Solo esta vista dibuja ese contenedor, así que scopear por su        */
-    /* PRESENCIA — vía :has() sobre el prefijo de key que arma `_card()`    */
-    /* (graficos/base.py: `chartcard_` + key), o sea                       */
-    /* `chartcard_ventas_comparativo_<grano>` — alcanza para no tocar el    */
-    /* resto de reportes/vistas. left:85px = el mismo punto donde           */
-    /* arrancaba el pill de fecha antes de este cambio; el pill y los       */
-    /* chips se corren a la derecha lo que el título reserva (260px +       */
-    /* 16px de aire) SOLO en esta vista — los otros 7 reportes (y el        */
-    /* resto de Ventas) no lo ven.                                          */
-    /* Los tres números de abajo (título:260, pill:361, chips:577) son la   */
-    /* MISMA cadena acoplada de siempre (ver el bloque de arriba): mover    */
-    /* uno sin los otros dos rompe la alineación.                           */
-    /* 260px (no 380: el ancho del título más largo) es a propósito — Ventas */
-    /* ya tiene 4 chips (Grupo/Sub Grupo/Canal/Servicio, ~430px de contenido */
-    /* real) y reservarle al título su ancho completo los hacía chocar: a   */
-    /* 1024px de viewport la fila de chips medía menos que su propio        */
-    /* contenido (superposición medida en vivo). Con 260px los títulos      */
-    /* largos truncan con ellipsis (el `title=` del span da el tooltip      */
-    /* completo). Con TODO y eso, el corrimiento sigue sin caber cómodo     */
-    /* por debajo de ~1220px (medido: ~410px de contenido de chips contra   */
-    /* un max-width que a esa altura ya no alcanza) — por eso el bloque de  */
-    /* abajo arranca en 1220px, no en los 901px que usa el resto de la      */
-    /* franja: bajo ese umbral el título se oculta y la fecha/chips vuelven */
-    /* a su posición de siempre (sin :has(), la regla base de arriba). Sin  */
-    /* título en pantallas angostas es mejor que chips ilegibles — mismo    */
-    /* criterio que ya usa fecha_corte_nav (oculto hasta 1400px) más abajo. */
-    /* =================================================================== */
-    .st-key-ventas_comp_titulo_franja {
-        position: fixed !important;
-        /* La fila 1 dejo de existir: su banda la ocupa ahora la franja de
-       vistas, que subio a tocar la de reportes. Los 5px centran un control
-       de 30px en los 40 de esa franja. */
-        top: calc(var(--franja-rep-alto) + 5px) !important;
-        left: var(--rail-der-res) !important;   /* ancla comun, ver el pill */
-        width: 260px !important;
-        z-index: 1000000 !important;   /* sobre la franja, ver el pill */
-        margin: 0 !important;
-        display: none !important;   /* oculto por defecto; ver abajo */
-    }
-    @media (min-width: 1220px) {
-        /* El `:has()` pregunta por el TÍTULO y no por la tarjeta
-           (`chartcard_ventas_comparativo_<grano>`): los dos los crea
-           `ventas_comparativo.py` en la misma pasada, y la key de la
-           tarjeta lleva el grano, así que sólo se alcanzaba con un
-           `[class*=...]`, que adentro de un `:has()` recalcula la página
-           entera en cada cambio de clase (regla #469). */
-        [data-testid="stAppViewContainer"]:has(.st-key-ventas_comp_titulo_franja)
-            .st-key-ventas_comp_titulo_franja {
-            display: block !important;
-        }
-        [data-testid="stAppViewContainer"]:has(.st-key-ventas_comp_titulo_franja)
-            .st-key-ventas_comp_titulo_franja [data-testid="stMarkdownContainer"] p {
-            margin: 0 !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            white-space: nowrap !important;
-            font-size: 14px !important;
-            font-weight: 700 !important;
-            line-height: calc(var(--cab-altura) - 8px) !important;
-            color: var(--text-primary) !important;
-        }
-        /* 2026-09-14: aca el pill se corria 276px para dejarle sitio al
-           titulo. Ya no comparten fila: el pill subio a la franja de
-           reportes (regla #419) y el titulo se quedo abajo, asi que el
-           corrimiento sobraba — y corrido, el pill caia encima de los
-           nombres de los reportes. */
-        /* 2026-08-31: el titulo fantasma seguia corriendo los chips con un
-           `left` — y el compartimento se ancla por la DERECHA, asi que ese
-           left lo mandaba al medio de la franja. El titulo sigue corriendo
-           al pill de fecha, que si vive a la izquierda. */
-    }
+    /* 2026-09-25 — el TÍTULO DE VENTAS › COMPARATIVO ya no se ancla acá.
+       Del 2026-08-15 a hoy vivió en `ventas_comp_titulo_franja`, un
+       contenedor `position: fixed` debajo de la franja de reportes que se
+       mostraba desde 1220px con sólo EXISTIR en el DOM. La pila de Ventas
+       construye la sección cuando uno se acerca, así que el título
+       aparecía encima de la sección de al lado (Mapa por hora, Venta por
+       día); y desde que la franja se esconde (#473) el contenido arranca
+       en 20px y el título tapaba contenido, no una barra. Volvió adentro
+       de su tarjeta (`franja_cabecera`). Regla #526. */
 
     /* 2026-08-23 — "PÁGINA BLANCA, TARJETAS TENUES" (3ra a 6ta vuelta,
        2026-08-16/21) se REVIRTIÓ acá, a pedido explícito ("apliquemos el

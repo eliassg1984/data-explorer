@@ -50,7 +50,7 @@ from tema import (
     ACENTO, ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_BORDE, GRIS_TEXTO,
     LAVANDA_BORDE, PALETA_SERIES,
 )
-from graficos.base import _card, _es_movil, titulo_en_franja
+from graficos.base import _card, _es_movil, franja_cabecera
 from inyecciones._iframe import inyectar_html
 from graficos.compras._comun import _first_point
 from graficos import alturas
@@ -467,17 +467,14 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         return
     ancla = _fe.max().date()
 
-    # ── Título en la FRANJA superior (fuera de la tarjeta) → controles →
-    # línea → gráfico ── El título vive en un contenedor propio,
-    # `ventas_comp_titulo_franja`, anclado por CSS a la franja superior
-    # (2026-08-15, a pedido: antes vivía dentro de la tarjeta, con su propia
-    # línea divisoria). Como esto shiftea la fecha/chips de la franja hacia
-    # la derecha (ver estilos/_50_fecha.py, scope `:has()` sobre esta misma
-    # tarjeta), el placeholder tiene que existir SIEMPRE que se dibuje esta
-    # vista, incluso vacío en el primer instante — si no, la fecha/chips
-    # saltarían de posición un frame después de aparecer.
-    _ph_hdr = st.container(key="ventas_comp_titulo_franja").empty()
-
+    # ── Título → línea → controles → línea → gráfico, TODO dentro de la
+    # tarjeta ── Del 2026-08-15 al 2026-09-25 el título vivió afuera, en un
+    # contenedor `position: fixed` anclado a la franja de arriba. Con la
+    # pila (la sección se construye mientras se mira la de al lado) y la
+    # franja que se esconde (#473), quedaba flotando encima de OTRA sección.
+    # En una pila cada sección lleva su título adentro. Ver arquitectura.md
+    # regla #526.
+    #
     # Misma forma que Ventas › Por día (arquitectura.md #104), con una
     # diferencia que cambia el diseño: acá son CUATRO grupos independientes,
     # no cuatro tabs de la misma cosa. Se agrupan por eje — a la izquierda
@@ -491,13 +488,13 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     #
     # La tarjeta se abre ACÁ, y no en el `with` de más abajo, porque la franja
     # de controles tiene que quedar DENTRO. Para no re-indentar las ~400
-    # líneas de cálculo que hay en el medio, se reservan dos huecos que se
+    # líneas de cálculo que hay en el medio, se reservan tres huecos que se
     # rellenan cuando ya hay con qué:
+    #   · `_ph_hdr`    el título, que nombra la granularidad y la alineación
+    #                  que eligen los controles de abajo (regla #108).
     #   · `_ph_vista`  "Vista" depende de `hay_pax`, que depende de los datos,
     #                  que dependen de los controles de esta MISMA franja.
     #   · `_slot_graf` el gráfico, que se arma al final.
-    # El título (antes un tercer hueco acá) ya no lo necesita: su placeholder
-    # vive afuera, arriba.
     # Se lee de session_state y no de `grano` porque `grano` sale del pills que
     # va DENTRO de estas columnas — hay que decidir antes de crearlas. En el
     # rerun el estado del widget ya está actualizado, así que coincide; en el
@@ -513,6 +510,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # reproducido con Semana y con Mes. Al variar la key, la tarjeta remonta
     # limpia en cada cambio de granularidad.
     with _card(f"ventas_comparativo_{_grano_layout}"):
+        _ph_hdr = st.empty()
         # Anchos de columna SEGÚN LA GRANULARIDAD, no fijos. En Semana/Mes no
         # existe "alinear por", y con los anchos de Día las etiquetas de
         # "Ventana" pasan de "7 días" a "12 semanas" y NO ENTRAN: envuelven a
@@ -562,15 +560,13 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             _ph_vista = st.empty()
         # CABECERA PROVISIONAL, ya. No esperar al final: `st.empty()` BORRA su
         # contenido al crearse, así que dejarlo vacío durante la carga de
-        # datos hacía que el título parpadeara vacío→texto en la franja.
-        # Ya no mueve nada de la tarjeta (el título dejó de estar en el
-        # flujo del documento — vive fuera, anclado por CSS, ver arriba),
-        # pero el parpadeo en sí seguía siendo visible, así que el patrón de
-        # dos pasadas se mantiene. `vista` todavía no existe acá, pero su
-        # valor del rerun anterior sí está en session_state y es el que va a
-        # salir el 99% de las veces; al final se reescribe con el real y, si
-        # coincide, Streamlit no toca el DOM. Ver arquitectura.md regla #108.
-        titulo_en_franja(_ph_hdr, _titulo_comparativo(
+        # datos hacía que la tarjeta perdiera la fila del título y la
+        # recuperara al terminar — el "sube y baja" de cada clic. `vista`
+        # todavía no existe acá, pero su valor del rerun anterior sí está en
+        # session_state y es el que va a salir el 99% de las veces; al final
+        # se reescribe con el real y, si coincide, Streamlit no toca el DOM.
+        # Ver arquitectura.md regla #108.
+        franja_cabecera(_ph_hdr, _titulo_comparativo(
             grano, modo,
             st.session_state.get("ventas_comp_vista") == "Descomposición"))
         # Línea INFERIOR de la franja de controles. Los -18px + width:calc(100% + 36px)
@@ -861,7 +857,7 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # que ya se pintó arriba, y ahí Streamlit no toca el DOM; sólo cambia algo
     # cuando el valor de session_state no era válido para estos datos (por
     # ejemplo "Descomposición" guardado y un rango sin pax).
-    titulo_en_franja(_ph_hdr, titulo)
+    franja_cabecera(_ph_hdr, titulo)
 
     with _slot_graf:
         # La selección de plotly_chart PERSISTE entre reruns: con una key

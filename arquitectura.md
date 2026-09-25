@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-525 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+526 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (181)
+**CSS y estilos** (182)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -215,8 +215,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#519** — El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre todas las filas, para…
 - **#520** — La leyenda del gráfico del Resumen de Ventas es una pastilla «Detalle · <período>» que flota…
 - **#523** — Un gráfico que rotula CADA barra congela el navegador cuando el rango crece, y lo congela…
+- **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
 
-**Layout y alturas** (74)
+**Layout y alturas** (75)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -292,6 +293,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#509** — «Salidas por período» es la MISMA tarjeta que la de requerimientos, con otro Lado. El área…
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
+- **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
 
 **Plotly y figuras** (99)
 
@@ -10426,6 +10428,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      a un título.**
 
+
+     > ⚠ **El título de Ventas › Comparativo VOLVIÓ a su tarjeta el
+     > 2026-09-25 — leer la #526.** En una pila, que un contenedor exista no
+     > quiere decir que esté en pantalla, y el título flotaba sobre otras
+     > secciones. Lo de abajo sigue valiendo como mecánica (`fixed` +
+     > el gap del hermano fantasma), no como patrón a copiar.
+
      Ventas › Comparativo (`graficos/ventas_comparativo.py`) pedía mover
 
      su título de dentro de la tarjeta a la franja superior, y correr la
@@ -10555,6 +10564,11 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      — con dos diferencias que no eran obvias de la 1ra vez (Ventas
 
      Comparativo, regla #120).**
+
+
+     > ⚠ **El helper `titulo_en_franja` ya no existe (2026-09-25, #526)**:
+     > Compras › Familia se eliminó con la #129 y Ventas › Comparativo
+     > devolvió el título a su tarjeta.
 
 
 
@@ -42893,6 +42907,74 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        pedido que anula y « · NC»: en un canje se ven la factura (+) y la
        nota (−), no un pedido de S/ 0 con el doble de platos.
 
+526. **En una pila, «existe en el DOM» no quiere decir «está en pantalla».
+     Un `position: fixed` que se muestra por la sola PRESENCIA de su
+     contenedor (`:has(.st-key-X)`) aparece encima de la sección que uno
+     está mirando. Cada sección lleva su título ADENTRO de su tarjeta.**
+     Reportado el 2026-09-25: el título de Ventas › Comparativo («Comparativo
+     día a día vs. año pasado — alineado por día de semana…») flotaba arriba
+     de la pantalla sobre OTRAS secciones. Medido a 1366×768 con datos
+     reales: con «Mapa por hora» al tope y la sección del Comparativo 700px
+     más abajo, el título estaba en x=84, y=49, sobre el mapa de calor; lo
+     mismo sobre «Venta bruta por día».
+
+     **Fueron tres decisiones correctas cada una por su lado:**
+     1. 2026-08-15 (#120): el título salió de la tarjeta a la franja de
+        arriba, `position: fixed`, y se mostraba desde 1220px con
+        `:has(.st-key-ventas_comp_titulo_franja)`: con sólo existir. En ese
+        momento Ventas mostraba una vista por vez y «existe» era «lo estás
+        mirando».
+     2. 2026-08-26: Ventas pasó a ser una pila y `seccion_perezosa`
+        construye una sección cuando uno se ACERCA — y la deja construida.
+        Desde ahí el Comparativo existe mientras se mira la sección de al
+        lado.
+     3. 2026-09-19 (#472/#473): la franja de vistas que había debajo de la
+        de reportes desapareció, la franja se esconde y el contenido
+        arranca en 20px. El `top: calc(var(--franja-rep-alto) + 5px)` del
+        título (49px) era la banda de una franja que ya no existe: ahora es
+        contenido.
+
+     **Por qué no «mostrarlo sólo con la franja a la vista».** La caja
+     estaba en y=49, DEBAJO de la franja de 44px: con la franja abierta o
+     cerrada, tapaba contenido igual. Y la franja ya dice dónde estás
+     (`.barra-vista`, #472) — de la sección en PANTALLA, que no tiene por
+     qué ser la del título.
+
+     **Lo que quedó:** el título va en la primera fila de su tarjeta con
+     `franja_cabecera` (título → línea → controles → línea), como «Venta
+     bruta por día». Su `st.empty()` es lo primero dentro del `_card` y
+     sigue pintándose dos veces (#108): ahora ocupa una fila, así que el
+     parpadeo volvería a mover la tarjeta. Se fueron con él tres cosas que
+     sólo existían para el título de afuera:
+     · el bloque de `estilos/_50_fecha.py`;
+     · el `margin-top: -24px` de la tarjeta en `estilos/_80_cards.py`, que
+       pagaba el `gap` de 16px del hermano fantasma más los 8px de padding
+       del padre (la trampa de la #120). Sin el hermano, el jalón habría
+       sacado la tarjeta 16px por arriba de su sección — otra vez la #473:
+       el jalón que compensa un gap sobrevive al gap;
+     · `graficos/base.py::titulo_en_franja`, que ya no tenía otro usuario
+       (Compras › Familia, la #121, murió con la #129).
+     El `min-height` de reserva pasó de 424 a 450: la tarjeta medida pasó
+     de 525 a 551, 26px y no los 32 de la caja del título, porque
+     `franja_cabecera` la sube 6 con margen negativo.
+
+     **Medido después, 1366×768:** ningún texto del título bajo un ancestro
+     `fixed`; en (150, 60), con «Mapa por hora» al tope, lo que hay es su
+     gráfico. La tarjeta abre a 8px de su sección, igual que la de Mapa por
+     hora; el título a 18 y los controles a 56. Alto: 551 en Día y 605 en
+     Semana, bajo los 724 de `--alto-util`. El título sigue a la
+     granularidad («semana a semana») y a «Descomposición» («¿Por qué
+     cambió la venta? — …»).
+
+     **Para la próxima:** antes de anclar algo `fixed` desde ADENTRO de una
+     sección, preguntarse qué pasa cuando la sección está construida pero
+     no a la vista — en una pila ése es el caso normal, no el raro. Queda
+     un resto del mismo patrón sin dueño: `.st-key-compras_prov_titulo_franja`
+     en `graficos/compras/_css_proveedor.py` no lo dibuja ningún `.py`, así
+     que hoy no muerde.
+
+     (2026-09-25.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42905,7 +42987,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#525**; la próxima toma el número siguiente.
+> última regla es la **#526**; la próxima toma el número siguiente.
 
 >
 
