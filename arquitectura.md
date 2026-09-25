@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-521 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+522 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (180)
 
@@ -292,7 +292,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 
-**Plotly y figuras** (96)
+**Plotly y figuras** (97)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -390,6 +390,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 - **#520** — La leyenda del gráfico del Resumen de Ventas es una pastilla «Detalle · <período>» que flota…
 - **#521** — El Resumen de Ventas: un solo eje a la derecha, su propia tarjeta, y el techo de las…
+- **#522** — El renglón del título del Resumen de Ventas lleva los KPI en UNA línea deslizable y la…
 
 **AgGrid y tablas** (83)
 
@@ -798,7 +799,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (103)
+**Decisiones de diseño y UX** (104)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -903,6 +904,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#514** — El «neto» del sistema es precio ÷ 1,235: IGV y recargo se SUMAN sobre el neto, y el IGV de…
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
 - **#519** — El Resumen de Ventas tiene SUBVISTAS: un grupo de columnas sobre todas las filas, para…
+- **#522** — El renglón del título del Resumen de Ventas lleva los KPI en UNA línea deslizable y la…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -42679,6 +42681,30 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      la #515 la trajo de Compras con leyenda al pie, y la #520 sacó la
      leyenda sin tocarla.
 
+522. **El renglón del título del Resumen de Ventas lleva los KPI en UNA
+     línea deslizable y la pastilla «Detalle» a la derecha; la figura ya no
+     reserva una franja para la pastilla.**
+     2026-09-24, a pedido: «¿poner los KPI en una sola línea, no en dos, y
+     si es posible deslizable?» y «subir un poco más el gráfico y lo de
+     abajo».
+
+     **Los KPI:** rótulo y valor en el mismo renglón (`.vt-kpi` en fila),
+     sin cortes (`nowrap`), deslizables de costado (`overflow-x: auto`,
+     barra fina) y con un desvanecido de 28px en el borde derecho que avisa
+     que hay más. Medido a 1366: los diez piden 1.249px y hay 740 libres al
+     lado del título. El renglón mide 32 (antes 35, con los KPI en dos).
+
+     **La pastilla** (#520) pasa del gráfico al renglón del título: un
+     ancla de 250×26 (`vt_resumen_ley_ancla`) con el contenido `absolute`
+     adentro, así que abierta baja ENCIMA del gráfico (84 → 230) sin mover
+     nada. La figura deja de reservarle 28px arriba: `_MARGEN_ARRIBA` 14
+     (sólo el rótulo «feriado») y `alturas.VENTAS_RESUMEN_FIG` 196, con el
+     mismo área de trazo (156). Medido: el área empieza 17px más arriba y
+     la tabla sube 17 (385 → 368).
+
+     El ancho del flex se reparte por las CLASES de las keys (`:has(> …)`
+     con clase sola, #469): el bloque de KPI se estira, el ancla no.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42691,7 +42717,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#521**; la próxima toma el número siguiente.
+> última regla es la **#522**; la próxima toma el número siguiente.
 
 >
 

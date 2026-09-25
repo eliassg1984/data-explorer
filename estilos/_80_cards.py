@@ -2074,9 +2074,62 @@ CSS = """    /* ================================================================
        mismo botón-título y mismo ancho fijo; sólo cambia la key. Flota
        sobre el margen de arriba de la figura (34px), así que no ocupa
        lugar: la leyenda de Plotly al pie se comía 38. */
-    /* `gap: 0`: la pastilla es `absolute` pero su envoltorio sigue en el
-       flex, y el gap de 16 de Streamlit empujaba el gráfico 16px abajo. */
-    .st-key-vt_resumen_chart_slot { position: relative; gap: 0 !important; }
+    /* EL RENGLÓN DEL TÍTULO: título + KPI a la izquierda, la pastilla
+       «Detalle» a la derecha (regla #522). La pastilla ocupa un ancla de
+       250×26 en el renglón y su contenido va `absolute` adentro: abierta,
+       el panel baja ENCIMA del gráfico sin empujar nada. */
+    .st-key-vt_resumen_cabfila { flex-wrap: nowrap !important; }
+    .st-key-vt_resumen_cabfila > .st-key-vt_resumen_kpi,
+    .st-key-vt_resumen_cabfila > :has(> .st-key-vt_resumen_kpi) {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    .st-key-vt_resumen_ley_ancla,
+    .st-key-vt_resumen_cabfila > :has(> .st-key-vt_resumen_ley_ancla) {
+        position: relative !important;
+        flex: 0 0 250px !important;
+        width: 250px !important;
+        height: 26px !important;
+        min-height: 26px !important;
+    }
+    /* LOS KPI EN UNA LÍNEA, deslizable (regla #522, a pedido: «ponerlos en
+       una sola línea y, si es posible, deslizable»). Rótulo y valor en el
+       mismo renglón; lo que no entra se desliza con la rueda o el
+       trackpad (barra fina), y un desvanecido en el borde derecho avisa
+       que hay más. Medido a 1366: los diez piden ~1.450px contra ~700
+       libres al lado del título. */
+    .st-key-vt_resumen_kpi .vt-cab {
+        flex-wrap: nowrap !important;
+        border-bottom: none !important;
+        padding-bottom: 0 !important;
+    }
+    .st-key-vt_resumen_kpi .vt-kpis {
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: thin;
+        -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+        mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+        padding-right: 24px;
+    }
+    .st-key-vt_resumen_kpi .vt-kpi {
+        flex-direction: row !important;
+        align-items: baseline !important;
+        gap: 5px;
+        max-width: none !important;
+        flex: 0 0 auto;
+    }
+    .st-key-vt_resumen_kpi .vt-kpi-rot { overflow: visible !important; }
+    /* La línea que separaba el renglón del gráfico, ahora debajo del
+       renglón entero (título, KPI y pastilla). */
+    .st-key-vt_resumen_cabfila {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 5px !important;
+    }
+    .st-key-vt_resumen_chart_slot { gap: 0 !important; }
     /* LA TARJETA, MÁS APRETADA (2026-09-24, a pedido: «subir estos dos
        cuadrantes —el título con los KPI y el gráfico— y subir algo las
        tablas»). Medido a 1366: 16px de relleno arriba y 16 de gap entre
@@ -2088,9 +2141,9 @@ CSS = """    /* ================================================================
         padding-top: 6px !important;
         gap: 8px !important;
     }
-    .st-key-vt_resumen_chart_slot .st-key-vt_resumen_ley_float {
+    .st-key-vt_resumen_ley_ancla .st-key-vt_resumen_ley_float {
         position: absolute;
-        top: 1px; left: 8px; z-index: 5;
+        top: 0; right: 0; z-index: 20;
         width: 250px !important;
         overflow: hidden;
         padding: 1px 0;
@@ -2171,7 +2224,7 @@ CSS = """    /* ================================================================
        (una barra sobre el margen), pero abierta cae encima de las barras
        y los montos se leían mezclados con las etiquetas de atrás. El
        `:has()` lleva sólo la clase del panel (#469). */
-    .st-key-vt_resumen_chart_slot
+    .st-key-vt_resumen_ley_ancla
         .st-key-vt_resumen_ley_float:has(.st-key-vt_resumen_ley_panel) {
         background: var(--bg-card) !important;
         box-shadow: 0 4px 16px rgba(16, 16, 20, 0.10) !important;
@@ -2203,7 +2256,7 @@ CSS = """    /* ================================================================
         white-space: nowrap;
     }
     @media (max-width: 640px) {
-        .st-key-vt_resumen_chart_slot .st-key-vt_resumen_ley_float {
+        .st-key-vt_resumen_ley_ancla .st-key-vt_resumen_ley_float {
             position: static !important;
             width: 100% !important;
             margin: 0 0 6px !important;

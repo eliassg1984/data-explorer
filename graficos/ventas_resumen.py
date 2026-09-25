@@ -93,9 +93,10 @@ MAX_DIAS = 30    # tope de barras legibles. Mismo espíritu que MAX_SEMANAS de
 # Streamlit recolecta el estado de todo widget del fragment que no se
 # dibujó. `preservar_widgets` los re-escribe sobre sí mismos antes de
 # escalar.
-_MARGEN_ARRIBA = 28
-"""Margen de arriba de la figura del Resumen: lo que ocupa la pastilla
-«Detalle» cerrada (26) y 2 de aire (regla #520)."""
+_MARGEN_ARRIBA = 14
+"""Margen de arriba de la figura del Resumen. Era 28 para la pastilla
+«Detalle» (#520); desde que la pastilla vive en el renglón del título
+(#522) sólo lleva el rótulo «feriado», que va sobre el borde del área."""
 
 _PIE_EJE = 26
 """Lo que ocupa, debajo del área de trazo, el renglón de rótulos del eje X
@@ -715,15 +716,34 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # con su línea abajo, y la fila de KPI debajo. Ahora el título es el
         # primer ítem del mismo flex y la línea va debajo de los dos; si no
         # entran en el ancho, los KPI bajan solos (flex-wrap). Regla #519.
-        with st.container(key="vt_resumen_kpi"):
-            st.markdown(
-                f'<div class="vt-cab"><span class="vt-cab-tit">'
-                f'{escape(_titulo)}</span>'
-                + _html_kpi_canales(
-                    float(g["total"].sum()), int(tabla["dia"].nunique()),
-                    [(c, float(_tot_canal[c])) for c in canales]
-                    if _partida else [], _kpis_extra(g))
-                + "</div>", unsafe_allow_html=True)
+        #
+        # Y LA PASTILLA «DETALLE» EN ESE MISMO RENGLÓN, a la derecha (regla
+        # #522, a pedido: «subir un poco más el gráfico y lo de abajo»). Ocupaba
+        # una franja propia de 28px arriba del gráfico; acá comparte el alto
+        # del renglón y, abierta, su panel baja ENCIMA del gráfico. Los KPI
+        # van en UNA línea que se desliza de costado (`.vt-kpis`).
+        _hay_ticket = vol_label and "ticket" in g.columns
+        _ix_ley = (_foco_ix if _foco_ix is not None
+                   else (claves.index(foco) if _foco_ok else n_per - 1))
+        with st.container(horizontal=True, gap="small",
+                          vertical_alignment="center",
+                          key="vt_resumen_cabfila"):
+            with st.container(key="vt_resumen_kpi"):
+                st.markdown(
+                    f'<div class="vt-cab"><span class="vt-cab-tit">'
+                    f'{escape(_titulo)}</span>'
+                    + _html_kpi_canales(
+                        float(g["total"].sum()), int(tabla["dia"].nunique()),
+                        [(c, float(_tot_canal[c])) for c in canales]
+                        if _partida else [], _kpis_extra(g))
+                    + "</div>", unsafe_allow_html=True)
+            with st.container(key="vt_resumen_ley_ancla"):
+                _leyenda_flotante(
+                    fila[_ix_ley], _ix_ley, canales if _partida else [],
+                    _colores, por_canal, g, vol_label,
+                    hay_tapa=("carta" in g.columns
+                              and float(g["carta"].sum()) > 0),
+                    hay_ticket=bool(_hay_ticket))
 
         # UNA sola figura (no make_subplots): la selección por clic de
         # `st.plotly_chart(on_select=...)` NO llega a las trazas de un
@@ -734,7 +754,6 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # el volumen baja de subplot propio a una línea punteada sobre un
         # eje Y secundario, que es como `ventas.py::_ventas_grafico_dia`
         # dibuja Pax. Ver arquitectura.md regla #488.
-        _hay_ticket = vol_label and "ticket" in g.columns
         # LA FIGURA SE ACORTA CUANDO HAY TABLA (regla #516): los mismos dos
         # altos que «Compras por período» — el suyo entero sin tabla y
         # COMPACTO con ella, que le deja a la grilla `_ALTO_TABLA_VR`.
@@ -977,17 +996,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         fig.update_layout(dragmode="pan")
         fig.update_xaxes(fixedrange=True)
         fig.update_yaxes(fixedrange=True)
-        # El gráfico y su pastilla «Detalle» comparten un contenedor
-        # `position: relative`: la pastilla flota sobre él sin ocupar lugar
-        # (estilos/_80_cards.py, regla #520).
-        _ix_ley = (_foco_ix if _foco_ix is not None
-                   else (claves.index(foco) if _foco_ok else n_per - 1))
         with st.container(key="vt_resumen_chart_slot"):
-            _leyenda_flotante(
-                fila[_ix_ley], _ix_ley, canales if _partida else [],
-                _colores, por_canal, g, vol_label,
-                hay_tapa="carta" in g.columns and float(g["carta"].sum()) > 0,
-                hay_ticket=bool(_hay_ticket))
             # Lo que devuelve se IGNORA: el clic ya se leyó arriba, antes de
             # armar la figura (ver «Foco, modo y clic»).
             st.plotly_chart(
