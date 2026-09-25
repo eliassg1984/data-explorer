@@ -1886,13 +1886,15 @@ CSS = """    /* ================================================================
        marca de color por canal —la de su tramo en la barra— para que la
        fila haga también de leyenda. Vive acá y no allá porque ese CSS sólo
        se inyecta en Compras. */
-    .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"] {
+    .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],
+    .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     /* El título y los KPI en un renglón (regla #519): el look de
        `.chart-card-hdr` —mismo cuerpo, peso y color, y la línea abajo— pero
        compartiendo el flex con los KPI. */
-    .st-key-vt_resumen_kpi .vt-cab {
+    .st-key-vt_resumen_kpi .vt-cab,
+    .st-key-vt_mix_cabfila .vt-cab {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -1900,20 +1902,23 @@ CSS = """    /* ================================================================
         padding: 0 0 6px;
         border-bottom: 1px solid var(--border);
     }
-    .st-key-vt_resumen_kpi .vt-cab-tit {
+    .st-key-vt_resumen_kpi .vt-cab-tit,
+    .st-key-vt_mix_cabfila .vt-cab-tit {
         font-size: 13px;
         font-weight: 600;
         line-height: 1.35;
         color: var(--accent-deep);
         white-space: nowrap;
     }
-    .st-key-vt_resumen_kpi .vt-kpis {
+    .st-key-vt_resumen_kpi .vt-kpis,
+    .st-key-vt_mix_cabfila .vt-kpis {
         display: flex;
         flex-wrap: wrap;
         align-items: stretch;
         gap: 2px 0;
     }
-    .st-key-vt_resumen_kpi .vt-kpi {
+    .st-key-vt_resumen_kpi .vt-kpi,
+    .st-key-vt_mix_cabfila .vt-kpi {
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -1923,19 +1928,22 @@ CSS = """    /* ================================================================
         line-height: 1.2;
         border-left: 1px solid var(--border);
     }
-    .st-key-vt_resumen_kpi .vt-kpi:first-child {
+    .st-key-vt_resumen_kpi .vt-kpi:first-child,
+    .st-key-vt_mix_cabfila .vt-kpi:first-child {
         padding-left: 0;
         border-left: none;
         max-width: none;
     }
-    .st-key-vt_resumen_kpi .vt-kpi-rot {
+    .st-key-vt_resumen_kpi .vt-kpi-rot,
+    .st-key-vt_mix_cabfila .vt-kpi-rot {
         font-size: 10px;
         color: var(--text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    .st-key-vt_resumen_kpi .vt-kpi[style] .vt-kpi-rot::before {
+    .st-key-vt_resumen_kpi .vt-kpi[style] .vt-kpi-rot::before,
+    .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before {
         content: "";
         display: inline-block;
         width: 8px;
@@ -1944,23 +1952,27 @@ CSS = """    /* ================================================================
         border-radius: 2px;
         background: var(--vt-kpi-color);
     }
-    .st-key-vt_resumen_kpi .vt-kpi-val {
+    .st-key-vt_resumen_kpi .vt-kpi-val,
+    .st-key-vt_mix_cabfila .vt-kpi-val {
         font-size: 13px;
         font-weight: 600;
         color: var(--text-primary);
         white-space: nowrap;
     }
-    .st-key-vt_resumen_kpi .vt-kpi-sub {
+    .st-key-vt_resumen_kpi .vt-kpi-sub,
+    .st-key-vt_mix_cabfila .vt-kpi-sub {
         margin-left: 4px;
         font-size: 10px;
         font-weight: 400;
         color: var(--text-secondary);
     }
-    .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val {
+    .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val,
+    .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val {
         color: var(--accent-deep);
         font-weight: 700;
     }
-    .st-key-vt_resumen_kpi .vt-kpi-alerta .vt-kpi-val {
+    .st-key-vt_resumen_kpi .vt-kpi-alerta .vt-kpi-val,
+    .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val {
         color: var(--warning-text);
     }
 
@@ -2055,7 +2067,8 @@ CSS = """    /* ================================================================
         padding: 0 12px !important;
         font-size: 12px !important;
     }
-    .st-key-vt_resumen_escala button {
+    .st-key-vt_resumen_escala button,
+    .st-key-vt_mixf_escala button {
         min-height: 28px !important;
         height: 28px !important;
         padding: 0 14px !important;
@@ -2066,6 +2079,118 @@ CSS = """    /* ================================================================
         height: 32px !important;
         padding: 0 10px !important;
         font-size: 12px !important;
+    }
+    /* VENTAS › MIX DE CARTA (2026-09-25, regla #527). La tarjeta copia la
+       del Resumen ejecutivo: el renglón del título con los KPI (las reglas
+       `.vt-cab`/`.vt-kpis` de arriba llevan también `vt_mix_cabfila`), la
+       fila de controles a 28px y la fila que elige qué se ve abajo. Lo
+       propio es la columna de la derecha del gráfico, `vt_mix_nav`: las
+       migas que suben y un botón por tramo de la barra, que hace de
+       leyenda. Todo acotado a SU key (CLAUDE.md). */
+    .st-key-ajuste_graf_card_izq_ventas_mix { gap: 8px !important; }
+    .st-key-vt_mix_cabfila {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 5px !important;
+    }
+    .st-key-vt_mix_gran [data-testid="stButtonGroup"] button,
+    .st-key-vt_mix_medida [data-testid="stButtonGroup"] button,
+    .st-key-vt_mix_escala [data-testid="stButtonGroup"] button,
+    .st-key-vt_mix_zona [data-testid="stButtonGroup"] button,
+    .st-key-vt_mix_comp [data-testid="stButtonGroup"] button,
+    .st-key-vt_mix_cambio [data-testid="stButtonGroup"] button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
+    /* El buscador, a 28 como los toggles, en las dos formas del
+       desplegable: la de la 1.59 (baseweb) y la de la 1.64 (react-aria),
+       igual que los filtros del Resumen (regla #519). */
+    .st-key-vt_mix_buscar [data-baseweb="select"] > div,
+    .st-key-vt_mix_buscar .react-aria-ComboBox > div {
+        min-height: 28px !important;
+        height: 28px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_mix_buscar [data-baseweb="select"] > div > div {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    .st-key-vt_mix_buscar .react-aria-ComboBox input {
+        height: 24px !important;
+        min-height: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_mix_pie { align-items: center !important; }
+    .st-key-vt_mix_pie [data-testid="stCaptionContainer"],
+    .st-key-vt_mix_pie [data-testid="stCaptionContainer"] p {
+        margin: 0 !important;
+        font-size: 12px !important;
+        line-height: 1.3 !important;
+    }
+    /* La columna de navegación: son una LISTA, no una botonera — a lo
+       ancho, alineados a la izquierda y a 24px. */
+    .st-key-vt_mix_nav [data-testid="stButton"] button {
+        width: 100% !important;
+        justify-content: flex-start !important;
+        min-height: 24px !important;
+        height: 24px !important;
+        padding: 0 6px !important;
+        border-radius: 6px !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-vt_mix_nav [data-testid="stButton"] button:hover:not(:disabled) {
+        background: var(--bg-hover) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-vt_mix_nav [data-testid="stButton"] button:disabled {
+        color: var(--text-secondary) !important;
+    }
+    .st-key-vt_mix_nav [data-testid="stButton"] button p {
+        font-size: 12.5px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    div[class*="st-key-vt_mix_miga_"] button {
+        color: var(--accent-deep) !important;
+    }
+    /* La muestra de color de cada tramo: el `--serie-<i>` de su posición
+       (`estilos/_00_base.py`, espejo de `ventas_mix._COLORES`), y el gris
+       del Resto, que es el `SCROLL_THUMB` de tema.py. */
+    div[class*="st-key-vt_mix_ley_"] button::before {
+        content: "";
+        flex: 0 0 auto;
+        width: 10px;
+        height: 10px;
+        margin-right: 8px;
+        border-radius: 3px;
+        background: var(--vt-mix-sw, var(--scroll-thumb));
+    }
+    .st-key-vt_mix_ley_0 { --vt-mix-sw: var(--serie-0); }
+    .st-key-vt_mix_ley_1 { --vt-mix-sw: var(--serie-1); }
+    .st-key-vt_mix_ley_2 { --vt-mix-sw: var(--serie-2); }
+    .st-key-vt_mix_ley_3 { --vt-mix-sw: var(--serie-3); }
+    .st-key-vt_mix_ley_4 { --vt-mix-sw: var(--serie-4); }
+    .st-key-vt_mix_ley_5 { --vt-mix-sw: var(--serie-5); }
+    .st-key-vt_mix_ley_6 { --vt-mix-sw: var(--serie-6); }
+    .st-key-vt_mix_nav [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-vt_mix_nav .vt-mix-nivel {
+        font-size: 11px;
+        line-height: 1.3;
+        color: var(--text-secondary);
+        padding: 2px 6px 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .st-key-vt_mix_nav [data-testid="stCaptionContainer"] p {
+        font-size: 11px !important;
+        margin: 4px 6px 0 !important;
     }
     /* LA PASTILLA «DETALLE» DEL RESUMEN (2026-09-24, regla #520): la
        leyenda del gráfico, flotando arriba a la izquierda como la de
@@ -2099,12 +2224,14 @@ CSS = """    /* ================================================================
        trackpad (barra fina), y un desvanecido en el borde derecho avisa
        que hay más. Medido a 1366: los diez piden ~1.450px contra ~700
        libres al lado del título. */
-    .st-key-vt_resumen_kpi .vt-cab {
+    .st-key-vt_resumen_kpi .vt-cab,
+    .st-key-vt_mix_cabfila .vt-cab {
         flex-wrap: nowrap !important;
         border-bottom: none !important;
         padding-bottom: 0 !important;
     }
-    .st-key-vt_resumen_kpi .vt-kpis {
+    .st-key-vt_resumen_kpi .vt-kpis,
+    .st-key-vt_mix_cabfila .vt-kpis {
         flex: 1 1 auto;
         min-width: 0;
         flex-wrap: nowrap !important;
@@ -2115,14 +2242,16 @@ CSS = """    /* ================================================================
         mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
         padding-right: 24px;
     }
-    .st-key-vt_resumen_kpi .vt-kpi {
+    .st-key-vt_resumen_kpi .vt-kpi,
+    .st-key-vt_mix_cabfila .vt-kpi {
         flex-direction: row !important;
         align-items: baseline !important;
         gap: 5px;
         max-width: none !important;
         flex: 0 0 auto;
     }
-    .st-key-vt_resumen_kpi .vt-kpi-rot { overflow: visible !important; }
+    .st-key-vt_resumen_kpi .vt-kpi-rot,
+    .st-key-vt_mix_cabfila .vt-kpi-rot { overflow: visible !important; }
     /* La línea que separaba el renglón del gráfico, ahora debajo del
        renglón entero (título, KPI y pastilla). */
     .st-key-vt_resumen_cabfila {
@@ -2662,55 +2791,6 @@ CSS = """    /* ================================================================
         }
     }
 
-    /* =================================================================== */
-    /* Toggle "Venta/Costo/Pax/Pax·Venta" de Ventas › Por día — de cápsula   */
-    /* a tab de texto con subrayado, pedido explícito (referencia: pestañas */
-    /* de un extracto financiero, texto plano + línea de color abajo del    */
-    /* activo, sin fondo relleno). `data-variant="pills"` + `aria-pressed`  */
-    /* son atributos reales de Streamlit (no clases con hash), así que el   */
-    /* selector no se rompe con la próxima versión que cambie los hashes.   */
-    /* =================================================================== */
-    /* Sube SÓLO el toggle, no la tarjeta. El ancla es la key del PROPIO
-       widget: `st.pills(key="ventas_dia_metricas")` emite esa clase en su
-       element container, así que no hace falta (ni conviene) envolverlo en
-       un st.container extra — ver arquitectura.md regla #90.
-
-       Este margen come el gap del bloque vertical de Streamlit entre la
-       CABECERA de la franja (título + línea superior, en graficos/ventas.py)
-       y los tabs. Es el aire que queda entre la línea de arriba y el texto
-       de los tabs: si se toca, medir en el navegador — el <hr> de abajo y
-       el padding de la cabecera están calculados contra este número. */
-    div[class*="st-key-ventas_dia_metricas"] {
-        margin-top: 6px !important;
-    }
-    /* El gap real no va en stButtonGroup: ese es display:block (verificado
-       en el navegador, no a ojo). El flex de verdad es su hijo directo, un
-       <div> sin testid propio — de ahí el "> div". */
-    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"] > div {
-        gap: 28px !important;
-    }
-    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"] {
-        background: transparent !important;
-        border: none !important;
-        border-radius: 0 !important;
-        border-bottom: 2px solid transparent !important;
-        padding: 4px 1px !important;
-        color: var(--text-secondary) !important;
-        font-weight: 400 !important;
-        font-size: 17px !important;
-    }
-    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"][aria-pressed="true"] {
-        border-bottom-color: var(--accent) !important;
-        color: var(--accent-deep) !important;
-        font-weight: 600 !important;
-    }
-    div[class*="st-key-ventas_dia_metricas"] [data-testid="stButtonGroup"]
-        button[data-variant="pills"]:hover {
-        color: var(--accent) !important;
-    }
-
     /* Reserva de alto de la tarjeta de Año Pasado, para que NO colapse
        mientras se cargan los datos. El gráfico se dibuja al final del script
        (después de traer las dos series de R2), así que entre el render de la
@@ -2850,64 +2930,6 @@ CSS = """    /* ================================================================
         width: 1px;
         height: 18px;
         background: var(--border);
-    }
-
-    /* =================================================================== */
-    /* ALTO ELÁSTICO — el CSS es el dueño del alto de esta figura            */
-    /*                                                                       */
-    /* Va con `alturas.ELASTICO` en graficos/ventas.py: la figura sale SIN    */
-    /* `fig.layout.height` y Plotly toma el alto de este contenedor al        */
-    /* MONTAR. Antes el alto era una constante de Python (373px) calibrada    */
-    /* para el laptop de 1366x768: correcta ahí y desperdiciando 343px en un  */
-    /* monitor de 1920x1080. Ver arquitectura.md regla #106.                  */
-    /*                                                                       */
-    /* El ancla es `:has()` sobre la key del PROPIO gráfico, no la key de la  */
-    /* tarjeta: `ajuste_graf_card_izq_ventas` la comparten TODAS las vistas   */
-    /* de Ventas, y darle alto fijo estiraría también el Resumen ejecutivo    */
-    /* (1364px, largo a propósito). Así sólo se estira la tarjeta que de      */
-    /* verdad contiene este gráfico.                                         */
-    /* =================================================================== */
-    /* TODO el bloque elástico va dentro del mismo @media que el encuadre de
-       arriba. En móvil el cromo es otro y el patrón correcto es el scroll de
-       página: fijarle el alto a la tarjeta ahí rompería justamente eso.
-       Consecuencia conocida en móvil: sin alto de CSS ni de Python, Plotly
-       cae a su default de 450px, que con scroll de página es aceptable. */
-    @media screen and (min-width: 769px) {
-    div[class*="st-key-ajuste_graf_card_"]:has(.st-key-ventas_g_dia) {
-        /* flex: 0 0 auto es OBLIGATORIO: los bloques de Streamlit son flex
-           items con `flex: 1 1 0%` y ahí `height` se ignora en silencio
-           (regla #101). Sin esto, la regla de abajo no hace nada. */
-        flex: 0 0 auto !important;
-        height: var(--alto-util) !important;
-    }
-    /* La cadena hasta el gráfico: si un solo nivel queda en `auto`, el
-       `height: 100%` de abajo se resuelve contra un padre sin alto y Plotly
-       cae a su default de 450px. Los dos niveles son reales, medidos en el
-       navegador: la tarjeta envuelve un stLayoutWrapper y ese un
-       stVerticalBlock. */
-    div[class*="st-key-ajuste_graf_card_"]:has(.st-key-ventas_g_dia)
-        > [data-testid="stLayoutWrapper"],
-    div[class*="st-key-ajuste_graf_card_"]:has(.st-key-ventas_g_dia)
-        > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
-        height: 100% !important;
-    }
-    /* El gráfico se come lo que sobra después de la franja de controles.
-       Streamlit le pone `flex: 0 0 <alto>px` derivado del alto de Plotly;
-       hay que reemplazarlo. `min-height: 0` es imprescindible: sin él, el
-       min-height:auto de un flex item impide que se ENCOJA por debajo de su
-       contenido y la tarjeta desborda en pantallas chicas.
-       OJO: acotado a la key del gráfico, NUNCA a los hijos del contenedor.
-       Con `> div` el flex reparte el alto entre los TRES hijos por igual
-       (título, tabs y gráfico) — medido en el banco: 214.7px cada uno. */
-    div[class*="st-key-ventas_g_dia"] {
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-    }
-    div[class*="st-key-ventas_g_dia"] [data-testid="stFullScreenFrame"],
-    div[class*="st-key-ventas_g_dia"] [data-testid="stPlotlyChart"],
-    div[class*="st-key-ventas_g_dia"] .js-plotly-plot {
-        height: 100% !important;
-    }
     }
 
     /* Botón "Cerrar" del drill de Platos (Ventas › Año Pasado): ícono solo,

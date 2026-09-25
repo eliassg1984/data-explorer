@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-526 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+527 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (182)
 
@@ -483,7 +483,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
 
-**Streamlit** (145)
+**Streamlit** (146)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -630,6 +630,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#502** — «Que el correo salga con MI dirección» no se resuelve mandando desde el servidor: se abre el…
 - **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
+- **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
 
 **Datos, R2 y DuckDB** (64)
 
@@ -805,7 +806,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (106)
+**Decisiones de diseño y UX** (107)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -913,6 +914,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#522** — El renglón del título del Resumen de Ventas lleva los KPI en UNA línea deslizable y la…
 - **#524** — La venta tiene UNA definición y vive en definicion_venta.py: facturas y boletas pagadas o por…
 - **#525** — El Resumen de Ventas muestra lo que la definición deja afuera: una subvista «Cuadre», los KPI…
+- **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -42975,6 +42977,82 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-25.)
 
+527. **«Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia
+     semanal»: la barra del Resumen partida por Grupo › Sub Grupo ›
+     Producto, con drill, mapa de calor y qué movió cada período.**
+     2026-09-25, a pedido («ver un gráfico … por período como la primera
+     vista de mi reporte de ventas, pero desde la perspectiva de Grupo,
+     Subgrupo y producto»), sobre un mockup aprobado con datos reales. Vive
+     en `graficos/ventas_mix.py`; la guarda es
+     `test_graficos.py::_pruebas_ventas_mix`.
+
+     - **El mismo esqueleto que el Resumen**, a propósito: granularidad,
+       una barra por período con su total y su variación encima
+       (`semanal._plan_etiquetas`, «parcial» donde el rango corta, #470),
+       el foco atenuado por COLOR (#476), el eje lineal por índice (#448),
+       `dragmode="pan"` para que el clic suelto llegue (#388) y el clic en
+       una barra ABRE el Detalle. Cambia de qué está hecha la barra: siete
+       tramos por Grupo (o Subgrupo, o Producto) y el resto junto.
+     - **Se baja tocando un nombre**, en la columna de la derecha del
+       gráfico (un botón por tramo, que hace de leyenda) o en una fila del
+       mapa de calor; las migas de esa columna suben. En Productos, tocar
+       uno lo pone en foco contra el resto de su subgrupo. El nivel se
+       guarda por NOMBRE (`vt_mix_ruta`) y se valida en cada corrida
+       (`ruta_valida`): un chip de la franja puede sacar el grupo donde el
+       usuario estaba parado.
+     - **Todos los clics se leen ARRIBA DE TODO.** Son cuatro widgets con
+       selección —el gráfico, el mapa de calor, el puente del Detalle y lo
+       más vendido— y los cuatro llevan un contador en la key (#399). Leído
+       donde se dibuja cada uno, el drill quedaba una corrida atrasado: el
+       gráfico, que va arriba, ya se había dibujado con el nivel viejo. Por
+       eso cada widget deja en `session_state` qué había en cada fila la
+       última vez que se dibujó (`_vt_mix_filas_*`, `_vt_mix_claves`), y
+       `_leer_clics` resuelve el clic contra eso antes de dibujar nada.
+     - **«Resto», no «Otros»**: en `ventas.parquet` hay un Grupo que se
+       llama «Otros», y el tramo que juntaba a los chicos con ese nombre se
+       leía como si fuera él. Con ocho miembros se muestran los ocho: un
+       «Resto (1)» esconde uno sin ganar nada.
+     - **Un período incompleto se compara en puntos de mix.** Tres días de
+       la semana en curso contra una semana entera dan −46 % sin que nada
+       haya pasado; el reparto sí es comparable. Al tocar una barra
+       cortada —o la que sigue a una cortada— el Detalle abre en «Mix
+       (pp)» y el renglón lo dice. «Año pasado» no tiene ese problema:
+       compara los MISMOS días un año antes (364 días en Día y Semana, el
+       mismo día de la semana; la misma fecha en Mes y Año) y los trae
+       aparte de R2 con `ventas_comparativo._cargar_tramo` +
+       `_filtrar_items`, así que quedan filtrados igual que `d`.
+     - **El prefijo de `selector_fecha_tarjeta` es SUYO.** Arma sus keys
+       con él —`{clave}_escala` (el popover), `{clave}_fila`,
+       `{clave}_atajo_sel`, `{clave}_esc_*`—, y con `"vt_mix"` chocó con
+       el control «Escala» de la vista (`vt_mix_escala`):
+       `StreamlitDuplicateElementKey` al abrirla. Va `"vt_mixf"`, que
+       además no matchea los `[class*="st-key-vt_mix_"]` del CSS.
+     - **Un widget que Python escribe nace en `session_state` y va SIN
+       `default=`.** La zona (Resumen/Detalle, la escribe el clic en una
+       barra) y el cambio (la escribe el período incompleto) se siembran
+       con `setdefault`; con `default=` además, Streamlit avisa en cada
+       corrida que el valor le llegó por dos lados.
+     - **Sin costo cargado es «—», no «0 %»**: no saberlo no es costar
+       cero (la venta sin costo de la #524). Los ceros del mapa de calor
+       también van «—», como en el Cuadre (#525).
+     - **Lo que se fue**: `_ventas_grafico_dia` con sus dos constantes, el
+       CSS de su toggle de métricas (`ventas_dia_metricas`) y el de su alto
+       elástico (`ventas_g_dia`); `alturas.ELASTICO` quedó sin figuras que
+       lo usen, pero el mecanismo sigue en `alturas.py` y `base.py`. La
+       lectura de «Por día» la da el Resumen en granularidad Día; la de
+       «Semanal» (top 8 + «Otros», sin bajar de nivel), el Mix en Semana.
+       «Histórica subfamilia» y «Matriz agrupada» se quedan: hacen parte
+       de esto, y retirarlas es una decisión aparte.
+     - **Medido** a 1366×768 con datos reales: la tarjeta mide 602px
+       contra 724 de alto útil (`VENTAS_MIX_FIG` 250 + `VENTAS_MIX_TABLA`
+       192), y a 375px no desborda.
+     - **Lo que mostró el dato el primer día**: desde julio de 2026
+       Arroces, Parrilla y Charcutería no venden y Carnes Americanas cae a
+       S/ 716 en el mes; contra el año pasado dan −100 %. O cambió la
+       carta o se reclasificaron productos — sin confirmar. Si fue lo
+       segundo, comparar subgrupos a través de julio engaña, en esta vista
+       y en las que ya existían.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -42987,7 +43065,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#526**; la próxima toma el número siguiente.
+> última regla es la **#527**; la próxima toma el número siguiente.
 
 >
 

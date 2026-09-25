@@ -579,8 +579,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                 culpables[_k] = (_top["prod"], float(_top["pc"]),
                                  float(_top["po"]))
 
-    # ── Volumen: Pax por período (dedup por pedido, mismo criterio que
-    # ventas.py::_ventas_grafico_dia) o, sin Pax, pedidos distintos ────────
+    # ── Volumen: Pax por período (dedup por pedido, `definicion_venta.
+    # pax_por`, como «Venta vs Compra») o, sin Pax, pedidos distintos ──────
     vol_label = None
     if col_pax:
         if col_pedido:
@@ -782,8 +782,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # eso el drill no abría nunca—. Todas las vistas clickeables del
         # repo son figuras únicas (semanal, comparativo, volatilidad); acá
         # el volumen baja de subplot propio a una línea punteada sobre un
-        # eje Y secundario, que es como `ventas.py::_ventas_grafico_dia`
-        # dibuja Pax. Ver arquitectura.md regla #488.
+        # eje Y secundario, que es como dibujaba Pax la vista «Por día»
+        # (retirada el 2026-09-25). Ver arquitectura.md regla #488.
         # LA FIGURA SE ACORTA CUANDO HAY TABLA (regla #516): los mismos dos
         # altos que «Compras por período» — el suyo entero sin tabla y
         # COMPACTO con ella, que le deja a la grilla `_ALTO_TABLA_VR`.
@@ -909,8 +909,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             ))
         # Ticket promedio como línea + puntos sobre un TERCER eje (soles,
         # pero otra escala que la venta: ~S/ 180 contra ~S/ 25.000). Va en su
-        # propio eje a la derecha —igual que `ventas.py::_ventas_grafico_dia`
-        # con Pax/Venta— para que las escalas no se aplasten. Antes era una
+        # propio eje a la derecha —igual que hacía la vista «Por día» con
+        # Pax/Venta— para que las escalas no se aplasten. Antes era una
         # tarjeta aparte; se subió acá a pedido el 2026-09-22.
         if _hay_ticket and _ver["ticket"]:
             fig.add_trace(go.Scatter(
@@ -978,7 +978,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # las etiquetas se calcula con esa leyenda en ese lugar
         # (`semanal._LEYENDA_Y`). `_xright` recorta el dominio del eje X
         # para hacerle lugar al tercer eje (el del ticket) a la derecha,
-        # como `_ventas_grafico_dia`.
+        # como hacía la vista «Por día».
         # UN SOLO EJE A LA DERECHA, el de Clientes (regla #521, a pedido:
         # «este segundo eje que dice Ticket descuadra la simetría de la
         # vista»). La línea del Ticket sigue en su propia escala —S/ 180

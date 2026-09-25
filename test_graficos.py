@@ -5491,6 +5491,131 @@ def _pruebas_ventas_un_item_una_vez():
     return fallos
 
 
+def _pruebas_ventas_mix():
+    """Ventas › Mix de carta (regla #527): las cuentas de la vista.
+
+    Fija lo que no se ve en pantalla hasta que miente: que la matriz salga
+    con las columnas por NOMBRE —el período, no la posición (regla #481,
+    pandas 2 contra pandas 3)—, que los chicos se junten en «Resto (N)» y
+    no en «Otros» (en `ventas.parquet` hay un Grupo que se llama así), que
+    el año pasado mire los MISMOS días, y que el dispatcher le pase
+    `_filtrar_items`: sin él, el año pasado se sumaría sin los chips de la
+    franja y con cortesías y anulados.
+    """
+    import ast
+    import inspect
+    import pathlib
+    import re
+    import textwrap
+    from datetime import date
+
+    from graficos import ventas as _v
+    from graficos import ventas_mix as _m
+    from graficos.compras._comun import _periodo_serie
+    from tema import PALETA_SERIES
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · mix · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · mix · {nombre}: got={got!r} exp={exp!r}")
+
+    # Lunes 3 y martes 4 de agosto (semana 32), martes 11 y miércoles 12
+    # (semana 33); una fila sin grupo.
+    d = pd.DataFrame({
+        "FEC REG DOCUMENTO": pd.to_datetime(
+            ["2026-08-03", "2026-08-04", "2026-08-11", "2026-08-12",
+             "2026-08-12"]),
+        "GRUPO": ["Alimentos", "Alimentos", "Bebidas", None, "Alimentos"],
+        "SUB GRUPO": ["Fondos", "Entradas", "Cocteles", None, "Fondos"],
+        "NOMB ITEM VENTA": ["Lomo", "Ceviche", "Pisco Sour", "Agua", "Lomo"],
+        "VENTA ITEM DDOCUMENTO": [100.0, 40.0, 30.0, 5.0, 60.0],
+        "CANTIDAD ITEM DDOCUMENTO": [2, 1, 3, 1, 1],
+        "COSTO VENTA": [35.0, 12.0, 9.0, 1.0, 21.0],
+        "NETO TOTAL ITEM DDOCUMENTO": [81.0, 32.4, 24.3, 4.05, 48.6],
+    })
+    cols = _m.columnas(d)
+    check("resuelve las ocho columnas", all(cols.values()), True)
+    b = _m.base(d, cols)
+    check("un grupo vacío se nombra, no se cae",
+          sorted(b["grupo"].unique()), ["(sin grupo)", "Alimentos", "Bebidas"])
+    b = b.assign(clave=_periodo_serie(b["fecha"], "Semana"))
+    claves = sorted(b["clave"].unique())
+    check("una clave por semana ISO", claves, ["2026-S32", "2026-S33"])
+    M = _m.matriz(b, "grupo", claves)
+    check("las cuatro medidas", sorted(M), ["cant", "costo", "neto", "venta"])
+    check("las columnas son los períodos, por nombre",
+          list(M["venta"].columns), claves)
+    check("Alimentos por semana", M["venta"].loc["Alimentos"].tolist(),
+          [140.0, 60.0])
+    check("una semana sin venta es cero, no NaN",
+          M["venta"].loc["Bebidas"].tolist(), [0.0, 30.0])
+
+    check("alcance de un subgrupo",
+          float(_m.alcance(b, ("Alimentos", "Fondos"))["venta"].sum()), 160.0)
+    check("un grupo que ya no está vuelve arriba",
+          _m.ruta_valida(b, ("Vinos",)), ())
+    check("un subgrupo de otro grupo sube uno",
+          _m.ruta_valida(b, ("Alimentos", "Cocteles")), ("Alimentos",))
+    check("una ruta que existe queda",
+          _m.ruta_valida(b, ("Bebidas", "Cocteles")), ("Bebidas", "Cocteles"))
+
+    orden = [f"g{i}" for i in range(10)]
+    tr = _m.tramos(orden)
+    check("diez: siete con nombre y «Resto (3)»",
+          [t[0] for t in tr], orden[:7] + ["Resto (3)"])
+    check("el resto junta a los tres de abajo", tr[-1][1], orden[7:])
+    check("ocho: los ocho, sin un «Resto (1)»",
+          [t[0] for t in _m.tramos(orden[:8])], orden[:8])
+    check("con foco: el producto contra el resto de su subgrupo",
+          [(t[0], t[1]) for t in _m.tramos(["a", "b", "c"], "b", "Fondos")],
+          [("b", ["b"]), ("Resto de Fondos", ["a", "c"])])
+
+    check("mes en curso: los mismos días, un año antes",
+          _m.rango_ano_pasado("2026-09", "Mes",
+                              (date(2026, 8, 1), date(2026, 9, 23))),
+          (date(2025, 9, 1), date(2025, 9, 23)))
+    check("semana: 364 días, el mismo día de la semana",
+          _m.rango_ano_pasado("2026-S33", "Semana", None),
+          (date(2025, 8, 11), date(2025, 8, 17)))
+    check("el 29 de febrero cae al 28",
+          _m.rango_ano_pasado("2028-02", "Mes", None)[1], date(2027, 2, 28))
+
+    # ── El cableado del dispatcher ────────────────────────────────────────
+    fuente = textwrap.dedent(inspect.getsource(_v.renderizar_graficos_ventas))
+    llamadas = [n for n in ast.walk(ast.parse(fuente))
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "_ventas_mix"]
+    check("el dispatcher llama al Mix una vez", len(llamadas), 1)
+    for c in llamadas:
+        check("con `d`: sólo venta, un ítem una vez",
+              [ast.unparse(a) for a in c.args], ["d"])
+        check("y el año pasado filtrado igual (filtrar_cb=_filtrar_items)",
+              {k.arg: ast.unparse(k.value) for k in c.keywords}.get(
+                  "filtrar_cb"), "_filtrar_items")
+    vistas = [v for _cat, vs in _v._VENTAS_RAIL_CATEGORIAS for v, *_ in vs]
+    check("«Venta por día» y «Familia/Subfamilia semanal» se fueron",
+          [n for n in ("Venta por día", "Familia/Subfamilia semanal")
+           if n in vistas or n in dict(_v._PILA).values()], [])
+    check("«Mix de carta» está en el rail y en la pila",
+          ("Mix de carta" in vistas, "Mix de carta" in dict(_v._PILA).values()),
+          (True, True))
+
+    # ── El espejo CSS de los colores de los tramos ────────────────────────
+    base_css = (pathlib.Path(__file__).parent / "estilos" / "_00_base.py"
+                ).read_text(encoding="utf-8")
+    espejo = [re.search(rf"--serie-{i}:\s*(#[0-9a-fA-F]{{6}})", base_css)
+              for i in range(len(_m._COLORES))]
+    check("--serie-<i> es PALETA_SERIES[i] para cada tramo con color",
+          [x.group(1).lower() if x else None for x in espejo],
+          [c.lower() for c in PALETA_SERIES[:len(_m._COLORES)]])
+    return fallos
+
+
 def _pruebas_movimientos_periodo():
     """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
 
@@ -6034,6 +6159,9 @@ def main():
 
     # ── Ventas › un ítem una vez, aunque se haya pagado con dos formas ───
     fallos += _pruebas_ventas_un_item_una_vez()
+
+    # ── Ventas › Mix de carta: las cuentas por nombre y el año pasado ────
+    fallos += _pruebas_ventas_mix()
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()

@@ -1,5 +1,5 @@
 """
-graficos.ventas — dashboard de Ventas: gráfico por día, matriz agrupada Grupo/SubGrupo/Producto × período, ranking FoodCost.
+graficos.ventas — dashboard de Ventas: resumen ejecutivo, mix de carta por período, matriz agrupada Grupo/SubGrupo/Producto × período, ranking FoodCost.
 """
 
 import numpy as np
@@ -11,7 +11,7 @@ from plotly.subplots import make_subplots
 
 import definicion_venta as dv
 from data import cargar as _cargar_reporte
-from tema import ACENTO, ERROR, EXITO, GRIS_BORDE, TEXTO_PRINCIPAL
+from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
@@ -21,6 +21,7 @@ from graficos.base import (
 from graficos.ventas_resumen import _ventas_resumen
 from graficos.ventas_comparativo import _ventas_comparativo
 from graficos.ventas_horario import _ventas_horario
+from graficos.ventas_mix import _ventas_mix
 from graficos import alturas
 
 _MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -57,13 +58,16 @@ def unico_por_item(df):
 #
 # La «Tabla» esta OCULTA desde el 2026-09-23, con las de los demas reportes:
 # `rail_sin_tablas` aca y `pila_sin_tablas` en `_PILA`, de a par (#507).
+#
+# «Mix de carta» entro el 2026-09-25 en el lugar de «Venta por dia», y ese
+# mismo dia se fue «Familia/Subfamilia semanal»: la barra semanal partida por
+# familia es la del Mix, que ademas baja a Subgrupo y Producto (regla #527).
 _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Resumen",  (("Resumen ejecutivo", "Resumen", ":material/summarize:"),)),
-    ("Tiempo",   (("Venta por día",              "Por día",    ":material/calendar_today:"),
+    ("Tiempo",   (("Mix de carta",               "Mix",        ":material/stacked_bar_chart:"),
                   ("Mapa por hora",               "Por hora",   ":material/schedule:"),
                   ("Comparativo vs Año Pasado",   "Año Pasado", ":material/compare_arrows:"),
                   ("Venta vs Compra",            "Vs Compra",  ":material/balance:"),
-                  ("Familia/Subfamilia semanal",  "Semanal",    ":material/calendar_view_week:"),
                   ("Histórica subfamilia",        "Histórica",  ":material/history:"))),
     ("Análisis", (("Matriz agrupada",     "Matriz",  ":material/grid_on:"),
                   ("Ranking & FoodCost",  "Ranking", ":material/leaderboard:"),
@@ -74,186 +78,23 @@ _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
 # tupla (el porqué está en `graficos/compras/__init__.py::_PILA`).
 #
-# Las 11 van en UNA sola pila: a diferencia de Ajuste, acá las categorías
+# Las 10 van en UNA sola pila: a diferencia de Ajuste, acá las categorías
 # del rail ("Resumen"/"Tiempo"/"Análisis") son sólo agrupación visual y no
 # separan la clave del rango — Ventas usa `carga_por_rango`, o sea UNA
 # clave por reporte, la misma que decide qué se baja de R2. El rail aplana
 # las categorías igual que siempre, así que la pila las lee seguidas.
 _PILA = pila_sin_tablas((
     ("vt_sec_resumen",    "Resumen ejecutivo"),
-    ("vt_sec_dia",        "Venta por día"),
+    ("vt_sec_mix",        "Mix de carta"),
     ("vt_sec_hora",       "Mapa por hora"),
     ("vt_sec_ano_pasado", "Comparativo vs Año Pasado"),
     ("vt_sec_vs_compra",  "Venta vs Compra"),
-    ("vt_sec_semanal",    "Familia/Subfamilia semanal"),
     ("vt_sec_historica",  "Histórica subfamilia"),
     ("vt_sec_matriz",     "Matriz agrupada"),
     ("vt_sec_ranking",    "Ranking & FoodCost"),
     ("vt_sec_meseros",    "Meseros"),
     ("vt_sec_tabla",      "Tabla"),
 ))
-
-
-_MAX_DIAS_CON_ROTULO = 35
-"""Hasta cuántos días «Venta por día» escribe el monto encima de cada barra.
-Un mes corrido entra; más allá los rótulos se pisan y, con un año, Plotly
-tardaba segundos en acomodarlos (regla #523). El monto sigue en el hover."""
-
-_MAX_TICKS_DIA = 31
-"""Rótulos del eje de «Venta por día»: uno por día hasta 31, y después uno
-cada N días. Con 264 días y un tick por día el eje era una mancha girada."""
-
-
-@st.fragment
-def _ventas_grafico_dia(g, col_costo, col_pax):
-    """Gráfico 'Venta bruta por día' aislado en su PROPIO @st.fragment.
-
-    Al vivir en un fragment, togglear una métrica (pills) solo redibuja
-    ESTE gráfico: no re-ejecuta los filtros de Grupo/Sub Grupo ni el resto
-    de la vista de Ventas. `g` ya viene agregado por día (venta, costo,
-    pax, ratio); Streamlit reutiliza el mismo `g` en los reruns del
-    fragment, así que no se recalcula nada aguas arriba.
-    """
-    _opts = ["Venta"]
-    if col_costo:
-        _opts.append("Costo")
-    if col_pax:
-        _opts += ["Pax", "Pax/Venta"]
-    _def = [m for m in ("Venta", "Costo") if m in _opts]
-    # ── Cabecera de la franja: título + línea SUPERIOR ────────────────────
-    # Junto con el <hr> de más abajo ENCIERRAN los toggles en una banda
-    # propia, en vez de dejarlos flotando sobre una sola línea. Es el
-    # patrón de la franja de controles de un gráfico bursátil: header,
-    # línea, tabs, línea, gráfico.
-    #
-    # El título vivía DENTRO de la figura (`title=` en update_layout) y
-    # CHOCABA con la leyenda: `_compras_layout` deja 30px de margen
-    # superior (t=30) y pone la leyenda horizontal en y=1.02 / x=0, o sea
-    # exactamente donde Plotly dibuja el título. Se leían encimados. Al
-    # sacar el título acá, la leyenda se queda sola con esa banda.
-    #
-    # Los `-18px` + `width:calc(100% + 36px)` son los MISMOS de la línea de
-    # abajo y por la misma razón: compensan el padding horizontal de la
-    # tarjeta (16px 18px, estilos/_80_cards.py::ajuste_graf_card_*) para
-    # que la línea toque el borde REAL. Si cambia ese padding, cambian los
-    # tres números (acá, en el <hr> y en el margen del toggle).
-    st.markdown(
-        '<div style="margin:-6px -18px 0;padding:0 18px 9px;'
-        'width:calc(100% + 36px);font-size:16px;font-weight:600;'
-        f'line-height:1.3;color:{TEXTO_PRINCIPAL};'
-        f'border-bottom:2px solid {GRIS_BORDE};">Venta bruta por día</div>',
-        unsafe_allow_html=True)
-    # NO envolver esto en un st.container(key=...) para poder estilarlo:
-    # `st.pills(key=...)` YA emite `st-key-ventas_dia_metricas` en su propio
-    # element container, que es el ancla de estilo local. Un container extra
-    # además reintroduce el bug de la regla #70 (un contenedor con key tiene
-    # identidad estable y RETIENE hijos huérfanos de la vista anterior —
-    # acá se quedaba con las columnas de KPI del Resumen ejecutivo).
-    sel = st.pills(
-        "Métricas", _opts, selection_mode="multi", default=_def,
-        key="ventas_dia_metricas", label_visibility="collapsed",
-    ) or ["Venta"]
-    # Separador de base bajo los toggles: los distingue del gráfico como un
-    # bloque de controles propio, en vez de flotar sueltos arriba del chart.
-    # Sangra hasta el borde REAL de la tarjeta (no solo el ancho del
-    # contenido): la tarjeta pinta 18px de padding horizontal
-    # (estilos/_80_cards.py, ajuste_graf_card_*), así que hay que compensar
-    # ese padding con margen negativo + ensanchar el width lo mismo, si no
-    # la línea queda corta por los dos lados en vez de tocar el borde.
-    # El margen SUPERIOR compensa la subida del toggle (-8px en
-    # estilos/_80_cards.py sobre `st-key-ventas_dia_metricas`): el <hr> va
-    # en flujo justo detrás de las pills, así que sin esto subiría con
-    # ellas. Van acoplados — si cambia uno, recalcular el otro.
-    # Color: el MISMO gris de la cuadrícula del gráfico (GRIS_BORDE, el
-    # `gridcolor` de graficos/base.py), no uno propio — así el separador
-    # se lee como una línea más del gráfico y no como un elemento ajeno.
-    # Como ese gris es más claro que el del texto suave, va a 2px para no
-    # desaparecer: el grosor compensa el contraste que pierde el color.
-    st.markdown(
-        f'<hr style="border:none;border-top:2px solid {GRIS_BORDE};'
-        'margin:-15px -18px 14px;width:calc(100% + 36px);">',
-        unsafe_allow_html=True)
-
-    _need_y2 = "Pax" in sel and "pax" in g.columns
-    _need_y3 = "Pax/Venta" in sel and "ratio" in g.columns
-
-    # CON UN AÑO, ESTE GRÁFICO CONGELABA LA PÁGINA (2026-09-24, regla #523).
-    # Rotulaba CADA barra (Venta y Costo) y ponía un tick por día: con el
-    # rango de un año son ~528 rótulos y 264 ticks girados, y Plotly los
-    # mide y acomoda uno por uno. Medido en el navegador: 9,3 s + 5,6 s de
-    # hilo principal bloqueado y 53.000 cambios de DOM — y pasaba mirando
-    # OTRA vista, porque la pila precarga la sección de al lado (el Resumen
-    # ejecutivo, que es la primera). Ahora los rótulos van sólo mientras
-    # entran, y el eje salta días para no pasar de `_MAX_TICKS_DIA` rótulos.
-    _n_dias = len(g)
-    _rotular = _n_dias <= _MAX_DIAS_CON_ROTULO
-    _txt = (dict(texttemplate="S/ %{y:,.0f}", textposition="outside",
-                 textfont=dict(size=13), cliponaxis=False)
-            if _rotular else {})
-    _paso_ticks = max(1, -(-_n_dias // _MAX_TICKS_DIA))
-
-    fig = go.Figure()
-    if "Venta" in sel:
-        fig.add_bar(
-            x=g["dia"], y=g["venta"], name="Venta",
-            marker=dict(color=ACENTO), yaxis="y", **_txt,
-            hovertemplate="%{x|%d/%m/%Y}<br>Venta: S/ %{y:,.2f}<extra></extra>")
-    if "Costo" in sel and "costo" in g.columns:
-        fig.add_bar(
-            x=g["dia"], y=g["costo"], name="Costo",
-            marker=dict(color=PALETA_CALLAI[1]), yaxis="y", **_txt,
-            hovertemplate="%{x|%d/%m/%Y}<br>Costo: S/ %{y:,.2f}<extra></extra>")
-    if _need_y2:
-        fig.add_trace(go.Scatter(
-            x=g["dia"], y=g["pax"], name="Pax",
-            **(dict(mode="lines+markers+text", text=g["pax"],
-                    texttemplate="%{y:,.0f}", textposition="top center",
-                    textfont=dict(size=12))
-               if _rotular else dict(mode="lines+markers")),
-            line=dict(color=PALETA_CALLAI[2], width=2.5), yaxis="y2",
-            hovertemplate="%{x|%d/%m/%Y}<br>Pax: %{y:,.0f}<extra></extra>"))
-    if _need_y3:
-        fig.add_trace(go.Scatter(
-            x=g["dia"], y=g["ratio"], name="Pax/Venta",
-            mode="lines+markers",
-            line=dict(color=PALETA_CALLAI[3], width=2, dash="dot"),
-            yaxis="y3",
-            hovertemplate="%{x|%d/%m/%Y}<br>Pax/Venta: %{y:.4f}<extra></extra>"))
-
-    # ELASTICO: el alto lo pone el CSS de la tarjeta, no Python. Esta figura
-    # comparte tarjeta con la franja de controles y se come lo que sobra, sea
-    # cual sea la pantalla. Con un alto fijo (con_franja() = 373) quedaba bien
-    # en el laptop objetivo y desperdiciaba 343px en un monitor de 1920x1080:
-    # el MARCO es CSS y se adapta, el alto de la figura era una constante
-    # calibrada para una sola pantalla. Ver arquitectura.md reglas #105 y #106.
-    _compras_layout(fig, alto=alturas.ELASTICO)
-    _xright = 0.88 if _need_y3 else 1.0
-    fig.update_layout(
-        # Sin `title=`: el título de este gráfico lo dibuja la cabecera de la
-        # franja (ver arriba). Dentro de la figura chocaba con la leyenda.
-        barmode="group",
-        xaxis=dict(
-            domain=[0.0, _xright], type="date",
-            tickmode="linear", tick0=g["dia"].min(),
-            dtick=86400000.0 * _paso_ticks,
-            tickformat="%d/%m", tickangle=-45, tickfont=dict(size=10),
-        ),
-        yaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
-        yaxis2=dict(overlaying="y", side="right", showgrid=False,
-                    tickformat=",.0f", title="Pax", visible=_need_y2),
-        yaxis3=dict(overlaying="y", side="right", anchor="free",
-                    position=1.0, showgrid=False, tickformat=".4f",
-                    title="Pax/Venta", visible=_need_y3),
-        margin=dict(l=10, r=(70 if _need_y3 else 10), t=30, b=10),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-    )
-    # height="stretch" acompaña a alturas.ELASTICO: estira el wrapper de
-    # Streamlit para que la cadena de contenedores tenga alto, que es de
-    # donde Plotly lee el suyo al montar. Solo no alcanza (regla #102): hace
-    # falta además el CSS de estilos/_80_cards.py que le da alto a la tarjeta
-    # y `flex: 1 1 auto` a este elemento.
-    st.plotly_chart(fig, use_container_width=True, height="stretch",
-                    key="ventas_g_dia")
 
 
 def _ventas_cargar_compra_diaria(dia_min, dia_max):
@@ -293,10 +134,9 @@ def _ventas_venta_compra_dia(g, hay_costo, hay_compra, hay_pax):
     a % de variación desde el primer día del rango, con badge de color al
     final de cada línea) + barras de Pax abajo en un subplot separado.
     Mismo espíritu que un gráfico bursátil: % arriba con crosshair, volumen
-    abajo. A diferencia de "Venta por día" (barras, valores en S/, Pax en
-    eje secundario), esta vista normaliza a % — Venta/Costo/Compra tienen
-    escalas muy distintas en soles, así que compararlas en % desde el
-    mismo punto de partida es lo que las hace legibles juntas."""
+    abajo. Normaliza a % —Venta/Costo/Compra tienen escalas muy distintas
+    en soles—, así que compararlas desde el mismo punto de partida es lo
+    que las hace legibles juntas."""
     _opts = ["Venta"]
     if hay_costo:
         _opts.append("Costo")
@@ -960,7 +800,7 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
         return
 
     # ── Agregar a nivel de PEDIDO: Pax/Hora/Mesero son del pedido, no de
-    # la línea — mismo criterio que Pax en "Venta por día" más arriba
+    # la línea — mismo criterio que Pax en «Venta vs Compra» más arriba
     # (Cant Pax se repite por línea, se toma 1 valor por pedido).
     #
     # DOS GRANOS (regla #517): esta vista recibe las filas POR PAGO porque
@@ -1076,8 +916,9 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
 
 
 def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None):
-    """Dashboard de Ventas: venta por día, familia/subfamilia por semana,
-    e histórica de subfamilia. Columnas reales del parquet de ventas.
+    """Dashboard de Ventas: resumen ejecutivo, mix de carta por período,
+    mapa por hora, año pasado, venta vs compra, histórica de subfamilia,
+    matriz, ranking y meseros. Columnas reales del parquet de ventas.
 
     `tabla_cb`: callback que arma la Tabla (inyectado por app.py — igual que
     Ajuste). Se le pasa `d`, el df YA filtrado por los chips propios de
@@ -1225,51 +1066,12 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                             col_serv=col_serv, col_canal=col_canal,
                             col_mesero=col_mesero, d_pagos=d_pagos)
 
-        # ── 1) Venta bruta por día (Venta / Costo / Pax / Pax·Venta) ─────
-        # Venta y Costo comparten el eje IZQUIERDO (soles). Pax va a un eje
-        # derecho (conteo) y el ratio Pax/Venta a un tercer eje derecho
-        # (escala minúscula), para que las 4 escalas no se pisen. El selector
-        # de métricas (pills multi) permite prender/apagar cada serie.
-        elif graf == "Venta por día" and col_fecha:
-            _fe = pd.to_datetime(d[col_fecha], errors="coerce").dt.normalize()
-
-            # Venta y Costo: suma por línea (cada línea es un valor distinto).
-            _base = pd.DataFrame({"dia": _fe, "venta": _venta})
-            if col_costo:
-                _base["costo"] = pd.to_numeric(d[col_costo], errors="coerce").fillna(0)
-            _base = _base.dropna(subset=["dia"])
-            _agg = {c: "sum" for c in _base.columns if c != "dia"}
-            g = _base.groupby("dia", as_index=False).agg(_agg).sort_values("dia")
-
-            # Pax: NO sumar todas las líneas (Cant Pax se repite por línea del
-            # mismo pedido). Se toma 1 valor por pedido y luego se suma por día.
-            if col_pax:
-                _pdf = pd.DataFrame({
-                    "dia": _fe,
-                    "pax": pd.to_numeric(d[col_pax], errors="coerce").fillna(0),
-                })
-                if col_pedido:
-                    # Un valor por pedido, y el de una nota de crédito
-                    # resta (regla #524): ver `definicion_venta.pax_por`.
-                    _pdf["ped"] = d[col_pedido].astype(str)
-                    if col_ldoc:
-                        _pdf["doc"] = d[col_ldoc].astype(str)
-                    _pdf = _pdf.dropna(subset=["dia"])
-                    _pax_dia = (dv.pax_por(_pdf, "ped", "pax",
-                                           doc="doc" if col_ldoc else None,
-                                           por="dia")
-                                .rename("pax").reset_index())
-                else:
-                    _pdf = _pdf.dropna(subset=["dia"])
-                    _pax_dia = _pdf.groupby("dia", as_index=False)["pax"].sum()
-                g = g.merge(_pax_dia, on="dia", how="left")
-                g["pax"] = g["pax"].fillna(0)
-                g["ratio"] = g["pax"] / g["venta"].replace(0, np.nan)
-
-            if g.empty:
-                st.info("Sin fechas válidas en el rango.")
-            else:
-                _ventas_grafico_dia(g, col_costo, col_pax)
+        # ── 1) Mix de carta: la venta por período partida por Grupo ›
+        # Sub Grupo › Producto (graficos/ventas_mix.py, regla #527). Le pasa
+        # `_filtrar_items` como a Año Pasado: el Detalle trae el año pasado
+        # aparte de R2 y tiene que quedar filtrado igual que `d`.
+        elif graf == "Mix de carta":
+            _ventas_mix(d, filtrar_cb=_filtrar_items)
 
         # ── 1a-bis) Mapa de calor día × hora, hasta 4 períodos ───────────
         # Trae sus propios tramos (uno por período comparado) con
@@ -1340,54 +1142,6 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 _ventas_venta_compra_dia(
                     g, hay_costo=bool(col_costo), hay_compra=hay_compra,
                     hay_pax=bool(col_pax))
-
-        # ── 2) Venta por familia/subfamilia por semana ──────────────────
-        elif graf == "Familia/Subfamilia semanal" and col_fecha and col_fam:
-            _dias_ini = {"Lunes": 0, "Sábado": 5, "Domingo": 6}
-            cc = st.columns([1, 1, 2])
-            with cc[0]:
-                _dini = st.selectbox("La semana empieza:",
-                                     list(_dias_ini.keys()),
-                                     key="ventas_sem_ini")
-            with cc[1]:
-                _desg = st.selectbox("Desglosar por:",
-                                     ["Familia", "Subfamilia"],
-                                     key="ventas_sem_desg")
-            col_seg = col_fam if _desg == "Familia" else (col_sub or col_fam)
-            _off = _dias_ini[_dini]
-            _fe = pd.to_datetime(d[col_fecha], errors="coerce")
-            _sem = (_fe - pd.to_timedelta(
-                (_fe.dt.weekday - _off) % 7, unit="D")).dt.date
-            seg = d[col_seg].astype(str)
-            top = _venta.groupby(seg).sum().nlargest(8).index
-            seg2 = seg.where(seg.isin(top), "Otros")
-            dd = (pd.DataFrame({"sem": _sem, "seg": seg2, "venta": _venta})
-                  .dropna(subset=["sem"]))
-            g = (dd.groupby(["sem", "seg"], as_index=False)["venta"].sum()
-                 .sort_values("sem"))
-            if g.empty:
-                st.info("Sin datos en el rango.")
-            else:
-                g["lbl"] = pd.to_datetime(g["sem"]).dt.strftime("Sem %d/%m")
-                fig = go.Figure()
-                segs = ([s for s in top if s in set(g["seg"])] +
-                        (["Otros"] if (g["seg"] == "Otros").any() else []))
-                for i, sname in enumerate(segs):
-                    gg = g[g["seg"] == sname]
-                    fig.add_bar(
-                        x=gg["lbl"], y=gg["venta"],
-                        name=_compras_truncar(sname, 22),
-                        marker=dict(color=(GRIS_BORDE if sname == "Otros"
-                                    else PALETA_CALLAI[i % len(PALETA_CALLAI)])),
-                        hovertemplate="%{fullData.name}<br>%{x}<br>S/ %{y:,.2f}<extra></extra>",
-                    )
-                _compras_layout(fig, alto=alturas.PROTAGONISTA)
-                fig.update_layout(
-                    title=f"Venta semanal por {_desg.lower()} (top 8 + Otros)",
-                    barmode="stack",
-                    legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=10)))
-                fig.update_xaxes(type="category")
-                st.plotly_chart(fig, use_container_width=True, key="ventas_g_sem")
 
         # ── 3) Venta histórica de subfamilia ────────────────────────────
         elif graf == "Histórica subfamilia" and col_fecha and col_sub:
@@ -1466,11 +1220,10 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         # platos): envuelto en una `ajuste_graf_card_` las dos se leían
         # como una sola caja. Regla #521.
         "vt_sec_resumen":    lambda: _cuerpo_grafico("Resumen ejecutivo"),
-        "vt_sec_dia":        _seccion("dia", "Venta por día"),
+        "vt_sec_mix":        _seccion("mix", "Mix de carta"),
         "vt_sec_hora":       _seccion("hora", "Mapa por hora"),
         "vt_sec_ano_pasado": _seccion("ano_pasado", "Comparativo vs Año Pasado"),
         "vt_sec_vs_compra":  _seccion("vs_compra", "Venta vs Compra"),
-        "vt_sec_semanal":    _seccion("semanal", "Familia/Subfamilia semanal"),
         "vt_sec_historica":  _seccion("historica", "Histórica subfamilia"),
         "vt_sec_matriz":     _seccion("matriz", "Matriz agrupada"),
         "vt_sec_ranking":    _seccion("ranking", "Ranking & FoodCost"),

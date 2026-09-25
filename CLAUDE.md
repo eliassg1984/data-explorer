@@ -406,6 +406,11 @@ resto de `graficos/compras/`.
   deja de ser seleccionable. Ver `arquitectura.md` #421.
 - **Widget + display auxiliar del mismo valor:** UNA sola key compartida (sin
   `value=`, sin key dinámica). El clamp de bounds va justo antes del widget.
+- **`selector_fecha_tarjeta(clave, …)` es dueño de su prefijo**: arma
+  `{clave}_escala`, `{clave}_fila`, `{clave}_atajo_sel`…, así que `clave`
+  no puede ser el prefijo de los widgets de la vista — `"vt_mix"` chocó con
+  el control `vt_mix_escala` y la vista murió con
+  `StreamlitDuplicateElementKey`. Ver `arquitectura.md` #527.
 - **Un widget adentro de un `st.popover` no se entera de lo que Python le
   escribe con el panel cerrado.** El navegador no monta el contenido de un
   popover cerrado, y Streamlit avisa el cambio (`set_value`) UNA vez: una

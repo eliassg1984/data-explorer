@@ -291,6 +291,22 @@ arriba bajó a 14, con el mismo área."""
 
 
 
+VENTAS_MIX_FIG = 250
+"""Alto de la figura de Ventas › Mix de carta (2026-09-25, regla #527).
+
+Más que la del Resumen (196) porque a su lado va la columna de navegación
+—las migas, el nivel y un botón de 24px por tramo, hasta ocho—, que mide
+~240 y comparte la fila: con 196 la fila la mandaba la columna y el gráfico
+quedaba con 44px de aire abajo. Lo que la figura crece lo paga la tabla de
+abajo (`VENTAS_MIX_TABLA`)."""
+
+VENTAS_MIX_TABLA = 27 * 7 + 3
+"""Alto de lo de abajo de Ventas › Mix de carta: el mapa de calor, el puente
+del Detalle y la tabla de lo más vendido. Seis filas de 27 (`row_height`
+de `st.dataframe`, el alto de fila de las grillas de la app) más la
+cabecera y los bordes. Son dos filas menos que las siete del Resumen
+(`VENTAS_RESUMEN_TABLA`): la figura de arriba mide 54 más."""
+
 FIG_CON_SU_TABLA = 180
 """Piso de una figura que comparte su tarjeta con la TABLA que la describe,
 y cuyo alto sale del reparto y no de un rol.
@@ -533,7 +549,8 @@ deja al vocabulario mintiendo."""
 # tarjeta. Es el modo de fallo más caro de todos: el gráfico se ve bien, sólo
 # que sin eje.
 #
-# Desglose de los 96px (graficos/ventas.py::_ventas_grafico_dia):
+# Desglose de los 96px (la vista «Por día», retirada el 2026-09-25 —
+# regla #527—; la cuenta queda como la de una franja de dos filas):
 #   título 21 + su padding 9 + línea 2 + aire 6 + tabs 32 + aire 8.5
 #   + línea 2 + margen al gráfico 14  ≈ 95.8  →  96
 FRANJA_CONTROLES = 96

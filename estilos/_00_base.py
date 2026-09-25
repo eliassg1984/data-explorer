@@ -52,6 +52,17 @@ CSS = """    <style>
            Si cambia PALETA_SERIES, cambiar acá también (regla #1). */
         --serie-pax: #22b8d4;
         --serie-ticket: #e85ba8;
+        /* Espejo de PALETA_SERIES[0:7] de tema.py, en orden: la muestra de
+           color de cada tramo en la columna de navegación de Ventas › Mix
+           de carta (`ventas_mix._COLORES`), que es un botón y no sabe su
+           color. Si cambia PALETA_SERIES, cambiar acá también (regla #1). */
+        --serie-0: #6c5ce7;
+        --serie-1: #22b8d4;
+        --serie-2: #e85ba8;
+        --serie-3: #f97316;
+        --serie-4: #16a34a;
+        --serie-5: #9385ec;
+        --serie-6: #f4b740;
         --border-lavender: #d4cdf7; /* borde lavanda de pastillas/inputs */
         --icon-muted: #85858f;
         --focus-lavender: #b9aff2;  /* borde de foco/selección */
