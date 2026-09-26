@@ -314,6 +314,14 @@ filas de 27 (`row_height` de `st.dataframe`) más la cabecera. En el gráfico
 son 26px por puesto con el top 15, lo que pide la escalera de líneas para
 no pisarse."""
 
+FICHA_HORA_MESAS = 170
+"""«Mesas abiertas a la vez», el gráfico de la ficha de la hora de Ventas ›
+Por hora (2026-09-26, regla #536). Va en el panel del drill, que tiene
+scroll propio, así que no le resta a la tarjeta: es el alto de una línea que
+se lee de un vistazo —cuándo se llenó el salón y cuánto duró—, con las horas
+del servicio abajo. El mockup lo midió en 178 con su eje incluido; acá
+Plotly pone el eje adentro del alto."""
+
 FIG_CON_SU_TABLA = 180
 """Piso de una figura que comparte su tarjeta con la TABLA que la describe,
 y cuyo alto sale del reparto y no de un rol.

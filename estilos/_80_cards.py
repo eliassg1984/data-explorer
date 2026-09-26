@@ -3408,4 +3408,418 @@ CSS = """    /* ================================================================
        la inversión; la mitad "página" vivía en estilos/_50_fecha.py y se
        revirtió junto con esto — son un par, no se puede sacar una sin la
        otra. Detalle en arquitectura.md regla #177. */
+
+    /* =================================================================== */
+    /* FICHA DE LA HORA — lo que abre un clic en una celda del mapa de      */
+    /* Ventas › Por hora (regla #536). Todo cuelga de su tarjeta            */
+    /* (`chartcard_ventas_horario_hora`) y de clases `vhh-` propias: ningún */
+    /* widget de otra tarjeta hereda esto. El HTML lo arma                  */
+    /* `graficos/ventas_ficha_hora.py`; los `!important` le ganan a los     */
+    /* márgenes, listas y tablas que el markdown de Streamlit trae puestos. */
+    /* =================================================================== */
+    .st-key-chartcard_ventas_horario_hora .vhh-tit {
+        margin: 2px 0 0 !important;
+        font-size: 17px !important;
+        font-weight: 700 !important;
+        line-height: 1.25 !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-sub {
+        margin: 2px 0 0 !important;
+        font-size: 12.5px !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-kpis {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 2px 18px !important;
+        margin: 6px 0 2px !important;
+        font-size: 12px !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-kpis b {
+        margin-left: 6px !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-aviso {
+        margin: 2px 0 !important;
+        padding: 7px 10px !important;
+        font-size: 13px !important;
+        color: var(--warning-text) !important;
+        background: var(--warning-bg) !important;
+        border: 1px solid var(--warning-border) !important;
+        border-radius: 8px !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-h3 {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 6px !important;
+        margin: 10px 0 6px !important;
+        font-size: 11.5px !important;
+        font-weight: 600 !important;
+        letter-spacing: .07em !important;
+        text-transform: uppercase !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-h3 em {
+        font-style: normal !important;
+        font-size: 12.5px !important;
+        font-weight: 500 !important;
+        letter-spacing: 0 !important;
+        text-transform: none !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-info {
+        display: inline-grid !important;
+        place-items: center !important;
+        width: 14px !important;
+        height: 14px !important;
+        border: 1px solid var(--text-muted) !important;
+        border-radius: 50% !important;
+        font-size: 9.5px !important;
+        font-weight: 700 !important;
+        line-height: 1 !important;
+        letter-spacing: 0 !important;
+        text-transform: none !important;
+        color: var(--text-secondary) !important;
+        cursor: help !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-frase {
+        margin: 0 0 2px !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-nota {
+        margin: 4px 0 0 !important;
+        font-size: 12.5px !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-nota b {
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+    }
+
+    /* La tira de «Contra lo normal»: el eje a 44px, los puntos centrados a
+       26px (Python les suma el carril con `top`) y la mediana como una raya
+       vertical. Las posiciones `left` las pone Python en %: son el dato. */
+    .st-key-chartcard_ventas_horario_hora .vhh-tira {
+        position: relative !important;
+        height: 62px !important;
+        margin: 2px 12px 0 6px !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tira > span {
+        position: absolute !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-eje {
+        left: 0 !important;
+        right: 0 !important;
+        top: 44px !important;
+        border-top: 1px solid var(--border) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-med {
+        top: 11px !important;
+        height: 30px !important;
+        border-left: 1.5px solid var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-punto {
+        width: 10px !important;
+        height: 10px !important;
+        margin: -5px 0 0 -5px !important;
+        border-radius: 50% !important;
+        background: var(--text-muted) !important;
+        box-shadow: 0 0 0 1.5px var(--bg-card) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-punto.act {
+        z-index: 1 !important;
+        width: 14px !important;
+        height: 14px !important;
+        margin: -7px 0 0 -7px !important;
+        background: var(--accent) !important;
+        box-shadow: 0 0 0 2px var(--bg-card) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-valor {
+        top: 0 !important;
+        transform: translateX(-50%) !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        white-space: nowrap !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-valor.der {
+        transform: translateX(-100%) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-valor.izq {
+        transform: none !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tick {
+        top: 48px !important;
+        font-size: 10.5px !important;
+        white-space: nowrap !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tick.der {
+        transform: translateX(-100%) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ley {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 4px 14px !important;
+        margin: 2px 0 0 !important;
+        font-size: 12px !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ley i {
+        display: inline-block !important;
+        margin-right: 6px !important;
+        vertical-align: middle !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ley .pt {
+        width: 9px !important;
+        height: 9px !important;
+        border-radius: 50% !important;
+        background: var(--text-muted) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ley .pt.act {
+        background: var(--accent) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ley .tk {
+        width: 0 !important;
+        height: 12px !important;
+        border-left: 1.5px solid var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ley .ln {
+        width: 16px !important;
+        height: 0 !important;
+        border-top: 2px solid var(--accent) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ley .ln.nor {
+        border-top: 1.5px solid var(--text-muted) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ley .ln.ref {
+        border-top: 1px dotted var(--text-secondary) !important;
+    }
+
+    /* «Por mesa»: cada cuenta es un factor con su normal y su flecha, y los
+       operadores van entre ellos. Verde y rojo sólo donde subir es bueno
+       para la venta; el tiempo y las mesas a la vez van en gris. */
+    .st-key-chartcard_ventas_horario_hora .vhh-cadena {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: stretch !important;
+        gap: 6px !important;
+        margin: 0 0 6px !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-intro {
+        align-self: center !important;
+        font-size: 12.5px !important;
+        white-space: nowrap !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-factor {
+        flex: 1 1 118px !important;
+        min-width: 110px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 1px !important;
+        padding: 7px 10px !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        background: var(--bg-card) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-factor.total {
+        background: var(--bg-primary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-flab {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        font-size: 12px !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-fval {
+        font-size: 17px !important;
+        font-weight: 600 !important;
+        line-height: 1.25 !important;
+        color: var(--text-primary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-fnor {
+        font-size: 11.5px !important;
+        color: var(--text-muted) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-op {
+        align-self: center !important;
+        font-size: 16px !important;
+        color: var(--text-muted) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-chip {
+        margin-top: 3px !important;
+        padding: 1px 7px !important;
+        border-radius: 999px !important;
+        font-size: 11.5px !important;
+        font-weight: 600 !important;
+        line-height: 1.5 !important;
+        white-space: nowrap !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-chip.sube {
+        color: var(--success-text) !important;
+        background: var(--success-bg) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-chip.baja {
+        color: var(--danger-text) !important;
+        background: var(--danger-bg) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-chip.neutro {
+        color: var(--text-secondary) !important;
+        background: var(--line-soft) !important;
+    }
+
+    /* «Quién atendió» */
+    .st-key-chartcard_ventas_horario_hora .vhh-tabla {
+        width: 100% !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-collapse: collapse !important;
+        font-size: 13px !important;
+        font-variant-numeric: tabular-nums !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tabla th,
+    .st-key-chartcard_ventas_horario_hora .vhh-tabla td {
+        padding: 5px 8px !important;
+        border: 0 !important;
+        border-bottom: 1px solid var(--line-soft) !important;
+        background: transparent !important;
+        text-align: left !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tabla th {
+        font-size: 11.5px !important;
+        font-weight: 600 !important;
+        white-space: nowrap !important;
+        color: var(--text-secondary) !important;
+        border-bottom-color: var(--border) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tabla th:first-child,
+    .st-key-chartcard_ventas_horario_hora .vhh-tabla td:first-child {
+        padding-left: 0 !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tabla .n {
+        text-align: right !important;
+        white-space: nowrap !important;
+    }
+
+    /* «Los pedidos de esa hora»: cada pedido es un <details> —abre sin
+       rerun— y su <summary> es una fila de la misma grilla que la cabecera. */
+    .st-key-chartcard_ventas_horario_hora .vhh-peds {
+        overflow-x: auto !important;
+        font-size: 13px !important;
+        font-variant-numeric: tabular-nums !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-fila {
+        display: grid !important;
+        grid-template-columns: 64px 64px 66px 60px minmax(72px, 1fr) 78px
+                               112px minmax(170px, 2.4fr) !important;
+        align-items: baseline !important;
+        gap: 0 10px !important;
+        min-width: 790px !important;
+        padding: 6px 4px !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-fila .n {
+        text-align: right !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-cab {
+        padding-top: 4px !important;
+        padding-bottom: 4px !important;
+        border-bottom: 1px solid var(--border) !important;
+        font-size: 11.5px !important;
+        font-weight: 600 !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ped {
+        margin: 0 !important;
+        border-bottom: 1px solid var(--line-soft) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ped > summary {
+        list-style: none !important;
+        cursor: pointer !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ped > summary::-webkit-details-marker {
+        display: none !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ped > summary:hover {
+        background: var(--rail-fondo) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ped[open] > summary {
+        background: var(--accent-tint) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-ped.nomesa > summary {
+        color: var(--text-secondary) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-parte {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-barra {
+        flex: 0 0 56px !important;
+        height: 6px !important;
+        border-radius: 3px !important;
+        overflow: hidden !important;
+        background: var(--line-soft) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-barra i {
+        display: block !important;
+        height: 6px !important;
+        border-radius: 3px !important;
+        background: var(--accent) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tag {
+        display: inline-block !important;
+        margin-right: 6px !important;
+        padding: 0 5px !important;
+        border-radius: 4px !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        line-height: 1.6 !important;
+        white-space: nowrap !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tag.ambar {
+        color: var(--warning-text) !important;
+        background: var(--warning-bg) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-tag.gris {
+        color: var(--text-secondary) !important;
+        background: var(--line-soft) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-mas {
+        font-size: 12px !important;
+        white-space: nowrap !important;
+        color: var(--text-muted) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-items {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important;
+        gap: 2px 20px !important;
+        min-width: 790px !important;
+        margin: 0 !important;
+        padding: 6px 12px 10px !important;
+        list-style: none !important;
+        font-size: 12.5px !important;
+        background: var(--rail-fondo) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-items li {
+        display: flex !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        margin: 0 !important;
+        padding: 3px 0 !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-items small {
+        color: var(--text-secondary) !important;
+    }
 """

@@ -85,14 +85,17 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import cortes
 import definicion_venta as dv
 from data import REPORTES, cargar_rango, rango_fechas
 from tema import (
-    ACENTO, ADVERTENCIA_TEXTO, AJUSTE_NEG, AJUSTE_POS, BLANCO, ERROR,
-    ESCALA_CONTINUA, EXITO, GRIS_CUADRICULA, GRIS_LINEA, GRIS_TEXTO,
+    ACENTO, ADVERTENCIA, ADVERTENCIA_TEXTO, AJUSTE_NEG, AJUSTE_POS, BLANCO,
+    ERROR, ESCALA_CONTINUA, EXITO, GRIS_CUADRICULA, GRIS_LINEA, GRIS_TEXTO,
     PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
+from graficos import ventas_ficha_hora as _fh
+from inyecciones._iframe import inyectar_html
 from graficos.base import (
     _card, _resolver, ctx_rango_propio, franja_linea_inferior, paso_etiquetas,
     publicar_var_px, rango_tarjeta, selector_fecha_tarjeta,
@@ -232,6 +235,71 @@ _K_SELECTOR = "vh_selector"  # ¿está abierto el selector de períodos?
 # Huella de la última selección ATENDIDA. Es lo que evita re-aplicarla en
 # cada rerun sin tener que remontar el chart. Ver la trampa 3 del docstring.
 _K_SEL = "vh_sel_huella"
+# La celda del CLIC, la que abre la ficha de la hora (regla #536): un dict
+# `{"sel", "c", "h"}` como una marca de 1×1, pero no es una marca.
+_K_FOCO = "vh_foco"
+# «Venta Interna y Eventos»: el interruptor sólo existe en «Días × horas» y
+# se esconde en «Platos»/«Grupos»; su valor vive aparte para que volver no
+# lo resetee (un widget que no se dibuja pierde su estado, CLAUDE.md).
+_K_RAROS = "vh_raros"
+_K_RAROS_VALOR = "_vh_raros_valor"
+
+# EL CLIC SUELTO LO TRAE ESTE PUENTE (regla #536). Con `dragmode="select"`
+# Streamlit fuerza `clickmode="event"` y descarta el clic —también en la
+# 1.64 de Cloud: su `handleClickEvent` sólo atiende treemap y sunburst—
+# (regla #388). Plotly igual emite `plotly_click`; este script lo escucha
+# y lo reenvía como una SELECCIÓN de un punto (`plotly_selected`), que es
+# lo que Streamlit sí lee. Tres cosas que no son adorno:
+#   · el punto va LIMPIO: el del evento trae `data`, `fullData` y los ejes,
+#     con referencias circulares, y el `JSON.stringify` de Streamlit
+#     reventaría. `data: {}` porque Streamlit lee `data.legendgroup`;
+#   · su `customdata` lleva «clic», para que Python lo distinga de un
+#     arrastre sobre una celda (ése trae `box` y sigue armando marcas);
+#   · y la hora del clic, para que volver a tocar la misma celda sea una
+#     selección NUEVA: Streamlit no avisa si la selección no cambió, y
+#     después de cerrar la ficha no habría forma de reabrirla.
+# Cada inyección le saca el oyente a la anterior y se engancha ella (el
+# iframe que lo instaló puede no existir más), y un gráfico remontado —otra
+# key— se engancha en la vuelta siguiente del reloj.
+_JS_CLIC_MAPA = """<script>
+(function () {
+  var w = window.parent, doc = w.document, yo = {};
+  var SEL = '[class*="st-key-vh_mapa_"] .js-plotly-plot';
+  function alClic(gd) {
+    return function (ev) {
+      var pts = (ev && ev.points) || [];
+      for (var i = 0; i < pts.length; i++) {
+        var p = pts[i], cd = p.customdata;
+        if (!cd || cd.length < 3) continue;
+        gd.emit("plotly_selected", {points: [{
+          curveNumber: p.curveNumber, pointNumber: p.pointNumber,
+          pointIndex: p.pointIndex, x: p.x, y: p.y,
+          customdata: [cd[0], cd[1], cd[2], "clic", Date.now()],
+          data: {}, fullData: {}
+        }]});
+        return;
+      }
+    };
+  }
+  function enganchar() {
+    var gds = doc.querySelectorAll(SEL);
+    for (var i = 0; i < gds.length; i++) {
+      var gd = gds[i];
+      if (gd.__vhClicDueno === yo || typeof gd.on !== "function") continue;
+      try {
+        if (gd.__vhClicFn) gd.removeListener("plotly_click", gd.__vhClicFn);
+      } catch (e) {}
+      gd.__vhClicFn = alClic(gd);
+      gd.__vhClicDueno = yo;
+      gd.on("plotly_click", gd.__vhClicFn);
+    }
+  }
+  try { if (w.__vhClicApagar) w.__vhClicApagar(); } catch (e) {}
+  var reloj = setInterval(enganchar, 700);
+  w.__vhClicApagar = function () { clearInterval(reloj); };
+  enganchar();
+})();
+</script>"""
 
 
 # ── Funciones puras (calendario) ────────────────────────────────────────────
@@ -357,12 +425,10 @@ def _clave_de_fecha(f, grano):
     return _clave_de_fecha_cmp(f, grano)
 
 
-def _etiqueta_hora(h):
-    """La hora como se dice, no como la guarda el reloj de la base: «7 pm» y
-    no «19h» (pedido del usuario, 2026-08-14). El mediodía y la medianoche
-    son los dos casos que se escriben mal solos: 12 pm y 12 am, nunca 0."""
-    h = int(h) % 24
-    return f"{h % 12 or 12} {'am' if h < 12 else 'pm'}"
+# «7 pm» y no «19h». Vive en `cortes.py` desde el 2026-09-26 (la pidió la
+# ficha de la hora); el alias conserva el nombre que usan este módulo y
+# test_graficos.py.
+_etiqueta_hora = cortes.etiqueta_hora
 
 
 def _tramo_horas(h0, h1):
@@ -700,6 +766,16 @@ def _celdas(tramo):
     # comparativo. Sin pax no hay ticket (NaN), no un cero que se leería como
     # "mesas gratis".
     g["ticket"] = g["venta"] / g["pax"].replace(0, np.nan)
+    # Lo que vendieron la Venta Interna y los Eventos en la celda: el mapa le
+    # pone un triángulo y el tooltip lo dice (regla #536).
+    if "grupo" in tramo.columns:
+        _r = (tramo[tramo["grupo"].isin(_fh.GRUPOS_RAROS)]
+              .groupby(["col", "hora"], as_index=False)["venta"].sum()
+              .rename(columns={"venta": "raro"}))
+        g = g.merge(_r, on=["col", "hora"], how="left")
+    if "raro" not in g.columns:
+        g["raro"] = 0.0
+    g["raro"] = g["raro"].fillna(0.0)
     return g
 
 
@@ -851,7 +927,7 @@ def _heatmap_dif(z, x, y, **kw):
 
 
 def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
-              alto=None, dif=False):
+              alto=None, dif=False, foco=None, raros=True):
     """Mapa de calor de los N paneles en una sola figura, con la capa de
     selección transparente encima y un rectángulo por marca.
 
@@ -939,7 +1015,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
              _num(getattr(f, medida, np.nan))
              for f in paneles[0].itertuples(index=False)}
             if dif and paneles[0] is not None and not paneles[0].empty else {})
-    xs, ys, cd, dtxt = [], [], [], []
+    xs, ys, cd, dtxt, rtxt, raras = [], [], [], [], [], []
     _et_base = _etiqueta_clave(claves[0], grano) if claves else ""
     for s, celdas in enumerate(paneles):
         if celdas is None or celdas.empty:
@@ -953,6 +1029,17 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
             valor = getattr(fila, medida, np.nan)
             _abs = (int(fila.col) + _off[s], int(fila.hora))
             vistos.add(_abs)
+            # La Venta Interna y los Eventos de la celda (regla #536): un
+            # triángulo en su esquina y una línea en el tooltip. Con el
+            # interruptor apagado ya no están en el tramo y `raro` da 0.
+            _raro = _num(getattr(fila, "raro", 0.0))
+            if raros and _raro > 0.5:
+                raras.append((x, h_idx[fila.hora]))
+                rtxt.append(f'<br><span style="color:{ADVERTENCIA_TEXTO}">'
+                            f"Incluye S/ {_raro:,.0f} de Venta Interna o "
+                            "Eventos</span>")
+            else:
+                rtxt.append("")
             if dif and s > 0:
                 _d = _num(valor) - base.get(_abs, 0.0)
                 z_dif[h_idx[fila.hora], x] = _d
@@ -1068,6 +1155,16 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     #
     # `hoverinfo="skip"` es lo que la mantiene invisible al pasar el cursor:
     # el hover con los números lo sigue dando la capa de datos.
+    def _nombre_celda(s, col):
+        """«Sep 26 · 5 · fin de semana»: el nombre de una celda en el hover."""
+        _n, _et = _columnas(claves[s], grano, ancla)
+        _c = _et[col] if col < len(_et) and _et[col] else ""
+        _m = _marca_dia(_fecha_de_columna(claves[s], grano, col), feriados)
+        return " · ".join(
+            x for x in (_etiqueta_clave(claves[s], grano), _c,
+                        {"feriado": "feriado",
+                         "finde": "fin de semana"}.get(_m, "")) if x)
+
     _sx, _sy, _scd = [], [], []
     for s, (n, _e) in enumerate(geo):
         for c in range(n):
@@ -1098,25 +1195,69 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
                 "Pax: %{customdata[4]:,.0f} · "
                 "Ticket: S/ %{customdata[7]:,.2f}<br>"
                 "Cantidad: %{customdata[5]:,.0f} · "
-                "Dscto: S/ %{customdata[6]:,.0f}<extra></extra>"),
+                "Dscto: S/ %{customdata[6]:,.0f}%{customdata[9]}"
+                "<extra></extra>"),
         ))
         # El nombre legible de cada punto (panel + columna) va como noveno
         # campo del customdata: armarlo acá evita que el hover tenga que
-        # entender de calendarios.
-        _nombres = []
-        for s, col, _h, *_r in cd:
-            _n, _et = _columnas(claves[s], grano, ancla)
-            _c = _et[col] if col < len(_et) and _et[col] else ""
-            _m = _marca_dia(_fecha_de_columna(claves[s], grano, col), feriados)
-            _nombres.append(" · ".join(
-                x for x in (_etiqueta_clave(claves[s], grano), _c,
-                            {"feriado": "feriado",
-                             "finde": "fin de semana"}.get(_m, "")) if x))
-        fig.data[-1].customdata = [c + [n, dt] for c, n, dt
-                                   in zip(cd, _nombres, dtxt)]
+        # entender de calendarios. El décimo es la línea de Venta Interna y
+        # Eventos, y el ÚLTIMO, la resta de «Diferencia» (test_graficos.py
+        # la busca ahí).
+        fig.data[-1].customdata = [
+            c + [_nombre_celda(c[0], c[1]), rt, dt]
+            for c, dt, rt in zip(cd, dtxt, rtxt)]
         if dif:
             fig.data[-1].hovertemplate = fig.data[-1].hovertemplate.replace(
-                "<extra></extra>", "%{customdata[9]}<extra></extra>")
+                "<extra></extra>", "%{customdata[10]}<extra></extra>")
+
+    # Capa de CLIC de las celdas VACÍAS (regla #536). El clic suelto viaja
+    # por `plotly_click` (ver `_JS_CLIC_MAPA`), y Plotly lo emite sólo sobre
+    # un punto con hover: la capa de selección lleva `"skip"` a propósito
+    # (con hover le robaría el tooltip a la de datos, regla #388). Sin esta
+    # capa, una hora sin ventas no abriría su ficha — y «no se vendió nada,
+    # pero un martes normal sí» es una respuesta. Va DESPUÉS de la de datos:
+    # test_graficos.py toma la primera capa con hover como la de los números.
+    _con_dato = {(c[0], c[1], c[2]) for c in cd}
+    _vx, _vy, _vcd = [], [], []
+    for x_, y_, c_ in zip(_sx, _sy, _scd):
+        if tuple(c_) not in _con_dato:
+            _vx.append(x_)
+            _vy.append(y_)
+            _vcd.append(c_ + [_nombre_celda(c_[0], c_[1])])
+    if _vx:
+        fig.add_trace(go.Scatter(
+            x=_vx, y=_vy, mode="markers",
+            marker=dict(size=13, color="rgba(0,0,0,0)", line=dict(width=0)),
+            customdata=_vcd, showlegend=False,
+            hovertemplate="<b>%{customdata[3]}</b> · %{y}<br>Sin ventas"
+                          "<extra></extra>"))
+
+    # El triángulo de la Venta Interna y los Eventos, en la esquina de arriba
+    # a la derecha de su celda (el eje de horas va invertido: `y - 0.5` es el
+    # borde de ARRIBA). Un solo shape con un subtrazo por celda, como la
+    # cuadrícula.
+    if raras:
+        fig.add_shape(
+            type="path", layer="above", line=dict(width=0),
+            fillcolor=ADVERTENCIA,
+            path="".join(f"M{x + 0.5},{y - 0.5}L{x + 0.2},{y - 0.5}"
+                         f"L{x + 0.5},{y - 0.05}Z" for x, y in raras))
+
+    # La celda del clic, como la celda activa de una planilla: borde oscuro
+    # y un filo blanco adentro. No es violeta a propósito: el violeta es de
+    # las marcas del arrastre, y la ficha no es una marca.
+    if foco and 0 <= foco.get("sel", -1) < len(geo) \
+            and 0 <= foco.get("c", -1) < geo[foco["sel"]][0] \
+            and foco.get("h") in h_idx:
+        _xf, _yf = offs[foco["sel"]] + int(foco["c"]), h_idx[foco["h"]]
+        fig.add_shape(type="rect", x0=_xf - 0.5, x1=_xf + 0.5,
+                      y0=_yf - 0.5, y1=_yf + 0.5, layer="above",
+                      line=dict(color=TEXTO_PRINCIPAL, width=2.5),
+                      fillcolor="rgba(0,0,0,0)")
+        fig.add_shape(type="rect", x0=_xf - 0.4, x1=_xf + 0.4,
+                      y0=_yf - 0.36, y1=_yf + 0.36, layer="above",
+                      line=dict(color=BLANCO, width=1),
+                      fillcolor="rgba(0,0,0,0)")
 
     # El rótulo del panel se dibuja SÓLO si hay más de uno: con varios es lo
     # único que dice cuál banda es cuál, pero con uno solo repite el título de
@@ -1232,6 +1373,31 @@ def _puntos_de_evento(evt):
             continue
         out.append((cd[0], cd[1], cd[2]))
     return out
+
+
+def _clic_de_evento(evt):
+    """`(panel, columna, hora, sello)` si la selección es un CLIC traído por
+    `_JS_CLIC_MAPA`, o None.
+
+    Un clic llega como un solo punto con «clic» en su customdata y SIN caja;
+    un arrastre, aunque sea sobre una sola celda, trae `box` y sigue armando
+    marcas. El sello (la hora del clic en el navegador) es lo que hace que
+    tocar dos veces la misma celda sean dos clics."""
+    try:
+        sel = getattr(evt, "selection", None)
+        if sel is None and isinstance(evt, dict):
+            sel = evt.get("selection")
+        sel = sel or {}
+        if sel.get("box") or sel.get("lasso"):
+            return None
+        pts = sel.get("points", []) or []
+    except Exception:
+        return None
+    for p in pts:
+        cd = p.get("customdata") if isinstance(p, dict) else None
+        if cd and len(cd) >= 5 and cd[3] == "clic":
+            return int(cd[0]), int(cd[1]), int(cd[2]), cd[4]
+    return None
 
 
 # ── Filas «Platos» y «Grupos» (2026-09-25, regla #530) ──────────────────────
@@ -1664,6 +1830,49 @@ def _panel_comparar(ancla, grano, del_rango, extras):
 
 # ── UI: drill ───────────────────────────────────────────────────────────────
 
+def _cerrar_foco():
+    """El botón «Cerrar» de la ficha de la hora. Corre antes del rerun, así
+    que la ficha ya no se dibuja en esa misma pasada."""
+    st.session_state.pop(_K_FOCO, None)
+
+
+def _ficha_de_la_hora(foco, claves, grano, ancla, filtrar_cb, raros, horas,
+                      paneles, modo, cfh):
+    """Trae de R2 la ventana del panel de la celda —el panel y sus 8 semanas
+    anteriores, `ventas_ficha_hora.ventana`— filtrada como el mapa, y dibuja
+    la ficha (regla #536). La cabecera repite la venta y el pax de la celda
+    tal como los pintó el mapa, para que no difiera del tooltip."""
+    k = claves[foco["sel"]]
+    dia = _fecha_de_columna(k, grano, foco["c"])
+    if dia is None:
+        st.caption("La ficha es de un día, y en «Año» cada columna es un mes "
+                   "entero: elegí Día, Semana o Mes para abrirla.")
+        return
+    ini, fin = _rango_de_clave(k, grano)
+    ini_v, fin_v = _fh.ventana(ini, min(fin, ancla))
+    cfg = REPORTES.get("Ventas", {})
+    with st.spinner("Armando la ficha de la hora…"):
+        df = cargar_rango(cfg.get("archivo", "ventas.parquet"),
+                          cfg.get("carga_por_rango", "FEC REG DOCUMENTO"),
+                          ini_v, fin_v)
+        if df is not None and not df.empty and filtrar_cb is not None:
+            df = filtrar_cb(df)
+        if not raros and df is not None and cfh.get("grupo") in df.columns:
+            df = df[~df[cfh["grupo"]].isin(_fh.GRUPOS_RAROS)]
+        fl = _fh.filas(df, cfh)
+    if fl is None or fl.empty:
+        st.caption("Sin ventas cargadas alrededor de esta hora.")
+        return
+    celda = None
+    p = paneles[foco["sel"]] if foco["sel"] < len(paneles) else None
+    if p is not None and not p.empty:
+        r = p[(p["col"] == foco["c"]) & (p["hora"] == foco["h"])]
+        celda = ((float(r["venta"].sum()), float(r["pax"].sum()))
+                 if len(r) else (0.0, 0.0))
+    _fh.dibujar(dia, foco["h"], fl, horas, modo=modo, celda=celda,
+                al_cerrar=_cerrar_foco)
+
+
 def _tabla_medidas(marcas, tramos, claves, grano, orden, medidas, ver_var):
     """Pivote marca × medida. Una fila por marca (así la tabla es ordenable y
     no crece a lo ancho con cada marca nueva) y una columna por medida activa,
@@ -2051,6 +2260,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.session_state[_K_FIRMA_PANELES] = _fp
             st.session_state[_K_MARCAS] = []
             st.session_state[_K_SEL] = None
+            st.session_state.pop(_K_FOCO, None)
 
         with c3:
             with st.container(horizontal=True, gap="small", key="vh_tiempo"):
@@ -2102,6 +2312,22 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     help="**Por día**: divide por los días con venta, para "
                          "comparar un mes entero con uno en curso.") \
                     or _ESCALAS[0]
+        # «Venta Interna y Eventos» (regla #536): sólo en «Días × horas», que
+        # mide la AFLUENCIA. En «Platos»/«Grupos» esos grupos son filas como
+        # cualquier otra y conviene verlos.
+        raros = True
+        if not en_filas:
+            with f4:
+                raros = st.toggle(
+                    "Venta Interna y Eventos",
+                    value=bool(st.session_state.get(_K_RAROS_VALOR, True)),
+                    key=_K_RAROS,
+                    help="Apagado, el mapa y su detalle dejan fuera la Venta "
+                         "Interna (charcutería de mostrador: sin personas, "
+                         "cobrada en minutos) y los Eventos, y queda el "
+                         "servicio de salón. El triángulo naranja marca las "
+                         "horas que los tienen.")
+            st.session_state[_K_RAROS_VALOR] = raros
         cols["fecha"] = col_hora_ped if hora == _HORA_OP[0] else col_fecha
         # Cambiar la hora cambia a qué CELDA va cada venta: las marcas viejas
         # apuntarían a otras. Y cambiar de filas cambia de qué es la ficha.
@@ -2109,12 +2335,14 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.session_state["vh_hora_aplicada"] = hora
             st.session_state[_K_MARCAS] = []
             st.session_state[_K_SEL] = None
+            st.session_state.pop(_K_FOCO, None)
         # El salto desde «Análisis de platos» («Ver a qué hora se vende»)
         # deja pedida la ficha de su plato.
         _pedida = st.session_state.pop("_vh_ficha_pedida", None)
         if st.session_state.get("vh_filas_aplicada") != filas or _pedida:
             st.session_state["vh_filas_aplicada"] = filas
             st.session_state[_K_FICHA] = _pedida
+            st.session_state.pop(_K_FOCO, None)
 
         # El PANEL va fuera de las columnas, a lo ancho de la tarjeta: dentro
         # de una columna de la franja (168px) sus cinco columnas daban 30px
@@ -2165,6 +2393,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 df = cargar_rango(_arch, _colp, ini, fin)
                 if df is not None and not df.empty and filtrar_cb is not None:
                     df = filtrar_cb(df)
+                if not raros and df is not None and col_fam in df.columns:
+                    df = df[~df[col_fam].isin(_fh.GRUPOS_RAROS)]
                 t = _prep_tramo(df, cols, grano, ini, fin)
                 tramos.append(t)
                 paneles.append(_celdas(t))
@@ -2177,7 +2407,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             return
 
         if en_filas:
-            marcas = []
+            marcas, foco = [], None
             _alto = _dibujar_filas(tramos, claves, grano, medida, filas,
                                    cols_filas, lectura, escala, horas)
         else:
@@ -2214,30 +2444,49 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             _clave_mapa = (f"vh_mapa_{_firma(grano, claves, medida)}"
                            f"_{'p' if hora == _HORA_OP[0] else 'c'}"
                            f"{'_d' if _dif else ''}")
-            puntos = _puntos_de_evento(st.session_state.get(_clave_mapa))
-            _huella = repr(sorted(puntos))
-            if puntos and _huella != st.session_state.get(_K_SEL):
-                st.session_state[_K_SEL] = _huella
-                st.session_state[_K_MARCAS] = _agregar_marcas(
-                    [m for m in st.session_state.get(_K_MARCAS, [])
-                     if m["sel"] < len(claves)],
-                    _marcas_de_seleccion(puntos, horas))
+            # Un CLIC abre la ficha de la hora; un ARRASTRE, aunque sea sobre
+            # una sola celda, sigue armando marcas (regla #536). Los dos pasan
+            # por la misma huella: el clic con su sello, que cambia en cada uno.
+            _evt = st.session_state.get(_clave_mapa)
+            _clic = _clic_de_evento(_evt)
+            if _clic is not None:
+                _huella = f"clic|{_clic[3]}"
+                if _huella != st.session_state.get(_K_SEL):
+                    st.session_state[_K_SEL] = _huella
+                    st.session_state[_K_FOCO] = {"sel": _clic[0],
+                                                 "c": _clic[1], "h": _clic[2]}
+            else:
+                puntos = _puntos_de_evento(_evt)
+                _huella = repr(sorted(puntos))
+                if puntos and _huella != st.session_state.get(_K_SEL):
+                    st.session_state[_K_SEL] = _huella
+                    st.session_state[_K_MARCAS] = _agregar_marcas(
+                        [m for m in st.session_state.get(_K_MARCAS, [])
+                         if m["sel"] < len(claves)],
+                        _marcas_de_seleccion(puntos, horas))
 
             marcas = [m for m in st.session_state.get(_K_MARCAS, [])
                       if m["sel"] < len(claves)]
+            foco = st.session_state.get(_K_FOCO)
+            if foco and (foco.get("sel", len(claves)) >= len(claves)
+                         or foco.get("h") not in horas):
+                foco = None
             # REPARTO. Con marcas puestas el mapa se comprime y el detalle ocupa
             # el resto de la pantalla con scroll propio, en vez de apilarse
             # debajo y empujar el gráfico fuera de la vista (1.312px de scroll
             # medidos antes de esto). El objetivo del usuario, textual: "que no
             # pierda enfoque en el gráfico principal y que haga el mínimo scroll".
-            _alto = _alto_mapa(len(horas), con_drill=bool(marcas),
+            # La ficha de la hora vive en el mismo panel: cuenta igual.
+            _alto = _alto_mapa(len(horas), con_drill=bool(marcas or foco),
                                varios=len(claves) > 1)
             fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla,
-                            alto=_alto, dif=_dif)
+                            alto=_alto, dif=_dif, foco=foco, raros=raros)
             st.plotly_chart(
                 fig, use_container_width=True, key=_clave_mapa,
                 on_select="rerun", selection_mode=("points", "box"),
                 config={"displaylogo": False, "displayModeBar": False})
+            # El puente que convierte el clic suelto en una selección.
+            inyectar_html(_JS_CLIC_MAPA)
 
         # ── Pastillas de marcas: deseleccionar una la quita ─────────────
         # Las pastillas de marcas YA NO viven acá: se mudaron a la primera
@@ -2274,13 +2523,28 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # con marcas evita que en una pantalla apretada quede una tira ilegible;
     # SIN marcas tiene que ser 0, o el panel vacío se come 150px de tarjeta.
     _ficha = en_filas and st.session_state.get(_K_FICHA)
-    publicar_var_px("vh-panel-min", _PANEL_MIN if (marcas or _ficha) else 0)
+    publicar_var_px("vh-panel-min",
+                    _PANEL_MIN if (marcas or _ficha or foco) else 0)
     # Key ESTABLE, sin `_on`/`_off`. Alternarla dejaba el contenedor viejo
     # huérfano en el DOM (regla #70) y no hace falta: con el panel vacío el
     # `max-height` no molesta a nadie.
     _panel = st.container(key="vh_panel_drill", border=False)
 
     with _panel:
+        # ── La ficha de la hora: lo que abre un CLIC (regla #536) ───────
+        # Primera del panel, pegada al mapa: es la respuesta a «¿qué fue
+        # esto?» sobre la celda que se acaba de tocar. Se abre SIEMPRE, vacía
+        # sin clic, por la misma regla #70 que las de abajo.
+        with _card("ventas_horario_hora", "", titulo_arriba=True):
+            if foco:
+                _ficha_de_la_hora(
+                    foco, claves, grano, ancla, filtrar_cb, raros, horas,
+                    paneles, "pedido" if hora == _HORA_OP[0] else "cobro",
+                    {"tiempo": cols["fecha"], "apertura": col_hora_ped,
+                     "cobro": col_fecha, "venta": col_venta, "pax": col_pax,
+                     "pedido": col_pedido, "prod": col_prod,
+                     "cant": col_cant, "grupo": col_fam})
+
         # Las dos tarjetas se abren SIEMPRE, aunque no haya marcas, y por
         # dentro deciden si tienen algo que decir. NO es cosmético: un
         # `st.container(key=...)` que deja de renderizarse RETIENE sus hijos

@@ -407,9 +407,14 @@ resto de `graficos/compras/`.
   `arquitectura.md` #388.
 - **Y `dragmode="select"` apaga el clic suelto del gráfico entero**, sea
   cual sea el `hoverinfo`: Streamlit fuerza `clickmode="event"` mientras el
-  modo sea select o lazo. Clic y caja no conviven en un `st.plotly_chart`;
-  hay que elegir con qué gesto abre (el histograma de Ajuste › Distribución
-  abre en clic: `dragmode="pan"` + ejes `fixedrange`). Misma #388.
+  modo sea select o lazo. Clic y caja no conviven solos en un
+  `st.plotly_chart`: o se elige con qué gesto abre (el histograma de Ajuste ›
+  Distribución abre en clic: `dragmode="pan"` + ejes `fixedrange`), o se
+  puentea el clic con JS, como el mapa de Ventas › Por hora
+  (`ventas_horario.py::_JS_CLIC_MAPA` lo reenvía como la selección de un
+  punto, con un sello para que tocar dos veces la misma celda cuente; su
+  celda vacía necesita una capa con hover, porque Plotly sólo emite el clic
+  sobre un punto con hover). Misma #388, y la #536.
 - **La selección de `st.plotly_chart(on_select=...)` persiste entre reruns.**
   Con `key` estática, cada rerun re-procesa el mismo clic → toggle infinito
   (parpadeo). La key tiene que cambiar tras cada clic procesado **y el

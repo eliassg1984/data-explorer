@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-535 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+536 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (186)
 
@@ -300,7 +300,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 
-**Plotly y figuras** (100)
+**Plotly y figuras** (101)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -402,6 +402,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#523** — Un gráfico que rotula CADA barra congela el navegador cuando el rango crece, y lo congela…
 - **#525** — El Resumen de Ventas muestra lo que la definición deja afuera: una subvista «Cuadre», los KPI…
 - **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
+- **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
 
 **AgGrid y tablas** (83)
 
@@ -489,7 +490,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
 
-**Streamlit** (147)
+**Streamlit** (148)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -638,6 +639,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
 - **#532** — El CSS que traba la página puede ser el de STREAMLIT: el separador de st.segmented_control…
+- **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
 
 **Datos, R2 y DuckDB** (66)
 
@@ -43494,6 +43496,97 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        no se mueve. Y el tramo de 769–900 no cambia: a 850px la cabecera
        sigue en 16px, sin el «Vistas de».
 
+536. **Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un
+     puente de JS lo reenvía como la selección de un punto. «Por hora» lo
+     usa para abrir la ficha de la hora** (`graficos/ventas_horario.py::
+     _JS_CLIC_MAPA`, `graficos/ventas_ficha_hora.py`). Pregunta del usuario
+     el 2026-09-26: «creo que no tengo ninguna funcionalidad al hacer click
+     en los cuadrantes». Tenía razón a medias: el arrastre armaba marcas
+     desde agosto, pero el clic suelto no hacía nada, y nada en pantalla
+     decía que había que arrastrar (la ayuda se quitó a pedido el
+     2026-08-14).
+
+     - **Por qué el clic no llegaba.** Es la #388: con `dragmode="select"`
+       Streamlit fuerza `clickmode="event"`, y un clic emite
+       `plotly_selected(undefined)`, que su handler descarta en la primera
+       línea. La 1.64 de Cloud suma un `handleClickEvent` para
+       `plotly_click`, pero sólo atiende treemap y sunburst (puntos con `id`
+       y `parent`): para cualquier otro trazo sale sin hacer nada. Leído en
+       el fuente de la 1.64; lo de la 1.59 local ya lo había medido la #388.
+     - **El puente.** Plotly igual emite `plotly_click` (desde `Fx.click`,
+       cuando hay un punto con hover bajo el cursor). Un `<script>`
+       inyectado con `inyectar_html` lo escucha en
+       `[class*="st-key-vh_mapa_"] .js-plotly-plot` y hace
+       `gd.emit("plotly_selected", {points: [p]})`, que es el evento que
+       Streamlit sí lee. Cuatro detalles, cada uno un intento perdido si se
+       olvida:
+       · El punto va LIMPIO. El del evento trae `data`, `fullData`,
+         `xaxis` y `yaxis`, con referencias circulares, y el
+         `JSON.stringify` de Streamlit reventaría. Streamlit lee
+         `data.legendgroup`: por eso va `data: {}`.
+       · Su `customdata` lleva `"clic"` y `Date.now()`. Lo primero, para que
+         Python distinga un clic de un ARRASTRE sobre una sola celda, que
+         trae `box` y sigue armando una marca (`_clic_de_evento`). Lo
+         segundo, porque Streamlit sólo avisa si la selección CAMBIÓ: sin
+         el sello, cerrar la ficha y volver a tocar la misma celda no haría
+         nada. La huella de siempre (`vh_sel_huella`) guarda
+         `clic|<sello>`.
+       · Plotly emite `plotly_click` sólo sobre un punto con hover, y la
+         capa de selección lleva `hoverinfo="skip"` a propósito (con hover
+         le robaría el tooltip a la de datos, #388). Por eso hay una TERCERA
+         capa con los puntos de las celdas vacías («Sin ventas»), puesta
+         DESPUÉS de la de datos: `test_graficos.py` toma la primera capa con
+         hover como la de los números.
+       · Cada inyección le saca su oyente a la anterior (`gd.__vhClicFn`) y
+         se engancha ella, porque el iframe que lo instaló puede no existir
+         más; un gráfico remontado (otra key) se engancha en la vuelta
+         siguiente del reloj de 700 ms. Medido tras varias corridas: un solo
+         oyente del puente por gráfico.
+     - **Verificado en el navegador con datos reales** (la 1.59 local), con
+       un clic sintético sobre `.nsewdrag` (mousemove dos veces, mousedown,
+       mouseup, click): salen los dos `plotly_selected` —el `undefined` de
+       Plotly y el del puente— y la ficha abre con «Sábado 5 set · 7 pm», 12
+       pedidos y 12 mesas de S/ 485. Una celda vacía abre la suya («Ni esta
+       ni las 8 semanas anteriores vendieron a las 4 pm»), «Cerrar» la
+       cierra, volver a tocar la misma celda la reabre, y un arrastre sigue
+       dejando su marca, con la ficha arriba. En Cloud el camino es el mismo
+       evento con el mismo handler; si algún día deja de abrir, lo primero
+       es mirar si Streamlit cambió `handleSelection`.
+     - **Qué dice la ficha.** Salió de un mockup con datos reales que el
+       usuario aprobó el mismo día: contra lo normal (las 8 semanas
+       anteriores, mismo día de la semana y misma hora: mediana y rango),
+       por mesa (venta en mesas = mesas × venta por mesa; venta por mesa =
+       personas por mesa × gasto por persona; tiempo en la mesa; venta por
+       hora de mesa; mesas a la vez), la línea de mesas abiertas contra un
+       día normal, quién atendió y los pedidos, cada uno un `<details>` que
+       abre sin rerun. Cada cuenta dice su origen en una «i»: la duración
+       como palanca y el RevPASH son de Kimes y otros (1998) y Kimes (1999);
+       lo normal y la venta por hora de mesa son cálculo propio.
+     - **Mesa = pedido del local con personas.** A pedido, sin el dato de
+       asientos ni de mesas del salón («no usemos el dato del asiento, sino
+       por mesa»). Quedan fuera Rappi, la Venta Interna y los pedidos sin
+       personas: el 6 % de los del local, 24 min de mediana y el 40 % bajo
+       15, contra 90 min y ninguno bajo 15 de los que tienen personas
+       (jun–sep 2026). «Mesas del salón» queda opcional: con el número, las
+       mesas a la vez pasan a ser ocupación.
+     - **Las personas de cada pedido salen de `definicion_venta.pax_por`**, no
+       de un `max()`: lo ataja `test_definicion_venta.py`. Para que devuelva
+       el neto de CADA pedido, el `por` es el mismo pedido con otro nombre
+       (`_ped_por`; no `_p`, que `pax_por` usa por dentro).
+     - **La ventana es por PANEL, no por celda.** `ventana(ini, fin)` trae el
+       panel, las 8 semanas de antes y un día después (la cena que se cobra
+       pasada la medianoche): todas las celdas de un mes comparten la misma
+       lectura cacheada de R2, en vez de ir a buscarla en cada clic.
+     - **Venta Interna y Eventos.** Son el 7 % de la venta de septiembre y
+       caen en 11 de 187 celdas: eran los picos más oscuros del mapa sin ser
+       servicio de salón (el miércoles 23 a las 9 pm, 86 % chorizo de pato
+       de mostrador). Un triángulo naranja marca sus celdas y el tooltip
+       dice cuánto; el interruptor «Venta Interna y Eventos» los saca del
+       mapa y del detalle. Existe sólo en «Días × horas» —en «Platos» y
+       «Grupos» son filas como cualquier otra—, y por eso su valor vive
+       aparte (`_vh_raros_valor`): un widget que no se dibuja pierde su
+       estado.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43506,7 +43599,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#535**; la próxima toma el número siguiente.
+> última regla es la **#536**; la próxima toma el número siguiente.
 
 >
 

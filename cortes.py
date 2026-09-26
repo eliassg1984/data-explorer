@@ -46,6 +46,19 @@ meses en español. Ésta nació capitalizada y privada en
 cuando el drill Semanal de Compras pidió la misma cosa. En minúscula, como
 sus vecinas — quien quiera «Sáb» tiene `.capitalize()`."""
 
+
+def etiqueta_hora(h):
+    """La hora como se dice, no como la guarda el reloj de la base: «7 pm» y
+    no «19h» (pedido del usuario, 2026-08-14). El mediodía y la medianoche
+    son los dos casos que se escriben mal solos: 12 pm y 12 am, nunca 0.
+
+    Nació en `graficos/ventas_horario.py` (que la sigue reexportando como
+    `_etiqueta_hora`); subió acá el 2026-09-26, cuando la pidió la ficha de
+    la hora (`graficos/ventas_ficha_hora.py`), que no puede importar el
+    módulo del mapa sin armar un ciclo."""
+    h = int(h) % 24
+    return f"{h % 12 or 12} {'am' if h < 12 else 'pm'}"
+
 # ── FERIADOS NACIONALES DE PERÚ ────────────────────────────────────────────
 # Vivían privados en `graficos/ventas_comparativo.py`, que fue el primero
 # que los necesitó (una barra rara de un martes se explica sola si el martes

@@ -5981,6 +5981,168 @@ def _pruebas_por_hora_filas():
     return fallos
 
 
+def _pruebas_ficha_hora():
+    """Ventas › Por hora: la ficha que abre un CLIC en una celda (regla #536).
+
+    Fija lo que no se ve hasta que miente: qué es una MESA (un pedido del
+    local con personas: ni Rappi, ni Venta Interna, ni sin personas), que
+    las cadenas cierren (mesas × venta por mesa = venta en mesas), que las
+    mesas abiertas se cuenten con el cobro como cierre y crucen la
+    medianoche, que un clic se distinga de un arrastre, y que el mapa siga
+    dando el hover de los números en su PRIMERA capa con hover.
+    """
+    import datetime as _dt
+
+    from graficos import ventas_ficha_hora as _f
+    from graficos import ventas_horario as _h
+    from tema import TEXTO_PRINCIPAL
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ficha hora · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ficha hora · {nombre}: got={got!r} exp={exp!r}")
+
+    ts = pd.Timestamp
+    # Sábado 5 de septiembre de 2026, 7 pm: dos mesas, una Venta Interna,
+    # un Rappi, un pedido sin personas y uno olvidado abierto 8 horas.
+    d = pd.DataFrame({
+        "PED": ["M1", "M1", "M2", "VI", "RP", "SP", "OL", "M9"],
+        "ABRE": [ts("2026-09-05 19:05"), ts("2026-09-05 19:05"),
+                 ts("2026-09-05 19:40"), ts("2026-09-05 19:50"),
+                 ts("2026-09-05 19:10"), ts("2026-09-05 19:20"),
+                 ts("2026-09-05 19:30"), ts("2026-08-29 19:15")],
+        "COBRO": [ts("2026-09-05 21:05"), ts("2026-09-05 21:05"),
+                  ts("2026-09-05 20:40"), ts("2026-09-05 19:52"),
+                  ts("2026-09-05 19:40"), ts("2026-09-05 19:30"),
+                  ts("2026-09-06 03:40"), ts("2026-08-29 20:45")],
+        "VENTA": [300.0, 100.0, 200.0, 1500.0, 80.0, 25.0, 90.0, 150.0],
+        "PAX": [4, 4, 2, 0, 1, 0, 2, 3],
+        "CANT": [1.0, 2.0, 1.0, 80.0, 1.0, 1.0, 1.0, 1.0],
+        "PROD": ["Lomo", "Pisco", "Ceviche", "Chorizo", "Lomo", "Café",
+                 "Pisco", "Lomo"],
+        "GRUPO": ["Alimentos", "Bebidas", "Alimentos", "Venta Interna",
+                  "Alimentos", "Bebidas", "Bebidas", "Alimentos"],
+        "Nombre Mesero": ["MESERO UNO", "MESERO UNO", "MESERA DOS", "", "", "",
+                          "MESERA DOS", "MESERA DOS"],
+        "Canal Venta": ["En el Local", "En el Local", "En el Local",
+                        "En el Local", "Rappi", "En el Local",
+                        "En el Local", "En el Local"],
+    })
+    c = {"tiempo": "ABRE", "apertura": "ABRE", "cobro": "COBRO",
+         "venta": "VENTA", "pax": "PAX", "pedido": "PED", "prod": "PROD",
+         "cant": "CANT", "grupo": "GRUPO"}
+    fl = _f.filas(d, c)
+    peds = _f.pedidos(fl).set_index("ped")
+    check("una mesa es un pedido del local con personas y venta",
+          sorted(peds.index[peds["mesa"]]), ["M1", "M2", "M9", "OL"])
+    check("la Venta Interna, Rappi y sin personas no son mesa",
+          sorted(peds.index[~peds["mesa"]]), ["RP", "SP", "VI"])
+    check("un pedido abierto más de 6 h no tiene duración",
+          bool(pd.isna(peds.loc["OL", "min"])), True)
+    check("la duración va del pedido al último cobro",
+          float(peds.loc["M1", "min"]), 120.0)
+
+    pc, items = _f.de_la_celda(fl, _f.pedidos(fl), "2026-09-05", 19,
+                               con_items=True)
+    check("los pedidos de la celda, del más grande al más chico",
+          list(pc["ped"]), ["VI", "M1", "M2", "OL", "RP", "SP"])
+    check("la venta de la celda es la de sus pedidos",
+          float(pc["v"].sum()), 2295.0)
+    check("lo que pidió cada uno, del más caro al más barato",
+          [p for p, _c, _v in items["M1"]], ["Lomo", "Pisco"])
+    m = _f.metricas(pc)
+    check("mesas de la celda (la del 29 es de otra celda)", m["mesas"], 3)
+    check("la cadena cierra: mesas × venta por mesa = venta en mesas",
+          round(m["mesas"] * m["vxm"], 6), round(m["v"], 6))
+    check("y venta por mesa = personas por mesa × gasto por persona",
+          round(m["pxm"] * m["gxp"], 6), round(m["vxm"], 6))
+    check("la venta por hora de mesa sólo cuenta mesas con duración",
+          round(m["vxh"], 4), round(600.0 / 3.0, 4))
+
+    ini, fin = _f.intervalos(_f.pedidos(fl))
+    check("mesas abiertas a las 7:45 (M1 y M2; OL no tiene duración)",
+          int(_f.abiertas(ini, fin, [ts("2026-09-05 19:45")])[0]), 2)
+    check("el cobro cierra: a las 8:40 M2 ya no cuenta",
+          int(_f.abiertas(ini, fin, [ts("2026-09-05 20:40")])[0]), 1)
+    check("lo más abierto entre las 7 y las 8",
+          _f.pico(ini, fin, ts("2026-09-05 19:00"), ts("2026-09-05 20:00")),
+          2)
+
+    horas = [12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 0]
+    check("el servicio es el tramo sin huecos", _f.bloque(horas, 20),
+          [18, 19, 20, 21, 22, 23, 0])
+    check("el almuerzo, aparte", _f.bloque(horas, 13), [12, 13, 14, 15, 16])
+    t0, t1, h0, h1 = _f.ventana_servicio("2026-09-06", horas, 0)
+    check("las 12 am del 6 son el final de la cena del 5",
+          (t0, h0), (ts("2026-09-05 17:30"), ts("2026-09-06 00:00")))
+    check("y la línea sigue una hora después de la última",
+          t1, ts("2026-09-06 02:00"))
+
+    check("la frase: la más alta",
+          _f.frase_normal(500.0, [100.0, 200.0], 5, 19),
+          "La más alta de 3 sábados a las 7 pm")
+    check("la frase: la 2.ª, y «a la 1 pm»",
+          _f.frase_normal(150.0, [100.0, 200.0], 0, 13),
+          "La 2.ª más alta de 3 lunes a la 1 pm")
+    check("la frase: nadie vendió",
+          _f.frase_normal(0.0, [0.0, 0.0], 2, 16),
+          "Ni esta ni las 2 semanas anteriores vendieron a las 4 pm")
+    check("la ventana trae 8 semanas antes y un día después",
+          _f.ventana(_dt.date(2026, 9, 1), _dt.date(2026, 9, 24)),
+          (_dt.date(2026, 7, 7), _dt.date(2026, 9, 25)))
+
+    # El clic que trae el puente de JS contra un arrastre sobre una celda.
+    clic = {"selection": {"points": [{"customdata": [0, 4, 19, "clic",
+                                                      1727380000000]}],
+                          "box": [], "lasso": []}}
+    caja = {"selection": {"points": [{"customdata": [0, 4, 19]}],
+                          "box": [{"x": [3.6, 4.4], "y": [5.6, 6.4]}],
+                          "lasso": []}}
+    check("un clic se reconoce con su sello",
+          _h._clic_de_evento(clic), (0, 4, 19, 1727380000000))
+    check("un arrastre no es un clic", _h._clic_de_evento(caja), None)
+    check("un arrastre sigue dando sus puntos para la marca",
+          _h._puntos_de_evento(caja), [(0, 4, 19)])
+    check("el puente reenvía el clic como selección",
+          all(x in _h._JS_CLIC_MAPA for x in
+              ("plotly_click", "plotly_selected", '"clic"', "__vhClicApagar")),
+          True)
+
+    # El mapa con la celda del clic: su borde oscuro, y el hover de los
+    # números sigue en la primera capa con hover (la de celdas vacías va
+    # después).
+    celdas = pd.DataFrame({"col": [0, 1], "hora": [19, 21],
+                           "venta": [100.0, 200.0], "cant": [3.0, 5.0],
+                           "desc": [0.0, 0.0], "pax": [2.0, 4.0],
+                           "ticket": [50.0, 50.0], "raro": [0.0, 80.0]})
+    fig = _h._fig_mapa([celdas], [(2026, 32)], "Semana", "venta", [],
+                       [19, 21], foco={"sel": 0, "c": 1, "h": 21})
+    bordes = [s for s in fig.layout.shapes
+              if s.type == "rect" and s.line.color == TEXTO_PRINCIPAL]
+    check("la celda del clic lleva su borde", len(bordes), 1)
+    hov = [t for t in fig.data if t.type == "scatter" and t.hoverinfo != "skip"]
+    check("la primera capa con hover es la de los números",
+          len(hov[0].x) if hov else 0, 2)
+    check("las celdas vacías también tienen hover (para el clic)",
+          len(hov[1].x) if len(hov) > 1 else 0, 7 * 2 - 2)
+    check("la Venta Interna o Eventos de la celda sale en el tooltip",
+          "Venta Interna" in (hov[0].customdata[1][9] if hov else ""), True)
+    tri = [s for s in fig.layout.shapes
+           if s.type == "path" and s.fillcolor is not None]
+    check("y su celda lleva el triángulo", len(tri), 1)
+    sin = _h._fig_mapa([celdas], [(2026, 32)], "Semana", "venta", [],
+                       [19, 21], raros=False)
+    check("con el interruptor apagado no hay triángulo",
+          len([s for s in sin.layout.shapes
+               if s.type == "path" and s.fillcolor is not None]), 0)
+    return fallos
+
+
 def _pruebas_movimientos_periodo():
     """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
 
@@ -6536,6 +6698,7 @@ def main():
 
     # ── Ventas › Por hora: las filas «Platos» y «Grupos» ─────────────────
     fallos += _pruebas_por_hora_filas()
+    fallos += _pruebas_ficha_hora()
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
