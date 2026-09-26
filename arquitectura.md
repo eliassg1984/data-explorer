@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-540 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+541 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (187)
+**CSS y estilos** (188)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -221,6 +221,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#534** — Un párrafo que queda FUERA de su comentario borra la regla que le sigue, y el test de la #454…
 - **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
 - **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
+- **#541** — Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre el reporte, dibujaba un…
 
 **Layout y alturas** (76)
 
@@ -824,7 +825,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (113)
+**Decisiones de diseño y UX** (114)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -939,6 +940,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#533** — La pila encaja: una vista por pantalla. Con encaje obligatorio, lo que está en el flujo y no…
 - **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
 - **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
+- **#541** — Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre el reporte, dibujaba un…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -43783,6 +43785,34 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-26.)
 
+541. **Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre
+     el reporte, dibujaba un punto por línea.**
+     2026-09-26, a pedido («creo no aporta información»). Era un gráfico de
+     líneas con las diez subfamilias que más vendieron, un punto por mes,
+     con un desplegable de Familia encima. Había quedado pendiente en la
+     #527 junto con «Matriz agrupada», que sigue.
+
+     - **Por qué no decía nada**: agrupaba por mes el `d` de la franja, y
+       Ventas abre en el mes en curso (`app.py::fecha_ini_default`, el 1 del
+       mes con datos). Diez puntos sueltos, uno por subfamilia y ninguna
+       línea que los una: un ranking dibujado como si fuera una serie. Para
+       que fuera «histórica» había que ampliar la fecha de arriba —lo que
+       pedía su propio caption—, y eso movía también las otras nueve vistas.
+     - **Lo que el usuario no pierde**: la misma lectura, sobre el mismo
+       rango, la da el mapa de calor de «Mix de carta» (#527) en
+       granularidad Mes y bajando a un Grupo — una fila por subgrupo, una
+       columna por mes, el monto en la celda. Diez líneas cruzadas en un
+       eje se leían peor que eso.
+     - **Se fue entero**: su rama en `_cuerpo_grafico`, su entrada en
+       `_VENTAS_RAIL_CATEGORIAS`, en `_PILA` y en `_DIBUJANTES` (las tres o
+       ninguna: un botón sin sección no lleva a ningún lado, y una sección
+       sin dibujante revienta en `_DIBUJANTES[_clave]`), sus keys
+       (`ventas_hist_fam`, `ventas_g_hist`) y los dos imports que sólo
+       usaba ella (`plotly.express` y `_compras_truncar`). No tenía CSS
+       propio: se buscó `ventas_hist` e `historica` en `estilos/` (#49).
+
+     (2026-09-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43795,7 +43825,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#540**; la próxima toma el número siguiente.
+> última regla es la **#541**; la próxima toma el número siguiente.
 
 >
 

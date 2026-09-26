@@ -4,7 +4,6 @@ graficos.ventas — dashboard de Ventas: resumen ejecutivo, mix de carta por per
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
@@ -14,7 +13,7 @@ from data import cargar as _cargar_reporte
 from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
-    PALETA_CALLAI, _card, _compras_layout, _compras_truncar, _render_rail,
+    PALETA_CALLAI, _card, _compras_layout, _render_rail,
     _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
     renderizar_graficos_genericos, seccion_perezosa,
 )
@@ -65,13 +64,14 @@ def unico_por_item(df):
 # familia es la del Mix, que ademas baja a Subgrupo y Producto (regla #527).
 # «Analisis de platos» entro ese mismo dia en lugar del Top platos del
 # Resumen (#528): el ranking entre hasta 4 periodos (regla #529).
+# «Historica subfamilia» se fue el 2026-09-26: la lee el mapa de calor del
+# Mix en granularidad Mes (regla #541).
 _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Resumen",  (("Resumen ejecutivo", "Resumen", ":material/summarize:"),)),
     ("Tiempo",   (("Mix de carta",               "Mix",        ":material/stacked_bar_chart:"),
                   ("Mapa por hora",               "Por hora",   ":material/schedule:"),
                   ("Comparativo vs Año Pasado",   "Año Pasado", ":material/compare_arrows:"),
-                  ("Venta vs Compra",            "Vs Compra",  ":material/balance:"),
-                  ("Histórica subfamilia",        "Histórica",  ":material/history:"))),
+                  ("Venta vs Compra",            "Vs Compra",  ":material/balance:"))),
     ("Análisis", (("Análisis de platos",  "Platos",  ":material/restaurant_menu:"),
                   ("Matriz agrupada",     "Matriz",  ":material/grid_on:"),
                   ("Ranking & FoodCost",  "Ranking", ":material/leaderboard:"),
@@ -82,7 +82,7 @@ _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
 # tupla (el porqué está en `graficos/compras/__init__.py::_PILA`).
 #
-# Las 11 van en UNA sola pila: a diferencia de Ajuste, acá las categorías
+# Las 10 van en UNA sola pila: a diferencia de Ajuste, acá las categorías
 # del rail ("Resumen"/"Tiempo"/"Análisis") son sólo agrupación visual y no
 # separan la clave del rango — Ventas usa `carga_por_rango`, o sea UNA
 # clave por reporte, la misma que decide qué se baja de R2. El rail aplana
@@ -93,7 +93,6 @@ _PILA = pila_sin_tablas((
     ("vt_sec_hora",       "Mapa por hora"),
     ("vt_sec_ano_pasado", "Comparativo vs Año Pasado"),
     ("vt_sec_vs_compra",  "Venta vs Compra"),
-    ("vt_sec_historica",  "Histórica subfamilia"),
     ("vt_sec_platos",     "Análisis de platos"),
     ("vt_sec_matriz",     "Matriz agrupada"),
     ("vt_sec_ranking",    "Ranking & FoodCost"),
@@ -922,7 +921,7 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
 
 def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard de Ventas: resumen ejecutivo, mix de carta por período,
-    mapa por hora, año pasado, venta vs compra, histórica de subfamilia,
+    mapa por hora, año pasado, venta vs compra, análisis de platos,
     matriz, ranking y meseros. Columnas reales del parquet de ventas.
 
     `tabla_cb`: callback que arma la Tabla (inyectado por app.py — igual que
@@ -1148,41 +1147,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                     g, hay_costo=bool(col_costo), hay_compra=hay_compra,
                     hay_pax=bool(col_pax))
 
-        # ── 3) Venta histórica de subfamilia ────────────────────────────
-        elif graf == "Histórica subfamilia" and col_fecha and col_sub:
-            _fams = ["(Todas)"] + (sorted(d[col_fam].dropna().astype(str)
-                                          .unique().tolist()) if col_fam else [])
-            cc = st.columns([1.4, 1.6])
-            with cc[0]:
-                fam_pick = st.selectbox("Familia", _fams, key="ventas_hist_fam")
-            dd = (d if (fam_pick == "(Todas)" or not col_fam)
-                  else d[d[col_fam].astype(str) == fam_pick])
-            _fe = pd.to_datetime(dd[col_fecha], errors="coerce")
-            _mes = _fe.dt.to_period("M").astype(str)
-            _vv = pd.to_numeric(dd[col_venta], errors="coerce").fillna(0)
-            seg = dd[col_sub].astype(str)
-            top = _vv.groupby(seg).sum().nlargest(10).index
-            g = pd.DataFrame({"mes": _mes, "sub": seg, "venta": _vv})
-            g = (g[g["sub"].isin(top)]
-                 .groupby(["mes", "sub"], as_index=False)["venta"].sum())
-            if g.empty:
-                st.info("Sin datos para esa familia.")
-            else:
-                fig = px.line(g, x="mes", y="venta", color="sub", markers=True,
-                              color_discrete_sequence=PALETA_CALLAI)
-                fig.for_each_trace(
-                    lambda t: t.update(name=_compras_truncar(t.name, 22)))
-                _compras_layout(fig, alto=alturas.PROTAGONISTA)
-                fig.update_layout(
-                    title="Venta histórica por subfamilia (top 10)",
-                    xaxis_title=None, yaxis_title=None, hovermode="x unified",
-                    legend=dict(orientation="h", y=-0.2, x=0, font=dict(size=10)))
-                fig.update_xaxes(type="category")
-                st.plotly_chart(fig, use_container_width=True, key="ventas_g_hist")
-                st.caption("Histórica sobre el rango de fechas cargado. Para ver "
-                           "más meses, amplía el rango en el selector de fecha.")
-
-        # ── 3b) Análisis de platos: el ranking entre hasta 4 períodos
+        # ── 3) Análisis de platos: el ranking entre hasta 4 períodos
         # (graficos/ventas_platos.py, regla #529). Trae sus períodos aparte
         # de R2, así que recibe `_filtrar_items` como Año Pasado.
         elif graf == "Análisis de platos":
@@ -1235,7 +1200,6 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         "vt_sec_hora":       _seccion("hora", "Mapa por hora"),
         "vt_sec_ano_pasado": _seccion("ano_pasado", "Comparativo vs Año Pasado"),
         "vt_sec_vs_compra":  _seccion("vs_compra", "Venta vs Compra"),
-        "vt_sec_historica":  _seccion("historica", "Histórica subfamilia"),
         # Como el Resumen, arma SUS tarjetas: la del ranking y, con un
         # plato en foco, la de su evolución debajo (regla #529).
         "vt_sec_platos":     lambda: _cuerpo_grafico("Análisis de platos"),
@@ -1246,7 +1210,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     }
 
     # El contenedor con la key va AFUERA del fragment: es el que observan el
-    # scrollspy y la precarga. Con once secciones —y las de Ventas son las
+    # scrollspy y la precarga. Con diez secciones —y las de Ventas son las
     # más pesadas de la app— la carga perezosa de `seccion_perezosa` deja de
     # ser una optimización y pasa a ser lo que hace la página viable: ver su
     # docstring y arquitectura.md #211 (construir todo de una dejaba al
