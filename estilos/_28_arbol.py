@@ -116,8 +116,9 @@ CSS = """
         --icono-x: calc(var(--rail-plegado-w) / 2);   /* centro de todo ícono de la columna */
     }
     /* Pantallas bajas: Ventas son 6 reportes + 10 vistas, y a 36/30 la
-       columna desplegada llega hasta y=613. Con esto, hasta y=559 (medido
-       a 1366×768 y 1366×660, 2026-09-26). */
+       columna desplegada llega hasta y=619. Con esto, hasta y=565 (medido
+       a 1366×768 y 1366×660, 2026-09-26, más los 6px que sumó el rótulo
+       «Vistas de» al agrandarse ese mismo día). */
     @media (max-height: 700px) {
         :root {
             --fila-rep: 32px;
@@ -436,30 +437,39 @@ CSS = """
     /* EL RÓTULO: «Vistas de <reporte>», con la línea que separa la lista de
        los reportes. Es la `.rail-cab` de `_render_rail` —entre 769 y 900px,
        la cabecera de la columna cuando cruza a Vistas— y acá dice de quién
-       son las vistas, que en el árbol colgado lo decía la sangría. Mismo
-       cuerpo, peso y color que el rótulo «Reportes» de arriba, y el texto en
-       su misma x (`--icono-x` + 22px): las dos cabeceras de la columna se
-       leen como pares. «Vistas de» va en un `::before` y no en Python
+       son las vistas, que en el árbol colgado lo decía la sangría. El texto
+       va en la x del rótulo «Reportes» de arriba (`--icono-x` + 22px), pero
+       NO con su peso: nació igual a él (12px, 500, gris) y se pidió «algo
+       más notorio» el mismo día — aquél rotula la columna, éste titula la
+       sección en la que estás. El nombre del reporte va en negrita y en el
+       color de su píldora de arriba, que es lo que lo ata a ella sin tener
+       que buscarla; «Vistas de», en gris y sin negrita, para que el ojo
+       caiga en el nombre. «Vistas de» va en un `::before` y no en Python
        porque entre 769 y 900 la misma `.rail-cab-nom` es el nombre a
        secas. */
     .st-key-nav_rail_lateral .rail-cab {
         display: block !important;
-        margin: 4px 16px 4px 16px !important;
-        padding: 10px 0 4px calc(var(--icono-x) + 22px - 16px) !important;
+        margin: 6px 16px 4px 16px !important;
+        padding: 12px 0 4px calc(var(--icono-x) + 22px - 16px) !important;
         border-top: 1px solid var(--border) !important;
     }
     .st-key-nav_rail_lateral .rail-cab-nom {
         display: block !important;
-        font-size: 12px !important;
-        font-weight: 500 !important;
-        line-height: 16px !important;
-        color: var(--text-secondary) !important;
+        /* 13 y no 13.5 (el de los nombres de reporte): con 13.5, «Vistas
+           de Ajuste de Inventario» pedía 178px de los 176 que hay y salía
+           cortado con «…»; con 13 mide 167 (medido). */
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        line-height: 18px !important;
+        color: var(--accent-deep) !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }
     .st-key-nav_rail_lateral .rail-cab-nom::before {
         content: "Vistas de ";
+        font-weight: 500;
+        color: var(--text-secondary);
     }
     .st-key-nav_rail_lateral [data-testid="stButton"] button {
         height: var(--fila-vis) !important;

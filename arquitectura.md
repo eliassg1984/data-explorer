@@ -43471,8 +43471,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        va debajo de la última, bajo el rótulo «Vistas de <reporte>» con
        una línea encima. El rótulo es la `.rail-cab` de `_render_rail`,
        que entre 769 y 900 es la cabecera de la columna: el «Vistas de»
-       sale de un `::before` para no cambiar aquel tramo, y va con el
-       cuerpo, el peso y la x del rótulo «Reportes» (12px, 500, x=56).
+       sale de un `::before` para no cambiar aquel tramo. Va en la x del
+       rótulo «Reportes» (x=56), pero no con su peso: nació igual a él
+       (12px, 500, gris) y el mismo día se pidió «algo más notorio». Quedó
+       el nombre del reporte en 13px, negrita y `--accent-deep` —el color
+       de su píldora de arriba, que es lo que lo ata a ella— y «Vistas de»
+       en gris sin negrita: aquél rotula la columna, éste titula la sección
+       en la que estás. 13 y no 13.5 como los nombres de reporte: el
+       rótulo tiene 176px, y con 13.5 «Vistas de Ajuste de Inventario»
+       pedía 178 y salía cortado con «…».
        Plegada, la lista tiene `visibility: hidden` —no se ve, no recibe
        el cursor ni el foco— y el cursor cae en `compras_tabs_row`, que
        despliega. La píldora del reporte activo se queda también
@@ -43489,8 +43496,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        CSS nuevo llega a Cloud antes que el `navegacion.py` que publica la
        variable (#357), la lista cae igual en su sitio en vez de encima
        del primer reporte.
-     - **Alto**: Ventas, 6 reportes y 10 vistas, termina en y=613 a
-       1366×768 y en y=559 a 1366×660 (filas de 32/27). Probado también el
+     - **Alto**: Ventas, 6 reportes y 10 vistas, termina en y=619 a
+       1366×768 y en y=565 a 1366×660 (filas de 32/27; 6px más que antes
+       de agrandar el rótulo, que es lo que midió la primera vuelta:
+       613 y 559). Ajuste, con 5 vistas, en y=482. Probado también el
        despliegue con el cursor de verdad (`computer{hover}`): la lista
        entra con la pausa de 180ms de la columna y el ícono bajo el cursor
        no se mueve. Y el tramo de 769–900 no cambia: a 850px la cabecera
