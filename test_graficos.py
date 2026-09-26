@@ -394,7 +394,7 @@ def _pruebas_puras():
     # (graficos/base.py y graficos/{ventas,compras,...}.py). Se prueban desde
     # ahí. `graficos.X` sigue funcionando para lo que se re-exporta.
     b = graficos.base
-    from graficos import ventas as _v, compras as _c
+    from graficos import compras as _c
     from graficos import recetas_comun as _rc
 
     # _activo — normaliza los TRES formatos reales de flag activo/inactivo
@@ -449,13 +449,6 @@ def _pruebas_puras():
     check("_first_point sin puntos",
           _c._first_point({"selection": {"points": []}}), None)
     check("_first_point None", _c._first_point(None), None)
-
-    # _fc_heat_css vive en graficos.ventas tras el refactor
-    check("_fc_heat mínimo (amarillo)", _v._fc_heat_css(12),
-          "background-color: rgba(254,240,138,0.6); color:#3a2a10")
-    check("_fc_heat máximo (rojo)", _v._fc_heat_css(42),
-          "background-color: rgba(220,38,38,0.6); color:#3a2a10")
-    check("_fc_heat NaN → vacío", _v._fc_heat_css(float("nan")), "")
 
     fe = pd.Series(pd.to_datetime(["2024-01-15", "2024-12-31"]))
     check("_periodo Mes", _c._periodo_serie(fe, "Mes"), ["2024-01", "2024-12"])
@@ -6114,6 +6107,7 @@ def _pruebas_ventas_platos():
     from datetime import date
 
     from graficos import ventas as _v
+    from graficos import ventas_mix as _mx
     from graficos import ventas_platos as _p
 
     fallos = 0
@@ -6163,13 +6157,31 @@ def _pruebas_ventas_platos():
         "sub": ["Fondos", "Fondos", "Cocteles"],
         "prod": ["Lomo", "Lomo", "Pisco Sour"],
         "venta": [100.0, 50.0, 30.0], "cant": [2.0, 1.0, 3.0],
-        "costo": 0.0, "neto": 0.0})
+        "costo": [30.0, 15.0, 0.0], "neto": [81.0, 40.5, 24.3]})
     a = _p.agregar(b)
     check("el agregado trae sus columnas por nombre",
-          list(a.columns), ["prod", "grupo", "sub", "venta", "cant"])
+          list(a.columns),
+          ["prod", "grupo", "sub", "venta", "cant", "costo", "neto"])
     check("Lomo suma sus dos líneas",
           a.set_index("prod").loc["Lomo", ["venta", "cant"]].tolist(),
           [150.0, 3.0])
+
+    # ── El % de costo de cada plato (regla #546) ──────────────────────────
+    pc = _p.costo_por_plato(a.set_index("prod"))
+    check("% costo del plato: costo ÷ NETO, no ÷ venta (45 / 121,5)",
+          round(float(pc["Lomo"]), 4), round(45.0 / 121.5, 4))
+    check("sin costo cargado no es 0 %: no hay número",
+          bool(pd.isna(pc["Pisco Sour"])), True)
+    partido = pd.DataFrame({
+        "prod": ["Lomo", "Lomo"], "grupo": ["Alimentos", "Alimentos"],
+        "sub": ["Fondos", "Parrilla"], "venta": [100.0, 50.0],
+        "cant": [2.0, 1.0], "costo": [30.0, 15.0], "neto": [81.0, 40.5]})
+    check("un plato que cambió de subgrupo se cuenta una vez",
+          round(float(_p.costo_por_plato(partido.set_index("prod"))["Lomo"]),
+                4), round(45.0 / 121.5, 4))
+    check("la cuenta y los colores son los del Mix, no una copia",
+          (_p.pct_costo is _mx.pct_costo, _p._estilo_costo is _mx._estilo_costo),
+          (True, True))
 
     fuente = textwrap.dedent(inspect.getsource(_v.renderizar_graficos_ventas))
     llamadas = [n for n in ast.walk(ast.parse(fuente))
@@ -6186,6 +6198,10 @@ def _pruebas_ventas_platos():
           analisis[0][0] if analisis else None, "Análisis de platos")
     check("y tiene su sección en la pila",
           "Análisis de platos" in dict(_v._PILA).values(), True)
+    vistas = [v for _cat, vs in _v._VENTAS_RAIL_CATEGORIAS for v, *_ in vs]
+    check("«Ranking & FoodCost» se fue: su lugar es éste (#545)",
+          ("Ranking & FoodCost" in vistas,
+           "Ranking & FoodCost" in dict(_v._PILA).values()), (False, False))
     return fallos
 
 

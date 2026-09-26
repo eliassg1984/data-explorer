@@ -47,7 +47,7 @@ from graficos.base import (_compras_layout, _compras_truncar,
 from graficos.compras._comun import _first_point
 from graficos.ventas_horario import (_COLOR_MARCA, _claves_hacia_atras,
                                      _etiqueta_clave, _rango_de_clave)
-from graficos.ventas_mix import base, columnas
+from graficos.ventas_mix import _estilo_costo, base, columnas, pct_costo
 from utils import fmt_k
 
 CORTES = ("Día", "Semana", "Mes", "Año")
@@ -122,13 +122,27 @@ def var_por_dia(v0, d0, v1, d1):
     return (b - a) / a if a else None
 
 
+_SUMAS = ["venta", "cant", "costo", "neto"]
+
+
 def agregar(b):
-    """Por plato: grupo, subgrupo, venta y unidades de un período (`b` es la
-    `base` de `ventas_mix`). Agrupa por columnas de verdad (regla #481)."""
+    """Por plato: grupo, subgrupo, venta, unidades, costo y neto de un
+    período (`b` es la `base` de `ventas_mix`). Agrupa por columnas de verdad
+    (regla #481)."""
     if b is None or b.empty:
-        return pd.DataFrame(columns=["prod", "grupo", "sub", "venta", "cant"])
-    return (b.groupby(["prod", "grupo", "sub"], as_index=False)
-            [["venta", "cant"]].sum())
+        return pd.DataFrame(columns=["prod", "grupo", "sub"] + _SUMAS)
+    return (b.groupby(["prod", "grupo", "sub"], as_index=False)[_SUMAS].sum())
+
+
+def costo_por_plato(a):
+    """El % de costo de cada plato (Series nombre → costo ÷ neto) en un
+    agregado de `agregar` indexado por plato: la cuenta del Resumen y del Mix
+    (`ventas_mix.pct_costo`, regla #546). Suma antes por nombre: un plato
+    que cambió de subgrupo a mitad del período sale en dos filas."""
+    if a is None or a.empty:
+        return pd.Series(dtype=float)
+    cn = a.groupby(level=0)[["costo", "neto"]].sum()
+    return pct_costo(cn["costo"], cn["neto"])
 
 
 # ===========================================================================
@@ -406,7 +420,10 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
             st.caption("Sin platos que mostrar: en «Elegidos», buscalos "
                        "arriba.")
     with g2:
-        _tabla(filas, sel, etq, val, pue, dias, m, movs)
+        # El % de costo es el del ÚLTIMO período, el mismo del puesto «#»:
+        # la pregunta es cuánto cuesta hoy lo que hoy se vende (regla #546).
+        _tabla(filas, sel, etq, val, pue, dias, m, movs,
+               costo_por_plato(agg[ult]))
     notas = []
     if mostrar == "Todos" and len(filas) > _TOPE_GRAFICO:
         notas.append(f"La tabla lista los {len(filas)} platos de {ambito}; "
@@ -517,9 +534,10 @@ def _grafico(nombres, sel, etq, pue, mostrar, elegidos, foco):
                     config={"displaylogo": False, "displayModeBar": False})
 
 
-def _tabla(filas, sel, etq, val, pue, dias, m, movs):
+def _tabla(filas, sel, etq, val, pue, dias, m, movs, pc):
     """La tabla: el puesto de hoy, lo vendido en cada período, el
-    movimiento de puesto y la variación por día. Un clic elige el plato."""
+    movimiento de puesto, la variación por día y el % de costo del último
+    período (`pc`, de `costo_por_plato`). Un clic elige el plato."""
     ss = st.session_state
     pri, ult = sel[0], sel[-1]
     t = pd.DataFrame({"Plato": filas})
@@ -540,6 +558,10 @@ def _tabla(filas, sel, etq, val, pue, dias, m, movs):
             return x
         return np.inf if val[ult].get(n, 0.0) > 0 else -np.inf
     t["Δ por día"] = np.array([_dv(n) for n in filas], dtype=float)
+    # Sin costo cargado —o sin venta en el último período— va 0, que se
+    # escribe «—»: un % de costo de verdad nunca es 0 (`pct_costo`).
+    t["% costo"] = np.nan_to_num(
+        np.array([pc.get(n, np.nan) for n in filas], dtype=float), nan=0.0)
     ss["_vt_pl_filas"] = list(filas)
     per = [etq[k] for k in sel]
     # «—» donde no hubo venta, y los montos compactos: la tabla va al lado
@@ -551,20 +573,32 @@ def _tabla(filas, sel, etq, val, pue, dias, m, movs):
                subset=per)
            .format(lambda v: ("nuevo" if v > 0 else "—") if np.isinf(v)
                    else f"{'+' if v >= 0 else '−'}{abs(v):.0%}",
-                   subset=["Δ por día"]))
+                   subset=["Δ por día"])
+           .format(lambda v: f"{v:.1%}" if v else "—", subset=["% costo"])
+           # Los umbrales y los colores del Resumen, como en el Mix: el mismo
+           # número se pinta igual en las tres vistas.
+           .map(_estilo_costo, subset=["% costo"]))
     # Anchos en píxeles y no «small»/«medium»: con cuatro períodos, los de
     # nombre dejaban la última columna fuera de la tarjeta (medido a 1366).
-    cfg = {"Plato": st.column_config.TextColumn(pinned=True, width=180),
+    # Y desde que lleva el % de costo, con cuatro se angostan el nombre y
+    # los montos para sumar lo mismo que con tres (medido: si no, «% costo»
+    # quedaba afuera; cederle ancho al gráfico le giraba las fechas, #546).
+    w_plato, w_per = (150, 58) if len(sel) >= MAX_PERIODOS else (180, 62)
+    cfg = {"Plato": st.column_config.TextColumn(pinned=True, width=w_plato),
            "#": st.column_config.Column(
                width=44, help=f"Puesto en {per[-1]}, dentro del ámbito"),
            "Puestos": st.column_config.Column(
                width=62, help=f"Cambio de puesto de {per[0]} a {per[-1]}"),
            "Δ por día": st.column_config.Column(
                width=72, help="Variación de la venta POR DÍA del primer al "
-                              "último período")}
+                              "último período"),
+           "% costo": st.column_config.Column(
+               width=62, help=f"Costo ÷ venta neta de {per[-1]}, como el "
+                              "Resumen. «—»: sin costo cargado o sin venta "
+                              "en ese período.")}
     for x in per:
         cfg[x] = st.column_config.Column(
-            width=62, help=("Venta" if m == "venta" else "Unidades")
+            width=w_per, help=("Venta" if m == "venta" else "Unidades")
             + f" de {x}" + (" (S/)" if m == "venta" else ""))
     st.dataframe(sty, key=_key("vt_pl_tabla"), on_select="rerun",
                  selection_mode="single-row", hide_index=True, row_height=27,

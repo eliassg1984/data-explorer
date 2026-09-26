@@ -1,5 +1,5 @@
 """
-graficos.ventas — dashboard de Ventas: resumen ejecutivo, mix de carta por período, ranking FoodCost.
+graficos.ventas — dashboard de Ventas: el dispatcher de sus vistas, y las que viven acá (Venta vs Compra, Meseros).
 """
 
 import numpy as np
@@ -63,7 +63,9 @@ def unico_por_item(df):
 # «Historica subfamilia» se fue el 2026-09-26: la lee el mapa de calor del
 # Mix en granularidad Mes (regla #541). Y ese mismo dia «Matriz agrupada»:
 # su tabla es la del Mix, y lo unico que tenia propio —el % de costo por
-# periodo— paso ahi (reglas #543 y #544).
+# periodo— paso ahi (reglas #543 y #544). Y tambien «Ranking & FoodCost»: lo
+# unico suyo —los platos de toda la carta con su costo al lado— paso a
+# «Analisis de platos» (reglas #545 y #546).
 _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Resumen",  (("Resumen ejecutivo", "Resumen", ":material/summarize:"),)),
     ("Tiempo",   (("Mix de carta",               "Mix",        ":material/stacked_bar_chart:"),
@@ -71,7 +73,6 @@ _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
                   ("Comparativo vs Año Pasado",   "Año Pasado", ":material/compare_arrows:"),
                   ("Venta vs Compra",            "Vs Compra",  ":material/balance:"))),
     ("Análisis", (("Análisis de platos",  "Platos",  ":material/restaurant_menu:"),
-                  ("Ranking & FoodCost",  "Ranking", ":material/leaderboard:"),
                   ("Meseros",             "Meseros", ":material/groups:"))),
     ("Datos",    (("Tabla",  "Tabla", ":material/table_rows:"),)),
 ))
@@ -79,7 +80,7 @@ _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
 # tupla (el porqué está en `graficos/compras/__init__.py::_PILA`).
 #
-# Las 9 van en UNA sola pila: a diferencia de Ajuste, acá las categorías
+# Las 8 van en UNA sola pila: a diferencia de Ajuste, acá las categorías
 # del rail ("Resumen"/"Tiempo"/"Análisis") son sólo agrupación visual y no
 # separan la clave del rango — Ventas usa `carga_por_rango`, o sea UNA
 # clave por reporte, la misma que decide qué se baja de R2. El rail aplana
@@ -91,7 +92,6 @@ _PILA = pila_sin_tablas((
     ("vt_sec_ano_pasado", "Comparativo vs Año Pasado"),
     ("vt_sec_vs_compra",  "Venta vs Compra"),
     ("vt_sec_platos",     "Análisis de platos"),
-    ("vt_sec_ranking",    "Ranking & FoodCost"),
     ("vt_sec_meseros",    "Meseros"),
     ("vt_sec_tabla",      "Tabla"),
 ))
@@ -226,251 +226,6 @@ def _ventas_venta_compra_dia(g, hay_costo, hay_compra, hay_pax):
                    "compras.parquet le faltan las columnas de fecha/valor) "
                    "— se omite esa serie.")
     st.plotly_chart(fig, use_container_width=True, key="ventas_g_vc_dia")
-
-
-def _fc_heat_css(v, lo=12.0, hi=42.0):
-    """Color de fondo amarillo→rojo para %FoodCost (v en %). Más FC = más rojo
-    = peor margen. Devuelve un rgba() para usar como background en Styler."""
-    if pd.isna(v):
-        return ""
-    t = min(1.0, max(0.0, (float(v) - lo) / (hi - lo)))
-    r = round(254 + (220 - 254) * t)
-    g = round(240 + (38 - 240) * t)
-    b = round(138 + (38 - 138) * t)
-    return f"background-color: rgba({r},{g},{b},0.6); color:#3a2a10"
-
-
-@st.fragment
-def _ventas_ranking_foodcost(d, col_venta, col_costo, col_cant,
-                             col_fam, col_sub, col_prod, col_fecha):
-    """Dashboard "Ranking & FoodCost" (opción de Gráficos de Ventas).
-
-    Tres piezas: barras de venta + %FC por Grupo (Plotly), tabla por SubGrupo
-    con %VAR vs Año Pasado y semáforo de FoodCost (Styler), y un ranking por
-    Producto con sparklines de tendencia mensual (AgGrid + cellRenderer SVG).
-
-    v1: FoodCost = Costo / Venta, con el costo de la LÍNEA (`COSTO VENTA`,
-    unitario × cantidad — regla #524; hasta el 2026-09-24 sumaba el
-    unitario y el FoodCost salía diez puntos más bajo). El "FC Receta"
-    teórico queda para después. Cantidad y Costo son opcionales; si
-    faltan, se omiten.
-    """
-    from st_aggrid import AgGrid, JsCode  # noqa: E402
-
-    if not (col_venta and col_fecha and col_fam and col_sub and col_prod):
-        st.info("Faltan columnas para el ranking "
-                "(Grupo, Sub Grupo, Producto, Venta, Fecha).")
-        return
-
-    _fe = pd.to_datetime(d[col_fecha], errors="coerce")
-    base = pd.DataFrame({
-        "grupo": d[col_fam].astype(str).values,
-        "sub":   d[col_sub].astype(str).values,
-        "prod":  d[col_prod].astype(str).values,
-        "anio":  _fe.dt.year.values,
-        "mes":   _fe.dt.month.values,
-        "venta": pd.to_numeric(d[col_venta], errors="coerce").fillna(0).values,
-    })
-    base["costo"] = (pd.to_numeric(d[col_costo], errors="coerce").fillna(0).values
-                     if col_costo else 0.0)
-    base["cant"] = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0).values
-                    if col_cant else 0.0)
-    base = base.dropna(subset=["anio", "mes"])
-    if base.empty:
-        st.info("Sin datos en el rango cargado.")
-        return
-    base["anio"] = base["anio"].astype(int)
-    cur = int(base["anio"].max())
-    prev = cur - 1
-    hay_ap = (base["anio"] == prev).any()
-    cur_df = base[base["anio"] == cur]
-    ap_df = base[base["anio"] == prev]
-
-    def _fc(costo, venta):
-        return (costo / venta * 100) if venta else np.nan
-
-    st.caption(
-        f"Actual = {cur} · Año pasado = {prev}. FoodCost = Costo/Venta. "
-        + ("" if hay_ap else
-           f"⚠️ El rango no incluye {prev}; «vs AP» sale como —."))
-
-    # ══ 1) Barras: Venta + %FC por Grupo ══════════════════════════════
-    col_izq, col_der = st.columns([1, 1.25])
-    with col_izq:
-        with _card("rank_grupo", "Venta + %FoodCost por Grupo"):
-            gv = cur_df.groupby("grupo", as_index=False).agg(
-                venta=("venta", "sum"), costo=("costo", "sum"))
-            gv["fc"] = gv.apply(lambda r: _fc(r["costo"], r["venta"]), axis=1)
-            gv = gv.sort_values("venta", ascending=True)
-            if gv.empty:
-                st.info("Sin datos.")
-            else:
-                _txt = [f"S/ {v/1000:,.0f}k · FC {f:.0f}%" if pd.notna(f)
-                        else f"S/ {v/1000:,.0f}k"
-                        for v, f in zip(gv["venta"], gv["fc"])]
-                fig = go.Figure(go.Bar(
-                    x=gv["venta"], y=gv["grupo"], orientation="h",
-                    marker=dict(color=ACENTO), text=_txt,
-                    textposition="outside",
-                    hovertemplate="%{y}<br>S/ %{x:,.0f}<extra></extra>"))
-                _compras_layout(fig, alto=alturas.por_filas(
-                    len(gv), px_fila=46, minimo=280, extra=60))
-                fig.update_layout(
-                    xaxis=dict(tickprefix="S/ ", tickformat=",.0f"),
-                    margin=dict(l=10, r=90, t=10, b=10), showlegend=False)
-                st.plotly_chart(fig, use_container_width=True,
-                                key="ventas_rank_grupo")
-
-    # ══ 2) Tabla por SubGrupo (Styler: heat FC + color %VAR) ══════════
-    with col_der:
-        with _card("rank_sub", "Venta y FoodCost por SubGrupo"):
-            a = cur_df.groupby("sub", as_index=False).agg(
-                ac=("venta", "sum"), costo=("costo", "sum"))
-            b = ap_df.groupby("sub", as_index=False).agg(ap=("venta", "sum"))
-            t = a.merge(b, on="sub", how="left")
-            t["ap"] = t["ap"].fillna(0.0)
-            t["fc"] = t.apply(lambda r: _fc(r["costo"], r["ac"]), axis=1)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                t["var"] = np.where(t["ap"] > 0,
-                                    (t["ac"] - t["ap"]) / t["ap"] * 100, np.nan)
-            t = t.sort_values("ac", ascending=False)
-            # Fila Total
-            _sap, _sac = t["ap"].sum(), t["ac"].sum()
-            tot = pd.DataFrame([{
-                "sub": "Total", "ap": _sap, "ac": _sac,
-                "costo": t["costo"].sum(),
-                "fc": _fc(t["costo"].sum(), _sac),
-                "var": ((_sac - _sap) / _sap * 100) if _sap else np.nan,
-            }])
-            tv = pd.concat([t, tot], ignore_index=True)[
-                ["sub", "ap", "ac", "var", "fc"]]
-            tv.columns = ["SubGrupo", "Año Pasado", "Actual", "%VAR vs AP", "%FC Venta"]
-
-            def _sty_var(v):
-                if pd.isna(v):
-                    return "color:#9aa0a6"
-                return "color:#15803d" if v >= 0 else "color:#dc2626"
-
-            sty = (tv.style
-                   .format({"Año Pasado": "S/ {:,.0f}", "Actual": "S/ {:,.0f}",
-                            "%VAR vs AP": lambda v: "—" if pd.isna(v) else f"{v:+.0f}%",
-                            "%FC Venta": lambda v: "—" if pd.isna(v) else f"{v:.1f}%"})
-                   .map(_sty_var, subset=["%VAR vs AP"])
-                   .map(_fc_heat_css, subset=["%FC Venta"])
-                   .set_properties(subset=["Año Pasado"], color="#9aa0a6"))
-            st.dataframe(sty, use_container_width=True, hide_index=True,
-                         height=alturas.por_filas(len(tv), px_fila=34,
-                                                  extra=60, minimo=0))
-
-    # ══ 3) Ranking por Producto con sparklines (AgGrid) ═══════════════
-    ac_prod = cur_df.groupby("prod", as_index=False).agg(
-        ac=("venta", "sum"), costo=("costo", "sum"), cant=("cant", "sum"))
-    ap_prod = ap_df.groupby("prod", as_index=False).agg(ap=("venta", "sum"))
-    rk = ac_prod.merge(ap_prod, on="prod", how="left")
-    rk["ap"] = rk["ap"].fillna(0.0)
-    rk["fc"] = rk.apply(lambda r: _fc(r["costo"], r["ac"]), axis=1)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        rk["var"] = np.where(rk["ap"] > 0, (rk["ac"] - rk["ap"]) / rk["ap"] * 100, np.nan)
-    rk = rk.sort_values("ac", ascending=False).head(30).reset_index(drop=True)
-
-    # Tendencia mensual (año actual) por producto → lista para el sparkline
-    meses_cur = sorted(cur_df["mes"].dropna().astype(int).unique())
-    pm = (cur_df.groupby(["prod", "mes"], as_index=False)["venta"].sum())
-    trend_map = {}
-    for prod, grp in pm.groupby("prod"):
-        m2v = dict(zip(grp["mes"].astype(int), grp["venta"]))
-        trend_map[prod] = [float(m2v.get(m, 0.0)) for m in meses_cur]
-    # La tendencia se pasa como texto "v1,v2,v3" (no lista): streamlit-aggrid
-    # no serializa listas de forma fiable a arrays JS y el cellRenderer fallaba
-    # con "a.map is not a function". El renderer la separa por comas.
-    rk["trend"] = rk["prod"].map(
-        lambda p: ",".join(f"{v:.0f}" for v in trend_map.get(p, [])))
-
-    df_rank = rk[["prod", "ap", "ac", "trend", "var", "cant", "fc"]].copy()
-
-    fmt_soles = JsCode("""
-        function(p){ if(p.value==null||isNaN(p.value))return '';
-          return 'S/ '+Number(p.value).toLocaleString('es-PE',{maximumFractionDigits:0});}
-    """)
-    fmt_int = JsCode("""
-        function(p){ if(p.value==null||isNaN(p.value))return '';
-          return Number(p.value).toLocaleString('es-PE',{maximumFractionDigits:0});}
-    """)
-    fmt_var = JsCode("""
-        function(p){ if(p.value==null||isNaN(p.value))return '—';
-          var v=Number(p.value); return (v>=0?'+':'')+v.toFixed(0)+'% '+(v>=0?'▲':'▼');}
-    """)
-    fmt_fc = JsCode("""
-        function(p){ if(p.value==null||isNaN(p.value))return '—';
-          return Number(p.value).toFixed(1)+'%';}
-    """)
-    style_var = JsCode("""
-        function(p){ if(p.value==null||isNaN(p.value))return {color:'#9aa0a6'};
-          var v=Number(p.value);
-          return v>=0?{color:'#15803d',fontWeight:500}:{color:'#dc2626',fontWeight:500};}
-    """)
-    style_fc = JsCode("""
-        function(p){ if(p.value==null||isNaN(p.value))return {};
-          var t=Math.min(1,Math.max(0,(Number(p.value)-12)/30));
-          var r=Math.round(254+(220-254)*t),g=Math.round(240+(38-240)*t),b=Math.round(138+(38-138)*t);
-          return {backgroundColor:'rgba('+r+','+g+','+b+',0.6)',color:'#3a2a10',fontWeight:500};}
-    """)
-    spark = JsCode("""
-        function(p){
-          var s=p.value; if(s==null)return '';
-          var a=String(s).split(',').map(Number).filter(function(x){return !isNaN(x);});
-          if(a.length<2)return '';
-          var w=88,h=22,mn=Math.min.apply(null,a),mx=Math.max.apply(null,a),rng=(mx-mn)||1;
-          var pts=a.map(function(v,i){return (i/(a.length-1)*(w-4)+2).toFixed(1)+','+(h-2-(v-mn)/rng*(h-4)).toFixed(1);}).join(' ');
-          var col=a[a.length-1]>=a[0]?'#15803d':'#dc2626';
-          return '<svg width="'+w+'" height="'+h+'"><polyline points="'+pts+'" fill="none" stroke="'+col+'" stroke-width="1.5"></polyline></svg>';}
-    """)
-
-    coldefs = [
-        {"headerName": "#", "valueGetter": "node.rowIndex + 1",
-         "width": 46, "pinned": "left", "cellStyle": {"color": "#9aa0a6"}},
-        {"field": "prod", "headerName": "Producto", "pinned": "left",
-         "minWidth": 210},
-        {"field": "ap", "headerName": "Año Pasado", "type": "numericColumn",
-         "width": 120, "valueFormatter": fmt_soles, "cellStyle": {"color": "#9aa0a6"}},
-        {"field": "ac", "headerName": "Actual", "type": "numericColumn",
-         "width": 120, "valueFormatter": fmt_soles},
-        {"field": "trend", "headerName": "Tendencia", "width": 110,
-         "sortable": False, "cellRenderer": spark},
-        {"field": "var", "headerName": "%Var vs AP", "type": "numericColumn",
-         "width": 110, "valueFormatter": fmt_var, "cellStyle": style_var},
-    ]
-    if col_cant:
-        coldefs.append({"field": "cant", "headerName": "Cant. Act.",
-                        "type": "numericColumn", "width": 100,
-                        "valueFormatter": fmt_int})
-    if col_costo:
-        coldefs.append({"field": "fc", "headerName": "%FC Venta",
-                        "type": "numericColumn", "width": 110,
-                        "valueFormatter": fmt_fc, "cellStyle": style_fc})
-
-    grid_options = {
-        "columnDefs": coldefs,
-        "defaultColDef": {"resizable": True, "sortable": True,
-                          "suppressMenu": True},
-        "rowHeight": 30,
-        "headerHeight": 34,
-    }
-
-    with _card("rank_prod", "Ranking de Venta Bruta y FoodCost por Producto"):
-        AgGrid(
-            df_rank,
-            gridOptions=grid_options,
-            allow_unsafe_jscode=True,
-            theme="streamlit",
-            height=alturas.por_filas(len(df_rank), px_fila=30,
-                                     extra=90, minimo=0),
-            enable_enterprise_modules=False,
-            key="ventas_ranking_grid",
-            reload_data=False,
-        )
-    if len(rk) >= 30:
-        st.caption("Mostrando top 30 productos por venta actual.")
 
 
 @st.fragment
@@ -609,8 +364,8 @@ def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
 
 def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard de Ventas: resumen ejecutivo, mix de carta por período,
-    mapa por hora, año pasado, venta vs compra, análisis de platos,
-    ranking y meseros. Columnas reales del parquet de ventas.
+    mapa por hora, año pasado, venta vs compra, análisis de platos y
+    meseros. Columnas reales del parquet de ventas.
 
     `tabla_cb`: callback que arma la Tabla (inyectado por app.py — igual que
     Ajuste). Se le pasa `d`, el df YA filtrado por los chips propios de
@@ -841,12 +596,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         elif graf == "Análisis de platos":
             _ventas_platos(d, filtrar_cb=_filtrar_items)
 
-        # ── 4) Ranking & FoodCost (dashboard) ───────────────────────────
-        elif graf == "Ranking & FoodCost":
-            _ventas_ranking_foodcost(d, col_venta, col_costo, col_cant,
-                                     col_fam, col_sub, col_prod, col_fecha)
-
-        # ── 6) Meseros: propina real vs. esperada (regresión en vivo) ───
+        # ── 4) Meseros: propina real vs. esperada (regresión en vivo) ───
         elif graf == "Meseros":
             _ventas_ranking_meseros(d_pagos, col_mesero, col_propina, col_pedido,
                                     col_corr, col_pax, col_fecha, col_venta)
@@ -886,13 +636,12 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         # Como el Resumen, arma SUS tarjetas: la del ranking y, con un
         # plato en foco, la de su evolución debajo (regla #529).
         "vt_sec_platos":     lambda: _cuerpo_grafico("Análisis de platos"),
-        "vt_sec_ranking":    _seccion("ranking", "Ranking & FoodCost"),
         "vt_sec_meseros":    _seccion("meseros", "Meseros"),
         "vt_sec_tabla":      _dib_tabla,
     }
 
     # El contenedor con la key va AFUERA del fragment: es el que observan el
-    # scrollspy y la precarga. Con nueve secciones —y las de Ventas son las
+    # scrollspy y la precarga. Con ocho secciones —y las de Ventas son las
     # más pesadas de la app— la carga perezosa de `seccion_perezosa` deja de
     # ser una optimización y pasa a ser lo que hace la página viable: ver su
     # docstring y arquitectura.md #211 (construir todo de una dejaba al

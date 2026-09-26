@@ -40,9 +40,10 @@ pedidos y platos) DENTRO de la tarjeta, con la figura que se acorta cuando
 aparece la tabla. Y un ítem se cuenta una vez: el parquet lo repite por
 forma de pago.
 
-El detalle profundo por producto (FoodCost, sparklines, %Var vs Año Pasado)
-sigue viviendo en "Ranking & FoodCost" — este panel es la foto rápida de un
-vistazo, no su reemplazo.
+El detalle por producto vive en otras vistas —el % de costo por período en
+«Mix de carta», el ranking de platos de toda la carta con su costo en
+«Análisis de platos»—: este panel es la foto rápida de un vistazo, no su
+reemplazo.
 """
 
 import re

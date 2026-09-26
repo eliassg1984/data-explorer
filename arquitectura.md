@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-544 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+546 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (188)
 
@@ -406,7 +406,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
 - **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
 
-**AgGrid y tablas** (86)
+**AgGrid y tablas** (87)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -494,6 +494,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
 - **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
+- **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 
 **Streamlit** (151)
 
@@ -649,7 +650,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
 - **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
 
-**Datos, R2 y DuckDB** (68)
+**Datos, R2 y DuckDB** (69)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -719,6 +720,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#531** — «Por hora» tiene su propia fecha: el rango se parte por la granularidad. Y en Ventas…
 - **#537** — Un for … in df.groupby(...) con un sort_values, un filtro o un mode() adentro no es un…
 - **#542** — En un COMBO, PRECIO COSTO es el costo de la LÍNEA entera, no el de una unidad — y…
+- **#546** — «Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO período, con la cuenta…
 
 **SUNAT y SIRE** (43)
 
@@ -829,7 +831,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (115)
+**Decisiones de diseño y UX** (117)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -946,6 +948,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
 - **#541** — Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre el reporte, dibujaba un…
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
+- **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
+- **#546** — «Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO período, con la cuenta…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44015,6 +44019,80 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-26.)
 
+545. **Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año
+     pasado no podía salir bien con NINGUNA fecha, y lo demás ya estaba
+     mejor en otra vista.**
+     2026-09-26, a pedido, después de analizarlo con datos reales. Eran
+     tres piezas: barras de venta y FoodCost por Grupo, una tabla de todos
+     los subgrupos con año pasado y FoodCost, y los 30 platos que más
+     venden en una AgGrid (año pasado, actual, tendencia, variación,
+     cantidad y FoodCost).
+
+     - **Su «vs año pasado» comparaba lo que cayera de cada AÑO CALENDARIO
+       dentro de la fecha elegida** (`cur`, el año más nuevo del rango;
+       `prev`, el anterior). Con los mismos datos, el total daba +107 % con
+       los últimos 12 meses (267 días de 2026 contra 95 de 2025) y −43 %
+       desde el 1 ene 2025 (267 contra 363); lo justo —del 1 de enero al 26
+       de septiembre de cada año— es −22 %. Con la fecha con que abre
+       Ventas no había año pasado: S/ 0, y «None» en la variación de la
+       tabla de subgrupos (la #529 otra vez). Es la trampa de la #543 con
+       otra cara: una vista que compara períodos trae el otro lado APARTE y
+       con los mismos días, como el Mix, «Año Pasado» y Análisis de platos.
+     - **Su FoodCost era costo ÷ VENTA**, y el % de costo del Resumen y del
+       Mix es ÷ NETO (#544): Alimentos, 32 % acá y 39,4 % allá, con los
+       mismos datos. Sin el Ranking la app muestra UNA sola cuenta; costo ÷
+       venta queda sólo en `cuadrar_ventas.py`, que la llama «FoodCost»
+       para cuadrar contra el POS.
+     - Y con la fecha con que abre, la tendencia salía vacía (pide dos
+       meses), la tarjeta se deslizaba por dentro —724px de alto contra
+       1.108 de contenido, lo que se pidió evitar en la #382— y la etiqueta
+       de la barra de Alimentos se cortaba en el borde.
+     - **Dónde está cada pieza hoy**: grupos y subgrupos con su % de costo,
+       en el Mix (#527, #544); los platos de toda la carta, en Análisis de
+       platos (#529), que ahora lleva el % de costo (#546); el año pasado
+       bien comparado, en el Detalle del Mix y en «Año Pasado».
+     - **Se fue entero**: `_ventas_ranking_foodcost` —cortada desde su
+       `@st.fragment`, la lección de la #543—, `_fc_heat_css` con sus tres
+       asserts, y su entrada en el rail, en `_PILA` y en `_DIBUJANTES`. No
+       tenía CSS propio. Con ella se va una AgGrid de Ventas (#540).
+
+     (2026-09-26.)
+
+546. **«Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO
+     período, con la cuenta y los colores del Mix, importados.**
+     2026-09-26, a pedido, con lo único que el Ranking tenía propio: los
+     platos de TODA la carta con su costo al lado (#545). El Mix muestra el
+     costo por plato, pero dentro de un subgrupo.
+
+     - **Qué período**: el último, el mismo del puesto «#»: la pregunta es
+       cuánto cuesta hoy lo que hoy se vende. Un plato que no vendió en ese
+       período dice «—», igual que uno sin costo cargado (0 en la tabla,
+       #529).
+     - **La cuenta es la del Mix**: `ventas_platos.costo_por_plato` suma
+       costo y neto por NOMBRE —un plato que cambió de subgrupo a mitad del
+       período sale en dos filas de `agregar`, que ahora suma también costo
+       y neto— y llama a `ventas_mix.pct_costo`; el color es
+       `ventas_mix._estilo_costo`, con los umbrales del Resumen. El test
+       afirma que son los mismos objetos.
+     - **El ancho**: con cuatro períodos la columna nueva quedaba afuera a
+       1366px. Cederle ~60px del gráfico de puestos lo arreglaba, pero el
+       eje, con cuatro puntos, quedó tan angosto que giró las fechas. Quedó
+       así: con cuatro períodos, el nombre a 150px y los montos a 58 (con
+       tres, 180 y 62, como antes): la tabla suma lo mismo que con tres.
+     - **No es la Ingeniería de menú**: ésa clasifica cada plato por
+       popularidad y por margen de contribución EN SOLES (Kasavana y Smith,
+       *Menu Engineering*, 1982), no por % de costo — un plato con 46 % de
+       costo puede dejar más soles por plato que uno con 25 %. Sigue
+       pendiente como segunda pieza de esta vista (#529).
+     - **Medido** a 1366×768 con datos reales (1–26 set 2026): Entraña
+       Americana 46,2 %, Lomo al Trapo 42,5 %, Risotto 45,8 %, Cotoletta
+       53,3 % y «(Cst) Chorizo de Pato Mayta 100gr» 112,6 % —cuesta más de
+       lo que se cobra—, igual que un cálculo independiente sobre el
+       parquet; «—» en los platos sin venta del período; a 375px, sin
+       desborde.
+
+     (2026-09-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44027,7 +44105,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#544**; la próxima toma el número siguiente.
+> última regla es la **#546**; la próxima toma el número siguiente.
 
 >
 
