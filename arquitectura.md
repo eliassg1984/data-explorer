@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-530 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+531 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (182)
 
@@ -634,7 +634,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
 
-**Datos, R2 y DuckDB** (65)
+**Datos, R2 y DuckDB** (66)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -701,6 +701,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#517** — En ventas.parquet un ítem sale UNA VEZ POR FORMA DE PAGO: toda suma de venta, costo o…
 - **#524** — La venta tiene UNA definición y vive en definicion_venta.py: facturas y boletas pagadas o por…
 - **#529** — «Análisis de platos»: el ranking de platos entre hasta cuatro períodos, en lugar del Top…
+- **#531** — «Por hora» tiene su propia fecha: el rango se parte por la granularidad. Y en Ventas…
 
 **SUNAT y SIRE** (43)
 
@@ -748,7 +749,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 
-**Fechas, rangos y cortes** (11)
+**Fechas, rangos y cortes** (12)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -761,6 +762,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#307** — Un default de fecha "el mes en curso" que se recorta a bounds COLAPSA a un día cuando la data…
 - **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
+- **#531** — «Por hora» tiene su propia fecha: el rango se parte por la granularidad. Y en Ventas…
 
 **Asistente IA** (2)
 
@@ -43182,6 +43184,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - Medido a 1366×768 con datos reales: la tarjeta del mapa mide 529px
        en «Platos» (20 filas) y la ficha 337 debajo.
 
+531. **«Por hora» tiene su propia fecha: el rango se parte por la
+     granularidad. Y en Ventas `categoria=` no alcanza para un rango
+     propio.**
+     2026-09-25, a pedido («añadámosle el selector de fecha que ya usamos en
+     los otros reportes, y que sea independiente»), con la opción «rango
+     partido» elegida sobre tres. Vive en `graficos/ventas_horario.py`; la
+     guarda son los `horario ·` de `test_graficos.py` (el trozo, el rango
+     corto, el año pasado y la diferencia martes contra martes).
+
+     - **El hilo que había**: la vista tomaba de la fecha de arriba SÓLO su
+       último día (`ancla = d[fecha].max()`) y con él armaba sus períodos,
+       que guardaba en `vh_claves`. Mover la fecha de arriba con la vista
+       abierta dejaba el panel en «Sep 26» cortado al 31 de julio: vacío. Hoy
+       el último día sale del parquet (`data.rango_fechas`), como en
+       «Análisis de platos», y la fecha de arriba no la toca.
+     - **El selector es `selector_fecha_tarjeta`** (el del Resumen, Mix y
+       Compras) con `categoria="vt_hora"` Y `ctx=ctx_rango_propio()`. Lo
+       segundo es la trampa: en un reporte que carga por rango,
+       `estado_rango.clave_rango` devuelve la clave del LOADER
+       (`rango_carga_Ventas`) antes de mirar la categoría, y los callbacks
+       escriben además el espejo `rango_carga_ok_Ventas`. Con sólo
+       `categoria=`, mover esta fecha habría movido la de arriba y recargado
+       el parquet del reporte. `base.py::ctx_rango_propio` pasa el ctx con
+       `usa_carga_rango=False`: la clave sale `rango_cat_Ventas_vt_hora` y
+       los bounds siguen siendo los del parquet entero.
+     - **Los paneles salen del rango partido por la granularidad**
+       (`_paneles_del_rango`), hasta 4: «últimos 30 días» en Mes son «27–31
+       Ago 26» y «Sep 26». Un período que el rango corta es un `_Tramo`
+       (clave + desde + hasta) y las funciones de calendario aceptan las dos
+       formas; uno cortado sólo por el ÚLTIMO DÍA CON DATOS sigue siendo su
+       clave de siempre, así el mes en curso abre como «Sep 26», como abrió
+       siempre. Con más de 4, los últimos 4 y un caption que nombra la
+       granularidad en la que SÍ entra (medida: un mes son 4 o 5 semanas).
+     - **Un trozo no dibuja los días que no tiene**: del 26 al 31 son 6
+       columnas, no 31 con 25 vacías que se leerían como días sin venta.
+       Eso es un `_offset` en tres sitios que tienen que coincidir:
+       `_columnas` (qué columnas hay), `_prep_tramo` (en qué columna cae
+       cada venta, contada desde `ini`) y `_fecha_de_columna`. Y la
+       «Diferencia» resta por columna del CALENDARIO (celda + offset): un
+       panel que arranca en martes resta su martes del martes de la base,
+       no de su lunes.
+     - **«Comparar» ya no elige los paneles: suma períodos SUELTOS**
+       (`vh_extras`) a los del rango, que es lo que un rango no puede decir.
+       Sus atajos son «Año pasado» (el mismo panel un año antes: 364 días en
+       Día y Semana, para caer en el mismo día de semana; la misma fecha en
+       Mes y Año; un trozo se mueve entero) y «Período anterior». Las marcas
+       se limpian cada vez que cambian los paneles, venga de donde venga
+       (`vh_paneles_firma`), y la key del mapa lleva un crc32 de TODOS los
+       paneles.
+     - **Los nombres llevan el año**: un trozo se llama «27–31 Ago 26», como
+       los meses enteros de al lado. Sin el año, con «Año pasado» el trozo
+       de este año y el del anterior se llamaban igual.
+     - **El texto del selector es corto** («1–24 sep 2026», con `label=`):
+       el largo pedía 1020px de fila contra 992 con la columna de la
+       izquierda fijada a 1366. Fecha y Comparar comparten una fila
+       horizontal (`vh_tiempo`) para que un rango largo corra a Comparar en
+       vez de montarse encima. Dos cosas del CSS que costaron una medición:
+       `_30_filtros.py` le da `min-width: 180px` a TODO botón de popover, y
+       el envoltorio de la fecha nace con `width: 100%`, así que el `flex`
+       solo no alcanzaba y Comparar se iba 116px fuera de la tarjeta.
+     - Pendiente conocido: la «Diferencia» resta todo contra el PRIMER panel;
+       con dos semanas + «Año pasado» la cuarta resta contra la primera del
+       año pasado, no contra su par.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43194,7 +43260,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#530**; la próxima toma el número siguiente.
+> última regla es la **#531**; la próxima toma el número siguiente.
 
 >
 

@@ -77,6 +77,8 @@ TRES TRAMPAS QUE YA ESTÁN RESUELTAS ACÁ (y que muerden si alguien las toca)
 
 import calendar as _cal
 import datetime as _dt
+import zlib as _zlib
+from collections import namedtuple
 
 import numpy as np
 import pandas as pd
@@ -84,7 +86,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import definicion_venta as dv
-from data import REPORTES, cargar_rango
+from data import REPORTES, cargar_rango, rango_fechas
 from tema import (
     ACENTO, ADVERTENCIA_TEXTO, AJUSTE_NEG, AJUSTE_POS, BLANCO, ERROR,
     ESCALA_CONTINUA, EXITO, GRIS_CUADRICULA, GRIS_LINEA, GRIS_TEXTO,
@@ -92,7 +94,8 @@ from tema import (
 )
 from graficos import alturas
 from graficos.base import (
-    _card, _resolver, franja_linea_inferior, paso_etiquetas, publicar_var_px,
+    _card, _resolver, ctx_rango_propio, franja_linea_inferior, paso_etiquetas,
+    publicar_var_px, rango_tarjeta, selector_fecha_tarjeta,
 )
 from graficos.compras._comun import _first_point
 # Los helpers de calendario NO se duplican: son los mismos que usa la vista
@@ -183,12 +186,12 @@ _CROMO_TARJETA = 39
 # Piso del panel del drill: menos que esto no se lee.
 _PANEL_MIN = 150
 
-# El arranque es SIEMPRE un solo período: el día, la semana, el mes o el año
-# EN CURSO, según la granularidad. Comparar es una decisión explícita del
-# usuario y tiene su botón (pedido del 2026-08-14). La versión anterior abría
-# con cuatro paneles y obligaba a leer cuatro trozos para responder "¿cómo va
-# esto?", que es la pregunta que uno trae al abrir.
-_N_DEFECTO = 1
+# El arranque es UN solo panel: el mes EN CURSO. Comparar es una decisión
+# explícita del usuario y tiene su botón (pedido del 2026-08-14). La versión
+# anterior abría con cuatro paneles y obligaba a leer cuatro trozos para
+# responder "¿cómo va esto?", que es la pregunta que uno trae al abrir. Desde
+# el 2026-09-25 el mes sale del rango con que abre el selector de fecha de
+# la vista (regla #531), que es el mes en curso hasta el último día con datos.
 _GRANO_DEF = "Mes"
 
 # Cuánto ancho se supone disponible para el eje X. Es una ESTIMACIÓN, y es la
@@ -217,7 +220,13 @@ _RATIO_MAX_CELDA = 3
 
 _SIN_DSCTO = "Sin descuento"
 
-_K_CLAVES = "vh_claves"      # períodos elegidos (lista de claves)
+# LA FECHA ES DE LA VISTA (2026-09-25, regla #531): el selector de la
+# cabecera escribe `rango_cat_Ventas_vt_hora`, no la fecha de arriba. Los
+# paneles salen de ese rango partido por la granularidad; «Comparar» suma
+# períodos SUELTOS (`_K_EXTRAS`), como el mismo mes del año pasado.
+_CAT_RANGO = "vt_hora"
+_K_EXTRAS = "vh_extras"      # períodos sueltos de «Comparar» (lista de claves)
+_K_FIRMA_PANELES = "vh_paneles_firma"  # qué paneles había en la corrida previa
 _K_MARCAS = "vh_marcas"      # marcas (lista de dicts)
 _K_SELECTOR = "vh_selector"  # ¿está abierto el selector de períodos?
 # Huella de la última selección ATENDIDA. Es lo que evita re-aplicarla en
@@ -227,6 +236,93 @@ _K_SEL = "vh_sel_huella"
 
 # ── Funciones puras (calendario) ────────────────────────────────────────────
 
+# UN PANEL QUE EL RANGO CORTA (regla #531): el trozo [desde, hasta] de un
+# período. Del 26 al 31 de agosto, en Mes, es `_Tramo((2026, 8), 26-ago,
+# 31-ago)`. Un período ENTERO sigue siendo su clave de siempre (una tupla,
+# una fecha o un año), así que lo que sólo conoce claves —«Comparar»,
+# «Análisis de platos», el comparativo— no se entera de que esto existe.
+# Las funciones de calendario de abajo aceptan las dos formas.
+_Tramo = namedtuple("_Tramo", "clave desde hasta")
+
+
+def _base_clave(k):
+    """La clave del período entero al que pertenece `k`."""
+    return k.clave if isinstance(k, _Tramo) else k
+
+
+def _offset(k, grano):
+    """Cuántas columnas del período quedan a la IZQUIERDA del tramo: el del
+    26 al 31 de agosto arranca en la columna 25. Cero en un período entero.
+
+    Es lo que mantiene honestas dos cosas: que el panel no dibuje del 1 al 25
+    vacíos (se leerían como días sin venta) y que la «Diferencia» reste la
+    misma columna del CALENDARIO —el miércoles con el miércoles— aunque un
+    panel arranque a mitad de semana."""
+    if not isinstance(k, _Tramo):
+        return 0
+    return int(_columna_de_fecha(pd.Series([pd.Timestamp(k.desde)]),
+                                 grano).iat[0])
+
+
+def _fmt_tramo(desde, hasta):
+    """«27–31 Ago 26», «27 Ago – 2 Sep 26», «28 Dic 25 – 3 Ene 26»: el nombre
+    de un trozo de período, con el mes y el año como «Ago 26», que es como se
+    llaman los paneles enteros de al lado. El año NO es opcional: con «Año
+    pasado» en «Comparar», el trozo de este año y el del anterior se
+    llamarían igual."""
+    def _m(f):
+        return _MESES_ES[f.month - 1]
+    if desde == hasta:
+        return f"{desde.day} {_m(desde)} {desde:%y}"
+    if (desde.year, desde.month) == (hasta.year, hasta.month):
+        return f"{desde.day}–{hasta.day} {_m(hasta)} {hasta:%y}"
+    if desde.year == hasta.year:
+        return f"{desde.day} {_m(desde)} – {hasta.day} {_m(hasta)} {hasta:%y}"
+    return (f"{desde.day} {_m(desde)} {desde:%y} – "
+            f"{hasta.day} {_m(hasta)} {hasta:%y}")
+
+
+def _fmt_rango_corto(ini, fin):
+    """El texto del selector de fecha de la vista: «1–24 sep 2026» y no
+    «1 sep – 24 sep 2026». Seis caracteres menos son ~40px, y es lo que deja
+    entrar la fila de la cabecera con la columna de la izquierda fijada a
+    1366px (medido: 992px de fila contra 1020 que pedía con el largo). En
+    minúscula y con el año entero, como el resto de los selectores de fecha
+    (`franja_fecha.fmt_rango_es`)."""
+    def _m(f):
+        return _MESES_ES[f.month - 1].lower()
+    if ini.year != fin.year:
+        return (f"{ini.day} {_m(ini)} {ini.year} – "
+                f"{fin.day} {_m(fin)} {fin.year}")
+    if ini == fin:
+        return f"{ini.day} {_m(ini)} {ini.year}"
+    if ini.month == fin.month:
+        return f"{ini.day}–{fin.day} {_m(fin)} {fin.year}"
+    return f"{ini.day} {_m(ini)} – {fin.day} {_m(fin)} {fin.year}"
+
+
+def _paneles_del_rango(ini, fin, grano, ultimo=None):
+    """Los paneles que dibuja el rango [ini, fin]: un período de `grano` por
+    panel, cronológicos, cada uno recortado al rango (regla #531).
+
+    Un período queda ENTERO —su clave de siempre, «Ago 26»— si el rango lo
+    cubre de punta a punta, y también si lo corta el último día CON DATOS
+    (`ultimo`): el mes en curso hasta el 24 sigue siendo «Sep 26», como
+    siempre fue. Si el rango lo corta por otro lado es un `_Tramo`."""
+    if not ini or not fin or ini > fin:
+        return []
+    out, dia = [], ini
+    while dia <= fin:
+        k = _clave_de_fecha(dia, grano)
+        p0, p1 = _rango_de_clave(k, grano)
+        desde, hasta = max(p0, ini), min(p1, fin)
+        tope = min(p1, ultimo) if ultimo else p1
+        out.append(k if (desde == p0 and hasta >= tope)
+                   else _Tramo(k, desde, hasta))
+        dia = p1 + _dt.timedelta(days=1)
+    return out
+
+
 def _claves_hacia_atras(ancla, grano, n):
     """Las `n` claves de período que terminan en el período de `ancla`."""
     if grano == "Año":
@@ -235,7 +331,9 @@ def _claves_hacia_atras(ancla, grano, n):
 
 
 def _rango_de_clave(clave, grano):
-    """(primer_día, último_día) del período."""
+    """(primer_día, último_día) del período, o del trozo si es un `_Tramo`."""
+    if isinstance(clave, _Tramo):
+        return clave.desde, clave.hasta
     if grano == "Año":
         return _dt.date(clave, 1, 1), _dt.date(clave, 12, 31)
     return _rango_cmp(clave, grano)
@@ -243,6 +341,8 @@ def _rango_de_clave(clave, grano):
 
 def _etiqueta_clave(clave, grano):
     """Etiqueta corta del período — la que titula su panel."""
+    if isinstance(clave, _Tramo):
+        return _fmt_tramo(clave.desde, clave.hasta)
     if grano == "Año":
         return str(clave)
     return _etiqueta_cmp(clave, grano)
@@ -274,6 +374,9 @@ def _tramo_horas(h0, h1):
 def _fecha_de_columna(clave, grano, i):
     """Fecha del día que representa la columna `i`, o None si la columna no
     es un día (granularidad Año: cada columna es un mes entero)."""
+    if isinstance(clave, _Tramo):
+        return _fecha_de_columna(clave.clave, grano,
+                                 int(i) + _offset(clave, grano))
     if grano == "Día":
         return clave
     if grano == "Semana":
@@ -324,7 +427,17 @@ def _columnas(clave, grano, hasta=None):
     el 14 de agosto, "agosto" son 14 columnas, no 31 con diecisiete vacías a
     la derecha. Es la versión visual del recorte que `ventas_comparativo`
     hace sobre los totales (`_rangos_comparables`): un período a medias se
-    muestra hasta donde llegó, no hasta donde llegará."""
+    muestra hasta donde llegó, no hasta donde llegará.
+
+    Un `_Tramo` se recorta por los DOS lados: del 26 al 31 de agosto son 6
+    columnas rotuladas 26…31, no 31 con las 25 primeras vacías."""
+    if isinstance(clave, _Tramo):
+        _n, etiquetas = _columnas(clave.clave, grano)
+        fin = clave.hasta if hasta is None else min(clave.hasta, hasta)
+        ult = int(_columna_de_fecha(pd.Series([pd.Timestamp(fin)]),
+                                    grano).iat[0])
+        etiquetas = etiquetas[_offset(clave, grano):ult + 1]
+        return len(etiquetas), etiquetas
     if grano == "Día":
         return 1, [""]
     if grano == "Semana":
@@ -485,8 +598,14 @@ def _firma(grano, claves, medida):
     apunta a coordenadas de otro mapa.
 
     Para que la selección no se re-procese en bucle con la key quieta está
-    la huella (`_K_SEL`, trampa 3 del docstring)."""
-    return f"{grano}_{len(claves)}_{claves[0] if claves else '-'}_{medida}"
+    la huella (`_K_SEL`, trampa 3 del docstring).
+
+    Los paneles van TODOS, como un número (crc32 de su `repr`): desde que el
+    rango los parte (regla #531) dos rangos distintos pueden coincidir en el
+    primero y en cuántos son, y un `_Tramo` escrito tal cual metería
+    espacios y paréntesis en la key."""
+    return (f"{grano}_{len(claves)}_{_zlib.crc32(repr(claves).encode())}"
+            f"_{medida}")
 
 
 # ── Datos ───────────────────────────────────────────────────────────────────
@@ -508,8 +627,12 @@ def _prep_tramo(df, c, grano, ini, fin):
     if not m.any():
         return None
     fe = fe[m]
+    # La columna se cuenta desde `ini`, no desde el arranque del período: en
+    # un `_Tramo` que empieza el 26, el 26 es la columna 0 (regla #531). En un
+    # período entero `ini` ES el arranque y esto resta cero.
+    _off = int(_columna_de_fecha(pd.Series([pd.Timestamp(ini)]), grano).iat[0])
     out = pd.DataFrame({
-        "col":  _columna_de_fecha(fe, grano).astype("int64").values,
+        "col":  (_columna_de_fecha(fe, grano) - _off).astype("int64").values,
         "hora": fe.dt.hour.astype("int64").values,
         # El día de semana y la fecha los usan las filas «Platos» y «Grupos»
         # (columnas por día de semana, y «Por día»), regla #530.
@@ -770,7 +893,7 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     def _rotulo(s, et):
         if grano != "Mes" or not et:
             return et
-        return f"{et} {_MESES_ES[claves[s][1] - 1]}"
+        return f"{et} {_MESES_ES[_base_clave(claves[s])[1] - 1]}"
 
     rotulos = [[_rotulo(s, e) for e in ets] for s, (_n, ets) in enumerate(geo)]
     total = sum(n for n, _e in geo) + max(0, len(geo) - 1)
@@ -808,7 +931,12 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
 
     def _num(v):
         return 0.0 if v is None or pd.isna(v) else float(v)
-    base = ({(int(f.col), int(f.hora)): _num(getattr(f, medida, np.nan))
+    # La resta va por columna del CALENDARIO (la de la celda + lo que el
+    # tramo deja a su izquierda, `_offset`): un panel que arranca el
+    # miércoles resta su miércoles del miércoles de la base, no de su lunes.
+    _off = [_offset(k, grano) for k in claves]
+    base = ({(int(f.col) + _off[0], int(f.hora)):
+             _num(getattr(f, medida, np.nan))
              for f in paneles[0].itertuples(index=False)}
             if dif and paneles[0] is not None and not paneles[0].empty else {})
     xs, ys, cd, dtxt = [], [], [], []
@@ -823,9 +951,10 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
                 continue
             x = offs[s] + int(fila.col)
             valor = getattr(fila, medida, np.nan)
-            vistos.add((int(fila.col), int(fila.hora)))
+            _abs = (int(fila.col) + _off[s], int(fila.hora))
+            vistos.add(_abs)
             if dif and s > 0:
-                _d = _num(valor) - base.get((int(fila.col), int(fila.hora)), 0.0)
+                _d = _num(valor) - base.get(_abs, 0.0)
                 z_dif[h_idx[fila.hora], x] = _d
                 dtxt.append(f"<br><b>Δ vs {_et_base}: "
                             f"{_fmt_delta(_d, medida)}</b>")
@@ -839,10 +968,11 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
                        float(fila.cant), float(fila.desc),
                        float(fila.ticket) if pd.notna(fila.ticket) else 0.0])
         if dif and s > 0:
-            for (col, hora), bv in base.items():
-                if (col, hora) not in vistos and col < n and hora in h_idx \
-                        and bv:
-                    z_dif[h_idx[hora], offs[s] + col] = -bv
+            for (col_a, hora), bv in base.items():
+                _loc = col_a - _off[s]
+                if (col_a, hora) not in vistos and 0 <= _loc < n \
+                        and hora in h_idx and bv:
+                    z_dif[h_idx[hora], offs[s] + _loc] = -bv
 
     fig = go.Figure()
 
@@ -1386,90 +1516,121 @@ def _toggle_selector():
     st.session_state[_K_SELECTOR] = not st.session_state.get(_K_SELECTOR, False)
 
 
-def _boton_selector(claves):
-    """Sólo el botón que abre/cierra el selector. Va en la franja, en su
+def _boton_selector(n_extras):
+    """Sólo el botón que abre/cierra «Comparar». Va en la franja, en su
     columna angosta.
 
     Está separado del PANEL a propósito: el panel es una grilla de cinco
     columnas y dibujarlo dentro de esta columna —168px medidos— le daba 30px
     a cada botón, así que "Ago 26" salía partido letra por letra, en
     vertical. El panel se dibuja a lo ancho de la tarjeta con
-    `_panel_selector`."""
-    st.button(f"Comparar · {len(claves)}/{MAX_MARCAS}",
+    `_panel_comparar`.
+
+    Cuenta sólo los períodos SUELTOS: los del rango ya los dice el selector
+    de fecha de al lado (regla #531)."""
+    st.button("Comparar" + (f" · {n_extras}" if n_extras else ""),
               key="vh_btn_selector", on_click=_toggle_selector,
               icon=(":material/keyboard_arrow_up:"
                     if st.session_state.get(_K_SELECTOR) else
                     ":material/keyboard_arrow_down:"))
 
 
-def _panel_selector(ancla, grano, claves):
-    """Lista de períodos para elegir los hasta 4 paneles. Se dibuja FUERA de
-    las columnas de la franja, a lo ancho de la tarjeta (ver
-    `_boton_selector`).
+def _ano_pasado(k, grano):
+    """El mismo panel un año antes. En Día y Semana, 364 días atrás —el mismo
+    día de SEMANA, que es lo que se compara en un restaurante y lo que
+    alinea las columnas Lun…Dom—; en Mes y Año, la misma fecha del
+    calendario, que es lo que alinea las columnas 1…31 y Ene…Dic. Un
+    `_Tramo` se mueve entero: del 26 al 31 de agosto contra lo mismo del año
+    anterior, no contra agosto entero."""
+    def _mover(f):
+        if grano in ("Día", "Semana"):
+            return f - _dt.timedelta(days=364)
+        try:
+            return f.replace(year=f.year - 1)
+        except ValueError:          # 29 de febrero
+            return f.replace(year=f.year - 1, day=28)
+    if isinstance(k, _Tramo):
+        d0, d1 = _mover(k.desde), _mover(k.hasta)
+        return _Tramo(_clave_de_fecha(d0, grano), d0, d1)
+    return _clave_de_fecha(_mover(_rango_de_clave(k, grano)[0]), grano)
+
+
+def _poner_extras(nuevos, grano):
+    """Guarda los períodos sueltos, en orden cronológico, y re-corre la
+    tarjeta. Las marcas NO se limpian acá: lo hace `_ventas_horario` cada
+    vez que cambian los paneles, venga el cambio de donde venga."""
+    st.session_state[_K_EXTRAS] = sorted(
+        nuevos, key=lambda x: _rango_de_clave(x, grano)[0])
+    st.rerun(scope="fragment")
+
+
+def _panel_comparar(ancla, grano, del_rango, extras):
+    """«Comparar»: períodos SUELTOS que se suman a los del rango (regla
+    #531). Se dibuja FUERA de las columnas de la franja, a lo ancho de la
+    tarjeta (ver `_boton_selector`).
+
+    Hasta el 2026-09-25 esto elegía TODOS los paneles; desde que la vista
+    tiene selector de fecha propio, los paneles salen del rango partido por
+    la granularidad y acá queda lo que un rango no puede decir: «y además
+    el mismo mes del año pasado». Por eso los dos atajos son «Año pasado» y
+    «Período anterior», y la lista no ofrece lo que el rango ya muestra.
 
     NO usa `st.popover`: el patrón manual (botón + `session_state` + contenido
     en flujo) es el que ya eligió este proyecto para el panel "Detalle" del
     comparativo, y por el mismo motivo — acá además cada clic dispara un
     rerun, y un popover que se cierra en cada clic obligaría a reabrirlo
-    cuatro veces para elegir cuatro períodos.
+    para cada período.
 
     Los períodos NO tienen que ser consecutivos ni recientes: la lista es el
     atajo para lo de siempre y el `date_input` de abajo abre el calendario
     entero (pedido del usuario 2026-08-14, "elegir días o meses de manera
-    aleatoria"). Lo que se elige por fecha se suma a la lista con su ✓, así se
-    quita igual que cualquier otro.
-
-    Devuelve la lista de claves elegidas (cronológica)."""
-    elegidas = list(claves)
+    aleatoria")."""
     if not st.session_state.get(_K_SELECTOR):
-        return elegidas
+        return
+    en_rango = {_base_clave(k) for k in del_rango}
+    libres = MAX_MARCAS - len(del_rango)
+    lleno = len(extras) >= libres
     # Los elegidos van SIEMPRE en la lista aunque caigan fuera de la ventana
     # reciente: si no, un mes de hace un año se quedaba seleccionado y sin
     # botón con el cual sacarlo.
     disponibles = sorted(
-        set(_claves_hacia_atras(ancla, grano, _N_LISTA[grano])) | set(elegidas),
+        {k for k in _claves_hacia_atras(ancla, grano, _N_LISTA[grano])
+         if k not in en_rango} | set(extras),
         key=lambda k: _rango_de_clave(k, grano)[0], reverse=True)
 
     with st.container(key="vh_selector_panel"):
-        _c1, _c2, _c3 = st.columns([1, 1, 4])
+        _c1, _c2, _c3 = st.columns([1, 1.2, 3.8])
         with _c1:
-            if st.button("Últimos 4", key="vh_preset_ult",
-                         use_container_width=True):
-                st.session_state[_K_CLAVES] = disponibles[:MAX_MARCAS][::-1]
-                st.session_state[_K_MARCAS] = []
-                st.rerun(scope="fragment")
+            # Uno por panel del rango, mientras quepan.
+            _ap = [x for x in (_ano_pasado(k, grano) for k in del_rango)
+                   if x not in extras
+                   and _base_clave(x) not in en_rango][:max(0, libres
+                                                           - len(extras))]
+            if st.button("Año pasado", key="vh_preset_ap",
+                         use_container_width=True, disabled=not _ap,
+                         help="Suma los mismos períodos un año antes: en Día "
+                              "y Semana, el mismo día de la semana."):
+                _poner_extras(list(extras) + _ap, grano)
         with _c2:
-            if st.button("Actual vs anterior", key="vh_preset_dos",
-                         use_container_width=True):
-                st.session_state[_K_CLAVES] = disponibles[:2][::-1]
-                st.session_state[_K_MARCAS] = []
-                st.rerun(scope="fragment")
+            _prev = (_clave_de_fecha(
+                _rango_de_clave(_base_clave(del_rango[0]), grano)[0]
+                - _dt.timedelta(days=1), grano) if del_rango else None)
+            if st.button("Período anterior", key="vh_preset_ant",
+                         use_container_width=True,
+                         disabled=(_prev is None or lleno or _prev in extras)):
+                _poner_extras(list(extras) + [_prev], grano)
 
-        lleno = len(elegidas) >= MAX_MARCAS
         cols = st.columns(5)
         for i, k in enumerate(disponibles):
-            on = k in elegidas
+            on = k in extras
             with cols[i % 5]:
                 if st.button(("✓ " if on else "") + _etiqueta_clave(k, grano),
                              key=f"vh_per_{grano}_{i}",
                              use_container_width=True,
                              type="primary" if on else "secondary",
                              disabled=(not on and lleno)):
-                    nuevas = ([x for x in elegidas if x != k] if on
-                              else elegidas + [k])
-                    if not nuevas:
-                        st.warning("Elegí al menos un período.")
-                    else:
-                        # Orden cronológico SIEMPRE, no orden de clic: los
-                        # paneles del mapa se leen de izquierda (más viejo) a
-                        # derecha, y la marca base del drill es la primera.
-                        st.session_state[_K_CLAVES] = sorted(
-                            nuevas, key=lambda x: _rango_de_clave(x, grano)[0])
-                        # Las marcas apuntan a un panel por ÍNDICE: si cambia
-                        # la lista de paneles, el índice deja de significar lo
-                        # mismo. Se limpian en vez de mentir.
-                        st.session_state[_K_MARCAS] = []
-                    st.rerun(scope="fragment")
+                    _poner_extras([x for x in extras if x != k] if on
+                                  else list(extras) + [k], grano)
         # ── Cualquier fecha, no sólo las recientes ──────────────────────
         # La lista de arriba cubre el 90% ("las últimas semanas"), pero deja
         # fuera "quiero ver el 14 de febrero". El date_input traduce la fecha
@@ -1488,21 +1649,17 @@ def _panel_selector(ancla, grano, claves):
                 st.warning("Elegí una fecha primero.")
             else:
                 _k = _clave_de_fecha(_fecha, grano)
-                if _k in elegidas:
-                    st.info(f"{_etiqueta_clave(_k, grano)} ya está en la "
-                            "comparación.")
+                if _k in en_rango or _k in extras:
+                    st.info(f"{_etiqueta_clave(_k, grano)} ya está en el "
+                            "mapa.")
                 else:
-                    st.session_state[_K_CLAVES] = sorted(
-                        elegidas + [_k],
-                        key=lambda x: _rango_de_clave(x, grano)[0])
-                    st.session_state[_K_MARCAS] = []
-                    st.rerun(scope="fragment")
+                    _poner_extras(list(extras) + [_k], grano)
         st.caption(
-            (f"Ya hay {MAX_MARCAS} períodos: quitá uno para elegir otro. "
+            (f"Ya hay {MAX_MARCAS} paneles: quitá uno para sumar otro. "
              if lleno else "")
-            + "Los períodos no tienen que ser consecutivos — para uno que no "
-            "esté en la lista, elegí cualquier fecha suya arriba.")
-    return elegidas
+            + "Suma períodos sueltos a los del rango de fechas —el mismo mes "
+            "del año pasado, uno de hace meses—. Para uno que no esté en la "
+            "lista, elegí cualquier fecha suya arriba.")
 
 
 # ── UI: drill ───────────────────────────────────────────────────────────────
@@ -1745,7 +1902,8 @@ def _dibujar_filas(tramos, claves, grano, medida, filas, cols_filas, lectura,
            else list(_DIAS_ES))
     dif = lectura == _LECTURAS[1] and len(claves) > 1
     if lectura == _LECTURAS[1] and len(claves) < 2:
-        st.caption("Elegí otro período en «Comparar» para ver la diferencia.")
+        st.caption("La diferencia pide otro panel: ampliá el rango de "
+                   "fechas o sumá uno en «Comparar».")
     elif dif and not por_dia:
         st.caption("En «Suma», un período en curso sale rojo aunque nada haya "
                    "cambiado: «Por día» lo compara parejo.")
@@ -1772,7 +1930,15 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     if _fe.empty:
         st.info("Sin fechas válidas en el rango cargado.")
         return
-    ancla = _fe.max().date()
+    # EL ÚLTIMO DÍA CON DATOS ES EL DEL PARQUET, no el del rango de arriba
+    # (regla #531). Hasta el 2026-09-25 era `_fe.max()`: la vista tomaba de
+    # la fecha de arriba sólo su último día, y moverla con la vista abierta
+    # dejaba el panel del mes en curso cortado a una fecha anterior a su
+    # primer día — vacío. Mismo criterio que «Análisis de platos».
+    _cfg_v = REPORTES.get("Ventas", {})
+    _lim = rango_fechas(_cfg_v.get("archivo", "ventas.parquet"),
+                        _cfg_v.get("carga_por_rango", "FEC REG DOCUMENTO"))
+    ancla = _lim[1] if _lim else _fe.max().date()
 
     # Descuento: dos columnas distintas y sólo una es el MONTO.
     # `DESCUENTO ITEM DDOCUMENTO` es el descuento de la línea (ya
@@ -1809,14 +1975,18 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         #
         # Anchos medidos como TABS (que son más angostos que las pastillas:
         # sin borde ni relleno): título 185 · granularidad 184 · medida 298 ·
-        # comparar 154, sobre 873px útiles.
-        c0, c1, c2, c3 = st.columns([2.4, 1.85, 3.0, 1.45],
+        # comparar 154, sobre 873px útiles. Desde el 2026-09-25 se suma la
+        # FECHA (regla #531) y el período sale del título: lo dice el
+        # selector.
+        # La fecha y «Comparar» comparten la última columna en una fila
+        # flexible (`vh_tiempo`): el texto del rango cambia de largo con el
+        # rango, y en columnas fijas uno largo se montaba sobre Comparar.
+        # columnas-internas: la primera fila de la franja
+        c0, c1, c2, c3 = st.columns([1.75, 1.9, 3.05, 2.9],
                                     vertical_alignment="center")
         with c0:
-            # Con UN período su nombre va acá, al lado del título; con varios
-            # cada panel lleva el suyo dentro de la figura. `_ph_titulo` se
-            # pinta DESPUÉS de conocer `claves` (regla #108: el título
-            # depende de un control que vive en esta misma franja).
+            # `_ph_titulo` se pinta DESPUÉS de conocer las filas (regla #108:
+            # el título depende de un control que vive en esta misma franja).
             _ph_titulo = st.empty()
         with c1:
             grano = st.pills("Granularidad", list(GRANOS),
@@ -1840,21 +2010,55 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         medida = next(mid for mid, lab in _MEDIDAS
                       if _MED_CORTO.get(mid, lab) == medida_lab)
 
-        # Si cambió la granularidad, las claves y las marcas viejas dejan de
-        # significar lo mismo (una columna de "Semana" no es una de "Mes").
+        # Si cambió la granularidad, los períodos sueltos dejan de significar
+        # lo mismo (una columna de "Semana" no es una de "Mes").
         if st.session_state.get("vh_grano_aplicado") != grano:
             st.session_state["vh_grano_aplicado"] = grano
-            st.session_state[_K_CLAVES] = None
+            st.session_state[_K_EXTRAS] = []
+
+        # ── LA FECHA DE LA VISTA (regla #531) ───────────────────────────
+        # El mismo selector que el Resumen, Mix de carta y las tarjetas de
+        # Compras, pero con rango PROPIO: `ctx_rango_propio` saca la clave de
+        # la del loader de Ventas, así que mover esta fecha no toca la de
+        # arriba ni recarga el parquet del reporte. Abre en el mes en curso
+        # hasta el último día con datos —el default del reporte—, que es
+        # donde la vista abrió siempre.
+        _ctx_h = ctx_rango_propio()
+        # La bandera avisa que la fecha cambió; acá no hay nada que escalar:
+        # los paneles se traen de R2 dentro de esta misma tarjeta. El rango
+        # se lee ANTES de dibujar el selector: su callback ya corrió.
+        st.session_state.pop("vh_fecha_cambio", None)
+        _rng = (rango_tarjeta(_CAT_RANGO, _ctx_h) if _ctx_h else None) \
+            or (ancla.replace(day=1), ancla)
+        del_rango = _paneles_del_rango(_rng[0], min(_rng[1], ancla), grano,
+                                       ancla)
+        _n_rango = len(del_rango)
+        del_rango = del_rango[-MAX_MARCAS:]
+        _bases = {_base_clave(k) for k in del_rango}
+        extras = [k for k in st.session_state.get(_K_EXTRAS) or []
+                  if _base_clave(k) not in _bases
+                  ][:MAX_MARCAS - len(del_rango)]
+        # Orden cronológico SIEMPRE: los paneles se leen de izquierda (más
+        # viejo) a derecha, y la base de la «Diferencia» y del drill es el
+        # primero — con «Año pasado», el del año pasado.
+        claves = sorted(del_rango + extras,
+                        key=lambda k: _rango_de_clave(k, grano)[0])
+        # Las marcas apuntan a un panel por ÍNDICE: si cambian los paneles
+        # —el rango, la granularidad, «Comparar»—, el índice deja de
+        # significar lo mismo. Se limpian en vez de mentir.
+        _fp = f"{grano}|{claves!r}"
+        if st.session_state.get(_K_FIRMA_PANELES) != _fp:
+            st.session_state[_K_FIRMA_PANELES] = _fp
             st.session_state[_K_MARCAS] = []
             st.session_state[_K_SEL] = None
 
-        claves = st.session_state.get(_K_CLAVES)
-        if not claves:
-            claves = _claves_hacia_atras(ancla, grano, _N_DEFECTO)
-            st.session_state[_K_CLAVES] = claves
-
         with c3:
-            _boton_selector(claves)
+            with st.container(horizontal=True, gap="small", key="vh_tiempo"):
+                if _ctx_h:
+                    selector_fecha_tarjeta(
+                        "vh_fecha", "vh_fecha_cambio", categoria=_CAT_RANGO,
+                        ctx=_ctx_h, label=_fmt_rango_corto(*_rng))
+                _boton_selector(len(extras))
         # ── LA SEGUNDA FILA: qué mira el mapa (2026-09-25, regla #530) ──
         # Mismo idioma que la primera (pestañas subrayadas, `vh_op_*` en
         # estilos/_80_cards.py). «Filas» decide la pregunta: «Días × horas»
@@ -1913,18 +2117,28 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.session_state[_K_FICHA] = _pedida
 
         # El PANEL va fuera de las columnas, a lo ancho de la tarjeta: dentro
-        # de `c3` (168px) sus cinco columnas daban 30px por botón y los
-        # períodos salían escritos en vertical, una letra por línea.
-        claves = _panel_selector(ancla, grano, claves)
+        # de una columna de la franja (168px) sus cinco columnas daban 30px
+        # por botón y los períodos salían escritos en vertical.
+        _panel_comparar(ancla, grano, del_rango, extras)
+        if _n_rango > MAX_MARCAS:
+            _uni = {"Día": "días", "Semana": "semanas", "Mes": "meses",
+                    "Año": "años"}[grano]
+            # La granularidad más fina en la que el rango SÍ entra, medida
+            # (un mes son cuatro o cinco semanas: «Semana» no siempre alcanza).
+            _mayor = next(
+                (g for g in GRANOS[GRANOS.index(grano) + 1:]
+                 if len(_paneles_del_rango(_rng[0], min(_rng[1], ancla), g,
+                                           ancla)) <= MAX_MARCAS), None)
+            st.caption(
+                f"El rango tiene {_n_rango} {_uni}: se ven los últimos "
+                f"{MAX_MARCAS}."
+                + (f" Con «{_mayor}» entra entero." if _mayor else ""))
 
         _nombre = ("Mapa por día y hora" if not en_filas else
                    f"{filas} por " + ("hora" if cols_filas == _COLS_FILAS[0]
                                       else "día de semana"))
-        _ph_titulo.markdown(
-            f'<p class="vh-titulo">{_nombre}'
-            + (f'<span> · {_etiqueta_clave(claves[0], grano)}</span>'
-               if len(claves) == 1 else '')
-            + '</p>', unsafe_allow_html=True)
+        _ph_titulo.markdown(f'<p class="vh-titulo">{_nombre}</p>',
+                            unsafe_allow_html=True)
 
         # Una sola línea al pie de la franja, no dos: el título ya no tiene
         # la suya porque comparte fila con los controles.
@@ -1993,7 +2207,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     "«Diferencia» no está en Mes: el 1 de un mes no es el mismo "
                     "día de semana que el 1 del otro. En Semana o Año las "
                     "columnas sí se corresponden." if grano == "Mes" else
-                    "Elegí otro período en «Comparar» para ver la diferencia.")
+                    "La diferencia pide otro panel: ampliá el "
+                    "rango de fechas o sumá uno en «Comparar».")
             # La hora y la diferencia van en la key: cambian QUÉ mapa es (las
             # coordenadas de una selección vieja serían de otro).
             _clave_mapa = (f"vh_mapa_{_firma(grano, claves, medida)}"

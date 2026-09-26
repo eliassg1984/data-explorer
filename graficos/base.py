@@ -1387,8 +1387,25 @@ def preservar_widgets(keys):
                 st.session_state[k] = st.session_state[k]
 
 
+def ctx_rango_propio(ctx=None):
+    """El `ctx` de la franja para una tarjeta con rango PROPIO en un reporte
+    que carga por rango (hoy Ventas).
+
+    En esos reportes `estado_rango.clave_rango` devuelve la clave del LOADER
+    (`rango_carga_{reporte}`) antes de mirar la categoría, así que un
+    `categoria=` solo no alcanza: la tarjeta seguiría escribiendo la fecha de
+    arriba y, de yapa, el espejo `rango_carga_ok_*` que decide qué se baja
+    de R2. Con `usa_carga_rango=False` la clave sale por categoría
+    (`rango_cat_{reporte}_{categoria}`) y el espejo no se toca. Los bounds
+    siguen siendo los del parquet entero, que es lo que publica `app.py`
+    para Ventas. Lo usa «Por hora», que trae sus períodos de R2 por su
+    cuenta (regla #531)."""
+    ctx = ctx if ctx is not None else franja_fecha.contexto()
+    return {**ctx, "usa_carga_rango": False} if ctx else ctx
+
+
 def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
-                           label=None, categoria=None):
+                           label=None, categoria=None, ctx=None):
     """Trigger + panel de fecha para UNA tarjeta, en cualquier dashboard.
 
     El TRIGGER es el rango vigente escrito con todas las letras ("1 ago –
@@ -1436,8 +1453,11 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
     rango a propósito: es el caso de `cp_rank` y `cp_docs`, que son la
     misma sección y donde la tabla de documentos se calcula sobre los
     proveedores que rankeó el gráfico de arriba. Ver regla #363.
+
+    `ctx` PISA el de la franja. Lo necesita una tarjeta de Ventas con rango
+    propio: ver `ctx_rango_propio`.
     """
-    ctx = franja_fecha.contexto()
+    ctx = ctx if ctx is not None else franja_fecha.contexto()
     if not ctx:
         return None
     if categoria:

@@ -416,6 +416,11 @@ resto de `graficos/compras/`.
   no puede ser el prefijo de los widgets de la vista — `"vt_mix"` chocó con
   el control `vt_mix_escala` y la vista murió con
   `StreamlitDuplicateElementKey`. Ver `arquitectura.md` #527.
+  **Y en Ventas `categoria=` no le da un rango propio**: Ventas carga por
+  rango, y ahí `clave_rango` devuelve la clave del loader antes de mirar la
+  categoría — la tarjeta movería la fecha de arriba y recargaría el
+  parquet. Para uno independiente va además
+  `ctx=graficos.base.ctx_rango_propio()`, como «Por hora». Ver #531.
 - **Un widget adentro de un `st.popover` no se entera de lo que Python le
   escribe con el panel cerrado.** El navegador no monta el contenido de un
   popover cerrado, y Streamlit avisa el cambio (`set_value`) UNA vez: una

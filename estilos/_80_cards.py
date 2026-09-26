@@ -3125,6 +3125,7 @@ CSS = """    /* ================================================================
     div[class*="st-key-vh_grano"]::before,
     div[class*="st-key-vh_medida_mapa"]::before,
     div[class*="st-key-vh_btn_selector"]::before,
+    .st-key-vh_fecha_fila::before,
     .st-key-vh_op_hora::before, .st-key-vh_op_lect::before,
     .st-key-vh_op_cols::before, .st-key-vh_op_esc::before {
         content: "";
@@ -3159,6 +3160,54 @@ CSS = """    /* ================================================================
     div[class*="st-key-vh_btn_selector"] button:hover {
         background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;
+    }
+    /* LA FECHA DE LA VISTA (regla #531): el trigger de
+       `selector_fecha_tarjeta` —el mismo del Resumen y de Compras— con el
+       idioma de «Comparar»: texto sin cápsula y separador a la izquierda,
+       porque vive en una fila de tabs. Un poco más de peso que Comparar:
+       es un DATO (el rango que se ve), no una acción. */
+    .st-key-vh_fecha_fila {
+        position: relative;
+        padding-left: 16px !important;
+    }
+    /* La fecha y «Comparar» en UNA fila que no se parte: el texto del rango
+       cambia de largo y así Comparar se corre en vez de quedar debajo. */
+    .st-key-vh_tiempo {
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+    }
+    /* Cada uno a su ancho: el envoltorio de la fecha nace `flex: 1 1 128px`
+       y se estiraba, dejando 120px de hueco antes de Comparar (medido). Y
+       con `width: 100%` puesto: el flex solo no alcanza, Comparar se iba
+       116px fuera de la tarjeta (medido). */
+    .st-key-vh_tiempo > div,
+    .st-key-vh_fecha_fila {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    .st-key-vh_fecha_escala button {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        color: var(--text) !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        min-height: 32px !important;
+        /* `_30_filtros.py` le da 180px mínimos a TODO botón de popover: con
+           «1–24 sep 2026» eran 90px de aire que empujaban a Comparar. */
+        min-width: 0 !important;
+        padding: 3px 4px !important;
+        white-space: nowrap !important;
+    }
+    .st-key-vh_fecha_escala button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    [data-testid="stPopoverBody"]:has(.st-key-vh_fecha_escala_panel) {
+        width: 290px !important;
+        min-width: 290px !important;
+        padding: 12px 14px !important;
     }
     /* FRANJA DELGADA. Medido dentro de la tarjeta: la fila de controles mide
        32px y la franja entera ocupaba 80 — 16px de padding arriba, 14 de

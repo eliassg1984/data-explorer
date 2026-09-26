@@ -1867,12 +1867,77 @@ def _pruebas_puras():
           _vh._clave_de_fecha(_dt.date(2025, 2, 14), "Día"),
           _dt.date(2025, 2, 14))
 
-    # El arranque es SIEMPRE un período: el EN CURSO. Comparar es una decisión
-    # explícita del usuario y tiene su botón.
-    check("horario · arranca con un solo período", _vh._N_DEFECTO, 1)
-    check("horario · y ese período es el EN CURSO",
-          _vh._claves_hacia_atras(_dt.date(2026, 8, 14), "Mes",
-                                  _vh._N_DEFECTO), [(2026, 8)])
+    # El arranque es UN panel: el mes EN CURSO, que sale del rango con que
+    # abre el selector de fecha de la vista —del 1 al último día con datos—.
+    # Cortado por ESE día sigue siendo el mes entero, como siempre fue.
+    _D = _dt.date
+    check("horario · el mes en curso es UN panel entero",
+          _vh._paneles_del_rango(_D(2026, 8, 1), _D(2026, 8, 14), "Mes",
+                                 _D(2026, 8, 14)), [(2026, 8)])
+
+    # EL RANGO SE PARTE POR LA GRANULARIDAD (regla #531): «últimos 30 días»
+    # en Mes son dos paneles, y el primero es un TROZO de agosto que no
+    # dibuja los 25 días que no tiene (se leerían como días sin venta).
+    _p30 = _vh._paneles_del_rango(_D(2026, 8, 26), _D(2026, 9, 24), "Mes",
+                                  _D(2026, 9, 24))
+    check("horario · rango partido: un trozo + el mes en curso",
+          [_vh._base_clave(k) for k in _p30], [(2026, 8), (2026, 9)])
+    check("horario · el trozo se llama por sus días",
+          _vh._etiqueta_clave(_p30[0], "Mes"), "26–31 Ago 26")
+    check("horario · el selector escribe el rango corto",
+          [_vh._fmt_rango_corto(_D(2026, 9, 1), _D(2026, 9, 24)),
+           _vh._fmt_rango_corto(_D(2026, 8, 26), _D(2026, 9, 24)),
+           _vh._fmt_rango_corto(_D(2025, 12, 28), _D(2026, 1, 3))],
+          ["1–24 sep 2026", "26 ago – 24 sep 2026",
+           "28 dic 2025 – 3 ene 2026"])
+    check("horario · el trozo no dibuja los días que no tiene",
+          _vh._columnas(_p30[0], "Mes"),
+          (6, ["26", "27", "28", "29", "30", "31"]))
+    check("horario · la columna 0 del trozo es su primer día",
+          _vh._fecha_de_columna(_p30[0], "Mes", 0), _D(2026, 8, 26))
+    check("horario · cortado por el RANGO (no por los datos) es un trozo",
+          isinstance(_vh._paneles_del_rango(_D(2026, 9, 1), _D(2026, 9, 20),
+                                            "Mes", _D(2026, 9, 24))[0],
+                     _vh._Tramo), True)
+    _dft = pd.DataFrame({
+        "F": pd.to_datetime(["2026-08-26 20:00", "2026-08-31 13:00",
+                             "2026-08-10 13:00"]),
+        "V": [1.0, 2.0, 3.0]})
+    check("horario · el trozo cuenta sus columnas desde su primer día",
+          _vh._prep_tramo(_dft, {"fecha": "F", "venta": "V"}, "Mes",
+                          _D(2026, 8, 26), _D(2026, 8, 31))["col"].tolist(),
+          [0, 5])
+    _psem = _vh._paneles_del_rango(_D(2026, 9, 1), _D(2026, 9, 24), "Semana",
+                                   _D(2026, 9, 24))
+    check("horario · un mes en Semana son cuatro paneles", len(_psem), 4)
+    check("horario · la semana que el rango abre en martes arranca en Mar",
+          _vh._columnas(_psem[0], "Semana")[1][0], "Mar")
+    _ap = _vh._ano_pasado(_psem[0], "Semana")
+    check("horario · año pasado en Semana: el mismo día de SEMANA",
+          (_ap.desde.weekday(), _ap.hasta.weekday()),
+          (_psem[0].desde.weekday(), _psem[0].hasta.weekday()))
+    check("horario · año pasado en Mes: la misma fecha, trozo con trozo",
+          _vh._ano_pasado(_p30[0], "Mes"),
+          _vh._Tramo((2025, 8), _D(2025, 8, 26), _D(2025, 8, 31)))
+    check("horario · año pasado de un mes entero es el mes entero",
+          _vh._ano_pasado((2026, 9), "Mes"), (2025, 9))
+    # «Diferencia» resta la misma columna del CALENDARIO: un panel base que
+    # arranca el martes pone su martes en la columna 0, y la semana entera
+    # de al lado lo tiene en la 1. Martes contra martes da +50.
+    def _celda(col, v):
+        return pd.DataFrame({"col": [col], "hora": [19], "venta": [v],
+                             "cant": [0.0], "desc": [0.0], "pax": [0.0],
+                             "ticket": [float("nan")]})
+    _fg = _vh._fig_mapa([_celda(0, 100.0), _celda(1, 150.0)],
+                        [_psem[0], (2026, 37)], "Semana", "venta", [], [19],
+                        dif=True)
+    _cds = [c for t in _fg.data
+            if getattr(t, "customdata", None) is not None
+            and len(t.customdata) and len(t.customdata[0]) > 9
+            for c in t.customdata]
+    check("horario · la diferencia resta martes contra martes",
+          [c[-1] for c in _cds if c[0] == 1],
+          ["<br><b>Δ vs 1–6 Sep 26: +S/ 50</b>"])
 
     _f = pd.Series(pd.to_datetime(["2026-08-05 13:00", "2026-08-09 20:30"]))
     check("horario · columna en semana (mié=2, dom=6)",
@@ -2592,10 +2657,6 @@ def _pruebas_widgets_de_fragment_escalado():
         ("movimientos_comun.py", "mov_evo_gran"):
             "ya lo cubre el espejo `_K_GRAN_ECO`, que es la forma vieja de "
             "la misma cura (regla #211, medida ahí el 2026-09-05)",
-        ("ventas_horario.py", "vh_otra_*"):
-            "los reruns de ese panel son de scope fragment y viven dentro "
-            "de handlers de botón; lo único que queda debajo es el "
-            "`date_input` «Otra fecha», que es de un solo uso y nace vacío",
     }
 
     def _key_de(nodo):
