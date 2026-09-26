@@ -100,8 +100,13 @@ COSTO = "COSTO VENTA"
 PRODUCTO = "COD ITEM VENTA DDOCUMENTO"
 ES_COMBO = "ES COMBO"
 """La marca de combo del POS, si la consulta del Sheet la trae
-(`INFOREST.DBO.TPRODUCTO.lCombinacion AS [ES COMBO]`). Hoy no la trae: con
-ella, `COMBOS` deja de hacer falta y un combo nuevo no se escapa."""
+(`CAST(INFOREST.DBO.DPEDIDO.lCombinacion AS int) AS 'ES COMBO'`). Hoy no la
+trae: con ella, `COMBOS` deja de hacer falta y un combo nuevo no se escapa.
+
+La de la LÍNEA del pedido y no la del producto (`TPRODUCTO.lCombinacion`):
+es la misma que decide, en esa consulta, si `PRECIO COSTO` sale de CPEDIDO
+(costo de línea) o de `DPEDIDO.nInsumo` (unitario). En 2025-26 difieren en
+una línea, y con la del producto esa se dividiría sin serlo."""
 
 COMBOS = frozenset({
     "0000314", "0000423", "0000424", "0000425", "0000492", "0000598",
@@ -204,7 +209,12 @@ def es_combo(df, cols=None):
     cols = cols or {n: columna(df, n) for n in (ES_COMBO, PRODUCTO)}
     if cols.get(ES_COMBO):
         s = df[cols[ES_COMBO]]
-        return ((pd.to_numeric(s, errors="coerce").fillna(0) != 0)
+        # Un `bit` del POS con vacíos (las notas de crédito no traen línea
+        # de pedido) llega de DuckDB como `boolean` de pandas, que revienta
+        # con `fillna(0)`: la carga de Ventas entera se caía. Por `object`,
+        # cualquier forma de la marca sale en números.
+        num = pd.to_numeric(s.astype(object), errors="coerce")
+        return ((num.fillna(0) != 0)
                 | _texto(s).isin(("TRUE", "SI", "SÍ", "S")))
     if cols.get(PRODUCTO):
         return _texto(df[cols[PRODUCTO]]).isin(COMBOS)

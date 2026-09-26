@@ -319,6 +319,15 @@ igual(float(_lm.loc["LB901", "PRECIO COSTO"]), 150.0,
       "`ES COMBO` falso gana aunque el código esté en COMBOS")
 igual(float(_lm.loc["LB902", "PRECIO COSTO"]), 0.75,
       "`ES COMBO` verdadero divide aunque el código no esté")
+# Tal como llega un `bit` con vacíos: DuckDB lo entrega como `boolean` de
+# pandas, y un `fillna(0)` sobre él tumbaba la carga de Ventas.
+_bit = _canje_combo(**{"ES COMBO": pd.array([True, False] * 2 + [None],
+                                            dtype="boolean")})
+_lb = dv.preparar(_bit, D1, D3).set_index("LLAVE LOCAL DOCUMENTO ITEM")
+igual(float(_lb.loc["LB901", "PRECIO COSTO"]), 50.0,
+      "`ES COMBO` como bit con vacíos: no revienta y divide el combo")
+igual(float(_lb.loc["LB902", "PRECIO COSTO"]), 1.5,
+      "y deja el agua como viene")
 
 print("\n── los KPIs del rail, con la misma definición ──")
 k = dv.resumir(prep, (("Venta", "VENTA ITEM DDOCUMENTO", "sum"),

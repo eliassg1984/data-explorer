@@ -43882,9 +43882,18 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      por la cantidad. Medido: sacando sólo el menú de septiembre de la
      lista, el FoodCost de 30 días pasa de 28,85 % a 32,24 % (una línea,
      S/ 14.013). El arreglo de fondo es una columna en la consulta del
-     Sheet, `INFOREST.DBO.TPRODUCTO.lCombinacion AS [ES COMBO]`:
+     Sheet, `CAST(INFOREST.DBO.DPEDIDO.lCombinacion AS int) AS 'ES COMBO'`:
      `preparar` ya la lee (`ES_COMBO`) y, si está, manda ella y la lista
-     sobra. Si en cambio alguien arregla `PRECIO COSTO` en el extractor
+     sobra. **De DPEDIDO y no de TPRODUCTO**: es la marca que usa la
+     propia consulta para decidir si `PRECIO COSTO` es de línea (CPEDIDO)
+     o unitario (`DPEDIDO.nInsumo`); en 2025-26 difieren en una línea, y
+     con la del producto esa se dividiría sin ser de línea. **Y como
+     `int`**: el `bit` con vacíos (las notas no tienen línea de pedido)
+     llega de DuckDB como `boolean` de pandas, y `es_combo` le hacía un
+     `fillna(0)` que tumbaba la carga de Ventas entera — medido
+     2026-09-26 antes de que nadie agregara la columna. `es_combo` ya
+     acepta las dos formas (pasa por `object`); el `CAST` es la segunda
+     llave. Si en cambio alguien arregla `PRECIO COSTO` en el extractor
      (dividiendo allá), hay que sacar `_costo_unitario`, o se divide dos
      veces.
 

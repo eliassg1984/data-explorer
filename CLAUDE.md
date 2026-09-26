@@ -829,8 +829,10 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
   `definicion_venta.COMBOS` — **una foto que se queda vieja**: sale un
   menú de evento casi cada mes, y uno solo que falte subió el FoodCost de
   30 días a 32,2 %. `cuadrar_ventas.py` nombra a los que falten; el
-  arreglo de fondo es sumar `lCombinacion AS [ES COMBO]` a la consulta del
-  Sheet, que `preparar` ya lee. Regla #542.
+  arreglo de fondo es sumar `CAST(INFOREST.DBO.DPEDIDO.lCombinacion AS int)
+  AS 'ES COMBO'` a la consulta del Sheet, que `preparar` ya lee — la marca
+  de la LÍNEA (la misma que decide el `PRECIO COSTO`), no la del producto.
+  Regla #542.
 - **Tocar la definición es subir `definicion_venta.VERSION`** (va en la
   clave de la caché de disco, que no caduca) y correr
   `python herramientas/cuadrar_ventas.py`, que la cuadra contra el POS por
