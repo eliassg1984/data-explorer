@@ -796,14 +796,15 @@ DOCUMENTO CORRELATIVO PAGO` una vez. El parquet no se toca. Regla #517.
 ## La venta tiene UNA definición: `definicion_venta.py`
 
 Desde el 2026-09-24, y cuadrada al céntimo contra el POS (30 días: facturas
-y boletas, notas de crédito, cortesías, anulados, propinas y clientes):
+y boletas, notas de crédito, cortesías, anulados, propinas, clientes y,
+desde el 2026-09-26, el costo):
 
     Venta = facturas y boletas pagadas o POR COBRAR − notas de crédito
 
 Cortesías (a precio carta) y anulados van aparte. Hasta ese día el Resumen
 los sacaba y las otras nueve vistas, el rail y el asistente no — el mismo
 día con dos montos —, nadie restaba las notas de crédito, y el costo se
-sumaba POR UNIDAD (FoodCost 24 % donde era 34,5 %).
+sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
 
 - **Se aplica al CARGAR**: `data._PREPARAR` manda `ventas.parquet` a
   `definicion_venta.preparar`, que agrega `CLASE VENTA` y `COSTO VENTA` y
@@ -817,12 +818,25 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 34,5 %).
   contra `MDOCUMENTO` cuadra una venta que cuenta los canjes dos veces.
 - **Clientes = adultos** (`CANT PAX` es `MPEDIDO.nAdulto`; el POS suma
   niños). Decisión del usuario, por ahora.
+- **En un COMBO, `PRECIO COSTO` es el costo de la LÍNEA, no de la
+  unidad** (la Degustación, las parrillas, los menús de evento:
+  `TPRODUCTO.lCombinacion = 1`). El extractor lo llena con lo servido de
+  cada plato (Σ `CPEDIDO.nCantidad × nInsumo`) y multiplicarlo por la
+  cantidad contaba 13 veces una línea de 13 Degustaciones: FoodCost 36,9 %
+  donde era 28,9 % (30 días a sep 2026), y «Eventos» al 145 %.
+  `preparar` lo devuelve a unitario ANTES de espejar las notas (dividir
+  después les da el signo al revés), y reconoce el combo por la lista
+  `definicion_venta.COMBOS` — **una foto que se queda vieja**: sale un
+  menú de evento casi cada mes, y uno solo que falte subió el FoodCost de
+  30 días a 32,2 %. `cuadrar_ventas.py` nombra a los que falten; el
+  arreglo de fondo es sumar `lCombinacion AS [ES COMBO]` a la consulta del
+  Sheet, que `preparar` ya lee. Regla #542.
 - **Tocar la definición es subir `definicion_venta.VERSION`** (va en la
   clave de la caché de disco, que no caduca) y correr
   `python herramientas/cuadrar_ventas.py`, que la cuadra contra el POS por
   la misma carga que usa la app.
 
-Detalle en `arquitectura.md` reglas #524 y #525.
+Detalle en `arquitectura.md` reglas #524, #525 y #542.
 
 ## El eje temporal tiene TRES modos, y un solo dueño
 

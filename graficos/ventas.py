@@ -936,8 +936,8 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                  "Fecha Registro", "FECHA"])
     # El costo de la LÍNEA (unitario × cantidad) que arma `definicion_venta`
     # (regla #524): «Precio Costo» es POR UNIDAD, y sumarlo suelto daba un
-    # FoodCost de 24 % donde era 34,5 %. Queda de respaldo para un df sin
-    # preparar.
+    # FoodCost de 24 % donde era 29 % (#542). Queda de respaldo para un df
+    # sin preparar.
     col_costo  = _resolver(df_f, ["Costo Venta", "Precio Costo",
                                   "Costo Item Ddocumento", "Costo"])
     col_pax    = _resolver(df_f, ["Cant Pax", "Cantidad Pax", "Pax"])

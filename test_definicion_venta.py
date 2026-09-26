@@ -5,8 +5,9 @@ Dos cosas, las dos sin secrets, sin red y sin navegador:
 1. Las CUENTAS de `definicion_venta.py` sobre un parquet de mentira que
    reproduce los casos reales: el canje de una boleta por factura (boleta,
    factura y nota de crédito del mismo pedido, en días distintos), una
-   cuenta dividida, una devolución, una cortesía, un anulado y un documento
-   pagado con dos formas de pago. Los montos son inventados — el repo es
+   cuenta dividida, una devolución, una cortesía, un anulado, un documento
+   pagado con dos formas de pago y el canje de un COMBO (cuyo `PRECIO
+   COSTO` es el de la línea entera). Los montos son inventados — el repo es
    público —, pero cada caso es uno que ya apareció en `ventas.parquet`.
 
 2. El CABLEADO, leído del código con `ast`: que nadie vuelva a definir la
@@ -64,8 +65,11 @@ D1, D3 = dt.date(2026, 9, 1), dt.date(2026, 9, 3)
 
 def _fila(doc, tipo_cod, tipo, estado, fecha, ped, pax, item, prod, cant,
           carta, desc, pago="1", propina=0.0, nc=None, nc_fecha=None,
-          total_doc=None, total_nc=None, monto_pago=None):
+          total_doc=None, total_nc=None, monto_pago=None, cod=None,
+          costo=None):
     venta = carta * cant - desc if item is not None else np.nan
+    if costo is None:
+        costo = carta * 0.3 if carta else np.nan
     return {
         "LLAVE LOCAL DOCUMENTO": "L" + doc,
         "NUMERO DOCUMENTO": doc,
@@ -80,10 +84,11 @@ def _fila(doc, tipo_cod, tipo, estado, fecha, ped, pax, item, prod, cant,
                                        else None),
         "LLAVE LOCAL DOCUMENTO CORRELATIVO PAGO": (f"L{doc}P{pago}"
                                                    if pago else None),
+        "COD ITEM VENTA DDOCUMENTO": cod,
         "NOMB ITEM VENTA": prod,
         "CANTIDAD ITEM DDOCUMENTO": cant,
         "PRECIO OFICIAL ITEM DDOCUMENTO": carta,
-        "PRECIO COSTO": carta * 0.3 if carta else np.nan,
+        "PRECIO COSTO": costo,
         "DESCUENTO ITEM DDOCUMENTO": desc,
         "VENTA ITEM DDOCUMENTO": venta,
         "NETO TOTAL ITEM DDOCUMENTO": venta / 1.18 if item is not None else np.nan,
@@ -257,6 +262,63 @@ igual(float(np_["VENTA ITEM DDOCUMENTO"].sum()), -100.0,
       "resta la proporción de la nota")
 igual(float(np_["CANT PAX"].abs().sum()), 0.0,
       "y no toca los clientes: la mesa vino igual")
+
+print("\n── los combos: su PRECIO COSTO es el de la LÍNEA (regla #542) ──")
+# Tres Degustaciones (un combo del POS) y dos aguas en la boleta B9 del día
+# 1, canjeada el día 3 por la factura F9 con la nota C9. En un combo el
+# extractor pone en PRECIO COSTO lo servido en la línea ENTERA (3 × 50):
+# multiplicarlo por la cantidad contaba 450. El agua viene por unidad.
+COMBO = "0001363"
+ok(COMBO in dv.COMBOS, "la Degustación figura entre los combos del POS")
+
+
+def _canje_combo(**extra):
+    f = []
+    for doc, fecha, nc in (("B9", D1, "C9"), ("F9", D3, None)):
+        comun = dict(nc=nc, nc_fecha=D3 if nc else None, total_doc=606.0,
+                     total_nc=606.0 if nc else None)
+        f.append(_fila(doc, "02", "Boleta Electronica", "PAGADO", fecha, "T",
+                       3, "01", "Degustacion", 3, 200.0, 0.0, cod=COMBO,
+                       costo=150.0, **comun))
+        f.append(_fila(doc, "02", "Boleta Electronica", "PAGADO", fecha, "T",
+                       3, "02", "Agua", 2, 3.0, 0.0, cod="0000007", costo=1.5,
+                       **comun))
+    f.append(_fila("C9", "04", "NC B Electronica", "PROCESADO", D3, None,
+                   np.nan, None, None, np.nan, np.nan, np.nan, pago=None,
+                   propina=np.nan, total_doc=-606.0))
+    return pd.DataFrame(f).assign(**extra)
+
+
+crudo_c = _canje_combo()
+prep_c = dv.preparar(crudo_c, D1, D3)
+_linea = prep_c.set_index("LLAVE LOCAL DOCUMENTO ITEM")
+igual(float(_linea.loc["LB901", "PRECIO COSTO"]), 50.0,
+      "el combo vuelve a costo UNITARIO: 150 / 3")
+igual(float(_linea.loc["LB901", dv.COSTO]), 150.0,
+      "y el costo de la línea es lo servido, no 150 × 3")
+igual(float(_linea.loc["LB902", "PRECIO COSTO"]), 1.5,
+      "lo que no es combo no se toca")
+igual(float(_linea.loc["LF901", dv.COSTO]), 150.0, "la factura del canje, igual")
+_nota_c = prep_c[prep_c[dv.CLASE] == dv.NOTA_CREDITO]
+igual(float(_nota_c.loc[_nota_c["NOMB ITEM VENTA"] == "Degustacion",
+                        dv.COSTO].sum()), -150.0,
+      "la nota resta el combo UNA vez (con el costo de línea daba −450)")
+_venta_c = prep_c[prep_c[dv.CLASE].isin(dv.CLASES_VENTA)]
+igual(float(_venta_c[dv.COSTO].sum()), 153.0,
+      "el canje entero: un combo (150) y dos aguas (3)")
+igual(float(crudo_c.loc[0, "PRECIO COSTO"]), 150.0,
+      "el df de entrada conserva su PRECIO COSTO")
+_sin_q = crudo_c.assign(**{"CANTIDAD ITEM DDOCUMENTO": 0.0})
+igual(float(dv.preparar(_sin_q, D1, D1).loc[0, "PRECIO COSTO"]), 150.0,
+      "con cantidad 0 no divide (y la línea cuesta 0 igual)")
+
+# Con la marca del POS en el parquet, manda ella y no la lista.
+_marcado = _canje_combo(**{"ES COMBO": [False, True] * 2 + [False]})
+_lm = dv.preparar(_marcado, D1, D3).set_index("LLAVE LOCAL DOCUMENTO ITEM")
+igual(float(_lm.loc["LB901", "PRECIO COSTO"]), 150.0,
+      "`ES COMBO` falso gana aunque el código esté en COMBOS")
+igual(float(_lm.loc["LB902", "PRECIO COSTO"]), 0.75,
+      "`ES COMBO` verdadero divide aunque el código no esté")
 
 print("\n── los KPIs del rail, con la misma definición ──")
 k = dv.resumir(prep, (("Venta", "VENTA ITEM DDOCUMENTO", "sum"),

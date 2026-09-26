@@ -28,8 +28,14 @@ LA DEFINICIÓN — cuadrada al céntimo contra el sistema de caja (INFOREST,
 - **Costo** de una línea = `PRECIO COSTO` × cantidad: el parquet trae el
   costo POR UNIDAD (el Lomo a 24,17 la unidad, vendido por 2). Sumarlo
   suelto, como hacían cuatro vistas, daba un FoodCost de 24 % donde era
-  34,5 % (septiembre 2026). `preparar` deja la cuenta hecha en
+  29 % (del 1 al 23 de septiembre de 2026; el 34,5 % que se midió ese día
+  traía los combos inflados). `preparar` deja la cuenta hecha en
   `COSTO VENTA`, en negativo en las notas de crédito.
+- **Menos en los COMBOS** (regla #542): ahí `PRECIO COSTO` ya es el costo
+  de la LÍNEA entera —lo que se sirvió de cada plato del combo, sumado—, y
+  multiplicarlo por la cantidad contaba 13 veces una línea de 13
+  Degustaciones. `preparar` lo devuelve a unitario antes de todo lo demás,
+  así que `PRECIO COSTO` dice lo mismo en todas las filas.
 - **Clientes** = `CANT PAX`, que el POS llena con los ADULTOS
   (`MPEDIDO.nAdulto`); los niños (`nNino`) no vienen en la consulta. Por
   decisión del usuario (2026-09-24) se queda así por ahora.
@@ -50,14 +56,15 @@ consumen los dos lados — `data.py` y las vistas —, igual que `cortes.py`.
 import numpy as np
 import pandas as pd
 
-VERSION = 2
+VERSION = 3
 """Entra en la clave de la caché de `data.py`. Subirla al cambiar la
 definición: la caché vive en disco y, sin esto, seguiría sirviendo el df
 preparado con la regla anterior hasta que cambie el parquet.
 
 No es teórico: la 2 nació el mismo día que la 1, al sumar `COSTO VENTA` —
 la caché local tenía el df de la 1, sin esa columna, y «Ranking & FoodCost»
-siguió mostrando el FoodCost con el costo unitario."""
+siguió mostrando el FoodCost con el costo unitario. La 3 es el costo de
+los combos (regla #542)."""
 
 CLASE = "CLASE VENTA"
 VENTA = "Venta"
@@ -90,6 +97,33 @@ DESCUENTO_ITEM = "DESCUENTO ITEM DDOCUMENTO"
 COSTO_UNIT = "PRECIO COSTO"
 COSTO = "COSTO VENTA"
 """La columna que agrega `preparar`: el costo de la LÍNEA (unitario × cantidad)."""
+PRODUCTO = "COD ITEM VENTA DDOCUMENTO"
+ES_COMBO = "ES COMBO"
+"""La marca de combo del POS, si la consulta del Sheet la trae
+(`INFOREST.DBO.TPRODUCTO.lCombinacion AS [ES COMBO]`). Hoy no la trae: con
+ella, `COMBOS` deja de hacer falta y un combo nuevo no se escapa."""
+
+COMBOS = frozenset({
+    "0000314", "0000423", "0000424", "0000425", "0000492", "0000598",
+    "0000652", "0000740", "0000843", "0000854", "0000988", "0000999",
+    "0001000", "0001003", "0001041", "0001042", "0001043", "0001044",
+    "0001075", "0001090", "0001123", "0001128", "0001130", "0001135",
+    "0001136", "0001142", "0001147", "0001157", "0001180", "0001202",
+    "0001206", "0001207", "0001208", "0001219", "0001224", "0001231",
+    "0001259", "0001268", "0001269", "0001331", "0001356", "0001363",
+    "0001490", "0001521", "0001536", "0001545", "0001546", "0001548",
+    "0001568", "0001595", "0001605", "0001629", "0001643", "0001650",
+    "0001682",
+})
+"""Los productos que el POS arma como COMBO (`INFOREST.DBO.TPRODUCTO.
+lCombinacion = 1`) al 2026-09-26: la Degustación, las parrillas, los menús
+de evento. En ellos `PRECIO COSTO` es el costo de la LÍNEA (regla #542).
+
+Es una FOTO del POS y se queda vieja: salen menús de evento casi cada mes
+(Echecopar y Cocina de Fuegos en agosto de 2026, Sept2026 el 24 de
+septiembre). Un combo que falte vuelve a contar su costo por la cantidad,
+sin ningún error. `herramientas/cuadrar_ventas.py` lo compara con el POS y
+nombra a los que falten; el arreglo de fondo es la columna `ES_COMBO`."""
 
 # Montos de LÍNEA: la nota los invierte. Los precios UNITARIOS (oficial,
 # costo, neto, venta) no se tocan — carta y costo salen de unitario ×
@@ -111,8 +145,8 @@ _REFERENCIA_NC = (NC_NUMERO, NC_FECHA, "NETO NC", NC_TOTAL, "FECH REG NC")
 COLUMNAS = (
     FECHA, COD_TIPO, TIPO, ESTADO, MOTIVO_CORTESIA, NUMERO, LLAVE_DOC,
     LLAVE_ITEM, LLAVE_PAGO, NC_NUMERO, NC_FECHA, NC_TOTAL, TOTAL_DOC, PAX,
-    CARTA_UNIT, COSTO_UNIT, *_MONTOS_LINEA, *_DEL_PAGO, *_CABECERA,
-    *_REFERENCIA_NC,
+    CARTA_UNIT, COSTO_UNIT, PRODUCTO, ES_COMBO, *_MONTOS_LINEA, *_DEL_PAGO,
+    *_CABECERA, *_REFERENCIA_NC,
 )
 """Todo lo que `preparar()` lee. Quien quiera la definición sin bajar el
 parquet entero (los KPIs del rail) trae estas y las suyas."""
@@ -122,8 +156,9 @@ DEFINICION = (
     "crédito. Es lo mismo que precio de carta menos descuentos. Las "
     "cortesías (a precio de carta) y los anulados no son venta; las notas "
     "de crédito restan el día que se emiten, como en el Registro de Ventas "
-    "de SUNAT. El costo es el de receta por la cantidad vendida. Clientes "
-    "cuenta adultos, como el POS en «pax».")
+    "de SUNAT. El costo es el de receta por la cantidad vendida (en un "
+    "combo, lo que se sirvió de cada plato). Clientes cuenta adultos, como "
+    "el POS en «pax».")
 
 
 def _norm(nombre):
@@ -161,6 +196,48 @@ def _clasificar(df, cols):
     if cols[ESTADO]:
         clase[_texto(df[cols[ESTADO]]) == "ANULADO"] = ANULADO
     return clase
+
+
+def es_combo(df, cols=None):
+    """Máscara de las líneas de COMBO: por la marca del POS si el parquet
+    la trae (`ES_COMBO`), si no por el código del producto (`COMBOS`)."""
+    cols = cols or {n: columna(df, n) for n in (ES_COMBO, PRODUCTO)}
+    if cols.get(ES_COMBO):
+        s = df[cols[ES_COMBO]]
+        return ((pd.to_numeric(s, errors="coerce").fillna(0) != 0)
+                | _texto(s).isin(("TRUE", "SI", "SÍ", "S")))
+    if cols.get(PRODUCTO):
+        return _texto(df[cols[PRODUCTO]]).isin(COMBOS)
+    return pd.Series(False, index=df.index)
+
+
+def _costo_unitario(df, cols):
+    """`PRECIO COSTO` por UNIDAD en todas las filas (regla #542).
+
+    En un combo el extractor lo llena con el costo de la LÍNEA DE PEDIDO
+    entera: Σ `CPEDIDO.nCantidad × CPEDIDO.nInsumo`, lo servido de cada
+    plato del combo (el POS deja `DPEDIDO.nInsumo` en 0). Se divide por la
+    cantidad del comprobante, que ES la de la línea de pedido: el POS nunca
+    reparte una línea entre comprobantes — una cuenta dividida separa
+    líneas enteras, y un canje repite la línea entera en los dos (medido:
+    196.241 líneas de 2025-26, ni una con otra cantidad).
+
+    Va ANTES de espejar las notas de crédito: el espejo copia el unitario
+    y niega la cantidad, así el costo de la nota sale negativo solo. Una
+    cantidad en 0 o vacía deja el costo como vino (la línea cuesta 0 igual)."""
+    c_costo, c_cant = cols[COSTO_UNIT], cols[CANTIDAD]
+    if not (c_costo and c_cant):
+        return df
+    combo = es_combo(df, cols)
+    if not combo.any():
+        return df
+    costo = pd.to_numeric(df[c_costo], errors="coerce")
+    cant = pd.to_numeric(df[c_cant], errors="coerce")
+    dividir = combo & cant.notna() & (cant != 0)
+    # Columna nueva y no `.loc[...] =`: así el df que recibió `preparar`
+    # no se entera, con copy-on-write o sin él.
+    df[c_costo] = costo.where(~dividir, costo / cant)
+    return df
 
 
 def _espejo_de_notas(df, cols, es_nota):
@@ -260,7 +337,8 @@ def preparar(df, ini=None, fin=None):
     - Agrega `CLASE VENTA`: Venta, Nota de crédito, Cortesía o Anulado.
     - Cada nota de crédito deja de ser un documento sin ítems y pasa a ser
       los ítems del documento que anula, en negativo y en SU fecha.
-    - Agrega `COSTO VENTA`: costo unitario × cantidad de cada línea.
+    - Agrega `COSTO VENTA`: costo unitario × cantidad de cada línea. En los
+      combos, antes, devuelve `PRECIO COSTO` a unitario (`_costo_unitario`).
     - Con `ini`/`fin` (fechas, inclusive) se queda sólo con lo que cae en
       el rango: el loader trae también los documentos anulados por una
       nota del rango aunque sean de antes, y acá se van después de
@@ -272,6 +350,7 @@ def preparar(df, ini=None, fin=None):
         return df
     cols = {n: columna(df, n) for n in COLUMNAS}
     out = df.assign(**{CLASE: _clasificar(df, cols)})
+    out = _costo_unitario(out, cols)
 
     if cols[NC_NUMERO] and cols[NC_FECHA] and cols[FECHA] and not out.empty:
         es_nota = out[CLASE] == NOTA_CREDITO

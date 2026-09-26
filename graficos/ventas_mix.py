@@ -111,7 +111,7 @@ _KEYS_WIDGET_MIX = ("vt_mix_gran", "vt_mix_medida", "vt_mix_escala",
 def columnas(d):
     """Las columnas que usa la vista, resueltas contra `d`. `costo` es el de
     la LÍNEA que arma `definicion_venta` (el unitario suelto daba un % de
-    costo de 24 donde era 34,5: regla #524)."""
+    costo de 24 donde era 29: reglas #524 y #542)."""
     return {
         "fecha": _resolver(d, ["Fec Reg Documento", "Fecha Registro", "FECHA"]),
         "grupo": _resolver(d, ["Grupo"]),

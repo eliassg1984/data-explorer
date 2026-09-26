@@ -27,6 +27,15 @@ QUÉ COMPARA, por día (fecha de registro del comprobante):
     propinas                            DPAGODOCUMENTO de lo no anulado
     clientes                            MPEDIDO.nAdulto, con la regla de
                                         `definicion_venta.pax_por`
+    costo (lo vendido − las notas)      cada línea del comprobante con SU
+    costo de las cortesías              línea de DPEDIDO (mismo pedido y
+                                        tItem): nInsumo × cantidad; en un
+                                        combo, Σ CPEDIDO nCantidad × nInsumo
+
+Y aparte, que `definicion_venta.COMBOS` tenga todos los combos del POS
+(`TPRODUCTO.lCombinacion`): uno que falte vuelve a contar su costo por la
+cantidad (regla #542). No cuadra un día, pero se nota recién cuando se
+vende; por eso sale con código 1 aunque todavía no se haya vendido.
 
 La app lee el parquet que dejó el extractor de la madrugada: un día de HOY
 no cuadra hasta la próxima corrida, y por eso el default termina ayer.
@@ -99,6 +108,40 @@ JOIN (SELECT DISTINCT tDocumento, tCodigoPedido FROM DDOCUMENTO) d
 JOIN MPEDIDO pe ON pe.tCodigoPedido = d.tCodigoPedido
 WHERE n.fRegistro >= ? AND n.fRegistro < ? AND n.tEstadoDocumento <> '04'
 """
+# El costo de una línea de comprobante. `DDOCUMENTO.tItem` ES el ítem del
+# pedido, y la cantidad de la línea es la del pedido: el POS no reparte una
+# línea entre comprobantes (regla #542). El combo guarda 0 en su
+# `DPEDIDO.nInsumo`; lo servido está en CPEDIDO.
+_COSTO_LINEA = """
+  CASE WHEN t.lCombinacion = 1 THEN ISNULL(c.costo, 0)
+       ELSE ISNULL(dp.nInsumo, 0) * dd.nCantidad END"""
+_UNIR_COSTO = """
+  JOIN TPRODUCTO t ON t.tCodigoProducto = dd.tCodigoProducto
+  LEFT JOIN DPEDIDO dp ON dp.tCodigoPedido = dd.tCodigoPedido
+                      AND dp.tItem = dd.tItem
+  LEFT JOIN (SELECT tCodigoPedido, tItem, SUM(nCantidad * nInsumo) AS costo
+             FROM CPEDIDO GROUP BY tCodigoPedido, tItem) c
+    ON c.tCodigoPedido = dd.tCodigoPedido AND c.tItem = dd.tItem"""
+_SQL_COSTO = f"""
+SELECT dia, SUM(costo) AS costo, SUM(costo_cortesias) AS costo_cortesias
+FROM (
+  SELECT CONVERT(varchar(10), m.fRegistro, 120) AS dia,
+    CASE WHEN m.tTipoDocumento <> '00' AND m.tEstadoDocumento IN ('02', '03')
+         THEN {_COSTO_LINEA} ELSE 0 END AS costo,
+    CASE WHEN m.tTipoDocumento = '00' AND m.tEstadoDocumento <> '04'
+         THEN {_COSTO_LINEA} ELSE 0 END AS costo_cortesias
+  FROM DDOCUMENTO dd
+  JOIN MDOCUMENTO m ON m.tDocumento = dd.tDocumento {_UNIR_COSTO}
+  WHERE m.fRegistro >= ? AND m.fRegistro < ?
+  UNION ALL
+  SELECT CONVERT(varchar(10), n.fRegistro, 120), -({_COSTO_LINEA}), 0
+  FROM MNOTACREDITO n
+  JOIN DDOCUMENTO dd ON dd.tDocumento = n.tDocumento {_UNIR_COSTO}
+  WHERE n.fRegistro >= ? AND n.fRegistro < ? AND n.tEstadoDocumento <> '04'
+) lineas
+GROUP BY dia
+"""
+_SQL_COMBOS = "SELECT tCodigoProducto FROM TPRODUCTO WHERE lCombinacion = 1"
 
 
 def _consulta(cn, sql, desde, hasta, veces=1):
@@ -112,7 +155,8 @@ def _consulta(cn, sql, desde, hasta, veces=1):
 
 
 def lado_pos(desde, hasta):
-    """DataFrame por día con las seis cifras del POS."""
+    """(DataFrame por día con las ocho cifras del POS, códigos de sus
+    combos)."""
     from sql_restaurante import _servidor_local, conectar
 
     servidor = _servidor_local()
@@ -124,16 +168,20 @@ def lado_pos(desde, hasta):
         partes = [_consulta(cn, q, desde, hasta).set_index("dia")
                   for q in (_SQL_MONTOS, _SQL_NOTAS, _SQL_PROPINAS)]
         pax = _consulta(cn, _SQL_PAX, desde, hasta, veces=2)
+        costo = _consulta(cn, _SQL_COSTO, desde, hasta, veces=2)
+        combos = _consulta(cn, _SQL_COMBOS, desde, hasta, veces=0)
     finally:
         cn.rollback()
         cn.close()
     pos = pd.concat(partes, axis=1).astype(float)
     pos["clientes"] = dv.pax_por(pax, "ped", "pax", doc="doc", por="dia")
-    return pos.fillna(0.0)
+    pos = pos.join(costo.set_index("dia").astype(float), how="outer")
+    return pos.fillna(0.0), set(combos["tCodigoProducto"].str.strip())
 
 
 def lado_app(desde, hasta):
-    """Las mismas cifras, de lo que `data.cargar_rango` le entrega a la app."""
+    """(Las mismas cifras, de lo que `data.cargar_rango` le entrega a la
+    app; si el parquet trae la marca de combo del POS)."""
     import data  # importa streamlit: sus avisos de «bare mode» son ruido
 
     df = data.cargar_rango("ventas.parquet", "FEC REG DOCUMENTO", desde, hasta)
@@ -157,7 +205,13 @@ def lado_app(desde, hasta):
                        .fillna(0.0).groupby(pagos["_dia"]).sum())
     app["clientes"] = dv.pax_por(dv.solo_venta(items), "LLAVE LOCAL PEDIDO",
                                  dv.PAX, doc=dv.LLAVE_DOC, por="_dia")
-    return app.fillna(0.0)
+    costo = pd.to_numeric(items[dv.COSTO], errors="coerce").fillna(0.0)
+    vendido = dv.es_venta(items)
+    cortesia = items[dv.CLASE] == dv.CORTESIA
+    app["costo"] = costo[vendido].groupby(items["_dia"][vendido]).sum()
+    app["costo_cortesias"] = (costo[cortesia]
+                              .groupby(items["_dia"][cortesia]).sum())
+    return app.fillna(0.0), dv.columna(df, dv.ES_COMBO) is not None
 
 
 def main():
@@ -170,8 +224,8 @@ def main():
                     help="soles (o clientes) de diferencia que se aceptan")
     a = ap.parse_args()
 
-    pos = lado_pos(a.desde, a.hasta)
-    app = lado_app(a.desde, a.hasta)
+    pos, combos_pos = lado_pos(a.desde, a.hasta)
+    app, trae_marca = lado_app(a.desde, a.hasta)
     dias = sorted(set(pos.index) | set(app.index))
     pos, app = pos.reindex(dias, fill_value=0.0), app.reindex(dias,
                                                               fill_value=0.0)
@@ -188,12 +242,26 @@ def main():
     tot.loc["= venta", "diferencia"] = round(
         tot.loc["= venta", "app"] - tot.loc["= venta", "POS"], 2)
     print(tot.to_string(float_format=lambda v: f"{v:,.2f}"))
-    if malos.empty:
+    venta = tot.loc["= venta"]
+    print(f"\nFoodCost (costo / venta): app "
+          f"{tot.loc['costo', 'app'] / venta['app']:.2%} · POS "
+          f"{tot.loc['costo', 'POS'] / venta['POS']:.2%}")
+
+    faltan = sorted(combos_pos - dv.COMBOS)
+    if trae_marca:
+        print("\nEl parquet trae `ES COMBO`: la lista COMBOS no se usa.")
+        faltan = []
+    elif faltan:
+        print(f"\n❌ {len(faltan)} combo(s) del POS no están en "
+              f"definicion_venta.COMBOS — su costo se cuenta por la "
+              f"cantidad (regla #542): {', '.join(faltan)}")
+    if malos.empty and not faltan:
         print(f"\n✅ Los {len(dias)} días cuadran (tolerancia "
               f"{a.tolerancia:g}).")
         return
-    print(f"\n❌ {len(malos)} día(s) no cuadran — app menos POS:")
-    print(malos.loc[:, (malos.abs() > a.tolerancia).any()].to_string())
+    if not malos.empty:
+        print(f"\n❌ {len(malos)} día(s) no cuadran — app menos POS:")
+        print(malos.loc[:, (malos.abs() > a.tolerancia).any()].to_string())
     sys.exit(1)
 
 

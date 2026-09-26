@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-541 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+542 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (188)
 
@@ -646,7 +646,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 - **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
 
-**Datos, R2 y DuckDB** (67)
+**Datos, R2 y DuckDB** (68)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -715,6 +715,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#529** — «Análisis de platos»: el ranking de platos entre hasta cuatro períodos, en lugar del Top…
 - **#531** — «Por hora» tiene su propia fecha: el rango se parte por la granularidad. Y en Ventas…
 - **#537** — Un for … in df.groupby(...) con un sort_values, un filtro o un mode() adentro no es un…
+- **#542** — En un COMBO, PRECIO COSTO es el costo de la LÍNEA entera, no el de una unidad — y…
 
 **SUNAT y SIRE** (43)
 
@@ -43813,6 +43814,93 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-26.)
 
+542. **En un COMBO, `PRECIO COSTO` es el costo de la LÍNEA entera, no el de
+     una unidad — y `definicion_venta.preparar` lo devuelve a unitario
+     ANTES de espejar las notas de crédito.** Medido el 2026-09-26 contra
+     el POS (`herramientas/sql_restaurante.py`, sólo lectura).
+
+     **Lo que pasaba.** Los combos del POS (`TPRODUCTO.lCombinacion = 1`:
+     la Degustación, las parrillas, los menús de evento; 55 productos) no
+     guardan costo en su línea de pedido: `DPEDIDO.nInsumo` es 0, y lo
+     servido está en `CPEDIDO`, una fila por plato elegido, con
+     `nCantidad` = el total de la línea y `nInsumo` = el costo unitario del
+     plato. El extractor llena `PRECIO COSTO` con Σ `nCantidad × nInsumo`
+     de la línea — el costo de la línea ENTERA —, y la #524 lo multiplica
+     por la cantidad como a cualquier otro plato: una línea de 13
+     Degustaciones contaba 13 veces su costo. Comprobado en las 2.492
+     líneas de combo del parquet que tienen su línea de pedido (2025-26):
+     `PRECIO COSTO` = el costo de la línea en todas, y en las 480 con
+     cantidad mayor que 1 ninguna trae el unitario.
+
+     **Cuánto.** Costo de más en facturas y boletas: S/ 148.005 en 2025 y
+     S/ 213.766 en 2026. Lo que llegaba al FoodCost es menos —S/ 119.535 y
+     S/ 160.558—, porque el espejo de las notas de crédito también
+     multiplicaba y los canjes de combos restaban de más. FoodCost de los
+     30 días al 25 set 2026: **36,92 % donde era 28,85 %**; del 1 al 23 de
+     septiembre, 34,5 % donde era 29,0 % — o sea que el «donde era 34,5 %»
+     de la #524 ya traía este error. «Eventos» salía al 145 % y es 10 %
+     (el menú de evento es un combo; los platos «(Evt)» no tienen receta y
+     cuestan 0, otro asunto). «Venta Interna» sigue en 105 %: ahí no hay
+     combos.
+
+     **¿Dividir por la cantidad de qué?** El costo es de la línea de
+     PEDIDO y la cantidad del parquet es la del COMPROBANTE; se puede
+     dividir por la segunda porque son la misma. `DDOCUMENTO.tItem` ES el
+     `tItem` del pedido, y en las 196.241 líneas de comprobantes válidos de
+     2025-26 ninguna tiene otra cantidad que su línea de pedido: el POS no
+     reparte una línea entre comprobantes. Una cuenta dividida separa
+     líneas enteras, y un canje (boleta → factura) repite la línea ENTERA
+     en los dos, con la nota de crédito restando una. Si el POS algún día
+     partiera una línea (2 Degustaciones en una boleta y 1 en otra), cada
+     parte traería el costo de las 3 y esto sobrecontaría: lo vería el
+     cuadre de costo de abajo, no un test.
+
+     **El arreglo, en `definicion_venta._costo_unitario`**: en las líneas
+     de combo, `PRECIO COSTO` ÷ cantidad, y `COSTO VENTA` sigue siendo
+     unitario × cantidad para todas. Dos decisiones:
+     - Se corrige `PRECIO COSTO` y no sólo `COSTO VENTA`: el Resumen lo
+       muestra como unitario y el asistente le dice al modelo que «es por
+       UNIDAD». Corregido en origen, los tres dicen lo mismo.
+     - Va ANTES del espejo de las notas. El espejo copia el unitario y
+       niega la cantidad, así el costo de la nota sale negativo solo;
+       dividiendo DESPUÉS, la cantidad ya es negativa y el costo de la nota
+       queda POSITIVO.
+     Con cantidad 0 o vacía no divide (la línea cuesta 0 igual). El df que
+     recibe no se toca: se reemplaza la columna entera, no `.loc[...] =`.
+
+     **Cómo sabe qué es un combo, y por qué eso se queda viejo.** El
+     parquet no trae la marca y ningún otro parquet de R2 la tiene
+     (`recetaventa` lista platos con receta, y un plato sin receta no es
+     un combo). Así que hoy manda `definicion_venta.COMBOS`, una FOTO de
+     `TPRODUCTO.lCombinacion` al 2026-09-26 — y sale un menú de evento
+     casi cada mes (Echecopar y Cocina de Fuegos en agosto, Sept2026 el
+     24 de septiembre). Un combo que falte no da error: vuelve a contar
+     por la cantidad. Medido: sacando sólo el menú de septiembre de la
+     lista, el FoodCost de 30 días pasa de 28,85 % a 32,24 % (una línea,
+     S/ 14.013). El arreglo de fondo es una columna en la consulta del
+     Sheet, `INFOREST.DBO.TPRODUCTO.lCombinacion AS [ES COMBO]`:
+     `preparar` ya la lee (`ES_COMBO`) y, si está, manda ella y la lista
+     sobra. Si en cambio alguien arregla `PRECIO COSTO` en el extractor
+     (dividiendo allá), hay que sacar `_costo_unitario`, o se divide dos
+     veces.
+
+     **Los candados:**
+     - `herramientas/cuadrar_ventas.py` cuadra ahora también el COSTO
+       —lo vendido menos las notas, y el de las cortesías—, día por día
+       contra el POS: cada línea del comprobante con SU línea de pedido,
+       `nInsumo × cantidad` o, en un combo, Σ `CPEDIDO`. Con el arreglo,
+       629 de 629 días al céntimo (enero 2025 → 25 set 2026); sin él, 268
+       no cuadraban. Además compara `COMBOS` con el POS y sale con código
+       1 si falta alguno, aunque todavía no se haya vendido.
+     - `test_definicion_venta.py`: el canje de un combo (boleta, factura
+       y nota) con un plato suelto al lado — unitario, costo de línea, la
+       nota restando UNA vez, el plato suelto sin tocar, la entrada sin
+       tocar, la cantidad 0, y que `ES COMBO` gane a la lista en los dos
+       sentidos.
+     - `definicion_venta.VERSION` pasó a 3 (la caché de disco no caduca).
+
+     (2026-09-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43825,7 +43913,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#541**; la próxima toma el número siguiente.
+> última regla es la **#542**; la próxima toma el número siguiente.
 
 >
 
