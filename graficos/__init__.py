@@ -14,7 +14,7 @@ Estructura:
         compras/       → dashboard Compras — PAQUETE, un drill por archivo
                           (_comun, proveedor, familia, cantidad).
                           Era un compras.py de 2.835 líneas hasta 2026-08-01.
-        ventas.py      → dashboard Ventas (ranking FoodCost, matriz agrupada)
+        ventas.py      → dashboard Ventas (resumen, mix de carta, ranking FoodCost)
         inventario.py  → dashboard Inventario Valorizado (v2)
         movimientos.py  → dashboard Movimientos: UNA página con los dos
                           parquets del flujo de stock (requerimientos +

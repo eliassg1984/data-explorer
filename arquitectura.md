@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-542 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+544 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (188)
 
@@ -406,7 +406,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
 - **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
 
-**AgGrid y tablas** (84)
+**AgGrid y tablas** (86)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -492,8 +492,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
 - **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
+- **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
+- **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 
-**Streamlit** (150)
+**Streamlit** (151)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -645,6 +647,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 - **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
+- **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
 
 **Datos, R2 y DuckDB** (68)
 
@@ -826,7 +829,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (114)
+**Decisiones de diseño y UX** (115)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -942,6 +945,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
 - **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
 - **#541** — Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre el reporte, dibujaba un…
+- **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -43899,6 +43903,107 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        sentidos.
      - `definicion_venta.VERSION` pasó a 3 (la caché de disco no caduca).
 
+543. **Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y
+     la comparación que la justificaba mentía. Y al borrar una función, el
+     corte empieza en su DECORADOR.**
+     2026-09-26, a pedido, después de analizarla con datos reales (había
+     quedado pendiente en la #527). Era un árbol AgGrid Grupo › Sub Grupo ›
+     Producto con una columna por mes o por semana: venta del año pasado,
+     la actual, su % del total y su % contra el año pasado; o, en modo
+     FoodCost, venta, costo, FC % y su cambio en puntos.
+
+     - **Con el rango con que abre Ventas no comparaba nada.** `d` trae
+       sólo la franja (`carga_por_rango`) y el año pasado no está: salía
+       una sola columna, «Sep», con «Vta AP» en S/ 0 en todas las filas, «—»
+       en la variación y el aviso de ampliar la fecha. Lo que quedaba —la
+       venta del mes por nivel y su %— es la tabla del Mix.
+     - **Con la fecha ampliada, mentía.** Del 27 set 2025 al 26 set 2026
+       armaba Ene–Dic por NÚMERO de mes: Ene–Ago sin año pasado; Sep, 26
+       días de 2026 contra 4 de 2025 (**+429 %**), y Oct–Dic, meses que no
+       pasaron contra los de 2025 (**−100 %**). Es el sesgo del período en
+       curso que la #87 dejó anotado sin corregir, más un eje que no sabe
+       que va a caballo de dos años.
+     - **Su FC % no era el % de costo del Resumen**: costo ÷ VENTA (con IGV
+       y recargo), y el Resumen divide por el NETO (`ventas_resumen`,
+       «Costo / neto»). Del 1 al 26 de septiembre, ya con el arreglo de
+       combos de la #542: Alimentos, 31,9 % contra 39,4 %; el total, 29,0 %
+       contra 35,7 %. «Ranking & FoodCost» sigue con la cuenta de la
+       Matriz: pendiente, no se tocó acá. (Costo ÷ venta es lo que
+       `cuadrar_ventas.py` llama «FoodCost»: ver la #544.)
+     - Y el árbol (`rowGroup`) es de AG Grid Enterprise, que corría sin
+       licencia: «License Key Not Found» en la consola.
+     - **Por qué quitarla y no rediseñarla**: rediseñada tendría las filas y
+       las columnas de la tabla del Mix, y dos tablas que calculan lo mismo
+       por separado es justo como el FoodCost terminó con dos cifras. Lo
+       único suyo —el % de costo por período— pasó al Mix (#544); el año
+       pasado por período lo dan el Detalle del Mix (los mismos días,
+       traídos de R2) y «Comparativo vs Año Pasado» (todos a la vez).
+     - **Se fue entero**: `_ventas_matriz_agrupada` (307 líneas, con sus
+       JsCode), `_MESES_ES`, su entrada en el rail, en `_PILA` y en
+       `_DIBUJANTES`, y sus keys (`ventas_matriz_modo`,
+       `ventas_matriz_exp`, `ventas_matriz_col`, `ventas_matriz_grid_*`).
+       No tenía CSS propio.
+     - **La trampa del corte**: se cortó desde `def _ventas_matriz_agrupada`
+       hasta la función siguiente, y el `@st.fragment` de la línea de
+       ARRIBA quedó colgando: pasó a decorar a `_fc_heat_css`, el color del
+       FoodCost de «Ranking & FoodCost», que dejó de devolverlo sin ningún
+       error — fuera de una corrida, un fragment devuelve `None`. Lo
+       atajaron sus tres asserts de `test_graficos.py`. Al borrar una
+       función, el corte empieza en su decorador, y se compara cuántos
+       `@st.fragment` había antes y después.
+
+     (2026-09-26.)
+
+544. **El Mix muestra el % de costo de cada período: la cuenta, los umbrales
+     y los colores son los del Resumen — importados, no copiados.**
+     2026-09-26, a pedido, en lugar de lo único que la Matriz tenía propio
+     (#543).
+
+     - **Dónde**: en la fila que elige qué se ve abajo, un «Venta | %
+       costo» que sólo aparece con el Resumen, como «Comparar con» sólo con
+       el Detalle. Cambia las celdas de la tabla y no la barra: el costo no
+       se apila. En «% costo», «Total» es el del rango entero y la columna
+       «% costo» se va (diría lo mismo); «Mix» sigue siendo lo que pesa
+       cada uno en lo vendido, que es lo que dice cuánto importa un costo
+       alto.
+     - **La cuenta es una**: `ventas_mix.pct_costo` (costo ÷ neto), para
+       las celdas, para «Total» y para la columna «% costo» del modo venta.
+       Es NaN sin costo cargado (#524) y con el neto ≤ 0 —una nota de
+       crédito que cae en otro período que su venta—. Un cociente no se
+       sesga con un período cortado por el rango: la semana en curso se lee
+       tal cual.
+     - **Los umbrales se importan**: `_COSTO_ALTO` (45 %, ámbar) y
+       `_COSTO_ROTO` (70 %, rojo) salen de `ventas_resumen`, con los
+       colores de `.vr-alto`/`.vr-roto`; el test afirma que son los MISMOS
+       objetos. Sin el fondo lavanda del modo venta: ese calor compara
+       cada fila consigo misma y taparía el ámbar.
+     - **Ojo con el nombre**: «FoodCost» en `cuadrar_ventas.py` y en la
+       #542 es costo ÷ VENTA; el «% costo» del Resumen y del Mix es costo
+       ÷ NETO. Son dos medidas con dos nombres —29,0 % y 35,7 % del mismo
+       mes—, y no se comparan entre sí.
+     - **Dos trampas, las dos vistas en pantalla con datos reales**:
+       · Un NaN en una celda se pintó «None» (Eventos, primera semana de
+         septiembre: vendió sin costo cargado). Es la #529 otra vez: la
+         tabla no lleva vacíos, lleva 0, y el Styler escribe «—». La
+         columna «% costo» que ya existía caía en el mismo NaN con «Otros»,
+         que no tiene costo.
+       · Un `None` adentro de la lista de un `LineChartColumn` hace que la
+         celda se rinda y escriba la lista como texto. La tendencia SALTA
+         los períodos sin dato (`_serie`): ni cero —un desplome que no
+         pasó— ni `None`.
+     - **La elección sobrevive al Detalle**: ahí el control no se dibuja y
+       Streamlit recolectaría su estado. `vt_mix_celdas` se re-escribe
+       sobre sí mismo al tope del fragment —el mecanismo de
+       `preservar_widgets` (#373)— y va en `_KEYS_WIDGET_MIX` para la
+       recarga de fecha.
+     - **Medido** a 1366×768 con datos reales (1–26 set 2026, por semana,
+       ya con el arreglo de combos de la #542): la fila Total da 26,7 /
+       36,2 / 37,2 / 45,3 % y 35,7 % el rango —el «Costo / neto» del
+       Resumen—, Alimentos 39,4 % y Eventos 17,7 %, igual que un cálculo
+       independiente sobre el parquet. La fila de controles sigue en 28px
+       y el texto de abajo en un renglón; a 375px los dos controles bajan a
+       dos renglones, como ya pasaba en el Detalle, sin desborde.
+
      (2026-09-26.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
@@ -43913,7 +44018,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#542**; la próxima toma el número siguiente.
+> última regla es la **#544**; la próxima toma el número siguiente.
 
 >
 

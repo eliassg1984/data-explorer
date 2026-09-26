@@ -2110,7 +2110,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_escala [data-testid="stButtonGroup"] button,
     .st-key-vt_mix_zona [data-testid="stButtonGroup"] button,
     .st-key-vt_mix_comp [data-testid="stButtonGroup"] button,
-    .st-key-vt_mix_cambio [data-testid="stButtonGroup"] button {
+    .st-key-vt_mix_cambio [data-testid="stButtonGroup"] button,
+    .st-key-vt_mix_celdas [data-testid="stButtonGroup"] button {
         min-height: 28px !important;
         height: 28px !important;
         padding: 0 10px !important;

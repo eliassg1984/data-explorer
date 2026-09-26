@@ -1946,9 +1946,8 @@ def _tabla_arbol(marcas, tramos, claves, grano, orden, medidas_arbol,
     """Árbol Grupo › Sub Grupo › Plato › Tipo de descuento, una columna por
     marca y medida.
 
-    AgGrid y no HTML: el agrupamiento con expandir/colapsar ya existe en este
-    proyecto (Matriz agrupada) y reimplementarlo a mano sería reescribir
-    gratis lo que la grilla da hecho. El tinte va por `cellStyle`, NUNCA por
+    AgGrid y no HTML: el agrupamiento con expandir/colapsar la grilla lo da
+    hecho, y reimplementarlo a mano sería reescribir gratis lo que ya trae. El tinte va por `cellStyle`, NUNCA por
     `cellRenderer` devolviendo HTML — acá eso se ve como texto escapado
     (arquitectura.md regla #25)."""
     from st_aggrid import AgGrid, GridOptionsBuilder, JsCode  # noqa: E402

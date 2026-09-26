@@ -6003,6 +6003,39 @@ def _pruebas_ventas_mix():
     check("una semana sin venta es cero, no NaN",
           M["venta"].loc["Bebidas"].tolist(), [0.0, 30.0])
 
+    # ── El % de costo por período (regla #544) ────────────────────────────
+    pc = _m.pct_costo(M["costo"], M["neto"])
+    check("% costo por período: costo ÷ NETO, no ÷ venta (47 / 113,4)",
+          round(float(pc.loc["Alimentos", "2026-S32"]), 4),
+          round(47.0 / 113.4, 4))
+    check("las columnas siguen siendo los períodos, por nombre",
+          list(pc.columns), claves)
+    check("un período sin venta es «—» (NaN), no 0 %",
+          bool(pd.isna(pc.loc["Bebidas", "2026-S32"])), True)
+    check("sin costo cargado es NaN, no 0 % (regla #524)",
+          bool(pd.isna(_m.pct_costo(pd.Series([0.0]), pd.Series([80.0]))[0])),
+          True)
+    check("con el neto en negativo no hay cociente",
+          bool(pd.isna(_m.pct_costo(pd.Series([10.0]), pd.Series([-50.0]))[0])),
+          True)
+    check("y con números sueltos, lo mismo",
+          (_m.pct_costo(47.0, 113.4) == 47.0 / 113.4,
+           bool(pd.isna(_m.pct_costo(0.0, 113.4)))), (True, True))
+    from graficos import ventas_resumen as _r
+    check("los umbrales de color SON los del Resumen, no una copia",
+          (_m._COSTO_ALTO is _r._COSTO_ALTO, _m._COSTO_ROTO is _r._COSTO_ROTO),
+          (True, True))
+    check("debajo del umbral, sin color; encima, ámbar; muy encima, rojo",
+          [bool(_m._estilo_costo(v)) for v in
+           (_r._COSTO_ALTO - 0.01, _r._COSTO_ALTO + 0.01)]
+          + ["700" in _m._estilo_costo(_r._COSTO_ROTO + 0.01),
+             _m._estilo_costo(float("nan")) == ""],
+          [False, True, True, True])
+    check("un NaN en la tendencia se salta: ni cero ni None (la línea no "
+          "tiene huecos)", _m._serie([0.4, float("nan"), 0.5]), [0.4, 0.5])
+    check("el control de las celdas sobrevive a la recarga de fecha",
+          "vt_mix_celdas" in _m._KEYS_WIDGET_MIX, True)
+
     check("alcance de un subgrupo",
           float(_m.alcance(b, ("Alimentos", "Fondos"))["venta"].sum()), 160.0)
     check("un grupo que ya no está vuelve arriba",
@@ -6046,8 +6079,9 @@ def _pruebas_ventas_mix():
               {k.arg: ast.unparse(k.value) for k in c.keywords}.get(
                   "filtrar_cb"), "_filtrar_items")
     vistas = [v for _cat, vs in _v._VENTAS_RAIL_CATEGORIAS for v, *_ in vs]
-    check("«Venta por día» y «Familia/Subfamilia semanal» se fueron",
-          [n for n in ("Venta por día", "Familia/Subfamilia semanal")
+    check("las vistas que reemplazó el Mix no vuelven (#527, #541, #543)",
+          [n for n in ("Venta por día", "Familia/Subfamilia semanal",
+                       "Histórica subfamilia", "Matriz agrupada")
            if n in vistas or n in dict(_v._PILA).values()], [])
     check("«Mix de carta» está en el rail y en la pila",
           ("Mix de carta" in vistas, "Mix de carta" in dict(_v._PILA).values()),

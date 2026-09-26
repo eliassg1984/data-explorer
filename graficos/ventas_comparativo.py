@@ -1097,8 +1097,8 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             if rk is None or rk.empty:
                 st.info("Sin ventas de productos en ese período.")
             else:
-                # Jerarquía primero (Grupo → Sub Grupo → Producto, como la
-                # Matriz agrupada), después la plata con su %Var, y las
+                # Jerarquía primero (Grupo → Sub Grupo → Producto, el orden
+                # de la carta), después la plata con su %Var, y las
                 # cantidades al final: son la lectura de apoyo, no la
                 # principal — y así los dos pares AP/Actual no se intercalan.
                 _cols = {"fam": "Grupo", "sub": "Sub Grupo", "prod": "Producto",

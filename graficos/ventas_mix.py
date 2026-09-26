@@ -42,9 +42,9 @@ import streamlit as st
 
 from cortes import MESES_ABR_ES
 from data import REPORTES
-from tema import (ACENTO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS,
-                  AJUSTE_POS_TEXTO, GRIS_TEXTO, LAVANDA_FONDO, PALETA_SERIES,
-                  SCROLL_THUMB, TEXTO_PRINCIPAL)
+from tema import (ACENTO, ADVERTENCIA_TEXTO, AJUSTE_NEG, AJUSTE_NEG_TEXTO,
+                  AJUSTE_POS, AJUSTE_POS_TEXTO, ERROR, GRIS_TEXTO,
+                  LAVANDA_FONDO, PALETA_SERIES, SCROLL_THUMB, TEXTO_PRINCIPAL)
 from graficos import alturas
 from graficos.base import (_compras_layout, _compras_truncar, _resolver,
                            preservar_widgets, selector_fecha_tarjeta)
@@ -55,8 +55,9 @@ from graficos.compras.semanal import (
     _plan_etiquetas, _rotulo_periodo,
 )
 from graficos.ventas_comparativo import _cargar_tramo
-from graficos.ventas_resumen import (MAX_DIAS, _ATENUADO, _con_alpha,
-                                     _fmt_dia, _fmt_var_venta)
+from graficos.ventas_resumen import (MAX_DIAS, _ATENUADO, _COSTO_ALTO,
+                                     _COSTO_ROTO, _con_alpha, _fmt_dia,
+                                     _fmt_var_venta)
 from utils import fmt_k
 
 _GRAN_OPCIONES = ("Día", "Semana", "Mes", "Año")
@@ -70,6 +71,9 @@ _ESCALAS = ("Monto", "% del período")
 _ZONA_RESUMEN, _ZONA_DETALLE = "Resumen", "Detalle"
 _COMP_ANT, _COMP_AP = "Período anterior", "Año pasado"
 _CAMBIO_MONTO, _CAMBIO_MIX = "Monto", "Mix (pp)"
+_CELDAS_VENTA, _CELDAS_COSTO = "Venta", "% costo"
+"""Qué dicen las celdas de la tabla del Resumen (regla #544). «% costo» no
+cambia la barra: el costo no se apila, y la barra es de lo vendido."""
 
 _NIVELES = ("Grupos", "Subgrupos", "Productos")
 _NIVEL_SING = ("grupo", "subgrupo", "producto")
@@ -98,7 +102,7 @@ navegación (`st.columns([3.3, 1])`, menos el gap)."""
 
 _KEYS_WIDGET_MIX = ("vt_mix_gran", "vt_mix_medida", "vt_mix_escala",
                     "vt_mix_zona", "vt_mix_comp", "vt_mix_cambio",
-                    "vt_mix_buscar")
+                    "vt_mix_celdas", "vt_mix_buscar")
 """Los controles de la vista, para que la recarga de fecha
 (`st.rerun(scope="app")`) no se los lleve: mismo mecanismo que
 `ventas_resumen._KEYS_WIDGET_RESUMEN` (regla #373)."""
@@ -192,6 +196,19 @@ def matriz(b, col, claves):
                            aggfunc="sum")
         salida[m] = t.reindex(columns=list(claves)).fillna(0.0)
     return salida
+
+
+def pct_costo(costo, neto):
+    """Costo ÷ neto, la cuenta del Resumen («Costo ÷ Neto»), para un número,
+    una Serie o una tabla entera de `matriz()` (regla #544).
+
+    Es NaN —y la celda dice «—»— donde no hay costo cargado: no saberlo no
+    es costar cero (regla #524). Y también donde el neto no es positivo: una
+    nota de crédito que cae en otro período que su venta lo deja negativo, y
+    ahí el cociente sale con signo cambiado o gigante sin medir nada."""
+    if np.isscalar(costo):
+        return costo / neto if (costo > 0 and neto > 0) else np.nan
+    return costo.where(costo > 0) / neto.where(neto > 0)
 
 
 def tramos(orden, prod_foco=None, sub=None):
@@ -444,6 +461,11 @@ def _ventas_mix(d, filtrar_cb=None):
     # con los dos, Streamlit avisa que el valor llegó por dos lados.
     ss.setdefault("vt_mix_zona", _ZONA_RESUMEN)
     ss.setdefault("vt_mix_cambio", _CAMBIO_MONTO)
+    # El «% costo» de la tabla se dibuja sólo en el Resumen, y tocar una
+    # barra abre el Detalle: sin esto, al volver la tabla estaría otra vez
+    # en venta. Re-escribirla la guarda de la recolección de los widgets que
+    # no se dibujaron — el mecanismo de `preservar_widgets` (regla #373).
+    ss["vt_mix_celdas"] = ss.get("vt_mix_celdas", _CELDAS_VENTA)
     _leer_clics()
 
     # ── 1) El renglón del título se crea ARRIBA y se llena después ───────
@@ -604,15 +626,29 @@ def _ventas_mix(d, filtrar_cb=None):
                 help="**Mix (pp)**: cuántos puntos del total ganó o perdió "
                      "cada uno. Sirve aunque los dos períodos no midan lo "
                      "mismo.") or _CAMBIO_MONTO
+        else:
+            celdas = st.segmented_control(
+                "Qué dicen las celdas", (_CELDAS_VENTA, _CELDAS_COSTO),
+                required=True, key="vt_mix_celdas",
+                label_visibility="collapsed",
+                help="**% costo**: el costo de cada período ÷ su venta neta, "
+                     "la cuenta del Resumen y con sus colores. La barra de "
+                     "arriba sigue en venta.") or _CELDAS_VENTA
         pie = st.empty()
 
     if zona == _ZONA_RESUMEN:
+        costo_modo = celdas == _CELDAS_COSTO
         _zona_resumen(M, med, orden, eje, [v[0] == "parcial" for v in vars_],
-                      foco_ix, pct_modo, unidades, nivel, ruta)
+                      foco_ix, pct_modo, unidades, nivel, ruta, costo_modo)
         _siguiente = (f"una fila para ver sus {_NIVELES[nivel + 1].lower()}"
                       if nivel < 2 else "un producto para seguirlo")
-        pie.caption(f"Tocá una barra para ver qué la movió · {_siguiente}."
-                    + _nota)
+        if costo_modo:
+            pie.caption(f"Costo ÷ venta neta, como el Resumen: en ámbar pasa "
+                        f"del {_COSTO_ALTO:.0%} y en rojo del "
+                        f"{_COSTO_ROTO:.0%} · Tocá {_siguiente}." + _nota)
+        else:
+            pie.caption(f"Tocá una barra para ver qué la movió · "
+                        f"{_siguiente}." + _nota)
     else:
         _zona_detalle(M, med, orden, claves, eje, largo, i_det, comp, cambio,
                       gran, rango, vars_, ruta, nivel, unidades, b,
@@ -832,41 +868,80 @@ def _heat(fila):
             if v > 0 else "" for v in vals]
 
 
+def _estilo_costo(v):
+    """El color de un % de costo: los umbrales y los colores del Resumen
+    (`ventas_resumen._COSTO_ALTO`/`_COSTO_ROTO`, y `.vr-alto`/`.vr-roto` de
+    `tablas/ventas_resumen.py`), importados y no copiados, para que el mismo
+    número se pinte igual en las dos vistas (regla #544)."""
+    if pd.isna(v):
+        return ""
+    if v > _COSTO_ROTO:
+        return f"color: {ERROR}; font-weight: 700"
+    if v > _COSTO_ALTO:
+        return f"color: {ADVERTENCIA_TEXTO}; font-weight: 600"
+    return ""
+
+
+def _serie(valores):
+    """Una fila de números para la columna «Tendencia». Un NaN —un período
+    sin venta o sin costo cargado— se SALTA: bajarlo a cero dibujaría un
+    desplome que no pasó, y la línea de `LineChartColumn` no tiene huecos —
+    con un `None` adentro se rinde y escribe la lista como texto (medido)."""
+    return [float(v) for v in valores if not pd.isna(v)]
+
+
 def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
-                  unidades, nivel, ruta):
+                  unidades, nivel, ruta, costo_modo=False):
     """El mapa de calor: una fila por cada uno del nivel, una columna por
     período, y el total, el mix, el % de costo y la tendencia al final. Un
     clic en una fila hace lo mismo que su nombre en la columna de la
-    derecha."""
+    derecha.
+
+    Con `costo_modo` cada celda es el % de costo de ese período (regla
+    #544): «Total» pasa a ser el del rango entero —la columna «% costo»
+    diría lo mismo, y se va—, y la tendencia es la del costo. «Mix» sigue
+    siendo lo que pesa cada uno en lo vendido (en soles o en unidades, lo
+    que diga «Medir»): es lo que dice cuánto importa un costo alto."""
     vals = M[med].loc[orden]
     tot = vals.sum(axis=0)
+    c, n = M["costo"].loc[orden], M["neto"].loc[orden]
+    pc_fila = pct_costo(c.sum(axis=1), n.sum(axis=1))
+    pc_todo = pct_costo(float(c.to_numpy().sum()), float(n.to_numpy().sum()))
     # El período en foco lleva «●» y uno cortado por el rango, «*»: el
     # nombre de la columna es lo único de la cabecera que se puede marcar.
     per_cols = [("● " if j == foco_ix else "") + e
                 + ("*" if parciales[j] else "") for j, e in enumerate(eje)]
-    cuerpo = (vals.div(tot.replace(0, np.nan), axis=1).fillna(0.0)
-              if pct_modo else vals)
+    if costo_modo:
+        # Un cociente no se sesga con un período cortado por el rango: 23
+        # días de septiembre dicen su % de costo igual que 30.
+        cuerpo = pct_costo(c, n)
+        cuerpo_tot = pct_costo(c.sum(axis=0), n.sum(axis=0))
+    elif pct_modo:
+        cuerpo = vals.div(tot.replace(0, np.nan), axis=1).fillna(0.0)
+        cuerpo_tot = pd.Series(1.0, index=tot.index)
+    else:
+        cuerpo, cuerpo_tot = vals, tot
     tabla = pd.DataFrame(cuerpo.to_numpy(), columns=per_cols)
     tabla.insert(0, _NIVELES[nivel], list(orden))
     t_fila = vals.sum(axis=1)
-    tabla["Total"] = t_fila.to_numpy()
+    tabla["Total"] = (pc_fila if costo_modo else t_fila).to_numpy()
     tabla["Mix"] = (t_fila / float(tot.sum())).to_numpy() if tot.sum() else 0.0
-    _c = M["costo"].loc[orden].sum(axis=1)
-    _n = M["neto"].loc[orden].sum(axis=1)
-    # Sin costo cargado no es «0 % de costo»: es no saberlo (regla #524,
-    # la venta sin costo del Resumen). Va «—».
-    tabla["% costo"] = (_c.where(_c > 0) / _n.replace(0, np.nan)).to_numpy()
-    tabla["Tendencia"] = [list(map(float, r)) for r in vals.to_numpy()]
+    if not costo_modo:
+        tabla["% costo"] = pc_fila.to_numpy()
+    tabla["Tendencia"] = [_serie(r) for r in
+                          (cuerpo if costo_modo else vals).to_numpy()]
     fila_total = {_NIVELES[nivel]: "Total",
-                  **{c: (1.0 if pct_modo else float(t))
-                     for c, t in zip(per_cols, tot)},
-                  "Total": float(tot.sum()), "Mix": 1.0,
-                  "% costo": (float(M["costo"].loc[orden].to_numpy().sum())
-                              / float(M["neto"].loc[orden].to_numpy().sum())
-                              if float(M["neto"].loc[orden].to_numpy().sum())
-                              else np.nan),
-                  "Tendencia": list(map(float, tot))}
+                  **{col: float(t) for col, t in zip(per_cols, cuerpo_tot)},
+                  "Total": pc_todo if costo_modo else float(tot.sum()),
+                  "Mix": 1.0,
+                  **({} if costo_modo else {"% costo": pc_todo}),
+                  "Tendencia": _serie(cuerpo_tot if costo_modo else tot)}
     tabla = pd.concat([pd.DataFrame([fila_total]), tabla], ignore_index=True)
+    # La tabla no lleva vacíos: un NaN viaja a la grilla como nulo y se pinta
+    # «None» aunque el Styler diga otra cosa (regla #529). Va 0, que se
+    # escribe «—»; un % de costo de verdad nunca es 0 (`pct_costo`).
+    _pcts = per_cols + ["Total"] if costo_modo else ["% costo"]
+    tabla[_pcts] = tabla[_pcts].fillna(0.0)
     st.session_state["_vt_mix_filas_tabla"] = (
         [None] + list(orden), nivel, tuple(ruta))
 
@@ -876,35 +951,48 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
         # Resumen, regla #525).
         if pd.isna(v) or v == 0:
             return "—"
-        if pct_modo:
+        if pct_modo or costo_modo:
             return f"{v:.1%}"
         return _unid(v) if unidades else fmt_k(v).replace("S/ ", "")
+
+    def _pct(v):
+        return "—" if pd.isna(v) or v == 0 else f"{v:.1%}"
 
     def _total_fila(fila):
         return ([f"background-color: {LAVANDA_FONDO}"] * len(fila)
                 if fila.name == 0 else [""] * len(fila))
 
-    sty = (tabla.style
-           .apply(_heat, axis=1, subset=pd.IndexSlice[1:, per_cols])
-           .apply(_total_fila, axis=1)
+    sty = tabla.style
+    if not costo_modo:
+        # El calor mide lo que vende cada uno contra sí mismo; en el costo
+        # el color es el del Resumen, y un fondo encima lo taparía.
+        sty = sty.apply(_heat, axis=1, subset=pd.IndexSlice[1:, per_cols])
+    sty = (sty.apply(_total_fila, axis=1)
+           .map(_estilo_costo,
+                subset=per_cols + ["Total"] if costo_modo else ["% costo"])
            .format(_num, subset=per_cols)
-           .format(lambda v: "—" if pd.isna(v) else _fmt(v, unidades),
+           .format(_pct if costo_modo
+                   else (lambda v: "—" if pd.isna(v) else _fmt(v, unidades)),
                    subset=["Total"])
-           .format(lambda v: "—" if pd.isna(v) else f"{v:.1%}",
-                   subset=["Mix", "% costo"]))
+           .format(_pct, subset=["Mix"] if costo_modo else ["Mix", "% costo"]))
+    config = {
+        _NIVELES[nivel]: st.column_config.TextColumn(
+            _NIVELES[nivel], pinned=True, width="medium"),
+        "Tendencia": st.column_config.LineChartColumn(
+            "Tendencia", width="small", y_min=0, color=ACENTO),
+    }
+    if costo_modo:
+        config["Total"] = st.column_config.Column(
+            "Total", help="El % de costo del rango entero: costo ÷ venta "
+            "neta. «—»: sin costo cargado.")
+    else:
+        config["% costo"] = st.column_config.Column(
+            "% costo", help="Costo de la línea ÷ venta neta, como el "
+            "Resumen. «—»: sin costo cargado.")
     st.dataframe(
         sty, key=_key("vt_mix_tabla"), on_select="rerun",
         selection_mode="single-row", hide_index=True, row_height=27,
-        height=alturas.VENTAS_MIX_TABLA,
-        column_config={
-            _NIVELES[nivel]: st.column_config.TextColumn(
-                _NIVELES[nivel], pinned=True, width="medium"),
-            "% costo": st.column_config.Column(
-                "% costo", help="Costo de la línea ÷ venta neta, como el "
-                "Resumen. «—»: sin costo cargado."),
-            "Tendencia": st.column_config.LineChartColumn(
-                "Tendencia", width="small", y_min=0, color=ACENTO),
-        })
+        height=alturas.VENTAS_MIX_TABLA, column_config=config)
 
 
 def _zona_detalle(M, med, orden, claves, eje, largo, i, comp, cambio, gran,
