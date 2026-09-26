@@ -21,6 +21,10 @@ paquete. La API publica no cambio: from inyecciones import inject_*.
                     de inspector.py y le comparte el espacio del badge)
     varios.py       overlay de errores, fullscreen, footer y calendario
                     en espanol
+    css_streamlit.py  le saca al CSS de Streamlit las `:has()` que traban
+                    la pagina (las de st.segmented_control, regla #532).
+                    `app.py` la importa por la ruta del submodulo, no desde
+                    aca: ver su docstring (regla #357)
 
 Ninguna funcion depende de otra: las unicas dependencias internas son hacia
 las constantes de _fragmentos.py y hacia `inyectar_html` de _iframe.py. La
@@ -44,3 +48,4 @@ from inyecciones.diseno import (inject_diseno_visual)  # noqa: F401
 from inyecciones.herramientas import (inject_herramientas)  # noqa: F401
 from inyecciones.hover_kpis import (inject_hover_kpis, inject_hover_kpis_grid)  # noqa: F401
 from inyecciones.varios import (inject_calendario_es, inject_error_overlay, inject_sello_actualizacion, inject_fullscreen_app)  # noqa: F401
+from inyecciones.css_streamlit import (neutralizar_has_streamlit)  # noqa: F401

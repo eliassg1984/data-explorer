@@ -145,6 +145,11 @@ sigue**, sin error: el texto que queda afuera es un selector inválido, y
 eso invalida la regla entera. Le pasó al `flex-wrap` de la cabecera de
 Semanal, con un comentario al lado jurando que funcionaba. Lo vigila
 `test_graficos.py::_pruebas_css_comentarios_cerrados`. Regla #454.
+**Y un párrafo que quedó FUERA de su comentario hace lo mismo**: así se
+perdió, desde el día en que nació, el `scroll-margin-top` de las secciones
+de la pila. Aquel test no miraba `estilos/` (busca `<style>…</style>` dentro
+de un mismo fichero y los módulos no tienen ninguno); lo vigila
+`_pruebas_css_sin_prosa_suelta`, que barre el CSS global entero. Regla #534.
 
 ## Adentro de un `:has()`, sólo clases
 
@@ -174,6 +179,18 @@ cuesta 3 ms puede ser la que dispara el recálculo que pagan las otras. Lo
 vigila `test_graficos.py::_pruebas_has_solo_clases`. Y un temporizador que
 toca el DOM escribe **sólo si el valor cambió**: quitar y poner la misma
 clase no es gratis. Mediciones y método en `arquitectura.md` regla #469.
+
+**Y el CSS del propio Streamlit también cuenta** (2026-09-25).
+`st.segmented_control` trae dos `:has()` con atributos adentro —el separador
+entre sus botones— y con ellas cada inserción y cada hover de la página
+costaban ~115 ms (0,1 ms sin ellas); en la 1.64 de Cloud, además, el
+multiselect. No se pueden editar: las saca en runtime
+`inyecciones/css_streamlit.py::neutralizar_has_streamlit`, que borra del
+sheet de emotion toda `:has()` con un atributo, un `:hover` o un `:active`
+adentro y envuelve `insertRule` para las que lleguen después. El test de
+arriba no las ve (mira nuestro código); el criterio lo fija
+`_pruebas_has_de_streamlit`. En Cloud se confirma desde la consola con
+`__hasCaroQuitadas`. Regla #532.
 
 ## Antes de agregar un widget dentro de una tarjeta: grep `estilos/`
 
@@ -1019,7 +1036,28 @@ Dos cosas que la pila cambia y conviene saber antes de tocar una vista:
   esqueleto. De paso desaparecen los dos parches que existían para que un
   widget no quedara huérfano al cambiar de vista (el `with c_x:` con el
   `if` adentro, y el sub-container con key por vista): con todas las vistas
-  siempre en la página, el problema no existe.
+  siempre en la página, el problema no existe. **Arriba quiere decir en el
+  cromo fijo** (la franja): desde el encaje de abajo, un control EN EL FLUJO
+  arriba de la primera sección queda inalcanzable.
+
+**Y la pila ENCAJA: una vista por pantalla** (2026-09-25, desde 769px).
+`.stMain` lleva `scroll-snap-type: y mandatory` y cada sección mide al menos
+una pantalla (`--pila-seccion-min`, en `estilos/_27_pila.py`): al soltar el
+scroll la página se detiene siempre en el tope de una vista, como
+diapositivas. Tres cosas que muerden:
+
+- **Lo que está en el flujo y no es punto de encaje no se puede ver.** El
+  aviso de datos viejos, que va arriba de la pila, es punto de encaje por
+  eso (`.st-key-aviso_dato_viejo`); lo que se agregue arriba o abajo de una
+  pila tiene que serlo también.
+- **El encaje se prende sólo con pila dibujada**: `_render_rail` publica
+  `--pila-encaje` cuando no está en un destino aparte. En una página sin
+  pila, ese aviso sería el único punto de encaje y la página no bajaría.
+- **Nada de `scroll-margin-top` en las secciones**: se suma al
+  `scroll-padding-top` de `.stMain` y corre el tope.
+
+Lo vigila `test_graficos.py::_pruebas_encaje_pila`. Detalle y mediciones en
+`arquitectura.md` regla #533.
 
 **Excepción: Ajuste tiene DOS pilas, una por categoría del rail.** Sus
 categorías no son agrupación visual — cada una recuerda su propio rango de

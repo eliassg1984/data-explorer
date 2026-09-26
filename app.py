@@ -23,6 +23,9 @@ from cortes import cortes_disponibles
 import franja_fecha
 from graficos.compras import bounds_fecha_de_la_vista, SEC_ABRE_EN_EL_MES
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_herramientas, inject_sello_actualizacion, inject_calendario_es, inject_fullscreen_app
+# Por la ruta del SUBMÓDULO y no desde el paquete: un nombre nuevo pedido al
+# `inyecciones` que Cloud ya tiene cargado tira la app (regla #357).
+from inyecciones.css_streamlit import neutralizar_has_streamlit
 from tablas import renderizar_aggrid_desktop, renderizar_aggrid_movil
 from graficos import renderizar_graficos_reporte, tiene_dashboard
 from graficos import periodo
@@ -55,6 +58,9 @@ st.set_page_config(
 procesar_aviso_ingreso()
 
 inject_css()
+# Las dos `:has()` del propio Streamlit (st.segmented_control) que hacían
+# costar ~115 ms cada cambio de la página y cada hover. Regla #532.
+neutralizar_has_streamlit()
 inject_error_overlay()
 inject_element_inspector()
 inject_diseno_visual()   # modo diseño (?debug=1&diseno=1), lee el pin de arriba

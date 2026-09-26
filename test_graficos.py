@@ -2589,6 +2589,162 @@ def _pruebas_has_solo_clases():
     return fallos
 
 
+def _pruebas_css_sin_prosa_suelta():
+    """Ningún párrafo de comentario queda FUERA del `/* … */`. Regla #534.
+
+    Gemela de `_pruebas_css_comentarios_cerrados`, y cubre lo que aquélla
+    no mira: esa barre bloques `<style>…</style>` enteros dentro de UN
+    fichero, y los módulos de `estilos/` no tienen ninguno (`_00_base` abre
+    la etiqueta y `_99_movil` la cierra). O sea que los 500 KB del CSS
+    global nunca pasaron por ella.
+
+    Encontrado el 2026-09-25 en `_28_arbol.py`: tres renglones de un
+    comentario habían quedado entre dos reglas, sin `/*`. El navegador los
+    leyó como el principio del selector siguiente y descartó la regla
+    —el `scroll-margin-top` de las secciones de la pila— desde el día en
+    que nació. Sin error: un selector inválido sólo invalida su regla.
+
+    La prosa se reconoce sin parsear CSS: después de borrar comentarios y
+    strings, un acento, una `ñ`, un `¿` o un backtick no pueden estar en un
+    selector ni en una declaración. Medido contra el CSS entero: el único
+    hallazgo era ese párrafo.
+    """
+    import pathlib
+    import re
+    import estilos
+
+    raiz = pathlib.Path(__file__).parent
+    bloques = [("estilos.get_css()", estilos.get_css())]
+    for f in (sorted((raiz / "graficos").rglob("*.py"))
+              + sorted((raiz / "tablas").rglob("*.py"))
+              + [raiz / "app.py", raiz / "navegacion.py", raiz / "asistente.py"]):
+        txt = f.read_text(encoding="utf-8")
+        for m in re.finditer(r"<style>(.*?)</style>", txt, re.S):
+            # Un `<style>` nombrado en un comentario se empareja con el
+            # `</style>` de más abajo y el tramo es PYTHON, no CSS: se
+            # descarta el que nace en un comentario o cruza un docstring o
+            # un comentario de Python.
+            inicio = txt[txt.rfind("\n", 0, m.start()) + 1:m.start()]
+            if ("#" in inicio or '"""' in m.group(1) or "'''" in m.group(1)
+                    or re.search(r"(?m)^\s*#", m.group(1))):
+                continue
+            bloques.append((str(f.relative_to(raiz)), m.group(1)))
+    prosa = []
+    for origen, css in bloques:
+        sin = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+        sin = re.sub(r"\"[^\"\n]*\"|'[^'\n]*'", '""', sin)
+        for linea in sin.splitlines():
+            if "*/" in linea or "`" in linea or re.search(r"[áéíóúñÁÉÍÓÚÑ¿¡]", linea):
+                prosa.append(f"{origen}: {linea.strip()[:90]}")
+    if prosa:
+        print("FALLA css · texto fuera de un comentario (el navegador lo lee "
+              "como selector y descarta la regla que sigue, regla #534):")
+        for p in prosa:
+            print(f"      {p}")
+        return 1
+    print(f"OK    css · ningún párrafo fuera de un comentario "
+          f"({len(bloques)} bloques, CSS global incluido)")
+    return 0
+
+
+def _pruebas_has_de_streamlit():
+    """Las `:has()` caras del CSS de STREAMLIT se sacan en runtime. Regla #532.
+
+    Nuestro CSS lo vigila `_pruebas_has_solo_clases`; el de Streamlit no se
+    puede editar, y trae dos (el separador de `st.segmented_control`) que
+    hacían costar ~115 ms cada inserción y cada hover de la página. Las saca
+    `inyecciones/css_streamlit.py`, y acá se fija su criterio contra las
+    dos reglas reales —copiadas de la hoja de emotion de la 1.59— y contra
+    las `:has()` de Streamlit que NO cuestan y tienen que quedar.
+    """
+    from inyecciones.css_streamlit import es_has_caro
+    import pathlib
+
+    fallos = 0
+    caras = (
+        '.st-emotion-cache-o7wst4:not([data-selected]):not([data-disabled])'
+        ':has(+ button[data-variant="segmented_control"][data-selected]'
+        ':not([data-disabled]))',
+        '.st-emotion-cache-o7wst4:not([data-selected]):not([data-disabled])'
+        ':not([data-hovered]):not([data-focus-visible])'
+        ':has(+ button[data-variant="segmented_control"]:not([data-disabled])'
+        ':is([data-hovered], [data-focus-visible]))',
+        '.x:has(> .y:hover)',
+        # la del multiselect de la 1.64, como la escribe emotion
+        '.e1kig3hy10:not(:has([data-focused])):not(:has([data-hovered])) '
+        "[role='option'][aria-posinset='1'] [data-item-hl]",
+    )
+    baratas = (
+        # anillo de foco del deslizador: estaba en la página medida
+        '.st-emotion-cache-igqoeg:focus-within:has(:focus-visible)',
+        '.st-emotion-cache-abc:has(> .stCheckbox)',
+        '.st-emotion-cache-abc:not([data-disabled]):has(+ .e1x2y3)',
+        '.st-emotion-cache-abc:has(.stTooltipIcon) [data-testid="x"]',
+    )
+    malas = ([s for s in caras if not es_has_caro(s)]
+             + [s for s in baratas if es_has_caro(s)])
+    if malas:
+        fallos += 1
+        print("FALLA css · el criterio de css_streamlit.py clasifica mal:")
+        for s in malas:
+            print(f"      {s[:100]}")
+    else:
+        print("OK    css · css_streamlit.py reconoce las :has() caras de "
+              "Streamlit y deja las baratas")
+
+    app = (pathlib.Path(__file__).parent / "app.py").read_text(encoding="utf-8")
+    if ("from inyecciones.css_streamlit import neutralizar_has_streamlit" not in app
+            or "\nneutralizar_has_streamlit()" not in app):
+        fallos += 1
+        print("FALLA css · app.py no llama a neutralizar_has_streamlit() "
+              "importándola del SUBMÓDULO (regla #357)")
+    else:
+        print("OK    css · app.py neutraliza las :has() de Streamlit en cada corrida")
+    return fallos
+
+
+def _pruebas_encaje_pila():
+    """El encaje de la pila no puede esconder nada. Regla #533.
+
+    Con `scroll-snap-type: y mandatory`, lo que está en el flujo y no es un
+    punto de encaje no se puede dejar a la vista. Dos trampas, las dos con
+    un aviso de por medio: el de datos viejos va ARRIBA de la pila (tiene
+    que ser punto de encaje, o la página salta por encima y no deja volver),
+    y en una página SIN pila sería el único punto (el encaje tiene que venir
+    apagado, o esa página no se podría bajar). Por eso el tipo de encaje va
+    en una variable que publica el rail sólo cuando dibuja la pila.
+    """
+    import pathlib
+    import re
+
+    fallos = 0
+    raiz = pathlib.Path(__file__).parent
+    pila = (raiz / "estilos" / "_27_pila.py").read_text(encoding="utf-8")
+    pila = re.sub(r"/\*.*?\*/", "", pila, flags=re.S)
+    base = (raiz / "graficos" / "base.py").read_text(encoding="utf-8")
+    faltas = []
+    if "scroll-snap-type: var(--pila-encaje, none)" not in pila:
+        faltas.append("el encaje de .stMain no cuelga de --pila-encaje (vendría "
+                      "prendido en páginas sin pila)")
+    if not re.search(r"\.st-key-aviso_dato_viejo\s*\{\s*scroll-snap-align: start",
+                     pila):
+        faltas.append("el aviso de datos viejos no es punto de encaje (quedaría "
+                      "escondido arriba de la pila)")
+    if not re.search(r"if not _fuera:\s*\n\s*st\.markdown\(\"<style>:root "
+                     r"\{ --pila-encaje: y mandatory; \}", base):
+        faltas.append("base.py::_render_rail no publica --pila-encaje sólo "
+                      "cuando dibuja la pila")
+    if faltas:
+        fallos += 1
+        print("FALLA css · encaje de la pila:")
+        for f_ in faltas:
+            print(f"      {f_}")
+    else:
+        print("OK    css · el encaje sólo se prende con pila y el aviso es punto "
+              "de encaje")
+    return fallos
+
+
 def _pruebas_widgets_de_fragment_escalado():
     """Un `st.rerun` al tope de un fragment le borra el estado a SUS widgets.
 
@@ -6339,7 +6495,10 @@ def main():
     fallos += _pruebas_widgets_de_fragment_escalado()
     fallos += _pruebas_fragment_anidado_una_vez()
     fallos += _pruebas_css_comentarios_cerrados()
+    fallos += _pruebas_css_sin_prosa_suelta()
     fallos += _pruebas_has_solo_clases()
+    fallos += _pruebas_has_de_streamlit()
+    fallos += _pruebas_encaje_pila()
     fallos += _pruebas_periodo_por_vista()
 
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────

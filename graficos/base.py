@@ -2135,6 +2135,16 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         # Lo dice Python, que lo sabe, en vez de que el JS lo deduzca de
         # qué secciones hay en el DOM. Ver el paso 0 del temporizador.
         _fuera = sel not in {_oid for _, _oid in secciones}
+        # EL ENCAJE (una vista por pantalla) SE ENCIENDE SÓLO SI HAY PILA
+        # DIBUJADA. La regla vive en `estilos/_27_pila.py`; acá se decide
+        # CUÁNDO, igual que el `--punto` de arriba. En un destino aparte o en
+        # una herramienta, el aviso de datos viejos —que es punto de encaje
+        # para no quedar escondido arriba de la pila— sería el ÚNICO punto
+        # de la página, y con encaje obligatorio no se podría bajar de él.
+        # Regla #533.
+        if not _fuera:
+            st.markdown("<style>:root { --pila-encaje: y mandatory; }</style>",
+                        unsafe_allow_html=True)
         _btn_act = f"{btn_prefix}lat_{_slug_url(sel)}"
         _lbl_act = _rotulos.get(sel, sel)
         with st.container(key="rail_scroll_hook"):

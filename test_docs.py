@@ -179,6 +179,10 @@ _SIMBOLOS = [
     ("_pruebas_vistas_tabla_ocultas", "test_graficos.py"),
     ("tarjeta_requerimientos_periodo", "graficos/movimientos_periodo.py"),
     ("tarjeta_salidas_periodo", "graficos/movimientos_periodo.py"),
+    ("neutralizar_has_streamlit", "inyecciones/css_streamlit.py"),
+    ("_pruebas_has_de_streamlit", "test_graficos.py"),
+    ("_pruebas_css_sin_prosa_suelta", "test_graficos.py"),
+    ("_pruebas_encaje_pila", "test_graficos.py"),
 ]
 for simbolo, modulo in _SIMBOLOS:
     ruta = RAIZ / modulo

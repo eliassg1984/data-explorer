@@ -850,7 +850,11 @@ CSS = """
 
        Por `data-testid` y NO por `.stLayoutWrapper`: el envoltorio lleva ese
        testid pero su `class` son hashes de emotion, que cambian entre
-       versiones de Streamlit. */
+       versiones de Streamlit.
+
+       Los jalones que compensaban esos 96px se borraron de donde vivían
+       (`_20_compras_rail.py` y `_40_ajuste_franja.py`): anularlos desde acá
+       habría dejado dos reglas discutiendo por el mismo margen. */
     [data-testid="stLayoutWrapper"]:has(> .st-key-rail_rotulo_rep),
     [data-testid="stLayoutWrapper"]:has(> .st-key-rail_pestillo_abierto),
     [data-testid="stLayoutWrapper"]:has(> .st-key-rail_pestillo_plegado),
@@ -860,16 +864,16 @@ CSS = """
     [data-testid="stLayoutWrapper"]:has(> .st-key-fila_ajuste_top) {
         display: contents !important;
     }
-       Los jalones que compensaban esos 96px se borraron de donde vivían
-       (`_20_compras_rail.py` y `_40_ajuste_franja.py`): anularlos desde acá
-       habría dejado dos reglas discutiendo por el mismo margen.
 
-    /* Una sección a la que se llega por código (`base.py::scroll_a_seccion`,
-       `scrollIntoView`) se detiene DEBAJO de la franja, no detrás. Las
-       secciones de la pila comparten el infijo `_sec_` en su key. */
-    [class*="_sec_"] {
-        scroll-margin-top: calc(var(--franja-rep-reserva) + 8px);
-    }
+    /* Acá vivía `[class*="_sec_"] { scroll-margin-top: … }`, para que una
+       sección a la que se llega por código (`base.py::scroll_a_seccion`) se
+       detuviera debajo de la franja. NUNCA APLICÓ: el párrafo de «Los
+       jalones…» había quedado FUERA del comentario de arriba, el navegador
+       lo leyó como el principio de este selector y descartó la regla
+       entera — del 2026-09-19 al 2026-09-25, regla #534. Lo que buscaba lo
+       hace ahora el `scroll-padding-top` de `.stMain` (`_27_pila.py`), que
+       es el tope donde encajan las vistas (regla #533). Arreglarla en vez
+       de borrarla habría SUMADO su margen a ese padding. */
 
     }
 """

@@ -130,4 +130,81 @@ CSS = """
             padding: 14px 16px;
         }
     }
+
+    /* =================================================================== */
+    /* ENCAJE: UNA VISTA POR PANTALLA (2026-09-25, regla #533)              */
+    /* =================================================================== */
+    /* A pedido: «a veces cuando el usuario hace scroll, las tarjetas se
+       quedan a medio scroll y eso puede quitar el enfoque». Se eligió, con
+       un mockup de por medio, la variante «diapositivas» sobre «imán al
+       borde» y «sólo si queda cerca»: cada vista ocupa la pantalla entera y
+       la siguiente no asoma.
+
+       Tres piezas, y hacen falta las tres:
+
+       · `scroll-snap-type: y mandatory` en `.stMain`, que es el que
+         scrollea (no la ventana). Obligatorio y no por cercanía: con
+         `proximity`, soltar a mitad de camino deja a mitad de camino, que
+         es justo la queja.
+       · `scroll-padding-top: var(--cab-offset-contenido)`: la vista encaja
+         donde abre la primera tarjeta (20px desde 901, 52 entre 769 y 900).
+         Desde 901 es el MISMO punto donde ya aterrizaba el clic del rail
+         (`techo + 8` en `base.py::_render_rail`), así que el salto y el
+         encaje no se pelean; y `scrollIntoView` (`scroll_a_seccion`) lo
+         respeta solo.
+       · Cada sección mide AL MENOS una pantalla: lo que mide una sección
+         cuya tarjeta llega al techo `--alto-util`, más sus dos márgenes.
+         Hace tres trabajos: la siguiente no asoma (una vista corta deja
+         aire abajo, que es el costo aceptado), la ÚLTIMA puede subir hasta
+         arriba (sin esto la página se acababa antes y quedaba a la vista la
+         cola de la anteúltima), y una sección que se construye no se
+         desploma mientras llega su contenido (medido en Compras › Vs año
+         pasado: el esqueleto de 708px caía a 0 y crecía durante ~35 s, con
+         todo lo de abajo subiendo y bajando solo).
+
+       Una vista más ALTA que la pantalla (Compras › Producto no lleva
+       techo) se recorre libre por dentro: el navegador da por válida
+       cualquier posición en que la sección cubra la pantalla, y encaja
+       recién al salir. Medido, igual que otras dos: si la sección de arriba
+       crece mientras se mira otra, la de pantalla se queda quieta (el
+       navegador re-encaja en el mismo elemento), y una tabla que crece
+       adentro de la vista en pantalla no la hace saltar.
+
+       LA TRAMPA: con encaje obligatorio, lo que está EN EL FLUJO y no es un
+       punto de encaje no se puede dejar a la vista. Un aviso arriba de la
+       pila quedaría del otro lado del borde para siempre: la página salta a
+       la primera sección y no deja volver. Por eso el aviso de datos viejos
+       (`app.py`, `aviso_dato_viejo`) es él mismo un punto de encaje, y lo
+       que se agregue arriba o abajo de una pila tiene que serlo también.
+       Y la trampa gemela, que es por qué el tipo de encaje es una VARIABLE:
+       en una página SIN pila (un destino aparte como Documentos SUNAT, o
+       una herramienta) ese aviso sería el único punto de encaje, y la
+       página no se podría bajar. `--pila-encaje` la publica
+       `base.py::_render_rail` sólo cuando dibuja la pila; sin ella, `none`.
+
+       Las secciones se reconocen por el infijo `_sec_` de su key, menos los
+       botones invisibles `pila_go_<clave>`, que también lo llevan: a esos un
+       punto de encaje los volvería un segundo tope, corrido un pixel. Fuera
+       de un `:has()`, un atributo no cuesta (regla #469).
+
+       Sólo desde 769px. En el celular las vistas miden varias pantallas y
+       el esqueleto reserva 240px (arriba): encajar ahí sería pelear con el
+       dedo. */
+    @media screen and (min-width: 769px) {
+        :root {
+            --pila-seccion-min: calc(var(--alto-util)
+                                     + var(--margen-tarjeta) * 2);
+        }
+        .stMain {
+            scroll-snap-type: var(--pila-encaje, none);
+            scroll-padding-top: var(--cab-offset-contenido);
+        }
+        [class*="st-key-"][class*="_sec_"]:not([class*="st-key-pila_go_"]) {
+            scroll-snap-align: start;
+            min-height: var(--pila-seccion-min);
+        }
+        .st-key-aviso_dato_viejo {
+            scroll-snap-align: start;
+        }
+    }
 """

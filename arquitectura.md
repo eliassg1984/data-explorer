@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-531 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+534 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (182)
+**CSS y estilos** (185)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -216,6 +216,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#520** — La leyenda del gráfico del Resumen de Ventas es una pastilla «Detalle · <período>» que flota…
 - **#523** — Un gráfico que rotula CADA barra congela el navegador cuando el rango crece, y lo congela…
 - **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
+- **#532** — El CSS que traba la página puede ser el de STREAMLIT: el separador de st.segmented_control…
+- **#533** — La pila encaja: una vista por pantalla. Con encaje obligatorio, lo que está en el flujo y no…
+- **#534** — Un párrafo que queda FUERA de su comentario borra la regla que le sigue, y el test de la #454…
 
 **Layout y alturas** (76)
 
@@ -485,7 +488,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
 
-**Streamlit** (146)
+**Streamlit** (147)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -633,6 +636,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#503** — El correo de «Nueva receta» se manda desde el servidor, con los adjuntos, por el SMTP de…
 - **#512** — «Nueva receta» son DOS tarjetas a la altura de la pantalla, con «Modificar» para editar una…
 - **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
+- **#532** — El CSS que traba la página puede ser el de STREAMLIT: el separador de st.segmented_control…
 
 **Datos, R2 y DuckDB** (66)
 
@@ -811,7 +815,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (110)
+**Decisiones de diseño y UX** (111)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -923,6 +927,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 - **#529** — «Análisis de platos»: el ranking de platos entre hasta cuatro períodos, en lugar del Top…
 - **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
+- **#533** — La pila encaja: una vista por pantalla. Con encaje obligatorio, lo que está en el flujo y no…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -43248,6 +43253,179 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        con dos semanas + «Año pasado» la cuarta resta contra la primera del
        año pasado, no contra su par.
 
+532. **El CSS que traba la página puede ser el de STREAMLIT: el separador
+     de `st.segmented_control` trae dos `:has()` con atributos, y con ellas
+     cada cambio del DOM y cada hover costaban ~115 ms.**
+     2026-09-25, a pedido («analiza también demoras, lag, y demás que
+     afecten la interacción del usuario»), en la misma tanda que el encaje
+     de la #533. Vive en `inyecciones/css_streamlit.py`; la guarda es
+     `test_graficos.py::_pruebas_has_de_streamlit`.
+
+     - **Lo medido** (Compras, 1366×768, datos reales, con un latido que
+       detectó exacta una tarea provocada de 120 ms):
+
+           cambio                                  antes        después
+           insertar un elemento en una sección     115-138 ms   4,9 ms
+           `data-hovered` en un botón segmentado   112 ms       5 ms
+           `data-hovered` en otro botón            114 ms       0,2 ms
+           cambiar la granularidad (3 por lado)    1,1 s        0,8 s bloqueado
+
+       Las tres primeras, con el arreglo ya en el código y un servidor
+       nuevo (el «después» de insertar incluye el layout); el gesto,
+       sacando las dos reglas a mano en la misma página. El gesto mejora
+       menos que una inserción porque React junta cientos de inserciones en
+       un recálculo de CSS, y lo que queda es redibujar gráficos y tablas.
+     - **Cómo se encontró.** Con las 160 `:has()` de la página quitadas del
+       CSSOM y repuestas de a una, cada una sola costaba casi nada
+       (sumadas, 19 ms); todas juntas, ~120. Sacar las 41 de emotion daba
+       0,1 ms, y sacar sólo las DOS con un atributo adentro, también. Hace
+       falta sacar las dos: con cualquiera sola el recálculo sigue siendo
+       de la página entera (70-78 ms). Es el «no es aditivo» de la #469,
+       con el disparador fuera de nuestro CSS: el test de la #469 barre
+       `estilos/`, `graficos/` y `tablas/`, no el CSS que trae Streamlit.
+     - **Las dos**, como las escribe emotion en la 1.59 (en la 1.64 de
+       Cloud son las mismas: verificado en el wheel):
+       `…:not([data-selected]):not([data-disabled]):has(+ button[data-variant="segmented_control"][data-selected]:not([data-disabled]))`
+       y su gemela con `:is([data-hovered], [data-focus-visible])`. Le
+       borran el filo derecho al botón que queda a la izquierda del elegido
+       o del que tiene el cursor. Emotion las inserta con el primer
+       segmentado de la sesión y no las saca; la app usa el widget en ~30
+       sitios.
+     - **Por qué pegaba en el hover.** `data-hovered` lo escribe react-aria
+       al pasar el puntero, y en la 1.64 lo usan además los desplegables,
+       las casillas, los inputs, los sliders, las fechas, los radios y el
+       multiselect. Con estas dos reglas, entrar o salir de cualquiera
+       recalculaba la página entera; y al scrollear con el mouse quieto el
+       navegador actualiza el hover de lo que pasa por debajo, así que el
+       scroll mismo pagaba.
+     - **El arreglo** (`neutralizar_has_streamlit`, en cada corrida desde
+       `app.py`): borra de las hojas `style[data-emotion]` toda regla con
+       un atributo, un `:hover` o un `:active` adentro de un `:has()`, y
+       envuelve `CSSStyleSheet.prototype.insertRule` para que lo que emotion
+       inserte después salga en la misma tarea, antes de que el navegador
+       recalcule con ello. En la 1.64 alcanza además al multiselect (resalta
+       la primera opción de la lista abierta mientras nadie pasó por ella) y
+       a un componente de pasos que la app no usa. SE QUEDAN las de foco
+       (`:focus-within:has(:focus-visible)` del slider, la tabla y el
+       error: cambian al tabular, y la del slider estaba en la página
+       medida) y las que llevan clases o etiquetas. El primer criterio
+       también sacaba la del slider; se angostó al puntero.
+     - **A la vista no cambia nada** en el segmentado: los botones se
+       solapan 1px y el elegido va con `z-index: 1`, así que su borde tapa
+       el del vecino (comprobado con una captura al triple). Lo único que se
+       pierde es, en Cloud, el resaltado de la primera opción del
+       multiselect.
+     - **`app.py` lo importa por la ruta del submódulo**: un nombre nuevo
+       pedido al paquete `inyecciones` que Cloud ya tiene cargado tira la
+       app (#357); un submódulo que no estaba se carga fresco.
+     - **Para confirmarlo en Cloud**, desde la consola: `__hasCaroQuitadas`
+       (cuántas sacó) y `__hasCaroEjemplos` (cuáles).
+     - Otras demoras medidas ese día, que quedan: Plotly tarda 2,8 s la
+       primera vez que dibuja (compilar su bundle); cada AgGrid es un iframe
+       que compila su propia copia de AG Grid, 0,4-0,95 s cada una (Compras
+       tiene seis); y los temporizadores del rail fuerzan un layout varias
+       veces por segundo, que durante un rerun costaba ~60 ms y ahora ~5.
+     - **Cómo medir esto sin engañarse.** Sólo el latido `MessageChannel`:
+       un sondeo propio con `getBoundingClientRect` fuerza el layout que
+       dice medir, y fabricó una «traba cada 200 ms» que no era de la app.
+       `long-animation-frame` da la atribución de cada tarea larga (qué
+       script, cuánto fue layout forzado). Y para aislar el costo de una
+       regla, `deleteRule`/`insertRule` en su índice ORIGINAL: en el 0
+       falla en las hojas que abren con `@import`.
+
+533. **La pila encaja: una vista por pantalla. Con encaje obligatorio, lo
+     que está en el flujo y no es un punto de encaje queda inalcanzable.**
+     2026-09-25, a pedido («a veces cuando el usuario hace scroll, las
+     tarjetas se quedan a medio scroll y eso puede quitar el enfoque»). Se
+     eligió, con un mockup, la variante «diapositivas» sobre «imán al
+     borde» y «sólo si queda cerca». Vive en `estilos/_27_pila.py` y en
+     `graficos/base.py::_render_rail`; la guarda es
+     `test_graficos.py::_pruebas_encaje_pila`.
+
+     - **Tres piezas.** `scroll-snap-type: y mandatory` en `.stMain`, que es
+       el que scrollea; obligatorio y no por cercanía, porque con
+       `proximity` soltar a mitad de camino deja a mitad de camino.
+       `scroll-padding-top: var(--cab-offset-contenido)`, que desde 901px es
+       el mismo punto donde ya aterrizaba el clic del rail (`techo + 8`):
+       el salto y el encaje no se pelean, y `scrollIntoView`
+       (`scroll_a_seccion`) lo respeta solo. Y `min-height:
+       var(--pila-seccion-min)` en cada sección: `--alto-util` más los dos
+       `--margen-tarjeta`, lo que mide una sección cuya tarjeta llega al
+       techo (740px en 1366×768).
+     - **El alto mínimo hace tres trabajos**: la siguiente no asoma (una
+       vista corta deja aire abajo, el costo aceptado de las
+       «diapositivas»); la ÚLTIMA puede subir hasta el tope (sin él la
+       página se acababa antes y quedaba a la vista la cola de la
+       anteúltima); y una sección no se desploma mientras se construye.
+       Medido en Compras › Vs año pasado: antes el esqueleto de 708px caía
+       a 0 y crecía durante ~35 s, con todo lo de abajo subiendo y bajando;
+       ahora la sección se quedó en 740px y en su tope de principio a fin.
+     - **Medido en Chrome**, el motor del usuario: soltar a mitad de camino
+       encaja en la vista más cercana (2000 → 2266, la vista en y=20); una
+       vista más alta que la pantalla se recorre libre por dentro y encaja
+       recién al salir; si la de arriba crece mientras se mira otra, la de
+       pantalla se queda quieta (el navegador re-encaja en el mismo
+       elemento); y una tabla que crece adentro de la vista en pantalla no
+       la hace saltar. Auditado en los seis tableros, a 1366×768: nada en el flujo queda
+       fuera de una vista y la última alcanza el tope en todos; en un
+       destino aparte (Documentos SUNAT) el encaje queda apagado. La
+       primera vista de Ventas y la de Movimientos arrancan en 23px y la
+       de Ajuste en 39, así que al cargar la página se corre 3 o 19px
+       sola para encajar: la de Ajuste queda ahora en 20, a la par del
+       resto (#473).
+       Lo que NO se pudo medir es la sensación
+       de la rueda y del touchpad, porque el panel no dibuja cuadros: el
+       mockup que eligió el usuario usa la misma función del navegador.
+     - **Trampa 1, arriba de la pila.** El aviso de datos viejos (`app.py`,
+       `aviso_dato_viejo`) va ARRIBA de la pila: sin ser punto de encaje, la
+       página saltaba por encima de él y no dejaba volver. Lo que se agregue
+       en el flujo arriba o abajo de una pila tiene que ser punto de encaje
+       también; los controles compartidos «arriba de la pila» viven hoy en
+       el cromo fijo, y así tienen que seguir.
+     - **Trampa 2, sin pila.** En un destino aparte (Compras › Documentos
+       SUNAT) o en una herramienta, ese mismo aviso sería el ÚNICO punto de
+       encaje, y con encaje obligatorio la página no se podría bajar. Por
+       eso el tipo de encaje es una variable, `--pila-encaje`, que publica
+       `_render_rail` sólo cuando dibuja la pila (`not _fuera`); sin ella,
+       `none`. Mismo reparto que el `--punto`: Python dice CUÁNDO, el CSS
+       dice CÓMO.
+     - **Trampa 3, el margen.** Un `scroll-margin-top` en las secciones se
+       SUMA al `scroll-padding-top` del contenedor. Había uno en
+       `_28_arbol.py` que nunca aplicó (#534): arreglarlo habría dejado
+       todas las vistas 20px más abajo. Se borró.
+     - Las secciones se reconocen por el infijo `_sec_` de su key, menos
+       los botones invisibles `pila_go_<clave>`, que también lo llevan (un
+       punto de encaje ahí sería un segundo tope). Fuera de un `:has()`, un
+       atributo no cuesta (#469).
+     - Sólo desde 769px: en el celular las vistas miden varias pantallas y
+       encajar sería pelear con el dedo.
+
+534. **Un párrafo que queda FUERA de su comentario borra la regla que le
+     sigue, y el test de la #454 no barría `estilos/`.**
+     2026-09-25, encontrado al preparar el encaje de la #533. En
+     `_28_arbol.py`, tres renglones de un comentario («Los jalones que
+     compensaban esos 96px…») habían quedado entre dos reglas, sin `/*`. El
+     navegador los leyó como el principio del selector siguiente
+     —`[class*="_sec_"]`— y descartó la regla entera: el `scroll-margin-top`
+     que iba a dejar debajo de la franja a una sección alcanzada por
+     `scroll_a_seccion` no aplicó nunca, desde que nació el 2026-09-19. Sin
+     error ni aviso, igual que en la #454. Se vio porque el prototipo del
+     encaje dejó las vistas a 20px del borde y no a 40.
+
+     - **Por qué el test de la #454 no lo vio**:
+       `_pruebas_css_comentarios_cerrados` barre bloques `<style>…</style>`
+       enteros dentro de UN fichero, y los módulos de `estilos/` no tienen
+       ninguno (`_00_base` abre la etiqueta y `_99_movil` la cierra). Los
+       500 KB del CSS global nunca pasaron por él.
+     - **La guarda nueva**, `_pruebas_css_sin_prosa_suelta`, barre
+       `estilos.get_css()` entero más los `<style>` del resto: borrados
+       comentarios y strings, un acento, una `ñ`, un `¿`, un backtick o un
+       `*/` no pueden estar ni en un selector ni en una declaración. Medido
+       contra el CSS entero antes del arreglo, el único hallazgo era ese
+       párrafo.
+     - **La regla se borró en vez de arreglarse**: su trabajo lo hace el
+       `scroll-padding-top` de `.stMain` (#533), y los dos juntos se suman.
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43260,7 +43438,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#531**; la próxima toma el número siguiente.
+> última regla es la **#534**; la próxima toma el número siguiente.
 
 >
 
