@@ -259,24 +259,48 @@ def _vol_cierres_semanales(d, prods, col_prod, col_punit, col_fecha, semanas):
     toda probabilidad— y el cierre salía 3.19 donde la vela decía 31.90; el
     puntaje saltaba de 191.8 a 1659.1. Medido en el navegador, 2026-09-12.
     `groupby` conserva el orden de las filas dentro de cada grupo, así que
-    cada semana llega al `sort_values` igual que por el filtro de siempre."""
-    out = {p: [None] * len(semanas) for p in prods}
-    pos = {s: i for i, s in enumerate(semanas)}
-    sub = d[d[col_prod].isin(list(prods))]
-    for p, g in sub.groupby(col_prod, sort=False):
-        propios = {}
-        for sem, gs in g.groupby("_semana", sort=False):
-            if sem in pos:
-                ohlc = _vol_ohlc_semana(gs.sort_values(col_fecha)[col_punit].tolist())
-                if ohlc:
-                    propios[pos[sem]] = ohlc["c"]
-        prev, cierres = None, []
-        for i in range(len(semanas)):
-            if i in propios:
-                prev = propios[i]
-            cierres.append(prev)
-        out[p] = cierres
-    return out
+    cada semana llega al `sort_values` igual que por el filtro de siempre.
+
+    DESDE EL 2026-09-26 NO HAY BUCLE (regla #537). Eran dos `groupby`
+    anidados —producto, y adentro semana— con un `sort_values` por celda:
+    el 57 % de la sección, 2,5-3,5 s en la laptop. Ahora es UN orden de
+    todas las filas y un `last()` por (producto, semana): 25 ms, el mismo
+    resultado sobre el parquet real. El desempate de arriba se conserva a
+    propósito: el orden es ESTABLE (compras del mismo día, en el orden del
+    parquet), que es lo que hacía el `sort_values` de un grupo chico
+    —numpy ordena por inserción debajo de 17 elementos— y lo que hace la
+    vela (`_vol_detalle_producto`, que desde ese día lo pide explícito).
+    El error de la primera versión no era vectorizar: era ordenar todo con
+    un algoritmo que NO respeta el orden de los empates."""
+    prods = list(prods)
+    tabla = _tabla_cierres(d[d[col_prod].isin(prods)], col_prod, col_punit,
+                           col_fecha, semanas)
+    return {p: _fila_cierres(tabla, p, len(semanas)) for p in prods}
+
+
+def _tabla_cierres(d, col_prod, col_punit, col_fecha, semanas):
+    """DataFrame producto × semana con el CIERRE de cada semana —el último
+    precio válido (> 0) por fecha; mismo día: orden del parquet— y relleno
+    hacia adelante en las semanas sin compra. Lo comparten la grilla
+    (`_vol_cierres_semanales`) y el ranking (`_vol_candidatos`): tienen
+    que medir sobre la MISMA serie (ver el docstring de la primera)."""
+    col = pd.Index(semanas)
+    v = d[[col_prod, "_semana", col_fecha, col_punit]]
+    v = v[v["_semana"].isin(col) & v[col_punit].notna()]
+    v = v[v[col_punit] > 0]
+    if v.empty:
+        return pd.DataFrame(columns=col, dtype=float)
+    v = v.sort_values([col_prod, "_semana", col_fecha], kind="stable")
+    ultimo = v.groupby([col_prod, "_semana"], sort=False)[col_punit].last()
+    return ultimo.unstack("_semana").reindex(columns=col).ffill(axis=1)
+
+
+def _fila_cierres(tabla, p, n):
+    """La fila de un producto como lista, con None donde todavía no hubo
+    compra (antes de la primera). Sin fila: n veces None."""
+    if p not in tabla.index:
+        return [None] * n
+    return [None if pd.isna(x) else float(x) for x in tabla.loc[p].tolist()]
 
 
 def _vol_precio_previo(d, prod, col_prod, col_punit, col_fecha, col_moneda,
@@ -543,21 +567,25 @@ def _vol_candidatos(d, col_prod, col_punit, col_fecha, col_valor, semanas,
     """Cierres semanales (con relleno hacia adelante en huecos) por producto,
     solo para los que superan gasto y cobertura mínimos. Devuelve
     {producto: {"cierres": [...], "volatilidad": float}}, ordenable después
-    por volatilidad."""
+    por volatilidad.
+
+    Sin bucle producto × semana desde el 2026-09-26: los cierres salen de la
+    misma `_tabla_cierres` que la grilla (regla #537). Era el 25 % de la
+    sección —un filtro y un `sort_values` por cada celda— y ahora son 25 ms.
+    """
+    if d is None or d.empty:
+        return {}
+    g = d.groupby(col_prod)                     # claves ordenadas, sin NaN
+    gasto = g[col_valor].sum()
+    semanas_con_compra = g["_semana"].nunique()
+    entra = ((gasto >= min_gasto)
+             & (semanas_con_compra >= min_cobertura * len(semanas)))
+    prods = gasto.index[entra.to_numpy()]
+    tabla = _tabla_cierres(d[d[col_prod].isin(prods)], col_prod, col_punit,
+                           col_fecha, semanas)
     out = {}
-    for prod, g in d.groupby(col_prod):
-        gasto = g[col_valor].sum()
-        semanas_con_compra = g["_semana"].nunique()
-        if gasto < min_gasto or semanas_con_compra < min_cobertura * len(semanas):
-            continue
-        cierres, prev = [], None
-        for sem in semanas:
-            sub = g[g["_semana"] == sem].sort_values(col_fecha)
-            ohlc = _vol_ohlc_semana(sub[col_punit].tolist())
-            c = ohlc["c"] if ohlc else prev
-            cierres.append(c)
-            if c is not None:
-                prev = c
+    for prod in prods:
+        cierres = _fila_cierres(tabla, prod, len(semanas))
         out[prod] = {"cierres": cierres, "volatilidad": _vol_score(cierres)}
     return out
 
@@ -576,7 +604,12 @@ def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
     weeks = []
     prev_close = cierre_previo
     for sem in semanas:
-        sub = g[g["_semana"] == sem].sort_values(col_fecha)
+        # `kind="stable"`: el mismo desempate que la grilla, SIEMPRE. Sin
+        # pedirlo, una semana con 17 compras o más del mismo insumo quedaba
+        # a merced del quicksort y la vela podía cerrar distinto que la
+        # celda (regla #537, y la trampa de «Cachema Entera» del docstring de
+        # `_vol_cierres_semanales`).
+        sub = g[g["_semana"] == sem].sort_values(col_fecha, kind="stable")
         ohlc = _vol_ohlc_semana(sub[col_punit].tolist())
         rows = []
         for _, r in sub.iterrows():

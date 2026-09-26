@@ -107,7 +107,8 @@ from graficos.base import (
 )
 from graficos import alturas, periodo
 from graficos.compras._comun import (
-    COLUMNAS_DRILL, GAP_DRILL, PARR, _first_point, unidad_corta,
+    COLUMNAS_DRILL, GAP_DRILL, PARR, _first_point, moda_por_grupo,
+    unidad_corta,
 )
 from tablas.compras_vs_ano_pasado import (
     _ALTO_FILA as _ALTO_FILA_DETALLE,
@@ -1262,9 +1263,17 @@ def _unidades_por(fuente, llave, col_um):
     if not (col_um and llave and col_um in fuente.columns
             and llave in fuente.columns):
         return {}
-    return (fuente[[llave, col_um]].astype(str).groupby(llave)[col_um]
-            .agg(lambda s: s.mode().iat[0] if not s.mode().empty else "")
-            .to_dict())
+    # UN conteo para todas las llaves, no un `mode()` por grupo. Así era
+    # (dos por grupo, además: uno en la condición y otro para el valor) y
+    # sobre los ~1.600 productos del histórico se llevaba el 84 % de la
+    # sección: 1,4-1,7 s por llamada en la laptop, y se llama dos veces por
+    # construcción. Así, 40 ms. Regla #537.
+    base = fuente[[llave, col_um]].astype(str)
+    modas = moda_por_grupo(base, llave, col_um).to_dict()
+    # En el orden del `groupby` de antes (ordenado), y una llave con TODAS
+    # sus unidades vacías da "", como daba el `mode()` vacío.
+    return {k: modas.get(k, "")
+            for k in sorted(base[llave].dropna().unique().tolist())}
 
 
 def _fig_puente(valor, valor_aa, ef_precio, ef_cant,

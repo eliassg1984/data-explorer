@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-536 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+540 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (186)
+**CSS y estilos** (187)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -220,6 +220,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#533** — La pila encaja: una vista por pantalla. Con encaje obligatorio, lo que está en el flujo y no…
 - **#534** — Un párrafo que queda FUERA de su comentario borra la regla que le sigue, y el test de la #454…
 - **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
+- **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
 
 **Layout y alturas** (76)
 
@@ -404,7 +405,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
 - **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
 
-**AgGrid y tablas** (83)
+**AgGrid y tablas** (84)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -489,8 +490,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#506** — La cantidad al lado de un monto es la que ESE monto multiplica. En Ajuste son dos: «Ajuste…
 - **#511** — «Detalle de salidas» es la cadena de tablas SIN tabla de hojas y SIN foco de entrada — y suma…
 - **#518** — El Resumen de «Tendencia diaria de venta» lee la venta en cuatro precios, y lo que no cabe en…
+- **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
 
-**Streamlit** (148)
+**Streamlit** (150)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -640,8 +642,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#527** — «Mix de carta» reemplaza a «Venta por día» y a «Familia/Subfamilia semanal»: la barra del…
 - **#532** — El CSS que traba la página puede ser el de STREAMLIT: el separador de st.segmented_control…
 - **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
+- **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
+- **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
 
-**Datos, R2 y DuckDB** (66)
+**Datos, R2 y DuckDB** (67)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -709,6 +713,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#524** — La venta tiene UNA definición y vive en definicion_venta.py: facturas y boletas pagadas o por…
 - **#529** — «Análisis de platos»: el ranking de platos entre hasta cuatro períodos, en lugar del Top…
 - **#531** — «Por hora» tiene su propia fecha: el rango se parte por la granularidad. Y en Ventas…
+- **#537** — Un for … in df.groupby(...) con un sort_values, un filtro o un mode() adentro no es un…
 
 **SUNAT y SIRE** (43)
 
@@ -776,7 +781,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 
-**Herramientas de desarrollo** (39)
+**Herramientas de desarrollo** (40)
 
 - **#39** — Inspector (?debug=1): clic derecho solo FIJABA el tooltip, nunca copiaba — y encima el…
 - **#46** — inject_diseno_visual (inyecciones/diseno.py) lee estado de inspector.py sin que inspector.py…
@@ -817,8 +822,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#428** — Un botón overlay se esconde con color: transparent, no vaciándole el label: el label ES el…
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
+- **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (112)
+**Decisiones de diseño y UX** (113)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -932,6 +938,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
 - **#533** — La pila encaja: una vista por pantalla. Con encaje obligatorio, lo que está en el flujo y no…
 - **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
+- **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -43596,6 +43603,186 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        aparte (`_vh_raros_valor`): un widget que no se dibuja pierde su
        estado.
 
+537. **Un `for … in df.groupby(...)` con un `sort_values`, un filtro o un
+     `mode()` adentro no es un detalle de estilo: en Compras era el 80-90 %
+     de lo que tardaban Volatilidad, «Vs año pasado» y Producto.** Medido el
+     2026-09-26 con `AppTest` sobre `app.py` y los datos reales de R2,
+     cronometrando cada sección de la pila (lo mismo que corre el rerun de
+     fragment cuando el temporizador del rail aprieta su botón):
+
+         sección          1ª construcción     rerun, todo construido
+         Producto         4,3 s -> 0,4 s      3,3-3,5 s -> 0,4 s
+         Vs año pasado    5,4 s -> 0,7 s      3,9-4,1 s -> 0,7-0,9 s
+         Volatilidad      6,0 s -> 1,1 s      5,6-6,0 s -> 1,0-1,3 s
+         rerun completo con las seis construidas: 15,5-16,6 s -> 5,2-6,2 s
+
+     Cuatro funciones, y cada una armaba un sub-DataFrame por grupo:
+     · `vs_ano_pasado._unidades_por`: un `mode()` por producto —DOS, uno en
+       la condición y otro para el valor— sobre los ~1.600 productos del
+       histórico. 1,4-1,7 s por llamada, y se llama dos veces.
+     · `producto._prod_ranking`: suma, moda, dropna, filtro y `sort_values`
+       por producto. 2,3-2,5 s con un mes.
+     · `volatilidad._vol_cierres_semanales` y `_vol_candidatos`: un
+       `sort_values` o un filtro por CELDA producto × semana. 2,5-3,5 s y
+       1,2-2,0 s.
+     Ahora cada una es UN `groupby`/`sort` sobre todas las filas (17-51 ms);
+     la moda sale de `graficos/compras/_comun.py::moda_por_grupo`.
+
+     **Lo que no podía cambiar, y se verificó:** la salida, columna por
+     columna, sobre las entradas reales capturadas de la app (y
+     `_prod_ranking` además sobre el histórico entero, cada año y cada
+     trimestre). Tres cosas que el bucle hacía sin decirlo y que ahora se
+     escriben:
+     · La moda: los vacíos no cuentan y, en empate, gana la MENOR (el
+       `iat[0]` de un `mode()`, que sale ordenado).
+     · «La primera/la última compra» y el cierre de la semana desempatan las
+       compras del MISMO día por el orden del parquet: orden ESTABLE. El
+       bucle lo hacía de casualidad —numpy ordena por inserción debajo de 17
+       elementos y un grupo chico rara vez llega— y es la trampa de
+       «Cachema Entera» que documenta `_vol_cierres_semanales`: su primera
+       versión vectorizada ordenó todo junto con un quicksort, que no
+       respeta los empates, y el cierre salió distinto que la vela. La vela
+       (`_vol_detalle_producto`) pide `kind="stable"` desde este cambio.
+     · Montos iguales al céntimo en el ranking de Producto: en el bucle su
+       orden dependía del último decimal de la suma (164,00000000000003
+       contra 164,0) y cambiaba según cómo se sumara — pasó en 3 de 20
+       recortes del histórico. Ahora van por nombre.
+
+     **Por qué costaba tanto, y más en la laptop que en Cloud.** Cada vuelta
+     paga lo fijo de pandas (armar un DataFrame, indexar, ordenar), cientos
+     de microsegundos, por miles de grupos. En pandas 3 (la laptop) el texto
+     vive en Arrow y cortar un grupo arma arreglos nuevos: las originales
+     tardaban ~2,5× más que con el texto como objeto
+     (`future.infer_string=False`, que es como lo guarda el pandas 2.2 de
+     Cloud). Las nuevas ganan en los dos: 30-113× y 16-65×.
+
+     `test_graficos.py::_pruebas_compras_sin_bucles_por_grupo` guarda los
+     bucles viejos como ORÁCULO y los compara contra las nuevas en esos
+     bordes y en un caso al azar con semilla fija; y con `ast`, que ninguna
+     vuelva a iterar un `groupby` ni a meter un `mode()` en una lambda (se
+     comprobó que la guarda caza las cuatro versiones viejas).
+
+     **Cómo se midió, para repetirlo:** `AppTest` sobre `app.py`, cambiando
+     el `seccion_perezosa` de cada dashboard por un envoltorio que cronometra
+     `dibujar()` y suma el `ByteSize()` de lo que la sección encola; para
+     atribuir, `pyinstrument`, que perfila UN hilo. `cProfile` no sirve: en
+     Python 3.14 es global a los hilos y el sondeo de AppTest le corrompe el
+     árbol (sale `time.sleep` «llamando» a `re.search`). Y comparar siempre
+     antes y después en corridas seguidas: la laptop cargada mueve los
+     segundos absolutos ×2 de una corrida a otra.
+
+     (2026-09-26.)
+
+538. **La precarga de la pila construye primero lo que está más CERCA de la
+     pantalla, no lo que está más arriba en la página.** Cada sección mide
+     una pantalla (`--pila-seccion-min`, #533), así que la ventana de ±900px
+     del temporizador de `base.py::_render_rail` alcanza a las dos de arriba
+     y a las dos de abajo; y como recorría `MAPA` en orden de página,
+     aterrizar en la sección k construía k−2, k−1, k, k+1, k+2, de a una. La
+     vista pedida esperaba detrás de dos que nadie pidió.
+
+     Medido en el navegador el 2026-09-26 (Compras, datos reales,
+     1366×768, el clic real del rail sobre «Detalle docs.», cuyo costo
+     propio de servidor es 0,4 s):
+
+         en orden de página       lista a los 23 s (antes, Vs año pasado
+                                  5,4 s y Volatilidad 8,9 s, y 2 de sus 3
+                                  clics perdidos)
+         la más cercana primero   lista a los 2,6 s (1,4 s de la guarda del
+                                  salto, #475, más el tic de 400 ms)
+
+     Las vecinas se siguen construyendo, después, así que al subir casi
+     siempre ya están. Si se sube en el acto, se ve su esqueleto un par de
+     segundos más que antes: es el costo aceptado.
+
+     Lo que se midió y se dejó igual, a propósito:
+     · La ventana de 900px. Al ABRIR un reporte sigue construyendo solas la
+       2ª y la 3ª sección (en Compras, Proveedor y Producto), y un clic en
+       la primera durante ese rato espera a que terminen. Achicarla es otra
+       decisión.
+     · Los clics perdidos. Con el navegador ocupado montando grillas (cada
+       AgGrid traba el hilo 1,1-1,8 s, #540) el `.click()` del temporizador
+       a veces no dispara rerun; se reintenta solo cada 400 ms mientras
+       quede el esqueleto.
+
+     Cómo medirlo: envolver `HTMLElement.prototype.click` de la PÁGINA (el
+     temporizador corre en su iframe, pero el botón es de la página y el
+     método sale de su prototipo) para anotar qué `pila_go_*` aprieta y
+     cuándo, y un `MutationObserver` sobre `data-test-script-state`. SIN el
+     latido de MessageChannel prendido todo el rato: es un bucle ocupado y se
+     come un núcleo de los dos de la laptop (medido, el renderer a 1,7
+     núcleos) — con él puesto, la misma carga tardó el doble. El panel oculto
+     no frena `setInterval` (400 ms exactos, medido), así que el orden se
+     mide bien aunque no se dibuje nada.
+
+     (2026-09-26.)
+
+539. **Una herramienta de desarrollo que se inyecta en TODAS las corridas
+     cuesta en todas, aunque sólo se active con ?debug=1.** El inspector
+     (`inyecciones/inspector.py`) se mandaba siempre y decidía en el
+     navegador si prenderse: 369 KB de JS y mapas por rerun completo. Y
+     llevaba adentro una foto del `session_state` (para su tooltip), que
+     cambia en toda corrida en la que el usuario tocó algo: el iframe
+     cambiaba siempre, y el navegador lo desmontaba y volvía a montar
+     entero. Medido el 2026-09-26: 130-250 ms de hilo trabado por rerun en
+     la laptop (clonando su `srcdoc` en un iframe oculto, con un latido
+     corto), más esos KB por la red en Cloud, para una herramienta que usa
+     una sola persona. La caché de mensajes de Streamlit (el `ref_hash`,
+     #474) no lo salvaba: sólo evita re-mandar lo IDÉNTICO.
+
+     Ahora, sin `?debug=1`, `inject_element_inspector` inyecta sólo
+     `_JS_ATAJO`: Alt+I pone el parámetro y recarga. Es constante, así que
+     no se re-monta. **Y la recarga tiene que salir de la PÁGINA:**
+     Streamlit monta estos iframes con `sandbox` SIN
+     `allow-top-navigation`, así que un `location.replace` llamado desde
+     una función del iframe no navega — en silencio, ni un error en la
+     consola. La primera versión registraba el oyente desde el iframe y
+     Alt+I no hacía nada (medido en el navegador). El atajo inserta un
+     `<script>` en el documento de la página, como las fuentes que carga
+     la barra (`_herramientas_js.py::cargarFuente`), y ése sí corre con
+     los permisos de la página. Lo que se pagó: entrar con Alt+I ya no es instantáneo
+     —es una recarga, y una recarga empieza una sesión nueva—. Para salir,
+     Alt+I sigue siendo del inspector (quita el parámetro con
+     `replaceState`, sin recargar); en el rerun completo siguiente Python ya
+     no lo inyecta y sus oyentes quedan inertes con su iframe (un callback
+     cuyo documento ya no está activo no corre).
+
+     Lo que NO se tocó: la barra de herramientas (262 KB, con las fuentes de
+     `herramientas/*.js` adentro), el modo diseño (49 KB) y el CSS global
+     (`inject_css`, 513 KB). Son idénticos de corrida en corrida: no se
+     re-montan y el `ref_hash` evita re-mandarlos. Medido con `AppTest`, un
+     rerun completo de Compras encola 1,31 MB, y casi todo es eso — cromo,
+     no datos.
+
+     (2026-09-26.)
+
+540. **Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB
+     y 1,1-1,8 s de hilo del navegador por grilla, aunque la página ya tenga
+     otras.** Streamlit 1.59 (`web/server/starlette/starlette_routes.py`, el
+     endpoint de componentes) sirve `main.<hash>.js` leyendo el fichero
+     entero en cada pedido, con `Cache-Control: public` SIN `max-age`, sin
+     `ETag` y sin `Last-Modified`. Para el navegador eso es «vencido al
+     instante y sin forma de revalidar»: cada iframe de st_aggrid lo vuelve
+     a pedir entero (1,28 MB con gzip, 4,7 MB de JS), el servidor lo vuelve a
+     comprimir y el navegador lo vuelve a compilar. Medido el 2026-09-26 en
+     el navegador, con datos reales:
+     · aislada y con el servidor en reposo: 0,5 s de descarga desde
+       localhost y 1,1-1,8 s de hilo trabado, antes de dibujar un dato;
+     · en la página, con el servidor calculando otra sección: las dos
+       grillas de Proveedor esperaron 10,7 y 11,3 s su archivo, porque lo
+       sirve el MISMO proceso de Python que está calculando;
+     · Compras con sus seis secciones construidas monta 10 grillas: unos
+       12,8 MB de descargas y 11-18 s de hilo sólo en compilarlas.
+     No se arregla desde el código de la app: la cabecera la pone
+     Streamlit. Lo que la app sí controla es CUÁNTAS grillas monta. Antes de
+     sumar una AgGrid para una tabla chica —de sólo lectura, o de pocas
+     filas: los paneles Familia y Subfamilia de Producto tienen 4-7—, pensar
+     si no alcanza `st.dataframe`, que viene en el bundle principal. Sin
+     verificar en Cloud (1.64): DevTools → Network, una vista con dos
+     grillas, y mirar el tamaño transferido de `main.*.js` en la segunda.
+
+     (2026-09-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43608,7 +43795,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#536**; la próxima toma el número siguiente.
+> última regla es la **#540**; la próxima toma el número siguiente.
 
 >
 

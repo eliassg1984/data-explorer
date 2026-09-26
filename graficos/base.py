@@ -2270,6 +2270,17 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     // turno en el camino. Regla #475.
                     if (w.__railSalto && Date.now() < w.__railSalto) return;
                     if (doc.querySelector('[data-testid="stStatusWidget"]')) return;
+                    // PRIMERO LA MAS CERCANA, NO LA PRIMERA DE LA PAGINA
+                    // (2026-09-26, regla #538). Las secciones miden una
+                    // pantalla cada una, asi que la ventana de 900px alcanza
+                    // a las dos de arriba y a las dos de abajo; recorriendo
+                    // MAPA en orden, al aterrizar en la k se construian ANTES
+                    // la k-2 y la k-1, y la vista que el usuario pidio
+                    // esperaba detras de dos que no pidio. Medido en Compras
+                    // (salto a 'Detalle docs.', cuyo costo propio es 0,4s):
+                    // lista a los 23s, contra 2,6s eligiendo por distancia.
+                    // Las vecinas se construyen igual, DESPUES.
+                    var mejor2 = null, mejorD = Infinity;
                     for (var j = 0; j < MAPA.length; j++) {{
                       var m2 = MAPA[j];
                       var s2 = doc.querySelector('[class*="st-key-' + m2.sec + '"]');
@@ -2286,9 +2297,20 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                       // tres vivas). Regla #475.
                       if (r2.top - caja.bottom > 900) continue;
                       if (caja.top - r2.bottom > 900) continue;
+                      // Distancia a la pantalla: la que se VE va primero (y
+                      // entre dos que se ven, la que mas se ve); despues,
+                      // la que queda mas cerca, arriba o abajo.
+                      var vis2 = Math.min(r2.bottom, caja.bottom)
+                               - Math.max(r2.top, caja.top);
+                      var d2 = vis2 > 0 ? -vis2
+                             : (r2.top >= caja.bottom ? r2.top - caja.bottom
+                                                      : caja.top - r2.bottom);
+                      if (d2 < mejorD) {{ mejorD = d2; mejor2 = m2; }}
+                    }}
+                    if (mejor2) {{
                       var g = doc.querySelector(
-                        '[class*="st-key-' + m2.go + '"] button');
-                      if (g) {{ g.click(); return; }}
+                        '[class*="st-key-' + mejor2.go + '"] button');
+                      if (g) g.click();
                     }}
                   }}, 400);
 

@@ -4663,6 +4663,237 @@ def _pruebas_drill_familia_subfamilia():
     return fallos
 
 
+def _pruebas_compras_sin_bucles_por_grupo():
+    """Las cuatro funciones de Compras que dejaron de recorrer grupos uno por
+    uno (2026-09-26, regla #537) dan lo MISMO que los bucles de antes.
+
+    Los bucles están copiados acá abajo como ORÁCULO: son la definición de
+    lo que cada función tiene que devolver. Se comparan sobre datos
+    sintéticos con los bordes que el cambio podía romper en silencio:
+
+      · la moda con EMPATE (gana la menor, como el `mode().iat[0]` de antes)
+        y con unidades vacías (no cuentan; todas vacías -> "");
+      · dos compras el MISMO día a distinto precio: la última es la de más
+        abajo en el parquet (orden estable). Es la trampa de «Cachema
+        Entera» del docstring de `_vol_cierres_semanales`;
+      · semanas sin compra (relleno hacia adelante) y None antes de la
+        primera; un precio 0 o vacío, que no abre ni cierra nada;
+      · un producto que no pasa el piso de gasto o de cobertura;
+      · montos iguales al céntimo en el ranking: van por nombre (en el
+        bucle dependían del último decimal de la suma).
+
+    Más un caso grande al azar, con semilla fija, para lo que no se me
+    ocurrió. Y una guarda con `ast`: ninguna de las cinco vuelve a iterar un
+    `groupby` ni a llamar `mode()` adentro de un `agg`. No se mide tiempo
+    —en esta laptop un test de tiempo falla por el antivirus—: se mide la
+    FORMA que costaba el tiempo.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    import numpy as np
+
+    import graficos.compras._comun as _cm
+    import graficos.compras.producto as _pr
+    import graficos.compras.volatilidad as _vo
+    import graficos.compras.vs_ano_pasado as _va
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    sin bucles · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA sin bucles · {nombre}{': ' + str(detalle)[:300] if detalle else ''}")
+
+    # ── Los oráculos: los bucles de antes, tal cual (con el orden estable
+    # explícito, que es lo que hacía numpy con un grupo chico). ──────────
+    def o_unidades(fuente, llave, col_um):
+        return (fuente[[llave, col_um]].astype(str).groupby(llave)[col_um]
+                .agg(lambda s: s.mode().iat[0] if not s.mode().empty else "")
+                .to_dict())
+
+    def o_ranking(dd, col_prod, col_fecha, col_valor, col_cant, col_punit, col_um):
+        filas = []
+        for prod, g in dd.groupby(col_prod):
+            um = ""
+            if col_um and col_um in g.columns:
+                _u = g[col_um].dropna()
+                if not _u.empty:
+                    um = str(_u.mode().iat[0])
+            gp = g.dropna(subset=[col_punit])
+            gp = gp[gp[col_punit] > 0].sort_values(col_fecha, kind="stable")
+            ini = fin = var = None
+            if not gp.empty:
+                ini = float(gp[col_punit].iloc[0])
+                fin = float(gp[col_punit].iloc[-1])
+                var = ((fin - ini) / ini * 100) if ini else None
+            filas.append({"producto": str(prod),
+                          "valor": float(g[col_valor].sum()),
+                          "cantidad": float(g[col_cant].sum()) if col_cant else 0.0,
+                          "um": um, "inicio": ini, "fin": fin, "var_pct": var})
+        return {f["producto"]: f for f in filas}
+
+    def o_cierres(d, prods, col_prod, col_punit, col_fecha, semanas):
+        out = {p: [None] * len(semanas) for p in prods}
+        pos = {s: i for i, s in enumerate(semanas)}
+        for p, g in d[d[col_prod].isin(list(prods))].groupby(col_prod, sort=False):
+            propios = {}
+            for sem, gs in g.groupby("_semana", sort=False):
+                if sem in pos:
+                    oh = _vo._vol_ohlc_semana(
+                        gs.sort_values(col_fecha, kind="stable")[col_punit].tolist())
+                    if oh:
+                        propios[pos[sem]] = oh["c"]
+            prev, cierres = None, []
+            for i in range(len(semanas)):
+                prev = propios.get(i, prev)
+                cierres.append(prev)
+            out[p] = cierres
+        return out
+
+    def o_candidatos(d, col_prod, col_punit, col_fecha, col_valor, semanas,
+                     min_gasto, min_cobertura):
+        out = {}
+        for prod, g in d.groupby(col_prod):
+            if (g[col_valor].sum() < min_gasto
+                    or g["_semana"].nunique() < min_cobertura * len(semanas)):
+                continue
+            c = o_cierres(g, [prod], col_prod, col_punit, col_fecha, semanas)[prod]
+            out[prod] = {"cierres": c, "volatilidad": _vo._vol_score(c)}
+        return out
+
+    def iguales(a, b):
+        """Igualdad con tolerancia para floats y None == NaN."""
+        if isinstance(a, dict):
+            return (list(a) == list(b)) and all(iguales(a[k], b[k]) for k in a)
+        if isinstance(a, (list, tuple)):
+            return len(a) == len(b) and all(iguales(x, y) for x, y in zip(a, b))
+        na = a is None or (isinstance(a, float) and np.isnan(a))
+        nb = b is None or (isinstance(b, float) and np.isnan(b))
+        if na or nb:
+            return na and nb
+        if isinstance(a, float) or isinstance(b, float):
+            return abs(float(a) - float(b)) <= 1e-9 * max(1.0, abs(float(a)))
+        return a == b
+
+    def ranking_por_producto(df):
+        return {r["producto"]: {k: (None if (isinstance(v, float) and np.isnan(v)) else v)
+                                for k, v in r.items() if k != "pct"}
+                for r in df.to_dict("records")}
+
+    def semana(f):
+        return (f - pd.to_timedelta(f.dt.weekday, unit="D")).dt.normalize()
+
+    # ── Casos armados a mano ────────────────────────────────────────────
+    sems = list(pd.to_datetime(["2026-06-01", "2026-06-08", "2026-06-15",
+                                "2026-06-22"]))
+    d = pd.DataFrame({
+        "p":      ["A", "A", "A", "A", "B", "C", "D", "D", "E", "E"],
+        # A: dos compras el MISMO día (10 y después 12: cierra 12), una
+        # semana en 0 (no cierra) y un precio vacío. E: el mismo monto que
+        # B al céntimo (empate del ranking).
+        "precio": [10.0, 12.0, 0.0, 15.0, 5.0, 7.0, np.nan, 4.0, 2.5, 2.5],
+        "f": pd.to_datetime(["2026-06-01", "2026-06-01", "2026-06-17",
+                             "2026-06-24", "2026-06-16", "2026-06-02",
+                             "2026-06-03", None, "2026-06-09", "2026-06-23"]),
+        "valor":  [100.0, 120.0, 0.0, 150.0, 50.0, 1.0, 30.0, 40.0, 25.0, 25.0],
+        "cant":   [10.0, 10.0, 1.0, 10.0, 10.0, 1.0, 3.0, 10.0, 10.0, 10.0],
+        # A: KG ×2 y UND ×2 (empate: gana la MENOR, "KG"). C: sin unidad.
+        "um":     ["KG", "UND", "KG", "UND", "UND", None, "LT", "LT", "UND", "UND"],
+    })
+    d["_semana"] = semana(d["f"])
+
+    check("unidades: moda con empate y unidad vacía = bucle de antes",
+          iguales(_va._unidades_por(d, "p", "um"), o_unidades(d, "p", "um")),
+          (_va._unidades_por(d, "p", "um"), o_unidades(d, "p", "um")))
+    check("unidades: en el empate gana la menor",
+          _va._unidades_por(d, "p", "um")["A"] == "KG")
+    rk = _pr._prod_ranking(d, "p", "f", "valor", "cant", "precio", "um")
+    check("ranking: cada producto dice lo mismo que el bucle",
+          iguales(ranking_por_producto(rk),
+                  {k: o_ranking(d, "p", "f", "valor", "cant", "precio", "um")[k]
+                   for k in ranking_por_producto(rk)}),
+          rk.to_dict("records"))
+    check("ranking: compras del mismo día -> la primera es la de más arriba",
+          float(rk.set_index("producto").loc["A", "inicio"]) == 10.0)
+    check("ranking: montos iguales al céntimo van por nombre",
+          rk["producto"].tolist()[-3:] == ["B", "E", "C"], rk["producto"].tolist())
+    check("ranking: sin columnas de Cantidad/UM no revienta",
+          (_pr._prod_ranking(d, "p", "f", "valor", None, "precio", None)["um"]
+           == "").all())
+    ci = _vo._vol_cierres_semanales(d, ["A", "B", "Z"], "p", "precio", "f", sems)
+    check("cierres = bucle de antes (mismo día, 0, huecos, producto ausente)",
+          iguales(ci, o_cierres(d, ["A", "B", "Z"], "p", "precio", "f", sems)), ci)
+    check("cierres: el mismo día cierra la compra de más abajo",
+          ci["A"][0] == 12.0, ci["A"])
+    ca = _vo._vol_candidatos(d, "p", "precio", "f", "valor", sems,
+                             min_gasto=40.0, min_cobertura=0.5)
+    check("candidatos = bucle de antes (pisos de gasto y cobertura)",
+          iguales(ca, o_candidatos(d, "p", "precio", "f", "valor", sems, 40.0, 0.5)),
+          ca)
+
+    # ── Un caso grande al azar ──────────────────────────────────────────
+    rng = np.random.default_rng(537)
+    n = 3000
+    fechas = pd.Timestamp("2026-01-05") + pd.to_timedelta(
+        rng.integers(0, 140, n), unit="D")
+    precio = np.round(rng.uniform(0.5, 90.0, n), 2)
+    precio[rng.random(n) < 0.05] = 0.0
+    precio[rng.random(n) < 0.03] = np.nan
+    g = pd.DataFrame({
+        "p": rng.choice([f"P{i:03d}" for i in range(120)], n),
+        "precio": precio, "f": fechas,
+        "valor": np.round(rng.uniform(1, 500, n), 2),
+        "cant": np.round(rng.uniform(0.1, 30, n), 3),
+        "um": rng.choice(["KG", "UND", "LT", None], n, p=[.45, .35, .15, .05]),
+    })
+    g["_semana"] = semana(g["f"])
+    sg = sorted(g["_semana"].dropna().unique())
+    sg = list(pd.to_datetime(sg))
+    check("al azar: unidades", iguales(_va._unidades_por(g, "p", "um"),
+                                       o_unidades(g, "p", "um")))
+    rg = _pr._prod_ranking(g, "p", "f", "valor", "cant", "precio", "um")
+    o_rg = o_ranking(g, "p", "f", "valor", "cant", "precio", "um")
+    check("al azar: ranking, producto por producto",
+          iguales(ranking_por_producto(rg),
+                  {k: o_rg[k] for k in ranking_por_producto(rg)}))
+    check("al azar: ranking ordenado por monto (céntimos) y nombre",
+          list(zip(rg["valor"].round(2) * -1, rg["producto"]))
+          == sorted(zip(rg["valor"].round(2) * -1, rg["producto"])))
+    prods = sorted(g["p"].unique())[:80]
+    check("al azar: cierres", iguales(
+        _vo._vol_cierres_semanales(g, prods, "p", "precio", "f", sg),
+        o_cierres(g, prods, "p", "precio", "f", sg)))
+    check("al azar: candidatos", iguales(
+        _vo._vol_candidatos(g, "p", "precio", "f", "valor", sg[-12:],
+                            min_gasto=300.0, min_cobertura=0.4),
+        o_candidatos(g, "p", "precio", "f", "valor", sg[-12:], 300.0, 0.4)))
+
+    # ── La guarda de forma ──────────────────────────────────────────────
+    for fn in (_cm.moda_por_grupo, _va._unidades_por, _pr._prod_ranking,
+               _vo._vol_candidatos, _vo._vol_cierres_semanales,
+               _vo._tabla_cierres):
+        arbol = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+        malos = []
+        for nodo in ast.walk(arbol):
+            if isinstance(nodo, (ast.For, ast.comprehension)):
+                if any(isinstance(x, ast.Attribute) and x.attr in ("groupby", "iterrows")
+                       for x in ast.walk(nodo.iter)):
+                    malos.append(f"línea {getattr(nodo, 'lineno', '?')}: "
+                                 "itera un groupby/iterrows")
+            if isinstance(nodo, ast.Lambda) and any(
+                    isinstance(x, ast.Attribute) and x.attr == "mode"
+                    for x in ast.walk(nodo)):
+                malos.append("un mode() adentro de una lambda (uno por grupo)")
+        check(f"{fn.__name__} no recorre grupos uno por uno", not malos, malos)
+
+    return fallos
+
+
 def _pruebas_etiqueta_barras_producto():
     """Lo que dicen las barras de la Evolución de Producto (2026-09-20).
 
@@ -6717,6 +6948,9 @@ def main():
 
     # ── Lo que dice cada barra de la Evolución de Producto ──────────────
     fallos += _pruebas_etiqueta_barras_producto()
+
+    # ── Compras: que no vuelvan los bucles por grupo (regla #537) ───────
+    fallos += _pruebas_compras_sin_bucles_por_grupo()
 
     # ── Container queries: que ninguna se quede sin contenedor ──────────
     fallos += _pruebas_container_queries()

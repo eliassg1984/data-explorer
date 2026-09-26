@@ -27,6 +27,40 @@ _KEY_FSTRING = re.compile(r"""key\s*=\s*f['"]([A-Za-z0-9]+)_\{""")
 _KEY_FSTRING_PREFIJO = re.compile(
     r"""\b(\w*key\w*)\s*=\s*f['"]([A-Za-z0-9_]+)\{""", re.IGNORECASE)
 
+# Lo ÚNICO que se inyecta sin ?debug=1 (2026-09-26, regla #539): el atajo.
+# Alt+I pone ?debug=1 en la dirección y recarga, y con eso Python inyecta el
+# inspector entero. Es CONSTANTE a propósito: un iframe cuyo contenido no
+# cambia no se vuelve a montar entre reruns.
+#
+# EL OYENTE VIVE EN LA PÁGINA, NO EN ESTE IFRAME, y no es por prolijidad:
+# Streamlit monta estos iframes con `sandbox` SIN `allow-top-navigation`, así
+# que un `location.replace` llamado desde una función del iframe no navega
+# —en silencio, ni un error en la consola—. Medido: la primera versión
+# registraba el oyente desde acá y Alt+I no hacía nada. Un `<script>` que se
+# inserta en el documento de la página corre con la página, como las
+# fuentes que carga la barra (`_herramientas_js.py::cargarFuente`). Se
+# instala una vez por página: la marca vive en la página, no en el iframe.
+_JS_ATAJO = """<script>
+(function () {
+  var w = window.parent, doc = w.document;
+  if (w.__atajoInspectorPagina) return;
+  function atajo() {
+    window.__atajoInspectorPagina = true;
+    document.addEventListener('keydown', function (e) {
+      if (!(e.altKey && (e.key === 'i' || e.key === 'I'))) return;
+      var url = new URL(window.location.href);
+      if (url.searchParams.get('debug') === '1') return;  // lo atiende el inspector
+      url.searchParams.set('debug', '1');
+      window.location.replace(url.toString());
+    }, true);
+  }
+  var s = doc.createElement('script');
+  s.setAttribute('data-atajo', 'inspector');
+  s.textContent = '(' + atajo.toString() + ')();';
+  doc.body.appendChild(s);
+})();
+</script>"""
+
 
 def _slug_py(s: str) -> str:
     """Slug equivalente a graficos.base._slug: minúsculas, no-alfanum → '_'."""
@@ -296,11 +330,25 @@ def inject_element_inspector():
     (#el-inspector-badge) se añaden a doc.body (documento PADRE), no al
     iframe de AgGrid, así que sus var(--x) SÍ resuelven contra el :root de
     estilos.py. Se mantienen tal cual.
+
+    SIN ?debug=1 NO SE INYECTA (2026-09-26, regla #539). Hasta ese día se
+    mandaba siempre y se activaba o no en el navegador, y costaba en cada
+    rerun completo aunque nadie lo usara: 369 KB que, además, cambiaban en
+    CADA corrida —llevan la foto del `session_state` de abajo—, así que el
+    navegador desmontaba y volvía a montar el iframe entero: 130-250 ms de
+    hilo trabado en la laptop, más esos KB por la red en Cloud. Sin
+    ?debug=1 va sólo `_JS_ATAJO`, y Alt+I sigue sirviendo para entrar: pone
+    el parámetro y RECARGA (antes era instantáneo; el precio es esa recarga,
+    que empieza una sesión nueva). Para salir, Alt+I lo resuelve el
+    inspector como siempre.
     """
+    import streamlit as st
+    if st.query_params.get("debug") != "1":
+        inyectar_html(_JS_ATAJO, height=0)
+        return
     mapa_codigo, mapa_estilos, mapa_snippets, mapa_funcion, mapa_refs, mapa_texto, mapa_construido, mapa_prefijos = _mapas_desarrollador()
     # session_state: snapshot no cacheado (cambia cada rerun). Se serializa a
     # str truncado — solo para inspección; nunca para persistir.
-    import streamlit as st
     _ss_snapshot: dict[str, str] = {}
     try:
         for _k, _v in st.session_state.items():

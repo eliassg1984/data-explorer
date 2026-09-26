@@ -183,6 +183,27 @@ def unidad_corta(um):
     return UNIDAD_CORTA.get(crudo.upper(), crudo.lower())
 
 
+def moda_por_grupo(df, llave, col):
+    """Serie `llave -> valor más frecuente de col`, para TODAS las llaves de
+    una vez. Sólo aparecen las que tienen algún valor.
+
+    Es lo mismo que `df.groupby(llave)[col].agg(lambda s: s.mode().iat[0])`
+    y así se escribía, pero ese `mode()` por grupo arma un sub-DataFrame por
+    llave: sobre los ~1.600 productos del histórico costaba 1,4-1,7 s en la
+    laptop, contra 40 ms esto (regla #537).
+
+    Mismo resultado, incluidos los dos bordes: los vacíos no cuentan (como
+    en `mode()`), y entre dos valores empatados gana el MENOR, que es el
+    primero del resultado ordenado de `mode()` — el `iat[0]` de siempre.
+    """
+    n = (df.groupby([llave, col], sort=False).size()
+           .reset_index(name="_n")
+           .sort_values([llave, "_n", col], ascending=[True, False, True],
+                        kind="stable"))
+    top = n.drop_duplicates(llave, keep="first")
+    return pd.Series(top[col].to_numpy(), index=top[llave].to_numpy())
+
+
 def _first_point(evt):
     """Primer punto de una selección de st.plotly_chart(on_select=...).
     Devuelve el dict del punto o None (tolerante a formatos/errores)."""

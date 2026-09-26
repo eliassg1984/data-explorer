@@ -725,6 +725,20 @@ python herramientas/sql_restaurante.py -f consulta.sql --base INFOREST
   motor sea 2019: no hay `STRING_AGG`, `IIF`, `CONCAT`, `TRY_CAST`,
   `LAG`/`LEAD` ni `OFFSET/FETCH`.
 
+## Nada de recorrer grupos uno por uno en una vista
+
+Un `for … in df.groupby(...)` con un `sort_values`, un filtro o un `mode()`
+adentro paga lo fijo de pandas en CADA grupo, y los grupos son miles: en
+Compras era el 80-90 % de Volatilidad, «Vs año pasado» y Producto (4-6 s
+cada una en la laptop, 0,4-1,1 s después de hacerlo con UN `groupby` sobre
+todas las filas). La moda por grupo sale de
+`graficos/compras/_comun.py::moda_por_grupo`. Dos trampas al vectorizar:
+el desempate de las compras del MISMO día va en orden ESTABLE
+(`kind="stable"`; un quicksort sobre todo el df desempata distinto que el
+bucle, y ya costó un bug), y el orden entre montos iguales se decide a
+propósito. Lo vigila `test_graficos.py::_pruebas_compras_sin_bucles_por_grupo`.
+Regla #537.
+
 ## Antes de sumar una columna "comparable": mirá su GRANO
 
 `compras.parquet` trae `VALOR_ANO_ANTERIOR`, `CANTIDAD_ANO_ANTERIOR` y
@@ -885,6 +899,13 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
 
 ## AgGrid — específicos de este proyecto
 
+- **Cada grilla cuesta 1,28 MB y 1,1-1,8 s de hilo del navegador, aunque
+  la página ya tenga otras.** Streamlit sirve el JS de st_aggrid sin nada
+  que le permita al navegador guardarlo (`Cache-Control: public` sin
+  `max-age` ni `ETag`), así que cada iframe lo baja y lo compila de cero;
+  Compras con todo construido monta 10. No se arregla desde la app: lo que
+  se controla es cuántas se montan. Para una tabla chica o de sólo
+  lectura, pensar antes si alcanza `st.dataframe`. Regla #540.
 - **Un `cellRenderer`/`innerRenderer` que devuelve un string de HTML no
   pinta HTML acá — se ve como texto escapado.** `st_aggrid` usa
   `ag-grid-react`; el atajo "vanilla" de AG Grid puro (función que
@@ -1073,6 +1094,14 @@ diapositivas. Tres cosas que muerden:
 Lo vigila `test_graficos.py::_pruebas_encaje_pila`. Detalle y mediciones en
 `arquitectura.md` regla #533.
 
+**La precarga construye primero lo más CERCA de la pantalla** (2026-09-26).
+El temporizador de `_render_rail` activa, de a una, las secciones en
+esqueleto a menos de 900px; como cada sección mide una pantalla, eso
+alcanza a las dos de arriba y a las dos de abajo. Recorrerlas en orden de
+página hacía esperar a la vista pedida detrás de las dos de arriba: saltar
+a «Detalle docs.» tardaba 23 s, contra 2,6 s eligiendo por distancia. Ver
+`arquitectura.md` regla #538.
+
 **Excepción: Ajuste tiene DOS pilas, una por categoría del rail.** Sus
 categorías no son agrupación visual — cada una recuerda su propio rango de
 fecha (`estado_rango.clave_rango(categoria=...)`), porque Cascada quiere un
@@ -1156,7 +1185,10 @@ impecable en el PNG y en la página se mete encima del legend (regla #362).
 
 También existe el inspector propio: **`?debug=1` en la URL o `Alt+I`**
 activa `inject_element_inspector` (tooltip con selectores y estilos al
-pasar el cursor). El inspector NO agrega elementos visibles en la página
+pasar el cursor). **Sin `?debug=1` no se inyecta** (2026-09-26): costaba
+369 KB y un re-montaje en cada rerun a todos los usuarios. Alt+I sin el
+parámetro lo agrega y RECARGA la página, o sea que entrar ya no es
+instantáneo y empieza una sesión nueva. Regla #539. El inspector NO agrega elementos visibles en la página
 — se ve como producción. Con un elemento fijado, la línea "Cadena de
 contenedores st-key" del tooltip es clicable: **migas de pan** que saltan
 el pin a cualquier ancestro sin ir a buscarlo a ojo en la pantalla. Con

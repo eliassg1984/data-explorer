@@ -65,7 +65,7 @@ from graficos.base import (
 from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
     ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL_ESPEJO,
-    CROMO_GRID_RANK, GAP_DRILL, selector_fecha_tarjeta,
+    CROMO_GRID_RANK, GAP_DRILL, moda_por_grupo, selector_fecha_tarjeta,
     # Las de la variación contra la barra anterior (#470): nacieron en
     # Semanal y viven en `_comun` desde que esta tarjeta pidió lo mismo.
     _UNIDAD_GRAN, _clave_grilla, _first_point, _fmt_variacion,
@@ -433,27 +433,54 @@ def _prod_ranking(dd, col_prod, col_fecha, col_valor, col_cant, col_punit, col_u
     """Un producto por fila: valor y cantidad totales del rango, UM (moda),
     y precio real de la primera y última compra del período (sin promediar
     — mismo criterio que "Por compra") con su % de variación. Ordenado por
-    valor descendente."""
-    filas = []
-    for prod, g in dd.groupby(col_prod):
-        valor = float(g[col_valor].sum())
-        cantidad = float(g[col_cant].sum()) if col_cant else 0.0
-        um = ""
-        if col_um and col_um in g.columns:
-            _u = g[col_um].dropna()
-            if not _u.empty:
-                um = str(_u.mode().iat[0])
-        gp = g.dropna(subset=[col_punit])
-        gp = gp[gp[col_punit] > 0].sort_values(col_fecha)
-        if gp.empty:
-            inicio = fin = var_pct = None
-        else:
-            inicio = float(gp[col_punit].iloc[0])
-            fin = float(gp[col_punit].iloc[-1])
-            var_pct = ((fin - inicio) / inicio * 100) if inicio else None
-        filas.append({"producto": str(prod), "valor": valor, "cantidad": cantidad,
-                      "um": um, "inicio": inicio, "fin": fin, "var_pct": var_pct})
-    out = pd.DataFrame(filas).sort_values("valor", ascending=False).reset_index(drop=True)
+    valor descendente.
+
+    TODO DE UNA VEZ, NO PRODUCTO POR PRODUCTO (2026-09-26, regla #537). Era
+    un bucle que armaba un sub-DataFrame por producto —suma, moda, dropna,
+    filtro y `sort_values` cada uno— y se llevaba el 90 % de la sección:
+    2,3-2,5 s por llamada en la laptop con un mes de compras. Así, 30 ms, y
+    el mismo resultado columna por columna, verificado sobre el parquet
+    real (el histórico entero, cada año y cada trimestre).
+
+    Dos cosas que el bucle hacía sin decirlo y que acá se escriben:
+      · «la primera y la última compra»: por fecha y, entre compras del
+        MISMO día, en el orden del parquet (orden estable);
+      · MONTOS IGUALES AL CÉNTIMO van por nombre. En el bucle su orden
+        dependía del último decimal de la suma (164,00000000000003 contra
+        164,0): dos productos de S/ 164 podían salir en cualquier orden, y
+        salían distinto según cómo se sumara.
+    """
+    g = dd.groupby(col_prod)                     # claves ordenadas, sin NaN
+    valor = g[col_valor].sum().astype(float)
+    prods = valor.index
+    cantidad = (g[col_cant].sum().astype(float).reindex(prods)
+                if col_cant else pd.Series(0.0, index=prods))
+    if col_um and col_um in dd.columns:
+        um = (moda_por_grupo(dd[[col_prod, col_um]].dropna(subset=[col_um]),
+                             col_prod, col_um)
+              .map(str).reindex(prods).fillna(""))
+    else:
+        um = pd.Series("", index=prods)
+    # Precio de la primera y la última compra VÁLIDA del período.
+    v = dd[[col_prod, col_fecha, col_punit]]
+    v = v[v[col_prod].notna() & v[col_punit].notna()]
+    v = v[v[col_punit] > 0].sort_values([col_prod, col_fecha], kind="stable")
+    gv = v.groupby(col_prod, sort=False)[col_punit]
+    inicio = gv.first().reindex(prods)
+    fin = gv.last().reindex(prods)
+    out = pd.DataFrame({
+        "producto": [str(p) for p in prods],
+        "valor": valor.to_numpy(),
+        "cantidad": cantidad.to_numpy(dtype=float),
+        "um": um.to_numpy(dtype=object),
+        "inicio": inicio.to_numpy(dtype=float),
+        "fin": fin.to_numpy(dtype=float),
+        "var_pct": ((fin - inicio) / inicio * 100).to_numpy(dtype=float),
+    })
+    out["_orden"] = out["valor"].round(2)
+    out = (out.sort_values(["_orden", "producto"], ascending=[False, True],
+                           kind="stable")
+              .drop(columns="_orden").reset_index(drop=True))
     tot = out["valor"].sum() or 1.0
     out["pct"] = out["valor"] / tot * 100
     return out
