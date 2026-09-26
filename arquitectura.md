@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-534 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+535 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (185)
+**CSS y estilos** (186)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -219,6 +219,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#532** — El CSS que traba la página puede ser el de STREAMLIT: el separador de st.segmented_control…
 - **#533** — La pila encaja: una vista por pantalla. Con encaje obligatorio, lo que está en el flujo y no…
 - **#534** — Un párrafo que queda FUERA de su comentario borra la regla que le sigue, y el test de la #454…
+- **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
 
 **Layout y alturas** (76)
 
@@ -815,7 +816,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#431** — st.popover no emite st-key-* propio: sin un contenedor que se la preste, el inspector y el…
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 
-**Decisiones de diseño y UX** (111)
+**Decisiones de diseño y UX** (112)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -928,6 +929,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#529** — «Análisis de platos»: el ranking de platos entre hasta cuatro períodos, en lugar del Top…
 - **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
 - **#533** — La pila encaja: una vista por pantalla. Con encaje obligatorio, lo que está en el flujo y no…
+- **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -39622,6 +39624,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-19.)
 
+     **Desde el 2026-09-26 las vistas ya no cuelgan de su reporte: van
+     debajo de todos (#535).** Lo de los dos contenedores sigue valiendo;
+     el hueco calculado y sus tres variables se fueron.
+
 473. **Un jalón negativo que compensa un `gap` fantasma es deuda con
      intereses: el día que el gap desaparece, cada reporte abre a una
      altura distinta. Se arregla en la CAUSA (`display: contents` en los
@@ -41169,6 +41175,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      PERSISTENTE de session_state: ahí `dot opacity` da 0 y el nombre 1,
      medido. Es la misma familia que la regla #353 (las transiciones no
      avanzan en el navegador automatizado).
+
+     **Reemplazada el 2026-09-26 por la #535**: los puntos tampoco decían
+     nada («no comunican mucho»), y el hueco que rellenaban dejó de existir
+     — las vistas pasaron al pie de la columna y plegada no se ven.
 
 496. **«Nueva receta» ya no es un reporte hermano, es una VISTA del reporte
      Recetas.** 2026-09-22, a pedido: «actualmente la opción de nueva
@@ -43426,6 +43436,64 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - **La regla se borró en vez de arreglarse**: su trabajo lo hace el
        `scroll-padding-top` de `.stMain` (#533), y los dos juntos se suman.
 
+535. **Lo que se despliega con el cursor va DEBAJO de lo que ya está en la
+     columna, no en el medio. Colgadas de su reporte, las vistas dejaban
+     plegada la columna con un hueco que había que rellenar con algo, y
+     los dos rellenos que se probaron fueron ruido.**
+     2026-09-26, a pedido, con captura de la columna plegada en Ventas:
+     «los iconos me agradan, pero creo que los puntos no comunican mucho,
+     quizás es mejor que no aparezcan?». Se eligió entre tres maquetas: A,
+     sacar los puntos y dejar el hueco; B, una sola marca de posición; C,
+     las vistas al pie de los reportes. Fue la C.
+
+     - **Por qué no alcanzaba con sacarlos.** El hueco no era de los
+       puntos: lo reservaba la fila del reporte activo, estirada lo que
+       medía la lista (`--arbol-activa`, #472), también con la columna
+       plegada. Cerrarlo plegada y abrirlo al desplegar mete la lista
+       entre los reportes y empuja hacia abajo al que está bajo el cursor
+       —el clic cae en una vista de otro reporte—, que es lo que prohíbe la
+       #465. Y sin cerrarlo, con Compras activo quedaban 244px vacíos entre
+       Compras y Stock (en Ventas no se notaba: es el último). De ahí
+       salieron los dos rellenos: el ícono de cada vista (#472), que «no
+       dice mucho», y el punto por vista (#495), que «no comunica mucho».
+     - **Un costo que nadie había reportado.** Con las vistas colgadas,
+       los íconos de debajo del activo cambiaban de altura con cada
+       reporte: con Compras activo, el de Ventas estaba en y=474; al
+       clickearlo se plegaba la lista de Compras y saltaba a 230 — el
+       ícono se corría de debajo del cursor DESPUÉS del clic. Medido con
+       la C, a 1366×768: los seis íconos quedan en 50, 86, 122, 158, 194 y
+       230 con Compras activo y con Ventas activo, plegada y desplegada.
+     - **Qué quedó** (`estilos/_28_arbol.py`; `navegacion.py`).
+       `navegacion.py` publica `--arbol-filas` —filas de reportes: un
+       grupo es una, el Inspector suma una cuando se muestra— y la lista
+       va debajo de la última, bajo el rótulo «Vistas de <reporte>» con
+       una línea encima. El rótulo es la `.rail-cab` de `_render_rail`,
+       que entre 769 y 900 es la cabecera de la columna: el «Vistas de»
+       sale de un `::before` para no cambiar aquel tramo, y va con el
+       cuerpo, el peso y la x del rótulo «Reportes» (12px, 500, x=56).
+       Plegada, la lista tiene `visibility: hidden` —no se ve, no recibe
+       el cursor ni el foco— y el cursor cae en `compras_tabs_row`, que
+       despliega. La píldora del reporte activo se queda también
+       desplegada: sin la lista debajo, es lo que lo ata a su rótulo. Se
+       fueron `--arbol-idx`, `--arbol-activa`, `--arbol-n`, `--arbol-seps`
+       y `--arbol-alto`, la línea guía y los puntos; cada regla de las
+       vistas tiene UN estado, el desplegado.
+     - **Dos cosas que no se ven y hay que saber.** (1) `visibility` se
+       hereda, pero Streamlit la re-declara dentro de cada `stMarkdown`:
+       sin un `.st-key-nav_rail_lateral * { visibility: inherit }` el
+       rótulo se seguiría leyendo con la lista escondida. Esa regla ya
+       existía en `_26_rails_scroll.py`, pero sólo para 769–900. (2) El
+       `var(--arbol-filas, 6)` lleva la cuenta de hoy como respaldo: si el
+       CSS nuevo llega a Cloud antes que el `navegacion.py` que publica la
+       variable (#357), la lista cae igual en su sitio en vez de encima
+       del primer reporte.
+     - **Alto**: Ventas, 6 reportes y 10 vistas, termina en y=613 a
+       1366×768 y en y=559 a 1366×660 (filas de 32/27). Probado también el
+       despliegue con el cursor de verdad (`computer{hover}`): la lista
+       entra con la pausa de 180ms de la columna y el ícono bajo el cursor
+       no se mueve. Y el tramo de 769–900 no cambia: a 850px la cabecera
+       sigue en 16px, sin el «Vistas de».
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -43438,7 +43506,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#534**; la próxima toma el número siguiente.
+> última regla es la **#535**; la próxima toma el número siguiente.
 
 >
 

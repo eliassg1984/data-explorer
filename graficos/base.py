@@ -1954,6 +1954,11 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
             #
             # `navegacion.py` ya la dejó calculada y formateada: acá sólo se
             # pinta. Ver `CLAVE_CABECERA`.
+            #
+            # Desde 901px hace otro trabajo con el mismo nombre: es el rótulo
+            # «Vistas de <reporte>» que separa la lista de los reportes de
+            # arriba, porque en el árbol las vistas van debajo de TODOS y no
+            # colgando del suyo (`estilos/_28_arbol.py`, regla #535).
             _cab = st.session_state.get(navegacion.CLAVE_CABECERA)
             if _cab and _cab.get("nombre"):
                 # Sólo el NOMBRE del reporte: los KPIs (montos S/) se quitaron
@@ -1985,10 +1990,6 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
             # posición fija.
             _ids_pila = {_oid for _, _oid in secciones}
             _prev_en_pila = None
-            # Cuántas filas y cuántos separadores lleva esta lista: desde
-            # 901px el árbol le abre a la fila del reporte activo un hueco
-            # de ese alto (`estilos/_28_arbol.py`, regla #472).
-            _n_filas = _n_seps = 0
             for _cat_nombre, items in categorias:
                 for item in items:
                     oid, label = item[0], item[1]
@@ -1996,9 +1997,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     if _prev_en_pila is not None and _en_pila != _prev_en_pila:
                         st.markdown('<div class="nav-rail-lat-sep"></div>',
                                    unsafe_allow_html=True)
-                        _n_seps += 1
                     _prev_en_pila = _en_pila
-                    _n_filas += 1
                     # El icono SÍ se dibuja acá (a diferencia de la franja
                     # horizontal, que lo ignora por falta de alto): esta copia
                     # es vertical y tiene sitio. Y hace falta — el rail que
@@ -2058,14 +2057,11 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                         with st.container(key=f"railkpi_{_slug_url(oid)}"):
                             if _ayuda:
                                 st.markdown(_ayuda)
-        # El alto del hueco que abre la fila activa del árbol lo calcula el
-        # CSS con estos dos conteos y los altos de fila que viven allá
-        # (`_28_arbol.py`). Fuera del contenedor del rail: adentro sería una
-        # fila más de la lista, y el `<style>` se esconde solo en la raíz
-        # (`navegacion.py::_CSS_AJUSTE`, punto 3).
-        st.markdown(f"<style>:root{{--arbol-n:{_n_filas};"
-                    f"--arbol-seps:{_n_seps};}}</style>",
-                    unsafe_allow_html=True)
+        # (Acá se publicaban `--arbol-n` y `--arbol-seps`, las filas y los
+        # separadores de esta lista, para que la fila del reporte activo
+        # del árbol se estirara lo que ella medía. Desde el 2026-09-26 la
+        # lista va debajo de todos los reportes y no hay hueco que abrir:
+        # `estilos/_28_arbol.py`, regla #535.)
 
         # ── SEMAFORO: un punto por fila ──────────────────────────────────
     # `estados` es `{id_vista: "success"|"danger"|"warning"}` y lo unico

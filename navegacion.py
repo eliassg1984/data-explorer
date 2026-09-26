@@ -1132,40 +1132,25 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                 unsafe_allow_html=True,
             )
 
-    # ── EL ÁRBOL: qué fila le abre el hueco a las vistas (2026-09-19) ─────
-    # Desde 901px las vistas del reporte activo se dibujan DEBAJO de su fila,
-    # como hijas en un árbol (`estilos/_28_arbol.py`). Son dos contenedores
-    # distintos —los reportes se dibujan acá, antes del fragment, y las vistas
-    # adentro, en `graficos/base.py::_render_rail`— así que el anidado es de
-    # geometría: la fila activa se estira lo que miden las vistas y el
-    # contenedor de las vistas se ubica en ese hueco. Para eso el CSS necesita
-    # dos datos que sólo Python sabe: CUÁL es la fila activa y en qué
-    # POSICIÓN está. Se publican como variables y no como reglas: el mismo
-    # criterio que el semáforo de `_render_rail`, una regla fija en estilos/
-    # y el dato que cambia por render entra por `var(--…)`.
-    _filas = []
-    _idx_activa = None
-    _grupos_arbol = set()
-    for nombre, info in visibles.items():
-        grupo = info.get("grupo_nav")
-        if grupo:
-            if grupo in _grupos_arbol:
-                continue
-            _grupos_arbol.add(grupo)
-            if reporte_activo in [n for n, i in visibles.items()
-                                  if i.get("grupo_nav") == grupo]:
-                _idx_activa = len(_filas)
-            _filas.append(_slug(grupo))
-            continue
-        if nombre == reporte_activo:
-            _idx_activa = len(_filas)
-        _filas.append(_slug(nombre))
-    if _idx_activa is not None:
-        st.markdown(
-            f"<style>:root{{--arbol-idx:{_idx_activa};}}"
-            f".st-key-navitem_{_filas[_idx_activa]}{{--arbol-activa:1;}}</style>",
-            unsafe_allow_html=True,
-        )
+    # ── EL ÁRBOL: dónde empiezan las vistas (2026-09-19; 2026-09-26) ─────
+    # Desde 901px las vistas del reporte activo van en la misma columna,
+    # DEBAJO DE TODOS LOS REPORTES (`estilos/_28_arbol.py`, regla #535).
+    # Hasta el 2026-09-26 colgaban de la fila activa y ésta se estiraba lo
+    # que medían: con eso los íconos de abajo cambiaban de altura con cada
+    # reporte, y la columna plegada cargaba un punto por vista para no
+    # dejar un agujero. Son dos contenedores distintos —los reportes se
+    # dibujan acá, antes del fragment, y las vistas adentro, en
+    # `graficos/base.py::_render_rail`—, así que el de las vistas se ubica
+    # por geometría y el CSS necesita un dato que sólo Python sabe: CUÁNTAS
+    # filas de reportes hay (un grupo es una fila, y el Inspector suma una
+    # cuando se muestra). Va por variable y no por regla: el mismo criterio
+    # que el semáforo de `_render_rail`, una regla fija en estilos/ y el
+    # dato que cambia por render entra por `var(--…)`.
+    _grupos_rep = {_i["grupo_nav"] for _i in visibles.values() if _i.get("grupo_nav")}
+    _n_filas_rep = len(_grupos_rep) + sum(1 for _i in visibles.values()
+                                          if not _i.get("grupo_nav"))
+    st.markdown(f"<style>:root{{--arbol-filas:{_n_filas_rep};}}</style>",
+                unsafe_allow_html=True)
 
     _grupos_dibujados = set()
     with st.container(key="compras_tabs_row"):

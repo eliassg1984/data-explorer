@@ -245,11 +245,13 @@ regla #366.
 Desde el 2026-09-19 (regla #472), en escritorio el cromo se reparte como en
 cualquier app con barra lateral, cada pieza con UN trabajo:
 
-- **Al costado, a dónde ir.** La columna lista los reportes y, anidadas
-  bajo el activo, sus vistas. No cambia de contenido al bajar. Plegada (el
-  default) es una tira de 68px de íconos; con el cursor se despliega a
-  248px ENCIMA del contenido; el pestillo la **fija** abierta y ahí el
-  contenido le reserva el ancho (`--rail-reserva`, en `_00_base.py`).
+- **Al costado, a dónde ir.** La columna lista los reportes y, debajo de
+  todos, las vistas del activo, bajo el rótulo «Vistas de <reporte>». No
+  cambia de contenido al bajar. Plegada (el default) es una tira de 68px
+  con los íconos de los reportes y nada más; con el cursor se despliega a
+  248px ENCIMA del contenido y aparecen las vistas; el pestillo la **fija**
+  abierta y ahí el contenido le reserva el ancho (`--rail-reserva`, en
+  `_00_base.py`).
 - **Arriba, dónde estás.** La franja (`nav_franja_rep`, 44px) lleva el
   reporte, la vista en pantalla y sus KPIs a la izquierda, y la fecha,
   Filtros, la hora del dato y Actualizar a la derecha, cada uno a la
@@ -260,21 +262,28 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
 
 Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
 
-- **El árbol son DOS contenedores**: los reportes se dibujan antes del
-  fragment (`navegacion.py`) y las vistas adentro (`_render_rail`). El
-  anidado es de geometría: Python publica `--arbol-idx`/`--arbol-activa` y
-  `--arbol-n`/`--arbol-seps`, y el CSS estira la fila activa lo que mide la
-  lista. Todo alto de adentro es `height`, sin márgenes propios: un píxel
-  de más se acumula y la última vista pisa al reporte siguiente.
+- **La columna son DOS contenedores**: los reportes se dibujan antes del
+  fragment (`navegacion.py`) y las vistas adentro (`_render_rail`). Las
+  vistas se ubican por geometría: Python publica `--arbol-filas` (cuántas
+  filas de reportes hay) y el CSS las pone debajo de la última. **No
+  vuelvas a colgarlas de su reporte**, que es como estuvieron hasta el
+  2026-09-26: la fila activa tenía que estirarse lo que medía la lista,
+  los íconos de abajo cambiaban de altura con cada reporte y, plegada, el
+  hueco pedía un relleno — primero el ícono de cada vista, después un
+  punto por vista, y ninguno decía nada. Regla #535.
 - **Lo que abre una capa no puede MOVERSE al abrirse** (#465). Los íconos
   de la columna y el pestillo tienen su centro en el mismo x (34) en los
-  tres estados; desplegar sólo agrega a la derecha.
+  tres estados; desplegar sólo agrega a la derecha, y las vistas abajo de
+  todo. Es lo que prohíbe cerrar el hueco con las vistas colgadas: al
+  desplegar se meterían entre los reportes y empujarían hacia abajo al que
+  estaba bajo el cursor.
 - **Asomar no cambia el ancho del contenido; fijar sí.** Por eso asomar va
   encima: un cambio de ancho obliga a Plotly y AgGrid a re-medirse (#350).
   Verificado que al fijar siguen a su contenedor.
 - **La vista de la franja la escribe el temporizador de `_render_rail`**
   (`.barra-vista`, con el rótulo corto de la vista). Toda vista nueva lleva
-  ícono (tercer elemento de su tupla): plegado, es lo único que se ve.
+  ícono (tercer elemento de su tupla): lo muestra la columna entre 769 y
+  900px; desde 901 no se dibuja (reglas #495 y #535).
 - **Ningún jalón negativo arriba de la primera tarjeta.** Los seis
   contenedores de cromo fijo van en `display: contents` y no cobran `gap`,
   así que la tarjeta abre donde dice `--cab-offset-contenido`. Si aparece
