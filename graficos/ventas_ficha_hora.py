@@ -688,7 +688,8 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
 
     la = "la" if h12 == 1 else "las"
     ampm = "am" if int(hora) % 24 < 12 else "pm"
-    verbo = "abiertos" if modo == "pedido" else "con cobro"
+    verbo = (("abierto" if n == 1 else "abiertos") if modo == "pedido"
+             else "con cobro")
     sub = (f"{n} {'pedido' if n == 1 else 'pedidos'} {verbo} entre {la} "
            f"{h12}:00 y {la} {h12}:59 {ampm}" if n else
            "Ningún pedido a esta hora")

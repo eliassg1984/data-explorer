@@ -833,6 +833,12 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
   AS 'ES COMBO'` a la consulta del Sheet, que `preparar` ya lee — la marca
   de la LÍNEA (la misma que decide el `PRECIO COSTO`), no la del producto.
   Regla #542.
+- **Una vista que UBICA por otra fecha tiene que CARGAR por esa fecha.**
+  «Por hora» pone cada venta en la hora del pedido; cargada por el cobro,
+  el pedido que cruzaba el borde de un panel no caía en ninguno (S/ 58.500
+  en junio de 2026), y un día de más no alcanza: hay pedidos facturados 70
+  días después. `cargar_rango(archivo, col, …)` recorta por `col` desde la
+  regla #552 (antes `preparar` recortaba siempre por el documento).
 - **Tocar la definición es subir `definicion_venta.VERSION`** (va en la
   clave de la caché de disco, que no caduca) y correr
   `python herramientas/cuadrar_ventas.py`, que la cuadra contra el POS por

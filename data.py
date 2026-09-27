@@ -1079,6 +1079,28 @@ def _version_preparar(archivo):
     return prep.VERSION if prep else None
 
 
+def _preparar_en_rango(prep, df, col_fecha, ini, fin):
+    """`prep.preparar` recortado al rango por la MISMA fecha con que se
+    cargó.
+
+    `preparar(df, ini, fin)` recorta por la fecha del DOCUMENTO, que es por
+    la que carga casi todo. «Por hora» carga por la del PEDIDO (regla #552),
+    y recortar después por el documento le sacaba justo lo que venía a
+    buscar: un pedido abierto el 30 de junio y cobrado el 1 de julio —o
+    facturado 70 días después, que los hay— es de junio, y quedaba fuera de
+    junio sin entrar en julio. Las notas de crédito espejadas conservan la
+    fecha del pedido que anulan, así que restan en el mismo período que su
+    venta."""
+    c_doc = prep.columna(df, prep.FECHA)
+    if c_doc is None or c_doc == col_fecha or col_fecha not in df.columns:
+        return prep.preparar(df, ini, fin)
+    out = prep.preparar(df)
+    f = pd.to_datetime(out[col_fecha], errors="coerce",
+                       dayfirst=True).dt.normalize()
+    m = f.notna() & (f >= pd.Timestamp(ini)) & (f <= pd.Timestamp(fin))
+    return out[m].reset_index(drop=True)
+
+
 def _donde_rango(con, url, col_fecha, prep):
     """(WHERE, parámetros) de una carga por rango de `ini` a `fin`.
 
@@ -1133,7 +1155,7 @@ def _cargar_rango_cacheable(archivo, sello, col_fecha, ini, fin,
         f"SELECT * FROM read_parquet('{url}') WHERE {donde}",
         [ini, fin] * n,
     ).df()
-    return prep.preparar(df, ini, fin) if prep else df
+    return _preparar_en_rango(prep, df, col_fecha, ini, fin) if prep else df
 
 
 def cargar_rango(archivo, col_fecha, ini, fin):

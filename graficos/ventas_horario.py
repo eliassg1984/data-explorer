@@ -2170,9 +2170,12 @@ def _ficha_de_la_hora(foco, claves, grano, ancla, filtrar_cb, raros, horas,
     ini, fin = _rango_de_clave(k, grano)
     ini_v, fin_v = _fh.ventana(ini, min(fin, ancla))
     cfg = REPORTES.get("Ventas", {})
+    # Por la misma fecha que el mapa (regla #552): si no, un pedido de la
+    # celda facturado días después está en el mapa y falta en la lista.
+    _col = (cfh["apertura"] if modo == "pedido" and cfh.get("apertura")
+            else cfg.get("carga_por_rango", "FEC REG DOCUMENTO"))
     with st.spinner("Armando la ficha de la hora…"):
-        df = cargar_rango(cfg.get("archivo", "ventas.parquet"),
-                          cfg.get("carga_por_rango", "FEC REG DOCUMENTO"),
+        df = cargar_rango(cfg.get("archivo", "ventas.parquet"), _col,
                           ini_v, fin_v)
         if df is not None and not df.empty and filtrar_cb is not None:
             df = filtrar_cb(df)
@@ -2750,6 +2753,14 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # colgada, que es exactamente como la reportó el usuario el
         # 2026-08-14. Va DENTRO de la tarjeta y después de la franja para que
         # el mensaje aparezca donde va a aparecer el mapa.
+        # Cada panel se CARGA por la misma fecha que lo UBICA (regla #552).
+        # Cargado por el cobro y ubicado por el pedido, un pedido abierto el
+        # último día y cobrado pasada la medianoche no caía en ningún panel:
+        # el de junio no lo traía y el de julio lo descartaba por ser de
+        # junio (Evento Fagor, S/ 58.500). Y un día de más no alcanza: hay
+        # pedidos facturados hasta 70 días después.
+        _col_carga = (col_hora_ped if hora == _HORA_OP[0] and col_hora_ped
+                      else _colp)
         tramos, paneles = [], []
         _n = len(claves)
         _msg = ("Cargando el período…" if _n == 1
@@ -2758,7 +2769,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             for k in claves:
                 ini, fin = _rango_de_clave(k, grano)
                 fin = min(fin, ancla)
-                df = cargar_rango(_arch, _colp, ini, fin)
+                df = cargar_rango(_arch, _col_carga, ini, fin)
                 if df is not None and not df.empty and filtrar_cb is not None:
                     df = filtrar_cb(df)
                 if not raros and df is not None and col_fam in df.columns:

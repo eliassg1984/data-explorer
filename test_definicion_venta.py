@@ -410,6 +410,64 @@ for nombre in ("_cargar_rango_cacheable", "_resumen_kpis_cacheable"):
        "sin ella, un cambio de definición sigue sirviendo el df viejo de "
        "la caché de disco")
 
+print("\n── cargar por la fecha del PEDIDO recorta por esa fecha ──")
+# «Por hora» ubica cada venta por la hora en que se ABRIÓ el pedido y carga
+# cada panel por esa misma fecha (regla #552). El recorte tiene que ser por
+# ella también: por la del documento se perdía el pedido del 31 abierto a
+# las 23:50 y cobrado el 1, y el que se factura días después.
+from data import _preparar_en_rango  # noqa: E402
+
+PED = "FECHA REGISTRO PEDIDO"
+D31, D2 = dt.date(2026, 8, 31), dt.date(2026, 9, 2)
+_abre = {"P": pd.Timestamp("2026-09-01 20:00"),
+         "Q": pd.Timestamp("2026-09-03 13:00"),
+         "R": pd.Timestamp("2026-09-03 14:00"),
+         "S": pd.Timestamp("2026-09-03 15:00")}
+_cp = crudo.assign(**{PED: crudo["LLAVE LOCAL PEDIDO"].map(_abre)})
+_cp = pd.concat([_cp, pd.DataFrame([
+    # T: abierto el 31 a las 23:50, cobrado el 1 a las 00:05.
+    {**_fila("B7", "02", "Boleta Electronica", "PAGADO",
+             "2026-09-01 00:05", "T", 2, "01", "Lomo", 1, 90.0, 0.0,
+             total_doc=90.0), PED: pd.Timestamp("2026-08-31 23:50")},
+    # U: abierto el 2, facturado el 20.
+    {**_fila("F9", "01", "Factura Electronica", "C.POR COBRAR",
+             "2026-09-20 16:00", "U", 3, "01", "Pato", 1, 70.0, 0.0,
+             total_doc=70.0), PED: pd.Timestamp("2026-09-02 19:00")},
+])], ignore_index=True)
+
+
+def _venta(x):
+    return float(dv.solo_venta(_items(x))["VENTA ITEM DDOCUMENTO"].sum())
+
+
+def _peds(x):
+    return sorted(dv.solo_venta(x)["LLAVE LOCAL PEDIDO"].dropna().unique())
+
+
+_por_doc = _preparar_en_rango(dv, _cp, "FEC REG DOCUMENTO", D1, D1)
+igual(_venta(_por_doc), _venta(dv.preparar(_cp, D1, D1)),
+      "por la fecha del documento, lo de siempre")
+igual(_peds(_preparar_en_rango(dv, _cp, PED, D31, D31)), ["T"],
+      "el pedido del 31 cobrado el 1 es del 31")
+_d1 = _preparar_en_rango(dv, _cp, PED, D1, D1)
+igual(_peds(_d1), ["P"], "el 1 trae sólo lo abierto el 1")
+igual(_venta(_d1), 200.0,
+      "y el canje neto: boleta + factura − nota, aunque la nota sea del 3")
+igual(_peds(_preparar_en_rango(dv, _cp, PED, D2, D2)), ["U"],
+      "el facturado 18 días después es del día en que se pidió")
+_dias = [_preparar_en_rango(dv, _cp, PED, d, d)
+         for d in pd.date_range(D31, dt.date(2026, 9, 30)).date]
+igual(round(sum(_venta(x) for x in _dias), 2),
+      round(_venta(_preparar_en_rango(dv, _cp, PED, D31,
+                                      dt.date(2026, 9, 30))), 2),
+      "día por día suma lo mismo que el mes: nada se cuenta dos veces")
+_fuente_h = (RAIZ / "graficos/ventas_horario.py").read_text(encoding="utf-8")
+ok("cargar_rango(_arch, _colp," not in _fuente_h
+   and "cargar_rango(_arch, _col_carga," in _fuente_h,
+   "ventas_horario.py: cada panel se carga por la fecha que lo ubica",
+   "cargado por el cobro y ubicado por el pedido, el pedido que cruza el "
+   "borde no cae en ningún panel")
+
 print("\n── el asistente sabe qué es venta ──")
 from asistente_datos import nota_de_grano  # noqa: E402
 

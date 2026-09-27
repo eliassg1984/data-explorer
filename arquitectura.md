@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-551 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+552 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (189)
 
@@ -654,7 +654,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 
-**Datos, R2 y DuckDB** (70)
+**Datos, R2 y DuckDB** (71)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -726,6 +726,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#542** — En un COMBO, PRECIO COSTO es el costo de la LÍNEA entera, no el de una unidad — y…
 - **#546** — «Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO período, con la cuenta…
 - **#548** — «Carta costeada»: la carta ENTERA con su % de costo, combos incluidos. El costo de un combo…
+- **#552** — «Por hora» carga cada panel por la MISMA fecha con que lo ubica: en «Hora del pedido», por la…
 
 **SUNAT y SIRE** (44)
 
@@ -837,7 +838,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (120)
+**Decisiones de diseño y UX** (121)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -959,6 +960,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#548** — «Carta costeada»: la carta ENTERA con su % de costo, combos incluidos. El costo de un combo…
 - **#549** — El buscador de Volatilidad encuentra CUALQUIER insumo; el ranking sigue filtrado. Los de…
 - **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
+- **#552** — «Por hora» carga cada panel por la MISMA fecha con que lo ubica: en «Hora del pedido», por la…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44399,12 +44401,58 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        y la lista de días se comportan igual. Lo fija
        `test_graficos.py::_pruebas_por_hora_semana_y_desliza`.
 
-     Queda sin arreglar el bug que se encontró en el análisis: cada panel
+     Quedó sin arreglar el bug que se encontró en el análisis: cada panel
      se carga por la fecha de COBRO y se ubica por la del PEDIDO, así que
      un pedido abierto el último día del mes y cobrado pasada la
      medianoche no cae en ningún panel (Evento Fagor, S/ 58.500, 30 jun
-     23:51 → 1 jul 00:01). La ficha ya carga un día de más (#536); el
-     mapa, no.
+     23:51 → 1 jul 00:01). Lo arregló la #552, el mismo día.
+
+     (2026-09-27.)
+
+552. **«Por hora» carga cada panel por la MISMA fecha con que lo ubica: en
+     «Hora del pedido», por la del pedido. Y `cargar_rango` recorta por la
+     columna que le pidieron, no siempre por la del documento.**
+     2026-09-27, a pedido («arregla el bug del cruce de mes»), el que dejó
+     anotado la #551. Cada panel se cargaba por `FEC REG DOCUMENTO` (el
+     cobro) y se ubicaba por `FECHA REGISTRO PEDIDO`, así que un pedido que
+     cruzaba el borde no caía en ningún panel: el de junio no lo traía y el
+     de julio lo descartaba por ser de junio. El caso que lo destapó: el
+     Evento Fagor, S/ 58.500, abierto el 30 de junio a las 23:51 y cobrado
+     el 1 de julio a las 00:01.
+
+     - **Un día de más NO alcanzaba**, que era el arreglo previsto. Medido
+       en los 29.611 pedidos del histórico: 29.465 se cobran el mismo día,
+       121 al día siguiente (la medianoche) y **25 se facturan entre 2 y 70
+       días después**.
+       Cargar 70 días de más por panel habría triplicado cada consulta.
+     - **Se carga por la fecha del pedido** (`_col_carga` en
+       `_ventas_horario`; la ficha, por la misma, en `_ficha_de_la_hora`).
+       En «Hora del cobro» no cambia nada: carga por el documento, con la
+       misma clave de caché de siempre.
+     - **La trampa estaba en `data.py`**: `cargar_rango` ya filtraba por la
+       columna que se le pasara, pero `preparar(df, ini, fin)` recorta
+       DESPUÉS por la fecha del documento, siempre, y le sacaba justo lo que
+       venía a buscar. `_preparar_en_rango` recorta por la columna de la
+       carga; con la del documento hace lo de siempre. Va en `data.py` y no
+       en la firma de `preparar` a propósito: si Cloud se queda con un
+       módulo viejo (#357), la app sigue andando como antes en vez de
+       caerse con un `TypeError`.
+     - **Las notas de crédito espejadas conservan la fecha del pedido que
+       anulan** (`_espejo_de_notas` no la toca), así que restan en el mismo
+       panel que su venta. Antes, una nota de julio sobre una venta de
+       junio no restaba en ningún lado: junio de 2025 mostraba S/ 100 de
+       más.
+     - **Validado contra el histórico entero** (21 meses, de enero de 2025
+       a septiembre de 2026): cada mes cargado por pedido trae exactamente
+       las filas del histórico cuyo pedido cae en ese mes, y los meses
+       sumados dan el histórico al céntimo (S/ 11.364.959,65). Antes
+       faltaban S/ 69.207, S/ 60.995 de ellos en junio de 2026. El 30 de
+       junio a las 11 pm ahora marca S/ 58.500, nueve veces la celda que
+       le sigue, y su ficha lista el pedido. Lo fija
+       `test_definicion_venta.py` (el pedido del 31 cobrado el 1, el
+       facturado 18 días después, el canje neto y que nada se cuente dos
+       veces), más una guarda de que el mapa no vuelva a cargar por el
+       cobro.
 
      (2026-09-27.)
 
@@ -44420,7 +44468,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#551**; la próxima toma el número siguiente.
+> última regla es la **#552**; la próxima toma el número siguiente.
 
 >
 
