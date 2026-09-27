@@ -912,6 +912,15 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   (`height = k * n + margen`), no `bargap`.
 - `_LAYOUT_BASE` no se puede desempacar con `**` si el `update_layout` define
   su propio `xaxis`/`yaxis`. Ver `arquitectura.md` § Reglas #5.
+- **Un eje en OTRA figura sólo cae sobre sus filas si nadie calcula nada.**
+  El mapa deslizable de Ventas › Por hora lleva las horas en una figura
+  aparte, pegada a la izquierda: las dos necesitan el mismo alto, los
+  mismos márgenes de arriba y abajo, `automargin=False` y el eje Y con
+  `autorange=False` y el MISMO `range` — con el autorange de siempre un
+  heatmap y un scatter redondean distinto y el eje quedó 4px corrido. Y
+  `st.plotly_chart(width=N)` escribe `max-width: 100%` en su contenedor:
+  en una fila que desliza va `flex: 0 0 auto; max-width: none`, nunca
+  `width: auto`, que pisa el ancho y dejó el mapa en 150px. Regla #551.
 
 ## AgGrid — específicos de este proyecto
 

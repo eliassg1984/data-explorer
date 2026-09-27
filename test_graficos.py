@@ -6659,6 +6659,135 @@ def _pruebas_ficha_hora():
     return fallos
 
 
+def _pruebas_por_hora_semana_y_desliza():
+    """Ventas › Por hora: las dos formas de columnas de «Días × horas» y el
+    mapa deslizable (regla #551).
+
+    «Por día de semana» pinta PROMEDIOS: cada celda es la suma dividida por
+    los días de ese día de la semana que vendieron algo, a cualquier hora, y
+    la lista que abre su clic tiene que dar el mismo promedio — si no, la
+    celda y la lista dicen dos cosas. El deslizable son dos figuras (el mapa
+    y su eje de horas) que tienen que coincidir fila por fila sin que el
+    navegador mida nada: mismo alto, mismos márgenes de arriba y abajo,
+    mismo rango del eje Y.
+
+    Todo por NOMBRE de columna (CLAUDE.md: pandas 3 acá, 2.2 en Cloud).
+    """
+    import datetime as _dt
+
+    from graficos import ventas_horario as _h
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    por hora · semana · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA por hora · semana · {nombre}: got={got!r} exp={exp!r}")
+
+    # Septiembre 2026: sábados 5, 12, 19 y 26; el 19 sólo vendió al
+    # almuerzo, el 26 no vendió. Un domingo, el 6.
+    ts = pd.Timestamp
+    d = pd.DataFrame({
+        "FECHA": [ts("2026-09-05 19:10"), ts("2026-09-05 19:10"),
+                  ts("2026-09-12 19:40"), ts("2026-09-19 13:00"),
+                  ts("2026-09-06 20:00")],
+        "VENTA": [300.0, 100.0, 200.0, 90.0, 50.0],
+        "PAX": [4, 4, 2, 3, 1],
+        "PED": ["P1", "P1", "P2", "P3", "P4"],
+    })
+    c = {"fecha": "FECHA", "venta": "VENTA", "pax": "PAX", "pedido": "PED"}
+    ini, fin = _dt.date(2026, 9, 1), _dt.date(2026, 9, 30)
+    t = _h._prep_tramo(d, c, "Mes", ini, fin, semanal=True)
+    check("la columna es el día de la semana (0 = lunes)",
+          sorted(set(zip(t["dia"].dt.day, t["col"]))),
+          [(5, 5), (6, 6), (12, 5), (19, 5)])
+    g = _h._celdas(t, promedio=True).set_index(["col", "hora"])
+    check("sábado 7 pm: 600 entre los 3 sábados que vendieron",
+          round(float(g.loc[(5, 19), "venta"]), 6), 200.0)
+    check("el almuerzo del 19 hace que ese sábado cuente",
+          round(float(g.loc[(5, 13), "venta"]), 6), 30.0)
+    check("el pax también es por día (un valor por pedido)",
+          round(float(g.loc[(5, 19), "pax"]), 6), 2.0)
+    check("el ticket no cambia al promediar",
+          round(float(g.loc[(5, 19), "ticket"]), 6), round(600.0 / 6.0, 6))
+    s_ = _h._celdas(t).set_index(["col", "hora"])
+    check("sin promedio, la suma de siempre",
+          float(s_.loc[(5, 19), "venta"]), 600.0)
+
+    filas_, prom, n = _h._dias_de_la_celda(t, 5, 19, ini, fin)
+    check("la lista trae todos los sábados del mes",
+          [f.day for f, *_ in filas_], [5, 12, 19, 26])
+    check("con su venta a esa hora",
+          [v for _, v, _, _ in filas_], [400.0, 200.0, 0.0, 0.0])
+    check("y sus pedidos", [p for *_, p in filas_], [1, 1, 0, 0])
+    check("el promedio de la lista es el de la celda",
+          round(prom, 6), round(float(g.loc[(5, 19), "venta"]), 6))
+    check("y su divisor, los sábados que vendieron", n, 3)
+    check("sin tramo, la lista sale en cero",
+          _h._dias_de_la_celda(None, 5, 19, ini, fin)[1:], (0.0, 0))
+
+    check("una marca por día de semana se rotula con sus días",
+          _h._etiqueta_columnas({"sem": True, "c0": 4, "c1": 6}, (2026, 9),
+                                "Mes"), "Vie–Dom")
+    check("el mapa por día de semana tiene 7 columnas",
+          _h._columnas_mapa((2026, 9), "Mes", semanal=True)[0], 7)
+
+    # El deslizable: 1 mes entra, 2 no.
+    claves = [(2026, 8), (2026, 9)]
+    ancla = _dt.date(2026, 9, 27)
+    tot = _h._total_columnas(claves, "Mes", ancla)
+    check("agosto + 27 días de septiembre + el hueco", tot, 31 + 27 + 1)
+    check("un mes no desliza",
+          _h._total_columnas([(2026, 9)], "Mes", ancla)
+          > _h._MAX_COLS_SIN_DESLIZAR, False)
+    check("dos meses sí", tot > _h._MAX_COLS_SIN_DESLIZAR, True)
+    check("por día de semana nunca: 7 columnas por panel",
+          _h._total_columnas(claves, "Mes", ancla, semanal=True), 15)
+    check("24 px por columna más los márgenes",
+          _h._ancho_desliza(tot), 4 + 10 + 59 * 24)
+
+    celdas = pd.DataFrame({"col": [0, 3], "hora": [19, 21],
+                           "venta": [100.0, 200.0], "cant": [3.0, 5.0],
+                           "desc": [0.0, 0.0], "pax": [2.0, 4.0],
+                           "ticket": [50.0, 50.0], "raro": [0.0, 0.0]})
+    horas = [13, 19, 21]
+    alto = 300
+    fig = _h._fig_mapa([celdas, celdas], claves, "Mes", "venta", [], horas,
+                       ancla=ancla, alto=alto, desliza=True)
+    eje = _h._fig_eje_horas(horas, alto, _h._margen_arriba(len(claves)))
+    check("la figura mide lo que pide el deslizable",
+          fig.layout.width, _h._ancho_desliza(tot))
+    check("el mapa no dibuja sus horas (las dibuja el eje)",
+          fig.layout.yaxis.showticklabels, False)
+    check("ni la barra de colores, que se iría con el scroll",
+          [tr.showscale for tr in fig.data if tr.type == "heatmap"],
+          [False] * len([tr for tr in fig.data if tr.type == "heatmap"]))
+    check("mismo alto", eje.layout.height, fig.layout.height)
+    check("mismo margen de arriba", eje.layout.margin.t, fig.layout.margin.t)
+    check("mismo margen de abajo", eje.layout.margin.b, fig.layout.margin.b)
+    check("mismo rango del eje Y, fijo",
+          (tuple(eje.layout.yaxis.range), eje.layout.yaxis.autorange),
+          (tuple(fig.layout.yaxis.range), fig.layout.yaxis.autorange))
+    check("y las mismas horas, en el mismo orden",
+          list(eje.data[0].y), [_h._etiqueta_hora(x) for x in horas])
+    sin = _h._fig_mapa([celdas], [(2026, 9)], "Mes", "venta", [], horas,
+                       ancla=ancla, alto=alto)
+    check("sin deslizar el mapa sigue rotulando sus horas",
+          sin.layout.yaxis.showticklabels is not False, True)
+    check("el puente de JS lleva el mapa al final sólo si cambió",
+          all(x in _h._JS_CLIC_MAPA for x in
+              ("st-key-vh_desliza", "data-firma", "scrollLeft")), True)
+
+    # El CSS del deslizable: adentro del `:has()`, una clase sola (#469).
+    from estilos._80_cards import CSS as _css
+    check("el deslizable se prende por la clase del eje",
+          ".st-key-vh_desliza:has(.st-key-vh_eje_horas)" in _css, True)
+    return fallos
+
+
 def _pruebas_movimientos_periodo():
     """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
 
@@ -7218,6 +7347,7 @@ def main():
     # ── Ventas › Por hora: las filas «Platos» y «Grupos» ─────────────────
     fallos += _pruebas_por_hora_filas()
     fallos += _pruebas_ficha_hora()
+    fallos += _pruebas_por_hora_semana_y_desliza()
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()

@@ -3281,7 +3281,8 @@ CSS = """    /* ================================================================
     div[class*="st-key-vh_grano"],
     div[class*="st-key-vh_medida_mapa"],
     .st-key-vh_op_hora, .st-key-vh_op_lect,
-    .st-key-vh_op_cols, .st-key-vh_op_esc {
+    .st-key-vh_op_cols, .st-key-vh_op_esc,
+    .st-key-vh_op_dias, .st-key-vh_raros {
         position: relative;
         padding-left: 16px !important;
     }
@@ -3290,7 +3291,8 @@ CSS = """    /* ================================================================
     div[class*="st-key-vh_btn_selector"]::before,
     .st-key-vh_fecha_fila::before,
     .st-key-vh_op_hora::before, .st-key-vh_op_lect::before,
-    .st-key-vh_op_cols::before, .st-key-vh_op_esc::before {
+    .st-key-vh_op_cols::before, .st-key-vh_op_esc::before,
+    .st-key-vh_op_dias::before, .st-key-vh_raros::before {
         content: "";
         position: absolute;
         left: 0;
@@ -3984,5 +3986,107 @@ CSS = """    /* ================================================================
     }
     .st-key-chartcard_ventas_horario_hora .vhh-items small {
         color: var(--text-secondary) !important;
+    }
+
+    /* =================================================================== */
+    /* «COMPARAR» EN UNA FILA (Ventas › Por hora, regla #551)               */
+    /* Los mismos botones de siempre en un contenedor horizontal, achicados */
+    /* a pastillas de 26 px. Eran 40 px en una grilla de cinco más la fila  */
+    /* de la fecha y dos líneas de ayuda: 198 px que empujaban el mapa. En  */
+    /* el celular se quedan grandes, que con el dedo se aciertan mejor.     */
+    /* =================================================================== */
+    @media screen and (min-width: 769px) {
+        .st-key-vh_selector_panel {
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+            padding: 2px 0 4px !important;
+        }
+        .st-key-vh_selector_panel button {
+            min-height: 0 !important;
+            height: 26px !important;
+            padding: 0 10px !important;
+            border-radius: 999px !important;
+            line-height: 1 !important;
+        }
+        .st-key-vh_selector_panel button p {
+            font-size: 13px !important;
+        }
+        .st-key-vh_selector_panel button[data-testid="stBaseButton-primary"] {
+            background: var(--accent-tint) !important;
+            border-color: var(--border-lavender) !important;
+            color: var(--accent-deep) !important;
+        }
+        .st-key-vh_selector_panel button[data-testid="stBaseButton-primary"] p {
+            color: var(--accent-deep) !important;
+            font-weight: 600 !important;
+        }
+    }
+    .st-key-vh_selector_panel [data-testid="stMarkdownContainer"] p {
+        margin: 0 !important;
+    }
+    .st-key-vh_selector_panel .vh-cmp-rot {
+        margin-right: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+    }
+    .st-key-vh_selector_panel .vh-cmp-sep {
+        display: inline-block;
+        width: 1px;
+        height: 18px;
+        margin: 0 4px;
+        vertical-align: middle;
+        background: var(--border);
+    }
+    .st-key-vh_selector_panel .vh-cmp-nota {
+        font-size: 12.5px;
+        color: var(--text-secondary);
+    }
+    .st-key-vh_selector_panel .vh-cmp-ayuda {
+        display: inline-grid;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+        border: 1px solid var(--text-muted);
+        border-radius: 50%;
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        cursor: help;
+    }
+
+    /* =================================================================== */
+    /* EL MAPA DESLIZABLE (Ventas › Por hora, regla #551)                   */
+    /* Con más de 40 columnas el mapa mide 24 px por columna y la tarjeta   */
+    /* lo desliza. Python dibuja el eje de horas en su propia figura        */
+    /* (`vh_eje_horas`) SÓLO en ese caso, así que su presencia es la señal: */
+    /* el contenedor pasa a ser una fila que se desliza, y el eje queda     */
+    /* pegado a la izquierda, con el fondo de la tarjeta para que las       */
+    /* celdas pasen por debajo. Adentro del `:has()`, una clase sola        */
+    /* (regla #469).                                                        */
+    /* =================================================================== */
+    .st-key-vh_desliza:has(.st-key-vh_eje_horas) {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: flex-start !important;
+        gap: 0 !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+    }
+    /* El ancho en píxeles lo pone Streamlit en cada hijo (`width="..."` de
+       Python); lo que hay que soltar es su `max-width: 100%`, que lo
+       recortaba al ancho de la tarjeta, y su `flex-basis`, que es el ALTO
+       (está pensado para una columna) y en una fila se leía como ancho. */
+    .st-key-vh_desliza:has(.st-key-vh_eje_horas) > div {
+        flex: 0 0 auto !important;
+        max-width: none !important;
+    }
+    .st-key-vh_eje_horas {
+        position: sticky !important;
+        left: 0;
+        z-index: 3;
+        background: var(--bg-card);
     }
 """

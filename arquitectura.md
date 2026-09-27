@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-550 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+551 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (188)
+**CSS y estilos** (189)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -222,6 +222,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
 - **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
 - **#541** — Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre el reporte, dibujaba un…
+- **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 
 **Layout y alturas** (77)
 
@@ -498,7 +499,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 
-**Streamlit** (151)
+**Streamlit** (152)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -651,6 +652,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 - **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
 - **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
+- **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 
 **Datos, R2 y DuckDB** (70)
 
@@ -44306,6 +44308,106 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-26.)
 
+551. **«Por hora» tiene DOS formas de columnas en «Días × horas» —los días
+     del calendario, que deslizan cuando no entran, y los días de la
+     semana, que promedian—, «Comparar» es una fila de pastillas y abrir
+     la ficha ya no achata el mapa.**
+     2026-09-27, a pedido, tras «veo botoneras muy grandes cuando uso la
+     opción de comparar, y los cuadrantes del mapa son muy chicos». Medido
+     antes a 1366×768: el panel «Comparar» ocupaba 198 px (botones de 40 en
+     una grilla de cinco, la fecha y dos líneas de ayuda) y las celdas
+     medían 40×23 px con un mes, 18×21 con dos, 8,6×21 con cuatro y 40×16
+     con la ficha abierta. Maqueta del antes y después:
+     https://claude.ai/artifact/Dpd8i32i4gWmaQC9t9XFqz. El usuario pidió
+     las dos formas del punto 2, no una.
+
+     - **«Comparar» en una fila** (`_panel_comparar`): los mismos botones y
+       las mismas keys, en un `st.container(horizontal=True)` y achicados
+       por CSS a pastillas de 26 px (`_80_cards.py`, sólo desde 769 px: en
+       el celular se quedan grandes). «Otra fecha» pasó a un popover y la
+       ayuda a un «?» con tooltip; el aviso «4 de 4 paneles» sale sólo
+       cuando está lleno. Mide 35 px con una fila de períodos (52 con
+       cuatro marcados).
+     - **La ficha sola no achata el mapa** (`_alto_mapa(...,
+       con_drill=bool(marcas))`): el mapa se encoge sólo cuando hay MARCAS,
+       porque la tabla y el árbol se leen al lado del mapa. La ficha abajo
+       usa el panel del drill, que ya desliza (su alto lo resta el CSS), así
+       que las filas se quedan en 22,6 px en vez de bajar a 16. Crece sólo
+       hacia abajo: nada cambia de ancho.
+     - **Columnas: «Días» o «Por día de semana»** (`st.pills` `vh_op_dias`,
+       con su valor aparte en `_vh_op_dias_valor`: no se dibuja en Día,
+       Semana ni en Platos/Grupos, y un widget que no se dibuja pierde su
+       estado). En Día y Semana no hace falta — ahí el día de la semana ya
+       es la columna.
+     - **«Días» desliza cuando pasa de 40 columnas**
+       (`_MAX_COLS_SIN_DESLIZAR`; un mes son 31, dos ya son 59): cada
+       columna mide 24 px (`_PX_CELDA_DESLIZA`) y la figura mide lo que
+       suman (`_ancho_desliza`). Las horas van en OTRA figura,
+       `_fig_eje_horas`, que el CSS deja pegada a la izquierda
+       (`position: sticky`) mientras el mapa pasa por debajo. **Las dos
+       tienen que coincidir fila por fila sin que el navegador mida nada**:
+       mismo alto, mismos márgenes de arriba (`_margen_arriba`, UNA
+       función para las dos) y de abajo (`_M_DESLIZA`), el eje Y con
+       `autorange=False` y el mismo `range`, y `automargin` apagado en las
+       dos. Con el `autorange` de siempre el heatmap y el scatter
+       redondean distinto y el eje quedó 4 px corrido (medido). El mapa
+       deslizable no dibuja sus horas ni la barra de colores, que se iría
+       con el scroll.
+     - **Abre mostrando lo más nuevo**, que está a la derecha: el puente de
+       JS (`_JS_CLIC_MAPA::alFinal`) lleva el scroll al final **sólo cuando
+       cambia la key del mapa** (la guarda en `data-firma`). Si lo hiciera
+       en cada vuelta del temporizador, devolvería al usuario al final
+       mientras mira un mes viejo; y abrir la ficha no cambia la key, así
+       que el clic no pierde la posición (medido: 1822 px antes y después).
+     - **El ancho que Streamlit le pone al contenedor manda**:
+       `st.plotly_chart(width=N)` escribe `width: Npx; max-width: 100%` en
+       el `stElementContainer`, y en una fila flex eso lo encoge. El CSS le
+       pone `flex: 0 0 auto; max-width: none` — NO `width: auto`, que pisa
+       el ancho de Streamlit y dejó el mapa en 150 px. Y el eje, aunque
+       pide 48 px, sale con un `_fullLayout.width` de 150 (Plotly no baja
+       de ahí): el contenedor de 48 lo recorta, y los rótulos caen dentro
+       porque van contra el margen izquierdo. La fila se prende con
+       `.st-key-vh_desliza:has(.st-key-vh_eje_horas)`: el eje existe sólo
+       deslizando, y adentro del `:has()` hay una clase sola (#469).
+     - **«Por día de semana» pinta PROMEDIOS** (`_celdas(...,
+       promedio=True)`): la suma de la celda dividida por los días de ese
+       día de la semana que vendieron algo, a CUALQUIER hora — el mismo
+       divisor que «Por día» en Platos y Grupos. El ticket no cambia (los
+       dos lados se dividen por lo mismo). La columna la pone
+       `_prep_tramo(..., semanal=True)` (0 = lunes), así que las marcas, el
+       árbol y la ficha leen la misma columna que el mapa sin saber que
+       existe el modo. Nunca desliza: son 7 columnas por panel. Y
+       «Diferencia» vuelve a estar en Mes: con 7 columnas los paneles se
+       pueden restar.
+     - **El clic sobre una celda abre la LISTA de sus días**
+       (`_lista_dias_de_semana`): la celda son los 4 o 5 sábados del mes,
+       no un día. **El promedio de la lista es el de la celda**, con el
+       mismo divisor (`_dias_de_la_celda`): un domingo que vendió al
+       almuerzo y no a las 7 pm cuenta como un cero, no se salta — si no,
+       la celda y la lista dan dos promedios. Hasta 6 días van con un botón
+       cada uno; más (en «Año», ~52) van en un `st.dataframe` con selección
+       de fila, que mide su CONTENIDO: el panel del drill ya desliza, y una
+       barra adentro de otra se pelea la rueda del mouse. La ficha del día
+       elegido lleva «← Todos los sábados» para volver a la lista.
+     - **Una marca «Por día de semana» lleva `sem`** y su tabla suma «Días»
+       y «Venta/día»: un mes con cinco sábados le gana a uno con cuatro
+       sólo por contar uno más. Cambiar de forma borra las marcas, la
+       selección y el foco (`vh_dias_aplicado`): una marca de «Días» leída
+       como día de la semana apuntaría a otra cosa.
+     - **Probado también con Streamlit 1.64** (la de Cloud; acá corre
+       1.59): el panel, el deslizable, el eje alineado, el clic con scroll
+       y la lista de días se comportan igual. Lo fija
+       `test_graficos.py::_pruebas_por_hora_semana_y_desliza`.
+
+     Queda sin arreglar el bug que se encontró en el análisis: cada panel
+     se carga por la fecha de COBRO y se ubica por la del PEDIDO, así que
+     un pedido abierto el último día del mes y cobrado pasada la
+     medianoche no cae en ningún panel (Evento Fagor, S/ 58.500, 30 jun
+     23:51 → 1 jul 00:01). La ficha ya carga un día de más (#536); el
+     mapa, no.
+
+     (2026-09-27.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44318,7 +44420,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#550**; la próxima toma el número siguiente.
+> última regla es la **#551**; la próxima toma el número siguiente.
 
 >
 
