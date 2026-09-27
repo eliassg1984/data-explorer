@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-546 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+547 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (188)
 
@@ -967,9 +967,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#356** — Al borrar una franja fija, lo que hay que borrar son TRES cosas: la superficie, la reserva…
 - **#408** — Un if nuevo se traga el bloque que tenía debajo, y Python no dice nada: la pila de CINCO…
 
-**Sin tema asignado** (1)
+**Sin tema asignado** (2)
 
 - **#300** — Un riel que PINTA casilleros enteros dice de más cuando el rango es más fino que su escala:…
+- **#547** — Un plato de cortesía cobrado a S/ 0 no tiene neto cero: tiene un RESIDUO, y dividir por él da…
 
 <!-- INDICE:FIN -->
 
@@ -44093,6 +44094,33 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-26.)
 
+547. **Un plato de cortesía cobrado a S/ 0 no tiene neto cero: tiene un
+     RESIDUO, y dividir por él da un % de costo de 10 millones.**
+     2026-09-26, visto al preparar la Ingeniería de menú, el mismo día que
+     el % de costo por plato entró al Mix (#544) y a Análisis de platos
+     (#546). El POS cobra algunos platos de cortesía como un producto
+     aparte a S/ 0 dentro de una boleta normal —«Chirimoya a la Brasa -
+     Cortesia», «Crema Volteada - Cortesia», el «Encurtido de Vegetales»—,
+     así que son VENTA (#524) y su costo es real. Pero su neto no es 0: es
+     un residuo de coma flotante de ~S/ 0,00002 por línea. Medido en 2025-26:
+     seis líneas con costo tienen neto 0 exacto y 460 lo tienen entre 0 y 1;
+     la Chirimoya de cortesía suma S/ 0,0082 de neto en 115 unidades contra
+     S/ 1.023 de costo, y su % de costo salía 12.500.000 %, en rojo.
+
+     - **El arreglo está en la cuenta, no en cada vista**:
+       `ventas_mix.pct_costo` exige un neto de al menos `_NETO_MIN` (medio
+       sol) y si no, «—». Ninguna venta de verdad de un plato suma tan
+       poco, y un total de grupo o de período no se acerca; lo usan el Mix
+       y Análisis de platos, así que las dos quedan cubiertas.
+     - **El costo de esas cortesías NO se descarta**: sigue sumando en el
+       total del subgrupo y del período, que es donde se paga. Lo que no
+       existe es un % de costo del plato gratis.
+     - **Para la Ingeniería de menú** vale lo mismo, un paso antes: un plato
+       sin precio no es un plato de la carta que se elige, y no entra a la
+       matriz.
+
+     (2026-09-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44105,7 +44133,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#546**; la próxima toma el número siguiente.
+> última regla es la **#547**; la próxima toma el número siguiente.
 
 >
 

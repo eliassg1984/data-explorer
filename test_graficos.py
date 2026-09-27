@@ -6011,6 +6011,12 @@ def _pruebas_ventas_mix():
     check("con el neto en negativo no hay cociente",
           bool(pd.isna(_m.pct_costo(pd.Series([10.0]), pd.Series([-50.0]))[0])),
           True)
+    # La «Chirimoya a la Brasa - Cortesia» real: 115 unidades a S/ 0 con
+    # S/ 1.023 de costo y un neto de S/ 0,0082 de puro redondeo (#547).
+    check("una cortesía a S/ 0 no es un % de costo de 12 millones",
+          (bool(pd.isna(_m.pct_costo(pd.Series([1023.35]),
+                                     pd.Series([0.0082]))[0])),
+           bool(pd.isna(_m.pct_costo(1023.35, 0.0082)))), (True, True))
     check("y con números sueltos, lo mismo",
           (_m.pct_costo(47.0, 113.4) == 47.0 / 113.4,
            bool(pd.isna(_m.pct_costo(0.0, 113.4)))), (True, True))

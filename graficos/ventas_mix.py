@@ -198,17 +198,27 @@ def matriz(b, col, claves):
     return salida
 
 
+_NETO_MIN = 0.5
+"""Medio sol. Un neto menor no es una venta: los platos de cortesía que el
+POS cobra a S/ 0 dentro de una boleta («Chirimoya a la Brasa - Cortesia»,
+«Encurtido de Vegetales») dejan un residuo de coma flotante —S/ 0,00002
+por línea— que, dividido, daba un % de costo de 10.930.554 (regla #547).
+Ninguna venta de verdad de un plato suma tan poco, y un total de grupo o de
+período no se acerca."""
+
+
 def pct_costo(costo, neto):
     """Costo ÷ neto, la cuenta del Resumen («Costo ÷ Neto»), para un número,
     una Serie o una tabla entera de `matriz()` (regla #544).
 
     Es NaN —y la celda dice «—»— donde no hay costo cargado: no saberlo no
-    es costar cero (regla #524). Y también donde el neto no es positivo: una
-    nota de crédito que cae en otro período que su venta lo deja negativo, y
-    ahí el cociente sale con signo cambiado o gigante sin medir nada."""
+    es costar cero (regla #524). Y también donde el neto no llega a
+    `_NETO_MIN`: una nota de crédito que cae en otro período que su venta lo
+    deja negativo, y una cortesía a S/ 0 lo deja en un residuo; en los dos
+    casos el cociente sale con signo cambiado o gigante sin medir nada."""
     if np.isscalar(costo):
-        return costo / neto if (costo > 0 and neto > 0) else np.nan
-    return costo.where(costo > 0) / neto.where(neto > 0)
+        return costo / neto if (costo > 0 and neto > _NETO_MIN) else np.nan
+    return costo.where(costo > 0) / neto.where(neto > _NETO_MIN)
 
 
 def tramos(orden, prod_foco=None, sub=None):
