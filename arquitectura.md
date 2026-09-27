@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-553 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+554 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (189)
 
@@ -304,7 +304,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 - **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 
-**Plotly y figuras** (102)
+**Plotly y figuras** (103)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -408,6 +408,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
 - **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
 - **#549** — El buscador de Volatilidad encuentra CUALQUIER insumo; el ranking sigue filtrado. Los de…
+- **#554** — En el mapa de «Por hora», la fila bajo el cursor se ENMARCA entera y su hora va en negrita;…
 
 **AgGrid y tablas** (87)
 
@@ -44516,6 +44517,54 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-27.)
 
+554. **En el mapa de «Por hora», la fila bajo el cursor se ENMARCA entera y
+     su hora va en negrita; ya no hay línea punteada.**
+     2026-09-27, a pedido, tras «¿es adecuada esa línea punteada o lo
+     común es que se seleccione toda la franja como si fuese una fila?».
+     La línea era el spike de Plotly (`showspikes`, `spikemode="across"`),
+     puesto el 2026-08-14 para «ver la hora como una franja». Es un recurso
+     de gráficos de LÍNEAS, donde el eje es continuo y la línea marca un
+     valor exacto; en un mapa de filas discretas pasaba por el MEDIO de la
+     fila, no decía dónde empezaba ni terminaba la franja, tapaba el color
+     de las celdas —el dato— y al cruzar los huecos entre paneles se leía
+     como un umbral.
+
+     - **El marco es un `<div>` del puente de JS** (`_JS_CLIC_MAPA`:
+       `mostrarFranja` / `ocultarFranja`, con `plotly_hover` y
+       `plotly_unhover`), no un shape de Plotly: un shape pide `relayout`,
+       que redibuja la figura entera en cada fila. La posición sale de los
+       ejes de la figura (`l2p`), a lo ancho de la primera a la última
+       columna con celdas (no del sobrante que reserva `_rango_x`). Se
+       escribe sólo cuando cambia la fila (#469), y se esconde con 120 ms de
+       respiro: pasar de una celda a la de al lado dispara `unhover` y
+       enseguida `hover`, y sin eso parpadea.
+     - **Sin relleno.** Un tinte encima cambiaría el color de las celdas;
+       detrás no se vería, porque la banda gris de una de cada dos filas es
+       opaca. El borde (2 px) cae en el `ygap` de 2 px entre filas, así que
+       no tapa ninguna celda. Va antes del último `<svg>` de la figura, el
+       de los tooltips, para que el tooltip quede encima.
+     - **La hora del eje, en negrita y en `--accent-deep`**, por clase
+       (`vh-hora-activa`) con `!important`: Plotly escribe el `fill` inline
+       en cada `<text>`. Deslizando, las horas están en la otra figura
+       (`vh_eje_horas`), y el script las busca ahí.
+     - **Sólo la fila, no la cruz fila + columna.** Las horas coinciden
+       entre paneles; los días no (la columna 6 de agosto y la de
+       septiembre son fechas distintas), así que resaltar la columna a
+       través de los paneles sugeriría una comparación que no existe.
+     - **La trampa que costó una vuelta**: `.vh-franja-hora` a secas no
+       tenía borde. Plotly trae `.js-plotly-plot .plotly div { border: 0 }`,
+       que le gana a una clase sola; va con el selector largo
+       (`.js-plotly-plot .plotly div.vh-franja-hora`). Todo `<div>` que se
+       meta adentro de una figura de Plotly hereda ese reset: también
+       `margin` y `padding` en cero.
+
+     Medido a 1366×768, con uno y con dos meses (el deslizable): el centro
+     del marco cae en el de la fila al décimo de píxel, y al sacar el
+     cursor se van el marco y la negrita. Lo fija
+     `test_graficos.py::_pruebas_por_hora_semana_y_desliza`.
+
+     (2026-09-27.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44528,7 +44577,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#553**; la próxima toma el número siguiente.
+> última regla es la **#554**; la próxima toma el número siguiente.
 
 >
 

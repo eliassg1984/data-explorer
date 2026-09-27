@@ -6952,6 +6952,20 @@ def _pruebas_por_hora_semana_y_desliza():
     from estilos._80_cards import CSS as _css
     check("el deslizable se prende por la clase del eje",
           ".st-key-vh_desliza:has(.st-key-vh_eje_horas)" in _css, True)
+
+    # La franja de la hora (regla #554): la fila bajo el cursor se enmarca
+    # con un <div> del puente de JS, no con el spike de Plotly (una línea
+    # punteada por el medio de la fila, encima del color de las celdas).
+    check("el mapa ya no dibuja el spike de Plotly",
+          bool(sin.layout.yaxis.showspikes), False)
+    check("el puente enmarca la fila con el cursor",
+          all(x in _h._JS_CLIC_MAPA for x in
+              ("plotly_hover", "plotly_unhover", "vh-franja-hora",
+               "vh-hora-activa", "vh_eje_horas")), True)
+    check("el marco le gana al `border: 0` de Plotly",
+          ".js-plotly-plot .plotly div.vh-franja-hora" in _css, True)
+    check("y la hora activa, al `fill` inline de Plotly",
+          ".ytick text.vh-hora-activa" in _css, True)
     return fallos
 
 

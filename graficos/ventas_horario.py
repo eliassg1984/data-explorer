@@ -314,6 +314,86 @@ _JS_CLIC_MAPA = """<script>
       }
     };
   }
+  // LA FRANJA DE LA HORA (regla #554). Al pasar el cursor por una celda,
+  // la FILA entera se enmarca y su hora del eje va en negrita. Es un <div>
+  // encima del gráfico, no un shape: un shape pide `relayout`, que redibuja
+  // la figura en cada fila. El borde (2 px) cae en el `ygap` de 2 px entre
+  // filas, así que no tapa el color de ninguna celda. Va ANTES del último
+  // <svg>, el de los tooltips, para que el tooltip quede encima. Se escribe
+  // sólo cuando cambia la fila (#469: tocar el DOM no es gratis).
+  function franjaDe(gd) {
+    var cont = gd.querySelector(".svg-container");
+    if (!cont) return null;
+    var f = cont.querySelector(".vh-franja-hora");
+    if (!f) {
+      f = doc.createElement("div");
+      f.className = "vh-franja-hora";
+      var svgs = cont.querySelectorAll("svg.main-svg");
+      cont.insertBefore(f, svgs.length ? svgs[svgs.length - 1] : null);
+    }
+    return f;
+  }
+  function marcarHora(gd, etiqueta) {
+    // Deslizando, las horas están en otra figura (`vh_eje_horas`).
+    var gds = [gd], eje = doc.querySelector(".st-key-vh_eje_horas .js-plotly-plot");
+    if (eje) gds.push(eje);
+    for (var g = 0; g < gds.length; g++) {
+      var ts = gds[g].querySelectorAll(".ytick text");
+      for (var i = 0; i < ts.length; i++) {
+        var es = etiqueta !== null && ts[i].textContent === etiqueta;
+        if (ts[i].classList.contains("vh-hora-activa") !== es) {
+          ts[i].classList.toggle("vh-hora-activa", es);
+        }
+      }
+    }
+  }
+  function mostrarFranja(gd, etiqueta) {
+    clearTimeout(gd.__vhFranjaReloj);
+    var f = franjaDe(gd), fl = gd._fullLayout;
+    if (!f || !fl || !fl.xaxis || !fl.yaxis) return;
+    if (gd.__vhFila === etiqueta && f.style.display === "block") return;
+    var ya = fl.yaxis, xa = fl.xaxis, cats = ya._categories || [];
+    var fila = cats.indexOf(etiqueta);
+    if (fila < 0) return;
+    var alto = cats.length > 1 ? Math.abs(ya.l2p(1) - ya.l2p(0)) : ya._length;
+    // A lo ancho, de la primera a la última columna con celdas (el heatmap
+    // tiene una x por columna): el sobrante que `_rango_x` reserva a la
+    // derecha no es parte de la fila.
+    var total = 1;
+    for (var t = 0; t < gd.data.length; t++) {
+      if (gd.data[t].type === "heatmap" && gd.data[t].x) {
+        total = gd.data[t].x.length;
+        break;
+      }
+    }
+    var x0 = Math.max(xa._offset, xa._offset + xa.l2p(-0.5));
+    var x1 = Math.min(xa._offset + xa._length, xa._offset + xa.l2p(total - 0.5));
+    var yc = ya._offset + ya.l2p(fila);
+    f.style.left = (x0 - 1) + "px";
+    f.style.width = (x1 - x0 + 2) + "px";
+    f.style.top = (yc - alto / 2 - 1) + "px";
+    f.style.height = (alto + 2) + "px";
+    f.style.display = "block";
+    gd.__vhFila = etiqueta;
+    marcarHora(gd, etiqueta);
+  }
+  function ocultarFranja(gd) {
+    // Con un respiro: pasar de una celda a la de al lado dispara `unhover` y
+    // enseguida `hover`, y sin esto el marco parpadea en cada celda.
+    clearTimeout(gd.__vhFranjaReloj);
+    gd.__vhFranjaReloj = setTimeout(function () {
+      var f = franjaDe(gd);
+      if (f) f.style.display = "none";
+      gd.__vhFila = null;
+      marcarHora(gd, null);
+    }, 120);
+  }
+  function alPasar(gd) {
+    return function (ev) {
+      var p = ev && ev.points && ev.points[0];
+      if (p && p.y !== undefined && p.y !== null) mostrarFranja(gd, String(p.y));
+    };
+  }
   function enganchar() {
     var gds = doc.querySelectorAll(SEL);
     for (var i = 0; i < gds.length; i++) {
@@ -321,10 +401,18 @@ _JS_CLIC_MAPA = """<script>
       if (gd.__vhClicDueno === yo || typeof gd.on !== "function") continue;
       try {
         if (gd.__vhClicFn) gd.removeListener("plotly_click", gd.__vhClicFn);
+        if (gd.__vhPasaFn) gd.removeListener("plotly_hover", gd.__vhPasaFn);
+        if (gd.__vhSaleFn) gd.removeListener("plotly_unhover", gd.__vhSaleFn);
       } catch (e) {}
       gd.__vhClicFn = alClic(gd);
+      gd.__vhPasaFn = alPasar(gd);
+      gd.__vhSaleFn = (function (g) {
+        return function () { ocultarFranja(g); };
+      })(gd);
       gd.__vhClicDueno = yo;
       gd.on("plotly_click", gd.__vhClicFn);
+      gd.on("plotly_hover", gd.__vhPasaFn);
+      gd.on("plotly_unhover", gd.__vhSaleFn);
     }
   }
   // El mapa deslizable abre mostrando el período MÁS NUEVO, que está a la
@@ -1468,17 +1556,15 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     # Horas de arriba hacia abajo: el turno empieza arriba y termina abajo,
     # como se lee un horario. `reversed` sobre un eje de categorías pone la
     # PRIMERA categoría arriba, que es justo el arranque del servicio.
+    # Al pasar el cursor, la FILA entera se enmarca y su hora va en negrita:
+    # lo hace el puente de JS (`_JS_CLIC_MAPA`, regla #554), no un spike de
+    # Plotly. El spike era una línea punteada por el MEDIO de la fila: no
+    # decía dónde empezaba ni terminaba la franja, tapaba el color de las
+    # celdas —el dato— y al cruzar los huecos entre paneles se leía como
+    # un umbral.
     fig.update_yaxes(type="category", autorange="reversed",
                      showgrid=False, zeroline=False, showticklabels=True,
-                     automargin=True, tickfont=dict(size=10, color=GRIS_TEXTO),
-                     # Spike horizontal: al pasar el cursor por una celda, la
-                     # FILA entera se marca de punta a punta. Es la tercera
-                     # pata del pedido "ver la hora como una franja" — las
-                     # bandas y el `ygap` ayudan a leer en reposo; el spike
-                     # contesta "¿qué pasó a las 8 pm en todos los paneles?"
-                     # sin tener que seguir el renglón con el dedo.
-                     showspikes=True, spikemode="across", spikesnap="data",
-                     spikethickness=1, spikedash="dot", spikecolor=ACENTO)
+                     automargin=True, tickfont=dict(size=10, color=GRIS_TEXTO))
     # Deslizando (regla #551): ancho en píxeles, sin rótulos de hora —los
     # pone `_fig_eje_horas`— y el rango de filas ESCRITO, el mismo que el del
     # eje de al lado. Con `autorange` un scatter de categorías arranca en el

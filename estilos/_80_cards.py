@@ -4153,4 +4153,29 @@ CSS = """    /* ================================================================
         z-index: 3;
         background: var(--bg-card);
     }
+
+    /* =================================================================== */
+    /* LA FRANJA DE LA HORA (Ventas › Por hora, regla #554)                 */
+    /* Al pasar el cursor por una celda, la fila entera se enmarca y su     */
+    /* hora del eje va en negrita. El <div> lo pone y lo mueve el puente de */
+    /* JS del mapa (`_JS_CLIC_MAPA`). Sin relleno a propósito: un tinte     */
+    /* encima cambiaría el color de las celdas, que es el dato; y detrás no */
+    /* se vería: la banda gris de una de cada dos filas es opaca.        */
+    /* El `!important` del rótulo le gana al `fill` que Plotly escribe      */
+    /* inline en cada <text>. Y el marco va con el selector largo porque    */
+    /* Plotly trae `.js-plotly-plot .plotly div { border: 0 }`, que le      */
+    /* gana a una clase sola: con `.vh-franja-hora` a secas no había borde. */
+    /* =================================================================== */
+    .js-plotly-plot .plotly div.vh-franja-hora {
+        position: absolute;
+        display: none;
+        box-sizing: border-box;
+        border: 2px solid var(--accent);
+        border-radius: 3px;
+        pointer-events: none;
+    }
+    .js-plotly-plot .ytick text.vh-hora-activa {
+        font-weight: 700 !important;
+        fill: var(--accent-deep) !important;
+    }
 """

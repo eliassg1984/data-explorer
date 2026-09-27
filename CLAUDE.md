@@ -927,6 +927,11 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   `st.plotly_chart(width=N)` escribe `max-width: 100%` en su contenedor:
   en una fila que desliza va `flex: 0 0 auto; max-width: none`, nunca
   `width: auto`, que pisa el ancho y dejó el mapa en 150px. Regla #551.
+- **Un `<div>` que metas adentro de una figura de Plotly nace sin borde.**
+  Plotly trae `.js-plotly-plot .plotly div { border: 0; margin: 0;
+  padding: 0 }`, que le gana a una clase sola: el marco de la fila de
+  «Por hora» no se veía. Selector largo (`.js-plotly-plot .plotly
+  div.mi-clase`). Regla #554.
 
 ## AgGrid — específicos de este proyecto
 
