@@ -6097,6 +6097,87 @@ def _pruebas_ventas_mix():
     return fallos
 
 
+def _pruebas_carta_costeada():
+    """Recetas › Carta costeada (regla #548): lo que la vista hace con
+    `cartacosteada.parquet` antes de dibujarlo.
+
+    Fija lo que se ve mal sin avisar: un precio centinela (S/ 1 o menos)
+    fuera y contado, un combo que se llama «Combo» aunque el POS no le haya
+    puesto `tDescargo`, el % sobre el NETO (÷ el divisor del sistema) y no
+    sobre el precio, sin costo = 0 (que se escribe «—», regla #529), la
+    fecha 1900 en blanco, los filtros y que la vista esté en la pila, en el
+    rail y en el botón de refresco del reporte.
+    """
+    from data import REPORTES
+    from graficos import carta_costeada as cc
+    from graficos import recetas as rec
+    from graficos.recetas_comun import divisor_neto
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    recetas · carta costeada · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA recetas · carta costeada · {nombre}: got={got!r} exp={exp!r}")
+
+    df = pd.DataFrame({
+        "GRUPO": ["Alimentos", "Bebidas", "Alimentos", "Alimentos", "Bebidas", "Alimentos"],
+        "SUBGRUPO": ["Fondos", "Aguas", "Menús", "Fondos", "Aguas", "Fondos"],
+        "COD PLATO": ["0000010", "0000020", "0000030", "0000040", "0000050", "0000060"],
+        "ITEM VENT ACT": ["ACTIV", "ACTIV", "ACTIV", "INACT", "ACTIV", "ACTIV"],
+        "ITEM VENT": ["Lomo Saltado", "Agua Munay", "Menú Sapiens", "Viejo", "Vale", "Ají de Gallina"],
+        "P.VENTA SALON": [74.1, 9.0, 175.0, 50.0, 0.5, 49.4],
+        "COSTO SALON": [24.7, None, 45.11, 10.0, 0.1, 0.0],
+        "TIPO DESC": ["RECETA", "NO APLICA", None, "RECETA", "DIRECTO", "RECETA"],
+        "TIPO COMBO": [None, None, "A ELEGIR", None, None, None],
+        "METODO COSTO": ["COSTO DEL PRODUCTO", "COSTO DEL PRODUCTO",
+                         "ESPERADO 90 DIAS", "COSTO DEL PRODUCTO",
+                         "COSTO DEL PRODUCTO", "COSTO DEL PRODUCTO"],
+        "COSTO MINIMO": [None, None, 22.75, None, None, None],
+        "COSTO ESPERADO": [None, None, 45.11, None, None, None],
+        "COMBOS VENDIDOS 90 DIAS": [None, None, 29, None, None, None],
+        "ULTIMA VENT": [pd.Timestamp("2026-09-20"), pd.Timestamp("1900-01-01"),
+                        pd.Timestamp("2026-09-19"), None, None, None],
+    })
+    t, n_sin_precio = cc.preparar(df)
+    check("sin los inactivos ni el precio centinela", sorted(t["Cod"]),
+          ["0000010", "0000020", "0000030", "0000060"])
+    check("el precio centinela se cuenta", n_sin_precio, 1)
+    fila = t.set_index("Cod")
+    check("un combo sin tDescargo se llama Combo", fila.loc["0000030", "Tipo"], "Combo")
+    check("el tipo de un plato con receta", fila.loc["0000010", "Tipo"], "Receta")
+    check("el % es sobre el neto", round(fila.loc["0000010", "Pct"], 6),
+          round(24.7 / (74.1 / divisor_neto()) * 100, 6))
+    check("sin costo cargado: % en 0 (se escribe «—»)",
+          (fila.loc["0000020", "Pct"], bool(fila.loc["0000020", "SinCosto"])),
+          (0.0, True))
+    check("costo 0 también es «sin costo»", bool(fila.loc["0000060", "SinCosto"]), True)
+    check("la fecha 1900 queda en blanco", fila.loc["0000020", "UltimaVenta"], "")
+    check("el método del combo, dicho para leerse",
+          fila.loc["0000030", "Metodo"], cc.METODOS["ESPERADO 90 DIAS"])
+    check("un plato normal no lleva método", fila.loc["0000010", "Metodo"], "")
+    check("una columna que falta viaja en 0 (Máximo)", fila.loc["0000030", "Maximo"], 0.0)
+    check("ordenada por % de costo", list(t["Cod"])[:2], ["0000010", "0000030"])
+    check("filtro Sin costo", sorted(cc.filtrar(t, tipo="Sin costo")["Cod"]),
+          ["0000020", "0000060"])
+    check("filtro por grupo", sorted(cc.filtrar(t, grupo="Bebidas")["Cod"]), ["0000020"])
+    check("buscar sin acentos ni mayúsculas",
+          list(cc.filtrar(t, buscar="aji de")["Cod"]), ["0000060"])
+    check("con inactivos", len(cc.preparar(df, incluir_inactivos=True)[0]), 5)
+    check("el resumen cuenta los sin costo", "**2** sin costo cargado" in cc.resumen(t), True)
+
+    check("está en la pila de Recetas",
+          ("rec_sec_carta", "Carta costeada") in rec._PILA, True)
+    check("y en su rail", any(v[0] == "Carta costeada"
+                              for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas), True)
+    check("y el botón Actualizar la refresca",
+          cc.ARCHIVO in REPORTES["Recetas"].get("archivos_extra", ()), True)
+    return fallos
+
+
 def _pruebas_ventas_platos():
     """Ventas › Análisis de platos (regla #529): las cuentas del ranking.
 
@@ -6989,6 +7070,9 @@ def main():
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
+
+    # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
+    fallos += _pruebas_carta_costeada()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()

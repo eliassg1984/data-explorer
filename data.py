@@ -272,7 +272,10 @@ REPORTES = {
         # reporte — sin ella, "Refrescar" dejaría las recetas base viejas y
         # no habría forma de actualizarlas desde la UI. Ver
         # navegacion.py::boton_refresco.
-        "archivos_extra": ("recetabase.parquet",),
+        # Desde el 2026-09-26, también la carta costeada (toda la carta con
+        # su % de costo, combos incluidos), que carga la sección «Carta
+        # costeada» de graficos/recetas.py (regla #548).
+        "archivos_extra": ("recetabase.parquet", "cartacosteada.parquet"),
         "icono": ":material/receipt_long:",
         # Catálogo sin fecha: el KPI es un conteo, no un agregado por período
         # (kpi_fecha ausente a propósito — resumen_kpis() agrega la tabla

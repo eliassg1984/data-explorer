@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-547 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+548 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (188)
 
@@ -650,7 +650,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
 - **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
 
-**Datos, R2 y DuckDB** (69)
+**Datos, R2 y DuckDB** (70)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -721,6 +721,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#537** — Un for … in df.groupby(...) con un sort_values, un filtro o un mode() adentro no es un…
 - **#542** — En un COMBO, PRECIO COSTO es el costo de la LÍNEA entera, no el de una unidad — y…
 - **#546** — «Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO período, con la cuenta…
+- **#548** — «Carta costeada»: la carta ENTERA con su % de costo, combos incluidos. El costo de un combo…
 
 **SUNAT y SIRE** (43)
 
@@ -831,7 +832,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (117)
+**Decisiones de diseño y UX** (118)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -950,6 +951,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#546** — «Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO período, con la cuenta…
+- **#548** — «Carta costeada»: la carta ENTERA con su % de costo, combos incluidos. El costo de un combo…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44121,6 +44123,61 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-26.)
 
+548. **«Carta costeada»: la carta ENTERA con su % de costo, combos
+     incluidos. El costo de un combo se calcula en la CONSULTA, no en la
+     vista, y el POS no lo guarda en ningún lado.**
+     2026-09-26, a pedido: «alimentar el reporte de recetas y costos con una
+     carta completa costeada». Vista de Recetas y Costos
+     (`graficos/carta_costeada.py`, rail «Carta», sección `rec_sec_carta`,
+     segunda de la pila) sobre un TERCER parquet del reporte,
+     `cartacosteada.parquet`, que sale de la fila `cartacosteada` del Sheet
+     (el extractor le agrega `.parquet`: sin guion bajo). Es la consulta de
+     «enlaces» del usuario (una fila por `INFOREST.TPRODUCTO`, con precios,
+     neto, costo y % por canal y con qué descarga del almacén) más el costo
+     de los combos. La guarda es `test_graficos.py::_pruebas_carta_costeada`.
+
+     - **El POS no costea los combos**: `TPRODUCTO.nInsumo` de un combo es 0
+       y `DPEDIDO.nInsumo` de su línea también. Lo servido vive en
+       `CPEDIDO` —una fila por plato elegido: `nCantidad` es el total de la
+       línea (combos × cantidad de ficha, 99,94 % exacto en los fijos) y
+       `nInsumo` el costo UNITARIO del plato ese día, una foto de
+       `TPRODUCTO.nInsumo`—, y la ficha en `TCOMBO`: un renglón por opción,
+       `tEtiqueta` es el grupo (el tiempo del menú, sin distinguir
+       mayúsculas: «D» y «d» son uno) y `lFijo` si va siempre. **La ficha no
+       dice cuántos se eligen por grupo**: las parrillas llevan 2
+       guarniciones con ficha de 1.
+     - **Cuatro métodos, el primero que se pueda** (`METODO COSTO`): FIJO
+       (todo fijo: la suma), ESPERADO 90 DIAS (a elegir y 10 o más vendidos
+       en 90 días: cada opción pesada por lo que eligieron los clientes),
+       ESPERADO HISTORICO (menos de 10: con todo su historial) y PROMEDIO
+       SIN VENTAS. Siempre con la cantidad de la FICHA y el costo de HOY;
+       sólo las opciones que siguen en la ficha (el código de un combo se
+       REUSA cuando cambia la carta: el SAT 2026 cambió de platos en junio
+       con el mismo código). Un grupo sin elecciones en el período cuenta
+       su promedio. Medido en oct-25/sep-26 contra lo servido: el esperado
+       erra 6 %, el promedio simple 9 %, el mínimo 19 % y el máximo 28 %.
+     - **Se calcula en la consulta y no en la app**: corre en el servidor al
+       refrescar (unos 6 s) y la vista sólo lee 1.680 filas. Así, abrirla
+       no espera ninguna cuenta. El mínimo, el máximo, el promedio, el
+       esperado y el costo REAL de lo servido en 90 días (`CPEDIDO`, al
+       costo de cada día) viajan en sus columnas; la vista los muestra en
+       su modo «Combos».
+     - **La vista recalcula el % sobre el neto** (precio ÷
+       `recetas_comun.divisor_neto`, el mismo de Composición) en vez de
+       leer `%COSTO SALON`: así precio, neto, costo y % de una fila cuadran
+       siempre. Sin costo cargado va 0 y se escribe «—» (#529); precios de
+       S/ 1 o menos, fuera y contados (#205); la fecha 1900 de un
+       `ISNULL(fecha, '')` viejo, en blanco.
+     - **`st.dataframe` y no AgGrid** (#540): es de sólo lectura. Y su alto
+       sigue a las filas (`_alto`): filas de 27 y una cabecera de **35**,
+       no de 27 — contada como una fila más, a la última le faltaban 7px.
+     - **Comentarios `/* */` en la consulta, no `--`**: si el Sheet la
+       juntara en una línea, un `--` comentaría el resto. Y la celda va SIN
+       comillas: las que aparecen al copiar una celda de varias líneas las
+       pone Google Sheets.
+
+     (2026-09-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44133,7 +44190,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#547**; la próxima toma el número siguiente.
+> última regla es la **#548**; la próxima toma el número siguiente.
 
 >
 

@@ -30,6 +30,12 @@ otra receta base). Medido contra R2 real el 2026-09-04, ver
 Este módulo NO explota todavía ese enlace: sólo apila lo que ya existía.
 El cruce Producto → Receta base → Plato queda para después.
 
+Desde el 2026-09-26 la pila suma, antes de las de platos, «Carta costeada»:
+la carta ENTERA del POS (también lo que no tiene receta: directos, sin
+enlace y combos) con su % de costo, sobre un TERCER parquet,
+`cartacosteada.parquet`, que carga la sección misma. Vive en
+`graficos/carta_costeada.py`; regla #548.
+
 DOS PARQUETS EN UNA PÁGINA. `app.py` carga UNO por reporte y lo pasa como
 `df_f`; el segundo se carga acá con `data.cargar`, que es el patrón que ya
 usa `recetas_comun.py::_cargar_flujo_compras` para traerse compras.parquet
@@ -56,6 +62,7 @@ from graficos.base import (
     _render_rail, _resolver, pila_sin_tablas, rail_sin_tablas,
     renderizar_graficos_genericos, seccion_perezosa,
 )
+from graficos.carta_costeada import ARCHIVO as ARCHIVO_CARTA, render_carta_costeada
 from graficos.recetas_comun import _items_clave, _ranking_contenedores
 from graficos.recetabase import _panorama_compras_base
 from graficos.recetaventa import (
@@ -85,6 +92,11 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # (tarjeta blanca) y el proceso completo pensado para caber en una sola
     # pantalla de laptop — ver `formulario_receta.py::render_formulario_receta`.
     ("Nueva",  (("Nueva receta",                        "Nueva",           ":material/add_circle:"),)),
+    # «Carta costeada» (2026-09-26): la carta ENTERA del POS con su % de
+    # costo, combos incluidos — lo único de la página que mira también lo
+    # que no tiene receta (directos, sin enlace, combos). Lee su propio
+    # parquet, `cartacosteada.parquet`; ver `graficos/carta_costeada.py`.
+    ("Carta",  (("Carta costeada",                      "Carta",           ":material/menu_book:"),)),
     ("Platos", (("Composición del plato",              "Composición",     ":material/donut_small:"),
                 ("Costeo Receta Venta",                "Costeo",          ":material/calculate:"),
                 ("Ingredientes clave",                 "Ingredientes",    ":material/eco:"),
@@ -105,6 +117,7 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 # incluso recetas base»).
 _PILA = pila_sin_tablas((
     ("rec_sec_nueva",        "Nueva receta"),
+    ("rec_sec_carta",        "Carta costeada"),
     ("rec_sec_composicion",  "Composición del plato"),
     ("rec_sec_costeo",       "Costeo Receta Venta"),
     ("rec_sec_ingredientes", "Ingredientes clave"),
@@ -222,6 +235,13 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         with st.container(border=True, key="rec_card_nueva"):
             render_formulario_receta()
 
+    def _dib_carta():
+        # Su parquet se carga ACÁ, dentro de la sección, y no arriba con los
+        # otros dos: la pila es perezosa y así sólo lo baja quien llega a la
+        # vista (mismo patrón que Porcionamientos en Movimientos).
+        with st.container(border=True, key="rec_card_carta"):
+            render_carta_costeada(_cargar_reporte(ARCHIVO_CARTA))
+
     def _dib_composicion():
         with st.container(border=True, key="rec_card_composicion"):
             _tabla_composicion_venta(df_f)
@@ -292,6 +312,7 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
 
     _DIBUJANTES = {
         "rec_sec_nueva":        _dib_nueva,
+        "rec_sec_carta":        _dib_carta,
         "rec_sec_composicion":  _dib_composicion,
         "rec_sec_costeo":       _dib_costeo,
         "rec_sec_ingredientes": _dib_ingredientes,

@@ -314,6 +314,12 @@ filas de 27 (`row_height` de `st.dataframe`) más la cabecera. En el gráfico
 son 26px por puesto con el top 15, lo que pide la escalera de líneas para
 no pisarse."""
 
+CARTA_COSTEADA = 27 * 13 + 3
+"""Alto de la tabla de Recetas › Carta costeada (2026-09-26, regla #548),
+la misma en sus dos modos (carta completa y combos): doce filas de 27
+(`row_height` de `st.dataframe`) más la cabecera. Arriba van el título, la
+fila de controles y la línea de números; abajo, el pie."""
+
 FICHA_HORA_MESAS = 170
 """«Mesas abiertas a la vez», el gráfico de la ficha de la hora de Ventas ›
 Por hora (2026-09-26, regla #536). Va en el panel del drill, que tiene
