@@ -6349,6 +6349,8 @@ def _pruebas_ventas_menu():
     subgrupos se cuente una vez, y la clase que tendría contado por
     pedidos.
     """
+    import math
+
     from graficos import ventas_menu as _im
     from graficos import ventas_platos as _p
 
@@ -6412,6 +6414,17 @@ def _pruebas_ventas_menu():
           (sin_ped["clase_ped"].isna().all(), len(sin_ped)), (True, 5))
     check("las opciones de la categoría, de la que más vende a la que menos",
           _im.subgrupos(a), [("Alimentos", "Fondos"), ("Alimentos", "Carnes")])
+    # El piso de la marca (2026-09-27): los tres dejan justo el promedio,
+    # pero el que se vendió UNA vez no lleva «al límite».
+    parejo = pd.DataFrame([
+        fila("A", "Fondos", 100, 5000.0, 2000.0, 90),
+        fila("B", "Fondos", 100, 4000.0, 1000.0, 90),
+        fila("C", "Fondos", 1, 60.0, 30.0, 1)])
+    m_p, _f, r_p = _im.clasificar(parejo, [("Alimentos", "Fondos")])
+    check("«al límite» sólo desde la mitad de lo que pide la popularidad",
+          sorted(m_p.loc[m_p["al_limite"], "prod"]), ["A", "B"])
+    check("y la línea de los umbrales dice desde cuántas unidades",
+          r_p["piso_limite_u"], math.ceil(0.5 * (0.70 / 3) * 201))
     casi = pd.DataFrame({"prod": ["Lomo Saltado", "Lomo a la Pimienta", "Borde"],
                          "mm": [0.116, 0.114, 0.129], "margen": [36.41, 36.51, 80.0]})
     pos = _im.rotulos(casi, 0.13, 150.0, 330, list(casi["prod"]))

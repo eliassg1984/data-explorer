@@ -32,7 +32,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 550 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (189)
+**CSS y estilos** (188)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -222,7 +222,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
 - **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
 - **#541** — Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre el reporte, dibujaba un…
-- **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 
 **Layout y alturas** (77)
 
@@ -836,7 +835,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (119)
+**Decisiones de diseño y UX** (120)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -957,6 +956,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#546** — «Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO período, con la cuenta…
 - **#548** — «Carta costeada»: la carta ENTERA con su % de costo, combos incluidos. El costo de un combo…
 - **#549** — El buscador de Volatilidad encuentra CUALQUIER insumo; el ranking sigue filtrado. Los de…
+- **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44291,6 +44291,18 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - **Sus controles** van en `_KEYS_WIDGET_PL`: la tarjeta se dibuja en
        el fragment de Análisis de platos, que escala con `st.rerun` al
        saltar a «Por hora» (#373).
+     - **«Al límite» tiene un PISO de volumen** (2026-09-27, a pedido: «se
+       marcan muchos cocteles»): sólo en los platos que venden al menos
+       la mitad de lo que pide la popularidad (`_PISO_LIMITE`). Los tragos
+       dejan márgenes apretados —la mitad de los 31 cocteles, entre
+       S/ 24,70 y S/ 30,04— y la franja de ±5 % alrededor del promedio
+       (S/ 25,22 a S/ 27,88) marcaba 9; seis se habían vendido de 1 a 7
+       veces, donde perro o rompecabezas se decide por céntimos y el
+       margen es el de un par de tickets. Con el piso quedan 4 (Primitivo,
+       Negroni Milano, Claret y Tinto de Verano); Fondos + carnes sigue
+       con 1. La tarjeta lo dice en la línea de los umbrales, con el
+       número («en los platos que venden 9 unidades o más»), en la ayuda
+       de la marca y en la de la columna «Nota».
 
      (2026-09-26.)
 

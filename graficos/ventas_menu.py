@@ -20,7 +20,9 @@ TRES DECISIONES DEL USUARIO, del mismo día:
     así — la Entraña, el plato que más vende en soles, está en «Carnes
     Americanas» (2 platos) y no en «Fondos».
   · «AL LÍMITE» (agregado nuestro, no del método): a menos de 5 % de un
-    umbral. Lomo Saltado quedaba a S/ 0,05 de ser estrella.
+    umbral, y desde el 2026-09-27 sólo en los platos que venden al menos la
+    mitad de lo que pide la popularidad (`_PISO_LIMITE`). Lomo Saltado
+    quedaba a S/ 0,05 de ser estrella.
   · SE MUESTRAN UNIDADES Y PEDIDOS: la clase sale de las unidades, como en
     el método; los pedidos (cada mesa o delivery una vez) van al lado, y si
     contados así el plato cambiaría de clase, lo dice.
@@ -55,6 +57,14 @@ _UMBRAL_POP = 0.70
 
 _LIMITE = 0.05
 """«Al límite»: a menos de 5 % de un umbral. Agregado nuestro, no del método."""
+
+_PISO_LIMITE = 0.5
+"""Y sólo en los platos que venden al menos la MITAD de lo que pide la
+popularidad (2026-09-27, a pedido). Por debajo, que un plato sea perro o
+rompecabezas se decide por céntimos, y su margen es el de un par de tickets:
+en Cocteles —márgenes apretados, la mitad entre S/ 24,70 y S/ 30,04— la
+marca salía en 9 de 31 tragos, seis vendidos de 1 a 7 veces. Con el piso
+quedan 4, los que se venden y un sol cambia de cuadro (regla #550)."""
 
 _PRECIO_MIN = 1.0
 """Un sol NETO por unidad. Menos que eso es una cortesía cobrada a S/ 0, que
@@ -156,13 +166,15 @@ def clasificar(a, subs):
         m["clase_ped"] = _clase(m["mm_ped"], m["margen"], umbral, acm)
     else:
         m["mm_ped"], m["clase_ped"] = np.nan, None
-    m["al_limite"] = (((m["mm"] / umbral - 1).abs() < _LIMITE)
-                      | (((m["margen"] / acm - 1).abs() < _LIMITE)
-                         if acm > 0 else False))
+    cerca = (((m["mm"] / umbral - 1).abs() < _LIMITE)
+             | (((m["margen"] / acm - 1).abs() < _LIMITE) if acm > 0 else False))
+    m["al_limite"] = cerca & (m["mm"] >= _PISO_LIMITE * umbral)
     m["pct_costo"] = m["costo"] / m["neto"]
     cm_tot = float(m["margen_tot"].sum())
     resumen = {
         "n": n, "umbral": umbral, "acm": acm, "u": u_tot, "margen": cm_tot,
+        # Desde cuántas unidades un plato puede llevar la marca «al límite».
+        "piso_limite_u": int(np.ceil(_PISO_LIMITE * umbral * u_tot - 1e-9)),
         "pedidos": float(ped_tot) if pd.notna(ped_tot) else None,
         "clases": {k: {"n": int((m["clase"] == k).sum()),
                        "margen": float(m.loc[m["clase"] == k, "margen_tot"].sum())}
@@ -238,7 +250,9 @@ def _chips(r, antes, etq_ant):
     h = ""
     if r.al_limite:
         h += ('<span class="ing-chip ing-limite" title="A menos de 5 % de un '
-              'umbral: su clase puede cambiar con poco">al límite</span>')
+              'umbral: su clase puede cambiar con poco. Sólo se marca en los '
+              'platos que venden al menos la mitad de lo que pide la '
+              'popularidad.">al límite</span>')
     if r.clase_ped and r.clase_ped != r.clase:
         h += (f'<span class="ing-chip" title="Si cada pedido contara una vez">'
               f'con pedidos: {escape(_SING[r.clase_ped].lower())}</span>')
@@ -449,9 +463,11 @@ def _tabla(m, antes, etq_ant):
             "Plato": st.column_config.TextColumn(pinned=True, width=190),
             "Nota": st.column_config.TextColumn(
                 width=170,
-                help="«Al límite»: a menos de 5 % de un umbral. «Con pedidos»: "
-                     "la clase si cada pedido contara una vez. «Antes»: su "
-                     f"clase en {etq_ant or 'el período anterior'}."),
+                help="«Al límite»: a menos de 5 % de un umbral, sólo en los "
+                     "platos que venden al menos la mitad de lo que pide la "
+                     "popularidad. «Con pedidos»: la clase si cada pedido "
+                     "contara una vez. «Antes»: su clase en "
+                     f"{etq_ant or 'el período anterior'}."),
             "% unid.": st.column_config.Column(
                 help="Su parte de las unidades de la categoría: la "
                      "popularidad del método"),
@@ -517,7 +533,9 @@ def tarjeta_ingenieria(a_ult, etq_ult, dias, a_ant=None, etq_ant=None):
             f"{res['u']:,.0f} unidades, {_soles(res['margen'], 0)} de "
             f"margen. **Popular**: {res['umbral']:.1%} o más de las unidades "
             f"(70 % × 1/{res['n']}). **Deja mucho**: {_soles(res['acm'])} o "
-            "más por plato (el promedio ponderado).")
+            "más por plato (el promedio ponderado). **Al límite**: a menos de "
+            "5 % de un corte, en los platos que venden "
+            f"{res['piso_limite_u']:,} unidades o más.")
         if forma == "Matriz":
             _matriz(m, res, antes, etq_ant)
         elif forma == "Tabla":
