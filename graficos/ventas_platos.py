@@ -42,11 +42,12 @@ from tema import (ACENTO, AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO,
                   GRIS_TEXTO_SUAVE, LAVANDA_BORDE, PALETA_SERIES,
                   TEXTO_PRINCIPAL)
 from graficos import alturas
-from graficos.base import (_compras_layout, _compras_truncar,
+from graficos.base import (_compras_layout, _compras_truncar, _resolver,
                            preservar_widgets, scroll_a_seccion)
 from graficos.compras._comun import _first_point
 from graficos.ventas_horario import (_COLOR_MARCA, _claves_hacia_atras,
                                      _etiqueta_clave, _rango_de_clave)
+from graficos.ventas_menu import _KEYS_WIDGET_MENU, tarjeta_ingenieria
 from graficos.ventas_mix import _estilo_costo, base, columnas, pct_costo
 from utils import fmt_k
 
@@ -69,8 +70,9 @@ queda con los 20 primeros: 300 líneas no se leen."""
 
 _KEYS_WIDGET_PL = ("vt_pl_corte", "vt_pl_medida", "vt_pl_mostrar",
                    "vt_pl_per_*", "vt_pl_ambito", "vt_pl_cual_*",
-                   "vt_pl_elegidos")
-"""Los controles de la vista, para que el salto a «Por hora»
+                   "vt_pl_elegidos") + _KEYS_WIDGET_MENU
+"""Los controles de la vista —también los de la Ingeniería de menú, que se
+dibuja en este mismo fragment—, para que el salto a «Por hora»
 (`st.rerun(scope="app")`) no se los lleve (regla #373)."""
 
 _COLORES_ELEGIDOS = tuple(PALETA_SERIES)
@@ -126,12 +128,19 @@ _SUMAS = ["venta", "cant", "costo", "neto"]
 
 
 def agregar(b):
-    """Por plato: grupo, subgrupo, venta, unidades, costo y neto de un
-    período (`b` es la `base` de `ventas_mix`). Agrupa por columnas de verdad
-    (regla #481)."""
+    """Por plato: grupo, subgrupo, venta, unidades, costo, neto y en cuántos
+    pedidos aparece, de un período (`b` es la `base` de `ventas_mix`, con la
+    columna `pedido` que le suma `_cargar_periodo`). Agrupa por columnas de
+    verdad (regla #481). Sin la columna —el modo demo—, `pedidos` es NaN."""
+    claves = ["prod", "grupo", "sub"]
     if b is None or b.empty:
-        return pd.DataFrame(columns=["prod", "grupo", "sub"] + _SUMAS)
-    return (b.groupby(["prod", "grupo", "sub"], as_index=False)[_SUMAS].sum())
+        return pd.DataFrame(columns=claves + _SUMAS + ["pedidos"])
+    a = b.groupby(claves, as_index=False)[_SUMAS].sum()
+    if "pedido" in b.columns:
+        ped = (b.groupby(claves, as_index=False)["pedido"].nunique()
+               .rename(columns={"pedido": "pedidos"}))
+        return a.merge(ped, on=claves, how="left")
+    return a.assign(pedidos=np.nan)
 
 
 def costo_por_plato(a):
@@ -163,6 +172,13 @@ def _cargar_periodo(clave, corte, ancla, filtrar_cb, d_demo):
     if df is None or df.empty:
         return agregar(None), 0
     b = base(df, columnas(df))
+    # En cuántos pedidos aparece cada plato (la Ingeniería de menú muestra
+    # los pedidos al lado de las unidades, #550). `base` conserva el índice
+    # de `df`, así que la llave se alinea sola.
+    col_ped = _resolver(df, ["Llave Local Pedido", "Nro Pedido",
+                             "Numero Pedido"])
+    if col_ped:
+        b = b.assign(pedido=df[col_ped].reindex(b.index))
     # El recorte se re-aplica en pandas: en modo demo el loader devuelve el
     # df entero (mismo motivo que `ventas_comparativo._cargar_tramo`).
     b = b[(b["fecha"].dt.date >= ini) & (b["fecha"].dt.date <= fin)]
@@ -276,14 +292,19 @@ def _ventas_platos(d, filtrar_cb=None):
     tarjeta = st.container(border=True,
                            key="ajuste_graf_card_izq_ventas_platos")
     with tarjeta:
-        foco = _cuerpo(d, filtrar_cb, cols_d, primer, ancla)
+        foco, menu = _cuerpo(d, filtrar_cb, cols_d, primer, ancla)
     if foco:
         _evolucion(*foco)
+    # La segunda pieza: la Ingeniería de menú del ÚLTIMO período, el mismo
+    # del puesto «#» y del % de costo (regla #550).
+    if menu:
+        tarjeta_ingenieria(*menu)
 
 
 def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
-    """Lo de la tarjeta del ranking. Devuelve los argumentos de la
-    evolución del plato en foco, o None."""
+    """Lo de la tarjeta del ranking. Devuelve `(foco, menu)`: los argumentos
+    de la evolución del plato en foco y los de la Ingeniería de menú, cada
+    uno o None."""
     ss = st.session_state
     cab = st.container(key="vt_pl_cabfila")
 
@@ -323,7 +344,7 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
     sel = [k for k in lista if etq[k] in elegidas][-MAX_PERIODOS:]
     if not sel:
         st.info("Elegí al menos un período para comparar.")
-        return None
+        return None, None
 
     with st.spinner("Cargando los períodos…" if len(sel) > 1
                     else "Cargando el período…"):
@@ -334,7 +355,7 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
     todos = pd.concat([agg[k][["grupo", "sub", "venta"]] for k in sel])
     if todos.empty:
         st.info("Sin ventas en los períodos elegidos.")
-        return None
+        return None, None
     # Grupo y subgrupo de cada plato: los del período más nuevo en que vendió.
     info = todos[~todos.index.duplicated(keep="last")][["grupo", "sub"]]
     peso = todos.groupby(level=0)["venta"].sum().sort_values(ascending=False)
@@ -437,10 +458,13 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
                  "curso tiene menos días.")
     st.caption(" ".join(notas))
 
+    ant = sel[-2] if len(sel) > 1 else None
+    menu = (datos[ult][0], etq[ult], dias[ult],
+            datos[ant][0] if ant else None, etq[ant] if ant else None)
     if foco:
         return (foco, corte, lista, etq, sel, ancla, filtrar_cb, d, m, info,
-                elegidos)
-    return None
+                elegidos), menu
+    return None, menu
 
 
 # ===========================================================================

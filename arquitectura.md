@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-549 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+550 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (188)
+**CSS y estilos** (189)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -222,8 +222,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#535** — Lo que se despliega con el cursor va DEBAJO de lo que ya está en la columna, no en el medio.…
 - **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
 - **#541** — Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre el reporte, dibujaba un…
+- **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 
-**Layout y alturas** (76)
+**Layout y alturas** (77)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -301,6 +302,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#516** — «Tendencia diaria de venta» interactúa como «Compras por período»: la figura se ACORTA cuando…
 - **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
+- **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 
 **Plotly y figuras** (102)
 
@@ -44221,6 +44223,61 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-26.)
 
+550. **La Ingeniería de menú es la segunda tarjeta de Análisis de platos:
+     Kasavana y Smith sobre la categoría que arma quien mira, con las
+     unidades para clasificar y los pedidos al lado.**
+     2026-09-26, sobre una maqueta aprobada, con cuatro decisiones del
+     usuario: abre en «Cuadros» y las tres formas se alternan; la categoría
+     se arma juntando subgrupos; se marcan los «al límite»; y se muestran
+     unidades Y pedidos.
+
+     - **El método, verificado en la fuente y no de memoria**: Kasavana, M.
+       L. y Smith, D. I. (1982), *Menu Engineering: A Practical Guide to
+       Menu Analysis*, con las fórmulas de AHLEI («The Power of Menu
+       Engineering», parte 2). Popular: al menos 70 % × 1/N de las
+       unidades. Deja mucho: margen por plato (precio NETO − costo) al menos
+       igual al promedio PONDERADO (margen total ÷ unidades); con el
+       promedio simple el plato del test cambia de clase.
+       `ventas_menu.clasificar` es pura y corre una vez: las tres formas
+       dibujan lo mismo (medido en la maqueta: 189 filas plato-clase
+       iguales en 10 combinaciones).
+     - **La categoría la arma quien mira** (`vt_ing_subs`, los subgrupos del
+       período por venta; abre en el que más vende). El método compara
+       platos que compiten por la misma elección, y el sistema no los agrupa
+       así: la Entraña, la que más vende en soles, está en «Carnes
+       Americanas», con 2 platos. Con Fondos y las dos carnes, Lomo a la
+       Pimienta pasa de estrella a caballo porque el promedio sube de
+       S/ 36,46 a S/ 40,89.
+     - **Qué no entra**, con su motivo en el pie: precio neto de menos de
+       S/ 1 por unidad (las cortesías, #547), sin costo cargado, y costo
+       mayor al precio (Bourbon Sour: S/ 264,68 contra S/ 27,41).
+     - **Dos agregados nuestros**, dichos así en el pie: «al límite» (a
+       menos de 5 % de un umbral) y «con pedidos» (la clase si cada pedido
+       contara una vez; los pedidos salen de `Llave Local Pedido`, que
+       `_cargar_periodo` le suma a `base`). Medido en septiembre: contado
+       por pedidos no cambia ningún plato de Fondos + carnes, uno de
+       Entradas y dos de Cocteles (el Aperol Spritz se pide de a dos). No
+       se muestra un TOTAL de pedidos: contaría dos veces al pedido con dos
+       fondos.
+     - **«Antes»** es la clase en el período anterior de la comparación de
+       arriba, con la misma categoría.
+     - **La matriz** va en un solo color —la clase la dice la posición— y
+       con los nombres ubicados por `rotulos`: Plotly no esquiva, y Lomo
+       Saltado y Lomo a la Pimienta caen casi en el mismo punto. Los valores
+       de los umbrales no van adentro (chocaban con las esquinas cuando el
+       umbral está cerca del borde); los dice el renglón de arriba.
+     - **El alto**, a 1366×768 con Fondos + carnes: Cuadros 676px, Matriz
+       677 y Tabla 539. Hasta siete platos por cuadro y cinco por clase en
+       la lista de la matriz; el resto, en la Tabla, y se avisa. La tarjeta
+       está fuera del techo de `--alto-util` (#382): con una categoría
+       grande se desliza la página. A 375px los cuadros se apilan, de la
+       estrella al perro.
+     - **Sus controles** van en `_KEYS_WIDGET_PL`: la tarjeta se dibuja en
+       el fragment de Análisis de platos, que escala con `st.rerun` al
+       saltar a «Por hora» (#373).
+
+     (2026-09-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44233,7 +44290,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#549**; la próxima toma el número siguiente.
+> última regla es la **#550**; la próxima toma el número siguiente.
 
 >
 

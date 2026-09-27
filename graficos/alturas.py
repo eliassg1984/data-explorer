@@ -314,6 +314,12 @@ filas de 27 (`row_height` de `st.dataframe`) más la cabecera. En el gráfico
 son 26px por puesto con el top 15, lo que pide la escalera de líneas para
 no pisarse."""
 
+VENTAS_MENU = 27 * 14 + 3
+"""Alto de la matriz y de la tabla de la Ingeniería de menú (2026-09-26,
+regla #550), la segunda tarjeta de Análisis de platos: trece filas de 27 más
+la cabecera. Una fila menos que el ranking de arriba porque la tarjeta lleva
+además la línea de los umbrales y el pie con el método."""
+
 CARTA_COSTEADA = 27 * 13 + 3
 """Alto de la tabla de Recetas › Carta costeada (2026-09-26, regla #548),
 la misma en sus dos modos (carta completa y combos): doce filas de 27

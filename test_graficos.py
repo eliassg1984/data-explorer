@@ -6291,7 +6291,10 @@ def _pruebas_ventas_platos():
     a = _p.agregar(b)
     check("el agregado trae sus columnas por nombre",
           list(a.columns),
-          ["prod", "grupo", "sub", "venta", "cant", "costo", "neto"])
+          ["prod", "grupo", "sub", "venta", "cant", "costo", "neto", "pedidos"])
+    check("con la llave del pedido, cada pedido cuenta una vez (#550)",
+          _p.agregar(b.assign(pedido=["P1", "P2", "P2"])).set_index("prod")
+          ["pedidos"].to_dict(), {"Lomo": 2, "Pisco Sour": 1})
     check("Lomo suma sus dos líneas",
           a.set_index("prod").loc["Lomo", ["venta", "cant"]].tolist(),
           [150.0, 3.0])
@@ -6332,6 +6335,95 @@ def _pruebas_ventas_platos():
     check("«Ranking & FoodCost» se fue: su lugar es éste (#545)",
           ("Ranking & FoodCost" in vistas,
            "Ranking & FoodCost" in dict(_v._PILA).values()), (False, False))
+    return fallos
+
+
+
+def _pruebas_ventas_menu():
+    """Ventas › Ingeniería de menú (regla #550): la clasificación.
+
+    Fija lo que en pantalla se ve razonable aunque esté mal: que el margen
+    promedio sea el PONDERADO por lo vendido (con el promedio simple, el
+    Lomo de abajo sería caballo y no estrella), que la popularidad sea 70 %
+    de 1/N, qué queda fuera y por qué, que un plato partido en dos
+    subgrupos se cuente una vez, y la clase que tendría contado por
+    pedidos.
+    """
+    from graficos import ventas_menu as _im
+    from graficos import ventas_platos as _p
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · menú · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · menú · {nombre}: got={got!r} exp={exp!r}")
+
+    def fila(prod, sub, cant, neto, costo, pedidos):
+        return {"prod": prod, "grupo": "Alimentos", "sub": sub, "venta": neto,
+                "cant": cant, "costo": costo, "neto": neto, "pedidos": pedidos}
+    a = pd.DataFrame([
+        fila("Lomo", "Fondos", 100, 5000.0, 500.0, 80),        # margen 45
+        fila("Risotto", "Fondos", 80, 3200.0, 2000.0, 80),     # margen 15
+        fila("Trapo 1kg", "Fondos", 10, 2400.0, 1000.0, 10),   # margen 140
+        fila("Fideua", "Fondos", 5, 350.0, 250.0, 5),          # margen 20
+        fila("Entraña", "Carnes", 60, 7200.0, 3300.0, 25),     # margen 65
+        fila("Postre Cortesia", "Fondos", 13, 0.008, 100.0, 13),
+        fila("Bourbon Sour", "Fondos", 2, 54.8, 529.4, 2),
+        fila("Sin receta", "Fondos", 20, 400.0, 0.0, 20),
+    ])
+    subs = [("Alimentos", "Fondos"), ("Alimentos", "Carnes")]
+    m, fuera, res = _im.clasificar(a, subs)
+    check("N son los clasificables: 5", res["n"], 5)
+    check("popular: 70 % de 1/N", round(res["umbral"], 6), round(0.70 / 5, 6))
+    check("el margen promedio es el PONDERADO (11.100 / 255), no el simple (57)",
+          round(res["acm"], 4), round(11100 / 255, 4))
+    clases = dict(zip(m["prod"], m["clase"]))
+    check("las cuatro clases", clases,
+          {"Lomo": "estrella", "Risotto": "caballo", "Trapo 1kg": "rompecabezas",
+           "Fideua": "perro", "Entraña": "estrella"})
+    check("al límite: el Lomo, a 3,4 % del promedio",
+          sorted(m.loc[m["al_limite"], "prod"]), ["Lomo"])
+    check("contada por pedidos, la Entraña (2 por pedido) no sería popular",
+          dict(zip(m["prod"], m["clase_ped"]))["Entraña"], "rompecabezas")
+    check("fuera, con su motivo",
+          {f["plato"]: f["motivo"] for f in fuera},
+          {"Postre Cortesia": "cortesía a S/ 0",
+           "Bourbon Sour": "cuesta más de lo que se cobra",
+           "Sin receta": "sin costo cargado"})
+    check("ordenada por el margen total que deja",
+          list(m["prod"]), ["Lomo", "Entraña", "Trapo 1kg", "Risotto", "Fideua"])
+    check("lo que deja cada clase",
+          (res["clases"]["estrella"]["n"], res["clases"]["estrella"]["margen"]),
+          (2, 8400.0))
+    solo_fondos = _im.clasificar(a, [("Alimentos", "Fondos")])[2]
+    check("la categoría es la que se arma: sin Carnes, 4 platos",
+          solo_fondos["n"], 4)
+    partido = pd.concat([a.head(1), a.head(1).assign(sub="Carnes")])
+    check("un plato partido en dos subgrupos se cuenta una vez",
+          _im.clasificar(partido, subs)[0]["u"].tolist(), [200.0])
+    check("sin subgrupos no hay clasificación",
+          _im.clasificar(a, [])[2], None)
+    sin_ped = _im.clasificar(a.drop(columns=["pedidos"]), subs)[0]
+    check("sin pedidos (modo demo): la clase por pedidos no existe",
+          (sin_ped["clase_ped"].isna().all(), len(sin_ped)), (True, 5))
+    check("las opciones de la categoría, de la que más vende a la que menos",
+          _im.subgrupos(a), [("Alimentos", "Fondos"), ("Alimentos", "Carnes")])
+    casi = pd.DataFrame({"prod": ["Lomo Saltado", "Lomo a la Pimienta", "Borde"],
+                         "mm": [0.116, 0.114, 0.129], "margen": [36.41, 36.51, 80.0]})
+    pos = _im.rotulos(casi, 0.13, 150.0, 330, list(casi["prod"]))
+    check("dos platos casi en el mismo punto no se pisan el nombre",
+          "Lomo Saltado" in pos and pos.get("Lomo a la Pimienta") != pos["Lomo Saltado"],
+          True)
+    check("contra el borde derecho, el nombre no se sale hacia la derecha",
+          pos.get("Borde") != "middle right", True)
+    check("abre en Cuadros, y las tres formas se alternan",
+          (_im._FORMA_DEFAULT, _im.FORMAS), ("Cuadros", ("Cuadros", "Matriz", "Tabla")))
+    check("sus controles sobreviven al salto a «Por hora» (#373)",
+          all(k in _p._KEYS_WIDGET_PL for k in _im._KEYS_WIDGET_MENU), True)
     return fallos
 
 
@@ -7106,6 +7198,9 @@ def main():
 
     # ── Ventas › Análisis de platos: puestos, movimiento, por día ────────
     fallos += _pruebas_ventas_platos()
+
+    # ── Ventas › Ingeniería de menú: la clasificación de Kasavana-Smith ──
+    fallos += _pruebas_ventas_menu()
 
     # ── Ventas › Por hora: las filas «Platos» y «Grupos» ─────────────────
     fallos += _pruebas_por_hora_filas()

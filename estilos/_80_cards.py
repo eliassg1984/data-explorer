@@ -1286,7 +1286,11 @@ CSS = """    /* ================================================================
         /* Y `…_izq_ventas_resumen` (Ventas › Resumen ejecutivo) el mismo     */
         /* día: su barra por período ahora es la de Compras, con la tabla     */
         /* DENTRO de la tarjeta; con el techo sacaba barra propia. #516.      */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen),
+        /* Y `…_izq_ventas_menu` (Ventas › Ingeniería de menú), al nacer el   */
+        /* 2026-09-26: sus cuatro cuadros listan hasta siete platos por      */
+        /* clase y con una categoría grande pasa de una pantalla. Que se     */
+        /* deslice la PÁGINA y no la tarjeta, lo pedido en la #382. #550.    */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_menu),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1888,7 +1892,8 @@ CSS = """    /* ================================================================
        se inyecta en Compras. */
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],
     .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"],
-    .st-key-vt_pl_cabfila [data-testid="stMarkdownContainer"] {
+    .st-key-vt_pl_cabfila [data-testid="stMarkdownContainer"],
+    .st-key-vt_ing_cabfila [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     /* El título y los KPI en un renglón (regla #519): el look de
@@ -1896,7 +1901,8 @@ CSS = """    /* ================================================================
        compartiendo el flex con los KPI. */
     .st-key-vt_resumen_kpi .vt-cab,
     .st-key-vt_mix_cabfila .vt-cab,
-    .st-key-vt_pl_cabfila .vt-cab {
+    .st-key-vt_pl_cabfila .vt-cab,
+    .st-key-vt_ing_cabfila .vt-cab {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -1906,7 +1912,8 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-cab-tit,
     .st-key-vt_mix_cabfila .vt-cab-tit,
-    .st-key-vt_pl_cabfila .vt-cab-tit {
+    .st-key-vt_pl_cabfila .vt-cab-tit,
+    .st-key-vt_ing_cabfila .vt-cab-tit {
         font-size: 13px;
         font-weight: 600;
         line-height: 1.35;
@@ -1915,7 +1922,8 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-kpis,
     .st-key-vt_mix_cabfila .vt-kpis,
-    .st-key-vt_pl_cabfila .vt-kpis {
+    .st-key-vt_pl_cabfila .vt-kpis,
+    .st-key-vt_ing_cabfila .vt-kpis {
         display: flex;
         flex-wrap: wrap;
         align-items: stretch;
@@ -1923,7 +1931,8 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-kpi,
     .st-key-vt_mix_cabfila .vt-kpi,
-    .st-key-vt_pl_cabfila .vt-kpi {
+    .st-key-vt_pl_cabfila .vt-kpi,
+    .st-key-vt_ing_cabfila .vt-kpi {
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -1935,14 +1944,16 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-kpi:first-child,
     .st-key-vt_mix_cabfila .vt-kpi:first-child,
-    .st-key-vt_pl_cabfila .vt-kpi:first-child {
+    .st-key-vt_pl_cabfila .vt-kpi:first-child,
+    .st-key-vt_ing_cabfila .vt-kpi:first-child {
         padding-left: 0;
         border-left: none;
         max-width: none;
     }
     .st-key-vt_resumen_kpi .vt-kpi-rot,
     .st-key-vt_mix_cabfila .vt-kpi-rot,
-    .st-key-vt_pl_cabfila .vt-kpi-rot {
+    .st-key-vt_pl_cabfila .vt-kpi-rot,
+    .st-key-vt_ing_cabfila .vt-kpi-rot {
         font-size: 10px;
         color: var(--text-secondary);
         white-space: nowrap;
@@ -1951,7 +1962,8 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before,
-    .st-key-vt_pl_cabfila .vt-kpi[style] .vt-kpi-rot::before {
+    .st-key-vt_pl_cabfila .vt-kpi[style] .vt-kpi-rot::before,
+    .st-key-vt_ing_cabfila .vt-kpi[style] .vt-kpi-rot::before {
         content: "";
         display: inline-block;
         width: 8px;
@@ -1962,7 +1974,8 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-val,
-    .st-key-vt_pl_cabfila .vt-kpi-val {
+    .st-key-vt_pl_cabfila .vt-kpi-val,
+    .st-key-vt_ing_cabfila .vt-kpi-val {
         font-size: 13px;
         font-weight: 600;
         color: var(--text-primary);
@@ -1970,7 +1983,8 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-kpi-sub,
     .st-key-vt_mix_cabfila .vt-kpi-sub,
-    .st-key-vt_pl_cabfila .vt-kpi-sub {
+    .st-key-vt_pl_cabfila .vt-kpi-sub,
+    .st-key-vt_ing_cabfila .vt-kpi-sub {
         margin-left: 4px;
         font-size: 10px;
         font-weight: 400;
@@ -1978,13 +1992,15 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val,
-    .st-key-vt_pl_cabfila .vt-kpi-total .vt-kpi-val {
+    .st-key-vt_pl_cabfila .vt-kpi-total .vt-kpi-val,
+    .st-key-vt_ing_cabfila .vt-kpi-total .vt-kpi-val {
         color: var(--accent-deep);
         font-weight: 700;
     }
     .st-key-vt_resumen_kpi .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val,
-    .st-key-vt_pl_cabfila .vt-kpi-alerta .vt-kpi-val {
+    .st-key-vt_pl_cabfila .vt-kpi-alerta .vt-kpi-val,
+    .st-key-vt_ing_cabfila .vt-kpi-alerta .vt-kpi-val {
         color: var(--warning-text);
     }
 
@@ -2101,7 +2117,8 @@ CSS = """    /* ================================================================
        leyenda. Todo acotado a SU key (CLAUDE.md). */
     .st-key-ajuste_graf_card_izq_ventas_mix { gap: 8px !important; }
     .st-key-vt_mix_cabfila,
-    .st-key-vt_pl_cabfila {
+    .st-key-vt_pl_cabfila,
+    .st-key-vt_ing_cabfila {
         border-bottom: 1px solid var(--border);
         padding-bottom: 5px !important;
     }
@@ -2255,6 +2272,147 @@ CSS = """    /* ================================================================
         color: var(--accent-deep);
         font-weight: 600;
     }
+    /* VENTAS › INGENIERÍA DE MENÚ (2026-09-26, regla #550): la segunda
+       tarjeta de Análisis de platos. El renglón del título es el de arriba
+       (las reglas `.vt-cab` llevan también `vt_ing_cabfila`); lo propio son
+       los cuatro cuadros, la lista al lado de la matriz y las marcas. Todo
+       acotado a SU tarjeta. */
+    .st-key-ajuste_graf_card_izq_ventas_menu { gap: 8px !important; }
+    .st-key-vt_ing_forma [data-testid="stButtonGroup"] button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_ing_subs [data-baseweb="select"] > div,
+    .st-key-vt_ing_subs .react-aria-ComboBox > div {
+        min-height: 28px !important;
+        font-size: 12px !important;
+    }
+    /* Los cuatro cuadros, en el lugar que ocupan en la matriz: arriba lo
+       que deja más por plato, a la derecha lo que se pide más. */
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-cuadros {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr);
+        gap: 8px;
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-eje-y {
+        grid-column: 1;
+        grid-row: 1 / 3;
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        text-align: center;
+        font-size: 11px;
+        color: var(--text-secondary);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-eje-x {
+        grid-column: 2 / 4;
+        grid-row: 3;
+        text-align: center;
+        font-size: 11px;
+        color: var(--text-secondary);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-cuadro {
+        min-width: 0;
+        padding: 9px 12px 7px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-cuadro.ing-estrella {
+        background: var(--accent-tint);
+        border-color: var(--border-lavender);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-rompecabezas { grid-column: 2; grid-row: 1; }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-estrella { grid-column: 3; grid-row: 1; }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-perro { grid-column: 2; grid-row: 2; }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-caballo { grid-column: 3; grid-row: 2; }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-tit {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 2px 10px;
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-tit b { font-size: 13px; color: var(--text-primary); }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-tit span { font-size: 11px; color: var(--text-secondary); }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-acc {
+        margin: 0 0 3px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--accent-deep);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-acc span { font-weight: 400; color: var(--text-secondary); }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-filas { list-style: none; margin: 0; padding: 0; }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-filas li {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 76px 50px;
+        gap: 8px;
+        align-items: baseline;
+        margin: 0;
+        padding: 3px 0;
+        font-size: 12px;
+        line-height: 1.35;
+        border-top: 1px solid var(--line-soft);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-filas.ing-con-ped li {
+        grid-template-columns: minmax(0, 1fr) 76px 50px 60px;
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-filas li.ing-cols {
+        padding-top: 0;
+        border-top: none;
+        font-size: 10px;
+        color: var(--text-muted);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-filas li.ing-cols span { text-align: right; }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-nom { overflow-wrap: anywhere; color: var(--text-primary); }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-num {
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-primary);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-suave { color: var(--text-secondary); }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-chip {
+        display: inline-block;
+        margin-left: 5px;
+        padding: 0 6px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        white-space: nowrap;
+        vertical-align: 1px;
+        background: var(--accent-light);
+        color: var(--accent-deep);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-chip.ing-limite {
+        background: var(--warning-bg);
+        color: var(--warning-text);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-chip.ing-antes {
+        font-weight: 500;
+        background: var(--line-soft);
+        color: var(--text-secondary);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-mas,
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-vacio {
+        margin: 4px 0 0;
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-lista { display: grid; gap: 10px; }
+    .st-key-ajuste_graf_card_izq_ventas_menu .ing-bloque .ing-tit { justify-content: flex-start; }
+    /* En el teléfono los cuadros van uno debajo del otro, de la estrella
+       al perro, y los ejes sobran. */
+    @media screen and (max-width: 768px) {
+        .st-key-ajuste_graf_card_izq_ventas_menu .ing-cuadros { grid-template-columns: minmax(0, 1fr); }
+        .st-key-ajuste_graf_card_izq_ventas_menu .ing-eje-y,
+        .st-key-ajuste_graf_card_izq_ventas_menu .ing-eje-x { display: none; }
+        .st-key-ajuste_graf_card_izq_ventas_menu .ing-cuadro { grid-column: 1; grid-row: auto; }
+        .st-key-ajuste_graf_card_izq_ventas_menu .ing-estrella { order: 1; }
+        .st-key-ajuste_graf_card_izq_ventas_menu .ing-caballo { order: 2; }
+        .st-key-ajuste_graf_card_izq_ventas_menu .ing-rompecabezas { order: 3; }
+        .st-key-ajuste_graf_card_izq_ventas_menu .ing-perro { order: 4; }
+    }
     /* LA PASTILLA «DETALLE» DEL RESUMEN (2026-09-24, regla #520): la
        leyenda del gráfico, flotando arriba a la izquierda como la de
        Comparativo › Descomposición (`ventas_comp_detalle_float`, más
@@ -2289,14 +2447,16 @@ CSS = """    /* ================================================================
        libres al lado del título. */
     .st-key-vt_resumen_kpi .vt-cab,
     .st-key-vt_mix_cabfila .vt-cab,
-    .st-key-vt_pl_cabfila .vt-cab {
+    .st-key-vt_pl_cabfila .vt-cab,
+    .st-key-vt_ing_cabfila .vt-cab {
         flex-wrap: nowrap !important;
         border-bottom: none !important;
         padding-bottom: 0 !important;
     }
     .st-key-vt_resumen_kpi .vt-kpis,
     .st-key-vt_mix_cabfila .vt-kpis,
-    .st-key-vt_pl_cabfila .vt-kpis {
+    .st-key-vt_pl_cabfila .vt-kpis,
+    .st-key-vt_ing_cabfila .vt-kpis {
         flex: 1 1 auto;
         min-width: 0;
         flex-wrap: nowrap !important;
@@ -2309,7 +2469,8 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-kpi,
     .st-key-vt_mix_cabfila .vt-kpi,
-    .st-key-vt_pl_cabfila .vt-kpi {
+    .st-key-vt_pl_cabfila .vt-kpi,
+    .st-key-vt_ing_cabfila .vt-kpi {
         flex-direction: row !important;
         align-items: baseline !important;
         gap: 5px;
@@ -2318,7 +2479,8 @@ CSS = """    /* ================================================================
     }
     .st-key-vt_resumen_kpi .vt-kpi-rot,
     .st-key-vt_mix_cabfila .vt-kpi-rot,
-    .st-key-vt_pl_cabfila .vt-kpi-rot { overflow: visible !important; }
+    .st-key-vt_pl_cabfila .vt-kpi-rot,
+    .st-key-vt_ing_cabfila .vt-kpi-rot { overflow: visible !important; }
     /* La línea que separaba el renglón del gráfico, ahora debajo del
        renglón entero (título, KPI y pastilla). */
     .st-key-vt_resumen_cabfila {
