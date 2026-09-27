@@ -5969,9 +5969,12 @@ def _pruebas_ventas_un_item_una_vez():
                for c in llamadas.get(vista, []) for k in c.keywords}
         check(f"{vista} recarga con filtrar_cb=_filtrar_items",
               kws.get("filtrar_cb"), "_filtrar_items")
-    mes = llamadas.get("_ventas_ranking_meseros", [])
+    mes = llamadas.get("_ventas_meseros", [])
     check("Meseros recibe las filas POR PAGO (la propina es del pago)",
           [ast.unparse(c.args[0]) for c in mes], ["d_pagos"])
+    kws = {k.arg: ast.unparse(k.value) for c in mes for k in c.keywords}
+    check("Meseros trae lo de R2 sólo con los chips (los granos los arma)",
+          kws.get("filtrar_cb"), "_aplicar_chips")
     return fallos
 
 
@@ -6337,6 +6340,170 @@ def _pruebas_ventas_platos():
            "Ranking & FoodCost" in dict(_v._PILA).values()), (False, False))
     return fallos
 
+
+
+def _pruebas_ventas_meseros():
+    """Ventas › Meseros (regla #553): las propinas por mesero.
+
+    Un parquet de mentira con cada caso real: un pedido pagado con tarjeta
+    y efectivo (sus ítems salen dos veces), uno con tarjeta y sin propina,
+    uno pagado sólo en efectivo, uno de Rappi sin mesero, una cortesía y
+    otro turno. Fija que la venta cuente un ítem una vez y la propina un
+    pago una vez (regla #517), que la cortesía no entre, qué es una mesa,
+    el pozo común (partes iguales entre los meseros del turno, sin perder un
+    sol), la planilla, los tramos de %, con qué se compara y el Excel. Todo
+    leído por NOMBRE de columna (regla #481).
+    """
+    import datetime as _d
+    import io as _io
+    import zipfile
+
+    from graficos import ventas_meseros as _m
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · meseros · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · meseros · {nombre}: got={got!r} exp={exp!r}")
+
+    filas = []
+
+    def pedido(ped, mesero, serv, items, pagos, pax, clase="Venta",
+               hora="2026-09-01 21:00"):
+        """`items`: (llave, producto, grupo, cantidad, venta);
+        `pagos`: (llave del pago, tipo, propina) — un ítem sale una vez
+        POR PAGO, como en `ventas.parquet`."""
+        for llave, prod, grupo, cant, venta in items:
+            for lp, tipo, prop in (pagos or [(None, None, None)]):
+                filas.append({
+                    "LLAVE LOCAL PEDIDO": ped, "NOMBRE MESERO": mesero,
+                    "FEC REG DOCUMENTO": pd.Timestamp(hora),
+                    "SERVICIO": serv, "VENTA ITEM DDOCUMENTO": venta,
+                    "CANTIDAD ITEM DDOCUMENTO": cant, "CANT PAX": pax,
+                    "LLAVE LOCAL DOCUMENTO": f"D{ped}",
+                    "NUMERO DOCUMENTO": f"B001-{ped}",
+                    "LLAVE LOCAL DOCUMENTO ITEM": llave,
+                    "LLAVE LOCAL DOCUMENTO CORRELATIVO PAGO": lp,
+                    "NOMBRE TIPO PAGO": tipo, "MONTO PROPINA": prop,
+                    "NOMB ITEM VENTA": prod, "GRUPO": grupo,
+                    "CLASE VENTA": clase})
+
+    tarjeta = "Tarjeta de Crédito"
+    pedido("1", "ANA", "CENA",
+           [("I1", "Lomo", "Alimentos", 1, 100.0),
+            ("I2", "Agua", "Bebidas s/ Alcohol", 2, 50.0)],
+           [("P1a", tarjeta, 10.0), ("P1b", "Efectivo", None)], pax=2)
+    pedido("2", "BETO", "CENA", [("I3", "Lomo", "Alimentos", 2, 200.0)],
+           [("P2", tarjeta, 0.0)], pax=3)
+    pedido("3", "ANA", "ALMUERZO", [("I4", "Ensalada", "Alimentos", 1, 80.0)],
+           [("P3", "Efectivo", None)], pax=1, hora="2026-09-01 13:00")
+    pedido("4", None, "CENA", [("I5", "Lomo", "Alimentos", 1, 60.0)],
+           [("P4", tarjeta, 0.0)], pax=0)
+    pedido("5", "BETO", "CENA", [("I6", "Postre", "Alimentos", 1, 90.0)],
+           None, pax=2, clase="Cortesía")
+    pedido("6", "CARLA", "CENA", [("I7", "Vino", "Vinos y Espumantes", 1,
+                                   100.0)],
+           [("P6", tarjeta, 10.0)], pax=2, hora="2026-09-02 00:04")
+    d = pd.DataFrame(filas)
+
+    P, items = _m.preparar(d)
+    p = P.set_index("ped")
+    check("un pedido por fila, sin la cortesía", sorted(p.index),
+          ["1", "2", "3", "4", "6"])
+    check("venta: un ítem una vez aunque se pagó con dos formas",
+          float(p.loc["1", "venta"]), 150.0)
+    check("productos del pedido 1", float(p.loc["1", "items"]), 3.0)
+    check("propina: un pago una vez", float(p.loc["1", "propina"]), 10.0)
+    check("tarjeta y efectivo: no es «sólo efectivo»",
+          (bool(p.loc["1", "tarjeta"]), bool(p.loc["1", "solo_efectivo"])),
+          (True, False))
+    check("sólo efectivo", bool(p.loc["3", "solo_efectivo"]), True)
+    check("personas una vez por pedido", float(p.loc["1", "personas"]), 2.0)
+    check("sin mesero va a «Sin mesero»", p.loc["4", "mesero"], "Sin mesero")
+    check("el nombre en Title Case", p.loc["2", "mesero"], "Beto")
+    check("turno en Title Case", p.loc["3", "turno"], "Almuerzo")
+
+    R = _m.resumen(P)
+    check("resumen: columnas por nombre", list(R.columns), _m._COLS_RESUMEN)
+    check("Ana: 2 mesas, 230 de venta, 10 de propina",
+          (int(R.loc["Ana", "mesas"]), float(R.loc["Ana", "venta"]),
+           float(R.loc["Ana", "propina"])), (2, 230.0, 10.0))
+    check("Beto: una mesa con tarjeta sin propina (la cortesía no cuenta)",
+          (int(R.loc["Beto", "mesas"]), int(R.loc["Beto", "sin_propina"])),
+          (1, 1))
+    check("Ana: una mesa pagada sólo en efectivo",
+          int(R.loc["Ana", "solo_efectivo"]), 1)
+
+    z = _m.pozo(P)
+    check("el pozo no incluye a «Sin mesero»",
+          "Sin mesero" in set(z["mesero"]), False)
+    cena = z[(z["turno"] == "Cena") & (z["dia"] == pd.Timestamp("2026-09-01"))]
+    check("cena del 1: el pozo (10 + 0) entre Ana y Beto",
+          sorted((m, round(float(v), 2)) for m, v in zip(cena["mesero"],
+                                                          cena["parte"])),
+          [("Ana", 5.0), ("Beto", 5.0)])
+    check("el pozo no pierde ni inventa un sol",
+          round(float(z["parte"].sum()), 6), round(float(z["propia"].sum()), 6))
+    rep = _m.reparto(P)
+    check("Beto gana con el pozo lo que Ana cede",
+          (round(float(rep.loc["Beto", "diferencia"]), 2),
+           round(float(rep.loc["Ana", "diferencia"]), 2)), (5.0, -5.0))
+
+    soles, mesas = _m.planilla(P)
+    check("planilla: una fila por mesero, sin «Sin mesero»",
+          sorted(soles.index), ["Ana", "Beto", "Carla"])
+    check("planilla: Carla cobra el 2 (cobro pasada la medianoche)",
+          float(soles.loc["Carla", pd.Timestamp("2026-09-02")]), 10.0)
+    check("planilla propia suma la propina",
+          round(float(soles.to_numpy().sum()), 6), 20.0)
+    soles_p, _ = _m.planilla(P, _m.REPARTOS[1])
+    check("planilla del pozo suma lo mismo",
+          round(float(soles_p.to_numpy().sum()), 6), 20.0)
+
+    D = _m.distribucion(P)
+    check("tramos: columnas en orden", list(D.columns), list(_m.TRAMOS))
+    check("6,7 % cae en «5 – 9 %», 0 % en «0 %», 10 % en «10 %»",
+          (int(D.loc["Ana", "5 – 9 %"]), int(D.loc["Beto", "0 %"]),
+           int(D.loc["Carla", "10 %"])), (1, 1, 1))
+
+    check("se compara con los mismos días del mes anterior",
+          _m.periodo_anterior(_d.date(2026, 9, 1), _d.date(2026, 9, 27)),
+          (_d.date(2026, 8, 1), _d.date(2026, 8, 27)))
+    check("un 31 cae en el último día del mes corto",
+          _m.periodo_anterior(_d.date(2026, 3, 1), _d.date(2026, 3, 31)),
+          (_d.date(2026, 2, 1), _d.date(2026, 2, 28)))
+    check("un rango de dos meses: el tramo igual de largo de antes",
+          _m.periodo_anterior(_d.date(2026, 8, 15), _d.date(2026, 9, 14)),
+          (_d.date(2026, 7, 15), _d.date(2026, 8, 14)))
+    hora = _m.hora_de_corte(P, _d.date(2026, 9, 2))
+    check("el último día corta a la hora del último cobro",
+          hora, pd.Timedelta(minutes=4))
+    check("sin cobro en el último día, no corta",
+          _m.hora_de_corte(P, _d.date(2026, 9, 3)), None)
+    P0 = P.assign(cobro=P["cobro"] - pd.DateOffset(months=1))
+    check("el mes anterior, hasta la misma hora",
+          len(_m.hasta_la_misma_hora(P0, _d.date(2026, 8, 2), hora)), 5)
+    check("…y lo que pasa de esa hora queda fuera",
+          len(_m.hasta_la_misma_hora(
+              P0.assign(cobro=P0["cobro"] + pd.Timedelta(hours=1)),
+              _d.date(2026, 8, 2), hora)), 4)
+
+    pagos = _m.pagos_con_propina(d)
+    check("pagos con propina: los dos que dejaron",
+          sorted(pagos["comprobante"]), ["B001-1", "B001-6"])
+    xls = _m.excel("1 sep – 2 sep 2026", "Todo el día", _m.REPARTOS[0], R,
+                   rep, soles, mesas, z, pagos)
+    with zipfile.ZipFile(_io.BytesIO(xls)) as zf:
+        libro = zf.read("xl/workbook.xml").decode("utf-8")
+    check("el Excel trae sus cuatro hojas",
+          all(h in libro for h in ("Resumen", "Planilla", "Por turno",
+                                   "Pagos con propina")), True)
+    check("columna de Excel 27 → AB", _m._col_xl(27), "AB")
+    return fallos
 
 
 def _pruebas_ventas_menu():
@@ -7343,6 +7510,9 @@ def main():
 
     # ── Ventas › Ingeniería de menú: la clasificación de Kasavana-Smith ──
     fallos += _pruebas_ventas_menu()
+
+    # ── Ventas › Meseros: propinas, pozo común, planilla y Excel ────────
+    fallos += _pruebas_ventas_meseros()
 
     # ── Ventas › Por hora: las filas «Platos» y «Grupos» ─────────────────
     fallos += _pruebas_por_hora_filas()

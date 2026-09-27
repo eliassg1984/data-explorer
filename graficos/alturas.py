@@ -320,6 +320,13 @@ regla #550), la segunda tarjeta de Análisis de platos: trece filas de 27 más
 la cabecera. Una fila menos que el ranking de arriba porque la tarjeta lleva
 además la línea de los umbrales y el pie con el método."""
 
+VENTAS_MESEROS_FIG = 230
+"""Alto de los dos gráficos del detalle del mesero en Ventas › Meseros
+(2026-09-27, regla #553): cómo dejan propina sus mesas (seis tramos) y su
+propina de los últimos doce meses. Van lado a lado con «Lo que vendió», que
+son dos tablas chicas: con 230 la leyenda de arriba y los seis tramos entran
+sin apretarse, y la tarjeta no pasa de una pantalla a 1366×768."""
+
 CARTA_COSTEADA = 27 * 13 + 3
 """Alto de la tabla de Recetas › Carta costeada (2026-09-26, regla #548),
 la misma en sus dos modos (carta completa y combos): doce filas de 27

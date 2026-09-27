@@ -1,8 +1,7 @@
 """
-graficos.ventas — dashboard de Ventas: el dispatcher de sus vistas, y las que viven acá (Venta vs Compra, Meseros).
+graficos.ventas — dashboard de Ventas: el dispatcher de sus vistas, y la que vive acá (Venta vs Compra).
 """
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -10,10 +9,10 @@ from plotly.subplots import make_subplots
 
 import definicion_venta as dv
 from data import cargar as _cargar_reporte
-from tema import ACENTO, ERROR, EXITO, GRIS_BORDE
+from tema import ACENTO, GRIS_BORDE
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
-    PALETA_CALLAI, _card, _compras_layout, _render_rail,
+    PALETA_CALLAI, _compras_layout, _render_rail,
     _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
     renderizar_graficos_genericos, seccion_perezosa,
 )
@@ -22,6 +21,7 @@ from graficos.ventas_comparativo import _ventas_comparativo
 from graficos.ventas_horario import _ventas_horario
 from graficos.ventas_mix import _ventas_mix
 from graficos.ventas_platos import _ventas_platos
+from graficos.ventas_meseros import _ventas_meseros
 from graficos import alturas
 
 def unico_por_item(df):
@@ -228,140 +228,6 @@ def _ventas_venta_compra_dia(g, hay_costo, hay_compra, hay_pax):
     st.plotly_chart(fig, use_container_width=True, key="ventas_g_vc_dia")
 
 
-@st.fragment
-def _ventas_ranking_meseros(d, col_mesero, col_propina, col_pedido,
-                            col_corr, col_pax, col_fecha, col_venta):
-    """Ranking de meseros por propina real vs. esperada (puntos porcentuales),
-    controlando por Pax/Hora/Fin de semana con una regresión simple ajustada
-    EN VIVO sobre el rango cargado — no un ranking crudo, que confundiría
-    "buen mesero" con "le tocaron las mesas que de por sí dejan más propina"
-    (grupos grandes, cena, findes).
-
-    Bar chart horizontal 2D a propósito, sin 3D: para comparar N categorías
-    con precisión, un bar chart gana — ver arquitectura.md.
-    """
-    if not (col_mesero and col_propina and col_pedido and col_pax
-            and col_fecha and col_venta):
-        st.info("Faltan columnas (Mesero, Propina, Pedido, Pax, Fecha, "
-                "Venta) para el ranking de meseros.")
-        return
-
-    # ── Agregar a nivel de PEDIDO: Pax/Hora/Mesero son del pedido, no de
-    # la línea — mismo criterio que Pax en «Venta vs Compra» más arriba
-    # (Cant Pax se repite por línea, se toma 1 valor por pedido).
-    #
-    # DOS GRANOS (regla #517): esta vista recibe las filas POR PAGO porque
-    # la propina es del pago, pero la VENTA se cuenta un ítem una vez —
-    # sumada por pago, un plato pagado con dos formas pesaba doble y el
-    # % de propina salía más bajo de lo que fue.
-    # Y sin cortesías ni anulados (regla #524): una cortesía es un pedido
-    # con «venta» a precio de carta y cero propina, y tiraba abajo la
-    # propina esperada de quien las atendió.
-    d = dv.solo_venta(d)
-    di = unico_por_item(d)
-    ped = d[col_pedido].astype(str)
-    fecha = pd.to_datetime(di[col_fecha], errors="coerce")
-    base = pd.DataFrame({
-        "ped":    di[col_pedido].astype(str),
-        "mesero": di[col_mesero].astype(str).str.strip().str.title(),
-        "pax":    pd.to_numeric(di[col_pax], errors="coerce"),
-        "hora":   fecha.dt.hour + fecha.dt.minute / 60.0,
-        "finde":  fecha.dt.day_name().isin(["Friday", "Saturday", "Sunday"]),
-        "venta":  pd.to_numeric(di[col_venta], errors="coerce").fillna(0),
-    }).dropna(subset=["pax", "hora"])
-    # El filtro de pax va por PEDIDO, más abajo: por fila se llevaba los
-    # ítems de una nota de crédito (pax negativo) y el pedido del canje
-    # quedaba con la venta de la boleta Y la de la factura.
-    base = base[(base["mesero"] != "") & (base["mesero"].str.lower() != "nan")]
-    if base.empty:
-        st.info("Sin datos de mesero en el rango cargado.")
-        return
-
-    # ── Propina por pedido: MONTO PROPINA se repite por LÍNEA DE PAGO, no
-    # por pedido completo — una mesa con pago dividido (2+ métodos) tiene
-    # más de un monto distinto. Sumar por (pedido, Correlativo Pago) único
-    # antes de sumar por pedido evita contar la misma propina una vez por
-    # cada línea de producto de ese pago (sumada por fila, x11: regla
-    # #517). La llave del pago va primero porque es por COMPROBANTE: un
-    # pedido partido en dos boletas tiene dos «pago 1», y (pedido, correlativo)
-    # se quedaba con la propina de una sola.
-    col_llave_pago = _resolver(d, ["Llave Local Documento Correlativo Pago"])
-    col_corr = col_llave_pago or col_corr
-    if col_corr and col_corr in d.columns:
-        pagos = (pd.DataFrame({
-            "ped": ped, "corr": d[col_corr].astype(str),
-            "propina": pd.to_numeric(d[col_propina], errors="coerce").fillna(0),
-        }).drop_duplicates(subset=["ped", "corr"]))
-    else:
-        pagos = pd.DataFrame({
-            "ped": ped,
-            "propina": pd.to_numeric(d[col_propina], errors="coerce").fillna(0),
-        }).drop_duplicates()
-    propina_ped = pagos.groupby("ped", as_index=False)["propina"].sum()
-
-    pedidos = (base.groupby("ped", as_index=False)
-               .agg(mesero=("mesero", "first"), pax=("pax", "max"),
-                    hora=("hora", "first"), finde=("finde", "first"),
-                    venta=("venta", "sum")))
-    pedidos = pedidos.merge(propina_ped, on="ped", how="left")
-    pedidos["propina"] = pedidos["propina"].fillna(0)
-    pedidos = pedidos[(pedidos["venta"] > 0) & (pedidos["pax"] > 0)
-                      & (pedidos["pax"] <= 20)]
-    if len(pedidos) < 30:
-        st.info("Muy pocos pedidos con mesero/propina en este rango para "
-                "un ranking confiable — ampliá el rango de fechas.")
-        return
-    pedidos["propina_pct"] = (pedidos["propina"] / pedidos["venta"] * 100).clip(0, 30)
-    pedidos["finde"] = pedidos["finde"].astype(float)
-
-    # ── Regresión simple (propina% ~ pax, hora, hora², pax·hora, finde)
-    # ajustada EN VIVO sobre el rango cargado: si cambia el rango de la
-    # franja, cambia la línea de base contra la que se compara cada mesero.
-    X = np.column_stack([
-        np.ones(len(pedidos)), pedidos["pax"], pedidos["hora"],
-        pedidos["hora"] ** 2, pedidos["pax"] * pedidos["hora"], pedidos["finde"],
-    ])
-    coef, *_ = np.linalg.lstsq(X, pedidos["propina_pct"].values, rcond=None)
-    pedidos["residual"] = pedidos["propina_pct"].values - X @ coef
-
-    resumen = (pedidos.groupby("mesero", as_index=False)
-               .agg(n=("ped", "count"),
-                    pct_real=("propina_pct", "mean"),
-                    residual=("residual", "mean"))
-               .sort_values("residual"))  # ascendente: el mejor queda ARRIBA en el bar horizontal
-
-    colores = [EXITO if r >= 0 else ERROR for r in resumen["residual"]]
-    _txt = [f"{r:+.2f}pp · n={n}" for r, n in zip(resumen["residual"], resumen["n"])]
-    fig = go.Figure(go.Bar(
-        x=resumen["residual"], y=resumen["mesero"], orientation="h",
-        marker=dict(color=colores), text=_txt, textposition="outside",
-        cliponaxis=False,
-        customdata=np.column_stack([resumen["pct_real"], resumen["n"]]),
-        hovertemplate="%{y}<br>Propina real: %{customdata[0]:.2f}%<br>"
-                      "vs. esperada: %{x:+.2f}pp<br>n=%{customdata[1]:.0f}"
-                      "<extra></extra>",
-    ))
-    _compras_layout(fig, alto=alturas.por_filas(
-        len(resumen), px_fila=46, minimo=280, extra=60))
-    # Rango del eje con relleno extra (no solo min/max de los datos): el
-    # texto "outside" de la barra MÁS ancha (más lejos del cero) necesita
-    # aire antes de chocar contra la columna de nombres -- sin este padding
-    # se pisaban (ver captura real: "Junior Mendoza" perdía el "-0.79pp").
-    _lo, _hi = float(resumen["residual"].min()), float(resumen["residual"].max())
-    _pad = max(_hi - _lo, 0.2) * 0.35
-    fig.update_layout(
-        xaxis=dict(zeroline=True, zerolinecolor=GRIS_BORDE, ticksuffix="pp",
-                   range=[_lo - _pad, _hi + _pad]),
-        margin=dict(l=10, r=90, t=10, b=10), showlegend=False)
-    with _card("meseros", "Propina real vs. esperada por mesero"):
-        st.plotly_chart(fig, use_container_width=True, key="ventas_g_meseros")
-        st.caption(
-            "Esperada = un modelo simple ajustado en vivo sobre pax, hora y "
-            "fin de semana del rango cargado — compara desempeño "
-            "controlando el tipo de mesas que atendió cada mesero, no un "
-            "promedio crudo. Meseros con pocos pedidos (n bajo) pesan menos.")
-
-
 def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard de Ventas: resumen ejecutivo, mix de carta por período,
     mapa por hora, año pasado, venta vs compra, análisis de platos y
@@ -395,8 +261,6 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_serv   = _resolver(df_f, ["Servicio", "Tipo Servicio",
                                   "Nomb Servicio", "Nombre Servicio"])
     col_mesero  = _resolver(df_f, ["Nombre Mesero", "Nomb Mesero"])
-    col_propina = _resolver(df_f, ["Monto Propina", "Propina"])
-    col_corr    = _resolver(df_f, ["Correlativo Pago"])
     col_ldoc    = _resolver(df_f, ["Llave Local Documento"])
     if not col_fecha:
         for _c in df_f.columns:
@@ -596,10 +460,17 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         elif graf == "Análisis de platos":
             _ventas_platos(d, filtrar_cb=_filtrar_items)
 
-        # ── 4) Meseros: propina real vs. esperada (regresión en vivo) ───
+        # ── 4) Meseros: las propinas por mesero, como los reportes del POS
+        # (graficos/ventas_meseros.py, regla #553). Recibe las filas POR
+        # PAGO —la propina es del pago (#517)— y, para lo que trae aparte de
+        # R2 (el mes anterior, los 12 meses), sólo los chips: los dos granos
+        # los arma la vista. `firma` identifica esos chips para guardar lo
+        # traído en la sesión.
         elif graf == "Meseros":
-            _ventas_ranking_meseros(d_pagos, col_mesero, col_propina, col_pedido,
-                                    col_corr, col_pax, col_fecha, col_venta)
+            _ventas_meseros(d_pagos, filtrar_cb=_aplicar_chips,
+                            firma=(tuple(fam_sel or ()), tuple(sub_sel or ()),
+                                   tuple(canal_sel or ()),
+                                   tuple(serv_sel or ())))
         else:
             st.info("No hay columnas suficientes para este gráfico.")
 
@@ -636,7 +507,9 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         # Como el Resumen, arma SUS tarjetas: la del ranking y, con un
         # plato en foco, la de su evolución debajo (regla #529).
         "vt_sec_platos":     lambda: _cuerpo_grafico("Análisis de platos"),
-        "vt_sec_meseros":    _seccion("meseros", "Meseros"),
+        # Como Platos, arma SUS tarjetas: la de la tabla, la planilla y el
+        # detalle del mesero elegido (regla #553).
+        "vt_sec_meseros":    lambda: _cuerpo_grafico("Meseros"),
         "vt_sec_tabla":      _dib_tabla,
     }
 

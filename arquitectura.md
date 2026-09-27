@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-552 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+553 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (189)
 
@@ -654,7 +654,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 
-**Datos, R2 y DuckDB** (71)
+**Datos, R2 y DuckDB** (72)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -727,6 +727,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#546** — «Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO período, con la cuenta…
 - **#548** — «Carta costeada»: la carta ENTERA con su % de costo, combos incluidos. El costo de un combo…
 - **#552** — «Por hora» carga cada panel por la MISMA fecha con que lo ubica: en «Hora del pedido», por la…
+- **#553** — Ventas › Meseros son las PROPINAS por mesero: lo que dan los reportes del POS (Analítico por…
 
 **SUNAT y SIRE** (44)
 
@@ -838,7 +839,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (121)
+**Decisiones de diseño y UX** (122)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -961,6 +962,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#549** — El buscador de Volatilidad encuentra CUALQUIER insumo; el ranking sigue filtrado. Los de…
 - **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 - **#552** — «Por hora» carga cada panel por la MISMA fecha con que lo ubica: en «Hora del pedido», por la…
+- **#553** — Ventas › Meseros son las PROPINAS por mesero: lo que dan los reportes del POS (Analítico por…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44456,6 +44458,64 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-27.)
 
+553. **Ventas › Meseros son las PROPINAS por mesero: lo que dan los
+     reportes del POS (Analítico por mozo y Propinas), contra el mismo tramo
+     del mes anterior, con una planilla por día para pagarlas, un pozo común
+     y un Excel. La regresión «propina real vs. esperada» se fue.**
+     2026-09-27, a pedido: «en primer fin obtener información de propinas,
+     que si bien el sistema nativo las muestra, es sólo en un reporte
+     plano». Antes hubo un análisis con los datos, que no quedó en el
+     código: con el rango por defecto (un mes) la regresión no distinguía a
+     nadie —la barra más grande era la de un mesero con 4 pedidos en un
+     día— y pax, hora, fin de semana y mesero explicaban el 2 % de la
+     propina (Lynn y McCall, 2000: la propina es demasiado débil para medir
+     el desempeño de un mesero).
+
+     - **Las cuentas son las del POS, leídas de INFOREST.**
+       `spRep_AnaliticoMozo` da pedidos, comensales, cantidad y venta por
+       mozo y producto (pedido no anulado, ítem vigente y facturado, fecha
+       del pedido Y del comprobante en el rango); `spRep_Propina`, cada pago
+       con tarjeta (`tTipoPago` 02) que dejó propina, por fecha del PAGO y
+       sin mirar el estado. Cuadrado del 1 al 26 sep 2026 mesero por
+       mesero: mesas, personas y propinas iguales. Una sola diferencia, el
+       comprobante B00001000055383 (S/ 38,50): el POS lo deja SIN mozo
+       porque ninguna línea de DPEDIDO apunta a él; el parquet lo liga a su
+       pedido y va a su mesero.
+     - **La propina sólo existe con tarjeta.** El POS no tiene dónde
+       anotarla en efectivo, cheque ni «varios» (0 en todo el histórico), y
+       `TTARJETACREDITO.nFactorRetencion` es 0 en todas: la propina es la
+       bruta. La vista cuenta las mesas pagadas sólo en efectivo (22 en
+       septiembre) para que se sepa cuánto no se ve.
+     - **Los dos granos (#517) los arma la vista**: recibe las filas POR
+       PAGO (`d_pagos`) y, para lo que trae de R2 (el mes anterior, los doce
+       meses), sólo los chips (`_aplicar_chips`), no `_filtrar_items`, que
+       ya dejaría un ítem por fila. Lo fija `test_graficos.py`.
+     - **Pozo común** (a pedido: «por cada mesero, pero también verlo como
+       pozo común»): la propina de cada turno de cada día, en partes iguales
+       entre los meseros que atendieron al menos una mesa en ese turno. Es
+       una regla SUPUESTA: el usuario no dijo cómo se reparte. En
+       septiembre movería S/ 2.579 hacia el mesero más nuevo, que estuvo en
+       los mismos turnos con muchas menos mesas.
+     - **La comparación va hasta la misma HORA** (`hora_de_corte`): el
+       parquet se extrae de madrugada y su último día trae sólo lo cobrado
+       pasada la medianoche. Contra un día entero del mes anterior, la
+       propina salía abajo sin que nada hubiera pasado.
+     - **Lo que costó una medición**: (1) filtrar filas arrastrando las 61
+       columnas del parquet, casi todas texto, tomaba 6 s para doce meses;
+       recortar a las ~17 que se usan ANTES de filtrar lo bajó a 1,6 s. (2)
+       «0 %» y «10 %» en el eje de los tramos: Plotly los leyó como números
+       y dibujó dos barras en un eje lineal (#325); va `type="category"`.
+       (3) Un `st.caption` que empieza con «*» es una lista de Markdown. (4)
+       La planilla desliza de costado y su barra tapaba la fila «Total del
+       día»: el alto suma `_BARRA_H`.
+     - **Tres tarjetas en una sección**: la tabla (su fecha es la del
+       reporte, `categoria=None`, como el Resumen y el Mix), la planilla con
+       el Excel (hojas Resumen, Planilla, Por turno y Pagos con propina) y
+       el detalle del mesero que se elige con un clic. La tabla es
+       `st.dataframe` y no AgGrid: son cinco filas (#540).
+
+     (2026-09-27.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44468,7 +44528,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#552**; la próxima toma el número siguiente.
+> última regla es la **#553**; la próxima toma el número siguiente.
 
 >
 
