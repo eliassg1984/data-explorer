@@ -18,6 +18,8 @@ uno, y la vela clickeada quedaba marcada sin que la tabla de la semana la
 siguiera. Ver regla #388.
 """
 
+import math
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -588,6 +590,74 @@ def _vol_candidatos(d, col_prod, col_punit, col_fecha, col_valor, semanas,
         cierres = _fila_cierres(tabla, prod, len(semanas))
         out[prod] = {"cierres": cierres, "volatilidad": _vol_score(cierres)}
     return out
+
+
+def _vol_fuera_del_ranking(d, d_rec, q, dentro, col_prod, col_valor,
+                           n_semanas, min_gasto=MIN_GASTO,
+                           min_cobertura=MIN_COBERTURA):
+    """Los insumos que el BUSCADOR encuentra y el ranking deja afuera, con el
+    motivo escrito. {producto: {"gasto", "semanas", "motivo"}}, ordenado por
+    lo gastado en la ventana entera (`d`), de mayor a menor.
+
+    2026-09-26, a pedido: «que el buscador encuentre cualquier insumo». El
+    ranking responde «¿qué se está moviendo?» y para eso pide compras
+    regulares y un gasto que importe (`_vol_candidatos`); el buscador
+    responde «¿cómo viene el precio de ESTO?», y ahí un piso no tiene nada
+    que hacer: «Chocolate 72% Cacao» compró 2 de 5 semanas por S/ 364 y no
+    había forma de ver su serie. Los encontrados van DEBAJO del ranking y
+    marcados, así el orden de arriba sigue diciendo lo mismo.
+
+    `gasto` y `semanas` se miden sobre `d_rec` —las semanas que mide el
+    puntaje— y con la MISMA cuenta que `_vol_candidatos`, porque son la
+    respuesta a «¿por qué no está?»: tienen que ser los números que el filtro
+    miró. `dentro` son los que sí entraron (no se repiten)."""
+    if not q or d is None or d.empty:
+        return {}
+    hallados = [p for p in d[col_prod].unique()
+                if q in str(p).lower() and p not in dentro]
+    if not hallados:
+        return {}
+    rec = d_rec[d_rec[col_prod].isin(hallados)].groupby(col_prod)
+    gasto_rec = rec[col_valor].sum()
+    semanas_rec = rec["_semana"].nunique()
+    gasto_ventana = d[d[col_prod].isin(hallados)].groupby(col_prod)[col_valor].sum()
+    # El mismo umbral que `_vol_candidatos` (`>= min_cobertura * n`), escrito
+    # como un entero: «4 de 5», no «3,75».
+    pide = math.ceil(min_cobertura * n_semanas - 1e-9)
+    out = {}
+    for p in sorted(hallados, key=lambda p: (-float(gasto_ventana.get(p, 0.0)),
+                                             str(p))):
+        gasto = float(gasto_rec.get(p, 0.0))
+        k = int(semanas_rec.get(p, 0))
+        if k == 0:
+            motivo = f"sin compras en las últimas {n_semanas} semanas"
+        else:
+            partes = []
+            if k < pide:
+                partes.append(f"compró {k} de las {n_semanas} semanas "
+                              f"(pide {pide})")
+            if gasto < min_gasto:
+                partes.append(f"S/ {gasto:,.0f} de gasto "
+                              f"(pide S/ {min_gasto:,.0f})")
+            motivo = " y ".join(partes)
+        out[p] = {"gasto": gasto, "semanas": k, "motivo": motivo}
+    return out
+
+
+def _vol_sin_coincidencias(q, d_full, col_prod, opcion):
+    """El aviso de una búsqueda que no encontró nada en la ventana. Distingue
+    «no existe» de «existe, pero no se compró en esta ventana»: desde que el
+    buscador encuentra cualquier insumo, lo segundo es lo único que puede
+    esconder a uno que sí se compró, y se arregla con el desplegable."""
+    if d_full is not None and col_prod in d_full.columns and (
+            d_full[col_prod].astype(str).str.lower()
+            .str.contains(q, regex=False).any()):
+        ventana = periodo.etiqueta(opcion) or "el rango elegido"
+        if ventana.startswith("últimos"):
+            ventana = f"los {ventana}"
+        return (f"Ningún insumo con «{q}» se compró en {ventana}. Probá una "
+                f"ventana más amplia con el selector del título.")
+    return f"Ningún insumo coincide con «{q}»."
 
 
 def _vol_detalle_producto(d, prod, col_prod, col_punit, col_fecha, col_prov,
@@ -1208,17 +1278,32 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
 
         candidatos = _vol_candidatos(dd_rec, col_prod, col_punit, col_fecha,
                                      col_valor, semanas)
-        if not candidatos:
-            c_tabla.info(f"Ningún insumo tiene compras regulares (≥75% de las "
-                    f"semanas) y gasto relevante (≥ S/ 400) en "
-                    f"{periodo.etiqueta(_op_vol) or 'el rango elegido'}.")
+        # EL BUSCADOR ENCUENTRA CUALQUIER INSUMO (2026-09-26, a pedido): los
+        # que el ranking deja afuera y coinciden con la búsqueda se suman
+        # DEBAJO, marcados y con el motivo (`_vol_fuera_del_ranking`). No
+        # entran en `ranking` ni en `puesto`: el orden de arriba sigue
+        # midiendo lo mismo. Sin búsqueda no hay ninguno.
+        fuera = _vol_fuera_del_ranking(dd, dd_rec, _q, candidatos, col_prod,
+                                       col_valor, len(semanas))
+        if not candidatos and not fuera:
+            c_tabla.info(_vol_sin_coincidencias(_q, d_full, col_prod, _op_vol)
+                         if _q else
+                         f"Ningún insumo tiene compras regulares (≥75% de las "
+                         f"semanas) y gasto relevante (≥ S/ 400) en "
+                         f"{periodo.etiqueta(_op_vol) or 'el rango elegido'}.")
             return
+        # Los dos juntos para todo lo que es POR INSUMO (la serie, la
+        # dispersión, la fila de la grilla, las velas); separados para lo
+        # que es del RANKING (el orden y el puesto). Los dicts son los mismos
+        # objetos: completar uno completa el otro.
+        info_de = {**candidatos,
+                   **{p: {"fuera": m} for p, m in fuera.items()}}
 
         # El puntaje se mide sobre la MISMA serie que dibuja la grilla: la
         # de toda la ventana, recortada a sus últimas `MAX_SEMANAS`. Ver
         # `_vol_cierres_semanales` para lo que cambia (una primera semana
         # sin compra ya no arranca a ciegas).
-        cierres_hist = _vol_cierres_semanales(dd, list(candidatos), col_prod,
+        cierres_hist = _vol_cierres_semanales(dd, list(info_de), col_prod,
                                               col_punit, col_fecha, semanas_hist)
         # La DISPERSIÓN se mide sobre las compras de las MISMAS semanas que
         # el puntaje (`dd_rec`, las `MAX_SEMANAS` que miden), no sobre la
@@ -1228,7 +1313,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # «Volatilidad».
         _precios_rec = dd_rec.groupby(col_prod, sort=False)[col_punit]
         dispersion = {p: _vol_dispersion(g.tolist()) for p, g in _precios_rec}
-        for prod, info in candidatos.items():
+        for prod, info in info_de.items():
             info["cierres_hist"] = cierres_hist[prod]
             info["volatilidad"] = _vol_score(cierres_hist[prod][-len(semanas):])
             info["dispersion"] = dispersion.get(prod)
@@ -1280,9 +1365,10 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
 
         ranking_vista = [(p, info) for p, info in ranking
                          if not _q or _q in str(p).lower()]
+        ranking_vista += [(p, info_de[p]) for p in fuera]
 
         prod_focus = st.session_state.get("compras_vol_focus")
-        if prod_focus not in {p for p, _ in ranking}:
+        if prod_focus not in info_de:
             prod_focus = None
 
         # ── EL RANKING ARRIBA, A TODO EL ANCHO; EL DRILL ABAJO ───────────
@@ -1316,22 +1402,29 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
         # fila encima, y la grilla recuperó el ancho entero — ver
         # `vol_fila_hdr`, arriba, y la regla #394.)
         if not ranking_vista:
-            c_tabla.info(f"Ningún insumo coincide con «{_q}».")
+            c_tabla.info(_vol_sin_coincidencias(_q, d_full, col_prod, _op_vol))
         else:
             filas = []
             for prod, info in ranking_vista:
                 cierres = info["cierres_hist"]
                 _disp = info["dispersion"]
+                _fuera = info.get("fuera")
+                _puntaje = (f"Volatilidad {info['volatilidad']:.1f}"
+                            + (f" · dispersión {_disp * 100:.0f}%"
+                               if _disp is not None else ""))
                 fila = {"Insumo": _compras_truncar(str(prod), 34),
                         "__insumo_full": str(prod),
                         # El tooltip del nombre: con las columnas ocultas, es
                         # la forma de consultar los puntajes sin prenderlas.
+                        # Al que está fuera del ranking le dice POR QUÉ: la
+                        # marca de la fila sola no lo explica.
                         "__tip_insumo": (
-                            f"{prod}\nVolatilidad {info['volatilidad']:.1f}"
-                            + (f" · dispersión {_disp * 100:.0f}%"
-                               if _disp is not None else "")
-                            + f" · puesto {puesto[prod]} de {len(ranking)}"
-                            f" · {periodo_vol}")}
+                            f"{prod}\n"
+                            + (f"Fuera del ranking: {_fuera['motivo']} "
+                               f"({periodo_vol})\n{_puntaje}" if _fuera else
+                               f"{_puntaje} · puesto {puesto[prod]} de "
+                               f"{len(ranking)} · {periodo_vol}")),
+                        "__fuera": bool(_fuera)}
                 for i, c in enumerate(cols_sem):
                     prev, cur = cierres[i], cierres[i + 1]
                     delta = (None if (prev is None or cur is None or not prev)
@@ -1367,7 +1460,17 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 prod_focus = _clicked
                 st.session_state["compras_vol_focus"] = prod_focus
 
-        prod_sel = prod_focus if prod_focus is not None else ranking[0][0]
+        # CON BÚSQUEDA, EL DETALLE SIGUE A LO QUE SE VE: escribir «chocolate»
+        # tiene que mostrar las velas del chocolate, no las del insumo que
+        # se clickeó antes y quedó fuera de la lista. Sin búsqueda, como
+        # siempre: el clickeado, o el primero del ranking.
+        _visibles = [p for p, _ in ranking_vista]
+        if prod_focus is not None and (not _q or prod_focus in _visibles):
+            prod_sel = prod_focus
+        elif _q and _visibles:
+            prod_sel = _visibles[0]
+        else:
+            prod_sel = ranking[0][0] if ranking else _visibles[0]
 
         if st.session_state.get("compras_vol_prod_prev") != prod_sel:
             st.session_state["compras_vol_prod_prev"] = prod_sel
@@ -1382,11 +1485,19 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
             f"Volatilidad de las **últimas {n_sem} semanas** "
             f"({periodo_vol}), o sea sus {n_sem - 1} variaciones · sólo "
             "insumos con ≥ S/ 400 de gasto y compras en al menos el 75% de "
-            "esas semanas.")
+            "esas semanas. El buscador encuentra también a los demás: salen "
+            "debajo, marcados «fuera del ranking», y el motivo se lee "
+            "pasando el mouse sobre el nombre.")
 
-        unidad_raw = str(dd_rec.loc[dd_rec[col_prod] == prod_sel, col_um].mode().iat[0]) \
-            if col_um and col_um in dd_rec.columns and not dd_rec.loc[dd_rec[col_prod] == prod_sel, col_um].empty \
-            else "kg"
+        # La unidad, de las semanas que miden y, si el insumo no compró en
+        # ellas (uno fuera del ranking), de la ventana entera.
+        unidad_raw = "kg"
+        if col_um and col_um in dd.columns:
+            for _base in (dd_rec, dd):
+                _um = _base.loc[_base[col_prod] == prod_sel, col_um].dropna()
+                if not _um.empty:
+                    unidad_raw = str(_um.mode().iat[0])
+                    break
         # El mapa vive en `_comun.py` desde el 2026-09-13: «Vs año pasado»
         # también escribe unidades, y dos copias se desincronizan.
         unidad = unidad_corta(unidad_raw)
@@ -1706,7 +1817,7 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
                 cierres = [w["c"] for w in weeks[_i_mide:]]
                 precio_actual = cierres[-1]
                 cambio_total = ((cierres[-1] - cierres[0]) / cierres[0] * 100) if cierres[0] else 0.0
-                vol_total = candidatos[prod_sel]["volatilidad"]
+                vol_total = info_de[prod_sel]["volatilidad"]
                 color_cambio = ERROR if cambio_total > 0.05 else (EXITO if cambio_total < -0.05 else GRIS_TEXTO)
                 # EL SIGNO SE CALLA CUANDO REDONDEA A CERO, igual que el `_FMT_PCT`
                 # de la grilla de arriba: `cierres[-1]` y `cierres[0]` pueden diferir

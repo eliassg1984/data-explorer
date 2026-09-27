@@ -663,6 +663,49 @@ def _pruebas_puras():
     check("_vol_score una sola semana", _vol._vol_score([100]), 0.0)
     check("_vol_score vacía", _vol._vol_score([]), 0.0)
 
+    # ── El buscador encuentra cualquier insumo (2026-09-26) ─────────────
+    # Cinco semanas que miden; «Choco 72» compró 2 de 5 por S/ 364 (el caso
+    # real de «Chocolate 72% Cacao»), «Choco 60» 4 de 5 pero poco gasto,
+    # «Choco blanco» sólo antes de las cinco, y «Limón» sí entra al ranking.
+    _sem = list(pd.date_range("2026-08-24", periods=5, freq="7D"))
+    _vieja = pd.Timestamp("2026-06-29")
+    _fx = pd.DataFrame([
+        ("Choco 72", _sem[2], 161.0), ("Choco 72", _sem[2], 122.0),
+        ("Choco 72", _sem[3], 81.0), ("Choco 72", _vieja, 900.0),
+        ("Choco 60", _sem[0], 50.0), ("Choco 60", _sem[1], 50.0),
+        ("Choco 60", _sem[2], 50.0), ("Choco 60", _sem[3], 50.0),
+        ("Choco blanco", _vieja, 97.0),
+        ("Limón", _sem[0], 500.0),
+    ], columns=["P", "_semana", "V"])
+    _fx_rec = _fx[_fx["_semana"].isin(_sem)]
+    _fu = _vol._vol_fuera_del_ranking(_fx, _fx_rec, "choco", {"Limón": {}},
+                                      "P", "V", 5)
+    check("_vol_fuera_del_ranking: encuentra los tres que no entran",
+          sorted(_fu), ["Choco 60", "Choco 72", "Choco blanco"])
+    check("_vol_fuera_del_ranking: ordena por lo gastado en la VENTANA",
+          list(_fu), ["Choco 72", "Choco 60", "Choco blanco"])
+    check("_vol_fuera_del_ranking: los números son los que miró el filtro",
+          (_fu["Choco 72"]["semanas"], _fu["Choco 72"]["gasto"]), (2, 364.0))
+    check("_vol_fuera_del_ranking: el motivo nombra los dos pisos",
+          _fu["Choco 72"]["motivo"],
+          "compró 2 de las 5 semanas (pide 4) y S/ 364 de gasto (pide S/ 400)")
+    check("_vol_fuera_del_ranking: sólo el piso que no cumple",
+          _fu["Choco 60"]["motivo"], "S/ 200 de gasto (pide S/ 400)")
+    check("_vol_fuera_del_ranking: sin compras en las que miden",
+          _fu["Choco blanco"]["motivo"], "sin compras en las últimas 5 semanas")
+    check("_vol_fuera_del_ranking: no repite a los del ranking",
+          list(_vol._vol_fuera_del_ranking(_fx, _fx_rec, "lim", {"Limón": {}},
+                                           "P", "V", 5)), [])
+    check("_vol_fuera_del_ranking: sin búsqueda, nadie",
+          _vol._vol_fuera_del_ranking(_fx, _fx_rec, "", {}, "P", "V", 5), {})
+    check("_vol_sin_coincidencias: existe fuera de la ventana",
+          _vol._vol_sin_coincidencias("choco", _fx, "P", "12m")
+          .startswith("Ningún insumo con «choco» se compró en los últimos 12 "
+                      "meses."), True)
+    check("_vol_sin_coincidencias: no existe",
+          _vol._vol_sin_coincidencias("pato", _fx, "P", "12m"),
+          "Ningún insumo coincide con «pato».")
+
     # ── El grano COMPRA (2026-09-20, regla #478) ────────────────────────
     from tema import PALETA_SERIES
     from graficos import alturas

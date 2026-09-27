@@ -502,6 +502,24 @@ que se distingan de la historia que se ve al deslizar
 (2026-09-12, a pedido, después de «¿de dónde sale el 10 Ago?»). Qué columna
 lleva la marca lo decide `volatilidad.py` (`mide` en `cols_sem`)."""
 
+_CLASE_FILA_FUERA = "vol-fila-fuera"
+"""Fila de un insumo que el BUSCADOR encontró y el ranking deja afuera
+(2026-09-26: «que el buscador encuentre cualquier insumo»). La decide
+Python (`__fuera`, columna oculta) y la pone `rowClassRules` y no
+`getRowClass`, que no quita la clase al refrescar la fila (regla #441): la
+grilla conserva su key mientras se escribe en el buscador."""
+
+_ES_FUERA = JsCode(
+    "function(p){ return !!(p.data && p.data.__fuera === true); }")
+
+_ETIQUETA_FUERA = "fuera del ranking"
+_ANCHO_ETIQUETA_FUERA = 84
+"""Ancho de la etiqueta, en px. Fijo y no del texto, porque la celda le
+reserva ese lugar con `padding-right` antes de saber cuánto mide. Medido
+en la grilla: el texto son 78px (10px, peso 500); con 3 de aire por lado
+y la etiqueta a 5 del borde, al nombre le quedan 132px, y ahí entra
+«Chocolate 72% Cacao» (127) entero. Con 92 se cortaba por 6px."""
+
 _PASO_NAV = 4
 """Cuántas semanas corre cada flecha ‹ › de la cabecera de «Insumo». Cuatro
 es lo que se lee de un vistazo en la grilla a todo el ancho (entran ~8), así
@@ -620,7 +638,10 @@ def _style_vol(max_vol):
     return JsCode(f"""
         function(params) {{
             if (params.value === null || params.value === undefined) return {{}};
-            var pct = Math.round(Number(params.value) / {max_vol} * 100);
+            // Tope en 100: una fila fuera del ranking puede pasarse del
+            // máximo contra el que se mide (ver `_escala`).
+            var pct = Math.min(100,
+                Math.round(Number(params.value) / {max_vol} * 100));
             return {{
                 backgroundColor: '{BLANCO}',
                 backgroundImage: 'linear-gradient(90deg, {ACENTO} ' + pct
@@ -721,6 +742,26 @@ _AL_MONTAR = JsCode("""
                 if (f !== ultima) { ultima = f; setTimeout(alFinal, 0); }
             });
         } catch (e) {}
+        // Gemela de la de arriba, para las FILAS: una búsqueda nueva es una
+        // lista nueva y abre en la semana más reciente.
+        var insumos = function () {
+            var n = [];
+            api.forEachNode(function (r) {
+                n.push(r.data ? r.data['__insumo_full'] : '');
+            });
+            return n.sort().join('|');
+        };
+        var filas = insumos();
+        try {
+            api.addEventListener('rowDataUpdated', function () {
+                var f = insumos();
+                if (f !== filas) {
+                    filas = f;
+                    setTimeout(alFinal, 0);
+                    setTimeout(alFinal, 250);
+                }
+            });
+        } catch (e) {}
         setTimeout(function () { ajustar(); alFinal(); }, 0);
     }
 """.replace("__VISIBLES__", str(_SEMANAS_A_LA_VISTA))
@@ -744,6 +785,15 @@ de las columnas del centro), vuelve a la más reciente — si no, al pasar de
 Rango a 12m se abría en la más vieja. Prender o apagar «Volatilidad» no
 cambia la firma (va fijada, no es del centro), así que no le roba al
 usuario la semana a la que había ido.
+
+LO MISMO CON LAS FILAS (2026-09-26), desde que el buscador encuentra
+cualquier insumo: cada búsqueda dejaba la grilla abierta en mayo en vez de
+en la semana de hoy (medido: `scrollLeft` 5811 de 8864, con «queso» y con
+«chirimoya» — ya pasaba antes, con el buscador que sólo filtraba el
+ranking). La firma de filas son los nombres de los insumos, ORDENADOS:
+un clic en una fila no la cambia (los datos vuelven iguales) y prender
+«Dispersión» tampoco (reordena, no cambia quiénes están), así que ninguno
+de los dos le roba al usuario la semana vieja que estaba mirando.
 
 LAS FLECHAS se esconden con una clase en el `<body>` del iframe y no
 tocando los botones: la cabecera de «Insumo» se vuelve a construir cuando
@@ -830,6 +880,17 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
                         headerComponent=_HDR_INSUMO)
     gb.configure_column("__insumo_full", hide=True)
     gb.configure_column("__tip_insumo", hide=True)
+    if "__fuera" in tv.columns:
+        gb.configure_column("__fuera", hide=True)
+    # Las barras de «Volatilidad» y «Dispersión» se miden contra el máximo
+    # del RANKING, no de toda la tabla: un insumo fuera del ranking que
+    # encontró el buscador suele tener una serie rala y un puntaje enorme
+    # («Chocolate 72% Cacao»: 257,8, por dos compras con la unidad mal
+    # cargada), y medidas contra él las barras de arriba quedarían en cero.
+    # Si TODAS son de afuera, contra ellas mismas.
+    _escala = tv
+    if "__fuera" in tv.columns and (~tv["__fuera"].astype(bool)).any():
+        _escala = tv[~tv["__fuera"].astype(bool)]
 
     # Las columnas-semana comparten TODO su código por un `columnType`: el
     # renderer, el formato, el estilo y el tooltip viajan una vez en
@@ -848,7 +909,8 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
         gb.configure_column(f"__prev_{i}", hide=True)
         gb.configure_column(f"__cur_{i}", hide=True)
 
-    max_vol = (max((float(v) for v in tv["Volatilidad"]), default=0.0) or 1.0)
+    max_vol = (max((float(v) for v in _escala["Volatilidad"]), default=0.0)
+               or 1.0)
     gb.configure_column(
         "Volatilidad", type=["numericColumn"], pinned="right",
         hide=not ver_vol, width=_ANCHO_COL_VOL, minWidth=_ANCHO_COL_VOL,
@@ -867,7 +929,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     # Que se vean iguales es deliberado: son dos lecturas del mismo insumo
     # en el mismo período, y lo único que las distingue tiene que ser el
     # título y el número, no el estilo.
-    _disp = [float(v) for v in tv["Dispersión"] if v is not None
+    _disp = [float(v) for v in _escala["Dispersión"] if v is not None
              and not pd.isna(v)]
     max_disp = max(_disp, default=0.0) or 1.0
     gb.configure_column(
@@ -891,6 +953,7 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     gb.configure_grid_options(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         onGridReady=_AL_MONTAR,
+        rowClassRules={_CLASE_FILA_FUERA: _ES_FUERA},
         columnTypes={"semana": {
             "width": _ANCHO_COL_SEMANA, "minWidth": _MIN_ANCHO_COL_SEMANA,
             "headerClass": _CLASE_HDR_COMPACTA,
@@ -979,6 +1042,32 @@ def renderizar_ranking_volatilidad(tv, cols_sem, altura, key, ver_vol=False,
     # Sin nada que deslizar, sin flechas (la clase la pone `_AL_MONTAR`).
     custom_css[".vol-sin-scroll .vol-nav"] = {
         "visibility": "hidden !important",
+    }
+    # LA FILA FUERA DEL RANKING: el nombre en gris y una etiqueta a la
+    # derecha de su celda. La etiqueta es un `::after` anclado a la celda
+    # (las celdas de AG Grid ya van `position: absolute`), y el `padding`
+    # le hace lugar para que el nombre largo se corte con «…» antes de
+    # llegar a ella en vez de pasarle por debajo.
+    _celda_fuera = f".ag-row.{_CLASE_FILA_FUERA} .ag-cell[col-id='Insumo']"
+    custom_css[_celda_fuera] = {
+        "color": f"{GRIS_TEXTO} !important",
+        "padding-right": f"{_ANCHO_ETIQUETA_FUERA + 9}px !important",
+    }
+    custom_css[f"{_celda_fuera}::after"] = {
+        "content": f"'{_ETIQUETA_FUERA}'",
+        "position": "absolute",
+        "right": "5px",
+        "top": "50%",
+        "transform": "translateY(-50%)",
+        "width": f"{_ANCHO_ETIQUETA_FUERA}px",
+        "box-sizing": "border-box",
+        "text-align": "center",
+        "font-size": "10px",
+        "line-height": "16px",
+        "font-weight": "500",
+        "color": f"{GRIS_TEXTO}",
+        "background": f"{GRIS_LINEA}",
+        "border-radius": "8px",
     }
     # QUE LA GRILLA OCUPE SU COLUMNA, no el ancho que tenía al renderizarse.
     # `#gridContainer` es el div que st_aggrid dibuja DENTRO del iframe con el

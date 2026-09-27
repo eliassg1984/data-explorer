@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-548 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+549 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (188)
 
@@ -302,7 +302,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 
-**Plotly y figuras** (101)
+**Plotly y figuras** (102)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -405,6 +405,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#525** — El Resumen de Ventas muestra lo que la definición deja afuera: una subvista «Cuadre», los KPI…
 - **#530** — «Por hora» ampliado: la hora del PEDIDO, qué platos se piden a qué hora, y la diferencia…
 - **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
+- **#549** — El buscador de Volatilidad encuentra CUALQUIER insumo; el ranking sigue filtrado. Los de…
 
 **AgGrid y tablas** (87)
 
@@ -832,7 +833,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (118)
+**Decisiones de diseño y UX** (119)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -952,6 +953,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#546** — «Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO período, con la cuenta…
 - **#548** — «Carta costeada»: la carta ENTERA con su % de costo, combos incluidos. El costo de un combo…
+- **#549** — El buscador de Volatilidad encuentra CUALQUIER insumo; el ranking sigue filtrado. Los de…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44178,6 +44180,46 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-26.)
 
+549. **El buscador de Volatilidad encuentra CUALQUIER insumo; el ranking
+     sigue filtrado. Los de afuera van debajo, marcados, y no cuentan para
+     el orden ni para la escala de las barras.**
+     2026-09-26, a pedido, tras «no figura el chocolate 70 %; ¿no deberían
+     figurar todos, para ver la evolución del precio de cualquier insumo?».
+     El ranking pide compras en 4 de las últimas 5 semanas y S/ 400 de
+     gasto en ellas (`_vol_candidatos`), y el buscador sólo filtraba ESE
+     ranking: «Chocolate 72% Cacao» (2 de 5 semanas, S/ 364) no se podía
+     ver de ninguna forma, y ampliar la fecha no servía porque el filtro
+     mira siempre las últimas 5 semanas. Quitar los pisos no era la
+     respuesta: el mismo chocolate tiene compras a S/ 80,51 y a S/ 289 el
+     kilo (unidades mal cargadas, casi seguro) y encabezaría el ranking por
+     ruido.
+
+     - **`_vol_fuera_del_ranking`** devuelve los que coinciden con la
+       búsqueda y no entraron, con el MOTIVO escrito con los números que
+       miró el filtro («compró 2 de las 5 semanas (pide 4) y S/ 364 de
+       gasto (pide S/ 400)»), ordenados por lo gastado en la ventana. Sin
+       búsqueda no hay ninguno. El motivo va en el tooltip del nombre; la
+       fila lleva el nombre en gris y la etiqueta «fuera del ranking»
+       (`vol-fila-fuera`, por `rowClassRules`: #441).
+     - **Las barras de «Volatilidad» y «Dispersión» se miden contra el
+       máximo del RANKING**, con tope en 100 %: el chocolate puntúa 257,8 y
+       medidas contra él las de arriba quedarían casi en cero.
+     - **Con búsqueda, el detalle sigue a lo que se ve**: si el insumo que
+       se clickeó antes no está en la lista filtrada, las velas pasan al
+       primero de la lista. Sin eso, escribir «chocolate» dejaba abajo el
+       insumo de antes.
+     - **Una búsqueda nueva vuelve a la semana más reciente** (ya pasaba
+       antes con el buscador viejo: la grilla quedaba en mayo). Lo hace
+       `_AL_MONTAR` con `rowDataUpdated` y una firma de los insumos
+       ORDENADA: ni un clic ni prender «Dispersión» (que reordena) la
+       cambian, así que no le roban al usuario la semana vieja que miraba.
+     - **Sin coincidencias en la ventana, el aviso distingue** «no existe»
+       de «existe pero no se compró en los últimos 12 meses»
+       (`_vol_sin_coincidencias`, mirando `d_full`): lo segundo se arregla
+       con el desplegable.
+
+     (2026-09-26.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44190,7 +44232,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#548**; la próxima toma el número siguiente.
+> última regla es la **#549**; la próxima toma el número siguiente.
 
 >
 
