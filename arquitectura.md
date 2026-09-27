@@ -726,7 +726,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#546** — «Análisis de platos» lleva el % de costo de cada plato: el del ÚLTIMO período, con la cuenta…
 - **#548** — «Carta costeada»: la carta ENTERA con su % de costo, combos incluidos. El costo de un combo…
 
-**SUNAT y SIRE** (43)
+**SUNAT y SIRE** (44)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -768,6 +768,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#326** — El default del rango se anclaba al tope del parquet del REPORTE, aunque la vista mirara OTRO…
 - **#329** — Una guarda de "no hay filas" puesta ANTES del rail apaga vistas que no dependen de esas…
 - **#333** — Un filtro sobre una vista que CRUZA dos fuentes se aplica al cruce, no a una de las dos…
+- **#457** — Una key que es CROMO en ocho reportes y CONTROL en una tarjeta no puede compartir el CSS de…
 - **#458** — El espejo que salva el rango de la recolección de Streamlit no sobrevive a un rerun de…
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
@@ -38411,6 +38412,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      **Regla general:** antes de esconder por CSS una key de un widget
      compartido, `grep` quién más la dibuja. Si un `render()` se llama de
      dos sitios, el selector tiene que nombrar el CONTENEDOR, no la key.
+
+     *(2026-09-27: quedaba una más, anterior a esta regla:
+     `.st-key-fecha_ajuste_pill { display: none !important; }` a secas, en
+     `graficos/compras/_css_proveedor.py`, del 2026-08-23, para esconder
+     el pill de la franja en Compras › Proveedor. Ese pill no existe en
+     Compras desde el 2026-09-06, así que la regla no escondía nada salvo
+     el de SUNAT. Y lo escondía **mientras corre la vista**: Streamlit
+     deja el `<style>` de Proveedor en la página, marcado como viejo,
+     hasta que TERMINA la corrida siguiente. Medido a 1366×768 en modo
+     demo, yendo de «Por Proveedor» a «Documentos SUNAT»: el pill de la
+     tarjeta sale `display: none`, 0×0, desde 1,45 s hasta 2,58 s, y
+     aparece cuando el `<style>` se va. Con datos reales y el SIRE en vivo
+     el hueco dura lo que tarde la vista. Borrada, no acotada a
+     `fila_ajuste_top`: no queda nada a lo que acotarla. Es la #526 por
+     otro camino: el CSS de una sección sobrevive a la sección.)*
 
      (2026-09-18.)
 

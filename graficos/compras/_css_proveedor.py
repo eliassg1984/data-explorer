@@ -2266,18 +2266,14 @@ CSS = """        <style>
             }
         }
 
-        /* 2026-08-23, a pedido ("eliminemos el widget de fecha... que ya
-           no sea visible"): el pill de fecha de la franja superior
-           (fecha_ajuste_pill, franja_fecha.py) se oculta SOLO en este
-           drill — este bloque se inyecta nada más que cuando el drill de
-           Proveedor se dibuja (ver el docstring del módulo), así que en
-           cualquier otra vista/pestaña de Compras el pill sigue como
-           siempre. Se oculta con CSS, no se deja de LLAMAR
-           `franja_fecha.render()`: el date_input de adentro es el DUEÑO
-           del rango (su key ES la clave canónica), y un widget que deja
-           de renderizarse pierde su estado (CLAUDE.md § Streamlit). El
-           rango se sigue pudiendo cambiar desde cualquier otra vista. */
-        .st-key-fecha_ajuste_pill { display: none !important; }
+        /* 2026-09-27: se fue el `.st-key-fecha_ajuste_pill { display: none }`
+           del 2026-08-23, que escondía el pill de fecha de la franja en este
+           drill. Ese pill no existe en Compras desde el 2026-09-06 (`app.py`
+           no llama a `franja_fecha.render()` en Compras), y la regla, sin
+           contenedor, apagaba el ÚNICO que queda: el de la tarjeta de
+           Documentos SUNAT, que es la misma key. Este CSS sigue en la
+           página mientras corre la vista siguiente (Streamlit borra lo
+           viejo al TERMINAR la corrida). Ver `arquitectura.md` regla #457. */
 
         /* ── El selector de fecha del Ranking de PRODUCTOS ───────────────
            2026-08-26, a pedido ("el mismo selector de fecha que la tabla
