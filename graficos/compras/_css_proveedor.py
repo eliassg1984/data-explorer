@@ -106,67 +106,14 @@ CSS = """        <style>
             flex: 0 0 auto !important;
             width: auto !important;
         }
-        /* Nombre de la vista ("Proveedor") PRIMERO en la franja, pegado a
-           la izquierda y ANTES del pill de fecha — igual que en Compras >
-           Familia (2da vuelta: nacio a la derecha del pill y se movio a
-           pedido). El pill y los chips se corren para hacerle sitio.
-           Cadena de numeros acoplada, medida en vivo:
-              85 = el left original del pill -> ahi va ahora el titulo.
-             100 = ancho reservado para la palabra "Proveedor" a 14px/700.
-             197 = 85 + 100 + 12 de aire -> nuevo left del PILL.
-             413 = 197 + 210 (ancho fijo del pill) + 6 -> left de los chips.
-           2026-08-18: la cadena entera bajo 90px al retirarse el rail
-           izquierdo (hoy franja superior). Los umbrales de @media NO se
-           tocaron: son anchos de viewport, no coordenadas.
-           Mover uno descoloca la fila entera. Ojo: el 503 de los chips es
-           el MISMO que cuando el titulo estaba a la derecha del pill — el
-           ancho total ocupado no cambia, solo el orden — asi que el umbral
-           de abajo tampoco se movio:
-             413 + 492 (chips) + 12 + 165 (prov_pop) + 163 = 1245, pero el
-             umbral se DEJA en 1340: bajarlo es una decision de diseno
-             aparte (mas ancho util no significa que el titulo se lea bien)
-             y este cambio no la toma.
-           Los DOS bloques (este y el de cp_prov_pop_float) tienen que entrar
-           o salir juntos, si no el titulo se superpondria con unos chips
-           que no se corrieron: por eso el `right` de cp_prov_pop_float se
-           repite aca, para que en la banda 1230-1339 (titulo oculto, pill
-           y chips sin correr) siga con su propia cuenta, que ahi da. */
-        .st-key-compras_prov_titulo_franja {
-            position: fixed !important;
-            top: calc(var(--nav-top-alto) + 8px) !important;
-            left: var(--rail-der-res) !important;   /* ancla comun de la franja */
-            right: auto !important;
-            bottom: auto !important;
-            width: 100px !important;
-            z-index: 23 !important;
-            margin: 0 !important;
-            display: none !important;   /* oculto por defecto; ver abajo */
-        }
-        @media (min-width: 1340px) {
-            .st-key-compras_prov_titulo_franja { display: block !important; }
-            .st-key-compras_prov_titulo_franja [data-testid="stMarkdownContainer"] p {
-                margin: 0 !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                white-space: nowrap !important;
-                font-size: 14px !important;
-                font-weight: 700 !important;
-                line-height: calc(var(--cab-altura) - 8px) !important;
-                color: var(--text-primary) !important;
-            }
-            /* El pill de fecha cede los 112px que ocupa el titulo delante
-               suyo. Clase TRIPLICADA para ganarle a la regla desktop de
-               estilos/_50_fecha.py, que ya usa la key duplicada (0,2,0),
-               sin depender del orden en que se inyecten los archivos. */
-            .st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill.st-key-fecha_ajuste_pill {
-                left: calc(var(--rail-der-res) + 112px) !important;
-            }
-            /* 2026-08-31: aca los chips recibian un `left` para arrancar
-               despues del pill corrido. El compartimento de filtros se ancla
-               por la DERECHA (`_50_fecha.py`), asi que un `left` lo movia al
-               medio de la franja. El pill de fecha si se sigue corriendo:
-               ese vive a la izquierda y el titulo le come el sitio. */
-        }
+        /* 2026-09-26: se fue el CSS de `compras_prov_titulo_franja` —el
+           nombre de la vista, `position: fixed` en la franja desde 1340px—
+           junto con el `left` + 112px que le corria el pill de fecha para
+           hacerle sitio. Ningun `.py` dibujaba ya ese contenedor, y el pill
+           de la franja no existe en Compras desde el 2026-09-06. Mismo
+           patron que el titulo de Ventas › Comparativo: en una pila, un
+           `fixed` flota sobre las otras secciones. Ver `arquitectura.md`
+           regla #526. */
         /* ── CUADRO DE CONTROL DE PROVEEDORES (reemplaza la leyenda) ──────
            2026-08-16, 3ra vuelta: dejo de FLOTAR sobre el plot y paso a ser
            una COLUMNA propia a su izquierda (st.columns en proveedor.py).

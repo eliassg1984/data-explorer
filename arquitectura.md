@@ -43021,7 +43021,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      no a la vista — en una pila ése es el caso normal, no el raro. Queda
      un resto del mismo patrón sin dueño: `.st-key-compras_prov_titulo_franja`
      en `graficos/compras/_css_proveedor.py` no lo dibuja ningún `.py`, así
-     que hoy no muerde.
+     que hoy no muerde. *(2026-09-26: borrado, con el `left` + 112px que le
+     corría al pill de fecha para hacerle sitio.)*
 
      (2026-09-25.)
 
