@@ -63,7 +63,7 @@ from tema import (ACENTO, AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO,
                   LAVANDA_BORDE, TEXTO_PRINCIPAL)
 from graficos import alturas
 from graficos.base import (_compras_layout, _resolver, preservar_widgets,
-                           selector_fecha_tarjeta)
+                           selector_fecha_tarjeta, una_vez_por_corrida)
 from graficos.ventas_platos import _clic, _fila, _key
 from graficos.ventas_resumen import _con_alpha
 
@@ -729,6 +729,10 @@ def _html_cab(t, t0, anterior):
             + "</div></div>")
 
 
+# ANIDADO: la sección que lo llama (`seccion_perezosa`) es otro fragment,
+# y CLAUDE.md pide la envoltura para que dos clics juntados en una corrida no
+# lo corran dos veces (regla #456; el bug es de Streamlit < 1.62).
+@una_vez_por_corrida
 @st.fragment
 def _ventas_meseros(d_pagos, filtrar_cb=None, firma=None):
     """«Meseros»: las propinas por mesero, su planilla por día y el detalle
