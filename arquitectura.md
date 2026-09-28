@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-556 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+557 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (189)
 
@@ -656,7 +656,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 
-**Datos, R2 y DuckDB** (73)
+**Datos, R2 y DuckDB** (74)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -731,6 +731,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#552** — «Por hora» carga cada panel por la MISMA fecha con que lo ubica: en «Hora del pedido», por la…
 - **#553** — Ventas › Meseros son las PROPINAS por mesero: lo que dan los reportes del POS (Analítico por…
 - **#556** — Recetas y Costos tiene UNA vista de la carta: «Composición del plato» era la Carta costeada…
+- **#557** — El panel de un producto de la Carta costeada tiene «En el tiempo»: el costo con que se…
 
 **SUNAT y SIRE** (44)
 
@@ -842,7 +843,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (124)
+**Decisiones de diseño y UX** (125)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -968,6 +969,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#553** — Ventas › Meseros son las PROPINAS por mesero: lo que dan los reportes del POS (Analítico por…
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 - **#556** — Recetas y Costos tiene UNA vista de la carta: «Composición del plato» era la Carta costeada…
+- **#557** — El panel de un producto de la Carta costeada tiene «En el tiempo»: el costo con que se…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44732,6 +44734,59 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-28.)
 
+557. **El panel de un producto de la Carta costeada tiene «En el tiempo»:
+     el costo con que se vendió, mes a mes, que es la FOTO que el POS guarda
+     en cada pedido. Va en soles por unidad y no en %, y lo vendido sin
+     costo se marca: no es un costo bajo, es un costo que falta.**
+     2026-09-28, a pedido: el paso 3 de la propuesta de la #556 («vamos con
+     el 2 y luego el 3»). Tercera pestaña del panel, junto a la dona y el
+     Sankey (`carta_costeada.py::_dib_costo_en_el_tiempo`).
+
+     - **De dónde sale.** `PRECIO COSTO` de ventas.parquet es
+       `DPEDIDO.nInsumo` en un plato y Σ `CPEDIDO` nCantidad × nInsumo en
+       un combo —cuadrado 629 de 629 días contra el POS (#542)—: el costo
+       de la receta al precio promedio del almacén en el momento del
+       pedido. Es una FOTO, medido sobre el parquet (enero 2025 → setiembre
+       2026): cada mes cambian de costo entre 120 y 230 productos, el 15 %
+       de los producto-día tiene más de un costo, y el último con que se
+       vendió cada plato es el de hoy del POS en 112 de 130. `costo_mensual`
+       lo resume por mes desde `data.venta_por_producto_dia` (#556): Σ costo
+       ÷ Σ unidades que traen costo.
+     - **En soles por unidad, no en %.** El IGV de restaurantes, medido en
+       las ventas (IGV ÷ neto), fue 18 % hasta mayo de 2025, 10 % desde
+       julio y 10,5 % desde marzo de 2026: con el mismo precio de carta el
+       neto subió ~6 % y el % de costo bajó ~2 puntos sin que cambiara
+       ningún costo. Precisa la #514, que ubicaba el cambio en octubre de
+       2025 leyendo `TLOG_MODPRECIO`.
+     - **Lo vendido sin costo.** El POS no corrige la foto: un plato vendido
+       antes de cargarle la receta queda con costo 0 para siempre (S/
+       250.047 de neto desde enero de 2025; Lomo a la Pimienta, julio de
+       2026 entero). Un mes con ALGO sin costo va en ámbar —su costo por
+       unidad es el de las unidades que sí lo traen— y uno vendido ENTERO
+       sin costo no tiene punto: una ✕ en la base lo nombra, porque un
+       hueco sin explicación se lee como un bug.
+     - **Los combos antes de octubre de 2025**: sus platos se registraron
+       entre 8 y 32 % más baratos que sueltos el mismo día (medido el
+       2026-09-26 contra `CPEDIDO`, sin explicación). El gráfico lo avisa en
+       los combos que vendieron antes.
+     - **El eje**: categorías (#448) con los meses de `cortes.MESES_ABR_ES`,
+       un rótulo cada ⌈n/7⌉ —veinte meses en 435px se pisaban—, Y desde
+       cero y la línea punteada del costo de HOY de la carta. Verificado en
+       el navegador con Lomo al Trapo (21 meses, S/ 92,54 → S/ 101,15), Lomo
+       a la Pimienta (julio con la ✕, agosto en ámbar) y la Degustación
+       Sapiens (el aviso de los combos).
+     - **Antes de 2025 hay historia, pero sucia.** El POS tiene costo desde
+       2022, y mayo–junio de 2022 y abril–junio de 2023 traen `nInsumo` de
+       hasta S/ 166.102 por plato: S/ 12,9 millones de costo que no
+       existieron. Desde julio de 2023 no aparece un unitario de miles. Si
+       se extiende la consulta del Sheet, desde enero de 2024.
+
+     Candado: `test_graficos.py::_pruebas_carta_costeada` (un mes por fila,
+     costo ÷ unidades con costo, el mes vendido sin costo sin punto, el mes
+     en castellano).
+
+     (2026-09-28.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44744,7 +44799,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#556**; la próxima toma el número siguiente.
+> última regla es la **#557**; la próxima toma el número siguiente.
 
 >
 

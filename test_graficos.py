@@ -6297,6 +6297,22 @@ def _pruebas_carta_costeada():
     check("los números del producto elegido",
           ("**5** vendidos" in kp, "**40.0 %** de costo" in kp), (True, True))
 
+    # El costo en el tiempo (regla #557): la foto del POS, por mes.
+    cm = cc.costo_mensual(agg, "0000010")
+    check("el costo en el tiempo: un mes por fila, en orden",
+          [str(m) for m in cm["mes"]], ["2026-06", "2026-07", "2026-09"])
+    check("el costo por unidad de cada mes: costo ÷ unidades con costo",
+          [round(v, 6) for v in cm["costo_unit"]], [24.0, 24.0, 24.0])
+    cm2 = cc.costo_mensual(agg, "0000020")
+    check("un mes vendido entero sin costo no tiene costo por unidad",
+          (len(cm2), bool(cm2["costo_unit"].isna().all()),
+           float(cm2["neto_sin_costo"].iloc[0])), (1, True, 290.0))
+    check("un producto sin ventas, vacío",
+          (cc.costo_mensual(agg, "0000099").empty,
+           cc.costo_mensual(None, "0000010").empty), (True, True))
+    check("el mes se escribe en castellano", cc._etiqueta_mes(pd.Period("2026-09")),
+          "set 26")
+
     rv = pd.DataFrame({"COD PLATO": ["0000010", "0000010", "0000030"],
                        "FECH MODIF": pd.to_datetime(["2022-09-23", "2022-09-23",
                                                      "2026-03-12"])})

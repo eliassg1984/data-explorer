@@ -45,20 +45,24 @@ usaba AgGrid sólo para el clic en una fila; `st.dataframe` lo hace con
 """
 
 import hashlib
+import math
 from html import escape
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
+from cortes import MESES_ABR_ES
 from graficos import alturas
-from graficos.base import _card, _resolver
+from graficos.base import _card, _compras_layout, _resolver
 from graficos.recetas_comun import divisor_neto
 from graficos.recetaventa import (
     _dib_sankey_insumo_costo, _dib_torta_costo_utilidad, receta_del_plato,
 )
 from graficos.ventas_mix import pct_costo
-from tema import ADVERTENCIA_TEXTO, ERROR, LAVANDA_FONDO
+from tema import (ACENTO, ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO,
+                  LAVANDA_FONDO)
 from utils import _norm
 
 ARCHIVO = "cartacosteada.parquet"
@@ -283,7 +287,7 @@ def resumen(t, que="productos"):
         return "Sin productos con este filtro."
     vende = "Vendidos" in t.columns
     con = t[~t["SinCosto"]]
-    partes = [f"**{len(t):,}** {que}"]
+    partes = [f"**{len(t):,}** {que[:-1] if len(t) == 1 else que}"]
     if len(con):
         partes.append(f"% de costo mediano **{con['Pct'].median():.1f} %**")
         alto = con[con["Pct"] > _UMBRAL_COSTO_WARN]
@@ -568,10 +572,139 @@ def _descarga(f):
                         "venderlo y no tiene costo.")
 
 
-def _panel(f, df_rv, rango):
+# ─── El costo en el tiempo (regla #557) ───────────────────────────────────
+# La tercera pestaña del panel: con qué costo se vendió el producto, mes a
+# mes. No es otra cuenta del costo: es la FOTO que el POS guarda en cada
+# pedido (`DPEDIDO.nInsumo`, o lo servido de `CPEDIDO` en un combo) —la
+# receta al precio promedio del almacén de ese momento—, que
+# `definicion_venta.por_producto_dia` suma por día. Va en soles por unidad y
+# no en %: el IGV de restaurantes pasó de 18 a 10 % a mitad de 2025 y el %
+# sobre el neto bajó ~2 puntos sin que cambiara ningún costo.
+_COMBO_ANTES = pd.Period("2025-10", freq="M")
+"""Hasta setiembre de 2025 el POS registró los platos de un combo con un
+costo entre 8 y 32 % menor que el mismo plato suelto el mismo día (medido
+el 2026-09-26 contra `CPEDIDO`, sin explicación); desde octubre, igual."""
+
+
+def costo_mensual(agg, cod):
+    """El costo por unidad con que se vendió `cod`, mes a mes: Σ costo ÷ Σ
+    unidades que traen costo. Con las unidades, el neto, el neto vendido sin
+    costo y el % al que se vendió (el `pct_costo` del Mix) de cada mes. Un mes
+    vendido entero sin costo queda con el costo por unidad vacío: sin costo
+    no hay costo por unidad que mostrar. Pura."""
+    cols = ["mes", "unidades", "neto", "costo", "unidades_costeadas",
+            "neto_sin_costo", "costo_unit", "pct"]
+    if agg is None or agg.empty:
+        return pd.DataFrame(columns=cols)
+    a = agg[agg["producto"].astype(str).str.strip() == str(cod).strip()]
+    if a.empty:
+        return pd.DataFrame(columns=cols)
+    a = a.assign(mes=pd.to_datetime(a["dia"]).dt.to_period("M"))
+    g = a.groupby("mes", as_index=False)[
+        ["unidades", "neto", "costo", "unidades_costeadas",
+         "neto_sin_costo"]].sum()
+    g = g[(g["unidades"] > 0) | (g["neto_sin_costo"] > 0)]
+    g["costo_unit"] = g["costo"] / g["unidades_costeadas"].where(
+        g["unidades_costeadas"] > 0)
+    g["pct"] = pct_costo(g["costo"], g["neto"]) * 100
+    return g.reset_index(drop=True)[cols]
+
+
+def _etiqueta_mes(p):
+    return f"{MESES_ABR_ES[p.month - 1]} {p.year % 100:02d}"
+
+
+def _dib_costo_en_el_tiempo(f, agg):
+    """La línea del costo por unidad al vender y, punteado, el de hoy."""
+    g = costo_mensual(agg, f["Cod"])
+    if g.empty:
+        st.info("No se vendió desde enero de 2025, que es desde cuando hay "
+                "ventas en la app: no hay costo al vender que mostrar.")
+        return
+    etq = [_etiqueta_mes(p) for p in g["mes"]]
+    sin = g["neto_sin_costo"] > 0
+
+    def _hover(r):
+        partes = [f"<b>{_etiqueta_mes(r['mes'])}</b>"]
+        if pd.notna(r["costo_unit"]):
+            partes.append(f"S/ {r['costo_unit']:,.2f} por unidad")
+        else:
+            partes.append("vendido sin costo")
+        partes.append(f"{r['unidades']:,.0f} vendidos")
+        if pd.notna(r["pct"]):
+            partes.append(f"al {r['pct']:.1f} % de costo")
+        if r["neto_sin_costo"] > 0:
+            partes.append(f"S/ {r['neto_sin_costo']:,.0f} sin costo")
+        return "<br>".join(partes)
+
+    fig = go.Figure(go.Scatter(
+        x=etq, y=g["costo_unit"], mode="lines+markers", connectgaps=False,
+        line=dict(color=ACENTO, width=2),
+        # Un mes con algo vendido sin costo va en ámbar: su costo por unidad
+        # es el de las unidades que SÍ lo traen, pero en el FoodCost de ese
+        # mes hay neto con costo 0 (regla #556).
+        marker=dict(size=7, color=[ADVERTENCIA if s else ACENTO for s in sin]),
+        text=[_hover(r) for _, r in g.iterrows()],
+        hovertemplate="%{text}<extra></extra>"))
+    # Los meses vendidos ENTEROS sin costo no tienen punto en la línea: se
+    # marcan abajo, para que el hueco diga por qué es un hueco.
+    vacios = g["costo_unit"].isna()
+    minimo = float(g["costo_unit"].min()) if g["costo_unit"].notna().any() else 0.0
+    if vacios.any():
+        fig.add_trace(go.Scatter(
+            x=[e for e, v in zip(etq, vacios) if v],
+            y=[minimo] * int(vacios.sum()), mode="markers",
+            marker=dict(symbol="x-thin", size=9, color=ADVERTENCIA,
+                        line=dict(width=2, color=ADVERTENCIA)),
+            text=[_hover(r) for _, r in g[vacios].iterrows()],
+            hovertemplate="%{text}<extra></extra>"))
+    if not f["SinCosto"]:
+        fig.add_hline(y=float(f["Costo"]), line=dict(color=GRIS_TEXTO, width=1,
+                                                     dash="dot"),
+                      annotation_text=f"hoy S/ {f['Costo']:,.2f}",
+                      annotation_position="top left",
+                      annotation_font=dict(size=10, color=GRIS_TEXTO))
+    _compras_layout(fig, alto=alturas.MINI)
+    # Un rótulo cada tanto: veinte meses en 430px se pisan (y girados comen
+    # alto). Categorías SIEMPRE: «ene 25» en un eje sin tipo lo decide
+    # Plotly (#448).
+    paso = max(1, math.ceil(len(etq) / 7))
+    tope = float(np.nanmax([g["costo_unit"].max(), f["Costo"] or 0.0]))
+    fig.update_layout(showlegend=False, margin=dict(l=6, r=8, t=20, b=6))
+    fig.update_xaxes(type="category", tickangle=0, tickfont=dict(size=10),
+                     tickvals=etq[::paso], ticktext=etq[::paso],
+                     fixedrange=True)
+    fig.update_yaxes(showticklabels=True, tickprefix="S/ ",
+                     tickformat=",.2f" if tope < 20 else ",.0f",
+                     tickfont=dict(size=10), automargin=True, fixedrange=True,
+                     rangemode="tozero")
+    st.plotly_chart(fig, use_container_width=True,
+                    key=f"rec_carta_tiempo_{f['Cod']}",
+                    config={"displaylogo": False, "displayModeBar": False})
+
+    con = g[g["costo_unit"].notna()]
+    if len(con) >= 2:
+        a, b = con.iloc[0], con.iloc[-1]
+        var = (b["costo_unit"] / a["costo_unit"] - 1) * 100 if a["costo_unit"] else 0.0
+        st.caption(f"De S/ {a['costo_unit']:,.2f} ({_etiqueta_mes(a['mes'])}) a "
+                   f"S/ {b['costo_unit']:,.2f} ({_etiqueta_mes(b['mes'])}): "
+                   f"{'+' if var >= 0 else '−'}{abs(var):.1f} %. El costo que "
+                   "guardó el POS al vender, por unidad.")
+    if vacios.any():
+        n = int(vacios.sum())
+        st.caption(f"✕ {n} {'mes vendido' if n == 1 else 'meses vendidos'} "
+                   "sin costo: no hay costo por unidad que dibujar.")
+    if f["Tipo"] == "Combo" and (g["mes"] < _COMBO_ANTES).any():
+        st.caption("Hasta setiembre de 2025 el POS registró los platos de los "
+                   "combos entre 8 y 32 % más baratos que sueltos: esa parte "
+                   "de la línea sale baja.")
+
+
+def _panel(f, df_rv, rango, ventas=None):
     """Debajo de la tabla: el producto elegido, su línea de números, su
-    receta (o lo que descarga) y la dona / el Sankey. Lo que era la parte
-    de abajo de «Composición» (regla #556)."""
+    receta (o lo que descarga) y la dona / el Sankey / su costo en el tiempo.
+    Lo que era la parte de abajo de «Composición» (regla #556), más el costo
+    con que se vendió (regla #557)."""
     cod, nombre = str(f["Cod"]), str(f["Producto"])
     with st.container(border=True, key="rec_card_carta_plato"):
         ruta = " › ".join(x for x in (f["Grupo"], f["Subgrupo"]) if x)
@@ -609,10 +742,12 @@ def _panel(f, df_rv, rango):
                 # un `plotly_events` escondido mide 0 y alterna su alto sin
                 # fin — trababa la página entera (regla #500).
                 vista = st.segmented_control(
-                    "Vista", ["Costo / Utilidad", "Sankey"],
+                    "Vista", ["Costo / Utilidad", "Sankey", "En el tiempo"],
                     default="Costo / Utilidad", key="rec_carta_mini_vista",
                     label_visibility="collapsed")
-                if vista == "Sankey":
+                if vista == "En el tiempo":
+                    _dib_costo_en_el_tiempo(f, ventas)
+                elif vista == "Sankey":
                     if r is None:
                         st.info("Sin receta no hay Sankey: el Sankey reparte "
                                 "el costo entre los insumos de la receta.")
@@ -736,4 +871,4 @@ def render_carta_costeada(df, df_rv=None, ventas=None):
                 pie += " No se pudieron leer las ventas: sin «Vendidos»."
             st.caption(pie)
 
-    _panel(t.iloc[pos], df_rv, rango)
+    _panel(t.iloc[pos], df_rv, rango, ventas)
