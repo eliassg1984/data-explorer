@@ -6969,6 +6969,127 @@ def _pruebas_por_hora_semana_y_desliza():
     return fallos
 
 
+def _pruebas_cabecera_por_hora():
+    """Ventas › Por hora: la cabecera como tabla dinámica (regla #555).
+
+    Lo que no se ve hasta que miente: que una opción que no aplica REBOTE y
+    diga por qué en vez de quedar elegida; que lo elegido sobreviva a que
+    su botonera no se dibuje o no aplique (la sombra); que «Diferencia» se
+    apague sólo cuando no se puede; y que los dos controles que viven en el
+    popover de «Ajustes» no se monten con su default y pisen lo elegido
+    (#467). Sin navegador: se reemplaza `st` por uno de mentira.
+    """
+    import pathlib
+    import types
+
+    from graficos import ventas_horario as _h
+    from graficos import ventas_platos as _vp
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    cabecera por hora · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA cabecera por hora · {nombre}: got={got!r} exp={exp!r}")
+
+    check("los nombres de tabla dinámica",
+          (_h._FILAS, _h._COLS_DIAS, _h._COLS_FILAS, _h._ESCALAS),
+          (("Horas", "Platos", "Grupos"), ("Fecha", "Día de semana"),
+           ("Hora", "Día de semana"), ("Total", "Por día")))
+    check("«Cantidad» se llama «Unidades»", dict(_h._MEDIDAS)["cant"],
+          "Unidades")
+
+    md = _h._motivo_diferencia
+    check("Diferencia con un panel no se puede",
+          "uno solo" in md(1, False, False, "Semana"), True)
+    check("ni en Mes por fecha (el 1 no es el mismo día de semana)",
+          md(2, False, False, "Mes").startswith("En Mes"), True)
+    check("en Mes por día de semana sí", md(2, False, True, "Mes"), "")
+    check("con filas Platos, en Mes también", md(2, True, False, "Mes"), "")
+    check("en Semana sí", md(2, False, False, "Semana"), "")
+
+    # `st` de mentira: el estado es un dict y `st.pills` anota lo que recibe.
+    real, llamadas = _h.st, []
+    falso = types.SimpleNamespace(
+        session_state={},
+        pills=lambda *a, **k: llamadas.append((a, k)))
+    _h.st = falso
+    try:
+        ss = falso.session_state
+        ss["w"] = "Pax"
+        _h._al_elegir("w", "_w", {"Pax": "Pax es del pedido."})
+        check("un toque en lo que no aplica deja el motivo",
+              (ss.get(_h._K_MOTIVO), ss.get("_w")),
+              ("Pax es del pedido.", None))
+        ss.pop(_h._K_MOTIVO)
+        ss["w"] = "Unidades"
+        _h._al_elegir("w", "_w", {"Pax": "x"})
+        check("lo que aplica se guarda en la sombra", ss.get("_w"), "Unidades")
+        ss["w"] = None
+        _h._al_elegir("w", "_w", {})
+        check("soltar la opción no borra lo elegido", ss.get("_w"), "Unidades")
+
+        gris = []
+        ss["_m"] = "Pax"
+        v = _h._pastillas("Valor", ["Venta", "Pax", "Unidades", "Ticket"],
+                          "m", "_m", "Venta", {"Pax": "a", "Ticket": "b"},
+                          gris=gris)
+        check("lo elegido que no aplica se ve como la primera que sí",
+              (v, ss["m"]), ("Venta", "Venta"))
+        check("y la sombra lo recuerda para cuando vuelva a aplicar",
+              ss["_m"], "Pax")
+        check("en gris van las posiciones de lo que no aplica",
+              gris, [("m", [1, 3])])
+        check("la botonera no recibe `default=` (lo pone la sombra)",
+              "default" in llamadas[-1][1], False)
+        v = _h._pastillas("Escala", ["Total", "Por día"], "e", "_e", "Por día",
+                          {"Total": "x", "Por día": "x"}, forzado="Total")
+        check("«forzado» manda aunque las dos estén en gris", v, "Total")
+        ss.pop("_e", None)
+        v = _h._pastillas("Escala", ["Total", "Por día"], "e", "_e", "Por día")
+        check("sin sombra, el default", v, "Por día")
+    finally:
+        _h.st = real
+
+    src = pathlib.Path(_h.__file__).read_text(encoding="utf-8")
+    check("el interruptor de Ajustes lleva su valor en `value=` (#467)",
+          "value=bool(st.session_state.get(_K_RAROS_VALOR, True))" in src,
+          True)
+    check("y Python no le escribe la key",
+          "setdefault(\n                        _K_RAROS" in src
+          or "session_state[_K_RAROS] =" in src, False)
+    vp = pathlib.Path(_vp.__file__).read_text(encoding="utf-8")
+    check("«Ver a qué hora se vende» deja la columna en su sombra",
+          'ss["_vh_op_cols_valor"] = "Hora"' in vp
+          and "Hora" in _h._COLS_FILAS, True)
+
+    from estilos._80_cards import CSS as _css
+    check("los rótulos de la cabecera",
+          all(f'content: "{x}"' in _css
+              for x in ("Filas", "Columnas", "Valor", "Un panel por")), True)
+    check("el rótulo es el ::before y el separador el ::after",
+          ".st-key-vh_op_filas::before" in _css
+          and ".st-key-vh_op_cols::after" in _css, True)
+
+    # «Promedio por día» en el hover sólo si la celda ES un promedio.
+    celdas = pd.DataFrame({"col": [5], "hora": [19], "venta": [100.0],
+                           "cant": [3.0], "desc": [0.0], "pax": [2.0],
+                           "ticket": [50.0], "raro": [0.0]})
+    import datetime as _dt
+    for prom in (True, False):
+        fig = _h._fig_mapa([celdas], [(2026, 9)], "Mes", "venta", [], [19],
+                           ancla=_dt.date(2026, 9, 27), semanal=True,
+                           promedio=prom)
+        hov = [t for t in fig.data
+               if t.type == "scatter" and t.hoverinfo != "skip"]
+        check(f"el hover dice «promedio» sólo si lo es ({prom})",
+              "promedio por día" in hov[0].customdata[0][8], prom)
+    return fallos
+
+
 def _pruebas_movimientos_periodo():
     """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
 
@@ -7532,6 +7653,7 @@ def main():
     fallos += _pruebas_por_hora_filas()
     fallos += _pruebas_ficha_hora()
     fallos += _pruebas_por_hora_semana_y_desliza()
+    fallos += _pruebas_cabecera_por_hora()
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()

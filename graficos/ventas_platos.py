@@ -256,7 +256,9 @@ def _ir_a_hora(nombre):
     scroll va en la corrida siguiente a ésa (ver `_ventas_platos`)."""
     ss = st.session_state
     ss["vh_op_filas"] = "Platos"
-    ss["vh_op_cols"] = "Por hora"
+    # «Por hora» guarda la columna elegida en su sombra y reescribe
+    # el widget desde ahí (`ventas_horario._pastillas`, regla #555).
+    ss["_vh_op_cols_valor"] = "Hora"
     ss["_vh_ficha_pedida"] = nombre
     ss["_vt_pl_ir_hora"] = 1
 

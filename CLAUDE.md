@@ -396,6 +396,11 @@ resto de `graficos/compras/`.
   (`navegacion.py::boton_refresco`) fuerza un rerun completo. Antes de
   poner un `run_every`, preguntarse si tiene algo que mirar. Ver
   `arquitectura.md` regla #474.
+- **Una ayuda (`help=`) en un widget con `label_visibility="collapsed"` no
+  se ve**: el «?» va dentro del rótulo oculto (medido: 0×0 px). Y `st.pills`
+  no apaga una opción suelta: para dejarla en gris y que al tocarla diga por
+  qué, `graficos/ventas_horario.py::_pastillas` (el valor en una sombra, un
+  callback que rebota y el gris por posición). Regla #555.
 - **Un `st.toast` seguido de un `st.rerun()` no se ve NUNCA** (medido): el
   rerun se lo lleva antes de pintarlo. El acuse viaja por `session_state`
   y lo pinta la corrida siguiente. Misma #474.

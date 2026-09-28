@@ -3341,22 +3341,24 @@ CSS = """    /* ================================================================
         flex-wrap: nowrap !important;
     }
     /* Separador colgado de cada grupo a su IZQUIERDA, no por posición: el
-       título es el primero y no lleva. */
+       título es el primero y no lleva, y «Filas» tampoco (abre su fila).
+       Va en `::after` desde la regla #555: el `::before` es del rótulo. */
     div[class*="st-key-vh_grano"],
     div[class*="st-key-vh_medida_mapa"],
-    .st-key-vh_op_hora, .st-key-vh_op_lect,
-    .st-key-vh_op_cols, .st-key-vh_op_esc,
-    .st-key-vh_op_dias, .st-key-vh_raros {
+    .st-key-vh_op_lect,
+    .st-key-vh_op_cols, .st-key-vh_op_esc, .st-key-vh_op_esc_h,
+    .st-key-vh_op_dias, .st-key-vh_ajustes {
         position: relative;
         padding-left: 16px !important;
     }
-    div[class*="st-key-vh_grano"]::before,
-    div[class*="st-key-vh_medida_mapa"]::before,
-    div[class*="st-key-vh_btn_selector"]::before,
-    .st-key-vh_fecha_fila::before,
-    .st-key-vh_op_hora::before, .st-key-vh_op_lect::before,
-    .st-key-vh_op_cols::before, .st-key-vh_op_esc::before,
-    .st-key-vh_op_dias::before, .st-key-vh_raros::before {
+    div[class*="st-key-vh_grano"]::after,
+    div[class*="st-key-vh_medida_mapa"]::after,
+    div[class*="st-key-vh_btn_selector"]::after,
+    .st-key-vh_fecha_fila::after,
+    .st-key-vh_op_lect::after,
+    .st-key-vh_op_cols::after, .st-key-vh_op_esc::after,
+    .st-key-vh_op_esc_h::after,
+    .st-key-vh_op_dias::after, .st-key-vh_ajustes::after {
         content: "";
         position: absolute;
         left: 0;
@@ -4152,6 +4154,64 @@ CSS = """    /* ================================================================
         left: 0;
         z-index: 3;
         background: var(--bg-card);
+    }
+
+    /* =================================================================== */
+    /* LOS RÓTULOS DE LA CABECERA (Ventas › Por hora, regla #555)           */
+    /* La cabecera se lee como una tabla dinámica: FILAS · COLUMNAS ·       */
+    /* VALOR, y UN PANEL POR arriba. El rótulo es el `::before` del         */
+    /* contenedor de la botonera —no un elemento: no cobra gap ni ocupa un  */
+    /* lugar en la fila de columnas—, y para que quede a la IZQUIERDA de    */
+    /* sus opciones el contenedor pasa a fila.                              */
+    /* =================================================================== */
+    div[class*="st-key-vh_grano"],
+    .st-key-vh_op_filas, .st-key-vh_op_cols, .st-key-vh_op_dias,
+    div[class*="st-key-vh_medida_mapa"] {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 9px !important;
+    }
+    div[class*="st-key-vh_grano"]::before,
+    .st-key-vh_op_filas::before, .st-key-vh_op_cols::before,
+    .st-key-vh_op_dias::before,
+    div[class*="st-key-vh_medida_mapa"]::before {
+        flex: none;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        color: var(--text-secondary);
+    }
+    div[class*="st-key-vh_grano"]::before { content: "Un panel por"; }
+    .st-key-vh_op_filas::before { content: "Filas"; }
+    .st-key-vh_op_cols::before, .st-key-vh_op_dias::before {
+        content: "Columnas";
+    }
+    div[class*="st-key-vh_medida_mapa"]::before { content: "Valor"; }
+    /* «Ajustes»: un botón con borde, como el «Otra fecha» de Comparar. Abre
+       la hora del pedido o del cobro y la Venta Interna y Eventos. */
+    .st-key-vh_ajustes [data-testid="stPopover"] button {
+        width: auto !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: 28px !important;
+        padding: 0 10px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: transparent !important;
+        color: var(--text-secondary) !important;
+        white-space: nowrap !important;
+    }
+    .st-key-vh_ajustes [data-testid="stPopover"] button p {
+        font-size: 13px !important;
+    }
+    /* Sin la flecha: el botón dice lo que abre, y la fila no tiene 20 px
+       de sobra. */
+    .st-key-vh_ajustes [data-testid="stPopover"] button
+        div[aria-hidden="true"] {
+        display: none !important;
     }
 
     /* =================================================================== */

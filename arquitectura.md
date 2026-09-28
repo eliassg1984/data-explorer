@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-554 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+555 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (189)
 
@@ -500,7 +500,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 
-**Streamlit** (152)
+**Streamlit** (153)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -654,6 +654,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#540** — Cada grilla AgGrid baja y compila su PROPIA copia de AG Grid: 1,28 MB y 1,1-1,8 s de hilo del…
 - **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
+- **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 
 **Datos, R2 y DuckDB** (72)
 
@@ -840,7 +841,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (122)
+**Decisiones de diseño y UX** (123)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -964,6 +965,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 - **#552** — «Por hora» carga cada panel por la MISMA fecha con que lo ubica: en «Hora del pedido», por la…
 - **#553** — Ventas › Meseros son las PROPINAS por mesero: lo que dan los reportes del POS (Analítico por…
+- **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44565,6 +44567,78 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-27.)
 
+555. **La cabecera de «Por hora» se lee como una tabla dinámica: FILAS ·
+     COLUMNAS · VALOR abajo, UN PANEL POR arriba; cada botonera en un
+     lugar fijo, y lo que no aplica en gris, que al tocarlo dice por qué.
+     «Cantidad» pasa a «Unidades».**
+     2026-09-27, a pedido («creo que no son intuitivas»), sobre una maqueta
+     de la vista entera con cuatro cabeceras y datos reales
+     (https://claude.ai/artifact/4vSSBuLZ1bi6HhxMxgEvos). Se eligió la
+     opción 3, directo. Lo que se midió de la de antes: la pregunta
+     («Días × horas / Platos / Grupos») estaba en la segunda fila con el
+     peso de «Hora del pedido»; dos lugares cambiaban de control al pasar a
+     Platos; había cuatro «día» con significados distintos (en Año,
+     «Días» eran meses); y el tiempo estaba en tres sitios.
+
+     - **Los nombres**: Días × horas → **Horas**; Días → **Fecha**; Por
+       hora → **Hora**; Por día de semana → **Día de semana**; Suma →
+       **Total**; la granularidad → **Un panel por**; Cantidad →
+       **Unidades**. «Columnas» ofrece lo que no está en las filas: Fecha o
+       Día de semana con filas Horas, Hora o Día de semana con Platos y
+       Grupos. **Lado a lado / Diferencia** pasó junto a «Comparar»: los dos
+       hablan de los paneles.
+     - **«Total / Por día» existe en los tres modos.** Con filas Horas y
+       columnas por día de semana antes promediaba siempre; ahora se elige,
+       y abre en «Por día» como abrió siempre. Con columnas por fecha cada
+       celda ya es un día (salvo en Año, que es un mes) y las dos opciones
+       se ven en gris. `_celdas(promedio=...)` lo decide la escala, no el
+       modo, y el hover dice «promedio por día» sólo cuando lo es.
+     - **Lo que no aplica NO se esconde** y no se deja elegir: `st.pills` no
+       apaga una opción suelta, así que son tres piezas
+       (`_pastillas`). El valor ELEGIDO vive en una clave sombra y la del
+       widget se reescribe desde ahí ANTES de dibujarlo, en cada corrida;
+       el callback (`_al_elegir`) sólo guarda en la sombra lo que aplica y,
+       si no, deja el motivo en `_K_MOTIVO`, que la cabecera muestra una
+       vez. Como la corrida reescribe el widget, el clic «rebota». El gris
+       lo pone un `<style>` por corrida, por posición de la opción
+       (`_css_gris`, sin `:has()`). De paso la sombra arregla lo que la
+       memoria tenía anotado: «Columnas» y «Escala» ya no vuelven a su
+       default al pasar por Horas. Casos: Pax y Ticket con filas Platos o
+       Grupos (son del pedido; se ven como Venta y vuelven al volver a
+       Horas); «Diferencia» con un solo panel o en Mes por fecha
+       (`_motivo_diferencia`); «Día de semana» en Día y Semana.
+     - **«Ajustes»**, un popover, guarda la hora del pedido o del cobro y la
+       Venta Interna y Eventos, que se eligen una vez. Si no están como
+       vienen, lo dice el título: «Mapa por día y hora · hora del cobro ·
+       sin Venta Interna ni Eventos». **La trampa de la #467 mordió acá**:
+       el interruptor tenía `setdefault` sobre su key, y al abrir el panel
+       se montaba con su default (apagado) y pisaba lo elegido. Va con
+       `value=` desde su sombra y sin escribir la key; medido: la hora del
+       cobro y el interruptor sobreviven a una corrida completa y a
+       reabrir el panel, en 1.59 y en 1.64.
+     - **Una ayuda (`help=`) en una botonera con `label_visibility=
+       "collapsed"` no se ve**: Streamlit dibuja el «?» dentro del rótulo
+       oculto (medido: 0×0 px). Las tres que había —«Hora», «Leer»,
+       «Escala»— no se vieron nunca. La de «Unidades» pasó a una línea que
+       sale cuando se la elige con filas Horas: todo lo vendido, y la Venta
+       Interna la infla (medido en septiembre: con ella, las unidades por
+       celda se mueven junto con el pax a 0,52; sin ella, a 0,92).
+     - **Los rótulos son el `::before` del contenedor de la botonera**, que
+       pasa a `display: flex` en fila (con el `block` que trae, el rótulo
+       quedaba ARRIBA y la fila crecía de 32 a 46 px); los separadores se
+       mudaron al `::after`. Las dos filas miden 32 y 30 px y caben a
+       1366 px, en 1.59 y en 1.64. El botón de «Ajustes» va sin la flecha
+       y con `width: auto` (medía 180 px en una columna de 95).
+     - **El salto desde «Análisis de platos»** («Ver a qué hora se vende»)
+       escribe la columna en su sombra (`_vh_op_cols_valor = "Hora"`): la
+       key del widget se reescribe desde ahí. Por string, no importando la
+       constante, para no sumar un import nuevo entre módulos (#357).
+
+     Lo fija `test_graficos.py::_pruebas_cabecera_por_hora`, con un `st`
+     de mentira para el rebote y la sombra.
+
+     (2026-09-27.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44577,7 +44651,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#554**; la próxima toma el número siguiente.
+> última regla es la **#555**; la próxima toma el número siguiente.
 
 >
 
