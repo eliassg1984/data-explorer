@@ -1,16 +1,22 @@
 """
 graficos.recetas — dashboard ÚNICO de Recetas (platos + recetas base).
 
-Una sola página con las NUEVE vistas que hasta el 2026-09-04 vivían
-repartidas en dos destinos que un chip alternaba (Receta base / Receta
-venta). A pedido: «quiero que las visualizaciones de estos toggles figuren
-todas juntas».
+Una sola página con las vistas que hasta el 2026-09-04 vivían repartidas en
+dos destinos que un chip alternaba (Receta base / Receta venta). A pedido:
+«quiero que las visualizaciones de estos toggles figuren todas juntas».
 
-    Platos (recetaventa.parquet)       Composición del plato · Costeo Receta
-                                       Venta · Ingredientes clave ·
-                                       Panorama · Tabla
+    Nueva receta                       el formulario (`formulario_receta.py`)
+    Carta (cartacosteada.parquet)      Carta costeada, con la receta del
+                                       producto elegido debajo
+    Platos (recetaventa.parquet)       Ingredientes clave · Panorama · Tabla
     Recetas base (recetabase.parquet)  Ranking · Insumos clave · Panorama ·
                                        Tabla
+
+«Composición del plato» y «Costeo Receta Venta» se quitaron el 2026-09-28
+(regla #556): la tabla de Composición era la Carta costeada filtrada a los
+platos con receta, con los mismos números al céntimo, y su receta, su
+simulador y su dona/Sankey se abren ahora con un clic en la Carta; Costeo
+sumaba ese mismo costo sin descartar los platos inactivos.
 
 POR QUÉ ERAN DOS Y AHORA SON UNA. La separación se justificaba con una
 medición equivocada: los docstrings de `recetabase.py`/`recetas_comun.py` y
@@ -34,7 +40,15 @@ Desde el 2026-09-26 la pila suma, antes de las de platos, «Carta costeada»:
 la carta ENTERA del POS (también lo que no tiene receta: directos, sin
 enlace y combos) con su % de costo, sobre un TERCER parquet,
 `cartacosteada.parquet`, que carga la sección misma. Vive en
-`graficos/carta_costeada.py`; regla #548.
+`graficos/carta_costeada.py`; regla #548. Desde el 2026-09-28 lee además
+lo vendido por producto (`data.venta_por_producto_dia`, de ventas.parquet),
+también sólo cuando se llega a la vista.
+
+LO INACTIVO NO SUMA. Ingredientes clave y el Ranking y los Insumos clave de
+recetas base agrupaban el catálogo entero: el 48 % de recetaventa.parquet
+son platos dados de baja, y 9 de los 10 primeros «ingredientes clave» salían
+sólo de ellos (shots de whisky con la botella entera por costo). Desde el
+2026-09-28 reciben sólo lo activo (`_activo`), como ya hacía el Panorama.
 
 DOS PARQUETS EN UNA PÁGINA. `app.py` carga UNO por reporte y lo pasa como
 `df_f`; el segundo se carga acá con `data.cargar`, que es el patrón que ya
@@ -55,7 +69,7 @@ Punto de entrada público: renderizar_graficos_recetas().
 
 import streamlit as st
 
-from data import cargar as _cargar_reporte
+from data import cargar as _cargar_reporte, venta_por_producto_dia
 from estilos import TAM_FUENTE
 from tablas import renderizar_aggrid_desktop
 from graficos.base import (
@@ -63,16 +77,14 @@ from graficos.base import (
     renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.carta_costeada import ARCHIVO as ARCHIVO_CARTA, render_carta_costeada
-from graficos.recetas_comun import _items_clave, _ranking_contenedores
+from graficos.recetas_comun import _activo, _items_clave, _ranking_contenedores
 from graficos.recetabase import _panorama_compras_base
-from graficos.recetaventa import (
-    _panorama_compras_venta, _tabla_composicion_venta, _tabla_costeo_venta,
-)
+from graficos.recetaventa import _panorama_compras_venta
 from formulario_receta import render_formulario_receta
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es
 # horizontal y aplana las categorías a una sola fila (ver
-# `base.py::_render_rail`), así que nueve items compiten por el ancho útil
+# `base.py::_render_rail`), así que los items compiten por el ancho útil
 # de una laptop (~1010px). El nombre largo vive en el id — que es lo que
 # viaja en `?vista=` y lo que empareja con `_PILA`.
 #
@@ -96,10 +108,11 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # costo, combos incluidos — lo único de la página que mira también lo
     # que no tiene receta (directos, sin enlace, combos). Lee su propio
     # parquet, `cartacosteada.parquet`; ver `graficos/carta_costeada.py`.
+    # Desde el 2026-09-28 un clic en un producto abre su receta debajo: es
+    # lo que hacía «Composición del plato», que se fue con «Costeo Receta
+    # Venta» (regla #556).
     ("Carta",  (("Carta costeada",                      "Carta",           ":material/menu_book:"),)),
-    ("Platos", (("Composición del plato",              "Composición",     ":material/donut_small:"),
-                ("Costeo Receta Venta",                "Costeo",          ":material/calculate:"),
-                ("Ingredientes clave",                 "Ingredientes",    ":material/eco:"),
+    ("Platos", (("Ingredientes clave",                 "Ingredientes",    ":material/eco:"),
                 ("Panorama de compras · platos",       "Panorama",        ":material/area_chart:"),
                 ("Tabla · platos",                     "Tabla",           ":material/table_rows:"))),
     ("Recetas base", (("Ranking de recetas base",            "Ranking · base",  ":material/leaderboard:"),
@@ -111,15 +124,13 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
 # tupla (el porqué, en `graficos/compras/__init__.py::_PILA`).
 #
-# Las cinco de platos van primero y las cuatro de recetas base después: se
+# La carta y las de platos van primero y las de recetas base después: se
 # lee de lo vendible hacia sus componentes, que es el orden en que el
 # usuario describió el dominio («los platos... formados por ingredientes e
 # incluso recetas base»).
 _PILA = pila_sin_tablas((
     ("rec_sec_nueva",        "Nueva receta"),
     ("rec_sec_carta",        "Carta costeada"),
-    ("rec_sec_composicion",  "Composición del plato"),
-    ("rec_sec_costeo",       "Costeo Receta Venta"),
     ("rec_sec_ingredientes", "Ingredientes clave"),
     ("rec_sec_panorama_rv",  "Panorama de compras · platos"),
     ("rec_sec_tabla_rv",     "Tabla · platos"),
@@ -207,6 +218,17 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         if not col_rb or not col_ins or not col_rb_valor:
             df_rb = None
 
+    # LO INACTIVO NO SUMA en los rankings (ver el docstring del módulo). Las
+    # Tablas y el Panorama siguen recibiendo el parquet entero: las Tablas
+    # son el dato crudo, y el Panorama filtra por su cuenta.
+    col_activo = _resolver(df_f, ["ITEM VENTA ACTIVO", "Item Venta Activo"])
+    df_act = df_f[_activo(df_f[col_activo])] if col_activo else df_f
+    df_rb_act = df_rb
+    if df_rb is not None:
+        col_rb_act = _resolver(df_rb, ["RB ACT", "Rb Act"])
+        if col_rb_act:
+            df_rb_act = df_rb[_activo(df_rb[col_rb_act])]
+
     # El rail MARCA en cuál sección estás y scrollea; no elige contenido.
     _render_rail(_RAIL_CATEGORIAS, "rec_graf_tipo", btn_prefix="rec_rail_btn_",
                  secciones=_PILA)
@@ -236,23 +258,18 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             render_formulario_receta()
 
     def _dib_carta():
-        # Su parquet se carga ACÁ, dentro de la sección, y no arriba con los
-        # otros dos: la pila es perezosa y así sólo lo baja quien llega a la
-        # vista (mismo patrón que Porcionamientos en Movimientos).
-        with st.container(border=True, key="rec_card_carta"):
-            render_carta_costeada(_cargar_reporte(ARCHIVO_CARTA))
-
-    def _dib_composicion():
-        with st.container(border=True, key="rec_card_composicion"):
-            _tabla_composicion_venta(df_f)
-
-    def _dib_costeo():
-        with st.container(border=True, key="rec_card_costeo"):
-            _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles)
+        # Su parquet —y lo vendido por producto, de ventas.parquet— se
+        # cargan ACÁ, dentro de la sección, y no arriba con los otros dos:
+        # la pila es perezosa y así sólo los baja quien llega a la vista
+        # (mismo patrón que Porcionamientos en Movimientos). Sus dos
+        # tarjetas —la carta y la del producto elegido— las arma
+        # `render_carta_costeada`.
+        render_carta_costeada(_cargar_reporte(ARCHIVO_CARTA), df_rv=df_f,
+                              ventas=venta_por_producto_dia())
 
     def _dib_ingredientes():
         with st.container(border=True, key="rec_card_ingredientes"):
-            _items_clave(df_f, col_plato, col_item, col_valor, es_soles,
+            _items_clave(df_act, col_plato, col_item, col_valor, es_soles,
                          card_key="rec_ingredientes",
                          titulo_card="Ingredientes de mayor costo total",
                          etiqueta_item="Ingrediente",
@@ -279,7 +296,7 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             if df_rb is None:
                 _sin_recetabase()
             else:
-                _ranking_contenedores(df_rb, col_rb, col_rb_valor, rb_es_soles,
+                _ranking_contenedores(df_rb_act, col_rb, col_rb_valor, rb_es_soles,
                                       key_topn="rec_ranking_rb_topn",
                                       card_key="rec_ranking_rb",
                                       titulo_card="Recetas base por costo total")
@@ -289,7 +306,7 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             if df_rb is None:
                 _sin_recetabase()
             else:
-                _items_clave(df_rb, col_rb, col_ins, col_rb_valor, rb_es_soles,
+                _items_clave(df_rb_act, col_rb, col_ins, col_rb_valor, rb_es_soles,
                              card_key="rec_insumos_rb",
                              titulo_card="Insumos de mayor costo total",
                              etiqueta_item="Insumo",
@@ -313,8 +330,6 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     _DIBUJANTES = {
         "rec_sec_nueva":        _dib_nueva,
         "rec_sec_carta":        _dib_carta,
-        "rec_sec_composicion":  _dib_composicion,
-        "rec_sec_costeo":       _dib_costeo,
         "rec_sec_ingredientes": _dib_ingredientes,
         "rec_sec_panorama_rv":  _dib_panorama_rv,
         "rec_sec_tabla_rv":     _dib_tabla_rv,

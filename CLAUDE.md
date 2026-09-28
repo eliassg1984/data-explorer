@@ -430,6 +430,13 @@ resto de `graficos/compras/`.
   `st.session_state[key]` ANTES de dibujar, con un contador en la key
   (`compras_vol_nclic`, `compras_sem_nclic`). Foco en la key sin rerun es
   el bug. Ver `arquitectura.md` #399.
+- **La selección de un `st.dataframe` con key es de la KEY, no de sus
+  datos** (`key_as_main_identity` en `elements/arrow.py`): con otro filtro,
+  la fila elegida pasa a ser otro producto. Y el contador en la key de la
+  #399 estrena la tabla con cada clic y le borra al usuario el orden que
+  eligió. En una tabla que se filtra: la key con la firma de la lista de
+  filas, `selection_default` y `single-row-required`
+  (`graficos/carta_costeada.py::_key_tabla`). Regla #556.
 - **Si un contenedor se ilumina en `:hover`, el contenedor entero tiene que
   responder al clic.** Un `st.button` con `padding: 0` se encoge hasta su
   glifo: el de la cascada de Ajuste medía **16×36 px dentro de una fila de

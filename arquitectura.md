@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-555 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+556 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (189)
 
@@ -656,7 +656,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 
-**Datos, R2 y DuckDB** (72)
+**Datos, R2 y DuckDB** (73)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -730,6 +730,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#548** — «Carta costeada»: la carta ENTERA con su % de costo, combos incluidos. El costo de un combo…
 - **#552** — «Por hora» carga cada panel por la MISMA fecha con que lo ubica: en «Hora del pedido», por la…
 - **#553** — Ventas › Meseros son las PROPINAS por mesero: lo que dan los reportes del POS (Analítico por…
+- **#556** — Recetas y Costos tiene UNA vista de la carta: «Composición del plato» era la Carta costeada…
 
 **SUNAT y SIRE** (44)
 
@@ -841,7 +842,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (123)
+**Decisiones de diseño y UX** (124)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -966,6 +967,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#552** — «Por hora» carga cada panel por la MISMA fecha con que lo ubica: en «Hora del pedido», por la…
 - **#553** — Ventas › Meseros son las PROPINAS por mesero: lo que dan los reportes del POS (Analítico por…
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
+- **#556** — Recetas y Costos tiene UNA vista de la carta: «Composición del plato» era la Carta costeada…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44639,6 +44641,97 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-27.)
 
+556. **Recetas y Costos tiene UNA vista de la carta: «Composición del
+     plato» era la Carta costeada filtrada a los platos con receta, y
+     «Costeo Receta Venta» sumaba el mismo costo con los platos inactivos
+     adentro. Y la selección de un `st.dataframe` con key es de la KEY, no
+     de sus datos.**
+     2026-09-28, a pedido («creo traen similar información, mira de dónde
+     usan la información y si requieren vistas individuales»), sobre una
+     medición contra R2.
+
+     - **Lo medido.** Composición (recetaventa activo, precio > 1) eran 425
+       platos, y los 425 están en `cartacosteada.parquet` como «Receta» con
+       el mismo precio, costo y % al céntimo, y el mismo nombre, grupo,
+       subgrupo y última venta (las «diferencias» de fecha eran el
+       01/01/1900 de un lado y el vacío del otro). La Carta trae además 206:
+       142 directos, 46 sin enlace, 13 «no aplica» y 5 combos. Costeo sumaba
+       `TOTAL` por NOMBRE de plato (= `CST SALON` en 424 de 425) sin filtro
+       de activo: 855 filas, 414 de platos dados de baja, y sus 15 primeros
+       puestos, shots de whisky inactivos (el Glenfiddich 21 a S/ 1.184). Su
+       «%» era la parte de cada plato en la suma de los costos UNITARIOS de
+       855 platos (S/ 17.855): una cifra que no mide nada. Lo único suyo era
+       «Ítems» (mediana: 2 insumos).
+     - **Lo que quedó: «Carta costeada»** (`graficos/carta_costeada.py`). La
+       tabla de la #548 con tres columnas más —Margen (neto − costo, el eje
+       de rentabilidad de Kasavana y Smith, *Menu Engineering*, 1982),
+       Vendidos (90 días, de Ventas) y Actualizado (`FECH MODIF` de la
+       receta, que traía Composición: 59 platos activos sin tocar desde 2024
+       o antes)—, el filtro Tipo completo (Sin enlace y No aplica), Venta
+       Interna FUERA por defecto con un interruptor (22 productos «(Cst)» a
+       precio de costo, 17 de los 18 que pasan el 100 %: decisión del
+       usuario) y «Sin costo» ordenado por lo vendido. Un clic en una fila
+       abre DEBAJO el panel que tenía Composición: la receta con su
+       simulador (`recetaventa.receta_del_plato`), la dona y el Sankey; en
+       un directo, qué artículo descarga; en un combo, su banda. Se fueron
+       `_tabla_composicion_venta`, `_tabla_costeo_venta` y sus dos AgGrid
+       (1,28 MB y más de un segundo cada una, #540).
+     - **Lo vendido sale de Ventas con la definición de venta (#524).**
+       `data.venta_por_producto_dia` baja sólo las 33 columnas que la
+       definición lee —el camino de los KPIs del rail—, prepara y resume
+       con `definicion_venta.por_producto_dia`: unidades, neto, costo,
+       unidades con costo y neto sin costo, por producto y día. Se cachea
+       con el sello: 56.000 filas y 3 MB, medido en 6 s en la laptop sobre
+       237.000 líneas, una vez por versión del parquet (`_purgar_version` la
+       vacía, o el disco juntaría una por madrugada). El % al que se vendió
+       es el `pct_costo` del Mix, importado. **El costo con que se vende es
+       una FOTO del POS y no se corrige**: el panel avisa el neto vendido
+       sin costo y distingue por qué — Lomo a la Pimienta: 40,4 % en carta,
+       27,6 % vendido, con S/ 10.803 vendidos antes de que se le cargara la
+       receta; las aguas Munay, sin costo hoy.
+     - **«Vendidos» NO es el «Vendidos 90 días» de los combos.** Aquél lo
+       cuenta la consulta del Sheet al refrescar, en SUS 90 días, para
+       elegir el método; éste sale de Ventas y termina en el último día con
+       venta. La Degustación Sapiens: 70 y 60. La columna de la tabla de
+       combos pasó a llamarse «Vendidos (consulta)».
+     - **La trampa: la selección de un `st.dataframe` con key es de la
+       KEY.** `elements/arrow.py` (1.59.2) calcula su identidad con
+       `key_as_main_identity={"selection_mode", "is_selection_activated"}`:
+       los datos no entran. Con otro filtro, «la fila 3» seguía elegida y
+       era otro producto. Y el contador en la key de Análisis de platos
+       (#399) tampoco sirve acá: estrena la tabla con cada clic y le borra
+       al usuario el orden que eligió (medido: ordenada por «Actualizado»,
+       un clic la devolvía al % de costo). Lo que quedó: la key lleva la
+       FIRMA (md5) de la lista de códigos —mientras la lista no cambie es la
+       misma tabla, y conserva orden y selección—, `selection_default` la
+       estrena con el producto en foco marcado, y `single-row-required`
+       hace que siempre haya uno. La selección se lee como ESTADO al tope de
+       la corrida: releerla da lo mismo, no hay evento que procesar dos
+       veces. Verificado en el navegador: ordenada por «Actualizado», el
+       clic en la segunda fila elige ese producto y la tabla queda como
+       estaba.
+     - **Una fecha que se ordena por fecha**: Actualizado y Última venta van
+       como fechas, con una centinela (1900) que se escribe «—». Un vacío
+       se pinta «None» (#529), y un texto «dd/mm/aaaa» ordena por el día del
+       mes.
+     - **Lo inactivo no suma.** Ingredientes clave y el Ranking y los Insumos
+       clave de recetas base agrupaban el catálogo entero: 9 de los 10
+       primeros ingredientes salían sólo de platos inactivos, y 12 de las 15
+       primeras recetas base estaban dadas de baja. Reciben lo activo
+       (`_activo`), como ya hacía el Panorama.
+
+     Candados: `test_graficos.py::_pruebas_carta_costeada` (el margen,
+     Venta Interna, el Tipo, lo vendido en la ventana, el orden de «Sin
+     costo» y que Composición y Costeo no vuelvan), `test_definicion_venta.py`
+     (`por_producto_dia`: un ítem una vez, el canje, sin cortesía ni anulado,
+     el combo con su costo de línea una vez) y `test_datos.py` (la cacheable
+     nueva lleva el sello y la limpia `limpiar_cache`). En Cloud: los módulos
+     nuevos importan nombres nuevos entre sí (`data.venta_por_producto_dia`,
+     `recetaventa.receta_del_plato`), así que después del push va «Reboot
+     app» (#357).
+
+     (2026-09-28.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44651,7 +44744,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#555**; la próxima toma el número siguiente.
+> última regla es la **#556**; la próxima toma el número siguiente.
 
 >
 

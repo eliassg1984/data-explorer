@@ -1,75 +1,27 @@
 """
-graficos.recetaventa — la mitad de PLATOS del dashboard de Recetas.
+graficos.recetaventa — la RECETA de un plato: la mitad de platos de Recetas.
 
 Cada fila de recetaventa.parquet es un ÍTEM de un plato:
-    Nomb Plato · Item Rv · Cantidad · Total
-    (plato)      (insumo)  (cant.)    (costo del insumo en el plato)
+    Nomb Plato · Ins Rv · Cantidad · Total
+    (plato)      (insumo)  (cant.)   (costo del insumo en el plato)
 
-Este módulo es la capa FINA de Receta Venta: resuelve las columnas reales
-del parquet y llama a los gráficos compartidos de `graficos.recetas_comun`
-(Ingredientes clave, Panorama de compras) — cada uno vive ahí UNA sola vez,
-junto con la versión de `recetabase.py` (el mismo tipo de dato: un BOM
-plato→insumos vs. receta base→insumos). Desde 2026-08-13 Receta Base y
-Receta Venta comparten ítem de nav ("Recetas") y un chip Base/Venta arriba
-del rail — ver `_chip_fuente` en recetas_comun.py (retirado 2026-09-22, ver ahí) y `arquitectura.md` §
-Unificación Recetas.
+Desde el 2026-09-28 (regla #556) lo que vive acá es el panel de la receta
+que se abre al elegir un producto en la Carta costeada
+(`graficos/carta_costeada.py`): la receta con su simulador, la dona
+Costo/Utilidad y el Sankey del plato. Y la resolución de columnas del
+Panorama de compras, cuyo gráfico está en `graficos.recetas_comun` junto
+con los otros que comparte con recetas base.
 
-"Composición" DEJÓ de ser compartida el 2026-08-24: acá es
-`_tabla_composicion_venta`, una tabla propia (no una dona de un plato) con
-columnas — Grupo/Subgrupo/P.VENTA SALON/CST SALON/%CST SALON — que no
-existen en recetabase.parquet. El chip Base/Venta/Nueva no se muestra en
-esta vista (no hay a qué "Base" equivalente navegar). Ver docstring de la
-función.
-
-Y desde el 2026-08-28, Composición pasó a ser SOLO de Receta Venta:
-Receta Base se quedó con Ranking (hoy Costeo, ver más abajo), Insumos
-clave, Panorama y Tabla (regla #236).
-
-Y desde el 2026-08-30, "Ranking de platos" se renombra a "Costeo Receta
-Venta" y deja el gráfico de barras horizontal por una tabla AgGrid propia
-(`_tabla_costeo_venta`, más abajo) — a pedido: "en lugar de un gráfico,
-una tabla tipo ranking, ordenada por costo, algo así como el que tengo
-para compras". Mismo lenguaje visual que el Ranking de Proveedores de
-Compras (barra como fondo de celda vía `linear-gradient`, fila TOTAL
-fijada abajo) y misma agregación que el gráfico que reemplaza (suma de
-costo/cantidad por plato, sin filtrar por activo). Sigue sin ser un quinto
-compartido en `recetas_comun.py`: sólo Receta Venta pidió el cambio, así
-que Receta Base se queda con el gráfico (`_ranking_contenedores`), que
-conserva el nombre "Ranking".
-
-Y el mismo 2026-08-30, más tarde, el Sankey se da de baja de Receta Venta
-a pedido — con él se van el selector "Plato" (existía sólo para
-alimentarlo, nada más lo usaba) y el drill "Abrir Sankey →" del Panorama
-de compras (era sólo un atajo hacia esta vista). `_sankey_contenedor` se
-BORRA de `recetas_comun.py`: Receta Base ya no lo llamaba desde el #236,
-así que este dashboard era su último llamador — mismo criterio que se
-aplicó con `_composicion_contenedor` esa vez (ver el docstring de
-recetas_comun.py). El Panorama de compras conserva su PROPIO Sankey
-(Producto→Plato, `_fig_panorama_sankey`): es un gráfico distinto, con otro
-propósito, no tocado por este cambio.
-
-Y una tercera vez el mismo 2026-08-30: el radio "Medir por" (Costo/
-Cantidad, `rv_metrica`) se saca a pedido — "por defecto siempre debe ser
-por costo". `es_soles` queda fijo (con el mismo fallback a Cantidad de
-siempre si no hubiera columna de costo), sin widget que lo cambie. Afecta
-a los tres lectores de `es_soles`: Costeo Receta Venta, Ingredientes clave
-y Panorama de compras pasan a mostrarse siempre en soles. Receta Base
-conserva su propio radio (`rb_metrica`) — este dashboard es el único que
-pidió sacarlo.
-
-**Dejó de ser un dashboard propio el 2026-09-04.** Hasta entonces «Receta
-Venta» era un reporte aparte, con su rail, su pila de 5 secciones y su
-punto de entrada `renderizar_graficos_recetaventa`, al que se llegaba por
-un chip Base/Venta. Hoy sus cinco vistas comparten página con las cuatro
-de recetas base — ver `graficos/recetas.py`, que dibuja la pila y explica
-por qué se fusionaron. Con el entry point se fueron sus
-`_RAIL_CATEGORIAS` y su `_PILA`.
-
-Lo que queda acá es lo PROPIO de este parquet: las dos tablas que no
-tienen equivalente en recetabase.parquet (`_tabla_composicion_venta`,
-`_tabla_costeo_venta`) y la resolución de columnas del Panorama
-(`_panorama_compras_venta`). Los gráficos compartidos con la mitad de
-recetas base siguen viniendo de `graficos.recetas_comun`.
+«Composición del plato» y «Costeo Receta Venta» fueron vistas propias hasta
+ese día. Medido contra R2: la tabla de Composición era la Carta costeada
+filtrada a los platos con receta —425 de 425 con el mismo precio, costo y %
+al céntimo, y mismo grupo, subgrupo y última venta—, y Costeo sumaba el
+mismo costo por plato sin descartar los inactivos (414 de sus 855 filas;
+sus 15 primeros puestos, shots de whisky dados de baja). Lo único propio de
+Composición era este panel, y ahora cuelga de la Carta. La historia de las
+dos tablas —el ranking que fue gráfico y después tabla, el Sankey que se dio
+de baja y volvió como pestaña, el radio «Medir por» que se sacó— está en
+`arquitectura.md`, reglas #205, #236, #253, #451, #452 y #556.
 """
 
 import json
@@ -78,7 +30,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from st_aggrid import AgGrid, JsCode
 # El ÚNICO uso del paquete en el repo, y está acotado a este Sankey: es el
 # único gráfico del proyecto que necesita clic y que
 # `st.plotly_chart(on_select=)` no puede escuchar (regla #452).
@@ -97,37 +48,13 @@ except Exception:                                      # pragma: no cover
     plotly_events = None
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, BLANCO, ERROR, EXITO,
-    GRIS_LINEA, LAVANDA_CHIP, PALETA_SERIES, TEXTO_PRINCIPAL,
+    ACENTO, BLANCO, EXITO, GRIS_LINEA, PALETA_SERIES, TEXTO_PRINCIPAL,
 )
-# El LOOK de una tabla-ranking del repo, en bloque. Nació en el Ranking de
-# proveedores de Compras, cruzó a los tres paneles del drill de Producto
-# (2026-09-11), a Inventario (2026-09-13) y a `drill_tablas.py`; el
-# 2026-09-17 llega a las dos tablas de Receta Venta, que eran de los
-# últimos AgGrid del repo dibujados con el `theme="streamlit"` tal como
-# sale de fábrica. Los cuatro nombres viajan JUNTOS y no se eligen por
-# separado: el alto de fila sin el cuerpo de 11.5px aprieta el texto
-# contra las líneas (docstring de `ALTO_FILA_RANK`), y la regla #404
-# cuenta lo que pasa cuando se copia el componente y no el look.
-from graficos.compras._comun import (
-    ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK,
-)
-from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos import alturas
 from graficos.base import _card, _resolver
 from graficos.recetas_comun import (
-    ARCHIVO_INVENTARIO, _activo, _hex_a_rgba, _panorama_compras,
-    catalogo_insumos, divisor_neto,
+    ARCHIVO_INVENTARIO, _hex_a_rgba, _panorama_compras, catalogo_insumos,
 )
-
-# Umbral de %Costo salón para el semáforo de la barra de progreso de
-# Composición (más abajo): mismo criterio que ya usa formulario_receta.py
-# para juzgar el % de costo de una receta nueva (🟢/🟠/🔴) — no vive en un
-# módulo compartido porque son dos herramientas separadas (ésta lee
-# recetaventa.parquet, aquélla arma una receta a mano) que coinciden en la
-# misma referencia de negocio, no en código que debieran compartir.
-_UMBRAL_COSTO_OK = 30
-_UMBRAL_COSTO_WARN = 35
 
 
 def _panorama_compras_venta(df_f, es_soles):
@@ -150,56 +77,25 @@ def _panorama_compras_venta(df_f, es_soles):
     )
 
 
-# ─── Composición: tabla de platos + drill a su receta ──────────────────────
-# 2026-08-24, a pedido: reemplaza la dona de UN plato (`_composicion_
-# contenedor`, compartida con Receta Base) por una tabla de TODOS los
-# platos activos con Grupo/Subgrupo/Precio/Costo/%Costo de Salón — la dona
-# "no mostraba mucho" (un plato a la vez, elegido a mano). NO vive en
-# recetas_comun.py como los otros 4 gráficos compartidos: GRUPO, SUBGRUPO,
-# P.VENTA SALON, CST SALON y %CST SALON no tienen equivalente en
-# recetabase.parquet (25 columnas, esquema RB NOMBRE/INSUMO/CST SUBT INS —
-# ver docstring de recetabase.py), así que Receta Base sigue con la dona.
+# ─── El panel de la receta de un plato ─────────────────────────────────────
+# Lo abre un clic en la Carta costeada (regla #556); hasta el 2026-09-28 lo
+# abría la tabla de «Composición», que es de donde vienen estas medidas:
 #
 # P.VENTA SALON / CST SALON / %CST SALON son atributos del PLATO, no del
-# ítem-insumo: confirmado contra R2 real (2026-08-24, DuckDB directo sobre
-# recetaventa.parquet) que los 850 platos del catálogo tienen un único
-# valor de los tres por COD PLATO, repetido en cada fila-insumo — mismo
-# patrón que VALOR_ANO_ANTERIOR en compras.parquet (CLAUDE.md § "Antes de
-# sumar una columna comparable"). Por eso se toman con `.first()` por
-# plato, nunca `.sum()`. También confirmado que CST SALON == suma de
-# TOTAL de los ítems de ese plato — la receta de la derecha y el costo de
-# la izquierda siempre cuadran, sin filtrar por INS ACTIVO (CST SALON
-# tampoco filtra por eso).
+# ítem-insumo: los 850 platos del catálogo tienen un único valor de los tres
+# por COD PLATO, repetido en cada fila-insumo (regla #205). Y CST SALON ==
+# suma de TOTAL de los ítems de ese plato, sin filtrar por INS ACTIVO: la
+# receta de este panel suma lo mismo que el costo de la fila de la Carta
+# (medido de nuevo el 2026-09-28: 424 de 425; la excepción es un shot cuyo
+# único insumo trae TOTAL 0).
 #
-# El insumo de la receta se lee de INS RV, no de ITEM RV: verificado que
-# ITEM RV es el número de LÍNEA dentro de la receta (001, 002…), no una
-# identidad de insumo — el mismo COD INS aparece como "001" en un plato y
-# "019" en otro. INS RV es el texto descriptivo, estable 1:1 contra
-# COD INS (0 variación en 1.058 códigos). "Ingredientes clave" (vía
-# recetas_comun.py) todavía agrupa por ITEM RV — bug preexistente, fuera
-# del alcance de este cambio, no tocado acá. "Costeo Receta Venta" (antes
-# "Ranking") ya usa INS RV y no ITEM RV desde que se armó como tabla — ver
-# `_tabla_costeo_venta`, más abajo.
+# El insumo se lee de INS RV, no de ITEM RV: ITEM RV es el número de LÍNEA
+# dentro de la receta (001, 002…), no una identidad de insumo — el mismo
+# COD INS aparece como "001" en un plato y "019" en otro. INS RV es el texto
+# descriptivo, estable 1:1 contra COD INS.
 #
-# Y el 2026-08-30 se sumaron tres columnas más a pedido: P. Neto Salón
-# (= P.VENTA SALON / 1.18 entonces; desde el 2026-09-24, ÷ el divisor del
-# sistema, `recetas_comun.divisor_neto` — regla #514),
-# Actualizado y Última Venta (ésta, la última columna de la tabla, a
-# pedido explícito) — las dos de columnas NATIVAS del parquet (`FECH
-# MODIF` / `ULTIMA VENT`), NO de cruzar contra ventas.parquet. Ver
-# arquitectura.md regla #253 para el detalle de cada verificación
-# (`ULTIMA VENT` no coincide al minuto con el registro real de
-# ventas.parquet, y por qué eso no la invalida; y por qué 1.18 sigue
-# siendo la cuenta correcta para un precio de LISTA aunque el ratio real
-# de una venta ya cerrada, con descuentos adentro, dé otra cosa).
-#
-# Y el 2026-08-31, a pedido, el panel de receta baja de un costado a
-# ABAJO de la tabla, y a SU costado aparece un mini panel con dos
-# pestañas — `_dib_torta_costo_utilidad` (donut Costo/Utilidad del plato
-# en foco) y `_dib_sankey_insumo_costo` (Sankey plato→insumo, mismo
-# cálculo que tenía `_sankey_contenedor` antes de borrarse de
-# recetas_comun.py el 2026-08-30, ver el docstring del módulo, pero a
-# tamaño MINI y sólo del plato en foco, no una vista propia).
+# El panel son dos tarjetas: la receta (con su simulador, abajo) y, al
+# lado, la dona Costo/Utilidad y el Sankey plato→insumo del plato en foco.
 
 
 # ─── El simulador: "¿y si...?" sobre la receta del plato en foco ───────────
@@ -544,28 +440,25 @@ def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
         return r.sort_values("Costo", ascending=False).reset_index(drop=True), costo_sim
 
 
-def _dib_torta_costo_utilidad(fila_foco, foco, costo_sim=None):
-    """Mini donut Costo/Utilidad del plato en foco: Costo Salón vs.
-    (P. Neto Salón − Costo Salón). Si el costo supera al precio neto —pasa
-    de verdad: arquitectura.md regla #205 mide bebidas premium con %Costo
-    de 300–950%, porque Costo Salón es la BOTELLA entera y P.Venta Salón
-    la COPA— la Utilidad da negativa y un donut no puede dibujar eso (una
-    porción no puede ser "menos que nada"): se avisa el monto en vez de
-    forzar un gráfico que mentiría.
+def _dib_torta_costo_utilidad(neto, costo, pct, foco, costo_sim=None):
+    """Mini donut Costo/Utilidad del plato en foco: el costo contra
+    (precio neto − costo). Si el costo supera al precio neto —pasa de
+    verdad: arquitectura.md regla #205 mide bebidas premium con %Costo de
+    300–950%, porque el costo es la BOTELLA entera y el precio la COPA— la
+    Utilidad da negativa y un donut no puede dibujar eso (una porción no
+    puede ser "menos que nada"): se avisa el monto en vez de forzar un
+    gráfico que mentiría.
 
+    `neto`, `costo` y `pct` (en %) son los de la fila de la Carta.
     `costo_sim`: el costo del BORRADOR del simulador, cuando hay uno. El
-    %Costo se RECALCULA contra el precio neto en vez de leerse de
-    `fila_foco["Pct"]`, que es el del parquet — si no, mover una cantidad
-    cambiaba el tamaño de la porción y dejaba el número del medio quieto,
-    que es justo la contradicción que el velo de la app existe para
-    evitar."""
-    if not len(fila_foco):
-        st.info("Sin datos para este plato.")
-        return
-    neto = float(fila_foco["PrecioNeto"].iloc[0])
+    %Costo se RECALCULA contra el precio neto en vez de usar `pct` — si
+    no, mover una cantidad cambiaba el tamaño de la porción y dejaba el
+    número del medio quieto, que es justo la contradicción que el velo de
+    la app existe para evitar."""
+    neto = float(neto or 0.0)
     if costo_sim is None:
-        costo = float(fila_foco["Costo"].iloc[0])
-        pct = float(fila_foco["Pct"].iloc[0])
+        costo = float(costo or 0.0)
+        pct = float(pct or 0.0)
     else:
         costo = float(costo_sim)
         pct = (costo / neto * 100) if neto else 0.0
@@ -778,474 +671,31 @@ def _dib_sankey_insumo_costo(r, nombre_foco, foco, simulando=False):
                   on_click=_sim_quitar_insumo, args=(foco, en_foco))
 
 
-def _tabla_composicion_venta(df_f):
-    """Vista 'Composición': ranking de platos activos (AgGrid, barra de
-    %Costo salón coloreada por umbral) a lo ancho, y ABAJO la receta del
-    plato en foco (tabla) + un mini panel con dos pestañas (torta Costo/
-    Utilidad, Sankey Insumo/Costo) — los tres actualizados al hacer clic
-    en una fila."""
-    col_cod_plato = _resolver(df_f, ["COD PLATO", "Cod Plato"])
-    col_plato = _resolver(df_f, ["NOMB PLATO", "Nombre Plato", "PLATO", "Plato"])
-    col_grupo = _resolver(df_f, ["GRUPO", "Grupo"])
-    col_subgrupo = _resolver(df_f, ["SUBGRUPO", "Sub Grupo", "Subgrupo"])
-    col_precio = _resolver(df_f, ["P.VENTA SALON", "P VENTA SALON",
-                                  "Precio Venta Salon", "PVENTA SALON"])
-    col_costo = _resolver(df_f, ["CST SALON", "CST SALÓN", "Costo Salon"])
-    col_pct = _resolver(df_f, ["%CST SALON", "% CST SALON", "PCT CST SALON",
-                               "Pct Cst Salon"])
-    col_activo = _resolver(df_f, ["ITEM VENTA ACTIVO", "Item Venta Activo"])
-    col_ins = _resolver(df_f, ["INS RV", "Ins Rv"])
-    col_cant = _resolver(df_f, ["CANTIDAD", "Cantidad"])
-    col_total = _resolver(df_f, ["TOTAL", "Total"])
-    # Opcionales (a diferencia de las de arriba, que son obligatorias — ver
-    # `faltan` más abajo): si no están, la tabla se queda sin esa columna
-    # en vez de romperse. Ver arquitectura.md regla #253 para el porqué de
-    # cada fuente — ninguna de las dos sale de cruzar contra ventas.parquet.
-    col_ult_venta = _resolver(df_f, ["ULTIMA VENT", "Ultima Vent", "Ultima Venta"])
-    col_fech_modif = _resolver(df_f, ["FECH MODIF", "Fech Modif", "Fecha Modif"])
-
-    faltan = [n for n, c in (
-        ("Plato", col_plato), ("Grupo", col_grupo), ("Subgrupo", col_subgrupo),
-        ("Precio Venta Salón", col_precio), ("Costo Salón", col_costo),
-        ("%Costo Salón", col_pct),
-    ) if not c]
-    if not col_cod_plato or faltan:
-        st.info(
-            "No se reconocieron todas las columnas de Composición "
-            f"({', '.join(faltan) or 'Cod Plato'}). Esta vista necesita "
-            "Cod Plato, Grupo, Subgrupo, P.Venta Salón, Cst Salón y "
-            "%Cst Salón de recetaventa.parquet."
-        )
-        return
-
-    d = df_f
-    if col_activo:
-        d = d[_activo(d[col_activo])]
-    if d.empty:
-        st.info("Sin platos activos para mostrar.")
-        return
-
-    agg = {
-        "Grupo": (col_grupo, "first"),
-        "Subgrupo": (col_subgrupo, "first"),
-        "Plato": (col_plato, "first"),
-        "Precio": (col_precio, "first"),
-        "Costo": (col_costo, "first"),
-        "Pct": (col_pct, "first"),
+# ─── Lo que usa la Carta costeada ──────────────────────────────────────────
+def columnas_receta(df):
+    """Las columnas de recetaventa.parquet que usa el panel de la receta,
+    resueltas contra `df` (`None` la que falte)."""
+    if df is None:
+        return {"cod": None, "ins": None, "cant": None, "total": None}
+    return {
+        "cod": _resolver(df, ["COD PLATO", "Cod Plato"]),
+        "ins": _resolver(df, ["INS RV", "Ins Rv"]),
+        "cant": _resolver(df, ["CANTIDAD", "Cantidad"]),
+        "total": _resolver(df, ["TOTAL", "Total"]),
     }
-    if col_ult_venta:
-        agg["UltimaVenta"] = (col_ult_venta, "first")
-    if col_fech_modif:
-        agg["FechaModif"] = (col_fech_modif, "first")
-    g = d.groupby(col_cod_plato, as_index=False).agg(**agg)
-    g["Grupo"] = g["Grupo"].fillna("").astype(str)
-    g["Subgrupo"] = g["Subgrupo"].fillna("").astype(str)
-    g["Plato"] = g["Plato"].astype(str)
-    g["Precio"] = pd.to_numeric(g["Precio"], errors="coerce").fillna(0.0)
-    g["Costo"] = pd.to_numeric(g["Costo"], errors="coerce").fillna(0.0)
-    g["Pct"] = pd.to_numeric(g["Pct"], errors="coerce").fillna(0.0) * 100
-    g["_cod"] = g[col_cod_plato].astype(str)
-    # Precio NETO como lo entiende el sistema: sin IGV NI recargo, los dos
-    # sumados sobre el neto (÷ 1,235 hoy). Hasta el 2026-09-24 era ÷ 1,18 y
-    # «P. Neto Salón» no cuadraba con el %Costo de la misma fila, que sí es
-    # el del sistema. El divisor es el MISMO que usa Nueva receta, y vive en
-    # `recetas_comun.divisor_neto` (regla #514). Se calcula ACÁ, antes del
-    # filtro de precios centinela de más abajo, así que un P.VENTA SALON
-    # centinela (~0) da un Precio Neto ~0 y no una división que reviente —
-    # el filtro de abajo igual lo saca de la tabla.
-    g["PrecioNeto"] = g["Precio"] / divisor_neto()
-    # Fechas nativas del parquet, formateadas a texto DD/MM/AAAA (mismo
-    # patrón que `graficos/compras/documentos_sunat.py`, columna "Fecha").
-    if col_ult_venta:
-        _uv = pd.to_datetime(g["UltimaVenta"], errors="coerce")
-        # Centinela de "nunca se vendió": 1900-01-01 (el mínimo de un
-        # SMALLDATETIME de SQL Server, el sistema de origen) en vez de
-        # NULL — verificado contra R2 real: 75 de 850 platos, activos e
-        # inactivos, con ESE valor exacto y ninguno con otra fecha antes
-        # de 2021. Mismo patrón-trampa que el precio centinela de
-        # P.VENTA SALON (arriba): mostrarlo tal cual diría que el plato
-        # se vendió en 1900, así que se blanquea en vez de mostrarse.
-        _uv = _uv.where(_uv >= pd.Timestamp("2000-01-01"))
-        g["UltimaVenta"] = _uv.dt.strftime("%d/%m/%Y").fillna("")
-    if col_fech_modif:
-        g["FechaModif"] = pd.to_datetime(
-            g["FechaModif"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("")
-
-    # P.VENTA SALON trae un cluster de precios centinela (1e-12…1.00,
-    # verificado contra R2 real: 15 de 436 platos activos, TODOS con un
-    # precio "redondo" que ningún plato real usa — cortesías, mermas,
-    # ítems de exhibición) que no son precios de venta reales. Sin este
-    # filtro %Costo se dispara a millones por ciento (S/0.58 de costo
-    # sobre S/0.000000000001 de "precio") y esos platos degenerados
-    # tapan el top entero del ranking — verificado en vivo, ver
-    # arquitectura.md regla #205. El corte en 1 es el que mide el hueco
-    # real: 0 platos activos caen entre 1 y 7 soles.
-    _n_sin_precio = int((g["Precio"] <= 1).sum())
-    g = g[g["Precio"] > 1]
-    if g.empty:
-        st.info("Ningún plato activo tiene un precio de Salón configurado.")
-        return
-    g = g.sort_values("Pct", ascending=False).reset_index(drop=True)
-
-    # La barra es el FONDO de la celda (mismo `linear-gradient` que el
-    # ranking de Proveedor/Producto de Compras — arquitectura.md regla
-    # #136), coloreado por el semáforo 30/35% de arriba en vez de un
-    # accent fijo: acá el color ES el dato (qué tan caro sale el plato),
-    # no solo un ranking relativo.
-    _js_barra_pct = JsCode(
-        "function(p){"
-        " var w = Math.max(0, Math.min(100, p.value||0));"
-        f" var c = w <= {_UMBRAL_COSTO_OK} ? '{EXITO}'"
-        f" : w <= {_UMBRAL_COSTO_WARN} ? '{ADVERTENCIA}' : '{ERROR}';"
-        " return {'background': 'linear-gradient(90deg, ' + c + ' 0 ' + w"
-        " + '%, transparent ' + w + '% 100%)',"
-        " 'display':'flex','alignItems':'center','justifyContent':'flex-end',"
-        f" 'color':'{TEXTO_PRINCIPAL}'"
-        "};"
-        "}")
-    _js_soles = JsCode(
-        "function(p){ return p.value==null ? '' : 'S/ ' + p.value.toFixed(2); }")
-    _js_pct = JsCode(
-        "function(p){ return p.value==null ? '' : p.value.toFixed(1) + '%'; }")
-    # Clic en la fila = toggle (mismo patrón que Compras › Proveedor/
-    # Producto): AG Grid no deselecciona solo al reclickear la fila ya
-    # elegida, y `st.dataframe` no sirve para esto — su columna de
-    # selección se dibuja en un canvas, sin nodo que ocultar por CSS.
-    _js_toggle = JsCode(
-        "function(e){ e.node.setSelected(!e.node.isSelected(), true); }")
-
-    # Ocho filas a la vista y el resto por scroll interno, con los MISMOS
-    # números que el Ranking de proveedores (24 de fila, 32 de cabecera,
-    # `CROMO_GRID_RANK` de cromo): eran 28 y 34 propios hasta el
-    # 2026-09-17. `extra` no lleva sumando de fila TOTAL porque esta tabla
-    # no tiene — ver el comentario del `AgGrid` de abajo.
-    _ALTO_FRAME = alturas.por_filas(8, px_fila=ALTO_FILA_RANK,
-                                    extra=CROMO_GRID_RANK, minimo=0)
-    # El alto, ATADO desde el documento padre. El `height=` de abajo no
-    # alcanza: st_aggrid mide su contenido y le reporta a Streamlit un
-    # `setFrameHeight` que termina como `style height` INLINE sobre el
-    # iframe y le gana a su propio atributo `height` — con 421 platos en
-    # el df, eso serían miles de píxeles. Son DOS nodos y no sólo el
-    # iframe: Streamlit escribe el alto reportado también sobre el
-    # `stElementContainer` que lo envuelve. Sin guard de "una sola vez"
-    # (regla #59). Ver regla #410, que lo midió en Inventario.
-    st.markdown(
-        "<style>div.st-key-rv_comp_grid, div.st-key-rv_comp_grid iframe "
-        f"{{ height: {_ALTO_FRAME}px !important; }}</style>",
-        unsafe_allow_html=True)
-
-    # La tabla va a lo ANCHO ahora (2026-08-31, a pedido: "que la receta se
-    # muestre abajo" — antes compartía fila con el panel de receta en 5:2).
-    # Sin nada al lado, ya no hace falta ese reparto: %Costo entra holgado
-    # y el resto de las columnas dejan de necesitar scroll en la mayoría
-    # de las pantallas.
-    with _card("rv_comp_tabla",
-               "Platos activos · % de costo sobre venta en Salón"):
-        # Ancho FIJO en todas las columnas, ninguna con `flex`: probado en
-        # graficos/compras/producto.py (arquitectura.md regla #192) que
-        # `st_aggrid` le clava `width: 200` a toda columna sin `width`
-        # propio, y como AG Grid prioriza el `width` explícito para el
-        # tamaño inicial, un `flex` mezclado con eso nunca reparte nada.
-        #
-        # %Costo va justo después de Plato, NO al final (pedido "Grupo,
-        # Subgrupo, Plato, Precio, Costo, %Costo"): medido en el
-        # navegador a 1280px con la tabla a 5/7 del ancho, ese orden
-        # dejaba %Costo —la columna con la barra, la razón de ser de
-        # esta vista— fuera del viewport visible sin scrollear.
-        # Grupo+Subgrupo+Plato+%Costo entran holgados; Precio/Costo
-        # (detalle de apoyo) son los que pueden quedar a un scroll de
-        # distancia en una pantalla angosta.
-        #
-        # Precio Neto, Actualizado y Última Venta se sumaron el
-        # 2026-08-30, a pedido — las dos últimas OPCIONALES, y Última
-        # Venta la ÚLTIMA columna a propósito (pedido explícito). Ver
-        # arquitectura.md regla #253 para el porqué de cada fuente.
-        _campos = ["Grupo", "Subgrupo", "Plato", "Pct", "Precio", "PrecioNeto", "Costo"]
-        _columnas = [
-            {"field": "Grupo", "width": 90, "tooltipField": "Grupo"},
-            {"field": "Subgrupo", "width": 100,
-             "tooltipField": "Subgrupo"},
-            {"field": "Plato", "width": 160, "tooltipField": "Plato"},
-            {"field": "Pct", "headerName": "% Costo",
-             "width": 80, "type": "numericColumn",
-             "cellStyle": _js_barra_pct,
-             "valueFormatter": _js_pct},
-            {"field": "Precio", "headerName": "P. Venta Salón",
-             "width": 90, "type": "numericColumn",
-             "valueFormatter": _js_soles},
-            {"field": "PrecioNeto", "headerName": "P. Neto Salón",
-             "width": 90, "type": "numericColumn",
-             "valueFormatter": _js_soles},
-            {"field": "Costo", "headerName": "Costo Salón",
-             "width": 90, "type": "numericColumn",
-             "valueFormatter": _js_soles},
-        ]
-        if col_fech_modif:
-            _campos.append("FechaModif")
-            _columnas.append({"field": "FechaModif",
-                              "headerName": "Actualizado", "width": 90})
-        if col_ult_venta:
-            _campos.append("UltimaVenta")
-            _columnas.append({"field": "UltimaVenta",
-                              "headerName": "Última Venta", "width": 100})
-        _campos.append("_cod")
-        _columnas.append({"field": "_cod", "hide": True})
-
-        resp = AgGrid(
-            g[_campos],
-            gridOptions={
-                "columnDefs": _columnas,
-                "defaultColDef": {"sortable": True, "resizable": True},
-                "rowSelection": {"mode": "singleRow", "checkboxes": False,
-                                 "enableClickSelection": False},
-                "onRowClicked": _js_toggle,
-                "rowHeight": ALTO_FILA_RANK,
-                "headerHeight": ALTO_HEADER_RANK,
-                "suppressCellFocus": True,
-                "suppressMovableColumns": True,
-                # SIN `pinnedBottomRowData`, a diferencia del resto de las
-                # tablas-ranking del repo, y no es un olvido: las seis
-                # columnas numéricas de acá son atributos del PLATO, no
-                # magnitudes que se acumulen. Sumar los precios de 421
-                # platos no significa nada y promediar el %Costo es la
-                # trampa de la #199 (un ratio no se re-pondera sobre el
-                # agregado). Una fila TOTAL vacía en cinco de seis
-                # columnas es peor que no tenerla.
-            },
-            allow_unsafe_jscode=True,
-            theme="streamlit",
-            # El tema de fábrica no alcanza: las filas blancas sin rayado,
-            # la cabecera sin franja lavanda, el cuerpo de 11.5px y el
-            # marco de FRANJA (dos líneas de 3px arriba y abajo, sin
-            # bordes laterales ni líneas verticales) salen de
-            # `CSS_RANKING_GRID`, y el único camino es `custom_css=`
-            # porque el grid vive en un iframe y el `<style>` del padre no
-            # entra. De ahí sale también la marca de la fila SELECCIONADA
-            # (`.ag-row-selected::before`, el acento al 8%), que acá es el
-            # plato cuyo panel de receta se ve abajo.
-            custom_css=CSS_RANKING_GRID,
-            height=_ALTO_FRAME,
-            update_on=["selectionChanged"],
-            key="rv_comp_grid",
-        )
-        _pie = "Clic en una fila para ver su receta →"
-        if _n_sin_precio:
-            _pie += f" · {_n_sin_precio} sin precio de Salón configurado, no se muestran"
-        st.caption(_pie)
-
-    sel = getattr(resp, "selected_rows", None)
-    if sel is not None and len(sel):
-        fila_sel = sel.iloc[0] if hasattr(sel, "iloc") else sel[0]
-        clicked = str(fila_sel["_cod"])
-    else:
-        clicked = None
-    # Sin clic (o reclic que deselecciona, ver `_js_toggle`): cae al primer
-    # plato de la tabla, que por el sort de arriba es el de %Costo más
-    # alto — el panel de abajo nunca arranca vacío.
-    foco = clicked if clicked else str(g["_cod"].iloc[0])
-    fila_foco = g[g["_cod"] == foco]
-    nombre_foco = str(fila_foco["Plato"].iloc[0]) if len(fila_foco) else ""
-
-    # ── Receta del plato en foco + mini panel (torta/Sankey) ─────────
-    # ABAJO de la tabla, a pedido (2026-08-31) — antes vivía a un costado.
-    #
-    # `r` sale de `_panel_receta`, que es quien decide si lo que se ve es la
-    # receta del parquet o el BORRADOR del simulador. Se arma UNA sola vez y
-    # las tres piezas leen ese mismo frame: la tabla de la izquierda, el
-    # Sankey y la dona. Antes se calculaba acá inline; con el simulador eso
-    # dejaba dos fuentes para lo mismo, que es exactamente cómo divergen.
-    #
-    # `costo_sim` viene en `None` mientras no se esté simulando, y la dona lo
-    # usa para saber si el %Costo lo lee del parquet o lo recalcula.
-    #
-    # [3, 2]: la tabla de receta necesita más ancho que la torta/Sankey
-    # (nombres de insumo largos en la primera columna, y ahora además las
-    # dos columnas editables y el buscador del catálogo); el mini panel no
-    # gana nada con más ancho, un donut/Sankey de 2 niveles no crece en
-    # utilidad por estirarse.
-    c_receta, c_mini = st.columns([3, 2], gap="medium")
-    with c_receta:
-        r, costo_sim = _panel_receta(df_f, foco, nombre_foco, col_cod_plato,
-                                     col_ins, col_cant, col_total)
-
-    with c_mini:
-        with _card("rv_comp_mini"):
-            # NO `st.tabs`: dibuja las DOS pestañas y esconde la otra con
-            # `display: none`, y el Sankey es un `plotly_events` (iframe).
-            # Escondido, su iframe mide 0 y el componente alterna
-            # `setFrameHeight` 240 ↔ 0 sin fin — medido: ~750 mensajes/s,
-            # cada uno re-dibuja el Sankey, el hilo del navegador no
-            # suelta nunca y TODA la página de Recetas se traba (se
-            # reportó como «Nueva receta se bloquea al agregar ítems»,
-            # 2026-09-23). Acá sólo existe el panel elegido. Regla #500.
-            vista = st.segmented_control(
-                "Vista", ["Costo / Utilidad", "Sankey"],
-                default="Costo / Utilidad", key="rv_comp_mini_vista",
-                label_visibility="collapsed",
-            )
-            if vista == "Sankey":
-                _dib_sankey_insumo_costo(
-                    r, nombre_foco, foco, costo_sim is not None)
-            else:
-                _dib_torta_costo_utilidad(fila_foco, foco, costo_sim)
 
 
-# ─── Costeo Receta Venta: ranking de platos por costo, en tabla ────────────
-# Reemplaza el gráfico de barras horizontales que tenía esta vista hasta el
-# 2026-08-30 (a pedido: "en lugar de un gráfico, una tabla tipo ranking,
-# ordenada por costo, algo así como el que tengo para compras" — ver
-# graficos/compras/proveedor.py, Ranking de Proveedores, mismo lenguaje
-# visual: barra como FONDO de celda vía `linear-gradient`, fila TOTAL
-# fijada abajo). Misma agregación que el gráfico que reemplazaba — suma de
-# `col_valor` por plato, SIN filtrar por activo (ese filtro tampoco lo
-# tenía `_ranking_contenedores`) — así que los números no cambian, sólo
-# cómo se dibujan.
-#
-# NO vive en recetas_comun.py como los otros 3 gráficos compartidos
-# (Sankey/Ingredientes clave/Panorama): sólo Receta Venta pidió el cambio,
-# y Receta Base se queda con el gráfico de barras compartido
-# (`_ranking_contenedores`) — mismo criterio que `_tabla_composicion_venta`,
-# arriba.
-#
-# Ancho de columnas: FIJO en las cuatro, ninguna con `flex` — arquitectura.md
-# regla #193 (`st_aggrid` inyecta `width: 200` a toda columna sin uno
-# propio, y ese ancho explícito le gana al `flex` en el render inicial; el
-# Ranking de Proveedores "funciona" con flex sólo porque nunca cruzó el
-# umbral de columnas — la regla #193 lo llama "el bug dormido").
-def _tabla_costeo_venta(df_f, col_plato, col_valor, es_soles):
-    """Vista 'Costeo Receta Venta': ranking de platos por costo (o
-    cantidad) total, en una tabla AgGrid — mismo lenguaje visual que el
-    Ranking de Proveedores de Compras."""
-    # INS RV, no ITEM RV, para el conteo de insumos: ITEM RV es el número
-    # de LÍNEA dentro de la receta, no una identidad de insumo — ver
-    # arquitectura.md regla #205 (punto 2). Columna opcional: si no está
-    # (p.ej. un export viejo), la tabla se queda sin "Ítems" en vez de
-    # romperse, mismo criterio defensivo que el resto del dashboard.
-    col_ins = _resolver(df_f, ["INS RV", "Ins Rv"])
+def receta_del_plato(df_rv, cod, nombre):
+    """La tarjeta de la receta del plato `cod`, con su simulador.
 
-    agg = {"Plato": (col_plato, "first"), "Valor": (col_valor, "sum")}
-    if col_ins:
-        agg["Items"] = (col_ins, "nunique")
-    g = df_f.groupby(col_plato, as_index=False).agg(**agg)
-    g["Plato"] = g["Plato"].astype(str)
-    g = g.sort_values("Valor", ascending=False).reset_index(drop=True)
-    if g.empty:
-        st.info("Sin datos para el ranking.")
-        return
-
-    total_valor = float(g["Valor"].sum()) or 1.0
-    g["Pct"] = g["Valor"] / total_valor * 100
-    g_max = float(g["Valor"].max()) or 1.0
-    g["_barra"] = g["Valor"] / g_max * 100
-
-    etiqueta_valor = "Costo (S/)" if es_soles else "Cantidad"
-
-    # La barra es el FONDO de la celda (mismo `linear-gradient` que el
-    # Ranking de Proveedores/Productos de Compras, arquitectura.md regla
-    # #136), escalada contra el MAYOR valor visible y topada al 62% del
-    # ancho para que el texto —alineado a la derecha— nunca caiga encima.
-    _js_barra = JsCode(
-        "function(p){"
-        " if (p.node.rowPinned) return {'display':'flex','alignItems':'center',"
-        " 'justifyContent':'flex-end','fontWeight':'700'};"
-        " var w = Math.max(0, Math.min(100, p.data._barra||0)) * 0.62;"
-        " return {'background': 'linear-gradient(90deg,"
-        f" {ACENTO} 0 ' + w + '%, transparent ' + w + '% 100%)',"
-        " 'display':'flex','alignItems':'center','justifyContent':'flex-end',"
-        f" 'color':'{TEXTO_PRINCIPAL}'"
-        "};"
-        "}")
-    # Números redondos (sin decimales): mismo formato que ya mostraban las
-    # barras del gráfico que esto reemplaza (`text=f"{pref}{v:,.0f}"`).
-    if es_soles:
-        _js_valor_fmt = JsCode(
-            "function(p){ return p.value==null ? '' :"
-            " 'S/ ' + Math.round(p.value).toLocaleString('es-PE'); }")
-    else:
-        _js_valor_fmt = JsCode(
-            "function(p){ return p.value==null ? '' :"
-            " Math.round(p.value).toLocaleString('es-PE'); }")
-    _js_pct = JsCode(
-        "function(p){ return p.value==null ? '' : Math.round(p.value) + '%'; }")
-    # Misma paleta que la fila TOTAL del Ranking de Proveedores — y desde
-    # el 2026-09-17, también sin su `borderTop`: `CSS_RANKING_GRID` apaga
-    # la línea del tema (`--ag-pinned-row-border: none`) y con las dos
-    # puestas quedaban DOS líneas apiladas de distinto color. El mismo
-    # inline se sacó de `proveedor.py` cuando ese dict nació.
-    _js_fila_total = JsCode(
-        "function(p){ if(p.node.rowPinned){ return {"
-        f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
-        f"'color':'{ACENTO_TEXTO_OSCURO}'"
-        "}; } }")
-
-    # Sin filtro de platos en esta vista (a diferencia del Ranking de
-    # Proveedores, que sí puede excluir algunos): la tabla siempre muestra
-    # TODOS, así que el TOTAL es exacto (100.0%) y no la suma de redondeos
-    # por fila.
-    _fila_total = {"Plato": "TOTAL", "Valor": round(total_valor, 2), "Pct": 100.0}
-    if col_ins:
-        _fila_total["Items"] = int(g["Items"].sum())
-
-    # 10 filas visibles + la fila TOTAL fijada, que reserva su sitio
-    # DENTRO del `height=` (sin ese sumando le come una fila a los datos)
-    # + `CROMO_GRID_RANK`, que es la cabecera y el cromo del tema medidos
-    # en el DOM. El resto de los platos scrollea DENTRO del grid — a
-    # diferencia del gráfico que esto reemplaza, ya no hace falta un
-    # selector "Mostrar N": acá el scroll hace ese trabajo (mismo criterio
-    # que el Ranking de Proveedores de Compras).
-    #
-    # Los números son los del ranking (24/32) desde el 2026-09-17; eran 28
-    # y 34 propios. Siguen siendo DIEZ filas a la vista: lo que se pidió
-    # fue el look, no menos datos — la tarjeta baja de 350 a 303px sola.
-    _ALTO_FRAME = alturas.por_filas(
-        10, px_fila=ALTO_FILA_RANK,
-        extra=CROMO_GRID_RANK + ALTO_FILA_RANK, minimo=0)
-    # El alto, ATADO desde el documento padre — misma razón y mismos DOS
-    # nodos que en `_tabla_composicion_venta`. Ver regla #410.
-    st.markdown(
-        "<style>div.st-key-rv_costeo_grid, div.st-key-rv_costeo_grid iframe "
-        f"{{ height: {_ALTO_FRAME}px !important; }}</style>",
-        unsafe_allow_html=True)
-
-    columnas = [
-        {"field": "Plato", "width": 420, "tooltipField": "Plato"},
-        {"field": "Valor", "headerName": etiqueta_valor, "width": 160,
-         "type": "numericColumn", "sort": "desc",
-         "cellStyle": _js_barra, "valueFormatter": _js_valor_fmt},
-    ]
-    campos = ["Plato", "Valor"]
-    if col_ins:
-        columnas.append({"field": "Items", "headerName": "Ítems", "width": 90,
-                         "type": "numericColumn"})
-        campos.append("Items")
-    columnas.append({"field": "Pct", "headerName": "%", "width": 80,
-                     "type": "numericColumn", "valueFormatter": _js_pct})
-    campos.append("Pct")
-    columnas.append({"field": "_barra", "hide": True})
-    campos.append("_barra")
-
-    with _card("rv_costeo",
-               f"Platos por {'costo' if es_soles else 'cantidad'} total"):
-        AgGrid(
-            g[campos],
-            gridOptions={
-                "columnDefs": columnas,
-                "defaultColDef": {"sortable": True, "resizable": True},
-                "suppressCellFocus": True,
-                "suppressMovableColumns": True,
-                "rowHeight": ALTO_FILA_RANK,
-                "headerHeight": ALTO_HEADER_RANK,
-                "pinnedBottomRowData": [_fila_total],
-                "getRowStyle": _js_fila_total,
-            },
-            allow_unsafe_jscode=True,
-            theme="streamlit",
-            # Mismo dict que la tabla de Composición y que el Ranking de
-            # proveedores del que salió: blanco sin rayado, cabecera sin
-            # franja lavanda, cuerpo de 11.5px y marco de FRANJA. Va por
-            # `custom_css=` porque el grid es un iframe.
-            custom_css=CSS_RANKING_GRID,
-            height=_ALTO_FRAME,
-            key="rv_costeo_grid",
-        )
-        st.caption(f"{len(g)} platos · ordenado por {etiqueta_valor.lower()}")
+    Devuelve `(r, costo_sim)` como `_panel_receta`: la receta vigente —la
+    del parquet o la del borrador— y el costo del borrador, o `None` si no
+    se está simulando. Las dos las usan la dona y el Sankey de al lado."""
+    c = columnas_receta(df_rv)
+    if not c["cod"]:
+        with _card("rv_comp_receta", "Receta"):
+            st.info("No se pudo leer recetaventa.parquet para mostrar la "
+                    "receta.")
+        return None, None
+    return _panel_receta(df_rv, str(cod), nombre, c["cod"], c["ins"],
+                         c["cant"], c["total"])

@@ -784,8 +784,9 @@ def _datos_demo(archivo, filas=60):
         # por ítem/insumo dentro de un plato.
         #
         # GRUPO/SUBGRUPO/P.VENTA SALON/CST SALON/%CST SALON/INS RV
-        # (sumados 2026-08-24 para la tabla "Composición" de
-        # recetaventa.py::_tabla_composicion_venta) son atributos del
+        # (sumados 2026-08-24 para la tabla "Composición", que desde el
+        # 2026-09-28 es el panel del plato de la Carta costeada, regla
+        # #556) son atributos del
         # PLATO —no del ítem—, confirmados contra R2 real: un valor por
         # COD PLATO, repetido en cada fila-ítem. Por eso se generan UNA
         # vez por plato, DESPUÉS de armar sus ítems: CST SALON tiene que
@@ -818,8 +819,7 @@ def _datos_demo(archivo, filas=60):
                     "ITEM RV": _ins,
                     # Insumo REAL: el nombre descriptivo. En el parquet
                     # real "ITEM RV" es el número de LÍNEA dentro de la
-                    # receta, no el insumo — ver docstring de
-                    # recetaventa.py::_tabla_composicion_venta.
+                    # receta, no el insumo — ver arquitectura.md regla #205.
                     "INS RV": _ins,
                     "INS ACTIVO": "ACTIV" if rng.random() < 0.95 else "INACTIV",
                     "CANTIDAD": _cant,
@@ -957,7 +957,8 @@ def sello_datos(archivo):
 def _purgar_version(archivo, sello):
     """Saca del disco lo PESADO que quedó de una versión anterior.
 
-    Sólo las dos cacheables grandes. `_rango_fechas_cacheable` y
+    Las dos cacheables grandes, y lo vendido por producto y día, que es
+    chico pero cambia de versión cada madrugada. `_rango_fechas_cacheable` y
     `_resumen_kpis_cacheable` guardan un par de fechas y un dict de KPIs
     —bytes—, y sus claves llevan `col_fecha` adentro, que acá no se conoce:
     su generación vieja no le molesta a nadie y ya nadie la lee, porque la
@@ -970,6 +971,12 @@ def _purgar_version(archivo, sello):
         # mismo argumento que `limpiar_cache`. Hoy el único reporte con
         # `carga_por_rango` es Ventas, así que el radio es uno solo.
         _cargar_rango_cacheable.clear()
+    if archivo in _PREPARAR:
+        # Lo vendido por producto y día (Recetas › Carta costeada): 3 MB por
+        # versión, pero una versión POR DÍA. Sin esto el disco juntaría uno
+        # por cada parquet de la madrugada. Se vacía entera: sólo guarda de
+        # este archivo.
+        _venta_por_producto_dia_cacheable.clear()
 
 
 @st.cache_data(ttl=3600, persist="disk")
@@ -1057,6 +1064,7 @@ def limpiar_cache(archivo):
     _cargar_rango_cacheable.clear()
     _rango_fechas_cacheable.clear()
     _resumen_kpis_cacheable.clear()
+    _venta_por_producto_dia_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -1381,3 +1389,51 @@ def resumen_kpis(archivo, kpis, col_fecha=None, col_dedup=None):
                                        definicion=_version_preparar(archivo))
     except Exception:
         return {}
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _venta_por_producto_dia_cacheable(archivo, sello, definicion=None):
+    """Lo vendido de cada producto, día por día, sobre TODO el parquet
+    (`definicion_venta.por_producto_dia`). Si falla, LANZA: no se cachea.
+
+    `sello` y `definicion` no se usan en el cuerpo: son la clave (ver el
+    bloque del sello y `_version_preparar`).
+
+    Mismo camino que los KPIs del rail: se bajan sólo las columnas que la
+    definición lee (33 de 59) y se prepara en pandas, porque agregar en SQL
+    sería una segunda copia de la definición (#524). Es lo más pesado que
+    baja la app de una vez —medido en la laptop sobre el parquet de
+    septiembre de 2026: 237.000 filas, 92 MB en memoria y 6 s—, pero lo que
+    se guarda son 56.000 filas y 3 MB, una vez por versión del parquet."""
+    prep = _PREPARAR[archivo]
+    if not secrets_disponibles():
+        return prep.por_producto_dia(prep.preparar(_datos_demo(archivo)))
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+    nombres = [r[0] for r in con.execute(
+        f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()]
+    vacio = pd.DataFrame(columns=nombres)
+    reales = list(dict.fromkeys(
+        c for c in (prep.columna(vacio, q) for q in prep.COLUMNAS) if c))
+    lista = ", ".join(f'"{c}"' for c in reales)
+    df = con.execute(f"SELECT {lista} FROM read_parquet('{url}')").df()
+    return prep.por_producto_dia(prep.preparar(df))
+
+
+def venta_por_producto_dia(archivo="ventas.parquet"):
+    """Lo vendido de cada producto por día, con la definición de venta de
+    siempre (regla #556): unidades, neto, costo, unidades con costo y neto
+    vendido sin costo. `None` si no se pudo cargar — quien lo pide sigue
+    sin esos datos en vez de caerse.
+
+    No cacheada (la interna sí), por lo mismo que `cargar()`: un fallo
+    transitorio de R2 no debe quedar guardado como None."""
+    if archivo not in _PREPARAR:
+        return None
+    try:
+        return _venta_por_producto_dia_cacheable(
+            archivo, sello_datos(archivo),
+            definicion=_version_preparar(archivo))
+    except Exception:
+        return None

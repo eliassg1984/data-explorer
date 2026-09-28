@@ -112,7 +112,9 @@ def _fuentes_py(raiz):
 
 
 def _pruebas_simulador_receta():
-    """El simulador de Recetas › Composición (`graficos/recetaventa.py`).
+    """El simulador de la receta de un plato (`graficos/recetaventa.py`), el
+    que abre un clic en Recetas › Carta costeada (hasta el 2026-09-28, en
+    Composición; regla #556).
 
     LO QUE VIGILA ES UN ORDEN, y cuesta verlo: el editor empareja lo
     tecleado con el borrador **por POSICIÓN** (`editado.iloc[i]` ↔
@@ -6154,6 +6156,8 @@ def _pruebas_carta_costeada():
     fecha 1900 en blanco, los filtros y que la vista esté en la pila, en el
     rail y en el botón de refresco del reporte.
     """
+    from datetime import date
+
     from data import REPORTES
     from graficos import carta_costeada as cc
     from graficos import recetas as rec
@@ -6201,7 +6205,13 @@ def _pruebas_carta_costeada():
           (fila.loc["0000020", "Pct"], bool(fila.loc["0000020", "SinCosto"])),
           (0.0, True))
     check("costo 0 también es «sin costo»", bool(fila.loc["0000060", "SinCosto"]), True)
-    check("la fecha 1900 queda en blanco", fila.loc["0000020", "UltimaVenta"], "")
+    # Una fecha que falta viaja como una fecha centinela que se escribe «—»:
+    # un vacío se pintaría «None» (#529), y un texto no se ordena por fecha.
+    check("la fecha 1900 queda en la centinela", fila.loc["0000020", "UltimaVenta"],
+          cc._SIN_FECHA)
+    check("y se escribe «—»", cc._dia(fila.loc["0000020", "UltimaVenta"]), "—")
+    check("una fecha de verdad se escribe entera",
+          cc._dia(fila.loc["0000010", "UltimaVenta"]), "20/09/2026")
     check("el método del combo, dicho para leerse",
           fila.loc["0000030", "Metodo"], cc.METODOS["ESPERADO 90 DIAS"])
     check("un plato normal no lleva método", fila.loc["0000010", "Metodo"], "")
@@ -6221,6 +6231,78 @@ def _pruebas_carta_costeada():
                               for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas), True)
     check("y el botón Actualizar la refresca",
           cc.ARCHIVO in REPORTES["Recetas"].get("archivos_extra", ()), True)
+
+    # ── Desde el 2026-09-28 es LA vista de la carta (regla #556) ─────────
+    # Composición era esta tabla filtrada a los platos con receta, y Costeo
+    # sumaba el mismo costo con los platos inactivos adentro: se fueron. Su
+    # panel —receta, simulador, dona y Sankey— lo abre un clic acá.
+    _vistas = {v[0] for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas}
+    check("Composición ya no es una vista (ni en el rail ni en la pila)",
+          ("Composición del plato" in _vistas)
+          or any(v == "Composición del plato" for _k, v in rec._PILA), False)
+    check("Costeo tampoco",
+          ("Costeo Receta Venta" in _vistas)
+          or any(v == "Costeo Receta Venta" for _k, v in rec._PILA), False)
+
+    check("el margen es neto − costo", round(fila.loc["0000010", "Margen"], 6),
+          round(74.1 / divisor_neto() - 24.7, 6))
+    check("sin costo no hay margen (va 0, se escribe «—»)",
+          (fila.loc["0000020", "Margen"], cc._soles(fila.loc["0000020", "Margen"])),
+          (0.0, "—"))
+    check("un margen negativo se escribe con su signo", cc._soles(-230.67), "−S/ 230.67")
+    check("«Sin enlace» y «No aplica» se pueden elegir",
+          ("Sin enlace" in cc.TIPOS, "No aplica" in cc.TIPOS), (True, True))
+    check("filtro No aplica", list(cc.filtrar(t, tipo="No aplica")["Cod"]), ["0000020"])
+
+    # Venta Interna: arranca fuera, un interruptor la suma.
+    vi = pd.concat([df, pd.DataFrame({
+        "GRUPO": ["Venta Interna"], "SUBGRUPO": ["Bebidas"], "COD PLATO": ["0000070"],
+        "ITEM VENT ACT": ["ACTIV"], "ITEM VENT": ["(Cst) Cerveza"],
+        "P.VENTA SALON": [3.89], "COSTO SALON": [3.68], "TIPO DESC": ["DIRECTO"]})],
+        ignore_index=True)
+    tvi, _ = cc.preparar(vi)
+    check("Venta Interna arranca fuera", "0000070" in set(cc.filtrar(tvi)["Cod"]), False)
+    check("y el interruptor la suma",
+          "0000070" in set(cc.filtrar(tvi, venta_interna=True)["Cod"]), True)
+
+    # Lo vendido: el resumen por producto y día de `definicion_venta`.
+    agg = pd.DataFrame({
+        "producto": ["0000010", "0000010", "0000020", "0000010"],
+        "dia": pd.to_datetime(["2026-09-27", "2026-07-01", "2026-09-20", "2026-06-01"]),
+        "unidades": [3.0, 2.0, 40.0, 100.0],
+        "neto": [180.0, 120.0, 290.0, 6000.0],
+        "costo": [72.0, 48.0, 0.0, 2400.0],
+        "unidades_costeadas": [3.0, 2.0, 0.0, 100.0],
+        "neto_sin_costo": [0.0, 0.0, 290.0, 0.0],
+    })
+    tv, rango = cc.con_ventas(t, agg)
+    fv = tv.set_index("Cod")
+    check("la ventana son 90 días hasta el último con venta",
+          rango, (date(2026, 6, 30), date(2026, 9, 27)))
+    check("vendidos: sólo lo de la ventana", fv.loc["0000010", "Vendidos"], 5.0)
+    check("el % al que se vendió es costo ÷ neto de lo vendido",
+          round(fv.loc["0000010", "PctVendido"], 6), 40.0)
+    check("lo vendido sin costo viaja aparte (y su % es «—»)",
+          (fv.loc["0000020", "SinCostoNeto"], fv.loc["0000020", "PctVendido"]),
+          (290.0, 0.0))
+    check("un producto sin ventas, 0", fv.loc["0000030", "Vendidos"], 0.0)
+    check("«Sin costo» se ordena por lo vendido",
+          list(cc.filtrar(tv, tipo="Sin costo")["Cod"]), ["0000020", "0000060"])
+    check("el resumen dice cuántos sin costo se venden",
+          "(**1** se venden)" in cc.resumen(tv), True)
+    check("sin resumen de ventas la vista sigue, en cero",
+          (cc.con_ventas(t, None)[1], float(cc.con_ventas(t, None)[0]["Vendidos"].sum())),
+          (None, 0.0))
+    kp = cc.kpis_producto(fv.loc["0000010"], rango)
+    check("los números del producto elegido",
+          ("**5** vendidos" in kp, "**40.0 %** de costo" in kp), (True, True))
+
+    rv = pd.DataFrame({"COD PLATO": ["0000010", "0000010", "0000030"],
+                       "FECH MODIF": pd.to_datetime(["2022-09-23", "2022-09-23",
+                                                     "2026-03-12"])})
+    check("la fecha de la receta, una por plato",
+          cc.fechas_de_receta(rv), {"0000010": pd.Timestamp("2022-09-23"),
+                                    "0000030": pd.Timestamp("2026-03-12")})
     return fallos
 
 

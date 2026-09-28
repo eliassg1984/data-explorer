@@ -92,6 +92,7 @@ TOTAL_DOC = "TOTAL MDOCUMENTO"
 PAX = "CANT PAX"
 CANTIDAD = "CANTIDAD ITEM DDOCUMENTO"
 VENTA_ITEM = "VENTA ITEM DDOCUMENTO"
+NETO_ITEM = "NETO TOTAL ITEM DDOCUMENTO"
 CARTA_UNIT = "PRECIO OFICIAL ITEM DDOCUMENTO"
 DESCUENTO_ITEM = "DESCUENTO ITEM DDOCUMENTO"
 COSTO_UNIT = "PRECIO COSTO"
@@ -134,7 +135,7 @@ nombra a los que falten; el arreglo de fondo es la columna `ES_COMBO`."""
 # costo, neto, venta) no se tocan — carta y costo salen de unitario ×
 # cantidad, y con la cantidad en negativo ya restan.
 _MONTOS_LINEA = (
-    VENTA_ITEM, "NETO TOTAL ITEM DDOCUMENTO", DESCUENTO_ITEM,
+    VENTA_ITEM, NETO_ITEM, DESCUENTO_ITEM,
     "IGV ITEM DDOCUMENTO", "RECARGO ITEM DDCOUMENTO", CANTIDAD,
 )
 # Del PAGO del documento anulado: la nota no paga ni deja propina.
@@ -515,6 +516,65 @@ def puente(df):
         out["carta"] = _suma(carta, VENTA)
         out["descuentos"] = _suma(desc, VENTA)
     return out
+
+
+POR_PRODUCTO_DIA = ("producto", "dia", "unidades", "neto", "costo",
+                    "unidades_costeadas", "neto_sin_costo")
+"""Las columnas de `por_producto_dia`, con nombre fijo (regla #481)."""
+
+
+def por_producto_dia(df):
+    """Lo vendido de cada producto, día por día, sobre el df PREPARADO: una
+    fila por (producto, día) con las unidades, el neto, el costo, las
+    unidades que traen costo y el neto que se vendió SIN costo.
+
+    Las mismas cuentas que suman las vistas de Ventas: sin cortesías ni
+    anulados, las notas de crédito restando y un ítem una vez (regla #517).
+    Es lo que lee la Carta costeada de Recetas para lo vendido en 90 días
+    y para el costo de cada plato en el tiempo (regla #556).
+
+    El costo con que se vendió es una FOTO del POS al pedir
+    (`DPEDIDO.nInsumo`, o lo servido de `CPEDIDO` en un combo) y el POS no
+    la corrige después: un plato vendido antes de cargarle la receta queda
+    con costo 0 para siempre. Por eso ese neto viaja aparte
+    (`neto_sin_costo`) y el costo por unidad se saca sólo de las unidades
+    que SÍ lo traen (`unidades_costeadas`)."""
+    vacio = pd.DataFrame(columns=list(POR_PRODUCTO_DIA))
+    if df is None or df.empty:
+        return vacio
+    c_prod, c_fecha, c_cant = (columna(df, PRODUCTO), columna(df, FECHA),
+                               columna(df, CANTIDAD))
+    if not (c_prod and c_fecha and c_cant):
+        return vacio
+    d = solo_venta(df)
+    c_item = columna(d, LLAVE_ITEM)
+    if c_item:
+        llave = d[c_item]
+        d = d[~(llave.duplicated() & llave.notna())]
+
+    def _num(nombre):
+        c = columna(d, nombre)
+        if c is None:
+            return pd.Series(0.0, index=d.index)
+        return pd.to_numeric(d[c], errors="coerce").fillna(0.0)
+
+    cant, neto, costo = _num(CANTIDAD), _num(NETO_ITEM), _num(COSTO)
+    b = pd.DataFrame({
+        "producto": d[c_prod].astype("string").str.strip(),
+        "dia": pd.to_datetime(d[c_fecha], errors="coerce").dt.normalize(),
+        "unidades": cant,
+        "neto": neto,
+        "costo": costo,
+        "unidades_costeadas": cant.where(costo != 0, 0.0),
+        "neto_sin_costo": neto.where(costo == 0, 0.0),
+    }).dropna(subset=["producto", "dia"])
+    b = b[b["producto"] != ""]
+    if b.empty:
+        return vacio
+    g = b.groupby(["producto", "dia"], as_index=False)[
+        list(POR_PRODUCTO_DIA[2:])].sum()
+    g["producto"] = g["producto"].astype(object)
+    return g
 
 
 def resumir(df, kpis, col_ped=None, col_item=None):

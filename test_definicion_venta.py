@@ -337,6 +337,38 @@ k = dv.resumir(prep, (("Venta", "VENTA ITEM DDOCUMENTO", "sum"),
 igual(k.get("Venta"), 280.0, "venta del rail = venta de las vistas")
 igual(k.get("Pax"), 6.0, "clientes del rail = los de las vistas")
 
+print("\n── lo vendido por producto y día (Recetas › Carta costeada, #556) ──")
+# El parquet de arriba con un código por producto (el nombre sirve) y el
+# Pisco sin costo: lo que queda con costo 0 en el histórico del POS.
+_x = crudo.assign(**{"COD ITEM VENTA DDOCUMENTO": crudo["NOMB ITEM VENTA"]})
+_x.loc[_x["NOMB ITEM VENTA"] == "Pisco", "PRECIO COSTO"] = 0.0
+_pd = dv.por_producto_dia(dv.preparar(_x, D1, D3))
+ok(list(_pd.columns) == list(dv.POR_PRODUCTO_DIA),
+   "columnas de nombre fijo (regla #481)", str(list(_pd.columns)))
+_pdi = _pd.assign(d=_pd["dia"].dt.date).set_index(["producto", "d"])
+igual(float(_pdi.loc[("Lomo", D1), "unidades"]), 1.0,
+      "un ítem una vez: el Lomo pagado con dos formas es UNA unidad")
+igual(float(_pdi.loc[("Lomo", D1), "costo"]), 33.0, "con el costo de su línea")
+igual(float(_pdi.loc[("Lomo", D3), "unidades"]), 0.0,
+      "el canje: el día 3 la factura suma y la nota resta")
+igual(float(_pd.loc[_pd["producto"] == "Lomo", "unidades"].sum()), 1.0,
+      "sin el anulado (otro Lomo, del día 3)")
+ok("Postre" not in set(_pd["producto"]), "sin la cortesía")
+igual(float(_pdi.loc[("Pato", D3), "unidades"]), 1.0, "por cobrar es venta")
+igual(float(_pdi.loc[("Pisco", D3), "neto_sin_costo"]), 20.0 / 1.18,
+      "lo vendido sin costo viaja aparte")
+igual(float(_pdi.loc[("Pisco", D3), "unidades_costeadas"]), 0.0,
+      "y no cuenta para el costo por unidad")
+_pdc = dv.por_producto_dia(prep_c)
+igual(float(_pdc.loc[_pdc["producto"] == COMBO, "costo"].sum()), 150.0,
+      "el combo: su costo de LÍNEA una vez, con el canje restando (no 450)")
+igual(float(_pdc.loc[_pdc["producto"] == COMBO, "unidades"].sum()), 3.0,
+      "y sus tres unidades")
+_sin_cod = pd.DataFrame({"Fec Reg Documento": [pd.Timestamp(D1)],
+                         "Venta Item Ddocumento": [10.0]})
+ok(dv.por_producto_dia(None).empty and dv.por_producto_dia(_sin_cod).empty,
+   "sin datos, o sin código de producto, sale vacío")
+
 print("\n── sin las columnas de la nota (el demo): sólo clasifica ──")
 demo = pd.DataFrame({"Fec Reg Documento": [pd.Timestamp(D1)] * 2,
                      "Venta Item Ddocumento": [10.0, 5.0],
