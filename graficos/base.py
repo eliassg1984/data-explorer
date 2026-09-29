@@ -1898,8 +1898,12 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
     # SUNAT) no tiene sección: con la vista elegida ya se dibuja, que es lo
     # que hace un clic en el rail. El destino anterior se borra siempre, así
     # que uno que no llegó a consumirse no se queda esperando a otra pila.
+    # `getattr` y no el atributo a secas: en Cloud este módulo puede
+    # recargarse con el `navegacion` viejo en memoria (regla #357), y ahí
+    # la constante no existe — sin salto, no sin app.
     st.session_state.pop(_CLAVE_SECCION_DESTINO, None)
-    _salto = st.session_state.pop(navegacion.CLAVE_SALTO_VISTA, None)
+    _clave_salto = getattr(navegacion, "CLAVE_SALTO_VISTA", None)
+    _salto = st.session_state.pop(_clave_salto, None) if _clave_salto else None
     if _salto is not None and secciones:
         _dest = next((_cl for _cl, _oid in secciones if _oid == _salto), None)
         if _dest:
