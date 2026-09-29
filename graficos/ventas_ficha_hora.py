@@ -456,11 +456,21 @@ def _factor(etiqueta, valor, actual, normal_, fmt, total=False, neutro=False,
 
 # ── HTML de cada bloque ─────────────────────────────────────────────────────
 
-def _html_normal(v, previas, dow, hora):
+# Dónde van los puntos dentro de la tira; la tira, el eje, la mediana y los
+# ticks los pone `estilos/_80_cards.py` y tienen que acompañar este número.
+# 26 → 40 el 2026-09-29 (#566): «que el gráfico tenga un poco más de
+# espacio»; los carriles pasaron de ±8/±15 a ±10/±19.
+_Y_PUNTOS = 40
+
+
+def _html_normal(v, previas, dow, hora, con_rotulo=True):
     vb = [p["v"] for p in previas]
     med = mediana(vb)
-    html = [f'<p class="vhh-h3">Contra lo normal {_info("normal")}</p>',
-            f'<p class="vhh-frase">{frase_normal(v, vb, dow, hora)}</p>']
+    # El rótulo va en la fila de Venta · Pax · Ticket cuando la ficha lo
+    # pide (#566): en renglón propio le quitaba 20 px a la tira.
+    html = ([f'<p class="vhh-h3">Contra lo normal {_info("normal")}</p>']
+            if con_rotulo else [])
+    html += [f'<p class="vhh-frase">{frase_normal(v, vb, dow, hora)}</p>']
     # Sin semanas, o con todo en cero, la frase ya lo dijo: una tira de nueve
     # puntos apilados en S/ 0 no agrega nada.
     if not vb or (not v and not max(vb)):
@@ -472,7 +482,7 @@ def _html_normal(v, previas, dow, hora):
         xp = x(p["v"])
         # Carriles: dos puntos que caen casi en el mismo lugar se apilan
         # arriba y abajo en vez de taparse.
-        off = next((o for o in (0, -8, 8, -15, 15)
+        off = next((o for o in (0, -10, 10, -19, 19)
                     if not any(q == o and abs(xq - xp) < 2.6
                                for xq, q in puestos)), 0)
         puestos.append((xp, off))
@@ -480,14 +490,15 @@ def _html_normal(v, previas, dow, hora):
         tit = _esc(f"{cortes.DIAS_ABR_ES[f.weekday()]} {f.day} "
                    f"{cortes.MESES_ABR_ES[f.month - 1]} · {_soles(p['v'])}")
         puntos.append(f'<span class="vhh-punto" title="{tit}" '
-                      f'style="left:{xp:.1f}%;top:{26 + off}px"></span>')
+                      f'style="left:{xp:.1f}%;top:{_Y_PUNTOS + off}px"></span>')
     xa = x(v)
     lado = " der" if xa > 85 else (" izq" if xa < 12 else "")
     tira = ('<div class="vhh-tira"><span class="vhh-eje"></span>'
             + (f'<span class="vhh-med" style="left:{x(med):.1f}%"></span>'
                if med is not None else "")
             + "".join(puntos)
-            + f'<span class="vhh-punto act" style="left:{xa:.1f}%;top:26px" '
+            + f'<span class="vhh-punto act" style="left:{xa:.1f}%;'
+              f'top:{_Y_PUNTOS}px" '
               f'title="esta hora · {_soles(v)}"></span>'
             + f'<span class="vhh-valor{lado}" style="left:{xa:.1f}%">'
               f'{_soles(v)}</span>'
@@ -759,7 +770,11 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
             f'<span class="vhh-sub">{sub}</span></p>'
             f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
             f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Ticket<b>'
-            f'{_soles2(v_hora / pax_hora) if pax_hora else "—"}</b></span></p>',
+            f'{_soles2(v_hora / pax_hora) if pax_hora else "—"}</b></span>'
+            # «CONTRA LO NORMAL» en esta fila (#566), sólo en esa vista.
+            + (f'<span class="vhh-h3 vhh-kpi-rot">Contra lo normal '
+               f'{_info("normal")}</span>' if vista == VISTAS[0] else "")
+            + '</p>',
             unsafe_allow_html=True)
         if raros:
             st.markdown(
@@ -769,7 +784,8 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
 
     if vista == VISTAS[0]:
         with c_a:
-            st.markdown(_html_normal(v_hora, previas, dow, hora),
+            st.markdown(_html_normal(v_hora, previas, dow, hora,
+                                     con_rotulo=False),
                         unsafe_allow_html=True)
         with c_b:
             st.markdown(_html_mesa(met, previas, v_hora, conc, dow, hora, n,

@@ -3708,6 +3708,16 @@ CSS = """    /* ================================================================
         font-size: 12px !important;
         color: var(--text-secondary) !important;
     }
+    /* «CONTRA LO NORMAL» en la fila de los KPIs (#566), apartado por una
+       línea: es el título de lo que va debajo, no un KPI más. */
+    .st-key-chartcard_ventas_horario_hora .vhh-kpis .vhh-kpi-rot {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        margin: 0 !important;
+        padding-left: 14px !important;
+        border-left: 1px solid var(--border) !important;
+    }
     .st-key-chartcard_ventas_horario_hora .vhh-kpis b {
         margin-left: 6px !important;
         font-size: 15px !important;
@@ -3792,8 +3802,11 @@ CSS = """    /* ================================================================
         color: var(--text-secondary) !important;
         cursor: help !important;
     }
+    /* 14 px arriba (#566): sin el rótulo «Contra lo normal» encima, la
+       frase es lo primero de su markdown y el -16px del de arriba (#162)
+       la montaba 10 px sobre Venta · Pax · Ticket (medido). */
     .st-key-chartcard_ventas_horario_hora .vhh-frase {
-        margin: 0 0 2px !important;
+        margin: 14px 0 2px !important;
         font-size: 15px !important;
         font-weight: 600 !important;
         color: var(--text-primary) !important;
@@ -3811,9 +3824,12 @@ CSS = """    /* ================================================================
     /* La tira de «Contra lo normal»: el eje a 44px, los puntos centrados a
        26px (Python les suma el carril con `top`) y la mediana como una raya
        vertical. Las posiciones `left` las pone Python en %: son el dato. */
+    /* Más alta el 2026-09-29 (#566): 62 → 90, con los puntos en y=40
+       (`ventas_ficha_hora._Y_PUNTOS`), el eje en 66 y los carriles de
+       los puntos que coinciden más separados. */
     .st-key-chartcard_ventas_horario_hora .vhh-tira {
         position: relative !important;
-        height: 62px !important;
+        height: 90px !important;
         margin: 2px 12px 0 6px !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-tira > span {
@@ -3822,12 +3838,12 @@ CSS = """    /* ================================================================
     .st-key-chartcard_ventas_horario_hora .vhh-eje {
         left: 0 !important;
         right: 0 !important;
-        top: 44px !important;
+        top: 66px !important;
         border-top: 1px solid var(--border) !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-med {
-        top: 11px !important;
-        height: 30px !important;
+        top: 16px !important;
+        height: 48px !important;
         border-left: 1.5px solid var(--text-secondary) !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-punto {
@@ -3861,7 +3877,7 @@ CSS = """    /* ================================================================
         transform: none !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-tick {
-        top: 48px !important;
+        top: 70px !important;
         font-size: 10.5px !important;
         white-space: nowrap !important;
         color: var(--text-secondary) !important;

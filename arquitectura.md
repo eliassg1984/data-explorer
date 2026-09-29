@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-565 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+566 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (192)
+**CSS y estilos** (193)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -226,6 +226,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#562** — La cabecera de «Por hora» no tiene texto fijo más que el título: los rótulos, los avisos y lo…
 - **#564** — La ficha de la hora va en dos columnas desde arriba: la botonera de vistas son pestañas de…
 - **#565** — En la ficha de la hora, el subtítulo va en el renglón del título y «POR MESA» en la fila de…
+- **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
 
 **Layout y alturas** (78)
 
@@ -852,7 +853,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (132)
+**Decisiones de diseño y UX** (133)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -986,6 +987,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#562** — La cabecera de «Por hora» no tiene texto fijo más que el título: los rótulos, los avisos y lo…
 - **#563** — La ficha de la hora entra entera debajo del mapa: la resta del panel se midió de nuevo con la…
 - **#564** — La ficha de la hora va en dos columnas desde arriba: la botonera de vistas son pestañas de…
+- **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45199,6 +45201,27 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-29.)
 
+566. **«CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira
+     de puntos crece con lo que libera.**
+     2026-09-29, a pedido, con captura, sobre la #565: «que el texto
+     Contra lo normal figure en la misma fila de venta pax ticket, y que
+     el gráfico tenga un poco más de espacio».
+
+     - **El rótulo** es un `<span class="vhh-h3 vhh-kpi-rot">` al final de
+       `.vhh-kpis`, apartado por una línea, sólo en la vista «Contra lo
+       normal»; `_html_normal(con_rotulo=False)` deja de dibujarlo abajo.
+     - **La tira pasa de 62 a 90 px**: los puntos en y=40
+       (`ventas_ficha_hora._Y_PUNTOS`, que el CSS acompaña: eje en 66,
+       mediana de 16 a 64, ticks en 70) y los carriles de los puntos que
+       coinciden de ±8/±15 a ±10/±19, para que un racimo se lea.
+     - **La trampa**: sin el rótulo encima, la frase («La 2.ª más alta…»)
+       quedó primera en su markdown y el `-16px` del markdown de arriba
+       (#162) la montó 10 px sobre los KPIs. Va con `margin-top: 14px`.
+     - Medido a 1366×768: la ficha en «Contra lo normal» 282 px, sin
+       scroll (277 antes: la tira gana 28 y el rótulo devuelve ~23).
+
+     (2026-09-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45211,7 +45234,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#565**; la próxima toma el número siguiente.
+> última regla es la **#566**; la próxima toma el número siguiente.
 
 >
 
