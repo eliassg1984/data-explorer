@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-566 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+567 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (193)
 
@@ -416,7 +416,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#554** — En el mapa de «Por hora», la fila bajo el cursor se ENMARCA entera y su hora va en negrita;…
 - **#565** — En la ficha de la hora, el subtítulo va en el renglón del título y «POR MESA» en la fila de…
 
-**AgGrid y tablas** (87)
+**AgGrid y tablas** (88)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -505,6 +505,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
+- **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 
 **Streamlit** (154)
 
@@ -853,7 +854,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (133)
+**Decisiones de diseño y UX** (134)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -988,6 +989,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#563** — La ficha de la hora entra entera debajo del mapa: la resta del panel se midió de nuevo con la…
 - **#564** — La ficha de la hora va en dos columnas desde arriba: la botonera de vistas son pestañas de…
 - **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
+- **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45222,6 +45224,35 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-29.)
 
+567. **«Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella
+     y «Contra lo normal».**
+     2026-09-29, a pedido, con captura: «más aire entre los dos gráficos»
+     y los cuadros «un poco más simétricos y menos largos
+     horizontalmente». Eran tres renglones de 3, 2 y 3 cuadros de anchos
+     distintos, con un «S/ 471 por mesa =» suelto al inicio del segundo.
+
+     - **Arriba, la cuenta entera**: venta en mesas = mesas × personas por
+       mesa × gasto por persona. Es exacta (venta por mesa = personas ×
+       gasto). **Abajo**: venta por mesa, tiempo en la mesa, venta por
+       hora de mesa, mesas a la vez.
+     - **Lo que se perdía, y cómo se devolvió**: la lectura en dos pasos
+       («venta por mesa» como resultado de personas × gasto). A pedido, la
+       celda de «Venta por mesa» lleva la nota «= personas × gasto»
+       (`_factor(nota=...)`).
+     - **Los nombres no se acortan**: van en hasta dos renglones (a
+       pedido, entre acortar o partir). Se había probado acortar —
+       «Venta por hora» perdía el «de mesa», que es lo que dice que es
+       por mesa ocupada— y el usuario eligió partir.
+     - **La grilla es CSS grid de 7 columnas** (4 de celda y 3 angostas de
+       12 px para el «=» y los «×»; abajo van vacías, así las dos filas
+       quedan alineadas). Cada celda: rótulo, valor con flecha, nota si
+       hay, lo normal.
+     - **El aire** es una columna vacía: `st.columns([5, 1, 6])`.
+     - Medido a 1366×768: celdas de 67 px arriba y 85 abajo (los nombres
+       de dos renglones), ficha de 285 px, sin scroll.
+
+     (2026-09-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45234,7 +45265,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#566**; la próxima toma el número siguiente.
+> última regla es la **#567**; la próxima toma el número siguiente.
 
 >
 

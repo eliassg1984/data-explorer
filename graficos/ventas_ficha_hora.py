@@ -440,18 +440,23 @@ def _chip(actual, normal_, neutro=False):
 
 
 def _factor(etiqueta, valor, actual, normal_, fmt, total=False, neutro=False,
-            info=None):
+            info=None, nota=None):
     nor = (f"normal {fmt(normal_)}" if normal_ is not None
            else "sin semanas para comparar")
-    # Dos renglones y no cuatro (2026-09-29, a pedido: «que los cuadrantes
-    # sean más pequeños», para no hacer scroll): el rótulo con su normal
-    # arriba, el valor con su flecha abajo. Regla #563.
+    # Una celda de la grilla de «Por mesa» (regla #567): el rótulo (en
+    # hasta dos renglones, a pedido: sin acortar nombres), el valor con su
+    # flecha y, debajo, lo normal. Las celdas miden todas lo
+    # mismo; lo que antes era un renglón largo con la normal a la derecha
+    # (#563) pasó a tres renglones cortos para que la grilla sea angosta.
     return (f'<div class="vhh-factor{" total" if total else ""}">'
-            f'<span class="vhh-fl1"><span class="vhh-flab">{etiqueta}'
+            f'<span class="vhh-flab" title="{_esc(etiqueta, quote=True)}">'
+            f'<span class="vhh-flab-t">{etiqueta}</span>'
             f'{" " + _info(info) if info else ""}</span>'
-            f'<span class="vhh-fnor">{nor}</span></span>'
             f'<span class="vhh-fl2"><span class="vhh-fval">{valor}</span>'
-            f'{_chip(actual, normal_, neutro)}</span></div>')
+            f'{_chip(actual, normal_, neutro)}</span>'
+            # `nota`: de dónde sale el valor, cuando la grilla no lo dice.
+            + (f'<span class="vhh-fnota">{nota}</span>' if nota else "")
+            + f'<span class="vhh-fnor">{nor}</span></div>')
 
 
 # ── HTML de cada bloque ─────────────────────────────────────────────────────
@@ -535,31 +540,39 @@ def _html_mesa(met, previas, v_hora, conc, dow, hora, n_pedidos,
         return "".join(html) + f'<p class="vhh-nota">{txt}</p>'
     uno = lambda v: f"{v:,.0f}"    # noqa: E731
     dec = lambda v: f"{v:,.1f}"    # noqa: E731
+    # UNA GRILLA DE 4 × 2 (2026-09-29, a pedido: «más simétrica y menos
+    # larga horizontalmente», regla #567). Arriba la cuenta entera, que es
+    # exacta: venta en mesas = mesas × personas por mesa × gasto por
+    # persona. Abajo, lo que la explica por otro lado: la venta por mesa
+    # (el producto de las dos de la derecha), el tiempo, la venta por hora
+    # de mesa y las mesas a la vez. Antes eran tres renglones de 3, 2 y 3
+    # cuadros de distinto ancho, con un «S/ 471 por mesa =» suelto.
+    op = (lambda t: f'<span class="vhh-op">{t}</span>')   # noqa: E731
+    nada = '<span class="vhh-op"></span>'
     html.append(
-        '<div class="vhh-cadena">'
+        '<div class="vhh-grilla">'
         + _factor("Venta en mesas", _soles(met["v"]), met["v"],
                   mediana(p["v_mesas"] for p in previas), _soles, total=True)
-        + '<span class="vhh-op">=</span>'
+        + op("=")
         + _factor("Mesas", uno(met["mesas"]), met["mesas"], n_mesas, uno)
-        + '<span class="vhh-op">×</span>'
-        + _factor("Venta por mesa", _soles(met["vxm"]), met["vxm"], nb("vxm"),
-                  _soles)
-        + "</div>")
-    html.append(
-        '<div class="vhh-cadena">'
-        f'<span class="vhh-intro">{_soles(met["vxm"])} por mesa =</span>'
+        + op("×")
         + _factor("Personas por mesa", dec(met["pxm"]), met["pxm"], nb("pxm"),
                   dec)
-        + '<span class="vhh-op">×</span>'
+        + op("×")
         + _factor("Gasto por persona", _soles(met["gxp"]), met["gxp"],
                   nb("gxp"), _soles)
-        + "</div>")
-    html.append(
-        '<div class="vhh-cadena">'
+        # La nota devuelve lo que decía el renglón «S/ 471 por mesa =
+        # personas × gasto» de antes: en la grilla la venta por mesa quedó
+        # abajo, lejos de sus dos factores (a pedido, #567).
+        + _factor("Venta por mesa", _soles(met["vxm"]), met["vxm"], nb("vxm"),
+                  _soles, nota="= personas × gasto")
+        + nada
         + _factor("Tiempo en la mesa", _dur(met["dur"]), met["dur"],
                   nb("dur"), _dur, neutro=True, info="dur")
+        + nada
         + _factor("Venta por hora de mesa", _soles(met["vxh"]), met["vxh"],
                   nb("vxh"), _soles, info="vxh")
+        + nada
         + _factor("Mesas a la vez, máx.", uno(conc), conc,
                   mediana(p["conc"] for p in previas), uno, neutro=True,
                   info="conc")
@@ -743,7 +756,10 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
     # vacía todo ese alto. Ahora la derecha lleva la botonera y, pegado
     # debajo, lo de la vista; la izquierda, el título y lo normal.
     # columnas-internas: la ficha en dos columnas, como el mockup
-    c_a, c_b = st.columns([5, 7], gap="large")
+    # Con un hueco entre las dos (2026-09-29, a pedido: «más aire entre los
+    # dos gráficos», regla #567): la tira de puntos y la grilla se leían
+    # como una sola cosa. La grilla, más angosta, cabe en 6.
+    c_a, _hueco, c_b = st.columns([5, 1, 6], gap="large")
     with c_b:
         with st.container(horizontal=True, vertical_alignment="center",
                           key="vhh_barra"):

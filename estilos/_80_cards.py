@@ -3941,23 +3941,49 @@ CSS = """    /* ================================================================
         white-space: nowrap !important;
         color: var(--text-secondary) !important;
     }
-    /* Dos renglones desde el 2026-09-29 (regla #563): rótulo + normal
-       arriba, valor + flecha abajo. Con cuatro, las tres filas de «Por
-       mesa» no entraban en la pantalla con el mapa arriba. */
+    /* LA GRILLA DE «POR MESA» (regla #567): 4 × 2 celdas del mismo ancho,
+       con una columna angosta entre cada una para el «=» y los «×» de la
+       cuenta de arriba (abajo va vacía, así las dos filas quedan
+       alineadas). Cada celda: rótulo, valor con flecha, lo normal. */
+    .st-key-chartcard_ventas_horario_hora .vhh-grilla {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) 12px
+                               minmax(0, 1fr) 12px minmax(0, 1fr) !important;
+        gap: 8px 4px !important;
+        align-items: stretch !important;
+        margin: 0 0 8px !important;
+    }
     .st-key-chartcard_ventas_horario_hora .vhh-factor {
-        flex: 1 1 150px !important;
-        min-width: 140px !important;
+        min-width: 0 !important;
         display: flex !important;
         flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 0 !important;
-        padding: 4px 9px !important;
+        align-items: flex-start !important;
+        gap: 1px !important;
+        padding: 6px 9px !important;
         border: 1px solid var(--border) !important;
         border-radius: 8px !important;
         background: var(--bg-card) !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-factor.total {
         background: var(--bg-primary) !important;
+    }
+    /* El nombre en hasta dos renglones, entero (a pedido: nada de «…»).
+       La ⓘ va pegada al final del texto. */
+    .st-key-chartcard_ventas_horario_hora .vhh-flab {
+        align-items: flex-start !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-flab-t {
+        white-space: normal !important;
+        line-height: 1.25 !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-flab .vhh-info {
+        flex: none !important;
+    }
+    /* La nota de «Venta por mesa»: de dónde sale el número. */
+    .st-key-chartcard_ventas_horario_hora .vhh-fnota {
+        font-size: 11px !important;
+        font-style: italic !important;
+        color: var(--text-secondary) !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-fl1,
     .st-key-chartcard_ventas_horario_hora .vhh-fl2 {
@@ -3975,6 +4001,7 @@ CSS = """    /* ================================================================
         display: inline-flex !important;
         align-items: center !important;
         gap: 5px !important;
+        max-width: 100% !important;
         font-size: 11.5px !important;
         color: var(--text-secondary) !important;
     }
