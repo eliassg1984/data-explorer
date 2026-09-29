@@ -96,7 +96,7 @@ _K_SALON_VALOR = "_vh_mesas_salon_valor"
 # con el mapa arriba no se veía nunca junta. Una botonera en su encabezado
 # alterna los tres en el MISMO lugar. Su valor sobrevive a cerrar la ficha:
 # quien mira pedidos suele seguir mirando pedidos en la hora siguiente.
-_K_VISTA = "vh_ficha_vista"
+_K_VISTA = "vh_op_ficha"
 VISTAS = ("Contra lo normal", "Mesas del salón", "Pedidos")
 
 _INFO = {
@@ -704,26 +704,6 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
     sub = (f"{n} {'pedido' if n == 1 else 'pedidos'} {verbo} entre {la} "
            f"{h12}:00 y {la} {h12}:59 {ampm}" if n else
            "Ningún pedido a esta hora")
-    # columnas-internas: el título de la ficha, la botonera y el cerrar
-    c_t, c_v, c_x = st.columns([5.5, 4.5, 1.3], vertical_alignment="top")
-    with c_v:
-        if st.session_state.get(_K_VISTA) not in VISTAS:
-            st.session_state[_K_VISTA] = VISTAS[0]
-        vista = st.pills("Ver", list(VISTAS), key=_K_VISTA,
-                         label_visibility="collapsed") or VISTAS[0]
-    with c_t:
-        st.markdown(
-            f'<p class="vhh-tit">{_DIAS[dow].capitalize()} {dia.day} '
-            f'{cortes.MESES_ABR_ES[dia.month - 1]} · '
-            f'{cortes.etiqueta_hora(hora)}</p><p class="vhh-sub">{sub}</p>'
-            f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
-            f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Ticket<b>'
-            f'{_soles2(v_hora / pax_hora) if pax_hora else "—"}</b></span></p>',
-            unsafe_allow_html=True)
-    with c_x:
-        st.button("Cerrar", key="vh_foco_cerrar", icon=":material/close:",
-                  on_click=al_cerrar, use_container_width=True)
-
     raros = []
     if n:
         _vi = float(pc.loc[pc["vi"], "v"].sum())
@@ -733,19 +713,48 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
                          "personas ni ocupa mesa")
         if _ev > 0:
             raros.append(f"{_soles(_ev)} de Eventos")
-    if raros:
-        st.markdown(
-            f'<div class="vhh-aviso">Esta hora incluye {" y ".join(raros)}. '
-            'El interruptor «Venta Interna y Eventos» los saca del mapa.'
-            '</div>', unsafe_allow_html=True)
 
     t0, t1, h0, h1 = ventana_servicio(dia, horas, hora)
     conc = pico(ini, fin, h0, h1)
     salon = st.session_state.get(_K_SALON_VALOR) or 0
 
+    if st.session_state.get(_K_VISTA) not in VISTAS:
+        st.session_state[_K_VISTA] = VISTAS[0]
+    vista = st.session_state[_K_VISTA]
+
+    # DOS COLUMNAS DESDE ARRIBA (2026-09-29, a pedido: «subir los
+    # cuadrantes», regla #564). Antes el título, la botonera y el cerrar
+    # eran una fila propia y «Por mesa» empezaba recién debajo del bloque
+    # del título (título, subtítulo, KPIs: ~75 px), con la columna derecha
+    # vacía todo ese alto. Ahora la derecha lleva la botonera y, pegado
+    # debajo, lo de la vista; la izquierda, el título y lo normal.
+    # columnas-internas: la ficha en dos columnas, como el mockup
+    c_a, c_b = st.columns([5, 7], gap="large")
+    with c_b:
+        with st.container(horizontal=True, vertical_alignment="center",
+                          key="vhh_barra"):
+            # Pestañas de línea, no cápsulas: la key cae en las reglas de
+            # `vh_op_` de estilos/_80_cards.py (texto con subrayado).
+            vista = st.pills("Ver", list(VISTAS), key=_K_VISTA,
+                             label_visibility="collapsed") or VISTAS[0]
+            st.button("Cerrar", key="vh_foco_cerrar",
+                      icon=":material/close:", on_click=al_cerrar)
+    with c_a:
+        st.markdown(
+            f'<p class="vhh-tit">{_DIAS[dow].capitalize()} {dia.day} '
+            f'{cortes.MESES_ABR_ES[dia.month - 1]} · '
+            f'{cortes.etiqueta_hora(hora)}</p><p class="vhh-sub">{sub}</p>'
+            f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
+            f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Ticket<b>'
+            f'{_soles2(v_hora / pax_hora) if pax_hora else "—"}</b></span></p>',
+            unsafe_allow_html=True)
+        if raros:
+            st.markdown(
+                f'<div class="vhh-aviso">Esta hora incluye '
+                f'{" y ".join(raros)}. El interruptor «Venta Interna y '
+                'Eventos» los saca del mapa.</div>', unsafe_allow_html=True)
+
     if vista == VISTAS[0]:
-        # columnas-internas: lo normal y las cuentas por mesa, como el mockup
-        c_a, c_b = st.columns([5, 7], gap="large")
         with c_a:
             st.markdown(_html_normal(v_hora, previas, dow, hora),
                         unsafe_allow_html=True)

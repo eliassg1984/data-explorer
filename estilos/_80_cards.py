@@ -3704,6 +3704,33 @@ CSS = """    /* ================================================================
     .st-key-chartcard_ventas_horario_hora .st-key-vh_mesas_salon {
         margin-top: 14px !important;
     }
+    /* La barra de la ficha (regla #564): las pestañas de línea a la
+       izquierda —su estilo viene de las reglas de `vh_op_`— y «Cerrar» al
+       extremo, como texto y no como caja: con borde medía 40 px y fijaba
+       el alto de la fila. */
+    .st-key-vhh_barra {
+        flex-wrap: nowrap !important;
+        min-height: 0 !important;
+    }
+    .st-key-vhh_barra > .st-key-vh_foco_cerrar {
+        margin-left: auto !important;
+    }
+    .st-key-vh_foco_cerrar button {
+        min-height: 0 !important;
+        height: 26px !important;
+        padding: 0 6px !important;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-vh_foco_cerrar button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-vh_foco_cerrar button p {
+        font-size: 13px !important;
+    }
     .st-key-chartcard_ventas_horario_hora .vhh-aviso {
         margin: 2px 0 !important;
         padding: 7px 10px !important;

@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-563 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+564 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (190)
+**CSS y estilos** (191)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -224,6 +224,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#541** — Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre el reporte, dibujaba un…
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 - **#562** — La cabecera de «Por hora» no tiene texto fijo más que el título: los rótulos, los avisos y lo…
+- **#564** — La ficha de la hora va en dos columnas desde arriba: la botonera de vistas son pestañas de…
 
 **Layout y alturas** (78)
 
@@ -849,7 +850,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (131)
+**Decisiones de diseño y UX** (132)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -982,6 +983,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#561** — «Por hora» cabe en una pantalla: la cabecera es UNA fila de desplegables y la ficha de la…
 - **#562** — La cabecera de «Por hora» no tiene texto fijo más que el título: los rótulos, los avisos y lo…
 - **#563** — La ficha de la hora entra entera debajo del mapa: la resta del panel se midió de nuevo con la…
+- **#564** — La ficha de la hora va en dos columnas desde arriba: la botonera de vistas son pestañas de…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45144,6 +45146,34 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-29.)
 
+564. **La ficha de la hora va en dos columnas desde arriba: la botonera
+     de vistas son pestañas de línea en la columna derecha, y «Por mesa»
+     arranca pegado debajo de ella.**
+     2026-09-29, a pedido, con captura: «hacer los toggle como si fuesen
+     líneas y subir los cuadrantes más arriba». El título, la botonera y
+     el «Cerrar» eran una fila propia; «Por mesa» empezaba recién debajo
+     del bloque del título (título, subtítulo y KPIs), con la columna
+     derecha vacía todo ese alto.
+
+     - **Dos columnas `[5, 7]` desde el tope** (`dibujar`): la izquierda
+       lleva el título, el aviso de Venta Interna y, en «Contra lo normal»,
+       lo normal; la derecha, la barra (`vhh_barra`: pestañas + «Cerrar»)
+       y, pegado debajo, «Por mesa». «Mesas del salón» y «Pedidos» siguen
+       debajo de las dos columnas, a lo ancho.
+     - **Las pestañas de línea salen gratis de la key**: `vh_op_ficha` cae
+       en las reglas `div[class*="st-key-vh_op_"] … stButtonGroup` de la
+       cabecera (texto con subrayado). Es a propósito —la ficha habla el
+       mismo idioma que la cabecera—, pero es un wildcard por familia:
+       tocar esas reglas cambia también la ficha y las pastillas de
+       «Ajustes» (`vh_op_hora`).
+     - **«Cerrar» es texto, no caja** (26 px, sin borde): con borde medía
+       40 y fijaba el alto de la barra.
+     - **Medido a 1366×768**: «Por mesa» arranca 65 px bajo el título
+       (antes ~100); la ficha mide 311 en «Contra lo normal» (antes 344),
+       369 en «Mesas del salón» y 346 en «Pedidos», todas sin scroll.
+
+     (2026-09-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45156,7 +45186,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#563**; la próxima toma el número siguiente.
+> última regla es la **#564**; la próxima toma el número siguiente.
 
 >
 
