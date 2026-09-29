@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-561 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+562 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (189)
+**CSS y estilos** (190)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -223,6 +223,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#538** — La precarga de la pila construye primero lo que está más CERCA de la pantalla, no lo que está…
 - **#541** — Se quitó «Histórica subfamilia» de Ventas: con el rango con que abre el reporte, dibujaba un…
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
+- **#562** — La cabecera de «Por hora» no tiene texto fijo más que el título: los rótulos, los avisos y lo…
 
 **Layout y alturas** (77)
 
@@ -847,7 +848,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (129)
+**Decisiones de diseño y UX** (130)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -978,6 +979,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#559** — Recetas y Costos pierde «Ingredientes clave», «Insumos clave · recetas base» y los dos…
 - **#560** — «Consumo según recetas» se compara contra lo COMPRADO del rango —en la ficha de cada insumo y…
 - **#561** — «Por hora» cabe en una pantalla: la cabecera es UNA fila de desplegables y la ficha de la…
+- **#562** — La cabecera de «Por hora» no tiene texto fijo más que el título: los rótulos, los avisos y lo…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45076,6 +45078,39 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-29.)
 
+562. **La cabecera de «Por hora» no tiene texto fijo más que el título: los
+     rótulos, los avisos y lo que tiene puesto «Ajustes» aparecen al pasar
+     el cursor.**
+     2026-09-29, a pedido, con captura, el mismo día que la #561: a 1.190 px
+     la fila de la #561 se partía en dos, y debajo quedaba una fila más con
+     «El rango tiene 5 semanas: se ven los últimos 4». «Deseo que todo
+     figure en una sola fila junto con el título».
+
+     - **Los rótulos** («UN PANEL POR», «FILAS», «COLUMNAS», «VALOR») siguen
+       siendo el `::before` del lugar, pero ahora flotan DEBAJO del control
+       y sólo con el cursor encima (`opacity`, un `:hover` suelto, sin
+       `:has()`). Eran ~250 px de la fila.
+     - **Las notas** pasan por `_nota_flotante`: una marca chica en la
+       fila —«4 de 5» junto a la fecha, «ⓘ» junto a «Unidades»— y el texto
+       entero flotando debajo al pasar el cursor (o con el foco: lleva
+       `tabindex`). El motivo de «no aplica» sale como `st.toast`: no hay
+       `st.rerun` detrás, así que la trampa de la #474 no aplica.
+     - **«Ajustes» es sólo el ícono.** Lo que tiene puesto lo dice su
+       `help=` («Cada venta en la hora del pedido · con Venta Interna y
+       Eventos»), y si algo no está como viene el botón va
+       `type="primary"`, pintado en acento. Hasta acá lo decía el título
+       («Mapa por día y hora · sin Venta Interna ni Eventos»). El tooltip
+       se arma ANTES de dibujar el popover, así que lee el estado
+       (`vh_op_hora`, `_K_RAROS`): el clic que los cambió ya lo escribió
+       antes de la corrida.
+     - **Lo que se recortó para que entre a 1366** (tarjeta de 1.172 px):
+       separadores de 16 a 11 px, gap de 8 a 6, y los anchos de los
+       desplegables al peor texto de cada uno más el botón (86 «Semana»,
+       104 «Descuento», 126 «Día de semana»). Medido: una fila de 32 px en
+       Mes y en Semana con el «4 de 5».
+
+     (2026-09-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45088,7 +45123,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#561**; la próxima toma el número siguiente.
+> última regla es la **#562**; la próxima toma el número siguiente.
 
 >
 

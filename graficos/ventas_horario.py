@@ -77,6 +77,8 @@ TRES TRAMPAS QUE YA ESTÁN RESUELTAS ACÁ (y que muerden si alguien las toca)
 
 import calendar as _cal
 import datetime as _dt
+import html
+import re
 import zlib as _zlib
 from collections import namedtuple
 
@@ -2008,6 +2010,22 @@ def _pastillas(etq, opciones, key, sombra, default, invalidas=None,
     return forzado
 
 
+def _nota_flotante(key, corto, texto):
+    """Una nota de la cabecera que NO ocupa renglón (regla #562): una marca
+    chica en la fila y el texto entero flotando debajo al pasar el cursor.
+    Hasta el 2026-09-29 eran `st.caption` y cada una abría una fila entera
+    debajo de la cabecera. `**x**` se lee como negrita, igual que en el
+    caption que reemplaza."""
+    cuerpo = html.escape(texto)
+    cuerpo = re.sub(r"\*\*(.+?)\*\*", lambda m: f"<b>{m.group(1)}</b>",
+                    cuerpo)
+    with st.container(key=key, width="content"):
+        st.markdown(
+            f'<span class="vh-flot" tabindex="0">{html.escape(corto)}'
+            f'<span class="vh-flot-txt">{cuerpo}</span></span>',
+            unsafe_allow_html=True)
+
+
 def _motivo_diferencia(n_paneles, en_filas, semanal, grano):
     """Por qué «Diferencia» no se puede, o "" si se puede."""
     if n_paneles < 2:
@@ -2736,7 +2754,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             if st.session_state.get("vh_grano") not in GRANOS:
                 st.session_state["vh_grano"] = _GRANO_DEF
             grano = st.selectbox("Un panel por", list(GRANOS), key="vh_grano",
-                                 label_visibility="collapsed", width=92)
+                                 label_visibility="collapsed", width=86)
 
         # Si cambió la granularidad, los períodos sueltos dejan de significar
         # lo mismo (una columna de "Semana" no es una de "Mes").
@@ -2800,11 +2818,11 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             lectura = _pastillas(
                 "Leer", _LECTURAS, "vh_op_lect", _K_LECT_VALOR,
                 _LECTURAS[0],
-                {_LECTURAS[1]: _mot_dif} if _mot_dif else None, ancho=118)
+                {_LECTURAS[1]: _mot_dif} if _mot_dif else None, ancho=104)
 
         with s_filas:
             filas = st.selectbox("Filas", list(_FILAS), key="vh_op_filas",
-                                 label_visibility="collapsed", width=92)
+                                 label_visibility="collapsed", width=86)
         en_filas = filas != _FILAS[0]
         que = "plato" if filas == "Platos" else "grupo"
         # «Columnas» ofrece lo que no está en las filas. Las dos botoneras
@@ -2814,7 +2832,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             if en_filas:
                 cols_filas = _pastillas("Columnas", _COLS_FILAS, _K_COLS,
                                         _K_COLS_VALOR, _COLS_FILAS[0],
-                                        ancho=132)
+                                        ancho=126)
                 cols_dias = _COLS_DIAS[0]
             else:
                 cols_filas = _COLS_FILAS[0]
@@ -2823,7 +2841,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     _COLS_DIAS[0],
                     {_COLS_DIAS[1]: "En Día y Semana las columnas ya son los "
                                     "días de la semana."}
-                    if grano in ("Día", "Semana") else None, ancho=132)
+                    if grano in ("Día", "Semana") else None, ancho=126)
         semanal = (not en_filas and grano in ("Mes", "Año")
                    and cols_dias == _COLS_DIAS[1])
         with s_valor:
@@ -2837,7 +2855,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 {x: f"{x} es del pedido, no del {que}: una mesa de cuatro no "
                     "le reparte un pax a cada plato. Con filas Horas sí."
                  for x in ("Pax", "Ticket")} if en_filas else None,
-                ancho=110)
+                ancho=104)
         medida = next(mid for mid, lab in _MEDIDAS
                       if _MED_CORTO.get(mid, lab) == medida_lab)
         # «Total / Por día» en los tres modos. Con filas Horas y columnas por
@@ -2847,7 +2865,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         with s_esc:
             if en_filas:
                 escala = _pastillas("Escala", _ESCALAS, _K_ESC, _K_ESC_VALOR,
-                                    _ESCALAS[0], ancho=96)
+                                    _ESCALAS[0], ancho=86)
             else:
                 _cada_dia = not semanal and grano != "Año"
                 escala = _pastillas(
@@ -2857,14 +2875,32 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                         "total y el promedio por día dan lo mismo."
                      for e in _ESCALAS} if _cada_dia else None,
                     forzado=_ESCALAS[0] if _cada_dia else None,
-                    ancho=96)
+                    ancho=86)
         promedio = (not en_filas and escala == _ESCALAS[1]
                     and (semanal or grano == "Año"))
         # «Ajustes»: la hora del pedido o del cobro y la Venta Interna y
-        # Eventos (regla #536), que se eligen una vez. Si no están como
-        # vienen, lo dice el título (`_ajustes_fuera`).
+        # Eventos (regla #536), que se eligen una vez. Lo que tienen puesto
+        # lo dice el tooltip del botón, y un punto en su nombre si no están
+        # como vienen. Hasta el 2026-09-29 lo decía el título («· sin Venta
+        # Interna ni Eventos»): a pedido, para ahorrar espacio (regla #562).
+        # El tooltip se arma ANTES del popover, así que se lee del estado:
+        # el clic que los cambió ya lo escribió ahí antes de esta corrida.
+        _hora_pre = ((st.session_state.get("vh_op_hora") or _HORA_OP[0])
+                     if col_hora_ped else _HORA_OP[1])
+        _raros_pre = bool(st.session_state.get(
+            _K_RAROS, st.session_state.get(_K_RAROS_VALOR, True)))
+        _fuera_pre = (_hora_pre != _HORA_OP[0] and bool(col_hora_ped)) or (
+            not en_filas and not _raros_pre)
+        _ayuda_aj = (
+            f"Cada venta en la {_hora_pre.lower()} · "
+            + ("con Venta Interna y Eventos" if en_filas or _raros_pre
+               else "sin Venta Interna ni Eventos"))
         with s_aj:
-            with st.popover("Ajustes", icon=":material/tune:"):
+            # Sólo el ícono (el rótulo lo esconde el CSS: la fila no tenía
+            # los 60 px), y en color de acento si algo no está como viene.
+            with st.popover("Ajustes", icon=":material/tune:",
+                            help="**Ajustes** · " + _ayuda_aj,
+                            type="primary" if _fuera_pre else "secondary"):
                 hora = (st.pills(
                     "Ubicar cada venta por", list(_HORA_OP),
                     default=_HORA_OP[0], key="vh_op_hora",
@@ -2891,17 +2927,19 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 st.session_state[_K_RAROS_VALOR] = _raros_ui
         # Sólo en filas Horas, que mide la AFLUENCIA.
         raros = True if en_filas else bool(_raros_ui)
-        _ajustes_fuera = [x for x, si in (
-            ("hora del cobro", hora != _HORA_OP[0] and bool(col_hora_ped)),
-            ("sin Venta Interna ni Eventos", not en_filas and not raros))
-            if si]
 
         # Lo que no aplica: el motivo del último toque, una vez, y el gris.
+        # El motivo sale una vez, como aviso flotante: un `st.caption` abría
+        # un renglón bajo la cabecera (regla #562). Sin `st.rerun` detrás,
+        # el toast se ve (la trampa de la #474 es el toast + rerun).
         _mot = st.session_state.pop(_K_MOTIVO, None)
         if _mot:
-            st.caption(f"No aplica: {_mot}")
-        elif medida == "cant" and not en_filas:
-            st.caption(_NOTA_UNIDADES + (_NOTA_UNIDADES_VI if raros else ""))
+            st.toast(f"No aplica: {_mot}", icon=":material/info:")
+        if medida == "cant" and not en_filas:
+            with s_valor:
+                _nota_flotante(
+                    "vh_flot_unid", "ⓘ",
+                    _NOTA_UNIDADES + (_NOTA_UNIDADES_VI if raros else ""))
         cols["fecha"] = col_hora_ped if hora == _HORA_OP[0] else col_fecha
         # Cambiar la hora cambia a qué CELDA va cada venta: las marcas viejas
         # apuntarían a otras. Y cambiar de filas cambia de qué es la ficha.
@@ -2938,20 +2976,19 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 (g for g in GRANOS[GRANOS.index(grano) + 1:]
                  if len(_paneles_del_rango(_rng[0], min(_rng[1], ancla), g,
                                            ancla)) <= MAX_MARCAS), None)
-            st.caption(
-                f"El rango tiene {_n_rango} {_uni}: se ven los últimos "
-                f"{MAX_MARCAS}."
-                + (f" Con «{_mayor}» entra entero." if _mayor else ""))
+            with s_fecha:
+                _nota_flotante(
+                    "vh_flot_rango", f"{MAX_MARCAS} de {_n_rango}",
+                    f"El rango tiene {_n_rango} {_uni}: se ven los últimos "
+                    f"{MAX_MARCAS}."
+                    + (f" Con «{_mayor}» entra entero." if _mayor else ""))
 
         _nombre = (("Mapa por día de semana" if semanal
                     else "Mapa por día y hora") if not en_filas else
                    f"{filas} por " + ("hora" if cols_filas == _COLS_FILAS[0]
                                       else "día de semana"))
-        _ph_titulo.markdown(
-            f'<p class="vh-titulo">{_nombre}'
-            + (f'<span> · {" · ".join(_ajustes_fuera)}</span>'
-               if _ajustes_fuera else "") + "</p>",
-            unsafe_allow_html=True)
+        _ph_titulo.markdown(f'<p class="vh-titulo">{_nombre}</p>',
+                            unsafe_allow_html=True)
 
         # Una sola línea al pie de la franja, no dos: el título ya no tiene
         # la suya porque comparte fila con los controles.

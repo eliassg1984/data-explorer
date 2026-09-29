@@ -3375,7 +3375,12 @@ CSS = """    /* ================================================================
     .st-key-vh_cab_grano, .st-key-vh_paneles, .st-key-vh_cab_filas,
     .st-key-vh_cab_cols, .st-key-vh_cab_valor, .st-key-vh_ajustes {
         position: relative;
-        padding-left: 16px !important;
+        /* 11 y no 16 (2026-09-29): con 16 la fila pedía 60px más de los
+           1.172 que tiene la tarjeta a 1366 y se partía en dos. */
+        padding-left: 11px !important;
+    }
+    .st-key-vh_cab, .st-key-vh_paneles {
+        gap: 6px !important;
     }
     .st-key-vh_cab_grano::after, .st-key-vh_paneles::after,
     .st-key-vh_cab_filas::after, .st-key-vh_cab_cols::after,
@@ -4189,15 +4194,34 @@ CSS = """    /* ================================================================
     /* lugar en la fila de columnas—, y para que quede a la IZQUIERDA de    */
     /* sus opciones el contenedor pasa a fila.                              */
     /* =================================================================== */
+    /* Desde el 2026-09-29 (regla #562) el rótulo NO ocupa lugar en la
+       fila: aparece DEBAJO del control al pasar el cursor, como una
+       etiqueta flotante. A pedido, para ahorrar espacio: con los rótulos
+       al costado la fila pedía ~250px más y se partía en dos. Un `:hover`
+       suelto, sin `:has()` (regla #469). */
     .st-key-vh_cab_grano::before, .st-key-vh_cab_filas::before,
     .st-key-vh_cab_cols::before, .st-key-vh_cab_valor::before {
-        flex: none;
+        position: absolute;
+        top: calc(100% + 2px);
+        left: 11px;
+        z-index: 20;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--bg-card);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
         font-size: 10px;
         font-weight: 700;
         letter-spacing: .09em;
         text-transform: uppercase;
         white-space: nowrap;
         color: var(--text-secondary);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .12s ease;
+    }
+    .st-key-vh_cab_grano:hover::before, .st-key-vh_cab_filas:hover::before,
+    .st-key-vh_cab_cols:hover::before, .st-key-vh_cab_valor:hover::before {
+        opacity: 1;
     }
     .st-key-vh_cab_grano::before { content: "Un panel por"; }
     .st-key-vh_cab_filas::before { content: "Filas"; }
@@ -4244,13 +4268,60 @@ CSS = """    /* ================================================================
     }
     /* El rótulo va en el LUGAR de la fila (`vh_cab_*`), no en el widget: el
        widget tiene el ancho fijo que le da Python y el rótulo adentro le
-       comía el desplegable (medido: «Mes» quedaba debajo de «Comparar»). */
-    .st-key-vh_cab_grano, .st-key-vh_cab_filas, .st-key-vh_cab_cols,
-    .st-key-vh_cab_valor {
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 8px !important;
+       comía el desplegable (medido: «Mes» quedaba debajo de «Comparar»).
+       Y el lugar no puede recortar lo que sobresale: el rótulo flotante
+       cuelga por debajo de su caja. */
+    .st-key-vh_cab, .st-key-vh_cab_grano, .st-key-vh_cab_filas,
+    .st-key-vh_cab_cols, .st-key-vh_cab_valor {
+        overflow: visible !important;
+    }
+    /* LAS NOTAS FLOTANTES de la cabecera (regla #562, `_nota_flotante`):
+       una marca chica en la fila —«4 de 5» junto a la fecha, «ⓘ» junto a
+       «Unidades»— y el texto entero debajo al pasar el cursor. Antes cada
+       una era un `st.caption` con su renglón. Un `:hover` suelto, sin
+       `:has()` (regla #469). */
+    .st-key-vh_tiempo, .st-key-vh_flot_rango, .st-key-vh_flot_unid,
+    .st-key-vh_flot_rango *, .st-key-vh_flot_unid * {
+        overflow: visible !important;
+    }
+    .st-key-vh_cab .vh-flot {
+        position: relative;
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: var(--accent-tint);
+        color: var(--accent-deep);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.5;
+        white-space: nowrap;
+        cursor: help;
+    }
+    .st-key-vh_cab .vh-flot-txt {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 30;
+        width: max-content;
+        max-width: 320px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        background: var(--bg-card);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 1.4;
+        white-space: normal;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity .12s ease;
+    }
+    .st-key-vh_cab .vh-flot:hover .vh-flot-txt,
+    .st-key-vh_cab .vh-flot:focus .vh-flot-txt {
+        opacity: 1;
+        visibility: visible;
     }
     /* «Ajustes» al extremo derecho: lo que se elige una vez, aparte. */
     .st-key-vh_cab > .st-key-vh_ajustes {
@@ -4275,8 +4346,22 @@ CSS = """    /* ================================================================
         color: var(--text-secondary) !important;
         white-space: nowrap !important;
     }
-    .st-key-vh_ajustes [data-testid="stPopover"] button p {
-        font-size: 13px !important;
+    /* Sólo el ícono desde el 2026-09-29 (regla #562): lo que tiene puesto
+       lo dice su tooltip, y el color de acento (`type="primary"`) avisa
+       que algo no está como viene. */
+    .st-key-vh_ajustes [data-testid="stPopover"] button
+        [data-testid="stMarkdownContainer"] {
+        display: none !important;
+    }
+    .st-key-vh_ajustes [data-testid="stPopover"] button {
+        padding: 0 7px !important;
+    }
+    .st-key-vh_ajustes [data-testid="stPopover"] button[kind="primary"],
+    .st-key-vh_ajustes [data-testid="stPopover"]
+        button[data-testid="stPopoverButton"][kind="primary"] {
+        background: var(--accent-tint) !important;
+        border-color: var(--accent) !important;
+        color: var(--accent-deep) !important;
     }
     /* Sin la flecha: el botón dice lo que abre, y la fila no tiene 20 px
        de sobra. */
