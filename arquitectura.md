@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-560 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+561 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (189)
 
@@ -500,7 +500,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 
-**Streamlit** (153)
+**Streamlit** (154)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -655,6 +655,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#543** — Se quitó «Matriz agrupada» de Ventas: su tabla ya era la del Mix, y la comparación que la…
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
+- **#561** — «Por hora» cabe en una pantalla: la cabecera es UNA fila de desplegables y la ficha de la…
 
 **Datos, R2 y DuckDB** (77)
 
@@ -846,7 +847,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (128)
+**Decisiones de diseño y UX** (129)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -976,6 +977,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#558** — «Consumo según recetas» (Movimientos): cada venta baja por las recetas base y los…
 - **#559** — Recetas y Costos pierde «Ingredientes clave», «Insumos clave · recetas base» y los dos…
 - **#560** — «Consumo según recetas» se compara contra lo COMPRADO del rango —en la ficha de cada insumo y…
+- **#561** — «Por hora» cabe en una pantalla: la cabecera es UNA fila de desplegables y la ficha de la…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45024,6 +45026,56 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-28.)
 
+561. **«Por hora» cabe en una pantalla: la cabecera es UNA fila de
+     desplegables y la ficha de la hora muestra un bloque a la vez, con
+     una botonera que los alterna en el mismo lugar.**
+     2026-09-29, a pedido, con captura: «deseo poder ver todo en una misma
+     pantalla». La cabecera de la #555 pedía dos renglones de botoneras, y
+     la ficha de la #536 apilaba lo normal y por mesa, «Mesas del salón»,
+     la línea de mesas abiertas, los meseros y los pedidos: más de una
+     pantalla debajo del mapa.
+
+     - **La cabecera**: título · fecha · UN PANEL POR ▾ · Comparar · Lado a
+       lado ▾ · FILAS ▾ · COLUMNAS ▾ · VALOR ▾ · Total ▾ · Ajustes. Cada
+       grupo es un `st.selectbox` que muestra sólo lo elegido. `_pastillas`
+       conserva la sombra y el rebote de la #555; lo que cambia es el gris:
+       la lista de un desplegable se dibuja en un portal, fuera de la
+       tarjeta, así que no hay «gris por posición». Lo que no aplica lleva
+       «· no aplica» por `format_func`, **salvo lo que se está viendo**:
+       con columnas por fecha no aplica ni «Total» ni «Por día», y la caja
+       decía «Total · no aplica» (medido). `_css_gris` se fue.
+     - **Los lugares de la fila se crean todos juntos y se llenan
+       después** (`st.container(key="vh_cab_*", width="content")` dentro de
+       un contenedor horizontal): en Streamlit el orden en pantalla es el
+       de creación, y «Lado a lado» necesita saber de las filas antes de
+       que se dibujen.
+     - **El rótulo y el separador cuelgan del LUGAR, no del widget.** El
+       desplegable tiene el ancho fijo que le da Python (`width=`) y el
+       `::before` adentro se lo comía: «Mes» quedó debajo de «Comparar»
+       (medido). «Total» y «Lado a lado» no llevan rótulo: se leen pegados
+       a lo de al lado («Venta Total», «Comparar · Lado a lado»).
+     - **DOS DOMs para el desplegable**: la 1.59 de la laptop lo dibuja con
+       react-aria (`[role="group"]` con un `<input>` y un botón), no con
+       baseweb. El CSS (28px, sin caja, subrayado) lleva los dos
+       selectores; el de baseweb quedó sin medir.
+     - **Cuánto ocupa**: la fila pide ~1.460 px. A 1850 (la pantalla de la
+       captura) entra en una fila de 32 px y la vista entera —cabecera, mapa
+       y ficha— termina en 796 de 870. A 1366 la fila se parte en dos: se
+       dejó así, sin achicar rótulos, porque la pantalla del pedido es la
+       otra.
+     - **La ficha**: «Contra lo normal» (lo normal y por mesa, lado a lado),
+       «Mesas del salón» (el número opcional, la ocupación y la línea de
+       mesas abiertas) y «Pedidos» (meseros y pedidos). La botonera
+       (`vh_ficha_vista`) va en el renglón del título, y su valor sobrevive
+       a cerrar la ficha: quien mira pedidos suele seguir mirando pedidos
+       en la hora siguiente. El número del salón ya viajaba por su sombra
+       (`_K_SALON_VALOR`), así que no dibujarlo no lo pierde.
+     - **El markdown del título de la ficha cuelga 10 px por debajo de su
+       caja** (el `-16px` de la #162): el rótulo del número de mesas quedó
+       encima de «Venta · Pax · Ticket» (medido). Un `margin-top` en su key.
+
+     (2026-09-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45036,7 +45088,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#558**; la próxima toma el número siguiente.
+> última regla es la **#561**; la próxima toma el número siguiente.
 
 >
 

@@ -3367,24 +3367,20 @@ CSS = """    /* ================================================================
         flex-wrap: nowrap !important;
     }
     /* Separador colgado de cada grupo a su IZQUIERDA, no por posición: el
-       título es el primero y no lleva, y «Filas» tampoco (abre su fila).
-       Va en `::after` desde la regla #555: el `::before` es del rótulo. */
-    div[class*="st-key-vh_grano"],
-    div[class*="st-key-vh_medida_mapa"],
-    .st-key-vh_op_lect,
-    .st-key-vh_op_cols, .st-key-vh_op_esc, .st-key-vh_op_esc_h,
-    .st-key-vh_op_dias, .st-key-vh_ajustes {
+       título es el primero y no lleva. Va en `::after` desde la regla #555:
+       el `::before` es del rótulo. Desde el 2026-09-29 cuelga del LUGAR de
+       la fila (`vh_cab_*`), no del widget: el widget tiene ancho fijo y el
+       relleno se lo comía. «Total» no lleva: se lee con el valor («Venta
+       Total»), y «Lado a lado» tampoco: es de los paneles, como Comparar. */
+    .st-key-vh_cab_grano, .st-key-vh_paneles, .st-key-vh_cab_filas,
+    .st-key-vh_cab_cols, .st-key-vh_cab_valor, .st-key-vh_ajustes {
         position: relative;
         padding-left: 16px !important;
     }
-    div[class*="st-key-vh_grano"]::after,
-    div[class*="st-key-vh_medida_mapa"]::after,
-    div[class*="st-key-vh_btn_selector"]::after,
-    .st-key-vh_fecha_fila::after,
-    .st-key-vh_op_lect::after,
-    .st-key-vh_op_cols::after, .st-key-vh_op_esc::after,
-    .st-key-vh_op_esc_h::after,
-    .st-key-vh_op_dias::after, .st-key-vh_ajustes::after {
+    .st-key-vh_cab_grano::after, .st-key-vh_paneles::after,
+    .st-key-vh_cab_filas::after, .st-key-vh_cab_cols::after,
+    .st-key-vh_cab_valor::after,
+    .st-key-vh_fecha_fila::after, .st-key-vh_ajustes::after {
         content: "";
         position: absolute;
         left: 0;
@@ -3399,10 +3395,6 @@ CSS = """    /* ================================================================
        cápsula, o desentona en una fila de tabs. Y sobre todo: medía 55px de
        alto y era ÉL quien fijaba el alto de la fila entera; con 32 la franja
        mide lo que miden los tabs. */
-    div[class*="st-key-vh_btn_selector"] {
-        position: relative;
-        padding-left: 16px !important;
-    }
     div[class*="st-key-vh_btn_selector"] button {
         background: transparent !important;
         border: none !important;
@@ -3699,6 +3691,13 @@ CSS = """    /* ================================================================
         font-size: 15px !important;
         font-weight: 600 !important;
         color: var(--text-primary) !important;
+    }
+    /* «Mesas del salón» abre su bloque (2026-09-29, un bloque a la vez):
+       el markdown del título de la ficha cuelga 10px por debajo de su caja
+       (el -16px de margen de Streamlit) y el rótulo del número quedaba
+       encima de «Venta · Pax · Ticket» (medido). */
+    .st-key-chartcard_ventas_horario_hora .st-key-vh_mesas_salon {
+        margin-top: 14px !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-aviso {
         margin: 2px 0 !important;
@@ -4190,18 +4189,8 @@ CSS = """    /* ================================================================
     /* lugar en la fila de columnas—, y para que quede a la IZQUIERDA de    */
     /* sus opciones el contenedor pasa a fila.                              */
     /* =================================================================== */
-    div[class*="st-key-vh_grano"],
-    .st-key-vh_op_filas, .st-key-vh_op_cols, .st-key-vh_op_dias,
-    div[class*="st-key-vh_medida_mapa"] {
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 9px !important;
-    }
-    div[class*="st-key-vh_grano"]::before,
-    .st-key-vh_op_filas::before, .st-key-vh_op_cols::before,
-    .st-key-vh_op_dias::before,
-    div[class*="st-key-vh_medida_mapa"]::before {
+    .st-key-vh_cab_grano::before, .st-key-vh_cab_filas::before,
+    .st-key-vh_cab_cols::before, .st-key-vh_cab_valor::before {
         flex: none;
         font-size: 10px;
         font-weight: 700;
@@ -4210,12 +4199,68 @@ CSS = """    /* ================================================================
         white-space: nowrap;
         color: var(--text-secondary);
     }
-    div[class*="st-key-vh_grano"]::before { content: "Un panel por"; }
-    .st-key-vh_op_filas::before { content: "Filas"; }
-    .st-key-vh_op_cols::before, .st-key-vh_op_dias::before {
-        content: "Columnas";
+    .st-key-vh_cab_grano::before { content: "Un panel por"; }
+    .st-key-vh_cab_filas::before { content: "Filas"; }
+    .st-key-vh_cab_cols::before { content: "Columnas"; }
+    .st-key-vh_cab_valor::before { content: "Valor"; }
+    /* DESPLEGABLES EN UNA FILA (2026-09-29, a pedido: «ver todo en una
+       misma pantalla»). Las botoneras pedían dos renglones; cada grupo es
+       ahora un `st.selectbox` que muestra sólo lo elegido. Sin caja: un
+       subrayado fino, como las pestañas que reemplaza, y 28px de alto en
+       vez de los 40 de Streamlit, que fijaban el alto de la fila. El
+       ancho lo pone Python (`width=`), que es lo que el desplegable no
+       calcula solo.
+       DOS DOMs: la 1.59 de la laptop dibuja el desplegable con react-aria
+       (`[role="group"]` con un <input> y un botón) y versiones anteriores
+       con baseweb (`[data-baseweb="select"] > div`). Van los dos: el
+       selector que no aplica no matchea nada. */
+    .st-key-vh_cab [data-testid="stSelectbox"] [role="group"],
+    .st-key-vh_cab [data-baseweb="select"] > div {
+        min-height: 0 !important;
+        height: 28px !important;
+        border: none !important;
+        border-bottom: 1px solid var(--border) !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
     }
-    div[class*="st-key-vh_medida_mapa"]::before { content: "Valor"; }
+    .st-key-vh_cab [data-testid="stSelectbox"] [role="group"]:hover,
+    .st-key-vh_cab [data-baseweb="select"] > div:hover {
+        border-bottom-color: var(--accent) !important;
+    }
+    .st-key-vh_cab [data-testid="stSelectbox"] input,
+    .st-key-vh_cab [data-baseweb="select"] div[value] {
+        height: 26px !important;
+        padding: 0 0 0 2px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: var(--accent-deep) !important;
+        background: transparent !important;
+        cursor: pointer !important;
+    }
+    .st-key-vh_cab [data-testid="stSelectbox"] [role="group"] button {
+        width: 22px !important;
+        height: 26px !important;
+    }
+    /* El rótulo va en el LUGAR de la fila (`vh_cab_*`), no en el widget: el
+       widget tiene el ancho fijo que le da Python y el rótulo adentro le
+       comía el desplegable (medido: «Mes» quedaba debajo de «Comparar»). */
+    .st-key-vh_cab_grano, .st-key-vh_cab_filas, .st-key-vh_cab_cols,
+    .st-key-vh_cab_valor {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+    /* «Ajustes» al extremo derecho: lo que se elige una vez, aparte. */
+    .st-key-vh_cab > .st-key-vh_ajustes {
+        margin-left: auto !important;
+    }
+    /* El título se achica con «…» antes que empujar los controles fuera. */
+    .st-key-vh_cab_tit {
+        flex: 0 1 auto !important;
+        min-width: 90px !important;
+    }
     /* «Ajustes»: un botón con borde, como el «Otra fecha» de Comparar. Abre
        la hora del pedido o del cobro y la Venta Interna y Eventos. */
     .st-key-vh_ajustes [data-testid="stPopover"] button {

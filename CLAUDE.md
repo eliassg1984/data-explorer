@@ -407,9 +407,10 @@ resto de `graficos/compras/`.
   `arquitectura.md` regla #474.
 - **Una ayuda (`help=`) en un widget con `label_visibility="collapsed"` no
   se ve**: el «?» va dentro del rótulo oculto (medido: 0×0 px). Y `st.pills`
-  no apaga una opción suelta: para dejarla en gris y que al tocarla diga por
-  qué, `graficos/ventas_horario.py::_pastillas` (el valor en una sombra, un
-  callback que rebota y el gris por posición). Regla #555.
+  no apaga una opción suelta, ni `st.selectbox`: para marcarla y que al
+  elegirla diga por qué, `graficos/ventas_horario.py::_pastillas` (el valor
+  en una sombra, un callback que rebota y «· no aplica» en la lista).
+  Reglas #555 y #561.
 - **Un `st.toast` seguido de un `st.rerun()` no se ve NUNCA** (medido): el
   rerun se lo lleva antes de pintarlo. El acuse viaja por `session_state`
   y lo pinta la corrida siguiente. Misma #474.

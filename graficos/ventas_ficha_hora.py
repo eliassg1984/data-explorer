@@ -91,6 +91,13 @@ _DIAS_PL = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábados",
 # que el número se guarda aparte y vuelve por `value=`.
 _K_SALON = "vh_mesas_salon"
 _K_SALON_VALOR = "_vh_mesas_salon_valor"
+# UN BLOQUE A LA VEZ (2026-09-29, a pedido): la ficha entera —lo normal y
+# por mesa, las mesas del salón, los pedidos— medía más de una pantalla, y
+# con el mapa arriba no se veía nunca junta. Una botonera en su encabezado
+# alterna los tres en el MISMO lugar. Su valor sobrevive a cerrar la ficha:
+# quien mira pedidos suele seguir mirando pedidos en la hora siguiente.
+_K_VISTA = "vh_ficha_vista"
+VISTAS = ("Contra lo normal", "Mesas del salón", "Pedidos")
 
 _INFO = {
     "normal": "Las 8 semanas anteriores, mismo día de la semana y misma "
@@ -693,8 +700,13 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
     sub = (f"{n} {'pedido' if n == 1 else 'pedidos'} {verbo} entre {la} "
            f"{h12}:00 y {la} {h12}:59 {ampm}" if n else
            "Ningún pedido a esta hora")
-    # columnas-internas: el título de la ficha y su botón de cerrar
-    c_t, c_x = st.columns([10, 1.3], vertical_alignment="top")
+    # columnas-internas: el título de la ficha, la botonera y el cerrar
+    c_t, c_v, c_x = st.columns([5.5, 4.5, 1.3], vertical_alignment="top")
+    with c_v:
+        if st.session_state.get(_K_VISTA) not in VISTAS:
+            st.session_state[_K_VISTA] = VISTAS[0]
+        vista = st.pills("Ver", list(VISTAS), key=_K_VISTA,
+                         label_visibility="collapsed") or VISTAS[0]
     with c_t:
         st.markdown(
             f'<p class="vhh-tit">{_DIAS[dow].capitalize()} {dia.day} '
@@ -727,14 +739,31 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
     conc = pico(ini, fin, h0, h1)
     salon = st.session_state.get(_K_SALON_VALOR) or 0
 
-    # columnas-internas: lo normal y las cuentas por mesa, como el mockup
-    c_a, c_b = st.columns([5, 7], gap="large")
-    with c_a:
-        st.markdown(_html_normal(v_hora, previas, dow, hora),
-                    unsafe_allow_html=True)
-    with c_b:
-        st.markdown(_html_mesa(met, previas, v_hora, conc, dow, hora, n),
-                    unsafe_allow_html=True)
+    if vista == VISTAS[0]:
+        # columnas-internas: lo normal y las cuentas por mesa, como el mockup
+        c_a, c_b = st.columns([5, 7], gap="large")
+        with c_a:
+            st.markdown(_html_normal(v_hora, previas, dow, hora),
+                        unsafe_allow_html=True)
+        with c_b:
+            st.markdown(_html_mesa(met, previas, v_hora, conc, dow, hora, n),
+                        unsafe_allow_html=True)
+        return
+
+    if vista == VISTAS[2]:
+        # columnas-internas: quién atendió y los pedidos de la hora
+        c_c, c_d = st.columns([5, 7], gap="large")
+        with c_c:
+            st.markdown(_html_meseros(pc, met), unsafe_allow_html=True)
+        with c_d:
+            st.markdown(_html_pedidos(pc, items), unsafe_allow_html=True)
+            st.caption("Clic en un pedido para ver lo que se pidió.")
+        return
+
+    # «Mesas del salón»: el dato opcional y la línea de mesas abiertas.
+    # columnas-internas: el número del salón y la línea de mesas abiertas
+    c_c, c_d = st.columns([3, 9], gap="large")
+    with c_c:
         salon = st.number_input(
             "Mesas del salón (opcional)", min_value=0, max_value=300, step=1,
             value=int(salon), key=_K_SALON,
@@ -748,10 +777,7 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
                 f'{int(salon)}</b> mesas ({100 * conc / salon:,.0f}%) · venta '
                 f'por mesa del salón: <b>{_soles(v_hora / salon)}</b>.</p>',
                 unsafe_allow_html=True)
-
-    # columnas-internas: la línea de mesas abiertas y quién atendió
-    c_c, c_d = st.columns([7, 5], gap="large")
-    with c_c:
+    with c_d:
         t, serie = linea(ini, fin, t0, t1)
         nor = tipica(ini, fin, t0, t1) if len(ini) else None
         visto = int(abiertas(ini, fin, ini).max()) if len(ini) else 0
@@ -787,10 +813,3 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
         else:
             st.caption("Sin la hora de apertura del pedido no se puede contar "
                        "cuántas mesas había a la vez.")
-    with c_d:
-        st.markdown(_html_meseros(pc, met), unsafe_allow_html=True)
-
-    st.markdown(_html_pedidos(pc, items), unsafe_allow_html=True)
-    st.caption("Clic en un pedido para ver lo que se pidió. Arrastrar sobre "
-               "el mapa sigue armando marcas: su tabla y el detalle por grupo "
-               "y plato salen debajo.")

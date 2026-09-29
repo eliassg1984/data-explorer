@@ -1932,9 +1932,11 @@ def _compras_layout_min(fig, titulo):
 # ── UI: selector de períodos ────────────────────────────────────────────────
 
 # ── LA CABECERA COMO TABLA DINÁMICA (regla #555) ────────────────────────────
-# Cada botonera vive siempre en el mismo lugar, y lo que no aplica NO se
-# esconde: se ve en gris y, si se toca, dice por qué. `st.pills` no apaga
-# una opción suelta, así que las tres piezas van a mano:
+# Cada control vive siempre en el mismo lugar, y lo que no aplica NO se
+# esconde: se ve marcado («· no aplica») y, si se elige, dice por qué. Desde
+# el 2026-09-29 son DESPLEGABLES en una sola fila con el título (a pedido:
+# «ver todo en una misma pantalla»; las botoneras pedían dos renglones).
+# `st.selectbox` no apaga una opción suelta, así que las piezas van a mano:
 #
 #   · el valor ELEGIDO vive aparte, en una clave sombra, y la del widget se
 #     reescribe ANTES de dibujarlo en cada corrida con lo que corresponde
@@ -1944,8 +1946,9 @@ def _compras_layout_min(fig, titulo):
 #   · el callback sólo guarda en la sombra lo que aplica; lo que no, deja
 #     el motivo en `_K_MOTIVO`, que la cabecera muestra una vez. Como la
 #     corrida reescribe el widget desde la sombra, el clic «rebota».
-#   · el gris lo pone una hoja de estilo por corrida (`_css_gris`), por
-#     posición de la opción dentro de su botonera.
+#   · la marca la pone `format_func` (un desplegable no tiene «gris por
+#     posición»: su lista se dibuja fuera de la tarjeta, en un portal).
+_NO_APLICA = " · no aplica"
 _K_MOTIVO = "_vh_motivo"
 _K_COLS = "vh_op_cols"
 _K_COLS_VALOR = "_vh_op_cols_valor"
@@ -1979,13 +1982,13 @@ def _al_elegir(key, sombra, invalidas):
 
 
 def _pastillas(etq, opciones, key, sombra, default, invalidas=None,
-               forzado=None, gris=None, **kw):
-    """Una botonera de la cabecera con su valor en la sombra (ver arriba).
+               forzado=None, ancho=None):
+    """Un desplegable de la cabecera con su valor en la sombra (ver arriba).
 
     `invalidas` es {opción: motivo}; `forzado`, lo que se muestra mientras
     no se pueda mostrar lo elegido (por defecto, la primera que aplica).
-    Devuelve lo que se ve, que es lo que vale. `gris` junta las posiciones a
-    apagar para `_css_gris`."""
+    Devuelve lo que se ve, que es lo que vale. `ancho`, en px: el
+    desplegable no se ajusta solo a su texto."""
     invalidas = invalidas or {}
     elegido = st.session_state.get(sombra)
     if elegido not in opciones:
@@ -1994,27 +1997,15 @@ def _pastillas(etq, opciones, key, sombra, default, invalidas=None,
         forzado = (elegido if elegido not in invalidas else
                    next((o for o in opciones if o not in invalidas), elegido))
     st.session_state[key] = forzado
-    st.pills(etq, list(opciones), key=key, label_visibility="collapsed",
-             on_change=_al_elegir, args=(key, sombra, invalidas), **kw)
-    if gris is not None and invalidas:
-        gris.append((key, [i for i, o in enumerate(opciones)
-                           if o in invalidas]))
+    st.selectbox(etq, list(opciones), key=key, label_visibility="collapsed",
+                 # Lo que se ve nunca lleva la marca: con «Total / Por día»
+                 # en columnas por fecha no aplica ninguna, y la caja decía
+                 # «Total · no aplica» (medido).
+                 format_func=lambda o: o + (
+                     _NO_APLICA if o in invalidas and o != forzado else ""),
+                 on_change=_al_elegir, args=(key, sombra, invalidas),
+                 **({"width": ancho} if ancho else {}))
     return forzado
-
-
-def _css_gris(gris):
-    """El gris de lo que no aplica, por posición dentro de su botonera. Va
-    en cada corrida: un `<style>` de `st.markdown` desaparece en la
-    siguiente (regla #59). Sin `:has()`: cada regla cuelga de la key."""
-    reglas = [
-        f'.st-key-{key} [data-testid="stButtonGroup"] button'
-        f':nth-of-type({i + 1})'
-        for key, pos in gris for i in pos]
-    if reglas:
-        st.markdown(
-            "<style>" + ",\n".join(reglas) +
-            "{color:var(--text-muted)!important;opacity:.55;"
-            "cursor:help!important;}</style>", unsafe_allow_html=True)
 
 
 def _motivo_diferencia(n_paneles, en_filas, semanal, grano):
@@ -2704,35 +2695,48 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     _grano_prev = st.session_state.get("vh_grano") or _GRANO_DEF
     with _card(f"ventas_horario_{_grano_prev}"):
         # LA CABECERA COMO UNA TABLA DINÁMICA (2026-09-27, a pedido, regla
-        # #555). Dos filas, cada grupo con su rótulo y en un lugar fijo:
+        # #555), EN UNA SOLA FILA desde el 2026-09-29 (a pedido: «ver todo
+        # en una misma pantalla»). Cada grupo es un desplegable con su
+        # rótulo, en un lugar fijo:
         #
-        #   título · fecha · UN PANEL POR Día… · Comparar · Lado a lado…
-        #   FILAS Horas… · COLUMNAS … · VALOR Venta… · Total / Por día · Ajustes
+        #   título · fecha · UN PANEL POR ▾ · Comparar · Lado a lado ▾ ·
+        #   FILAS ▾ · COLUMNAS ▾ · VALOR ▾ · Total ▾ · Ajustes
         #
         # Nada cambia de lugar al cambiar de filas: «Columnas» ofrece lo que
         # no está en las filas (Fecha o Día de semana con filas Horas; Hora o
-        # Día de semana con Platos y Grupos), y lo que no aplica se ve en
-        # gris y, al tocarlo, dice por qué (`_pastillas`). La hora del pedido
+        # Día de semana con Platos y Grupos), y lo que no aplica dice «no
+        # aplica» y, al elegirlo, por qué (`_pastillas`). La hora del pedido
         # o del cobro y el filtro de eventos, que se eligen una vez, van en
         # «Ajustes». Los rótulos son pseudo-elementos de
         # `estilos/_80_cards.py`: no cuentan como ítems ni se cobran el gap.
         #
         # En Streamlit el orden de ejecución es el orden en que se leen los
-        # valores: la fila de arriba necesita saber si «Diferencia» se puede,
-        # y eso depende de las filas y las columnas, que se dibujan abajo.
-        # Esos dos se leen del estado antes de dibujar nada.
-        # columnas-internas: la primera fila de la cabecera
-        c0, c1, c2, c3 = st.columns([2.3, 1.6, 2.9, 2.9],
-                                    vertical_alignment="center")
-        with c0:
+        # valores, y el orden en pantalla, el de creación: los lugares de la
+        # fila se crean todos juntos acá (contenedores vacíos) y se llenan
+        # después, cada uno cuando se conoce lo que necesita.
+        with st.container(horizontal=True, gap="small",
+                          vertical_alignment="center", key="vh_cab"):
+            s_tit = st.container(key="vh_cab_tit", width="content")
+            s_fecha = st.container(horizontal=True, gap="small",
+                                   key="vh_tiempo", width="content")
+            s_grano = st.container(key="vh_cab_grano", width="content")
+            s_paneles = st.container(horizontal=True, gap="small",
+                                     vertical_alignment="center",
+                                     key="vh_paneles", width="content")
+            s_filas = st.container(key="vh_cab_filas", width="content")
+            s_cols = st.container(key="vh_cab_cols", width="content")
+            s_valor = st.container(key="vh_cab_valor", width="content")
+            s_esc = st.container(key="vh_cab_esc", width="content")
+            s_aj = st.container(key="vh_ajustes", width="content")
+        with s_tit:
             # `_ph_titulo` se pinta DESPUÉS de conocer las filas (regla #108:
             # el título depende de un control que vive en esta misma franja).
             _ph_titulo = st.empty()
-        with c2:
-            grano = st.pills("Un panel por", list(GRANOS),
-                             default=_GRANO_DEF, key="vh_grano",
-                             label_visibility="collapsed") or _GRANO_DEF
-        _gris = []
+        with s_grano:
+            if st.session_state.get("vh_grano") not in GRANOS:
+                st.session_state["vh_grano"] = _GRANO_DEF
+            grano = st.selectbox("Un panel por", list(GRANOS), key="vh_grano",
+                                 label_visibility="collapsed", width=92)
 
         # Si cambió la granularidad, los períodos sueltos dejan de significar
         # lo mismo (una columna de "Semana" no es una de "Mes").
@@ -2784,40 +2788,33 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                    == _COLS_DIAS[1])
         _mot_dif = _motivo_diferencia(len(claves), en_filas, semanal, grano)
 
-        with c1:
-            with st.container(horizontal=True, gap="small", key="vh_tiempo"):
-                if _ctx_h:
-                    selector_fecha_tarjeta(
-                        "vh_fecha", "vh_fecha_cambio", categoria=_CAT_RANGO,
-                        ctx=_ctx_h, label=_fmt_rango_corto(*_rng))
-        with c3:
+        with s_fecha:
+            if _ctx_h:
+                selector_fecha_tarjeta(
+                    "vh_fecha", "vh_fecha_cambio", categoria=_CAT_RANGO,
+                    ctx=_ctx_h, label=_fmt_rango_corto(*_rng))
+        with s_paneles:
             # «Lado a lado / Diferencia» junto a «Comparar»: los dos hablan de
             # los PANELES, y «Diferencia» pide dos o más.
-            with st.container(horizontal=True, gap="small",
-                              vertical_alignment="center", key="vh_paneles"):
-                _boton_selector(len(extras))
-                lectura = _pastillas(
-                    "Leer", _LECTURAS, "vh_op_lect", _K_LECT_VALOR,
-                    _LECTURAS[0],
-                    {_LECTURAS[1]: _mot_dif} if _mot_dif else None,
-                    gris=_gris)
+            _boton_selector(len(extras))
+            lectura = _pastillas(
+                "Leer", _LECTURAS, "vh_op_lect", _K_LECT_VALOR,
+                _LECTURAS[0],
+                {_LECTURAS[1]: _mot_dif} if _mot_dif else None, ancho=118)
 
-        # ── LA SEGUNDA FILA: FILAS · COLUMNAS · VALOR · Ajustes ─────────
-        # columnas-internas: la segunda fila de la cabecera
-        f1, f2, f3, f4, f5 = st.columns([2.0, 2.35, 3.5, 1.15, 1.2],
-                                        vertical_alignment="center")
-        with f1:
-            filas = st.pills("Filas", list(_FILAS), key="vh_op_filas",
-                             label_visibility="collapsed") or _FILAS[0]
+        with s_filas:
+            filas = st.selectbox("Filas", list(_FILAS), key="vh_op_filas",
+                                 label_visibility="collapsed", width=92)
         en_filas = filas != _FILAS[0]
         que = "plato" if filas == "Platos" else "grupo"
         # «Columnas» ofrece lo que no está en las filas. Las dos botoneras
         # comparten lugar y guardan cada una lo suyo (la sombra), así que ir
         # a Platos y volver no le borra a Horas su «Día de semana».
-        with f2:
+        with s_cols:
             if en_filas:
                 cols_filas = _pastillas("Columnas", _COLS_FILAS, _K_COLS,
-                                        _K_COLS_VALOR, _COLS_FILAS[0])
+                                        _K_COLS_VALOR, _COLS_FILAS[0],
+                                        ancho=132)
                 cols_dias = _COLS_DIAS[0]
             else:
                 cols_filas = _COLS_FILAS[0]
@@ -2826,10 +2823,10 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     _COLS_DIAS[0],
                     {_COLS_DIAS[1]: "En Día y Semana las columnas ya son los "
                                     "días de la semana."}
-                    if grano in ("Día", "Semana") else None, gris=_gris)
+                    if grano in ("Día", "Semana") else None, ancho=132)
         semanal = (not en_filas and grano in ("Mes", "Año")
                    and cols_dias == _COLS_DIAS[1])
-        with f3:
+        with s_valor:
             # Medida del MAPA: el color sólo puede codificar una cosa
             # (decisión del usuario, 2026-08-14). Etiquetas CORTAS acá y
             # sólo acá: "Ticket promedio" no entra en la fila.
@@ -2840,17 +2837,17 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 {x: f"{x} es del pedido, no del {que}: una mesa de cuatro no "
                     "le reparte un pax a cada plato. Con filas Horas sí."
                  for x in ("Pax", "Ticket")} if en_filas else None,
-                gris=_gris)
+                ancho=110)
         medida = next(mid for mid, lab in _MEDIDAS
                       if _MED_CORTO.get(mid, lab) == medida_lab)
         # «Total / Por día» en los tres modos. Con filas Horas y columnas por
         # fecha, cada celda ya es un día (salvo en Año, que es un mes), y
-        # las dos dan lo mismo: se ven en gris. Con día de semana abre en
+        # las dos dan lo mismo: se marcan «no aplica». Con día de semana abre en
         # «Por día», como abrió siempre ese modo.
-        with f4:
+        with s_esc:
             if en_filas:
                 escala = _pastillas("Escala", _ESCALAS, _K_ESC, _K_ESC_VALOR,
-                                    _ESCALAS[0])
+                                    _ESCALAS[0], ancho=96)
             else:
                 _cada_dia = not semanal and grano != "Año"
                 escala = _pastillas(
@@ -2860,39 +2857,38 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                         "total y el promedio por día dan lo mismo."
                      for e in _ESCALAS} if _cada_dia else None,
                     forzado=_ESCALAS[0] if _cada_dia else None,
-                    gris=_gris)
+                    ancho=96)
         promedio = (not en_filas and escala == _ESCALAS[1]
                     and (semanal or grano == "Año"))
         # «Ajustes»: la hora del pedido o del cobro y la Venta Interna y
         # Eventos (regla #536), que se eligen una vez. Si no están como
         # vienen, lo dice el título (`_ajustes_fuera`).
-        with f5:
-            with st.container(key="vh_ajustes"):
-                with st.popover("Ajustes", icon=":material/tune:"):
-                    hora = (st.pills(
-                        "Ubicar cada venta por", list(_HORA_OP),
-                        default=_HORA_OP[0], key="vh_op_hora",
-                        help="**Hora del pedido**: cuando se abrió la mesa, "
-                             "que es cuando la cocina trabaja. **Hora del "
-                             "cobro**: cuando se pagó, 1 h 38 min después "
-                             "(mediana).") or _HORA_OP[0]
-                            ) if col_hora_ped else _HORA_OP[1]
-                    # Adentro de un popover, el valor viaja en `value=` y
-                    # Python nunca escribe la key: con el panel cerrado el
-                    # widget no se entera, y al abrirlo se montaba con su
-                    # default (apagado) y pisaba lo elegido (regla #467).
-                    _raros_ui = st.toggle(
-                        "Venta Interna y Eventos",
-                        value=bool(st.session_state.get(_K_RAROS_VALOR, True)),
-                        key=_K_RAROS, disabled=en_filas,
-                        help="Apagado, el mapa y su detalle dejan fuera la "
-                             "Venta Interna (charcutería de mostrador: sin "
-                             "personas, cobrada en minutos) y los Eventos, y "
-                             "queda el servicio de salón. El triángulo "
-                             "naranja marca las horas que los tienen. Con "
-                             "filas Platos o Grupos son filas como las "
-                             "demás: se ven siempre.")
-                    st.session_state[_K_RAROS_VALOR] = _raros_ui
+        with s_aj:
+            with st.popover("Ajustes", icon=":material/tune:"):
+                hora = (st.pills(
+                    "Ubicar cada venta por", list(_HORA_OP),
+                    default=_HORA_OP[0], key="vh_op_hora",
+                    help="**Hora del pedido**: cuando se abrió la mesa, "
+                         "que es cuando la cocina trabaja. **Hora del "
+                         "cobro**: cuando se pagó, 1 h 38 min después "
+                         "(mediana).") or _HORA_OP[0]
+                        ) if col_hora_ped else _HORA_OP[1]
+                # Adentro de un popover, el valor viaja en `value=` y
+                # Python nunca escribe la key: con el panel cerrado el
+                # widget no se entera, y al abrirlo se montaba con su
+                # default (apagado) y pisaba lo elegido (regla #467).
+                _raros_ui = st.toggle(
+                    "Venta Interna y Eventos",
+                    value=bool(st.session_state.get(_K_RAROS_VALOR, True)),
+                    key=_K_RAROS, disabled=en_filas,
+                    help="Apagado, el mapa y su detalle dejan fuera la "
+                         "Venta Interna (charcutería de mostrador: sin "
+                         "personas, cobrada en minutos) y los Eventos, y "
+                         "queda el servicio de salón. El triángulo "
+                         "naranja marca las horas que los tienen. Con "
+                         "filas Platos o Grupos son filas como las "
+                         "demás: se ven siempre.")
+                st.session_state[_K_RAROS_VALOR] = _raros_ui
         # Sólo en filas Horas, que mide la AFLUENCIA.
         raros = True if en_filas else bool(_raros_ui)
         _ajustes_fuera = [x for x, si in (
@@ -2906,7 +2902,6 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             st.caption(f"No aplica: {_mot}")
         elif medida == "cant" and not en_filas:
             st.caption(_NOTA_UNIDADES + (_NOTA_UNIDADES_VI if raros else ""))
-        _css_gris(_gris)
         cols["fecha"] = col_hora_ped if hora == _HORA_OP[0] else col_fecha
         # Cambiar la hora cambia a qué CELDA va cada venta: las marcas viejas
         # apuntarían a otras. Y cambiar de filas cambia de qué es la ficha.

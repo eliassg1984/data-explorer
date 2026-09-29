@@ -7308,11 +7308,12 @@ def _pruebas_cabecera_por_hora():
     check("con filas Platos, en Mes también", md(2, True, False, "Mes"), "")
     check("en Semana sí", md(2, False, False, "Semana"), "")
 
-    # `st` de mentira: el estado es un dict y `st.pills` anota lo que recibe.
+    # `st` de mentira: el estado es un dict y `st.selectbox` anota lo que
+    # recibe (desde el 2026-09-29 la cabecera son desplegables).
     real, llamadas = _h.st, []
     falso = types.SimpleNamespace(
         session_state={},
-        pills=lambda *a, **k: llamadas.append((a, k)))
+        selectbox=lambda *a, **k: llamadas.append((a, k)))
     _h.st = falso
     try:
         ss = falso.session_state
@@ -7329,22 +7330,24 @@ def _pruebas_cabecera_por_hora():
         _h._al_elegir("w", "_w", {})
         check("soltar la opción no borra lo elegido", ss.get("_w"), "Unidades")
 
-        gris = []
         ss["_m"] = "Pax"
         v = _h._pastillas("Valor", ["Venta", "Pax", "Unidades", "Ticket"],
                           "m", "_m", "Venta", {"Pax": "a", "Ticket": "b"},
-                          gris=gris)
+                          ancho=110)
         check("lo elegido que no aplica se ve como la primera que sí",
               (v, ss["m"]), ("Venta", "Venta"))
         check("y la sombra lo recuerda para cuando vuelva a aplicar",
               ss["_m"], "Pax")
-        check("en gris van las posiciones de lo que no aplica",
-              gris, [("m", [1, 3])])
-        check("la botonera no recibe `default=` (lo pone la sombra)",
-              "default" in llamadas[-1][1], False)
+        _fmt = llamadas[-1][1]["format_func"]
+        check("lo que no aplica se marca en la lista",
+              [_fmt(o) for o in ("Venta", "Pax")],
+              ["Venta", "Pax" + _h._NO_APLICA])
+        check("el desplegable no recibe `index=` (lo pone la sombra)",
+              "index" in llamadas[-1][1], False)
+        check("y lleva su ancho", llamadas[-1][1].get("width"), 110)
         v = _h._pastillas("Escala", ["Total", "Por día"], "e", "_e", "Por día",
                           {"Total": "x", "Por día": "x"}, forzado="Total")
-        check("«forzado» manda aunque las dos estén en gris", v, "Total")
+        check("«forzado» manda aunque las dos no apliquen", v, "Total")
         ss.pop("_e", None)
         v = _h._pastillas("Escala", ["Total", "Por día"], "e", "_e", "Por día")
         check("sin sombra, el default", v, "Por día")
@@ -7368,8 +7371,8 @@ def _pruebas_cabecera_por_hora():
           all(f'content: "{x}"' in _css
               for x in ("Filas", "Columnas", "Valor", "Un panel por")), True)
     check("el rótulo es el ::before y el separador el ::after",
-          ".st-key-vh_op_filas::before" in _css
-          and ".st-key-vh_op_cols::after" in _css, True)
+          ".st-key-vh_cab_filas::before" in _css
+          and ".st-key-vh_cab_cols::after" in _css, True)
 
     # «Promedio por día» en el hover sólo si la celda ES un promedio.
     celdas = pd.DataFrame({"col": [5], "hora": [19], "venta": [100.0],
