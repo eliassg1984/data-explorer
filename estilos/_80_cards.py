@@ -986,6 +986,27 @@ CSS = """    /* ================================================================
         display: block !important;
     }
 
+    /* ── MOVIMIENTOS › CONSUMO SEGÚN RECETAS: un iframe que SÍ se ve ─────
+       Todo `st.iframe` nace escondido: son los de las inyecciones, y los
+       esconden `_00_base.py` (alto 0) y `navegacion.py` (su contenedor en
+       `display: none`). Esta sección es la excepción: la página entera —la
+       tabla dinámica y el resumen— vive en uno (`graficos/_consumo_html.py`).
+       El ALTO no se pone acá: lo escribe el iframe mismo en su `<iframe>`,
+       en línea y con `!important`, que le gana a la regla de alto 0. Acá
+       sólo se devuelve el contenedor al flujo, con un selector que pesa más
+       que los dos que lo esconden (una clase más). Regla #558. */
+    html body .st-key-mov_consumo_vista [data-testid="stElementContainer"]:has(.stIFrame) {
+        display: block !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+    }
+    .st-key-mov_consumo_vista [data-testid="stIFrame"] {
+        display: block !important;
+        width: 100% !important;
+        border: 0 !important;
+    }
+
     /* ── TABLA: el selector de ventana, pegado a la derecha ────────────
        2026-09-06. La sección «Tabla» de Compras no tiene cabecera (el
        nombre lo pone el rail), así que su selector no comparte renglón con
@@ -1290,7 +1311,11 @@ CSS = """    /* ================================================================
         /* 2026-09-26: sus cuatro cuadros listan hasta siete platos por      */
         /* clase y con una categoría grande pasa de una pantalla. Que se     */
         /* deslice la PÁGINA y no la tarjeta, lo pedido en la #382. #550.    */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_menu),
+        /* Y `…_izq_mov_consumo` (Movimientos › Consumo según recetas), al   */
+        /* nacer el 2026-09-28: es un iframe que se mide solo, con la tabla  */
+        /* dinámica y la ficha del insumo; adentro sólo scrollean las        */
+        /* tablas. Con techo tendría barra propia encima. #558.              */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_menu):not(.st-key-ajuste_graf_card_izq_mov_consumo),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1307,7 +1332,8 @@ CSS = """    /* ================================================================
         div.st-key-ajuste_graf_card_izq_sem,
         div.st-key-ajuste_graf_card_izq_mov_periodo,
         div.st-key-ajuste_graf_card_izq_mov_sal_periodo,
-        div.st-key-ajuste_graf_card_izq_mov_porc_periodo {
+        div.st-key-ajuste_graf_card_izq_mov_porc_periodo,
+        div.st-key-ajuste_graf_card_izq_mov_consumo {
             padding-top: 16px !important;
             padding-bottom: 16px !important;
         }

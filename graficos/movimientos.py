@@ -2,8 +2,9 @@
 graficos.movimientos — dashboard ÚNICO de Movimientos (requerimientos,
 salidas y porcionamientos).
 
-Una sola página con las SIETE vistas de los tres parquets del flujo de
-stock. Las de requerimientos y salidas vivían hasta el 2026-09-05 en dos
+Una sola página con las OCHO vistas del flujo de stock (la octava, desde
+el 2026-09-28, «Consumo según recetas»: lo que usaron las VENTAS en
+insumos de compra, en `graficos/movimientos_consumo.py`, regla #558). Las de requerimientos y salidas vivían hasta el 2026-09-05 en dos
 reportes que un chip Requerimiento/Salidas alternaba. A pedido, al ver que
 la Evolución ya mostraba los dos lados juntos: «esto ya no debería estar, ya
 que ahora muestra ambos».
@@ -143,6 +144,7 @@ from graficos.movimientos_periodo import (
     tarjeta_requerimientos_periodo, tarjeta_salidas_periodo,
 )
 from graficos import drill_tablas
+from graficos.movimientos_consumo import tarjeta_consumo
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es horizontal
 # y aplana las categorías a una sola fila (ver `base.py::_render_rail`), así
@@ -184,6 +186,11 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # pedido. Una sola vista, con el nombre que se pidió; el ícono son las
     # tijeras del corte.
     ("Porcionamientos", (("Porcionamientos", "Porcionamientos", ":material/content_cut:"),)),
+    # «Consumo según recetas» (2026-09-28, regla #558): cuarto grupo, al
+    # final. Lo que las VENTAS usaron en insumos de compra, bajando por las
+    # recetas base y los porcionamientos — el lado teórico de lo que las
+    # tres de arriba miden del almacén. El ícono es una olla.
+    ("Consumo", (("Consumo según recetas", "Consumo", ":material/soup_kitchen:"),)),
 ))
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA tupla
@@ -205,6 +212,7 @@ _PILA = pila_sin_tablas((
     ("mov_sec_detalle_sal", "Detalle de salidas"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
     ("mov_sec_porc",        "Porcionamientos"),
+    ("mov_sec_consumo",     "Consumo según recetas"),
 ))
 
 
@@ -629,6 +637,13 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
             cols={nombre: _resolver(d_porc, columna)
                   for nombre, columna in _COLS_PORC.items()})
 
+    def _dib_consumo():
+        # Carga y calcula ACÁ, como Porcionamientos: sólo cuando la sección
+        # sale del esqueleto (la última de la pila). La familia del chip
+        # recorta los insumos de compra; el sub almacén no aplica (regla
+        # #558, `graficos/movimientos_consumo.py`).
+        tarjeta_consumo(fam_sel, sub_sel)
+
     _DIBUJANTES = {
         "mov_sec_periodo":     _dib_periodo,
         "mov_sec_cadena":      _dib_cadena,
@@ -637,6 +652,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         "mov_sec_detalle_sal": _dib_detalle_sal,
         "mov_sec_tabla_sal":   _dib_tabla_sal,
         "mov_sec_porc":        _dib_porc,
+        "mov_sec_consumo":     _dib_consumo,
     }
 
     # El contenedor con la key va AFUERA del fragment a propósito: es el que

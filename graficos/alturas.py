@@ -890,6 +890,17 @@ def cabe(alto_total):
 
 
 # ===========================================================================
+# CONSUMO SEGÚN RECETAS (Movimientos, regla #558)
+# ===========================================================================
+CONSUMO_VISTA = 900
+"""El alto con que NACE el iframe de la sección, y nada más: la página se
+mide sola y se escribe su alto en el `<iframe>` (`graficos/_consumo_html.py`),
+así que la tarjeta mide su contenido —fuera del techo, como las de Compras ›
+Producto (regla #382)— y adentro sólo se deslizan las tablas, con un tope
+que la página saca del alto de la ventana real."""
+
+
+# ===========================================================================
 # GUARDA DE COHERENCIA
 # ===========================================================================
 # Barata (corre una vez, al importar) y evita el fallo más tonto posible:

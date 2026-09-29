@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-557 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+558 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (189)
 
@@ -656,7 +656,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 
-**Datos, R2 y DuckDB** (74)
+**Datos, R2 y DuckDB** (75)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -732,6 +732,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#553** — Ventas › Meseros son las PROPINAS por mesero: lo que dan los reportes del POS (Analítico por…
 - **#556** — Recetas y Costos tiene UNA vista de la carta: «Composición del plato» era la Carta costeada…
 - **#557** — El panel de un producto de la Carta costeada tiene «En el tiempo»: el costo con que se…
+- **#558** — «Consumo según recetas» (Movimientos): cada venta baja por las recetas base y los…
 
 **SUNAT y SIRE** (44)
 
@@ -843,7 +844,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (125)
+**Decisiones de diseño y UX** (126)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -970,6 +971,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 - **#556** — Recetas y Costos tiene UNA vista de la carta: «Composición del plato» era la Carta costeada…
 - **#557** — El panel de un producto de la Carta costeada tiene «En el tiempo»: el costo con que se…
+- **#558** — «Consumo según recetas» (Movimientos): cada venta baja por las recetas base y los…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44787,6 +44789,103 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-28.)
 
+558. **«Consumo según recetas» (Movimientos): cada venta baja por las
+     recetas base y los porcionamientos hasta el insumo de COMPRA. La cuenta
+     vive en `consumo_recetas.py` —puro, con su test— y la vista es UN
+     iframe con la tabla dinámica y el resumen adentro, que se mide solo.**
+     2026-09-28, a pedido y en cinco pasos, los dos últimos sobre un mockup
+     aprobado en tres vueltas: «cuánto de crema de leche usé en una semana»
+     (entra directo en unos platos y escondida en recetas base de otros) y
+     «cuánto pulpo» (la receta pide un corte que sale de un porcionamiento).
+
+     - **La fuente es el primer nivel del POS**: `paloteoinsumosnivel1.parquet`
+       es `spRep_PaloteoInsumo` hecho consulta del Sheet —idéntico al SP en
+       12 meses, con cuatro errores suyos corregidos—, más la fecha del
+       pedido y `FECHA ITEM`, la hora de CADA plato (`DPEDIDO.fregistro`):
+       con la de la mesa, 1 de cada 3 platos cae en otra hora y un postre,
+       70 minutos antes. El DÍA es el de la mesa. Las otras tres fuentes son
+       las recetas base (con `FACTOR INS`), los porcionamientos y el
+       inventario valorizado, que desde ese día trae `FACTOR` y hace de
+       maestro de productos.
+     - **Todo viaja en unidad de ENTRADA** (la del kardex, la de compra): el
+       POS y las recetas hablan en la de salida (ml, g) y el factor pasa de
+       una a otra. Una receta base rinde UN lote = una unidad de entrada de
+       su producto (medido: 407 de 426).
+     - **Qué manda, mes a mes**: si el producto se porcionó en los 90 días
+       que terminan el último día del mes, sus porcionamientos (el real
+       manda); si no, su receta base activa; y sólo si no tiene receta, los
+       10 porcionamientos más cercanos. El usuario pidió «la receta sólo
+       como respaldo cuando no hay porcionamientos»; la primera versión
+       tomaba cualquier porcionamiento viejo antes que la receta, y al
+       correrla sobre los datos el respaldo de un producto CON receta era
+       casi siempre otra cosa: el código viejo del pulpo cocido —que hoy es
+       una receta sobre el corte nuevo: bajaba con rendimientos de 2025,
+       53 kg en vez de 40—, o una crema de yogurt, un jus de res y unos
+       shallotes «porcionados» desde pan campesino.
+     - **El reparto entre los cortes es por PESO**, la regla del Almacén
+       (2.612 de 2.613 porcionamientos con el mismo costo por kilo;
+       `CANT TOT RESUL` es la suma de los pesos en 7.657 de 7.660). A los
+       subproductos —grasa, retazos, carcasa, esqueleto— la cocina les
+       anota poco peso para cargarles poco costo: les toca poco insumo, y
+       la ficha los marca «Revisar» (kg por kg < 0,95, sumando orígenes: el
+       lomo para carpaccio sale de dos, 0,84 + 0,28).
+     - **Hay porcionamientos AL REVÉS** —del corte al insumo, correcciones—
+       y arman círculos. Una hoja es lo que ya no tiene por dónde seguir
+       SIN volver sobre sus pasos; con «no tiene aristas» a secas, el asado
+       de tira Duroc y las conchas se perdían enteros (S/ 4.115 en un mes).
+     - **El cuadre**: por las recetas base cierra —S/ 48.634 contra
+       48.627 en 328 insumos de primer nivel, del 28 de agosto al 27 de
+       septiembre—, porque el Almacén recuesta cada preparación con sus
+       insumos; por un porcionamiento no tiene por qué (−2 %: las hojas
+       llevan el rendimiento real y el corte, el costo que le puso el
+       Almacén). En total, S/ 138.763 → 136.969. Lo repite
+       `herramientas/verificar_consumo.py`, que además lista los
+       rendimientos raros y los productos con receta Y porcionamientos que
+       parten de insumos distintos (39 de 69).
+     - **La Venta Interna** es la de Ventas › Por hora
+       (`GRUPOS_NO_SERVICIO` = `ventas_ficha_hora.GRUPOS_RAROS`, lo vigila
+       el test): el chorizo de pato para Mayta se vende por tanda —un
+       miércoles con 46 kg de magret— y corría el patrón por día. La página
+       tiene su interruptor.
+     - **La vista es un iframe VISIBLE**, y eso es la excepción: todo
+       `st.iframe` nace escondido (alto 0 en `_00_base.py`, su contenedor en
+       `display: none` en `navegacion.py`), y `estilos/_80_cards.py` los
+       devuelve al flujo para `.st-key-mov_consumo_vista` con una clase más
+       de especificidad. El ALTO lo escribe el iframe en su `<iframe>`, en
+       línea y con `!important` —le gana a la regla de alto 0—, y adentro
+       las tablas llevan un tope que sale del alto de la ventana del padre:
+       `vh` adentro de un iframe que se mide solo es circular. La tarjeta
+       queda fuera del techo (#382). No es AG Grid: las filas desplegables
+       son de la versión Enterprise, y cada grilla cuesta lo suyo (#540).
+     - **Lo que arma la página, sobre listas y dicts**: con `itertuples` y
+       búsquedas por índice —las columnas de listas vienen de Arrow y cada
+       acceso cuesta— un mes tardaba 2,5 s; así, 0,65 s. Pesa 1,25 MB un
+       mes y 2,8 MB un año; hasta 62 días el detalle va día por día, más
+       largo por semana y por mes.
+     - **La caché**: `data._consumo_recetas_cacheable(archivo, sello, ini,
+       fin, sellos=..., version=...)` — el sello del primer nivel al frente,
+       como pide `test_datos.py`; los de las otras tres fuentes en
+       `sellos`, y la versión de la cuenta. La vacían `limpiar_cache` y
+       `_purgar_version`. Los tres parquets nuevos van en los
+       `archivos_extra` de Movimientos: «Refrescar» los pide a todos.
+     - **Los chips**: Familia recorta (la del insumo de compra, el mismo
+       catálogo); Sub Almacén no —la receta dice qué, no de qué almacén— y
+       la tarjeta lo dice.
+     - Medido en la laptop: la primera carga de la sección, 22 s (bajar los
+       cuatro parquets de R2 y calcular); la cuenta sola, 2,1 s un mes y
+       11,7 s un año.
+
+     Candados: `test_consumo_recetas.py` (los casos reales sobre datos de
+     mentira: el directo, dos niveles de receta base, el corte por peso y
+     con merma, el respaldo, el código viejo con receta, el porcionamiento
+     al revés, la venta interna, los turnos, el ciclo, lo sin factor y la
+     conservación por las recetas base) y `test_datos.py` (la cacheable
+     nueva lleva el sello y la limpia `limpiar_cache`). En Cloud:
+     `graficos/movimientos.py` importa un módulo nuevo y `data.py` suma una
+     función, así que después del push va «Reboot app» (#357).
+
+     (2026-09-28.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -44799,7 +44898,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#557**; la próxima toma el número siguiente.
+> última regla es la **#558**; la próxima toma el número siguiente.
 
 >
 

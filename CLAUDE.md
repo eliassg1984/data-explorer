@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -106,6 +106,15 @@ cortesía, un anulado) y, con `ast`, que ninguna vista de Ventas vuelva a
 definirla por su cuenta. Sin secrets, sin red. La cifra contra el POS de
 verdad la da `herramientas/cuadrar_ventas.py`. Ver `arquitectura.md` regla
 #524.
+
+`test_consumo_recetas.py` vigila el CONSUMO SEGÚN RECETAS
+(`consumo_recetas.py`): cuatro parquets de mentira con los nombres del
+Sheet y cada caso real —el directo, dos niveles de receta base, el corte
+porcionado por peso y con merma, el respaldo, el código viejo que hoy es
+receta, el porcionamiento al revés, la venta interna, los turnos—, y que por
+las recetas base el costo de las hojas sea el del primer nivel. La cifra
+sobre R2 la da `herramientas/verificar_consumo.py`. Ver `arquitectura.md`
+regla #558.
 
 ## El asistente IA no adivina: consulta
 
@@ -857,6 +866,30 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
   la misma carga que usa la app.
 
 Detalle en `arquitectura.md` reglas #524, #525 y #542.
+
+## El consumo según recetas baja hasta lo que se COMPRA
+
+Movimientos › «Consumo según recetas» (2026-09-28): cada plato vendido,
+abierto por las recetas base y los porcionamientos hasta el insumo de
+compra. La cuenta es `consumo_recetas.py` (puro, con test); la sección,
+`graficos/movimientos_consumo.py`; su página, `graficos/_consumo_html.py`.
+Lo que ya mordió:
+
+- **Todo en unidad de ENTRADA** (la del kardex): el POS y las recetas hablan
+  en la de salida (ml, g) y el `FACTOR` del maestro pasa de una a otra.
+- **Mes a mes manda el porcionamiento de los 90 días; si no hubo, la
+  receta; y sólo sin receta, los porcionamientos viejos.** Al revés, el
+  código viejo del pulpo bajaba con rendimientos de 2025.
+- **Hay porcionamientos al revés** (del corte al insumo): una hoja es lo que
+  no tiene por dónde seguir SIN volver sobre sus pasos.
+- **La sección es un iframe VISIBLE**, y todo `st.iframe` nace escondido:
+  la excepción vive en `estilos/_80_cards.py` y el alto lo escribe el
+  iframe mismo en su `<iframe>`, con `!important`. Adentro, nada de `vh`.
+- **Cambiar QUÉ se calcula es subir `consumo_recetas.VERSION`** y correr
+  `python herramientas/verificar_consumo.py`: por las recetas base el costo
+  tiene que cerrar contra el primer nivel.
+
+Detalle, trampas y mediciones en `arquitectura.md` regla #558.
 
 ## El eje temporal tiene TRES modos, y un solo dueño
 

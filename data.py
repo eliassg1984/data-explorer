@@ -12,6 +12,7 @@ import zlib
 from datetime import datetime, timezone
 
 import definicion_venta
+import consumo_recetas
 
 
 # ===========================================================================
@@ -215,7 +216,15 @@ REPORTES = {
         # navegacion.py::boton_refresco. El TERCERO, porcionamientos.parquet,
         # llego el 2026-09-24 con la seccion "Porcionamientos" (regla #510):
         # lo carga la seccion misma, y va aca por lo mismo que salidas.
-        "archivos_extra": ("salidas.parquet", "porcionamientos.parquet"),
+        # Los otros TRES llegaron el 2026-09-28 con "Consumo segun recetas"
+        # (regla #558), que baja cada venta por las recetas base y los
+        # porcionamientos hasta el insumo de compra: el primer nivel de las
+        # recetas de venta, las recetas base y el maestro de productos (su
+        # factor y su precio). Refrescar desde Movimientos los pide a todos:
+        # si no, la seccion mezclaria recetas de hoy con precios de ayer.
+        "archivos_extra": ("salidas.parquet", "porcionamientos.parquet",
+                           "paloteoinsumosnivel1.parquet", "recetabase.parquet",
+                           "inventariovalorizado.parquet"),
         "icono": ":material/sync_alt:",
         "kpis": (("Valorizado", "VALOR ITEM", "sum"),
                  ("Requerim.", "COD REQUERIMIENTO", "count_distinct")),
@@ -977,6 +986,11 @@ def _purgar_version(archivo, sello):
         # por cada parquet de la madrugada. Se vacía entera: sólo guarda de
         # este archivo.
         _venta_por_producto_dia_cacheable.clear()
+    if archivo in consumo_recetas.ARCHIVOS.values():
+        # El consumo según recetas (Movimientos, regla #558) lee CUATRO
+        # parquets y cambia de versión con cualquiera. Su clave lleva el
+        # rango, así que se vacía entera, como la de arriba.
+        _consumo_recetas_cacheable.clear()
 
 
 @st.cache_data(ttl=3600, persist="disk")
@@ -1065,6 +1079,7 @@ def limpiar_cache(archivo):
     _rango_fechas_cacheable.clear()
     _resumen_kpis_cacheable.clear()
     _venta_por_producto_dia_cacheable.clear()
+    _consumo_recetas_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -1436,4 +1451,63 @@ def venta_por_producto_dia(archivo="ventas.parquet"):
             archivo, sello_datos(archivo),
             definicion=_version_preparar(archivo))
     except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _consumo_recetas_cacheable(archivo, sello, ini, fin, sellos=(), version=None):
+    """El consumo de insumos de compra del rango (`consumo_recetas.calcular`,
+    regla #558). Si falla, LANZA: no se cachea.
+
+    `archivo` es el primer nivel de las recetas de venta, el que manda el
+    rango; `sellos`, los de los otros tres parquets del cálculo (recetas
+    base, porcionamientos y el maestro), y `version`, la de la cuenta. Ninguno
+    se usa en el cuerpo: son la clave (ver el bloque del sello).
+
+    Lee de R2 sólo lo del rango y agregado por día, hora, plato e insumo
+    —medido: 32.554 filas un mes, 470.000 sin agregar un año—; las recetas,
+    los porcionamientos y el maestro enteros, que son chicos. La cuenta corre
+    en una conexión de DuckDB PROPIA (`calcular`): arma tablas temporales, y
+    la de `get_conn()` la comparten todas las sesiones."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    A = consumo_recetas.ARCHIVOS
+
+    def rel(nombre):
+        return f"read_parquet('s3://{bucket}/{A[nombre]}')"
+
+    columnas = [r[0] for r in con.execute(
+        f"DESCRIBE SELECT * FROM {rel('paloteo')}").fetchall()]
+    # Sin `FECHA ITEM` (un parquet anterior al 2026-09-28) la hora es la de
+    # la MESA, y la vista lo dice: un postre caería una hora antes.
+    con_hora = "FECHA ITEM" in columnas
+    n1 = con.execute(consumo_recetas.sql_nivel1(rel("paloteo"), ini, fin,
+                                                con_hora_item=con_hora)).df()
+    rb = con.execute(consumo_recetas.sql_recetas(rel("recetabase"))).df()
+    po = con.execute(consumo_recetas.sql_porcionamientos(rel("porcionamientos"))).df()
+    ma = con.execute(consumo_recetas.sql_maestro(rel("maestro"))).df()
+    r = consumo_recetas.calcular(n1, rb, po, ma, ini, fin)
+    r["resumen"]["hora_de_mesa"] = not con_hora
+    return r
+
+
+def consumo_recetas_rango(ini, fin):
+    """Cuánto insumo de COMPRA usaron las ventas entre `ini` y `fin`
+    (fechas del pedido, inclusive), bajando por las recetas base y los
+    porcionamientos — la sección «Consumo según recetas» de Movimientos,
+    regla #558. `None` si no se pudo calcular (o sin secrets): quien lo pide
+    avisa en vez de caerse.
+
+    No cacheada (la interna sí), por lo mismo que `cargar()`."""
+    A = consumo_recetas.ARCHIVOS
+    try:
+        return _consumo_recetas_cacheable(
+            A["paloteo"], sello_datos(A["paloteo"]), ini, fin,
+            sellos=tuple((a, sello_datos(a)) for a in
+                         (A["recetabase"], A["porcionamientos"], A["maestro"])),
+            version=consumo_recetas.VERSION)
+    except Exception as e:
+        st.error(f"Error calculando el consumo según recetas: {e}")
         return None
