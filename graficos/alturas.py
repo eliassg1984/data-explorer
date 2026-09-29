@@ -333,6 +333,11 @@ la misma en sus dos modos (carta completa y combos): doce filas de 27
 (`row_height` de `st.dataframe`) más la cabecera. Arriba van el título, la
 fila de controles y la línea de números; abajo, el pie."""
 
+REVISAR_RECETAS = 27 * 13 + 3
+"""Alto de la tabla de Recetas › Revisar recetas (2026-09-28, regla #559): la
+misma medida que la Carta costeada, doce filas de 27 más la cabecera, y la
+tabla crece hasta ahí con las filas que tenga (`por_filas`)."""
+
 FICHA_HORA_MESAS = 170
 """«Mesas abiertas a la vez», el gráfico de la ficha de la hora de Ventas ›
 Por hora (2026-09-26, regla #536). Va en el panel del drill, que tiene

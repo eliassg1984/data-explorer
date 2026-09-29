@@ -8,9 +8,12 @@ Cada fila de recetaventa.parquet es un ÍTEM de un plato:
 Desde el 2026-09-28 (regla #556) lo que vive acá es el panel de la receta
 que se abre al elegir un producto en la Carta costeada
 (`graficos/carta_costeada.py`): la receta con su simulador, la dona
-Costo/Utilidad y el Sankey del plato. Y la resolución de columnas del
-Panorama de compras, cuyo gráfico está en `graficos.recetas_comun` junto
-con los otros que comparte con recetas base.
+Costo/Utilidad y el Sankey del plato. Hasta el 2026-09-28 vivía también la
+resolución de columnas del «Panorama de compras · platos», que se fue ese
+día con Ingredientes clave (regla #559): repartía lo comprado entre los
+platos según la receta y no según lo vendido, y sólo reconocía un insumo
+si la receta lo nombraba tal cual — el lomo fino, que llega al plato por
+un porcionamiento, le salía «sin vincular».
 
 «Composición del plato» y «Costeo Receta Venta» fueron vistas propias hasta
 ese día. Medido contra R2: la tabla de Composición era la Carta costeada
@@ -52,29 +55,7 @@ from tema import (
 )
 from graficos import alturas
 from graficos.base import _card, _resolver
-from graficos.recetas_comun import (
-    ARCHIVO_INVENTARIO, _hex_a_rgba, _panorama_compras, catalogo_insumos,
-)
-
-
-def _panorama_compras_venta(df_f, es_soles):
-    _panorama_compras(
-        df_f, es_soles, key_prefix="rv",
-        col_cod_ins_cand=["COD INS", "Cod Ins"],
-        col_contenedor_cand=["Nomb Plato", "Nombre Plato", "PLATO", "Plato"],
-        col_valor_cand=["Total", "TOTAL", "Importe", "Costo Total"],
-        col_cant_cand=["Cantidad", "CANTIDAD", "Cant"],
-        col_activo_contenedor_cand=["ITEM VENTA ACTIVO", "Item Venta Activo"],
-        col_activo_item_cand=["INS ACTIVO", "Ins Activo"],
-        etiqueta_otros_contenedor="Otros platos",
-        titulo_card="Productos comprados → platos que los usan",
-        col_contenedor_out="Plato",
-        etiqueta_contenedor_plural="platos activos",
-        # Sin `nombre_vista_sankey`/`clave_seccion_sankey`: este dashboard ya
-        # no tiene Sankey (dado de baja el 2026-08-30), así que
-        # `_panorama_compras` deja el drill de insumo a lo ancho — mismo
-        # criterio que `_panorama_compras_base`.
-    )
+from graficos.recetas_comun import ARCHIVO_INVENTARIO, _hex_a_rgba, catalogo_insumos
 
 
 # ─── El panel de la receta de un plato ─────────────────────────────────────

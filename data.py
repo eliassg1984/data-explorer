@@ -989,8 +989,10 @@ def _purgar_version(archivo, sello):
     if archivo in consumo_recetas.ARCHIVOS.values():
         # El consumo según recetas (Movimientos, regla #558) lee CUATRO
         # parquets y cambia de versión con cualquiera. Su clave lleva el
-        # rango, así que se vacía entera, como la de arriba.
+        # rango, así que se vacía entera, como la de arriba. Lo mismo el
+        # primer nivel de «Revisar recetas» (regla #559), que lee el primero.
         _consumo_recetas_cacheable.clear()
+        _demanda_nivel1_cacheable.clear()
 
 
 @st.cache_data(ttl=3600, persist="disk")
@@ -1080,6 +1082,7 @@ def limpiar_cache(archivo):
     _resumen_kpis_cacheable.clear()
     _venta_por_producto_dia_cacheable.clear()
     _consumo_recetas_cacheable.clear()
+    _demanda_nivel1_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -1510,4 +1513,35 @@ def consumo_recetas_rango(ini, fin):
             version=consumo_recetas.VERSION)
     except Exception as e:
         st.error(f"Error calculando el consumo según recetas: {e}")
+        return None
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _demanda_nivel1_cacheable(archivo, sello, ini, fin):
+    """Lo que pidieron las ventas del rango al PRIMER nivel de sus recetas,
+    por insumo y plato (`consumo_recetas.sql_demanda_nivel1`). Si falla,
+    LANZA: no se cachea.
+
+    `archivo` es `paloteoinsumosnivel1.parquet`; `sello` no se usa en el
+    cuerpo: es la clave (ver el bloque del sello). Agregado en DuckDB sobre
+    R2: unos miles de filas en vez de las 112.000 de 90 días. Lo lee Recetas ›
+    «Revisar recetas» (regla #559)."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    return con.execute(consumo_recetas.sql_demanda_nivel1(rel, ini, fin)).df()
+
+
+def demanda_nivel1_rango(ini, fin):
+    """Lo que pidieron las ventas entre `ini` y `fin` (fechas del pedido,
+    inclusive) al primer nivel de sus recetas: cod, plato, consumo (en unidad
+    de SALIDA) y costo. `None` si no se pudo leer — quien lo pide avisa.
+
+    No cacheada (la interna sí), por lo mismo que `cargar()`."""
+    archivo = consumo_recetas.ARCHIVOS["paloteo"]
+    try:
+        return _demanda_nivel1_cacheable(archivo, sello_datos(archivo), ini, fin)
+    except Exception:
         return None

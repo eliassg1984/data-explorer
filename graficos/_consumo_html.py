@@ -1,9 +1,10 @@
 """graficos._consumo_html — la página de «Consumo según recetas» (regla #558).
 
 La sección entera —el resumen de arriba, la TABLA DINÁMICA (insumo ›
-preparación › plato, por semana, día, mes, día de la semana o turno) y el
-RESUMEN (la tabla de insumos y la ficha del elegido)— es UN iframe con todo
-el dato adentro, y todo lo que hace el usuario pasa en el navegador:
+preparación › plato, por semana, día, mes, día de la semana o turno), el
+RESUMEN (la tabla de insumos y la ficha del elegido) y CONTRA COMPRAS (lo
+comprado del rango al lado de lo que explican las ventas, regla #560)— es
+UN iframe con todo el dato adentro, y todo lo que hace el usuario pasa en el navegador:
 desplegar, cambiar columnas, buscar, prender o apagar la venta interna. Nada
 de eso vuelve a Python. Es lo que se aprobó sobre el mockup, y es la única
 forma de que desplegar sea instantáneo: con widgets, cada clic sería una
@@ -165,11 +166,12 @@ table.td { border-collapse: separate; border-spacing: 0; width: max-content; min
 .td .lv2 .nm { color: var(--texto-2); }
 .td .meta { display: block; font-size: 12px; color: var(--suave); }
 .und { color: var(--suave); font-size: 12px; margin-left: 3px; }
-.t-rb, .t-po, .t-di, .t-vi { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; vertical-align: 1px; }
+.t-rb, .t-po, .t-di, .t-vi, .t-ed { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; vertical-align: 1px; }
 .t-rb { background: var(--lav); color: var(--acento-texto); }
 .t-po { background: var(--adv-fondo); color: var(--adv-texto); }
 .t-di { background: var(--linea); color: var(--suave); }
 .t-vi { background: var(--adv-fondo); color: var(--adv-texto); }
+.t-ed { background: transparent; border: 1px solid var(--adv-borde); color: var(--adv-texto); padding: 0 6px; }
 
 /* resumen: tabla + ficha */
 .cuerpo { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -247,6 +249,12 @@ td.dia.pico { font-weight: 700; color: var(--acento-texto); }
 .metodo { color: var(--suave); font-size: 12.5px; margin: 0; }
 .metodo b { color: var(--texto-2); font-weight: 600; }
 details.metodo summary { cursor: pointer; color: var(--texto-2); font-weight: 600; }
+.cc-res { margin: 0; padding: 0 14px 10px; font-size: 13px; color: var(--texto-2); max-width: 120ch; }
+.cc-res b { color: var(--texto); font-weight: 600; }
+.tabla-wrap tbody tr.sin-ficha { cursor: default; }
+.dif { white-space: nowrap; }
+.dif.alta { color: var(--adv-texto); font-weight: 600; }
+.nota-ed { font-size: 12.5px; color: var(--adv-texto); margin: 8px 0 0; }
 details.metodo p { margin: 6px 0 0; max-width: 120ch; }
 
 @media (max-width: 1100px) {
@@ -288,6 +296,7 @@ details.metodo p { margin: 6px 0 0; max-width: 120ch; }
     <nav class="vistas" id="vistas" role="tablist" aria-label="Vista">
       <button type="button" role="tab" data-v="tabla">Tabla dinámica</button>
       <button type="button" role="tab" data-v="resumen">Resumen</button>
+      <button type="button" role="tab" data-v="compras">Contra compras</button>
     </nav>
     <div class="der">
       <label class="interruptor num" id="vi-lbl"><input type="checkbox" id="vi" checked><span class="riel" aria-hidden="true"></span><span>Venta interna <small id="vi-cuenta"></small></span></label>
@@ -334,6 +343,21 @@ details.metodo p { margin: 6px 0 0; max-width: 120ch; }
     <aside class="caja" id="detalle" aria-live="polite"></aside>
   </section>
 
+  <section id="vista-compras" hidden>
+    <div class="caja">
+      <div class="card-h">
+        <div class="tit"><h2>Lo comprado contra lo que explican las ventas</h2><span class="sub" id="cc-sub"></span></div>
+      </div>
+      <p class="cc-res num" id="cc-resumen"></p>
+      <div class="filtros">
+        <input class="buscar" id="cc-buscar" type="search" placeholder="Buscar insumo…" aria-label="Buscar insumo" style="width:220px">
+        <div id="cc-filtro" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div class="tabla-wrap"><table><thead id="cc-cabeza"></thead><tbody id="cc-filas"></tbody></table></div>
+      <div class="pie num" id="cc-pie" style="padding:8px 14px"></div>
+    </div>
+  </section>
+
   <details class="metodo" id="metodo">
     <summary>Cómo se calcula</summary>
     <p id="metodo-txt"></p>
@@ -369,6 +393,7 @@ const CHEV = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-
 const K_UI = 'consumo_recetas_ui';
 let UI = { vista: 'tabla', tdCols: 'semana', tdVal: 'cant', vi: true, modo: 'dias', sel: null };
 try { Object.assign(UI, JSON.parse(window.parent.sessionStorage.getItem(K_UI) || '{}')); } catch (e) {}
+if (!['tabla', 'resumen', 'compras'].includes(UI.vista)) UI.vista = 'tabla';
 const guardar = () => { try { window.parent.sessionStorage.setItem(K_UI, JSON.stringify(UI)); } catch (e) {} };
 
 // ── el alto: lo mide el iframe y se lo escribe a su <iframe> ──
@@ -505,11 +530,14 @@ function pintarVista() {
   tabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', b.dataset.v === UI.vista));
   document.getElementById('dinamica').hidden = UI.vista !== 'tabla';
   document.getElementById('vista-resumen').hidden = UI.vista !== 'resumen';
+  document.getElementById('vista-compras').hidden = UI.vista !== 'compras';
 }
 tabs.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   UI.vista = b.dataset.v; guardar(); pintarVista();
-  if (UI.vista === 'resumen') { pintarFilas(); pintarDetalle(); } else pintarDinamica();
+  if (UI.vista === 'resumen') { pintarFilas(); pintarDetalle(); }
+  else if (UI.vista === 'compras') pintarCompras();
+  else pintarDinamica();
 });
 
 // ═══ TABLA DINÁMICA ═══
@@ -554,6 +582,10 @@ function totTD(x, factor, u) {
 }
 const coincide = s => !tdTxt || String(s).toLowerCase().includes(tdTxt);
 const vendidos = x => !x ? '' : `${x % 1 === 0 ? n0(x) : dec(x, 2)} vendidos`;
+// La receta de HOY: un plato cuya receta se editó dentro del rango se calcula
+// con la nueva aunque se haya vendido antes (regla #560).
+const marcaEditada = ed => !ed ? '' :
+  `<span class="t-ed" title="La receta se editó el ${fCorta(ed)}: lo vendido antes de esa fecha se calcula con la receta de hoy.">receta editada ${fCorta(ed)}</span>`;
 function pintarDinamica(foco) {
   tdCabeza();
   let lista = A.lista;
@@ -590,10 +622,10 @@ function pintarDinamica(foco) {
         <td class="c-tot num">${totTD(b, f, u)}</td>${celdasTD(b, f)}</tr>`);
       if (!ab1) continue;
       for (const c of platos) {
-        const [pn, vi, vend] = PLATOS[c.pid];
+        const [pn, vi, vend, ed] = PLATOS[c.pid];
         const enReceta = c.n1.size ? `<span class="meta">en la receta: ${esc([...c.n1].map(prepNombre).join(' · '))}</span>` : '';
         filasH.push(`<tr class="lv2">
-          <td class="c-nom"><div class="fila"><span class="txt"><span class="nm">${esc(pn)}</span>${vi ? '<span class="t-vi">venta interna</span>' : ''}<span class="meta num">${vendidos(vend)}</span>${enReceta}</span></div></td>
+          <td class="c-nom"><div class="fila"><span class="txt"><span class="nm">${esc(pn)}</span>${vi ? '<span class="t-vi">venta interna</span>' : ''}${marcaEditada(ed)}<span class="meta num">${vendidos(vend)}</span>${enReceta}</span></div></td>
           <td class="c-tot num">${totTD(c, f, u)}</td>${celdasTD(c, f)}</tr>`);
       }
     }
@@ -823,9 +855,122 @@ function pintarDetalle() {
     </div>
     <div class="det-sec"><h3>Platos que más lo usan</h3>
       ${barras(platos.map(([p, v]) => [PLATOS[p][0], v]), 'var(--acento)', v => `${prom(v)} ${esc(corta(u))}`)}
+      ${notaEditadas(platos.map(([p]) => p))}
     </div>
-    ${seccionCuando(a)}${rend}${real}`;
+    ${seccionCuando(a)}${rend}${real}${contraCompras(a)}`;
 }
+
+function notaEditadas(pids) {
+  const ed = pids.filter(p => PLATOS[p][3]).map(p => `${PLATOS[p][0]} (${fCorta(PLATOS[p][3])})`);
+  if (!ed.length) return '';
+  return `<p class="nota-ed">Receta editada en el período: ${esc(ed.join(', '))}. Lo vendido antes de esa fecha se calcula con la receta de hoy.</p>`;
+}
+function contraCompras(a) {
+  const [, u, , fam] = D.insumos[a.cod];
+  if (!D.compras_familias.length) return '';
+  const c = D.compras[a.cod];
+  const u_ = esc(corta(u));
+  const titulo = `<h3>Contra lo que se compró<small>del ${fCorta(P.desde)} al ${fCorta(P.hasta)}, por la fecha del documento</small></h3>`;
+  if (!c) {
+    if (!FAM_C.has(String(fam).toUpperCase())) return '';
+    return `<div class="det-sec">${titulo}<p class="nota" style="margin:0">No se compró en el período: lo que se usó salió del stock, o se compra con otro código.</p></div>`;
+  }
+  const [qc, sc, docs] = c, dif = qc - a.tot;
+  const txt = Math.abs(dif) < 1e-9 ? 'Lo mismo que explican las ventas.'
+    : (dif > 0 ? `Se compró ${prom(dif)} ${u_} más de lo que explican las ventas (${pct(dif, a.tot)}).`
+               : `Las ventas explican ${prom(-dif)} ${u_} más de lo que se compró (${pct(-dif, a.tot)}): salió del stock.`);
+  return `<div class="det-sec">${titulo}
+    <div class="real"><div><div class="eyebrow">Explican las ventas</div><div class="grande num">${prom(a.tot)} <span class="und">${u_}</span></div></div>
+    <div><div class="eyebrow">Se compraron</div><div class="grande num">${prom(qc)} <span class="und">${u_}</span></div><div class="sub num">${sol(sc)} en ${docs} documento${docs === 1 ? '' : 's'}</div></div></div>
+    <p class="nota num">${txt} Comprar no es usar: el stock sube y baja entre compras, y hay usos que no pasan por una receta (aceite de freír, comida del personal, pruebas).${UI.vi ? '' : ' Con la venta interna apagada, lo que se compró para ella queda del lado de lo comprado.'}</p></div>`;
+}
+
+// ═══ CONTRA COMPRAS: todo lo comprado del rango, al lado de lo que explican las ventas ═══
+const FAM_C = new Set((D.compras_familias || []).map(f => String(f).toUpperCase()));
+const FAM_DEFECTO = ['ALIMENTOS', 'BEBIDAS CON ALCOHOL', 'BEBIDAS SIN ALCOHOL', 'VINOS Y ESPUMANTES'];
+const famsTexto = () => {
+  const f = [...FAM_C].sort();
+  return f.length === FAM_DEFECTO.length && f.every((x, i) => x === FAM_DEFECTO[i])
+    ? 'alimentos y bebidas' : f.map(x => cap(x).toLowerCase()).join(', ');
+};
+// «Diferencia grande»: más del 25 % de lo que explican las ventas Y más de
+// S/ 100. Con el 25 % solo, un mes de septiembre de 2026 marcaba 305 de 417
+// insumos (lo chico se compra cada tanto y casi nunca cierra en un mes); con
+// los dos, 93, y arriba lo que importa: cachema, bife ancho, naranja, papa.
+const DIF_MIN_SOLES = 100;
+const FILTROS_C = [['todo', 'Todo'], ['sin', 'Ninguna venta los usó'], ['dif', 'Diferencia grande']];
+let ccTxt = '', ccFiltro = 'todo';
+function filasCompras() {
+  const out = [], vistos = new Set();
+  for (const a of A.lista) {
+    const [nom, u, , fam, sub] = D.insumos[a.cod];
+    if (!FAM_C.has(String(fam).toUpperCase())) continue;
+    const c = D.compras[a.cod] || [0, 0, 0];
+    out.push({ cod: a.cod, nom, u, fam, sub, usado: a.tot, costo: a.costo, comp: c[0], sComp: c[1], docs: c[2], ficha: true });
+    vistos.add(a.cod);
+  }
+  for (const [cod, c] of Object.entries(D.compras)) {
+    if (vistos.has(cod)) continue;
+    let nom, u, fam, sub;
+    if (D.comprados[cod]) [nom, u, fam, sub] = D.comprados[cod];
+    else if (D.insumos[cod]) [nom, u, , fam, sub] = D.insumos[cod];
+    else continue;
+    out.push({ cod, nom, u, fam, sub, usado: 0, costo: 0, comp: c[0], sComp: c[1], docs: c[2], ficha: A.ins.has(cod) });
+  }
+  for (const r of out) {
+    r.dif = r.comp - r.usado; r.peso = Math.max(r.sComp, r.costo);
+    const pr = D.insumos[r.cod] ? D.insumos[r.cod][2] : (r.comp ? r.sComp / r.comp : 0);
+    r.sDif = Math.abs(r.dif) * pr;
+  }
+  return out.sort((x, y) => y.peso - x.peso);
+}
+const alta = r => r.usado > 0 && Math.abs(r.dif) > 0.25 * r.usado && r.sDif >= DIF_MIN_SOLES;
+function pintarCompras() {
+  const cab = document.getElementById('cc-cabeza'), tb = document.getElementById('cc-filas');
+  if (!D.compras_familias.length) {
+    document.getElementById('cc-resumen').textContent = 'No se pudieron leer las compras del período (compras.parquet).';
+    cab.innerHTML = ''; tb.innerHTML = ''; document.getElementById('cc-pie').textContent = '';
+    return;
+  }
+  const todas = filasCompras();
+  const compradas = todas.filter(r => r.comp > 0);
+  const sTot = suma(compradas.map(r => r.sComp));
+  const usadas = compradas.filter(r => r.usado > 0), sinUso = compradas.filter(r => r.usado <= 0);
+  const sUsadas = suma(usadas.map(r => r.sComp));
+  document.getElementById('cc-sub').textContent = `Del ${fCorta(P.desde)} al ${fCorta(P.hasta)} · ${famsTexto()} · compras por la fecha del documento`;
+  document.getElementById('cc-resumen').innerHTML =
+    `<b>${sol(sTot)}</b> comprados en ${compradas.length} productos. Las ventas del período usan ${usadas.length} de ellos: <b>${sol(sUsadas)}</b> (${pct(sUsadas, sTot)}).` +
+    (sinUso.length ? ` <b>${sol(suma(sinUso.map(r => r.sComp)))}</b> en ${sinUso.length} producto${sinUso.length === 1 ? '' : 's'} que ninguna venta del período usó.` : ' Todo lo comprado lo usó alguna venta del período.');
+  document.getElementById('cc-filtro').innerHTML = FILTROS_C.map(([k, txt]) =>
+    `<button class="chipf" type="button" aria-pressed="${k === ccFiltro}" data-f="${k}"${k === 'dif' ? ` title="Más del 25 % de lo que explican las ventas y más de S/ ${DIF_MIN_SOLES}, ordenado por los soles de la diferencia"` : ''}>${txt}</button>`).join('');
+  let vis = todas;
+  if (ccFiltro === 'sin') vis = vis.filter(r => r.comp > 0 && r.usado <= 0);
+  if (ccFiltro === 'dif') vis = vis.filter(alta).sort((x, y) => y.sDif - x.sDif);
+  if (ccTxt) vis = vis.filter(r => r.nom.toLowerCase().includes(ccTxt));
+  cab.innerHTML = '<tr><th class="rk">#</th><th>Insumo</th><th class="r">Se compró<div class="th-sub">soles</div></th><th class="r">Explican las ventas<div class="th-sub">costo de hoy</div></th><th class="r">Comprado − usado</th></tr>';
+  tb.innerHTML = vis.slice(0, 500).map((r, i) => {
+    const u_ = esc(corta(r.u));
+    let dif;
+    if (r.usado <= 0) dif = '<span class="dif alta">ninguna venta lo usó</span>';
+    else if (r.comp <= 0) dif = `<span class="dif${alta(r) ? ' alta' : ''}">no se compró · −${prom(r.usado)} ${u_}</span>`;
+    else dif = `<span class="dif${alta(r) ? ' alta' : ''}">${r.dif >= 0 ? '+' : '−'}${prom(Math.abs(r.dif))} ${u_} · ${r.dif >= 0 ? '+' : '−'}${pct0(Math.abs(r.dif), r.usado)}</span>`;
+    if (r.usado > 0 && r.sDif >= 0.5) dif += `<div class="costo-sub">${sol(r.sDif)}</div>`;
+    return `<tr${r.ficha ? ` tabindex="0" data-cod="${esc(r.cod)}" title="Abrir su ficha en «Resumen»"` : ' class="sin-ficha"'}>
+      <td class="rk num">${i + 1}</td>
+      <td><div class="nom">${esc(r.nom)}</div><div class="fam">${esc(cap(r.fam))} · ${esc(r.sub || '')}</div></td>
+      <td class="r num">${r.comp ? `${prom(r.comp)}<span class="und">${u_}</span><div class="costo-sub">${sol(r.sComp)}</div>` : '—'}</td>
+      <td class="r num">${r.usado ? `${prom(r.usado)}<span class="und">${u_}</span><div class="costo-sub">${sol(r.costo)}</div>` : '—'}</td>
+      <td class="r num">${dif}</td></tr>`;
+  }).join('') || '<tr class="sin-ficha"><td colspan="5">Nada con este filtro.</td></tr>';
+  document.getElementById('cc-pie').textContent =
+    `${vis.length} de ${todas.length} insumos. Comprar no es usar: el stock del almacén sube y baja entre compras, y hay usos que no pasan por una receta (aceite de freír, comida del personal, pruebas, mermas). Una diferencia chica es normal; una grande en un mes pide mirar (en ámbar: más del 25 % y más de S/ ${DIF_MIN_SOLES}). En la unidad del kardex, la misma de las compras; soles de compra sin IGV, y lo que explican las ventas al costo promedio de hoy.` +
+    (UI.vi ? '' : ' Con la venta interna apagada, lo que se compró para ella queda del lado de lo comprado.');
+}
+document.getElementById('cc-filtro').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ccFiltro = b.dataset.f; pintarCompras(); });
+document.getElementById('cc-buscar').addEventListener('input', e => { ccTxt = e.target.value.trim().toLowerCase(); pintarCompras(); });
+const abrirFicha = cod => { UI.vista = 'resumen'; UI.sel = cod; guardar(); pintarVista(); pintarFilas(); pintarDetalle(); };
+document.getElementById('cc-filas').addEventListener('click', e => { const tr = e.target.closest('tr[data-cod]'); if (tr) abrirFicha(tr.dataset.cod); });
+document.getElementById('cc-filas').addEventListener('keydown', e => { if (e.key === 'Enter') { const tr = e.target.closest('tr[data-cod]'); if (tr) abrirFicha(tr.dataset.cod); } });
 
 // ── cómo se calcula ──
 {
@@ -837,6 +982,9 @@ function pintarDetalle() {
     `<b>El día y la hora.</b> El día es el del pedido. La hora es la de cada plato${R.hora_de_mesa ? ' — en este parquet todavía la de la MESA, que no trae la del plato' : ' y no la de la mesa: un postre llega unos 70 minutos después de abierta'}. «Día de la semana» es un promedio: lo de los lunes entre cuántos lunes hubo.`,
     '<b>Venta interna.</b> El chorizo y la chistorra de pato para Mayta se venden por tanda: cuentan en lo que se usó, pero corren el patrón de días y horas. El interruptor la saca, como en Ventas › Por hora.',
   ];
+  const editadas = PLATOS.filter(p => p[3]);
+  if (editadas.length) partes.push(`<b>Recetas editadas.</b> ${editadas.length} plato${editadas.length === 1 ? '' : 's'} del período cambi${editadas.length === 1 ? 'ó' : 'aron'} de receta desde el ${fCorta(P.desde)} (${esc(editadas.slice(0, 4).map(p => `${p[0]}, ${fCorta(p[3])}`).join(' · '))}${editadas.length > 4 ? '…' : ''}): lo vendido antes de esa fecha se calcula con la receta de hoy. La tabla dinámica y la ficha los marcan.`);
+  partes.push(`<b>Contra compras.</b> Lo comprado del rango, por la fecha del documento y en la unidad del kardex —la misma de las compras en todas sus líneas—, ${D.compras_familias.length ? 'de ' + famsTexto() : 'que no se pudo leer'}. Comprar no es usar: el stock sube y baja entre compras.`);
   if (R.sin_maestro || R.sin_factor) partes.push(`<b>Lo que no se pudo bajar.</b> ${R.sin_maestro} líneas con un insumo que no está en el maestro y ${R.sin_factor} sin factor de conversión: ${sol(R.costo_sin_convertir)} del primer nivel.`);
   document.getElementById('metodo-txt').innerHTML = partes.join(' ');
 }
@@ -844,6 +992,7 @@ function pintarDetalle() {
 function pintarTodo() {
   pintarResumen(); pintarSegTD(); pintarDinamica(); pintarFams(); pintarModos(); pintarCabeza();
   if (UI.vista === 'resumen') { pintarFilas(); pintarDetalle(); }
+  if (UI.vista === 'compras') pintarCompras();
 }
 // abre con el primer insumo y su primera preparación desplegados: los tres niveles a la vista
 if (A.lista.length) {

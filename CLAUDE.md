@@ -888,6 +888,16 @@ Lo que ya mordió:
 - **Cambiar QUÉ se calcula es subir `consumo_recetas.VERSION`** y correr
   `python herramientas/verificar_consumo.py`: por las recetas base el costo
   tiene que cerrar contra el primer nivel.
+- **Contra lo COMPRADO se compara en CANTIDAD**: las compras vienen en la
+  unidad del kardex en el 100 % de las líneas, la misma del consumo.
+  «Diferencia grande» es más del 25 % Y más de S/ 100 (con el 25 % solo,
+  305 de 417 insumos). Y el consumo usa la receta de HOY: la página marca
+  los platos cuya receta se editó dentro del rango (#560).
+- **Lo que al nivel de insumo de compra cierra puede estar mal al nivel de
+  CORTE**: una receta que pide el corte equivocado no da error — el lomo
+  fino cierra (211 kg contra 209 porcionados) y el Lomo Saltado descarga
+  medallón mientras la cocina porciona trozos. Eso lo muestra Recetas ›
+  «Revisar recetas» (`graficos/recetas_revisar.py`, #559).
 
 Detalle, trampas y mediciones en `arquitectura.md` regla #558.
 

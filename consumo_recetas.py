@@ -136,6 +136,21 @@ def sql_nivel1(relacion, ini, fin, con_hora_item=True):
         GROUP BY 1, 2, 3, 5"""
 
 
+def sql_demanda_nivel1(relacion, ini, fin):
+    """Lo que pidieron las ventas del rango al PRIMER nivel, por insumo y plato,
+    sin día ni hora: lo lee Recetas › «Revisar recetas» (regla #559) para
+    comparar lo que piden las recetas de cada corte contra lo porcionado.
+    `consumo` va en unidad de SALIDA, como en el POS."""
+    return f"""
+        SELECT "COD INSUMO"          AS cod,
+               "PRODUCTO"            AS plato,
+               SUM("CONSUMO TOTAL")  AS consumo,
+               SUM("COSTO TOTAL")    AS costo
+        FROM {relacion}
+        WHERE CAST("FECHA PEDIDO" AS DATE) BETWEEN DATE '{ini}' AND DATE '{fin}'
+        GROUP BY 1, 2"""
+
+
 def sql_recetas(relacion):
     return f"""
         SELECT "COD PROD RB" AS prod, "COD INS RB" AS ins, "CANT" AS cant,

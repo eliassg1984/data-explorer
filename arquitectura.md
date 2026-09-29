@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-558 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+560 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (189)
 
@@ -656,7 +656,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 
-**Datos, R2 y DuckDB** (75)
+**Datos, R2 y DuckDB** (77)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -733,6 +733,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#556** — Recetas y Costos tiene UNA vista de la carta: «Composición del plato» era la Carta costeada…
 - **#557** — El panel de un producto de la Carta costeada tiene «En el tiempo»: el costo con que se…
 - **#558** — «Consumo según recetas» (Movimientos): cada venta baja por las recetas base y los…
+- **#559** — Recetas y Costos pierde «Ingredientes clave», «Insumos clave · recetas base» y los dos…
+- **#560** — «Consumo según recetas» se compara contra lo COMPRADO del rango —en la ficha de cada insumo y…
 
 **SUNAT y SIRE** (44)
 
@@ -844,7 +846,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (126)
+**Decisiones de diseño y UX** (128)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -972,6 +974,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#556** — Recetas y Costos tiene UNA vista de la carta: «Composición del plato» era la Carta costeada…
 - **#557** — El panel de un producto de la Carta costeada tiene «En el tiempo»: el costo con que se…
 - **#558** — «Consumo según recetas» (Movimientos): cada venta baja por las recetas base y los…
+- **#559** — Recetas y Costos pierde «Ingredientes clave», «Insumos clave · recetas base» y los dos…
+- **#560** — «Consumo según recetas» se compara contra lo COMPRADO del rango —en la ficha de cada insumo y…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -44883,6 +44887,140 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      nueva lleva el sello y la limpia `limpiar_cache`). En Cloud:
      `graficos/movimientos.py` importa un módulo nuevo y `data.py` suma una
      función, así que después del push va «Reboot app» (#357).
+
+     (2026-09-28.)
+
+559. **Recetas y Costos pierde «Ingredientes clave», «Insumos clave · recetas
+     base» y los dos «Panorama de compras»: medían la CARTA y no lo vendido,
+     y lo contesta bien Movimientos › «Consumo según recetas» (#558). En su
+     lugar entra «Revisar recetas»: los cortes que se porcionan y ninguna
+     receta usa, y los que las recetas piden y casi no se porcionan. Un par
+     del mismo insumo es UNA receta que apunta al corte equivocado — y eso
+     no da error en ningún lado.**
+     2026-09-28, a pedido («analiza la vista ingredientes… quizás pueda
+     cruzarse con algún otro dato»; después «haz las tres cosas, quita las
+     cuatro vistas de recetas»), sobre una medición contra R2 y producción.
+
+     - **Lo que medía Ingredientes clave**: Σ `TOTAL` (el costo POR PORCIÓN)
+       del ingrediente en los platos activos, o sea «lo que costaría hacer
+       una porción de cada plato de la carta». Su primer puesto, un whisky
+       de S/ 265 «en 1 plato», se pidió una vez en 90 días (puesto 113 por
+       lo consumido); el segundo, ninguna. De sus 15 primeros, cinco están
+       entre los 15 más consumidos (Spearman 0,60); 8 de sus 40 primeros no
+       se consumieron en 90 días; no veía los 60 productos DIRECTOS (17,6 %
+       del costo de lo vendido) y el 80 % del costo pasa por un (P) o un
+       (Rs) que no abría. «Insumos clave · recetas base» era lo mismo sobre
+       recetabase.
+     - **El Panorama de compras engañaba**: repartía lo comprado entre los
+       platos según la receta, no según lo vendido, y sólo reconocía un
+       insumo si la receta lo nombraba tal cual. Del 1 al 27 de septiembre
+       de 2026 daba «vinculado a receta» al 21,3 % de lo comprado en
+       alimentos y bebidas; «Consumo según recetas» explica el 94,5 %. El
+       lomo fino entero —lo más comprado, S/ 14.664— le salía «sin
+       vincular»: llega al plato por un porcionamiento. Su única idea propia,
+       lo comprado que ninguna receta explica, se mudó a la pestaña «Contra
+       compras» de Consumo (#560). `graficos/recetabase.py` quedó sin nada y
+       se borró; de `recetas_comun.py` se fueron `_items_clave`,
+       `_panorama_compras`, `_cargar_flujo_compras`, su Sankey, sus KPIs y
+       su drill.
+     - **Por qué «Revisar recetas».** El 02/09/2026 se crearon «(P) Lomo
+       Medallon 170gr» (14:16) y «(P) Lomo trozos saltado 170gr» (14:28), y
+       a las 14:32 se editó el Lomo Saltado. Hasta el 28/09 Producción
+       porcionó 179 medallones y 262 trozos; la venta descargó (kardex,
+       tipo 95) 592,5 medallones y NINGÚN trozo; en el conteo del 17/09 en
+       Cocina, el medallón pasó de −224 a 5 (+229, S/ +3.995) y los trozos
+       de 101 a 17,5 (−83,5, S/ −1.457). Al nivel de insumo de compra cierra
+       —el lomo fino: 211 kg explicados, 209 porcionados—; al nivel de
+       corte, no. La charela tiene otro par igual: la de 125 g que piden las
+       recetas no se porciona desde junio, y la cocina porciona un «(Rs)
+       Collar / Charela 125gr» que ninguna receta usa.
+     - **Las dos señales** (`graficos/recetas_revisar.py::revisar`, pura).
+       «Ninguna receta lo usa»: se porcionó en el período y no lo nombra una
+       receta de venta ni una receta base ACTIVAS, ni un directo activo de
+       la carta, ni una venta del período (así entran las propiedades, que
+       no tienen parquet), ni otro porcionamiento que parta de él. Si no se
+       porcionó en los últimos 14 días, «ya no se porciona»: el código viejo
+       de un cambio de receta (los trozos de 180 g). Si las notas de salida
+       cubren la mitad, «sale por notas de salida»: la «familia» es la
+       comida del personal (46,6 kg en el mes). «Piden más de lo
+       porcionado»: un corte con porcionamientos en su historia, SIN receta
+       base activa —esa se produce por orden de producción—, cuyo primer
+       nivel del período es más del doble de lo porcionado MÁS lo comprado
+       directo: la lechuga, el gin de la casa o un vino se porcionaron
+       alguna vez y hoy se compran.
+     - **El grupo es la RAÍZ de la cadena, y la cadena se para en lo que se
+       compra.** La charela de 125 g sale de la de 250 g, que sale de la
+       entera: con el origen de un solo paso, las gemelas caían en grupos
+       distintos. Hay un porcionamiento de charela «desde» cachema: sin
+       parar en lo comprado, la charela se iba al grupo de la cachema. Y los
+       porcionamientos al revés arman círculos (#558): se corta en el último
+       que no vuelve sobre sus pasos.
+     - **Las unidades**: lo porcionado y lo comprado van en la del kardex
+       (el 100 % de las líneas de compra de 12 meses); el primer nivel viene
+       en la de salida y se pasa con el `FACTOR` del maestro. Lo trae
+       `data.demanda_nivel1_rango`, sellada (`consumo_recetas.
+       sql_demanda_nivel1`, agregada por insumo y plato en DuckDB: 792 filas
+       un mes).
+     - **La tabla lleva el ancho de cada columna** (`COLUMNAS_TABLA`). Sin
+       anchos, cada columna medía su texto más largo: sumaban 1.585 px
+       contra 1.196 y las cifras quedaban escondidas a la derecha, detrás de
+       una barra (medido a 1366×768). Por lo mismo los rótulos de la señal
+       son cortos.
+     - Del 30/08 al 28/09/2026: 5 cortes sin receta (S/ 3.945), 10 que
+       piden más de lo porcionado (faltaron S/ 12.819), 3 códigos viejos y
+       uno de comida del personal.
+
+     Candados: `test_graficos.py::_pruebas_revisar_recetas` (los dos pares,
+     el código viejo, la cadena, el círculo, la familia, las seis
+     exclusiones, los anchos, que no haya vacíos que se pinten «None» y que
+     las cuatro vistas no vuelvan) y `test_datos.py` (la cacheable nueva
+     lleva el sello y la limpia `limpiar_cache`). En Cloud: `graficos/
+     recetas.py` importa un módulo nuevo y se borró uno, así que después
+     del push va «Reboot app» (#357).
+
+     (2026-09-28.)
+
+560. **«Consumo según recetas» se compara contra lo COMPRADO del rango —en
+     la ficha de cada insumo y en una pestaña «Contra compras»— y marca los
+     platos cuya receta se editó dentro del rango, porque el consumo usa la
+     receta de HOY.**
+     2026-09-28, a pedido, en el mismo cambio que la #559.
+
+     - **Contra compras.** Lo comprado del rango (compras.parquet, por la
+       fecha del documento) viaja con la página
+       (`movimientos_consumo.compras_del_rango`). Se compara CANTIDAD:
+       `UNIDAD_DE_INGRESO` es la del kardex en las 12.844 líneas de 12
+       meses (medido), la misma en que va el consumo. Sin chip de familia
+       entran alimentos y bebidas (`FAMILIAS_INSUMO`, la lista que usaba el
+       Panorama): carbón (S/ 4.969 en septiembre), leña o limpieza se
+       compran sin que una receta los nombre. Del 1 al 27 de septiembre:
+       S/ 116.564 comprados en 287 productos; las ventas usan 240 de ellos
+       (S/ 110.157, 94,5 %), y quedan S/ 6.406 en 47 que ninguna venta usó
+       (charela entera, muslo de pollo, hueso de pollo: fondos y comida del
+       personal).
+     - **Lo que se ve**: el lomo fino, 208,6 kg comprados contra 211,1
+       explicados; el aceite vegetal, 185 L contra 32,7 (el de freír no
+       está en ninguna receta); la pierna de cerdo, 61,7 kg contra 12,2.
+       «Diferencia grande» es más del 25 % Y más de S/ 100: con el 25 %
+       solo marcaba 305 de 417 insumos —lo chico se compra cada tanto y en
+       un mes casi nunca cierra—; con los dos, 93, ordenados por los soles
+       de la diferencia (cachema −34,8 kg, bife ancho +14,2, naranja −165).
+     - **La receta de HOY**: el Lomo Saltado se editó el 02/09 y cambió de
+       corte (#559); el primer nivel le atribuye 1.574,5 medallones en 90
+       días contra 519,5 que descargó el kardex. La página marca «receta
+       editada 2 sep» en la fila del plato, lo dice en la ficha y en «Cómo
+       se calcula» (`recetas_editadas`: `FECH MODIF` de recetaventa.parquet
+       por NOMBRE, que es como llega el plato del POS — 0 nombres repetidos,
+       medido). Del 1 al 27 de septiembre, 9 platos vendidos.
+     - **Al medir la página con el panel del navegador oculto**, el
+       `ResizeObserver` del iframe no corre —no hay dibujado— y el iframe se
+       queda con el alto viejo (medido: 326 px con 890 de documento). No es
+       un bug de la página: una captura lo destraba y el alto vuelve a
+       seguir a cada pestaña (891, 921, 2.330).
+
+     Candados: `test_consumo_recetas.py` (las compras del rango con y sin
+     chip, las recetas editadas, lo que viaja a la página y que sin compras
+     la pestaña no se promete). En Cloud va con el «Reboot app» de la #559.
 
      (2026-09-28.)
 

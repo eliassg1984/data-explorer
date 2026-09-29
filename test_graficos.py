@@ -65,8 +65,8 @@ def _df_minimo():
 
 def _df_recetas():
     """12 filas emulando un BOM (contenedor -> ítems), forma común a
-    Receta Base y Receta Venta — suficiente para ejercitar los 5
-    constructores compartidos de graficos/recetas_comun.py."""
+    Receta Base y Receta Venta — suficiente para ejercitar el ranking que
+    comparten en graficos/recetas_comun.py."""
     return pd.DataFrame({
         "CONTENEDOR": ["A", "A", "A", "B", "B", "C", "C", "C", "C", "D", "D", "D"],
         "ITEM":       ["x1", "x2", "x3", "x1", "x4", "x2", "x3", "x4", "x5", "x1", "x2", "x3"],
@@ -6145,6 +6145,205 @@ def _pruebas_ventas_mix():
     return fallos
 
 
+def _pruebas_revisar_recetas():
+    """Recetas › Revisar recetas (regla #559): los cortes que se porcionan y
+    ninguna receta usa, y los que las recetas piden y casi no se porcionan.
+
+    Fija los casos reales del 2026-09-28: el PAR del lomo (el medallón que
+    las recetas piden de más y los trozos que ninguna receta usa) en el mismo
+    grupo; el código viejo que se dejó de porcionar; la charela de 125 g
+    que sale de la de 250 g y queda con su gemela bajo la charela ENTERA
+    (la cadena se para en lo que se compra, y un círculo no la cuelga); la
+    comida del personal, que no es un tema de receta; y las seis cosas que
+    NO son una señal: lo que usa una receta base activa, lo que parte a otro
+    porcionamiento, un directo de la carta, una venta (propiedades), un corte
+    con receta base activa (se produce por orden de producción) y lo que se
+    compra directo. Y que las cuatro vistas que se fueron no vuelvan.
+    """
+    from datetime import date, timedelta
+
+    from graficos import recetas as rec
+    from graficos import recetas_revisar as rr
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    recetas · revisar · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA recetas · revisar · {nombre}: got={got!r} exp={exp!r}")
+
+    fin = date(2026, 9, 27)
+    ini = fin - timedelta(days=29)
+
+    def dia(n):
+        return pd.Timestamp(fin - timedelta(days=n))
+
+    maestro = pd.DataFrame([
+        # cod, nombre, unidad, factor, precio
+        ("0000287", "Lomo fino entero x Kg", "KILOS", 1000.0, 73.0),
+        ("0004159", "(P) Lomo Medallon 170gr", "UND", 1.0, 15.0),
+        ("0004160", "(P) Lomo trozos saltado 170gr", "UND", 1.0, 14.0),
+        ("0004001", "(P) Lomo trozos saltado 180gr", "UND", 1.0, 16.0),
+        ("0001997", "Charela entera x Kg", "KILOS", 1000.0, 55.0),
+        ("0003920", "(P) Charela limpio 250gr", "UND", 1.0, 30.0),
+        ("0004076", "(P) Charela limpio 125gr", "UND", 1.0, 15.0),
+        ("0003902", "(Rs) Collar / Charela 125gr", "UND", 1.0, 15.0),
+        ("0000100", "Pollo entero x Kg", "KILOS", 1000.0, 11.0),
+        ("0000883", "Pollo Familia x Kg", "KILOS", 1000.0, 11.0),
+        ("0000900", "(P) Cebolla limpia", "KILOS", 1000.0, 4.0),
+        ("0000950", "(P) Pulpo cocido", "KILOS", 1000.0, 90.0),
+        ("0000951", "(P) Pulpo cocido 120gr", "UND", 1.0, 11.0),
+        ("0000960", "(P) Entraña 300gr", "UND", 1.0, 60.0),
+        ("0000970", "(Rs) Salsa de la casa", "KILOS", 1000.0, 20.0),
+        ("0000980", "Lechuga Morada", "KILOS", 1000.0, 8.0),
+        ("0000990", "(P) Palta limpia", "KILOS", 1000.0, 16.0),
+        ("0005001", "(P) Corte A", "UND", 1.0, 5.0),
+        ("0005002", "(P) Corte B", "UND", 1.0, 5.0),
+    ], columns=["CODIGO PRODUCTO", "NOMBRE PRODUCTO", "UNIDAD KARDEX", "FACTOR",
+                "PRECIO PROMEDIO"])
+    nom = dict(zip(maestro["CODIGO PRODUCTO"], maestro["NOMBRE PRODUCTO"]))
+
+    def porc(n, inic, final, cant, precio, fecha):
+        return {"COD PORC": n, "COD PROD INIC": inic, "PROD INICIAL": nom[inic],
+                "FEC REGIST": fecha, "COD PROD FINAL": final,
+                "PROD FINAL RESULT": nom[final], "CANT RESULT": cant,
+                "UNID PROD FIN": "UND", "PREC PROM PROD FIN": precio}
+
+    porcionamientos = pd.DataFrame([
+        porc("P1", "0000287", "0004159", 179, 15.0, dia(3)),
+        porc("P1", "0000287", "0004160", 262, 14.0, dia(3)),
+        porc("P2", "0000287", "0004001", 78, 16.0, dia(27)),       # ya no se porciona
+        porc("P0", "0004159", "0000287", 1.0, 73.0, dia(200)),     # al revés
+        porc("P3", "0001997", "0003920", 10, 30.0, dia(120)),      # antes del período
+        porc("P4", "0003920", "0004076", 20, 15.0, dia(96)),       # cadena 250 → 125
+        porc("P5", "0001997", "0003902", 13, 15.0, dia(5)),
+        porc("P6", "0000100", "0000883", 19.1, 11.0, dia(16)),
+        porc("P7", "0000287", "0000900", 4.0, 4.0, dia(4)),        # lo usa una receta base
+        porc("P8", "0000287", "0000950", 3.0, 90.0, dia(6)),       # parte a otro porcionamiento
+        porc("P9", "0000950", "0000951", 20, 11.0, dia(5)),
+        porc("P10", "0000287", "0000960", 5, 60.0, dia(6)),        # un directo de la carta
+        porc("P11", "0000287", "0000970", 1.0, 20.0, dia(300)),    # tiene receta base activa
+        porc("P12", "0000287", "0000980", 1.0, 8.0, dia(200)),     # hoy se compra
+        porc("P13", "0000287", "0000990", 8.0, 16.0, dia(4)),      # lo pide una venta
+        porc("P14", "0005002", "0005001", 2, 5.0, dia(2)),         # círculo A ← B ← A
+        porc("P15", "0005001", "0005002", 2, 5.0, dia(40)),
+    ])
+    n1 = pd.DataFrame([
+        ("0004159", "Lomo Saltado", 400.0, 6000.0),
+        ("0004159", "Lomo a la Pimienta", 194.0, 2910.0),
+        ("0004076", "(Ex) Collar de Pesca", 35.0, 525.0),
+        ("0000970", "Tallarín de la casa", 100000.0, 2000.0),
+        ("0000980", "Lomo al Trapo", 3050.0, 24.4),
+        ("0000990", "Propiedad: con palta", 10000.0, 160.0),
+        ("0000951", "Pulpo a la Leña", 20.0, 220.0),
+    ], columns=["cod", "plato", "consumo", "costo"])
+    recetaventa = pd.DataFrame({
+        "COD INS": ["0004159", "0004076", "0004160"],
+        "ITEM VENTA ACTIVO": ["ACTIV", "ACTIV", "INACTIV"],   # los trozos, en un plato de baja
+        "INS ACTIVO": ["ACTIV", "ACTIV", "ACTIV"],
+    })
+    recetabase = pd.DataFrame({
+        "COD PROD RB": ["0000970", "0000999"],
+        "COD INS RB": ["0000900", "0003902"],
+        "RB ACT": ["RB.ACTIV", "RB.INACT"],                   # el collar, en una receta de baja
+        "INS ACTIVO": ["INS.ACT", "INS.ACT"],
+    })
+    carta = pd.DataFrame({
+        "TIPO DESC": ["DIRECTO", "DIRECTO"],
+        "ITEM VENT ACT": ["ACTIV", "INACT"],                  # los trozos, en un directo de baja
+        "COD ITEM O RECETA": ["0000960", "0004160"],
+    })
+    salidas = pd.DataFrame({
+        "COD PRODUCTO": ["0000883", "0004160", "0003902"],
+        "TIPO DESCARGO": ["Comida Personal", "Bajas", "Bajas"],
+        "CANT SALIDA": [46.6, 3.0, 13.0],
+        "FECHA REGISTRO": [dia(2), dia(1), dia(1)],
+        "NOMBRE ESTADO SALIDA": ["PROCESADO", "PROCESADO", "ANULADO"],
+    })
+    compras = pd.DataFrame({
+        "COD_PRODUCTO": ["0000980", "0000287", "0001997", "0000100"],
+        "CANTIDAD_COMPRA": [5.0, 200.0, 30.0, 40.0],
+        "FECHA_EMISION_DOC": [dia(8), dia(10), dia(60), dia(20)],
+    })
+
+    t = rr.revisar(porcionamientos, n1, recetaventa, recetabase, carta, maestro,
+                   salidas, ini, fin, compras=compras)
+    que = dict(zip(t["cod"], t["que"]))
+    check("las filas: el par del lomo, el código viejo, el par de la charela y la familia",
+          sorted(que), sorted(["0004159", "0004160", "0004001", "0003902", "0004076",
+                               "0000883", "0005001"]))
+    check("el medallón: las ventas piden más de lo que se porciona",
+          que.get("0004159"), rr.QUE_FALTA)
+    check("los trozos: ninguna receta los usa (un plato y un directo de baja no cuentan)",
+          que.get("0004160"), rr.QUE_SIN)
+    check("el de 180 g se dejó de porcionar", que.get("0004001"), rr.QUE_SIN_VIEJO)
+    check("el collar: una receta base DE BAJA no cuenta, ni una salida anulada",
+          que.get("0003902"), rr.QUE_SIN)
+    check("la charela de 125 g no se porcionó en el período",
+          que.get("0004076"), rr.QUE_FALTA)
+    check("la familia sale por notas de salida", que.get("0000883"), rr.QUE_SALIDA)
+
+    g = dict(zip(t["cod"], t["grupo_cod"]))
+    check("el par del lomo, en el grupo del lomo (el porcionamiento al revés no lo cuelga)",
+          (g["0004159"], g["0004160"], g["0004001"]), ("0000287",) * 3)
+    check("la charela de 125 g sale de la de 250 g, que sale de la entera: juntas",
+          (g["0004076"], g["0003902"]), ("0001997", "0001997"))
+    check("el grupo del lomo va primero, y adentro la señal antes que el código viejo",
+          list(t["cod"])[:3], ["0004159", "0004160", "0004001"])
+    check("la familia va al final: no pesa en el orden", list(t["cod"])[-1], "0000883")
+    f = t.set_index("cod")
+    check("lo pedido va en unidad de ENTRADA y se compara contra lo porcionado",
+          (f.loc["0004159", "pedido"], f.loc["0004159", "porcionado"]), (594.0, 179.0))
+    check("el valor de lo que faltó: al precio de hoy",
+          round(f.loc["0004159", "valor"], 2), round((594 - 179) * 15.0, 2))
+    check("el valor de lo porcionado sin receta: al costo del porcionamiento",
+          round(f.loc["0004160", "valor"], 2), round(262 * 14.0, 2))
+    check("los platos que lo piden, de más a menos",
+          f.loc["0004159", "platos"], ["Lomo Saltado", "Lomo a la Pimienta"])
+    check("por dónde salió", f.loc["0004160", "salio"], {"Bajas": 3.0})
+    check("un círculo de porcionamientos (A ← B ← A) no cuelga la búsqueda: queda en B",
+          g["0005001"], "0005002")
+
+    v = rr.tabla(t, fin).set_index("Corte")
+    check("una cantidad entera, sin decimales",
+          v.loc["(P) Lomo trozos saltado 170gr", "Porcionado"], "262 und")
+    check("lo que no se pide se escribe «—»",
+          v.loc["(P) Lomo trozos saltado 170gr", "Piden las ventas"], "—")
+    check("la fecha del último porcionamiento",
+          v.loc["(P) Lomo trozos saltado 180gr", "Último porc."], "31 ago")
+    check("la del último porcionamiento de la charela de 125 g",
+          v.loc["(P) Charela limpio 125gr", "Último porc."], "23 jun")
+    check("cada columna de la tabla tiene su ancho (sin anchos sumaban 1.585 px)",
+          sorted(rr.tabla(t, fin).columns), sorted(rr.COLUMNAS_TABLA))
+    check("sin vacíos que st.dataframe pinte «None» (#529)",
+          bool(rr.tabla(t, fin).isna().any().any()), False)
+    txt = rr.resumen(t, ini, fin)
+    check("el resumen cuenta cada señal",
+          ("**3** cortes se porcionan y ninguna receta los usa" in txt,
+           "**2** cortes los piden las recetas" in txt,
+           "Otro se dejó de porcionar" in txt,
+           "Uno más sale por notas de salida" in txt),
+          (True, True, True, True))
+    vacio = rr.revisar(porcionamientos.iloc[:0], n1.iloc[:0], recetaventa, recetabase,
+                       carta, maestro, salidas, ini, fin)
+    check("sin nada para revisar, lo dice",
+          rr.resumen(vacio, ini, fin).endswith("nada para revisar."), True)
+
+    # ── En el rail y en la pila; y las cuatro que se fueron, fuera ───────
+    _vistas = {v[0] for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas}
+    check("Revisar recetas está en el rail y en la pila",
+          ("Revisar recetas" in _vistas, ("rec_sec_revisar", "Revisar recetas") in rec._PILA),
+          (True, True))
+    for ida in ("Ingredientes clave", "Insumos clave · recetas base",
+                "Panorama de compras · platos", "Panorama de compras · recetas base"):
+        check(f"«{ida}» ya no es una vista (#559)",
+              ida in _vistas or any(v == ida for _k, v in rec._PILA), False)
+    return fallos
+
+
 def _pruebas_carta_costeada():
     """Recetas › Carta costeada (regla #548): lo que la vista hace con
     `cartacosteada.parquet` antes de dibujarlo.
@@ -7564,30 +7763,18 @@ def main():
             (df, "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
     ]
 
-    # ── Constructores compartidos de Receta Base / Receta Venta ─────────
-    # graficos/recetas_comun.py: una sola copia de cada gráfico para los
-    # dos dashboards (ver arquitectura.md § Unificación Recetas). Kwargs
-    # solo-nombrados → se envuelven en lambdas de 0 args para reusar el
-    # mismo bucle `fn(*args)` de arriba.
+    # ── El constructor compartido de Receta Base / Receta Venta ─────────
+    # graficos/recetas_comun.py: el Ranking de recetas base. «Ingredientes
+    # clave» y el Panorama de compras se fueron el 2026-09-28 (regla #559).
+    # Kwargs solo-nombrados → se envuelven en lambdas de 0 args para reusar
+    # el mismo bucle `fn(*args)` de arriba.
     from graficos import recetas_comun as _rc
     df_rec = _df_recetas()
-    links_panorama = pd.DataFrame({
-        "producto_n":   ["Prod 1", "Prod 1", "Otros insumos", "Prod 2"],
-        "contenedor_n": ["A", "B", "A", "Otros"],
-        "valor":        [100.0, 40.0, 15.0, 60.0],
-    })
     pruebas += [
         ("recetas_comun · ranking contenedores", lambda: _rc._ranking_contenedores(
             df_rec, "CONTENEDOR", "VALOR", True,
             key_topn="test_topn", card_key="test_ranking",
             titulo_card="Ranking de prueba"), ()),
-        ("recetas_comun · items clave", lambda: _rc._items_clave(
-            df_rec, "CONTENEDOR", "ITEM", "VALOR", True,
-            card_key="test_items", titulo_card="Ítems de prueba",
-            etiqueta_item="Ítem", etiqueta_contenedor_plural="contenedores",
-            expander_titulo="Tabla de prueba"), ()),
-        ("recetas_comun · fig panorama sankey", lambda: _rc._fig_panorama_sankey(
-            links_panorama, True), ()),
     ]
 
     # ── Mapa por hora (Ventas › Por hora) ───────────────────────────────
@@ -7758,6 +7945,9 @@ def main():
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()
+
+    # ── Recetas › Revisar recetas: los cortes que ninguna receta usa ─────
+    fallos += _pruebas_revisar_recetas()
 
     # ── Contratos entre app.py y los dashboards (firma del dispatcher) ──
     fallos += _pruebas_contratos()

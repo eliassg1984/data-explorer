@@ -22,6 +22,11 @@ Dos cosas, las dos sin secrets, sin red y sin navegador:
 2. El CABLEADO, con `ast`: que la lista de grupos que no son servicio sea la
    misma que la de Ventas › Por hora.
 
+3. LA VISTA (regla #560), sobre el mismo resultado: lo comprado del rango
+   que viaja con la página (sólo alimentos y bebidas sin chip; con chip,
+   el chip), lo comprado que ninguna venta usó con su nombre, y la fecha de
+   los platos cuya receta se editó dentro del rango.
+
 La cifra contra los parquets de verdad no vive acá (necesita R2): la da
 `herramientas/verificar_consumo.py`.
 
@@ -257,6 +262,56 @@ ok(cr.dias_por_dia_semana(dt.date(2026, 8, 28), dt.date(2026, 9, 27)) == [4, 4, 
 ok(RES["niveles"] == 2, "el árbol más hondo del caso tiene dos niveles", f"{RES['niveles']}")
 ok(set(rp.loc[rp["cod_x"] == "PR", "fuente"]) == {"respaldo"},
    "el porcionamiento viejo del código viejo sigue en la tabla de rendimientos (para mostrarlo)")
+
+print("\n── la vista: contra lo que se compró y la receta editada (regla #560) ──")
+# El modelo de la página (`graficos/movimientos_consumo.py`) sobre el mismo
+# resultado: lo comprado del rango viaja con la página, y un plato cuya
+# receta se editó dentro del rango lleva su fecha.
+from graficos import movimientos_consumo as mc  # noqa: E402  (después del cálculo, a propósito)
+
+COMPRAS = pd.DataFrame([
+    # cod, nombre, unidad, familia, subfamilia, cantidad, valor, documento, fecha
+    ("CRE", "Crema de leche", "LITROS", "ALIMENTOS", "LACTEOS", 2.0, 40.0, "F1", T("2026-09-03")),
+    ("CRE", "Crema de leche", "LITROS", "ALIMENTOS", "LACTEOS", 1.0, 21.0, "F2", T("2026-09-18")),
+    ("OLE", "Aceite de freír", "LITROS", "ALIMENTOS", "ABARROTES", 20.0, 150.0, "F2", T("2026-09-18")),
+    ("CAR", "Carbón vegetal", "KILOS", "COSTOS PRODUCCION", "COMBUSTIBLE", 50.0, 90.0, "F3", T("2026-09-05")),
+    ("LEC", "Lechuga", "KILOS", "ALIMENTOS", "VERDURAS", 5.0, 50.0, "F4", T("2026-08-20")),  # fuera
+], columns=["COD_PRODUCTO", "NOMBRE_PRODUCTO", "UNIDAD_DE_INGRESO", "FAMILIA", "SUBFAMILIA",
+            "CANTIDAD_COMPRA", "VALOR_COMPRA", "NUM_DOCUMENTO", "FECHA_EMISION_DOC"])
+cp = mc.compras_del_rango(COMPRAS, INI, FIN)
+cpi = cp.set_index("cod")
+ok(set(cp["cod"]) == {"CRE", "OLE"},
+   "las compras del rango, sólo alimentos y bebidas: el carbón y lo de agosto quedan fuera",
+   f"{sorted(cp['cod'])}")
+igual(cpi.loc["CRE", "cant"], 3.0, "la crema: dos facturas suman 3 litros")
+igual(cpi.loc["CRE", "valor"], 61.0, "y S/ 61")
+ok(int(cpi.loc["CRE", "docs"]) == 2, "en 2 documentos")
+cp_car = mc.compras_del_rango(COMPRAS, INI, FIN, ("COSTOS PRODUCCION",))
+ok(list(cp_car["cod"]) == ["CAR"], "con el chip de familia puesto, manda el chip")
+ok(mc.compras_del_rango(None, INI, FIN) is None, "sin compras, None: la página lo dice")
+
+RV = pd.DataFrame({
+    "NOMB PLATO": ["Lomo a la pimienta", "Lomo a la pimienta", "Ensalada", "Fideua"],
+    "FECH MODIF": [T("2026-09-02 14:26"), T("2026-09-02 14:26"), T("2026-03-10"), None],
+})
+ed = mc.recetas_editadas(RV, INI)
+ok(ed == {"Lomo a la pimienta": "2026-09-02"},
+   "las recetas editadas desde el primer día del rango, por nombre", f"{ed!r}")
+
+d = mc.datos_de_la_vista(r, (), compras=cp, editadas=ed)
+ok(d["compras"].get("CRE") == [3.0, 61.0, 2], "la crema comprada viaja con la página",
+   f"{d['compras'].get('CRE')!r}")
+ok("OLE" in d["comprados"] and "CRE" not in d["comprados"],
+   "lo comprado que ninguna venta usó viaja con su nombre; lo usado, no (ya está en insumos)")
+ok(d["comprados"].get("OLE", [None])[0] == "Aceite de freír", "con su nombre")
+ok(d["compras_familias"] == sorted(mc.FAMILIAS_INSUMO),
+   "sin chip, las familias de alimentos y bebidas", f"{d['compras_familias']!r}")
+plato = {p[0]: p for p in d["platos"]}
+ok(plato["Lomo a la pimienta"][3] == "2026-09-02" and plato["Ensalada"][3] == "",
+   "el plato con la receta editada lleva su fecha; los demás, vacío")
+sin = mc.datos_de_la_vista(r, ())
+ok(sin["compras"] == {} and sin["compras_familias"] == [],
+   "sin compras leídas, la página no promete la pestaña", f"{sin['compras_familias']!r}")
 
 print("\n── el cableado ──")
 arbol = ast.parse((RAIZ / "graficos" / "ventas_ficha_hora.py").read_text(encoding="utf-8"))

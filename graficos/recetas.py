@@ -8,15 +8,29 @@ dos destinos que un chip alternaba (Receta base / Receta venta). A pedido:
     Nueva receta                       el formulario (`formulario_receta.py`)
     Carta (cartacosteada.parquet)      Carta costeada, con la receta del
                                        producto elegido debajo
-    Platos (recetaventa.parquet)       Ingredientes clave · Panorama · Tabla
-    Recetas base (recetabase.parquet)  Ranking · Insumos clave · Panorama ·
-                                       Tabla
+    Revisar recetas                    los cortes que se porcionan y ninguna
+                                       receta usa, y los que las recetas
+                                       piden y casi no se porcionan
+    Platos (recetaventa.parquet)       Tabla
+    Recetas base (recetabase.parquet)  Ranking · Tabla
 
 «Composición del plato» y «Costeo Receta Venta» se quitaron el 2026-09-28
 (regla #556): la tabla de Composición era la Carta costeada filtrada a los
 platos con receta, con los mismos números al céntimo, y su receta, su
 simulador y su dona/Sankey se abren ahora con un clic en la Carta; Costeo
 sumaba ese mismo costo sin descartar los platos inactivos.
+
+Y el mismo día, más tarde, otras cuatro (regla #559): «Ingredientes clave»,
+«Insumos clave · recetas base» y los dos «Panorama de compras». Medían la
+CARTA y no lo vendido —Ingredientes sumaba el costo POR PORCIÓN de cada
+ingrediente en los platos activos: su primer puesto, un whisky de S/ 265
+«en 1 plato», se pidió una vez en 90 días— y el Panorama sólo reconocía un
+insumo si la receta lo nombraba tal cual (el lomo fino, que llega al plato
+por un porcionamiento, le salía «sin vincular»). Lo contesta bien
+Movimientos › «Consumo según recetas» (regla #558), que baja cada venta
+hasta el insumo de compra; lo único propio del Panorama —lo comprado que
+ninguna receta explica— se mudó ahí. En su lugar entró «Revisar recetas»
+(`graficos/recetas_revisar.py`): lo que se arregla editando una receta.
 
 POR QUÉ ERAN DOS Y AHORA SON UNA. La separación se justificaba con una
 medición equivocada: los docstrings de `recetabase.py`/`recetas_comun.py` y
@@ -31,10 +45,8 @@ Son 1.003 de 2.599 filas de recetaventa, en 334 de 828 platos. O sea que
 una receta base no es la HERMANA de una receta de venta: es una PIEZA de
 adentro (y con profundidad — 630 filas de recetabase apuntan a su vez a
 otra receta base). Medido contra R2 real el 2026-09-04, ver
-`arquitectura.md` regla #303.
-
-Este módulo NO explota todavía ese enlace: sólo apila lo que ya existía.
-El cruce Producto → Receta base → Plato queda para después.
+`arquitectura.md` regla #303. Ese árbol lo recorre hoy
+`consumo_recetas.py` (regla #558).
 
 Desde el 2026-09-26 la pila suma, antes de las de platos, «Carta costeada»:
 la carta ENTERA del POS (también lo que no tiene receta: directos, sin
@@ -44,17 +56,14 @@ enlace y combos) con su % de costo, sobre un TERCER parquet,
 lo vendido por producto (`data.venta_por_producto_dia`, de ventas.parquet),
 también sólo cuando se llega a la vista.
 
-LO INACTIVO NO SUMA. Ingredientes clave y el Ranking y los Insumos clave de
-recetas base agrupaban el catálogo entero: el 48 % de recetaventa.parquet
-son platos dados de baja, y 9 de los 10 primeros «ingredientes clave» salían
-sólo de ellos (shots de whisky con la botella entera por costo). Desde el
-2026-09-28 reciben sólo lo activo (`_activo`), como ya hacía el Panorama.
+LO INACTIVO NO SUMA en el Ranking de recetas base: agrupaba el catálogo
+entero y 12 de sus 15 primeras recetas estaban dadas de baja. Desde el
+2026-09-28 recibe sólo lo activo (`_activo`).
 
 DOS PARQUETS EN UNA PÁGINA. `app.py` carga UNO por reporte y lo pasa como
-`df_f`; el segundo se carga acá con `data.cargar`, que es el patrón que ya
-usa `recetas_comun.py::_cargar_flujo_compras` para traerse compras.parquet
-desde otro dashboard. `df_f` es el de PLATOS (el reporte «Recetas» apunta a
-recetaventa.parquet).
+`df_f`; el segundo se carga acá con `data.cargar`, el mismo patrón que usa
+`graficos/movimientos.py` con salidas.parquet. `df_f` es el de PLATOS (el
+reporte «Recetas» apunta a recetaventa.parquet).
 
 Las dos Tablas NO se dibujan igual, y no es un descuido:
   · la de platos va por `tabla_cb`, el callback que inyecta app.py — sabe
@@ -77,9 +86,8 @@ from graficos.base import (
     renderizar_graficos_genericos, seccion_perezosa,
 )
 from graficos.carta_costeada import ARCHIVO as ARCHIVO_CARTA, render_carta_costeada
-from graficos.recetas_comun import _activo, _items_clave, _ranking_contenedores
-from graficos.recetabase import _panorama_compras_base
-from graficos.recetaventa import _panorama_compras_venta
+from graficos.recetas_comun import _activo, _ranking_contenedores
+from graficos.recetas_revisar import render_revisar_recetas
 from formulario_receta import render_formulario_receta
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es
@@ -88,13 +96,13 @@ from formulario_receta import render_formulario_receta
 # de una laptop (~1010px). El nombre largo vive en el id — que es lo que
 # viaja en `?vista=` y lo que empareja con `_PILA`.
 #
-# El sufijo « · base» es el desambiguador: «Panorama de compras» y «Tabla»
-# existían en los dos lados y al juntarlas quedaban dos items con el mismo
-# nombre.
+# El sufijo « · base» es el desambiguador: «Tabla» existe en los dos lados
+# y al juntarlas quedaban dos items con el mismo nombre.
 #
 # Las dos «Tabla» están OCULTAS desde el 2026-09-23, con las de los demás
 # reportes: `rail_sin_tablas` acá y `pila_sin_tablas` en `_PILA`, de a par
-# (regla #507).
+# (regla #507). Con ellas apagadas, «Platos» se queda sin ítems y se va
+# entera del rail.
 _RAIL_CATEGORIAS = rail_sin_tablas((
     # "Nueva receta" es una VISTA del reporte desde el 2026-09-22 — hasta ese
     # día era un reporte hermano (tool: True) que el chip Recetas/+ Nueva
@@ -112,31 +120,29 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # lo que hacía «Composición del plato», que se fue con «Costeo Receta
     # Venta» (regla #556).
     ("Carta",  (("Carta costeada",                      "Carta",           ":material/menu_book:"),)),
-    ("Platos", (("Ingredientes clave",                 "Ingredientes",    ":material/eco:"),
-                ("Panorama de compras · platos",       "Panorama",        ":material/area_chart:"),
-                ("Tabla · platos",                     "Tabla",           ":material/table_rows:"))),
+    # «Revisar recetas» (2026-09-28, regla #559): los cortes que la cocina
+    # porciona y ninguna receta usa, y los que las recetas piden y casi no
+    # se porcionan — un par como el medallón y los trozos del lomo es UNA
+    # receta que apunta al corte equivocado. Ver `graficos/recetas_revisar.py`.
+    ("Revisar", (("Revisar recetas",                    "Revisar",         ":material/fact_check:"),)),
+    ("Platos", (("Tabla · platos",                     "Tabla",           ":material/table_rows:"),)),
     ("Recetas base", (("Ranking de recetas base",            "Ranking · base",  ":material/leaderboard:"),
-                      ("Insumos clave · recetas base",       "Insumos · base",  ":material/nutrition:"),
-                      ("Panorama de compras · recetas base", "Panorama · base", ":material/stacked_line_chart:"),
                       ("Tabla · recetas base",               "Tabla · base",    ":material/table_view:"))),
 ))
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail, en la MISMA
 # tupla (el porqué, en `graficos/compras/__init__.py::_PILA`).
 #
-# La carta y las de platos van primero y las de recetas base después: se
-# lee de lo vendible hacia sus componentes, que es el orden en que el
-# usuario describió el dominio («los platos... formados por ingredientes e
-# incluso recetas base»).
+# La carta y lo que se revisa de sus recetas van primero y las recetas base
+# después: se lee de lo vendible hacia sus componentes, que es el orden en
+# que el usuario describió el dominio («los platos... formados por
+# ingredientes e incluso recetas base»).
 _PILA = pila_sin_tablas((
     ("rec_sec_nueva",        "Nueva receta"),
     ("rec_sec_carta",        "Carta costeada"),
-    ("rec_sec_ingredientes", "Ingredientes clave"),
-    ("rec_sec_panorama_rv",  "Panorama de compras · platos"),
+    ("rec_sec_revisar",      "Revisar recetas"),
     ("rec_sec_tabla_rv",     "Tabla · platos"),
     ("rec_sec_ranking_rb",   "Ranking de recetas base"),
-    ("rec_sec_insumos_rb",   "Insumos clave · recetas base"),
-    ("rec_sec_panorama_rb",  "Panorama de compras · recetas base"),
     ("rec_sec_tabla_rb",     "Tabla · recetas base"),
 ))
 
@@ -166,63 +172,43 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     `tabla_cb`: callback que arma la Tabla de platos (inyectado por app.py),
     llamado con 1 argumento. La de recetas base va por `_tabla_recetabase`,
     ver el docstring del módulo."""
-    # ── Columnas de PLATOS (recetaventa.parquet) ──────────────────────────
+    # ── ¿Es de verdad recetaventa.parquet? ────────────────────────────────
+    # Sin la columna del plato no hay nada de esta página que se pueda
+    # dibujar (el modo demo, sin secrets, trae otra forma): el explorador
+    # genérico, como hasta ahora.
+    #
+    # Si alguna vez se vuelve a agrupar por INGREDIENTE: es `INS RV`, no
+    # `ITEM RV`. Los dos existen y el segundo PARECE el bueno por el nombre,
+    # pero es el NÚMERO DE LÍNEA dentro de la receta ('001', '002'…). Así se
+    # agrupó «Ingredientes clave» hasta el 2026-09-06, por posición en la
+    # receta, y se veía como un eje de rótulos 2, 4, 6… (regla #325).
     col_plato = _resolver(df_f, ["Nomb Plato", "Nombre Plato", "PLATO", "Plato"])
-    # EL INGREDIENTE ES `INS RV`, NO `ITEM RV`. Los dos existen en
-    # recetaventa.parquet y el segundo PARECE el bueno por el nombre, pero
-    # es el NÚMERO DE LÍNEA dentro de la receta: '001', '002', '003'…, sólo
-    # 31 valores distintos contra los 1.053 de `INS RV`, que es donde vive
-    # el nombre ('Mantequilla Sin Sal', '(L) Palta Limpia DD'). Medido
-    # contra R2 el 2026-09-06.
-    #
-    # La lista de candidatos vieja empezaba por «Item Rv»/«ITEM RV», así que
-    # «Ingredientes clave» venía agrupando por POSICIÓN EN LA RECETA — el
-    # costo de todos los ingredientes #1 de todos los platos juntos, que no
-    # significa nada. Se veía como «el gráfico no muestra los nombres»
-    # porque Plotly lee '001' como número y rotula el eje 2, 4, 6…: el
-    # síntoma era de rótulos y el bug era de agregación. Ver arquitectura.md
-    # regla #325.
-    #
-    # Los candidatos de `ITEM RV` NO vuelven a la lista ni como último
-    # recurso: caer ahí no es degradarse, es mentir.
-    col_item = _resolver(df_f, ["INS RV", "Insumo", "Ingrediente",
-                                "Nombre Item", "Nombre Producto"])
-    col_total = _resolver(df_f, ["Total", "TOTAL", "Importe", "Costo Total",
-                                 "Total Costo", "Valorizado"])
-    col_cant = _resolver(df_f, ["Cantidad", "CANTIDAD", "Cant"])
-
-    if not col_plato or not col_item or not (col_total or col_cant):
+    if not col_plato:
         st.warning(
             "No se reconocieron las columnas de Receta Venta (se buscó "
-            "«Nomb Plato», «Item Rv», «Total», «Cantidad»). "
-            "Mostrando explorador genérico."
+            "«Nomb Plato»). Mostrando explorador genérico."
         )
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
     # ── Columnas de RECETAS BASE (recetabase.parquet, cargado acá) ────────
-    # Defensivo igual que `_cargar_flujo_compras`: si el parquet no está o
-    # le faltan columnas, las cuatro secciones de recetas base avisan y el
-    # resto de la página sigue funcionando.
-    col_rb = col_ins = col_rb_valor = col_rb_total = None
+    # Defensivo: si el parquet no está o le faltan columnas, sus secciones
+    # avisan y el resto de la página sigue funcionando.
+    col_rb = col_rb_valor = col_rb_total = None
     df_rb = _cargar_reporte("recetabase.parquet")
     if df_rb is None or df_rb.empty:
         df_rb = None
     else:
         col_rb = _resolver(df_rb, ["RB NOMBRE", "Rb Nombre", "Nombre RB"])
-        col_ins = _resolver(df_rb, ["INSUMO", "Insumo"])
         col_rb_total = _resolver(df_rb, ["CST SUBT INS", "Cst Subt Ins",
                                          "Costo Subtotal Insumo"])
         col_rb_cant = _resolver(df_rb, ["CANT", "Cant", "Cantidad"])
         col_rb_valor = col_rb_total or col_rb_cant
-        if not col_rb or not col_ins or not col_rb_valor:
+        if not col_rb or not col_rb_valor:
             df_rb = None
 
-    # LO INACTIVO NO SUMA en los rankings (ver el docstring del módulo). Las
-    # Tablas y el Panorama siguen recibiendo el parquet entero: las Tablas
-    # son el dato crudo, y el Panorama filtra por su cuenta.
-    col_activo = _resolver(df_f, ["ITEM VENTA ACTIVO", "Item Venta Activo"])
-    df_act = df_f[_activo(df_f[col_activo])] if col_activo else df_f
+    # LO INACTIVO NO SUMA en el ranking (ver el docstring del módulo). La
+    # Tabla sigue recibiendo el parquet entero: es el dato crudo.
     df_rb_act = df_rb
     if df_rb is not None:
         col_rb_act = _resolver(df_rb, ["RB ACT", "Rb Act"])
@@ -233,21 +219,9 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     _render_rail(_RAIL_CATEGORIAS, "rec_graf_tipo", btn_prefix="rec_rail_btn_",
                  secciones=_PILA)
 
-    # El chip Recetas/+ Nueva (`_chip_fuente`) que vivía acá se retiró el
-    # 2026-09-22: «+ Nueva» dejó de ser un reporte hermano y bajó a ser una
-    # vista más de esta pila (ver `_RAIL_CATEGORIAS`), así que no queda a
-    # dónde chipear.
-
-    # Medir por: SIEMPRE costo, en las DOS mitades. Receta Venta ya no tenía
-    # el radio (se sacó el 2026-08-30 a pedido: «por defecto siempre debe ser
-    # por costo»); el `rb_metrica` que le quedaba a Receta Base se va con la
-    # fusión, porque un control ARRIBA de la pila que sólo mueve 3 de las 9
-    # secciones miente sobre su alcance — y meterlo adentro de una sección lo
-    # escondería hasta que esa sección salga del esqueleto (CLAUDE.md § los
-    # controles compartidos van arriba). Se conserva el fallback de siempre:
-    # si no hubiera columna de costo, se mide en cantidad.
-    es_soles = bool(col_total)
-    col_valor = col_total if es_soles else col_cant
+    # Medir por: SIEMPRE costo (se sacó el radio el 2026-08-30 a pedido: «por
+    # defecto siempre debe ser por costo»). Se conserva el fallback de
+    # siempre: si no hubiera columna de costo, el ranking mide en cantidad.
     rb_es_soles = bool(df_rb is not None and col_rb_valor == col_rb_total)
 
     # ── LA PILA, PEREZOSA ─────────────────────────────────────────────────
@@ -267,18 +241,11 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         render_carta_costeada(_cargar_reporte(ARCHIVO_CARTA), df_rv=df_f,
                               ventas=venta_por_producto_dia())
 
-    def _dib_ingredientes():
-        with st.container(border=True, key="rec_card_ingredientes"):
-            _items_clave(df_act, col_plato, col_item, col_valor, es_soles,
-                         card_key="rec_ingredientes",
-                         titulo_card="Ingredientes de mayor costo total",
-                         etiqueta_item="Ingrediente",
-                         etiqueta_contenedor_plural="platos",
-                         expander_titulo="📋 Tabla: ingredientes por costo y n.º de platos")
-
-    def _dib_panorama_rv():
-        with st.container(border=True, key="rec_card_panorama_rv"):
-            _panorama_compras_venta(df_f, es_soles)
+    def _dib_revisar():
+        # Lo que lee (porcionamientos, el primer nivel de las ventas, el
+        # maestro, la carta y las salidas) lo carga la sección misma, por lo
+        # mismo que la Carta.
+        render_revisar_recetas(df_f, df_rb)
 
     def _dib_tabla_rv():
         with st.container(border=True, key="rec_card_tabla_rv"):
@@ -301,25 +268,6 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                       card_key="rec_ranking_rb",
                                       titulo_card="Recetas base por costo total")
 
-    def _dib_insumos_rb():
-        with st.container(border=True, key="rec_card_insumos_rb"):
-            if df_rb is None:
-                _sin_recetabase()
-            else:
-                _items_clave(df_rb_act, col_rb, col_ins, col_rb_valor, rb_es_soles,
-                             card_key="rec_insumos_rb",
-                             titulo_card="Insumos de mayor costo total",
-                             etiqueta_item="Insumo",
-                             etiqueta_contenedor_plural="recetas base",
-                             expander_titulo="📋 Tabla: insumos por costo y n.º de recetas")
-
-    def _dib_panorama_rb():
-        with st.container(border=True, key="rec_card_panorama_rb"):
-            if df_rb is None:
-                _sin_recetabase()
-            else:
-                _panorama_compras_base(df_rb, rb_es_soles)
-
     def _dib_tabla_rb():
         with st.container(border=True, key="rec_card_tabla_rb"):
             if df_rb is None:
@@ -330,12 +278,9 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     _DIBUJANTES = {
         "rec_sec_nueva":        _dib_nueva,
         "rec_sec_carta":        _dib_carta,
-        "rec_sec_ingredientes": _dib_ingredientes,
-        "rec_sec_panorama_rv":  _dib_panorama_rv,
+        "rec_sec_revisar":      _dib_revisar,
         "rec_sec_tabla_rv":     _dib_tabla_rv,
         "rec_sec_ranking_rb":   _dib_ranking_rb,
-        "rec_sec_insumos_rb":   _dib_insumos_rb,
-        "rec_sec_panorama_rb":  _dib_panorama_rb,
         "rec_sec_tabla_rb":     _dib_tabla_rb,
     }
 
