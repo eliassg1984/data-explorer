@@ -443,11 +443,15 @@ def _factor(etiqueta, valor, actual, normal_, fmt, total=False, neutro=False,
             info=None):
     nor = (f"normal {fmt(normal_)}" if normal_ is not None
            else "sin semanas para comparar")
+    # Dos renglones y no cuatro (2026-09-29, a pedido: «que los cuadrantes
+    # sean más pequeños», para no hacer scroll): el rótulo con su normal
+    # arriba, el valor con su flecha abajo. Regla #563.
     return (f'<div class="vhh-factor{" total" if total else ""}">'
-            f'<span class="vhh-flab">{etiqueta}{" " + _info(info) if info else ""}'
-            f'</span><span class="vhh-fval">{valor}</span>'
-            f'<span class="vhh-fnor">{nor}</span>'
-            f'{_chip(actual, normal_, neutro)}</div>')
+            f'<span class="vhh-fl1"><span class="vhh-flab">{etiqueta}'
+            f'{" " + _info(info) if info else ""}</span>'
+            f'<span class="vhh-fnor">{nor}</span></span>'
+            f'<span class="vhh-fl2"><span class="vhh-fval">{valor}</span>'
+            f'{_chip(actual, normal_, neutro)}</span></div>')
 
 
 # ── HTML de cada bloque ─────────────────────────────────────────────────────

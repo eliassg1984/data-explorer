@@ -1671,9 +1671,14 @@ _TOP_PLATOS = 20
 _MED_FILAS = ("venta", "cant", "desc")
 _NOCHE_DESDE = 18
 _K_FICHA = "vh_ficha"
-# Lo que ocupa la segunda fila de controles (la de «Filas», «Hora»…) con el
-# gap de la tarjeta. Entra en la resta del panel de abajo (`vh-alto-arriba`).
-_FILA_CONTROLES = 30
+# La cabecera de UNA fila (reglas #561-#562), del borde de la tarjeta al
+# mapa, y lo que va del mapa al panel cuando sólo está la ficha de la hora
+# (sin marcas no hay pastillas ni gaps de más). Medido a 1366×768 el
+# 2026-09-29: 43 y 21. Hasta ese día la resta llevaba la cabecera de dos
+# filas (61 + 30) y el cromo con marcas (39): 66 px de más, y la ficha
+# scrolleaba por dentro con 82 px libres debajo de la tarjeta (regla #563).
+_CABECERA_UNA_FILA = 43
+_PIE_SOLO_FICHA = 21
 
 
 def _items_filas(tramos, que):
@@ -3177,7 +3182,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     # un monitor grande. Ver `alturas.py` § LA RESTA NO SE HACE ACÁ.
     publicar_var_px(
         "vh-alto-arriba",
-        alturas.FRANJA_UNA_LINEA + _FILA_CONTROLES + _alto + _CROMO_TARJETA
+        _CABECERA_UNA_FILA + _alto
+        + (_CROMO_TARJETA if marcas else _PIE_SOLO_FICHA)
         + (_BARRA_DESLIZA if desliza else 0))
     # El piso del panel también se publica en vez de vivir suelto en el CSS:
     # con marcas evita que en una pantalla apretada quede una tira ilegible;

@@ -3881,14 +3881,17 @@ CSS = """    /* ================================================================
         white-space: nowrap !important;
         color: var(--text-secondary) !important;
     }
+    /* Dos renglones desde el 2026-09-29 (regla #563): rótulo + normal
+       arriba, valor + flecha abajo. Con cuatro, las tres filas de «Por
+       mesa» no entraban en la pantalla con el mapa arriba. */
     .st-key-chartcard_ventas_horario_hora .vhh-factor {
-        flex: 1 1 118px !important;
-        min-width: 110px !important;
+        flex: 1 1 150px !important;
+        min-width: 140px !important;
         display: flex !important;
         flex-direction: column !important;
-        align-items: flex-start !important;
-        gap: 1px !important;
-        padding: 7px 10px !important;
+        align-items: stretch !important;
+        gap: 0 !important;
+        padding: 4px 9px !important;
         border: 1px solid var(--border) !important;
         border-radius: 8px !important;
         background: var(--bg-card) !important;
@@ -3896,21 +3899,33 @@ CSS = """    /* ================================================================
     .st-key-chartcard_ventas_horario_hora .vhh-factor.total {
         background: var(--bg-primary) !important;
     }
+    .st-key-chartcard_ventas_horario_hora .vhh-fl1,
+    .st-key-chartcard_ventas_horario_hora .vhh-fl2 {
+        display: flex !important;
+        align-items: baseline !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        white-space: nowrap !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-fl2 {
+        justify-content: flex-start !important;
+        align-items: center !important;
+    }
     .st-key-chartcard_ventas_horario_hora .vhh-flab {
         display: inline-flex !important;
         align-items: center !important;
         gap: 5px !important;
-        font-size: 12px !important;
+        font-size: 11.5px !important;
         color: var(--text-secondary) !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-fval {
-        font-size: 17px !important;
+        font-size: 15px !important;
         font-weight: 600 !important;
         line-height: 1.25 !important;
         color: var(--text-primary) !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-fnor {
-        font-size: 11.5px !important;
+        font-size: 11px !important;
         color: var(--text-muted) !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-op {
@@ -3919,8 +3934,8 @@ CSS = """    /* ================================================================
         color: var(--text-muted) !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-chip {
-        margin-top: 3px !important;
-        padding: 1px 7px !important;
+        margin-top: 0 !important;
+        padding: 0 6px !important;
         border-radius: 999px !important;
         font-size: 11.5px !important;
         font-weight: 600 !important;
@@ -3975,7 +3990,16 @@ CSS = """    /* ================================================================
 
     /* «Los pedidos de esa hora»: cada pedido es un <details> —abre sin
        rerun— y su <summary> es una fila de la misma grilla que la cabecera. */
+    /* Sólo la LISTA desliza, no la ficha entera (2026-09-29, regla #563):
+       el título y la botonera se quedan quietos. El techo es el alto del
+       panel menos lo que va encima de la lista (104 px) y debajo (87),
+       medidos a 1366×768, más los 24 del aviso de Venta Interna que
+       sale en algunas horas; nunca menos de 120. */
     .st-key-chartcard_ventas_horario_hora .vhh-peds {
+        max-height: max(120px, calc(var(--alto-util)
+                                    - var(--vh-alto-arriba, 400px)
+                                    - 222px)) !important;
+        overflow-y: auto !important;
         overflow-x: auto !important;
         font-size: 13px !important;
         font-variant-numeric: tabular-nums !important;
@@ -3993,6 +4017,11 @@ CSS = """    /* ================================================================
         text-align: right !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-cab {
+        /* Quieta arriba mientras la lista desliza (#563). */
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 1 !important;
+        background: var(--bg-card) !important;
         padding-top: 4px !important;
         padding-bottom: 4px !important;
         border-bottom: 1px solid var(--border) !important;

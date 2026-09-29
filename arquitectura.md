@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-562 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+563 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (190)
 
@@ -225,7 +225,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 - **#562** — La cabecera de «Por hora» no tiene texto fijo más que el título: los rótulos, los avisos y lo…
 
-**Layout y alturas** (77)
+**Layout y alturas** (78)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -304,6 +304,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#526** — En una pila, «existe en el DOM» no quiere decir «está en pantalla». Un position: fixed que se…
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 - **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
+- **#563** — La ficha de la hora entra entera debajo del mapa: la resta del panel se midió de nuevo con la…
 
 **Plotly y figuras** (103)
 
@@ -848,7 +849,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (130)
+**Decisiones de diseño y UX** (131)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -980,6 +981,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#560** — «Consumo según recetas» se compara contra lo COMPRADO del rango —en la ficha de cada insumo y…
 - **#561** — «Por hora» cabe en una pantalla: la cabecera es UNA fila de desplegables y la ficha de la…
 - **#562** — La cabecera de «Por hora» no tiene texto fijo más que el título: los rótulos, los avisos y lo…
+- **#563** — La ficha de la hora entra entera debajo del mapa: la resta del panel se midió de nuevo con la…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45111,6 +45113,37 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-29.)
 
+563. **La ficha de la hora entra entera debajo del mapa: la resta del panel
+     se midió de nuevo con la cabecera de una fila, los cuadros de «Por
+     mesa» pasaron a dos renglones y en «Pedidos» desliza sólo la lista.**
+     2026-09-29, a pedido, con captura: «que el usuario no haga scroll,
+     porque siento que quita el foco». La ficha scrolleaba por dentro y
+     debajo de la tarjeta sobraban 82 px (medido a 1366×768).
+
+     - **La resta estaba vieja.** `vh-alto-arriba` sumaba
+       `FRANJA_UNA_LINEA` (61) + `_FILA_CONTROLES` (30) + el mapa + el
+       cromo con marcas (39): 414 px contra 348 reales. La segunda fila de
+       controles ya no existe (#561) y la cabecera de una fila mide 43.
+       Ahora es `_CABECERA_UNA_FILA` (43) + el mapa + `_PIE_SOLO_FICHA`
+       (21) sin marcas, o el `_CROMO_TARJETA` de siempre con marcas (que
+       traen pastillas y gaps de más; ese caso no se volvió a medir). Es la
+       misma trampa de siempre con estas constantes: una medida del DOM
+       congelada en Python queda mintiendo cuando el DOM cambia, y no hay
+       test que lo vea.
+     - **Los cuadros de «Por mesa» van en dos renglones** (`_factor`):
+       rótulo + normal arriba, valor + flecha abajo. De ~80 a 47 px cada
+       uno; con tres filas de cuadros son ~100 px.
+     - **En «Pedidos» desliza sólo la lista** (`.vhh-peds`, con la
+       cabecera `sticky`): la lista es tan larga como pedidos tuvo la hora
+       y no hay alto que la contenga siempre. Su techo es el del panel
+       menos lo que va encima y debajo (222 px medidos, con el aviso de
+       Venta Interna), nunca menos de 120.
+     - **Medido a 1366×768**: «Contra lo normal» 344 de 344, «Mesas del
+       salón» 369 de 369, «Pedidos» 374 de 374 con la lista deslizando
+       por dentro. Cabecera, mapa y ficha en una sola pantalla.
+
+     (2026-09-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45123,7 +45156,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#562**; la próxima toma el número siguiente.
+> última regla es la **#563**; la próxima toma el número siguiente.
 
 >
 
