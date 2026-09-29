@@ -150,13 +150,23 @@ _ESPERA = "220ms"
 # el rótulo: en el árbol es la cabecera de la columna y sí recibe el cursor
 # (allá se le devuelve el `pointer-events`); sin él, pasar por la cabecera
 # plegaría el árbol en el camino hacia el pestillo.
+#
+# 2026-09-29 (regla #568): desde 901px la columna plegada ya no se despliega
+# con el cursor —lleva el nombre bajo cada ícono— y esta marca sólo hace
+# ASOMAR la columna OCULTA. Por eso suma la pestaña que queda al ocultarla
+# (`rail_vis_oculto`: el cursor encima la hace asomar) y los paneles de
+# vistas de cada reporte (`nav_paneles`): salen por la derecha de la
+# columna, y pasar a uno no puede esconder la columna de la que cuelga.
 DISPARADORES_COLUMNA = """.st-key-compras_tabs_row:hover,
             .st-key-nav_rail_lateral:hover,
             .st-key-rail_rotulo_rep:hover,
             .st-key-rail_pestillo_abierto:hover,
             .st-key-rail_pestillo_plegado:hover,
+            .st-key-rail_vis_oculto:hover,
+            .st-key-nav_paneles:hover,
             .st-key-compras_tabs_row :focus-visible,
-            .st-key-nav_rail_lateral :focus-visible"""
+            .st-key-nav_rail_lateral :focus-visible,
+            .st-key-rail_vis_oculto :focus-visible"""
 
 DISPARADORES_CABECERA = """.st-key-nav_franja_rep:hover,
             .st-key-nav_franja_rep :focus-visible,

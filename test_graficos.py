@@ -4213,6 +4213,71 @@ def _pruebas_hook_del_rail_bajo_secciones():
     return fallos
 
 
+def _pruebas_vistas_de_cada_reporte():
+    """El panel de cada reporte en el rail dice lo mismo que su rail.
+
+    2026-09-29, regla #568: el cursor sobre un reporte de la columna abre un
+    panel con sus vistas, y un clic en una entra al reporte ya parado en
+    ella. Para eso `graficos.vistas_de` tiene un registro, `_RAILS`, con las
+    categorías de cada dashboard y la clave de `session_state` donde su
+    rail guarda la vista elegida. Se rompe EN SILENCIO de dos maneras:
+
+      · un dashboard nuevo que se suma a `_DASHBOARDS` y no a `_RAILS`: su
+        reporte queda sin panel, y nada lo avisa;
+      · una clave que no es la que el dashboard le pasa a `_render_rail`:
+        el panel abre el reporte y la vista pedida NO se elige — la página
+        abre en la primera y el salto no encuentra su sección.
+
+    Así que se lee, con `ast`, la llamada a `_render_rail` de cada
+    dashboard, y se exige que sus categorías sean EL MISMO objeto del
+    registro y su clave, la misma cadena.
+    """
+    import ast
+    import inspect
+    import graficos
+    from graficos import _DASHBOARDS, _RAILS, vistas_de
+
+    fallos = 0
+
+    def check(nombre, ok, detalle=""):
+        nonlocal fallos
+        if ok:
+            print(f"OK    panel · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA panel · {nombre}{': ' + detalle if detalle else ''}")
+
+    check("cada dashboard tiene su rail registrado",
+          set(_DASHBOARDS) == set(_RAILS),
+          f"faltan {sorted(set(_DASHBOARDS) - set(_RAILS))}, "
+          f"sobran {sorted(set(_RAILS) - set(_DASHBOARDS))}")
+    for rep, render in _DASHBOARDS.items():
+        par = vistas_de(rep)
+        check(f"{rep}: tiene vistas", bool(par and par[1]))
+        if rep not in _RAILS:
+            continue
+        cats, clave = _RAILS[rep]
+        mod = inspect.getmodule(render)
+        llamadas = [n for n in ast.walk(ast.parse(inspect.getsource(mod)))
+                    if isinstance(n, ast.Call)
+                    and getattr(n.func, "id", None) == "_render_rail"]
+        ok = False
+        for c in llamadas:
+            if (len(c.args) >= 2 and isinstance(c.args[0], ast.Name)
+                    and isinstance(c.args[1], ast.Constant)):
+                ok = ok or (getattr(mod, c.args[0].id, None) is cats
+                            and c.args[1].value == clave)
+        check(f"{rep}: `_RAILS` usa las categorías y la clave de su "
+              f"`_render_rail` ({clave})", ok,
+              f"{len(llamadas)} llamada(s) en {mod.__name__}")
+    check("reporte sin dashboard: sin panel", vistas_de("Inspector") is None)
+    check("`vistas_de` no deja pasar una Tabla oculta (#507)",
+          all(not graficos.base.es_vista_tabla(v[0])
+              for r in _RAILS for v in vistas_de(r)[1])
+          or graficos.base.MOSTRAR_VISTAS_TABLA)
+    return fallos
+
+
 def _pruebas_vistas_tabla_ocultas():
     """Las vistas «Tabla» siguen ocultas, y siguen DECLARADAS.
 
@@ -7981,6 +8046,9 @@ def main():
 
     # ── Las vistas «Tabla»: ocultas, pero todavía declaradas ────────────
     fallos += _pruebas_vistas_tabla_ocultas()
+
+    # ── El panel de cada reporte: el mismo rail que su dashboard ───────
+    fallos += _pruebas_vistas_de_cada_reporte()
 
     # ── JsCode: que nadie vuelva a meterle un payload de datos adentro ──
     fallos += _pruebas_jscode_barato()

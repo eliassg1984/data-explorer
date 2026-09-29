@@ -41,26 +41,32 @@ Compras activo, el de Ventas estaba en y=474, y al clickearlo saltaba a
 es sólo íconos. Es el esquema de Figma: arriba las páginas, abajo las capas
 de la abierta. Regla #535.
 
-PLEGADO, ASOMADO Y FIJADO
--------------------------
-  · PLEGADO (el default): la columna es una tira de íconos de
-    `--rail-plegado-w` y el contenido le reserva sólo eso. Las vistas no se
-    ven.
-  · ASOMADO: con el cursor en la columna (`<html data-capa-col>`, lo marca
-    `navegacion.py::_SCRIPT_CAPAS` con la lista `DISPARADORES_COLUMNA`) el
-    árbol se despliega a `--rail-der-w` ENCIMA del contenido, con sombra, y
-    el contenido no se mueve. Entra con una pausa de 180ms para que cruzar la
-    columna camino a otra cosa no la abra.
-  · FIJADO: el pestillo (`rail_pestillo_abierto`) lo deja desplegado y ahí
-    sí el contenido le reserva su ancho (`_00_base.py`, `--rail-reserva`).
+PLEGADO, FIJADO Y OCULTO (2026-09-29, regla #568)
+-------------------------------------------------
+  · PLEGADO (el default): la columna mide `--rail-plegado-w` (80px) y cada
+    reporte es un ícono de 24px con su nombre DEBAJO. El contenido le
+    reserva sólo eso. El cursor sobre un reporte abre al costado su PANEL:
+    sus vistas, y un clic en una entra al reporte ya parado en ella (el del
+    activo es la lista de vistas del rail, presentada como panel).
+  · FIJADO: el pestillo (`rail_pestillo_abierto`, abajo de la columna) la
+    deja en el árbol de `--rail-der-w`: reportes con su nombre entero y,
+    debajo de todos, las vistas del activo. Ahí sí el contenido le reserva
+    su ancho (`_00_base.py`, `--rail-reserva`).
+  · OCULTO: el botón de arriba (`rail_vis_oculto`) la esconde entera y
+    queda una pestaña de 24px; el cursor sobre ella la hace ASOMAR encima
+    del contenido (`<html data-capa-col>`, `DISPARADORES_COLUMNA`).
+
+Hasta el 2026-09-29 había un estado ASOMADO de la columna visible: con el
+cursor encima, el árbol entero se desplegaba ENCIMA del contenido. Se fue
+cuando la columna plegada empezó a decir el nombre de cada reporte y a
+abrir sus vistas en un panel.
 
 Y LO QUE ABRE UNA CAPA NO PUEDE MOVERSE AL ABRIRSE (#465): los íconos de los
-reportes y el pestillo están en la MISMA x en los tres estados (su centro en
-`--rail-plegado-w / 2`). Desplegar sólo agrega a la derecha —el texto, los
-KPIs— y ABAJO DE TODO —las vistas—; lo que está bajo el cursor queda donde
-estaba. Por eso las vistas no pueden volver a colgar de su reporte con la
-columna plegada cerrada sobre ellas: al desplegar se meterían entre los
-reportes y el ícono que ibas a clickear se correría de debajo del cursor.
+reportes, el botón de ocultar y el pestillo están en la MISMA x en los dos
+estados (su centro en `--rail-plegado-w / 2`). Fijar sólo agrega a la
+derecha —el texto, los KPIs— y ABAJO DE TODO —las vistas—. Por eso las
+vistas no pueden volver a colgar de su reporte: al fijar se meterían entre
+los reportes y correrían los íconos de abajo.
 
 COMO SE VERIFICA
 ----------------
@@ -73,19 +79,49 @@ lista se verifica midiendo que su tope quede debajo del borde de abajo de la
 ÚLTIMA fila de reportes y que cada ícono de reporte mida la misma `top` sea
 cual sea el activo. El estado desplegado se prueba con el PESTILLO: forzar
 `data-capa-col` por consola no dura (regla #495).
+
+Y LAS FOTOS NO SALEN DEL PANEL DEL NAVEGADOR INTEGRADO con la app corriendo
+(se queda esperando a que la página termine de dibujar). Salen de
+Playwright (`pip` ya lo trae en esta máquina): una página de 1366x768, el
+cursor con `page.mouse.move` —así se abren los paneles— y una hoja con
+`:is(#no,*) { transition: none !important }`. Ojo: un `*` a secas no
+alcanza, porque las transiciones de acá llevan `!important` y más
+especificidad (regla #568).
 """
 
 CSS = """
+    /* ── Los tres contenedores de la regla #568 no cobran gap, en NINGÚN
+       ancho: el botón de ocultar (`rail_vis_*`) y los paneles de vistas
+       (`nav_paneles`) son cromo fijo desde 901px y no existen por debajo
+       (el bloque de abajo), pero sus envoltorios estarían igual en el
+       flujo. Mismo recurso que los de cromo fijo del final de este
+       fichero; fuera del `@media` para que tampoco empujen a 900px. */
+    [data-testid="stLayoutWrapper"]:has(> .st-key-rail_vis_visible),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-rail_vis_oculto),
+    [data-testid="stLayoutWrapper"]:has(> .st-key-nav_paneles) {
+        display: contents !important;
+    }
+    /* El ícono del encabezado de la lista de vistas sólo se ve cuando esa
+       lista hace de PANEL (columna plegada, más abajo). */
+    .rail-cab-ico {
+        display: none;
+    }
+
     /* ── Abajo de 901px no hay árbol: el pestillo no tiene qué plegar ────
        Entre 769 y 900 la columna sigue siendo la capa de siempre y en el
        celular es la tira de chips; en ninguna de las dos se pliega. La
        franja de contexto tampoco se ve: ahí la franja de reportes sigue
        siendo la botonera de siempre. `display: none` sobre la caja de
        adentro, no sobre su envoltorio: el envoltorio sigue cobrando el gap
-       de la raíz igual que antes, así que la primera tarjeta no se mueve. */
+       de la raíz igual que antes, así que la primera tarjeta no se mueve.
+       Tampoco se oculta la columna ni hay paneles (regla #568): ahí la
+       columna ya aparece sólo con el cursor. */
     @media (max-width: 900px) {
         .st-key-rail_pestillo_abierto,
-        .st-key-rail_pestillo_plegado {
+        .st-key-rail_pestillo_plegado,
+        .st-key-rail_vis_visible,
+        .st-key-rail_vis_oculto,
+        .st-key-nav_paneles {
             display: none !important;
         }
         .st-key-nav_franja_rep [data-testid="stElementContainer"]:has(.barra-ctx) {
@@ -114,6 +150,9 @@ CSS = """
         --rail-fila-alto: var(--fila-vis);
         --arbol-cab: 6px;            /* aire entre la cabecera y el primer reporte */
         --icono-x: calc(var(--rail-plegado-w) / 2);   /* centro de todo ícono de la columna */
+        /* Plegada, cada reporte es ícono + nombre debajo: botón de 56 más
+           4 de aire (regla #568). Fijada sigue siendo `--fila-rep`. */
+        --fila-ico: 60px;
     }
     /* Pantallas bajas: Ventas son 6 reportes + 10 vistas, y a 36/30 la
        columna desplegada llega hasta y=619. Con esto, hasta y=565 (medido
@@ -238,66 +277,160 @@ CSS = """
         opacity: 0;
         transition: opacity 120ms linear;
     }
-    /* El pestillo, arriba a la izquierda y QUIETO: su centro es el de los
-       íconos de abajo, en los tres estados (ver el docstring). */
+    /* Los dos botones de la columna, QUIETOS: su centro es el de los íconos
+       de los reportes (`--icono-x`) en los dos estados (ver el docstring).
+       ARRIBA, el que la oculta (`rail_vis_visible`); ABAJO, el pestillo
+       que la fija abierta. Hasta el 2026-09-29 el pestillo iba arriba: bajó
+       cuando llegó el de ocultar (regla #568), que es el que se busca
+       primero. */
+    .st-key-rail_vis_visible,
     .st-key-rail_pestillo_abierto,
     .st-key-rail_pestillo_plegado {
         position: fixed !important;
-        top: calc((var(--franja-rep-alto) - 28px) / 2) !important;
-        left: calc(var(--icono-x) - 14px) !important;
-        width: 28px !important;
-        height: 28px !important;
+        top: calc((var(--franja-rep-alto) - 32px) / 2) !important;
+        left: calc(var(--icono-x) - 16px) !important;
+        width: 32px !important;
+        height: 32px !important;
         opacity: 1 !important;
         pointer-events: auto !important;
         z-index: 1000013 !important;
     }
+    .st-key-rail_pestillo_abierto,
+    .st-key-rail_pestillo_plegado {
+        top: auto !important;
+        bottom: 10px !important;
+    }
+    .st-key-rail_vis_visible button,
     .st-key-rail_pestillo_abierto button,
     .st-key-rail_pestillo_plegado button {
-        width: 28px !important;
-        height: 28px !important;
-        min-height: 28px !important;
+        width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
         border: none !important;
         border-radius: 8px !important;
         background: transparent !important;
         color: var(--text-secondary) !important;
     }
+    .st-key-rail_vis_visible button [data-testid="stIconMaterial"],
+    .st-key-rail_pestillo_abierto button [data-testid="stIconMaterial"],
+    .st-key-rail_pestillo_plegado button [data-testid="stIconMaterial"] {
+        font-size: 22px !important;
+        width: 22px !important;
+    }
+    .st-key-rail_vis_visible button:hover,
     .st-key-rail_pestillo_abierto button:hover,
     .st-key-rail_pestillo_plegado button:hover {
         background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;
     }
+    /* DEFENSA ANTI-TOOLTIP-FANTASMA (regla #164): los dos llevan `help=`,
+       y Streamlit deja una copia suelta del contenido en el mismo
+       `stButton`. El pestillo ya la tiene en `_20_compras_rail.py`. */
+    :is(.st-key-rail_vis_visible, .st-key-rail_vis_oculto)
+        [data-testid="stButton"] > div + div {
+        display: none !important;
+    }
 
-    /* ── Desplegado: FIJADO o ASOMADO ───────────────────────────────────
-       Fijado lo dice la key del pestillo; asomado, la marca del cursor.
-       Los dos sólo agregan: a la derecha, y abajo de todo las vistas. */
+    /* ── OCULTA (2026-09-29, regla #568) ────────────────────────────────
+       Lo que queda es la PESTAÑA de 24px contra el borde izquierdo, a la
+       altura del botón que la ocultó: es ese mismo botón (`rail_vis_oculto`)
+       con otra forma. El contenido le reserva sus 24px (`_00_base.py`), así
+       que no tapa la primera tarjeta; y la franja de arriba arranca después
+       de ella, así que tampoco se pisa con la tira que abre la franja. */
+    .st-key-rail_vis_oculto {
+        position: fixed !important;
+        top: calc((var(--franja-rep-alto) - 36px) / 2) !important;
+        left: 0 !important;
+        width: 24px !important;
+        height: 36px !important;
+        pointer-events: auto !important;
+        z-index: 1000016 !important;
+    }
+    .st-key-rail_vis_oculto button {
+        width: 24px !important;
+        height: 36px !important;
+        min-height: 36px !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        border: 1px solid var(--border) !important;
+        border-left: none !important;
+        border-radius: 0 10px 10px 0 !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        box-shadow: 0 1px 3px rgba(24, 24, 29, .08) !important;
+    }
+    .st-key-rail_vis_oculto button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    .st-key-rail_vis_oculto button [data-testid="stIconMaterial"] {
+        font-size: 18px !important;
+        width: 18px !important;
+    }
+    /* La columna, su rótulo, el pestillo y el árbol se van. Con
+       `visibility` y no con `display`: así ASOMAN con el cursor (abajo)
+       sin reconstruir nada, y escondidos no reciben ni el cursor ni el
+       foco. La salida espera a que el cursor se haya ido de verdad. */
+    :root:has(.st-key-rail_vis_oculto) :is(.st-key-compras_tabs_row,
+        .st-key-rail_rotulo_rep, .st-key-rail_pestillo_abierto,
+        .st-key-rail_pestillo_plegado) {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        transition: opacity 120ms linear 160ms,
+                    visibility 0s linear 280ms !important;
+    }
+    :root:has(.st-key-rail_vis_oculto):has(.st-key-rail_pestillo_abierto)
+        .st-key-nav_rail_lateral {
+        opacity: 0 !important;
+        visibility: hidden !important;
+    }
+    /* ASOMADA: el cursor en la pestaña (o ya en la columna, o en un panel
+       suyo) marca `<html data-capa-col>` (`DISPARADORES_COLUMNA`) y la
+       columna aparece ENCIMA del contenido, con sombra, sin moverlo —cambiar
+       el ancho de la página en un hover haría que Plotly y AgGrid se
+       re-midan (regla #350)—. Entra sin pausa: la pestaña es un blanco
+       explícito, no un borde que se cruza de camino a otra cosa. */
+    :root[data-capa-col]:has(.st-key-rail_vis_oculto) :is(.st-key-compras_tabs_row,
+        .st-key-rail_rotulo_rep, .st-key-rail_pestillo_abierto,
+        .st-key-rail_pestillo_plegado),
+    :root[data-capa-col]:has(.st-key-rail_vis_oculto):has(.st-key-rail_pestillo_abierto)
+        .st-key-nav_rail_lateral {
+        opacity: 1 !important;
+        visibility: visible !important;
+        transition: opacity 120ms linear, visibility 0s linear 0s !important;
+    }
+    :root[data-capa-col]:has(.st-key-rail_vis_oculto) .st-key-compras_tabs_row {
+        box-shadow: var(--sombra-capa) !important;
+    }
+
+    /* ── FIJADA: el árbol ────────────────────────────────────────────────
+       Lo dice la key del pestillo. Sólo agrega: a la derecha los nombres, y
+       abajo de todo las vistas del activo.
+
+       Hasta el 2026-09-29 había además un estado ASOMADO: con el cursor en
+       la columna plegada, el árbol entero se desplegaba ENCIMA del
+       contenido (`:root[data-capa-col]`). Se fue con la regla #568: plegada
+       la columna ya dice el nombre de cada reporte bajo su ícono, y las
+       vistas de cada uno salen en su panel. La marca del cursor quedó sólo
+       para la columna OCULTA (arriba). */
     :root:has(.st-key-rail_pestillo_abierto) :is(.st-key-compras_tabs_row,
-        .st-key-nav_rail_lateral, .st-key-rail_rotulo_rep),
-    :root[data-capa-col] :is(.st-key-compras_tabs_row,
         .st-key-nav_rail_lateral, .st-key-rail_rotulo_rep) {
         width: var(--rail-der-w) !important;
     }
-    :root:has(.st-key-rail_pestillo_abierto) .st-key-nav_rail_lateral,
-    :root[data-capa-col] .st-key-nav_rail_lateral {
+    :root:has(.st-key-rail_pestillo_abierto) .st-key-nav_rail_lateral {
         opacity: 1 !important;
         visibility: visible !important;
         transition: width 160ms cubic-bezier(.4, 0, .2, 1),
                     opacity 120ms linear,
                     visibility 0s linear 0s !important;
     }
-    /* Asomado encima del contenido: la sombra dice que está por ENCIMA, y
-       la pausa de entrada (sólo al entrar: la salida usa la transición de
-       reposo, sin pausa) evita que cruzar la columna la despliegue. */
-    :root[data-capa-col]:has(.st-key-rail_pestillo_plegado) :is(.st-key-compras_tabs_row,
-        .st-key-nav_rail_lateral, .st-key-rail_rotulo_rep) {
-        transition-delay: 180ms !important;
-    }
-    :root[data-capa-col]:has(.st-key-rail_pestillo_plegado) .st-key-compras_tabs_row {
-        box-shadow: var(--sombra-capa) !important;
-    }
-    :root:has(.st-key-rail_pestillo_abierto) .st-key-rail_rotulo_rep .rail-rotulo,
-    :root[data-capa-col] .st-key-rail_rotulo_rep .rail-rotulo {
+    :root:has(.st-key-rail_pestillo_abierto) .st-key-rail_rotulo_rep .rail-rotulo {
         opacity: 1;
         transition-delay: 120ms;
+    }
+    /* El rótulo «Reportes» empieza después del botón de ocultar. */
+    .st-key-rail_rotulo_rep {
+        padding-left: calc(var(--icono-x) + 26px) !important;
     }
 
     /* ══ LAS FILAS DE REPORTES ═════════════════════════════════════════ */
@@ -317,12 +450,15 @@ CSS = """
         min-height: 0 !important;
         width: calc(100% - 12px) !important;
         margin: 0 6px !important;
-        /* El centro del ícono en `--icono-x` (34): 6 de margen + 20 de
+        /* El centro del ícono en `--icono-x` (40): 6 de margen + 26 de
            relleno + 8, la mitad de la caja de 16px en la que Streamlit mete
-           al ícono (el glifo mide 20 y desborda 2 por lado, medido). Así el
-           ícono no se mueve al desplegar. */
+           al ícono. El glifo es más grande que su caja y desborda parejo
+           por los dos lados —2px cuando medía 21, 4 desde que mide 24
+           (medido, 2026-09-29)—, así que el centro no depende de su tamaño.
+           Así el ícono no se mueve al fijar. `gap` 12 y no 10 desde el
+           glifo de 24: los 4px que desborda se comían el aire del nombre. */
         padding: 0 10px 0 calc(var(--icono-x) - 14px) !important;
-        gap: 10px !important;
+        gap: 12px !important;
         justify-content: flex-start !important;
         border: none !important;
         border-left: none !important;
@@ -332,12 +468,12 @@ CSS = """
         font-weight: 400 !important;
         overflow: hidden !important;
     }
-    /* El ícono de un REPORTE, 21px y del color del texto de la fila. Es el
-       único ícono que se ve en la columna: el de una vista no se dibuja
-       (más abajo). */
+    /* El ícono de un REPORTE, del color del texto de la fila. 24px desde el
+       2026-09-29 (antes 21, regla #568): el tamaño para el que están
+       dibujados los Material Symbols. */
     .st-key-graf_tipo_chips [data-testid="stButton"] button [data-testid="stIconMaterial"] {
-        font-size: 21px !important;
-        width: 21px !important;
+        font-size: 24px !important;
+        width: 24px !important;
         color: inherit !important;
         flex: 0 0 auto !important;
         margin: 0 !important;
@@ -366,8 +502,7 @@ CSS = """
         font-weight: 600 !important;
         border-left: none !important;
     }
-    :root:has(.st-key-rail_pestillo_abierto) .st-key-graf_tipo_chips [data-testid="stButton"] button [data-testid="stMarkdownContainer"],
-    :root[data-capa-col] .st-key-graf_tipo_chips [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
+    :root:has(.st-key-rail_pestillo_abierto) .st-key-graf_tipo_chips [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
         opacity: 1;
         transition-delay: 120ms;
     }
@@ -395,10 +530,106 @@ CSS = """
     .st-key-compras_tabs_row .st-key-graf_tipo_chips .nav-kpis-secundario {
         display: none !important;
     }
-    :root:has(.st-key-rail_pestillo_abierto) .st-key-compras_tabs_row .st-key-graf_tipo_chips .nav-kpis-valores,
-    :root[data-capa-col] .st-key-compras_tabs_row .st-key-graf_tipo_chips .nav-kpis-valores {
+    :root:has(.st-key-rail_pestillo_abierto) .st-key-compras_tabs_row .st-key-graf_tipo_chips .nav-kpis-valores {
         opacity: 1;
         transition-delay: 120ms;
+    }
+
+    /* ── PLEGADA: ícono de 24px con su nombre DEBAJO (2026-09-29) ────────
+       Regla #568, a pedido: «¿recomiendas íconos más grandes?». Hasta hoy
+       la columna plegada era una tira de íconos de 21px sin nombre (hay que
+       pasar el cursor para saber cuál es cuál) que se desplegaba entera
+       con el cursor. Ahora cada reporte es un botón de 72x56 con el ícono
+       arriba y una palabra abajo: el riel de navegación de Material Design
+       3 (80 de ancho, íconos de 24, indicador de 56x32, rótulo de 12).
+
+       EL NOMBRE ES UN `::after`, no el `<p>` del botón: el botón lleva el
+       `label_corto` entero («Stock e Inventario»), que es lo que se lee con
+       la columna fijada, y abajo del ícono entra una palabra. La palabra
+       llega por `--rot-corto`, que `navegacion.py` escribe por reporte
+       desde `data.py::label_rail`. El `<p>` se va con `display: none`, así
+       que el nombre accesible del botón plegado es el del `::after`.
+
+       LA PÍLDORA VA DETRÁS DEL ÍCONO, no del botón entero: 56x32 con el
+       ícono en el centro, como el indicador de Material. Pero el botón
+       ENTERO recibe el clic (regla #421): la píldora es el `stIconMaterial`
+       con relleno, y el nombre de debajo también es parte del botón. */
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [class*="st-key-navitem_"] {
+        height: var(--fila-ico) !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button {
+        height: 56px !important;
+        width: calc(100% - 8px) !important;
+        margin: 2px 4px !important;
+        padding: 0 !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        gap: 4px !important;
+        background: transparent !important;
+    }
+    /* La caja donde Streamlit mete al ícono mide 16px, y la píldora (el
+       ícono con su relleno) desborda de ella centrada. Se estira el
+       envoltorio al alto de la píldora para que el botón centre lo que se
+       VE —la píldora y el nombre— y no una caja de 16 con 12 de aire
+       abajo, que la dejaba 3px por encima del borde del botón (medido). */
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button > div {
+        height: 32px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button [data-testid="stIconMaterial"] {
+        box-sizing: content-box !important;
+        padding: 4px 16px !important;
+        border-radius: 16px !important;
+        line-height: 24px !important;
+        height: 24px !important;
+        transition: background 120ms linear;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
+        display: none !important;
+    }
+    /* El `::after` del botón ya tenía dueño: el punto del semáforo de
+       `_20_compras_rail.py` (un círculo absoluto de 6px arriba a la
+       derecha). Un reporte no lleva semáforo —es de las vistas—, así que
+       acá se le devuelve la forma de un renglón de texto; sin esto el
+       nombre salía metido en ese círculo: una marquita al lado del ícono. */
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button::after {
+        content: var(--rot-corto, "");
+        position: static;
+        top: auto;
+        right: auto;
+        width: auto;
+        height: auto;
+        border-radius: 0;
+        background: none;
+        display: block;
+        font-size: 11px;
+        line-height: 14px;
+        font-weight: 500;
+        color: inherit;
+        white-space: nowrap;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button:hover {
+        background: transparent !important;
+        color: var(--text-primary) !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button:hover [data-testid="stIconMaterial"] {
+        background: var(--accent-tint) !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button[kind="primary"] {
+        background: transparent !important;
+        color: var(--accent-deep) !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button[kind="primary"] [data-testid="stIconMaterial"] {
+        background: var(--accent-light) !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-graf_tipo_chips [data-testid="stButton"] button[kind="primary"]::after {
+        font-weight: 700;
     }
 
     /* ══ LAS VISTAS, AL PIE DE LOS REPORTES ═══════════════════════════════
@@ -555,6 +786,222 @@ CSS = """
     /* (El punto del KPI de cada vista, `railkpi_<slug>` —regla #482—, tenía
        acá su regla para esconderse con la columna plegada. Ya no la
        necesita: plegada se va con la lista entera.) */
+
+    /* ══ EL PANEL DE UN REPORTE: SUS VISTAS SIN ENTRAR (2026-09-29) ══════
+       Regla #568, a pedido: «que permita ver el esqueleto de las vistas sin
+       entrar al reporte». El cursor sobre un reporte de la columna abre al
+       costado un panel con sus vistas; un clic en una entra al reporte ya
+       parado en ella.
+
+       Son dos clases de panel con UNA sola pinta:
+         · el de un reporte que no es el activo, `navfly_<slug>` dentro de
+           `nav_paneles` (`navegacion.py`);
+         · el del ACTIVO, que es la lista de vistas del rail
+           (`nav_rail_lateral`) presentada como panel mientras la columna
+           está plegada. Fijada, esa lista vuelve a ser el árbol de arriba.
+
+       QUIÉN LO ABRE no es un `:hover` del CSS: los paneles no cuelgan de su
+       fila en el DOM (la del activo ni siquiera se dibuja en el mismo
+       sitio), así que `navegacion.py::_SCRIPT_CAPAS` marca el panel con
+       `data-fly` y le escribe `--fly-top`, la altura de su fila subida lo
+       que haga falta para que entre en la ventana. Un atributo en el panel
+       y no en `<html>`: recalcula ese panel, no la página (regla #469).
+
+       ENTRA CON PAUSA Y SE VA CON PAUSA. 150ms para abrir, para que cruzar
+       la columna camino a otra cosa no abra una lista por reporte; 220ms
+       para cerrar, para que el viaje en diagonal de la fila a su panel no
+       lo cierre en el camino. Y del borde de la columna al panel no hay
+       hueco: los primeros 10px del panel son un PUENTE transparente —la
+       superficie blanca es un `::before` que arranca después—, así que el
+       cursor nunca sale de algo que lo mantenga abierto. */
+    .st-key-nav_paneles {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        z-index: 1000015 !important;
+    }
+    .st-key-nav_paneles [class*="st-key-navfly_"],
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral {
+        position: fixed !important;
+        top: var(--fly-top, 56px) !important;
+        bottom: auto !important;
+        left: calc(var(--rail-plegado-w) - 2px) !important;
+        width: 278px !important;
+        height: auto !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 10px 8px 8px 18px !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+        border: none !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        overflow: visible !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: auto !important;
+        z-index: 1000015 !important;
+        transition: opacity 100ms linear 120ms,
+                    visibility 0s linear 220ms !important;
+    }
+    :root:has(.st-key-rail_pestillo_abierto) .st-key-nav_paneles [class*="st-key-navfly_"] {
+        left: calc(var(--rail-der-w) - 2px) !important;
+    }
+    .st-key-nav_paneles [class*="st-key-navfly_"]::before,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 10px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--sombra-capa);
+        z-index: -1;
+        pointer-events: none;
+    }
+    .st-key-nav_paneles [class*="st-key-navfly_"][data-fly],
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral[data-fly] {
+        opacity: 1 !important;
+        visibility: visible !important;
+        transition: opacity 120ms linear 150ms,
+                    visibility 0s linear 150ms !important;
+    }
+    .st-key-nav_paneles [class*="st-key-navfly_"] * {
+        visibility: inherit;
+    }
+    .st-key-nav_paneles [data-testid="stVerticalBlock"] {
+        gap: 0 !important;
+    }
+    .st-key-nav_paneles [data-testid="stElementContainer"],
+    .st-key-nav_paneles [data-testid="stButton"],
+    .st-key-nav_paneles [data-testid="stMarkdown"],
+    .st-key-nav_paneles [data-testid="stMarkdownContainer"] {
+        width: 100% !important;
+        margin: 0 !important;
+    }
+    /* El encabezado: el ícono y el nombre ENTERO del reporte. En el del
+       activo es la `.rail-cab` de siempre, sin el «Vistas de» del árbol. */
+    .fly-cab,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-cab {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        margin: 0 0 4px 0 !important;
+        padding: 2px 8px 10px 8px !important;
+        border-top: none !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+    .fly-ico,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-cab-ico {
+        display: inline-block !important;
+        font-family: "Material Symbols Rounded";
+        font-feature-settings: "liga";
+        font-size: 20px;
+        line-height: 1;
+        color: var(--accent);
+        flex: 0 0 auto;
+    }
+    .fly-nom,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-cab-nom {
+        font-size: 14.5px !important;
+        font-weight: 700 !important;
+        line-height: 20px !important;
+        color: var(--text-primary) !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .rail-cab-nom::before {
+        content: none;
+    }
+    .fly-pie {
+        margin: 6px 0 0 0;
+        padding: 8px 8px 2px 8px;
+        border-top: 1px solid var(--border);
+        font-size: 11.5px;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+    /* Cada vista: una fila de 32px con su ícono, que en el panel SÍ se ve
+       (en el árbol no: ahí guarda la sangría, más arriba). */
+    .st-key-nav_paneles [data-testid="stButton"] button,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button {
+        height: 32px !important;
+        min-height: 0 !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 10px !important;
+        gap: 10px !important;
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        border: none !important;
+        border-radius: 8px !important;
+        background: transparent !important;
+        color: var(--text-primary) !important;
+        box-shadow: none !important;
+        font-weight: 400 !important;
+        overflow: hidden !important;
+    }
+    .st-key-nav_paneles [data-testid="stButton"] button > div,
+    .st-key-nav_paneles [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
+        display: block !important;
+        width: auto !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+    }
+    .st-key-nav_paneles [data-testid="stButton"] button [data-testid="stIconMaterial"],
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button [data-testid="stIconMaterial"] {
+        font-size: 18px !important;
+        width: 18px !important;
+        margin: 0 !important;
+        flex: 0 0 auto !important;
+        opacity: 1 !important;
+        color: var(--text-secondary) !important;
+    }
+    .st-key-nav_paneles [data-testid="stButton"] button p,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button p {
+        margin: 0 !important;
+        font-size: 13.5px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
+        margin-left: 0 !important;
+    }
+    .st-key-nav_paneles [data-testid="stButton"] button:hover,
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    /* La vista en pantalla, en el panel del activo: la píldora, sin la
+       barra del árbol (que se ubica con la geometría del árbol). */
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla {
+        background: var(--accent-light) !important;
+        color: var(--accent-deep) !important;
+        font-weight: 600 !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla [data-testid="stIconMaterial"] {
+        color: var(--accent) !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral [data-testid="stButton"] button.vista-en-pantalla::before {
+        display: none !important;
+    }
+    :root:has(.st-key-rail_pestillo_plegado) .st-key-nav_rail_lateral .nav-rail-lat-sep {
+        margin: 4px 8px !important;
+    }
 
     /* ══ LA FRANJA DE CONTEXTO ══════════════════════════════════════════
        Arranca donde termina lo que la columna reserva y va hasta el borde:

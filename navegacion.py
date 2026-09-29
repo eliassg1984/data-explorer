@@ -91,6 +91,12 @@ ZONA_PERU = ZoneInfo("America/Lima")
 #   · escribe SOLO si cambió (la otra mitad de la #469);
 #   · un `data-*` y no una clase: cambiarle una clase a `<html>` invalida
 #     todo lo que cuelga de un `[class*=...]` de estilos/.
+#
+# 2026-09-29: también abre el PANEL de un reporte (regla #568) — sus vistas,
+# al pasar el cursor por él. Ahí la marca va en el PANEL (`data-fly`) y no
+# en `<html>`: son seis paneles, y así el cambio recalcula uno solo. Suma
+# `--fly-top`, la altura: la de la fila del reporte, subida lo que haga falta
+# para que el panel entre en la ventana — el CSS no conoce ni una ni la otra.
 _SCRIPT_CAPAS = """<script>
 (function () {
   var w = window.parent, doc = w.document, raiz = doc.documentElement;
@@ -98,6 +104,66 @@ _SCRIPT_CAPAS = """<script>
     .filter(function (c) {
       try { doc.querySelector(c[1]); return true; } catch (e) { return false; }
     });
+  // ── El panel de un reporte (regla #568) ──────────────────────────────
+  // El del ACTIVO es la lista de vistas del rail (`nav_rail_lateral`), y
+  // sólo con la columna plegada: fijada, esa lista ya está a la vista en el
+  // árbol. Los demás, `navfly_<slug>`.
+  var ANCHO = w.matchMedia("(min-width: 901px)");
+  var FILAS = '.st-key-graf_tipo_chips [class*="st-key-navitem_"]';
+  // El panel donde se acaba de hacer clic no se reabre mientras el cursor
+  // siga ahí: una lista que se queda abierta después de elegir tapa lo que
+  // se eligió.
+  var cerrado = null;
+  function panelDe(fila, plegado) {
+    if (fila.querySelector('button[kind="primary"]')) {
+      return plegado ? doc.querySelector(".st-key-nav_rail_lateral") : null;
+    }
+    var m = /(?:^|\\s)st-key-navitem_(\\S+)/.exec(fila.className);
+    return m ? doc.querySelector(".st-key-navfly_" + m[1]) : null;
+  }
+  function elegir() {
+    if (!ANCHO.matches) return [null, null];
+    var plegado = !!doc.querySelector(".st-key-rail_pestillo_plegado");
+    var p = doc.querySelector('.st-key-nav_paneles [class*="st-key-navfly_"]:hover')
+      || (plegado && doc.querySelector(".st-key-nav_rail_lateral:hover"));
+    if (!p) {
+      var f = doc.querySelector('.st-key-nav_paneles :focus-visible'
+                                + (plegado ? ", .st-key-nav_rail_lateral :focus-visible" : ""));
+      p = f && f.closest('[class*="st-key-navfly_"], .st-key-nav_rail_lateral');
+    }
+    if (p) return [p, null];
+    var fila = doc.querySelector(FILAS + ":hover");
+    if (!fila) {
+      var g = doc.querySelector(".st-key-graf_tipo_chips :focus-visible");
+      fila = g && g.closest('[class*="st-key-navitem_"]');
+    }
+    return fila ? [panelDe(fila, plegado), fila] : [null, null];
+  }
+  function paneles() {
+    var par = elegir(), obj = par[0], fila = par[1];
+    if (cerrado) { if (obj === cerrado) obj = null; else cerrado = null; }
+    var abiertos = doc.querySelectorAll("[data-fly]");
+    for (var i = 0; i < abiertos.length; i++) {
+      if (abiertos[i] !== obj) abiertos[i].removeAttribute("data-fly");
+    }
+    if (!obj) return;
+    if (fila) {
+      var r = fila.getBoundingClientRect();
+      var alto = obj.offsetHeight || 0;
+      var y = Math.round(Math.max(8, Math.min(r.top - 6, w.innerHeight - alto - 8)));
+      if (obj.style.getPropertyValue("--fly-top") !== y + "px") {
+        obj.style.setProperty("--fly-top", y + "px");
+      }
+    }
+    if (!obj.hasAttribute("data-fly")) obj.setAttribute("data-fly", "");
+  }
+  function alClic(ev) {
+    var t = ev.target;
+    if (t && t.closest && t.closest("button")) {
+      var p = t.closest("[data-fly]");
+      if (p) cerrado = p;
+    }
+  }
   function recalcular() {
     for (var i = 0; i < CAPAS.length; i++) {
       var abierta = !!doc.querySelector(CAPAS[i][1]);
@@ -106,6 +172,7 @@ _SCRIPT_CAPAS = """<script>
         else raiz.removeAttribute(CAPAS[i][0]);
       }
     }
+    paneles();
   }
   var pendiente = false;
   function pronto() {
@@ -120,7 +187,7 @@ _SCRIPT_CAPAS = """<script>
   try { if (w.__capasApagar) w.__capasApagar(); } catch (e) {}
   var EVENTOS = [["mouseover", pronto], ["mouseout", pronto],
                  ["focusin", pronto], ["focusout", pronto],
-                 ["click", despues], ["keyup", despues]];
+                 ["click", alClic], ["click", despues], ["keyup", despues]];
   EVENTOS.forEach(function (e) { doc.addEventListener(e[0], e[1], true); });
   var reloj = setInterval(recalcular, 300);
   w.__capasApagar = function () {
@@ -158,6 +225,28 @@ def _on_nav_click(nombre):
     """Guarda el reporte elegido. Corre ANTES del script => app.py lo ve desde
     arriba en un solo rerun."""
     st.session_state["_nav_reporte"] = nombre
+
+
+def _ir_a_vista(nombre, state_key, vista):
+    """Callback de una vista en el PANEL de un reporte (regla #568): entra al
+    reporte ya parado en esa vista. Deja la vista elegida en el rail del
+    reporte —con eso un destino aparte ya se dibuja— y pide el salto a su
+    sección, que resuelve `graficos/base.py::_render_rail` al llegar."""
+    st.session_state["_nav_reporte"] = nombre
+    st.session_state[state_key] = vista
+    st.session_state[CLAVE_SALTO_VISTA] = vista
+
+
+def _vistas_de(nombre):
+    """`graficos.vistas_de`, importado acá adentro: `graficos.base` importa
+    este módulo, así que traerlo arriba sería un import circular. None si el
+    reporte no tiene dashboard —o si en Cloud este módulo nuevo quedó
+    hablando con un `graficos` viejo (regla #357): sin panel, no sin app."""
+    try:
+        from graficos import vistas_de
+    except ImportError:
+        return None
+    return vistas_de(nombre)
 
 
 def _fmt_kpi(etiqueta, agregacion, v):
@@ -347,6 +436,11 @@ def _formatear_kpis(info):
 # Donde `inject_navegacion` deja la cabecera del reporte activo (nombre +
 # KPIs ya formateados). La lee el rail de vistas de `graficos/base.py`.
 CLAVE_CABECERA = "_nav_cabecera"
+
+# La vista que se pidió desde el PANEL de un reporte del rail (regla #568):
+# la escribe `_ir_a_vista` y la consume `graficos/base.py::_render_rail`
+# del reporte al que se llega, que la traduce a su sección de la pila.
+CLAVE_SALTO_VISTA = "_rail_saltar_a"
 
 NAV_X0 = 64        # Ver comentario original más abajo, junto al CSS.
 NAV_MOVIL_ALTO = 60  # Debe coincidir con estilos/_00_base.py, ver ese archivo.
@@ -1035,15 +1129,46 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     #    una laptop de 1366 fijarla le cuesta a la tarjeta 180px de ancho,
     #    así que el default es no hacerlo. El chevron sigue apuntando al
     #    destino: plegada dice «›» (fijar abierta), fijada dice «‹».
+    #
+    # 6. **BAJA AL PIE DE LA COLUMNA** (2026-09-29, regla #568). Arriba va
+    #    ahora el que la OCULTA entera (abajo). Y la columna plegada ya no
+    #    se despliega con el cursor: lleva el nombre debajo de cada ícono, y
+    #    las vistas de cada reporte salen en un panel al pasar por él. Fijar
+    #    sigue siendo lo que era: el árbol de 248px con los nombres enteros y
+    #    las vistas del activo debajo. Doble chevron («»»/«««») porque es lo
+    #    que mueve la columna entera, no un ítem.
     _plegado = bool(st.session_state.get("rail_plegado", True))
     with st.container(key="rail_pestillo_"
                       + ("plegado" if _plegado else "abierto")):
-        if st.button(":material/chevron_right:" if _plegado
-                     else ":material/chevron_left:",
+        if st.button(":material/keyboard_double_arrow_right:" if _plegado
+                     else ":material/keyboard_double_arrow_left:",
                      key="rail_pestillo_btn",
-                     help=("Fijar el panel abierto" if _plegado
-                           else "Plegar el panel")):
+                     help=("Fijar el panel abierto, con los nombres"
+                           if _plegado else "Plegar el panel a íconos")):
             st.session_state["rail_plegado"] = not _plegado
+            st.rerun()
+
+    # ── OCULTAR LA COLUMNA ENTERA (2026-09-29, a pedido, regla #568) ─────
+    # «¿y que pueda ocultarse todo el rail?». Arriba de la columna, donde
+    # estaba el pestillo. Oculta, la columna no se dibuja ni reserva ancho:
+    # queda una PESTAÑA de 24px contra el borde izquierdo, y es este MISMO
+    # botón —la regla #216: un estado escondido sin un control a la vista
+    # que lo deshaga es un usuario sin salida—. El cursor sobre la pestaña
+    # hace ASOMAR la columna encima del contenido, sin moverlo (está en
+    # `DISPARADORES_COLUMNA`); un clic la deja a la vista.
+    #
+    # Misma forma que el pestillo: la KEY del contenedor codifica el estado
+    # y de ahí cuelga el CSS (`estilos/_28_arbol.py`, `_00_base.py`). Sólo
+    # desde 901px: más angosto la columna ya es una capa que aparece con el
+    # cursor, o la tira del celular.
+    _oculto = bool(st.session_state.get("rail_oculto", False))
+    with st.container(key="rail_vis_" + ("oculto" if _oculto else "visible")):
+        if st.button(":material/left_panel_open:" if _oculto
+                     else ":material/left_panel_close:",
+                     key="rail_vis_btn",
+                     help=("Mostrar el panel" if _oculto
+                           else "Ocultar el panel")):
+            st.session_state["rail_oculto"] = not _oculto
             st.rerun()
 
     # ── FRANJA DE REPORTES (2026-08-31, a pedido) ────────────────────────
@@ -1149,7 +1274,19 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     _grupos_rep = {_i["grupo_nav"] for _i in visibles.values() if _i.get("grupo_nav")}
     _n_filas_rep = len(_grupos_rep) + sum(1 for _i in visibles.values()
                                           if not _i.get("grupo_nav"))
-    st.markdown(f"<style>:root{{--arbol-filas:{_n_filas_rep};}}</style>",
+    # EL NOMBRE DEBAJO DEL ÍCONO (2026-09-29, regla #568). Plegada, la
+    # columna mide 80px y bajo cada ícono va una palabra: `label_rail`, que
+    # es `label_corto` salvo en los tres cuyo nombre no entra («Stock e
+    # Inventario» → «Stock»). Fijada muestra el `label_corto` entero —el que
+    # se pidió el 2026-09-21 y el 2026-09-22—, así que el botón sigue
+    # llevándolo, y el corto lo pinta un `::after` desde esta variable: la
+    # regla, fija en `_28_arbol.py`; el dato, acá. `json.dumps` da una cadena
+    # CSS válida (comillas dobles, escapes).
+    _rotulos = "".join(
+        f".st-key-navitem_{_slug(n)}{{--rot-corto:"
+        f"{json.dumps(i.get('label_rail') or i.get('label_corto') or n)};}}"
+        for n, i in visibles.items() if not i.get("grupo_nav"))
+    st.markdown(f"<style>:root{{--arbol-filas:{_n_filas_rep};}}{_rotulos}</style>",
                 unsafe_allow_html=True)
 
     _grupos_dibujados = set()
@@ -1216,3 +1353,51 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
         # PIE DEL RAIL — Refrescar, la única ACCIÓN (no un reporte). Fuera de
         # graf_tipo_chips por lo mismo que el pestillo (regla #6).
         boton_refresco()
+
+    # ── EL PANEL DE CADA REPORTE: sus vistas, sin entrar (regla #568) ─────
+    # 2026-09-29, a pedido: «que permita ver el esqueleto de las vistas sin
+    # entrar al reporte». Desde 901px, el cursor sobre un reporte del rail
+    # abre al costado un panel con sus vistas, en el orden de su página, y
+    # un clic en una entra al reporte YA PARADO en ella (`_ir_a_vista`).
+    #
+    # El del reporte ACTIVO no se dibuja acá: es la lista de vistas del
+    # propio rail (`nav_rail_lateral`, de `graficos/base.py::_render_rail`),
+    # que ya marca la vista en pantalla, lleva a ella sin rerun y trae los
+    # puntos de KPI de Compras. Plegada la columna, esa lista se presenta
+    # como panel; fijada, sigue siendo el árbol de debajo de los reportes.
+    #
+    # FUERA de `compras_tabs_row` a propósito: adentro heredaría las reglas
+    # de los botones de reportes —`estilos/` las cuelga del contenedor, y
+    # un descendiente nuevo las toma sin que nada lo avise (CLAUDE.md,
+    # «grep estilos/ antes de agregar un widget»)—. Quién abre cada panel y
+    # a qué altura lo decide `_SCRIPT_CAPAS` (`data-fly`, `--fly-top`); el
+    # aspecto, `estilos/_28_arbol.py`. Son HTML y botones nativos: el clic
+    # lo resuelve Streamlit con un rerun completo, como el de un reporte.
+    _paneles = []
+    for nombre, info in visibles.items():
+        if nombre == reporte_activo or info.get("grupo_nav") or info.get("tool"):
+            continue
+        _rail = _vistas_de(nombre)
+        if _rail and _rail[1]:
+            _paneles.append((nombre, info, _rail))
+    if _paneles:
+        with st.container(key="nav_paneles"):
+            for nombre, info, (_sk, _vistas) in _paneles:
+                _ico = (info.get("icono") or "").removeprefix(":material/").removesuffix(":")
+                _nom = info.get("label_largo") or info.get("label_corto") or nombre
+                with st.container(key=f"navfly_{_slug(nombre)}"):
+                    st.markdown(
+                        '<div class="fly-cab">'
+                        + (f'<span class="fly-ico" aria-hidden="true">{html.escape(_ico)}</span>'
+                           if _ico else "")
+                        + f'<span class="fly-nom">{html.escape(_nom)}</span></div>',
+                        unsafe_allow_html=True)
+                    for _oid, _rot, _vico in _vistas:
+                        st.button(
+                            _rot, key=f"navflyv_{_slug(nombre)}_{_slug(_oid)}",
+                            icon=_vico, on_click=_ir_a_vista,
+                            args=(nombre, _sk, _oid),
+                        )
+                    st.markdown('<div class="fly-pie">Clic en una vista: entra '
+                                'al reporte justo ahí.</div>',
+                                unsafe_allow_html=True)

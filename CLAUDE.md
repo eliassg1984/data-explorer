@@ -254,13 +254,24 @@ regla #366.
 Desde el 2026-09-19 (regla #472), en escritorio el cromo se reparte como en
 cualquier app con barra lateral, cada pieza con UN trabajo:
 
-- **Al costado, a dónde ir.** La columna lista los reportes y, debajo de
-  todos, las vistas del activo, bajo el rótulo «Vistas de <reporte>». No
-  cambia de contenido al bajar. Plegada (el default) es una tira de 68px
-  con los íconos de los reportes y nada más; con el cursor se despliega a
-  248px ENCIMA del contenido y aparecen las vistas; el pestillo la **fija**
-  abierta y ahí el contenido le reserva el ancho (`--rail-reserva`, en
-  `_00_base.py`).
+- **Al costado, a dónde ir.** La columna lista los reportes. No cambia de
+  contenido al bajar. Tiene tres estados (regla #568):
+  - **Plegada** (el default): 80px, un ícono de 24px por reporte con su
+    nombre DEBAJO (un `::after` con `--rot-corto`, de
+    `data.py::label_rail`). El cursor sobre un reporte abre al costado su
+    **panel**: sus vistas, y un clic en una entra al reporte ya parado en
+    ella. El del activo es la lista de vistas del rail
+    (`nav_rail_lateral`) presentada como panel.
+  - **Fijada**: el pestillo, al pie de la columna, la deja en el árbol de
+    248px: reportes con el nombre entero y, debajo de todos, las vistas del
+    activo bajo «Vistas de <reporte>». Ahí el contenido le reserva el ancho
+    (`--rail-reserva`, en `_00_base.py`).
+  - **Oculta**: el botón de arriba (`rail_vis_oculto`) la esconde y deja
+    una pestaña de 24px; el cursor sobre la pestaña la hace asomar ENCIMA
+    del contenido.
+
+  Hasta el 2026-09-29 la columna plegada era una tira de 68px sin nombres
+  que se desplegaba ENTERA con el cursor; ese asomado se fue.
 - **Arriba, dónde estás.** La franja (`nav_franja_rep`, 44px) lleva el
   reporte, la vista en pantalla y sus KPIs a la izquierda, y la fecha,
   Filtros, la hora del dato y Actualizar a la derecha, cada uno a la
@@ -281,22 +292,36 @@ Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
   hueco pedía un relleno — primero el ícono de cada vista, después un
   punto por vista, y ninguno decía nada. Regla #535.
 - **Lo que abre una capa no puede MOVERSE al abrirse** (#465). Los íconos
-  de la columna y el pestillo tienen su centro en el mismo x (34) en los
-  tres estados; desplegar sólo agrega a la derecha, y las vistas abajo de
-  todo. Es lo que prohíbe cerrar el hueco con las vistas colgadas: al
-  desplegar se meterían entre los reportes y empujarían hacia abajo al que
-  estaba bajo el cursor.
+  de la columna, el botón de ocultar y el pestillo tienen su centro en el
+  mismo x (40) plegada y fijada; fijar sólo agrega a la derecha, y las
+  vistas abajo de todo. Es lo que prohíbe volver a colgar las vistas de su
+  reporte: se meterían entre los reportes y correrían los de abajo. Ojo al
+  medir: Streamlit mete el ícono en una caja de 16px y el glifo desborda
+  parejo, así que el centro es `relleno + 8`, no `relleno + 12`.
+- **El panel de un reporte** (regla #568) sale del MISMO rail de su
+  dashboard: `graficos/__init__.py::_RAILS` importa sus categorías y su
+  `state_key`. Un dashboard nuevo va ahí además de en `_DASHBOARDS`
+  (lo vigila `test_graficos.py::_pruebas_vistas_de_cada_reporte`). Los
+  paneles viven en `nav_paneles`, FUERA de `compras_tabs_row` —adentro
+  heredarían las reglas de los botones de reportes—; los abre
+  `_SCRIPT_CAPAS` con `data-fly` y `--fly-top`. Entrar parado en una vista
+  es `navegacion.py::_ir_a_vista` → `CLAVE_SALTO_VISTA` → `_render_rail`
+  la traduce a su sección → `seccion_perezosa` la construye primero y baja
+  hasta ella.
 - **Asomar no cambia el ancho del contenido; fijar sí.** Por eso asomar va
   encima: un cambio de ancho obliga a Plotly y AgGrid a re-medirse (#350).
   Verificado que al fijar siguen a su contenedor.
 - **La vista de la franja la escribe el temporizador de `_render_rail`**
   (`.barra-vista`, con el rótulo corto de la vista). Toda vista nueva lleva
-  ícono (tercer elemento de su tupla): lo muestra la columna entre 769 y
-  900px; desde 901 no se dibuja (reglas #495 y #535).
-- **Ningún jalón negativo arriba de la primera tarjeta.** Los seis
-  contenedores de cromo fijo van en `display: contents` y no cobran `gap`,
-  así que la tarjeta abre donde dice `--cab-offset-contenido`. Si aparece
-  un séptimo, se suma a esa lista — no se compensa con un `margin-top`
+  ícono (tercer elemento de su tupla): lo muestran la columna entre 769 y
+  900px y, desde 901, el panel de su reporte; en el árbol fijado no se
+  dibuja (reglas #495, #535 y #568).
+- **Ningún jalón negativo arriba de la primera tarjeta.** Los contenedores
+  de cromo fijo van en `display: contents` y no cobran `gap`, así que la
+  tarjeta abre donde dice `--cab-offset-contenido` (los de la regla #568
+  —ocultar y los paneles— en una lista aparte, al tope de `_28_arbol.py` y
+  fuera del `@media`). Si aparece otro, se suma — no se compensa con un
+  `margin-top`
   negativo por reporte, que es lo que hubo hasta el 2026-09-19 y hacía que
   cada reporte abriera a una altura distinta (regla #473).
 - **El punto de color de una vista sale de su KPI**: rojo subió (en
@@ -307,13 +332,18 @@ Vive en `estilos/_28_arbol.py`. Lo que cuesta un bug si se toca sin leerlo:
   botón— y el KPI es un panel que cuelga de él**, no el `help=` de
   Streamlit: ése lo dispara el botón entero, sale a 464px y baseweb lo
   clava en la esquina de la pantalla. Se abre SÓLO con el cursor sobre el
-  punto, y plegada la columna el punto no se ve. Ver regla #482.
+  punto. Plegada la columna, se ve en el panel del reporte activo, que es
+  esa misma lista (#568). Ver regla #482.
 - **En el navegador automatizado las transiciones no avanzan** (#353): para
-  medir anchos, apagarlas antes desde la consola.
-- **Quién despliega no es el CSS**: `navegacion.py::_SCRIPT_CAPAS` evalúa
-  `DISPARADORES_COLUMNA` (de `_26_rails_scroll.py`) con `querySelector` y
-  marca `<html data-capa-col>`. Un `:hover` adentro de un `:has()` costaba
-  80 ms por inserción (#469).
+  medir anchos, apagarlas antes desde la consola — con `:is(#no,*)` y no
+  con `*`, que pierde contra las transiciones con `!important` de acá. Y el
+  panel del navegador integrado no saca capturas con la app corriendo: las
+  fotos, con Playwright (regla #568).
+- **Quién abre las capas no es el CSS**: `navegacion.py::_SCRIPT_CAPAS`
+  evalúa `DISPARADORES_COLUMNA` (de `_26_rails_scroll.py`) con
+  `querySelector` y marca `<html data-capa-col>` —desde 901px, sólo para
+  asomar la columna oculta— y `data-fly` en el panel de un reporte. Un
+  `:hover` adentro de un `:has()` costaba 80 ms por inserción (#469).
 
 **Entre 769 y 900px sigue el esquema anterior**: la franja de reportes y la
 columna son capas que aparecen con el cursor (`opacity: 0` + un

@@ -26,6 +26,14 @@ import consumo_recetas
 #                                    Existe para nombrar un reporte distinto de
 #                                    su clave interna sin renombrarla — hoy solo
 #                                    "Inventario Valorizado" → "Stock e Inventario".
+#   label_rail                       el nombre DEBAJO del ícono en la columna
+#                                    plegada de 80px (2026-09-29, regla #568):
+#                                    una palabra de ~70px como mucho. Cae en
+#                                    `label_corto` si falta; sólo lo declaran
+#                                    los tres cuyo `label_corto` no entra ahí.
+#                                    Con la columna FIJADA (248px) se sigue
+#                                    viendo `label_corto` entero, que es lo que
+#                                    se pidió el 2026-09-21 y el 2026-09-22.
 #   fecha                            columna de fecha; None = sin filtro
 #   carga_por_rango                  filtra en DuckDB antes de materializar
 #   filtros_cat, buscador, agrupar   filtros genericos
@@ -104,6 +112,7 @@ REPORTES = {
         # en la franja del resto de los reportes, que no declaran `label_largo`.
         "label_corto": "Stock e Inventario",
         "label_largo": "Stock e Inventario",
+        "label_rail": "Stock",
         "archivo": "inventariovalorizado.parquet",
         "icono": ":material/inventory_2:",
         # Foto sin fecha (igual que Recetas): kpi_fecha ausente a
@@ -133,6 +142,7 @@ REPORTES = {
         # sólo faltaba el ítem del rail, que toma `label_corto`. Sin
         # `label_largo` porque la clave ya coincide con el nombre a mostrar.
         "label_corto": "Ajuste de Inventario",
+        "label_rail": "Ajuste",
         "archivo": "ajusteinventario.parquet",
         "icono": ":material/tune:",
         "kpis": (("Ajuste Valoriz.", "AJUSTE VALORIZADO", "sum"),),
@@ -273,6 +283,7 @@ REPORTES = {
         # miembro y desapareció junto con el chip Recetas/+ Nueva.
         "label_corto": "Recetas y Costos",
         "label_largo": "Recetas y Costos",
+        "label_rail": "Recetas",
         "archivo": "recetaventa.parquet",
         # El SEGUNDO parquet de la página. `app.py` sigue cargando uno solo
         # (`archivo`) y pasándolo como df_f; recetabase.parquet lo carga

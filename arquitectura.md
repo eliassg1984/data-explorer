@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-567 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+568 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (193)
+**CSS y estilos** (194)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -227,6 +227,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#564** — La ficha de la hora va en dos columnas desde arriba: la botonera de vistas son pestañas de…
 - **#565** — En la ficha de la hora, el subtítulo va en el renglón del título y «POR MESA» en la fila de…
 - **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
+- **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 
 **Layout y alturas** (78)
 
@@ -854,7 +855,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (134)
+**Decisiones de diseño y UX** (135)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -990,6 +991,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#564** — La ficha de la hora va en dos columnas desde arriba: la botonera de vistas son pestañas de…
 - **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
+- **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45253,6 +45255,92 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-29.)
 
+568. **La columna plegada dice el nombre de cada reporte, se puede ocultar
+     entera y muestra las vistas de un reporte sin entrar a él.**
+     2026-09-29, a pedido, con un mockup aprobado («vamos con la
+     propuesta»): «¿recomiendas íconos más grandes? ¿y que pueda ocultarse
+     todo el rail? ¿y que permita ver el esqueleto de las vistas sin entrar
+     al reporte?». Desde 901px, en `estilos/_28_arbol.py`,
+     `navegacion.py`, `graficos/base.py` y `graficos/__init__.py`.
+
+     - **Íconos de 24 px con el nombre DEBAJO**, en botones de 72×56 y
+       una columna de 80 px (antes 68, con íconos de 21 px y sin nombre).
+       Son las medidas del riel de navegación de Material Design 3
+       (Google): 80 de ancho, íconos de 24, indicador de 56×32. La
+       píldora del activo va detrás del ícono, no del botón entero; el
+       botón entero recibe el clic (#421).
+     - **El nombre de abajo es un `::after`, no el `<p>` del botón**: el
+       botón sigue llevando el `label_corto` entero, que es lo que se lee
+       con la columna fijada y lo que se pidió el 2026-09-21 y el
+       2026-09-22. La palabra corta llega por `--rot-corto`, que
+       `navegacion.py` escribe por reporte desde `data.py::label_rail`
+       (sólo la declaran Stock, Ajuste y Recetas). **Trampa**: el `::after`
+       de esos botones ya era el punto del semáforo de
+       `_20_compras_rail.py`, un círculo absoluto de 6 px. Sin resetear
+       `position`, `width`, `height` y `background`, el nombre salía
+       metido en ese círculo: una marquita al lado del ícono.
+     - **El centro del ícono no depende de su tamaño**: Streamlit lo mete
+       en una caja de 16 px y el glifo desborda parejo por los dos lados
+       (2 px con 21, 4 con 24). Con la columna fijada el relleno sigue
+       siendo `--icono-x − 14px`; con `− 18px`, que es la cuenta «obvia»
+       para un glifo de 24, quedaba 4 px corrido (medido).
+     - **Ocultar**: un botón arriba de la columna (`rail_vis_visible` /
+       `rail_vis_oculto`, la key codifica el estado como el pestillo, que
+       bajó al pie). Oculta, queda una pestaña de 24 px —el mismo botón,
+       #216— y el contenido le reserva sólo eso. El cursor sobre la
+       pestaña la hace **asomar** encima del contenido sin moverlo (#350):
+       está en `DISPARADORES_COLUMNA`, y la marca `data-capa-col` quedó
+       sólo para esto.
+     - **Se fue el asomado de la columna visible**: el árbol entero que se
+       desplegaba encima con el cursor. Plegada ya dice el nombre de cada
+       reporte, y las vistas salen en el panel.
+     - **El panel de un reporte**: el cursor sobre un reporte abre al
+       costado sus vistas, en el orden de su página. El de un reporte que
+       no es el activo es `navfly_<slug>` en `nav_paneles` —FUERA de
+       `compras_tabs_row`, que si no le contagiaría las reglas de los
+       botones de reportes—; el del activo es la lista de vistas del rail
+       (`nav_rail_lateral`) presentada como panel, que ya marca la vista en
+       pantalla, lleva a ella sin rerun y trae los puntos de KPI. Fijada la
+       columna, esa lista vuelve a ser el árbol.
+     - **Quién lo abre es JS, no un `:hover`**: los paneles no cuelgan de
+       su fila en el DOM. `_SCRIPT_CAPAS` marca el panel con `data-fly`
+       (en el panel y no en `<html>`: recalcula uno solo, #469) y le
+       escribe `--fly-top`, la altura de su fila subida lo que haga falta
+       para entrar en la ventana. Abre a los 150 ms y cierra a los 220 (el
+       viaje en diagonal de la fila al panel no lo cierra), y los primeros
+       10 px del panel son un puente transparente: la superficie blanca es
+       un `::before`. Después de un clic en un panel, no se reabre hasta
+       que el cursor sale de él.
+     - **Las vistas salen del MISMO rail del dashboard**:
+       `graficos/__init__.py::_RAILS` importa las categorías que cada uno
+       le pasa a `_render_rail` (ya sin las Tablas ocultas, #507) y su
+       `state_key`. Un dashboard nuevo va en los dos dicts;
+       `test_graficos.py::_pruebas_vistas_de_cada_reporte` lee con `ast` la
+       llamada a `_render_rail` de cada uno y falla si la clave o las
+       categorías no coinciden.
+     - **Entrar parado en la vista**: el clic (`navegacion.py::_ir_a_vista`)
+       deja la vista elegida en el `state_key` del reporte —con eso un
+       destino aparte como Documentos SUNAT ya se dibuja— y pide el salto
+       en `CLAVE_SALTO_VISTA`. El `_render_rail` del reporte al que se
+       llega lo traduce a su SECCIÓN, y `seccion_perezosa` construye ESA
+       primero y lleva la página hasta ella con `scroll_a_seccion`; la
+       primera de la pila cede su turno (la cuenta de #538). Medido con
+       datos reales: Compras → Ventas › Meseros, Ajuste › Evolución (la
+       otra pila de Ajuste), Movimientos › Detalle de salidas y Ventas →
+       Documentos SUNAT; las cuatro entran con la sección construida y la
+       franja diciendo su nombre.
+     - **Cómo se verifica**: el panel del navegador integrado no saca
+       capturas con la app corriendo. Playwright sí (está instalado):
+       1366×768, `page.mouse.move` para abrir los paneles, y una hoja con
+       `:is(#no,*) { transition: none !important }` — un `*` a secas no
+       alcanza contra las transiciones con `!important` de `_28_arbol.py`.
+     - **En Cloud, reiniciar la app** tras este cambio (#357): el
+       `navegacion.py` nuevo importa `graficos.vistas_de`, que el
+       `graficos` viejo en memoria no tiene. Si falta, no se cae: sin
+       paneles (`_vistas_de` devuelve None).
+
+     (2026-09-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45265,7 +45353,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#567**; la próxima toma el número siguiente.
+> última regla es la **#568**; la próxima toma el número siguiente.
 
 >
 

@@ -478,7 +478,8 @@ CSS = """    <style>
          --rail-der-w       248px, el árbol desplegado. Fijo en los dos
              estados del pestillo: plegar ya no achica el árbol, lo esconde
              detrás de la tira de íconos (ver `--rail-plegado-w`).
-         --rail-plegado-w   68px, la tira de íconos.
+         --rail-plegado-w   80px (68 hasta el 2026-09-29), la tira de íconos,
+             cada uno con su nombre debajo (regla #568).
          --rail-reserva     lo que la columna le quita al contenido: la tira
              plegada, o el árbol entero si el pestillo lo FIJA abierto. Al
              pasar el cursor por la columna plegada, el árbol se dibuja
@@ -500,12 +501,23 @@ CSS = """    <style>
                cómodo contra el borde y no puede pisar contenido. */
             --franja-rep-reserva: 12px;
             --rail-der-w: 248px;
-            --rail-plegado-w: 68px;
+            /* 68 -> 80 el 2026-09-29 (regla #568): íconos de 24px con su
+               nombre DEBAJO, en botones de 72x56 — las medidas del riel de
+               navegación de Material Design 3 (80 de ancho, íconos de 24,
+               indicador de 56x32). La tarjeta pierde 12px. */
+            --rail-plegado-w: 80px;
             --rail-reserva: var(--rail-plegado-w);
             --rail-der-res: calc(var(--rail-reserva) + 16px);
         }
         :root:has(.st-key-rail_pestillo_abierto) {
             --rail-reserva: var(--rail-der-w);
+        }
+        /* OCULTA (2026-09-29, regla #568): la columna no reserva nada salvo
+           la PESTAÑA de 24px que la trae de vuelta (`navegacion.py`,
+           `rail_vis_oculto`). Después del fijado a propósito: oculta manda
+           aunque el pestillo la haya dejado fijada. */
+        :root:has(.st-key-rail_vis_oculto) {
+            --rail-reserva: 24px;
         }
     }
 

@@ -49,6 +49,13 @@ from graficos.inventario import renderizar_graficos_inventario        # noqa: F4
 from graficos.movimientos import renderizar_graficos_movimientos      # noqa: F401
 from graficos.recetas import renderizar_graficos_recetas              # noqa: F401
 from graficos.ventas import renderizar_graficos_ventas                # noqa: F401
+# Los rails de cada dashboard, para `vistas_de` (abajo).
+from graficos.ajuste import _AJUSTE_RAIL_CATEGORIAS
+from graficos.compras import _COMPRAS_RAIL_CATEGORIAS
+from graficos.inventario import _INVENTARIO_RAIL_CATEGORIAS
+from graficos.movimientos import _RAIL_CATEGORIAS as _MOV_RAIL
+from graficos.recetas import _RAIL_CATEGORIAS as _REC_RAIL
+from graficos.ventas import _VENTAS_RAIL_CATEGORIAS
 
 
 # render_vista_pills() (pestañas Gráficos/Tabla en la franja) se eliminó
@@ -71,6 +78,43 @@ _DASHBOARDS = {
     "Movimientos":           renderizar_graficos_movimientos,
     "Ventas":                renderizar_graficos_ventas,
 }
+
+
+# ── LAS VISTAS DE CADA REPORTE, SIN ENTRAR A ÉL (2026-09-29, regla #568) ────
+# Al pasar el cursor por un reporte del rail, `navegacion.py` abre un panel
+# con sus vistas, y un clic en una lleva al reporte Y a esa vista. Para eso
+# necesita, de cada dashboard, lo mismo que ese dashboard le pasa a su
+# `_render_rail`: sus categorías (ya sin las Tablas ocultas, #507) y la
+# clave de `session_state` donde el rail guarda la vista elegida.
+#
+# Son las MISMAS constantes, importadas, no una copia: una lista aparte de
+# vistas por reporte es la garantía de que el panel y el rail un día digan
+# cosas distintas. Un dashboard nuevo se suma acá además de en
+# `_DASHBOARDS`; `test_graficos.py::_pruebas_vistas_de_cada_reporte` falla
+# si falta.
+_RAILS = {
+    "Ajuste de Inventario":  (_AJUSTE_RAIL_CATEGORIAS, "ajuste_graf_tipo"),
+    "Compras":               (_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo"),
+    "Inventario Valorizado": (_INVENTARIO_RAIL_CATEGORIAS, "inv_graf_tipo"),
+    "Recetas":               (_REC_RAIL, "rec_graf_tipo"),
+    "Movimientos":           (_MOV_RAIL, "mov_graf_tipo"),
+    "Ventas":                (_VENTAS_RAIL_CATEGORIAS, "ventas_graf_tipo"),
+}
+
+
+def vistas_de(reporte):
+    """`(state_key, ((id, rótulo, ícono), …))` del rail de `reporte`, o None.
+
+    El rótulo es el corto, el mismo que muestra el rail; el ícono puede ser
+    None (hay rails con tuplas de dos). El orden es el del rail, que es el
+    de la página."""
+    par = _RAILS.get(reporte)
+    if par is None:
+        return None
+    categorias, state_key = par
+    vistas = tuple((item[0], item[1], item[2] if len(item) > 2 else None)
+                   for _, items in categorias for item in items)
+    return state_key, vistas
 
 
 def tiene_dashboard(reporte):

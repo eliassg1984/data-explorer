@@ -88,6 +88,13 @@ def _rail_set(state_key, opcion_id):
     st.session_state[state_key] = opcion_id
 
 
+# La SECCIÓN de la pila que se pidió desde el panel del rail (regla #568):
+# la escribe `_render_rail` —que traduce la vista pedida a su sección— y la
+# consume `seccion_perezosa`, que la construye primero y lleva la página
+# hasta ella. Vive de un render del rail al siguiente, nada más.
+_CLAVE_SECCION_DESTINO = "_pila_destino"
+
+
 # ── LAS VISTAS «TABLA», OCULTAS HASTA NUEVO AVISO ───────────────────────────
 # 2026-09-23, a pedido: «todos los reportes tienen una vista llamada "Tabla"
 # que es un cuadro aggrid en la última vista … podemos ocultarlas hasta nuevo
@@ -589,7 +596,21 @@ def seccion_perezosa(clave, vista, dibujar, activa_de_entrada=False):
                     unsafe_allow_html=True)
 
     k = f"_pila_activa_{clave}"
-    if activa_de_entrada:
+    # ¿SE LLEGÓ PIDIENDO ESTA SECCIÓN? (2026-09-29, regla #568.) Desde el
+    # panel de un reporte en el rail se entra a una vista concreta: esa
+    # sección se construye DE ENTRADA y la página baja hasta ella, y la
+    # primera cede su turno — construirla antes hacía esperar a la pedida
+    # detrás de una que nadie pidió (la misma cuenta de la regla #538). El
+    # marcador de arriba sigue leyendo `activa_de_entrada`: dice «soy la
+    # primera de la pila», no «me construyo de entrada».
+    activar = activa_de_entrada
+    _destino = st.session_state.get(_CLAVE_SECCION_DESTINO)
+    if _destino:
+        activar = clave == _destino
+        if activar:
+            st.session_state.pop(_CLAVE_SECCION_DESTINO, None)
+            scroll_a_seccion(clave)
+    if activar:
         st.session_state[k] = True
 
     if not st.session_state.get(k, False):
@@ -1870,6 +1891,19 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         # igual "comparativo_vs_ano_pasado" que "Comparativo vs Año Pasado".
         sel = vista_activa(categorias, state_key)
         st.session_state[state_key] = sel
+    # ── Se llegó desde el panel del rail pidiendo una vista (regla #568) ──
+    # `navegacion.py::_ir_a_vista` ya la dejó elegida en `state_key` y pide
+    # el salto en `CLAVE_SALTO_VISTA`. Acá se traduce a su SECCIÓN, que es
+    # lo que sabe buscar `seccion_perezosa`. Un destino aparte (Documentos
+    # SUNAT) no tiene sección: con la vista elegida ya se dibuja, que es lo
+    # que hace un clic en el rail. El destino anterior se borra siempre, así
+    # que uno que no llegó a consumirse no se queda esperando a otra pila.
+    st.session_state.pop(_CLAVE_SECCION_DESTINO, None)
+    _salto = st.session_state.pop(navegacion.CLAVE_SALTO_VISTA, None)
+    if _salto is not None and secciones:
+        _dest = next((_cl for _cl, _oid in secciones if _oid == _salto), None)
+        if _dest:
+            st.session_state[_CLAVE_SECCION_DESTINO] = _dest
     # SIN wrapper interno propio (a diferencia del rail vertical, que abre
     # `graf_tipo_chips` adentro): los botones van DIRECTOS dentro de
     # `nav_rail`, igual que dibujaba Reportes antes del 2026-08-22.
@@ -1965,9 +1999,16 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                 # del rail el 2026-09-22, a pedido. El KPI del reporte activo
                 # sigue estando en la franja superior de contexto
                 # (navegacion._html_barra_contexto).
+                # El ícono sólo se ve cuando esta lista hace de PANEL del
+                # reporte activo (columna plegada, regla #568): encabeza
+                # igual que los paneles de los otros reportes.
+                _ico_cab = ((_cab.get("icono") or "")
+                            .removeprefix(":material/").removesuffix(":"))
                 st.markdown(
                     '<div class="rail-cab">'
-                    f'<div class="rail-cab-nom">{html.escape(_cab["nombre"])}</div>'
+                    + (f'<span class="rail-cab-ico" aria-hidden="true">'
+                       f'{html.escape(_ico_cab)}</span>' if _ico_cab else "")
+                    + f'<div class="rail-cab-nom">{html.escape(_cab["nombre"])}</div>'
                     '</div>',
                     unsafe_allow_html=True,
                 )
