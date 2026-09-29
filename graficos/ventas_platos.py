@@ -6,8 +6,15 @@ Nació el 2026-09-25 (regla #529) como el reemplazo del «Top platos
 vendidos» que se quitó del Resumen (#528): aquél eran ocho barras de UN
 período; éste compara hasta cuatro —de un corte que abre en Mes y puede ser
 Día, Semana o Año—, dentro de toda la carta, un grupo o un subgrupo, con el
-top, todos los platos o los que el usuario elige a mano. La Ingeniería de
-menú (popularidad × margen) va a ser la segunda pieza de esta vista.
+top, todos los platos o los que el usuario elige a mano.
+
+UNA TARJETA, DOS VISTAS (2026-09-29, regla #569): el interruptor del renglón
+del título alterna este ranking y la Ingeniería de menú (popularidad ×
+margen, `ventas_menu.py`, regla #550), que hasta ese día era una segunda
+tarjeta debajo. Las dos comparten la fila del Corte y las pastillas de los
+períodos —la Ingeniería clasifica el último elegido—, que no se mueven al
+cambiar de vista; lo demás es de cada una y se dibuja sólo con la suya, con
+`persist_state="page"` para que vuelva como quedó.
 
 DE DÓNDE SALEN LOS DATOS: como en «Año Pasado» y «Por hora», cada período se
 trae con `data.cargar_rango` y pasa por `filtrar_cb` (el `_filtrar_items` de
@@ -47,7 +54,8 @@ from graficos.base import (_compras_layout, _compras_truncar, _resolver,
 from graficos.compras._comun import _first_point
 from graficos.ventas_horario import (_COLOR_MARCA, _claves_hacia_atras,
                                      _etiqueta_clave, _rango_de_clave)
-from graficos.ventas_menu import _KEYS_WIDGET_MENU, tarjeta_ingenieria
+from graficos import ventas_menu as _menu
+from graficos.ventas_menu import _KEYS_WIDGET_MENU
 from graficos.ventas_mix import _estilo_costo, base, columnas, pct_costo
 from utils import fmt_k
 
@@ -58,20 +66,41 @@ _N_PERIODOS = {"Día": 14, "Semana": 10, "Mes": 13}
 el mismo mes del año pasado está en la lista. Año ofrece todos los años con
 dato."""
 
+VISTAS = ("Ranking", "Ingeniería de menú")
+_VISTA_DEFAULT = VISTAS[0]
+
 MAX_PERIODOS = 4
 _N_DEFECTO = 3
 _MEDIDAS = ("Venta", "Unidades")
-_AMBITOS = ("Toda la carta", "Grupo", "Subgrupo")
+TODA_LA_CARTA = "Toda la carta"
 _MOSTRAR = ("Top 10", "Top 15", "Top 20", "Todos", "Elegidos")
 _MOSTRAR_DEFAULT = "Top 15"
 _TOPE_GRAFICO = 20
 """Con «Todos» la tabla lista cada plato del ámbito; el gráfico de puestos se
 queda con los 20 primeros: 300 líneas no se leen."""
 
-_KEYS_WIDGET_PL = ("vt_pl_corte", "vt_pl_medida", "vt_pl_mostrar",
-                   "vt_pl_per_*", "vt_pl_ambito", "vt_pl_cual_*",
+FILA_RANKING = (2.0, 1.35, 3.15, 2.3)
+FILA_MENU = (2.0, 1.9, 4.85, 0.05)
+"""La fila de controles de cada vista: el Corte y, a su derecha, Medida ·
+Mostrar · Ámbito en el ranking, Forma · Categoría en la Ingeniería. Suman lo
+mismo y abren con el mismo número a propósito: el Corte, que es de las dos,
+no cambia de ancho ni de lugar al cambiar de vista (lo que se toca no se
+mueve, regla #465). Las proporciones son los anchos medidos a 1366 (199,
+133, 313 y ~230 px), para que cada control entre en su columna.
+
+Y las dos tienen CUATRO columnas, aunque la Ingeniería use tres: la cuarta
+va con un `st.empty()`. Con tres, el desplegable del Ámbito quedaba en la
+Ingeniería como un resto a lo ancho de la tarjeta (visto una vez de tres):
+Streamlit borra lo que una corrida no volvió a dibujar SÓLO si la corrida
+termina limpia (`clearStaleNodes`, con FINISHED_SUCCESSFULLY), y si otra
+corrida la corta —la precarga de las secciones vecinas— el resto se queda
+hasta el próximo clic en la tarjeta. Escribir la posición la reemplaza
+siempre (regla #569)."""
+
+_KEYS_WIDGET_PL = ("vt_pl_vista", "vt_pl_corte", "vt_pl_medida",
+                   "vt_pl_mostrar", "vt_pl_per_*", "vt_pl_amb",
                    "vt_pl_elegidos") + _KEYS_WIDGET_MENU
-"""Los controles de la vista —también los de la Ingeniería de menú, que se
+"""Los controles de la tarjeta —también los de la Ingeniería de menú, que se
 dibuja en este mismo fragment—, para que el salto a «Por hora»
 (`st.rerun(scope="app")`) no se los lleve (regla #373)."""
 
@@ -152,6 +181,22 @@ def costo_por_plato(a):
         return pd.Series(dtype=float)
     cn = a.groupby(level=0)[["costo", "neto"]].sum()
     return pct_costo(cn["costo"], cn["neto"])
+
+
+def opciones_ambito(todos):
+    """Las opciones del desplegable del ámbito, `{rótulo: (columna, valor)}`:
+    toda la carta —`(None, None)`—, cada grupo y cada subgrupo, cada tanda de
+    la que más vende a la que menos. Uno solo en vez de «Grupo | Subgrupo» y
+    un segundo desplegable con cuál (2026-09-29, regla #569): el tipo va en
+    el rótulo («Subgrupo: Fondos»), que además separa un grupo de un
+    subgrupo que se llamen igual. `todos` trae `grupo`, `sub` y `venta`."""
+    ops = {TODA_LA_CARTA: (None, None)}
+    if todos is None or todos.empty:
+        return ops
+    for col, rot in (("grupo", "Grupo"), ("sub", "Subgrupo")):
+        orden = todos.groupby(col)["venta"].sum().sort_values(ascending=False)
+        ops.update({f"{rot}: {v}": (col, v) for v in orden.index})
+    return ops
 
 
 # ===========================================================================
@@ -269,7 +314,9 @@ def _ir_a_hora(nombre):
 
 @st.fragment
 def _ventas_platos(d, filtrar_cb=None):
-    """«Análisis de platos»: el ranking de platos entre hasta 4 períodos."""
+    """«Análisis de platos»: UNA tarjeta con dos vistas —el ranking de
+    platos entre hasta 4 períodos y la Ingeniería de menú del último— que
+    alterna el interruptor de su renglón del título (regla #569)."""
     ss = st.session_state
     # El salto a «Por hora», en dos pasos: una corrida completa para que esa
     # sección se redibuje con la ficha pedida, y en ESA corrida el scroll.
@@ -291,43 +338,63 @@ def _ventas_platos(d, filtrar_cb=None):
     _fd = pd.to_datetime(d[cols_d["fecha"]], errors="coerce").dropna()
     primer, ancla = lim if lim else (_fd.min().date(), _fd.max().date())
 
-    tarjeta = st.container(border=True,
-                           key="ajuste_graf_card_izq_ventas_platos")
-    with tarjeta:
-        foco, menu = _cuerpo(d, filtrar_cb, cols_d, primer, ancla)
-    if foco:
-        _evolucion(*foco)
-    # La segunda pieza: la Ingeniería de menú del ÚLTIMO período, el mismo
-    # del puesto «#» y del % de costo (regla #550).
-    if menu:
-        tarjeta_ingenieria(*menu)
+    with st.container(border=True, key="ajuste_graf_card_izq_ventas_platos"):
+        _cuerpo(d, filtrar_cb, cols_d, primer, ancla)
 
 
 def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
-    """Lo de la tarjeta del ranking. Devuelve `(foco, menu)`: los argumentos
-    de la evolución del plato en foco y los de la Ingeniería de menú, cada
-    uno o None."""
+    """Lo de la tarjeta, en el orden en que se lee: el interruptor de la
+    vista con sus KPI, la fila del Corte, los períodos y la vista elegida."""
     ss = st.session_state
-    cab = st.container(key="vt_pl_cabfila")
+    # ── El renglón del título: el interruptor y, a su derecha, los KPI de
+    # la vista, que se escriben al final (hacen falta los períodos) ───────
+    cab = st.container(horizontal=True, gap="medium",
+                       vertical_alignment="center", key="vt_pl_cabfila")
+    with cab:
+        vista = st.segmented_control(
+            "Vista", VISTAS, default=_VISTA_DEFAULT, required=True,
+            key="vt_pl_vista", label_visibility="collapsed") or _VISTA_DEFAULT
+    ranking = vista == VISTAS[0]
 
-    # columnas-internas: la fila de controles de la tarjeta
-    c1, c2, c3 = st.columns([1.5, 1.1, 2.6], vertical_alignment="center")
-    with c1:
+    # ── La fila de controles: el Corte, en el mismo lugar en las dos
+    # vistas, y a su derecha los de la vista en pantalla. Los que dependen
+    # de los datos —el Ámbito, la Categoría— se llenan después de cargar.
+    # columnas-internas: la fila de controles de la tarjeta (FILA_RANKING)
+    fila = st.columns(FILA_RANKING if ranking else FILA_MENU,
+                      vertical_alignment="center")
+    with fila[0]:
         corte = st.segmented_control(
             "Corte", CORTES, default=_CORTE_DEFAULT, required=True,
             key="vt_pl_corte", label_visibility="collapsed") or _CORTE_DEFAULT
-    with c2:
-        medida = st.segmented_control(
-            "Medida", _MEDIDAS, default=_MEDIDAS[0], required=True,
-            key="vt_pl_medida", label_visibility="collapsed") or _MEDIDAS[0]
-    with c3:
-        mostrar = st.segmented_control(
-            "Mostrar", _MOSTRAR, default=_MOSTRAR_DEFAULT, required=True,
-            key="vt_pl_mostrar", label_visibility="collapsed",
-            help="**Todos**: la tabla lista cada plato del ámbito; el gráfico "
-                 "sigue con los 20 primeros. **Elegidos**: sólo los platos "
-                 "que buscaste abajo.") or _MOSTRAR_DEFAULT
-    m = "cant" if medida == "Unidades" else "venta"
+    medida = mostrar = forma = None
+    if ranking:
+        with fila[1]:
+            medida = st.segmented_control(
+                "Medida", _MEDIDAS, default=_MEDIDAS[0], required=True,
+                key="vt_pl_medida", label_visibility="collapsed",
+                persist_state="page") or _MEDIDAS[0]
+        with fila[2]:
+            mostrar = st.segmented_control(
+                "Mostrar", _MOSTRAR, default=_MOSTRAR_DEFAULT, required=True,
+                key="vt_pl_mostrar", label_visibility="collapsed",
+                persist_state="page",
+                help="**Todos**: la tabla lista cada plato del ámbito; el "
+                     "gráfico sigue con los 20 primeros. **Elegidos**: sólo "
+                     "los platos que buscaste arriba de la tabla."
+            ) or _MOSTRAR_DEFAULT
+    else:
+        # Por atributo y no importadas por nombre (regla #357, como el
+        # `getattr` de `_render_rail`): si Cloud recarga este módulo con el
+        # `ventas_menu` de antes de la #569 en memoria, la Ingeniería pide
+        # reiniciar en vez de tumbar Ventas entero con un ImportError.
+        if not hasattr(_menu, "vista_ingenieria"):
+            st.info("La Ingeniería de menú se actualizó: hace falta "
+                    "reiniciar la app («Manage app» → «Reboot app»).")
+            return
+        with fila[1]:
+            forma = _menu.control_forma()
+        with fila[3]:
+            st.empty()      # la columna del Ámbito, vacía: ver FILA_MENU
 
     # ── Los períodos del corte: una pastilla por período, hasta 4 ────────
     lista = periodos(corte, ancla, primer)
@@ -342,51 +409,85 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
         "Comparar", [etq[k] for k in lista], selection_mode="multi",
         key=k_per, label_visibility="collapsed",
         help="Hasta 4, y no tienen que ser seguidos. Con más de 4 se usan "
-             "los 4 más recientes.") or []
+             "los 4 más recientes. La Ingeniería de menú clasifica el "
+             "último.") or []
     sel = [k for k in lista if etq[k] in elegidas][-MAX_PERIODOS:]
     if not sel:
         st.info("Elegí al menos un período para comparar.")
-        return None, None
+        return
 
     with st.spinner("Cargando los períodos…" if len(sel) > 1
                     else "Cargando el período…"):
         datos = {k: _cargar_periodo(k, corte, ancla, filtrar_cb, d)
                  for k in sel}
+    ult = sel[-1]
+    if not ranking:
+        # La Ingeniería de menú del ÚLTIMO período, el mismo del puesto «#»
+        # y del % de costo del ranking (regla #550).
+        ant = sel[-2] if len(sel) > 1 else None
+        _menu.vista_ingenieria(datos[ult][0], etq[ult], datos[ult][1],
+                               datos[ant][0] if ant else None,
+                               etq[ant] if ant else None,
+                               forma=forma, cab=cab, c_cat=fila[2])
+        return
+    en_foco = _ranking(cab, fila[3], datos, sel, etq, medida, mostrar)
+    if en_foco:
+        foco, info, elegidos = en_foco
+        _evolucion(foco, corte, lista, etq, sel, ancla, filtrar_cb, d,
+                   "cant" if medida == "Unidades" else "venta", info,
+                   elegidos)
+    else:
+        # Sin evolución, el lugar donde la Ingeniería pone su pie: se
+        # escribe vacío para no depender de la limpieza (ver FILA_MENU).
+        st.empty()
+
+
+def _ranking(cab, c_amb, datos, sel, etq, medida, mostrar):
+    """La vista del ranking, con los períodos ya cargados: el Ámbito (en
+    `c_amb`, la última columna de la fila del Corte), los KPI (en `cab`), el
+    gráfico de puestos, el buscador y la tabla. Con un plato en foco
+    devuelve `(plato, info, elegidos)` para su evolución; si no, None."""
+    ss = st.session_state
+    m = "cant" if medida == "Unidades" else "venta"
     agg = {k: datos[k][0].set_index("prod") for k in sel}
     dias = {k: datos[k][1] for k in sel}
     todos = pd.concat([agg[k][["grupo", "sub", "venta"]] for k in sel])
     if todos.empty:
         st.info("Sin ventas en los períodos elegidos.")
-        return None, None
+        return None
     # Grupo y subgrupo de cada plato: los del período más nuevo en que vendió.
     info = todos[~todos.index.duplicated(keep="last")][["grupo", "sub"]]
     peso = todos.groupby(level=0)["venta"].sum().sort_values(ascending=False)
 
-    # ── El ámbito: toda la carta, un grupo o un subgrupo ─────────────────
-    # columnas-internas: el tipo de ámbito y cuál
-    a1, a2, a3 = st.columns([1.6, 1.6, 2.8], vertical_alignment="center")
-    with a1:
-        amb = st.segmented_control(
-            "Ámbito", _AMBITOS, default=_AMBITOS[0], required=True,
-            key="vt_pl_ambito", label_visibility="collapsed") or _AMBITOS[0]
-    cual = None
-    if amb != "Toda la carta":
-        col_amb = "grupo" if amb == "Grupo" else "sub"
-        ops = (todos.groupby(col_amb)["venta"].sum()
-               .sort_values(ascending=False).index.tolist())
-        with a2:
-            cual = st.selectbox(amb, ops, key=f"vt_pl_cual_{col_amb}",
-                                label_visibility="collapsed")
-        en_amb = info.index[info[col_amb] == cual]
-    else:
-        en_amb = info.index
-    with a3:
+    # ── El ámbito: un desplegable en la fila del Corte (regla #569) ──────
+    amb_ops = opciones_ambito(todos)
+    # Un grupo que no vendió en los períodos de ahora ya no es opción: un
+    # valor fuera de las opciones es un error.
+    if ss.get("vt_pl_amb") not in amb_ops:
+        ss["vt_pl_amb"] = TODA_LA_CARTA
+    with c_amb:
+        amb = st.selectbox(
+            "Ámbito", list(amb_ops), key="vt_pl_amb",
+            label_visibility="collapsed", persist_state="page",
+            help="Toda la carta, un grupo o un subgrupo: el puesto se "
+                 "calcula DENTRO de lo elegido («3º de Fondos»)."
+        ) or TODA_LA_CARTA
+    col_amb, cual = amb_ops[amb]
+    en_amb = (info.index if col_amb is None
+              else info.index[info[col_amb] == cual])
+
+    # ── El gráfico de puestos a la izquierda; a la derecha el buscador de
+    # platos y, debajo, la tabla. Las columnas se crean ANTES de contar:
+    # con «Elegidos», lo buscado decide las filas ─────────────────────────
+    # columnas-internas: el gráfico de puestos y su tabla
+    g1, g2 = st.columns([0.9, 1.2], gap="medium")
+    with g2:
         _opciones = list(dict.fromkeys(
             list(peso.index) + list(ss.get("vt_pl_elegidos") or [])))
         elegidos = st.multiselect(
             "Platos a comparar", _opciones, key="vt_pl_elegidos",
             max_selections=MAX_ELEGIDOS, placeholder="Buscar platos para "
-            "comparar…", label_visibility="collapsed",
+            "comparar…", label_visibility="collapsed", persist_state="page",
             help="Hasta 8. Con «Elegidos» se comparan sólo ésos, cada uno "
                  "con su color, estén en el puesto que estén.")
 
@@ -408,7 +509,7 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
     en_graf = (filas if mostrar == "Elegidos"
                else [n for n in filas if pue[ult].get(n, 10 ** 6) <= _TOPE_GRAFICO])
 
-    # ── El renglón del título ────────────────────────────────────────────
+    # ── Los KPI del renglón del título ───────────────────────────────────
     tot = {k: float(val[k].sum()) for k in sel}
     g_amb = var_por_dia(tot[pri], dias[pri], tot[ult], dias[ult])
     movs = {n: movimiento(pue[pri].get(n), pue[ult].get(n)) for n in universo}
@@ -424,24 +525,20 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
     n_entran = sum(1 for n in universo if movs[n][1] == "entra"
                    and pue[ult].get(n, 10 ** 6) <= _TOPE_GRAFICO)
     ambito = cual or "toda la carta"
-    titulo = {"Elegidos": "Platos elegidos", "Todos": "Todos los platos"}.get(
-        mostrar, f"{mostrar} platos")
     with cab:
         st.markdown(_html_cab(
-            titulo, ambito, len(pue[ult]), etq[ult], g_amb, etq[pri],
+            ambito, len(pue[ult]), etq[ult], g_amb, etq[pri],
             sube, _dif.get(sube), baja, _dif.get(baja), n_entran,
             len(sel) > 1), unsafe_allow_html=True)
 
     # ── El gráfico de puestos y la tabla ─────────────────────────────────
     foco = ss.get("vt_pl_foco")
-    # columnas-internas: el gráfico de puestos y su tabla
-    g1, g2 = st.columns([0.9, 1.2], gap="medium")
     with g1:
         if en_graf:
             _grafico(en_graf, sel, etq, pue, mostrar, elegidos, foco)
         else:
             st.caption("Sin platos que mostrar: en «Elegidos», buscalos "
-                       "arriba.")
+                       "arriba de la tabla.")
     with g2:
         # El % de costo es el del ÚLTIMO período, el mismo del puesto «#»:
         # la pregunta es cuánto cuesta hoy lo que hoy se vende (regla #546).
@@ -459,23 +556,19 @@ def _cuerpo(d, filtrar_cb, cols_d, primer, ancla):
     notas.append("El % compara la venta POR DÍA con venta: un período en "
                  "curso tiene menos días.")
     st.caption(" ".join(notas))
-
-    ant = sel[-2] if len(sel) > 1 else None
-    menu = (datos[ult][0], etq[ult], dias[ult],
-            datos[ant][0] if ant else None, etq[ant] if ant else None)
-    if foco:
-        return (foco, corte, lista, etq, sel, ancla, filtrar_cb, d, m, info,
-                elegidos), menu
-    return None, menu
+    return (foco, info, elegidos) if foco else None
 
 
 # ===========================================================================
 # LAS PIEZAS
 # ===========================================================================
 
-def _html_cab(titulo, ambito, n_platos, ult, g_amb, pri, sube, d_sube,
-              baja, d_baja, n_entran, compara):
-    """Título + KPI en un renglón, con el dibujo del Resumen (`.vt-cab`)."""
+def _html_cab(ambito, n_platos, ult, g_amb, pri, sube, d_sube, baja,
+              d_baja, n_entran, compara):
+    """Los KPI en un renglón, con el dibujo del Resumen (`.vt-cab`). Sin
+    título desde que la tarjeta tiene dos vistas (regla #569): el nombre lo
+    dice el interruptor, a su izquierda, y el «Top 15» que decía el título
+    está marcado en «Mostrar»."""
     def _k(rot, val, clase="", tip=""):
         return (f'<div class="vt-kpi {clase}" title="{escape(tip or rot)}">'
                 f'<span class="vt-kpi-rot">{escape(rot)}</span>'
@@ -494,8 +587,8 @@ def _html_cab(titulo, ambito, n_platos, ult, g_amb, pri, sube, d_sube,
         partes.append(_k("Entran al top 20", f"{n_entran}",
                          tip=f"Platos del top 20 de {ult} que no vendieron "
                              f"en {pri}"))
-    return (f'<div class="vt-cab"><span class="vt-cab-tit">{escape(titulo)}'
-            f'</span><div class="vt-kpis">' + "".join(partes) + "</div></div>")
+    return ('<div class="vt-cab"><div class="vt-kpis">' + "".join(partes)
+            + "</div></div>")
 
 
 def _grafico(nombres, sel, etq, pue, mostrar, elegidos, foco):
@@ -628,13 +721,17 @@ def _tabla(filas, sel, etq, val, pue, dias, m, movs, pc):
             + f" de {x}" + (" (S/)" if m == "venta" else ""))
     st.dataframe(sty, key=_key("vt_pl_tabla"), on_select="rerun",
                  selection_mode="single-row", hide_index=True, row_height=27,
-                 height=alturas.VENTAS_PLATOS, column_config=cfg)
+                 height=alturas.VENTAS_PLATOS_TABLA, column_config=cfg)
 
 
 def _evolucion(nombre, corte, lista, etq, sel, ancla, filtrar_cb, d, m, info,
                elegidos):
-    """La segunda tarjeta: el plato en foco en TODO el corte, por día."""
-    with st.container(border=True, key="ajuste_graf_card_izq_ventas_platos_evo"):
+    """El plato en foco en TODO el corte, por día. Va DENTRO de la tarjeta,
+    debajo de la tabla y separado por una línea: hasta el 2026-09-29 era una
+    segunda tarjeta (regla #569). La key no lleva el prefijo de tarjeta
+    (`ajuste_graf_card_`) a propósito: con él heredaría fondo, borde y techo
+    de una tarjeta metida en otra."""
+    with st.container(key="vt_pl_evo_caja"):
         # columnas-internas: el título de la evolución y sus tres botones
         c1, c2, c4, c3 = st.columns([2.6, 1.1, 1.3, 0.7],
                                     vertical_alignment="center")

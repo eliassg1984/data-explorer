@@ -308,17 +308,27 @@ cabecera y los bordes. Son dos filas menos que las siete del Resumen
 (`VENTAS_RESUMEN_TABLA`): la figura de arriba mide 54 más."""
 
 VENTAS_PLATOS = 27 * 15 + 3
-"""Alto del gráfico de puestos y de la tabla de Ventas › Análisis de platos
-(2026-09-25, regla #529), que van lado a lado y miden lo mismo: catorce
+"""Alto del gráfico de puestos de Ventas › Análisis de platos (2026-09-25,
+regla #529) y de su columna de al lado: el buscador y la tabla, que mide
+esto menos el buscador (`VENTAS_PLATOS_TABLA`, desde la #569). Catorce
 filas de 27 (`row_height` de `st.dataframe`) más la cabecera. En el gráfico
 son 26px por puesto con el top 15, lo que pide la escalera de líneas para
 no pisarse."""
 
+VENTAS_PLATOS_TABLA = VENTAS_PLATOS - 46
+"""Alto de la tabla del ranking de Análisis de platos desde que el buscador
+de platos va encima de ella, en su misma columna (2026-09-29, regla #569):
+lo que mide el gráfico de puestos de al lado menos el buscador (30px) y el
+gap de la columna (16px), para que las dos columnas terminen a la misma
+altura. El buscador crece con cada plato elegido; ahí la columna de la
+tabla pasa a la del gráfico, y es lo esperado."""
+
 VENTAS_MENU = 27 * 14 + 3
 """Alto de la matriz y de la tabla de la Ingeniería de menú (2026-09-26,
-regla #550), la segunda tarjeta de Análisis de platos: trece filas de 27 más
-la cabecera. Una fila menos que el ranking de arriba porque la tarjeta lleva
-además la línea de los umbrales y el pie con el método."""
+regla #550), la otra vista de Análisis de platos (una tarjeta, dos vistas
+desde la regla #569): trece filas de 27 más la cabecera. Una fila menos que
+el ranking porque la vista lleva además la línea de los umbrales y el pie
+con el método."""
 
 VENTAS_MESEROS_FIG = 230
 """Alto de los dos gráficos del detalle del mesero en Ventas › Meseros

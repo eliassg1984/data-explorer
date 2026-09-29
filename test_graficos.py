@@ -6700,6 +6700,61 @@ def _pruebas_ventas_platos():
     check("«Ranking & FoodCost» se fue: su lugar es éste (#545)",
           ("Ranking & FoodCost" in vistas,
            "Ranking & FoodCost" in dict(_v._PILA).values()), (False, False))
+
+    # ── Una tarjeta, dos vistas (regla #569) ──────────────────────────────
+    todos = pd.DataFrame({
+        "grupo": ["Alimentos", "Alimentos", "Bebidas", "Bebidas"],
+        "sub": ["Fondos", "Entradas", "Cocteles", "Bebidas"],
+        "venta": [500.0, 100.0, 300.0, 50.0]},
+        index=["Lomo", "Ceviche", "Pisco Sour", "Agua"])
+    ops = _p.opciones_ambito(todos)
+    check("el ámbito es UN desplegable: la carta, los grupos y los "
+          "subgrupos, cada tanda de la que más vende a la que menos",
+          list(ops), ["Toda la carta", "Grupo: Alimentos", "Grupo: Bebidas",
+                      "Subgrupo: Fondos", "Subgrupo: Cocteles",
+                      "Subgrupo: Entradas", "Subgrupo: Bebidas"])
+    check("un grupo y un subgrupo del mismo nombre no se confunden",
+          (ops["Grupo: Bebidas"], ops["Subgrupo: Bebidas"]),
+          (("grupo", "Bebidas"), ("sub", "Bebidas")))
+    check("toda la carta no filtra", ops["Toda la carta"], (None, None))
+    check("abre en el ranking", _p._VISTA_DEFAULT, "Ranking")
+    import math
+    check("el Corte no se mueve al cambiar de vista: su columna pesa lo "
+          "mismo en las dos filas",
+          math.isclose(_p.FILA_RANKING[0] / sum(_p.FILA_RANKING),
+                       _p.FILA_MENU[0] / sum(_p.FILA_MENU)), True)
+    check("las dos filas tienen cuatro columnas: la que sobra se escribe "
+          "vacía, no se deja al borrado de Streamlit",
+          (len(_p.FILA_RANKING), len(_p.FILA_MENU)), (4, 4))
+    # Lo que se dibuja con UNA sola vista tiene que recordar su valor
+    # mientras se ve la otra: sin `persist_state`, volver al ranking lo
+    # dejaba en su default (Top 15, toda la carta, sin elegidos).
+    from graficos import ventas_menu as _im
+    compartidas = {"vt_pl_vista", "vt_pl_corte"}
+    propias, sin_persistir = set(), []
+    for mod in (_p, _im):
+        for n in ast.walk(ast.parse(inspect.getsource(mod))):
+            if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                    and n.func.attr in ("segmented_control", "selectbox",
+                                        "multiselect")):
+                continue
+            kw = {k.arg: k.value for k in n.keywords}
+            clave = kw.get("key")
+            if not isinstance(clave, ast.Constant) or clave.value in compartidas:
+                continue
+            propias.add(clave.value)
+            if not (isinstance(kw.get("persist_state"), ast.Constant)
+                    and kw["persist_state"].value == "page"):
+                sin_persistir.append(clave.value)
+    check("los controles de cada vista llevan persist_state='page'",
+          sorted(sin_persistir), [])
+    check("y son los que se esperan (si no, el barrido no mira nada)",
+          sorted(propias), ["vt_ing_forma", "vt_ing_subs", "vt_pl_amb",
+                            "vt_pl_elegidos", "vt_pl_medida",
+                            "vt_pl_mostrar"])
+    check("la Ingeniería ya no abre una tarjeta propia",
+          ("ajuste_graf_card_izq_ventas_menu" in inspect.getsource(_im),
+           hasattr(_im, "tarjeta_ingenieria")), (False, False))
     return fallos
 
 

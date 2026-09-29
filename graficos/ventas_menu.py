@@ -1,8 +1,12 @@
 """
-graficos.ventas_menu — la «Ingeniería de menú», segunda tarjeta de Ventas ›
+graficos.ventas_menu — la «Ingeniería de menú», la segunda vista de Ventas ›
 Análisis de platos: cada plato clasificado por lo que se pide y lo que deja.
 
-Nació el 2026-09-26 de una maqueta aprobada (regla #550). El método es el de
+Nació el 2026-09-26 de una maqueta aprobada (regla #550), como una segunda
+tarjeta debajo del ranking. Desde el 2026-09-29 es una de las dos vistas de
+UNA tarjeta (regla #569): el interruptor «Ranking | Ingeniería de menú» del
+renglón del título elige cuál se dibuja, y ésta pone sus controles en la
+fila del Corte, que comparte con el ranking. El método es el de
 Kasavana y Smith (1982), *Menu Engineering: A Practical Guide to Menu
 Analysis*, con las fórmulas y las acciones como las publica AHLEI:
 
@@ -99,9 +103,11 @@ _DETALLE = {
 }
 
 _KEYS_WIDGET_MENU = ("vt_ing_forma", "vt_ing_subs")
-"""Los controles de la tarjeta. Van también en
-`ventas_platos._KEYS_WIDGET_PL`: la tarjeta se dibuja dentro de ese fragment,
-y su salto a «Por hora» lo corta con un `st.rerun` (regla #373)."""
+"""Los controles de la vista. Van también en
+`ventas_platos._KEYS_WIDGET_PL`: la vista se dibuja dentro de ese fragment,
+y su salto a «Por hora» lo corta con un `st.rerun` (regla #373). Y los dos
+llevan `persist_state="page"`: mientras se mira el ranking no se dibujan, y
+sin eso volverían a su default (regla #569)."""
 
 
 # ===========================================================================
@@ -263,8 +269,10 @@ def _chips(r, antes, etq_ant):
     return h
 
 
-def _html_cab(titulo, res):
-    """Título + una cifra por clase, con el dibujo del Resumen (`.vt-cab`)."""
+def _html_cab(res):
+    """Una cifra por clase, con el dibujo del Resumen (`.vt-cab`). Sin
+    título: lo dice el interruptor de la vista, que va a su izquierda, y la
+    categoría está en su desplegable (regla #569)."""
     partes = []
     for k in CLASES:
         c = res["clases"][k]
@@ -274,8 +282,8 @@ def _html_cab(titulo, res):
             f'{escape(_ACCION[k])}."><span class="vt-kpi-rot">{_NOMBRE[k]}</span>'
             f'<span class="vt-kpi-val">{c["n"]}<span class="vt-kpi-sub">'
             f'{parte:.0%} del margen</span></span></div>')
-    return (f'<div class="vt-cab"><span class="vt-cab-tit">{escape(titulo)}'
-            f'</span><div class="vt-kpis">' + "".join(partes) + "</div></div>")
+    return ('<div class="vt-cab"><div class="vt-kpis">' + "".join(partes)
+            + "</div></div>")
 
 
 def _filas_html(del_k, antes, etq_ant, con_pedidos, tope=_FILAS_CUADRO):
@@ -481,74 +489,84 @@ def _tabla(m, antes, etq_ant):
         })
 
 
-def tarjeta_ingenieria(a_ult, etq_ult, dias, a_ant=None, etq_ant=None):
-    """La tarjeta: la categoría la arma quien mira, y la clasificación se
-    muestra en la forma elegida. `a_ult` es el agregado por plato del último
-    período de la comparación de arriba y `a_ant`, el del anterior (para
-    «antes: …»), los dos de `ventas_platos.agregar`."""
+def control_forma():
+    """«Cuadros | Matriz | Tabla». Se dibuja en la columna que le da la fila
+    del Corte de Análisis de platos, antes de cargar los períodos: no los
+    necesita."""
+    return st.segmented_control(
+        "Forma", FORMAS, default=_FORMA_DEFAULT, required=True,
+        key="vt_ing_forma", label_visibility="collapsed", persist_state="page",
+        help="Las tres muestran la misma clasificación.") or _FORMA_DEFAULT
+
+
+def vista_ingenieria(a_ult, etq_ult, dias, a_ant, etq_ant, *, forma, cab,
+                     c_cat):
+    """La vista, dentro de la tarjeta de Análisis de platos (regla #569): la
+    categoría la arma quien mira —su desplegable va en `c_cat`, la columna de
+    la fila del Corte—, las cifras por clase van en `cab` —el renglón del
+    título, a la derecha del interruptor de la vista— y la clasificación, en
+    la forma elegida, en el contenedor desde el que se llama.
+
+    `a_ult` es el agregado por plato del último período de la comparación y
+    `a_ant`, el del anterior (para «antes: …»), los dos de
+    `ventas_platos.agregar`."""
     ss = st.session_state
     ops = subgrupos(a_ult)
     if not ops:
+        st.info("Sin platos con venta en el período para clasificar.")
         return
     rot = {_rotulo(gs): gs for gs in ops}
     # Lo elegido que ya no existe en este período se descarta: un valor fuera
     # de las opciones es un error. Sin nada, el subgrupo que más vende.
     _validas = [x for x in (ss.get("vt_ing_subs") or []) if x in rot]
     ss["vt_ing_subs"] = _validas or [_rotulo(ops[0])]
-
-    with st.container(border=True, key="ajuste_graf_card_izq_ventas_menu"):
-        cab = st.container(key="vt_ing_cabfila")
-        # columnas-internas: la forma y la categoría
-        c1, c2 = st.columns([1.3, 3.2], vertical_alignment="center")
-        with c1:
-            forma = st.segmented_control(
-                "Forma", FORMAS, default=_FORMA_DEFAULT, required=True,
-                key="vt_ing_forma", label_visibility="collapsed",
-                help="Las tres muestran la misma clasificación.") or _FORMA_DEFAULT
-        with c2:
-            elegidos = st.multiselect(
-                "Categoría", list(rot), key="vt_ing_subs",
-                label_visibility="collapsed",
-                placeholder="Subgrupos que compiten entre sí…",
-                help="El método compara platos que compiten por la misma "
-                     "elección: juntá los subgrupos que van juntos en la "
-                     "carta, por ejemplo Fondos con las carnes.")
-        subs = [rot[x] for x in elegidos]
-        m, fuera, res = clasificar(a_ult, subs)
-        if res is None:
-            st.info("Elegí al menos un subgrupo con platos para clasificar.")
-            return
-        antes = {}
-        if a_ant is not None:
-            m_ant, _f, _r = clasificar(a_ant, subs)
-            if not m_ant.empty:
-                antes = dict(zip(m_ant["prod"], m_ant["clase"]))
-        titulo = "Ingeniería de menú · " + " + ".join(s for _g, s in subs)
-        with cab:
-            st.markdown(_html_cab(titulo, res), unsafe_allow_html=True)
-        # Sin el total de pedidos: sería la suma de los de cada plato, y un
-        # pedido con dos fondos contaría dos veces. Los de cada plato sí van.
-        st.caption(
-            f"{etq_ult} · {dias} días con venta · {res['n']} platos, "
-            f"{res['u']:,.0f} unidades, {_soles(res['margen'], 0)} de "
-            f"margen. **Popular**: {res['umbral']:.1%} o más de las unidades "
-            f"(70 % × 1/{res['n']}). **Deja mucho**: {_soles(res['acm'])} o "
-            "más por plato (el promedio ponderado). **Al límite**: a menos de "
-            "5 % de un corte, en los platos que venden "
-            f"{res['piso_limite_u']:,} unidades o más.")
-        if forma == "Matriz":
-            _matriz(m, res, antes, etq_ant)
-        elif forma == "Tabla":
-            _tabla(m, antes, etq_ant)
-        else:
-            _cuadros(m, res, antes, etq_ant)
-        pie = []
-        if fuera:
-            pie.append("**Fuera**: " + " · ".join(
-                f"{f['plato']} ({f['motivo']}"
-                + (f": {_soles(f['costo_u'])} de costo contra "
-                   f"{_soles(f['precio'])}" if f["motivo"].startswith("cuesta")
-                   else "") + ")" for f in fuera) + ".")
-        pie.append("Método: Kasavana y Smith (1982), con las fórmulas de AHLEI. "
-                   "«Al límite» y «con pedidos» son agregados nuestros.")
-        st.caption(" ".join(pie))
+    with c_cat:
+        elegidos = st.multiselect(
+            "Categoría", list(rot), key="vt_ing_subs",
+            label_visibility="collapsed", persist_state="page",
+            placeholder="Subgrupos que compiten entre sí…",
+            help="El método compara platos que compiten por la misma "
+                 "elección: juntá los subgrupos que van juntos en la "
+                 "carta, por ejemplo Fondos con las carnes.")
+    subs = [rot[x] for x in elegidos]
+    m, fuera, res = clasificar(a_ult, subs)
+    if res is None:
+        st.info("Elegí al menos un subgrupo con platos para clasificar.")
+        return
+    antes = {}
+    if a_ant is not None:
+        m_ant, _f, _r = clasificar(a_ant, subs)
+        if not m_ant.empty:
+            antes = dict(zip(m_ant["prod"], m_ant["clase"]))
+    with cab:
+        st.markdown(_html_cab(res), unsafe_allow_html=True)
+    # Qué período se clasifica, dicho con las pastillas a la vista: es el
+    # ÚLTIMO de los elegidos arriba, y el «antes: …» sale del penúltimo.
+    # Sin el total de pedidos: sería la suma de los de cada plato, y un
+    # pedido con dos fondos contaría dos veces. Los de cada plato sí van.
+    st.caption(
+        f"Se clasifica **{etq_ult}**, el último período elegido"
+        + (f"; «antes» es {etq_ant}" if etq_ant else "") + ". "
+        f"{dias} días con venta · {res['n']} platos, "
+        f"{res['u']:,.0f} unidades, {_soles(res['margen'], 0)} de "
+        f"margen. **Popular**: {res['umbral']:.1%} o más de las unidades "
+        f"(70 % × 1/{res['n']}). **Deja mucho**: {_soles(res['acm'])} o "
+        "más por plato (el promedio ponderado). **Al límite**: a menos de "
+        "5 % de un corte, en los platos que venden "
+        f"{res['piso_limite_u']:,} unidades o más.")
+    if forma == "Matriz":
+        _matriz(m, res, antes, etq_ant)
+    elif forma == "Tabla":
+        _tabla(m, antes, etq_ant)
+    else:
+        _cuadros(m, res, antes, etq_ant)
+    pie = []
+    if fuera:
+        pie.append("**Fuera**: " + " · ".join(
+            f"{f['plato']} ({f['motivo']}"
+            + (f": {_soles(f['costo_u'])} de costo contra "
+               f"{_soles(f['precio'])}" if f["motivo"].startswith("cuesta")
+               else "") + ")" for f in fuera) + ".")
+    pie.append("Método: Kasavana y Smith (1982), con las fórmulas de AHLEI. "
+               "«Al límite» y «con pedidos» son agregados nuestros.")
+    st.caption(" ".join(pie))

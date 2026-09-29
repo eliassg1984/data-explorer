@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-568 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+569 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (194)
 
@@ -508,7 +508,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 
-**Streamlit** (154)
+**Streamlit** (155)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -664,6 +664,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 - **#561** — «Por hora» cabe en una pantalla: la cabecera es UNA fila de desplegables y la ficha de la…
+- **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 
 **Datos, R2 y DuckDB** (77)
 
@@ -855,7 +856,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (135)
+**Decisiones de diseño y UX** (136)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -992,6 +993,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
+- **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45341,6 +45343,88 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-29.)
 
+569. **Análisis de platos es UNA tarjeta con dos vistas, y lo que una
+     corrida deja de dibujar no siempre se borra.** 2026-09-29, a pedido:
+     «mi vista de platos … tiene dos tarjetas, podemos hacer que sea solo
+     una y que con algún toggle superior alterne ambas visualizaciones» y,
+     en el mismo pedido, el Ámbito «como línea desplegable, en la misma
+     fila donde están los del top». En `graficos/ventas_platos.py`,
+     `graficos/ventas_menu.py` y `estilos/_80_cards.py`.
+     - **El interruptor va en el renglón del título** (`vt_pl_vista`:
+       Ranking | Ingeniería de menú; abre en Ranking) y los KPI de la
+       vista en pantalla a su derecha. El renglón es un
+       `st.container(horizontal=True)` con `nowrap` y los KPI deslizables,
+       como los del Resumen (#522). El título se fue: el nombre lo dice el
+       interruptor y el «Top 15» que decía ya está marcado en «Mostrar».
+     - **Lo compartido no se mueve al cambiar de vista** (#465). El Corte y
+       las pastillas de los períodos son de las dos: la Ingeniería
+       clasifica el ÚLTIMO período elegido y saca el «antes» del
+       penúltimo, y ahora su línea de umbrales lo dice. `FILA_RANKING` y
+       `FILA_MENU` suman lo mismo y abren con el mismo peso, así que el
+       Corte queda en el mismo x. Y la Categoría de la Ingeniería bajó a
+       28 px: sus etiquetas medían 28 más 5 de margen, la caja 39, y las
+       pastillas bajaban 11 px al pasar a esa vista. Medido a 1366: Corte
+       en y=70 y períodos en y=106 en las dos. Con más subgrupos de los
+       que entran en un renglón, la caja crece de a 24 y no esconde
+       ninguno (probado con seis).
+     - **Cada vista recuerda lo suyo con `persist_state="page"`**, un
+       parámetro de los widgets de Streamlit que está en la 1.59 de acá y
+       en la 1.64 de Cloud (verificado en su código). El control que no se
+       dibuja conserva su valor y, al volver, el NAVEGADOR lo muestra. El
+       truco de siempre, `ss[k] = ss[k]` (el de `preservar_widgets`), sólo
+       salva al backend: el `set_value` viaja al navegador únicamente si
+       el valor es nuevo en ESA corrida, y un widget que se vuelve a montar
+       sin él se pinta en su default mientras Python lee otro valor.
+       Probado: Top 20 + «Subgrupo: Fondos» → Ingeniería → Ranking vuelve
+       con los dos marcados y 18 platos en el gráfico. Lo vigila
+       `test_graficos.py::_pruebas_ventas_platos`: todo `segmented_control`,
+       `selectbox` o `multiselect` con key propia de UNA vista lo lleva.
+     - **El Ámbito es UN desplegable** (`vt_pl_amb`, `opciones_ambito`):
+       toda la carta, cada grupo y cada subgrupo, del que más vende al que
+       menos, con el tipo en el rótulo («Subgrupo: Fondos», que además
+       separa un grupo de un subgrupo del mismo nombre), en vez de «Toda
+       la carta | Grupo | Subgrupo» más un segundo desplegable con cuál.
+       El buscador de platos, que se quedaba solo en su fila, subió a la
+       columna de la tabla, encima de ella; la tabla mide lo del gráfico
+       menos el buscador (`alturas.VENTAS_PLATOS_TABLA`), y las dos
+       columnas terminan a la misma altura. La tarjeta del ranking bajó de
+       594 a 566 px aun con el renglón del interruptor.
+     - **La evolución del plato en foco va adentro**, bajo una línea
+       (`vt_pl_evo_caja`, sin el prefijo `ajuste_graf_card_`, que le
+       daría fondo y borde de tarjeta metida en otra). Ojo: `vt_pl_evo` ya
+       era la key de su GRÁFICO; con la caja llamada igual salió
+       `StreamlitDuplicateElementKey`. La tarjeta va sin techo
+       (`--alto-util`), como iba la de la Ingeniería (#550): con la
+       Ingeniería o con la evolución abierta pasa de una pantalla, y se
+       desliza la página, no la tarjeta (#382).
+     - **Lo que una corrida no vuelve a dibujar se borra SÓLO si la
+       corrida termina limpia.** El navegador corre `clearStaleNodes` al
+       recibir `FINISHED_SUCCESSFULLY` o
+       `FINISHED_FRAGMENT_RUN_SUCCESSFULLY` (leído en el JS de la 1.59);
+       si otra corrida corta ésa —la precarga de las secciones vecinas,
+       #538—, lo viejo queda en pantalla hasta la próxima corrida de ese
+       fragment. Visto una vez de tres: con la fila de la Ingeniería en
+       TRES columnas, el desplegable del Ámbito, que vivía en la cuarta,
+       quedó a lo ancho de la tarjeta, entre la fila y los períodos. Es
+       la #115 con otra causa. La cura es no depender del borrado: las dos
+       vistas escriben las mismas posiciones —cuatro columnas en las dos
+       filas, con un `st.empty()` en la que sobra, y otro `st.empty()`
+       donde la Ingeniería pone su pie cuando el ranking no tiene
+       evolución—. Un `st.empty()` no ocupa lugar (medido:
+       `display: none`, 0 px). El test exige cuatro columnas en las dos.
+     - **Cada clic dibuja sólo la vista en pantalla**, y se nota menos de
+       lo que parecía: medido con Playwright contra el commit anterior en
+       otro puerto, cinco clics por caso con la caché caliente, un cambio
+       de «Medida» en el ranking pasó de ~2,8 s a ~2,4 s y uno de «Forma»
+       en la Ingeniería de ~2,5 s a ~1,5 s. La primera vuelta, con la
+       caché fría, daba 6,5 contra 3,2: no creerle a una sola vuelta.
+     - **Cómo se verificó**: Playwright a 1366×768 con datos reales
+       (ranking, Ingeniería con uno y con seis subgrupos, evolución
+       abierta) y a 390 de ancho, donde el renglón del título se apila:
+       el interruptor arriba y los KPI deslizables abajo.
+
+     (2026-09-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45353,7 +45437,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#568**; la próxima toma el número siguiente.
+> última regla es la **#569**; la próxima toma el número siguiente.
 
 >
 
