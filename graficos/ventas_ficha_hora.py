@@ -506,8 +506,11 @@ def _html_normal(v, previas, dow, hora):
     return "".join(html)
 
 
-def _html_mesa(met, previas, v_hora, conc, dow, hora, n_pedidos):
-    html = [f'<p class="vhh-h3">Por mesa {_info("mesa")}</p>']
+def _html_mesa(met, previas, v_hora, conc, dow, hora, n_pedidos,
+               con_rotulo=True):
+    # El rótulo va en la barra de pestañas cuando la ficha lo pide (#565).
+    html = ([f'<p class="vhh-h3">Por mesa {_info("mesa")}</p>']
+            if con_rotulo else [])
     con = [p for p in previas if p["mesas"]]
     nb = (lambda k: mediana(p[k] for p in con))   # noqa: E731
     n_mesas = mediana(p["mesas"] for p in previas)
@@ -737,13 +740,23 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
             # `vh_op_` de estilos/_80_cards.py (texto con subrayado).
             vista = st.pills("Ver", list(VISTAS), key=_K_VISTA,
                              label_visibility="collapsed") or VISTAS[0]
+            # «POR MESA» sube a la fila de las pestañas (2026-09-29, a
+            # pedido, regla #565): es el título de lo que va justo debajo,
+            # y en su propio renglón le costaba 30 px a los cuadros.
+            if vista == VISTAS[0]:
+                with st.container(key="vhh_rot_mesa", width="content"):
+                    st.markdown(f'<p class="vhh-h3 vhh-h3-barra">Por mesa '
+                                f'{_info("mesa")}</p>',
+                                unsafe_allow_html=True)
             st.button("Cerrar", key="vh_foco_cerrar",
                       icon=":material/close:", on_click=al_cerrar)
     with c_a:
         st.markdown(
             f'<p class="vhh-tit">{_DIAS[dow].capitalize()} {dia.day} '
             f'{cortes.MESES_ABR_ES[dia.month - 1]} · '
-            f'{cortes.etiqueta_hora(hora)}</p><p class="vhh-sub">{sub}</p>'
+            f'{cortes.etiqueta_hora(hora)}'
+            # El subtítulo en el MISMO renglón del título (#565).
+            f'<span class="vhh-sub">{sub}</span></p>'
             f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
             f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Ticket<b>'
             f'{_soles2(v_hora / pax_hora) if pax_hora else "—"}</b></span></p>',
@@ -759,7 +772,8 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
             st.markdown(_html_normal(v_hora, previas, dow, hora),
                         unsafe_allow_html=True)
         with c_b:
-            st.markdown(_html_mesa(met, previas, v_hora, conc, dow, hora, n),
+            st.markdown(_html_mesa(met, previas, v_hora, conc, dow, hora, n,
+                                   con_rotulo=False),
                         unsafe_allow_html=True)
         return
 

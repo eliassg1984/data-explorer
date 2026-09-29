@@ -3683,6 +3683,23 @@ CSS = """    /* ================================================================
         font-size: 12.5px !important;
         color: var(--text-secondary) !important;
     }
+    /* Regla #565: el subtítulo va DENTRO del renglón del título, y «POR
+       MESA» en la fila de las pestañas, separado por una línea. */
+    .st-key-chartcard_ventas_horario_hora .vhh-tit .vhh-sub {
+        margin: 0 0 0 10px !important;
+        font-weight: 400 !important;
+    }
+    /* Sin el -16px de margen de `st.markdown` (regla #162): con él, el
+       rótulo quedaba 8 px más abajo que las pestañas (medido). */
+    .st-key-vhh_rot_mesa [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-h3.vhh-h3-barra {
+        margin: 0 0 0 6px !important;
+        padding-left: 14px !important;
+        border-left: 1px solid var(--border) !important;
+        white-space: nowrap !important;
+    }
     .st-key-chartcard_ventas_horario_hora .vhh-kpis {
         display: flex !important;
         flex-wrap: wrap !important;

@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-564 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+565 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (191)
+**CSS y estilos** (192)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -225,6 +225,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#551** — «Por hora» tiene DOS formas de columnas en «Días × horas» —los días del calendario, que…
 - **#562** — La cabecera de «Por hora» no tiene texto fijo más que el título: los rótulos, los avisos y lo…
 - **#564** — La ficha de la hora va en dos columnas desde arriba: la botonera de vistas son pestañas de…
+- **#565** — En la ficha de la hora, el subtítulo va en el renglón del título y «POR MESA» en la fila de…
 
 **Layout y alturas** (78)
 
@@ -307,7 +308,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 - **#563** — La ficha de la hora entra entera debajo del mapa: la resta del panel se midió de nuevo con la…
 
-**Plotly y figuras** (103)
+**Plotly y figuras** (104)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -412,6 +413,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#536** — Un clic suelto sobre un mapa que se arrastra SÍ se puede atender: un puente de JS lo reenvía…
 - **#549** — El buscador de Volatilidad encuentra CUALQUIER insumo; el ranking sigue filtrado. Los de…
 - **#554** — En el mapa de «Por hora», la fila bajo el cursor se ENMARCA entera y su hora va en negrita;…
+- **#565** — En la ficha de la hora, el subtítulo va en el renglón del título y «POR MESA» en la fila de…
 
 **AgGrid y tablas** (87)
 
@@ -45174,6 +45176,29 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-29.)
 
+565. **En la ficha de la hora, el subtítulo va en el renglón del título y
+     «POR MESA» en la fila de las pestañas.**
+     2026-09-29, a pedido, con captura y flechas, sobre la #564. Los dos
+     tenían renglón propio: el subtítulo («6 pedidos abiertos entre…») bajo
+     el título, y «POR MESA» entre las pestañas y los cuadros.
+
+     - **El subtítulo** es un `<span class="vhh-sub">` dentro del
+       `<p class="vhh-tit">`, con 10 px de aire a la izquierda.
+     - **«POR MESA»** lo dibuja la barra (`vhh_barra`) después de las
+       pestañas, sólo en «Contra lo normal», con una línea que lo separa;
+       `_html_mesa(con_rotulo=False)` deja de dibujarlo abajo.
+     - **Va en su propio contenedor con key (`vhh_rot_mesa`)** para poder
+       quitarle el `-16px` de margen de `st.markdown` (#162) sin tocar
+       otros textos de la barra. Con ese margen el rótulo quedaba 8 px más
+       abajo que las pestañas; la primera versión del arreglo apuntó a
+       `.st-key-vhh_barra [data-testid="stMarkdownContainer"]` y agarró
+       OTRO markdown de la barra (el rótulo oculto de las pestañas), sin
+       mover el que importaba. Medido: los centros de las pestañas, el
+       rótulo y «Cerrar» en 361-362 px.
+     - La ficha en «Contra lo normal» pasa de 311 a 277 px (1366×768).
+
+     (2026-09-29.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45186,7 +45211,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#564**; la próxima toma el número siguiente.
+> última regla es la **#565**; la próxima toma el número siguiente.
 
 >
 
