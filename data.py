@@ -232,7 +232,10 @@ REPORTES = {
         # recetas de venta, las recetas base y el maestro de productos (su
         # factor y su precio). Refrescar desde Movimientos los pide a todos:
         # si no, la seccion mezclaria recetas de hoy con precios de ayer.
+        # Y ordenesproduccion.parquet llego el 2026-09-30 con la seccion
+        # "Produccion" (regla #575): el reporte Produccion del Almacen.
         "archivos_extra": ("salidas.parquet", "porcionamientos.parquet",
+                           "ordenesproduccion.parquet",
                            "paloteoinsumosnivel1.parquet", "recetabase.parquet",
                            "inventariovalorizado.parquet"),
         "icono": ":material/sync_alt:",
@@ -681,6 +684,44 @@ def _datos_demo(archivo, filas=60):
         for col in ("SUB ALMACEN", "USUARIO REG"):
             df[col] = df.groupby("COD PORC")[col].transform("first")
         return df
+
+    if archivo == "ordenesproduccion.parquet":
+        # El GRANO REAL (regla #575): una fila por ORDEN y por receta base
+        # producida en ella, con la cabecera —área, estado, usuario— repetida
+        # en cada una. Casi todas procesadas; alguna generada (no suma: no
+        # produjo nada) y alguna anulada, como en el real. La cantidad va en
+        # la unidad de entrada y el precio es el costo por esa unidad.
+        _recetas = [("(Rs) Salsa de lomo x Kg", "KILOS", 18.0),
+                    ("(Rs) Arroz con choclo 200gr x por", "UND", 1.4),
+                    ("(Rs) Batch Herbal (Bar)", "LITROS", 7.6),
+                    ("(Rs) Creme brulee x und", "UND", 8.5),
+                    ("(Rs) Vinagreta Cesar x Lt", "LITROS", 12.6)]
+        filas = []
+        for i, fecha in enumerate(pd.date_range("2025-01-01", periods=n,
+                                                freq="D")):
+            area = rng.choice(["COCINA", "PRODUCCION", "BARRA", "PASTELERIA"],
+                              p=[0.5, 0.2, 0.15, 0.15])
+            estado = rng.choice(["PROCESADO", "GENERADO", "ANULADO"],
+                                p=[0.94, 0.03, 0.03])
+            usuario = rng.choice(["CARLOS", "MMASIAS"])
+            for item in range(int(rng.integers(1, 4))):
+                prod, unid, precio = _recetas[int(rng.integers(0, 5))]
+                cant = (float(rng.integers(5, 30)) if unid == "UND"
+                        else float(rng.uniform(0.3, 5).round(3)))
+                filas.append({
+                    "COD ORDEN PRODUCCION": f"25{i:08d}",
+                    "ITEM": f"{item + 1:03d}",
+                    "FECHA REGISTRO": fecha + pd.Timedelta(
+                        minutes=int(rng.integers(480, 1080))),
+                    "AREA": area, "NOMBRE ESTADO": estado,
+                    "USUARIO REGISTRO": usuario,
+                    "NOMBRE PRODUCTO": prod,
+                    "NOMBRE FAMILIA": ("BEBIDAS CON ALCOHOL" if "Batch" in prod
+                                       else "ALIMENTOS"),
+                    "CANTIDAD": cant, "UNIDAD": unid, "PRECIO UNIT": precio,
+                    "VALOR ITEM": round(cant * precio, 4),
+                })
+        return pd.DataFrame(filas)
 
     if archivo == "requerimientos.parquet":
         # Mismos códigos de producto que el demo de salidas.parquet

@@ -7638,7 +7638,10 @@ def _pruebas_cabecera_por_hora():
 
 
 def _pruebas_movimientos_periodo():
-    """Movimientos › las dos tarjetas «por período» (graficos/movimientos_periodo.py).
+    """Movimientos › las tarjetas «por período» (graficos/movimientos_periodo.py).
+
+    Desde el 2026-09-30 son cuatro: la de PRODUCCIÓN no suma las órdenes
+    generadas aunque tengan líneas (regla #575).
 
     Lo que fija son las CUENTAS de las reglas #508 y #509, que son las que se
     leen distinto de lo que parecen: un documento es un CÓDIGO y no una fila;
@@ -7973,6 +7976,89 @@ def _pruebas_movimientos_periodo():
           (".st-key-mpp_fila" in mp._css(mp.PORCIONAMIENTOS),
            ".st-key-mov_pporc_gran" in mp._css(mp.PORCIONAMIENTOS)),
           (True, True))
+
+    # ── PRODUCCIÓN: la orden GENERADA no suma aunque tenga líneas (#575) ──
+    # Semana 37: O1 de Cocina procesada con dos recetas (36 + 14 = 50), O2
+    # de Producción GENERADA con una línea de 54 —MÁS que O1: si sumara, el
+    # Detalle abriría en ella— y O3 de Barra ANULADA. Semana 38: O4 de
+    # Pastelería, 68. Los nombres de columna son los de la consulta del
+    # Sheet (`ordenesproduccion`).
+    do = pd.DataFrame({
+        "COD ORDEN PRODUCCION": ["O1", "O1", "O2", "O3", "O4"],
+        "FECHA REGISTRO": pd.to_datetime(
+            ["2026-09-08 10:00"] * 2 + ["2026-09-09 11:00", "2026-09-10 12:00",
+                                        "2026-09-15 09:00"]),
+        "AREA": ["COCINA", "COCINA", "PRODUCCION", "BARRA", "PASTELERIA"],
+        "NOMBRE ESTADO": ["PROCESADO", "PROCESADO", "GENERADO", "ANULADO",
+                          "PROCESADO"],
+        "USUARIO REGISTRO": ["CARLOS", "CARLOS", "MMASIAS", "CARLOS", "CARLOS"],
+        "NOMBRE FAMILIA": ["ALIMENTOS", "ALIMENTOS", "ALIMENTOS",
+                           "BEBIDAS CON ALCOHOL", "ALIMENTOS"],
+        "NOMBRE PRODUCTO": ["(Rs) Salsa", "(Rs) Arroz", "(Rs) Salsa",
+                            "(Rs) Batch", "(Rs) Creme brulee"],
+        "CANTIDAD": [2.0, 10.0, 3.0, 1.0, 8.0],
+        "UNIDAD": ["KILOS", "UND", "KILOS", "LITROS", "UND"],
+        "PRECIO UNIT": [18.0, 1.4, 18.0, 7.6, 8.5],
+        "VALOR ITEM": [36.0, 14.0, 54.0, 7.6, 68.0],
+    })
+    co = dict(fecha="FECHA REGISTRO", doc="COD ORDEN PRODUCCION", area="AREA",
+              estado="NOMBRE ESTADO", tipo="USUARIO REGISTRO",
+              fam="NOMBRE FAMILIA", prod="NOMBRE PRODUCTO", cant="CANTIDAD",
+              unid="UNIDAD", punit="PRECIO UNIT", val="VALOR ITEM")
+    bo = mp.lineas_documentos(do, **co)
+    check("prod.: la unidad viaja por línea; sin ella, vacía",
+          (bo["unid"].tolist(),
+           set(mp.lineas_documentos(do, **{**co, "unid": None})["unid"])),
+          (["KILOS", "UND", "KILOS", "LITROS", "UND"], {""}))
+    bo["clave"] = _periodo_serie(bo["fecha"], "Semana")
+    ro = mp.resumen_por_periodo(bo, mp.PRODUCCION)
+    check("prod.: la generada no suma; anulada y generada se cuentan",
+          ro.loc["2026-S37", ["valor", "lineas", "docs", "anulados",
+                              "sin_procesar"]].tolist(),
+          [50.0, 2, 1, 1, 1])
+    check("…y en requerimientos la misma fila SÍ sumaría (el criterio es "
+          "del lado)", float(mp.resumen_por_periodo(bo).loc["2026-S37",
+                                                            "valor"]), 104.0)
+    check("prod.: lo que no suma, contado una vez",
+          (mp.no_suman(bo, mp.PRODUCCION), mp.no_suman(bo)),
+          ((1, 1, 0), (1, 0, 0)))
+    check("prod.: la nota habla en femenino y nombra la generada aun con "
+          "filtro de familia (tiene familia y producto)",
+          (mp.nota_no_suman(bo, mp.PRODUCCION)[0],
+           mp.nota_no_suman(bo, mp.PRODUCCION, vacios_nombrables=False)[0]),
+          ("1 anulada · 1 sin procesar", "1 anulada · 1 sin procesar"))
+    check("prod.: la nota larga dice por qué no suma",
+          "no movieron el kardex" in mp.nota_no_suman(bo, mp.PRODUCCION)[1],
+          True)
+    amb_o = bo[bo["clave"] == "2026-S37"]
+    check("prod.: el Detalle abre en la mayor PROCESADA, no en la generada",
+          (mp._mayor_valido(amb_o, mp.PRODUCCION), mp._mayor_valido(amb_o)),
+          ("O1", "O2"))
+    fo, to = mp.tabla_documentos(amb_o, "O1", mp.PRODUCCION)
+    check("prod.: la lista rotula la generada aunque tenga líneas",
+          sorted(zip(fo["codigo"], fo["tipo"], fo["__estado"], fo["__elbl"])),
+          [("O1", "CARLOS", "", ""), ("O2", "MMASIAS", "sin procesar",
+                                      "Sin procesar"),
+           ("O3", "CARLOS", "anulado", "Anulada")])
+    check("prod.: el total del Detalle suma sólo la procesada",
+          (to["codigo"], to["area"], to["lineas"], to["valor"]),
+          ("1 OP", "+2 no suman", "2", "S/ 50.00"))
+    vo = mp.vista_periodos(bo, "Semana", rango, orden, mp.PRODUCCION)
+    check("prod.: las barras son las de lo procesado",
+          vo["tot"], [50.0, 68.0])
+    check("prod.: el hover cuenta órdenes como «OP»",
+          "1 OP · 2 líneas" in str(mp.figura_periodos(vo, alturas.COMPACTO)
+                                  .data[-1].customdata[0][3]), True)
+    fro, _ = mp.tabla_resumen(vo)
+    check("prod.: el Resumen avisa lo que quedó fuera",
+          fro["estado"].tolist(), ["1 anulada · 1 sin procesar", "✓"])
+    check("prod.: el CSS sale del molde con SUS prefijos",
+          (".st-key-mpd_fila" in mp._css(mp.PRODUCCION),
+           ".st-key-mov_pprod_gran" in mp._css(mp.PRODUCCION)), (True, True))
+    lados = (mp.REQUERIMIENTOS, mp.SALIDAS, mp.PORCIONAMIENTOS, mp.PRODUCCION)
+    check("los cuatro lados no comparten prefijos ni tarjeta (conviven en la "
+          "página)", [len({getattr(x, a) for x in lados})
+                      for a in ("k", "c", "card")], [4, 4, 4])
     return fallos
 
 

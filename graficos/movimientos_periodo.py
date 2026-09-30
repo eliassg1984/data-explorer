@@ -1,6 +1,6 @@
-"""graficos.movimientos_periodo - las tres tarjetas «por período» de
-Movimientos: «Requerimientos por período», «Salidas por período» y
-«Porcionamientos».
+"""graficos.movimientos_periodo - las cuatro tarjetas «por período» de
+Movimientos: «Requerimientos por período», «Salidas por período»,
+«Porcionamientos» y «Producción».
 
 Nació el 2026-09-23 con la de requerimientos, a pedido: «poner en primera
 vista una tarjeta como la que tengo para la vista compras por período […]
@@ -33,6 +33,18 @@ merma en vez de la cuenta), la KPI de lo porcionado, y las grillas del
 Resumen y del Detalle, que listan porcionamientos y sus cortes—. El filtro
 de tipo lo ocupa el Usuario que porcionó, y no hay Familia: la consulta no
 la trae. Ver `arquitectura.md` regla #510.
+
+EL CUARTO LADO, PRODUCCIÓN (2026-09-30, a pedido: «obtener datos de los
+registros de producción de mi sistema de almacén […] y agregarlo como una
+vista de mi reporte de movimientos»). Es el reporte «Producción» del
+Almacén (`Sp_RepOrdenProduccion`) sobre `ordenesproduccion.parquet`: una
+fila por ORDEN y por receta base producida en ella, con la forma de los
+requerimientos —el documento es la orden, las líneas son lo que produjo—,
+así que usa `lineas_documentos` tal cual. Lo único suyo es que una orden
+GENERADA no suma aunque tenga líneas (`suma_sin_procesar=False`): en
+requerimientos un pedido generado ya es un pedido, pero una orden sin
+procesar no produjo nada — medido, no movió el kardex. Ver `arquitectura.md`
+regla #575.
 
 ES LA GEMELA DE «COMPRAS POR PERÍODO» (graficos/compras/semanal.py), y a
 propósito comparte sus cuentas en vez de copiarlas: el plan de las
@@ -71,7 +83,8 @@ necesita por su selector de fecha, que escala a una corrida completa (regla
 fragment de su sección (`seccion_perezosa`) y ningún control suyo escala.
 
 Puntos de entrada: `tarjeta_requerimientos_periodo()`,
-`tarjeta_salidas_periodo()` y `tarjeta_porcionamientos_periodo()`. Lo demás
+`tarjeta_salidas_periodo()`, `tarjeta_porcionamientos_periodo()` y
+`tarjeta_produccion_periodo()`. Lo demás
 son las piezas puras que las arman, y que `test_graficos.py` prueba sin
 navegador.
 """
@@ -127,7 +140,9 @@ class Lado:
     el «Top N por …» del selector de Producto. `con_familia` en False
     cuando el parquet no trae la familia (no se dibuja un filtro que no
     filtra nada). `merma` marca el lado de porcionamientos: ver el docstring
-    del módulo y la regla #510."""
+    del módulo y la regla #510. `suma_sin_procesar` en False cuando un
+    documento GENERADO no suma aunque tenga líneas: la orden de producción
+    sin procesar no produjo nada (regla #575)."""
     k: str
     c: str
     card: str
@@ -145,6 +160,7 @@ class Lado:
     rot_total: str = "Total de la vista"
     con_familia: bool = True
     merma: bool = False
+    suma_sin_procesar: bool = True
 
     def cuenta(self, n):
         """«1 requerimiento», «3 salidas»."""
@@ -158,6 +174,10 @@ class Lado:
     def anulado_rotulo(self):
         """Lo que escribe la celda del valor de un anulado."""
         return "Anulada" if self.fem else "Anulado"
+
+    def los(self):
+        """El artículo del plural: «los requerimientos», «las salidas»."""
+        return "las" if self.fem else "los"
 
 
 REQUERIMIENTOS = Lado(
@@ -183,6 +203,17 @@ PORCIONAMIENTOS = Lado(
                "Ofrece los del área elegida, por merma.",
     medida="merma en soles", top="merma", rot_total="Merma de la vista",
     con_familia=False, merma=True)
+
+# «OP» es como el propio Almacén abrevia la orden de producción
+# (`TPARAMETRO.lEnlaceOP_Evento`); «órd.» se leía como una errata.
+PRODUCCION = Lado(
+    k="mov_pprod", c="mpd", card="ajuste_graf_card_izq_mov_prod_periodo",
+    sing="orden", plur="órdenes", corto="OP", fem=True,
+    titulo="Valorizado producido", accion="produjo",
+    rotulo_tipo="Usuario", tipo_todos="Todos los usuarios",
+    ayuda_tipo="Acota la tarjeta a quien registró la orden de producción. "
+               "Ofrece los del área elegida, por valorizado.",
+    suma_sin_procesar=False)
 
 
 # ===========================================================================
@@ -272,7 +303,7 @@ def _texto(d, col, vacio=""):
 
 
 def lineas_documentos(d, *, fecha, doc, area, estado, fam, prod, cant, val,
-                      punit=None, tipo=None):
+                      punit=None, tipo=None, unid=None):
     """Las líneas de un parquet de Movimientos con los nombres de la tarjeta.
 
     Una fila por línea: `fecha`, `doc` (el código), `area`, `tipo`, `estado`
@@ -285,7 +316,11 @@ def lineas_documentos(d, *, fecha, doc, area, estado, fam, prod, cant, val,
 
     Sin precio unitario (salidas.parquet no lo trae) se DESPEJA de la línea:
     valor ÷ cantidad, y vacío donde la cantidad no es positiva — 106 líneas
-    de salidas vienen con cantidad 0."""
+    de salidas vienen con cantidad 0.
+
+    `unid`, la unidad de la cantidad, sólo la trae producción (#575): una
+    orden produce kilos de una salsa y unidades de un postre, y «0.304» sin
+    unidad no se lee. Sin ella la columna `unid` va vacía."""
     idx = d.index
     nan = pd.Series(float("nan"), index=idx)
     valor = pd.to_numeric(d[val], errors="coerce").fillna(0.0)
@@ -303,6 +338,7 @@ def lineas_documentos(d, *, fecha, doc, area, estado, fam, prod, cant, val,
         "estado": _texto(d, estado, "PROCESADO").str.upper(),
         "fam": _texto(d, fam),
         "prod": _texto(d, prod),
+        "unid": _texto(d, unid),
         "cant": cantidad,
         "punit": precio,
         "valor": valor,
@@ -451,12 +487,22 @@ def colores_area(orden, nombres):
     return salida
 
 
-def _validas(bl):
-    """Las líneas que SUMAN: con producto y de un documento no anulado."""
-    return bl[~bl["vacio"] & (bl["estado"] != _ANULADO)]
+def _no_suma_sin_procesar(lado):
+    """True si en `lado` un documento GENERADO no suma aunque tenga líneas
+    (producción, #575). Sin lado, el criterio de siempre: sí suma."""
+    return lado is not None and not lado.suma_sin_procesar
 
 
-def resumen_por_periodo(bl):
+def _validas(bl, lado=None):
+    """Las líneas que SUMAN: con producto y de un documento no anulado. En
+    producción, además, de una orden PROCESADA (#575)."""
+    m = ~bl["vacio"] & (bl["estado"] != _ANULADO)
+    if _no_suma_sin_procesar(lado):
+        m &= bl["estado"] != _GENERADO
+    return bl[m]
+
+
+def resumen_por_periodo(bl, lado=None):
     """Una fila por período —la columna `clave` de `bl`—, en orden.
 
     `bl` son TODAS las líneas del recorte, las vacías incluidas. Columnas,
@@ -468,8 +514,9 @@ def resumen_por_periodo(bl):
 
     Las líneas de porcionamientos (`lineas_porcionamientos`) traen además
     `costo` y `cortes`, y salen sumadas con esos mismos nombres: lo
-    porcionado y los cortes del período (regla #510)."""
-    dv = _validas(bl)
+    porcionado y los cortes del período (regla #510). `lado` sólo cambia
+    algo en producción, donde lo generado tampoco suma (#575)."""
+    dv = _validas(bl, lado)
     g = (dv.groupby("clave")
            .agg(valor=("valor", "sum"), lineas=("valor", "size"),
                 docs=("doc", "nunique"), areas=("area", "nunique"))
@@ -484,17 +531,21 @@ def resumen_por_periodo(bl):
     return g
 
 
-def no_suman(bl):
+def no_suman(bl, lado=None):
     """`(anulados, sin procesar, sin ítems)`: los documentos del recorte que
     no suman en la barra, contados una sola vez cada uno.
 
     Anulado manda sobre todo lo demás; «sin procesar» es el GENERADO que
     además no tiene ítems (el que sí los tiene SUMA, y lo dice la columna
-    Estado); «sin ítems» es el resto de los documentos vacíos."""
+    Estado) —en producción, todo GENERADO: ahí no suma nunca (#575)—;
+    «sin ítems» es el resto de los documentos vacíos."""
     por_doc = (bl.groupby("doc")
                  .agg(estado=("estado", "first"), vacio=("vacio", "all")))
     anul = por_doc["estado"] == _ANULADO
-    sin_proc = ~anul & por_doc["vacio"] & (por_doc["estado"] == _GENERADO)
+    generado = por_doc["estado"] == _GENERADO
+    sin_proc = ~anul & generado
+    if not _no_suma_sin_procesar(lado):
+        sin_proc &= por_doc["vacio"]
     sin_items = ~anul & por_doc["vacio"] & (por_doc["estado"] != _GENERADO)
     return int(anul.sum()), int(sin_proc.sum()), int(sin_items.sum())
 
@@ -586,7 +637,7 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS):
     sus rótulos (`eje`, `hover`, `fila`), el resumen (`res`), los tramos
     (`trazas`), las variaciones y sus notas. Vacío (`claves == []`) si no
     hay nada válido que dibujar."""
-    res = resumen_por_periodo(bl)
+    res = resumen_por_periodo(bl, lado)
     claves = res.index.tolist()
     v = {"claves": claves, "res": res, "gran": gran, "rango": rango,
          "lado": lado}
@@ -619,7 +670,7 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS):
     def _ant(var):
         return corto[var[2]] if var and var[2] is not None else ""
 
-    dv = _validas(bl)
+    dv = _validas(bl, lado)
     v.update(
         eje=[rot[c][0] for c in claves], hover=hover, corto=corto, fila=fila,
         dias=dias, tot=tot, variaciones=variaciones,
@@ -816,10 +867,13 @@ def tabla_documentos(amb, sel, lado=REQUERIMIENTOS):
     estado[anul] = _EST_ANULADO
     # Lo que la celda del valor escribe EN LUGAR del monto: el anulado y el
     # documento que no tiene ítems (con o sin procesar). El que tiene ítems
-    # y está sin procesar muestra su valor, en ámbar: sí suma.
+    # y está sin procesar muestra su valor, en ámbar: sí suma. Salvo en
+    # producción, donde la orden sin procesar no produjo nada y no suma
+    # (#575): ahí la celda dice «Sin procesar» aunque tenga líneas.
+    sp_fuera = sin_proc if _no_suma_sin_procesar(lado) else vacio & sin_proc
     rotulo = pd.Series("", index=docs.index, dtype=object)
     rotulo[vacio & ~anul] = "Sin ítems"
-    rotulo[vacio & sin_proc] = "Sin procesar"
+    rotulo[sp_fuera] = "Sin procesar"
     rotulo[anul] = lado.anulado_rotulo()
     filas = pd.DataFrame({
         "registro": docs["fecha"].dt.strftime("%Y-%m-%d %H:%M"),
@@ -833,7 +887,7 @@ def tabla_documentos(amb, sel, lado=REQUERIMIENTOS):
         "__doc": docs["doc"],
         "__sel": docs["doc"] == sel,
     })
-    suman = ~anul & ~vacio
+    suman = ~anul & ~vacio & ~sp_fuera
     n_val, n_fuera = int(suman.sum()), int((~suman).sum())
     # El total sale de los valores SIN redondear, como la barra y el
     # Resumen: sumar los de la columna (redondeados a céntimos de a uno)
@@ -951,11 +1005,11 @@ def tabla_cortes(cortes, unid_inicial):
     return filas, total
 
 
-def _mayor_valido(amb):
+def _mayor_valido(amb, lado=None):
     """El código del documento válido de mayor valor del período: el que la
     tabla de líneas muestra si nadie eligió otro (el criterio de Compras: la
     de al lado nunca está vacía)."""
-    v = _validas(amb)
+    v = _validas(amb, lado)
     if v.empty:
         v = amb
     s = v.groupby("doc")["valor"].sum().sort_values(ascending=False)
@@ -1017,10 +1071,15 @@ def nota_no_suman(bl_scope, lado, vacios_nombrables=True):
 
     `bl_scope` son las líneas del recorte (todas). Con un filtro de familia
     o de producto puesto, los documentos sin ítems no son de la vista —no
-    tienen ni una ni otro— y no se nombran (`vacios_nombrables=False`)."""
-    n_an, n_sp, n_vac = no_suman(bl_scope)
+    tienen ni una ni otro— y no se nombran (`vacios_nombrables=False`).
+    En producción los sin procesar SÍ tienen líneas, con su familia y su
+    producto, así que se nombran igual (#575)."""
+    n_an, n_sp, n_vac = no_suman(bl_scope, lado)
+    sp_con_lineas = _no_suma_sin_procesar(lado)
     if not vacios_nombrables:
-        n_sp = n_vac = 0
+        n_vac = 0
+        if not sp_con_lineas:
+            n_sp = 0
     if not (n_an or n_sp or n_vac):
         return None
     corto, largo = [], []
@@ -1030,7 +1089,10 @@ def nota_no_suman(bl_scope, lado, vacios_nombrables=True):
                      "Detalle)")
     if n_sp:
         corto.append(f"{n_sp:,} sin procesar")
-        largo.append(f"{n_sp:,} sin procesar que todavía no tienen ítems")
+        largo.append(f"{n_sp:,} sin procesar"
+                     + (" —se generaron pero no se procesaron: no movieron el "
+                        "kardex—" if sp_con_lineas
+                        else " que todavía no tienen ítems"))
     if n_vac:
         # De qué área son casi todos —en requerimientos, GASTOS—: es lo que
         # hace que el número se entienda.
@@ -1258,6 +1320,19 @@ def tarjeta_porcionamientos_periodo(d, *, cols, orden=()):
     _tarjeta(d, PORCIONAMIENTOS, cols, orden)
 
 
+def tarjeta_produccion_periodo(d, *, cols, orden=()):
+    """Producción: la misma tarjeta sobre `ordenesproduccion.parquet` (el
+    reporte «Producción» del Almacén, `Sp_RepOrdenProduccion`), con el
+    valorizado de lo producido en la barra (regla #575).
+
+    `cols` son los de `lineas_documentos` —el documento es la ORDEN y cada
+    línea una receta base producida— más `tipo` (el usuario que registró la
+    orden) y `unid` (la unidad de la cantidad). Las órdenes GENERADAS no
+    suman: no produjeron nada. `orden` es el de requerimientos, como en las
+    otras tres."""
+    _tarjeta(d, PRODUCCION, cols, orden)
+
+
 def _tarjeta(d, lado, cols, orden):
     k, c = lado.k, lado.c
     with st.container(border=True, key=lado.card):
@@ -1275,6 +1350,8 @@ def _tarjeta(d, lado, cols, orden):
             base, cortes_todos = lineas_documentos(d, **cols), None
         lin = base[~base["vacio"]]
         valida = lin["estado"] != _ANULADO
+        if _no_suma_sin_procesar(lado):
+            valida &= lin["estado"] != _GENERADO
         con_tipo = bool(lado.rotulo_tipo and cols.get("tipo"))
 
         def _rank(columna, mascara):
@@ -1432,7 +1509,7 @@ def _tarjeta(d, lado, cols, orden):
         nota = nota_no_suman(
             bl, lado,
             vacios_nombrables=fam_sel == _FAM_TODAS and prod_sel == _PROD_TODOS)
-        dv = _validas(bl)
+        dv = _validas(bl, lado)
         # Porcionamientos cierra la fila con lo porcionado y le da a cada
         # área su % de merma PROPIO en el tooltip (#510).
         kw_kpi = (dict(costo=float(dv["costo"].sum()),
@@ -1512,8 +1589,9 @@ def _tarjeta(d, lado, cols, orden):
             ayuda_modo = (f"Qué se ve debajo del gráfico. **Resumen**: una fila "
                           f"por barra —sus {lado.plur}, líneas, áreas, "
                           "valorizado, variación y estado— más el total. "
-                          f"**Detalle**: los {lado.plur} de la barra que toques "
-                          "y, al costado, las líneas del que elijas.")
+                          f"**Detalle**: {lado.los()} {lado.plur} de la barra "
+                          "que toques y, al costado, las líneas "
+                          + ("de la" if lado.fem else "del") + " que elijas.")
         with st.container(horizontal=True, gap="small", key=f"{c}_pie"):
             st.segmented_control(
                 "Qué se ve abajo", _MODO_OPCIONES, default=_MODO_DEFAULT,
@@ -1567,7 +1645,7 @@ def _tarjeta(d, lado, cols, orden):
         amb = bl[bl["clave"] == foco]
         sel = st.session_state.get(f"{k}_doc")
         if sel not in set(amb["doc"]):
-            sel = _mayor_valido(amb)
+            sel = _mayor_valido(amb, lado)
         if lado.merma:
             # Los porcionamientos del período y los CORTES del elegido, que
             # viven aparte (`lineas_porcionamientos`): no son filas de `amb`.
@@ -1585,6 +1663,10 @@ def _tarjeta(d, lado, cols, orden):
                 "punit": pd.to_numeric(lin_sel["punit"], errors="coerce").round(4),
                 "valor": lin_sel["valor"].astype(float).round(2),
             })
+            # La unidad de la cantidad, si el lado la trae (producción,
+            # #575): la grilla la escribe al lado del número.
+            if lin_sel["unid"].ne("").any():
+                filas_lin["__unid"] = lin_sel["unid"].map(unidad_corta)
             _nl = len(filas_lin)
             total_lin = {
                 "prod": f"Total · {_nl} línea" + ("" if _nl == 1 else "s"),

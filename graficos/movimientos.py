@@ -1,10 +1,11 @@
 """
 graficos.movimientos — dashboard ÚNICO de Movimientos (requerimientos,
-salidas y porcionamientos).
+salidas, porcionamientos y producción).
 
-Una sola página con las OCHO vistas del flujo de stock (la octava, desde
+Una sola página con las NUEVE vistas del flujo de stock (la octava, desde
 el 2026-09-28, «Consumo según recetas»: lo que usaron las VENTAS en
-insumos de compra, en `graficos/movimientos_consumo.py`, regla #558). Las de requerimientos y salidas vivían hasta el 2026-09-05 en dos
+insumos de compra, en `graficos/movimientos_consumo.py`, regla #558; la
+novena, desde el 2026-09-30, «Producción»). Las de requerimientos y salidas vivían hasta el 2026-09-05 en dos
 reportes que un chip Requerimiento/Salidas alternaba. A pedido, al ver que
 la Evolución ya mostraba los dos lados juntos: «esto ya no debería estar, ya
 que ahora muestra ambos».
@@ -15,6 +16,18 @@ que ahora muestra ambos».
                                        cinco cuadros) · Tabla
     Porcionamientos                    Porcionamientos (la merma por período)
       (porcionamientos.parquet)
+    Producción                         Producción (lo producido por período)
+      (ordenesproduccion.parquet)
+
+QUÉ PASÓ EL 2026-09-30. Entró «Producción», a pedido: el reporte
+«Producción» del Almacén (`Sp_RepOrdenProduccion`) llevado a una consulta
+del Sheet y a la MISMA tarjeta «por período», con un cuarto `Lado` —la
+orden es el documento; lo que produjo, sus líneas— que no suma las órdenes
+generadas: no produjeron nada (`graficos/movimientos_periodo.py::
+tarjeta_produccion_periodo`). Va después de Porcionamientos, que es la otra
+transformación que se registra en el Almacén. La recortan los DOS chips de
+la franja: su área y su familia son las mismas de requerimientos. Ver
+`arquitectura.md` regla #575.
 
 QUÉ PASÓ EL 2026-09-24 (2). «Top productos · salidas» —un gráfico de barras
 con los diez productos de mayor valorizado dado de baja— se retiró a pedido
@@ -126,7 +139,7 @@ Punto de entrada público: renderizar_graficos_movimientos().
 import pandas as pd
 import streamlit as st
 
-from data import cargar as _cargar_reporte
+from data import cargar as _cargar_reporte, secrets_disponibles, sello_datos
 from estilos import TAM_FUENTE
 from tablas import renderizar_aggrid_desktop
 from graficos.base import (
@@ -141,7 +154,8 @@ from graficos.movimientos_comun import _rango_vigente
 # retoque.
 from graficos.movimientos_periodo import (
     _ANULADO, SALIDAS, orden_areas, tarjeta_porcionamientos_periodo,
-    tarjeta_requerimientos_periodo, tarjeta_salidas_periodo,
+    tarjeta_produccion_periodo, tarjeta_requerimientos_periodo,
+    tarjeta_salidas_periodo,
 )
 from graficos import drill_tablas
 from graficos.movimientos_consumo import tarjeta_consumo
@@ -186,6 +200,12 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # pedido. Una sola vista, con el nombre que se pidió; el ícono son las
     # tijeras del corte.
     ("Porcionamientos", (("Porcionamientos", "Porcionamientos", ":material/content_cut:"),)),
+    # «Producción» (2026-09-30, regla #575): las órdenes de producción del
+    # Almacén, lo que las áreas preparan con sus recetas base. Va junto a
+    # Porcionamientos —las dos transformaciones que se registran en el
+    # Almacén— y antes de Consumo, que es la cuenta TEÓRICA de las ventas.
+    # El ícono es una licuadora: una preparación.
+    ("Producción", (("Producción", "Producción", ":material/blender:"),)),
     # «Consumo según recetas» (2026-09-28, regla #558): cuarto grupo, al
     # final. Lo que las VENTAS usaron en insumos de compra, bajando por las
     # recetas base y los porcionamientos — el lado teórico de lo que las
@@ -212,6 +232,7 @@ _PILA = pila_sin_tablas((
     ("mov_sec_detalle_sal", "Detalle de salidas"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
     ("mov_sec_porc",        "Porcionamientos"),
+    ("mov_sec_prod",        "Producción"),
     ("mov_sec_consumo",     "Consumo según recetas"),
 ))
 
@@ -388,6 +409,70 @@ def _cargar_porcionamientos_del_rango(sub_sel=()):
         _elegidas = {str(s).strip() for s in sub_sel}
         d = d[d[col_area].fillna("").astype(str).str.strip().isin(_elegidas)]
     return d
+
+
+ARCHIVO_PRODUCCION = "ordenesproduccion.parquet"
+"""El reporte «Producción» del Almacén (`Sp_RepOrdenProduccion`), llevado
+al Sheet de consultas el 2026-09-30 con el nombre `ordenesproduccion`.
+Regla #575."""
+
+_COLS_PROD = {
+    "fecha": "FECHA REGISTRO",
+    "doc": "COD ORDEN PRODUCCION",
+    "area": "AREA",
+    "estado": "NOMBRE ESTADO",
+    "tipo": "USUARIO REGISTRO",
+    "fam": "NOMBRE FAMILIA",
+    "prod": "NOMBRE PRODUCTO",
+    "cant": "CANTIDAD",
+    "unid": "UNIDAD",
+    "punit": "PRECIO UNIT",
+    "val": "VALOR ITEM",
+}
+"""Las columnas de `ordenesproduccion.parquet` por el nombre que pide
+`lineas_documentos`. La fecha es la de REGISTRO, como el reporte del
+Almacén: su «Filtrado por Proceso» filtra también por el registro (el SP
+usa `fRegistro` en las dos ramas). `CANTIDAD` va en la unidad de ENTRADA
+del producto (`UNIDAD`), la del kardex."""
+
+
+def _cargar_produccion_del_rango(fam_sel=(), sub_sel=()):
+    """`(df, falta)`: `ordenesproduccion.parquet` recortado al rango de la
+    franja y a sus dos chips.
+
+    `falta` es True si el parquet todavía no existe en R2 —la fila del Sheet
+    no se agregó o la extracción no corrió—: la sección lo dice en vez del
+    error rojo de `data.cargar`. Se sabe por el sello (el `LastModified`,
+    cacheado un minuto), sin intentar la descarga. En modo demo no hay R2 y
+    carga el demo.
+
+    Los DOS chips recortan: el área es la de `vArea` y la familia la del
+    maestro, los mismos catálogos que requerimientos (comparado contra los
+    dos parquets el 2026-09-30). El borde superior va como `< fin + 1 día`
+    porque `FECHA REGISTRO` trae hora (regla #321)."""
+    if secrets_disponibles() and not sello_datos(ARCHIVO_PRODUCCION):
+        return None, True
+    df = _cargar_reporte(ARCHIVO_PRODUCCION)
+    if df is None or df.empty:
+        return None, False
+    col_fecha = _resolver(df, _COLS_PROD["fecha"])
+    if not col_fecha:
+        return None, False
+    d = df.copy()
+    d["_fecha"] = pd.to_datetime(d[col_fecha], errors="coerce")
+    d = d.dropna(subset=["_fecha"])
+    rango = _rango_vigente()
+    if rango:
+        _ini, _fin = rango
+        d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
+    col_area = _resolver(d, _COLS_PROD["area"])
+    if sub_sel and col_area:
+        _elegidas = {str(s).strip() for s in sub_sel}
+        d = d[d[col_area].fillna("").astype(str).str.strip().isin(_elegidas)]
+    col_fam = _resolver(d, _COLS_PROD["fam"])
+    if fam_sel and col_fam:
+        d = d[d[col_fam].astype(str).isin(fam_sel)]
+    return d, False
 
 
 # ─── Punto de entrada público ───────────────────────────────────────────────
@@ -637,6 +722,26 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
             cols={nombre: _resolver(d_porc, columna)
                   for nombre, columna in _COLS_PORC.items()})
 
+    def _dib_prod():
+        # Se carga ACÁ, como Porcionamientos: sólo cuando la sección sale
+        # del esqueleto. Los dos chips la recortan (regla #575).
+        d_prod, falta = _cargar_produccion_del_rango(fam_sel, sub_sel)
+        if d_prod is None:
+            with st.container(border=True,
+                              key="ajuste_graf_card_izq_mov_prod_vacia"):
+                if falta:
+                    st.info("Todavía no hay datos de producción: falta la "
+                            "consulta «ordenesproduccion» en el Sheet de "
+                            "consultas, o que corra la extracción.")
+                else:
+                    st.info(f"No se pudo cargar {ARCHIVO_PRODUCCION}: esta "
+                            "sección queda vacía.")
+            return
+        tarjeta_produccion_periodo(
+            d_prod, orden=orden,
+            cols={nombre: _resolver(d_prod, columna)
+                  for nombre, columna in _COLS_PROD.items()})
+
     def _dib_consumo():
         # Carga y calcula ACÁ, como Porcionamientos: sólo cuando la sección
         # sale del esqueleto (la última de la pila). La familia del chip
@@ -652,6 +757,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         "mov_sec_detalle_sal": _dib_detalle_sal,
         "mov_sec_tabla_sal":   _dib_tabla_sal,
         "mov_sec_porc":        _dib_porc,
+        "mov_sec_prod":        _dib_prod,
         "mov_sec_consumo":     _dib_consumo,
     }
 

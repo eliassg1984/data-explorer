@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-574 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+575 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -671,7 +671,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 
-**Datos, R2 y DuckDB** (79)
+**Datos, R2 y DuckDB** (80)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -752,6 +752,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#560** — «Consumo según recetas» se compara contra lo COMPRADO del rango —en la ficha de cada insumo y…
 - **#571** — «Carta impresa» es un atributo del PRODUCTO: va en la consulta de la carta, no en la de ventas
 - **#573** — La Carta costeada no lee las ventas hasta que algo las muestra
+- **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 
 **SUNAT y SIRE** (44)
 
@@ -863,7 +864,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (138)
+**Decisiones de diseño y UX** (139)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1003,6 +1004,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 - **#571** — «Carta impresa» es un atributo del PRODUCTO: va en la consulta de la carta, no en la de ventas
 - **#574** — La Carta costeada: el título con sus desplegables en un renglón, los porcionamientos de un…
+- **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45694,6 +45696,73 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-30.)
 
+575. **Movimientos › «Producción»: el reporte Producción del Almacén, con
+     las órdenes GENERADAS fuera de la suma.** 2026-09-30, a pedido:
+     «mapear este SP […] obtener datos de los registros de producción de mi
+     sistema de almacén […] llevarlo a una consulta para mi google sheet y
+     agregarlo como una vista de mi reporte de movimientos».
+     - **El SP es `ALMACEN.DBO.Sp_RepOrdenProduccion`** (menú Producción del
+       Almacén). Un SELECT dinámico de `MORDENPRODUCCION` (cabecera) +
+       `DORDENPRODUCCION` (una línea por RECETA BASE producida) +
+       `MRECETABASE`/`TPRODUCTO`/`vUnidadMedida`/`vArea`/`vEstadoDocumento`/
+       `vGrupoResponsable`; nada se calcula adentro. Los parámetros del
+       formulario: tipo de fecha `R`/`P`, fechas, área, estado, responsable
+       (LIKE), un filtro de SQL crudo (Artículo/Evento) y los datos del hotel
+       para eventos (`OPENDATASOURCE`, sólo si `TPARAMETRO.lEnlaceOP_Evento`
+       = 1: acá es 0). «Agrupar» lo hace el reporte, no el SP; sede y
+       «ver todo extensión» no se usan.
+     - **«Filtrado por Proceso» no filtra por el proceso**: las dos ramas del
+       SP comparan `fRegistro`. La vista usa `FECHA REGISTRO`, como el
+       reporte; hasta 2025 la mayoría se procesaba días después (2026: el
+       90 % en menos de una hora).
+     - **La consulta del Sheet se llama `ordenesproduccion`** →
+       `ordenesproduccion.parquet`: el historial entero (25.050 líneas, 8.991
+       órdenes desde mayo 2022, 0,65 s en el servidor), sin USE ni SET
+       TRANSACTION, NOLOCK tabla por tabla y nombres completos. Verificada
+       corriendo el código del SP sobre producción: 0 diferencias en sus 16
+       columnas. Suma familia, subfamilia, nombre del maestro, valor
+       (cantidad × precio), unidad de salida, día contable y usuarios, y
+       corrige dos filtros del SP que hoy no cambian ninguna fila: el INNER
+       JOIN a la unidad (dejaba afuera los productos sin unidad de entrada)
+       y el LIKE del responsable (descarta los NULL).
+     - **Una orden GENERADA no suma, aunque tenga líneas.** Medido: las
+       órdenes sin procesar no tienen ni un movimiento tipo 94 en
+       `MSUBKARDEX`, o sea que no produjeron nada. Es lo contrario de
+       requerimientos (un pedido generado ya es un pedido), así que va en el
+       `Lado`: `suma_sin_procesar=False`, que `_validas`, `no_suman`,
+       `tabla_documentos`, `nota_no_suman` y `_mayor_valido` leen. Sin
+       `lado` todo sigue como antes. 154 de 8.999 órdenes están generadas y
+       39 anuladas.
+     - **Es la cuarta tarjeta «por período»** (`PRODUCCION`, prefijos
+       `mov_pprod`/`mpd`, tarjeta `…_mov_prod_periodo`): la orden es el
+       documento y cada receta base, una línea — `lineas_documentos` tal
+       cual, con `unid` nuevo para que la cantidad diga «8.16 kg» o «29
+       porc.» (una orden produce kilos y unidades a la vez). El filtro de
+       tipo es el usuario que registró, como en porcionamientos. «OP» es la
+       abreviatura (la del propio Almacén). La recortan los DOS chips: área
+       y familia son los catálogos de requerimientos (comparado).
+     - **Mientras el parquet no existe en R2, la sección lo dice** en vez del
+       error rojo de `data.cargar`: se sabe por el sello (`sello_datos`
+       vacío), sin intentar la descarga.
+     - **El valor es el del documento, como el reporte del POS, y no siempre
+       el del kardex.** En los últimos 12 meses 19 de 3.567 órdenes difieren
+       en más de S/ 50 (S/ 532.310 contra S/ 509.378). La peor: la 2600001224
+       (Puré de Manzana, 25/04/2026) dice 4 kg a S/ 7.645/kg = S/ 30.581,
+       pero el kardex entró 0,0026 kg por S/ 20 — el precio salió de dividir
+       el costo por la cantidad del kardex; abril 2026 sale en S/ 85 mil. En
+       las demás es al revés: el kardex tiene 3-6 veces la cantidad (la orden
+       procesada más de una vez). Queda así, fiel al reporte, hasta que se
+       decida si la vista toma el valor del kardex.
+     - **En Cloud, reiniciar la app** (#357): `movimientos.py` importa una
+       función nueva de `movimientos_periodo.py`.
+     - **Cómo se verificó**: pruebas en `test_graficos.py` (lo que suma y lo
+       que no, contra el mismo df leído como requerimientos) y la tarjeta
+       con las 25.050 filas reales en una página fuera del repo (AppTest en
+       los cuatro granos y el histórico entero; Playwright a 1398px: 628px
+       de alto en Resumen y en Detalle).
+
+     (2026-09-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45706,7 +45775,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#569**; la próxima toma el número siguiente.
+> última regla es la **#575**; la próxima toma el número siguiente.
 
 >
 

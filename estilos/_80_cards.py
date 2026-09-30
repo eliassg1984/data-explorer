@@ -1304,6 +1304,7 @@ CSS = """    /* ================================================================
         /* cediéndole su sitio a la tabla. Regla #508. Y su hermana de        */
         /* salidas, `…_mov_sal_periodo`, el mismo día. Regla #509. Y la de    */
         /* porcionamientos, `…_mov_porc_periodo`, el 2026-09-24. Regla #510.  */
+        /* Y la de producción, `…_mov_prod_periodo`, el 2026-09-30. #575.     */
         /* Y `…_izq_ventas_resumen` (Ventas › Resumen ejecutivo) el mismo     */
         /* día: su barra por período ahora es la de Compras, con la tabla     */
         /* DENTRO de la tarjeta; con el techo sacaba barra propia. #516.      */
@@ -1318,7 +1319,7 @@ CSS = """    /* ================================================================
         /* nacer el 2026-09-28: es un iframe que se mide solo, con la tabla  */
         /* dinámica y la ficha del insumo; adentro sólo scrollean las        */
         /* tablas. Con techo tendría barra propia encima. #558.              */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_platos):not(.st-key-ajuste_graf_card_izq_mov_consumo),
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_mov_prod_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_platos):not(.st-key-ajuste_graf_card_izq_mov_consumo),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1336,6 +1337,7 @@ CSS = """    /* ================================================================
         div.st-key-ajuste_graf_card_izq_mov_periodo,
         div.st-key-ajuste_graf_card_izq_mov_sal_periodo,
         div.st-key-ajuste_graf_card_izq_mov_porc_periodo,
+        div.st-key-ajuste_graf_card_izq_mov_prod_periodo,
         div.st-key-ajuste_graf_card_izq_mov_consumo {
             padding-top: 16px !important;
             padding-bottom: 16px !important;

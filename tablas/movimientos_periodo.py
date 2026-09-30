@@ -1,6 +1,9 @@
 """tablas.movimientos_periodo - las grillas de las tarjetas «por período»
 de Movimientos (graficos/movimientos_periodo.py): la de requerimientos, la
-de salidas y la de porcionamientos, que son la misma tarjeta con tres lados.
+de salidas, la de porcionamientos y la de producción, que son la misma
+tarjeta con cuatro lados. Producción (2026-09-30, regla #575) usa las
+grillas de requerimientos tal cual: sólo le suma a las líneas la unidad de
+la cantidad (`__unid`).
 
 Porcionamientos (2026-09-24, regla #510) tiene sus propias tres grillas
 —`renderizar_periodos_porc`, `renderizar_porcionamientos_mov` y
@@ -551,7 +554,11 @@ def renderizar_lineas_mov(tp, altura, key, total=None):
 
     Es `compras_semanal.renderizar_lineas_semanal` con otra cantidad (ver
     `_JS_CANT_MOV`). Sin fecha, código ni área, a propósito: son los mismos
-    en todas las filas y ya los dice la fila marcada de al lado."""
+    en todas las filas y ya los dice la fila marcada de al lado.
+
+    Con una columna oculta `__unid` (producción, regla #575) la cantidad
+    lleva su unidad al lado: una orden produce kilos y unidades a la vez."""
+    con_unidad = "__unid" in tp.columns
     gb = GridOptionsBuilder.from_dataframe(tp)
     gb.configure_default_column(
         resizable=False, sortable=True, filter=False, editable=False,
@@ -560,8 +567,11 @@ def renderizar_lineas_mov(tp, altura, key, total=None):
     gb.configure_column("prod", header_name="Producto", width=180,
                         minWidth=100, tooltipField="prod")
     gb.configure_column("cant", header_name="Cantidad", type=["numericColumn"],
-                        valueFormatter=_JS_CANT_MOV,
+                        valueFormatter=(_JS_CANT_UNID if con_unidad
+                                        else _JS_CANT_MOV),
                         width=98, minWidth=98, suppressSizeToFit=True)
+    if con_unidad:
+        gb.configure_column("__unid", hide=True)
     gb.configure_column("punit", header_name="P. unit.", type=["numericColumn"],
                         valueFormatter=_JS_SOLES,
                         width=100, minWidth=100, suppressSizeToFit=True)
