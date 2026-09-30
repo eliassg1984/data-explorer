@@ -98,6 +98,31 @@ REPORTES = {
         ),
         "kpi_fecha": "FECHA_EMISION_DOC",
     },
+    # REPORTE PROPIO desde el 2026-09-30, a pedido («que documentos sunat se
+    # vea en otra botonera del rail, como si fuese un reporte más, ya no
+    # dentro de compras»). Hasta ese día era una vista de Compras —la única
+    # que no estaba en su pila, un "destino aparte"— y ya se comportaba como
+    # un reporte: otra fuente (el SIRE, no el parquet), sin los chips de
+    # Familia/Subfamilia y con el ÚNICO calendario entero de Compras dentro
+    # de su tarjeta. El drill no cambió: sigue en
+    # `graficos/compras/documentos_sunat.py`; lo despacha
+    # `graficos/sunat_reporte.py`. Regla #577.
+    #
+    # `archivo` es compras.parquet a propósito: es el lado "sistema" del
+    # cruce documento a documento, y el botón Refrescar lo pide. Lo de SUNAT
+    # no es un parquet que se refresque desde acá: lo trae la tarjeta con su
+    # propio botón de sincronizar.
+    #
+    # Sin `kpis`: los de Compras cuentan documentos DEL SISTEMA, y en este
+    # reporte un «Documentos» sin apellido se leería como los de SUNAT. Lo
+    # que cuadra y lo que no lo dice la tira de KPIs de la propia tarjeta.
+    "Documentos SUNAT": {
+        "label_corto": "Documentos SUNAT",
+        "label_largo": "Documentos SUNAT",
+        "label_rail": "SUNAT",
+        "archivo": "compras.parquet",
+        "icono": ":material/fact_check:",
+    },
     "Inventario Valorizado": {
         # La clave "Inventario Valorizado" es la IDENTIDAD INTERNA del reporte
         # (dispatcher de graficos/, _sugerencias del asistente, el slug CSS

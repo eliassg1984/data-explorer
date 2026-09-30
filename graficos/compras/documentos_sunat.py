@@ -1,5 +1,12 @@
 """graficos.compras.documentos_sunat — drill «Documentos SUNAT».
 
+DESDE EL 2026-09-30 ES UN REPORTE PROPIO, no una vista de Compras: lo
+despacha `graficos/sunat_reporte.py` y el rango es el de ese reporte
+(`clave_rango("Documentos SUNAT")`). El módulo se quedó en este paquete
+porque todo lo que importa —`_comun`, el CSS del ranking, las pruebas— vive
+acá. Donde abajo dice "Compras > Documentos SUNAT" o "la vista", léase el
+reporte. Regla #577.
+
 Los comprobantes que los PROVEEDORES emitieron hacia nuestro RUC, tal como
 los tiene anotados SUNAT en el Registro de Compras Electrónico (SIRE/RCE).
 
@@ -3903,7 +3910,7 @@ def _rango_vigente():
     Ver `arquitectura.md` regla #458.
     """
     return _dia_o_rango(
-        restaurar_eco(clave_rango("Compras", usa_carga_rango=False)))
+        restaurar_eco(clave_rango("Documentos SUNAT", usa_carga_rango=False)))
 
 
 def _dia_o_rango(rango):
@@ -3939,7 +3946,7 @@ contabilidad."""
 
 
 def renderizar_documentos_sunat(d, col_fecha):
-    """Punto de entrada del drill. Lo llama `graficos/compras/__init__.py`.
+    """Punto de entrada del drill. Lo llama `graficos/sunat_reporte.py`.
 
     TRES TARJETAS, y la tercera es condicional (2026-08-28):
 

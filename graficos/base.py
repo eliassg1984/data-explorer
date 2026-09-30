@@ -1894,8 +1894,8 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
     # ── Se llegó desde el panel del rail pidiendo una vista (regla #568) ──
     # `navegacion.py::_ir_a_vista` ya la dejó elegida en `state_key` y pide
     # el salto en `CLAVE_SALTO_VISTA`. Acá se traduce a su SECCIÓN, que es
-    # lo que sabe buscar `seccion_perezosa`. Un destino aparte (Documentos
-    # SUNAT) no tiene sección: con la vista elegida ya se dibuja, que es lo
+    # lo que sabe buscar `seccion_perezosa`. Un destino aparte (el reporte
+    # Documentos SUNAT) no tiene sección: con la vista elegida ya se dibuja, que es lo
     # que hace un clic en el rail. El destino anterior se borra siempre, así
     # que uno que no llegó a consumirse no se queda esperando a otra pila.
     # `getattr` y no el atributo a secas: en Cloud este módulo puede
@@ -1947,8 +1947,15 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                 )
     # ── Copia VERTICAL del rail, para la columna izquierda ───────────────
     # Solo se dibuja si el dashboard declara `secciones`, o sea si su página
-    # es una PILA que se lee bajando. Hoy la tiene Compras; los otros 8
-    # dashboards no pasan nada y no pagan nada: ni rail extra, ni iframe.
+    # es una PILA que se lee bajando. Hoy la declaran todos.
+    #
+    # `secciones=()` —una tupla VACÍA, no `None`— es la página sin pila: un
+    # reporte que es UN destino aparte, hoy «Documentos SUNAT» (2026-09-30,
+    # regla #577; hasta ese día era el destino aparte DENTRO de Compras).
+    # Lleva la lista y el temporizador igual que antes: la lista es el panel
+    # del reporte activo en la columna, y el temporizador escribe la vista en
+    # la franja y la marca (el paso 0, `FUERA`). Por eso las dos guardas de
+    # abajo son `is not None` y no la verdad de la tupla.
     #
     # `secciones` es `((clave_contenedor, id_vista), ...)` EN EL ORDEN de la
     # página. El id de vista es el mismo que el del rail, así que el slug del
@@ -1973,7 +1980,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
     # `navegacion.py::_CSS_FRANJA_VISTAS`, y en la cascada el origen de
     # ANIMACIÓN va por DEBAJO de las declaraciones `!important` del autor.
     # Ver arquitectura.md regla #200.
-    if secciones:
+    if secciones is not None:
         # 2026-09-01: acá se dibujaba el rótulo "Vistas", el gemelo del
         # "Reportes" de `navegacion.py`. Se retiró a pedido, y el cambio de
         # comportamiento lo dejó sin sitio además de sin razón: al scrollear,
@@ -2154,7 +2161,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
     # (Inventario, Ventas, Movimientos, Recetas, Ajuste) las secciones de la
     # pila se quedaban en esqueleto para siempre — no hay quien apriete su
     # botón invisible. Ver `arquitectura.md` regla #408.
-    if secciones:
+    if secciones is not None:
         # Un temporizador que mide geometría, no observers. El porqué de cada
         # decisión está en el propio JS de abajo; en resumen: los umbrales de
         # `IntersectionObserver` no alcanzan para marcar secciones más altas
@@ -2171,8 +2178,9 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         _mapa = [{"sec": _cl, "btn": f"{btn_prefix}lat_{_slug_url(_oid)}",
                    "go": f"pila_go_{_cl}", "lbl": _rotulos.get(_oid, _oid)}
                  for _cl, _oid in secciones]
-        # ¿La vista elegida es un DESTINO APARTE? (Compras › Documentos
-        # SUNAT: no está en `secciones`, y estando ahí la pila no se dibuja.)
+        # ¿La vista elegida es un DESTINO APARTE? (No está en `secciones`, y
+        # estando ahí la pila no se dibuja. Hoy: el reporte «Documentos
+        # SUNAT», que no tiene pila — `secciones=()`, regla #577.)
         # Lo dice Python, que lo sabe, en vez de que el JS lo deduzca de
         # qué secciones hay en el DOM. Ver el paso 0 del temporizador.
         _fuera = sel not in {_oid for _, _oid in secciones}
@@ -2234,7 +2242,7 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
                     var caja = raiz.getBoundingClientRect();
 
                     // ── 0. Un DESTINO APARTE no tiene pila que mirar ─────
-                    // (Compras › Documentos SUNAT.) Ninguna seccion de MAPA
+                    // (El reporte Documentos SUNAT.) Ninguna seccion de MAPA
                     // esta en el DOM, asi que el paso 1 no llega a decidir
                     // nada y la columna se quedaba con Reportes. La salida
                     // era la franja de vistas; desde que no se dibuja en

@@ -4236,11 +4236,18 @@ def _pruebas_hook_del_rail_bajo_secciones():
     if not hooks:
         return fallos
 
+    # La guarda es `if secciones is not None:` desde el 2026-09-30: una
+    # tupla VACÍA es un reporte sin pila (Documentos SUNAT, regla #577) y
+    # también lleva el temporizador. Se acepta el nombre suelto o comparado.
     guardas = []
     n = padre.get(hooks[0])
     while n is not None:
-        if isinstance(n, ast.If) and isinstance(n.test, ast.Name):
-            guardas.append(n.test.id)
+        if isinstance(n, ast.If):
+            _t = n.test
+            if isinstance(_t, ast.Compare) and isinstance(_t.left, ast.Name):
+                _t = _t.left
+            if isinstance(_t, ast.Name):
+                guardas.append(_t.id)
         n = padre.get(n)
 
     check("el hook cuelga de `secciones`", "secciones" in guardas,

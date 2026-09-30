@@ -21,7 +21,8 @@ from estado_rango import (
 )
 from cortes import cortes_disponibles
 import franja_fecha
-from graficos.compras import bounds_fecha_de_la_vista, SEC_ABRE_EN_EL_MES
+from graficos.compras import SEC_ABRE_EN_EL_MES
+from graficos.sunat_reporte import bounds_fecha as bounds_fecha_sunat
 from inyecciones import inject_error_overlay, inject_element_inspector, inject_diseno_visual, inject_herramientas, inject_sello_actualizacion, inject_calendario_es, inject_fullscreen_app
 # Por la ruta del SUBMÓDULO y no desde el paquete: un nombre nuevo pedido al
 # `inyecciones` que Cloud ya tiene cargado tira la app (regla #357).
@@ -458,6 +459,12 @@ es_ajuste = (reporte == "Ajuste de Inventario")
 # no-herramienta tienen dashboard y esta rama queda sin reportes activos —
 # se deja el mecanismo listo para el próximo reporte que no tenga uno.
 REPORTES_INICIO_TABLA = ()
+
+# Reportes cuyo calendario entero vive DENTRO de su tarjeta y consulta al
+# SIRE, no al parquet: topes del registro hasta HOY, y la franja no dibuja
+# el pill (dos widgets con la key del rango son una excepción). Hoy uno,
+# Documentos SUNAT — una vista de Compras hasta el 2026-09-30, regla #577.
+REPORTES_FECHA_EN_TARJETA_SUNAT = ("Documentos SUNAT",)
 _vista_default = "Tabla" if reporte in REPORTES_INICIO_TABLA else "Gráficos"
 
 
@@ -502,22 +509,22 @@ _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
 # de que el default del reporte sean 12 meses.
 _max_parquet = fecha_max_full
 
-# Una vista puede filtrar OTRO dataset que el del reporte, y entonces los
-# topes del calendario no son los del parquet. Hoy solo Compras >
-# Documentos SUNAT, que le pregunta al SIRE: otra fuente, que llega más
+# Un reporte puede filtrar OTRO dataset que el de su parquet, y entonces los
+# topes del calendario no son los del parquet. Hoy solo Documentos SUNAT
+# (una vista de Compras hasta el 2026-09-30, regla #577), que le pregunta
+# al SIRE: otra fuente, que llega más
 # adelante y que además sabe contestar EN VIVO por el día de hoy. Medido
 # el 2026-08-24: el parquet de Compras llegaba al 21 y en SUNAT ya había
 # comprobantes del 24 — tres días que existían y que el calendario no
 # dejaba ni elegir.
 #
-# Se ENSANCHA, nunca se reemplaza: la unión de los dos. Y al salir de esa
-# vista los topes vuelven a los del parquet, así que `asegurar_rango`
-# (justo acá abajo) recorta el rango guardado — un rango que quedó en días
-# que solo el SIRE cubre se corre al último día del parquet en vez de
-# reventar el `date_input` con un valor fuera de bounds. Ver
-# `arquitectura.md` regla #197.
-if _franja_con_fecha and reporte == "Compras":
-    _b_vista = bounds_fecha_de_la_vista()
+# Se ENSANCHA, nunca se reemplaza: la unión de los dos. Ver
+# `arquitectura.md` regla #197. (Mientras fue una vista de Compras compartía
+# la clave del rango con el resto del reporte, y al salir de ella los topes
+# encogían: `asegurar_rango` tenía que recortar lo elegido. Con su propio
+# reporte, su rango es suyo y los topes no cambian bajo sus pies.)
+if _franja_con_fecha and reporte in REPORTES_FECHA_EN_TARJETA_SUNAT:
+    _b_vista = bounds_fecha_sunat()
     if _b_vista:
         # Cada extremo por separado: el piso puede faltar (sin parquet del
         # registro) y el techo —hoy— existe siempre.
@@ -613,7 +620,13 @@ _mes_default = (
 #
 # Los otros siete reportes NO cambian: ahí el pill de la franja sigue siendo
 # el control de fecha.
-if reporte == "Compras" and fecha_min_full and fecha_max_full:
+#
+# Documentos SUNAT abre igual, y por herencia: fue una vista de Compras
+# hasta el 2026-09-30 y compartía este rango (regla #577). Doce meses del
+# registro hasta HOY — su techo es el de `bounds_fecha_sunat`, no el del
+# parquet.
+if (reporte in ("Compras", *REPORTES_FECHA_EN_TARJETA_SUNAT)
+        and fecha_min_full and fecha_max_full):
     _v12 = periodo.ventana("12m", _ancla_mes, minimo=fecha_min_full)
     if _v12:
         fecha_ini_default, fecha_fin_default = _v12[0].date(), _v12[1].date()
@@ -816,7 +829,13 @@ with _fila_top:
             # canónica del rango, ver el docstring de `franja_fecha`—. Con
             # la franja fuera de juego esa negociación desaparece: en
             # Compras el único que puede dibujarlo es ese drill.
-            _franja_dibuja_fecha = reporte != "Compras"
+            #
+            # Documentos SUNAT, reporte propio desde el 2026-09-30 (regla
+            # #577), tampoco: su tarjeta dibuja el pill entero adentro, y
+            # dos widgets con la key del rango son una excepción.
+            _franja_dibuja_fecha = (
+                reporte != "Compras"
+                and reporte not in REPORTES_FECHA_EN_TARJETA_SUNAT)
             if _franja_dibuja_fecha:
                 franja_fecha.render()
 
