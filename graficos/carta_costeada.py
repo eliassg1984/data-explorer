@@ -79,15 +79,23 @@ from utils import _norm
 ARCHIVO = "cartacosteada.parquet"
 
 VER = ("Carta completa", "Combos")
-VER_OFERTA = ("Completa", "Impresa", "No impresa", "Combos")
-"""Las opciones de «Ver» cuando la consulta trae «Tipo de Oferta» (regla
-#571): la carta entera, la impresa, la que no y los combos. Sin la columna
-—un parquet de antes de la regla— quedan las dos de siempre. «Carta» se cae
-del rótulo porque ya lo dice el título de la tarjeta, y con él las cuatro
-no entraban en la fila de controles a 1366px (medido: 362px sin él)."""
+"""El desplegable «Ver» del renglón del título (regla #574)."""
 
-OFERTAS = {"Impresa": "Carta impresa", "No impresa": "Carta no impresa"}
-"""Opción de «Ver» → valor de «Tipo de Oferta» que filtra."""
+OFERTA_TODA = "Toda la carta"
+OFERTAS = ("Carta impresa", "Carta no impresa")
+"""Los valores de «Tipo de Oferta» de la consulta (regla #571), que son
+también las opciones de su desplegable, detrás de «Toda la carta». Sin la
+columna —un parquet de antes de la regla— el desplegable no se dibuja."""
+
+SUBTITULO = "% de costo sobre el precio neto de Salón, combos incluidos"
+"""Lo que decía el título al lado del nombre; desde la regla #574 aparece
+al pasar el cursor sobre «Carta costeada»."""
+
+_K_VER = "rec_carta_vista"
+_K_OFERTA = "rec_carta_oferta"
+"""Keys nuevas y no las del `segmented_control` de antes (`rec_carta_ver`):
+un desplegable que hereda un valor que no está entre sus opciones es un
+error de Streamlit."""
 TIPOS = ("Todos", "Receta", "Directo", "Combo", "Sin enlace", "No aplica",
          "Sin costo")
 
@@ -159,11 +167,11 @@ con el elegido fuera del filtro, el panel sigue a la primera fila."""
 _K_MAS = "rec_carta_mas_cols"
 """El interruptor «Más columnas» (regla #570): arranca apagado."""
 
-PROPORCION = (0.635, 0.365)
-"""Tabla | producto elegido. Con las columnas de siempre la tabla mide
-736px (38 de la casilla de selección, 696 de columnas y el borde) y a
-1366×768 con la columna del rail plegada le tocan ~750: el panel se queda
-con ~430, lo que ya tenía la dona al lado de la receta."""
+PROPORCION = (0.6, 0.4)
+"""Tabla | producto elegido. Sin «P. neto» (regla #574) las columnas de
+siempre miden 678px con la casilla de selección, y a 1323px de ancho —la
+pantalla del usuario— le tocan ~688: el panel se queda con ~458, y los
+nombres de la receta ganan 30px."""
 
 
 def _num(df, col):
@@ -256,7 +264,7 @@ def preparar(df, incluir_inactivos=False):
     # Vacío sin la columna, o con un nBoton fuera de 0-19 (la consulta lo
     # deja nulo a propósito, para que se note).
     t["Oferta"] = _texto(d, c["OFERTA"]).str.upper().map(
-        {v.upper(): v for v in OFERTAS.values()}).fillna("")
+        {v.upper(): v for v in OFERTAS}).fillna("")
     t = t.sort_values(["Pct", "Producto"], ascending=[False, True])
     return t.reset_index(drop=True), n_sin_precio
 
@@ -459,7 +467,12 @@ def columnas_carta(mas=False, con_ventas_=True, movil=False):
         cols.append("Margen")
         if con_ventas_:
             cols.append("Vendidos")
-    cols += ["Precio", "Neto", "Costo"]
+    cols.append("Precio")
+    if mas:
+        # «P. neto» se esconde con las demás desde la regla #574: es el precio
+        # ÷ 1,235, y el % de costo ya está calculado sobre él.
+        cols.append("Neto")
+    cols.append("Costo")
     if mas:
         cols += ["Tipo", "Actualizado", "UltimaVenta"]
     return cols
@@ -497,7 +510,7 @@ def _tabla_carta(t, pos_foco, rango, mas=False, dias=DIAS_VENDIDOS):
     cfg = {
         "Grupo": st.column_config.TextColumn(pinned=fija, width=100),
         "Subgrupo": st.column_config.TextColumn(pinned=fija, width=114),
-        "Producto": st.column_config.TextColumn(pinned=fija or movil, width=190),
+        "Producto": st.column_config.TextColumn(pinned=fija or movil, width=210),
         "% costo": st.column_config.Column(
             width=64, help="Costo ÷ precio neto de Salón (sin IGV ni recargo). "
                            "«—»: sin costo cargado en el POS."),
@@ -791,20 +804,101 @@ def receta_base(df_rb, cod, escala=1.0, bases=frozenset()):
     return out.sort_values("Costo", ascending=False).reset_index(drop=True)[cols]
 
 
+# ─── Los porcionamientos (regla #574) ─────────────────────────────────────
+# Un insumo de la receta es PORCIONADO cuando sale de un porcionamiento: su
+# código es un `COD PROD FINAL` de porcionamientos.parquet (93 insumos de
+# recetas al 2026-09-30, 49 de ellos además con receta base). Su costo en la
+# receta es el precio promedio del almacén, que en un porcionado suele ser
+# el del ÚLTIMO porcionamiento: la Pesca del día, S/ 26,78 en la receta y en
+# el porcionamiento del 26/09. El parquet trae una fila por CORTE con la
+# cabecera repetida (regla #510): acá se lee la fila del corte pedido, una
+# por porcionamiento.
+_N_PORC = 8
+"""Cuántos porcionamientos se muestran, del más nuevo al más viejo."""
+
+
+def codigos_porcionados(df_po):
+    """Los códigos de almacén que salen de algún porcionamiento. Pura."""
+    if df_po is None or df_po.empty:
+        return frozenset()
+    c = _resolver(df_po, ["COD PROD FINAL"])
+    if not c:
+        return frozenset()
+    return frozenset(df_po[c].dropna().astype(str).str.strip())
+
+
+def porcionamientos_de(df_po, cod, n=_N_PORC):
+    """Los últimos `n` porcionamientos de los que salió `cod`, del más nuevo
+    al más viejo: Fecha, De (lo que se porcionó), Porcionado y UnidIni
+    (cuánto), Salio y UnidFin (cuánto salió de ESTE corte), Merma (% de lo
+    porcionado) y Costo (por unidad de este corte: lo que hereda la receta).
+    Pura."""
+    cols = ["Fecha", "De", "Porcionado", "UnidIni", "Salio", "UnidFin",
+            "Merma", "Costo"]
+    if df_po is None or df_po.empty:
+        return pd.DataFrame(columns=cols)
+    c = {k: _resolver(df_po, [k]) for k in (
+        "COD PORC", "COD PROD FINAL", "FEC REGIST", "PROD INICIAL",
+        "UNID PROD INIC", "CANT A PORCIONAR", "CANT MERMA", "CANT RESULT",
+        "UNID PROD FIN", "PREC PROM PROD FIN")}
+    if not (c["COD PROD FINAL"] and c["FEC REGIST"]):
+        return pd.DataFrame(columns=cols)
+    d = df_po[df_po[c["COD PROD FINAL"]].astype(str).str.strip() == str(cod).strip()]
+    if c["COD PORC"]:
+        d = d.drop_duplicates(subset=[c["COD PORC"]])
+    d = d.assign(_f=pd.to_datetime(d[c["FEC REGIST"]], errors="coerce"))
+    d = d.sort_values("_f", ascending=False, kind="stable").head(n)
+    porc = _num(d, c["CANT A PORCIONAR"]).fillna(0.0)
+    merma = _num(d, c["CANT MERMA"]).fillna(0.0)
+    out = pd.DataFrame({
+        "Fecha": d["_f"],
+        "De": _texto(d, c["PROD INICIAL"]),
+        "Porcionado": porc,
+        "UnidIni": _texto(d, c["UNID PROD INIC"]),
+        "Salio": _num(d, c["CANT RESULT"]).fillna(0.0),
+        "UnidFin": _texto(d, c["UNID PROD FIN"]),
+        "Merma": (merma / porc.where(porc > 0) * 100).fillna(0.0),
+        "Costo": _num(d, c["PREC PROM PROD FIN"]).fillna(0.0),
+    })
+    return out.reset_index(drop=True)[cols]
+
+
+def costo_de_origen(costo_unit, costo_base, costo_porc):
+    """Si el costo por unidad de la receta sale de la receta base o del
+    último porcionamiento: «base» o «porc», el que esté más cerca (uno solo
+    si falta el otro). Es con qué abre el detalle de un insumo que tiene las
+    dos cosas. Pura."""
+    if costo_base is None and costo_porc is None:
+        return None
+    if costo_porc is None:
+        return "base"
+    if costo_base is None:
+        return "porc"
+    return ("base" if abs(costo_unit - costo_base) <= abs(costo_unit - costo_porc)
+            else "porc")
+
+
 def _escala(cantidad, factor):
     """Cuántas unidades de la receta base usa una línea: su cantidad (en la
     unidad de la receta) ÷ el factor a la unidad del kardex."""
     return float(cantidad) / float(factor) if factor and factor > 0 else float(cantidad)
 
 
-def _filas_clic(r, bases):
+def _filas_clic(r, bases, porcs=frozenset()):
     """Lo que un clic en la fila `i` de la tabla `r` necesita saber."""
     cods = r["Cod"] if "Cod" in r.columns else pd.Series("", index=r.index)
     facts = r["Factor"] if "Factor" in r.columns else pd.Series(0.0, index=r.index)
     return [{"cod": str(c), "nombre": str(n), "escala": _escala(q, fa),
-             "costo": float(co), "es_base": str(c) in bases}
+             "costo": float(co), "es_base": str(c) in bases,
+             "es_porc": str(c) in porcs}
             for c, n, q, fa, co in zip(cods, r["Insumo"], r["Cantidad"], facts,
                                        r["Costo"])]
+
+
+def _abre(fila):
+    """Si una fila se puede abrir: tiene receta base o sale de un
+    porcionamiento."""
+    return bool(fila.get("es_base") or fila.get("es_porc"))
 
 
 def _al_elegir_en_receta(key, plato, filas):
@@ -814,7 +908,7 @@ def _al_elegir_en_receta(key, plato, filas):
     gen = (st.session_state.get(_K_BASE) or {}).get("gen", 0)
     estado = {"plato": plato, "ruta": [], "gen": gen}
     if fila is not None and 0 <= fila < len(filas):
-        if filas[fila]["es_base"]:
+        if _abre(filas[fila]):
             estado["ruta"] = [filas[fila]]
         else:
             estado["aviso"] = filas[fila]["nombre"]
@@ -825,7 +919,7 @@ def _al_elegir_en_base(key, plato, ruta, filas):
     """Clic en una receta base abierta: si esa fila también es receta base,
     se abre ella (un nivel más adentro)."""
     fila = _fila_elegida(st.session_state.get(key))
-    if fila is not None and 0 <= fila < len(filas) and filas[fila]["es_base"]:
+    if fila is not None and 0 <= fila < len(filas) and _abre(filas[fila]):
         e = st.session_state.get(_K_BASE) or {}
         st.session_state[_K_BASE] = {"plato": plato, "ruta": ruta + [filas[fila]],
                                      "gen": e.get("gen", 0)}
@@ -860,10 +954,15 @@ def _estado_base(plato):
 
 
 _CFG_RECETA = {
-    # Suman 366 + los 36 de la casilla de selección: el panel mide ~406 a
-    # 1366px con el rail plegado (medido; con los anchos automáticos el
-    # número del «%» quedaba cortado contra el borde).
-    "Insumo": st.column_config.TextColumn(width=146),
+    # Suman 396 + los 36 de la casilla de selección: el panel mide ~441 a
+    # 1323px, la pantalla del usuario (regla #574; con los anchos
+    # automáticos el número del «%» quedaba cortado contra el borde).
+    # El «▸» se explica en la ayuda de la cabecera y no en un renglón
+    # debajo de la tabla: eran 36px, y sin ellos la tarjeta entra en ~600
+    # de alto (regla #574).
+    "Insumo": st.column_config.TextColumn(
+        width=176, help="▸ receta base o porcionado: clic en la fila para "
+                        "ver de dónde sale su costo"),
     "Cantidad": st.column_config.NumberColumn(format="%.3f", width=64),
     "Costo": st.column_config.NumberColumn(format="S/ %.2f", width=66),
     "%": st.column_config.ProgressColumn(format="%.1f%%", min_value=0,
@@ -871,25 +970,28 @@ _CFG_RECETA = {
 }
 
 
-def _con_flecha(r):
-    """La tabla a mostrar: «▸» delante de lo que es receta base, que es lo
-    que se puede abrir. En una copia: el Sankey usa los nombres tal cual."""
+def _con_flecha(r, porcs=frozenset()):
+    """La tabla a mostrar: «▸» delante de lo que se puede abrir —una receta
+    base o un porcionado—. En una copia: el Sankey usa los nombres tal
+    cual."""
     v = r[["Insumo", "Cantidad", "Costo", "%"]].copy()
-    if "EsBase" in r.columns:
-        v["Insumo"] = np.where(r["EsBase"], "▸ " + r["Insumo"], r["Insumo"])
+    abre = r["EsBase"] if "EsBase" in r.columns else pd.Series(False, index=r.index)
+    if "Cod" in r.columns:
+        abre = abre | r["Cod"].isin(porcs)
+    v["Insumo"] = np.where(abre, "▸ " + r["Insumo"], r["Insumo"])
     return v
 
 
-def _tabla_receta(orig, plato, bases):
-    """La receta del plato en lectura, clicable (regla #572)."""
+def _tabla_receta(orig, plato, bases, porcs=frozenset()):
+    """La receta del plato en lectura, clicable (reglas #572 y #574)."""
     r = orig.copy()
     r["EsBase"] = (r["Cod"].isin(bases) if "Cod" in r.columns
                    else pd.Series(False, index=r.index))
-    filas = _filas_clic(r, bases)
+    filas = _filas_clic(r, bases, porcs)
     gen = _estado_base(plato).get("gen", 0)
     key = _key_tabla(f"rec_carta_rv_{plato}_{gen}",
                      [f"{x['cod']}:{x['nombre']}" for x in filas])
-    st.dataframe(_con_flecha(r), key=key,
+    st.dataframe(_con_flecha(r, porcs), key=key,
                  on_select=partial(_al_elegir_en_receta, key, plato, filas),
                  selection_mode="single-row", hide_index=True, row_height=27,
                  height=alturas.por_filas(len(r), px_fila=27, extra=38,
@@ -897,17 +999,26 @@ def _tabla_receta(orig, plato, bases):
                  column_config=_CFG_RECETA)
     e = _estado_base(plato)
     if e.get("aviso") and not e.get("ruta"):
-        st.caption(f"«{e['aviso']}» es un insumo de compra: no tiene receta base.")
-    elif r["EsBase"].any() and not e.get("ruta"):
-        st.caption("▸ receta base: clic en la fila para ver de qué está hecha.")
+        st.caption(f"«{e['aviso']}» es un insumo de compra: no tiene receta "
+                   "base ni porcionamientos.")
 
 
-def _bloque_base(df_rb, plato, ruta, bases):
-    """Debajo de la receta, en el lugar del gráfico: la receta base abierta,
-    proporcionada a lo que lleva UN plato. Va en el lugar del gráfico y con
-    su mismo alto para que abrirla no estire la tarjeta (regla #572)."""
+
+_MODOS = ("Receta base", "Porcionamientos")
+
+
+def _bloque_base(df_rb, df_po, plato, ruta, bases, porcs):
+    """Debajo de la receta, en el lugar del gráfico: de dónde sale el costo
+    del insumo abierto — su receta base, proporcionada a lo que lleva UN
+    plato (regla #572), o sus últimos porcionamientos (regla #574). Va en el
+    lugar del gráfico y con su mismo alto para que abrirla no estire la
+    tarjeta."""
     actual = ruta[-1]
-    rb = receta_base(df_rb, actual["cod"], actual["escala"], bases)
+    rb = (receta_base(df_rb, actual["cod"], actual["escala"], bases)
+          if actual.get("es_base") else None)
+    po = (porcionamientos_de(df_po, actual["cod"])
+          if actual.get("es_porc") else None)
+    modos = [m for m, x in zip(_MODOS, (rb, po)) if x is not None]
     with st.container(key="rec_carta_base_caja"):
         with st.container(horizontal=True, vertical_alignment="center",
                           key="rec_carta_base_hdr"):
@@ -916,20 +1027,40 @@ def _bloque_base(df_rb, plato, ruta, bases):
             # leía (medido en el segundo nivel). El camino va en el tooltip.
             migas = " › ".join(x["nombre"] for x in ruta)
             st.markdown(f'<p class="rec-base-tit" title="{escape(migas)}">'
-                        f'Receta base · {escape(actual["nombre"])}</p>',
+                        f'{escape(actual["nombre"])}</p>',
                         unsafe_allow_html=True)
+            if len(modos) > 1:
+                # Las dos cosas (49 insumos): abre en la que explica el costo
+                # de la receta — la más cercana a su costo por unidad.
+                unit = actual["costo"] / actual["escala"] if actual["escala"] else 0.0
+                c_base = float(rb["Costo"].sum()) / actual["escala"] if (
+                    actual["escala"] and not rb.empty) else None
+                c_porc = float(po["Costo"].iloc[0]) if not po.empty else None
+                de = costo_de_origen(unit, c_base, c_porc)
+                k_modo = f"rec_carta_det_modo_{actual['cod']}"
+                if st.session_state.get(k_modo) not in modos:
+                    st.session_state[k_modo] = (_MODOS[1] if de == "porc"
+                                                else _MODOS[0])
+                with st.container(key="rec_carta_det_modo", width="content"):
+                    modo = st.selectbox("De dónde sale", modos, key=k_modo,
+                                        label_visibility="collapsed", width=140)
+            else:
+                modo = modos[0]
             if len(ruta) > 1:
                 st.button("↑ Subir", key="rec_carta_base_subir",
                           on_click=_subir_base, args=(plato,))
             st.button("✕", key="rec_carta_base_cerrar",
                       on_click=_cerrar_base, args=(plato,))
+        if modo == _MODOS[1]:
+            _tabla_porcionamientos(po, actual)
+            return
         if rb.empty:
             st.info("La receta base no tiene insumos cargados.")
             return
-        filas = _filas_clic(rb, bases)
+        filas = _filas_clic(rb, bases, porcs)
         key = _key_tabla(f"rec_carta_rb_{plato}_" + "-".join(x["cod"] for x in ruta),
                          [f"{x['cod']}:{x['nombre']}" for x in filas])
-        st.dataframe(_con_flecha(rb), key=key,
+        st.dataframe(_con_flecha(rb, porcs), key=key,
                      on_select=partial(_al_elegir_en_base, key, plato, ruta, filas),
                      selection_mode="single-row", hide_index=True, row_height=27,
                      height=alturas.por_filas(len(rb), px_fila=27, extra=38,
@@ -940,12 +1071,64 @@ def _bloque_base(df_rb, plato, ruta, bases):
         if abs(total - actual["costo"]) > max(0.01, 0.01 * abs(actual["costo"])):
             # Las líneas que no cuadran las costea el precio promedio del
             # almacén, no la receta (45 de 866 al 2026-09-30).
-            pie += (f" (la receta del plato lo costea en S/ {actual['costo']:,.2f}, "
-                    "al precio promedio del almacén)")
+            pie += (f" (en la receta: S/ {actual['costo']:,.2f}, promedio del "
+                    "almacén)")
         pie += "."
-        if rb["EsBase"].any():
-            pie += " ▸ abre la de adentro."
+        if any(_abre(x) for x in filas):
+            pie += " ▸ abre lo de adentro."
         st.caption(pie)
+
+
+def _cant(v, unid):
+    return f"{v:,.3f}".rstrip("0").rstrip(".") + (f" {unid.lower()}" if unid else "")
+
+
+def _tabla_porcionamientos(po, actual):
+    """Los últimos porcionamientos del insumo abierto (regla #574). No se
+    clica: el producto de origen es de otro porcionamiento o de una compra,
+    y el costo se lee acá."""
+    if po.empty:
+        st.info("No hay porcionamientos de este insumo en el parquet.")
+        return
+    v = pd.DataFrame({
+        "Fecha": po["Fecha"].dt.strftime("%d/%m/%y"),
+        "De": po["De"],
+        "Porcionado": [_cant(q, u) for q, u in zip(po["Porcionado"], po["UnidIni"])],
+        "Salió": [_cant(q, u) for q, u in zip(po["Salio"], po["UnidFin"])],
+        "Merma": po["Merma"],
+        "Costo u.": po["Costo"],
+    })
+    st.dataframe(v, hide_index=True, row_height=27,
+                 height=alturas.por_filas(len(v), px_fila=27, extra=38,
+                                          minimo=0, rol=alturas.CARTA_RECETA),
+                 column_config={
+                     # Suman 426: el panel mide ~431 a 1323px (con 438, la
+                     # última columna quedaba cortada contra el borde).
+                     "Fecha": st.column_config.TextColumn(width=60),
+                     "De": st.column_config.TextColumn(
+                         width=118, help="Lo que se porcionó"),
+                     "Porcionado": st.column_config.TextColumn(width=70),
+                     "Salió": st.column_config.TextColumn(
+                         width=62, help="Lo que salió de este corte"),
+                     "Merma": st.column_config.NumberColumn(
+                         format="%.0f%%", width=50,
+                         help="Merma del porcionamiento, sobre lo porcionado"),
+                     "Costo u.": st.column_config.NumberColumn(
+                         format="S/ %.2f", width=66,
+                         help="Costo por unidad de este corte: el del producto "
+                              "porcionado, repartido entre los cortes"),
+                 })
+    unit = actual["costo"] / actual["escala"] if actual["escala"] else 0.0
+    ult = float(po["Costo"].iloc[0])
+    fecha = po["Fecha"].iloc[0]
+    # En UN renglón: con dos, abrirlo estiraba la tarjeta fuera de la
+    # pantalla del usuario (medido a 1323×619).
+    if ult and abs(unit - ult) <= max(0.01, 0.01 * ult):
+        st.caption(f"Receta: S/ {unit:,.2f} c/u, el del último porcionamiento "
+                   f"({fecha:%d/%m/%y}).")
+    else:
+        st.caption(f"Receta: S/ {unit:,.2f} c/u, promedio del almacén · último: "
+                   f"S/ {ult:,.2f} ({fecha:%d/%m/%y}).")
 
 
 def _lo_vendido(ventas):
@@ -962,7 +1145,7 @@ def _lo_vendido(ventas):
     return agg
 
 
-def _panel(f, df_rv, dias, ventas=None, df_rb=None):
+def _panel(f, df_rv, dias, ventas=None, df_rb=None, porcionamientos=None):
     """Al costado de la tabla (regla #570): el producto elegido, su receta
     (o lo que descarga) y, debajo, la dona / el Sankey / su costo en el
     tiempo — o la receta base que se abrió con un clic en la receta (regla
@@ -976,6 +1159,11 @@ def _panel(f, df_rv, dias, ventas=None, df_rb=None):
     es_receta = f["Tipo"] == "Receta"
     simulando = es_receta and bool(st.session_state.get(_K_SIM_ON))
     bases = codigos_base(df_rb)
+    # Los porcionamientos, sólo si hay receta que marcar (regla #574): el
+    # parquet es chico (12.368 filas) y lo comparte «Revisar recetas».
+    df_po = (porcionamientos() if callable(porcionamientos) else porcionamientos) \
+        if es_receta else None
+    porcs = codigos_porcionados(df_po)
     with st.container(key="rec_carta_plato"):
         ruta_txt = " › ".join(x for x in (f["Grupo"], f["Subgrupo"]) if x)
         with st.container(horizontal=True, vertical_alignment="center",
@@ -1006,7 +1194,8 @@ def _panel(f, df_rv, dias, ventas=None, df_rb=None):
         if es_receta:
             r, costo_sim = receta_del_plato(
                 df_rv, cod, nombre, toggle=False, titulo=False,
-                dibujar_lectura=partial(_tabla_receta, plato=cod, bases=bases))
+                dibujar_lectura=partial(_tabla_receta, plato=cod, bases=bases,
+                                        porcs=porcs))
         else:
             r, costo_sim = None, None
             _descarga(f)
@@ -1017,7 +1206,7 @@ def _panel(f, df_rv, dias, ventas=None, df_rb=None):
             e = {"plato": cod, "ruta": []}
             st.session_state[_K_BASE] = e
         if e.get("ruta"):
-            _bloque_base(df_rb, cod, e["ruta"], bases)
+            _bloque_base(df_rb, df_po, cod, e["ruta"], bases, porcs)
             return
         with _card("rec_carta_mini"):
             # NO `st.tabs`: dibuja las dos pestañas y esconde la otra, y
@@ -1050,30 +1239,42 @@ def _panel(f, df_rv, dias, ventas=None, df_rb=None):
 
 
 # ─── La vista ─────────────────────────────────────────────────────────────
-def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
+def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None,
+                          porcionamientos=None):
     """La vista entera: UNA tarjeta con la carta a la izquierda y el
     producto elegido a la derecha (regla #570). `df` es
     `cartacosteada.parquet` (o None si no se pudo cargar); `df_rv`,
     recetaventa.parquet (las recetas y su fecha); `ventas`, lo vendido por
     producto y día, o la FUNCIÓN que lo carga (`data.venta_por_producto_dia`,
     que es como lo pasa el dispatcher: regla #573), o None; `df_rb`,
-    recetabase.parquet (para abrir una receta base), o None.
+    recetabase.parquet (para abrir una receta base), o None;
+    `porcionamientos`, porcionamientos.parquet o la función que lo carga
+    (regla #574), o None.
 
     Lo vendido se carga SÓLO si algo en pantalla lo usa: la columna
     «Vendidos» (con «Más columnas»), el filtro «Sin costo» (se ordena por
     lo vendido) o «En el tiempo». Es leer ventas.parquet casi entero —237.604
     filas y 96 MB; 10 s en frío en la laptop, bastante más en Cloud— y hasta
     el 2026-09-30 se pagaba al abrir la vista aunque la columna estuviera
-    escondida."""
+    escondida.
+
+    Desde la regla #574, a pedido, el título es sólo «Carta costeada» (lo
+    demás, al pasar el cursor) y en SU renglón van los desplegables —qué
+    ver, la oferta, grupo, tipo y el buscador—, con el estilo de la cabecera
+    de Ventas › Por hora. Los tres interruptores bajaron al renglón de
+    encima de la tabla."""
     ss = st.session_state
     # LO ELEGIDO, ANTES DE DIBUJAR NADA: la tabla nueva sale con eso marcado.
     _leer_eleccion("rec_carta_tabla")
     _leer_eleccion("rec_carta_combos")
 
     with st.container(border=True, key="rec_card_carta"):
-        st.markdown('<p class="chart-card-hdr">Carta costeada · % de costo sobre '
-                    'el precio neto de Salón, combos incluidos</p>',
-                    unsafe_allow_html=True)
+        cab = st.container(horizontal=True, gap="small",
+                           vertical_alignment="center", key="rec_carta_cab")
+        with cab:
+            st.markdown(f'<p class="chart-card-hdr rec-carta-tit" '
+                        f'data-ayuda="{escape(SUBTITULO)}">Carta costeada</p>',
+                        unsafe_allow_html=True)
         if df is None or df.empty:
             st.info("Todavía no hay datos de la carta costeada "
                     f"({ARCHIVO}). Se genera con la consulta «cartacosteada» del "
@@ -1096,53 +1297,41 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
         grupos = ["Todos"] + sorted(
             g for g in carta["Grupo"].unique()
             if g and (vi or g.casefold() != GRUPO_VENTA_INTERNA.casefold()))
-
-        # Las cuatro opciones de «Ver» sólo si la consulta ya trae «Tipo de
-        # Oferta»; si lo elegido no está entre las de ahora (otro juego de
-        # rótulos), se BORRA y el control vuelve a su default: escribirle
-        # otro valor, con un `default=` puesto, es un aviso de Streamlit.
         hay_oferta = bool((carta["Oferta"] != "").any())
-        opciones_ver = VER_OFERTA if hay_oferta else VER
-        if ss.get("rec_carta_ver") not in (None, *opciones_ver):
-            ss.pop("rec_carta_ver")
-        # columnas-internas: la fila de controles de la tarjeta (qué ver,
-        # grupo, tipo, buscador y los dos interruptores); no parte la página.
-        # Con cuatro opciones «Ver» pide 362px (medido: 93 + 83 + 102 + 84;
-        # con 357, «Combos» bajaba a un segundo renglón) y se los ceden el
-        # grupo, el tipo y el buscador. A 1366px con el rail plegado, la
-        # fila tiene 1122px sin los huecos: esto suma 1114.
-        anchos = ([372, 156, 130, 150, 140, 166] if hay_oferta
-                  else [1.5, 1.25, 1.1, 1.5, 0.95, 1.1])
-        c_ver, c_grupo, c_tipo, c_buscar, c_inact, c_vi = st.columns(
-            anchos, vertical_alignment="center")
-        with c_ver:
-            ver = st.segmented_control(
-                "Ver", opciones_ver, default=opciones_ver[0],
-                key="rec_carta_ver",
-                label_visibility="collapsed") or opciones_ver[0]
-        with c_grupo:
-            if ss.get("rec_carta_grupo") not in grupos:
-                ss["rec_carta_grupo"] = "Todos"
-            grupo = st.selectbox("Grupo", grupos, key="rec_carta_grupo",
-                                 label_visibility="collapsed")
-        with c_tipo:
-            # En «Combos» el tipo ya está elegido: se apaga en vez de
-            # esconderse, para no perder lo elegido al volver (un widget que
-            # no se dibuja pierde su estado).
-            tipo = st.selectbox("Tipo", TIPOS, key="rec_carta_tipo",
-                                label_visibility="collapsed",
-                                disabled=(ver == "Combos"))
-        with c_buscar:
-            buscar = st.text_input("Buscar", key="rec_carta_buscar",
-                                   placeholder="Buscar producto",
-                                   label_visibility="collapsed")
-        with c_inact:
-            st.toggle("Inactivos", key="rec_carta_inactivos",
-                      help="Sumar los productos que el POS tiene inactivos")
-        with c_vi:
-            st.toggle("Venta interna", key="rec_carta_vi",
-                      help="Sumar los productos «(Cst)» de Venta Interna, que se "
-                           "venden a precio de costo y por eso pasan el 100 %")
+
+        # EL RENGLÓN DEL TÍTULO (regla #574): desplegables sin caja, con un
+        # subrayado —los de Ventas › Por hora—; el nombre de cada uno aparece
+        # debajo al pasar el cursor. El ancho lo pone Python (`width=`). En
+        # «Combos» la oferta y el tipo se apagan en vez de esconderse: un
+        # widget que no se dibuja pierde su estado.
+        with cab:
+            with st.container(key="rec_carta_cab_ver", width="content"):
+                ver = st.selectbox("Ver", VER, key=_K_VER,
+                                   label_visibility="collapsed", width=128)
+            oferta = None
+            if hay_oferta:
+                with st.container(key="rec_carta_cab_oferta", width="content"):
+                    op = st.selectbox("Oferta", (OFERTA_TODA, *OFERTAS),
+                                      key=_K_OFERTA, label_visibility="collapsed",
+                                      width=140, disabled=(ver == "Combos"))
+                oferta = op if op in OFERTAS else None
+            with st.container(key="rec_carta_cab_grupo", width="content"):
+                if ss.get("rec_carta_grupo") not in grupos:
+                    ss["rec_carta_grupo"] = "Todos"
+                grupo = st.selectbox("Grupo", grupos, key="rec_carta_grupo",
+                                     label_visibility="collapsed", width=150,
+                                     format_func=lambda g: ("Todos los grupos"
+                                                            if g == "Todos" else g))
+            with st.container(key="rec_carta_cab_tipo", width="content"):
+                tipo = st.selectbox("Tipo", TIPOS, key="rec_carta_tipo",
+                                    label_visibility="collapsed", width=138,
+                                    disabled=(ver == "Combos"),
+                                    format_func=lambda x: ("Todos los tipos"
+                                                           if x == "Todos" else x))
+            with st.container(key="rec_carta_cab_buscar", width="content"):
+                buscar = st.text_input("Buscar", key="rec_carta_buscar",
+                                       placeholder="Buscar producto",
+                                       label_visibility="collapsed", width=170)
 
         # Lo vendido, sólo si algo lo muestra (ver el docstring). Todo se lee
         # del estado: los controles que lo piden ya se dibujaron o van más
@@ -1161,7 +1350,7 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
             vacio = "No hay combos con este filtro."
         else:
             t = filtrar(carta, grupo, tipo, buscar, venta_interna=vi,
-                        oferta=OFERTAS.get(ver))
+                        oferta=oferta)
             vacio = "Ningún producto con este filtro."
         if t.empty:
             st.info(vacio)
@@ -1174,45 +1363,46 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
         # (regla #570); es la tarjeta de la vista, no parte la página.
         c_tabla, c_panel = st.columns(list(PROPORCION), gap="medium")
         with c_tabla:
-            # «Más columnas» va ARRIBA DE LA TABLA y no en la fila de
-            # controles: es de la tabla, y en esa fila no entraba un séptimo
-            # control a 1366px (medido: «Carta completa | Combos» se partía
-            # en dos renglones y «Inactivos» se cortaba). A la IZQUIERDA: a
-            # la derecha lo tapa la barrita de íconos que `st.dataframe`
-            # asoma sobre su esquina al pasar el cursor. El renglón que suma
-            # lo paga la columna de la tabla, que es la más baja.
+            # Encima de la tabla, lo que cambia QUÉ filas y columnas tiene:
+            # los tres interruptores y, con «Más columnas», la ventana de
+            # «Vendidos». A la IZQUIERDA: a la derecha lo taparía la barrita
+            # de íconos que `st.dataframe` asoma sobre su esquina.
             with st.container(horizontal=True, vertical_alignment="center",
                               key="rec_carta_mas_fila"):
                 mas = st.toggle(
                     "Más columnas", key=_K_MAS,
-                    help="En la carta: Margen, Vendidos, Tipo, Actualizado y "
-                         "Última venta. En Combos: la banda de costos "
-                         "(mínimo, promedio, esperado, máximo y real). La "
-                         "tabla se desliza de costado; el producto elegido "
+                    help="En la carta: Margen, Vendidos, P. neto, Tipo, "
+                         "Actualizado y Última venta. En Combos: la banda de "
+                         "costos (mínimo, promedio, esperado, máximo y real). "
+                         "La tabla se desliza de costado; el producto elegido "
                          "sigue al lado.")
+                st.toggle("Inactivos", key="rec_carta_inactivos",
+                          help="Sumar los productos que el POS tiene inactivos")
+                st.toggle("Venta interna", key="rec_carta_vi",
+                          help="Sumar los productos «(Cst)» de Venta Interna, "
+                               "que se venden a precio de costo y por eso pasan "
+                               "el 100 %")
                 if mas and ver != "Combos" and rango is not None:
-                    st.markdown('<p class="rec-vend-rot">Vendidos en</p>',
-                                unsafe_allow_html=True)
-                    st.segmented_control(
-                        "Vendidos en", list(VENTANAS_VENDIDOS),
-                        default="90 días", key=_K_VENTANA,
-                        label_visibility="collapsed", persist_state="page")
+                    with st.container(key="rec_carta_cab_vend", width="content"):
+                        st.selectbox(
+                            "Vendidos en", list(VENTANAS_VENDIDOS),
+                            index=list(VENTANAS_VENDIDOS).index("90 días"),
+                            format_func=lambda x: f"Vendidos en {x}",
+                            key=_K_VENTANA, label_visibility="collapsed",
+                            width=160, persist_state="page")
             if ver == "Combos":
                 _tabla_combos(t, pos, mas)
                 st.caption(
-                    "Todo con la cantidad de la ficha y el costo de HOY de cada "
-                    "plato. Esperado: cada opción pesada por lo que eligieron los "
-                    "clientes — en 90 días si hubo 10 o más vendidos, si no con "
-                    "todo su historial; un grupo sin elecciones cuenta su "
-                    "promedio. Real: lo servido en 90 días, al costo de cada día. "
-                    "Clic en un combo para ver su detalle.")
+                    "Con la cantidad de la ficha y el costo de HOY de cada plato. "
+                    "Esperado: cada opción pesada por lo que eligieron los "
+                    "clientes; Real: lo servido en 90 días.")
             else:
                 _tabla_carta(t, pos, rango, mas, dias)
-                orden = ("lo vendido" if tipo == "Sin costo" else "% de costo")
-                pie = (f"Ordenada por {orden}: ámbar sobre {_UMBRAL_COSTO_OK} %, "
-                       f"rojo sobre {_UMBRAL_COSTO_WARN} %. Clic en un producto "
-                       "para ver su receta.")
-                if ver in OFERTAS:
+                pie = (f"Ámbar sobre {_UMBRAL_COSTO_OK} %, rojo sobre "
+                       f"{_UMBRAL_COSTO_WARN} %.")
+                if tipo == "Sin costo":
+                    pie = "Ordenada por lo vendido."
+                if oferta:
                     pie += " Impresa: con botón del 1 al 19 en el POS."
                 if n_sin_precio:
                     pie += (f" {n_sin_precio} sin precio de Salón (S/ 1 o menos) "
@@ -1229,4 +1419,4 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
                     pie += " No se pudieron leer las ventas: sin «Vendidos»."
                 st.caption(pie)
         with c_panel:
-            _panel(t.iloc[pos], df_rv, dias, agg, df_rb)
+            _panel(t.iloc[pos], df_rv, dias, agg, df_rb, porcionamientos)

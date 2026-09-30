@@ -6596,10 +6596,12 @@ def _pruebas_carta_costeada():
     base = cc.columnas_carta()
     check("la tabla empieza por Grupo, Subgrupo y Producto", base[:3],
           ["Grupo", "Subgrupo", "Producto"])
-    _opcionales = {"Tipo", "Actualizado", "UltimaVenta", "Margen", "Vendidos"}
-    check("sin «Más columnas» no están las cinco opcionales",
+    # «P. neto» se sumó a las opcionales en la regla #574.
+    _opcionales = {"Tipo", "Actualizado", "UltimaVenta", "Margen", "Vendidos",
+                   "Neto"}
+    check("sin «Más columnas» no están las seis opcionales",
           sorted(_opcionales & set(base)), [])
-    check("con «Más columnas» están las cinco",
+    check("con «Más columnas» están las seis",
           sorted(_opcionales - set(cc.columnas_carta(mas=True))), [])
     check("y todas existen en la carta preparada",
           sorted(set(cc.columnas_carta(mas=True)) - set(tv.columns)
@@ -6624,12 +6626,12 @@ def _pruebas_carta_costeada():
           ("Carta impresa", "Carta impresa"))
     check("un nBoton fuera de rango (nulo) queda sin tipo",
           fo.loc["0000030", "Oferta"], "")
-    check("filtro Impresa", sorted(cc.filtrar(to, oferta=cc.OFERTAS["Impresa"])["Cod"]),
+    check("filtro Impresa", sorted(cc.filtrar(to, oferta="Carta impresa")["Cod"]),
           ["0000010", "0000060"])
     check("filtro No impresa",
-          list(cc.filtrar(to, oferta=cc.OFERTAS["No impresa"])["Cod"]), ["0000020"])
-    check("Ver ofrece Impresa y No impresa",
-          all(o in cc.VER_OFERTA for o in cc.OFERTAS), True)
+          list(cc.filtrar(to, oferta="Carta no impresa")["Cod"]), ["0000020"])
+    check("la oferta se elige entre la carta impresa y la no impresa",
+          cc.OFERTAS, ("Carta impresa", "Carta no impresa"))
 
     # Las recetas base (regla #572): un insumo de la receta es receta base
     # si su código de almacén es el `COD PROD RB` de una; se abre
@@ -6662,6 +6664,45 @@ def _pruebas_carta_costeada():
           (cc.receta_base(rb, "0000460", 1.0, bases).empty,
            cc.receta_base(None, "0003215").empty, cc.codigos_base(None)),
           (True, True, frozenset()))
+
+    # Los porcionamientos (regla #574): un insumo porcionado muestra de qué
+    # porcionamientos salió, del más nuevo al más viejo, una fila por
+    # porcionamiento aunque el parquet traiga una por CORTE (#510).
+    po = pd.DataFrame({
+        "COD PORC": ["P1", "P1", "P2", "P3"],
+        "COD PROD FINAL": ["0004117", "0009999", "0004117", "0004117"],
+        "FEC REGIST": pd.to_datetime(["2026-09-26", "2026-09-26", "2026-09-21",
+                                      "2026-09-12"]),
+        "PROD INICIAL": ["(P) Cachema Limpia"] * 4,
+        "UNID PROD INIC": ["UND"] * 4,
+        "CANT A PORCIONAR": [15.0, 15.0, 16.0, 15.0],
+        "CANT MERMA": [0.0, 0.0, 1.0, 0.0],
+        "CANT RESULT": [15.0, 3.0, 15.0, 15.0],
+        "UNID PROD FIN": ["UND"] * 4,
+        "PREC PROM PROD FIN": [26.780552, 1.0, 29.258964, 27.803125],
+    })
+    check("qué códigos salen de un porcionamiento",
+          sorted(cc.codigos_porcionados(po)), ["0004117", "0009999"])
+    pd4117 = cc.porcionamientos_de(po, "0004117")
+    check("sus porcionamientos, del más nuevo al más viejo",
+          [round(v, 2) for v in pd4117["Costo"]], [26.78, 29.26, 27.8])
+    check("la merma, sobre lo porcionado", round(pd4117["Merma"].iloc[1], 2), 6.25)
+    check("con tope de filas", len(cc.porcionamientos_de(po, "0004117", n=2)), 2)
+    check("un código sin porcionamientos, vacío",
+          (cc.porcionamientos_de(po, "0000001").empty,
+           cc.porcionamientos_de(None, "0004117").empty,
+           cc.codigos_porcionados(None)), (True, True, frozenset()))
+    check("el detalle abre en lo que explica el costo de la receta",
+          (cc.costo_de_origen(1.705, 0.034, 1.705), cc.costo_de_origen(21.0, 21.0, 28.0),
+           cc.costo_de_origen(5.0, None, 4.0), cc.costo_de_origen(5.0, None, None)),
+          ("porc", "base", "porc", None))
+    fp = cc._filas_clic(pd.DataFrame({"Cod": ["0004117", "0000460"],
+                                      "Insumo": ["(P) Pesca", "Sal"],
+                                      "Cantidad": [1.0, 3.0], "Factor": [1.0, 1000.0],
+                                      "Costo": [26.78, 0.01]}),
+                        frozenset(), cc.codigos_porcionados(po))
+    check("un porcionado se puede abrir; un insumo de compra, no",
+          [cc._abre(x) for x in fp], [True, False])
 
     rv = pd.DataFrame({"COD PLATO": ["0000010", "0000010", "0000030"],
                        "FECH MODIF": pd.to_datetime(["2022-09-23", "2022-09-23",

@@ -1593,15 +1593,172 @@ CSS = """    /* ================================================================
     /* también es el de la tarjeta del plato que existía hasta ese día, y    */
     /* un wildcard así le pega a cualquier key que empiece igual.            */
     /* =================================================================== */
-    .st-key-rec_card_carta {
+    /* «Revisar recetas» (`rec_card_revisar`) lleva el mismo look desde la
+       regla #574, a pedido: era la última de Recetas con el marco gris. */
+    .st-key-rec_card_carta,
+    .st-key-rec_card_revisar {
         background: var(--bg-card) !important;
         border: none !important;
         border-radius: 20px !important;
         padding: 16px 18px;
         box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
     }
-    .st-key-rec_card_carta > div {
+    .st-key-rec_card_carta > div,
+    .st-key-rec_card_revisar > div {
         border: none !important;
+    }
+
+    /* EL RENGLÓN DEL TÍTULO (regla #574): «Carta costeada» y, en el mismo
+       renglón, los desplegables — el estilo de la cabecera de Ventas › Por
+       hora (#555, #562): sin caja, con un subrayado; el nombre de cada uno
+       aparece debajo al pasar el cursor, y una rayita los separa. La línea
+       de abajo es de la FILA, no del `<p>` del título. */
+    .st-key-rec_carta_cab {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6px;
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        overflow: visible !important;
+    }
+    .st-key-rec_carta_cab .chart-card-hdr {
+        border-bottom: none;
+        margin: 0 6px 0 0;
+        padding: 0;
+    }
+    /* El subtítulo, al pasar el cursor sobre el título: un `::after` con el
+       texto del atributo, flotando debajo — no cobra lugar en la fila. Un
+       `:hover` suelto, sin `:has()` (regla #469). */
+    .rec-carta-tit {
+        position: relative;
+        overflow: visible !important;
+        cursor: default;
+    }
+    .rec-carta-tit::after {
+        content: attr(data-ayuda);
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 30;
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: var(--bg-card);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .14);
+        font-size: 12px;
+        font-weight: 400;
+        white-space: nowrap;
+        color: var(--text-secondary);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .12s ease;
+    }
+    .rec-carta-tit:hover::after {
+        opacity: 1;
+    }
+    .st-key-rec_carta_cab_ver, .st-key-rec_carta_cab_oferta,
+    .st-key-rec_carta_cab_grupo, .st-key-rec_carta_cab_tipo,
+    .st-key-rec_carta_cab_buscar, .st-key-rec_carta_cab_vend,
+    .st-key-rec_carta_det_modo {
+        position: relative;
+        padding-left: 11px !important;
+        overflow: visible !important;
+    }
+    .st-key-rec_carta_cab_ver::after, .st-key-rec_carta_cab_oferta::after,
+    .st-key-rec_carta_cab_grupo::after, .st-key-rec_carta_cab_tipo::after,
+    .st-key-rec_carta_cab_buscar::after, .st-key-rec_carta_cab_vend::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 18px;
+        background: var(--border);
+    }
+    .st-key-rec_carta_cab_ver::before, .st-key-rec_carta_cab_oferta::before,
+    .st-key-rec_carta_cab_grupo::before, .st-key-rec_carta_cab_tipo::before,
+    .st-key-rec_carta_cab_buscar::before, .st-key-rec_carta_cab_vend::before {
+        position: absolute;
+        top: calc(100% + 2px);
+        left: 11px;
+        z-index: 20;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--bg-card);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        color: var(--text-secondary);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .12s ease;
+    }
+    .st-key-rec_carta_cab_ver:hover::before, .st-key-rec_carta_cab_oferta:hover::before,
+    .st-key-rec_carta_cab_grupo:hover::before, .st-key-rec_carta_cab_tipo:hover::before,
+    .st-key-rec_carta_cab_buscar:hover::before, .st-key-rec_carta_cab_vend:hover::before {
+        opacity: 1;
+    }
+    .st-key-rec_carta_cab_ver::before { content: "Ver"; }
+    .st-key-rec_carta_cab_oferta::before { content: "Oferta"; }
+    .st-key-rec_carta_cab_grupo::before { content: "Grupo"; }
+    .st-key-rec_carta_cab_tipo::before { content: "Tipo"; }
+    .st-key-rec_carta_cab_buscar::before { content: "Buscar"; }
+    .st-key-rec_carta_cab_vend::before { content: "Ventana de lo vendido"; }
+    /* Los desplegables (y el buscador) sin caja, con un subrayado, 28px de
+       alto — como los de Por hora. DOS DOMs, como allá: react-aria en la
+       1.59 (`[role="group"]`) y baseweb en versiones anteriores. */
+    .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"],
+    .st-key-rec_carta_cab [data-baseweb="select"] > div,
+    .st-key-rec_carta_cab [data-testid="stTextInputRootElement"],
+    .st-key-rec_carta_cab [data-baseweb="input"],
+    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"],
+    .st-key-rec_carta_cab_vend [data-baseweb="select"] > div,
+    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"],
+    .st-key-rec_carta_det_modo [data-baseweb="select"] > div {
+        min-height: 0 !important;
+        height: 28px !important;
+        border: none !important;
+        border-bottom: 1px solid var(--border) !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"]:hover,
+    .st-key-rec_carta_cab [data-baseweb="select"] > div:hover,
+    .st-key-rec_carta_cab [data-testid="stTextInputRootElement"]:hover,
+    .st-key-rec_carta_cab [data-baseweb="input"]:hover,
+    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"]:hover,
+    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"]:hover {
+        border-bottom-color: var(--accent) !important;
+    }
+    .st-key-rec_carta_cab [data-testid="stSelectbox"] input,
+    .st-key-rec_carta_cab [data-baseweb="select"] div[value],
+    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] input,
+    .st-key-rec_carta_cab_vend [data-baseweb="select"] div[value],
+    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] input,
+    .st-key-rec_carta_det_modo [data-baseweb="select"] div[value] {
+        height: 26px !important;
+        padding: 0 0 0 2px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: var(--accent-deep) !important;
+        background: transparent !important;
+        cursor: pointer !important;
+    }
+    .st-key-rec_carta_cab [data-testid="stTextInput"] input,
+    .st-key-rec_carta_cab [data-baseweb="input"] input {
+        height: 26px !important;
+        padding: 0 2px !important;
+        font-size: 13px !important;
+        background: transparent !important;
+    }
+    .st-key-rec_carta_cab [data-testid="stSelectbox"] [role="group"] button,
+    .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"] button,
+    .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"] button {
+        width: 22px !important;
+        height: 26px !important;
     }
     /* Las sub-tarjetas de `_card()` del panel —la receta, lo que descarga y
        el gráfico— sin marco ni relleno: adentro de la tarjeta blanca serían

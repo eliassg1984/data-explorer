@@ -76,6 +76,8 @@ Las dos Tablas NO se dibujan igual, y no es un descuido:
 Punto de entrada público: renderizar_graficos_recetas().
 """
 
+from functools import partial
+
 import streamlit as st
 
 from data import cargar as _cargar_reporte, venta_por_producto_dia
@@ -240,8 +242,12 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         # base— la arma `render_carta_costeada`.
         # Lo vendido va como FUNCIÓN y no cargado: la vista lo pide sólo
         # si algo en pantalla lo usa (regla #573).
-        render_carta_costeada(_cargar_reporte(ARCHIVO_CARTA), df_rv=df_f,
-                              ventas=venta_por_producto_dia, df_rb=df_rb)
+        # Los porcionamientos también (regla #574): los lee el panel sólo si
+        # el producto elegido tiene receta.
+        render_carta_costeada(
+            _cargar_reporte(ARCHIVO_CARTA), df_rv=df_f,
+            ventas=venta_por_producto_dia, df_rb=df_rb,
+            porcionamientos=partial(_cargar_reporte, "porcionamientos.parquet"))
 
     def _dib_revisar():
         # Lo que lee (porcionamientos, el primer nivel de las ventas, el

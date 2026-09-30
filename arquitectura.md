@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-573 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+574 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -230,7 +230,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 
-**Layout y alturas** (80)
+**Layout y alturas** (81)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -312,6 +312,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#563** — La ficha de la hora entra entera debajo del mapa: la resta del panel se midió de nuevo con la…
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
+- **#574** — La Carta costeada: el título con sus desplegables en un renglón, los porcionamientos de un…
 
 **Plotly y figuras** (104)
 
@@ -862,7 +863,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (137)
+**Decisiones de diseño y UX** (138)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1001,6 +1002,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 - **#571** — «Carta impresa» es un atributo del PRODUCTO: va en la consulta de la carta, no en la de ventas
+- **#574** — La Carta costeada: el título con sus desplegables en un renglón, los porcionamientos de un…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45630,6 +45632,65 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - **En Cloud, reiniciar la app** (#357): `recetas.py` ahora pasa una
        FUNCIÓN, y la `carta_costeada.py` vieja en memoria la trataría como
        una tabla.
+
+     (2026-09-30.)
+
+574. **La Carta costeada: el título con sus desplegables en un renglón, los
+     porcionamientos de un insumo y una tarjeta para ~620px de alto.**
+     2026-09-30, a pedido: que el título diga sólo «Carta costeada» (lo demás
+     al pasar el cursor), esconder «P. neto» con las otras, «Completa /
+     Combos» e «Impresa / No impresa» como listas desplegables «al igual que
+     en Por hora» y en la fila del título, mostrar de qué porcionamientos
+     sale el costo de un insumo porcionado, una tarjeta más baja y «Revisar
+     recetas» con el mismo fondo blanco. En `graficos/carta_costeada.py`,
+     `graficos/recetas.py`, `graficos/alturas.py` y `estilos/_80_cards.py`.
+     - **La pantalla del usuario mide ~620px de página, no 768** (medido en
+       su captura: 1323×619). A 1323×619 la tarjeta mide 558 cerrada y 585
+       con un porcionamiento abierto; entra hasta ~599. Para eso: el
+       renglón de controles se fue (todo al del título), la tabla vuelve a
+       12 filas, la receta del panel topa en 5 y el gráfico en 180, y la
+       ayuda del «▸» pasó de un renglón debajo de la receta a la cabecera
+       «Insumo». Los pies de las tablas del panel van en UN renglón: con
+       dos, abrir un porcionamiento sacaba la tarjeta de la pantalla.
+     - **El renglón del título** (`rec_carta_cab`) lleva «Carta costeada» y
+       los desplegables Ver, Oferta, Grupo, Tipo y el buscador con el estilo
+       de Ventas › Por hora (#555, #562): sin caja, subrayados, 28px, el
+       nombre debajo al pasar el cursor y una rayita entre ellos. El
+       subtítulo es un `::after` del título con `attr(data-ayuda)`. Keys
+       NUEVAS (`rec_carta_vista`, `rec_carta_oferta`) y no la del
+       `segmented_control` de antes: un desplegable que hereda un valor que
+       no está entre sus opciones es un error. «Todos» se escribe «Todos los
+       grupos» / «Todos los tipos» (`format_func`): dos «Todos» seguidos no
+       decían cuál era cuál. El buscador de la 1.59 no tiene `baseweb`: su
+       caja es `[data-testid="stTextInputRootElement"]`. Los interruptores
+       (Más columnas, Inactivos, Venta interna) y la ventana de «Vendidos»
+       —ahora desplegable, «Vendidos en 90 días»— bajaron encima de la
+       tabla. `PROPORCION` pasa a 0,6 : 0,4: sin «P. neto» la tabla pide
+       678px y el panel gana 30 para los nombres de la receta.
+     - **Porcionamientos**: un insumo es porcionado si su código es un `COD
+       PROD FINAL` de porcionamientos.parquet (93 insumos de recetas; 49 de
+       ellos además con receta base). Lleva «▸» como una receta base, y el
+       clic abre DEBAJO sus últimos porcionamientos (`porcionamientos_de`,
+       una fila por porcionamiento aunque el parquet traiga una por corte,
+       #510): fecha, de qué salió, cuánto se porcionó, cuánto salió de ese
+       corte, la merma y el costo por unidad — el que hereda la receta. La
+       Pesca del día: S/ 26,78 en la receta y en el porcionamiento del
+       26/09. El pie dice si el costo de la receta es el del último
+       porcionamiento o el promedio del almacén.
+     - **Con receta base Y porcionamientos, un desplegable elige cuál ver**
+       y abre en el que explica el costo de la receta (`costo_de_origen`: el
+       más cercano a su costo por unidad). No hay regla fija: el chorizo
+       criollo cuesta lo del porcionamiento (S/ 1,705 contra 0,034 de su
+       «receta» de etiquetas) y el zumo de maracuyá lo de su receta base (S/
+       21 contra 28). Al chorizo se le ven además porcionamientos a S/ 0,16
+       — la receta base «Marca Chorizo» con costo casi cero ese día.
+     - Los porcionamientos se cargan sólo si el producto elegido tiene
+       receta (`porcionamientos` llega como función, como las ventas en la
+       #573), y comparten caché con «Revisar recetas».
+     - **«Revisar recetas»** (`rec_card_revisar`) entra en la misma regla de
+       fondo blanco que la carta.
+     - **En Cloud, reiniciar la app** (#357): `recetas.py` pasa un argumento
+       nuevo (`porcionamientos=`) a la vista.
 
      (2026-09-30.)
 
