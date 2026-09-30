@@ -1605,13 +1605,7 @@ CSS = """    /* ================================================================
     }
     /* Las sub-tarjetas de `_card()` del panel —la receta, lo que descarga y
        el gráfico— sin marco ni relleno: adentro de la tarjeta blanca serían
-       cajas dentro de la caja. Las separa la línea del título al pie de la
-       receta (`.chart-card-pie`).
-       Las dos que llevan ese título guardan 16px ABAJO: el `<p>` del título
-       cuelga 1rem por debajo de su contenedor (el margen negativo con que
-       Streamlit cierra un markdown), y sin relleno caía encima de lo que
-       sigue — medido en el teléfono, donde el `gap` es de 4px: el título
-       quedaba debajo de los botones Costo / Utilidad · Sankey. */
+       cajas dentro de la caja. */
     .st-key-rec_card_carta .st-key-chartcard_rv_comp_receta,
     .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga,
     .st-key-rec_card_carta .st-key-chartcard_rec_carta_mini {
@@ -1620,13 +1614,91 @@ CSS = """    /* ================================================================
         box-shadow: none !important;
         background: transparent !important;
     }
-    .st-key-rec_card_carta .st-key-chartcard_rv_comp_receta,
+    /* «Qué descarga del almacén» lleva su título al pie (`.chart-card-pie`)
+       y guarda 16px ABAJO: el `<p>` del título cuelga 1rem por debajo de su
+       contenedor (el margen negativo con que Streamlit cierra un markdown),
+       y sin relleno caía encima de lo que sigue — medido en el teléfono,
+       donde el `gap` es de 4px. */
     .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga {
         padding-bottom: 16px !important;
+    }
+    /* Desde la regla #572 la receta va sin título al pie —el nombre del
+       plato ya está arriba—, así que lo que la separa del gráfico, o de la
+       receta base abierta en su lugar, es una línea ENCIMA de ellos. */
+    .st-key-rec_card_carta .st-key-chartcard_rec_carta_mini,
+    .st-key-rec_carta_base_caja {
+        border-top: 1px solid var(--border) !important;
+        padding-top: 10px !important;
     }
     .st-key-rec_carta_plato {
         border-left: 1px solid var(--border);
         padding-left: 16px;
+    }
+    /* El renglón del nombre (#572): el nombre se corta con «…» y «Simular»
+       queda a su derecha. La línea de abajo es de la FILA y no del `<p>`:
+       en el `<p>` subrayaría sólo el nombre y dejaría el interruptor
+       colgando de nada. Lo mismo el título de la receta base y su «Subir». */
+    .st-key-rec_carta_plato_hdr {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6px;
+        flex-wrap: nowrap !important;
+    }
+    .st-key-rec_carta_plato_hdr .chart-card-hdr {
+        border-bottom: none;
+        margin: 0;
+        padding: 0;
+    }
+    .st-key-rec_carta_base_hdr {
+        flex-wrap: nowrap !important;
+    }
+    .st-key-rec_carta_plato_hdr > .stElementContainer:first-child,
+    .st-key-rec_carta_base_hdr > .stElementContainer:first-child {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+    }
+    /* Sin la barrita de íconos que `st.dataframe` asoma sobre la esquina
+       de arriba a la derecha al pasar el cursor (buscar, bajar, pantalla
+       completa) en las tablas del panel: queda ENCIMA del renglón de
+       arriba y se come el clic de «Simular» y de «↑ Subir» (medido con
+       Playwright: «stElementToolbar … intercepts pointer events»). En
+       tablas de seis filas no hace falta; la de la carta la conserva. */
+    .st-key-rec_carta_plato .stElementToolbar {
+        display: none !important;
+    }
+    /* `!important` en el tamaño: `.stMarkdown p` (0,1,1) le gana a una
+       clase sola, como con `.chart-card-pie`. */
+    .rec-base-tit {
+        margin: 0;
+        font-size: 12.5px !important;
+        font-weight: 600;
+        color: var(--accent-deep);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* En estas filas horizontales el texto no se centra contra sus
+       controles: Streamlit cierra el markdown con `margin-bottom: -1rem`,
+       su contenedor mide 3px y el `<p>` cuelga 16px por debajo (medido:
+       «Vendidos en» 8px más abajo que sus botones). */
+    .st-key-rec_carta_mas_fila [data-testid="stMarkdownContainer"],
+    .st-key-rec_carta_plato_hdr [data-testid="stMarkdownContainer"],
+    .st-key-rec_carta_base_hdr [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    /* «↑ Subir» y «✕» de la receta base: chicos, del alto del título. */
+    .st-key-rec_carta_base_subir button,
+    .st-key-rec_carta_base_cerrar button {
+        min-height: 0 !important;
+        padding: 2px 10px !important;
+    }
+    .st-key-rec_carta_base_subir button p,
+    .st-key-rec_carta_base_cerrar button p {
+        font-size: 12px !important;
+    }
+    .rec-vend-rot {
+        margin: 0;
+        font-size: 12px !important;
+        color: var(--text-secondary);
     }
     /* Debajo de 640px Streamlit apila las columnas: el panel queda abajo de
        la tabla y la línea pasa de su costado a su borde de arriba. */

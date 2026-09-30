@@ -123,6 +123,9 @@ guarda por plato y no uno solo global para que ir a mirar otro plato y
 volver no borre lo que estabas probando."""
 
 _K_SIM_ON = "rv_comp_sim_on"
+AYUDA_SIMULAR = ("Cambiá cantidades y precios para ver cómo se mueven el "
+                 "costo y el margen. Es un borrador de esta sesión: no toca "
+                 "los datos ni se guarda.")
 
 
 def _precios_y_pesos(r):
@@ -142,8 +145,14 @@ def _precios_y_pesos(r):
     return r
 
 
-def _receta_original(df_f, foco, col_cod_plato, col_ins, col_cant, col_total):
-    """La receta tal como está en el parquet. `None` si faltan columnas."""
+def _receta_original(df_f, foco, col_cod_plato, col_ins, col_cant, col_total,
+                     col_cod_ins=None, col_factor=None):
+    """La receta tal como está en el parquet. `None` si faltan columnas.
+
+    Con `col_cod_ins`/`col_factor` suma `Cod` (el código de almacén del
+    insumo) y `Factor` (cuántas unidades de la receta hay en una del
+    kardex): con eso la Carta costeada reconoce un insumo que es RECETA BASE
+    y la abre proporcionada a lo que usa el plato (regla #572)."""
     if not (col_ins and col_total):
         return None
     items = df_f[df_f[col_cod_plato].astype(str) == foco].reset_index(drop=True)
@@ -153,6 +162,10 @@ def _receta_original(df_f, foco, col_cod_plato, col_ins, col_cant, col_total):
                      if col_cant else 0.0),
         "Costo": pd.to_numeric(items[col_total], errors="coerce").fillna(0.0),
     })
+    if col_cod_ins:
+        r["Cod"] = items[col_cod_ins].astype("string").fillna("").str.strip()
+    if col_factor:
+        r["Factor"] = pd.to_numeric(items[col_factor], errors="coerce").fillna(0.0)
     r = _precios_y_pesos(r)
     return r.sort_values("Costo", ascending=False).reset_index(drop=True)
 
@@ -260,8 +273,15 @@ def _sim_quitar(foco, marcadas):
 
 
 def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
-                  col_total):
+                  col_total, col_cod_ins=None, col_factor=None, toggle=True,
+                  titulo=True, dibujar_lectura=None):
     """La tarjeta de receta del plato en foco, en sus dos modos.
+
+    Desde la regla #572 la Carta costeada la pide sin el interruptor
+    «Simular» (`toggle=False`: lo pone en el renglón del nombre del
+    plato), sin título al pie (`titulo=False`: el nombre ya está arriba) y
+    con su propia tabla de lectura (`dibujar_lectura(orig)`), que se puede
+    clicar para abrir una receta base.
 
     Devuelve `(r, costo_sim)`: la receta VIGENTE —la del parquet o la del
     borrador— y el costo simulado, o `None` si no se esta simulando. Las
@@ -274,7 +294,7 @@ def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
     boton de volver.
     """
     orig = _receta_original(df_f, foco, col_cod_plato, col_ins, col_cant,
-                            col_total)
+                            col_total, col_cod_ins, col_factor)
     borradores = _sim_borradores()
     simulando = bool(st.session_state.get(_K_SIM_ON)) and orig is not None
 
@@ -282,7 +302,7 @@ def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
     if simulando:
         rotulo += " \u00b7 borrador, no se guarda"
 
-    with _card("rv_comp_receta", rotulo):
+    with _card("rv_comp_receta", rotulo if titulo else ""):
         if orig is None:
             st.info("No se reconoci\u00f3 la columna de insumo (INS RV) o "
                     "de costo (TOTAL) para mostrar la receta.")
@@ -291,12 +311,18 @@ def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
         # El toggle se dibuja SIEMPRE, tambien en modo lectura: un widget
         # que deja de renderizarse pierde su estado (CLAUDE.md § Streamlit),
         # y este es justamente el que decide si el resto se dibuja.
-        c_tog, c_vol = st.columns([2, 3], gap="small")
-        with c_tog:
-            st.toggle("Simular", key=_K_SIM_ON,
-                      help="Cambi\u00e1 cantidades y precios para ver c\u00f3mo se "
-                           "mueven el costo y el margen. Es un borrador de "
-                           "esta sesi\u00f3n: no toca los datos ni se guarda.")
+        if toggle:
+            c_tog, c_vol = st.columns([2, 3], gap="small")
+            with c_tog:
+                st.toggle("Simular", key=_K_SIM_ON, help=AYUDA_SIMULAR)
+        else:
+            # Quien llama dibuja el interruptor; el botón de volver, en el
+            # modo borrador, va en su propio renglón (y sólo entonces se
+            # crea: un contenedor vacío igual cobra el `gap`).
+            c_vol = None
+        if not simulando and dibujar_lectura is not None:
+            dibujar_lectura(orig)
+            return orig, None
         if not simulando:
             # El alto de SUS filas, hasta MINI: desde que la receta va al
             # costado de la tabla de la carta (regla #570), la de un solo
@@ -334,7 +360,7 @@ def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
             ]
         lineas = borradores[foco]
 
-        with c_vol:
+        with c_vol if c_vol is not None else st.container():
             # Sin `use_container_width`: con el ancho del contenedor se
             # estiraba a 3/5 de la fila, y un bot\u00f3n de deshacer con ese
             # peso se lee como la acci\u00f3n principal de la tarjeta \u2014 que es
@@ -352,19 +378,24 @@ def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
             use_container_width=True, height=alturas.MINI,
             disabled=["Insumo", "Costo"],
             column_config={
-                "Quitar": st.column_config.CheckboxColumn(width="small"),
+                # Anchos que suman ~390: el panel de la Carta costeada mide
+                # ~406 a 1366px (regla #572); con los automáticos el insumo
+                # se llevaba media tabla y la cantidad quedaba afuera.
+                "Quitar": st.column_config.CheckboxColumn(width=48),
+                "Insumo": st.column_config.TextColumn(width=140),
                 "Cantidad": st.column_config.NumberColumn(
-                    min_value=0.0, step=0.01, format="%.3f"),
+                    min_value=0.0, step=0.01, format="%.3f", width=64),
                 "Precio": st.column_config.NumberColumn(
                     "Precio unit.", min_value=0.0, step=0.01,
-                    format="S/ %.4f"),
+                    format="S/ %.4f", width=72),
                 # DESHABILITADA y por lo tanto con UNA pasada de atraso: lo
                 # que se ve aca es `Cantidad * Precio` de la corrida
                 # anterior, porque el frame se arma antes de leer lo
                 # editado. El Sankey y la dona NO tienen ese atraso -- salen
                 # de `lineas`, que si se actualiza mas abajo. Mismo trato
                 # que el «Subtotal» de `formulario_receta.py`.
-                "Costo": st.column_config.NumberColumn(format="S/ %.2f"),
+                "Costo": st.column_config.NumberColumn(format="S/ %.2f",
+                                                       width=64),
             },
         )
 
@@ -434,7 +465,8 @@ def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
         return r.sort_values("Costo", ascending=False).reset_index(drop=True), costo_sim
 
 
-def _dib_torta_costo_utilidad(neto, costo, pct, foco, costo_sim=None):
+def _dib_torta_costo_utilidad(neto, costo, pct, foco, costo_sim=None,
+                              alto=alturas.MINI):
     """Mini donut Costo/Utilidad del plato en foco: el costo contra
     (precio neto − costo). Si el costo supera al precio neto —pasa de
     verdad: arquitectura.md regla #205 mide bebidas premium con %Costo de
@@ -481,7 +513,7 @@ def _dib_torta_costo_utilidad(neto, costo, pct, foco, costo_sim=None):
         font=dict(size=13, color=TEXTO_PRINCIPAL, family="DM Sans, sans-serif"),
     )
     fig.update_layout(
-        height=alturas.MINI,
+        height=alto,
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
@@ -546,7 +578,8 @@ def _indice_clickeado(bruto):
         return None
 
 
-def _dib_sankey_insumo_costo(r, nombre_foco, foco, simulando=False):
+def _dib_sankey_insumo_costo(r, nombre_foco, foco, simulando=False,
+                             alto=alturas.MINI):
     """Mini Sankey plato→insumo del plato en foco, ancho del flujo
     proporcional al costo del insumo — mismo cálculo que tenía
     `_sankey_contenedor` (recetas_comun.py, borrada el 2026-08-30 al
@@ -620,7 +653,7 @@ def _dib_sankey_insumo_costo(r, nombre_foco, foco, simulando=False):
         ),
     ))
     fig.update_layout(
-        height=alturas.MINI,
+        height=alto,
         margin=dict(l=6, r=6, t=6, b=6),
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=10),
@@ -635,7 +668,7 @@ def _dib_sankey_insumo_costo(r, nombre_foco, foco, simulando=False):
         return
 
     plotly_events(fig, click_event=True, hover_event=False, select_event=False,
-                  override_height=alturas.MINI, key=key_sankey)
+                  override_height=alto, key=key_sankey)
 
     if en_foco is None:
         st.caption("Clic en un insumo para enfocarlo."
@@ -670,21 +703,26 @@ def columnas_receta(df):
     """Las columnas de recetaventa.parquet que usa el panel de la receta,
     resueltas contra `df` (`None` la que falte)."""
     if df is None:
-        return {"cod": None, "ins": None, "cant": None, "total": None}
+        return {"cod": None, "ins": None, "cant": None, "total": None,
+                "cod_ins": None, "factor": None}
     return {
         "cod": _resolver(df, ["COD PLATO", "Cod Plato"]),
         "ins": _resolver(df, ["INS RV", "Ins Rv"]),
         "cant": _resolver(df, ["CANTIDAD", "Cantidad"]),
         "total": _resolver(df, ["TOTAL", "Total"]),
+        "cod_ins": _resolver(df, ["COD INS", "Cod Ins"]),
+        "factor": _resolver(df, ["FACTOR", "Factor"]),
     }
 
 
-def receta_del_plato(df_rv, cod, nombre):
+def receta_del_plato(df_rv, cod, nombre, **opciones):
     """La tarjeta de la receta del plato `cod`, con su simulador.
 
     Devuelve `(r, costo_sim)` como `_panel_receta`: la receta vigente —la
     del parquet o la del borrador— y el costo del borrador, o `None` si no
-    se está simulando. Las dos las usan la dona y el Sankey de al lado."""
+    se está simulando. Las dos las usan la dona y el Sankey de al lado.
+    `opciones` van tal cual a `_panel_receta` (`toggle`, `titulo`,
+    `dibujar_lectura`)."""
     c = columnas_receta(df_rv)
     if not c["cod"]:
         with _card("rv_comp_receta", "Receta"):
@@ -692,4 +730,5 @@ def receta_del_plato(df_rv, cod, nombre):
                     "receta.")
         return None, None
     return _panel_receta(df_rv, str(cod), nombre, c["cod"], c["ins"],
-                         c["cant"], c["total"])
+                         c["cant"], c["total"], c["cod_ins"], c["factor"],
+                         **opciones)

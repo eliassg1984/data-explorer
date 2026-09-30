@@ -6487,7 +6487,10 @@ def _pruebas_carta_costeada():
     check("buscar sin acentos ni mayúsculas",
           list(cc.filtrar(t, buscar="aji de")["Cod"]), ["0000060"])
     check("con inactivos", len(cc.preparar(df, incluir_inactivos=True)[0]), 5)
-    check("el resumen cuenta los sin costo", "**2** sin costo cargado" in cc.resumen(t), True)
+    # Sin la línea de números de arriba de la tabla ni la del producto: se
+    # quitaron a pedido para que la tarjeta entre en una pantalla (#572).
+    check("sin resumen ni línea de números del producto",
+          (hasattr(cc, "resumen"), hasattr(cc, "kpis_producto")), (False, False))
 
     check("está en la pila de Recetas",
           ("rec_sec_carta", "Carta costeada") in rec._PILA, True)
@@ -6552,14 +6555,20 @@ def _pruebas_carta_costeada():
     check("un producto sin ventas, 0", fv.loc["0000030", "Vendidos"], 0.0)
     check("«Sin costo» se ordena por lo vendido",
           list(cc.filtrar(tv, tipo="Sin costo")["Cod"]), ["0000020", "0000060"])
-    check("el resumen dice cuántos sin costo se venden",
-          "(**1** se venden)" in cc.resumen(tv), True)
     check("sin resumen de ventas la vista sigue, en cero",
           (cc.con_ventas(t, None)[1], float(cc.con_ventas(t, None)[0]["Vendidos"].sum())),
           (None, 0.0))
-    kp = cc.kpis_producto(fv.loc["0000010"], rango)
-    check("los números del producto elegido",
-          ("**5** vendidos" in kp, "**40.0 %** de costo" in kp), (True, True))
+    # La ventana de «Vendidos» se elige (regla #572): con 30 días, lo del
+    # 1 de julio queda fuera y lo del 27 de setiembre dentro.
+    t30, r30 = cc.con_ventas(t, agg, cc.VENTANAS_VENDIDOS["30 días"])
+    check("con 30 días, sólo lo vendido en esos 30",
+          (r30, float(t30.set_index("Cod").loc["0000010", "Vendidos"])),
+          ((date(2026, 8, 29), date(2026, 9, 27)), 3.0))
+    t365, _ = cc.con_ventas(t, agg, cc.VENTANAS_VENDIDOS["1 año"])
+    check("con un año, también lo de junio",
+          float(t365.set_index("Cod").loc["0000010", "Vendidos"]), 105.0)
+    check("la ventana por defecto sigue en 90 días",
+          cc.VENTANAS_VENDIDOS["90 días"], cc.DIAS_VENDIDOS)
 
     # El costo en el tiempo (regla #557): la foto del POS, por mes.
     cm = cc.costo_mensual(agg, "0000010")
@@ -6615,10 +6624,40 @@ def _pruebas_carta_costeada():
           ["0000010", "0000060"])
     check("filtro No impresa",
           list(cc.filtrar(to, oferta=cc.OFERTAS["No impresa"])["Cod"]), ["0000020"])
-    check("el resumen dice cuántos están en la carta impresa",
-          "**2** en la carta impresa" in cc.resumen(to), True)
     check("Ver ofrece Impresa y No impresa",
           all(o in cc.VER_OFERTA for o in cc.OFERTAS), True)
+
+    # Las recetas base (regla #572): un insumo de la receta es receta base
+    # si su código de almacén es el `COD PROD RB` de una; se abre
+    # proporcionada a lo que usa el plato (40 g de un kilo = 0,04).
+    rb = pd.DataFrame({
+        "COD RB": ["00329", "00329", "00330"],
+        "COD PROD RB": ["0003215", "0003215", "0002554"],
+        "RB ACT": ["RB.ACTIV"] * 3,
+        "COD INS RB": ["0000527", "0002554", "0000460"],
+        "INSUMO": ["Vino Tinto De Cocina", "(Rs) Demiglace de Res", "Sal De Mesa"],
+        "CANT": [1000.0, 3000.0, 15.0],
+        "FACTOR INS": [1000.0, 1000.0, 1000.0],
+        "CST SUBT INS": [11.446077, 27.34561, 0.025609],
+    })
+    bases = cc.codigos_base(rb)
+    check("qué artículos tienen receta base", sorted(bases), ["0002554", "0003215"])
+    tb = cc.receta_base(rb, "0003215", 40 / 1000, bases)
+    check("la receta base, proporcionada a lo que usa el plato",
+          [round(v, 4) for v in tb["Costo"]], [round(27.34561 * 0.04, 4),
+                                                round(11.446077 * 0.04, 4)])
+    check("y sus cantidades también", [round(v, 3) for v in tb["Cantidad"]],
+          [120.0, 40.0])
+    check("marca la receta base que tiene adentro", list(tb["EsBase"]), [True, False])
+    check("el % es sobre el total de la receta base",
+          round(float(tb["%"].sum()), 6), 100.0)
+    fil = cc._filas_clic(tb, bases)
+    check("abrir la de adentro: su escala es su cantidad ÷ su factor",
+          round(fil[0]["escala"], 6), 0.12)
+    check("un artículo sin receta base, tabla vacía",
+          (cc.receta_base(rb, "0000460", 1.0, bases).empty,
+           cc.receta_base(None, "0003215").empty, cc.codigos_base(None)),
+          (True, True, frozenset()))
 
     rv = pd.DataFrame({"COD PLATO": ["0000010", "0000010", "0000030"],
                        "FECH MODIF": pd.to_datetime(["2022-09-23", "2022-09-23",

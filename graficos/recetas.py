@@ -235,11 +235,11 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         # Su parquet —y lo vendido por producto, de ventas.parquet— se
         # cargan ACÁ, dentro de la sección, y no arriba con los otros dos:
         # la pila es perezosa y así sólo los baja quien llega a la vista
-        # (mismo patrón que Porcionamientos en Movimientos). Sus dos
-        # tarjetas —la carta y la del producto elegido— las arma
-        # `render_carta_costeada`.
+        # (mismo patrón que Porcionamientos en Movimientos). Su tarjeta
+        # —la carta y, al costado, el producto elegido, con sus recetas
+        # base— la arma `render_carta_costeada`.
         render_carta_costeada(_cargar_reporte(ARCHIVO_CARTA), df_rv=df_f,
-                              ventas=venta_por_producto_dia())
+                              ventas=venta_por_producto_dia(), df_rb=df_rb)
 
     def _dib_revisar():
         # Lo que lee (porcionamientos, el primer nivel de las ventas, el

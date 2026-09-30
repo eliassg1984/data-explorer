@@ -441,6 +441,12 @@ resto de `graficos/compras/`.
   elegirla diga por qué, `graficos/ventas_horario.py::_pastillas` (el valor
   en una sombra, un callback que rebota y «· no aplica» en la lista).
   Reglas #555 y #561.
+- **La barrita de íconos de un `st.dataframe` (`.stElementToolbar`) flota
+  ENCIMA del renglón de arriba** mientras el cursor está en la tabla, y se
+  come el clic de lo que haya ahí (un botón, un interruptor). Y una tabla sin
+  el foco se come el PRIMER clic sobre una fila ya marcada: «soltá la fila
+  para cerrar» pide a veces dos clics — mejor un botón de cerrar que estrene
+  la tabla (`graficos/carta_costeada.py::_cerrar_base`). Regla #572.
 - **Un `st.toast` seguido de un `st.rerun()` no se ve NUNCA** (medido): el
   rerun se lo lleva antes de pintarlo. El acuse viaja por `session_state`
   y lo pinta la corrida siguiente. Misma #474.

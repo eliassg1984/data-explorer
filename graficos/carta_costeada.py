@@ -55,6 +55,7 @@ usaba AgGrid sólo para el clic en una fila; `st.dataframe` lo hace con
 
 import hashlib
 import math
+from functools import partial
 from html import escape
 
 import numpy as np
@@ -67,7 +68,8 @@ from graficos import alturas
 from graficos.base import _card, _compras_layout, _es_movil, _resolver
 from graficos.recetas_comun import divisor_neto
 from graficos.recetaventa import (
-    _dib_sankey_insumo_costo, _dib_torta_costo_utilidad, receta_del_plato,
+    _K_SIM_ON, AYUDA_SIMULAR, _dib_sankey_insumo_costo,
+    _dib_torta_costo_utilidad, receta_del_plato,
 )
 from graficos.ventas_mix import pct_costo
 from tema import (ACENTO, ADVERTENCIA, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO,
@@ -119,10 +121,26 @@ GRUPO_VENTA_INTERNA = "Venta Interna"
 interruptor, a pedido: encabezaban la tabla sin decir nada de la carta."""
 
 DIAS_VENDIDOS = 90
-"""La ventana de «Vendidos»: 90 días hasta el último día con venta."""
+"""La ventana de «Vendidos» por defecto: 90 días hasta el último día con
+venta."""
 
-MIN_VENDIDOS = 10
-"""Cuántas ventas en la ventana hacen que un % alto importe (el resumen)."""
+VENTANAS_VENDIDOS = {"30 días": 30, "90 días": 90, "6 meses": 180,
+                     "1 año": 365}
+"""Las ventanas que se pueden elegir para «Vendidos» (regla #572). Terminan
+todas en el último día con venta del resumen, no hoy."""
+
+_K_VENTANA = "rec_carta_vend_ventana"
+"""El selector de la ventana de «Vendidos». Se dibuja sólo con «Más
+columnas» —es la columna que mide—, y con `persist_state="page"` conserva
+lo elegido mientras está escondido."""
+
+_K_BASE = "rec_carta_base"
+"""La receta base abierta en el panel: `{"plato", "ruta", "aviso", "gen"}`.
+`ruta` es la lista de recetas base abiertas, de la del plato a la más
+adentro; cada una `{"cod", "nombre", "escala", "costo", "es_base"}`. La
+escriben los clics en las tablas (callbacks), antes de la corrida que
+dibuja. `gen` va en la key de la tabla de la receta y la sube «✕»: cerrar
+estrena la tabla, sin la fila marcada."""
 
 _SIN_FECHA = pd.Timestamp("1900-01-01")
 """Una fecha que falta. `st.dataframe` pinta «None» en un vacío aunque el
@@ -315,45 +333,6 @@ def filtrar(t, grupo="Todos", tipo="Todos", buscar="", venta_interna=False,
     return t
 
 
-def resumen(t, que="productos"):
-    """La línea de números de arriba de la tabla (`que`: cómo se llaman las
-    filas — «productos» en la carta, «combos» en su modo). El % de costo va en
-    MEDIANA y no en promedio: con precios de S/ 3 al lado de S/ 400, un
-    promedio de porcentajes lo mueven los baratos (la #199: un ratio no se
-    promedia). Con lo vendido a mano, dice cuántos de los caros y de los sin
-    costo se VENDEN: de los que pasan el 35 %, la mitad no se vendió en 90
-    días."""
-    if t.empty:
-        return "Sin productos con este filtro."
-    vende = "Vendidos" in t.columns
-    con = t[~t["SinCosto"]]
-    partes = [f"**{len(t):,}** {que[:-1] if len(t) == 1 else que}"]
-    if len(con):
-        partes.append(f"% de costo mediano **{con['Pct'].median():.1f} %**")
-        alto = con[con["Pct"] > _UMBRAL_COSTO_WARN]
-        texto = f"**{len(alto)}** sobre {_UMBRAL_COSTO_WARN} %"
-        if vende and len(alto):
-            n = int((alto["Vendidos"] >= MIN_VENDIDOS).sum())
-            texto += f" (**{n}** con {MIN_VENDIDOS} o más ventas en {DIAS_VENDIDOS} días)"
-        partes.append(texto)
-    n_sin = int(t["SinCosto"].sum())
-    if n_sin:
-        texto = f"**{n_sin}** sin costo cargado"
-        if vende:
-            n = int((t["SinCosto"] & (t["Vendidos"] > 0)).sum())
-            if n:
-                texto += f" (**{n}** se venden)"
-        partes.append(texto)
-    if "Oferta" in t.columns and que != "combos":
-        n_imp = int((t["Oferta"] == OFERTAS["Impresa"]).sum())
-        if 0 < n_imp < len(t):
-            partes.append(f"**{n_imp}** en la carta impresa")
-    n_combo = int((t["Tipo"] == "Combo").sum())
-    if n_combo and que != "combos":
-        partes.append(f"**{n_combo}** combos")
-    return " · ".join(partes)
-
-
 def _estilo_pct(v):
     """El semáforo (30 / 35 %), en el color del texto."""
     if not v:
@@ -481,10 +460,10 @@ def columnas_carta(mas=False, con_ventas_=True, movil=False):
     return cols
 
 
-def _tabla_carta(t, pos_foco, rango, mas=False):
+def _tabla_carta(t, pos_foco, rango, mas=False, dias=DIAS_VENDIDOS):
     movil = _es_movil()
     cols = columnas_carta(mas, rango is not None, movil)
-    col_vend = f"Vendidos {DIAS_VENDIDOS} d"
+    col_vend = f"Vendidos {dias} d"
     v = t[cols].rename(columns={
         "Pct": "% costo", "Precio": "P. venta", "Neto": "P. neto",
         "UltimaVenta": "Última venta", "Vendidos": col_vend})
@@ -506,7 +485,7 @@ def _tabla_carta(t, pos_foco, rango, mas=False):
     # nombre lo pondría delante del grupo— y las pinta en gris. En el
     # teléfono, sólo el nombre, que ya va primero: las tres no entran.
     fija = bool(mas) and not movil
-    vendidos_help = (f"Unidades vendidas en los últimos {DIAS_VENDIDOS} días "
+    vendidos_help = (f"Unidades vendidas en los últimos {dias} días "
                      "hasta el último día con venta")
     if rango is not None:
         vendidos_help += f": del {rango[0]:%d/%m/%Y} al {rango[1]:%d/%m/%Y}"
@@ -598,30 +577,6 @@ def _tabla_combos(t, pos_foco, mas=False):
 
 
 # ─── El panel del producto elegido ────────────────────────────────────────
-def kpis_producto(f, rango):
-    """La línea de números del producto elegido, en markdown. `f` es su fila
-    de la carta (con lo vendido, si hay `rango`). Pura."""
-    partes = []
-    if f["SinCosto"]:
-        partes.append("**sin costo** cargado en el POS")
-    else:
-        partes.append(f"% de carta **{f['Pct']:.1f} %**")
-        partes.append(f"margen **{_soles(f['Margen'])}** por unidad")
-    if rango is not None:
-        n = float(f.get("Vendidos", 0.0))
-        if n:
-            txt = f"en {DIAS_VENDIDOS} días: **{n:,.0f}** vendidos"
-            if f.get("PctVendido", 0.0):
-                txt += f", al **{f['PctVendido']:.1f} %** de costo"
-            partes.append(txt)
-        else:
-            partes.append(f"sin ventas en {DIAS_VENDIDOS} días")
-    act = f.get("Actualizado", _SIN_FECHA)
-    if f["Tipo"] == "Receta" and pd.notna(act) and act > _SIN_FECHA:
-        partes.append(f"receta actualizada el **{_dia(act)}**")
-    return " · ".join(partes)
-
-
 def _descarga(f):
     """Lo que va en el lugar de la receta cuando el producto no tiene una."""
     with _card("rec_carta_descarga", "Qué descarga del almacén"):
@@ -699,7 +654,7 @@ def _etiqueta_mes(p):
     return f"{MESES_ABR_ES[p.month - 1]} {p.year % 100:02d}"
 
 
-def _dib_costo_en_el_tiempo(f, agg):
+def _dib_costo_en_el_tiempo(f, agg, alto=alturas.MINI):
     """La línea del costo por unidad al vender y, punteado, el de hoy."""
     g = costo_mensual(agg, f["Cod"])
     if g.empty:
@@ -749,7 +704,7 @@ def _dib_costo_en_el_tiempo(f, agg):
                       annotation_text=f"hoy S/ {f['Costo']:,.2f}",
                       annotation_position="top left",
                       annotation_font=dict(size=10, color=GRIS_TEXTO))
-    _compras_layout(fig, alto=alturas.MINI)
+    _compras_layout(fig, alto=alto)
     # Un rótulo cada tanto: veinte meses en 430px se pisan (y girados comen
     # alto). Categorías SIEMPRE: «ene 25» en un eje sin tipo lo decide
     # Plotly (#448).
@@ -785,23 +740,236 @@ def _dib_costo_en_el_tiempo(f, agg):
                    "de la línea sale baja.")
 
 
-def _panel(f, df_rv, rango, ventas=None):
-    """Al costado de la tabla (regla #570): el producto elegido, su línea
-    de números, su receta (o lo que descarga) y, debajo, la dona / el Sankey
-    / su costo en el tiempo. Lo que era la parte de abajo de «Composición»
-    (regla #556), más el costo con que se vendió (regla #557).
+# ─── Las recetas base (regla #572) ───────────────────────────────────────
+# Un insumo de la receta de un plato es RECETA BASE cuando su código de
+# almacén (`COD INS` de recetaventa) es el de un artículo con receta en
+# recetabase (`COD PROD RB`, uno por receta base). La receta base guarda lo
+# que lleva UNA unidad suya (un kilo de demiglace, una molleja cocida); el
+# plato usa `CANTIDAD ÷ FACTOR` unidades (40 g ÷ 1.000 = 0,04 kg), y por eso
+# su tabla sale proporcionada: los costos suman lo de esa línea de la receta
+# (medido el 2026-09-30: 821 de 866 líneas, al 1 %; las otras las costea el
+# precio promedio del almacén, que no es el de la receta).
+def codigos_base(df_rb):
+    """Los códigos de almacén que tienen receta base. Pura."""
+    if df_rb is None or df_rb.empty:
+        return frozenset()
+    c = _resolver(df_rb, ["COD PROD RB"])
+    if not c:
+        return frozenset()
+    return frozenset(df_rb[c].dropna().astype(str).str.strip())
 
-    La receta y el gráfico van UNO ARRIBA DEL OTRO y no lado a lado, como
-    iban cuando el panel ocupaba el ancho entero: en ~440px no entran dos, y
-    los dos se leen juntos — el simulador edita la receta y la dona y el
-    Sankey siguen al borrador."""
+
+def receta_base(df_rb, cod, escala=1.0, bases=frozenset()):
+    """Los insumos de la receta base del artículo `cod`, proporcionados a
+    `escala` unidades de ella: Cod, Insumo, Cantidad, Costo, %, Factor y
+    EsBase (si ese insumo tiene, a su vez, receta base). Pura."""
+    cols = ["Cod", "Insumo", "Cantidad", "Costo", "%", "Factor", "EsBase"]
+    if df_rb is None or df_rb.empty:
+        return pd.DataFrame(columns=cols)
+    c = {n: _resolver(df_rb, [n]) for n in (
+        "COD PROD RB", "COD INS RB", "INSUMO", "CANT", "FACTOR INS",
+        "CST SUBT INS")}
+    if not all(c.values()):
+        return pd.DataFrame(columns=cols)
+    d = df_rb[df_rb[c["COD PROD RB"]].astype(str).str.strip() == str(cod).strip()]
+    d = d[d[c["COD INS RB"]].notna()]
+    out = pd.DataFrame({
+        "Cod": d[c["COD INS RB"]].astype(str).str.strip(),
+        "Insumo": d[c["INSUMO"]].astype(str),
+        "Cantidad": pd.to_numeric(d[c["CANT"]], errors="coerce").fillna(0.0) * escala,
+        "Costo": pd.to_numeric(d[c["CST SUBT INS"]], errors="coerce").fillna(0.0) * escala,
+        "Factor": pd.to_numeric(d[c["FACTOR INS"]], errors="coerce").fillna(0.0),
+    })
+    total = out["Costo"].sum() or 1.0
+    out["%"] = out["Costo"] / total * 100
+    out["EsBase"] = out["Cod"].isin(bases)
+    return out.sort_values("Costo", ascending=False).reset_index(drop=True)[cols]
+
+
+def _escala(cantidad, factor):
+    """Cuántas unidades de la receta base usa una línea: su cantidad (en la
+    unidad de la receta) ÷ el factor a la unidad del kardex."""
+    return float(cantidad) / float(factor) if factor and factor > 0 else float(cantidad)
+
+
+def _filas_clic(r, bases):
+    """Lo que un clic en la fila `i` de la tabla `r` necesita saber."""
+    cods = r["Cod"] if "Cod" in r.columns else pd.Series("", index=r.index)
+    facts = r["Factor"] if "Factor" in r.columns else pd.Series(0.0, index=r.index)
+    return [{"cod": str(c), "nombre": str(n), "escala": _escala(q, fa),
+             "costo": float(co), "es_base": str(c) in bases}
+            for c, n, q, fa, co in zip(cods, r["Insumo"], r["Cantidad"], facts,
+                                       r["Costo"])]
+
+
+def _al_elegir_en_receta(key, plato, filas):
+    """Clic en la receta del plato: abre la receta base de esa fila, o la
+    cierra si se soltó la fila o si el insumo no tiene."""
+    fila = _fila_elegida(st.session_state.get(key))
+    gen = (st.session_state.get(_K_BASE) or {}).get("gen", 0)
+    estado = {"plato": plato, "ruta": [], "gen": gen}
+    if fila is not None and 0 <= fila < len(filas):
+        if filas[fila]["es_base"]:
+            estado["ruta"] = [filas[fila]]
+        else:
+            estado["aviso"] = filas[fila]["nombre"]
+    st.session_state[_K_BASE] = estado
+
+
+def _al_elegir_en_base(key, plato, ruta, filas):
+    """Clic en una receta base abierta: si esa fila también es receta base,
+    se abre ella (un nivel más adentro)."""
+    fila = _fila_elegida(st.session_state.get(key))
+    if fila is not None and 0 <= fila < len(filas) and filas[fila]["es_base"]:
+        e = st.session_state.get(_K_BASE) or {}
+        st.session_state[_K_BASE] = {"plato": plato, "ruta": ruta + [filas[fila]],
+                                     "gen": e.get("gen", 0)}
+
+
+def _subir_base(plato):
+    e = st.session_state.get(_K_BASE) or {}
+    if e.get("plato") == plato:
+        st.session_state[_K_BASE] = {"plato": plato, "gen": e.get("gen", 0),
+                                     "ruta": list(e.get("ruta", []))[:-1]}
+
+
+def _cerrar_base(plato):
+    """«✕»: cierra la receta base y estrena la tabla de la receta. Soltar la
+    fila también la cierra, pero la tabla que no tiene el foco se come el
+    primer clic sobre una fila ya marcada (medido: después de tocar otro
+    control, hacían falta dos)."""
+    e = st.session_state.get(_K_BASE) or {}
+    st.session_state[_K_BASE] = {"plato": plato, "ruta": [],
+                                 "gen": e.get("gen", 0) + 1}
+
+
+def _estado_base(plato):
+    """El estado de la receta base abierta PARA ESTE PLATO. Si era de otro,
+    se vacía: la tabla de la receta nace sin fila elegida, y dejarlo haría
+    que al volver al plato apareciera abierta una receta base sin su fila."""
+    e = st.session_state.get(_K_BASE) or {}
+    if e.get("plato") != plato:
+        e = {"plato": plato, "ruta": [], "gen": e.get("gen", 0)}
+        st.session_state[_K_BASE] = e
+    return e
+
+
+_CFG_RECETA = {
+    # Suman 366 + los 36 de la casilla de selección: el panel mide ~406 a
+    # 1366px con el rail plegado (medido; con los anchos automáticos el
+    # número del «%» quedaba cortado contra el borde).
+    "Insumo": st.column_config.TextColumn(width=146),
+    "Cantidad": st.column_config.NumberColumn(format="%.3f", width=64),
+    "Costo": st.column_config.NumberColumn(format="S/ %.2f", width=66),
+    "%": st.column_config.ProgressColumn(format="%.1f%%", min_value=0,
+                                         max_value=100, width=90),
+}
+
+
+def _con_flecha(r):
+    """La tabla a mostrar: «▸» delante de lo que es receta base, que es lo
+    que se puede abrir. En una copia: el Sankey usa los nombres tal cual."""
+    v = r[["Insumo", "Cantidad", "Costo", "%"]].copy()
+    if "EsBase" in r.columns:
+        v["Insumo"] = np.where(r["EsBase"], "▸ " + r["Insumo"], r["Insumo"])
+    return v
+
+
+def _tabla_receta(orig, plato, bases):
+    """La receta del plato en lectura, clicable (regla #572)."""
+    r = orig.copy()
+    r["EsBase"] = (r["Cod"].isin(bases) if "Cod" in r.columns
+                   else pd.Series(False, index=r.index))
+    filas = _filas_clic(r, bases)
+    gen = _estado_base(plato).get("gen", 0)
+    key = _key_tabla(f"rec_carta_rv_{plato}_{gen}",
+                     [f"{x['cod']}:{x['nombre']}" for x in filas])
+    st.dataframe(_con_flecha(r), key=key,
+                 on_select=partial(_al_elegir_en_receta, key, plato, filas),
+                 selection_mode="single-row", hide_index=True, row_height=27,
+                 height=alturas.por_filas(len(r), px_fila=27, extra=38,
+                                          minimo=0, rol=alturas.CARTA_RECETA),
+                 column_config=_CFG_RECETA)
+    e = _estado_base(plato)
+    if e.get("aviso") and not e.get("ruta"):
+        st.caption(f"«{e['aviso']}» es un insumo de compra: no tiene receta base.")
+    elif r["EsBase"].any() and not e.get("ruta"):
+        st.caption("▸ receta base: clic en la fila para ver de qué está hecha.")
+
+
+def _bloque_base(df_rb, plato, ruta, bases):
+    """Debajo de la receta, en el lugar del gráfico: la receta base abierta,
+    proporcionada a lo que lleva UN plato. Va en el lugar del gráfico y con
+    su mismo alto para que abrirla no estire la tarjeta (regla #572)."""
+    actual = ruta[-1]
+    rb = receta_base(df_rb, actual["cod"], actual["escala"], bases)
+    with st.container(key="rec_carta_base_caja"):
+        with st.container(horizontal=True, vertical_alignment="center",
+                          key="rec_carta_base_hdr"):
+            # La ABIERTA primero: con el camino entero («A › B») el renglón
+            # se cortaba en la de afuera y la que se estaba viendo no se
+            # leía (medido en el segundo nivel). El camino va en el tooltip.
+            migas = " › ".join(x["nombre"] for x in ruta)
+            st.markdown(f'<p class="rec-base-tit" title="{escape(migas)}">'
+                        f'Receta base · {escape(actual["nombre"])}</p>',
+                        unsafe_allow_html=True)
+            if len(ruta) > 1:
+                st.button("↑ Subir", key="rec_carta_base_subir",
+                          on_click=_subir_base, args=(plato,))
+            st.button("✕", key="rec_carta_base_cerrar",
+                      on_click=_cerrar_base, args=(plato,))
+        if rb.empty:
+            st.info("La receta base no tiene insumos cargados.")
+            return
+        filas = _filas_clic(rb, bases)
+        key = _key_tabla(f"rec_carta_rb_{plato}_" + "-".join(x["cod"] for x in ruta),
+                         [f"{x['cod']}:{x['nombre']}" for x in filas])
+        st.dataframe(_con_flecha(rb), key=key,
+                     on_select=partial(_al_elegir_en_base, key, plato, ruta, filas),
+                     selection_mode="single-row", hide_index=True, row_height=27,
+                     height=alturas.por_filas(len(rb), px_fila=27, extra=38,
+                                              minimo=0, rol=alturas.CARTA_RECETA),
+                     column_config=_CFG_RECETA)
+        total = float(rb["Costo"].sum())
+        pie = f"Lo que lleva un plato: S/ {total:,.2f}"
+        if abs(total - actual["costo"]) > max(0.01, 0.01 * abs(actual["costo"])):
+            # Las líneas que no cuadran las costea el precio promedio del
+            # almacén, no la receta (45 de 866 al 2026-09-30).
+            pie += (f" (la receta del plato lo costea en S/ {actual['costo']:,.2f}, "
+                    "al precio promedio del almacén)")
+        pie += "."
+        if rb["EsBase"].any():
+            pie += " ▸ abre la de adentro."
+        st.caption(pie)
+
+
+def _panel(f, df_rv, dias, ventas=None, df_rb=None):
+    """Al costado de la tabla (regla #570): el producto elegido, su receta
+    (o lo que descarga) y, debajo, la dona / el Sankey / su costo en el
+    tiempo — o la receta base que se abrió con un clic en la receta (regla
+    #572). Lo que era la parte de abajo de «Composición» (regla #556), más
+    el costo con que se vendió (regla #557).
+
+    Desde la #572 cabe en una pantalla de 1366×768: sin la línea de números
+    del producto (a pedido), con «Simular» en el renglón del nombre y el
+    gráfico de 200px."""
     cod, nombre = str(f["Cod"]), str(f["Producto"])
+    es_receta = f["Tipo"] == "Receta"
+    simulando = es_receta and bool(st.session_state.get(_K_SIM_ON))
+    bases = codigos_base(df_rb)
     with st.container(key="rec_carta_plato"):
-        ruta = " › ".join(x for x in (f["Grupo"], f["Subgrupo"]) if x)
-        st.markdown(f'<p class="chart-card-hdr">{escape(nombre)} · '
-                    f'{escape(ruta)} · {escape(f["Tipo"])}</p>',
-                    unsafe_allow_html=True)
-        st.markdown(kpis_producto(f, rango))
+        ruta_txt = " › ".join(x for x in (f["Grupo"], f["Subgrupo"]) if x)
+        with st.container(horizontal=True, vertical_alignment="center",
+                          key="rec_carta_plato_hdr"):
+            st.markdown(f'<p class="chart-card-hdr">{escape(nombre)} · '
+                        f'{escape(ruta_txt)} · {escape(f["Tipo"])}'
+                        + (" · borrador, no se guarda" if simulando else "")
+                        + '</p>', unsafe_allow_html=True)
+            if es_receta:
+                # Acá y no adentro de la receta: un renglón menos. Se dibuja
+                # SIEMPRE que hay receta —un widget que no se dibuja pierde
+                # su estado, y este decide si la tabla es un editor—.
+                st.toggle("Simular", key=_K_SIM_ON, help=AYUDA_SIMULAR)
         sin_costo_neto = float(f.get("SinCostoNeto", 0.0))
         if sin_costo_neto > 0:
             # Dos historias distintas con el mismo número: el que HOY no
@@ -813,31 +981,45 @@ def _panel(f, df_rv, rango, ventas=None):
                      "se vendió antes de que el POS se lo cargara")
             st.markdown(
                 f'<p style="color:{ADVERTENCIA_TEXTO};margin:0">'
-                f'S/ {sin_costo_neto:,.0f} de lo vendido en {DIAS_VENDIDOS} '
+                f'S/ {sin_costo_neto:,.0f} de lo vendido en {dias} '
                 f'días entró al FoodCost con costo 0: {causa}, y así queda '
                 f'guardado.</p>', unsafe_allow_html=True)
-        if f["Tipo"] == "Receta":
-            r, costo_sim = receta_del_plato(df_rv, cod, nombre)
+        if es_receta:
+            r, costo_sim = receta_del_plato(
+                df_rv, cod, nombre, toggle=False, titulo=False,
+                dibujar_lectura=partial(_tabla_receta, plato=cod, bases=bases))
         else:
             r, costo_sim = None, None
             _descarga(f)
+        # Simulando, la tabla es un editor sin clic: nada abierto (y al
+        # volver, la tabla de lectura nace sin fila elegida).
+        e = _estado_base(cod)
+        if simulando and e.get("ruta"):
+            e = {"plato": cod, "ruta": []}
+            st.session_state[_K_BASE] = e
+        if e.get("ruta"):
+            _bloque_base(df_rb, cod, e["ruta"], bases)
+            return
         with _card("rec_carta_mini"):
             # NO `st.tabs`: dibuja las dos pestañas y esconde la otra, y
             # un `plotly_events` escondido mide 0 y alterna su alto sin
-            # fin — trababa la página entera (regla #500).
+            # fin — trababa la página entera (regla #500). Y `persist_state`:
+            # mientras hay una receta base abierta este control no se
+            # dibuja, y al cerrarla vuelve como quedó.
             vista = st.segmented_control(
                 "Vista", ["Costo / Utilidad", "Sankey", "En el tiempo"],
                 default="Costo / Utilidad", key="rec_carta_mini_vista",
-                label_visibility="collapsed")
+                label_visibility="collapsed", persist_state="page")
+            alto = alturas.CARTA_FIG
             if vista == "En el tiempo":
-                _dib_costo_en_el_tiempo(f, ventas)
+                _dib_costo_en_el_tiempo(f, ventas, alto=alto)
             elif vista == "Sankey":
                 if r is None:
                     st.info("Sin receta no hay Sankey: el Sankey reparte "
                             "el costo entre los insumos de la receta.")
                 else:
                     _dib_sankey_insumo_costo(r, nombre, cod,
-                                             costo_sim is not None)
+                                             costo_sim is not None, alto=alto)
             elif f["SinCosto"] and costo_sim is None:
                 # Sin costo, la dona dibujaría «0 % de costo» y toda la
                 # porción como utilidad: una cifra que no existe.
@@ -845,16 +1027,17 @@ def _panel(f, df_rv, rango, ventas=None):
                         "precio entre costo y utilidad.")
             else:
                 _dib_torta_costo_utilidad(f["Neto"], f["Costo"], f["Pct"],
-                                          cod, costo_sim)
+                                          cod, costo_sim, alto=alto)
 
 
 # ─── La vista ─────────────────────────────────────────────────────────────
-def render_carta_costeada(df, df_rv=None, ventas=None):
+def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
     """La vista entera: UNA tarjeta con la carta a la izquierda y el
     producto elegido a la derecha (regla #570). `df` es
     `cartacosteada.parquet` (o None si no se pudo cargar); `df_rv`,
     recetaventa.parquet (las recetas y su fecha); `ventas`, lo vendido por
-    producto y día (`data.venta_por_producto_dia`), o None."""
+    producto y día (`data.venta_por_producto_dia`), o None; `df_rb`,
+    recetabase.parquet (para abrir una receta base), o None."""
     ss = st.session_state
     # LO ELEGIDO, ANTES DE DIBUJAR NADA: la tabla nueva sale con eso marcado.
     _leer_eleccion("rec_carta_tabla")
@@ -876,7 +1059,14 @@ def render_carta_costeada(df, df_rv=None, ventas=None):
         fechas = fechas_de_receta(df_rv)
         carta["Actualizado"] = pd.to_datetime(
             carta["Cod"].map(fechas), errors="coerce").fillna(_SIN_FECHA)
-        carta, rango = con_ventas(carta, ventas)
+        # La ventana de «Vendidos» se lee ANTES de dibujar su selector, que va
+        # más abajo, encima de la tabla: Streamlit ya dejó en el estado lo
+        # que se eligió en el clic que disparó esta corrida.
+        ventana = ss.get(_K_VENTANA)
+        if ventana not in VENTANAS_VENDIDOS:
+            ventana = "90 días"
+        dias = VENTANAS_VENDIDOS[ventana]
+        carta, rango = con_ventas(carta, ventas, dias)
         grupos = ["Todos"] + sorted(
             g for g in carta["Grupo"].unique()
             if g and (vi or g.casefold() != GRUPO_VENTA_INTERNA.casefold()))
@@ -928,14 +1118,15 @@ def render_carta_costeada(df, df_rv=None, ventas=None):
                       help="Sumar los productos «(Cst)» de Venta Interna, que se "
                            "venden a precio de costo y por eso pasan el 100 %")
 
+        # Sin la línea de números que iba acá (cuántos, mediana, cuántos
+        # sobre el 35 %…): se quitó a pedido el 2026-09-30, con la del
+        # producto, para que la tarjeta entre en una pantalla (regla #572).
         if ver == "Combos":
             t = filtrar(carta, grupo, "Combo", buscar, venta_interna=vi)
-            st.markdown(resumen(t, "combos"))
             vacio = "No hay combos con este filtro."
         else:
             t = filtrar(carta, grupo, tipo, buscar, venta_interna=vi,
                         oferta=OFERTAS.get(ver))
-            st.markdown(resumen(t))
             vacio = "Ningún producto con este filtro."
         if t.empty:
             st.info(vacio)
@@ -955,14 +1146,22 @@ def render_carta_costeada(df, df_rv=None, ventas=None):
             # la derecha lo tapa la barrita de íconos que `st.dataframe`
             # asoma sobre su esquina al pasar el cursor. El renglón que suma
             # lo paga la columna de la tabla, que es la más baja.
-            with st.container(key="rec_carta_mas_fila"):
+            with st.container(horizontal=True, vertical_alignment="center",
+                              key="rec_carta_mas_fila"):
                 mas = st.toggle(
                     "Más columnas", key=_K_MAS,
-                    help="En la carta: Margen, Vendidos (90 días), Tipo, "
-                         "Actualizado y Última venta. En Combos: la banda de "
-                         "costos (mínimo, promedio, esperado, máximo y real). "
-                         "La tabla se desliza de costado; el producto elegido "
+                    help="En la carta: Margen, Vendidos, Tipo, Actualizado y "
+                         "Última venta. En Combos: la banda de costos "
+                         "(mínimo, promedio, esperado, máximo y real). La "
+                         "tabla se desliza de costado; el producto elegido "
                          "sigue al lado.")
+                if mas and ver != "Combos" and rango is not None:
+                    st.markdown('<p class="rec-vend-rot">Vendidos en</p>',
+                                unsafe_allow_html=True)
+                    st.segmented_control(
+                        "Vendidos en", list(VENTANAS_VENDIDOS),
+                        default="90 días", key=_K_VENTANA,
+                        label_visibility="collapsed", persist_state="page")
             if ver == "Combos":
                 _tabla_combos(t, pos, mas)
                 st.caption(
@@ -973,26 +1172,26 @@ def render_carta_costeada(df, df_rv=None, ventas=None):
                     "promedio. Real: lo servido en 90 días, al costo de cada día. "
                     "Clic en un combo para ver su detalle.")
             else:
-                _tabla_carta(t, pos, rango, mas)
-                orden = ("lo vendido en 90 días" if tipo == "Sin costo"
-                         else "% de costo")
-                pie = (f"Ordenada por {orden}. Semáforo: sobre {_UMBRAL_COSTO_OK} % "
-                       f"en ámbar, sobre {_UMBRAL_COSTO_WARN} % en rojo. Clic en "
-                       "un producto para ver su receta.")
+                _tabla_carta(t, pos, rango, mas, dias)
+                orden = ("lo vendido" if tipo == "Sin costo" else "% de costo")
+                pie = (f"Ordenada por {orden}: ámbar sobre {_UMBRAL_COSTO_OK} %, "
+                       f"rojo sobre {_UMBRAL_COSTO_WARN} %. Clic en un producto "
+                       "para ver su receta.")
                 if ver in OFERTAS:
-                    pie += (" Carta impresa: los productos con botón del 1 al "
-                            "19 en el POS («Tipo de Oferta» de la consulta).")
+                    pie += " Impresa: con botón del 1 al 19 en el POS."
                 if n_sin_precio:
                     pie += (f" {n_sin_precio} sin precio de Salón (S/ 1 o menos) "
                             "no se muestran.")
                 if rango is not None:
                     # «¿Vendidos cuándo?» (preguntado el 2026-09-29): la
                     # ventana termina en el último día con venta, no hoy.
-                    pie += (f" Lo vendido es de los últimos {DIAS_VENDIDOS} días "
-                            f"con datos: del {rango[0]:%d/%m} al "
-                            f"{rango[1]:%d/%m/%Y}.")
+                    # Con el año del inicio si no es el del fin: con «1 año»
+                    # decía «del 29/09 al 28/09/2026».
+                    desde = (f"{rango[0]:%d/%m}" if rango[0].year == rango[1].year
+                             else f"{rango[0]:%d/%m/%Y}")
+                    pie += f" Vendidos: del {desde} al {rango[1]:%d/%m/%Y}."
                 else:
                     pie += " No se pudieron leer las ventas: sin «Vendidos»."
                 st.caption(pie)
         with c_panel:
-            _panel(t.iloc[pos], df_rv, rango, ventas)
+            _panel(t.iloc[pos], df_rv, dias, ventas, df_rb)

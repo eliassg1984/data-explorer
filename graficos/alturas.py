@@ -337,14 +337,26 @@ propina de los últimos doce meses. Van lado a lado con «Lo que vendió», que
 son dos tablas chicas: con 230 la leyenda de arriba y los seis tramos entran
 sin apretarse, y la tarjeta no pasa de una pantalla a 1366×768."""
 
-CARTA_COSTEADA = 27 * 21 + 38
+CARTA_COSTEADA = 27 * 15 + 38
 """Alto de la tabla de Recetas › Carta costeada (2026-09-26, regla #548),
-la misma en sus dos modos (carta completa y combos): veintiuna filas de 27
+la misma en sus dos modos (carta completa y combos): quince filas de 27
 (`row_height` de `st.dataframe`) más la cabecera y los bordes. Fueron doce
-hasta el 2026-09-29, cuando el producto elegido pasó al COSTADO de la tabla
-(regla #570): con la receta y la dona uno arriba del otro, el panel mide
-~760px con una receta de seis insumos, y la tabla de doce dejaba media
-columna vacía debajo. Encima de la tabla va «Más columnas»; abajo, el pie."""
+hasta el 2026-09-29, veintiuna ese día —el producto elegido pasó al COSTADO
+de la tabla y medía ~760px (regla #570)— y quince desde el 2026-09-30, a
+pedido: «que la tarjeta quepa en la vista» (regla #572). A 1366×768 la
+tarjeta tiene 724px; menos su título, la fila de controles y los bordes,
+a la fila tabla | producto le quedan ~565, y a la tabla, sin «Más
+columnas» encima ni el pie debajo, ~445."""
+
+CARTA_RECETA = 27 * 6 + 38
+"""Tope de la tabla de la receta en el panel de la Carta costeada (regla
+#572), y de la receta base que se abre debajo: seis filas de 27. La receta
+más larga se desliza DENTRO de la tabla; la tarjeta no crece."""
+
+CARTA_FIG = 200
+"""El gráfico del panel de la Carta costeada (dona, Sankey, costo en el
+tiempo), regla #572: 40px menos que MINI para que el panel entre en una
+pantalla de 1366×768 junto a la receta de seis filas."""
 
 REVISAR_RECETAS = 27 * 13 + 3
 """Alto de la tabla de Recetas › Revisar recetas (2026-09-28, regla #559):

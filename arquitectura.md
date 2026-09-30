@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-571 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+572 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (194)
+**CSS y estilos** (195)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -228,8 +228,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#565** — En la ficha de la hora, el subtítulo va en el renglón del título y «POR MESA» en la fila de…
 - **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
+- **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 
-**Layout y alturas** (79)
+**Layout y alturas** (80)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -310,6 +311,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 - **#563** — La ficha de la hora entra entera debajo del mapa: la resta del panel se midió de nuevo con la…
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
+- **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 
 **Plotly y figuras** (104)
 
@@ -45538,6 +45540,66 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        ancho para que la tarjeta mida lo mismo que en la app a 1366).
 
      (2026-09-29.)
+
+572. **La Carta costeada entra en una pantalla, elige la ventana de
+     «Vendidos» y abre las recetas base de la receta.** 2026-09-30, a
+     pedido: quitar la línea de números del producto («% de carta · margen ·
+     en 90 días… · receta actualizada») y la de arriba de la tabla («44
+     productos · % de costo mediano…»), «algún selector para el rango de la
+     columna Vendidos», «que la tarjeta quepa en la vista» y, como la receta
+     sube, «que al hacer clic en un ítem que sea receta base se despliegue
+     la receta base en otra tabla abajo». En `graficos/carta_costeada.py`,
+     `graficos/recetaventa.py`, `graficos/alturas.py`, `graficos/recetas.py`
+     y `estilos/_80_cards.py`.
+     - **Cabe a 1366×768**: 681 px contra los 724 de `--alto-util`, cerrada
+       y con una receta base abierta (antes, ~930). Se fueron las dos líneas
+       de números; la tabla bajó a 15 filas (`alturas.CARTA_COSTEADA`), la
+       receta del panel topa en 6 (`CARTA_RECETA`, filas de 27) y el gráfico
+       mide 200 (`CARTA_FIG`, que ahora reciben la dona, el Sankey y el
+       costo en el tiempo). «Simular» subió al renglón del nombre del plato
+       y la receta ya no lleva título al pie (`receta_del_plato(...,
+       toggle=False, titulo=False, dibujar_lectura=...)`). Simulando SÍ pasa
+       de una pantalla (856): el editor, sus botones y el gráfico no entran
+       juntos, y es un modo que se prende a propósito.
+     - **«Vendidos en: 30 días · 90 días · 6 meses · 1 año»**
+       (`VENTANAS_VENDIDOS`), junto a «Más columnas» y sólo con ellas
+       prendidas —es la columna que mide—, con `persist_state="page"` para
+       que lo elegido sobreviva mientras está escondido. Todas terminan en
+       el último día con venta. Se lee del estado ANTES de dibujarlo (va
+       encima de la tabla; `con_ventas` corre arriba). Mueve también el orden
+       de «Sin costo» y el aviso de lo vendido sin costo del panel.
+     - **Receta base**: un insumo lo es si su `COD INS` es el `COD PROD RB`
+       de una (399 de 1.054 códigos; cada artículo tiene UNA receta base).
+       La tabla de la receta lleva «▸» delante y es clicable
+       (`on_select` con callback: el estado se escribe ANTES de la corrida
+       que dibuja); la receta base sale DEBAJO, en el lugar del gráfico y
+       con su mismo alto, para que abrirla no estire la tarjeta. Va
+       PROPORCIONADA a lo que usa un plato: la receta base guarda una unidad
+       suya (un kilo de demiglace) y el plato usa `CANTIDAD ÷ FACTOR` (40 g
+       ÷ 1.000); así sus costos suman los de la línea — medido en 821 de 866
+       líneas; las otras las costea el precio promedio del almacén y el pie
+       lo dice. Una receta base adentro de otra se abre con otro clic
+       («Subir» vuelve). Probado con Mollejas a la Parrilla → Demiglace
+       Punteada → Demiglace de Res.
+     - **Dos trampas de `st.dataframe`, medidas con Playwright**: su
+       barrita de íconos (`.stElementToolbar`) flota ENCIMA del renglón de
+       arriba mientras el cursor está en la tabla y se come el clic de lo
+       que haya ahí («Simular», «↑ Subir»): en el panel se esconde por CSS.
+       Y una tabla que no tiene el foco se come el PRIMER clic sobre una
+       fila ya marcada: «soltar la fila para cerrar» pedía dos clics después
+       de tocar otro control. De ahí «✕» (`_cerrar_base`), que sube un
+       contador en la key de la tabla de la receta y la estrena sin fila
+       marcada — el contador de la #399, que acá no cuesta nada porque la
+       tabla es de seis filas.
+     - **Un texto en una fila horizontal no se centra contra sus
+       controles**: Streamlit cierra el markdown con `margin-bottom: -1rem`,
+       el contenedor mide 3 px y el `<p>` cuelga 16 por debajo («Vendidos
+       en» salía 8 px más abajo que sus botones). Se anula en las tres filas
+       del panel.
+     - El editor de «Simular» lleva anchos que suman ~390 (el panel mide
+       ~406): con los automáticos, «Cantidad» quedaba fuera.
+
+     (2026-09-30.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
