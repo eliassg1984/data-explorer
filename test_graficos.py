@@ -6569,6 +6569,10 @@ def _pruebas_carta_costeada():
           float(t365.set_index("Cod").loc["0000010", "Vendidos"]), 105.0)
     check("la ventana por defecto sigue en 90 días",
           cc.VENTANAS_VENDIDOS["90 días"], cc.DIAS_VENDIDOS)
+    # Lo vendido puede llegar ya cargado o como la función que lo carga
+    # (regla #573): cargado, pasa tal cual.
+    check("lo vendido ya cargado pasa tal cual",
+          (cc._lo_vendido(agg) is agg, cc._lo_vendido(None)), (True, None))
 
     # El costo en el tiempo (regla #557): la foto del POS, por mes.
     cm = cc.costo_mensual(agg, "0000010")

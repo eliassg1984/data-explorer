@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-572 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+573 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -670,7 +670,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 
-**Datos, R2 y DuckDB** (78)
+**Datos, R2 y DuckDB** (79)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -750,6 +750,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#559** — Recetas y Costos pierde «Ingredientes clave», «Insumos clave · recetas base» y los dos…
 - **#560** — «Consumo según recetas» se compara contra lo COMPRADO del rango —en la ficha de cada insumo y…
 - **#571** — «Carta impresa» es un atributo del PRODUCTO: va en la consulta de la carta, no en la de ventas
+- **#573** — La Carta costeada no lee las ventas hasta que algo las muestra
 
 **SUNAT y SIRE** (44)
 
@@ -45598,6 +45599,37 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        del panel.
      - El editor de «Simular» lleva anchos que suman ~390 (el panel mide
        ~406): con los automáticos, «Cantidad» quedaba fuera.
+
+     (2026-09-30.)
+
+573. **La Carta costeada no lee las ventas hasta que algo las muestra.**
+     2026-09-30: «demora mucho en visualizar» — en Cloud, recién reiniciada,
+     la sección se quedaba en «Cargando Carta costeada…». Medido en la
+     laptop, en frío: leer las 33 columnas de `ventas.parquet` que usa la
+     definición de venta son 7,9 s (237.604 filas, 96 MB), prepararlas 1,7 y
+     resumirlas por producto y día 0,9 — más de 10 s de los ~16 que tardaba
+     la vista, y en Cloud bastante más. Todo para la columna «Vendidos»,
+     que desde la #572 va escondida detrás de «Más columnas». Lo demás en
+     frío es poco (cada parquet chico ~1,5 s) y en cada clic, nada: la carta
+     se prepara en 0,08 s (los 3 s de la PRIMERA vez son la carga de
+     pandas/pyarrow, una vez por proceso).
+     - **`ventas` puede ser la función que carga** (`data.venta_por_producto_dia`,
+       que es como la pasa `graficos/recetas.py`), y `_lo_vendido` la llama
+       SÓLO si algo lo usa: «Más columnas» (la columna «Vendidos»), el tipo
+       «Sin costo» (se ordena por lo vendido) o «En el tiempo». Con un
+       aviso («Cargando lo vendido… la primera vez del día tarda»): la caché
+       es por versión del parquet, que cambia cada madrugada.
+     - **Una vez cargado en la sesión, se sigue pidiendo** (`_K_VENTAS_OK`):
+       es la caché, y así el aviso de lo vendido sin costo del panel no
+       aparece y desaparece según esté prendido «Más columnas».
+     - **Todo se decide leyendo el estado**, antes de dibujar la tabla:
+       «Más columnas» y «En el tiempo» se dibujan más abajo, pero Streamlit
+       ya dejó en el estado lo del clic que disparó la corrida.
+     - Verificado con `AppTest` y una función que cuenta sus llamadas: 0 al
+       abrir, 1 al prender «Más columnas».
+     - **En Cloud, reiniciar la app** (#357): `recetas.py` ahora pasa una
+       FUNCIÓN, y la `carta_costeada.py` vieja en memoria la trataría como
+       una tabla.
 
      (2026-09-30.)
 

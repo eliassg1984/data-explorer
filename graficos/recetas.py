@@ -238,8 +238,10 @@ def renderizar_graficos_recetas(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         # (mismo patrón que Porcionamientos en Movimientos). Su tarjeta
         # —la carta y, al costado, el producto elegido, con sus recetas
         # base— la arma `render_carta_costeada`.
+        # Lo vendido va como FUNCIÓN y no cargado: la vista lo pide sólo
+        # si algo en pantalla lo usa (regla #573).
         render_carta_costeada(_cargar_reporte(ARCHIVO_CARTA), df_rv=df_f,
-                              ventas=venta_por_producto_dia(), df_rb=df_rb)
+                              ventas=venta_por_producto_dia, df_rb=df_rb)
 
     def _dib_revisar():
         # Lo que lee (porcionamientos, el primer nivel de las ventas, el

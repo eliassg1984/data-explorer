@@ -134,6 +134,11 @@ _K_VENTANA = "rec_carta_vend_ventana"
 columnas» —es la columna que mide—, y con `persist_state="page"` conserva
 lo elegido mientras está escondido."""
 
+_K_VENTAS_OK = "rec_carta_ventas_ok"
+"""Si en esta sesión ya se cargó lo vendido (regla #573). Desde entonces se
+pide siempre: la segunda vez es la caché, y así el aviso de lo vendido sin
+costo no aparece y desaparece según esté prendido «Más columnas»."""
+
 _K_BASE = "rec_carta_base"
 """La receta base abierta en el panel: `{"plato", "ruta", "aviso", "gen"}`.
 `ruta` es la lista de recetas base abiertas, de la del plato a la más
@@ -943,6 +948,20 @@ def _bloque_base(df_rb, plato, ruta, bases):
         st.caption(pie)
 
 
+def _lo_vendido(ventas):
+    """Lo vendido por producto y día. `ventas` es el resumen ya cargado o la
+    función que lo carga (`data.venta_por_producto_dia`): con la función, se
+    llama acá, con un aviso — en frío es lo más lento de la vista (regla
+    #573)."""
+    if not callable(ventas):
+        return ventas
+    with st.spinner("Cargando lo vendido… la primera vez del día tarda"):
+        agg = ventas()
+    if agg is not None:
+        st.session_state[_K_VENTAS_OK] = True
+    return agg
+
+
 def _panel(f, df_rv, dias, ventas=None, df_rb=None):
     """Al costado de la tabla (regla #570): el producto elegido, su receta
     (o lo que descarga) y, debajo, la dona / el Sankey / su costo en el
@@ -1036,8 +1055,16 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
     producto elegido a la derecha (regla #570). `df` es
     `cartacosteada.parquet` (o None si no se pudo cargar); `df_rv`,
     recetaventa.parquet (las recetas y su fecha); `ventas`, lo vendido por
-    producto y día (`data.venta_por_producto_dia`), o None; `df_rb`,
-    recetabase.parquet (para abrir una receta base), o None."""
+    producto y día, o la FUNCIÓN que lo carga (`data.venta_por_producto_dia`,
+    que es como lo pasa el dispatcher: regla #573), o None; `df_rb`,
+    recetabase.parquet (para abrir una receta base), o None.
+
+    Lo vendido se carga SÓLO si algo en pantalla lo usa: la columna
+    «Vendidos» (con «Más columnas»), el filtro «Sin costo» (se ordena por
+    lo vendido) o «En el tiempo». Es leer ventas.parquet casi entero —237.604
+    filas y 96 MB; 10 s en frío en la laptop, bastante más en Cloud— y hasta
+    el 2026-09-30 se pagaba al abrir la vista aunque la columna estuviera
+    escondida."""
     ss = st.session_state
     # LO ELEGIDO, ANTES DE DIBUJAR NADA: la tabla nueva sale con eso marcado.
     _leer_eleccion("rec_carta_tabla")
@@ -1066,7 +1093,6 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
         if ventana not in VENTANAS_VENDIDOS:
             ventana = "90 días"
         dias = VENTANAS_VENDIDOS[ventana]
-        carta, rango = con_ventas(carta, ventas, dias)
         grupos = ["Todos"] + sorted(
             g for g in carta["Grupo"].unique()
             if g and (vi or g.casefold() != GRUPO_VENTA_INTERNA.casefold()))
@@ -1117,6 +1143,15 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
             st.toggle("Venta interna", key="rec_carta_vi",
                       help="Sumar los productos «(Cst)» de Venta Interna, que se "
                            "venden a precio de costo y por eso pasan el 100 %")
+
+        # Lo vendido, sólo si algo lo muestra (ver el docstring). Todo se lee
+        # del estado: los controles que lo piden ya se dibujaron o van más
+        # abajo, y Streamlit dejó ahí lo del clic que disparó la corrida.
+        pide_ventas = (bool(ss.get(_K_MAS)) or tipo == "Sin costo"
+                       or ss.get("rec_carta_mini_vista") == "En el tiempo"
+                       or bool(ss.get(_K_VENTAS_OK)))
+        agg = _lo_vendido(ventas) if pide_ventas else None
+        carta, rango = con_ventas(carta, agg, dias)
 
         # Sin la línea de números que iba acá (cuántos, mediana, cuántos
         # sobre el 35 %…): se quitó a pedido el 2026-09-30, con la del
@@ -1190,8 +1225,8 @@ def render_carta_costeada(df, df_rv=None, ventas=None, df_rb=None):
                     desde = (f"{rango[0]:%d/%m}" if rango[0].year == rango[1].year
                              else f"{rango[0]:%d/%m/%Y}")
                     pie += f" Vendidos: del {desde} al {rango[1]:%d/%m/%Y}."
-                else:
+                elif pide_ventas:
                     pie += " No se pudieron leer las ventas: sin «Vendidos»."
                 st.caption(pie)
         with c_panel:
-            _panel(t.iloc[pos], df_rv, dias, ventas, df_rb)
+            _panel(t.iloc[pos], df_rv, dias, agg, df_rb)
