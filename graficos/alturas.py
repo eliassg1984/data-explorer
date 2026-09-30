@@ -337,16 +337,20 @@ propina de los últimos doce meses. Van lado a lado con «Lo que vendió», que
 son dos tablas chicas: con 230 la leyenda de arriba y los seis tramos entran
 sin apretarse, y la tarjeta no pasa de una pantalla a 1366×768."""
 
-CARTA_COSTEADA = 27 * 13 + 3
+CARTA_COSTEADA = 27 * 21 + 38
 """Alto de la tabla de Recetas › Carta costeada (2026-09-26, regla #548),
-la misma en sus dos modos (carta completa y combos): doce filas de 27
-(`row_height` de `st.dataframe`) más la cabecera. Arriba van el título, la
-fila de controles y la línea de números; abajo, el pie."""
+la misma en sus dos modos (carta completa y combos): veintiuna filas de 27
+(`row_height` de `st.dataframe`) más la cabecera y los bordes. Fueron doce
+hasta el 2026-09-29, cuando el producto elegido pasó al COSTADO de la tabla
+(regla #570): con la receta y la dona uno arriba del otro, el panel mide
+~760px con una receta de seis insumos, y la tabla de doce dejaba media
+columna vacía debajo. Encima de la tabla va «Más columnas»; abajo, el pie."""
 
 REVISAR_RECETAS = 27 * 13 + 3
-"""Alto de la tabla de Recetas › Revisar recetas (2026-09-28, regla #559): la
-misma medida que la Carta costeada, doce filas de 27 más la cabecera, y la
-tabla crece hasta ahí con las filas que tenga (`por_filas`)."""
+"""Alto de la tabla de Recetas › Revisar recetas (2026-09-28, regla #559):
+doce filas de 27 más la cabecera —la medida que tenía la Carta costeada
+hasta la regla #570—, y la tabla crece hasta ahí con las filas que tenga
+(`por_filas`)."""
 
 FICHA_HORA_MESAS = 170
 """«Mesas abiertas a la vez», el gráfico de la ficha de la hora de Ventas ›

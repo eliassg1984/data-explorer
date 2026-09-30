@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-569 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+570 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (194)
 
@@ -229,7 +229,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 
-**Layout y alturas** (78)
+**Layout y alturas** (79)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -309,6 +309,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#528** — Se quitó «Top platos vendidos» del Resumen de Ventas: el ranking de platos ya tenía dónde…
 - **#550** — La Ingeniería de menú es la segunda tarjeta de Análisis de platos: Kasavana y Smith sobre la…
 - **#563** — La ficha de la hora entra entera debajo del mapa: la resta del panel se midió de nuevo con la…
+- **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 
 **Plotly y figuras** (104)
 
@@ -508,7 +509,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 
-**Streamlit** (155)
+**Streamlit** (156)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -665,6 +666,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#555** — La cabecera de «Por hora» se lee como una tabla dinámica: FILAS · COLUMNAS · VALOR abajo, UN…
 - **#561** — «Por hora» cabe en una pantalla: la cabecera es UNA fila de desplegables y la ficha de la…
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
+- **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 
 **Datos, R2 y DuckDB** (77)
 
@@ -45422,6 +45424,73 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        (ranking, Ingeniería con uno y con seis subgrupos, evolución
        abierta) y a 390 de ancho, donde el renglón del título se apila:
        el interruptor arriba y los KPI deslizables abajo.
+
+     (2026-09-29.)
+
+570. **La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO,
+     y la tabla esconde lo que no hace falta para elegir.** 2026-09-29, a
+     pedido: «que sea como las demás vistas de otros reportes, o sea fondo
+     blanco», «la tabla debe empezar por grupo, subgrupo, y luego el
+     nombre», «ocultar o dejar expandible a elección las columnas de tipo,
+     actualizado, última venta, margen y vendidos, para que al costado se
+     ubique la receta que ahora está abajo y el gráfico». En
+     `graficos/carta_costeada.py`, `graficos/recetaventa.py`,
+     `graficos/alturas.py` y `estilos/_80_cards.py`.
+     - **Por qué no era blanca**: sus dos `st.container(border=True)`
+       (`rec_card_carta` y `rec_card_carta_plato`) no estaban en ninguna
+       regla de fondo, así que llevaban el marco POR DEFECTO de Streamlit
+       —fondo transparente, línea gris de 1 px, radio 8, medido—. Las
+       tarjetas blancas de los otros reportes lo son por su prefijo
+       (`ajuste_graf_card_`, `compras_*_card_`, `sunat_card_`). Ahora es
+       una sola tarjeta con clases EXACTAS (`.st-key-rec_card_carta`): el
+       wildcard `[class*="st-key-rec_card_carta"]` le pegaba también a la
+       vieja del plato. «Revisar recetas» (`rec_card_revisar`) sigue con el
+       marco por defecto: no se pidió.
+     - **Tabla | producto, 0,635 : 0,365** (`PROPORCION`). Por defecto la
+       tabla lleva Grupo, Subgrupo, Producto, % costo, P. venta, P. neto y
+       Costo: 696 px de columnas + 38 de la casilla de selección, y a
+       1366×768 con el rail plegado le tocan 747. «Más columnas»
+       (`rec_carta_mas_cols`, apagado) suma Margen y Vendidos junto al % y
+       Tipo, Actualizado y Última venta al final (`columnas_carta`); en
+       Combos, la banda (mínimo…real), que del combo elegido ya está en el
+       panel. Con ellas la tabla se desliza de costado y las tres primeras
+       quedan FIJAS — sólo entonces: Streamlit lleva las columnas fijas a
+       la izquierda (fijar sólo el nombre lo pondría delante del grupo) y
+       las pinta en GRIS. En el teléfono el nombre va primero y fijo: con
+       Grupo y Subgrupo delante, en 306 px no se veía qué fila era.
+     - **«Más columnas» va encima de la tabla, a la IZQUIERDA.** En la
+       fila de controles no entraba un séptimo control a 1366 px (medido:
+       «Carta completa | Combos» se partía en dos renglones e «Inactivos»
+       se cortaba), y a la derecha lo tapa la barrita de íconos que
+       `st.dataframe` asoma sobre su esquina al pasar el cursor.
+     - **La receta y el gráfico van uno arriba del otro** (en ~420 px no
+       entran dos, y se leen juntos: el simulador edita la receta y la
+       dona y el Sankey siguen al borrador). Para que eso no deje media
+       columna vacía, la tabla creció de 12 a 21 filas
+       (`alturas.CARTA_COSTEADA`): con una receta de seis insumos el panel
+       mide ~760 y la columna de la tabla ~740. La tarjeta mide ~930 a
+       1366×768 —antes, la tarjeta y la del plato sumaban 1.130—, así que
+       pasa de una pantalla y se desliza la PÁGINA, no la tarjeta (#382).
+       La tabla de la receta mide lo de sus filas hasta MINI (una de un
+       insumo dejaba cinco filas vacías) y lleva anchos fijos que suman
+       ~400: con los automáticos, el número del «%» quedaba cortado.
+     - **Un `.chart-card-pie` cuelga 16 px por debajo de su contenedor**
+       (el `margin-bottom: -1rem` con que Streamlit cierra un markdown).
+       Adentro de un `_card()` con borde lo absorbía el relleno de la
+       tarjeta; al quitarles marco y relleno a las sub-tarjetas del panel
+       —cajas dentro de la caja—, el título «Receta · …» cayó encima de
+       los botones Costo / Utilidad · Sankey en el teléfono, donde el
+       `gap` es de 4 px. Las dos sub-tarjetas con título guardan
+       `padding-bottom: 16px`.
+     - **«Vendidos», ¿de cuándo?** (preguntado ese día). Son las unidades
+       de los 90 días hasta el ÚLTIMO DÍA CON VENTA, no hasta hoy (el dato
+       llega de madrugada), con la definición de venta de Ventas. La
+       cabecera dice «Vendidos 90 d», su ayuda trae las dos fechas y el
+       pie de la tabla también.
+     - **Cómo se verificó**: Playwright a 1366×1000 con datos reales
+       (carta, un plato de seis insumos, «Más columnas» y Combos) y a 390
+       con User-Agent de teléfono. El panel del navegador integrado no
+       saca capturas con la app corriendo (#568).
 
      (2026-09-29.)
 

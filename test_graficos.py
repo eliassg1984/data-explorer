@@ -6577,6 +6577,27 @@ def _pruebas_carta_costeada():
     check("el mes se escribe en castellano", cc._etiqueta_mes(pd.Period("2026-09")),
           "set 26")
 
+    # Las columnas de la tabla (regla #570): primero lo que ubica al
+    # producto, y lo que no hace falta para decidir, detrás de «Más
+    # columnas» — sin eso no entra el producto elegido al costado.
+    base = cc.columnas_carta()
+    check("la tabla empieza por Grupo, Subgrupo y Producto", base[:3],
+          ["Grupo", "Subgrupo", "Producto"])
+    _opcionales = {"Tipo", "Actualizado", "UltimaVenta", "Margen", "Vendidos"}
+    check("sin «Más columnas» no están las cinco opcionales",
+          sorted(_opcionales & set(base)), [])
+    check("con «Más columnas» están las cinco",
+          sorted(_opcionales - set(cc.columnas_carta(mas=True))), [])
+    check("y todas existen en la carta preparada",
+          sorted(set(cc.columnas_carta(mas=True)) - set(tv.columns)
+                 - {"Actualizado"}), [])
+    check("en el teléfono el nombre va primero",
+          cc.columnas_carta(movil=True)[:3], ["Producto", "Grupo", "Subgrupo"])
+    check("sin ventas no hay «Vendidos», ni con «Más columnas»",
+          "Vendidos" in cc.columnas_carta(mas=True, con_ventas_=False), False)
+    check("la banda de los combos existe en la carta preparada",
+          sorted(set(cc._BANDA) - set(t.columns)), [])
+
     rv = pd.DataFrame({"COD PLATO": ["0000010", "0000010", "0000030"],
                        "FECH MODIF": pd.to_datetime(["2022-09-23", "2022-09-23",
                                                      "2026-03-12"])})

@@ -1578,6 +1578,66 @@ CSS = """    /* ================================================================
     div.st-key-rec_card_nueva > div {
         border: none !important;
     }
+
+    /* =================================================================== */
+    /* «Carta costeada» (Recetas y Costos): UNA tarjeta blanca              */
+    /*                                                                       */
+    /* Hasta el 2026-09-29 eran dos `st.container(border=True)` con el marco */
+    /* POR DEFECTO de Streamlit —fondo transparente, una línea gris de 1px   */
+    /* y radio 8, medido—, así que la vista cambiaba de idioma visual contra */
+    /* las de los otros reportes. Desde ese día, a pedido, es una tarjeta    */
+    /* con el look de siempre: la tabla a la izquierda y el producto elegido */
+    /* a la derecha (`rec_carta_plato`), separados por una línea. Regla #570.*/
+    /*                                                                       */
+    /* Clases EXACTAS y no `[class*="st-key-rec_card_carta"]`: ese prefijo   */
+    /* también es el de la tarjeta del plato que existía hasta ese día, y    */
+    /* un wildcard así le pega a cualquier key que empiece igual.            */
+    /* =================================================================== */
+    .st-key-rec_card_carta {
+        background: var(--bg-card) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        padding: 16px 18px;
+        box-shadow: 0 1px 4px rgba(16, 16, 20, 0.06);
+    }
+    .st-key-rec_card_carta > div {
+        border: none !important;
+    }
+    /* Las sub-tarjetas de `_card()` del panel —la receta, lo que descarga y
+       el gráfico— sin marco ni relleno: adentro de la tarjeta blanca serían
+       cajas dentro de la caja. Las separa la línea del título al pie de la
+       receta (`.chart-card-pie`).
+       Las dos que llevan ese título guardan 16px ABAJO: el `<p>` del título
+       cuelga 1rem por debajo de su contenedor (el margen negativo con que
+       Streamlit cierra un markdown), y sin relleno caía encima de lo que
+       sigue — medido en el teléfono, donde el `gap` es de 4px: el título
+       quedaba debajo de los botones Costo / Utilidad · Sankey. */
+    .st-key-rec_card_carta .st-key-chartcard_rv_comp_receta,
+    .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga,
+    .st-key-rec_card_carta .st-key-chartcard_rec_carta_mini {
+        border: none !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        background: transparent !important;
+    }
+    .st-key-rec_card_carta .st-key-chartcard_rv_comp_receta,
+    .st-key-rec_card_carta .st-key-chartcard_rec_carta_descarga {
+        padding-bottom: 16px !important;
+    }
+    .st-key-rec_carta_plato {
+        border-left: 1px solid var(--border);
+        padding-left: 16px;
+    }
+    /* Debajo de 640px Streamlit apila las columnas: el panel queda abajo de
+       la tabla y la línea pasa de su costado a su borde de arriba. */
+    @media screen and (max-width: 640px) {
+        .st-key-rec_carta_plato {
+            border-left: none;
+            padding-left: 0;
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+        }
+    }
     .st-key-form_receta_card_receta,
     .st-key-form_receta_card_precio {
         background: var(--bg-card);

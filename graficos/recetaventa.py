@@ -298,15 +298,28 @@ def _panel_receta(df_f, foco, nombre_foco, col_cod_plato, col_ins, col_cant,
                            "mueven el costo y el margen. Es un borrador de "
                            "esta sesi\u00f3n: no toca los datos ni se guarda.")
         if not simulando:
+            # El alto de SUS filas, hasta MINI: desde que la receta va al
+            # costado de la tabla de la carta (regla #570), la de un solo
+            # insumo —un trago, un directo con receta— dejaba cinco filas
+            # vacías empujando el gráfico hacia abajo. Filas de 35 (las de
+            # `st.dataframe` sin `row_height`) y 38 de cabecera y bordes.
             st.dataframe(
                 orig[["Insumo", "Cantidad", "Costo", "%"]],
                 hide_index=True, use_container_width=True,
-                height=alturas.MINI,
+                height=alturas.por_filas(len(orig), px_fila=35, extra=38,
+                                         minimo=0, rol=alturas.MINI),
+                # Anchos fijos que suman ~400: al costado de la tabla el panel
+                # mide ~420 a 1366px, y con los anchos automáticos el número
+                # del «%» quedaba cortado contra el borde (medido).
                 column_config={
-                    "Cantidad": st.column_config.NumberColumn(format="%.3f"),
-                    "Costo": st.column_config.NumberColumn(format="S/ %.2f"),
+                    "Insumo": st.column_config.TextColumn(width=150),
+                    "Cantidad": st.column_config.NumberColumn(format="%.3f",
+                                                              width=72),
+                    "Costo": st.column_config.NumberColumn(format="S/ %.2f",
+                                                           width=68),
                     "%": st.column_config.ProgressColumn(
-                        format="%.1f%%", min_value=0, max_value=100),
+                        format="%.1f%%", min_value=0, max_value=100,
+                        width=106),
                 },
             )
             return orig, None

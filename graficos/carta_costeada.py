@@ -21,8 +21,9 @@ porqué de cada decisión, en `arquitectura.md` regla #548.
 DESDE EL 2026-09-28 ES LA ÚNICA VISTA DE LA CARTA (regla #556). Absorbió a
 «Composición del plato», cuya tabla era ésta misma filtrada a los platos con
 receta (425 de 425 con el mismo precio, costo y %): un clic en un producto
-abre DEBAJO su receta con el simulador, la dona Costo/Utilidad y el Sankey
-(`graficos/recetaventa.py`). Y «Costeo Receta Venta», que sumaba el mismo
+abre su receta con el simulador, la dona Costo/Utilidad y el Sankey
+(`graficos/recetaventa.py`) — AL COSTADO de la tabla desde el 2026-09-29
+(regla #570), y debajo hasta ese día. Y «Costeo Receta Venta», que sumaba el mismo
 costo por plato sin descartar los inactivos, se quitó. La regla que ordena
 las dos mitades:
 
@@ -37,6 +38,14 @@ el `pct_costo` del Mix importado: una cifra de Ventas se ve igual acá.
 Dos modos en UNA tarjeta, y no dos tarjetas: la carta completa y la banda de
 los combos no entran juntas en una pantalla de laptop, y una tarjeta con
 barra propia no va (`CLAUDE.md` § Alturas).
+
+UNA tarjeta blanca, como las de los otros reportes, con la tabla a la
+izquierda y el producto elegido a la derecha (regla #570). Para que el
+producto quepa al costado, la tabla muestra por defecto sólo lo que la
+identifica y lo que cuesta —Grupo, Subgrupo, Producto, % de costo y los
+tres montos— y el interruptor «Más columnas» suma Margen, Vendidos, Tipo,
+Actualizado y Última venta; con ellas la tabla se desliza de costado, con
+las tres primeras fijas.
 
 `st.dataframe` y no AgGrid: es una tabla de sólo lectura, y cada AgGrid
 cuesta 1,28 MB y más de un segundo de navegador (regla #540). Composición
@@ -55,7 +64,7 @@ import streamlit as st
 
 from cortes import MESES_ABR_ES
 from graficos import alturas
-from graficos.base import _card, _compras_layout, _resolver
+from graficos.base import _card, _compras_layout, _es_movil, _resolver
 from graficos.recetas_comun import divisor_neto
 from graficos.recetaventa import (
     _dib_sankey_insumo_costo, _dib_torta_costo_utilidad, receta_del_plato,
@@ -114,6 +123,15 @@ columna sigue siendo de fechas, y ordenar por ella ordena por fecha."""
 _K_FOCO = "rec_carta_foco"
 """El código del producto elegido. Sólo lo escribe un clic: sin clic, o
 con el elegido fuera del filtro, el panel sigue a la primera fila."""
+
+_K_MAS = "rec_carta_mas_cols"
+"""El interruptor «Más columnas» (regla #570): arranca apagado."""
+
+PROPORCION = (0.635, 0.365)
+"""Tabla | producto elegido. Con las columnas de siempre la tabla mide
+736px (38 de la casilla de selección, 696 de columnas y el borde) y a
+1366×768 con la columna del rail plegada le tocan ~750: el panel se queda
+con ~430, lo que ya tenía la dona al lado de la receta."""
 
 
 def _num(df, col):
@@ -417,36 +435,67 @@ def _pintar_foco(pos):
     return _fila
 
 
-def _tabla_carta(t, pos_foco, con_ventas_):
-    cols = ["Producto", "Grupo", "Subgrupo", "Pct", "Margen"]
-    if con_ventas_:
-        cols.append("Vendidos")
-    cols += ["Precio", "Neto", "Costo", "Tipo", "Actualizado", "UltimaVenta"]
+def columnas_carta(mas=False, con_ventas_=True, movil=False):
+    """Las columnas de la tabla de la carta, en orden (regla #570). Primero
+    lo que ubica al producto —Grupo, Subgrupo y su nombre—, después lo que
+    cuesta. `mas`: el interruptor «Más columnas», que suma Margen y Vendidos
+    junto al % y Tipo y las dos fechas al final. `movil`: en un teléfono la
+    tabla no entra nunca entera y el nombre va PRIMERO, que es como se sabe
+    qué fila es (con Grupo y Subgrupo delante, en 306px no se veía). Pura."""
+    cols = ["Grupo", "Subgrupo", "Producto", "Pct"]
+    if movil:
+        cols = ["Producto", "Grupo", "Subgrupo", "Pct"]
+    if mas:
+        cols.append("Margen")
+        if con_ventas_:
+            cols.append("Vendidos")
+    cols += ["Precio", "Neto", "Costo"]
+    if mas:
+        cols += ["Tipo", "Actualizado", "UltimaVenta"]
+    return cols
+
+
+def _tabla_carta(t, pos_foco, rango, mas=False):
+    movil = _es_movil()
+    cols = columnas_carta(mas, rango is not None, movil)
+    col_vend = f"Vendidos {DIAS_VENDIDOS} d"
     v = t[cols].rename(columns={
         "Pct": "% costo", "Precio": "P. venta", "Neto": "P. neto",
-        "UltimaVenta": "Última venta"})
+        "UltimaVenta": "Última venta", "Vendidos": col_vend})
     sty = (v.style
            .format(_pct, subset=["% costo"])
-           .format(_soles, subset=["P. venta", "P. neto", "Costo", "Margen"])
-           .format(_dia, subset=["Actualizado", "Última venta"])
+           .format(_soles, subset=[c for c in ("P. venta", "P. neto", "Costo",
+                                               "Margen") if c in v.columns])
            .map(_estilo_pct, subset=["% costo"])
-           .map(_estilo_margen, subset=["Margen"])
            .apply(_pintar_foco(pos_foco), axis=1))
-    if con_ventas_:
-        sty = sty.format(_unidades, subset=["Vendidos"])
+    if "Margen" in v.columns:
+        sty = sty.map(_estilo_margen, subset=["Margen"])
+    if "Actualizado" in v.columns:
+        sty = sty.format(_dia, subset=["Actualizado", "Última venta"])
+    if col_vend in v.columns:
+        sty = sty.format(_unidades, subset=[col_vend])
+    # Con «Más columnas» la tabla no entra en su mitad y se desliza de
+    # costado: las tres que dicen QUÉ producto es quedan fijas. Fijas SÓLO
+    # entonces: Streamlit lleva las fijas a la izquierda —fijar sólo el
+    # nombre lo pondría delante del grupo— y las pinta en gris. En el
+    # teléfono, sólo el nombre, que ya va primero: las tres no entran.
+    fija = bool(mas) and not movil
+    vendidos_help = (f"Unidades vendidas en los últimos {DIAS_VENDIDOS} días "
+                     "hasta el último día con venta")
+    if rango is not None:
+        vendidos_help += f": del {rango[0]:%d/%m/%Y} al {rango[1]:%d/%m/%Y}"
     cfg = {
-        "Producto": st.column_config.TextColumn(pinned=True, width=210),
-        "Grupo": st.column_config.TextColumn(width=110),
-        "Subgrupo": st.column_config.TextColumn(width=115),
+        "Grupo": st.column_config.TextColumn(pinned=fija, width=100),
+        "Subgrupo": st.column_config.TextColumn(pinned=fija, width=114),
+        "Producto": st.column_config.TextColumn(pinned=fija or movil, width=190),
         "% costo": st.column_config.Column(
-            width=66, help="Costo ÷ precio neto de Salón (sin IGV ni recargo). "
+            width=64, help="Costo ÷ precio neto de Salón (sin IGV ni recargo). "
                            "«—»: sin costo cargado en el POS."),
         "Margen": st.column_config.Column(
             width=78, help="Lo que deja cada unidad: precio neto − costo"),
-        "Vendidos": st.column_config.Column(
-            width=78, help=f"Unidades vendidas en los últimos {DIAS_VENDIDOS} "
-                           "días (el pie dice desde y hasta cuándo), con la "
-                           "definición de venta de Ventas"),
+        col_vend: st.column_config.Column(
+            width=100, help=vendidos_help + ". Con la definición de venta de "
+                                           "Ventas; el dato llega de madrugada."),
         "P. venta": st.column_config.Column(width=76, help="Precio de Salón, con impuestos"),
         "P. neto": st.column_config.Column(width=76, help="Precio de Salón ÷ 1,235, como el sistema"),
         "Costo": st.column_config.Column(
@@ -463,23 +512,33 @@ def _tabla_carta(t, pos_foco, con_ventas_):
                    _alto(len(v)), cfg)
 
 
-def _tabla_combos(t, pos_foco):
-    v = t[["Producto", "TipoCombo", "Metodo", "Costo", "Pct", "Minimo",
-           "Promedio", "Esperado", "Maximo", "Real90", "Vendidos90"]].rename(
+_BANDA = ["Minimo", "Promedio", "Esperado", "Maximo", "Real90", "Vendidos90"]
+"""Las columnas de la banda de un combo, que en la tabla suma «Más
+columnas»: la banda del combo elegido ya está al costado, en su panel."""
+
+
+def _tabla_combos(t, pos_foco, mas=False):
+    cols = ["Producto", "TipoCombo", "Metodo", "Costo", "Pct"]
+    if mas:
+        cols += _BANDA
+    v = t[cols].rename(
         columns={"Producto": "Combo", "TipoCombo": "Tipo",
                  "Metodo": "Cómo se costeó", "Costo": "Costo usado",
                  "Pct": "% costo", "Minimo": "Mínimo", "Maximo": "Máximo",
                  "Real90": "Real 90 días", "Vendidos90": "Vendidos (consulta)"})
-    montos = ["Costo usado", "Mínimo", "Promedio", "Esperado", "Máximo",
-              "Real 90 días"]
+    montos = [c for c in ("Costo usado", "Mínimo", "Promedio", "Esperado",
+                          "Máximo", "Real 90 días") if c in v.columns]
     sty = (v.style
            .format(_pct, subset=["% costo"])
            .format(_soles, subset=montos)
-           .format(_unidades, subset=["Vendidos (consulta)"])
            .map(_estilo_pct, subset=["% costo"])
            .apply(_pintar_foco(pos_foco), axis=1))
+    if "Vendidos (consulta)" in v.columns:
+        sty = sty.format(_unidades, subset=["Vendidos (consulta)"])
     cfg = {
-        "Combo": st.column_config.TextColumn(pinned=True, width=210),
+        # Fija sólo con la banda a la vista, como las de la carta: una
+        # columna fija se pinta en gris, y sin desliz no hace falta.
+        "Combo": st.column_config.TextColumn(pinned=bool(mas), width=210),
         "Tipo": st.column_config.TextColumn(width=78),
         "Cómo se costeó": st.column_config.TextColumn(width=186),
         "Costo usado": st.column_config.Column(
@@ -506,7 +565,7 @@ def _tabla_combos(t, pos_foco):
             width=118, help="Los que contó la consulta del Sheet en 90 días "
                             "para elegir el método (10 o más: «Esperado · "
                             "últimos 90 días»). Lo vendido según Ventas está "
-                            "en el panel de abajo."),
+                            "en el panel del combo elegido."),
     }
     _dibujar_tabla("rec_carta_combos", sty, pos_foco, list(t["Cod"]),
                    _alto(len(v)), cfg)
@@ -701,12 +760,17 @@ def _dib_costo_en_el_tiempo(f, agg):
 
 
 def _panel(f, df_rv, rango, ventas=None):
-    """Debajo de la tabla: el producto elegido, su línea de números, su
-    receta (o lo que descarga) y la dona / el Sankey / su costo en el tiempo.
-    Lo que era la parte de abajo de «Composición» (regla #556), más el costo
-    con que se vendió (regla #557)."""
+    """Al costado de la tabla (regla #570): el producto elegido, su línea
+    de números, su receta (o lo que descarga) y, debajo, la dona / el Sankey
+    / su costo en el tiempo. Lo que era la parte de abajo de «Composición»
+    (regla #556), más el costo con que se vendió (regla #557).
+
+    La receta y el gráfico van UNO ARRIBA DEL OTRO y no lado a lado, como
+    iban cuando el panel ocupaba el ancho entero: en ~440px no entran dos, y
+    los dos se leen juntos — el simulador edita la receta y la dona y el
+    Sankey siguen al borrador."""
     cod, nombre = str(f["Cod"]), str(f["Producto"])
-    with st.container(border=True, key="rec_card_carta_plato"):
+    with st.container(key="rec_carta_plato"):
         ruta = " › ".join(x for x in (f["Grupo"], f["Subgrupo"]) if x)
         st.markdown(f'<p class="chart-card-hdr">{escape(nombre)} · '
                     f'{escape(ruta)} · {escape(f["Tipo"])}</p>',
@@ -726,50 +790,45 @@ def _panel(f, df_rv, rango, ventas=None):
                 f'S/ {sin_costo_neto:,.0f} de lo vendido en {DIAS_VENDIDOS} '
                 f'días entró al FoodCost con costo 0: {causa}, y así queda '
                 f'guardado.</p>', unsafe_allow_html=True)
-        # columnas-internas: la receta (con su editor, que necesita ancho) y
-        # la dona / el Sankey, que no ganan nada con más; el mismo 3:2 que
-        # tenía Composición.
-        c_izq, c_der = st.columns([3, 2], gap="medium")
-        with c_izq:
-            if f["Tipo"] == "Receta":
-                r, costo_sim = receta_del_plato(df_rv, cod, nombre)
-            else:
-                r, costo_sim = None, None
-                _descarga(f)
-        with c_der:
-            with _card("rec_carta_mini"):
-                # NO `st.tabs`: dibuja las dos pestañas y esconde la otra, y
-                # un `plotly_events` escondido mide 0 y alterna su alto sin
-                # fin — trababa la página entera (regla #500).
-                vista = st.segmented_control(
-                    "Vista", ["Costo / Utilidad", "Sankey", "En el tiempo"],
-                    default="Costo / Utilidad", key="rec_carta_mini_vista",
-                    label_visibility="collapsed")
-                if vista == "En el tiempo":
-                    _dib_costo_en_el_tiempo(f, ventas)
-                elif vista == "Sankey":
-                    if r is None:
-                        st.info("Sin receta no hay Sankey: el Sankey reparte "
-                                "el costo entre los insumos de la receta.")
-                    else:
-                        _dib_sankey_insumo_costo(r, nombre, cod,
-                                                 costo_sim is not None)
-                elif f["SinCosto"] and costo_sim is None:
-                    # Sin costo, la dona dibujaría «0 % de costo» y toda la
-                    # porción como utilidad: una cifra que no existe.
-                    st.info("Sin costo cargado: no hay cómo repartir el "
-                            "precio entre costo y utilidad.")
+        if f["Tipo"] == "Receta":
+            r, costo_sim = receta_del_plato(df_rv, cod, nombre)
+        else:
+            r, costo_sim = None, None
+            _descarga(f)
+        with _card("rec_carta_mini"):
+            # NO `st.tabs`: dibuja las dos pestañas y esconde la otra, y
+            # un `plotly_events` escondido mide 0 y alterna su alto sin
+            # fin — trababa la página entera (regla #500).
+            vista = st.segmented_control(
+                "Vista", ["Costo / Utilidad", "Sankey", "En el tiempo"],
+                default="Costo / Utilidad", key="rec_carta_mini_vista",
+                label_visibility="collapsed")
+            if vista == "En el tiempo":
+                _dib_costo_en_el_tiempo(f, ventas)
+            elif vista == "Sankey":
+                if r is None:
+                    st.info("Sin receta no hay Sankey: el Sankey reparte "
+                            "el costo entre los insumos de la receta.")
                 else:
-                    _dib_torta_costo_utilidad(f["Neto"], f["Costo"], f["Pct"],
-                                              cod, costo_sim)
+                    _dib_sankey_insumo_costo(r, nombre, cod,
+                                             costo_sim is not None)
+            elif f["SinCosto"] and costo_sim is None:
+                # Sin costo, la dona dibujaría «0 % de costo» y toda la
+                # porción como utilidad: una cifra que no existe.
+                st.info("Sin costo cargado: no hay cómo repartir el "
+                        "precio entre costo y utilidad.")
+            else:
+                _dib_torta_costo_utilidad(f["Neto"], f["Costo"], f["Pct"],
+                                          cod, costo_sim)
 
 
 # ─── La vista ─────────────────────────────────────────────────────────────
 def render_carta_costeada(df, df_rv=None, ventas=None):
-    """La vista entera: la tarjeta de la carta y, debajo, la del producto
-    elegido. `df` es `cartacosteada.parquet` (o None si no se pudo cargar);
-    `df_rv`, recetaventa.parquet (las recetas y su fecha); `ventas`, lo
-    vendido por producto y día (`data.venta_por_producto_dia`), o None."""
+    """La vista entera: UNA tarjeta con la carta a la izquierda y el
+    producto elegido a la derecha (regla #570). `df` es
+    `cartacosteada.parquet` (o None si no se pudo cargar); `df_rv`,
+    recetaventa.parquet (las recetas y su fecha); `ventas`, lo vendido por
+    producto y día (`data.venta_por_producto_dia`), o None."""
     ss = st.session_state
     # LO ELEGIDO, ANTES DE DIBUJAR NADA: la tabla nueva sale con eso marcado.
     _leer_eleccion("rec_carta_tabla")
@@ -831,44 +890,64 @@ def render_carta_costeada(df, df_rv=None, ventas=None):
         if ver == "Combos":
             t = filtrar(carta, grupo, "Combo", buscar, venta_interna=vi)
             st.markdown(resumen(t, "combos"))
-            if t.empty:
-                st.info("No hay combos con este filtro.")
-                return
-            t = t.reset_index(drop=True)
-            foco = ss.get(_K_FOCO)
-            pos = t.index[t["Cod"] == foco]
-            pos = int(pos[0]) if len(pos) else 0
-            _tabla_combos(t, pos)
-            st.caption(
-                "Todo con la cantidad de la ficha y el costo de HOY de cada "
-                "plato. Esperado: cada opción pesada por lo que eligieron los "
-                "clientes — en 90 días si hubo 10 o más vendidos, si no con "
-                "todo su historial; un grupo sin elecciones cuenta su "
-                "promedio. Real: lo servido en 90 días, al costo de cada día. "
-                "Clic en un combo para verlo abajo.")
+            vacio = "No hay combos con este filtro."
         else:
             t = filtrar(carta, grupo, tipo, buscar, venta_interna=vi)
             st.markdown(resumen(t))
-            if t.empty:
-                st.info("Ningún producto con este filtro.")
-                return
-            t = t.reset_index(drop=True)
-            foco = ss.get(_K_FOCO)
-            pos = t.index[t["Cod"] == foco]
-            pos = int(pos[0]) if len(pos) else 0
-            _tabla_carta(t, pos, rango is not None)
-            orden = ("lo vendido en 90 días" if tipo == "Sin costo"
-                     else "% de costo")
-            pie = (f"Ordenada por {orden}. Semáforo: sobre {_UMBRAL_COSTO_OK} % en "
-                   f"ámbar, sobre {_UMBRAL_COSTO_WARN} % en rojo. Clic en un "
-                   "producto para ver su receta abajo.")
-            if n_sin_precio:
-                pie += (f" {n_sin_precio} sin precio de Salón (S/ 1 o menos) no "
-                        "se muestran.")
-            if rango is not None:
-                pie += (f" Vendidos: del {rango[0]:%d/%m} al {rango[1]:%d/%m/%Y}.")
-            else:
-                pie += " No se pudieron leer las ventas: sin «Vendidos»."
-            st.caption(pie)
+            vacio = "Ningún producto con este filtro."
+        if t.empty:
+            st.info(vacio)
+            return
+        t = t.reset_index(drop=True)
+        pos = t.index[t["Cod"] == ss.get(_K_FOCO)]
+        pos = int(pos[0]) if len(pos) else 0
 
-    _panel(t.iloc[pos], df_rv, rango, ventas)
+        # columnas-internas: la tabla y, AL COSTADO, el producto elegido
+        # (regla #570); es la tarjeta de la vista, no parte la página.
+        c_tabla, c_panel = st.columns(list(PROPORCION), gap="medium")
+        with c_tabla:
+            # «Más columnas» va ARRIBA DE LA TABLA y no en la fila de
+            # controles: es de la tabla, y en esa fila no entraba un séptimo
+            # control a 1366px (medido: «Carta completa | Combos» se partía
+            # en dos renglones y «Inactivos» se cortaba). A la IZQUIERDA: a
+            # la derecha lo tapa la barrita de íconos que `st.dataframe`
+            # asoma sobre su esquina al pasar el cursor. El renglón que suma
+            # lo paga la columna de la tabla, que es la más baja.
+            with st.container(key="rec_carta_mas_fila"):
+                mas = st.toggle(
+                    "Más columnas", key=_K_MAS,
+                    help="En la carta: Margen, Vendidos (90 días), Tipo, "
+                         "Actualizado y Última venta. En Combos: la banda de "
+                         "costos (mínimo, promedio, esperado, máximo y real). "
+                         "La tabla se desliza de costado; el producto elegido "
+                         "sigue al lado.")
+            if ver == "Combos":
+                _tabla_combos(t, pos, mas)
+                st.caption(
+                    "Todo con la cantidad de la ficha y el costo de HOY de cada "
+                    "plato. Esperado: cada opción pesada por lo que eligieron los "
+                    "clientes — en 90 días si hubo 10 o más vendidos, si no con "
+                    "todo su historial; un grupo sin elecciones cuenta su "
+                    "promedio. Real: lo servido en 90 días, al costo de cada día. "
+                    "Clic en un combo para ver su detalle.")
+            else:
+                _tabla_carta(t, pos, rango, mas)
+                orden = ("lo vendido en 90 días" if tipo == "Sin costo"
+                         else "% de costo")
+                pie = (f"Ordenada por {orden}. Semáforo: sobre {_UMBRAL_COSTO_OK} % "
+                       f"en ámbar, sobre {_UMBRAL_COSTO_WARN} % en rojo. Clic en "
+                       "un producto para ver su receta.")
+                if n_sin_precio:
+                    pie += (f" {n_sin_precio} sin precio de Salón (S/ 1 o menos) "
+                            "no se muestran.")
+                if rango is not None:
+                    # «¿Vendidos cuándo?» (preguntado el 2026-09-29): la
+                    # ventana termina en el último día con venta, no hoy.
+                    pie += (f" Lo vendido es de los últimos {DIAS_VENDIDOS} días "
+                            f"con datos: del {rango[0]:%d/%m} al "
+                            f"{rango[1]:%d/%m/%Y}.")
+                else:
+                    pie += " No se pudieron leer las ventas: sin «Vendidos»."
+                st.caption(pie)
+        with c_panel:
+            _panel(t.iloc[pos], df_rv, rango, ventas)
