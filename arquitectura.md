@@ -42239,8 +42239,11 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      7 tipos, 10 áreas y 6 familias la fila de arriba cerraba en escalón.
      Con el piso, las cinco miden 301px a 1366. Las keys las arma
      `drill_tablas.claves_tarjetas_cuadros` y el piso las enumera por key
-     exacta (#469); la cadena de Inventario y la de «Por sub almacén»
-     siguen sin piso (#411).
+     exacta (#469); la cadena de Inventario sigue sin piso (#411). La de
+     «Por sub almacén» entró el 2026-09-30, a pedido («la tarjeta del medio
+     se ve más corta»): con COCINA en foco, 6 familias entre 8 sub
+     almacenes y 8 subfamilias. El piso estira la TARJETA; la grilla sigue
+     en el alto que le ata `tabla_ranking` (#410).
 
      **Una cabecera que AG Grid escribe sola.** Sin `headerName`, AG Grid
      arma la cabecera desde el `field` y le sube la inicial a CADA palabra:

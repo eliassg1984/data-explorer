@@ -1441,12 +1441,21 @@ CSS = """    /* ================================================================
         /* mide las filas que trae hasta ocho, así que sin piso la fila de  */
         /* arriba cerraba en escalón: 7 tipos de baja, 10 áreas, 6          */
         /* familias. Son la primera fila de `ajuste_graf_card_` que entra   */
-        /* acá; las de la cadena de Inventario y de «Por sub almacén»       */
-        /* siguen sin piso (#411). Las keys las arma                        */
-        /* `drill_tablas.claves_tarjetas_cuadros`, y                        */
+        /* acá; la cadena de Inventario sigue sin piso (#411). Las keys las */
+        /* arma `drill_tablas.claves_tarjetas_cuadros`, y                   */
         /* `test_graficos.py::_pruebas_detalle_salidas` exige verlas acá.   */
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-ajuste_graf_card_izq_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal_n2, > .st-key-ajuste_graf_card_der_mov_detsal_n3, > .st-key-ajuste_graf_card_der_mov_detsal_n4) {
+        > div:has(> .st-key-ajuste_graf_card_izq_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal_n2, > .st-key-ajuste_graf_card_der_mov_detsal_n3, > .st-key-ajuste_graf_card_der_mov_detsal_n4),
+        /* Y las tres de Movimientos › «Por sub almacén» (2026-09-30, a     */
+        /* pedido: «la tarjeta del medio se ve más corta»). Con COCINA en   */
+        /* foco, 8 sub almacenes, 6 familias y 8 subfamilias: la del medio  */
+        /* cerraba dos filas más arriba que sus vecinas. El piso estira la  */
+        /* TARJETA, no la grilla — su alto sigue atado por key desde        */
+        /* `drill_tablas.tabla_ranking`, que es lo que la #410 pide.       */
+        /* Las keys las arma `drill_tablas.seccion_cadena` (pref "mov",     */
+        /* slug "subalm").                                                  */
+        .stColumn > .stVerticalBlock
+        > div:has(> .st-key-ajuste_graf_card_izq_mov_subalm, > .st-key-ajuste_graf_card_der_mov_subalm, > .st-key-ajuste_graf_card_der_mov_subalm_n2) {
             flex: 1 1 auto;
         }
 
