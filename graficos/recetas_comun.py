@@ -6,11 +6,17 @@ Los dos parquets son la MISMA forma de dato — un BOM (lista de materiales):
 cada fila es un ítem/insumo dentro de un contenedor (plato o receta base),
 con una cantidad y un costo. Lo que queda acá es lo que usan los dos lados
 —y la Carta costeada, y el formulario de Nueva receta—: `_activo()`, que
-normaliza los TRES formatos del flag de activo; `_ranking_contenedores`, el
-Ranking de recetas base; `_hex_a_rgba`, del Sankey del panel de la Carta; el
-divisor del precio neto (regla #514) y el catálogo de insumos del Almacén.
+normaliza los TRES formatos del flag de activo; `_hex_a_rgba`, del Sankey
+del panel de la Carta; el divisor del precio neto (regla #514) y el catálogo
+de insumos del Almacén.
 
 LO QUE SE FUE, Y POR QUÉ — se borra cuando pierde su ÚLTIMO llamador:
+
+  · `_ranking_contenedores` (el Ranking de recetas base, barras con el costo
+    POR LOTE de cada receta del catálogo) y su `_fmt_valor`, el 2026-09-30 —
+    regla #576. Decía cuál receta cuesta más hacer una vez y nada de cuánto
+    se usa; lo reemplazó «Costo Recetas Base» (`graficos/recetas_base_costo.py`),
+    que cruza lo usado por las ventas con las órdenes de producción.
 
   · `_composicion_contenedor` (la dona de UN plato/receta), el 2026-08-28:
     Receta Venta la reemplazó por una tabla propia y Receta Base dio de baja
@@ -43,13 +49,10 @@ PIEZA de un plato, no su hermana. Ver `arquitectura.md` regla #303; el
 """
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 from data import cargar as _cargar_reporte
-from tema import GRIS_BORDE, SERIE_PRINCIPAL
-from graficos.base import _card, _layout, _resolver
-from graficos import alturas
+from graficos.base import _resolver
 
 
 # ─── Helpers de formato ─────────────────────────────────────────────────────
@@ -60,11 +63,6 @@ def _hex_a_rgba(hex_color: str, alpha: float = 0.45) -> str:
         return f"rgba(108,92,231,{alpha})"
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
-
-
-def _fmt_valor(es_soles: bool):
-    """(prefijo, formato) según la métrica activa sea costo (S/) o cantidad."""
-    return ("S/ ", ",.2f") if es_soles else ("", ",.2f")
 
 
 def _activo(serie):
@@ -105,41 +103,6 @@ def _activo(serie):
 # el grupo_nav de Recetas quedó de un solo miembro y no había a dónde
 # chipear. La navegación entre secciones ahora la hace el rail lateral, con
 # el mismo mecanismo que Compras/Ajuste.
-
-
-# ─── 1. Ranking de contenedores por costo ───────────────────────────────────
-def _ranking_contenedores(d, col_contenedor, col_valor, es_soles, *,
-                          key_topn, card_key, titulo_card):
-    """Barras horizontales: los contenedores que más cuestan (suma de sus
-    ítems)."""
-    g = (d.groupby(col_contenedor, as_index=False)[col_valor].sum()
-           .sort_values(col_valor, ascending=False))
-    if g.empty:
-        st.info("Sin datos para el ranking.")
-        return
-    pref, num = _fmt_valor(es_soles)
-
-    topn = st.selectbox("Mostrar", [10, 15, 20, 30, "Todos"], index=1,
-                        key=key_topn)
-    g_top = g if topn == "Todos" else g.head(int(topn))
-    g_top = g_top.sort_values(col_valor)  # ascendente → mayor arriba en barh
-
-    fig = go.Figure(go.Bar(
-        x=g_top[col_valor], y=g_top[col_contenedor].astype(str),
-        orientation="h", marker_color=SERIE_PRINCIPAL,
-        text=[f"{pref}{v:,.0f}" for v in g_top[col_valor]],
-        textposition="outside",
-        hovertemplate=f"%{{y}}<br>{pref}%{{x:{num}}}<extra></extra>",
-    ))
-    fig.update_layout(**_layout(
-        height=alturas.por_filas(len(g_top), px_fila=30,
-                                 minimo=360, extra=120),
-        xaxis=dict(tickprefix=pref, tickformat=",.0f", gridcolor=GRIS_BORDE),
-        yaxis=dict(showticklabels=True, gridcolor=GRIS_BORDE),
-        showlegend=False,
-    ))
-    with _card(card_key, titulo_card):
-        st.plotly_chart(fig, use_container_width=True)
 
 
 # ─── El catálogo de insumos de almacén ──────────────────────────────────────

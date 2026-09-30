@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-575 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+576 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -671,7 +671,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 
-**Datos, R2 y DuckDB** (80)
+**Datos, R2 y DuckDB** (81)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -753,6 +753,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#571** — «Carta impresa» es un atributo del PRODUCTO: va en la consulta de la carta, no en la de ventas
 - **#573** — La Carta costeada no lee las ventas hasta que algo las muestra
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
+- **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 
 **SUNAT y SIRE** (44)
 
@@ -864,7 +865,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (139)
+**Decisiones de diseño y UX** (140)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1005,6 +1006,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#571** — «Carta impresa» es un atributo del PRODUCTO: va en la consulta de la carta, no en la de ventas
 - **#574** — La Carta costeada: el título con sus desplegables en un renglón, los porcionamientos de un…
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
+- **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45763,6 +45765,100 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-30.)
 
+576. **Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta
+     base contra lo que produjeron las órdenes, y su costo por unidad en el
+     tiempo.** 2026-09-30, a pedido: «mi vista Ranking Base me da muy poca
+     información. Quisiera alguna tabla que me muestre las recetas más usadas
+     dentro de los platos de venta, cruzadas con la cantidad de veces que se
+     registran en una orden de producción […] un histórico de cómo
+     evolucionó el costo por unidad según el registro de orden de
+     producción», del tamaño de una tarjeta, que puede alternar, con
+     desplegables de una línea. Y el rail en este orden y con estos nombres:
+     «Costo Carta» (antes «Carta»), «Costo Recetas Base» (antes «Ranking ·
+     base»), «Revisar» y «Nuevo Costeo» (antes «Nueva»). En
+     `graficos/recetas_base_costo.py`, `graficos/recetas.py`,
+     `consumo_recetas.py`, `data.py`, `graficos/alturas.py` y
+     `estilos/_80_cards.py`.
+     - **El Ranking de recetas base se fue** (`recetas_comun.py::
+       _ranking_contenedores` y su `_fmt_valor`, sin otro llamador): barras
+       con el costo POR LOTE de cada receta del catálogo — cuál cuesta más
+       hacer una vez, nada de cuánto se usa. El id de la vista cambió con él
+       («Costo de recetas base», sección `rec_sec_costo_rb`): un enlace viejo
+       con `?vista=ranking_de_recetas_base` abre la primera vista. Los otros
+       tres ids no cambiaron; sólo sus rótulos.
+     - **UNA tarjeta, dos vistas que alterna el desplegable «Ver»**, en el
+       renglón del título con el estilo de la Carta costeada (#574): «Uso y
+       producción» (la tabla) y «Evolución del costo» (la receta en foco).
+       La receta en foco vive en una clave propia (`rec_rb_foco`), no en un
+       widget: cada vista dibuja sólo uno de los dos que la eligen —la fila
+       de la tabla o el desplegable «Receta»— y un widget que no se dibuja
+       pierde su estado. Cuando el desplegable la cambia, un contador en la
+       key de la tabla la estrena con esa fila marcada (la selección de un
+       `st.dataframe` es de su KEY, #556). En la evolución la ventana se
+       apaga en vez de esconderse, por lo mismo.
+     - **Lo USADO baja por las recetas base.** El primer nivel de las ventas
+       (`paloteoinsumosnivel1`) sólo nombra lo que pide la receta del PLATO:
+       de 427 recetas activas, 257 salen ahí y 95 sólo adentro de otra
+       receta base (un fondo, un aderezo). La cantidad baja multiplicando
+       (un kilo de salsa lleva 0,3 kg de fondo; un lote por unidad de
+       entrada, como en #558) y los platos bajan sin multiplicar, un par
+       (plato, receta) una vez aunque llegue por dos caminos — así tampoco
+       da vueltas en un círculo. Sólo por recetas ACTIVAS; lo que se
+       porciona no se baja (esta vista mira recetas, no cortes).
+     - **`sql_demanda_nivel1` suma `vendido`** (las unidades del plato), y
+       `_demanda_nivel1_cacheable` cambió su docstring A PROPÓSITO: la clave
+       de `st.cache_data` es el código fuente de la función cacheada —no el
+       de la consulta, que vive en `consumo_recetas`—, y la caché de disco no
+       caduca (#367). Sin tocar ese texto, «Revisar recetas» dejaba en disco
+       la tabla sin la columna y esta vista la leía así. La vista igual se
+       defiende: sin `vendido`, trata el primer nivel como ausente.
+     - **Lo PRODUCIDO y el costo salen de `ordenesproduccion.parquet`** (#575),
+       sólo las órdenes PROCESADAS. `PRECIO UNIT` es el costo por unidad de
+       entrada que calculó el Almacén al procesar, con los precios de ese
+       día; la mediana de último costo ÷ `RB COSTO` (la receta con los
+       precios de hoy) da 1,00 en 498 recetas. La unidad de la orden y la de
+       la receta coinciden en el 100 %.
+     - **Órdenes atípicas**: más de 10 veces sobre o bajo la mediana de sus 9
+       vecinas (89 de 24.652; el aderezo de cebolla a S/ 34.239 el kilo, un
+       zumo a S/ 0,008). No entran en el costo del mes ni en el último costo,
+       pero SÍ en lo producido: la orden existió. Contra las vecinas y no
+       contra la mediana de toda la historia, porque un cambio de régimen
+       es real —el choclo blanqueado pasó de S/ 7 a S/ 33 el kilo— y
+       comparado con la historia entera marcaba como raras 496 órdenes. El
+       gráfico las dibuja aparte, contra el borde, sin estirar la escala.
+       UN `groupby().rolling()` sobre todas las filas, no un `transform` por
+       receta (#537).
+     - **Producido ÷ usado es «—» si la receta nunca tuvo una orden**, no un
+       0 %: casi todas las «(L)» y «(P)» salen de un porcionamiento, y en
+       ámbar encabezaban la tabla (son de lo más usado). Un 0 % es de una
+       receta que se produjo alguna vez y no en el período. Ámbar fuera de
+       50-150 %. Un desplegable separa las que tuvieron órdenes de las que no.
+     - **La línea «Costo 12 m»** (`LineChartColumn`, con Styler: dibuja igual)
+       sólo con dos meses o más: una de un mes sale plana contra el piso de
+       la celda y parece un costo quieto. «Var. 12 m», del primer al último
+       mes de esa línea: una suba de 20 % en ámbar, una baja en verde, como
+       en Compras.
+     - **Caché por SELLO, no por DataFrame** (`_calculo`): cada clic en la
+       tabla re-ejecuta la sección y la cuenta son ~0,7 s en la laptop. Los
+       DataFrames van con `_` delante, fuera de la clave; la clave son los
+       sellos de los tres parquets y la ventana. En memoria, sin disco.
+     - **Mide ~533px** a 1323×700 (tabla de 13 filas, `alturas.
+       RB_COSTO_TABLA`), y la evolución ~528 (gráfico de 340 y las órdenes de
+       la receta al costado, once filas). Entra en la pantalla del usuario
+       (#574).
+     - **El botón Actualizar de Recetas** pide además `ordenesproduccion` y el
+       primer nivel (`archivos_extra`).
+     - **En Cloud, reiniciar la app** (#357): `recetas.py` importa un módulo
+       nuevo y `recetas_comun.py` perdió una función.
+     - **Cómo se verificó**: pruebas en `test_graficos.py` (lo anidado, el
+       plato por dos caminos, la orden generada, las atípicas y el cambio de
+       régimen, «—» contra 0 %, sin vacíos, el orden del rail) y la vista con
+       datos reales a 1323×700 con Playwright: elegir una fila, pasar a la
+       evolución (abre esa receta), cambiar de receta buscando en el
+       desplegable, volver, y los filtros de área y de órdenes.
+
+     (2026-09-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45775,7 +45871,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#575**; la próxima toma el número siguiente.
+> última regla es la **#576**; la próxima toma el número siguiente.
 
 >
 

@@ -297,8 +297,12 @@ REPORTES = {
         # navegacion.py::boton_refresco.
         # Desde el 2026-09-26, también la carta costeada (toda la carta con
         # su % de costo, combos incluidos), que carga la sección «Carta
-        # costeada» de graficos/recetas.py (regla #548).
-        "archivos_extra": ("recetabase.parquet", "cartacosteada.parquet"),
+        # costeada» de graficos/recetas.py (regla #548). Y desde el
+        # 2026-09-30 las órdenes de producción y el primer nivel de las
+        # ventas, que lee «Costo Recetas Base» (regla #576).
+        "archivos_extra": ("recetabase.parquet", "cartacosteada.parquet",
+                           "ordenesproduccion.parquet",
+                           "paloteoinsumosnivel1.parquet"),
         "icono": ":material/receipt_long:",
         # Catálogo sin fecha: el KPI es un conteo, no un agregado por período
         # (kpi_fecha ausente a propósito — resumen_kpis() agrega la tabla
@@ -1576,8 +1580,14 @@ def _demanda_nivel1_cacheable(archivo, sello, ini, fin):
 
     `archivo` es `paloteoinsumosnivel1.parquet`; `sello` no se usa en el
     cuerpo: es la clave (ver el bloque del sello). Agregado en DuckDB sobre
-    R2: unos miles de filas en vez de las 112.000 de 90 días. Lo lee Recetas ›
-    «Revisar recetas» (regla #559)."""
+    R2: unos miles de filas en vez de las 112.000 de 90 días. Lo leen Recetas ›
+    «Revisar recetas» (regla #559) y «Costo recetas base» (regla #576).
+
+    La columna `vendido` llegó el 2026-09-30 con la segunda. Streamlit mete el
+    CÓDIGO FUENTE de esta función en la clave de su caché —no el de la
+    consulta, que vive en `consumo_recetas`—, así que cambiar lo que devuelve
+    es cambiar también este texto: si no, la caché de disco, que no caduca,
+    seguiría sirviendo la tabla vieja, sin la columna."""
     if not secrets_disponibles():
         return None
     con = get_conn()
@@ -1589,7 +1599,8 @@ def _demanda_nivel1_cacheable(archivo, sello, ini, fin):
 def demanda_nivel1_rango(ini, fin):
     """Lo que pidieron las ventas entre `ini` y `fin` (fechas del pedido,
     inclusive) al primer nivel de sus recetas: cod, plato, consumo (en unidad
-    de SALIDA) y costo. `None` si no se pudo leer — quien lo pide avisa.
+    de SALIDA), costo y vendido (unidades del plato). `None` si no se pudo
+    leer — quien lo pide avisa.
 
     No cacheada (la interna sí), por lo mismo que `cargar()`."""
     archivo = consumo_recetas.ARCHIVOS["paloteo"]

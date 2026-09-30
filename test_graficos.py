@@ -63,15 +63,52 @@ def _df_minimo():
     })
 
 
-def _df_recetas():
-    """12 filas emulando un BOM (contenedor -> ítems), forma común a
-    Receta Base y Receta Venta — suficiente para ejercitar el ranking que
-    comparten en graficos/recetas_comun.py."""
-    return pd.DataFrame({
-        "CONTENEDOR": ["A", "A", "A", "B", "B", "C", "C", "C", "C", "D", "D", "D"],
-        "ITEM":       ["x1", "x2", "x3", "x1", "x4", "x2", "x3", "x4", "x5", "x1", "x2", "x3"],
-        "VALOR":      [10.0, 5.0, 2.5, 8.0, 3.0, 4.0, 6.0, 1.0, 2.0, 9.0, 3.5, 1.5],
-    })
+def _recetabase_rb_demo():
+    """recetabase.parquet de mentira para «Costo recetas base» (regla #576),
+    con los nombres de columna del Sheet: una salsa que lleva un fondo (300 g
+    por kilo), el fondo, una receta INACTIVA que igual se vende y una activa
+    que nadie usa."""
+    filas = [
+        # prod, nombre, unid, costo, act, factor, area, ins, cant, factor ins
+        ("0000100", "(Rs) Salsa de lomo", "KILOS", 20.0, "RB.ACTIV", 1000.0, "COCINA",
+         "0000200", 300.0, 1000.0),
+        ("0000100", "(Rs) Salsa de lomo", "KILOS", 20.0, "RB.ACTIV", 1000.0, "COCINA",
+         "0000900", 50.0, 1000.0),
+        ("0000200", "(Rs) Fondo oscuro", "KILOS", 5.0, "RB.ACTIV", 1000.0, "PRODUCCION",
+         "0000901", 1000.0, 1000.0),
+        ("0000300", "(Rs) Postre viejo", "UND", 3.0, "RB.INACT", 1.0, "COCINA",
+         "0000902", 1.0, 1.0),
+        ("0000400", "(Rs) Batch de barra", "LITROS", 8.0, "RB.ACTIV", 1000.0, "BARRA",
+         "0000903", 900.0, 1000.0),
+    ]
+    return pd.DataFrame(filas, columns=[
+        "COD PROD RB", "RB NOMBRE", "RB UNID", "RB COSTO", "RB ACT", "RB FACTOR",
+        "RB AREA PROD", "COD INS RB", "CANT", "FACTOR INS"])
+
+
+def _ordenes_rb_demo():
+    """ordenesproduccion.parquet de mentira (regla #575/#576): la salsa, diez
+    órdenes a ~S/ 20 el kilo, una a S/ 3.000 (una cantidad mal cargada) y la
+    última a S/ 0; el fondo, cinco a S/ 5 y cinco a S/ 25 —un CAMBIO de
+    régimen, que no es atípico— y una generada, que no suma."""
+    filas = []
+
+    def _orden(i, cod, nombre, fecha, cant, punit, estado="PROCESADO", unid="KILOS"):
+        filas.append({"COD ORDEN PRODUCCION": f"26{i:08d}", "FECHA REGISTRO": pd.Timestamp(fecha),
+                      "NOMBRE ESTADO": estado, "AREA": "COCINA", "COD PRODUCTO": cod,
+                      "NOMBRE PRODUCTO": nombre, "CANTIDAD": cant, "UNIDAD": unid,
+                      "PRECIO UNIT": punit, "VALOR ITEM": cant * punit})
+
+    for k in range(10):
+        _orden(k, "0000100", "(Rs) Salsa de lomo", f"2026-{(k % 9) + 1:02d}-10 10:00",
+               2.0, 20.0 + k * 0.1)
+    _orden(20, "0000100", "(Rs) Salsa de lomo", "2026-09-12 10:00", 0.01, 3000.0)
+    _orden(21, "0000100", "(Rs) Salsa de lomo", "2026-09-20 10:00", 1.0, 0.0)
+    for k in range(10):
+        _orden(30 + k, "0000200", "(Rs) Fondo oscuro", f"2026-0{1 + k // 2}-0{1 + k % 2} 09:00",
+               4.0, 5.0 if k < 5 else 25.0)
+    _orden(50, "0000200", "(Rs) Fondo oscuro", "2026-09-15 09:00", 99.0, 5.0, estado="GENERADO")
+    return pd.DataFrame(filas)
 
 
 def _fuentes_py(raiz):
@@ -6409,6 +6446,132 @@ def _pruebas_revisar_recetas():
     return fallos
 
 
+def _pruebas_costo_recetas_base():
+    """Recetas › «Costo Recetas Base» (regla #576), que reemplazó al Ranking
+    de recetas base: lo que usaron las ventas de cada receta base —también
+    adentro de otra— contra lo que produjeron las órdenes de producción, y su
+    costo por unidad en el tiempo.
+
+    Fija lo que se ve mal sin avisar: una receta que sólo llega al plato
+    ADENTRO de otra (sin bajar, decía «sin uso»); un plato que la lleva por
+    dos caminos cuenta una vez; una orden GENERADA no produjo nada; una orden
+    con un costo absurdo no entra en el último costo, y un cambio de régimen
+    no es absurdo; sin vacíos que `st.dataframe` pinte «None» (#529). Y el
+    orden y los nombres del rail que se pidieron.
+    """
+    import math
+    from datetime import date
+
+    import consumo_recetas
+    from data import REPORTES
+    from graficos import recetas as rec
+    from graficos import recetas_base_costo as rbc
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    recetas · costo recetas base · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA recetas · costo recetas base · {nombre}: got={got!r} exp={exp!r}")
+
+    rb = _recetabase_rb_demo()
+    op = _ordenes_rb_demo()
+    n1 = pd.DataFrame({
+        "cod": ["0000100", "0000100", "0000200", "0000300", "0000900"],
+        "plato": ["Lomo a la pimienta", "Pasta", "Lomo a la pimienta", "Postre", "Lomo a la pimienta"],
+        "consumo": [2000.0, 1000.0, 500.0, 4.0, 100.0],
+        "costo": [40.0, 20.0, 2.5, 12.0, 1.0],
+        "vendido": [10.0, 5.0, 10.0, 4.0, 10.0],
+    })
+
+    u = rbc.uso(n1, rb)
+    check("lo usado de la salsa, en kilos (2000 g + 1000 g)", round(u.loc["0000100", "usado"], 6), 3.0)
+    check("el fondo: 0,5 kg directo + 3 kg de salsa × 0,3", round(u.loc["0000200", "usado"], 6), 1.4)
+    check("y su parte directa, aparte", round(u.loc["0000200", "directo"], 6), 0.5)
+    check("un plato que lleva el fondo por dos caminos cuenta una vez",
+          (int(u.loc["0000200", "platos"]), u.loc["0000200", "vendidos"]), (2, 15.0))
+    check("un insumo de compra no es una receta base", "0000900" in u.index, False)
+
+    o = rbc.ordenes(op)
+    check("una orden generada no produjo nada", "GENERADO" in set(op["NOMBRE ESTADO"])
+          and len(o) == int((op["NOMBRE ESTADO"] == "PROCESADO").sum()), True)
+    raras = set(o.loc[o["atipico"], "orden"])
+    check("S/ 3.000 el kilo y S/ 0 son atípicas", raras, {"2600000020", "2600000021"})
+    check("un cambio de régimen (de S/ 5 a S/ 25) no es atípico",
+          bool(o.loc[o["cod"] == "0000200", "atipico"].any()), False)
+
+    ini, fin = pd.Timestamp("2026-07-01"), pd.Timestamp("2026-09-29")
+    t = rbc.tabla(rb, n1, o, ini, fin).set_index("cod")
+    check("el último costo salta las atípicas", round(t.loc["0000100", "ultimo"], 6), 20.8)
+    # Julio a setiembre: tres órdenes normales de 2 kg y las dos atípicas,
+    # que SÍ cuentan como producción —la orden existió—; sólo quedan fuera
+    # del costo.
+    check("órdenes y producido del período, con las atípicas",
+          (int(t.loc["0000100", "ordenes"]), round(t.loc["0000100", "producido"], 6)),
+          (5, 7.01))
+    check("producido ÷ usado", round(t.loc["0000100", "cobertura"], 4), round(7.01 / 3.0, 4))
+    check("sin uso, producido ÷ usado queda en infinito (se escribe «—»)",
+          (math.isinf(t.loc["0000400", "cobertura"]), rbc._pct(t.loc["0000400", "cobertura"])),
+          (True, "—"))
+    check("una inactiva que se vendió está, y una activa sin nada también",
+          ("0000300" in t.index, "0000400" in t.index), (True, True))
+    check("usada y nunca producida por una orden: «—», no un 0 % (se hace de otra forma)",
+          rbc._pct(t.loc["0000300", "cobertura"]), "—")
+    check("filtro: con órdenes / sin órdenes",
+          (sorted(rbc.filtrar(t.reset_index(), produccion=rbc.PRODUCCION[1])["cod"]),
+           sorted(rbc.filtrar(t.reset_index(), produccion=rbc.PRODUCCION[2])["cod"])),
+          (["0000100", "0000200"], ["0000300", "0000400"]))
+    check("una línea de 12 meses con menos de dos meses no se dibuja",
+          t.loc["0000400", "linea"], [])
+    check("una suba marcada en ámbar y una baja en verde",
+          (rbc.ADVERTENCIA_TEXTO in rbc._estilo_var(0.25),
+           rbc.AJUSTE_POS_TEXTO in rbc._estilo_var(-0.25), rbc._estilo_var(0.1)),
+          (True, True, ""))
+    check("el fondo: de S/ 5 a S/ 25 en la línea de 12 meses",
+          round(t.loc["0000200", "var"], 6), 4.0)
+    v = rbc.columnas_tabla(t.reset_index())
+    check("las columnas de la tabla", tuple(v.columns), rbc.COLUMNAS)
+    check("sin vacíos que st.dataframe pinte «None» (#529)",
+          bool(v.drop(columns=["Costo 12 m"]).isna().any().any()), False)
+    check("la inactiva lo dice", "(Rs) Postre viejo · inactiva" in set(v["Receta base"]), True)
+    check("ordenada por lo vendido, a igual venta por órdenes",
+          list(rbc.tabla(rb, n1, o, ini, fin)["cod"])[:2], ["0000100", "0000200"])
+    check("filtro por área", list(rbc.filtrar(t.reset_index(), "BARRA")["cod"]), ["0000400"])
+    check("buscar sin acentos ni mayúsculas",
+          list(rbc.filtrar(t.reset_index(), buscar="FONDO")["cod"]), ["0000200"])
+    check("el área se escribe con su tilde", rbc.area_escrita("PRODUCCION"), "Producción")
+    sin_ventas = rbc.tabla(rb, None, o, ini, fin)
+    check("sin el primer nivel de las ventas, la tabla sale igual",
+          (len(sin_ventas) > 0, float(sin_ventas["usado"].sum())), (True, 0.0))
+    fig = rbc.fig_evolucion(o[o["cod"] == "0000100"], rbc.costo_por_mes(o[o["cod"] == "0000100"]),
+                            20.0, "KILOS")
+    check("la orden de S/ 3.000 no estira la escala", fig.layout.yaxis.range[1] < 100, True)
+    check("los meses del eje en español (#241)",
+          any(txt.startswith("ene") for txt in fig.layout.xaxis.ticktext), True)
+    check("el primer nivel trae lo vendido",
+          "vendido" in consumo_recetas.sql_demanda_nivel1("x", date(2026, 1, 1), date(2026, 1, 2)),
+          True)
+
+    # ── El rail: el orden y los nombres que se pidieron (2026-09-30) ──────
+    visibles = [v for _cat, vistas in rec._RAIL_CATEGORIAS for v in vistas
+                if not v[1].startswith("Tabla")]
+    check("el rail, en el orden pedido",
+          [v[1] for v in visibles], ["Costo Carta", "Costo Recetas Base", "Revisar", "Nuevo Costeo"])
+    check("la pila, en el mismo orden",
+          [s for _k, s in rec._PILA if not s.startswith("Tabla")],
+          [v[0] for v in visibles])
+    check("el Ranking de recetas base ya no es una vista",
+          any(v[0] == "Ranking de recetas base" for _c, vs in rec._RAIL_CATEGORIAS for v in vs)
+          or any(s == "Ranking de recetas base" for _k, s in rec._PILA), False)
+    check("el botón Actualizar refresca las órdenes y el primer nivel",
+          all(a in REPORTES["Recetas"].get("archivos_extra", ())
+              for a in (rbc.ARCHIVO_ORDENES, rbc.ARCHIVO_N1)), True)
+    return fallos
+
+
 def _pruebas_carta_costeada():
     """Recetas › Carta costeada (regla #548): lo que la vista hace con
     `cartacosteada.parquet` antes de dibujarlo.
@@ -8099,18 +8262,16 @@ def main():
             (df, "AJUSTE VALORIZADO", "NOMBRE PRODUCTO")),
     ]
 
-    # ── El constructor compartido de Receta Base / Receta Venta ─────────
-    # graficos/recetas_comun.py: el Ranking de recetas base. «Ingredientes
-    # clave» y el Panorama de compras se fueron el 2026-09-28 (regla #559).
-    # Kwargs solo-nombrados → se envuelven en lambdas de 0 args para reusar
-    # el mismo bucle `fn(*args)` de arriba.
-    from graficos import recetas_comun as _rc
-    df_rec = _df_recetas()
+    # ── Recetas › Costo recetas base: la evolución del costo ────────────
+    # Reemplazó al Ranking de recetas base de graficos/recetas_comun.py el
+    # 2026-09-30 (regla #576). Una orden atípica adentro: es la que ejercita
+    # la traza «fuera de escala» y el tope del eje.
+    from graficos import recetas_base_costo as _rbc
+    _o_rb = _rbc.ordenes(_ordenes_rb_demo())
+    _o_s = _o_rb[_o_rb["cod"] == "0000100"]
     pruebas += [
-        ("recetas_comun · ranking contenedores", lambda: _rc._ranking_contenedores(
-            df_rec, "CONTENEDOR", "VALOR", True,
-            key_topn="test_topn", card_key="test_ranking",
-            titulo_card="Ranking de prueba"), ()),
+        ("recetas · costo recetas base · evolución", _rbc.fig_evolucion,
+            (_o_s, _rbc.costo_por_mes(_o_s), 20.0, "KILOS")),
     ]
 
     # ── Mapa por hora (Ventas › Por hora) ───────────────────────────────
@@ -8281,6 +8442,9 @@ def main():
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()
+
+    # ── Recetas › Costo recetas base: uso, producción y costo (#576) ─────
+    fallos += _pruebas_costo_recetas_base()
 
     # ── Recetas › Revisar recetas: los cortes que ninguna receta usa ─────
     fallos += _pruebas_revisar_recetas()
