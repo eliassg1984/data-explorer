@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-576 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+577 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -755,7 +755,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 
-**SUNAT y SIRE** (44)
+**SUNAT y SIRE** (45)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -801,6 +801,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#458** — El espejo que salva el rango de la recolección de Streamlit no sobrevive a un rerun de…
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
+- **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
 
 **Fechas, rangos y cortes** (12)
 
@@ -865,7 +866,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (140)
+**Decisiones de diseño y UX** (141)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1007,6 +1008,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#574** — La Carta costeada: el título con sus desplegables en un renglón, los porcionamientos de un…
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
+- **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45911,6 +45913,71 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-30.)
 
+577. **«Documentos SUNAT» es un reporte propio, no una vista de Compras.**
+     2026-09-30, a pedido, con captura del panel de Compras: «que documentos
+     sunat se vea en otra botonera del rail, como si fuese un reporte más, ya
+     no dentro de compras». Ya se comportaba como uno: era la única vista de
+     Compras FUERA de su pila (un destino aparte, #419), con otra fuente (el
+     SIRE, #197), sin los chips de Familia (#301) y con el único calendario
+     entero de Compras dentro de su tarjeta (#332, #458). En `data.py`,
+     `graficos/sunat_reporte.py` (nuevo), `graficos/__init__.py`,
+     `graficos/compras/__init__.py`, `graficos/compras/documentos_sunat.py`,
+     `graficos/base.py` y `app.py`.
+     - **Se movió el DESPACHO, no el drill.** `graficos/sunat_reporte.py`
+       dibuja el rail de una vista y el contenedor; el drill sigue en
+       `graficos/compras/documentos_sunat.py`, con sus pruebas y el CSS de
+       sus keys. El envoltorio conserva `compras_sunat_drill_wrap`: de esa key
+       cuelgan la regla que esconde los chips y la franja vacía de la fecha
+       (`_40_ajuste_franja.py`) y la que le quita el jalón a la primera
+       tarjeta (`_20_compras_rail.py`). Renombrarla era reescribir tres
+       reglas para que nadie lo vea.
+     - **El rango es del REPORTE**: `clave_rango("Documentos SUNAT")`, no la
+       canónica de Compras. Mover la fecha de SUNAT ya no toca la de ninguna
+       tarjeta de Compras sin `categoria=`. Abre en los últimos 12 meses
+       hasta HOY, como abría estando en Compras; los topes son los del
+       registro (`sunat_reporte.bounds_fecha`, antes
+       `compras.bounds_fecha_de_la_vista`, que miraba si la vista activa era
+       ésta). La franja no dibuja el pill en este reporte
+       (`app.py::REPORTES_FECHA_EN_TARJETA_SUNAT`): la tarjeta lo dibuja
+       adentro, y dos widgets con la key del rango son una excepción.
+     - **Sin pila: `secciones=()`, y la tupla vacía NO es `None`.**
+       `_render_rail` guardaba la lista de vistas de la columna y el
+       temporizador con `if secciones:`, así que una tupla vacía apagaba los
+       dos: sin lista no hay panel del reporte activo con la columna plegada
+       (#568), y sin temporizador la franja no escribe la vista
+       (`.barra-vista`, #472) ni pasa por el paso 0, `FUERA`, que marca la
+       vista. Las dos guardas son `is not None` (y
+       `test_graficos.py::_pruebas_hook_del_rail_bajo_secciones` acepta el nombre
+       comparado). Con `FUERA` no se enciende el encaje (#533): una página
+       sin pila no tiene dónde encajar.
+     - **El punto de la vista** (#482) lo arma
+       `sunat_reporte._kpi_de_la_vista` con lo que la tarjeta publica en
+       `_cp_docs_cruce` (sistema, SUNAT y a revisar): llega un rerun tarde,
+       y hasta que se abre una vez no hay punto — igual que en Compras. El
+       lado «en el sistema» ya no sale del parquet recortado: sale del cruce.
+     - **Sin `kpis` en `REPORTES`**: los de Compras cuentan documentos DEL
+       SISTEMA, y un «Documentos» sin apellido en este reporte se leería
+       como los de SUNAT. La tira de la propia tarjeta ya los dice.
+     - **Ícono `fact_check`** y `label_rail` «SUNAT»: `receipt_long` ya es
+       el de Recetas, y el nombre entero no entra bajo el ícono de 80px.
+       Va segundo en la columna, debajo de Compras, porque es su lado fiscal.
+     - **Un enlace viejo** con `?reporte=Compras&vista=documentos_sunat` abre
+       Compras en su primera vista: la vista ya no existe en ese rail.
+     - **En Cloud, reiniciar la app** (#357): `app.py` importa
+       `graficos.sunat_reporte` y dejó de importar
+       `compras.bounds_fecha_de_la_vista`, y `data.REPORTES` suma una
+       entrada — con los módulos viejos en memoria el reporte no aparece o
+       la página cae con un `ImportError`.
+     - **Cómo se verificó**: `test_graficos.py` (el reporte en `_DASHBOARDS`
+       y en `_RAILS`, su rail y su pila con `rail_sin_tablas`/
+       `pila_sin_tablas`, la guarda del temporizador) y la app en modo demo
+       con Playwright a 1358×800: el botón nuevo en la columna, el panel de
+       Compras sin la vista, el reporte abre con el pill dentro de la tarjeta
+       y «Documentos SUNAT» escrito en la franja, y la ida y vuelta
+       Compras ↔ SUNAT sin excepciones y con el rango conservado.
+
+     (2026-09-30.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -45923,7 +45990,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#576**; la próxima toma el número siguiente.
+> última regla es la **#577**; la próxima toma el número siguiente.
 
 >
 

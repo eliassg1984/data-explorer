@@ -14,6 +14,10 @@ un dashboard por archivo.
                       producto en comun, o Valor por Familia (sin
                       selector), cada uno contra su serie del año
                       pasado/anterior
+    documentos_sunat.py  el drill del REPORTE «Documentos SUNAT»: vive
+                      aca pero ya no es una vista de Compras — lo
+                      despacha graficos/sunat_reporte.py (2026-09-30,
+                      regla #577)
 
 Punto de entrada publico: renderizar_graficos_compras (lo consume el
 dispatcher de graficos/__init__.py). Vive aca abajo junto a la config del
@@ -34,7 +38,7 @@ from graficos.base import (
     _compras_layout, _compras_truncar, _render_rail,
     _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
     recortar_por_tarjeta, sembrar_seleccion, seccion_perezosa,
-    renderizar_graficos_genericos, vista_activa,
+    renderizar_graficos_genericos,
 )
 from graficos.compras._comun import (  # noqa: F401  (re-export)
     # `CATEGORIA_SEC` la consumen los cinco drills Y este dispatcher; se
@@ -42,9 +46,8 @@ from graficos.compras._comun import (  # noqa: F401  (re-export)
     # (sus claves son las de esa tupla) aunque viva en `_comun` por el ciclo
     # de imports. `test_graficos.py` verifica que sigan apareadas.
     # `SEC_ABRE_EN_EL_MES` no la usa este módulo: la lee `app.py`, que es
-    # quien arma los defaults publicados. Se reexporta por el mismo camino
-    # que `bounds_fecha_de_la_vista` para que `app.py` siga hablando con el
-    # paquete y no con un privado (`_comun`).
+    # quien arma los defaults publicados. Se reexporta para que `app.py`
+    # hable con el paquete y no con un privado (`_comun`).
     CATEGORIA_SEC, SEC_ABRE_EN_EL_MES,
     _es_movil, _first_point, _periodo_serie,
 )
@@ -258,35 +261,10 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
                 estados["Volatilidad"] = "warning"
             kpis["Volatilidad"] = _texto("Precio más inestable", _txt_vol, None)
 
-    # DOCUMENTOS: cuantos en el SISTEMA y cuantos en SUNAT (2026-09-01, a
-    # pedido). El del sistema sale de aca, que es barato. El de SUNAT no:
-    # exige la consulta al SIRE, que hace la propia vista con su rango. Se
-    # lo pide prestado por `session_state` —lo publica `documentos_sunat.py`
-    # cuando dibuja— asi que aparece recien cuando esa vista se abrio una
-    # vez. Preferible eso a disparar una consulta externa para decorar un
-    # rotulo de navegacion.
-    d_v, val, prev = _vista("Documentos SUNAT")
-    if d_v is not None and col_docu and col_docu in d_v.columns:
-        _n_sis = int(d_v[col_docu].nunique())
-        _cruce = st.session_state.get("_cp_docs_cruce") or {}
-        _txt = f"{_n_sis:,} en el sistema".replace(",", ".")
-        if _cruce.get("sunat") is not None:
-            _txt += f" · {_cruce['sunat']:,} en SUNAT".replace(",", ".")
-        # Lo que NO cuadra, que es lo unico accionable de esta vista.
-        # Viaja por `session_state` desde `documentos_sunat.py` igual que
-        # los dos totales de arriba, y por el mismo motivo: el lado SUNAT
-        # sale de la consulta al SIRE y el rail no puede dispararla para
-        # decorar un rotulo. Hasta que Documentos se abra una vez, no
-        # esta — y no estar es correcto: mejor sin numero que con uno
-        # inventado.
-        _n_rev = _cruce.get("revisar")
-        if _n_rev:
-            _txt += f" · {_n_rev} con diferencias a revisar"
-            estados["Documentos SUNAT"] = "warning"
-        _prev_docs = (int(prev[col_docu].nunique())
-                      if prev is not None and col_docu in prev.columns else None)
-        kpis["Documentos SUNAT"] = _texto("Documentos", _txt,
-                                          _delta(_n_sis, _prev_docs))
+    # (Acá vivía el KPI de «Documentos SUNAT»: cuántos en el sistema, cuántos
+    # en SUNAT y cuántos a revisar. Se fue con la vista el 2026-09-30, cuando
+    # pasó a ser un reporte propio; lo arma ahora
+    # `graficos/sunat_reporte.py::_kpi_de_la_vista`. Regla #577.)
 
     # COMPRAS POR PERÍODO (la vieja «Semanal», renombrada el 2026-09-19): la
     # mejor semana del rango, contra la mejor de antes.
@@ -389,7 +367,9 @@ def _kpis_vistas(df_de_vista, d_full, col_valor, col_prov, col_fam, col_prod,
 # KPI/estado). Por eso renombrar la etiqueta del rail es un cambio de una sola
 # columna: 2026-09-21, a pedido, se alargaron cinco —«Por Proveedor», «Por
 # Producto», «Comparación Año Pasado», «Volatilidad de Precios», «Documentos
-# SUNAT»— sin tocar ningún id. Entran en la columna desplegada (~183px al
+# SUNAT»— sin tocar ningún id. (La última ya no está: desde el 2026-09-30
+# «Documentos SUNAT» es un reporte propio, `graficos/sunat_reporte.py`,
+# regla #577.) Entran en la columna desplegada (~183px al
 # rótulo, 13px de fuente) con el `text-overflow: ellipsis` de `_28_arbol.py`
 # como red; plegada sólo se ve el ícono.
 #
@@ -402,36 +382,13 @@ _COMPRAS_RAIL_CATEGORIAS = rail_sin_tablas((
                    ("Producto",            "Por Producto",  ":material/inventory_2:"))),
     ("Precios",   (("Vs año pasado", "Comparación Año Pasado", ":material/compare_arrows:"),
                    ("Volatilidad",   "Volatilidad de Precios", ":material/candlestick_chart:"))),
-    ("SUNAT",     (("Documentos SUNAT", "Documentos SUNAT", ":material/receipt_long:"),)),
     ("Más",       (("Tabla",                     "Tabla",         ":material/table_rows:"),
-                   # «Detalle docs.» (id «Documentos por proveedor») NO es la
-                   # «Documentos SUNAT» del grupo de arriba: aquélla son los
-                   # comprobantes del SIRE; ésta, el detalle por proveedor que
-                   # sale del parquet. Se distinguen por rótulo, ícono y grupo.
+                   # «Detalle docs.» (id «Documentos por proveedor») NO es
+                   # «Documentos SUNAT», que desde el 2026-09-30 es otro
+                   # reporte: aquélla son los comprobantes del SIRE; ésta, el
+                   # detalle por proveedor que sale del parquet.
                    ("Documentos por proveedor", "Detalle docs.", ":material/list_alt:"))),
 ))
-
-# Vistas de Compras que se quedan el selector de fecha DENTRO de su tarjeta
-# en vez de dejarlo en la franja superior. Hoy solo Documentos SUNAT: ahi la
-# fecha no es contexto global sino EL filtro de la tabla (es el rango que se
-# le consulta al SIRE), asi que vivia lejos de lo que filtra.
-#
-# `Semanal` estuvo aca un dia (2026-08-24) con un calendario propio de dos
-# meses, y se saco al apilar las vistas: con las seis dibujandose en la MISMA
-# corrida, dos duenos de la clave del rango no pueden convivir —
-# `st.session_state` no se puede reescribir despues de que el widget de esa
-# key ya se instancio— y Compras reventaba en cada carga. Ver regla #203.
-#
-# La leccion general, y el motivo de que la lista siga teniendo un solo
-# miembro: en una pagina APILADA el rango es del REPORTE, no de la vista.
-# Ver el analisis de la regla #210.
-_VISTAS_CON_FECHA_PROPIA = {"Documentos SUNAT"}
-
-# Subconjunto del anterior: las que ademas necesitan OTROS topes de
-# calendario que los del parquet de Compras. Se separa a proposito — atar
-# los bounds a `_VISTAS_CON_FECHA_PROPIA` haria que cualquier vista nueva
-# que se quede la fecha heredara los limites del SIRE sin pedirlos.
-_VISTAS_CON_BOUNDS_SUNAT = {"Documentos SUNAT"}
 
 # ORDEN DE LA PILA — y el apareo sección ↔ vista del rail.
 #
@@ -444,8 +401,10 @@ _VISTAS_CON_BOUNDS_SUNAT = {"Documentos SUNAT"}
 # vista, sólo en el resaltado. Emparejando acá, el slug del botón lo calcula
 # quien lo dibuja y nadie tiene que adivinarlo.
 #
-# Fuera de la pila: `Documentos SUNAT`, que se lleva prestado el único
-# selector de fecha de la app.
+# Hasta el 2026-09-30 quedaba una vista FUERA de la pila: «Documentos
+# SUNAT», un destino aparte con el calendario entero dentro de su tarjeta.
+# Hoy es un reporte propio (`graficos/sunat_reporte.py`, regla #577) y toda
+# vista de Compras es una sección de esta tupla.
 #
 # 2026-09-09, a pedido («bajemos Detalle de documentos por proveedor»):
 # `compras_sec_documentos` entra al FINAL. No es una vista nueva — es la
@@ -501,44 +460,6 @@ _PILA = pila_sin_tablas((
 _FAMILIAS_DE_ENTRADA = ("ALIMENTOS", "BEBIDAS CON ALCOHOL",
                         "BEBIDAS SIN ALCOHOL", "VINOS Y ESPUMANTES",
                         "ENVASES Y EMBALAJES")
-
-
-def bounds_fecha_de_la_vista():
-    """`(min, max)` que la vista activa necesita en el calendario, o None.
-
-    La consulta `app.py` antes de sembrar/recortar el rango. Devuelve None
-    para el resto de las vistas — cada una se queda con los topes de su
-    propio dato, incluida la Semanal, que filtra el parquet de Compras
-    como todas las demas y por lo tanto NO quiere los topes del SIRE.
-
-    Documentos SUNAT es la excepción porque no filtra el parquet de
-    Compras: le pregunta al SIRE. Y los dos extremos salen de sitios
-    distintos a propósito:
-
-      · el PISO, de `sunat.limites_registro()` — antes de la primera
-        factura del registro no hay nada que pedir;
-      · el TECHO, de HOY — no del tope del parquet. Un techo puesto en
-        "hasta donde llegó el último sync" siempre atrasa lo que tarde en
-        correr el sync, así que el día de HOY nunca se puede elegir. Eso
-        fue el bug: 2026-08-24, con comprobantes del 24 ya visibles en
-        SUNAT, el calendario cortaba en el 21. `comprobantes_rango` sabe
-        pedir en vivo los días que el parquet todavía no trajo. Ver
-        `arquitectura.md` regla #197.
-    """
-    if vista_activa(_COMPRAS_RAIL_CATEGORIAS,
-                    "compras_graf_tipo") not in _VISTAS_CON_BOUNDS_SUNAT:
-        return None
-    import datetime
-    import zoneinfo
-
-    import sunat
-
-    # HOY en Lima, no en UTC: Streamlit Cloud corre en UTC y a partir de
-    # las 19:00 de Perú ya está en el día siguiente — el calendario
-    # ofrecería un mañana que SUNAT todavía no puede tener.
-    hoy = datetime.datetime.now(zoneinfo.ZoneInfo("America/Lima")).date()
-    limites = sunat.limites_registro()
-    return (limites[0] if limites else None), hoy
 
 
 def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=None):
@@ -711,16 +632,16 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     def _df_de_vista(nombre):
         """El df de una VISTA del rail, para su KPI.
 
-        «Documentos SUNAT» no está en `_PILA` (es un destino aparte, fuera
-        de la pila) así que cae a `d`, que es lo que usaba antes — su rango
-        propio es el pill que dibuja adentro de su tarjeta.
+        Una vista que no esté en `_PILA` cae a `d`. Hoy no queda ninguna:
+        la única, «Documentos SUNAT», pasó a ser un reporte propio el
+        2026-09-30 (regla #577).
         """
         return _d_sec(_SEC_DE_VISTA.get(nombre))
 
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
 
     opciones = ["Compras por período", "Proveedor", "Producto",
-                "Vs año pasado", "Volatilidad", "Documentos SUNAT", "Tabla",
+                "Vs año pasado", "Volatilidad", "Tabla",
                 "Documentos por proveedor"]
 
 
@@ -754,44 +675,19 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # y habia que forzar un rerun completo al cruzar esa frontera.
     #
     # Sin fecha en la franja de Compras no hay frontera que cruzar: el
-    # unico que puede dibujar el pill es Documentos SUNAT, y lo dibuja
-    # dentro de su propia tarjeta. Que la negociacion desaparezca —en vez
+    # unico que podia dibujar el pill era Documentos SUNAT, y lo dibujaba
+    # dentro de su propia tarjeta (desde el 2026-09-30 es otro reporte, y
+    # en Compras no lo dibuja nadie — regla #577). Que la negociacion desaparezca —en vez
     # de quedar con un lado fijo en `False`— es lo que evita el bucle: la
     # condicion vieja era "los dos coinciden", y con la franja SIEMPRE en
     # `False` cualquier vista que no fuera SUNAT la cumplia en cada render.
 
-    # Tabla: usa el mismo AgGrid de la vista Tabla, pero como una opción más
-    # del selector. `d` ya viene filtrado por los chips Familia/Subfamilia.
-    # ── Vistas que siguen siendo un DESTINO propio ───────────────────────
-    # Una excepción a la pila de abajo: Documentos SUNAT dibuja el pill de
-    # fecha completo (`franja_fecha.render()`, la misma función que llamaba
-    # `app.py`), y es la única del reporte que lo hace. Entra a la pila
-    # cuando tenga rango propio; hasta entonces sigue siendo un destino
-    # aparte, porque dos widgets con esa key son una excepción.
-    if graf == "Documentos SUNAT":
-        # Import local a propósito: arrastra `sunat.py` y, con él,
-        # `requests` — no hay por qué pagarlo al importar Compras si nadie
-        # abre esta vista.
-        from graficos.compras.documentos_sunat import renderizar_documentos_sunat
-        with st.container(key="compras_sunat_drill_wrap"):
-            # `df_full`, NO `d` -- `d` viene filtrado por los chips
-            # Familia/Subfamilia (línea de arriba) y ese filtro no tiene
-            # que tocar la vista "Cruce": SUNAT no sabe de familias (es
-            # taxonomía nuestra, del maestro de productos — ver el
-            # docstring del módulo), así que filtrar por familia ANTES de
-            # cruzar hacía que un documento con TODAS sus líneas en una
-            # familia no elegida desapareciera entero de `compras.parquet`
-            # y saliera "Solo SUNAT" siendo falso — reportado en vivo
-            # 2026-09-03 con un documento real (FA28-2312219, COMPAÑIA
-            # FOOD RETAIL) que sí estaba en el parquet, mismo RUC y mismo
-            # total que SUNAT. `_parquet_agrupado_por_documento` ya acota
-            # por FECHA sola (`fecha_ini`/`fecha_fin`, el rango propio de
-            # este drill) — no hace falta que además venga acotado por
-            # familia. `df_full` puede ser `None` en llamadores viejos,
-            # de ahí el fallback a `d`. Ver arquitectura.md regla #301.
-            renderizar_documentos_sunat(
-                df_full if df_full is not None else d, col_fecha)
-        return
+    # ── Vistas que eran un DESTINO propio ────────────────────────────────
+    # Acá se despachaba «Documentos SUNAT», la única vista de Compras que no
+    # vivía en la pila: dibujaba el pill de fecha entero dentro de su tarjeta
+    # y no miraba los chips. Desde el 2026-09-30 es un reporte propio, con su
+    # botón en la columna de reportes (`graficos/sunat_reporte.py`, regla
+    # #577), y el drill sigue en `documentos_sunat.py` de este paquete.
 
     # ── SIN FILAS TRAS LOS CHIPS: un CARTEL, no una salida ───────────────
     # Desde el 2026-09-02 este cartel es alcanzable a propósito: las
