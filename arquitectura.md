@@ -45786,16 +45786,30 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        («Costo de recetas base», sección `rec_sec_costo_rb`): un enlace viejo
        con `?vista=ranking_de_recetas_base` abre la primera vista. Los otros
        tres ids no cambiaron; sólo sus rótulos.
-     - **UNA tarjeta, dos vistas que alterna el desplegable «Ver»**, en el
-       renglón del título con el estilo de la Carta costeada (#574): «Uso y
-       producción» (la tabla) y «Evolución del costo» (la receta en foco).
-       La receta en foco vive en una clave propia (`rec_rb_foco`), no en un
-       widget: cada vista dibuja sólo uno de los dos que la eligen —la fila
-       de la tabla o el desplegable «Receta»— y un widget que no se dibuja
-       pierde su estado. Cuando el desplegable la cambia, un contador en la
-       key de la tabla la estrena con esa fila marcada (la selección de un
-       `st.dataframe` es de su KEY, #556). En la evolución la ventana se
-       apaga en vez de esconderse, por lo mismo.
+     - **DOS tarjetas, una debajo de la otra** (segunda versión del mismo
+       día, a pedido: «no veo la tabla para ver el detalle de la receta
+       base… una tarjeta abajo de la tabla principal, clickeable para
+       mostrar al lado derecho alguna receta anidada, y que se alterne en su
+       mismo lugar con el historial de producciones»). Arriba, la tabla con
+       sus desplegables en el renglón del título (#574). Abajo
+       (`rec_card_rb_detalle`), la receta elegida en la tabla, con un
+       desplegable «Ver» que alterna en el mismo lugar:
+       · **Receta**: sus ingredientes por UNA unidad de entrada (un kilo),
+         en la unidad de la receta (g, ml); los que son receta base llevan
+         «▸», y un clic abre la suya AL COSTADO, proporcionada a lo que lleva
+         ese kilo (300 g de fondo → la receta del fondo × 0,3), así que su
+         total es el costo de esa línea. Adentro se sigue bajando; «↑ Subir»
+         y «✕», como el panel de la Carta (#572). El estado va en
+         `rec_rb_ruta`, atado a la receta elegida: al elegir otra se vacía.
+       · **Producciones**: lo que en la primera versión era «Evolución del
+         costo» —cada orden, el costo del mes, la receta hoy y las órdenes al
+         costado—, de la receta elegida y no de un desplegable propio.
+       La primera versión era UNA tarjeta con «Ver: Uso y producción /
+       Evolución del costo» y un desplegable «Receta» en la evolución; con
+       todo a la vista, la fila de la tabla es la única que elige y el foco
+       (`rec_rb_foco`) no necesita contador. Mide ~530 arriba y ~400
+       (Receta) o ~505 (Producciones) abajo: la sección pasa de una pantalla
+       y se recorre libre por dentro (#533).
      - **Lo USADO baja por las recetas base.** El primer nivel de las ventas
        (`paloteoinsumosnivel1`) sólo nombra lo que pide la receta del PLATO:
        de 427 recetas activas, 257 salen ahí y 95 sólo adentro de otra

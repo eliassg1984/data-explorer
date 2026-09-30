@@ -6551,6 +6551,23 @@ def _pruebas_costo_recetas_base():
     check("la orden de S/ 3.000 no estira la escala", fig.layout.yaxis.range[1] < 100, True)
     check("los meses del eje en español (#241)",
           any(txt.startswith("ene") for txt in fig.layout.xaxis.ticktext), True)
+    # ── La tarjeta de abajo: la receta y las de adentro ──────────────────
+    bases = rbc.codigos_base(rb)
+    ing = rbc.ingredientes(rb.assign(UNID="GRAMOS"), "0000100", 1.0, bases).set_index("Cod")
+    check("los ingredientes de la salsa, en la unidad de la receta",
+          (round(ing.loc["0000200", "Cantidad"], 6), ing.loc["0000200", "Unid"]), (300.0, "g"))
+    check("el fondo, que es receta base, se marca; el insumo de compra no",
+          (bool(ing.loc["0000200", "EsBase"]), bool(ing.loc["0000900", "EsBase"])), (True, False))
+    filas = rbc._filas_clic(rbc.ingredientes(rb, "0000100", 1.0, bases))
+    fondo = next(f for f in filas if f["cod"] == "0000200")
+    check("la receta de adentro se proporciona a lo que lleva un kilo (300 g ÷ 1.000)",
+          round(fondo["escala"], 6), 0.3)
+    check("y sus cantidades salen proporcionadas",
+          round(float(rbc.ingredientes(rb, "0000200", fondo["escala"], bases)["Cantidad"].iloc[0]), 6),
+          300.0)
+    check("una receta sin ingredientes cargados sale vacía",
+          rbc.ingredientes(rb, "9999999", 1.0, bases).empty, True)
+
     check("el primer nivel trae lo vendido",
           "vendido" in consumo_recetas.sql_demanda_nivel1("x", date(2026, 1, 1), date(2026, 1, 2)),
           True)

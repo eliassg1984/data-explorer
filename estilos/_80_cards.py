@@ -1597,10 +1597,12 @@ CSS = """    /* ================================================================
     /* =================================================================== */
     /* «Revisar recetas» (`rec_card_revisar`) lleva el mismo look desde la
        regla #574, a pedido: era la última de Recetas con el marco gris; y
-       «Costo recetas base» (`rec_card_costo_rb`) desde que nació (#576). */
+       «Costo recetas base» (`rec_card_costo_rb`) desde que nació, con la
+       tarjeta de la receta elegida debajo (`rec_card_rb_detalle`) (#576). */
     .st-key-rec_card_carta,
     .st-key-rec_card_revisar,
-    .st-key-rec_card_costo_rb {
+    .st-key-rec_card_costo_rb,
+    .st-key-rec_card_rb_detalle {
         background: var(--bg-card) !important;
         border: none !important;
         border-radius: 20px !important;
@@ -1609,7 +1611,8 @@ CSS = """    /* ================================================================
     }
     .st-key-rec_card_carta > div,
     .st-key-rec_card_revisar > div,
-    .st-key-rec_card_costo_rb > div {
+    .st-key-rec_card_costo_rb > div,
+    .st-key-rec_card_rb_detalle > div {
         border: none !important;
     }
 
@@ -1620,7 +1623,8 @@ CSS = """    /* ================================================================
        de abajo es de la FILA, no del `<p>` del título. El de «Costo recetas
        base» (`rec_rb_cab`, regla #576) es el mismo renglón. */
     .st-key-rec_carta_cab,
-    .st-key-rec_rb_cab {
+    .st-key-rec_rb_cab,
+    .st-key-rec_rb_det_cab {
         border-bottom: 1px solid var(--border);
         padding-bottom: 6px;
         flex-wrap: nowrap !important;
@@ -1628,7 +1632,8 @@ CSS = """    /* ================================================================
         overflow: visible !important;
     }
     .st-key-rec_carta_cab .chart-card-hdr,
-    .st-key-rec_rb_cab .chart-card-hdr {
+    .st-key-rec_rb_cab .chart-card-hdr,
+    .st-key-rec_rb_det_cab .chart-card-hdr {
         border-bottom: none;
         margin: 0 6px 0 0;
         padding: 0;
@@ -1666,7 +1671,7 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_grupo, .st-key-rec_carta_cab_tipo,
     .st-key-rec_carta_cab_buscar, .st-key-rec_carta_cab_vend,
     .st-key-rec_carta_det_modo,
-    .st-key-rec_rb_cab_ver, .st-key-rec_rb_cab_ventana,
+    .st-key-rec_rb_det_cab_ver, .st-key-rec_rb_cab_ventana,
     .st-key-rec_rb_cab_area, .st-key-rec_rb_cab_produccion,
     .st-key-rec_rb_cab_buscar {
         position: relative;
@@ -1676,7 +1681,7 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_ver::after, .st-key-rec_carta_cab_oferta::after,
     .st-key-rec_carta_cab_grupo::after, .st-key-rec_carta_cab_tipo::after,
     .st-key-rec_carta_cab_buscar::after, .st-key-rec_carta_cab_vend::after,
-    .st-key-rec_rb_cab_ver::after, .st-key-rec_rb_cab_ventana::after,
+    .st-key-rec_rb_det_cab_ver::after, .st-key-rec_rb_cab_ventana::after,
     .st-key-rec_rb_cab_area::after, .st-key-rec_rb_cab_produccion::after,
     .st-key-rec_rb_cab_buscar::after {
         content: "";
@@ -1691,9 +1696,9 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_ver::before, .st-key-rec_carta_cab_oferta::before,
     .st-key-rec_carta_cab_grupo::before, .st-key-rec_carta_cab_tipo::before,
     .st-key-rec_carta_cab_buscar::before, .st-key-rec_carta_cab_vend::before,
-    .st-key-rec_rb_cab_ver::before, .st-key-rec_rb_cab_ventana::before,
+    .st-key-rec_rb_det_cab_ver::before, .st-key-rec_rb_cab_ventana::before,
     .st-key-rec_rb_cab_area::before, .st-key-rec_rb_cab_produccion::before,
-    .st-key-rec_rb_cab_buscar::before, .st-key-rec_rb_cab_receta::before {
+    .st-key-rec_rb_cab_buscar::before {
         position: absolute;
         top: calc(100% + 2px);
         left: 11px;
@@ -1715,9 +1720,9 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_ver:hover::before, .st-key-rec_carta_cab_oferta:hover::before,
     .st-key-rec_carta_cab_grupo:hover::before, .st-key-rec_carta_cab_tipo:hover::before,
     .st-key-rec_carta_cab_buscar:hover::before, .st-key-rec_carta_cab_vend:hover::before,
-    .st-key-rec_rb_cab_ver:hover::before, .st-key-rec_rb_cab_ventana:hover::before,
+    .st-key-rec_rb_det_cab_ver:hover::before, .st-key-rec_rb_cab_ventana:hover::before,
     .st-key-rec_rb_cab_area:hover::before, .st-key-rec_rb_cab_produccion:hover::before,
-    .st-key-rec_rb_cab_buscar:hover::before, .st-key-rec_rb_cab_receta:hover::before {
+    .st-key-rec_rb_cab_buscar:hover::before {
         opacity: 1;
     }
     .st-key-rec_carta_cab_ver::before { content: "Ver"; }
@@ -1726,23 +1731,24 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_tipo::before { content: "Tipo"; }
     .st-key-rec_carta_cab_buscar::before { content: "Buscar"; }
     .st-key-rec_carta_cab_vend::before { content: "Ventana de lo vendido"; }
-    .st-key-rec_rb_cab_ver::before { content: "Ver"; }
+    .st-key-rec_rb_det_cab_ver::before { content: "Ver"; }
     .st-key-rec_rb_cab_ventana::before { content: "Uso y producción en"; }
     .st-key-rec_rb_cab_area::before { content: "Área de la receta"; }
     .st-key-rec_rb_cab_produccion::before { content: "Órdenes de producción"; }
     .st-key-rec_rb_cab_buscar::before { content: "Buscar"; }
-    .st-key-rec_rb_cab_receta::before { content: "Receta base"; left: 0; }
-    /* El desplegable de la receta, en la evolución (#576): sin rayita a la
-       izquierda —abre su renglón— y relativo, para su rótulo. */
-    .st-key-rec_rb_cab_receta {
-        position: relative;
-        overflow: visible !important;
+    /* La tarjeta de la receta elegida (#576): el nombre se corta con «…»
+       y deja lugar al desplegable; la línea de números de «Producciones»
+       en un renglón. */
+    .st-key-rec_rb_det_cab > .stElementContainer:first-child {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
     }
-    .st-key-rec_rb_evo_fila {
-        flex-wrap: nowrap !important;
-        gap: 14px !important;
+    .rec-rb-det-tit {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
-    .st-key-rec_rb_evo_fila [data-testid="stMarkdownContainer"] p {
+    .st-key-rec_rb_det_kpis [data-testid="stMarkdownContainer"] p {
         margin: 0;
         font-size: 13px;
         color: var(--text-secondary);
@@ -1765,8 +1771,8 @@ CSS = """    /* ================================================================
     .st-key-rec_rb_cab [data-baseweb="select"] > div,
     .st-key-rec_rb_cab [data-testid="stTextInputRootElement"],
     .st-key-rec_rb_cab [data-baseweb="input"],
-    .st-key-rec_rb_cab_receta [data-testid="stSelectbox"] [role="group"],
-    .st-key-rec_rb_cab_receta [data-baseweb="select"] > div {
+    .st-key-rec_rb_det_cab [data-testid="stSelectbox"] [role="group"],
+    .st-key-rec_rb_det_cab [data-baseweb="select"] > div {
         min-height: 0 !important;
         height: 28px !important;
         border: none !important;
@@ -1785,8 +1791,8 @@ CSS = """    /* ================================================================
     .st-key-rec_rb_cab [data-baseweb="select"] > div:hover,
     .st-key-rec_rb_cab [data-testid="stTextInputRootElement"]:hover,
     .st-key-rec_rb_cab [data-baseweb="input"]:hover,
-    .st-key-rec_rb_cab_receta [data-testid="stSelectbox"] [role="group"]:hover,
-    .st-key-rec_rb_cab_receta [data-baseweb="select"] > div:hover {
+    .st-key-rec_rb_det_cab [data-testid="stSelectbox"] [role="group"]:hover,
+    .st-key-rec_rb_det_cab [data-baseweb="select"] > div:hover {
         border-bottom-color: var(--accent) !important;
     }
     .st-key-rec_carta_cab [data-testid="stSelectbox"] input,
@@ -1797,8 +1803,8 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_det_modo [data-baseweb="select"] div[value],
     .st-key-rec_rb_cab [data-testid="stSelectbox"] input,
     .st-key-rec_rb_cab [data-baseweb="select"] div[value],
-    .st-key-rec_rb_cab_receta [data-testid="stSelectbox"] input,
-    .st-key-rec_rb_cab_receta [data-baseweb="select"] div[value] {
+    .st-key-rec_rb_det_cab [data-testid="stSelectbox"] input,
+    .st-key-rec_rb_det_cab [data-baseweb="select"] div[value] {
         height: 26px !important;
         padding: 0 0 0 2px !important;
         font-size: 13px !important;
@@ -1820,7 +1826,7 @@ CSS = """    /* ================================================================
     .st-key-rec_carta_cab_vend [data-testid="stSelectbox"] [role="group"] button,
     .st-key-rec_carta_det_modo [data-testid="stSelectbox"] [role="group"] button,
     .st-key-rec_rb_cab [data-testid="stSelectbox"] [role="group"] button,
-    .st-key-rec_rb_cab_receta [data-testid="stSelectbox"] [role="group"] button {
+    .st-key-rec_rb_det_cab [data-testid="stSelectbox"] [role="group"] button {
         width: 22px !important;
         height: 26px !important;
     }
@@ -1869,11 +1875,13 @@ CSS = """    /* ================================================================
         margin: 0;
         padding: 0;
     }
-    .st-key-rec_carta_base_hdr {
+    .st-key-rec_carta_base_hdr,
+    .st-key-rec_rb_anidada_hdr {
         flex-wrap: nowrap !important;
     }
     .st-key-rec_carta_plato_hdr > .stElementContainer:first-child,
-    .st-key-rec_carta_base_hdr > .stElementContainer:first-child {
+    .st-key-rec_carta_base_hdr > .stElementContainer:first-child,
+    .st-key-rec_rb_anidada_hdr > .stElementContainer:first-child {
         flex: 1 1 0 !important;
         min-width: 0 !important;
     }
@@ -1883,7 +1891,8 @@ CSS = """    /* ================================================================
        arriba y se come el clic de «Simular» y de «↑ Subir» (medido con
        Playwright: «stElementToolbar … intercepts pointer events»). En
        tablas de seis filas no hace falta; la de la carta la conserva. */
-    .st-key-rec_carta_plato .stElementToolbar {
+    .st-key-rec_carta_plato .stElementToolbar,
+    .st-key-rec_card_rb_detalle .stElementToolbar {
         display: none !important;
     }
     /* `!important` en el tamaño: `.stMarkdown p` (0,1,1) le gana a una
@@ -1903,17 +1912,22 @@ CSS = """    /* ================================================================
        «Vendidos en» 8px más abajo que sus botones). */
     .st-key-rec_carta_mas_fila [data-testid="stMarkdownContainer"],
     .st-key-rec_carta_plato_hdr [data-testid="stMarkdownContainer"],
-    .st-key-rec_carta_base_hdr [data-testid="stMarkdownContainer"] {
+    .st-key-rec_carta_base_hdr [data-testid="stMarkdownContainer"],
+    .st-key-rec_rb_anidada_hdr [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     /* «↑ Subir» y «✕» de la receta base: chicos, del alto del título. */
     .st-key-rec_carta_base_subir button,
-    .st-key-rec_carta_base_cerrar button {
+    .st-key-rec_carta_base_cerrar button,
+    .st-key-rec_rb_anidada_subir button,
+    .st-key-rec_rb_anidada_cerrar button {
         min-height: 0 !important;
         padding: 2px 10px !important;
     }
     .st-key-rec_carta_base_subir button p,
-    .st-key-rec_carta_base_cerrar button p {
+    .st-key-rec_carta_base_cerrar button p,
+    .st-key-rec_rb_anidada_subir button p,
+    .st-key-rec_rb_anidada_cerrar button p {
         font-size: 12px !important;
     }
     .rec-vend-rot {

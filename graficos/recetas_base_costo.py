@@ -11,16 +11,31 @@ producción, y un histórico de cómo evolucionó el costo por unidad según la
 orden de producción», en el tamaño de una tarjeta, que puede alternar, y con
 desplegables de una línea.
 
-UNA tarjeta con dos vistas, que elige el desplegable «Ver»:
+DOS tarjetas, una debajo de la otra:
 
-    Uso y producción      una fila por receta base: cuántos platos vendidos
-                          la llevaron, cuánto usaron (con lo que va ADENTRO
-                          de otra receta base), cuántas órdenes de producción
-                          la produjeron, cuánto, producido ÷ usado, su último
-                          costo por unidad y la línea de sus últimos 12 meses
-    Evolución del costo   la receta elegida en la tabla: cada orden de
-                          producción con su costo por unidad, el promedio de
-                          cada mes, el costo de la receta HOY y sus órdenes
+    Costo recetas base    la tabla: una fila por receta base — cuántos
+                          platos vendidos la llevaron, cuánto usaron (con lo
+                          que va ADENTRO de otra receta base), cuántas
+                          órdenes de producción la produjeron, cuánto,
+                          producido ÷ usado, su último costo por unidad y la
+                          línea de sus últimos 12 meses
+    <la receta elegida>   lo de la fila elegida, en el mismo lugar según el
+                          desplegable «Ver»:
+                            Receta        sus ingredientes por una unidad de
+                                          entrada; un clic en uno que es
+                                          receta base abre la suya AL
+                                          COSTADO, proporcionada, y así
+                                          hacia adentro
+                            Producciones  cada orden con su costo por unidad,
+                                          el de cada mes, el de la receta HOY
+                                          y sus órdenes
+
+Hasta la segunda versión del mismo día era UNA tarjeta con «Ver: Uso y
+producción / Evolución del costo». A pedido («no veo la tabla para ver el
+detalle de la receta base… una tarjeta abajo de la tabla principal, que sea
+clickeable para mostrar al lado derecho alguna receta anidada, y que se
+alterne en su mismo lugar con el historial de producciones»), la evolución
+bajó a la tarjeta de abajo como «Producciones».
 
 DE DÓNDE SALE CADA COSA
   · Lo USADO: el primer nivel de las ventas (`paloteoinsumosnivel1.parquet`,
@@ -58,6 +73,8 @@ las muestra aparte y el pie las cuenta.
 
 import hashlib
 import math
+from functools import partial
+from html import escape
 
 import numpy as np
 import pandas as pd
@@ -80,7 +97,10 @@ TITULO = "Costo recetas base"
 SUBTITULO = ("Lo que usan las ventas de cada receta base, lo que se produjo y "
              "su costo por unidad según las órdenes de producción")
 
-VER = ("Uso y producción", "Evolución del costo")
+VER_DETALLE = ("Receta", "Producciones")
+"""El desplegable de la tarjeta de abajo: la receta elegida en la tabla —sus
+ingredientes, con las recetas base de adentro al costado— o su historial de
+producciones. Alternan en el mismo lugar."""
 
 VENTANAS = {"Últimos 30 días": 30, "Últimos 90 días": 90,
             "Últimos 6 meses": 182, "Últimos 12 meses": 365}
@@ -103,6 +123,10 @@ misma receta alrededor suyo (ver el docstring del módulo)."""
 UNIDAD_CORTA = {"KILOS": "kg", "LITROS": "L", "UND": "und", "UNIDAD": "und",
                 "PORCION": "porc"}
 
+UNIDAD_RECETA = {"GRAMOS": "g", "MILILITROS": "ml", "KILOS": "kg", "LITROS": "L",
+                 "UND": "und", "UNIDAD": "und", "ONZAS": "oz", "PORCION": "porc"}
+"""La unidad en que la receta pide cada ingrediente (la de SALIDA), corta."""
+
 COBERTURA_BAJA, COBERTURA_ALTA = 0.5, 1.5
 """Producido ÷ usado fuera de este tramo va en ámbar: se produjo mucho menos
 de lo que usaron las ventas (o se hace de otra forma), o mucho más."""
@@ -114,17 +138,18 @@ PRODUCCION = ("Todas las recetas", "Con órdenes", "Sin órdenes")
 """El desplegable que separa las recetas que alguna vez produjo una orden de
 las que no (casi todas «(L)» y «(P)», que salen de un porcionamiento)."""
 
-_K_VER = "rec_rb_ver"
+_K_VER_DETALLE = "rec_rb_det_ver"
+_K_RUTA = "rec_rb_ruta"
+"""Las recetas base abiertas al costado de la receta elegida:
+`{"raiz", "ruta", "gen", "aviso"}` — `ruta` va de la de afuera a la de más
+adentro."""
 _K_VENTANA = "rec_rb_ventana"
 _K_AREA = "rec_rb_area"
 _K_PRODUCCION = "rec_rb_produccion"
 _K_BUSCAR = "rec_rb_buscar"
-_K_RECETA = "rec_rb_receta"
 _K_FOCO = "rec_rb_foco"
-"""El código de la receta en foco: lo elige la fila de la tabla o el
-desplegable «Receta» de la evolución, y lo leen los dos. Clave propia y no
-la de un widget: un widget que no se dibuja pierde su estado, y cada vista
-dibuja sólo uno de los dos."""
+"""El código de la receta en foco: lo elige la fila de la tabla principal y
+lo muestra la tarjeta de abajo."""
 
 COLUMNAS_RB = ("COD PROD RB", "RB NOMBRE", "RB UNID", "RB COSTO", "RB ACT",
                "RB FACTOR", "COD INS RB", "CANT", "FACTOR INS")
@@ -381,6 +406,38 @@ def filtrar(t, area=AREA_TODAS, buscar="", produccion=None):
     return t
 
 
+def codigos_base(df_rb):
+    """Los códigos de producto que tienen receta base."""
+    return frozenset(cabeceras(df_rb).index)
+
+
+def ingredientes(df_rb, cod, escala=1.0, bases=frozenset()):
+    """Los ingredientes de la receta base del producto `cod`, proporcionados a
+    `escala` unidades de entrada de ella: Cod, Insumo, Cantidad y Unid (en la
+    unidad de la receta: gramos, mililitros), Costo, %, Factor (a la unidad
+    de entrada del ingrediente) y EsBase (si el ingrediente tiene a su vez
+    receta base). Ordenados por costo."""
+    cols = ["Cod", "Insumo", "Cantidad", "Unid", "Costo", "%", "Factor", "EsBase"]
+    d = df_rb[_txt(df_rb["COD PROD RB"]) == str(cod).strip()]
+    d = d[d["COD INS RB"].notna()]
+    if d.empty:
+        return pd.DataFrame(columns=cols)
+    out = pd.DataFrame({
+        "Cod": _txt(d["COD INS RB"]),
+        "Insumo": _txt(d["INSUMO"]) if "INSUMO" in d else _txt(d["COD INS RB"]),
+        "Cantidad": _num(d["CANT"]).fillna(0.0) * escala,
+        "Unid": ([UNIDAD_RECETA.get(u, u.lower()) for u in _txt(d["UNID"]).str.upper()]
+                 if "UNID" in d else ""),
+        "Costo": (_num(d["CST SUBT INS"]).fillna(0.0) * escala if "CST SUBT INS" in d
+                  else 0.0),
+        "Factor": _num(d["FACTOR INS"]).fillna(0.0),
+    })
+    total = out["Costo"].sum() or 1.0
+    out["%"] = out["Costo"] / total * 100
+    out["EsBase"] = out["Cod"].isin(bases) & (out["Cod"] != str(cod).strip())
+    return out.sort_values("Costo", ascending=False, kind="stable").reset_index(drop=True)[cols]
+
+
 COLUMNAS = ("Receta base", "Unid.", "Platos", "Vendidos", "Usado", "Órdenes",
             "Producido", "Prod. ÷ uso", "Último costo", "Var. 12 m", "Costo 12 m")
 """Las columnas de la tabla, en orden; `columnas_tabla` las arma."""
@@ -474,36 +531,33 @@ def _calculo(sellos, ini, fin, _df_rb, _n1, _df_op):
     return tabla(_df_rb, _n1, ords, ini, fin), ords
 
 
-def _key_tabla(codigos, gen):
-    """La key de la tabla lleva la firma de su lista de recetas (la selección
-    de un `st.dataframe` es de la KEY y no de sus filas: con otro filtro, la
-    fila elegida sería otra receta, regla #556) y un contador que sube cuando
-    el foco cambia desde la evolución, para que la tabla se estrene con él
-    marcado."""
+def _key(base, codigos):
+    """La key de una tabla con la firma de su lista de filas: la selección de
+    un `st.dataframe` es de la KEY y no de sus filas —con otro filtro, la
+    fila elegida sería otra receta— (regla #556)."""
     firma = hashlib.md5("|".join(codigos).encode("utf-8")).hexdigest()[:12]
-    return f"rec_rb_tabla_{firma}_{gen}"
+    return f"{base}_{firma}"
 
 
-def _leer_eleccion():
-    """La receta que la tabla tenía elegida en la corrida anterior, al foco.
-    Se lee ANTES de dibujar nada: la evolución y la tabla nueva salen con
-    ella. Sólo si la elección es NUEVA: una ya aplicada no le gana a un foco
-    que después cambió el desplegable de la evolución."""
-    ss = st.session_state
-    key = ss.get("_rec_rb_tabla_key")
-    codigos = ss.get("_rec_rb_tabla_codigos") or []
-    evt = ss.get(key) if key else None
+def _fila_elegida(evt):
     try:
         sel = evt.get("selection", {}) if isinstance(evt, dict) else getattr(evt, "selection", {})
         filas = (sel or {}).get("rows", [])
+        return filas[0] if filas else None
     except Exception:
-        filas = []
-    if not filas or not (0 <= filas[0] < len(codigos)):
-        return
-    marca = (key, filas[0])
-    if ss.get("_rec_rb_tabla_aplicada") != marca:
-        ss["_rec_rb_tabla_aplicada"] = marca
-        ss[_K_FOCO] = codigos[filas[0]]
+        return None
+
+
+def _leer_eleccion():
+    """La receta que la tabla principal tenía elegida en la corrida anterior,
+    al foco. Se lee ANTES de dibujar: la tabla nueva sale con ella marcada, y
+    la tarjeta de abajo la muestra."""
+    ss = st.session_state
+    key = ss.get("_rec_rb_tabla_key")
+    codigos = ss.get("_rec_rb_tabla_codigos") or []
+    fila = _fila_elegida(ss.get(key)) if key else None
+    if fila is not None and 0 <= fila < len(codigos):
+        ss[_K_FOCO] = codigos[fila]
 
 
 def _pintar_foco(pos):
@@ -559,9 +613,9 @@ def _dib_tabla(t, ini, fin):
                            "en ámbar; una baja igual, en verde"),
         "Costo 12 m": st.column_config.LineChartColumn(
             width=110, help="El costo por unidad de cada mes con órdenes, últimos 12 "
-                            "meses. «Evolución del costo» lo abre entero"),
+                            "meses. «Producciones», en la tarjeta de abajo, lo abre entero"),
     }
-    key = _key_tabla(codigos, ss.get("_rec_rb_gen", 0))
+    key = _key("rec_rb_tabla", codigos)
     ss["_rec_rb_tabla_key"] = key
     ss["_rec_rb_tabla_codigos"] = codigos
     st.dataframe(sty, key=key, on_select="rerun", selection_mode="single-row-required",
@@ -639,48 +693,32 @@ def fig_evolucion(o, meses, costo_hoy, unid, alto=alturas.RB_COSTO_FIG):
     return fig
 
 
-def _dib_evolucion(t, ords):
-    ss = st.session_state
-    con_ordenes = t[t["cod"].isin(set(ords["cod"]))]
-    if con_ordenes.empty:
-        st.info("Ninguna de estas recetas base tiene órdenes de producción.")
+# ─── La tarjeta de abajo: la receta elegida ────────────────────────────────
+def _dib_producciones(fila, ords):
+    """El historial de producciones de la receta elegida: su costo por unidad
+    orden a orden y mes a mes, y sus órdenes al costado."""
+    cod = fila["cod"]
+    o = ords[ords["cod"] == cod]
+    if o.empty:
+        st.info("Esta receta base nunca se produjo con una orden de producción: si se "
+                "usa, sale de un porcionamiento o no se registra.")
         return
-    opciones = list(con_ordenes["cod"])
-    nombres = dict(zip(t["cod"], t["nombre"]))
-    foco = ss.get(_K_FOCO)
-    if foco not in opciones:
-        foco = opciones[0]
-    # El desplegable sigue al foco (lo que se eligió en la tabla), salvo
-    # cuando fue ÉL quien lo cambió en la corrida anterior.
-    if ss.get("_rec_rb_receta_de") != foco or ss.get(_K_RECETA) not in opciones:
-        ss[_K_RECETA] = foco
-    with st.container(horizontal=True, vertical_alignment="center", key="rec_rb_evo_fila"):
-        with st.container(key="rec_rb_cab_receta", width="content"):
-            cod = st.selectbox("Receta", opciones, key=_K_RECETA,
-                               format_func=lambda c: nombres.get(c, c),
-                               label_visibility="collapsed", width=330)
-        fila = t.set_index("cod").loc[cod]
-        o = ords[ords["cod"] == cod]
-        u = UNIDAD_CORTA.get(fila["unid"], fila["unid"].lower()) or "unidad"
-        partes = []
-        if fila["ultimo"]:
-            partes.append(f"Último: **S/ {fila['ultimo']:,.2f}** por {u} "
-                          f"({fila['f_ultimo']:%d/%m/%Y})")
-        if fila["costo_hoy"]:
-            partes.append(f"receta hoy: S/ {fila['costo_hoy']:,.2f}")
-        if math.isfinite(fila["var"]):
-            partes.append(f"12 meses: {_var(fila['var'])}")
-        partes.append(f"{o['orden'].nunique():,} órdenes desde {o['fecha'].min():%m/%Y}")
+    u = UNIDAD_CORTA.get(fila["unid"], fila["unid"].lower()) or "unidad"
+    partes = []
+    if fila["ultimo"]:
+        partes.append(f"Último: **S/ {fila['ultimo']:,.2f}** por {u} "
+                      f"({fila['f_ultimo']:%d/%m/%Y})")
+    if fila["costo_hoy"]:
+        partes.append(f"receta hoy: S/ {fila['costo_hoy']:,.2f}")
+    if math.isfinite(fila["var"]):
+        partes.append(f"12 meses: {_var(fila['var'])}")
+    partes.append(f"{o['orden'].nunique():,} órdenes desde {o['fecha'].min():%m/%Y}")
+    with st.container(key="rec_rb_det_kpis"):
         st.markdown(" · ".join(partes))
-    if cod != foco:
-        # El foco cambió desde acá: la tabla se estrena con él marcado.
-        ss["_rec_rb_gen"] = ss.get("_rec_rb_gen", 0) + 1
-    ss[_K_FOCO] = cod
-    ss["_rec_rb_receta_de"] = cod
 
     meses = costo_por_mes(o)
     # columnas-internas: el gráfico y, al costado, sus órdenes; es la
-    # tarjeta de la vista, no parte la página.
+    # tarjeta de la receta, no parte la página.
     c_fig, c_ord = st.columns([0.62, 0.38], gap="medium")
     with c_fig:
         st.plotly_chart(fig_evolucion(o, meses, fila["costo_hoy"], fila["unid"]),
@@ -717,8 +755,171 @@ def _dib_evolucion(t, ords):
     st.caption(pie)
 
 
+_CFG_INGREDIENTES = {
+    "Insumo": st.column_config.TextColumn(
+        width=230, help="▸ receta base: clic en la fila para ver la suya al costado"),
+    "Cantidad": st.column_config.TextColumn(width=86),
+    "Costo": st.column_config.NumberColumn(format="S/ %.2f", width=74),
+    "%": st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100,
+                                         width=90),
+}
+
+
+def _filas_clic(r):
+    """Lo que un clic en una fila de ingredientes necesita saber: si abre (es
+    receta base) y a cuánto se proporciona su receta (su cantidad ÷ el factor
+    a su unidad de entrada: 300 g ÷ 1.000 = 0,3 kg)."""
+    return [{"cod": c, "nombre": n, "costo": float(co), "es_base": bool(b),
+             "escala": float(q) / float(f) if f and f > 0 else float(q)}
+            for c, n, q, f, co, b in zip(r["Cod"], r["Insumo"], r["Cantidad"], r["Factor"],
+                                          r["Costo"], r["EsBase"])]
+
+
+def _estado_ruta(raiz):
+    """Las recetas base abiertas al costado, PARA ESTA receta elegida: si la
+    de arriba cambió, se vacía."""
+    ss = st.session_state
+    e = ss.get(_K_RUTA) or {}
+    if e.get("raiz") != raiz:
+        e = {"raiz": raiz, "ruta": [], "gen": e.get("gen", 0)}
+        ss[_K_RUTA] = e
+    return e
+
+
+def _al_elegir_ingrediente(key, raiz, filas):
+    """Clic en la receta de la izquierda: abre al costado la receta base de esa
+    fila, o avisa que es un insumo de compra."""
+    fila = _fila_elegida(st.session_state.get(key))
+    e = _estado_ruta(raiz)
+    nuevo = {"raiz": raiz, "ruta": [], "gen": e.get("gen", 0)}
+    if fila is not None and 0 <= fila < len(filas):
+        if filas[fila]["es_base"]:
+            nuevo["ruta"] = [filas[fila]]
+        else:
+            nuevo["aviso"] = filas[fila]["nombre"]
+    st.session_state[_K_RUTA] = nuevo
+
+
+def _al_elegir_anidada(key, raiz, ruta, filas):
+    """Clic en la receta del costado: si esa fila también es receta base, se
+    abre ella, un nivel más adentro."""
+    fila = _fila_elegida(st.session_state.get(key))
+    if fila is not None and 0 <= fila < len(filas) and filas[fila]["es_base"]:
+        e = _estado_ruta(raiz)
+        st.session_state[_K_RUTA] = {"raiz": raiz, "ruta": ruta + [filas[fila]],
+                                     "gen": e.get("gen", 0)}
+
+
+def _subir(raiz):
+    e = _estado_ruta(raiz)
+    st.session_state[_K_RUTA] = {"raiz": raiz, "ruta": list(e["ruta"])[:-1],
+                                 "gen": e.get("gen", 0)}
+
+
+def _cerrar(raiz):
+    """«✕»: cierra lo de la derecha y estrena la tabla de la izquierda (una
+    tabla sin el foco se come el primer clic sobre una fila ya marcada,
+    regla #572)."""
+    e = _estado_ruta(raiz)
+    st.session_state[_K_RUTA] = {"raiz": raiz, "ruta": [], "gen": e.get("gen", 0) + 1}
+
+
+def _tabla_ingredientes(r, key, on_select):
+    v = pd.DataFrame({
+        "Insumo": np.where(r["EsBase"], "▸ " + r["Insumo"], r["Insumo"]),
+        "Cantidad": [f"{_cant(q)} {u}".strip() for q, u in zip(r["Cantidad"], r["Unid"])],
+        "Costo": r["Costo"],
+        "%": r["%"],
+    })
+    st.dataframe(v, key=key, on_select=on_select, selection_mode="single-row",
+                 hide_index=True, row_height=27, column_config=_CFG_INGREDIENTES,
+                 height=alturas.por_filas(len(v), px_fila=27, extra=38, minimo=0,
+                                          rol=alturas.RB_COSTO_ORDENES))
+
+
+def _dib_receta(fila, df_rb, bases):
+    """La receta elegida, por UNA unidad de entrada (un kilo, un litro), a la
+    izquierda; y al costado, la receta base de un ingrediente que se elija,
+    proporcionada a lo que lleva esa unidad — y así hacia adentro."""
+    raiz = fila["cod"]
+    u = UNIDAD_CORTA.get(fila["unid"], fila["unid"].lower()) or "unidad"
+    r = ingredientes(df_rb, raiz, 1.0, bases)
+    e = _estado_ruta(raiz)
+    # columnas-internas: la receta y, al costado, la receta base que se abra
+    # de adentro de ella; es la tarjeta de la receta, no parte la página.
+    c_izq, c_der = st.columns(2, gap="medium")
+    with c_izq:
+        if r.empty:
+            st.info("Esta receta base no tiene ingredientes cargados.")
+            return
+        filas = _filas_clic(r)
+        key = _key(f"rec_rb_ing_{raiz}_{e.get('gen', 0)}",
+                   [f"{x['cod']}:{x['nombre']}" for x in filas])
+        _tabla_ingredientes(r, key, partial(_al_elegir_ingrediente, key, raiz, filas))
+        pie = f"Por 1 {u}, con los precios de hoy: S/ {float(r['Costo'].sum()):,.2f}."
+        if r["EsBase"].any():
+            pie += " ▸ es otra receta base: clic para verla al costado."
+        st.caption(pie)
+    with c_der:
+        e = _estado_ruta(raiz)
+        if not e.get("ruta"):
+            if e.get("aviso"):
+                st.caption(f"«{e['aviso']}» es un insumo de compra: no tiene receta base.")
+            elif r["EsBase"].any():
+                n = int(r["EsBase"].sum())
+                st.caption(f"Lleva {n} {'receta base' if n == 1 else 'recetas base'} "
+                           "adentro (▸). Elegí una a la izquierda para ver la suya acá.")
+            else:
+                st.caption("No lleva otras recetas base: todo lo que usa se compra o "
+                           "se porciona.")
+            return
+        ruta = e["ruta"]
+        actual = ruta[-1]
+        with st.container(horizontal=True, vertical_alignment="center",
+                          key="rec_rb_anidada_hdr"):
+            migas = " › ".join([fila["nombre"]] + [x["nombre"] for x in ruta])
+            st.markdown(f'<p class="rec-base-tit" title="{escape(migas)}">'
+                        f'{escape(actual["nombre"])}</p>', unsafe_allow_html=True)
+            if len(ruta) > 1:
+                st.button("↑ Subir", key="rec_rb_anidada_subir", on_click=_subir,
+                          args=(raiz,))
+            st.button("✕", key="rec_rb_anidada_cerrar", on_click=_cerrar, args=(raiz,))
+        rr = ingredientes(df_rb, actual["cod"], actual["escala"], bases)
+        if rr.empty:
+            st.info("La receta base no tiene ingredientes cargados.")
+            return
+        filas2 = _filas_clic(rr)
+        key2 = _key(f"rec_rb_anid_{raiz}_" + "-".join(x["cod"] for x in ruta),
+                    [f"{x['cod']}:{x['nombre']}" for x in filas2])
+        _tabla_ingredientes(rr, key2, partial(_al_elegir_anidada, key2, raiz, ruta, filas2))
+        pie = (f"Lo que lleva 1 {u} de {fila['nombre']}: S/ "
+               f"{float(rr['Costo'].sum()):,.2f}.")
+        if rr["EsBase"].any():
+            pie += " ▸ abre la de adentro."
+        st.caption(pie)
+
+
+def _tarjeta_receta(fila, df_rb, ords):
+    """La tarjeta de abajo: la receta elegida en la tabla, con su receta o
+    su historial de producciones —en el mismo lugar, que alterna el
+    desplegable «Ver»—."""
+    with st.container(border=True, key="rec_card_rb_detalle"):
+        with st.container(horizontal=True, gap="small", vertical_alignment="center",
+                          key="rec_rb_det_cab"):
+            st.markdown(f'<p class="chart-card-hdr rec-rb-det-tit">{escape(fila["nombre"])}'
+                        '</p>', unsafe_allow_html=True)
+            with st.container(key="rec_rb_det_cab_ver", width="content"):
+                ver = st.selectbox("Ver", VER_DETALLE, key=_K_VER_DETALLE,
+                                   label_visibility="collapsed", width=150)
+        if ver == VER_DETALLE[0]:
+            _dib_receta(fila, df_rb, codigos_base(df_rb))
+        else:
+            _dib_producciones(fila, ords)
+
+
 def render_costo_recetas_base(df_rb, df_op=None):
-    """La tarjeta. `df_rb` es recetabase.parquet (o None); `df_op`,
+    """Las dos tarjetas: la tabla de las recetas base y, abajo, la receta
+    elegida. `df_rb` es recetabase.parquet (o None); `df_op`,
     ordenesproduccion.parquet, o la FUNCIÓN que lo carga (así sólo se lee al
     llegar a la vista, regla #573), o None. Lo usado por las ventas lo pide
     acá (`data.demanda_nivel1_rango`)."""
@@ -752,18 +953,13 @@ def render_costo_recetas_base(df_rb, df_op=None):
         areas = [AREA_TODAS] + sorted(a for a in cab_rb["area"].unique() if a)
 
         # EL RENGLÓN DEL TÍTULO: los desplegables de la Carta costeada (regla
-        # #574). En la evolución la ventana se apaga en vez de esconderse: un
-        # widget que no se dibuja pierde su estado.
+        # #574).
         with cab:
-            with st.container(key="rec_rb_cab_ver", width="content"):
-                ver = st.selectbox("Ver", VER, key=_K_VER, label_visibility="collapsed",
-                                   width=164)
             with st.container(key="rec_rb_cab_ventana", width="content"):
                 if ss.get(_K_VENTANA) not in VENTANAS:
                     ss[_K_VENTANA] = "Últimos 90 días"
                 ventana = st.selectbox("Período", list(VENTANAS), key=_K_VENTANA,
-                                       label_visibility="collapsed", width=146,
-                                       disabled=(ver != VER[0]))
+                                       label_visibility="collapsed", width=146)
             with st.container(key="rec_rb_cab_area", width="content"):
                 if ss.get(_K_AREA) not in areas:
                     ss[_K_AREA] = AREA_TODAS
@@ -774,7 +970,7 @@ def render_costo_recetas_base(df_rb, df_op=None):
                                           label_visibility="collapsed", width=150)
             with st.container(key="rec_rb_cab_buscar", width="content"):
                 buscar = st.text_input("Buscar", key=_K_BUSCAR, placeholder="Buscar receta",
-                                       label_visibility="collapsed", width=150)
+                                       label_visibility="collapsed", width=160)
 
         rango = data.rango_fechas(ARCHIVO_N1, "FECHA PEDIDO")
         if rango is None:
@@ -793,20 +989,19 @@ def render_costo_recetas_base(df_rb, df_op=None):
         if t.empty:
             st.info("Ninguna receta base con este filtro.")
             return
-        if ver == VER[0]:
-            _dib_tabla(t, ini, fin)
-            # «¿Vendidos cuándo?» (preguntado en la Carta, regla #572): la
-            # ventana termina en el último día con venta, no hoy.
-            desde = (f"{ini:%d/%m}" if ini.year == fin.year else f"{ini:%d/%m/%Y}")
-            pie = (f"Del {desde} al {fin:%d/%m/%Y}. Usado: lo que pidieron las ventas según "
-                   "las recetas de hoy, también adentro de otras recetas base. Producido: "
-                   "órdenes procesadas. «—» en Prod. ÷ uso: nunca la produjo una orden (casi "
-                   "todas las «(L)» y «(P)» salen de un porcionamiento). Elegí una fila y "
-                   "pasá a «Evolución del costo» para verla entera.")
-            if n1 is None:
-                pie = ("No se pudo leer lo que pidieron las ventas: «Platos», «Vendidos» "
-                       "y «Usado» salen vacíos. " + pie)
-            st.caption(pie)
-        else:
-            _dib_evolucion(t, ords)
-
+        _dib_tabla(t, ini, fin)
+        # «¿Vendidos cuándo?» (preguntado en la Carta, regla #572): la
+        # ventana termina en el último día con venta, no hoy.
+        desde = (f"{ini:%d/%m}" if ini.year == fin.year else f"{ini:%d/%m/%Y}")
+        pie = (f"Del {desde} al {fin:%d/%m/%Y}. Usado: lo que pidieron las ventas según "
+               "las recetas de hoy, también adentro de otras recetas base. Producido: "
+               "órdenes procesadas. «—» en Prod. ÷ uso: nunca la produjo una orden (casi "
+               "todas las «(L)» y «(P)» salen de un porcionamiento). Elegí una fila: "
+               "abajo, su receta y sus producciones.")
+        if n1 is None:
+            pie = ("No se pudo leer lo que pidieron las ventas: «Platos», «Vendidos» "
+                   "y «Usado» salen vacíos. " + pie)
+        st.caption(pie)
+    fila = t.set_index("cod").loc[ss[_K_FOCO]].copy()
+    fila["cod"] = ss[_K_FOCO]
+    _tarjeta_receta(fila, df_rb, ords)
