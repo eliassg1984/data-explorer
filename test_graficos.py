@@ -6558,13 +6558,14 @@ def _pruebas_costo_recetas_base():
           (round(ing.loc["0000200", "Cantidad"], 6), ing.loc["0000200", "Unid"]), (300.0, "g"))
     check("el fondo, que es receta base, se marca; el insumo de compra no",
           (bool(ing.loc["0000200", "EsBase"]), bool(ing.loc["0000900", "EsBase"])), (True, False))
+    # La receta de adentro se abre por UNA unidad de producción SUYA (pedido
+    # el 2026-09-30: antes salía proporcionada a lo que llevaba la de afuera).
     filas = rbc._filas_clic(rbc.ingredientes(rb, "0000100", 1.0, bases))
     fondo = next(f for f in filas if f["cod"] == "0000200")
-    check("la receta de adentro se proporciona a lo que lleva un kilo (300 g ÷ 1.000)",
-          round(fondo["escala"], 6), 0.3)
-    check("y sus cantidades salen proporcionadas",
-          round(float(rbc.ingredientes(rb, "0000200", fondo["escala"], bases)["Cantidad"].iloc[0]), 6),
-          300.0)
+    check("la receta de adentro, por 1 unidad suya (1 kg de fondo)",
+          (fondo["es_base"], rbc.unidad_de(rb, fondo["cod"]),
+           round(float(rbc.ingredientes(rb, "0000200", 1.0, bases)["Cantidad"].iloc[0]), 6)),
+          (True, "kg", 1000.0))
     # Pedido el 2026-09-30: el costo de la unidad de COMPRA y el de la
     # cantidad de la receta, los dos, y el total al pie.
     rb_u = rb.assign(UNID="GRAMOS", **{"CST UNIT INS": 0.003, "CST SUBT INS": rb["CANT"] * 0.003})
@@ -6574,12 +6575,12 @@ def _pruebas_costo_recetas_base():
           (3.0, "kg"))
     check("y el costo de la cantidad de la receta (300 g = S/ 0,90)",
           round(ing_u.loc["0000200", "Costo"], 6), 0.9)
-    v_ing = rbc.tabla_ingredientes(rbc.ingredientes(rb_u, "0000100", 1.0, bases))
-    check("la tabla cierra con el total de la receta, también en la cabecera",
-          (v_ing["Insumo"].iloc[-1], v_ing.iloc[-1, 3], v_ing.columns[3]),
-          ("Total de la receta", "S/ 1.05", "Costo · S/ 1.05"))
-    check("con las columnas pedidas",
-          list(v_ing.columns), ["Insumo", "Cantidad", "Costo unit.", "Costo · S/ 1.05", "%"])
+    r_u = rbc.ingredientes(rb_u, "0000100", 1.0, bases)
+    v_ing = rbc.tabla_ingredientes(r_u)
+    check("el total va ABAJO, en un renglón fijo, no en la cabecera ni en una fila",
+          (list(v_ing.columns), "Total" in " ".join(v_ing["Insumo"]),
+           "S/ 1.05" in rbc.renglon_total(r_u)),
+          (["Insumo", "Cantidad", "Costo unit.", "Costo", "%"], False, True))
     check("sin vacíos que st.dataframe pinte «None» (#529)",
           bool(v_ing.isna().any().any()), False)
     check("una receta sin ingredientes cargados sale vacía",

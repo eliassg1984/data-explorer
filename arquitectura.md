@@ -45796,9 +45796,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        desplegable «Ver» que alterna en el mismo lugar:
        · **Receta**: sus ingredientes por UNA unidad de entrada (un kilo),
          en la unidad de la receta (g, ml); los que son receta base llevan
-         «▸», y un clic abre la suya AL COSTADO, proporcionada a lo que lleva
-         ese kilo (300 g de fondo → la receta del fondo × 0,3), así que su
-         total es el costo de esa línea. Adentro se sigue bajando; «↑ Subir»
+         «▸», y un clic abre la suya AL COSTADO (por una unidad de producción
+         suya desde la quinta versión, abajo). Adentro se sigue bajando; «↑ Subir»
          y «✕», como el panel de la Carta (#572). El estado va en
          `rec_rb_ruta`, atado a la receta elegida: al elegir otra se vacía.
        · **Producciones**: lo que en la primera versión era «Evolución del
@@ -45831,11 +45830,24 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        receta, factor) — g/1.000 → kg, ml/1.000 → L; con otro factor (las
        onzas de barra, 32 o 33) va por unidad de la receta. «Costo» es el de
        la cantidad (`CST SUBT INS` = `CANT × CST UNIT INS` exacto en todo el
-       parquet) y lleva el TOTAL en su cabecera («Costo · S/ 12.12»), porque
-       la fila «Total de la receta» del pie queda debajo de lo visible en
-       una receta de más de cuatro líneas. Los montos van escritos (texto):
-       la fila del total no tiene costo unitario y un vacío se pinta «None»
-       (#529). Un clic en esa fila no abre ni cierra nada.
+       parquet). Los montos van escritos (texto): un vacío se pinta «None»
+       (#529).
+     - **El total va ABAJO, en un renglón fijo, y la receta de adentro por
+       SU unidad** (quinta versión, a pedido, con captura: «el costo de la
+       receta anidada debe corresponder a una unidad de producción; el total
+       en ambas tablas debe ir abajo, no en la cabecera»). Hasta ahí el total
+       iba en la cabecera de «Costo» y en una fila «Total» de la tabla, que
+       en una receta de más de cuatro líneas quedaba debajo de lo visible;
+       ahora es un renglón (`renglon_total`, `.rec-rb-total`) pegado debajo
+       de la tabla, que muestra una fila menos para hacerle lugar: 24px con
+       su relleno y un `gap` de 2px (con 4px la tarjeta se pasaba 3px), y sin
+       el `margin-bottom: -1rem` con que Streamlit cierra un markdown (sin
+       eso colgaba fuera de la tarjeta). La receta de adentro ya no sale
+       proporcionada a lo que lleva la de afuera (10 g de pasta de ajo:
+       S/ 0,17) sino por UNA unidad de producción suya (1 kg: S/ 17,48): su
+       total es el «Costo unit.» con que figura a la izquierda. Medido a
+       1323×619: la tarjeta de abajo termina en 615px con la receta de
+       adentro abierta.
      - **Lo USADO baja por las recetas base.** El primer nivel de las ventas
        (`paloteoinsumosnivel1`) sólo nombra lo que pide la receta del PLATO:
        de 427 recetas activas, 257 salen ahí y 95 sólo adentro de otra

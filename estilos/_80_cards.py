@@ -1771,6 +1771,33 @@ CSS = """    /* ================================================================
         font-weight: 400;
         color: var(--text-secondary);
     }
+    /* El total de cada receta, en un renglón fijo pegado DEBAJO de su tabla
+       (a pedido: «abajo, no en la cabecera»), con el lavanda de la fila
+       elegida. La tabla muestra una fila menos para hacerle lugar. */
+    .st-key-rec_rb_izq,
+    .st-key-rec_rb_der {
+        gap: 2px !important;
+    }
+    /* Streamlit cierra un markdown con `margin-bottom: -1rem`: sin esto el
+       renglón del total cuelga por debajo de la tarjeta (medido). */
+    .st-key-rec_rb_izq [data-testid="stMarkdownContainer"],
+    .st-key-rec_rb_der [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    /* 24px con su relleno: lo que deja la fila de menos de la tabla (27)
+       menos el `gap` de arriba. Con 4px de relleno la tarjeta se pasaba 3px
+       de la pantalla del usuario (medido a 1323×619). */
+    .rec-rb-total {
+        display: flex;
+        justify-content: space-between;
+        line-height: 18px;
+        padding: 3px 12px;
+        border-radius: 6px;
+        background: var(--accent-tint);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
     /* La ayuda del título, cuando es un párrafo (lo que eran los pies de
        las dos tarjetas): envuelve en varias líneas en lugar de una sola. */
     .rec-carta-tit.rec-ayuda-larga::after {

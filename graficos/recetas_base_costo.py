@@ -781,62 +781,60 @@ def _dib_producciones(fila, o):
                                               rol=alturas.RB_COSTO_DETALLE))
 
 
-def _cfg_ingredientes(total):
-    """Las columnas de una tabla de ingredientes. «Costo» lleva el TOTAL de
-    la receta en su cabecera: la fila «Total» va al pie y en una receta
-    larga queda debajo de lo que se ve sin deslizar."""
-    return {
-        # Suman 530 con la casilla de selección: la mitad de la tarjeta a
-        # 1323px. «Costo» es la más ancha porque su cabecera lleva el total
-        # (con 84px se cortaba en «S/ 12.1»).
-        "Insumo": st.column_config.TextColumn(
-            width=168, help="▸ receta base: clic en la fila para ver la suya al costado"),
-        "Cantidad": st.column_config.TextColumn(
-            width=70, help="Lo que pide la receta, en su unidad"),
-        "Costo unit.": st.column_config.TextColumn(
-            width=90, help="Lo que cuesta una unidad de COMPRA del insumo (el kilo, el "
-                           "litro), con el precio de hoy"),
-        _col_costo(total): st.column_config.TextColumn(
-            width=112, help="Lo que cuesta la cantidad de la receta: cantidad × costo "
-                            "unitario. En la cabecera, el total de la receta"),
-        "%": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=100,
-                                             width=54),
-    }
-
-
-def _col_costo(total):
-    return f"Costo · S/ {total:,.2f}"
+# Suman 530 con la casilla de selección: la mitad de la tarjeta a 1323px.
+_CFG_INGREDIENTES = {
+    "Insumo": st.column_config.TextColumn(
+        width=190, help="▸ receta base: clic en la fila para ver la suya al costado"),
+    "Cantidad": st.column_config.TextColumn(
+        width=70, help="Lo que pide la receta, en su unidad"),
+    "Costo unit.": st.column_config.TextColumn(
+        width=92, help="Lo que cuesta una unidad de COMPRA del insumo (el kilo, el "
+                       "litro), con el precio de hoy"),
+    "Costo": st.column_config.TextColumn(
+        width=84, help="Lo que cuesta la cantidad de la receta: cantidad × costo unitario. "
+                       "El total, debajo de la tabla"),
+    "%": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=100,
+                                         width=58),
+}
 
 
 def tabla_ingredientes(r):
     """Lo que muestra una tabla de ingredientes: Insumo (con «▸» si es receta
     base), Cantidad, Costo unit. (por unidad de compra), Costo (de esa
-    cantidad, con el total en la cabecera) y %, más una última fila «Total»
-    con el costo de la receta. Los montos van escritos: una columna de texto
-    no pinta «None» (#529) y deja la fila del total sin costo unitario."""
-    total = float(r["Costo"].sum())
-    v = pd.DataFrame({
+    cantidad) y %. Los montos van escritos: una columna de texto no pinta
+    «None» (#529). El total NO va acá: va en `renglon_total`, debajo."""
+    return pd.DataFrame({
         "Insumo": np.where(r["EsBase"], "▸ " + r["Insumo"], r["Insumo"]),
         "Cantidad": [f"{_cant(q)} {u}".strip() for q, u in zip(r["Cantidad"], r["Unid"])],
         "Costo unit.": [f"S/ {c:,.2f} / {u}" if c else "—"
                         for c, u in zip(r["CostoUnit"], r["UnidCompra"])],
-        _col_costo(total): [f"S/ {c:,.2f}" for c in r["Costo"]],
+        "Costo": [f"S/ {c:,.2f}" for c in r["Costo"]],
         "%": r["%"].astype(float),
     })
-    fila_total = pd.DataFrame({"Insumo": ["Total de la receta"], "Cantidad": [""],
-                               "Costo unit.": [""], _col_costo(total): [f"S/ {total:,.2f}"],
-                               "%": [100.0 if total else 0.0]})
-    return pd.concat([v, fila_total], ignore_index=True)
+
+
+def renglon_total(r):
+    """El costo total de la receta, en un renglón FIJO debajo de su tabla
+    (pedido el 2026-09-30: «el total debe ir abajo, no en la cabecera»). No
+    es una fila de la tabla: en una receta de más de cuatro líneas quedaría
+    debajo de lo que se ve sin deslizar."""
+    total = float(r["Costo"].sum()) if not r.empty else 0.0
+    return (f'<div class="rec-rb-total"><span>Total de la receta</span>'
+            f'<span>S/ {total:,.2f}</span></div>')
+
+
+def unidad_de(df_rb, cod):
+    """La unidad de producción (de entrada) de la receta base `cod`, corta:
+    «kg», «L», «und»."""
+    unid = cabeceras(df_rb)["unid"].get(str(cod).strip(), "")
+    return UNIDAD_CORTA.get(unid, unid.lower()) or "unidad"
 
 
 def _filas_clic(r):
-    """Lo que un clic en una fila de ingredientes necesita saber: si abre (es
-    receta base) y a cuánto se proporciona su receta (su cantidad ÷ el factor
-    a su unidad de entrada: 300 g ÷ 1.000 = 0,3 kg)."""
-    return [{"cod": c, "nombre": n, "costo": float(co), "es_base": bool(b),
-             "escala": float(q) / float(f) if f and f > 0 else float(q)}
-            for c, n, q, f, co, b in zip(r["Cod"], r["Insumo"], r["Cantidad"], r["Factor"],
-                                          r["Costo"], r["EsBase"])]
+    """Lo que un clic en una fila de ingredientes necesita saber: cuál es y
+    si abre (es receta base)."""
+    return [{"cod": c, "nombre": n, "es_base": bool(b)}
+            for c, n, b in zip(r["Cod"], r["Insumo"], r["EsBase"])]
 
 
 def _estado_ruta(raiz):
@@ -854,8 +852,6 @@ def _al_elegir_ingrediente(key, raiz, filas):
     """Clic en la receta de la izquierda: abre al costado la receta base de esa
     fila, o avisa que es un insumo de compra."""
     fila = _fila_elegida(st.session_state.get(key))
-    if fila is not None and fila >= len(filas):
-        return  # la fila «Total»: no es un ingrediente
     e = _estado_ruta(raiz)
     nuevo = {"raiz": raiz, "ruta": [], "gen": e.get("gen", 0)}
     if fila is not None and 0 <= fila < len(filas):
@@ -890,39 +886,40 @@ def _cerrar(raiz):
     st.session_state[_K_RUTA] = {"raiz": raiz, "ruta": [], "gen": e.get("gen", 0) + 1}
 
 
-def _tabla_ingredientes(r, key, on_select, rol=alturas.RB_COSTO_DETALLE):
+def _tabla_ingredientes(r, key, on_select, rol):
+    """La tabla y, pegado debajo, el renglón del total. `rol` es el tope de
+    la tabla: una fila menos que el de la tarjeta, que es lo que ocupa el
+    renglón del total — así la tarjeta sigue entrando en la pantalla."""
     v = tabla_ingredientes(r)
-    ultima = len(v) - 1
-    sty = v.style.apply(lambda f: [f"font-weight: 700; background-color: {LAVANDA_FONDO}"
-                                   if f.name == ultima else ""] * len(f), axis=1)
-    # Un clic en la fila «Total» no abre nada: cae fuera de las filas que
-    # conocen los callbacks.
-    st.dataframe(sty, key=key, on_select=on_select, selection_mode="single-row",
-                 hide_index=True, row_height=27,
-                 column_config=_cfg_ingredientes(float(r["Costo"].sum())),
+    st.dataframe(v, key=key, on_select=on_select, selection_mode="single-row",
+                 hide_index=True, row_height=27, column_config=_CFG_INGREDIENTES,
                  height=alturas.por_filas(len(v), px_fila=27, extra=38, minimo=0, rol=rol))
+    st.markdown(renglon_total(r), unsafe_allow_html=True)
 
 
 def _dib_receta(fila, df_rb, bases):
-    """La receta elegida, por UNA unidad de entrada (un kilo, un litro), a la
-    izquierda; y al costado, la receta base de un ingrediente que se elija,
-    proporcionada a lo que lleva esa unidad — y así hacia adentro."""
+    """La receta elegida, por UNA unidad de producción (un kilo, un litro), a
+    la izquierda; y al costado, la receta base de un ingrediente que se
+    elija, también por UNA unidad de producción suya — y así hacia adentro.
+    Hasta el 2026-09-30 la de adentro salía proporcionada a lo que llevaba la
+    de afuera (10 g de pasta de ajo: S/ 0,17); a pedido, es su receta de
+    siempre (1 kg: S/ 17,48)."""
     raiz = fila["cod"]
-    u = UNIDAD_CORTA.get(fila["unid"], fila["unid"].lower()) or "unidad"
     r = ingredientes(df_rb, raiz, 1.0, bases)
     e = _estado_ruta(raiz)
     # columnas-internas: la receta y, al costado, la receta base que se abra
     # de adentro de ella; es la tarjeta de la receta, no parte la página.
     c_izq, c_der = st.columns(2, gap="medium")
-    with c_izq:
+    with c_izq, st.container(key="rec_rb_izq"):
         if r.empty:
             st.info("Esta receta base no tiene ingredientes cargados.")
             return
         filas = _filas_clic(r)
         key = _key(f"rec_rb_ing_{raiz}_{e.get('gen', 0)}",
                    [f"{x['cod']}:{x['nombre']}" for x in filas])
-        _tabla_ingredientes(r, key, partial(_al_elegir_ingrediente, key, raiz, filas))
-    with c_der:
+        _tabla_ingredientes(r, key, partial(_al_elegir_ingrediente, key, raiz, filas),
+                            rol=alturas.RB_COSTO_DETALLE - 27)
+    with c_der, st.container(key="rec_rb_der"):
         e = _estado_ruta(raiz)
         if not e.get("ruta"):
             if e.get("aviso"):
@@ -940,16 +937,15 @@ def _dib_receta(fila, df_rb, bases):
         with st.container(horizontal=True, vertical_alignment="center",
                           key="rec_rb_anidada_hdr"):
             migas = " › ".join([fila["nombre"]] + [x["nombre"] for x in ruta])
-            # El total va en el renglón del nombre y no en un pie: la
-            # tarjeta entera tiene que entrar en una pantalla.
             st.markdown(f'<p class="rec-base-tit" title="{escape(migas)}">'
-                        f'{escape(actual["nombre"])} <span class="rec-rb-anid-tot">· en 1 '
-                        f'{u}: S/ {actual["costo"]:,.2f}</span></p>', unsafe_allow_html=True)
+                        f'{escape(actual["nombre"])} <span class="rec-rb-anid-tot">· receta '
+                        f'por 1 {unidad_de(df_rb, actual["cod"])}</span></p>',
+                        unsafe_allow_html=True)
             if len(ruta) > 1:
                 st.button("↑ Subir", key="rec_rb_anidada_subir", on_click=_subir,
                           args=(raiz,))
             st.button("✕", key="rec_rb_anidada_cerrar", on_click=_cerrar, args=(raiz,))
-        rr = ingredientes(df_rb, actual["cod"], actual["escala"], bases)
+        rr = ingredientes(df_rb, actual["cod"], 1.0, bases)
         if rr.empty:
             st.info("La receta base no tiene ingredientes cargados.")
             return
@@ -959,7 +955,7 @@ def _dib_receta(fila, df_rb, bases):
         # Una fila menos que la de la izquierda: el renglón del nombre ocupa
         # su lugar y las dos columnas terminan a la misma altura.
         _tabla_ingredientes(rr, key2, partial(_al_elegir_anidada, key2, raiz, ruta, filas2),
-                            rol=alturas.RB_COSTO_DETALLE - 27)
+                            rol=alturas.RB_COSTO_DETALLE - 54)
 
 
 def _tarjeta_receta(fila, df_rb, ords):
@@ -1000,13 +996,16 @@ def resumen_receta(fila, r):
     """(info, ayuda) de «Receta»: el costo por unidad y cuántas recetas base
     lleva adentro, para la cabecera; y cómo se lee, al pasar el cursor."""
     u = UNIDAD_CORTA.get(fila["unid"], fila["unid"].lower()) or "unidad"
-    info = f"Por 1 {u}, precios de hoy: S/ {float(r['Costo'].sum()):,.2f}" if not r.empty else ""
+    # El total de la receta NO va acá: va debajo de su tabla (a pedido).
+    info = f"Receta por 1 {u}, precios de hoy" if not r.empty else ""
     n = int(r["EsBase"].sum()) if not r.empty else 0
     if n:
         info += f" · {n} {'receta base' if n == 1 else 'recetas base'} adentro (▸)"
-    ayuda = (f"Los ingredientes para 1 {u}, con los precios de hoy. Un ingrediente con ▸ "
-             "es otra receta base: clic en su fila para ver la suya al costado, "
-             f"proporcionada a lo que lleva 1 {u}; adentro se sigue bajando.")
+    ayuda = (f"Los ingredientes para 1 {u}, con los precios de hoy: la cantidad de la "
+             "receta, lo que cuesta la unidad de compra del insumo y lo que cuesta esa "
+             "cantidad; el total, debajo. Un ingrediente con ▸ es otra receta base: clic "
+             "en su fila para ver al costado la suya, por 1 unidad de producción de ella; "
+             "adentro se sigue bajando.")
     return info, ayuda
 
 
