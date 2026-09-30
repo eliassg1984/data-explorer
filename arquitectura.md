@@ -45822,6 +45822,20 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        hidden` en el `<p>` se recortaba su propia ayuda. Menos relleno y
        aire (10px, gap 8px). Medido con Playwright a 1323×619, la página del
        usuario: de 20 a 616px en «Producciones», el caso más alto.
+     - **Cada ingrediente dice los DOS costos, y la receta su total**
+       (cuarta versión, a pedido: «el kilo de arroz es de 3 soles pero la
+       receta usa 100 gramos y eso es 30 centavos; ambas columnas… y no
+       olvidar el costo final»). «Costo unit.» es por unidad de COMPRA:
+       `CST UNIT INS` va por unidad de salida (por gramo) y se multiplica
+       por `FACTOR INS`; el nombre de esa unidad sale de (unidad de la
+       receta, factor) — g/1.000 → kg, ml/1.000 → L; con otro factor (las
+       onzas de barra, 32 o 33) va por unidad de la receta. «Costo» es el de
+       la cantidad (`CST SUBT INS` = `CANT × CST UNIT INS` exacto en todo el
+       parquet) y lleva el TOTAL en su cabecera («Costo · S/ 12.12»), porque
+       la fila «Total de la receta» del pie queda debajo de lo visible en
+       una receta de más de cuatro líneas. Los montos van escritos (texto):
+       la fila del total no tiene costo unitario y un vacío se pinta «None»
+       (#529). Un clic en esa fila no abre ni cierra nada.
      - **Lo USADO baja por las recetas base.** El primer nivel de las ventas
        (`paloteoinsumosnivel1`) sólo nombra lo que pide la receta del PLATO:
        de 427 recetas activas, 257 salen ahí y 95 sólo adentro de otra

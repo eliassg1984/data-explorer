@@ -127,6 +127,11 @@ UNIDAD_RECETA = {"GRAMOS": "g", "MILILITROS": "ml", "KILOS": "kg", "LITROS": "L"
                  "UND": "und", "UNIDAD": "und", "ONZAS": "oz", "PORCION": "porc"}
 """La unidad en que la receta pide cada ingrediente (la de SALIDA), corta."""
 
+UNIDAD_COMPRA = {("g", 1000.0): "kg", ("ml", 1000.0): "L", ("und", 1.0): "und",
+                 ("kg", 1.0): "kg", ("L", 1.0): "L", ("porc", 1.0): "porc"}
+"""(unidad de la receta, factor) → la unidad de COMPRA del insumo, la del
+kardex: 2.165 líneas en gramos y 490 en mililitros con factor 1.000."""
+
 COBERTURA_BAJA, COBERTURA_ALTA = 0.5, 1.5
 """Producido ÷ usado fuera de este tramo va en ámbar: se produjo mucho menos
 de lo que usaron las ventas (o se hace de otra forma), o mucho más."""
@@ -414,10 +419,21 @@ def codigos_base(df_rb):
 def ingredientes(df_rb, cod, escala=1.0, bases=frozenset()):
     """Los ingredientes de la receta base del producto `cod`, proporcionados a
     `escala` unidades de entrada de ella: Cod, Insumo, Cantidad y Unid (en la
-    unidad de la receta: gramos, mililitros), Costo, %, Factor (a la unidad
-    de entrada del ingrediente) y EsBase (si el ingrediente tiene a su vez
-    receta base). Ordenados por costo."""
-    cols = ["Cod", "Insumo", "Cantidad", "Unid", "Costo", "%", "Factor", "EsBase"]
+    unidad de la receta: gramos, mililitros), CostoUnit y UnidCompra (lo que
+    cuesta una unidad de COMPRA del insumo —el kilo de arroz, S/ 3—, que no
+    depende de la escala), Costo (lo que cuesta la cantidad de la receta:
+    100 g de ese arroz, S/ 0,30), %, Factor (a la unidad de entrada del
+    ingrediente) y EsBase (si el ingrediente tiene a su vez receta base).
+    Ordenados por costo.
+
+    `CST SUBT INS` es exactamente `CANT × CST UNIT INS` en todo el parquet
+    (medido el 2026-09-30), y `CST UNIT INS` va por unidad de SALIDA (por
+    gramo): por unidad de compra es × `FACTOR INS`. Con un factor que no es
+    el de gramos o mililitros a kilo o litro, ni 1, no se sabe el nombre de
+    la unidad de compra (las onzas de barra, factor 32 o 33): va por unidad
+    de la receta."""
+    cols = ["Cod", "Insumo", "Cantidad", "Unid", "CostoUnit", "UnidCompra", "Costo", "%",
+            "Factor", "EsBase"]
     d = df_rb[_txt(df_rb["COD PROD RB"]) == str(cod).strip()]
     d = d[d["COD INS RB"].notna()]
     if d.empty:
@@ -432,6 +448,12 @@ def ingredientes(df_rb, cod, escala=1.0, bases=frozenset()):
                   else 0.0),
         "Factor": _num(d["FACTOR INS"]).fillna(0.0),
     })
+    unit = (_num(d["CST UNIT INS"]).fillna(0.0) if "CST UNIT INS" in d
+            else out["Costo"] / out["Cantidad"].where(out["Cantidad"] > 0)).fillna(0.0)
+    compra = [UNIDAD_COMPRA.get((u, f)) for u, f in zip(out["Unid"], out["Factor"])]
+    out["CostoUnit"] = [c * f if uc else c
+                        for c, f, uc in zip(unit, out["Factor"], compra)]
+    out["UnidCompra"] = [uc or u for uc, u in zip(compra, out["Unid"])]
     total = out["Costo"].sum() or 1.0
     out["%"] = out["Costo"] / total * 100
     out["EsBase"] = out["Cod"].isin(bases) & (out["Cod"] != str(cod).strip())
@@ -759,14 +781,52 @@ def _dib_producciones(fila, o):
                                               rol=alturas.RB_COSTO_DETALLE))
 
 
-_CFG_INGREDIENTES = {
-    "Insumo": st.column_config.TextColumn(
-        width=230, help="▸ receta base: clic en la fila para ver la suya al costado"),
-    "Cantidad": st.column_config.TextColumn(width=86),
-    "Costo": st.column_config.NumberColumn(format="S/ %.2f", width=74),
-    "%": st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100,
-                                         width=90),
-}
+def _cfg_ingredientes(total):
+    """Las columnas de una tabla de ingredientes. «Costo» lleva el TOTAL de
+    la receta en su cabecera: la fila «Total» va al pie y en una receta
+    larga queda debajo de lo que se ve sin deslizar."""
+    return {
+        # Suman 530 con la casilla de selección: la mitad de la tarjeta a
+        # 1323px. «Costo» es la más ancha porque su cabecera lleva el total
+        # (con 84px se cortaba en «S/ 12.1»).
+        "Insumo": st.column_config.TextColumn(
+            width=168, help="▸ receta base: clic en la fila para ver la suya al costado"),
+        "Cantidad": st.column_config.TextColumn(
+            width=70, help="Lo que pide la receta, en su unidad"),
+        "Costo unit.": st.column_config.TextColumn(
+            width=90, help="Lo que cuesta una unidad de COMPRA del insumo (el kilo, el "
+                           "litro), con el precio de hoy"),
+        _col_costo(total): st.column_config.TextColumn(
+            width=112, help="Lo que cuesta la cantidad de la receta: cantidad × costo "
+                            "unitario. En la cabecera, el total de la receta"),
+        "%": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=100,
+                                             width=54),
+    }
+
+
+def _col_costo(total):
+    return f"Costo · S/ {total:,.2f}"
+
+
+def tabla_ingredientes(r):
+    """Lo que muestra una tabla de ingredientes: Insumo (con «▸» si es receta
+    base), Cantidad, Costo unit. (por unidad de compra), Costo (de esa
+    cantidad, con el total en la cabecera) y %, más una última fila «Total»
+    con el costo de la receta. Los montos van escritos: una columna de texto
+    no pinta «None» (#529) y deja la fila del total sin costo unitario."""
+    total = float(r["Costo"].sum())
+    v = pd.DataFrame({
+        "Insumo": np.where(r["EsBase"], "▸ " + r["Insumo"], r["Insumo"]),
+        "Cantidad": [f"{_cant(q)} {u}".strip() for q, u in zip(r["Cantidad"], r["Unid"])],
+        "Costo unit.": [f"S/ {c:,.2f} / {u}" if c else "—"
+                        for c, u in zip(r["CostoUnit"], r["UnidCompra"])],
+        _col_costo(total): [f"S/ {c:,.2f}" for c in r["Costo"]],
+        "%": r["%"].astype(float),
+    })
+    fila_total = pd.DataFrame({"Insumo": ["Total de la receta"], "Cantidad": [""],
+                               "Costo unit.": [""], _col_costo(total): [f"S/ {total:,.2f}"],
+                               "%": [100.0 if total else 0.0]})
+    return pd.concat([v, fila_total], ignore_index=True)
 
 
 def _filas_clic(r):
@@ -794,6 +854,8 @@ def _al_elegir_ingrediente(key, raiz, filas):
     """Clic en la receta de la izquierda: abre al costado la receta base de esa
     fila, o avisa que es un insumo de compra."""
     fila = _fila_elegida(st.session_state.get(key))
+    if fila is not None and fila >= len(filas):
+        return  # la fila «Total»: no es un ingrediente
     e = _estado_ruta(raiz)
     nuevo = {"raiz": raiz, "ruta": [], "gen": e.get("gen", 0)}
     if fila is not None and 0 <= fila < len(filas):
@@ -829,14 +891,15 @@ def _cerrar(raiz):
 
 
 def _tabla_ingredientes(r, key, on_select, rol=alturas.RB_COSTO_DETALLE):
-    v = pd.DataFrame({
-        "Insumo": np.where(r["EsBase"], "▸ " + r["Insumo"], r["Insumo"]),
-        "Cantidad": [f"{_cant(q)} {u}".strip() for q, u in zip(r["Cantidad"], r["Unid"])],
-        "Costo": r["Costo"],
-        "%": r["%"],
-    })
-    st.dataframe(v, key=key, on_select=on_select, selection_mode="single-row",
-                 hide_index=True, row_height=27, column_config=_CFG_INGREDIENTES,
+    v = tabla_ingredientes(r)
+    ultima = len(v) - 1
+    sty = v.style.apply(lambda f: [f"font-weight: 700; background-color: {LAVANDA_FONDO}"
+                                   if f.name == ultima else ""] * len(f), axis=1)
+    # Un clic en la fila «Total» no abre nada: cae fuera de las filas que
+    # conocen los callbacks.
+    st.dataframe(sty, key=key, on_select=on_select, selection_mode="single-row",
+                 hide_index=True, row_height=27,
+                 column_config=_cfg_ingredientes(float(r["Costo"].sum())),
                  height=alturas.por_filas(len(v), px_fila=27, extra=38, minimo=0, rol=rol))
 
 

@@ -6565,6 +6565,23 @@ def _pruebas_costo_recetas_base():
     check("y sus cantidades salen proporcionadas",
           round(float(rbc.ingredientes(rb, "0000200", fondo["escala"], bases)["Cantidad"].iloc[0]), 6),
           300.0)
+    # Pedido el 2026-09-30: el costo de la unidad de COMPRA y el de la
+    # cantidad de la receta, los dos, y el total al pie.
+    rb_u = rb.assign(UNID="GRAMOS", **{"CST UNIT INS": 0.003, "CST SUBT INS": rb["CANT"] * 0.003})
+    ing_u = rbc.ingredientes(rb_u, "0000100", 1.0, bases).set_index("Cod")
+    check("el costo unitario va por kilo (S/ 0,003 el gramo = S/ 3 el kilo)",
+          (round(ing_u.loc["0000200", "CostoUnit"], 6), ing_u.loc["0000200", "UnidCompra"]),
+          (3.0, "kg"))
+    check("y el costo de la cantidad de la receta (300 g = S/ 0,90)",
+          round(ing_u.loc["0000200", "Costo"], 6), 0.9)
+    v_ing = rbc.tabla_ingredientes(rbc.ingredientes(rb_u, "0000100", 1.0, bases))
+    check("la tabla cierra con el total de la receta, también en la cabecera",
+          (v_ing["Insumo"].iloc[-1], v_ing.iloc[-1, 3], v_ing.columns[3]),
+          ("Total de la receta", "S/ 1.05", "Costo · S/ 1.05"))
+    check("con las columnas pedidas",
+          list(v_ing.columns), ["Insumo", "Cantidad", "Costo unit.", "Costo · S/ 1.05", "%"])
+    check("sin vacíos que st.dataframe pinte «None» (#529)",
+          bool(v_ing.isna().any().any()), False)
     check("una receta sin ingredientes cargados sale vacía",
           rbc.ingredientes(rb, "9999999", 1.0, bases).empty, True)
 
