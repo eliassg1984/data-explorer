@@ -1740,21 +1740,51 @@ CSS = """    /* ================================================================
        y deja lugar al desplegable; la línea de números de «Producciones»
        en un renglón. */
     .st-key-rec_rb_det_cab > .stElementContainer:first-child {
+        flex: 0 1 auto !important;
+        max-width: 46%;
+        min-width: 0 !important;
+    }
+    .st-key-rec_rb_det_cab > .stElementContainer:nth-child(2) {
         flex: 1 1 0 !important;
         min-width: 0 !important;
     }
-    .rec-rb-det-tit {
+    .st-key-rec_rb_det_cab [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    /* El «…» va en un `<span>` de adentro y no en el `<p>`: un `overflow:
+       hidden` en el `<p>` recortaría su `::after`, que es la ayuda. */
+    .rec-rb-det-nom {
+        display: block;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    .st-key-rec_rb_det_kpis [data-testid="stMarkdownContainer"] p {
-        margin: 0;
-        font-size: 13px;
+    .rec-rb-det-info {
+        margin: 0 !important;
+        font-size: 12.5px !important;
         color: var(--text-secondary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+    .rec-rb-anid-tot {
+        font-weight: 400;
+        color: var(--text-secondary);
+    }
+    /* La ayuda del título, cuando es un párrafo (lo que eran los pies de
+       las dos tarjetas): envuelve en varias líneas en lugar de una sola. */
+    .rec-carta-tit.rec-ayuda-larga::after {
+        white-space: normal;
+        width: min(560px, 80vw);
+        line-height: 1.45;
+    }
+    /* Las dos tarjetas entran JUNTAS en la pantalla del usuario (~620px):
+       menos relleno y menos aire entre renglones que la Carta. Después de
+       la regla compartida de la tarjeta blanca, para ganarle. */
+    .st-key-rec_card_costo_rb,
+    .st-key-rec_card_rb_detalle {
+        padding: 10px 16px !important;
+        gap: 8px !important;
     }
     /* Los desplegables (y el buscador) sin caja, con un subrayado, 28px de
        alto — como los de Por hora. DOS DOMs, como allá: react-aria en la

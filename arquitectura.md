@@ -45807,9 +45807,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        La primera versión era UNA tarjeta con «Ver: Uso y producción /
        Evolución del costo» y un desplegable «Receta» en la evolución; con
        todo a la vista, la fila de la tabla es la única que elige y el foco
-       (`rec_rb_foco`) no necesita contador. Mide ~530 arriba y ~400
-       (Receta) o ~505 (Producciones) abajo: la sección pasa de una pantalla
-       y se recorre libre por dentro (#533).
+       (`rec_rb_foco`) no necesita contador.
+     - **Las dos tarjetas entran JUNTAS en una pantalla** (tercera versión,
+       a pedido: «que por defecto aparezca la ventana de abajo ya mostrando
+       la receta base… en una sola pantalla»). La tabla de arriba muestra
+       nueve filas (`alturas.RB_COSTO_TABLA`), y las tablas y el gráfico de
+       abajo cinco (`RB_COSTO_DETALLE`; la receta de adentro, una menos, por
+       el renglón de su nombre). Sin pies: lo que decían aparece al pasar el
+       cursor por el título de cada tarjeta (`.rec-ayuda-larga`, el `::after`
+       de la Carta envolviendo en varias líneas), y los números de abajo van
+       en el renglón del nombre. El título de arriba se dibuja en un
+       `st.empty()` que se llena al final, porque su ayuda dice el período.
+       El nombre de abajo se corta con «…» en un `<span>`: con `overflow:
+       hidden` en el `<p>` se recortaba su propia ayuda. Menos relleno y
+       aire (10px, gap 8px). Medido con Playwright a 1323×619, la página del
+       usuario: de 20 a 616px en «Producciones», el caso más alto.
      - **Lo USADO baja por las recetas base.** El primer nivel de las ventas
        (`paloteoinsumosnivel1`) sólo nombra lo que pide la receta del PLATO:
        de 427 recetas activas, 257 salen ahí y 95 sólo adentro de otra

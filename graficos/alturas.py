@@ -358,20 +358,16 @@ CARTA_FIG = 180
 tiempo), regla #572: 60px menos que MINI (200 hasta la #574) para que el
 panel entre en ~575px junto a la receta de cinco filas."""
 
-RB_COSTO_TABLA = 27 * 13 + 38
-"""Tope de la tabla de Recetas › Costo recetas base, «Uso y producción»
-(2026-09-30, regla #576): trece filas de 27 más la cabecera y los bordes.
-Con el renglón del título y el pie, la tarjeta mide ~530px: entra en la
-pantalla del usuario (~620px de página, regla #574)."""
+RB_COSTO_TABLA = 27 * 9 + 38
+"""Tope de la tabla de Recetas › Costo recetas base (2026-09-30, regla
+#576): NUEVE filas de 27 más la cabecera y los bordes (trece en la primera
+versión). A pedido, la tabla y la tarjeta de la receta elegida entran
+JUNTAS en la pantalla del usuario (~620px de página, regla #574)."""
 
-RB_COSTO_FIG = 340
-"""El gráfico de «Evolución del costo» de la misma tarjeta (regla #576): el
-alto que le queda a la tarjeta después del renglón del título, el de la
-receta elegida y el pie, para no pasar de ~560px."""
-
-RB_COSTO_ORDENES = 27 * 11 + 38
-"""Las órdenes de la receta elegida, al costado del gráfico de la
-evolución: once filas, la altura del gráfico (regla #576)."""
+RB_COSTO_DETALLE = 27 * 5 + 38
+"""Las tablas y el gráfico de la tarjeta de la receta elegida, debajo de la
+tabla (regla #576): cinco filas. Lo que no entra se desliza dentro de su
+tabla."""
 
 REVISAR_RECETAS = 27 * 13 + 3
 """Alto de la tabla de Recetas › Revisar recetas (2026-09-28, regla #559):

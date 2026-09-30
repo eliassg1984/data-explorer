@@ -625,7 +625,7 @@ def _dib_tabla(t, ini, fin):
                                           rol=alturas.RB_COSTO_TABLA))
 
 
-def fig_evolucion(o, meses, costo_hoy, unid, alto=alturas.RB_COSTO_FIG):
+def fig_evolucion(o, meses, costo_hoy, unid, alto=alturas.RB_COSTO_DETALLE):
     """El costo por unidad de UNA receta en el tiempo: un punto por orden,
     la línea del costo de cada mes y, punteado, el de la receta hoy. Las
     órdenes atípicas van como triángulos contra el borde de arriba (si se
@@ -694,34 +694,48 @@ def fig_evolucion(o, meses, costo_hoy, unid, alto=alturas.RB_COSTO_FIG):
 
 
 # ─── La tarjeta de abajo: la receta elegida ────────────────────────────────
-def _dib_producciones(fila, ords):
+def resumen_producciones(fila, o):
+    """(info, ayuda) de «Producciones»: la línea de números que va en la
+    cabecera de la tarjeta y lo que explica el gráfico, que aparece al pasar
+    el cursor por el nombre (a pedido: la tarjeta entera en una pantalla)."""
+    u = UNIDAD_CORTA.get(fila["unid"], fila["unid"].lower()) or "unidad"
+    partes = []
+    if fila["ultimo"]:
+        partes.append(f"Último S/ {fila['ultimo']:,.2f} por {u} ({fila['f_ultimo']:%d/%m/%y})")
+    if fila["costo_hoy"]:
+        partes.append(f"receta hoy S/ {fila['costo_hoy']:,.2f}")
+    if math.isfinite(fila["var"]):
+        partes.append(f"12 m {_var(fila['var'])}")
+    if not o.empty:
+        partes.append(f"{o['orden'].nunique():,} órdenes desde {o['fecha'].min():%m/%Y}")
+    ayuda = ("Un punto por orden de producción procesada: el costo por unidad que calculó "
+             "el Almacén al procesarla, con los precios de ese día. La línea es el costo de "
+             "cada mes (lo que costó lo producido ÷ lo producido); la punteada, la receta "
+             "con los precios de hoy.")
+    n_raras = int(o["atipico"].sum()) if not o.empty else 0
+    if n_raras:
+        ayuda += (f" {n_raras} {'orden fuera' if n_raras == 1 else 'órdenes fuera'} de "
+                  "escala (más de 10 veces sobre o bajo sus vecinas, casi siempre una "
+                  "cantidad mal cargada): en ámbar, y no entran en el costo del mes.")
+    return " · ".join(partes), ayuda
+
+
+def _dib_producciones(fila, o):
     """El historial de producciones de la receta elegida: su costo por unidad
     orden a orden y mes a mes, y sus órdenes al costado."""
     cod = fila["cod"]
-    o = ords[ords["cod"] == cod]
     if o.empty:
         st.info("Esta receta base nunca se produjo con una orden de producción: si se "
                 "usa, sale de un porcionamiento o no se registra.")
         return
     u = UNIDAD_CORTA.get(fila["unid"], fila["unid"].lower()) or "unidad"
-    partes = []
-    if fila["ultimo"]:
-        partes.append(f"Último: **S/ {fila['ultimo']:,.2f}** por {u} "
-                      f"({fila['f_ultimo']:%d/%m/%Y})")
-    if fila["costo_hoy"]:
-        partes.append(f"receta hoy: S/ {fila['costo_hoy']:,.2f}")
-    if math.isfinite(fila["var"]):
-        partes.append(f"12 meses: {_var(fila['var'])}")
-    partes.append(f"{o['orden'].nunique():,} órdenes desde {o['fecha'].min():%m/%Y}")
-    with st.container(key="rec_rb_det_kpis"):
-        st.markdown(" · ".join(partes))
-
     meses = costo_por_mes(o)
     # columnas-internas: el gráfico y, al costado, sus órdenes; es la
     # tarjeta de la receta, no parte la página.
     c_fig, c_ord = st.columns([0.62, 0.38], gap="medium")
     with c_fig:
-        st.plotly_chart(fig_evolucion(o, meses, fila["costo_hoy"], fila["unid"]),
+        st.plotly_chart(fig_evolucion(o, meses, fila["costo_hoy"], fila["unid"],
+                                      alto=alturas.RB_COSTO_DETALLE),
                         use_container_width=True, key=f"rec_rb_evo_{cod}",
                         config={"displaylogo": False, "displayModeBar": False})
     with c_ord:
@@ -742,17 +756,7 @@ def _dib_producciones(fila, ords):
                      column_config={"Fecha": st.column_config.TextColumn(width=78),
                                     "Área": st.column_config.TextColumn(width=86)},
                      height=alturas.por_filas(len(v), px_fila=27, extra=38, minimo=0,
-                                              rol=alturas.RB_COSTO_ORDENES))
-    n_raras = int(o["atipico"].sum())
-    pie = ("Un punto por orden de producción procesada: el costo por unidad que calculó "
-           "el Almacén al procesarla, con los precios de ese día. La línea es el costo de "
-           "cada mes (lo que costó lo producido ÷ lo producido); la punteada, la receta "
-           "con los precios de hoy.")
-    if n_raras:
-        pie += (f" {n_raras} {'orden fuera' if n_raras == 1 else 'órdenes fuera'} de "
-                "escala (más de 10 veces sobre o bajo sus vecinas, casi siempre una "
-                "cantidad mal cargada): en ámbar, y no entran en el costo del mes.")
-    st.caption(pie)
+                                              rol=alturas.RB_COSTO_DETALLE))
 
 
 _CFG_INGREDIENTES = {
@@ -824,7 +828,7 @@ def _cerrar(raiz):
     st.session_state[_K_RUTA] = {"raiz": raiz, "ruta": [], "gen": e.get("gen", 0) + 1}
 
 
-def _tabla_ingredientes(r, key, on_select):
+def _tabla_ingredientes(r, key, on_select, rol=alturas.RB_COSTO_DETALLE):
     v = pd.DataFrame({
         "Insumo": np.where(r["EsBase"], "▸ " + r["Insumo"], r["Insumo"]),
         "Cantidad": [f"{_cant(q)} {u}".strip() for q, u in zip(r["Cantidad"], r["Unid"])],
@@ -833,8 +837,7 @@ def _tabla_ingredientes(r, key, on_select):
     })
     st.dataframe(v, key=key, on_select=on_select, selection_mode="single-row",
                  hide_index=True, row_height=27, column_config=_CFG_INGREDIENTES,
-                 height=alturas.por_filas(len(v), px_fila=27, extra=38, minimo=0,
-                                          rol=alturas.RB_COSTO_ORDENES))
+                 height=alturas.por_filas(len(v), px_fila=27, extra=38, minimo=0, rol=rol))
 
 
 def _dib_receta(fila, df_rb, bases):
@@ -856,10 +859,6 @@ def _dib_receta(fila, df_rb, bases):
         key = _key(f"rec_rb_ing_{raiz}_{e.get('gen', 0)}",
                    [f"{x['cod']}:{x['nombre']}" for x in filas])
         _tabla_ingredientes(r, key, partial(_al_elegir_ingrediente, key, raiz, filas))
-        pie = f"Por 1 {u}, con los precios de hoy: S/ {float(r['Costo'].sum()):,.2f}."
-        if r["EsBase"].any():
-            pie += " ▸ es otra receta base: clic para verla al costado."
-        st.caption(pie)
     with c_der:
         e = _estado_ruta(raiz)
         if not e.get("ruta"):
@@ -878,8 +877,11 @@ def _dib_receta(fila, df_rb, bases):
         with st.container(horizontal=True, vertical_alignment="center",
                           key="rec_rb_anidada_hdr"):
             migas = " › ".join([fila["nombre"]] + [x["nombre"] for x in ruta])
+            # El total va en el renglón del nombre y no en un pie: la
+            # tarjeta entera tiene que entrar en una pantalla.
             st.markdown(f'<p class="rec-base-tit" title="{escape(migas)}">'
-                        f'{escape(actual["nombre"])}</p>', unsafe_allow_html=True)
+                        f'{escape(actual["nombre"])} <span class="rec-rb-anid-tot">· en 1 '
+                        f'{u}: S/ {actual["costo"]:,.2f}</span></p>', unsafe_allow_html=True)
             if len(ruta) > 1:
                 st.button("↑ Subir", key="rec_rb_anidada_subir", on_click=_subir,
                           args=(raiz,))
@@ -891,30 +893,58 @@ def _dib_receta(fila, df_rb, bases):
         filas2 = _filas_clic(rr)
         key2 = _key(f"rec_rb_anid_{raiz}_" + "-".join(x["cod"] for x in ruta),
                     [f"{x['cod']}:{x['nombre']}" for x in filas2])
-        _tabla_ingredientes(rr, key2, partial(_al_elegir_anidada, key2, raiz, ruta, filas2))
-        pie = (f"Lo que lleva 1 {u} de {fila['nombre']}: S/ "
-               f"{float(rr['Costo'].sum()):,.2f}.")
-        if rr["EsBase"].any():
-            pie += " ▸ abre la de adentro."
-        st.caption(pie)
+        # Una fila menos que la de la izquierda: el renglón del nombre ocupa
+        # su lugar y las dos columnas terminan a la misma altura.
+        _tabla_ingredientes(rr, key2, partial(_al_elegir_anidada, key2, raiz, ruta, filas2),
+                            rol=alturas.RB_COSTO_DETALLE - 27)
 
 
 def _tarjeta_receta(fila, df_rb, ords):
     """La tarjeta de abajo: la receta elegida en la tabla, con su receta o
     su historial de producciones —en el mismo lugar, que alterna el
     desplegable «Ver»—."""
+    ss = st.session_state
+    if ss.get(_K_VER_DETALLE) not in VER_DETALLE:
+        ss[_K_VER_DETALLE] = VER_DETALLE[0]
+    ver = ss[_K_VER_DETALLE]
+    bases = codigos_base(df_rb)
+    o = ords[ords["cod"] == fila["cod"]]
+    if ver == VER_DETALLE[0]:
+        info, ayuda = resumen_receta(fila, ingredientes(df_rb, fila["cod"], 1.0, bases))
+    else:
+        info, ayuda = resumen_producciones(fila, o)
     with st.container(border=True, key="rec_card_rb_detalle"):
         with st.container(horizontal=True, gap="small", vertical_alignment="center",
                           key="rec_rb_det_cab"):
-            st.markdown(f'<p class="chart-card-hdr rec-rb-det-tit">{escape(fila["nombre"])}'
-                        '</p>', unsafe_allow_html=True)
+            # Lo que decían los pies de la tarjeta aparece al pasar el cursor
+            # por el nombre; los números, en su mismo renglón.
+            st.markdown(f'<p class="chart-card-hdr rec-carta-tit rec-ayuda-larga '
+                        f'rec-rb-det-tit" data-ayuda="{escape(ayuda)}">'
+                        f'<span class="rec-rb-det-nom">{escape(fila["nombre"])}</span></p>',
+                        unsafe_allow_html=True)
+            st.markdown(f'<p class="rec-rb-det-info">{escape(info)}</p>',
+                        unsafe_allow_html=True)
             with st.container(key="rec_rb_det_cab_ver", width="content"):
-                ver = st.selectbox("Ver", VER_DETALLE, key=_K_VER_DETALLE,
-                                   label_visibility="collapsed", width=150)
+                st.selectbox("Ver", VER_DETALLE, key=_K_VER_DETALLE,
+                             label_visibility="collapsed", width=140)
         if ver == VER_DETALLE[0]:
-            _dib_receta(fila, df_rb, codigos_base(df_rb))
+            _dib_receta(fila, df_rb, bases)
         else:
-            _dib_producciones(fila, ords)
+            _dib_producciones(fila, o)
+
+
+def resumen_receta(fila, r):
+    """(info, ayuda) de «Receta»: el costo por unidad y cuántas recetas base
+    lleva adentro, para la cabecera; y cómo se lee, al pasar el cursor."""
+    u = UNIDAD_CORTA.get(fila["unid"], fila["unid"].lower()) or "unidad"
+    info = f"Por 1 {u}, precios de hoy: S/ {float(r['Costo'].sum()):,.2f}" if not r.empty else ""
+    n = int(r["EsBase"].sum()) if not r.empty else 0
+    if n:
+        info += f" · {n} {'receta base' if n == 1 else 'recetas base'} adentro (▸)"
+    ayuda = (f"Los ingredientes para 1 {u}, con los precios de hoy. Un ingrediente con ▸ "
+             "es otra receta base: clic en su fila para ver la suya al costado, "
+             f"proporcionada a lo que lleva 1 {u}; adentro se sigue bajando.")
+    return info, ayuda
 
 
 def render_costo_recetas_base(df_rb, df_op=None):
@@ -929,8 +959,11 @@ def render_costo_recetas_base(df_rb, df_op=None):
         cab = st.container(horizontal=True, gap="small", vertical_alignment="center",
                            key="rec_rb_cab")
         with cab:
-            st.markdown(f'<p class="chart-card-hdr rec-carta-tit" data-ayuda="{SUBTITULO}">'
-                        f'{TITULO}</p>', unsafe_allow_html=True)
+            # Un hueco para el título, que se llena al final: su ayuda —lo que
+            # era el pie de la tabla— dice el período, que se sabe después.
+            hueco_tit = st.empty()
+            hueco_tit.markdown(f'<p class="chart-card-hdr">{TITULO}</p>',
+                               unsafe_allow_html=True)
         if df_rb is None or df_rb.empty:
             st.info("No se pudieron cargar las recetas base (recetabase.parquet).")
             return
@@ -990,18 +1023,23 @@ def render_costo_recetas_base(df_rb, df_op=None):
             st.info("Ninguna receta base con este filtro.")
             return
         _dib_tabla(t, ini, fin)
-        # «¿Vendidos cuándo?» (preguntado en la Carta, regla #572): la
-        # ventana termina en el último día con venta, no hoy.
+        # Sin pie, a pedido: la tabla y la receta de abajo tienen que entrar
+        # juntas en una pantalla. Lo que decía aparece al pasar el cursor por
+        # el título. «¿Vendidos cuándo?» (regla #572): la ventana termina en
+        # el último día con venta, no hoy.
         desde = (f"{ini:%d/%m}" if ini.year == fin.year else f"{ini:%d/%m/%Y}")
-        pie = (f"Del {desde} al {fin:%d/%m/%Y}. Usado: lo que pidieron las ventas según "
-               "las recetas de hoy, también adentro de otras recetas base. Producido: "
-               "órdenes procesadas. «—» en Prod. ÷ uso: nunca la produjo una orden (casi "
-               "todas las «(L)» y «(P)» salen de un porcionamiento). Elegí una fila: "
-               "abajo, su receta y sus producciones.")
+        ayuda = (f"Del {desde} al {fin:%d/%m/%Y}. {SUBTITULO}. Usado: lo que pidieron las "
+                 "ventas según las recetas de hoy, también adentro de otras recetas base. "
+                 "Producido: órdenes procesadas. «—» en Prod. ÷ uso: nunca la produjo una "
+                 "orden (casi todas las «(L)» y «(P)» salen de un porcionamiento). Elegí "
+                 "una fila: abajo, su receta y sus producciones.")
         if n1 is None:
-            pie = ("No se pudo leer lo que pidieron las ventas: «Platos», «Vendidos» "
-                   "y «Usado» salen vacíos. " + pie)
-        st.caption(pie)
+            ayuda = ("No se pudo leer lo que pidieron las ventas: «Platos», «Vendidos» "
+                     "y «Usado» salen vacíos. " + ayuda)
+            st.caption("No se pudo leer lo que pidieron las ventas.")
+        hueco_tit.markdown(f'<p class="chart-card-hdr rec-carta-tit rec-ayuda-larga" '
+                           f'data-ayuda="{escape(ayuda)}">{TITULO}</p>',
+                           unsafe_allow_html=True)
     fila = t.set_index("cod").loc[ss[_K_FOCO]].copy()
     fila["cod"] = ss[_K_FOCO]
     _tarjeta_receta(fila, df_rb, ords)
