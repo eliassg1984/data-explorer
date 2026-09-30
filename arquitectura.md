@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-570 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+571 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (194)
 
@@ -668,7 +668,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 
-**Datos, R2 y DuckDB** (77)
+**Datos, R2 y DuckDB** (78)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -747,6 +747,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#558** — «Consumo según recetas» (Movimientos): cada venta baja por las recetas base y los…
 - **#559** — Recetas y Costos pierde «Ingredientes clave», «Insumos clave · recetas base» y los dos…
 - **#560** — «Consumo según recetas» se compara contra lo COMPRADO del rango —en la ficha de cada insumo y…
+- **#571** — «Carta impresa» es un atributo del PRODUCTO: va en la consulta de la carta, no en la de ventas
 
 **SUNAT y SIRE** (44)
 
@@ -858,7 +859,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (136)
+**Decisiones de diseño y UX** (137)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -996,6 +997,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
+- **#571** — «Carta impresa» es un atributo del PRODUCTO: va en la consulta de la carta, no en la de ventas
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -45491,6 +45493,49 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        (carta, un plato de seis insumos, «Más columnas» y Combos) y a 390
        con User-Agent de teléfono. El panel del navegador integrado no
        saca capturas con la app corriendo (#568).
+
+     (2026-09-29.)
+
+571. **«Carta impresa» es un atributo del PRODUCTO: va en la consulta de
+     la carta, no en la de ventas.** 2026-09-29, a pedido: en Recetas ›
+     Carta costeada, además de «Carta completa» y «Combos», poder ver la
+     carta impresa y la no impresa. En otra sesión se había agregado a la
+     consulta de VENTAS una columna «Tipo de Oferta» con
+     `INFOREST.DBO.TPRODUCTO.nBoton` (del 1 al 19, «Carta impresa»; 0 o
+     vacío, «Carta no impresa»; otro valor, nulo para que se note). La
+     cuenta está bien; el lugar no:
+     - **Es del producto y es de HOY.** En `ventas.parquet` se repetiría
+       en cada línea (ítem × forma de pago, #517) y le pondría a una venta
+       de 2025 la carta de hoy: un plato que salió de la carta impresa
+       figuraría «no impreso» en todo su historial. Y la vista muestra
+       productos que no se vendieron en la ventana, que en ventas no
+       tienen fila de la que sacar el dato.
+     - **Va en la consulta `cartacosteada` del Sheet**, una fila por
+       producto de `INFOREST.DBO.TPRODUCTO`: la misma columna, la última
+       del SELECT. Probada contra la base con `herramientas/sql_restaurante.py`
+       (1.682 filas, 41 columnas). La app la lee con cualquier mayúscula
+       (`preparar` → columna `Oferta`) y, mientras el parquet no la trae,
+       «Ver» sigue con sus dos opciones: nada se rompe antes de pegarla.
+     - **«Ver» pasa a Completa · Impresa · No impresa · Combos** (`VER_OFERTA`,
+       `OFERTAS`). «Carta» se cae del rótulo porque lo dice el título: con
+       él no entraban. Medido a 1366 con el rail plegado: los cuatro botones
+       piden 362 px (93 + 83 + 102 + 84) y con 357 «Combos» bajaba a otro
+       renglón; la fila de controles se reparte `[372, 156, 130, 150, 140,
+       166]` sobre 1.122. Si lo elegido no está entre las opciones de ahora
+       se BORRA la key y el control vuelve a su default: escribirle otro
+       valor teniendo `default=` es un aviso de Streamlit. El resumen dice
+       cuántos están en la carta impresa cuando se ve la completa.
+     - **Lo que `nBoton` marca hoy** (activos con precio, 2026-09-29): 56
+       productos — Entradas 17 de 18, Fondos 16 de 19, Guarniciones 5 de 8,
+       Postres 6 de 8, y de bebidas sólo 12 (4 de 98 cócteles, 1 de 61
+       piscos, aguas y gaseosas); ningún vino. Los valores van 1, 2, 3… DENTRO
+       de cada subgrupo, que es la forma de un ORDEN (la posición del botón
+       en la pantalla del POS, por el nombre), no de una marca. Antes de
+       usarlo para marcar bebidas en el POS, mirar qué cambia en la pantalla
+       de los mozos.
+     - **Cómo se verificó**: una página de prueba fuera del repo que dibuja
+       la vista con el CSV de la consulta nueva (Playwright, 1398 px de
+       ancho para que la tarjeta mida lo mismo que en la app a 1366).
 
      (2026-09-29.)
 

@@ -6598,6 +6598,28 @@ def _pruebas_carta_costeada():
     check("la banda de los combos existe en la carta preparada",
           sorted(set(cc._BANDA) - set(t.columns)), [])
 
+    # «Tipo de Oferta» (regla #571): la carta impresa sale de nBoton en la
+    # consulta de la CARTA —un atributo del producto—, no de la de ventas.
+    check("sin la columna, nadie tiene tipo de oferta (y Ver no la ofrece)",
+          set(t["Oferta"]), {""})
+    of = df.assign(**{"Tipo de Oferta": ["Carta impresa", "Carta no impresa", None,
+                                         "Carta impresa", None, "CARTA IMPRESA"]})
+    to, _ = cc.preparar(of)
+    fo = to.set_index("Cod")
+    check("el tipo de oferta se lee sin importar mayúsculas",
+          (fo.loc["0000010", "Oferta"], fo.loc["0000060", "Oferta"]),
+          ("Carta impresa", "Carta impresa"))
+    check("un nBoton fuera de rango (nulo) queda sin tipo",
+          fo.loc["0000030", "Oferta"], "")
+    check("filtro Impresa", sorted(cc.filtrar(to, oferta=cc.OFERTAS["Impresa"])["Cod"]),
+          ["0000010", "0000060"])
+    check("filtro No impresa",
+          list(cc.filtrar(to, oferta=cc.OFERTAS["No impresa"])["Cod"]), ["0000020"])
+    check("el resumen dice cuántos están en la carta impresa",
+          "**2** en la carta impresa" in cc.resumen(to), True)
+    check("Ver ofrece Impresa y No impresa",
+          all(o in cc.VER_OFERTA for o in cc.OFERTAS), True)
+
     rv = pd.DataFrame({"COD PLATO": ["0000010", "0000010", "0000030"],
                        "FECH MODIF": pd.to_datetime(["2022-09-23", "2022-09-23",
                                                      "2026-03-12"])})

@@ -77,6 +77,15 @@ from utils import _norm
 ARCHIVO = "cartacosteada.parquet"
 
 VER = ("Carta completa", "Combos")
+VER_OFERTA = ("Completa", "Impresa", "No impresa", "Combos")
+"""Las opciones de «Ver» cuando la consulta trae «Tipo de Oferta» (regla
+#571): la carta entera, la impresa, la que no y los combos. Sin la columna
+—un parquet de antes de la regla— quedan las dos de siempre. «Carta» se cae
+del rótulo porque ya lo dice el título de la tarjeta, y con él las cuatro
+no entraban en la fila de controles a 1366px (medido: 362px sin él)."""
+
+OFERTAS = {"Impresa": "Carta impresa", "No impresa": "Carta no impresa"}
+"""Opción de «Ver» → valor de «Tipo de Oferta» que filtra."""
 TIPOS = ("Todos", "Receta", "Directo", "Combo", "Sin enlace", "No aplica",
          "Sin costo")
 
@@ -168,6 +177,11 @@ def preparar(df, incluir_inactivos=False):
         "METODO COSTO", "COSTO MINIMO", "COSTO MAXIMO", "COSTO PROMEDIO",
         "COSTO ESPERADO", "COSTO REAL 90 DIAS", "COMBOS VENDIDOS 90 DIAS",
         "ULTIMA VENT")}
+    # «Tipo de Oferta» (regla #571): la consulta del Sheet la arma con
+    # `INFOREST.DBO.TPRODUCTO.nBoton` —del 1 al 19, «Carta impresa»; 0 o
+    # vacío, «Carta no impresa»—. Es un atributo del PRODUCTO, y por eso vive
+    # en esta consulta, una fila por producto, y no en la de ventas.
+    c["OFERTA"] = _resolver(df, ["Tipo de Oferta", "TIPO OFERTA"])
     d = df
     if not incluir_inactivos and c["ITEM VENT ACT"]:
         d = d[_texto(d, c["ITEM VENT ACT"]).str.upper() == "ACTIV"]
@@ -216,6 +230,10 @@ def preparar(df, incluir_inactivos=False):
     # Por si el parquet trae todavía el 01/01/1900 de un ISNULL(fecha, ''):
     # la consulta nueva ya lo manda vacío, pero un parquet viejo no.
     t["UltimaVenta"] = _fecha(uv)
+    # Vacío sin la columna, o con un nBoton fuera de 0-19 (la consulta lo
+    # deja nulo a propósito, para que se note).
+    t["Oferta"] = _texto(d, c["OFERTA"]).str.upper().map(
+        {v.upper(): v for v in OFERTAS.values()}).fillna("")
     t = t.sort_values(["Pct", "Producto"], ascending=[False, True])
     return t.reset_index(drop=True), n_sin_precio
 
@@ -271,9 +289,13 @@ def con_ventas(t, agg, dias=DIAS_VENDIDOS):
     return t, (ini.date(), fin.date())
 
 
-def filtrar(t, grupo="Todos", tipo="Todos", buscar="", venta_interna=False):
+def filtrar(t, grupo="Todos", tipo="Todos", buscar="", venta_interna=False,
+            oferta=None):
     """Los filtros de la fila de controles. `venta_interna`: si entran los
-    productos del grupo Venta Interna (arrancan fuera). Pura."""
+    productos del grupo Venta Interna (arrancan fuera); `oferta`: «Carta
+    impresa» o «Carta no impresa», o None para toda la carta. Pura."""
+    if oferta:
+        t = t[t["Oferta"] == oferta]
     if not venta_interna:
         t = t[t["Grupo"].str.casefold() != GRUPO_VENTA_INTERNA.casefold()]
     if grupo and grupo != "Todos":
@@ -322,6 +344,10 @@ def resumen(t, que="productos"):
             if n:
                 texto += f" (**{n}** se venden)"
         partes.append(texto)
+    if "Oferta" in t.columns and que != "combos":
+        n_imp = int((t["Oferta"] == OFERTAS["Impresa"]).sum())
+        if 0 < n_imp < len(t):
+            partes.append(f"**{n_imp}** en la carta impresa")
     n_combo = int((t["Tipo"] == "Combo").sum())
     if n_combo and que != "combos":
         partes.append(f"**{n_combo}** combos")
@@ -855,14 +881,29 @@ def render_carta_costeada(df, df_rv=None, ventas=None):
             g for g in carta["Grupo"].unique()
             if g and (vi or g.casefold() != GRUPO_VENTA_INTERNA.casefold()))
 
+        # Las cuatro opciones de «Ver» sólo si la consulta ya trae «Tipo de
+        # Oferta»; si lo elegido no está entre las de ahora (otro juego de
+        # rótulos), se BORRA y el control vuelve a su default: escribirle
+        # otro valor, con un `default=` puesto, es un aviso de Streamlit.
+        hay_oferta = bool((carta["Oferta"] != "").any())
+        opciones_ver = VER_OFERTA if hay_oferta else VER
+        if ss.get("rec_carta_ver") not in (None, *opciones_ver):
+            ss.pop("rec_carta_ver")
         # columnas-internas: la fila de controles de la tarjeta (qué ver,
         # grupo, tipo, buscador y los dos interruptores); no parte la página.
+        # Con cuatro opciones «Ver» pide 362px (medido: 93 + 83 + 102 + 84;
+        # con 357, «Combos» bajaba a un segundo renglón) y se los ceden el
+        # grupo, el tipo y el buscador. A 1366px con el rail plegado, la
+        # fila tiene 1122px sin los huecos: esto suma 1114.
+        anchos = ([372, 156, 130, 150, 140, 166] if hay_oferta
+                  else [1.5, 1.25, 1.1, 1.5, 0.95, 1.1])
         c_ver, c_grupo, c_tipo, c_buscar, c_inact, c_vi = st.columns(
-            [1.5, 1.25, 1.1, 1.5, 0.95, 1.1], vertical_alignment="center")
+            anchos, vertical_alignment="center")
         with c_ver:
-            ver = st.segmented_control("Ver", VER, default=VER[0],
-                                       key="rec_carta_ver",
-                                       label_visibility="collapsed") or VER[0]
+            ver = st.segmented_control(
+                "Ver", opciones_ver, default=opciones_ver[0],
+                key="rec_carta_ver",
+                label_visibility="collapsed") or opciones_ver[0]
         with c_grupo:
             if ss.get("rec_carta_grupo") not in grupos:
                 ss["rec_carta_grupo"] = "Todos"
@@ -892,7 +933,8 @@ def render_carta_costeada(df, df_rv=None, ventas=None):
             st.markdown(resumen(t, "combos"))
             vacio = "No hay combos con este filtro."
         else:
-            t = filtrar(carta, grupo, tipo, buscar, venta_interna=vi)
+            t = filtrar(carta, grupo, tipo, buscar, venta_interna=vi,
+                        oferta=OFERTAS.get(ver))
             st.markdown(resumen(t))
             vacio = "Ningún producto con este filtro."
         if t.empty:
@@ -937,6 +979,9 @@ def render_carta_costeada(df, df_rv=None, ventas=None):
                 pie = (f"Ordenada por {orden}. Semáforo: sobre {_UMBRAL_COSTO_OK} % "
                        f"en ámbar, sobre {_UMBRAL_COSTO_WARN} % en rojo. Clic en "
                        "un producto para ver su receta.")
+                if ver in OFERTAS:
+                    pie += (" Carta impresa: los productos con botón del 1 al "
+                            "19 en el POS («Tipo de Oferta» de la consulta).")
                 if n_sin_precio:
                     pie += (f" {n_sin_precio} sin precio de Salón (S/ 1 o menos) "
                             "no se muestran.")
