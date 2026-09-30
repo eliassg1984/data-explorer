@@ -66,14 +66,18 @@ def unico_por_item(df):
 # periodo— paso ahi (reglas #543 y #544). Y tambien «Ranking & FoodCost»: lo
 # unico suyo —los platos de toda la carta con su costo al lado— paso a
 # «Analisis de platos» (reglas #545 y #546).
+#
+# Los ROTULOS (segundo elemento) se alargaron el 2026-09-30 a pedido
+# («Venta por Periodo», «Mix de Ventas», …); el id (primero) no se toco: es
+# el que usan `_PILA`, las keys de los botones y el `?vista=` de la URL.
 _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
-    ("Resumen",  (("Resumen ejecutivo", "Resumen", ":material/summarize:"),)),
-    ("Tiempo",   (("Mix de carta",               "Mix",        ":material/stacked_bar_chart:"),
-                  ("Mapa por hora",               "Por hora",   ":material/schedule:"),
-                  ("Comparativo vs Año Pasado",   "Año Pasado", ":material/compare_arrows:"),
-                  ("Venta vs Compra",            "Vs Compra",  ":material/balance:"))),
-    ("Análisis", (("Análisis de platos",  "Platos",  ":material/restaurant_menu:"),
-                  ("Meseros",             "Meseros", ":material/groups:"))),
+    ("Resumen",  (("Resumen ejecutivo", "Venta por Periodo", ":material/summarize:"),)),
+    ("Tiempo",   (("Mix de carta",               "Mix de Ventas",           ":material/stacked_bar_chart:"),
+                  ("Mapa por hora",               "Análisis por Hora",       ":material/schedule:"),
+                  ("Comparativo vs Año Pasado",   "Comparación Año Pasado",  ":material/compare_arrows:"),
+                  ("Venta vs Compra",            "Vs Compras",              ":material/balance:"))),
+    ("Análisis", (("Análisis de platos",  "Análisis de Platos",  ":material/restaurant_menu:"),
+                  ("Meseros",             "Análisis de Meseros", ":material/groups:"))),
     ("Datos",    (("Tabla",  "Tabla", ":material/table_rows:"),)),
 ))
 
