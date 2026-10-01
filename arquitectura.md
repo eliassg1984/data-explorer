@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-577 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+578 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -230,7 +230,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 
-**Layout y alturas** (81)
+**Layout y alturas** (82)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -313,6 +313,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 - **#574** — La Carta costeada: el título con sus desplegables en un renglón, los porcionamientos de un…
+- **#578** — Compras › Proveedor son dos filas: [Ranking | Productos] arriba y [Documentos | Evolución |…
 
 **Plotly y figuras** (104)
 
@@ -45980,6 +45981,79 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        Compras ↔ SUNAT sin excepciones y con el rango conservado.
 
      (2026-09-30.)
+
+578. **Compras › Proveedor son dos filas: [Ranking | Productos] arriba y
+     [Documentos | Evolución | Proveedores de] abajo.** 2026-10-01, a
+     pedido, con captura: «la tabla ranking de proveedores y la tabla de los
+     productos... deben estar ambos arriba, uno al lado de otro. Abajo
+     añadamos una tabla que debe mostrar los documentos del proveedor que
+     está seleccionado, indicando fecha, número documento, valor. Al lado
+     derecho el gráfico evolución y al lado derecho de éste el que muestra
+     los proveedores del producto seleccionado». Hasta ese día eran
+     [Ranking | Evolución] y [Productos | Proveedores de], las dos con
+     `COLUMNAS_DRILL` (1.6/1). En `graficos/compras/proveedor.py`,
+     `graficos/compras/_comun.py`, `graficos/compras/_css_proveedor.py` y
+     `estilos/_80_cards.py`.
+     - **Las cinco columnas se crean ARRIBA y se llenan después.** El orden
+       de ejecución no es el de la pantalla: el Ranking fija el foco de
+       proveedor, que leen los Documentos y la Evolución; los Productos
+       (`_paneles_card`, al final) fijan el de producto, que lee el Panel B.
+       Las dos filas se arman juntas antes del Ranking, y cada tarjeta entra
+       en su columna con un `with` cuando su dato está listo. Las keys de
+       las filas (`cp_chart_wrap`, `paneles_row`) se quedaron: cuelgan CSS.
+     - **Dos proporciones nuevas, en `_comun.py`**: `COLUMNAS_DRILL_TABLAS`
+       (1/1, la derecha ya no es un panel de apoyo sino otra tabla de cinco
+       columnas: en el 1 del 1.6/1 le quedaban ~115px al nombre del
+       producto) y `COLUMNAS_DRILL_TRES` (1/1.3/1: el 1.3 le deja a la
+       Evolución el 39 % que ya tenía, que es lo que midieron su fila de
+       controles y `_ANCHO_EVO`). Las dos filas ya no comparten eje —una
+       parte en dos y la otra en tres—, y es la forma del pedido (#145).
+     - **El sujeto de los Documentos y de los Productos es UNO**,
+       `_prov_ver`, calculado junto al Ranking: el foco, o sin foco el de
+       mayor valor del rango (la primera fila). La Evolución conserva su
+       fallback propio, el mayor de SU ventana (sin foco pueden diferir,
+       como antes).
+     - **Los Documentos son un `st.dataframe`, no un AgGrid**: de sólo
+       lectura, y cada AgGrid cuesta 1,28 MB y más de un segundo de
+       navegador (#540). Una fila por `docu` del proveedor en el rango del
+       Ranking, con la fecha más vieja de sus líneas y la suma de su valor,
+       del más nuevo al más viejo; las líneas sin número quedan fuera (la
+       columna Docs del Ranking tampoco las cuenta, así que las dos dicen
+       lo mismo). Medido en modo demo: Comercial Río, 9 documentos en el
+       Ranking y 9 filas.
+     - **Con un Styler, Streamlit muestra SUS textos en TODAS las celdas**
+       (`pandas_styler_utils._use_display_values`): sin formato propio la
+       fecha salía con la hora. Y el autoajuste de columnas mide el valor
+       CRUDO, no el texto del Styler, así que a la Fecha le daba el ancho de
+       una fecha con hora y el Valor se cortaba («S/ 14,27»). Por eso los
+       tres anchos van fijos (68/78/76, que se estiran si sobra), la fecha
+       con el año en dos cifras y el valor sin céntimos, como en el Ranking.
+     - **Alto**: la grilla de Documentos mide lo que la del Ranking
+       (`_ALTO_RANK`) y la Evolución se sigue dimensionando contra él
+       (`_ALTO_EVO`), así que las tres de abajo nacen iguales y el piso de
+       `_80_cards.py` queda de red; la tarjeta nueva entró a su `:has()` y
+       a la compactación del Panel A en `_css_proveedor.py` (sin ella el
+       título caía 13px más abajo que el de las vecinas). Medido con
+       Playwright a 1358×800: las cinco tarjetas a 313px.
+     - **Piso de ancho de la fila de abajo: 260px**, no los 300 de la de
+       arriba. A 1100px de ventana las de los costados miden ~285: con 300
+       el Panel B ya saltaba de renglón, cuando todo entra.
+     - **Medir contra `main` necesita OTRO server**: Streamlit relee
+       `app.py` pero no los módulos ya importados, así que un `git stash`
+       con el server corriendo deja ver el código nuevo con cara de viejo
+       (lo de CLAUDE.md y #357). Para comparar se levantó `main` en un
+       worktree aparte, en otro puerto. Así se vio que el «Choos…» del
+       desplegable de ventana de la Evolución después de un clic en el
+       Ranking ya pasaba en `main`: no es de este cambio.
+     - **En Cloud, reiniciar la app** (#357): `proveedor.py` importa dos
+       nombres NUEVOS de `_comun.py` y le dejó de importar
+       `COLUMNAS_DRILL`. Si el proceso se queda con el `_comun.py` viejo en
+       memoria y relee el `proveedor.py` nuevo, la página cae con un
+       `ImportError` de `COLUMNAS_DRILL_TABLAS`; si se queda con los dos
+       viejos, sigue mostrando la vista de antes. «Reboot app» cubre los
+       dos casos.
+
+     (2026-10-01.)
 
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 

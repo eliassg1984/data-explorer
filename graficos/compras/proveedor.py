@@ -1,8 +1,17 @@
 """graficos.compras.proveedor - drill de Proveedor.
 
 Ranking de proveedores como tabla (nombre + barra de valor + documentos +
-%). Clic en una fila fija el foco y filtra los paneles A/B y la tabla de
-documentos de abajo.
+%). Clic en una fila fija el foco y filtra las otras cuatro tarjetas.
+
+Desde el 2026-10-01 (regla #578) son dos filas:
+
+    [ Ranking de proveedores ][ Productos del proveedor ]
+    [ Documentos ][   Evolución   ][ Proveedores del producto ]
+
+Las cinco columnas se crean ARRIBA, antes de llenar ninguna, porque el
+orden en que se calculan no es el de la pantalla: el Ranking fija el foco
+de proveedor, los Productos el de producto, y la Evolución y el Panel B
+los leen después.
 
 Es el drill mas grande del dashboard. Incluye un bloque largo de CSS
 inyectado con st.markdown para los controles flotantes sobre el grafico;
@@ -26,9 +35,10 @@ from graficos.base import (
     paso_etiquetas, preservar_widgets, publicar_var_px,
 )
 from graficos.compras._comun import (
-    ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL,
-    CROMO_GRID_RANK, GAP_DRILL, agregar_periodo, base_normalizada,
-    filtro_proveedores, periodos_ordenados, selector_fecha_tarjeta,
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL_TABLAS,
+    COLUMNAS_DRILL_TRES, CROMO_GRID_RANK, GAP_DRILL, agregar_periodo,
+    base_normalizada, documento_legible, filtro_proveedores,
+    periodos_ordenados, selector_fecha_tarjeta,
 )
 from graficos.compras._css_proveedor import (
     CSS as CSS_PROVEEDOR, CSS_RANKING_GRID,
@@ -70,21 +80,102 @@ def _prov_mayor(src, col_prov, col_valor):
     return str(_g.idxmax()) if len(_g) else None
 
 
+def _tarjeta_documentos(base, prov, alto):
+    """La tarjeta «Documentos · <proveedor>»: una fila por comprobante del
+    proveedor en foco, con su fecha, su número y su valor.
+
+    Nació el 2026-10-01, a pedido («una tabla que debe mostrar los
+    documentos del proveedor que está seleccionado arriba, indicando fecha,
+    número de documento, valor»), abajo a la izquierda. Regla #578.
+
+    - **El rango es el del Ranking** (`base` ya viene recortado por la fecha
+      de su cabecera), así que la tabla cuenta lo mismo que la columna Docs
+      de la fila del proveedor, y suma su Valor.
+    - **Un documento es su número**: `base` trae una fila por LÍNEA, así que
+      se agrupa por `docu` y se suma el valor de sus líneas. Las líneas sin
+      número no se pueden contar como comprobante y quedan fuera — tampoco
+      las cuenta la columna Docs del Ranking.
+    - **`st.dataframe` y no AgGrid**: es de sólo lectura, y cada AgGrid le
+      cuesta a la página 1,28 MB y más de un segundo de navegador (regla
+      #540) — Compras ya monta varias. El formato va por el Styler porque
+      con un Styler Streamlit muestra SUS textos en todas las celdas: la
+      fecha sin formatear saldría con la hora.
+    - **Del más nuevo al más viejo**, en orden estable: la pregunta que la
+      trae es «qué le compré últimamente».
+    - **Fecha con el año en dos cifras y Valor sin céntimos**: con tres
+      columnas la tarjeta mide ~360px en una laptop y ~285 a 1100px de
+      ventana, y fue lo que hizo falta para que el Valor no se cortara.
+
+    `alto` es el de la grilla del Ranking: el cromo de esta tarjeta es casi
+    el de aquélla, así que mide lo que la Evolución de al lado, que se
+    dimensiona contra el Ranking. Lo que falte lo iguala el piso de
+    `estilos/_80_cards.py`.
+    """
+    _tit = ("Documentos" if prov is None
+            else f"Documentos · {_compras_truncar(nombre_propio(prov), 24)}")
+    with st.container(border=True, key="compras_prov_card_docsprov"):
+        with _card("prov_docsprov", _tit, titulo_arriba=True):
+            if prov is None:
+                return
+            _sub = base[(base["prov"] == prov)
+                        & (base["docu"].astype(str).str.strip() != "")]
+            if _sub.empty:
+                st.caption("Sin números de documento para este proveedor "
+                           "en el rango.")
+                return
+            # Columnas por NOMBRE, no por posición: el `groupby` sale con otra
+            # forma en pandas 3 que en el 2.2 de Cloud (regla #481).
+            _g = (_sub.groupby("docu", as_index=False)
+                      .agg(fecha=("fecha", "min"), valor=("valor", "sum"))
+                      .sort_values(["fecha", "docu"], ascending=False,
+                                   kind="stable"))
+            _tabla = pd.DataFrame({
+                "Fecha": pd.to_datetime(_g["fecha"]).to_numpy(),
+                "Documento": documento_legible(_g["docu"]).to_numpy(),
+                "Valor": _g["valor"].to_numpy(dtype=float),
+            })
+            st.dataframe(
+                _tabla.style.format({
+                    "Fecha": lambda f: ("—" if pd.isna(f)
+                                        else f.strftime("%d/%m/%y")),
+                    # Sin céntimos, como el Valor del Ranking y de los
+                    # Productos de arriba — y porque los céntimos eran lo
+                    # que no entraba: a 1100px de ventana la columna se
+                    # cortaba en «S/ 14,27».
+                    "Valor": "S/ {:,.0f}",
+                }),
+                hide_index=True, width="stretch", height=alto,
+                row_height=ALTO_FILA_RANK + 4,
+                # Anchos fijos para las dos columnas de largo conocido: el
+                # autoajuste de Streamlit mide el valor CRUDO y no el texto
+                # del Styler, así que a la Fecha le daba el ancho de una
+                # fecha con hora y la tarjeta no alcanzaba para el Valor
+                # (medido a 1100px de ventana: la tabla tiene ~228px).
+                column_config={
+                    "Fecha": st.column_config.Column(width=68),
+                    "Documento": st.column_config.Column(width=78),
+                    "Valor": st.column_config.Column(width=76),
+                },
+                key="cp_prov_docs_tab",
+            )
+
+
 @st.fragment
 def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                              col_punit, col_um, col_fecha, col_docu=None,
                              d_full=None):
     """Dashboard de Proveedor.
 
-    Tabla-ranking (izq.): un proveedor por fila, ordenados por valor, con
-    la barra de "Valor" pintada como FONDO de la celda (un `linear-gradient`
-    cortado en el % del valor — ver el bloque del AgGrid). Clic en una fila
-    la enfoca y filtra los paneles A y B de abajo; clic en la MISMA fila
-    quita el foco. Sin checkbox: el gesto es la fila entera. Al lado, la
-    evolución del proveedor elegido.
+    Tabla-ranking (arriba a la izq.): un proveedor por fila, ordenados por
+    valor, con la barra de "Valor" pintada como FONDO de la celda (un
+    `linear-gradient` cortado en el % del valor — ver el bloque del AgGrid).
+    Clic en una fila la enfoca y filtra las demás tarjetas; clic en la MISMA
+    fila quita el foco. Sin checkbox: el gesto es la fila entera.
 
-    Panel A: Top N productos comprados al proveedor en foco (valor + cantidad).
-    Panel B: proveedores del producto seleccionado en Panel A.
+    Panel A (arriba a la der.): los productos comprados al proveedor en foco.
+    Abajo, de izquierda a derecha: sus documentos (fecha, número, valor), la
+    evolución del proveedor y el Panel B, los proveedores del producto
+    seleccionado en el Panel A.
     """
     # ── Escalada a rerun COMPLETO tras un atajo de fecha ───────────────────
     # Los atajos del Ranking (más abajo) escriben el rango con
@@ -487,7 +578,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     _ALTO_RANK + _CROMO_CARD_RANK - _CROMO_CARD_EVO)
     # Ancho de la figura de evolución, MEDIDO en el navegador (viewport 1912,
     # rails desplegados). No sale de una cuenta porque su columna cuelga de
-    # dos repartos anidados —COLUMNAS_DRILL y el [2.6, 1] de acá abajo— sobre
+    # dos repartos anidados —COLUMNAS_DRILL_TRES (hasta el 2026-10-01,
+    # COLUMNAS_DRILL; el 1.3 de la nueva le deja el mismo ancho, regla #578)
+    # y el [2.6, 1] de acá abajo— sobre
     # un ancho que Python no conoce. Lo consume `paso_etiquetas` para decidir
     # cuántas etiquetas entran en el eje X; es el número que quedó obsoleto
     # (era ~380 cuando la figura ocupaba la columna entera) y nadie revisó al
@@ -544,8 +637,35 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         # frame fijo de 8 filas de arriba, el bloque ya no cambia de alto
         # entre reruns, así que no queda nada que animar.)
 
-        with st.container(key="cp_chart_wrap"):
-            # ── Ranking (izq., tabla) + evolución (der.) ────────────────
+        # ── Las DOS filas, creadas antes de llenar ninguna ─────────────
+        # 2026-10-01, a pedido (regla #578): arriba el Ranking y los
+        # Productos del proveedor en foco; abajo sus Documentos, la
+        # Evolución y los Proveedores del producto en foco. Hasta ese día
+        # eran [Ranking | Evolución] arriba y [Productos | Proveedores de]
+        # abajo.
+        #
+        # Las cinco columnas nacen ACÁ y se llenan después, cada una cuando
+        # su dato está listo: en Streamlit el orden de ejecución es el orden
+        # en que se leen los valores, y no coincide con el de la pantalla
+        # — el Ranking fija el foco que leen los Documentos y la Evolución,
+        # y los Productos (que se dibujan al final, en `_paneles_card`) el
+        # que lee el Panel B. Con un `with` sobre la columna, lo que se
+        # dibuja tarde cae igual en su sitio.
+        #
+        # Las keys de las filas se quedaron: `cp_chart_wrap` y
+        # `paneles_row` cuelgan CSS en `_css_proveedor.py` (el piso de
+        # 300px por columna, el margen entre las filas) que sigue valiendo
+        # para la fila nueva.
+        _fila_arriba = st.container(key="cp_chart_wrap")
+        _fila_abajo = st.container(key="paneles_row")
+        with _fila_arriba:
+            _c_tabla, _c_prods = st.columns(COLUMNAS_DRILL_TABLAS,
+                                            gap=GAP_DRILL)
+        with _fila_abajo:
+            _c_docs, _c_evo, _c_provde = st.columns(COLUMNAS_DRILL_TRES,
+                                                    gap=GAP_DRILL)
+        with _fila_arriba:
+            # ── Ranking (arriba a la izq.) ──────────────────────────────
             # 2026-08-16: el cuadro de control de proveedores DESAPARECE.
             # Listaba color + nombre + monto + %, y con el ranking horizontal
             # los nombres pasaron a ser el eje: tenerlos también en una
@@ -559,7 +679,6 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             # barra. Muestra hasta 8 filas (`_ALTO_FRAME_RANK`, que desde
             # el 2026-09-01 sigue a los datos) y scrollea el resto por
             # dentro.
-            _c_tabla, _c_evo = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
             with _c_tabla:
                 # ── BLOQUE 1: el ranking ─────────────────────────
                 # 2026-08-18, a pedido: lo que era UNA tarjeta con la
@@ -845,8 +964,30 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         prod_focus = None
                         st.session_state["compras_prov_focus"]     = prov_focus
                         st.session_state["compras_prov_prodfocus"] = None
+            # ── El SUJETO de los Documentos y los Productos ─────────────────
+            # Sin foco, el proveedor de mayor valor del rango — la primera
+            # fila del Ranking (mismo df, mismo orden). Se calcula UNA vez,
+            # acá, y lo leen las dos tarjetas: si cada una eligiera el suyo,
+            # bastaría un desempate distinto para que los Productos y los
+            # Documentos de abajo hablaran de dos proveedores. NO se
+            # persiste en session_state: el foco real lo sigue fijando el
+            # clic. La Evolución tiene su propio fallback (el mayor de SU
+            # ventana, ver su bloque): con ella la diferencia es a propósito.
+            _prov_ver = prov_focus
+            if _prov_ver is None and not base.empty:
+                _prov_ver = base.groupby("prov")["valor"].sum().idxmax()
+            with _c_docs:
+                # ── Los documentos del proveedor en foco (abajo a la izq.) ──
+                # Mismo alto de grilla que el Ranking: así la tarjeta mide
+                # lo mismo que la de la Evolución, que se dimensiona contra
+                # él (`_ALTO_EVO`). Ver `_tarjeta_documentos`.
+                _tarjeta_documentos(base, _prov_ver, _ALTO_RANK)
             with _c_evo:
                 # ── BLOQUE 2: la evolución, con su propio período ──
+                # Desde el 2026-10-01 vive en la fila de ABAJO, al medio
+                # (regla #578): su alto se sigue midiendo contra el
+                # Ranking (`_ALTO_EVO`), que ya no está al lado, porque las
+                # tres tarjetas de abajo se igualan contra él.
                 with st.container(border=True,
                                   key="compras_prov_card_evo"):
                     # Sin elección del usuario cae al primero del ranking (el de
@@ -1295,7 +1436,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # tenía 117). El gráfico es el protagonista.
                         # columnas-internas: el chart y su pila de KPIs parten
                         # DENTRO de una tarjeta. No es el eje de la página,
-                        # que lo manda COLUMNAS_DRILL.
+                        # que lo manda COLUMNAS_DRILL_TRES.
                         _c_graf, _c_kpi = st.columns([2.6, 1], gap="small")
                         with _c_graf:
                             st.plotly_chart(
@@ -1516,27 +1657,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
         _prod_top = None
         # 2026-09-03: los paneles A/B ahora se ven SIEMPRE (a pedido). Sin
         # foco real, el SUJETO DE DISPLAY cae al proveedor de mayor valor del
-        # rango — mismo criterio que la tarjeta de Evolución de arriba (que sin
-        # foco toma `_prov_mayor`) y que el Panel B con su producto top. NO se
-        # persiste en session_state: el foco real lo sigue fijando el clic;
-        # esto solo decide QUÉ mostrar mientras no se haya clickeado nada.
-        # `idxmax` sobre `base` = la primera fila del ranking de al lado (mismo
-        # df, mismo orden por valor), así los cuadros arrancan coordinados.
-        _prov_ver = prov_focus
-        if _prov_ver is None and not base.empty:
-            _prov_ver = base.groupby("prov")["valor"].sum().idxmax()
-        # 2026-08-21: los paneles A/B eran UNA tarjeta ancha
-        # (`compras_prov_card_paneles`) partida al 50% con dos `_card`
-        # transparentes adentro, mientras la fila de arriba son DOS tarjetas
-        # partidas al 61.5%. El ojo veía dos cajas arriba y una abajo, con el
-        # canal gris cortado a media página y el eje corrido ~150px en un
-        # viewport de 1536 (~200 en uno de 1920, crece con el ancho). Ahora son
-        # cuatro bloques `compras_prov_card_*` sobre la MISMA grilla, así que
-        # la vista se lee como un 2x2. Ver `_comun.COLUMNAS_DRILL`.
-        pa, pb = st.columns(COLUMNAS_DRILL, gap=GAP_DRILL)
+        # rango: es `_prov_ver`, calculado junto al Ranking y compartido con
+        # la tarjeta de Documentos.
+        #
+        # Las columnas tampoco se crean acá desde el 2026-10-01 (regla
+        # #578): el Panel A va arriba a la derecha, al lado del Ranking
+        # (`_c_prods`), y el Panel B abajo a la derecha (`_c_provde`). Las
+        # dos filas se arman juntas, arriba, con `COLUMNAS_DRILL_TABLAS` y
+        # `COLUMNAS_DRILL_TRES`.
 
-        # Panel A: Top N productos del proveedor en foco
-        with pa:
+        # Panel A: los productos del proveedor en foco
+        with _c_prods:
             with st.container(border=True, key="compras_prov_card_prods"):
                 _ta = ("Selecciona un proveedor arriba para ver sus productos"
                        if _prov_ver is None
@@ -1802,7 +1933,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
 
 
         # Panel B: proveedores del producto seleccionado
-        with pb:
+        with _c_provde:
             with st.container(border=True, key="compras_prov_card_provde"):
                 # Sin eleccion del usuario, cae al primero de la tabla de al
                 # lado (a pedido: antes el panel arrancaba vacio, con solo el
@@ -1996,6 +2127,5 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     #  Inyectarlo aqui con un st.markdown propio metia un stElementContainer
     #  vacio justo entre las dos tarjetas: alto 0, pero el gap de 1rem del
     #  bloque vertical igual se aplicaba -> ~16px de aire.)
-    with st.container(key="paneles_row"):
-        _paneles_card()
+    _paneles_card()
 

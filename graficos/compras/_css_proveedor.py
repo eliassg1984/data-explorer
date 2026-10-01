@@ -658,6 +658,17 @@ CSS = """        <style>
         .st-key-cp_chart_wrap [data-testid="stColumn"] {
             min-width: 300px !important;
         }
+        /* 2026-10-01: la fila de ABAJO (`paneles_row`) también lleva piso.
+           Desde ese día son TRES columnas —Documentos | Evolución |
+           Proveedores de— y sin piso, en una ventana angosta, se apretaban
+           hasta ilegibles; con él, la tercera baja a un renglón propio.
+           260 y no los 300 de arriba: medido con Playwright, a 1100px de
+           ventana las de los costados miden ~285 y con 300 la tercera ya
+           saltaba de renglón, cuando la tabla de documentos (fecha, número,
+           valor) y la lista del Panel B entran enteras. Regla #578. */
+        .st-key-paneles_row [data-testid="stColumn"] {
+            min-width: 260px !important;
+        }
         /* ...pero ese selector es DESCENDIENTE, así que captura también las
            columnas que se agreguen ADENTRO de los dos bloques. Al partir la
            evolución en gráfico + resumen (2026-08-19) las dos columnas nuevas
@@ -1709,21 +1720,30 @@ CSS = """        <style>
         /* MATAR TODO espacio vertical entre header y gráfico: Streamlit
            inyecta gap en stVerticalBlock + margins en cada stElementContainer
            (uno para el markdown del título, otro para el plotly). */
+        /* `chartcard_prov_docsprov` (la tarjeta de Documentos, 2026-10-01,
+           regla #578) entra a las cuatro reglas de compactación del Panel A:
+           sin ellas su título caía 13px más abajo que el de las tarjetas
+           vecinas (15px de padding y 32 de cabecera, contra 2 y 22). */
         .st-key-chartcard_prov_prods,
-        .st-key-chartcard_prov_prods [data-testid="stVerticalBlock"] {
+        .st-key-chartcard_prov_prods [data-testid="stVerticalBlock"],
+        .st-key-chartcard_prov_docsprov,
+        .st-key-chartcard_prov_docsprov [data-testid="stVerticalBlock"] {
             gap: 0 !important;
             row-gap: 0 !important;
         }
         .st-key-chartcard_prov_prods [data-testid="stElementContainer"],
         .st-key-chartcard_prov_prods [data-testid="stMarkdownContainer"],
-        .st-key-chartcard_prov_prods [data-testid="stPlotlyChart"] {
+        .st-key-chartcard_prov_prods [data-testid="stPlotlyChart"],
+        .st-key-chartcard_prov_docsprov [data-testid="stElementContainer"],
+        .st-key-chartcard_prov_docsprov [data-testid="stMarkdownContainer"] {
             margin-top: 0 !important;
             margin-bottom: 0 !important;
             padding-top: 0 !important;
             padding-bottom: 0 !important;
         }
         /* Reducir el padding interior de la card (era 15px por defecto). */
-        .st-key-chartcard_prov_prods {
+        .st-key-chartcard_prov_prods,
+        .st-key-chartcard_prov_docsprov {
             padding: 2px 12px 8px 12px !important;
         }
         /* Cabecera compacta: se reduce min-height y padding vertical para
@@ -1733,7 +1753,8 @@ CSS = """        <style>
            fueron el 2026-09-11 —la tarjeta obedece al selector de fecha de
            arriba y lista todos los productos— y con ellos la reserva, que
            le comía al título 200 de sus ~560px por nada. Ver regla #378. */
-        .st-key-chartcard_prov_prods .chart-card-hdr {
+        .st-key-chartcard_prov_prods .chart-card-hdr,
+        .st-key-chartcard_prov_docsprov .chart-card-hdr {
             padding: 0 4px;
             min-height: 22px;
             margin: 0 !important;
@@ -2186,6 +2207,7 @@ CSS = """        <style>
            a ser DOS bloques hermanos, uno por columna, para que caigan sobre
            la misma grilla que la fila de arriba. La animación se aplica a los
            dos: entran juntos, que es lo que hacía la tarjeta única. */
+        .st-key-compras_prov_card_docsprov,
         .st-key-compras_prov_card_prods,
         .st-key-compras_prov_card_provde {
             animation: unfoldRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) backwards;

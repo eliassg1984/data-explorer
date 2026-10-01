@@ -98,6 +98,30 @@ por la mitad, y si una fila comparara 1.6/1 y la otra 1/1, el eje
 vertical de la página se correría a media pantalla — que es exactamente
 el bug que hizo nacer la regla #145."""
 
+COLUMNAS_DRILL_TABLAS = [1, 1]
+"""Fila de arriba del drill de Proveedor: el Ranking y los Productos del
+proveedor en foco, lado a lado.
+
+Desde el 2026-10-01, a pedido («la tabla ranking de proveedores y la tabla
+de los productos... ambos arriba, uno al lado de otro»). Mitad y mitad, y
+no el 1.6/1 de `COLUMNAS_DRILL`: la derecha ya no es un panel de apoyo sino
+OTRA tabla, con cinco columnas (Producto, Valor con su barra, %, Cant.,
+UM). En el 1 de aquella proporción le quedaban ~115px al nombre del
+producto en una laptop; a la mitad, ~185. Y el Ranking no pierde nada: sus
+cuatro columnas sobraban en el 1.6. Ver regla #578."""
+
+COLUMNAS_DRILL_TRES = [1, 1.3, 1]
+"""Fila de abajo del drill de Proveedor: los Documentos del proveedor en
+foco, la Evolución y los Proveedores del producto en foco.
+
+El 1.3 del medio es para la Evolución, y no es un número nuevo: le deja el
+MISMO ancho que tenía en el 1 de `COLUMNAS_DRILL` (1.3/3.3 = 39 %, contra
+1/2.6 = 38 %), que es el que midieron su fila de controles —tres
+desplegables y las flechas, al píxel en `_css_proveedor.py`— y su
+`_ANCHO_EVO`. A los costados quedan ~360px en una laptop: lo que pide la
+fila de un proveedor del Panel B (nombre, precio, fecha) y las tres
+columnas de los documentos (fecha, número, valor). Ver regla #578."""
+
 GAP_DRILL = "small"
 """Gap entre las columnas de un drill. Va con `COLUMNAS_DRILL`: si las dos
 filas parten en el mismo sitio pero con gaps distintos, el canal gris cambia
