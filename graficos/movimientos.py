@@ -186,16 +186,21 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # 2026-09-13. No hereda el nombre de aquel ranking —que era UN cuadro—
     # porque ahora son cuatro tablas encadenadas: el ítem del rail nombra la
     # cadena, no su primer eslabón.
-    ("Requerimientos", (("Requerimientos por período", "Por período · req.", ":material/calendar_view_week:"),
-                        ("Por sub almacén",            "Sub almacén",        ":material/warehouse:"),
-                        ("Tabla · requerim.",          "Tabla · req.",       ":material/table_rows:"))),
+    #
+    # Los rótulos de las cuatro primeras se escriben enteros desde el
+    # 2026-10-01, a pedido («Requerimientos por Período», «… por Área»,
+    # «Salidas por …»): los ids de la izquierda NO cambian — los usan la
+    # pila, las keys y los tests.
+    ("Requerimientos", (("Requerimientos por período", "Requerimientos por Período", ":material/calendar_view_week:"),
+                        ("Por sub almacén",            "Requerimientos por Área",    ":material/warehouse:"),
+                        ("Tabla · requerim.",          "Tabla · req.",               ":material/table_rows:"))),
     # «Detalle de salidas» (2026-09-24, regla #511) ocupa el sitio de «Top
     # productos · salidas», que se retiró ese día. Nombre sin sufijo: no
     # tiene gemela del lado de requerimientos. El ícono es el de un tablero
     # partido en paneles, que es lo que dibuja —cinco cuadros, 3 + 2—.
-    ("Salidas", (("Salidas por período", "Por período · sal.", ":material/calendar_view_week:"),
-                 ("Detalle de salidas",  "Detalle de salidas", ":material/view_quilt:"),
-                 ("Tabla · salidas",     "Tabla · sal.",       ":material/table_view:"))),
+    ("Salidas", (("Salidas por período", "Salidas por Período", ":material/calendar_view_week:"),
+                 ("Detalle de salidas",  "Salidas por Área",    ":material/view_quilt:"),
+                 ("Tabla · salidas",     "Tabla · sal.",        ":material/table_view:"))),
     # «Porcionamientos» (2026-09-24, regla #510): tercer grupo, al final, a
     # pedido. Una sola vista, con el nombre que se pidió; el ícono son las
     # tijeras del corte.
