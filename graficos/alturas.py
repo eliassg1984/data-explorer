@@ -232,6 +232,24 @@ AMPLIADO = 620
 SEMANAL_SOLO = 457
 SEMANAL_TABLA = 201
 
+FRANJA_KPI_SEMANAL = 38
+"""Lo que medía la fila de KPI de la cabecera de «Compra por período»
+(el total de la vista y el de cada familia) y que desde el 2026-10-01 es
+de la FIGURA, en los dos estados.
+
+La fila se quitó a pedido: «esa información ya me la da mi tabla de abajo
+en Resumen» —las columnas por familia salen de la misma
+`semanal._familias_de`—, «y las barras deben subir un poco más». Son los
+38px que había sumado el 2026-09-17 (28 de la fila y 10 del gap de la
+cabecera, medidos a 1366x768; ver `SEMANAL_SOLO` acá arriba). Desde el
+2026-09-19 la fila iba SIEMPRE en su propio renglón, así que los 38 se
+liberan a cualquier ancho. Se suman a la figura y no se restan de la
+tarjeta: la tarjeta sigue midiendo lo que la de «Vs año pasado» (617),
+que es por lo que existen `SEMANAL_SOLO` y `SEMANAL_TABLA`.
+
+No toca a Movimientos (`movimientos_periodo.py`), que usa los mismos dos
+números y conserva su fila de KPI."""
+
 FRANJA_MODO_SEMANAL = 10
 """Lo que le cuesta a «Compra por período» la fila que ELIGE qué se ve
 abajo — «Detalle» (las dos grillas) o «Resumen» (una fila por barra) —,

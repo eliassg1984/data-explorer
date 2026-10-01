@@ -73,7 +73,6 @@ el rango corta el período. La semana se nombra «14–20 set» y no
 «2026-S38». Y la cabecera suma dos filtros: Subfamilia y Proveedor.
 """
 
-from html import escape
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -257,7 +256,13 @@ puntos de compra cabían en una barra de Mes y Año. Se fue con los puntos.)"""
 # pasado» en los dos estados (`alturas.SEMANAL_SOLO`, regla #398). Es el
 # mismo mecanismo que `FRANJA_CTRL_SERIE` en «Vs año pasado» y por el mismo
 # motivo: restar acá o crecer allá son las dos únicas salidas.
-_ALTO_FIG_SOLO = alturas.SEMANAL_SOLO - alturas.FRANJA_MODO_SEMANAL
+#
+# Y la fila de KPI que se fue el 2026-10-01 le devuelve a la FIGURA lo que
+# medía, en los dos estados (`alturas.FRANJA_KPI_SEMANAL`): a pedido, «las
+# barras deben subir un poco más».
+_ALTO_FIG_SOLO = (alturas.SEMANAL_SOLO - alturas.FRANJA_MODO_SEMANAL
+                  + alturas.FRANJA_KPI_SEMANAL)
+_ALTO_FIG_CON_TABLA = alturas.COMPACTO + alturas.FRANJA_KPI_SEMANAL
 _ALTO_TABLA = alturas.SEMANAL_TABLA - alturas.FRANJA_MODO_SEMANAL
 
 
@@ -401,10 +406,15 @@ def _etiqueta_en_la_punta(tramos, textos):
 # total por familia de la barra, puede ser al pasar el cursor».
 #
 # Son dos preguntas con dos respuestas, y no una respuesta repetida:
-#   · la VISTA —rango + filtros de la tarjeta— va en una fila de KPI dentro
+#   · la VISTA —rango + filtros de la tarjeta— iba en una fila de KPI dentro
 #     de la cabecera, al lado de la fecha, que es lo que la acota;
 #   · la BARRA va en su hover, que es el único sitio donde cada barra
 #     contesta por sí misma sin ocupar alto.
+#
+# La fila de KPI se quitó el 2026-10-01, a pedido: «esa información ya me
+# la da mi tabla de abajo en Resumen», que trae una columna por familia
+# (las mismas de `_familias_de`) y su fila TOTAL. Sus 38px pasaron a la
+# figura (`alturas.FRANJA_KPI_SEMANAL`).
 #
 # CUÁNTAS FAMILIAS. Medido con DuckDB contra `compras.parquet` (mes corrido
 # al 16/09/2026): son 8, y el reparto es muy desparejo —
@@ -420,12 +430,9 @@ def _etiqueta_en_la_punta(tramos, textos):
 # máximo; por documento, 1,09 — de ahí los dos topes de abajo.
 
 _KPI_FAMILIAS = 4
-"""Familias con tarjeta propia en la fila de KPI; el resto va sumado en una.
-
-Ver la medición de arriba. El ancho es el otro techo: el total, cuatro
-familias y «N más» tienen que entrar en el renglón que les deja la
-cabecera junto a la fecha (ver `.st-key-cp_sem_kpi` en
-`_css_proveedor.py`, que trae lo medido)."""
+"""Familias con columna propia en la tabla de Resumen; el resto va sumado
+en una. Ver la medición de arriba. (Nació como las tarjetas de la fila de
+KPI de la cabecera, que se fue el 2026-10-01.)"""
 
 _HOVER_FAMILIAS = 5
 """Familias que nombra el hover de una barra; el resto va en «N más».
@@ -456,36 +463,6 @@ def _familias_de(dd):
            for f, v in s.iloc[:_KPI_FAMILIAS].items()]
     resto = s.iloc[_KPI_FAMILIAS:]
     return total, top, (len(resto), float(resto.sum()))
-
-
-def _html_kpi_vista(total, n_compras, top, resto):
-    """La fila de KPI de la cabecera: el total y las familias mayores.
-
-    Cada tarjeta lleva el nombre COMPLETO en `title`: el rótulo se recorta
-    con puntos suspensivos a partir de ~13 caracteres («Vinos y espumantes»
-    no entra) y el tooltip nativo es lo que lo devuelve entero. Con una sola
-    familia en la vista no se desglosa nada: el total ya es esa familia, y
-    el título de la figura la nombra."""
-    def _tarjeta(rotulo, valor, sub, clase="", tip=""):
-        return (f'<div class="sem-kpi {clase}" title="{escape(tip or rotulo)}">'
-                f'<span class="sem-kpi-rot">{escape(rotulo)}</span>'
-                f'<span class="sem-kpi-val">{escape(valor)}'
-                f'<span class="sem-kpi-sub">{escape(sub)}</span></span></div>')
-
-    _n = f"{n_compras:,} compra" + ("" if n_compras == 1 else "s")
-    partes = [_tarjeta("Total de la vista", fmt_k(total), _n, "sem-kpi-total",
-                       f"Total de la vista: S/ {total:,.2f} · {_n}")]
-    if len(top) + resto[0] > 1:
-        for fam, v, p in top:
-            nom = _nombre_familia(fam)
-            partes.append(_tarjeta(nom, fmt_k(v), f"{p:.0%}",
-                                   tip=f"{nom}: S/ {v:,.2f} · {p:.1%}"))
-        if resto[0]:
-            _p = resto[1] / total if total else 0.0
-            partes.append(_tarjeta(
-                f"{resto[0]} más", fmt_k(resto[1]), f"{_p:.0%}", "sem-kpi-resto",
-                f"{resto[0]} familias más: S/ {resto[1]:,.2f} · {_p:.1%}"))
-    return '<div class="sem-kpis">' + "".join(partes) + "</div>"
 
 
 def _familias_por_clave(dd):
@@ -1217,11 +1194,6 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # toggle pegado dice «una de cinco». `required=True` porque una
         # granularidad vacía no existe — con las píldoras, tocar la activa
         # la soltaba y la vista caía al default sin que nada lo marcara.
-        #
-        # Y la fila de KPI de la vista (regla #454) va en el MISMO flex, entre
-        # los filtros y la fecha: es la suma de lo que esos dos acotan. Se
-        # reserva acá con un `st.empty()` y se llena más abajo, cuando el
-        # recorte ya existe — el orden de ejecución no es el de la pantalla.
         _box = {}
 
         def _controles():
@@ -1267,8 +1239,6 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                              "primero es el que más compraste. «Top N por "
                              "valor» suma los N mayores en una sola serie. "
                              "Se puede escribir para buscar.")
-            with st.container(key="cp_sem_kpi"):
-                _box["kpi"] = st.empty()
 
         _ctx_fecha = selector_fecha_tarjeta(
             "cp_sem", "_cp_sem_atajo_pendiente", extra=_controles,
@@ -1380,16 +1350,6 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         dd["compra"] = (
             dd["fecha"].dt.strftime("%Y-%m-%d") + "·" + dd["prov"] + "·" + dd["docn"]
             if _con_doc else dd.index.astype(str))
-
-        # La fila de KPI de la cabecera (regla #454). Sale de `dd` ya
-        # recortado por los filtros de la tarjeta: es el total de lo que las barras
-        # suman, no el de la franja.
-        if "kpi" in _box:
-            _tot_v, _top_f, _resto_f = _familias_de(dd)
-            _box["kpi"].markdown(
-                _html_kpi_vista(_tot_v, dd["compra"].nunique(), _top_f,
-                                _resto_f),
-                unsafe_allow_html=True)
 
         if gran == "Por documento":
             dd["clave"] = dd["compra"]
@@ -1593,7 +1553,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # la figura cede su sitio también ahí, y la zona de abajo deja de
         # tener un estado vacío.
         _con_tabla = _con_detalle or _modo == _MODO_RESUMEN
-        _alto_fig = (alturas.COMPACTO if _con_tabla else _ALTO_FIG_SOLO)
+        _alto_fig = (_ALTO_FIG_CON_TABLA if _con_tabla else _ALTO_FIG_SOLO)
 
         # ── LA ETIQUETA DE CADA BARRA (#440, #454 y #470) ────────────────
         # El total, los documentos debajo y la variación contra la barra
@@ -1854,9 +1814,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         #
         # El caption se RESERVA acá y se escribe al final: su texto nombra
         # el ámbito, que en modo Detalle sale del período en foco — ochenta
-        # líneas más abajo. Mismo `st.empty()` que la fila de KPI de la
-        # cabecera, y por lo mismo: el orden de ejecución no es el de la
-        # pantalla.
+        # líneas más abajo. Por eso un `st.empty()`: el orden de ejecución
+        # no es el de la pantalla.
         #
         # Lo que devuelve el toggle se IGNORA a propósito: el modo ya se
         # leyó de `session_state` antes de la figura, porque su alto depende
@@ -1906,15 +1865,14 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             _uni = _UNIDAD_GRAN[gran][0 if _n_per == 1 else 1]
 
             # ── UNA COLUMNA POR FAMILIA (2026-09-20, a pedido) ───────────
-            # «Añadamos los datos por familia a la tabla». Son LAS MISMAS
-            # que las tarjetas de KPI de la cabecera —salen de la misma
-            # `_familias_de`, o sea las cuatro mayores y el resto sumado—,
-            # y eso no es economía de código: la cabecera ya las nombra, y
-            # dos listas de familias distintas en la misma tarjeta se leen
-            # como dos cosas distintas.
+            # «Añadamos los datos por familia a la tabla». Salen de
+            # `_familias_de`: las cuatro mayores y el resto sumado. Desde el
+            # 2026-10-01 son además el ÚNICO desglose de la vista por
+            # familia: la fila de KPI de la cabecera, que las repetía, se
+            # quitó a pedido porque esta tabla ya lo dice.
             #
-            # Con UNA sola familia en la vista no se desglosa nada, por lo
-            # mismo que la KPI no lo hace: la columna repetiría Valorizado.
+            # Con UNA sola familia en la vista no se desglosa nada: la
+            # columna repetiría Valorizado.
             _, _top_f, _resto_f = _familias_de(dd)
             _cols_fam, _dat_fam, _tot_fam = [], {}, {}
             if len(_top_f) + _resto_f[0] > 1:

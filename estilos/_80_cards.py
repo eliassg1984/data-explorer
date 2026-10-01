@@ -2347,9 +2347,9 @@ CSS = """    /* ================================================================
     }
 
     /* Fila de KPI de «Tendencia diaria de venta» (2026-09-24, regla #515):
-       el total de la vista y lo de cada canal. Es el mismo dibujo que la
-       `.sem-kpis` de «Compras por período» (`_css_proveedor.py`), con una
-       marca de color por canal —la de su tramo en la barra— para que la
+       el total de la vista y lo de cada canal. Es el mismo dibujo que
+       tenía la `.sem-kpis` de «Compras por período» (quitada el
+       2026-10-01), con una marca de color por canal —la de su tramo en la barra— para que la
        fila haga también de leyenda. Vive acá y no allá porque ese CSS sólo
        se inyecta en Compras. */
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],

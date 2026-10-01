@@ -261,8 +261,8 @@ def _nota_var_venta(var, nombre_ant):
 def _html_kpi_canales(total, n_dias, canales, extras=()):
     """La fila de KPI de la tarjeta: el total de la vista y lo de cada canal.
 
-    Mismo dibujo que la de «Compras por período»
-    (`semanal._html_kpi_vista`), con canales en vez de familias. `canales`
+    Mismo dibujo que tenía la de «Compras por período» (quitada el
+    2026-10-01), con canales en vez de familias. `canales`
     es `[(nombre, valor), …]` de mayor a menor. Con un solo canal no se
     desglosa nada: el total ya es ese canal.
 

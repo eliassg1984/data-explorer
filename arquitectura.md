@@ -38233,6 +38233,16 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-09-17.)
 
+     **2026-10-01: la fila de KPI se quitó**, a pedido: «esa información
+     ya me la da mi tabla de abajo en Resumen» —la tabla trae una columna
+     por familia, de la misma `_familias_de`, y su fila TOTAL—, «y las
+     barras deben subir un poco más». Sus 38px (28 de la fila + 10 del gap
+     de la cabecera) pasaron a la FIGURA en los dos estados
+     (`alturas.FRANJA_KPI_SEMANAL`), así que la tarjeta sigue midiendo los
+     617 de «Vs año pasado». `SEMANAL_SOLO` y `SEMANAL_TABLA` no se tocaron:
+     los usa también Movimientos, que conserva su fila de KPI. El hover
+     por familia de cada barra sigue.
+
 455. **Un JS que busca «el primer AgGrid de la página» toca la tabla
      equivocada en cuanto la página tiene dos — y la #410 era esto, no
      st_aggrid.** Reportado con captura sobre Compras › Proveedor: «mis
