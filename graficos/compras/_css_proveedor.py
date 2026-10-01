@@ -2044,6 +2044,16 @@ CSS = """        <style>
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .cp-pl, .cp-pm { font-size: 12px; line-height: 1.25; }
+        /* El TOTAL al pie de la tabla de Documentos: la fila TOTAL del
+           Ranking (lavanda, negrita, violeta oscuro), fuera de la grilla
+           porque `st.dataframe` no tiene fila fija. Regla #579. */
+        .cp-docs-total {
+            display: flex; justify-content: space-between; align-items: center;
+            height: 22px; margin-top: 2px; padding: 0 10px;
+            background: var(--accent-tint); color: var(--accent-deep);
+            font-size: 12px; font-weight: 700; border-radius: 4px;
+            font-variant-numeric: tabular-nums;
+        }
         .cp-pl-head, .cp-pl-row > summary {
             display: grid; align-items: center; column-gap: 8px;
             grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) 40px 52px 56px 10px;
@@ -2070,6 +2080,25 @@ CSS = """        <style>
         .cp-pl-row > summary::-webkit-details-marker { display: none; }
         .cp-pl-row > summary:hover { background: var(--bg-primary); }
         .cp-pl-row[open] > summary { background: var(--accent-tint); }
+        /* El producto EN FOCO —el que dibuja la Evolución de abajo— lleva
+           el nombre en negrita y un filete de acento a la izquierda, en las
+           dos vistas de la tabla. Regla #579. */
+        .cp-pl-row.foco > summary,
+        .cp-pm-fila.foco { box-shadow: inset 3px 0 0 var(--accent); }
+        .cp-pl-row.foco > summary .nm,
+        .cp-pm-fila.foco .nm { font-weight: 700; }
+        .cp-pm-fila { cursor: pointer; }
+        .cp-pm-fila:hover { background: var(--bg-primary); }
+        .cp-pm-fila.foco { background: var(--accent-tint); }
+        /* El relevo del clic (`cp_prov_prod_relevo`): invisible pero
+           PRESENTE, como el de `_aplicar_pan_riel` — un widget con
+           `display:none` no existe para Streamlit. */
+        .st-key-cp_prov_prod_relevo {
+            position: absolute !important;
+            width: 1px !important; height: 1px !important;
+            overflow: hidden !important; opacity: 0 !important;
+            margin: 0 !important; padding: 0 !important;
+        }
         .cp-pl-row .nm {
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }

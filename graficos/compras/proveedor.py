@@ -36,7 +36,7 @@ from st_aggrid import AgGrid, JsCode
 from tema import (ACENTO, ACENTO_TEXTO_OSCURO, CELDA_POS_TEXTO, ERROR,
                   ERROR_TEXTO, EXITO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_CHIP,
                   TEXTO_PRINCIPAL)
-from inyecciones import inject_hover_kpis
+from inyecciones import inject_hover_kpis, inyectar_html
 from graficos.base import (
     PALETA_CALLAI, _card, _compras_layout, _compras_truncar,
     paso_etiquetas, preservar_widgets,
@@ -184,11 +184,14 @@ def _tarjeta_documentos(base, prov, alto, gran, src_per, per_orden, etq):
                 ) or "doc"
             if prov is None:
                 return
+            # La nota de cada modo («de dónde salen las filas y contra qué
+            # se compara») era un renglón fijo bajo el título; desde el
+            # 2026-10-01 es el tooltip de la cabecera «Var. %», a pedido:
+            # «que sólo aparezca al pasar el cursor por la cabecera de la
+            # columna». Sus 18px los usa el TOTAL del pie.
             if _modo == "per":
-                st.markdown(
-                    '<div class="cp-modo-nota">Los períodos de la Evolución '
-                    '(su ventana) · Var. % contra el anterior</div>',
-                    unsafe_allow_html=True)
+                _ayuda_var = ("Los períodos de la Evolución (su ventana). "
+                              "Var. %: contra el período anterior.")
                 if src_per is None or not per_orden:
                     st.caption("La Evolución no tiene períodos que agrupar.")
                     return
@@ -211,11 +214,10 @@ def _tarjeta_documentos(base, prov, alto, gran, src_per, per_orden, etq):
                 _anchos = {"Período": 74, "Docs": 44, "Valor": 76,
                            "Var. %": 70}
                 _fmt = {"Valor": "S/ {:,.0f}", "Var. %": _fmt_var}
+                _n_docs = int(_g["docs"].sum())
             else:
-                st.markdown(
-                    '<div class="cp-modo-nota">El rango del Ranking · '
-                    'Var. % contra el documento anterior</div>',
-                    unsafe_allow_html=True)
+                _ayuda_var = ("El rango del Ranking. Var. %: contra el "
+                              "documento anterior (el de abajo).")
                 _sub = base[(base["prov"] == prov)
                             & (base["docu"].astype(str).str.strip() != "")]
                 if _sub.empty:
@@ -243,6 +245,7 @@ def _tarjeta_documentos(base, prov, alto, gran, src_per, per_orden, etq):
                 })
                 _anchos = {"Fecha": 64, "Documento": 78, "Valor": 72,
                            "Var. %": 70}
+                _n_docs = len(_g)
                 _fmt = {
                     "Fecha": lambda f: ("—" if pd.isna(f)
                                         else f.strftime("%d/%m/%y")),
@@ -255,10 +258,21 @@ def _tarjeta_documentos(base, prov, alto, gran, src_per, per_orden, etq):
                 _tabla.style.format(_fmt).map(_color_var, subset=["Var. %"]),
                 hide_index=True, width="stretch", height=alto,
                 row_height=ALTO_FILA_RANK + 4,
-                column_config={k: st.column_config.Column(width=w)
+                column_config={k: st.column_config.Column(
+                                   width=w,
+                                   help=_ayuda_var if k == "Var. %" else None)
                                for k, w in _anchos.items()},
                 key=f"cp_prov_docs_tab_{_modo}",
             )
+            # El TOTAL, al pie y FUERA de la tabla: `st.dataframe` no tiene
+            # fila fija al final, y una fila «Total» de datos se movería al
+            # ordenar por una columna. Mismo lavanda y negrita que la fila
+            # TOTAL del Ranking.
+            st.markdown(
+                f'<div class="cp-docs-total"><span>Total · {_n_docs:,} '
+                f'{"documento" if _n_docs == 1 else "documentos"}</span>'
+                f'<span>S/ {float(np.sum(_vals)):,.0f}</span></div>',
+                unsafe_allow_html=True)
 
 
 def _esc(t):
@@ -329,8 +343,64 @@ def _filas_proveedores(src, prods, color_map):
     return out
 
 
-def _tarjeta_productos(base, prov, gran, src_per, per_orden, evo_x, etq,
-                       d_full, cols, color_map, alto_ranking):
+_K_RELEVO_PROD = "cp_prov_prod_relevo"
+"""El `st.text_input` oculto por el que un clic en un producto (HTML, sin
+widget propio) llega a Python. Ver `_relevo_producto`."""
+
+_SEP_RELEVO = "@@"
+"""Separa el producto de un sello de tiempo en el valor del relevo: sin
+él, clickear dos veces el MISMO producto escribiría el mismo texto y el
+`on_change` no correría la segunda vez."""
+
+
+def _relevo_producto():
+    """`on_change` del relevo: el producto clickeado pasa a ser el foco de
+    la Evolución, y clickear el que ya estaba en foco lo suelta.
+
+    El patrón es el del riel de Días (`graficos/base.py::_aplicar_pan_riel`,
+    regla #217): un `st.text_input` invisible que el JS llena y CONFIRMA con
+    un Enter de teclado de verdad — `input`/`change` no alcanzan."""
+    raw = st.session_state.get(_K_RELEVO_PROD) or ""
+    prod = raw.rsplit(_SEP_RELEVO, 1)[0]
+    if not prod:
+        return
+    actual = st.session_state.get("compras_prov_prodfocus")
+    st.session_state["compras_prov_prodfocus"] = (None if prod == actual
+                                                  else prod)
+
+
+_JS_CLIC_PRODUCTO = f"""<script>
+(function () {{
+  // Un clic en una fila de producto (la de «Total del rango» o la de
+  // «Por período») escribe su nombre en el relevo y lo confirma con un
+  // Enter de verdad (regla #217). Escucha en el DOCUMENTO, delegado: la
+  // tabla se rehace en cada corrida y un listener por fila se perdería.
+  // Se reemplaza en cada inyección para no dejar uno colgado de un iframe
+  // que ya no existe.
+  var w = window.parent, doc = w.document;
+  if (w.__cpProdClic) doc.removeEventListener('click', w.__cpProdClic, true);
+  w.__cpProdClic = function (ev) {{
+    var t = ev.target && ev.target.closest && ev.target.closest('[data-prod]');
+    if (!t || !t.closest('.st-key-compras_prov_card_prods')) return;
+    var relevo = doc.querySelector('.st-key-{_K_RELEVO_PROD} input');
+    if (!relevo) return;
+    var setter = w.Object.getOwnPropertyDescriptor(
+      w.HTMLInputElement.prototype, 'value').set;
+    relevo.focus({{preventScroll: true}});
+    setter.call(relevo, t.getAttribute('data-prod') + '{_SEP_RELEVO}' + w.Date.now());
+    relevo.dispatchEvent(new w.Event('input', {{bubbles: true}}));
+    var o = {{key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+             bubbles: true, cancelable: true}};
+    relevo.dispatchEvent(new w.KeyboardEvent('keydown', o));
+    relevo.dispatchEvent(new w.KeyboardEvent('keyup', o));
+  }};
+  doc.addEventListener('click', w.__cpProdClic, true);
+}})();
+</script>"""
+
+
+def _tarjeta_productos(base, prov, prod_foco, gran, src_per, per_orden,
+                       evo_x, etq, d_full, cols, color_map, alto_ranking):
     """La tarjeta «Productos · <proveedor>», arriba a la derecha.
 
     Desde el 2026-10-01 (regla #579) es una tabla HTML con dos modos, en las
@@ -356,6 +426,14 @@ def _tarjeta_productos(base, prov, gran, src_per, per_orden, evo_x, etq,
     `alto_ranking` es la grilla del Ranking de al lado: la lista scrollea
     DENTRO a partir de ahí, para que las dos tarjetas de arriba midan lo
     mismo con un producto desplegado o sin él.
+
+    **Un clic en un producto lo pone además en la Evolución** (2026-10-01,
+    a pedido: «cuando se haga clic en un producto, el gráfico de abajo
+    muestre lo relacionado al producto»). Las filas son HTML, sin widget:
+    el clic viaja por un `st.text_input` oculto (`_K_RELEVO_PROD`) que un
+    script llena y confirma con Enter. `prod_foco` vuelve marcado —en
+    «Total», con su despliegue ABIERTO, para que el rerun no lo cierre— y
+    clickearlo de nuevo lo suelta.
     """
     (col_prov, col_prod, col_cant, col_valor, col_punit, col_um, col_fecha,
      col_docu) = cols
@@ -381,12 +459,17 @@ def _tarjeta_productos(base, prov, gran, src_per, per_orden, evo_x, etq,
                 ) or "tot"
             if prov is None:
                 return
+            st.text_input("Producto en foco", key=_K_RELEVO_PROD,
+                          label_visibility="collapsed",
+                          on_change=_relevo_producto)
             if _modo == "per":
                 _html = _html_productos_por_periodo(
-                    prov, src_per, per_orden, evo_x, etq, gran, _alto_lista)
+                    prov, src_per, per_orden, evo_x, etq, gran, _alto_lista,
+                    prod_foco)
             else:
                 _html = _html_productos_total(
-                    base, prov, d_full, cols, color_map, _alto_lista)
+                    base, prov, d_full, cols, color_map, _alto_lista,
+                    prod_foco)
             # REMONTAJE POR CONTENIDO (regla #377): un `<details>` guarda
             # abierto/cerrado en el DOM y ese nodo sobrevive al rerun. Con
             # la key atada al contenido, otro proveedor estrena los nodos y
@@ -395,9 +478,11 @@ def _tarjeta_productos(base, prov, gran, src_per, per_orden, evo_x, etq,
             _k = zlib.crc32(_html.encode("utf-8"))
             with st.container(key=f"cp_pl_{_k:08x}"):
                 st.markdown(_html, unsafe_allow_html=True)
+    inyectar_html(_JS_CLIC_PRODUCTO)
 
 
-def _html_productos_total(base, prov, d_full, cols, color_map, alto_lista):
+def _html_productos_total(base, prov, d_full, cols, color_map, alto_lista,
+                          prod_foco=None):
     """La tabla de productos «Total del rango», con el despliegue de sus
     proveedores debajo de cada fila. Ver `_tarjeta_productos`."""
     (col_prov, col_prod, col_cant, col_valor, col_punit, col_um, col_fecha,
@@ -442,8 +527,10 @@ def _html_productos_total(base, prov, d_full, cols, color_map, alto_lista):
                   + f'<details class="cp-pl-todo"><summary>Todo el histórico · '
                   f'{n_t} {"proveedor" if n_t == 1 else "proveedores"}</summary>'
                   f'<div class="pb-cards">{h_t}</div></details>')
+        _foco = r.prod == prod_foco
         filas.append(
-            f'<details class="cp-pl-row"><summary>'
+            f'<details class="cp-pl-row{" foco" if _foco else ""}"'
+            f'{" open" if _foco else ""}><summary data-prod="{nom}">'
             f'<span class="nm" title="{nom}">{nom}</span>'
             f'<span class="vb"><span class="bar" style="width:{r.valor / vmax * 62:.1f}%"></span>'
             f'<span class="v">S/ {r.valor:,.0f}</span></span>'
@@ -461,7 +548,7 @@ def _html_productos_total(base, prov, d_full, cols, color_map, alto_lista):
 
 
 def _html_productos_por_periodo(prov, src_per, per_orden, evo_x, etq, gran,
-                                alto_lista):
+                                alto_lista, prod_foco=None):
     """La tabla de productos «Por <granularidad>»: cada producto en los
     últimos (hasta cuatro) períodos de la Evolución. Ver
     `_tarjeta_productos`."""
@@ -510,7 +597,8 @@ def _html_productos_por_periodo(prov, src_per, per_orden, evo_x, etq, gran,
                 else (" sube" if var > 0 else " baja"))
         nom = _esc(prod)
         filas.append(
-            f'<div class="cp-pm-fila">'
+            f'<div class="cp-pm-fila{" foco" if prod == prod_foco else ""}"'
+            f' data-prod="{nom}">'
             f'<span class="nm" title="{nom}">{nom}</span>'
             f'<span class="sp">{barras}</span>{celdas}'
             f'<span class="var{_cls}">{_fmt_var(var)}</span></div>')
@@ -862,7 +950,11 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # El piso de 1 es por el caso vacío: `max(1, ...)` deja la cabecera y la
     # fila TOTAL con una fila de aire en vez de un grid de 0 filas, que AG
     # Grid dibuja recortando su propio overlay de "sin datos".
-    _FILAS_RANK = min(8, max(1, len(_rk_nombres)))
+    # 2026-10-01: el techo baja de 8 a 7, a pedido («reduzcamos 1 fila a
+    # cada una, y que suba un poco las tarjetas de abajo»). La lista de
+    # Productos de al lado mide contra esta grilla, así que pierde la suya
+    # sola. Regla #579.
+    _FILAS_RANK = min(7, max(1, len(_rk_nombres)))
     _ALTO_FRAME_RANK = alturas.por_filas(
         _FILAS_RANK, px_fila=_ALTO_FILA_RANK,
         extra=_CROMO_GRID_RANK + _ALTO_FILA_RANK + alturas.FRANJA_ATAJOS,
@@ -1351,6 +1443,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     if _clicked != prov_focus:
                         prov_focus = _clicked
                         st.session_state["compras_prov_focus"] = prov_focus
+                        # El producto en foco es de ESTE proveedor: otro
+                        # proveedor lo suelta (regla #579).
+                        st.session_state["compras_prov_prodfocus"] = None
             # ── El SUJETO de los Documentos y los Productos ─────────────────
             # Sin foco, el proveedor de mayor valor del rango — la primera
             # fila del Ranking (mismo df, mismo orden). Se calcula UNA vez,
@@ -1363,6 +1458,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
             _prov_ver = prov_focus
             if _prov_ver is None and not base.empty:
                 _prov_ver = base.groupby("prov")["valor"].sum().idxmax()
+            # ── El PRODUCTO en foco (2026-10-01, regla #579) ────────────
+            # Un clic en un producto de la tabla de Productos lo pone acá
+            # (por el relevo `cp_prov_prod_relevo`, ver `_tarjeta_productos`)
+            # y la Evolución pasa a dibujar ESE producto de ESE proveedor.
+            # Sólo vale si el producto está entre los de `_prov_ver` en el
+            # rango: un producto que ya no está en la tabla no puede mandar
+            # sobre el gráfico.
+            _prod_evo = st.session_state.get("compras_prov_prodfocus")
+            if _prod_evo is not None and (
+                    _prov_ver is None
+                    or _prod_evo not in set(
+                        base.loc[base["prov"] == _prov_ver, "prod"])):
+                _prod_evo = None
             # Los PERÍODOS de la Evolución, que los Documentos y los
             # Productos usan para agruparse «como Evolución» (regla #579).
             # Los llena el bloque de la Evolución; estos son los valores
@@ -1382,6 +1490,10 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                     # el orden natural de la tabla-ranking de al lado), así que
                     # el mayor es directamente el primero.
                     _prov_evo = prov_focus
+                    if _prod_evo is not None:
+                        # Con un producto en foco, el proveedor es el de la
+                        # tabla de Productos, que es de donde salió el clic.
+                        _prov_evo = _prov_ver
                     if _prov_evo is None:
                         # SIN FOCO, EL SUJETO SALE DEL HISTÓRICO, no del
                         # ranking de al lado. A pedido, 2026-08-26: "el
@@ -1679,7 +1791,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         _per_evo = (_src_evo[["_per_sort", "per"]].drop_duplicates()
                                     .sort_values("_per_sort")["per"].tolist())
                         _per_evo = list(dict.fromkeys(_per_evo))
-                        _serie_evo = (_src_evo[_src_evo["prov"] == _prov_evo]
+                        # Las filas que dibuja la línea: las del proveedor y,
+                        # con un producto en foco, sólo las de ese producto.
+                        _m_evo = _src_evo["prov"] == _prov_evo
+                        if _prod_evo is not None:
+                            _m_evo &= _src_evo["prod"] == _prod_evo
+                        _serie_evo = (_src_evo[_m_evo]
                                       .groupby("per")["valor"].sum()
                                       .reindex(_per_evo, fill_value=0))
                         # Con ventana propia se dibuja lo que el usuario pidió,
@@ -1787,6 +1904,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # `nombre_propio` ANTES de truncar, para que los
                         # puntos suspensivos caigan sobre el texto que se ve.
                         _tit_evo = _compras_truncar(nombre_propio(_prov_evo), 26)
+                        if _prod_evo is not None:
+                            # El producto primero —es lo que cambió— y el
+                            # proveedor detrás, más chico.
+                            _tit_evo = (
+                                f"{_compras_truncar(str(_prod_evo), 28)}"
+                                f'<span style="font-weight:400;font-size:10.5px">'
+                                f" · {_compras_truncar(nombre_propio(_prov_evo), 22)}"
+                                "</span>")
                         # Un punto suelto no dibuja ninguna evolución. Antes eso
                         # se corregía solo (se saltaba al histórico sin avisar);
                         # ahora la ventana la eligió el usuario, así que la salida
@@ -1831,7 +1956,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         with _c_graf:
                             st.plotly_chart(
                                 fig_evo, width="stretch",
-                                key=f"cp_evo_{gran}_{_prov_evo}",
+                                key=f"cp_evo_{gran}_{_prov_evo}_{_prod_evo}",
                                 config={"displayModeBar": False},
                             )
                         # ── Resumen del proveedor ───────────────────────────
@@ -1858,14 +1983,19 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # intercambio lo hace el navegador. Son 4 cifras por
                         # punto y el eje tiene a lo sumo unas decenas.
                         if _evo_x:
-                            _dprov = _src_evo[_src_evo["prov"] == _prov_evo]
+                            _dprov = _src_evo[_m_evo]
                             # `reindex(_evo_x)`: el eje manda. Un período sin
                             # compras de ESTE proveedor tiene que salir en 0,
                             # no faltar — si no, el índice del punto que
                             # reporta Plotly deja de coincidir con la fila.
                             _g_val = (_dprov.groupby("per")["valor"].sum()
                                       .reindex(_evo_x, fill_value=0.0))
-                            _g_tot = (_src_evo.groupby("per")["valor"].sum()
+                            # El «% del total»: contra todos los proveedores;
+                            # con un producto en foco, contra lo comprado a
+                            # ESE proveedor («% del proveedor»).
+                            _src_tot = (_src_evo if _prod_evo is None
+                                        else _src_evo[_src_evo["prov"] == _prov_evo])
+                            _g_tot = (_src_tot.groupby("per")["valor"].sum()
                                       .reindex(_evo_x, fill_value=0.0))
                             # El período ANTERIOR a cada uno de los dibujados,
                             # para la variación. Sale de `_per_evo` (todos los
@@ -1963,7 +2093,13 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # pila —que es el piso de alto de la figura de al
                             # lado (`_MIN_EVO`)—. Cuál es el anterior lo dice
                             # el encabezado, que nombra el período.
-                            _rotulos_kpi = ("Total compra", "% del total",
+                            _rotulos_kpi = ("Total compra",
+                                            # «% del prov.» y no «% del
+                                            # proveedor»: tiene el largo de
+                                            # «% del total», que es lo que
+                                            # entra en la celda (ver abajo).
+                                            "% del total" if _prod_evo is None
+                                            else "% del prov.",
                                             "Vs. anterior", "Documentos")
                             with _c_kpi:
                                 _base_kpi = _kpis_evo[-1]
@@ -2016,7 +2152,8 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # pasar por el servidor (regla #579).
     with _c_prods:
         _tarjeta_productos(
-            base, _prov_ver, gran, _src_evo, _per_evo, _evo_x, _etq_evo,
+            base, _prov_ver, _prod_evo, gran, _src_evo, _per_evo, _evo_x,
+            _etq_evo,
             d_full, (col_prov, col_prod, col_cant, col_valor, col_punit,
                      col_um, col_fecha, col_docu),
             {p: PALETA_CALLAI[i % len(PALETA_CALLAI)]

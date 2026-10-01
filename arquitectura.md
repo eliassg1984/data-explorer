@@ -46155,6 +46155,32 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        (`container-name: cpprods`). Y va AL FINAL de su bloque: puesta
        antes, `.cp-pm-fila .sp` —mismo peso— le ganaba por orden y la
        cabecera perdía la columna pero las filas no.
+     - **Un clic en un producto lo pone en la Evolución** (mismo día, a
+       pedido: «cuando se haga clic en un producto, el gráfico de abajo
+       muestre lo relacionado al producto»). La tabla es HTML, sin widget,
+       así que el clic viaja por un RELEVO: un `st.text_input` oculto
+       (`cp_prov_prod_relevo`) que un script delegado en el documento
+       llena con el nombre (`data-prod` de la fila) y confirma con un
+       Enter de verdad — el patrón del riel de Días, #217. El valor lleva
+       un sello de tiempo detrás: sin él, clickear dos veces el mismo
+       producto escribe el mismo texto y el `on_change` no corre, y ese
+       segundo clic es el que SUELTA el foco. Con foco, la Evolución dibuja
+       ese producto de ese proveedor (su título: «producto · proveedor»),
+       y el «% del total» pasa a ser «% del prov.» (mismo largo: la celda
+       no da para «% del proveedor»). El foco vuelve marcado en la tabla
+       —filete de acento, nombre en negrita y, en «Total», su despliegue
+       ABIERTO, para que el rerun no lo cierre— y lo suelta también un
+       clic en otro proveedor del Ranking. El script se REEMPLAZA en cada
+       inyección (`window.__cpProdClic`), para no dejar uno colgado de un
+       iframe que ya no existe.
+     - **La nota de Documentos es el tooltip de «Var. %»** (a pedido:
+       «que sólo aparezca al pasar el cursor por la cabecera de la
+       columna»): `help=` de su `column_config`. Sus 18px los usa el
+       TOTAL, al pie y FUERA de la tabla —`st.dataframe` no tiene fila
+       fija, y una fila «Total» de datos se movería al ordenar—, con el
+       lavanda y la negrita de la fila TOTAL del Ranking. Y el Ranking
+       baja de 8 a 7 filas de techo (la lista de Productos, que mide contra
+       él, pierde la suya sola): la fila de abajo sube 24px.
      - **En Cloud, reiniciar la app** (#357): `proveedor.py` importa de
        `_comun.py` un nombre nuevo (`COLUMNAS_DRILL_ABAJO`) en lugar de
        `COLUMNAS_DRILL_TRES`, que ya no existe.
