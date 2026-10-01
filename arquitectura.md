@@ -46095,9 +46095,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        su contador de remontaje (`cp_paneles_inst`) y la variable
        `--cp-prov-alto-paneles`.
      - **Las filas de los proveedores son MÁS DELGADAS y MÁS DISCRETAS que
-       la de su producto**: 18px contra 24, texto gris de 11px, precio sin
-       negrita (el más bajo sigue en verde), fecha de 10px y la barra de
-       peso a media tinta. Heredadas de la tarjeta que se fue medían ~28px
+       la de su producto**: 19px contra 24, texto gris de 11,5px, precio
+       sin negrita (el más bajo sigue en verde), fecha de 11px y la barra
+       de peso a media tinta (tercera vuelta, a pedido: «letras de 11.5,
+       fecha de 11 y fila de 19»; la segunda había quedado en 18/11/10). Heredadas de la tarjeta que se fue medían ~28px
        con texto negro de 12,5, y lo que cuelga de una fila se leía más
        importante que ella («deben ser más delgadas que la del mismo
        producto», y después «me parecen más notorios que el producto»,

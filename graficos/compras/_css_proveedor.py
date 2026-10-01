@@ -2111,11 +2111,11 @@ CSS = """        <style>
            Heredadas de la tarjeta «Proveedores de» medían ~28px —6 de
            padding arriba y abajo y un cuerpo de 12.5— contra los 24 de la
            fila del producto, y lo que cuelga de una fila se leía más
-           importante que ella. Acá van a 18px y más chicas: se leen como
+           importante que ella. Acá van a 19px y más chicas: se leen como
            el detalle de su producto. Sólo DENTRO del despliegue
            (`.cp-pl-provs`), regla #579. */
         .cp-pl-provs .pb-row > summary {
-            padding: 0 8px; height: 18px; gap: 6px;
+            padding: 0 8px; height: 19px; gap: 6px;
         }
         /* Y MENOS NOTORIAS (2026-10-01, segunda vuelta, con captura: «me
            parecen más notorios que el producto»). Además de delgadas:
@@ -2125,13 +2125,13 @@ CSS = """        <style>
            precio más bajo se queda —es la señal de la lista—, pero sin
            negrita como los demás. */
         .cp-pl-provs .pb-row .name {
-            font-size: 11px; color: var(--text-secondary);
+            font-size: 11.5px; color: var(--text-secondary);
         }
         .cp-pl-provs .pb-row .pu {
-            font-size: 11px; font-weight: 400; color: var(--text-secondary);
+            font-size: 11.5px; font-weight: 400; color: var(--text-secondary);
         }
         .cp-pl-provs .pb-row .pu.pu-min { color: var(--success-text); }
-        .cp-pl-provs .pb-row .fec { font-size: 10px; color: var(--text-muted); }
+        .cp-pl-provs .pb-row .fec { font-size: 11px; color: var(--text-muted); }
         .cp-pl-provs .pb-row .peso { opacity: 0.5; }
         .cp-pl-provs .pb-row .sw { width: 7px; height: 7px; }
         .cp-pl-provs .pb-row > summary:hover .name,
