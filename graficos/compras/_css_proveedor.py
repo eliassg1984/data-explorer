@@ -1639,7 +1639,8 @@ CSS = """        <style>
            absolutos no empujan el gráfico. El key de un st.container SIN borde ES
            el stVerticalBlock, por eso la dirección FILA se fija sobre .st-key-...
            directamente (no sobre un bloque anidado). Valores verificados. */
-        .st-key-chartcard_prov_prods { position: relative; }
+        .st-key-chartcard_prov_prods,
+        .st-key-chartcard_prov_docsprov { position: relative; }
         /* MATAR TODO espacio vertical entre header y gráfico: Streamlit
            inyecta gap en stVerticalBlock + margins en cada stElementContainer
            (uno para el markdown del título, otro para el plotly). */
@@ -1676,100 +1677,40 @@ CSS = """        <style>
            fueron el 2026-09-11 —la tarjeta obedece al selector de fecha de
            arriba y lista todos los productos— y con ellos la reserva, que
            le comía al título 200 de sus ~560px por nada. Ver regla #378. */
+        /* 2026-10-01: la reserva VUELVE, por otras pastillas — las de
+           modo de las dos tarjetas (`cp_modo_*`: «Total del rango | Por
+           mes» y «Por documento | Por mes», regla #579), que flotan en
+           este renglón a la derecha. Y la cabecera pasa a BLOQUE, porque el
+           `ellipsis` de `.chart-card-hdr` sólo recorta un bloque (ver el
+           mismo hallazgo en la del Panel B, regla #317). */
         .st-key-chartcard_prov_prods .chart-card-hdr,
         .st-key-chartcard_prov_docsprov .chart-card-hdr {
-            padding: 0 4px;
+            padding: 0 196px 0 4px;
             min-height: 22px;
             margin: 0 !important;
             font-size: 13px;
-            line-height: 1.25;
-            display: flex;
-            align-items: center;
-            border-bottom: none;
-        }
-        /* Ámbito de fecha (En rango / Todo) — en la cabecera del Panel B.
-           Se replican las mismas reglas de compactación del Panel A para
-           que titulo, toggles y contenido queden a la misma altura. */
-        /* El ancho que manda en este panel es el de la TARJETA, no el del
-           viewport: es el `1` de `COLUMNAS_DRILL` (1.6/1), o sea ~38% del
-           ancho útil. Medido: con 1280px de pantalla la tarjeta mide 289px
-           y con 1920px, 535px — un `@media` no distingue esos dos casos.
-           Por eso acá se abre un CONTAINER y todo lo que reacciona al
-           apretón (las pastillas de ámbito, la grilla de métricas) se
-           consulta con `@container pbcard (...)`. Ver regla #317. */
-        .st-key-chartcard_prov_prov_de_prod {
-            position: relative;
-            container-type: inline-size;
-            container-name: pbcard;
-        }
-        .st-key-chartcard_prov_prov_de_prod,
-        .st-key-chartcard_prov_prov_de_prod [data-testid="stVerticalBlock"] {
-            gap: 0 !important;
-            row-gap: 0 !important;
-        }
-        .st-key-chartcard_prov_prov_de_prod [data-testid="stElementContainer"],
-        .st-key-chartcard_prov_prov_de_prod [data-testid="stMarkdownContainer"] {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-        }
-        .st-key-chartcard_prov_prov_de_prod {
-            padding: 2px 12px 8px 12px !important;
-        }
-        .st-key-chartcard_prov_prov_de_prod .chart-card-hdr {
-            padding: 0 140px 0 4px;
-            min-height: 22px;
-            margin: 0 !important;
-            font-size: 13px;
-            /* BLOQUE y no flex, aunque haya que centrar el texto a mano con
-               el `line-height`: el `text-overflow: ellipsis` que trae
-               `.chart-card-hdr` (estilos/_80_cards.py) sólo aplica a un
-               contenedor de BLOQUE. Como flex, el título era un item
-               anónimo —no hay selector que lo alcance— y en vez de
-               recortarse se DIBUJABA encima de las pastillas: `overflow:
-               hidden` recorta en el borde del padding, así que los 140px
-               reservados a la derecha no frenaban nada. Ver regla #317. */
-            display: block;
             line-height: 22px;
+            display: block;
             border-bottom: none;
         }
-        .st-key-panelb_scope_float {
+        /* Las PASTILLAS DE MODO de Productos y Documentos (`cp_modo_*`,
+           2026-10-01, regla #579). Heredan el look de las «Año actual |
+           Todo» de la tarjeta «Proveedores de», que se fue ese día: tabs de
+           texto con subrayado, flotando a la derecha de la fila del
+           título. Wildcard por FAMILIA a propósito: son exactamente esas
+           dos, y fuera de un `:has()` no cuesta nada (regla #469). */
+        div[class*="st-key-cp_modo_"] {
             position: absolute; top: 0; right: 12px; z-index: 5;
             height: 24px; display: flex; align-items: center;
             width: auto !important;
         }
-        /* LAS PASTILLAS SE QUEDAN EN LA FILA DEL TÍTULO (2026-09-12, a
-           pedido: «coloca las opciones de rango y todo al lado del título
-           de esa misma tarjeta»). Hasta ese día este bloque las bajaba a un
-           renglón propio por debajo de 460px de tarjeta. El 460 salía de la
-           grilla de 4 métricas que tenía cada proveedor (~458px), con la
-           que compartía umbral a propósito; esa grilla se fue el
-           2026-09-11 (una FILA por proveedor, regla #377) y el umbral quedó
-           sirviendo sólo a las pastillas, que piden mucho menos. El renglón
-           extra las dejaba debajo del título en la tarjeta de ~430px de
-           una laptop — que es lo que se reportó con captura.
-           Ahora el título cede (ellipsis, con la reserva de `padding-right`
-           de arriba) y las pastillas no se mueven. Sólo en una tarjeta
-           MINÚSCULA bajan, porque ahí el título ya no diría nada: 300px de
-           tarjeta dejan ~150 de título, ~22 caracteres. En pantallas
-           angostas manda además el `@media (max-width: 900px)` del bloque
-           de MÓVIL, al final. */
-        @container pbcard (max-width: 300px) {
-            .st-key-chartcard_prov_prov_de_prod .chart-card-hdr {
-                padding-right: 4px;
-            }
-            .st-key-panelb_scope_float {
-                position: static !important;
-                height: auto !important;
-                width: 100% !important;
-                margin: 1px 0 5px !important;
-                justify-content: flex-start !important;
-            }
-        }
-        .st-key-panelb_scope_float > div { width: auto !important; }
-        .st-key-panelb_scope_float [data-testid="stElementToolbar"] { display: none; }
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button {
+        /* En la fila del título y a la derecha: el título cede (ellipsis,
+           con la reserva de `padding-right` de su cabecera) y las pastillas
+           no se mueven. Por debajo de 900px bajan a un renglón propio (el
+           `@media` del bloque de MÓVIL, al final). */
+        div[class*="st-key-cp_modo_"] > div { width: auto !important; }
+        div[class*="st-key-cp_modo_"] [data-testid="stElementToolbar"] { display: none; }
+        div[class*="st-key-cp_modo_"] [data-testid="stButtonGroup"] button {
             min-height: 22px !important;
             height: 22px !important;
             padding: 0 8px !important;
@@ -1793,7 +1734,7 @@ CSS = """        <style>
            es el marcado de los MULTI-select. Ese error ya costo un selector
            muerto durante varios commits en Ano Pasado (arquitectura.md
            #107, 2do addendum). */
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] {
+        div[class*="st-key-cp_modo_"] [data-testid="stButtonGroup"] {
             border: none !important;
             border-radius: 0 !important;
             background: transparent !important;
@@ -1803,11 +1744,11 @@ CSS = """        <style>
            display:block), no en el grupo — mismo hallazgo que en Ventas y
            Familia. Sin capsula que los una, el aire es lo unico que separa
            una opcion de la otra. */
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] > div {
+        div[class*="st-key-cp_modo_"] [data-testid="stButtonGroup"] > div {
             gap: 14px !important;
             flex-wrap: nowrap !important;
         }
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"] button[data-variant="pills"] {
+        div[class*="st-key-cp_modo_"] [data-testid="stButtonGroup"] button[data-variant="pills"] {
             background: transparent !important;
             border: none !important;
             border-radius: 0 !important;
@@ -1820,13 +1761,13 @@ CSS = """        <style>
             font-weight: 400 !important;
             line-height: 1.3 !important;
         }
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"]
+        div[class*="st-key-cp_modo_"] [data-testid="stButtonGroup"]
             button[data-variant="pills"][data-selected="true"] {
             border-bottom-color: var(--accent) !important;
             color: var(--accent-deep) !important;
             font-weight: 600 !important;
         }
-        .st-key-panelb_scope_float [data-testid="stButtonGroup"]
+        div[class*="st-key-cp_modo_"] [data-testid="stButtonGroup"]
             button[data-variant="pills"]:hover {
             color: var(--accent) !important;
         }
@@ -1978,22 +1919,12 @@ CSS = """        <style>
            lleva un borde izquierdo verde y el precio en verde. */
         .pb-cards {
             display: flex; flex-direction: column; gap: 0;
-            margin: 4px 0 8px;
-            /* 2026-08-25, a pedido: capado al mismo alto que la tabla de
-               Panel A (`--cp-prov-alto-paneles`, publicada por Python
-               desde `_ALTO_PRODS` — proveedor.py; era `_ALTO_FRAME`, un
-               fijo de 8 filas, hasta que el 2026-09-02 esa tabla pasó a
-               medir sus propias filas). Sin este techo, un
-               producto con muchos proveedores estira la lista mucho más
-               que el panel de al lado, y el `:has()` de _80_cards.py
-               ("dos tarjetas de la fila miden lo mismo") terminaba
-               estirando TAMBIÉN a Panel A para igualar ese exceso — un
-               gráfico chico con medio panel de aire abajo. Lo que no
-               entra scrollea DENTRO, mismo idioma que la tarjeta entera
-               (regla de "una tarjeta = una pantalla" más arriba). */
-            max-height: var(--cp-prov-alto-paneles);
-            overflow-y: auto;
-            overflow-x: hidden;
+            margin: 2px 0 4px;
+            /* Sin techo propio desde el 2026-10-01: la lista vive adentro
+               del desplegable de su producto, y el que scrollea es la
+               tabla de productos entera (`.cp-pl-lista`). Hasta ese día
+               era la tarjeta «Proveedores de» y se capaba al alto de la
+               tabla de al lado (`--cp-prov-alto-paneles`). Regla #579. */
         }
         .pb-cards::-webkit-scrollbar { width: 6px; }
         .pb-cards::-webkit-scrollbar-thumb {
@@ -2097,6 +2028,156 @@ CSS = """        <style>
             color: var(--accent-deep); font-weight: 500;
         }
 
+
+        /* ── PRODUCTOS: la tabla con los proveedores desplegables ───────────
+           2026-10-01 (regla #579). Era una AgGrid y su tarjeta hermana,
+           «Proveedores de», mostraba los proveedores del producto
+           clickeado. Ahora es HTML: una FILA por producto que es el
+           `<summary>` de un `<details>`, y adentro, la lista de proveedores
+           con las mismas filas `.pb-row` de aquella tarjeta. Las columnas
+           y el look copian a la tabla del Ranking de al lado (24px por
+           fila, nombre en violeta, la barra de valor pintada detrás del
+           monto hasta el 62 %). */
+        .cp-modo-nota {
+            font-size: 11px; color: var(--text-secondary);
+            line-height: 18px; height: 18px; padding: 0 4px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cp-pl, .cp-pm { font-size: 12px; line-height: 1.25; }
+        .cp-pl-head, .cp-pl-row > summary {
+            display: grid; align-items: center; column-gap: 8px;
+            grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) 40px 52px 56px 10px;
+        }
+        .cp-pl-head, .cp-pm-head {
+            height: 28px; padding: 0 8px;
+            font-size: 11.5px; color: var(--text-secondary);
+            border-top: 3px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+        .cp-pl-head .r, .cp-pm-head .r { text-align: right; }
+        .cp-pl-lista {
+            overflow-y: auto; overflow-x: hidden;
+        }
+        .cp-pl-lista::-webkit-scrollbar { width: 6px; }
+        .cp-pl-lista::-webkit-scrollbar-thumb {
+            background: var(--scroll-thumb); border-radius: 3px;
+        }
+        .cp-pl-row { border-bottom: 1px solid var(--border); }
+        .cp-pl-row > summary {
+            height: 24px; padding: 0 8px; cursor: pointer; list-style: none;
+            color: var(--accent-deep);
+        }
+        .cp-pl-row > summary::-webkit-details-marker { display: none; }
+        .cp-pl-row > summary:hover { background: var(--bg-primary); }
+        .cp-pl-row[open] > summary { background: var(--accent-tint); }
+        .cp-pl-row .nm {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .cp-pl-row .vb {
+            position: relative; height: 100%;
+            display: flex; align-items: center; justify-content: flex-end;
+        }
+        .cp-pl-row .vb .bar {
+            position: absolute; left: 0; top: 0; bottom: 0;
+            background: var(--accent);
+        }
+        .cp-pl-row .vb .v {
+            position: relative; color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+        .cp-pl-row .n { text-align: right; font-variant-numeric: tabular-nums; }
+        .cp-pl-row .um { white-space: nowrap; overflow: hidden; }
+        /* El chevron, como el de las filas `.pb-row`: dos bordes de una
+           caja de 5px, girados. */
+        .cp-pl-row > summary::after {
+            content: ""; width: 5px; height: 5px; justify-self: end;
+            border-right: 1.5px solid var(--text-muted);
+            border-bottom: 1.5px solid var(--text-muted);
+            transform: translateY(-2px) rotate(45deg);
+            transition: transform 0.15s;
+        }
+        .cp-pl-row[open] > summary::after {
+            transform: translateY(1px) rotate(-135deg);
+            border-color: var(--accent);
+        }
+        .cp-pl-provs {
+            padding: 4px 0 6px 18px;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border);
+        }
+        .cp-pl-sub, .cp-pl-todo > summary {
+            font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+            color: var(--text-muted); padding: 3px 8px;
+        }
+        .cp-pl-vacio { font-size: 11.5px; color: var(--text-muted); padding: 2px 8px 6px; }
+        .cp-pl-todo > summary {
+            cursor: pointer; list-style: none; color: var(--accent);
+        }
+        .cp-pl-todo > summary::-webkit-details-marker { display: none; }
+        .cp-pl-todo > summary::before { content: "+ "; }
+        .cp-pl-todo[open] > summary::before { content: "− "; }
+
+        /* ── PRODUCTOS POR PERÍODO: cómo varió cada uno ─────────────────
+           Mismo renglón de 24px. Cada celda de período lleva un fondo
+           violeta tanto más fuerte cuanto más se compró en ella (`--t`,
+           contra el mayor de SU fila); la tendencia es una tira de
+           barritas, y la variación va en rojo si subió el gasto y en verde
+           si bajó — el código de color de todo Compras. */
+        .cp-pm-head, .cp-pm-fila {
+            display: grid; align-items: center; column-gap: 2px;
+            grid-template-columns: minmax(0, 1.4fr) 54px
+                repeat(var(--n), minmax(0, 1fr)) 66px;
+        }
+        .cp-pm-fila {
+            height: 24px; padding: 0 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .cp-pm-fila .nm {
+            color: var(--accent-deep);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .cp-pm-fila .sp {
+            display: flex; align-items: flex-end; gap: 2px;
+            height: 16px; padding-right: 8px;
+        }
+        .cp-pm-fila .sp i {
+            flex: 1 1 0; background: var(--accent); border-radius: 1px;
+        }
+        .cp-pm-fila .sp i.z { background: var(--border); }
+        .cp-pm-fila .c {
+            height: 100%; display: flex; align-items: center;
+            justify-content: flex-end; padding-right: 6px;
+            font-variant-numeric: tabular-nums; color: var(--text-primary);
+            background: color-mix(in srgb, var(--accent) var(--t), transparent);
+        }
+        .cp-pm-fila .c.z { color: var(--text-muted); }
+        .cp-pm-fila .var {
+            text-align: right; font-size: 11.5px; font-weight: 600;
+            color: var(--text-secondary); font-variant-numeric: tabular-nums;
+        }
+        .cp-pm-fila .var.sube { color: var(--danger-text); }
+        .cp-pm-fila .var.baja { color: var(--success-text); }
+        /* Una tarjeta ANGOSTA saca la Tendencia y le da su lugar al nombre
+           del producto. Es el ancho de la TARJETA, no el de la ventana: la
+           misma ventana deja la tarjeta en ~580px con la columna de la
+           izquierda fija y en ~450 con ella plegada, así que un `@media` no
+           distingue los dos casos (regla #317). Las barritas repiten lo que
+           ya dicen los números de al lado; el nombre no lo dice nadie más.
+           Va AL FINAL del bloque: `.cp-pm-fila .sp` pesa lo mismo y, antes,
+           le ganaba por orden (medido: la cabecera perdía la columna y las
+           filas no, y la grilla salía corrida). */
+        .st-key-chartcard_prov_prods {
+            container-type: inline-size;
+            container-name: cpprods;
+        }
+        @container cpprods (max-width: 480px) {
+            .cp-pm-head, .cp-pm-fila {
+                grid-template-columns: minmax(0, 1.4fr)
+                    repeat(var(--n), minmax(0, 1fr)) 62px;
+            }
+            .cp-pm .sp { display: none; }
+        }
+
         /* ── TARJETAS COLAPSABLES: animacion unfold (drill Proveedor) ──
            IMPORTANTE: NO usar scaleX/scaleY/rotate en el contenedor. Al
            remontar plotly/aggrid/dataframe con key nueva, esos componentes
@@ -2131,8 +2212,7 @@ CSS = """        <style>
            la misma grilla que la fila de arriba. La animación se aplica a los
            dos: entran juntos, que es lo que hacía la tarjeta única. */
         .st-key-compras_prov_card_docsprov,
-        .st-key-compras_prov_card_prods,
-        .st-key-compras_prov_card_provde {
+        .st-key-compras_prov_card_prods {
             animation: unfoldRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) backwards;
         }
         /* 2026-08-21: acá vivía el PESTILLO del detalle de documentos
@@ -2158,18 +2238,16 @@ CSS = """        <style>
            título/gráfico. Nada se encima; a cambio la tarjeta crece un poco
            en alto, barato en móvil.
            ── Dos breakpoints, por qué distintos:
-           · Paneles A/B viven en `st.columns(COLUMNAS_DRILL)`, que colapsa a
-             1 columna recién por debajo de ~640px. ENTRE 640 y 900px cada
-             panel es media pantalla y su título + las pastillas ya no caben
-             en la cabecera → el fix de panelb_scope_float aplica desde
-             900px. El Panel A ya no entra en la cuenta: desde el 2026-09-11
-             no tiene controles propios (regla #378).
+           · Productos y Documentos viven en dos columnas que colapsan a una
+             recién por debajo de ~640px. ENTRE 640 y 900px cada tarjeta es
+             media pantalla y su título + las pastillas de modo ya no caben
+             en la cabecera → el fix de `cp_modo_*` aplica desde 900px.
            · El gráfico principal (y su win_nav / floats de tope) es de ancho
              completo: solo se aprieta de verdad por debajo de ~640px.
            ══════════════════════════════════════════════════════════════ */
         @media (max-width: 900px) {
-            /* Panel B: En rango/Todo — bajo el título. */
-            .st-key-panelb_scope_float {
+            /* Pastillas de modo de Productos y Documentos: bajo el título. */
+            div[class*="st-key-cp_modo_"] {
                 position: static !important;
                 height: auto !important;
                 width: 100% !important;

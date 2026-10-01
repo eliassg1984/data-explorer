@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-578 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+579 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (195)
+**CSS y estilos** (196)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -229,8 +229,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
+- **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 
-**Layout y alturas** (82)
+**Layout y alturas** (83)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -314,6 +315,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 - **#574** — La Carta costeada: el título con sus desplegables en un renglón, los porcionamientos de un…
 - **#578** — Compras › Proveedor son dos filas: [Ranking | Productos] arriba y [Documentos | Evolución |…
+- **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 
 **Plotly y figuras** (104)
 
@@ -46062,6 +46064,87 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        `ImportError` de `COLUMNAS_DRILL_TABLAS`; si se queda con los dos
        viejos, sigue mostrando la vista de antes. «Reboot app» cubre los
        dos casos.
+
+     (2026-10-01.)
+
+579. **Compras › Proveedor: los proveedores de un producto se despliegan
+     DEBAJO de su fila, Documentos y Productos se agrupan como la
+     Evolución, y la fila de abajo mide seis filas.** 2026-10-01, el mismo
+     día que la #578 y elegido sobre cuatro maquetas (fila que se
+     despliega, ventana flotante, cajón bajo la fila, pestaña en la
+     Evolución): «la tarjeta "Proveedores de"... que ya no exista como
+     tarjeta, sino que figure... al hacer click o desplegar hacia abajo»;
+     «que la tabla de documentos tenga la opción de agruparse según la
+     agrupación del gráfico Evolución, y que indique la variación %
+     respecto a la fila anterior»; «alguna forma de ver cómo variaron los
+     productos del proveedor seleccionado según la agrupación»; «que las
+     tarjetas de abajo sólo sean de 6 filas, para que se pueda ver toda la
+     vista en una pantalla de laptop». En `graficos/compras/proveedor.py`,
+     `graficos/compras/_comun.py`, `graficos/compras/_css_proveedor.py`,
+     `estilos/_80_cards.py` y `test_graficos.py`.
+     - **Productos dejó de ser una AgGrid: es HTML**, una fila por producto
+       que es el `<summary>` de un `<details>`. Adentro van los proveedores
+       con las MISMAS filas `.pb-row` de la tarjeta que se fue (#377): los
+       del año en curso y, en un segundo desplegable, los de todo el
+       histórico (las «Año actual | Todo» de antes, ahora sin widget). Abre
+       al instante, sin rerun, y se pueden abrir varios. En AgGrid
+       Community un despliegue bajo la fila pide filas de dos tipos y
+       `postSortRows` (#466), y lo que se perdía —ordenar por columna— no
+       pagaba una grilla más (#540): la tabla viene ordenada por valor. Con
+       la grilla se fueron el foco de producto (`compras_prov_prodfocus`),
+       su contador de remontaje (`cp_paneles_inst`) y la variable
+       `--cp-prov-alto-paneles`.
+     - **Los proveedores de todos los productos se calculan de una vez**
+       (`_filas_proveedores`): un `groupby` por (producto, proveedor) para
+       el total, el último precio con fecha en orden estable y la UM con
+       `moda_por_grupo` (#537). El bucle que queda sólo arma texto.
+       `itertuples` RENOMBRA las columnas que empiezan con `_` (`_min` sale
+       `_5`): costó un `AttributeError` en la primera corrida.
+     - **«Por <granularidad>» usa la VENTANA de la Evolución, no el rango
+       del Ranking.** El Ranking abre en un mes corrido: agrupado por mes
+       daba una o dos filas. Los Documentos agrupados son todos los
+       períodos de la ventana (`_per_evo`, también los que quedaron en
+       cero), y los Productos, los últimos CUATRO que muestra su línea
+       (`_evo_x`; con cinco, al nombre le quedaban ~85px). Por eso las dos
+       tarjetas se dibujan DESPUÉS de la Evolución aunque los Documentos
+       vayan a su izquierda: las columnas se crean arriba (#578) y la
+       Evolución deja `_src_evo`, `_per_evo`, `_evo_x` y `_etq_evo` (con
+       valores vacíos si no dibuja serie). `_src_evo` ganó la columna
+       `prod` para esto.
+     - **La variación es contra la fila ANTERIOR en el tiempo**: en los
+       Documentos por documento, el de abajo (más viejo); agrupados, el
+       período anterior; en los Productos, el último período contra el
+       anterior. Desde cero no hay porcentaje («—», como `_var_txt` de la
+       Evolución), y en `st.dataframe` ese «—» sale de un `inf`, no de un
+       NaN, que se pinta «None» (#529). Rojo si subió el gasto y verde si
+       bajó, el código de todo Compras; por debajo del 0,5 % sin color.
+     - **Las pastillas de modo** («Por documento | Por mes» y «Total del
+       rango | Por mes») son `st.pills` con valores ESTABLES (`doc`/`per`,
+       `tot`/`per`) y el rótulo por `format_func`: el de «agrupado» cambia
+       con la granularidad de la Evolución, y un `st.pills` con un valor
+       guardado fuera de sus opciones revienta. Heredaron el look de las
+       «Año actual | Todo» (tabs de texto en la fila del título, ahora
+       `div[class*="st-key-cp_modo_"]`) y van en `_KEYS_WIDGET` (#373).
+     - **Seis filas abajo**: la tabla de Documentos mide 7 × 28 + 3
+       (`_ALTO_DOCS`: seis filas y su cabecera, que en `st.dataframe` mide
+       una fila) y la Evolución se mide contra ella; la cuenta cae debajo
+       de `_MIN_EVO`, así que la figura queda en el piso de su pila de KPIs.
+       La lista de Productos scrollea a partir de la grilla del Ranking
+       menos 30 (con 20 pedía 323px y estiraba al Ranking). Medido con
+       Playwright a 1358×800: arriba 313 y 313, abajo 283 y 283, y la vista
+       entera termina en y≈600 — entra en la laptop sin scrollear, con un
+       producto desplegado y en «Por mes».
+     - **La única container query del repo era la del Panel B** (`pbcard`),
+       y `test_graficos.py::_pruebas_container_queries` exige que quede
+       alguna (es su guarda positiva). La que la reemplaza tiene un uso de
+       verdad: en una tarjeta de Productos de menos de 480px, «Por mes»
+       saca la columna Tendencia y le da su lugar al nombre
+       (`container-name: cpprods`). Y va AL FINAL de su bloque: puesta
+       antes, `.cp-pm-fila .sp` —mismo peso— le ganaba por orden y la
+       cabecera perdía la columna pero las filas no.
+     - **En Cloud, reiniciar la app** (#357): `proveedor.py` importa de
+       `_comun.py` un nombre nuevo (`COLUMNAS_DRILL_ABAJO`) en lugar de
+       `COLUMNAS_DRILL_TRES`, que ya no existe.
 
      (2026-10-01.)
 

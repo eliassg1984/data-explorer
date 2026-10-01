@@ -1402,7 +1402,7 @@ CSS = """    /* ================================================================
         /* sus tarjetas no comparten fila, así que no hay nada que igualar.*/
         /* ─────────────────────────────────────────────────────────────── */
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_docsprov, > .st-key-compras_prov_card_evo, > .st-key-compras_prov_card_prods, > .st-key-compras_prov_card_provde, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
+        > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_docsprov, > .st-key-compras_prov_card_evo, > .st-key-compras_prov_card_prods, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-sunat_card_conversor, > .st-key-sunat_card_doc, > .st-key-sunat_card_graf, > .st-key-sunat_card_izq, > .st-key-sunat_card_sis),
         /* Las dos mitades del conversor entraron acá el 2026-08-29, al   */

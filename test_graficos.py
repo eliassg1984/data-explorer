@@ -5332,15 +5332,15 @@ def _pruebas_grilla_horizontal():
     # ── 2) Las dos filas del drill de Proveedor usan las constantes ─────
     # Positiva, no negativa: sin esto, borrar las dos llamadas dejaría la
     # guarda #1 en verde. Desde el 2026-10-01 son dos constantes PROPIAS
-    # —arriba `COLUMNAS_DRILL_TABLAS`, abajo `COLUMNAS_DRILL_TRES`, regla
-    # #578—, y se pide cada una por su nombre: el prefijo solo dejaba pasar
-    # dos filas partidas con la misma.
+    # —arriba `COLUMNAS_DRILL_TABLAS`, abajo `COLUMNAS_DRILL_ABAJO`, reglas
+    # #578 y #579—, y se pide cada una por su nombre: el prefijo solo dejaba
+    # pasar dos filas partidas con la misma.
     prov = (raiz / "graficos" / "compras" / "proveedor.py").read_text(
         encoding="utf-8")
     n_filas = [len(re.findall(r"st\.columns\(%s\b" % c, prov))
-               for c in ("COLUMNAS_DRILL_TABLAS", "COLUMNAS_DRILL_TRES")]
+               for c in ("COLUMNAS_DRILL_TABLAS", "COLUMNAS_DRILL_ABAJO")]
     check("las 2 filas del drill de Proveedor parten con "
-          "COLUMNAS_DRILL_TABLAS y COLUMNAS_DRILL_TRES",
+          "COLUMNAS_DRILL_TABLAS y COLUMNAS_DRILL_ABAJO",
           n_filas == [1, 1], f"se encontraron {n_filas}")
 
     # ── 3) La constante tiene UN dueño ──────────────────────────────────
