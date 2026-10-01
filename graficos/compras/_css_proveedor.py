@@ -2105,9 +2105,26 @@ CSS = """        <style>
             background: var(--bg-primary);
             border-top: 1px solid var(--border);
         }
+        /* Las filas de los proveedores, MÁS DELGADAS que la del producto
+           que las abre (2026-10-01, a pedido, con captura: «deben ser más
+           delgadas que la del mismo producto, ahora están más gruesas»).
+           Heredadas de la tarjeta «Proveedores de» medían ~28px —6 de
+           padding arriba y abajo y un cuerpo de 12.5— contra los 24 de la
+           fila del producto, y lo que cuelga de una fila se leía más
+           importante que ella. Acá van a 20px y un punto más chico: se
+           leen como el detalle de su producto. Sólo DENTRO del despliegue
+           (`.cp-pl-provs`), regla #579. */
+        .cp-pl-provs .pb-row > summary {
+            padding: 0 8px; height: 20px; gap: 6px;
+        }
+        .cp-pl-provs .pb-row .name,
+        .cp-pl-provs .pb-row .pu { font-size: 11.5px; }
+        .cp-pl-provs .pb-row .fec { font-size: 10.5px; }
+        .cp-pl-provs .pb-row .sw { width: 8px; height: 8px; }
+        .cp-pl-provs .pb-row .mas { padding: 2px 8px 4px 22px; font-size: 11px; }
         .cp-pl-sub, .cp-pl-todo > summary {
-            font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
-            color: var(--text-muted); padding: 3px 8px;
+            font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase;
+            color: var(--text-muted); padding: 2px 8px; line-height: 16px;
         }
         .cp-pl-vacio { font-size: 11.5px; color: var(--text-muted); padding: 2px 8px 6px; }
         .cp-pl-todo > summary {

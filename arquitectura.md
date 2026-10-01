@@ -46094,6 +46094,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        la grilla se fueron el foco de producto (`compras_prov_prodfocus`),
        su contador de remontaje (`cp_paneles_inst`) y la variable
        `--cp-prov-alto-paneles`.
+     - **Las filas de los proveedores son MÁS DELGADAS que la de su
+       producto** (20px contra 24, cuerpo de 11,5): heredadas de la tarjeta
+       que se fue medían ~28px y lo que cuelga de una fila se leía más
+       importante que ella («deben ser más delgadas que la del mismo
+       producto, ahora están más gruesas», con captura). Acotado a
+       `.cp-pl-provs .pb-row`; medido con Playwright.
      - **Los proveedores de todos los productos se calculan de una vez**
        (`_filas_proveedores`): un `groupby` por (producto, proveedor) para
        el total, el último precio con fecha en orden estable y la UM con
