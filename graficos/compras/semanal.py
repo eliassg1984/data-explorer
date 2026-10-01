@@ -109,6 +109,7 @@ from graficos.compras._comun import (
 # Ver `_etiquetas_proveedor.nombre_propio` y `arquitectura.md` #379.
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from tablas.compras_semanal import (
+    renderizar_proveedores_periodo,
     renderizar_documentos_semanal, renderizar_lineas_semanal,
     renderizar_periodos,
 )
@@ -1008,7 +1009,10 @@ def _calendario_del_eje(fig, dias, sep):
 def _resumen_proveedores(dd):
     """La tabla de «Resumen del Período» (regla #580): una fila por
     proveedor del rango de la vista, de mayor a menor valor, con sus
-    documentos (compras), su % del valor del período y sus ítems distintos.
+    documentos (compras), su fracción del valor del período (0-1) y sus
+    ítems distintos — los números CRUDOS, que el formato lo pone la grilla
+    (`tablas/compras_semanal.py::renderizar_proveedores_periodo`) y así se
+    ordenan.
 
     `__prov` lleva el nombre CRUDO, que es con lo que se filtra Detalle; la
     columna visible va como nombre propio. Columnas por NOMBRE, no por
@@ -1021,30 +1025,13 @@ def _resumen_proveedores(dd):
            .reset_index(drop=True))
     tot = float(g["valor"].sum()) or 1.0
     return pd.DataFrame({
-        "Proveedor": [nombre_propio(p) for p in g["prov"]],
-        "Valor": g["valor"].astype(float).round(2),
-        "% del período": g["valor"].astype(float) / tot * 100,
-        "Documentos": g["docs"].astype(int),
-        "Ítems distintos": g["items"].astype(int),
+        "prov": [nombre_propio(p) for p in g["prov"]],
+        "valor": g["valor"].astype(float).round(2),
+        "parte": g["valor"].astype(float) / tot,
+        "docs": g["docs"].astype(int),
+        "items": g["items"].astype(int),
         "__prov": g["prov"],
     })
-
-
-def _fila_elegida(evento):
-    """El índice de la fila elegida en la selección de un `st.dataframe`
-    (lo que guarda `session_state[key]`), o None: la de la celda elegida
-    con `single-cell` (`cells`, pares fila-columna), o la fila con
-    `single-row` (`rows`). Tolerante a la forma: es un dict con atributos,
-    y en la primera corrida no existe."""
-    try:
-        sel = evento["selection"]
-    except (KeyError, TypeError):
-        return None
-    celdas = sel.get("cells") or []
-    if celdas:
-        return int(celdas[0][0])
-    filas = sel.get("rows") or []
-    return int(filas[0]) if filas else None
 
 
 def _clave_del_clic(x, ord_claves):
@@ -1575,30 +1562,26 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             _modo = _MODO_DEFAULT
             st.session_state["compras_sem_modo"] = _modo
 
-        # ── RESUMEN DEL PERÍODO: la tabla, y su clic, ARRIBA DE TODO ─────
-        # (regla #580). La tabla se dibuja debajo del gráfico, pero un clic
-        # en ella CAMBIA EL MODO (lleva a Detalle), y el modo se escribe
-        # antes de que se dibuje su toggle y decide el alto de la figura.
-        # Por eso se arma acá y su selección se lee de `session_state` antes
-        # de dibujar, con un CONTADOR en la key —la receta del clic en la
-        # barra (regla #399)—: cada clic leído estrena la tabla, y la
-        # selección vieja no se vuelve a aplicar.
-        _tp_provs = _resumen_proveedores(dd)
-        _pnclic = st.session_state.get("compras_sem_pnclic", 0)
-        _k_provs = ("compras_sem_provs_grid_"
-                    + _clave_grilla(gran, _ctx, _rng) + f"_{_pnclic}")
-        _fila_p = _fila_elegida(st.session_state.get(_k_provs))
-        if _fila_p is not None and _fila_p < len(_tp_provs):
-            st.session_state["compras_sem_prov_det"] = (
-                _tp_provs["__prov"].iloc[_fila_p])
+        # ── RESUMEN DEL PERÍODO: su clic se APLICA arriba de todo ────────
+        # (regla #580). Un clic en un proveedor CAMBIA EL MODO (lleva a
+        # Detalle), y el modo es la clave de un widget que sólo se puede
+        # escribir ANTES de que se dibuje — y además decide el alto de la
+        # figura. La grilla devuelve su selección recién después de
+        # dibujarse, debajo del gráfico: ahí se deja una BANDERA
+        # (`_compras_sem_ir_prov`) y un rerun, y es ACÁ, en la corrida
+        # siguiente, donde se aplica. El contador de la key
+        # (`compras_sem_pnclic`) estrena la grilla después de cada clic,
+        # para que su selección vieja no vuelva a mandar a nadie a Detalle
+        # al regresar a este modo.
+        _ir_prov = st.session_state.pop("_compras_sem_ir_prov", None)
+        if _ir_prov is not None:
+            st.session_state["compras_sem_prov_det"] = _ir_prov
             st.session_state["compras_sem_focus"] = None
             st.session_state["compras_sem_doc"] = None
             st.session_state["compras_sem_modo"] = _MODO_DETALLE
             _modo = _MODO_DETALLE
-            _pnclic += 1
-            st.session_state["compras_sem_pnclic"] = _pnclic
-            _k_provs = ("compras_sem_provs_grid_"
-                        + _clave_grilla(gran, _ctx, _rng) + f"_{_pnclic}")
+            st.session_state["compras_sem_pnclic"] = (
+                st.session_state.get("compras_sem_pnclic", 0) + 1)
         _nclic = st.session_state.get("compras_sem_nclic", 0)
         _key_base = f"compras_g_semanal_{gran}"
         _pt = _first_point(st.session_state.get(f"{_key_base}_{_nclic}"))
@@ -2082,34 +2065,36 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # leyó arriba de todo (ver «RESUMEN DEL PERÍODO: la tabla, y su
         # clic»), acá sólo se dibuja la tabla con la key que se va a leer.
         if _modo == _MODO_PROVS:
-            with st.container(key="cp_sem_provs"):
-                st.dataframe(
-                    _tp_provs.drop(columns="__prov").style.format({
-                        "Valor": "S/ {:,.2f}",
-                        "% del período": "{:.1f}%",
-                        "Documentos": "{:,}",
-                        "Ítems distintos": "{:,}",
-                    }),
-                    hide_index=True, width="stretch", height=_ALTO_TABLA,
-                    # `single-cell` y no `single-row`: con filas, Streamlit
-                    # sólo elige desde la casilla de la izquierda y un clic
-                    # en el nombre apenas enfoca la celda (medido). Con
-                    # celdas, un clic en CUALQUIER parte de la fila cuenta,
-                    # y la columna de casillas no aparece.
-                    on_select="rerun", selection_mode="single-cell",
-                    key=_k_provs,
-                    column_config={
-                        "Proveedor": st.column_config.Column(width="large"),
-                        "Ítems distintos": st.column_config.Column(
-                            help="Productos distintos que se le compraron "
-                                 "en el período."),
-                    })
+            # La MISMA grilla que «Resumen Total» —tema, cabecera, alto de
+            # fila y fila TOTAL—, con el mismo alto: muestra las mismas
+            # filas (a pedido: «que sea similar, 5 filas y colores
+            # similares»).
+            _tp_provs = _resumen_proveedores(dd)
             _n_p = len(_tp_provs)
+            _tot_p = {
+                "prov": f"Total · {_n_p:,} "
+                        f"{'proveedor' if _n_p == 1 else 'proveedores'}",
+                "valor": f"S/ {float(_tp_provs['valor'].sum()):,.2f}",
+                "parte": "100%",
+                "docs": f"{int(_tp_provs['docs'].sum()):,}",
+                # Los ítems NO se suman: un producto comprado a dos
+                # proveedores contaría dos veces. El total es el de la
+                # vista, contado una vez.
+                "items": f"{dd['prod'].nunique():,}",
+            }
+            _pnclic = st.session_state.get("compras_sem_pnclic", 0)
+            with st.container(key="cp_sem_resumen"):
+                _prov_clic = renderizar_proveedores_periodo(
+                    _tp_provs, altura=_ALTO_TABLA,
+                    key=("compras_sem_provs_grid_"
+                         + _clave_grilla(gran, _ctx, _rng, _pnclic)),
+                    total=_tot_p)
             _pie.caption(
-                f"**{_del_al(dd['fecha'])}** · {_n_p:,} "
-                f"{'proveedor' if _n_p == 1 else 'proveedores'} · "
-                f"S/ {float(_tp_provs['Valor'].sum()):,.2f} — un clic en "
-                "un proveedor abre sus documentos en Detalle.")
+                f"**{_del_al(dd['fecha'])}** · una fila por proveedor — un "
+                "clic en uno abre sus documentos en Detalle.")
+            if _prov_clic is not None and _prov_clic in set(dd["prov"]):
+                st.session_state["_compras_sem_ir_prov"] = _prov_clic
+                st.rerun(scope=scope_rerun())
             return
 
         # El CAPTION es un elemento simple: un `if/else`

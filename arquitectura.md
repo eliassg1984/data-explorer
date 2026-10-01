@@ -46243,19 +46243,26 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        sea cual sea la granularidad, y el caption lo nombra. Un clic en una
        barra lo suelta y vuelve al ámbito de la barra; con un proveedor
        abierto el gráfico no atenúa barras, porque no hay UNA en foco.
-     - **El clic en la tabla se lee ARRIBA DE TODO**, antes de la figura y
-       del toggle: cambia el modo, y el modo es una clave de widget que
-       sólo se puede escribir antes de que el `segmented_control` se dibuje
-       (y decide el alto de la figura). Es la receta del clic en la barra
-       (#399): la selección se lee de `session_state[key]` y la key lleva
-       un CONTADOR (`compras_sem_pnclic`) que sube con cada clic leído, así
-       la tabla se estrena y la selección vieja no se vuelve a aplicar.
-     - **`selection_mode="single-cell"`, no `single-row`**: con filas,
-       `st.dataframe` sólo elige desde la casilla de la izquierda y un clic
-       en el nombre apenas enfoca la celda (medido con Playwright: el modo
-       no cambiaba). Con celdas, cualquier clic en la fila cuenta y la
-       columna de casillas no aparece; `_fila_elegida` lee `cells` (o
-       `rows`).
+     - **La tabla es la MISMA grilla que «Resumen Total»**
+       (`tablas/compras_semanal.py::renderizar_proveedores_periodo`, hermana
+       de la de períodos y la de documentos: tema, cabecera neutra,
+       `ALTO_FILA`, fila TOTAL fija y el mismo `_ALTO_TABLA`), así que
+       muestra las mismas 5 filas con los mismos colores. Nació como
+       `st.dataframe` y se mudó el mismo día, a pedido: «es distinta a la de
+       Resumen Total, deseo que sea similar, 5 filas y colores similares».
+       Medido con Playwright: las dos grillas, 1194×191. En la fila TOTAL
+       los ítems distintos NO se suman —un producto comprado a dos
+       proveedores contaría dos veces—: es el conteo de la vista.
+     - **El clic se APLICA en la corrida siguiente, arriba de todo.** Cambia
+       el modo, que es la clave de un widget —sólo se puede escribir antes
+       de que el `segmented_control` se dibuje— y decide el alto de la
+       figura; la grilla, en cambio, devuelve su selección DESPUÉS de
+       dibujarse. Por eso deja una bandera (`_compras_sem_ir_prov`) y un
+       rerun, y la bandera se consume antes de leer el modo. La key de la
+       grilla lleva un CONTADOR (`compras_sem_pnclic`) que sube con cada
+       clic aplicado: sin él, al volver a «Resumen del Período» la grilla
+       devolvía su selección vieja y mandaba de nuevo a Detalle (la
+       selección de AG Grid es la VIGENTE, no un evento; #399).
      - **«Resumen» pasó a llamarse «Resumen Total»**, y el valor del toggle
        es el texto: una sesión vieja guardó «Resumen», y un
        `segmented_control` con un valor fuera de sus opciones revienta. Se

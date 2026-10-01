@@ -485,6 +485,74 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
     return None
 
 
+def renderizar_proveedores_periodo(tp, altura, key, total=None):
+    """Una fila por PROVEEDOR del rango: la tabla de «Resumen del Período»
+    de «Compras por período» (2026-10-01, regla #580).
+
+    Nació como `st.dataframe` y se mudó acá el mismo día, a pedido: «el
+    estilo de la tabla Resumen del Período es distinto al de Resumen Total,
+    deseo que sea similar, o sea 5 filas y colores similares». Es la misma
+    receta que sus hermanas —el tema, la cabecera neutra, `ALTO_FILA`, la
+    fila TOTAL fija y el alto que le da el llamador—, así que con el mismo
+    `altura` muestra las mismas filas que «Resumen Total».
+
+    `tp` trae `prov` (el nombre como se muestra), `valor`, `parte` (0-1),
+    `docs` e `items` crudos —para que se ordenen—, y `__prov` oculta, el
+    nombre CRUDO con el que el drill filtra. Abre ordenada por Valor ↓
+    (`initialSort`, regla #471).
+
+    Devuelve el `__prov` de la fila SELECCIONADA, o None: la selección
+    vigente, no un clic de esta vuelta. El llamador estrena la key después
+    de usarla (un contador), así la misma selección no se aplica dos veces.
+    """
+    gb = GridOptionsBuilder.from_dataframe(tp)
+    gb.configure_default_column(
+        resizable=False, sortable=True, filter=False, editable=False,
+        suppressMovable=True, wrapHeaderText=False, autoHeaderHeight=False,
+    )
+    # La única que se estira: los nombres son lo largo de la tabla.
+    gb.configure_column("prov", header_name="Proveedor", minWidth=160,
+                        tooltipField="prov")
+    gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
+                        valueFormatter=_JS_SOLES, initialSort="desc",
+                        width=124, minWidth=124, suppressSizeToFit=True,
+                        headerTooltip="Valorizado de compra del proveedor "
+                                      "en el período")
+    gb.configure_column("parte", header_name="% del período",
+                        type=["numericColumn"], valueFormatter=_JS_PARTE,
+                        width=120, minWidth=120, suppressSizeToFit=True,
+                        headerTooltip="Cuánto pesa el proveedor en el "
+                                      "valor total del período")
+    gb.configure_column("docs", header_name="Documentos",
+                        type=["numericColumn"], valueFormatter=_JS_ENTERO,
+                        width=112, minWidth=112, suppressSizeToFit=True,
+                        headerTooltip="En cuántos comprobantes se le compró")
+    gb.configure_column("items", header_name="Ítems distintos",
+                        type=["numericColumn"], valueFormatter=_JS_ENTERO,
+                        width=132, minWidth=132, suppressSizeToFit=True,
+                        headerTooltip="Productos distintos que se le "
+                                      "compraron en el período")
+    gb.configure_column("__prov", hide=True)
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
+    gb.configure_grid_options(**_con_total(dict(
+        rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
+        suppressCellFocus=True, onGridReady=_AL_MONTAR), total))
+    grid_options = gb.build()
+    _parchar_iconos(grid_options)  # arquitectura.md #159
+
+    # `update_on` sólo la selección, como la de documentos: ordenar no le
+    # cuesta una corrida a nadie.
+    resp = AgGrid(
+        tp, gridOptions=grid_options, height=altura, theme="material",
+        custom_css=_css(), allow_unsafe_jscode=True, key=key,
+        update_on=["selectionChanged"],
+    )
+    sel = resp.selected_rows
+    if sel is not None and not sel.empty:
+        return str(sel.iloc[0]["__prov"])
+    return None
+
+
 def renderizar_compras_producto(tp, altura, key, total=None):
     """Una fila por COMPRA del período en foco, para la Evolución de Producto.
 
