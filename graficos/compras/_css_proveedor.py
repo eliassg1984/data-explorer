@@ -1061,87 +1061,10 @@ CSS = """        <style>
         .st-key-cp_sem_resumen .stCustomComponentV1 {
             display: block !important;
         }
-        /* ── LA FILA DE KPI DE LA VISTA (2026-09-17, regla #454) ────────
-           Un item MÁS del flex de la cabecera, entre los filtros y la
-           fecha: es la suma de lo que esos dos acotan. Crece para ocupar
-           el hueco y cede con `min-width: 0`; la base de 360px es la que
-           decide el renglón — si no entran 360 al lado de los filtros,
-           baja al renglón de la fecha, que es donde se lee junto al rango.
-           El item del flex es el `stLayoutWrapper` que envuelve a la key
-           (regla #272), de ahí el `:has`. */
-        /* 2026-09-19 (2): la KPI va SIEMPRE en su propio renglón, debajo.
-           En el DOM está entre los filtros y la fecha (la dibuja el mismo
-           `extra` que los filtros), así que para que la fecha suba al lado
-           de los filtros la KPI se corre al final con `order` y ocupa el
-           renglón entero. A 1366 ya iba abajo —junto a la fecha—, así que
-           la tarjeta mide lo mismo (617). */
-        .st-key-cp_sem_fila
-            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_kpi) {
-            order: 2 !important;
-            flex: 1 1 100% !important;
-            min-width: 0 !important;
-            width: auto !important;
-        }
-
-        /* Con la fila delante: la regla `... cp_sem_fila
-           [data-testid="stElementContainer"] { width: auto }` de más abajo
-           tiene la misma especificidad que la corta y ganaría por orden. */
-        .st-key-cp_sem_fila .st-key-cp_sem_kpi,
-        .st-key-cp_sem_fila .st-key-cp_sem_kpi
-            > [data-testid="stElementContainer"] {
-            width: 100% !important;
-        }
-        /* Streamlit le pone `margin-bottom: -16px` a todo
-           `stMarkdownContainer` (regla #162): medido, el bloque reportaba
-           12px con 28 de contenido, y la fila no sabía que el KPI ocupaba
-           el resto. */
-        .st-key-cp_sem_kpi [data-testid="stMarkdownContainer"] {
-            margin-bottom: 0 !important;
-        }
-        .st-key-cp_sem_kpi .sem-kpis {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: stretch;
-            gap: 2px 0;
-        }
-        .st-key-cp_sem_kpi .sem-kpi {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-width: 0;
-            max-width: 112px;
-            padding: 0 12px;
-            line-height: 1.2;
-            border-left: 1px solid var(--border);
-        }
-        .st-key-cp_sem_kpi .sem-kpi:first-child {
-            padding-left: 0;
-            border-left: none;
-            max-width: none;
-        }
-        .st-key-cp_sem_kpi .sem-kpi-rot {
-            font-size: 10px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .st-key-cp_sem_kpi .sem-kpi-val {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-primary);
-            white-space: nowrap;
-        }
-        .st-key-cp_sem_kpi .sem-kpi-sub {
-            margin-left: 4px;
-            font-size: 10px;
-            font-weight: 400;
-            color: var(--text-secondary);
-        }
-        .st-key-cp_sem_kpi .sem-kpi-total .sem-kpi-val {
-            color: var(--accent-deep);
-            font-weight: 700;
-        }
+        /* (Acá vivía la fila de KPI de la vista, `.st-key-cp_sem_kpi`,
+           regla #454. Se quitó el 2026-10-01, a pedido: la tabla de
+           Resumen ya da el total y lo de cada familia. Sus 38px son de la
+           figura: `alturas.FRANJA_KPI_SEMANAL`.) */
         /* El TITULO cede, el control no. El `min-width: 0` no es
            decorativo: sin el, un flex item nunca se encoge por debajo de
            su contenido, asi que un nombre largo empujaria al control fuera
