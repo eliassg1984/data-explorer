@@ -159,10 +159,31 @@ pero en un toggle lineal el «Por» sobra: los otros cuatro no lo llevan, y
 un botón más largo que sus vecinos se lee como otra cosa."""
 
 _MODO_DETALLE = "Detalle"
-_MODO_RESUMEN = "Resumen"
-_MODO_OPCIONES = (_MODO_DETALLE, _MODO_RESUMEN)
-_MODO_DEFAULT = _MODO_DETALLE
-"""Los dos modos de la zona de abajo (2026-09-19, regla #476).
+_MODO_RESUMEN = "Resumen Total"
+_MODO_PROVS = "Resumen del Período"
+_MODO_OPCIONES = (_MODO_RESUMEN, _MODO_PROVS, _MODO_DETALLE)
+_MODO_DEFAULT = _MODO_RESUMEN
+"""Los TRES modos de la zona de abajo, en el orden del toggle.
+
+Desde el 2026-10-01 (regla #580), a pedido: «que la vista predeterminada
+sea Resumen, pero que ahora se llame Resumen Total; al costado, como un
+toggle del medio, otro llamado Resumen del Período, con los nombres de los
+proveedores, cantidad de documentos, % del valor total del período y
+cantidad de ítems distintos; y al hacer clic en una de las filas, que te
+lleve a Detalle, que estará al lado, como tercero». Así el toggle se lee de
+lo general a lo particular: todas las barras → los proveedores del rango →
+los documentos.
+
+«Resumen del Período» mira el rango ENTERO de la tarjeta (el «Del… al…»
+del caption), no una barra: es la pregunta «¿a quién le compré en este
+período?». Un clic en un proveedor abre Detalle con el ÁMBITO de ese
+proveedor —sus compras de todo el rango— en vez del de una barra
+(`compras_sem_prov_det`); un clic en una barra vuelve al ámbito de la barra.
+
+Debajo, la historia de los dos modos que había hasta ese día — «Resumen»
+se llamaba así y el default era Detalle.
+
+Los dos modos de la zona de abajo (2026-09-19, regla #476).
 
 «Detalle» son las dos grillas de siempre —los documentos del período que se
 toca en el gráfico y las líneas del que se elija—, y necesita una barra en
@@ -178,15 +199,20 @@ El default es Detalle porque es lo que la vista hacía hasta hoy: un modo
 nuevo no cambia con qué abre una vista que la gente ya conoce."""
 
 _AYUDA_MODO = (
-    "Qué se ve debajo del gráfico. **Detalle**: los documentos de la barra "
-    "que toques y las líneas del que elijas. **Resumen**: una fila por "
-    "barra —con su total, su % de la vista, sus documentos y su "
-    "variación— más el total de todas."
+    "Qué se ve debajo del gráfico. **Resumen Total**: una fila por barra "
+    "—con su total, su % de la vista, sus documentos y su variación— más el "
+    "total de todas. **Resumen del Período**: una fila por proveedor del "
+    "rango, con sus documentos, su % del valor y sus ítems distintos; un "
+    "clic en uno abre su Detalle. **Detalle**: los documentos de la barra "
+    "que toques (o del proveedor que elijas) y las líneas del que elijas."
 )
 
 _KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familia",
                 "compras_sem_subfamilia", "compras_sem_proveedor",
                 "compras_sem_producto", "compras_sem_modo")
+# (La tabla de «Resumen del Período» no va: su selección se CONSUME en la
+# corrida del clic —estrena la key con un contador—, así que no hay nada
+# que preservar.)
 """Los controles de la tarjeta, para que la escalada no se los lleve.
 
 Eran tres hasta el 2026-09-19, cuando se sumaron Subfamilia y Proveedor;
@@ -979,6 +1005,48 @@ def _calendario_del_eje(fig, dias, sep):
     return tickvals, ticktext
 
 
+def _resumen_proveedores(dd):
+    """La tabla de «Resumen del Período» (regla #580): una fila por
+    proveedor del rango de la vista, de mayor a menor valor, con sus
+    documentos (compras), su % del valor del período y sus ítems distintos.
+
+    `__prov` lleva el nombre CRUDO, que es con lo que se filtra Detalle; la
+    columna visible va como nombre propio. Columnas por NOMBRE, no por
+    posición (regla #481)."""
+    g = (dd.groupby("prov", as_index=False)
+           .agg(valor=("valor", "sum"), docs=("compra", "nunique"),
+                items=("prod", "nunique"))
+           .sort_values(["valor", "prov"], ascending=[False, True],
+                        kind="stable")
+           .reset_index(drop=True))
+    tot = float(g["valor"].sum()) or 1.0
+    return pd.DataFrame({
+        "Proveedor": [nombre_propio(p) for p in g["prov"]],
+        "Valor": g["valor"].astype(float).round(2),
+        "% del período": g["valor"].astype(float) / tot * 100,
+        "Documentos": g["docs"].astype(int),
+        "Ítems distintos": g["items"].astype(int),
+        "__prov": g["prov"],
+    })
+
+
+def _fila_elegida(evento):
+    """El índice de la fila elegida en la selección de un `st.dataframe`
+    (lo que guarda `session_state[key]`), o None: la de la celda elegida
+    con `single-cell` (`cells`, pares fila-columna), o la fila con
+    `single-row` (`rows`). Tolerante a la forma: es un dict con atributos,
+    y en la primera corrida no existe."""
+    try:
+        sel = evento["selection"]
+    except (KeyError, TypeError):
+        return None
+    celdas = sel.get("cells") or []
+    if celdas:
+        return int(celdas[0][0])
+    filas = sel.get("rows") or []
+    return int(filas[0]) if filas else None
+
+
 def _clave_del_clic(x, ord_claves):
     """Clave del período que corresponde a la x de un clic en una barra.
 
@@ -1499,7 +1567,38 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # barra desde Resumen CAMBIA el modo (ver la rama de abajo).
         _modo = st.session_state.get("compras_sem_modo")
         if _modo not in _MODO_OPCIONES:
+            # Una sesión vieja guardó «Resumen» (el nombre de antes del
+            # 2026-10-01): un `segmented_control` con un valor fuera de sus
+            # opciones revienta, así que se corrige la CLAVE, no sólo la
+            # variable — antes de que el widget se dibuje, que es cuando se
+            # puede escribir.
             _modo = _MODO_DEFAULT
+            st.session_state["compras_sem_modo"] = _modo
+
+        # ── RESUMEN DEL PERÍODO: la tabla, y su clic, ARRIBA DE TODO ─────
+        # (regla #580). La tabla se dibuja debajo del gráfico, pero un clic
+        # en ella CAMBIA EL MODO (lleva a Detalle), y el modo se escribe
+        # antes de que se dibuje su toggle y decide el alto de la figura.
+        # Por eso se arma acá y su selección se lee de `session_state` antes
+        # de dibujar, con un CONTADOR en la key —la receta del clic en la
+        # barra (regla #399)—: cada clic leído estrena la tabla, y la
+        # selección vieja no se vuelve a aplicar.
+        _tp_provs = _resumen_proveedores(dd)
+        _pnclic = st.session_state.get("compras_sem_pnclic", 0)
+        _k_provs = ("compras_sem_provs_grid_"
+                    + _clave_grilla(gran, _ctx, _rng) + f"_{_pnclic}")
+        _fila_p = _fila_elegida(st.session_state.get(_k_provs))
+        if _fila_p is not None and _fila_p < len(_tp_provs):
+            st.session_state["compras_sem_prov_det"] = (
+                _tp_provs["__prov"].iloc[_fila_p])
+            st.session_state["compras_sem_focus"] = None
+            st.session_state["compras_sem_doc"] = None
+            st.session_state["compras_sem_modo"] = _MODO_DETALLE
+            _modo = _MODO_DETALLE
+            _pnclic += 1
+            st.session_state["compras_sem_pnclic"] = _pnclic
+            _k_provs = ("compras_sem_provs_grid_"
+                        + _clave_grilla(gran, _ctx, _rng) + f"_{_pnclic}")
         _nclic = st.session_state.get("compras_sem_nclic", 0)
         _key_base = f"compras_g_semanal_{gran}"
         _pt = _first_point(st.session_state.get(f"{_key_base}_{_nclic}"))
@@ -1513,12 +1612,16 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             # (eje lineal), así que hay que traducirla — el foco se guarda
             # como CLAVE, que es lo que compara la tabla de abajo.
             _clic = _clave_del_clic(_pt.get("x"), _ord_claves)
+            # Un clic en una barra vuelve al ámbito de la BARRA: suelta el
+            # proveedor que había abierto «Resumen del Período» (#580).
+            if _clic is not None:
+                st.session_state["compras_sem_prov_det"] = None
             # Con una compra en foco, la barra SUBE un nivel (vuelve al
             # período entero) en vez de apagarlo todo: apagar obligaría a
             # dos clics para deshacer uno.
             if _clic is None:
                 pass
-            elif _modo == _MODO_RESUMEN:
+            elif _modo in (_MODO_RESUMEN, _MODO_PROVS):
                 # UN CLIC EN UNA BARRA DESDE RESUMEN LLEVA A DETALLE (regla
                 # #476, 2026-09-20). A pedido: «cuando estoy en la vista
                 # resumen y hago clic en una barra, debería enviarme a la
@@ -1548,11 +1651,15 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # alto — que es justo lo que este bloque viene a evitar.
         _doc_ok = _doc is not None and _doc in set(dd["compra"])
         _foco_ok = _focus in set(dd["clave"])
-        _con_detalle = _doc_ok or _foco_ok
+        # El ámbito de un PROVEEDOR (#580): lo abre un clic en «Resumen del
+        # Período» y manda sobre el de la barra mientras esté puesto.
+        _prov_det = st.session_state.get("compras_sem_prov_det")
+        _prov_ok = _prov_det is not None and _prov_det in set(dd["prov"])
+        _con_detalle = _doc_ok or _foco_ok or _prov_ok
         # Resumen no necesita foco: su tabla son TODAS las barras. Por eso
         # la figura cede su sitio también ahí, y la zona de abajo deja de
         # tener un estado vacío.
-        _con_tabla = _con_detalle or _modo == _MODO_RESUMEN
+        _con_tabla = _con_detalle or _modo in (_MODO_RESUMEN, _MODO_PROVS)
         _alto_fig = (_ALTO_FIG_CON_TABLA if _con_tabla else _ALTO_FIG_SOLO)
 
         # ── LA ETIQUETA DE CADA BARRA (#440, #454 y #470) ────────────────
@@ -1687,7 +1794,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # lo reventaba igual: una barra en foco + texto encima = el mismo
         # estado. Atenuar el color (rgba con alpha) da el mismo gris sin
         # tocar `opacity`, así que el bug no existe. Ver regla #476.
-        _marcar_foco = _con_detalle and _modo != _MODO_RESUMEN
+        _marcar_foco = (_con_detalle and _modo == _MODO_DETALLE
+                        and not _prov_ok)
         if _marcar_foco and _partida:
             # Las tres trazas comparten el eje `_ord_claves`, así que el
             # mismo criterio sirve para las tres: lo que se marca es el
@@ -1968,6 +2076,42 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 "del eje; un clic en la cabecera lo cambia.")
             return
 
+        # ── MODO RESUMEN DEL PERÍODO: los proveedores del rango (#580) ───
+        # Una fila por proveedor, de mayor a menor valor. Un clic en una
+        # lleva a Detalle con el ámbito de ese proveedor; ese clic ya se
+        # leyó arriba de todo (ver «RESUMEN DEL PERÍODO: la tabla, y su
+        # clic»), acá sólo se dibuja la tabla con la key que se va a leer.
+        if _modo == _MODO_PROVS:
+            with st.container(key="cp_sem_provs"):
+                st.dataframe(
+                    _tp_provs.drop(columns="__prov").style.format({
+                        "Valor": "S/ {:,.2f}",
+                        "% del período": "{:.1f}%",
+                        "Documentos": "{:,}",
+                        "Ítems distintos": "{:,}",
+                    }),
+                    hide_index=True, width="stretch", height=_ALTO_TABLA,
+                    # `single-cell` y no `single-row`: con filas, Streamlit
+                    # sólo elige desde la casilla de la izquierda y un clic
+                    # en el nombre apenas enfoca la celda (medido). Con
+                    # celdas, un clic en CUALQUIER parte de la fila cuenta,
+                    # y la columna de casillas no aparece.
+                    on_select="rerun", selection_mode="single-cell",
+                    key=_k_provs,
+                    column_config={
+                        "Proveedor": st.column_config.Column(width="large"),
+                        "Ítems distintos": st.column_config.Column(
+                            help="Productos distintos que se le compraron "
+                                 "en el período."),
+                    })
+            _n_p = len(_tp_provs)
+            _pie.caption(
+                f"**{_del_al(dd['fecha'])}** · {_n_p:,} "
+                f"{'proveedor' if _n_p == 1 else 'proveedores'} · "
+                f"S/ {float(_tp_provs['Valor'].sum()):,.2f} — un clic en "
+                "un proveedor abre sus documentos en Detalle.")
+            return
+
         # El CAPTION es un elemento simple: un `if/else`
         # desnudo lo reconcilia bien (mismo conteo de
         # elementos en los tres branches, sólo cambia el
@@ -2026,7 +2170,12 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # En «Por documento» la barra YA es una compra, y listarla sola sería
         # una tabla de una fila: ahí la lista son las compras de SU DÍA, que
         # es la unidad que el eje agrupa con las punteadas.
-        if gran == "Por documento":
+        if _prov_ok:
+            # El ámbito de un PROVEEDOR (#580): sus compras de TODO el rango,
+            # sea cual sea la granularidad.
+            _amb = dd[dd["prov"] == _prov_det]
+            _id_amb = f"prov:{_prov_det}"
+        elif gran == "Por documento":
             _dia = dd.loc[dd["compra"] == _focus, "fecha"].iloc[0].normalize()
             _amb = dd[dd["fecha"].dt.normalize() == _dia]
             _id_amb = f"{_dia:%Y-%m-%d}"
@@ -2046,9 +2195,9 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # barra; y si no hay ninguna, la MAYOR del período, que es la primera
         # fila. Así la tabla de al lado nunca está vacía, el mismo criterio
         # que `drill_tablas.tabla_ranking(abrir_en_mayor=True)`.
-        if _doc_ok:
+        if _doc_ok and _doc in set(_amb["compra"]):
             _sel = _doc
-        elif gran == "Por documento":
+        elif gran == "Por documento" and not _prov_ok:
             _sel = _focus
         else:
             _sel = _docs["compra"].iloc[0]
@@ -2142,7 +2291,10 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # El caption NOMBRA el ámbito y nada más: cuántas compras y cuánto
         # suman lo dicen ahora las filas TOTAL, y dos lugares con el mismo
         # número son dos lugares donde pueden diferir.
-        if gran == "Por documento":
+        if _prov_ok:
+            _nombre_amb = (f"{nombre_propio(_prov_det)} · "
+                           f"{_del_al(_amb['fecha'])}")
+        elif gran == "Por documento":
             _nombre_amb = (f"{cortes.DIAS_ABR_ES[_dia.weekday()].capitalize()} "
                            f"{_dia:%d/%m/%Y} · las compras del día")
         elif gran == "Día":
@@ -2178,7 +2330,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         if (_clic is None or _clic == _sel
                 or _clic not in set(_docs["compra"])):
             return
-        if gran == "Por documento":
+        if gran == "Por documento" and not _prov_ok:
             st.session_state["compras_sem_focus"] = _clic
         else:
             st.session_state["compras_sem_doc"] = _clic

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-579 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+580 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -316,7 +316,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#578** — Compras › Proveedor son dos filas: [Ranking | Productos] arriba y [Documentos | Evolución |…
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 
-**Plotly y figuras** (104)
+**Plotly y figuras** (105)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -422,6 +422,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#549** — El buscador de Volatilidad encuentra CUALQUIER insumo; el ranking sigue filtrado. Los de…
 - **#554** — En el mapa de «Por hora», la fila bajo el cursor se ENMARCA entera y su hora va en negrita;…
 - **#565** — En la ficha de la hora, el subtítulo va en el renglón del título y «POR MESA» en la fila de…
+- **#580** — Compras › «Compras por período»: la zona de abajo tiene TRES modos —Resumen Total, Resumen…
 
 **AgGrid y tablas** (88)
 
@@ -868,7 +869,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (142)
+**Decisiones de diseño y UX** (143)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1012,6 +1013,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 - **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
+- **#580** — Compras › «Compras por período»: la zona de abajo tiene TRES modos —Resumen Total, Resumen…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -46220,6 +46222,44 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - **En Cloud, reiniciar la app** (#357): `proveedor.py` importa de
        `_comun.py` un nombre nuevo (`COLUMNAS_DRILL_ABAJO`) en lugar de
        `COLUMNAS_DRILL_TRES`, que ya no existe.
+
+     (2026-10-01.)
+
+580. **Compras › «Compras por período»: la zona de abajo tiene TRES modos
+     —Resumen Total, Resumen del Período y Detalle—, de lo general a lo
+     particular, y abre en Resumen Total.** 2026-10-01, a pedido, con
+     captura: «que la vista predeterminada sea Resumen, pero que ahora se
+     llame Resumen Total; luego, al costado, como un toggle del medio, otro
+     llamado Resumen del Período, con los nombres de los proveedores,
+     cantidad de documentos, % del valor total del período y cantidad de
+     ítems distintos; y al hacer clic en una de las filas, que te lleve a
+     la vista Detalle, que estará al lado, como tercero». En
+     `graficos/compras/semanal.py`.
+     - **«Resumen del Período» mira el RANGO de la tarjeta**, no una barra
+       (`_resumen_proveedores`): una fila por proveedor, de mayor a menor
+       valor. El caption dice el rango, cuántos proveedores y el total.
+     - **Un clic en un proveedor abre Detalle con el ámbito de ESE
+       proveedor**: sus compras de todo el rango (`compras_sem_prov_det`),
+       sea cual sea la granularidad, y el caption lo nombra. Un clic en una
+       barra lo suelta y vuelve al ámbito de la barra; con un proveedor
+       abierto el gráfico no atenúa barras, porque no hay UNA en foco.
+     - **El clic en la tabla se lee ARRIBA DE TODO**, antes de la figura y
+       del toggle: cambia el modo, y el modo es una clave de widget que
+       sólo se puede escribir antes de que el `segmented_control` se dibuje
+       (y decide el alto de la figura). Es la receta del clic en la barra
+       (#399): la selección se lee de `session_state[key]` y la key lleva
+       un CONTADOR (`compras_sem_pnclic`) que sube con cada clic leído, así
+       la tabla se estrena y la selección vieja no se vuelve a aplicar.
+     - **`selection_mode="single-cell"`, no `single-row`**: con filas,
+       `st.dataframe` sólo elige desde la casilla de la izquierda y un clic
+       en el nombre apenas enfoca la celda (medido con Playwright: el modo
+       no cambiaba). Con celdas, cualquier clic en la fila cuenta y la
+       columna de casillas no aparece; `_fila_elegida` lee `cells` (o
+       `rows`).
+     - **«Resumen» pasó a llamarse «Resumen Total»**, y el valor del toggle
+       es el texto: una sesión vieja guardó «Resumen», y un
+       `segmented_control` con un valor fuera de sus opciones revienta. Se
+       corrige la CLAVE antes de dibujar, no sólo la variable.
 
      (2026-10-01.)
 
