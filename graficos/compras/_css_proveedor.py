@@ -1704,6 +1704,20 @@ CSS = """        <style>
             height: 24px; display: flex; align-items: center;
             width: auto !important;
         }
+        /* La medida de los Productos «por período» (regla #579) va un
+           renglón más abajo que las otras pastillas: en el de la NOTA, que
+           le reserva su lugar a la derecha (`.cp-modo-nota.con-medida`). */
+        div[class*="st-key-cp_modo_"].st-key-cp_modo_medida {
+            top: 22px; height: 18px;
+        }
+        .st-key-cp_modo_medida [data-testid="stButtonGroup"] > div {
+            gap: 10px !important;
+        }
+        .st-key-cp_modo_medida [data-testid="stButtonGroup"] button {
+            min-height: 18px !important; height: 18px !important;
+            font-size: 10.5px !important;
+        }
+        .cp-modo-nota.con-medida { padding-right: 190px; }
         /* En la fila del título y a la derecha: el título cede (ellipsis,
            con la reserva de `padding-right` de su cabecera) y las pastillas
            no se mueven. Por debajo de 900px bajan a un renglón propio (el
@@ -1898,6 +1912,9 @@ CSS = """        <style>
            entraba (se pasaba ~18px, por eso se fue). */
         .st-key-cp_evo_ctrl > .st-key-cp_evo_periodo { width: 56px !important; }
         .st-key-cp_evo_ctrl .st-key-gran_float { width: 84px !important; }
+        /* La medida de la Evolución (Soles / Cantidad / Precio, regla #579):
+           «Cantidad» es la más larga, 74px con su chevron. */
+        .st-key-cp_evo_ctrl .st-key-evo_medida { width: 78px !important; }
         .st-key-cp_evo_ctrl .st-key-win_size { width: 64px !important; }
         .st-key-cp_evo_ctrl [data-testid="stSelectbox"] { width: 100% !important; }
         /* Las flechas ‹ › entran al renglón compartido: pierden el margen
@@ -2058,13 +2075,13 @@ CSS = """        <style>
             display: grid; align-items: center; column-gap: 8px;
             grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) 40px 52px 56px 10px;
         }
-        .cp-pl-head, .cp-pm-head {
+        .cp-pl-head, .cp-pm-head, .cp-dl-head {
             height: 28px; padding: 0 8px;
             font-size: 11.5px; color: var(--text-secondary);
             border-top: 3px solid var(--border);
             border-bottom: 1px solid var(--border);
         }
-        .cp-pl-head .r, .cp-pm-head .r { text-align: right; }
+        .cp-pl-head .r, .cp-pm-head .r, .cp-dl-head .r { text-align: right; }
         .cp-pl-lista {
             overflow-y: auto; overflow-x: hidden;
         }
@@ -2216,8 +2233,84 @@ CSS = """        <style>
             text-align: right; font-size: 11.5px; font-weight: 600;
             color: var(--text-secondary); font-variant-numeric: tabular-nums;
         }
-        .cp-pm-fila .var.sube { color: var(--danger-text); }
-        .cp-pm-fila .var.baja { color: var(--success-text); }
+        .cp-pm-fila .var.sube, .cp-dl .var.sube { color: var(--danger-text); }
+        .cp-pm-fila .var.baja, .cp-dl .var.baja { color: var(--success-text); }
+        /* La unidad al lado del nombre, en Cantidad y Precio. */
+        .cp-pm-fila .nm small {
+            margin-left: 5px; font-size: 10px; font-weight: 400;
+            color: var(--text-muted);
+        }
+
+        /* ── DOCUMENTOS: la tabla que se despliega ──────────────────────
+           2026-10-01 (regla #579). Era un `st.dataframe`; pasó a HTML para
+           que cada fila se abra: un documento en sus productos (cantidad,
+           precio unitario y valor) y un período en sus documentos (fecha,
+           número, filas y total). El renglón es de 26px —el que tenía en
+           `st.dataframe` era de 28— y lo de adentro va como las filas de
+           proveedores de Productos: más chico y en gris, porque es el
+           detalle de la fila que lo abre. */
+        .cp-dl { font-size: 12px; line-height: 1.25; }
+        .cp-dl-doc .cp-dl-head, .cp-dl-doc .cp-dl-row > summary {
+            display: grid; align-items: center; column-gap: 8px;
+            grid-template-columns: 62px minmax(0, 1fr) 40px 76px 70px 10px;
+        }
+        .cp-dl-per .cp-dl-head, .cp-dl-per .cp-dl-row > summary {
+            display: grid; align-items: center; column-gap: 8px;
+            grid-template-columns: minmax(0, 1fr) 44px 90px 70px 10px;
+        }
+        .cp-dl-head .ayuda {
+            cursor: help; text-decoration: underline dotted;
+            text-underline-offset: 3px;
+        }
+        .cp-dl-row { border-bottom: 1px solid var(--border); }
+        .cp-dl-row > summary {
+            height: 26px; padding: 0 8px; cursor: pointer; list-style: none;
+            color: var(--text-primary); font-variant-numeric: tabular-nums;
+        }
+        .cp-dl-row > summary::-webkit-details-marker { display: none; }
+        .cp-dl-row > summary:hover { background: var(--bg-primary); }
+        .cp-dl-row[open] > summary { background: var(--accent-tint); }
+        .cp-dl-row .nm {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .cp-dl-row .r, .cp-dl-lin .r { text-align: right; }
+        .cp-dl .var { text-align: right; font-size: 11.5px; font-weight: 600;
+                      color: var(--text-secondary); }
+        .cp-dl-row > summary::after {
+            content: ""; width: 5px; height: 5px; justify-self: end;
+            border-right: 1.5px solid var(--text-muted);
+            border-bottom: 1.5px solid var(--text-muted);
+            transform: translateY(-2px) rotate(45deg);
+            transition: transform 0.15s;
+        }
+        .cp-dl-row[open] > summary::after {
+            transform: translateY(1px) rotate(-135deg);
+            border-color: var(--accent);
+        }
+        .cp-dl-det {
+            padding: 2px 0 4px 16px;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border);
+        }
+        .cp-dl-lin {
+            display: grid; align-items: center; column-gap: 8px;
+            grid-template-columns: minmax(0, 1fr) 72px 72px 64px;
+            height: 19px; padding: 0 8px;
+            font-size: 11.5px; color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+            border-bottom: 0.5px solid var(--border);
+        }
+        .cp-dl-lin:last-child { border-bottom: none; }
+        .cp-dl-lin.per {
+            grid-template-columns: 62px minmax(0, 1fr) 40px 76px;
+        }
+        .cp-dl-lin.cab {
+            font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase;
+            color: var(--text-muted); height: 18px;
+        }
+        .cp-dl-lin .nm {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
         /* Una tarjeta ANGOSTA saca la Tendencia y le da su lugar al nombre
            del producto. Es el ancho de la TARJETA, no el de la ventana: la
            misma ventana deja la tarjeta en ~580px con la columna de la

@@ -33,8 +33,8 @@ import streamlit as st
 
 from st_aggrid import AgGrid, JsCode
 
-from tema import (ACENTO, ACENTO_TEXTO_OSCURO, CELDA_POS_TEXTO, ERROR,
-                  ERROR_TEXTO, EXITO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_CHIP,
+from tema import (ACENTO, ACENTO_TEXTO_OSCURO, ERROR, EXITO, GRIS_BORDE,
+                  GRIS_TEXTO, LAVANDA_CHIP,
                   TEXTO_PRINCIPAL)
 from inyecciones import inject_hover_kpis, inyectar_html
 from graficos.base import (
@@ -57,6 +57,7 @@ from graficos import alturas, periodo
 _KEYS_WIDGET = (
     "compras_prov_gran", "cp_prov_win_size", "cp_evo_periodo",
     "cp_prov_show_names", "cp_prov_docs_modo", "cp_prov_prods_modo",
+    "cp_evo_medida", "cp_prov_prods_medida",
     "cp_prov_q", "cp_prov_cb::*",
 )
 """Los controles de esta sección, para que la escalada no se los lleve.
@@ -97,9 +98,9 @@ def _var_pct(cur, prev):
     """Variación % de `cur` contra `prev`, con `inf` cuando no hay contra
     qué comparar (no hay anterior, o el anterior es cero).
 
-    `inf` y no NaN a propósito: un vacío en `st.dataframe` se pinta «None»
-    aunque el Styler diga otra cosa, y un valor sí lo alcanza el formato,
-    que lo escribe «—» (regla #529). Desde cero no hay porcentaje: el mismo
+    `inf` y no NaN: nació para un `st.dataframe`, donde un vacío se pinta
+    «None» aunque el Styler diga otra cosa (regla #529); desde que las
+    tablas son HTML sólo importa que `_fmt_var` lo escribe «—». Desde cero no hay porcentaje: el mismo
     criterio que los KPIs de la Evolución (`_var_txt`)."""
     if prev is None or pd.isna(prev) or float(prev) <= 0:
         return np.inf
@@ -116,52 +117,197 @@ def _fmt_var(v):
     return f"{'▲' if v > 0 else '▼'} {abs(v):.1f}%"
 
 
-def _color_var(v):
-    """En Compras GASTAR MÁS es rojo y gastar menos, verde — lo fija `_delta`
-    en `graficos/compras/__init__.py` y lo repiten los KPIs de la Evolución.
-    Por debajo del 0,5 % la flecha va sin color: es ruido."""
-    if not np.isfinite(v) or abs(v) < 0.5:
-        return f"color: {GRIS_TEXTO}"
-    # Los mismos dos tonos de texto que `--danger-text`/`--success-text`
-    # del CSS, que pintan la variación de los Productos por período.
-    return f"color: {ERROR_TEXTO if v > 0 else CELDA_POS_TEXTO}"
+_MEDIDAS = {"valor": "Soles", "cant": "Cantidad", "precio": "Precio"}
+"""Lo que pueden medir la Evolución y los Productos «por período»
+(2026-10-01, a pedido: «un selector Soles / Cantidad / Precio»). Regla
+#579. Cantidad y Precio sólo tienen sentido sobre UN producto en la
+Evolución: sumar kilos de mantequilla con litros de aceite no da nada que
+se pueda leer."""
+
+
+def _serie_medida(df, orden, medida):
+    """La medida de `df` por período, en el orden de `orden` (los que no
+    tienen compras salen en cero, o vacíos en Precio).
+
+    El precio es el PROMEDIO PONDERADO del período —lo pagado sobre lo
+    comprado—, no el promedio de los precios de cada compra: una compra
+    grande pesa lo que pesó en la caja. Sin cantidad no hay precio, y queda
+    vacío (NaN) en vez de en cero, que se leería como «gratis»."""
+    g = (df.groupby("per").agg(valor=("valor", "sum"), cant=("cant", "sum"))
+           .reindex(orden).fillna(0.0))
+    if medida == "cant":
+        return g["cant"]
+    if medida == "precio":
+        return g["valor"] / g["cant"].where(g["cant"] > 0)
+    return g["valor"]
+
+
+def _fmt_medida(v, medida, um=""):
+    """Un valor de la medida, como se lee: «S/ 4,421», «112 KILOS»,
+    «S/ 39.41» (el precio con céntimos: es lo único que se compara al
+    céntimo) o «—»."""
+    if v is None or pd.isna(v):
+        return "—"
+    if medida == "cant":
+        return f"{v:,.0f}" + (f" {um}" if um else "")
+    if medida == "precio":
+        return f"S/ {v:,.2f}"
+    return f"S/ {v:,.0f}"
+
+
+def _fila_var(v):
+    """La celda «Var. %» de las tablas HTML: el texto de `_fmt_var` con el
+    color de Compras (rojo si subió el gasto, verde si bajó, sin color por
+    debajo del 0,5 %)."""
+    _cls = ("" if not np.isfinite(v) or abs(v) < 0.5
+            else (" sube" if v > 0 else " baja"))
+    return f'<span class="var{_cls}">{_fmt_var(v)}</span>'
+
+
+def _cant_txt(c):
+    """Una cantidad sin ceros de más: «112», «2.5», «0.75»."""
+    return f"{c:,.2f}".rstrip("0").rstrip(".")
+
+
+def _html_docs_por_documento(sub, alto_lista):
+    """«Por documento»: una fila por comprobante, que se DESPLIEGA en sus
+    productos con cantidad, precio unitario y valor. Devuelve
+    `(html, n_documentos, total)`. `sub` son las líneas del proveedor en el
+    rango del Ranking, con número de documento."""
+    docs = (sub.groupby("docu", as_index=False)
+               .agg(fecha=("fecha", "min"), valor=("valor", "sum"),
+                    prods=("prod", "nunique"))
+               .sort_values(["fecha", "docu"], ascending=False, kind="stable")
+               .reset_index(drop=True))
+    docs["leg"] = documento_legible(docs["docu"]).to_numpy()
+    # Las líneas de cada documento, sumadas por producto (un producto puede
+    # venir en dos líneas del mismo comprobante). El precio es lo pagado
+    # sobre lo comprado; sin cantidad, «—».
+    lin = (sub.groupby(["docu", "prod"], as_index=False)
+              .agg(cant=("cant", "sum"), valor=("valor", "sum"),
+                   um=("um", "first"))
+              .sort_values(["docu", "valor"], ascending=[True, False],
+                           kind="stable"))
+    cuerpos = {}
+    for docu, ls in lin.groupby("docu", sort=False):
+        # Sólo arma TEXTO: lo calculado ya está arriba (regla #537).
+        filas = []
+        for r in ls.itertuples(index=False):
+            um = "" if str(r.um) in ("", "nan", "None") else _esc(r.um)
+            pu = (f"S/ {r.valor / r.cant:,.2f}" if r.cant else "—")
+            filas.append(
+                f'<div class="cp-dl-lin"><span class="nm" title="{_esc(r.prod)}">'
+                f'{_esc(r.prod)}</span><span class="r">{_cant_txt(r.cant)}'
+                f'{" " + um if um else ""}</span>'
+                f'<span class="r">{pu}</span>'
+                f'<span class="r">S/ {r.valor:,.0f}</span></div>')
+        cuerpos[docu] = "".join(filas)
+    vals = docs["valor"].to_numpy(dtype=float)
+    filas = []
+    for i, r in enumerate(docs.itertuples(index=False)):
+        # Ordenado del más nuevo al más viejo: el anterior es el de ABAJO.
+        var = _var_pct(vals[i], vals[i + 1] if i + 1 < len(vals) else None)
+        fec = "—" if pd.isna(r.fecha) else pd.Timestamp(r.fecha).strftime("%d/%m/%y")
+        filas.append(
+            f'<details class="cp-dl-row"><summary>'
+            f'<span>{fec}</span><span class="nm">{_esc(r.leg)}</span>'
+            f'<span class="r">{int(r.prods)}</span>'
+            f'<span class="r">S/ {r.valor:,.0f}</span>{_fila_var(var)}</summary>'
+            f'<div class="cp-dl-det"><div class="cp-dl-lin cab"><span>Producto</span>'
+            f'<span class="r">Cant.</span><span class="r">P. unit.</span>'
+            f'<span class="r">Valor</span></div>{cuerpos.get(r.docu, "")}</div>'
+            f'</details>')
+    _ayuda = ("El rango del Ranking. Var. %: contra el documento anterior "
+              "(el de abajo).")
+    html_ = ('<div class="cp-dl cp-dl-doc"><div class="cp-dl-head">'
+             '<span>Fecha</span><span>Documento</span>'
+             '<span class="r" title="Productos distintos en el documento">Prods</span>'
+             '<span class="r">Valor</span>'
+             f'<span class="r ayuda" title="{_ayuda}">Var. %</span></div>'
+             f'<div class="cp-pl-lista" style="max-height:{alto_lista}px">'
+             + "".join(filas) + '</div></div>')
+    return html_, len(docs), float(vals.sum())
+
+
+def _html_docs_por_periodo(sp, per_orden, etq, alto_lista):
+    """«Por <granularidad>»: una fila por período de la ventana de la
+    Evolución, que se DESPLIEGA en sus documentos —número, fecha, cuántas
+    filas (líneas) trae y su total—. Devuelve `(html, n_documentos,
+    total)`. `sp` son las líneas del proveedor en esa ventana."""
+    _sp = sp[sp["docu"].astype(str).str.strip() != ""]
+    g = (sp.groupby("per")["valor"].sum().reindex(per_orden).fillna(0.0))
+    n_docs = _sp.groupby("per")["docu"].nunique().reindex(per_orden).fillna(0)
+    docs = (_sp.groupby(["per", "docu"], as_index=False)
+               .agg(fecha=("fecha", "min"), valor=("valor", "sum"),
+                    filas=("valor", "size"))
+               .sort_values(["per", "fecha", "docu"],
+                            ascending=[True, False, False], kind="stable"))
+    docs["leg"] = documento_legible(docs["docu"]).to_numpy()
+    cuerpos = {}
+    for per, ds in docs.groupby("per", sort=False):
+        # Sólo arma TEXTO (regla #537).
+        cuerpos[per] = "".join(
+            f'<div class="cp-dl-lin per"><span>'
+            f'{"—" if pd.isna(r.fecha) else pd.Timestamp(r.fecha).strftime("%d/%m/%y")}'
+            f'</span><span class="nm">{_esc(r.leg)}</span>'
+            f'<span class="r">{int(r.filas)}</span>'
+            f'<span class="r">S/ {r.valor:,.0f}</span></div>'
+            for r in ds.itertuples(index=False))
+    vals = g.to_numpy(dtype=float)
+    filas = []
+    for i in range(len(per_orden) - 1, -1, -1):
+        p = per_orden[i]
+        var = _var_pct(vals[i], vals[i - 1] if i else None)
+        cuerpo = cuerpos.get(p)
+        cab = ('<div class="cp-dl-lin per cab"><span>Fecha</span>'
+               '<span>Documento</span><span class="r">Filas</span>'
+               '<span class="r">Total</span></div>')
+        filas.append(
+            f'<details class="cp-dl-row"><summary>'
+            f'<span class="nm"><b>{_esc(etq(p))}</b></span>'
+            f'<span class="r">{int(n_docs.iloc[i])}</span>'
+            f'<span class="r">S/ {vals[i]:,.0f}</span>{_fila_var(var)}</summary>'
+            f'<div class="cp-dl-det">'
+            + (cab + cuerpo if cuerpo
+               else '<div class="cp-pl-vacio">Sin documentos en el período.</div>')
+            + '</div></details>')
+    _ayuda = ("Los períodos de la Evolución (su ventana). Var. %: contra el "
+              "período anterior.")
+    html_ = ('<div class="cp-dl cp-dl-per"><div class="cp-dl-head">'
+             '<span>Período</span><span class="r">Docs</span>'
+             '<span class="r">Valor</span>'
+             f'<span class="r ayuda" title="{_ayuda}">Var. %</span></div>'
+             f'<div class="cp-pl-lista" style="max-height:{alto_lista}px">'
+             + "".join(filas) + '</div></div>')
+    return html_, int(n_docs.sum()), float(vals.sum())
 
 
 def _tarjeta_documentos(base, prov, alto, gran, src_per, per_orden, etq):
     """La tarjeta «Documentos · <proveedor>», abajo a la izquierda.
 
-    Nació el 2026-10-01, a pedido («una tabla que debe mostrar los
-    documentos del proveedor que está seleccionado arriba, indicando fecha,
-    número de documento, valor»; regla #578), y el mismo día ganó dos cosas
-    (regla #579): el modo AGRUPADO —«que se pueda agrupar según la
-    agrupación del gráfico Evolución»— y la variación % contra la fila
-    anterior.
+    Nació el 2026-10-01, a pedido (regla #578), y el mismo día ganó, de a
+    pedidos (regla #579): el modo AGRUPADO según la Evolución, la variación
+    % contra la fila anterior, el total al pie, la columna «Prods» y el
+    DESPLIEGUE de cada fila:
 
-    Dos modos, en las pastillas de la cabecera:
+    - **Por documento**: un comprobante por fila, del RANGO DEL RANKING
+      (`base` ya viene recortado), con su fecha, su número, cuántos
+      productos distintos trae, su valor y la variación contra el documento
+      anterior (el de abajo). Se despliega en sus productos con cantidad,
+      precio unitario y valor.
+    - **Por <granularidad de la Evolución>**: un período por fila, de LA
+      VENTANA de la Evolución (`src_per`/`per_orden`, también los que
+      quedaron en cero; el Ranking abre en un mes y agrupado daba una o dos
+      filas), con cuántos documentos y cuánto valor. Se despliega en sus
+      documentos: número, fecha, cuántas filas trae y su total.
 
-    - **Por documento**: una fila por comprobante del RANGO DEL RANKING
-      (`base` ya viene recortado por la fecha de su cabecera), así que
-      cuenta lo mismo que la columna Docs de su fila. Un documento es su
-      número: se agrupa por `docu` y se suma el valor de sus líneas; las
-      líneas sin número quedan fuera (tampoco las cuenta el Ranking). La
-      variación es contra el documento ANTERIOR (el de abajo).
-    - **Por <granularidad de la Evolución>**: una fila por período de LA
-      VENTANA DE LA EVOLUCIÓN (`src_per`/`per_orden`, los mismos períodos
-      que dibuja su línea, también los que quedaron en cero), con cuántos
-      documentos y cuánto valor. Ventana de la Evolución y no rango del
-      Ranking: el Ranking abre en un mes, y agrupado por mes daba una o dos
-      filas. La variación es contra el período anterior.
+    Desde que se despliega es HTML (`<details>`) y no `st.dataframe`, que no
+    tiene filas que se abran: abre al instante, sin rerun. La nota de cada
+    modo es el TOOLTIP de la cabecera «Var. %» (un `title`: a pedido, «que
+    sólo aparezca al pasar el cursor por la cabecera»), y el total va al pie.
 
-    Del más nuevo al más viejo en los dos: la pregunta que la trae es «qué
-    le compré últimamente».
-
-    `st.dataframe` y no AgGrid: es de sólo lectura, y cada AgGrid le cuesta
-    a la página 1,28 MB y más de un segundo de navegador (regla #540). Con
-    un Styler Streamlit muestra SUS textos en todas las celdas, así que todo
-    formato va por él; el autoajuste de columnas mide el valor CRUDO, por
-    eso los anchos fijos.
-
-    `alto` son las seis filas de la fila de abajo (`_ALTO_DOCS`).
+    `alto` son las seis filas de la fila de abajo (`_ALTO_DOCS`): la lista
+    scrollea a partir de ahí.
     """
     _tit = ("Documentos" if prov is None
             else f"Documentos · {_compras_truncar(nombre_propio(prov), 24)}")
@@ -184,95 +330,29 @@ def _tarjeta_documentos(base, prov, alto, gran, src_per, per_orden, etq):
                 ) or "doc"
             if prov is None:
                 return
-            # La nota de cada modo («de dónde salen las filas y contra qué
-            # se compara») era un renglón fijo bajo el título; desde el
-            # 2026-10-01 es el tooltip de la cabecera «Var. %», a pedido:
-            # «que sólo aparezca al pasar el cursor por la cabecera de la
-            # columna». Sus 18px los usa el TOTAL del pie.
             if _modo == "per":
-                _ayuda_var = ("Los períodos de la Evolución (su ventana). "
-                              "Var. %: contra el período anterior.")
                 if src_per is None or not per_orden:
                     st.caption("La Evolución no tiene períodos que agrupar.")
                     return
-                _sp = src_per[src_per["prov"] == prov]
-                _docu = _sp["docu"].astype(str).str.strip()
-                _g = pd.DataFrame({
-                    "valor": _sp.groupby("per")["valor"].sum(),
-                    "docs": _sp.assign(_d=_docu.where(_docu != ""))
-                               .groupby("per")["_d"].nunique(),
-                }).reindex(per_orden).fillna(0)
-                _vals = _g["valor"].to_numpy(dtype=float)
-                _var = [_var_pct(v, _vals[i - 1] if i else None)
-                        for i, v in enumerate(_vals)]
-                _tabla = pd.DataFrame({
-                    "Período": [etq(p) for p in per_orden],
-                    "Docs": _g["docs"].to_numpy(dtype=int),
-                    "Valor": _vals,
-                    "Var. %": _var,
-                }).iloc[::-1].reset_index(drop=True)
-                _anchos = {"Período": 74, "Docs": 44, "Valor": 76,
-                           "Var. %": 70}
-                _fmt = {"Valor": "S/ {:,.0f}", "Var. %": _fmt_var}
-                _n_docs = int(_g["docs"].sum())
+                _html, _n_docs, _tot = _html_docs_por_periodo(
+                    src_per[src_per["prov"] == prov], per_orden, etq, alto)
             else:
-                _ayuda_var = ("El rango del Ranking. Var. %: contra el "
-                              "documento anterior (el de abajo).")
                 _sub = base[(base["prov"] == prov)
                             & (base["docu"].astype(str).str.strip() != "")]
                 if _sub.empty:
                     st.caption("Sin números de documento para este "
                                "proveedor en el rango.")
                     return
-                # Columnas por NOMBRE, no por posición: el `groupby` sale con
-                # otra forma en pandas 3 que en el 2.2 de Cloud (regla #481).
-                _g = (_sub.groupby("docu", as_index=False)
-                          .agg(fecha=("fecha", "min"), valor=("valor", "sum"))
-                          .sort_values(["fecha", "docu"], ascending=False,
-                                       kind="stable")
-                          .reset_index(drop=True))
-                _vals = _g["valor"].to_numpy(dtype=float)
-                # Ordenado del más nuevo al más viejo: el anterior de cada
-                # documento es el de ABAJO.
-                _var = [_var_pct(v, _vals[i + 1] if i + 1 < len(_vals)
-                                 else None)
-                        for i, v in enumerate(_vals)]
-                _tabla = pd.DataFrame({
-                    "Fecha": pd.to_datetime(_g["fecha"]).to_numpy(),
-                    "Documento": documento_legible(_g["docu"]).to_numpy(),
-                    "Valor": _vals,
-                    "Var. %": _var,
-                })
-                _anchos = {"Fecha": 64, "Documento": 78, "Valor": 72,
-                           "Var. %": 70}
-                _n_docs = len(_g)
-                _fmt = {
-                    "Fecha": lambda f: ("—" if pd.isna(f)
-                                        else f.strftime("%d/%m/%y")),
-                    # Sin céntimos, como el Valor del Ranking y de los
-                    # Productos: los céntimos eran lo que no entraba.
-                    "Valor": "S/ {:,.0f}",
-                    "Var. %": _fmt_var,
-                }
-            st.dataframe(
-                _tabla.style.format(_fmt).map(_color_var, subset=["Var. %"]),
-                hide_index=True, width="stretch", height=alto,
-                row_height=ALTO_FILA_RANK + 4,
-                column_config={k: st.column_config.Column(
-                                   width=w,
-                                   help=_ayuda_var if k == "Var. %" else None)
-                               for k, w in _anchos.items()},
-                key=f"cp_prov_docs_tab_{_modo}",
-            )
-            # El TOTAL, al pie y FUERA de la tabla: `st.dataframe` no tiene
-            # fila fija al final, y una fila «Total» de datos se movería al
-            # ordenar por una columna. Mismo lavanda y negrita que la fila
-            # TOTAL del Ranking.
-            st.markdown(
-                f'<div class="cp-docs-total"><span>Total · {_n_docs:,} '
-                f'{"documento" if _n_docs == 1 else "documentos"}</span>'
-                f'<span>S/ {float(np.sum(_vals)):,.0f}</span></div>',
-                unsafe_allow_html=True)
+                _html, _n_docs, _tot = _html_docs_por_documento(_sub, alto)
+            # El TOTAL, al pie: el lavanda y la negrita de la fila TOTAL del
+            # Ranking.
+            _html += (f'<div class="cp-docs-total"><span>Total · {_n_docs:,} '
+                      f'{"documento" if _n_docs == 1 else "documentos"}</span>'
+                      f'<span>S/ {_tot:,.0f}</span></div>')
+            # Remontaje por contenido, como la tabla de Productos (#377).
+            _k = zlib.crc32(_html.encode("utf-8"))
+            with st.container(key=f"cp_dl_{_k:08x}"):
+                st.markdown(_html, unsafe_allow_html=True)
 
 
 def _esc(t):
@@ -463,9 +543,19 @@ def _tarjeta_productos(base, prov, prod_foco, gran, src_per, per_orden,
                           label_visibility="collapsed",
                           on_change=_relevo_producto)
             if _modo == "per":
+                # La medida de la matriz (2026-10-01, a pedido): sólo en
+                # este modo, en el renglón de la nota, a la derecha. Es SUYA
+                # y no la de la Evolución: acá cada fila es un producto, así
+                # que Cantidad y Precio tienen sentido sin elegir ninguno.
+                with st.container(key="cp_modo_medida"):
+                    _medida = st.pills(
+                        "Medida de los productos", list(_MEDIDAS),
+                        default="valor", format_func=_MEDIDAS.get,
+                        key="cp_prov_prods_medida",
+                        label_visibility="collapsed") or "valor"
                 _html = _html_productos_por_periodo(
                     prov, src_per, per_orden, evo_x, etq, gran, _alto_lista,
-                    prod_foco)
+                    prod_foco, _medida)
             else:
                 _html = _html_productos_total(
                     base, prov, d_full, cols, color_map, _alto_lista,
@@ -548,9 +638,10 @@ def _html_productos_total(base, prov, d_full, cols, color_map, alto_lista,
 
 
 def _html_productos_por_periodo(prov, src_per, per_orden, evo_x, etq, gran,
-                                alto_lista, prod_foco=None):
+                                alto_lista, prod_foco=None, medida="valor"):
     """La tabla de productos «Por <granularidad>»: cada producto en los
-    últimos (hasta cuatro) períodos de la Evolución. Ver
+    últimos (hasta cuatro) períodos de la Evolución, en la `medida` que se
+    elija (Soles, Cantidad o Precio promedio del período). Ver
     `_tarjeta_productos`."""
     if src_per is None or not per_orden or "prod" not in src_per.columns:
         return ('<div class="cp-modo-nota">La Evolución no tiene períodos '
@@ -563,19 +654,39 @@ def _html_productos_por_periodo(prov, src_per, per_orden, evo_x, etq, gran,
     ant = per_orden[_i0 - 1] if _i0 > 0 else None
     cols_p = ([ant] if ant is not None else []) + vis
     sp = src_per[(src_per["prov"] == prov) & src_per["per"].isin(cols_p)]
-    m = (sp.groupby(["prod", "per"])["valor"].sum().unstack("per")
-           .reindex(columns=cols_p).fillna(0.0))
-    m = m[m[vis].sum(axis=1) > 0]
+    # Soles Y cantidad siempre: el orden de las filas y qué productos entran
+    # salen de lo pagado, sea cual sea la medida (una tabla que se reordena
+    # al cambiar de Soles a Precio deja de leerse como la misma tabla).
+    _v = (sp.groupby(["prod", "per"])["valor"].sum().unstack("per")
+            .reindex(columns=cols_p).fillna(0.0))
+    _c = (sp.groupby(["prod", "per"])["cant"].sum().unstack("per")
+            .reindex(index=_v.index, columns=cols_p).fillna(0.0))
+    _v = _v[_v[vis].sum(axis=1) > 0]
+    if medida == "cant":
+        m = _c.loc[_v.index]
+    elif medida == "precio":
+        # Precio PONDERADO del período (lo pagado / lo comprado); sin
+        # cantidad no hay precio (NaN → «—»). Ver `_serie_medida`.
+        m = _v / _c.loc[_v.index].where(_c.loc[_v.index] > 0)
+    else:
+        m = _v
+    um = pd.Series(dtype=object)
+    if medida != "valor" and "um" in sp.columns:
+        _u = sp[~sp["um"].astype(str).isin(("", "nan", "None"))]
+        if len(_u):
+            um = moda_por_grupo(_u, "prod", "um")
     if m.empty:
         return ('<div class="cp-modo-nota">Sin compras a este proveedor en '
                 'los períodos de la Evolución.</div>')
-    m = m.loc[m[vis].sum(axis=1).sort_values(ascending=False,
-                                             kind="stable").index]
+    m = m.loc[_v[vis].sum(axis=1).sort_values(ascending=False,
+                                              kind="stable").index]
     n = len(vis)
     head = "".join(f'<span class="r">{_esc(etq(p))}</span>' for p in vis)
     filas = []
     for prod, fila in m.iterrows():
-        vals = [float(fila[p]) for p in vis]
+        # NaN (Precio sin cantidad) cuenta como cero para dibujar, y se
+        # escribe «—».
+        vals = [0.0 if pd.isna(fila[p]) else float(fila[p]) for p in vis]
         tope = max(vals) or 1.0
         # La tendencia: una barrita por período, escalada contra el mayor
         # de la fila. HTML y no SVG: lo que dibuja `st.markdown` está
@@ -583,9 +694,10 @@ def _html_productos_por_periodo(prov, src_per, per_orden, evo_x, etq, gran,
         barras = "".join(
             f'<i class="{"z" if not v else ""}" '
             f'style="height:{max(8, v / tope * 100):.0f}%"></i>' for v in vals)
+        _dec = 2 if medida == "precio" else 0
         celdas = "".join(
             f'<span class="c{" z" if not v else ""}" style="--t:{v / tope * 28:.0f}%">'
-            f'{f"{v:,.0f}" if v else "—"}</span>' for v in vals)
+            f'{f"{v:,.{_dec}f}" if v else "—"}</span>' for v in vals)
         # El último período contra el anterior: el de al lado si hay dos o
         # más en pantalla; si hay uno solo, el que quedó fuera del cuadro.
         if n > 1:
@@ -596,15 +708,21 @@ def _html_productos_por_periodo(prov, src_per, per_orden, evo_x, etq, gran,
         _cls = ("" if not np.isfinite(var) or abs(var) < 0.5
                 else (" sube" if var > 0 else " baja"))
         nom = _esc(prod)
+        # En Cantidad y Precio, la unidad al lado del nombre: «112» no dice
+        # nada sin saber si son kilos o unidades.
+        _u = _esc(um.get(prod, "")) if medida != "valor" else ""
         filas.append(
             f'<div class="cp-pm-fila{" foco" if prod == prod_foco else ""}"'
             f' data-prod="{nom}">'
-            f'<span class="nm" title="{nom}">{nom}</span>'
+            f'<span class="nm" title="{nom}">{nom}'
+            f'{f"<small>{_u}</small>" if _u else ""}</span>'
             f'<span class="sp">{barras}</span>{celdas}'
             f'<span class="var{_cls}">{_fmt_var(var)}</span></div>')
     _contra = _esc(etq(vis[-2])) if n > 1 else (_esc(etq(ant)) if ant else "")
-    return (f'<div class="cp-modo-nota">Soles por {_esc(gran.lower())} · los '
-            f'períodos que muestra la Evolución · Var. % contra {_contra or "el anterior"}</div>'
+    _que = {"valor": "Soles", "cant": "Cantidad",
+            "precio": "Precio promedio (S/ por unidad)"}[medida]
+    return (f'<div class="cp-modo-nota con-medida">{_que} por {_esc(gran.lower())} · '
+            f'los períodos de la Evolución · Var. % contra {_contra or "el anterior"}</div>'
             # Las columnas las arma el CSS (`.cp-pm`, con cuántos períodos
             # hay en `--n`), porque una tarjeta angosta saca la de Tendencia
             # con una container query, y eso no se puede contra un estilo
@@ -1041,19 +1159,21 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # tarjetas de abajo sólo sean de 6 filas, para que se pueda ver toda la
     # vista en una pantalla de laptop»). Regla #579.
     #
-    # Manda la tabla de Documentos: seis filas de `_ALTO_FILA_DOCS` más su
-    # cabecera, que en `st.dataframe` mide lo mismo que una fila. Y la
-    # Evolución deja de medirse contra el Ranking —ya no está a su lado— y
-    # pasa a medirse contra los Documentos, con la misma resta de cromos de
-    # siempre. Con seis filas la cuenta da por debajo de `_MIN_EVO`, así que
-    # en la práctica la figura queda en su piso (el de la pila de KPIs) y
-    # la tarjeta de los Documentos se estira lo que falte (el piso de
+    # Manda la tabla de Documentos: seis filas de `_ALTO_FILA_DOCS` (la
+    # lista que scrollea, `_ALTO_LISTA_DOCS`) más su cabecera y su total.
+    # Desde que la tabla es HTML (se despliega, regla #579) las filas son de
+    # 26px. La Evolución se mide contra esa tarjeta con la resta de cromos
+    # de siempre; con seis filas la cuenta da por debajo de `_MIN_EVO`, así
+    # que en la práctica la figura queda en su piso (el de la pila de KPIs)
+    # y la tarjeta de Documentos se estira lo que falte (el piso de
     # `_80_cards.py`).
     _FILAS_ABAJO = 6
-    _ALTO_FILA_DOCS = _ALTO_FILA_RANK + 4
-    _ALTO_DOCS = alturas.por_filas(_FILAS_ABAJO + 1, px_fila=_ALTO_FILA_DOCS,
-                                   extra=3, minimo=0)
-    _CROMO_CARD_DOCS = 82
+    _ALTO_FILA_DOCS = 26
+    _ALTO_LISTA_DOCS = _FILAS_ABAJO * _ALTO_FILA_DOCS
+    # Cabecera de la tabla (28) + total (24): lo que la tarjeta mide además
+    # de la lista y de su cromo de tarjeta (`_CROMO_CARD_DOCS`).
+    _ALTO_DOCS = _ALTO_LISTA_DOCS + 28 + 24
+    _CROMO_CARD_DOCS = 64
     _ALTO_EVO = max(_MIN_EVO,
                     _ALTO_DOCS + _CROMO_CARD_DOCS - _CROMO_CARD_EVO)
     # Ancho de la figura de evolución, MEDIDO en el navegador (viewport 1912,
@@ -1065,7 +1185,12 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
     # (era ~380 cuando la figura ocupaba la columna entera) y nadie revisó al
     # partirla. Si se cambia el reparto de columnas, volver a medir: con
     # ?debug=1 → Rayos X, o auditarGraficos() desde la misma barra.
-    _ANCHO_EVO = 206
+    # 2026-10-01: de 206 a 400. La Evolución pasó a la fila de abajo y a la
+    # mitad del ancho (la simetría con la fila de arriba, regla #579);
+    # medido con Playwright, la figura mide 404px a 1358 de ventana y 604 a
+    # 1912. Va el de la laptop: con el más angosto, las etiquetas entran
+    # también en el más ancho.
+    _ANCHO_EVO = 400
 
     # ── Selector de granularidad FLOTANTE sobre el gráfico ────────────────
     # El contenedor "compras_prov_marco" es posición relativa; dentro, las
@@ -1653,6 +1778,20 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 # desplegables más las flechas suman ~270px en
                                 # una fila de 279.5, y con el emoji se pasaban.
                                 # Era decorativo; "Rango" solo dice lo mismo.
+                                # La MEDIDA (2026-10-01, regla #579):
+                                # Soles, Cantidad o Precio. Las dos últimas
+                                # piden un producto en foco; sin él, la
+                                # línea sigue en soles y lo dice en su
+                                # rótulo.
+                                with st.container(key="evo_medida"):
+                                    _medida_pedida = st.selectbox(
+                                        "Medida", list(_MEDIDAS),
+                                        key="cp_evo_medida",
+                                        format_func=_MEDIDAS.get,
+                                        label_visibility="collapsed")
+                                _medida_evo = (_medida_pedida
+                                               if _prod_evo is not None
+                                               else "valor")
                                 _op_evo = periodo.selector(
                                     "cp_evo_periodo", widget="lista")
                                 # Se resuelve ACÁ y no después del bloque porque
@@ -1779,6 +1918,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                           if col_prod else "—"),
                                 "docu":  (_d_evo[col_docu].astype(str).values
                                           if col_docu else ""),
+                                # La unidad, para la Cantidad (regla #579).
+                                "um":    (_d_evo[col_um].astype(str).values
+                                          if col_um else ""),
                                 "fecha": pd.to_datetime(_d_evo[col_fecha],
                                                         errors="coerce").values,
                             })
@@ -1796,9 +1938,15 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         _m_evo = _src_evo["prov"] == _prov_evo
                         if _prod_evo is not None:
                             _m_evo &= _src_evo["prod"] == _prod_evo
-                        _serie_evo = (_src_evo[_m_evo]
-                                      .groupby("per")["valor"].sum()
-                                      .reindex(_per_evo, fill_value=0))
+                        _serie_evo = _serie_medida(_src_evo[_m_evo], _per_evo,
+                                                   _medida_evo)
+                        # La unidad del producto en foco (la más usada en
+                        # sus compras), para rotular la Cantidad.
+                        _um_evo = ""
+                        if _medida_evo == "cant" and "um" in _src_evo.columns:
+                            _ums = _src_evo.loc[_m_evo, "um"].astype(str)
+                            _ums = _ums[~_ums.isin(("", "nan", "None"))]
+                            _um_evo = _ums.mode().iat[0] if len(_ums) else ""
                         # Con ventana propia se dibuja lo que el usuario pidió,
                         # entero: acá vivía un `tail(12)` fijo que tenía sentido
                         # cuando la fuente era "todo el histórico" y nadie la
@@ -1819,11 +1967,24 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             mode="lines+markers",
                             line=dict(color=_color_evo, width=2.5),
                             marker=dict(color=_color_evo, size=7),
-                            fill="tozeroy",
+                            # En Precio, sin relleno: el área bajo un precio
+                            # no suma nada, y con meses sin compras (huecos)
+                            # se dibujaba como una banda suelta.
+                            fill=("none" if _medida_evo == "precio"
+                                  else "tozeroy"),
                             fillcolor=_color_evo.replace(")", ", 0.10)").replace(
                                 "rgb(", "rgba(") if _color_evo.startswith("rgb")
                                 else None,
-                            hovertemplate="%{x}<br>S/ %{y:,.0f}<extra></extra>",
+                            hovertemplate=(
+                                "%{x}<br>S/ %{y:,.0f}<extra></extra>"
+                                if _medida_evo == "valor" else
+                                "%{x}<br>S/ %{y:,.2f}<extra></extra>"
+                                if _medida_evo == "precio" else
+                                "%{x}<br>%{y:,.0f} " + str(_um_evo)
+                                + "<extra></extra>"),
+                            # Un período sin compras no tiene precio: la
+                            # línea lo salta en vez de caer a cero.
+                            connectgaps=True,
                         ))
                         # Etiquetas del eje X: las "2026-08" se pisan entre sí
                         # y quedan ilegibles (reportado con captura). Dos cosas
@@ -1904,6 +2065,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                         # `nombre_propio` ANTES de truncar, para que los
                         # puntos suspensivos caigan sobre el texto que se ve.
                         _tit_evo = _compras_truncar(nombre_propio(_prov_evo), 26)
+                        if _prod_evo is None and _medida_pedida != "valor":
+                            # Pidió Cantidad o Precio sin un producto: se
+                            # dibuja en soles, y se dice por qué.
+                            _tit_evo += ('<br><span style="font-size:10px;'
+                                         f'font-weight:400;color:{GRIS_TEXTO}">'
+                                         'en soles · clic en un producto para '
+                                         f'ver su {_MEDIDAS[_medida_pedida].lower()}'
+                                         '</span>')
                         if _prod_evo is not None:
                             # El producto primero —es lo que cambió— y el
                             # proveedor detrás, más chico.
@@ -1990,6 +2159,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # reporta Plotly deja de coincidir con la fila.
                             _g_val = (_dprov.groupby("per")["valor"].sum()
                                       .reindex(_evo_x, fill_value=0.0))
+                            # La MEDIDA elegida, para la primera cifra y la
+                            # variación (en soles es la misma `_g_val`).
+                            _g_med = _serie_medida(_dprov, _evo_x, _medida_evo)
                             # El «% del total»: contra todos los proveedores;
                             # con un producto en foco, contra lo comprado a
                             # ESE proveedor («% del proveedor»).
@@ -2005,8 +2177,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # de cuadro. `_evo_x` es un tramo contiguo de
                             # `_per_evo`, así que basta con saber dónde
                             # empieza.
-                            _g_todo = (_dprov.groupby("per")["valor"].sum()
-                                       .reindex(_per_evo, fill_value=0.0))
+                            _g_todo = _serie_medida(_dprov, _per_evo, _medida_evo)
                             _pos0 = (_per_evo.index(_evo_x[0])
                                      if _evo_x[0] in _per_evo else 0)
                             if "docu" in _dprov.columns:
@@ -2055,7 +2226,9 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                 if _j < 0:
                                     return "—", ""
                                 _ant = float(_g.iloc[_j])
-                                if _ant <= 0:
+                                # `not >` y no `<=`: en Precio un período
+                                # sin compras es NaN, y NaN <= 0 da False.
+                                if not _ant > 0 or pd.isna(_g.iloc[_p0 + _i]):
                                     return "—", ""
                                 _v = (float(_g.iloc[_p0 + _i]) - _ant) / _ant * 100
                                 if abs(_v) < 0.05:
@@ -2078,8 +2251,14 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                                             if _i == len(_evo_x) - 1
                                             else gran)
                                            + f" · {_etq_evo(_p)}",
-                                    "vals": [f"S/ {_r_val:,.0f}",
-                                             f"{_r_pct:.1f}%",
+                                    "vals": [_fmt_medida(float(_g_med.iloc[_i]),
+                                                         _medida_evo, _um_evo),
+                                             # En Cantidad y Precio, la
+                                             # segunda cifra es lo pagado:
+                                             # un % de kilos no se lee.
+                                             f"{_r_pct:.1f}%"
+                                             if _medida_evo == "valor"
+                                             else f"S/ {_r_val:,.0f}",
                                              _r_var,
                                              f"{int(_g_docs.iloc[_i]):,.0f}"],
                                     # Un color por celda, en el mismo orden.
@@ -2093,13 +2272,17 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                             # pila —que es el piso de alto de la figura de al
                             # lado (`_MIN_EVO`)—. Cuál es el anterior lo dice
                             # el encabezado, que nombra el período.
-                            _rotulos_kpi = ("Total compra",
+                            _rotulos_kpi = ({"valor": "Total compra",
+                                             "cant": "Cantidad",
+                                             "precio": "Precio prom."}[_medida_evo],
                                             # «% del prov.» y no «% del
                                             # proveedor»: tiene el largo de
                                             # «% del total», que es lo que
                                             # entra en la celda (ver abajo).
                                             "% del total" if _prod_evo is None
-                                            else "% del prov.",
+                                            else "% del prov."
+                                            if _medida_evo == "valor"
+                                            else "Valor compra",
                                             "Vs. anterior", "Documentos")
                             with _c_kpi:
                                 _base_kpi = _kpis_evo[-1]
@@ -2133,7 +2316,7 @@ def _compras_proveedor_drill(d, col_prov, col_prod, col_cant, col_valor,
                 # ── Los documentos del proveedor en foco (abajo a la izq.) ──
                 # Va DESPUÉS de la Evolución aunque se vea a su izquierda:
                 # agrupado, usa sus períodos (`_src_evo`/`_per_evo`).
-                _tarjeta_documentos(base, _prov_ver, _ALTO_DOCS, gran,
+                _tarjeta_documentos(base, _prov_ver, _ALTO_LISTA_DOCS, gran,
                                     _src_evo, _per_evo, _etq_evo)
         # 2026-08-23: `win_nav` (‹ Auto/N/Todo ›, navegación de la ventana de
         # períodos) se movió DENTRO de la tarjeta de Evolución, junto con

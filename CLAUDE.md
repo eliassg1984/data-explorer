@@ -391,7 +391,8 @@ Tercera cara del mismo patrón (color / alto / **eje horizontal**). La
 proporción que parte en dos una fila de un drill de Compras sale de
 `graficos/compras/_comun.py::COLUMNAS_DRILL`, no de un literal. Proveedor
 tiene las suyas desde el 2026-10-01, en el mismo sitio: `COLUMNAS_DRILL_TABLAS`
-(Ranking | Productos) y `COLUMNAS_DRILL_ABAJO` (Documentos | Evolución; los
+(Ranking | Productos) y `COLUMNAS_DRILL_ABAJO` (Documentos | Evolución,
+derivada de la de arriba para que las dos filas compartan el eje; los
 proveedores de un producto se despliegan debajo de su fila). Reglas #578 y
 #579.
 

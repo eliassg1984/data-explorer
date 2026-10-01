@@ -110,17 +110,18 @@ UM). En el 1 de aquella proporción le quedaban ~115px al nombre del
 producto en una laptop; a la mitad, ~185. Y el Ranking no pierde nada: sus
 cuatro columnas sobraban en el 1.6. Ver regla #578."""
 
-COLUMNAS_DRILL_ABAJO = [1, 1.35]
+COLUMNAS_DRILL_ABAJO = COLUMNAS_DRILL_TABLAS
 """Fila de abajo del drill de Proveedor: los Documentos del proveedor en
-foco y la Evolución.
+foco y la Evolución — partida IGUAL que la de arriba.
 
-Fue `COLUMNAS_DRILL_TRES` (1/1.3/1) un solo día: el 2026-10-01 la tercera
-tarjeta —los Proveedores del producto en foco— dejó de existir como
-tarjeta y pasó a desplegarse DEBAJO de su producto, en la tabla de arriba
-(regla #579). La Evolución se queda el 1.35 porque es la que más pide —su
-fila de controles y la pila de KPIs al costado de la figura—; los
-Documentos, con cuatro columnas (fecha o período, número o documentos,
-valor y variación), entran en el 1. Ver reglas #578 y #579."""
+Fue `COLUMNAS_DRILL_TRES` (1/1.3/1) y después [1, 1.35], las dos el
+2026-10-01: la tercera tarjeta —los Proveedores del producto en foco— se
+fue ese día a desplegarse debajo de su producto (regla #579), y más tarde
+el mismo día se pidió simetría: «que la tarjeta del gráfico sea del mismo
+ancho que la tarjeta de arriba». Derivada de `COLUMNAS_DRILL_TABLAS` y no
+un [1, 1] propio: lo que se pidió es que las dos filas compartan el EJE,
+y si una cambia, la otra tiene que cambiar con ella. Ver reglas #578 y
+#579."""
 
 GAP_DRILL = "small"
 """Gap entre las columnas de un drill. Va con `COLUMNAS_DRILL`: si las dos

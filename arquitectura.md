@@ -32,7 +32,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 579 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (196)
+**CSS y estilos** (195)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -229,7 +229,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
-- **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 
 **Layout y alturas** (83)
 
@@ -869,7 +868,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (141)
+**Decisiones de diseño y UX** (142)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1012,6 +1011,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 - **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
+- **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -46181,6 +46181,42 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        lavanda y la negrita de la fila TOTAL del Ranking. Y el Ranking
        baja de 8 a 7 filas de techo (la lista de Productos, que mide contra
        él, pierde la suya sola): la fila de abajo sube 24px.
+     - **Documentos también se despliega, y por eso dejó de ser un
+       `st.dataframe`** (mismo día, a pedido): «Por documento» gana la
+       columna «Prods» (productos distintos del comprobante) y cada
+       documento se abre en sus productos con cantidad, precio unitario
+       (lo pagado sobre lo comprado) y valor; «agrupado», cada período se
+       abre en sus documentos con fecha, número, cuántas FILAS trae y su
+       total. `st.dataframe` no tiene filas que se abran: es HTML con
+       `<details>`, como Productos, con renglones de 26px (los 6 de la
+       fila siguen siendo `_FILAS_ABAJO`, ahora `_ALTO_LISTA_DOCS`). El
+       tooltip de «Var. %» pasó del `help=` de `column_config` a un
+       `title` en su cabecera, subrayada en puntos para que se note que
+       tiene algo. La variación y su color salen de `_fila_var`.
+     - **Soles / Cantidad / Precio**, en dos selectores INDEPENDIENTES (a
+       pedido: «para el modo Por mes, y que también sea posible en el
+       gráfico de abajo»): uno en la Evolución (`cp_evo_medida`, el primer
+       desplegable de su fila de controles) y otro en los Productos «por
+       período» (`cp_prov_prods_medida`, en el renglón de la nota). Cada
+       uno manda sobre lo suyo. En la Evolución, Cantidad y Precio piden un
+       producto en foco —sumar kilos de mantequilla con litros de aceite no
+       se lee—: sin él la línea sigue en soles y su rótulo dice «en soles ·
+       clic en un producto para ver su cantidad». El precio es el PROMEDIO
+       PONDERADO del período (`_serie_medida`: lo pagado sobre lo
+       comprado), y un período sin compras queda vacío (NaN), no en cero:
+       la línea lo salta (`connectgaps`) y va SIN relleno, que con huecos
+       se dibujaba como una banda suelta. Con Cantidad o Precio, la segunda
+       cifra de los KPIs es lo pagado y no un %, y la unidad va al lado del
+       número. En la matriz, el ORDEN de los productos sale siempre de los
+       soles: una tabla que se reordena al cambiar de medida deja de
+       leerse como la misma.
+     - **Las dos filas, del mismo ancho** (a pedido: «que la tarjeta del
+       gráfico sea del mismo ancho que la de arriba, para que haya
+       simetría»): `COLUMNAS_DRILL_ABAJO` es ahora `COLUMNAS_DRILL_TABLAS`
+       (derivada, no un [1, 1] propio: lo pedido es compartir el EJE). La
+       figura de la Evolución pasó de 206 a 404px en una laptop y
+       `_ANCHO_EVO` (que decide cuántas etiquetas entran en el eje) se
+       volvió a medir: 400.
      - **En Cloud, reiniciar la app** (#357): `proveedor.py` importa de
        `_comun.py` un nombre nuevo (`COLUMNAS_DRILL_ABAJO`) en lugar de
        `COLUMNAS_DRILL_TRES`, que ya no existe.
