@@ -3798,26 +3798,63 @@ def _panel_abajo(vis, doc, fila_cruce, d, resumen=None):
     pedido se alternan en el mismo sitio, para que la tabla y lo que se
     mira de ella entren en una pantalla.
 
-    El estado va en un espejo de `session_state` que NO es la clave del
-    widget: un `st.rerun()` en medio de la corrida se lleva puesto el
-    estado de un `segmented_control` que todavía no se dibujó. Es la
-    regla #211, aplicada preventivamente. El espejo es el mismo de cuando
-    sólo elegía el modo del gráfico, así que quien venía usando uno lo
-    conserva.
+    El selector es una columna de botones-ícono al costado (ver más
+    abajo), y la vista elegida vive en `_K_MODO_ABAJO`, que escribe el
+    callback de cada botón: no es la clave de ningún widget, así que un
+    `st.rerun()` a media corrida no se la lleva (regla #211).
 
     La ficha se abre SÓLO con el ojo / el número del documento en la
-    tabla: el botón «📄 Ver <doc>» que vivía al costado de este selector
+    tabla: el botón «📄 Ver <doc>» que vivía al costado del selector
     se quitó a pedido (2026-10-02).
     """
-    k_eco = "sunat_graf_modo__eco"
-    previo = st.session_state.get(k_eco, _MODOS_GRAFICO[0])
-    if previo not in _MODOS_ABAJO:
-        previo = _MODOS_GRAFICO[0]
-    modo = st.segmented_control(
-        "Ver", _MODOS_ABAJO, default=previo, key="sunat_graf_modo",
-        label_visibility="collapsed") or previo
-    st.session_state[k_eco] = modo
+    modo = st.session_state.get(_K_MODO_ABAJO, _MODOS_GRAFICO[0])
+    if modo not in _MODOS_ABAJO:
+        modo = _MODOS_GRAFICO[0]
 
+    # EL SELECTOR ES UNA COLUMNA DE ÍCONOS AL COSTADO, no un renglón arriba
+    # (2026-10-02, a pedido: «que los toggles no me ocupen una fila»). Un
+    # botón por vista, el nombre en el tooltip y la activa en lavanda: el
+    # mismo idioma que la columna de reportes de la app. La fila es un
+    # contenedor horizontal: la columna mide 40px fijos y el contenido se
+    # queda con el resto. El CSS, en `estilos/_80_cards.py`.
+    with st.container(horizontal=True, wrap=False, gap="small",
+                      key="sunat_abajo_fila"):
+        with st.container(width=40, gap=None, key="sunat_abajo_nav"):
+            for nombre, icono in _ICONOS_ABAJO.items():
+                st.button("", icon=icono, help=nombre,
+                          key=f"sunat_abajo_{_SLUG_ABAJO[nombre]}",
+                          type="primary" if nombre == modo else "tertiary",
+                          on_click=_elegir_modo_abajo, args=(nombre,))
+        with st.container(key="sunat_abajo_cuerpo"):
+            _contenido_abajo(modo, vis, doc, fila_cruce, d, resumen)
+
+
+_K_MODO_ABAJO = "sunat_graf_modo__eco"
+"""La vista elegida en la tarjeta de abajo. Conserva el nombre del espejo de
+cuando era un `segmented_control`, así quien venía usando una la conserva."""
+
+_ICONOS_ABAJO = {
+    "Este proveedor": ":material/storefront:",
+    "Por fecha": ":material/calendar_month:",
+    "Por proveedor": ":material/leaderboard:",
+    _MODO_RESUMEN: ":material/bar_chart:",
+    _MODO_CONVERSOR: ":material/swap_horiz:",
+}
+"""Un ícono por vista de `_MODOS_ABAJO`, en el mismo orden."""
+
+_SLUG_ABAJO = {
+    "Este proveedor": "este_prov", "Por fecha": "fecha",
+    "Por proveedor": "por_prov", _MODO_RESUMEN: "resumen",
+    _MODO_CONVERSOR: "conversor",
+}
+
+
+def _elegir_modo_abajo(nombre):
+    st.session_state[_K_MODO_ABAJO] = nombre
+
+
+def _contenido_abajo(modo, vis, doc, fila_cruce, d, resumen):
+    """Lo que dibuja la tarjeta de abajo para la vista `modo`."""
     if modo == _MODO_RESUMEN:
         _panel_resumen(d, resumen)
     elif modo != _MODO_CONVERSOR:
