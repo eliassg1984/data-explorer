@@ -158,12 +158,14 @@ KPIs de cada columna — que lo busca por esa key y no por «el primer AgGrid
 de la página», que en esta página es otro (regla #455)."""
 
 
-_FILAS_DOCS = 10
+_FILAS_DOCS = 8
 """Filas que RESERVA la tabla de documentos. Un techo, no un alto: lo que
 sobra scrollea adentro (y sobra casi siempre — 244 comprobantes en un mes
 corriente, 4.618 en doce meses).
 
-10 a pedido (2026-09-18, «mostremos menos filas en el cuadro, solo 10»).
+8 a pedido (2026-10-02, «que la tabla solo muestre 8 filas»: la idea es ver
+la tabla y la tarjeta de abajo en UNA pantalla). Antes 10 (2026-09-18,
+«mostremos menos filas en el cuadro, solo 10»).
 Venía de `alturas.APOYO` como techo, que a 24px por fila daba 14. Mismo
 patrón —y mismo nombre— que `_FILAS_PROD` y `_FILAS_RANK` del resto de
 Compras: el alto de una tabla-ranking se declara en FILAS, no en px."""
@@ -1175,11 +1177,17 @@ def _tabla_documentos(df_cruce, df_sire):
 
     # Los campos que el cruce no lleva, por `car`. `.get` con relleno: los
     # tests arman df sin estas columnas y `cruzar_con_parquet` es publica.
-    _cols = ("tipo_nombre", "moneda", "tipo_cambio", "detraccion", "estado")
+    _cols = ("tipo_nombre", "moneda", "tipo_cambio", "detraccion", "estado",
+             "ruc_proveedor", "serie", "numero")
     extra = {}
     if df_sire is not None and "car" in df_sire.columns:
         for _, r in df_sire.iterrows():
             extra[str(r.get("car") or "")] = {c: r.get(c) for c in _cols}
+
+    # Los XML que ya están en R2, en UN listado (ver
+    # `sunat.claves_xml_en_r2`). La key se arma con la MISMA función que usa
+    # el sync que los sube, así que no hay forma de que difieran en el nombre.
+    _xml_en_r2 = sunat.claves_xml_en_r2()
 
     filas = []
     for _, r in df_cruce.iterrows():
@@ -1236,6 +1244,10 @@ def _tabla_documentos(df_cruce, df_sire):
             "Total": total_sunat if total_sunat is not None else tot_s,
             "D": "D" if str(ex.get("detraccion") or "").strip().upper() == "D"
                  else "",
+            # Sin fila del SIRE («Solo sistema») no hay comprobante que
+            # bajar: la celda queda vacía, igual que la de un XML que falta.
+            "XML": "✓" if ex and sunat.claves_original(ex)[1] in _xml_en_r2
+                   else "",
             _COL_ESTADO: str(r.get("estado") or ""),
         })
 
@@ -1275,6 +1287,16 @@ def _tabla_documentos(df_cruce, df_sire):
         cellStyle=JsCode(
             "function(p){ return p.value ? {'color':'%s','fontWeight':'700',"
             "'textAlign':'center'} : {}; }" % ADVERTENCIA_TEXTO))
+    # «XML» (2026-10-02, a pedido): si el original ya se bajó a R2. Es lo
+    # que decide si la ficha trae «Comprobante / Detalle / XML» o sólo el
+    # botón de pedirlo, y si el conversor tiene líneas que comparar — antes
+    # había que abrir el documento para enterarse.
+    gb.configure_column(
+        "XML", width=44, minWidth=44,
+        headerTooltip="✓ = el XML original del proveedor ya está descargado. "
+                      "Sin marca, se pide desde la ficha del documento.",
+        cellStyle={"color": ACENTO, "fontWeight": "700",
+                   "textAlign": "center"})
     # Misma convención de color que tenía «Estado»: ámbar = revisar, rojo =
     # plata cargada sin comprobante electrónico que la respalde.
     # «Coincide» no se destaca — lo normal no compite por atención.
@@ -1319,8 +1341,9 @@ def _tabla_documentos(df_cruce, df_sire):
 
     resp = AgGrid(
         tv, gridOptions=gb.build(),
-        # DIEZ filas y lo que sobre scrollea adentro, a pedido (2026-09-18:
-        # «mostremos menos filas en el cuadro, solo 10»). Antes el techo era
+        # OCHO filas y lo que sobre scrollea adentro, a pedido (2026-10-02;
+        # antes diez, 2026-09-18: «mostremos menos filas en el cuadro, solo
+        # 10»). Antes el techo era
         # `alturas.APOYO`, o sea 380px ≈ 14 filas. Mismo patrón que
         # `_FILAS_RANK`/`_FILAS_PROD` del resto de Compras: un techo, no un
         # alto — con menos de 10 comprobantes la grilla se encoge.
@@ -3528,22 +3551,14 @@ def _card_sistema(doc, fila):
     _grilla_campos(_filas_cotejo(doc, fila), "sistema")
 
     if fila is None or estado == "Solo SUNAT":
-        st.caption("SUNAT lo tiene, tu sistema todavía no. El conversor de "
-                   "abajo mapea sus líneas contra el maestro.")
-
-
-def _panel_documento_vacio():
-    """El estado de "todavía no elegiste nada", para las dos tarjetas."""
-    st.markdown(
-        f'<div style="padding:28px 16px;text-align:center;color:{GRIS_TEXTO};'
-        f'font-size:13px;line-height:1.6;">'
-        f'<div style="font-size:30px;margin-bottom:6px;">📄</div>'
-        f'Elegí un documento de la tabla<br>para verlo acá.</div>',
-        unsafe_allow_html=True)
+        st.caption("SUNAT lo tiene, tu sistema todavía no. El «Conversor "
+                   "SUNAT-Sistema», en la tarjeta de debajo de la tabla, "
+                   "mapea sus líneas contra el maestro.")
 
 
 def _cabecera_documento(doc):
-    """La identificación del documento elegido, ARRIBA de las dos tarjetas.
+    """La identificación del documento elegido, ARRIBA de las dos tarjetas
+    de la ficha (en la capa que la pone sobre la tabla, al lado de la ✕).
 
     Va una sola vez y no dentro de cada una: identifica al documento para
     las DOS, igual que la cabecera única que tenía el panel cuando era una
@@ -3646,8 +3661,9 @@ def _grafico_proveedor(doc):
 _MODOS_GRAFICO = ("Este proveedor", "Por fecha", "Por proveedor")
 
 
-def _panel_grafico(vis, doc):
-    """El panel de la derecha de la fila de la ficha: tres modos.
+def _panel_grafico(vis, doc, modo):
+    """El gráfico de la tarjeta de abajo, en uno de sus tres modos. El
+    selector lo dibuja `_panel_abajo`, que lo comparte con el conversor.
 
     «Por fecha» y «Por proveedor» son los dos resúmenes que hasta el
     2026-08-28 vivían ARRIBA de la tabla, elegidos con un `selectbox`
@@ -3657,18 +3673,7 @@ def _panel_grafico(vis, doc):
     confusión que el usuario reportó al preguntar en qué se diferenciaban
     las dos primeras opciones (la respuesta era: sólo en este widget).
 
-    El estado va en un espejo de `session_state` que NO es la clave del
-    widget: un `st.rerun()` en medio de la corrida se lleva puesto el
-    estado de un `segmented_control` que todavía no se dibujó. Es la
-    regla #211, aplicada preventivamente.
     """
-    k_eco = "sunat_graf_modo__eco"
-    previo = st.session_state.get(k_eco, _MODOS_GRAFICO[0])
-    modo = st.segmented_control(
-        "Ver", _MODOS_GRAFICO, default=previo, key="sunat_graf_modo",
-        label_visibility="collapsed") or previo
-    st.session_state[k_eco] = modo
-
     if modo == "Este proveedor":
         _grafico_proveedor(doc)
         return
@@ -3711,6 +3716,140 @@ def _necesita_conversor(doc, fila_cruce):
         # dibuja, que es el comportamiento que había antes de esta regla.
         return True
     return str(fila_cruce.get("estado") or "") == "Solo SUNAT"
+
+
+_MODO_CONVERSOR = "Conversor SUNAT-Sistema"
+_MODOS_ABAJO = _MODOS_GRAFICO + (_MODO_CONVERSOR,)
+"""Las opciones del selector de la tarjeta de abajo: los tres modos del
+gráfico y el conversor. UN selector y no dos (gráfico/conversor y, adentro,
+el modo del gráfico) porque son cuatro vistas excluyentes de la misma
+tarjeta, y dos filas de botones le costarían alto a la pantalla única."""
+
+
+def _panel_abajo(vis, doc, fila_cruce, d):
+    """La tarjeta de debajo de la tabla: el gráfico O el conversor.
+
+    Hasta el 2026-10-02 eran dos tarjetas apiladas (el gráfico a lo ancho y,
+    debajo, el conversor cuando el documento faltaba en el sistema); a
+    pedido se alternan en el mismo sitio, para que la tabla y lo que se
+    mira de ella entren en una pantalla.
+
+    El estado va en un espejo de `session_state` que NO es la clave del
+    widget: un `st.rerun()` en medio de la corrida se lleva puesto el
+    estado de un `segmented_control` que todavía no se dibujó. Es la
+    regla #211, aplicada preventivamente. El espejo es el mismo de cuando
+    sólo elegía el modo del gráfico, así que quien venía usando uno lo
+    conserva.
+
+    Al costado del selector, cuando la ficha está cerrada, el botón que la
+    vuelve a abrir: con la fila todavía elegida, un clic sobre ella no
+    cambia la selección de la grilla y no llega a Python.
+    """
+    k_eco = "sunat_graf_modo__eco"
+    previo = st.session_state.get(k_eco, _MODOS_GRAFICO[0])
+    if previo not in _MODOS_ABAJO:
+        previo = _MODOS_GRAFICO[0]
+    # columnas-internas: el selector de la tarjeta y, a la derecha, el
+    # botón que reabre la ficha. No es una fila de un drill.
+    c_modo, c_ficha = st.columns([4, 1], vertical_alignment="center")
+    with c_modo:
+        modo = st.segmented_control(
+            "Ver", _MODOS_ABAJO, default=previo, key="sunat_graf_modo",
+            label_visibility="collapsed") or previo
+    st.session_state[k_eco] = modo
+    if doc is not None and not _ficha_abierta(doc):
+        with c_ficha:
+            st.button(f"📄 Ver {doc.get('documento', 'documento')}",
+                      key="sunat_ficha_abrir", type="tertiary",
+                      use_container_width=True, on_click=_abrir_ficha,
+                      help="Abrir la ficha del documento elegido, sobre "
+                           "la tabla.")
+
+    if modo != _MODO_CONVERSOR:
+        _panel_grafico(vis, doc, modo)
+    elif doc is not None and not _necesita_conversor(doc, fila_cruce):
+        # Antes la tarjeta del conversor directamente no se dibujaba en
+        # este caso (ver `_necesita_conversor`); con un selector que la
+        # nombra, desaparecer sin decir nada se leería como un bug.
+        estado = str(fila_cruce.get("estado") or "")
+        st.markdown(
+            f'<div style="padding:20px 16px;text-align:center;'
+            f'color:{GRIS_TEXTO};font-size:13px;line-height:1.6;">'
+            f'{doc.get("documento", "Este documento")} ya está cargado en el '
+            f'sistema («{estado}»): no hay líneas que convertir.'
+            + ('<br>La diferencia de montos la muestra la ficha del '
+               'documento.' if estado == "Diferencia" else '')
+            + '</div>', unsafe_allow_html=True)
+    else:
+        _card_conversor_sistema(doc, d)
+
+
+_K_FICHA_DOC = "sunat_ficha_doc"
+_K_FICHA_CERRADA = "sunat_ficha_cerrada"
+"""La ficha sobre la tabla se cierra POR DOCUMENTO: `_K_FICHA_DOC` es el
+`car` del último documento elegido y `_K_FICHA_CERRADA` dice si el usuario
+lo cerró. Elegir otro documento la vuelve a abrir sola."""
+
+
+def _id_ficha(doc):
+    """Identidad del documento para la capa: `car`, que es la única clave
+    sin colisiones (ver `_fila_de`)."""
+    if doc is None:
+        return ""
+    return str(doc.get("car") or doc.get("documento") or "")
+
+
+def _ficha_abierta(doc):
+    """¿Se dibuja la ficha sobre la tabla?
+
+    Sí con un documento elegido, salvo que el usuario la haya cerrado con
+    la ✕ — y eso vale sólo para ESE documento. Sin documento se olvida el
+    último, para que volver a elegirlo después la abra de nuevo.
+    """
+    actual = _id_ficha(doc)
+    if st.session_state.get(_K_FICHA_DOC) != actual:
+        st.session_state[_K_FICHA_DOC] = actual
+        st.session_state[_K_FICHA_CERRADA] = False
+    return bool(actual) and not st.session_state.get(_K_FICHA_CERRADA)
+
+
+def _cerrar_ficha():
+    st.session_state[_K_FICHA_CERRADA] = True
+
+
+def _abrir_ficha():
+    st.session_state[_K_FICHA_CERRADA] = False
+
+
+def _ficha_sobre_tabla(doc, fila_cruce):
+    """La ficha del documento —la tarjeta SUNAT y la del sistema— como una
+    capa SOBRE la tabla, con una ✕ que la cierra (2026-10-02, a pedido).
+
+    El contenido es el mismo de cuando era una fila debajo de la tabla:
+    la cabecera con la identificación (una vez, porque es de las dos) y
+    las dos tarjetas partidas con `COLUMNAS_COTEJO`. Lo que no entra en el
+    alto de la tabla scrollea adentro de la capa.
+    """
+    # columnas-internas: la cabecera del documento y la ✕ que cierra la
+    # capa. No es una fila de un drill.
+    c_cab, c_x = st.columns([24, 1], vertical_alignment="top",
+                            gap="small")
+    with c_cab:
+        _cabecera_documento(doc)
+    with c_x:
+        st.button("✕", key="sunat_ficha_cerrar", type="tertiary",
+                  on_click=_cerrar_ficha,
+                  help="Cerrar la ficha y volver a la tabla.")
+    # Se parte con `COLUMNAS_COTEJO` (1/1) y no con `COLUMNAS_DRILL`: los
+    # dos lados son pares y cualquier asimetría se leería como que uno
+    # importa más.
+    c_sunat, c_sistema = st.columns(COLUMNAS_COTEJO, gap=GAP_DRILL)
+    with c_sunat:
+        with st.container(border=True, key="sunat_card_doc"):
+            _card_sunat(doc, fila_cruce)
+    with c_sistema:
+        with st.container(border=True, key="sunat_card_sis"):
+            _card_sistema(doc, fila_cruce)
 
 
 def _pedir_original(doc):
@@ -3839,12 +3978,8 @@ def _card_conversor_sistema(doc, d):
     "Cruce") — lo necesita `_detalle_sistema` para buscar las líneas de
     ESTE documento y armar el catálogo completo de productos.
     """
-    st.markdown(
-        f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
-        f'text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px;'
-        f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
-        f'Conversor SUNAT-Sistema</div>', unsafe_allow_html=True)
-
+    # Sin título propio desde el 2026-10-02: lo nombra el selector de la
+    # tarjeta, que alterna el conversor con el gráfico (`_panel_abajo`).
     if doc is None:
         st.markdown(
             f'<div style="padding:20px 16px;text-align:center;color:{GRIS_TEXTO};'
@@ -3864,7 +3999,7 @@ def _card_conversor_sistema(doc, d):
     if not lineas:
         st.info("Todavía no hay XML original sincronizado para este "
                 "documento — sin XML no hay líneas que comparar. Se pide "
-                "desde «Original del proveedor», arriba.")
+                "desde la ficha del documento, pestaña «⬇ Original».")
         return
 
     _detalle_sistema(doc, lineas, d, xml_original)
@@ -3948,18 +4083,20 @@ contabilidad."""
 def renderizar_documentos_sunat(d, col_fecha):
     """Punto de entrada del drill. Lo llama `graficos/sunat_reporte.py`.
 
-    TRES TARJETAS, y la tercera es condicional (2026-08-28):
+    DOS TARJETAS Y UNA CAPA, para que todo entre en una pantalla
+    (2026-10-02, a pedido; antes eran cuatro tarjetas apiladas):
 
       1. **La tabla** a lo ancho — controles, KPIs del cruce y los
-         comprobantes. Una sola tabla desde que `_tabla` y `_tabla_cruce`
-         se fundieron en `_tabla_documentos`.
-      2. **Ficha | gráfico**, partidos con `COLUMNAS_DRILL`. La ficha es
-         el documento elegido en pestañas (`_panel_documento`); el
-         gráfico bajó de arriba de la tabla —donde no cambiaba nunca— y
-         ahora habla del proveedor de la fila elegida (`_panel_grafico`).
-      3. **El conversor**, sólo si el documento no está cargado en el
-         sistema (`_necesita_conversor`). En 2 de cada 3 documentos la
-         pantalla termina en la 2.
+         comprobantes, ocho filas (`_FILAS_DOCS`). Una sola tabla desde
+         que `_tabla` y `_tabla_cruce` se fundieron en `_tabla_documentos`.
+      2. **La ficha del documento elegido**, SOBRE la tabla y tapándola:
+         la tarjeta SUNAT y la del sistema, con una ✕ que la cierra
+         (`_ficha_sobre_tabla`). Elegir otra fila la vuelve a abrir.
+      3. **Gráfico o conversor**, en UNA tarjeta debajo de la tabla, con
+         un selector que alterna entre los tres modos del gráfico y el
+         conversor SUNAT-Sistema (`_panel_abajo`). El conversor sigue
+         teniendo trabajo sólo si el documento no está cargado en el
+         sistema (`_necesita_conversor`); si lo está, lo dice.
 
     `d` y `col_fecha` (el parquet de Compras y su columna de fecha) ya no
     son opcionales: el cruce dejó de ser una vista elegible y se calcula
@@ -4088,6 +4225,7 @@ def renderizar_documentos_sunat(d, col_fecha):
                 sunat.periodos_con_estado.clear()
                 sunat._existe_original.clear()
                 sunat._bytes_original.clear()
+                sunat.claves_xml_en_r2.clear()
                 st.rerun()
         with _c_xls:
             # El botón de exportar vive ARRIBA (a pedido) pero los datos
@@ -4216,41 +4354,25 @@ def renderizar_documentos_sunat(d, col_fecha):
 
         estado["doc"] = _cuerpo()
 
-    doc = estado["doc"]
-    fila_cruce = _fila_cruce_de(estado["cruce"], doc)
+        doc = estado["doc"]
+        fila_cruce = _fila_cruce_de(estado["cruce"], doc)
 
-    # Segunda fila: el documento elegido en DOS tarjetas hermanas, SUNAT
-    # contra sistema (a pedido 2026-08-28 — antes era una sola tarjeta con
-    # cuatro columnas: campo | SUNAT | sistema | Δ). Se parte con
-    # `COLUMNAS_COTEJO` (1/1) y no con `COLUMNAS_DRILL` (1.6/1): acá los
-    # dos lados son pares y cualquier asimetría se leería como que uno
-    # importa más. Además así el eje cae en el mismo sitio que la fila del
-    # conversor, que también parte por la mitad.
-    if doc is None:
-        with st.container(border=True, key="sunat_card_doc"):
-            _panel_documento_vacio()
-    else:
-        # La identificación del documento va UNA vez, arriba de las dos:
-        # es de las dos, no de ninguna. Son ~50px, el mismo sitio que
-        # ocupaba dentro de la tarjeta única.
-        _cabecera_documento(doc)
-        c_sunat, c_sistema = st.columns(COLUMNAS_COTEJO, gap=GAP_DRILL)
-        with c_sunat:
-            with st.container(border=True, key="sunat_card_doc"):
-                _card_sunat(doc, fila_cruce)
-        with c_sistema:
-            with st.container(border=True, key="sunat_card_sis"):
-                _card_sistema(doc, fila_cruce)
+        # LA FICHA DEL DOCUMENTO, SOBRE LA TABLA (2026-10-02, a pedido: «que
+        # las dos tarjetas aparezcan sobre la tabla, tapándola, con una X
+        # para cerrar»). Hasta ese día eran una fila propia DEBAJO de la
+        # tabla, y con el gráfico y el conversor la vista eran cuatro
+        # pantallas. Va ADENTRO de esta tarjeta y el CSS la estira sobre ella
+        # (`estilos/_80_cards.py`, `sunat_ficha_capa`). La grilla se sigue
+        # DIBUJANDO debajo: un widget que deja de renderizarse pierde su
+        # estado, y sin la selección no habría documento — ni para la capa
+        # ni para el gráfico y el conversor de abajo. Regla #586.
+        if _ficha_abierta(doc):
+            with st.container(key="sunat_ficha_capa"):
+                _ficha_sobre_tabla(doc, fila_cruce)
 
-    # El gráfico BAJA a lo ancho (a pedido, mismo día): al costado de la
-    # ficha ya no hay sitio, porque ese costado se lo lleva la tarjeta del
-    # sistema. Sigue siendo el panel de tres modos, sólo que ahora ocupa
-    # la fila entera.
+    # Debajo de la tabla, UNA tarjeta que alterna el gráfico y el conversor
+    # (2026-10-02, a pedido: «que se alternen debajo de la tabla»). Antes
+    # eran dos tarjetas apiladas, y el conversor sólo aparecía cuando el
+    # documento faltaba en el sistema. Ver `_panel_abajo`.
     with st.container(border=True, key="sunat_card_graf"):
-        _panel_grafico(estado["vis"], doc)
-
-    # Tercera tarjeta, CONDICIONAL: el conversor sirve para cargar lo que
-    # no está cargado, así que sólo aparece ahí. Ver `_necesita_conversor`.
-    if _necesita_conversor(doc, fila_cruce):
-        with st.container(border=True, key="sunat_card_conversor"):
-            _card_conversor_sistema(doc, d)
+        _panel_abajo(estado["vis"], doc, fila_cruce, d)

@@ -957,6 +957,34 @@ def _originales_en_r2(ruc):
                if o["Key"].endswith(".pdf") or o["Key"].endswith(".xml"))
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def claves_xml_en_r2():
+    """Las keys de TODOS los XML originales que hay en R2, como `frozenset`.
+
+    Es lo que alimenta la columna «XML» de la tabla de documentos
+    (2026-10-02): una marca por fila de si el XML ya se bajó. Preguntarlo
+    fila por fila con `_existe_original` serían miles de `head_object` por
+    render (4.615 documentos en doce meses); un listado del prefijo entero
+    son unas pocas páginas de 1.000 keys.
+
+    TTL de 5 minutos, más largo que el de `_existe_original` (20 s): la
+    ficha de UN documento se mira esperando un pedido y tiene que enterarse
+    rápido; la columna es un censo. El botón ⟳ de la tabla limpia los dos.
+    """
+    import data
+
+    if not data.secrets_disponibles():
+        return frozenset()
+    try:
+        paginas = data.get_s3_cliente().get_paginator("list_objects_v2").paginate(
+            Bucket=st.secrets["R2_BUCKET"], Prefix=f"{PREFIJO_ORIGINALES}/")
+        return frozenset(o["Key"] for p in paginas
+                         for o in p.get("Contents", [])
+                         if o["Key"].endswith(".xml"))
+    except Exception:
+        return frozenset()
+
+
 def emisor_sin_originales(doc):
     """Documentos del emisor en el registro si NINGUNO tiene original, o 0.
 
