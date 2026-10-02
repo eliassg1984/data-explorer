@@ -2992,14 +2992,12 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
         codigos_auto = _sugerir_desde_maestro(lineas_xml)
         _origen_auto = "Sugerido"
 
-    # Sin aviso cuando NO está registrado (quitado a pedido, 2026-10-02):
-    # la pastilla «Solo SUNAT» de la ficha ya lo dice, y que los códigos
-    # son sugerencias lo dice la columna de origen de cada línea
-    # («Sugerido»: en ámbar, con el detalle en el tooltip). El cartel azul
-    # costaba ~70px a una pantalla única.
-    if registrado:
-        st.caption("Documento registrado: los ítems salen de cruzar "
-                   "contra lo que ya está cargado en `compras.parquet`.")
+    # Sin texto arriba de las dos tablas, en ningún caso (los dos quitados
+    # a pedido, 2026-10-02): ni el cartel azul de «todavía no está cargado»
+    # ni la línea de «Documento registrado: los ítems salen de cruzar…». De
+    # dónde sale cada código lo dice su línea («Automático» / «Sugerido» /
+    # «Corregido», en el tooltip y en ámbar lo que hay que revisar), y cada
+    # renglón de aviso le costaba alto a una pantalla única.
 
     filas_sunat, filas_sistema = [], []
     for i, xml_l in enumerate(lineas_xml):
