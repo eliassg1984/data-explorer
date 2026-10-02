@@ -428,7 +428,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 - **#582** — Compras › Producto: la tabla de abajo del gráfico muestra SEIS filas, las barras dicen la…
 
-**AgGrid y tablas** (88)
+**AgGrid y tablas** (89)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -518,6 +518,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
+- **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
 
 **Streamlit** (158)
 
@@ -811,7 +812,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 - **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
-- **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento va SOBRE la tabla, y el…
+- **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
 
 **Fechas, rangos y cortes** (12)
 
@@ -46497,44 +46498,66 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
-586. **Documentos SUNAT entra en una pantalla: la ficha del documento va
-     SOBRE la tabla, y el gráfico y el conversor se alternan debajo.**
-     2026-10-02, a pedido: «que la tabla solo muestre 8 filas», «que me
-     muestre si ya se descargó el XML», «que las dos tarjetas aparezcan
-     sobre la tabla, tapándola, con una X para cerrar» y «que el gráfico y
-     el conversor se alternen debajo de la tabla». Hasta ese día eran
+586. **Documentos SUNAT entra en una pantalla: la ficha del documento se
+     abre en una VENTANA MODAL desde el número del documento, y el gráfico
+     y el conversor se alternan debajo de la tabla.** 2026-10-02, a pedido:
+     «que la tabla solo muestre 8 filas», «que me muestre si ya se descargó
+     el XML», «que las dos tarjetas aparezcan sobre la tabla con una X para
+     cerrar», «que el gráfico y el conversor se alternen debajo de la
+     tabla» y —con la captura de otra webapp, un facturador— «que aparezca
+     sólo al dar clic en el número del documento». Hasta ese día eran
      cuatro tarjetas apiladas: tabla, ficha (SUNAT | sistema), gráfico y
      —sólo con un documento «Solo SUNAT»— el conversor.
 
-     - **La capa vive ADENTRO de la tarjeta de la tabla** (`sunat_card_izq`
-       → `sunat_ficha_capa`) y el CSS la estira encima con `position:
-       absolute; inset: 0` (`estilos/_80_cards.py`). La grilla se sigue
-       DIBUJANDO debajo, y no es un detalle: un widget que deja de
+     - **La ficha es un `st.dialog`** (`_ficha_modal`, `width="large"`):
+       centrada, con la página oscurecida detrás, su ✕, y se cierra también
+       con Esc o con un clic afuera. **Antes, el mismo día, fue una capa
+       pegada encima de la tarjeta de la tabla** (`position: absolute`), y
+       se descartó: opaca se leía como si la tabla se hubiera ido, medía lo
+       que la tabla (333px) y la ficha scrolleaba casi entera; translúcida
+       («fantasma») el texto de las dos se pisaba. Lo pedido tenía nombre:
+       una modal.
+     - **Una modal es un fragment, y ésta se llama adentro de otro**
+       (`app.py::_render_contenido`): va envuelta en `una_vez_por_corrida`
+       (#456). El título es por documento, así que el decorador se aplica
+       al llamarla y no en el `def`.
+     - **TODO cierre pasa por `on_dismiss=_cerrar_ficha`.** La selección
+       del AgGrid persiste entre corridas: sin anotar el cierre, cualquier
+       clic de la página (el selector del gráfico, por ejemplo) la volvía
+       a abrir. Un `st.rerun()` de adentro (el pedido del original) no la
+       cierra: vuelve a llamarse con la misma fila.
+     - **Se abre con el ojo / el número del documento, no con la fila.** La
+       grilla le avisa a Python la SELECCIÓN, no qué celda se clickeó. Así
+       que el `onCellClicked` de la columna «Documento» escribe un sello en
+       la fila (`_ver`, la hora) y la suelta y la vuelve a elegir, diferido:
+       la selección viaja con el sello, y `_atender_pedido_de_ficha` abre la
+       ficha si el sello es NUEVO (`sunat_ficha_pedido` guarda el último;
+       la selección vieja trae el mismo en cada corrida). Soltar y volver a
+       elegir hace que el ojo de una fila YA elegida también llegue, y que
+       no dependa de si AG Grid despacha el clic de la celda antes o
+       después de elegir la fila. Verificado en el navegador: clic en el
+       proveedor elige sin abrir; en el número abre; ✕ y Esc cierran; otro
+       clic de la página no la reabre; el mismo número otra vez, sí.
+     - **«📄 Ver <doc>»**, al lado del selector de abajo, es la otra vía:
+       abre la ficha de la fila elegida cuando está cerrada.
+     - **La tabla se sigue DIBUJANDO detrás**: un widget que deja de
        renderizarse pierde su estado (CLAUDE.md), y sin la selección del
-       AgGrid no hay documento — ni para la capa ni para el gráfico y el
-       conversor de abajo. Medido en el navegador (1358×860): la tarjeta
-       mide 333px con la capa abierta y cerrada; la de abajo no se mueve.
-     - **El contenedor de elemento que Streamlit mete entre la tarjeta y la
-       capa va en `display: contents`.** Con la capa en `absolute` mide 0px
-       pero seguiría cobrando el `gap` de la tarjeta: abrir la ficha la
-       estiraba 16px y corría la tarjeta de abajo (#465).
-     - **La key de la capa NO es de la familia `sunat_card_`**: heredaría el
-       techo con scroll, el padding y la sombra de una tarjeta. Las dos
-       tarjetas de adentro sí lo son (`sunat_card_doc`/`_sis`, por el piso
-       de alto de #145) y la capa les apaga el techo: la que scrollea es la
-       capa, y dos barras anidadas se leen como una caja rota (#382).
-     - **Cerrar es POR DOCUMENTO** (`_ficha_abierta`: `sunat_ficha_doc` +
-       `sunat_ficha_cerrada`). Elegir otra fila la vuelve a abrir sola.
-       Para el MISMO documento hace falta un botón (`📄 Ver <doc>`, al lado
-       del selector de abajo): con la fila ya elegida, un clic sobre ella no
-       cambia la selección del AgGrid y no llega a Python.
+       AgGrid no hay documento — ni para la ficha ni para el gráfico y el
+       conversor de abajo.
+     - **Las tarjetas de adentro** son las de siempre (`sunat_card_doc` /
+       `_sis`, por el piso de alto de #145) y en la modal sueltan el techo
+       con scroll de su familia (`[data-testid="stDialog"]` en
+       `_80_cards.py`): la que scrollea es la modal, y dos barras anidadas
+       se leen como una caja rota (#382).
      - **Gráfico y conversor comparten UN selector** (`_MODOS_ABAJO`: los
        tres modos del gráfico + «Conversor SUNAT-Sistema») y el espejo
        `sunat_graf_modo__eco` de siempre — validado contra las opciones,
        porque un `default` que no está en la lista revienta el widget. Con
        un documento ya cargado el conversor no se dibuja, como antes
        (`_necesita_conversor`), pero ahora lo DICE: con un selector que lo
-       nombra, desaparecer callado se leería como un bug.
+       nombra, desaparecer callado se leería como un bug. Y ya no abre con
+       el cartel azul de «todavía no está cargado» (quitado a pedido): lo
+       dicen la pastilla «Solo SUNAT» y el ámbar de «Ítem (sistema)».
      - **La columna «XML» sale de UN listado de R2**
        (`sunat.claves_xml_en_r2`, `list_objects_v2` paginado sobre
        `sunat_originales/`, 5 minutos de caché), no de un `head_object` por

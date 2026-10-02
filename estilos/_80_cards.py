@@ -1606,58 +1606,18 @@ CSS = """    /* ================================================================
     }
 
     /* ─────────────────────────────────────────────────────────────── */
-    /* LA FICHA DEL DOCUMENTO, SOBRE LA TABLA (2026-10-02, a pedido)    */
+    /* LA FICHA DEL DOCUMENTO, EN UNA VENTANA MODAL (2026-10-02)        */
     /*                                                                  */
-    /* `sunat_ficha_capa` vive ADENTRO de `sunat_card_izq` (la tarjeta  */
-    /* de la tabla), después de la grilla, y acá se la estira encima de */
-    /* la tarjeta entera: la tapa con su mismo fondo y sus mismas       */
-    /* esquinas. La grilla se sigue dibujando debajo: si dejara de     */
-    /* renderizarse perdería la selección, y con ella el documento de  */
-    /* la capa y de la tarjeta de abajo. Regla #586.                    */
-    /*                                                                  */
-    /* Key FUERA de la familia `sunat_card_` a propósito: con ese       */
-    /* prefijo heredaría el techo con scroll, el padding y la sombra de */
-    /* una tarjeta, y lo que tiene que parecer es la MISMA tarjeta con  */
-    /* otro contenido. Lo que no entra en el alto de la tabla scrollea  */
-    /* adentro de la capa.                                              */
-    /*                                                                  */
-    /* El contenedor de elemento que Streamlit mete entre la tarjeta y  */
-    /* la capa va en `display: contents`: con la capa en `absolute` se  */
-    /* queda en 0px de alto pero seguiría cobrando el `gap` de la       */
-    /* tarjeta, y abrir la ficha la estiraría 16px — y con ella correría */
-    /* la tarjeta de abajo (#465: lo que abre una capa no se mueve).    */
+    /* `_ficha_modal` la abre con `st.dialog`: la modal ya trae su      */
+    /* fondo, su ✕ y su scroll. Lo único que hace falta acá es que las  */
+    /* dos tarjetas de adentro (`sunat_card_doc`/`_sis`) suelten el     */
+    /* techo con scroll de su familia: dentro de una modal que ya       */
+    /* scrollea, serían dos barras anidadas, una caja rota (#382). Y la  */
+    /* sombra de tarjeta se cambia por una línea de 1px, que sobre el   */
+    /* blanco de la modal es lo que separa. Regla #586.                 */
     /* ─────────────────────────────────────────────────────────────── */
-    div.st-key-sunat_card_izq {
-        position: relative;
-    }
-    div.st-key-sunat_card_izq > div:has(> .st-key-sunat_ficha_capa) {
-        display: contents;
-    }
-    div.st-key-sunat_ficha_capa {
-        position: absolute !important;
-        inset: 0;
-        z-index: 6;
-        background: var(--bg-card);
-        border-radius: 20px;
-        padding: 14px 18px 16px;
-        overflow-y: auto;
-        overflow-x: hidden;
-        box-shadow: 0 2px 10px rgba(16, 16, 20, 0.10);
-    }
-    div.st-key-sunat_ficha_capa::-webkit-scrollbar {
-        width: 6px;
-    }
-    div.st-key-sunat_ficha_capa::-webkit-scrollbar-thumb {
-        background: var(--scroll-thumb);
-        border-radius: 3px;
-    }
-    /* Las dos tarjetas de la ficha, adentro de la capa: sin el techo con */
-    /* scroll de su familia —la que scrollea es la capa, y dos barras    */
-    /* anidadas se leen como una caja rota (#382)— y con la línea de 1px */
-    /* de las mitades del conversor en vez de la sombra, que sobre el    */
-    /* blanco de la capa no separa nada.                                 */
-    div.st-key-sunat_ficha_capa .st-key-sunat_card_doc,
-    div.st-key-sunat_ficha_capa .st-key-sunat_card_sis {
+    [data-testid="stDialog"] .st-key-sunat_card_doc,
+    [data-testid="stDialog"] .st-key-sunat_card_sis {
         max-height: none !important;
         overflow: visible !important;
         box-shadow: none !important;
