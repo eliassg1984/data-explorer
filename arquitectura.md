@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-584 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+585 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -762,7 +762,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 
-**SUNAT y SIRE** (45)
+**SUNAT y SIRE** (46)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -809,6 +809,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 - **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
+- **#585** — Documentos SUNAT entra en una pantalla: la ficha del documento va SOBRE la tabla, y el…
 
 **Fechas, rangos y cortes** (12)
 
@@ -46446,6 +46447,59 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+585. **Documentos SUNAT entra en una pantalla: la ficha del documento va
+     SOBRE la tabla, y el gráfico y el conversor se alternan debajo.**
+     2026-10-02, a pedido: «que la tabla solo muestre 8 filas», «que me
+     muestre si ya se descargó el XML», «que las dos tarjetas aparezcan
+     sobre la tabla, tapándola, con una X para cerrar» y «que el gráfico y
+     el conversor se alternen debajo de la tabla». Hasta ese día eran
+     cuatro tarjetas apiladas: tabla, ficha (SUNAT | sistema), gráfico y
+     —sólo con un documento «Solo SUNAT»— el conversor.
+
+     - **La capa vive ADENTRO de la tarjeta de la tabla** (`sunat_card_izq`
+       → `sunat_ficha_capa`) y el CSS la estira encima con `position:
+       absolute; inset: 0` (`estilos/_80_cards.py`). La grilla se sigue
+       DIBUJANDO debajo, y no es un detalle: un widget que deja de
+       renderizarse pierde su estado (CLAUDE.md), y sin la selección del
+       AgGrid no hay documento — ni para la capa ni para el gráfico y el
+       conversor de abajo. Medido en el navegador (1358×860): la tarjeta
+       mide 333px con la capa abierta y cerrada; la de abajo no se mueve.
+     - **El contenedor de elemento que Streamlit mete entre la tarjeta y la
+       capa va en `display: contents`.** Con la capa en `absolute` mide 0px
+       pero seguiría cobrando el `gap` de la tarjeta: abrir la ficha la
+       estiraba 16px y corría la tarjeta de abajo (#465).
+     - **La key de la capa NO es de la familia `sunat_card_`**: heredaría el
+       techo con scroll, el padding y la sombra de una tarjeta. Las dos
+       tarjetas de adentro sí lo son (`sunat_card_doc`/`_sis`, por el piso
+       de alto de #145) y la capa les apaga el techo: la que scrollea es la
+       capa, y dos barras anidadas se leen como una caja rota (#382).
+     - **Cerrar es POR DOCUMENTO** (`_ficha_abierta`: `sunat_ficha_doc` +
+       `sunat_ficha_cerrada`). Elegir otra fila la vuelve a abrir sola.
+       Para el MISMO documento hace falta un botón (`📄 Ver <doc>`, al lado
+       del selector de abajo): con la fila ya elegida, un clic sobre ella no
+       cambia la selección del AgGrid y no llega a Python.
+     - **Gráfico y conversor comparten UN selector** (`_MODOS_ABAJO`: los
+       tres modos del gráfico + «Conversor SUNAT-Sistema») y el espejo
+       `sunat_graf_modo__eco` de siempre — validado contra las opciones,
+       porque un `default` que no está en la lista revienta el widget. Con
+       un documento ya cargado el conversor no se dibuja, como antes
+       (`_necesita_conversor`), pero ahora lo DICE: con un selector que lo
+       nombra, desaparecer callado se leería como un bug.
+     - **La columna «XML» sale de UN listado de R2**
+       (`sunat.claves_xml_en_r2`, `list_objects_v2` paginado sobre
+       `sunat_originales/`, 5 minutos de caché), no de un `head_object` por
+       fila: son 4.615 documentos en doce meses. La key se arma con
+       `claves_original`, la misma función que usa el sync que sube los
+       archivos. La caché es más larga que la de la ficha (20 s), así que un
+       original recién pedido puede verse en la ficha antes que en la
+       columna; el ⟳ de la tabla limpia las dos.
+     - **Ya pasaba antes y sigue pasando**: el AgGrid de documentos se
+       re-monta en cada clic (medido en el modo demo, con y sin este
+       cambio) y la fila elegida pierde el resaltado. La selección de Python
+       sobrevive, así que la ficha y la tarjeta de abajo no se enteran.
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46458,7 +46512,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#584**; la próxima toma el número siguiente.
+> última regla es la **#585**; la próxima toma el número siguiente.
 
 >
 

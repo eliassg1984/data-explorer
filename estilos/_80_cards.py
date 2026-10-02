@@ -1183,7 +1183,8 @@ CSS = """    /* ================================================================
     /* Key `sunat_conv_` a propósito, NO `sunat_card_`: aquélla es la   */
     /* familia que el bloque de arriba clampea a `--alto-util` con      */
     /* scroll propio, y estas dos viven DENTRO de una de ellas          */
-    /* (`sunat_card_conversor`). Con el prefijo de la familia grande    */
+    /* (`sunat_card_graf`, que lo alterna con el gráfico desde el      */
+    /* 2026-10-02; antes `sunat_card_conversor`). Con el prefijo grande */
     /* heredarían un segundo scroll anidado adentro del de la tarjeta   */
     /* que las contiene. Es la regla de CLAUDE.md ("antes de agregar    */
     /* un widget dentro de una tarjeta: grep estilos/") leída al revés: */
@@ -1404,7 +1405,7 @@ CSS = """    /* ================================================================
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_docsprov, > .st-key-compras_prov_card_evo, > .st-key-compras_prov_card_prods, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-sunat_card_conversor, > .st-key-sunat_card_doc, > .st-key-sunat_card_graf, > .st-key-sunat_card_izq, > .st-key-sunat_card_sis),
+        > div:has(> .st-key-sunat_card_doc, > .st-key-sunat_card_graf, > .st-key-sunat_card_izq, > .st-key-sunat_card_sis),
         /* Las dos mitades del conversor entraron acá el 2026-08-29, al   */
         /* ganar cada una un pie de totales de largo distinto: la de      */
         /* SUNAT medía 388px y la del sistema 349 en el documento de      */
@@ -1565,6 +1566,66 @@ CSS = """    /* ================================================================
     /* Anula el borde interno que Streamlit pinta cuando border=True. */
     div[class*="st-key-sunat_card_"] > div {
         border: none !important;
+    }
+
+    /* ─────────────────────────────────────────────────────────────── */
+    /* LA FICHA DEL DOCUMENTO, SOBRE LA TABLA (2026-10-02, a pedido)    */
+    /*                                                                  */
+    /* `sunat_ficha_capa` vive ADENTRO de `sunat_card_izq` (la tarjeta  */
+    /* de la tabla), después de la grilla, y acá se la estira encima de */
+    /* la tarjeta entera: la tapa con su mismo fondo y sus mismas       */
+    /* esquinas. La grilla se sigue dibujando debajo: si dejara de     */
+    /* renderizarse perdería la selección, y con ella el documento de  */
+    /* la capa y de la tarjeta de abajo. Regla #585.                    */
+    /*                                                                  */
+    /* Key FUERA de la familia `sunat_card_` a propósito: con ese       */
+    /* prefijo heredaría el techo con scroll, el padding y la sombra de */
+    /* una tarjeta, y lo que tiene que parecer es la MISMA tarjeta con  */
+    /* otro contenido. Lo que no entra en el alto de la tabla scrollea  */
+    /* adentro de la capa.                                              */
+    /*                                                                  */
+    /* El contenedor de elemento que Streamlit mete entre la tarjeta y  */
+    /* la capa va en `display: contents`: con la capa en `absolute` se  */
+    /* queda en 0px de alto pero seguiría cobrando el `gap` de la       */
+    /* tarjeta, y abrir la ficha la estiraría 16px — y con ella correría */
+    /* la tarjeta de abajo (#465: lo que abre una capa no se mueve).    */
+    /* ─────────────────────────────────────────────────────────────── */
+    div.st-key-sunat_card_izq {
+        position: relative;
+    }
+    div.st-key-sunat_card_izq > div:has(> .st-key-sunat_ficha_capa) {
+        display: contents;
+    }
+    div.st-key-sunat_ficha_capa {
+        position: absolute !important;
+        inset: 0;
+        z-index: 6;
+        background: var(--bg-card);
+        border-radius: 20px;
+        padding: 14px 18px 16px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        box-shadow: 0 2px 10px rgba(16, 16, 20, 0.10);
+    }
+    div.st-key-sunat_ficha_capa::-webkit-scrollbar {
+        width: 6px;
+    }
+    div.st-key-sunat_ficha_capa::-webkit-scrollbar-thumb {
+        background: var(--scroll-thumb);
+        border-radius: 3px;
+    }
+    /* Las dos tarjetas de la ficha, adentro de la capa: sin el techo con */
+    /* scroll de su familia —la que scrollea es la capa, y dos barras    */
+    /* anidadas se leen como una caja rota (#382)— y con la línea de 1px */
+    /* de las mitades del conversor en vez de la sombra, que sobre el    */
+    /* blanco de la capa no separa nada.                                 */
+    div.st-key-sunat_ficha_capa .st-key-sunat_card_doc,
+    div.st-key-sunat_ficha_capa .st-key-sunat_card_sis {
+        max-height: none !important;
+        overflow: visible !important;
+        box-shadow: none !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 14px !important;
     }
 
     /* =================================================================== */
