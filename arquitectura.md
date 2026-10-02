@@ -46538,8 +46538,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        después de elegir la fila. Verificado en el navegador: clic en el
        proveedor elige sin abrir; en el número abre; ✕ y Esc cierran; otro
        clic de la página no la reabre; el mismo número otra vez, sí.
-     - **«📄 Ver <doc>»**, al lado del selector de abajo, es la otra vía:
-       abre la ficha de la fila elegida cuando está cerrada.
+     - **No hay otra vía**: el botón «📄 Ver <doc>» que hubo al lado del
+       selector de abajo se quitó a pedido el mismo día. La ficha se abre
+       sólo con el ojo / el número.
      - **La tabla se sigue DIBUJANDO detrás**: un widget que deja de
        renderizarse pierde su estado (CLAUDE.md), y sin la selección del
        AgGrid no hay documento — ni para la ficha ni para el gráfico y el
@@ -46558,6 +46559,16 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        nombra, desaparecer callado se leería como un bug. Y ya no abre con
        el cartel azul de «todavía no está cargado» (quitado a pedido): lo
        dicen la pastilla «Solo SUNAT» y el ámbar de «Ítem (sistema)».
+     - **En el conversor, los datos del documento van en el renglón del
+       título** (`_titulo_panel(..., derecha=_datos_documento_html(doc))`):
+       proveedor, RUC, fecha y moneda, en las dos mitades con el mismo
+       markup para que las dos tablas sigan arrancando en la misma `y`.
+       Antes eran una caja gris de dos renglones debajo del título; subir
+       los datos sube las tablas ~45px. Lo único que se corta con «…» es el
+       nombre (entero en el tooltip), y el `detalle` del título («lo que
+       emitió el proveedor») se quitó ahí: cortado a «lo …» en una laptop
+       decía menos que nada. Medido a 1358 y a 1100 de ancho: un renglón
+       de 12,6px en las dos mitades.
      - **La columna «XML» sale de UN listado de R2**
        (`sunat.claves_xml_en_r2`, `list_objects_v2` paginado sobre
        `sunat_originales/`, 5 minutos de caché), no de un `head_object` por

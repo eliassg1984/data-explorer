@@ -77,6 +77,7 @@ baja a S/6,9 y S/1.199 — esa medición es de ANTES de tener RUC, cuando la
 
 import datetime
 import difflib
+import html
 import io
 import json
 import re
@@ -2386,19 +2387,30 @@ def _alto_conversor(n_filas):
                              rol=alturas.MINI)
 
 
-def _titulo_panel(texto, detalle):
+def _titulo_panel(texto, detalle, derecha=""):
     """La cabecera de cada mitad del conversor: de qué fuente es la tabla
     de abajo. Las dos mitades la dibujan IGUAL (mismo markup, mismo alto)
     porque de eso depende que las dos tablas arranquen en la misma `y` —
-    ver `_ALTO_FILA_CONVERSOR`."""
+    ver `_ALTO_FILA_CONVERSOR`.
+
+    `derecha` es HTML que va en el MISMO renglón, pegado al borde derecho:
+    en el conversor, los datos del documento (`_datos_documento_html`). Ahí
+    el `detalle` va vacío: cortado a «lo …» en una laptop decía menos que
+    nada, y el renglón lo necesita el nombre del proveedor."""
     st.markdown(
         f'<div style="display:flex;align-items:baseline;gap:6px;'
-        f'margin:0 0 6px;padding-bottom:4px;'
+        f'margin:0 0 6px;padding-bottom:4px;min-width:0;'
         f'border-bottom:1px solid {GRIS_BORDE};">'
         f'<span style="font-size:10px;font-weight:700;color:{ACENTO};'
-        f'text-transform:uppercase;letter-spacing:.05em;">{texto}</span>'
-        f'<span style="font-size:10px;color:{GRIS_TEXTO};">{detalle}</span>'
-        f'</div>', unsafe_allow_html=True)
+        f'text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;'
+        f'flex:none;">{texto}</span>'
+        + (f'<span style="font-size:10px;color:{GRIS_TEXTO};white-space:nowrap;'
+           f'overflow:hidden;text-overflow:ellipsis;min-width:0;'
+           f'flex:0 2 auto;">{detalle}</span>' if detalle else '')
+        + (f'<span style="margin-left:auto;display:flex;gap:6px;'
+           f'align-items:baseline;min-width:0;flex:0 1 auto;">{derecha}'
+           f'</span>' if derecha else '')
+        + '</div>', unsafe_allow_html=True)
 
 
 _JS_FORMATO_CANT = JsCode(
@@ -2410,11 +2422,14 @@ iguales se verían distintos justo en la vista que existe para
 compararlos."""
 
 
-def _cabecera_conversor(doc):
-    """Los datos del documento arriba de CADA mitad del conversor: RUC,
-    proveedor, fecha de emisión y moneda.
+def _datos_documento_html(doc):
+    """Los datos del documento para CADA mitad del conversor: proveedor,
+    RUC, fecha de emisión y moneda, en UN renglón — el del título
+    (`_titulo_panel(..., derecha=)`). Hasta el 2026-10-02 eran una caja
+    gris de dos renglones debajo del título; subieron a pedido, para que
+    las tablas de abajo suban con ellos (~45px).
 
-    Se dibuja dos veces con la MISMA función, y eso no es redundancia: es
+    Se arma dos veces con la MISMA función, y eso no es redundancia: es
     lo que garantiza que las dos cabeceras midan igual y las dos tablas
     arranquen a la misma altura. Una cabecera copiada a mano en cada lado
     se desincroniza en cuanto alguien toque una — es la lección de la
@@ -2428,28 +2443,26 @@ def _cabecera_conversor(doc):
     a la vista mientras se homologa es ver lo que se va a exportar.
     """
     if doc is None:
-        return
+        return ""
     ruc = str(doc.get("ruc_proveedor") or "—")
-    prov = _compras_truncar(str(doc.get("proveedor") or ""), 34)
+    prov = html.escape(str(doc.get("proveedor") or ""))
     fecha = pd.to_datetime(doc.get("fecha_emision"), errors="coerce")
     fecha = "—" if pd.isna(fecha) else f"{fecha:%d/%m/%Y}"
-    st.markdown(
-        f'<div style="display:flex;flex-direction:column;gap:1px;'
-        f'padding:6px 9px;margin-bottom:8px;border-radius:8px;'
-        f'background:{GRIS_FONDO};line-height:1.35;">'
-        f'<div style="font-size:11.5px;color:{TEXTO_PRINCIPAL};'
-        f'font-weight:600;white-space:nowrap;overflow:hidden;'
-        f'text-overflow:ellipsis;">{prov}</div>'
-        f'<div style="font-size:10.5px;color:{GRIS_TEXTO};'
-        f'font-variant-numeric:tabular-nums;">'
-        f'RUC {ruc} · {fecha} · {sunat._moneda_con_tc(doc)}</div>'
-        f'</div>', unsafe_allow_html=True)
+    # El nombre es lo único que se corta (con «…» y entero en el tooltip):
+    # RUC, fecha y moneda son cortos y son los que se cotejan.
+    return (
+        f'<span title="{prov}" style="font-size:11px;font-weight:600;'
+        f'color:{TEXTO_PRINCIPAL};white-space:nowrap;overflow:hidden;'
+        f'text-overflow:ellipsis;min-width:0;">{prov}</span>'
+        f'<span style="font-size:10.5px;color:{GRIS_TEXTO};'
+        f'white-space:nowrap;flex:none;font-variant-numeric:tabular-nums;">'
+        f'RUC {ruc} · {fecha} · {sunat._moneda_con_tc(doc)}</span>')
 
 
 def _renglon_total(etiqueta, valor, sim, fuerte=False):
     """Un renglón del pie de totales. Compartido por las dos mitades para
     que los dos pies se vean iguales — mismo argumento que
-    `_cabecera_conversor`."""
+    `_datos_documento_html`."""
     peso = "700" if fuerte else "400"
     color = TEXTO_PRINCIPAL if fuerte else GRIS_TEXTO
     tam = "13px" if fuerte else "11.5px"
@@ -3201,14 +3214,14 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
     c_izq, c_der = st.columns(2, gap="small")
     with c_izq:
         with st.container(border=True, key="sunat_conv_izq"):
-            _titulo_panel("Comprobante SUNAT", "lo que emitió el proveedor")
-            _cabecera_conversor(doc)
+            _titulo_panel("Comprobante SUNAT", "",
+                          derecha=_datos_documento_html(doc))
             _grid_lado_sunat(tv_sunat, _doc_id)
             _pie_comprobante(doc, lineas_xml, totales_doc)
     with c_der:
         with st.container(border=True, key="sunat_conv_der"):
-            _titulo_panel("Sistema", "con qué se carga")
-            _cabecera_conversor(doc)
+            _titulo_panel("Sistema", "",
+                          derecha=_datos_documento_html(doc))
             resp = _grid_lado_sistema(tv, _doc_id)
             _pie_sistema(doc, filas_sistema, lineas_xml)
 
@@ -3767,29 +3780,18 @@ def _panel_abajo(vis, doc, fila_cruce, d):
     sólo elegía el modo del gráfico, así que quien venía usando uno lo
     conserva.
 
-    Al costado del selector, cuando la ficha está cerrada, el botón que la
-    abre para la fila elegida — la otra vía, además del ojo de la tabla.
+    La ficha se abre SÓLO con el ojo / el número del documento en la
+    tabla: el botón «📄 Ver <doc>» que vivía al costado de este selector
+    se quitó a pedido (2026-10-02).
     """
     k_eco = "sunat_graf_modo__eco"
     previo = st.session_state.get(k_eco, _MODOS_GRAFICO[0])
     if previo not in _MODOS_ABAJO:
         previo = _MODOS_GRAFICO[0]
-    # columnas-internas: el selector de la tarjeta y, a la derecha, el
-    # botón que reabre la ficha. No es una fila de un drill.
-    c_modo, c_ficha = st.columns([4, 1], vertical_alignment="center")
-    with c_modo:
-        modo = st.segmented_control(
-            "Ver", _MODOS_ABAJO, default=previo, key="sunat_graf_modo",
-            label_visibility="collapsed") or previo
+    modo = st.segmented_control(
+        "Ver", _MODOS_ABAJO, default=previo, key="sunat_graf_modo",
+        label_visibility="collapsed") or previo
     st.session_state[k_eco] = modo
-    if doc is not None and not _ficha_abierta(doc):
-        with c_ficha:
-            st.button(f"📄 Ver {doc.get('documento', 'documento')}",
-                      key="sunat_ficha_abrir", type="tertiary",
-                      use_container_width=True, on_click=_abrir_ficha,
-                      args=(_id_ficha(doc),),
-                      help="Abrir la ficha del documento elegido, sobre "
-                           "la tabla.")
 
     if modo != _MODO_CONVERSOR:
         _panel_grafico(vis, doc, modo)
@@ -3847,10 +3849,6 @@ def _ficha_abierta(doc):
 
 def _cerrar_ficha():
     st.session_state[_K_FICHA_ABIERTA] = None
-
-
-def _abrir_ficha(id_doc):
-    st.session_state[_K_FICHA_ABIERTA] = id_doc
 
 
 def _ficha_modal(doc, fila_cruce):
