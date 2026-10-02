@@ -1582,30 +1582,34 @@ def _pruebas_puras():
     check("cruce: sin filas de más (5 SIRE + 3 solo-sistema reales)",
           len(_cruce), 8)
 
-    # La tira de estados de arriba de la tabla: % y cantidad, SIN montos
-    # (2026-09-23, a pedido). El % es sobre lo que reporta SUNAT —los tres
-    # estados que lo conocen suman 100— y «solo en el sistema» va sin %,
-    # porque no está en ese universo. `_cruce` trae 3 coinciden, 1 con
-    # diferencia y 1 solo en SUNAT (los 5 del SIRE) más 3 solo en el sistema.
-    check("% con un decimal (220 de 4.320)",
-          _ds._pct_del_sire(220, 4320), "5.1%")
-    check("1 de 4.320 no se redondea a 0.0%",
-          _ds._pct_del_sire(1, 4320), "<0.1%")
-    check("ni 4.319 de 4.320 a 100.0%",
-          _ds._pct_del_sire(4319, 4320), ">99.9%")
-    check("todos es 100.0%", _ds._pct_del_sire(5, 5), "100.0%")
-    check("sin nada del SIRE no hay %", _ds._pct_del_sire(0, 0), None)
-
-    import re as _re
-    from unittest import mock as _mock
-    with _mock.patch.object(_ds.st, "markdown") as _md:
-        _ds._kpis_cruce(_cruce, n_provs=1)
-    _ds.st.session_state.pop("_cp_docs_cruce", None)
-    _estado = _md.call_args[0][0].split('data-grupo="estado">', 1)[1]
-    check("tira de estados: %, cantidad y estado, en el orden pedido",
-          _re.sub(r"<[^>]+>", "", _estado),
-          "60.0% 3 coinciden·20.0% 1 con diferencia·20.0% 1 solo en SUNAT"
-          "·3 solo en el sistema")
+    # El «Resumen del cruce» (2026-10-02; antes, la tira de estados de
+    # arriba de la tabla). `_cruce` trae 3 coinciden, 1 con diferencia y 1
+    # solo en SUNAT (los 5 del SIRE) más 3 solo en el sistema: 8 en total.
+    check("% con un decimal (220 de 4.320)", _ds._pct_de(220, 4320), "5.1%")
+    check("1 de 4.320 no se redondea a 0.0%", _ds._pct_de(1, 4320), "<0.1%")
+    check("ni 4.319 de 4.320 a 100.0%", _ds._pct_de(4319, 4320), ">99.9%")
+    check("todos es 100.0%", _ds._pct_de(5, 5), "100.0%")
+    check("sin total no hay %", _ds._pct_de(0, 0), None)
+    check("resumen del cruce: las siete barras, por nombre",
+          _ds._conteos_cruce(_cruce),
+          {"Total": 8, "En SUNAT": 5, "En sistema": 7, "Coinciden": 3,
+           "Con diferencia": 1, "Solo SUNAT": 1, "Solo sistema": 3})
+    check("resumen del cruce: los cuatro estados suman el total",
+          sum(_ds._conteos_cruce(_cruce)[b] for b in
+              ("Coinciden", "Con diferencia", "Solo SUNAT", "Solo sistema")),
+          8)
+    check("resumen del cruce: sin cruce, todo en cero",
+          set(_ds._conteos_cruce(None).values()), {0})
+    _ds._publicar_conteos(_cruce)
+    check("el KPI del rail sigue recibiendo los conteos",
+          _ds.st.session_state.pop("_cp_docs_cruce", None),
+          {"sunat": 5, "sistema": 7, "revisar": 5})
+    check("comparar con el año pasado corre el MISMO rango un año",
+          _ds._rango_hace(_dt.date(2026, 9, 3), _dt.date(2026, 10, 2), 1),
+          (_dt.date(2025, 9, 3), _dt.date(2025, 10, 2)))
+    check("el 29 de febrero cae en el 28",
+          _ds._rango_hace(_dt.date(2024, 2, 29), _dt.date(2024, 3, 5), 1)[0],
+          _dt.date(2023, 2, 28))
 
     # ── Comparativo vs Año Pasado (Ventas) ──────────────────────────────
     import datetime as _dt

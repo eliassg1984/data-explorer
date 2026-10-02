@@ -428,7 +428,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 - **#582** — Compras › Producto: la tabla de abajo del gráfico muestra SEIS filas, las barras dicen la…
 
-**AgGrid y tablas** (89)
+**AgGrid y tablas** (88)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -518,7 +518,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
-- **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
 
 **Streamlit** (158)
 
@@ -46582,6 +46581,32 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        local el rerun dura menos que los 400ms del velo, así que «¿se ve
        el velo?» da que no aunque el bug esté; lo que se cuenta es la
        marca `data-stale`.
+     - **La tira de KPIs de la tabla se fue y volvió como gráfico**
+       (mismo día, a pedido: «ocupa una fila, la tabla debe subir»). Los
+       conteos que mostraba al pasar el cursor por «Está vs Sistema» son el
+       modo **«Resumen del cruce»** de la tarjeta de abajo (`_panel_resumen`):
+       siete barras —Total (la UNIÓN de los dos lados), En SUNAT, En
+       sistema, Coinciden, Con diferencia, Solo SUNAT, Solo sistema— con la
+       cifra y el % sobre el total escritos encima. Con eso se fueron también
+       el hover de la grilla (`inject_hover_kpis_grid`, que sigue en
+       `inyecciones/` por si otra tabla lo quiere), `_kpis_cruce` y el CSS de
+       las reglas #460 y #464. Dos cosas que la tira hacía y no podían
+       perderse: **los conteos para el KPI del rail** los publica ahora
+       `_publicar_conteos`, y **la alerta de «faltan los últimos días»**
+       (#197) sale arriba de la tabla, sólo cuando pasa.
+     - **La comparación es contra el MISMO rango corrido 1 o 2 años**
+       (`_COMPARACIONES`, pastillas «Año pasado» / «Hace 2 años»). Un tono
+       que se aclara hacia atrás —los períodos tienen orden—, y por eso cada
+       barra lleva su número: los dos lavandas claros no llegan a 3:1 contra
+       el blanco. Se aplica el filtro de proveedor; «Mes en SUNAT» no (en un
+       año cerrado todo está presentado y «Mes abierto» daría cero), y la
+       nota lo dice. **Un período sin una de las dos fuentes no se dibuja**:
+       antes del primer comprobante del registro todo saldría «Solo
+       sistema», y antes del primero del parquet todo «Solo SUNAT» — un
+       desastre contable que no existió. La nota dice por qué falta la
+       barra (`_conteos_de_periodo`). Los conteos de cada período anterior
+       se guardan en `session_state` por rango y proveedor: el cruce de un
+       año cuesta ~0,4 s y la tarjeta re-corre en cada clic del selector.
      - **La columna «XML» sale de UN listado de R2**
        (`sunat.claves_xml_en_r2`, `list_objects_v2` paginado sobre
        `sunat_originales/`, 5 minutos de caché), no de un `head_object` por

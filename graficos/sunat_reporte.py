@@ -92,7 +92,7 @@ def _kpi_de_la_vista():
     Es el texto que tenía la vista cuando vivía en Compras, pero sin el lado
     del sistema calculado desde el parquet: los dos conteos y lo que no
     cuadra los publica la propia tarjeta en `_cp_docs_cruce` cuando dibuja
-    (`documentos_sunat.py::_kpis_cruce`), así que llegan un rerun tarde y
+    (`documentos_sunat.py::_publicar_conteos`), así que llegan un rerun tarde y
     faltan hasta la primera vez que se abre. Mejor sin número que con uno
     inventado. Ámbar si hay algo que revisar: es lo único accionable acá.
     """

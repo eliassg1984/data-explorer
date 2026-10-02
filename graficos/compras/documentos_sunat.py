@@ -94,8 +94,9 @@ from estado_rango import clave_rango, restaurar_eco
 import franja_fecha
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, ERROR_FONDO, ERROR_TEXTO,
-    GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
-    LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
+    GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
+    LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO,
+    TEXTO_PRINCIPAL,
 )
 from graficos.base import _compras_layout, _compras_truncar, una_vez_por_corrida
 from graficos.compras._comun import (
@@ -103,7 +104,6 @@ from graficos.compras._comun import (
     GAP_DRILL,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
-from inyecciones import inject_hover_kpis_grid
 # REEXPORT, no import muerto: `_llave_documento_parquet` vivia definida aca
 # y se movio a `_comun.py` el 2026-09-08, cuando el drill Semanal la pidio
 # para mostrar el N de documento en su tabla (ver el comentario largo que la
@@ -744,45 +744,16 @@ def _filtro_estado(slot, df_cruce):
     return mapa.get(sel)
 
 
-# Qué columna de la tabla resume cada grupo de la tira de KPIs. Lo consume
-# `inyecciones.hover_kpis.inject_hover_kpis_grid`, que traduce el `col-id`
-# del DOM de AG Grid —que es el nombre del campo, tal cual— al grupo que hay
-# que encender.
-#
-# «Fecha» y «D» no están y no es un olvido: el rango ya lo dice el pill de
-# arriba, y la detracción no tiene cifra en la tira. Una columna sin grupo
-# deja la tira en su estado de reposo, que es lo correcto — mejor no decir
-# nada que encender un grupo que no la resume.
-_COL_A_GRUPO_KPI = {
-    "Documento": "docs",
-    "Proveedor": "provs",
-    "Base": "base",
-    "IGV": "igv",
-    "Total": "total",
-    _COL_ESTADO: "estado",
-}
+def _pct_de(n, total):
+    """`n` como porcentaje de `total`, con un decimal. None si `total` es 0.
 
-_GRUPO_KPI_REPOSO = "docs"
-"""Qué grupo se ve sin cursor encima. Vacío sería más fiel al pedido («que
-sólo aparezcan al pasar el cursor»), pero un hueco que no muestra NADA no
-tiene cómo anunciar que ahí hay algo: nadie adivina que hay que pasar el
-cursor por una columna. «docs» es el más corto y el menos redundante de los
-seis —el único que no está ya escrito en alguna celda— así que es el que
-paga menos por quedarse."""
-
-
-def _pct_del_sire(n, n_sire):
-    """`n` como porcentaje de los comprobantes que reporta SUNAT, con un
-    decimal, para el grupo de estados de `_kpis_cruce`. None si SUNAT no
-    reporta ninguno —todo es «Solo sistema»—: no hay sobre qué.
-
-    Los dos bordes no se redondean. 1 de 4.320 es el 0,02 %, y «0.0% 1 con
-    diferencia» se lee como una contradicción: sale «<0.1%». Igual arriba:
-    4.319 de 4.320 no es «100.0%» con uno al lado que no coincide.
+    Los dos bordes no se redondean. 1 de 4.320 es el 0,02 %, y «0.0%» al
+    lado de un documento con diferencia se lee como una contradicción: sale
+    «<0.1%». Igual arriba: 4.319 de 4.320 no es «100.0%».
     """
-    if not n_sire:
+    if not total:
         return None
-    p = n / n_sire * 100
+    p = n / total * 100
     if 0 < p < 0.05:
         return "<0.1%"
     if 99.95 <= p < 100:
@@ -790,166 +761,49 @@ def _pct_del_sire(n, n_sire):
     return f"{p:.1f}%"
 
 
-def _kpis_cruce(df, origen=None, n_tabla=None, n_provs=None):
-    """Resumen de UNA línea del cruce: cuántos documentos coinciden,
-    difieren, o faltan de un lado u otro. Mismo criterio compacto que
-    `_kpis` — ver su docstring sobre por qué no son `st.metric`.
+_BARRAS_CRUCE = ("Total", "En SUNAT", "En sistema", "Coinciden",
+                 "Con diferencia", "Solo SUNAT", "Solo sistema")
+"""Las barras del «Resumen del cruce», en orden de lectura: el universo,
+sus dos lados y cómo se reparte. «Total» es la UNIÓN —cada documento una
+vez, esté de un lado, del otro o de los dos—, así que los cuatro estados
+suman 100 % y «En SUNAT» + «En sistema» suman más (los que coinciden o
+difieren están en los dos)."""
 
-    `origen` desde el 2026-08-28: al fundirse las dos tablas, ésta es la
-    única tira de KPIs que queda, así que tiene que llevar también el
-    sello de dónde salió el dato (parquet o API) que antes mostraba
-    `_kpis`. Sin eso, el usuario perdía la única señal de que está viendo
-    una copia y no lo que SUNAT dice ahora mismo.
 
-    LOS SEIS GRUPOS SE APILAN Y SE VE UNO, el de la columna que tenga el
-    cursor encima (2026-09-18, a pedido: «que los datos del recuadro rojo
-    sólo aparezcan al pasar el cursor sobre sus columnas»). Acá sólo se
-    marca cada grupo con su `data-grupo`; quién los prende es
-    `inyecciones.hover_kpis.inject_hover_kpis_grid` —pone `data-activo` en
-    el contenedor desde el hover de AG Grid— y el CSS que los esconde vive
-    en `estilos/_30_filtros.py`. Apilados con un `grid` de una sola celda y
-    no con `position: absolute`: así el hueco mide lo que el grupo MÁS ALTO
-    y la cabecera no salta al cambiar de columna. Ver regla #460.
+def _conteos_cruce(df):
+    """Documentos de un cruce por barra de `_BARRAS_CRUCE`."""
+    if df is None or getattr(df, "empty", True) or "estado" not in df.columns:
+        return dict.fromkeys(_BARRAS_CRUCE, 0)
+    c = df["estado"].value_counts()
+    n = int(len(df))
+    coi, dif = int(c.get("Coincide", 0)), int(c.get("Diferencia", 0))
+    ssu, ssi = int(c.get("Solo SUNAT", 0)), int(c.get("Solo sistema", 0))
+    return {"Total": n, "En SUNAT": n - ssi, "En sistema": n - ssu,
+            "Coinciden": coi, "Con diferencia": dif,
+            "Solo SUNAT": ssu, "Solo sistema": ssi}
 
-    **El sello de origen queda FUERA de la pila y siempre a la vista.** No
-    es un total de columna: es la única señal de que lo que se está mirando
-    puede estar incompleto (regla #197), y eso no se esconde detrás de un
-    gesto que hay que descubrir.
 
-    `n_tabla` es cuántas filas muestra la tabla cuando el filtro de estado
-    está puesto. La tira se calcula SIN ese filtro a propósito —ver
-    `_filtro_estado`— y este número es lo que evita que se lea como una
-    contradicción: el grupo «docs» dice «14 de 244».
+def _publicar_conteos(df):
+    """Deja los conteos del cruce para el KPI de la vista en la columna.
+
+    Los publicaba la tira de KPIs de la tabla (`_kpis_cruce`) hasta que se
+    fue, el 2026-10-02. Se PUBLICAN en vez de recalcularse allá porque el
+    lado SUNAT sale de la consulta al SIRE que se acaba de hacer acá — el
+    rail no puede dispararla sola para decorar un rótulo. Llegan un rerun
+    tarde (el rail se dibuja antes que esta vista): hasta que Documentos se
+    abra una vez el KPI muestra sólo el lado del sistema. Es la degradación
+    correcta.
     """
-    if df is None or df.empty:
-        st.markdown('<div class="sunat-kpis-fila"></div>',
-                    unsafe_allow_html=True)
-        return
-    conteos = df["estado"].value_counts()
-
-    def dato(valor, etiqueta, color=None, pct=None):
-        c = color or TEXTO_PRINCIPAL
-        cifra = f'<b style="color:{c};font-weight:600;">{pct or valor}</b>'
-        if pct:
-            # El % va primero y se lleva la negrita y el color del estado;
-            # la cantidad queda al lado, en peso normal. Dos cifras en
-            # negrita pegadas se leen como un solo número.
-            cifra += f'<span style="color:{TEXTO_PRINCIPAL};"> {valor}</span>'
-        return (f'<span style="white-space:nowrap;">{cifra}'
-                f'<span style="color:{GRIS_TEXTO};"> {etiqueta}</span></span>')
-
-    def grupo(nombre, *partes_grupo):
-        # El grupo de reposo nace con la clase puesta, y eso no es
-        # redundante con el JS: si la inyección no engancha —iframe que
-        # tarda, Cloud lento, un rerun que la deja a medias— la tira
-        # degrada a «siempre muestra docs» en vez de quedarse en blanco.
-        # La clase la mueve `inject_hover_kpis_grid`; el CSS no sabe los
-        # nombres de los grupos (viven sólo acá).
-        act = " kpi-activo" if nombre == _GRUPO_KPI_REPOSO else ""
-        return (f'<span class="sunat-kpi-grupo{act}" data-grupo="{nombre}">'
-                + f'<span style="color:{GRIS_BORDE};">·</span>'.join(partes_grupo)
-                + '</span>')
-
-    # El VOLUMEN del rango va primero -- lo mostraba `_kpis`, que murió al
-    # fundirse las dos tablas (2026-08-28) y se llevaba puestos el total y
-    # el IGV del período. Se suma el lado SUNAT, que es el original; las
-    # filas «Solo sistema» no tienen y quedan fuera de esta suma, que es
-    # lo correcto: no son comprobantes del SIRE.
-    _tot = float(pd.to_numeric(df.get("total_sunat"), errors="coerce").sum())
-    _igv = float(pd.to_numeric(df.get("igv_sunat"), errors="coerce").sum())
-    # La BASE no estaba hasta el 2026-09-18 y entra con el hover: la tabla
-    # tiene una columna «Base» y una columna que al pasar el cursor no dice
-    # nada se lee como que la función está rota, no como que ese dato no
-    # existe. Mismo lado que las otras dos sumas (el del SIRE).
-    _base = float(pd.to_numeric(df.get("base_sunat"), errors="coerce").sum())
-    # Cuántos proveedores distintos, para la columna «Proveedor». Por RUC y
-    # no por razón social, mismo criterio que `_ranking_proveedores`: basta
-    # una tilde distinta entre períodos para partir un proveedor en dos.
-    #
-    # LO PASA EL LLAMADOR porque `_claves_proveedor_cruce` recorre el df con
-    # `iterrows()` y el filtro de proveedor ya lo llamó en este mismo
-    # render: recalcularlo acá son ~4.600 filas de bucle Python de más por
-    # rerun. El fallback existe para que la función siga siendo llamable
-    # sola (los tests), no para usarse.
-    _provs = int(n_provs if n_provs is not None
-                 else _claves_proveedor_cruce(df).nunique())
-    _docs = (f"{n_tabla:,} de {len(df):,}" if n_tabla is not None
-             and n_tabla != len(df) else f"{len(df):,}")
-    grupos = [
-        grupo("docs", dato(_docs, "docs")),
-        grupo("provs", dato(f"{_provs:,}",
-                            "proveedor" if _provs == 1 else "proveedores")),
-        grupo("base", dato(f"S/ {_base:,.2f}", "base")),
-        grupo("igv", dato(f"S/ {_igv:,.2f}", "IGV")),
-        grupo("total", dato(f"S/ {_tot:,.2f}", "total")),
-    ]
-
-    # Los conteos, prestados al KPI de la franja de vistas (2026-09-01, a
-    # pedido: "cuantos estan en SUNAT y cuantos en sistema"). Se PUBLICAN
-    # en vez de recalcularse alla porque el lado SUNAT sale de la consulta
-    # al SIRE que se acaba de hacer aca — el rail no puede dispararla sola
-    # para decorar un rotulo. Mismo patron que `CLAVE_CABECERA` de
-    # navegacion.py: quien tiene el dato lo deja, quien lo pinta lo lee.
-    #
-    # Llega un rerun tarde (el rail se dibuja antes que esta vista), asi
-    # que hasta que Documentos se abra una vez el KPI muestra solo el lado
-    # del sistema. Es la degradacion correcta: un numero cierto y otro que
-    # todavia no se sabe, en vez de bloquear la franja esperando a SUNAT.
+    k = _conteos_cruce(df)
     st.session_state["_cp_docs_cruce"] = {
-        "sunat": int(len(df) - conteos.get("Solo sistema", 0)),
-        "sistema": int(len(df) - conteos.get("Solo SUNAT", 0)),
-        # Lo que NO cuadra, en un solo numero (2026-09-07): los que estan
-        # de un lado y no del otro, mas los que estan en los dos con
-        # importes distintos. El rail lo pinta como excepcion (ambar) —
-        # es lo unico de esta vista que pide una accion, y los dos totales
-        # de arriba no lo dicen: 204 y 207 se leen como "casi igual"
-        # cuando pueden ser 7 documentos mal por los dos lados.
-        "revisar": int(conteos.get("Solo sistema", 0)
-                      + conteos.get("Solo SUNAT", 0)
-                      + conteos.get("Diferencia", 0)),
+        "sunat": k["En SUNAT"],
+        "sistema": k["En sistema"],
+        # Lo que NO cuadra, en un solo número: el rail lo pinta como
+        # excepción (ámbar), y los dos totales no lo dicen — 204 y 207 se
+        # leen como «casi igual» cuando pueden ser 7 documentos mal por los
+        # dos lados.
+        "revisar": k["Solo sistema"] + k["Solo SUNAT"] + k["Con diferencia"],
     }
-
-    # PORCENTAJE Y CANTIDAD, SIN MONTOS (2026-09-23, a pedido: «quitemos los
-    # valorizados, mantengamos las cantidades y añadamos %»), en ese orden.
-    #
-    # EL % ES SOBRE LO QUE REPORTA SUNAT —coinciden + con diferencia + solo
-    # en SUNAT—, no sobre las filas de la tabla: esos tres suman 100 y se
-    # leen como «de lo que dice SUNAT, cuánto cuadra». «Solo en el sistema»
-    # va sin % a propósito (también a pedido): no es parte de ese universo,
-    # y un % suyo sobre el mismo denominador haría sumar la tira más de 100.
-    n_coi = int(conteos.get("Coincide", 0))
-    n_dif = int(conteos.get("Diferencia", 0))
-    n_ssu = int(conteos.get("Solo SUNAT", 0))
-    n_ssi = int(conteos.get("Solo sistema", 0))
-    n_sire = n_coi + n_dif + n_ssu
-
-    partes = [dato(f"{n_coi:,}", "coinciden",
-                   pct=_pct_del_sire(n_coi, n_sire))]
-    if n_dif:
-        partes.append(dato(f"{n_dif:,}", "con diferencia", ADVERTENCIA_TEXTO,
-                           pct=_pct_del_sire(n_dif, n_sire)))
-    if n_ssu:
-        partes.append(dato(f"{n_ssu:,}", "solo en SUNAT", ADVERTENCIA_TEXTO,
-                           pct=_pct_del_sire(n_ssu, n_sire)))
-    if n_ssi:
-        partes.append(dato(f"{n_ssi:,}", "solo en el sistema", ERROR))
-
-    # Los cuatro estados son UN grupo, el de la columna «Está vs Sistema»:
-    # se leen juntos o no se leen (99 coinciden no significa nada sin saber
-    # sobre cuántos). Es además el grupo más ancho, así que es el que fija
-    # el alto del hueco.
-    grupos.append(grupo("estado", *partes))
-
-    st.markdown(
-        '<div class="sunat-kpis-fila">'
-        f'<span class="sunat-kpis" data-activo="{_GRUPO_KPI_REPOSO}">'
-        + "".join(grupos)
-        + '</span>'
-        + (f'<span class="sunat-kpi-sello">{_sello_origen(origen)}</span>'
-           if origen else "")
-        + '</div>',
-        unsafe_allow_html=True,
-    )
 
 
 _TOL_JS = str(_TOLERANCIA_CENTAVOS)
@@ -1427,12 +1281,6 @@ def _tabla_documentos(df_cruce, df_sire):
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
         key=_KEY_GRID_DOCS,
     )
-    # El puente entre el hover de esta grilla y la tira de KPIs de la
-    # cabecera. Va DESPUÉS del AgGrid porque busca su iframe: antes no
-    # existe. Es un no-op si no lo encuentra — la tira se queda en su grupo
-    # de reposo, que es lo que Python ya dibujó.
-    inject_hover_kpis_grid(_KEY_GRID_DOCS, "sunat_card_izq",
-                           _COL_A_GRUPO_KPI, reposo=_GRUPO_KPI_REPOSO)
     sel = resp.selected_rows
     if sel is None or (hasattr(sel, "empty") and sel.empty) or len(sel) == 0:
         return None
@@ -3758,16 +3606,170 @@ def _necesita_conversor(doc, fila_cruce):
 
 
 _MODO_CONVERSOR = "Conversor SUNAT-Sistema"
-_MODOS_ABAJO = _MODOS_GRAFICO + (_MODO_CONVERSOR,)
+_MODO_RESUMEN = "Resumen del cruce"
+_MODOS_ABAJO = _MODOS_GRAFICO + (_MODO_RESUMEN, _MODO_CONVERSOR)
 """Las opciones del selector de la tarjeta de abajo: los tres modos del
 gráfico y el conversor. UN selector y no dos (gráfico/conversor y, adentro,
 el modo del gráfico) porque son cuatro vistas excluyentes de la misma
 tarjeta, y dos filas de botones le costarían alto a la pantalla única."""
 
 
+_COMPARACIONES = {"Año pasado": 1, "Hace 2 años": 2}
+"""Con qué se compara el período en el «Resumen del cruce»: el MISMO rango
+de fechas, corrido uno o dos años atrás. Mes corriente contra el mismo mes
+del año pasado o del antepasado, que es lo pedido (2026-10-02)."""
+
+_COLORES_PERIODO = (ACENTO, LAVANDA_FOCO, LAVANDA_BORDE)
+"""Actual, año pasado, hace dos años: UN tono que se aclara hacia atrás,
+porque los períodos tienen orden y no son categorías sueltas. Los dos claros
+tienen poco contraste contra el blanco, así que cada barra lleva su número
+escrito: el color nombra el período, la cifra no depende de él."""
+
+
+def _rango_hace(f_ini, f_fin, anos):
+    """`(ini, fin)` corridos `anos` años atrás (29-feb cae en el 28)."""
+    return ((pd.Timestamp(f_ini) - pd.DateOffset(years=anos)).date(),
+            (pd.Timestamp(f_fin) - pd.DateOffset(years=anos)).date())
+
+
+def _rotulo_rango(ini, fin):
+    ini, fin = pd.Timestamp(ini), pd.Timestamp(fin)
+    a = f"{ini.day} {MESES_ABR_ES[ini.month - 1]}"
+    if ini.year != fin.year:
+        a += f" {ini.year}"
+    return f"{a} – {fin.day} {MESES_ABR_ES[fin.month - 1]} {fin.year}"
+
+
+def _conteos_de_periodo(d, col_fecha, ini, fin, prov):
+    """`(conteos, None)` del cruce de un período ANTERIOR, o `(None, motivo)`.
+
+    Mismo cálculo que la tabla —`comprobantes_rango` del registro y
+    `_parquet_agrupado_por_documento` del parquet, cruzados— con el filtro
+    de proveedor si está puesto. «Mes en SUNAT» NO se aplica: en un año
+    cerrado todos los meses están presentados, y «Mes abierto» daría cero.
+
+    El motivo existe porque un período sin una de las dos fuentes no es
+    «cero documentos»: antes del primer comprobante del registro, todo lo
+    del sistema saldría «Solo sistema», y antes del primero del parquet,
+    todo lo de SUNAT «Solo SUNAT». Barras así se leerían como un desastre
+    contable que no existió. Se dice por qué no hay barra.
+    """
+    lim = sunat.limites_registro()
+    if lim and ini < lim[0]:
+        return None, (f"el registro de SUNAT empieza el "
+                      f"{lim[0]:%d/%m/%Y}")
+    if d is not None and col_fecha in getattr(d, "columns", ()):
+        _min = pd.to_datetime(d[col_fecha], errors="coerce").min()
+        if pd.notna(_min) and ini < _min.date():
+            return None, (f"las compras del sistema empiezan el "
+                          f"{_min:%d/%m/%Y}")
+    try:
+        df, _ = sunat.comprobantes_rango(ini, fin)
+    except Exception as e:  # SUNAT caído no tumba el resumen del actual
+        return None, f"no se pudo leer el registro ({e})"
+    if df is None or df.empty:
+        return None, "SUNAT no tiene comprobantes en ese rango"
+    cr = cruzar_con_parquet(
+        df, _parquet_agrupado_por_documento(d, col_fecha, ini, fin))
+    if prov:
+        cr = cr[_claves_proveedor_cruce(cr) == prov]
+    return _conteos_cruce(cr), None
+
+
+def _panel_resumen(d, resumen):
+    """«Resumen del cruce»: cuántos documentos hay de cada lado y cómo se
+    reparten, en barras, contra el mismo período de años anteriores.
+
+    Es lo que decía la tira de KPIs de la tabla al pasar el cursor por
+    «Está vs Sistema» (2026-09-18 a 2026-10-02): se fue de ahí a pedido,
+    porque ocupaba un renglón, y volvió acá como gráfico, también a pedido,
+    con la comparación entre períodos.
+
+    El período actual es el CENSO de la tabla: rango, «Mes en SUNAT» y
+    proveedor aplicados, «Está vs Sistema» no (es el filtro que elige
+    dentro de este censo, ver `_filtro_estado`). Los anteriores se cachean
+    en `session_state` por rango y proveedor: el cruce de un año cuesta
+    ~0,4 s y el selector de abajo re-corre esta tarjeta en cada clic.
+    """
+    if not resumen or resumen.get("censo") is None:
+        st.caption("Sin comprobantes en el rango para resumir.")
+        return
+    f_ini, f_fin = resumen["f_ini"], resumen["f_fin"]
+    prov, col_fecha = resumen.get("prov"), resumen.get("col_fecha")
+
+    comparar = st.pills(
+        "Comparar con", list(_COMPARACIONES), selection_mode="multi",
+        default=["Año pasado"], key="sunat_res_comp",
+        label_visibility="collapsed") or []
+
+    periodos = [(_rotulo_rango(f_ini, f_fin),
+                 _conteos_cruce(resumen["censo"]))]
+    avisos = []
+    for nombre in _COMPARACIONES:
+        if nombre not in comparar:
+            continue
+        ini, fin = _rango_hace(f_ini, f_fin, _COMPARACIONES[nombre])
+        k_cache = (f"sunat_res_cache_{ini}_{fin}_{prov or ''}_"
+                   f"{len(d) if d is not None else 0}")
+        if k_cache not in st.session_state:
+            with st.spinner(f"Cruzando {_rotulo_rango(ini, fin)}…"):
+                st.session_state[k_cache] = _conteos_de_periodo(
+                    d, col_fecha, ini, fin, prov)
+        conteos, motivo = st.session_state[k_cache]
+        if conteos is None:
+            avisos.append(f"{nombre} ({_rotulo_rango(ini, fin)}): sin barra "
+                          f"— {motivo}.")
+        else:
+            periodos.append((_rotulo_rango(ini, fin), conteos))
+
+    fig = go.Figure()
+    for i, (rotulo, k) in enumerate(periodos):
+        total = k["Total"]
+        ys = [k[b] for b in _BARRAS_CRUCE]
+        pcts = [_pct_de(v, total) or "—" for v in ys]
+        # La cifra arriba de cada barra; el % en un segundo renglón salvo en
+        # «Total», que es el 100 % por definición.
+        textos = [f"{v:,}" if b == "Total" else f"{v:,}<br>{p}"
+                  for b, v, p in zip(_BARRAS_CRUCE, ys, pcts)]
+        fig.add_trace(go.Bar(
+            name=rotulo + (" (actual)" if i == 0 else ""),
+            x=list(_BARRAS_CRUCE), y=ys, text=textos,
+            textposition="outside", cliponaxis=False,
+            textfont=dict(size=10.5, color=GRIS_TEXTO_MEDIO),
+            marker=dict(color=_COLORES_PERIODO[i], cornerradius=4),
+            customdata=pcts,
+            hovertemplate=(f"<b>%{{x}}</b><br>{rotulo}<br>"
+                           "%{y:,} documentos · %{customdata} del total"
+                           "<extra></extra>"),
+        ))
+    _compras_layout(fig, alto=alturas.MINI)
+    _ymax = max((max(k.values()) for _, k in periodos), default=0)
+    fig.update_layout(
+        barmode="group", bargap=0.28, bargroupgap=0.06,
+        showlegend=len(periodos) > 1,
+        title=(None if len(periodos) > 1 else
+               f"Documentos · {periodos[0][0]}"),
+        margin=dict(t=34, b=24, l=8, r=8))
+    # Aire arriba para el rótulo de dos renglones de la barra más alta. Y
+    # sin números en el eje: cada barra ya lleva el suyo escrito.
+    fig.update_yaxes(range=[0, (_ymax or 1) * 1.3], showticklabels=False)
+    st.plotly_chart(fig, use_container_width=True, key="sunat_g_resumen")
+
+    notas = [f"% sobre el total de documentos de cada período (SUNAT ∪ "
+             f"sistema). Origen del período actual: "
+             f"{_sello_origen(resumen.get('origen'))}."]
+    if resumen.get("mes_filtrado") and len(periodos) > 1:
+        notas.append("«Mes en SUNAT» se aplica sólo al período actual: en "
+                     "los años anteriores todos los meses están presentados.")
+    notas += avisos
+    st.markdown(
+        f'<div style="font-size:11.5px;color:{GRIS_TEXTO};line-height:1.5;">'
+        + "<br>".join(notas) + "</div>", unsafe_allow_html=True)
+
+
 @una_vez_por_corrida
 @st.fragment
-def _tarjeta_abajo(vis, doc, fila_cruce, d):
+def _tarjeta_abajo(vis, doc, fila_cruce, d, resumen=None):
     """La tarjeta de debajo de la tabla, en su PROPIO fragment.
 
     Sin él, cualquier clic adentro —el selector Gráfico/Conversor, una
@@ -3787,10 +3789,10 @@ def _tarjeta_abajo(vis, doc, fila_cruce, d):
     fragment (`app.py::_render_contenido`, regla #456).
     """
     with st.container(border=True, key="sunat_card_graf"):
-        _panel_abajo(vis, doc, fila_cruce, d)
+        _panel_abajo(vis, doc, fila_cruce, d, resumen)
 
 
-def _panel_abajo(vis, doc, fila_cruce, d):
+def _panel_abajo(vis, doc, fila_cruce, d, resumen=None):
     """La tarjeta de debajo de la tabla: el gráfico O el conversor.
 
     Hasta el 2026-10-02 eran dos tarjetas apiladas (el gráfico a lo ancho y,
@@ -3818,7 +3820,9 @@ def _panel_abajo(vis, doc, fila_cruce, d):
         label_visibility="collapsed") or previo
     st.session_state[k_eco] = modo
 
-    if modo != _MODO_CONVERSOR:
+    if modo == _MODO_RESUMEN:
+        _panel_resumen(d, resumen)
+    elif modo != _MODO_CONVERSOR:
         _panel_grafico(vis, doc, modo)
     elif doc is not None and not _necesita_conversor(doc, fila_cruce):
         # Antes la tarjeta del conversor directamente no se dibujaba en
@@ -4199,7 +4203,7 @@ def renderizar_documentos_sunat(d, col_fecha):
     # porque las salidas tempranas de `_cuerpo` (sin rango, SUNAT caído,
     # sin comprobantes) devuelven `None` sin tocarlo: la regla #115 —
     # dibujar las tarjetas SIEMPRE y decidir el contenido adentro.
-    estado = {"doc": None, "vis": None, "cruce": None}
+    estado = {"doc": None, "vis": None, "cruce": None, "resumen": None}
 
     with st.container(border=True, key="sunat_card_izq"):
         # UN SOLO RENGLÓN CON LOS CUATRO FILTROS, a pedido (2026-09-18:
@@ -4207,8 +4211,8 @@ def renderizar_documentos_sunat(d, col_fecha):
         # de la tarjeta»). Hasta hoy la fecha iba arriba y los otros tres
         # debajo, dentro de una columna de 622px.
         #
-        # PARA QUE CUPIERAN, LA TIRA DE KPIs BAJÓ AL SEGUNDO RENGLÓN, y las
-        # dos mitades del cambio se leen juntas. Medido en el navegador
+        # PARA QUE CUPIERAN, LA TIRA DE KPIs BAJÓ AL SEGUNDO RENGLÓN (y el
+        # 2026-10-02 se fue de la tarjeta, ver más abajo). Medido en el navegador
         # (viewport 1358, tarjeta de 1227 = 1191 de contenido):
         #
         #   · lo que pide cada control en su PEOR caso — el pill 210 (se
@@ -4302,19 +4306,12 @@ def renderizar_documentos_sunat(d, col_fecha):
             # abajo sin partir el flujo en dos reruns.
             _slot_excel = st.empty()
 
-        # SEGUNDO RENGLÓN: la tira de KPIs, a lo ancho de la tarjeta y
-        # pegada a la tabla. Es un hueco reservado como los otros tres —
-        # `_cuerpo` lo rellena cuando ya tiene el cruce— y va en un
-        # `st.container` con key y no en un `st.empty()` porque es un
-        # BLOQUE (el markdown de la tira) y porque esa key es el ancla del
-        # CSS que le aprieta el gap contra la tabla.
-        #
-        # Si `_cuerpo` sale temprano (sin rango, SUNAT caído, rango vacío)
-        # nadie lo rellena y Streamlit poda el contenedor vacío en el render
-        # siguiente (regla #338). Acá eso es lo correcto y no un bug: sin
-        # cruce no hay nada que resumir, y el hueco no tiene que quedar
-        # reservado en blanco.
-        _slot_kpi = st.container(key="sunat_kpis_fila")
+        # (Acá iba un SEGUNDO RENGLÓN con la tira de KPIs del cruce —docs,
+        # proveedores, montos y los cuatro estados, que se encendían con el
+        # cursor sobre su columna—. Se fue el 2026-10-02, a pedido, para que
+        # la tabla suba: sus conteos son ahora el modo «Resumen del cruce»
+        # de la tarjeta de abajo, con la comparación contra años
+        # anteriores. Regla #586.)
 
         def _cuerpo():
             """La tabla y su dato. Deja en `estado` lo que necesitan las
@@ -4374,9 +4371,9 @@ def renderizar_documentos_sunat(d, col_fecha):
             # de un solo proveedor sería un número que no se puede
             # verificar en pantalla.
             #
-            # `df_cruce` se guarda ANTES de aplicarlo: es lo que resume la
-            # tira de KPIs, que es el censo del que este filtro elige (ver
-            # `_filtro_estado`). Es la única de las cuatro que no se recorta.
+            # `df_cruce` se guarda ANTES de aplicarlo: es lo que resume el
+            # «Resumen del cruce» de la tarjeta de abajo, que es el censo
+            # del que este filtro elige (ver `_filtro_estado`).
             _cruce_censo = df_cruce
             _est = _filtro_estado(_slot_est, df_cruce)
             if _est:
@@ -4396,11 +4393,24 @@ def renderizar_documentos_sunat(d, col_fecha):
                     vis = vis[vis["car"].astype(str).isin(
                         set(df_cruce["car"].astype(str)))]
             estado["vis"], estado["cruce"] = vis, df_cruce
+            estado["resumen"] = {
+                "censo": _cruce_censo, "origen": _origen,
+                "f_ini": f_ini, "f_fin": f_fin, "prov": _prov,
+                "col_fecha": col_fecha, "mes_filtrado": _sit is not None,
+            }
+            _publicar_conteos(_cruce_censo)
 
-            with _slot_kpi:
-                _kpis_cruce(_cruce_censo, _origen, n_tabla=len(df_cruce),
-                            n_provs=_claves.loc[_cruce_censo.index]
-                            .nunique())
+            # El sello de origen vivía en la tira. Lo que no puede perderse
+            # es su caso de ALERTA —«faltan los últimos días», regla #197—:
+            # un total creíble al que le falta la cola. Ése se dice acá,
+            # arriba de la tabla, y sólo cuando pasa.
+            if _origen == "parquet-sin-cola":
+                st.markdown(
+                    f'<div style="font-size:12px;color:{ADVERTENCIA_TEXTO};'
+                    f'text-align:right;">⚠ Faltan los últimos días: el sync '
+                    f'todavía no los trajo y SUNAT no respondió la consulta '
+                    f'en vivo. Probá de nuevo con ⟳.</div>',
+                    unsafe_allow_html=True)
             doc = _tabla_documentos(df_cruce, vis)
 
             # Se rellena el hueco reservado ARRIBA. Se exporta el CRUCE,
@@ -4438,4 +4448,4 @@ def renderizar_documentos_sunat(d, col_fecha):
     # (2026-10-02, a pedido: «que se alternen debajo de la tabla»). Antes
     # eran dos tarjetas apiladas, y el conversor sólo aparecía cuando el
     # documento faltaba en el sistema. Ver `_panel_abajo`.
-    _tarjeta_abajo(estado["vis"], doc, fila_cruce, d)
+    _tarjeta_abajo(estado["vis"], doc, fila_cruce, d, estado["resumen"])
