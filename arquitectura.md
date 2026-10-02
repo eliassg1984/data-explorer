@@ -876,7 +876,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (145)
+**Decisiones de diseño y UX** (146)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1023,6 +1023,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#580** — Compras › «Compras por período»: la zona de abajo tiene TRES modos —Resumen Total, Resumen…
 - **#583** — Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la Evolución más ancha, el Ranking…
 - **#584** — Ajuste: los rótulos del rail dicen lo que cada vista ES hoy; los ids siguen siendo los de…
+- **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -46557,7 +46558,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        (`_necesita_conversor`), pero ahora lo DICE: con un selector que lo
        nombra, desaparecer callado se leería como un bug. Y ya no abre con
        el cartel azul de «todavía no está cargado» (quitado a pedido): lo
-       dicen la pastilla «Solo SUNAT» y el ámbar de «Ítem (sistema)».
+       dicen la pastilla «Solo SUNAT» y el ámbar de «Ítem (sistema)». Ni
+       con la línea «Documento registrado: los ítems salen de cruzar…» del
+       caso contrario (también a pedido): sobre las dos tablas no va texto.
      - **En el conversor, los datos del documento van en el renglón del
        título** (`_titulo_panel(..., derecha=_datos_documento_html(doc))`):
        proveedor, RUC, fecha y moneda, en las dos mitades con el mismo
