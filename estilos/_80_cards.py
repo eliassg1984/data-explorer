@@ -1606,83 +1606,23 @@ CSS = """    /* ================================================================
     }
 
     /* ─────────────────────────────────────────────────────────────── */
-    /* LA FICHA DEL DOCUMENTO, SOBRE LA TABLA (2026-10-02, a pedido)    */
+    /* LA FICHA DEL DOCUMENTO, EN UNA VENTANA MODAL (2026-10-02)        */
     /*                                                                  */
-    /* `sunat_ficha_capa` vive ADENTRO de `sunat_card_izq` (la tarjeta  */
-    /* de la tabla), después de la grilla, y acá se la estira encima de */
-    /* la tarjeta entera. La grilla se sigue dibujando debajo: si dejara de */
-    /* renderizarse perdería la selección, y con ella el documento de  */
-    /* la capa y de la tarjeta de abajo. Regla #586.                    */
-    /*                                                                  */
-    /* COMO FANTASMA, no como reemplazo (2026-10-02, a pedido: «que     */
-    /* aparezca como fantasma el comprobante, no que reemplace a la     */
-    /* tabla»). Con el fondo blanco opaco y las esquinas de la tarjeta, */
-    /* la capa se leía como si la tabla se hubiera ido. Ahora la capa   */
-    /* no tiene fondo propio —sólo un velo tenue—, las dos tarjetas     */
-    /* van al 88 % de opacidad con una sombra que las despega, y la     */
-    /* tabla se sigue viendo detrás y en el borde de 8px alrededor.     */
-    /*                                                                  */
-    /* Key FUERA de la familia `sunat_card_` a propósito: con ese       */
-    /* prefijo heredaría el techo con scroll, el padding, el fondo y la */
-    /* sombra de una tarjeta. Lo que no entra en el alto de la tabla    */
-    /* scrollea adentro de la capa.                                     */
-    /*                                                                  */
-    /* El contenedor de elemento que Streamlit mete entre la tarjeta y  */
-    /* la capa va en `display: contents`: con la capa en `absolute` se  */
-    /* queda en 0px de alto pero seguiría cobrando el `gap` de la       */
-    /* tarjeta, y abrir la ficha la estiraría 16px — y con ella correría */
-    /* la tarjeta de abajo (#465: lo que abre una capa no se mueve).    */
+    /* `_ficha_modal` la abre con `st.dialog`: la modal ya trae su      */
+    /* fondo, su ✕ y su scroll. Lo único que hace falta acá es que las  */
+    /* dos tarjetas de adentro (`sunat_card_doc`/`_sis`) suelten el     */
+    /* techo con scroll de su familia: dentro de una modal que ya       */
+    /* scrollea, serían dos barras anidadas, una caja rota (#382). Y la  */
+    /* sombra de tarjeta se cambia por una línea de 1px, que sobre el   */
+    /* blanco de la modal es lo que separa. Regla #586.                 */
     /* ─────────────────────────────────────────────────────────────── */
-    div.st-key-sunat_card_izq {
-        position: relative;
-    }
-    div.st-key-sunat_card_izq > div:has(> .st-key-sunat_ficha_capa) {
-        display: contents;
-    }
-    div.st-key-sunat_ficha_capa {
-        position: absolute !important;
-        inset: 8px;
-        /* Streamlit le pone `width: 100%` a todo bloque vertical: con el */
-        /* `inset` de 8px eso la sacaba 16px por la derecha (medido).     */
-        width: auto !important;
-        z-index: 6;
-        background: color-mix(in srgb, var(--bg-card) 35%, transparent);
-        border-radius: 16px;
-        padding: 6px 10px 10px;
-        overflow-y: auto;
-        overflow-x: hidden;
-    }
-    div.st-key-sunat_ficha_capa::-webkit-scrollbar {
-        width: 6px;
-    }
-    div.st-key-sunat_ficha_capa::-webkit-scrollbar-thumb {
-        background: var(--scroll-thumb);
-        border-radius: 3px;
-    }
-    /* Las dos tarjetas de la ficha, adentro de la capa: sin el techo con */
-    /* scroll de su familia —la que scrollea es la capa, y dos barras    */
-    /* anidadas se leen como una caja rota (#382)—, translúcidas y con   */
-    /* una sombra más marcada que la de una tarjeta: son lo que flota.   */
-    div.st-key-sunat_ficha_capa .st-key-sunat_card_doc,
-    div.st-key-sunat_ficha_capa .st-key-sunat_card_sis {
+    [data-testid="stDialog"] .st-key-sunat_card_doc,
+    [data-testid="stDialog"] .st-key-sunat_card_sis {
         max-height: none !important;
         overflow: visible !important;
-        background: color-mix(in srgb, var(--bg-card) 88%, transparent) !important;
-        box-shadow: 0 6px 22px rgba(16, 16, 20, 0.16) !important;
+        box-shadow: none !important;
         border: 1px solid var(--border) !important;
         border-radius: 14px !important;
-    }
-    /* La ✕, con fondo propio: transparente dejaba ver a través de ella */
-    /* el botón de Excel de la cabecera de la tabla, justo detrás.      */
-    div.st-key-sunat_ficha_capa .st-key-sunat_ficha_cerrar button {
-        background: var(--bg-card) !important;
-        box-shadow: 0 2px 8px rgba(16, 16, 20, 0.14);
-        border-radius: 10px;
-        /* Un `tertiary` se encoge hasta su glifo: medía 18×44px. */
-        min-width: 34px;
-        height: 34px;
-        min-height: 34px;
-        padding: 0 !important;
     }
 
     /* =================================================================== */

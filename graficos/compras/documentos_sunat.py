@@ -96,7 +96,7 @@ from tema import (
     GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
     LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
-from graficos.base import _compras_layout, _compras_truncar
+from graficos.base import _compras_layout, _compras_truncar, una_vez_por_corrida
 from graficos.compras._comun import (
     ALTO_FILA_RANK, ALTO_HEADER_RANK, COLUMNAS_COTEJO, CROMO_GRID_RANK,
     GAP_DRILL,
@@ -1056,8 +1056,35 @@ class DocumentoCelda {
     init(p) {
         var d = p.data || {};
         this.eGui = document.createElement('div');
+        // EL OJO Y EL NÚMERO SON EL BOTÓN DE LA FICHA (2026-10-02, a pedido,
+        // como en el facturador que mostró el usuario): el clic acá abre la
+        // modal, el resto de la fila sólo la elige. El clic lo atiende
+        // `onCellClicked`, en las opciones de la grilla.
+        this.eGui.style.cursor = 'pointer';
+        this.eGui.title = 'Ver el comprobante';
+        var NS = 'http://www.w3.org/2000/svg';
+        var ojo = document.createElementNS(NS, 'svg');
+        ojo.setAttribute('viewBox', '0 0 24 24');
+        ojo.setAttribute('width', '14');
+        ojo.setAttribute('height', '14');
+        ojo.setAttribute('fill', 'none');
+        ojo.setAttribute('stroke', '__ACENTO__');
+        ojo.setAttribute('stroke-width', '2');
+        ojo.style.verticalAlign = '-2px';
+        ojo.style.marginRight = '5px';
+        var a = document.createElementNS(NS, 'path');
+        a.setAttribute('d', 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z');
+        var b = document.createElementNS(NS, 'circle');
+        b.setAttribute('cx', '12'); b.setAttribute('cy', '12'); b.setAttribute('r', '3');
+        ojo.appendChild(a); ojo.appendChild(b);
+        this.eGui.appendChild(ojo);
         var t = document.createElement('span');
         t.textContent = p.value == null ? '' : p.value;
+        t.style.textDecoration = 'underline';
+        t.style.textDecorationColor = 'transparent';
+        t.style.textUnderlineOffset = '2px';
+        this.eGui.onmouseenter = function(){ t.style.textDecorationColor = 'currentColor'; };
+        this.eGui.onmouseleave = function(){ t.style.textDecorationColor = 'transparent'; };
         this.eGui.appendChild(t);
         var chips = String(d._chips || '').split('|');
         for (var i = 0; i < chips.length; i++) {
@@ -1079,7 +1106,7 @@ class DocumentoCelda {
     }
     getGui() { return this.eGui; }
 }
-""".replace("__COLORES__", json.dumps(_COLOR_CHIP)))
+""".replace("__COLORES__", json.dumps(_COLOR_CHIP)).replace("__ACENTO__", ACENTO))
 """El número de documento con sus CHIPS: marcan lo que NO es la norma.
 
 Nació de medir el registro completo el 2026-08-28: 16.276 de 16.678
@@ -1235,6 +1262,9 @@ def _tabla_documentos(df_cruce, df_sire):
             "_base_sis": base_s, "_igv_sis": igv_s, "_total_sis": tot_s,
             "_conv": conv,
             "_dos": dos,
+            # El sello del clic en el ojo/número (lo escribe `onCellClicked`):
+            # es lo que distingue «abrí la ficha» de «elegí la fila».
+            "_ver": 0,
             "Fecha": r.get("fecha_emision"),
             "Documento": str(r.get("documento") or ""),
             "Proveedor": str(r.get("proveedor") or "")
@@ -1259,14 +1289,15 @@ def _tabla_documentos(df_cruce, df_sire):
     gb.configure_default_column(resizable=True, sortable=True, filter=False,
                                 editable=False, suppressMovable=True)
     for oculta in ("_car", "_chips", "_sim", "_base_sis", "_igv_sis",
-                   "_total_sis", "_conv", "_dos"):
+                   "_total_sis", "_conv", "_dos", "_ver"):
         gb.configure_column(oculta, hide=True)
     # `_tipo` va oculta pero NO muerta: con el tipo fuera de las columnas
     # visibles (es un chip), ésta es la que permite ordenar y filtrar por
     # tipo sin gastar 94 px de ancho.
     gb.configure_column("_tipo", hide=True, headerName="Tipo")
     gb.configure_column("Fecha", width=96, minWidth=96)
-    gb.configure_column("Documento", width=140, minWidth=126,
+    # +19px desde que lleva el ojo (14 del ícono y 5 de aire).
+    gb.configure_column("Documento", width=159, minWidth=145,
                         cellRenderer=_JS_DOCUMENTO)
     gb.configure_column("Proveedor", minWidth=170, flex=1,
                         tooltipField="Proveedor")
@@ -1336,6 +1367,22 @@ def _tabla_documentos(df_cruce, df_sire):
             " a.refreshCells({force:true,"
             " columns:['Base','IGV','Total']});"
             " } catch(x) {} }, 0); }"),
+        # EL CLIC EN EL OJO/NÚMERO ABRE LA FICHA (2026-10-02, a pedido: «que
+        # aparezca sólo al dar clic en el número del documento, no en
+        # cualquier parte de la fila»). La grilla no le avisa a Python QUÉ
+        # celda se clickeó —sólo la selección—, así que el clic deja un
+        # sello en la fila (`_ver`, la hora) y la selección lo lleva.
+        #
+        # Y la fila se suelta y se vuelve a elegir, diferido: sin eso, el
+        # ojo de una fila YA elegida no cambiaría la selección y el clic no
+        # llegaría a Python; y aunque la fila sea nueva, no depende de si
+        # AG Grid despacha el clic de la celda antes o después de elegirla.
+        onCellClicked=JsCode(
+            "function(e){ if (!e.data || !e.colDef"
+            " || e.colDef.field !== 'Documento') return;"
+            " e.data._ver = Date.now(); var n = e.node;"
+            " setTimeout(function(){ try { n.setSelected(false);"
+            " n.setSelected(true); } catch(x) {} }, 0); }"),
         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"),
     )
 
@@ -1393,7 +1440,9 @@ def _tabla_documentos(df_cruce, df_sire):
         # No hay documento del SIRE que le corresponda: no es una carencia
         # del panel, es que ese comprobante no tiene contraparte ahí.
         return None
-    return _fila_de(df_sire, fila)
+    doc = _fila_de(df_sire, fila)
+    _atender_pedido_de_ficha(fila, doc)
+    return doc
 
 
 def _sello_origen(origen):
@@ -3555,28 +3604,6 @@ def _card_sistema(doc, fila):
                    "mapea sus líneas contra el maestro.")
 
 
-def _cabecera_documento(doc):
-    """La identificación del documento elegido, ARRIBA de las dos tarjetas
-    de la ficha (en la capa que la pone sobre la tabla, al lado de la ✕).
-
-    Va una sola vez y no dentro de cada una: identifica al documento para
-    las DOS, igual que la cabecera única que tenía el panel cuando era una
-    sola tarjeta con dos columnas.
-    """
-    st.markdown(
-        f'<div style="background:{LAVANDA_FONDO};border-radius:10px;'
-        f'padding:9px 14px;margin-bottom:10px;display:flex;'
-        f'align-items:baseline;gap:10px;flex-wrap:wrap;">'
-        f'<span style="font-size:16px;font-weight:600;color:{TEXTO_PRINCIPAL};">'
-        f'{doc.get("documento", "")}</span>'
-        f'<span style="font-size:11px;color:{GRIS_TEXTO};'
-        f'text-transform:uppercase;letter-spacing:.04em;">'
-        f'{doc.get("tipo_nombre", "Comprobante")}</span>'
-        f'<span style="font-size:12px;color:{GRIS_TEXTO};">'
-        f'{_compras_truncar(str(doc.get("proveedor", "")), 52)}</span></div>',
-        unsafe_allow_html=True)
-
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def _serie_proveedor(ruc, meses=12):
     """Total comprado a un proveedor, mes a mes, sobre el registro COMPLETO
@@ -3741,8 +3768,7 @@ def _panel_abajo(vis, doc, fila_cruce, d):
     conserva.
 
     Al costado del selector, cuando la ficha está cerrada, el botón que la
-    vuelve a abrir: con la fila todavía elegida, un clic sobre ella no
-    cambia la selección de la grilla y no llega a Python.
+    abre para la fila elegida — la otra vía, además del ojo de la tabla.
     """
     k_eco = "sunat_graf_modo__eco"
     previo = st.session_state.get(k_eco, _MODOS_GRAFICO[0])
@@ -3761,6 +3787,7 @@ def _panel_abajo(vis, doc, fila_cruce, d):
             st.button(f"📄 Ver {doc.get('documento', 'documento')}",
                       key="sunat_ficha_abrir", type="tertiary",
                       use_container_width=True, on_click=_abrir_ficha,
+                      args=(_id_ficha(doc),),
                       help="Abrir la ficha del documento elegido, sobre "
                            "la tabla.")
 
@@ -3783,72 +3810,89 @@ def _panel_abajo(vis, doc, fila_cruce, d):
         _card_conversor_sistema(doc, d)
 
 
-_K_FICHA_DOC = "sunat_ficha_doc"
-_K_FICHA_CERRADA = "sunat_ficha_cerrada"
-"""La ficha sobre la tabla se cierra POR DOCUMENTO: `_K_FICHA_DOC` es el
-`car` del último documento elegido y `_K_FICHA_CERRADA` dice si el usuario
-lo cerró. Elegir otro documento la vuelve a abrir sola."""
+_K_FICHA_ABIERTA = "sunat_ficha_abierta"
+_K_FICHA_PEDIDO = "sunat_ficha_pedido"
+"""La ficha (la modal) se abre por PEDIDO, no por elegir la fila (2026-10-02):
+`_K_FICHA_ABIERTA` es el `car` del documento cuya ficha está abierta (o
+`None`), y `_K_FICHA_PEDIDO` el último sello `_ver` atendido — la selección
+de la grilla persiste entre corridas y trae el mismo sello en cada una, así
+que sin recordarlo la ficha se reabriría en cada clic de la página."""
 
 
 def _id_ficha(doc):
-    """Identidad del documento para la capa: `car`, que es la única clave
+    """Identidad del documento para la modal: `car`, que es la única clave
     sin colisiones (ver `_fila_de`)."""
     if doc is None:
         return ""
     return str(doc.get("car") or doc.get("documento") or "")
 
 
-def _ficha_abierta(doc):
-    """¿Se dibuja la ficha sobre la tabla?
+def _atender_pedido_de_ficha(fila, doc):
+    """Si la fila elegida trae un sello `_ver` NUEVO —el clic en el ojo o
+    el número del documento—, abre su ficha. Un sello ya atendido no."""
+    try:
+        sello = float(fila.get("_ver") or 0)
+    except (TypeError, ValueError):
+        sello = 0.0
+    if sello and sello != st.session_state.get(_K_FICHA_PEDIDO):
+        st.session_state[_K_FICHA_PEDIDO] = sello
+        st.session_state[_K_FICHA_ABIERTA] = _id_ficha(doc) or None
 
-    Sí con un documento elegido, salvo que el usuario la haya cerrado con
-    la ✕ — y eso vale sólo para ESE documento. Sin documento se olvida el
-    último, para que volver a elegirlo después la abra de nuevo.
-    """
+
+def _ficha_abierta(doc):
+    """¿Está abierta la ficha (la modal) del documento elegido?"""
     actual = _id_ficha(doc)
-    if st.session_state.get(_K_FICHA_DOC) != actual:
-        st.session_state[_K_FICHA_DOC] = actual
-        st.session_state[_K_FICHA_CERRADA] = False
-    return bool(actual) and not st.session_state.get(_K_FICHA_CERRADA)
+    return bool(actual) and st.session_state.get(_K_FICHA_ABIERTA) == actual
 
 
 def _cerrar_ficha():
-    st.session_state[_K_FICHA_CERRADA] = True
+    st.session_state[_K_FICHA_ABIERTA] = None
 
 
-def _abrir_ficha():
-    st.session_state[_K_FICHA_CERRADA] = False
+def _abrir_ficha(id_doc):
+    st.session_state[_K_FICHA_ABIERTA] = id_doc
 
 
-def _ficha_sobre_tabla(doc, fila_cruce):
-    """La ficha del documento —la tarjeta SUNAT y la del sistema— como una
-    capa SOBRE la tabla, con una ✕ que la cierra (2026-10-02, a pedido).
+def _ficha_modal(doc, fila_cruce):
+    """La ficha del documento —la tarjeta SUNAT y la del sistema— en una
+    VENTANA MODAL (`st.dialog`): centrada, con la página oscurecida detrás
+    y una ✕ que la cierra; también se cierra con Esc o con un clic afuera.
 
-    El contenido es el mismo de cuando era una fila debajo de la tabla:
-    la cabecera con la identificación (una vez, porque es de las dos) y
-    las dos tarjetas partidas con `COLUMNAS_COTEJO`. Lo que no entra en el
-    alto de la tabla scrollea adentro de la capa.
+    Así se pidió el 2026-10-02, con la captura de otra webapp (el «Detalle
+    de comprobante» de un facturador). La primera versión de ese mismo día
+    era una capa pegada encima de la tarjeta de la tabla: se leía como si
+    la tabla se hubiera ido, y medía lo que la tabla (333px), así que la
+    ficha scrolleaba casi entera. La modal mide lo que su contenido, hasta
+    el alto de la pantalla.
+
+    CUALQUIER CIERRE pasa por `on_dismiss=_cerrar_ficha`: sin eso la
+    siguiente corrida —un clic en el gráfico de abajo, por ejemplo— la
+    volvería a abrir, porque la fila sigue elegida. Un `st.rerun()` desde
+    adentro (el pedido del original) no la cierra: vuelve a llamarse.
+
+    El título se arma por documento, así que el decorador se aplica acá y
+    no en el `def`. Y `una_vez_por_corrida` porque una modal es un
+    fragment, y ésta se llama adentro de otro (`app.py::_render_contenido`,
+    regla #456).
     """
-    # columnas-internas: la cabecera del documento y la ✕ que cierra la
-    # capa. No es una fila de un drill.
-    c_cab, c_x = st.columns([24, 1], vertical_alignment="top",
-                            gap="small")
-    with c_cab:
-        _cabecera_documento(doc)
-    with c_x:
-        st.button("✕", key="sunat_ficha_cerrar", type="tertiary",
-                  on_click=_cerrar_ficha,
-                  help="Cerrar la ficha y volver a la tabla.")
-    # Se parte con `COLUMNAS_COTEJO` (1/1) y no con `COLUMNAS_DRILL`: los
-    # dos lados son pares y cualquier asimetría se leería como que uno
-    # importa más.
-    c_sunat, c_sistema = st.columns(COLUMNAS_COTEJO, gap=GAP_DRILL)
-    with c_sunat:
-        with st.container(border=True, key="sunat_card_doc"):
-            _card_sunat(doc, fila_cruce)
-    with c_sistema:
-        with st.container(border=True, key="sunat_card_sis"):
-            _card_sistema(doc, fila_cruce)
+    titulo = " · ".join(t for t in (
+        str(doc.get("documento") or "Comprobante"),
+        _compras_truncar(str(doc.get("proveedor") or ""), 48)) if t)
+
+    def _contenido():
+        # Se parte con `COLUMNAS_COTEJO` (1/1) y no con `COLUMNAS_DRILL`:
+        # los dos lados son pares y cualquier asimetría se leería como que
+        # uno importa más.
+        c_sunat, c_sistema = st.columns(COLUMNAS_COTEJO, gap=GAP_DRILL)
+        with c_sunat:
+            with st.container(border=True, key="sunat_card_doc"):
+                _card_sunat(doc, fila_cruce)
+        with c_sistema:
+            with st.container(border=True, key="sunat_card_sis"):
+                _card_sistema(doc, fila_cruce)
+
+    una_vez_por_corrida(st.dialog(titulo, width="large",
+                                  on_dismiss=_cerrar_ficha)(_contenido))()
 
 
 def _pedir_original(doc):
@@ -4082,15 +4126,16 @@ contabilidad."""
 def renderizar_documentos_sunat(d, col_fecha):
     """Punto de entrada del drill. Lo llama `graficos/sunat_reporte.py`.
 
-    DOS TARJETAS Y UNA CAPA, para que todo entre en una pantalla
+    DOS TARJETAS Y UNA MODAL, para que todo entre en una pantalla
     (2026-10-02, a pedido; antes eran cuatro tarjetas apiladas):
 
       1. **La tabla** a lo ancho — controles, KPIs del cruce y los
          comprobantes, ocho filas (`_FILAS_DOCS`). Una sola tabla desde
          que `_tabla` y `_tabla_cruce` se fundieron en `_tabla_documentos`.
-      2. **La ficha del documento elegido**, SOBRE la tabla y tapándola:
-         la tarjeta SUNAT y la del sistema, con una ✕ que la cierra
-         (`_ficha_sobre_tabla`). Elegir otra fila la vuelve a abrir.
+      2. **La ficha del documento elegido**, en una ventana modal sobre la
+         página: la tarjeta SUNAT y la del sistema, con una ✕ que la
+         cierra (`_ficha_modal`). Se abre con el ojo / el número del
+         documento; el resto de la fila sólo la elige.
       3. **Gráfico o conversor**, en UNA tarjeta debajo de la tabla, con
          un selector que alterna entre los tres modos del gráfico y el
          conversor SUNAT-Sistema (`_panel_abajo`). El conversor sigue
@@ -4356,18 +4401,15 @@ def renderizar_documentos_sunat(d, col_fecha):
         doc = estado["doc"]
         fila_cruce = _fila_cruce_de(estado["cruce"], doc)
 
-        # LA FICHA DEL DOCUMENTO, SOBRE LA TABLA (2026-10-02, a pedido: «que
-        # las dos tarjetas aparezcan sobre la tabla, tapándola, con una X
-        # para cerrar»). Hasta ese día eran una fila propia DEBAJO de la
-        # tabla, y con el gráfico y el conversor la vista eran cuatro
-        # pantallas. Va ADENTRO de esta tarjeta y el CSS la estira sobre ella
-        # (`estilos/_80_cards.py`, `sunat_ficha_capa`). La grilla se sigue
-        # DIBUJANDO debajo: un widget que deja de renderizarse pierde su
-        # estado, y sin la selección no habría documento — ni para la capa
-        # ni para el gráfico y el conversor de abajo. Regla #586.
-        if _ficha_abierta(doc):
-            with st.container(key="sunat_ficha_capa"):
-                _ficha_sobre_tabla(doc, fila_cruce)
+    # LA FICHA DEL DOCUMENTO, EN UNA VENTANA MODAL (2026-10-02, a pedido:
+    # «que las dos tarjetas aparezcan sobre la tabla, con una X para
+    # cerrar»). Hasta ese día eran una fila propia DEBAJO de la tabla, y con
+    # el gráfico y el conversor la vista eran cuatro pantallas. La tabla se
+    # sigue DIBUJANDO detrás: un widget que deja de renderizarse pierde su
+    # estado, y sin la selección no habría documento — ni para la ficha ni
+    # para el gráfico y el conversor de abajo. Regla #586.
+    if _ficha_abierta(doc):
+        _ficha_modal(doc, fila_cruce)
 
     # Debajo de la tabla, UNA tarjeta que alterna el gráfico y el conversor
     # (2026-10-02, a pedido: «que se alternen debajo de la tabla»). Antes
