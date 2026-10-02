@@ -250,88 +250,9 @@ CSS = """    /* ================================================================
         color: var(--accent-deep) !important;
     }
 
-    /* LA TIRA DE KPIs: SEIS GRUPOS APILADOS Y SE VE UNO
-       ────────────────────────────────────────────────────────────────
-       2026-09-18, a pedido: «que los datos del recuadro rojo sólo
-       aparezcan al pasar el cursor sobre sus columnas». Cada grupo resume
-       UNA columna de la tabla y se enciende cuando esa columna tiene el
-       cursor encima — el reparto columna → grupo vive en
-       `documentos_sunat.py::_COL_A_GRUPO_KPI` y quien mueve la clase es
-       `inyecciones/hover_kpis.py::inject_hover_kpis_grid`, que escucha el
-       hover DENTRO del iframe de AG Grid.
-
-       ESTE CSS NO SABE CÓMO SE LLAMAN LOS GRUPOS, y es deliberado: la
-       primera versión tenía una regla
-       `[data-activo="X"] [data-grupo="X"]` por grupo, o sea los seis
-       nombres escritos también acá — dos listas que se desincronizan el
-       día que alguien agregue una columna. Con una clase `kpi-activo` que
-       el JS mueve, los nombres viven en UN solo sitio. Ver
-       `arquitectura.md` regla #460. */
-    .st-key-sunat_card_izq .sunat-kpis-fila {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 14px;
-        font-size: 12.5px;
-    }
-    /* UNA sola celda de grid con los seis grupos dentro. El hueco mide lo
-       que el grupo MÁS ALTO (el de los cuatro estados, que envuelve a dos
-       renglones), siempre, así que la cabecera no salta al pasar de una
-       columna a otra. Con `position: absolute` el contenedor mediría 0 y
-       habría que adivinar un alto fijo — y adivinarlo mal recorta el grupo
-       más largo justo cuando se lo quiere leer. */
-    .st-key-sunat_card_izq .sunat-kpis {
-        display: grid;
-        justify-items: end;
-        align-items: center;
-        flex: 1 1 auto;
-        min-width: 0;
-    }
-    .st-key-sunat_card_izq .sunat-kpi-grupo {
-        grid-area: 1 / 1;
-        /* FLEX Y NO TEXTO CORRIDO. Cada cifra es un `<span>` con
-           `white-space: nowrap` y el `·` que las separa es otro span, sin
-           un espacio en medio — así que como texto inline NO HAY DÓNDE
-           CORTAR: medido, el grupo de los cuatro estados salía de 670px en
-           una sola línea dentro de una celda de 368 y se iba por el
-           costado. Como flex, cada cifra es un ítem y el salto ocurre
-           entre ítems, que es justo donde tiene que ocurrir. Es la misma
-           receta que tenía la tira antes de apilarse; lo que cambió es que
-           ahora hay una por grupo. */
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 2px 8px;
-        /* Invisible pero MIDIENDO: los seis tienen que seguir aportando su
-           alto a la celda. `visibility` y no `display: none` por eso —
-           `none` los saca del flujo y el hueco se encogería al grupo
-           activo, que es exactamente el salto que se quiere evitar. */
-        visibility: hidden;
-        opacity: 0;
-        transition: opacity 120ms linear;
-    }
-    .st-key-sunat_card_izq .sunat-kpi-grupo.kpi-activo {
-        visibility: visible;
-        opacity: 1;
-    }
-    /* El sello de origen («hoy», «faltan los últimos días») va FUERA de la
-       pila y siempre visible: no es un total de columna, es la única señal
-       de que lo que hay en pantalla puede estar incompleto (regla #197).
-       Eso no se esconde detrás de un gesto que hay que descubrir. */
-    .st-key-sunat_card_izq .sunat-kpi-sello {
-        flex: 0 0 auto;
-        white-space: nowrap;
-    }
-    /* Y SU CAJA TIENE QUE MEDIR LO QUE MIDE. Un `st.markdown` con HTML de
-       BLOQUE trae `margin-bottom: -16px` en su `stMarkdownContainer` (regla
-       #162, puesto para cancelar el 1rem que Streamlit deja detrás). Desde
-       que la tira bajó a su propio renglón (2026-09-18) eso la rompe:
-       medido, su contenedor salía de 4px —20 de contenido menos los 16—
-       mientras la tira seguía dibujando 20, así que se montaba 10px sobre
-       la tabla. Con el gap de la tarjeta en 6px ese -16 ya no cancela
-       nada, sobra. Ver regla #464. */
-    .st-key-sunat_kpis_fila [data-testid="stMarkdownContainer"] {
-        margin-bottom: 0 !important;
-    }
+    /* (Acá vivía la TIRA DE KPIs de la tabla de Documentos SUNAT: seis
+       grupos apilados que se encendían con el cursor sobre su columna,
+       reglas #460 y #464. Se fue el 2026-10-02, a pedido, para que la
+       tabla suba un renglón: sus conteos son ahora el modo «Resumen del
+       cruce» de la tarjeta de abajo. Regla #586.) */
 """
