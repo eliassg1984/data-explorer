@@ -46547,6 +46547,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        re-monta en cada clic (medido en el modo demo, con y sin este
        cambio) y la fila elegida pierde el resaltado. La selección de Python
        sobrevive, así que la ficha y la tarjeta de abajo no se enteran.
+     - **La capa es un FANTASMA, no un reemplazo** (mismo día, a pedido:
+       «que aparezca como fantasma el comprobante, no que reemplace a la
+       tabla»). Con fondo blanco opaco y las esquinas de la tarjeta se leía
+       como si la tabla se hubiera ido. Ahora la capa va con `inset: 8px`
+       y un velo al 35 %, las dos tarjetas al 88 % con sombra, y la tabla
+       se ve detrás. Los blancos translúcidos salen de `color-mix` sobre
+       `--bg-card`, no de un `rgba` suelto. Ojo: Streamlit le pone `width:
+       100%` a todo bloque vertical, y con el `inset` eso la sacaba 16px
+       por la derecha — va `width: auto`. Y la ✕ lleva fondo propio y
+       34px fijos: transparente dejaba ver el botón de Excel de detrás, y
+       un `tertiary` se encoge hasta su glifo (18×44px).
+     - **El conversor ya no avisa con un cartel que el documento no está
+       cargado** (quitado a pedido): lo dice la pastilla «Solo SUNAT» de la
+       ficha, y que los códigos son sugerencias lo marca el ámbar de la
+       columna «Ítem (sistema)», con «Sugerido» en el tooltip.
 
      (2026-10-02.)
 

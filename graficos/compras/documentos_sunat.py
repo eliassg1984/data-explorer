@@ -3082,15 +3082,14 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
         codigos_auto = _sugerir_desde_maestro(lineas_xml)
         _origen_auto = "Sugerido"
 
+    # Sin aviso cuando NO está registrado (quitado a pedido, 2026-10-02):
+    # la pastilla «Solo SUNAT» de la ficha ya lo dice, y que los códigos
+    # son sugerencias lo dice la columna de origen de cada línea
+    # («Sugerido»: en ámbar, con el detalle en el tooltip). El cartel azul
+    # costaba ~70px a una pantalla única.
     if registrado:
         st.caption("Documento registrado: los ítems salen de cruzar "
                    "contra lo que ya está cargado en `compras.parquet`.")
-    else:
-        st.info("Este documento todavía no está cargado en el sistema — "
-                "SUNAT lo ve, pero sigue «Pendiente». Los ítems de abajo "
-                "son SUGERENCIAS por nombre contra el maestro de "
-                "artículos, sin ninguna compra registrada que las "
-                "confirme.")
 
     filas_sunat, filas_sistema = [], []
     for i, xml_l in enumerate(lineas_xml):
