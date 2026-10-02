@@ -5088,7 +5088,7 @@ def _pruebas_etiqueta_barras_producto():
 
     from graficos.compras._comun import _variaciones
     from graficos.compras.producto import (
-        _compras_del_periodo, _etiquetas_barras, _fmt_docs, _hover_barras,
+        _compras_del_periodo, _etiquetas_barras, _fmt_cant_um, _fmt_docs, _hover_barras,
         _periodo_del_clic, _prod_serie_periodo, _rotulo_periodo, _var_precio,
     )
 
@@ -5149,8 +5149,22 @@ def _pruebas_etiqueta_barras_producto():
     # Trampa 4.
     rot = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, rotada=True)
     check("rotada, la etiqueta es UN renglón", "<br>" not in rot[2], rot[2])
-    check("rotada dice lo mismo",
-          all(x in rot[2] for x in ("S/ 14.00", "S/ 19k")), rot[2])
+    # LA CANTIDAD (2026-10-02, regla #582): derecha es el tercer renglón;
+    # girada reemplaza al valor —con los tres, la etiqueta girada se salía
+    # de la figura—.
+    _cants = [5.0, 12.5, 315.0, 1240.0]
+    et = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores,
+                           cantidades=_cants, um="KG")
+    check("con cantidad, son tres renglones y el último es la cantidad",
+          et[2].count("<br>") == 2 and et[2].endswith("315 KG"), et[2])
+    rot = _etiquetas_barras([10.0, 12.0, 14.0, 20.0], valores, rotada=True,
+                            cantidades=_cants, um="KG")
+    check("rotada lleva precio y cantidad, sin el valor",
+          rot[2] == "S/ 14.00 · 315 KG", rot[2])
+    check("la cantidad lleva un decimal sólo si es chica y lo tiene",
+          [_fmt_cant_um(c, "KG") for c in _cants]
+          == ["5 KG", "12.5 KG", "315 KG", "1,240 KG"],
+          str([_fmt_cant_um(c, "KG") for c in _cants]))
 
     # ── EL CLIC EN UNA BARRA → SU PERÍODO (2026-09-20, regla #480) ─────
     # Acá el eje NO es lineal (`_eje_x_kwargs` dibuja sobre los timestamps

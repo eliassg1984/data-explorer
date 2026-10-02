@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-581 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+582 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -316,7 +316,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#578** — Compras › Proveedor son dos filas: [Ranking | Productos] arriba y [Documentos | Evolución |…
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 
-**Plotly y figuras** (106)
+**Plotly y figuras** (107)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -424,6 +424,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#565** — En la ficha de la hora, el subtítulo va en el renglón del título y «POR MESA» en la fila de…
 - **#580** — Compras › «Compras por período»: la zona de abajo tiene TRES modos —Resumen Total, Resumen…
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
+- **#582** — Compras › Producto: la tabla de abajo del gráfico muestra SEIS filas, las barras dicen la…
 
 **AgGrid y tablas** (88)
 
@@ -46338,6 +46339,54 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+582. **Compras › Producto: la tabla de abajo del gráfico muestra SEIS
+     filas, las barras dicen la CANTIDAD comprada con su unidad, Resumen
+     Total suma la cantidad y el producto se nombra en azul.** 2026-10-02,
+     a pedido: «la tabla debajo del gráfico muestra sólo 3 filas, hagamos
+     que muestre 6 y alarguemos la tarjeta hacia abajo, también la del lado
+     derecho; las barras deben mostrar la cantidad comprada según su unidad
+     de medida; la tabla en Resumen Total debe mostrar el total en cantidad
+     también; el nombre del producto debe ser levemente más visible, quizás
+     en letra azul». En `graficos/compras/producto.py` y
+     `tablas/compras_semanal.py`.
+     - **Seis filas las paga el Ranking, no la figura.** `_FILAS_ZONA` pasa
+       de 4 a 7 (la fila TOTAL es fija y ocupa una): +81px. La tarjeta de la
+       Evolución mide lo que mide la de al lado (`_ALTO_EVO`), así que si
+       nada más cambia esos 81 se los come la figura. `_FILAS_PROD` pasa de
+       7 a 11 (+96): las dos tarjetas se alargan juntas hacia abajo, de 528
+       a 624 a 1358×800, y a la figura le sobran 15 (203 → 218) para el
+       tercer renglón de sus etiquetas.
+     - **La etiqueta de cada barra suma la cantidad** (`_fmt_cant_um`:
+       «315 KG», un decimal sólo si es chico y lo tiene). Derecha son tres
+       renglones —precio, valor, cantidad—; GIRADA (más de
+       `_UMBRAL_BARRAS_ROTADAS` barras) son dos, precio · cantidad, sin el
+       valor: con los tres medía ~130px y, MEDIDO con 13 barras semanales,
+       se salía 19 por arriba de la figura. El valor lo dicen el alto de la
+       barra, el hover y la tabla.
+     - **El techo del eje Y se CALCULA** en vez de un 1.75 / 1.28 fijo: lo
+       que mide la etiqueta más larga (5,6px por carácter a 10px, o tres
+       renglones de 12,5) menos los 30px del margen de arriba, sobre el
+       área de trazo (alto − 60). Nunca menos de 1.28. Medido: la etiqueta
+       más alta queda 16px debajo del borde girada y 24 derecha.
+     - **Resumen Total suma «Cant.»** (antes del precio: cuánto, a cuánto y
+       cuánto salió) y la fila TOTAL la escribe con su unidad («613 KG»): las
+       barras son de UN producto, así que la cantidad se suma. Para que
+       entrara en 429px se fue «Docs.» (sigue en el hover de cada barra) y
+       la tabla ESTRECHA va a 6px de padding por lado en vez de 8
+       (`tablas/compras_semanal.py::_css(estrecha=True)`). Medido celda por
+       celda con `scrollWidth` contra `clientWidth`: con 8px no entraban
+       «S/ 21,014.65», «100.0%», «+1344%» ni «may 2026» —los tres primeros
+       se cortaban desde que la tabla nació—. La fila fija dice «Total» a
+       secas y «100%», que eran lo más ancho de sus columnas. OJO al medir:
+       el texto de la fila fija (negrita) se cortaba con «…» sin que el
+       `scrollWidth` de su celda lo dijera — lo confirmó una captura.
+     - **El nombre del producto**, a 15px (eran 13,5) y en `ACENTO_TEXTO`,
+       el azul con que «Vs año pasado» nombra su ítem: las dos vistas de
+       Compras nombran igual al producto en foco. Entra en los 22px del
+       renglón de los selectores sin moverlo.
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46350,7 +46399,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#581**; la próxima toma el número siguiente.
+> última regla es la **#582**; la próxima toma el número siguiente.
 
 >
 

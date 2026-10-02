@@ -263,7 +263,7 @@ _COLS_ANCHA = {
     "periodo": ("", 180), "precio": ("Precio prom.", 118),
     "valor": ("Valorizado", 130), "parte": ("% del total", 104),
     "docs": ("Documentos", 106), "lineas": ("Líneas", 82),
-    "variacion": ("Variación", 104),
+    "variacion": ("Variación", 104), "cant": ("Cantidad", 104),
 }
 """Rótulo y ancho de cada columna cuando la tabla ocupa una tarjeta a lo
 ancho (el caso de «Compra por período»). Los anchos son la cuenta de
@@ -271,10 +271,10 @@ siempre: lo que mide el peor dato a 13px, más 8+8 de padding y los ~14 de
 la flecha de ordenar."""
 
 _COLS_ESTRECHA = {
-    "periodo": ("", 96), "precio": ("Precio", 72),
-    "valor": ("Valorizado", 88), "parte": ("%", 58),
+    "periodo": ("", 64), "precio": ("Precio", 72),
+    "valor": ("Valorizado", 88), "parte": ("%", 56),
     "docs": ("Docs.", 60), "lineas": ("Líneas", 62),
-    "variacion": ("Var.", 58),
+    "variacion": ("Var.", 60), "cant": ("Cant.", 72),
 }
 """Lo mismo para media tarjeta, donde el rótulo entero no entra.
 
@@ -293,7 +293,23 @@ semibold la cabecera), no de tantear:
     Var.         «+188%»           41   19       58
 
 Las cinco fijas suman 336 y a «Período» le quedan 97 — de ahí el 96 de
-mínimo. El rótulo abreviado NO pierde información: el nombre entero va al
+mínimo.
+
+DESDE EL 2026-10-02 (regla #582) la Evolución de Producto manda además la
+CANTIDAD («Cant.», 72: la fila TOTAL la escribe con su unidad, «1,234 KG»)
+y deja de mandar «Docs.» —el dato sigue en el hover de cada barra—. Y se
+re-midió todo en la grilla de verdad (`scrollWidth` contra `clientWidth`
+de cada celda), que dijo que con 8px de padding no entraba: «S/ 21,014.65»
+pedía 90 contra los 88 de Valorizado, «100.0%» 60 contra 58, «+1344%» 64
+contra 58 y «may 2026» 73 contra lo que le quedaba a Período —se leían
+con «…», los tres primeros desde el día en que nacieron—. La salida fue el
+padding: esta tabla va a 6px por lado (`_css(estrecha=True)`), y con esos
+4px por columna los anchos de arriba entran. Las fijas suman 348 y a
+«Período» le quedan 81; la fila fija dice «Total» a secas, porque «Total ·
+25» era lo más ancho de la columna y cuántas barras hay lo dice el
+gráfico.
+
+El rótulo abreviado NO pierde información: el nombre entero va al
 `headerTooltip`, que es lo que ya hacen las tarjetas de KPI con «Vinos y
 espumantes». Lo que NO se abrevia es «Valorizado»: es la columna que se
 lee, y «Valor» se confunde con el valor unitario."""
@@ -377,12 +393,18 @@ def _con_total(opciones, total):
     return opciones
 
 
-def _css():
-    """El CSS de las dos grillas: el look de Volatilidad más lo propio."""
+def _css(estrecha=False):
+    """El CSS de las grillas: el look de Volatilidad más lo propio.
+
+    `estrecha` angosta el padding de las celdas de 8 a 6px: es la tabla de
+    la Evolución de Producto, seis columnas en 429px (`_COLS_ESTRECHA`), y
+    esos 4px por columna son los que hacían falta para que «may 2026»,
+    «S/ 21,014.65» y «+1344%» entraran sin «…» (regla #582)."""
     css = _css_look(_css_grid(13, cebra=False, cabecera_neutra=True))
+    _pad = "6px" if estrecha else _PAD_X_CELDA
     css[".ag-row .ag-cell, .ag-header-row .ag-header-cell"] = {
-        "padding-left": f"{_PAD_X_CELDA} !important",
-        "padding-right": f"{_PAD_X_CELDA} !important",
+        "padding-left": f"{_pad} !important",
+        "padding-right": f"{_pad} !important",
     }
     # Mismo par que en Volatilidad: el iframe lo estira `estilos/_80_cards.py`
     # y el div de adentro va acá, que es lo único que entra al iframe.
@@ -761,7 +783,9 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
 
     `tp` trae `periodo` (el nombre de la barra, ya legible), los números
     crudos `valor`, `parte` (0-1) y, si su gráfico los tiene, `precio`
-    (promedio del período), `docs`, `lineas` y `proveedores` (los nombres,
+    (promedio del período), `cant` (la cantidad, sólo cuando las barras
+    son de UN producto: entre productos no se suma), `docs`, `lineas` y
+    `proveedores` (los nombres,
     ya escritos); la `variacion` en % (o vacía) y hasta cuatro ocultas:
     `__vtxt` (qué escribir cuando no hay porcentaje — «parcial»), `__nota`
     (el tooltip que dice por qué), `__pnota` (el desglose de proveedores
@@ -834,6 +858,10 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
           headerTooltip="Precio promedio · promedio de los precios "
                         "unitarios de compra del período. El total no lo "
                         "promedia: un promedio de promedios no mide nada")
+    _fijo("cant", type=["numericColumn"], valueFormatter=_JS_CANT,
+          headerTooltip="Cantidad comprada en el período, en la unidad de "
+                        "medida del producto. El total la suma: es un solo "
+                        "producto, una sola unidad")
     _fijo("valor", type=["numericColumn"], valueFormatter=_JS_SOLES,
           headerTooltip="Valorizado de compra del período")
     _fijo("parte", type=["numericColumn"], valueFormatter=_JS_PARTE,
@@ -887,5 +915,6 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
 
     AgGrid(
         tp, gridOptions=grid_options, height=altura, theme="material",
-        custom_css=_css(), allow_unsafe_jscode=True, key=key, update_on=[],
+        custom_css=_css(estrecha), allow_unsafe_jscode=True, key=key,
+        update_on=[],
     )

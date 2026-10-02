@@ -57,7 +57,8 @@ from st_aggrid import AgGrid, JsCode
 
 from cortes import MESES_ABR_ES
 from tema import (
-    ACENTO, ERROR, EXITO, GRIS_TEXTO, LAVANDA_FOCO, TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO, ERROR, EXITO, GRIS_TEXTO, LAVANDA_FOCO,
+    TEXTO_PRINCIPAL,
 )
 from graficos.base import (
     _compras_layout, _compras_truncar, _slug, preservar_widgets,
@@ -85,7 +86,7 @@ from tablas.compras_semanal import (
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos import alturas, periodo
 
-_FILAS_PROD = 7
+_FILAS_PROD = 11
 """Filas que reserva el Ranking de productos. Un techo, no un alto: lo que
 sobra scrollea adentro.
 
@@ -97,7 +98,15 @@ y dos altos de fila en la misma tarjeta se leían como dos tablas pegadas.
 que se reduzca la tarjeta»). Esa misma mañana había subido a 9 para
 aprovechar el alto de una pantalla de 768; con la tarjeta ya sin techo
 (regla #382) el alto que manda es el que el usuario quiere ver, no el que
-cabe."""
+cabe.
+
+11 desde el 2026-10-02, a pedido: «que la tabla de debajo del gráfico
+muestre 6 filas y alarguemos la tarjeta hacia abajo, también la del lado
+derecho». La tarjeta de la Evolución mide lo que mide ésta (ver
+`_ALTO_EVO`), así que las tres filas que suma la zona de allá (81px) las
+tiene que pagar algo de acá, o se las come la figura: cuatro filas de 24
+son 96, y los 15 que sobran le quedan a la figura para el tercer renglón
+de sus etiquetas (la cantidad). Regla #582."""
 
 _ALTO_FRAME = alturas.por_filas(
     _FILAS_PROD, px_fila=ALTO_FILA_RANK, extra=CROMO_GRID_RANK, minimo=0)
@@ -145,14 +154,20 @@ _ALTO_FRAME_FAM = alturas.por_filas(
 # pide menos y el piso `:has()` rellena esos px al pie: es el caso raro.
 _CROMO_CARD_RANK = 138
 
-_FILAS_ZONA = 4
+_FILAS_ZONA = 7
 """Cuántas filas de la zona de abajo se ven sin deslizar.
 
 Es un TECHO, no un alto: lo que sobra scrollea DENTRO de la grilla, que es
 el único sitio de esta vista donde se permite una barra (las tarjetas de
 Producto no tienen techo desde la regla #382).
 
-CUATRO Y NO MÁS porque cada fila se la saca a la figura: la tarjeta mide lo
+SIETE desde el 2026-10-02 (regla #582): seis filas de datos más la fila
+TOTAL, que es fija y ocupa una — con cuatro se veían TRES compras, y se
+pidió ver seis. Lo que cuestan lo paga ahora el Ranking de al lado, que
+creció lo mismo (ver `_FILAS_PROD`): la tarjeta se alarga hacia abajo y
+la figura no pierde nada.
+
+Hasta ese día eran CUATRO, porque cada fila se la sacaba a la figura: la tarjeta mide lo
 que mide la del Ranking de al lado y ese total no cambia, así que la zona y
 el gráfico se reparten el mismo presupuesto. Cuatro cubre el caso que se ve
 de verdad —la ventana por defecto son 3 meses agrupados por Mes, o sea 3 ó
@@ -349,11 +364,19 @@ _CSS_SELECTOR_TEXTO = f"""
 }}
 /* El nombre del producto en foco. Recorta con puntos suspensivos y el
    nombre entero va en el `title`: un corte fijo en N caracteres no sigue
-   al ancho de la columna. */
+   al ancho de la columna.
+
+   AZUL Y A 15px desde el 2026-10-02 (regla #582), a pedido: «el nombre del
+   producto debe ser levemente más visible [...] quizás en letra azul». El
+   azul es `ACENTO_TEXTO`, el mismo del nombre del ítem en «Vs año pasado»
+   (`_nombre_serie_html`): en las dos vistas de Compras el producto en
+   foco se nombra igual. A 15 y no a los 16 del título del Ranking: es el
+   NOMBRE de lo que se mira, no el título de la tarjeta, y entra en los 22px
+   del renglón de los selectores sin moverlo. */
 .cp-prod-evo-tit {{
-    font-size: 13.5px;
+    font-size: 15px;
     font-weight: 700;
-    color: var(--text-primary);
+    color: {ACENTO_TEXTO};
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -733,8 +756,33 @@ def _fmt_docs(n, largo=False):
     return f"{n:,} docs" if n != 1 else "1 doc"
 
 
-def _etiquetas_barras(precios, valores, rotada=False):
-    """El texto que Plotly dibuja SOBRE cada barra: precio y valor.
+def _fmt_cant_um(cant, um):
+    """La cantidad comprada con su unidad: «315 KG», «12.5 LT», «1,240 UN».
+
+    Un decimal sólo si el número es chico y lo tiene: en la etiqueta de una
+    barra «315.00 KG» son tres caracteres de ruido. Sin cantidad, vacío —
+    la etiqueta no escribe un «0 KG» que nadie compró así."""
+    if cant is None or pd.isna(cant) or not cant:
+        return ""
+    cant = float(cant)
+    _dec = 1 if abs(cant) < 100 and cant % 1 else 0
+    _um = f" {um}" if um else ""
+    return f"{cant:,.{_dec}f}{_um}"
+
+
+def _etiquetas_barras(precios, valores, rotada=False, cantidades=None,
+                      um=""):
+    """El texto que Plotly dibuja SOBRE cada barra: precio, valor y, desde
+    el 2026-10-02, la CANTIDAD comprada en la unidad del producto (regla
+    #582, a pedido: «las barras deben mostrar la cantidad comprada según su
+    unidad de medida»). Va ÚLTIMA: el precio sigue siendo la pregunta que
+    trae a este panel.
+
+    ROTADA LLEVA DOS Y NO TRES: precio y cantidad, sin el valor. Con los
+    tres la etiqueta girada medía ~130px —MEDIDO con 13 barras semanales:
+    se salía 19px por arriba de la figura— y no hay techo que la acomode
+    sin aplastar las barras. El valor es el que menos pierde: lo dice el
+    alto de la barra, el hover y la tabla de abajo.
 
     Sin rotar son dos renglones; rotada es uno solo con los dos separados
     por «·», porque de costado los renglones se apilan a lo ANCHO y ahí el
@@ -756,11 +804,15 @@ def _etiquetas_barras(precios, valores, rotada=False):
     falta, porque en la misma vuelta la figura pasó de 384px a 237 para
     hacerle sitio a la tabla."""
     out = []
-    for pr, val in zip(precios, valores):
+    if cantidades is None:
+        cantidades = [None] * len(valores)
+    for pr, val, cant in zip(precios, valores, cantidades):
         _pr = ("" if pr is None or pd.isna(pr) else f"S/ {pr:,.2f}")
         _val = _fmt_soles_compacto(val)
-        sep = " · " if rotada else "<br>"
-        out.append(sep.join(x for x in (_pr, _val) if x))
+        _q = _fmt_cant_um(cant, um)
+        partes = (_pr, _q) if rotada else (_pr, _val, _q)
+        out.append((" · " if rotada else "<br>").join(x for x in partes
+                                                       if x))
     return out
 
 
@@ -822,7 +874,7 @@ def _hover_barras(rotulos, precios, valores, docs, provs, variaciones=None,
 
 
 def _tabla_periodos(rotulos, precios, valores, docs, variaciones,
-                    claves, gran, rango):
+                    claves, gran, rango, cantidades=None, um=""):
     """Las filas del RESUMEN: una por BARRA, en el orden del eje.
 
     Es «el gráfico escrito», el mismo trato que la tabla Resumen de «Compra
@@ -852,12 +904,20 @@ def _tabla_periodos(rotulos, precios, valores, docs, variaciones,
         `_JS_SOLES` escribe con un None.
     """
     _tot = float(sum(valores))
-    filas = {
-        "periodo": list(rotulos),
+    filas = {"periodo": list(rotulos)}
+    # LA CANTIDAD (regla #582, a pedido: «la tabla en la vista Resumen Total
+    # debe mostrar el total en cantidad también»). Va antes del precio, en
+    # el orden en que se lee una compra: cuánto, a cuánto y cuánto salió. Y
+    # el total SÍ la suma —las barras son de UN producto, así que es una
+    # sola unidad de medida—, escrito con la unidad.
+    if cantidades is not None:
+        filas["cant"] = [(0.0 if c is None or pd.isna(c) else float(c))
+                         for c in cantidades]
+    filas.update({
         "precio": [(None if pd.isna(pr) else float(pr)) for pr in precios],
         "valor": [float(v) for v in valores],
         "parte": [(float(v) / _tot if _tot else 0.0) for v in valores],
-    }
+    })
     if docs is not None:
         filas["docs"] = [(0 if d is None or pd.isna(d) else int(d))
                          for d in docs]
@@ -878,18 +938,24 @@ def _tabla_periodos(rotulos, precios, valores, docs, variaciones,
     # 14 semanas» mide 108 y se cortaría con «…» justo en el número, que es
     # lo único suyo que hay que leer. La unidad la dice el eje del gráfico
     # de arriba, que es la misma.
-    _n = len(valores)
+    # Y desde el 2026-10-02 dice «Total» a secas: la columna se angostó a
+    # 69px para que entrara la cantidad (regla #582), y «Total · 25» ya no
+    # cabía. Cuántas barras hay lo cuenta el gráfico de arriba.
     total = {
-        "periodo": f"Total · {_n:,}",
+        "periodo": "Total",
         "precio": None,
         "valor": f"S/ {_tot:,.2f}",
-        "parte": "100.0%",
+        # «100%» y no «100.0%»: en negrita, en 56px, el decimal se cortaba
+        # («100.…»), y un total de 100 no tiene decimal que decir.
+        "parte": "100%",
         "variacion": None,
         "__vtxt": "",
         "__nota": "",
     }
     if "docs" in filas:
         total["docs"] = f"{sum(filas['docs']):,}"
+    if "cant" in filas:
+        total["cant"] = _fmt_cant_um(sum(filas["cant"]), um) or "—"
     return pd.DataFrame(filas), total
 
 
@@ -2039,6 +2105,9 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
 
                     _precio = agg["precio"].tolist()
                     _valor = agg["valor"].tolist()
+                    _cant = (agg["cantidad"].tolist()
+                             if "cantidad" in agg.columns
+                             else [None] * len(_valor))
                     _docs = (agg["docs"].tolist() if "docs" in agg.columns
                              else None)
                     _provs = (agg["provs"].tolist() if "provs" in agg.columns
@@ -2155,7 +2224,9 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     # `_UMBRAL_BARRAS_ROTADAS`.
                     _muchas = len(agg) > _UMBRAL_BARRAS_ROTADAS
                     _etiquetas = _etiquetas_barras(_precio, _valor,
-                                                   rotada=_muchas)
+                                                   rotada=_muchas,
+                                                   cantidades=_cant,
+                                                   um=fila["um"])
                     _hover = _hover_barras(
                         _rotulos, _precio, _valor, _docs, _provs,
                         variaciones=_vars, claves=_claves, gran=gran,
@@ -2191,13 +2262,22 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     # corta contra el borde.
                     #
                     # Rotada la etiqueta ocupa ALTO en vez de ancho, así que
-                    # el techo tiene que dar más aire. Con las dos cifras
-                    # MEDIDO: 70px de etiqueta girada, y 1.75 sobre un área
-                    # de trazo de ~170 deja los ~73 que hacen falta.
+                    # el techo tiene que dar más aire. Hasta el 2026-10-02
+                    # era un 1.75 fijo, medido para dos cifras; con la
+                    # cantidad (regla #582) el largo cambia con la unidad y
+                    # el número, así que el techo se CALCULA: lo que mide la
+                    # etiqueta más larga (5,6px por carácter a 10px, o tres
+                    # renglones de 12,5 sin rotar) menos los 30 del margen
+                    # de arriba, que también la recibe, sobre el área de
+                    # trazo (el alto menos 30 + 10 de márgenes y ~20 del eje
+                    # X). Nunca menos de 1.28, el aire de siempre.
                     if max(_valor) > 0:
-                        fig.update_yaxes(
-                            range=[0, max(_valor) * (1.75 if _muchas
-                                                     else 1.28)])
+                        _area = _ALTO_EVO - 60
+                        _pide = ((max(len(_e) for _e in _etiquetas) * 5.6
+                                  if _muchas else 3 * 12.5) + 6 - 30)
+                        _techo = max(1.28, _area / max(_area - max(_pide, 0),
+                                                       40))
+                        fig.update_yaxes(range=[0, max(_valor) * _techo])
                     fig.update_xaxes(**_eje_x_kwargs(gran, agg))
                     # `on_select="rerun"` es lo que hace clickeable la barra.
                     # El `key` lleva el contador de arriba, no el foco.
@@ -2306,9 +2386,13 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                                     _prov_clic)
                                 st.rerun(scope=scope_rerun())
                     else:
+                        # SIN los documentos desde el 2026-10-02 (regla
+                        # #582): en 429px no entraban junto a la cantidad,
+                        # y siguen en el hover de cada barra.
                         _filas_z, _tot_z = _tabla_periodos(
-                            _rotulos, _precio, _valor, _docs, _vars,
-                            _claves, gran, _rng_evo)
+                            _rotulos, _precio, _valor, None, _vars,
+                            _claves, gran, _rng_evo, cantidades=_cant,
+                            um=fila["um"])
                         renderizar_periodos(
                             _filas_z, altura=_ALTO_ZONA,
                             key=f"compras_prod_zona_res_{_k_z}",
