@@ -81,15 +81,21 @@ from graficos.ajuste._distribucion import (  # noqa: F401
 # con las de los demás reportes: `rail_sin_tablas` aquí y `pila_sin_tablas`
 # en las dos pilas, siempre de a par (regla #507).
 _AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
-    ("Visual", (("Cascada",        "Cascada",       ":material/waterfall_chart:"),
-                     ("Mapa de calor",  "Mapa de calor", ":material/grid_on:"),
-                     ("Distribución",   "Distribución",  ":material/bar_chart:"))),
+    # Los RÓTULOS (segundo elemento) se renombraron el 2026-10-02 a pedido:
+    # «Cascada» hace rato es una tabla de familias (#441) y «Mapa de calor»
+    # una tabla Familia × Área (#468). Los IDS (primer elemento) no se tocan:
+    # son la URL, las keys, el CSS y `_PILA_VISUAL`. Regla #584.
+    ("Visual", (("Cascada",        "Por familia",   ":material/view_list:"),
+                     ("Mapa de calor",  "Familia × Área", ":material/grid_on:"),
+                     ("Distribución",   "Distribución de diferencias",
+                      ":material/bar_chart:"))),
     # Desde el 2026-09-23 «Comparativa mensual» y «Por fecha de corte» no
     # existen: miraban el mismo dato que Evolución y se fusionaron en ella
     # (#501). El mismo día la tabla volvió a salir de Evolución como vista
     # propia, porque no dependía de la serie (#504).
     ("Tiempo",      (("Evolución",            "Evolución", ":material/show_chart:"),
-                     ("Detalle por producto", "Detalle",   ":material/table_view:"))),
+                     ("Detalle por producto", "Tabla dinámica",
+                      ":material/pivot_table_chart:"))),
     ("Datos",       (("Tabla",          "Tabla",         ":material/table_rows:"),)),
 ))
 
