@@ -769,6 +769,38 @@ suman 100 % y «En SUNAT» + «En sistema» suman más (los que coinciden o
 difieren están en los dos)."""
 
 
+_NOMBRE_CRUCE = {
+    "Total": "Documentos del período",
+    "En SUNAT": "Registrados en SUNAT",
+    "En sistema": "Cargados en el sistema",
+    "Coinciden": "En los dos, montos iguales",
+    "Con diferencia": "En los dos, montos distintos",
+    "Solo SUNAT": "Sólo en SUNAT",
+    "Solo sistema": "Sólo en el sistema",
+}
+"""Lo que dice cada barra en la TABLA y en el tooltip del gráfico. Los
+nombres cortos de `_BARRAS_CRUCE` siguen en el eje del gráfico, donde no
+entra más; en la tabla se leían como preguntas («Total, ¿de qué?»,
+«Coinciden, ¿en qué?» — 2026-10-02, a pedido)."""
+
+_AYUDA_CRUCE = {
+    "Total": ("Cada documento una vez, esté en SUNAT, en el sistema o en los "
+              "dos. Es el 100 % de las demás filas."),
+    "En SUNAT": ("Están en el registro de compras de SUNAT (SIRE), cargados "
+                 "o no en el sistema."),
+    "En sistema": ("Están cargados en el sistema de almacén, los reporte "
+                   "SUNAT o no."),
+    "Coinciden": (f"Están en los dos y cuadran base, IGV y total (hasta "
+                  f"S/ {_TOLERANCIA_CENTAVOS:.2f} de diferencia)."),
+    "Con diferencia": ("Están en los dos, pero la base, el IGV o el total no "
+                       "cuadran: revisar."),
+    "Solo SUNAT": "SUNAT los tiene y el sistema todavía no: falta cargarlos.",
+    "Solo sistema": ("Cargados en el sistema sin comprobante en SUNAT, al "
+                     "menos por ahora."),
+}
+"""La explicación larga de cada fila: el tooltip de su nombre en la tabla."""
+
+
 def _conteos_cruce(df):
     """Documentos de un cruce por barra de `_BARRAS_CRUCE`."""
     if df is None or getattr(df, "empty", True) or "estado" not in df.columns:
@@ -3545,9 +3577,11 @@ def _panel_resumen(d, resumen):
                       gap="small", key="sunat_res_cab"):
         _slot_leyenda = st.empty()
         # Las opciones son 1 y 2 (años atrás) y el rótulo es el año: así
-        # el valor guardado no cambia cuando el rango pasa a otro año.
+        # el valor guardado no cambia cuando el rango pasa a otro año. Del
+        # más viejo al más nuevo, como la leyenda y la tabla.
         comparar = st.pills(
-            "Comparar con", list(rangos), selection_mode="multi",
+            "Comparar con", sorted(rangos, reverse=True),
+            selection_mode="multi",
             default=[1], key="sunat_res_anios",
             format_func=lambda a: _rotulo_anio(*rangos[a]),
             label_visibility="collapsed") or []
@@ -3558,8 +3592,11 @@ def _panel_resumen(d, resumen):
                                    else ":material/table_rows:"),
             label_visibility="collapsed") or "grafico"
 
-    periodos = [(_rotulo_corto(f_ini, f_fin),
-                 _conteos_cruce(resumen["censo"]))]
+    # Cada período con su edad (0 = el actual, 1 = el año pasado…): de ahí
+    # sale su color, que no depende de la posición.
+    periodos = [{"edad": 0, "rot": _rotulo_corto(f_ini, f_fin),
+                 "rango": _rotulo_rango(f_ini, f_fin),
+                 "k": _conteos_cruce(resumen["censo"])}]
     avisos = []
     for anios in sorted(comparar):
         ini, fin = rangos[anios]
@@ -3575,74 +3612,98 @@ def _panel_resumen(d, resumen):
                           f"({_rotulo_rango(ini, fin)}): sin barra — "
                           f"{motivo}.")
         else:
-            periodos.append((_rotulo_anio(ini, fin), conteos))
+            periodos.append({"edad": anios, "rot": _rotulo_anio(ini, fin),
+                             "rango": _rotulo_rango(ini, fin), "k": conteos})
+    # DEL MÁS VIEJO AL ACTUAL, de izquierda a derecha (2026-10-02, a pedido:
+    # «que el orden sea de antes, a la izquierda, a después, a la
+    # derecha»). En la leyenda, en las barras de cada grupo y en las
+    # columnas de la tabla: el tiempo corre para el mismo lado en las tres.
+    periodos.sort(key=lambda p: -p["edad"])
+
+    # La nota que explica los % ya no va debajo (a pedido, mismo día): es
+    # el tooltip de la leyenda y de las cabeceras de la tabla. Debajo sólo
+    # quedan los avisos de un año sin barra, que dicen por qué falta algo
+    # que se pidió.
+    nota = ("% sobre los documentos de cada período: los que están en "
+            "SUNAT, en el sistema o en los dos. Origen del período actual: "
+            f"{_sello_origen(resumen.get('origen'))}.")
+    if resumen.get("mes_filtrado") and len(periodos) > 1:
+        nota += (" «Mes en SUNAT» se aplica sólo al período actual: en los "
+                 "años anteriores todos los meses están presentados.")
 
     # La leyenda, en el renglón de los controles: un cuadrado del color de
-    # cada período y su rótulo. El actual va con su rango; los anteriores,
-    # con el año, porque son ese mismo rango corrido.
+    # cada período y su rótulo; el rango entero y la nota, en el tooltip.
     _slot_leyenda.markdown(
         '<div style="display:flex;gap:12px;align-items:center;'
         f'font-size:11.5px;color:{GRIS_TEXTO_MEDIO};white-space:nowrap;">'
         + "".join(
-            f'<span style="display:inline-flex;align-items:center;gap:5px;">'
-            f'<span style="width:9px;height:9px;border-radius:2px;'
-            f'background:{_COLORES_PERIODO[i]};"></span>{rot}</span>'
-            for i, (rot, _k) in enumerate(periodos))
+            f'<span title="{html.escape(p["rango"] + " · " + nota)}" '
+            f'style="display:inline-flex;align-items:center;gap:5px;'
+            f'cursor:help;"><span style="width:9px;height:9px;'
+            f'border-radius:2px;background:{_COLORES_PERIODO[p["edad"]]};">'
+            f'</span>{p["rot"]}</span>'
+            for p in periodos)
         + '</div>', unsafe_allow_html=True)
 
     if vista == "tabla":
-        _tabla_resumen(periodos)
+        _tabla_resumen(periodos, nota)
     else:
         _grafico_resumen(periodos)
 
-    notas = [f"% sobre el total de documentos de cada período (SUNAT ∪ "
-             f"sistema). Origen del período actual: "
-             f"{_sello_origen(resumen.get('origen'))}."]
-    if resumen.get("mes_filtrado") and len(periodos) > 1:
-        notas.append("«Mes en SUNAT» se aplica sólo al período actual: en "
-                     "los años anteriores todos los meses están presentados.")
-    notas += avisos
-    st.markdown(
-        f'<div style="font-size:11.5px;color:{GRIS_TEXTO};line-height:1.5;">'
-        + "<br>".join(notas) + "</div>", unsafe_allow_html=True)
+    if avisos:
+        st.markdown(
+            f'<div style="font-size:11px;color:{GRIS_TEXTO};line-height:1.45;">'
+            + "<br>".join(avisos) + "</div>", unsafe_allow_html=True)
 
 
 def _grafico_resumen(periodos):
-    """Las barras del «Resumen del cruce»: una serie por período."""
+    """Las barras del «Resumen del cruce»: una serie por período, del más
+    viejo al actual (así llegan de `_panel_resumen`)."""
     fig = go.Figure()
-    for i, (rotulo, k) in enumerate(periodos):
-        total = k["Total"]
+    for p in periodos:
+        k, total = p["k"], p["k"]["Total"]
         ys = [k[b] for b in _BARRAS_CRUCE]
         pcts = [_pct_de(v, total) or "—" for v in ys]
         # La cifra arriba de cada barra; el % en un segundo renglón salvo en
         # «Total», que es el 100 % por definición.
-        textos = [f"{v:,}" if b == "Total" else f"{v:,}<br>{p}"
-                  for b, v, p in zip(_BARRAS_CRUCE, ys, pcts)]
+        textos = [f"{v:,}" if b == "Total" else f"{v:,}<br>{pc}"
+                  for b, v, pc in zip(_BARRAS_CRUCE, ys, pcts)]
         fig.add_trace(go.Bar(
-            name=rotulo, x=list(_BARRAS_CRUCE), y=ys, text=textos,
+            name=p["rot"], x=list(_BARRAS_CRUCE), y=ys, text=textos,
             textposition="outside", cliponaxis=False,
             textfont=dict(size=10.5, color=GRIS_TEXTO_MEDIO),
-            marker=dict(color=_COLORES_PERIODO[i], cornerradius=4),
-            customdata=pcts,
-            hovertemplate=(f"<b>%{{x}}</b><br>{rotulo}<br>"
-                           "%{y:,} documentos · %{customdata} del total"
+            marker=dict(color=_COLORES_PERIODO[p["edad"]], cornerradius=4),
+            customdata=[[_NOMBRE_CRUCE[b], pc] for b, pc in
+                        zip(_BARRAS_CRUCE, pcts)],
+            hovertemplate=(f"<b>%{{customdata[0]}}</b><br>{p['rango']}<br>"
+                           "%{y:,} documentos · %{customdata[1]} del período"
                            "<extra></extra>"),
         ))
     _compras_layout(fig, alto=alturas.MINI)
-    _ymax = max((max(k.values()) for _, k in periodos), default=0)
-    # Sin título ni leyenda: los dice el renglón de los controles.
+    _ymax = max((max(p["k"].values()) for p in periodos), default=0)
+    # Sin título ni leyenda: los dice el renglón de los controles. Y casi
+    # sin margen arriba: el gráfico arranca pegado a ese renglón.
     fig.update_layout(barmode="group", bargap=0.28, bargroupgap=0.06,
                       showlegend=False, title=None,
-                      margin=dict(t=8, b=24, l=8, r=8))
-    # Aire arriba para el rótulo de dos renglones de la barra más alta. Y
+                      margin=dict(t=2, b=24, l=8, r=8))
+    # Aire arriba para el rótulo de dos renglones de la barra más alta
+    # (×1.2 alcanza a 240px; con ×1.3 sobraba una franja vacía arriba). Y
     # sin números en el eje: cada barra ya lleva el suyo escrito.
-    fig.update_yaxes(range=[0, (_ymax or 1) * 1.3], showticklabels=False)
+    fig.update_yaxes(range=[0, (_ymax or 1) * 1.2], showticklabels=False)
     st.plotly_chart(fig, use_container_width=True, key="sunat_g_resumen")
 
 
-def _tabla_resumen(periodos):
+def _tabla_resumen(periodos, nota=""):
     """El «Resumen del cruce» como tabla: una fila por barra, una columna
-    por período, «cantidad · %» en cada celda.
+    por período —del más viejo, a la izquierda, al actual—, «cantidad · %»
+    en cada celda.
+
+    Cada fila dice qué cuenta (`_NOMBRE_CRUCE`) y su nombre explica más en
+    el tooltip (`_AYUDA_CRUCE`). Cada columna lleva de cabecera su RANGO
+    de fechas, no el año (a pedido, 2026-10-02: «debe decir de qué fecha y
+    mes»), y la nota de los % en el tooltip. Tooltips del NAVEGADOR
+    (`enableBrowserTooltips`): los de AG Grid se dibujan dentro del iframe
+    del componente y se cortan contra su borde.
 
     CON EL LOOK DE LA TABLA DE DOCUMENTOS de arriba, a pedido (2026-10-02:
     «que tenga el mismo estilo que la tabla superior»): mismo AgGrid, tema
@@ -3654,24 +3715,30 @@ def _tabla_resumen(periodos):
     """
     filas = []
     for b in _BARRAS_CRUCE:
-        fila = {"Concepto": b}
-        for rot, k in periodos:
-            v = k[b]
-            p = _pct_de(v, k["Total"])
-            fila[rot] = f"{v:,}" if b == "Total" or p is None else f"{v:,} · {p}"
+        fila = {"Documentos": _NOMBRE_CRUCE[b], "_ayuda": _AYUDA_CRUCE[b]}
+        for p in periodos:
+            v = p["k"][b]
+            pc = _pct_de(v, p["k"]["Total"])
+            fila[p["rango"]] = (f"{v:,}" if b == "Total" or pc is None
+                                else f"{v:,} · {pc}")
         filas.append(fila)
     tv = pd.DataFrame(filas)
 
     gb = GridOptionsBuilder.from_dataframe(tv)
     gb.configure_default_column(resizable=True, sortable=False, filter=False,
                                 editable=False, suppressMovable=True)
-    gb.configure_column("Concepto", minWidth=140, flex=1)
-    for rot, _k in periodos:
-        gb.configure_column(rot, minWidth=120, flex=1,
-                            type=["rightAligned"])
+    gb.configure_column("Documentos", minWidth=190, flex=1.3,
+                        tooltipField="_ayuda",
+                        headerTooltip="Pasá el cursor por cada fila para "
+                                      "ver qué cuenta.")
+    gb.configure_column("_ayuda", hide=True)
+    for p in periodos:
+        gb.configure_column(p["rango"], minWidth=140, flex=1,
+                            type=["rightAligned"],
+                            headerTooltip=f"{p['rango']} · {nota}")
     gb.configure_grid_options(
         headerHeight=ALTO_HEADER_RANK, rowHeight=ALTO_FILA_RANK,
-        suppressCellFocus=True,
+        suppressCellFocus=True, enableBrowserTooltips=True,
         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"))
     AgGrid(
         tv, gridOptions=gb.build(),
@@ -3682,7 +3749,7 @@ def _tabla_resumen(periodos):
         # La key lleva los períodos: con otro año elegido son otras
         # columnas, y la grilla tiene que estrenarse (regla #556).
         key="sunat_t_resumen_" + "_".join(
-            re.sub(r"\W+", "", r) for r, _k in periodos),
+            re.sub(r"\W+", "", p["rot"]) for p in periodos),
     )
 
 
