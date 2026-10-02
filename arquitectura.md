@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-582 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+583 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -230,7 +230,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 
-**Layout y alturas** (83)
+**Layout y alturas** (84)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -315,6 +315,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#574** — La Carta costeada: el título con sus desplegables en un renglón, los porcionamientos de un…
 - **#578** — Compras › Proveedor son dos filas: [Ranking | Productos] arriba y [Documentos | Evolución |…
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
+- **#583** — Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la Evolución más ancha, el Ranking…
 
 **Plotly y figuras** (107)
 
@@ -872,7 +873,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (143)
+**Decisiones de diseño y UX** (144)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1017,6 +1018,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 - **#580** — Compras › «Compras por período»: la zona de abajo tiene TRES modos —Resumen Total, Resumen…
+- **#583** — Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la Evolución más ancha, el Ranking…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -46387,6 +46389,29 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+583. **Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la
+     Evolución más ancha, el Ranking más angosto.** 2026-10-02, a pedido:
+     «alarguemos horizontalmente la tarjeta izquierda un poco y acortemos
+     la derecha». La proporción sale de una constante propia,
+     `graficos/compras/_comun.py::COLUMNAS_DRILL_PRODUCTO`, y no de
+     `COLUMNAS_DRILL[::-1]`: moverla habría movido también Proveedor.
+     `COLUMNAS_DRILL_ESPEJO`, que era eso y sólo usaba Producto, se borró.
+     - **Medido a 1358×800**: la izquierda pasa de 465 a 539px (su tabla
+       de abajo, de 429 a 503) y la derecha de 749 a 675 (el Ranking, 639:
+       sus ocho columnas piden ~606 fijos). El alto no cambia —624 las
+       dos—, Familia | Subfamilia no parten renglones y ninguna celda se
+       corta con «…» (`scrollWidth` contra `clientWidth`, en Mes, Semana y
+       12 meses).
+     - **El costo está en pantallas angostas**: a 1100 de ancho la derecha
+       queda en 532 y el Ranking recorta a 85px el nombre del producto (va
+       entero en el tooltip), alguna variación de tres cifras («+144.1%») y
+       el rótulo «Subfamilia». Con el 1 : 1.6 de antes, a ese ancho la que
+       no entraba era la tabla de la izquierda (368px para seis columnas).
+       Si se reporta desde una pantalla así, lo que hay que mover es el
+       ancho fijo de esas columnas, no la proporción.
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46399,7 +46424,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#582**; la próxima toma el número siguiente.
+> última regla es la **#583**; la próxima toma el número siguiente.
 
 >
 

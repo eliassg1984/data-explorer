@@ -394,7 +394,8 @@ tiene las suyas desde el 2026-10-01, en el mismo sitio: `COLUMNAS_DRILL_TABLAS`
 (Ranking | Productos) y `COLUMNAS_DRILL_ABAJO` (Documentos | Evolución,
 derivada de la de arriba para que las dos filas compartan el eje; los
 proveedores de un producto se despliegan debajo de su fila). Reglas #578 y
-#579.
+#579. Y Producto la suya, `COLUMNAS_DRILL_PRODUCTO` (1 : 1.25, la
+Evolución a la izquierda), desde el 2026-10-02: regla #583.
 
 Nació de un bug con captura: el drill de Proveedor partía la fila de arriba
 con `[1.6, 1]` y la de abajo con `st.columns(2)`. Los dos números son

@@ -63,22 +63,22 @@ B mide 289px en una pantalla de 1280 y 535px en una de 1920. Cualquier cosa
 que reaccione al ancho de ESE panel se consulta por `@container`, no por
 `@media` — el viewport no distingue esos dos casos. Ver regla #317."""
 
-COLUMNAS_DRILL_ESPEJO = COLUMNAS_DRILL[::-1]
-"""`COLUMNAS_DRILL` al revés: el panel de apoyo a la IZQUIERDA y la tabla
-a la derecha.
+COLUMNAS_DRILL_PRODUCTO = [1, 1.25]
+"""La fila de Producto: la Evolución a la izquierda, Familia | Subfamilia
+y el Ranking a la derecha.
 
-Nació el 2026-09-12 con el drill de Producto, a pedido («el gráfico del
-producto, pongámoslo al lado izquierdo y las tablas al lado derecho»). Es
-la MISMA proporción espejada y no otra a propósito: la tabla se sigue
-llevando el 1.6 por la razón de arriba (nombres largos, ocho columnas en el
-ranking de productos), y la figura el 1, el ancho que ya tenía. Poner la
-figura en el 1.6 habría dejado a Familia | Subfamilia en ~200px cada una.
+Era `COLUMNAS_DRILL_ESPEJO` (1 : 1.6) hasta el 2026-10-02, cuando se pidió
+«alargar horizontalmente la tarjeta izquierda un poco y acortar la
+derecha» (regla #583): desde ese día la tarjeta de la Evolución lleva
+debajo una tabla de seis columnas (#582), y en 429px de panel cada columna
+iba medida al píxel. A 1358×800 la izquierda pasa de 465 a ~540 y la
+derecha de 749 a ~674, que todavía le alcanzan al Ranking: sus ocho
+columnas piden ~606 de ancho fijo y `fitGridWidth` estira el resto.
 
-Lo que se paga: el canal gris cae en el espejo del de Proveedor (38% en vez
-de 62%), así que las dos filas apiladas de Compras dejan de compartir eje y
-se leen en zigzag. Es la forma del pedido, no un descuido — y como es una
-constante derivada, si `COLUMNAS_DRILL` cambia, ésta cambia con ella. Ver
-regla #382."""
+Una constante PROPIA y no `COLUMNAS_DRILL[::-1]`: ésa movería también la
+fila de Proveedor. `COLUMNAS_DRILL_ESPEJO` —que era eso, nacida el
+2026-09-12 cuando el gráfico pasó a la IZQUIERDA (regla #382)— se borró
+el mismo día: Producto era su único usuario."""
 
 COLUMNAS_COTEJO = [1, 1]
 """Proporción de una fila que COMPARA dos fuentes, no que parte una tabla

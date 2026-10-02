@@ -66,7 +66,7 @@ from graficos.base import (
 )
 from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
-    ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL_ESPEJO,
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CATEGORIA_SEC, COLUMNAS_DRILL_PRODUCTO,
     CROMO_GRID_RANK, GAP_DRILL, moda_por_grupo, selector_fecha_tarjeta,
     # Las de la variación contra la barra anterior (#470): nacieron en
     # Semanal y viven en `_comun` desde que esta tarjeta pidió lo mismo.
@@ -1690,8 +1690,9 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     # pintaría de blanco con padding y sombra ENCIMA de las dos tarjetas.
     #
     # 2026-09-12, segunda vuelta del mismo día: el gráfico pasa a la
-    # IZQUIERDA y las tablas a la derecha, a pedido — `COLUMNAS_DRILL_ESPEJO`
-    # (ver `_comun.py` sobre por qué es la misma proporción al revés). Las
+    # IZQUIERDA y las tablas a la derecha, a pedido — con la proporción de
+    # Proveedor al revés, que el 2026-10-02 pasó a ser una propia
+    # (`_comun.py::COLUMNAS_DRILL_PRODUCTO`, regla #583). Las
     # tablas se siguen escribiendo PRIMERO en el código: el gráfico necesita
     # el ranking y el foco que ellas resuelven, y en Streamlit la posición la
     # decide la columna, no el orden del `with`. En esa misma vuelta la
@@ -1708,7 +1709,9 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
     # el gráfico que describe.
     _detalle = None
     with st.container(key="compras_prod_marco"):
-        col_detalle, col_tabla = st.columns(COLUMNAS_DRILL_ESPEJO,
+        # 1 : 1.25 desde el 2026-10-02 (regla #583); antes, el espejo de
+        # Proveedor. Ver `_comun.py::COLUMNAS_DRILL_PRODUCTO`.
+        col_detalle, col_tabla = st.columns(COLUMNAS_DRILL_PRODUCTO,
                                             gap=GAP_DRILL)
         with col_tabla:
             with st.container(border=True, key="compras_prod_card_ranking"):
