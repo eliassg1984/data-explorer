@@ -3765,6 +3765,31 @@ el modo del gráfico) porque son cuatro vistas excluyentes de la misma
 tarjeta, y dos filas de botones le costarían alto a la pantalla única."""
 
 
+@una_vez_por_corrida
+@st.fragment
+def _tarjeta_abajo(vis, doc, fila_cruce, d):
+    """La tarjeta de debajo de la tabla, en su PROPIO fragment.
+
+    Sin él, cualquier clic adentro —el selector Gráfico/Conversor, una
+    celda corregida del conversor, el ranking «Por proveedor»— re-corría
+    el drill entero: la consulta al SIRE, el cruce y la tabla de arriba,
+    que se re-monta y se queda «Actualizando…» unos segundos (reportado el
+    2026-10-02: «la tabla se actualiza a cada rato, cuando hago cualquier
+    clic, incluso abajo en los toggles del conversor»). Ahora esos clics
+    re-corren sólo esta tarjeta, y el `st.rerun(scope="fragment")` del
+    conversor también se queda acá adentro.
+
+    CERRADO SOBRE SUS ARGUMENTOS: Streamlit lo re-ejecuta con los de la
+    última corrida del drill, así que nada se lee del scope de afuera —
+    mismo trato que `vs_ano_pasado.py::_tarjeta_cascada` (regla #447). Un
+    clic en la TABLA sí re-corre el drill, que lo vuelve a llamar con la
+    fila nueva. Y `una_vez_por_corrida` porque se llama adentro de otro
+    fragment (`app.py::_render_contenido`, regla #456).
+    """
+    with st.container(border=True, key="sunat_card_graf"):
+        _panel_abajo(vis, doc, fila_cruce, d)
+
+
 def _panel_abajo(vis, doc, fila_cruce, d):
     """La tarjeta de debajo de la tabla: el gráfico O el conversor.
 
@@ -4413,5 +4438,4 @@ def renderizar_documentos_sunat(d, col_fecha):
     # (2026-10-02, a pedido: «que se alternen debajo de la tabla»). Antes
     # eran dos tarjetas apiladas, y el conversor sólo aparecía cuando el
     # documento faltaba en el sistema. Ver `_panel_abajo`.
-    with st.container(border=True, key="sunat_card_graf"):
-        _panel_abajo(estado["vis"], doc, fila_cruce, d)
+    _tarjeta_abajo(estado["vis"], doc, fila_cruce, d)

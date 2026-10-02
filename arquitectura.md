@@ -46569,6 +46569,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        emitió el proveedor») se quitó ahí: cortado a «lo …» en una laptop
        decía menos que nada. Medido a 1358 y a 1100 de ancho: un renglón
        de 12,6px en las dos mitades.
+     - **La tarjeta de abajo es su PROPIO fragment** (`_tarjeta_abajo`,
+       cerrado sobre sus argumentos como `_tarjeta_cascada`, #447, y con
+       `una_vez_por_corrida`, #456). Sin él, cualquier clic adentro —el
+       selector, una celda del conversor— re-corría el drill entero, y la
+       tabla de arriba se quedaba «Actualizando…» con cada uno (reportado
+       con captura el mismo día). Medido en el navegador con un
+       `MutationObserver` sobre `data-stale` y cuatro clics en el
+       selector: la tabla quedó marcada 19 veces antes y 0 después, y su
+       iframe no se re-monta. El `st.rerun(scope="fragment")` del
+       conversor ahora también se queda en la tarjeta. Ojo al medirlo: en
+       local el rerun dura menos que los 400ms del velo, así que «¿se ve
+       el velo?» da que no aunque el bug esté; lo que se cuenta es la
+       marca `data-stale`.
      - **La columna «XML» sale de UN listado de R2**
        (`sunat.claves_xml_en_r2`, `list_objects_v2` paginado sobre
        `sunat_originales/`, 5 minutos de caché), no de un `head_object` por
