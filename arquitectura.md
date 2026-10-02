@@ -46690,7 +46690,11 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - **Detalle y XML con techo propio** (`_ALTO_DETALLE_FICHA`, 340px): lo
        que sobra scrollea dentro de la tabla o del código, no la modal. Y el
        detalle escribe el símbolo de la moneda del PAPEL: las líneas del XML
-       no vienen en soles (#313) y la tabla decía «S/» fijo.
+       no vienen en soles (#313) y la tabla decía «S/» fijo. **Y la fila del
+       documento llega como una Series de pandas**: el primer push hacía
+       `(doc or {})` y reventaba la modal en Cloud al abrir un comprobante
+       con XML («The truth value of a Series is ambiguous»). El modo demo
+       no lo vio porque no tiene originales; lo vigila `test_sunat.py`.
      - **Todo el estilo vive en `estilos/_80_cards.py`** con clases
        `sunat-ficha-*` y `var(--…)`, no inline: así el apilado del teléfono
        sale de CSS y no hay un `#hex` suelto.
