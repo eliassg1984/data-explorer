@@ -3824,18 +3824,48 @@ def _grafico_resumen(periodos):
 
 def _tabla_resumen(periodos):
     """El «Resumen del cruce» como tabla: una fila por barra, una columna
-    por período, «cantidad · %» en cada celda. Un `st.dataframe` y no un
-    AgGrid: siete filas de sólo lectura no pagan 1,28 MB de grilla (#540)."""
+    por período, «cantidad · %» en cada celda.
+
+    CON EL LOOK DE LA TABLA DE DOCUMENTOS de arriba, a pedido (2026-10-02:
+    «que tenga el mismo estilo que la tabla superior»): mismo AgGrid, tema
+    `streamlit` + `CSS_RANKING_GRID`, filas de `ALTO_FILA_RANK` y cabecera
+    de `ALTO_HEADER_RANK` — el alto y el CSS viajan juntos (regla #404). La
+    primera versión fue un `st.dataframe`, que es otro idioma visual
+    (otra letra, otras líneas, cabecera gris). Paga una grilla más (#540),
+    pero sólo cuando se elige la vista de tabla.
+    """
     filas = []
     for b in _BARRAS_CRUCE:
-        fila = {"": b}
+        fila = {"Concepto": b}
         for rot, k in periodos:
             v = k[b]
             p = _pct_de(v, k["Total"])
             fila[rot] = f"{v:,}" if b == "Total" or p is None else f"{v:,} · {p}"
         filas.append(fila)
-    st.dataframe(pd.DataFrame(filas), hide_index=True,
-                 use_container_width=True, key="sunat_t_resumen")
+    tv = pd.DataFrame(filas)
+
+    gb = GridOptionsBuilder.from_dataframe(tv)
+    gb.configure_default_column(resizable=True, sortable=False, filter=False,
+                                editable=False, suppressMovable=True)
+    gb.configure_column("Concepto", minWidth=140, flex=1)
+    for rot, _k in periodos:
+        gb.configure_column(rot, minWidth=120, flex=1,
+                            type=["rightAligned"])
+    gb.configure_grid_options(
+        headerHeight=ALTO_HEADER_RANK, rowHeight=ALTO_FILA_RANK,
+        suppressCellFocus=True,
+        onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"))
+    AgGrid(
+        tv, gridOptions=gb.build(),
+        height=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
+                                 extra=CROMO_GRID_RANK, minimo=0),
+        theme="streamlit", custom_css=CSS_RANKING_GRID,
+        allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
+        # La key lleva los períodos: con otro año elegido son otras
+        # columnas, y la grilla tiene que estrenarse (regla #556).
+        key="sunat_t_resumen_" + "_".join(
+            re.sub(r"\W+", "", r) for r, _k in periodos),
+    )
 
 
 @una_vez_por_corrida
