@@ -100,8 +100,7 @@ from tema import (
 )
 from graficos.base import _compras_layout, _compras_truncar, una_vez_por_corrida
 from graficos.compras._comun import (
-    ALTO_FILA_RANK, ALTO_HEADER_RANK, COLUMNAS_COTEJO, CROMO_GRID_RANK,
-    GAP_DRILL,
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
 # REEXPORT, no import muerto: `_llave_documento_parquet` vivia definida aca
@@ -1615,80 +1614,116 @@ def _fila_de(df, fila_vista):
     return coincidencias.iloc[0] if not coincidencias.empty else None
 
 
+def _pastilla_ficha(texto, tono=""):
+    """Una pastilla de la cabecera de la ficha. `tono` es una clase extra
+    de `estilos/_80_cards.py` (`ambar`), vacío para la lavanda de siempre."""
+    return (f'<span class="sunat-ficha-pill {tono}">'
+            f'{html.escape(str(texto))}</span>')
+
+
+def _cabecera_ficha_html(doc):
+    """La cabecera de la ficha: qué es el documento y cuánto vale, en UN
+    renglón. A la izquierda el tipo y el estado en SUNAT (pastillas) y,
+    debajo, RUC y fechas; a la derecha el total en grande.
+
+    El número del documento y el proveedor NO van acá: los dice el título
+    de la modal, y repetirlos dos renglones más abajo se lee como relleno.
+    El total va en soles —como lo registra SUNAT— y, si el papel es en
+    otra moneda, debajo lo que imprimió el proveedor (regla #313).
+    """
+    pills = [_pastilla_ficha(sunat._val(doc, "tipo_nombre", "Comprobante"))]
+    estado = sunat._val(doc, "estado", "")
+    if estado:
+        pills.append(_pastilla_ficha(estado))
+    if str(doc.get("detraccion") or "").strip().upper() == "D":
+        pills.append(_pastilla_ficha("Con detracción", "ambar"))
+
+    meta = [f'RUC {html.escape(sunat._val(doc, "ruc_proveedor"))}',
+            f'Emitida {sunat._val(doc, "fecha_emision")}']
+    venc = sunat._val(doc, "fecha_vencimiento", "")
+    if venc:
+        meta.append(f"Vence {venc}")
+
+    papel = sunat._importe_del_papel(doc, "total")
+    sub = (f'<div class="sunat-ficha-total-sub">{papel} en el papel · '
+           f'{html.escape(sunat._moneda_con_tc(doc))}</div>' if papel else "")
+    return (
+        '<div class="sunat-ficha-cab">'
+        f'<div class="sunat-ficha-cab-izq">'
+        f'<div class="sunat-ficha-pills">{"".join(pills)}</div>'
+        f'<div class="sunat-ficha-meta">{" · ".join(meta)}</div></div>'
+        f'<div class="sunat-ficha-total">'
+        f'<div class="sunat-ficha-total-rot">Total</div>'
+        f'<div class="sunat-ficha-total-val">'
+        f'{sunat._importe(doc, "total")}</div>{sub}</div>'
+        '</div>')
+
+
 def _ficha_html(doc):
-    """La ficha del comprobante, pintada en pantalla.
+    """Los datos del comprobante, en la pestaña «Datos» de la ficha.
+
+    Salen de `sunat.campos_ficha()`, la misma fuente que el PDF que se
+    descarga (`sunat.ficha_pdf`), así que pantalla y papel no pueden
+    divergir. DOS columnas y no una lista: a la izquierda quién lo emitió
+    y qué documento es, a la derecha los importes con el total en una
+    banda al pie, como en un comprobante impreso. Apilados en una sola
+    lista eran catorce renglones y la modal no entraba en una pantalla
+    (2026-10-02, a pedido: «que entre en una pantalla y sea más
+    estilizada»). En el teléfono las columnas se apilan solas
+    (`estilos/_80_cards.py`).
 
     POR QUÉ NO ES UN PDF EMBEBIDO (probado y descartado el 2026-08-19):
     Chrome no renderiza un `data:application/pdf` dentro de un iframe con
-    `sandbox`, y Streamlit monta TODOS sus iframes con sandbox. Medido en
-    el navegador: el frame carga con el alto correcto y `contentDocument`
-    queda en `null` — o sea, un rectángulo en blanco y ningún error. No es
-    algo que se arregle con CSS ni cambiando de `components.html` a
-    `st.iframe`: la migración se hizo el 2026-08-24 (regla #204) y el
-    `sandbox` no se movió, porque lo pone el frontend de Streamlit y no
-    depende de qué función de Python emitió el iframe.
-
-    Lo que se ve acá es HTML, y sale mejor que el PDF embebido: texto
-    nítido en cualquier zoom, hereda la paleta de la app y funciona igual
-    en el teléfono. El PDF sigue existiendo para descargar (`ficha_pdf`),
-    y ambos salen de `sunat.campos_ficha()`, así que no pueden divergir.
-
-    Un beneficio lateral: al no haber iframe, este panel no cae en la regla
-    de `estilos/_00_base.py` que oculta todos los iframes por defecto.
+    `sandbox`, y Streamlit monta TODOS sus iframes con sandbox. El PDF del
+    proveedor se muestra como IMAGEN en la pestaña «Comprobante».
     """
-    # Un GRUPO por bloque, y los bloques en columnas. Cuando la ficha vivia
-    # en la columna angosta de la derecha, apilar todo en una lista era lo
-    # correcto; apilada bajo la tabla, a todo el ancho, esa misma lista
-    # queda larguisima y con la etiqueta y el valor separados por medio
-    # metro de vacio (son filas `space-between`). El grid reparte los
-    # grupos en cuantas columnas entren, sin numero fijo: `auto-fit` +
-    # `minmax(260px, 1fr)` da 1 columna en el telefono y 3-4 en desktop.
-    # `break-inside: avoid` no hace falta porque cada grupo es un item del
-    # grid, no texto fluyendo en `column-count`.
-    filas = []
-    for titulo, campos in sunat.campos_ficha(doc):
-        grupo = [
-            f'<div style="font-size:10px;font-weight:700;color:{ACENTO};'
-            f'text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;'
-            f'padding-bottom:3px;border-bottom:1px solid {GRIS_BORDE};">'
-            f'{titulo}</div>'
-        ]
-        for etiqueta, valor in campos:
-            grupo.append(
-                f'<div style="display:flex;justify-content:space-between;'
-                f'gap:10px;padding:3px 0;font-size:12px;">'
-                f'<span style="color:{GRIS_TEXTO};">{etiqueta}</span>'
-                f'<span style="color:{TEXTO_PRINCIPAL};font-weight:500;'
-                f'text-align:right;">{valor}</span></div>'
-            )
-        filas.append(f'<div>{"".join(grupo)}</div>')
+    secciones = dict(sunat.campos_ficha(doc))
 
-    st.markdown(
-        f'<div style="padding:2px 2px 8px;">'
-        f'<div style="display:grid;gap:14px 28px;'
-        f'grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">'
-        f'{"".join(filas)}</div>'
-        f'<div style="display:flex;justify-content:space-between;'
-        f'align-items:center;background:{LAVANDA_FONDO};border-radius:8px;'
-        f'padding:9px 12px;margin-top:14px;">'
-        f'<span style="font-size:12px;font-weight:700;color:{ACENTO_TEXTO};">'
-        f'TOTAL</span>'
-        f'<span style="font-size:16px;font-weight:700;color:{ACENTO_TEXTO};">'
-        f'{sunat._importe(doc, "total")}</span></div>'
-        f'<div style="font-size:10px;color:{GRIS_TEXTO};margin-top:8px;'
-        f'line-height:1.45;">CAR SUNAT: {sunat._val(doc, "car")}</div></div>',
-        unsafe_allow_html=True,
-    )
+    def _grupo(titulo, campos):
+        filas = "".join(
+            f'<div class="sunat-ficha-fila"><span>{html.escape(et)}</span>'
+            f'<span>{html.escape(str(v))}</span></div>'
+            for et, v in campos)
+        return (f'<div class="sunat-ficha-grupo">'
+                f'<div class="sunat-ficha-grupo-tit">{titulo}</div>'
+                f'{filas}</div>')
+
+    importes = list(secciones.get("Importes", ()))
+    # «Total» sale de la lista y va a la banda; «Total en USD» (sólo en
+    # moneda extranjera) se queda como renglón, debajo de la banda.
+    total = next((v for et, v in importes if et == "Total"), "—")
+    resto = [(et, v) for et, v in importes
+             if et != "Total" and not et.startswith("Total en")]
+    papel = [(et, v) for et, v in importes if et.startswith("Total en")]
+
+    izq = (_grupo("Emisor", secciones.get("Emisor", ()))
+           + _grupo("Documento", secciones.get("Documento", ())))
+    der = (_grupo("Importes", resto)
+           + f'<div class="sunat-ficha-banda"><span>Total</span>'
+             f'<span>{total}</span></div>'
+           + "".join(f'<div class="sunat-ficha-fila"><span>{et}</span>'
+                     f'<span>{v}</span></div>' for et, v in papel)
+           + f'<div class="sunat-ficha-car">CAR SUNAT · '
+             f'{html.escape(sunat._val(doc, "car"))}</div>')
+    st.markdown(f'<div class="sunat-ficha-datos"><div>{izq}</div>'
+                f'<div>{der}</div></div>', unsafe_allow_html=True)
 
 
-def _tabla_detalle(lineas):
-    """Las líneas del XML, como tabla. Es lo que el registro NO tiene."""
+def _tabla_detalle(lineas, doc=None):
+    """Las líneas del XML, como tabla. Es lo que el registro NO tiene.
+
+    Los importes del XML están en la moneda del PAPEL, no en soles como
+    los del registro (regla #313): el símbolo sale de `doc`. Y el alto se
+    acota a `_ALTO_DETALLE_FICHA`, para que la modal entre en una pantalla
+    y lo que sobre scrollee adentro de la tabla."""
     if not lineas:
         st.caption("El XML no trae líneas de detalle legibles.")
         return
     tv = pd.DataFrame(lineas)
+    sim = sunat.simbolo_moneda((doc or {}).get("moneda")).replace("%", "%%")
     st.dataframe(
         tv, use_container_width=True, hide_index=True,
+        height=min(_ALTO_DETALLE_FICHA, 35 * (len(tv) + 1) + 3),
         column_config={
             "codigo": st.column_config.TextColumn("Código", width="small"),
             "descripcion": st.column_config.TextColumn("Descripción",
@@ -1697,12 +1732,11 @@ def _tabla_detalle(lineas):
                                                       width="small"),
             "unidad": st.column_config.TextColumn("Unidad", width="small"),
             "precio_unitario": st.column_config.NumberColumn(
-                "P. unitario", format="S/ %.2f"),
+                "P. unitario", format=f"{sim} %.2f"),
             "importe": st.column_config.NumberColumn("Importe",
-                                                     format="S/ %.2f"),
+                                                     format=f"{sim} %.2f"),
         },
     )
-
 
 _COLS_LINEA_PARQUET = ["COD_PRODUCTO", "NOMBRE_PRODUCTO", "CANTIDAD_COMPRA",
                        "UNIDAD_DE_INGRESO", "PRECIO_UNIT", "VALOR_COMPRA",
@@ -3142,16 +3176,6 @@ def _detalle_sistema(doc, lineas_xml, d, xml_original=None):
         st.rerun(scope="fragment")
 
 
-def _fmt_imp(valor, moneda="PEN"):
-    """Un importe con el símbolo de SU moneda, o `—`. Gemelo en Python del
-    formateo que `_JS_IMPORTE` hace en la grilla: los dos tienen que
-    escribir igual el mismo número, o la ficha y la tabla se contradicen."""
-    v = _num(valor)
-    if v is None:
-        return "—"
-    return f"{sunat.simbolo_moneda(moneda)} {v:,.2f}"
-
-
 def _fila_cruce_de(df_cruce, doc):
     """La fila del cruce que corresponde a `doc`, o `None`.
 
@@ -3170,180 +3194,26 @@ def _fila_cruce_de(df_cruce, doc):
     return None if coincidencias.empty else coincidencias.iloc[0]
 
 
-def _filas_cotejo(doc, fila):
-    """Las filas del cotejo, en orden: `(etiqueta, valor SUNAT, valor
-    sistema o None, diferencia o None)`.
-
-    FUENTE ÚNICA de las dos tarjetas que comparan el documento
-    (`_card_sunat` y `_card_sistema`). Que las dos recorran ESTA lista es
-    lo que las mantiene alineadas fila a fila — la misma razón por la que
-    `_ALTO_FILA_CONVERSOR` es una constante compartida y no dos literales:
-    dos paneles que se leen uno contra otro no pueden decidir su contenido
-    por separado.
-
-    TRES CLASES DE FILA, y la diferencia importa:
-      · comparables (base, IGV, total) — las tres traen Δ. «Base total»
-        es gravada + no gravada, que es lo que compara
-        `cruzar_con_parquet`; el desglose son las dos filas de arriba.
-      · de identidad que el sistema también guarda (RUC, número en el ERP,
-        fecha) — los dos lados, sin Δ: no son números.
-      · sólo de SUNAT (tipo, período, estado, moneda, vencimiento,
-        detracción, base gravada, no gravado — y el total en la moneda del
-        papel cuando no es PEN) — el sistema no las tiene y su celda va
-        con una raya, no en cero. Un cero ahí se leería como un dato. Que
-        sean OCHO de catorce no es ruido: es la medida de cuánto menos
-        guarda el ERP que el registro de SUNAT.
-
-    LOS IMPORTES VAN EN SOLES, los de las dos fuentes: el registro del
-    SIRE viene así y el lado del sistema se convierte al agrupar (ver
-    `_parquet_agrupado_por_documento`). Ver la regla #313.
-
-    «Base gravada» y «No gravado» van separadas y sin Δ, y además está
-    «Base» que es la suma: sólo la gravada genera crédito fiscal, pero es
-    la suma la que `cruzar_con_parquet` compara contra el sistema (para
-    que una compra exonerada no parezca descuadre — ver su docstring).
-    """
-    mon = str(doc.get("moneda") or "PEN")
-    tiene = fila is not None
-
-    def _fecha(v):
-        f = pd.to_datetime(v, errors="coerce")
-        return None if pd.isna(f) else f"{f:%d/%m/%Y}"
-
-    filas = [
-        ("RUC", str(doc.get("ruc_proveedor") or "—"),
-         (str(fila.get("ruc_sistema") or "") or None) if tiene else None, None),
-        ("Documento en el ERP", str(doc.get("documento") or "—"),
-         (str(fila.get("documento_sistema") or "") or None) if tiene else None,
-         None),
-        ("Fecha de emisión", _fecha(doc.get("fecha_emision")) or "—",
-         _fecha(fila.get("fecha_sistema")) if tiene else None, None),
-        ("Tipo de comprobante", str(doc.get("tipo_nombre") or "—"), None, None),
-        ("Período tributario", str(doc.get("periodo") or "—"), None, None),
-        ("Estado en SUNAT", str(doc.get("estado") or "—"), None, None),
-        ("Moneda", sunat._moneda_con_tc(doc), None, None),
-        ("Vencimiento", _fecha(doc.get("fecha_vencimiento")) or "—", None, None),
-        ("Detracción",
-         "Sí" if str(doc.get("detraccion") or "").strip().upper() == "D"
-         else "No", None, None),
-        # En SOLES, como los registra SUNAT y como quedan las dos fuentes
-        # del cruce. La moneda del papel se dice en la fila «Moneda» y,
-        # si no es PEN, con el total del comprobante al final. Regla #313.
-        ("Base gravada", _fmt_imp(doc.get("base_imponible")), None, None),
-        ("No gravado", _fmt_imp(doc.get("no_gravado")), None, None),
-    ]
-
-    # Los tres comparables. El valor de SUNAT sale del CRUCE cuando hay
-    # fila (`base_sunat` es base+no gravado, no `base_imponible`) y del
-    # propio comprobante cuando no la hay.
-    _desde_doc = {"base_sunat": "base_imponible", "igv_sunat": "igv",
-                  "total_sunat": "total"}
-    for etiqueta, campo_u, campo_s in (
-            ("Base total", "base_sunat", "base_sistema"),
-            ("IGV", "igv_sunat", "igv_sistema"),
-            ("Total", "total_sunat", "total_sistema")):
-        u = (_num(fila.get(campo_u)) if tiene
-             else _num(doc.get(_desde_doc[campo_u])))
-        s = _num(fila.get(campo_s)) if tiene else None
-        dif = None if (u is None or s is None) else round(s - u, 2)
-        filas.append((etiqueta, _fmt_imp(u),
-                      None if s is None else _fmt_imp(s), dif))
-
-    # El total como lo dice el PAPEL, sólo en moneda extranjera: las once
-    # filas de arriba están en soles y sin esto no habría dónde leer el
-    # número que el proveedor imprimió.
-    _papel = sunat.en_moneda_del_papel(doc, _num(doc.get("total")))
-    if _papel is not None:
-        filas.append((f"Total en {mon}",
-                      f"{sunat.simbolo_moneda(mon)} {_papel:,.2f}", None, None))
-    return filas
+_ALTO_DETALLE_FICHA = 340
+"""Techo, en píxeles, de lo que puede crecer una pestaña de la ficha
+(el detalle de líneas y el XML): con él la modal entra en una pantalla de
+laptop (1366×768) y lo que sobra scrollea adentro de esa tabla, no la
+modal entera. Gemelo del `max-height` de la imagen del comprobante en
+`estilos/_80_cards.py`."""
 
 
-_TIRON_MARKDOWN = 16
-"""Los píxeles que `stMarkdownContainer` se come con su
-`margin-bottom: -16px` (regla #162). Los suma `_card_sistema` al alto de
-su pastilla para que las dos grillas del cotejo arranquen a la misma
-altura."""
+def _ficha_sunat(doc):
+    """El comprobante tal como lo tiene SUNAT: la cabecera y las pestañas.
 
+    Hasta el 2026-10-02 la ficha eran DOS tarjetas lado a lado —esta y la
+    del sistema, con las mismas catorce filas y una columna Δ—, y se quitó
+    la del sistema a pedido: «que solo aparezca la del comprobante SUNAT,
+    que entre en una pantalla y sea más estilizada». Lo que el sistema
+    tiene cargado lo siguen diciendo la columna «Está vs Sistema» de la
+    tabla (con el monto del otro lado en la fila elegida) y el conversor.
 
-_ALTO_TABS = 40
-"""Alto de la barra de `st.tabs`, medido en el navegador. Lo necesita la
-tarjeta del sistema para reservar el mismo sitio con su pastilla de
-estado: es lo único que separa el tope de las dos grillas, y de eso
-depende que las filas se lean una contra otra. Si Streamlit cambia el alto
-de sus tabs, esto se nota como un desfase parejo en las catorce filas —
-`herramientas/auditar_layout.js` lo mide en diez segundos."""
-
-
-_ANCHO_ETIQUETA_COTEJO = 132
-"""Ancho de la columna de etiquetas del cotejo, en píxeles. Es fijo y
-compartido por las dos tarjetas a propósito: ver `_grilla_campos`."""
-
-
-_ALTO_FILA_COTEJO = 24
-"""Alto de una fila del cotejo, en píxeles, y la razón por la que es una
-constante: las DOS tarjetas la usan como `line-height`, y de eso depende
-que la fila «Total» de la izquierda caiga a la misma altura que la de la
-derecha. Misma familia que `_ALTO_FILA_CONVERSOR` — dos paneles que se
-comparan a simple vista no pueden medir distinto."""
-
-
-def _grilla_campos(filas, lado):
-    """Pinta las filas del cotejo en una de las dos tarjetas.
-
-    `lado` es `"sunat"` o `"sistema"`, y es lo único que cambia: la
-    etiqueta se repite en las DOS a propósito. Podría ir sólo en la
-    izquierda y ahorrar ancho —las filas están alineadas—, pero en móvil
-    las columnas se apilan y la tarjeta de la derecha quedaría como una
-    lista de números sin nombre. Una tarjeta tiene que poder leerse sola.
-    """
-    celdas = []
-    for etiqueta, val_u, val_s, dif in filas:
-        marcada = dif is not None and abs(dif) > _TOLERANCIA_CENTAVOS
-        if lado == "sunat":
-            celdas.append(
-                f'<div style="color:{GRIS_TEXTO};">{etiqueta}</div>'
-                f'<div style="color:{TEXTO_PRINCIPAL};text-align:right;">'
-                f'{val_u}</div>')
-            continue
-        color = ADVERTENCIA_TEXTO if marcada else TEXTO_PRINCIPAL
-        peso = "600" if marcada else "400"
-        # Una raya y no vacío: "el sistema no guarda este campo" es un
-        # dato, y una celda en blanco se lee como "no lo cargaron".
-        valor = val_s if val_s is not None else "—"
-        _d = "" if dif is None else (
-            "=" if abs(dif) <= _TOLERANCIA_CENTAVOS else f"{dif:+,.2f}")
-        celdas.append(
-            f'<div style="color:{GRIS_TEXTO};">{etiqueta}</div>'
-            f'<div style="color:{color};font-weight:{peso};text-align:right;">'
-            f'{valor}</div>'
-            f'<div style="color:{color};font-weight:{peso};text-align:right;'
-            f'font-size:11px;">{_d}</div>')
-
-    # La columna de etiquetas mide lo mismo en las dos, y por eso es fija
-    # y no `1fr`: la del sistema tiene una columna más (Δ), así que con
-    # `1fr` le quedaba 80px menos y una etiqueta larga envolvía a dos
-    # líneas SÓLO de ese lado. Medido: «Base (grav. + no grav.)» ocupaba
-    # 48px contra 24, y las dos últimas filas quedaban corridas 8px.
-    _e = f"{_ANCHO_ETIQUETA_COTEJO}px"
-    cols = f"{_e} auto" if lado == "sunat" else f"{_e} auto 58px"
-    st.markdown(
-        f'<div style="display:grid;grid-template-columns:{cols};'
-        f'gap:0 12px;font-size:12.5px;font-variant-numeric:tabular-nums;'
-        f'line-height:{_ALTO_FILA_COTEJO}px;">' + "".join(celdas) + '</div>',
-        unsafe_allow_html=True)
-
-
-def _card_sunat(doc, fila):
-    """Tarjeta IZQUIERDA: el comprobante tal como lo tiene SUNAT.
-
-    Lleva las pestañas porque los tres artefactos que cuelgan de ellas
-    —el PDF, el detalle de líneas y el XML— son del lado del proveedor:
-    no hay nada equivalente del lado del sistema.
-
-      · **Datos** — los campos del SIRE, en el mismo orden que la tarjeta
-        de al lado (`_filas_cotejo`).
-      · **Comprobante** — el PDF, renderizado.
+      · **Datos** — los campos del SIRE (`_ficha_html`) y las descargas.
+      · **Comprobante** — el PDF del proveedor, renderizado.
       · **Detalle (n)** — las líneas del XML, completas.
       · **XML** — el archivo crudo.
 
@@ -3354,7 +3224,7 @@ def _card_sunat(doc, fila):
     «Datos» está SIEMPRE: sale del registro del SIRE, que no depende de
     ningún sync.
     """
-    _titulo_panel("Comprobante SUNAT", "el original del proveedor")
+    st.markdown(_cabecera_ficha_html(doc), unsafe_allow_html=True)
 
     pdf_original, xml_original = sunat.originales(doc)
     lineas = sunat.lineas_xml(xml_original) if xml_original else []
@@ -3367,100 +3237,43 @@ def _card_sunat(doc, fila):
     if xml_original:
         nombres.append("🧾 XML")
     if not (pdf_original or xml_original):
-        # La ETIQUETA cambia cuando el último pedido falló. No es adorno:
-        # el aviso vive DENTRO de esta pestaña, así que con el rótulo de
-        # siempre («⬇ Original», que invita a bajar algo) el usuario se
+        # La ETIQUETA cambia cuando el último pedido falló: con el rótulo
+        # de siempre («⬇ Original», que invita a bajar algo) el usuario se
         # queda en «Datos» esperando un archivo que ya se sabe que no va a
-        # llegar. Medido el 2026-09-04 con FI01-20701451: el pedido se
-        # atendió en 25 segundos y falló, y la pantalla no lo decía en
-        # ningún lado visible sin abrir la pestaña. Ver regla #309.
+        # llegar. Ver regla #309.
         nombres.append("⚠ Original" if sunat.fallo_solicitud(doc)
                        else "⬇ Original")
 
     for nombre, tab in zip(nombres, st.tabs(nombres)):
         with tab:
             if nombre == "Datos":
-                _grilla_campos(_filas_cotejo(doc, fila), "sunat")
+                _ficha_html(doc)
                 _descargas_ficha(doc, pdf_original, xml_original)
             elif nombre.startswith("📄"):
                 # EL PDF SE MUESTRA COMO IMAGEN, no embebido: Chrome no
                 # renderiza un `data:application/pdf` dentro de un iframe
                 # con `sandbox` y Streamlit monta todos sus iframes así.
-                # Renderizarlo del lado del servidor además funciona igual
-                # en el teléfono, donde un visor embebido es incómodo.
+                # La imagen la acota al alto de la pantalla
+                # `.st-key-sunat_ficha_pdf` en `estilos/_80_cards.py`: a
+                # todo el ancho, una hoja A4 medía ~1000px y la modal
+                # scrolleaba para ver el total.
                 with st.spinner("Preparando el comprobante…"):
                     paginas = sunat.paginas_pdf(pdf_original)
                 if not paginas:
                     st.warning("No se pudo mostrar el PDF en pantalla. "
                                "Se puede descargar igual.")
-                for i, png in enumerate(paginas, 1):
-                    st.image(png, use_container_width=True)
-                    if len(paginas) > 1:
-                        st.caption(f"Página {i} de {len(paginas)}")
+                with st.container(key="sunat_ficha_pdf"):
+                    for i, png in enumerate(paginas, 1):
+                        st.image(png)
+                        if len(paginas) > 1:
+                            st.caption(f"Página {i} de {len(paginas)}")
             elif nombre.startswith("📋"):
-                _tabla_detalle(lineas)
+                _tabla_detalle(lineas, doc)
             elif nombre.startswith("🧾"):
                 st.code(xml_original.decode("utf-8", errors="replace"),
-                        language="xml")
+                        language="xml", height=_ALTO_DETALLE_FICHA)
             else:
                 _pedir_original(doc)
-
-
-_COLOR_ESTADO_CRUCE = {
-    "Coincide": GRIS_TEXTO,
-    "Diferencia": ADVERTENCIA_TEXTO,
-    "Solo SUNAT": ADVERTENCIA_TEXTO,
-    "Solo sistema": ERROR,
-}
-"""Color de la pastilla de estado de `_card_sistema`. Misma convención que
-la columna «Está vs Sistema» de la tabla: ámbar = revisar, rojo = plata
-cargada sin comprobante que la respalde, gris = lo normal, que no compite
-por atención."""
-
-
-def _card_sistema(doc, fila):
-    """Tarjeta DERECHA: lo que el sistema tiene cargado de ese documento.
-
-    Recorre las MISMAS filas que la de la izquierda (`_filas_cotejo`), en
-    el mismo orden y con el mismo alto de línea, así se leen una contra
-    otra sin tener que buscar. Suma una columna Δ, que responde la
-    pregunta real —«¿cuánto?»— en vez de dejar los dos números para que
-    los reste el usuario.
-
-    La pastilla de estado ocupa el sitio que en la tarjeta de al lado
-    ocupan las pestañas. No es un relleno: es el veredicto del cruce, y
-    ponerlo acá arriba es lo que hace que las catorce filas de abajo
-    arranquen a la misma altura en las dos tarjetas.
-    """
-    _titulo_panel("Sistema", "lo que está cargado")
-
-    estado = str(fila.get("estado") or "") if fila is not None else "Solo SUNAT"
-    color = _COLOR_ESTADO_CRUCE.get(estado, GRIS_TEXTO)
-    # `height` y no `min-height`, y con ESE número: es el alto exacto de la
-    # barra de pestañas de la tarjeta de al lado (40px, medido en el
-    # navegador) MÁS los 16 que le resta el `margin-bottom: -16px` que
-    # Streamlit le pone al `stMarkdownContainer` (regla #162). Ese tirón
-    # vive en el contenedor PADRE, así que un `margin-bottom:0` inline no
-    # lo alcanza — se comprobó: la propiedad quedaba en 0 en el div y el
-    # desfase seguía. Compensarlo en el alto es local y no depende de
-    # acertarle a un selector.
-    # Sin esto, las dos grillas arrancaban con 22px de
-    # desfase — casi una fila entera de 24px — y las catorce filas se
-    # leían corridas una respecto de la otra, que es justo lo que dos
-    # tarjetas que comparan no pueden hacer.
-    st.markdown(
-        f'<div style="display:flex;align-items:center;'
-        f'height:{_ALTO_TABS + _TIRON_MARKDOWN}px;">'
-        f'<span style="background:{LAVANDA_FONDO};color:{color};'
-        f'font-size:11px;font-weight:600;padding:3px 10px;border-radius:7px;">'
-        f'{estado or "—"}</span></div>', unsafe_allow_html=True)
-
-    _grilla_campos(_filas_cotejo(doc, fila), "sistema")
-
-    if fila is None or estado == "Solo SUNAT":
-        st.caption("SUNAT lo tiene, tu sistema todavía no. El «Conversor "
-                   "SUNAT-Sistema», en la tarjeta de debajo de la tabla, "
-                   "mapea sus líneas contra el maestro.")
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -4018,17 +3831,20 @@ def _cerrar_ficha():
     st.session_state[_K_FICHA_ABIERTA] = None
 
 
-def _ficha_modal(doc, fila_cruce):
-    """La ficha del documento —la tarjeta SUNAT y la del sistema— en una
-    VENTANA MODAL (`st.dialog`): centrada, con la página oscurecida detrás
-    y una ✕ que la cierra; también se cierra con Esc o con un clic afuera.
+def _ficha_modal(doc):
+    """La ficha del documento —el comprobante SUNAT— en una VENTANA MODAL
+    (`st.dialog`): centrada, con la página oscurecida detrás y una ✕ que la
+    cierra; también se cierra con Esc o con un clic afuera.
 
     Así se pidió el 2026-10-02, con la captura de otra webapp (el «Detalle
     de comprobante» de un facturador). La primera versión de ese mismo día
     era una capa pegada encima de la tarjeta de la tabla: se leía como si
     la tabla se hubiera ido, y medía lo que la tabla (333px), así que la
-    ficha scrolleaba casi entera. La modal mide lo que su contenido, hasta
-    el alto de la pantalla.
+    ficha scrolleaba casi entera. Y ese mismo día, más tarde, perdió la
+    tarjeta del sistema que llevaba al costado (ver `_ficha_sunat`): con
+    una sola cosa adentro, la modal pasa de `large` a `medium` (750px), el
+    ancho de un comprobante, y la modal misma es la superficie — sin una
+    tarjeta con borde adentro, que se leía como una caja dentro de otra.
 
     CUALQUIER CIERRE pasa por `on_dismiss=_cerrar_ficha`: sin eso la
     siguiente corrida —un clic en el gráfico de abajo, por ejemplo— la
@@ -4045,18 +3861,10 @@ def _ficha_modal(doc, fila_cruce):
         _compras_truncar(str(doc.get("proveedor") or ""), 48)) if t)
 
     def _contenido():
-        # Se parte con `COLUMNAS_COTEJO` (1/1) y no con `COLUMNAS_DRILL`:
-        # los dos lados son pares y cualquier asimetría se leería como que
-        # uno importa más.
-        c_sunat, c_sistema = st.columns(COLUMNAS_COTEJO, gap=GAP_DRILL)
-        with c_sunat:
-            with st.container(border=True, key="sunat_card_doc"):
-                _card_sunat(doc, fila_cruce)
-        with c_sistema:
-            with st.container(border=True, key="sunat_card_sis"):
-                _card_sistema(doc, fila_cruce)
+        with st.container(key="sunat_ficha"):
+            _ficha_sunat(doc)
 
-    una_vez_por_corrida(st.dialog(titulo, width="large",
+    una_vez_por_corrida(st.dialog(titulo, width="medium",
                                   on_dismiss=_cerrar_ficha)(_contenido))()
 
 
@@ -4104,8 +3912,8 @@ def _pedir_original(doc):
         _n = f"{n_emisor:,}".replace(",", ".")
         st.info(f"Con este proveedor el portal de SUNAT nunca entregó el "
                 f"original: de sus {_n} comprobantes del registro, cero se "
-                f"pudieron bajar. El cotejo de al lado sale del SIRE y no "
-                f"depende de esto.", icon="ℹ️")
+                f"pudieron bajar. Los datos de la pestaña «Datos» salen del "
+                f"SIRE y no dependen de esto.", icon="ℹ️")
         etiqueta = "↻ Intentar igual"
 
     if st.button(etiqueta, use_container_width=True,
@@ -4119,7 +3927,7 @@ def _pedir_original(doc):
             st.error("No se pudo dejar el pedido. ¿Están las credenciales "
                      "de R2 configuradas?")
     if not fallo and not n_emisor:
-        st.caption("Todavía no sincronizado. El cotejo de al lado sale del "
+        st.caption("Todavía no sincronizado. La pestaña «Datos» sale del "
                    "registro del SIRE y está disponible igual.")
 
 
@@ -4580,7 +4388,7 @@ def renderizar_documentos_sunat(d, col_fecha):
     # estado, y sin la selección no habría documento — ni para la ficha ni
     # para el gráfico y el conversor de abajo. Regla #586.
     if _ficha_abierta(doc):
-        _ficha_modal(doc, fila_cruce)
+        _ficha_modal(doc)
 
     # Debajo de la tabla, UNA tarjeta que alterna el gráfico y el conversor
     # (2026-10-02, a pedido: «que se alternen debajo de la tabla»). Antes

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-586 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+587 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (196)
 
@@ -764,7 +764,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 
-**SUNAT y SIRE** (46)
+**SUNAT y SIRE** (47)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -812,6 +812,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 - **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
 - **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
+- **#587** — La ficha de Documentos SUNAT es SÓLO el comprobante SUNAT, y entra en una pantalla
 
 **Fechas, rangos y cortes** (12)
 
@@ -46545,7 +46546,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        renderizarse pierde su estado (CLAUDE.md), y sin la selección del
        AgGrid no hay documento — ni para la ficha ni para el gráfico y el
        conversor de abajo.
-     - **Las tarjetas de adentro** son las de siempre (`sunat_card_doc` /
+     - **Las tarjetas de adentro** (hasta la #587, que dejó sólo el
+       comprobante SUNAT y sin tarjeta) eran las de siempre (`sunat_card_doc` /
        `_sis`, por el piso de alto de #145) y en la modal sueltan el techo
        con scroll de su familia (`[data-testid="stDialog"]` en
        `_80_cards.py`): la que scrollea es la modal, y dos barras anidadas
@@ -46650,6 +46652,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+587. **La ficha de Documentos SUNAT es SÓLO el comprobante SUNAT, y entra
+     en una pantalla.** 2026-10-02, a pedido, el mismo día que nació la
+     modal (#586): «que ya no aparezca [la del sistema de almacén] y solo
+     aparezca la del comprobante SUNAT, pero que entre en una pantalla y sea
+     más estilizada». Hasta ahí la modal (`large`) llevaba dos tarjetas lado
+     a lado —SUNAT y Sistema, las mismas catorce filas con una columna Δ— y
+     una lista de catorce renglones que obligaba a scrollear.
+
+     - **Se fue la tarjeta del sistema** (`_card_sistema`) y con ella todo
+       lo que sólo existía para alinearla con la de SUNAT: `_filas_cotejo`,
+       `_grilla_campos`, `_TIRON_MARKDOWN`, `_ALTO_TABS`, `_fmt_imp` y
+       `_comun.COLUMNAS_COTEJO`. Lo que el sistema tiene cargado lo siguen
+       diciendo la columna «Está vs Sistema» de la tabla y el conversor.
+     - **La modal pasa a `width="medium"` (750px)**, el ancho de un
+       comprobante, y **la modal ES la superficie**: adentro va un
+       `st.container(key="sunat_ficha")` sin borde. Una tarjeta con borde
+       dentro de una modal se leía como una caja dentro de otra.
+     - **Cabecera con el total** (`_cabecera_ficha_html`): pastillas de tipo
+       y estado en SUNAT (ámbar si lleva detracción), RUC y fechas debajo, y
+       el total en grande a la derecha —en soles y, si el papel es en otra
+       moneda, lo que imprimió el proveedor (#313)—. El número y el
+       proveedor NO se repiten: los dice el título de la modal.
+     - **«Datos» en dos columnas** (`_ficha_html`, que estaba muerta y se
+       rehízo): Emisor + Documento | Importes con el total en una banda
+       lavanda. Sale de `sunat.campos_ficha()`, la misma fuente del PDF
+       descargable, así que pantalla y papel no divergen. Medido a
+       1366×768 en el modo demo: la modal mide 608px, sin scroll. Con
+       `auto-fit` + `minmax(260px, 1fr)` se apila sola en el teléfono.
+     - **El comprobante (imagen del PDF) entra ENTERO**:
+       `.st-key-sunat_ficha_pdf img` lleva `max-height: calc(100dvh -
+       300px)` y se centra. Sin techo, a 750px de ancho una hoja A4 medía
+       ~1000 de alto. Los 300 son 48 de margen de la modal + 202 de título,
+       cabecera y pestañas + el padding de abajo, medidos; si se agrega un
+       renglón a la cabecera, hay que sumarlo acá. Para leer letra chica
+       queda el botón de pantalla completa de `st.image`.
+     - **Detalle y XML con techo propio** (`_ALTO_DETALLE_FICHA`, 340px): lo
+       que sobra scrollea dentro de la tabla o del código, no la modal. Y el
+       detalle escribe el símbolo de la moneda del PAPEL: las líneas del XML
+       no vienen en soles (#313) y la tabla decía «S/» fijo.
+     - **Todo el estilo vive en `estilos/_80_cards.py`** con clases
+       `sunat-ficha-*` y `var(--…)`, no inline: así el apilado del teléfono
+       sale de CSS y no hay un `#hex` suelto.
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46662,7 +46709,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#586**; la próxima toma el número siguiente.
+> última regla es la **#587**; la próxima toma el número siguiente.
 
 >
 
