@@ -3615,7 +3615,8 @@ tarjeta, y dos filas de botones le costarían alto a la pantalla única."""
 _COMPARACIONES = {"Año pasado": 1, "Hace 2 años": 2}
 """Con qué se compara el período en el «Resumen del cruce»: el MISMO rango
 de fechas, corrido uno o dos años atrás. Mes corriente contra el mismo mes
-del año pasado o del antepasado, que es lo pedido (2026-10-02)."""
+del año pasado o del antepasado, que es lo pedido (2026-10-02). Los botones
+no dicen estos nombres sino el año (`_rotulo_anio`), también a pedido."""
 
 _COLORES_PERIODO = (ACENTO, LAVANDA_FOCO, LAVANDA_BORDE)
 """Actual, año pasado, hace dos años: UN tono que se aclara hacia atrás,
@@ -3674,39 +3675,76 @@ def _conteos_de_periodo(d, col_fecha, ini, fin, prov):
     return _conteos_cruce(cr), None
 
 
+def _rotulo_corto(ini, fin):
+    """El rango en corto para la leyenda: «3 set–2 oct 26», «1–30 set 26»."""
+    ini, fin = pd.Timestamp(ini), pd.Timestamp(fin)
+    m1, m2 = MESES_ABR_ES[ini.month - 1], MESES_ABR_ES[fin.month - 1]
+    if (ini.year, ini.month) == (fin.year, fin.month):
+        return f"{ini.day}–{fin.day} {m2} {fin.year % 100:02d}"
+    a = f"{ini.day} {m1}"
+    if ini.year != fin.year:
+        a += f" {ini.year % 100:02d}"
+    return f"{a}–{fin.day} {m2} {fin.year % 100:02d}"
+
+
+def _rotulo_anio(ini, fin):
+    """El año de un período anterior, para su botón: «2025», o «2024-25» si
+    el rango corrido cruza el año nuevo."""
+    a, b = pd.Timestamp(ini).year, pd.Timestamp(fin).year
+    return str(b) if a == b else f"{a}-{b % 100:02d}"
+
+
 def _panel_resumen(d, resumen):
     """«Resumen del cruce»: cuántos documentos hay de cada lado y cómo se
-    reparten, en barras, contra el mismo período de años anteriores.
+    reparten, en barras o en tabla, contra el mismo período de años
+    anteriores.
 
     Es lo que decía la tira de KPIs de la tabla al pasar el cursor por
     «Está vs Sistema» (2026-09-18 a 2026-10-02): se fue de ahí a pedido,
     porque ocupaba un renglón, y volvió acá como gráfico, también a pedido,
     con la comparación entre períodos.
 
+    TODO EL CONTROL VA EN UN RENGLÓN (mismo día, a pedido): la leyenda
+    —el rango actual en corto y los años que se comparan, cada uno con su
+    color—, los botones de los años («2025», «2024»: el año, no «Año
+    pasado») y Gráfico / Tabla. El gráfico ya no lleva título ni leyenda
+    propios: los dos le costaban un renglón y repetían lo de arriba.
+
     El período actual es el CENSO de la tabla: rango, «Mes en SUNAT» y
     proveedor aplicados, «Está vs Sistema» no (es el filtro que elige
     dentro de este censo, ver `_filtro_estado`). Los anteriores se cachean
     en `session_state` por rango y proveedor: el cruce de un año cuesta
-    ~0,4 s y el selector de abajo re-corre esta tarjeta en cada clic.
+    ~0,4 s y el selector de la tarjeta la re-corre en cada clic.
     """
     if not resumen or resumen.get("censo") is None:
         st.caption("Sin comprobantes en el rango para resumir.")
         return
     f_ini, f_fin = resumen["f_ini"], resumen["f_fin"]
     prov, col_fecha = resumen.get("prov"), resumen.get("col_fecha")
+    rangos = {a: _rango_hace(f_ini, f_fin, a) for a in _COMPARACIONES.values()}
 
-    comparar = st.pills(
-        "Comparar con", list(_COMPARACIONES), selection_mode="multi",
-        default=["Año pasado"], key="sunat_res_comp",
-        label_visibility="collapsed") or []
+    with st.container(horizontal=True, vertical_alignment="center",
+                      gap="small", key="sunat_res_cab"):
+        _slot_leyenda = st.empty()
+        # Las opciones son 1 y 2 (años atrás) y el rótulo es el año: así
+        # el valor guardado no cambia cuando el rango pasa a otro año.
+        comparar = st.pills(
+            "Comparar con", list(rangos), selection_mode="multi",
+            default=[1], key="sunat_res_anios",
+            format_func=lambda a: _rotulo_anio(*rangos[a]),
+            label_visibility="collapsed") or []
+        vista = st.pills(
+            "Ver como", ["grafico", "tabla"], selection_mode="single",
+            default="grafico", key="sunat_res_vista",
+            format_func=lambda v: (":material/bar_chart:" if v == "grafico"
+                                   else ":material/table_rows:"),
+            label_visibility="collapsed") or "grafico"
 
-    periodos = [(_rotulo_rango(f_ini, f_fin),
+    periodos = [(_rotulo_corto(f_ini, f_fin),
                  _conteos_cruce(resumen["censo"]))]
     avisos = []
-    for nombre in _COMPARACIONES:
-        if nombre not in comparar:
-            continue
-        ini, fin = _rango_hace(f_ini, f_fin, _COMPARACIONES[nombre])
+    for anios in sorted(comparar):
+        ini, fin = rangos[anios]
         k_cache = (f"sunat_res_cache_{ini}_{fin}_{prov or ''}_"
                    f"{len(d) if d is not None else 0}")
         if k_cache not in st.session_state:
@@ -3715,43 +3753,29 @@ def _panel_resumen(d, resumen):
                     d, col_fecha, ini, fin, prov)
         conteos, motivo = st.session_state[k_cache]
         if conteos is None:
-            avisos.append(f"{nombre} ({_rotulo_rango(ini, fin)}): sin barra "
-                          f"— {motivo}.")
+            avisos.append(f"{_rotulo_anio(ini, fin)} "
+                          f"({_rotulo_rango(ini, fin)}): sin barra — "
+                          f"{motivo}.")
         else:
-            periodos.append((_rotulo_rango(ini, fin), conteos))
+            periodos.append((_rotulo_anio(ini, fin), conteos))
 
-    fig = go.Figure()
-    for i, (rotulo, k) in enumerate(periodos):
-        total = k["Total"]
-        ys = [k[b] for b in _BARRAS_CRUCE]
-        pcts = [_pct_de(v, total) or "—" for v in ys]
-        # La cifra arriba de cada barra; el % en un segundo renglón salvo en
-        # «Total», que es el 100 % por definición.
-        textos = [f"{v:,}" if b == "Total" else f"{v:,}<br>{p}"
-                  for b, v, p in zip(_BARRAS_CRUCE, ys, pcts)]
-        fig.add_trace(go.Bar(
-            name=rotulo + (" (actual)" if i == 0 else ""),
-            x=list(_BARRAS_CRUCE), y=ys, text=textos,
-            textposition="outside", cliponaxis=False,
-            textfont=dict(size=10.5, color=GRIS_TEXTO_MEDIO),
-            marker=dict(color=_COLORES_PERIODO[i], cornerradius=4),
-            customdata=pcts,
-            hovertemplate=(f"<b>%{{x}}</b><br>{rotulo}<br>"
-                           "%{y:,} documentos · %{customdata} del total"
-                           "<extra></extra>"),
-        ))
-    _compras_layout(fig, alto=alturas.MINI)
-    _ymax = max((max(k.values()) for _, k in periodos), default=0)
-    fig.update_layout(
-        barmode="group", bargap=0.28, bargroupgap=0.06,
-        showlegend=len(periodos) > 1,
-        title=(None if len(periodos) > 1 else
-               f"Documentos · {periodos[0][0]}"),
-        margin=dict(t=34, b=24, l=8, r=8))
-    # Aire arriba para el rótulo de dos renglones de la barra más alta. Y
-    # sin números en el eje: cada barra ya lleva el suyo escrito.
-    fig.update_yaxes(range=[0, (_ymax or 1) * 1.3], showticklabels=False)
-    st.plotly_chart(fig, use_container_width=True, key="sunat_g_resumen")
+    # La leyenda, en el renglón de los controles: un cuadrado del color de
+    # cada período y su rótulo. El actual va con su rango; los anteriores,
+    # con el año, porque son ese mismo rango corrido.
+    _slot_leyenda.markdown(
+        '<div style="display:flex;gap:12px;align-items:center;'
+        f'font-size:11.5px;color:{GRIS_TEXTO_MEDIO};white-space:nowrap;">'
+        + "".join(
+            f'<span style="display:inline-flex;align-items:center;gap:5px;">'
+            f'<span style="width:9px;height:9px;border-radius:2px;'
+            f'background:{_COLORES_PERIODO[i]};"></span>{rot}</span>'
+            for i, (rot, _k) in enumerate(periodos))
+        + '</div>', unsafe_allow_html=True)
+
+    if vista == "tabla":
+        _tabla_resumen(periodos)
+    else:
+        _grafico_resumen(periodos)
 
     notas = [f"% sobre el total de documentos de cada período (SUNAT ∪ "
              f"sistema). Origen del período actual: "
@@ -3763,6 +3787,55 @@ def _panel_resumen(d, resumen):
     st.markdown(
         f'<div style="font-size:11.5px;color:{GRIS_TEXTO};line-height:1.5;">'
         + "<br>".join(notas) + "</div>", unsafe_allow_html=True)
+
+
+def _grafico_resumen(periodos):
+    """Las barras del «Resumen del cruce»: una serie por período."""
+    fig = go.Figure()
+    for i, (rotulo, k) in enumerate(periodos):
+        total = k["Total"]
+        ys = [k[b] for b in _BARRAS_CRUCE]
+        pcts = [_pct_de(v, total) or "—" for v in ys]
+        # La cifra arriba de cada barra; el % en un segundo renglón salvo en
+        # «Total», que es el 100 % por definición.
+        textos = [f"{v:,}" if b == "Total" else f"{v:,}<br>{p}"
+                  for b, v, p in zip(_BARRAS_CRUCE, ys, pcts)]
+        fig.add_trace(go.Bar(
+            name=rotulo, x=list(_BARRAS_CRUCE), y=ys, text=textos,
+            textposition="outside", cliponaxis=False,
+            textfont=dict(size=10.5, color=GRIS_TEXTO_MEDIO),
+            marker=dict(color=_COLORES_PERIODO[i], cornerradius=4),
+            customdata=pcts,
+            hovertemplate=(f"<b>%{{x}}</b><br>{rotulo}<br>"
+                           "%{y:,} documentos · %{customdata} del total"
+                           "<extra></extra>"),
+        ))
+    _compras_layout(fig, alto=alturas.MINI)
+    _ymax = max((max(k.values()) for _, k in periodos), default=0)
+    # Sin título ni leyenda: los dice el renglón de los controles.
+    fig.update_layout(barmode="group", bargap=0.28, bargroupgap=0.06,
+                      showlegend=False, title=None,
+                      margin=dict(t=8, b=24, l=8, r=8))
+    # Aire arriba para el rótulo de dos renglones de la barra más alta. Y
+    # sin números en el eje: cada barra ya lleva el suyo escrito.
+    fig.update_yaxes(range=[0, (_ymax or 1) * 1.3], showticklabels=False)
+    st.plotly_chart(fig, use_container_width=True, key="sunat_g_resumen")
+
+
+def _tabla_resumen(periodos):
+    """El «Resumen del cruce» como tabla: una fila por barra, una columna
+    por período, «cantidad · %» en cada celda. Un `st.dataframe` y no un
+    AgGrid: siete filas de sólo lectura no pagan 1,28 MB de grilla (#540)."""
+    filas = []
+    for b in _BARRAS_CRUCE:
+        fila = {"": b}
+        for rot, k in periodos:
+            v = k[b]
+            p = _pct_de(v, k["Total"])
+            fila[rot] = f"{v:,}" if b == "Total" or p is None else f"{v:,} · {p}"
+        filas.append(fila)
+    st.dataframe(pd.DataFrame(filas), hide_index=True,
+                 use_container_width=True, key="sunat_t_resumen")
 
 
 @una_vez_por_corrida

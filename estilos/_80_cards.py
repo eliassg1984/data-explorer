@@ -1646,6 +1646,30 @@ CSS = """    /* ================================================================
         color: var(--accent) !important;
     }
 
+    /* El renglón de controles del «Resumen del cruce»: la leyenda, los  */
+    /* años que se comparan y Gráfico / Tabla. Botones DELGADOS (a       */
+    /* pedido: «son muy gruesos y empujan el gráfico hacia abajo»): 24px */
+    /* de alto contra los ~34 de una pastilla de Streamlit. La leyenda   */
+    /* empuja los botones a la derecha. Regla #586.                      */
+    .st-key-sunat_res_cab {
+        min-height: 0 !important;
+    }
+    .st-key-sunat_res_cab [data-testid="stElementContainer"]:first-child {
+        margin-right: auto;
+    }
+    .st-key-sunat_res_anios button,
+    .st-key-sunat_res_vista button {
+        min-height: 24px !important;
+        height: 24px !important;
+        padding: 0 10px !important;
+        font-size: 11.5px !important;
+        line-height: 1 !important;
+    }
+    .st-key-sunat_res_anios p,
+    .st-key-sunat_res_vista p {
+        font-size: 11.5px !important;
+    }
+
     /* ─────────────────────────────────────────────────────────────── */
     /* LA FICHA DEL DOCUMENTO, EN UNA VENTANA MODAL (2026-10-02)        */
     /*                                                                  */
