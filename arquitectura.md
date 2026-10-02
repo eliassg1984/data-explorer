@@ -46628,9 +46628,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        el año en `format_func`: así lo elegido no cambia cuando el rango
        pasa a otro año. Miden 24px de alto contra los ~34 de una pastilla
        de Streamlit, y el gráfico no lleva título ni leyenda propios: los
-       dos le costaban un renglón y repetían el de arriba. **La tabla** es
-       un `st.dataframe` (siete filas de sólo lectura no pagan un AgGrid,
-       #540) con «cantidad · %» por período.
+       dos le costaban un renglón y repetían el de arriba. **La tabla**
+       lleva «cantidad · %» por período y es el MISMO AgGrid que la de
+       documentos (tema `streamlit` + `CSS_RANKING_GRID`, `ALTO_FILA_RANK`,
+       `ALTO_HEADER_RANK`), a pedido: nació como `st.dataframe` por la
+       #540 y se leía como de otra app (otra letra, otras líneas, cabecera
+       gris). Paga una grilla más sólo cuando se elige la vista de tabla, y
+       su key lleva los períodos: con otro año son otras columnas (#556).
      - **La columna «XML» sale de UN listado de R2**
        (`sunat.claves_xml_en_r2`, `list_objects_v2` paginado sobre
        `sunat_originales/`, 5 minutos de caché), no de un `head_object` por
