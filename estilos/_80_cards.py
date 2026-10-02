@@ -1442,7 +1442,7 @@ CSS = """    /* ================================================================
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-compras_prov_card_docs, > .st-key-compras_prov_card_docsprov, > .st-key-compras_prov_card_evo, > .st-key-compras_prov_card_prods, > .st-key-compras_prov_card_ranking, > .st-key-compras_prov_card_vacio),
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-sunat_card_doc, > .st-key-sunat_card_graf, > .st-key-sunat_card_izq, > .st-key-sunat_card_sis),
+        > div:has(> .st-key-sunat_card_graf, > .st-key-sunat_card_izq),
         /* Las dos mitades del conversor entraron acá el 2026-08-29, al   */
         /* ganar cada una un pie de totales de largo distinto: la de      */
         /* SUNAT medía 388px y la del sistema 349 en el documento de      */
@@ -1674,20 +1674,146 @@ CSS = """    /* ================================================================
     /* LA FICHA DEL DOCUMENTO, EN UNA VENTANA MODAL (2026-10-02)        */
     /*                                                                  */
     /* `_ficha_modal` la abre con `st.dialog`: la modal ya trae su      */
-    /* fondo, su ✕ y su scroll. Lo único que hace falta acá es que las  */
-    /* dos tarjetas de adentro (`sunat_card_doc`/`_sis`) suelten el     */
-    /* techo con scroll de su familia: dentro de una modal que ya       */
-    /* scrollea, serían dos barras anidadas, una caja rota (#382). Y la  */
-    /* sombra de tarjeta se cambia por una línea de 1px, que sobre el   */
-    /* blanco de la modal es lo que separa. Regla #586.                 */
+    /* fondo, su ✕ y su scroll. Adentro va SÓLO el comprobante SUNAT    */
+    /* (`sunat_ficha`), sin tarjeta con borde: la modal es la           */
+    /* superficie. Lo de acá hace que entre en UNA pantalla de laptop:  */
+    /* la cabecera con el total, los datos en dos columnas y la imagen  */
+    /* del comprobante acotada al alto de la ventana. Regla #587.       */
     /* ─────────────────────────────────────────────────────────────── */
-    [data-testid="stDialog"] .st-key-sunat_card_doc,
-    [data-testid="stDialog"] .st-key-sunat_card_sis {
-        max-height: none !important;
-        overflow: visible !important;
-        box-shadow: none !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 14px !important;
+    .sunat-ficha-cab {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 16px;
+        padding: 0 2px 12px;
+        border-bottom: 1px solid var(--border);
+    }
+    .sunat-ficha-cab-izq { min-width: 0; }
+    .sunat-ficha-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 7px;
+    }
+    .sunat-ficha-pill {
+        background: var(--accent-tint);
+        color: var(--accent-deep);
+        border: 1px solid var(--border-lavender);
+        border-radius: 999px;
+        padding: 2px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.5;
+        white-space: nowrap;
+    }
+    .sunat-ficha-pill.ambar {
+        background: var(--warning-bg);
+        color: var(--warning-text);
+        border-color: var(--warning-border);
+    }
+    .sunat-ficha-meta {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    .sunat-ficha-total { text-align: right; flex: none; }
+    .sunat-ficha-total-rot {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+    }
+    .sunat-ficha-total-val {
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1.15;
+        color: var(--accent-deep);
+        font-variant-numeric: tabular-nums;
+    }
+    .sunat-ficha-total-sub {
+        font-size: 11.5px;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    /* Los datos: dos columnas (quién y qué | importes). En el teléfono */
+    /* se apilan: `minmax(0, 1fr)` con un piso de 260px por `auto-fit`. */
+    .sunat-ficha-datos {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 4px 28px;
+        padding: 2px 2px 6px;
+    }
+    .sunat-ficha-grupo { margin-bottom: 10px; }
+    .sunat-ficha-grupo-tit {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--accent);
+        padding-bottom: 4px;
+        margin-bottom: 2px;
+        border-bottom: 1px solid var(--border);
+    }
+    .sunat-ficha-fila {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 12.5px;
+        line-height: 23px;
+        font-variant-numeric: tabular-nums;
+    }
+    .sunat-ficha-fila > span:first-child { color: var(--text-secondary); }
+    .sunat-ficha-fila > span:last-child {
+        color: var(--text-primary);
+        font-weight: 500;
+        text-align: right;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .sunat-ficha-banda {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        background: var(--accent-tint);
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin: 2px 0 6px;
+        color: var(--accent-deep);
+        font-variant-numeric: tabular-nums;
+    }
+    .sunat-ficha-banda > span:first-child {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+    .sunat-ficha-banda > span:last-child { font-size: 17px; font-weight: 700; }
+    .sunat-ficha-car {
+        font-size: 10.5px;
+        color: var(--text-muted);
+        margin-top: 8px;
+        overflow-wrap: anywhere;
+    }
+    /* El PDF del proveedor, como imagen: la hoja ENTERA a la vista.    */
+    /* Sin el techo, a 750px de ancho una hoja A4 medía ~1000 de alto y */
+    /* había que scrollear la modal para leer el total del papel. Los   */
+    /* 300px son lo que la rodea, medido a 1366×768: 48 del margen de   */
+    /* arriba de la modal, 202 de su título + la cabecera + las         */
+    /* pestañas, y el padding de abajo con algo de aire. Para leer letra */
+    /* chica está el botón de pantalla completa de `st.image`.          */
+    .st-key-sunat_ficha_pdf { align-items: center; }
+    .st-key-sunat_ficha_pdf img {
+        max-height: calc(100dvh - 300px) !important;
+        width: auto !important;
+        max-width: 100% !important;
+        margin: 0 auto;
+        display: block;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: var(--shadow-md);
     }
 
     /* =================================================================== */
