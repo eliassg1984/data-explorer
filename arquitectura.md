@@ -46551,9 +46551,18 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        `_80_cards.py`): la que scrollea es la modal, y dos barras anidadas
        se leen como una caja rota (#382).
      - **Gráfico y conversor comparten UN selector** (`_MODOS_ABAJO`: los
-       tres modos del gráfico + «Conversor SUNAT-Sistema») y el espejo
-       `sunat_graf_modo__eco` de siempre — validado contra las opciones,
-       porque un `default` que no está en la lista revienta el widget. Con
+       tres modos del gráfico, «Resumen del cruce» y «Conversor
+       SUNAT-Sistema») guardado en `sunat_graf_modo__eco` de siempre y
+       validado contra las opciones. **Desde el mismo día es una COLUMNA DE
+       ÍCONOS al costado, no un renglón arriba** (a pedido: «que los
+       toggles no me ocupen una fila»): un `st.container(horizontal=True)`
+       con una columna de 40px (`sunat_abajo_nav`, un `st.button` de sólo
+       ícono por vista, el nombre en el `help` y la activa como `primary`
+       en lavanda) y el contenido (`sunat_abajo_cuerpo`, con `min-width: 0`
+       para que un gráfico ancho no empuje la fila). Se eligió entre tres
+       —columna al costado, selector que aparece con el cursor, íconos en
+       el renglón del título— porque es la única que no ocupa alto, está
+       siempre a la vista y repite el idioma de la columna de reportes. Con
        un documento ya cargado el conversor no se dibuja, como antes
        (`_necesita_conversor`), pero ahora lo DICE: con un selector que lo
        nombra, desaparecer callado se leería como un bug. Y ya no abre con

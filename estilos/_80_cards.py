@@ -1606,6 +1606,47 @@ CSS = """    /* ================================================================
     }
 
     /* ─────────────────────────────────────────────────────────────── */
+    /* LA COLUMNA DE ÍCONOS DE LA TARJETA DE ABAJO (2026-10-02)         */
+    /*                                                                  */
+    /* El selector de vistas de la tarjeta de debajo de la tabla        */
+    /* (gráficos, resumen, conversor) dejó de ser un renglón arriba y   */
+    /* es una columna de 40px al costado: no ocupa alto. Mismo idioma   */
+    /* que la columna de reportes: ícono gris, la vista activa en       */
+    /* lavanda, el nombre en el tooltip, y una línea que separa la      */
+    /* columna del contenido. La activa es el botón `primary` que pone  */
+    /* Python (`_panel_abajo`); el resto son `tertiary`. Regla #586.    */
+    /* ─────────────────────────────────────────────────────────────── */
+    .st-key-sunat_abajo_nav {
+        border-right: 1px solid var(--border);
+        padding-right: 6px;
+        gap: 4px !important;
+        flex: 0 0 auto;
+    }
+    .st-key-sunat_abajo_cuerpo {
+        min-width: 0;   /* sin esto, un gráfico ancho empuja la fila */
+    }
+    .st-key-sunat_abajo_nav button {
+        width: 32px !important;
+        min-width: 32px !important;
+        height: 32px !important;
+        min-height: 32px !important;
+        padding: 0 !important;
+        border-radius: 9px !important;
+        border: none !important;
+        background: transparent !important;
+        color: var(--text-secondary) !important;
+        box-shadow: none !important;
+    }
+    .st-key-sunat_abajo_nav button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent) !important;
+    }
+    .st-key-sunat_abajo_nav button[kind="primary"] {
+        background: var(--accent-light) !important;
+        color: var(--accent) !important;
+    }
+
+    /* ─────────────────────────────────────────────────────────────── */
     /* LA FICHA DEL DOCUMENTO, EN UNA VENTANA MODAL (2026-10-02)        */
     /*                                                                  */
     /* `_ficha_modal` la abre con `st.dialog`: la modal ya trae su      */
