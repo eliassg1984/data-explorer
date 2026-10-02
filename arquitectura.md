@@ -46619,6 +46619,18 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        barra (`_conteos_de_periodo`). Los conteos de cada período anterior
        se guardan en `session_state` por rango y proveedor: el cruce de un
        año cuesta ~0,4 s y la tarjeta re-corre en cada clic del selector.
+       **Sus controles van en UN renglón** (mismo día, a pedido): la
+       leyenda en corto («3 set–2 oct 26 · 2025 · 2024», un cuadrado del
+       color de cada período), los botones de los años y Gráfico / Tabla
+       (`sunat_res_cab`, un `st.container(horizontal=True)`). Los botones
+       dicen el AÑO y no «Año pasado» (`_rotulo_anio`; «2024-25» si el
+       rango cruza el año nuevo), y sus valores son 1 y 2 (años atrás) con
+       el año en `format_func`: así lo elegido no cambia cuando el rango
+       pasa a otro año. Miden 24px de alto contra los ~34 de una pastilla
+       de Streamlit, y el gráfico no lleva título ni leyenda propios: los
+       dos le costaban un renglón y repetían el de arriba. **La tabla** es
+       un `st.dataframe` (siete filas de sólo lectura no pagan un AgGrid,
+       #540) con «cantidad · %» por período.
      - **La columna «XML» sale de UN listado de R2**
        (`sunat.claves_xml_en_r2`, `list_objects_v2` paginado sobre
        `sunat_originales/`, 5 minutos de caché), no de un `head_object` por
