@@ -1654,6 +1654,13 @@ CSS = """    /* ================================================================
     .st-key-sunat_res_cab {
         min-height: 0 !important;
     }
+    /* Entre el renglón de los controles y lo de abajo, la mitad del gap */
+    /* de Streamlit (16px): el gráfico sube y la tarjeta se acorta, a     */
+    /* pedido (2026-10-02, «acortar un poco la tarjeta de abajo, subir    */
+    /* un poco el gráfico»). Regla #588.                                  */
+    .st-key-sunat_abajo_cuerpo {
+        gap: 8px !important;
+    }
     .st-key-sunat_res_cab [data-testid="stElementContainer"]:first-child {
         margin-right: auto;
     }

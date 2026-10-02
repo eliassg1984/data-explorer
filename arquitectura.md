@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-587 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+588 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (196)
 
@@ -318,7 +318,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 - **#583** — Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la Evolución más ancha, el Ranking…
 
-**Plotly y figuras** (107)
+**Plotly y figuras** (108)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -427,6 +427,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#580** — Compras › «Compras por período»: la zona de abajo tiene TRES modos —Resumen Total, Resumen…
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 - **#582** — Compras › Producto: la tabla de abajo del gráfico muestra SEIS filas, las barras dicen la…
+- **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
 
 **AgGrid y tablas** (88)
 
@@ -764,7 +765,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 
-**SUNAT y SIRE** (47)
+**SUNAT y SIRE** (48)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -813,6 +814,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
 - **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
 - **#587** — La ficha de Documentos SUNAT es SÓLO el comprobante SUNAT, y entra en una pantalla
+- **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
 
 **Fechas, rangos y cortes** (12)
 
@@ -46701,6 +46703,44 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+588. **El «Resumen del cruce» se lee de antes a después, dice qué cuenta
+     cada fila, y la nota de los % va en el tooltip.** 2026-10-02, a pedido,
+     sobre la tarjeta de abajo de Documentos SUNAT: «acortar un poco la
+     tarjeta, subir el gráfico», «en la tabla el orden de antes, a la
+     izquierda, a después, a la derecha», «que no exista este texto abajo
+     (…) debe aparecer al mover el cursor sobre alguna cabecera», «la
+     cabecera de los años debe decir de qué fecha y mes» y «los nombres de
+     las filas son poco intuitivos: Total, ¿de qué? Coinciden, ¿en qué?».
+
+     - **Del más viejo al actual, en las cuatro piezas**: los botones de año,
+       la leyenda, las barras de cada grupo y las columnas de la tabla
+       (`periodos.sort(key=-edad)` en `_panel_resumen`). Cada período lleva
+       su EDAD (0 actual, 1 año pasado…) y el color sale de ella, no de la
+       posición: reordenar no le cambia el color a nadie.
+     - **Las columnas de la tabla se llaman por su rango** («16 may – 2 oct
+       2025», `_rotulo_rango`), no por el año. Los botones y la leyenda
+       siguen con el año, que es lo que entra en un renglón.
+     - **Filas con nombre que se entiende** (`_NOMBRE_CRUCE`: «Documentos
+       del período», «En los dos, montos iguales»…) y su explicación en el
+       tooltip (`_AYUDA_CRUCE`, con la tolerancia de S/ 0.05 dicha en
+       número). Las claves de `_BARRAS_CRUCE` no cambian: las usan
+       `_conteos_cruce` y el KPI de la columna. El eje del gráfico sigue
+       con los cortos (no entra más); el tooltip de cada barra, con el
+       largo.
+     - **La nota de los % ya no ocupa renglones debajo**: es el `title` de
+       cada ítem de la leyenda y el `headerTooltip` de cada columna. Con
+       `enableBrowserTooltips`: el tooltip de AG Grid se dibuja dentro del
+       iframe del componente y se corta contra su borde; el del navegador
+       no. Debajo sólo quedan los avisos de un año sin barra, que explican
+       por qué falta algo pedido.
+     - **Más corta**: sin la nota, el aire de arriba del gráfico de ×1.3 a
+       ×1.2, su margen superior de 8 a 2 y el gap del cuerpo de la tarjeta
+       de 16 a 8 (`.st-key-sunat_abajo_cuerpo`). Medido a 1366×768 en el
+       modo demo con dos años: 364 → 304px en gráfico y 338 → 279 en tabla.
+       El gráfico sigue en `alturas.MINI`, que es el piso de su rol.
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46713,7 +46753,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#587**; la próxima toma el número siguiente.
+> última regla es la **#588**; la próxima toma el número siguiente.
 
 >
 
