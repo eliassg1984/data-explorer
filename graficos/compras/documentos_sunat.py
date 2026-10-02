@@ -4365,7 +4365,7 @@ def renderizar_documentos_sunat(d, col_fecha):
         # (`estilos/_80_cards.py`, `sunat_ficha_capa`). La grilla se sigue
         # DIBUJANDO debajo: un widget que deja de renderizarse pierde su
         # estado, y sin la selección no habría documento — ni para la capa
-        # ni para el gráfico y el conversor de abajo. Regla #585.
+        # ni para el gráfico y el conversor de abajo. Regla #586.
         if _ficha_abierta(doc):
             with st.container(key="sunat_ficha_capa"):
                 _ficha_sobre_tabla(doc, fila_cruce)

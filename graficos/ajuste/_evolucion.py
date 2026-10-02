@@ -53,7 +53,9 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from tema import (
-    AJUSTE_NEG, AJUSTE_POS, GRIS_BORDE, GRIS_TEXTO, TEXTO_PRINCIPAL,
+    AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO, BLANCO,
+    GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_SUAVE, LAVANDA_SELECCION,
+    TEXTO_PRINCIPAL,
 )
 from graficos.base import publicar_contexto_ia
 from graficos import alturas
@@ -63,9 +65,18 @@ from graficos.ajuste._comun import (
 )
 from utils import fmt_k
 
-GRANOS = ("Corte", "Semana", "Mes")
+# SIN «Semana» desde el 2026-10-02 (regla #585). El ajuste no pasa EN una
+# semana: aparece el día en que se cuenta y mide lo acumulado desde el
+# conteo anterior. Por semana, el eje juntaba barras separadas por una o
+# por ocho semanas como si fueran vecinas, una sesión que cruzaba el lunes
+# salía partida en dos, y lo demás era «Corte» con un rótulo peor.
+GRANOS = ("Corte", "Mes")
 
 _K_GRAN = "ajuste_evo_gran"
+# Qué muestra la mitad de abajo de la tarjeta: los mini-gráficos por
+# familia o la tabla que resume la serie de arriba (regla #585).
+_K_ABAJO = "ajuste_evo_abajo"
+ABAJO = ("Familias", "Tabla")
 _K_FOCO = "ajuste_evo_foco"
 # Contador de la key de la serie: la seleccion de `on_select` PERSISTE
 # entre reruns, asi que se lee ANTES de dibujar y la key cambia tras cada
@@ -93,9 +104,8 @@ def periodos_ajuste(d, col_fecha, gran):
 
     En «Mes» se rellenan los meses sin conteo entre el primero y el ultimo:
     un mes sin sesion de inventario es un dato («no se conto»), y saltearlo
-    pegaria dos meses que no son vecinos. En Semana y Corte no: con uno a
-    tres conteos por mes, rellenar semanas dejaria tres de cada cuatro
-    columnas vacias.
+    pegaria dos meses que no son vecinos. En Corte no: cada periodo ES un
+    conteo, y entre dos no hay nada que rellenar.
     """
     d = d.copy()
     d[col_fecha] = pd.to_datetime(d[col_fecha], errors="coerce")
@@ -294,6 +304,14 @@ def orden_familias(sf):
     return fijas + resto
 
 
+def alto_multiplos():
+    """Alto de la fila de mini-gráficos. Lo usa también la tabla que la
+    reemplaza, como techo de su scroll: alternar no mueve la tarjeta."""
+    return alturas.por_filas(1, px_fila=alturas.FILA_MULTIPLOS,
+                             extra=alturas.EXTRA_MULTIPLOS,
+                             minimo=alturas.FILA_MULTIPLOS)
+
+
 def fig_familias(sf, foco=None):
     """Mini-graficos (small multiples): la misma serie, una vez por familia,
     en UNA fila que se desliza de costado (el ancho lo fuerza el CSS de
@@ -332,9 +350,7 @@ def fig_familias(sf, foco=None):
         bargap=0.3,
         hovermode="x unified",
         showlegend=False,
-        height=alturas.por_filas(1, px_fila=alturas.FILA_MULTIPLOS,
-                                 extra=alturas.EXTRA_MULTIPLOS,
-                                 minimo=alturas.FILA_MULTIPLOS),
+        height=alto_multiplos(),
         margin=dict(l=10, r=10, t=24, b=6),
     ))
     _marcas = _marcas_eje(sf.drop_duplicates("_clave")["eje"], _ROTULOS_PANEL)
@@ -348,6 +364,95 @@ def fig_familias(sf, foco=None):
     for a in fig.layout.annotations:
         a.font = dict(size=11, color=TEXTO_PRINCIPAL)
     return fig
+
+
+def _monto(v):
+    """«S/ -1,234», como el hover de la serie; vacío si no hubo conteo."""
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return "—"
+    return f"S/ {v:,.0f}"
+
+
+def tabla_resumen_html(s, foco=None, alto=None):
+    """La tabla que resume la serie de arriba: una fila por periodo, con
+    las mismas tres medidas que la figura (sobrante, faltante, neto) y el
+    valor contado que la figura deja en el hover del neto.
+
+    Se lee de ARRIBA hacia abajo del más nuevo al más viejo —lo último que
+    se contó es lo que se busca primero—, con el total del rango clavado al
+    pie. Un mes sin conteo sigue en la tabla, con «—» y «sin conteo»: es un
+    dato, igual que el hueco de la serie. El periodo en foco de la serie
+    sale marcado.
+
+    HTML y no AgGrid ni `st.dataframe`: es chica y de sólo lectura (una
+    AgGrid cuesta 1,28 MB por iframe, regla #540) y `st.dataframe` pinta
+    «None» en un vacío (regla #529). `alto` es el techo del scroll: el de
+    la fila de mini-gráficos, para que alternar no cambie el alto de la
+    tarjeta.
+
+    Las líneas de la cabecera y del total son `box-shadow` y no `border`:
+    con `border-collapse` el borde de una celda `sticky` se queda en su
+    sitio y se va con el scroll."""
+    th = (f"padding:4px 10px;font-weight:600;color:{GRIS_TEXTO};"
+          f"box-shadow:inset 0 -1px 0 {GRIS_BORDE};position:sticky;top:0;"
+          f"background:{BLANCO};white-space:nowrap")
+    td = "padding:3px 10px;white-space:nowrap;font-variant-numeric:tabular-nums"
+
+    def _celda(v, color, peso=400):
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return f"<td style='{td};text-align:right;color:{GRIS_TEXTO_SUAVE}'>—</td>"
+        return (f"<td style='{td};text-align:right;color:{color};"
+                f"font-weight:{peso}'>{_monto(v)}</td>")
+
+    filas = []
+    for _, r in s.iloc[::-1].iterrows():
+        sin_conteo = pd.isna(r["neto"])
+        en_foco = foco is not None and r["_clave"] == foco
+        fondo = f"background:{LAVANDA_SELECCION};" if en_foco else ""
+        peso = 600 if en_foco else 400
+        nota = (f" <span style='color:{GRIS_TEXTO_SUAVE};font-size:11px'>"
+                "sin conteo</span>" if sin_conteo else "")
+        filas.append(
+            f"<tr style='{fondo}border-bottom:1px solid {GRIS_BORDE}'>"
+            f"<td style='{td};color:{TEXTO_PRINCIPAL};font-weight:{peso}'>"
+            f"{r['eje']}{nota}</td>"
+            + _celda(r["sobrante"], AJUSTE_POS_TEXTO, peso)
+            + _celda(r["faltante"], AJUSTE_NEG_TEXTO, peso)
+            + _celda(r["neto"], TEXTO_PRINCIPAL, 600)
+            + _celda(r["contado"], GRIS_TEXTO, peso)
+            + "</tr>")
+
+    tot = {c: float(s[c].sum()) for c in ("sobrante", "faltante", "neto",
+                                          "contado")}
+    pie = (f"position:sticky;bottom:0;background:{BLANCO};"
+           f"box-shadow:inset 0 1px 0 {GRIS_TEXTO_SUAVE}")
+    total = (f"<tr style='{pie}'>"
+             f"<td style='{td};{pie};color:{TEXTO_PRINCIPAL};font-weight:600'>"
+             "Total del rango</td>"
+             + "".join(
+                 f"<td style='{td};{pie};text-align:right;font-weight:600;"
+                 f"color:{c}'>{_monto(tot[k])}</td>"
+                 for k, c in (("sobrante", AJUSTE_POS_TEXTO),
+                              ("faltante", AJUSTE_NEG_TEXTO),
+                              ("neto", TEXTO_PRINCIPAL),
+                              ("contado", GRIS_TEXTO)))
+             + "</tr>")
+
+    cab = "".join(
+        f"<th style='{th};text-align:{al}' title='{ayuda}'>{txt}</th>"
+        for txt, al, ayuda in (
+            ("Período", "left", "El mismo período de la serie de arriba"),
+            ("Sobrante", "right", "Suma de los ajustes positivos"),
+            ("Faltante", "right", "Suma de los ajustes negativos"),
+            ("Neto", "right", "Sobrante + faltante: lo que se ve en la línea"),
+            ("Valor contado", "right",
+             "Stock declarado × precio de lo que se contó. Contexto: en un "
+             "mes con varias sesiones cuenta el stock más de una vez")))
+    techo = f"max-height:{alto}px;" if alto else ""
+    return (f"<div class='ajevo-tabla' style='{techo}overflow-y:auto'>"
+            "<table style='width:100%;border-collapse:collapse;font-size:12px'>"
+            f"<thead><tr>{cab}</tr></thead><tbody>{''.join(filas)}</tbody>"
+            f"<tfoot>{total}</tfoot></table></div>")
 
 
 # ── LA VISTA ─────────────────────────────────────────────────────────────
@@ -432,6 +537,10 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
             [2.5, 0.95, 0.75, 1.1],  # columnas-internas: titulo | area | foco | grano
             vertical_alignment="center")
         with c_gran:
+            # Una sesión vieja puede traer «Semana» guardada (regla #585):
+            # un valor que no está en las opciones no se dibuja marcado.
+            if st.session_state.get(_K_GRAN) not in (None, *GRANOS):
+                del st.session_state[_K_GRAN]
             gran = st.segmented_control(
                 "Agrupar por", GRANOS, default="Mes", key=_K_GRAN,
                 label_visibility="collapsed",
@@ -496,15 +605,33 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         )
 
         # ── Debajo, en la MISMA tarjeta: quien explica cada periodo ──────
-        if (col_familia and col_familia in dp.columns
-                and dp[col_familia].nunique() > 1):
+        # Dos lecturas que se alternan (regla #585): los mini-gráficos por
+        # familia, o la tabla que resume la serie de arriba. Con una sola
+        # familia los paneles no dicen nada que la serie no diga, así que
+        # queda la tabla sola, sin selector.
+        hay_familias = bool(col_familia and col_familia in dp.columns
+                            and dp[col_familia].nunique() > 1)
+        with st.container(key="ajevo_divisor_fila"):
+            c_txt, c_abajo = st.columns(
+                [4, 1.2],  # columnas-internas: rótulo | Familias/Tabla
+                vertical_alignment="center")
+            abajo = "Tabla"
+            if hay_familias:
+                with c_abajo:
+                    abajo = st.segmented_control(
+                        "Abajo", ABAJO, default="Familias", key=_K_ABAJO,
+                        label_visibility="collapsed",
+                    ) or "Familias"
+
+        if abajo == "Familias":
             sf = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
                               col_grupo=col_familia)
             _n = sf["grupo"].nunique()
             _desliza = " · deslizá para ver las demás →" if _n > 3 else ""
-            st.markdown(
-                f'<div class="ajevo-divisor">Por familia · cada panel con su '
-                f'propia escala{_desliza}</div>', unsafe_allow_html=True)
+            with c_txt:
+                st.markdown(
+                    f'<div class="ajevo-divisor">Por familia · cada panel con '
+                    f'su propia escala{_desliza}</div>', unsafe_allow_html=True)
             # El ancho de la fila lo fuerza el CSS sobre el CONTENEDOR:
             # `st.plotly_chart` pisa `fig.layout.width` con el de su
             # contenedor, y agrandando el contenedor el ResizeObserver de
@@ -522,3 +649,12 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                                 use_container_width=True,
                                 key="ajuste_evo_familias",
                                 config={"displayModeBar": False})
+        else:
+            _por = "corte" if gran == "Corte" else "mes"
+            with c_txt:
+                st.markdown(
+                    f'<div class="ajevo-divisor">Resumen por {_por} · lo mismo '
+                    'que la serie de arriba, del más nuevo al más viejo</div>',
+                    unsafe_allow_html=True)
+            st.markdown(tabla_resumen_html(s, foco, alto=alto_multiplos()),
+                        unsafe_allow_html=True)

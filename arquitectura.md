@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-585 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+586 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (195)
+**CSS y estilos** (196)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -229,6 +229,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#566** — «CONTRA LO NORMAL» va en la fila de Venta · Pax · Ticket, y la tira de puntos crece con lo…
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
+- **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 
 **Layout y alturas** (84)
 
@@ -518,7 +519,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 
-**Streamlit** (157)
+**Streamlit** (158)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -677,6 +678,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
+- **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 
 **Datos, R2 y DuckDB** (81)
 
@@ -809,7 +811,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 - **#500** — Un componente con iframe (plotly_events) NO va adentro de una pestaña de st.tabs que pueda…
 - **#577** — «Documentos SUNAT» es un reporte propio, no una vista de Compras
-- **#585** — Documentos SUNAT entra en una pantalla: la ficha del documento va SOBRE la tabla, y el…
+- **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento va SOBRE la tabla, y el…
 
 **Fechas, rangos y cortes** (12)
 
@@ -46447,7 +46449,55 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
-585. **Documentos SUNAT entra en una pantalla: la ficha del documento va
+585. **Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los
+     mini-gráficos con una tabla que resume la serie.** 2026-10-02, a
+     pedido: «analiza la opción por semana, creo que no tiene mucha
+     lógica», y después «que la parte de abajo […] pueda alternar con una
+     tabla de resumen según lo que muestre arriba el gráfico principal».
+
+     - **El ajuste no ocurre EN una semana.** Aparece el día en que se
+       cuenta y mide lo acumulado desde el conteo anterior. Agrupado por
+       semana ISO, el eje era de categorías y sólo traía las semanas con
+       conteo: en la captura, S01 → S09 eran 8 semanas en dos pasos y S09
+       → S13 eran 4 en otros dos, dibujados igual. Lo demás era «Corte»
+       con un rótulo peor («S23 26» por «2–5 jun»), o peor que Corte: una
+       sesión que cruza de domingo a lunes salía partida en dos barras, y
+       dos sesiones de la misma semana, sumadas en una. Rellenar las
+       semanas vacías arreglaba el eje pero dejaba tres de cada cuatro
+       columnas en blanco y seguía cargando el ajuste a la semana del
+       conteo. Se quitó de `GRANOS` (`_evolucion.py`), que comparte
+       «Detalle por producto» (`_pivote.py`), y de
+       `_comun._periodo_pivote_ajuste`.
+     - **Una sesión vieja puede traer «Semana» en `ajuste_evo_gran` o
+       `ajuste_det_gran`**: los dos selectores borran la clave si su valor
+       ya no está entre las opciones, antes de dibujarse.
+     - **La tabla resume la MISMA serie** (`serie_ajuste`, sin agrupar por
+       familia): una fila por período —del más nuevo al más viejo—, con
+       sobrante, faltante, neto y el valor contado que la figura deja en
+       el hover, el total del rango clavado al pie y el período en foco
+       marcado. El mes sin conteo sigue en la tabla, con «—» y «sin
+       conteo». Es HTML (`tabla_resumen_html`, pura y con prueba): chica y
+       de sólo lectura, una AgGrid cuesta 1,28 MB (#540) y `st.dataframe`
+       pinta «None» en el vacío (#529).
+     - **Alternar no mueve la tarjeta**: el techo del scroll de la tabla es
+       `alto_multiplos()`, el alto de la fila de mini-gráficos, y su
+       envoltorio devuelve los 16px del `margin-bottom: -16px` del
+       `stMarkdownContainer` — sin eso el total se salía por el borde de
+       abajo de la tarjeta. Medido a 1366×768: 583px en los dos modos.
+     - **La línea del divisor pasó a la FILA** (`ajevo_divisor_fila`), que
+       lleva el rótulo y el selector `ajuste_evo_abajo`: puesta en el
+       texto, se cortaba en su columna. Con una sola familia no hay
+       selector: los paneles no dirían nada que la serie no diga, y queda
+       la tabla.
+     - **Las líneas de cabecera y total son `box-shadow`**: con
+       `border-collapse`, el borde de una celda `sticky` se queda en su
+       sitio y se va con el scroll. Y las de columna las pone Streamlit en
+       toda tabla de `st.markdown`; las apaga `.ajevo-tabla` en
+       `_80_cards.py`.
+
+     (2026-10-02.)
+
+586. **Documentos SUNAT entra en una pantalla: la ficha del documento va
      SOBRE la tabla, y el gráfico y el conversor se alternan debajo.**
      2026-10-02, a pedido: «que la tabla solo muestre 8 filas», «que me
      muestre si ya se descargó el XML», «que las dos tarjetas aparezcan
@@ -46512,7 +46562,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#585**; la próxima toma el número siguiente.
+> última regla es la **#586**; la próxima toma el número siguiente.
 
 >
 

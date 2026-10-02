@@ -5515,6 +5515,23 @@ def _pruebas_evolucion_ajuste():
     check("Corte: una sesión por racha de días",
           len(orden_c), 2)
 
+    # Sin «Semana» (regla #585): el ajuste se mide por conteo, no por semana.
+    check("los granos son Corte y Mes", _ev.GRANOS, ("Corte", "Mes"))
+
+    # La tabla que alterna con los mini-gráficos resume la MISMA serie.
+    html = _ev.tabla_resumen_html(s.reset_index(), foco="2026-01", alto=184)
+    check("tabla: una fila por período más el total",
+          html.count("<tr"), 1 + len(s) + 1)
+    check("tabla: del más nuevo al más viejo",
+          html.index("ene 26") < html.index("nov 25"), True)
+    check("tabla: el mes sin conteo dice «sin conteo», no «None» ni 0",
+          ("sin conteo" in html, "None" in html, "nan" in html),
+          (True, False, False))
+    check("tabla: el total es el neto del rango",
+          "S/ -99<" in html.split("Total del rango")[1], True)
+    check("tabla: el período en foco sale marcado",
+          html.count(_ev.LAVANDA_SELECCION), 1)
+
     # La tabla parte el tiempo con los MISMOS períodos que la serie.
     wide, periodos = _pv._armar_tabla_pivote_ajuste(
         dp.dropna(subset=["FAM"]), orden, "FAM", None, "PROD", "AJ", "AV")
@@ -8309,7 +8326,7 @@ def main():
          ()),
         ("evolucion · serie sin valorizado (rama else)", lambda: _aj.fig_serie(
             _aj.serie_ajuste(*_aj.periodos_ajuste(
-                df_min, "FECHA APERTURA INVENTARIO", "Semana"),
+                df_min, "FECHA APERTURA INVENTARIO", "Corte"),
                 "AJUSTE VALORIZADO")), ()),
         ("waterfall (Cascada)", _aj._graf_waterfall_ajuste,
             (df, "FAMILIA", "AREA", "AJUSTE VALORIZADO")),

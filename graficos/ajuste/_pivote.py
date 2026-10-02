@@ -116,7 +116,8 @@ _K_AREA_DETALLE = "ajuste_det_filtro_area"
 def vista_detalle_ajuste(d, col_fecha, col_familia, col_area, col_ajuste_val,
                          col_producto, col_cantidad):
     """«Detalle por producto»: la tabla pivote en su propia tarjeta, con su
-    área y su selector Corte / Semana / Mes en la cabecera. Misma categoría
+    área y su selector Corte / Mes en la cabecera (sin Semana desde el
+    2026-10-02, regla #585). Misma categoría
     del rail que Evolución, así que el mismo rango de la franja y la misma
     Familia del compartimento de arriba."""
     if not col_fecha or col_fecha not in d.columns:
@@ -129,6 +130,9 @@ def vista_detalle_ajuste(d, col_fecha, col_familia, col_area, col_ajuste_val,
             [3, 0.95, 1.1],  # columnas-internas: titulo | area | grano
             vertical_alignment="center")
         with c_gran:
+            # Una sesión vieja puede traer «Semana» guardada (regla #585).
+            if st.session_state.get(_K_GRAN_DETALLE) not in (None, *GRANOS):
+                del st.session_state[_K_GRAN_DETALLE]
             gran = st.segmented_control(
                 "Agrupar columnas por", GRANOS, default="Mes",
                 key=_K_GRAN_DETALLE, label_visibility="collapsed",
