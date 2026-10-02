@@ -1720,7 +1720,12 @@ def _tabla_detalle(lineas, doc=None):
         st.caption("El XML no trae líneas de detalle legibles.")
         return
     tv = pd.DataFrame(lineas)
-    sim = sunat.simbolo_moneda((doc or {}).get("moneda")).replace("%", "%%")
+    # `doc is None` y no `doc or {}`: la fila llega como una Series de
+    # pandas, y una Series no se puede evaluar como verdadero o falso —
+    # `or` lanza «The truth value of a Series is ambiguous» (se vio en
+    # Cloud el mismo día, al abrir un comprobante con XML).
+    mon = None if doc is None else doc.get("moneda")
+    sim = sunat.simbolo_moneda(mon).replace("%", "%%")
     st.dataframe(
         tv, use_container_width=True, hide_index=True,
         height=min(_ALTO_DETALLE_FICHA, 35 * (len(tv) + 1) + 3),

@@ -1171,6 +1171,25 @@ ok("***" not in sunat._mensaje_error(ValueError("error comun")),
 ok(len(sunat._mensaje_error(ValueError("x" * 900))) <= 400,
    "recorta mensajes largos")
 
+# ── La ficha: el detalle del XML con la fila como Series ──────────────────
+# Bug real (2026-10-02): `_tabla_detalle` hacía `(doc or {})` y la fila del
+# documento llega como una Series de pandas, que no se puede evaluar como
+# verdadero o falso. Reventaba la modal en Cloud al abrir un comprobante
+# con XML; el modo demo no lo vio porque no tiene originales.
+print("\n── _tabla_detalle acepta la fila como Series ──")
+from graficos.compras.documentos_sunat import _tabla_detalle  # noqa: E402
+
+_lineas = [{"codigo": "A1", "descripcion": "Palta", "cantidad": 2.0,
+            "unidad": "KG", "precio_unitario": 10.0, "importe": 20.0}]
+for _doc, _nombre in ((pd.Series({"moneda": "USD"}), "Series en USD"),
+                      (pd.Series({"moneda": "PEN"}), "Series en PEN"),
+                      (None, "sin documento")):
+    try:
+        _tabla_detalle(_lineas, _doc)
+        ok(True, f"_tabla_detalle no revienta con {_nombre}")
+    except Exception as e:
+        ok(False, f"_tabla_detalle no revienta con {_nombre} ({e})")
+
 # ── Cierre ─────────────────────────────────────────────────────────────────
 print()
 if _fallos:
