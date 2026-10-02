@@ -2139,17 +2139,23 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
     # nueva por render infla el `<style>`. Con la variable, la regla que
     # dibuja el punto es UNA sola y vive en `estilos/`, que es donde el
     # proyecto quiere el CSS.
-    if estados:
-        _vars = []
-        for _oid, _est in estados.items():
-            if _est not in ("success", "danger", "warning"):
-                continue
-            _sl = _slug_url(_oid)
-            for _k in (f"{btn_prefix}{_slug(_oid)}", f"railkpi_{_sl}"):
-                _vars.append(f".st-key-{_k} {{ --punto: var(--{_est}); }}")
-        if _vars:
-            st.markdown("<style>" + "".join(_vars) + "</style>",
-                        unsafe_allow_html=True)
+    #
+    # EL `<style>` SE ESCRIBE SIEMPRE, vacío si no hay estados (2026-10-02,
+    # regla #589). Escrito sólo cuando había, aparecía en una corrida y no
+    # en la anterior —los conteos de Documentos SUNAT llegan una corrida
+    # tarde (`_publicar_conteos`)—, y un elemento de más corre un lugar
+    # TODO lo que se dibuja después: Streamlit lo da por otro elemento y lo
+    # monta de cero. La grilla de documentos se re-montaba entera con el
+    # primer clic (bajar y compilar AG Grid de nuevo, #540).
+    _vars = []
+    for _oid, _est in (estados or {}).items():
+        if _est not in ("success", "danger", "warning"):
+            continue
+        _sl = _slug_url(_oid)
+        for _k in (f"{btn_prefix}{_slug(_oid)}", f"railkpi_{_sl}"):
+            _vars.append(f".st-key-{_k} {{ --punto: var(--{_est}); }}")
+    st.markdown("<style>" + "".join(_vars) + "</style>",
+                unsafe_allow_html=True)
 
     # ── El rail: marcado + activación ────────────────────────────────
     # `if secciones:` y no la indentación heredada: este bloque vivía a
@@ -2194,6 +2200,11 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
         if not _fuera:
             st.markdown("<style>:root { --pila-encaje: y mandatory; }</style>",
                         unsafe_allow_html=True)
+        else:
+            # Un `<style>` vacío en el MISMO sitio: el elemento existe en
+            # las dos ramas, por lo mismo que el del semáforo de arriba
+            # (regla #589).
+            st.markdown("<style></style>", unsafe_allow_html=True)
         _btn_act = f"{btn_prefix}lat_{_slug_url(sel)}"
         _lbl_act = _rotulos.get(sel, sel)
         with st.container(key="rail_scroll_hook"):

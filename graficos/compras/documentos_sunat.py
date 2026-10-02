@@ -390,7 +390,10 @@ def cruzar_con_parquet(df_sire, g_parquet):
     vistos_pq = set()   # (documento, ruc_pq) ya usados en un match
     filas = []
 
-    for _, r in df_sire.iterrows():
+    # `to_dict("records")` y no `iterrows()`: iterrows arma una Series por
+    # fila y con miles de comprobantes se llevaba la mayor parte de cada
+    # clic en la tabla (2026-10-02, regla #589). Los valores son los mismos.
+    for r in df_sire.to_dict("records"):
         doc = str(r.get("documento", ""))
         ruc_sire = str(r.get("ruc_proveedor") or "").strip()
         prov_sire = str(r.get("proveedor", ""))
@@ -496,7 +499,7 @@ def cruzar_con_parquet(df_sire, g_parquet):
 
     # Lo que quedó en el parquet sin usarse en NINGÚN match: son compras
     # cargadas en el sistema que SUNAT no reporta (aún) para este RUC.
-    for _, cand in g_parquet.iterrows():
+    for cand in g_parquet.to_dict("records"):
         if (cand["documento"], cand["ruc_pq"], cand["proveedor_pq"]) in vistos_pq:
             continue
         filas.append({
@@ -567,7 +570,7 @@ def _claves_proveedor_cruce(df):
     return pd.Series(
         [_clave_proveedor(r.get("ruc_proveedor") or r.get("ruc_sistema"),
                           r.get("proveedor") or r.get("proveedor_sistema"))
-         for _, r in df.iterrows()],
+         for r in df.to_dict("records")],
         index=df.index, dtype="object")
 
 
@@ -579,7 +582,7 @@ def _claves_proveedor_sire(df):
     """
     return pd.Series(
         [_clave_proveedor(r.get("ruc_proveedor"), r.get("proveedor"))
-         for _, r in df.iterrows()],
+         for r in df.to_dict("records")],
         index=df.index, dtype="object")
 
 
@@ -1094,7 +1097,7 @@ def _tabla_documentos(df_cruce, df_sire):
              "ruc_proveedor", "serie", "numero")
     extra = {}
     if df_sire is not None and "car" in df_sire.columns:
-        for _, r in df_sire.iterrows():
+        for r in df_sire.to_dict("records"):
             extra[str(r.get("car") or "")] = {c: r.get(c) for c in _cols}
 
     # Los XML que ya están en R2, en UN listado (ver
@@ -1103,7 +1106,8 @@ def _tabla_documentos(df_cruce, df_sire):
     _xml_en_r2 = sunat.claves_xml_en_r2()
 
     filas = []
-    for _, r in df_cruce.iterrows():
+    # Diccionarios y no `iterrows()`, como en `cruzar_con_parquet` (#589).
+    for r in df_cruce.to_dict("records"):
         car = str(r.get("car") or "")
         ex = extra.get(car, {})
         mon = str(ex.get("moneda") or "PEN").strip().upper() or "PEN"
@@ -4190,9 +4194,11 @@ def renderizar_documentos_sunat(d, col_fecha):
     `d` y `col_fecha` (el parquet de Compras y su columna de fecha) ya no
     son opcionales: el cruce dejó de ser una vista elegible y se calcula
     SIEMPRE, porque su resultado es una columna de la tabla. Cuesta
-    ~390 ms por rango en la máquina de desarrollo, y se paga una vez
-    porque `_parquet_agrupado_por_documento` y el propio registro están
-    cacheados.
+    ~390 ms por rango en la máquina de desarrollo. OJO: sólo el registro
+    está cacheado; el cruce y la tabla se rehacen en CADA corrida, también
+    con cada clic en una fila. Por eso sus bucles recorren diccionarios y
+    no `iterrows()`: con 3.500 documentos eran ~800 ms por clic y quedaron
+    en ~250 (regla #589).
 
     LOS CUATRO FILTROS (fecha, «Mes en SUNAT», proveedor y «Está vs
     Sistema») SON DE LA TABLA: recortan también el Excel que se baja y los

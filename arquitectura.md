@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-588 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+589 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (196)
 
@@ -765,7 +765,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 
-**SUNAT y SIRE** (48)
+**SUNAT y SIRE** (49)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -815,6 +815,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
 - **#587** — La ficha de Documentos SUNAT es SÓLO el comprobante SUNAT, y entra en una pantalla
 - **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
+- **#589** — Un elemento que aparece en una corrida y no en la anterior re-monta TODO lo que se dibuja…
 
 **Fechas, rangos y cortes** (12)
 
@@ -879,7 +880,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (146)
+**Decisiones de diseño y UX** (147)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1027,6 +1028,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#583** — Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la Evolución más ancha, el Ranking…
 - **#584** — Ajuste: los rótulos del rail dicen lo que cada vista ES hoy; los ids siguen siendo los de…
 - **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
+- **#589** — Un elemento que aparece en una corrida y no en la anterior re-monta TODO lo que se dibuja…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -46651,6 +46653,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        re-monta en cada clic (medido en el modo demo, con y sin este
        cambio) y la fila elegida pierde el resaltado. La selección de Python
        sobrevive, así que la ficha y la tarjeta de abajo no se enteran.
+       **Resuelto en la #589**: era sólo el PRIMER clic, y la causa estaba
+       en el rail, no en la tabla.
 
      (2026-10-02.)
 
@@ -46741,6 +46745,46 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+589. **Un elemento que aparece en una corrida y no en la anterior re-monta
+     TODO lo que se dibuja después de él.** 2026-10-02, a pedido: «cuando
+     hago clic en alguna fila de la tabla, la tabla parece que actualiza y
+     recarga, ¿eso debe ser así?». No: elegir una fila sólo cambia la
+     tarjeta de abajo.
+
+     - **La causa no estaba en la tabla.** Streamlit identifica cada
+       elemento por su POSICIÓN en la página, no por su key, para decidir
+       si lo actualiza o lo monta de nuevo. El semáforo del rail
+       (`graficos/base.py::_render_rail`) escribía su `<style>` con el
+       `--punto` de cada vista SÓLO si había estados, y los de Documentos
+       SUNAT llegan una corrida tarde (`_publicar_conteos`, que los publica
+       la propia vista después de que el rail se dibujó). Así que el primer
+       clic sumaba un elemento arriba de todo, la vista entera bajaba un
+       lugar y la grilla de documentos se montaba de cero: un iframe nuevo,
+       1,28 MB de AG Grid bajados y compilados otra vez (#540) y la fila
+       elegida sin resaltar. Medido con Playwright: el contenedor de la
+       vista pasaba del índice 4 al 5 de su bloque.
+     - **Arreglo: el `<style>` se escribe SIEMPRE**, vacío si no hay
+       estados. Lo mismo el de `--pila-encaje`, que dependía de si la vista
+       es un destino aparte. Verificado: el iframe de la grilla es el mismo
+       antes y después del primer clic, y conserva la fila elegida; la
+       primera tarjeta de los siete reportes sigue en la misma `y`.
+     - **La regla general**: un `st.markdown` de estilos dentro de un `if`
+       que puede cambiar de una corrida a otra es un remontaje esperando
+       pasar. O se escribe siempre (con el contenido condicional adentro) o
+       va en un sitio donde no tiene nada debajo.
+     - **Y el clic seguía costando lo que cuesta la vista**: el cruce, las
+       claves de proveedor y la tabla se rehacen en cada corrida (el
+       docstring de `renderizar_documentos_sunat` decía que estaban en
+       caché; sólo lo está el registro). Los bucles recorrían `iterrows()`,
+       que arma una Series por fila: con 3.500 documentos sintéticos eran
+       ~800 ms en Python por clic, y con `to_dict("records")` quedaron en
+       ~250. Los valores son los mismos (`test_sunat.py` cubre el cruce).
+       Con eso el velo de «Actualizando…» (entra a los 400 ms, #366)
+       debería verse mucho menos sobre la tabla; lo que queda es lo que
+       tarda Streamlit en reenviar la grilla al navegador.
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46753,7 +46797,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#588**; la próxima toma el número siguiente.
+> última regla es la **#589**; la próxima toma el número siguiente.
 
 >
 
