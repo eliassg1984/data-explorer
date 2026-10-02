@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-583 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+584 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -873,7 +873,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (144)
+**Decisiones de diseño y UX** (145)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1019,6 +1019,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 - **#580** — Compras › «Compras por período»: la zona de abajo tiene TRES modos —Resumen Total, Resumen…
 - **#583** — Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la Evolución más ancha, el Ranking…
+- **#584** — Ajuste: los rótulos del rail dicen lo que cada vista ES hoy; los ids siguen siendo los de…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -46412,6 +46413,39 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+584. **Ajuste: los rótulos del rail dicen lo que cada vista ES hoy; los
+     ids siguen siendo los de cuando nacieron.** 2026-10-02, a pedido:
+     «los nombres no me reflejan las vistas del reporte de ajuste». Cinco
+     rótulos, cada uno contra lo que dibuja:
+
+     | id (no cambia)         | rótulo de antes | rótulo de hoy               |
+     |------------------------|-----------------|-----------------------------|
+     | `Cascada`              | Cascada         | Por familia                 |
+     | `Mapa de calor`        | Mapa de calor   | Familia × Área              |
+     | `Distribución`         | Distribución    | Distribución de diferencias |
+     | `Evolución`            | Evolución       | Evolución                   |
+     | `Detalle por producto` | Detalle         | Tabla dinámica              |
+
+     - **La «Cascada» no dibuja una cascada desde el 16 de septiembre**
+       (tabla de familias + detalle, #441), y el «Mapa de calor» es una
+       tabla Familia × Área desde el 18 (#468). Los dos módulos ya avisaban
+       en su docstring que el nombre había quedado viejo. Sus íconos
+       cambiaron con el rótulo: `waterfall_chart` → `view_list` y
+       `table_view` → `pivot_table_chart`.
+     - **Sólo cambia el segundo elemento de la tupla** de
+       `_AJUSTE_RAIL_CATEGORIAS`. El primero es la URL (`?vista=cascada`),
+       la key de la sección (`aj_sec_cascada`), el CSS (`ajcas_`, `hm_*`),
+       `_PILA_VISUAL` y `categoria_rango_ajuste`: renombrarlo es otro
+       cambio, y uno que obliga a reiniciar la app en Cloud (#357). Mismo
+       criterio que «Comparación Año Pasado» en Compras.
+     - **«Distribución de diferencias» es el rótulo más largo del rail de
+       Ajuste**, y el mismo texto lo escribe el temporizador de
+       `_render_rail` en la franja (`.barra-vista`, tope de 240px con
+       `ellipsis` en `_28_arbol.py`). Se eligió igual, a pedido: el panel
+       del reporte y el árbol fijado lo muestran entero.
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46424,7 +46458,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#583**; la próxima toma el número siguiente.
+> última regla es la **#584**; la próxima toma el número siguiente.
 
 >
 
