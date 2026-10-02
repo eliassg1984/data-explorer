@@ -78,6 +78,7 @@ from graficos.compras.semanal import (
     _del_al, _etiqueta_en_la_punta, _plan_etiquetas, _rotulo_periodo,
 )
 from graficos import alturas
+from graficos.recetas_comun import TASA_RECARGO
 from tablas.movimientos_periodo import renderizar_lineas_mov
 from tablas.ventas_resumen import (
     renderizar_dias_venta, renderizar_pedidos_venta,
@@ -304,6 +305,123 @@ def _colores_de(n):
     return [_COLORES_CANAL[_i % len(_COLORES_CANAL)] for _i in range(n)]
 
 
+# ── El IGV mueve el % de costo sin que cambie ningún costo (regla #590) ─────
+# El % de costo es costo ÷ NETO, y el neto es el precio sin IGV ni recargo:
+# con el mismo precio de carta, una tasa de IGV más baja deja más neto y un
+# % más bajo. Medido en las ventas (IGV ÷ neto de cada línea): 18 % hasta el
+# 9 de junio de 2025, 10 % desde el 10, y 10,5 % desde el 10 de febrero de
+# 2026. El primero baja el % de costo un 6 % de sí mismo —~2 pp sobre un
+# 35 %—; el segundo lo sube una décima. La tasa sale de las ventas y no se
+# escribe acá: cambia por ley (regla #514). La comparten el Resumen y el Mix.
+_UMBRAL_IGV = 0.01
+"""Un cambio de la tasa de un punto o más se marca. El de 10 a 10,5 % no:
+mueve el % de costo una décima, y una marca que no cambia nada es ruido."""
+
+
+def cambios_de_igv(fecha, igv, neto):
+    """Los días en que cambió la tasa de IGV de lo vendido, en un punto o
+    más: `[(día, tasa de antes, tasa de después)]`, en orden.
+
+    La tasa de un día es la de la MAYORÍA de sus líneas (la moda de IGV ÷
+    neto) y no la de la suma: un día flojo con alguna línea exonerada no es
+    un cambio de ley. Sólo cuentan las líneas con neto (las notas de crédito
+    restan y no dicen la tasa). Pura."""
+    t = pd.DataFrame({
+        "dia": pd.to_datetime(pd.Series(fecha), errors="coerce").dt.normalize(),
+        "igv": pd.to_numeric(pd.Series(igv), errors="coerce"),
+        "neto": pd.to_numeric(pd.Series(neto), errors="coerce"),
+    })
+    t = t[t["dia"].notna() & t["igv"].notna() & (t["neto"] > 0.5)]
+    if t.empty:
+        return []
+    t = t.assign(tasa=(t["igv"] / t["neto"]).round(3))
+    moda = (t.groupby(["dia", "tasa"]).size().rename("n").reset_index()
+            .sort_values(["dia", "n", "tasa"], ascending=[True, False, True])
+            .drop_duplicates("dia").reset_index(drop=True))
+    antes = moda["tasa"].shift()
+    hubo = (moda["tasa"] - antes).abs() >= _UMBRAL_IGV
+    return [(pd.Timestamp(d), float(a), float(b)) for d, a, b
+            in zip(moda.loc[hubo, "dia"], antes[hubo], moda.loc[hubo, "tasa"])]
+
+
+def _tasa(t):
+    """0.18 → «18%», 0.105 → «10.5%»."""
+    return f"{t * 100:g}%"
+
+
+def marca_igv(antes, despues):
+    """La marca corta de un período: «IGV 18→10%»."""
+    return f"IGV {antes * 100:g}→{despues * 100:g}%"
+
+
+def efecto_igv(antes, despues):
+    """En qué proporción cambia el % de costo SÓLO por pasar de una tasa de
+    IGV a otra, con el mismo precio y el mismo costo: −0,061 de 18 a 10 %. El
+    recargo es el del restaurante (`recetas_comun.TASA_RECARGO`)."""
+    return (1 + despues + TASA_RECARGO) / (1 + antes + TASA_RECARGO) - 1
+
+
+def nota_igv(dia, antes, despues, pcosto=None):
+    """La frase que explica la marca: qué día, de qué tasa a cuál y cuánto
+    mueve eso el % de costo — en puntos si se sabe de qué % se parte. Pura."""
+    rel = efecto_igv(antes, despues)
+    txt = (f"El {pd.Timestamp(dia):%d/%m/%Y} el IGV pasó de {_tasa(antes)} a "
+           f"{_tasa(despues)} del neto: con el mismo precio y el mismo costo, ")
+    if pcosto:
+        pp = rel * pcosto * 100
+        txt += (f"un % de costo de {pcosto:.1%} pasa a {pcosto * (1 + rel):.1%} "
+                f"({'+' if pp >= 0 else '−'}{abs(pp):.1f} pp)")
+    else:
+        txt += (f"el % de costo {'baja' if rel < 0 else 'sube'} un "
+                f"{abs(rel):.1%} de sí mismo")
+    return txt + " sin que cambie ningún costo."
+
+
+# ── Lo que se vendió sin costo cargado (regla #590) ──────────────────────────
+# La columna «Sin costo» del Resumen dice CUÁNTO desde el 2026-09-24; esto
+# dice QUÉ: lo que hay que corregir en el POS. El costo con que se vende es
+# una foto que el POS no corrige después (regla #557), así que lo vendido sin
+# costo baja el % de costo de ese período para siempre.
+def productos_sin_costo(tabla):
+    """Lo vendido SIN costo cargado, de mayor a menor venta: `({clave:
+    [(producto, venta)]}, [(producto, venta)])` — por período y en el rango.
+
+    El mismo criterio que la columna «Sin costo» (`pc <= 0`, venta con
+    impuestos); una nota de crédito resta de su producto y lo que queda en
+    cero o menos no se nombra. Pura."""
+    if not {"pc", "prod", "clave", "venta"} <= set(tabla.columns):
+        return {}, []
+    sc = tabla[tabla["pc"] <= 0]
+    if sc.empty:
+        return {}, []
+    g = sc.groupby(["clave", "prod"], as_index=False)["venta"].sum()
+    g = g[g["venta"] > 0].sort_values(["clave", "venta", "prod"],
+                                      ascending=[True, False, True])
+    por = {k: list(zip(grp["prod"], grp["venta"].astype(float)))
+           for k, grp in g.groupby("clave", sort=False)}
+    tot = sc.groupby("prod")["venta"].sum()
+    tot = tot[tot > 0].sort_values(ascending=False)
+    return por, list(zip(tot.index, tot.astype(float)))
+
+
+def texto_sin_costo(lista, n=2):
+    """«Agua Munay c/gas, Agua Munay s/gas y 6 más». Pura."""
+    if not lista:
+        return ""
+    resto = len(lista) - n
+    return (", ".join(p for p, _ in lista[:n])
+            + (f" y {resto} más" if resto > 0 else ""))
+
+
+def detalle_sin_costo(lista, n=8):
+    """«Agua Munay c/gas S/ 412 · Agua Munay s/gas S/ 380 · y 6 más». Pura."""
+    if not lista:
+        return ""
+    resto = len(lista) - n
+    return (" · ".join(f"{p} S/ {v:,.0f}" for p, v in lista[:n])
+            + (f" · y {resto} más" if resto > 0 else ""))
+
+
 @st.fragment
 def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                     col_cant, col_fam=None, col_serv=None, col_canal=None,
@@ -336,6 +454,9 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     col_desc = _resolver(d, ["Descuento Item Ddocumento"])
     col_pcosto = _resolver(d, ["Precio Costo"])
     col_ldoc = _resolver(d, ["Llave Local Documento"])
+    # El IGV de la línea: de él sale la tasa, que marca el período en que
+    # cambió (regla #590). Opcional, como las de arriba.
+    col_igv = _resolver(d, ["Igv Item Ddocumento"])
 
     # UN ÍTEM SE CUENTA UNA VEZ (reglas #516 y #517). `ventas.py` ya manda
     # `d` deduplicado (`unico_por_item`); esto queda por si otro llamador no
@@ -450,6 +571,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         cols["costo"] = cols["pc"] * _cant
     if col_ldoc:
         cols["ldoc"] = d[col_ldoc].astype(str)
+    if col_igv:
+        cols["igv"] = _num(col_igv)
     # QUÉ ES VENTA LO DICE `definicion_venta` (regla #524), no esta vista:
     # `d` llega con `CLASE VENTA` y con las notas de crédito como ítems en
     # negativo. Las cortesías (a precio carta) y los anulados no son venta
@@ -544,6 +667,19 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # del costo dice cuánto de la venta está en esa situación.
         _pegar(tabla[tabla["pc"] <= 0].groupby("clave")["venta"].sum()
                .rename("venta_sin_costo").to_frame())
+    # Y QUÉ se vendió sin costo, por período y en el rango (regla #590).
+    sin_costo_prods, sin_costo_rango = productos_sin_costo(tabla)
+
+    # El período en que cambió la tasa de IGV (regla #590): el día del
+    # cambio sale de las líneas, y se marca el período que lo contiene.
+    igv_cambios = {}
+    if {"igv", "neto"} <= set(tabla.columns):
+        _dia_clave = dict(zip(tabla["dia"], tabla["clave"]))
+        for _d, _a, _b in cambios_de_igv(tabla["dia"], tabla["igv"],
+                                         tabla["neto"]):
+            _k = _dia_clave.get(_d)
+            if _k is not None:
+                igv_cambios[_k] = (_d, _a, _b)
 
     # PROPINA: una por PAGO, no por plato (regla #517). Sale de las filas por
     # pago (`d_pagos`), tomando cada pago una vez; los anulados no cuentan.
@@ -1103,7 +1239,10 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             _zona_resumen(g, claves, fila, _vars, foco if _foco_ok else None,
                           vol_label, por_canal, canales if _partida else [],
                           gran, _ctx, _pie, _rng, _nota_recorte,
-                          feriados=_feriados, culpables=culpables)
+                          feriados=_feriados, culpables=culpables,
+                          sin_costo_prods=sin_costo_prods,
+                          sin_costo_rango=sin_costo_rango,
+                          igv_cambios=igv_cambios)
         elif not _foco_ok:
             # El `st.empty()` sólo en esta rama, como en Compras (regla
             # #471): borra las grillas al soltar el foco sin re-montarlas en
@@ -1132,12 +1271,19 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
 
 def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
                   canales, gran, ctx, pie, rango, nota_recorte,
-                  feriados=frozenset(), culpables=None):
+                  feriados=frozenset(), culpables=None, sin_costo_prods=None,
+                  sin_costo_rango=None, igv_cambios=None):
     """El gráfico escrito como tabla, en la forma «B» del mockup (regla
     #518): nueve columnas y, al hacer clic en una fila, una franja con los
     canales, las propinas, los descuentos, las cortesías y el detalle del
-    costo. «Ver pedidos» en la franja abre el Detalle de ese período."""
+    costo. «Ver pedidos» en la franja abre el Detalle de ese período.
+
+    `sin_costo_prods` / `sin_costo_rango`: lo vendido sin costo, por período
+    y en el rango (`productos_sin_costo`); `igv_cambios`: `{clave: (día,
+    antes, después)}` del período en que cambió la tasa de IGV (#590)."""
     culpables = culpables or {}
+    sin_costo_prods = sin_costo_prods or {}
+    igv_cambios = igv_cambios or {}
     n = len(claves)
     tot = g["total"].astype(float).tolist()
     tot_vista = float(sum(tot))
@@ -1255,22 +1401,40 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
             if sin_costo[i]:
                 _fino += (f" · {sin_costo[i] / tot[i]:.0%} de la venta sin "
                           "costo cargado")
+            if claves[i] in igv_cambios:
+                _fino += " · " + marca_igv(*igv_cambios[claves[i]][1:])
             partes.append(_bloque(
                 "Costo", f"{pcosto[i]:.1%}{_span(*_txt_pp(_pp(pcosto, i)))}",
                 _fino, aviso=pcosto[i] > _COSTO_ROTO))
         # El plato que dispara el costo va en el renglón del botón y no en su
         # bloque: adentro alargaba la franja a 156px (medido en el 12/09) en
-        # una grilla de 191. El renglón del botón existe igual.
+        # una grilla de 191. El renglón del botón existe igual — y por lo
+        # mismo van ahí lo vendido sin costo y el cambio de IGV (#590).
         _cul = culpables.get(claves[i])
         _aviso = ""
         if pcosto[i] is not None and pcosto[i] > _COSTO_ROTO and _cul:
             _aviso = (f'<span class="vr-revisar">Revisar «{escape(_cul[0])}»: '
                       f'costo S/ {_cul[1]:,.2f} por unidad contra precio '
                       f'S/ {_cul[2]:,.2f}</span>')
+        _sp = sin_costo_prods.get(claves[i])
+        if _sp:
+            _aviso += (f'<span class="vr-sincosto">Sin costo: '
+                       f'{escape(detalle_sin_costo(_sp, 3))}</span>')
+        _ic = igv_cambios.get(claves[i])
+        if _ic:
+            _aviso += (f'<span class="vr-igv">'
+                       f'{escape(nota_igv(*_ic, pcosto=_pc_antes(i)))}</span>')
         partes.append(f'<div class="vr-pie">{_aviso}<button class="vr-ver" '
                       f'type="button">Ver pedidos de {escape(fila[i])} →'
                       '</button></div>')
         return "".join(partes)
+
+    def _pc_antes(i):
+        """El % de costo del que parte un cambio de IGV: el del período de
+        antes (el marcado ya trae días con la tasa nueva)."""
+        if i and pcosto[i - 1] is not None:
+            return pcosto[i - 1]
+        return pcosto[i]
 
     def _max(serie):
         vals = [x for x in serie if x is not None and not pd.isna(x)]
@@ -1302,6 +1466,16 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
         r = {"periodo": fila[i], "__tip": fila[i]}
         if gran == "Día" and pd.Timestamp(c).date() in feriados:
             r["__v_periodo"], r["__vc_periodo"] = "feriado", "vr-alto"
+        _ic = igv_cambios.get(c)
+        if _ic:
+            # La marca va en el PERÍODO y no en el % de costo: la celda del %
+            # ya lleva su cambio en pp y la bandera «revisar» (#590).
+            _m = marca_igv(_ic[1], _ic[2])
+            _prev = r.get("__v_periodo")
+            r["__v_periodo"] = f"{_prev} · {_m}" if _prev else _m
+            r["__vc_periodo"] = "vr-alto"
+            r["__tip"] = (f"{fila[i]} · "
+                          + nota_igv(*_ic, pcosto=_pc_antes(i)))
         for k, serie in (("carta", carta), ("neto", neto), ("costo", costo)):
             if serie[i] is not None:
                 r[k] = round(serie[i], 2)
@@ -1327,6 +1501,11 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
             _celda(r, "psin", round(psin[i], 4), f"{psin[i]:.0%}")
             _barra(r, "psin", psin[i], _max(psin),
                    "vr-bar-ambar" if psin[i] > 0.3 else "")
+            # QUÉ se vendió sin costo (#590): dos nombres en la celda y el
+            # detalle con montos al pasar el cursor.
+            _sp = sin_costo_prods.get(c, [])
+            r["sin_que"] = texto_sin_costo(_sp)
+            r["__tip_sin_que"] = detalle_sin_costo(_sp)
         if vol_label:
             r["pax"] = pax[i]
             _tk = None if ticket[i] is None or pd.isna(ticket[i]) \
@@ -1411,6 +1590,8 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
     if "venta_sin_costo" in hay:
         total["sin_costo"] = f"S/ {_s('venta_sin_costo'):,.0f}"
         total["psin"] = f"{_s('venta_sin_costo') / tot_vista:.0%}" if tot_vista else ""
+        if sin_costo_rango:
+            total["sin_que"] = texto_sin_costo(sin_costo_rango, 3)
     if vol_label:
         _tp = _s("pax")
         total["pax"] = f"{_tp:,.0f}"
@@ -1565,6 +1746,13 @@ def _subvistas(vol_label, canales, hay):
                       "Venta de platos SIN costo cargado: baja el % de costo"),
                      ("psin", "% venta sin costo", "celda", 132,
                       "Qué parte de la venta no tiene costo cargado")]
+        if "sin_que" in hay:
+            # Regla #590: lo que hay que corregir en el POS. El costo con que
+            # se vende es una foto, así que lo de ese período queda así.
+            cols.append(("sin_que", "Qué se vendió sin costo", "texto", 220,
+                         "Lo vendido sin costo cargado, de mayor a menor "
+                         "venta: lo que hay que corregir en el POS. Con el "
+                         "cursor, los montos"))
         cols.append(("revisar", "A revisar", "texto", 180,
                      "El plato con mayor exceso de costo sobre su precio, en "
                      "los períodos marcados «revisar»"))

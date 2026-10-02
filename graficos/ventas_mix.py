@@ -57,7 +57,8 @@ from graficos.compras.semanal import (
 from graficos.ventas_comparativo import _cargar_tramo
 from graficos.ventas_resumen import (MAX_DIAS, _ATENUADO, _COSTO_ALTO,
                                      _COSTO_ROTO, _con_alpha, _fmt_dia,
-                                     _fmt_var_venta)
+                                     _fmt_var_venta, cambios_de_igv,
+                                     nota_igv)
 from utils import fmt_k
 
 _GRAN_OPCIONES = ("Día", "Semana", "Mes", "Año")
@@ -126,13 +127,17 @@ def columnas(d):
         "cant": _resolver(d, ["Cantidad Item Ddocumento", "Cantidad"]),
         "costo": _resolver(d, ["Costo Venta", "Costo Item Ddocumento"]),
         "neto": _resolver(d, ["Neto Total Item Ddocumento"]),
+        # De él sale la tasa de IGV, que marca el período en que cambió y
+        # movió el % de costo sin tocar ningún costo (regla #590).
+        "igv": _resolver(d, ["Igv Item Ddocumento"]),
     }
 
 
 def base(d, cols):
-    """Una fila por ítem vendido con los tres niveles de la carta y las
-    cuatro sumas, con nombres FIJOS: todo lo de abajo agrupa por columna de
-    verdad y renombra por nombre (regla #481, pandas 2 contra pandas 3).
+    """Una fila por ítem vendido con los tres niveles de la carta y sus
+    sumas, con nombres FIJOS: todo lo de abajo agrupa por columna de verdad
+    y renombra por nombre (regla #481, pandas 2 contra pandas 3). `igv` va
+    en cero si `cols` no lo trae (un llamador viejo de `columnas`).
 
     Un nivel vacío se nombra («(sin grupo)») en vez de caerse: esa venta
     existe y tiene que sumar en algún lado."""
@@ -157,6 +162,7 @@ def base(d, cols):
         "cant": _num(cols["cant"]),
         "costo": _num(cols["costo"]),
         "neto": _num(cols["neto"]),
+        "igv": _num(cols.get("igv")),
     })
     return b.dropna(subset=["fecha"])
 
@@ -544,6 +550,16 @@ def _ventas_mix(d, filtrar_cb=None):
     n_per = len(claves)
     eje, largo = _rotulos(claves, gran)
     rango = (b_todo["fecha"].min().date(), b_todo["fecha"].max().date())
+    # El período en que cambió la tasa de IGV (regla #590): su columna se
+    # marca cuando las celdas dicen el % de costo. El día sale de las líneas.
+    _j_de = {k: j for j, k in enumerate(claves)}
+    _dia_clave = dict(zip(b_todo["fecha"].dt.normalize(), b_todo["clave"]))
+    igv_notas = [None] * n_per
+    for _d, _a, _b in cambios_de_igv(b_todo["fecha"], b_todo["igv"],
+                                     b_todo["neto"]):
+        _j = _j_de.get(_dia_clave.get(_d))
+        if _j is not None:
+            igv_notas[_j] = (_d, _a, _b)
 
     # ── 3) El nivel en pantalla ──────────────────────────────────────────
     ruta = ruta_valida(b_todo, ss.get("vt_mix_ruta", ()))
@@ -649,7 +665,8 @@ def _ventas_mix(d, filtrar_cb=None):
     if zona == _ZONA_RESUMEN:
         costo_modo = celdas == _CELDAS_COSTO
         _zona_resumen(M, med, orden, eje, [v[0] == "parcial" for v in vars_],
-                      foco_ix, pct_modo, unidades, nivel, ruta, costo_modo)
+                      foco_ix, pct_modo, unidades, nivel, ruta, costo_modo,
+                      igv_notas=igv_notas)
         _siguiente = (f"una fila para ver sus {_NIVELES[nivel + 1].lower()}"
                       if nivel < 2 else "un producto para seguirlo")
         if costo_modo:
@@ -901,7 +918,7 @@ def _serie(valores):
 
 
 def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
-                  unidades, nivel, ruta, costo_modo=False):
+                  unidades, nivel, ruta, costo_modo=False, igv_notas=None):
     """El mapa de calor: una fila por cada uno del nivel, una columna por
     período, y el total, el mix, el % de costo y la tendencia al final. Un
     clic en una fila hace lo mismo que su nombre en la columna de la
@@ -911,7 +928,12 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
     #544): «Total» pasa a ser el del rango entero —la columna «% costo»
     diría lo mismo, y se va—, y la tendencia es la del costo. «Mix» sigue
     siendo lo que pesa cada uno en lo vendido (en soles o en unidades, lo
-    que diga «Medir»): es lo que dice cuánto importa un costo alto."""
+    que diga «Medir»): es lo que dice cuánto importa un costo alto.
+
+    `igv_notas`: por período, `None` o `(día, antes, después)` si ahí cambió
+    la tasa de IGV. Con `costo_modo` su columna dice «· IGV» y la ayuda de la
+    cabecera explica cuánto mueve eso el % (regla #590)."""
+    igv_notas = igv_notas or [None] * len(eje)
     vals = M[med].loc[orden]
     tot = vals.sum(axis=0)
     c, n = M["costo"].loc[orden], M["neto"].loc[orden]
@@ -920,7 +942,9 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
     # El período en foco lleva «●» y uno cortado por el rango, «*»: el
     # nombre de la columna es lo único de la cabecera que se puede marcar.
     per_cols = [("● " if j == foco_ix else "") + e
-                + ("*" if parciales[j] else "") for j, e in enumerate(eje)]
+                + ("*" if parciales[j] else "")
+                + (" · IGV" if costo_modo and igv_notas[j] else "")
+                for j, e in enumerate(eje)]
     if costo_modo:
         # Un cociente no se sesga con un período cortado por el rango: 23
         # días de septiembre dicen su % de costo igual que 30.
@@ -995,6 +1019,14 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
         config["Total"] = st.column_config.Column(
             "Total", help="El % de costo del rango entero: costo ÷ venta "
             "neta. «—»: sin costo cargado.")
+        # La columna del período en que cambió el IGV explica, al pasar el
+        # cursor por su cabecera, cuánto del cambio del % es sólo eso.
+        for j, nota in enumerate(igv_notas):
+            if nota:
+                _antes = cuerpo_tot.iloc[j - 1] if j else np.nan
+                config[per_cols[j]] = st.column_config.Column(
+                    per_cols[j], help=nota_igv(
+                        *nota, pcosto=None if pd.isna(_antes) else float(_antes)))
     else:
         config["% costo"] = st.column_config.Column(
             "% costo", help="Costo de la línea ÷ venta neta, como el "

@@ -279,6 +279,10 @@ def _css_dias():
                       "align-items": "baseline"}
     css[".vr-revisar"] = {"font-size": "12px", "font-weight": "600",
                           "color": ERROR}
+    # Lo vendido sin costo y el cambio de IGV, en el renglón del botón (#590).
+    css[".vr-sincosto"] = {"font-size": "12px", "font-weight": "600",
+                           "color": ADVERTENCIA_TEXTO}
+    css[".vr-igv"] = {"font-size": "12px", "color": GRIS_TEXTO_MEDIO}
     css[".vr-ver"] = {"font": "inherit", "font-size": "12px",
                       "font-weight": "600", "color": ACENTO_TEXTO,
                       "background": "none", "border": "0", "padding": "0",
@@ -332,7 +336,11 @@ def renderizar_dias_venta(tp, altura, key, columnas, rotulo_periodo="Día",
         kw = dict(header_name=rotulo, headerTooltip=tip)
         if tipo == "texto":
             # La única que se estira: un nombre de plato no tiene ancho fijo.
-            kw.update(minWidth=ancho, tooltipField=campo)
+            # Su ayuda es ella misma, salvo que la fila traiga una propia en
+            # `__tip_<campo>` (lo vendido sin costo: los montos, #590).
+            _tip = f"__tip_{campo}"
+            kw.update(minWidth=ancho,
+                      tooltipField=_tip if _tip in tp.columns else campo)
         else:
             kw.update(type=["numericColumn"], width=ancho, minWidth=ancho,
                       suppressSizeToFit=True)

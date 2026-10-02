@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-589 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+590 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (196)
 
@@ -880,7 +880,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (147)
+**Decisiones de diseño y UX** (148)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1029,6 +1029,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#584** — Ajuste: los rótulos del rail dicen lo que cada vista ES hoy; los ids siguen siendo los de…
 - **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
 - **#589** — Un elemento que aparece en una corrida y no en la anterior re-monta TODO lo que se dibuja…
+- **#590** — El Resumen de Ventas dice QUÉ se vendió sin costo, y el Resumen y el Mix marcan el período en…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -46785,6 +46786,63 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+590. **El Resumen de Ventas dice QUÉ se vendió sin costo, y el Resumen y el
+     Mix marcan el período en que cambió el IGV: el % de costo es sobre el
+     NETO, y un IGV más bajo lo baja sin que cambie ningún costo.**
+     2026-10-02, a pedido: el paso 4 de la propuesta de la #556. Medido antes
+     de escribirlo, y con un error mío que conviene dejar dicho: el MONTO
+     vendido sin costo por período ya estaba en el Resumen (subvista Costo,
+     «Sin costo» y «% venta sin costo», desde el 2026-09-24, d4b9746) y al
+     proponer el paso no lo vi. Faltaba el QUÉ y la marca del IGV.
+
+     - **Qué se vendió sin costo** (`productos_sin_costo`, el mismo criterio
+       de la columna: `PRECIO COSTO <= 0`, venta con impuestos, una nota de
+       crédito restando de su producto). Una columna de la subvista Costo,
+       «Qué se vendió sin costo» —dos nombres y «y N más», con los montos en
+       la ayuda (`__tip_sin_que`: la tabla deja que una columna de texto
+       traiga su propia ayuda)—, la línea «Sin costo: …» con montos en el
+       renglón del botón de la franja y los tres primeros del rango en la
+       fila Total. Medido en 2025 por mes: 85 productos, S/ 71.529; en junio
+       la (Ev) NessToma Sapiens S/ 2.868 y las aguas Munay; desde setiembre
+       los «(Cst)» de Venta Interna. El costo con que se vende es una foto
+       que el POS no corrige (#557): esto es lo que hay que arreglar allá.
+     - **El IGV, medido en las ventas** (IGV ÷ neto de cada línea): 18 %
+       hasta el 9 de junio de 2025, 10 % desde el 10, y 10,5 % desde el 10
+       de febrero de 2026 — escalones de un día al otro. Precisa la #514,
+       que ubicaba el cambio en octubre de 2025 leyendo `TLOG_MODPRECIO`, y
+       la #557, que lo daba «en junio–julio». Con el mismo precio y el mismo
+       costo, el % de costo se multiplica por (1 + IGV nuevo + recargo) ÷
+       (1 + IGV viejo + recargo): de 18 a 10 %, −6,1 %, o sea −2,2 pp sobre
+       un 35,5 %. El de 10 a 10,5 % lo mueve una décima y no se marca
+       (`_UMBRAL_IGV` = 1 punto de tasa).
+     - **El día del cambio sale de las líneas, no de la suma**
+       (`cambios_de_igv`): la tasa de un día es la MODA de IGV ÷ neto de sus
+       líneas con neto, así una línea exonerada en un día flojo —o una nota
+       de crédito— no pasa por un cambio de ley. Se marca el período que
+       CONTIENE ese día, una sola vez: con los promedios por período, junio
+       (12 %) y julio (10 %) salían marcados los dos.
+     - **Dónde va la marca.** En el Resumen, en el PERÍODO («Jun 2025» lleva
+       «IGV 18→10%» y su ayuda la frase entera) y no en el % de costo, cuya
+       celda ya lleva el cambio en pp y la bandera «revisar»; en la franja,
+       «IGV 18→10%» en el bloque Costo y la frase debajo. En el Mix, sólo
+       con las celdas en «% costo»: la columna del período dice «· IGV» y la
+       ayuda de su cabecera, cuánto. La frase la arma `nota_igv` desde el %
+       del período ANTERIOR. Medido en junio de 2025: 35,5 % igual que mayo,
+       cuando el IGV solo lo bajaba a 33,3 % — los costos subieron ~2 pp
+       ese mes y el % no lo mostraba.
+     - El Mix de carta no podía leer el IGV: `columnas()` suma `igv` y
+       `base()` lo trae en cero si un llamador viejo no lo pide (Análisis de
+       platos usa las dos).
+
+     Candados: `test_graficos.py::_pruebas_igv_y_sin_costo` (el día del
+     cambio con una línea exonerada y una nota de crédito en el medio, el
+     10 → 10,5 % sin marca, el efecto, la frase, la lista por período con la
+     nota restando) y la del Mix, que ahora resuelve nueve columnas. Los
+     nombres nuevos se importan entre módulos (`ventas_mix` →
+     `ventas_resumen.cambios_de_igv`): en Cloud, «Reboot app» (#357).
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46797,7 +46855,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#589**; la próxima toma el número siguiente.
+> última regla es la **#590**; la próxima toma el número siguiente.
 
 >
 

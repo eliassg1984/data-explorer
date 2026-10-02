@@ -6175,10 +6175,16 @@ def _pruebas_ventas_mix():
         "CANTIDAD ITEM DDOCUMENTO": [2, 1, 3, 1, 1],
         "COSTO VENTA": [35.0, 12.0, 9.0, 1.0, 21.0],
         "NETO TOTAL ITEM DDOCUMENTO": [81.0, 32.4, 24.3, 4.05, 48.6],
+        # El IGV de la línea marca el período en que cambió la tasa (#590).
+        "IGV ITEM DDOCUMENTO": [8.1, 3.24, 2.43, 0.405, 4.86],
     })
     cols = _m.columnas(d)
-    check("resuelve las ocho columnas", all(cols.values()), True)
+    check("resuelve las nueve columnas", all(cols.values()), True)
     b = _m.base(d, cols)
+    check("y la base trae el IGV", round(float(b["igv"].sum()), 3), 19.035)
+    check("sin la columna del IGV, la base sigue (en cero)",
+          float(_m.base(d, {k: v for k, v in cols.items() if k != "igv"})
+                ["igv"].sum()), 0.0)
     check("un grupo vacío se nombra, no se cae",
           sorted(b["grupo"].unique()), ["(sin grupo)", "Alimentos", "Bebidas"])
     b = b.assign(clave=_periodo_serie(b["fecha"], "Semana"))
@@ -6651,6 +6657,74 @@ def _pruebas_costo_recetas_base():
     check("el botón Actualizar refresca las órdenes y el primer nivel",
           all(a in REPORTES["Recetas"].get("archivos_extra", ())
               for a in (rbc.ARCHIVO_ORDENES, rbc.ARCHIVO_N1)), True)
+    return fallos
+
+
+def _pruebas_igv_y_sin_costo():
+    """Ventas › Resumen y Mix (regla #590): el período en que cambió la tasa
+    de IGV —que mueve el % de costo sin tocar ningún costo— y QUÉ se vendió
+    sin costo cargado.
+
+    Fija lo que se vería mal sin avisar: que una línea exonerada en un día
+    flojo no pase por un cambio de ley (la tasa del día es la de la MAYORÍA
+    de sus líneas), que el 10 → 10,5 % no se marque (mueve una décima), que
+    una nota de crédito no cuente para la tasa, y que lo vendido sin costo
+    salga de mayor a menor con la nota restando de su producto."""
+    from graficos import ventas_resumen as vr
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · igv y sin costo · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · igv y sin costo · {nombre}: got={got!r} exp={exp!r}")
+
+    dias = pd.to_datetime(["2025-06-08", "2025-06-08", "2025-06-09",
+                           "2025-06-09", "2025-06-09", "2025-06-10",
+                           "2025-06-10", "2025-06-11", "2026-02-10",
+                           "2026-02-11"])
+    neto = [100.0, 50.0, 80.0, 20.0, 40.0, 100.0, -100.0, 60.0, 100.0, 100.0]
+    #       18 %   18 %   18 %   0 % (exonerada)  18 %  10 %  nota  10 %
+    igv = [18.0, 9.0, 14.4, 0.0, 7.2, 10.0, -10.0, 6.0, 10.0, 10.5]
+    cambios = vr.cambios_de_igv(dias, igv, neto)
+    check("un cambio de 18 a 10 %, el día que pasó",
+          [(d.strftime("%Y-%m-%d"), round(a, 3), round(b, 3))
+           for d, a, b in cambios], [("2025-06-10", 0.18, 0.1)])
+    check("sin líneas con neto, ningún cambio",
+          vr.cambios_de_igv(dias[:1], [0.0], [-5.0]), [])
+    check("la marca corta", vr.marca_igv(0.18, 0.10), "IGV 18→10%")
+    check("el efecto: −6,1 % del % de costo", round(vr.efecto_igv(0.18, 0.10), 4),
+          -0.0611)
+    nota = vr.nota_igv(pd.Timestamp("2025-06-10"), 0.18, 0.10, pcosto=0.36)
+    check("la frase dice el día, las tasas y los puntos",
+          ("10/06/2025" in nota, "18%" in nota, "10%" in nota,
+           "36.0%" in nota, "−2.2 pp" in nota or "-2.2 pp" in nota),
+          (True, True, True, True, True))
+
+    tabla = pd.DataFrame({
+        "clave": ["a", "a", "a", "a", "b", "b"],
+        "prod": ["Agua", "Agua", "Pisco", "Lomo", "Agua", "Pisco"],
+        "venta": [11.0, 11.0, 30.0, 80.0, 11.0, -30.0],
+        "pc": [0.0, 0.0, 0.0, 25.0, 0.0, 0.0],
+    })
+    por, rango = vr.productos_sin_costo(tabla)
+    check("por período, de mayor a menor venta",
+          por["a"], [("Pisco", 30.0), ("Agua", 22.0)])
+    check("una nota de crédito resta de su producto y lo que queda en 0 no "
+          "se nombra", por["b"], [("Agua", 11.0)])
+    check("en el rango", rango, [("Agua", 33.0)])
+    check("el texto de la celda", vr.texto_sin_costo(
+        [("A", 3.0), ("B", 2.0), ("C", 1.0)]), "A, B y 1 más")
+    check("el detalle con montos", vr.detalle_sin_costo([("Agua", 412.4)]),
+          "Agua S/ 412")
+    check("sin la columna de costo, nada",
+          vr.productos_sin_costo(tabla.drop(columns=["pc"])), ({}, []))
+    subs = vr._subvistas(None, [], {"pcosto", "psin", "sin_que"})
+    check("la subvista Costo lleva la columna",
+          "sin_que" in [c[0] for c in subs["Costo"][0]], True)
     return fallos
 
 
@@ -8524,6 +8598,7 @@ def main():
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()
+    fallos += _pruebas_igv_y_sin_costo()
 
     # ── Recetas › Costo recetas base: uso, producción y costo (#576) ─────
     fallos += _pruebas_costo_recetas_base()
