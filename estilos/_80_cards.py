@@ -1134,10 +1134,47 @@ CSS = """    /* ================================================================
        lecturas, no dos tarjetas —, y la pastilla «jul 26 ✕» que dice qué
        período está resaltado. Las dos por su key/clase exacta. */
     .ajevo-divisor {
-        border-top: 1px solid var(--border);
-        padding-top: 6px;
         font-size: 12px;
         color: var(--text-secondary);
+    }
+    /* Desde el 2026-10-02 (regla #585) la línea va en la FILA del divisor y
+       no en el texto: la fila lleva también el selector Familias | Tabla,
+       y una línea sobre el texto solo se cortaba en su columna. */
+    .st-key-ajevo_divisor_fila {
+        border-top: 1px solid var(--border);
+        padding-top: 6px;
+    }
+    /* El selector Familias | Tabla, compacto: que alternar no le sume a la
+       tarjeta más alto que el renglón de texto que ya existía. */
+    /* La tabla de resumen (regla #585) es un <table> de `st.markdown`, y
+       Streamlit le pone a esas tablas un marco y una línea entre columnas:
+       acá sólo van las líneas entre filas, que dibuja el propio HTML. */
+    .ajevo-tabla table,
+    .ajevo-tabla th,
+    .ajevo-tabla td {
+        border-left: 0 !important;
+        border-right: 0 !important;
+        border-top: 0 !important;
+    }
+    .ajevo-tabla table {
+        border: 0 !important;
+        margin: 0 !important;
+    }
+    /* El `stMarkdownContainer` nace con `margin-bottom: -16px` (medido):
+       sin devolverlos, el total de la tabla se salía 16px por el borde de
+       abajo de la tarjeta. Con ellos, la tarjeta mide lo mismo en
+       Familias que en Tabla (583px a 1366x768). */
+    .ajevo-tabla {
+        margin-bottom: 16px;
+    }
+    .st-key-ajuste_evo_abajo [data-testid="stButtonGroup"] {
+        justify-content: flex-end;
+    }
+    .st-key-ajuste_evo_abajo [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
     }
     /* La fila de mini-gráficos se desliza de costado (regla #505): el
        ancho de la figura lo fuerza un <style> por render desde

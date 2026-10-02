@@ -75,19 +75,17 @@ def _fmt_corte(fecha):
 
 def _periodo_pivote_ajuste(fechas, gran):
     """Clave ordenable + etiqueta corta de periodo para la tabla dinámica
-    de Ajuste, en las 3 granularidades del selector (Corte/Semana/Mes).
-    Corte agrupa por rachas de días (`_cortes_por_racha`); Semana/Mes
-    reusan `_periodo_serie` (graficos/compras/_comun.py, re-exportada vía
+    de Ajuste, en las 2 granularidades del selector (Corte/Mes). Corte
+    agrupa por rachas de días (`_cortes_por_racha`); Mes reusa
+    `_periodo_serie` (graficos/compras/_comun.py, re-exportada vía
     graficos.compras — "reusar desde ahí, no duplicar" per
     arquitectura.md) para la clave, con etiqueta propia porque acá el mes
-    va abreviado en español (_MESES_ABR_ES)."""
+    va abreviado en español (_MESES_ABR_ES). «Semana» se quitó el
+    2026-10-02: el ajuste se mide por conteo, no por semana (regla #585)."""
     if gran == "Corte":
         return _cortes_por_racha(fechas)
     clave = _periodo_serie(fechas, gran)
-    if gran == "Semana":
-        etiqueta = "S" + fechas.dt.isocalendar().week.astype(str).str.zfill(2)
-    else:
-        etiqueta = fechas.dt.month.map(lambda m: _MESES_ABR_ES[m - 1])
+    etiqueta = fechas.dt.month.map(lambda m: _MESES_ABR_ES[m - 1])
     return clave, etiqueta
 
 
