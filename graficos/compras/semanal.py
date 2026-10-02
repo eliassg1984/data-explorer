@@ -1912,8 +1912,11 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # leyó de `session_state` antes de la figura, porque su alto depende
         # de él (ver «EL MODO SE LEE DE session_state»).
         with st.container(horizontal=True, gap="small", key="cp_sem_pie"):
+            # SIN `default=`: la clave ya viene sembrada desde arriba (ver
+            # «EL MODO SE LEE DE session_state»), y con las dos Streamlit
+            # avisa en el log en cada sesión.
             st.segmented_control(
-                "Qué se ve abajo", _MODO_OPCIONES, default=_MODO_DEFAULT,
+                "Qué se ve abajo", _MODO_OPCIONES,
                 required=True, key="compras_sem_modo",
                 label_visibility="collapsed", help=_AYUDA_MODO)
             _pie = st.empty()

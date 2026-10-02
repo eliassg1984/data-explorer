@@ -47,6 +47,7 @@ alto.
 """
 
 import html
+import unicodedata
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -60,7 +61,7 @@ from tema import (
 )
 from graficos.base import (
     _compras_layout, _compras_truncar, _slug, preservar_widgets,
-    rango_tarjeta,
+    rango_tarjeta, scope_rerun,
 )
 from graficos.ventas_comparativo import _fmt_soles_compacto
 from graficos.compras._comun import (
@@ -68,7 +69,7 @@ from graficos.compras._comun import (
     CROMO_GRID_RANK, GAP_DRILL, moda_por_grupo, selector_fecha_tarjeta,
     # Las de la variación contra la barra anterior (#470): nacieron en
     # Semanal y viven en `_comun` desde que esta tarjeta pidió lo mismo.
-    _UNIDAD_GRAN, _clave_grilla, _first_point, _fmt_variacion,
+    _clave_grilla, _first_point, _fmt_variacion,
     _hover_variacion, _nota_variacion, _periodo_serie, _variaciones,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
@@ -79,6 +80,7 @@ from graficos.compras._css_proveedor import CSS_RANKING_GRID
 # despeja contra el alto de SU fila, no contra un número copiado.
 from tablas.compras_semanal import (
     ALTO_FILA, renderizar_compras_producto, renderizar_periodos,
+    renderizar_proveedores_producto,
 )
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos import alturas, periodo
@@ -157,13 +159,35 @@ de verdad —la ventana por defecto son 3 meses agrupados por Mes, o sea 3 ó
 4 barras, y entran todas sin deslizar— y le deja 237px a la figura. Con
 cinco la figura caía a 210 y con seis a 183.
 
-La zona mide LO MISMO en sus dos estados, Resumen y Detalle: si midiera
-distinto, tocar una barra cambiaría el alto de la tarjeta y la fila entera
-bailaría con cada clic (es la #398, la misma razón por la que las dos
+La zona mide LO MISMO en sus tres modos (regla #581): si midiera
+distinto, tocar una barra o cambiar de modo cambiaría el alto de la
+tarjeta y la fila entera bailaría con cada clic (es la #398, la misma razón por la que las dos
 tablas de Semanal miden igual)."""
 
 _ALTO_ZONA = alturas.por_filas(_FILAS_ZONA, px_fila=ALTO_FILA,
                                extra=CROMO_GRID_RANK, minimo=0)
+
+_ZONA_TOTAL = "Resumen Total"
+_ZONA_PROVS = "Resumen del Período"
+_ZONA_DETALLE = "Detalle"
+_ZONA_OPCIONES = (_ZONA_TOTAL, _ZONA_PROVS, _ZONA_DETALLE)
+"""Lo que puede mostrar la zona de abajo del gráfico (2026-10-02, regla
+#581). Los mismos tres nombres que «Compras por período», y por la misma
+razón que las dos tablas comparten grilla: es la misma pregunta.
+
+  · «Resumen Total» — el gráfico escrito: una fila por BARRA. Abre acá.
+  · «Resumen del Período» — una fila por PROVEEDOR del producto, en la
+    barra en foco o, sin barra, en la ventana entera. Un clic en uno lleva
+    a Detalle con sus compras.
+  · «Detalle» — una fila por COMPRA, con el mismo ámbito (barra y, si vino
+    de ahí, proveedor).
+
+Hasta ese día la zona tenía dos estados y ningún control: los cambiaba el
+clic en la barra, y la única forma de volver era tocar la MISMA barra —
+lo que obligaba a escribir la instrucción en el rótulo («tocá la misma
+barra para volver al resumen»), que se pidió quitar."""
+
+_K_ZONA_MODO = "compras_prod_zona_modo"
 
 # La tarjeta de la Evolución cambió de forma el 2026-09-20: la tabla «una
 # fila por barra» dejó de vivir a lo ancho de la vista y bajó ADENTRO de
@@ -179,13 +203,17 @@ _ALTO_ZONA = alturas.por_filas(_FILAS_ZONA, px_fila=ALTO_FILA,
 #                                                ────
 #                                                157,2
 #
+# Y 178 desde el 2026-10-02 (regla #581): el rótulo de la zona pasó a ser
+# la fila del control de sus tres modos, que mide 26 y no 5,2 — MEDIDO, la
+# tarjeta saltó de 528 a 549 hasta que la figura devolvió esos 21.
+#
 # Los tres números que no se pueden deducir y hay que medir, porque la
 # primera cuenta los erró y la tarjeta salió 13px más alta que su vecina:
 # la fila de controles mide **22 y no 32** (los dos selectores van aplanados
 # a texto, ver `_CSS_SELECTOR_TEXTO`), el bloque de la grilla suma **7,6
 # propios** al alto del iframe, y los gaps son **cuatro y no tres** — la
 # zona agregó uno.
-_CROMO_CARD_EVO = 157 + _ALTO_ZONA
+_CROMO_CARD_EVO = 178 + _ALTO_ZONA
 
 # El piso ya no es `alturas.MINI`: ver su docstring en `alturas.py`. Con los
 # números de hoy la resta da 237 y el piso no ata — está para el día en que
@@ -209,7 +237,8 @@ no el «Rango» pelado de las otras tarjetas: acá el rango que hereda vive
 en la tarjeta de AL LADO (el selector de «Compras por familia»), y
 «Rango» a secas no dice cuál."""
 
-_KEYS_WIDGET = ("compras_prod_gran_sel", "compras_prod_periodo")
+_KEYS_WIDGET = ("compras_prod_gran_sel", "compras_prod_periodo",
+                "compras_prod_zona_modo", "compras_prod_q")
 """Los controles de esta sección, para que la escalada no se los lleve.
 
 La consume `preservar_widgets` en el `st.rerun(scope="app")` de más abajo:
@@ -218,7 +247,14 @@ que no se dibujó, así que sin esta tupla mover la fecha de la cabecera
 devolvía la granularidad a «Mes» y la ventana a «Últimos 3 meses». Ver
 `graficos/base.py::preservar_widgets` y `arquitectura.md` regla #373.
 Hasta el 2026-09-12 había dos más, las del filtro de proveedores
-(`cp_prod_prov_q`, `cp_prod_prov_cb::*`), que se fue ese día."""
+(`cp_prod_prov_q`, `cp_prod_prov_cb::*`), que se fue ese día. Desde el
+2026-10-02 suma el modo de la zona (`_K_ZONA_MODO`) y el buscador del
+Ranking (regla #581).
+
+Todas como TEXTO, también la del modo, que tiene su constante: la guarda
+de `test_graficos.py` lee esta tupla con `ast.literal_eval`, y un nombre
+adentro la vuelve ilegible — la guarda la da por vacía y canta todos los
+controles de la sección."""
 
 # Eje X por granularidad: forzado a propósito. Con pocos puntos (rango de
 # fecha corto, o un producto con 1-2 compras) Plotly no tiene de dónde sacar
@@ -341,6 +377,66 @@ _CSS_SELECTOR_TEXTO = f"""
     text-overflow: ellipsis;
 }}
 .cp-prod-zona-rot b {{ color: var(--text-primary); font-weight: 600; }}
+/* LA FILA DE LA ZONA (regla #581): el control de los tres modos y, al
+   lado, el rótulo del ámbito. Comparten renglón por lo mismo que en
+   «Compras por período» (`cp_sem_pie`): un renglón propio para cada uno se
+   lo comería la figura. A 26px y no a los 32 de allá: esta tarjeta tiene
+   media página y la figura paga cada píxel (`_CROMO_CARD_EVO`). */
+.st-key-compras_prod_zona_modo [data-testid="stButtonGroup"] button {{
+    min-height: 26px !important;
+    height: 26px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+}}
+.st-key-cp_prod_zona_pie {{ align-items: center !important; }}
+.st-key-cp_prod_zona_pie > [data-testid="stElementContainer"]:has(
+        .cp-prod-zona-rot) {{
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}}
+.st-key-cp_prod_zona_pie [data-testid="stMarkdownContainer"] {{
+    margin-bottom: 0 !important;
+}}
+.st-key-cp_prod_zona_pie .cp-prod-zona-rot {{ margin: 0; }}
+/* LA FILA DEL TÍTULO DEL RANKING, con su buscador (regla #581). El título
+   se queda con lo que sobra y se corta con «…» —el ámbito («· Vinos
+   Tinto») puede ser largo—; el buscador mide lo que su placeholder. A 26px
+   como los de las cabeceras de Volatilidad y «Vs año pasado»: sin esto el
+   campo se queda en los 40 de Streamlit y la tarjeta crece. */
+.st-key-cp_prod_rank_hdr {{ align-items: center !important; }}
+/* Y la fila le devuelve a la tabla los 12px que el título solo no pedía:
+   solo, el título es un `st.markdown`, y la regla #162 le come 16 de los
+   29,6 que mide — la tabla abría a 29,6 de él. La fila mide 26 + el gap,
+   y sin esto la tarjeta crecía 12 (MEDIDO: 528 → 541). Con el margen la
+   tabla abre a la misma distancia que antes del buscador. */
+.st-key-cp_prod_rank_hdr {{ margin-bottom: -12.4px !important; }}
+.st-key-cp_prod_rank_hdr > [data-testid="stElementContainer"]:has(
+        .cp-prod-rank-tit) {{
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}}
+.st-key-cp_prod_rank_hdr [data-testid="stMarkdownContainer"] {{
+    margin-bottom: 0 !important;
+}}
+.st-key-cp_prod_rank_hdr .cp-prod-rank-tit {{
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}}
+.st-key-cp_prod_rank_hdr > [data-testid="stLayoutWrapper"]:has(
+        > .st-key-cp_prod_rank_buscar) {{
+    flex: 0 0 auto !important;
+    width: 170px !important;
+}}
+.st-key-cp_prod_rank_buscar [data-testid="stTextInputRootElement"] {{
+    min-height: 26px !important;
+    height: 26px !important;
+}}
+.st-key-cp_prod_rank_buscar [data-testid="stTextInputRootElement"] input {{
+    padding: 0 8px !important;
+    font-size: 12px !important;
+}}
 /* Título sobre cada tabla-ranking: mismo lenguaje visual que
    `.cp-rank-tit` de graficos/compras/_css_proveedor.py, pero declarado acá
    — ese CSS solo se inyecta cuando se renderiza el drill de Proveedor, así
@@ -825,8 +921,12 @@ def _periodo_del_clic(pt, claves, momentos):
 
 
 def _compras_del_periodo(g, clave, gran, col_fecha, col_punit, col_cant,
-                         col_valor, col_docu, col_prov):
+                         col_valor, col_docu, col_prov, prov=None):
     """Las filas del DETALLE: una por COMPRA del período que se tocó.
+
+    `clave` None es la ventana ENTERA (todas las barras) y `prov` acota a un
+    proveedor, con su nombre CRUDO: así llega al Detalle quien viene de un
+    clic en «Resumen del Período» (regla #581), con o sin barra en foco.
 
     Devuelve `(filas, total)` o `(None, None)` si el parquet no trae la
     columna de documento — sin ella no hay «una fila por comprobante» que
@@ -845,11 +945,14 @@ def _compras_del_periodo(g, clave, gran, col_fecha, col_punit, col_cant,
     cantidad, que es la única definición que se sostiene al agregar."""
     if not col_docu or col_docu not in g.columns:
         return None, None
-    _g = g[_periodo_serie(pd.Series(g[col_fecha]), gran) == clave].copy()
-    if _g.empty:
-        return None, None
+    _g = (g if clave is None else
+          g[_periodo_serie(pd.Series(g[col_fecha]), gran) == clave]).copy()
     _g["__prov"] = (_g[col_prov].astype(str) if col_prov
                     and col_prov in _g.columns else "")
+    if prov is not None:
+        _g = _g[_g["__prov"] == prov]
+    if _g.empty:
+        return None, None
     _g["__cant"] = pd.to_numeric(_g[col_cant], errors="coerce").fillna(0.0)
     _g["__val"] = pd.to_numeric(_g[col_valor], errors="coerce").fillna(0.0)
     # SE AGRUPA POR DOS COLUMNAS DE VERDAD, y el renombre es POR NOMBRE.
@@ -885,6 +988,76 @@ def _compras_del_periodo(g, clave, gran, col_fecha, col_punit, col_cant,
         "__doc": "",
     }
     return _d, total
+
+
+def _proveedores_del_producto(g, clave, gran, col_fecha, col_cant, col_valor,
+                              col_prov):
+    """Las filas del RESUMEN DEL PERÍODO (regla #581): una por PROVEEDOR
+    que vendió el producto en la barra en foco, o en la ventana entera si
+    no hay barra (`clave` None).
+
+    Devuelve `(filas, total)` o `(None, None)` si el parquet no trae
+    proveedor o no hay compras. Las columnas, por NOMBRE (regla #481).
+
+    El precio es el PONDERADO de cada proveedor, por lo mismo que en el
+    Detalle. Sin conteo de documentos: no entraba en el ancho del panel y
+    el dato está a un clic, en Detalle (ver `renderizar_proveedores_producto`).
+
+    La cantidad SÍ se suma en el total: es un solo producto, así que es una
+    sola unidad de medida."""
+    if not col_prov or col_prov not in g.columns:
+        return None, None
+    _g = (g if clave is None else
+          g[_periodo_serie(pd.Series(g[col_fecha]), gran) == clave]).copy()
+    if _g.empty:
+        return None, None
+    _g["__prov"] = _g[col_prov].astype(str)
+    _g["__cant"] = pd.to_numeric(_g[col_cant], errors="coerce").fillna(0.0)
+    _g["__val"] = pd.to_numeric(_g[col_valor], errors="coerce").fillna(0.0)
+    _p = (_g.groupby("__prov", as_index=False)
+            .agg(cant=("__cant", "sum"), valor=("__val", "sum"))
+            .sort_values(["valor", "__prov"], ascending=[False, True],
+                         kind="stable")
+            .reset_index(drop=True))
+    _val = float(_p["valor"].sum())
+    _cant = float(_p["cant"].sum())
+    filas = pd.DataFrame({
+        "prov": [nombre_propio(_n) if _n else "—" for _n in _p["__prov"]],
+        "cant": _p["cant"].astype(float),
+        "punit": [(_v / _c if _c else None)
+                  for _v, _c in zip(_p["valor"], _p["cant"])],
+        "valor": _p["valor"].astype(float),
+        "parte": (_p["valor"].astype(float) / _val if _val else 0.0),
+        "__prov": _p["__prov"],
+    })
+    _n = len(filas)
+    total = {
+        "prov": f"Total · {_n:,}",
+        "cant": _cant,
+        "punit": (f"S/ {_val / _cant:,.2f}" if _cant else None),
+        "valor": f"S/ {_val:,.2f}",
+        "parte": "100%",
+        "__prov": "",
+    }
+    return filas, total
+
+
+def _sin_tildes(texto):
+    """Minúsculas y sin tildes, para que «limon» encuentre «Limón»."""
+    return (unicodedata.normalize("NFKD", str(texto))
+            .encode("ascii", "ignore").decode().lower())
+
+
+def _coincide(nombres, consulta):
+    """Máscara del buscador del Ranking de productos (regla #581): cada
+    PALABRA de la consulta tiene que aparecer en el nombre, en cualquier
+    orden — «pato magret» encuentra «Magret De Pato Macho x Kg»."""
+    _pal = _sin_tildes(consulta).split()
+    _nom = nombres.astype(str).map(_sin_tildes)
+    _m = pd.Series(True, index=nombres.index)
+    for _p in _pal:
+        _m &= _nom.str.contains(_p, regex=False)
+    return _m
 
 
 def _rotulo_periodo(ts, gran):
@@ -1493,8 +1666,18 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                                          sub_amb)
                 ranking = _prod_ranking(d_rank, col_prod, col_fecha, col_valor,
                                         col_cant, col_punit, col_um)
+                # EL BUSCADOR SE LEE ANTES DE DIBUJARSE: decide qué filas
+                # tiene la tabla y qué producto puede seguir en foco, y su
+                # widget va en la fila del título, más abajo. `key` se lee
+                # sin dibujarla, como el modo de la zona.
+                _q_prod = str(st.session_state.get("compras_prod_q")
+                              or "").strip()
+                ranking_vis = ranking
+                if _q_prod:
+                    ranking_vis = ranking[_coincide(ranking["producto"],
+                                                    _q_prod)]
                 prod_focus = st.session_state.get("compras_prod_focus")
-                if prod_focus not in set(ranking["producto"]):
+                if prod_focus not in set(ranking_vis["producto"]):
                     prod_focus = None
 
                 # El ámbito se DICE en el título: el recorte lo decide un
@@ -1511,19 +1694,40 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                 # arriba (ver `_paneles_familia`). Sólo sin
                 # columna de Familia —sin fila de arriba— la fecha vuelve
                 # acá: la sección no puede quedarse sin control de rango.
+                #
+                # 2026-10-02, a pedido: «que la tabla Ranking de productos
+                # tenga un buscador en la misma fila de su título» (regla
+                # #581). Filtra por nombre, sin tildes ni mayúsculas; el %
+                # sigue siendo sobre el ámbito ENTERO —el buscador elige
+                # qué filas se ven, no cambia contra qué se miden—.
                 _tit_rank = ('<div class="cp-prod-rank-tit">'
                              f'Ranking de productos{_amb_html}</div>')
+
+                def _buscador():
+                    with st.container(key="cp_prod_rank_buscar"):
+                        st.text_input("Buscar producto", key="compras_prod_q",
+                                      placeholder="Buscar producto…",
+                                      label_visibility="collapsed")
+
                 if hay_fam:
-                    st.markdown(_tit_rank, unsafe_allow_html=True)
+                    with st.container(horizontal=True, gap="small",
+                                      vertical_alignment="center",
+                                      key="cp_prod_rank_hdr"):
+                        st.markdown(_tit_rank, unsafe_allow_html=True)
+                        _buscador()
                 else:
+                    # Sin Familia el título comparte fila con la FECHA, que
+                    # no se puede ir a otro lado (la sección se quedaría sin
+                    # control de rango): el buscador baja a un renglón suyo.
                     _fecha(_tit_rank)
+                    _buscador()
 
                 # SIN el punto en "Cant": AG Grid resuelve `field` con notación
                 # de PATH ("a.b" -> row.a.b), así que un campo "Cant." se parte
                 # en ["Cant", ""] y la celda sale vacía en silencio, sin ningún
                 # error (arquitectura.md regla #192). El punto vuelve como
                 # `headerName` en el columnDef, así que el rótulo no cambia.
-                disp = ranking.rename(columns={
+                disp = ranking_vis.rename(columns={
                     "producto": "Producto", "valor": "Valor", "pct": "%",
                     "cantidad": "Cant", "um": "UM", "inicio": "Inicio",
                     "fin": "Fin", "var_pct": "Var",
@@ -1617,8 +1821,13 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     # paso el remonte nace sin fila elegida, así que al
                     # cambiar de grupo la Evolución pasa al primero del grupo
                     # nuevo en vez de quedarse en un producto de otro.
+                    # La búsqueda también: con otras filas, la grilla
+                    # estrena (y nace sin fila elegida, así que la Evolución
+                    # pasa al primero de lo que se ve).
                     key=("compras_prod_rank_tab_"
-                         f"{_slug(fam_amb or 'todo')}_{_slug(sub_amb or 'todo')}"),
+                         f"{_slug(fam_amb or 'todo')}_{_slug(sub_amb or 'todo')}"
+                         + (f"_{_clave_grilla(_sin_tildes(_q_prod))}"
+                            if _q_prod else "")),
                 )
                 # AgGrid devuelve la selección VIGENTE en cada corrida (no un
                 # evento) — comparar contra `prod_focus` alcanza, sin dedup.
@@ -1637,7 +1846,13 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
 
         with col_detalle:
             with st.container(border=True, key="compras_prod_card_evo"):
-                prod_foco = prod_focus if prod_focus is not None else ranking.iloc[0]["producto"]
+                # Sin foco, el primero de lo que se VE: con el buscador
+                # puesto, el primero del ranking entero podría no estar en
+                # la tabla. Una búsqueda sin resultados no deja la tarjeta
+                # vacía: sigue con el primero del ranking.
+                _base_foco = ranking_vis if len(ranking_vis) else ranking
+                prod_foco = (prod_focus if prod_focus is not None
+                             else _base_foco.iloc[0]["producto"])
 
                 # ── CABECERA: el producto en foco ────────────────────────────
                 # Sin controles de sección, y eso es lo que quedó de tres
@@ -1849,6 +2064,32 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     # barra está en foco dependen DOS cosas de esta misma
                     # corrida: el color de las barras y qué dibuja la zona de
                     # abajo.
+                    #
+                    # ── Y EL MODO DE LA ZONA, también antes (regla #581) ──
+                    # Un clic en una barra desde «Resumen Total» CAMBIA el
+                    # modo (lleva a Detalle), y el modo es la clave de un
+                    # widget que sólo se puede escribir ANTES de dibujarlo.
+                    # Mismo orden que «Compras por período» (#476, #580).
+                    _zmodo = st.session_state.get(_K_ZONA_MODO)
+                    if _zmodo not in _ZONA_OPCIONES:
+                        # Un `segmented_control` con un valor fuera de sus
+                        # opciones revienta: se corrige la CLAVE.
+                        _zmodo = _ZONA_TOTAL
+                        st.session_state[_K_ZONA_MODO] = _zmodo
+                    # El clic en un proveedor de «Resumen del Período»: la
+                    # grilla lo devuelve DESPUÉS de dibujarse, así que deja
+                    # una bandera y un rerun, y se aplica acá. El contador
+                    # estrena esa grilla, para que su selección vieja no
+                    # vuelva a mandar a nadie a Detalle al regresar.
+                    _ir_prov = st.session_state.pop("_compras_prod_ir_prov",
+                                                    None)
+                    if _ir_prov is not None:
+                        st.session_state["compras_prod_prov_det"] = _ir_prov
+                        st.session_state[_K_ZONA_MODO] = _ZONA_DETALLE
+                        _zmodo = _ZONA_DETALLE
+                        st.session_state["compras_prod_pnclic"] = (
+                            st.session_state.get("compras_prod_pnclic", 0)
+                            + 1)
                     _key_base = f"compras_g_prod_{gran}"
                     _nclic = st.session_state.get("compras_prod_nclic", 0)
                     _foco_antes = st.session_state.get("compras_prod_foco_per")
@@ -1862,17 +2103,37 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                         st.session_state["compras_prod_nclic"] = _nclic
                         _clic = _periodo_del_clic(_pt, _claves, agg.index)
                         if _clic is not None:
-                            # La MISMA barra apaga el foco: sin toggle no
-                            # habría forma de volver al Resumen, porque esta
-                            # zona no tiene control propio (el pestillo
-                            # «Detalle» se quitó a pedido el 2026-09-20).
-                            st.session_state["compras_prod_foco_per"] = (
-                                None if _foco_antes == _clic else _clic)
+                            # Una barra vuelve al ámbito de la BARRA: suelta
+                            # el proveedor que había abierto «Resumen del
+                            # Período».
+                            st.session_state["compras_prod_prov_det"] = None
+                            if _zmodo == _ZONA_TOTAL:
+                                # «Resumen Total» son TODAS las barras: el
+                                # gesto sobre una es «mostrame ésta», y eso
+                                # es Detalle. Desde ahí siempre ABRE.
+                                st.session_state[_K_ZONA_MODO] = _ZONA_DETALLE
+                                _zmodo = _ZONA_DETALLE
+                                st.session_state["compras_prod_foco_per"] = (
+                                    _clic)
+                            else:
+                                # En los otros dos la barra ACOTA la tabla, y
+                                # la misma barra la suelta: vuelve a la
+                                # ventana entera, sin cambiar de modo.
+                                st.session_state["compras_prod_foco_per"] = (
+                                    None if _foco_antes == _clic else _clic)
+                    # «Resumen Total» no tiene foco —son todas las barras—,
+                    # y el proveedor sólo acota el Detalle. Volver a uno de
+                    # esos modos los suelta, para que el gráfico no siga
+                    # apagando barras que la tabla ya no nombra.
+                    if _zmodo == _ZONA_TOTAL:
+                        st.session_state["compras_prod_foco_per"] = None
+                    if _zmodo != _ZONA_DETALLE:
+                        st.session_state["compras_prod_prov_det"] = None
                     _key_graf = f"{_key_base}_{_nclic}"
                     _foco_per = st.session_state.get("compras_prod_foco_per")
                     # Un foco que ya no existe (cambió la ventana, la
                     # granularidad o el producto) no es un error: es que el
-                    # período se fue. La zona vuelve a Resumen sin avisar.
+                    # período se fue. La zona vuelve a la ventana entera.
                     if _foco_per not in _claves:
                         _foco_per = None
 
@@ -1943,56 +2204,107 @@ def _compras_producto_drill(d, col_prod, col_fam, col_valor, col_cant, col_punit
                     st.plotly_chart(fig, use_container_width=True,
                                     on_select="rerun", key=_key_graf)
 
-                    # ── LA ZONA DE ABAJO: el gráfico escrito, o UNA barra ─
+                    # ── LA ZONA DE ABAJO: tres tablas y un control ───────
                     # 2026-09-20, a pedido: «la tabla debe estar debajo del
-                    # gráfico y formar parte de la tarjeta del gráfico [...]
-                    # y al hacer click en una columna debe mostrar la
-                    # información de esa columna, algo similar a lo que ya
-                    # tengo en la vista por período». Son los dos estados de
-                    # la zona, y no hay control que los cambie: los cambia el
-                    # clic en la barra, que es el gesto que ya significaba
-                    # «mostrame ésta».
+                    # gráfico y formar parte de la tarjeta del gráfico». Ese
+                    # día eran dos estados sin control —el clic en la barra
+                    # los cambiaba—; desde el 2026-10-02 son tres, con el
+                    # mismo control que «Compras por período» (regla #581):
+                    # «Resumen Total» (una fila por barra), «Resumen del
+                    # Período» (una por proveedor) y «Detalle» (una por
+                    # compra).
                     #
-                    # Las dos tablas miden `_ALTO_ZONA`, lo mismo: si
-                    # midieran distinto, tocar una barra cambiaría el alto de
+                    # Las tres tablas miden `_ALTO_ZONA`, lo mismo: si
+                    # midieran distinto, cambiar de modo cambiaría el alto de
                     # la tarjeta y la fila entera bailaría con cada clic
                     # (#398).
-                    _det_filas, _det_total = (None, None)
-                    if _foco_per is not None:
-                        _det_filas, _det_total = _compras_del_periodo(
-                            g, _foco_per, gran, col_fecha, col_punit,
-                            col_cant, col_valor, col_docu, col_prov)
+                    _prov_det = st.session_state.get("compras_prod_prov_det")
+                    if _prov_det is not None and (
+                            not col_prov or col_prov not in g.columns
+                            or _prov_det not in set(g[col_prov].astype(str))):
+                        _prov_det = None
                     _i_foco = (_claves.index(_foco_per)
                                if _foco_per in _claves else None)
 
-                    if _det_filas is not None:
-                        _n_c = len(_det_filas)
+                    # EL RÓTULO DICE EL ÁMBITO, NO CÓMO SE USA: la barra en
+                    # foco (o la ventana entera) y, en Detalle, el proveedor
+                    # que lo acota. Sin cuentas ni instrucciones, a pedido
+                    # («quitemos este texto: 9 compras · tocá la misma barra
+                    # para volver al resumen»): el control de al lado ya
+                    # dice cómo volver. En «Resumen Total» no hay ámbito que
+                    # nombrar —son todas las barras— y va vacío.
+                    _rot_z = _rot_tit = ""
+                    if _zmodo != _ZONA_TOTAL:
                         _rot_z = (
-                            f'<b>{html.escape(_rotulos[_i_foco])}</b> · '
-                            f'{_n_c:,} '
-                            f'{"compra" if _n_c == 1 else "compras"}'
-                            ' · tocá la misma barra para volver al resumen')
-                    else:
-                        _uni = _UNIDAD_GRAN.get(gran, ("período", "períodos"))
-                        _n_b = len(_claves)
-                        _rot_z = (
-                            f'<b>Resumen</b> · {_n_b:,} '
-                            f'{_uni[0] if _n_b == 1 else _uni[1]}'
-                            ' · tocá una barra para ver sus compras')
-                    st.markdown(f'<div class="cp-prod-zona-rot">{_rot_z}</div>',
-                                unsafe_allow_html=True)
+                            f'<b>{html.escape(_rotulos[_i_foco])}</b>'
+                            if _i_foco is not None else
+                            html.escape(_ETIQ_VENTANA_EVO.get(_op_prod,
+                                                              _op_prod)))
+                        if _zmodo == _ZONA_DETALLE and _prov_det is not None:
+                            # El nombre se corta con «…» por CSS (el renglón
+                            # lo comparte con el control) y va entero en el
+                            # `title`.
+                            _rot_tit = html.escape(nombre_propio(_prov_det),
+                                                   quote=True)
+                            _rot_z += f' · {_rot_tit}'
+                    # Lo que devuelve el control se IGNORA a propósito: el
+                    # modo ya se leyó de `session_state` arriba del gráfico,
+                    # porque un clic en una barra puede cambiarlo. Y va SIN
+                    # `default=`: la clave ya viene sembrada desde arriba, y
+                    # con las dos Streamlit avisa en el log en cada sesión.
+                    with st.container(horizontal=True, gap="small",
+                                      key="cp_prod_zona_pie"):
+                        st.segmented_control(
+                            "Qué se ve abajo", _ZONA_OPCIONES,
+                            required=True, key=_K_ZONA_MODO,
+                            label_visibility="collapsed")
+                        st.markdown(
+                            f'<div class="cp-prod-zona-rot" title="{_rot_tit}">'
+                            f'{_rot_z}</div>', unsafe_allow_html=True)
 
                     # La key la ESTRENA todo lo que cambia las filas: el
-                    # producto, la granularidad, la ventana, el rango y el
-                    # foco. Con key estable la grilla se refresca y el
-                    # navegador puede quedarse con los datos de antes (#227).
+                    # producto, la granularidad, la ventana, el rango, el
+                    # foco y el proveedor. Con key estable la grilla se
+                    # refresca y el navegador puede quedarse con los datos
+                    # de antes (#227).
                     _k_z = _clave_grilla(prod_foco, gran, _op_prod, _rng_evo,
-                                         _foco_per, len(_claves))
-                    if _det_filas is not None:
-                        renderizar_compras_producto(
-                            _det_filas, altura=_ALTO_ZONA,
-                            key=f"compras_prod_zona_det_{_k_z}",
-                            total=_det_total)
+                                         _foco_per, len(_claves), _prov_det)
+                    if _zmodo == _ZONA_DETALLE:
+                        _det_filas, _det_total = _compras_del_periodo(
+                            g, _foco_per, gran, col_fecha, col_punit,
+                            col_cant, col_valor, col_docu, col_prov,
+                            prov=_prov_det)
+                        if _det_filas is None:
+                            st.info("Sin compras en este ámbito."
+                                    if col_docu and col_docu in g.columns
+                                    else "El parquet no trae el número de "
+                                         "comprobante: sin él no hay una "
+                                         "fila por compra que armar.")
+                        else:
+                            renderizar_compras_producto(
+                                _det_filas, altura=_ALTO_ZONA,
+                                key=f"compras_prod_zona_det_{_k_z}",
+                                total=_det_total)
+                    elif _zmodo == _ZONA_PROVS:
+                        _pv_filas, _pv_total = _proveedores_del_producto(
+                            g, _foco_per, gran, col_fecha, col_cant,
+                            col_valor, col_prov)
+                        if _pv_filas is None:
+                            st.info("El parquet no trae el proveedor de "
+                                    "cada compra.")
+                        else:
+                            _pnclic = st.session_state.get(
+                                "compras_prod_pnclic", 0)
+                            _prov_clic = renderizar_proveedores_producto(
+                                _pv_filas, altura=_ALTO_ZONA,
+                                key=("compras_prod_zona_provs_"
+                                     + _clave_grilla(_k_z, _pnclic)),
+                                total=_pv_total)
+                            if (_prov_clic is not None and _prov_clic
+                                    in set(_pv_filas["__prov"])):
+                                st.session_state["_compras_prod_ir_prov"] = (
+                                    _prov_clic)
+                                st.rerun(scope=scope_rerun())
                     else:
                         _filas_z, _tot_z = _tabla_periodos(
                             _rotulos, _precio, _valor, _docs, _vars,

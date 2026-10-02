@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-580 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+581 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (195)
 
@@ -316,7 +316,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#578** — Compras › Proveedor son dos filas: [Ranking | Productos] arriba y [Documentos | Evolución |…
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 
-**Plotly y figuras** (105)
+**Plotly y figuras** (106)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -423,6 +423,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#554** — En el mapa de «Por hora», la fila bajo el cursor se ENMARCA entera y su hora va en negrita;…
 - **#565** — En la ficha de la hora, el subtítulo va en el renglón del título y «POR MESA» en la fila de…
 - **#580** — Compras › «Compras por período»: la zona de abajo tiene TRES modos —Resumen Total, Resumen…
+- **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 
 **AgGrid y tablas** (88)
 
@@ -515,7 +516,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 
-**Streamlit** (156)
+**Streamlit** (157)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -673,6 +674,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#561** — «Por hora» cabe en una pantalla: la cabecera es UNA fila de desplegables y la ficha de la…
 - **#569** — Análisis de platos es UNA tarjeta con dos vistas, y lo que una corrida deja de dibujar no…
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
+- **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 
 **Datos, R2 y DuckDB** (81)
 
@@ -46270,6 +46272,72 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-01.)
 
+581. **Compras › Producto: el Ranking de productos tiene un buscador en
+     la fila de su título, y la tabla de abajo del gráfico los mismos TRES
+     modos que «Compras por período».** 2026-10-02, a pedido, con captura:
+     «que la tabla Ranking de productos tenga un buscador en la misma fila
+     de su título; que la tabla de debajo del gráfico de barras pueda
+     alternar entre resumen del total, resumen del período y detalle (creo
+     que la actual ya es el detalle), sugiéreme; y quitemos este texto: 9
+     compras · tocá la misma barra para volver al resumen». En
+     `graficos/compras/producto.py`.
+     - **Los tres modos** (`_ZONA_OPCIONES`, control
+       `compras_prod_zona_modo`, abre en el primero):
+       *Resumen Total* — la tabla de siempre, una fila por BARRA;
+       *Resumen del Período* — una fila por PROVEEDOR del producto, con
+       cantidad, precio PONDERADO, valor y %
+       (`_proveedores_del_producto` + `tablas/compras_semanal.py::
+       renderizar_proveedores_producto`); *Detalle* — una fila por COMPRA
+       (la tabla que ya existía). El «período» es la barra en foco o, sin
+       barra, la ventana entera del gráfico: Detalle ya no necesita una
+       barra para tener algo que mostrar (`_compras_del_periodo` acepta
+       `clave=None` y un `prov=`).
+     - **Gestos.** Un clic en una barra desde Resumen Total ABRE Detalle de
+       esa barra (como en «Compras por período», #476); en los otros dos
+       modos la barra ACOTA la tabla y la misma barra la suelta. Un clic en
+       un proveedor lleva a Detalle con sus compras, con bandera
+       (`_compras_prod_ir_prov`) + rerun + contador en la key de la grilla
+       (`compras_prod_pnclic`), por lo mismo que la #580. Volver a Resumen
+       Total suelta la barra (son todas) y salir de Detalle suelta el
+       proveedor: el gráfico no puede seguir apagando barras que la tabla
+       ya no nombra.
+     - **El rótulo dice el ámbito, no cómo se usa**: la barra en foco o la
+       ventana («Últimos 3 meses») y, en Detalle, el proveedor —cortado con
+       «…» y entero en el `title`—. Sin conteos ni instrucciones; en
+       Resumen Total va vacío. Comparte renglón con el control, y ese
+       renglón mide 26 donde el rótulo solo medía 5,2: MEDIDO, la tarjeta
+       saltó de 528 a 549 hasta que la figura devolvió los 21
+       (`_CROMO_CARD_EVO` pasó de 157 a 178; la figura, de 224 a 203).
+     - **El buscador** (`compras_prod_q`, en `cp_prod_rank_hdr`) filtra por
+       PALABRAS, sin tildes ni mayúsculas y en cualquier orden
+       (`_coincide`). Elige qué filas se ven, no contra qué se miden: el %
+       y la barra de fondo siguen siendo sobre el ámbito entero. Va en la
+       key de la grilla, así que buscar la estrena y la Evolución pasa al
+       primero de lo que se ve; una búsqueda sin resultados deja la
+       Evolución en el primero del ranking entero, no vacía.
+     - **La fila del título le devuelve 12,4px a la tabla** con un
+       `margin-bottom` negativo. Solo, el título es un `st.markdown` al que
+       la #162 le come 16 de sus 29,6 —la tabla abría a 29,6 de él—; la
+       fila mide 26 + el gap, y sin el margen la tarjeta crecía 12 (528 →
+       541). Con él la tabla abre donde abría y las dos tarjetas siguen en
+       528.
+     - **Anchos medidos** en el panel de 429px: en Resumen del Período
+       Valor pide 108 (la suma de un proveedor tiene cinco cifras) y no
+       entraba también una columna de documentos —se leía «Do…»—, así que
+       no va: el dato está a un clic, en Detalle. En Detalle la fecha pasó
+       de 82 a 92 y el valor de 84 a 100: se leían «01/09/20…» y
+       «S/ 11,80…».
+     - **`_KEYS_WIDGET` va en TEXTO**, también la del modo, que tiene su
+       constante: la guarda de la #373 en `test_graficos.py` la lee con
+       `ast.literal_eval`, y un nombre adentro la vuelve ilegible — la da
+       por vacía y canta todos los controles de la sección.
+     - **Los `segmented_control` de modo van sin `default=`** (éste y el de
+       la #580): la clave ya viene sembrada antes de dibujarlos, y con las
+       dos cosas Streamlit escribe en el log «created with a default value
+       but also had its value set via the Session State API».
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46282,7 +46350,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#577**; la próxima toma el número siguiente.
+> última regla es la **#581**; la próxima toma el número siguiente.
 
 >
 
