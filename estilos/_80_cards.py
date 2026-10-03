@@ -2611,7 +2611,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],
     .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"],
     .st-key-vt_pl_cabfila [data-testid="stMarkdownContainer"],
-    .st-key-vt_mes_cabfila [data-testid="stMarkdownContainer"] {
+    .st-key-vt_mes_cabfila [data-testid="stMarkdownContainer"],
+    .st-key-vt_ctl_cabfila [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     /* El título y los KPI en un renglón (regla #519): el look de
@@ -2620,7 +2621,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-cab,
     .st-key-vt_mix_cabfila .vt-cab,
     .st-key-vt_pl_cabfila .vt-cab,
-    .st-key-vt_mes_cabfila .vt-cab {
+    .st-key-vt_mes_cabfila .vt-cab,
+    .st-key-vt_ctl_cabfila .vt-cab {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -2631,7 +2633,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-cab-tit,
     .st-key-vt_mix_cabfila .vt-cab-tit,
     .st-key-vt_pl_cabfila .vt-cab-tit,
-    .st-key-vt_mes_cabfila .vt-cab-tit {
+    .st-key-vt_mes_cabfila .vt-cab-tit,
+    .st-key-vt_ctl_cabfila .vt-cab-tit {
         font-size: 13px;
         font-weight: 600;
         line-height: 1.35;
@@ -2641,7 +2644,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-kpis,
     .st-key-vt_mix_cabfila .vt-kpis,
     .st-key-vt_pl_cabfila .vt-kpis,
-    .st-key-vt_mes_cabfila .vt-kpis {
+    .st-key-vt_mes_cabfila .vt-kpis,
+    .st-key-vt_ctl_cabfila .vt-kpis {
         display: flex;
         flex-wrap: wrap;
         align-items: stretch;
@@ -2650,7 +2654,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-kpi,
     .st-key-vt_mix_cabfila .vt-kpi,
     .st-key-vt_pl_cabfila .vt-kpi,
-    .st-key-vt_mes_cabfila .vt-kpi {
+    .st-key-vt_mes_cabfila .vt-kpi,
+    .st-key-vt_ctl_cabfila .vt-kpi {
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -2663,7 +2668,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-kpi:first-child,
     .st-key-vt_mix_cabfila .vt-kpi:first-child,
     .st-key-vt_pl_cabfila .vt-kpi:first-child,
-    .st-key-vt_mes_cabfila .vt-kpi:first-child {
+    .st-key-vt_mes_cabfila .vt-kpi:first-child,
+    .st-key-vt_ctl_cabfila .vt-kpi:first-child {
         padding-left: 0;
         border-left: none;
         max-width: none;
@@ -2671,7 +2677,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-kpi-rot,
     .st-key-vt_mix_cabfila .vt-kpi-rot,
     .st-key-vt_pl_cabfila .vt-kpi-rot,
-    .st-key-vt_mes_cabfila .vt-kpi-rot {
+    .st-key-vt_mes_cabfila .vt-kpi-rot,
+    .st-key-vt_ctl_cabfila .vt-kpi-rot {
         font-size: 10px;
         color: var(--text-secondary);
         white-space: nowrap;
@@ -2681,7 +2688,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_pl_cabfila .vt-kpi[style] .vt-kpi-rot::before,
-    .st-key-vt_mes_cabfila .vt-kpi[style] .vt-kpi-rot::before {
+    .st-key-vt_mes_cabfila .vt-kpi[style] .vt-kpi-rot::before,
+    .st-key-vt_ctl_cabfila .vt-kpi[style] .vt-kpi-rot::before {
         content: "";
         display: inline-block;
         width: 8px;
@@ -2693,7 +2701,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-val,
-    .st-key-vt_mes_cabfila .vt-kpi-val {
+    .st-key-vt_mes_cabfila .vt-kpi-val,
+    .st-key-vt_ctl_cabfila .vt-kpi-val {
         font-size: 13px;
         font-weight: 600;
         color: var(--text-primary);
@@ -2702,7 +2711,8 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-kpi-sub,
     .st-key-vt_mix_cabfila .vt-kpi-sub,
     .st-key-vt_pl_cabfila .vt-kpi-sub,
-    .st-key-vt_mes_cabfila .vt-kpi-sub {
+    .st-key-vt_mes_cabfila .vt-kpi-sub,
+    .st-key-vt_ctl_cabfila .vt-kpi-sub {
         margin-left: 4px;
         font-size: 10px;
         font-weight: 400;
@@ -2711,14 +2721,16 @@ CSS = """    /* ================================================================
     .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-total .vt-kpi-val,
-    .st-key-vt_mes_cabfila .vt-kpi-total .vt-kpi-val {
+    .st-key-vt_mes_cabfila .vt-kpi-total .vt-kpi-val,
+    .st-key-vt_ctl_cabfila .vt-kpi-total .vt-kpi-val {
         color: var(--accent-deep);
         font-weight: 700;
     }
     .st-key-vt_resumen_kpi .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-alerta .vt-kpi-val,
-    .st-key-vt_mes_cabfila .vt-kpi-alerta .vt-kpi-val {
+    .st-key-vt_mes_cabfila .vt-kpi-alerta .vt-kpi-val,
+    .st-key-vt_ctl_cabfila .vt-kpi-alerta .vt-kpi-val {
         color: var(--warning-text);
     }
 

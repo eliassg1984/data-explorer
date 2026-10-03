@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-593 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+594 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (196)
 
@@ -683,7 +683,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 
-**Datos, R2 y DuckDB** (82)
+**Datos, R2 y DuckDB** (83)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -767,6 +767,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
+- **#594** — Ventas › «Control de pedidos»: lo que pasa con los pedidos ANTES de la venta, que…
 
 **SUNAT y SIRE** (50)
 
@@ -46996,6 +46997,63 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+594. **Ventas › «Control de pedidos»: lo que pasa con los pedidos ANTES de
+     la venta, que `ventas.parquet` no ve porque arranca en el
+     comprobante.** 2026-10-03, a pedido, después de leer contra la base
+     tres reportes del POS —«Control de Transacciones» (`spRep_Anulacion`),
+     «Reporte de Ocupabilidad» (`spRep_Ocupabilidad`) y la Liquidación de
+     Cajero (#591)—: «creo que agregaría información relacionada y valiosa
+     a los pedidos».
+
+     - **Dos parquets propios, cada uno con su grano** (consultas del
+       Sheet escritas y probadas contra el POS ese día): `pedidos.parquet`,
+       UNA FILA POR PEDIDO —apertura, día contable, estado, mesa, mesero,
+       adultos, primer y último plato, precuenta, comprobante y la
+       anulación—, y `transacciones.parquet`, una por PLATO ANULADO o por
+       TRANSFERENCIA. Un dato de mesa en el parquet de ventas se repetiría
+       en cada plato y cada pago, y sumarlo lo multiplica (#198).
+     - **Dónde vive cada cosa en el POS.** Un pedido anulado queda en
+       `MPEDIDO` (estado 03) con sus ítems en «A»; un PLATO anulado en un
+       pedido que sigue SALE de `DPEDIDO` y va a `APEDIDO`, con
+       `lImprime` = ya se había enviado a cocina — mirar sólo `DPEDIDO`
+       dice que no hay platos anulados en pedidos vigentes, y es falso;
+       las transferencias, en `TPEDIDO` (pedido e ítem de origen →
+       destino). El motivo de un pedido anulado es texto libre
+       (`tMotivoAnulacion` es siempre «000»), con erratas: se agrupa por
+       palabra (`motivo_categoria`).
+     - **Lo que dice septiembre de 2026**, y la vista lo repite: 82
+       pedidos anulados (46 por mesa vacía, 13 por producto agotado),
+       282 platos anulados por S/ 27.304 —224 en el mismo minuto: una
+       corrección al digitar, no una pérdida; sólo 2 ya habían salido a
+       cocina—, y 406 transferencias por S/ 16.359: 221 a una cuenta que
+       se facturó como cortesía, 111 cuentas divididas, 74 entre mesas. La
+       mesa típica dura 1 h 37 (1 min al primer plato, 52 de comida, 35 de
+       sobremesa, 4 de cobro). El pico fue 22 de 25 mesas el 5 a las 21:30.
+     - **La ocupación es la foto del POS con la fecha entera.** El
+       `spRep_Ocupabilidad` compara sólo la HORA del día: un rango de
+       varios días se apila en una fila por hora, y una mesa que cruza la
+       medianoche cuenta mal. Acá la foto es por día. Y SIN asientos: el
+       POS los tiene en `TMESA.nPersona` (10 en 23 mesas, 100 en tres) pero
+       el negocio no los maneja —«sólo la cantidad total por mesa»—; se
+       mide sobre las mesas que se usaron en el rango, y la venta por hora
+       ocupada en vez del RevPASH.
+     - **Una mesa abierta de noche y usada al día siguiente** (12-sep
+       22:21, primer plato el 13 a las 13:07) se mide desde su primer plato
+       (`_REABIERTA_MIN`). Sin eso duraba 16 horas.
+     - **Las tablas son las del Resumen** (`renderizar_dias_venta`, con la
+       franja y «Ver el detalle de…» que filtra la lista) y la lista es una
+       grilla de lectura con su mismo look (`tablas/ventas_control.py::
+       renderizar_lista`). A 1323 px: 624 + 519 px, sin barra horizontal
+       (medido con Playwright); «De → a» de una transferencia va en la
+       ayuda del plato para entrar.
+
+     Candado: `test_graficos.py::_pruebas_control_pedidos` (el motivo con
+     erratas, la corrección al digitar, a cortesía antes que dividida, la
+     mesa reabierta y la foto de la ocupación con la fecha). `graficos/
+     ventas.py` importa un módulo nuevo: en Cloud, «Reboot app» (#357).
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47008,7 +47066,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#593**; la próxima toma el número siguiente.
+> última regla es la **#594**; la próxima toma el número siguiente.
 
 >
 

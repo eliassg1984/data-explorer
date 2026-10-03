@@ -6875,6 +6875,93 @@ def _pruebas_formas_de_pago():
     return fallos
 
 
+def _pruebas_control_pedidos():
+    """Ventas › «Control de pedidos» (regla #594): las cuentas de la vista
+    sobre `pedidos.parquet` y `transacciones.parquet`.
+
+    Fija lo que se vería mal sin avisar: el motivo de un pedido anulado
+    agrupado desde el texto libre del POS (con sus erratas), un plato
+    anulado al minuto como corrección y no como pérdida, lo pasado a una
+    cuenta de cortesía antes que una cuenta dividida, la mesa reabierta al
+    día siguiente medida desde su primer plato, y la foto de ocupación con
+    la fecha entera (el POS compara sólo la hora del día)."""
+    from graficos import ventas_control as vc
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · control · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · control · {nombre}: got={got!r} exp={exp!r}")
+
+    check("el motivo agrupado, erratas incluidas",
+          vc.motivo_categoria(pd.Series([
+              "MESQA VACIA", "PRODUYCTO EN 86", "POR CAMBIO DE PRECIO / NO SALIO",
+              "DOBLE DIGITACION / NO SALIO", "CLIENTE CANCELO", "ST1204", "",
+              None])).tolist(),
+          ["Mesa vacía", "Producto agotado", "Error de precio",
+           "Error de digitación", "Cliente cambió o canceló", "Otro",
+           "Sin motivo", "Sin motivo"])
+
+    ts = pd.Timestamp
+    t = pd.DataFrame({"cocina": [False, True, False],
+                      "min": [0.0, 30.0, 45.0]})
+    check("plato anulado: corrección, ya en cocina, después",
+          vc.clase_plato_anulado(t).tolist(),
+          ["Corrección al digitar", "Ya en cocina", "Anulado después"])
+
+    p = pd.DataFrame({"ped": ["A", "B", "C"],
+                      "apertura": [ts("2026-09-04 20:00"),
+                                   ts("2026-09-04 22:58"),
+                                   ts("2026-09-04 21:00")]})
+    tr = pd.DataFrame({"destino": ["B", "B", "C", "Z"],
+                       "f_trx": [ts("2026-09-04 23:00")] * 4})
+    check("transferencia: dividida, a cortesía antes que dividida, entre "
+          "mesas, destino fuera del rango",
+          vc.tipo_transferencia(tr.iloc[[0, 2, 3]], p).tolist()
+          + vc.tipo_transferencia(tr.iloc[[1]], p, {"B"}).tolist(),
+          ["Cuenta dividida", "Entre mesas", "Entre mesas", "A cortesía"])
+
+    pe = pd.DataFrame({
+        "ped": ["1", "2", "3"], "anulado": [False, False, False],
+        "mesa": ["703", "101", "Sin Mesa"],
+        "apertura": [ts("2026-09-12 22:21"), ts("2026-09-12 20:00"),
+                     ts("2026-09-12 20:00")],
+        "primer": [ts("2026-09-13 13:07"), ts("2026-09-12 20:05"),
+                   ts("2026-09-12 20:01")],
+        "ultimo": [ts("2026-09-13 14:09"), ts("2026-09-12 21:00"),
+                   ts("2026-09-12 20:01")],
+        "precuenta": [ts("2026-09-13 14:37"), ts("2026-09-12 21:30"), pd.NaT],
+        "comp": [ts("2026-09-13 14:42"), ts("2026-09-12 21:35"),
+                 ts("2026-09-12 20:02")],
+        "dia": [ts("2026-09-13"), ts("2026-09-12"), ts("2026-09-12")],
+        "adultos": [3.0, 2.0, 0.0], "monto": [471.0, 200.0, 50.0]})
+    b = vc.tiempos(pe)
+    check("sin mesa no cuenta", sorted(b["ped"]), ["1", "2"])
+    check("la mesa reabierta se mide desde su primer plato",
+          float(b.loc[b["ped"] == "1", "total"].iloc[0]), 95.0)
+    check("los tramos de la otra", [float(b.loc[b["ped"] == "2", c].iloc[0])
+                                    for c in ("espera", "comida",
+                                              "sobremesa", "cobro", "total")],
+          [5.0, 55.0, 30.0, 5.0, 95.0])
+    z = vc.ocupacion(b, pd.date_range("2026-09-12", "2026-09-13"))
+    sl = vc.etiquetas_slots()
+    check("la foto de las 21:00 del 12 ve la mesa 101",
+          float(z[0, sl.index("21:00")]), 1.0)
+    check("y la de las 21:30 también (cobró a las 21:35)",
+          float(z[0, sl.index("21:30")]), 1.0)
+    check("a las 22:00 ya no", float(z[0, sl.index("22:00")]), 0.0)
+    check("la reabierta ocupa la tarde del 13, no la mañana del 12",
+          (float(z[1, sl.index("13:30")]), float(z[0, sl.index("13:30")])),
+          (1.0, 0.0))
+    check("grupos", vc.grupo_de(pd.Series([0, 1, 4, 9])).tolist(),
+          ["Sin dato", "1", "3–4", "7 o más"])
+    return fallos
+
+
 def _pruebas_carta_costeada():
     """Recetas › Carta costeada (regla #548): lo que la vista hace con
     `cartacosteada.parquet` antes de dibujarlo.
@@ -8748,6 +8835,7 @@ def main():
     fallos += _pruebas_igv_y_sin_costo()
     fallos += _pruebas_ticket_sin_canales_sin_clientes()
     fallos += _pruebas_formas_de_pago()
+    fallos += _pruebas_control_pedidos()
 
     # ── Recetas › Costo recetas base: uso, producción y costo (#576) ─────
     fallos += _pruebas_costo_recetas_base()

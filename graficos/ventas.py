@@ -22,6 +22,7 @@ from graficos.ventas_horario import _ventas_horario
 from graficos.ventas_mix import _ventas_mix
 from graficos.ventas_platos import _ventas_platos
 from graficos.ventas_meseros import _ventas_meseros
+from graficos.ventas_control import _ventas_control, cortesias_de
 from graficos import alturas
 
 def unico_por_item(df):
@@ -77,7 +78,9 @@ _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
                   ("Comparativo vs Año Pasado",   "Comparación Año Pasado",  ":material/compare_arrows:"),
                   ("Venta vs Compra",            "Vs Compras",              ":material/balance:"))),
     ("Análisis", (("Análisis de platos",  "Análisis de Platos",  ":material/restaurant_menu:"),
-                  ("Meseros",             "Análisis de Meseros", ":material/groups:"))),
+                  ("Meseros",             "Análisis de Meseros", ":material/groups:"),
+                  # Lo que pasa con los pedidos antes de la venta (#594).
+                  ("Control de pedidos",  "Control de Pedidos",  ":material/rule:"))),
     ("Datos",    (("Tabla",  "Tabla", ":material/table_rows:"),)),
 ))
 
@@ -97,6 +100,7 @@ _PILA = pila_sin_tablas((
     ("vt_sec_vs_compra",  "Venta vs Compra"),
     ("vt_sec_platos",     "Análisis de platos"),
     ("vt_sec_meseros",    "Meseros"),
+    ("vt_sec_control",    "Control de pedidos"),
     ("vt_sec_tabla",      "Tabla"),
 ))
 
@@ -509,6 +513,15 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                             firma=(tuple(fam_sel or ()), tuple(sub_sel or ()),
                                    tuple(canal_sel or ()),
                                    tuple(serv_sel or ())))
+
+        # ── 5) Control de pedidos: anulaciones, transferencias, tiempos de
+        # mesa y ocupación (graficos/ventas_control.py, regla #594). Lee sus
+        # parquets; de acá sólo le llegan los pedidos que se facturaron como
+        # cortesía (para reconocer lo que se pasó a una cuenta de cortesía)
+        # y el filtro de canal.
+        elif graf == "Control de pedidos":
+            _ventas_control(cortesias=cortesias_de(d_todo),
+                            canales=tuple(canal_sel or ()))
         else:
             st.info("No hay columnas suficientes para este gráfico.")
 
@@ -548,6 +561,9 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         # Como Platos, arma SUS tarjetas: la de la tabla, la planilla y el
         # detalle del mesero elegido (regla #553).
         "vt_sec_meseros":    lambda: _cuerpo_grafico("Meseros"),
+        # Arma SU tarjeta, con sus propios parquets (pedidos y
+        # transacciones, regla #594).
+        "vt_sec_control":    lambda: _cuerpo_grafico("Control de pedidos"),
         "vt_sec_tabla":      _dib_tabla,
     }
 
