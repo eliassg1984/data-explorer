@@ -148,6 +148,97 @@ def _fuentes_py(raiz):
             continue
 
 
+def _pruebas_articulos_nuevos():
+    """Las cuentas de lo que una receta NUEVA lleva y el almacén no tiene
+    (`articulos_nuevos.py`, regla #597), con parquets de mentira.
+
+    TRES COSAS QUE YA COSTARON UNA CORRECCIÓN O LA COSTARÍAN EN SILENCIO:
+
+      · La merma propuesta cuenta cada porcionamiento UNA vez. La cabecera
+        (`CANT A PORCIONAR`, `CANT MERMA`) se repite en cada corte, y
+        sumarla por fila la infla tanto como cortes tenga (regla #510).
+      · «Dónde se usa» sube por las recetas base: un insumo que está en una
+        salsa que está en un plato SE USA en ese plato (decisión del
+        usuario, 2026-10-03). Y no se cuelga con una receta que se contiene
+        a sí misma.
+      · Una pieza que sale de algo que se pesa gasta SU PESO, no una unidad
+        de lo que entró: 220 g de lomo con 17 % de merma son 0,265 kg."""
+    import pandas as pd
+
+    import articulos_nuevos as an
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        ok = (abs(got - exp) < 1e-6) if isinstance(exp, float) and got is not None else got == exp
+        if ok:
+            print(f"OK    artículos nuevos · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA artículos nuevos · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── El porcionado por rendimiento ──
+    check("pieza de algo que se pesa: peso ÷ (1 − merma)",
+          an.entrada_por_unidad("KILOS", "UND", 220, 17.0), 0.220 / 0.83)
+    check("a granel: una unidad de lo que entró, ÷ (1 − merma)",
+          an.entrada_por_unidad("KILOS", "KILOS", 0, 20.0), 1 / 0.8)
+    check("lo que entra por pieza no tiene peso que mirar",
+          an.entrada_por_unidad("UND", "UND", 500, 0.0), 1.0)
+    check("una merma del 100 % no deja nada", an.entrada_por_unidad("KILOS", "UND", 220, 100), None)
+
+    # ── La merma y los cortes, de porcionamientos.parquet ──
+    po = pd.DataFrame({
+        "COD PORC":         ["A", "A", "B", "C"],
+        "COD PROD INIC":    ["LOMO", "LOMO", "LOMO", "OTRO"],
+        "FEC REGIST":       ["2026-09-01", "2026-09-01", "2026-09-20", "2026-09-20"],
+        "CANT A PORCIONAR": [10.0, 10.0, 5.0, 3.0],
+        "CANT TOT RESUL":   [8.0, 8.0, 4.0, 3.0],
+        "CANT MERMA":       [2.0, 2.0, 1.0, 0.0],
+        "COD PROD FINAL":   ["MED", "TROZ", "MED", "X"],
+        "PROD FINAL RESULT": ["Medallon", "Trozos", "Medallon", "X"],
+        "CANT RESULT":      [20.0, 4.0, 20.0, 3.0],
+        "UNID PROD FIN":    ["UND", "KILOS", "UND", "KILOS"],
+        "PESO RESULT":      [4.0, 4.0, 4.0, 3.0],
+    })
+    h = an.merma_y_cortes(po, "LOMO")
+    check("la merma cuenta cada porcionamiento una vez (3/15, no 5/25)", h["merma_pct"], 20.0)
+    check("cuántos porcionamientos", h["n"], 2)
+    med = h["cortes"].set_index("cod").loc["MED"]
+    # A: 10 kg × 4/8 = 5 kg para 20 medallones; B: 5 × 4/4 = 5 kg para 20.
+    check("el insumo se reparte entre cortes por PESO", float(med["entrada_x_und"]), 10 / 40)
+    check("el peso real de la pieza", float(med["peso_x_und"]), 8 / 40)
+    check("la ventana deja afuera lo de antes",
+          an.merma_y_cortes(po, "LOMO", desde="2026-09-10")["n"], 1)
+    check("sin porcionamientos no hay merma que proponer",
+          an.merma_y_cortes(po, "NADA")["merma_pct"], None)
+
+    # ── La receta base ──
+    check("costo por unidad = tanda ÷ lo que rinde",
+          an.costo_receta_base([{"cantidad": 1000, "precio": 0.01},
+                                {"cantidad": 10, "precio": 0.5}], 2)[1], 7.5)
+
+    # ── Dónde se usa, también por recetas base ──
+    rv = pd.DataFrame({
+        "plato": ["P1", "P1", "P2", "P3"], "nombre": ["Asado", "Asado", "Lomo", "Combo"],
+        "ins":   ["DEMI", "SAL", "SALSA", "SALSA"], "cant": [20.0, 1.0, 50.0, 10.0],
+        "unid":  ["GRAMOS"] * 4, "pv": [79.0, 79.0, 79.0, 1.0], "pct": [34.5, 34.5, 38.4, 0.0]})
+    rb = pd.DataFrame({
+        "base": ["SALSA", "SALSA", "LOOP"], "nombre": ["(Rs) Salsa", "(Rs) Salsa", "(Rs) Loop"],
+        "ins": ["DEMI", "AJI", "LOOP"], "cant": [100.0, 5.0, 1.0], "unid": ["GRAMOS"] * 3})
+    idx = an.indice_usos(rv, rb)
+    u = an.usos_de(idx, "DEMI")
+    check("directo e indirecto, directo primero",
+          [(f["receta"], f["via"]) for f in u],
+          [("Asado", ""), ("Combo", "(Rs) Salsa"), ("Lomo", "(Rs) Salsa"), ("(Rs) Salsa", "")])
+    check("lo indirecto dice cuánto lleva de la VÍA", u[2]["cant"], "50 g")
+    check("el resumen de la tabla", an.resumen_usos(u), "3 platos · 1 base")
+    check("una receta que se contiene a sí misma no cuelga (ni cuenta como uso)",
+          an.resumen_usos(an.usos_de(idx, "LOOP")), "sin usos")
+    check("sin usos", an.resumen_usos(an.usos_de(idx, "NADA")), "sin usos")
+    return fallos
+
+
 def _pruebas_simulador_receta():
     """El simulador de la receta de un plato (`graficos/recetaventa.py`), el
     que abre un clic en Recetas › Carta costeada (hasta el 2026-09-28, en
@@ -8973,6 +9064,9 @@ def main():
 
     # ── El simulador de receta: que nadie vuelva a ordenar el borrador ─
     fallos += _pruebas_simulador_receta()
+
+    # ── Nuevo Costeo: lo que el almacén todavía no tiene (#597) ─────────
+    fallos += _pruebas_articulos_nuevos()
 
     # ── El marcador de una inyección: que el .replace() lo alcance ─────
     fallos += _pruebas_placeholder_de_inyeccion()

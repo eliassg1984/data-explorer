@@ -45,6 +45,7 @@ El PDF se dibuja con matplotlib (ya es dependencia; mismo criterio que
 import io
 import re
 import smtplib
+import textwrap
 import unicodedata
 from email.message import EmailMessage
 from urllib.parse import quote, urlencode
@@ -172,6 +173,20 @@ def pdf_receta(resumen):
                 if pct is not None:
                     fig.text(0.55, y - 0.005, f"% de costo sobre neto: {pct:.1f}%",
                              fontsize=10, color=ACENTO, weight="bold")
+                    y -= 0.022
+                # Lo que el almacén todavía no tiene (regla #597): una línea
+                # por artículo, partida a lo ancho de la hoja.
+                nuevos = resumen.get("nuevos") or []
+                if nuevos:
+                    y -= 0.03
+                    fig.text(0.07, y, "Artículos nuevos (no están en el almacén)",
+                             fontsize=10, weight="bold", color=TEXTO_PRINCIPAL)
+                    for texto in nuevos:
+                        for i, renglon in enumerate(textwrap.wrap(texto, 110)):
+                            y -= 0.017
+                            fig.text(0.07 if i == 0 else 0.085, y,
+                                     ("• " if i == 0 else "") + renglon,
+                                     fontsize=8, color=TEXTO_PRINCIPAL)
             fig.text(0.07, 0.03, "Generado desde Reportes › Recetas › Nueva receta. "
                      "Es una PROPUESTA: no modifica la receta del sistema.",
                      fontsize=7.5, color=GRIS_TEXTO)
@@ -245,6 +260,15 @@ def excel_receta(resumen):
     ws.set_column(1, 1, 42)
     ws.set_column(2, 2, 10)
     ws.set_column(3, 6, 15)
+
+    # Lo que el almacén todavía no tiene (regla #597), en una hoja aparte.
+    nuevos = resumen.get("nuevos") or []
+    if nuevos:
+        wn = wb.add_worksheet("Nuevos")
+        wn.write(0, 0, "Artículos nuevos (no están en el almacén)", f_tit)
+        for i, texto in enumerate(nuevos, start=2):
+            wn.write(i, 0, texto)
+        wn.set_column(0, 0, 140)
     wb.close()
     return buf.getvalue()
 
@@ -265,6 +289,10 @@ def cuerpo_correo(resumen):
     pct = _pct_costo(resumen)
     if pct is not None:
         txt.append(f"% de costo sobre neto: {pct:.1f}%")
+    nuevos = resumen.get("nuevos") or []
+    if nuevos:
+        txt += ["", "Artículos nuevos (no están en el almacén):"]
+        txt += [f"- {t}" for t in nuevos]
     txt += ["", "Adjunto el detalle en PDF y en Excel."]
     return "\n".join(txt)
 

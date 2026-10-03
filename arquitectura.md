@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-596 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+597 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (197)
 
@@ -232,7 +232,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 - **#596** — La franja superior de contexto no lleva KPIs: dice dónde estás, no cuánto
 
-**Layout y alturas** (86)
+**Layout y alturas** (87)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -320,6 +320,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#583** — Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la Evolución más ancha, el Ranking…
 - **#591** — El ticket de Ventas divide la venta de los canales que REGISTRAN clientes, no la venta…
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
+- **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 
 **Plotly y figuras** (108)
 
@@ -523,7 +524,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 
-**Streamlit** (158)
+**Streamlit** (159)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -683,6 +684,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#570** — La Carta costeada es UNA tarjeta blanca con el producto AL COSTADO, y la tabla esconde lo que…
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
+- **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 
 **Datos, R2 y DuckDB** (84)
 
@@ -47124,6 +47126,96 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+597. **Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P)
+     o (Rs)—, y dice dónde se usa cada artículo, también por recetas
+     base.** 2026-10-03, sobre un mockup aprobado
+     (https://claude.ai/artifact/Xr4AVjAuXLUfHrmD864cGF) con tres
+     decisiones del usuario: el (P) se costea POR RENDIMIENTO, un precio
+     estimado entra al costo CON AVISO, y «dónde se usa» cuenta también lo
+     INDIRECTO. Las cuentas viven en `articulos_nuevos.py` (puro, con
+     `test_graficos.py::_pruebas_articulos_nuevos`); la pantalla, en
+     `formulario_receta.py`.
+
+     - **El buscador acepta texto escrito** (`st.selectbox(...,
+       accept_new_options=True)`): escribir «ajo negro» y darle Enter lo
+       devuelve tal cual, y eso abre en el panel de la derecha la pestaña
+       «Artículo nuevo», que pregunta qué es. Hasta ese día `st.selectbox`
+       no le pasaba a Python lo tecleado y hacía falta una opción centinela
+       que cambiaba el buscador por un `text_input` (#497). El «Add:» de la
+       lista lo escribe Streamlit, en inglés, y no se puede cambiar.
+     - **La tarjeta de la derecha alterna paneles** con una fila de
+       `st.pills`: Precio · Dónde se usa · una pestaña por cada (P)/(Rs)
+       nuevo · «Nuevo: …» mientras se crea uno. Tres cosas que muerden:
+       · **Un widget que no se dibuja pierde su valor.** El precio de venta
+         era la key de su `number_input`: al mirar otra pestaña se borraba.
+         Ahora el valor vive en `pv` y el widget es `pv_w`, sembrado en cada
+         corrida; lo mismo la pestaña (`panel` / `panel_w`) y cada campo del
+         detalle (`_semilla`). Sembrar `panel_w` en cada corrida es además
+         lo que deja ABRIR una pestaña desde Python, y lo que evita que un
+         clic sobre la ya elegida —que en `st.pills` la suelta— deje el
+         panel sin nada.
+       · **Lo que se edita en el panel se guarda con `on_change`**, que
+         corre antes que la página. La tabla de la izquierda se dibuja
+         PRIMERO: leyendo el valor al dibujar el panel, la tabla mostraba el
+         costo de la corrida anterior. La tabla de una (Rs) nueva lee su
+         `edited_rows` en el callback por la misma razón.
+       · **El precio y la unidad de un (P)/(Rs) nuevo los pone su detalle**
+         (`_sincronizar_nuevos`, al principio de la corrida). El
+         `data_editor` no apaga una celda suelta, así que lo que se escriba
+         en su P. unit. se deshace (fuera la key del editor y rerun).
+     - **Lo nuevo no tiene código**: su celda dice «NUEVO», en lavanda si
+       el costo está completo y en ámbar si es estimado o le falta detalle,
+       y la columna nueva «Se usa en» dice cuál («precio estimado», «falta
+       detalle», «porcionado nuevo»…). Las dos son columnas NO editables,
+       las únicas que el Styler de un `data_editor` pinta.
+     - **(P) por rendimiento:** lo que pesa una pieza ÷ (1 − merma) es lo
+       que se gasta del insumo de entrada, por su precio de KARDEX (el
+       catálogo guarda desde ese día `unidad_kardex`/`precio_kardex`
+       además del precio por gramo). La merma propuesta es la de ESE insumo
+       en sus porcionamientos de 90 días, contando cada porcionamiento UNA
+       vez (#510): el lomo fino nacional da 17,0 % en 43 porcionamientos, y
+       un medallón de 220 g, S/ 19,75. Debajo, los cortes que ya salen de
+       ese insumo con su peso REAL: el «Medallon 200gr» pesa 180 g.
+     - **(Rs):** los insumos de la tanda ÷ lo que rinde. Se puede partir de
+       una receta base del sistema, activa o no (sus insumos activos), y
+       llevar insumos nuevos con precio escrito a mano.
+     - **Dónde se usa sube por las recetas base**, a lo ancho y con la vía
+       más corta: la Demiglace punteada está en 5 platos directos y en 3
+       más por la Salsa pepper y el Gravy de culantro, y en 5 recetas base.
+       Una receta que se contiene a sí misma no cuelga la búsqueda. Sólo
+       recetas ACTIVAS (plato, receta de venta y receta base).
+     - **Lo estimado o sin detalle entra al costo con un aviso** en el
+       renglón de la pista del panel de precio: UN renglón, con el texto
+       entero en el tooltip, para no cambiar el alto de la tarjeta.
+     - **Viaja con la propuesta**: `articulos_nuevos` en el JSON guardado
+       (clase y detalle de cada uno), una línea por artículo en el PDF, una
+       hoja «Nuevos» en el Excel y un bloque en el correo
+       (`articulos_nuevos.describir`). Guardadas lo muestra.
+
+     **Y las dos tarjetas miden lo mismo** (pedido el mismo día: «iguala en
+     tamaño vertical las tarjetas»). A 1323×619 la de Receta medía 628 y la
+     de Precio 597: el pie de Receta mide 68 y no los 53 de la #512, y el
+     panel de precio, 16 menos. Se recontaron las dos (`_CROMO_*` en
+     `formulario_receta.py`, cada panel estira SU tabla hasta el pie) y se
+     sumaron al piso de «dos tarjetas en una fila» de `estilos/_80_cards.py`
+     como red. Medido con Playwright en 17 estados —vacía, con compra, (P)
+     y (Rs) nuevos, Dónde se usa, Precio con aviso, Combo y Modificar—: las
+     dos en 613, sin desborde horizontal. Lo que hizo falta para eso:
+     - las pestañas en UN renglón (`nowrap`, nombres de 14 caracteres):
+       partidas en dos, la tarjeta crecía 36;
+     - las notas del panel, de dos renglones justos (`.fr-nota-2`);
+     - los rótulos cortos («Peso (g)», «Merma %»): el `label` global va en
+       versalitas y uno largo se partía en dos renglones;
+     - sin la barrita de íconos de las tablas en las dos tarjetas: flotaba
+       sobre el «+» del buscador de la (Rs) y se comía el clic — la #572
+       otra vez, encontrada por Playwright, no a ojo.
+
+     Sin renombres de lo que importa `app.py`; pero `formulario_receta.py`
+     importa un módulo nuevo, y Cloud no relee los paquetes ya importados
+     hasta reiniciar (#357): «Reboot app» para verlo.
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47136,7 +47228,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#596**; la próxima toma el número siguiente.
+> última regla es la **#597**; la próxima toma el número siguiente.
 
 >
 

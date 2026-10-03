@@ -44,8 +44,17 @@ Desde el 2026-09-23 la receta/combo se descarga en PDF y Excel y se manda
 «desde mi Gmail» (la fila de Guardar; ver `envio_receta.py` para el porqué
 de abrir el Gmail del usuario en vez de mandar desde el servidor).
 
-Afuera de este commit a propósito (quedan para commits siguientes):
-  - Crear/editar una Receta Base desde acá.
+Desde el 2026-10-03 (regla #597) la receta puede llevar lo que el almacén
+TODAVÍA NO TIENE: el buscador acepta un nombre escrito y el panel de la
+derecha pregunta qué es —insumo de compra, (P) porcionado o (Rs) receta
+base— y deja detallar los dos últimos. El panel alterna entre Precio,
+«Dónde se usa» (las recetas activas que llevan cada artículo, también por
+recetas base) y una pestaña por cada (P)/(Rs) nuevo. Las cuentas viven en
+`articulos_nuevos.py`, puro y con test.
+
+Afuera a propósito (quedan para commits siguientes):
+  - Editar una Receta Base que YA existe (acá sólo se arman nuevas, aunque
+    se puede partir de una del sistema).
   - "Cargar de vuelta en el editor" desde una propuesta guardada (el visor
     de este commit es de solo lectura).
   - Grupo/SubGrupo (sin fuente real definida para esa taxonomía todavía).
@@ -63,7 +72,7 @@ simplemente no sale, arquitectura.md regla #100).
 import json
 import smtplib
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import html
@@ -72,6 +81,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import articulos_nuevos as an
 import envio_receta
 
 from data import cargar as _cargar_reporte
@@ -79,8 +89,9 @@ from data import get_s3_cliente, secrets_disponibles
 from graficos import alturas
 from graficos.base import _resolver, una_vez_por_corrida
 from tema import (
-    ACENTO, ADVERTENCIA, ERROR, EXITO, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
-    PALETA_SERIES, TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO, ADVERTENCIA, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO,
+    ERROR, EXITO, GRIS_TEXTO, GRIS_TEXTO_SUAVE, LAVANDA_CHIP, PALETA_SERIES,
+    TEXTO_PRINCIPAL,
 )
 # El catálogo de insumos y el nombre de SU parquet viajan juntos, y viven
 # allá desde el 2026-09-17 — ver el comentario de `_catalogo_insumos_
@@ -91,6 +102,8 @@ from graficos.recetas_comun import (
 )
 
 _ARCHIVO_RECETAVENTA = "recetaventa.parquet"
+_ARCHIVO_RECETABASE = "recetabase.parquet"
+_ARCHIVO_PORCIONAMIENTOS = "porcionamientos.parquet"
 _ZONA_LIMA = ZoneInfo("America/Lima")   # Cloud corre en UTC
 # IGV y recargo al consumo: los del SISTEMA, sumados sobre el neto (hoy
 # 10,5 % + 13 %, precio ÷ 1,235). Viven en `recetas_comun` porque
@@ -103,6 +116,30 @@ _MODOS = ("venta", "combo", "modificar")
 # Rótulo del segmented control → modo interno. «Guardadas» no arma nada.
 _MODO_DE_ROTULO = {"Receta de venta": "venta", "Combo": "combo",
                    "Modificar": "modificar"}
+
+# ─── Lo NUEVO: artículos que el almacén todavía no tiene (regla #597) ────
+# Las tres clases del almacén, con lo que se le explica a quien elige. En
+# Combo no se pregunta: lo nuevo es un producto de venta, con su costo
+# estimado.
+_CLASES_NUEVO = {
+    "compra": ("Insumo de compra",
+               "Se compra a un proveedor: pones su unidad y un precio estimado."),
+    "p": ("(P) Porcionado",
+          "Sale de porcionar o limpiar un insumo: dices de cuál y cuánto rinde."),
+    "rs": ("(Rs) Receta base",
+           "Se prepara con otros insumos: cargas sus ingredientes y cuánto rinde."),
+}
+_PREFIJO_NUEVO = {"p": "(P) ", "rs": "(Rs) "}
+_UNIDADES_SALIDA_P = ("UND", "PORCION", "KILOS", "LITROS")
+_UNIDADES_RS = ("KILOS", "LITROS", "UND", "PORCION")
+_AREAS_RS = ("COCINA", "PRODUCCION", "BARRA")
+_UNIDADES_COMPRA = ("KILOS", "LITROS", "UND")
+# El color de lo nuevo en las tablas (columna Cód. y «Se usa en»): lavanda
+# si su costo está completo, ámbar si es un precio ESTIMADO o le falta el
+# detalle. El `data_editor` sólo pinta columnas no editables, y éstas lo son.
+_ESTILO_NUEVO_OK = f"background-color: {LAVANDA_CHIP}; color: {ACENTO_TEXTO}; font-weight: 600"
+_ESTILO_NUEVO_PEND = (f"background-color: {ADVERTENCIA_FONDO}; color: {ADVERTENCIA_TEXTO}; "
+                      "font-weight: 600")
 
 # Los cuatro trozos de la torta y sus puntos en la tabla de precios: el
 # MISMO color en los dos sitios (pedido 2026-09-24: «recuerda colocar los
@@ -123,11 +160,35 @@ _COLOR_IGV = PALETA_SERIES[2]
 #     (40 + gap) y la nota contra el sistema (19 + gap): 83 más.
 #   · Precio: padding 32 + cabecera 32 + tabla 229 + semáforo 39 + título
 #     de la torta 32 + 4 gaps de 12 = 412.
-_CROMO_TARJETA_RECETA = 245
+# Re-medido el 2026-10-03, cuando se pidió «iguala en tamaño vertical las
+# tarjetas»: a 1323×619 la de Receta medía 628 y la de Precio 597. El pie
+# ya no medía 53 sino 68, y el panel de precio 16 menos de lo supuesto. Las
+# dos se cuentan otra vez abajo, y además el CSS las estira a la más alta
+# (`estilos/_80_cards.py`, el piso de «dos tarjetas en una fila»).
+#
+# La de la derecha, desde el mismo día, alterna paneles con una fila de
+# pestañas (regla #597): todos comparten el cromo de arriba —padding,
+# cabecera, pestañas y dos gaps— y cada uno estira SU tabla (o la torta)
+# hasta el pie.
+_CROMO_TARJETA_RECETA = 260
 _FILAS_MODIFICAR = 83
-_CROMO_TARJETA_PRECIO = 412
+_ALTO_PESTANAS = 32
+_CROMO_PANEL = 32 + 32 + _ALTO_PESTANAS + 2 * 12
+_ALTO_PANEL = alturas.PRESUPUESTO - _CROMO_PANEL
+#   · Precio: tabla 223 + semáforo y pista 39 + título de la torta 22 + 3 gaps.
+_ALTO_TORTA = _ALTO_PANEL - (223 + 39 + 22 + 3 * 12)
+#   · (P): nombre 42 + «sale de» 40 + la fila con rótulos 68 + nota de
+#     dos renglones 34 + resultado 64 + título 22 + 6 gaps.
+_ALTO_CORTES_P = _ALTO_PANEL - (42 + 40 + 68 + 34 + 64 + 22 + 6 * 12)
+#   · (Rs): nombre 42 + rinde/unidad/área 68 + buscador 40 + quitar y
+#     resultado 88 + «partir de» 40 + 5 gaps.
+_ALTO_TABLA_RS = _ALTO_PANEL - (42 + 68 + 40 + 88 + 40 + 5 * 12)
+#   · Dónde se usa: el artículo 40 + la nota de dos renglones + 2 gaps.
+_ALTO_NOTA_USOS = 34
+_ALTO_TABLA_USOS = _ALTO_PANEL - (40 + _ALTO_NOTA_USOS + 2 * 12)
 _ALTO_TABLA = alturas.PRESUPUESTO - _CROMO_TARJETA_RECETA
-_ALTO_TORTA = alturas.PRESUPUESTO - _CROMO_TARJETA_PRECIO
+# «Se usa en», en la tabla de la receta: «20 platos · 36 bases» entero.
+_ANCHO_USOS = 122
 
 
 def _alto_tabla(modo):
@@ -154,8 +215,13 @@ def _key_lineas(modo):
 def _init_estado():
     for modo in _MODOS:
         st.session_state.setdefault(_key_lineas(modo), [])
-        # El precio de venta es un `st.number_input` con esta key: vacío
-        # (None) hasta que alguien escribe uno o se importa un plato.
+        # Lo nuevo de la receta, por el código provisional de su línea
+        # («NUEVO-3»): la clase y su detalle (regla #597).
+        st.session_state.setdefault(_key(modo, "nuevos"), {})
+        # El precio de venta: vacío (None) hasta que alguien escribe uno o
+        # se importa un plato. Desde el 2026-10-03 NO es la key de su
+        # `st.number_input` (ésa es `pv_w`): el panel de precio alterna con
+        # otros, y un widget que no se dibuja pierde su valor (regla #597).
         st.session_state.setdefault(_key(modo, "pv"), None)
     st.session_state.setdefault("form_receta_contador_nuevo", 0)
 
@@ -230,8 +296,11 @@ def _es_activo_valor(fila):
     return bool(v) if v is not None and not pd.isna(v) else None
 
 
-def _agregar_linea(modo, cod, nombre, unidad, precio, activo, tipo):
-    lineas = st.session_state[_key_lineas(modo)]
+def _agregar_linea(modo, cod, nombre, unidad, precio, activo, tipo, lineas=None):
+    """Suma una línea a la receta (o a `lineas`, las de una receta base
+    nueva), salvo que ese código ya esté."""
+    if lineas is None:
+        lineas = st.session_state[_key_lineas(modo)]
     if any(l["cod"] == cod for l in lineas):
         return
     lineas.append({
@@ -240,7 +309,14 @@ def _agregar_linea(modo, cod, nombre, unidad, precio, activo, tipo):
     })
 
 
-_SENTINEL_NUEVO = "➕  Agregar un ítem nuevo (no está en la lista)…"
+def _codigo_nuevo():
+    """«NUEVO-7»: el código provisional de algo que el almacén no tiene.
+    Uno por sesión y sin repetir, aunque la línea se quite."""
+    st.session_state["form_receta_contador_nuevo"] += 1
+    return f"NUEVO-{st.session_state['form_receta_contador_nuevo']}"
+
+
+_SENTINEL_NUEVO = "➕  Crear un artículo nuevo (no está en el almacén)…"
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -301,35 +377,26 @@ def _opciones_precomputadas(kind: str):
     return opciones, meta, cod_por_etiq
 
 
-def _buscador_catalogo(modo, kind, c_main, c_btn, *, placeholder,
-                       unidad_nueva="unidad"):
-    """Buscador SUGESTIVO unificado con el alta de ítem nuevo.
+def _buscador_catalogo(modo, kind, c_main, c_btn, *, placeholder):
+    """Buscador SUGESTIVO unificado con el alta de lo que NO está.
 
     `kind` es el nombre del catálogo (`"insumos"` o `"productos_venta"`)
     para `_opciones_precomputadas`, que ya trae la lista y el meta en un
     formato listo para el selectbox — pre-2026-09-23 iteraba con
     `df.iterrows()` en cada rerun y era el bottleneck del "+".
 
-    Una sola fila: `st.selectbox` con los ítems del catálogo MÁS la opción
-    centinela `_SENTINEL_NUEVO` al final. El widget filtra client-side a
-    medida que el usuario tipea (sin Enter). El botón «+» al costado
-    confirma la línea.
+    Una sola fila: `st.selectbox` con los ítems del catálogo y el «+» al
+    costado, que confirma la línea. El widget filtra client-side a medida
+    que el usuario tipea.
 
-    Dos modos, alternados por session_state[`modo_nuevo`]:
-      · **buscar** (default): selectbox de opciones + «+». Elegir la
-        opción centinela lleva a buscar → nuevo.
-      · **nuevo**: mismo lugar, pero un `st.text_input` para el nombre
-        del ítem que no está + «+». Un enlace «← volver a buscar» debajo
-        vuelve a buscar.
-
-    Reemplaza al esquema anterior (`st.expander` aparte con su propio
-    input) del pedido de 2026-09-23: «"¿No está en la lista?" debe ser
-    una funcionalidad del buscador de artículos de almacén de arriba, no
-    un cuadrante aparte. Al escribir un producto nuevo, debe consultarte
-    si lo creamos como un artículo nuevo». `st.selectbox` no expone al
-    Python el texto tipeado en el filtro (el filtrado es puro
-    client-side), así que la señal «acá no hay nada» la da el usuario
-    eligiendo la opción centinela desde el mismo dropdown.
+    LO QUE NO ESTÁ (regla #597, 2026-10-03). Hasta ese día `st.selectbox`
+    no le pasaba a Python el texto tipeado, así que la señal «acá no hay
+    nada» la daba una opción centinela que, al elegirla, cambiaba el
+    buscador por un `text_input`. Con `accept_new_options` el texto
+    escrito SE PUEDE elegir: escribir «ajo negro» y darle Enter lo devuelve
+    tal cual, y eso abre en el panel de la derecha la pestaña «Artículo
+    nuevo», que pregunta qué es (compra, (P) o (Rs)). La centinela queda
+    al final de la lista para quien la busque sin escribir.
 
     La key del widget lleva un contador incremental por modo, para que
     después de cada agregado el widget arranque limpio (Streamlit descarta
@@ -340,69 +407,29 @@ def _buscador_catalogo(modo, kind, c_main, c_btn, *, placeholder,
     st.session_state.setdefault(contador_key, 0)
     ver = st.session_state[contador_key]
 
-    modo_nuevo_key = _key(modo, "modo_nuevo")
-    modo_nuevo = st.session_state.get(modo_nuevo_key, False)
-
     lineas_actuales = {l["cod"] for l in st.session_state[_key_lineas(modo)]}
-    todas_opciones, meta_total, cod_por_etiq = _opciones_precomputadas(kind)
-    if not todas_opciones:
-        # Catálogo vacío o no disponible: nada que ofrecer.
-        opciones = []
-        meta = {}
-    else:
-        # Filtrado O(N) sobre listas Python: sin `df.iterrows()` en la ruta caliente.
-        opciones = [op for op in todas_opciones if cod_por_etiq[op] not in lineas_actuales]
-        meta = meta_total  # el meta completo alcanza; sólo iteramos las opciones filtradas
+    todas_opciones, meta, cod_por_etiq = _opciones_precomputadas(kind)
+    # Filtrado O(N) sobre listas Python: sin `df.iterrows()` en la ruta caliente.
+    opciones = [op for op in todas_opciones if cod_por_etiq[op] not in lineas_actuales]
 
     # Las dos columnas las abre el llamador, en la MISMA fila que el nombre
     # de la receta (mockup del 2026-09-24): nombre · buscador · «+».
-    if modo_nuevo:
-        with c_main:
-            nuevo_nombre = st.text_input(
-                "Nombre del nuevo ítem",
-                key=_key(modo, f"nuevo_nombre_v{ver}"),
-                placeholder="nombre del ítem nuevo (no está en el almacén)…",
-                label_visibility="collapsed",
-            ).strip()
-        with c_btn:
-            agregar_n = st.button(
-                "➕", key=_key(modo, "add_nuevo"),
-                disabled=not nuevo_nombre, use_container_width=True,
-                help="Confirmar como ítem nuevo (precio 0, se completa después)",
-            )
-        with c_main:
-            if st.button("← Volver a buscar", key=_key(modo, "cancel_nuevo"),
-                         type="tertiary" if hasattr(st, "tertiary") else "secondary"):
-                st.session_state[modo_nuevo_key] = False
-                st.session_state[contador_key] = ver + 1
-                st.rerun(scope="fragment")
-        if agregar_n and nuevo_nombre:
-            st.session_state["form_receta_contador_nuevo"] += 1
-            n = st.session_state["form_receta_contador_nuevo"]
-            _agregar_linea(modo, f"NUEVO-{n}", nuevo_nombre, unidad_nueva, 0.0, None, "nuevo")
-            st.session_state[modo_nuevo_key] = False
-            st.session_state[contador_key] = ver + 1
-            st.rerun(scope="fragment")
-        return
-
-    opciones_completas = opciones + [_SENTINEL_NUEVO]
     with c_main:
         elegido = st.selectbox(
-            "Buscar", opciones_completas, index=None, placeholder=placeholder,
-            key=_key(modo, f"buscador_v{ver}"),
-            label_visibility="collapsed",
+            "Buscar", opciones + [_SENTINEL_NUEVO], index=None,
+            placeholder=placeholder, accept_new_options=True,
+            key=_key(modo, f"buscador_v{ver}"), label_visibility="collapsed",
         )
+    es_nuevo = elegido is not None and elegido not in meta
     with c_btn:
         agregar = st.button(
             "➕", key=_key(modo, "add_sel"),
-            disabled=elegido is None or elegido == _SENTINEL_NUEVO,
+            disabled=elegido is None or es_nuevo,
             use_container_width=True,
             help="Agregar el ítem seleccionado a la lista",
         )
-    if elegido == _SENTINEL_NUEVO:
-        # Cambia de modo: en el próximo render aparece el input de nombre
-        # en el mismo lugar del buscador.
-        st.session_state[modo_nuevo_key] = True
+    if es_nuevo:
+        _empezar_nuevo(modo, "" if elegido == _SENTINEL_NUEVO else str(elegido).strip())
         st.session_state[contador_key] = ver + 1
         st.rerun(scope="fragment")
     elif agregar and elegido:
@@ -467,7 +494,15 @@ def _tabla_lineas(modo, origen=None):
 
     `origen` es la receta del sistema que se importó en «Modificar»: con
     él aparece la columna «Antes», con la cantidad del sistema tachada en
-    las filas donde se cambió."""
+    las filas donde se cambió.
+
+    Lo NUEVO (regla #597) no tiene código: su celda dice «NUEVO», en
+    lavanda si su costo está completo y en ámbar si es estimado o le falta
+    el detalle, y «Se usa en» dice cuál de las dos. En lo del almacén, esa
+    columna cuenta las recetas activas que lo llevan, también por recetas
+    base; cuáles son, en la pestaña «Dónde se usa». El precio y la unidad
+    de un (P)/(Rs) nuevo salen de su detalle: lo que se escriba ahí se
+    deshace."""
     lineas = st.session_state[_key_lineas(modo)]
     if not lineas:
         if modo == "modificar":
@@ -481,21 +516,29 @@ def _tabla_lineas(modo, origen=None):
 
     orig = origen["lineas"] if origen else {}
     total = _total_lineas(lineas)
-    filas = []
-    for l in lineas:
+    con_usos = modo != "combo"
+    filas, estilos, fijos = [], [], set()
+    for i, l in enumerate(lineas):
         subtotal = l["cantidad"] * l["precio"]
         pct = (subtotal / total * 100) if total > 0 else 0.0
         badges = []
-        if l["tipo"] == "nuevo":
-            badges.append("🆕 Nuevo")
-        elif origen and l.get("sid") not in orig:
+        nuevo = l["tipo"] == "nuevo"
+        if origen and not nuevo and l.get("sid") not in orig:
             badges.append("agregado")
         if l.get("activo") is False:
             badges.append("🔸 Inactivo")
         nombre_mostrado = l["nombre"] + (f"  ({', '.join(badges)})" if badges else "")
+        if nuevo:
+            completo, usos = _estado_nuevo(modo, l)
+            estilos.append(_ESTILO_NUEVO_OK if completo else _ESTILO_NUEVO_PEND)
+            if _modelo(modo, l)["clase"] in ("p", "rs"):
+                fijos.add(i)
+        else:
+            usos = an.resumen_usos(_usos(l["cod"])) if con_usos else ""
+            estilos.append("")
         fila = {
             "Quitar": False,
-            "Código": l["cod"],
+            "Código": "NUEVO" if nuevo else l["cod"],
             "Producto": nombre_mostrado,
             "Unidad": l["unidad"],
         }
@@ -509,13 +552,18 @@ def _tabla_lineas(modo, origen=None):
         fila["Precio unit. (S/)"] = round(l["precio"], 4)
         fila["Subtotal (S/)"] = round(subtotal, 2)
         fila["% del total"] = round(pct, 1)
+        if con_usos:
+            fila["Se usa en"] = usos
         filas.append(fila)
     df_show = pd.DataFrame(filas)
-    datos = df_show
+    # El Styler sólo pinta columnas NO editables: alcanza para el código,
+    # «Se usa en» y «Antes».
+    datos = df_show.style.apply(lambda _c: estilos, subset=["Código"])
+    if con_usos:
+        datos = datos.apply(
+            lambda _c: [e or f"color: {GRIS_TEXTO}" for e in estilos], subset=["Se usa en"])
     if origen:
-        # El Styler sólo pinta columnas NO editables: alcanza para «Antes».
-        datos = df_show.style.set_properties(
-            subset=["Antes"], **{"color": GRIS_TEXTO_SUAVE})
+        datos = datos.set_properties(subset=["Antes"], **{"color": GRIS_TEXTO_SUAVE})
 
     editor_key = _key(modo, "editor")
     editado = st.data_editor(
@@ -524,7 +572,8 @@ def _tabla_lineas(modo, origen=None):
         hide_index=True,
         use_container_width=True,
         height=_alto_tabla(modo),
-        disabled=["Código", "Producto", "Antes", "Subtotal (S/)", "% del total"],
+        disabled=["Código", "Producto", "Antes", "Subtotal (S/)", "% del total",
+                  "Se usa en"],
         # Cabeceras ABREVIADAS y anchos fijos (pedido 2026-09-23: «más
         # angostas las columnas de los insumos»). El data_editor no parte
         # una cabecera en dos renglones, así que se acorta el rótulo y el
@@ -541,25 +590,34 @@ def _tabla_lineas(modo, origen=None):
         column_config={
             "Quitar": st.column_config.CheckboxColumn(
                 "✕", width=36, help="Marcar para quitar"),
-            "Código": st.column_config.TextColumn("Cód.", width=64),
-            "Producto": st.column_config.TextColumn("Producto", width=190),
+            "Código": st.column_config.TextColumn("Cód.", width=62),
+            # Más angosto desde «Se usa en» (regla #597); con «Antes»,
+            # además, para que la tabla no desborde a lo ancho: la suma de
+            # los anchos no puede pasar de los ~680 de la tabla a 1323 px.
+            "Producto": st.column_config.TextColumn(
+                "Producto", width=110 if origen else 150 if con_usos else 190),
             "Unidad": st.column_config.TextColumn(
-                "Und.", width=84, help="Unidad, tal cual la escribe el sistema"),
+                "Und.", width=72, help="Unidad, tal cual la escribe el sistema"),
             "Antes": st.column_config.TextColumn(
                 "Antes", width=52,
                 help="Cantidad que tiene hoy el sistema, si la cambiaste"),
             "Cantidad": st.column_config.NumberColumn(
-                "Cant.", width=64, help="Cantidad", min_value=0.0),
+                "Cant.", width=52, help="Cantidad", min_value=0.0),
             "Precio unit. (S/)": st.column_config.NumberColumn(
-                "P. unit.", width=72, help="Precio unitario (S/)",
+                "P. unit.", width=62, help="Precio unitario (S/)",
                 min_value=0.0),
             "Subtotal (S/)": st.column_config.NumberColumn(
-                "Subtot.", width=66, help="Subtotal (S/)", format="%.2f"),
+                "Subtot.", width=58, help="Subtotal (S/)", format="%.2f"),
             "% del total": st.column_config.NumberColumn(
-                "%", width=46, help="% del costo total", format="%.1f"),
+                "%", width=42, help="% del costo total", format="%.1f"),
+            "Se usa en": st.column_config.TextColumn(
+                "Se usa en", width=_ANCHO_USOS,
+                help="Recetas ACTIVAS que lo llevan, directo o por una receta "
+                     "base. Cuáles, en la pestaña «Dónde se usa» de la derecha."),
         },
     )
 
+    deshacer = False
     for i, l in enumerate(lineas):
         fila = editado.iloc[i]
         # Lo mostrado está redondeado: pisar el valor guardado con lo que
@@ -568,8 +626,21 @@ def _tabla_lineas(modo, origen=None):
         for campo, col in (("cantidad", "Cantidad"), ("precio", "Precio unit. (S/)")):
             v = float(fila[col]) if pd.notna(fila[col]) else 0.0
             if abs(v - df_show.iloc[i][col]) > 1e-9:
-                l[campo] = v
-        l["unidad"] = str(fila["Unidad"]) or "unidad"
+                if i in fijos and campo == "precio":
+                    deshacer = True
+                else:
+                    l[campo] = v
+        und = str(fila["Unidad"]) or "unidad"
+        if i in fijos:
+            deshacer = deshacer or und != l["unidad"]
+        else:
+            l["unidad"] = und
+    if deshacer:
+        # El precio de un (P)/(Rs) nuevo es el de su detalle: la celda
+        # vuelve a lo calculado (si no, mostraría lo tecleado y costaría
+        # otra cosa).
+        st.session_state.pop(_key(modo, "editor"), None)
+        st.rerun(scope="fragment")
 
     marcadas = {i for i, v in enumerate(editado["Quitar"].tolist()) if v}
     return lineas, marcadas
@@ -648,7 +719,17 @@ def _vaciar(modo):
         st.session_state.pop(_key(modo, "origen"), None)
         st.session_state.pop(_key(modo, "nombre"), None)
         st.session_state.pop(_key(modo, "pv"), None)
+        st.session_state.pop(_key(modo, "pv_w"), None)
         st.session_state.pop(_key(modo, "plato_sel"), None)
+    _soltar_nuevos(modo)
+
+
+def _soltar_nuevos(modo):
+    """Fuera lo nuevo a medio armar: su detalle, el alta en curso y la
+    pestaña que lo mostraba."""
+    st.session_state[_key(modo, "nuevos")] = {}
+    st.session_state[_key(modo, "creando")] = None
+    st.session_state[_key(modo, "panel")] = "precio"
 
 
 def _estado_costo(pct):
@@ -692,7 +773,11 @@ def _monto(v, hay=True):
     return f"−{abs(v):,.2f}" if v < -0.004 else f"{v:,.2f}"
 
 
-def _panel_precio(modo, costo, origen=None):
+def _al_cambiar_pv(modo):
+    st.session_state[_key(modo, "pv")] = st.session_state.get(_key(modo, "pv_w"))
+
+
+def _panel_precio(modo, costo, origen=None, aviso=None):
     """La tarjeta de la derecha: la tabla Costo · Precio · Neto ·
     Utilidad · Recargo · IGV, el semáforo del % de costo y la torta.
 
@@ -707,16 +792,14 @@ def _panel_precio(modo, costo, origen=None):
     **Actual** (el costo de la receta y el precio de salón que tiene hoy el
     sistema) y **Nuevo** (lo que se está armando). Devuelve el precio de
     venta vigente."""
-    k_pv = _key(modo, "pv")
+    k_pv, k_w = _key(modo, "pv"), _key(modo, "pv_w")
     pv = float(st.session_state.get(k_pv) or 0.0)
     N = _cuentas(costo, pv)
     A = _cuentas(origen["costo"], origen["pv"]) if origen else None
     hay_n = pv > 0
-
-    st.markdown(
-        '<div class="fr-cab"><span class="fr-titulo">Precio de venta</span>'
-        f'<span class="fr-sub">IGV {_tasa(tasa_igv())} · recargo al consumo '
-        f'{_tasa(_RECARGO)}, sobre el neto</span></div>', unsafe_allow_html=True)
+    # El widget se siembra con el precio guardado en cada corrida: si la
+    # pestaña estuvo en otro panel, Streamlit ya le borró el suyo.
+    st.session_state[k_w] = st.session_state.get(k_pv)
 
     cols_cls = "fr-p-dos" if A else "fr-p-una"
     with st.container(key="form_receta_ptabla"):
@@ -752,10 +835,11 @@ def _panel_precio(modo, costo, origen=None):
                                 unsafe_allow_html=True)
             with c_inp:
                 st.number_input(
-                    "Precio de venta", key=k_pv, min_value=0.0, step=0.5,
+                    "Precio de venta", key=k_w, min_value=0.0, step=0.5,
                     format="%.2f", placeholder="0.00",
                     label_visibility="collapsed",
                     help="Precio de carta, con IGV y recargo incluidos",
+                    on_change=_al_cambiar_pv, args=(modo,),
                 )
 
         filas = [
@@ -787,9 +871,16 @@ def _panel_precio(modo, costo, origen=None):
         "escribe un precio para calcularlo")
     pista = ("Escribe el precio nuevo en su celda; lo demás se calcula." if A else
              "Escribe el precio de venta en su celda; lo demás se calcula.")
+    # Con algo estimado o sin detalle en la receta, el aviso va en el
+    # renglón de la pista (decisión del usuario, 2026-10-03: entra al costo,
+    # con aviso). Un renglón, con el texto entero en el tooltip: así la
+    # tarjeta no cambia de alto.
+    linea = (f'<div class="fr-pista fr-aviso" title="{html.escape(aviso)}">⚠ '
+             f'{html.escape(aviso)}</div>' if aviso else
+             f'<div class="fr-pista">✎ {pista}</div>')
     st.markdown(
-        f'<div class="fr-semaforo">% de costo sobre el neto: {semaforo}</div>'
-        f'<div class="fr-pista">✎ {pista}</div>', unsafe_allow_html=True)
+        f'<div class="fr-semaforo">% de costo sobre el neto: {semaforo}</div>{linea}',
+        unsafe_allow_html=True)
 
     _torta(modo, N, A)
     return pv
@@ -886,7 +977,7 @@ def _correo_usuario():
         return None
 
 
-def _resumen_envio(tipo, nombre, autor, lineas, precio_venta):
+def _resumen_envio(tipo, nombre, autor, lineas, precio_venta, nuevos=()):
     """Todo lo que `envio_receta` necesita, COPIADO: el PDF y el Excel se
     arman recién al hacer clic, en otro hilo, y para entonces las líneas de
     `session_state` pueden haber cambiado."""
@@ -898,6 +989,9 @@ def _resumen_envio(tipo, nombre, autor, lineas, precio_venta):
         "costo_total": _total_lineas(lineas), "precio_venta": precio_venta,
         "base": base, "recargo": m_recargo, "igv": m_igv,
         "pct_recargo": _RECARGO * 100, "pct_igv": tasa_igv() * 100,
+        # Lo que la receta lleva y el almacén no tiene, dicho en una línea
+        # cada uno (regla #597).
+        "nuevos": [an.describir(d) for d in nuevos],
     }
 
 
@@ -913,7 +1007,8 @@ def _credenciales_correo():
     return (rem, clave) if rem and clave else None
 
 
-def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta):
+def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta,
+                   nuevos=()):
     """PDF · Excel · «Enviar por correo», en las tres columnas `cols` de la
     fila de Guardar.
 
@@ -931,7 +1026,7 @@ def _botones_envio(modo, cols, tipo, nombre, guardado_por, lineas, precio_venta)
     listo = bool(nombre.strip()) and bool(lineas)
     falta = ("Ponle nombre y agrega al menos un ítem." if not listo else None)
     resumen = _resumen_envio(tipo, nombre, guardado_por.strip() or correo or "",
-                             lineas, precio_venta)
+                             lineas, precio_venta, nuevos)
     c_pdf, c_xls, c_mail = cols
     with c_pdf:
         st.download_button(
@@ -1054,6 +1149,7 @@ def _guardar_propuesta(tipo, nombre, guardado_por, lineas, extra=None):
             {k: l[k] for k in ("cod", "nombre", "unidad", "precio", "cantidad", "tipo")}
             for l in lineas
         ],
+        # Lo nuevo y su detalle van en `articulos_nuevos` (por `extra`).
     }
     if extra:
         payload.update(extra)
@@ -1088,8 +1184,10 @@ def _limpiar_modo(modo):
     st.session_state.pop(_key(modo, "editor"), None)
     st.session_state.pop(_key(modo, "nombre"), None)
     st.session_state.pop(_key(modo, "pv"), None)
+    st.session_state.pop(_key(modo, "pv_w"), None)
     st.session_state.pop(_key(modo, "origen"), None)
     st.session_state.pop(_key(modo, "plato_sel"), None)
+    _soltar_nuevos(modo)
 
 
 # ─── Modificar: importar una receta del sistema ─────────────────────────
@@ -1233,6 +1331,873 @@ def _importador():
     return origen
 
 
+# ─── Lo nuevo: detalle, cuentas y paneles (regla #597) ──────────────────
+# Un artículo NUEVO es una línea con `tipo="nuevo"` y un código provisional
+# («NUEVO-3»). Su detalle vive aparte, en `_key(modo, "nuevos")`, con la
+# clase (compra, p, rs o, en Combo, producto) y lo que hace falta para
+# costearlo. El precio y la unidad de una línea (P) o (Rs) NO se escriben
+# en la tabla: los pone `_sincronizar_nuevos` desde su detalle, al
+# principio de cada corrida, para que la tabla, el panel de precio, el PDF
+# y lo que se guarda digan lo mismo.
+#
+# Los widgets de los paneles guardan lo que cambian con `on_change`, que
+# corre ANTES que la página: la tabla de la izquierda se dibuja primero y
+# tiene que ver el detalle ya cambiado. Con el valor leído al dibujar el
+# panel, la tabla quedaba una corrida atrás.
+def _nuevos(modo):
+    return st.session_state[_key(modo, "nuevos")]
+
+
+def _modelo(modo, linea):
+    """El detalle del artículo NUEVO de esta línea, o None si la línea es
+    del almacén. Una línea nueva sin detalle —un insumo nuevo adentro de
+    una receta base, o una de antes del 2026-10-03— cuenta como compra."""
+    if linea.get("tipo") != "nuevo":
+        return None
+    return _nuevos(modo).get(linea["cod"]) or {"clase": "compra"}
+
+
+def _semilla(k, valor):
+    """Le da a un widget su valor de partida sólo si no tiene uno. Si una
+    corrida abortada le borró el estado (regla #373), vuelve del detalle."""
+    if k not in st.session_state:
+        st.session_state[k] = valor
+
+
+def _al_cambiar(modo, cod, campo, k):
+    m = _nuevos(modo).get(cod)
+    if m is not None:
+        m[campo] = st.session_state.get(k)
+
+
+def _corto(texto, n):
+    texto = str(texto)
+    return texto if len(texto) <= n else texto[:n - 1].rstrip() + "…"
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _kardex():
+    """{cod: (nombre, unidad de kardex, precio de kardex)} del almacén: de
+    qué sale un (P) nuevo y a cuánto el kilo."""
+    df = catalogo_insumos()
+    if df is None or df.empty:
+        return {}
+    return {c: (n, u, float(p)) for c, n, u, p in zip(
+        df["cod"], df["nombre"], df["unidad_kardex"], df["precio_kardex"])}
+
+
+def _rotulo_kardex(cod):
+    k = _kardex().get(cod)
+    if not k:
+        return str(cod)
+    return f"{k[0]} · {cod} · S/ {k[2]:,.2f} {an.por_unidad(k[1])}"
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _historia_porcionado(cod):
+    """La merma de `cod` y los cortes que salieron de él en los últimos
+    `an.VENTANA_DIAS` días (`articulos_nuevos.merma_y_cortes`)."""
+    desde = (datetime.now(_ZONA_LIMA) - timedelta(days=an.VENTANA_DIAS)).date()
+    return an.merma_y_cortes(_cargar_reporte(_ARCHIVO_PORCIONAMIENTOS), cod, desde=desde)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _indice_usos():
+    """El índice de «dónde se usa» (`articulos_nuevos.indice_usos`) con las
+    recetas de venta y base ACTIVAS. Un plato cuenta si están activos él y
+    su receta; una receta base, si lo está ella."""
+    vacio_rv = pd.DataFrame(columns=["plato", "nombre", "ins", "cant", "unid", "pv", "pct"])
+    vacio_rb = pd.DataFrame(columns=["base", "nombre", "ins", "cant", "unid"])
+    rv = _cargar_reporte(_ARCHIVO_RECETAVENTA)
+    rb = _cargar_reporte(_ARCHIVO_RECETABASE)
+    if rv is not None and not rv.empty:
+        c = {k: _resolver(rv, v) for k, v in {
+            "plato": ["COD PLATO", "Cod Plato"], "nombre": ["NOMB PLATO", "Nomb Plato"],
+            "ins": ["COD INS", "Cod Ins"], "cant": ["CANTIDAD", "Cantidad"],
+            "unid": ["UNID COSTO", "Unid Costo"], "pv": ["P.VENTA SALON", "P VENTA SALON"],
+            "pct": ["%CST SALON", "% CST SALON"], "act": ["ITEM VENTA ACTIVO"],
+            "rv_act": ["RV ACTIV", "RV ACTIVO"]}.items()}
+        if all(c[k] for k in ("plato", "nombre", "ins", "cant")):
+            d = rv
+            for k in ("act", "rv_act"):
+                if c[k]:
+                    d = d[_activo(d[c[k]])]
+
+            def num(col):
+                return pd.to_numeric(d[col], errors="coerce").fillna(0.0) if col else 0.0
+
+            vacio_rv = pd.DataFrame({
+                "plato": d[c["plato"]].astype(str), "nombre": d[c["nombre"]].astype(str),
+                "ins": d[c["ins"]].astype(str), "cant": num(c["cant"]),
+                "unid": d[c["unid"]].astype(str) if c["unid"] else "",
+                "pv": num(c["pv"]), "pct": num(c["pct"]) * 100})
+    if rb is not None and not rb.empty:
+        c = {k: _resolver(rb, v) for k, v in {
+            "base": ["COD PROD RB"], "nombre": ["RB NOMBRE"], "ins": ["COD INS RB"],
+            "cant": ["CANT"], "unid": ["UNID"], "act": ["RB ACT"]}.items()}
+        if all(c[k] for k in ("base", "nombre", "ins", "cant")):
+            d = rb[_activo(rb[c["act"]])] if c["act"] else rb
+            vacio_rb = pd.DataFrame({
+                "base": d[c["base"]].astype(str), "nombre": d[c["nombre"]].astype(str),
+                "ins": d[c["ins"]].astype(str),
+                "cant": pd.to_numeric(d[c["cant"]], errors="coerce").fillna(0.0),
+                "unid": d[c["unid"]].astype(str) if c["unid"] else ""})
+    return an.indice_usos(vacio_rv, vacio_rb)
+
+
+def _usos(cod):
+    return an.usos_de(_indice_usos(), cod)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _recetas_base_sistema():
+    """{COD PROD RB: receta} de recetabase.parquet, activas e inactivas, para
+    PARTIR de una al armar una nueva: nombre, unidad de salida, si está
+    activa y sus insumos activos, en la unidad y al costo del sistema."""
+    df = _cargar_reporte(_ARCHIVO_RECETABASE)
+    if df is None or df.empty:
+        return {}
+    c = {k: _resolver(df, v) for k, v in {
+        "cod": ["COD PROD RB"], "nombre": ["RB NOMBRE"], "unid_rb": ["RB UNID"],
+        "act": ["RB ACT"], "ins": ["COD INS RB"], "ins_nom": ["INSUMO"], "cant": ["CANT"],
+        "unid": ["UNID"], "pu": ["CST UNIT INS"], "ins_act": ["INS ACTIVO"]}.items()}
+    if not all(c[k] for k in ("cod", "nombre", "ins", "ins_nom", "cant", "pu")):
+        return {}
+    d = df[_activo(df[c["ins_act"]])] if c["ins_act"] else df
+    activa = _activo(d[c["act"]]) if c["act"] else pd.Series(True, index=d.index)
+    d = d.assign(_act=activa, _cant=pd.to_numeric(d[c["cant"]], errors="coerce").fillna(0.0),
+                 _pu=pd.to_numeric(d[c["pu"]], errors="coerce").fillna(0.0))
+    recetas = {}
+    for cod, g in d.groupby(c["cod"], sort=False):
+        act = bool(g["_act"].iloc[0])
+        nombre = str(g[c["nombre"]].iloc[0])
+        recetas[str(cod)] = {
+            "nombre": nombre, "activa": act,
+            "unidad": str(g[c["unid_rb"]].iloc[0]).strip().upper() if c["unid_rb"] else "KILOS",
+            "rotulo": nombre + ("" if act else " · inactiva"),
+            "lineas": [{"cod": str(i), "nombre": str(n),
+                        "unidad": str(u).strip() if c["unid"] else "unidad",
+                        "cantidad": float(q), "precio": float(p), "activo": None,
+                        "tipo": "almacen"}
+                       for i, n, u, q, p in zip(
+                           g[c["ins"]], g[c["ins_nom"]],
+                           g[c["unid"]] if c["unid"] else [""] * len(g),
+                           g["_cant"], g["_pu"])],
+        }
+    return dict(sorted(recetas.items(),
+                       key=lambda kv: (not kv[1]["activa"], kv[1]["nombre"].lower())))
+
+
+# ── Las cuentas ──
+def _costo_p(m):
+    """(insumo de entrada por unidad, costo por unidad de salida) de un (P)
+    nuevo; (None, 0.0) mientras no diga de qué sale o le falte el peso."""
+    k = _kardex().get(m.get("sale_de") or "")
+    if not k:
+        return None, 0.0
+    ent = an.entrada_por_unidad(k[1], m["salida"], m.get("peso_g"), m.get("merma") or 0)
+    if not ent:
+        return None, 0.0
+    return ent, ent * k[2]
+
+
+def _costo_rs(m):
+    """(costo de la tanda, costo por unidad de salida) de una (Rs) nueva."""
+    return an.costo_receta_base(m["lineas"], m["rinde"])
+
+
+def _falta_detalle(m):
+    if m["clase"] == "p":
+        return _costo_p(m)[1] <= 0
+    if m["clase"] == "rs":
+        return _costo_rs(m)[1] <= 0
+    return False
+
+
+def _estado_nuevo(modo, linea):
+    """(completo, texto de «Se usa en») de una línea NUEVA. Completo es lo
+    que va en lavanda; lo estimado o sin detalle, en ámbar."""
+    m = _modelo(modo, linea)
+    clase = m["clase"]
+    if clase in ("p", "rs"):
+        if _falta_detalle(m):
+            return False, "falta detalle"
+        if clase == "p":
+            return True, "porcionado nuevo"
+        if any(l.get("tipo") == "nuevo" for l in m["lineas"]):
+            return False, "precio estimado"
+        return True, "receta base nueva"
+    if clase == "producto":
+        return False, "costo estimado" if linea["precio"] > 0 else "sin costo"
+    return False, "precio estimado" if linea["precio"] > 0 else "sin precio"
+
+
+def _sincronizar_nuevos(modo):
+    """Precio, unidad y nombre de cada línea (P)/(Rs) nueva, desde su
+    detalle; y fuera el detalle de lo que ya no está en la receta.
+
+    Si la unidad cambia (una receta base que pasa de KILOS a UND), la
+    cantidad vuelve a 1: «180» gramos no son 180 unidades."""
+    lineas = st.session_state[_key_lineas(modo)]
+    nuevos = _nuevos(modo)
+    presentes = {l["cod"] for l in lineas}
+    for cod in [c for c in nuevos if c not in presentes]:
+        del nuevos[cod]
+    for l in lineas:
+        m = nuevos.get(l["cod"]) if l.get("tipo") == "nuevo" else None
+        if not m or m["clase"] not in ("p", "rs"):
+            continue
+        if m["clase"] == "p":
+            costo, salida = _costo_p(m)[1], m["salida"]
+        else:
+            costo, salida = _costo_rs(m)[1], m["unidad"]
+        und, factor = an.unidad_de_costeo(salida)
+        if l["unidad"] != und:
+            l["cantidad"] = 1.0
+        l.update(unidad=und, precio=costo / factor, nombre=m["nombre"])
+
+
+def _aviso_pendientes(modo, lineas):
+    """La línea del panel de precio cuando el costo lleva algo ESTIMADO o
+    sin detalle (decisión del usuario, 2026-10-03: entra al costo, con
+    aviso), o None."""
+    estimado, falta = [], []
+    for l in lineas:
+        if l.get("tipo") != "nuevo":
+            continue
+        m = _modelo(modo, l)
+        if m["clase"] in ("p", "rs"):
+            if _falta_detalle(m):
+                falta.append(l["nombre"])
+            elif m["clase"] == "rs" and any(x.get("tipo") == "nuevo" for x in m["lineas"]):
+                estimado.append(l["nombre"])
+        else:
+            (estimado if l["precio"] > 0 else falta).append(l["nombre"])
+    if not estimado and not falta:
+        return None
+    partes = []
+    if estimado:
+        partes.append("precios ESTIMADOS (" + ", ".join(estimado) + ")")
+    if falta:
+        partes.append("algo sin detalle que cuenta S/ 0.00 (" + ", ".join(falta) + ")")
+    return "El costo lleva " + " y ".join(partes) + "."
+
+
+def _detalle_nuevos(modo, lineas):
+    """Lo que se GUARDA de cada artículo nuevo con la propuesta, y de lo que
+    salen el PDF, el Excel y el correo (`articulos_nuevos.describir`)."""
+    out = []
+    for l in lineas:
+        if l.get("tipo") != "nuevo":
+            continue
+        m = _modelo(modo, l)
+        d = {"cod": l["cod"], "clase": m["clase"], "nombre": l["nombre"],
+             "unidad": l["unidad"], "precio": l["precio"]}
+        if m["clase"] == "compra":
+            d.update(unidad_kardex=m.get("unidad_kardex") or l["unidad"],
+                     precio_kardex_estimado=round(l["precio"] * m.get("factor", 1.0), 4))
+        elif m["clase"] == "p":
+            ent, costo = _costo_p(m)
+            k = _kardex().get(m.get("sale_de") or "")
+            d.update(sale_de=m.get("sale_de"), sale_de_nombre=k[0] if k else None,
+                     sale_de_unidad=k[1] if k else None, sale_de_precio=k[2] if k else None,
+                     salida=m["salida"], peso_g=m.get("peso_g"), merma_pct=m.get("merma"),
+                     entrada_por_unidad=ent, costo_por_unidad=costo)
+        elif m["clase"] == "rs":
+            tanda, por = _costo_rs(m)
+            d.update(rinde=m["rinde"], unidad_rinde=m["unidad"], area=m["area"],
+                     costo_tanda=tanda, costo_por_unidad=por,
+                     lineas=[{k: x[k] for k in ("cod", "nombre", "unidad", "cantidad",
+                                                "precio", "tipo")} for x in m["lineas"]])
+        out.append(d)
+    return out
+
+
+# ── Crear ──
+def _empezar_nuevo(modo, nombre):
+    """Abre la pestaña «Artículo nuevo» del panel con `nombre` escrito. La
+    versión en las keys hace que cada alta arranque de cero."""
+    ver = st.session_state.get(_key(modo, "creando_ver"), 0) + 1
+    st.session_state[_key(modo, "creando_ver")] = ver
+    st.session_state[_key(modo, "creando")] = ver
+    st.session_state[_key(modo, f"crear_nombre_v{ver}")] = nombre
+    st.session_state[_key(modo, "panel")] = "crear"
+
+
+def _crear(modo, clase, nombre, unidad, precio_kardex):
+    """Suma la línea nueva y su detalle. Un (P) o una (Rs) abren su pestaña
+    para detallarse; lo demás vuelve al precio."""
+    cod = _codigo_nuevo()
+    pref = _PREFIJO_NUEVO.get(clase)
+    if pref and not nombre.lower().startswith(pref.strip().lower()):
+        nombre = pref + nombre
+    if clase == "p":
+        m = {"clase": "p", "nombre": nombre, "sale_de": None, "salida": "UND",
+             "peso_g": 0.0, "merma": 0.0}
+        und, precio = "UND", 0.0
+    elif clase == "rs":
+        m = {"clase": "rs", "nombre": nombre, "rinde": 1.0, "unidad": "KILOS",
+             "area": _AREAS_RS[0], "lineas": [], "ver": 0}
+        und, precio = "GRAMOS", 0.0
+    elif clase == "producto":
+        m = {"clase": "producto", "nombre": nombre}
+        und, precio = "porción", float(precio_kardex)
+    else:
+        und, factor = an.unidad_de_costeo(unidad)
+        m = {"clase": "compra", "nombre": nombre, "unidad_kardex": unidad, "factor": factor}
+        precio = float(precio_kardex) / factor
+    _nuevos(modo)[cod] = m
+    _agregar_linea(modo, cod, nombre, und, precio, None, "nuevo")
+    st.session_state[_key(modo, "creando")] = None
+    st.session_state[_key(modo, "panel")] = cod if clase in ("p", "rs") else "precio"
+
+
+def _panel_crear(modo):
+    """«Artículo nuevo»: el nombre escrito en el buscador y QUÉ ES. Una
+    compra se agrega con su precio estimado; un (P) o una (Rs) se agregan
+    sin costo y abren su pestaña para detallarse."""
+    ver = st.session_state.get(_key(modo, "creando"))
+    es_combo = modo == "combo"
+    nombre = st.text_input(
+        "Nombre del artículo nuevo", key=_key(modo, f"crear_nombre_v{ver}"),
+        placeholder="nombre del artículo nuevo…")
+    if es_combo:
+        clase = "producto"
+    else:
+        # El contenedor con key fija es el ancla del CSS: el `label` global
+        # va en versalitas, y las opciones de un radio son `<label>`.
+        with st.container(key="form_receta_crear_tipo"):
+            clase = st.radio(
+                "¿Qué es?", list(_CLASES_NUEVO), key=_key(modo, f"crear_clase_v{ver}"),
+                format_func=lambda c: _CLASES_NUEVO[c][0],
+                captions=[desc for _, desc in _CLASES_NUEVO.values()])
+    unidad, precio = "UND", 0.0
+    if clase in ("compra", "producto"):
+        # columnas-internas: la unidad a su ancho y el precio con el resto.
+        c_u, c_p = st.columns([1, 1.6], vertical_alignment="bottom")
+        with c_u:
+            unidad = "porción" if es_combo else st.selectbox(
+                "Unidad del almacén", _UNIDADES_COMPRA, key=_key(modo, f"crear_und_v{ver}"))
+        with c_p:
+            precio = st.number_input(
+                "Costo estimado (S/ por porción)" if es_combo else
+                f"Precio estimado (S/ {an.por_unidad(unidad)})",
+                min_value=0.0, step=0.5, format="%.2f", key=_key(modo, f"crear_precio_v{ver}"))
+        und, factor = an.unidad_de_costeo(unidad)
+        nota = ("Entra al costo con un aviso, hasta que exista en el sistema."
+                if es_combo or factor == 1 else
+                f"Se costea en {und}: S/ {_num(precio / factor)} {an.por_unidad(und)}. "
+                "Entra al costo con un aviso, hasta que el almacén lo cree.")
+    else:
+        nota = ("Al agregarlo se abre su pestaña para decir de qué insumo sale y "
+                "cuánto rinde. Hasta entonces la tabla lo marca «falta detalle»."
+                if clase == "p" else
+                "Al agregarla se abre su pestaña para cargar sus insumos y cuánto "
+                "rinde. Hasta entonces la tabla la marca «falta detalle».")
+    st.markdown(f'<div class="fr-nota">{html.escape(nota)}</div>', unsafe_allow_html=True)
+    # columnas-internas: los dos botones a su ancho, a la izquierda.
+    c_ok, c_no, _pad = st.columns([1.6, 1, 1.2])
+    with c_ok:
+        agregar = st.button("Agregar a la receta", type="primary",
+                            key=_key(modo, f"crear_ok_v{ver}"),
+                            disabled=not nombre.strip(), use_container_width=True)
+    with c_no:
+        cancelar = st.button("Cancelar", key=_key(modo, f"crear_no_v{ver}"),
+                             use_container_width=True)
+    if cancelar:
+        st.session_state[_key(modo, "creando")] = None
+        st.session_state[_key(modo, "panel")] = "precio"
+        st.rerun(scope="fragment")
+    if agregar and nombre.strip():
+        _crear(modo, clase, nombre.strip(), unidad, precio)
+        st.rerun(scope="fragment")
+
+
+# ── Detallar ──
+def _al_renombrar(modo, cod, k):
+    """El nombre de un (P)/(Rs) nuevo lleva su prefijo, como en el almacén."""
+    m = _nuevos(modo).get(cod)
+    if m is None:
+        return
+    v = str(st.session_state.get(k) or "").strip()
+    pref = _PREFIJO_NUEVO.get(m["clase"], "")
+    if pref and not v.lower().startswith(pref.strip().lower()):
+        v = pref + v
+    m["nombre"] = v
+    st.session_state[k] = v
+
+
+def _campo_nombre(modo, cod, m):
+    k = _key(modo, f"{cod}_nombre")
+    _semilla(k, m["nombre"])
+    # columnas-internas: la píldora a su ancho y el nombre con el resto.
+    c_b, c_n = st.columns([0.9, 4], vertical_alignment="center")
+    with c_b:
+        st.markdown('<span class="fr-nuevo">NUEVO</span>', unsafe_allow_html=True)
+    with c_n:
+        st.text_input("Nombre", key=k, label_visibility="collapsed",
+                      on_change=_al_renombrar, args=(modo, cod, k))
+
+
+def _al_elegir_entrada(modo, cod, k):
+    """Al elegir de qué sale un (P), la merma propuesta es la de ESE insumo
+    en sus porcionamientos de los últimos 90 días; sin historia, 0."""
+    m = _nuevos(modo).get(cod)
+    if m is None:
+        return
+    m["sale_de"] = st.session_state.get(k)
+    h = _historia_porcionado(m["sale_de"]) if m["sale_de"] else None
+    m["merma"] = round(h["merma_pct"], 1) if h and h["merma_pct"] is not None else 0.0
+    st.session_state[_key(modo, f"{cod}_merma")] = m["merma"]
+
+
+def _html_caja(filas):
+    """La caja lavanda con el resultado de un detalle: (rótulo, valor,
+    destacado) por renglón."""
+    cuerpo = "".join(
+        f'<span class="{"fr-caja-fuerte" if fuerte else ""}">{html.escape(r)}</span>'
+        f'<span class="fr-caja-num{" fr-caja-fuerte" if fuerte else ""}">{html.escape(v)}</span>'
+        for r, v, fuerte in filas)
+    return f'<div class="fr-caja">{cuerpo}</div>'
+
+
+def _panel_p(modo, cod):
+    """Un (P) nuevo, por RENDIMIENTO (decisión del usuario, 2026-10-03): de
+    qué insumo sale, cómo sale, lo que pesa una pieza y la merma. Debajo,
+    los cortes que ya salen de ese insumo, con su peso REAL — el nombre
+    dice lo pedido («Medallon 200gr» pesa 180 g en sus porcionamientos)."""
+    m = _nuevos(modo)[cod]
+    _campo_nombre(modo, cod, m)
+    k_sd = _key(modo, f"{cod}_sale_de")
+    _semilla(k_sd, m.get("sale_de"))
+    st.selectbox(
+        "Sale de", list(_kardex()), index=None, format_func=_rotulo_kardex, key=k_sd,
+        placeholder="¿De qué insumo sale? Busca en el almacén…",
+        label_visibility="collapsed", on_change=_al_elegir_entrada, args=(modo, cod, k_sd))
+    k = _kardex().get(m.get("sale_de") or "")
+    pesa = bool(k) and k[1].upper() in an.CONVERSION_ESTANDAR
+    por_peso = pesa and m["salida"] in an.POR_PIEZA
+    # columnas-internas: cómo sale · cuánto pesa · cuánta merma.
+    c_s, c_p, c_m = st.columns([1.1, 1.2, 1])
+    with c_s:
+        k_sal = _key(modo, f"{cod}_salida")
+        _semilla(k_sal, m["salida"])
+        st.selectbox("Sale en", _UNIDADES_SALIDA_P, key=k_sal,
+                     on_change=_al_cambiar, args=(modo, cod, "salida", k_sal))
+    with c_p:
+        k_peso = _key(modo, f"{cod}_peso")
+        _semilla(k_peso, float(m.get("peso_g") or 0.0))
+        st.number_input(
+            "Peso (" + ("ml" if k and k[1].upper() == "LITROS" else "g") + ")",
+            min_value=0.0, step=5.0, format="%.0f", key=k_peso, disabled=not por_peso,
+            help=("Lo que pesa una pieza ya porcionada." if por_peso else
+                  "Sólo para piezas (UND, PORCION) que salen de algo que se pesa: "
+                  "lo que pesa una ya porcionada."),
+            on_change=_al_cambiar, args=(modo, cod, "peso_g", k_peso))
+    with c_m:
+        k_mer = _key(modo, f"{cod}_merma")
+        _semilla(k_mer, float(m.get("merma") or 0.0))
+        st.number_input("Merma %", min_value=0.0, max_value=95.0, step=0.5,
+                        format="%.1f", key=k_mer,
+                        on_change=_al_cambiar, args=(modo, cod, "merma", k_mer))
+
+    h = _historia_porcionado(m["sale_de"]) if k else None
+    if not k:
+        nota = "Elige de qué insumo del almacén sale: la merma se propone con su historia."
+    elif h["merma_pct"] is None:
+        nota = (f"{k[0]} no tiene porcionamientos en los últimos {an.VENTANA_DIAS} "
+                "días: escribe la merma.")
+    else:
+        nota = (f"{h['merma_pct']:.1f} % es la merma de {k[0]} en sus {h['n']} "
+                f"porcionamientos de los últimos {an.VENTANA_DIAS} días "
+                f"({h['porcionado']:,.1f} {k[1].lower()}).")
+    st.markdown(f'<div class="fr-nota fr-nota-2">{html.escape(nota)}</div>',
+                unsafe_allow_html=True)
+
+    ent, costo = _costo_p(m)
+    u_ent = k[1].lower() if k else ""
+    una = an.nombre_unidad(m["salida"])
+    st.markdown(_html_caja([
+        (f"{k[0] if k else 'Insumo'} por {una}", an.cantidad_en(ent, k[1]) if ent else "—", False),
+        (f"Costo por {una}", _fmt(costo) if costo else "—", True),
+    ]), unsafe_allow_html=True)
+
+    st.markdown(f'<div class="fr-titulo-2">Cortes que ya salen de este insumo · '
+                f'{an.VENTANA_DIAS} días</div>', unsafe_allow_html=True)
+    cortes = h["cortes"] if h else None
+    if cortes is None or cortes.empty:
+        st.markdown(_html_vacio("Sin porcionamientos de este insumo en la ventana.",
+                                _ALTO_CORTES_P), unsafe_allow_html=True)
+        return
+    pieza = cortes["unidad"].str.upper().isin(an.POR_PIEZA)
+    tabla = pd.DataFrame({
+        "Corte": cortes["nombre"],
+        "Porc.": cortes["n"],
+        "Peso real": [f"{p * 1000:,.0f} g" if es else "—"
+                      for p, es in zip(cortes["peso_x_und"], pieza)],
+        "Insumo x und": [f"{e:.3f}" for e in cortes["entrada_x_und"]],
+        "Costo": [_fmt(e * k[2]) for e in cortes["entrada_x_und"]],
+    })
+    st.dataframe(
+        tabla, hide_index=True, use_container_width=True, height=_ALTO_CORTES_P,
+        key=_key(modo, f"{cod}_cortes"),
+        column_config={
+            "Corte": st.column_config.TextColumn("Corte", width=150),
+            "Porc.": st.column_config.NumberColumn(
+                "Porc.", width=42, help="Porcionamientos en la ventana"),
+            "Peso real": st.column_config.TextColumn(
+                "Peso real", width=62, help="Lo que pesó cada pieza, en promedio"),
+            "Insumo x und": st.column_config.TextColumn(
+                f"{u_ent or 'insumo'}", width=58,
+                help="Lo que se gastó del insumo por unidad del corte, en su unidad"),
+            "Costo": st.column_config.TextColumn(
+                "Costo", width=70, help="Por unidad del corte, al precio de hoy"),
+        })
+
+
+def _al_editar_rs(modo, cod, k):
+    """Lo tecleado en la tabla de una (Rs) nueva va a su detalle ANTES de
+    dibujar la página (ver el comentario de arriba del bloque)."""
+    m = _nuevos(modo).get(cod)
+    estado = st.session_state.get(k) or {}
+    if m is None:
+        return
+    for i, cambios in (estado.get("edited_rows") or {}).items():
+        i = int(i)
+        if i >= len(m["lineas"]):
+            continue
+        l = m["lineas"][i]
+        for col, campo in (("Cantidad", "cantidad"), ("Precio unit. (S/)", "precio")):
+            if col in cambios and cambios[col] is not None:
+                l[campo] = float(cambios[col])
+        if "Unidad" in cambios and l.get("tipo") == "nuevo":
+            l["unidad"] = str(cambios["Unidad"] or "unidad")
+
+
+def _al_partir_de(modo, cod, k):
+    """Carga en una (Rs) nueva los insumos de una receta base del sistema."""
+    m = _nuevos(modo).get(cod)
+    rb = _recetas_base_sistema().get(st.session_state.get(k) or "")
+    if m is None or not rb:
+        return
+    m["lineas"] = [dict(l) for l in rb["lineas"]]
+    m["rinde"] = 1.0
+    if rb["unidad"] in _UNIDADES_RS:
+        m["unidad"] = rb["unidad"]
+    st.session_state[_key(modo, f"{cod}_rinde")] = m["rinde"]
+    st.session_state[_key(modo, f"{cod}_unidad")] = m["unidad"]
+    st.session_state.pop(_key(modo, f"{cod}_editor"), None)
+    m["ver"] = m.get("ver", 0) + 1
+
+
+def _panel_rs(modo, cod):
+    """Una (Rs) nueva: cuánto rinde, sus insumos —del almacén, o nuevos con
+    precio estimado— y lo que cuesta en este plato. Se puede partir de una
+    receta base del sistema, activa o no."""
+    m = _nuevos(modo)[cod]
+    ver = m.setdefault("ver", 0)
+    _campo_nombre(modo, cod, m)
+    # columnas-internas: rinde · unidad · área, los tres angostos.
+    c_r, c_u, c_a = st.columns([1, 1.1, 1.3])
+    with c_r:
+        k_r = _key(modo, f"{cod}_rinde")
+        _semilla(k_r, float(m["rinde"]))
+        st.number_input("Rinde", min_value=0.001, step=0.5, format="%.3f", key=k_r,
+                        on_change=_al_cambiar, args=(modo, cod, "rinde", k_r))
+    with c_u:
+        k_u = _key(modo, f"{cod}_unidad")
+        _semilla(k_u, m["unidad"])
+        st.selectbox("Unidad", _UNIDADES_RS, key=k_u,
+                     on_change=_al_cambiar, args=(modo, cod, "unidad", k_u))
+    with c_a:
+        k_a = _key(modo, f"{cod}_area")
+        _semilla(k_a, m["area"])
+        st.selectbox("Área", _AREAS_RS, key=k_a,
+                     on_change=_al_cambiar, args=(modo, cod, "area", k_a))
+
+    todas, meta, cod_por_etiq = _opciones_precomputadas("insumos")
+    presentes = {l["cod"] for l in m["lineas"]}
+    # columnas-internas: el buscador con el ancho y el «+» al de su glifo.
+    c_b, c_m = st.columns([6, 0.8], vertical_alignment="center")
+    with c_b:
+        el = st.selectbox(
+            "Insumo de la receta base", [o for o in todas if cod_por_etiq[o] not in presentes],
+            index=None, accept_new_options=True, key=_key(modo, f"{cod}_bus_v{ver}"),
+            placeholder="Agregar insumo… (o escribe uno que no está)",
+            label_visibility="collapsed")
+    nuevo = el is not None and el not in meta
+    with c_m:
+        mas = st.button("➕", key=_key(modo, f"{cod}_add"), disabled=el is None or nuevo,
+                        use_container_width=True, help="Agregar el insumo elegido")
+    if nuevo and str(el).strip():
+        _agregar_linea(modo, _codigo_nuevo(), str(el).strip(), "GRAMOS", 0.0, None,
+                       "nuevo", lineas=m["lineas"])
+    elif mas and el:
+        c, n, u, p, a = meta[el]
+        _agregar_linea(modo, c, n, u, p, a, "almacen", lineas=m["lineas"])
+    if (nuevo and str(el).strip()) or (mas and el):
+        m["ver"] = ver + 1
+        st.rerun(scope="fragment")
+
+    marcadas = _tabla_rs(modo, cod, m)
+    tanda, por = _costo_rs(m)
+    und, factor = an.unidad_de_costeo(m["unidad"])
+    linea = next((l for l in st.session_state[_key_lineas(modo)] if l["cod"] == cod), None)
+    # columnas-internas: «Quitar» a su ancho y el resultado con el resto.
+    c_q, c_res = st.columns([0.9, 2.6], vertical_alignment="top")
+    with c_q:
+        if st.button("✕ Quitar", key=_key(modo, f"{cod}_quitar"),
+                     help="Quitar los insumos marcados con ✕",
+                     disabled=not marcadas, use_container_width=True):
+            m["lineas"] = [l for i, l in enumerate(m["lineas"]) if i not in marcadas]
+            st.session_state.pop(_key(modo, f"{cod}_editor"), None)
+            st.rerun(scope="fragment")
+    with c_res:
+        filas = [(f"Costo de {an.cantidad_en(m['rinde'], m['unidad'])}", _fmt(tanda), False),
+                 (f"Costo por {an.nombre_unidad(m['unidad'])}", _fmt(por), False)]
+        if linea:
+            filas.append((f"En este plato · {an.cantidad_en(linea['cantidad'], und)}",
+                          _fmt(linea["cantidad"] * por / factor), True))
+        st.markdown(_html_caja(filas), unsafe_allow_html=True)
+    rbs = _recetas_base_sistema()
+    k_pd = _key(modo, f"{cod}_partir_v{ver}")
+    st.selectbox(
+        "Partir de", list(rbs), index=None, format_func=lambda c: rbs[c]["rotulo"],
+        key=k_pd, placeholder="Partir de una receta base del sistema…",
+        label_visibility="collapsed", disabled=bool(m["lineas"]),
+        help=("Vacía la tabla para partir de otra receta." if m["lineas"] else
+              "Carga sus insumos (activos) para editarlos acá. No toca la del sistema."),
+        on_change=_al_partir_de, args=(modo, cod, k_pd))
+
+
+def _tabla_rs(modo, cod, m):
+    """Los insumos de una (Rs) nueva, editables como los de la receta. Lo
+    nuevo lleva «NUEVO» en ámbar: su precio lo escribe quien la arma.
+    Devuelve las filas marcadas para quitar."""
+    lineas = m["lineas"]
+    if not lineas:
+        st.markdown(_html_vacio(
+            "Busca arriba sus insumos (o escribe uno que el almacén no tiene) y "
+            "agrégalos con «+». O parte de una receta base del sistema, abajo.",
+            _ALTO_TABLA_RS), unsafe_allow_html=True)
+        return set()
+    df_show = pd.DataFrame([{
+        "Quitar": False,
+        "Código": "NUEVO" if l.get("tipo") == "nuevo" else l["cod"],
+        "Insumo": l["nombre"],
+        "Unidad": l["unidad"],
+        "Cantidad": round(l["cantidad"], 4),
+        "Precio unit. (S/)": round(l["precio"], 4),
+        "Subtotal (S/)": round(l["cantidad"] * l["precio"], 2),
+    } for l in lineas])
+    estilos = [_ESTILO_NUEVO_PEND if l.get("tipo") == "nuevo" else "" for l in lineas]
+    k = _key(modo, f"{cod}_editor")
+    editado = st.data_editor(
+        df_show.style.apply(lambda _c: estilos, subset=["Código"]),
+        key=k, hide_index=True, use_container_width=True, height=_ALTO_TABLA_RS,
+        disabled=["Código", "Insumo", "Subtotal (S/)"],
+        on_change=_al_editar_rs, args=(modo, cod, k),
+        column_config={
+            "Quitar": st.column_config.CheckboxColumn("✕", width=30, help="Marcar para quitar"),
+            "Código": st.column_config.TextColumn("Cód.", width=58),
+            "Insumo": st.column_config.TextColumn("Insumo", width=104),
+            "Unidad": st.column_config.TextColumn("Und.", width=56),
+            "Cantidad": st.column_config.NumberColumn("Cant.", width=48, min_value=0.0),
+            "Precio unit. (S/)": st.column_config.NumberColumn(
+                "P. unit.", width=56, min_value=0.0, help="Precio unitario (S/)"),
+            "Subtotal (S/)": st.column_config.NumberColumn("Subt.", width=52, format="%.2f"),
+        })
+    return {i for i, v in enumerate(editado["Quitar"].tolist()) if v}
+
+
+# ── Dónde se usa ──
+def _texto_usos(filas):
+    """«8 platos (5 directos, 3 por recetas base) · 5 recetas base»."""
+    pl = [f for f in filas if f["clase"] == "Plato"]
+    rb = [f for f in filas if f["clase"] != "Plato"]
+    partes = []
+    for grupo, uno, varios in ((pl, "plato", "platos"), (rb, "receta base", "recetas base")):
+        if not grupo:
+            continue
+        ind = sum(1 for f in grupo if f["via"])
+        txt = f"{len(grupo)} {uno if len(grupo) == 1 else varios}"
+        if ind:
+            txt += f" ({len(grupo) - ind} directo{'s' if len(grupo) - ind != 1 else ''}, {ind} por otra receta)"
+        partes.append(txt)
+    return " · ".join(partes)
+
+
+def _estilo_pct_uso(v):
+    if not isinstance(v, str) or not v.endswith("%"):
+        return f"color: {GRIS_TEXTO}"
+    pct = float(v.rstrip(" %"))
+    color, _ = _estado_costo(pct)
+    return f"color: {color}; font-weight: 600"
+
+
+def _panel_usos(modo, lineas):
+    """En qué recetas ACTIVAS se usa cada artículo de esta receta, directo o
+    por una receta base (decisión del usuario, 2026-10-03: también los
+    indirectos). La tabla principal dice cuántas; acá, cuáles: una celda
+    del `data_editor` no puede abrir nada al clic."""
+    if not lineas:
+        st.markdown(_html_vacio(
+            "Agrega artículos a la receta: acá verás en qué otras recetas activas "
+            "se usa cada uno.", _ALTO_PANEL - 10), unsafe_allow_html=True)
+        return
+    por_cod = {l["cod"]: l for l in lineas}
+    cods = list(por_cod)
+    k = _key(modo, "uso_sel")
+    if st.session_state.get(k) not in cods:
+        st.session_state[k] = next(
+            (c for c in cods if por_cod[c].get("tipo") != "nuevo"), cods[0])
+
+    def rotulo(c):
+        l = por_cod[c]
+        if l.get("tipo") == "nuevo":
+            return f"{l['nombre']} · nuevo"
+        return f"{l['nombre']} · {an.resumen_usos(_usos(c))}"
+
+    cod = st.selectbox("Artículo", cods, format_func=rotulo, key=k,
+                       label_visibility="collapsed")
+    linea = por_cod[cod]
+    if linea.get("tipo") == "nuevo":
+        m = _modelo(modo, linea)
+        k_ent = _kardex().get(m.get("sale_de") or "") if m["clase"] == "p" else None
+        if not k_ent:
+            st.markdown(_html_vacio("Es nuevo: ninguna receta lo usa todavía.",
+                                    _ALTO_TABLA_USOS + _ALTO_NOTA_USOS),
+                        unsafe_allow_html=True)
+            return
+        st.markdown(f'<div class="fr-nota fr-nota-2">Es nuevo: ninguna receta lo usa '
+                    f'todavía. Los otros cortes de {html.escape(k_ent[0])} '
+                    f'({an.VENTANA_DIAS} días) se usan en:</div>', unsafe_allow_html=True)
+        cortes = _historia_porcionado(m["sale_de"])["cortes"]
+        filas = []
+        for c, n in zip(cortes["cod"], cortes["nombre"]):
+            u = _usos(c)
+            nombres = ", ".join(f["receta"] for f in u[:6]) + ("…" if len(u) > 6 else "")
+            filas.append({"Corte": n, "Se usa en": f"{an.resumen_usos(u)}: {nombres}" if u
+                          else "sin usos"})
+        st.dataframe(pd.DataFrame(filas, columns=["Corte", "Se usa en"]), hide_index=True,
+                     use_container_width=True, height=_ALTO_TABLA_USOS,
+                     key=_key(modo, "usos_hermanos"),
+                     column_config={"Corte": st.column_config.TextColumn("Corte", width=170)})
+        return
+    filas = _usos(cod)
+    if not filas:
+        st.markdown(_html_vacio("Ninguna receta activa lo usa, ni directo ni por "
+                                "una receta base.", _ALTO_TABLA_USOS + _ALTO_NOTA_USOS),
+                    unsafe_allow_html=True)
+        return
+    st.markdown(f'<div class="fr-nota fr-nota-2">{html.escape(_texto_usos(filas))}</div>',
+                unsafe_allow_html=True)
+    tabla = pd.DataFrame({
+        "Receta": [f["receta"] for f in filas],
+        "Es": ["plato" if f["clase"] == "Plato" else "base" for f in filas],
+        "Lleva": [f["cant"] for f in filas],
+        "Vía": [f["via"] or "directo" for f in filas],
+        "% costo": ["—" if f["pct"] is None else
+                    ("en combo" if f["pv"] <= 1 else f"{f['pct']:.1f} %") for f in filas],
+    })
+    st.dataframe(
+        tabla.style.map(_estilo_pct_uso, subset=["% costo"]),
+        hide_index=True, use_container_width=True, height=_ALTO_TABLA_USOS,
+        key=_key(modo, "usos_tabla"),
+        column_config={
+            "Receta": st.column_config.TextColumn("Receta", width=140),
+            "Es": st.column_config.TextColumn("Es", width=40),
+            "Lleva": st.column_config.TextColumn(
+                "Lleva", width=56, help="Cuánto lleva del artículo, o de la receta base por la que le llega"),
+            "Vía": st.column_config.TextColumn(
+                "Vía", width=100, help="«directo», o la receta base por la que le llega"),
+            "% costo": st.column_config.TextColumn(
+                "% costo", width=62, help="% de costo del plato en el sistema, sobre el neto"),
+        })
+
+
+# ── La tarjeta de la derecha ──
+def _opciones_panel(modo, lineas):
+    ops = ["precio"] + ([] if modo == "combo" else ["usos"])
+    nuevos = _nuevos(modo)
+    for l in lineas:
+        m = nuevos.get(l["cod"]) if l.get("tipo") == "nuevo" else None
+        if m and m["clase"] in ("p", "rs") and l["cod"] not in ops:
+            ops.append(l["cod"])
+    if st.session_state.get(_key(modo, "creando")):
+        ops.append("crear")
+    return ops
+
+
+def _al_elegir_panel(modo):
+    v = st.session_state.get(_key(modo, "panel_w"))
+    if v is not None:
+        st.session_state[_key(modo, "panel")] = v
+
+
+def _pestanas(modo, lineas):
+    """Cabecera de la tarjeta de la derecha y la fila de pestañas: Precio ·
+    Dónde se usa · una por cada (P)/(Rs) nuevo · «Nuevo: …» mientras se
+    crea uno. Devuelve la elegida.
+
+    La elección vive en `panel` y el widget se SIEMBRA con ella en cada
+    corrida: así una pestaña se puede abrir desde Python (crear una (Rs)
+    abre la suya) y un clic sobre la ya elegida, que en `st.pills` la
+    suelta, no deja el panel sin nada."""
+    ops = _opciones_panel(modo, lineas)
+    k, kw = _key(modo, "panel"), _key(modo, "panel_w")
+    sel = st.session_state.get(k)
+    if sel not in ops:
+        sel = "precio"
+    st.session_state[k] = sel
+    st.session_state[kw] = sel
+    nuevos = _nuevos(modo)
+    ver = st.session_state.get(_key(modo, "creando"))
+    creando = st.session_state.get(_key(modo, f"crear_nombre_v{ver}")) or "…"
+
+    def rotulo(o):
+        if o == "precio":
+            return "Precio"
+        if o == "usos":
+            return "Dónde se usa"
+        if o == "crear":
+            return f"Nuevo: {_corto(creando, 16)}"
+        m = nuevos[o]
+        return _corto(m["nombre"], 14) + (" · falta" if _falta_detalle(m) else "")
+
+    if sel == "precio":
+        titulo = "Precio de venta"
+        sub = (f"IGV {_tasa(tasa_igv())} · recargo al consumo {_tasa(_RECARGO)}, "
+               "sobre el neto")
+    elif sel == "usos":
+        titulo, sub = "Dónde se usa", "recetas activas, directo o por recetas base"
+    elif sel == "crear":
+        titulo, sub = "Artículo nuevo", "no está en el almacén"
+    else:
+        titulo = "Porcionado nuevo" if nuevos[sel]["clase"] == "p" else "Receta base nueva"
+        sub = "viaja con la propuesta guardada"
+    st.markdown(
+        f'<div class="fr-cab"><span class="fr-titulo">{titulo}</span>'
+        f'<span class="fr-sub">{html.escape(sub)}</span></div>', unsafe_allow_html=True)
+    st.pills("Qué mostrar", ops, selection_mode="single", format_func=rotulo, key=kw,
+             on_change=_al_elegir_panel, args=(modo,), label_visibility="collapsed")
+    return sel
+
+
+def _panel_derecho(modo, lineas, origen):
+    sel = _pestanas(modo, lineas)
+    nuevos = _nuevos(modo)
+    if sel == "usos":
+        _panel_usos(modo, lineas)
+    elif sel == "crear":
+        _panel_crear(modo)
+    elif sel in nuevos:
+        (_panel_p if nuevos[sel]["clase"] == "p" else _panel_rs)(modo, sel)
+    else:
+        _panel_precio(modo, _total_lineas(lineas), origen,
+                      aviso=_aviso_pendientes(modo, lineas))
+
+
 # ─── Las dos tarjetas ────────────────────────────────────────────────────
 _TIPO_GUARDADO = {"venta": "Receta de Venta", "combo": "Combo",
                   "modificar": "Modificación de receta"}
@@ -1259,6 +2224,8 @@ def _render_armado(modo, card_izq, card_der):
 
     with card_izq:
         origen = _importador() if modo == "modificar" else None
+        # Precio y unidad de lo nuevo, desde su detalle, ANTES de la tabla.
+        _sincronizar_nuevos(modo)
 
         # Nombre · buscador · «+» en UNA fila (mockup del 2026-09-24).
         # columnas-internas: el nombre al ancho de un nombre de plato, el
@@ -1272,9 +2239,9 @@ def _render_armado(modo, card_izq, card_der):
             )
         _buscador_catalogo(
             modo, "productos_venta" if es_combo else "insumos", c_bus, c_mas,
-            placeholder=("Buscar producto de venta (plato)…" if es_combo
-                         else "Buscar artículo del almacén…"),
-            unidad_nueva="porción" if es_combo else "unidad",
+            placeholder=("Buscar producto de venta (plato)… o escribe uno nuevo"
+                         if es_combo else
+                         "Buscar artículo del almacén… o escribe uno nuevo"),
         )
 
         lineas, marcadas = _tabla_lineas(modo, origen)
@@ -1300,8 +2267,9 @@ def _render_armado(modo, card_izq, card_der):
                     "💾 Guardar propuesta", type="primary",
                     key=_key(modo, "guardar"), use_container_width=True,
                 )
+            nuevos = _detalle_nuevos(modo, lineas)
             _botones_envio(modo, (c_pdf, c_xls, c_mail), tipo, nombre,
-                           guardado_por, lineas, precio_venta)
+                           guardado_por, lineas, precio_venta, nuevos)
         if guardar:
             que = "el combo" if es_combo else "la receta"
             if not nombre.strip():
@@ -1312,6 +2280,8 @@ def _render_armado(modo, card_izq, card_der):
                 st.warning("Agrega al menos un ítem.")
             else:
                 extra = {"precio_venta": precio_venta}
+                if nuevos:
+                    extra["articulos_nuevos"] = nuevos
                 if origen:
                     extra.update({
                         "plato_sistema": origen["cod"],
@@ -1324,7 +2294,7 @@ def _render_armado(modo, card_izq, card_der):
                     _limpiar_modo(modo)
 
     with card_der:
-        _panel_precio(modo, _total_lineas(lineas), origen)
+        _panel_derecho(modo, lineas, origen)
 
 
 # ─── Guardadas (visor de solo lectura) ──────────────────────────────────
@@ -1406,6 +2376,11 @@ def _render_guardadas():
                 df[["Código", "Producto", "Unidad", "Cantidad", "Precio unit. (S/)", "Subtotal (S/)"]],
                 hide_index=True, use_container_width=True,
             )
+            nuevos = p.get("articulos_nuevos") or []
+            if nuevos:
+                st.markdown("**Artículos nuevos**")
+                for d in nuevos:
+                    st.caption("• " + an.describir(d))
 
 
 # ─── Punto de entrada público ───────────────────────────────────────────────

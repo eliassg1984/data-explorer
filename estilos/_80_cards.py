@@ -1493,7 +1493,16 @@ CSS = """    /* ================================================================
         /* Las keys las arma `drill_tablas.seccion_cadena` (pref "mov",     */
         /* slug "subalm").                                                  */
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-ajuste_graf_card_izq_mov_subalm, > .st-key-ajuste_graf_card_der_mov_subalm, > .st-key-ajuste_graf_card_der_mov_subalm_n2) {
+        > div:has(> .st-key-ajuste_graf_card_izq_mov_subalm, > .st-key-ajuste_graf_card_der_mov_subalm, > .st-key-ajuste_graf_card_der_mov_subalm_n2),
+        /* Y las dos de Recetas › Nuevo Costeo (2026-10-03, a pedido:     */
+        /* «iguala en tamaño vertical las tarjetas»). A 1323×619 la de     */
+        /* Receta medía 628 y la de Precio 597: las dos pasan su mínimo    */
+        /* (`--alto-util`) y cada una mide su contenido. Python las cuenta */
+        /* al mismo alto (`formulario_receta._CROMO_*`), pero el panel de  */
+        /* la derecha alterna cinco contenidos desde ese día (regla #597): */
+        /* el piso es la red.                                               */
+        .stColumn > .stVerticalBlock
+        > div:has(> .st-key-form_receta_card_receta, > .st-key-form_receta_card_precio) {
             flex: 1 1 auto;
         }
 
@@ -2382,6 +2391,108 @@ CSS = """    /* ================================================================
         color: var(--warning-text);
         font-size: 13px;
         line-height: 1.45;
+    }
+    /* Lo nuevo (regla #597). El aviso del panel de precio va en el renglón
+       de la pista y es UNO: el texto entero en el tooltip, para que la
+       tarjeta no cambie de alto con lo largo de la lista. */
+    .fr-aviso {
+        color: var(--warning-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* Sin la barrita de íconos de las tablas (buscar, bajar, pantalla
+       completa) en las dos tarjetas: flota ENCIMA del renglón de arriba y
+       se come el clic del «+» de su buscador — medido con Playwright el
+       2026-10-03 en la tabla de una (Rs) nueva, la misma trampa de la
+       #572. La de la receta tapaba igual el «+» del buscador principal. */
+    .st-key-form_receta_card_receta .stElementToolbar,
+    .st-key-form_receta_card_precio .stElementToolbar {
+        display: none !important;
+    }
+    /* «¿Qué es?» del artículo nuevo: las opciones de un radio son
+       `<label>`, y el `label` global (_00_base.py) va en versalitas grises
+       de 0.78rem — una descripción así no se lee. */
+    .st-key-form_receta_crear_tipo [data-testid="stRadioOption"] {
+        text-transform: none;
+        font-size: 13px !important;
+        color: var(--text-primary) !important;
+        font-weight: 600 !important;
+    }
+    .st-key-form_receta_crear_tipo [data-testid="stCaptionContainer"] p {
+        font-size: 12px !important;
+        font-weight: 400 !important;
+        color: var(--text-secondary) !important;
+    }
+    /* Una nota de DOS renglones justos, diga lo que diga: la tabla de
+       abajo se dimensiona contando con ella (`_ALTO_NOTA_USOS`). */
+    .fr-nota-2 {
+        height: 34px;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        line-height: 17px;
+    }
+    /* Las pestañas del panel en UN renglón: con varios artículos nuevos
+       se partían en dos y la tarjeta crecía 36px. Lo que no entra se
+       desliza a lo ancho. */
+    .st-key-form_receta_venta_panel_w [data-testid="stButtonGroup"] > div,
+    .st-key-form_receta_combo_panel_w [data-testid="stButtonGroup"] > div,
+    .st-key-form_receta_modificar_panel_w [data-testid="stButtonGroup"] > div {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .st-key-form_receta_venta_panel_w [data-testid="stButtonGroup"] button,
+    .st-key-form_receta_combo_panel_w [data-testid="stButtonGroup"] button,
+    .st-key-form_receta_modificar_panel_w [data-testid="stButtonGroup"] button {
+        flex: 0 0 auto;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+    .st-key-form_receta_venta_panel_w [data-testid="stButtonGroup"] button p,
+    .st-key-form_receta_combo_panel_w [data-testid="stButtonGroup"] button p,
+    .st-key-form_receta_modificar_panel_w [data-testid="stButtonGroup"] button p {
+        font-size: 12.5px !important;
+    }
+    .fr-nuevo {
+        display: inline-block;
+        white-space: nowrap;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--accent-tint);
+        color: var(--accent-deep);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        line-height: 14px;
+    }
+    /* El resultado de un detalle: rótulo a la izquierda, monto a la
+       derecha; el renglón que importa, en el color del acento. */
+    .fr-caja {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 4px 12px;
+        padding: 9px 12px;
+        border: 1px solid var(--accent-light);
+        border-radius: 8px;
+        background: var(--rail-fondo);
+        font-size: 12.5px;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    .fr-caja > span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .fr-caja-num {
+        text-align: right;
+    }
+    .fr-caja-fuerte {
+        font-weight: 600;
+        color: var(--accent-deep);
     }
     .fr-punto {
         display: inline-block;

@@ -51,6 +51,7 @@ PIEZA de un plato, no su hermana. Ver `arquitectura.md` regla #303; el
 import pandas as pd
 import streamlit as st
 
+from articulos_nuevos import CONVERSION_ESTANDAR
 from data import cargar as _cargar_reporte
 from graficos.base import _resolver
 
@@ -166,8 +167,9 @@ def tasa_igv():
 # Conversión de la unidad de KARDEX a la de COSTEO cuando el insumo no
 # aparece en ninguna receta de venta: la misma que usa el sistema en esos
 # pares (1.255 filas KILOS→GRAMOS y 480 LITROS→MILILITROS con FACTOR 1000).
-_CONVERSION_ESTANDAR = {"KILOS": ("GRAMOS", 1000.0),
-                        "LITROS": ("MILILITROS", 1000.0)}
+# Vive en `articulos_nuevos` desde el 2026-10-03: el costeo de un artículo
+# NUEVO pasa de una unidad a otra con la misma tabla (regla #597).
+_CONVERSION_ESTANDAR = CONVERSION_ESTANDAR
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -225,6 +227,11 @@ def catalogo_insumos():
         "unidad": df[col_unidad].astype(str) if col_unidad else "unidad",
         "precio": pd.to_numeric(df[col_precio], errors="coerce").fillna(0.0),
     })
+    # La unidad y el precio de KARDEX quedan aparte: un (P) nuevo de Nuevo
+    # Costeo se costea con el precio del KILO de lo que se porciona, no
+    # con el del gramo (regla #597).
+    out["unidad_kardex"] = out["unidad"].str.strip()
+    out["precio_kardex"] = out["precio"]
     # En la unidad de COSTEO de las recetas (GRAMOS, MILILITROS, ONZAS…) y
     # no en la de kardex (2026-09-24, a pedido: «las unidades deben estar
     # tal cual el sistema»). Antes el buscador agregaba en KILOS a S/ 38 el
