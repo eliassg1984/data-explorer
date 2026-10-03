@@ -43021,7 +43021,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        cableado leído con `ast`: que ninguna vista de `graficos/ventas*.py`
        compare contra "CORTESIA"/"ANULADO" ni cuente clientes con
        `["pax"].max()`, que `d` sea `dv.solo_venta(d_todo)` y que toda
-       llamada a las cacheables pase la versión.
+       llamada a las cacheables pase la versión. Hay UNA excepción con
+       nombre, la del PEDIDO anulado de «Control de pedidos» (#594).
      - `herramientas/cuadrar_ventas.py`: el cuadre contra el POS hecho
        herramienta, por la MISMA carga que usa la app. Sale con código 1
        si un día no cuadra. Correrlo después de tocar la definición o la
@@ -47052,6 +47053,18 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        renderizar_lista`). A 1323 px: 624 + 519 px, sin barra horizontal
        (medido con Playwright); «De → a» de una transferencia va en la
        ayuda del plato para entrar.
+
+     - **«ANULADO» acá es el estado de un PEDIDO, no de un comprobante**,
+       y el candado de la #524 no lo distingue: prohíbe el texto
+       `"ANULADO"` en toda vista de Ventas, y la vista nació rompiéndolo
+       (`test_definicion_venta.py` en rojo en `main`). No se puede pasar
+       por `definicion_venta`: `pedidos.parquet` no trae `CLASE VENTA`, y
+       los dos vocabularios ni siquiera coinciden —en `MPEDIDO` el 03 es
+       ANULADO; en `MDOCUMENTO`, POR COBRAR, o sea venta—. Va en una
+       constante con nombre, `ESTADO_PEDIDO_ANULADO`, y el test la acepta
+       sólo declarada una vez y usada sólo en `pedidos()`, que no lee
+       `ventas.parquet`: el resto del archivo, y las otras vistas, siguen
+       bajo el candado entero. Las cifras no cambian.
 
      Candado: `test_graficos.py::_pruebas_control_pedidos` (el motivo con
      erratas, la corrección al digitar, a cortesía antes que dividida, la

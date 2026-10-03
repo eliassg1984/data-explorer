@@ -78,6 +78,13 @@ _KEYS_WIDGET_CTL = ("vt_ctl_gran", "vt_ctl_sub")
 PLATO_ANULADO, TRANSFERENCIA = "PLATO ANULADO", "TRANSFERENCIA"
 SIN_MESA = "SIN MESA"
 
+ESTADO_PEDIDO_ANULADO = "ANULADO"
+"""El estado de un PEDIDO anulado en `pedidos.parquet` (`MPEDIDO`, código
+03). No es la clase «Anulado» de `definicion_venta`, que es la de un
+COMPROBANTE de `ventas.parquet` — y en `MDOCUMENTO` el 03 es POR COBRAR,
+o sea venta. Es la única excepción con nombre al candado de la regla #524
+(`test_definicion_venta.py`), y sólo se usa en `pedidos()` (#594)."""
+
 _REABIERTA_MIN = 120
 """Minutos entre la apertura y el primer plato a partir de los cuales la
 mesa se mide desde el primer plato: hay pedidos abiertos de noche y usados
@@ -150,7 +157,7 @@ def pedidos(df, turno=True):
         "usu_anul": _txt(_col(df, "USUARIO ANULACION")),
         "obs_anul": _txt(_col(df, "MOTIVO ANULACION")),
     }).dropna(subset=["dia"])
-    p["anulado"] = p["estado"] == "ANULADO"
+    p["anulado"] = p["estado"] == ESTADO_PEDIDO_ANULADO
     p["motivo"] = np.where(p["anulado"], motivo_categoria(p["obs_anul"]), "")
     return p.reset_index(drop=True)
 

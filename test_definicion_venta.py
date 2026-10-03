@@ -384,8 +384,29 @@ print("\n── nadie define la venta por su cuenta ──")
 VISTAS = sorted((RAIZ / "graficos").glob("ventas*.py"))
 ok(len(VISTAS) >= 4, "el barrido ve las vistas de Ventas",
    ", ".join(p.name for p in VISTAS))
+# La única excepción, con nombre: «Control de pedidos» (#594) tiene como
+# TEMA el pedido anulado, y ése es el estado de `MPEDIDO` en
+# `pedidos.parquet` —donde el 03 es ANULADO—, no el de un comprobante —en
+# `MDOCUMENTO` el 03 es POR COBRAR—. La declara UNA vez y la usa sólo en
+# `pedidos()`, que no lee `ventas.parquet`; el resto del archivo sigue bajo
+# el candado.
+_EXCEPCION = ("ventas_control.py", "ESTADO_PEDIDO_ANULADO", "pedidos")
 for p in VISTAS:
     src = p.read_text(encoding="utf-8")
+    if p.name == _EXCEPCION[0]:
+        _decl = f'{_EXCEPCION[1]} = "ANULADO"'
+        igual(src.count(_decl), 1,
+              f"{p.name}: declara el estado del PEDIDO anulado una vez")
+        _arbol_x = ast.parse(src)
+        _en_fn = {id(n) for f_ in ast.walk(_arbol_x)
+                  if isinstance(f_, ast.FunctionDef)
+                  and f_.name == _EXCEPCION[2] for n in ast.walk(f_)}
+        _usos = [n for n in ast.walk(_arbol_x) if isinstance(n, ast.Name)
+                 and n.id == _EXCEPCION[1] and isinstance(n.ctx, ast.Load)]
+        ok(_usos and all(id(n) in _en_fn for n in _usos),
+           f"{p.name}: `{_EXCEPCION[1]}` sólo se usa en `{_EXCEPCION[2]}()`",
+           f"{len(_usos)} uso(s)")
+        src = src.replace(_decl, "")
     ok('"CORTESIA"' not in src and '"ANULADO"' not in src,
        f"{p.name}: no detecta cortesías ni anulados a mano",
        "eso lo dice `definicion_venta` (CLASE VENTA)")
