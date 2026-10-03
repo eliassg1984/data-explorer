@@ -2237,20 +2237,24 @@ def _volver_a_la_lista():
 
 
 def _celda_de_un_dia(tramo, dia, hora):
-    """(venta, pax) de un día a una hora, sacados del tramo: en «Por día de
-    semana» las celdas del mapa son promedios y no sirven para un día."""
+    """(venta, pax, venta del ticket) de un día a una hora, sacados del
+    tramo: en «Por día de semana» las celdas del mapa son promedios y no
+    sirven para un día. La venta del ticket es la de los canales que
+    registran clientes (regla #591)."""
     if tramo is None or tramo.empty:
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0
     r = tramo[(tramo["dia"] == pd.Timestamp(dia)) & (tramo["hora"] == hora)]
     if r.empty:
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0
     pax = 0.0
     if "pax" in r.columns and "ped" in r.columns:
         _r = r.dropna(subset=["pax"])
         pax = (dv.pax_por(_r, "ped", "pax",
                           doc="doc" if "doc" in _r.columns else None)
                if not _r.empty else 0.0)
-    return float(r["venta"].sum()), float(pax)
+    venta = float(r["venta"].sum())
+    return (venta, float(pax),
+            float(r["venta_cli"].sum()) if "venta_cli" in r.columns else venta)
 
 
 def _dias_de_la_celda(tramo, w, h, ini, fin):
@@ -2404,8 +2408,10 @@ def _ficha_de_la_hora(foco, claves, grano, ancla, filtrar_cb, raros, horas,
         celda = _celda_de_un_dia(tramo, dia, int(foco["h"]))
     elif p is not None and not p.empty:
         r = p[(p["col"] == foco["c"]) & (p["hora"] == foco["h"])]
-        celda = ((float(r["venta"].sum()), float(r["pax"].sum()))
-                 if len(r) else (0.0, 0.0))
+        _vc = "venta_cli" if "venta_cli" in r.columns else "venta"
+        celda = ((float(r["venta"].sum()), float(r["pax"].sum()),
+                  float(r[_vc].sum()))
+                 if len(r) else (0.0, 0.0, 0.0))
     _fh.dibujar(dia, foco["h"], fl, horas, modo=modo, celda=celda,
                 al_cerrar=_cerrar_foco)
 

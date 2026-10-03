@@ -708,9 +708,10 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
 
     `fl` son las filas de `filas()` sobre la ventana del panel; `horas`, las
     del mapa en orden de servicio; `modo`, «pedido» o «cobro» (qué hora
-    decide la celda); `celda`, `(venta, pax)` tal como los pinta el mapa,
-    para que la cabecera diga lo mismo que el tooltip; `al_cerrar`, el
-    callback del botón que la cierra."""
+    decide la celda); `celda`, `(venta, pax, venta del ticket)` tal como
+    los pinta el mapa, para que la cabecera diga lo mismo que el tooltip
+    —el ticket sin la venta de los canales que no registran clientes,
+    regla #591—; `al_cerrar`, el callback del botón que la cierra."""
     dia = pd.Timestamp(dia)
     dow, h12 = dia.weekday(), (int(hora) % 12 or 12)
     peds = pedidos(fl)
@@ -721,7 +722,8 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
     met = metricas(pc)
     ini, fin = intervalos(peds)
     previas = normal(fl, peds, dia, hora, ini, fin)
-    v_hora, pax_hora = celda if celda else (float(pc["v"].sum()), 0.0)
+    v_hora, pax_hora = celda[:2] if celda else (float(pc["v"].sum()), 0.0)
+    v_ticket = celda[2] if celda and len(celda) > 2 else v_hora
     n = len(pc)
 
     la = "la" if h12 == 1 else "las"
@@ -786,7 +788,7 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
             f'<span class="vhh-sub">{sub}</span></p>'
             f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
             f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Ticket<b>'
-            f'{_soles2(v_hora / pax_hora) if pax_hora else "—"}</b></span>'
+            f'{_soles2(v_ticket / pax_hora) if pax_hora else "—"}</b></span>'
             # «CONTRA LO NORMAL» en esta fila (#566), sólo en esa vista.
             + (f'<span class="vhh-h3 vhh-kpi-rot">Contra lo normal '
                f'{_info("normal")}</span>' if vista == VISTAS[0] else "")

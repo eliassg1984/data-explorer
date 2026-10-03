@@ -6773,6 +6773,8 @@ def _pruebas_ticket_sin_canales_sin_clientes():
     tot = vh._agregar_marca(t, pin, list(range(24)))
     check("la marca del mapa, igual", round(float(tot["ticket"]), 4),
           round(400.0 / 3.0, 4))
+    check("la ficha de un día recibe la venta del ticket aparte",
+          vh._celda_de_un_dia(t, "2026-09-04", 20), (490.0, 3.0, 400.0))
 
     hay = {"ticket", "ticket_neto", "sin_cli"}
     subs = vr._subvistas("Clientes", [], hay)

@@ -46874,7 +46874,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        pax) sigue adentro, como en el POS. La usan el Resumen (tarjeta,
        línea, tabla y total), el rail (`resumir` devuelve `TICKET`),
        «Comparativo vs año pasado» (`_series_por_rangos` devuelve una
-       tercera serie) y «Por hora» (`venta_cli` en el tramo, la celda y la
+       tercera serie) y «Por hora» (`venta_cli` en el tramo, la celda, la ficha de la hora y la
        marca). Septiembre: S/ 147,43. Con el filtro Canal = Rappi no hay
        ticket, no un ticket de Rappi.
      - **El ticket neto** es una columna de la subvista «Venta» y va en el
