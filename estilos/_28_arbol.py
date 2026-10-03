@@ -6,9 +6,9 @@ La «opción 5» del prototipo, elegida por el usuario, y la regla #472. Desde
   · AL COSTADO, A DÓNDE IR. Una columna siempre visible con los reportes y,
     debajo de todos, las vistas del activo (desde el 2026-09-26; hasta ese
     día colgaban de su reporte, ver abajo). No cambia de contenido al bajar.
-  · ARRIBA, DÓNDE ESTÁS. Una franja de 44px con el reporte, la vista en
-    pantalla y sus KPIs, y a la derecha la fecha, Filtros, la hora del dato y
-    Actualizar. NO ESTÁ EN REPOSO (2026-09-19, a pedido): deja una tira de
+  · ARRIBA, DÓNDE ESTÁS. Una franja de 44px con el reporte y la vista en
+    pantalla (sin KPIs desde el 2026-10-03, regla #596), y a la derecha la
+    fecha, Filtros, la hora del dato y Actualizar. NO ESTÁ EN REPOSO (2026-09-19, a pedido): deja una tira de
     `--franja-rep-reserva` (12px) contra el borde de arriba y aparece —con
     sus controles— cuando el cursor la toca, igual que la columna. Por eso el
     contenido arranca en 20px (`--cab-offset-contenido`) y no en 52.
@@ -1128,72 +1128,9 @@ CSS = """
         margin-right: 8px;
         color: var(--text-muted);
     }
-    /* Los KPIs: si no entran, se VAN enteros en vez de cortarse a la mitad.
-       Es una fila con `wrap` y alto fijo: lo que no cabe baja a un segundo
-       renglón que el `overflow` no deja ver. */
-    .barra-kpis {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        column-gap: 18px;
-        height: var(--franja-rep-alto);
-        min-width: 0;
-        flex: 0 1 auto;
-        overflow: hidden;
-        margin-left: 6px;
-        padding-left: 16px;
-        position: relative;
-    }
-    .barra-kpis::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 13px;
-        bottom: 13px;
-        width: 1px;
-        background: var(--border);
-    }
-    .barra-kpi,
-    .barra-par {
-        height: var(--franja-rep-alto);
-        display: flex;
-        align-items: center;
-        flex: 0 0 auto;
-        font-variant-numeric: tabular-nums;
-    }
-    .barra-kpi-val {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-    .barra-kpi-sec {
-        font-size: 12px;
-        color: var(--text-muted);
-        margin-left: 6px;
-    }
-    .barra-par {
-        flex-direction: column;
-        align-items: flex-start;
-        justify-content: center;
-        line-height: 1.1;
-        gap: 2px;
-    }
-    .barra-par-rot {
-        font-style: normal;
-        font-size: 9.5px;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-    }
-    .barra-par-val {
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--accent-deep);
-    }
-    .barra-ctx .kpi-neg {
-        color: var(--danger-text);
-    }
+    /* Acá vivían los KPIs de la franja (`.barra-kpis`, `.barra-kpi`,
+       `.barra-par`), del 2026-09-19 al 2026-10-03: se quitaron a pedido,
+       regla #596. */
 
     /* ── Lo que vive a la DERECHA de la franja ─────────────────────────
        Cuatro piezas fijas que ya existían (Filtros, Actualizar, la fecha y

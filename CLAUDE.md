@@ -273,7 +273,8 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   Hasta el 2026-09-29 la columna plegada era una tira de 68px sin nombres
   que se desplegaba ENTERA con el cursor; ese asomado se fue.
 - **Arriba, dónde estás.** La franja (`nav_franja_rep`, 44px) lleva el
-  reporte, la vista en pantalla y sus KPIs a la izquierda, y la fecha,
+  reporte y la vista en pantalla a la izquierda —sin KPIs desde el
+  2026-10-03, a pedido (regla #596)—, y la fecha,
   Filtros, la hora del dato y Actualizar a la derecha, cada uno a la
   izquierda del anterior (`--barra-f`, `--barra-fecha`, `--barra-corte`).
   **No está en reposo**: deja una tira de 12px contra el borde de arriba y

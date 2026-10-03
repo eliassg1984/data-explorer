@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-595 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+596 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (196)
+**CSS y estilos** (197)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -230,6 +230,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#568** — La columna plegada dice el nombre de cada reporte, se puede ocultar entera y muestra las…
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
+- **#596** — La franja superior de contexto no lleva KPIs: dice dónde estás, no cuánto
 
 **Layout y alturas** (86)
 
@@ -886,7 +887,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (150)
+**Decisiones de diseño y UX** (151)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1038,6 +1039,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#590** — El Resumen de Ventas dice QUÉ se vendió sin costo, y el Resumen y el Mix marcan el período en…
 - **#591** — El ticket de Ventas divide la venta de los canales que REGISTRAN clientes, no la venta…
 - **#593** — Ventas se fecha por el día del TURNO de caja (default) o por el de EMISIÓN del comprobante, a…
+- **#596** — La franja superior de contexto no lleva KPIs: dice dónde estás, no cuánto
 
 **Mantenimiento y trampas del lenguaje** (14)
 
@@ -47094,6 +47096,34 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+596. **La franja superior de contexto no lleva KPIs: dice dónde estás, no
+     cuánto.** 2026-10-03, a pedido y con captura de Stock e Inventario
+     («que la franja superior, que aparece, no tenga KPIs»): la franja
+     decía «Stock e Inventario › Stock por Producto | S/ 179.4k». Desde
+     901px lleva sólo el ícono, el reporte y la vista en pantalla
+     (`navegacion.py::_html_barra_contexto`, que perdió su tercer
+     argumento), y el CSS de los montos (`.barra-kpis`, `.barra-kpi`,
+     `.barra-par`) se borró de `estilos/_28_arbol.py`. Revierte el tramo
+     «y sus KPIs» de la #472.
+
+     - **Con esto el cromo de escritorio no muestra ningún monto.** Los del
+       rail se habían ido el 2026-09-22 y el del reporte activo seguía sólo
+       en la franja: dos comentarios que decían «la señal no se pierde, la
+       franja lo muestra» (`navegacion.py`, `graficos/base.py`) se
+       corrigieron en el mismo cambio.
+     - **Lo que NO se tocó:** la franja de KPIs de 769 a 900px
+       (`nav_franja_kpis`, la que se cruza con las vistas al bajar, #419) y
+       el `kpis_franja` de Compras en `data.py`, que es lo que ella dibuja.
+       El pedido llegó con captura de escritorio. Si se quita también, el
+       `if _kpis_arriba` de `inject_navegacion` ya cubre el caso: sin KPIs
+       el cruce no ocurre y esa franja se queda con las vistas.
+
+     Sin renombres de lo que importa `app.py`, así que no tira la app; pero
+     es un cambio en `navegacion.py` y `estilos/`, que Cloud no relee hasta
+     reiniciar el proceso (#357).
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47106,7 +47136,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#595**; la próxima toma el número siguiente.
+> última regla es la **#596**; la próxima toma el número siguiente.
 
 >
 

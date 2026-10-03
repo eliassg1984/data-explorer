@@ -298,9 +298,9 @@ def _kpis_franja(info):
     return pares or None
 
 
-def _html_barra_contexto(reporte_activo, info, par):
+def _html_barra_contexto(reporte_activo, info):
     """El contenido de la franja superior desde 901px (2026-09-19, regla
-    #472): ícono y nombre del reporte, la vista en pantalla y sus KPIs.
+    #472): ícono y nombre del reporte y la vista en pantalla.
 
     La VISTA sale vacía a propósito: la escribe el temporizador de
     `graficos/base.py::_render_rail` en `.barra-vista`, porque qué sección
@@ -308,19 +308,14 @@ def _html_barra_contexto(reporte_activo, info, par):
     nombre es un `::before` que sólo existe con texto (`_28_arbol.py`), así
     que mientras no llega no queda un «›» colgando.
 
-    LOS KPIs, en dos tramos:
-      · el principal del reporte —el mismo `par` que mostraba su fila del
-        rail, que en el árbol ya no lo repite—, grande y con su segundo
-        renglón al lado;
-      · los que el reporte declare APARTE para la franja (`kpis_franja`, hoy
-        sólo Compras: Alimentos, Bebidas, Vino), cada uno con su rótulo
-        encima. Los que repiten un rótulo del principal se saltean: el
-        «Documentos» de Compras ya está en «135 docs».
-    Un reporte sin `kpis_franja` muestra sólo el principal; sin KPIs (las
-    herramientas), sólo el nombre.
+    SIN KPIs desde el 2026-10-03, a pedido («que la franja superior, que
+    aparece, no tenga KPIs»; regla #596). Hasta ese día llevaba el principal
+    del reporte y, en Compras, los de `kpis_franja` (Alimentos, Bebidas,
+    Vino) — `kpis_franja` sigue declarado porque lo usa la franja de KPIs de
+    769 a 900px (`nav_franja_kpis`, más abajo).
 
-    Todo con `html.escape`: el nombre del reporte y los rótulos son texto,
-    y este bloque va por `unsafe_allow_html`."""
+    Todo con `html.escape`: el nombre del reporte es texto, y este bloque va
+    por `unsafe_allow_html`."""
     icono = (info.get("icono") or "").removeprefix(":material/").removesuffix(":")
     partes = ['<div class="barra-ctx">']
     if icono:
@@ -332,26 +327,6 @@ def _html_barra_contexto(reporte_activo, info, par):
     _nom = info.get("label_largo") or reporte_activo
     partes.append(f'<span class="barra-nom">{html.escape(_nom)}</span>')
     partes.append('<span class="barra-vista"></span>')
-    kpis_html = []
-    if par:
-        primario, secundario, negativo = par
-        kpis_html.append(
-            '<span class="barra-kpi">'
-            f'<b class="barra-kpi-val{" kpi-neg" if negativo else ""}">{html.escape(primario)}</b>'
-            + (f'<small class="barra-kpi-sec">{html.escape(secundario)}</small>' if secundario else "")
-            + '</span>')
-    if par and info.get("kpis_franja"):
-        ya = {k[0] for k in info.get("kpis") or ()}
-        for et, txt, neg in _kpis_franja(info) or ():
-            if et in ya:
-                continue
-            kpis_html.append(
-                '<span class="barra-par">'
-                f'<i class="barra-par-rot">{html.escape(et)}</i>'
-                f'<b class="barra-par-val{" kpi-neg" if neg else ""}">{html.escape(txt)}</b>'
-                '</span>')
-    if kpis_html:
-        partes.append('<span class="barra-kpis">' + "".join(kpis_html) + '</span>')
     partes.append('</div>')
     return "".join(partes)
 
@@ -1193,11 +1168,12 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
     # fila de botones repetía la columna de al lado: en escritorio se
     # esconde (`estilos/_28_arbol.py`) y en su lugar la franja dice DÓNDE
     # ESTÁS y CON QUÉ DATOS — el reporte, la vista en pantalla (la escribe
-    # el temporizador de `graficos/base.py::_render_rail`) y sus KPIs. Es el
-    # reparto estándar de una app con barra lateral: al costado a dónde ir,
-    # arriba dónde estás. Los botones siguen dibujándose para el tramo de
-    # 769 a 900px, donde la franja sigue siendo la de siempre.
-    _arbol_barra = _html_barra_contexto(reporte_activo, _info_act, _par_act)
+    # el temporizador de `graficos/base.py::_render_rail`). Es el reparto
+    # estándar de una app con barra lateral: al costado a dónde ir, arriba
+    # dónde estás. Los botones siguen dibujándose para el tramo de 769 a
+    # 900px, donde la franja sigue siendo la de siempre. Sus KPIs se fueron
+    # el 2026-10-03 (regla #596).
+    _arbol_barra = _html_barra_contexto(reporte_activo, _info_act)
     with st.container(key="nav_franja_rep"):
         st.markdown(_arbol_barra, unsafe_allow_html=True)
         _grupos_franja = set()
@@ -1348,10 +1324,10 @@ def inject_navegacion(reportes, reporte_activo, mostrar_inspector=False):
                         args=(nombre,),
                     )
                     # Los KPIs (los montos S/ a la derecha de cada reporte) se
-                    # QUITARON del rail el 2026-09-22, a pedido. La señal no se
-                    # pierde: la franja superior de contexto sigue mostrando el
-                    # KPI del reporte ACTIVO (`_html_barra_contexto`, alimentada
-                    # por `_par_act`). El `navitem_<slug>` que envuelve al botón
+                    # QUITARON del rail el 2026-09-22, a pedido, y de la franja
+                    # superior de contexto el 2026-10-03 (regla #596): desde
+                    # 901px el cromo no lleva montos. El `navitem_<slug>`
+                    # que envuelve al botón
                     # se mantiene igual — es el ancestro que asume el hairline
                     # entre ítems (estilos/_20_compras_rail.py).
         # PIE DEL RAIL — Refrescar, la única ACCIÓN (no un reporte). Fuera de

@@ -2007,9 +2007,8 @@ def _render_rail(categorias, state_key, btn_prefix="graf_btn_",
             _cab = st.session_state.get(navegacion.CLAVE_CABECERA)
             if _cab and _cab.get("nombre"):
                 # Sólo el NOMBRE del reporte: los KPIs (montos S/) se quitaron
-                # del rail el 2026-09-22, a pedido. El KPI del reporte activo
-                # sigue estando en la franja superior de contexto
-                # (navegacion._html_barra_contexto).
+                # del rail el 2026-09-22, a pedido, y de la franja superior
+                # de contexto el 2026-10-03 (regla #596).
                 # El ícono sólo se ve cuando esta lista hace de PANEL del
                 # reporte activo (columna plegada, regla #568): encabeza
                 # igual que los paneles de los otros reportes.
