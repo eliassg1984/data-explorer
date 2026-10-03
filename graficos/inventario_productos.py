@@ -93,14 +93,16 @@ _K_BUSCAR = "inv_prod_buscar"
 _K_SIN_STOCK = "inv_prod_sin_stock"
 
 # Con qué áreas ABRE el listado (2026-09-18, a pedido: «debe filtrar
-# inicialmente Almacén central, cocina, bar, producción, salón»). Es un
+# inicialmente Almacén central, cocina, bar, producción, salón»; CAVA se sumó
+# el 2026-10-03, también a pedido). Es un
 # DEFAULT, no un piso: se siembra una sola vez y el usuario las cambia, o las
 # suelta todas para ver el inventario entero. «Bar» es BARRA, como la
 # escribe el ERP. Las que no estén en los datos no se siembran (`st.pills`
 # revienta con un valor que no está entre sus opciones), y si no queda
-# ninguna la tabla abre sin filtro de área.
+# ninguna la tabla abre sin filtro de área. El ERP escribe «CAVA » con un
+# espacio al final; las opciones salen de `_texto`, que lo recorta.
 AREAS_DE_ENTRADA = ("ALMACEN CENTRAL", "COCINA", "BARRA", "PRODUCCION",
-                    "SALON")
+                    "SALON", "CAVA")
 
 
 # ═══════════════════════════════════════════════════════════════════════
