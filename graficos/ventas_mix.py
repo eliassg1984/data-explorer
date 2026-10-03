@@ -55,6 +55,7 @@ from graficos.compras.semanal import (
     _plan_etiquetas, _rotulo_periodo,
 )
 from graficos.ventas_comparativo import _cargar_tramo
+from graficos.ventas_horario import nombre_area
 from graficos.ventas_resumen import (MAX_DIAS, _ATENUADO, _COSTO_ALTO,
                                      _COSTO_ROTO, _con_alpha, _fmt_dia,
                                      _fmt_var_venta, cambios_de_igv,
@@ -81,6 +82,19 @@ _NIVEL_SING = ("grupo", "subgrupo", "producto")
 _COL_NIVEL = ("grupo", "sub", "prod")
 _TODOS = "Todos los grupos"
 
+_EJE_CARTA, _EJE_AREA = "Carta", "Área"
+"""Por dónde se abre la venta (regla #595): el árbol de la carta (Grupo ›
+Subgrupo › Producto) o el de la cocina (Área › Subgrupo › Producto), con el
+área de producción a la que el POS manda cada plato. Las cuentas no se
+enteran: `base` pone el área en la columna `grupo`. El segundo nivel es el
+SUBGRUPO y no el grupo: casi toda área prepara un solo grupo («Cocina» es
+Alimentos), y abrirla mostraba una barra entera de lo mismo."""
+_NOMBRES_EJE = {
+    _EJE_CARTA: (_NIVELES, _NIVEL_SING, _TODOS),
+    _EJE_AREA: (("Áreas", "Subgrupos", "Productos"),
+                ("área", "subgrupo", "producto"), "Todas las áreas"),
+}
+
 _MAX_TRAMOS = 7
 """Tramos con color en la barra; el resto va junto. Con 8 se muestran los 8:
 juntar uno solo en «Resto (1)» es esconderlo sin ganar nada."""
@@ -103,7 +117,7 @@ navegación (`st.columns([3.3, 1])`, menos el gap)."""
 
 _KEYS_WIDGET_MIX = ("vt_mix_gran", "vt_mix_medida", "vt_mix_escala",
                     "vt_mix_zona", "vt_mix_comp", "vt_mix_cambio",
-                    "vt_mix_celdas", "vt_mix_buscar")
+                    "vt_mix_celdas", "vt_mix_buscar", "vt_mix_eje")
 """Los controles de la vista, para que la recarga de fecha
 (`st.rerun(scope="app")`) no se los lleve: mismo mecanismo que
 `ventas_resumen._KEYS_WIDGET_RESUMEN` (regla #373)."""
@@ -121,6 +135,7 @@ def columnas(d):
         "fecha": _resolver(d, ["Fec Reg Documento", "Fecha Registro", "FECHA"]),
         "grupo": _resolver(d, ["Grupo"]),
         "sub": _resolver(d, ["Sub Grupo", "Sub_Grupo", "Subgrupo"]),
+        "area": _resolver(d, ["Area Produccion"]),
         "prod": _resolver(d, ["Nomb Item Venta", "Nombre Producto",
                               "Producto", "Descripcion"]),
         "venta": _resolver(d, ["Venta Item Ddocumento", "Venta"]),
@@ -133,11 +148,14 @@ def columnas(d):
     }
 
 
-def base(d, cols):
+def base(d, cols, eje=_EJE_CARTA):
     """Una fila por ítem vendido con los tres niveles de la carta y sus
     sumas, con nombres FIJOS: todo lo de abajo agrupa por columna de verdad
     y renombra por nombre (regla #481, pandas 2 contra pandas 3). `igv` va
     en cero si `cols` no lo trae (un llamador viejo de `columnas`).
+
+    Con `eje` = Área los niveles son Área › Subgrupo › Producto, en las
+    MISMAS columnas (`grupo` lleva el área): todo lo de abajo sigue igual.
 
     Un nivel vacío se nombra («(sin grupo)») en vez de caerse: esa venta
     existe y tiene que sumar en algún lado."""
@@ -164,6 +182,10 @@ def base(d, cols):
         "neto": _num(cols["neto"]),
         "igv": _num(cols.get("igv")),
     })
+    if eje == _EJE_AREA:
+        b["grupo"] = (nombre_area(d[cols["area"]])
+                      if cols.get("area") and cols["area"] in d.columns
+                      else "Sin área")
     return b.dropna(subset=["fecha"])
 
 
@@ -402,6 +424,12 @@ def _ir_a(ruta):
     st.session_state["vt_mix_prod"] = None
 
 
+def _al_cambiar_eje():
+    """Otro árbol: la ruta de uno no existe en el otro («Alimentos» es un
+    grupo, no un área), así que se vuelve arriba."""
+    _ir_a(())
+
+
 def _al_buscar():
     """El buscador salta al subgrupo del producto y lo pone en foco. Se vacía
     solo: es un atajo, no un filtro que quede puesto."""
@@ -515,7 +543,13 @@ def _ventas_mix(d, filtrar_cb=None):
     pct_modo = escala == "% del período"
     med = "cant" if unidades else "venta"
 
-    b_todo = base(d, cols)
+    # El área sólo se ofrece si el parquet la trae (regla #595).
+    hay_area = bool(cols.get("area"))
+    if ss.get("vt_mix_eje") not in _NOMBRES_EJE or not hay_area:
+        ss["vt_mix_eje"] = _EJE_CARTA
+    eje_arbol = ss["vt_mix_eje"]
+    niv = _NOMBRES_EJE[eje_arbol]
+    b_todo = base(d, cols, eje_arbol)
     if b_todo.empty:
         st.info("Sin ventas en el rango cargado.")
         return
@@ -625,7 +659,7 @@ def _ventas_mix(d, filtrar_cb=None):
                  foco_ix, unidades, pct_modo, n_per)
     with c_nav:
         _navegacion(tr, valores, ruta, nivel, foco_ix, eje, unidades,
-                    len(orden), prod_foco)
+                    len(orden), prod_foco, niv=niv, hay_area=hay_area)
 
     # ── 7) La fila que elige qué se ve abajo ─────────────────────────────
     with st.container(horizontal=True, gap="small",
@@ -666,8 +700,8 @@ def _ventas_mix(d, filtrar_cb=None):
         costo_modo = celdas == _CELDAS_COSTO
         _zona_resumen(M, med, orden, eje, [v[0] == "parcial" for v in vars_],
                       foco_ix, pct_modo, unidades, nivel, ruta, costo_modo,
-                      igv_notas=igv_notas)
-        _siguiente = (f"una fila para ver sus {_NIVELES[nivel + 1].lower()}"
+                      igv_notas=igv_notas, niv=niv)
+        _siguiente = (f"una fila para ver sus {niv[0][nivel + 1].lower()}"
                       if nivel < 2 else "un producto para seguirlo")
         if costo_modo:
             pie.caption(f"Costo ÷ venta neta, como el Resumen: en ámbar pasa "
@@ -679,7 +713,7 @@ def _ventas_mix(d, filtrar_cb=None):
     else:
         _zona_detalle(M, med, orden, claves, eje, largo, i_det, comp, cambio,
                       gran, rango, vars_, ruta, nivel, unidades, b,
-                      filtrar_cb, pie)
+                      filtrar_cb, pie, niv=niv, eje_arbol=eje_arbol)
 
 
 # ===========================================================================
@@ -836,24 +870,39 @@ def _grafico(tr, valores, colores, tot, claves, eje, largo, vars_,
 
 
 def _navegacion(tr, valores, ruta, nivel, foco_ix, eje, unidades,
-                n_miembros, prod_foco):
+                n_miembros, prod_foco, niv=_NOMBRES_EJE[_EJE_CARTA],
+                hay_area=False):
     """La columna de la derecha: dónde estás (las migas suben) y los tramos
     de la barra, cada uno un botón que baja un nivel. Hace de leyenda: la
     muestra de color de cada botón la pinta el CSS por su key
-    (`vt_mix_ley_<i>`), con los `--serie-<i>` espejo de `_COLORES`."""
+    (`vt_mix_ley_<i>`), con los `--serie-<i>` espejo de `_COLORES`.
+
+    Arriba, si el parquet trae el área, por cuál árbol se abre (#595): es
+    la raíz de las migas, así que vive con ellas."""
+    niveles, sing, todos = niv
     with st.container(key="vt_mix_nav", gap=None):
-        antes = [(_TODOS, ())] + [(ruta[k], ruta[:k + 1])
+        if hay_area:
+            st.segmented_control(
+                "Abrir por", (_EJE_CARTA, _EJE_AREA), required=True,
+                key="vt_mix_eje", label_visibility="collapsed",
+                on_change=_al_cambiar_eje,
+                help="**Carta**: Grupo › Subgrupo › Producto. **Área**: "
+                     "dónde se prepara —la estación del POS a la que va el "
+                     "pedido— › Subgrupo › Producto.")
+        antes = [(todos, ())] + [(ruta[k], ruta[:k + 1])
                                   for k in range(len(ruta) - 1)]
         if ruta:
             for k, (txt, destino) in enumerate(antes):
                 st.button(f"‹ {txt}", key=f"vt_mix_miga_{k}", type="tertiary",
                           on_click=_ir_a, args=(destino,),
                           help=f"Volver a {txt}")
-        actual = ruta[-1] if ruta else _TODOS
+        actual = ruta[-1] if ruta else todos
         cuando = "todo el rango" if foco_ix is None else eje[foco_ix]
         st.markdown(
             f'<div class="vt-mix-nivel"><b>{escape(actual)}</b> · '
-            f'{n_miembros} {_NIVELES[nivel].lower()} · {escape(cuando)}</div>',
+            f'{n_miembros} '
+            f'{sing[nivel] if n_miembros == 1 else niveles[nivel].lower()} · '
+            f'{escape(cuando)}</div>',
             unsafe_allow_html=True)
 
         total = sum(float(v.sum() if foco_ix is None else v[foco_ix])
@@ -870,11 +919,11 @@ def _navegacion(tr, valores, ruta, nivel, foco_ix, eje, unidades,
                           help="Cada uno está en la tabla de abajo.")
                 continue
             if nivel < 2:
-                ayuda = f"Ver los {_NIVELES[nivel + 1].lower()} de {nombre}"
+                ayuda = f"Ver los {niveles[nivel + 1].lower()} de {nombre}"
             elif prod_foco == nombre:
                 ayuda = "Soltar el foco"
             else:
-                ayuda = f"Seguir {nombre} contra el resto de su subgrupo"
+                ayuda = f"Seguir {nombre} contra el resto de su {sing[1]}"
             st.button(etq, key=f"vt_mix_ley_{_i}", type="tertiary",
                       on_click=_bajar, args=(nivel, ruta, nombre),
                       help=ayuda)
@@ -918,7 +967,8 @@ def _serie(valores):
 
 
 def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
-                  unidades, nivel, ruta, costo_modo=False, igv_notas=None):
+                  unidades, nivel, ruta, costo_modo=False, igv_notas=None,
+                  niv=_NOMBRES_EJE[_EJE_CARTA]):
     """El mapa de calor: una fila por cada uno del nivel, una columna por
     período, y el total, el mix, el % de costo y la tendencia al final. Un
     clic en una fila hace lo mismo que su nombre en la columna de la
@@ -956,7 +1006,8 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
     else:
         cuerpo, cuerpo_tot = vals, tot
     tabla = pd.DataFrame(cuerpo.to_numpy(), columns=per_cols)
-    tabla.insert(0, _NIVELES[nivel], list(orden))
+    nombre_nivel = niv[0][nivel]
+    tabla.insert(0, nombre_nivel, list(orden))
     t_fila = vals.sum(axis=1)
     tabla["Total"] = (pc_fila if costo_modo else t_fila).to_numpy()
     tabla["Mix"] = (t_fila / float(tot.sum())).to_numpy() if tot.sum() else 0.0
@@ -964,7 +1015,7 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
         tabla["% costo"] = pc_fila.to_numpy()
     tabla["Tendencia"] = [_serie(r) for r in
                           (cuerpo if costo_modo else vals).to_numpy()]
-    fila_total = {_NIVELES[nivel]: "Total",
+    fila_total = {nombre_nivel: "Total",
                   **{col: float(t) for col, t in zip(per_cols, cuerpo_tot)},
                   "Total": pc_todo if costo_modo else float(tot.sum()),
                   "Mix": 1.0,
@@ -1010,8 +1061,8 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
                    subset=["Total"])
            .format(_pct, subset=["Mix"] if costo_modo else ["Mix", "% costo"]))
     config = {
-        _NIVELES[nivel]: st.column_config.TextColumn(
-            _NIVELES[nivel], pinned=True, width="medium"),
+        nombre_nivel: st.column_config.TextColumn(
+            nombre_nivel, pinned=True, width="medium"),
         "Tendencia": st.column_config.LineChartColumn(
             "Tendencia", width="small", y_min=0, color=ACENTO),
     }
@@ -1038,7 +1089,8 @@ def _zona_resumen(M, med, orden, eje, parciales, foco_ix, pct_modo,
 
 
 def _zona_detalle(M, med, orden, claves, eje, largo, i, comp, cambio, gran,
-                  rango, vars_, ruta, nivel, unidades, b, filtrar_cb, pie):
+                  rango, vars_, ruta, nivel, unidades, b, filtrar_cb, pie,
+                  niv=_NOMBRES_EJE[_EJE_CARTA], eje_arbol=_EJE_CARTA):
     """Qué movió el período `i`: el cambio de cada uno del nivel contra el
     período anterior (o el mismo tramo del año pasado), ordenado por cuánto
     pesó, y al lado lo más vendido en el período."""
@@ -1056,7 +1108,7 @@ def _zona_detalle(M, med, orden, claves, eje, largo, i, comp, cambio, gran,
                               cfg.get("carga_por_rango", "FEC REG DOCUMENTO"),
                               ini, fin, filtrar_cb)
         if df_ap is not None:
-            b_ap = alcance(base(df_ap, columnas(df_ap)), ruta)
+            b_ap = alcance(base(df_ap, columnas(df_ap), eje_arbol), ruta)
             b_ap = b_ap[(b_ap["fecha"].dt.date >= ini)
                         & (b_ap["fecha"].dt.date <= fin)]
             b_ser = b_ap.groupby(col)[med].sum()

@@ -884,6 +884,8 @@ def _prep_tramo(df, c, grano, ini, fin, semanal=False):
     for _id, _col in (("grupo", "fam"), ("sub", "sub"), ("prod", "prod")):
         if c.get(_col) and c[_col] in df.columns:
             out[_id] = df.loc[m, c[_col]].astype(str).values
+    if c.get("area") and c["area"] in df.columns:
+        out["area"] = nombre_area(df.loc[m, c["area"]]).values
     if c.get("tipo_desc") and c["tipo_desc"] in df.columns:
         # El `fillna` va ANTES del `astype(str)` y no es paranoia: desde
         # pandas 2.1 `astype(str)` PRESERVA los nulos en vez de escribir
@@ -1673,8 +1675,29 @@ def _clic_de_evento(evt):
 # «Platos» y «Grupos» miden PREFERENCIAS: qué se pide y cuándo. Por eso Pax
 # y Ticket no existen ahí —son del pedido, no del plato: una mesa de cuatro
 # no le reparte «un pax» a cada plato— y el mapa cae a Venta y lo dice.
+#
+# «Áreas» (2026-10-03, regla #595) es la misma pregunta por DÓNDE se
+# prepara: la estación del POS a la que el plato se manda (`AREA
+# PRODUCCION`), no su grupo de carta. Un grupo reparte su venta entre
+# varias —«Alimentos» sale de Cocina, Calientes, Carnes, Fríos, Pase y
+# Pastelería—, y la pregunta de la cocina es cuánto se le junta a cada una
+# y a qué hora.
 
-_FILAS = ("Horas", "Platos", "Grupos")
+_FILAS = ("Horas", "Platos", "Grupos", "Áreas")
+_QUE_FILAS = {"Platos": "prod", "Grupos": "grupo", "Áreas": "area"}
+"""La columna de `_prep_tramo` que da las filas de cada opción."""
+_NOMBRE_FILA = {"prod": "plato", "grupo": "grupo", "area": "área"}
+_TILDES_AREA = {"Pasteleria": "Pastelería", "Frios": "Fríos"}
+"""El POS escribe las áreas en mayúsculas y sin tilde; se nombran como el
+resto de la carta. Un área que no esté acá sale sólo con la mayúscula."""
+
+
+def nombre_area(s):
+    """«CARNES Y PESCADOS» → «Carnes y pescados»; vacío → «Sin área»."""
+    s = s.astype("object")
+    s = s.where(s.notna(), "").astype(str).str.strip()
+    s = s.str.capitalize().replace(_TILDES_AREA)
+    return s.mask(s == "", "Sin área")
 _COLS_FILAS = ("Hora", "Día de semana")
 _HORA_OP = ("Hora del pedido", "Hora del cobro")
 _LECTURAS = ("Lado a lado", "Diferencia")
@@ -1747,9 +1770,9 @@ def _fmt_valor(v, medida, por_dia):
 
 def _fig_filas(items, mats, etq_cols, claves, grano, medida, dif, foco,
                por_dia):
-    """El mapa de «Platos»/«Grupos»: una fila por plato (o grupo), una
-    columna por hora (o día de semana), un panel por período, concatenados
-    como en `_fig_mapa`. Encima, la capa de hover y CLIC —un heatmap no
+    """El mapa de «Platos»/«Grupos»/«Áreas»: una fila por plato (o grupo, o
+    área), una columna por hora (o día de semana), un panel por período,
+    concatenados como en `_fig_mapa`. Encima, la capa de hover y CLIC —un heatmap no
     emite eventos (trampa 1 del docstring)—, que abre la ficha de la fila."""
     n_it, n_c = len(items), len(etq_cols)
     dif = dif and len(mats) > 1
@@ -2642,7 +2665,7 @@ def _dibujar_filas(tramos, claves, grano, medida, filas, cols_filas, lectura,
                    escala, horas):
     """El mapa de «Platos» o «Grupos». Devuelve el alto de la figura, que
     entra en la resta del panel de abajo."""
-    que = "prod" if filas == "Platos" else "grupo"
+    que = _QUE_FILAS[filas]
     if medida not in _MED_FILAS:
         # PAX Y TICKET SON DEL PEDIDO (regla #530): no se apagan en
         # silencio, se dice por qué y se ofrece el camino a donde sí están.
@@ -2650,7 +2673,7 @@ def _dibujar_filas(tramos, claves, grano, medida, filas, cols_filas, lectura,
         _a, _b = st.columns([3.2, 1], vertical_alignment="center")
         with _a:
             st.caption(f"{_MED_LABEL[medida]} es del pedido, no del "
-                       f"{'plato' if que == 'prod' else 'grupo'}: una mesa "
+                       f"{_NOMBRE_FILA[que]}: una mesa "
                        "de cuatro no le reparte un pax a cada plato. El mapa "
                        "muestra la venta.")
         with _b:
@@ -2659,7 +2682,11 @@ def _dibujar_filas(tramos, claves, grano, medida, filas, cols_filas, lectura,
         medida = "venta"
     items = _items_filas(tramos, que)
     if not items:
-        st.info("Sin ventas con plato en los períodos elegidos.")
+        _sin_col = que == "area" and not any(
+            x is not None and "area" in x.columns for x in tramos)
+        st.info("El parquet de ventas no trae el área de producción "
+                "(`AREA PRODUCCION`)." if _sin_col else
+                "Sin ventas con plato en los períodos elegidos.")
         return _ALTO_MIN
     por_hora = cols_filas == _COLS_FILAS[0]
     por_dia = escala == _ESCALAS[1]
@@ -2720,7 +2747,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     cols = {"fecha": col_fecha, "venta": col_venta, "pax": col_pax,
             "pedido": col_pedido, "prod": col_prod, "cant": col_cant,
             "fam": col_fam, "sub": col_sub, "desc": col_desc,
-            "tipo_desc": col_tipo}
+            "tipo_desc": col_tipo,
+            "area": _resolver(d, ["Area Produccion"])}
     # LA HORA DEL PEDIDO (regla #530). `FEC REG DOCUMENTO` es la del COBRO,
     # que llega 1 h 38 min después (mediana, medido el 2026-09-25) y corría
     # el pico de la noche de las 7 pm a las 10 pm. La del pedido es cuando
@@ -2847,7 +2875,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             filas = st.selectbox("Filas", list(_FILAS), key="vh_op_filas",
                                  label_visibility="collapsed", width=86)
         en_filas = filas != _FILAS[0]
-        que = "plato" if filas == "Platos" else "grupo"
+        que = _NOMBRE_FILA[_QUE_FILAS.get(filas, "grupo")]
         # «Columnas» ofrece lo que no está en las filas. Las dos botoneras
         # comparten lugar y guardan cada una lo suyo (la sombra), así que ir
         # a Platos y volver no le borra a Horas su «Día de semana».
@@ -3292,7 +3320,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         with _card("ventas_horario_ficha", "", titulo_arriba=True):
             if _ficha:
                 _ficha_filas(tramos, claves, grano,
-                             "prod" if filas == "Platos" else "grupo",
+                             _QUE_FILAS[filas],
                              st.session_state[_K_FICHA],
                              medida if medida in _MED_FILAS else "venta",
                              horas)

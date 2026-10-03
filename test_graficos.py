@@ -6177,9 +6177,11 @@ def _pruebas_ventas_mix():
         "NETO TOTAL ITEM DDOCUMENTO": [81.0, 32.4, 24.3, 4.05, 48.6],
         # El IGV de la línea marca el período en que cambió la tasa (#590).
         "IGV ITEM DDOCUMENTO": [8.1, 3.24, 2.43, 0.405, 4.86],
+        # Dónde se prepara (#595): como lo escribe el POS, con un vacío.
+        "AREA PRODUCCION": ["COCINA", "PASTELERIA", "BAR", None, "COCINA"],
     })
     cols = _m.columnas(d)
-    check("resuelve las nueve columnas", all(cols.values()), True)
+    check("resuelve las diez columnas", all(cols.values()), True)
     b = _m.base(d, cols)
     check("y la base trae el IGV", round(float(b["igv"].sum()), 3), 19.035)
     check("sin la columna del IGV, la base sigue (en cero)",
@@ -6240,6 +6242,31 @@ def _pruebas_ventas_mix():
 
     check("alcance de un subgrupo",
           float(_m.alcance(b, ("Alimentos", "Fondos"))["venta"].sum()), 160.0)
+
+    # ── El árbol por área de producción (regla #595) ──────────────────────
+    ba = _m.base(d, cols, _m._EJE_AREA)
+    check("por Área, el primer nivel es el área, con nombre de carta",
+          sorted(ba["grupo"].unique()),
+          ["Bar", "Cocina", "Pastelería", "Sin área"])
+    check("y el segundo, el subgrupo de la carta",
+          sorted(ba.loc[ba["grupo"] == "Cocina", "sub"].unique()),
+          ["Fondos"])
+    check("las mismas filas y la misma venta que por Carta",
+          (len(ba), float(ba["venta"].sum())),
+          (len(b), float(b["venta"].sum())))
+    check("el alcance baja por área y subgrupo",
+          float(_m.alcance(ba, ("Cocina", "Fondos"))["venta"].sum()),
+          160.0)
+    check("un área no es una ruta de la Carta: vuelve arriba",
+          _m.ruta_valida(b, ("Cocina",)), ())
+    check("las migas y la tabla nombran los niveles del árbol",
+          _m._NOMBRES_EJE[_m._EJE_AREA][0],
+          ("Áreas", "Subgrupos", "Productos"))
+    check("sin la columna del área, todo cae en «Sin área»",
+          set(_m.base(d, {k: v for k, v in cols.items() if k != "area"},
+                      _m._EJE_AREA)["grupo"]), {"Sin área"})
+    check("el selector sobrevive a la recarga de fecha",
+          "vt_mix_eje" in _m._KEYS_WIDGET_MIX, True)
     check("un grupo que ya no está vuelve arriba",
           _m.ruta_valida(b, ("Vinos",)), ())
     check("un subgrupo de otro grupo sube uno",
@@ -6725,6 +6752,64 @@ def _pruebas_igv_y_sin_costo():
     subs = vr._subvistas(None, [], {"pcosto", "psin", "sin_que"})
     check("la subvista Costo lleva la columna",
           "sin_que" in [c[0] for c in subs["Costo"][0]], True)
+    return fallos
+
+
+def _pruebas_filas_por_area():
+    """«Por hora» › filas «Áreas» (regla #595): la venta por la estación del
+    POS que prepara cada plato. Fija el nombre (el POS escribe «PASTELERIA»
+    y la carta «Pastelería»), que el área viaje en el tramo sin tocar la
+    venta, y que las filas salgan por venta con la matriz sumando lo
+    mismo."""
+    import datetime as _dt
+
+    from graficos import ventas_horario as vh
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · por área · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · por área · {nombre}: got={got!r} exp={exp!r}")
+
+    check("el nombre como el resto de la carta",
+          vh.nombre_area(pd.Series(["CARNES Y PESCADOS", "PASTELERIA",
+                                    " frios ", None, ""])).tolist(),
+          ["Carnes y pescados", "Pastelería", "Fríos", "Sin área",
+           "Sin área"])
+    check("«Áreas» es una opción de filas, con su columna",
+          ("Áreas" in vh._FILAS, vh._QUE_FILAS.get("Áreas")), (True, "area"))
+    d = pd.DataFrame({
+        "FEC REG DOCUMENTO": pd.to_datetime(["2026-09-04 13:10",
+                                             "2026-09-04 13:20",
+                                             "2026-09-04 20:40",
+                                             "2026-09-05 21:00"]),
+        "VENTA ITEM DDOCUMENTO": [80.0, 30.0, 50.0, 40.0],
+        "GRUPO": ["Alimentos", "Bebidas s/ Alcohol", "Alimentos",
+                  "Alimentos"],
+        "AREA PRODUCCION": ["COCINA", "BAR", "CALIENTES", "COCINA"],
+    })
+    c = {"fecha": "FEC REG DOCUMENTO", "venta": "VENTA ITEM DDOCUMENTO",
+         "fam": "GRUPO", "area": "AREA PRODUCCION"}
+    t = vh._prep_tramo(d, c, "Semana", _dt.date(2026, 8, 31),
+                       _dt.date(2026, 9, 6))
+    check("el tramo trae el área", sorted(t["area"].unique()),
+          ["Bar", "Calientes", "Cocina"])
+    items = vh._items_filas([t], "area")
+    check("las filas, por venta", items, ["Cocina", "Calientes", "Bar"])
+    m = vh._matriz_filas(t, "area", items, True, "venta", list(range(24)),
+                         False)
+    check("la fila de Cocina: 80 a la 1 pm y 40 a las 9 pm",
+          (m[0, 13], m[0, 21]), (80.0, 40.0))
+    check("y la matriz suma la venta entera", float(m.sum()), 200.0)
+    check("sin la columna, el tramo no inventa un área",
+          "area" in vh._prep_tramo(d, {k: v for k, v in c.items()
+                                       if k != "area"}, "Semana",
+                                   _dt.date(2026, 8, 31),
+                                   _dt.date(2026, 9, 6)).columns, False)
     return fallos
 
 
@@ -8094,7 +8179,7 @@ def _pruebas_cabecera_por_hora():
 
     check("los nombres de tabla dinámica",
           (_h._FILAS, _h._COLS_DIAS, _h._COLS_FILAS, _h._ESCALAS),
-          (("Horas", "Platos", "Grupos"), ("Fecha", "Día de semana"),
+          (("Horas", "Platos", "Grupos", "Áreas"), ("Fecha", "Día de semana"),
            ("Hora", "Día de semana"), ("Total", "Por día")))
     check("«Cantidad» se llama «Unidades»", dict(_h._MEDIDAS)["cant"],
           "Unidades")
@@ -8836,6 +8921,7 @@ def main():
     fallos += _pruebas_ticket_sin_canales_sin_clientes()
     fallos += _pruebas_formas_de_pago()
     fallos += _pruebas_control_pedidos()
+    fallos += _pruebas_filas_por_area()
 
     # ── Recetas › Costo recetas base: uso, producción y costo (#576) ─────
     fallos += _pruebas_costo_recetas_base()

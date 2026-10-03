@@ -2940,6 +2940,15 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_nav [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
+    /* «Carta | Área» (regla #595): la raíz de las migas, a la altura de la
+       lista que tiene debajo. */
+    .st-key-vt_mix_eje { margin: 0 6px 4px !important; }
+    .st-key-vt_mix_eje [data-testid="stButtonGroup"] button {
+        min-height: 24px !important;
+        height: 24px !important;
+        padding: 0 10px !important;
+        font-size: 11.5px !important;
+    }
     .st-key-vt_mix_nav .vt-mix-nivel {
         font-size: 11px;
         line-height: 1.3;

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-594 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+595 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (196)
 
@@ -683,7 +683,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 
-**Datos, R2 y DuckDB** (83)
+**Datos, R2 y DuckDB** (84)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -768,6 +768,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 - **#594** — Ventas › «Control de pedidos»: lo que pasa con los pedidos ANTES de la venta, que…
+- **#595** — La venta por ÁREA DE PRODUCCIÓN: dónde se prepara, no qué grupo de la carta es
 
 **SUNAT y SIRE** (50)
 
@@ -1038,7 +1039,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#591** — El ticket de Ventas divide la venta de los canales que REGISTRAN clientes, no la venta…
 - **#593** — Ventas se fecha por el día del TURNO de caja (default) o por el de EMISIÓN del comprobante, a…
 
-**Mantenimiento y trampas del lenguaje** (13)
+**Mantenimiento y trampas del lenguaje** (14)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -1053,6 +1054,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#355** — Un default que tapaba un problema de OTRA parte de la app queda huérfano cuando esa parte…
 - **#356** — Al borrar una franja fija, lo que hay que borrar son TRES cosas: la superficie, la reserva…
 - **#408** — Un if nuevo se traga el bloque que tenía debajo, y Python no dice nada: la pila de CINCO…
+- **#595** — La venta por ÁREA DE PRODUCCIÓN: dónde se prepara, no qué grupo de la carta es
 
 **Sin tema asignado** (2)
 
@@ -47054,6 +47056,44 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+595. **La venta por ÁREA DE PRODUCCIÓN: dónde se prepara, no qué grupo de
+     la carta es.** 2026-10-03, la cuarta de las piezas pedidas después de
+     leer la Liquidación de Cajero y el Paloteo de Producción del POS (#591
+     a #594). La columna `AREA PRODUCCION` entró ese día a la consulta de
+     `ventas.parquet`: la estación a la que el POS manda cada ítem del
+     pedido (`DPEDIDO.tArea` contra `vArea`).
+
+     - **No se deduce del grupo.** En septiembre de 2026 «Alimentos» se
+       repartía entre seis áreas —Cocina S/ 129.380, Calientes 74.533,
+       Carnes y pescados 34.340, Pase 16.146, Fríos 13.096, Pastelería
+       12.570—, «Eventos» sale de Cocina y la venta interna tiene su
+       propia área, «Mayta». La pregunta de la cocina (cuánto se le junta
+       a cada estación y a qué hora) no tenía respuesta con la carta.
+     - **«Por hora» suma «Áreas» a sus filas** (Horas / Platos / Grupos /
+       Áreas), con la misma matriz, la ficha de la fila y el aviso de que
+       Pax y Ticket son del pedido. Las opciones salen de `_QUE_FILAS`:
+       hasta este día cada sitio decidía con un `"prod" if filas ==
+       "Platos" else "grupo"`, que con una tercera opción la habría
+       mandado callada a «Grupos».
+     - **El Mix se abre por Carta o por Área** («Carta | Área», arriba de
+       las migas, que es donde está la raíz del árbol). Por Área el árbol
+       es Área › SUBGRUPO › Producto: con el grupo de segundo nivel, abrir
+       «Cocina» mostraba una barra entera de «Alimentos · 100 %». Las
+       cuentas no se enteran: `base` pone el área en la columna `grupo`.
+       Cambiar de árbol vuelve arriba (la ruta de uno no existe en el otro)
+       y el selector va en `_KEYS_WIDGET_MIX` (#373).
+     - **El nombre se escribe como la carta**: el POS dice «PASTELERIA»,
+       la app «Pastelería» (`ventas_horario.nombre_area`, con un diccionario
+       de tildes que es una foto: un área nueva sale sólo con la
+       mayúscula). Sin la columna, «Áreas» lo dice en vez de mostrar un
+       mapa vacío, y el Mix no ofrece el selector.
+
+     Candados: `test_graficos.py::_pruebas_filas_por_area` y el tramo
+     «árbol por área» de `_pruebas_ventas_mix`. `ventas_mix` importa un
+     nombre nuevo de `ventas_horario`: en Cloud, «Reboot app» (#357).
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47066,7 +47106,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#594**; la próxima toma el número siguiente.
+> última regla es la **#595**; la próxima toma el número siguiente.
 
 >
 
