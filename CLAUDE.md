@@ -884,7 +884,14 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
   crédito no están en `MDOCUMENTO` (están en `MNOTACREDITO`): cuadrar sólo
   contra `MDOCUMENTO` cuadra una venta que cuenta los canjes dos veces.
 - **Clientes = adultos** (`CANT PAX` es `MPEDIDO.nAdulto`; el POS suma
-  niños). Decisión del usuario, por ahora.
+  niños). Decisión del usuario, por ahora. Los niños (`CANT NINOS`) se
+  muestran aparte si la consulta del Sheet los trae, sin sumar a Clientes.
+- **El ticket es la venta de los canales que REGISTRAN clientes ÷
+  clientes** (`definicion_venta.con_clientes`): Rappi vende sin pax, y con
+  la venta entera arriba el de septiembre de 2026 daba S/ 150,32 en vez de
+  147,43. El «Ticket Pro.» de la Liquidación de Cajero del POS es otra
+  cosa: el NETO del local ÷ adultos (118,86), que la app muestra como
+  «Ticket neto». Regla #591.
 - **En un COMBO, `PRECIO COSTO` es el costo de la LÍNEA, no de la
   unidad** (la Degustación, las parrillas, los menús de evento:
   `TPRODUCTO.lCombinacion = 1`). El extractor lo llena con lo servido de

@@ -876,6 +876,11 @@ def _prep_tramo(df, c, grano, ini, fin, semanal=False):
         _c_doc = dv.columna(df, dv.LLAVE_DOC)
         if _c_doc:
             out["doc"] = df.loc[m, _c_doc].astype(str).values
+        # La venta que entra en el TICKET: la de los canales que registran
+        # clientes (regla #591). Un pedido de Rappi en la celda sumaba venta
+        # sin sumar a nadie.
+        _cli = dv.con_clientes(df, dv.columna(df, dv.CANAL), c["pax"])
+        out["venta_cli"] = np.where(_cli[m].to_numpy(), out["venta"], 0.0)
     for _id, _col in (("grupo", "fam"), ("sub", "sub"), ("prod", "prod")):
         if c.get(_col) and c[_col] in df.columns:
             out[_id] = df.loc[m, c[_col]].astype(str).values
@@ -908,8 +913,9 @@ def _celdas(tramo, promedio=False):
     if promedio:
         n_dias = tramo.drop_duplicates("dia").groupby("col")["dia"].size()
         div = g["col"].map(n_dias).replace(0, np.nan)
-        for m in ("venta", "cant", "desc", "pax", "raro"):
-            g[m] = g[m] / div
+        for m in ("venta", "cant", "desc", "pax", "raro", "venta_cli"):
+            if m in g.columns:
+                g[m] = g[m] / div
     return g
 
 
@@ -917,6 +923,8 @@ def _celdas_suma(tramo):
     """Las sumas de `_celdas`, celda por celda."""
     agg = {"venta": ("venta", "sum"), "cant": ("cant", "sum"),
            "desc": ("desc", "sum")}
+    if "venta_cli" in tramo.columns:
+        agg["venta_cli"] = ("venta_cli", "sum")
     g = tramo.groupby(["col", "hora"], as_index=False).agg(**agg)
     if "pax" in tramo.columns:
         _t = tramo.dropna(subset=["pax"])
@@ -930,10 +938,11 @@ def _celdas_suma(tramo):
     if "pax" not in g.columns:
         g["pax"] = np.nan
     g["pax"] = g["pax"].fillna(0.0)
-    # Ticket = venta/pax, la MISMA definición que ventas_resumen.py y el
-    # comparativo. Sin pax no hay ticket (NaN), no un cero que se leería como
-    # "mesas gratis".
-    g["ticket"] = g["venta"] / g["pax"].replace(0, np.nan)
+    # Ticket = venta de los canales con clientes ÷ pax, la MISMA definición
+    # que ventas_resumen.py y el comparativo (regla #591). Sin pax no hay
+    # ticket (NaN), no un cero que se leería como "mesas gratis".
+    g["ticket"] = (g["venta_cli"] if "venta_cli" in g.columns
+                   else g["venta"]) / g["pax"].replace(0, np.nan)
     # Lo que vendieron la Venta Interna y los Eventos en la celda: el mapa le
     # pone un triángulo y el tooltip lo dice (regla #536).
     if "grupo" in tramo.columns:
@@ -977,7 +986,10 @@ def _agregar_marca(tramo, pin, orden):
                       if not _t.empty else 0.0)
     else:
         out["pax"] = 0.0
-    out["ticket"] = (out["venta"] / out["pax"]) if out["pax"] else np.nan
+    # Con la venta de los canales que registran clientes (regla #591).
+    _vt = (float(t["venta_cli"].sum()) if "venta_cli" in t.columns
+           else out["venta"])
+    out["ticket"] = (_vt / out["pax"]) if out["pax"] else np.nan
     return out
 
 

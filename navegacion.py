@@ -373,11 +373,11 @@ def _formatear_kpis(info):
 
     Caso especial VENTAS: si el reporte trae "Venta" Y "Pax" (únicos dos
     KPIs que hoy comparten reporte), el secundario suma un tercer valor
-    DERIVADO —Ticket promedio = Venta / Pax— que no sale de ninguna
-    columna del parquet por sí sola. No hay una forma genérica de expresar
-    "un KPI es la razón entre otros dos" en `REPORTES[x]["kpis"]` que
-    valga la pena para un solo caso; se resuelve acá, a mano, igual que ya
-    hace `graficos/ventas_resumen.py` con el mismo cálculo.
+    DERIVADO —el ticket promedio— que no sale de ninguna columna del
+    parquet por sí sola. Lo calcula `definicion_venta.resumir` (clave
+    `Ticket`): la venta de los canales que registran clientes ÷ clientes,
+    la misma cuenta que `graficos/ventas_resumen.py` (regla #591). Venta ÷
+    Pax queda sólo de respaldo, para un resumen que no lo traiga.
 
     Retorna `None` (no una tupla) si no definió `kpis`, si la consulta no
     trajo nada (parquet sin esa columna, R2 caído — resumen_kpis() ya
@@ -404,7 +404,11 @@ def _formatear_kpis(info):
     if not items:
         return None
     partes = [_fmt_kpi(et, ag, v) for et, ag, v in items]
-    if "Venta" in valores and "Pax" in valores and valores["Pax"]:
+    if valores.get("Ticket") is not None:
+        # Sin la venta de los canales que no cargan clientes (Rappi):
+        # `definicion_venta.resumir`, regla #591.
+        partes.append(f"S/ {valores['Ticket']:.1f}")
+    elif "Venta" in valores and "Pax" in valores and valores["Pax"]:
         partes.append(f"S/ {valores['Venta'] / valores['Pax']:.1f}")
     primario, resto = partes[0], partes[1:]
     negativo = items[0][2] < 0

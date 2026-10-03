@@ -500,6 +500,44 @@ ok("cargar_rango(_arch, _colp," not in _fuente_h
    "cargado por el cobro y ubicado por el pedido, el pedido que cruza el "
    "borde no cae en ningún panel")
 
+print("\n── el ticket: sin la venta de los canales sin clientes (regla #591) ──")
+# Septiembre de 2026: Rappi vendió S/ 7.949,60 sin un solo pax, y sumarla
+# arriba del ticket lo subía de 147,43 a 150,32. La Venta Interna (el local,
+# sin pax) sí entra: es del canal que registra clientes, como en el POS.
+_tk = pd.concat([crudo.assign(**{dv.CANAL: "En el Local"}), pd.DataFrame([
+    {**_fila("B8", "02", "Boleta Electronica", "PAGADO", D3, "V", 0, "01",
+             "Lomo", 1, 100.0, 0.0, total_doc=100.0), dv.CANAL: "Rappi"},
+    {**_fila("B6", "02", "Boleta Electronica", "PAGADO", D3, "W", 0, "01",
+             "Pan", 1, 30.0, 0.0, total_doc=30.0), dv.CANAL: "En el Local"},
+])], ignore_index=True)
+_tkp = dv.preparar(_tk, D1, D3)
+_tki = dv.solo_venta(_items(_tkp))
+_cli = dv.con_clientes(_tki, dv.CANAL, dv.PAX)
+igual(float(_tki.loc[_cli, "VENTA ITEM DDOCUMENTO"].sum()), 310.0,
+      "entra el local entero, con la cuenta sin pax: 280 + 30")
+igual(float(_tki.loc[~_cli, "VENTA ITEM DDOCUMENTO"].sum()), 100.0,
+      "Rappi queda afuera")
+ok(dv.con_clientes(_tki, None, dv.PAX).all(), "sin columna de canal, entra todo")
+_r = dv.resumir(_tkp, (("Venta", "VENTA ITEM DDOCUMENTO", "sum"),
+                       ("Pax", "CANT PAX", "sum_dedup")),
+                col_ped="LLAVE LOCAL PEDIDO",
+                col_item="LLAVE LOCAL DOCUMENTO ITEM")
+igual(_r.get("Venta"), 410.0, "la venta del rail sigue entera: 280 + 100 + 30")
+igual(_r.get("Pax"), 6.0, "los clientes: 4 + 2")
+igual(_r.get(dv.TICKET), 310.0 / 6.0, "el ticket del rail: 310 ÷ 6, no 410 ÷ 6")
+ok(dv.CANAL in dv.COLUMNAS, "el rail baja el canal (lo pide el ticket)")
+
+print("\n── los niños: se cuentan como los adultos y la nota los resta ──")
+_n = crudo.assign(**{dv.NINOS: crudo["LLAVE LOCAL PEDIDO"]
+                     .map({"P": 1.0}).fillna(0.0)})
+_np = dv.preparar(_n, D1, D3)
+igual(set(_np.loc[_np[dv.CLASE] == dv.NOTA_CREDITO, dv.NINOS]), {-1.0},
+      "la nota del canje trae el niño en negativo")
+igual(dv.pax_por(dv.solo_venta(_items(_np)), "LLAVE LOCAL PEDIDO", dv.NINOS,
+                 doc="LLAVE LOCAL DOCUMENTO"), 1.0,
+      "en el rango, el niño de la mesa del canje cuenta una vez")
+ok(dv.NINOS in dv.COLUMNAS, "y viajan con la definición si la consulta los trae")
+
 print("\n── el asistente sabe qué es venta ──")
 from asistente_datos import nota_de_grano  # noqa: E402
 

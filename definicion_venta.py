@@ -37,8 +37,12 @@ LA DEFINICIÓN — cuadrada al céntimo contra el sistema de caja (INFOREST,
   Degustaciones. `preparar` lo devuelve a unitario antes de todo lo demás,
   así que `PRECIO COSTO` dice lo mismo en todas las filas.
 - **Clientes** = `CANT PAX`, que el POS llena con los ADULTOS
-  (`MPEDIDO.nAdulto`); los niños (`nNino`) no vienen en la consulta. Por
-  decisión del usuario (2026-09-24) se queda así por ahora.
+  (`MPEDIDO.nAdulto`). Por decisión del usuario (2026-09-24) se queda así;
+  los niños (`nNino`) se MUESTRAN aparte si la consulta del Sheet los trae
+  (`CANT NINOS`, regla #591), pero no suman a «Clientes».
+- **Ticket** = la venta de los canales que registran clientes ÷ clientes
+  (`con_clientes`, regla #591): Rappi vende sin pax, y su venta inflaba el
+  ticket.
 
 CÓMO SE APLICA. `data.cargar_rango` llama a `preparar()` al bajar
 `ventas.parquet`, así que TODO consumidor —las vistas, los KPIs del rail,
@@ -56,7 +60,7 @@ consumen los dos lados — `data.py` y las vistas —, igual que `cortes.py`.
 import numpy as np
 import pandas as pd
 
-VERSION = 3
+VERSION = 4
 """Entra en la clave de la caché de `data.py`. Subirla al cambiar la
 definición: la caché vive en disco y, sin esto, seguiría sirviendo el df
 preparado con la regla anterior hasta que cambie el parquet.
@@ -64,7 +68,8 @@ preparado con la regla anterior hasta que cambie el parquet.
 No es teórico: la 2 nació el mismo día que la 1, al sumar `COSTO VENTA` —
 la caché local tenía el df de la 1, sin esa columna, y «Ranking & FoodCost»
 siguió mostrando el FoodCost con el costo unitario. La 3 es el costo de
-los combos (regla #542)."""
+los combos (regla #542); la 4, los niños de las notas de crédito, que
+restan como los adultos (regla #591)."""
 
 CLASE = "CLASE VENTA"
 VENTA = "Venta"
@@ -72,6 +77,9 @@ NOTA_CREDITO = "Nota de crédito"
 CORTESIA = "Cortesía"
 ANULADO = "Anulado"
 CLASES_VENTA = (VENTA, NOTA_CREDITO)
+TICKET = "Ticket"
+"""La clave del ticket en lo que devuelve `resumir`. No es un KPI de
+`REPORTES`: sale de dos (venta y clientes), y el rail lo escribe al lado."""
 
 # ── Columnas del parquet, en MAYÚSCULAS como vienen de R2 ────────────────
 # Se buscan sin distinguir mayúsculas ni `_` (el demo las trae «Fec Reg
@@ -90,6 +98,13 @@ NC_FECHA = "FECH REG NC"
 NC_TOTAL = "TOTAL NC"          # en el parquet es « TOTAL NC», con espacio
 TOTAL_DOC = "TOTAL MDOCUMENTO"
 PAX = "CANT PAX"
+NINOS = "CANT NINOS"
+"""Los niños de la mesa, si la consulta del Sheet los trae
+(`INFOREST.DBO.MPEDIDO.nNino AS [CANT NINOS]`, regla #591). Se repiten en
+cada ítem, como `CANT PAX`, y se cuentan con `pax_por`. No suman a
+«Clientes» (el POS tampoco los cuenta en su ticket): dan un segundo ticket,
+por PERSONA, al lado del de por adulto."""
+CANAL = "CANAL VENTA"
 CANTIDAD = "CANTIDAD ITEM DDOCUMENTO"
 VENTA_ITEM = "VENTA ITEM DDOCUMENTO"
 NETO_ITEM = "NETO TOTAL ITEM DDOCUMENTO"
@@ -151,11 +166,12 @@ _REFERENCIA_NC = (NC_NUMERO, NC_FECHA, "NETO NC", NC_TOTAL, "FECH REG NC")
 COLUMNAS = (
     FECHA, COD_TIPO, TIPO, ESTADO, MOTIVO_CORTESIA, NUMERO, LLAVE_DOC,
     LLAVE_ITEM, LLAVE_PAGO, NC_NUMERO, NC_FECHA, NC_TOTAL, TOTAL_DOC, PAX,
-    CARTA_UNIT, COSTO_UNIT, PRODUCTO, ES_COMBO, *_MONTOS_LINEA, *_DEL_PAGO,
-    *_CABECERA, *_REFERENCIA_NC,
+    NINOS, CANAL, CARTA_UNIT, COSTO_UNIT, PRODUCTO, ES_COMBO,
+    *_MONTOS_LINEA, *_DEL_PAGO, *_CABECERA, *_REFERENCIA_NC,
 )
-"""Todo lo que `preparar()` lee. Quien quiera la definición sin bajar el
-parquet entero (los KPIs del rail) trae estas y las suyas."""
+"""Todo lo que `preparar()` lee —y el canal, que pide el ticket de
+`resumir`—. Quien quiera la definición sin bajar el parquet entero (los
+KPIs del rail) trae estas y las suyas."""
 
 DEFINICION = (
     "Venta = facturas y boletas pagadas o por cobrar, menos notas de "
@@ -298,9 +314,13 @@ def _espejo_de_notas(df, cols, es_nota):
         if c:
             espejo[c] = (-pd.to_numeric(orig[c], errors="coerce")
                          * factor).to_numpy()
-    if cols[PAX]:
-        pax = pd.to_numeric(orig[cols[PAX]], errors="coerce")
-        espejo[cols[PAX]] = (-pax).where(factor >= 0.999, 0.0).to_numpy()
+    # Los niños, con la regla de los adultos: restan si la nota es por el
+    # total (regla #591).
+    for nombre in (PAX, NINOS):
+        if cols[nombre]:
+            pax = pd.to_numeric(orig[cols[nombre]], errors="coerce")
+            espejo[cols[nombre]] = (-pax).where(factor >= 0.999,
+                                                0.0).to_numpy()
     if cols[LLAVE_ITEM]:
         espejo[cols[LLAVE_ITEM]] = (llave_nc + "|"
                                     + orig[cols[LLAVE_ITEM]].astype("string"))
@@ -333,7 +353,7 @@ def _nota_sin_items(filas, cols):
         filas[cols[VENTA_ITEM]] = total
     if cols[CARTA_UNIT]:
         filas[cols[CARTA_UNIT]] = np.nan
-    for nombre in (CANTIDAD, PAX):
+    for nombre in (CANTIDAD, PAX, NINOS):
         if cols[nombre]:
             filas[cols[nombre]] = 0.0
     if cols[LLAVE_ITEM] and cols[LLAVE_DOC]:
@@ -461,6 +481,33 @@ def pax_por(df, ped, pax, doc=None, por=None):
     # Por NOMBRE de nivel y, con uno solo, como escalar: `level=[0]` devuelve
     # un índice de tuplas en unas versiones de pandas y plano en otras.
     return neto.groupby(level=por[0] if len(por) == 1 else por).sum()
+
+
+def con_clientes(df, canal, pax):
+    """Máscara de las filas que entran en el TICKET: las de los canales que
+    registran clientes (regla #591).
+
+    Ticket = venta ÷ clientes, y un canal que vende sin cargar pax —Rappi—
+    suma arriba sin sumar a nadie abajo. En septiembre de 2026 eso subía el
+    ticket de S/ 147,43 a 150,32, y lo hacía crecer con el delivery aunque
+    en las mesas se gastara lo mismo. El POS tampoco lo mezcla: su
+    Liquidación de Cajero da un ticket POR CANAL.
+
+    Un canal registra clientes si ALGUNA fila suya en `df` trae pax > 0: lo
+    dicen los datos y no una lista, así que un canal nuevo entra o queda
+    afuera solo. Va por canal y no por pedido a propósito: una cuenta del
+    local sin pax (la Venta Interna) sigue en el ticket del local, como en
+    el POS.
+
+    `canal` y `pax` son nombres de columna de `df`; sin alguna de las dos,
+    entra todo."""
+    if df is None:
+        return pd.Series(dtype=bool)
+    if not (canal and pax and canal in df.columns and pax in df.columns):
+        return pd.Series(True, index=df.index)
+    c = df[canal].astype(object).where(df[canal].notna(), "\0sin canal")
+    p = pd.to_numeric(df[pax], errors="coerce").fillna(0.0)
+    return c.isin(set(c[p > 0]))
 
 
 def documentos_por(df, doc, clase, por=None):
@@ -605,4 +652,14 @@ def resumir(df, kpis, col_ped=None, col_item=None):
             out[etiqueta] = int(d[c].nunique())
         else:
             out[etiqueta] = float(pd.to_numeric(d[c], errors="coerce").sum())
+    # El ticket, si se pidieron clientes: con la venta de los canales que
+    # los registran (`con_clientes`, regla #591), no con la venta entera.
+    c_venta, c_pax = columna(d, VENTA_ITEM), columna(d, PAX)
+    clientes = next((out.get(k[0]) for k in kpis
+                     if k[2] == "sum_dedup" and _norm(k[1]) == _norm(PAX)),
+                    None)
+    if clientes and c_venta:
+        base = d[con_clientes(d, columna(d, CANAL), c_pax)]
+        out[TICKET] = float(pd.to_numeric(base[c_venta],
+                                          errors="coerce").sum()) / clientes
     return out

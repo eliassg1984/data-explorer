@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-590 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+591 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (196)
 
@@ -231,7 +231,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 
-**Layout y alturas** (84)
+**Layout y alturas** (85)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -317,6 +317,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#578** — Compras › Proveedor son dos filas: [Ranking | Productos] arriba y [Documentos | Evolución |…
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 - **#583** — Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la Evolución más ancha, el Ranking…
+- **#591** — El ticket de Ventas divide la venta de los canales que REGISTRAN clientes, no la venta…
 
 **Plotly y figuras** (108)
 
@@ -880,7 +881,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (148)
+**Decisiones de diseño y UX** (149)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1030,6 +1031,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#586** — Documentos SUNAT entra en una pantalla: la ficha del documento se abre en una VENTANA MODAL…
 - **#589** — Un elemento que aparece en una corrida y no en la anterior re-monta TODO lo que se dibuja…
 - **#590** — El Resumen de Ventas dice QUÉ se vendió sin costo, y el Resumen y el Mix marcan el período en…
+- **#591** — El ticket de Ventas divide la venta de los canales que REGISTRAN clientes, no la venta…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -46843,6 +46845,62 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+591. **El ticket de Ventas divide la venta de los canales que REGISTRAN
+     clientes, no la venta entera: Rappi vende sin pax.** 2026-10-02, a
+     pedido, después de cuadrar septiembre contra la Liquidación de Cajero
+     del POS (`spRep_Liquidacion_NC`, `spRep_LiquidacionOutPut_NC` y
+     `spRep_LiquidacionSuma_NC`, leídos con el usuario de solo lectura y corridos
+     como script: el login no tiene EXECUTE).
+
+     - **El cuadre.** Venta, neto, IGV, recargo, descuentos, cortesías,
+       anulados, propinas y tarjetas de septiembre de 2026 dieron al
+       céntimo con la app (S/ 412.929,80), y las unidades del Paloteo de
+       Producción, producto por producto (244 productos). Lo único que no
+       daba era el ticket: S/ 150,32 en la app contra 118,86 en el POS.
+     - **Tres diferencias, y sólo una era un error.** El POS da el ticket
+       POR CANAL: el de «En el Local» es el NETO del canal ÷ los adultos
+       (confirmado con el PDF impreso: 328.996,85 ÷ 2.768). La app dividía
+       la venta ENTERA —con los S/ 7.949,60 de Rappi, que no carga pax—
+       entre los clientes: +S/ 2,89, y un ticket que subía con el delivery
+       aunque en las mesas se gastara lo mismo. Ése es el error. Las otras
+       dos son definiciones: neto contra venta con impuestos, y los 21
+       adultos de las 211 mesas sólo-cortesía, que el POS cuenta (su pax
+       sale de todo pedido no anulado, por `MPEDIDO.fRegistro`) y la app
+       no. El ticket del POS para Rappi dice 6.436,92: es su neto entero,
+       dividido entre cero clientes.
+     - **La regla vive en `definicion_venta.con_clientes(df, canal, pax)`**:
+       entra la venta de los canales con ALGUNA fila de pax > 0 en lo
+       cargado. Por canal y no por pedido: la Venta Interna (del local, sin
+       pax) sigue adentro, como en el POS. La usan el Resumen (tarjeta,
+       línea, tabla y total), el rail (`resumir` devuelve `TICKET`),
+       «Comparativo vs año pasado» (`_series_por_rangos` devuelve una
+       tercera serie) y «Por hora» (`venta_cli` en el tramo, la celda y la
+       marca). Septiembre: S/ 147,43. Con el filtro Canal = Rappi no hay
+       ticket, no un ticket de Rappi.
+     - **El ticket neto** es una columna de la subvista «Venta» y va en el
+       hover de la línea: neto ÷ clientes = S/ 119,77. Contra los 118,86 del
+       POS quedan sólo los 21 adultos de cortesía.
+     - **Los niños** (a pedido: «¿podemos indicar ticket sin niños y con
+       niños?»): `CANT NINOS`, que la consulta del Sheet todavía no trae
+       (`INFOREST.DBO.MPEDIDO.nNino`). Cuando la traiga, la subvista
+       «Clientes» suma Niños, Personas y los tickets «c/ niños». No suman a
+       «Clientes» (decisión del 2026-09-24, y el POS tampoco los cuenta en
+       su ticket). La nota de crédito los resta como a los adultos: por eso
+       `definicion_venta.VERSION` pasó a 4.
+     - **La subvista «Clientes»**: venta, «Fuera del ticket» (lo de Rappi),
+       adultos, [niños, personas] y los tickets. La tarjeta «Clientes» no
+       creció —la fila de KPI ya se corta a la derecha—: el neto, los niños
+       y lo que quedó afuera van en su tooltip.
+
+     Candados: `test_definicion_venta.py` (el ticket sin Rappi con la Venta
+     Interna adentro, el del rail, los niños de la nota) y
+     `test_graficos.py::_pruebas_ticket_sin_canales_sin_clientes` (la celda
+     y la marca de «Por hora», las columnas de las subvistas y la tarjeta).
+     Los nombres nuevos se importan entre módulos (`con_clientes`, `NINOS`,
+     `CANAL`, `TICKET`): en Cloud, «Reboot app» (#357).
+
+     (2026-10-02.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46855,7 +46913,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#590**; la próxima toma el número siguiente.
+> última regla es la **#591**; la próxima toma el número siguiente.
 
 >
 

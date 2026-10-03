@@ -6728,6 +6728,80 @@ def _pruebas_igv_y_sin_costo():
     return fallos
 
 
+def _pruebas_ticket_sin_canales_sin_clientes():
+    """El TICKET de Ventas (regla #591): la venta de los canales que
+    registran clientes ÷ clientes. Rappi vende sin pax, y con su venta
+    arriba el ticket de septiembre de 2026 daba S/ 150,32 en vez de 147,43.
+
+    Fija las tres vistas que lo dibujan y la tabla que lo escribe: el mapa
+    de «Por hora» (una celda con un pedido de Rappi), la marca del mapa, y
+    las columnas del Resumen —el ticket neto en «Venta» y la subvista
+    «Clientes», con los niños sólo si la consulta los trae—."""
+    import datetime as _dt
+
+    from graficos import ventas_horario as vh
+    from graficos import ventas_resumen as vr
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · ticket · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · ticket · {nombre}: got={got!r} exp={exp!r}")
+
+    d = pd.DataFrame({
+        "FEC REG DOCUMENTO": pd.to_datetime(["2026-09-04 20:10",
+                                             "2026-09-04 20:20",
+                                             "2026-09-04 20:40"]),
+        "VENTA ITEM DDOCUMENTO": [300.0, 100.0, 90.0],
+        "CANT PAX": [3, 3, 0],
+        "LLAVE LOCAL PEDIDO": ["P1", "P1", "R1"],
+        "CANAL VENTA": ["En el Local", "En el Local", "Rappi"],
+    })
+    c = {"fecha": "FEC REG DOCUMENTO", "venta": "VENTA ITEM DDOCUMENTO",
+         "pax": "CANT PAX", "pedido": "LLAVE LOCAL PEDIDO"}
+    t = vh._prep_tramo(d, c, "Semana", _dt.date(2026, 8, 31),
+                       _dt.date(2026, 9, 6))
+    cel = vh._celdas(t).iloc[0]
+    check("la celda suma la venta entera", float(cel["venta"]), 490.0)
+    check("pero el ticket deja a Rappi afuera: 400 ÷ 3",
+          round(float(cel["ticket"]), 4), round(400.0 / 3.0, 4))
+    pin = {"c0": 0, "c1": 6, "h0": 20, "h1": 20}
+    tot = vh._agregar_marca(t, pin, list(range(24)))
+    check("la marca del mapa, igual", round(float(tot["ticket"]), 4),
+          round(400.0 / 3.0, 4))
+
+    hay = {"ticket", "ticket_neto", "sin_cli"}
+    subs = vr._subvistas("Clientes", [], hay)
+    check("«Venta» lleva el ticket neto",
+          [x[0] for x in subs["Venta"][0] if x[0].startswith("ticket")],
+          ["ticket", "ticket_neto"])
+    check("«Clientes» sin niños: adultos y los dos tickets",
+          [x[0] for x in subs["Clientes"][0]],
+          ["valor", "sin_cli", "pax", "ticket", "ticket_neto"])
+    subs = vr._subvistas("Clientes", [], hay | {"ninos", "personas",
+                                                "ticket_p", "ticket_neto_p"})
+    check("con niños: personas y el ticket por persona",
+          [x[0] for x in subs["Clientes"][0]],
+          ["valor", "sin_cli", "pax", "ninos", "personas", "ticket",
+           "ticket_p", "ticket_neto", "ticket_neto_p"])
+    check("sin clientes no hay subvista «Clientes»",
+          "Clientes" in vr._subvistas("Pedidos", [], {"ticket"}), False)
+    check("la subvista va en el selector", "Clientes" in vr._SUBVISTAS, True)
+
+    g = pd.DataFrame({"total": [490.0], "pax": [3.0], "venta_cli": [400.0],
+                      "neto_cli": [330.0]})
+    kpi = vr._kpis_extra(g)[0]
+    check("la tarjeta Clientes: el ticket sin Rappi", kpi[2], "ticket S/ 133.33")
+    check("y su ayuda dice el neto y lo que quedó afuera",
+          ("ticket neto S/ 110.00" in kpi[4], "S/ 90.00" in kpi[4]),
+          (True, True))
+    return fallos
+
+
 def _pruebas_carta_costeada():
     """Recetas › Carta costeada (regla #548): lo que la vista hace con
     `cartacosteada.parquet` antes de dibujarlo.
@@ -8599,6 +8673,7 @@ def main():
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()
     fallos += _pruebas_igv_y_sin_costo()
+    fallos += _pruebas_ticket_sin_canales_sin_clientes()
 
     # ── Recetas › Costo recetas base: uso, producción y costo (#576) ─────
     fallos += _pruebas_costo_recetas_base()

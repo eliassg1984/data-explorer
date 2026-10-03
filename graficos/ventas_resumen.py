@@ -125,8 +125,8 @@ _KEYS_WIDGET_RESUMEN = ("vt_resumen_gran", "vt_resumen_grupo",
 _GRAN_OPCIONES = ("Día", "Semana", "Mes", "Año")
 _GRAN_DEFAULT = "Día"
 
-_SUBVISTAS = ("Venta", "Canales", "Propinas", "Descuentos", "Cortesías",
-              "Costo", "Cuadre")
+_SUBVISTAS = ("Venta", "Clientes", "Canales", "Propinas", "Descuentos",
+              "Cortesías", "Costo", "Cuadre")
 """Los grupos de columnas del Resumen (regla #519). Una subvista que el
 parquet no permite (sin propina, un solo canal) no se ofrece de más: la
 tabla cae a «Venta» — ver `_subvistas`."""
@@ -547,6 +547,11 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     _cant = cols.get("cant", pd.Series(1.0, index=d.index))
     if col_pax:
         cols["pax"] = pd.to_numeric(d[col_pax], errors="coerce")
+        # Los niños, si la consulta del Sheet los trae (regla #591): no
+        # suman a «Clientes», dan el ticket «c/ niños».
+        _c_ninos = dv.columna(d, dv.NINOS)
+        if _c_ninos:
+            cols["ninos"] = pd.to_numeric(d[_c_ninos], errors="coerce")
     if col_pedido:
         cols["ped"] = d[col_pedido].astype(str)
     if col_canal and col_canal in d.columns:
@@ -605,6 +610,12 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                              "ventas: para ver más, agrupá por semana o mes.")
     tabla = tabla.sort_values("fecha").copy()
     tabla["clave"] = _periodo_serie(tabla["fecha"], gran)
+    # LO QUE ENTRA EN EL TICKET (regla #591): la venta de los canales que
+    # registran clientes. Sobre lo que quedó después de los filtros: con
+    # Canal = Rappi no hay ticket, no un ticket de Rappi.
+    if "pax" in tabla.columns:
+        tabla["cli"] = dv.con_clientes(
+            tabla, "canal" if "canal" in tabla.columns else None, "pax")
     cortesias = cortesias.assign(
         clave=_periodo_serie(cortesias["fecha"], gran))
     anulados = anulados.assign(clave=_periodo_serie(anulados["fecha"], gran))
@@ -740,7 +751,34 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         g["pax"] = g["pax"].fillna(0)
         vol_label = "Pedidos"
     if vol_label:
-        g["ticket"] = g["total"] / g["pax"].replace(0, np.nan)
+        # EL TICKET (regla #591): la venta de los canales que registran
+        # clientes ÷ clientes. Rappi vende sin pax, y con la venta entera
+        # arriba el de septiembre de 2026 daba S/ 150,32 en vez de 147,43.
+        # El NETO es el «Ticket Pro.» de la Liquidación de Cajero del POS
+        # (neto ÷ adultos), que todavía cuenta los adultos de las mesas
+        # sólo-cortesía: S/ 118,86 contra 119,77 acá.
+        _base = tabla[tabla["cli"]] if "cli" in tabla.columns else tabla
+        _bt = {"venta_cli": _base.groupby("clave")["venta"].sum()}
+        if "neto" in tabla.columns:
+            _bt["neto_cli"] = _base.groupby("clave")["neto"].sum()
+        _pegar(pd.DataFrame(_bt))
+        _div = g["pax"].replace(0, np.nan)
+        g["ticket"] = g["venta_cli"] / _div
+        if "neto_cli" in g.columns:
+            g["ticket_neto"] = g["neto_cli"] / _div
+        # Y POR PERSONA, con los niños (regla #591), si vienen: se cuentan
+        # como los adultos, un valor por pedido.
+        if "ninos" in tabla.columns and "ped" in tabla.columns:
+            _n = (dv.pax_por(tabla, "ped", "ninos",
+                             doc="ldoc" if "ldoc" in tabla.columns else None,
+                             por="clave")
+                  .rename("ninos").to_frame())
+            _pegar(_n)
+            g["personas"] = g["pax"] + g["ninos"]
+            _divp = g["personas"].replace(0, np.nan)
+            g["ticket_p"] = g["venta_cli"] / _divp
+            if "neto_cli" in g.columns:
+                g["ticket_neto_p"] = g["neto_cli"] / _divp
     if "costo" in g.columns and "neto" in g.columns:
         g["pcosto"] = g["costo"] / g["neto"].replace(0, np.nan)
 
@@ -1051,12 +1089,18 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         # Pax/Venta— para que las escalas no se aplasten. Antes era una
         # tarjeta aparte; se subió acá a pedido el 2026-09-22.
         if _hay_ticket and _ver["ticket"]:
+            # El neto (el ticket del POS, regla #591) viaja en el hover.
+            _neto_tk = ([("—" if pd.isna(_t) else f"S/ {_t:,.2f}")
+                         for _t in g["ticket_neto"]]
+                        if "ticket_neto" in g.columns else [""] * n_per)
             fig.add_trace(go.Scatter(
                 x=_xs, y=g["ticket"], name="Ticket", mode="lines+markers",
                 line=dict(color=ADVERTENCIA, width=2), marker=dict(size=5),
-                yaxis="y3", customdata=largo,
-                hovertemplate=("%{customdata}<br>Ticket: S/ %{y:,.2f}"
-                               "<extra></extra>"),
+                yaxis="y3", customdata=list(zip(largo, _neto_tk)),
+                hovertemplate=("%{customdata[0]}<br>Ticket: S/ %{y:,.2f}"
+                               + ("<br>Neto: %{customdata[1]}"
+                                  if "ticket_neto" in g.columns else "")
+                               + "<extra></extra>"),
             ))
             _ult = g["ticket"].iloc[-1]
             if not pd.isna(_ult):
@@ -1213,7 +1257,8 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
             if _modo == _MODO_RESUMEN:
                 _hay = set(g.columns)
                 _ops = [x for x, ok in zip(_SUBVISTAS, (
-                    True, _partida, "propina" in _hay,
+                    True, vol_label == "Clientes" and "ticket" in _hay,
+                    _partida, "propina" in _hay,
                     {"desc", "carta"} <= _hay, "cort_s" in _hay,
                     "pcosto" in _hay, "docs_v" in _hay)) if ok]
                 _eco = st.session_state.get("_vt_resumen_sub_eco", "Venta")
@@ -1294,7 +1339,13 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
                 else [None] * n)
 
     carta, neto, costo = _col("carta"), _col("neto"), _col("costo")
-    pcosto, pax, ticket = _col("pcosto"), _col("pax"), _col("ticket")
+    pcosto, pax = _col("pcosto"), _col("pax")
+    # Los cuatro tickets (regla #591): por adulto y por persona, con
+    # impuestos y neto. Sólo los que el parquet permite.
+    tickets = {k: _col(k) for k in ("ticket", "ticket_neto", "ticket_p",
+                                    "ticket_neto_p") if k in hay}
+    ninos, personas = _col("ninos"), _col("personas")
+    venta_cli = _col("venta_cli")
     desc, n_desc, n_docs = _col("desc"), _col("n_desc"), _col("n_docs")
     cort, n_cort, costo_cort = _col("cort_s"), _col("n_cort"), _col("costo_cort")
     prop, n_prop = _col("propina"), _col("n_prop")
@@ -1508,13 +1559,21 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
             r["__tip_sin_que"] = detalle_sin_costo(_sp)
         if vol_label:
             r["pax"] = pax[i]
-            _tk = None if ticket[i] is None or pd.isna(ticket[i]) \
-                else round(ticket[i], 2)
-            _vt = (None if (v[0] != "ok" or _tk is None
-                            or not ticket[v[2]] or pd.isna(ticket[v[2]]))
-                   else (ticket[i] - ticket[v[2]]) / ticket[v[2]] * 100)
-            _celda(r, "ticket", _tk, "—" if _tk is None else f"S/ {_tk:,.2f}",
-                   _txt_var(_vt))
+            for k, serie in tickets.items():
+                _tk = None if serie[i] is None or pd.isna(serie[i]) \
+                    else round(serie[i], 2)
+                _vt = (None if (v[0] != "ok" or _tk is None
+                                or not serie[v[2]] or pd.isna(serie[v[2]]))
+                       else (serie[i] - serie[v[2]]) / serie[v[2]] * 100)
+                _celda(r, k, _tk, "—" if _tk is None else f"S/ {_tk:,.2f}",
+                       _txt_var(_vt))
+            if ninos[i] is not None:
+                r["ninos"], r["personas"] = ninos[i], personas[i]
+            if venta_cli[i] is not None:
+                # Lo que queda FUERA del ticket: la venta de los canales
+                # que no registran clientes (Rappi). Cero es «—».
+                _x = round(tot[i] - venta_cli[i], 2)
+                _celda(r, "sin_cli", _x, f"S/ {_x:,.0f}" if _x else "—")
         # Canales: monto (con su variación) y % del período (con su cambio).
         for k, cn in enumerate(canales):
             _m = _serie_canal[cn]
@@ -1595,7 +1654,22 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
     if vol_label:
         _tp = _s("pax")
         total["pax"] = f"{_tp:,.0f}"
-        total["ticket"] = f"S/ {tot_vista / _tp:,.2f}" if _tp else "—"
+        # El ticket del total, con las sumas y no con el promedio de las
+        # filas (regla #591): venta de los canales con clientes ÷ clientes.
+        _vc = _s("venta_cli") if "venta_cli" in hay else tot_vista
+        _pers = _s("personas")
+        for k, num, den in (("ticket", _vc, _tp),
+                            ("ticket_neto", _s("neto_cli"), _tp),
+                            ("ticket_p", _vc, _pers),
+                            ("ticket_neto_p", _s("neto_cli"), _pers)):
+            if k in hay:
+                total[k] = f"S/ {num / den:,.2f}" if den else "—"
+        if "ninos" in hay:
+            total["ninos"] = f"{_s('ninos'):,.0f}"
+            total["personas"] = f"{_pers:,.0f}"
+        if "venta_cli" in hay:
+            _x = tot_vista - _vc
+            total["sin_cli"] = f"S/ {_x:,.0f}" if round(_x, 2) else "—"
     for k, cn in enumerate(canales):
         _m = float(por_canal[cn].sum())
         total[f"c{k}_v"] = f"S/ {_m:,.0f}"
@@ -1676,16 +1750,57 @@ def _subvistas(vol_label, canales, hay):
         ("pcosto", "% costo", "celda", _ANCHO_PCOSTO, "Costo ÷ Neto, y su cambio en pp "
                                             "contra la barra anterior"),
     ]
+    _sin = ("sin la venta de los canales que no registran clientes "
+            "(Rappi)" if "sin_cli" in hay else "")
     if vol_label:
         venta += [
             ("pax", "Pax" if vol_label == "Clientes" else vol_label, "entero",
              72, f"{vol_label} del período"),
             ("ticket", "Ticket", "celda", 132,
-             f"Venta ÷ {vol_label.lower()}, y su variación"),
+             f"Venta ÷ {vol_label.lower()}"
+             + (f", {_sin}" if _sin else "") + ". Y su variación"),
         ]
+        if "ticket_neto" in hay:
+            venta.append(("ticket_neto", "Ticket neto", "celda", 132,
+                          "Neto (sin IGV ni recargo) ÷ "
+                          f"{vol_label.lower()}: el «Ticket Pro.» de la "
+                          "Liquidación de Cajero del POS"))
     venta.append(("variacion", "Var. venta", "var", S,
                   "Variación de la venta contra la barra anterior"))
     out["Venta"] = (venta, "Precios, % de costo, clientes, ticket y variación.")
+    if vol_label == "Clientes" and "ticket" in hay:
+        # CLIENTES (regla #591, a pedido: «¿podemos indicar ticket sin niños
+        # y con niños?»). Los adultos son «Clientes», como el POS; los
+        # niños, si la consulta los trae, dan el ticket por persona.
+        cols = [("valor", "Venta", "celda", 118, "Venta cobrada")]
+        if "sin_cli" in hay:
+            cols.append(("sin_cli", "Fuera del ticket", "celda", 128,
+                         "Venta de los canales que no registran clientes "
+                         "(Rappi): no entra en ningún ticket"))
+        cols.append(("pax", "Adultos", "entero", 84,
+                     "Clientes: los adultos, como cuenta el POS"))
+        con_ninos = "ninos" in hay
+        if con_ninos:
+            cols += [("ninos", "Niños", "entero", 72, "Niños de las mesas"),
+                     ("personas", "Personas", "entero", 92,
+                      "Adultos + niños")]
+        cols.append(("ticket", "Ticket", "celda", 132,
+                     "Venta ÷ adultos, y su variación"))
+        if con_ninos:
+            cols.append(("ticket_p", "Ticket c/ niños", "celda", 140,
+                         "Venta ÷ personas (adultos + niños)"))
+        if "ticket_neto" in hay:
+            cols.append(("ticket_neto", "Ticket neto", "celda", 132,
+                         "Neto (sin IGV ni recargo) ÷ adultos: el «Ticket "
+                         "Pro.» de la Liquidación de Cajero del POS"))
+        if "ticket_neto_p" in hay:
+            cols.append(("ticket_neto_p", "Neto c/ niños", "celda", 132,
+                         "Neto ÷ personas (adultos + niños)"))
+        out["Clientes"] = (cols, (
+            "Ticket por adulto y con niños, con impuestos y neto."
+            if con_ninos else
+            "Ticket por adulto. Los niños no vienen todavía en la consulta "
+            "de ventas."))
     if len(canales) > 1:
         cols = [("valor", "Venta", "celda", 118, "Venta cobrada")]
         for k, cn in enumerate(canales):
@@ -1899,9 +2014,25 @@ def _kpis_extra(g):
     out = []
     tot = float(g["total"].sum())
     if "pax" in g.columns and float(g["pax"].sum()):
+        # El ticket sin la venta de los canales que no registran clientes
+        # (regla #591). La tarjeta no crece —la fila ya se corta a la
+        # derecha—: el neto y los niños van en su tooltip.
         _x = float(g["pax"].sum())
-        out.append(("Clientes", f"{_x:,.0f}", f"ticket S/ {tot / _x:,.2f}", "",
-                     f"{_x:,.0f} clientes · ticket promedio S/ {tot / _x:,.2f}"))
+        _vc = float(g["venta_cli"].sum()) if "venta_cli" in g.columns else tot
+        _tip = [f"{_x:,.0f} clientes (adultos)"]
+        _n = float(g["ninos"].sum()) if "ninos" in g.columns else 0.0
+        if _n:
+            _tip[0] += f" + {_n:,.0f} niños"
+        _tip.append(f"ticket S/ {_vc / _x:,.2f}")
+        if "neto_cli" in g.columns:
+            _tip.append(f"ticket neto S/ {float(g['neto_cli'].sum()) / _x:,.2f}")
+        if _n:
+            _tip.append(f"con niños S/ {_vc / (_x + _n):,.2f}")
+        if round(tot - _vc, 2):
+            _tip.append(f"sin S/ {tot - _vc:,.2f} de los canales que no "
+                        "registran clientes")
+        out.append(("Clientes", f"{_x:,.0f}", f"ticket S/ {_vc / _x:,.2f}",
+                    "", " · ".join(_tip)))
     if "propina" in g.columns and tot:
         _p = float(g["propina"].sum())
         out.append(("Propinas", fmt_k(_p), f"{_p / tot:.1%}", "",

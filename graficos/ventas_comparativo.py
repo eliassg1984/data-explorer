@@ -283,8 +283,10 @@ def _cargar_tramo(archivo, col_parquet, ini, fin, filtrar_cb):
 
 def _series_por_rangos(archivo, col_parquet, col_fecha, col_venta, col_pax,
                        col_pedido, rangos, filtrar_cb):
-    """({clave: venta}, {clave: pax}) para cada `(clave, ini, fin)` de
-    `rangos`, con UNA sola carga de R2 que los cubre a todos.
+    """({clave: venta}, {clave: pax}, {clave: venta del ticket}) para cada
+    `(clave, ini, fin)` de `rangos`, con UNA sola carga de R2 que los cubre
+    a todos. La venta del ticket es la de los canales que registran
+    clientes (`definicion_venta.con_clientes`, regla #591): sin Rappi.
 
     Se suma por RANGO y no por clave de período justamente para que el
     recorte del período en curso (ver `_rangos_comparables`) funcione: la
@@ -300,7 +302,7 @@ def _series_por_rangos(archivo, col_parquet, col_fecha, col_venta, col_pax,
     fin_g = max(r[2] for r in rangos)
     df = _cargar_tramo(archivo, col_parquet, ini_g, fin_g, filtrar_cb)
     if df is None or col_fecha not in df.columns or col_venta not in df.columns:
-        return {}, {}
+        return {}, {}, {}
     cols = {
         "f": pd.to_datetime(df[col_fecha], errors="coerce").dt.normalize(),
         "venta": pd.to_numeric(df[col_venta], errors="coerce"),
@@ -313,15 +315,17 @@ def _series_por_rangos(archivo, col_parquet, col_fecha, col_venta, col_pax,
         _c_doc = dv.columna(df, dv.LLAVE_DOC)
         if _c_doc:
             cols["doc"] = df[_c_doc].astype(str)
+        cols["cli"] = dv.con_clientes(df, dv.columna(df, dv.CANAL), col_pax)
     base = pd.DataFrame(cols).dropna(subset=["f", "venta"])
     if base.empty:
-        return {}, {}
+        return {}, {}, {}
     fechas = base["f"].dt.date
-    ventas, paxes = {}, {}
+    ventas, paxes, ventas_cli = {}, {}, {}
     for clave, ini, fin in rangos:
         m = (fechas >= ini) & (fechas <= fin)
         ventas[clave] = float(base.loc[m, "venta"].sum())
         if hay_pax:
+            ventas_cli[clave] = float(base.loc[m & base["cli"], "venta"].sum())
             _t = base.loc[m, [c for c in ("ped", "pax", "doc")
                               if c in base.columns]].dropna(subset=["pax"])
             # Un valor por pedido y la nota de crédito resta (regla #524).
@@ -329,7 +333,7 @@ def _series_por_rangos(archivo, col_parquet, col_fecha, col_venta, col_pax,
                                        doc="doc" if "doc" in _t.columns
                                        else None)
                             if not _t.empty else 0.0)
-    return ventas, paxes
+    return ventas, paxes, ventas_cli
 
 
 def _pct(actual, previo):
@@ -593,10 +597,10 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     cfg = REPORTES.get("Ventas", {})
     _arch = cfg.get("archivo", "ventas.parquet")
     _colp = cfg.get("carga_por_rango", "FEC REG DOCUMENTO")
-    serie_act, pax_act_d = _series_por_rangos(
+    serie_act, pax_act_d, cli_act_d = _series_por_rangos(
         _arch, _colp, col_fecha, col_venta, col_pax, col_pedido,
         rangos_act, filtrar_cb)
-    serie_ap, pax_ap_d = _series_por_rangos(
+    serie_ap, pax_ap_d, cli_ap_d = _series_por_rangos(
         _arch, _colp, col_fecha, col_venta, col_pax, col_pedido,
         rangos_ap, filtrar_cb)
 
@@ -607,7 +611,8 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         return
     hay_ap = any(y_ap)
 
-    # Descomposición: Venta = Pax × Ticket, así que %Δventa, %Δpax y %Δticket
+    # Descomposición: Venta ≈ Pax × Ticket (sin la venta de los canales sin
+    # clientes, regla #591), así que %Δventa, %Δpax y %Δticket
     # viven en el MISMO eje de % y contestan "¿vino menos gente o gastaron
     # menos?" — la pregunta que sigue a cualquier caída. Sólo se ofrece si
     # hay pax deduplicable por pedido (ver _series_por_rangos).
@@ -635,10 +640,14 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     es_desc = vista == "Descomposición"
     d_venta = [_pct(a, b) for a, b in zip(y_act, y_ap)]
     d_pax = [_pct(a, b) for a, b in zip(p_act, p_ap)]
-    # Ticket = venta/pax. Si falta cualquiera de los dos lados, el ticket de
-    # ese período no existe (None) y la línea corta ahí en vez de inventar.
-    t_act = [(v / p if p else None) for v, p in zip(y_act, p_act)]
-    t_ap = [(v / p if p else None) for v, p in zip(y_ap, p_ap)]
+    # Ticket = venta de los canales con clientes ÷ pax (regla #591): la de
+    # Rappi, que no carga pax, queda afuera. Si falta cualquiera de los dos
+    # lados, el ticket de ese período no existe (None) y la línea corta ahí
+    # en vez de inventar.
+    c_act = [float(cli_act_d.get(k, 0.0)) for k in claves]
+    c_ap = [float(cli_ap_d.get(k, 0.0)) for k in claves_ap]
+    t_act = [(v / p if p else None) for v, p in zip(c_act, p_act)]
+    t_ap = [(v / p if p else None) for v, p in zip(c_ap, p_ap)]
     d_ticket = [(_pct(a, b) if (a is not None and b) else None)
                 for a, b in zip(t_act, t_ap)]
 
@@ -1035,7 +1044,9 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                      "compara contra el MISMO tramo del año pasado (no contra "
                      "el período entero), así que el %Var es justo.")
         if es_desc:
-            _expl = ("Venta = pax × ticket, así que los tres %Δ comparten un "
+            _expl = ("Venta ≈ pax × ticket (el ticket deja afuera la venta "
+                     "de los canales sin clientes, como Rappi), así que los "
+                     "tres %Δ comparten un "
                      "mismo eje. Si la venta cae y el ticket queda plano, "
                      "faltó gente; si cae el ticket y el pax no, vinieron "
                      "igual pero gastaron menos. " + _expl)
