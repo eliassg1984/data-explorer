@@ -427,6 +427,13 @@ resto de `graficos/compras/`.
   «Última actualización: hoy» — ese rótulo mide el ARCHIVO en R2, no el df
   cargado. Toda cacheable que lea R2 recibe `data.sello_datos(archivo)` como
   segundo argumento. Ver `arquitectura.md` regla #367.
+- **La conexión de DuckDB es POR HILO** (`data.get_conn()`, desde el
+  2026-10-03). Cada sesión corre en su hilo, y con una sola conexión para
+  todas una consulta se llevaba la fila de otra — medido, 464 de 1.500 — y
+  eso se cacheaba como el dato: la app murió con «Documentos» de Compras
+  valiendo un nombre de columna. Nada de guardar una conexión en un
+  `cache_resource` ni en una global: siempre `get_conn()`. Un cursor no
+  hereda los `SET s3_*`; `get_conn` se los pone. Regla #599.
 - **Un `run_every` que tictaquea siempre le VENCE al navegador la caché de
   MENSAJES** (otra caché: no es la de datos de arriba). Streamlit manda un
   `ref_hash` en vez del mensaje entero cuando el navegador dice tenerlo, y

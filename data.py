@@ -8,6 +8,8 @@ import pandas as pd
 import numpy as np
 import boto3
 import json
+import numbers
+import threading
 import zlib
 from datetime import datetime, timedelta, timezone
 
@@ -411,12 +413,47 @@ REPORTES = {
 # CONEXIÓN A R2 VIA DUCKDB
 # ===========================================================================
 
+# UNA CONEXIÓN POR HILO, no una por proceso (2026-10-03, regla #599). Hasta
+# ese día `get_conn` era un `@st.cache_resource` que devolvía la MISMA
+# conexión a todas las sesiones, y cada sesión corre en su propio hilo. Una
+# conexión de DuckDB no es segura entre hilos: `execute` deja el resultado
+# colgado de la conexión y `fetchone` lee el que haya, así que si otra sesión
+# ejecuta algo en el medio, uno se lleva la fila del otro. Medido con dos
+# hilos: 464 de 1.500 consultas de KPIs recibieron la fila de un `DESCRIBE`
+# ajeno, y otras 483 un `None`. En Cloud se vio como un `ValueError` en
+# `navegacion.py::_fmt_kpi`: «Documentos» de Compras llegó con un NOMBRE DE
+# COLUMNA. Y lo que sale de esa carrera se cachea como si fuera el dato.
+#
+# La base (con httpfs cargado) sigue siendo una por proceso; cada hilo usa
+# un cursor propio. Los `SET s3_*` son de SESIÓN: un cursor no los hereda
+# (medido: sin repetirlos, la lectura de R2 da 404), así que se le aplican
+# al crearlo. Streamlit corre cada sesión en su hilo, y el `threading.local`
+# se libera solo cuando el hilo termina.
 @st.cache_resource
-def get_conn():
-    """Establece y retorna la conexión a R2 usando DuckDB."""
+def _conexion_base():
+    """La base DuckDB del proceso, con httpfs cargado. No se consulta
+    directo: `get_conn` le saca un cursor por hilo."""
     try:
         con = duckdb.connect()
         con.execute("INSTALL httpfs; LOAD httpfs;")
+        return con
+    except Exception as e:
+        st.error(f"Error de conexión: {str(e)}")
+        st.stop()
+
+
+_CONEXION_DEL_HILO = threading.local()
+
+
+def get_conn():
+    """La conexión a R2 de ESTE hilo: un cursor de `_conexion_base`, con la
+    configuración S3. Se crea la primera vez que el hilo la pide."""
+    base = _conexion_base()
+    con = getattr(_CONEXION_DEL_HILO, "con", None)
+    if con is not None and getattr(_CONEXION_DEL_HILO, "base", None) is base:
+        return con
+    try:
+        con = base.cursor()
         con.execute(f"""
             SET s3_endpoint='{st.secrets["R2_ACCOUNT_ID"]}.r2.cloudflarestorage.com';
             SET s3_access_key_id='{st.secrets["R2_ACCESS_KEY"]}';
@@ -424,10 +461,11 @@ def get_conn():
             SET s3_region='auto';
             SET s3_url_style='path';
         """)
-        return con
     except Exception as e:
         st.error(f"Error de conexión: {str(e)}")
         st.stop()
+    _CONEXION_DEL_HILO.con, _CONEXION_DEL_HILO.base = con, base
+    return con
 
 
 # ===========================================================================
@@ -1540,7 +1578,14 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
         sql = f'SELECT {", ".join(partes)} FROM {fuente}'
 
     fila = con.execute(sql).fetchone()
-    return {kpi[0]: fila[i] for i, kpi in enumerate(kpis)}
+    valores = {kpi[0]: fila[i] for i, kpi in enumerate(kpis)}
+    # Un KPI es un número o un vacío. Otra cosa —un nombre de columna, una
+    # fecha— es la fila de OTRA consulta (regla #599), y se lanza para que
+    # no quede en la caché, que es de disco y no caduca.
+    if any(v is not None and not isinstance(v, numbers.Number)
+           for v in valores.values()):
+        raise ValueError("un KPI volvió con un valor que no es un número")
+    return valores
 
 
 def resumen_kpis(archivo, kpis, col_fecha=None, col_dedup=None):

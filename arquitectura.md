@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-598 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+599 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (197)
 
@@ -686,7 +686,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 
-**Datos, R2 y DuckDB** (85)
+**Datos, R2 y DuckDB** (86)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -773,6 +773,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#594** — Ventas › «Control de pedidos»: lo que pasa con los pedidos ANTES de la venta, que…
 - **#595** — La venta por ÁREA DE PRODUCCIÓN: dónde se prepara, no qué grupo de la carta es
 - **#598** — «Stock e Inventario» cuenta sólo lo ACTIVO: área activa, producto activo, habilitado en el…
+- **#599** — Una conexión de DuckDB por HILO, no por proceso: compartida entre sesiones, una consulta se…
 
 **SUNAT y SIRE** (50)
 
@@ -47307,6 +47308,58 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+599. **Una conexión de DuckDB por HILO, no por proceso: compartida entre
+     sesiones, una consulta se lleva la fila de otra.** 2026-10-03. La app
+     publicada murió con un `ValueError` en `navegacion.py::_fmt_kpi`
+     (`f"{v:,.0f}"`), llamado desde `_kpis_franja`. Se preguntó si venía de
+     la #596, que había tocado esa franja: no — la llamada que falló existía
+     antes sin cambios, y la #596 sólo había quitado OTRA.
+
+     **Por qué sólo podía ser Compras:** `inject_navegacion` formatea los
+     KPIs del rail (`_formatear_kpis`, con `kpis`) ANTES que los de la franja
+     (`_kpis_franja`, con `kpis_franja` o, si no hay, los mismos `kpis`). Un
+     valor malo en `kpis` habría reventado en la primera. Sólo Compras
+     declara `kpis_franja`, y su único KPI que no es un monto es
+     «Documentos» (`COUNT(DISTINCT …)`, que no puede devolver un texto).
+
+     **La causa:** `get_conn()` era un `@st.cache_resource` que devolvía UNA
+     conexión a todo el proceso, y cada sesión de Streamlit corre en su
+     propio hilo. En DuckDB, `execute` deja el resultado colgado de la
+     conexión y `fetchone` lee el que haya: si otra sesión ejecuta algo en
+     el medio, cada una se lleva lo de la otra. Medido con dos hilos sobre
+     una conexión: **464 de 1.500** consultas de KPIs recibieron la fila de
+     un `DESCRIBE` ajeno (`('a', 'BIGINT', 'YES', …)`) y otras **483** un
+     `None`. «Documentos» llegó con un NOMBRE DE COLUMNA. El `DESCRIBE` que
+     la #598 sumó a `_resumen_kpis_cacheable` hace la carrera más probable,
+     pero no la creó: hay `DESCRIBE` y `.df()` en todo `data.py`.
+
+     **Lo que lo hace grave:** lo que sale de la carrera se CACHEA como si
+     fuera el dato (`persist="disk"`, que no caduca hasta que cambie el
+     sello, #367). Un `.df()` que se lleva el resultado de otra consulta
+     deja un DataFrame ajeno guardado como el parquet.
+
+     **El arreglo** (`data.py::get_conn`): la base sigue siendo una por
+     proceso (`_conexion_base`, con httpfs cargado) y cada hilo usa un
+     CURSOR propio, guardado en un `threading.local` que se libera solo al
+     terminar el hilo. Los `SET s3_*` son de SESIÓN: un cursor no los
+     hereda (medido: sin repetirlos, la lectura de R2 da 404), así que se
+     le aplican al crearlo. Con eso, la misma carrera: 0 filas ajenas y 0
+     errores; dos navegadores a la vez recorriendo ocho reportes, sin una
+     excepción.
+
+     **Y la caché envenenada:** `_resumen_kpis_cacheable` LANZA si un valor
+     no es un número (`numbers.Number`) o vacío, para no guardarlo. De
+     paso, cambiar su código cambia la clave de su caché (Streamlit la arma
+     con el fuente de la función), así que lo que quedó guardado en Cloud
+     con un nombre de columna ya no se lee. Las cargas de parquet no tienen
+     esa guarda: si una quedó envenenada, «Actualizar» las vacía
+     (`limpiar_cache`).
+
+     Cambia `data.py`, que Cloud no relee hasta reiniciar: «Reboot app»
+     (#357). La firma de `get_conn()` no cambió.
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47319,7 +47372,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#598**; la próxima toma el número siguiente.
+> última regla es la **#599**; la próxima toma el número siguiente.
 
 >
 
