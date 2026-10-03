@@ -6804,6 +6804,77 @@ def _pruebas_ticket_sin_canales_sin_clientes():
     return fallos
 
 
+def _pruebas_formas_de_pago():
+    """Ventas › Resumen › Pagos (regla #592): lo cobrado por forma de pago.
+
+    Fija lo que se vería mal sin avisar: un pago contado una vez aunque el
+    parquet lo repita en cada plato (#517), la tarjeta abierta en su MARCA
+    y «Varios» en su detalle, los anulados y las cortesías afuera, y las
+    formas que no entran en la tabla juntas en «Otras» con sus nombres."""
+    import definicion_venta as dv
+    from graficos import ventas_resumen as vr
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · pagos · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · pagos · {nombre}: got={got!r} exp={exp!r}")
+
+    tipo = pd.Series(["Tarjeta de Crédito", "Varios", "Efectivo", None,
+                      "Tarjeta de Crédito"])
+    tarj = pd.Series(["Visa", None, None, None, None])
+    otro = pd.Series([None, "Nota de Credito", None, None, None])
+    check("la tarjeta en su marca, Varios en su detalle",
+          vr.forma_de_pago(tipo, tarj, otro).tolist(),
+          ["Visa", "Nota de crédito", "Efectivo", "Sin forma",
+           "Tarjeta de Crédito"])
+
+    f = pd.Timestamp("2026-09-04 20:00")
+    d = pd.DataFrame({
+        "FEC REG DOCUMENTO": [f] * 7,
+        "LLAVE LOCAL DOCUMENTO CORRELATIVO PAGO": ["B1P1", "B1P1", "B2P1",
+                                                   "B3P1", "K1P1", "A1P1",
+                                                   None],
+        "MONTO TIPO PAGO DOC": [100.0, 100.0, 40.0, 1480.0, 60.0, 90.0,
+                                None],
+        "NOMBRE TIPO PAGO": ["Tarjeta de Crédito"] * 2
+                            + ["Varios", "Efectivo", "Efectivo",
+                               "Efectivo", None],
+        "NOMBRE TARJETA PAGO": ["Visa", "Visa", None, None, None, None, None],
+        "NOMBRE OTRO TIPO PAGO DOC": [None, None, "Vale", None, None, None,
+                                      None],
+        dv.CLASE: [dv.VENTA, dv.VENTA, dv.VENTA, dv.VENTA, dv.CORTESIA,
+                   dv.ANULADO, dv.VENTA],
+    })
+    claves = set(vr._periodo_serie(pd.Series([f]), "Mes"))
+    pv = vr.formas_de_pago(d, "FEC REG DOCUMENTO", "Mes", claves)
+    check("un pago una vez, sin cortesías ni anulados, en orden de monto",
+          {k: float(v) for k, v in pv.iloc[0].items()},
+          {"Efectivo": 1480.0, "Visa": 100.0, "Vale": 40.0})
+    check("y en ese orden", list(pv.columns), ["Efectivo", "Visa", "Vale"])
+    pv2 = vr.formas_de_pago(d, "FEC REG DOCUMENTO", "Mes", claves,
+                            max_formas=2)
+    check("las que no entran van juntas en «Otras»", list(pv2.columns),
+          ["Efectivo", vr._OTRAS_FORMAS])
+    check("con sus nombres", pv2.attrs.get("otras"), ["Visa", "Vale"])
+    check("sin las columnas del pago, nada",
+          vr.formas_de_pago(d.drop(columns=["NOMBRE TIPO PAGO"]),
+                            "FEC REG DOCUMENTO", "Mes", claves), None)
+    subs = vr._subvistas("Clientes", [], {"ticket"}, ["Visa", "Otras"],
+                         ["Vale", "Cheque"])
+    check("la subvista Pagos: una columna por forma, cobrado y por cobrar",
+          [c[0] for c in subs["Pagos"][0]],
+          ["valor", "f0_v", "f1_v", "cobrado", "por_cobrar"])
+    check("«Otras» dice cuáles junta",
+          "Vale, Cheque" in subs["Pagos"][0][2][4], True)
+    check("y va en el selector", "Pagos" in vr._SUBVISTAS, True)
+    return fallos
+
+
 def _pruebas_carta_costeada():
     """Recetas › Carta costeada (regla #548): lo que la vista hace con
     `cartacosteada.parquet` antes de dibujarlo.
@@ -8676,6 +8747,7 @@ def main():
     fallos += _pruebas_carta_costeada()
     fallos += _pruebas_igv_y_sin_costo()
     fallos += _pruebas_ticket_sin_canales_sin_clientes()
+    fallos += _pruebas_formas_de_pago()
 
     # ── Recetas › Costo recetas base: uso, producción y costo (#576) ─────
     fallos += _pruebas_costo_recetas_base()

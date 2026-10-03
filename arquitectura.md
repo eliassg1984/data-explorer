@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-591 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+592 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (196)
 
@@ -231,7 +231,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 
-**Layout y alturas** (85)
+**Layout y alturas** (86)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -318,6 +318,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#579** — Compras › Proveedor: los proveedores de un producto se despliegan DEBAJO de su fila,…
 - **#583** — Compras › Producto: la fila reparte 1 : 1.25, no 1 : 1.6 — la Evolución más ancha, el Ranking…
 - **#591** — El ticket de Ventas divide la venta de los canales que REGISTRAN clientes, no la venta…
+- **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 
 **Plotly y figuras** (108)
 
@@ -682,7 +683,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 
-**Datos, R2 y DuckDB** (81)
+**Datos, R2 y DuckDB** (82)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -765,6 +766,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#573** — La Carta costeada no lee las ventas hasta que algo las muestra
 - **#575** — Movimientos › «Producción»: el reporte Producción del Almacén, con las órdenes GENERADAS…
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
+- **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 
 **SUNAT y SIRE** (49)
 
@@ -46901,6 +46903,49 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-02.)
 
+592. **Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la
+     marca de cada tarjeta — y la consulta de ventas del Sheet pasó a
+     traer el monto del pago en SOLES.** 2026-10-03, a pedido, después de
+     cuadrar septiembre contra la Liquidación de Cajero (#591).
+
+     - **El monto del pago venía en la moneda del pago.** En un pago en
+       dólares, `DPAGODOCUMENTO.nMonto` son dólares (F00001000009201:
+       $455,38 por una cuenta de S/ 1.480), y `MONTO TIPO PAGO DOC` los
+       traía tal cual: el efectivo de septiembre salía S/ 1.024,62 bajo, y
+       el de 2022 un 74 % bajo (306 pagos en dólares desde 2021, unos
+       S/ 104 mil). Se arregló EN LA CONSULTA (`nMonto × nTipoCambio`
+       cuando `tMoneda <> '01'`), no en la app: probada contra el POS, las
+       mismas 238.740 filas y las 59 columnas de antes idénticas fila por
+       fila, salvo ese monto en los 50 pagos en dólares desde 2025.
+     - **La misma corrida sumó cinco columnas al final**: `CANT NINOS`
+       (#591), `DIA CONTABLE`, `NOMBRE TARJETA PAGO` (la consulta ya la
+       calculaba dentro del bloque de pagos y no la sacaba),
+       `NOMBRE OTRO TIPO PAGO DOC` (el detalle de «Varios»: vale, nota de
+       crédito usada como pago) y `AREA PRODUCCION` (`DPEDIDO.tArea`).
+       Y dos parquets nuevos, de una fila por pedido (`pedidos.parquet`) y
+       de una por plato anulado o transferencia (`transacciones.parquet`,
+       APEDIDO ∪ TPEDIDO): todavía no los lee ninguna vista.
+     - **La subvista** (`formas_de_pago`): un pago una vez (#517), sólo de
+       lo que es venta (ni anulados ni cortesías), con la tarjeta abierta
+       en su marca y «Varios» en su detalle (`forma_de_pago`). Una columna
+       por forma, de la que más cobró a la que menos, con su parte de lo
+       cobrado debajo; «Cobrado» y «Por cobrar» (el estado C.POR COBRAR no
+       tiene pago). Forma por forma más lo por cobrar = las facturas y
+       boletas del período: septiembre 396.347,20 + 17.313,60 =
+       413.660,80, el «Total Documentos» de la Liquidación antes de la
+       nota de crédito, que acá se cobra como una forma más.
+     - **Nueve formas no entran.** Septiembre tuvo efectivo, cinco
+       tarjetas, cheque, vale y nota de crédito; a 1323 px la tarjeta deja
+       ~1.130 para la grilla. Las que pasan de cinco van sumadas en
+       «Otras» (`_MAX_FORMAS`), con sus nombres en la ayuda de la columna;
+       «American Express» se escribe «Amex». La fila Total lleva sólo el
+       monto: «S/ 273,210 · 71%» salía cortado.
+
+     Candado: `test_graficos.py::_pruebas_formas_de_pago`. Medido con
+     Playwright a 1323×619 sobre R2: la grilla sin barra horizontal.
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46913,7 +46958,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#591**; la próxima toma el número siguiente.
+> última regla es la **#592**; la próxima toma el número siguiente.
 
 >
 

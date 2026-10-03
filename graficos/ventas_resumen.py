@@ -125,8 +125,8 @@ _KEYS_WIDGET_RESUMEN = ("vt_resumen_gran", "vt_resumen_grupo",
 _GRAN_OPCIONES = ("Día", "Semana", "Mes", "Año")
 _GRAN_DEFAULT = "Día"
 
-_SUBVISTAS = ("Venta", "Clientes", "Canales", "Propinas", "Descuentos",
-              "Cortesías", "Costo", "Cuadre")
+_SUBVISTAS = ("Venta", "Clientes", "Canales", "Propinas", "Pagos",
+              "Descuentos", "Cortesías", "Costo", "Cuadre")
 """Los grupos de columnas del Resumen (regla #519). Una subvista que el
 parquet no permite (sin propina, un solo canal) no se ofrece de más: la
 tabla cae a «Venta» — ver `_subvistas`."""
@@ -422,6 +422,92 @@ def detalle_sin_costo(lista, n=8):
             + (f" · y {resto} más" if resto > 0 else ""))
 
 
+# ── Las formas de pago (regla #592) ──────────────────────────────────────────
+_POR_COBRAR = "C.POR COBRAR"
+"""El estado del comprobante que se cobra después: es venta y no tiene pago."""
+
+_NOMBRE_FORMA = {"NOTA DE CREDITO": "Nota de crédito",
+                 "AMERICAN EXPRESS": "Amex"}
+"""Nombres del POS que se leen mal tal cual («Nota de Credito», sin tilde)
+o que no entran en una cabecera de 112 px («American Express»)."""
+
+
+def forma_de_pago(tipo, tarjeta=None, otro=None):
+    """La forma de cada pago: «Tarjeta de Crédito» se abre en su MARCA
+    (Visa, Amex…) y «Varios» en su detalle (vale, nota de crédito usada
+    como pago). Un pago sin tipo es «Sin forma». Pura, sobre Series."""
+    def _txt(s):
+        if s is None:
+            return pd.Series("", index=tipo.index)
+        return s.astype(object).where(s.notna(), "").astype(str).str.strip()
+
+    t, tj, ot = _txt(tipo), _txt(tarjeta), _txt(otro)
+    tl = t.str.lower()
+    out = t.where(~(tl.str.startswith("tarjeta") & (tj != "")), tj)
+    out = out.where(~((tl == "varios") & (ot != "")), ot)
+    out = out.map(lambda x: _NOMBRE_FORMA.get(x.upper(), x))
+    return out.where(out != "", "Sin forma")
+
+
+_OTRAS_FORMAS = "Otras"
+_MAX_FORMAS = 6
+"""Columnas de forma de pago en la tabla. Septiembre de 2026 tuvo nueve
+(efectivo, cinco tarjetas, cheque, vale y nota de crédito) y no entraban en
+los ~1.200 px de la tarjeta: las que pasan de cinco van juntas en «Otras»."""
+
+
+def formas_de_pago(d_pagos, col_fecha, gran, claves_ok,
+                   max_formas=_MAX_FORMAS):
+    """Lo cobrado por período y forma de pago: un DataFrame indexado por la
+    clave del período con una columna por forma, de la que más cobró a la
+    que menos — o None si el parquet no trae los pagos. Con más de
+    `max_formas`, las que siguen a las primeras `max_formas − 1` van
+    sumadas en «Otras», y sus nombres en `.attrs["otras"]`.
+
+    Un pago se cuenta una vez (el parquet repite cada pago en cada ítem,
+    regla #517) y sólo si su comprobante es venta: ni anulados ni
+    cortesías. El monto es el del pago en SOLES (la consulta del Sheet
+    convierte los pagos en dólares desde el 2026-10-03)."""
+    if d_pagos is None or d_pagos.empty:
+        return None
+    c_pago = _resolver(d_pagos, ["Llave Local Documento Correlativo Pago"])
+    c_monto = _resolver(d_pagos, ["Monto Tipo Pago Doc"])
+    c_tipo = _resolver(d_pagos, ["Nombre Tipo Pago"])
+    if not (c_pago and c_monto and c_tipo and col_fecha in d_pagos.columns):
+        return None
+    p = d_pagos[d_pagos[c_pago].notna()]
+    if dv.CLASE in p.columns:
+        p = p[p[dv.CLASE] == dv.VENTA]
+    p = p.drop_duplicates(c_pago)
+    if p.empty:
+        return None
+    t = pd.DataFrame({
+        "fecha": pd.to_datetime(p[col_fecha], errors="coerce"),
+        "monto": pd.to_numeric(p[c_monto], errors="coerce").fillna(0.0),
+        "forma": forma_de_pago(
+            p[c_tipo],
+            p[_resolver(p, ["Nombre Tarjeta Pago"])]
+            if _resolver(p, ["Nombre Tarjeta Pago"]) else None,
+            p[_resolver(p, ["Nombre Otro Tipo Pago Doc"])]
+            if _resolver(p, ["Nombre Otro Tipo Pago Doc"]) else None),
+    }).dropna(subset=["fecha"])
+    t["clave"] = _periodo_serie(t["fecha"], gran)
+    t = t[t["clave"].isin(claves_ok)]
+    if t.empty:
+        return None
+    # Por NOMBRE de columna (regla #481), en el orden de lo cobrado.
+    pv = t.pivot_table(index="clave", columns="forma", values="monto",
+                       aggfunc="sum", fill_value=0.0)
+    orden = list(pv.sum().sort_values(ascending=False).index)
+    if len(orden) <= max_formas:
+        return pv[orden]
+    quedan, resto = orden[:max_formas - 1], orden[max_formas - 1:]
+    out = pv[quedan].copy()
+    out[_OTRAS_FORMAS] = pv[resto].sum(axis=1)
+    out.attrs["otras"] = resto
+    return out
+
+
 @st.fragment
 def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                     col_cant, col_fam=None, col_serv=None, col_canal=None,
@@ -560,6 +646,9 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         cols["mesero"] = d[col_mesero].fillna("").astype(str).str.strip()
     if col_doc:
         cols["doc"] = d[col_doc].fillna("").astype(str)
+    _c_est = dv.columna(d, dv.ESTADO)
+    if _c_est:
+        cols["estado"] = d[_c_est].astype(str).str.strip().str.upper()
     # Los cuatro precios (regla #518): carta y costo vienen POR UNIDAD y se
     # multiplican por la cantidad; neto y descuento ya son de la línea
     # (medido: «Sudado a la leña» ×2, precio carta 59, descuento de línea
@@ -713,6 +802,19 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         _pgg = _pg.groupby("clave")["prop"]
         _pegar(pd.DataFrame({"propina": _pgg.sum(),
                              "n_prop": _pgg.apply(lambda s: int((s > 0).sum()))}))
+
+    # FORMAS DE PAGO (regla #592): lo cobrado, por efectivo, cada marca de
+    # tarjeta, cheque, vale o nota de crédito. Un pago una vez, como la
+    # propina, y sólo de lo que es venta (ni anulados ni cortesías). Lo que
+    # queda POR COBRAR no tiene pago: va aparte, para que forma por forma
+    # más lo por cobrar den los comprobantes del período, como el cuadre
+    # de la Liquidación de Cajero.
+    por_forma = formas_de_pago(d_pagos, col_fecha, gran, _claves_ok)
+    if "estado" in tabla.columns:
+        _pc = tabla[(tabla["clase"] == dv.VENTA)
+                    & (tabla["estado"] == _POR_COBRAR)]
+        _pegar(_pc.groupby("clave")["venta"].sum().rename("por_cobrar")
+               .to_frame())
 
     # El plato que dispara el costo: el de mayor exceso de costo sobre su
     # precio de carta en el período. Sale en el bloque del costo cuando el
@@ -1259,6 +1361,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                 _ops = [x for x, ok in zip(_SUBVISTAS, (
                     True, vol_label == "Clientes" and "ticket" in _hay,
                     _partida, "propina" in _hay,
+                    por_forma is not None and not por_forma.empty,
                     {"desc", "carta"} <= _hay, "cort_s" in _hay,
                     "pcosto" in _hay, "docs_v" in _hay)) if ok]
                 _eco = st.session_state.get("_vt_resumen_sub_eco", "Venta")
@@ -1287,7 +1390,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                           feriados=_feriados, culpables=culpables,
                           sin_costo_prods=sin_costo_prods,
                           sin_costo_rango=sin_costo_rango,
-                          igv_cambios=igv_cambios)
+                          igv_cambios=igv_cambios, por_forma=por_forma)
         elif not _foco_ok:
             # El `st.empty()` sólo en esta rama, como en Compras (regla
             # #471): borra las grillas al soltar el foco sin re-montarlas en
@@ -1317,7 +1420,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
 def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
                   canales, gran, ctx, pie, rango, nota_recorte,
                   feriados=frozenset(), culpables=None, sin_costo_prods=None,
-                  sin_costo_rango=None, igv_cambios=None):
+                  sin_costo_rango=None, igv_cambios=None, por_forma=None):
     """El gráfico escrito como tabla, en la forma «B» del mockup (regla
     #518): nueve columnas y, al hacer clic en una fila, una franja con los
     canales, las propinas, los descuentos, las cortesías y el detalle del
@@ -1325,7 +1428,8 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
 
     `sin_costo_prods` / `sin_costo_rango`: lo vendido sin costo, por período
     y en el rango (`productos_sin_costo`); `igv_cambios`: `{clave: (día,
-    antes, después)}` del período en que cambió la tasa de IGV (#590)."""
+    antes, después)}` del período en que cambió la tasa de IGV (#590);
+    `por_forma`: lo cobrado por forma de pago (`formas_de_pago`, #592)."""
     culpables = culpables or {}
     sin_costo_prods = sin_costo_prods or {}
     igv_cambios = igv_cambios or {}
@@ -1333,6 +1437,12 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
     tot = g["total"].astype(float).tolist()
     tot_vista = float(sum(tot))
     hay = set(g.columns)
+    formas = (list(por_forma.columns)
+              if por_forma is not None and not por_forma.empty else [])
+    otras = por_forma.attrs.get("otras", []) if formas else []
+    if formas:
+        por_forma = por_forma.reindex(claves).fillna(0.0)
+        _cobrado = por_forma.sum(axis=1).tolist()
 
     def _col(nombre):
         return (g[nombre].astype(float).tolist() if nombre in hay
@@ -1346,6 +1456,7 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
                                     "ticket_neto_p") if k in hay}
     ninos, personas = _col("ninos"), _col("personas")
     venta_cli = _col("venta_cli")
+    por_cobrar = _col("por_cobrar")
     desc, n_desc, n_docs = _col("desc"), _col("n_desc"), _col("n_docs")
     cort, n_cort, costo_cort = _col("cort_s"), _col("n_cort"), _col("costo_cort")
     prop, n_prop = _col("propina"), _col("n_prop")
@@ -1593,6 +1704,18 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
             r["n_prop"] = int(n_prop[i] or 0)
             if prop_cli[i] is not None:
                 r["prop_cli"] = round(prop_cli[i], 2)
+        # Formas de pago (regla #592): el monto y, abajo, su parte de lo
+        # cobrado en el período. Cero es «—»: casi todo es Visa.
+        for k, fm in enumerate(formas):
+            _m = float(por_forma[fm].iloc[i])
+            _p = _m / _cobrado[i] if _cobrado[i] else 0.0
+            _celda(r, f"f{k}_v", round(_m, 2), f"S/ {_m:,.0f}" if _m else "—",
+                   (f"{_p:.0%}", "vr-neutro") if _m else ("", ""))
+        if formas:
+            _x = round(por_cobrar[i] or 0.0, 2)
+            _celda(r, "por_cobrar", _x, f"S/ {_x:,.0f}" if _x else "—")
+            _celda(r, "cobrado", round(_cobrado[i], 2),
+                   f"S/ {_cobrado[i]:,.0f}")
         if pdesc[i] is not None:
             _celda(r, "desc", round(desc[i], 2), f"S/ {desc[i]:,.0f}",
                    _txt_var(_var(desc, i), malo_si_sube=True))
@@ -1680,6 +1803,15 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
         total["n_prop"] = f"{_s('n_prop'):,.0f}"
         if vol_label == "Clientes" and _s("pax"):
             total["prop_cli"] = f"S/ {_s('propina') / _s('pax'):,.2f}"
+    if formas:
+        # Sólo el monto: «S/ 273,210 · 71%» no entra en 112 px y la fila
+        # Total no lleva la segunda línea de las celdas (medido, #592).
+        _tc = float(sum(_cobrado))
+        for k, fm in enumerate(formas):
+            total[f"f{k}_v"] = f"S/ {float(por_forma[fm].sum()):,.0f}"
+        total["cobrado"] = f"S/ {_tc:,.0f}"
+        _x = _s("por_cobrar")
+        total["por_cobrar"] = f"S/ {_x:,.0f}" if round(_x, 2) else "—"
     if "desc" in hay and _s("carta"):
         total["desc"] = f"S/ {_s('desc'):,.0f}"
         total["pdesc"] = f"{_s('desc') / _s('carta'):.1%}"
@@ -1699,7 +1831,7 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
         total["costo_cort"] = f"S/ {_s('costo_cort'):,.0f}"
 
     # ── Las subvistas: qué grupo de columnas se ve (regla #519) ───────────
-    subs = _subvistas(vol_label, canales, set(tp.columns))
+    subs = _subvistas(vol_label, canales, set(tp.columns), formas, otras)
     sub = st.session_state.get("vt_resumen_sub")
     if sub not in subs:
         sub = next(iter(subs))
@@ -1725,10 +1857,12 @@ def _zona_resumen(g, claves, fila, variaciones, foco, vol_label, por_canal,
         st.rerun(scope=scope_rerun())
 
 
-def _subvistas(vol_label, canales, hay):
+def _subvistas(vol_label, canales, hay, formas=(), otras=()):
     """`{nombre: (columnas, ayuda)}` de las subvistas del Resumen (regla #519),
     sólo las que el parquet permite. Cada columna es `(campo, rótulo, tipo,
     ancho, tooltip)` — ver `tablas.ventas_resumen.renderizar_dias_venta`.
+    `formas`: las formas de pago, de la que más cobró a la que menos, y
+    `otras`, las que van juntas en «Otras» (#592).
 
     Nació a pedido («poder alternar subvistas o agrupar columnas, de manera
     que visualmente pueda comparar la fila de un período con las demás»): la
@@ -1823,6 +1957,24 @@ def _subvistas(vol_label, canales, hay):
         if vol_label:
             cols.append(("pax", "Pax", "entero", 72, "Clientes del período"))
         out["Propinas"] = (cols, "Una propina por pago.")
+    if formas:
+        # PAGOS (regla #592): lo cobrado por forma, con la marca de cada
+        # tarjeta. Forma por forma + lo por cobrar = los comprobantes del
+        # período (venta + las notas de crédito, que se pagan con la nota).
+        cols = [("valor", "Venta", "celda", 118, "Venta cobrada")]
+        for k, fm in enumerate(formas):
+            _con = (", ".join(otras) if fm == _OTRAS_FORMAS and otras
+                    else fm)
+            cols.append((f"f{k}_v", fm, "celda", 112,
+                         f"Cobrado con {_con} y su parte de lo cobrado en "
+                         "el período"))
+        cols += [("cobrado", "Cobrado", "celda", 112,
+                  "Todo lo cobrado en el período, sumando las formas"),
+                 ("por_cobrar", "Por cobrar", "celda", 112,
+                  "Comprobantes que se cobran después (cuentas por cobrar): "
+                  "son venta y todavía no tienen pago")]
+        out["Pagos"] = (cols, "Lo cobrado por forma de pago, una vez cada "
+                              "pago; por cobrar, aparte.")
     if "pdesc" in hay:
         cols = [("carta", "Carta", "soles0", S, "Venta a precio de carta"),
                 ("valor", "Venta", "celda", 118, "Venta cobrada"),
