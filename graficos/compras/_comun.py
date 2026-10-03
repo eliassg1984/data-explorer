@@ -154,6 +154,11 @@ UNIDAD_CORTA = {
     "LITROS": "Lt", "LITRO": "Lt", "LT": "Lt",
     "UND": "und", "UNIDAD": "und",
     "PAQUETE": "paq",
+    # Las unidades de SALIDA del kardex (2026-10-03, regla #598): Stock por
+    # Producto escribe «2 Lt 26.0 oz» como el reporte por área del POS.
+    "GRAMOS": "g", "GRAMO": "g",
+    "MILILITROS": "ml", "MILILITRO": "ml",
+    "ONZAS": "oz", "ONZA": "oz",
 }
 """Cómo se ESCRIBE al lado de un número la `UNIDAD_DE_INGRESO` del parquet.
 

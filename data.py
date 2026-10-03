@@ -56,6 +56,36 @@ import consumo_recetas
 # el 2026-08-08. Son configuracion de DATOS, no de despacho: su sitio es este
 # dict, igual que columnas_movil.
 
+
+# QUÉ ES STOCK: sólo lo ACTIVO (2026-10-03, a pedido, regla #598). Una fila de
+# `inventariovalorizado.parquet` entra en «Stock e Inventario» si las cuatro
+# marcas del POS dicen que sí; si no, va a «Inactivos y servicios» con el
+# motivo de la PRIMERA que falle, en este orden:
+#
+#   · AREA ACTIVA      `vArea.lActivo`. CALIENTES está inactiva y arrastraba
+#                      −S/ 38.161 de descargos de venta sin un solo ingreso.
+#   · PRODUCTO ACTIVO  `TPRODUCTO.lActivo`. Agua Filtrada −10.645 L en Barra.
+#   · COMPARTIDO       `TSUBSTOCK.lActivo`: el producto habilitado en ESA área
+#                      (medido: coincide en las 11.513 filas de área; el
+#                      Almacén Central siempre dice COMPARTIDO).
+#   · TIPO PRODUCTO    `TPRODUCTO.tTipoProducto`: un SERVICIO no es inventario
+#                      («Compras Mantenimiento Varios», 2.269,5 und = S/ 126k
+#                      en GASTOS).
+#
+# Es la regla con que el «Inventario Valorizado al Día» del POS elige sus
+# filas (cuadrado fila por fila el 2026-10-03: Central 1.750 de 1.750, Barra
+# 406 de 406), más el área inactiva. La consumen la vista
+# (`graficos/inventario.py::separar_activos`) y el KPI de este reporte, así
+# que se define UNA vez acá. Una columna que el parquet todavía no traiga no
+# filtra: AREA ACTIVA y TIPO PRODUCTO llegaron con la consulta del Sheet del
+# 2026-10-03.
+INVENTARIO_ACTIVO = (
+    ("AREA ACTIVA", "ACTIVA", "Área inactiva"),
+    ("PRODUCTO ACTIVO", "ACTIVO", "Producto inactivo"),
+    ("COMPARTIDO", "COMPARTIDO", "No habilitado en el área"),
+    ("TIPO PRODUCTO", "MERCADERIA", "Servicio"),
+)
+
 REPORTES = {
     # Orden del dict == orden del rail de navegación (navegacion.py::
     # inject_navegacion itera `reportes.items()` tal cual). Reordenar acá
@@ -141,8 +171,11 @@ REPORTES = {
         "archivo": "inventariovalorizado.parquet",
         "icono": ":material/inventory_2:",
         # Foto sin fecha (igual que Recetas): kpi_fecha ausente a
-        # propósito, resumen_kpis() agrega la tabla entera.
-        "kpis": (("Valorizado", "VALORIZADO TOTAL", "sum"),),
+        # propósito, resumen_kpis() agrega la tabla entera — pero sólo lo
+        # ACTIVO, como la vista (regla #598): sin el filtro el KPI decía
+        # S/ 179.395 y la vista S/ 56.674.
+        "kpis": (("Valorizado", "VALORIZADO TOTAL", "sum",
+                  tuple((c, (v,)) for c, v, _ in INVENTARIO_ACTIVO)),),
         "columnas": [
             "Nombre Familia", "Nombre Subfamilia", "Nombre Producto",
             "Unidad Kardex", "Codigo Producto", "Nombre Area", "Codigo Area", "Stock al Dia", "Precio Promedio", "Valorizado total"
@@ -1463,6 +1496,7 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
                f'GROUP BY "{col_dedup}")')
     else:
         partes = []
+        nombres = None
         for i, kpi in enumerate(kpis):
             _et, col, agg = kpi[0], kpi[1], kpi[2]
             fn = _AGREGACIONES_KPI[agg]
@@ -1477,13 +1511,30 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
             # Los valores salen de REPORTES (config nuestra, no del usuario),
             # pero se escapan igual: una comilla en un nombre de familia
             # rompe el SQL y no se descubre hasta que aparezca una.
+            #
+            # Y puede ser VARIOS pares (columna, valores), que se cumplen
+            # todos: así lee «Stock e Inventario» su regla de lo activo
+            # (`INVENTARIO_ACTIVO`, regla #598). Ahí un par cuya columna el
+            # parquet todavía no trae se salta en vez de romper la consulta:
+            # el KPI sigue, con las marcas que haya.
             filtro = kpi[3] if len(kpi) > 3 else None
-            if filtro:
-                col_f, vals = filtro
-                lista = ", ".join("'" + str(v).replace("'", "''") + "'"
-                                  for v in vals)
+            pares = (() if not filtro
+                     else (filtro,) if isinstance(filtro[0], str)
+                     else tuple(filtro))
+            if len(pares) > 1 or (pares and not isinstance(filtro[0], str)):
+                if nombres is None:
+                    nombres = {r[0] for r in con.execute(
+                        f"DESCRIBE SELECT * FROM read_parquet('{url}')"
+                    ).fetchall()}
+                pares = tuple(p for p in pares if p[0] in nombres)
+            condiciones = " AND ".join(
+                f'"{col_f}" IN ('
+                + ", ".join("'" + str(v).replace("'", "''") + "'" for v in vals)
+                + ")"
+                for col_f, vals in pares)
+            if condiciones:
                 partes.append(f'{fn}("{col}"){cierre} '
-                              f'FILTER (WHERE "{col_f}" IN ({lista})) AS k{i}')
+                              f'FILTER (WHERE {condiciones}) AS k{i}')
             else:
                 partes.append(f'{fn}("{col}"){cierre} AS k{i}')
         sql = f'SELECT {", ".join(partes)} FROM {fuente}'

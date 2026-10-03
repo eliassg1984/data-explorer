@@ -5991,6 +5991,88 @@ def _pruebas_listado_inventario():
           ("COCINA", "", ""))
     check("familia y subfamilia se escriben como nombre propio",
           f.loc[0, "familia"], "Bebidas con Alcohol")
+
+    # En unidad de salida (regla #598), con los casos del reporte por área
+    # del POS de Barra del 2026-10-03.
+    from graficos.inventario_productos import texto_unidad_salida as tus
+    check("unidad de salida · litros en onzas (Vino tinto de la casa)",
+          tus(2.813, 32, "LITROS", "ONZAS"), "2 Lt 26.0 oz")
+    check("unidad de salida · sin entero, sólo el resto (Aceituna Verde)",
+          tus(0.35, 1000, "KILOS", "GRAMOS"), "350 g")
+    check("unidad de salida · entero y resto (Miel de Abeja)",
+          tus(2.5, 1000, "KILOS", "GRAMOS"), "2 kg 500 g")
+    check("unidad de salida · lo que dos decimales se comían (Anís, 0.05)",
+          tus(0.051, 1000, "KILOS", "GRAMOS"), "51 g")
+    check("unidad de salida · negativo, con el signo adelante",
+          tus(-10645.164, 1000, "LITROS", "MILILITROS"), "−10,645 Lt 164 ml")
+    check("unidad de salida · el resto que redondea a una unidad, sube",
+          tus(0.9999, 1000, "LITROS", "MILILITROS"), "1 Lt")
+    check("unidad de salida · misma unidad: la cantidad tal cual",
+          tus(14, 1, "UND", "UND"), "14 und")
+    check("unidad de salida · sin unidad de salida: tal cual",
+          tus(1.25, float("nan"), "KILOS", ""), "1.25 kg")
+    check("unidad de salida · cero", tus(0, 32, "LITROS", "ONZAS"), "0 Lt")
+
+    d2 = d.assign(FAC=[1000.0] * 3 + [32.0, 1000.0, 1000.0, 1000.0],
+                  US=["GRAMOS"] * 3 + ["ONZAS", "GRAMOS", "GRAMOS", "GRAMOS"])
+    f2 = filas_grilla(armar_listado(d2, **cols, col_factor="FAC",
+                                    col_usal="US"))
+    check("rowData: el producto trae su cantidad en unidad de salida",
+          f2.loc[f2["__id"] == "02", "cant_salida"].iloc[0], "3 Lt")
+    check("rowData: cada ÁREA se parte con el factor de su producto",
+          f2.loc[f2["__id"] == "04|BARRA", "cant_salida"].iloc[0], "−1 kg")
+    check("rowData: y la del kardex, para el tooltip",
+          f2.loc[f2["__id"] == "01", "cant_kardex"].iloc[0], "3 kg")
+    return fallos
+
+
+def _pruebas_inventario_activos():
+    """«Stock e Inventario» cuenta sólo lo ACTIVO (regla #598).
+
+    `separar_activos` aplica `data.INVENTARIO_ACTIVO`: área activa, producto
+    activo, habilitado en el área (COMPARTIDO) y de mercadería. Lo que fija:
+    el MOTIVO es la primera marca que falla en ese orden, una celda vacía no
+    saca la fila, y una columna que el parquet todavía no trae no filtra —
+    AREA ACTIVA y TIPO PRODUCTO llegaron con la consulta del 2026-10-03.
+    """
+    from graficos.inventario import separar_activos, COL_MOTIVO
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    inventario activos · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA inventario activos · {nombre}: got={got!r} exp={exp!r}")
+
+    d = pd.DataFrame({
+        "CODIGO PRODUCTO": ["A", "B", "C", "D", "E", "F"],
+        "AREA ACTIVA":     ["ACTIVA", "NO ACTIVA", "ACTIVA", "ACTIVA",
+                            "ACTIVA", "ACTIVA"],
+        "PRODUCTO ACTIVO": ["ACTIVO", "NO ACTIVO", "NO ACTIVO", "ACTIVO",
+                            "ACTIVO", "ACTIVO"],
+        "COMPARTIDO":      ["COMPARTIDO", "COMPARTIDO", "COMPARTIDO",
+                            "NO COMPARTIDO", "COMPARTIDO", "COMPARTIDO"],
+        "TIPO PRODUCTO":   ["MERCADERIA", "MERCADERIA", "MERCADERIA",
+                            "MERCADERIA", "SERVICIO", None],
+        "VALORIZADO TOTAL": [10.0, -5.0, 3.0, 2.0, 100.0, 7.0],
+    })
+    act, exc = separar_activos(d)
+    check("entran los activos (y el de tipo vacío: sin dato no hay motivo)",
+          act["CODIGO PRODUCTO"].tolist(), ["A", "F"])
+    check("el motivo es la PRIMERA marca que falla",
+          dict(zip(exc["CODIGO PRODUCTO"], exc[COL_MOTIVO])),
+          {"B": "Área inactiva", "C": "Producto inactivo",
+           "D": "No habilitado en el área", "E": "Servicio"})
+    check("activos + excluidos = la tabla entera",
+          len(act) + len(exc), len(d))
+    act2, exc2 = separar_activos(d.drop(columns=["AREA ACTIVA",
+                                                 "TIPO PRODUCTO"]))
+    check("sin las columnas nuevas filtra con las que hay",
+          (act2["CODIGO PRODUCTO"].tolist(),
+           sorted(exc2["CODIGO PRODUCTO"])), (["A", "E", "F"], ["B", "C", "D"]))
     return fallos
 
 
@@ -8978,6 +9060,7 @@ def main():
 
     # ── Inventario › Productos: el grano y el despliegue de áreas ────────
     fallos += _pruebas_listado_inventario()
+    fallos += _pruebas_inventario_activos()
 
     # ── Movimientos › las tarjetas «por período»: qué cuenta y qué no ────
     fallos += _pruebas_movimientos_periodo()

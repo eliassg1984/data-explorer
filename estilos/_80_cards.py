@@ -1463,6 +1463,11 @@ CSS = """    /* ================================================================
         /* piso queda de red, igual que en Proveedor.                       */
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-compras_prod_card_evo, > .st-key-compras_prod_card_ranking, > .st-key-compras_prod_card_vacio),
+        /* Las tres de arriba de Stock por Área, desde el 2026-10-03: la  */
+        /* del ranking suma la fila «Inactivos y servicios» (regla #598)  */
+        /* y ya no mide lo mismo que sus vecinas por contenido.           */
+        .stColumn > .stVerticalBlock
+        > div:has(> .st-key-ajuste_graf_card_izq_inv_area, > .st-key-ajuste_graf_card_der_inv_area, > .st-key-ajuste_graf_card_der_inv_area_n2),
         /* Las dos tarjetas de abajo de Volatilidad (velas | compras de la  */
         /* semana), desde que se separaron el 2026-09-13 (#415): la tabla   */
         /* de la semana mide lo que tenga filas y sin piso cerraba más      */

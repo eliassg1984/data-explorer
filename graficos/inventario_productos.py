@@ -64,7 +64,7 @@ from graficos.ajuste._comun import css_filtros_vista
 # fila, misma cabecera, mismo CSS. Una tabla ancha con otro idioma de grilla
 # debajo de tres que comparten uno se lee como otro reporte.
 from graficos.compras._comun import (
-    ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK,
+    ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK, unidad_corta,
 )
 from graficos.compras._css_proveedor import CSS_RANKING_GRID
 # La ÚNICA del repo (regla #379): familia y subfamilia se ESCRIBEN como
@@ -91,6 +91,7 @@ _K_FAMILIAS = "inv_prod_familias"
 _K_SUBFAMILIAS = "inv_prod_subfamilias"
 _K_BUSCAR = "inv_prod_buscar"
 _K_SIN_STOCK = "inv_prod_sin_stock"
+_K_SALIDA = "inv_prod_unidad_salida"
 
 # Con qué áreas ABRE el listado (2026-09-18, a pedido: «debe filtrar
 # inicialmente Almacén central, cocina, bar, producción, salón»; CAVA se sumó
@@ -136,10 +137,52 @@ class Listado:
     sin_stock: int
 
 
+def texto_unidad_salida(cantidad, factor, u_ent, u_sal):
+    """La cantidad como la escribe el reporte por área del POS: lo ENTERO en
+    la unidad del kardex y el resto en la de salida — «2 Lt 26.0 oz», «350 g»,
+    «−10,645 Lt 164 ml» (regla #598).
+
+    Es la cuenta de `spRepInventario`: `cast(stock as int)` trunca hacia el
+    cero y el resto es `(stock − entero) × nFactor`. Con la misma unidad de
+    los dos lados (o sin factor) no hay nada que partir y sale la cantidad
+    tal cual. El resto va sin decimales cuando el factor es de mil (g, ml) y
+    con uno cuando es chico (32 onzas el litro): «26.016 ONZAS» del POS es
+    «26.0 oz» acá. Si el resto redondea a una unidad entera, sube:
+    0.9999 Lt no es «0 Lt 1000 ml» sino «1 Lt». Pura, sin Streamlit."""
+    try:
+        v = float(cantidad)
+    except (TypeError, ValueError):
+        return ""
+    if v != v:
+        return ""
+    ue, us = unidad_corta(u_ent), unidad_corta(u_sal)
+    try:
+        f = float(factor)
+    except (TypeError, ValueError):
+        f = 0.0
+    signo = "−" if v < 0 else ""
+    a = abs(v)
+    if not ue or not us or us == ue or not f > 1:
+        txt = f"{a:,.3f}".rstrip("0").rstrip(".")
+        return f"{signo}{txt} {ue}".strip()
+    dec = 0 if f >= 100 else 1
+    entero = int(a)
+    resto = round((a - entero) * f, dec)
+    if resto >= f:
+        entero, resto = entero + 1, 0.0
+    partes = []
+    if entero:
+        partes.append(f"{entero:,} {ue}")
+    if resto:
+        partes.append(f"{resto:,.{dec}f} {us}")
+    return signo + (" ".join(partes) if partes else f"0 {ue}")
+
+
 def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
                   col_area=None, col_unidad=None, col_punit=None,
                   col_cant=None, col_val=None, areas=(), familias=(),
-                  subfamilias=(), texto="", incluir_sin_stock=False):
+                  subfamilias=(), texto="", incluir_sin_stock=False,
+                  col_factor=None, col_usal=None):
     """El parquet (una fila por producto × área) llevado a un PRODUCTO por
     fila, más sus áreas aparte.
 
@@ -169,7 +212,10 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
     son sólo esas.
 
     Sin `col_cod`, la clave es el nombre (hay 9 nombres repetidos entre
-    códigos distintos en el parquet real: sin código se fundirían)."""
+    códigos distintos en el parquet real: sin código se fundirían).
+
+    `col_factor` y `col_usal` (regla #598) son del producto, como la unidad:
+    con qué se parte su cantidad en la unidad de salida."""
     nombre = _texto(d, col_prod)
     base = pd.DataFrame({
         "codigo": _texto(d, col_cod) if col_cod else nombre,
@@ -177,6 +223,9 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
         "subfamilia": _texto(d, col_subfam),
         "nombre": nombre,
         "unidad": _texto(d, col_unidad),
+        "usal": _texto(d, col_usal),
+        "factor": (pd.to_numeric(d[col_factor], errors="coerce")
+                   if col_factor else np.nan),
         "precio": (pd.to_numeric(d[col_punit], errors="coerce")
                    if col_punit else np.nan),
         "cantidad": (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
@@ -199,6 +248,7 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
     prods = base.groupby("codigo", sort=False).agg(
         familia=("familia", "first"), subfamilia=("subfamilia", "first"),
         nombre=("nombre", "first"), unidad=("unidad", "first"),
+        usal=("usal", "first"), factor=("factor", "first"),
         precio=("precio", "first"), cantidad=("cantidad", "sum"),
         valorizado=("valorizado", "sum"))
 
@@ -243,6 +293,17 @@ def filas_grilla(listado):
     p = listado.productos.reset_index()
     p["familia"] = [nombre_propio(x) if x else "" for x in p["familia"]]
     p["subfamilia"] = [nombre_propio(x) if x else "" for x in p["subfamilia"]]
+    # La cantidad ya ESCRITA en unidad de salida y en la del kardex (regla
+    # #598): el interruptor «Ver en unidad de salida» elige cuál se ve, y la
+    # otra va al tooltip. Texto hecho en Python y no en el navegador: la
+    # cuenta tiene prueba (`texto_unidad_salida`), y la columna sigue
+    # ordenando por el número.
+    _f = p["factor"] if "factor" in p else pd.Series(np.nan, index=p.index)
+    _us = p["usal"] if "usal" in p else pd.Series("", index=p.index)
+    p["cant_salida"] = [texto_unidad_salida(q, f, u, s) for q, f, u, s
+                        in zip(p["cantidad"], _f, p["unidad"], _us)]
+    p["cant_kardex"] = [texto_unidad_salida(q, 1, u, u) for q, u
+                        in zip(p["cantidad"], p["unidad"])]
     p["__tipo"] = "p"
     p["__id"] = p["codigo"]
     p["__padre"] = ""
@@ -259,6 +320,17 @@ def filas_grilla(listado):
         "__o": a["codigo"].map(dict(zip(p["codigo"], p["__o"]))),
     })
     a = a[a["__o"].notna()]
+    # Las áreas se parten con el factor y las unidades de SU producto.
+    _por = p.set_index("codigo")
+    _pad = a["__padre"]
+    a["cant_salida"] = [
+        texto_unidad_salida(q, _por.at[c, "factor"] if "factor" in _por else
+                            np.nan, _por.at[c, "unidad"],
+                            _por.at[c, "usal"] if "usal" in _por else "")
+        for q, c in zip(a["cantidad"], _pad)]
+    a["cant_kardex"] = [texto_unidad_salida(q, 1, _por.at[c, "unidad"],
+                                            _por.at[c, "unidad"])
+                        for q, c in zip(a["cantidad"], _pad)]
     filas = pd.concat([p, a], ignore_index=True)
     # Producto antes que sus áreas; las áreas conservan su orden (valorizado
     # descendente) porque el sort es estable.
@@ -361,6 +433,11 @@ _JS_CANTIDAD = (
     " var v = Number(p.value);"
     " return (v < 0 ? '−' : '') + Math.abs(v).toLocaleString("
     "'es-PE', {maximumFractionDigits: 2}); }")
+# En unidad de salida (regla #598): el texto lo arma Python
+# (`texto_unidad_salida`), acá sólo se elige. La fila TOTAL, vacía igual.
+_JS_CANTIDAD_SALIDA = (
+    "function(p){ if (p.node && p.node.rowPinned) return '';"
+    " return (p.data && p.data.cant_salida) || ''; }")
 # Negativo en rojo, como en el resto del dashboard (regla #80). Inline, así
 # que le gana al violeta de `.ag-cell` de `CSS_RANKING_GRID` sin
 # `!important`.
@@ -417,9 +494,15 @@ def _col(campo, titulo, **kw):
     return {"field": campo, "headerName": titulo, **kw}
 
 
-def renderizar_listado(filas, total, key, movil=False):
+def renderizar_listado(filas, total, key, movil=False, unidad_salida=False):
     """La grilla. `filas` sale de `filas_grilla`; `total` es el valorizado
-    de la fila TOTAL."""
+    de la fila TOTAL.
+
+    `unidad_salida` (regla #598): la Cantidad se escribe como el reporte por
+    área del POS —«2 Lt 26.0 oz»— y la columna «Unidad kardex» se esconde,
+    porque las unidades ya van en la celda; sus 100px pagan los 34 que la
+    Cantidad necesita de más. El número en la unidad del kardex queda en el
+    tooltip, y la columna sigue ordenando por él."""
     from st_aggrid import AgGrid, JsCode
 
     js = JsCode
@@ -469,17 +552,25 @@ def renderizar_listado(filas, total, key, movil=False):
              cellStyle=js(_JS_ESTILO_NOMBRE),
              pinned="left" if movil else None),
         _col("unidad", "Unidad kardex", width=100, minWidth=100,
-             suppressSizeToFit=True),
+             suppressSizeToFit=True, hide=bool(unidad_salida)),
         _col("precio", "Precio unitario", type=num, width=104, minWidth=104,
              suppressSizeToFit=True,
              valueFormatter=js(_JS_SOLES),
              headerTooltip="Precio promedio del kardex. Es el mismo en "
                            "todas las áreas del producto."),
-        _col("cantidad", "Cantidad", type=num, width=86, minWidth=86,
-             suppressSizeToFit=True,
-             valueFormatter=js(_JS_CANTIDAD), cellStyle=js(_JS_SIGNO),
-             headerTooltip="Stock al día, sumado entre las áreas "
-                           "elegidas."),
+        (_col("cantidad", "Cantidad", type=num, width=120, minWidth=120,
+              suppressSizeToFit=True,
+              valueFormatter=js(_JS_CANTIDAD_SALIDA), cellStyle=js(_JS_SIGNO),
+              tooltipField="cant_kardex",
+              headerTooltip="Stock al día, sumado entre las áreas elegidas: "
+                            "lo entero en la unidad del kardex y el resto en "
+                            "la de salida, como el reporte por área del POS.")
+         if unidad_salida else
+         _col("cantidad", "Cantidad", type=num, width=86, minWidth=86,
+              suppressSizeToFit=True,
+              valueFormatter=js(_JS_CANTIDAD), cellStyle=js(_JS_SIGNO),
+              headerTooltip="Stock al día, sumado entre las áreas "
+                            "elegidas.")),
         _col("valorizado", "Valorizado total", type=num, width=124,
              minWidth=124, suppressSizeToFit=True, sort="desc", valueFormatter=js(_JS_SOLES),
              cellStyle=js(_JS_SIGNO),
@@ -489,7 +580,8 @@ def renderizar_listado(filas, total, key, movil=False):
     # Las ocultas: sin columna no llegan al JS en todas las versiones del
     # componente, y el despliegue entero cuelga de ellas.
     columnas += [{"field": c, "hide": True}
-                 for c in ("__tipo", "__id", "__padre", "__n")]
+                 for c in ("__tipo", "__id", "__padre", "__n",
+                           "cant_salida", "cant_kardex")]
 
     grid_options = {
         "columnDefs": columnas,
@@ -579,7 +671,8 @@ def _filtro(col, nombre, icono, etiqueta, dibujar):
 
 
 def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
-                      col_area, col_unidad, col_punit, col_cant, col_val):
+                      col_area, col_unidad, col_punit, col_cant, col_val,
+                      col_factor=None, col_usal=None):
     """La tarjeta entera: título y filtros en una fila, la tabla debajo.
 
     Área, Familia y Subfamilia son de selección MÚLTIPLE (2026-09-18, a
@@ -587,7 +680,11 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
     no son tres desplegables anchos sino el disparador minimalista de Ajuste
     (regla #427): el texto dice lo elegido y el panel se abre al clic. Con
     cinco áreas marcadas de entrada, un `st.multiselect` suelto en la fila
-    habría envuelto sus chips en dos o tres renglones."""
+    habría envuelto sus chips en dos o tres renglones.
+
+    «Ver en unidad de salida» (regla #598) sale sólo si el parquet trae el
+    factor y la unidad de salida: sin ellos no hay con qué partir la
+    cantidad, y un interruptor que no hace nada se lee como un bug."""
     if not (col_prod and col_val):
         st.info("Faltan las columnas de producto o de valorizado para este "
                 "listado.")
@@ -614,10 +711,24 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
     ops_sub = sorted(set(_texto(_d_fam, col_subfam)) - {""})
     recortar_seleccion(_K_SUBFAMILIAS, ops_sub)
 
-    # columnas-internas: el título y los cinco controles de la tabla, en el
-    # renglón de arriba de la misma tarjeta.
-    c_tit, c_area, c_fam, c_sub, c_q, c_cero = st.columns(
-        [1.3, 0.95, 0.95, 1.05, 1.45, 0.8], vertical_alignment="center")
+    # El buscador y el título ceden lo que pide «Ver en unidad de salida»
+    # (regla #598), que sólo se dibuja si el parquet trae con qué partir.
+    hay_salida = bool(col_factor and col_usal)
+    c_us = None
+    if hay_salida:
+        # columnas-internas: el título y los seis controles de la tabla, en
+        # el renglón de arriba de la misma tarjeta.
+        # Repartidos por lo MEDIDO a 1366 (rótulos en versalitas de 14px):
+        # «VER EN UNIDAD DE SALIDA» pide 157 + 40 del interruptor y «VER SIN
+        # STOCK», 88 + 40; con menos, los dos se parten en dos renglones.
+        c_tit, c_area, c_fam, c_sub, c_q, c_us, c_cero = st.columns(
+            [1.55, 1.25, 1.35, 1.5, 1.35, 2.05, 1.35],
+            vertical_alignment="center")
+    else:
+        # columnas-internas: el título y los cinco controles de la tabla, en
+        # el renglón de arriba de la misma tarjeta.
+        c_tit, c_area, c_fam, c_sub, c_q, c_cero = st.columns(
+            [1.3, 0.95, 0.95, 1.05, 1.45, 0.8], vertical_alignment="center")
 
     def _dib_area():
         seleccion_en_panel(st.pills, "Área", _K_AREAS, ops_area,
@@ -671,6 +782,10 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         # columna de 141px. Qué hace lo dice el `title` del título, que
         # cuenta cuántos productos esconde.
         incluir = st.toggle("Ver sin stock", key=_K_SIN_STOCK)
+    en_salida = False
+    if hay_salida:
+        with c_us:
+            en_salida = st.toggle("Ver en unidad de salida", key=_K_SALIDA)
 
     areas = st.session_state.get(_K_AREAS) or []
     familias = st.session_state.get(_K_FAMILIAS) or []
@@ -680,7 +795,8 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         col_subfam=col_subfam, col_area=col_area, col_unidad=col_unidad,
         col_punit=col_punit, col_cant=col_cant, col_val=col_val,
         areas=areas, familias=familias, subfamilias=subfamilias,
-        texto=texto, incluir_sin_stock=incluir)
+        texto=texto, incluir_sin_stock=incluir,
+        col_factor=col_factor, col_usal=col_usal)
     n = len(listado.productos)
 
     with c_tit:
@@ -711,8 +827,8 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
     # tiene que poder escribir igual que Streamlit.
     recorte = "|".join([",".join(sorted(areas)), ",".join(sorted(familias)),
                         ",".join(sorted(subfamilias)), texto.strip(),
-                        str(incluir), str(len(d))])
+                        str(incluir), str(len(d)), str(en_salida)])
     key = f"inv_prod_grid_{zlib.crc32(recorte.encode('utf-8')):08x}"
     renderizar_listado(filas_grilla(listado),
                        float(listado.productos["valorizado"].sum()),
-                       key, movil=_es_movil())
+                       key, movil=_es_movil(), unidad_salida=en_salida)

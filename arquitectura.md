@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-597 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+598 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (197)
 
@@ -686,7 +686,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 
-**Datos, R2 y DuckDB** (84)
+**Datos, R2 y DuckDB** (85)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -772,6 +772,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 - **#594** — Ventas › «Control de pedidos»: lo que pasa con los pedidos ANTES de la venta, que…
 - **#595** — La venta por ÁREA DE PRODUCCIÓN: dónde se prepara, no qué grupo de la carta es
+- **#598** — «Stock e Inventario» cuenta sólo lo ACTIVO: área activa, producto activo, habilitado en el…
 
 **SUNAT y SIRE** (50)
 
@@ -47229,6 +47230,83 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+598. **«Stock e Inventario» cuenta sólo lo ACTIVO: área activa, producto
+     activo, habilitado en el área y de mercadería. Lo demás va a una fila
+     «Inactivos y servicios» que se abre como un área más.** 2026-10-03, a
+     pedido, después de cuadrar la vista contra cuatro reportes del POS
+     (Valorizado al día, por área, Distribución e Histórico): el stock y el
+     precio promedio daban IGUAL fila por fila —Central 1.750 de 1.750,
+     Barra 406 de 406, Distribución 723 de 749 (las otras 26 explicadas)—
+     y los TOTALES no, porque cada reporte del POS elige qué artículos
+     entran y la app sumaba todo. Con la foto de las 3:00 de ese día la
+     tabla entera sumaba S/ 179.395 y lo activo, S/ 56.674. Lo que quedó
+     fuera (201 filas con stock):
+       · **servicios**, 24 filas, S/ 164.753 — «Compras Mantenimiento
+         Varios» con 2.269,5 und = S/ 126.361 en GASTOS, «Planilla de
+         Movilidad», «Impresora». Se compran y nadie los da de baja;
+       · **área inactiva**, 43 filas, −S/ 35.614 — CALIENTES no tiene cierre
+         desde 2025-07-06 y sólo recibe descargos de venta (tipo 95): −145
+         «(P) Bife Ancho Argentino», −813 L de Aceite Frituras;
+       · **producto inactivo**, 114 filas, −S/ 6.792 — Agua Filtrada
+         −10.645 L en Barra;
+       · **no habilitado en el área**, 20 filas, S/ 374.
+
+     **La regla vive UNA vez: `data.INVENTARIO_ACTIVO`**, cuatro tríos
+     (columna, valor que entra, motivo). La aplican la vista
+     (`graficos/inventario.py::separar_activos`, al principio de
+     `renderizar_graficos_inventario`: chips, las cuatro secciones, la Tabla
+     y el asistente leen el df ya recortado, y un área inactiva no se ofrece
+     en los chips) y el KPI «Valorizado» del reporte, cuyo filtro admite
+     desde ese día VARIOS pares (columna, valores) que se cumplen todos
+     (`_resumen_kpis_cacheable`). El motivo es la PRIMERA marca que falla,
+     en ese orden. Tres cosas que muerden:
+       · **`COMPARTIDO` ES «habilitado en el área»** (`TSUBSTOCK.lActivo`):
+         medido, coincide en las 11.513 filas de área; el Almacén Central
+         dice siempre COMPARTIDO. Ya venía en el parquet sin que nadie lo
+         leyera.
+       · **AREA ACTIVA, TIPO PRODUCTO y UNIDAD SALIDA llegaron con la
+         consulta del Sheet de ese día** (reescrita con nombres completos y
+         validada contra el parquet: las 15.392 filas y las 13 columnas de
+         antes, iguales). Una marca cuya columna el parquet no trae NO
+         filtra —ni en la vista ni en el KPI, que la salta en vez de romper
+         la consulta—, y una celda vacía tampoco: sin dato no hay motivo.
+       · **El «Inventario Valorizado al Día» del POS NO es
+         `spRepInventario`**: ese SP no filtra el área en TSUBSTOCK. La regla
+         salió de cuadrar las filas, no del SP (memoria del proyecto).
+
+     **«Inactivos y servicios»** es un `st.button` debajo del TOTAL del
+     ranking de Por área, con la key que lleva su estado (`_on`/`_off`) para
+     que el CSS lo pinte elegido. Elegido, los otros tres cuadros hacen lo
+     de un área: «— por motivo», «— por área» y la tabla de abajo con una
+     columna «Por qué» y SÓLO las filas con stock (lo inactivo en cero no
+     hay que corregirlo). Un clic en un área del ranking lo suelta: el foco
+     del ranking sólo cambia con un clic (es estado que se relee, #399), así
+     que distinto al de la corrida anterior es «eligió un área». El ranking
+     muestra una fila menos (7) para pagar el alto del botón, y las tres
+     tarjetas entraron al piso de «una fila, un alto» de `_80_cards.py`:
+     medidas, 313 las tres.
+
+     **El % de los rankings se calcula sobre lo POSITIVO** y una fila
+     negativa no lleva %; el TOTAL dice 100 % sólo si no hay negativos. Era
+     sobre el neto, que con CALIENTES en −S/ 38.161 dejaba al Almacén
+     Central en 166 %. Sin negativos da lo mismo que antes. Ojo: la copia
+     de Movimientos (`graficos/drill_tablas.py`, #411) sigue sobre el neto.
+
+     **Stock por Producto: «Ver en unidad de salida».** La cantidad se
+     escribe como el reporte por área del POS —«2 Lt 26.0 oz», «350 g»,
+     «−10,645 Lt 164 ml»—: lo entero en la unidad del kardex y el resto ×
+     `FACTOR` en la de salida (`texto_unidad_salida`, la cuenta de
+     `spRepInventario`, con prueba). El texto lo arma Python
+     (`filas_grilla`: `cant_salida` y `cant_kardex`, también para cada área
+     del despliegue, con el factor de SU producto); la columna sigue
+     ordenando por el número y el kardex va al tooltip. Prendido, «Unidad
+     kardex» se esconde: sus 100px pagan los 34 que la Cantidad necesita de
+     más. Sin `FACTOR` y `UNIDAD SALIDA` en el parquet el interruptor no se
+     dibuja. Con dos decimales, el anís estrella de Barra (51 g) se leía
+     «0.05».
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47241,7 +47319,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#597**; la próxima toma el número siguiente.
+> última regla es la **#598**; la próxima toma el número siguiente.
 
 >
 

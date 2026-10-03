@@ -927,6 +927,19 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
 
 Detalle en `arquitectura.md` reglas #524, #525 y #542.
 
+## El stock también tiene UNA definición: lo ACTIVO
+
+Desde el 2026-10-03 «Stock e Inventario» cuenta sólo lo que el POS da por
+activo: área activa, producto activo, habilitado en el área (`COMPARTIDO`
+del parquet es eso, `TSUBSTOCK.lActivo`) y de mercadería. La regla vive
+UNA vez, `data.INVENTARIO_ACTIVO`; la aplica
+`graficos/inventario.py::separar_activos` al entrar al reporte y la lee el
+KPI. Sin ella la tabla sumaba S/ 179.395 contra S/ 56.674 de stock: S/ 165k
+de SERVICIOS que nadie da de baja en GASTOS y CALIENTES, área inactiva con
+−S/ 38k de descargos de venta. Lo demás se ve en la fila «Inactivos y
+servicios» de Por área, con su motivo. Y una marca cuya columna el parquet
+no trae no filtra. Regla #598.
+
 ## El consumo según recetas baja hasta lo que se COMPRA
 
 Movimientos › «Consumo según recetas» (2026-09-28): cada plato vendido,
