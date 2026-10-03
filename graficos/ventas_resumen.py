@@ -649,6 +649,12 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     _c_est = dv.columna(d, dv.ESTADO)
     if _c_est:
         cols["estado"] = d[_c_est].astype(str).str.strip().str.upper()
+    # Con la venta por día del turno (regla #593), `fecha` dice el TURNO —el
+    # cobro de las 00:25 queda a las 23:59 del día anterior— y la hora real
+    # de emisión viaja aparte: es la que se lee en el Detalle.
+    _c_em = dv.columna(d, dv.FECHA_EMISION)
+    if _c_em:
+        cols["emision"] = pd.to_datetime(d[_c_em], errors="coerce")
     # Los cuatro precios (regla #518): carta y costo vienen POR UNIDAD y se
     # multiplican por la cantidad; neto y descuento ya son de la línea
     # (medido: «Sudado a la leña» ×2, precio carta 59, descuento de línea
@@ -2243,8 +2249,9 @@ def _zona_detalle(tabla, foco, nombre, gran, partida, ctx, nclic, pie):
         _nc = amb["clase"] == dv.NOTA_CREDITO
         if _nc.any():
             amb = amb.assign(ped=amb["ped"].where(~_nc, amb["ped"] + " · NC"))
-    agg = {"fecha": ("fecha", "min"), "platos": ("venta", "size"),
-           "valor": ("venta", "sum")}
+    agg = {"fecha": ("emision" if "emision" in amb.columns else "fecha",
+                     "min"),
+           "platos": ("venta", "size"), "valor": ("venta", "sum")}
     for _c in ("doc", "mesero", "canal"):
         if _c in amb.columns:
             agg[_c] = (_c, "first")

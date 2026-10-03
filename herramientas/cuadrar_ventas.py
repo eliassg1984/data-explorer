@@ -184,7 +184,10 @@ def lado_app(desde, hasta):
     app; si el parquet trae la marca de combo del POS)."""
     import data  # importa streamlit: sus avisos de «bare mode» son ruido
 
-    df = data.cargar_rango("ventas.parquet", "FEC REG DOCUMENTO", desde, hasta)
+    # Por fecha de EMISIÓN, no del turno (regla #593): el POS se cuadra
+    # por `MDOCUMENTO.fRegistro`, día calendario.
+    df = data.cargar_rango("ventas.parquet", "FEC REG DOCUMENTO", desde, hasta,
+                           turno=False)
     if df is None or df.empty:
         sys.exit("La app no trajo ventas para ese rango.")
     dia = pd.to_datetime(df[dv.FECHA]).dt.strftime("%Y-%m-%d")

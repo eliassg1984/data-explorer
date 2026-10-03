@@ -9,7 +9,7 @@ import numpy as np
 import boto3
 import json
 import zlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import definicion_venta
 import consumo_recetas
@@ -1186,7 +1186,7 @@ def _version_preparar(archivo):
     return prep.VERSION if prep else None
 
 
-def _preparar_en_rango(prep, df, col_fecha, ini, fin):
+def _preparar_en_rango(prep, df, col_fecha, ini, fin, turno=False):
     """`prep.preparar` recortado al rango por la MISMA fecha con que se
     cargó.
 
@@ -1197,11 +1197,14 @@ def _preparar_en_rango(prep, df, col_fecha, ini, fin):
     facturado 70 días después, que los hay— es de junio, y quedaba fuera de
     junio sin entrar en julio. Las notas de crédito espejadas conservan la
     fecha del pedido que anulan, así que restan en el mismo período que su
-    venta."""
+    venta.
+
+    `turno`: la venta por día del turno de caja (regla #593); va a
+    `preparar`, que mueve la fecha del documento antes de recortar."""
     c_doc = prep.columna(df, prep.FECHA)
     if c_doc is None or c_doc == col_fecha or col_fecha not in df.columns:
-        return prep.preparar(df, ini, fin)
-    out = prep.preparar(df)
+        return prep.preparar(df, ini, fin, turno=turno)
+    out = prep.preparar(df, turno=turno)
     f = pd.to_datetime(out[col_fecha], errors="coerce",
                        dayfirst=True).dt.normalize()
     m = f.notna() & (f >= pd.Timestamp(ini)) & (f <= pd.Timestamp(fin))
@@ -1234,13 +1237,17 @@ def _donde_rango(con, url, col_fecha, prep):
 
 @st.cache_data(ttl=3600, persist="disk")
 def _cargar_rango_cacheable(archivo, sello, col_fecha, ini, fin,
-                            definicion=None):
+                            definicion=None, turno=False):
     """Lectura filtrada por rango. Si falla, LANZA — @st.cache_data no cachea el
     fracaso. Ver `cargar()` para el porqué del split cacheada/wrapper.
 
     `sello` no se usa en el cuerpo: ES la clave (ver el bloque del sello).
     `definicion` tampoco: es la versión de `_PREPARAR[archivo]`, por lo
     mismo (ver `_version_preparar`).
+
+    `turno` (regla #593): la venta por día del turno de caja. Carga un día
+    más al final, porque el cobro de las 00:25 del día siguiente es del
+    último día del rango; `preparar` lo mueve y recorta.
 
     `persist="disk"` por lo mismo que `_cargar_cacheable`: la clave incluye el
     rango, así que cada ventana que ya se miró una vez queda en disco y
@@ -1258,14 +1265,30 @@ def _cargar_rango_cacheable(archivo, sello, col_fecha, ini, fin,
     bucket = st.secrets["R2_BUCKET"]
     url = f"s3://{bucket}/{archivo}"
     donde, n = _donde_rango(con, url, col_fecha, prep)
+    turno = bool(turno and prep is not None)
+    fin_carga = fin + timedelta(days=1) if turno else fin
     df = con.execute(
         f"SELECT * FROM read_parquet('{url}') WHERE {donde}",
-        [ini, fin] * n,
+        [ini, fin_carga] * n,
     ).df()
-    return _preparar_en_rango(prep, df, col_fecha, ini, fin) if prep else df
+    return (_preparar_en_rango(prep, df, col_fecha, ini, fin, turno=turno)
+            if prep else df)
 
 
-def cargar_rango(archivo, col_fecha, ini, fin):
+def venta_por_turno():
+    """True si Ventas está fechando por el día del TURNO de caja (el
+    default, regla #593) y False si por la fecha de EMISIÓN del comprobante
+    (la del Registro de Ventas de SUNAT). Lo elige el selector de «Filtros»
+    de Ventas (`definicion_venta.CLAVE_DIA`); fuera de Streamlit, turno."""
+    try:
+        return (st.session_state.get(definicion_venta.CLAVE_DIA,
+                                     definicion_venta.DIA_TURNO)
+                == definicion_venta.DIA_TURNO)
+    except Exception:
+        return True
+
+
+def cargar_rango(archivo, col_fecha, ini, fin, turno=None):
     """
     Como cargar(), pero filtrando por fecha DENTRO de DuckDB, antes de
     materializar el DataFrame (para parquets grandes como ventas.parquet:
@@ -1284,11 +1307,19 @@ def cargar_rango(archivo, col_fecha, ini, fin):
 
     No cacheada a propósito (la capa interna sí): un fallo transitorio NO debe
     quedar cacheado 1h como None. Mismo patrón que cargar().
+
+    `turno`: fechar la venta por el día del turno de caja (regla #593). Sin
+    darlo, lo que diga el selector de Ventas (`venta_por_turno`); una
+    herramienta que cuadra contra el POS por fecha de registro pasa False.
     """
+    if turno is None:
+        turno = venta_por_turno()
+    turno = bool(turno and archivo in _PREPARAR)
     try:
         return _cargar_rango_cacheable(archivo, sello_datos(archivo),
                                        col_fecha, ini, fin,
-                                       definicion=_version_preparar(archivo))
+                                       definicion=_version_preparar(archivo),
+                                       turno=turno)
     except Exception as e:
         st.error(f"Error cargando {archivo}: {str(e)}")
         return None
@@ -1361,7 +1392,7 @@ def _expr_fecha_kpi(col_fecha):
 
 @st.cache_data(ttl=3600, persist="disk")
 def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
-                            col_item=None, definicion=None):
+                            col_item=None, definicion=None, turno=False):
     """Agregados SUM/COUNT DISTINCT directo en DuckDB, sin materializar
     filas — mismo espíritu que `_rango_fechas_cacheable`. Acota al MES EN
     CURSO cuando `col_fecha` viene dado (mismo default que usa la franja de
@@ -1371,7 +1402,8 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
 
     `definicion` no se usa en el cuerpo: es la versión de la definición
     del archivo (`_version_preparar`), en la clave por el mismo motivo que
-    el sello."""
+    el sello. `turno`: el mes por día del turno de caja, como la vista
+    (regla #593)."""
     if not secrets_disponibles():
         return {}
     con = get_conn()
@@ -1400,7 +1432,7 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
         df = con.execute(
             f"SELECT {lista} FROM read_parquet('{url}') WHERE {donde}",
             [ini, hoy] * n).df()
-        return prep.resumir(prep.preparar(df, ini, hoy), kpis,
+        return prep.resumir(prep.preparar(df, ini, hoy, turno=turno), kpis,
                             col_ped=col_dedup, col_item=col_item)
 
     where = ""
@@ -1483,9 +1515,10 @@ def resumen_kpis(archivo, kpis, col_fecha=None, col_dedup=None):
                      if i.get("archivo") == archivo and i.get("kpi_item")),
                     None)
     try:
-        return _resumen_kpis_cacheable(archivo, sello_datos(archivo),
-                                       kpis, col_fecha, col_dedup, col_item,
-                                       definicion=_version_preparar(archivo))
+        return _resumen_kpis_cacheable(
+            archivo, sello_datos(archivo), kpis, col_fecha, col_dedup,
+            col_item, definicion=_version_preparar(archivo),
+            turno=bool(archivo in _PREPARAR and venta_por_turno()))
     except Exception:
         return {}
 

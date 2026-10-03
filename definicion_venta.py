@@ -60,7 +60,7 @@ consumen los dos lados — `data.py` y las vistas —, igual que `cortes.py`.
 import numpy as np
 import pandas as pd
 
-VERSION = 4
+VERSION = 5
 """Entra en la clave de la caché de `data.py`. Subirla al cambiar la
 definición: la caché vive en disco y, sin esto, seguiría sirviendo el df
 preparado con la regla anterior hasta que cambie el parquet.
@@ -69,7 +69,8 @@ No es teórico: la 2 nació el mismo día que la 1, al sumar `COSTO VENTA` —
 la caché local tenía el df de la 1, sin esa columna, y «Ranking & FoodCost»
 siguió mostrando el FoodCost con el costo unitario. La 3 es el costo de
 los combos (regla #542); la 4, los niños de las notas de crédito, que
-restan como los adultos (regla #591)."""
+restan como los adultos (regla #591); la 5, la nota que toma la fecha de
+su propia fila, y la venta por día del turno de caja (regla #593)."""
 
 CLASE = "CLASE VENTA"
 VENTA = "Venta"
@@ -85,6 +86,20 @@ TICKET = "Ticket"
 # Se buscan sin distinguir mayúsculas ni `_` (el demo las trae «Fec Reg
 # Documento»). Las que faltan se saltean: sin ellas no hay nota que armar.
 FECHA = "FEC REG DOCUMENTO"
+DIA = "DIA CONTABLE"
+"""El día del TURNO de caja de cada comprobante (`MDOCUMENTO.fDiaContable`,
+en la consulta del Sheet desde el 2026-10-03). Con `preparar(turno=True)`
+la venta se fecha por él (regla #593)."""
+CLAVE_DIA = "ventas_dia"
+DIA_TURNO = "Turno de caja"
+DIA_EMISION = "Emisión · SUNAT"
+"""El selector de «Filtros» de Ventas que elige por qué día se fecha la
+venta (regla #593): el del turno de caja (default, como el cierre del
+cajero) o el de emisión del comprobante (como el Registro de Ventas)."""
+FECHA_EMISION = "FECHA EMISION"
+"""La fecha y hora REALES de emisión, cuando `preparar(turno=True)` pasa
+`FECHA` al día del turno: lo que dice el comprobante y el Registro de
+Ventas de SUNAT."""
 COD_TIPO = "COD TIPO DOC"
 TIPO = "TIPO DOC"
 ESTADO = "ESTADO DOCUMENTO"
@@ -166,7 +181,7 @@ _REFERENCIA_NC = (NC_NUMERO, NC_FECHA, "NETO NC", NC_TOTAL, "FECH REG NC")
 COLUMNAS = (
     FECHA, COD_TIPO, TIPO, ESTADO, MOTIVO_CORTESIA, NUMERO, LLAVE_DOC,
     LLAVE_ITEM, LLAVE_PAGO, NC_NUMERO, NC_FECHA, NC_TOTAL, TOTAL_DOC, PAX,
-    NINOS, CANAL, CARTA_UNIT, COSTO_UNIT, PRODUCTO, ES_COMBO,
+    NINOS, CANAL, DIA, CARTA_UNIT, COSTO_UNIT, PRODUCTO, ES_COMBO,
     *_MONTOS_LINEA, *_DEL_PAGO, *_CABECERA, *_REFERENCIA_NC,
 )
 """Todo lo que `preparar()` lee —y el canal, que pide el ticket de
@@ -297,6 +312,15 @@ def _espejo_de_notas(df, cols, es_nota):
             c = cols[nombre]
             if c:
                 espejo[c] = num_nc.map(notas[c]).fillna(orig[c]).to_numpy()
+        # La FECHA de la propia nota, si vino: es la de `FECH REG NC`, salvo
+        # que `preparar` ya la haya pasado al día del turno (regla #593) —
+        # entonces la nota resta el día del turno en que se emitió.
+        f_nota = pd.to_datetime(num_nc.map(notas[cols[FECHA]]),
+                                errors="coerce")
+        espejo[cols[FECHA]] = f_nota.fillna(espejo[cols[FECHA]]).to_numpy()
+        if FECHA_EMISION in notas.columns:
+            espejo[FECHA_EMISION] = pd.to_datetime(
+                orig[cols[NC_FECHA]], errors="coerce").to_numpy()
     if cols[LLAVE_DOC]:
         llave_nc = espejo[cols[LLAVE_DOC]].astype("string").fillna(
             "NC " + num_nc)
@@ -362,7 +386,25 @@ def _nota_sin_items(filas, cols):
     return filas
 
 
-def preparar(df, ini=None, fin=None):
+def fecha_de_turno(fecha, dia):
+    """La fecha de cada comprobante en el día del TURNO de caja (regla
+    #593): la misma `fecha` cuando cae en su `dia` contable y, cuando no,
+    ese día a las 23:59 — el cobro de las 00:25 cierra el turno del día
+    anterior, como lo cuadra el cajero. Al revés (un día contable posterior,
+    no hay ninguno en 2026), ese día a las 00:00. Sin `dia`, la `fecha`.
+
+    23:59 y no la hora real: un 00:25 en el día anterior quedaría ANTES de
+    que abriera la mesa y daría tiempos negativos. Pura, sobre Series."""
+    f = pd.to_datetime(fecha, errors="coerce")
+    d = pd.to_datetime(dia, errors="coerce").dt.normalize()
+    dia_f = f.dt.normalize()
+    antes = d.notna() & dia_f.notna() & (d < dia_f)
+    despues = d.notna() & dia_f.notna() & (d > dia_f)
+    return (f.where(~antes, d + pd.Timedelta(hours=23, minutes=59))
+             .where(~despues, d))
+
+
+def preparar(df, ini=None, fin=None, turno=False):
     """El df de `ventas.parquet` con la definición de venta aplicada.
 
     - Agrega `CLASE VENTA`: Venta, Nota de crédito, Cortesía o Anulado.
@@ -370,6 +412,10 @@ def preparar(df, ini=None, fin=None):
       los ítems del documento que anula, en negativo y en SU fecha.
     - Agrega `COSTO VENTA`: costo unitario × cantidad de cada línea. En los
       combos, antes, devuelve `PRECIO COSTO` a unitario (`_costo_unitario`).
+    - Con `turno` (y la columna `DIA CONTABLE`), `FEC REG DOCUMENTO` pasa
+      al día del turno de caja (`fecha_de_turno`) y la fecha de emisión
+      real queda en `FECHA EMISION` (regla #593). Antes de espejar las
+      notas, así una nota resta el día del turno en que se emitió.
     - Con `ini`/`fin` (fechas, inclusive) se queda sólo con lo que cae en
       el rango: el loader trae también los documentos anulados por una
       nota del rango aunque sean de antes, y acá se van después de
@@ -382,6 +428,11 @@ def preparar(df, ini=None, fin=None):
     cols = {n: columna(df, n) for n in COLUMNAS}
     out = df.assign(**{CLASE: _clasificar(df, cols)})
     out = _costo_unitario(out, cols)
+    if turno and cols[DIA] and cols[FECHA] and not out.empty:
+        out = out.assign(**{
+            FECHA_EMISION: pd.to_datetime(out[cols[FECHA]], errors="coerce"),
+            cols[FECHA]: fecha_de_turno(out[cols[FECHA]], out[cols[DIA]]),
+        })
 
     if cols[NC_NUMERO] and cols[NC_FECHA] and cols[FECHA] and not out.empty:
         es_nota = out[CLASE] == NOTA_CREDITO

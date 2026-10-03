@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-592 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+593 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (196)
 
@@ -768,7 +768,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#576** — Recetas › «Costo Recetas Base»: lo que usan las ventas de cada receta base contra lo que…
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 
-**SUNAT y SIRE** (49)
+**SUNAT y SIRE** (50)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -819,6 +819,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#587** — La ficha de Documentos SUNAT es SÓLO el comprobante SUNAT, y entra en una pantalla
 - **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
 - **#589** — Un elemento que aparece en una corrida y no en la anterior re-monta TODO lo que se dibuja…
+- **#593** — Ventas se fecha por el día del TURNO de caja (default) o por el de EMISIÓN del comprobante, a…
 
 **Fechas, rangos y cortes** (12)
 
@@ -883,7 +884,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (149)
+**Decisiones de diseño y UX** (150)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1034,6 +1035,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#589** — Un elemento que aparece en una corrida y no en la anterior re-monta TODO lo que se dibuja…
 - **#590** — El Resumen de Ventas dice QUÉ se vendió sin costo, y el Resumen y el Mix marcan el período en…
 - **#591** — El ticket de Ventas divide la venta de los canales que REGISTRAN clientes, no la venta…
+- **#593** — Ventas se fecha por el día del TURNO de caja (default) o por el de EMISIÓN del comprobante, a…
 
 **Mantenimiento y trampas del lenguaje** (13)
 
@@ -46946,6 +46948,54 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+593. **Ventas se fecha por el día del TURNO de caja (default) o por el de
+     EMISIÓN del comprobante, a elección: el cobro de las 00:25 es del día
+     anterior para el cajero y del día siguiente para SUNAT.** 2026-10-03,
+     a pedido: «puedo tener ambas, pero que abra mostrando la de turno de
+     caja, porque para el registro de ventas contable se toma la fecha de
+     emisión del documento».
+
+     - **Lo que cambia.** El POS anota en cada comprobante su día contable
+       (`MDOCUMENTO.fDiaContable`, columna `DIA CONTABLE` desde la #592),
+       que es el del turno. Se separa de la fecha de registro sólo en lo
+       cobrado pasada la medianoche: 7 comprobantes en septiembre de 2026
+       (S/ 2.491,60 de venta) — y el evento FAGOR, S/ 58.500 abierto el
+       30 de junio a las 23:51 y cobrado el 1 de julio a las 00:01: por
+       turno, junio da S/ 361.339,62; por emisión, 300.344,12. Medido
+       contra el POS por día contable, junio y septiembre: todos los días
+       al céntimo.
+     - **Dónde se aplica: al CARGAR**, no en cada vista. `data.cargar_rango`
+       lee el selector (`venta_por_turno`, clave `definicion_venta.
+       CLAVE_DIA`) y lo pasa a `preparar(turno=True)`, que mueve
+       `FEC REG DOCUMENTO` al día del turno (`fecha_de_turno`) y deja la
+       hora real en `FECHA EMISION`. Así las siete vistas de Ventas, el
+       rail (`resumen_kpis`) y el asistente ven el mismo día sin que
+       ninguna lo sepa. Con turno se carga un día más al final: el cobro de
+       las 00:25 del día siguiente es del último día del rango. La nota de
+       crédito toma la fecha de SU fila (la nota), así resta el día de su
+       turno.
+     - **23:59 y no la hora real.** Pasar el 00:25 del 3 al 2 a las 00:25
+       lo dejaría antes de que abriera la mesa: tiempos negativos en la
+       ficha de la hora y en la duración. Va al cierre del turno, 23:59, y
+       la hora real se lee de `FECHA EMISION` donde importa (el Detalle del
+       Resumen).
+     - **El selector vive en «Filtros» de Ventas** (`_selector_dia_venta`):
+       no es un filtro, pero manda sobre las mismas vistas, y fuera del
+       default prende el contador del panel. Cambiarlo cambia QUÉ se carga,
+       y el panel está dentro del fragment del contenido: pide un
+       `st.rerun(scope="app")` después de registrar el widget. Verificado
+       en el navegador: la granularidad y la subvista del Resumen
+       sobreviven al cambio.
+     - **`herramientas/cuadrar_ventas.py` carga por emisión**
+       (`turno=False`): el POS se cuadra por `MDOCUMENTO.fRegistro`, día
+       calendario. `definicion_venta.VERSION` pasó a 5.
+
+     Candado: `test_definicion_venta.py` (el cobro de las 00:25 en el
+     turno anterior a las 23:59 con su hora real aparte, el mismo día por
+     emisión, la nota del canje en su turno).
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -46958,7 +47008,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#592**; la próxima toma el número siguiente.
+> última regla es la **#593**; la próxima toma el número siguiente.
 
 >
 

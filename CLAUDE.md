@@ -892,6 +892,12 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
   147,43. El «Ticket Pro.» de la Liquidación de Cajero del POS es otra
   cosa: el NETO del local ÷ adultos (118,86), que la app muestra como
   «Ticket neto». Regla #591.
+- **Ventas se fecha por el día del TURNO de caja** (default) o por el de
+  emisión, con un selector en «Filtros». Se aplica AL CARGAR
+  (`preparar(turno=True)` mueve `FEC REG DOCUMENTO` y deja la hora real en
+  `FECHA EMISION`), no en cada vista. Todo lo que cuadre contra el POS por
+  fecha de registro carga con `turno=False`, como `cuadrar_ventas.py`.
+  Regla #593.
 - **En un COMBO, `PRECIO COSTO` es el costo de la LÍNEA, no de la
   unidad** (la Degustación, las parrillas, los menús de evento:
   `TPRODUCTO.lCombinacion = 1`). El extractor lo llena con lo servido de

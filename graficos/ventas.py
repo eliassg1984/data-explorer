@@ -101,6 +101,33 @@ _PILA = pila_sin_tablas((
 ))
 
 
+_K_DIA_RECARGA = "_ventas_dia_recarga"
+
+
+def _selector_dia_venta():
+    """Por qué día se fecha la venta (regla #593): el del TURNO de caja
+    —el cobro de las 00:25 es del día anterior, como lo cierra el cajero—
+    o el de EMISIÓN del comprobante —el del Registro de Ventas de SUNAT—.
+
+    Cambiarlo es cambiar QUÉ se carga (`data.cargar_rango` lee esta misma
+    clave), y el panel vive dentro del fragment del contenido: un rerun del
+    fragment volvería a dibujar el df viejo. Por eso el cambio pide una
+    corrida COMPLETA, después de que el widget quedó registrado."""
+    st.markdown('<div class="filtro-rotulo filtro-ventas_dia">Fecha de la '
+                'venta</div>', unsafe_allow_html=True)
+    st.segmented_control(
+        "Fecha de la venta", [dv.DIA_TURNO, dv.DIA_EMISION],
+        default=dv.DIA_TURNO, required=True, key=dv.CLAVE_DIA,
+        label_visibility="collapsed",
+        on_change=lambda: st.session_state.__setitem__(_K_DIA_RECARGA, True),
+        help=("**Turno de caja**: lo cobrado pasada la medianoche cuenta en "
+              "el día del turno, como el cierre de caja. **Emisión · SUNAT**: "
+              "en el día del comprobante, como el Registro de Ventas. Sólo "
+              "cambia lo cobrado después de las 00:00 (unos 5 cobros al mes)."))
+    if st.session_state.pop(_K_DIA_RECARGA, False):
+        st.rerun(scope="app")
+
+
 def _ventas_cargar_compra_diaria(dia_min, dia_max):
     """Compra por día, acotada a [dia_min, dia_max] (el rango de días que
     ya tiene la vista de Ventas). Carga compras.parquet APARTE — Ventas y
@@ -287,9 +314,16 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # sólo para no repetirlos — ese helper es hoy `base.filtro_pills`, que
     # además dejó de necesitar el wrapper `chipwrap_<key>_on|off`: el estado
     # activo lo marca ahora el compartimento entero, no cada filtro.
+    # El día de la venta (regla #593) no es un filtro, pero manda sobre las
+    # mismas vistas: va en el mismo panel, y fuera del default prende el
+    # contador como un filtro más, para que se note con el panel cerrado.
+    _dia_otro = (st.session_state.get(dv.CLAVE_DIA, dv.DIA_TURNO)
+                 != dv.DIA_TURNO)
     with compartimento_filtros(contar_filtros(
             "ventas_graf_filtro_fam", "ventas_graf_filtro_sub",
-            "ventas_graf_filtro_canal", "ventas_graf_filtro_serv")):
+            "ventas_graf_filtro_canal", "ventas_graf_filtro_serv")
+            + int(_dia_otro)):
+        _selector_dia_venta()
         _, fam_sel = filtro_pills(df_f, col_fam,
                                   "ventas_graf_filtro_fam", "Grupo")
         # CASCADA: Sub Grupo sólo ofrece los que quedan bajo el Grupo elegido.

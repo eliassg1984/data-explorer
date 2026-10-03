@@ -538,6 +538,36 @@ igual(dv.pax_por(dv.solo_venta(_items(_np)), "LLAVE LOCAL PEDIDO", dv.NINOS,
       "en el rango, el niño de la mesa del canje cuenta una vez")
 ok(dv.NINOS in dv.COLUMNAS, "y viajan con la definición si la consulta los trae")
 
+print("\n── el día del turno de caja (regla #593) ──")
+# El cobro de las 00:25 del 3 es del turno del 2: con `turno` cuenta el 2 (a
+# las 23:59, no a las 00:25, que quedaría antes de abrir la mesa) y su hora
+# real queda en FECHA EMISION; sin `turno`, del 3, como el Registro de
+# Ventas. La nota del canje (C1, del 3) resta el día de SU turno.
+D2 = dt.date(2026, 9, 2)
+_tu = crudo.assign(**{dv.DIA: pd.to_datetime(crudo["FEC REG DOCUMENTO"])
+                      .dt.normalize()})
+_tu = pd.concat([_tu, pd.DataFrame([{
+    **_fila("B9", "02", "Boleta Electronica", "PAGADO", "2026-09-03 00:25",
+            "N", 2, "01", "Lomo", 1, 50.0, 0.0, total_doc=50.0),
+    dv.DIA: pd.Timestamp(D2)}])], ignore_index=True)
+_ft = dv.fecha_de_turno(_tu["FEC REG DOCUMENTO"], _tu[dv.DIA])
+igual(str(_ft.iloc[-1]), "2026-09-02 23:59:00",
+      "el cobro de las 00:25 va al cierre del turno del día anterior")
+ok((_ft.iloc[:-1] == pd.to_datetime(_tu["FEC REG DOCUMENTO"].iloc[:-1])).all(),
+   "los que caen en su día contable no se mueven")
+_t2 = dv.preparar(_tu, D2, D2, turno=True)
+igual(float(_venta_dia(_t2).sum()), 50.0, "con turno, el 2 trae el cobro del 3 a las 00:25")
+igual(str(_t2[dv.FECHA_EMISION].iloc[0]), "2026-09-03 00:25:00",
+      "y su hora real de emisión, aparte")
+igual(float(_venta_dia(dv.preparar(_tu, D2, D2)).sum()), 0.0,
+      "sin turno (emisión · SUNAT), el 2 no tiene ventas")
+_t3 = dv.preparar(_tu, D3, D3, turno=True)
+igual(float(_venta_dia(_t3).sum()), 80.0,
+      "con turno, el 3 sigue: factura − nota del canje + la cuenta dividida")
+ok((_t3.loc[_t3[dv.CLASE] == dv.NOTA_CREDITO, "FEC REG DOCUMENTO"]
+    .dt.date == D3).all(), "la nota resta el día de su turno")
+ok(dv.DIA in dv.COLUMNAS, "el día contable viaja con la definición")
+
 print("\n── el asistente sabe qué es venta ──")
 from asistente_datos import nota_de_grano  # noqa: E402
 
