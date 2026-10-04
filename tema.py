@@ -237,6 +237,23 @@ que es lo que mide el tramo chico de una barra mediana. Regla #453."""
 ESCALA_CONTINUA = "blues"
 """Escala continua de Plotly para treemaps/mapas de calor (valor → intensidad)."""
 
+MAPA_TRAMOS = ["#d6e6f7", "#a3c6ec", "#6aa1dc", "#3a78c4", "#1c4f96"]
+"""Los cinco tonos del MOSAICO de Ventas › Por hora (regla #610), de lo que
+menos vende a lo que más. Escalonados y no continuos: con la escala
+«blues» una sola hora con evento estiraba la escala y el resto del mapa
+quedaba en su tercio más claro, tonos que casi no se distinguían («una
+pared mal pintada»). El primero ya es azul a propósito: la hora SIN
+ventas va en `GRIS_LINEA`, y tiene que leerse distinta de la que vendió
+poco."""
+
+MAPA_TINTA = "#0c2d57"
+"""El número escrito sobre los tres tonos claros de `MAPA_TRAMOS` (sobre los
+dos oscuros va en blanco). Es el azul más oscuro de la misma familia, no un
+negro: sobre un color se escribe con la tinta de ese color."""
+
+MAPA_PUNTO = MAPA_TRAMOS[3]
+"""El punto de la forma «Puntos» de Ventas › Por hora (regla #610)."""
+
 ESCALA_SEMAFORO = ["#ef4444", "#f97316", "#16a34a"]
 """Escala divergente rojo→naranja→verde: negativo→neutro→positivo
 (p.ej. ajuste de inventario, donde el signo importa)."""

@@ -2112,27 +2112,110 @@ def _pruebas_puras():
     check("horario · el eje de Semana se queda con el día",
           any("Ago" in t for t in _tt_sem), False)
 
-    # ── Cuadrícula del mapa ─────────────────────────────────────────────
-    # Va como UN shape `path` con muchos subtrazos, encima del heatmap (la
-    # grilla menor del eje se dibuja debajo y la tapaba el <image>). Lo que
-    # se fija acá es la GEOMETRÍA: los cortes caen en los bordes de celda
-    # (± 0.5, nunca en el centro) y el hueco entre paneles queda cerrado a
-    # los lados pero SIN líneas dentro — cruzarlo diría que ahí hay días.
+    # ── El mosaico (regla #610) ─────────────────────────────────────────
+    # «Una pared mal pintada»: escala continua estirada por una hora con
+    # evento, rayado gris en filas alternas y cuadrícula encima. Ahora el
+    # aire entre celdas es el ÚNICO separador —sin shapes de cuadrícula ni
+    # de rayado—, y la hora sin ventas va en su propia capa gris, sólo
+    # dentro de los paneles (no en el hueco entre ellos).
+    import numpy as _np
     _fig_rej = _vh._fig_mapa([_cd_eje, _cd_eje], [(2026, 32), (2026, 33)],
                              "Semana", "venta", [], [19, 21])
-    _rej = [s for s in _fig_rej.layout.shapes if s.type == "path"]
-    check("horario · la cuadrícula es un solo shape", len(_rej), 1)
-    check("horario · y va encima del heatmap", _rej[0].layer, "above")
-    _seg = [s for s in _rej[0].path.split("M") if s]
-    _pt = lambda s, i, j: float(s.split("L")[i].split(",")[j])  # noqa: E731
-    _vert = sorted({_pt(s, 0, 0) for s in _seg if _pt(s, 0, 0) == _pt(s, 1, 0)})
-    check("horario · cortes verticales en los bordes de cada día",
-          _vert, [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5,
-                  7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5])
-    _hor = sorted({(_pt(s, 0, 0), _pt(s, 1, 0))
-                   for s in _seg if _pt(s, 0, 1) == _pt(s, 1, 1)})
-    check("horario · las horizontales no cruzan el hueco entre paneles",
-          _hor, [(-0.5, 6.5), (7.5, 14.5)])
+    check("horario · el mosaico no dibuja cuadrícula ni rayado",
+          [s.type for s in _fig_rej.layout.shapes], [])
+    _hm = [t for t in _fig_rej.data if t.type == "heatmap"]
+    check("horario · el aire entre celdas es el separador",
+          {(t.xgap, t.ygap) for t in _hm},
+          {(_vh._GAP_CELDA, _vh._GAP_CELDA)})
+    check("horario · la hora sin ventas tiene su capa (2×7×2 − 4 con dato)",
+          int(_np.isfinite(_np.array(_hm[0].z, dtype=float)).sum()), 24)
+    check("horario · el puente de JS sabe cuántas columnas hay",
+          _fig_rej.layout.meta["vh_cols"], 15)
+    # Los tonos: quintiles redondeados a dos cifras, y una hora con evento
+    # NO estira la escala (era el bug de la «blues» continua).
+    check("horario · los cortes son los quintiles redondeados",
+          _vh._cortes_tramos(_np.arange(1, 101, dtype=float)),
+          [21.0, 41.0, 60.0, 80.0])
+    check("horario · un evento de S/ 100.000 no estira los cortes",
+          max(_vh._cortes_tramos(list(range(1, 101)) + [100_000])) < 100,
+          True)
+    check("horario · cortes repetidos quedan uno (menos tonos, no iguales)",
+          _vh._cortes_tramos([5.0] * 50), [5.0])
+    check("horario · la leyenda de los tonos",
+          _vh._rotulos_tramos([300.0, 800.0], "venta"),
+          ["< 300", "300–800", "≥ 800"])
+    check("horario · con tres tonos, el más alto es el más oscuro",
+          _vh._idx_tramos(3), [0, 2, 4])
+    check("horario · la cifra corta de la celda",
+          [_vh._fmt_celda(v, "venta") for v in
+           (850, 999.6, 2548, 12_000, 1_300_000, -300)],
+          ["850", "1k", "2.5k", "12k", "1.3M", "−300"])
+    check("horario · el ticket va sin decimales y la resta con signo",
+          (_vh._fmt_celda(115.8, "ticket"),
+           _vh._fmt_celda(1200, "venta", signo=True)), ("116", "+1.2k"))
+    # La cifra en la celda: una capa de texto, tinta azul sobre los tonos
+    # claros y blanco sobre los oscuros; sin ella si no se pide o si la
+    # columna no tiene el ancho (dos meses enteros sin deslizar: 63
+    # columnas en el ancho estimado).
+    from tema import BLANCO as _BL, MAPA_TINTA as _TINTA
+    _txt = [t for t in _fig_rej.data if t.type == "scatter" and t.mode == "text"]
+    check("horario · el número va en la celda", len(_txt), 1)
+    _col_txt = dict(zip(_txt[0].text, _txt[0].textfont.color)) if _txt else {}
+    check("horario · tinta sobre lo claro, blanco sobre lo oscuro",
+          (_col_txt.get("100"), _col_txt.get("200")), (_TINTA, _BL))
+    _sin_num = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "venta", [],
+                             [19, 21], numeros=False)
+    check("horario · sin número, no hay capa de texto",
+          [t.mode for t in _sin_num.data if t.type == "scatter"
+           and t.mode == "text"], [])
+    _angosto = _vh._fig_mapa([_cd_eje, _cd_eje], [(2026, 7), (2026, 8)],
+                             "Mes", "venta", [], [19, 21])
+    check("horario · si la columna es angosta, el número no se escribe",
+          [t.mode for t in _angosto.data if t.type == "scatter"
+           and t.mode == "text"], [])
+    # «Puntos»: sin heatmap, y las horas en SU orden aunque la primera capa
+    # que las nombra sea la de las horas sin ventas (salían 12 pm, 4 pm…).
+    _pts = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "venta", [],
+                         [19, 21], forma="Puntos")
+    check("horario · en puntos no hay heatmap",
+          [t.type for t in _pts.data if t.type == "heatmap"], [])
+    check("horario · y las horas van en su orden",
+          list(_pts.layout.yaxis.categoryarray), ["7 pm", "9 pm"])
+    _tam = [t for t in _pts.data if t.type == "scatter"
+            and t.mode == "markers" and t.hoverinfo == "skip"
+            and t.customdata is None and len(t.x) == 2]
+    check("horario · el punto más grande es la hora que más vendió",
+          (list(_tam[0].marker.size)[0] < list(_tam[0].marker.size)[1])
+          if _tam else False, True)
+    # Los totales al margen: dos barras en ejes que COMPARTEN el de las
+    # horas y el de las columnas con el mapa; el ticket se divide, no se
+    # suma; con «Diferencia» no hay totales.
+    _tot = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "venta", [],
+                         [19, 21], totales=True)
+    _bh = [t for t in _tot.data if t.type == "bar" and t.orientation == "h"]
+    _bc = [t for t in _tot.data if t.type == "bar" and t.orientation != "h"]
+    check("horario · total por hora a la derecha, sobre las mismas filas",
+          (list(_bh[0].x), _bh[0].yaxis, _tot.layout.xaxis2.anchor)
+          if _bh else None, ([100.0, 200.0], "y", "y"))
+    check("horario · total por columna debajo, sobre las mismas columnas",
+          (list(_bc[0].y)[:2], _bc[0].xaxis, _tot.layout.yaxis3.anchor)
+          if _bc else None, ([100.0, 200.0], "x", "x"))
+    check("horario · las filas le dejan sitio a la tira de abajo",
+          _tot.layout.yaxis.domain[0] > 0, True)
+    _tk = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "ticket", [],
+                        [19, 21], totales=True)
+    check("horario · el ticket por hora es venta ÷ clientes",
+          [list(t.x) for t in _tk.data if t.type == "bar"
+           and t.orientation == "h"], [[50.0, 50.0]])
+    _td = _vh._fig_mapa([_cd_eje, _cd_eje], [(2026, 32), (2026, 33)],
+                        "Semana", "venta", [], [19, 21], dif=True,
+                        totales=True)
+    check("horario · con «Diferencia» no hay totales",
+          [t.type for t in _td.data if t.type == "bar"], [])
+    check("horario · los totales suman alto y ancho al deslizable",
+          (_vh._alto_mapa(10, totales=True) > _vh._alto_mapa(10),
+           _vh._ancho_desliza(10, True) - _vh._ancho_desliza(10)),
+          (True, _vh._PX_TOT_HORA))
 
     # ── Capa de selección ───────────────────────────────────────────────
     # Un punto por CELDA, haya venta o no. Si vuelve a haberlos sólo donde
@@ -2141,7 +2224,8 @@ def _pruebas_puras():
     # queda dibujado para siempre (pasó, 2026-08-15). Además la marca se
     # encogería en silencio hasta el último día con venta.
     _sel_pts = [t for t in _fig_rej.data
-                if t.type == "scatter" and t.hoverinfo == "skip"]
+                if t.type == "scatter" and t.hoverinfo == "skip"
+                and t.customdata is not None]
     check("horario · la capa de selección cubre TODAS las celdas",
           len(_sel_pts[0].x) if _sel_pts else 0,
           2 * 7 * 2)          # 2 paneles × 7 días × 2 horas
@@ -8603,14 +8687,20 @@ def _pruebas_ficha_hora():
           len(hov[1].x) if len(hov) > 1 else 0, 7 * 2 - 2)
     check("la Venta Interna o Eventos de la celda sale en el tooltip",
           "Venta Interna" in (hov[0].customdata[1][9] if hov else ""), True)
+    # Desde la regla #610 es un punto naranja en la esquina, medido en
+    # píxeles (antes, un triángulo que se leía como una salpicadura).
+    from tema import ADVERTENCIA as _NAR
     tri = [s for s in fig.layout.shapes
-           if s.type == "path" and s.fillcolor is not None]
-    check("y su celda lleva el triángulo", len(tri), 1)
+           if s.type == "circle" and s.fillcolor == _NAR]
+    check("y su celda lleva el punto naranja", len(tri), 1)
+    check("medido en píxeles desde la esquina",
+          (tri[0].xsizemode, tri[0].ysizemode) if tri else None,
+          ("pixel", "pixel"))
     sin = _h._fig_mapa([celdas], [(2026, 32)], "Semana", "venta", [],
                        [19, 21], raros=False)
-    check("con el interruptor apagado no hay triángulo",
+    check("con el interruptor apagado no hay punto naranja",
           len([s for s in sin.layout.shapes
-               if s.type == "path" and s.fillcolor is not None]), 0)
+               if s.type == "circle" and s.fillcolor == _NAR]), 0)
     return fallos
 
 
@@ -8728,6 +8818,19 @@ def _pruebas_por_hora_semana_y_desliza():
           (tuple(fig.layout.yaxis.range), fig.layout.yaxis.autorange))
     check("y las mismas horas, en el mismo orden",
           list(eje.data[0].y), [_h._etiqueta_hora(x) for x in horas])
+    # Con los totales al margen (regla #610) las filas del mapa dejan abajo
+    # la tira de totales: el eje de al lado tiene que dejarla también, o
+    # cada hora cae sobre la fila de otra.
+    fig_t = _h._fig_mapa([celdas, celdas], claves, "Mes", "venta", [], horas,
+                         ancla=ancla, alto=alto, desliza=True, totales=True)
+    eje_t = _h._fig_eje_horas(horas, alto,
+                              _h._margen_arriba(len(claves), True),
+                              totales=True)
+    check("con totales, el eje y el mapa reparten igual las filas",
+          (tuple(eje_t.layout.yaxis.domain), eje_t.layout.margin.t),
+          (tuple(fig_t.layout.yaxis.domain), fig_t.layout.margin.t))
+    check("y el mapa mide lo que pide el deslizable con totales",
+          fig_t.layout.width, _h._ancho_desliza(tot, True))
     sin = _h._fig_mapa([celdas], [(2026, 9)], "Mes", "venta", [], horas,
                        ancla=ancla, alto=alto)
     check("sin deslizar el mapa sigue rotulando sus horas",

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-609 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+610 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (199)
 
@@ -324,7 +324,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 
-**Plotly y figuras** (108)
+**Plotly y figuras** (109)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -434,6 +434,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 - **#582** — Compras › Producto: la tabla de abajo del gráfico muestra SEIS filas, las barras dicen la…
 - **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
+- **#610** — El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico (con o sin número), puntos…
 
 **AgGrid y tablas** (89)
 
@@ -904,7 +905,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (153)
+**Decisiones de diseño y UX** (154)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1059,6 +1060,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#596** — La franja superior de contexto no lleva KPIs: dice dónde estás, no cuánto
 - **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
 - **#605** — «Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en casa el día que se…
+- **#610** — El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico (con o sin número), puntos…
 
 **Mantenimiento y trampas del lenguaje** (14)
 
@@ -47991,6 +47993,86 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+610. **El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico
+     (con o sin número), puntos y, aparte, totales al margen — y abre en
+     mosaico con número.** 2026-10-04, a pedido: «la tabla de arriba se ve
+     como una pared mal pintada». Eran cinco cosas sumadas, y ninguna sola:
+     la escala continua «blues» la estiraba UNA hora con evento (sábado 3
+     oct, 7 pm, S/ 7.541) y el resto quedaba en su tercio claro, tonos que
+     casi no se distinguían; la escala arrancaba en blanco, así que la hora
+     sin ventas y la que vendió poco se veían iguales; detrás, un rayado
+     gris en filas alternas (pedido el 2026-08-14) hacía que las vacías
+     salieran blancas en unas filas y grises en otras; encima, una
+     cuadrícula (2026-08-15), y un triángulo naranja y un doble marco que
+     se leían como salpicaduras. Se armó un mockup con la venta real
+     (cuatro formas, tres períodos, la ficha al clic) y el usuario eligió
+     que fueran TODAS elegibles. Viven en «Ajustes» (`_K_FORMA`, `_K_NUM`,
+     `_K_TOT`), sólo con filas Horas:
+
+     - **Mosaico** (el default): cinco tonos de `tema.MAPA_TRAMOS` con
+       corte en los QUINTILES de las celdas con dato, redondeados a dos
+       cifras (`_cortes_tramos`). Por quintiles y no en tramos iguales
+       hasta el máximo, porque el máximo era justo el problema; y así vale
+       igual para venta, pax o ticket. Cortes que redondean igual quedan
+       uno: menos tonos, nunca dos iguales. Va como heatmap del NÚMERO de
+       tramo con una escala escalonada (`zmin=-0.5`), y la barra de color
+       rotula los tramos («< 280», «280–980», …).
+     - **El aire es el separador**: `_GAP_CELDA` = 3 px, sin cuadrícula ni
+       rayado. Con 2 px el ojo lo junta. La hora SIN ventas va en su propia
+       capa gris (`GRIS_LINEA`), sólo dentro de los paneles: es lo que deja
+       seguir una hora a lo ancho, que era para lo que se pidió el rayado,
+       y ya no se confunde con la que vendió poco (el primer tono es azul).
+     - **Número en la celda**: una capa de texto aparte (no el
+       `texttemplate` del heatmap) porque el color va POR CELDA: tinta
+       `MAPA_TINTA` sobre los tres tonos claros, blanco sobre los dos
+       oscuros. Entra si la columna mide ≥ 20 px estimados con
+       `_ANCHO_UTIL` (el extremo angosto): un mes sin deslizar y el
+       deslizable sí, dos meses sin deslizar no.
+     - **Puntos**: el área es la cantidad (diámetro con la raíz), tope en
+       el percentil 95 y anillo para lo que pasa de ahí; una línea finita
+       por fila; sin ventas, un punto mínimo.
+     - **Totales al margen**: el total de cada hora a la derecha y el de
+       cada columna debajo, como barras en ejes que COMPARTEN el de las
+       horas (`xaxis2` anclado a `y`) y el de las columnas (`yaxis3`
+       anclado a `x`): caen fila por fila sin medir nada. El ticket es un
+       cociente: venta ÷ clientes de la fila, no la suma de tickets. Con
+       «Diferencia» no hay (los paneles restan) y el interruptor se apaga.
+       Deslizando, el eje de horas de al lado recibe el mismo dominio
+       (`_dominio_filas`) o cada hora cae sobre la fila de otra (#551).
+     - La Venta Interna y los Eventos: un PUNTO naranja de 5 px en la
+       esquina, medido en píxeles (`xsizemode="pixel"`) para que mida lo
+       mismo en una celda de 24 que en una de 66. La celda del clic, un
+       solo marco oscuro, que en el mosaico cae en el aire.
+
+     **Tres trampas que costaron una vuelta:**
+
+     - **En un eje de categorías el ORDEN lo pone la primera capa que las
+       nombra.** En Mosaico es un heatmap con todas las horas; en Puntos,
+       la de las horas sin ventas, y las filas salieron «12 pm, 4 pm,
+       6 pm, 10 pm…». Va `categoryorder="array"` con las horas escritas.
+     - **`update_xaxes`/`update_yaxes` sin selector tocan TODOS los ejes
+       que existan.** Los de los totales se crean al FINAL de `_fig_mapa`
+       (`_totales_al_margen`), después de esas llamadas: antes, les habrían
+       puesto las categorías invertidas y el rango de las columnas.
+     - **El puente de JS medía el ancho de la fila con el primer heatmap**
+       (#554), y en Puntos no hay ninguno: la figura publica cuántas
+       columnas tiene en `layout.meta.vh_cols` y el puente lo lee primero.
+
+     La forma, el número y los totales van en la KEY del mapa: cambian qué
+     capas tiene la figura y en qué orden, y una selección guardada por
+     número de capa caería en otra. Verificado con Playwright a 1323×619
+     en la app local con la venta real: las cuatro combinaciones, el panel
+     de «Ajustes» que conserva lo elegido tras un rerun completo (#467) y
+     el clic que abre la ficha en Mosaico y en Puntos (sábado 3 oct, 1 pm:
+     S/ 2,548, 22 pax, ticket S/ 115.80). Las filas «Platos», «Grupos» y
+     «Áreas» siguen con su heatmap de siempre.
+
+     Sin renombres de lo que importa `app.py`, pero `tema.py` suma
+     constantes que `ventas_horario` importa: «Reboot app» en Cloud
+     (#357).
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48003,7 +48085,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#609**; la próxima toma el número siguiente.
+> última regla es la **#610**; la próxima toma el número siguiente.
 
 >
 

@@ -1113,6 +1113,13 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   (`height = k * n + margen`), no `bargap`.
 - `_LAYOUT_BASE` no se puede desempacar con `**` si el `update_layout` define
   su propio `xaxis`/`yaxis`. Ver `arquitectura.md` § Reglas #5.
+- **En un eje de categorías, el ORDEN lo pone la primera capa que las
+  nombra**, no la lista que pensabas: si esa capa es la de las celdas
+  vacías, las filas salen salteadas. Escribilo con `categoryorder="array"`.
+  Y **`update_xaxes`/`update_yaxes` sin selector tocan TODOS los ejes que
+  existan**: un eje extra (`xaxis2`, `yaxis3`) se crea DESPUÉS de esas
+  llamadas o hereda categorías y rangos ajenos. Los dos, en el mapa de
+  «Por hora»: regla #610.
 - **Un eje en OTRA figura sólo cae sobre sus filas si nadie calcula nada.**
   El mapa deslizable de Ventas › Por hora lleva las horas en una figura
   aparte, pegada a la izquierda: las dos necesitan el mismo alto, los

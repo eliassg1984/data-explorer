@@ -93,7 +93,8 @@ from data import REPORTES, cargar_rango, rango_fechas
 from tema import (
     ACENTO, ADVERTENCIA, ADVERTENCIA_TEXTO, AJUSTE_NEG, AJUSTE_POS, BLANCO,
     ERROR, ESCALA_CONTINUA, EXITO, GRIS_CUADRICULA, GRIS_LINEA, GRIS_TEXTO,
-    PALETA_SERIES, TEXTO_PRINCIPAL,
+    GRIS_TEXTO_SUAVE, MAPA_PUNTO, MAPA_TINTA, MAPA_TRAMOS, PALETA_SERIES,
+    TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos import ventas_ficha_hora as _fh
@@ -279,6 +280,39 @@ _BARRA_DESLIZA = 12
 _MAX_LISTA_BOTONES = 6
 _PX_FILA_TABLA = 27
 
+# CÓMO SE DIBUJA EL MAPA (2026-10-04, a pedido, regla #610): «se ve como
+# una pared mal pintada». Lo elige el usuario en «Ajustes» y abre en
+# mosaico con número:
+#   · Mosaico: cinco tonos escalonados (`MAPA_TRAMOS`), aire entre celdas
+#     como único separador y la hora sin ventas en gris, distinta de la que
+#     vendió poco. Con «Número en la celda», la cifra adentro.
+#   · Puntos: el tamaño es la cantidad; sin ventas, un puntito.
+# Y aparte, en las dos, «Totales al margen»: el total de cada hora a la
+# derecha y el de cada columna debajo.
+_FORMAS = ("Mosaico", "Puntos")
+_K_FORMA = "vh_op_forma"
+_K_NUM = "vh_numero"
+_K_NUM_VALOR = "_vh_numero_valor"
+_K_TOT = "vh_totales"
+_K_TOT_VALOR = "_vh_totales_valor"
+# El aire entre celdas, en px: ES el separador (no hay cuadrícula ni
+# rayado). Con 2 px el ojo lo junta y el mapa vuelve a ser una pared.
+_GAP_CELDA = 3
+# El número entra si la columna mide al menos esto en pantalla, ESTIMADO
+# con `_ANCHO_UTIL` (el extremo angosto): «2.5k» a 10 px son ~19 px.
+_PX_COL_NUMERO = 20
+# Los totales al margen: el alto de la tira de totales por columna, el
+# renglón de las fechas que queda entre ella y el mapa, el rótulo de arriba
+# con un solo panel (con varios, el margen de sus títulos ya alcanza), lo
+# que ocupa la columna de totales por hora en el mapa deslizable y la parte
+# del ancho que se lleva cuando el mapa se estira.
+_PX_TOT_DIA = 30
+_PX_ROTULO_DIA = 22
+_PX_TITULO_TOT = 14
+_PX_TOT_HORA = 150
+_DOM_TOT_HORA = 0.2
+_DOM_MAPA_MAX = 0.78
+
 # EL CLIC SUELTO LO TRAE ESTE PUENTE (regla #536). Con `dragmode="select"`
 # Streamlit fuerza `clickmode="event"` y descarta el clic —también en la
 # 1.64 de Cloud: su `handleClickEvent` sólo atiende treemap y sunburst—
@@ -319,8 +353,8 @@ _JS_CLIC_MAPA = """<script>
   // LA FRANJA DE LA HORA (regla #554). Al pasar el cursor por una celda,
   // la FILA entera se enmarca y su hora del eje va en negrita. Es un <div>
   // encima del gráfico, no un shape: un shape pide `relayout`, que redibuja
-  // la figura en cada fila. El borde (2 px) cae en el `ygap` de 2 px entre
-  // filas, así que no tapa el color de ninguna celda. Va ANTES del último
+  // la figura en cada fila. El borde (2 px) cae en el aire de 3 px entre
+  // filas (regla #610), así que no tapa el color de ninguna celda. Va ANTES del último
   // <svg>, el de los tooltips, para que el tooltip quede encima. Se escribe
   // sólo cuando cambia la fila (#469: tocar el DOM no es gratis).
   function franjaDe(gd) {
@@ -358,11 +392,13 @@ _JS_CLIC_MAPA = """<script>
     var fila = cats.indexOf(etiqueta);
     if (fila < 0) return;
     var alto = cats.length > 1 ? Math.abs(ya.l2p(1) - ya.l2p(0)) : ya._length;
-    // A lo ancho, de la primera a la última columna con celdas (el heatmap
-    // tiene una x por columna): el sobrante que `_rango_x` reserva a la
-    // derecha no es parte de la fila.
-    var total = 1;
-    for (var t = 0; t < gd.data.length; t++) {
+    // A lo ancho, de la primera a la última columna con celdas: el sobrante
+    // que `_rango_x` reserva a la derecha no es parte de la fila. Cuántas
+    // son lo dice la figura (`meta.vh_cols`); si no, el primer heatmap, que
+    // tiene una x por columna (en «Puntos» no hay heatmap, regla #610).
+    var meta = (gd.layout && gd.layout.meta) || {};
+    var total = meta.vh_cols || 1;
+    for (var t = 0; total === 1 && t < gd.data.length; t++) {
       if (gd.data[t].type === "heatmap" && gd.data[t].x) {
         total = gd.data[t].x.length;
         break;
@@ -1022,17 +1058,33 @@ def _columnas_mapa(clave, grano, hasta=None, semanal=False):
     return _columnas(clave, grano, hasta)
 
 
-def _margen_arriba(n_paneles):
-    """Margen de arriba del mapa: con más de un panel lleva sus títulos.
-    Lo leen el mapa y su eje de horas, que tienen que coincidir al píxel
-    (regla #551)."""
-    return 34 if n_paneles > 1 else 10
+def _margen_arriba(n_paneles, totales=False):
+    """Margen de arriba del mapa: con más de un panel lleva sus títulos, y
+    con los totales al margen, el rótulo de su columna (regla #610). Lo leen
+    el mapa y su eje de horas, que tienen que coincidir al píxel (regla
+    #551)."""
+    if n_paneles > 1:
+        return 34
+    return 10 + (_PX_TITULO_TOT if totales else 0)
 
 
-def _ancho_desliza(total_columnas):
-    """Ancho de la figura deslizable: 24 px por columna más sus márgenes."""
+def _ancho_desliza(total_columnas, totales=False):
+    """Ancho de la figura deslizable: 24 px por columna más sus márgenes, y
+    la columna de los totales por hora si va (regla #610)."""
     return (_M_DESLIZA["l"] + _M_DESLIZA["r"]
-            + int(total_columnas) * _PX_CELDA_DESLIZA)
+            + int(total_columnas) * _PX_CELDA_DESLIZA
+            + (_PX_TOT_HORA if totales else 0))
+
+
+def _dominio_filas(alto, t, b):
+    """Con los totales al margen (regla #610), la parte de abajo de la
+    figura es la tira de totales por columna, y entre ella y las filas va
+    el renglón de las fechas. Devuelve `(dominio Y de las filas, alto de la
+    tira)` en fracciones del área de dibujo. Lo leen el mapa y su eje de
+    horas: deslizando, las filas tienen que caer al píxel (regla #551)."""
+    area = max(1.0, float(alto) - t - b)
+    tira = min(0.3, _PX_TOT_DIA / area)
+    return [min(0.6, tira + _PX_ROTULO_DIA / area), 1.0], tira
 
 
 def _total_columnas(claves, grano, ancla=None, semanal=False):
@@ -1077,18 +1129,25 @@ def _tick_marcado(texto, marca):
     return texto
 
 
-def _alto_mapa(n_horas, con_drill=False, varios=False):
+def _alto_mapa(n_horas, con_drill=False, varios=False, totales=False):
     """Alto de la figura. Sigue al NÚMERO DE FILAS y no al techo de la
     tarjeta: con un alto fijo, un turno de 8 horas repartía 373px entre 8
     filas y salían bandas de 46px de alto por 28 de ancho — más aire que dato.
 
     Con el drill abierto la fila se comprime (22px → 15) para que el mapa y
     el detalle entren en la MISMA pantalla. Es la pieza que evita que abrir
-    un bloque empuje el gráfico fuera de la vista."""
+    un bloque empuje el gráfico fuera de la vista.
+
+    Los totales al margen (regla #610) suman su tira de abajo y, con un
+    solo panel, el rótulo de arriba: van en el `extra`, así el techo de la
+    tarjeta sigue mandando."""
+    extra = _AIRE_MAPA if varios else _AIRE_MAPA_SOLO
+    if totales:
+        extra += _PX_TOT_DIA + _PX_ROTULO_DIA + (0 if varios else
+                                                 _PX_TITULO_TOT)
     return alturas.por_filas(
         n_horas, px_fila=(_PX_HORA_DRILL if con_drill else _PX_HORA),
-        extra=(_AIRE_MAPA if varios else _AIRE_MAPA_SOLO),
-        rol=alturas.con_franja(), minimo=_ALTO_MIN)
+        extra=extra, rol=alturas.con_franja(), minimo=_ALTO_MIN)
 
 
 def _paso_etiquetas(total_columnas, largo_etiqueta, ancho=None):
@@ -1134,11 +1193,96 @@ def _heatmap_dif(z, x, y, **kw):
                       tickfont=dict(size=10, color=GRIS_TEXTO)), **kw)
 
 
+def _redondo(x):
+    """Dos cifras significativas: 1.234 → 1.200, 87 → 87, 152,3 → 150."""
+    if not x or x <= 0 or not np.isfinite(x):
+        return 0.0
+    paso = 10.0 ** (int(np.floor(np.log10(x))) - 1)
+    return float(round(x / paso) * paso)
+
+
+def _cortes_tramos(z):
+    """Dónde empieza cada tono del mosaico (regla #610): los quintiles de
+    las celdas con venta, redondeados para que la leyenda se lea.
+
+    Por QUINTILES y no en tramos iguales hasta el máximo: el máximo es justo
+    lo que arruinaba la escala continua —una hora con evento a S/ 7.500 y el
+    resto del mapa amontonado en el tercio claro—. Así cada tono tiene más o
+    menos la misma cantidad de celdas, y vale igual para la venta, el pax o
+    el ticket, que viven en escalas distintas. Si dos cortes redondean al
+    mismo número, queda uno: menos tonos, nunca dos iguales."""
+    v = np.asarray(z, dtype=float)
+    v = v[np.isfinite(v) & (v > 0)]
+    if not v.size:
+        return []
+    n = len(MAPA_TRAMOS)
+    cortes = []
+    for q in np.percentile(v, [100.0 * i / n for i in range(1, n)]):
+        r = _redondo(q)
+        if r > 0 and (not cortes or r > cortes[-1]):
+            cortes.append(r)
+    return cortes
+
+
+def _idx_tramos(n):
+    """Qué tonos de `MAPA_TRAMOS` usan `n` tramos: repartidos de punta a
+    punta, para que con tres el más alto siga siendo el más oscuro."""
+    top = len(MAPA_TRAMOS) - 1
+    if n <= 1:
+        return [top // 2]
+    return [int(round(i * top / (n - 1))) for i in range(n)]
+
+
+def _escala_tramos(n):
+    """La escala ESCALONADA de `n` tramos para un heatmap que recibe el
+    número de tramo (0..n-1) con `zmin=-0.5, zmax=n-0.5`."""
+    out = []
+    for i, k in enumerate(_idx_tramos(n)):
+        out += [[i / n, MAPA_TRAMOS[k]], [(i + 1) / n, MAPA_TRAMOS[k]]]
+    return out
+
+
+def _fmt_celda(v, medida, signo=False):
+    """La cifra corta que entra en una celda: «850», «2.5k», «12k», «1.2M».
+    El ticket va sin decimales; con `signo`, la resta de «Diferencia»."""
+    s = ("+" if v > 0 else "−" if v < 0 else "") if signo else (
+        "−" if v < 0 else "")
+    a = abs(float(v))
+
+    def _dec(x):
+        return f"{x:.1f}".rstrip("0").rstrip(".")
+    if medida == "ticket" or a < 999.5:
+        txt = f"{a:,.0f}"
+    elif a >= 999_500:
+        txt = _dec(a / 1e6) + "M"
+    elif a >= 9_950:
+        txt = f"{a / 1e3:.0f}k"
+    else:
+        txt = _dec(a / 1e3) + "k"
+    return s + txt
+
+
+def _rotulos_tramos(cortes, medida):
+    """La leyenda del mosaico: «< 300», «300–800», …, «≥ 2.9k»."""
+    if not cortes:
+        return [""]
+    f = [_fmt_celda(c, medida) for c in cortes]
+    return ([f"< {f[0]}"] + [f"{a}–{b}" for a, b in zip(f, f[1:])]
+            + [f"≥ {f[-1]}"])
+
+
 def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
               alto=None, dif=False, foco=None, raros=True, semanal=False,
-              desliza=False, promedio=None):
+              desliza=False, promedio=None, forma=_FORMAS[0], numeros=True,
+              totales=False):
     """Mapa de calor de los N paneles en una sola figura, con la capa de
     selección transparente encima y un rectángulo por marca.
+
+    `forma`, `numeros` y `totales` son cómo se DIBUJA (regla #610): mosaico
+    o puntos, la cifra en la celda y los totales al margen. No cambian ni
+    las capas de selección y de hover ni su orden, que son las que leen el
+    clic, el arrastre y los tests. Con «Diferencia» no hay totales: los
+    paneles restan y no hay un total que sumar.
 
     Los paneles se concatenan en el eje X con UNA columna de hueco entre
     ellos (NaN, que Plotly deja sin pintar): así el eje de horas es uno solo
@@ -1242,6 +1386,11 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
             if dif and paneles[0] is not None and not paneles[0].empty else {})
     xs, ys, cd, dtxt, rtxt, raras = [], [], [], [], [], []
     _et_base = _etiqueta_clave(claves[0], grano) if claves else ""
+    # Los totales al margen (regla #610), por hora y por columna. El ticket
+    # es un cociente: se suman sus dos lados y se divide al final.
+    tot = bool(totales) and not dif
+    tot_hn, tot_hd = np.zeros(n_horas), np.zeros(n_horas)
+    tot_cn, tot_cd = np.zeros(total), np.zeros(total)
     for s, celdas in enumerate(paneles):
         if celdas is None or celdas.empty:
             celdas = pd.DataFrame(columns=["col", "hora"])
@@ -1273,6 +1422,15 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
             else:
                 z[h_idx[fila.hora], x] = valor
                 dtxt.append("")
+                if medida == "ticket":
+                    _nu = _num(getattr(fila, "venta_cli", fila.venta))
+                    _de = _num(fila.pax)
+                else:
+                    _nu, _de = _num(valor), 0.0
+                tot_hn[h_idx[fila.hora]] += _nu
+                tot_hd[h_idx[fila.hora]] += _de
+                tot_cn[x] += _nu
+                tot_cd[x] += _de
             xs.append(x)
             ys.append(y_cat[h_idx[fila.hora]])
             cd.append([s, int(fila.col), int(fila.hora),
@@ -1288,78 +1446,153 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
 
     fig = go.Figure()
 
-    # BANDAS POR HORA (2026-08-14, pedido del usuario). Van DEBAJO de las
-    # celdas, así que sólo se ven donde el heatmap no pinta — que es
-    # justamente donde hacen falta: el mapa tiene muchas celdas vacías (una
-    # hora sin ventas ese día) y sin nada detrás, seguir una hora a lo ancho
-    # de cuatro paneles era saltar por huecos blancos. Una de cada dos filas
-    # lleva un gris apenas perceptible, como el rayado de una planilla.
-    # Las bandas llegan hasta el ÚLTIMO DÍA CON COLUMNA, no hasta el final
-    # del rango. El rango puede ser más ancho (ver `_rango_x`: con pocas
-    # columnas se reserva sitio para que la celda no se estire), y una banda
-    # gris estirada sobre ese sobrante se lee como una fila de la tabla que
-    # está vacía en vez de como espacio libre — fue justo lo que se reportó
-    # el 2026-08-15 con un mes en curso de 13 días. Cruzar el hueco ENTRE
-    # paneles sí es a propósito: seguir una hora de punta a punta es para lo
-    # que se pidieron las bandas.
+    # LO QUE MIDE UNA COLUMNA Y UNA FILA EN PANTALLA, estimado: el ancho real
+    # lo sabe el navegador (ver `_ANCHO_UTIL`). Deciden si la cifra entra en
+    # la celda y el tamaño de los puntos (regla #610).
     _rango = [-0.5, total - 0.5] if desliza else _rango_x(total)
-    _x0, _x1 = _rango
-    _x1 = min(_x1, offs[-1] + geo[-1][0] - 0.5) if geo else _x1
-    for i in range(0, n_horas, 2):
-        fig.add_shape(type="rect", x0=_x0, x1=_x1, y0=i - 0.5, y1=i + 0.5,
-                      line=dict(width=0), fillcolor=GRIS_LINEA,
-                      layer="below")
+    _dom_mapa = 1.0
+    if tot and not desliza:
+        # Con los totales al margen el sobrante de la derecha (`_rango_x`)
+        # se lo llevan ellos: las columnas van justas y su parte del ancho
+        # es la que tendrían con el sobrante.
+        _min_cols = max(1, _ANCHO_UTIL // (_RATIO_MAX_CELDA * _PX_HORA))
+        _dom_mapa = min(_DOM_MAPA_MAX, total / max(total, _min_cols))
+        _rango = [-0.5, total - 0.5]
+    _px_col = (_PX_CELDA_DESLIZA if desliza else
+               _ANCHO_UTIL * _dom_mapa / max(1.0, _rango[1] - _rango[0]))
+    _alto_fig = alto or _alto_mapa(n_horas, varios=len(claves) > 1,
+                                   totales=tot)
+    _t = _margen_arriba(len(claves), tot)
+    _b = _M_DESLIZA["b"] if desliza else 2
+    _px_fila = max(8.0, (_alto_fig - _t - _b - _PX_ROTULO_DIA
+                         - (_PX_TOT_DIA if tot else 0)) / max(1, n_horas))
+    # Todas las celdas de los paneles, tengan venta o no (no el hueco entre
+    # paneles ni el sobrante de la derecha).
+    _celdas_panel = [(offs[s] + c, i) for s, (n, _e) in enumerate(geo)
+                     for c in range(n) for i in range(n_horas)]
 
-    fig.add_trace(go.Heatmap(
-        z=z, x=list(range(total)), y=y_cat,
-        colorscale=ESCALA_CONTINUA, hoverinfo="skip",
-        # ygap 2 y no 1: el hueco entre filas ES el separador (el fondo se ve
-        # a través), así que un píxel más de aire vertical convierte cada
-        # hora en una franja legible sin dibujar una sola línea.
-        xgap=1, ygap=2, showscale=not desliza,
-        colorbar=dict(thickness=10, outlinewidth=0,
-                      len=0.42 if dif else 0.85, y=0.78 if dif else 0.5,
-                      tickfont=dict(size=10, color=GRIS_TEXTO)),
-    ))
-    if dif:
-        fig.add_trace(_heatmap_dif(z_dif, list(range(total)), y_cat,
-                                   xgap=1, ygap=2, showscale=not desliza))
-    # CUADRÍCULA (2026-08-15, pedido: "una ligera cuadrícula para tener
-    # referencia de la fecha y hora"). Las líneas caen en los BORDES de la
-    # celda (i ± 0.5), nunca en su centro: ahí es donde el xgap/ygap del
-    # heatmap ya deja 1-2px de junta, así que la línea entra en el hueco en
-    # vez de partir un día por la mitad.
-    #
-    # POR QUÉ UN SHAPE Y NO LA GRILLA DEL EJE. Se probaron las dos:
-    #   · La grilla MAYOR va en los ticks, o sea en el centro de la celda.
-    #     Descartada de entrada.
-    #   · La grilla MENOR (`minor=dict(tickvals=…)`) sí acepta los bordes,
-    #     pero se dibuja en `minor-gridlayer`, que Plotly monta ANTES de
-    #     `overplot`, y `layer="above traces"` (que mueve la mayor) no la
-    #     alcanza. Verificado en el DOM: el <image> del heatmap quedaba
-    #     encima y la cuadrícula sólo asomaba por las celdas vacías —
-    #     justo al revés de lo que hace falta, porque lo que uno quiere
-    #     rastrear hasta su día es la celda CARGADA.
-    # Un shape con `layer="above"` sí queda encima de todo. Y va como UN
-    # solo `type="path"` con muchos subtrazos en vez de una línea por corte:
-    # cuatro meses comparados son ~180 segmentos, que como shapes sueltos
-    # serían 180 objetos en el JSON de la figura.
-    _rejilla = []
-    for s, (n, _e) in enumerate(geo):
-        _a, _b = offs[s] - 0.5, offs[s] + n - 0.5
-        # Verticales: un corte por día, más los dos bordes del panel. El
-        # hueco ENTRE paneles queda cerrado a ambos lados y sin líneas
-        # dentro — cruzarlo sugeriría que ahí hay días.
-        for i in range(n + 1):
-            _rejilla.append(f"M{offs[s] + i - 0.5},-0.5"
-                            f"L{offs[s] + i - 0.5},{n_horas - 0.5}")
-        # Horizontales: sólo a lo ancho del panel, no del rango entero (a la
-        # derecha sobra el resto del mes, que no tiene celdas que separar).
-        for j in range(n_horas + 1):
-            _rejilla.append(f"M{_a},{j - 0.5}L{_b},{j - 0.5}")
-    if _rejilla:
-        fig.add_shape(type="path", path="".join(_rejilla), layer="above",
-                      line=dict(color=GRIS_CUADRICULA, width=1))
+    # LOS TRAMOS (regla #610). La escala continua «blues» dejaba que una
+    # sola hora con evento la estirara y todo lo demás quedaba en su tercio
+    # claro: tonos que casi no se distinguían, sobre un rayado gris en filas
+    # alternas y una cuadrícula encima — «una pared mal pintada». Cinco
+    # tonos con corte en los quintiles (`_cortes_tramos`) y la cifra al
+    # lado en la leyenda.
+    _cortes = _cortes_tramos(z)
+    _n_t = len(_cortes) + 1
+    _idx_t = _idx_tramos(_n_t)
+    _tramo = np.where(np.isfinite(z),
+                      np.searchsorted(_cortes, np.nan_to_num(z), side="right"),
+                      np.nan)
+    _cbar = dict(thickness=10, outlinewidth=0,
+                 len=0.42 if dif else 0.85, y=0.78 if dif else 0.5,
+                 tickvals=list(range(_n_t)),
+                 ticktext=_rotulos_tramos(_cortes, medida),
+                 tickfont=dict(size=10, color=GRIS_TEXTO))
+    if tot and not desliza:
+        _cbar.update(x=min(1.0, _dom_mapa + 0.03 + _DOM_TOT_HORA) + 0.02,
+                     xanchor="left")
+
+    if forma != _FORMAS[1]:
+        # MOSAICO. Sin rayado ni cuadrícula: el aire entre celdas
+        # (`_GAP_CELDA`) es el único separador, y la hora SIN ventas va en
+        # gris — distinta de la que vendió poco, que ya es azul. Ese gris es
+        # además lo que deja seguir una hora a lo ancho, que es para lo que
+        # se pidió el rayado (2026-08-14). Es el PRIMER heatmap: el puente de
+        # JS toma de ahí cuántas columnas tiene el mapa.
+        _vacia = np.full((n_horas, total), np.nan)
+        for _x, _i in _celdas_panel:
+            if not np.isfinite(z[_i, _x]) and not np.isfinite(z_dif[_i, _x]):
+                _vacia[_i, _x] = 0.0
+        fig.add_trace(go.Heatmap(
+            z=_vacia, x=list(range(total)), y=y_cat, hoverinfo="skip",
+            colorscale=[[0.0, GRIS_LINEA], [1.0, GRIS_LINEA]],
+            showscale=False, xgap=_GAP_CELDA, ygap=_GAP_CELDA))
+        fig.add_trace(go.Heatmap(
+            z=_tramo, x=list(range(total)), y=y_cat, hoverinfo="skip",
+            zmin=-0.5, zmax=_n_t - 0.5, colorscale=_escala_tramos(_n_t),
+            xgap=_GAP_CELDA, ygap=_GAP_CELDA, showscale=not desliza,
+            colorbar=_cbar))
+        if dif:
+            fig.add_trace(_heatmap_dif(z_dif, list(range(total)), y_cat,
+                                       xgap=_GAP_CELDA, ygap=_GAP_CELDA,
+                                       showscale=not desliza))
+        # La cifra, si entra. Es una capa de texto aparte y no el
+        # `texttemplate` del heatmap porque el color va por celda: tinta
+        # azul sobre los tonos claros, blanco sobre los dos oscuros. Sin
+        # hover: el clic y el tooltip son de las capas de abajo.
+        if numeros and _px_col >= _PX_COL_NUMERO:
+            _tx, _ty, _tt, _tc = [], [], [], []
+            for _x, _i in _celdas_panel:
+                if np.isfinite(z[_i, _x]):
+                    _tx.append(_x)
+                    _tt.append(_fmt_celda(z[_i, _x], medida))
+                    _tc.append(BLANCO if _idx_t[int(_tramo[_i, _x])] >= 3
+                               else MAPA_TINTA)
+                elif np.isfinite(z_dif[_i, _x]):
+                    _tx.append(_x)
+                    _tt.append(_fmt_celda(z_dif[_i, _x], medida, signo=True))
+                    _tc.append(TEXTO_PRINCIPAL)
+                else:
+                    continue
+                _ty.append(y_cat[_i])
+            if _tx:
+                fig.add_trace(go.Scatter(
+                    x=_tx, y=_ty, mode="text", text=_tt, hoverinfo="skip",
+                    textposition="middle center", showlegend=False,
+                    textfont=dict(size=10, color=_tc)))
+    else:
+        # PUNTOS. El área del punto es la cantidad (el diámetro va con la
+        # raíz), con tope en el percentil 95: lo que pasa de ahí no crece
+        # más y lleva un anillo, para que una hora con evento no deje al
+        # resto en puntitos. Una línea finita por fila sigue la hora a lo
+        # ancho; sin ventas, un punto mínimo.
+        _guias = []
+        for s, (n, _e) in enumerate(geo):
+            for _i in range(n_horas):
+                _guias.append(f"M{offs[s] - 0.5},{_i}L{offs[s] + n - 0.5},{_i}")
+        if _guias:
+            fig.add_shape(type="path", path="".join(_guias), layer="below",
+                          line=dict(color=GRIS_LINEA, width=1))
+        _d_max = max(6.0, min(_px_fila, _px_col) - 6)
+        _pos = z[np.isfinite(z) & (z > 0)]
+        _tope = float(np.percentile(_pos, 95)) if _pos.size else 1.0
+        _dpos = np.abs(z_dif[np.isfinite(z_dif)])
+        _tope_d = float(np.percentile(_dpos, 90)) if _dpos.size else 1.0
+        _px, _py, _ps, _pc, _ax, _ay, _vx0, _vy0 = ([] for _ in range(8))
+        for _x, _i in _celdas_panel:
+            v, d = z[_i, _x], z_dif[_i, _x]
+            if np.isfinite(v) and v > 0:
+                _ps.append(max(4.0, _d_max * np.sqrt(min(v, _tope) / _tope)))
+                _pc.append(MAPA_PUNTO)
+                if v > _tope:
+                    _ax.append(_x)
+                    _ay.append(y_cat[_i])
+            elif np.isfinite(d) and d != 0:
+                _ps.append(max(4.0, _d_max * np.sqrt(
+                    min(abs(d), _tope_d) / (_tope_d or 1.0))))
+                _pc.append(AJUSTE_POS if d > 0 else AJUSTE_NEG)
+            else:
+                _vx0.append(_x)
+                _vy0.append(y_cat[_i])
+                continue
+            _px.append(_x)
+            _py.append(y_cat[_i])
+        if _vx0:
+            fig.add_trace(go.Scatter(
+                x=_vx0, y=_vy0, mode="markers", hoverinfo="skip",
+                showlegend=False,
+                marker=dict(size=3, color=GRIS_TEXTO_SUAVE, line=dict(width=0))))
+        if _px:
+            fig.add_trace(go.Scatter(
+                x=_px, y=_py, mode="markers", hoverinfo="skip",
+                showlegend=False,
+                marker=dict(size=_ps, color=_pc, line=dict(width=0))))
+        if _ax:
+            fig.add_trace(go.Scatter(
+                x=_ax, y=_ay, mode="markers", hoverinfo="skip",
+                showlegend=False,
+                marker=dict(size=_d_max + 5, color="rgba(0,0,0,0)",
+                            line=dict(color=MAPA_PUNTO, width=1.2))))
 
     # ── Capa de selección: TODAS las celdas, tengan venta o no ──────────
     # Va aparte de la capa de hover de abajo, y la diferencia importa.
@@ -1462,31 +1695,31 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
             hovertemplate="<b>%{customdata[3]}</b> · %{y}<br>Sin ventas"
                           "<extra></extra>"))
 
-    # El triángulo de la Venta Interna y los Eventos, en la esquina de arriba
-    # a la derecha de su celda (el eje de horas va invertido: `y - 0.5` es el
-    # borde de ARRIBA). Un solo shape con un subtrazo por celda, como la
-    # cuadrícula.
-    if raras:
+    # La Venta Interna y los Eventos de la celda: un PUNTO naranja de 5 px
+    # en su esquina de arriba a la derecha (regla #610; hasta entonces, un
+    # triángulo que se leía como una salpicadura). Medido en píxeles desde
+    # la esquina (`xsizemode`/`ysizemode`), así mide lo mismo en una celda
+    # de 24 px que en una de 66, y queda adentro del aire entre celdas. El
+    # eje de horas va invertido: `y - 0.5` es el borde de ARRIBA, y en
+    # píxeles hacia abajo es negativo.
+    for x, y in raras:
         fig.add_shape(
-            type="path", layer="above", line=dict(width=0),
-            fillcolor=ADVERTENCIA,
-            path="".join(f"M{x + 0.5},{y - 0.5}L{x + 0.2},{y - 0.5}"
-                         f"L{x + 0.5},{y - 0.05}Z" for x, y in raras))
+            type="circle", layer="above", line=dict(width=0),
+            fillcolor=ADVERTENCIA, xsizemode="pixel", ysizemode="pixel",
+            xanchor=x + 0.5, yanchor=y - 0.5, x0=-9, x1=-4, y0=-4, y1=-9)
 
-    # La celda del clic, como la celda activa de una planilla: borde oscuro
-    # y un filo blanco adentro. No es violeta a propósito: el violeta es de
-    # las marcas del arrastre, y la ficha no es una marca.
+    # La celda del clic, como la celda activa de una planilla: un borde
+    # oscuro, que en el mosaico cae en el aire entre celdas y no tapa el
+    # tono. No es violeta a propósito: el violeta es de las marcas del
+    # arrastre, y la ficha no es una marca. (Hasta la regla #610 llevaba
+    # además un filo blanco adentro: con el aire, el doble marco sobra.)
     if foco and 0 <= foco.get("sel", -1) < len(geo) \
             and 0 <= foco.get("c", -1) < geo[foco["sel"]][0] \
             and foco.get("h") in h_idx:
         _xf, _yf = offs[foco["sel"]] + int(foco["c"]), h_idx[foco["h"]]
         fig.add_shape(type="rect", x0=_xf - 0.5, x1=_xf + 0.5,
                       y0=_yf - 0.5, y1=_yf + 0.5, layer="above",
-                      line=dict(color=TEXTO_PRINCIPAL, width=2.5),
-                      fillcolor="rgba(0,0,0,0)")
-        fig.add_shape(type="rect", x0=_xf - 0.4, x1=_xf + 0.4,
-                      y0=_yf - 0.36, y1=_yf + 0.36, layer="above",
-                      line=dict(color=BLANCO, width=1),
+                      line=dict(color=TEXTO_PRINCIPAL, width=2),
                       fillcolor="rgba(0,0,0,0)")
 
     # El rótulo del panel se dibuja SÓLO si hay más de uno: con varios es lo
@@ -1531,16 +1764,19 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
         # filas y salían bandas de 46px de alto por 28 de ancho — ladrillos
         # verticales con más aire que dato. `por_filas` clampea igual al
         # techo cuando hay muchas horas.
-        height=alto or _alto_mapa(n_horas, varios=len(claves) > 1),
+        height=_alto_fig,
         # `t` reserva el sitio de los rótulos de panel; sin ellos el gráfico
         # sube esos 24px.
         # b=2: las etiquetas de día ya no llevan marca de tick, así que no
         # hay nada que separar del eje. Eran 10px de aire bajo los números.
         # Deslizando, los márgenes son FIJOS: el eje de horas va en otra
         # figura y tiene que caer fila por fila sobre éstas (regla #551).
-        margin=(dict(_M_DESLIZA, t=_margen_arriba(len(claves)))
-                if desliza else
-                dict(l=10, r=10, t=_margen_arriba(len(claves)), b=2)),
+        margin=(dict(_M_DESLIZA, t=_t) if desliza else
+                dict(l=10, r=10, t=_t, b=_b)),
+        # Cuántas columnas tiene el mapa, para el puente de JS: el marco de
+        # la fila llega hasta la última (regla #554). Antes lo sacaba del
+        # primer heatmap, y en «Puntos» no hay ninguno (regla #610).
+        meta=dict(vh_cols=total),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=12),
         dragmode="select",     # sin esto el arrastre hace zoom, no selección
@@ -1579,7 +1815,11 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     # decía dónde empezaba ni terminaba la franja, tapaba el color de las
     # celdas —el dato— y al cruzar los huecos entre paneles se leía como
     # un umbral.
+    # El ORDEN de las horas va escrito: sin esto Plotly lo toma de la
+    # primera capa que las nombra, y en «Puntos» la primera es la de las
+    # horas sin ventas — las filas salían 12 pm, 4 pm, 6 pm, 10 pm… (#610).
     fig.update_yaxes(type="category", autorange="reversed",
+                     categoryorder="array", categoryarray=y_cat,
                      showgrid=False, zeroline=False, showticklabels=True,
                      automargin=True, tickfont=dict(size=10, color=GRIS_TEXTO))
     # Deslizando (regla #551): ancho en píxeles, sin rótulos de hora —los
@@ -1589,19 +1829,107 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
     # corrido (medido en la 1.59). Va al final: lo de arriba vuelve a poner
     # los rótulos.
     if desliza:
-        fig.update_layout(width=_ancho_desliza(total))
+        fig.update_layout(width=_ancho_desliza(total, tot))
         fig.update_xaxes(automargin=False, tickangle=0)
         fig.update_yaxes(showticklabels=False, automargin=False,
                          autorange=False, range=[n_horas - 0.5, -0.5])
+    if tot:
+        _totales_al_margen(fig, medida, y_cat, total, geo, offs,
+                           (tot_hn, tot_hd), (tot_cn, tot_cd), _nombre_celda,
+                           _alto_fig, _t, _b, _dom_mapa, desliza)
     return fig
 
 
-def _fig_eje_horas(horas, alto, t):
+def _totales_al_margen(fig, medida, y_cat, total, geo, offs, por_hora,
+                       por_col, nombre_celda, alto, t, b, dom_mapa, desliza):
+    """Los totales al margen del mapa (regla #610): a la derecha, el total
+    de cada hora; debajo, el de cada columna. Van como barras en ejes
+    propios que COMPARTEN el de las horas y el de las columnas con el mapa,
+    así caen fila por fila y columna por columna sin medir nada.
+
+    Al final de la figura y por eso después de todo lo de `_fig_mapa`: los
+    `update_xaxes`/`update_yaxes` de allá tocan TODOS los ejes que existan,
+    y con éstos ya creados les pondrían categorías y rangos ajenos. El
+    ticket es un cociente: venta entre clientes de la fila o la columna,
+    no la suma de los tickets."""
+    def _valor(num, den):
+        if medida != "ticket":
+            return num
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(den > 0, num / den, np.nan)
+    v_h = _valor(*por_hora)
+    v_c = _valor(*por_col)
+    # Las columnas de hueco entre paneles no son columnas: sin barra.
+    _es_col = np.zeros(total, dtype=bool)
+    _nombres = [""] * total
+    for s, (n, _e) in enumerate(geo):
+        for c in range(n):
+            _es_col[offs[s] + c] = True
+            _nombres[offs[s] + c] = nombre_celda(s, c)
+    v_c = np.where(_es_col, v_c, np.nan)
+    _fmt = {"venta": "S/ %{x:,.0f}", "desc": "S/ %{x:,.0f}",
+            "ticket": "S/ %{x:,.2f}"}.get(medida, "%{x:,.0f}")
+    _pre = "S/ " if medida in ("venta", "desc", "ticket") else ""
+    _que = "ticket" if medida == "ticket" else "total"
+    mx_h = float(np.nanmax(np.abs(v_h))) if np.isfinite(v_h).any() else 1.0
+    mx_c = float(np.nanmax(v_c)) if np.isfinite(v_c).any() else 1.0
+    fig.add_trace(go.Bar(
+        x=v_h, y=y_cat, orientation="h", xaxis="x2", yaxis="y", width=0.55,
+        marker=dict(color=MAPA_TRAMOS[1], line=dict(width=0)),
+        text=[_pre + _fmt_celda(v, medida) if np.isfinite(v) else ""
+              for v in v_h],
+        textposition="outside", cliponaxis=False,
+        textfont=dict(size=10, color=GRIS_TEXTO), showlegend=False,
+        hovertemplate=f"<b>%{{y}}</b> · {_que}: {_fmt}<extra></extra>"))
+    # La cifra de cada columna, sólo si la columna es ancha (pocos días): con
+    # un mes no entra, y queda en el tooltip.
+    _ancho_col = (_PX_CELDA_DESLIZA if desliza
+                  else _ANCHO_UTIL * dom_mapa / max(1, total))
+    _txt_c = ([_pre + _fmt_celda(v, medida) if np.isfinite(v) else ""
+               for v in v_c] if _ancho_col >= 44 else None)
+    fig.add_trace(go.Bar(
+        x=list(range(total)), y=v_c, xaxis="x", yaxis="y3", width=0.6,
+        marker=dict(color=MAPA_TRAMOS[1], line=dict(width=0)),
+        text=_txt_c, textposition="inside", insidetextanchor="middle",
+        textfont=dict(size=10, color=MAPA_TINTA),
+        customdata=_nombres, showlegend=False,
+        hovertemplate=(f"<b>%{{customdata}}</b> · {_que}: "
+                       + _fmt.replace("x:", "y:") + "<extra></extra>")))
+    dom_y, tira = _dominio_filas(alto, t, b)
+    if desliza:
+        _cols_px = total * _PX_CELDA_DESLIZA
+        dom_mapa = _cols_px / float(_cols_px + _PX_TOT_HORA)
+        dom_tot = [min(1.0, dom_mapa + 12.0 / (_cols_px + _PX_TOT_HORA)), 1.0]
+    else:
+        dom_tot = [dom_mapa + 0.03, min(1.0, dom_mapa + 0.03 + _DOM_TOT_HORA)]
+    fig.update_layout(
+        xaxis=dict(domain=[0.0, dom_mapa]),
+        yaxis=dict(domain=dom_y),
+        # El rango deja sitio para la cifra al final de la barra.
+        xaxis2=dict(domain=dom_tot, anchor="y", range=[0, mx_h * 1.6],
+                    visible=False, fixedrange=True),
+        yaxis3=dict(domain=[0.0, tira], anchor="x", range=[0, mx_c * 1.05],
+                    visible=False, fixedrange=True),
+        bargap=0)
+    fig.add_annotation(
+        xref="x2 domain", x=0, yref="paper", y=1.0, xanchor="left",
+        yanchor="bottom", showarrow=False,
+        text="Ticket por hora" if medida == "ticket" else "Total por hora",
+        font=dict(size=10, color=GRIS_TEXTO))
+    if not desliza:
+        fig.add_annotation(
+            xref="paper", x=0, yref="y3 domain", y=0.5, xanchor="right",
+            yanchor="middle", showarrow=False, text="Total",
+            font=dict(size=10, color=GRIS_TEXTO))
+
+
+def _fig_eje_horas(horas, alto, t, totales=False):
     """El eje de horas del mapa deslizable, en una figura aparte que la
     tarjeta deja fija a la izquierda mientras el mapa se desliza (regla
     #551). Mismo alto, mismos márgenes de arriba y abajo y las mismas
     categorías que `_fig_mapa`: así cada rótulo cae sobre su fila sin medir
-    nada en el navegador."""
+    nada en el navegador. Con los totales al margen (regla #610), también
+    el mismo dominio: las filas del mapa dejan abajo la tira de totales."""
     y_cat = [_etiqueta_hora(h) for h in horas]
     fig = go.Figure(go.Scatter(
         x=[0] * len(y_cat), y=y_cat, mode="markers", marker=dict(opacity=0),
@@ -1619,6 +1947,13 @@ def _fig_eje_horas(horas, alto, t):
                      showgrid=False, zeroline=False, fixedrange=True,
                      automargin=False, ticks="",
                      tickfont=dict(size=10, color=GRIS_TEXTO))
+    if totales:
+        dom_y, tira = _dominio_filas(alto, t, _M_DESLIZA["b"])
+        fig.update_yaxes(domain=dom_y)
+        fig.add_annotation(
+            xref="paper", x=1, yref="paper", y=tira / 2, xanchor="right",
+            yanchor="middle", showarrow=False, text="Total",
+            font=dict(size=10, color=GRIS_TEXTO))
     return fig
 
 
@@ -2946,6 +3281,10 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             f"Cada venta en la {_hora_pre.lower()} · "
             + ("con Venta Interna y Eventos" if en_filas or _raros_pre
                else "sin Venta Interna ni Eventos"))
+        # «Diferencia» se sabe acá y no recién al dibujar: apaga los
+        # totales al margen, que en una resta no tienen qué sumar (#610).
+        _dif = (lectura == _LECTURAS[1] and (grano != "Mes" or semanal)
+                and len(claves) > 1)
         with s_aj:
             # Sólo el ícono (el rótulo lo esconde el CSS: la fila no tenía
             # los 60 px), y en color de acento si algo no está como viene.
@@ -2971,13 +3310,41 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     help="Apagado, el mapa y su detalle dejan fuera la "
                          "Venta Interna (charcutería de mostrador: sin "
                          "personas, cobrada en minutos) y los Eventos, y "
-                         "queda el servicio de salón. El triángulo "
+                         "queda el servicio de salón. El punto "
                          "naranja marca las horas que los tienen. Con "
                          "filas Platos o Grupos son filas como las "
                          "demás: se ven siempre.")
                 st.session_state[_K_RAROS_VALOR] = _raros_ui
+                # CÓMO SE DIBUJA (regla #610), sólo con filas Horas. Abre en
+                # mosaico con número; los dos interruptores siguen la regla
+                # #467 como el de arriba.
+                forma = st.pills(
+                    "Dibujar el mapa como", list(_FORMAS),
+                    default=_FORMAS[0], key=_K_FORMA, disabled=en_filas,
+                    help="**Mosaico**: cada celda pintada en uno de cinco "
+                         "tonos, cada uno con la misma cantidad de horas; "
+                         "gris, sin ventas. **Puntos**: el tamaño es la "
+                         "cantidad.") or _FORMAS[0]
+                _num_ui = st.toggle(
+                    "Número en la celda",
+                    value=bool(st.session_state.get(_K_NUM_VALOR, True)),
+                    key=_K_NUM, disabled=en_filas or forma != _FORMAS[0],
+                    help="La cifra escrita en cada celda del mosaico. Si "
+                         "las columnas son muy angostas para que entre, no "
+                         "se escribe.")
+                st.session_state[_K_NUM_VALOR] = _num_ui
+                _tot_ui = st.toggle(
+                    "Totales al margen",
+                    value=bool(st.session_state.get(_K_TOT_VALOR, False)),
+                    key=_K_TOT, disabled=en_filas or _dif,
+                    help="El total de cada hora a la derecha y el de cada "
+                         "columna debajo. Con «Diferencia» no se dibujan: "
+                         "los paneles restan.")
+                st.session_state[_K_TOT_VALOR] = _tot_ui
         # Sólo en filas Horas, que mide la AFLUENCIA.
         raros = True if en_filas else bool(_raros_ui)
+        numeros = bool(_num_ui) and forma == _FORMAS[0]
+        totales = bool(_tot_ui) and not _dif
 
         # Lo que no aplica: el motivo del último toque, una vez, y el gris.
         # El motivo sale una vez, como aviso flotante: un `st.caption` abría
@@ -3110,18 +3477,22 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             # montado, esa misma selección vuelve en CADA rerun (los del rail,
             # los de los chips, los del propio drill), y sin ella la marca se
             # re-aplicaría sola una y otra vez.
-            # «Diferencia» pide columnas que se correspondan: en Mes el 1 de
-            # un mes no es el mismo día de semana que el 1 del otro.
-            # Si no se puede, `_pastillas` ya la muestra como «Lado a lado»
-            # (`_motivo_diferencia`); la condición queda por las dudas.
-            _dif = (lectura == _LECTURAS[1] and (grano != "Mes" or semanal)
-                    and len(claves) > 1)
+            # «Diferencia» (`_dif`, más arriba) pide columnas que se
+            # correspondan: en Mes el 1 de un mes no es el mismo día de
+            # semana que el 1 del otro. Si no se puede, `_pastillas` ya la
+            # muestra como «Lado a lado» (`_motivo_diferencia`); la
+            # condición queda por las dudas.
             # La hora, la diferencia y el modo de columnas van en la key:
             # cambian QUÉ mapa es (las coordenadas de una selección vieja
-            # serían de otro).
+            # serían de otro). La forma, el número y los totales (regla
+            # #610) también: cambian qué capas tiene la figura y en qué
+            # orden, y una selección guardada por número de capa caería en
+            # otra.
             _clave_mapa = (f"vh_mapa_{_firma(grano, claves, medida)}"
                            f"_{'p' if hora == _HORA_OP[0] else 'c'}"
-                           f"{'_d' if _dif else ''}{'_s' if semanal else ''}")
+                           f"{'_d' if _dif else ''}{'_s' if semanal else ''}"
+                           f"_{'m' if forma == _FORMAS[0] else 'o'}"
+                           f"{'n' if numeros else ''}{'t' if totales else ''}")
             # Un CLIC abre la ficha de la hora; un ARRASTRE, aunque sea sobre
             # una sola celda, sigue armando marcas (regla #536). Los dos pasan
             # por la misma huella: el clic con su sello, que cambia en cada uno.
@@ -3163,13 +3534,14 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
             # con filas de 16 px la celda de al lado costaba acertarla. La
             # ficha se desliza por dentro de su panel, que se lleva la resta.
             _alto = _alto_mapa(len(horas), con_drill=bool(marcas),
-                               varios=len(claves) > 1)
+                               varios=len(claves) > 1, totales=totales)
             _total = _total_columnas(claves, grano, ancla, semanal)
             desliza = not semanal and _total > _MAX_COLS_SIN_DESLIZAR
             fig = _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla,
                             alto=_alto, dif=_dif, foco=foco, raros=raros,
                             semanal=semanal, desliza=desliza,
-                            promedio=promedio)
+                            promedio=promedio, forma=forma, numeros=numeros,
+                            totales=totales)
             _cfg_fig = {"displaylogo": False, "displayModeBar": False}
             # EL MAPA DESLIZABLE (regla #551). El contenedor se dibuja SIEMPRE
             # —un contenedor con key que deja de dibujarse retiene a sus hijos,
@@ -3182,11 +3554,13 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 if desliza:
                     st.plotly_chart(
                         _fig_eje_horas(horas, _alto,
-                                       _margen_arriba(len(claves))),
+                                       _margen_arriba(len(claves), totales),
+                                       totales=totales),
                         key="vh_eje_horas", width=_ANCHO_EJE,
                         config=dict(_cfg_fig, staticPlot=True))
                     st.plotly_chart(
-                        fig, key=_clave_mapa, width=_ancho_desliza(_total),
+                        fig, key=_clave_mapa,
+                        width=_ancho_desliza(_total, totales),
                         on_select="rerun", selection_mode=("points", "box"),
                         config=_cfg_fig)
                 else:
