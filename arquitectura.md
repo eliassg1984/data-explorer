@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-603 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+604 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (198)
 
@@ -780,7 +780,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#601** — El stock a una fecha sale del kardex por hora, con la regla del Histórico del POS: el último…
 - **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
 
-**SUNAT y SIRE** (51)
+**SUNAT y SIRE** (52)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -833,6 +833,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#589** — Un elemento que aparece en una corrida y no en la anterior re-monta TODO lo que se dibuja…
 - **#593** — Ventas se fecha por el día del TURNO de caja (default) o por el de EMISIÓN del comprobante, a…
 - **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
+- **#604** — «Documentos SUNAT» cruza también las notas de crédito del Almacén, y empareja nota contra…
 
 **Fechas, rangos y cortes** (12)
 
@@ -47604,6 +47605,53 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+604. **«Documentos SUNAT» cruza también las notas de crédito del Almacén,
+     y empareja nota contra nota y factura contra factura.** 2026-10-04, a
+     pedido («suma las notas del Almacén al cruce de SUNAT»), el mismo día
+     que la #603.
+
+     Hasta ese día el lado sistema del cruce era sólo `compras.parquet`, que
+     no trae notas: TODA nota del SIRE salía «Solo SUNAT» — la que el
+     Almacén tenía registrada y la que nadie cargó. 2026: 61 notas en el
+     SIRE, 11 en el Almacén. Ahora `_parquet_agrupado_por_documento(...,
+     notas=data.notas_credito_compras())` suma una fila por nota PROCESADA
+     del rango (`definicion_compra.como_documentos`): en soles con el cambio
+     de la nota, en NEGATIVO como en el SIRE, IGV aparte, la cabecera una
+     vez (en la consulta se repite por línea) y el RUC sacado de compras por
+     código de proveedor (la consulta no lo trae). La llave es la de las
+     facturas: `N0E001000000068` → `E001-68`. Una nota GENERADA no entra:
+     en el Almacén todavía no resta, y «Coincide» lo escondería.
+
+     **El número no dice el tipo.** `E001-1` es la primera factura de un
+     emisor Y su primera nota; el cruce emparejaba por documento + RUC, así
+     que la nota E001-1 del SIRE (de un proveedor persona natural, junio
+     2026) salía
+     «Diferencia» contra la FACTURA E001-1, y con las notas del sistema
+     adentro una factura y una nota del mismo número caían juntas como
+     candidatas. `cruzar_con_parquet` separa antes de elegir: en el SIRE es
+     nota la de `tipo_cdp` 07 (o base negativa, si la fila no lo trae —
+     `_es_nota_sire`); en el sistema, la de base negativa.
+
+     Medido sobre 2026 (1 ene – 3 oct): Coincide 1.961 → 1.968, Solo SUNAT
+     1.107 → 1.103, Diferencia 164 → 161, Solo sistema 293 → 294. De las 9
+     notas procesadas del Almacén, 7 coinciden; la de La Cesta (FC01-70)
+     difiere (S/ 190,41 contra 195,00) y la de Quality Beef sale «Solo
+     sistema»: el Almacén la cargó como F001-1430 y SUNAT tiene dos,
+     F001-1461 y F001-1464. Las 4 «Diferencia» que bajaron eran notas del
+     SIRE emparejadas con su factura del mismo número. Septiembre: la del
+     Magret de pato (E001-68), «Coincide».
+
+     La nota entra por SU fecha (la del Almacén, `FECHA NC`): puede no ser
+     la del SIRE (E001-68: 23/09 en SUNAT, 28/09 en el Almacén), igual que
+     una factura cargada con otra fecha; en el borde de un rango eso parte
+     el par en un «Solo SUNAT» y un «Solo sistema». Al hacer clic en una
+     nota, la tarjeta de abajo no tiene líneas del sistema que mostrar:
+     compras no trae notas.
+
+     Toca `data.py` y `graficos/`: «Reboot app» en Cloud (#357).
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47616,7 +47664,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#603**; la próxima toma el número siguiente.
+> última regla es la **#604**; la próxima toma el número siguiente.
 
 >
 

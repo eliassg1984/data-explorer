@@ -47,7 +47,9 @@ LA REGLA:
   «Documentos SUNAT», que cruza documento contra documento, lee el parquet
   SIN las notas (`data.cargar(..., notas_credito=False)`): una factura
   anulada que desaparece saldría «Sólo en SUNAT» siendo falso — la misma
-  trampa que la regla #301 con los chips de Familia.
+  trampa que la regla #301 con los chips de Familia. Y las notas, ahí, van
+  como documentos propios (`como_documentos`, regla #604): una nota que el
+  Almacén registró sale «Coincide» contra la del SIRE.
 
 Una nota cuya factura no está en el parquet (que arranca en 2023) no se
 aplica: lo que corregía tampoco está. Desde 2023 es una sola, de 2023 sobre
@@ -104,6 +106,9 @@ positivo. Sumada a `VALOR_COMPRA` da la línea tal como se facturó."""
 # ── notascreditocompras.parquet (la consulta del Sheet) ────────────────────
 NC_NUMERO = "NOTA CREDITO"
 NC_PROVEEDOR = "COD PROVEEDOR"
+NC_NOMBRE = "PROVEEDOR"
+NC_TOTAL = "TOTAL NC"
+NC_CAMBIO = "TIPO CAMBIO NC"
 NC_TIPO = "TIPO NC"
 NC_ESTADO = "ESTADO NC"
 NC_FECHA = "FECHA NC"
@@ -311,6 +316,53 @@ def aplicar_notas(compras, notas):
     # céntimos — un precio unitario infinito para Volatilidad y Producto.
     devuelta = cr["f_valor"].ge(_ENTERA) | cr["f_cant"].ge(_ENTERA)
     return out[~devuelta]
+
+
+def como_documentos(notas, compras=None):
+    """Una fila por nota PROCESADA, como un documento más del sistema: lo
+    que «Documentos SUNAT» cruza contra las notas de crédito del SIRE
+    (regla #604). No resta nada — eso es `aplicar_notas`.
+
+    Los montos en SOLES y en NEGATIVO, como los trae el registro del SIRE:
+    una nota en dólares se pasa con SU tipo de cambio (`TIPO CAMBIO NC`),
+    que es el del día de la nota, el mismo con que la convierte SUNAT. El
+    RUC no viene en la consulta del Sheet: sale de `compras`
+    (`INDICADOR TRIBUTARIO` por código de proveedor), que el cruce necesita
+    para no emparejar `E001-68` con la nota de otro emisor de la misma
+    serie (regla #143). La cabecera se toma una vez por nota: en la
+    consulta se repite en cada línea devuelta.
+
+    Columnas: nota, prov, ruc, proveedor, fecha, base, igv, total."""
+    cols = ["nota", "prov", "ruc", "proveedor", "fecha", "base", "igv", "total"]
+    necesarias = (NC_NUMERO, NC_PROVEEDOR, NC_ESTADO, NC_FECHA, NC_MONEDA,
+                  NC_NETO, NC_TOTAL)
+    if notas is None or notas.empty or any(c not in notas.columns
+                                           for c in necesarias):
+        return pd.DataFrame(columns=cols)
+    n = notas.assign(_nota=_texto(notas[NC_NUMERO]),
+                     _prov=_texto(notas[NC_PROVEEDOR]))
+    n = n[_texto(n[NC_ESTADO]).isin(ESTADOS) & n["_nota"].ne("")]
+    n = n.drop_duplicates(["_nota", "_prov"])
+    if n.empty:
+        return pd.DataFrame(columns=cols)
+    cambio = (pd.to_numeric(n[NC_CAMBIO], errors="coerce")
+              if NC_CAMBIO in n.columns else pd.Series(np.nan, index=n.index))
+    tc = np.where(_texto(n[NC_MONEDA]).eq(DOLARES) & (cambio > 0), cambio, 1.0)
+    neto, total = _num(n[NC_NETO]) * tc, _num(n[NC_TOTAL]) * tc
+
+    ruc = pd.Series("", index=n.index)
+    if compras is not None and {PROVEEDOR, "INDICADOR TRIBUTARIO"} <= set(compras.columns):
+        r = pd.DataFrame({"prov": _texto(compras[PROVEEDOR]),
+                          "ruc": _texto(compras["INDICADOR TRIBUTARIO"])})
+        r = r[r["ruc"].ne("")].drop_duplicates("prov").set_index("prov")["ruc"]
+        ruc = n["_prov"].map(r).fillna("")
+    nombre = (_texto(n[NC_NOMBRE]) if NC_NOMBRE in n.columns
+              else pd.Series("", index=n.index))
+    return pd.DataFrame({
+        "nota": n["_nota"], "prov": n["_prov"], "ruc": ruc, "proveedor": nombre,
+        "fecha": pd.to_datetime(n[NC_FECHA], errors="coerce"),
+        "base": -neto, "igv": -(total - neto), "total": -total,
+    }).reset_index(drop=True)
 
 
 def aplicadas(compras, notas):

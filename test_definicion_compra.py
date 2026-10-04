@@ -187,11 +187,32 @@ print("\n── la consulta del Sheet ──")
 _sql = dc.consulta_sheet()
 for col in (dc.NC_NUMERO, dc.NC_PROVEEDOR, dc.NC_TIPO, dc.NC_ESTADO, dc.NC_REF,
             dc.NC_MONEDA, dc.NC_NETO, dc.NC_PRODUCTO, dc.NC_CANTIDAD,
-            dc.NC_NETO_LINEA):
+            dc.NC_NETO_LINEA, dc.NC_FECHA, dc.NC_TOTAL, dc.NC_CAMBIO,
+            dc.NC_NOMBRE):
     ok(f"AS [{col}]" in _sql, f"la consulta trae [{col}]")
 ok("nCantidad > 0" in _sql, "sólo las líneas DEVUELTAS (DNOTACREDITO trae todas)")
 ok("LEFT JOIN ALMACEN.DBO.DNOTACREDITO" in _sql,
    "LEFT JOIN: la nota por monto, sin líneas, también sale")
+
+print("\n── las notas como documentos, para el cruce con SUNAT ──")
+_nd = notas.assign(**{dc.NC_FECHA: pd.Timestamp("2026-09-28"),
+                      dc.NC_TOTAL: notas[dc.NC_NETO] * 1.18,
+                      dc.NC_CAMBIO: 3.80, dc.NC_NOMBRE: "PROV"})
+_docs = dc.como_documentos(_nd, compras.assign(**{"INDICADOR TRIBUTARIO": "20123456789"}))
+ok(sorted(_docs["nota"]) == ["N-1", "N-2", "N-3", "N-4", "N-6", "N-7", "N-8"],
+   "una fila por nota PROCESADA (N-8 tiene dos líneas: cuenta una vez; "
+   "la generada N-5 no entra)", repr(sorted(_docs["nota"])))
+_n8 = _docs.set_index("nota").loc["N-8"]
+igual(float(_n8["base"]), -14.0, "la nota en negativo, con el neto de su CABECERA")
+igual(float(_n8["igv"]), -14.0 * 0.18, "y su IGV aparte")
+igual(float(_docs.set_index("nota").loc["N-4", "base"]), -760.0,
+      "la nota en dólares, a soles con SU tipo de cambio")
+ok(_docs.set_index("nota").loc["N-2", "ruc"] == "20123456789",
+   "el RUC sale de compras, por código de proveedor")
+ok(_docs.set_index("nota").loc["N-6", "ruc"] == "",
+   "un proveedor sin compras queda sin RUC (el cruce cae al nombre)")
+ok(dc.como_documentos(None).empty and dc.como_documentos(notas).empty,
+   "sin notas, o sin las columnas de cabecera, no hay documentos")
 
 # ── El cableado ──────────────────────────────────────────────────────────
 print("\n── el cableado ──")
@@ -221,9 +242,23 @@ ok(_pide_crudo, "«Documentos SUNAT» pide compras SIN restar las notas",
 _lectores = [p.relative_to(RAIZ).as_posix()
              for p in (RAIZ / "graficos").rglob("*.py")
              if "notascreditocompras" in p.read_text(encoding="utf-8")
-             or "ARCHIVO_NOTAS" in p.read_text(encoding="utf-8")]
-ok(not _lectores, "ninguna vista lee el parquet de notas por su cuenta",
-   f"lo leen: {_lectores} — las notas se restan UNA vez, en data.cargar")
+             or "ARCHIVO_NOTAS" in p.read_text(encoding="utf-8")
+             or "aplicar_notas" in p.read_text(encoding="utf-8")]
+ok(not _lectores, "ninguna vista lee el parquet de notas ni las resta por su cuenta",
+   f"lo hacen: {_lectores} — se restan UNA vez, en data.cargar; quien las "
+   "quiera sin restar las pide a data.notas_credito_compras()")
+
+_ds = ast.parse((RAIZ / "graficos" / "compras" / "documentos_sunat.py")
+                .read_text(encoding="utf-8"))
+_cruces = [n for n in ast.walk(_ds) if isinstance(n, ast.Call)
+           and getattr(n.func, "id", "") == "_parquet_agrupado_por_documento"]
+ok(len(_cruces) >= 2 and all(
+       any(k.arg == "notas" and "notas_credito_compras" in ast.unparse(k.value)
+           for k in c.keywords) for c in _cruces),
+   "«Documentos SUNAT» suma las notas del Almacén a su lado sistema, en "
+   "todas sus llamadas (regla #604)",
+   f"{len(_cruces)} llamadas; sin las notas, toda nota del SIRE sale «Solo "
+   "SUNAT», la registrada y la que falta cargar")
 
 # ── Cierre ─────────────────────────────────────────────────────────────────
 print()

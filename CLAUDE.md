@@ -962,6 +962,11 @@ sirve las compras como antes.
 - **«Documentos SUNAT» las pide SIN restar**
   (`data.cargar(..., notas_credito=False)`): cruza documento contra
   documento, y una factura anulada que desaparece saldría «Solo SUNAT».
+  Las notas entran ahí como documentos propios, en negativo
+  (`data.notas_credito_compras()` → `definicion_compra.como_documentos`),
+  y el cruce empareja **nota contra nota y factura contra factura**:
+  `E001-1` es a la vez la primera factura y la primera nota de un emisor.
+  Regla #604.
 - **La cabecera no se toca** (`TOTAL NETO`, `TOTAL DOCUMENTO`): describe la
   factura emitida. Lo restado va en `VALOR_NC`, y la nota en `NOTA_CREDITO`.
 - **Tocar la regla es subir `definicion_compra.VERSION`** y correr

@@ -1597,6 +1597,87 @@ def _pruebas_puras():
           _cruce.loc[_cruce["estado"] == "Coincide",
                      "documento_sistema"].iloc[0], "")
 
+    # NOTA CONTRA NOTA, FACTURA CONTRA FACTURA (regla #604). `E001-1` es
+    # la primera factura de un emisor y también su primera nota de
+    # crédito. Antes la nota del SIRE se emparejaba con la FACTURA del
+    # mismo RUC («Diferencia»); desde que el sistema trae sus notas, las dos
+    # caían juntas como candidatas. En el sistema la nota va en negativo; en
+    # el SIRE la dice `tipo_cdp` 07 (o la base negativa, si no viene).
+    _sire_nc = pd.DataFrame({
+        "documento": ["E001-1", "E001-1", "E001-7"],
+        "tipo_cdp": ["01", "07", "07"],
+        "proveedor": ["CARNES SAC"] * 3,
+        "ruc_proveedor": ["20888888888"] * 3,
+        "fecha_emision": pd.to_datetime(["2026-09-05", "2026-09-23",
+                                         "2026-09-24"]),
+        "base_imponible": [1000.0, -400.0, -50.0], "no_gravado": [0.0] * 3,
+        "total": [1180.0, -472.0, -59.0], "situacion": ["Registrado"] * 3,
+    })
+    _g_nc = pd.DataFrame({
+        "documento": ["E001-1", "E001-1"],
+        "ruc_pq": ["20888888888"] * 2,
+        "proveedor_pq": ["CARNES SAC"] * 2,
+        "base_pq": [1000.0, -400.0], "total_pq": [1180.0, -472.0],
+        "fecha_pq": pd.to_datetime(["2026-09-05", "2026-09-28"]),
+    })
+    _cr_nc = _ds.cruzar_con_parquet(_sire_nc, _g_nc)
+    _sunat_nc = _cr_nc[_cr_nc["estado"] != "Solo sistema"].reset_index(drop=True)
+    check("cruce: la factura E001-1 con la factura del mismo número",
+          (_sunat_nc.loc[0, "estado"], _sunat_nc.loc[0, "base_sistema"]),
+          ("Coincide", 1000.0))
+    check("cruce: la nota E001-1 con la NOTA del mismo número, no la factura",
+          (_sunat_nc.loc[1, "estado"], _sunat_nc.loc[1, "base_sistema"]),
+          ("Coincide", -400.0))
+    check("cruce: una nota que el sistema no tiene es «Solo SUNAT», aunque "
+          "haya una factura con su número (que queda «Solo sistema»)",
+          sorted(_ds.cruzar_con_parquet(_sire_nc.iloc[[1]], _g_nc.iloc[[0]])
+                 ["estado"]), ["Solo SUNAT", "Solo sistema"])
+    check("cruce: sin `tipo_cdp`, la base negativa dice que es nota",
+          _ds.cruzar_con_parquet(_sire_nc.drop(columns="tipo_cdp"), _g_nc)
+          .loc[lambda x: x["estado"] != "Solo sistema", "estado"].tolist(),
+          ["Coincide", "Coincide", "Solo SUNAT"])
+
+    # Las notas del Almacén entran al lado sistema (regla #604): una fila por
+    # nota PROCESADA del rango, en negativo y con la llave de las facturas.
+    _d_nc = pd.DataFrame({
+        "NUM_DOCUMENTO": ["F0E001000000001"], "INDICADOR TRIBUTARIO": ["20888888888 "],
+        "COD_PROVEEDOR": ["00100"], "NOMBRE_PROVEEDOR": ["CARNES SAC"],
+        "FECHA_EMISION_DOC": pd.to_datetime(["2026-09-05"]),
+        "TOTAL NETO": [1000.0], "TOTAL IGV": [180.0], "TOTAL DOCUMENTO": [1180.0],
+        "TIPO_MONEDA": ["01"], "TIPO_CAMBIO": [3.5],
+    })
+    _notas_alm = pd.DataFrame({
+        "NOTA CREDITO": ["N0E001000000001", "N0E001000000001", "N0E001000000002",
+                         "N0E001000000003", "N0E001000000004"],
+        "COD PROVEEDOR": ["00100"] * 5, "PROVEEDOR": ["CARNES SAC"] * 5,
+        "ESTADO NC": ["02", "02", "01", "02", "03"],
+        "FECHA NC": pd.to_datetime(["2026-09-28", "2026-09-28", "2026-09-29",
+                                    "2026-08-01", "2026-09-30"]),
+        "MONEDA NC": ["01", "01", "01", "01", "02"],
+        "TIPO CAMBIO NC": [3.5, 3.5, 3.5, 3.5, 3.8],
+        "NETO NC": [400.0, 400.0, 10.0, 20.0, 10.0],
+        "TOTAL NC": [472.0, 472.0, 11.8, 23.6, 11.8],
+    })
+    _g_alm = _ds._parquet_agrupado_por_documento(
+        _d_nc, "FECHA_EMISION_DOC", "2026-09-01", "2026-09-30", notas=_notas_alm)
+    _filas_nc = _g_alm[_g_alm["base_pq"] < 0].set_index("documento")
+    check("notas del Almacén: una fila por nota procesada del rango "
+          "(la cabecera repetida en dos líneas cuenta una vez; sin la "
+          "generada ni la de agosto)",
+          sorted(_filas_nc.index), ["E001-1", "E001-4"])
+    check("notas del Almacén: en negativo, IGV aparte",
+          (_filas_nc.loc["E001-1", "base_pq"], _filas_nc.loc["E001-1", "igv_pq"],
+           _filas_nc.loc["E001-1", "total_pq"]), (-400.0, -72.0, -472.0))
+    check("notas del Almacén: la nota en dólares, a soles con SU cambio",
+          round(_filas_nc.loc["E001-4", "base_pq"], 2), -38.0)
+    check("notas del Almacén: el RUC sale de compras, limpio",
+          _filas_nc.loc["E001-1", "ruc_pq"], "20888888888")
+    check("notas del Almacén: el número crudo, para la columna del sistema",
+          _filas_nc.loc["E001-1", "num_doc_pq"], "N0E001000000001")
+    check("sin notas, el lado sistema es el de siempre",
+          len(_ds._parquet_agrupado_por_documento(
+              _d_nc, "FECHA_EMISION_DOC", "2026-09-01", "2026-09-30")), 1)
+
     # ── IGV como TERCERA cifra comparable (2026-08-27) ──────────────────
     # E003-2 es el caso que motivo el cambio: proveedor con TASA REDUCIDA
     # (10.5%, medido en facturas reales de TACUAREMBO S.A.C.). Cargado con

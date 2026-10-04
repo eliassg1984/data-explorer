@@ -88,6 +88,8 @@ import plotly.graph_objects as go
 import streamlit as st
 from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, JsCode
 
+import data
+import definicion_compra
 import sunat
 from cortes import MESES_ABR_ES
 from estado_rango import clave_rango, restaurar_eco
@@ -246,9 +248,12 @@ sea cero información nueva y filas marcadas "Diferencia" por un dato que
 en realidad no tenemos."""
 
 
-def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
+def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin,
+                                    notas=None):
     """Compras del parquet agrupadas a una fila por (documento, RUC),
-    ACOTADAS al rango que se está comparando.
+    ACOTADAS al rango que se está comparando — más las notas de crédito
+    del Almacén (`notas`, la consulta del Sheet), una fila por nota en
+    negativo, como las trae el SIRE (regla #604; ver `_notas_del_rango`).
 
     Acotar por fecha ANTES de armar la clave no es un detalle de
     performance, es lo que hace confiable el cruce: `serie-número`
@@ -283,8 +288,9 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
     ini = pd.Timestamp(fecha_ini).normalize()
     fin = pd.Timestamp(fecha_fin).normalize() + pd.Timedelta(days=1)
     dd = d[(fechas >= ini) & (fechas < fin) & d["NUM_DOCUMENTO"].notna()].copy()
+    notas_rango = _notas_del_rango(notas, d, ini, fin, columnas)
     if dd.empty:
-        return pd.DataFrame(columns=columnas)
+        return notas_rango
 
     dd["documento"] = _llave_documento_parquet(dd["NUM_DOCUMENTO"])
     dd["ruc_pq"] = (dd[COL_RUC_PARQUET].astype(str).str.strip()
@@ -338,7 +344,54 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin):
                 # con mas de uno). Ver `arquitectura.md` regla #143.
                 num_doc_pq=("NUM_DOCUMENTO", "first"))
            .rename(columns={"NOMBRE_PROVEEDOR": "proveedor_pq"}))
-    return g
+    if notas_rango.empty:
+        return g
+    return pd.concat([g, notas_rango], ignore_index=True)
+
+
+def _notas_del_rango(notas, d, ini, fin, columnas):
+    """Las notas de crédito PROCESADAS del Almacén con fecha en `[ini, fin)`,
+    con las columnas del lado sistema del cruce (regla #604).
+
+    Hasta el 2026-10-04 el cruce sólo miraba `compras.parquet`, que no trae
+    notas: toda nota del SIRE salía «Solo SUNAT», la que el Almacén tenía
+    registrada y la que no — y ésas son lo que hay que ir a cargar (en 2026,
+    11 en el Almacén contra 61 en SUNAT). Con éstas, una nota registrada
+    sale «Coincide» y «Solo SUNAT» vuelve a significar lo que dice.
+
+    La llave es la de las facturas (`_llave_documento_parquet`):
+    `N0E001000000068` → `E001-68`, igual que el SIRE. Montos en soles y en
+    negativo (`definicion_compra.como_documentos`); el RUC sale de `d`. Una
+    nota GENERADA (estado 01) no entra: en el Almacén todavía no resta, y
+    marcarla «Coincide» escondería eso."""
+    nd = definicion_compra.como_documentos(notas, d)
+    if nd.empty:
+        return pd.DataFrame(columns=columnas)
+    nd = nd[(nd["fecha"] >= ini) & (nd["fecha"] < fin)]
+    if nd.empty:
+        return pd.DataFrame(columns=columnas)
+    return pd.DataFrame({
+        "documento": _llave_documento_parquet(nd["nota"]),
+        "ruc_pq": nd["ruc"],
+        "proveedor_pq": nd["proveedor"],
+        "base_pq": nd["base"],
+        "igv_pq": nd["igv"],
+        "total_pq": nd["total"],
+        "fecha_pq": nd["fecha"],
+        "num_doc_pq": nd["nota"],
+    }, columns=columnas).reset_index(drop=True)
+
+
+def _es_nota_sire(r):
+    """`True` si la fila del SIRE es una nota de crédito: su tipo de
+    comprobante es el 07 de SUNAT o, si la fila no lo trae (los tests arman
+    el SIRE a mano), su base es negativa."""
+    tipo = str(r.get("tipo_cdp") or "").strip()
+    if tipo:
+        return tipo == "07"
+    base = (float(r.get("base_imponible") or 0)
+            + float(r.get("no_gravado") or 0))
+    return base < 0
 
 
 def cruzar_con_parquet(df_sire, g_parquet):
@@ -400,6 +453,16 @@ def cruzar_con_parquet(df_sire, g_parquet):
         sub = candidatos.get(doc)
         elegido = None
         if sub is not None and len(sub):
+            # NOTA CONTRA NOTA Y FACTURA CONTRA FACTURA (regla #604). El
+            # número no dice de qué tipo es el comprobante: `E001-1` es la
+            # primera factura de un emisor Y su primera nota de crédito.
+            # Sin esta separación, la nota E001-1 del SIRE se emparejaba con
+            # la FACTURA E001-1 del mismo RUC («Diferencia» de S/ 836 en
+            # 2026), y desde que el sistema trae sus notas, una factura y
+            # una nota con el mismo número caían juntas como candidatas. En
+            # el sistema la nota es la que va en negativo.
+            _neg = pd.to_numeric(sub["base_pq"], errors="coerce") < 0
+            sub = sub[_neg == _es_nota_sire(r)]
             por_ruc = sub[sub["ruc_pq"] == ruc_sire] if ruc_sire else sub.iloc[0:0]
             if len(por_ruc) == 1:
                 elegido = por_ruc.iloc[0]
@@ -3523,7 +3586,8 @@ def _conteos_de_periodo(d, col_fecha, ini, fin, prov):
     if df is None or df.empty:
         return None, "SUNAT no tiene comprobantes en ese rango"
     cr = cruzar_con_parquet(
-        df, _parquet_agrupado_por_documento(d, col_fecha, ini, fin))
+        df, _parquet_agrupado_por_documento(
+            d, col_fecha, ini, fin, notas=data.notas_credito_compras()))
     if prov:
         cr = cr[_claves_proveedor_cruce(cr) == prov]
     return _conteos_cruce(cr), None
@@ -4370,7 +4434,8 @@ def renderizar_documentos_sunat(d, col_fecha):
                         "rango.")
                 return None
 
-            g_pq = _parquet_agrupado_por_documento(d, col_fecha, f_ini, f_fin)
+            g_pq = _parquet_agrupado_por_documento(
+                d, col_fecha, f_ini, f_fin, notas=data.notas_credito_compras())
             df_cruce = cruzar_con_parquet(vis, g_pq)
 
             # EL FILTRO DE PROVEEDOR VA ACÁ, sobre el cruce ya armado, y no

@@ -1206,6 +1206,23 @@ def _sello_notas_compras():
     return sello_datos(definicion_compra.ARCHIVO_NOTAS)
 
 
+def notas_credito_compras():
+    """Las notas de crédito de los proveedores tal como las trae la consulta
+    del Sheet (`notascreditocompras.parquet`), SIN aplicar a nada. Las lee
+    «Documentos SUNAT», que las cruza como documentos (regla #604): restarlas
+    de las compras lo hace `cargar`, una sola vez.
+
+    `None` si el parquet no existe (o no hay secrets) o si la lectura
+    falla: el cruce sigue sin ellas, como hasta el 2026-10-04."""
+    if not _sello_notas_compras():
+        return None
+    try:
+        return _cargar_cacheable(definicion_compra.ARCHIVO_NOTAS,
+                                 sello_datos(definicion_compra.ARCHIVO_NOTAS))
+    except Exception:
+        return None
+
+
 def cargar(archivo, notas_credito=True):
     """
     Carga un archivo parquet desde R2.
