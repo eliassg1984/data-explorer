@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-599 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+600 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (197)
+**CSS y estilos** (198)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -231,6 +231,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#572** — La Carta costeada entra en una pantalla, elige la ventana de «Vendidos» y abre las recetas…
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 - **#596** — La franja superior de contexto no lleva KPIs: dice dónde estás, no cuánto
+- **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 
 **Layout y alturas** (87)
 
@@ -524,7 +525,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 
-**Streamlit** (159)
+**Streamlit** (160)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -685,6 +686,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#581** — Compras › Producto: el Ranking de productos tiene un buscador en la fila de su título, y la…
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
+- **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 
 **Datos, R2 y DuckDB** (86)
 
@@ -47360,6 +47362,43 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+600. **Stock por Producto se ve como los filtros de Compras y abre de la A a
+     la Z por producto, sin mirar el prefijo del almacén.** 2026-10-03, a
+     pedido: «que los cuadrantes y filtros sean similares en estilo a los
+     otros que tengo en mis reportes» y «el orden de la A a la Z, primero
+     producto, después subfamilia y luego familia» (confirmado: la TABLA,
+     no los filtros).
+
+     - **Los filtros siguen siendo popovers** —Área, Familia y Subfamilia
+       son de selección múltiple (#466) y un `st.selectbox` no lo es—, pero
+       se pintan como el desplegable de Compras por período, medido ahí:
+       caja de 40px, fondo blanco, borde de 1px `GRIS_BORDE`, radio 8,
+       texto de 14px «Todas las familias» y la flecha contra el borde
+       derecho (`inventario_productos.py::CSS_FILTROS`). Hasta ese día eran
+       el disparador minimalista de Ajuste (#427): 26px, sin borde, gris y
+       con un ícono. **La flecha al borde pide dos reglas**: el botón ya
+       trae `justify-content`, pero el que reparte es el `div` de ADENTRO
+       (texto + ícono), que nace del ancho de su contenido — `width: 100%` +
+       `space-between` en él, y `flex: 1` + `flex-start` en su primer hijo,
+       o el texto queda centrado. El buscador, blanco y con el mismo borde:
+       Streamlit lo pinta gris y con Source Sans.
+     - **Dos renglones**: arriba los filtros (Área · Familia · Subfamilia ·
+       buscador, de lo general a lo particular como en Compras) y los dos
+       interruptores; debajo, el título con su cuenta. Con las cajas al
+       tamaño de Compras no entraban junto al título: medido a 1323, los
+       seis controles piden ~1.070px de los 1.149 de la fila. La tarjeta
+       mide 497 (cabe en los 619 de la pantalla del usuario).
+     - **La tabla**: Producto · Subfamilia · Familia · Código · …, y abre
+       ordenada por Producto (`initialSort`, no `sort`: #471) en vez de por
+       valorizado. **El orden ignora el prefijo**: con «(P)», «(Rs)» o «(L)»
+       el paréntesis va antes que cualquier letra y la tabla abría con
+       ~850 artículos así antes de «Aceite». Python ordena con
+       `clave_orden` y la grilla con `_JS_ORDEN_NOMBRE` (`localeCompare`
+       sin tildes); son la MISMA regla en dos lenguajes — si se toca una,
+       la otra. Las áreas de un producto siguen por valorizado.
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47372,7 +47411,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#599**; la próxima toma el número siguiente.
+> última regla es la **#600**; la próxima toma el número siguiente.
 
 >
 

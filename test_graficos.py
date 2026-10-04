@@ -5929,8 +5929,13 @@ def _pruebas_listado_inventario():
                 col_punit="PU", col_cant="STK", col_val="VAL")
 
     L = armar_listado(d, **cols)
-    check("un producto por código, mayor valorizado arriba",
-          L.productos.index.tolist(), ["02", "01", "04"])
+    check("un producto por código, de la A a la Z por nombre",
+          L.productos.index.tolist(), ["04", "02", "01"])
+    from graficos.inventario_productos import clave_orden
+    check("la A a la Z no mira el prefijo del almacén ni las tildes",
+          sorted(["Cebolla", "(P) Bife Ancho", "Ávila", "(Rs) Ají Panca"],
+                 key=clave_orden),
+          ["(Rs) Ají Panca", "Ávila", "(P) Bife Ancho", "Cebolla"])
     check("cantidad y valorizado se suman entre áreas",
           (L.productos.loc["01", "cantidad"], L.productos.loc["01", "valorizado"]),
           (3.0, 30.0))
@@ -5984,13 +5989,13 @@ def _pruebas_listado_inventario():
     f = filas_grilla(L)
     check("rowData: cada producto seguido de sus áreas",
           list(zip(f["__tipo"], f["__padre"])),
-          [("p", ""), ("a", "02"), ("p", ""), ("a", "01"), ("a", "01"),
-           ("p", ""), ("a", "04"), ("a", "04")])
+          [("p", ""), ("a", "04"), ("a", "04"), ("p", ""), ("a", "02"),
+           ("p", ""), ("a", "01"), ("a", "01")])
     check("la fila de área lleva el ÁREA en «nombre» y deja vacío lo del "
-          "producto", tuple(f.loc[3, ["nombre", "familia", "codigo"]]),
+          "producto", tuple(f.loc[1, ["nombre", "familia", "codigo"]]),
           ("COCINA", "", ""))
     check("familia y subfamilia se escriben como nombre propio",
-          f.loc[0, "familia"], "Bebidas con Alcohol")
+          f.loc[3, "familia"], "Bebidas con Alcohol")
 
     # En unidad de salida (regla #598), con los casos del reporte por área
     # del POS de Barra del 2026-10-03.

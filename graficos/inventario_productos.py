@@ -40,6 +40,7 @@ escribir la familia a mano. Van en la fila del título y el recorte lo hace
 Python antes de armar las filas.
 """
 
+import re
 import unicodedata
 import zlib
 from dataclasses import dataclass
@@ -49,17 +50,14 @@ import pandas as pd
 import streamlit as st
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG_TEXTO, GRIS_TEXTO_MEDIO,
-    LAVANDA_CHIP, LAVANDA_FILA, LAVANDA_SELECCION,
+    ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG_TEXTO, BLANCO, GRIS_BORDE,
+    GRIS_TEXTO_MEDIO, LAVANDA_BORDE, LAVANDA_CHIP, LAVANDA_FILA,
+    LAVANDA_SELECCION,
 )
 from graficos import alturas
 from graficos.base import (
     _es_movil, poner_seleccion, recortar_seleccion, seleccion_en_panel,
 )
-# El disparador minimalista de los filtros (regla #427) nació en Ajuste y es
-# genérico: sólo pide el prefijo de key de sus contenedores. El segundo
-# prefijo (la lista de cortes) acá no tiene a quién estilar.
-from graficos.ajuste._comun import css_filtros_vista
 # El look de las otras tres tablas del dashboard (regla #404): mismo alto de
 # fila, misma cabecera, mismo CSS. Una tabla ancha con otro idioma de grilla
 # debajo de tres que comparten uno se lee como otro reporte.
@@ -122,6 +120,19 @@ def _plano(s):
     """Minúscula y sin tildes: lo que se compara en el buscador."""
     return (unicodedata.normalize("NFKD", str(s))
             .encode("ascii", "ignore").decode().lower())
+
+
+_PREFIJO = re.compile(r"^\s*(\([^)]*\)\s*)+")
+
+
+def clave_orden(nombre):
+    """Con qué se ordena un producto de la A a la Z: sin el prefijo del
+    almacén —«(P)», «(Rs)», «(L)»— ni tildes ni mayúsculas. Con el prefijo,
+    el paréntesis va antes que cualquier letra y la tabla abría con 850
+    artículos «(L)…» y «(P)…» antes de «Aceite»; así «(P) Bife Ancho» cae en
+    la B, junto a los otros bifes. La grilla ordena con la misma regla
+    (`_JS_ORDEN_NOMBRE`)."""
+    return _plano(_PREFIJO.sub("", str(nombre)))
 
 
 @dataclass
@@ -273,10 +284,14 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
     sin_stock = int((prods["areas"] == 0).sum())
     if not incluir_sin_stock:
         prods = prods[prods["areas"] > 0]
-    # Mayor valorizado arriba, que es el orden con el que abre la columna.
-    # Las áreas, igual dentro de cada producto.
-    prods = prods.sort_values(["valorizado", "nombre"],
-                              ascending=[False, True], kind="stable")
+    # De la A a la Z por NOMBRE, que es el orden con el que abre la columna
+    # (2026-10-03, a pedido: por valorizado «se ve desordenado»), con la
+    # regla de `clave_orden`. Las áreas de cada producto, por valorizado:
+    # dónde está la mayor parte.
+    prods = prods.assign(_orden=[clave_orden(n) for n in prods["nombre"]])
+    prods = (prods.sort_values(["_orden", "valorizado"],
+                               ascending=[True, False], kind="stable")
+             .drop(columns="_orden"))
     en_areas = en_areas.sort_values("valorizado", ascending=False,
                                     kind="stable")
     return Listado(prods, en_areas.reset_index(drop=True), sin_stock)
@@ -407,6 +422,16 @@ _JS_FLECHA = (
     " if (!d || d.__tipo !== 'p' || !(d.__n > 0)) return '';"
     f" return {_JS_ABIERTOS}[d.__id] ? '▾' : '▸'; }}")
 
+# El orden de la columna Producto: el mismo que `clave_orden` en Python.
+_JS_ORDEN_NOMBRE = r"""
+function(a, b) {
+    var k = function(v) {
+        return String(v == null ? '' : v).replace(/^\s*(\([^)]*\)\s*)+/, '');
+    };
+    return k(a).localeCompare(k(b), 'es', {sensitivity: 'base'});
+}
+"""
+
 # «↳ COCINA»: la flecha dice que la fila cuelga de la de arriba, la sangría
 # la separa de los nombres de producto.
 _JS_NOMBRE = (
@@ -515,7 +540,8 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False):
     #   · Unidad       «Unidad kardex» sin flecha, 82+16 → 100 (PRODUCCION, 97)
     #   · Precio       «Precio unitario» sin flecha, 83+16 → 104
     #   · Cantidad     cabecera ordenada, 50+36 → 86 (−1,234.56 pide 69)
-    #   · Valorizado   cabecera ordenada, 87+36 → 124: abre ordenada por ella
+    #   · Valorizado   cabecera ordenada, 87+36 → 124 (hasta el 2026-10-03
+    #                  abría ordenada por ella; hoy abre por Producto)
     # Las fijas suman 520 y las tres de texto 366 de mínimo: 886px, que
     # entran en los 910 de la grilla con la ventana en 1024 sin scroll
     # horizontal (con 896 sobraba 1px: la barra vertical se come ~14). Las de texto se estiran para llenar (y su tooltip da el
@@ -539,18 +565,21 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False):
          "pinned": "left" if movil else None,
          "valueGetter": js(_JS_FLECHA), "cellStyle": js(_JS_FLECHA_ESTILO),
          "headerTooltip": "Clic en un producto para ver en qué áreas está."},
-        _col("codigo", "Código", width=76, minWidth=76,
-             suppressSizeToFit=True),
+        # Producto · Subfamilia · Familia, de lo particular a lo general, y
+        # la tabla abre de la A a la Z por producto (2026-10-03, a pedido).
         # Los `width` de estas tres son la PROPORCIÓN en que se reparten lo
         # que sobra, no su ancho final.
-        _col("familia", "Familia", width=140, minWidth=96,
-             tooltipField="familia"),
+        _col("nombre", "Producto", width=310, minWidth=160,
+             tooltipField="nombre", valueFormatter=js(_JS_NOMBRE),
+             cellStyle=js(_JS_ESTILO_NOMBRE), initialSort="asc",
+             comparator=js(_JS_ORDEN_NOMBRE),
+             pinned="left" if movil else None),
         _col("subfamilia", "Subfamilia", width=170, minWidth=110,
              tooltipField="subfamilia"),
-        _col("nombre", "Nombre", width=310, minWidth=160,
-             tooltipField="nombre", valueFormatter=js(_JS_NOMBRE),
-             cellStyle=js(_JS_ESTILO_NOMBRE),
-             pinned="left" if movil else None),
+        _col("familia", "Familia", width=140, minWidth=96,
+             tooltipField="familia"),
+        _col("codigo", "Código", width=76, minWidth=76,
+             suppressSizeToFit=True),
         _col("unidad", "Unidad kardex", width=100, minWidth=100,
              suppressSizeToFit=True, hide=bool(unidad_salida)),
         _col("precio", "Precio unitario", type=num, width=104, minWidth=104,
@@ -572,7 +601,7 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False):
               headerTooltip="Stock al día, sumado entre las áreas "
                             "elegidas.")),
         _col("valorizado", "Valorizado total", type=num, width=124,
-             minWidth=124, suppressSizeToFit=True, sort="desc", valueFormatter=js(_JS_SOLES),
+             minWidth=124, suppressSizeToFit=True, valueFormatter=js(_JS_SOLES),
              cellStyle=js(_JS_SIGNO),
              headerTooltip="Cantidad × precio unitario, sumado entre las "
                            "áreas elegidas."),
@@ -651,21 +680,58 @@ def _rotulo_area(a):
 def _etiqueta(sel, plural, fmt=str):
     """Lo que dice el disparador: el VALOR vigente, para que se lea qué hay
     puesto sin abrir nada (regla #427). Una sola, por su nombre; varias,
-    cuántas; ninguna, «todas»."""
+    cuántas; ninguna, «Todas las …», como los desplegables de Compras
+    («Todas las familias»)."""
     if not sel:
-        return f"todas las {plural}"
+        return f"Todas las {plural}"
     if len(sel) == 1:
-        return fmt(sel[0]).lower()
+        return fmt(sel[0])
     return f"{len(sel)} {plural}"
 
 
-def _filtro(col, nombre, icono, etiqueta, dibujar):
-    """Un filtro de la fila: disparador compacto + panel. El contenedor con
-    `inv_prod_ctrl_` es de donde cuelga el look minimalista; el popover
-    lleva key para que no se cierre al marcar una opción (la etiqueta
-    cambia con cada clic, y sin key cambiaría también su identidad)."""
+# Los filtros se ven como los desplegables de Compras por período y de
+# Movimientos (2026-10-03, a pedido: «que sea similar en estilo a los otros
+# que tengo en mis reportes»), aunque por dentro sigan siendo un popover —
+# acá la selección es MÚLTIPLE (#466) y un `st.selectbox` no lo es. Medido
+# en Compras: caja de 40px, fondo blanco, borde de 1px `GRIS_BORDE`, radio
+# de 8 y el texto a 14px con el color de siempre; la flecha a la derecha.
+# Hasta ese día eran el disparador minimalista de Ajuste (#427): sin borde,
+# 26px de alto, gris y con un ícono adelante. El buscador, igual: Streamlit
+# lo pinta gris y con su tipografía, y al lado de las cajas blancas se leía
+# como otro control.
+CSS_FILTROS = f"""
+div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"] {{
+    min-width: 0 !important; min-height: 40px !important;
+    padding: 0 8px 0 10px !important;
+    background: {BLANCO} !important; border: 1px solid {GRIS_BORDE} !important;
+    border-radius: 8px !important;
+    justify-content: space-between !important; }}
+div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"] > div {{
+    width: 100% !important; justify-content: space-between !important; }}
+div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"] > div > div:first-child {{
+    flex: 1 1 auto !important; min-width: 0 !important;
+    justify-content: flex-start !important; text-align: left !important; }}
+div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"] p {{
+    font-size: 14px !important; font-weight: 400 !important; }}
+div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"]:hover,
+div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"][aria-expanded="true"] {{
+    border-color: {LAVANDA_BORDE} !important; }}
+.st-key-{_K_BUSCAR} [data-testid="stTextInputRootElement"] {{
+    background: {BLANCO} !important; border: 1px solid {GRIS_BORDE} !important;
+    border-radius: 8px !important; }}
+.st-key-{_K_BUSCAR} input {{
+    font-family: inherit !important; font-size: 14px !important;
+    padding-left: 10px !important; }}
+"""
+
+
+def _filtro(col, nombre, etiqueta, dibujar):
+    """Un filtro de la fila: la caja con lo elegido + su panel. El contenedor
+    con `inv_prod_ctrl_` es de donde cuelga `CSS_FILTROS`; el popover lleva
+    key para que no se cierre al marcar una opción (la etiqueta cambia con
+    cada clic, y sin key cambiaría también su identidad)."""
     with col, st.container(key=f"inv_prod_ctrl_{nombre}"):
-        with st.popover(f"{icono} {etiqueta}", key=f"inv_prod_pop_{nombre}",
+        with st.popover(etiqueta, key=f"inv_prod_pop_{nombre}",
                         use_container_width=True):
             dibujar()
 
@@ -691,9 +757,7 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         return
 
     # Sin guard de "una sola vez" (regla #59).
-    st.markdown("<style>"
-                + css_filtros_vista("inv_prod_ctrl_", "inv_prod_corte_")
-                + "</style>", unsafe_allow_html=True)
+    st.markdown("<style>" + CSS_FILTROS + "</style>", unsafe_allow_html=True)
 
     # ── Opciones y estado, ANTES de dibujar: las etiquetas de los
     # disparadores leen lo elegido, y Streamlit las fija al construirlos.
@@ -711,24 +775,28 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
     ops_sub = sorted(set(_texto(_d_fam, col_subfam)) - {""})
     recortar_seleccion(_K_SUBFAMILIAS, ops_sub)
 
-    # El buscador y el título ceden lo que pide «Ver en unidad de salida»
-    # (regla #598), que sólo se dibuja si el parquet trae con qué partir.
+    # DOS renglones desde el 2026-10-03: arriba los filtros, de lo general a
+    # lo particular como en Compras por período (Área · Familia · Subfamilia
+    # · el buscador) y los dos interruptores a la derecha; debajo, el título
+    # con su cuenta. Con las cajas al tamaño de las de Compras no entraban
+    # junto al título en una laptop: medido a 1323, los seis controles piden
+    # ~1.070px de los 1.149 de la fila. «Ver en unidad de salida» (regla
+    # #598) sale sólo si el parquet trae con qué partir.
     hay_salida = bool(col_factor and col_usal)
     c_us = None
     if hay_salida:
-        # columnas-internas: el título y los seis controles de la tabla, en
-        # el renglón de arriba de la misma tarjeta.
-        # Repartidos por lo MEDIDO a 1366 (rótulos en versalitas de 14px):
-        # «VER EN UNIDAD DE SALIDA» pide 157 + 40 del interruptor y «VER SIN
-        # STOCK», 88 + 40; con menos, los dos se parten en dos renglones.
-        c_tit, c_area, c_fam, c_sub, c_q, c_us, c_cero = st.columns(
-            [1.55, 1.25, 1.35, 1.5, 1.35, 2.05, 1.35],
-            vertical_alignment="center")
+        # columnas-internas: los seis controles de la tabla, en el renglón de
+        # arriba de la misma tarjeta. Repartidos por lo MEDIDO (14px):
+        # «Todas las subfamilias» pide ~178 con su caja; «VER EN UNIDAD DE
+        # SALIDA», 157 + 40 del interruptor; «VER SIN STOCK», 88 + 40.
+        c_area, c_fam, c_sub, c_q, c_us, c_cero = st.columns(
+            [1.45, 1.6, 1.8, 1.9, 2.0, 1.3], vertical_alignment="center")
     else:
-        # columnas-internas: el título y los cinco controles de la tabla, en
-        # el renglón de arriba de la misma tarjeta.
-        c_tit, c_area, c_fam, c_sub, c_q, c_cero = st.columns(
-            [1.3, 0.95, 0.95, 1.05, 1.45, 0.8], vertical_alignment="center")
+        # columnas-internas: los cinco controles de la tabla, en el renglón
+        # de arriba de la misma tarjeta.
+        c_area, c_fam, c_sub, c_q, c_cero = st.columns(
+            [1.45, 1.6, 1.8, 2.4, 1.3], vertical_alignment="center")
+    c_tit = st.container(key="inv_prod_titulo")
 
     def _dib_area():
         seleccion_en_panel(st.pills, "Área", _K_AREAS, ops_area,
@@ -764,12 +832,12 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         st.caption("Las de " + ", ".join(nombre_propio(f) for f in _fams)
                    + "." if _fams else "Sin ninguna elegida entran todas.")
 
-    _filtro(c_area, "area", ":material/apartment:",
+    _filtro(c_area, "area",
             _etiqueta(st.session_state.get(_K_AREAS), "áreas",
-                      _rotulo_area), _dib_area)
-    _filtro(c_fam, "familia", ":material/category:",
+                      nombre_propio), _dib_area)
+    _filtro(c_fam, "familia",
             _etiqueta(_fams, "familias", nombre_propio), _dib_fam)
-    _filtro(c_sub, "subfamilia", ":material/label:",
+    _filtro(c_sub, "subfamilia",
             _etiqueta(st.session_state.get(_K_SUBFAMILIAS), "subfamilias",
                       nombre_propio), _dib_sub)
     with c_q:
