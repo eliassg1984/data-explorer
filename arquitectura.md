@@ -47635,10 +47635,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Medido sobre 2026 (1 ene – 3 oct): Coincide 1.961 → 1.968, Solo SUNAT
      1.107 → 1.103, Diferencia 164 → 161, Solo sistema 293 → 294. De las 9
      notas procesadas del Almacén, 7 coinciden; la de La Cesta (FC01-70)
-     difiere (S/ 190,41 contra 195,00) y la de Quality Beef sale «Solo
-     sistema»: el Almacén la cargó como F001-1430 y SUNAT tiene dos,
-     F001-1461 y F001-1464. Las 4 «Diferencia» que bajaron eran notas del
-     SIRE emparejadas con su factura del mismo número. Septiembre: la del
+     difiere (S/ 190,41 contra 195,00) y la de Quality Beef (F001-1430)
+     sale «Solo sistema» en ese rango sólo por la FECHA: SUNAT la tiene el
+     20/12/2025 y el Almacén la cargó el 28/01/2026 — con los 12 meses con
+     que abre la vista, coincide. Las F001-1461 y F001-1464 de SUNAT (28/01,
+     ~S/ 6.578 cada una) son OTRAS dos notas, que el Almacén no tiene. Las
+     4 «Diferencia» que bajaron eran notas del SIRE emparejadas con su
+     factura del mismo número. Verificado en la app publicada (12 meses al
+     4/10/2026): de las 87 notas del SIRE, 8 «Coincide», 1 «Diferencia» y
+     78 «Solo SUNAT». Septiembre: la del
      Magret de pato (E001-68), «Coincide».
 
      La nota entra por SU fecha (la del Almacén, `FECHA NC`): puede no ser
