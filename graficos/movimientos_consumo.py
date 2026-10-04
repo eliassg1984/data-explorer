@@ -260,7 +260,16 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
         rend=rend, revisar=revisar, porcionado=porcionado,
         compras=compras_d, comprados=comprados,
         compras_familias=fams_compras if compras is not None else [],
-        venta_interna=dict(pedidos=len(vi), platos=len(vi), nombres=[p[0] for p in vi][:4]),
+        venta_interna=dict(
+            pedidos=len(vi), platos=len(vi), nombres=[p[0] for p in vi][:4],
+            # Lo que se contó por lo PRODUCIDO y no por lo facturado (regla
+            # #605): por producto, lo porcionado y lo facturado en el rango,
+            # en unidades del producto, y si se fechó por su masa.
+            produccion=[[_texto(x.get("plato") or ""), _texto(_m(x["cod"], "unid", "")),
+                         _q(_num(x.get("producido"), 0.0)), _q(_num(x.get("facturado"), 0.0)),
+                         bool(x.get("por_masa")), _q(_num(x.get("parte"), 1.0))]
+                        for x in res.get("por_produccion", [])
+                        if _num(x.get("producido"), 0.0) or _num(x.get("facturado"), 0.0)]),
         resumen=dict(costo=_q(res["costo"]), costo_nivel1=_q(res["costo_nivel1"]),
                      niveles=int(res["niveles"]), sin_maestro=int(res["sin_maestro"]),
                      sin_factor=int(res["sin_factor"]),

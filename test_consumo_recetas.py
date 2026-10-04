@@ -313,6 +313,91 @@ sin = mc.datos_de_la_vista(r, ())
 ok(sin["compras"] == {} and sin["compras_familias"] == [],
    "sin compras leídas, la página no promete la pestaña", f"{sin['compras_familias']!r}")
 
+print("\n── la venta interna, por la fecha en que se PRODUJO (regla #605) ──")
+# La charcutería de Mayta: la MASA se hace con una orden de producción el
+# 1 de agosto (10 kg, 1 kg de magret por kg), el 20 se porciona en
+# chistorras y chorizos, y se FACTURAN recién el 23 de septiembre. La
+# manteca sale de porcionar pellejo y va también al arroz del salón.
+MAE2 = pd.concat([MAESTRO, pd.DataFrame([
+    ("MAS", "(Rs) Masa de chorizo", "KILOS", 1000.0, 50.0, "ALIMENTOS", "RB"),
+    ("CHI", "(P) Chistorra x und", "UND", 1.0, 2.0, "ALIMENTOS", "PORC"),
+    ("CHR", "(P) Chorizo x und", "UND", 1.0, 6.0, "ALIMENTOS", "PORC"),
+    ("PEL", "Pellejo de pato", "KILOS", 1000.0, 10.0, "ALIMENTOS", "AVES"),
+    ("MAN", "(P) Manteca de pato", "KILOS", 1000.0, 20.0, "ALIMENTOS", "PORC"),
+], columns=MAESTRO.columns)], ignore_index=True)
+RB2 = pd.concat([RECETAS, pd.DataFrame([
+    ("MAS", "MAG", 1000.0, 1000.0, "GRAMOS", "RB.ACTIV"),       # 1 kg de magret por kg de masa
+], columns=RECETAS.columns)], ignore_index=True)
+PORC2 = pd.concat([PORC, pd.DataFrame([
+    # 4 kg de masa → 100 chistorras (2,5 kg) y 40 chorizos (1,5 kg)
+    ("P8", T("2026-08-20 10:00"), "MAS", "CHI", 4.0, 4.0, 100.0, 2.5),
+    ("P8", T("2026-08-20 10:00"), "MAS", "CHR", 4.0, 4.0, 40.0, 1.5),
+    # 2 kg de pellejo → 1 kg de manteca
+    ("P9", T("2026-09-10 09:00"), "PEL", "MAN", 2.0, 1.0, 1.0, 1.0),
+], columns=PORC.columns)], ignore_index=True)
+OPS = pd.DataFrame({"fecha": [T("2026-08-01 08:00"), T("2026-07-15 08:00"), T("2026-08-05 08:00")],
+                    "cod": ["MAS", "MAS", "MAS"], "cant": [10.0, 4.0, 3.0],
+                    "estado": ["PROCESADO", "PROCESADO", "GENERADO"]})
+PAL2 = pd.DataFrame([
+    (T("2026-05-10 09:00"), T("2026-05-10 09:00"), "Chistorra Mayta", "Venta Interna", "CHI", 50.0, 100.0, 50.0, "UND"),
+    (T("2026-05-10 09:00"), T("2026-05-10 09:00"), "Chorizo Mayta", "Venta Interna", "CHR", 20.0, 120.0, 20.0, "UND"),
+    (T("2026-09-23 09:00"), T("2026-09-23 09:00"), "Chistorra Mayta", "Venta Interna", "CHI", 100.0, 200.0, 100.0, "UND"),
+    (T("2026-09-23 09:00"), T("2026-09-23 09:00"), "Chorizo Mayta", "Venta Interna", "CHR", 40.0, 240.0, 40.0, "UND"),
+    (T("2026-06-10 13:00"), T("2026-06-10 13:00"), "Arroz con pato", "Alimentos", "MAN", 700.0, 14.0, 7.0, "GRAMOS"),
+    (T("2026-09-12 13:00"), T("2026-09-12 13:00"), "Arroz con pato", "Alimentos", "MAN", 200.0, 4.0, 2.0, "GRAMOS"),
+    (T("2026-09-25 09:00"), T("2026-09-25 09:00"), "Manteca Mayta", "Venta Interna", "MAN", 300.0, 6.0, 1.0, "GRAMOS"),
+], columns=PALOTEO.columns)
+OPS_SHEET = OPS.rename(columns={"fecha": "FECHA PROCESO", "cod": "COD PRODUCTO", "cant": "CANTIDAD",
+                                "estado": "NOMBRE ESTADO"}).assign(**{"FECHA REGISTRO": OPS["fecha"]})
+for nombre, df in (("pal2", PAL2), ("rb2", RB2), ("po2", PORC2), ("ma2", MAE2), ("op2", OPS_SHEET)):
+    con.register(nombre, df)
+ops2 = con.execute(cr.sql_ordenes("op2")).df()
+ok(len(ops2) == 2, "una orden GENERADA no cuenta como producción", f"{len(ops2)} órdenes")
+
+
+def _correr(ini, fin, con_anual=True):
+    return cr.calcular(con.execute(cr.sql_nivel1("pal2", ini, fin)).df(),
+                       con.execute(cr.sql_recetas("rb2")).df(),
+                       con.execute(cr.sql_porcionamientos("po2")).df(),
+                       con.execute(cr.sql_maestro("ma2")).df(), ini, fin,
+                       anual=(con.execute(cr.sql_demanda_anual("pal2", fin)).df() if con_anual else None),
+                       ordenes=ops2)
+
+
+def _q(r, cod, **filtro):
+    f = r["filas"][r["filas"]["cod"] == cod]
+    for k, v in filtro.items():
+        f = f[f[k] == v]
+    return float(f["q"].sum())
+
+
+AGO, SEP = (dt.date(2026, 8, 1), dt.date(2026, 8, 31)), (dt.date(2026, 9, 1), dt.date(2026, 9, 30))
+ago, sep = _correr(*AGO), _correr(*SEP)
+igual(_q(ago, "MAG"), 10.0, "agosto: el magret de los 10 kg de masa del 1 de agosto")
+igual(_q(ago, "MAG", plato="Chistorra Mayta"), 10.0 * 2.5 / 4.0,
+      "repartido entre los productos de la masa por lo que se llevó cada uno: chistorra 2,5 de 4 kg")
+igual(_q(ago, "MAG", plato="Chorizo Mayta"), 10.0 * 1.5 / 4.0, "…y chorizo 1,5 de 4")
+ok(bool(ago["filas"][ago["filas"]["cod"] == "MAG"]["interna"].all()), "y sigue siendo venta interna")
+igual(_q(sep, "MAG"), 0.0,
+      "septiembre: lo FACTURADO el 23 no vuelve a contar (la masa se hizo en agosto)")
+igual(_q(_correr(*SEP, con_anual=False), "MAG"), 100 * 0.025 + 40 * 0.0375,
+      "sin la regla, la factura del 23 contaba el magret en septiembre (por el porcionamiento)")
+igual(_q(_correr(*AGO, con_anual=False), "MAG"), 0.0, "…y agosto quedaba en cero")
+_pl = dict(zip(sep["platos"]["plato"], sep["platos"]["vendidos"]))
+igual(_pl.get("Chistorra Mayta", -1), 100.0, "lo VENDIDO sigue saliendo de las ventas")
+_pp = {x["cod"]: x for x in sep["resumen"]["por_produccion"]}
+ok(_pp["CHI"]["por_masa"] and _pp["CHI"]["facturado"] == 100.0 and _pp["CHI"]["producido"] == 0.0,
+   "el resumen dice lo producido y lo facturado de cada producto", f"{_pp.get('CHI')!r}")
+igual(sum(x["producido"] for x in ago["resumen"]["masas"]), 10.0, "y cuánta masa se contó")
+# La manteca: también va al arroz del salón. En 12 meses la venta interna se
+# llevó 300 de 1.200 g: el 25 % de lo porcionado el 10 de septiembre.
+igual(_q(sep, "PEL", interna=True), 1.0 * 0.25 * 2.0,
+      "la manteca de venta interna: su parte de lo porcionado (0,25 kg) × 2 kg de pellejo por kg")
+igual(_q(sep, "PEL", interna=False), 0.2 * 2.0, "el salón sigue por lo vendido: 200 g de manteca")
+_mn = {x["cod"]: x for x in sep["resumen"]["por_produccion"]}["MAN"]
+ok(not _mn["por_masa"] and abs(_mn["parte"] - 0.25) < 1e-9,
+   "la manteca sale de su propio porcionamiento (el pellejo no tiene órdenes)", f"{_mn!r}")
+
 print("\n── el cableado ──")
 arbol = ast.parse((RAIZ / "graficos" / "ventas_ficha_hora.py").read_text(encoding="utf-8"))
 raros = next((ast.literal_eval(n.value) for n in ast.walk(arbol)
@@ -320,6 +405,13 @@ raros = next((ast.literal_eval(n.value) for n in ast.walk(arbol)
              None)
 ok(raros is not None and tuple(raros) == tuple(cr.GRUPOS_NO_SERVICIO),
    "la venta interna es la misma de Ventas › Por hora (GRUPOS_RAROS)", f"{raros!r}")
+_data = ast.parse((RAIZ / "data.py").read_text(encoding="utf-8"))
+_calc = [n for n in ast.walk(_data) if isinstance(n, ast.Call)
+         and getattr(n.func, "attr", "") == "calcular"]
+ok(_calc and all({"anual", "ordenes"} <= {k.arg for k in c.keywords} for c in _calc),
+   "la app le pasa al cálculo los 12 meses y las órdenes de producción (regla #605)")
+ok(cr.ARCHIVOS.get("ordenes") == "ordenesproduccion.parquet",
+   "las órdenes de producción están entre los parquets del cálculo (su sello va en la caché)")
 
 # ── Cierre ─────────────────────────────────────────────────────────────────
 print()

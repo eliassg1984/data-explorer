@@ -512,7 +512,7 @@ function pintarResumen() {
   const vi = D.venta_interna;
   document.getElementById('vi-cuenta').textContent = vi.pedidos ? `· ${vi.platos} plato${vi.platos === 1 ? '' : 's'}` : '· no hubo';
   document.getElementById('vi-lbl').title = vi.pedidos
-    ? `${vi.nombres.join(', ')}: se venden por tanda. Cuentan en lo que se usó, pero corren el patrón de días y horas. Es la misma que apaga Ventas › Por hora.`
+    ? `${vi.nombres.join(', ')}: lo que se produce en casa para Mayta cuenta el día que se PRODUJO, no el que se facturó; igual va por tanda y corre el patrón de días y horas. Es la misma que apaga Ventas › Por hora.`
     : 'En el período no hubo venta interna.';
   const cb = document.getElementById('vi');
   cb.checked = UI.vi;
@@ -809,7 +809,7 @@ function pintarDetalle() {
   const platos = [...a.pl.entries()].sort((x, y) => y[1] - x[1]).slice(0, 6);
   const nombresVI = [...a.pl.keys()].filter(p => PLATOS[p][1]).map(p => PLATOS[p][0]).slice(0, 2);
   const avisoVI = (UI.vi && a.tot && a.vi / a.tot >= 0.25)
-    ? `<div class="det-sec aviso-vi"><p><b>${pct0(a.vi, a.tot)} sale de venta interna</b> (${esc(nombresVI.join(' y '))}): se vende por tanda, así que su día y su hora no son los del servicio. Apaga «Venta interna» para ver el patrón del salón.</p></div>` : '';
+    ? `<div class="det-sec aviso-vi"><p><b>${pct0(a.vi, a.tot)} sale de venta interna</b> (${esc(nombresVI.join(' y '))}): se produce por tanda, así que su día y su hora son los de la producción, no los del servicio. Apaga «Venta interna» para ver el patrón del salón.</p></div>` : '';
   let rend = '';
   const cortes = [...a.porc.entries()].sort((x, y) => y[1] - x[1]);
   if (cortes.length) {
@@ -973,6 +973,15 @@ document.getElementById('cc-filas').addEventListener('click', e => { const tr = 
 document.getElementById('cc-filas').addEventListener('keydown', e => { if (e.key === 'Enter') { const tr = e.target.closest('tr[data-cod]'); if (tr) abrirFicha(tr.dataset.cod); } });
 
 // ── cómo se calcula ──
+// Lo producido contra lo facturado del período, producto por producto
+// (regla #605): la cuenta de arriba sale de lo primero.
+function notaProduccion() {
+  const pr = (D.venta_interna && D.venta_interna.produccion) || [];
+  if (!pr.length) return '';
+  const filas = pr.map(([pl, u, prod, fact, masa, parte]) =>
+    `${esc(pl)}: ${n0(prod)} ${esc(u)} porcionad${prod === 1 ? 'o' : 'os'}, ${n0(fact)} facturad${fact === 1 ? 'o' : 'os'}${masa ? ' (fechado por su masa)' : ''}${parte < 0.995 ? ` (a la venta interna le toca el ${Math.round(parte * 100)} %)` : ''}`);
+  return ' En el período: ' + filas.join(' · ') + '.';
+}
 {
   const R = D.resumen;
   const partes = [
@@ -980,7 +989,7 @@ document.getElementById('cc-filas').addEventListener('keydown', e => { if (e.key
     '<b>Unidades y precios.</b> Todo en la unidad del kardex (la de compra), con el factor de cada producto. Recetas y precios promedio: los de HOY — editar una receta cambia el consumo de meses pasados, como en el POS.',
     `<b>El costo.</b> Al primer nivel, el del POS, el período suma ${sol(R.costo_nivel1)}; bajando hasta lo que se compra, ${sol(R.costo)}. Por las recetas base cierra: el Almacén recuesta cada preparación con sus insumos. La diferencia sale de los porcionamientos: las hojas llevan el rendimiento real, y el corte, el costo que le puso el Almacén.`,
     `<b>El día y la hora.</b> El día es el del pedido. La hora es la de cada plato${R.hora_de_mesa ? ' — en este parquet todavía la de la MESA, que no trae la del plato' : ' y no la de la mesa: un postre llega unos 70 minutos después de abierta'}. «Día de la semana» es un promedio: lo de los lunes entre cuántos lunes hubo.`,
-    '<b>Venta interna.</b> El chorizo y la chistorra de pato para Mayta se venden por tanda: cuentan en lo que se usó, pero corren el patrón de días y horas. El interruptor la saca, como en Ventas › Por hora.',
+    '<b>Venta interna.</b> Lo que se produce en casa para Mayta —el chorizo, la chistorra y la manteca de pato— cuenta el día que se PRODUJO y no el que se facturó: se factura por tanda (en agosto de 2026, nada; el 23 de septiembre, 600 unidades) y así el magret «se usaba» un mes después de comprado. Si sale de porcionar una masa que se hace con orden de producción, la fecha es la de esa orden, que es cuando se usó el magret; si no, la de su porcionamiento. Si también va al salón, la venta interna se lleva su parte de los últimos 12 meses. Lo que se revende tal cual (vinos, panceta) sigue por la factura. El interruptor la saca, como en Ventas › Por hora.' + notaProduccion(),
   ];
   const editadas = PLATOS.filter(p => p[3]);
   if (editadas.length) partes.push(`<b>Recetas editadas.</b> ${editadas.length} plato${editadas.length === 1 ? '' : 's'} del período cambi${editadas.length === 1 ? 'ó' : 'aron'} de receta desde el ${fCorta(P.desde)} (${esc(editadas.slice(0, 4).map(p => `${p[0]}, ${fCorta(p[3])}`).join(' · '))}${editadas.length > 4 ? '…' : ''}): lo vendido antes de esa fecha se calcula con la receta de hoy. La tabla dinámica y la ficha los marcan.`);

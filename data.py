@@ -1803,7 +1803,18 @@ def _consumo_recetas_cacheable(archivo, sello, ini, fin, sellos=(), version=None
     rb = con.execute(consumo_recetas.sql_recetas(rel("recetabase"))).df()
     po = con.execute(consumo_recetas.sql_porcionamientos(rel("porcionamientos"))).df()
     ma = con.execute(consumo_recetas.sql_maestro(rel("maestro"))).df()
-    r = consumo_recetas.calcular(n1, rb, po, ma, ini, fin)
+    # Los 12 meses que terminan en `fin`, agregados: qué parte de cada
+    # producto va a la venta interna, que se cuenta por lo PRODUCIDO
+    # (regla #605). Unas mil filas.
+    anual = con.execute(consumo_recetas.sql_demanda_anual(rel("paloteo"), fin)).df()
+    # Las órdenes de producción: la masa del chorizo se produce así, y de
+    # ella sale la fecha en que se usó el magret (regla #605). Si el parquet
+    # no está, la venta interna se fecha por su porcionamiento.
+    try:
+        ops = con.execute(consumo_recetas.sql_ordenes(rel("ordenes"))).df()
+    except Exception:
+        ops = None
+    r = consumo_recetas.calcular(n1, rb, po, ma, ini, fin, anual=anual, ordenes=ops)
     r["resumen"]["hora_de_mesa"] = not con_hora
     return r
 
@@ -1821,7 +1832,8 @@ def consumo_recetas_rango(ini, fin):
         return _consumo_recetas_cacheable(
             A["paloteo"], sello_datos(A["paloteo"]), ini, fin,
             sellos=tuple((a, sello_datos(a)) for a in
-                         (A["recetabase"], A["porcionamientos"], A["maestro"])),
+                         (A["recetabase"], A["porcionamientos"], A["maestro"],
+                          A["ordenes"])),
             version=consumo_recetas.VERSION)
     except Exception as e:
         st.error(f"Error calculando el consumo según recetas: {e}")

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-604 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+605 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (198)
 
@@ -689,7 +689,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 
-**Datos, R2 y DuckDB** (88)
+**Datos, R2 y DuckDB** (89)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -779,6 +779,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#599** — Una conexión de DuckDB por HILO, no por proceso: compartida entre sesiones, una consulta se…
 - **#601** — El stock a una fecha sale del kardex por hora, con la regla del Histórico del POS: el último…
 - **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
+- **#605** — «Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en casa el día que se…
 
 **SUNAT y SIRE** (52)
 
@@ -898,7 +899,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (152)
+**Decisiones de diseño y UX** (153)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1052,6 +1053,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#593** — Ventas se fecha por el día del TURNO de caja (default) o por el de EMISIÓN del comprobante, a…
 - **#596** — La franja superior de contexto no lleva KPIs: dice dónde estás, no cuánto
 - **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
+- **#605** — «Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en casa el día que se…
 
 **Mantenimiento y trampas del lenguaje** (14)
 
@@ -47657,6 +47659,61 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+605. **«Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en
+     casa el día que se PRODUJO, no el que se facturó.** 2026-10-04, a pedido
+     («mide el consumo de venta interna por fecha de producción»), después de
+     ver que el Magret de pato daba 0 kg usados en agosto.
+
+     El Magret sólo llega a ventas por la charcutería que se le factura a
+     Mayta (grupo «Venta Interna»: chorizo, chistorra, manteca de pato), y
+     esa venta se factura por TANDAS: el 13 de julio, nada en agosto, siete
+     documentos en septiembre —600 unidades el 23—. Contado por la factura,
+     el magret «se usaba» un mes después de comprado: agosto 0 kg y
+     septiembre 94,7 contra 69,7 comprados.
+
+     La producción SÍ tiene fecha, en dos pasos: la MASA de chorizo
+     (`0003953`) se hace con una ORDEN DE PRODUCCIÓN —el 1 de agosto, 18,5
+     kg, el mismo día en que se porcionó el magret— y se guarda; después se
+     PORCIONA en chorizos y chistorras (el 24 de agosto, 5,8 kg; el resto en
+     septiembre). Las órdenes del chorizo mismo se dejaron de cargar en
+     septiembre de 2025, y la chistorra nunca tuvo. La regla
+     (`consumo_recetas.calcular(..., anual=, ordenes=)`):
+
+     - Un producto que la venta interna pide en los últimos 12 meses y que
+       se PORCIONÓ en ese lapso sale de lo PRODUCIDO, no de lo facturado:
+       sus filas de venta interna se cambian por filas de producción.
+     - Si todo lo que se porciona de él sale de algo que se produce con
+       orden de producción (la masa), la producción es esa orden, en su día
+       y su hora, repartida entre los productos que salen de la masa por lo
+       que se llevó cada uno en los 12 meses (así la chistorra y el chorizo
+       siguen siendo dos platos). Si no, es su propio porcionamiento.
+     - `parte`: lo que le tocó a la venta interna en los 12 meses. La
+       manteca va también al arroz con pato: el salón sigue por lo vendido
+       y la venta interna se lleva su parte (41 % a sep 2026).
+     - Lo que se revende tal cual (vinos, panceta, setas) no se porciona y
+       sigue por la factura. Lo VENDIDO de cada plato sigue saliendo de las
+       ventas: un mes sin factura muestra el plato con 0 vendidos.
+
+     Medido (magret, kg): julio 27,2 usado / 29,8 porcionado; agosto 18,7 /
+     21,0; septiembre 48,0 / 50,6; doce meses 506 / 578 —la diferencia es la
+     merma del porcionamiento—. Antes: 16,5 / 0 / 94,7. El costo de la venta
+     interna en 12 meses casi no cambia (S/ 53.662 → 52.504) y el del salón,
+     nada: se mueven las FECHAS, no el total.
+
+     Lo nuevo de los datos: el cálculo lee `ordenesproduccion.parquet`
+     (`ARCHIVOS["ordenes"]`, su sello en la clave de la caché) y los 12
+     meses del primer nivel (`sql_demanda_anual`). Las órdenes GENERADAS no
+     cuentan (no movieron el kardex, #575). Y el primer nivel se castea a
+     texto al entrar: un rango sin ventas llega como un DataFrame vacío sin
+     tipos, y la comparación con los códigos de la venta interna reventaba.
+     `consumo_recetas.VERSION` pasa a 2. Lo vigila
+     `test_consumo_recetas.py` (la masa de agosto facturada en septiembre,
+     la manteca compartida).
+
+     Toca `data.py` y `graficos/`: «Reboot app» en Cloud (#357).
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47669,7 +47726,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#604**; la próxima toma el número siguiente.
+> última regla es la **#605**; la próxima toma el número siguiente.
 
 >
 

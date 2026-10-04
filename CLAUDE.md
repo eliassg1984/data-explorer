@@ -1026,6 +1026,13 @@ Lo que ya mordió:
   «Diferencia grande» es más del 25 % Y más de S/ 100 (con el 25 % solo,
   305 de 417 insumos). Y el consumo usa la receta de HOY: la página marca
   los platos cuya receta se editó dentro del rango (#560).
+- **La venta interna de lo que se produce en casa cuenta el día que se
+  PRODUJO, no el que se facturó** (#605): la charcutería de Mayta se
+  factura por tanda (agosto 2026 en cero, 600 unidades el 23/09) y el
+  magret «se usaba» un mes después de comprado. Sale de la orden de
+  producción de la MASA o, si no, del porcionamiento del producto; por eso
+  el cálculo lee también `ordenesproduccion.parquet`. Lo que se revende tal
+  cual (vinos) sigue por la factura.
 - **Lo que al nivel de insumo de compra cierra puede estar mal al nivel de
   CORTE**: una receta que pide el corte equivocado no da error — el lomo
   fino cierra (211 kg contra 209 porcionados) y el Lomo Saltado descarga

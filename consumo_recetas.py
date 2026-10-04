@@ -68,17 +68,21 @@ import datetime as dt
 
 import duckdb
 
-VERSION = 1
+VERSION = 2
 """Va en la clave de la caché de disco (que no caduca): subirla cuando cambie
-QUÉ se calcula, no cómo se ve."""
+QUÉ se calcula, no cómo se ve. La 2: la venta interna de lo que se produce
+en casa, por la fecha en que se produjo (regla #605)."""
 
 ARCHIVOS = {
     "paloteo": "paloteoinsumosnivel1.parquet",
     "recetabase": "recetabase.parquet",
     "porcionamientos": "porcionamientos.parquet",
     "maestro": "inventariovalorizado.parquet",
+    "ordenes": "ordenesproduccion.parquet",
 }
-"""Los cuatro parquets del cálculo. El primero es el que manda el rango."""
+"""Los parquets del cálculo. El primero es el que manda el rango; el de las
+órdenes de producción, desde la regla #605, sólo para fechar la venta
+interna por su masa."""
 
 GRUPOS_NO_SERVICIO = ("Venta Interna", "Eventos")
 """Los grupos del POS que no son servicio de salón: se venden por tanda (el
@@ -155,6 +159,33 @@ def sql_demanda_nivel1(relacion, ini, fin):
         GROUP BY 1, 2"""
 
 
+def sql_demanda_anual(relacion, fin):
+    """Los 12 meses que terminan en `fin`, por insumo del primer nivel, plato
+    y grupo: de ahí sale QUÉ PARTE de un producto va a la venta interna y con
+    qué plato se vende (regla #605). `consumo` en unidad de salida; sólo se
+    comparan cantidades de un mismo insumo, así que no hace falta pasarla."""
+    desde = fin - dt.timedelta(days=364)
+    return f"""
+        SELECT "COD INSUMO"          AS cod,
+               "PRODUCTO"            AS plato,
+               ANY_VALUE("GRUPO")    AS grupo,
+               SUM("CONSUMO TOTAL")  AS consumo
+        FROM {relacion}
+        WHERE CAST("FECHA PEDIDO" AS DATE) BETWEEN DATE '{desde}' AND DATE '{fin}'
+        GROUP BY 1, 2"""
+
+
+def sql_ordenes(relacion):
+    """Las órdenes de producción PROCESADAS (`ordenesproduccion.parquet`, la
+    del reporte Producción del Almacén): una fila por receta base producida.
+    Una GENERADA no movió el kardex (regla #575)."""
+    return f"""
+        SELECT COALESCE("FECHA PROCESO", "FECHA REGISTRO") AS fecha,
+               "COD PRODUCTO" AS cod, "CANTIDAD" AS cant
+        FROM {relacion}
+        WHERE "NOMBRE ESTADO" = 'PROCESADO'"""
+
+
 def sql_recetas(relacion):
     return f"""
         SELECT "COD PROD RB" AS prod, "COD INS RB" AS ins, "CANT" AS cant,
@@ -219,7 +250,8 @@ def dias_por_dia_semana(ini, fin):
     return n
 
 
-def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin):
+def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
+             ordenes=None):
     """El consumo de insumos de compra del rango.
 
     Recibe lo que devuelven las `sql_*` (DataFrames) y el rango (fechas,
@@ -237,7 +269,16 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin):
       platos    las unidades vendidas y si es venta interna.
       cuadre    cada insumo del primer nivel: su costo ahí contra el de sus
                 hojas, y si bajó por algún porcionamiento.
-      resumen   totales y avisos (costo del primer nivel, filas sin maestro…).
+      resumen   totales y avisos (costo del primer nivel, filas sin maestro…), y
+                `por_produccion`: lo de venta interna que se contó por lo
+                producido y no por lo facturado.
+
+    `anual` (lo que devuelve `sql_demanda_anual`, opcional): con él, la VENTA
+    INTERNA de lo que se produce en casa se cuenta el día que se PRODUJO y no
+    el que se facturó (regla #605). Sin él, todo va por la fecha del pedido,
+    como hasta el 2026-10-04. `ordenes` (lo que devuelve `sql_ordenes`,
+    opcional): las órdenes de producción procesadas, para fechar por la de
+    la MASA lo que sale de porcionarla.
     """
     g = grano(ini, fin)
     finas, meses = cubetas(ini, fin, g)
@@ -247,6 +288,17 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin):
         con.register("rb_in", recetas)
         con.register("porc_in", porcionamientos)
         con.register("maestro_in", maestro)
+        if ordenes is not None:
+            con.register("op_in", ordenes)
+        else:
+            con.execute("CREATE TABLE op_in AS SELECT NULL::TIMESTAMP fecha, NULL::VARCHAR cod, "
+                        "NULL::DOUBLE cant WHERE false")
+        if anual is not None:
+            con.register("anual_in", anual)
+        else:
+            con.execute("CREATE TABLE anual_in AS SELECT NULL::VARCHAR cod, NULL::VARCHAR plato, "
+                        "NULL::VARCHAR grupo, NULL::DOUBLE consumo WHERE false")
+        hace_un_ano = fin - dt.timedelta(days=364)
         lista_ns = ", ".join("'" + x.replace("'", "''") + "'" for x in GRUPOS_NO_SERVICIO)
         lunes0 = finas[0] if g == "semana" else ini - dt.timedelta(days=ini.weekday())
         con.execute(f"""
@@ -257,14 +309,112 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin):
 
         CREATE TABLE n1_todo AS
         SELECT CAST(n.fecha AS DATE) fecha, date_trunc('month', CAST(n.fecha AS DATE))::DATE mes,
-               CAST(n.hora AS INTEGER) hora, n.plato,
-               COALESCE(n.grupo IN ({lista_ns}), false) interna, n.cod,
-               n.consumo, n.costo, n.vendido, n.unid_salida,
+               CAST(n.hora AS INTEGER) hora, CAST(n.plato AS VARCHAR) plato,
+               COALESCE(CAST(n.grupo AS VARCHAR) IN ({lista_ns}), false) interna,
+               CAST(n.cod AS VARCHAR) cod,
+               CAST(n.consumo AS DOUBLE) consumo, CAST(n.costo AS DOUBLE) costo,
+               CAST(n.vendido AS DOUBLE) vendido, CAST(n.unid_salida AS VARCHAR) unid_salida,
                n.consumo / NULLIF(m.factor, 0) q, m.cod IS NOT NULL en_maestro
-        FROM n1_in n LEFT JOIN maestro m USING (cod)
+        -- Los CAST: un rango sin ninguna venta llega como un DataFrame vacío,
+        -- sin tipos, y la venta interna por producción lo compara con texto.
+        FROM n1_in n LEFT JOIN maestro m ON m.cod = CAST(n.cod AS VARCHAR)
         WHERE CAST(n.fecha AS DATE) BETWEEN DATE '{ini}' AND DATE '{fin}';
 
-        CREATE TABLE n1 AS SELECT * FROM n1_todo WHERE q IS NOT NULL;
+        -- LA VENTA INTERNA DE LO QUE SE PRODUCE EN CASA, POR LA FECHA EN QUE SE
+        -- PRODUJO (regla #605). El chorizo y la chistorra de pato para Mayta se
+        -- facturan por tanda —nada en agosto de 2026, 600 unidades el 23 de
+        -- septiembre— y por la factura el magret «se usaba» un mes después de
+        -- comprado. La producción sí tiene fecha, en dos pasos: la MASA se
+        -- hace con una orden de producción (el 1 de agosto, el mismo día en que
+        -- se porcionó el magret) y se guarda; después se PORCIONA en chorizos y
+        -- chistorras (el 24 de agosto y en septiembre). El magret se consume
+        -- en el primer paso, así que:
+        --   · un producto que la venta interna pide (`vi`) y que se porcionó en
+        --     los últimos 12 meses SALE DE LO PRODUCIDO y no de lo facturado;
+        --   · si TODO lo que se porciona de él sale de algo que se produce con
+        --     orden de producción (`masa`), la producción es esa orden, en su
+        --     día y su hora, por la parte de la masa que va a la venta interna;
+        --   · si no, es su propio porcionamiento.
+        -- `parte`: lo que le tocó a la venta interna en los 12 meses. Si el
+        -- producto también va al salón (la manteca de pato al arroz con pato),
+        -- el salón sigue por lo vendido y la venta interna se lleva su parte.
+        CREATE TABLE anual AS
+        SELECT cod,
+               COALESCE(SUM(consumo) FILTER (WHERE grupo IN ({lista_ns})), 0) c_int,
+               SUM(consumo) c_tot,
+               arg_max(plato, consumo) FILTER (WHERE grupo IN ({lista_ns})) plato_int
+        FROM anual_in WHERE cod IS NOT NULL GROUP BY cod;
+
+        CREATE TABLE cortes_ano AS
+        SELECT porc, CAST(fecha AS TIMESTAMP) fecha, cod_e, cod_x, cant_x,
+               cant_porc * peso / cant_tot entra_e
+        FROM porc_in
+        WHERE cant_x > 0 AND cant_tot > 0 AND peso > 0 AND cod_e IS NOT NULL AND cod_x IS NOT NULL
+          AND CAST(fecha AS DATE) BETWEEN DATE '{hace_un_ano}' AND DATE '{fin}';
+
+        CREATE TABLE vi AS
+        SELECT a.cod, a.plato_int plato, a.c_int / a.c_tot parte
+        FROM anual a
+        WHERE a.c_int > 0 AND a.c_tot > 0 AND a.cod IN (SELECT cod_x FROM cortes_ano);
+
+        CREATE TABLE op AS
+        SELECT CAST(fecha AS TIMESTAMP) fecha, cod, cant FROM op_in
+        WHERE cant > 0 AND cod IS NOT NULL AND fecha IS NOT NULL;
+
+        CREATE TABLE masa AS
+        SELECT c.cod_e cod,
+               SUM(c.entra_e * COALESCE(v.parte, 0)) / SUM(c.entra_e) parte,
+               arg_max(v.plato, c.entra_e * COALESCE(v.parte, 0)) plato
+        FROM cortes_ano c LEFT JOIN vi v ON v.cod = c.cod_x
+        WHERE c.cod_e IN (SELECT cod FROM op
+                          WHERE CAST(fecha AS DATE) BETWEEN DATE '{hace_un_ano}' AND DATE '{fin}')
+        GROUP BY c.cod_e
+        HAVING SUM(c.entra_e * COALESCE(v.parte, 0)) > 0;
+
+        -- Cada OP de la masa se reparte entre los productos que salen de
+        -- ella, por lo que se llevó cada uno en los 12 meses (y su parte de
+        -- venta interna): así la chistorra y el chorizo siguen siendo dos
+        -- platos.
+        CREATE TABLE masa_reparto AS
+        SELECT c.cod_e masa, v.cod, v.plato,
+               SUM(c.entra_e * v.parte) / ANY_VALUE(t.tot) w
+        FROM cortes_ano c JOIN vi v ON v.cod = c.cod_x
+        JOIN (SELECT cod_e, SUM(entra_e) tot FROM cortes_ano GROUP BY cod_e) t ON t.cod_e = c.cod_e
+        WHERE c.cod_e IN (SELECT cod FROM masa)
+        GROUP BY c.cod_e, v.cod, v.plato;
+
+        CREATE TABLE vi_por_masa AS
+        SELECT v.cod FROM vi v
+        WHERE NOT EXISTS (SELECT 1 FROM cortes_ano c
+                          WHERE c.cod_x = v.cod AND c.cod_e NOT IN (SELECT cod FROM masa));
+
+        CREATE TABLE prod_n1 AS
+        WITH ev AS (
+          SELECT o.fecha, o.cod, o.cant * r.w q, r.plato
+          FROM op o JOIN masa_reparto r ON r.masa = o.cod
+          WHERE CAST(o.fecha AS DATE) BETWEEN DATE '{ini}' AND DATE '{fin}'
+          UNION ALL
+          SELECT c.fecha, c.cod_x, c.cant_x * v.parte, v.plato
+          FROM (SELECT DISTINCT porc, CAST(fecha AS TIMESTAMP) fecha, cod_x, cant_x FROM porc_in
+                WHERE cant_x > 0 AND cod_x IS NOT NULL) c
+          JOIN vi v ON v.cod = c.cod_x
+          WHERE v.cod NOT IN (SELECT cod FROM vi_por_masa)
+            AND CAST(c.fecha AS DATE) BETWEEN DATE '{ini}' AND DATE '{fin}'
+        )
+        SELECT CAST(e.fecha AS DATE) fecha, date_trunc('month', CAST(e.fecha AS DATE))::DATE mes,
+               CAST(hour(e.fecha) AS INTEGER) hora, e.plato, true interna, e.cod,
+               SUM(e.q) * ANY_VALUE(m.factor) consumo, SUM(e.q) * ANY_VALUE(m.precio) costo,
+               0.0::DOUBLE vendido, NULL::VARCHAR unid_salida, SUM(e.q) q,
+               ANY_VALUE(m.cod) IS NOT NULL en_maestro
+        FROM ev e LEFT JOIN maestro m ON m.cod = e.cod
+        GROUP BY 1, 2, 3, 4, 6;
+
+        CREATE TABLE n1_ef AS
+        SELECT * FROM n1_todo WHERE NOT (interna AND cod IN (SELECT cod FROM vi))
+        UNION ALL BY NAME
+        SELECT * FROM prod_n1;
+
+        CREATE TABLE n1 AS SELECT * FROM n1_ef WHERE q IS NOT NULL;
 
         -- LOS PORCIONAMIENTOS: una fila por corte; lo que entró del insumo de
         -- origen se reparte entre los cortes por su PESO. Fuera los que no
@@ -438,7 +588,13 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin):
             GROUP BY 1""").df()
         platos = con.execute("""
             SELECT plato, ANY_VALUE(interna) interna, MAX(u) vendidos
-            FROM (SELECT plato, cod, ANY_VALUE(interna) interna, SUM(vendido) u FROM n1_todo GROUP BY plato, cod)
+            -- Lo VENDIDO sale de las ventas aunque el consumo de la venta
+            -- interna salga de lo producido: un plato que sólo se produjo en
+            -- el rango aparece con 0 vendidos, que es lo que se facturó.
+            FROM (SELECT plato, cod, ANY_VALUE(interna) interna, SUM(vendido) u
+                  FROM (SELECT plato, cod, interna, vendido FROM n1_todo
+                        UNION ALL SELECT plato, cod, interna, vendido FROM prod_n1)
+                  GROUP BY plato, cod)
             GROUP BY plato""").df()
 
         # EL CUADRE: cada insumo del primer nivel contra lo que cuestan sus
@@ -463,11 +619,26 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin):
             FROM hojas h JOIN maestro m USING (cod)""").fetchone()
         costo_n1 = con.execute("""
             SELECT COALESCE(SUM(costo), 0), COALESCE(SUM(costo) FILTER (WHERE interna), 0)
-            FROM n1_todo""").fetchone()
+            FROM n1_ef""").fetchone()
         sin = con.execute("""
             SELECT COUNT(*) FILTER (WHERE NOT en_maestro), COUNT(*) FILTER (WHERE en_maestro AND q IS NULL),
                    COALESCE(SUM(costo) FILTER (WHERE q IS NULL), 0)
-            FROM n1_todo""").fetchone()
+            FROM n1_ef""").fetchone()
+        # Lo que se contó por producción, para que la página lo diga: por
+        # producto, lo porcionado y lo facturado en el rango (en unidades del
+        # producto) y si su producción se leyó en la masa; y cuánta masa.
+        por_produccion = con.execute(f"""
+            SELECT v.cod, v.plato, v.parte, v.cod IN (SELECT cod FROM vi_por_masa) por_masa,
+                   COALESCE((SELECT SUM(c.cant_x)
+                             FROM (SELECT DISTINCT porc, fecha, cod_x, cant_x FROM porc_in) c
+                             WHERE c.cod_x = v.cod
+                               AND CAST(c.fecha AS DATE) BETWEEN DATE '{ini}' AND DATE '{fin}'), 0) producido,
+                   COALESCE((SELECT SUM(t.q) FROM n1_todo t WHERE t.cod = v.cod AND t.interna), 0) facturado
+            FROM vi v ORDER BY v.cod""").df().to_dict("records")
+        masas = con.execute("""
+            SELECT k.cod, k.plato, k.parte,
+                   COALESCE((SELECT SUM(p.q) FROM prod_n1 p WHERE p.cod = k.cod), 0) producido
+            FROM masa k ORDER BY k.cod""").df().to_dict("records")
         resumen = dict(
             ini=ini, fin=fin, grano=g, finas=finas, meses=meses,
             n_dia=dias_por_dia_semana(ini, fin),
@@ -475,6 +646,7 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin):
             insumos=int(costo_hojas[2]), niveles=int(costo_hojas[3]),
             costo_nivel1=float(costo_n1[0]), costo_nivel1_interna=float(costo_n1[1]),
             sin_maestro=int(sin[0]), sin_factor=int(sin[1]), costo_sin_convertir=float(sin[2]),
+            por_produccion=por_produccion, masas=masas,
         )
         return dict(filas=filas, horas=horas, rend=rend, porcionado=porcionado,
                     maestro=mae, platos=platos, cuadre=cuadre, resumen=resumen)
