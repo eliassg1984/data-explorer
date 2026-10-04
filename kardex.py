@@ -28,10 +28,16 @@ documento que anulan: el ingreso de un requerimiento se anula con una salida.
 La consulta las resta del lado del original —una salida anulada baja la
 salida, no sube el ingreso—, así que un requerimiento anulado no infla nada.
 
+LOS MOVIMIENTOS POR TIPO (regla #602) son las mismas filas sumadas en un
+período: `sql_movimientos`, agrupadas por `GRUPOS`. Con la foto de antes y la
+de después, explican el cambio del stock; lo que no explica ningún movimiento
+es la VALORIZACIÓN (el precio promedio que cambia con stock negativo, o una
+venta que sale sin costo).
+
 Puro DuckDB, sin Streamlit, como `consumo_recetas.py`: `relacion` es lo que va
 después del FROM (un `read_parquet(...)` de R2 o una tabla registrada en una
 prueba). Lo lee `data.py`; lo vigila `test_graficos.py::_pruebas_kardex`.
-Regla #601.
+Reglas #601 y #602.
 """
 
 import datetime as dt
@@ -82,3 +88,86 @@ def sql_ultimo_movimiento(relacion):
     """El último momento con movimientos (sin la fila del saldo inicial): el
     tope del selector de fecha."""
     return f"""SELECT max("{COL_FECHA}") FROM {relacion} WHERE "COD TIPO" <> 'SI'"""
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MOVIMIENTOS POR TIPO (regla #602)
+# ═══════════════════════════════════════════════════════════════════════
+
+GRUPOS = (
+    ("compras", "Compras"),
+    ("ventas", "Ventas"),
+    ("ajustes", "Ajustes de inventario"),
+    ("salidas", "Notas de salida"),
+    ("produccion", "Producción y porcionamiento"),
+    ("entre", "Entre áreas"),
+    ("otros", "Otros"),
+)
+"""Cómo se agrupan los tipos de documento del kardex, en el orden en que se
+leen: lo que entra de afuera, lo que sale por la venta, lo que corrige el
+conteo, lo que sale por otra vía, lo que se transforma adentro y lo que sólo
+cambia de área. «Entre áreas» suma cero en el restaurante entero —lo que el
+Almacén Central entrega lo recibe un área— y es lo que explica cada área."""
+
+_GRUPO_DE_TIPO = {
+    "95": "ventas",       # Descargo de Ventas
+    "93": "ajustes",      # Ajuste Inventarios
+    "98": "salidas",      # Nota de Salida
+    "92": "salidas",      # Merma Fija
+    "91": "salidas",      # Control Interno
+    "90": "produccion",   # Empacado
+    "94": "produccion",   # Orden de Producción
+    "96": "produccion",   # Porcionamiento
+    "97": "entre",        # Transferencia
+    "99": "entre",        # Requerimiento
+}
+
+TIPO_VENTAS = "95"
+
+
+def grupo_de(cod_tipo):
+    """El grupo (`GRUPOS`) de un tipo de documento. Los de compra son los
+    códigos de SUNAT, todos por debajo del 90 (01 Factura, 03 Boleta, 07
+    Nota de Crédito, 46 Guía…); los internos del Almacén van del 90 al 99.
+    Uno que no se conozca va a «Otros», que sólo se muestra si suma algo."""
+    c = str(cod_tipo).strip()
+    if c in _GRUPO_DE_TIPO:
+        return _GRUPO_DE_TIPO[c]
+    if c.isdigit() and int(c) < 90:
+        return "compras"
+    return "otros"
+
+
+def sql_movimientos(relacion, desde, hasta):
+    """Por área, producto y tipo de documento, lo que entró y salió entre
+    `desde` (desde las 00:00) y `hasta` (hasta las 23:59), en cantidad y en
+    soles, con cuántos movimientos y anulaciones fueron.
+
+    Y lo que salió POR VENTAS SIN COSTO (`cant_sin_costo`,
+    `movs_sin_costo`): las filas del descargo de ventas con cantidad y valor
+    cero. El kardex saca cada venta al precio promedio de ese momento, y un
+    producto que se vende antes de recibirlo —con el precio todavía en
+    cero— sale gratis: medido en septiembre 2026, cuatro productos de Cocina
+    por ≈ S/ 7.633 a su precio de hoy. La fila es una hora × tipo, así que
+    una hora que mezcle ventas a cero y con precio cuenta como con precio:
+    el error va del lado de no acusar."""
+    d0 = dt.datetime.combine(desde, dt.time(0, 0))
+    d1 = dt.datetime.combine(hasta, dt.time(0, 0)) + dt.timedelta(days=1)
+    return f"""
+        SELECT "CODIGO AREA" AS area, "CODIGO PRODUCTO" AS cod,
+               "COD TIPO" AS tipo, any_value("TIPO MOVIMIENTO") AS nombre,
+               sum("CANT INGRESO") AS cant_in, sum("CANT SALIDA") AS cant_out,
+               sum("VALOR INGRESO") AS val_in, sum("VALOR SALIDA") AS val_out,
+               sum("MOVIMIENTOS") AS movs, sum("ANULACIONES") AS anul,
+               sum(CASE WHEN "COD TIPO" = '{TIPO_VENTAS}'
+                         AND "CANT SALIDA" > 0 AND abs("VALOR SALIDA") < 1e-9
+                        THEN "CANT SALIDA" ELSE 0 END) AS cant_sin_costo,
+               sum(CASE WHEN "COD TIPO" = '{TIPO_VENTAS}'
+                         AND "CANT SALIDA" > 0 AND abs("VALOR SALIDA") < 1e-9
+                        THEN "MOVIMIENTOS" ELSE 0 END) AS movs_sin_costo
+        FROM {relacion}
+        WHERE "COD TIPO" <> 'SI'
+          AND "{COL_FECHA}" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}'
+          AND "{COL_FECHA}" < TIMESTAMP '{d1:%Y-%m-%d %H:%M:%S}'
+        GROUP BY 1, 2, 3
+    """

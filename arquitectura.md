@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-601 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+602 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (198)
 
@@ -434,7 +434,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#582** — Compras › Producto: la tabla de abajo del gráfico muestra SEIS filas, las barras dicen la…
 - **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
 
-**AgGrid y tablas** (88)
+**AgGrid y tablas** (89)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -524,6 +524,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#544** — El Mix muestra el % de costo de cada período: la cuenta, los umbrales y los colores son los…
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
+- **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
 
 **Streamlit** (160)
 
@@ -894,7 +895,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (151)
+**Decisiones de diseño y UX** (152)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1047,6 +1048,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#591** — El ticket de Ventas divide la venta de los canales que REGISTRAN clientes, no la venta…
 - **#593** — Ventas se fecha por el día del TURNO de caja (default) o por el de EMISIÓN del comprobante, a…
 - **#596** — La franja superior de contexto no lleva KPIs: dice dónde estás, no cuánto
+- **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
 
 **Mantenimiento y trampas del lenguaje** (14)
 
@@ -47456,6 +47458,56 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+602. **«Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del
+     kardex, y lo que no explica ningún movimiento se llama
+     VALORIZACIÓN.** 2026-10-03, a pedido («una vista de tipos de
+     movimientos», con el mockup de septiembre aprobado): una sección nueva
+     de Stock e Inventario, `graficos/inventario_movimientos.py`.
+
+     - **La cuenta**: stock al cierre del día anterior + el neto de cada
+       grupo de tipos de documento + valorización = stock al cierre del
+       último día. Las puntas son la foto del kardex (`data.stock_al`, la
+       regla de la #601) y los netos, el `nValor` de cada movimiento
+       (`kardex.sql_movimientos`, cacheada con sello en
+       `data.movimientos_kardex`). Los grupos (`kardex.GRUPOS`): Compras
+       (los códigos de SUNAT, todos < 90), Ventas (95), Ajustes de
+       inventario (93), Notas de salida (98, 92 merma fija, 91 control
+       interno), Producción y porcionamiento (90, 94, 96), Entre áreas
+       (97, 99) y Otros (un código que no se conozca; sólo aparece si suma
+       algo). Septiembre 2026, sobre lo activo: 75.232 + 154.493 − 119.569
+       − 15.504 − 7.631 − 2.241 + 0 − 10.126 = 74.654.
+     - **Entre áreas suma cero** en el restaurante entero y es lo que
+       explica cada área: por eso la vista tiene «Por área» (una fila por
+       área, la misma cuenta de izquierda a derecha). Almacén Central
+       entregó S/ 121.609 en septiembre; Cocina recibió 97.023 y vendió
+       88.964.
+     - **La valorización no es un error de la cuenta**: la CANTIDAD cierra
+       exacta (13.722 de 13.817 áreas × producto; las otras, por la hora de
+       corte). Es el precio promedio: el kardex saca cada salida al precio
+       del momento, y un producto con stock negativo —se vendió antes de
+       recibirlo— o con el precio en cero sale barato; al reponer, el valor
+       salta. −S/ 10.126 en septiembre, 85 % en Cocina.
+     - **Y las ventas SIN COSTO se acusan**: las filas del descargo de
+       ventas con cantidad y valor cero (`cant_sin_costo`). Septiembre: 437
+       ventas de 8 productos, ≈ S/ 7.634 a su precio de hoy —Lomo Medallón
+       y Bife Ancho, casi todo—. Es costo que no llegó al costo de venta
+       del mes, y el descargo de ventas (S/ 119.569) es ese costo. Una fila
+       es hora × tipo: una hora que mezcle ventas a cero y con precio
+       cuenta como con precio (el error va del lado de no acusar).
+     - **El ámbito es el del reporte**: lo activo (#598) y los chips, más
+       los filtros propios de la tarjeta (área, familia, buscador). El
+       kardex se cruza con `d` por código de área y de producto.
+     - Abre en el mes pasado ENTERO, como «Ver a una fecha». Tablas en HTML
+       y no AgGrid (cada grilla son 1,28 MB, #540): son de lectura. El
+       markdown de Streamlit le pone a una tabla bordes en las cuatro caras:
+       `border: 0 !important` en sus celdas. La fila de filtros es la de
+       Productos: `inventario_productos.css_filtros(prefijo, k_buscar)` y
+       `filtro_en_panel(..., prefijo=)`, una función desde ese día.
+
+     Cambia `data.py` y suma un módulo: «Reboot app» en Cloud (#357).
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47468,7 +47520,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#601**; la próxima toma el número siguiente.
+> última regla es la **#602**; la próxima toma el número siguiente.
 
 >
 

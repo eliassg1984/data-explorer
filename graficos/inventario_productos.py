@@ -852,41 +852,52 @@ def _etiqueta(sel, plural, fmt=str):
 # 26px de alto, gris y con un ícono adelante. El buscador, igual: Streamlit
 # lo pinta gris y con su tipografía, y al lado de las cajas blancas se leía
 # como otro control.
-CSS_FILTROS = f"""
-div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"] {{
+def css_filtros(prefijo, k_buscar):
+    """El CSS de la fila de filtros de una sección: los disparadores con
+    `{prefijo}_ctrl_` y el buscador `k_buscar`. Una función y no una
+    constante desde que «Movimientos» (regla #602) usa la misma fila: dos
+    copias del mismo look se desincronizan a la primera que se toque."""
+    return f"""
+div[class*="st-key-{prefijo}_ctrl_"] button[data-testid="stPopoverButton"] {{
     min-width: 0 !important; min-height: 40px !important;
     padding: 0 8px 0 10px !important;
     background: {BLANCO} !important; border: 1px solid {GRIS_BORDE} !important;
     border-radius: 8px !important;
     justify-content: space-between !important; }}
-div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"] > div {{
+div[class*="st-key-{prefijo}_ctrl_"] button[data-testid="stPopoverButton"] > div {{
     width: 100% !important; justify-content: space-between !important; }}
-div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"] > div > div:first-child {{
+div[class*="st-key-{prefijo}_ctrl_"] button[data-testid="stPopoverButton"] > div > div:first-child {{
     flex: 1 1 auto !important; min-width: 0 !important;
     justify-content: flex-start !important; text-align: left !important; }}
-div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"] p {{
+div[class*="st-key-{prefijo}_ctrl_"] button[data-testid="stPopoverButton"] p {{
     font-size: 14px !important; font-weight: 400 !important; }}
-div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"]:hover,
-div[class*="st-key-inv_prod_ctrl_"] button[data-testid="stPopoverButton"][aria-expanded="true"] {{
+div[class*="st-key-{prefijo}_ctrl_"] button[data-testid="stPopoverButton"]:hover,
+div[class*="st-key-{prefijo}_ctrl_"] button[data-testid="stPopoverButton"][aria-expanded="true"] {{
     border-color: {LAVANDA_BORDE} !important; }}
-.st-key-{_K_BUSCAR} [data-testid="stTextInputRootElement"] {{
+.st-key-{k_buscar} [data-testid="stTextInputRootElement"] {{
     background: {BLANCO} !important; border: 1px solid {GRIS_BORDE} !important;
     border-radius: 8px !important; }}
-.st-key-{_K_BUSCAR} input {{
+.st-key-{k_buscar} input {{
     font-family: inherit !important; font-size: 14px !important;
     padding-left: 10px !important; }}
 """
 
 
-def _filtro(col, nombre, etiqueta, dibujar):
+CSS_FILTROS = css_filtros("inv_prod", _K_BUSCAR)
+
+
+def filtro_en_panel(col, nombre, etiqueta, dibujar, prefijo="inv_prod"):
     """Un filtro de la fila: la caja con lo elegido + su panel. El contenedor
-    con `inv_prod_ctrl_` es de donde cuelga `CSS_FILTROS`; el popover lleva
+    con `{prefijo}_ctrl_` es de donde cuelga `css_filtros`; el popover lleva
     key para que no se cierre al marcar una opción (la etiqueta cambia con
     cada clic, y sin key cambiaría también su identidad)."""
-    with col, st.container(key=f"inv_prod_ctrl_{nombre}"):
-        with st.popover(etiqueta, key=f"inv_prod_pop_{nombre}",
+    with col, st.container(key=f"{prefijo}_ctrl_{nombre}"):
+        with st.popover(etiqueta, key=f"{prefijo}_pop_{nombre}",
                         use_container_width=True):
             dibujar()
+
+
+_filtro = filtro_en_panel
 
 
 def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,

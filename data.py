@@ -1241,6 +1241,7 @@ def limpiar_cache(archivo):
     _consumo_recetas_cacheable.clear()
     _demanda_nivel1_cacheable.clear()
     _stock_al_cacheable.clear()
+    _movimientos_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -1797,5 +1798,31 @@ def stock_al(cuando):
     try:
         return _stock_al_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
                                    cuando, version=kardex.VERSION)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _movimientos_cacheable(archivo, sello, desde, hasta, version=None):
+    """Lo que entró y salió de cada área y producto por tipo de documento
+    entre `desde` y `hasta` (`kardex.sql_movimientos`). Si falla, LANZA: no
+    se cachea. `sello` y `version` son la clave, como en
+    `_stock_al_cacheable`. Regla #602."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    return con.execute(kardex.sql_movimientos(rel, desde, hasta)).df()
+
+
+def movimientos_kardex(desde, hasta):
+    """Los movimientos del kardex entre dos fechas (`date`), por área,
+    producto y tipo. `None` si no se pudo leer: quien lo pide avisa. No
+    cacheada (la interna sí), por lo mismo que `cargar()`."""
+    try:
+        return _movimientos_cacheable(kardex.ARCHIVO,
+                                      sello_datos(kardex.ARCHIVO),
+                                      desde, hasta, version=kardex.VERSION)
     except Exception:
         return None

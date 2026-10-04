@@ -376,6 +376,13 @@ CARTA_FIG = 180
 tiempo), regla #572: 60px menos que MINI (200 hasta la #574) para que el
 panel entre en ~575px junto a la receta de cinco filas."""
 
+STOCK_MOVIMIENTOS = 340
+"""Stock › Movimientos (2026-10-03, regla #602): el alto de la cascada «por
+qué cambió el stock» y el TOPE de la tabla de al lado —y de la de «Por
+área»—, que se desliza por dentro. Con la fila de filtros (40), el título
+y el aviso de ventas sin costo, la tarjeta entra en los ~575px de la
+pantalla del usuario (regla #574)."""
+
 RB_COSTO_TABLA = 27 * 9 + 38
 """Tope de la tabla de Recetas › Costo recetas base (2026-09-30, regla
 #576): NUEVE filas de 27 más la cabecera y los bordes (trece en la primera

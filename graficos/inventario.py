@@ -57,6 +57,7 @@ from graficos.base import (
 )
 from graficos import alturas
 from graficos.inventario_productos import seccion_productos
+from graficos.inventario_movimientos import seccion_movimientos
 from data import INVENTARIO_ACTIVO
 
 # Lo que NO es stock (regla #598): el nombre con que se lo ve en «Stock por
@@ -243,7 +244,9 @@ _FILAS_RANK = 8
 _INVENTARIO_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Vista", (("Productos",   "Stock por Producto", ":material/inventory_2:"),
                ("Por área",    "Stock por Área",     ":material/space_dashboard:"),
-               ("Por familia", "Stock por Familia",  ":material/account_tree:"))),
+               ("Por familia", "Stock por Familia",  ":material/account_tree:"),
+               ("Movimientos", "Movimientos por Tipo",
+                ":material/waterfall_chart:"))),
     ("Datos", (("Tabla", "Tabla", ":material/table_rows:"),)),
 ))
 
@@ -255,6 +258,8 @@ _PILA = pila_sin_tablas((
     ("inv_sec_productos", "Productos"),
     ("inv_sec_area",    "Por área"),
     ("inv_sec_familia", "Por familia"),
+    # Por qué cambió el stock entre dos fechas, del kardex (regla #602).
+    ("inv_sec_movimientos", "Movimientos"),
     ("inv_sec_tabla",   "Tabla"),
 ))
 
@@ -1091,6 +1096,14 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                 col_factor=col_factor, col_usal=col_usal,
                 col_cod_area=col_cod_area)
 
+    def _dib_movimientos():
+        with st.container(border=True,
+                          key="ajuste_graf_card_izq_inv_movimientos"):
+            seccion_movimientos(
+                d, col_cod_area=col_cod_area, col_cod=col_cod,
+                col_area=col_area, col_prod=col_prod, col_fam=col_fam,
+                col_punit=col_punit)
+
     def _dib_tabla():
         with st.container(border=True, key="ajuste_graf_card_izq_inv_tabla"):
             if tabla_cb is not None:
@@ -1102,6 +1115,7 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
         "inv_sec_area":    _dib_area,
         "inv_sec_familia": _dib_familia,
         "inv_sec_productos": _dib_productos,
+        "inv_sec_movimientos": _dib_movimientos,
         "inv_sec_tabla":   _dib_tabla,
     }
 

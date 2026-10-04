@@ -6202,6 +6202,99 @@ def _pruebas_kardex():
     check("sin «Comparar con hoy», los que estaban en cero se cuentan "
           "aparte (Berro y Culantro: ninguno tiene foto)",
           armar_listado(t, **cols).sin_stock, 2)
+
+    # ── Movimientos por tipo (regla #602) ─────────────────────────────
+    from graficos.inventario_movimientos import (
+        armar_movimientos, periodo_por_defecto)
+    check("grupos: los códigos de SUNAT son compras, los internos por tipo",
+          [kardex.grupo_de(c) for c in ("01", "07", "46", "95", "93", "98",
+                                         "94", "96", "97", "99", "XX")],
+          ["compras", "compras", "compras", "ventas", "ajustes", "salidas",
+           "produccion", "produccion", "entre", "entre", "otros"])
+    km = pd.DataFrame({
+        "FECHA HORA": [h("2024-12-31 23:00"), h("2026-09-01 00:00"),
+                       h("2026-09-30 23:00"), h("2026-10-01 00:00"),
+                       h("2026-09-15 12:00"), h("2026-09-15 13:00")],
+        "CODIGO AREA": ["000"] * 4 + ["001", "001"],
+        "CODIGO PRODUCTO": ["A"] * 4 + ["B", "B"],
+        "COD TIPO": ["SI", "01", "99", "01", "95", "95"],
+        "TIPO MOVIMIENTO": ["Saldo", "Factura", "Requerimiento", "Factura",
+                            "Descargo de Ventas", "Descargo de Ventas"],
+        "CANT INGRESO": [0, 10, 0, 5, 0, 0.0],
+        "CANT SALIDA": [0, 0, 6, 0, 2, 1.0],
+        "VALOR INGRESO": [0, 100, 0, 50, 0, 0.0],
+        "VALOR SALIDA": [0, 0, 60, 0, 0, 7.0],
+        "MOVIMIENTOS": [0, 1, 3, 1, 2, 1],
+        "ANULACIONES": [0, 0, 1, 0, 0, 0],
+    })
+    con.register("km", km)
+    mv = con.execute(kardex.sql_movimientos(
+        "km", dt.date(2026, 9, 1), dt.date(2026, 9, 30))).df()
+    check("el período va de las 00:00 del primero a las 23:59 del último, "
+          "sin el saldo inicial",
+          sorted(zip(mv["cod"], mv["tipo"])), [("A", "01"), ("A", "99"),
+                                                ("B", "95")])
+    _b = mv[mv["cod"] == "B"].iloc[0]
+    check("la venta que salió con valor cero se cuenta aparte",
+          (_b["cant_out"], _b["val_out"], _b["cant_sin_costo"],
+           _b["movs_sin_costo"]), (3.0, 7.0, 2.0, 2))
+
+    dm = pd.DataFrame({
+        "CA": ["000", "001", "001"], "AREA": ["ALMACEN CENTRAL", "COCINA",
+                                             "COCINA"],
+        "COD": ["A", "A", "B"], "PROD": ["Ajo", "Ajo", "Berro"],
+        "FAM": ["VERDURAS"] * 3, "PU": [10.0, 10.0, 5.0],
+    })
+    mov = pd.DataFrame({
+        "area": ["000", "000", "001", "001", "001", "000"],
+        "cod": ["A", "A", "A", "A", "B", "Z"],
+        "tipo": ["01", "99", "99", "95", "95", "01"],
+        "nombre": ["Factura", "Requerimiento", "Requerimiento",
+                   "Descargo de Ventas", "Descargo de Ventas", "Factura"],
+        "val_in": [100.0, 0, 60, 0, 0, 999], "val_out": [0, 60.0, 0, 50, 0, 0],
+        "movs": [1, 3, 3, 9, 2, 1], "anul": [0, 1, 1, 0, 0, 0],
+        "cant_sin_costo": [0, 0, 0, 0, 2.0, 0],
+        "movs_sin_costo": [0, 0, 0, 0, 2, 0],
+    })
+    f_ini = pd.DataFrame({"area": ["000"], "cod": ["A"], "stock": [1.0],
+                          "precio": [10.0]})
+    f_fin = pd.DataFrame({"area": ["000", "001", "001", "000"],
+                          "cod": ["A", "A", "B", "Z"],
+                          "stock": [5.0, 1.0, -2.0, 9.0],
+                          "precio": [10.0, 12.0, 0.0, 111.0]})
+    cm = dict(col_cod_area="CA", col_cod="COD", col_area="AREA",
+              col_prod="PROD", col_fam="FAM", col_punit="PU")
+    M = armar_movimientos(dm, mov, f_ini, f_fin, **cm)
+    check("las puntas y los netos, sólo de lo que está en el reporte "
+          "(el Z inactivo no entra)",
+          (M.ini, M.fin, M.netos["compras"], M.netos["entre"],
+           M.netos["ventas"]), (10.0, 62.0, 100.0, 0.0, -50.0))
+    check("la valorización es lo que ningún movimiento explica",
+          round(M.valorizacion, 6), 2.0)
+    _c = M.por_area.set_index("area").loc["COCINA"]
+    check("por área: Cocina recibió por requerimiento y vendió",
+          (_c["ini"], _c["entre"], _c["ventas"], _c["fin"],
+           round(_c["valorizacion"], 6)), (0.0, 60.0, -50.0, 12.0, 2.0))
+    check("por tipo: en el orden de los grupos, con sus anulaciones",
+          list(zip(M.por_tipo["tipo"], M.por_tipo["anul"])),
+          [("01", 0), ("95", 0), ("99", 2)])
+    check("lo vendido sin costo, a precio de hoy",
+          M.sin_costo[["producto", "movs", "valor_hoy"]].values.tolist(),
+          [["Berro", 2, 10.0]])
+    Mc = armar_movimientos(dm, mov, f_ini, f_fin, **cm, areas=["COCINA"])
+    check("con un área, las puntas y los netos son los suyos",
+          (Mc.ini, Mc.fin, Mc.netos["entre"], Mc.netos["compras"]),
+          (0.0, 12.0, 60.0, 0.0))
+    _Mq = armar_movimientos(dm, mov, f_ini, f_fin, **cm, texto="ajo")
+    check("buscador: sólo ese producto (Ajo, no Berro)",
+          (_Mq.netos["ventas"], _Mq.sin_costo.empty, _Mq.fin),
+          (-50.0, True, 62.0))
+    check("abre en el mes pasado entero",
+          periodo_por_defecto(dt.date(2025, 1, 1), dt.date(2026, 10, 1)),
+          (dt.date(2026, 9, 1), dt.date(2026, 9, 30)))
+    check("si el kardex no llega a un mes entero, todo lo que hay",
+          periodo_por_defecto(dt.date(2026, 9, 20), dt.date(2026, 10, 1)),
+          (dt.date(2026, 9, 20), dt.date(2026, 10, 1)))
     return fallos
 
 

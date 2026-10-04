@@ -947,6 +947,16 @@ de SERVICIOS que nadie da de baja en GASTOS y CALIENTES, área inactiva con
 servicios» de Por área, con su motivo. Y una marca cuya columna el parquet
 no trae no filtra. Regla #598.
 
+**El pasado del stock sale del kardex** (`kardex.py`, `kardex.parquet`, la
+fila «kardex» del Sheet, desde el 2026-10-03): «Ver a una fecha» de Stock
+por Producto (#601) y la sección «Movimientos por Tipo» (#602). La foto a
+una fecha es el último movimiento por CORRELATIVO —la regla del Histórico
+del POS, cuadrada al céntimo— y el precio es el de cada ÁREA, no el del
+maestro: por eso «Comparar con hoy» compara contra la foto más nueva y no
+contra la tabla sin fecha. Lo que entre dos fotos no explica ningún
+movimiento es la VALORIZACIÓN (stock negativo, ventas que salen a S/ 0), no
+un error de la cuenta.
+
 ## El consumo según recetas baja hasta lo que se COMPRA
 
 Movimientos › «Consumo según recetas» (2026-09-28): cada plato vendido,
