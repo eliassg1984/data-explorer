@@ -4587,7 +4587,7 @@ CSS = """    /* ================================================================
     .st-key-chartcard_ventas_horario_hora .vhh-kpis {
         display: flex !important;
         flex-wrap: wrap !important;
-        gap: 2px 18px !important;
+        gap: 2px 14px !important;
         margin: 6px 0 2px !important;
         font-size: 12px !important;
         color: var(--text-secondary) !important;
@@ -4601,6 +4601,23 @@ CSS = """    /* ================================================================
         margin: 0 !important;
         padding-left: 14px !important;
         border-left: 1px solid var(--border) !important;
+    }
+    /* EL RESULTADO, NO EL RÓTULO (2026-10-04, a pedido): junto al título,
+       cuánto se aleja la hora de lo normal («▲ 86% vs lo normal»), y en
+       la fila de los KPIs, donde estaba «CONTRA LO NORMAL», la frase que
+       dice en qué puesto cae. */
+    .st-key-chartcard_ventas_horario_hora .vhh-tit .vhh-tit-normal {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        margin-left: 10px !important;
+        vertical-align: 2px !important;
+        font-weight: 400 !important;
+    }
+    .st-key-chartcard_ventas_horario_hora .vhh-kpis .vhh-kpi-frase {
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-kpis b {
         margin-left: 6px !important;
@@ -4711,10 +4728,14 @@ CSS = """    /* ================================================================
     /* Más alta el 2026-09-29 (#566): 62 → 90, con los puntos en y=40
        (`ventas_ficha_hora._Y_PUNTOS`), el eje en 66 y los carriles de
        los puntos que coinciden más separados. */
+    /* 14 px arriba desde el 2026-10-04: la frase subió a la fila de los
+       KPIs y la tira es ahora lo primero de su markdown; el -16px del de
+       arriba (#162) le montaba 8 px de la cifra de esta hora sobre esa
+       fila (medido). Igual sube ~22 px respecto de antes. */
     .st-key-chartcard_ventas_horario_hora .vhh-tira {
         position: relative !important;
         height: 90px !important;
-        margin: 2px 12px 0 6px !important;
+        margin: 14px 12px 0 6px !important;
     }
     .st-key-chartcard_ventas_horario_hora .vhh-tira > span {
         position: absolute !important;

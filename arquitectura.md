@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-610 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+611 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (199)
 
@@ -785,7 +785,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#607** — En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y «Modificar» abre también una…
 - **#608** — Modificar › Combo: la ficha del combo sale de TCOMBO, en un parquet propio, y un grupo «a…
 
-**SUNAT y SIRE** (53)
+**SUNAT y SIRE** (54)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -840,6 +840,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
 - **#604** — «Documentos SUNAT» cruza también las notas de crédito del Almacén, y empareja nota contra…
 - **#606** — En el cruce de «Documentos SUNAT», un candidato ÚNICO con OTRO RUC sólo se empareja si los…
+- **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
 
 **Fechas, rangos y cortes** (13)
 
@@ -905,7 +906,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (154)
+**Decisiones de diseño y UX** (155)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1061,6 +1062,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
 - **#605** — «Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en casa el día que se…
 - **#610** — El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico (con o sin número), puntos…
+- **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
 
 **Mantenimiento y trampas del lenguaje** (14)
 
@@ -48082,6 +48084,42 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+611. **En la ficha de la hora, el RESULTADO contra lo normal va junto al
+     título, y la frase en la fila de Venta · Pax · Ticket: el rótulo
+     «CONTRA LO NORMAL» se fue.** 2026-10-04, a pedido: «qué significa
+     "contra lo normal", aparece en casi todas las horas, ¿no es
+     redundante?». Lo era: era el TÍTULO del bloque de abajo (la frase y la
+     tira contra las 8 semanas anteriores), subido a la fila de los KPIs
+     por la #566, y repetía la pestaña «Contra lo normal» que está al lado.
+     El resultado —cuánto se aleja la hora de su mediana— quedaba en letra
+     chica al pie de la tira.
+
+     - **Junto al título**, en todas las vistas (es de la hora, no de un
+       bloque): una etiqueta «▲ 86% vs lo normal», «▼ 18% vs lo normal» o
+       «≈ lo normal» (±5 %), con el ⓘ de siempre y en el `title` la
+       mediana y el rango. La arma `ventas_ficha_hora.veredicto_normal`;
+       sin semanas con qué comparar, o si ni esta ni aquéllas vendieron, no
+       hay etiqueta (la frase ya lo dice). Si lo normal es no vender y esta
+       hora vendió: «▲ lo normal: sin ventas».
+     - **En la fila de los KPIs**, donde estaba el rótulo, la frase: «La
+       6.ª más alta de 9 viernes». Sin la hora (`frase_normal(...,
+       con_hora=False)`), que ya está en el título.
+     - **La tira sube ~22 px**: sin el renglón de la frase es lo primero de
+       su markdown, y lleva 14 px arriba para que el -16px del de arriba
+       (#162) no le monte la cifra de esta hora sobre la fila de los KPIs
+       (medido: se montaba 8 px).
+
+     **Para que cada cosa entre en su renglón hubo que acortar dos
+     textos** (medido con Playwright a 1323×619: la columna izquierda mide
+     464 px). El subtítulo pasó de «2 pedidos abiertos entre las 10:00 y
+     las 10:59 pm» a «2 pedidos abiertos» —el tramo repetía la hora del
+     título y queda en el `title`—, y la frase de la fila perdió «a las 10
+     pm». Con los dos largos, la etiqueta caía a un segundo renglón y la
+     frase también, y la tira quedaba 8 px encima de ella. El hueco entre
+     KPIs bajó de 18 a 14 px.
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48094,7 +48132,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#610**; la próxima toma el número siguiente.
+> última regla es la **#611**; la próxima toma el número siguiente.
 
 >
 

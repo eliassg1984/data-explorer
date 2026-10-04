@@ -8659,6 +8659,25 @@ def _pruebas_ficha_hora():
     check("la frase: nadie vendió",
           _f.frase_normal(0.0, [0.0, 0.0], 2, 16),
           "Ni esta ni las 2 semanas anteriores vendieron a las 4 pm")
+    # En la fila de Venta · Pax · Ticket va SIN la hora (2026-10-04): ya
+    # está en el título de al lado, y con ella la fila no entraba.
+    check("la frase corta, sin la hora",
+          (_f.frase_normal(150.0, [100.0, 200.0], 4, 22, con_hora=False),
+           _f.frase_normal(0.0, [0.0, 0.0], 6, 23, con_hora=False)),
+          ("La 2.ª más alta de 3 viernes", "Ningún domingo vendió en 2 semanas"))
+    # El resultado contra lo normal, junto al título: en lugar del rótulo
+    # «CONTRA LO NORMAL», que no decía nada.
+    check("el resultado: sube, baja, igual",
+          [_f.veredicto_normal(v, [100.0, 100.0, 120.0])
+           for v in (186.0, 82.0, 102.0)],
+          [("▲ 86% vs lo normal", "sube"), ("▼ 18% vs lo normal", "baja"),
+           ("≈ lo normal", "neutro")])
+    check("el resultado: sin semanas o sin ventas, nada que decir",
+          (_f.veredicto_normal(50.0, []), _f.veredicto_normal(0.0, [0.0, 0.0])),
+          (None, None))
+    check("el resultado: vendió donde lo normal es no vender",
+          _f.veredicto_normal(300.0, [0.0, 0.0, 50.0]),
+          ("▲ lo normal: sin ventas", "sube"))
     check("la ventana trae 8 semanas antes y un día después",
           _f.ventana(_dt.date(2026, 9, 1), _dt.date(2026, 9, 24)),
           (_dt.date(2026, 7, 7), _dt.date(2026, 9, 25)))

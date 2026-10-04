@@ -368,22 +368,47 @@ def mediana(valores):
     return float(np.median(x)) if x else None
 
 
-def frase_normal(v, previas, dow, hora):
+def frase_normal(v, previas, dow, hora, con_hora=True):
     """«La más alta de 9 sábados a las 7 pm»: dónde cae la celda entre ella
-    y sus 8 semanas anteriores."""
-    a = (f"a {'la' if (int(hora) % 12 or 12) == 1 else 'las'} "
-         f"{cortes.etiqueta_hora(hora)}")
+    y sus 8 semanas anteriores. Sin `con_hora`, la que va en la fila de
+    Venta · Pax · Ticket de la ficha (2026-10-04): la hora ya está en el
+    título de al lado, y con ella la fila no entraba en un renglón."""
+    a = (f" a {'la' if (int(hora) % 12 or 12) == 1 else 'las'} "
+         f"{cortes.etiqueta_hora(hora)}") if con_hora else ""
     pl, n = _DIAS_PL[dow], len(previas) + 1
     if not previas:
         return "Sin semanas anteriores para comparar"
     if v == 0 and max(previas) == 0:
-        return f"Ni esta ni las {len(previas)} semanas anteriores vendieron {a}"
+        return (f"Ni esta ni las {len(previas)} semanas anteriores "
+                f"vendieron{a}" if con_hora else
+                f"Ningún {_DIAS[dow]} vendió en {len(previas)} semanas")
     if all(x < v - 0.5 for x in previas):
-        return f"La más alta de {n} {pl} {a}"
+        return f"La más alta de {n} {pl}{a}"
     if all(x > v + 0.5 for x in previas):
-        return f"La más baja de {n} {pl} {a}"
+        return f"La más baja de {n} {pl}{a}"
     k = sum(1 for x in previas if x > v + 0.5) + 1
-    return f"La {k}.ª más alta de {n} {pl} {a}"
+    return f"La {k}.ª más alta de {n} {pl}{a}"
+
+
+def veredicto_normal(v, previas):
+    """`(texto, clase)` de la etiqueta que va junto al título de la ficha:
+    cuánto se aleja la venta de la hora de su mediana de las 8 semanas
+    anteriores («▲ 86% vs lo normal», «≈ lo normal»), o None si no hay con
+    qué comparar o si ni esta ni aquéllas vendieron (la frase ya lo dice).
+
+    Reemplaza al rótulo «CONTRA LO NORMAL» (2026-10-04, a pedido): era el
+    título del bloque, repetía la pestaña de al lado y no decía el
+    resultado, que quedaba en letra chica al pie de la tira."""
+    med = mediana(previas)
+    if med is None:
+        return None
+    if med <= 0:
+        return None if v <= 0 else ("▲ lo normal: sin ventas", "sube")
+    pct = (v - med) / med
+    if abs(pct) < 0.05:
+        return ("≈ lo normal", "neutro")
+    return (f"{'▲' if pct > 0 else '▼'} {abs(pct) * 100:,.0f}% vs lo normal",
+            "sube" if pct > 0 else "baja")
 
 
 # ── Formato ─────────────────────────────────────────────────────────────────
@@ -471,11 +496,13 @@ _Y_PUNTOS = 40
 def _html_normal(v, previas, dow, hora, con_rotulo=True):
     vb = [p["v"] for p in previas]
     med = mediana(vb)
-    # El rótulo va en la fila de Venta · Pax · Ticket cuando la ficha lo
-    # pide (#566): en renglón propio le quitaba 20 px a la tira.
-    html = ([f'<p class="vhh-h3">Contra lo normal {_info("normal")}</p>']
+    # Con `con_rotulo=False` la ficha ya puso arriba lo que va acá: el
+    # resultado junto al título y la frase en la fila de Venta · Pax ·
+    # Ticket (2026-10-04, a pedido; antes, el rótulo en esa fila, #566).
+    # Sin ese renglón la tira sube.
+    html = ([f'<p class="vhh-h3">Contra lo normal {_info("normal")}</p>',
+             f'<p class="vhh-frase">{frase_normal(v, vb, dow, hora)}</p>']
             if con_rotulo else [])
-    html += [f'<p class="vhh-frase">{frase_normal(v, vb, dow, hora)}</p>']
     # Sin semanas, o con todo en cero, la frase ya lo dijo: una tira de nueve
     # puntos apilados en S/ 0 no agrega nada.
     if not vb or (not v and not max(vb)):
@@ -730,9 +757,12 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
     ampm = "am" if int(hora) % 24 < 12 else "pm"
     verbo = (("abierto" if n == 1 else "abiertos") if modo == "pedido"
              else "con cobro")
-    sub = (f"{n} {'pedido' if n == 1 else 'pedidos'} {verbo} entre {la} "
-           f"{h12}:00 y {la} {h12}:59 {ampm}" if n else
+    # Corto desde el 2026-10-04: el renglón del título suma el resultado
+    # contra lo normal y no entraba. «Entre las 10:00 y las 10:59 pm»
+    # repetía la hora del título; queda en el tooltip.
+    sub = (f"{n} {'pedido' if n == 1 else 'pedidos'} {verbo}" if n else
            "Ningún pedido a esta hora")
+    sub_tit = f"entre {la} {h12}:00 y {la} {h12}:59 {ampm}"
     raros = []
     if n:
         _vi = float(pc.loc[pc["vi"], "v"].sum())
@@ -779,19 +809,41 @@ def dibujar(dia, hora, fl, horas, *, modo, celda, al_cerrar):
                                 unsafe_allow_html=True)
             st.button("Cerrar", key="vh_foco_cerrar",
                       icon=":material/close:", on_click=al_cerrar)
+    # EL RESULTADO, NO EL RÓTULO (2026-10-04, a pedido). Junto al título,
+    # cuánto se aleja esta hora de lo normal, en todas las vistas: es de la
+    # hora, no de un bloque. Y en la fila de Venta · Pax · Ticket, donde
+    # estaba el rótulo «CONTRA LO NORMAL», la frase que dice en qué puesto
+    # cae; con eso la tira de abajo sube un renglón.
+    vb = [p["v"] for p in previas]
+    ver = veredicto_normal(v_hora, vb)
+    if ver:
+        _med = mediana(vb)
+        _tit = _esc(f"{_soles(v_hora)} contra una mediana de {_soles(_med)}"
+                    f" (de {_soles(min(vb))} a {_soles(max(vb))}): las "
+                    f"{len(vb)} semanas anteriores, mismo día y misma hora",
+                    quote=True)
+        ver_html = (f'<span class="vhh-tit-normal"><span class="vhh-chip '
+                    f'{ver[1]}" title="{_tit}">{ver[0]}</span>'
+                    f'{_info("normal")}</span>')
+    else:
+        ver_html = ""
     with c_a:
         st.markdown(
             f'<p class="vhh-tit">{_DIAS[dow].capitalize()} {dia.day} '
             f'{cortes.MESES_ABR_ES[dia.month - 1]} · '
             f'{cortes.etiqueta_hora(hora)}'
             # El subtítulo en el MISMO renglón del título (#565).
-            f'<span class="vhh-sub">{sub}</span></p>'
+            f'<span class="vhh-sub" title="{sub_tit}">{sub}</span>'
+            f'{ver_html}</p>'
             f'<p class="vhh-kpis"><span>Venta<b>{_soles(v_hora)}</b></span>'
             f'<span>Pax<b>{pax_hora:,.0f}</b></span><span>Ticket<b>'
             f'{_soles2(v_ticket / pax_hora) if pax_hora else "—"}</b></span>'
-            # «CONTRA LO NORMAL» en esta fila (#566), sólo en esa vista.
-            + (f'<span class="vhh-h3 vhh-kpi-rot">Contra lo normal '
-               f'{_info("normal")}</span>' if vista == VISTAS[0] else "")
+            # La frase en esta fila, sólo en la vista de lo normal: es el
+            # título de la tira que va debajo.
+            + (f'<span class="vhh-kpi-rot vhh-kpi-frase">'
+               f'{frase_normal(v_hora, vb, dow, hora, con_hora=False)}'
+               '</span>'
+               if vista == VISTAS[0] else "")
             + '</p>',
             unsafe_allow_html=True)
         if raros:
