@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import definicion_venta
 import consumo_recetas
+import kardex
 
 
 # ===========================================================================
@@ -171,6 +172,10 @@ REPORTES = {
         "label_largo": "Stock e Inventario",
         "label_rail": "Stock",
         "archivo": "inventariovalorizado.parquet",
+        # El kardex por hora (2026-10-03, regla #601): el «Stock al» de
+        # Stock por Producto lo lee para el stock a una fecha. Va acá para
+        # que «Actualizar» lo pida también.
+        "archivos_extra": (kardex.ARCHIVO,),
         "icono": ":material/inventory_2:",
         # Foto sin fecha (igual que Recetas): kpi_fecha ausente a
         # propósito, resumen_kpis() agrega la tabla entera — pero sólo lo
@@ -1235,6 +1240,7 @@ def limpiar_cache(archivo):
     _venta_por_producto_dia_cacheable.clear()
     _consumo_recetas_cacheable.clear()
     _demanda_nivel1_cacheable.clear()
+    _stock_al_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -1760,5 +1766,36 @@ def demanda_nivel1_rango(ini, fin):
     archivo = consumo_recetas.ARCHIVOS["paloteo"]
     try:
         return _demanda_nivel1_cacheable(archivo, sello_datos(archivo), ini, fin)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _stock_al_cacheable(archivo, sello, cuando, version=None):
+    """El stock de cada área y producto al momento `cuando`, del kardex por
+    hora (`kardex.sql_stock_al`): area, cod, stock, precio, correlativo. Si
+    falla, LANZA: no se cachea.
+
+    `sello` y `version` no se usan en el cuerpo: son la clave (la versión de
+    la cuenta vive en `kardex`, y Streamlit sólo mete en la clave el código
+    de ESTA función). Agregado en DuckDB sobre R2: ~15 mil filas en vez de
+    las 559 mil del parquet. Regla #601."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    return con.execute(kardex.sql_stock_al(rel, cuando)).df()
+
+
+def stock_al(cuando):
+    """El stock de cada área y producto al momento `cuando` (un `datetime`;
+    cuenta su hora entera, ver `kardex.momento`). `None` si no se pudo leer
+    —el parquet todavía no existe, R2 caído—: quien lo pide avisa.
+
+    No cacheada (la interna sí), por lo mismo que `cargar()`."""
+    try:
+        return _stock_al_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
+                                   cuando, version=kardex.VERSION)
     except Exception:
         return None

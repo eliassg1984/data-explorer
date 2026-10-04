@@ -861,6 +861,9 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     # el interruptor de Productos no se dibuja.
     col_factor = _resolver(df_f, ["FACTOR", "Factor"])
     col_usal   = _resolver(df_f, ["UNIDAD SALIDA", "Unidad Salida"])
+    # El código del área es con lo que la tabla de Productos se cruza con el
+    # kardex para ver el stock a una fecha (regla #601).
+    col_cod_area = _resolver(df_f, ["CODIGO AREA", "Codigo Area"])
 
     if not col_val:
         st.warning("No se encontró la columna de valorizado. "
@@ -1085,7 +1088,8 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                 col_subfam=col_subfam, col_area=col_area,
                 col_unidad=col_unidad, col_punit=col_punit,
                 col_cant=col_cant, col_val=col_val,
-                col_factor=col_factor, col_usal=col_usal)
+                col_factor=col_factor, col_usal=col_usal,
+                col_cod_area=col_cod_area)
 
     def _dib_tabla():
         with st.container(border=True, key="ajuste_graf_card_izq_inv_tabla"):

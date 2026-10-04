@@ -6081,6 +6081,130 @@ def _pruebas_inventario_activos():
     return fallos
 
 
+def _pruebas_kardex():
+    """El stock A UNA FECHA (kardex.py + inventario_productos, regla #601).
+
+    Lo que fija: la foto es la del ÚLTIMO movimiento hasta ese momento —por
+    correlativo, no por hora—, con la hora pedida ENTERA adentro; lo que no
+    se movió desde el 2025 sale del saldo inicial; el precio va a tres
+    decimales y es el del área. Y del lado de la tabla: sin foto el stock era
+    cero, «Comparar con hoy» conserva lo de hoy, y lo que se terminó desde
+    entonces sigue en la tabla.
+    """
+    import datetime as dt
+    import duckdb
+    import kardex
+    from graficos.inventario_productos import (
+        COL_CANT_HOY, COL_VAL_HOY, armar_listado, filas_grilla,
+        stock_a_la_fecha)
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    kardex · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA kardex · {nombre}: got={got!r} exp={exp!r}")
+
+    h = pd.Timestamp
+    k = pd.DataFrame({
+        "FECHA HORA": [h("2024-12-31 23:00"), h("2026-09-30 14:00"),
+                       h("2026-09-30 14:00"), h("2026-09-30 15:00"),
+                       h("2024-12-31 23:00"), h("2026-10-01 09:00"),
+                       h("2026-09-30 10:00")],
+        "CODIGO AREA": ["000", "000", "000", "000", "007", "007", "007"],
+        "CODIGO PRODUCTO": ["A", "A", "A", "A", "A", "B", "C"],
+        # Dos tipos en la MISMA hora: manda el correlativo, no el orden.
+        "COD TIPO": ["SI", "99", "01", "95", "SI", "01", "95"],
+        "ULTIMO CORRELATIVO": [10, 30, 25, 40, 5, 7, 6],
+        "STOCK DESPUES": [5.0, 3.0, 8.0, 1.0, 2.0, 4.0, 0.0],
+        "PRECIO PROMEDIO DESPUES": [10.0, 12.34567, 12.0, 12.5, 9.0, 3.0,
+                                    1.0],
+    })
+    con = duckdb.connect()
+    con.register("k", k)
+
+    def foto(cuando):
+        f = con.execute(kardex.sql_stock_al("k", cuando)).df()
+        return {(r.area, r.cod): (r.stock, r.precio)
+                for r in f.itertuples()}
+
+    check("la hora pedida entra ENTERA (14 = hasta las 14:59)",
+          kardex.momento(dt.date(2026, 9, 30), 14),
+          dt.datetime(2026, 9, 30, 14, 0))
+    f14 = foto(kardex.momento(dt.date(2026, 9, 30), 14))
+    check("en la misma hora manda el correlativo mayor, y el precio va a "
+          "tres decimales", f14[("000", "A")], (3.0, 12.346))
+    check("sin movimientos desde el 2025: el saldo inicial",
+          f14[("007", "A")], (2.0, 9.0))
+    check("lo que todavía no existía no tiene foto",
+          ("007", "B") in f14, False)
+    check("la hora siguiente ya cuenta el movimiento de las 15",
+          foto(kardex.momento(dt.date(2026, 9, 30), 15))[("000", "A")],
+          (1.0, 12.5))
+    check("antes del 2025, sólo el saldo",
+          foto(dt.datetime(2024, 12, 31, 23))[("000", "A")], (5.0, 10.0))
+
+    d = pd.DataFrame({
+        "COD AREA": ["000", "007", "007", "000"],
+        "AREA": ["ALMACEN CENTRAL", "COCINA", "COCINA", "ALMACEN CENTRAL"],
+        "COD": ["A", "A", "B", "C"],
+        "PROD": ["Ajo", "Ajo", "Berro", "Culantro"],
+        "FAM": ["VERDURAS"] * 4, "SUB": ["HOJAS"] * 4,
+        "UM": ["KILOS"] * 4,
+        "PU": [12.0, 12.0, 3.0, 1.0],
+        "STK": [4.0, 0.0, 6.0, 2.0],
+        "VAL": [48.0, 0.0, 18.0, 2.0],
+    })
+    fx = pd.DataFrame({"area": ["000", "007"], "cod": ["A", "A"],
+                       "stock": [3.0, 2.0], "precio": [12.346, 9.0]})
+    t = stock_a_la_fecha(d, fx, col_area="COD AREA", col_cod="COD",
+                         col_cant="STK", col_val="VAL", col_punit="PU")
+    check("la cantidad y el valorizado son los de la FOTO, con el precio "
+          "del área", (t.loc[0, "STK"], round(t.loc[0, "VAL"], 3),
+                       t.loc[1, "VAL"]), (3.0, 37.038, 18.0))
+    check("sin foto el stock era cero, con el precio de hoy",
+          (t.loc[2, "STK"], t.loc[2, "VAL"], t.loc[2, "PU"]), (0.0, 0.0, 3.0))
+    check("lo de hoy queda aparte, para comparar",
+          (t[COL_CANT_HOY].tolist(), t[COL_VAL_HOY].tolist()),
+          ([4.0, 0.0, 6.0, 2.0], [48.0, 0.0, 18.0, 2.0]))
+
+    # «Hoy» con la foto del último momento: misma regla de precio que la
+    # fecha (el área a 12.346 y no al 12 del maestro); la fila que el kardex
+    # no tiene se queda con la de hoy.
+    fh = pd.DataFrame({"area": ["000", "007"], "cod": ["A", "B"],
+                       "stock": [4.0, 6.0], "precio": [12.346, 3.0]})
+    th = stock_a_la_fecha(d, fx, col_area="COD AREA", col_cod="COD",
+                          col_cant="STK", col_val="VAL", col_punit="PU",
+                          foto_hoy=fh)
+    check("«Hoy» sale de la foto del último momento, al precio del área",
+          [round(v, 3) for v in th[COL_VAL_HOY]], [49.384, 0.0, 18.0, 2.0])
+
+    cols = dict(col_cod="COD", col_prod="PROD", col_fam="FAM",
+                col_subfam="SUB", col_area="AREA", col_unidad="UM",
+                col_punit="PU", col_cant="STK", col_val="VAL")
+    L = armar_listado(t, **cols, col_cant_hoy=COL_CANT_HOY,
+                      col_val_hoy=COL_VAL_HOY)
+    check("lo que hoy tiene stock y entonces no, sigue en la tabla",
+          sorted(L.productos.index), ["A", "B", "C"])
+    check("con dos precios entre áreas, el del producto es el ponderado",
+          round(L.productos.loc["A", "precio"], 4),
+          round((3 * 12.346 + 2 * 9.0) / 5, 4))
+    check("un área que entonces tenía stock y hoy no, se despliega",
+          sorted(L.areas.loc[L.areas["codigo"] == "A", "area"]),
+          ["ALMACEN CENTRAL", "COCINA"])
+    f = filas_grilla(L)
+    _b = f[f["__id"] == "B"].iloc[0]
+    check("la diferencia es hoy − la fecha, en soles",
+          (_b["cant_hoy"], _b["val_hoy"], _b["dif"]), (6.0, 18.0, 18.0))
+    check("sin «Comparar con hoy», los que estaban en cero se cuentan "
+          "aparte (Berro y Culantro: ninguno tiene foto)",
+          armar_listado(t, **cols).sin_stock, 2)
+    return fallos
+
+
 def _pruebas_detalle_salidas():
     """Movimientos › «Detalle de salidas» (regla #511).
 
@@ -9066,6 +9190,7 @@ def main():
     # ── Inventario › Productos: el grano y el despliegue de áreas ────────
     fallos += _pruebas_listado_inventario()
     fallos += _pruebas_inventario_activos()
+    fallos += _pruebas_kardex()
 
     # ── Movimientos › las tarjetas «por período»: qué cuenta y qué no ────
     fallos += _pruebas_movimientos_periodo()

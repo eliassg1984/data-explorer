@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-600 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+601 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (198)
 
@@ -688,7 +688,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 
-**Datos, R2 y DuckDB** (86)
+**Datos, R2 y DuckDB** (87)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -776,6 +776,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#595** — La venta por ÁREA DE PRODUCCIÓN: dónde se prepara, no qué grupo de la carta es
 - **#598** — «Stock e Inventario» cuenta sólo lo ACTIVO: área activa, producto activo, habilitado en el…
 - **#599** — Una conexión de DuckDB por HILO, no por proceso: compartida entre sesiones, una consulta se…
+- **#601** — El stock a una fecha sale del kardex por hora, con la regla del Histórico del POS: el último…
 
 **SUNAT y SIRE** (50)
 
@@ -47399,6 +47400,62 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+601. **El stock a una fecha sale del kardex por hora, con la regla del
+     Histórico del POS: el último movimiento, por correlativo.** 2026-10-03,
+     a pedido: «Ver a una fecha» en Stock por Producto, con hora.
+
+     - **El dato**: `kardex.parquet`, la consulta «kardex» del Sheet sobre
+       `MKARDEX` (Almacén Central, área `000`) y `MSUBKARDEX` (las áreas),
+       desde el 2025-01-01, más una fila «Saldo al 31/12/2024» por área y
+       producto con lo que dejó el último movimiento anterior. **Grano: hora
+       × área × producto × tipo de documento** —1,48 millones de
+       movimientos en 559 mil filas; por día serían 490 mil, la hora cuesta
+       12 % y deja elegirla—. Cada fila trae lo que entró y salió por ese
+       tipo (cantidad y `nValor`) y una FOTO: `STOCK DESPUES` y `PRECIO
+       PROMEDIO DESPUES` de su último movimiento, con su `ULTIMO
+       CORRELATIVO`. **Las fotos no se suman.** Las anulaciones (estado 02)
+       son filas de reverso del MISMO tipo: la consulta las resta del lado
+       del original, así que no inflan nada. Lo lee `kardex.py` (puro
+       DuckDB, con prueba); el mismo parquet es la base de los movimientos
+       por tipo, que todavía no tienen vista.
+     - **La regla** es la de `spRepInventarioH` (modo 'R'): por área y
+       producto, el movimiento de MAYOR CORRELATIVO con `fRegistro` ≤ el
+       momento — no el de hora más tardía: en la misma hora conviven varios
+       tipos. Su stock y su precio, éste a tres decimales como el POS
+       (`CAST(… AS numeric(18,3))`). Cuadrado contra el PDF del Almacén
+       Central al 30/09/2026 23:59:59: los 3.879 artículos con el mismo
+       stock y el mismo precio, S/ 35.818,44 contra 35.818,45. Y la foto
+       más nueva da el stock de hoy en las 15.472 combinaciones.
+     - **El precio es el del ÁREA**, no el del maestro: cada subkardex
+       lleva el suyo, y el reporte de hoy usa `TPRODUCTO.nPrecioPromedio`.
+       Difieren en 175 filas con stock (medido ese día). Por eso **«Hoy»,
+       en «Comparar con hoy», es la foto del último momento del kardex y no
+       la tabla sin fecha**: contra ésa, productos que no se movieron
+       salían con diferencia. Con la misma regla, a la última fecha la
+       diferencia da S/ 0,00 en todas las filas; el total de «Hoy» puede
+       diferir unos soles del de la tabla sin fecha, y el tooltip lo dice.
+       Donde un producto tiene dos precios entre sus áreas, el de su fila es
+       el ponderado.
+     - **Lo demás es de hoy**: nombre, familia, si está activo (#598). El
+       maestro no guarda historia; un producto sin foto no se había movido
+       todavía y su stock era cero.
+     - **La caché** (`data._stock_al_cacheable`) agrega en DuckDB sobre R2
+       —15 mil filas en vez de 559 mil— y lleva sello y `kardex.VERSION`
+       (#367). El momento es una HORA ENTERA (`kardex.momento`): «hasta las
+       14:59» es la fila de las 14:00.
+     - **Abre en el cierre del mes pasado**, no en el último día: ése sería
+       la tabla de hoy otra vez.
+
+     Cambia `data.py` e importa un módulo nuevo: «Reboot app» en Cloud
+     (#357). Sin la fila «kardex» del Sheet, el interruptor avisa y la tabla
+     sigue en hoy. Y como `kardex.parquet` va en los `archivos_extra` de
+     Inventario Valorizado, «Actualizar» lo pide aunque el Sheet no lo
+     tenga: un pedido así no llega nunca, y su vigilante (`run_every=4`)
+     tictaqueaba toda la sesión (#474). Desde ese día `_vigilar_refresco`
+     lo da por perdido a los 10 minutos.
+
+     (2026-10-03.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47411,7 +47468,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#600**; la próxima toma el número siguiente.
+> última regla es la **#601**; la próxima toma el número siguiente.
 
 >
 

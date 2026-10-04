@@ -45,9 +45,15 @@ import unicodedata
 import zlib
 from dataclasses import dataclass
 
+import datetime as dt
+
 import numpy as np
 import pandas as pd
 import streamlit as st
+
+import data
+import kardex
+from cortes import MESES_ABR_ES
 
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG_TEXTO, BLANCO, GRIS_BORDE,
@@ -90,6 +96,11 @@ _K_SUBFAMILIAS = "inv_prod_subfamilias"
 _K_BUSCAR = "inv_prod_buscar"
 _K_SIN_STOCK = "inv_prod_sin_stock"
 _K_SALIDA = "inv_prod_unidad_salida"
+# El stock a una fecha (regla #601).
+_K_A_FECHA = "inv_prod_a_fecha"
+_K_FECHA = "inv_prod_fecha"
+_K_HORA = "inv_prod_hora"
+_K_COMPARAR = "inv_prod_comparar"
 
 # Con qué áreas ABRE el listado (2026-09-18, a pedido: «debe filtrar
 # inicialmente Almacén central, cocina, bar, producción, salón»; CAVA se sumó
@@ -193,7 +204,8 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
                   col_area=None, col_unidad=None, col_punit=None,
                   col_cant=None, col_val=None, areas=(), familias=(),
                   subfamilias=(), texto="", incluir_sin_stock=False,
-                  col_factor=None, col_usal=None):
+                  col_factor=None, col_usal=None, col_cant_hoy=None,
+                  col_val_hoy=None):
     """El parquet (una fila por producto × área) llevado a un PRODUCTO por
     fila, más sus áreas aparte.
 
@@ -226,7 +238,15 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
     códigos distintos en el parquet real: sin código se fundirían).
 
     `col_factor` y `col_usal` (regla #598) son del producto, como la unidad:
-    con qué se parte su cantidad en la unidad de salida."""
+    con qué se parte su cantidad en la unidad de salida.
+
+    `col_cant_hoy` y `col_val_hoy` (regla #601): con el stock A UNA FECHA,
+    cantidad y valorizado son los de esa fecha y éstas las de hoy, para
+    «Comparar con hoy». Se suman igual, y un área «existe» si tiene stock en
+    cualquiera de los dos momentos: lo que se terminó desde entonces también
+    es parte de la respuesta. A una fecha el precio es el de CADA ÁREA (el
+    kardex lleva uno por área, y el POS valoriza así): donde un producto
+    tiene más de uno, el suyo es el promedio ponderado de sus áreas."""
     nombre = _texto(d, col_prod)
     base = pd.DataFrame({
         "codigo": _texto(d, col_cod) if col_cod else nombre,
@@ -244,6 +264,10 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
         "valorizado": (pd.to_numeric(d[col_val], errors="coerce").fillna(0)
                        if col_val else 0.0),
         "area": _texto(d, col_area),
+        "cant_hoy": (pd.to_numeric(d[col_cant_hoy], errors="coerce").fillna(0)
+                     if col_cant_hoy else 0.0),
+        "val_hoy": (pd.to_numeric(d[col_val_hoy], errors="coerce").fillna(0)
+                    if col_val_hoy else 0.0),
     })
     # Los tres recortes van sobre las FILAS, antes de agrupar. Familia y
     # subfamilia son atributos del producto (da lo mismo hacerlos antes o
@@ -260,8 +284,15 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
         familia=("familia", "first"), subfamilia=("subfamilia", "first"),
         nombre=("nombre", "first"), unidad=("unidad", "first"),
         usal=("usal", "first"), factor=("factor", "first"),
-        precio=("precio", "first"), cantidad=("cantidad", "sum"),
-        valorizado=("valorizado", "sum"))
+        precio=("precio", "first"), _pmin=("precio", "min"),
+        _pmax=("precio", "max"), cantidad=("cantidad", "sum"),
+        valorizado=("valorizado", "sum"), cant_hoy=("cant_hoy", "sum"),
+        val_hoy=("val_hoy", "sum"))
+    _varios = (((prods["_pmax"] - prods["_pmin"]).abs() > _EPS)
+               & (prods["cantidad"].abs() > _EPS))
+    prods = prods.assign(precio=prods["precio"].where(
+        ~_varios, prods["valorizado"] / prods["cantidad"].where(_varios, 1.0))
+    ).drop(columns=["_pmin", "_pmax"])
 
     # El buscador: todas las palabras tienen que estar, en el nombre o en el
     # código, sin mirar tildes ni mayúsculas. «pollo kg» encuentra «Muslo
@@ -272,11 +303,13 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
                                                      prods.index)]
         prods = prods[[all(p in h for p in palabras) for h in pajar]]
 
-    activo = (base["cantidad"].abs() > _EPS) | (base["valorizado"].abs() > _EPS)
+    activo = ((base["cantidad"].abs() > _EPS) | (base["valorizado"].abs() > _EPS)
+              | (base["cant_hoy"].abs() > _EPS) | (base["val_hoy"].abs() > _EPS))
     en_areas = (base[activo & base["codigo"].isin(prods.index)]
                 .groupby(["codigo", "area"], as_index=False, sort=False)
                 .agg(cantidad=("cantidad", "sum"),
-                     valorizado=("valorizado", "sum")))
+                     valorizado=("valorizado", "sum"),
+                     cant_hoy=("cant_hoy", "sum"), val_hoy=("val_hoy", "sum")))
     prods = prods.assign(
         areas=prods.index.map(en_areas.groupby("codigo").size())
         .fillna(0).astype(int))
@@ -297,6 +330,62 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
     return Listado(prods, en_areas.reset_index(drop=True), sin_stock)
 
 
+COL_CANT_HOY = "__cant_hoy"
+COL_VAL_HOY = "__val_hoy"
+
+
+def _en_la_foto(d, foto, col_area, col_cod):
+    """(stock, precio) de `foto` para cada fila de `d`, cruzando por área y
+    producto; NaN donde la foto no la tiene."""
+    clave = pd.MultiIndex.from_arrays([
+        d[col_area].astype(str).str.strip(), d[col_cod].astype(str).str.strip()])
+    f = foto.assign(area=foto["area"].astype(str).str.strip(),
+                    cod=foto["cod"].astype(str).str.strip())
+    f = f.drop_duplicates(["area", "cod"]).set_index(["area", "cod"])
+    return (pd.to_numeric(f["stock"], errors="coerce").reindex(clave).to_numpy(),
+            pd.to_numeric(f["precio"], errors="coerce").reindex(clave).to_numpy())
+
+
+def stock_a_la_fecha(d, foto, *, col_area, col_cod, col_cant, col_val,
+                     col_punit, foto_hoy=None):
+    """`d` (una fila por área × producto, la de HOY) con la cantidad, el
+    precio y el valorizado de la FOTO del kardex a una fecha (regla #601):
+    `foto` trae `area`, `cod`, `stock` y `precio`, como lo devuelve
+    `data.stock_al`. Una fila sin foto no tuvo un solo movimiento hasta esa
+    fecha: su stock era cero (y su precio, el de hoy). Todo lo demás —el
+    producto, su familia, si está activo— es el de hoy: el maestro no guarda
+    su historia.
+
+    Lo de HOY, para «Comparar con hoy», queda en `COL_CANT_HOY` y
+    `COL_VAL_HOY`. Con `foto_hoy` (la foto del kardex al último momento) es
+    ésa, con la MISMA regla de precio que la fecha: el kardex valoriza cada
+    área con su precio y el reporte de hoy con el del maestro, que difiere
+    en 175 filas con stock (medido el 2026-10-03), así que comparar contra
+    la tabla sin fecha pintaba diferencias en productos que no se movieron.
+    El stock es el mismo en las dos. Sin `foto_hoy`, o en una fila que el
+    kardex no tiene, la de `d`. Pura."""
+    t = d.copy()
+    punit = (pd.to_numeric(d[col_punit], errors="coerce").to_numpy()
+             if col_punit else np.full(len(d), np.nan))
+    cant_hoy = pd.to_numeric(d[col_cant], errors="coerce").fillna(0).to_numpy()
+    val_hoy = pd.to_numeric(d[col_val], errors="coerce").fillna(0).to_numpy()
+    if foto_hoy is not None:
+        s_h, p_h = _en_la_foto(d, foto_hoy, col_area, col_cod)
+        p_h = np.where(np.isnan(p_h), punit, p_h)
+        tiene = ~np.isnan(s_h)
+        cant_hoy = np.where(tiene, s_h, cant_hoy)
+        val_hoy = np.where(tiene, s_h * np.nan_to_num(p_h, nan=0.0), val_hoy)
+    t[COL_CANT_HOY] = cant_hoy
+    t[COL_VAL_HOY] = val_hoy
+    stock, precio = _en_la_foto(d, foto, col_area, col_cod)
+    precio = np.where(np.isnan(precio), punit, precio)
+    t[col_cant] = np.nan_to_num(stock, nan=0.0)
+    if col_punit:
+        t[col_punit] = precio
+    t[col_val] = t[col_cant].to_numpy() * np.nan_to_num(precio, nan=0.0)
+    return t
+
+
 def filas_grilla(listado):
     """El `rowData`: cada producto seguido de sus áreas, en un solo df.
 
@@ -304,21 +393,14 @@ def filas_grilla(listado):
     las de área van VACÍAS las que son del producto (familia, subfamilia,
     unidad, precio): se leen en la fila de arriba, y repetirlas en cada área
     convierte el despliegue en un bloque de texto igual. El nombre del área
-    viaja en `nombre`, que es la columna que se lee hacia abajo."""
+    viaja en `nombre`, que es la columna que se lee hacia abajo.
+
+    Con el stock a una fecha (regla #601) viajan además las cantidades de
+    HOY (`cant_hoy`, `val_hoy`) y `dif` = hoy − la fecha, en soles: cuánto
+    cambió el stock desde entonces."""
     p = listado.productos.reset_index()
     p["familia"] = [nombre_propio(x) if x else "" for x in p["familia"]]
     p["subfamilia"] = [nombre_propio(x) if x else "" for x in p["subfamilia"]]
-    # La cantidad ya ESCRITA en unidad de salida y en la del kardex (regla
-    # #598): el interruptor «Ver en unidad de salida» elige cuál se ve, y la
-    # otra va al tooltip. Texto hecho en Python y no en el navegador: la
-    # cuenta tiene prueba (`texto_unidad_salida`), y la columna sigue
-    # ordenando por el número.
-    _f = p["factor"] if "factor" in p else pd.Series(np.nan, index=p.index)
-    _us = p["usal"] if "usal" in p else pd.Series("", index=p.index)
-    p["cant_salida"] = [texto_unidad_salida(q, f, u, s) for q, f, u, s
-                        in zip(p["cantidad"], _f, p["unidad"], _us)]
-    p["cant_kardex"] = [texto_unidad_salida(q, 1, u, u) for q, u
-                        in zip(p["cantidad"], p["unidad"])]
     p["__tipo"] = "p"
     p["__id"] = p["codigo"]
     p["__padre"] = ""
@@ -330,23 +412,34 @@ def filas_grilla(listado):
         "codigo": "", "familia": "", "subfamilia": "",
         "nombre": a["area"], "unidad": "", "precio": np.nan,
         "cantidad": a["cantidad"], "valorizado": a["valorizado"],
+        "cant_hoy": a["cant_hoy"] if "cant_hoy" in a else 0.0,
+        "val_hoy": a["val_hoy"] if "val_hoy" in a else 0.0,
         "__tipo": "a", "__id": a["codigo"] + "|" + a["area"],
         "__padre": a["codigo"], "__n": 0,
         "__o": a["codigo"].map(dict(zip(p["codigo"], p["__o"]))),
     })
     a = a[a["__o"].notna()]
-    # Las áreas se parten con el factor y las unidades de SU producto.
+
+    # La cantidad ya ESCRITA en unidad de salida y en la del kardex (regla
+    # #598): el interruptor «Ver en unidad de salida» elige cuál se ve, y la
+    # otra va al tooltip. Texto hecho en Python y no en el navegador: la
+    # cuenta tiene prueba (`texto_unidad_salida`), y la columna sigue
+    # ordenando por el número. Cada área se parte con el factor y las
+    # unidades de SU producto.
     _por = p.set_index("codigo")
-    _pad = a["__padre"]
-    a["cant_salida"] = [
-        texto_unidad_salida(q, _por.at[c, "factor"] if "factor" in _por else
-                            np.nan, _por.at[c, "unidad"],
-                            _por.at[c, "usal"] if "usal" in _por else "")
-        for q, c in zip(a["cantidad"], _pad)]
-    a["cant_kardex"] = [texto_unidad_salida(q, 1, _por.at[c, "unidad"],
-                                            _por.at[c, "unidad"])
-                        for q, c in zip(a["cantidad"], _pad)]
+    _cod = list(p["codigo"]) + list(a["__padre"])
     filas = pd.concat([p, a], ignore_index=True)
+    _f = [_por.at[c, "factor"] if "factor" in _por else np.nan for c in _cod]
+    _ue = [_por.at[c, "unidad"] for c in _cod]
+    _us = [_por.at[c, "usal"] if "usal" in _por else "" for c in _cod]
+    for cant, sal, kar in (("cantidad", "cant_salida", "cant_kardex"),
+                           ("cant_hoy", "cant_salida_hoy", "cant_kardex_hoy")):
+        q = filas[cant] if cant in filas else pd.Series(0.0, index=filas.index)
+        filas[sal] = [texto_unidad_salida(v, f, u, s2)
+                      for v, f, u, s2 in zip(q, _f, _ue, _us)]
+        filas[kar] = [texto_unidad_salida(v, 1, u, u) for v, u in zip(q, _ue)]
+    filas["dif"] = (pd.to_numeric(filas.get("val_hoy", 0.0), errors="coerce")
+                    .fillna(0) - filas["valorizado"])
     # Producto antes que sus áreas; las áreas conservan su orden (valorizado
     # descendente) porque el sort es estable.
     filas["__t"] = (filas["__tipo"] == "a").astype(int)
@@ -459,10 +552,19 @@ _JS_CANTIDAD = (
     " return (v < 0 ? '−' : '') + Math.abs(v).toLocaleString("
     "'es-PE', {maximumFractionDigits: 2}); }")
 # En unidad de salida (regla #598): el texto lo arma Python
-# (`texto_unidad_salida`), acá sólo se elige. La fila TOTAL, vacía igual.
-_JS_CANTIDAD_SALIDA = (
-    "function(p){ if (p.node && p.node.rowPinned) return '';"
-    " return (p.data && p.data.cant_salida) || ''; }")
+# (`texto_unidad_salida`), acá sólo se elige —`cant_salida` o, comparando
+# con hoy, `cant_salida_hoy`—. La fila TOTAL, vacía igual.
+def _js_texto(campo):
+    return ("function(p){ if (p.node && p.node.rowPinned) return '';"
+            f" return (p.data && p.data.{campo}) || ''; }}")
+
+
+# La diferencia contra hoy (regla #601), con su signo escrito: «+S/ 584.00».
+_JS_SOLES_SIGNO = (
+    "function(p){ if (p.value == null || isNaN(p.value)) return '';"
+    " var v = Number(p.value); if (Math.abs(v) < 0.005) return 'S/ 0.00';"
+    " return (v < 0 ? '−' : '+') + 'S/ ' + Math.abs(v).toLocaleString("
+    "'es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }")
 # Negativo en rojo, como en el resto del dashboard (regla #80). Inline, así
 # que le gana al violeta de `.ag-cell` de `CSS_RANKING_GRID` sin
 # `!important`.
@@ -519,7 +621,26 @@ def _col(campo, titulo, **kw):
     return {"field": campo, "headerName": titulo, **kw}
 
 
-def renderizar_listado(filas, total, key, movil=False, unidad_salida=False):
+def _col_cantidad(campo, titulo, unidad_salida, sufijo="", ayuda=""):
+    """La columna de una cantidad: el número, o el texto en unidad de salida
+    con el número del kardex en el tooltip (regla #598)."""
+    from st_aggrid import JsCode
+    if unidad_salida:
+        return _col(campo, titulo, type=["numericColumn"], width=120,
+                    minWidth=120, suppressSizeToFit=True,
+                    valueFormatter=JsCode(_js_texto("cant_salida" + sufijo)),
+                    cellStyle=JsCode(_JS_SIGNO),
+                    tooltipField="cant_kardex" + sufijo,
+                    headerTooltip=ayuda + " Lo entero en la unidad del kardex "
+                                          "y el resto en la de salida, como el "
+                                          "reporte por área del POS.")
+    return _col(campo, titulo, type=["numericColumn"], width=86, minWidth=86,
+                suppressSizeToFit=True, valueFormatter=JsCode(_JS_CANTIDAD),
+                cellStyle=JsCode(_JS_SIGNO), headerTooltip=ayuda)
+
+
+def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
+                       al=None, comparar=False, total_hoy=None):
     """La grilla. `filas` sale de `filas_grilla`; `total` es el valorizado
     de la fila TOTAL.
 
@@ -527,7 +648,13 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False):
     área del POS —«2 Lt 26.0 oz»— y la columna «Unidad kardex» se esconde,
     porque las unidades ya van en la celda; sus 100px pagan los 34 que la
     Cantidad necesita de más. El número en la unidad del kardex queda en el
-    tooltip, y la columna sigue ordenando por él."""
+    tooltip, y la columna sigue ordenando por él.
+
+    `al` (regla #601): el rótulo de la fecha del stock («Al 30 sep 2026 ·
+    23:59») si no es el de hoy; agrupa encima Cantidad y Valorizado. Y
+    `comparar` suma el grupo «Hoy» y la Diferencia (hoy − la fecha, en
+    soles); para que entre en una laptop, ahí no van «Unidad kardex» ni
+    «Precio unitario», que son de un momento y no de los dos."""
     from st_aggrid import AgGrid, JsCode
 
     js = JsCode
@@ -587,30 +714,52 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False):
              valueFormatter=js(_JS_SOLES),
              headerTooltip="Precio promedio del kardex. Es el mismo en "
                            "todas las áreas del producto."),
-        (_col("cantidad", "Cantidad", type=num, width=120, minWidth=120,
-              suppressSizeToFit=True,
-              valueFormatter=js(_JS_CANTIDAD_SALIDA), cellStyle=js(_JS_SIGNO),
-              tooltipField="cant_kardex",
-              headerTooltip="Stock al día, sumado entre las áreas elegidas: "
-                            "lo entero en la unidad del kardex y el resto en "
-                            "la de salida, como el reporte por área del POS.")
-         if unidad_salida else
-         _col("cantidad", "Cantidad", type=num, width=86, minWidth=86,
-              suppressSizeToFit=True,
-              valueFormatter=js(_JS_CANTIDAD), cellStyle=js(_JS_SIGNO),
-              headerTooltip="Stock al día, sumado entre las áreas "
-                            "elegidas.")),
+        _col_cantidad("cantidad", "Cantidad", unidad_salida,
+                      ayuda=("Stock a esa fecha" if al else "Stock al día")
+                      + ", sumado entre las áreas elegidas."),
         _col("valorizado", "Valorizado total", type=num, width=124,
              minWidth=124, suppressSizeToFit=True, valueFormatter=js(_JS_SOLES),
              cellStyle=js(_JS_SIGNO),
              headerTooltip="Cantidad × precio unitario, sumado entre las "
-                           "áreas elegidas."),
+                           "áreas elegidas."
+                           + (" Al precio promedio de esa fecha." if al else "")),
     ]
+    if al:
+        # Las dos últimas, agrupadas bajo la fecha: se lee «de cuándo» es el
+        # número sin buscarlo en el título.
+        cant, val = columnas[-2], columnas[-1]
+        if comparar:
+            columnas = [c for c in columnas[:-2]
+                        if c.get("field") not in ("unidad", "precio")]
+            val = {**val, "headerName": "Valorizado"}
+            columnas += [
+                {"headerName": al, "children": [cant, val]},
+                {"headerName": "Hoy", "children": [
+                    _col_cantidad("cant_hoy", "Cantidad", unidad_salida,
+                                  sufijo="_hoy", ayuda="Stock de hoy."),
+                    _col("val_hoy", "Valorizado", type=num, width=124,
+                         minWidth=124, suppressSizeToFit=True,
+                         valueFormatter=js(_JS_SOLES),
+                         cellStyle=js(_JS_SIGNO),
+                         headerTooltip="Al precio promedio de hoy de cada "
+                                       "área, el del kardex: puede diferir "
+                                       "unos soles de la tabla sin fecha, que "
+                                       "usa el del maestro.")]},
+                _col("dif", "Diferencia", type=num, width=116, minWidth=116,
+                     suppressSizeToFit=True, valueFormatter=js(_JS_SOLES_SIGNO),
+                     cellStyle=js(_JS_SIGNO),
+                     headerTooltip="Valorizado de hoy menos el de esa fecha: "
+                                   "cuánto cambió el stock desde entonces."),
+            ]
+        else:
+            columnas = columnas[:-2] + [
+                {"headerName": al, "children": [cant, val]}]
     # Las ocultas: sin columna no llegan al JS en todas las versiones del
     # componente, y el despliegue entero cuelga de ellas.
     columnas += [{"field": c, "hide": True}
                  for c in ("__tipo", "__id", "__padre", "__n",
-                           "cant_salida", "cant_kardex")]
+                           "cant_salida", "cant_kardex", "cant_salida_hoy",
+                           "cant_kardex_hoy")]
 
     grid_options = {
         "columnDefs": columnas,
@@ -632,7 +781,11 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False):
         "rowClassRules": {k: js(v) for k, v in _REGLAS_FILA.items()},
         "getRowStyle": js(_JS_ESTILO_FILA),
         "pinnedBottomRowData": [{"nombre": "TOTAL",
-                                 "valorizado": round(float(total), 2)}],
+                                 "valorizado": round(float(total), 2),
+                                 **({"val_hoy": round(float(total_hoy), 2),
+                                     "dif": round(float(total_hoy)
+                                                  - float(total), 2)}
+                                    if total_hoy is not None else {})}],
     }
 
     alto = alturas.por_filas(FILAS_LISTADO, px_fila=ALTO_FILA_RANK,
@@ -738,8 +891,8 @@ def _filtro(col, nombre, etiqueta, dibujar):
 
 def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
                       col_area, col_unidad, col_punit, col_cant, col_val,
-                      col_factor=None, col_usal=None):
-    """La tarjeta entera: título y filtros en una fila, la tabla debajo.
+                      col_factor=None, col_usal=None, col_cod_area=None):
+    """La tarjeta entera: filtros en una fila, título y tabla debajo.
 
     Área, Familia y Subfamilia son de selección MÚLTIPLE (2026-09-18, a
     pedido: «un usuario puede querer filtrar alimentos y vinos a la vez»), y
@@ -750,7 +903,12 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
 
     «Ver en unidad de salida» (regla #598) sale sólo si el parquet trae el
     factor y la unidad de salida: sin ellos no hay con qué partir la
-    cantidad, y un interruptor que no hace nada se lee como un bug."""
+    cantidad, y un interruptor que no hace nada se lee como un bug.
+
+    «Ver a una fecha» (regla #601), en el renglón del título: la tabla pasa
+    al stock y al precio de ese momento —la foto del kardex, como el
+    «Inventario Histórico Valorizado» del POS— con los mismos filtros, y
+    «Comparar con hoy» suma lo de hoy y la diferencia."""
     if not (col_prod and col_val):
         st.info("Faltan las columnas de producto o de valorizado para este "
                 "listado.")
@@ -855,19 +1013,74 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         with c_us:
             en_salida = st.toggle("Ver en unidad de salida", key=_K_SALIDA)
 
+    # ── «Ver a una fecha» (regla #601), a la derecha del título ──────────
+    # columnas-internas: el título y los controles de la fecha, en el
+    # renglón de abajo de los filtros.
+    c_tt, c_af, c_fe, c_ho, c_cmp = c_tit.columns(
+        [2.4, 1.65, 1.3, 1.25, 1.65], vertical_alignment="center")
+    hay_fecha = bool(col_cod and col_cod_area)
+    al, comparar, d_vista, momento_al = None, False, d, None
+    if hay_fecha:
+        with c_af:
+            a_fecha = st.toggle("Ver a una fecha", key=_K_A_FECHA)
+        if a_fecha:
+            _rango = data.rango_fechas(kardex.ARCHIVO, kardex.COL_FECHA)
+            _tope = _rango[1] if _rango else dt.date.today()
+            _desde = _rango[0] if _rango else kardex.INICIO
+            if _K_FECHA not in st.session_state:
+                # Abre en el cierre del mes pasado: es la pregunta de siempre
+                # («¿con cuánto cerramos septiembre?»), y el último día con
+                # movimientos sería la tabla de hoy otra vez.
+                st.session_state[_K_FECHA] = (_tope.replace(day=1)
+                                              - dt.timedelta(days=1))
+            st.session_state[_K_FECHA] = min(max(st.session_state[_K_FECHA],
+                                                 _desde), _tope)
+            with c_fe:
+                fecha = st.date_input("Fecha", key=_K_FECHA, min_value=_desde,
+                                      max_value=_tope, format="DD/MM/YYYY",
+                                      label_visibility="collapsed")
+            with c_ho:
+                hora = st.selectbox(
+                    "Hora", list(range(24)), index=23, key=_K_HORA,
+                    format_func=lambda h: f"hasta las {h:02d}:59",
+                    label_visibility="collapsed")
+            with c_cmp:
+                comparar = st.toggle("Comparar con hoy", key=_K_COMPARAR)
+            momento_al = kardex.momento(fecha, hora)
+            foto = data.stock_al(momento_al)
+            # «Hoy» es la foto del último momento del kardex, no la tabla sin
+            # fecha: misma regla de precio que la fecha (ver
+            # `stock_a_la_fecha`).
+            foto_hoy = (data.stock_al(kardex.momento(_tope, 23))
+                        if comparar else None)
+            if foto is None:
+                with c_tt:
+                    st.caption("Falta el kardex: la consulta «kardex» del "
+                               "Sheet todavía no llegó a la app.")
+                comparar = False
+            else:
+                al = (f"Al {fecha.day} {MESES_ABR_ES[fecha.month - 1]} "
+                      f"{fecha.year} · {hora:02d}:59")
+                d_vista = stock_a_la_fecha(
+                    d, foto, col_area=col_cod_area, col_cod=col_cod,
+                    col_cant=col_cant, col_val=col_val, col_punit=col_punit,
+                    foto_hoy=foto_hoy)
+
     areas = st.session_state.get(_K_AREAS) or []
     familias = st.session_state.get(_K_FAMILIAS) or []
     subfamilias = st.session_state.get(_K_SUBFAMILIAS) or []
     listado = armar_listado(
-        d, col_cod=col_cod, col_prod=col_prod, col_fam=col_fam,
+        d_vista, col_cod=col_cod, col_prod=col_prod, col_fam=col_fam,
         col_subfam=col_subfam, col_area=col_area, col_unidad=col_unidad,
         col_punit=col_punit, col_cant=col_cant, col_val=col_val,
         areas=areas, familias=familias, subfamilias=subfamilias,
         texto=texto, incluir_sin_stock=incluir,
-        col_factor=col_factor, col_usal=col_usal)
+        col_factor=col_factor, col_usal=col_usal,
+        col_cant_hoy=COL_CANT_HOY if (al and comparar) else None,
+        col_val_hoy=COL_VAL_HOY if (al and comparar) else None)
     n = len(listado.productos)
 
-    with c_tit:
+    with c_tt:
         # El número va en el título (regla #403): en una tabla que scrollea,
         # sin él no se ve si son 12 productos o 800. Con los productos en
         # cero afuera dice «867 de 3,874», para que el recorte no pase por
@@ -879,7 +1092,8 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
                  "los muestra." if _ocultos else "")
         st.markdown(
             f'<div class="inv-rank-tit" style="margin:0" title="{_nota}">'
-            f'Productos <span class="inv-rank-tit-n">{_cuenta}</span></div>',
+            f'Productos <span class="inv-rank-tit-n">{_cuenta}'
+            + (f" · {al.lower()}" if al else "") + '</span></div>',
             unsafe_allow_html=True)
 
     if not n:
@@ -895,8 +1109,12 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
     # tiene que poder escribir igual que Streamlit.
     recorte = "|".join([",".join(sorted(areas)), ",".join(sorted(familias)),
                         ",".join(sorted(subfamilias)), texto.strip(),
-                        str(incluir), str(len(d)), str(en_salida)])
+                        str(incluir), str(len(d)), str(en_salida),
+                        str(momento_al if al else ""), str(comparar)])
     key = f"inv_prod_grid_{zlib.crc32(recorte.encode('utf-8')):08x}"
     renderizar_listado(filas_grilla(listado),
                        float(listado.productos["valorizado"].sum()),
-                       key, movil=_es_movil(), unidad_salida=en_salida)
+                       key, movil=_es_movil(), unidad_salida=en_salida,
+                       al=al, comparar=bool(al and comparar),
+                       total_hoy=(float(listado.productos["val_hoy"].sum())
+                                  if (al and comparar) else None))

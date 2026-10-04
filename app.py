@@ -103,6 +103,16 @@ def _vigilar_refresco(archivo, clave_estado, mostrar_aviso=True):
         st.rerun(scope="app")
         return
 
+    # Un pedido que no llega NUNCA —el servidor caído, o un parquet que el
+    # Sheet todavía no tiene, como el kardex el día que nació (regla #601)—
+    # no puede quedarse tictaqueando toda la sesión: cada tic vence la caché
+    # de mensajes del navegador (regla #474). A los 10 minutos se da por
+    # perdido, y un rerun completo desmonta al vigilante.
+    if transcurrido > 600:
+        st.session_state.pop(clave_estado, None)
+        st.rerun(scope="app")
+        return
+
     if transcurrido > 120:
         if not mostrar_aviso:
             return
