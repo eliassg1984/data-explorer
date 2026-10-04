@@ -195,6 +195,22 @@ f_pc = rp[(rp["cod_x"] == "PC") & (rp["cod_e"] == "PE")].iloc[0]
 ok(f_pc["fuente"] == "ventana" and int(f_pc["n_porc"]) == 2,
    "el rendimiento del corte es de la ventana, con 2 porcionamientos", f"{dict(f_pc)}")
 
+print("\n── los porcionamientos de cada rendimiento (regla #609) ──")
+# Una venta no dice de qué porcionamiento salió su corte: la página lista
+# todos los que dan el rendimiento, con su número del Almacén.
+PCS = r["porcs"]
+pc_pe = PCS[(PCS["cod_x"] == "PC") & (PCS["cod_e"] == "PE")]
+ok(list(pc_pe["porc"]) == ["P2", "P1"],
+   "el corte de pulpo lista P2 y P1, el más nuevo primero (P4 no pesa)", f"{list(pc_pe['porc'])}")
+_p1 = pc_pe.set_index("porc")
+igual(_p1.loc["P1", "entra"], 2.4, "a los cortes de P1 les tocaron 2,4 kg de los 3 porcionados")
+igual(_p1.loc["P1", "porcionado"], 3.0, "y lleva lo porcionado entero, como en el Almacén")
+igual(_p1.loc["P2", "sale"], 10.0, "P2 sacó 10 cortes")
+ok(bool(_p1["ventana"].all()), "los dos son de la ventana de 90 días")
+ok(not (PCS["cod_x"] == "PR").any(),
+   "el porcionamiento viejo de un producto con receta no se lista: el árbol no baja por él")
+ok(list(PCS.loc[PCS["cod_x"] == "PQ", "ventana"]) == [False], "el del respaldo dice que no es de la ventana")
+
 print("\n── sin porcionamientos en 90 días: los más cercanos ──")
 igual(total("PE", padre="PQ"), 1 * (1.0 / 5.0), "Fideua: 1 corte × 1 kg / 5 cortes")
 f_pq = rp[(rp["cod_x"] == "PQ")].iloc[0]
@@ -312,6 +328,15 @@ ok(plato["Lomo a la pimienta"][3] == "2026-09-02" and plato["Ensalada"][3] == ""
 sin = mc.datos_de_la_vista(r, ())
 ok(sin["compras"] == {} and sin["compras_familias"] == [],
    "sin compras leídas, la página no promete la pestaña", f"{sin['compras_familias']!r}")
+z = d["porcs"].get("PE", {}).get("PC")
+ok(z is not None and z[:5] == [2, 2, "2026-09-10", "2026-09-20", False]
+   and [x[0] for x in z[5]] == ["P2", "P1"] and z[5][1] == ["P1", "2026-09-10", 3.0, 2.4, 8.0],
+   "la página recibe los porcionamientos del corte: cuántos, desde, hasta y cada N° con su fecha",
+   f"{z!r}")
+ok(d["porcs"]["PE"].get("PQ", [None] * 5)[4] is True, "el del respaldo viaja marcado")
+ok("RET" not in d["porcs"]["PE"], "un corte que ninguna venta usó no viaja (los retazos de P1)")
+viejo = mc.datos_de_la_vista({k: v for k, v in r.items() if k != "porcs"}, ())
+ok(viejo["porcs"] == {}, "con una caché anterior a la VERSION 3 la página no los lista, y no se cae")
 
 print("\n── la venta interna, por la fecha en que se PRODUJO (regla #605) ──")
 # La charcutería de Mayta: la MASA se hace con una orden de producción el

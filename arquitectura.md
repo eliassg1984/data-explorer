@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-608 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+609 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (199)
 
@@ -840,7 +840,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#604** — «Documentos SUNAT» cruza también las notas de crédito del Almacén, y empareja nota contra…
 - **#606** — En el cruce de «Documentos SUNAT», un candidato ÚNICO con OTRO RUC sólo se empareja si los…
 
-**Fechas, rangos y cortes** (12)
+**Fechas, rangos y cortes** (13)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -854,6 +854,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#427** — Un control que vive en la fila del título de lo que él mismo elige es un huevo y gallina: se…
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 - **#531** — «Por hora» tiene su propia fecha: el rango se parte por la granularidad. Y en Ventas…
+- **#609** — Consumo según recetas: un corte porcionado no sale de UN porcionamiento, sale de todos los de…
 
 **Asistente IA** (2)
 
@@ -47938,6 +47939,58 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+609. **Consumo según recetas: un corte porcionado no sale de UN
+     porcionamiento, sale de todos los de la ventana — y la tabla dinámica
+     los lista con su N° del Almacén.** 2026-10-04, a pedido: «al desplegar
+     un insumo, la receta se identifica por su nombre; el porcionamiento
+     quisiera verlo por su número o fecha». La premisa no se cumple, y eso
+     es lo primero que la página tiene que decir: una venta no registra de
+     qué porcionamiento salió su corte, así que el árbol (#558) baja con el
+     RENDIMIENTO de todos los del corte en los 90 días que cierran el mes.
+     La «(P) Entraña 300gr» vendida el 1 de octubre de 2026 baja a entraña
+     entera con 22 porcionamientos, del 15 de agosto al 30 de septiembre;
+     con un rango de 12 meses, 119. Mostrar «el» número sería inventarlo.
+
+     - **El cálculo devuelve `porcs`**: una fila por porcionamiento que el
+       árbol usó —de qué insumo a qué corte, `COD PORC`, fecha, lo
+       porcionado, lo que le tocó al corte (`entra`) y los cortes que
+       salieron (`sale`)—, en TODOS los meses del rango, no sólo el último
+       como la ficha. Un corte que cae en la ventana de dos meses cuenta
+       una vez (`rid`, la fila de `cortes`). El respaldo entra sólo si el
+       árbol bajó por él (el corte no tiene receta), con `ventana` falso.
+       `consumo_recetas.VERSION` sube a 3; una caché anterior no trae
+       `porcs` y la página simplemente no los lista.
+     - **En la tabla**: la fila de la preparación porcionada dice «22
+       porcionamientos, 15 ago – 30 sep» (con uno solo, su N°), y al
+       desplegarla, antes de los platos, una fila con cada N° y su fecha,
+       los más nuevos primero, y en el tooltip lo porcionado y lo que le
+       tocó al corte. Hasta `PORCS_MAX` (60) por par: en 90 días el corte que
+       más tiene ronda los 50; con un año, el zumo de limón pasa de 250 y
+       la fila dejaría de leerse.
+     - **Un corte que sale de varios insumos lo dice**: los retazos bajan a
+       la entraña por 21 porcionamientos, pero otros 29 los hicieron desde
+       el bife ancho y el vacío, y ésos también reparten el rendimiento
+       (#558: el corte pesa lo que aportó cada insumo).
+
+     **La fila de los N° mide lo VISIBLE de la tabla, y eso destapó que la
+     página no tenía ancho.** La fila va a todo lo ancho (`colspan`) con un
+     `div` pegajoso de `width: var(--td-vis)`, el `clientWidth` de
+     `.td-wrap` que escribe un `ResizeObserver`. Pero `.app` era una grilla
+     con su columna implícita `auto`, que crece con lo que tenga adentro:
+     la tabla, que es `width: max-content`, se estiraba hasta poner los 22
+     N° en un renglón, la página entera pasaba a medir 3.668 px y el
+     `ResizeObserver` medía ese ancho como «lo visible». Va
+     `grid-template-columns: minmax(0, 1fr)`, y con eso la tabla vuelve a
+     deslizarse por dentro. Medido con Playwright a 1323×619 (los 22 N° en
+     tres renglones, las columnas en su sitio) y a 900 con la tabla
+     deslizada (la fila de los N° queda fija a la izquierda).
+
+     Sin renombres de lo que importa `app.py`, pero `consumo_recetas` y
+     `graficos/movimientos_consumo.py` cambian juntos lo que se pasan:
+     «Reboot app» en Cloud (#357).
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47950,7 +48003,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#608**; la próxima toma el número siguiente.
+> última regla es la **#609**; la próxima toma el número siguiente.
 
 >
 

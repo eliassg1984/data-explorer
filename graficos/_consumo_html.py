@@ -82,7 +82,10 @@ body { font-family: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-
 .num { font-variant-numeric: tabular-nums; }
 .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--suave); }
 .sub { color: var(--suave); font-size: 13px; }
-.app { display: grid; gap: 14px; padding: 2px 2px 10px; }
+/* minmax(0, …): una columna `auto` crece con lo que tenga adentro, y la fila
+   de los porcionamientos (que mide lo visible de la tabla) ensanchaba la
+   página entera a 3.668px en vez de deslizarse (regla #609) */
+.app { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 2px 2px 10px; }
 [hidden] { display: none !important; }
 
 /* resumen de arriba */
@@ -172,6 +175,15 @@ table.td { border-collapse: separate; border-spacing: 0; width: max-content; min
 .t-di { background: var(--linea); color: var(--suave); }
 .t-vi { background: var(--adv-fondo); color: var(--adv-texto); }
 .t-ed { background: transparent; border: 1px solid var(--adv-borde); color: var(--adv-texto); padding: 0 6px; }
+/* los porcionamientos de un corte (regla #609): una fila a todo lo ancho,
+   pegada a la izquierda aunque la tabla se deslice */
+.td tr.lvp td { padding: 0; white-space: normal; }
+.td tbody tr.lvp:hover { background: none; }
+.porcs { position: sticky; left: 0; width: var(--td-vis, 100%); display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; padding: 2px 12px 10px 56px; font-size: 12px; color: var(--suave); }
+.porcs-tit { flex: 0 0 100%; }
+.porcs-tit b { color: var(--texto-2); font-weight: 600; }
+.pc { display: inline-flex; align-items: baseline; gap: 5px; height: 22px; padding-inline: 8px; border: 1px solid var(--borde); border-radius: 999px; background: var(--fondo); color: var(--texto-2); font-size: 11.5px; line-height: 20px; cursor: text; }
+.pc small { color: var(--suave); font-size: 11px; }
 
 /* resumen: tabla + ficha */
 .cuerpo { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -270,6 +282,7 @@ details.metodo p { margin: 6px 0 0; max-width: 120ch; }
   .td .c-tot { left: 190px; min-width: 92px; }
   .td .lv1 .fila { padding-left: 12px; }
   .td .lv2 .fila { padding-left: 26px; }
+  .porcs { padding-left: 26px; }
 }
 </style></head>
 <body>
@@ -541,6 +554,12 @@ tabs.addEventListener('click', e => {
 });
 
 // ═══ TABLA DINÁMICA ═══
+// El ancho VISIBLE de la tabla: la fila de los porcionamientos mide eso y
+// queda pegada a la izquierda aunque las columnas se deslicen.
+{
+  const wrap = document.querySelector('.td-wrap');
+  new ResizeObserver(() => { if (wrap.clientWidth) wrap.style.setProperty('--td-vis', wrap.clientWidth + 'px'); }).observe(wrap);
+}
 const COLS = [['total', 'Total'], ['semana', 'Semana']];
 if (P.grano === 'dia') COLS.push(['dia', 'Día']);
 if (NM > 1) COLS.push(['mes', 'Mes']);
@@ -586,6 +605,28 @@ const vendidos = x => !x ? '' : `${x % 1 === 0 ? n0(x) : dec(x, 2)} vendidos`;
 // con la nueva aunque se haya vendido antes (regla #560).
 const marcaEditada = ed => !ed ? '' :
   `<span class="t-ed" title="La receta se editó el ${fCorta(ed)}: lo vendido antes de esa fecha se calcula con la receta de hoy.">receta editada ${fCorta(ed)}</span>`;
+// Los porcionamientos de un corte (regla #609). Una venta no dice de qué
+// porcionamiento salió su corte: lo que baja al insumo es el rendimiento de
+// TODOS los de la ventana, así que se listan todos, con su N° del Almacén.
+// z = [cuántos, cuántos del corte, desde, hasta, sólo respaldo, lista].
+const porcsDe = (cod, prep) => ((D.porcs || {})[cod] || {})[prep];
+const fDia = s => fCorta(s) + (fecha(s).a !== fecha(P.hasta).a ? ' ' + fecha(s).a : '');
+const porcsMeta = z => !z ? '' : (z[0] === 1
+  ? ` · porcionamiento N° ${esc(z[5][0][0])} del ${fDia(z[2])}`
+  : ` · ${n0(z[0])} porcionamientos, ${fDia(z[2])} – ${fDia(z[3])}`);
+function filaPorcs(z, cod, prep, ncol) {
+  const [n, nCorte, desde, , resp, l] = z;
+  const u = esc(corta(D.insumos[cod][1])), uc = esc(corta(D.preps[prep] ? D.preps[prep][2] : ''));
+  const nom = esc(D.insumos[cod][0]);
+  const de = resp ? `no hubo en los 90 días y el corte no tiene receta: ${n === 1 ? 'el más cercano' : 'los más cercanos'}`
+                  : `los de los 90 días que cierran ${NM > 1 ? 'cada' : 'el'} mes`;
+  const otros = nCorte > n
+    ? ` Otros ${n0(nCorte - n)} hicieron este corte desde otros insumos: entran en la cuenta para repartirlo.` : '';
+  const chips = l.map(([po, f, cant, entra, sale]) =>
+    `<span class="pc num" title="N° ${esc(po)} del ${fDia(f)}: se porcionaron ${prom(cant)} ${u} de ${nom}; a este corte le tocaron ${prom(entra)} ${u} por ${sale % 1 === 0 ? n0(sale) : prom(sale)} ${uc}.">${esc(po)}<small>${fDia(f)}</small></span>`).join('');
+  const mas = n > l.length ? `<span>y ${n0(n - l.length)} más, desde el ${fDia(desde)}</span>` : '';
+  return `<tr class="lvp"><td colspan="${ncol}"><div class="porcs"><span class="porcs-tit">El rendimiento sale de <b>${n0(n)} porcionamiento${n === 1 ? '' : 's'}</b> (${de}).${otros} N° del Almacén y fecha:</span>${chips}${mas}</div></td></tr>`;
+}
 function pintarDinamica(foco) {
   tdCabeza();
   let lista = A.lista;
@@ -617,10 +658,12 @@ function pintarDinamica(foco) {
       let forz1 = false;
       if (forzado && !coincide(prepNombre(b.prep))) { platos = platos.filter(c => coincide(PLATOS[c.pid][0])); forz1 = true; }
       const ab1 = forz1 || tdAbiertos.has(k1);
+      const z = porcsDe(a.cod, b.prep);
       filasH.push(`<tr class="lv1${ab1 ? ' abierto' : ''}" data-k="${esc(k1)}" tabindex="0" aria-expanded="${ab1}">
-        <td class="c-nom"><div class="fila"><span class="flecha">${CHEV}</span><span class="txt"><span class="nm">${prepEtiqueta(b.prep)}</span><span class="meta">${b.platos.size} plato${b.platos.size === 1 ? '' : 's'}</span></span></div></td>
+        <td class="c-nom"><div class="fila"><span class="flecha">${CHEV}</span><span class="txt"><span class="nm">${prepEtiqueta(b.prep)}</span><span class="meta num">${b.platos.size} plato${b.platos.size === 1 ? '' : 's'}${porcsMeta(z)}</span></span></div></td>
         <td class="c-tot num">${totTD(b, f, u)}</td>${celdasTD(b, f)}</tr>`);
       if (!ab1) continue;
+      if (z) filasH.push(filaPorcs(z, a.cod, b.prep, 2 + cubetas(b).length));
       for (const c of platos) {
         const [pn, vi, vend, ed] = PLATOS[c.pid];
         const enReceta = c.n1.size ? `<span class="meta">en la receta: ${esc([...c.n1].map(prepNombre).join(' · '))}</span>` : '';

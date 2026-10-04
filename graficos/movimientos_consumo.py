@@ -67,6 +67,11 @@ nace escondido, son los de las inyecciones) cuelga de esta key."""
 _ULTIMA = {"directo": 0, "receta base": 1, "porcionamiento": 2}
 _PESO = ("KILOS", "LITROS")
 
+PORCS_MAX = 60
+"""Cuántos porcionamientos de un mismo par insumo › corte viajan con la
+página, los más nuevos (regla #609). En 90 días el corte con más tiene 50; con
+un rango de un año pasarían de 200, y la fila que los lista no se leería."""
+
 ARCHIVO_COMPRAS = "compras.parquet"
 ARCHIVO_RECETAS = "recetaventa.parquet"
 
@@ -215,12 +220,12 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
         mapa_ins.setdefault(cod, [[], []])[k].append([int(dsem), j, _q(q)])
 
     # ── los rendimientos del ÚLTIMO mes del rango, los que el árbol usa
+    usados = {(c, p) for c, p, u in zip(col["cod"], col["padre"], col["ultima"])
+              if u == "porcionamiento"}
     rd = r["rend"]
     rend, revisar = {}, []
     if not rd.empty:
         rd = rd[(rd["mes"] == rd["mes"].max()) & rd["usado"]]
-        usados = {(c, p) for c, p, u in zip(col["cod"], col["padre"], col["ultima"])
-                  if u == "porcionamiento"}
         suma, misma = {}, {}
         for x in rd.to_dict("records"):
             cx, ce = x["cod_x"], x["cod_e"]
@@ -237,6 +242,28 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
 
     po = r["porcionado"]
     porcionado = {c: _q(q) for c, q in zip(po["cod"], po["cant"]) if c in insumos}
+
+    # ── los porcionamientos de cada rendimiento, en TODO el rango (regla
+    # #609): {insumo: {corte: [cuántos, cuántos del corte desde cualquier
+    # insumo, desde, hasta, sólo del respaldo, [[N°, fecha, porcionado, le
+    # tocó al corte, cortes], …]]}}, los más nuevos primero. Una venta no dice
+    # de qué porcionamiento salió su corte: el rendimiento es de todos. Sin
+    # `porcs` (una caché anterior a la VERSION 3), la página no los lista.
+    porcs = {}
+    pc = r.get("porcs")
+    if pc is not None and not pc.empty:
+        por_par, del_corte = {}, {}
+        for x in pc.to_dict("records"):
+            del_corte.setdefault(x["cod_x"], set()).add(x["porc"])
+            if (x["cod_e"], x["cod_x"]) in usados:
+                por_par.setdefault((x["cod_e"], x["cod_x"]), []).append(x)
+        for (ce, cx), xs in por_par.items():
+            fechas = [str(pd.Timestamp(x["fecha"]).date()) for x in xs]
+            porcs.setdefault(ce, {})[cx] = [
+                len(xs), len(del_corte[cx]), min(fechas), max(fechas),
+                not any(bool(x["ventana"]) for x in xs),
+                [[_texto(x["porc"]), f, _q(x["porcionado"]), _q(x["entra"]), _q(x["sale"])]
+                 for x, f in zip(xs[:PORCS_MAX], fechas)]]
 
     # ── lo comprado: el de los insumos de la página, y aparte (con su nombre)
     # lo que ninguna venta del rango usó
@@ -257,7 +284,7 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
                      n_dia=res["n_dia"], n_dias=(res["fin"] - res["ini"]).days + 1),
         horas=[int(h) for h in horas], caminos=caminos, platos=lista_platos,
         insumos=insumos, preps=preps, filas=salida, horas_ins=horas_ins, mapa_ins=mapa_ins,
-        rend=rend, revisar=revisar, porcionado=porcionado,
+        rend=rend, revisar=revisar, porcionado=porcionado, porcs=porcs,
         compras=compras_d, comprados=comprados,
         compras_familias=fams_compras if compras is not None else [],
         venta_interna=dict(

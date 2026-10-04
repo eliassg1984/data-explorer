@@ -68,10 +68,11 @@ import datetime as dt
 
 import duckdb
 
-VERSION = 2
+VERSION = 3
 """Va en la clave de la caché de disco (que no caduca): subirla cuando cambie
 QUÉ se calcula, no cómo se ve. La 2: la venta interna de lo que se produce
-en casa, por la fecha en que se produjo (regla #605)."""
+en casa, por la fecha en que se produjo (regla #605). La 3: devuelve además
+`porcs`, los porcionamientos de cada rendimiento (regla #609)."""
 
 ARCHIVOS = {
     "paloteo": "paloteoinsumosnivel1.parquet",
@@ -264,6 +265,11 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
                 cena), en unidad de ENTRADA del insumo.
       horas     por (insumo, venta interna, día de la semana, hora).
       rend      los rendimientos de los meses del rango.
+      porcs     los porcionamientos que el árbol usó, uno por fila: de qué
+                insumo a qué corte, su número (`COD PORC`), su fecha, lo
+                porcionado, lo que le tocó al corte (`entra`, en unidad del
+                insumo) y cuántos cortes salieron (`sale`); `ventana` si fue
+                de los 90 días y no del respaldo. Es el detalle de `rend`.
       porcionado  lo porcionado de verdad en el rango, por insumo de origen.
       maestro   nombre, unidad, factor, precio y familia de los códigos usados.
       platos    las unidades vendidas y si es venta interna.
@@ -419,9 +425,10 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
         -- LOS PORCIONAMIENTOS: una fila por corte; lo que entró del insumo de
         -- origen se reparte entre los cortes por su PESO. Fuera los que no
         -- pesan (11 de 12.331): no se pueden repartir.
+        -- `rid`: cada fila de corte una vez, aunque la usen varios meses.
         CREATE TABLE cortes AS
-        SELECT porc, CAST(fecha AS DATE) fecha, cod_e, cod_x, cant_x sale_x,
-               cant_porc * peso / cant_tot entra_e
+        SELECT row_number() OVER () rid, porc, CAST(fecha AS DATE) fecha, cod_e, cod_x,
+               cant_x sale_x, cant_porc * peso / cant_tot entra_e, cant_porc porcionado
         FROM porc_in
         WHERE cant_x > 0 AND cant_tot > 0 AND peso > 0 AND cod_e IS NOT NULL AND cod_x IS NOT NULL;
 
@@ -431,13 +438,13 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
         SELECT x.cod_x, m.mes, m.fin FROM (SELECT DISTINCT cod_x FROM cortes) x CROSS JOIN meses m;
 
         CREATE TABLE ventana AS
-        SELECT g.cod_x, g.mes, c.cod_e, c.entra_e, c.sale_x, c.fecha
+        SELECT g.cod_x, g.mes, c.cod_e, c.entra_e, c.sale_x, c.fecha, c.rid, c.porc, c.porcionado
         FROM grilla g JOIN cortes c
           ON c.cod_x = g.cod_x AND c.fecha > g.fin - {VENTANA_DIAS} AND c.fecha <= g.fin;
 
         CREATE TABLE respaldo AS
         SELECT * EXCLUDE (rn) FROM (
-          SELECT g.cod_x, g.mes, c.cod_e, c.entra_e, c.sale_x, c.fecha,
+          SELECT g.cod_x, g.mes, c.cod_e, c.entra_e, c.sale_x, c.fecha, c.rid, c.porc, c.porcionado,
                  ROW_NUMBER() OVER (PARTITION BY g.cod_x, g.mes
                                     ORDER BY abs(date_diff('day', c.fecha, g.fin)), c.fecha DESC, c.porc) rn
           FROM grilla g JOIN cortes c ON c.cod_x = g.cod_x
@@ -581,6 +588,25 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
         rend = con.execute("""
             SELECT r.*, (r.fuente = 'ventana' OR r.cod_x NOT IN (SELECT prod FROM rb_aristas)) usado
             FROM rend r ORDER BY cod_x, mes, cod_e""").df()
+        # Los porcionamientos de cada rendimiento que el árbol usó, en todos
+        # los meses del rango: una venta no dice de qué porcionamiento salió
+        # su corte, así que la página los muestra TODOS (regla #609). Un corte
+        # que entra en la ventana de dos meses cuenta una vez (`rid`).
+        porcs = con.execute("""
+            WITH b AS (
+              SELECT *, true ventana FROM ventana
+              UNION ALL
+              SELECT *, false FROM respaldo WHERE cod_x NOT IN (SELECT prod FROM rb_aristas)
+            ), u AS (
+              SELECT rid, ANY_VALUE(cod_x) cod_x, ANY_VALUE(cod_e) cod_e, ANY_VALUE(porc) porc,
+                     ANY_VALUE(fecha) fecha, ANY_VALUE(porcionado) porcionado,
+                     ANY_VALUE(entra_e) entra, ANY_VALUE(sale_x) sale, bool_or(ventana) ventana
+              FROM b GROUP BY rid
+            )
+            SELECT cod_x, cod_e, porc, ANY_VALUE(fecha) fecha, ANY_VALUE(porcionado) porcionado,
+                   SUM(entra) entra, SUM(sale) sale, bool_or(ventana) ventana
+            FROM u GROUP BY cod_x, cod_e, porc
+            ORDER BY cod_x, cod_e, fecha DESC, porc DESC""").df()
         porcionado = con.execute(f"""
             SELECT cod_e cod, SUM(cant_porc) cant
             FROM (SELECT DISTINCT porc, cod_e, cant_porc FROM porc_in
@@ -648,7 +674,7 @@ def calcular(nivel1, recetas, porcionamientos, maestro, ini, fin, anual=None,
             sin_maestro=int(sin[0]), sin_factor=int(sin[1]), costo_sin_convertir=float(sin[2]),
             por_produccion=por_produccion, masas=masas,
         )
-        return dict(filas=filas, horas=horas, rend=rend, porcionado=porcionado,
+        return dict(filas=filas, horas=horas, rend=rend, porcs=porcs, porcionado=porcionado,
                     maestro=mae, platos=platos, cuadre=cuadre, resumen=resumen)
     finally:
         con.close()
