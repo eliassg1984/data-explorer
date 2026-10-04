@@ -1637,6 +1637,82 @@ def _pruebas_puras():
           .loc[lambda x: x["estado"] != "Solo sistema", "estado"].tolist(),
           ["Coincide", "Coincide", "Solo SUNAT"])
 
+    # UN SOLO CANDIDATO CON OTRO RUC (regla #606). `E001-1067` lo usan
+    # decenas de emisores: el único candidato del sistema con un RUC
+    # distinto —los dos presentes— es otro proveedor, y antes salía una
+    # «Diferencia» falsa (33 en 12 meses). Se acepta sólo si los montos
+    # calzan: es el mismo documento cargado con otro proveedor. Y si a un
+    # lado le falta el RUC, se acepta como siempre.
+    def _sire_uno(ruc, base=500.0, igv=90.0, total=590.0, doc="E001-1067"):
+        return pd.DataFrame({
+            "documento": [doc], "proveedor": ["EMISOR DEL SIRE SAC"],
+            "ruc_proveedor": [ruc],
+            "fecha_emision": pd.to_datetime(["2026-09-10"]),
+            "base_imponible": [base], "no_gravado": [0.0], "igv": [igv],
+            "total": [total], "situacion": ["Registrado"]})
+
+    def _g_uno(ruc, base=200.0, igv=36.0, total=236.0):
+        return pd.DataFrame({
+            "documento": ["E001-1067"], "ruc_pq": [ruc],
+            "proveedor_pq": ["OTRA CARNICERIA EIRL"],
+            "base_pq": [base], "igv_pq": [igv], "total_pq": [total],
+            "fecha_pq": pd.to_datetime(["2024-03-02"])})
+
+    def _estados(cr):
+        return sorted(cr["estado"])
+
+    check("cruce: único candidato con OTRO RUC y otro monto -> sin par "
+          "(«Solo SUNAT» + «Solo sistema»), no una «Diferencia» falsa",
+          _estados(_ds.cruzar_con_parquet(_sire_uno("20100000001"),
+                                          _g_uno("20200000002"))),
+          ["Solo SUNAT", "Solo sistema"])
+    _cr_sin_ruc = _ds.cruzar_con_parquet(_sire_uno(""), _g_uno("20200000002"))
+    check("cruce: único candidato y el SIRE sin RUC -> se empareja",
+          _estados(_cr_sin_ruc), ["Diferencia"])
+    check("cruce: ... y la fila trae los montos del sistema",
+          (_cr_sin_ruc.loc[0, "base_sistema"], _cr_sin_ruc.loc[0, "dif_total"]),
+          (200.0, 354.0))
+    check("cruce: único candidato y el sistema sin RUC -> se empareja",
+          _estados(_ds.cruzar_con_parquet(_sire_uno("20100000001"),
+                                          _g_uno(""))), ["Diferencia"])
+    # Y el «sin RUC» del sistema tiene que llegar VACÍO: con `astype(str)`
+    # solo, un nulo salía «nan» — un RUC distinto para la regla de arriba.
+    _g_nulo = _ds._parquet_agrupado_por_documento(
+        _pq.assign(**{"INDICADOR TRIBUTARIO": [None, None, float("nan"),
+                                                float("nan")]}),
+        "FECHA_EMISION_DOC", pd.Timestamp("2026-07-01"),
+        pd.Timestamp("2026-07-31"))
+    check("_parquet_agrupado: un RUC nulo queda vacío, no «nan» ni «None»",
+          sorted(_g_nulo["ruc_pq"]), ["", ""])
+    _cr_mismo = _ds.cruzar_con_parquet(
+        _sire_uno("20300000003"), _g_uno("20300000103", 500.0, 90.0, 590.0))
+    check("cruce: otro RUC pero los tres montos calzan -> el mismo documento "
+          "cargado con otro proveedor, «Coincide»",
+          (_estados(_cr_mismo), _cr_mismo.loc[0, "ruc_sistema"]),
+          (["Coincide"], "20300000103"))
+    check("cruce: otro RUC, base y total calzan pero el IGV no -> sin par",
+          _estados(_ds.cruzar_con_parquet(
+              _sire_uno("20300000003"),
+              _g_uno("20300000103", 500.0, 50.0, 590.0))),
+          ["Solo SUNAT", "Solo sistema"])
+    check("cruce: otro RUC y siete céntimos de diferencia -> sin par (la "
+          "tolerancia es la del veredicto)",
+          _estados(_ds.cruzar_con_parquet(
+              _sire_uno("20400000004", 107.71, 19.39, 127.10),
+              _g_uno("20500000005", 107.77, 19.40, 127.17))),
+          ["Solo SUNAT", "Solo sistema"])
+    # Lo que más pasaba en los datos (31 de 34): el documento del sistema
+    # ya era el par EXACTO de otra fila del SIRE —el emisor de verdad— y la
+    # factura ajena se le colgaba también. Un documento del sistema
+    # emparejado dos veces.
+    _sire_dos = pd.concat([_sire_uno("20200000002", 200.0, 36.0, 236.0),
+                           _sire_uno("20100000001")], ignore_index=True)
+    _cr_dos = _ds.cruzar_con_parquet(_sire_dos, _g_uno("20200000002"))
+    check("cruce: el dueño del RUC se queda con su documento y el otro "
+          "emisor queda «Solo SUNAT» — el del sistema no se usa dos veces",
+          sorted(zip(_cr_dos["ruc_proveedor"], _cr_dos["estado"])),
+          [("20100000001", "Solo SUNAT"), ("20200000002", "Coincide")])
+
     # Las notas del Almacén entran al lado sistema (regla #604): una fila por
     # nota PROCESADA del rango, en negativo y con la llave de las facturas.
     _d_nc = pd.DataFrame({

@@ -293,7 +293,10 @@ def _parquet_agrupado_por_documento(d, col_fecha, fecha_ini, fecha_fin,
         return notas_rango
 
     dd["documento"] = _llave_documento_parquet(dd["NUM_DOCUMENTO"])
-    dd["ruc_pq"] = (dd[COL_RUC_PARQUET].astype(str).str.strip()
+    # `fillna("")` antes del `astype(str)`: un RUC nulo saldría «nan», y
+    # el cruce lo tomaría por el RUC de OTRO proveedor en vez de por uno
+    # que falta (regla #606).
+    dd["ruc_pq"] = (dd[COL_RUC_PARQUET].fillna("").astype(str).str.strip()
                      if COL_RUC_PARQUET in dd.columns else "")
     dd["_fecha"] = fechas.loc[dd.index]
     # A SOLES, que es la moneda del cruce. Las tres columnas de CABECERA
@@ -394,20 +397,58 @@ def _es_nota_sire(r):
     return base < 0
 
 
+def _comparar_montos(base_sunat, igv_sunat, total_sunat, cand):
+    """Las tres cifras de una fila del SIRE contra un candidato del sistema:
+    los montos del sistema, las diferencias y el `estado` («Coincide» o
+    «Diferencia»). Una sola cuenta para dos usos: el veredicto de la fila
+    y, antes, decidir si un candidato de OTRO RUC es el mismo documento
+    (regla #606)."""
+    base_sist, total_sist = float(cand["base_pq"]), float(cand["total_pq"])
+    dif_base = round(base_sunat - base_sist, 2)
+    dif_total = round(total_sunat - total_sist, 2)
+    # `.get()` y no `[...]`: hay llamadores (los tests) que arman
+    # `g_parquet` a mano sin esta columna — mismo criterio que
+    # `num_doc_pq`. Y `pd.isna` cubre los dos casos de ausencia:
+    # la columna que no vino y el parquet viejo sin `TOTAL IGV`.
+    _igv_crudo = cand.get("igv_pq")
+    _hay_igv = _igv_crudo is not None and not pd.isna(_igv_crudo)
+    igv_sist = float(_igv_crudo) if _hay_igv else None
+    dif_igv = round(igv_sunat - igv_sist, 2) if _hay_igv else None
+    estado = ("Coincide"
+              if abs(dif_base) <= _TOLERANCIA_CENTAVOS
+              and abs(dif_total) <= _TOLERANCIA_CENTAVOS
+              and (dif_igv is None
+                   or abs(dif_igv) <= _TOLERANCIA_CENTAVOS)
+              else "Diferencia")
+    return {"base": base_sist, "igv": igv_sist, "total": total_sist,
+            "dif_base": dif_base, "dif_igv": dif_igv, "dif_total": dif_total,
+            "estado": estado}
+
+
 def cruzar_con_parquet(df_sire, g_parquet):
     """Compara cada comprobante del SIRE contra su equivalente en el
     parquet de Compras (`g_parquet` — ver `_parquet_agrupado_por_documento`,
     YA acotado al mismo rango).
 
-    Empareja por `documento` y, entre los candidatos que compartan esa
-    clave, prioriza el que tenga el MISMO RUC (limpio con `.strip()` de
-    ambos lados — ver `COL_RUC_PARQUET`). Solo si ningún candidato calza
-    por RUC cae a desambiguar por NOMBRE (normalizado con `utils._norm`,
-    acepta que uno contenga al otro) como red de seguridad — para cuando
-    el RUC del parquet venga vacío o con un formato raro en esa fila
-    puntual. Si ningún candidato es plausible por ninguna de las dos vías,
-    NO fuerza el emparejamiento: mejor un documento "Solo SUNAT" de más
-    que cruzarlo contra la factura de otro proveedor.
+    Empareja por `documento`, nota contra nota y factura contra factura
+    (`_es_nota_sire`, regla #604), y entre los candidatos que compartan esa
+    clave prioriza el que tenga el MISMO RUC (limpio con `.strip()` de
+    ambos lados — ver `COL_RUC_PARQUET`). Si no hay uno con el RUC exacto:
+
+      · UN SOLO candidato: se acepta si a uno de los dos lados le falta el
+        RUC (no hay con qué desmentirlo). Si los dos lo traen y son
+        DISTINTOS, se acepta sólo si los montos calzan («Coincide»): es el
+        mismo documento cargado en el Almacén con otro proveedor. Con montos
+        distintos es otro emisor que reusa el serie-número — `E001-1067` lo
+        tienen decenas — y queda sin par: «Solo SUNAT» de un lado, «Solo
+        sistema» del otro, en vez de una «Diferencia» falsa (regla #606).
+      · VARIOS: desambigua por NOMBRE (normalizado con `utils._norm`, acepta
+        que uno contenga al otro) como red de seguridad — para cuando el
+        RUC del parquet venga vacío o con un formato raro en esa fila.
+
+    Si ningún candidato es plausible, NO fuerza el emparejamiento: mejor un
+    documento "Solo SUNAT" de más que cruzarlo contra la factura de otro
+    proveedor.
 
     Devuelve una fila por documento (unión SIRE ∪ parquet dentro del
     rango) con `estado` en uno de:
@@ -450,6 +491,18 @@ def cruzar_con_parquet(df_sire, g_parquet):
         doc = str(r.get("documento", ""))
         ruc_sire = str(r.get("ruc_proveedor") or "").strip()
         prov_sire = str(r.get("proveedor", ""))
+        # base_imponible (gravado) + no_gravado, no solo base_imponible:
+        # TOTAL NETO del parquet es el neto del documento completo, sin
+        # distinguir si está afecto a IGV o no -- SUNAT sí lo separa en
+        # dos campos. Sin sumar no_gravado, una compra exonerada (ej.
+        # alimentos sin procesar) mostraba base_imponible=0 contra un
+        # TOTAL NETO real, como "Diferencia" pese a no haber ninguna.
+        # Ver `arquitectura.md` regla #143, addendum 4.
+        base_sunat = float(r.get("base_imponible") or 0) + float(r.get("no_gravado") or 0)
+        # `igv` del SIRE ya viene sumado (IGV + IPM, gravado y no gravado)
+        # por `sunat._normalizar_registro`; no hay nada que componer acá.
+        igv_sunat = float(r.get("igv") or 0)
+        total_sunat = float(r.get("total") or 0)
         sub = candidatos.get(doc)
         elegido = None
         if sub is not None and len(sub):
@@ -467,10 +520,24 @@ def cruzar_con_parquet(df_sire, g_parquet):
             if len(por_ruc) == 1:
                 elegido = por_ruc.iloc[0]
             elif len(sub) == 1:
-                # Único candidato para esta clave: el RUC no calzó (o vino
-                # vacío), pero no hay con qué más comparar. Se acepta —
-                # es el mismo criterio de antes de tener columna de RUC.
-                elegido = sub.iloc[0]
+                # Único candidato y el RUC no calzó. Si a uno de los dos
+                # lados le falta, no hay con qué desmentirlo: se acepta,
+                # como antes de tener columna de RUC. Si los DOS lo traen y
+                # son distintos, casi siempre es otro proveedor que usa el
+                # mismo serie-número (`E001-1067` lo tienen decenas): en 12
+                # meses, 33 «Diferencia» falsas contra facturas de otro
+                # emisor y de meses o años antes. Pero no siempre: 9 eran
+                # el MISMO documento —misma fecha, mismo monto al céntimo—
+                # cargado en el Almacén con otro proveedor (un RUC con un
+                # dígito cambiado, una cadena con el RUC de su empresa
+                # hermana). Ésos se aceptan sólo si los montos calzan: sin
+                # par, saldrían «Solo SUNAT» con el botón de importarlos
+                # otra vez a la vista. Regla #606.
+                unico = sub.iloc[0]
+                if (not ruc_sire or not str(unico["ruc_pq"] or "").strip()
+                        or _comparar_montos(base_sunat, igv_sunat, total_sunat,
+                                            unico)["estado"] == "Coincide"):
+                    elegido = unico
             else:
                 # Varios candidatos y ninguno con el RUC exacto: red de
                 # seguridad por nombre, como se hacía antes de tener RUC.
@@ -481,18 +548,6 @@ def cruzar_con_parquet(df_sire, g_parquet):
                         elegido = cand
                         break
 
-        # base_imponible (gravado) + no_gravado, no solo base_imponible:
-        # TOTAL NETO del parquet es el neto del documento completo, sin
-        # distinguir si está afecto a IGV o no -- SUNAT sí lo separa en
-        # dos campos. Sin sumar no_gravado, una compra exonerada (ej.
-        # alimentos sin procesar) mostraba base_imponible=0 contra un
-        # TOTAL NETO real, como "Diferencia" pese a no haber ninguna.
-        # Ver `arquitectura.md` regla #143, addendum 4.
-        base_sunat = float(r.get("base_imponible") or 0) + float(r.get("no_gravado") or 0)
-        # `igv` del SIRE ya viene sumado (IGV + IPM, gravado y no gravado)
-        # por `sunat._normalizar_registro`; no hay nada que componer acá.
-        igv_sunat = float(r.get("igv") or 0)
-        total_sunat = float(r.get("total") or 0)
         if elegido is not None:
             # La tripleta (documento, ruc, proveedor) es la clave REAL de
             # `g_parquet` (la que arma `_parquet_agrupado_por_documento`),
@@ -504,23 +559,10 @@ def cruzar_con_parquet(df_sire, g_parquet):
             # que el segundo se diera por usado sin estarlo, y desaparecía
             # de la vista en vez de aparecer como su propio "Solo sistema".
             vistos_pq.add((doc, elegido["ruc_pq"], elegido["proveedor_pq"]))
-            base_sist, total_sist = float(elegido["base_pq"]), float(elegido["total_pq"])
-            dif_base = round(base_sunat - base_sist, 2)
-            dif_total = round(total_sunat - total_sist, 2)
-            # `.get()` y no `[...]`: hay llamadores (los tests) que arman
-            # `g_parquet` a mano sin esta columna — mismo criterio que
-            # `num_doc_pq`. Y `pd.isna` cubre los dos casos de ausencia:
-            # la columna que no vino y el parquet viejo sin `TOTAL IGV`.
-            _igv_crudo = elegido.get("igv_pq")
-            _hay_igv = _igv_crudo is not None and not pd.isna(_igv_crudo)
-            igv_sist = float(_igv_crudo) if _hay_igv else None
-            dif_igv = round(igv_sunat - igv_sist, 2) if _hay_igv else None
-            estado = ("Coincide"
-                      if abs(dif_base) <= _TOLERANCIA_CENTAVOS
-                      and abs(dif_total) <= _TOLERANCIA_CENTAVOS
-                      and (dif_igv is None
-                           or abs(dif_igv) <= _TOLERANCIA_CENTAVOS)
-                      else "Diferencia")
+            _m = _comparar_montos(base_sunat, igv_sunat, total_sunat, elegido)
+            base_sist, igv_sist, total_sist = _m["base"], _m["igv"], _m["total"]
+            dif_base, dif_igv, dif_total = _m["dif_base"], _m["dif_igv"], _m["dif_total"]
+            estado = _m["estado"]
             prov_sistema, ruc_sistema = elegido["proveedor_pq"], elegido["ruc_pq"]
             # `.get()` y no `[...]`: `cruzar_con_parquet` es publica y se
             # llama con df armados a mano en los tests, sin esta columna.

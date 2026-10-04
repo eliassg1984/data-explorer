@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-605 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+606 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (198)
 
@@ -781,7 +781,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
 - **#605** — «Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en casa el día que se…
 
-**SUNAT y SIRE** (52)
+**SUNAT y SIRE** (53)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -835,6 +835,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#593** — Ventas se fecha por el día del TURNO de caja (default) o por el de EMISIÓN del comprobante, a…
 - **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
 - **#604** — «Documentos SUNAT» cruza también las notas de crédito del Almacén, y empareja nota contra…
+- **#606** — En el cruce de «Documentos SUNAT», un candidato ÚNICO con OTRO RUC sólo se empareja si los…
 
 **Fechas, rangos y cortes** (12)
 
@@ -47714,6 +47715,85 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+606. **En el cruce de «Documentos SUNAT», un candidato ÚNICO con OTRO RUC
+     sólo se empareja si los montos calzan.** 2026-10-04, a pedido: el SIRE
+     traía E001-1067 (S/ 6.130), E001-1684, E001-1472 y F001-3958
+     emparejadas con documentos de OTROS proveedores, de meses o años
+     antes, y la vista las daba por «Diferencia».
+
+     `cruzar_con_parquet` empareja por serie-número y, entre los candidatos,
+     prefiere el del mismo RUC. Pero si quedaba UNO solo, lo aceptaba
+     aunque los dos RUC estuvieran y fueran distintos («no hay con qué más
+     comparar», el criterio de antes de tener columna de RUC). El
+     serie-número no es del proveedor: `E001-1067` lo tienen decenas de
+     emisores, y en un rango de un año caen varios. El código asumía «otro
+     RUC = otro proveedor». **No siempre es así**: medido antes de cambiarlo,
+     de los 43 emparejados con RUC distinto en los 12 meses por defecto, 34
+     eran «Diferencia» (33 contra otro emisor, con una mediana de 75 días
+     entre las fechas) y 9 «Coincide» que SÍ son el mismo documento, con la
+     misma fecha (±5 días) y el mismo monto al céntimo, pero cargado en el
+     Almacén con otro proveedor: dos RUC con un dígito cambiado, compras de
+     una cadena de supermercados cargadas con el RUC de su empresa hermana.
+     Dejarlos sin par los mostraría «Solo SUNAT», que es la fila que ofrece
+     «Importar al Almacén»: una invitación a cargarlos dos veces.
+
+     La regla, con un único candidato y el RUC sin calzar:
+     - A uno de los dos lados le FALTA el RUC → se acepta, como siempre (no
+       hay con qué desmentirlo).
+     - Los dos lo traen y son distintos → se acepta sólo si base, IGV y
+       total calzan con la tolerancia del veredicto (`_TOLERANCIA_CENTAVOS`,
+       la misma cuenta, `_comparar_montos`): sale «Coincide». Si no, queda
+       sin par: «Solo SUNAT» de un lado y «Solo sistema» del otro.
+     - Varios candidatos sin el RUC exacto → el respaldo por nombre de
+       siempre, sin tocar. Medido: después del cambio no queda NINGUNA
+       «Diferencia» con los dos RUC distintos, así que ese respaldo no
+       produce el mismo error en los datos de hoy.
+     - Antes de elegir, nota contra nota y factura contra factura (#604),
+       igual que antes.
+
+     **Lo que más pasaba no era un emparejamiento falso suelto: era un
+     documento del sistema emparejado DOS veces.** De las 34 filas que
+     cambian en 12 meses, 31 colgaban de un documento del sistema que YA
+     era el par exacto (mismo RUC) de otra fila del SIRE, la del emisor de
+     verdad: la factura ajena se le sumaba como segundo par. Documentos del
+     sistema con dos pares: 30 → 0 en 12 meses, 99 → 0 en 2023-2026. Por
+     eso «Solo sistema» casi no sube.
+
+     Medido sobre la misma foto (compras sin restar las notas + las notas
+     del Almacén, como la vista; SIRE del parquet + la cola en vivo):
+
+     | Rango | Coincide | Diferencia | Solo SUNAT | Solo sistema |
+     |---|---|---|---|---|
+     | 12 meses (5 oct 2025 – 4 oct 2026) | 2.674 → 2.674 | 212 → 178 | 1.404 → 1.438 | 329 → 332 |
+     | 1 ene 2023 – 4 oct 2026 | 13.180 → 13.180 | 825 → 686 | 3.088 → 3.227 | 4.283 → 4.309 |
+
+     En los 12 meses por defecto, 33 de las 212 «Diferencia» (16 %) eran
+     contra otro emisor: no era raro. Se mantienen con otro RUC los que
+     coinciden, 9 en 12 meses y
+     18 en 2023-2026. El costo, aceptado: F402-103373 (S/ 127,10 contra
+     127,17, con 3 días de distancia y en la misma cadena con el RUC de la
+     hermana) era el mismo documento y ahora sale sin par. Por siete céntimos
+     no se puede distinguir de otro emisor.
+
+     De paso, **un RUC nulo del sistema tiene que llegar VACÍO**:
+     `_parquet_agrupado_por_documento` armaba `ruc_pq` con `astype(str)`, que
+     en pandas 2.2 (Cloud) escribe «nan» (un RUC «distinto» para esta regla)
+     y en pandas 3 deja el nulo, y el `groupby` TIRA esas filas: el documento
+     desaparecía del cruce. Va `fillna("")` antes. Hoy ninguna de las 52.822
+     filas de compras trae el RUC nulo, pero una fila floja del parquet no
+     puede cambiar de veredicto según la versión de pandas (#481).
+
+     Lo vigila `test_graficos.py` (al lado de los otros casos del cruce):
+     otro RUC con otro monto sin par, sin RUC de cualquiera de los dos lados
+     emparejado, otro RUC con los tres montos iguales «Coincide», otro RUC
+     con el IGV distinto o siete céntimos sin par, el dueño del RUC que se
+     queda con su documento, y el RUC nulo vacío.
+
+     Toca sólo `graficos/`: nada se rompe sin reboot, pero hasta un «Reboot
+     app» en Cloud sigue corriendo la regla vieja (#357).
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47726,7 +47806,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#605**; la próxima toma el número siguiente.
+> última regla es la **#606**; la próxima toma el número siguiente.
 
 >
 
