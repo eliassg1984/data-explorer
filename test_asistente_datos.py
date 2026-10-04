@@ -193,6 +193,18 @@ ok(nota is not None and "LLAVE LOCAL DOCUMENTO ITEM" in nota
    and "LLAVE LOCAL DOCUMENTO CORRELATIVO PAGO" in nota,
    "ventas: la nota de grano nombra las dos llaves")
 ok(nota_de_grano(d) is None, "otro reporte: sin nota de grano")
+dc = pd.DataFrame({
+    "NUM_DOCUMENTO": ["F1", "F1", "F2"],
+    "TOTAL NETO": [150.0, 150.0, 40.0],
+    "VALOR_COMPRA": [100.0, 50.0, 40.0],
+    "VALOR_NC": [0.0, 10.0, 0.0],
+    "NOTA_CREDITO": ["", "N1", ""],
+})
+rc = resumen_para_prompt(dc, "Compras", {})
+ok('Suma de "VALOR_COMPRA": S/ 190.00' in rc,
+   "compras: el resumen suma VALOR_COMPRA, no la cabecera TOTAL NETO")
+ok("NOTAS DE CRÉDITO" in (nota_de_grano(dc) or ""),
+   "compras con notas restadas: la nota lo dice")
 rv = resumen_para_prompt(dv, "Ventas", {})
 ok("VENTA ITEM DDOCUMENTO" in rv and "150.00" in rv and "250.00" not in rv,
    "ventas: el resumen suma la VENTA un ítem una vez (150, no 250)")

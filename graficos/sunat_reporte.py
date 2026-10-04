@@ -36,6 +36,8 @@ import zoneinfo
 import pandas as pd
 import streamlit as st
 
+import data
+import definicion_compra
 from utils import _norm
 from graficos.base import (
     _render_rail, _resolver, pila_sin_tablas, rail_sin_tablas,
@@ -120,7 +122,16 @@ def renderizar_graficos_sunat(df_f, nombre_reporte, df_full=None, tabla_cb=None)
     no puede venir recortado por nada más — en Compras eso eran los chips
     de Familia, y un documento con todas sus líneas en una familia no
     elegida salía «Solo SUNAT» siendo falso (regla #301).
+
+    Y por el mismo motivo, SIN las notas de crédito restadas: `data.cargar`
+    las resta de compras para todos (regla #603), y una factura anulada por
+    una nota desaparece del df — para este cruce saldría «Solo SUNAT» siendo
+    falso. Acá se pide el parquet tal como lo escribió el extractor; si esa
+    lectura falla, se sigue con el que llegó.
     """
+    _crudo = data.cargar(definicion_compra.ARCHIVO, notas_credito=False)
+    if _crudo is not None and not _crudo.empty:
+        df_full = _crudo
     col_fecha = _resolver(df_f, ["Fecha_documento", "Fecha documento",
                                  "Fecha_registro", "Fecha registro", "FECHA"])
     if not col_fecha:

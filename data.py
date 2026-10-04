@@ -14,6 +14,7 @@ import zlib
 from datetime import datetime, timedelta, timezone
 
 import definicion_venta
+import definicion_compra
 import consumo_recetas
 import kardex
 
@@ -1175,11 +1176,47 @@ def _cargar_cacheable(archivo, sello):
     return con.execute(f"SELECT * FROM read_parquet('{url}')").df()
 
 
-def cargar(archivo):
+@st.cache_data(ttl=3600, show_spinner=False)
+def _compras_netas_cacheable(archivo, sello, sello_notas="", version=None):
+    """`compras.parquet` con las notas de crédito de los proveedores restadas
+    de las líneas que corrigen (`definicion_compra.aplicar_notas`, regla
+    #603). Si falla, LANZA: no se cachea.
+
+    `sello_notas` (el de `notascreditocompras.parquet`) y `version` (la de
+    la regla) no se usan en el cuerpo: son la clave, como el sello. Con
+    `sello_notas` vacío —el parquet todavía no existe porque falta la fila
+    del Sheet— devuelve las compras tal cual.
+
+    SÓLO EN MEMORIA, sin `persist`: los dos parquets ya están en el disco
+    (`_cargar_cacheable`), y la cuenta tarda medio segundo. Persistirla
+    sería otra copia de 20 MB por versión que purgar."""
+    compras = _cargar_cacheable(archivo, sello_datos(archivo))
+    if not sello_notas:
+        return compras
+    notas = _cargar_cacheable(definicion_compra.ARCHIVO_NOTAS,
+                              sello_datos(definicion_compra.ARCHIVO_NOTAS))
+    return definicion_compra.aplicar_notas(compras, notas)
+
+
+def _sello_notas_compras():
+    """El sello de `notascreditocompras.parquet`, o `""` si no existe en R2
+    (o no hay secrets): con `""` las compras se sirven sin notas."""
+    if not secrets_disponibles():
+        return ""
+    return sello_datos(definicion_compra.ARCHIVO_NOTAS)
+
+
+def cargar(archivo, notas_credito=True):
     """
     Carga un archivo parquet desde R2.
     Si no hay secrets de R2, devuelve datos demo en su lugar.
     Retorna el DataFrame o None si hay error.
+
+    `compras.parquet` sale con las notas de crédito de los proveedores ya
+    restadas (`definicion_compra`, regla #603), para TODO consumidor.
+    `notas_credito=False` lo da tal como lo escribió el extractor: lo pide
+    «Documentos SUNAT», que cruza documento contra documento y necesita
+    las facturas como se emitieron.
 
     IMPORTANTE — por qué NO está cacheada esta capa (y sí la de adentro):
     @st.cache_data guarda CUALQUIER return, incluido un None. Si esta función
@@ -1191,6 +1228,15 @@ def cargar(archivo):
       - este wrapper (no cacheado) traduce el fallo a None cada rerun,
     un blip afecta solo ese rerun: F5 reintenta.
     """
+    if notas_credito and archivo == definicion_compra.ARCHIVO:
+        try:
+            return _compras_netas_cacheable(
+                archivo, sello_datos(archivo), _sello_notas_compras(),
+                version=definicion_compra.VERSION)
+        except Exception:
+            # Un blip leyendo las NOTAS no deja a Compras sin datos: este
+            # rerun va sin restarlas y el próximo lo reintenta (no se cacheó).
+            pass
     try:
         return _cargar_cacheable(archivo, sello_datos(archivo))
     except Exception as e:
@@ -1234,6 +1280,10 @@ def limpiar_cache(archivo):
     quedaría guardado bajo la clave vieja — para volver a bajarse un minuto
     después, cuando aparezca el sello nuevo. Dos descargas por cada clic."""
     _cargar_cacheable.clear(archivo, _SELLOS.get(archivo, ""))
+    # Las compras con sus notas restadas (regla #603): vive sólo en memoria
+    # y su clave lleva los dos sellos, así que un parquet nuevo ya es otra
+    # entrada; se vacía para no esperar la hora de su `ttl` con dos copias.
+    _compras_netas_cacheable.clear()
     _cargar_rango_cacheable.clear()
     _rango_fechas_cacheable.clear()
     _resumen_kpis_cacheable.clear()
@@ -1247,19 +1297,32 @@ def limpiar_cache(archivo):
 
 
 # ── Qué se le hace a un parquet ENTRE leerlo de R2 y entregarlo ─────────
-# Hoy sólo a ventas: la DEFINICIÓN DE VENTA (regla #524) —qué es venta,
+# A ventas: la DEFINICIÓN DE VENTA (regla #524) —qué es venta,
 # cortesía, anulado y nota de crédito— vive en `definicion_venta.py` y se
 # aplica acá, al cargar, para que TODO consumidor reciba el mismo df: las
 # vistas, los KPIs del rail, el asistente y los tramos que Año Pasado y
 # Mapa por hora cargan aparte. Aplicarla en cada vista era cómo cada una
 # había terminado con su propia versión.
+#
+# A compras, las notas de crédito de los proveedores (regla #603), por el
+# mismo motivo. No va en `_PREPARAR` porque no es una función del parquet
+# solo — necesita OTRO, `notascreditocompras.parquet` —, y Compras no carga
+# por rango: la aplica `cargar()` (`_compras_netas_cacheable`) y, para los
+# KPIs del rail, `_resumen_kpis_cacheable`.
 _PREPARAR = {"ventas.parquet": definicion_venta}
 
 
 def _version_preparar(archivo):
     """La versión de la definición que se le aplica a `archivo`: va en la
     clave de la caché para que un cambio de definición no siga sirviendo
-    el df preparado con la regla vieja (la caché de disco no caduca)."""
+    el df preparado con la regla vieja (la caché de disco no caduca).
+
+    En compras es `(versión, sello de las notas de crédito)`: lo que se le
+    aplica depende también de OTRO parquet (regla #603). `None` si ese
+    parquet todavía no existe — las compras van como vienen."""
+    if archivo == definicion_compra.ARCHIVO:
+        sello_notas = _sello_notas_compras()
+        return (definicion_compra.VERSION, sello_notas) if sello_notas else None
     prep = _PREPARAR.get(archivo)
     return prep.VERSION if prep else None
 
@@ -1478,10 +1541,11 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
     entera — es el caso de los catálogos sin fecha (Recetas,
     Inventario Valorizado).
 
-    `definicion` no se usa en el cuerpo: es la versión de la definición
-    del archivo (`_version_preparar`), en la clave por el mismo motivo que
-    el sello. `turno`: el mes por día del turno de caja, como la vista
-    (regla #593)."""
+    `definicion` es la versión de la definición del archivo
+    (`_version_preparar`), en la clave por el mismo motivo que el sello. En
+    compras es `(versión, sello de las notas de crédito)` y SÍ se usa: dice
+    de qué df salen los KPIs (regla #603). `turno`: el mes por día del
+    turno de caja, como la vista (regla #593)."""
     if not secrets_disponibles():
         return {}
     con = get_conn()
@@ -1519,10 +1583,24 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
         ini = hoy.replace(day=1)
         where = f"WHERE {_expr_fecha_kpi(col_fecha)} BETWEEN '{ini}' AND '{hoy}'"
 
+    origen = f"read_parquet('{url}')"
+    if archivo == definicion_compra.ARCHIVO and definicion:
+        # CON NOTAS DE CRÉDITO (compras, regla #603): el rail suma lo mismo
+        # que las vistas, así que lee el df con las notas ya restadas y no el
+        # parquet — reescribir la resta en SQL sería una segunda copia de la
+        # regla. `definicion` es (versión, sello de las notas). Conexión
+        # PROPIA: `register` es de la conexión, y la de `get_conn()` es la de
+        # este hilo para todo lo demás (regla #599).
+        con = duckdb.connect()
+        con.register("compras_netas", _compras_netas_cacheable(
+            archivo, sello_datos(archivo), definicion[1],
+            version=definicion[0]))
+        origen = "compras_netas"
+
     # Un ítem una vez (regla #517): la fuente pasa a ser el parquet con UNA
     # fila por `col_item`. Las filas sin llave se quedan todas, igual que en
     # `graficos/ventas.py::unico_por_item`.
-    fuente = f"read_parquet('{url}') {where}"
+    fuente = f"{origen} {where}"
     if col_item:
         fuente = (f'(SELECT * FROM {fuente} QUALIFY "{col_item}" IS NULL '
                   f'OR ROW_NUMBER() OVER (PARTITION BY "{col_item}") = 1)')
@@ -1569,7 +1647,7 @@ def _resumen_kpis_cacheable(archivo, sello, kpis, col_fecha, col_dedup,
             if len(pares) > 1 or (pares and not isinstance(filtro[0], str)):
                 if nombres is None:
                     nombres = {r[0] for r in con.execute(
-                        f"DESCRIBE SELECT * FROM read_parquet('{url}')"
+                        f"DESCRIBE SELECT * FROM {origen}"
                     ).fetchall()}
                 pares = tuple(p for p in pares if p[0] in nombres)
             condiciones = " AND ".join(

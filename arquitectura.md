@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-602 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+603 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (198)
 
@@ -689,7 +689,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 
-**Datos, R2 y DuckDB** (87)
+**Datos, R2 y DuckDB** (88)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -778,8 +778,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#598** — «Stock e Inventario» cuenta sólo lo ACTIVO: área activa, producto activo, habilitado en el…
 - **#599** — Una conexión de DuckDB por HILO, no por proceso: compartida entre sesiones, una consulta se…
 - **#601** — El stock a una fecha sale del kardex por hora, con la regla del Histórico del POS: el último…
+- **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
 
-**SUNAT y SIRE** (50)
+**SUNAT y SIRE** (51)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -831,6 +832,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
 - **#589** — Un elemento que aparece en una corrida y no en la anterior re-monta TODO lo que se dibuja…
 - **#593** — Ventas se fecha por el día del TURNO de caja (default) o por el de EMISIÓN del comprobante, a…
+- **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
 
 **Fechas, rangos y cortes** (12)
 
@@ -47508,6 +47510,100 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-03.)
 
+603. **Las notas de crédito de los proveedores se RESTAN de la compra que
+     corrigen, en la fecha de su factura — y «Documentos SUNAT» lee las
+     compras sin restarlas.** 2026-10-04, a pedido («ok traigamos las notas
+     de crédito»), después de cuadrar los seis reportes de compras del
+     Almacén contra la app (septiembre 2026):
+
+     | Reporte del Almacén | De dónde sale | Sep 2026, neto |
+     |---|---|---|
+     | Ingreso de Artículos por Proveedor | Crystal dentro del exe | 156.656,98 |
+     | Proveedores vs Artículo | Crystal dentro del exe | 156.656,98 |
+     | Resumen de Ingresos | SQL literal del exe | 156.656,98 |
+     | Ranking de Compra x Proveedores | `RP_RANKING_COMPRAS_PROVEEDOR` | 144.602,47 |
+     | Ranking de Compra x Artículo | `spRep_RankingComprasA` | 144.602,45 |
+     | Registro de Compras | `RP_REGISTROCOMPRAS` | 148.729,86 |
+
+     Los tres primeros = `compras.parquet` al céntimo: todo lo procesado
+     (facturas, guías SIN canjear, planillas de movilidad), ningún tipo de
+     ingreso excluido, sin notas. Los Rankings cuentan sólo Mercadería, por
+     fecha de INGRESO (lo que su formulario llama «Registro») y restan las
+     notas; el Registro deja fuera guías y planillas
+     (`vTipoDocumento.lRegistroCompras = 0`) y resta todas las notas. Las
+     notas no están en `MDOCUMENTO`: viven en `MNOTACREDITO` +
+     `DNOTACREDITO`, y la app no las veía. La de septiembre anulaba una
+     factura de Magret de pato por «error de tipeo», re-emitida: la app
+     contaba las dos (109,66 kg donde se compraron 69,68).
+
+     - **La regla vive en `definicion_compra.py`** y la aplica
+       `data.cargar("compras.parquet")` (`_compras_netas_cacheable`, en
+       memoria: los dos parquets ya están en disco y la cuenta tarda medio
+       segundo), así que la reciben TODOS: las vistas, el asistente,
+       «Consumo según recetas» y «Revisar recetas». Los KPIs del rail
+       también (`_resumen_kpis_cacheable` corre su SQL sobre el df neto,
+       registrado en una conexión propia).
+     - **Procesadas** (02 y 03), como los Rankings. Una nota por PRODUCTO
+       (tipo P) resta de la línea de ese producto en su factura la cantidad
+       devuelta y los montos en la proporción del neto devuelto; una por
+       MONTO (tipo D, sin líneas) se reparte sobre toda la factura en
+       proporción al valor, cantidad incluida — leída como descuento, una
+       nota del 96 % dejaba el kilo al 4 % de lo pagado. Así ninguna mueve
+       el precio unitario. La línea devuelta entera desaparece; las demás
+       llevan `NOTA_CREDITO` y `VALOR_NC`. Una nota en dólares va a soles
+       con el cambio de SU factura.
+     - **En la fecha de la FACTURA, no en la de la nota** — al revés que en
+       ventas (#524), a propósito: Compras mide precios y cantidades por
+       compra, y una nota como fila negativa sería una compra de cantidad
+       negativa a un precio — una vela más en Volatilidad, un precio
+       «final» que no se pagó. El costo: el mes en que nota y factura caen
+       en meses distintos no cuadra con el Ranking ni con el Registro, que
+       la restan en su fecha. Medido: 1 de 9 notas en 2026 (factura de
+       diciembre 2025, nota de enero, «factura mal emitida»), 2 de 9 en
+       2025, 5 de 19 en 2024, 10 de 35 en 2023.
+     - **Las columnas de CABECERA no se tocan** (`TOTAL NETO`, `TOTAL IGV`,
+       `TOTAL DOCUMENTO`): la factura tal como se emitió. Y por eso
+       «Documentos SUNAT» pide `data.cargar(..., notas_credito=False)`: cruza
+       documento contra documento, y una factura anulada que desaparece
+       saldría «Solo SUNAT» siendo falso — la #301 otra vez.
+     - **El grano de la consulta**: una fila por línea DEVUELTA
+       (`DNOTACREDITO.nCantidad > 0`: el Almacén guarda TODAS las líneas de
+       la factura en la nota; una de 8 unidades trae 73) con la cabecera de
+       la nota repetida — sumar `NETO NC` por fila cuenta la nota tantas
+       veces como líneas (la trampa de la #510). La nota por monto sale en
+       una fila con el producto vacío.
+     - **Cobertura**: desde 2023 cada nota procesada encuentra su factura
+       en el parquet (una sola no: de 2023, sobre una factura de 2022) y
+       cada línea devuelta, su producto. Resta S/ 33.947 en 2023, 30.265 en
+       2024, 10.617 en 2025 y 5.075 en 2026; 155 líneas desaparecen.
+     - **El asistente** recibe una nota de grano de compras
+       (`asistente_datos._nota_compras`): ya vienen restadas, `VALOR_NC` no
+       se suma, la cabecera tampoco. Y de paso se arregló que su resumen de
+       arranque sumaba `TOTAL NETO` —la cabecera repetida en cada línea:
+       500 líneas daban S/ 267 mil—: `_col_valor` prefiere `VALOR_COMPRA`,
+       la misma trampa que la #517 en ventas.
+     - **El cuadre**: `herramientas/cuadrar_compras.py`, proveedor por
+       proveedor contra `MDOCUMENTO` − `MNOTACREDITO`. 2023 a 2026 cuadran
+       con céntimos de redondeo línea/cabecera (hasta S/ 0,30 en un año) y
+       una boleta de S/ 20 de 2023 que está en el Almacén sin líneas y no
+       llega al parquet. `test_definicion_compra.py` tiene cada caso.
+
+     Lo que NO se resolvió y la distancia que queda al Ranking del POS: el
+     TIPO DE INGRESO. El parquet no lo trae, y la app recorta por Familia,
+     no por Mercadería — con criterios distintos (el carbón y la leña son
+     Mercadería en el POS y «Costos Producción» en el maestro; desde agosto
+     2026 se cargan facturas de mercadería con tipo «X», que el Ranking del
+     POS pierde: 30 en septiembre, S/ 6.764). Y el SIRE tiene 61 notas de
+     crédito en 2026 contra 11 del Almacén: sin verificar si las que faltan
+     son de facturas que nunca se cargaron.
+
+     Hasta que exista la fila `notascreditocompras` del Sheet,
+     `notascreditocompras.parquet` no está en R2 y `cargar` sirve las
+     compras como antes. Cambia `data.py` y suma un módulo: «Reboot app»
+     en Cloud (#357).
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47520,7 +47616,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#602**; la próxima toma el número siguiente.
+> última regla es la **#603**; la próxima toma el número siguiente.
 
 >
 

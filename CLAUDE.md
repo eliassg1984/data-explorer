@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -115,6 +115,14 @@ receta, el porcionamiento al revés, la venta interna, los turnos—, y que por
 las recetas base el costo de las hojas sea el del primer nivel. La cifra
 sobre R2 la da `herramientas/verificar_consumo.py`. Ver `arquitectura.md`
 regla #558.
+
+`test_definicion_compra.py` vigila las NOTAS DE CRÉDITO de compras
+(`definicion_compra.py`): un parquet de mentira con la factura anulada y
+re-emitida, la devolución parcial, la nota por monto, la nota en dólares,
+la generada que no cuenta, y con `ast` que `data.cargar` las reste para
+todos y que «Documentos SUNAT» las pida sin restar. La cifra contra el
+Almacén la da `herramientas/cuadrar_compras.py`. Ver `arquitectura.md`
+regla #603.
 
 ## El asistente IA no adivina: consulta
 
@@ -933,6 +941,36 @@ sumaba POR UNIDAD (FoodCost 24 % donde era 29 %).
   la misma carga que usa la app.
 
 Detalle en `arquitectura.md` reglas #524, #525 y #542.
+
+## La compra resta las notas de crédito: `definicion_compra.py`
+
+Desde el 2026-10-04. Las notas de crédito de los proveedores NO están en
+`compras.parquet` ni en `MDOCUMENTO`: viven en `MNOTACREDITO` +
+`DNOTACREDITO` y llegan en `notascreditocompras.parquet` (la fila
+`notascreditocompras` del Sheet, `definicion_compra.consulta_sheet()`).
+`data.cargar("compras.parquet")` las resta para TODO consumidor —vistas,
+KPIs del rail, asistente, Consumo y Revisar recetas—; sin ese parquet,
+sirve las compras como antes.
+
+- **Se restan en la fecha de la FACTURA que corrigen**, al revés que en
+  ventas: Compras mide precios y cantidades por compra, y una nota como
+  fila negativa sería una «compra» de cantidad negativa a un precio. Por
+  producto, de su línea; por monto, repartida sobre la factura con la
+  cantidad incluida: ninguna mueve el precio unitario. La línea devuelta
+  entera desaparece. El costo: si nota y factura caen en meses distintos,
+  ese mes no da lo mismo que el Ranking del POS, que la resta en su fecha.
+- **«Documentos SUNAT» las pide SIN restar**
+  (`data.cargar(..., notas_credito=False)`): cruza documento contra
+  documento, y una factura anulada que desaparece saldría «Solo SUNAT».
+- **La cabecera no se toca** (`TOTAL NETO`, `TOTAL DOCUMENTO`): describe la
+  factura emitida. Lo restado va en `VALOR_NC`, y la nota en `NOTA_CREDITO`.
+- **Tocar la regla es subir `definicion_compra.VERSION`** y correr
+  `python herramientas/cuadrar_compras.py`, que cuadra proveedor por
+  proveedor contra el Almacén.
+
+Los otros reportes de compras del Almacén y qué cuenta cada uno (los tres de
+«Ingresos» = `compras.parquet` al céntimo; los Rankings, sólo Mercadería y
+por fecha de ingreso; el Registro, sin guías ni planillas), en la regla #603.
 
 ## El stock también tiene UNA definición: lo ACTIVO
 

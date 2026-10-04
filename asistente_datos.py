@@ -44,6 +44,7 @@ import re
 
 import pandas as pd
 
+import definicion_compra
 import definicion_venta
 
 # Tope de filas que se le devuelven al modelo por consulta. No es por
@@ -125,9 +126,13 @@ def _col_valor(df: pd.DataFrame) -> str | None:
 
     "venta item" va antes que "total": en Ventas, la primera columna con
     "total" es TOTAL MDOCUMENTO, la cabecera del comprobante repetida en
-    cada ítem — su suma no significa nada (regla #517)."""
-    for kw in ("ajuste valorizado", "valorizado total", "venta item", "importe",
-               "valorizado", "total", "monto", "precio"):
+    cada ítem — su suma no significa nada (regla #517). Y "valor_compra"
+    por lo mismo en Compras: ahí la primera con "total" es TOTAL NETO, la
+    cabecera de la factura, y el resumen sumaba eso (visto el 2026-10-04,
+    regla #603: 500 líneas daban S/ 267 mil)."""
+    for kw in ("ajuste valorizado", "valorizado total", "venta item",
+               "valor_compra", "importe", "valorizado", "total", "monto",
+               "precio"):
         for c in df.columns:
             if kw in str(c).lower() and pd.api.types.is_numeric_dtype(df[c]):
                 return c
@@ -172,8 +177,8 @@ def resumen_para_prompt(df: pd.DataFrame, reporte: str,
     cv = _col_valor(df)
     if cv:
         try:
-            if grano:
-                llave = _columna(df, _LLAVE_ITEM)
+            llave = _columna(df, _LLAVE_ITEM) if grano else None
+            if llave:
                 unicos = df[~(df[llave].duplicated() & df[llave].notna())]
                 partes.append(f"Suma de \"{cv}\" (cada ítem una vez): "
                               f"S/ {unicos[cv].sum():,.2f}")
@@ -209,15 +214,17 @@ def _columna(df: pd.DataFrame, nombre: str) -> str | None:
 def nota_de_grano(df: pd.DataFrame) -> str | None:
     """La nota de GRANO para el prompt, o None si la tabla no la necesita.
 
-    Sale sólo cuando están las dos llaves (ítem y pago): es la forma de
+    Sale cuando están las dos llaves (ítem y pago): es la forma de
     `ventas.parquet`, y ningún otro reporte las tiene. Los nombres van con
     el caso REAL de las columnas, para que el modelo los copie tal cual.
+    Sin ellas, la de compras si trae las notas de crédito restadas
+    (`_nota_compras`, regla #603).
     """
     if df is None or df.empty:
         return None
     item, pago = _columna(df, _LLAVE_ITEM), _columna(df, _LLAVE_PAGO)
     if not (item and pago):
-        return None
+        return _nota_compras(df)
     doc = _columna(df, _LLAVE_DOC) or _LLAVE_DOC
     nota = (
         "GRANO DE `datos` — LEER ANTES DE SUMAR: hay una fila por ÍTEM Y POR "
@@ -248,6 +255,26 @@ def nota_de_grano(df: pd.DataFrame) -> str | None:
             f"\"{definicion_venta.COSTO}\" (PRECIO COSTO es por UNIDAD). "
             "Clientes (pax): un valor por pedido; la nota de crédito lo resta.")
     return nota
+
+
+def _nota_compras(df: pd.DataFrame) -> str | None:
+    """La nota de compras: que `VALOR_COMPRA` ya viene con las notas de
+    crédito de los proveedores restadas (regla #603). Sale sólo si está la
+    columna de lo restado, que pone `definicion_compra.aplicar_notas`."""
+    nc = _columna(df, definicion_compra.COL_VALOR_NC)
+    if not nc:
+        return None
+    nota = _columna(df, definicion_compra.COL_NOTA) or definicion_compra.COL_NOTA
+    return (
+        "NOTAS DE CRÉDITO — LEER ANTES DE SUMAR: valor, cantidad e IGV de "
+        "cada línea ya vienen con las notas de crédito de los proveedores "
+        "RESTADAS, en la fecha de la factura que corrigen; una línea devuelta "
+        "entera no está. Se suman tal cual. "
+        f"\"{nc}\" es lo que la nota le restó a esa línea (soles, positivo) y "
+        f"\"{nota}\" su número: no los sumes a la compra; úsalos si preguntan "
+        "por devoluciones o notas de crédito. TOTAL NETO / TOTAL IGV / TOTAL "
+        "DOCUMENTO son la CABECERA de la factura tal como se emitió, repetida "
+        "en cada línea: no los sumes.")
 
 
 # ─── Ejecución de SQL ──────────────────────────────────────────────────────
