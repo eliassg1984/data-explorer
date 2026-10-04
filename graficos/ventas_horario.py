@@ -309,9 +309,14 @@ _PX_COL_NUMERO = 20
 _PX_TOT_DIA = 30
 _PX_ROTULO_DIA = 22
 _PX_TITULO_TOT = 14
-_PX_TOT_HORA = 150
+_PX_TOT_HORA = 170
 _DOM_TOT_HORA = 0.2
 _DOM_MAPA_MAX = 0.78
+# La tablita de los totales por hora: el rótulo de cada columna y dónde
+# termina cada una de las de texto en el eje `x2` (la barra ocupa de 0 a 1).
+_ROT_TOT = {"venta": "Venta", "pax": "Pax", "cant": "Unid.",
+            "desc": "Dscto.", "ticket": "Ticket"}
+_X_TOT_COLS = (1.68, 2.36)
 
 # EL CLIC SUELTO LO TRAE ESTE PUENTE (regla #536). Con `dragmode="select"`
 # Streamlit fuerza `clickmode="event"` y descarta el clic —también en la
@@ -1386,11 +1391,12 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
             if dif and paneles[0] is not None and not paneles[0].empty else {})
     xs, ys, cd, dtxt, rtxt, raras = [], [], [], [], [], []
     _et_base = _etiqueta_clave(claves[0], grano) if claves else ""
-    # Los totales al margen (regla #610), por hora y por columna. El ticket
-    # es un cociente: se suman sus dos lados y se divide al final.
+    # Los totales al margen (regla #610), por hora y por columna: lo que
+    # mide el mapa, los clientes y la venta que entra en el ticket. El
+    # ticket es un cociente: se suman sus dos lados y se divide al final.
     tot = bool(totales) and not dif
-    tot_hn, tot_hd = np.zeros(n_horas), np.zeros(n_horas)
-    tot_cn, tot_cd = np.zeros(total), np.zeros(total)
+    tot_h = np.zeros((3, n_horas))
+    tot_c = np.zeros((3, total))
     for s, celdas in enumerate(paneles):
         if celdas is None or celdas.empty:
             celdas = pd.DataFrame(columns=["col", "hora"])
@@ -1422,15 +1428,11 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
             else:
                 z[h_idx[fila.hora], x] = valor
                 dtxt.append("")
-                if medida == "ticket":
-                    _nu = _num(getattr(fila, "venta_cli", fila.venta))
-                    _de = _num(fila.pax)
-                else:
-                    _nu, _de = _num(valor), 0.0
-                tot_hn[h_idx[fila.hora]] += _nu
-                tot_hd[h_idx[fila.hora]] += _de
-                tot_cn[x] += _nu
-                tot_cd[x] += _de
+                _suma = (_num(valor), _num(fila.pax),
+                         _num(getattr(fila, "venta_cli", fila.venta)))
+                for _k, _v in enumerate(_suma):
+                    tot_h[_k, h_idx[fila.hora]] += _v
+                    tot_c[_k, x] += _v
             xs.append(x)
             ys.append(y_cat[h_idx[fila.hora]])
             cd.append([s, int(fila.col), int(fila.hora),
@@ -1835,30 +1837,70 @@ def _fig_mapa(paneles, claves, grano, medida, marcas, horas, ancla=None,
                          autorange=False, range=[n_horas - 0.5, -0.5])
     if tot:
         _totales_al_margen(fig, medida, y_cat, total, geo, offs,
-                           (tot_hn, tot_hd), (tot_cn, tot_cd), _nombre_celda,
+                           tot_h, tot_c, _nombre_celda,
                            _alto_fig, _t, _b, _dom_mapa, desliza)
     return fig
 
 
 def _totales_al_margen(fig, medida, y_cat, total, geo, offs, por_hora,
                        por_col, nombre_celda, alto, t, b, dom_mapa, desliza):
-    """Los totales al margen del mapa (regla #610): a la derecha, el total
-    de cada hora; debajo, el de cada columna. Van como barras en ejes
-    propios que COMPARTEN el de las horas y el de las columnas con el mapa,
-    así caen fila por fila y columna por columna sin medir nada.
+    """Los totales al margen del mapa (regla #610). A la derecha, una
+    tablita por hora: lo que mide el mapa con su barra, y al lado los
+    clientes y el ticket (2026-10-04, a pedido); en la fila de abajo, el
+    total del período. Debajo del mapa, la barra de cada columna. Van en
+    ejes propios que COMPARTEN el de las horas y el de las columnas con el
+    mapa, así caen fila por fila y columna por columna sin medir nada.
+
+    `por_hora` y `por_col` traen tres sumas por fila: lo que mide el mapa,
+    los clientes y la venta que entra en el ticket (la de los canales que
+    registran clientes, regla #591). El ticket es un cociente: venta entre
+    clientes de la fila o la columna, no la suma de los tickets.
 
     Al final de la figura y por eso después de todo lo de `_fig_mapa`: los
     `update_xaxes`/`update_yaxes` de allá tocan TODOS los ejes que existan,
-    y con éstos ya creados les pondrían categorías y rangos ajenos. El
-    ticket es un cociente: venta entre clientes de la fila o la columna,
-    no la suma de los tickets."""
-    def _valor(num, den):
-        if medida != "ticket":
-            return num
+    y con éstos ya creados les pondrían categorías y rangos ajenos."""
+    def _medidas(m):
+        val, pax, vcli = (np.asarray(x, dtype=float) for x in m)
         with np.errstate(divide="ignore", invalid="ignore"):
-            return np.where(den > 0, num / den, np.nan)
-    v_h = _valor(*por_hora)
-    v_c = _valor(*por_col)
+            tk = np.where(pax > 0, vcli / np.where(pax > 0, pax, 1.0), np.nan)
+        return {"med": tk if medida == "ticket" else val, "pax": pax,
+                "ticket": tk}
+    hor = _medidas(por_hora)
+    col = _medidas(por_col)
+    _sp, _sv = float(np.sum(por_hora[1])), float(np.sum(por_hora[2]))
+    gen = {"pax": _sp, "ticket": _sv / _sp if _sp > 0 else np.nan}
+    gen["med"] = gen["ticket"] if medida == "ticket" else float(
+        np.sum(por_hora[0]))
+    # Las columnas de la tablita: lo que mide el mapa y, si no es eso
+    # mismo, los clientes y el ticket.
+    extra = [m for m in ("pax", "ticket") if m != medida]
+    cols = [("med", medida)] + [(m, m) for m in extra]
+    # Dónde termina cada columna de texto en el eje `x2`: la barra ocupa de
+    # 0 a 1 y su cifra va ENCIMA, a la izquierda (como las barras de datos
+    # de Excel); las otras dos, alineadas a la derecha. Medido al ancho
+    # estimado más angosto (154 px): «S/ 101k», «1,512» y «S/ 116» entran.
+    bordes = [1.0] + list(_X_TOT_COLS[:len(extra)])
+
+    def _corto(v, m):
+        if not np.isfinite(v):
+            return ""
+        if m == "pax":
+            return f"{v:,.0f}"
+        if m == "ticket":
+            return f"S/ {v:,.0f}"
+        return ("S/ " if m in ("venta", "desc") else "") + _fmt_celda(v, m)
+
+    def _largo(v, m):
+        if not np.isfinite(v):
+            return "—"
+        if m == "ticket":
+            return f"S/ {v:,.2f}"
+        return ("S/ " if m in ("venta", "desc") else "") + f"{v:,.0f}"
+
+    def _tooltip(nombre, tabla, i):
+        return f"<b>{nombre}</b><br>" + " · ".join(
+            f"{_ROT_TOT[m]} {_largo(tabla[k][i], m)}" for k, m in cols)
+
     # Las columnas de hueco entre paneles no son columnas: sin barra.
     _es_col = np.zeros(total, dtype=bool)
     _nombres = [""] * total
@@ -1866,35 +1908,39 @@ def _totales_al_margen(fig, medida, y_cat, total, geo, offs, por_hora,
         for c in range(n):
             _es_col[offs[s] + c] = True
             _nombres[offs[s] + c] = nombre_celda(s, c)
-    v_c = np.where(_es_col, v_c, np.nan)
-    _fmt = {"venta": "S/ %{x:,.0f}", "desc": "S/ %{x:,.0f}",
-            "ticket": "S/ %{x:,.2f}"}.get(medida, "%{x:,.0f}")
-    _pre = "S/ " if medida in ("venta", "desc", "ticket") else ""
-    _que = "ticket" if medida == "ticket" else "total"
-    mx_h = float(np.nanmax(np.abs(v_h))) if np.isfinite(v_h).any() else 1.0
-    mx_c = float(np.nanmax(v_c)) if np.isfinite(v_c).any() else 1.0
+    v_c = np.where(_es_col, col["med"], np.nan)
+    mx_h = (float(np.nanmax(np.abs(hor["med"])))
+            if np.isfinite(hor["med"]).any() else 0.0) or 1.0
+    mx_c = (float(np.nanmax(v_c)) if np.isfinite(v_c).any() else 0.0) or 1.0
+
     fig.add_trace(go.Bar(
-        x=v_h, y=y_cat, orientation="h", xaxis="x2", yaxis="y", width=0.55,
+        x=np.nan_to_num(hor["med"]) / mx_h, y=y_cat, orientation="h",
+        xaxis="x2", yaxis="y", width=0.62, base=0,
         marker=dict(color=MAPA_TRAMOS[1], line=dict(width=0)),
-        text=[_pre + _fmt_celda(v, medida) if np.isfinite(v) else ""
-              for v in v_h],
-        textposition="outside", cliponaxis=False,
-        textfont=dict(size=10, color=GRIS_TEXTO), showlegend=False,
-        hovertemplate=f"<b>%{{y}}</b> · {_que}: {_fmt}<extra></extra>"))
+        customdata=[_tooltip(h, hor, i) for i, h in enumerate(y_cat)],
+        hovertemplate="%{customdata}<extra></extra>", showlegend=False))
+    for (k, m), borde in zip(cols, bordes):
+        fig.add_trace(go.Scatter(
+            x=[0.04 if k == "med" else borde] * len(y_cat), y=y_cat,
+            xaxis="x2", yaxis="y", mode="text", hoverinfo="skip",
+            text=[_corto(v, m) for v in hor[k]], showlegend=False,
+            textposition="middle right" if k == "med" else "middle left",
+            textfont=dict(size=10, color=(MAPA_TINTA if k == "med"
+                                          else GRIS_TEXTO))))
     # La cifra de cada columna, sólo si la columna es ancha (pocos días): con
-    # un mes no entra, y queda en el tooltip.
+    # un mes no entra, y queda en el tooltip con los clientes y el ticket.
     _ancho_col = (_PX_CELDA_DESLIZA if desliza
                   else _ANCHO_UTIL * dom_mapa / max(1, total))
-    _txt_c = ([_pre + _fmt_celda(v, medida) if np.isfinite(v) else ""
-               for v in v_c] if _ancho_col >= 44 else None)
+    _txt_c = ([_corto(v, medida) for v in v_c] if _ancho_col >= 44 else None)
     fig.add_trace(go.Bar(
         x=list(range(total)), y=v_c, xaxis="x", yaxis="y3", width=0.6,
         marker=dict(color=MAPA_TRAMOS[1], line=dict(width=0)),
         text=_txt_c, textposition="inside", insidetextanchor="middle",
         textfont=dict(size=10, color=MAPA_TINTA),
-        customdata=_nombres, showlegend=False,
-        hovertemplate=(f"<b>%{{customdata}}</b> · {_que}: "
-                       + _fmt.replace("x:", "y:") + "<extra></extra>")))
+        customdata=[_tooltip(_nombres[i], col, i) if _es_col[i] else ""
+                    for i in range(total)],
+        hovertemplate="%{customdata}<extra></extra>", showlegend=False))
+
     dom_y, tira = _dominio_filas(alto, t, b)
     if desliza:
         _cols_px = total * _PX_CELDA_DESLIZA
@@ -1905,17 +1951,24 @@ def _totales_al_margen(fig, medida, y_cat, total, geo, offs, por_hora,
     fig.update_layout(
         xaxis=dict(domain=[0.0, dom_mapa]),
         yaxis=dict(domain=dom_y),
-        # El rango deja sitio para la cifra al final de la barra.
-        xaxis2=dict(domain=dom_tot, anchor="y", range=[0, mx_h * 1.6],
+        xaxis2=dict(domain=dom_tot, anchor="y", range=[0, bordes[-1] + 0.04],
                     visible=False, fixedrange=True),
         yaxis3=dict(domain=[0.0, tira], anchor="x", range=[0, mx_c * 1.05],
                     visible=False, fixedrange=True),
         bargap=0)
-    fig.add_annotation(
-        xref="x2 domain", x=0, yref="paper", y=1.0, xanchor="left",
-        yanchor="bottom", showarrow=False,
-        text="Ticket por hora" if medida == "ticket" else "Total por hora",
-        font=dict(size=10, color=GRIS_TEXTO))
+    # La cabecera de la tablita, y en la fila de la tira de abajo, el total
+    # del período: la última fila de una tabla dinámica.
+    for (k, m), borde in zip(cols, bordes):
+        _x, _anc = (0.04, "left") if k == "med" else (borde, "right")
+        fig.add_annotation(
+            xref="x2", x=_x, yref="paper", y=1.0, xanchor=_anc,
+            yanchor="bottom", showarrow=False, text=_ROT_TOT[m],
+            font=dict(size=10, color=GRIS_TEXTO))
+        fig.add_annotation(
+            xref="x2", x=_x, yref="y3 domain", y=0.5, xanchor=_anc,
+            yanchor="middle", showarrow=False,
+            text=f"<b>{_corto(gen[k], m)}</b>",
+            font=dict(size=10, color=TEXTO_PRINCIPAL))
     if not desliza:
         fig.add_annotation(
             xref="paper", x=0, yref="y3 domain", y=0.5, xanchor="right",

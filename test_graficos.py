@@ -2187,16 +2187,27 @@ def _pruebas_puras():
     check("horario · el punto más grande es la hora que más vendió",
           (list(_tam[0].marker.size)[0] < list(_tam[0].marker.size)[1])
           if _tam else False, True)
-    # Los totales al margen: dos barras en ejes que COMPARTEN el de las
-    # horas y el de las columnas con el mapa; el ticket se divide, no se
-    # suma; con «Diferencia» no hay totales.
+    # Los totales al margen: una tablita por hora —lo que mide el mapa con
+    # su barra, los clientes y el ticket— y una barra por columna, en ejes
+    # que COMPARTEN el de las horas y el de las columnas con el mapa; abajo,
+    # el total del período. El ticket se divide, no se suma; con
+    # «Diferencia» no hay totales.
     _tot = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "venta", [],
                          [19, 21], totales=True)
     _bh = [t for t in _tot.data if t.type == "bar" and t.orientation == "h"]
     _bc = [t for t in _tot.data if t.type == "bar" and t.orientation != "h"]
-    check("horario · total por hora a la derecha, sobre las mismas filas",
+    check("horario · la barra de cada hora, sobre las mismas filas",
           (list(_bh[0].x), _bh[0].yaxis, _tot.layout.xaxis2.anchor)
-          if _bh else None, ([100.0, 200.0], "y", "y"))
+          if _bh else None, ([0.5, 1.0], "y", "y"))
+    _cols_tot = [list(t.text) for t in _tot.data
+                 if t.type == "scatter" and t.mode == "text"
+                 and t.xaxis == "x2"]
+    check("horario · por hora: venta, clientes y ticket",
+          _cols_tot, [["S/ 100", "S/ 200"], ["2", "4"], ["S/ 50", "S/ 50"]])
+    check("horario · y abajo, el total del período",
+          [a.text for a in _tot.layout.annotations
+           if a.yref == "y3 domain" and a.xref == "x2"],
+          ["<b>S/ 300</b>", "<b>6</b>", "<b>S/ 50</b>"])
     check("horario · total por columna debajo, sobre las mismas columnas",
           (list(_bc[0].y)[:2], _bc[0].xaxis, _tot.layout.yaxis3.anchor)
           if _bc else None, ([100.0, 200.0], "x", "x"))
@@ -2204,9 +2215,10 @@ def _pruebas_puras():
           _tot.layout.yaxis.domain[0] > 0, True)
     _tk = _vh._fig_mapa([_cd_eje], [(2026, 32)], "Semana", "ticket", [],
                         [19, 21], totales=True)
-    check("horario · el ticket por hora es venta ÷ clientes",
-          [list(t.x) for t in _tk.data if t.type == "bar"
-           and t.orientation == "h"], [[50.0, 50.0]])
+    check("horario · el ticket por hora es venta ÷ clientes, sin repetirlo",
+          [list(t.text) for t in _tk.data if t.type == "scatter"
+           and t.mode == "text" and t.xaxis == "x2"],
+          [["S/ 50", "S/ 50"], ["2", "4"]])
     _td = _vh._fig_mapa([_cd_eje, _cd_eje], [(2026, 32), (2026, 33)],
                         "Semana", "venta", [], [19, 21], dif=True,
                         totales=True)

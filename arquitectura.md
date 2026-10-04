@@ -48039,6 +48039,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        «Diferencia» no hay (los paneles restan) y el interruptor se apaga.
        Deslizando, el eje de horas de al lado recibe el mismo dominio
        (`_dominio_filas`) o cada hora cae sobre la fila de otra (#551).
+       **A la derecha es una tablita, no una barra suelta** (el mismo
+       día, a pedido: «agregar ticket promedio y pax»): lo que mide el
+       mapa con su barra y la cifra ENCIMA, a la izquierda, como las
+       barras de datos de Excel; al lado los clientes y el ticket
+       (columnas de texto en el mismo eje `x2`, `_X_TOT_COLS`), y en la
+       fila de la tira de abajo, el total del período. Si el mapa mide
+       pax o ticket, esa columna no se repite. El tooltip de cada barra,
+       por hora y por columna, trae las tres. Septiembre 2026 da S/ 413k
+       y ticket S/ 147: el de la Liquidación de Cajero (#591).
      - La Venta Interna y los Eventos: un PUNTO naranja de 5 px en la
        esquina, medido en píxeles (`xsizemode="pixel"`) para que mida lo
        mismo en una celda de 24 que en una de 66. La celda del clic, un
