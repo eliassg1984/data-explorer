@@ -461,3 +461,44 @@ def bloque_impacto(filas, base):
                    signo(r["delta"])] for r in filas],
         "pie": [],
     }
+
+
+# ─── Un combo del POS, como lista plana ──────────────────────────────────
+def lineas_de_combo(filas):
+    """Las líneas de un combo del POS para la lista plana del modo Combo
+    (Modificar › Combo, regla #608). `filas` son dicts con `cod`, `nombre`,
+    `grupo`, `cantidad`, `fijo` y `activo`: la ficha de INFOREST.DBO.TCOMBO,
+    una por opción (`combosdetalle.parquet`).
+
+    Lo FIJO entra con su cantidad. Un grupo «a elegir» entra con cada opción
+    ACTIVA a su cantidad ÷ las opciones activas del grupo: el promedio, lo
+    mismo que el COSTO PROMEDIO de la Carta costeada (decisión del
+    2026-10-04). La ficha no dice cuántas se eligen por grupo —una parrilla
+    con dos guarniciones guarda «1»—: eso se corrige a mano en la tabla.
+
+    El grupo se compara sin mayúsculas: el POS trata «D» y «d» como el MISMO
+    tiempo (su collation no distingue), y el «Menu Sapiens SAT 2026» trae
+    los dos. Devuelve `(lineas, inactivas)`: dicts con `cod`, `nombre`,
+    `cantidad` y `grupo` (el rótulo que va en la tabla), y cuántas opciones
+    inactivas quedaron afuera."""
+    def clave(f):
+        return str(f.get("grupo") or "").strip().lower()
+
+    activas = [f for f in filas if f.get("activo")]
+    opciones = {}
+    for f in activas:
+        if not f.get("fijo"):
+            opciones[clave(f)] = opciones.get(clave(f), 0) + 1
+    out = []
+    for f in sorted(activas, key=lambda f: (clave(f), not f.get("fijo"))):
+        g = clave(f)
+        prefijo = f"{g} · " if g else ""
+        if f.get("fijo"):
+            cant, rotulo = float(f["cantidad"]), prefijo + "fijo"
+        else:
+            n = opciones[g]
+            cant = float(f["cantidad"]) / n
+            rotulo = prefijo + ("único" if n == 1 else f"elige 1 de {n}")
+        out.append({"cod": str(f["cod"]), "nombre": str(f["nombre"]),
+                    "cantidad": cant, "grupo": rotulo})
+    return out, len(filas) - len(activas)

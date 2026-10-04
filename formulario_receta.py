@@ -104,6 +104,8 @@ from graficos.recetas_comun import (
 _ARCHIVO_RECETAVENTA = "recetaventa.parquet"
 _ARCHIVO_RECETABASE = "recetabase.parquet"
 _ARCHIVO_PORCIONAMIENTOS = "porcionamientos.parquet"
+_ARCHIVO_COMBOS = "combosdetalle.parquet"
+_ARCHIVO_CARTA = "cartacosteada.parquet"
 _ZONA_LIMA = ZoneInfo("America/Lima")   # Cloud corre en UTC
 # IGV y recargo al consumo: los del SISTEMA, sumados sobre el neto (hoy
 # 10,5 % + 13 %, precio ÷ 1,235). Viven en `recetas_comun` porque
@@ -177,6 +179,10 @@ _CROMO_PANEL = 32 + 32 + _ALTO_PESTANAS + 2 * 12
 _ALTO_PANEL = alturas.PRESUPUESTO - _CROMO_PANEL
 #   · Precio: tabla 223 + semáforo y pista 39 + título de la torta 22 + 3 gaps.
 _ALTO_TORTA = _ALTO_PANEL - (223 + 39 + 22 + 3 * 12)
+#     En «Modificar», con algo importado, el título de la torta lleva el
+#     selector Nuevo/Actual (32 en vez de 22): la torta lo paga (medido el
+#     2026-10-04, regla #608).
+_ALTO_SEL_TORTA = 10
 #   · (P): nombre 42 + «sale de» 40 + la fila con rótulos 68 + nota de
 #     dos renglones 34 + resultado 64 + título 22 + 6 gaps.
 _ALTO_CORTES_P = _ALTO_PANEL - (42 + 40 + 68 + 34 + 64 + 22 + 6 * 12)
@@ -534,7 +540,10 @@ def _tabla_lineas(modo, origen=None):
 
     orig = origen["lineas"] if origen else {}
     total = _total_lineas(lineas)
-    con_usos = modo != "combo"
+    con_usos = not _es_combo(modo)
+    # Un combo importado dice de qué grupo de su ficha sale cada producto
+    # (fijo, o «elige 1 de N»), en el lugar de «Se usa en» (regla #608).
+    con_grupo = _es_combo(modo) and any(l.get("grupo") for l in lineas)
     filas, estilos, fijos = [], [], set()
     for i, l in enumerate(lineas):
         subtotal = l["cantidad"] * l["precio"]
@@ -572,6 +581,8 @@ def _tabla_lineas(modo, origen=None):
         fila["% del total"] = round(pct, 1)
         if con_usos:
             fila["Se usa en"] = usos
+        if con_grupo:
+            fila["Grupo"] = l.get("grupo") or ("nuevo" if nuevo else "agregado")
         filas.append(fila)
     df_show = pd.DataFrame(filas)
     # El Styler sólo pinta columnas NO editables: alcanza para el código,
@@ -580,6 +591,8 @@ def _tabla_lineas(modo, origen=None):
     if con_usos:
         datos = datos.apply(
             lambda _c: [e or f"color: {GRIS_TEXTO}" for e in estilos], subset=["Se usa en"])
+    if con_grupo:
+        datos = datos.set_properties(subset=["Grupo"], **{"color": GRIS_TEXTO})
     if origen:
         datos = datos.set_properties(subset=["Antes"], **{"color": GRIS_TEXTO_SUAVE})
 
@@ -591,7 +604,7 @@ def _tabla_lineas(modo, origen=None):
         use_container_width=True,
         height=_alto_tabla(modo),
         disabled=["Código", "Producto", "Antes", "Subtotal (S/)", "% del total",
-                  "Se usa en"],
+                  "Se usa en", "Grupo"],
         # Cabeceras ABREVIADAS y anchos fijos (pedido 2026-09-23: «más
         # angostas las columnas de los insumos»). El data_editor no parte
         # una cabecera en dos renglones, así que se acorta el rótulo y el
@@ -613,7 +626,7 @@ def _tabla_lineas(modo, origen=None):
             # además, para que la tabla no desborde a lo ancho: la suma de
             # los anchos no puede pasar de los ~680 de la tabla a 1323 px.
             "Producto": st.column_config.TextColumn(
-                "Producto", width=110 if origen else 150 if con_usos else 190),
+                "Producto", width=110 if origen else 150 if con_usos or con_grupo else 190),
             "Unidad": st.column_config.TextColumn(
                 "Und.", width=72, help="Unidad, tal cual la escribe el sistema"),
             "Antes": st.column_config.TextColumn(
@@ -628,6 +641,11 @@ def _tabla_lineas(modo, origen=None):
                 "Subtot.", width=58, help="Subtotal (S/)", format="%.2f"),
             "% del total": st.column_config.NumberColumn(
                 "%", width=42, help="% del costo total", format="%.1f"),
+            "Grupo": st.column_config.TextColumn(
+                "Grupo", width=_ANCHO_USOS,
+                help="De qué grupo de la ficha del combo sale: fijo, o «elige 1 de N» "
+                     "(entra con 1 ÷ N, el promedio del grupo; corrige la cantidad si se "
+                     "eligen más)."),
             "Se usa en": st.column_config.TextColumn(
                 "Se usa en", width=_ANCHO_USOS,
                 help="Recetas ACTIVAS que lo llevan, directo o por una receta "
@@ -742,6 +760,7 @@ def _vaciar(modo):
         st.session_state.pop(_key(modo, "pv_w"), None)
         st.session_state.pop(_key(modo, "plato_sel"), None)
         st.session_state.pop(_key(modo, "base_sel"), None)
+        st.session_state.pop(_key(modo, "combo_sel"), None)
         st.session_state.pop(_key(modo, "rinde"), None)
     _soltar_nuevos(modo)
 
@@ -888,7 +907,10 @@ def _panel_precio(modo, costo, origen=None, aviso=None):
         if cuenta["pct"] is None:
             continue
         color, rotulo = _estado_costo(cuenta["pct"])
-        partes.append(f'{_html_punto(color)}<b>{cuenta["pct"]:.1f}%</b> ({rotulo})')
+        # Con Actual → Nuevo, el rótulo va sólo en el nuevo: con los dos el
+        # renglón se partía en dos y la tarjeta crecía 26 (regla #608).
+        partes.append(f'{_html_punto(color)}<b>{cuenta["pct"]:.1f}%</b>'
+                      + ("" if A and cuenta is A else f" ({rotulo})"))
     semaforo = ' <span class="fr-flecha">→</span> '.join(partes) if partes else (
         "escribe un precio para calcularlo")
     pista = ("Escribe el precio nuevo en su celda; lo demás se calcula." if A else
@@ -918,6 +940,7 @@ def _torta(modo, N, A):
     with c_tit:
         st.markdown('<div class="fr-titulo-2">Cómo se reparte el precio de venta</div>',
                     unsafe_allow_html=True)
+    alto = _ALTO_TORTA - (_ALTO_SEL_TORTA if A else 0)
     T = N
     if A:
         with c_sel:
@@ -929,7 +952,7 @@ def _torta(modo, N, A):
 
     if T["pv"] <= 0:
         st.markdown(
-            f'<div class="fr-vacio" style="height:{_ALTO_TORTA}px">Escribe un '
+            f'<div class="fr-vacio" style="height:{alto}px">Escribe un '
             'precio de venta en la tabla para ver cómo se reparte.</div>',
             unsafe_allow_html=True)
         return
@@ -964,7 +987,7 @@ def _torta(modo, N, A):
         font=dict(size=15, color=TEXTO_PRINCIPAL, family="DM Sans, sans-serif"),
     )
     fig.update_layout(
-        height=_ALTO_TORTA, margin=dict(l=0, r=0, t=0, b=0), showlegend=False,
+        height=alto, margin=dict(l=0, r=0, t=0, b=0), showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="DM Sans, sans-serif", color=TEXTO_PRINCIPAL, size=11),
     )
@@ -1325,14 +1348,29 @@ def _importador():
     st.session_state["form_receta_modificar_que_w"] = que
     # columnas-internas: qué se modifica a su ancho, el buscador con lo que
     # queda, «Importar» al de su texto y la píldora del sistema al final.
-    c_que, c_sel, c_btn, c_chip = st.columns([2.2, 2.7, 1.1, 1.6],
+    c_que, c_sel, c_btn, c_chip = st.columns([3.0, 2.5, 1.1, 1.3],
                                              vertical_alignment="center")
     with c_que:
         st.segmented_control(
             "Qué modificar", list(_QUE_MODIFICAR), format_func=_QUE_MODIFICAR.get,
             key="form_receta_modificar_que_w", on_change=_al_cambiar_que,
             label_visibility="collapsed")
-    if que == "base":
+    if que == "combo":
+        combos = _combos_sistema()
+        if not combos:
+            st.error(f"No llegó {_ARCHIVO_COMBOS}: falta la fila «combosdetalle» en el "
+                     "Sheet, o refrescar Recetas.")
+            return origen
+        with c_sel:
+            sel = st.selectbox(
+                "Combo del sistema", list(combos), index=None,
+                format_func=lambda c: (
+                    f"{combos[c]['nombre']} · S/ {combos[c]['pv']:,.2f} · "
+                    f"{len(combos[c]['lineas'])} productos"
+                    + ("" if combos[c]["activo"] else " · inactivo")),
+                placeholder=f"Buscar entre los {len(combos)} combos…",
+                key=_key(modo, "combo_sel"), label_visibility="collapsed")
+    elif que == "base":
         recetas = _recetas_base_sistema()
         if not recetas:
             st.error(f"No se pudieron leer las recetas base de {_ARCHIVO_RECETABASE}.")
@@ -1371,7 +1409,14 @@ def _importador():
         )
     if origen:
         with c_chip:
-            if origen.get("clase") == "base":
+            if origen.get("clase") == "combo":
+                st.markdown(
+                    f'<div class="fr-chip" title="Precio de salón; y el costo que le da la '
+                    f'Carta costeada (fijo, o esperado por lo que eligen los clientes): '
+                    f'S/ {origen["costo_carta"]:,.2f}. «Actual» en la tabla de precios es '
+                    f'la ficha costeada con el promedio de cada grupo.">Sistema: '
+                    f'{_fmt(origen["pv"])}</div>', unsafe_allow_html=True)
+            elif origen.get("clase") == "base":
                 st.markdown(
                     f'<div class="fr-chip" title="Cómo está hoy en el sistema: costo por '
                     f'unidad de salida">Sistema: S/ {origen["costo"]:,.2f} '
@@ -1383,17 +1428,93 @@ def _importador():
                     f'{html.escape(origen["subgrupo"])} · {_fmt(origen["pv"])} · '
                     f'costo {origen["costo"]:,.2f}</div>', unsafe_allow_html=True)
     if importar and sel is not None:
-        (_importar_base if que == "base" else _importar)(sel)
+        {"base": _importar_base, "combo": _importar_combo}.get(que, _importar)(sel)
         st.rerun(scope="fragment")
     return origen
 
 
-_QUE_MODIFICAR = {"plato": "Plato", "base": "Receta base"}
+_QUE_MODIFICAR = {"plato": "Plato", "base": "Receta base", "combo": "Combo"}
 
 
 def _que_modificar():
-    """«plato» o «base»: qué se importa en «Modificar» (regla #607)."""
+    """«plato», «base» o «combo»: qué se importa en «Modificar» (reglas #607
+    y #608)."""
     return st.session_state.get("form_receta_modificar_que") or "plato"
+
+
+def _es_combo(modo):
+    """¿Se arma un combo? En «Combo», o en «Modificar» con un combo: la lista
+    es de productos de venta, no de insumos, y no hay «Dónde se usa»."""
+    return modo == "combo" or (modo == "modificar" and _que_modificar() == "combo")
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _combos_sistema():
+    """{COD COMBO: combo} de `combosdetalle.parquet` (la ficha del POS,
+    INFOREST.DBO.TCOMBO, regla #608): nombre, si está activo, su precio de
+    salón y su costo según la Carta costeada, y sus líneas armadas por
+    `articulos_nuevos.lineas_de_combo` —cada una al costo del producto de
+    venta: el del catálogo del modo Combo y, si no está, el de la carta—.
+    Vacío si el parquet no llegó (falta la fila en el Sheet)."""
+    df = _cargar_reporte(_ARCHIVO_COMBOS)
+    if df is None or df.empty or "COD COMBO" not in df.columns:
+        return {}
+    carta = _cargar_reporte(_ARCHIVO_CARTA)
+    pv, costo_carta, subgrupo, tipo = {}, {}, {}, {}
+    if carta is not None and not carta.empty:
+        c_cod = _resolver(carta, ["COD PLATO"])
+        if c_cod:
+            cods = carta[c_cod].astype(str)
+            for col, destino in (("P.VENTA SALON", pv), ("COSTO SALON", costo_carta)):
+                if col in carta.columns:
+                    destino.update(zip(cods, pd.to_numeric(carta[col], errors="coerce").fillna(0.0)))
+            for col, destino in (("SUBGRUPO", subgrupo), ("TIPO COMBO", tipo)):
+                if col in carta.columns:
+                    destino.update(zip(cods, carta[col].fillna("").astype(str)))
+    catalogo = _catalogo_productos_venta_cacheado()
+    precio_cat = dict(zip(catalogo["cod"], catalogo["precio"])) if catalogo is not None else {}
+    combos = {}
+    for cod, g in df.groupby("COD COMBO", sort=False):
+        cod = str(cod)
+        filas = [{"cod": str(r["COD PRODUCTO"]), "nombre": str(r["PRODUCTO"]),
+                  "grupo": r["GRUPO"], "cantidad": float(r["CANTIDAD"] or 0),
+                  "fijo": bool(r["FIJO"]), "activo": bool(r["PRODUCTO ACTIVO"])}
+                 for r in g.to_dict("records")]
+        lineas, inactivas = an.lineas_de_combo(filas)
+        for i, l in enumerate(lineas):
+            l.update(sid=f"{cod}:{i}", unidad="porción", activo=None, tipo="sistema",
+                     precio=float(precio_cat.get(l["cod"], costo_carta.get(l["cod"], 0.0))))
+        combos[cod] = {
+            "nombre": str(g["COMBO"].iloc[0]), "activo": bool(g["COMBO ACTIVO"].iloc[0]),
+            "pv": float(pv.get(cod, 0.0)), "costo_carta": float(costo_carta.get(cod, 0.0)),
+            "subgrupo": subgrupo.get(cod, ""), "tipo": tipo.get(cod, ""),
+            "lineas": lineas, "inactivas": inactivas,
+        }
+    return dict(sorted(combos.items(),
+                       key=lambda kv: (not kv[1]["activo"], kv[1]["nombre"].lower())))
+
+
+def _importar_combo(cod, con_nombre=True):
+    """Carga en la tabla de «Modificar» un combo del sistema: cada producto
+    de su ficha, con lo «a elegir» repartido entre sus opciones (regla
+    #608), y su precio de salón como precio nuevo de partida."""
+    combo = _combos_sistema().get(cod)
+    if not combo:
+        return
+    modo = "modificar"
+    lineas = [dict(l) for l in combo["lineas"]]
+    st.session_state[_key_lineas(modo)] = lineas
+    st.session_state[_key(modo, "origen")] = {
+        "cod": cod, "nombre": combo["nombre"], "clase": "combo",
+        "subgrupo": combo["subgrupo"], "pv": combo["pv"],
+        "costo": sum(l["cantidad"] * l["precio"] for l in lineas),
+        "costo_carta": combo["costo_carta"], "inactivas": combo["inactivas"],
+        "lineas": {l["sid"]: (l["cantidad"], l["precio"]) for l in lineas},
+    }
+    st.session_state[_key(modo, "pv")] = round(combo["pv"], 2)
+    st.session_state.pop(_key(modo, "editor"), None)
+    if con_nombre:
+        st.session_state[_key(modo, "nombre")] = combo["nombre"]
 
 
 def _al_cambiar_que():
@@ -1434,7 +1555,7 @@ def _importar_base(cod, con_nombre=True):
 
 def _reimportar(origen):
     """«Volver al original» de lo que se haya importado."""
-    (_importar_base if origen.get("clase") == "base" else _importar)(
+    {"base": _importar_base, "combo": _importar_combo}.get(origen.get("clase"), _importar)(
         origen["cod"], con_nombre=False)
 
 
@@ -1932,7 +2053,7 @@ def _sincronizar_nuevos(modo):
         if l.get("tipo") == "nuevo" and l["cod"] not in nuevos:
             nuevos[l["cod"]] = (
                 {"clase": "producto", "nombre": l["nombre"], "precio": l["precio"]}
-                if modo == "combo" else
+                if _es_combo(modo) else
                 {"clase": "compra", "nombre": l["nombre"], "unidad_kardex": l["unidad"],
                  "factor": 1.0, "precio_kardex": l["precio"]})
     vivos = _alcanzables(modo, lineas)
@@ -2077,7 +2198,7 @@ def _panel_crear(modo):
     se agregan sin costo y abren su pestaña para detallarse."""
     cre = st.session_state.get(_key(modo, "creando")) or {}
     ver, destino = cre.get("ver"), cre.get("destino")
-    es_combo = modo == "combo"
+    es_combo = _es_combo(modo)
     duenio = _nuevos(modo).get(destino[1]) if destino else None
     nombre = st.text_input(
         "Nombre del artículo nuevo", key=_key(modo, f"crear_nombre_v{ver}"),
@@ -2628,7 +2749,7 @@ def _opciones_panel(modo, lineas):
     """Precio · Dónde se usa · una pestaña por cada (P)/(Rs) nuevo que la
     receta usa —también el que está adentro de otro, regla #607—, en el
     orden en que se crearon · «Nuevo: …» mientras se crea uno."""
-    ops = ["precio"] + ([] if modo == "combo" else ["usos"])
+    ops = ["precio"] + ([] if _es_combo(modo) else ["usos"])
     nuevos = _nuevos(modo)
     vivos = set(_alcanzables(modo, lineas))
     ops += [c for c in _orden_nuevos(nuevos)
@@ -2727,7 +2848,7 @@ def _render_armado(modo, card_izq, card_der):
     izquierda (buscadores, insumos, guardar y enviar) y «Precio de venta»
     a la derecha. Los tres comparten todo; lo que cambia es el catálogo
     del buscador y, en Modificar, la fila de importar."""
-    es_combo = modo == "combo"
+    es_combo = _es_combo(modo)
     if es_combo and _catalogo_productos_venta_cacheado() is None:
         with card_izq:
             st.error(
@@ -2770,7 +2891,9 @@ def _render_armado(modo, card_izq, card_der):
         # lee de la key de su `number_input`, que ya trae lo de esta corrida.
         precio_venta = float(st.session_state.get(_key(modo, "pv")) or 0.0)
         base = _calculo_base(modo, lineas, origen)
-        tipo = "Modificación de receta base" if base else _TIPO_GUARDADO[modo]
+        tipo = ("Modificación de receta base" if base else
+                "Modificación de combo" if modo == "modificar" and es_combo
+                else _TIPO_GUARDADO[modo])
         extra_envio = ({"receta_base": {k: base[k] for k in ("unidad", "rinde", "actual", "por",
                                                        "delta", "pct")},
                         "impacto": base["filas"]} if base else None)
@@ -2812,6 +2935,13 @@ def _render_armado(modo, card_izq, card_der):
                         "rinde": base["rinde"], "unidad": base["unidad"],
                         "costo_por_unidad": round(base["por"], 4),
                         "impacto": base["filas"],
+                    })
+                elif origen and origen.get("clase") == "combo":
+                    extra.update({
+                        "combo_sistema": origen["cod"],
+                        "precio_venta_sistema": origen["pv"],
+                        "costo_ficha_sistema": round(origen["costo"], 4),
+                        "costo_carta_sistema": round(origen["costo_carta"], 4),
                     })
                 elif origen:
                     extra.update({

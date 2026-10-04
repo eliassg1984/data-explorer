@@ -365,10 +365,14 @@ REPORTES = {
         # su % de costo, combos incluidos), que carga la sección «Carta
         # costeada» de graficos/recetas.py (regla #548). Y desde el
         # 2026-09-30 las órdenes de producción y el primer nivel de las
-        # ventas, que lee «Costo Recetas Base» (regla #576).
+        # ventas, que lee «Costo Recetas Base» (regla #576). Y desde el
+        # 2026-10-04 la composición de los combos, que lee «Nuevo Costeo ›
+        # Modificar › Combo» (regla #608): sin ella acá, el botón no tenía
+        # cómo traerla y había que pedirla a mano.
         "archivos_extra": ("recetabase.parquet", "cartacosteada.parquet",
                            "ordenesproduccion.parquet",
-                           "paloteoinsumosnivel1.parquet"),
+                           "paloteoinsumosnivel1.parquet",
+                           "combosdetalle.parquet"),
         "icono": ":material/receipt_long:",
         # Catálogo sin fecha: el KPI es un conteo, no un agregado por período
         # (kpi_fecha ausente a propósito — resumen_kpis() agrega la tabla

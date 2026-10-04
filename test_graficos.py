@@ -272,6 +272,24 @@ def _pruebas_articulos_nuevos():
         {"unidad": "KILOS", "actual": 66.6, "por": 76.6})
     check("a quién afecta: % de hoy, el nuevo y el Δ con su signo",
           bi["filas"], [["Asado", "plato", "34.5 %", "34.8 %", "+0.20"]])
+
+    # ── Un combo del POS como lista plana (Modificar › Combo, regla #608) ──
+    # «D» y «d» son el MISMO tiempo para el POS; lo inactivo no entra; lo
+    # fijo entra con su cantidad; cada opción a elegir, con 1 ÷ N.
+    lineas, inactivas = an.lineas_de_combo([
+        {"cod": "PAN", "nombre": "Pan", "grupo": "a", "cantidad": 0.5, "fijo": True, "activo": True},
+        {"cod": "P1", "nombre": "Plato 1", "grupo": "b", "cantidad": 1, "fijo": False, "activo": True},
+        {"cod": "P2", "nombre": "Plato 2", "grupo": "b", "cantidad": 1, "fijo": False, "activo": True},
+        {"cod": "P3", "nombre": "Plato 3", "grupo": "b", "cantidad": 1, "fijo": False, "activo": False},
+        {"cod": "D1", "nombre": "Postre 1", "grupo": "D", "cantidad": 1, "fijo": False, "activo": True},
+        {"cod": "D2", "nombre": "Postre 2", "grupo": "d", "cantidad": 1, "fijo": False, "activo": True},
+    ])
+    check("cantidades: fijo tal cual, a elegir ÷ opciones activas, «D» = «d»",
+          [(l["cod"], l["cantidad"]) for l in lineas],
+          [("PAN", 0.5), ("P1", 0.5), ("P2", 0.5), ("D1", 0.5), ("D2", 0.5)])
+    check("el rótulo del grupo", [l["grupo"] for l in lineas][:2],
+          ["a · fijo", "b · elige 1 de 2"])
+    check("las opciones inactivas quedan afuera y se cuentan", inactivas, 1)
     return fallos
 
 

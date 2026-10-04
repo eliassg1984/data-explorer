@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-607 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+608 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (199)
 
@@ -690,7 +690,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 
-**Datos, R2 y DuckDB** (90)
+**Datos, R2 y DuckDB** (91)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -782,6 +782,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
 - **#605** — «Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en casa el día que se…
 - **#607** — En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y «Modificar» abre también una…
+- **#608** — Modificar › Combo: la ficha del combo sale de TCOMBO, en un parquet propio, y un grupo «a…
 
 **SUNAT y SIRE** (53)
 
@@ -47882,6 +47883,61 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+608. **Modificar › Combo: la ficha del combo sale de `TCOMBO`, en un
+     parquet propio, y un grupo «a elegir» entra con el promedio de sus
+     opciones.** 2026-10-04, lo que la #607 dejó pendiente. La composición
+     de un combo no estaba en R2: `cartacosteada.parquet` trae su costo y
+     `ventas.parquet` una línea por combo vendido (`ES COMBO`), sin qué
+     platos lleva. Se preguntó si se podía sacar de las ventas: no —las
+     elecciones de cada combo viven en `CPEDIDO`, que no se baja—, y aun
+     con ellas sólo dirían lo que se VENDIÓ: sin las opciones que nadie
+     pidió, sin qué es fijo, sin los combos nuevos. La ficha son 513 filas
+     para 55 combos (5 activos) y corre en menos de un segundo; ventas son
+     239 mil filas y ~40 s en frío.
+
+     - **La fila del Sheet es `combosdetalle`** (`INFOREST.DBO.TCOMBO` con
+       el nombre del combo y del producto, sus activos, la cantidad y si es
+       fijo; nombres completos y la tabla repetida en una subconsulta) y
+       llega como `combosdetalle.parquet`. Va en los `archivos_extra` de
+       Recetas: el botón «Refrescar» de un reporte sólo pide SUS parquets, y
+       sin eso no había cómo traerla desde la app (el primer refresco se
+       pidió a mano con `data.solicitar_refresco`).
+     - **`articulos_nuevos.lineas_de_combo`** la vuelve lista plana: lo
+       fijo con su cantidad; cada opción ACTIVA de un grupo «a elegir» con
+       cantidad ÷ opciones activas del grupo —el promedio, como el COSTO
+       PROMEDIO de la Carta costeada (decisión: era la recomendada y no se
+       eligió otra)—. La ficha no guarda cuántas se eligen por grupo (una
+       parrilla con dos guarniciones dice «1»): se corrige a mano.
+     - **«D» y «d» son el MISMO grupo**: el POS compara sin mayúsculas, y el
+       «Menu Sapiens SAT 2026» trae los dos. Contarlos aparte daba dos
+       grupos de una opción en vez de uno de dos.
+     - **El costo de cada opción** es el del catálogo del modo Combo (la
+       receta de venta) y, si no está, el de la Carta costeada: coinciden
+       en todos los que tienen los dos. Las aguas Munay no tienen en
+       ninguno (#590).
+     - **En la tabla, la columna «Grupo»** ocupa el lugar de «Se usa en»
+       («b · elige 1 de 3»), y el PDF y el Excel la escriben al lado del
+       producto: sin ella, un 0.3333 no se entiende. «Actual» en la tabla de
+       precios es la ficha costeada con ese promedio; el costo de la Carta
+       costeada (fijo o esperado por lo que eligen los clientes) va en el
+       tooltip de la píldora «Sistema».
+     - **`_es_combo(modo)`** reemplaza a los `modo == "combo"`: Modificar con
+       un combo arma productos de venta, crea «productos» nuevos y no tiene
+       «Dónde se usa».
+
+     **De paso, la tarjeta de precio de «Modificar» crecía 36 px con algo
+     importado** —un plato también, desde antes de este cambio—: el
+     semáforo «Actual → Nuevo» con los dos rótulos se partía en dos
+     renglones, y el título de la torta lleva el selector Nuevo/Actual (32
+     en vez de 22). El rótulo va sólo en el nuevo y la torta paga los 10
+     (`_ALTO_SEL_TORTA`). Medido en un navegador automatizado a 1323×619: el
+     combo importado y un plato importado, las dos tarjetas en 613.
+
+     Sin renombres de lo que importa `app.py`; `data.py` cambia su tabla de
+     reportes y los módulos de Recetas: «Reboot app» en Cloud (#357).
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47894,7 +47950,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#607**; la próxima toma el número siguiente.
+> última regla es la **#608**; la próxima toma el número siguiente.
 
 >
 

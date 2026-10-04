@@ -72,13 +72,21 @@ def _num(v):
     return f"{round(float(v), 4):,.4f}".rstrip("0").rstrip(".")
 
 
+def _nombre_con_grupo(l):
+    """El producto, y en un combo importado, de qué grupo de su ficha sale
+    («· b · elige 1 de 3»): sin eso, una cantidad de 0.3333 no se entiende
+    (regla #608)."""
+    nombre = str(l["nombre"])
+    return f"{nombre[:28]} · {l['grupo']}" if l.get("grupo") else nombre
+
+
 def nombre_archivo(resumen, extension):
     """«receta_lomo-saltado.pdf»: sin tildes ni espacios, para que el
     adjunto no llegue con el nombre roto en otro cliente de correo."""
     base = unicodedata.normalize("NFKD", resumen["nombre"] or "sin-nombre")
     base = base.encode("ascii", "ignore").decode("ascii").lower()
     base = re.sub(r"[^a-z0-9]+", "-", base).strip("-") or "sin-nombre"
-    prefijo = "combo" if resumen["tipo"] == "Combo" else "receta"
+    prefijo = "combo" if "ombo" in resumen["tipo"] else "receta"
     return f"{prefijo}_{base[:60]}.{extension}"
 
 
@@ -112,7 +120,8 @@ def _pct_costo(resumen):
 
 def _encabezado(resumen):
     tipo = {"Combo": "Combo", "Modificación de receta": "Modificación de receta",
-            "Modificación de receta base": "Modificación de receta base"}.get(
+            "Modificación de receta base": "Modificación de receta base",
+            "Modificación de combo": "Modificación de combo"}.get(
         resumen["tipo"], "Receta de venta")
     quien = f"Propuesta de {resumen['autor']}" if resumen["autor"] else "Propuesta"
     return (f"{tipo}: {resumen['nombre'] or '(sin nombre)'}",
@@ -137,7 +146,7 @@ def pdf_receta(resumen):
         sub = l["cantidad"] * l["precio"]
         filas.append([
             "NUEVO" if l.get("tipo") == "nuevo" else str(l["cod"]),
-            str(l["nombre"])[:48], str(l["unidad"]),
+            _nombre_con_grupo(l)[:48], str(l["unidad"]),
             _num(l["cantidad"]), _num(l["precio"]), f"{sub:,.2f}",
             f"{(sub / total * 100) if total > 0 else 0:.1f}",
         ])
@@ -340,7 +349,7 @@ def excel_receta(resumen):
     for r, l in enumerate(resumen["lineas"], start=fila0 + 1):
         sub = l["cantidad"] * l["precio"]
         ws.write(r, 0, str(l["cod"]))
-        ws.write(r, 1, str(l["nombre"]))
+        ws.write(r, 1, _nombre_con_grupo(l))
         ws.write(r, 2, str(l["unidad"]))
         ws.write_number(r, 3, l["cantidad"], f_fino)
         ws.write_number(r, 4, l["precio"], f_fino)
