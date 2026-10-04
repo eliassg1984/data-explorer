@@ -46,6 +46,8 @@ import io
 import re
 import smtplib
 import textwrap
+
+import articulos_nuevos as an
 import unicodedata
 from email.message import EmailMessage
 from urllib.parse import quote, urlencode
@@ -81,7 +83,15 @@ def nombre_archivo(resumen, extension):
 
 
 def _filas_desglose(resumen):
-    """Las filas del panel de precios, en el MISMO orden que en pantalla."""
+    """Las filas del panel de precios, en el MISMO orden que en pantalla. Una
+    receta base modificada no tiene precio: su costo contra el del sistema."""
+    b = resumen.get("receta_base")
+    if b:
+        una = an.nombre_unidad(b["unidad"])
+        return [(f"Costo de {an.cantidad_en(b['rinde'], b['unidad'])}", resumen["costo_total"]),
+                (f"Costo por {una}, nuevo", b["por"]),
+                (f"Costo por {una}, sistema", b["actual"]),
+                (f"Variación por {una}", b["delta"])]
     filas = [("Costo total", resumen["costo_total"])]
     if resumen["precio_venta"] > 0:
         filas += [
@@ -101,7 +111,8 @@ def _pct_costo(resumen):
 
 
 def _encabezado(resumen):
-    tipo = {"Combo": "Combo", "Modificación de receta": "Modificación de receta"}.get(
+    tipo = {"Combo": "Combo", "Modificación de receta": "Modificación de receta",
+            "Modificación de receta base": "Modificación de receta base"}.get(
         resumen["tipo"], "Receta de venta")
     quien = f"Propuesta de {resumen['autor']}" if resumen["autor"] else "Propuesta"
     return (f"{tipo}: {resumen['nombre'] or '(sin nombre)'}",
@@ -125,7 +136,8 @@ def pdf_receta(resumen):
     for l in lineas:
         sub = l["cantidad"] * l["precio"]
         filas.append([
-            str(l["cod"]), str(l["nombre"])[:48], str(l["unidad"]),
+            "NUEVO" if l.get("tipo") == "nuevo" else str(l["cod"]),
+            str(l["nombre"])[:48], str(l["unidad"]),
             _num(l["cantidad"]), _num(l["precio"]), f"{sub:,.2f}",
             f"{(sub / total * 100) if total > 0 else 0:.1f}",
         ])
@@ -136,8 +148,9 @@ def pdf_receta(resumen):
     with PdfPages(buf) as pdf:
         for n, trozo in enumerate(paginas, start=1):
             fig = Figure(figsize=(8.27, 11.69))          # A4 en pulgadas
-            fig.text(0.07, 0.95, titulo, fontsize=16, weight="bold",
-                     color=TEXTO_PRINCIPAL)
+            # Un nombre largo se salía de la hoja: la letra baja con el largo.
+            fig.text(0.07, 0.95, titulo, fontsize=16 if len(titulo) <= 52 else 12.5,
+                     weight="bold", color=TEXTO_PRINCIPAL)
             fig.text(0.07, 0.925, subtitulo + " · importes en S/", fontsize=9,
                      color=GRIS_TEXTO)
             alto = 0.022 * (len(trozo) + 1)
@@ -160,6 +173,9 @@ def pdf_receta(resumen):
                     if r == 0:
                         celda.set_facecolor(GRIS_FONDO)
                         celda.get_text().set_weight("bold")
+                    elif c == 0 and trozo[r - 1][0] == "NUEVO":
+                        celda.get_text().set_color(ACENTO)
+                        celda.get_text().set_weight("bold")
             # El desglose va sólo en la última página, debajo de la tabla.
             if n == len(paginas):
                 y = 0.90 - alto - 0.05
@@ -174,19 +190,13 @@ def pdf_receta(resumen):
                     fig.text(0.55, y - 0.005, f"% de costo sobre neto: {pct:.1f}%",
                              fontsize=10, color=ACENTO, weight="bold")
                     y -= 0.022
-                # Lo que el almacén todavía no tiene (regla #597): una línea
-                # por artículo, partida a lo ancho de la hoja.
                 nuevos = resumen.get("nuevos") or []
-                if nuevos:
-                    y -= 0.03
-                    fig.text(0.07, y, "Artículos nuevos (no están en el almacén)",
-                             fontsize=10, weight="bold", color=TEXTO_PRINCIPAL)
-                    for texto in nuevos:
-                        for i, renglon in enumerate(textwrap.wrap(texto, 110)):
-                            y -= 0.017
-                            fig.text(0.07 if i == 0 else 0.085, y,
-                                     ("• " if i == 0 else "") + renglon,
-                                     fontsize=8, color=TEXTO_PRINCIPAL)
+                partes = (["a quién afecta"] if resumen.get("impacto") else []) + (
+                    [f"{len(nuevos)} {'artículo nuevo' if len(nuevos) == 1 else 'artículos nuevos'}"]
+                    if nuevos else [])
+                if partes:
+                    fig.text(0.07, y - 0.03, "En las páginas siguientes: "
+                             + " y ".join(partes) + ".", fontsize=9, color=GRIS_TEXTO)
             fig.text(0.07, 0.03, "Generado desde Reportes › Recetas › Nueva receta. "
                      "Es una PROPUESTA: no modifica la receta del sistema.",
                      fontsize=7.5, color=GRIS_TEXTO)
@@ -194,14 +204,115 @@ def pdf_receta(resumen):
                 fig.text(0.93, 0.03, f"{n}/{len(paginas)}", fontsize=7.5,
                          ha="right", color=GRIS_TEXTO)
             pdf.savefig(fig)
+        _paginas_detalle(pdf, Figure, resumen)
     return buf.getvalue()
+
+
+# El detalle de lo nuevo (regla #607): una página aparte con un bloque por
+# artículo —título, qué es, una frase, su tabla y su pie—, partido entre
+# páginas si no entra. Lo arma `articulos_nuevos.bloques_detalle`, el mismo
+# que llena la hoja «Nuevos» del Excel.
+_ALTO_FILA = 0.02
+_ANCHOS = {6: [0.10, 0.38, 0.12, 0.10, 0.13, 0.17], 5: [0.46, 0.10, 0.14, 0.14, 0.16],
+           2: [0.40, 0.60]}
+
+
+def _bloques(resumen):
+    """Lo que va en las páginas de detalle: a quién afecta una receta base
+    modificada, y lo nuevo de la receta."""
+    bloques = []
+    if resumen.get("impacto"):
+        bloques.append(an.bloque_impacto(resumen["impacto"], resumen.get("receta_base") or {}))
+    return bloques + [an.bloques_detalle(d) for d in resumen.get("nuevos") or []]
+
+
+def _paginas_detalle(pdf, Figure, resumen):
+    from tema import ACENTO, GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, TEXTO_PRINCIPAL
+
+    bloques = _bloques(resumen)
+    if not bloques:
+        return
+    titulo, _ = _encabezado(resumen)
+    estado = {"fig": None, "y": 0.0}
+
+    def pagina_nueva():
+        if estado["fig"] is not None:
+            pdf.savefig(estado["fig"])
+        fig = Figure(figsize=(8.27, 11.69))
+        fig.text(0.07, 0.95, "Detalle de la propuesta", fontsize=16, weight="bold",
+                 color=TEXTO_PRINCIPAL)
+        sub = textwrap.wrap(f"{titulo} · " + (
+            "lo nuevo no está en el almacén: su costo sale de este detalle · "
+            if resumen.get("nuevos") else "") + "importes en S/", 115)
+        for i, renglon in enumerate(sub[:2]):
+            fig.text(0.07, 0.925 - 0.015 * i, renglon, fontsize=9, color=GRIS_TEXTO)
+        estado["fig"], estado["y"] = fig, 0.89 - 0.015 * (min(len(sub), 2) - 1)
+
+    def tabla(cab, filas):
+        fig, alto = estado["fig"], _ALTO_FILA * (len(filas) + 1)
+        ax = fig.add_axes([0.07, estado["y"] - alto, 0.86, alto])
+        ax.axis("off")
+        t = ax.table(cellText=filas, colLabels=cab, loc="upper center", cellLoc="left",
+                     colLoc="left", colWidths=_ANCHOS.get(len(cab)))
+        t.auto_set_font_size(False)
+        t.set_fontsize(8)
+        for (r, c), celda in t.get_celld().items():
+            celda.PAD = 0.04
+            celda.set_edgecolor(GRIS_BORDE)
+            celda.set_height(1 / (len(filas) + 1))
+            if (len(cab) == 6 and c >= 3) or (len(cab) == 5 and c >= 2):
+                celda.get_text().set_horizontalalignment("right")
+            if r == 0:
+                celda.set_facecolor(GRIS_FONDO)
+                celda.get_text().set_weight("bold")
+            elif filas[r - 1][0] == "NUEVO" and c == 0:
+                celda.get_text().set_color(ACENTO)
+                celda.get_text().set_weight("bold")
+        estado["y"] -= alto
+
+    pagina_nueva()
+    for b in bloques:
+        renglones = textwrap.wrap(b["resumen"], 105) if b["resumen"] else []
+        filas = list(b["filas"])
+        cabeza = 0.026 + 0.016 * len(renglones) + (_ALTO_FILA * 2 if filas else 0)
+        if estado["y"] - cabeza < 0.06:
+            pagina_nueva()
+        primera = True
+        while primera or filas:
+            fig = estado["fig"]
+            fig.text(0.07, estado["y"], b["titulo"] + ("" if primera else " (sigue)"),
+                     fontsize=11, weight="bold", color=TEXTO_PRINCIPAL)
+            fig.text(0.93, estado["y"], b["etiqueta"], fontsize=8.5, ha="right",
+                     color=ACENTO, weight="bold")
+            estado["y"] -= 0.022
+            if primera:
+                for r in renglones:
+                    fig.text(0.07, estado["y"], r, fontsize=8.5, color=GRIS_TEXTO)
+                    estado["y"] -= 0.016
+            primera = False
+            if not filas:
+                break
+            entran = max(1, int((estado["y"] - 0.06) / _ALTO_FILA) - 1)
+            tabla(b["cabecera"], filas[:entran])
+            filas = filas[entran:]
+            if filas:
+                pagina_nueva()
+        for rot, val in b["pie"]:
+            if estado["y"] - 0.02 < 0.05:
+                pagina_nueva()
+            estado["y"] -= 0.018
+            estado["fig"].text(0.60, estado["y"], rot, fontsize=9, color=TEXTO_PRINCIPAL)
+            estado["fig"].text(0.93, estado["y"], val, fontsize=9, ha="right",
+                               color=TEXTO_PRINCIPAL, weight="bold")
+        estado["y"] -= 0.03
+    pdf.savefig(estado["fig"])
 
 
 # ─── Excel ──────────────────────────────────────────────────────────────
 def excel_receta(resumen):
     import xlsxwriter
 
-    from tema import GRIS_FONDO, GRIS_TEXTO
+    from tema import ACENTO_TEXTO, GRIS_FONDO, GRIS_TEXTO
 
     titulo, subtitulo = _encabezado(resumen)
     buf = io.BytesIO()
@@ -261,14 +372,38 @@ def excel_receta(resumen):
     ws.set_column(2, 2, 10)
     ws.set_column(3, 6, 15)
 
-    # Lo que el almacén todavía no tiene (regla #597), en una hoja aparte.
-    nuevos = resumen.get("nuevos") or []
-    if nuevos:
-        wn = wb.add_worksheet("Nuevos")
-        wn.write(0, 0, "Artículos nuevos (no están en el almacén)", f_tit)
-        for i, texto in enumerate(nuevos, start=2):
-            wn.write(i, 0, texto)
-        wn.set_column(0, 0, 140)
+    # Lo que el almacén todavía no tiene, en una hoja aparte: un bloque por
+    # artículo con su tabla (reglas #597 y #607, `bloques_detalle`).
+    bloques = _bloques(resumen)
+    if bloques:
+        wn = wb.add_worksheet("Detalle")
+        f_et = wb.add_format({"bold": True, "font_color": ACENTO_TEXTO})
+        f_neg = wb.add_format({"bold": True})
+        wn.write(0, 0, "Detalle de la propuesta", f_tit)
+        r = 2
+        for b in bloques:
+            wn.write(r, 0, b["titulo"], f_neg)
+            wn.write(r, 3, b["etiqueta"], f_et)
+            r += 1
+            if b["resumen"]:
+                wn.write(r, 0, b["resumen"], f_sub)
+                r += 1
+            if b["filas"]:
+                for c, texto in enumerate(b["cabecera"]):
+                    wn.write(r, c, texto, f_cab)
+                r += 1
+                for fila in b["filas"]:
+                    for c, texto in enumerate(fila):
+                        wn.write(r, c, texto)
+                    r += 1
+            for rot, val in b["pie"]:
+                wn.write(r, 4, rot, f_tot_txt)
+                wn.write(r, 5, val, f_tot_txt)
+                r += 1
+            r += 1
+        wn.set_column(0, 0, 24)
+        wn.set_column(1, 1, 40)
+        wn.set_column(2, 5, 14)
     wb.close()
     return buf.getvalue()
 
@@ -292,7 +427,7 @@ def cuerpo_correo(resumen):
     nuevos = resumen.get("nuevos") or []
     if nuevos:
         txt += ["", "Artículos nuevos (no están en el almacén):"]
-        txt += [f"- {t}" for t in nuevos]
+        txt += [f"- {an.describir(d)}" for d in nuevos]
     txt += ["", "Adjunto el detalle en PDF y en Excel."]
     return "\n".join(txt)
 

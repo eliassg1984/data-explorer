@@ -148,20 +148,34 @@ def indice_usos(rv, rb):
     del sistema, sobre el neto). `rb`: las líneas de las recetas base
     ACTIVAS, con `base` (el código del producto que sale), `nombre`, `ins`,
     `cant` y `unid`. Los dos ya filtrados: qué es «activo» lo decide quien
-    lee los parquets, con `recetas_comun._activo`."""
+    lee los parquets, con `recetas_comun._activo`.
+
+    Opcionales, para `impacto`: `factor` en las dos (cuántas unidades de
+    costeo caben en una de kardex: 1000 gramos en un kilo; sin la columna
+    se deduce de la unidad) y `cst` en `rv` (el costo del plato)."""
+    def factor_de(r):
+        f = float(getattr(r, "factor", 0) or 0)
+        if f > 0:
+            return f
+        return CONVERSION_ESTANDAR.get({"GRAMOS": "KILOS", "MILILITROS": "LITROS"}.get(
+            str(r.unid).strip().upper(), ""), ("", 1.0))[1]
+
     platos = {}
     for r in rv.itertuples(index=False):
-        p = platos.setdefault(str(r.plato), {"nombre": str(r.nombre), "pv": float(r.pv),
-                                             "pct": float(r.pct), "lleva": {}})
+        p = platos.setdefault(str(r.plato), {
+            "nombre": str(r.nombre), "pv": float(r.pv), "pct": float(r.pct),
+            "cst": float(getattr(r, "cst", 0) or 0), "lleva": {}, "factor": {}})
         k = str(r.ins)
         cant, unid = p["lleva"].get(k, (0.0, str(r.unid)))
         p["lleva"][k] = (cant + float(r.cant), unid)
+        p["factor"][k] = factor_de(r)
     bases = {}
     for r in rb.itertuples(index=False):
-        b = bases.setdefault(str(r.base), {"nombre": str(r.nombre), "lleva": {}})
+        b = bases.setdefault(str(r.base), {"nombre": str(r.nombre), "lleva": {}, "factor": {}})
         k = str(r.ins)
         cant, unid = b["lleva"].get(k, (0.0, str(r.unid)))
         b["lleva"][k] = (cant + float(r.cant), unid)
+        b["factor"][k] = factor_de(r)
     en_platos, en_bases = {}, {}
     for cod, p in platos.items():
         for ins in p["lleva"]:
@@ -207,7 +221,7 @@ def usos_de(indice, cod):
         frente = siguiente
 
     def plato(p, via, de):
-        return {"receta": platos[p]["nombre"], "clase": "Plato", "via": via,
+        return {"cod": p, "receta": platos[p]["nombre"], "clase": "Plato", "via": via,
                 "cant": _cant(platos[p]["lleva"][de]),
                 "pv": platos[p]["pv"], "pct": platos[p]["pct"]}
 
@@ -228,11 +242,57 @@ def usos_de(indice, cod):
             if (hijo is None) != directa:
                 continue
             de = cod if hijo is None else hijo
-            grupo.append({"receta": bases[b]["nombre"], "clase": "Receta base",
+            grupo.append({"cod": b, "receta": bases[b]["nombre"], "clase": "Receta base",
                           "via": "" if hijo is None else bases[hijo]["nombre"],
                           "cant": _cant(bases[b]["lleva"][de]), "pv": None, "pct": None})
         filas += sorted(grupo, key=lambda f: f["receta"].lower())
     return filas
+
+
+def impacto(indice, cod, delta):
+    """Cuánto cambia el costo de cada receta activa si el de `cod` cambia en
+    `delta` soles por unidad de KARDEX (por kilo, por litro, por unidad).
+
+    Devuelve `{"platos": {cod: Δ costo del plato}, "bases": {cod: Δ por su
+    unidad}}`. Sube por las recetas base como lo hace el costeo del
+    sistema: una receta base guarda los insumos de UNA unidad de salida, así
+    que lo que lleva de un hijo (en su unidad de costeo) ÷ el factor por el
+    Δ del hijo es su Δ. Un plato que lo lleva por dos caminos suma los dos:
+    los dos son de verdad. Un ciclo (una receta que se contiene) aporta 0."""
+    cod = str(cod)
+    bases, platos = indice["bases"], indice["platos"]
+    alcanzables, frente = set(), list(indice["en_bases"].get(cod, []))
+    while frente:
+        b = frente.pop()
+        if b in alcanzables or b == cod:
+            continue
+        alcanzables.add(b)
+        frente += indice["en_bases"].get(b, [])
+    memo, en_curso = {}, set()
+
+    def d(x):
+        if x == cod:
+            return float(delta)
+        if x in memo:
+            return memo[x]
+        if x in en_curso or x not in bases:
+            return 0.0
+        en_curso.add(x)
+        b = bases[x]
+        tot = sum(cant / (b["factor"].get(h) or 1.0) * d(h)
+                  for h, (cant, _u) in b["lleva"].items() if h == cod or h in alcanzables)
+        en_curso.discard(x)
+        memo[x] = tot
+        return tot
+
+    afectados = {cod} | alcanzables
+    out_platos = {}
+    for p, info in platos.items():
+        hijos = [h for h in info["lleva"] if h in afectados]
+        if hijos:
+            out_platos[p] = sum(info["lleva"][h][0] / (info["factor"].get(h) or 1.0) * d(h)
+                                for h in hijos)
+    return {"platos": out_platos, "bases": {b: d(b) for b in alcanzables}}
 
 
 def resumen_usos(filas):
@@ -268,8 +328,9 @@ def describir(d):
             return f"{n}: porcionado nuevo, SIN DETALLE (cuenta S/ 0.00)."
         pieza = (f"{d['peso_g']:g} g por unidad, " if d.get("salida") in POR_PIEZA
                  and str(d.get("sale_de_unidad", "")).upper() in CONVERSION_ESTANDAR else "")
+        origen = "nuevo" if d.get("sale_de_nuevo") else d.get("sale_de")
         return (f"{n}: porcionado nuevo. Sale de {d.get('sale_de_nombre')} "
-                f"({d.get('sale_de')}, S/ {d.get('sale_de_precio', 0):,.2f} "
+                f"({origen}, S/ {d.get('sale_de_precio', 0):,.2f} "
                 f"{por_unidad(d.get('sale_de_unidad'))}); {pieza}merma "
                 f"{d.get('merma_pct') or 0:.1f} % → {d.get('entrada_por_unidad', 0):.3f} "
                 f"{str(d.get('sale_de_unidad', '')).lower()} por unidad, "
@@ -278,10 +339,11 @@ def describir(d):
         lineas = d.get("lineas") or []
         if not d.get("costo_por_unidad"):
             return f"{n}: receta base nueva, SIN DETALLE (cuenta S/ 0.00)."
-        insumos = ", ".join(f"{l['nombre']} {round(l['cantidad'], 3):g} {l['unidad'].lower()}"
+        insumos = ", ".join(f"{l['nombre']} {cantidad_en(l['cantidad'], l['unidad'])}"
+                            + (" (nuevo)" if l.get("tipo") == "nuevo" else "")
                             for l in lineas)
         return (f"{n}: receta base nueva ({d.get('area', '')}). Rinde "
-                f"{d.get('rinde', 1):g} {str(d.get('unidad_rinde', '')).lower()} con "
+                f"{cantidad_en(d.get('rinde', 1), d.get('unidad_rinde'))} con "
                 f"{insumos}; S/ {d['costo_por_unidad']:,.2f} "
                 f"{por_unidad(d.get('unidad_rinde'))}.")
     if clase == "producto":
@@ -309,3 +371,93 @@ def nombre_unidad(unidad):
     """«kilo», «unidad», «porción»: la unidad en singular, para «por kilo»."""
     u = str(unidad or "").strip().upper()
     return _SINGULAR.get(u, u.lower() or "unidad")
+
+
+_ETIQUETA = {"rs": "Receta base nueva", "p": "Porcionado nuevo",
+             "compra": "Insumo de compra nuevo", "producto": "Producto nuevo"}
+
+
+def _n(v):
+    return f"{round(float(v or 0), 4):,.4f}".rstrip("0").rstrip(".")
+
+
+def bloques_detalle(d):
+    """El detalle de un artículo nuevo como lo dibujan el PDF y el Excel
+    (regla #607): `titulo`, `etiqueta`, `resumen` (una frase), una tabla
+    (`cabecera` y `filas`, listas de texto) y un `pie` de (rótulo, valor).
+    Una receta base, sus insumos; un porcionado, de dónde sale y su
+    rendimiento; una compra, su precio estimado."""
+    clase = d.get("clase")
+    costo = float(d.get("costo_por_unidad") or 0)
+    una = nombre_unidad(d.get("unidad_kardex"))
+    etiqueta = _ETIQUETA.get(clase, "Nuevo") + ("" if costo > 0 else " · SIN DETALLE")
+    b = {"titulo": d.get("nombre", "?"), "etiqueta": etiqueta, "resumen": "",
+         "cabecera": [], "filas": [], "pie": []}
+    if clase == "rs":
+        b["etiqueta"] += f" · {d.get('area', '')}" if d.get("area") else ""
+        b["resumen"] = (f"Rinde {cantidad_en(d.get('rinde', 1), d.get('unidad_rinde'))}. "
+                        "Lo marcado NUEVO tampoco está en el almacén: su detalle va aparte.")
+        b["cabecera"] = ["Código", "Insumo", "Unidad", "Cant.", "P. unit.", "Subtotal"]
+        b["filas"] = [["NUEVO" if l.get("tipo") == "nuevo" else str(l["cod"]),
+                       str(l["nombre"]), str(l["unidad"]), _n(l["cantidad"]), _n(l["precio"]),
+                       f"{float(l['cantidad']) * float(l['precio']):,.2f}"]
+                      for l in d.get("lineas") or []]
+        b["pie"] = [(f"Costo de {cantidad_en(d.get('rinde', 1), d.get('unidad_rinde'))}",
+                     f"S/ {float(d.get('costo_tanda') or 0):,.2f}"),
+                    (f"Costo por {una}", f"S/ {costo:,.2f}")]
+    elif clase == "p":
+        u_ent = d.get("sale_de_unidad")
+        pieza = (d.get("salida") in POR_PIEZA
+                 and str(u_ent or "").upper() in CONVERSION_ESTANDAR)
+        b["resumen"] = "Costeado por rendimiento: lo que pesa una pieza ÷ (1 − merma)."
+        b["cabecera"] = ["Concepto", "Valor"]
+        b["filas"] = [
+            ["Sale de", f"{d.get('sale_de_nombre') or '—'}"
+                        + (" (nuevo)" if d.get("sale_de_nuevo") else
+                           f" ({d.get('sale_de')})" if d.get("sale_de") else "")],
+            ["Precio de lo que entra",
+             f"S/ {float(d.get('sale_de_precio') or 0):,.2f} {por_unidad(u_ent)}"],
+            ["Sale en", str(d.get("salida") or "—")],
+        ] + ([["Peso por unidad", f"{float(d.get('peso_g') or 0):g} g"]] if pieza else []) + [
+            ["Merma", f"{float(d.get('merma_pct') or 0):.1f} %"],
+            [f"Insumo por {una}", cantidad_en(d.get("entrada_por_unidad") or 0, u_ent)
+             if d.get("entrada_por_unidad") else "—"],
+        ]
+        b["pie"] = [(f"Costo por {una}", f"S/ {costo:,.2f}")]
+    elif clase == "producto":
+        b["resumen"] = f"Costo ESTIMADO S/ {float(d.get('precio') or 0):,.2f} por porción."
+    else:
+        b["resumen"] = (f"Precio ESTIMADO S/ {costo:,.2f} "
+                        f"{por_unidad(d.get('unidad_kardex'))}, hasta que el almacén lo cree.")
+    return b
+
+
+def _recorte(texto, n):
+    return texto if len(texto) <= n else texto[:n - 1].rstrip() + "…"
+
+
+def bloque_impacto(filas, base):
+    """«A quién afecta» una receta base modificada, como bloque del PDF y
+    del Excel (mismo formato que `bloques_detalle`). `filas` las arma
+    `formulario_receta._calculo_base`."""
+    una = nombre_unidad(base.get("unidad"))
+
+    def pct(v, combo):
+        return "en combo" if combo else ("—" if v is None else f"{v:.1f} %")
+
+    def signo(v):
+        return f"{float(v):+,.2f}".replace("-", "−")
+
+    return {
+        "titulo": "A quién afecta",
+        "etiqueta": "recetas activas que la llevan",
+        "resumen": (f"Por {una}: S/ {float(base.get('actual') or 0):,.2f} en el sistema → "
+                    f"S/ {float(base.get('por') or 0):,.2f} con esta propuesta. En un plato, "
+                    "Δ es por plato; en una receta base, por su unidad."),
+        "cabecera": ["Receta", "Es", "% hoy", "% nuevo", "Δ costo"],
+        "filas": [[_recorte(str(r["receta"]) + (f" (por {r['via']})" if r.get("via") else ""),
+                            58),
+                   r["es"], pct(r["pct_actual"], r["combo"]), pct(r["pct_nuevo"], r["combo"]),
+                   signo(r["delta"])] for r in filas],
+        "pie": [],
+    }

@@ -236,6 +236,42 @@ def _pruebas_articulos_nuevos():
     check("una receta que se contiene a sí misma no cuelga (ni cuenta como uso)",
           an.resumen_usos(an.usos_de(idx, "LOOP")), "sin usos")
     check("sin usos", an.resumen_usos(an.usos_de(idx, "NADA")), "sin usos")
+
+    # ── A quién afecta cambiar una receta base (Modificar › Receta base) ──
+    # +10 soles el KILO de DEMI: el Asado lleva 20 g (+0,20); la Salsa lleva
+    # 100 g por kilo (+1 el kilo) y el Lomo y el Combo llevan 50 g y 10 g de
+    # Salsa (+0,05 y +0,01). Las unidades salen de GRAMOS → 1000 por kilo.
+    imp = an.impacto(idx, "DEMI", 10.0)
+    check("Δ directo: lo que lleva ÷ el factor × el Δ", imp["platos"]["P1"], 0.2)
+    check("Δ de la receta base que lo lleva", imp["bases"]["SALSA"], 1.0)
+    check("Δ por la receta base", imp["platos"]["P2"], 0.05)
+    check("sin afectar lo que no lo lleva", sorted(imp["platos"]), ["P1", "P2", "P3"])
+
+    # ── El detalle que va al PDF y al Excel (regla #607) ──
+    rs = an.bloques_detalle({
+        "clase": "rs", "nombre": "(Rs) Puré", "unidad_kardex": "KILOS", "costo_por_unidad": 13.26,
+        "rinde": 1.0, "unidad_rinde": "KILOS", "area": "COCINA", "costo_tanda": 13.26,
+        "lineas": [{"cod": "0002623", "nombre": "Camote", "unidad": "GRAMOS", "cantidad": 1300,
+                    "precio": 0.0028, "tipo": "almacen"},
+                   {"cod": "NUEVO-4", "nombre": "Chipotle", "unidad": "GRAMOS", "cantidad": 30,
+                    "precio": 0.06, "tipo": "nuevo"}]})
+    check("una receta base lleva sus insumos, y lo nuevo dice NUEVO",
+          [f[0] for f in rs["filas"]], ["0002623", "NUEVO"])
+    check("su pie: el costo de la tanda y por unidad",
+          rs["pie"], [("Costo de 1 kilo", "S/ 13.26"), ("Costo por kilo", "S/ 13.26")])
+    p_ = an.bloques_detalle({
+        "clase": "p", "nombre": "(P) Medallón", "unidad_kardex": "UND", "costo_por_unidad": 0,
+        "sale_de": "NUEVO-1", "sale_de_nombre": "Lomo madurado", "sale_de_unidad": "KILOS",
+        "sale_de_nuevo": True, "salida": "UND", "peso_g": 220, "merma_pct": 17.0})
+    check("un porcionado sin costo se marca SIN DETALLE", p_["etiqueta"],
+          "Porcionado nuevo · SIN DETALLE")
+    check("y si sale de algo nuevo, lo dice", p_["filas"][0], ["Sale de", "Lomo madurado (nuevo)"])
+    bi = an.bloque_impacto(
+        [{"receta": "Asado", "es": "plato", "via": "", "delta": 0.2, "pct_actual": 34.5,
+          "pct_nuevo": 34.8, "combo": False}],
+        {"unidad": "KILOS", "actual": 66.6, "por": 76.6})
+    check("a quién afecta: % de hoy, el nuevo y el Δ con su signo",
+          bi["filas"], [["Asado", "plato", "34.5 %", "34.8 %", "+0.20"]])
     return fallos
 
 

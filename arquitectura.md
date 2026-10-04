@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-606 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+607 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (198)
+**CSS y estilos** (199)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -232,6 +232,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 - **#596** — La franja superior de contexto no lleva KPIs: dice dónde estás, no cuánto
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
+- **#607** — En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y «Modificar» abre también una…
 
 **Layout y alturas** (87)
 
@@ -689,7 +690,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 
-**Datos, R2 y DuckDB** (89)
+**Datos, R2 y DuckDB** (90)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -780,6 +781,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#601** — El stock a una fecha sale del kardex por hora, con la regla del Histórico del POS: el último…
 - **#603** — Las notas de crédito de los proveedores se RESTAN de la compra que corrigen, en la fecha de…
 - **#605** — «Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en casa el día que se…
+- **#607** — En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y «Modificar» abre también una…
 
 **SUNAT y SIRE** (53)
 
@@ -47794,6 +47796,92 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+607. **En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y
+     «Modificar» abre también una receta base y dice a quién afecta.**
+     2026-10-04, cuatro pedidos sobre la #597: (1) un (P) nuevo no podía
+     salir de algo nuevo; (2) el PDF sólo decía una línea de cada nuevo;
+     (3) una (Rs) nueva no podía llevar otra (Rs), un (P) ni una compra
+     nuevos de verdad (lo escrito ahí era una compra suelta sin unidad);
+     (4) «Modificar» sólo importaba platos.
+
+     - **Lo nuevo es UNA lista con referencias** (`formulario_receta.py`,
+       `_hijos` / `_alcanzables`). Todo selector de un artículo —el
+       buscador de la receta, el de una (Rs) nueva, el «Sale de» de un (P)
+       nuevo— ofrece lo del almacén, lo nuevo ya creado y crear algo
+       nuevo; crear desde una (Rs) o un (P) lleva un `destino` y lo
+       engancha ahí. Cada (P)/(Rs) tiene su pestaña, también el de
+       adentro. Se descartó armar sub-tablas dentro de un panel: en 426px
+       no entran dos niveles.
+     - **El costo baja por las referencias** (`_costo_kardex`, por unidad
+       de kardex) y `_sincronizar_nuevos` escribe precio, unidad y nombre
+       en TODA línea que nombre algo nuevo —de la receta y de cada (Rs)—
+       al principio de la corrida. El precio de una compra nueva vive en
+       su detalle (`precio_kardex`), no en la línea: escribirlo en
+       cualquier tabla va ahí (`_escribir_precio_nuevo`).
+     - **Un ciclo no cuelga**: el costo lleva la pila de lo que está
+       calculando y lo que se repite vale 0 («falta detalle»). Los
+       selectores no ofrecen lo que ya contiene al que se edita
+       (`_contiene`).
+     - **Lo que nadie usa se va**: el detalle de un nuevo que ninguna
+       línea alcanza se borra al sincronizar (quitarlo de una (Rs) se
+       lleva su pestaña).
+     - **Lo estimado o sin detalle cuenta también ADENTRO**
+       (`_pendientes`): una (Rs) completa que lleva una compra estimada va
+       en ámbar, «precio estimado».
+
+     **El PDF y el Excel traen el detalle** (`articulos_nuevos.
+     bloques_detalle`, el mismo para los dos): páginas aparte con un
+     bloque por artículo —una (Rs), su tabla de insumos con lo nuevo en
+     «NUEVO», el rinde y el costo por unidad; un (P), de dónde sale, el
+     precio de lo que entra, peso, merma e insumo por unidad; una compra,
+     su precio estimado—, partido entre páginas si no entra. En el Excel,
+     una hoja «Detalle». La primera página marca lo nuevo con «NUEVO» en
+     el código y avisa que el detalle sigue.
+
+     **Modificar › Receta base**: un «Plato | Receta base» en la fila del
+     importador. La receta base entra con sus insumos activos, para 1
+     unidad (como la guarda el sistema), y la derecha muestra «Costo e
+     impacto»: el rinde (editable), su costo del sistema contra el nuevo y
+     **a quién afecta** — cada receta activa que la lleva, directo o por
+     otra receta base, con el Δ de su costo y, en los platos, el % de
+     costo de hoy y el que quedaría. La cuenta es
+     `articulos_nuevos.impacto`: subir por las recetas base como el
+     costeo del sistema, lo que lleva de un hijo ÷ el factor (gramos por
+     kilo) × el Δ del hijo; un plato que la lleva por dos caminos suma los
+     dos. Verificado a mano: la Demiglace punteada +S/ 7,40 el kilo da
+     +0,74 al Lomo al Trapo (100 g) y +0,67 al Ojo de Bife por el Gravy de
+     culantro (900 g por kilo de gravy, 100 g de gravy). El índice de
+     «dónde se usa» guarda desde ese día el `FACTOR` de cada línea y el
+     costo del plato.
+
+     **Modificar un combo NO está**: `cartacosteada.parquet` trae su
+     costo, no su composición. La consulta de `TCOMBO` (combo · grupo ·
+     producto · cantidad · fijo) quedó probada contra el POS y entregada
+     para una fila nueva del Sheet; falta decidir cómo se costea un grupo
+     «a elegir» en una lista plana.
+
+     Trampas de este cambio:
+     - **El `resumen` del envío ya tenía una clave `base`** (el precio
+       neto): la receta base va en `receta_base`. Con el mismo nombre, el
+       correo moría con «'float' object is not subscriptable» al escribir
+       un precio — lo encontró el recorrido en el navegador automatizado, no un
+       test.
+     - **Las pestañas se acortan con la cantidad**: con tres o más de lo
+       nuevo los nombres bajan a 10 y 8 caracteres y «Dónde se usa» pasa a
+       «Usos», para seguir en un renglón (#597).
+     - **El selector «Plato | Receta base» pide ~200px**: en una columna
+       angosta se apilaba y la tarjeta crecía 28.
+
+     Medido en un navegador automatizado a 1323×619 (los 17 estados de la #597 y 9 más:
+     un (P) de una compra nueva, una (Rs) dentro de otra, el PDF de los
+     dos, y una receta base importada, con el rinde cambiado y al volver de
+     otra pestaña): las dos tarjetas en 613, sin desborde.
+
+     Sin renombres de lo que importa `app.py`, pero son tres módulos que
+     Cloud no relee hasta reiniciar (#357): «Reboot app».
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -47806,7 +47894,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#606**; la próxima toma el número siguiente.
+> última regla es la **#607**; la próxima toma el número siguiente.
 
 >
 
