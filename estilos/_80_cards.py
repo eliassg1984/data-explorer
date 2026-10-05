@@ -2723,7 +2723,10 @@ CSS = """    /* ================================================================
        tenía la `.sem-kpis` de «Compras por período» (quitada el
        2026-10-01), con una marca de color por canal —la de su tramo en la barra— para que la
        fila haga también de leyenda. Vive acá y no allá porque ese CSS sólo
-       se inyecta en Compras. */
+       se inyecta en Compras. Desde el 2026-10-05 la usa también el total de
+       la ventana de «Comparativo vs Año Pasado» (`ventas_comp_tot`, regla
+       #614), que también hace de leyenda. */
+    .st-key-ventas_comp_tot [data-testid="stMarkdownContainer"],
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],
     .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"],
     .st-key-vt_pl_cabfila [data-testid="stMarkdownContainer"],
@@ -2734,6 +2737,7 @@ CSS = """    /* ================================================================
     /* El título y los KPI en un renglón (regla #519): el look de
        `.chart-card-hdr` —mismo cuerpo, peso y color, y la línea abajo— pero
        compartiendo el flex con los KPI. */
+    .st-key-ventas_comp_tot .vt-cab,
     .st-key-vt_resumen_kpi .vt-cab,
     .st-key-vt_mix_cabfila .vt-cab,
     .st-key-vt_pl_cabfila .vt-cab,
@@ -2746,6 +2750,7 @@ CSS = """    /* ================================================================
         padding: 0 0 6px;
         border-bottom: 1px solid var(--border);
     }
+    .st-key-ventas_comp_tot .vt-cab-tit,
     .st-key-vt_resumen_kpi .vt-cab-tit,
     .st-key-vt_mix_cabfila .vt-cab-tit,
     .st-key-vt_pl_cabfila .vt-cab-tit,
@@ -2757,6 +2762,7 @@ CSS = """    /* ================================================================
         color: var(--accent-deep);
         white-space: nowrap;
     }
+    .st-key-ventas_comp_tot .vt-kpis,
     .st-key-vt_resumen_kpi .vt-kpis,
     .st-key-vt_mix_cabfila .vt-kpis,
     .st-key-vt_pl_cabfila .vt-kpis,
@@ -2767,6 +2773,7 @@ CSS = """    /* ================================================================
         align-items: stretch;
         gap: 2px 0;
     }
+    .st-key-ventas_comp_tot .vt-kpi,
     .st-key-vt_resumen_kpi .vt-kpi,
     .st-key-vt_mix_cabfila .vt-kpi,
     .st-key-vt_pl_cabfila .vt-kpi,
@@ -2781,6 +2788,7 @@ CSS = """    /* ================================================================
         line-height: 1.2;
         border-left: 1px solid var(--border);
     }
+    .st-key-ventas_comp_tot .vt-kpi:first-child,
     .st-key-vt_resumen_kpi .vt-kpi:first-child,
     .st-key-vt_mix_cabfila .vt-kpi:first-child,
     .st-key-vt_pl_cabfila .vt-kpi:first-child,
@@ -2790,6 +2798,7 @@ CSS = """    /* ================================================================
         border-left: none;
         max-width: none;
     }
+    .st-key-ventas_comp_tot .vt-kpi-rot,
     .st-key-vt_resumen_kpi .vt-kpi-rot,
     .st-key-vt_mix_cabfila .vt-kpi-rot,
     .st-key-vt_pl_cabfila .vt-kpi-rot,
@@ -2801,6 +2810,7 @@ CSS = """    /* ================================================================
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    .st-key-ventas_comp_tot .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_resumen_kpi .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_pl_cabfila .vt-kpi[style] .vt-kpi-rot::before,
@@ -2814,6 +2824,7 @@ CSS = """    /* ================================================================
         border-radius: 2px;
         background: var(--vt-kpi-color);
     }
+    .st-key-ventas_comp_tot .vt-kpi-val,
     .st-key-vt_resumen_kpi .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-val,
@@ -2824,6 +2835,7 @@ CSS = """    /* ================================================================
         color: var(--text-primary);
         white-space: nowrap;
     }
+    .st-key-ventas_comp_tot .vt-kpi-sub,
     .st-key-vt_resumen_kpi .vt-kpi-sub,
     .st-key-vt_mix_cabfila .vt-kpi-sub,
     .st-key-vt_pl_cabfila .vt-kpi-sub,
@@ -2834,6 +2846,7 @@ CSS = """    /* ================================================================
         font-weight: 400;
         color: var(--text-secondary);
     }
+    .st-key-ventas_comp_tot .vt-kpi-total .vt-kpi-val,
     .st-key-vt_resumen_kpi .vt-kpi-total .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-total .vt-kpi-val,
@@ -2842,6 +2855,7 @@ CSS = """    /* ================================================================
         color: var(--accent-deep);
         font-weight: 700;
     }
+    .st-key-ventas_comp_tot .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_resumen_kpi .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-alerta .vt-kpi-val,
@@ -4112,33 +4126,132 @@ CSS = """    /* ================================================================
     div[class*="st-key-ventas_comp_vista"] {
         margin-top: 6px !important;
     }
-    /* "Vista" va a la DERECHA de la franja (es el otro eje). NO se intenta
-       con `justify-content: flex-end`: probado en el navegador, el div flex
-       interno del stButtonGroup se queda en su ancho de contenido (165px)
-       aunque se le fuerce `width: 100% !important` en los tres niveles de la
-       cadena — element container, stButtonGroup y el propio div. Lo empuja
-       una columna espaciadora vacía en ventas_comparativo.py. */
-    div[class*="st-key-ventas_comp_ventana_"],
-    div[class*="st-key-ventas_comp_modo"] {
-        position: relative;
-        padding-left: 17px !important;
+    /* La fila es un `st.container(horizontal=True, gap=None)` con cada
+       grupo a su ancho de contenido y un `st.space("stretch")` que empuja
+       «Vista» a la DERECHA (regla #614). Hasta el 2026-10-05 eran
+       `st.columns` proporcionales: el sobrante de cada columna caía a la
+       derecha de su grupo y la línea quedaba a 102-113px del anterior y a
+       17 del siguiente. Ahora el aire lo pone el `padding-left` del
+       ENVOLTORIO de cada grupo (`ventas_comp_g_*`, clase exacta) y la línea
+       va en la MITAD de ese padding: 24px a cada lado. El `top` suma 3px,
+       la mitad del `margin-top: 6px` de los pills de arriba, para que la
+       línea quede centrada en el texto y no en la caja. «Vista» lleva el
+       mismo aire sin línea, por si el espaciador se queda en cero. */
+    div[class*="st-key-ventas_comp_ctrl_"] {
+        container-type: inline-size;
+        container-name: vcompctrl;
     }
-    div[class*="st-key-ventas_comp_ventana_"]::before,
-    div[class*="st-key-ventas_comp_modo"]::before {
+    .st-key-ventas_comp_g_ventana,
+    .st-key-ventas_comp_g_modo {
+        position: relative;
+        padding-left: 48px;
+    }
+    /* «Vista» se dibuja en un `st.empty()` que se vacía al empezar cada
+       corrida. En una fila donde no entra al lado de los otros (el rail
+       fijado entre 901 y ~985px, el celular) su renglón desaparecía
+       mientras cargan los datos —vacío mide 24px y sube al de arriba— y la
+       tarjeta subía y bajaba 38px en cada clic (#108). Ahí va SIEMPRE en
+       su propio renglón (`100cqw`, el ancho de la fila; ver la fila angosta
+       abajo) y con el alto de un grupo lleno: 38 medido, 50 en el celular,
+       donde los botones van a 0.9rem. */
+    .st-key-ventas_comp_g_vista {
+        padding-left: 24px;
+        min-height: 38px;
+    }
+    @media screen and (max-width: 768px) {
+        .st-key-ventas_comp_g_vista {
+            min-height: 50px;
+        }
+    }
+    .st-key-ventas_comp_g_ventana::before,
+    .st-key-ventas_comp_g_modo::before {
         content: "";
         position: absolute;
-        left: 0;
-        top: 50%;
+        left: 24px;
+        top: calc(50% + 3px);
         transform: translateY(-50%);
         width: 1px;
         height: 18px;
         background: var(--border);
     }
+    /* FILA ANGOSTA. La fila de Día mide 793px con 24 a cada lado de la
+       línea; en una más angosta «Vista» baja a otro renglón y la franja
+       crece de 38 a 88px. Se mide la FILA (container query) y no el
+       viewport: con la columna del rail fijada (248px en vez de 80) el
+       mismo viewport deja ~170px menos. Angosta: 12 a cada lado, los tabs
+       con 12 entre ellos y el texto a 13px (~620px). En el celular la fila
+       se envuelve: los grupos van de a varios por renglón según quepan.
+       El tamaño va en el `<p>`: en Streamlit 1.64 el texto del pill vive en
+       un stMarkdownContainer que fija 0.875rem y no hereda el del botón —
+       medido: el `font-size: 15px` de los pills de arriba deja el botón en
+       15 y el texto en 14. */
+    @container vcompctrl (max-width: 800px) {
+        .st-key-ventas_comp_g_ventana,
+        .st-key-ventas_comp_g_modo {
+            padding-left: 24px;
+        }
+        .st-key-ventas_comp_g_vista {
+            padding-left: 12px;
+        }
+        .st-key-ventas_comp_g_ventana::before,
+        .st-key-ventas_comp_g_modo::before {
+            left: 12px;
+        }
+        div[class*="st-key-ventas_comp_grano"] [data-testid="stButtonGroup"]
+            button[data-variant="pills"] p,
+        div[class*="st-key-ventas_comp_ventana_"] [data-testid="stButtonGroup"]
+            button[data-variant="pills"] p,
+        div[class*="st-key-ventas_comp_modo"] [data-testid="stButtonGroup"]
+            button[data-variant="pills"] p,
+        div[class*="st-key-ventas_comp_vista"] [data-testid="stButtonGroup"]
+            button[data-variant="pills"] p {
+            font-size: 13px !important;
+        }
+        div[class*="st-key-ventas_comp_grano"] [data-testid="stButtonGroup"] > div,
+        div[class*="st-key-ventas_comp_ventana_"] [data-testid="stButtonGroup"] > div,
+        div[class*="st-key-ventas_comp_modo"] [data-testid="stButtonGroup"] > div,
+        div[class*="st-key-ventas_comp_vista"] [data-testid="stButtonGroup"] > div {
+            gap: 12px !important;
+        }
+    }
+    /* Más angosta todavía (la fila compacta de Día pide ~650): «Vista» no
+       entra al lado y va a su propio renglón — fijo, lleno o vacío. */
+    @container vcompctrl (max-width: 660px) {
+        .st-key-ventas_comp_g_vista {
+            min-width: 100cqw;
+        }
+    }
+    /* Alto mínimo del total de la ventana: se llena después de cargar los
+       datos y, vacío, la tarjeta saltaría en cada clic (regla #108). */
+    .st-key-ventas_comp_tot {
+        min-height: 28px;
+    }
+    /* En el celular los cinco KPI (~410px) no entran en una tarjeta de
+       ~300: la fila se partía en dos renglones de 57px, la reserva de 28
+       no la cubría (todo lo de abajo saltaba 29px en cada clic) y el
+       segundo renglón abría con el separador de su primer KPI. Un solo
+       renglón deslizable, con el desvanecido de las otras filas de KPI de
+       Ventas (regla #522) que avisa que hay más. */
+    @media screen and (max-width: 768px) {
+        .st-key-ventas_comp_tot .vt-kpis {
+            flex-wrap: nowrap !important;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+            mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+            padding-right: 24px;
+        }
+        .st-key-ventas_comp_tot .vt-kpi {
+            flex: 0 0 auto;
+        }
+    }
 
     /* Botón "Cerrar" del drill de Platos (Ventas › Año Pasado): ícono solo,
        sin relleno — a pedido, el botón secundario ancho (127×40,
        use_container_width) "es muy grande para desktop" y comparte fila
-       con el título "Platos · …" (ver graficos/ventas_comparativo.py).
+       con el título "Qué explica la diferencia · …" (ver
+       graficos/ventas_comparativo.py).
        `vertical_alignment="center"` de st.columns no alcanzó (medido:
        align-items quedaba en "stretch", no en "center"), así que se fuerza
        acá. Con eso puesto TODAVÍA quedaban 8px de diferencia entre los
