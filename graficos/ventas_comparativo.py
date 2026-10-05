@@ -399,9 +399,13 @@ def _var_tabla(actual, previo):
     """%Δ para la tabla del drill, que no puede llevar vacíos: un NaN se ve
     «None» en `st.dataframe` aunque el Styler diga otra cosa (regla #529).
     Sin venta el año pasado: +∞ si hoy vende («nuevo»), −∞ si hoy da
-    negativo (sólo notas de crédito) y 0 si ninguno de los dos vendió."""
+    negativo (sólo notas de crédito) y 0 si ninguno de los dos vendió.
+
+    Con el año pasado NEGATIVO (ese día sólo hubo una nota de crédito del
+    producto) se divide por su valor absoluto: dividir por la base negativa
+    daba el signo al revés y la celda contradecía al Δ S/ de al lado."""
     if previo:
-        return (actual - previo) / previo * 100
+        return (actual - previo) / abs(previo) * 100
     if actual > 0:
         return float("inf")
     return float("-inf") if actual < 0 else 0.0
@@ -434,7 +438,11 @@ def _explica_diferencia(t, top=15):
     # vende hoy y después por nombre (`kind="stable"` lo conserva).
     t = t.sort_values(["venta", "prod"], ascending=[False, True])
     t = t.loc[t["d"].abs().sort_values(ascending=False, kind="stable").index]
-    filas, resto = t.head(top).copy(), t.iloc[top:]
+    # Se junta sólo si sobran DOS o más: una fila «Resto · 1» ocupa el
+    # mismo renglón que el producto con su nombre (criterio de
+    # `ventas_mix.tramos`).
+    _n = top + 1 if len(t) == top + 1 else top
+    filas, resto = t.head(_n).copy(), t.iloc[_n:]
     filas["resto"] = False
     resumen = {"d_total": float(t["d"].sum()), "d_top": float(filas["d"].sum()),
                "n_resto": len(resto)}
@@ -567,8 +575,8 @@ def _html_totales(tot_act, tot_ap, es_desc, tramo_act, tramo_ap):
     ES LA LEYENDA de lo que se dibuja: en Montos, «Año pasado» y «Actual»
     llevan el color de su barra y la figura va sin legend; en
     Descomposición lo llevan «Clientes» y «Ticket», las dos líneas. Se
-    pierde el clic en el legend de Plotly para ocultar una serie, a cambio
-    de los ~40px que el legend ocupaba arriba del gráfico.
+    pierde el clic en el legend de Plotly para ocultar una serie (#91), a
+    cambio de los 95px de margen que el legend pedía arriba (ahora 30).
 
     `tot_*` son los `total` de `_series_por_rangos` (o None); `tramo_*` el
     texto de los días sumados, para el tooltip."""
@@ -695,14 +703,16 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # derecha, no como un separador. Y «Vista» no llegaba al borde: 108px
         # de aire a la derecha contra 16 a la izquierda.
         #
-        # Con `gap` fijo el hueco es el mismo a los dos lados de cada línea
-        # (`gap` = el `padding-left` del grupo en `estilos/_80_cards.py`), y
-        # `st.space("stretch")` empuja «Vista» contra el borde derecho — lo
+        # Sin `gap`: el aire lo pone el `padding-left` de cada envoltorio y la
+        # línea va en la mitad de ese padding (`estilos/_80_cards.py`), así
+        # que es el mismo a los dos lados; y la fila es un container query
+        # que lo achica cuando ELLA es angosta (con la columna fijada
+        # también). `st.space("stretch")` empuja «Vista» contra el borde — lo
         # que la #107 no logró con `justify-content`: allá se empujaba el div
         # interno del stButtonGroup; acá se acomoda el envoltorio del grupo.
         # Los envoltorios llevan `_g_` en la key para que no los atrapen los
         # `[class*="st-key-ventas_comp_grano"]` (y demás) de los pills.
-        with st.container(horizontal=True, gap=24,
+        with st.container(horizontal=True, gap=None,
                           key=f"ventas_comp_ctrl_{_grano_layout}"):
             c1 = st.container(width="content", key="ventas_comp_g_grano")
             c2 = st.container(width="content", key="ventas_comp_g_ventana")
@@ -725,9 +735,9 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 label_visibility="collapsed",
             ) or VENTANA_DEF[grano]
         modo = "semana"
-        # `c3 is not None` protege el caso raro en que el ancho se decidió con
-        # un grano y el widget devolvió otro: sin la guarda sería un
-        # AttributeError sobre None en vez de una franja un poco más angosta.
+        # `c3 is not None` protege el caso raro en que la fila se armó con un
+        # grano y el widget devolvió otro: sin la guarda sería un
+        # AttributeError sobre None en vez de una franja sin «alinear por».
         if grano == "Día" and c3 is not None:
             with c3:
                 modo_lbl = st.pills(
@@ -1038,7 +1048,12 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # salían hacia ese aire; sin él, el rango les hace lugar adentro —
         # el de «en curso» sólo si hay un período en curso (medio renglón
         # de texto arriba de cada uno: ~0.05 del tope).
-        _piso = min(0.0, min(y_act + y_ap, default=0.0))
+        # Abajo, lo mismo cuando hay un día negativo (sólo notas de
+        # crédito): sin aire, su etiqueta «outside» caía bajo el eje.
+        _min = min(y_act + y_ap, default=0.0)
+        _esc = max(_tope, -_min)
+        _piso = ((_min - _esc * (0.14 if mostrar_etq else 0.04))
+                 if _min < 0 else 0.0)
         _techo = ((1.30 if parciales else 1.22) if mostrar_etq else 1.10)
         fig.update_yaxes(tickprefix="S/ ", tickformat=",.0f",
                          gridcolor=GRIS_BORDE, zeroline=False,
@@ -1316,8 +1331,11 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 tv = rk[_orden].rename(columns=_cols)
                 _es_resto = rk["resto"].to_numpy()
 
+                # El signo y el color salen del monto como se VE: un Δ de
+                # céntimos se escribe «S/ 0», sin signo y en gris.
                 def _fmt_d(v):
-                    _s = "+" if v > 0 else ("−" if v < 0 else "")
+                    _r = round(v)
+                    _s = "+" if _r > 0 else ("−" if _r < 0 else "")
                     return f"{_s}S/ {abs(v):,.0f}"
 
                 # Sin vacíos en la tabla (regla #529): ±∞ marca «sin venta el
@@ -1335,7 +1353,9 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     return f"color:{_var_txt(v)[1]}"
 
                 def _sty_d(v):
-                    return f"color:{_var_txt(v)[1]}" if v else ""
+                    _r = round(v)
+                    return (f"color:{GRIS_TEXTO}" if _r == 0
+                            else f"color:{EXITO if _r > 0 else ERROR}")
 
                 def _sty_resto(fila):
                     _css = (f"color:{GRIS_TEXTO};font-style:italic"
@@ -1362,11 +1382,10 @@ def _ventas_comparativo(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 _pie = (f"Diferencia del período: {_fmt_d(_res['d_total'])}"
                         f"{_pct_tot}. Ordenados por cuánto pesaron, para "
                         "arriba o para abajo")
-                if _res["n_resto"]:
-                    _otros = ("el otro" if _res["n_resto"] == 1
-                              else f"los otros {_res['n_resto']}")
+                if _res["n_resto"]:      # nunca 1: ver `_explica_diferencia`
                     _pie += (f": estos {_n_top} explican "
-                             f"{_fmt_d(_res['d_top'])} y {_otros}, "
+                             f"{_fmt_d(_res['d_top'])} y los otros "
+                             f"{_res['n_resto']}, "
                              f"{_fmt_d(_res['d_total'] - _res['d_top'])}")
                 st.caption(_pie + ". «nuevo» en %Var: no se vendió en esos "
                            "días del año pasado.")

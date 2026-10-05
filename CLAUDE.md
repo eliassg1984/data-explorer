@@ -944,11 +944,12 @@ Detalle en `arquitectura.md` reglas #524, #525 y #542.
 
 ## El «año pasado» de Ventas es 364 días antes, no la misma semana ISO
 
-Día y Semana se comparan contra 52 semanas justas (el mismo día de la
-semana); Mes y Año, contra el mismo mes del calendario. La semana ISO da
-lo mismo casi siempre, pero 2026 tiene 53: en todo 2027 compara contra 371
-días antes — el Día de la Madre contra un domingo cualquiera. Comparativo,
-Mix › Detalle › «Año pasado» y Por hora lo cuentan igual, y
+«Mismo día de semana» (el default de Día) y Semana se comparan contra 52
+semanas justas, el mismo día de la semana; «Misma fecha» del Comparativo,
+Mes y Año, contra la misma fecha del calendario un año antes. La semana
+ISO da lo mismo casi siempre, pero 2026 tiene 53: en todo 2027 compara
+contra 371 días antes — el Día de la Madre contra un domingo cualquiera.
+Comparativo, Mix › Detalle › «Año pasado» y Por hora lo cuentan igual, y
 `test_graficos.py` los compara día por día de 2025 a 2029. Regla #614.
 
 ## La compra resta las notas de crédito: `definicion_compra.py`

@@ -2131,6 +2131,15 @@ def _pruebas_puras():
     check("explica · sin venta el año pasado es «nuevo» (+∞), no un vacío",
           float(_tab_d.loc[_tab_d["prod"] == "C", "var"].iloc[0]),
           float("inf"))
+    # Con UN producto de más no hay «Resto · 1»: va con su nombre.
+    _tab_d1, _res_d1 = _vc._explica_diferencia(_t_d, top=4)
+    check("explica · sobra uno: va con su nombre, sin fila Resto",
+          (len(_tab_d1), bool(_tab_d1["resto"].any()), _res_d1["n_resto"]),
+          (5, False, 0))
+    # El año pasado negativo (sólo una nota de crédito): el signo del %Var
+    # sigue al del Δ S/, no al revés.
+    check("explica · año pasado negativo: el %Var sube si el Δ sube",
+          _vc._var_tabla(100.0, -40.0) > 0, True)
     check("variación · 0 % sin signo y en gris",
           _vc._var_txt(0.04)[0], "0%")
     check("variación · el menos tipográfico", _vc._var_txt(-4.66)[0], "−4.7%")

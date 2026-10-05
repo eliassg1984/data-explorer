@@ -324,7 +324,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 
-**Plotly y figuras** (109)
+**Plotly y figuras** (110)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -435,6 +435,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#582** — Compras › Producto: la tabla de abajo del gráfico muestra SEIS filas, las barras dicen la…
 - **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
 - **#610** — El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico (con o sin número), puntos…
+- **#614** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
 
 **AgGrid y tablas** (89)
 
@@ -528,7 +529,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 - **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
 
-**Streamlit** (161)
+**Streamlit** (160)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -690,7 +691,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
-- **#614** — Ventas › Comparativo vs Año Pasado: el «mismo día de semana» es 364 días antes, no la misma…
 
 **Datos, R2 y DuckDB** (92)
 
@@ -7440,6 +7440,15 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
     El control son los checkboxes del panel "Detalle", que además muestran
 
     el valor absoluto — tener legend Y panel era decir lo mismo dos veces.
+
+    > ⚠ **Desde el 2026-10-05 Montos tampoco tiene legend ni `_legend_on`:
+
+    > la leyenda es la fila del total (`_html_totales`) y el margen de arriba
+
+    > es fijo (30, 50 en Descomposición) — leer la #614.** Se perdió el clic
+
+    > para ocultar una serie en Montos, que esta regla registra como pedido.
+
 
     El legend nativo queda sólo en Montos, y el margen superior es
 
@@ -48275,16 +48284,21 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        - **La fila ES la leyenda**: la muestra de color de la #515 va en lo
          que se dibuja (Año pasado/Actual en Montos, Clientes/Ticket en
          Descomposición) y la figura va sin legend. Se perdió el clic en el
-         legend para ocultar una serie; se ganaron los 95px de margen que
-         el legend pedía arriba (ahora 30, 50 en Descomposición por el
-         panel «Detalle»).
+         legend para ocultar una serie —que la #91 registra como pedido del
+         usuario: se le consultó—; se ganaron los 95px de margen que el
+         legend pedía arriba (ahora 30, 50 en Descomposición por el panel
+         «Detalle»).
        - **Sin legend el %Var se salía por arriba**: las etiquetas son
          anotaciones y el autorange no las ve. En Montos el eje Y lleva
-         rango fijo: 1.22 del tope, 1.30 si hay un período «en curso».
+         rango fijo: 1.22 del tope, 1.30 si hay un período «en curso». Y
+         abajo, si hay un día negativo (sólo notas de crédito), 0.14 de aire:
+         sin él la etiqueta de esa barra caía bajo el eje.
        - **La tarjeta no crece**: la fila mide 28 + 16 y la figura pasó de
          340 a 296 (`alturas.VENTAS_COMP_FIG`; el 340 era un literal que la
-         guarda de altos no veía por el paréntesis). El área de trazo
-         creció de ~200 a 232 (248 en Mes). Lo que sí la hizo crecer, en la
+         guarda de altos no veía por el paréntesis). El área de trazo crece
+         21px con etiquetas (el margen de arriba baja 65 y la figura 44):
+         232 en Día medido a 1440, 248 en Mes. Con 30 días el margen ya era
+         60 y el área queda casi igual. Lo que sí la hizo crecer, en la
          primera pasada, fue el CAPTION: un texto 26 caracteres más largo
          bajó a un tercer renglón y la tarjeta midió 22px más. Se acortó
          hasta el largo de antes. Lo que se mide es la tarjeta (#449).
@@ -48293,8 +48307,11 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        que el año pasado se vendía y hoy no —venta 0— quedaba siempre
        último y fuera, aunque el docstring decía que verlo era el punto.
        Ahora ordena por |Δ S/|, como el puente de Mix, agrega la columna
-       Δ S/ y junta el resto en una fila. Sin vacíos (#529): ±∞ en el %Var
-       y el formateador escribe «nuevo».
+       Δ S/ y junta el resto en una fila, sólo si sobran dos o más. Sin
+       vacíos (#529): ±∞ en el %Var y el formateador escribe «nuevo». Con
+       el año pasado negativo el %Var divide por su valor absoluto, y el
+       Δ S/ decide signo y color por el monto redondeado: si no, «−350%» al
+       lado de «+S/ 140», y «+S/ 0» en verde.
        - **No lleva a Mix**, aunque fue lo que se propuso primero: Mix sólo
          ve el rango de la franja (`ventas_mix.py:586`) y con el de por
          defecto 9 de las 14 barras de Día caen afuera. Llevarlo obligaba a
@@ -48307,13 +48324,22 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        `st.columns` proporcionales el sobrante de cada columna caía a la
        derecha del grupo: la línea quedaba a 102-113px del anterior y a 17
        del siguiente, y «Vista» a 108px del borde contra 16 a la izquierda
-       (medido a 1440). Ahora 24 y 24, y 34px a cada borde, de 780 a 1440.
+       (medido a 1440). Ahora 24 y 24 en una fila de 800px o más (12 y 12
+       en una angosta), y «Vista» a la misma distancia del borde derecho
+       que «Día» del izquierdo.
        - Los envoltorios llevan `_g_` en la key (`ventas_comp_g_grano`…):
          sin eso los atrapan los `[class*="st-key-ventas_comp_grano"]` de
          los pills y heredan su estilo.
-       - **Debajo de 1013px la fila no entra** con gap de 24 y «Vista» baja
-         a otro renglón (franja de 38 a 88px). Hasta 769px: 12px a cada
-         lado de la línea y el texto a 13px.
+       - **El aire lo pone el `padding-left` del envoltorio**, con la línea
+         en su mitad, y no el `gap` de la fila (`gap=None`).
+       - **Una fila de menos de 800px no entra** con 24 a cada lado: «Vista»
+         baja a otro renglón (franja de 38 a 88px). La fila es su propio
+         container (`container-name: vcompctrl`) y un `@container
+         vcompctrl (max-width: 800px)` baja a 12 a cada lado y el texto a
+         13px. No un
+         `@media` por viewport, como fue en la primera pasada: con la
+         columna del rail fijada (248px en vez de 80, #568) el mismo
+         viewport deja ~170px menos de fila.
        - **El `font-size` de un pill va en su `<p>`**: en Streamlit 1.64 el
          texto vive en un stMarkdownContainer que fija 0.875rem. El
          `font-size: 15px` de los pills de esta franja deja el botón en 15

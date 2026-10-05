@@ -4126,51 +4126,63 @@ CSS = """    /* ================================================================
     div[class*="st-key-ventas_comp_vista"] {
         margin-top: 6px !important;
     }
-    /* La fila es un `st.container(horizontal=True, gap=24)` con cada grupo
-       a su ancho de contenido y un `st.space("stretch")` que empuja «Vista»
-       a la DERECHA (regla #614). Hasta el 2026-10-05 eran `st.columns`
-       proporcionales: el sobrante de cada columna caía a la derecha de su
-       grupo y la línea quedaba a 102-113px del anterior y a 17 del
-       siguiente. Ahora el separador va en el ENVOLTORIO del grupo
-       (`ventas_comp_g_*`, clase exacta) y su `padding-left` es el mismo
-       `gap` del .py: 24px a cada lado de la línea. El `top` suma 3px, la
-       mitad del `margin-top: 6px` de los pills de arriba, para que la línea
-       quede centrada en el texto y no en la caja. */
+    /* La fila es un `st.container(horizontal=True, gap=None)` con cada
+       grupo a su ancho de contenido y un `st.space("stretch")` que empuja
+       «Vista» a la DERECHA (regla #614). Hasta el 2026-10-05 eran
+       `st.columns` proporcionales: el sobrante de cada columna caía a la
+       derecha de su grupo y la línea quedaba a 102-113px del anterior y a
+       17 del siguiente. Ahora el aire lo pone el `padding-left` del
+       ENVOLTORIO de cada grupo (`ventas_comp_g_*`, clase exacta) y la línea
+       va en la MITAD de ese padding: 24px a cada lado. El `top` suma 3px,
+       la mitad del `margin-top: 6px` de los pills de arriba, para que la
+       línea quede centrada en el texto y no en la caja. «Vista» lleva el
+       mismo aire sin línea, por si el espaciador se queda en cero. */
+    div[class*="st-key-ventas_comp_ctrl_"] {
+        container-type: inline-size;
+        container-name: vcompctrl;
+    }
     .st-key-ventas_comp_g_ventana,
     .st-key-ventas_comp_g_modo {
         position: relative;
+        padding-left: 48px;
+    }
+    .st-key-ventas_comp_g_vista {
         padding-left: 24px;
     }
     .st-key-ventas_comp_g_ventana::before,
     .st-key-ventas_comp_g_modo::before {
         content: "";
         position: absolute;
-        left: 0;
+        left: 24px;
         top: calc(50% + 3px);
         transform: translateY(-50%);
         width: 1px;
         height: 18px;
         background: var(--border);
     }
-    /* Debajo de ~1013px la fila de Día (816px con gap de 24) no entra y
-       «Vista» baja a otro renglón: la franja crece de 38 a 88px (medido a
-       920). Con 12 de cada lado de la línea, y los tabs a 13px con 12 entre
-       ellos, la fila mide ~640 y entra en la tarjeta de un 920. En el
-       celular los grupos se apilan igual, uno por renglón. */
-    @media screen and (max-width: 1012px) {
-        div[class*="st-key-ventas_comp_ctrl_"] {
-            gap: 12px !important;
-        }
+    /* FILA ANGOSTA. La fila de Día mide 793px con 24 a cada lado de la
+       línea; en una más angosta «Vista» baja a otro renglón y la franja
+       crece de 38 a 88px. Se mide la FILA (container query) y no el
+       viewport: con la columna del rail fijada (248px en vez de 80) el
+       mismo viewport deja ~170px menos. Angosta: 12 a cada lado, los tabs
+       con 12 entre ellos y el texto a 13px (~620px). En el celular la fila
+       se envuelve: los grupos van de a varios por renglón según quepan.
+       El tamaño va en el `<p>`: en Streamlit 1.64 el texto del pill vive en
+       un stMarkdownContainer que fija 0.875rem y no hereda el del botón —
+       medido: el `font-size: 15px` de los pills de arriba deja el botón en
+       15 y el texto en 14. */
+    @container vcompctrl (max-width: 800px) {
         .st-key-ventas_comp_g_ventana,
         .st-key-ventas_comp_g_modo {
+            padding-left: 24px;
+        }
+        .st-key-ventas_comp_g_vista {
             padding-left: 12px;
         }
-    }
-    /* El tamaño va en el `<p>`: en Streamlit 1.64 el texto del pill vive en
-       un stMarkdownContainer que fija 14px (0.875rem) y no hereda el del
-       botón — medido: el `font-size: 15px` de los pills de arriba deja el
-       botón en 15 y el texto en 14. */
-    @media screen and (min-width: 769px) and (max-width: 1012px) {
+        .st-key-ventas_comp_g_ventana::before,
+        .st-key-ventas_comp_g_modo::before {
+            left: 12px;
+        }
         div[class*="st-key-ventas_comp_grano"] [data-testid="stButtonGroup"]
             button[data-variant="pills"] p,
         div[class*="st-key-ventas_comp_ventana_"] [data-testid="stButtonGroup"]
@@ -4197,7 +4209,8 @@ CSS = """    /* ================================================================
     /* Botón "Cerrar" del drill de Platos (Ventas › Año Pasado): ícono solo,
        sin relleno — a pedido, el botón secundario ancho (127×40,
        use_container_width) "es muy grande para desktop" y comparte fila
-       con el título "Platos · …" (ver graficos/ventas_comparativo.py).
+       con el título "Qué explica la diferencia · …" (ver
+       graficos/ventas_comparativo.py).
        `vertical_alignment="center"` de st.columns no alcanzó (medido:
        align-items quedaba en "stretch", no en "center"), así que se fuerza
        acá. Con eso puesto TODAVÍA quedaban 8px de diferencia entre los

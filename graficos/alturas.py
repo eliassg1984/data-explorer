@@ -322,9 +322,10 @@ VENTAS_COMP_FIG = 296
 """Alto de la figura de Ventas › Comparativo vs Año Pasado (2026-10-05,
 regla #614). Era 340, literal en el `.py`. La fila del TOTAL de la ventana
 que entró arriba del gráfico mide 28 + 16 de separación, y esos 44 los paga
-la figura para que la tarjeta no crezca. El área de trazo igual CRECE (de
-~195 a ~215 en Montos): el legend de Plotly —que la fila del total
-reemplaza— se llevaba 95 de margen arriba, y ahora son 30."""
+la figura para que la tarjeta no crezca. El área de trazo igual CRECE 21px
+con etiquetas (232 en Día medido a 1440): el legend de Plotly —que la fila
+del total reemplaza— se llevaba 95 de margen arriba, y ahora son 30. Con 30
+días, sin etiquetas, el margen ya era 60 y queda casi igual."""
 
 VENTAS_COMP_FIG_MOVIL = 260
 """El mismo alto en el celular, donde la tarjeta se lee con el scroll de la
