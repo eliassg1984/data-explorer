@@ -4146,8 +4146,22 @@ CSS = """    /* ================================================================
         position: relative;
         padding-left: 48px;
     }
+    /* «Vista» se dibuja en un `st.empty()` que se vacía al empezar cada
+       corrida. En una fila donde no entra al lado de los otros (el rail
+       fijado entre 901 y ~985px, el celular) su renglón desaparecía
+       mientras cargan los datos —vacío mide 24px y sube al de arriba— y la
+       tarjeta subía y bajaba 38px en cada clic (#108). Ahí va SIEMPRE en
+       su propio renglón (`100cqw`, el ancho de la fila; ver la fila angosta
+       abajo) y con el alto de un grupo lleno: 38 medido, 50 en el celular,
+       donde los botones van a 0.9rem. */
     .st-key-ventas_comp_g_vista {
         padding-left: 24px;
+        min-height: 38px;
+    }
+    @media screen and (max-width: 768px) {
+        .st-key-ventas_comp_g_vista {
+            min-height: 50px;
+        }
     }
     .st-key-ventas_comp_g_ventana::before,
     .st-key-ventas_comp_g_modo::before {
@@ -4200,10 +4214,37 @@ CSS = """    /* ================================================================
             gap: 12px !important;
         }
     }
+    /* Más angosta todavía (la fila compacta de Día pide ~650): «Vista» no
+       entra al lado y va a su propio renglón — fijo, lleno o vacío. */
+    @container vcompctrl (max-width: 660px) {
+        .st-key-ventas_comp_g_vista {
+            min-width: 100cqw;
+        }
+    }
     /* Alto mínimo del total de la ventana: se llena después de cargar los
        datos y, vacío, la tarjeta saltaría en cada clic (regla #108). */
     .st-key-ventas_comp_tot {
         min-height: 28px;
+    }
+    /* En el celular los cinco KPI (~410px) no entran en una tarjeta de
+       ~300: la fila se partía en dos renglones de 57px, la reserva de 28
+       no la cubría (todo lo de abajo saltaba 29px en cada clic) y el
+       segundo renglón abría con el separador de su primer KPI. Un solo
+       renglón deslizable, con el desvanecido de las otras filas de KPI de
+       Ventas (regla #522) que avisa que hay más. */
+    @media screen and (max-width: 768px) {
+        .st-key-ventas_comp_tot .vt-kpis {
+            flex-wrap: nowrap !important;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+            mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+            padding-right: 24px;
+        }
+        .st-key-ventas_comp_tot .vt-kpi {
+            flex: 0 0 auto;
+        }
     }
 
     /* Botón "Cerrar" del drill de Platos (Ventas › Año Pasado): ícono solo,

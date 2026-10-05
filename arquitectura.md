@@ -48340,6 +48340,17 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
          `@media` por viewport, como fue en la primera pasada: con la
          columna del rail fijada (248px en vez de 80, #568) el mismo
          viewport deja ~170px menos de fila.
+       - **«Vista» vive en un `st.empty()` que se vacía en cada corrida**:
+         vacío mide 24px. En una fila donde no entra al lado de los otros
+         (menos de 660px: el rail fijado entre 901 y ~985, el celular)
+         subía al renglón de arriba mientras cargaban los datos y bajaba
+         al terminar — la tarjeta saltaba 38px en cada clic. Ahí va SIEMPRE
+         en su propio renglón (`min-width: 100cqw`) con el alto de un grupo
+         lleno (38; 50 en el celular). Medido cuadro a cuadro con
+         `requestAnimationFrame`: la fila no cambia de alto al recargar.
+     - **En el celular el total es un renglón deslizable**: los cinco KPI
+       piden ~410px; partidos en dos renglones (57px) la reserva de 28 no
+       los cubría y todo lo de abajo saltaba 29px al recargar.
        - **El `font-size` de un pill va en su `<p>`**: en Streamlit 1.64 el
          texto vive en un stMarkdownContainer que fija 0.875rem. El
          `font-size: 15px` de los pills de esta franja deja el botón en 15
