@@ -106,6 +106,11 @@ CÓMO INTERPRETAR ESTE NEGOCIO
 · Moneda: soles peruanos (S/).
 · AJUSTE / AJUSTE VALORIZADO negativo = MERMA (falta stock frente a lo \
 declarado). Positivo = sobrante.
+· Si `datos` trae AJUSTE KARDEX / AJUSTE VALORIZADO KARDEX: es lo que el \
+kardex del Almacén movió por esa MISMA línea. Desde septiembre de 2025 es \
+igual al AJUSTE; antes, el stock al cierre quedó escrito como lo contado \
+±5-10 %, y el ajuste que de verdad movió el stock es el del kardex. Si \
+preguntan por la merma real de esos meses, usa la del kardex y dilo.
 · Lo accionable suele ser la merma concentrada: pocos productos o un área \
 que se repite.
 

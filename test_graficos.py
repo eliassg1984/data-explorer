@@ -6605,6 +6605,110 @@ def _pruebas_kardex():
     return fallos
 
 
+def _pruebas_ajuste_kardex():
+    """El cierre contra el kardex (kardex.sql_ajuste_con_kardex y la línea
+    punteada de Ajuste › Evolución, regla #612).
+
+    Lo que fija: el cruce es por cierre y por los SIETE dígitos del producto
+    —el «4» que el kardex tiene con un código que no existe no cae sobre el
+    0000004—; un cierre que el kardex no tiene es «sin dato» (NULO) y no
+    cero; el ajuste sale en su orden y con sus columnas. Y del lado de la
+    vista: un periodo sin dato del kardex no «difiere», la línea del kardex
+    va ANTES que la del neto (para que ésta la tape donde coinciden) y sin
+    el parquet todo queda como antes.
+    """
+    import duckdb
+    import kardex
+    from graficos.ajuste import _evolucion as _ev
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ajuste vs kardex · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ajuste vs kardex · {nombre}: got={got!r} exp={exp!r}")
+
+    aj = pd.DataFrame({
+        "CODIGO CIERRE": ["00120251001", "00120251001", "00120251001",
+                          "00020240701", "00620240501"],
+        "FECHA APERTURA INVENTARIO": pd.to_datetime(
+            ["2025-10-01", "2025-10-01", "2025-10-01", "2024-07-01",
+             "2024-05-01"]),
+        "CODIGO PRODUCTO": ["0000000033", "0000000004", "0000000077",
+                            "0000000004", "0000000004"],
+        "AJUSTE VALORIZADO": [5.0, -1.0, 0.0, -2.0, 3.0],
+    })
+    kx = pd.DataFrame({
+        "CODIGO CIERRE": ["00120251001", "00120251001", "00020240701",
+                          "00020240701", "00999999999"],
+        "CODIGO PRODUCTO": ["0000033", "4", "0000004", "0000004", "0000004"],
+        "AJUSTE KARDEX": [1.0, 4.0, -3.0, -1.0, 9.0],
+        "AJUSTE VALORIZADO KARDEX": [5.0, 12.23, -30.0, -10.0, 99.0],
+    })
+    con = duckdb.connect()
+    con.register("aj", aj)
+    con.register("kx", kx)
+    j = con.execute(kardex.sql_ajuste_con_kardex("aj", "kx")).df()
+
+    check("las columnas del ajuste, en su orden, y las dos del kardex",
+          list(j.columns), list(aj.columns) + [kardex.COL_AJUSTE_KX,
+                                               kardex.COL_VALOR_KX])
+    check("las filas, en su orden",
+          j["CODIGO PRODUCTO"].tolist(), aj["CODIGO PRODUCTO"].tolist())
+    _v = j[kardex.COL_VALOR_KX].tolist()
+    check("cruza por los siete dígitos (10 en el ajuste, 7 en el kardex)",
+          _v[0], 5.0)
+    check("el «4» del kardex NO cae sobre el producto 0000004",
+          _v[1], 0.0)
+    check("lo que el kardex no movió en un cierre que tiene, en cero",
+          _v[2], 0.0)
+    check("dos movimientos del mismo producto en un cierre se suman",
+          (_v[3], j[kardex.COL_AJUSTE_KX].tolist()[3]), (-40.0, -4.0))
+    check("un cierre que el kardex no tiene es «sin dato», no cero",
+          pd.isna(_v[4]), True)
+
+    # La serie y lo que dibuja.
+    d = pd.DataFrame({
+        "F": pd.to_datetime(["2025-07-01", "2025-07-01", "2025-08-01",
+                             "2025-09-01"]),
+        "AV": [-10.0, 4.0, -5.0, -8.0],
+        "VT": [0.0, 0.0, 0.0, 0.0],
+        "KX": [-30.0, 4.0, -5.4, None],
+    })
+    dp, orden = _ev.periodos_ajuste(d, "F", "Mes")
+    s = _ev.serie_ajuste(dp, orden, "AV", "VT", col_kardex="KX")
+    check("la serie trae «kardex», por nombre",
+          list(s.columns), ["_clave", "etq", "eje", "anio", "sobrante",
+                            "faltante", "neto", "contado", "kardex"])
+    check("el kardex del periodo es la suma de sus líneas",
+          s["kardex"].tolist()[:2], [-26.0, -5.4])
+    check("un periodo sin dato del kardex queda en NaN, no en cero",
+          pd.isna(s["kardex"].tolist()[2]), True)
+    check("difiere: julio sí, agosto no (S/ 0,40 es redondeo), setiembre "
+          "no se sabe", _ev.difiere_kardex(s).tolist(), [True, False, False])
+    check("la nota cuenta los periodos con dato",
+          "difiere en 1 de 2 meses" in _ev.nota_kardex(s, "Mes"), True)
+    fig = _ev.fig_serie(s)
+    check("la línea del kardex va ANTES que la del neto (la tapa)",
+          [t.name for t in fig.data], ["Sobrante", "Faltante", "Kardex", "Neto"])
+    check("el hover del neto dice cuánto difiere el kardex",
+          [c[1] for c in fig.data[3].customdata],
+          ["S/ -26 · difiere en S/ -20", "igual", "sin dato"])
+    check("la tabla suma la columna «Kardex»",
+          ">Kardex</th>" in _ev.tabla_resumen_html(s), True)
+
+    s0 = _ev.serie_ajuste(dp, orden, "AV", "VT")
+    check("sin el parquet del kardex, la serie de siempre",
+          ("kardex" in s0.columns, [t.name for t in _ev.fig_serie(s0).data],
+           ">Kardex</th>" in _ev.tabla_resumen_html(s0),
+           _ev.nota_kardex(s0, "Mes")),
+          (False, ["Sobrante", "Faltante", "Neto"], False, ""))
+    return fallos
+
+
 def _pruebas_detalle_salidas():
     """Movimientos › «Detalle de salidas» (regla #511).
 
@@ -9629,6 +9733,9 @@ def main():
     fallos += _pruebas_listado_inventario()
     fallos += _pruebas_inventario_activos()
     fallos += _pruebas_kardex()
+
+    # ── Ajuste › el cierre contra el kardex (regla #612) ─────────────────
+    fallos += _pruebas_ajuste_kardex()
 
     # ── Movimientos › las tarjetas «por período»: qué cuenta y qué no ────
     fallos += _pruebas_movimientos_periodo()

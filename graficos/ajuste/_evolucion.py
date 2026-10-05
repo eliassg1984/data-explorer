@@ -53,9 +53,9 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from tema import (
-    AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS, AJUSTE_POS_TEXTO, BLANCO,
-    GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_SUAVE, LAVANDA_SELECCION,
-    TEXTO_PRINCIPAL,
+    AJUSTE_ALERTA_TEXTO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS,
+    AJUSTE_POS_TEXTO, BLANCO, GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
+    LAVANDA_SELECCION, TEXTO_PRINCIPAL,
 )
 from graficos.base import publicar_contexto_ia
 from graficos import alturas
@@ -89,6 +89,21 @@ _MAX_ROTULOS = 16
 
 # Opacidad de los periodos que NO estan en foco.
 _APAGADO = 0.3
+
+# Desde cuántos soles el neto según el kardex «difiere» del del cierre: por
+# debajo es redondeo del precio promedio (regla #612).
+TOL_KARDEX = 1.0
+
+# Lo que dice el `title` de la leyenda y de la columna del kardex. Va en un
+# atributo HTML entre comillas simples: sin apóstrofos.
+AYUDA_KARDEX = (
+    "El neto de los mismos conteos según el kardex del Almacén: el reporte "
+    "«Movimientos por artículo», movimiento «Ajuste Inventarios». El de "
+    "las barras es el del «Cierre y Ajuste de Inventario». Coinciden desde "
+    "septiembre de 2025; antes, el stock al cierre de ese reporte quedó "
+    "escrito como lo contado ±5 o ±10 %, y el ajuste que de verdad movió el "
+    "stock es el del kardex. "
+    "Donde coinciden, la línea punteada queda debajo de la del neto.")
 
 
 # ── DATOS (puros: sin Streamlit, los prueba test_graficos.py) ────────────
@@ -141,7 +156,8 @@ def periodos_ajuste(d, col_fecha, gran):
     return d.drop(columns=["_etq"]), orden[cols].reset_index(drop=True)
 
 
-def serie_ajuste(d, orden, col_ajuste_val, col_valorizado=None, col_grupo=None):
+def serie_ajuste(d, orden, col_ajuste_val, col_valorizado=None, col_grupo=None,
+                 col_kardex=None):
     """Sobrante, faltante, neto y valor contado por periodo (y por grupo).
 
     Una fila por periodo de `orden` —o por periodo x grupo—, INCLUIDOS los
@@ -150,6 +166,10 @@ def serie_ajuste(d, orden, col_ajuste_val, col_valorizado=None, col_grupo=None):
     declarado x precio) de las filas contadas: contexto para el hover, NO
     el inventario del local — sumado sobre un mes con cuatro sesiones cuenta
     el stock cuatro veces.
+
+    Con `col_kardex` (el ajuste valorizado que registró el kardex por cada
+    línea, regla #612) suma además `kardex`: el neto de los MISMOS conteos
+    según el kardex. NaN si ninguna línea del periodo tiene dato del kardex.
 
     Se agrupa por COLUMNAS con nombre y se devuelve por nombre: una clave
     suelta en el groupby da otra forma en pandas 2 que en 3 (regla #481).
@@ -167,6 +187,11 @@ def serie_ajuste(d, orden, col_ajuste_val, col_valorizado=None, col_grupo=None):
                     if col_valorizado and col_valorizado in d.columns
                     else 0.0),
     })
+    if col_kardex and col_kardex in d.columns:
+        # Sin `fillna`: una línea sin dato del kardex NO es un kardex en
+        # cero, y el `min_count` de abajo lo deja en NaN.
+        x["kardex"] = pd.to_numeric(d[col_kardex], errors="coerce").values
+        medidas.append("kardex")
     llaves = ["_clave"]
     if col_grupo:
         x["grupo"] = d[col_grupo].astype(str).values
@@ -174,7 +199,7 @@ def serie_ajuste(d, orden, col_ajuste_val, col_valorizado=None, col_grupo=None):
         # «Nan».
         x = x[d[col_grupo].notna().values]
         llaves.append("grupo")
-    agg = x.groupby(llaves, as_index=False)[medidas].sum()
+    agg = x.groupby(llaves, as_index=False)[medidas].sum(min_count=1)
 
     esqueleto = orden[base]
     if col_grupo:
@@ -191,14 +216,65 @@ def _fmt(v):
     return fmt_k(v)
 
 
+def con_kardex(s):
+    """`True` si la serie trae el neto según el kardex en algún periodo."""
+    return "kardex" in s.columns and bool(s["kardex"].notna().any())
+
+
+def difiere_kardex(s):
+    """Por periodo, `True` si el kardex dice otra cosa que el cierre (más de
+    `TOL_KARDEX`). Un periodo sin dato del kardex no difiere: no se sabe."""
+    if "kardex" not in s.columns:
+        return pd.Series(False, index=s.index)
+    return ((s["kardex"] - s["neto"]).abs() > TOL_KARDEX).fillna(False)
+
+
+def nota_kardex(s, gran):
+    """El remate del rótulo de abajo: en cuántos periodos de la serie el
+    kardex dice otra cosa —en ámbar, con la explicación en el `title`—, o
+    «igual al kardex» en gris si en ninguno. Vacío sin dato del kardex."""
+    if not con_kardex(s):
+        return ""
+    n = int(difiere_kardex(s).sum())
+    if n == 0:
+        return (f" · <span style='color:{GRIS_TEXTO_SUAVE}' "
+                f"title='{AYUDA_KARDEX}'>igual al kardex</span>")
+    m = int(s["kardex"].notna().sum())
+    unidad = ("cortes" if m > 1 else "corte") if gran == "Corte" else (
+        "meses" if m > 1 else "mes")
+    return (f" · <span style='color:{AJUSTE_ALERTA_TEXTO};font-weight:600;"
+            f"cursor:help' title='{AYUDA_KARDEX}'>el kardex difiere en {n} "
+            f"de {m} {unidad}</span>")
+
+
+def _texto_kardex(neto, kx):
+    """La línea del kardex en el hover del neto: «igual» o cuánto difiere."""
+    if kx is None or (isinstance(kx, float) and math.isnan(kx)):
+        return "sin dato"
+    if neto is None or (isinstance(neto, float) and math.isnan(neto)):
+        return f"S/ {kx:,.0f}"
+    if abs(kx - neto) <= TOL_KARDEX:
+        return "igual"
+    return f"S/ {kx:,.0f} · difiere en S/ {kx - neto:,.0f}"
+
+
 def _trazas(s, foco, leyenda=True, rotulos=True):
-    """Las tres trazas de una serie: dos barras y la linea del neto.
+    """Las trazas de una serie: dos barras, la linea del neto y, si la serie
+    lo trae, la del neto según el kardex (regla #612).
 
     Las comparten la serie grande y cada mini-grafico, asi los dos dicen lo
-    mismo con la misma forma. `foco` apaga los otros periodos."""
+    mismo con la misma forma. `foco` apaga los otros periodos.
+
+    LA DEL KARDEX VA ABAJO DE LA DEL NETO, punteada y un poco más fina:
+    donde los dos coinciden —todo desde sep 2025— la tapa la línea del neto
+    y no se ve; donde no, se separa y lleva un punto. Así la comparación
+    no le agrega nada a la serie mientras no haya nada que decir. Su número
+    va en el hover del NETO y no en el suyo (`hoverinfo="skip"`), para que
+    la caja diga «Neto … · Kardex: igual» en ese orden."""
     opac = [1.0 if foco is None or k == foco else _APAGADO
             for k in s["_clave"]]
     fmt_hover = "S/ %{y:,.0f}"
+    kx = con_kardex(s)
     sobr = go.Bar(
         x=s["eje"], y=s["sobrante"], name="Sobrante",
         marker=dict(color=AJUSTE_POS, opacity=opac),
@@ -213,6 +289,15 @@ def _trazas(s, foco, leyenda=True, rotulos=True):
     )
     neto_y = s["neto"]
     con_texto = rotulos and len(s) <= _MAX_ROTULOS
+    # Contado en el hover del neto: cuanto valor se conto para producir
+    # ese ajuste. Contexto, no denominador (ver el docstring del modulo).
+    datos = [[c] for c in s["contado"]]
+    hover = (f"<b>Neto: {fmt_hover}</b><br>"
+             "Valor contado: S/ %{customdata[0]:,.0f}")
+    if kx:
+        datos = [[c, _texto_kardex(n, k)]
+                 for c, n, k in zip(s["contado"], neto_y, s["kardex"])]
+        hover += "<br>Kardex: %{customdata[1]}"
     neto = go.Scatter(
         x=s["eje"], y=neto_y, name="Neto",
         mode="lines+markers+text" if con_texto else "lines+markers",
@@ -223,13 +308,23 @@ def _trazas(s, foco, leyenda=True, rotulos=True):
         marker=dict(size=5, color=TEXTO_PRINCIPAL, opacity=opac),
         connectgaps=False,
         showlegend=leyenda, legendgroup="neto",
-        # Contado en el hover del neto: cuanto valor se conto para producir
-        # ese ajuste. Contexto, no denominador (ver el docstring del modulo).
-        customdata=s[["contado"]].to_numpy(),
-        hovertemplate=(f"<b>Neto: {fmt_hover}</b><br>"
-                       "Valor contado: S/ %{customdata[0]:,.0f}<extra></extra>"),
+        customdata=datos,
+        hovertemplate=hover + "<extra></extra>",
     )
-    return sobr, falt, neto
+    if not kx:
+        return sobr, falt, neto
+    dif = difiere_kardex(s)
+    kardex = go.Scatter(
+        x=s["eje"], y=s["kardex"], name="Kardex",
+        mode="lines+markers",
+        line=dict(color=AJUSTE_ALERTA_TEXTO, width=1.3, dash="dot"),
+        # El punto, sólo donde difiere: es lo que se busca con la vista.
+        marker=dict(size=[6 if d else 0 for d in dif],
+                    color=AJUSTE_ALERTA_TEXTO, opacity=opac),
+        connectgaps=False, hoverinfo="skip",
+        showlegend=leyenda, legendgroup="kardex",
+    )
+    return sobr, falt, kardex, neto
 
 
 def _marcas_eje(ejes, maximo):
@@ -392,7 +487,12 @@ def tabla_resumen_html(s, foco=None, alto=None):
 
     Las líneas de la cabecera y del total son `box-shadow` y no `border`:
     con `border-collapse` el borde de una celda `sticky` se queda en su
-    sitio y se va con el scroll."""
+    sitio y se va con el scroll.
+
+    Si la serie trae el kardex (regla #612), una columna más al lado del
+    neto: en gris donde coincide y en ámbar donde no, con la diferencia en
+    el `title`. Callada mientras no haya nada que decir, como su línea."""
+    kx = con_kardex(s)
     th = (f"padding:4px 10px;font-weight:600;color:{GRIS_TEXTO};"
           f"box-shadow:inset 0 -1px 0 {GRIS_BORDE};position:sticky;top:0;"
           f"background:{BLANCO};white-space:nowrap")
@@ -403,6 +503,22 @@ def tabla_resumen_html(s, foco=None, alto=None):
             return f"<td style='{td};text-align:right;color:{GRIS_TEXTO_SUAVE}'>—</td>"
         return (f"<td style='{td};text-align:right;color:{color};"
                 f"font-weight:{peso}'>{_monto(v)}</td>")
+
+    def _celda_kx(neto, v, extra=""):
+        if not kx:
+            return ""
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return (f"<td style='{td};{extra}text-align:right;"
+                    f"color:{GRIS_TEXTO_SUAVE}' title='Sin dato del kardex'>—</td>")
+        if (neto is None or (isinstance(neto, float) and math.isnan(neto))
+                or abs(v - neto) <= TOL_KARDEX):
+            return (f"<td style='{td};{extra}text-align:right;"
+                    f"color:{GRIS_TEXTO_SUAVE}' title='Igual al neto'>"
+                    f"{_monto(v)}</td>")
+        return (f"<td style='{td};{extra}text-align:right;"
+                f"color:{AJUSTE_ALERTA_TEXTO};font-weight:600' "
+                f"title='Difiere del neto en S/ {v - neto:,.0f}'>"
+                f"{_monto(v)}</td>")
 
     filas = []
     for _, r in s.iloc[::-1].iterrows():
@@ -419,6 +535,7 @@ def tabla_resumen_html(s, foco=None, alto=None):
             + _celda(r["sobrante"], AJUSTE_POS_TEXTO, peso)
             + _celda(r["faltante"], AJUSTE_NEG_TEXTO, peso)
             + _celda(r["neto"], TEXTO_PRINCIPAL, 600)
+            + _celda_kx(r["neto"], r["kardex"] if kx else None)
             + _celda(r["contado"], GRIS_TEXTO, peso)
             + "</tr>")
 
@@ -426,28 +543,42 @@ def tabla_resumen_html(s, foco=None, alto=None):
                                           "contado")}
     pie = (f"position:sticky;bottom:0;background:{BLANCO};"
            f"box-shadow:inset 0 1px 0 {GRIS_TEXTO_SUAVE}")
+
+    def _celda_pie(k, c):
+        return (f"<td style='{td};{pie};text-align:right;font-weight:600;"
+                f"color:{c}'>{_monto(tot[k])}</td>")
+
+    # El total del kardex sólo se compara si TODOS los periodos con conteo
+    # tienen su dato: si no, sumaría menos conteos que el neto.
+    kx_pie = ""
+    if kx:
+        _incompleto = bool((s["neto"].notna() & s["kardex"].isna()).any())
+        kx_pie = _celda_kx(tot["neto"],
+                           None if _incompleto else float(s["kardex"].sum()),
+                           extra=f"{pie};font-weight:600;")
     total = (f"<tr style='{pie}'>"
              f"<td style='{td};{pie};color:{TEXTO_PRINCIPAL};font-weight:600'>"
              "Total del rango</td>"
-             + "".join(
-                 f"<td style='{td};{pie};text-align:right;font-weight:600;"
-                 f"color:{c}'>{_monto(tot[k])}</td>"
-                 for k, c in (("sobrante", AJUSTE_POS_TEXTO),
-                              ("faltante", AJUSTE_NEG_TEXTO),
-                              ("neto", TEXTO_PRINCIPAL),
-                              ("contado", GRIS_TEXTO)))
+             + _celda_pie("sobrante", AJUSTE_POS_TEXTO)
+             + _celda_pie("faltante", AJUSTE_NEG_TEXTO)
+             + _celda_pie("neto", TEXTO_PRINCIPAL)
+             + kx_pie
+             + _celda_pie("contado", GRIS_TEXTO)
              + "</tr>")
 
+    columnas = [
+        ("Período", "left", "El mismo período de la serie de arriba"),
+        ("Sobrante", "right", "Suma de los ajustes positivos"),
+        ("Faltante", "right", "Suma de los ajustes negativos"),
+        ("Neto", "right", "Sobrante + faltante: lo que se ve en la línea"),
+        ("Valor contado", "right",
+         "Stock declarado × precio de lo que se contó. Contexto: en un "
+         "mes con varias sesiones cuenta el stock más de una vez")]
+    if kx:
+        columnas.insert(4, ("Kardex", "right", AYUDA_KARDEX))
     cab = "".join(
         f"<th style='{th};text-align:{al}' title='{ayuda}'>{txt}</th>"
-        for txt, al, ayuda in (
-            ("Período", "left", "El mismo período de la serie de arriba"),
-            ("Sobrante", "right", "Suma de los ajustes positivos"),
-            ("Faltante", "right", "Suma de los ajustes negativos"),
-            ("Neto", "right", "Sobrante + faltante: lo que se ve en la línea"),
-            ("Valor contado", "right",
-             "Stock declarado × precio de lo que se contó. Contexto: en un "
-             "mes con varias sesiones cuenta el stock más de una vez")))
+        for txt, al, ayuda in columnas)
     techo = f"max-height:{alto}px;" if alto else ""
     return (f"<div class='ajevo-tabla' style='{techo}overflow-y:auto'>"
             "<table style='width:100%;border-collapse:collapse;font-size:12px'>"
@@ -468,13 +599,15 @@ def _titulo(texto, sub=""):
     )
 
 
-def _leyenda_html():
+def _leyenda_html(kardex=False):
     """La leyenda de la serie y de los paneles, escrita en la fila del
     título: dos cuadritos y una raya, con los MISMOS colores de las trazas.
     Reemplaza a las dos leyendas de Plotly (una por figura), que se comían
-    ~60px de alto entre las dos (regla #505)."""
-    def _item(muestra, texto):
-        return (f"<span style='display:inline-flex;align-items:center;"
+    ~60px de alto entre las dos (regla #505). Con `kardex`, una raya
+    punteada más, que explica en su `title` qué es (regla #612)."""
+    def _item(muestra, texto, ayuda=""):
+        _t = f" title='{ayuda}'" if ayuda else ""
+        return (f"<span{_t} style='display:inline-flex;align-items:center;"
                 f"gap:4px;margin-left:12px'>{muestra}"
                 f"<span style='font-size:11.5px;color:{GRIS_TEXTO};"
                 f"font-weight:400'>{texto}</span></span>")
@@ -482,9 +615,12 @@ def _leyenda_html():
              "background:{c};display:inline-block'></span>")
     _raya = (f"<span style='width:14px;height:2px;background:{TEXTO_PRINCIPAL};"
              "display:inline-block'></span>")
+    _puntos = (f"<span style='width:14px;border-top:2px dotted "
+               f"{AJUSTE_ALERTA_TEXTO};display:inline-block'></span>")
     return (_item(_cuad.format(c=AJUSTE_POS), "Sobrante")
             + _item(_cuad.format(c=AJUSTE_NEG), "Faltante")
-            + _item(_raya, "Neto"))
+            + _item(_raya, "Neto")
+            + (_item(_puntos, "Kardex", AYUDA_KARDEX) if kardex else ""))
 
 
 def _soltar_foco():
@@ -501,7 +637,7 @@ _K_AREA = "ajuste_evo_filtro_area"
 
 
 def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
-                           col_ajuste_val, col_valorizado):
+                           col_ajuste_val, col_valorizado, col_kardex=None):
     """UNA tarjeta: la serie y, debajo, quien la explica (las familias).
 
     Son una sola superficie a proposito (2026-09-23, a pedido, regla #504):
@@ -518,6 +654,11 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
 
     `d` ya viene recortado por el rango de la franja y por la Familia del
     compartimento de arriba de la pila. El Área la filtra la propia vista.
+
+    `col_kardex` es el ajuste valorizado que registró el kardex por cada
+    línea (`kardex.COL_VALOR_KX`); sin él —falta `ajustekardex.parquet`— la
+    vista es la de siempre. Con él, la línea punteada, la columna de la
+    tabla y, en el rótulo de abajo, en cuántos periodos difiere (#612).
     """
     if not col_fecha or col_fecha not in d.columns:
         st.info("Sin columna de fecha: no se puede armar la evolución.")
@@ -579,12 +720,14 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
             foco = None
             st.session_state[_K_FOCO] = None
 
+        s = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
+                         col_kardex=col_kardex)
         with c_tit:
             st.markdown(
                 f"<div style='font-size:14px;font-weight:600;"
                 f"color:{TEXTO_PRINCIPAL};line-height:1.3;white-space:nowrap' "
                 f"title='Clic en una barra para resaltar ese período'>"
-                f"Sobrante, faltante y neto{_leyenda_html()}</div>",
+                f"Sobrante, faltante y neto{_leyenda_html(con_kardex(s))}</div>",
                 unsafe_allow_html=True)
         if foco is not None:
             with c_foco:
@@ -596,7 +739,6 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                          "Clic para soltarlo.",
                 )
 
-        s = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado)
         st.plotly_chart(
             fig_serie(s, foco, alto=alturas.EVO_SERIE),
             use_container_width=True, key=k_fig,
@@ -611,6 +753,7 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         # queda la tabla sola, sin selector.
         hay_familias = bool(col_familia and col_familia in dp.columns
                             and dp[col_familia].nunique() > 1)
+        nota_kx = nota_kardex(s, gran)
         with st.container(key="ajevo_divisor_fila"):
             c_txt, c_abajo = st.columns(
                 [4, 1.2],  # columnas-internas: rótulo | Familias/Tabla
@@ -625,13 +768,14 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
 
         if abajo == "Familias":
             sf = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
-                              col_grupo=col_familia)
+                              col_grupo=col_familia, col_kardex=col_kardex)
             _n = sf["grupo"].nunique()
             _desliza = " · deslizá para ver las demás →" if _n > 3 else ""
             with c_txt:
                 st.markdown(
                     f'<div class="ajevo-divisor">Por familia · cada panel con '
-                    f'su propia escala{_desliza}</div>', unsafe_allow_html=True)
+                    f'su propia escala{_desliza}{nota_kx}</div>',
+                    unsafe_allow_html=True)
             # El ancho de la fila lo fuerza el CSS sobre el CONTENEDOR:
             # `st.plotly_chart` pisa `fig.layout.width` con el de su
             # contenedor, y agrandando el contenedor el ResizeObserver de
@@ -654,7 +798,7 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
             with c_txt:
                 st.markdown(
                     f'<div class="ajevo-divisor">Resumen por {_por} · lo mismo '
-                    'que la serie de arriba, del más nuevo al más viejo</div>',
-                    unsafe_allow_html=True)
+                    'que la serie de arriba, del más nuevo al más viejo'
+                    f'{nota_kx}</div>', unsafe_allow_html=True)
             st.markdown(tabla_resumen_html(s, foco, alto=alto_multiplos()),
                         unsafe_allow_html=True)

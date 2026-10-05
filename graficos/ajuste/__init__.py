@@ -29,6 +29,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 
+import kardex
+
 from tema import (
     ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, GRIS_BORDE, GRIS_FONDO,
     PALETA_SERIES, SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
@@ -165,6 +167,9 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_producto   = _resolver(df_f, ["NOMBRE PRODUCTO", "PRODUCTO", "DESCRIPCION"])
     col_codigo     = _resolver(df_f, ["CODIGO PRODUCTO", "Codigo Producto", "COD PRODUCTO"])
     col_cantidad   = _resolver(df_f, ["AJUSTE", "CANTIDAD AJUSTE", "CANTIDAD"])
+    # Lo que registró el kardex por cada línea del cierre (regla #612). Sólo
+    # existe si `data.cargar` encontró `ajustekardex.parquet` en R2.
+    col_kardex     = _resolver(df_f, [kardex.COL_VALOR_KX])
     # Misma lista de candidatos que graficos/compras/__init__.py::col_um —
     # la unidad real de Kardex (Kg, Und, Lt...), no un sufijo inventado.
     col_unidad     = _resolver(df_f, ["Unidad de Ingreso", "Unidad_de_ingreso",
@@ -344,7 +349,8 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
                 st.info("No hay datos para los filtros seleccionados.")
             return
         vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
-                               col_ajuste_val, col_valorizado)
+                               col_ajuste_val, col_valorizado,
+                               col_kardex=col_kardex)
 
     def _dib_detalle():
         """La tabla por producto, con su propio grano (#504). Mismo `d`."""

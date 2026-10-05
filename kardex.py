@@ -34,10 +34,15 @@ de después, explican el cambio del stock; lo que no explica ningún movimiento
 es la VALORIZACIÓN (el precio promedio que cambia con stock negativo, o una
 venta que sale sin costo).
 
+EL AJUSTE SEGÚN EL KARDEX (regla #612) sale de OTRA consulta, la fila
+`ajustekardex` del Sheet (`consulta_ajustes_sheet`): lo que el kardex registró
+por cada cierre de inventario, para compararlo con lo que dice el cierre
+(`sql_ajuste_con_kardex`).
+
 Puro DuckDB, sin Streamlit, como `consumo_recetas.py`: `relacion` es lo que va
 después del FROM (un `read_parquet(...)` de R2 o una tabla registrada en una
 prueba). Lo lee `data.py`; lo vigila `test_graficos.py::_pruebas_kardex`.
-Reglas #601 y #602.
+Reglas #601, #602 y #612.
 """
 
 import datetime as dt
@@ -170,4 +175,139 @@ def sql_movimientos(relacion, desde, hasta):
           AND "{COL_FECHA}" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}'
           AND "{COL_FECHA}" < TIMESTAMP '{d1:%Y-%m-%d %H:%M:%S}'
         GROUP BY 1, 2, 3
+    """
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EL AJUSTE SEGÚN EL KARDEX (regla #612)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# El Almacén tiene DOS reportes de un mismo cierre de inventario, y hasta
+# agosto de 2025 no dicen lo mismo:
+#
+#   «Cierre y Ajuste de Inventario»     `SpRepCierreInventario`, sobre
+#   (y `ajusteinventario.parquet`)      `mCierreInventario`: stock al cierre
+#                                       (`nStockActual`), lo contado
+#                                       (`nTotal`), el ajuste (`nAjuste`) ×
+#                                       el precio promedio.
+#   «Movimientos por artículo ›         el kardex: `MKARDEX` (Almacén
+#    Ajuste Inventarios»                Central) y `MSUBKARDEX` (las áreas),
+#                                       tipo 93, con el código del cierre en
+#                                       `tDocumento`.
+#
+# Medido el 2026-10-04 sobre los 903 cierres desde dic 2021: desde sep 2025
+# coinciden todos al céntimo (la Cocina del 01/10/2025 difiere en S/ 12: el
+# kardex movió un producto «4», un código que no existe). Antes, en
+# 31.960 líneas el «stock al cierre» de `mCierreInventario` está escrito como
+# LO CONTADO × 1,10 o × 0,90 (hasta el primer trimestre de 2024) y × 1,05 o
+# × 0,95 (de ahí a agosto de 2025), o igual a lo contado: el ajuste del
+# reporte sale de ±5-10 % o cero, y el del kardex es el de verdad. Lo contado
+# es el mismo en los dos lados —el stock que deja el kardex después del
+# ajuste es `nTotal` en el 99,8 % de esas líneas—: lo que no coincide es el
+# stock de antes. El kardex suma S/ 1,4 millones más de faltante que el
+# reporte entre dic 2021 y ago 2025 (S/ 264 mil en 2024, S/ 159 mil en 2025).
+
+ARCHIVO_AJUSTES = "ajustekardex.parquet"
+"""La fila `ajustekardex` del Sheet: una fila por cierre × producto."""
+
+VERSION_AJUSTES = 1
+"""Va en la clave de la caché del cruce: subirla cuando cambie QUÉ se cruza."""
+
+COL_AJUSTE_KX = "AJUSTE KARDEX"
+COL_VALOR_KX = "AJUSTE VALORIZADO KARDEX"
+"""Las dos columnas que `sql_ajuste_con_kardex` agrega a cada línea del
+cierre: la cantidad y los soles que movió el kardex por ella."""
+
+
+def consulta_ajustes_sheet():
+    """El SQL de la fila `ajustekardex` del Sheet, con los nombres completos
+    que usa el usuario (sin apodos de tabla; la unión de los dos kardex es una
+    subconsulta con nombre).
+
+    Una fila por cierre × área × producto: lo que entró menos lo que salió por
+    el ajuste (`AJUSTE KARDEX`), en soles con signo (`nValor` viene siempre
+    positivo; el signo lo pone el lado), el stock que había antes del primer
+    movimiento y cuántos fueron. El tipo 93 no tiene anulaciones (medido: cero
+    en todo el histórico); si las tuviera, el reverso es del mismo tipo y la
+    suma lo resta igual. Sin filtro de fecha: ~358 mil filas desde dic 2021,
+    40 s en el servidor."""
+    return """SELECT
+    KARDEX_AJUSTES.tDocumento AS [CODIGO CIERRE],
+    KARDEX_AJUSTES.tCodigoArea AS [CODIGO AREA],
+    KARDEX_AJUSTES.tCodigoProducto AS [CODIGO PRODUCTO],
+    MIN(KARDEX_AJUSTES.fRegistro) AS [FECHA KARDEX],
+    SUM(KARDEX_AJUSTES.nIngreso - KARDEX_AJUSTES.nSalida) AS [AJUSTE KARDEX],
+    SUM(CASE WHEN KARDEX_AJUSTES.nIngreso > 0 THEN KARDEX_AJUSTES.nValor
+             WHEN KARDEX_AJUSTES.nSalida > 0 THEN -KARDEX_AJUSTES.nValor
+             ELSE 0 END) AS [AJUSTE VALORIZADO KARDEX],
+    SUM(CASE WHEN KARDEX_AJUSTES.nOrden = 1 THEN KARDEX_AJUSTES.nStockUltimo
+             ELSE 0 END) AS [STOCK ANTES KARDEX],
+    COUNT(*) AS [MOVIMIENTOS]
+FROM (
+    SELECT ALMACEN.DBO.MKARDEX.tDocumento, ALMACEN.DBO.MKARDEX.tCodigoArea,
+           ALMACEN.DBO.MKARDEX.tCodigoProducto, ALMACEN.DBO.MKARDEX.fRegistro,
+           ALMACEN.DBO.MKARDEX.nIngreso, ALMACEN.DBO.MKARDEX.nSalida,
+           ALMACEN.DBO.MKARDEX.nValor, ALMACEN.DBO.MKARDEX.nStockUltimo,
+           ROW_NUMBER() OVER (PARTITION BY ALMACEN.DBO.MKARDEX.tDocumento,
+                                           ALMACEN.DBO.MKARDEX.tCodigoProducto
+                              ORDER BY ALMACEN.DBO.MKARDEX.nCorrelativo) AS nOrden
+    FROM ALMACEN.DBO.MKARDEX
+    WHERE ALMACEN.DBO.MKARDEX.tTipoDocumento = '93'
+    UNION ALL
+    SELECT ALMACEN.DBO.MSUBKARDEX.tDocumento, ALMACEN.DBO.MSUBKARDEX.tCodigoArea,
+           ALMACEN.DBO.MSUBKARDEX.tCodigoProducto, ALMACEN.DBO.MSUBKARDEX.fRegistro,
+           ALMACEN.DBO.MSUBKARDEX.nIngreso, ALMACEN.DBO.MSUBKARDEX.nSalida,
+           ALMACEN.DBO.MSUBKARDEX.nValor, ALMACEN.DBO.MSUBKARDEX.nStockUltimo,
+           ROW_NUMBER() OVER (PARTITION BY ALMACEN.DBO.MSUBKARDEX.tDocumento,
+                                           ALMACEN.DBO.MSUBKARDEX.tCodigoArea,
+                                           ALMACEN.DBO.MSUBKARDEX.tCodigoProducto
+                              ORDER BY ALMACEN.DBO.MSUBKARDEX.nCorrelativo) AS nOrden
+    FROM ALMACEN.DBO.MSUBKARDEX
+    WHERE ALMACEN.DBO.MSUBKARDEX.tTipoDocumento = '93'
+) AS KARDEX_AJUSTES
+GROUP BY KARDEX_AJUSTES.tDocumento, KARDEX_AJUSTES.tCodigoArea,
+    KARDEX_AJUSTES.tCodigoProducto
+ORDER BY KARDEX_AJUSTES.tDocumento, KARDEX_AJUSTES.tCodigoProducto"""
+
+
+def sql_ajuste_con_kardex(rel_ajuste, rel_kardex):
+    """`ajusteinventario.parquet` tal cual, en su orden, con dos columnas
+    más: `COL_AJUSTE_KX` y `COL_VALOR_KX`, lo que el kardex movió por cada
+    línea del cierre.
+
+    El cruce es por el CÓDIGO DEL CIERRE (que ya dice el área) y los SIETE
+    dígitos del producto: el parquet del ajuste lo trae con 10 («0000000033»)
+    y el kardex con 7 («0000033»). No como número: el kardex tiene ocho
+    movimientos con códigos que no existen («4», «50», «1.217»), y el «4»
+    caía sobre el producto 0000004 de otro cierre.
+
+    Un cierre que el kardex no tiene en absoluto queda en NULO —«sin dato»,
+    no cero—: o es más nuevo que el parquet del kardex, o nunca pasó al
+    kardex. Un producto que el kardex no movió en un cierre que sí tiene, en
+    cero. Lo que el kardex movió y el cierre no lista no entra: medido, ocho
+    líneas desde nov 2023 —casi todas esos códigos que no existen—, ninguna
+    de más de S/ 195 (S/ 108 entre todas)."""
+    return f"""
+        WITH a AS (
+            SELECT *, row_number() OVER () AS _fila_aj FROM {rel_ajuste}
+        ), kx AS (
+            SELECT trim("CODIGO CIERRE") AS cierre,
+                   trim("CODIGO PRODUCTO") AS cod,
+                   sum("{COL_AJUSTE_KX}") AS cant,
+                   sum("{COL_VALOR_KX}") AS val
+            FROM {rel_kardex}
+            GROUP BY 1, 2
+        ), cierres AS (
+            SELECT DISTINCT cierre FROM kx
+        )
+        SELECT a.* EXCLUDE (_fila_aj),
+               CASE WHEN c.cierre IS NULL THEN NULL
+                    ELSE coalesce(kx.cant, 0) END AS "{COL_AJUSTE_KX}",
+               CASE WHEN c.cierre IS NULL THEN NULL
+                    ELSE coalesce(kx.val, 0) END AS "{COL_VALOR_KX}"
+        FROM a
+        LEFT JOIN cierres AS c ON c.cierre = trim(a."CODIGO CIERRE")
+        LEFT JOIN kx ON kx.cierre = trim(a."CODIGO CIERRE")
+                    AND kx.cod = right(trim(a."CODIGO PRODUCTO"), 7)
+        ORDER BY a._fila_aj
     """

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-611 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+612 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (199)
 
@@ -691,7 +691,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 
-**Datos, R2 y DuckDB** (91)
+**Datos, R2 y DuckDB** (92)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -784,6 +784,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#605** — «Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en casa el día que se…
 - **#607** — En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y «Modificar» abre también una…
 - **#608** — Modificar › Combo: la ficha del combo sale de TCOMBO, en un parquet propio, y un grupo «a…
+- **#612** — El ajuste de un cierre tiene DOS versiones en el Almacén, y hasta agosto de 2025 no…
 
 **SUNAT y SIRE** (54)
 
@@ -48120,6 +48121,68 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+612. **El ajuste de un cierre tiene DOS versiones en el Almacén, y hasta
+     agosto de 2025 no coinciden: la que movió el stock es la del kardex.**
+     2026-10-04, a pedido («en teoría ambos reportes deben coincidir…
+     verifícalo»). El reporte «Cierre y Ajuste de Inventario»
+     (`SpRepCierreInventario` → `vmCierreInventario` → `mCierreInventario`)
+     calcula el ajuste como `nAjuste × nPrecioPromedio`, y
+     `ajusteinventario.parquet` es esa tabla al céntimo en los 483 cierres
+     desde nov 2023. «Movimientos por artículo › Ajuste Inventarios» lee el
+     kardex: tipo 93 de `MKARDEX` (área 000) y `MSUBKARDEX`, con el código
+     del cierre en `tDocumento`.
+
+     Medido sobre los 903 cierres desde dic 2021, con
+     `herramientas/sql_restaurante.py`:
+
+     - **Desde sep 2025, iguales**, cierre por cierre (la Cocina del
+       01/10/2025 difiere en S/ 12: el kardex movió un producto «4», un
+       código que no existe). El PDF del Almacén Central del 01/10/2026
+       cuadra con el de Movimientos: −2.737,27 = 3.544,73 − 6.282,00.
+     - **Antes, en 31.960 líneas el «stock al cierre» quedó escrito como lo
+       contado × 1,10 o × 0,90** (hasta el primer trimestre de 2024) **y ×
+       1,05 o × 0,95** (de ahí a agosto de 2025), o igual a lo contado: el
+       ajuste del reporte sale de ±5-10 % o cero. Lo contado (`nTotal`) es
+       el mismo en los dos lados —el kardex deja el stock en `nTotal` en el
+       99,8 % de esas líneas—; lo que no coincide es el stock de antes. El
+       kardex suma S/ 1,44 millones más de faltante que el reporte entre dic
+       2021 y ago 2025 (S/ 264 mil en 2024, S/ 159 mil en 2025).
+
+     Lo que se hizo:
+
+     - **Una fila nueva del Sheet, `ajustekardex`**
+       (`kardex.consulta_ajustes_sheet()`): cierre × área × producto, todo
+       el histórico, 358 mil filas en 40 s.
+     - **`data.cargar("ajusteinventario.parquet")` le suma dos columnas**,
+       `AJUSTE KARDEX` y `AJUSTE VALORIZADO KARDEX`
+       (`kardex.sql_ajuste_con_kardex`, en DuckDB contra R2: así queda UNA
+       copia del ajuste en memoria). Sin el parquet, el ajuste de siempre.
+       NULO quiere decir que el kardex no tiene ese cierre —«sin dato», no
+       cero—.
+     - **El cruce es por los SIETE dígitos del producto, no como número**
+       (el ajuste los trae con 10, el kardex con 7): el kardex tiene ocho
+       movimientos con códigos que no existen («4», «50», «1.217») y,
+       comparados como número, el «4» caía sobre el producto 0000004.
+     - **La vista es Ajuste › Evolución**, porque la diferencia es del
+       tiempo. Una línea punteada «Kardex» DEBAJO de la del neto: donde
+       coinciden, la tapa y no se ve —los últimos 12 meses, que es como
+       abre—; donde no, se separa y lleva un punto. El número va en el hover
+       del neto («Kardex: igual» o «S/ … · difiere en S/ …»), el rótulo de
+       abajo dice «igual al kardex» o «el kardex difiere en N de M meses», y
+       el modo Tabla suma la columna. Las barras y el KPI siguen siendo los
+       del cierre: son los del reporte del POS, y lo pedido fue compararlos
+       «sutilmente», no reemplazarlos.
+     - El asistente IA sabe qué son las dos columnas y cuál usar para la
+       merma de esos meses.
+
+     **Al medir el ancho de una fila de títulos, el `scrollWidth` de un
+     `<div>` de bloque no sirve**: si nada desborda es su propio ancho, así
+     que «530 en una columna de 530» no es estar justo. Se mide el borde
+     derecho del último hijo. Casi costó achicar el selector de grano por
+     nada.
+
+     (2026-10-04.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48132,7 +48195,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#611**; la próxima toma el número siguiente.
+> última regla es la **#612**; la próxima toma el número siguiente.
 
 >
 

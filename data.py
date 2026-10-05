@@ -210,6 +210,9 @@ REPORTES = {
         "label_corto": "Ajuste de Inventario",
         "label_rail": "Ajuste",
         "archivo": "ajusteinventario.parquet",
+        # Lo que el kardex registró por cada cierre (regla #612): `cargar`
+        # lo une al ajuste. Acá para que «Actualizar» pida los dos.
+        "archivos_extra": (kardex.ARCHIVO_AJUSTES,),
         "icono": ":material/tune:",
         "kpis": (("Ajuste Valoriz.", "AJUSTE VALORIZADO", "sum"),),
         "kpi_fecha": "FECHA APERTURA INVENTARIO",
@@ -1135,6 +1138,10 @@ def _purgar_version(archivo, sello):
     su generación vieja no le molesta a nadie y ya nadie la lee, porque la
     clave tiene el sello."""
     _cargar_cacheable.clear(archivo, sello)
+    if archivo in (_ARCHIVO_AJUSTE, kardex.ARCHIVO_AJUSTES):
+        # El ajuste con el kardex al lado (regla #612): una copia del ajuste
+        # entero por versión de CUALQUIERA de los dos parquets.
+        _ajuste_con_kardex_cacheable.clear()
     if any(c.get("archivo") == archivo and c.get("carga_por_rango")
            for c in REPORTES.values()):
         # Su clave lleva (col_fecha, ini, fin): no hay forma de nombrar las
@@ -1210,6 +1217,38 @@ def _sello_notas_compras():
     return sello_datos(definicion_compra.ARCHIVO_NOTAS)
 
 
+_ARCHIVO_AJUSTE = "ajusteinventario.parquet"
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _ajuste_con_kardex_cacheable(archivo, sello, sello_kardex="", version=None):
+    """`ajusteinventario.parquet` con lo que el kardex registró por cada
+    línea del cierre (`kardex.sql_ajuste_con_kardex`, regla #612). Si
+    falla, LANZA: no se cachea.
+
+    `sello_kardex` (el de `ajustekardex.parquet`) y `version` no se usan en
+    el cuerpo: son la clave, como el sello.
+
+    El cruce lo hace DuckDB contra R2 y no pandas contra `_cargar_cacheable`:
+    el kardex son 358 mil filas que en pandas pesarían más que el ajuste
+    mismo, y así en memoria queda UNA copia del ajuste, no dos. Persiste en
+    disco por lo mismo que `_cargar_cacheable` (es lo que la reemplaza):
+    sin eso cada reinicio baja los dos parquets."""
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    return con.execute(kardex.sql_ajuste_con_kardex(
+        f"read_parquet('s3://{bucket}/{archivo}')",
+        f"read_parquet('s3://{bucket}/{kardex.ARCHIVO_AJUSTES}')")).df()
+
+
+def _sello_ajustes_kardex():
+    """El sello de `ajustekardex.parquet`, o `""` si no existe en R2 (o no
+    hay secrets): con `""` el ajuste se sirve sin el kardex."""
+    if not secrets_disponibles():
+        return ""
+    return sello_datos(kardex.ARCHIVO_AJUSTES)
+
+
 def notas_credito_compras():
     """Las notas de crédito de los proveedores tal como las trae la consulta
     del Sheet (`notascreditocompras.parquet`), SIN aplicar a nada. Las lee
@@ -1258,6 +1297,16 @@ def cargar(archivo, notas_credito=True):
             # Un blip leyendo las NOTAS no deja a Compras sin datos: este
             # rerun va sin restarlas y el próximo lo reintenta (no se cacheó).
             pass
+    if archivo == _ARCHIVO_AJUSTE and _sello_ajustes_kardex():
+        # El ajuste con lo que dice el kardex al lado (regla #612). Sin
+        # `ajustekardex.parquet` —falta la fila del Sheet— o con un blip, el
+        # ajuste solo, como hasta el 2026-10-04.
+        try:
+            return _ajuste_con_kardex_cacheable(
+                archivo, sello_datos(archivo), _sello_ajustes_kardex(),
+                version=kardex.VERSION_AJUSTES)
+        except Exception:
+            pass
     try:
         return _cargar_cacheable(archivo, sello_datos(archivo))
     except Exception as e:
@@ -1305,6 +1354,9 @@ def limpiar_cache(archivo):
     # y su clave lleva los dos sellos, así que un parquet nuevo ya es otra
     # entrada; se vacía para no esperar la hora de su `ttl` con dos copias.
     _compras_netas_cacheable.clear()
+    # El ajuste con el kardex al lado (regla #612): su clave lleva los dos
+    # sellos, y se vacía entera por lo mismo que la de arriba.
+    _ajuste_con_kardex_cacheable.clear()
     _cargar_rango_cacheable.clear()
     _rango_fechas_cacheable.clear()
     _resumen_kpis_cacheable.clear()

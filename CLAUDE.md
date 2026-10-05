@@ -1000,6 +1000,16 @@ contra la tabla sin fecha. Lo que entre dos fotos no explica ningún
 movimiento es la VALORIZACIÓN (stock negativo, ventas que salen a S/ 0), no
 un error de la cuenta.
 
+**Y el ajuste de un cierre, hasta agosto de 2025, también sale del kardex**
+(regla #612). El «Cierre y Ajuste de Inventario» del Almacén
+(`mCierreInventario`, y con él `ajusteinventario.parquet`) tiene en 31.960
+líneas el stock al cierre escrito como lo contado ±5-10 %: el ajuste que
+movió el stock es el del kardex (tipo 93), S/ 1,44 millones más de faltante.
+Desde sep 2025 los dos coinciden. `data.cargar` le suma `AJUSTE KARDEX` y
+`AJUSTE VALORIZADO KARDEX` desde `ajustekardex.parquet` (la fila
+`ajustekardex` del Sheet) y Ajuste › Evolución lo dibuja punteado. Para la
+merma de esos meses, la del kardex.
+
 ## El consumo según recetas baja hasta lo que se COMPRA
 
 Movimientos › «Consumo según recetas» (2026-09-28): cada plato vendido,
