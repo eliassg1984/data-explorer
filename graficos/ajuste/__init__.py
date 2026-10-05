@@ -59,7 +59,8 @@ from graficos.compras import _periodo_serie
 # test_graficos.py las prueba una por una como `_aj._graf_*` — por eso
 # entran al namespace del paquete y no solo al del modulo que las define.
 from graficos.ajuste._comun import (  # noqa: F401
-    FAMILIAS_DE_ENTRADA, _fmt_corte, _layout_aj,
+    CLAVE_MES, FAMILIAS_DE_ENTRADA, MES_OPERATIVO, MES_REGISTRO, _fmt_corte,
+    _layout_aj, mes_operativo_activo,
 )
 from graficos.ajuste._evolucion import (  # noqa: F401
     fig_familias, fig_serie, periodos_ajuste, serie_ajuste,
@@ -155,6 +156,34 @@ def categoria_rango_ajuste(graf_id):
     return "visual"
 
 
+_K_MES_RECARGA = "_ajuste_mes_recarga"
+
+
+def _selector_mes_ajuste():
+    """En qué mes cuenta un cierre (regla #613): el OPERATIVO —el que
+    cierra: lo registrado del 1 al 6 es del mes anterior— o el de la fecha
+    de REGISTRO en el Almacén.
+
+    Cambiarlo cambia el filtro de fecha, que aplica `app.py` fuera del
+    fragment del contenido: un rerun del fragment volvería a dibujar el df
+    viejo. Por eso pide una corrida COMPLETA, después de que el widget
+    quedó registrado (mismo patrón que `ventas._selector_dia_venta`)."""
+    st.markdown('<div class="filtro-rotulo filtro-ajuste_mes">Mes del '
+                'cierre</div>', unsafe_allow_html=True)
+    st.segmented_control(
+        "Mes del cierre", [MES_OPERATIVO, MES_REGISTRO],
+        default=MES_OPERATIVO, required=True, key=CLAVE_MES,
+        label_visibility="collapsed",
+        on_change=lambda: st.session_state.__setitem__(_K_MES_RECARGA, True),
+        help=("**Mes operativo**: el cierre registrado del 1 al 6 cuenta en "
+              "el mes anterior, el que cierra. **Fecha de registro**: en el "
+              "día en que se abrió en el Almacén. Cambia el rango de fechas y "
+              "el «Mes» de Evolución y de la tabla dinámica; los cortes "
+              "siguen con sus días."))
+    if st.session_state.pop(_K_MES_RECARGA, False):
+        st.rerun(scope="app")
+
+
 def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """
     Gráficos de Ajuste de Inventario — layout con rail derecho (estándar).
@@ -235,6 +264,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     with compartimento_filtros(contar_filtros("ajuste_graf_filtro_familia")):
         _, fam_sel = filtro_pills(df_f, col_familia,
                                   "ajuste_graf_filtro_familia", "Familia")
+        _selector_mes_ajuste()
 
     if ambito == "Histórico":
         base = df_full if df_full is not None else df_f

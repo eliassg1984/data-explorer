@@ -19,7 +19,7 @@ from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
     clave_corte, corte_vigente, aplicar_corte, restaurar_eco,
 )
-from cortes import cortes_disponibles
+from cortes import cortes_disponibles, fecha_operativa
 import franja_fecha
 from graficos.compras import SEC_ABRE_EN_EL_MES
 from graficos.sunat_reporte import bounds_fecha as bounds_fecha_sunat
@@ -32,7 +32,7 @@ from graficos import renderizar_graficos_reporte, tiene_dashboard
 from graficos import periodo
 from graficos.base import (_render_rail, compartimento_filtros,
                            contar_filtros, filtro_pills)
-from graficos.ajuste import categoria_rango_ajuste
+from graficos.ajuste import categoria_rango_ajuste, mes_operativo_activo
 from asistente import inject_asistente
 from navegacion import inject_navegacion
 from aviso_ingreso import procesar_aviso_ingreso
@@ -974,9 +974,15 @@ elif _franja_con_fecha:
         # siendo INCLUSIVO aunque la columna traiga hora (que es el caso de
         # FECHA APERTURA INVENTARIO): con "<= fin" se perderia todo lo
         # posterior a la medianoche del ultimo dia.
+        # Ajuste cuenta cada cierre en su MES OPERATIVO salvo que «Filtros»
+        # diga otra cosa: el de fin de mes se registra del 1 al 6 del
+        # siguiente, y «septiembre» tiene que traerlo (regla #613). El modo
+        # Cortes de arriba no pasa por acá: un corte son sus días de verdad.
+        _f_rango = (fecha_operativa(df_f[col_fecha])
+                    if es_ajuste and mes_operativo_activo() else df_f[col_fecha])
         df_f = df_f[
-            (df_f[col_fecha] >= pd.Timestamp(_ini_apl)) &
-            (df_f[col_fecha] < pd.Timestamp(_fin_apl) + pd.Timedelta(days=1))
+            (_f_rango >= pd.Timestamp(_ini_apl)) &
+            (_f_rango < pd.Timestamp(_fin_apl) + pd.Timedelta(days=1))
         ]
 perf.end_phase("Ajuste top row")                                            # ⚡ PERF
 

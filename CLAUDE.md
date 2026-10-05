@@ -1010,6 +1010,12 @@ Desde sep 2025 los dos coinciden. `data.cargar` le suma `AJUSTE KARDEX` y
 `ajustekardex` del Sheet) y Ajuste › Evolución lo dibuja punteado. Para la
 merma de esos meses, la del kardex.
 
+**Y el cierre de fin de mes se registra del 1 al 6 del siguiente**: Ajuste
+lo cuenta en su MES OPERATIVO (`cortes.fecha_operativa`), con un selector
+«Mes del cierre» en «Filtros». Mueve el rango de la franja y el «Mes» de
+Evolución y la tabla dinámica; los cortes siguen con sus días de verdad, y
+el df no se toca. Regla #613.
+
 ## El consumo según recetas baja hasta lo que se COMPRA
 
 Movimientos › «Consumo según recetas» (2026-09-28): cada plato vendido,

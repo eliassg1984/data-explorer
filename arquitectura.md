@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-612 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+613 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (199)
 
@@ -843,7 +843,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#606** — En el cruce de «Documentos SUNAT», un candidato ÚNICO con OTRO RUC sólo se empareja si los…
 - **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
 
-**Fechas, rangos y cortes** (13)
+**Fechas, rangos y cortes** (14)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -858,11 +858,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#442** — Una selección sembrada con el corte con que ABRE la vista hereda sus huecos — y…
 - **#531** — «Por hora» tiene su propia fecha: el rango se parte por la granularidad. Y en Ventas…
 - **#609** — Consumo según recetas: un corte porcionado no sale de UN porcionamiento, sale de todos los de…
+- **#613** — El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo cuenta en su MES OPERATIVO
 
-**Asistente IA** (2)
+**Asistente IA** (3)
 
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
+- **#613** — El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo cuenta en su MES OPERATIVO
 
 **Herramientas de desarrollo** (40)
 
@@ -48183,6 +48185,37 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-04.)
 
+613. **El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo
+     cuenta en su MES OPERATIVO.** El Almacén fecha el cierre
+     (`FECHA APERTURA INVENTARIO`) el día en que se abre en el sistema, y el
+     de fin de mes se abre del 1 al 6 del siguiente: el «cierre de
+     septiembre» lleva fecha de octubre. Por fecha de registro, septiembre
+     salía sin conteo y octubre con el de septiembre.
+
+     - **`cortes.fecha_operativa`**: lo registrado del 1 al
+       `DIA_CIERRE_OPERATIVO` (6, lo dijo el usuario) pasa al último día del
+       mes anterior, con su hora. Restar tantos días como el día del mes
+       cae justo ahí, sin calcular cuántos tiene.
+     - **Un selector en «Filtros» de Ajuste** («Mes del cierre»: *Mes
+       operativo*, el default, o *Fecha de registro*; clave
+       `graficos/ajuste/_comun.py::CLAVE_MES`). Manda sobre DOS cosas: el
+       rango de la franja (`app.py` compara la fecha operativa) y el «Mes»
+       de Evolución y de la tabla dinámica (`periodos_ajuste(...,
+       operativo=)`). Cambiarlo pide una corrida completa, como el «Fecha
+       de la venta» de Ventas (#593): el filtro vive fuera del fragment.
+     - **Los cortes NO se mueven.** Un corte es una sesión de conteo y sus
+       días son los de verdad: el modo Cortes de la franja, el grano
+       «Corte» y Por familia / Familia × Área siguen con la fecha del
+       sistema. Mover las fechas habría pegado el cierre del día 2 con los
+       ajustes sueltos del 28 en un solo corte.
+     - **No se escribe en el df**: se calcula sobre la Series donde hace
+       falta. Una columna nueva sería otra copia del ajuste por corrida, y
+       el df que reciben las vistas y el asistente sigue con la fecha del
+       Almacén.
+     - Queda en calendario el KPI del rail («mes en curso» en SQL).
+
+     (2026-10-05.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48195,7 +48228,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#612**; la próxima toma el número siguiente.
+> última regla es la **#613**; la próxima toma el número siguiente.
 
 >
 

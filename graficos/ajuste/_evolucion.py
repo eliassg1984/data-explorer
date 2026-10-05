@@ -61,7 +61,8 @@ from graficos.base import publicar_contexto_ia
 from graficos import alturas
 from graficos.ajuste._comun import (
     FAMILIAS_DE_ENTRADA, _MESES_ABR_ES, _layout_aj, _periodo_pivote_ajuste,
-    css_filtros_vista, filtro_area_en_titulo,
+    css_filtros_vista, fechas_del_mes, filtro_area_en_titulo,
+    mes_operativo_activo,
 )
 from utils import fmt_k
 
@@ -108,7 +109,7 @@ AYUDA_KARDEX = (
 
 # ── DATOS (puros: sin Streamlit, los prueba test_graficos.py) ────────────
 
-def periodos_ajuste(d, col_fecha, gran):
+def periodos_ajuste(d, col_fecha, gran, operativo=False):
     """Asigna a cada fila su periodo y arma la lista ORDENADA de periodos.
 
     Devuelve `(d_con_clave, orden)`: `d` con la columna `_clave`, y un
@@ -121,6 +122,10 @@ def periodos_ajuste(d, col_fecha, gran):
     un mes sin sesion de inventario es un dato («no se conto»), y saltearlo
     pegaria dos meses que no son vecinos. En Corte no: cada periodo ES un
     conteo, y entre dos no hay nada que rellenar.
+
+    `operativo`: el «Mes» de cada fila es su mes OPERATIVO —un cierre
+    registrado del 1 al 6 es del mes anterior— (regla #613). Los cortes
+    siguen con sus días de verdad.
     """
     d = d.copy()
     d[col_fecha] = pd.to_datetime(d[col_fecha], errors="coerce")
@@ -129,7 +134,8 @@ def periodos_ajuste(d, col_fecha, gran):
     if d.empty:
         return d.assign(_clave=pd.Series(dtype=str)), pd.DataFrame(columns=cols)
 
-    clave, etq = _periodo_pivote_ajuste(d[col_fecha], gran)
+    f_mes = fechas_del_mes(d[col_fecha], operativo and gran == "Mes")
+    clave, etq = _periodo_pivote_ajuste(f_mes, gran)
     d["_clave"] = clave.astype(str).values
     d["_etq"] = etq.astype(str).values
 
@@ -140,8 +146,8 @@ def periodos_ajuste(d, col_fecha, gran):
     orden["anio"] = orden["fin"].dt.year.astype(int)
 
     if gran == "Mes":
-        meses = pd.period_range(d[col_fecha].min().to_period("M"),
-                                d[col_fecha].max().to_period("M"), freq="M")
+        meses = pd.period_range(f_mes.min().to_period("M"),
+                                f_mes.max().to_period("M"), freq="M")
         orden = pd.DataFrame({
             "_clave": [str(m) for m in meses],
             "etq": [_MESES_ABR_ES[m.month - 1] for m in meses],
@@ -696,7 +702,8 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
             "Familia": st.session_state.get("ajuste_graf_filtro_familia"),
             "Área": st.session_state.get(_K_AREA)})
 
-        dp, orden = periodos_ajuste(d, col_fecha, gran)
+        dp, orden = periodos_ajuste(d, col_fecha, gran,
+                                    operativo=mes_operativo_activo())
         if orden.empty:
             with c_tit:
                 _titulo("Sobrante, faltante y neto")

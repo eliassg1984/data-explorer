@@ -20,7 +20,9 @@ import streamlit as st
 
 from tema import GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _resolver
-from graficos.ajuste._comun import css_filtros_vista, filtro_area_en_titulo
+from graficos.ajuste._comun import (
+    css_filtros_vista, filtro_area_en_titulo, mes_operativo_activo,
+)
 from graficos.ajuste._evolucion import GRANOS, periodos_ajuste
 
 
@@ -149,7 +151,8 @@ def vista_detalle_ajuste(d, col_fecha, col_familia, col_area, col_ajuste_val,
                 f"font-size:12px'> · S/ arriba, cantidad abajo</span></div>",
                 unsafe_allow_html=True,
             )
-        dp, orden = periodos_ajuste(d, col_fecha, gran)
+        dp, orden = periodos_ajuste(d, col_fecha, gran,
+                                    operativo=mes_operativo_activo())
         if orden.empty:
             st.info("Sin fechas válidas en el rango seleccionado.")
             return

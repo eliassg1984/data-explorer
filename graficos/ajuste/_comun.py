@@ -34,7 +34,7 @@ from cortes import (  # noqa: F401
     cortes_por_racha as _cortes_por_racha,
     etiqueta_corte as _etiqueta_corte,
 )
-from cortes import corte_contiguo, cortes_disponibles
+from cortes import corte_contiguo, cortes_disponibles, fecha_operativa
 from tema import ACENTO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_SELECCION
 from graficos.base import (
     _layout, _slug, filtro_pills, sembrar_seleccion,
@@ -71,6 +71,28 @@ def _fmt_corte(fecha):
     sistema (inglés en Streamlit Cloud), y esta app es en español."""
     _ts = pd.Timestamp(fecha)
     return f"{_ts.day:02d}-{_MESES_ABR_ES[_ts.month - 1]}"
+
+
+# ── EL MES DE UN CIERRE: el operativo o el del registro (regla #613) ─────
+# El cierre de fin de mes se registra del 1 al 6 del siguiente
+# (`cortes.DIA_CIERRE_OPERATIVO`). Con «Mes operativo» (el default) el
+# rango de la franja y el «Mes» de Evolución y de la tabla dinámica lo
+# cuentan en el mes que cierra; con «Fecha de registro», en el del sistema.
+# Los cortes no cambian: un corte es una sesión de conteo y sus días son
+# los de verdad.
+CLAVE_MES = "ajuste_mes"
+MES_OPERATIVO = "Mes operativo"
+MES_REGISTRO = "Fecha de registro"
+
+
+def mes_operativo_activo():
+    """True si Ajuste fecha los cierres por su mes operativo (el default)."""
+    return st.session_state.get(CLAVE_MES, MES_OPERATIVO) == MES_OPERATIVO
+
+
+def fechas_del_mes(fechas, operativo):
+    """`fechas` tal cual, o en su mes operativo si `operativo`."""
+    return fecha_operativa(fechas) if operativo else fechas
 
 
 def _periodo_pivote_ajuste(fechas, gran):

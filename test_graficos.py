@@ -5917,6 +5917,34 @@ def _pruebas_evolucion_ajuste():
     check("Corte: una sesión por racha de días",
           len(orden_c), 2)
 
+    # MES OPERATIVO (regla #613): el cierre registrado del 1 al 6 es del mes
+    # anterior, con su hora; el del 7 en adelante, del suyo.
+    from cortes import fecha_operativa
+    f_op = fecha_operativa(pd.Series(pd.to_datetime(
+        ["2026-10-03 14:20", "2026-10-06 09:00", "2026-10-07 08:00",
+         "2026-03-01 10:00", "2025-01-05 00:00", None])))
+    check("mes operativo: del 1 al 6, al último día del mes anterior",
+          [str(x) for x in f_op],
+          ["2026-09-30 14:20:00", "2026-09-30 09:00:00",
+           "2026-10-07 08:00:00", "2026-02-28 10:00:00",
+           "2024-12-31 00:00:00", "NaT"])
+    d_op = pd.DataFrame({
+        "F": pd.to_datetime(["2026-08-29", "2026-10-02", "2026-10-02",
+                             "2026-10-20"]),
+        "AV": [1.0, -10.0, -5.0, 2.0], "VT": [1.0, 1.0, 1.0, 1.0]})
+    dp_op, orden_op = _ev.periodos_ajuste(d_op, "F", "Mes", operativo=True)
+    check("mes operativo: el cierre del 2 oct cae en septiembre",
+          orden_op["_clave"].tolist(), ["2026-08", "2026-09", "2026-10"])
+    s_op = _ev.serie_ajuste(dp_op, orden_op, "AV", "VT").set_index("_clave")
+    check("mes operativo: la serie lo suma en septiembre",
+          s_op.loc["2026-09", "neto"], -15.0)
+    _, orden_reg = _ev.periodos_ajuste(d_op, "F", "Mes")
+    check("por fecha de registro, septiembre queda sin conteo",
+          orden_reg["_clave"].tolist(), ["2026-08", "2026-09", "2026-10"])
+    _, orden_cop = _ev.periodos_ajuste(d_op, "F", "Corte", operativo=True)
+    check("mes operativo: los cortes siguen con sus días de verdad",
+          len(orden_cop), 3)
+
     # Sin «Semana» (regla #585): el ajuste se mide por conteo, no por semana.
     check("los granos son Corte y Mes", _ev.GRANOS, ("Corte", "Mes"))
 

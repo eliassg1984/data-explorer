@@ -46,6 +46,26 @@ meses en español. Ésta nació capitalizada y privada en
 cuando el drill Semanal de Compras pidió la misma cosa. En minúscula, como
 sus vecinas — quien quiera «Sáb» tiene `.capitalize()`."""
 
+DIA_CIERRE_OPERATIVO = 6
+"""Hasta qué día del mes un cierre de inventario es del mes ANTERIOR.
+
+El Almacén fecha el cierre el día en que se abre en el sistema, y el de fin
+de mes se abre del 1 al 6 del siguiente: el «cierre de septiembre» lleva
+fecha de octubre. Lo dijo el usuario (2026-10-05). Regla #613."""
+
+
+def fecha_operativa(fechas, dia=DIA_CIERRE_OPERATIVO):
+    """La fecha en su MES OPERATIVO: lo registrado del día 1 al `dia` pasa
+    al último día del mes anterior, con su misma hora; lo demás queda igual.
+
+    Restar tantos días como el día del mes cae justo en el último del mes
+    anterior (3 oct − 3 días = 30 set), sin calcular cuántos días tiene.
+    Recibe y devuelve una Series de pandas."""
+    import pandas as pd
+    f = pd.to_datetime(fechas, errors="coerce")
+    temprano = f.dt.day <= dia
+    return f.where(~temprano, f - pd.to_timedelta(f.dt.day, unit="D"))
+
 
 def etiqueta_hora(h):
     """La hora como se dice, no como la guarda el reloj de la base: «7 pm» y
