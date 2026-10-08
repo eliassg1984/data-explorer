@@ -160,9 +160,24 @@ def _css_mov():
     return css
 
 
+_JS_VS_ANT = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'number')"
+    "   return (p.node && p.node.rowPinned) ? v : '\\u2014';"
+    " if (v >= 900) return '\\u00d7' + Math.round(v / 100 + 1);"
+    " var dec = Math.abs(v) < 10 ? 1 : 0;"
+    " var a = Math.abs(v);"
+    " if (Number(a.toFixed(dec)) === 0) return '0%';"
+    " return (v > 0 ? '+' : '\\u2212') + a.toFixed(dec) + '%'; }")
+"""La variación contra el año comparado (regla #614): «+8.2%», «−3.0%», y
+«—» donde ese año no hubo nada en el período. Desde +900 % se escribe en
+veces —«×204»—: una semana de S/ 11.080 contra S/ 54 daba «+20308%», que
+no se lee. La fila TOTAL trae el texto ya escrito desde Python."""
+
+
 def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                             rotulo_docs="Requerimientos", ver_variacion=True,
-                            total=None):
+                            total=None, rotulo_ant=""):
     """Una fila por BARRA del gráfico, en el orden del eje.
 
     `tp` trae `periodo` (el nombre de la barra, ya legible), los números
@@ -173,6 +188,12 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
     estado), `__clave` (la clave del período, la del eje) y `__sel` (la
     barra en foco). `rotulo_docs` es la cabecera de la cuenta de documentos
     —«Requerimientos» o «Salidas»—.
+
+    Si `tp` trae `ant` y `vs_ant` —el mismo período del año comparado y la
+    variación contra él, regla #614—, van como dos columnas más con
+    `rotulo_ant` («2025») en la cabecera. Para que entren sin scroll
+    horizontal se esconden «Líneas» y la variación contra la barra anterior:
+    con el año pasado al lado, la referencia que importa es ésa.
 
     SIN `initialSort`, como el Resumen de Compras: las filas abren en el
     orden del EJE porque la tabla es el gráfico escrito. Se ordenan igual con
@@ -198,8 +219,9 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                       "los anulados ni los que vienen sin "
                                       "ítems",
                         width=132, minWidth=132, suppressSizeToFit=True)
+    con_ant = "ant" in tp.columns and "vs_ant" in tp.columns
     gb.configure_column("lineas", header_name="Líneas", type=["numericColumn"],
-                        valueFormatter=_JS_ENTERO,
+                        hide=con_ant, valueFormatter=_JS_ENTERO,
                         headerTooltip="Líneas de esos documentos: un "
                                       "producto es una línea",
                         width=82, minWidth=82, suppressSizeToFit=True)
@@ -218,13 +240,29 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                       "de la vista",
                         width=104, minWidth=104, suppressSizeToFit=True)
     gb.configure_column("variacion", header_name="Variación",
-                        hide=not ver_variacion, type=["numericColumn"],
+                        hide=(not ver_variacion) or con_ant,
+                        type=["numericColumn"],
                         valueFormatter=_JS_VARIACION,
                         cellStyle=_STYLE_VARIACION, tooltipField="__nota",
                         headerTooltip="Variación contra la barra ANTERIOR "
                                       "del gráfico, no contra el período "
                                       "anterior del calendario",
                         width=104, minWidth=104, suppressSizeToFit=True)
+    if con_ant:
+        gb.configure_column("ant", header_name=rotulo_ant or "Año pasado",
+                            type=["numericColumn"],
+                            valueFormatter=_JS_VALOR_MOV,
+                            headerTooltip="El mismo período, en el año "
+                                          "comparado",
+                            width=120, minWidth=120, suppressSizeToFit=True)
+        gb.configure_column("vs_ant", header_name=f"vs {rotulo_ant}".strip(),
+                            type=["numericColumn"],
+                            valueFormatter=_JS_VS_ANT,
+                            cellStyle=_STYLE_VARIACION,
+                            headerTooltip="Cuánto cambió contra el mismo "
+                                          "período del año comparado. Rojo: "
+                                          "subió",
+                            width=96, minWidth=96, suppressSizeToFit=True)
     gb.configure_column("estado", header_name="Estado",
                         cellClassRules=REGLAS_ESTADO,
                         headerTooltip="Sólo se escribe la excepción: "

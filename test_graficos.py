@@ -6737,6 +6737,160 @@ def _pruebas_ajuste_kardex():
     return fallos
 
 
+def _pruebas_salidas_comparar_y_destino():
+    """Movimientos › salidas: la causa, los años anteriores y el destino de
+    lo que entra (regla #614).
+
+      1. LA CAUSA sale del motivo escrito, con erratas y sin tildes, y lo
+         que sólo dice «producto de baja» no inventa una.
+      2. LA COMPARACIÓN cae en la MISMA clave del eje que su barra: por mes
+         con el calendario, por semana con 364 días (el mismo día de la
+         semana). Lo anulado tampoco suma el año pasado.
+      3. EL AVISO DE POCO REGISTRO: sólo meses enteros, cerrados y con menos
+         de la mitad de la mediana de los doce anteriores.
+      4. EL DESTINO cierra: entró − vendido − preparaciones − notas + ajuste
+         es lo que quedó, las bajas salen de las notas y no se cuentan dos
+         veces, y lo que va entre áreas no infla lo que entró.
+    """
+    import pandas as pd
+
+    from graficos import movimientos as mov
+    from graficos import movimientos_destino as md
+    from graficos import movimientos_periodo as mp
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    salidas #614 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA salidas #614 · {nombre}: {got!r} != {exp!r}")
+
+    # ── 1) La causa ───────────────────────────────────────────────────────
+    for motivo, causa in (
+            ("PRODUCTO DE BAJA / TIEMPO DE VIDA", "Tiempo de vida"),
+            ("PRODCUTOS DE BAJA / TEIMPIO DE VIDA", "Tiempo de vida"),
+            ("PRODUCTO DE BAJA (MANIPULACION DE COCINA / TIEMPO DE VIDA )",
+             "Tiempo de vida"),
+            ("Producto de baja / cocción", "Cocción o término"),
+            ("BAJA DE PRODUCTO / FRIO MALOGRADO", "Equipo malogrado o frío"),
+            ("PRODUCTO DE BAJA / SE ROMPIO", "Manipulación"),
+            ("BAJA DE PRODUCTO / NO CUMPLE STANDAR", "No cumple el estándar"),
+            ("CONSUMO DIRECTO", "Consumo directo"),
+            ("PRODUCTOS DE BAJA", mov.SIN_CAUSA),
+            (".\r\n", mov.SIN_CAUSA),
+            (None, mov.SIN_CAUSA),
+            ("USO MENSUAL", mov.OTRA_CAUSA)):
+        check(f"causa de «{str(motivo).strip()[:30]}»",
+              mov.causa_de_baja(motivo), causa)
+    d = pd.DataFrame({"MOTIVO": ["PRODUCTO DE BAJA / TERMINO", None]})
+    check("con_causa agrega la columna",
+          mov.con_causa(d, "MOTIVO")[mov.COL_CAUSA].tolist(),
+          ["Cocción o término", mov.SIN_CAUSA])
+    check("sin columna de motivo, el df tal cual",
+          mov.COL_CAUSA in mov.con_causa(d, None).columns, False)
+
+    # ── 2) La comparación con años anteriores ─────────────────────────────
+    def _lin(filas):
+        return pd.DataFrame({
+            "fecha": pd.to_datetime([f for f, *_ in filas]),
+            "doc": [doc for _, doc, *_ in filas],
+            "estado": [e for *_, e, _ in filas],
+            "valor": [v for *_, v in filas],
+            "vacio": False, "area": "COCINA", "tipo": "", "fam": "",
+            "prod": "x"})
+    bh = _lin([("2025-08-05", "a", "PROCESADO", 10.0),
+               ("2025-09-10", "b", "PROCESADO", 20.0),
+               ("2025-09-11", "c", "ANULADO", 99.0),
+               ("2024-09-02", "d", "PROCESADO", 7.0)])
+    rng = (pd.Timestamp("2026-08-01"), pd.Timestamp("2026-10-01"))
+    comps = mp.comparacion_periodos(bh, rng, "Mes", ["2026-08", "2026-09"],
+                                    2)
+    check("por mes, el año pasado cae en la barra de su mes",
+          comps[0]["tot"], [10.0, 20.0])
+    check("lo anulado no suma el año pasado", comps[0]["total"], 30.0)
+    check("el rótulo del año", (comps[0]["rot"], comps[1]["rot"]),
+          ("2025", "2024"))
+    check("dos años atrás", comps[1]["tot"], [0.0, 7.0])
+    # Por semana: el miércoles 10/09/2025 es, 364 días después, el miércoles
+    # 09/09/2026 — la semana ISO 37 de los dos años.
+    sem = mp.comparacion_periodos(
+        bh, (pd.Timestamp("2026-09-07"), pd.Timestamp("2026-09-14")),
+        "Semana", ["2026-S37"], 1)
+    check("por semana, 364 días: el mismo día de la semana",
+          sem[0]["tot"], [20.0])
+    check("un rango que cruza el año se rotula «2024-25»",
+          mp.rotulo_anio(pd.Timestamp("2025-10-01"),
+                         pd.Timestamp("2026-10-01"), pd.DateOffset(years=1)),
+          "2024-25")
+    check("variación sin base es None", mp.variacion_pct(5.0, 0.0), None)
+
+    # ── 3) El aviso de poco registro ──────────────────────────────────────
+    filas = []
+    for i, mes in enumerate(pd.period_range("2025-08", "2026-07", freq="M")):
+        for k in range(40):
+            filas.append((str(mes.start_time.date()), f"{mes}-{k}",
+                          "PROCESADO", 1.0))
+    filas += [("2026-08-03", f"ago-{k}", "PROCESADO", 1.0) for k in range(10)]
+    filas += [("2026-09-03", f"sep-{k}", "PROCESADO", 1.0) for k in range(35)]
+    poco = mp.meses_poco_registro(
+        _lin(filas), (pd.Timestamp("2026-08-01"), pd.Timestamp("2026-10-01")),
+        pd.Timestamp("2026-10-08"))
+    check("agosto con 10 de ~40 avisa; septiembre con 35 no",
+          [(str(p), n) for p, n, _ in poco], [("2026-08", 10)])
+    pocas_sep = [f for f in filas if not f[1].startswith("sep-")] + [
+        ("2026-09-03", f"sep-{k}", "PROCESADO", 1.0) for k in range(5)]
+    check("el mes en curso no se juzga aunque traiga pocas",
+          mp.meses_poco_registro(
+              _lin(pocas_sep), (pd.Timestamp("2026-08-01"),
+                                pd.Timestamp("2026-10-01")),
+              pd.Timestamp("2026-09-15")),
+          [(pd.Period("2026-08", "M"), 10, 40.0)])
+
+    # ── 4) El destino de lo que entra ─────────────────────────────────────
+    m = pd.Timestamp("2026-09-01")
+    kx = pd.DataFrame([
+        # cod, tipo, entra, sale
+        ("T", "94", 100.0, 0.0),   # la orden produjo 100 tartas
+        ("T", "95", 0.0, 70.0),    # se vendieron 70
+        ("T", "98", 0.0, 25.0),    # 25 en notas: 20 bajas + 5 personal
+        ("T", "93", 0.0, 2.0),     # faltaron 2 en el cierre
+        ("T", "99", 50.0, 50.0),   # un requerimiento: no entra
+        ("Q", "01", 10.0, 0.0),    # el queso, comprado
+        ("Q", "07", 0.0, 1.0),     # una nota de crédito
+        ("Q", "94", 0.0, 6.0),     # usado en la orden de la tarta
+    ], columns=["cod", "tipo", "cant_in", "cant_out"]).assign(mes=m)
+    kx = kx[kx["tipo"] != "99"]   # `sql_movimientos_mes` ya los saca
+    bajas = pd.DataFrame({"cod": ["T"], "mes": [m], "cant": [20.0],
+                          "valor": [190.0]})
+    r = md.armar_destino(kx, bajas).set_index("cod")
+    check("tarta: entró, vendido, baja, otras, ajuste, quedó",
+          [round(float(r.loc["T", c]), 2) for c in
+           ("entro", "vendido", "baja", "otras", "ajuste", "quedo")],
+          [100.0, 70.0, 20.0, 5.0, -2.0, 3.0])
+    check("tarta: % baja sobre lo que entró", round(r.loc["T", "pct_baja"], 1),
+          20.0)
+    check("queso: lo comprado neto de la nota de crédito y lo usado",
+          [float(r.loc["Q", c]) for c in ("entro", "prep", "quedo")],
+          [9.0, 6.0, 3.0])
+    check("queso: entró y no se dio de baja, 0 %",
+          float(r.loc["Q", "pct_baja"]), 0.0)
+    s = pd.DataFrame({
+        "FECHA PROCESADO": pd.to_datetime(["2026-09-02", "2026-09-03",
+                                           "2026-09-04", "2026-10-01"]),
+        "NOMBRE ESTADO SALIDA": ["PROCESADO", "ANULADO", "PROCESADO",
+                                 "PROCESADO"],
+        "COD PRODUCTO": ["T", "T", "T", "T"],
+        "TIPO DESCARGO": ["Bajas", "Bajas", "Comida Personal", "Bajas"],
+        "CANT SALIDA": [1.0, 2.0, 4.0, 8.0], "VALOR NETO": [1.0] * 4})
+    b = md.bajas_de(s, pd.Timestamp("2026-09-01"), pd.Timestamp("2026-10-01"))
+    check("bajas: sólo Bajas, sin anuladas, en el rango", b["cant"].tolist(),
+          [1.0])
+    return fallos
+
+
 def _pruebas_detalle_salidas():
     """Movimientos › «Detalle de salidas» (regla #511).
 
@@ -6835,8 +6989,8 @@ def _pruebas_detalle_salidas():
     check("formato · desglose de tres cuadros (1 de 3.2)",
           dt.formato_por_ancho(1 / 3.2), dt.FORMATO_DETALLE[3])
     filas = mov._FILAS_DETALLE_SAL
-    check("cinco cuadros en las filas del Detalle",
-          sum(len(f) for f in filas), 5)
+    check("seis cuadros en las filas del Detalle (la causa, #614)",
+          sum(len(f) for f in filas), 6)
     check("las dos filas cortan la primera columna en el mismo sitio",
           len({round(f[0] / sum(f), 6) for f in filas}), 1)
 
@@ -6865,7 +7019,7 @@ def _pruebas_detalle_salidas():
             llamadas.append((py.name, pref, slug, n))
     check("hay UNA llamada a seccion_cuadros (la de Movimientos)",
           [(a, p, s, n) for a, p, s, n in llamadas],
-          [("movimientos.py", "mov", "detsal", 5)])
+          [("movimientos.py", "mov", "detsal", 6)])
     faltan = [k for _a, p, s, n in llamadas
               for k in dt.claves_tarjetas_cuadros(p, s, n)
               if f".st-key-{k}," not in cards and f".st-key-{k})" not in cards]
@@ -9791,6 +9945,7 @@ def main():
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
+    fallos += _pruebas_salidas_comparar_y_destino()
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()

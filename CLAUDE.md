@@ -1016,6 +1016,19 @@ lo cuenta en su MES OPERATIVO (`cortes.fecha_operativa`), con un selector
 Evolución y la tabla dinámica; los cortes siguen con sus días de verdad, y
 el df no se toca. Regla #613.
 
+## Una nota de salida tiene DOS fechas
+
+Registro (cuándo se digitó: la «Relación de Notas de Salidas» del Almacén)
+y proceso (cuándo movió el stock: el kardex, la «Relación de Salidas» y
+Stock › Movimientos por Tipo). Septiembre 2026: S/ 6.893 contra 7.703, las
+dos cuadradas al céntimo; difieren las notas que cruzan de mes. Las
+secciones de salidas de Movimientos abren por REGISTRO (a pedido) y se
+cambian en «Filtros» (`graficos/movimientos.py::K_FECHA_SAL`), junto al
+selector que las compara con años anteriores. «Destino de lo que entra»
+usa SIEMPRE la del kardex: si no, sus columnas no cierran. Y se registra
+por lotes —la comida de personal de un mes entero en 27 minutos—, así que
+ninguna de las dos es el día de la merma. Regla #614.
+
 ## El consumo según recetas baja hasta lo que se COMPRA
 
 Movimientos › «Consumo según recetas» (2026-09-28): cada plato vendido,

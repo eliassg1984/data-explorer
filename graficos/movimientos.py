@@ -136,6 +136,9 @@ regla #322.
 Punto de entrada público: renderizar_graficos_movimientos().
 """
 
+import re
+import unicodedata
+
 import pandas as pd
 import streamlit as st
 
@@ -153,12 +156,14 @@ from graficos.movimientos_comun import _rango_vigente
 # salida anulada» —o de cómo se escribe «3 anuladas»— se separan al primer
 # retoque.
 from graficos.movimientos_periodo import (
-    _ANULADO, SALIDAS, orden_areas, tarjeta_porcionamientos_periodo,
+    _ANULADO, SALIDAS, orden_areas, rotulo_anio,
+    tarjeta_porcionamientos_periodo,
     tarjeta_produccion_periodo, tarjeta_requerimientos_periodo,
     tarjeta_salidas_periodo,
 )
 from graficos import drill_tablas
 from graficos.movimientos_consumo import tarjeta_consumo
+from graficos.movimientos_destino import tarjeta_destino
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es horizontal
 # y aplana las categorías a una sola fila (ver `base.py::_render_rail`), así
@@ -198,8 +203,12 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # productos · salidas», que se retiró ese día. Nombre sin sufijo: no
     # tiene gemela del lado de requerimientos. El ícono es el de un tablero
     # partido en paneles, que es lo que dibuja —cinco cuadros, 3 + 2—.
+    # «Destino de lo que entra» (2026-10-08, regla #614): las bajas
+    # contra lo que se compró, produjo o porcionó, producto por producto.
+    # Va con las salidas porque su pregunta es «cuánto de esto se tiró».
     ("Salidas", (("Salidas por período", "Salidas por Período", ":material/calendar_view_week:"),
                  ("Detalle de salidas",  "Salidas por Área",    ":material/view_quilt:"),
+                 ("Destino de lo que entra", "Destino de lo que entra", ":material/alt_route:"),
                  ("Tabla · salidas",     "Tabla · sal.",        ":material/table_view:"))),
     # «Porcionamientos» (2026-09-24, regla #510): tercer grupo, al final, a
     # pedido. Una sola vista, con el nombre que se pidió; el ícono son las
@@ -235,6 +244,7 @@ _PILA = pila_sin_tablas((
     ("mov_sec_tabla_req",   "Tabla · requerim."),
     ("mov_sec_sal_periodo", "Salidas por período"),
     ("mov_sec_detalle_sal", "Detalle de salidas"),
+    ("mov_sec_destino",     "Destino de lo que entra"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
     ("mov_sec_porc",        "Porcionamientos"),
     ("mov_sec_prod",        "Producción"),
@@ -310,24 +320,162 @@ def _tabla_salidas(df_sal):
                               cols_visibles=None)
 
 
+# ── LA FECHA DE LAS SALIDAS Y LA COMPARACIÓN (2026-10-08, regla #614) ─────
+# Una nota de salida tiene DOS fechas: cuándo se REGISTRÓ (la que escribe la
+# «Relación de Notas de Salidas» del Almacén, `MSUBSALIDA.fRegistro`) y
+# cuándo se PROCESÓ y movió el stock (la del kardex: la «Relación de
+# Salidas», `SpLisRepSalida`, y Stock › Movimientos por Tipo). Casi siempre
+# es el mismo día; cambia en las notas que cruzan de mes. Septiembre 2026:
+# S/ 6.893 por registro y 7.703 por proceso, las dos cuadradas al céntimo.
+# Abre en REGISTRO, a pedido: «es la fecha en que supuestamente ocurrió la
+# baja en forma física».
+FECHA_REGISTRO = "Registro"
+FECHA_PROCESO = "Proceso"
+K_FECHA_SAL = "mov_sal_fecha"
+_COLS_FECHA_SAL = {
+    FECHA_REGISTRO: ["Fecha registro", "FECHA REGISTRO"],
+    FECHA_PROCESO: ["Fecha procesado", "FECHA PROCESADO"],
+}
+_ROT_FECHA_SAL = {FECHA_REGISTRO: "fecha de registro",
+                  FECHA_PROCESO: "fecha de proceso"}
+
+COMPARAR_SAL = ("Sin comparar", "Año pasado", "Dos años")
+"""Cuántos años atrás comparan las secciones de salidas: el índice es el
+número de años. Abre en «Año pasado», como el mockup aprobado."""
+K_COMP_SAL = "mov_sal_comparar"
+
+
+def _selectores_salidas():
+    """La fecha y la comparación de las secciones de SALIDAS, en el panel
+    «Filtros» de la franja (regla #614).
+
+    En el panel y no en una tarjeta por dos razones: mandan sobre TRES
+    secciones a la vez —por período, por área y el destino—, y un control
+    adentro de una sección vive en su fragment, que no vuelve a cargar el
+    parquet (lo carga `renderizar_graficos_movimientos`, afuera). Y en la
+    franja no le cuestan alto a ninguna tarjeta. Es el lugar de los otros
+    dos selectores de «qué fecha cuenta»: el día de la venta (#593) y el
+    mes del cierre (#613)."""
+    st.markdown('<div class="filtro-rotulo filtro-mov_sal_fecha">Fecha de '
+                'las salidas</div>', unsafe_allow_html=True)
+    st.segmented_control(
+        "Fecha de las salidas", [FECHA_REGISTRO, FECHA_PROCESO],
+        default=FECHA_REGISTRO, required=True, key=K_FECHA_SAL,
+        label_visibility="collapsed",
+        help=("**Registro**: el día en que se digitó la nota, como la "
+              "«Relación de Notas de Salidas» del Almacén. **Proceso**: el "
+              "día en que movió el stock, como el kardex, la «Relación de "
+              "Salidas» y Stock › Movimientos por Tipo. Sólo cambian las "
+              "notas que cruzan de mes."))
+    st.markdown('<div class="filtro-rotulo filtro-mov_sal_comparar">Comparar '
+                'salidas con</div>', unsafe_allow_html=True)
+    st.segmented_control(
+        "Comparar salidas con", list(COMPARAR_SAL), default=COMPARAR_SAL[1],
+        required=True, key=K_COMP_SAL, label_visibility="collapsed",
+        help=("El mismo rango de fechas uno o dos años atrás: un trazo gris "
+              "sobre cada barra, una tarjeta con la variación y, en el "
+              "Resumen y en los cuadros, una columna «vs <año>»."))
+
+
+def fecha_salidas():
+    """La fecha elegida para las salidas (`FECHA_REGISTRO` por defecto)."""
+    f = st.session_state.get(K_FECHA_SAL)
+    return f if f in _COLS_FECHA_SAL else FECHA_REGISTRO
+
+
+def anios_comparar_salidas():
+    """0, 1 o 2: cuántos años atrás comparan las secciones de salidas."""
+    c = st.session_state.get(K_COMP_SAL, COMPARAR_SAL[1])
+    return COMPARAR_SAL.index(c) if c in COMPARAR_SAL else 1
+
+
+# ── LA CAUSA DE UNA BAJA (regla #614) ─────────────────────────────────────
+# `MSUBSALIDA.tMotivo` es texto libre, pero desde octubre de 2025 se escribe
+# casi siempre igual: «PRODUCTO DE BAJA / <causa>» (el 90 % de lo dado de
+# baja en 2026), con erratas («PRODCUTO», «TEIMPIO»). Doce meses (oct 2025 –
+# sep 2026), S/ 34.431 en bajas: tiempo de vida 51 %, cocción o término
+# 10 %, equipo malogrado o frío 6 %. La columna llega al parquet con
+# `ALMACEN.DBO.MSUBSALIDA.tMotivo AS 'MOTIVO'` en la consulta del Sheet.
+_COLS_MOTIVO_SAL = ["MOTIVO", "Motivo"]
+COL_CAUSA = "_causa"
+SIN_CAUSA = "Sin causa escrita"
+OTRA_CAUSA = "Otra causa"
+_CAUSAS = (
+    # (causa, palabras), en orden de precedencia: «PRODUCTO DE BAJA
+    # (MANIPULACION DE COCINA / TIEMPO DE VIDA)» es tiempo de vida, y
+    # «SE ROMPIO» no lo es.
+    ("Equipo malogrado o frío", ("MALOGRAD", "REFRIGER", "FRIO", "MAQUIN",
+                                 "MAQU ", "CONGELA")),
+    ("Cocción o término", ("COCCION", "TERMINO", "QUEM")),
+    ("Prueba o degustación", ("PRUEBA", "DEGUSTA")),
+    ("Producción", ("PRODUCCION",)),
+    ("Tiempo de vida", ("VIDA", "VENC", "TIEMP", "TEIMP")),
+    ("Manipulación", ("MANIPULACION", "ROMPIO", "ROTO", "GUARDAR", "CAYO")),
+    ("Consumo directo", ("CONSUMO DIRECTO",)),
+    ("No cumple el estándar", ("STANDAR", "ESTANDAR")),
+)
+_PALABRAS_SIN_CAUSA = {"PRODUCTO", "PRODUCTOS", "PRODCUTO", "PRODCUTOS",
+                       "PROUCTOS", "PRODUCCTOS", "BAJA", "BAJAS", "DE", "DEL",
+                       "LA", "LAS", "EL", "LOS", "Y", "X", "POR"}
+
+
+def causa_de_baja(motivo):
+    """La causa de una salida a partir de su motivo escrito: una de
+    `_CAUSAS`, `SIN_CAUSA` si el texto no dice más que «producto de baja»
+    (o nada) y `OTRA_CAUSA` si dice algo que no está en la lista. Sin
+    tildes ni mayúsculas que importen. Pura."""
+    t = unicodedata.normalize("NFKD", str(motivo or "")).encode(
+        "ascii", "ignore").decode().upper()
+    t = " ".join(t.split())
+    if t in ("", "NAN", "NONE", "NULL"):
+        return SIN_CAUSA
+    for causa, palabras in _CAUSAS:
+        if any(p in t for p in palabras):
+            return causa
+    resto = {w for w in re.split(r"[^A-Z]+", t) if w} - _PALABRAS_SIN_CAUSA
+    return OTRA_CAUSA if resto else SIN_CAUSA
+
+
+def con_causa(d, col_motivo):
+    """`d` con la columna `COL_CAUSA`, o `d` tal cual sin motivo. Cada texto
+    distinto se clasifica una vez."""
+    if d is None or not col_motivo or col_motivo not in d.columns:
+        return d
+    m = d[col_motivo].fillna("").astype(str)
+    mapa = {x: causa_de_baja(x) for x in m.unique()}
+    return d.assign(**{COL_CAUSA: m.map(mapa)})
+
+
 _COLS_AREA_SALIDAS = ["AREA", "Area", "SUB ALMACEN", "Sub Almacen"]
 """Cómo se llama el área en `salidas.parquet`. La trae desde el 2026-09-23
 su consulta (`vArea.Descripcion` por `MSUBSALIDA.tCodigoArea`, regla #509)
 con el nombre `AREA`; «Sub Almacen» es el del demo de `data.py`."""
 
-_FILAS_DETALLE_SAL = ((1.2, 1, 1), (1.2, 2))
-"""El reparto de los cinco cuadros de «Detalle de salidas»: tipo de baja,
-área y familia arriba; subfamilia y producto abajo. El 1.2 de las dos filas
-es el mismo corte —la primera columna termina en el mismo sitio arriba y
-abajo, a 2,7px: Streamlit le suma a cada columna su parte del sobrante del
-flex, y en la fila de tres la parte es menor (medido a 1366: 538 y 541)—, y
-la fila de arriba es la de «Stock por área» (`drill_tablas.
-COLUMNAS_NIVELES[3]`). Regla #511."""
+_FILAS_DETALLE_SAL = ((1.2, 1, 1), (1.2, 1, 1))
+"""El reparto de los SEIS cuadros de «Detalle de salidas»: tipo de baja,
+causa y área arriba; familia, subfamilia y producto abajo. El 1.2 de las
+dos filas es el mismo corte —la primera columna termina en el mismo sitio
+arriba y abajo—, y la fila de arriba es la de «Stock por área»
+(`drill_tablas.COLUMNAS_NIVELES[3]`). Regla #511.
+
+LA CAUSA VA SEGUNDA (2026-10-08, regla #614), y no al final: un clic en
+«Tiempo de vida» recorta los cuadros que la SIGUEN, así que puesta ahí
+contesta «qué se vence, y en qué área»; al final no recortaría nada. Las
+dos filas con el mismo reparto: con la subfamilia en 0.8 su columna de
+valorizado salía cortada («V…»), medido a 1323px."""
 
 
-def _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel=()):
-    """`salidas.parquet` recortado al MISMO rango, familia y área que el
-    resto.
+def _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel=(),
+                              fecha=FECHA_REGISTRO):
+    """`(d, hist, col_fecha)`: `salidas.parquet` recortado al MISMO rango,
+    familia y área que el resto (`d`), el parquet ENTERO con los mismos
+    chips (`hist`, para comparar con años anteriores y medir cuánto se
+    registra, regla #614) y la columna de fecha que se usó — la de
+    `fecha`, registro o proceso; sin la de proceso (un parquet viejo, el
+    demo), la de registro. `(None, None, None)` si no hay parquet.
+
+    Por PROCESO, una salida generada y sin procesar no tiene fecha y no
+    entra: todavía no movió el stock.
 
     Defensivo igual que `recetas.py` con recetabase: si el parquet no está o
     no trae su fecha, las secciones de Salidas avisan y el resto de la
@@ -345,24 +493,26 @@ def _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel=()):
     """
     df = _cargar_reporte("salidas.parquet")
     if df is None or df.empty:
-        return None
-    col_fecha = _resolver(df, ["Fecha registro", "FECHA REGISTRO"])
+        return None, None, None
+    col_fecha = (_resolver(df, _COLS_FECHA_SAL[fecha])
+                 or _resolver(df, _COLS_FECHA_SAL[FECHA_REGISTRO]))
     if not col_fecha:
-        return None
-    d = df.copy()
+        return None, None, None
+    d = con_causa(df, _resolver(df, _COLS_MOTIVO_SAL)).copy()
     d["_fecha"] = pd.to_datetime(d[col_fecha], errors="coerce")
     d = d.dropna(subset=["_fecha"])
-    rango = _rango_vigente()
-    if rango:
-        _ini, _fin = rango
-        d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
     if fam_sel and col_fam_sal and col_fam_sal in d.columns:
         d = d[d[col_fam_sal].astype(str).isin(fam_sel)]
     col_area = _resolver(d, _COLS_AREA_SALIDAS)
     if sub_sel and col_area:
         _elegidas = {str(s).strip() for s in sub_sel}
         d = d[d[col_area].fillna("").astype(str).str.strip().isin(_elegidas)]
-    return d
+    hist = d
+    rango = _rango_vigente()
+    if rango:
+        _ini, _fin = rango
+        d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
+    return d, hist, col_fecha
 
 
 _COLS_PORC = {
@@ -523,6 +673,10 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # del reporte. FAMILIA existe en los dos, con las mismas seis familias.
     with compartimento_filtros(contar_filtros("mov_graf_filtro_sub",
                                               "mov_graf_filtro_fam")):
+        # Primero, como el día de la venta en Ventas: el panel tiene techo
+        # de 60vh y con las 13 áreas de Sub Almacén lo de abajo queda fuera
+        # de la vista sin que nada avise que hay más.
+        _selectores_salidas()
         _, sub_sel = filtro_pills(df_f, col_sub,
                                   "mov_graf_filtro_sub", "Sub Almacén")
         _, fam_sel = filtro_pills(df_f, col_fam,
@@ -554,7 +708,14 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
 
     # ── El otro parquet ───────────────────────────────────────────────────
     col_fam_sal = "NOMBRE FAMILIA"
-    d_sal = _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel)
+    fecha_sal = fecha_salidas()
+    anios_comp = anios_comparar_salidas()
+    d_sal, hist_sal, col_fecha_sal = _cargar_salidas_del_rango(
+        col_fam_sal, fam_sel, sub_sel, fecha=fecha_sal)
+    # Si se pidió proceso y el parquet no trae esa fecha, se usó la de
+    # registro: el rótulo dice la que de verdad se usó.
+    if col_fecha_sal and col_fecha_sal in _COLS_FECHA_SAL[FECHA_REGISTRO]:
+        fecha_sal = FECHA_REGISTRO
 
     def _col_sal(*nombres):
         return _resolver(d_sal, list(nombres)) if d_sal is not None else None
@@ -642,8 +803,9 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                 _sin_salidas()
             return
         tarjeta_salidas_periodo(
-            d_sal, orden=orden,
-            cols=dict(fecha=_col_sal("Fecha registro", "FECHA REGISTRO"),
+            d_sal, orden=orden, hist=hist_sal, anios=anios_comp,
+            rot_fecha=_ROT_FECHA_SAL[fecha_sal],
+            cols=dict(fecha=col_fecha_sal,
                       doc=_col_sal("Cod Salida", "COD SALIDA"),
                       area=_col_sal(*_COLS_AREA_SALIDAS),
                       estado=_col_sal("Nombre Estado Salida",
@@ -682,25 +844,54 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
             with st.container(border=True, key=vacia):
                 st.info("No hay columnas suficientes para esta sección.")
             return
-        validas, nota = salidas_que_suman(
-            d_sal, col_estado=_col_sal("Nombre Estado Salida",
-                                       "NOMBRE ESTADO SALIDA"),
+        _kw_suman = dict(
+            col_estado=_col_sal("Nombre Estado Salida",
+                                "NOMBRE ESTADO SALIDA"),
             col_prod=col_prod_sal, col_doc=_col_sal("Cod Salida", "COD SALIDA"),
             col_val=col_val_sal)
+        validas, nota = salidas_que_suman(d_sal, **_kw_suman)
         if validas.empty:
             with st.container(border=True, key=vacia):
                 st.info("Sin salidas en el rango de fechas. Ampliá el rango "
                         "en la franja de arriba.")
             return
+        # El MISMO rango un año atrás, con los mismos chips y la misma
+        # fecha: la columna «vs <año>» de cada cuadro (regla #614). Con
+        # «Dos años» los cuadros comparan contra el más cercano; los dos
+        # años van en el gráfico de «Salidas por período».
+        d_ant, rot_ant = None, ""
+        rng = _rango_vigente()
+        if anios_comp and rng and hist_sal is not None:
+            off = pd.DateOffset(years=1)
+            _h = hist_sal[(hist_sal["_fecha"] >= rng[0] - off)
+                          & (hist_sal["_fecha"] < rng[1] - off)]
+            d_ant, _ = salidas_que_suman(_h, **_kw_suman)
+            rot_ant = rotulo_anio(rng[0], rng[1], off)
+        hay_causa = COL_CAUSA in validas.columns
         drill_tablas.seccion_cuadros(
             validas, pref="mov", slug="detsal",
             niveles=((col_tipo, "tipo de baja"),
+                     (COL_CAUSA if hay_causa else None, "causa"),
                      (_col_sal(*_COLS_AREA_SALIDAS), "área"),
                      (_col_sal("Nombre Familia", "NOMBRE FAMILIA"), "familia"),
                      (_col_sal("Nombre Subfamilia", "NOMBRE SUBFAMILIA"),
                       "subfamilia"),
                      (col_prod_sal, "producto")),
-            filas=_FILAS_DETALLE_SAL, col_val=col_val_sal, nota=nota)
+            filas=_FILAS_DETALLE_SAL, col_val=col_val_sal, nota=nota,
+            titulo=f"Por tipo de baja · {fecha_sal.lower()}",
+            d_ant=d_ant, rotulo_ant=rot_ant,
+            aviso_falta={"causa": (
+                "La causa sale del motivo escrito en cada nota («PRODUCTO "
+                "DE BAJA / TIEMPO DE VIDA»), y la consulta de salidas "
+                "todavía no lo trae. Se agrega en el Sheet con "
+                "`ALMACEN.DBO.MSUBSALIDA.tMotivo AS 'MOTIVO'` y llega con "
+                "«Refrescar».")})
+
+    def _dib_destino():
+        # Carga ACÁ, como Porcionamientos: el kardex por mes sólo hace falta
+        # cuando la sección sale del esqueleto. La familia del chip recorta;
+        # el sub almacén no (la cuenta es del restaurante entero, #614).
+        tarjeta_destino(fam_sel, anios_comp)
 
     def _dib_tabla_sal():
         with st.container(border=True, key="ajuste_graf_card_izq_mov_tabla_sal"):
@@ -760,6 +951,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         "mov_sec_tabla_req":   _dib_tabla_req,
         "mov_sec_sal_periodo": _dib_sal_periodo,
         "mov_sec_detalle_sal": _dib_detalle_sal,
+        "mov_sec_destino":     _dib_destino,
         "mov_sec_tabla_sal":   _dib_tabla_sal,
         "mov_sec_porc":        _dib_porc,
         "mov_sec_prod":        _dib_prod,

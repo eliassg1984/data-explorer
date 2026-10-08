@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-613 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+614 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (199)
 
@@ -324,7 +324,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 
-**Plotly y figuras** (109)
+**Plotly y figuras** (110)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -435,6 +435,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#582** — Compras › Producto: la tabla de abajo del gráfico muestra SEIS filas, las barras dicen la…
 - **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
 - **#610** — El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico (con o sin número), puntos…
+- **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
 
 **AgGrid y tablas** (89)
 
@@ -691,7 +692,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 
-**Datos, R2 y DuckDB** (92)
+**Datos, R2 y DuckDB** (93)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -785,6 +786,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#607** — En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y «Modificar» abre también una…
 - **#608** — Modificar › Combo: la ficha del combo sale de TCOMBO, en un parquet propio, y un grupo «a…
 - **#612** — El ajuste de un cierre tiene DOS versiones en el Almacén, y hasta agosto de 2025 no…
+- **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
 
 **SUNAT y SIRE** (54)
 
@@ -48216,6 +48218,92 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-05.)
 
+614. **Una nota de salida tiene DOS fechas, y la app cuadra con los dos
+     reportes del Almacén: las salidas abren por REGISTRO, se pueden ver por
+     PROCESO y se comparan con años anteriores.** 2026-10-08, a partir de
+     revisar la «Relación de Salidas» y la «Relación de Notas de Salidas»
+     contra Movimientos y Stock.
+
+     **Qué hace cada reporte del Almacén** (leído del `Almacen.exe` y de
+     sus SP; el login de lectura no tiene EXECUTE: se corre el cuerpo):
+
+     | Reporte | SP | Fecha | Trae |
+     |---|---|---|---|
+     | Relación de Salidas | `SpLisRepSalida` | la del kardex (`MSUBKARDEX.fRegistro`) = cuándo se PROCESÓ | todo tipo > 90 con salida: notas, ventas, OP, porcionamiento, transferencias, ajustes |
+     | Relación de Notas de Salidas | `spRepLisNotaSalida` (y `…PorDescargo…`) | `MSUBSALIDA.fRegistro` («Registro») o `fProcesa` («Proceso») | sólo notas; anuladas en 0, generadas al precio de HOY |
+
+     Septiembre 2026: S/ 6.892,93 por registro y 7.703,02 por proceso, y
+     la app da las DOS cifras —Salidas por período / por área usaban el
+     registro; Stock › Movimientos por Tipo, el kardex—. Los 810,10 son diez
+     notas a caballo de mes (registradas el 31/08 o el 30/09, procesadas al
+     día siguiente). Comparado mes a mes: 46 meses (ene 2023 – oct 2026),
+     diferencia 0,00 por registro.
+
+     **La fecha se elige, y abre en registro** («es la fecha en que
+     supuestamente ocurrió la baja en forma física»): un selector en
+     «Filtros» de Movimientos (`graficos/movimientos.py::K_FECHA_SAL`), al
+     lado de los de la venta (#593) y el cierre (#613). En el panel y no en
+     una tarjeta porque manda sobre TRES secciones y el parquet se carga en
+     `renderizar_graficos_movimientos`, afuera de los fragments de las
+     secciones: un control adentro de una no lo recargaría. Por proceso,
+     una salida generada no tiene fecha y no entra (no movió el stock).
+
+     **Comparar con años anteriores** (otro selector del mismo panel: sin
+     comparar, año pasado —el default—, dos años). El parquet entero con los
+     chips (`hist`) viaja a las secciones:
+     - En «Salidas por período», un TRAZO gris por año sobre cada barra
+       (no una barra al lado: la barra ya va partida por área y la etiqueta
+       usa el ancho), una tarjeta «Mismo rango 2025» en la fila de KPI y,
+       en el Resumen, dos columnas (el año y «vs»), que esconden «Líneas» y
+       la variación contra la barra anterior para entrar.
+       `movimientos_periodo.comparacion_periodos` corre el rango con
+       `desfase_comparacion` —el calendario por mes y año; **364 días por
+       día y semana**, para que el lunes compare contra un lunes y la
+       semana ISO sea la misma— y TRAE DE VUELTA las fechas antes de
+       agrupar: así lo del año pasado cae en la misma clave que su barra.
+     - En «Salidas por área», cada cuadro suma «vs <año>»
+       (`drill_tablas.tabla_ranking(d_ant=)`), con la misma ruta.
+     - Desde +900 % se escribe en veces («×204»): una semana de S/ 11.080
+       contra S/ 54 daba «+20308%».
+
+     **Pocas salidas** (`meses_poco_registro`): una tarjeta ámbar en la
+     fila de KPI con los meses enteros y cerrados que traen menos de la
+     mitad de los documentos de la mediana de sus doce anteriores. Agosto
+     2026 trajo 44 notas y septiembre 84 contra ~230: una barra baja ahí
+     puede ser que no se registró, no menos merma. Y se registra por LOTES
+     (el 29/09, toda la comida de personal del mes en 27 notas en 27
+     minutos): ninguna de las dos fechas es el día de la merma; el mes es
+     el grano confiable.
+
+     **La causa** (sexto cuadro, SEGUNDO en la cadena: un clic en «Tiempo
+     de vida» recorta área, familia y producto). Sale de
+     `MSUBSALIDA.tMotivo`, texto libre que desde oct 2025 se escribe
+     «PRODUCTO DE BAJA / <causa>» con erratas; `causa_de_baja` lo clasifica
+     por palabras (oct 2025 – sep 2026: tiempo de vida 51 %, cocción o
+     término 10 %, equipo malogrado o frío 6 %). No se compara con 2025: esa
+     forma no existía. **Falta la columna en la consulta del Sheet**
+     (`ALMACEN.DBO.MSUBSALIDA.tMotivo AS 'MOTIVO'`); sin ella el cuadro lo
+     dice (`seccion_cuadros(aviso_falta=)`).
+
+     **«Destino de lo que entra»** (sección nueva,
+     `graficos/movimientos_destino.py`): por producto, lo que entró
+     (compras, orden de producción, porcionamiento) contra lo vendido, lo
+     usado en otras preparaciones, la baja, las otras notas, el ajuste y el
+     cambio de stock, del kardex por mes (`kardex.sql_movimientos_mes`, sin
+     los tipos entre áreas, que suman cero y contados de un lado inflan lo
+     que entró). Fecha del KARDEX también para las bajas: si no, las
+     columnas no cierran entre sí. Ene–sep 2026: de 729 tartas de queso
+     producidas se vendieron 549 y se dieron de baja 152 (21 %). El chip
+     Sub Almacén no recorta (es el restaurante entero). La tabla de 2025 no
+     siempre cierra (se vendió más tarta y calamar del que «entró»: había
+     otro código o stock de antes), así que el % de 2025 se lee con
+     cuidado.
+
+     Lo vigila `test_graficos.py::_pruebas_salidas_comparar_y_destino`.
+     Nada de esto cambia `salidas.parquet`.
+
+     (2026-10-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48228,7 +48316,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#613**; la próxima toma el número siguiente.
+> última regla es la **#614**; la próxima toma el número siguiente.
 
 >
 

@@ -383,6 +383,17 @@ qué cambió el stock» y el TOPE de la tabla de al lado —y de la de «Por
 y el aviso de ventas sin costo, la tarjeta entra en los ~575px de la
 pantalla del usuario (regla #574)."""
 
+DESTINO_TABLA = 27 * 6 + 38
+"""Tope de la tabla de Movimientos › «A dónde fue lo que entró» (2026-10-08,
+regla #614): seis filas de 27 más la cabecera. El producto elegido se abre
+DEBAJO —su gráfico (`DESTINO_FIG`) y el % de baja mes a mes—, y las dos
+cosas entran en la pantalla del usuario (~575px de tarjeta, regla #574); lo
+que no entra se desliza dentro de la tabla."""
+
+DESTINO_FIG = 140
+"""El gráfico mes a mes del producto elegido en «A dónde fue lo que entró»
+(regla #614): lo que entró, lo vendido y lo dado de baja."""
+
 RB_COSTO_TABLA = 27 * 9 + 38
 """Tope de la tabla de Recetas › Costo recetas base (2026-09-30, regla
 #576): NUEVE filas de 27 más la cabecera y los bordes (trece en la primera

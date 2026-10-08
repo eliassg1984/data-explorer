@@ -51,8 +51,8 @@ import pandas as pd
 import streamlit as st
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, LAVANDA_BORDE, LAVANDA_CHIP,
-    TEXTO_PRINCIPAL,
+    ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO,
+    GRIS_TEXTO_SUAVE, LAVANDA_BORDE, LAVANDA_CHIP, TEXTO_PRINCIPAL,
 )
 from graficos.compras._comun import (
     ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK, unidad_corta,
@@ -219,7 +219,8 @@ def recorte(d, ruta):
 def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                   ancho_pct=80, flex_nombre=2, ancho_barra=0.62,
                   monto_corto=False, nombre_bonito=False, abre_en=(),
-                  abrir_en_mayor=False, etiqueta_valor="Valorizado"):
+                  abrir_en_mayor=False, etiqueta_valor="Valorizado",
+                  d_ant=None, rotulo_ant=""):
     """El ranking de un nivel, como TABLA con barra de progreso.
 
     Es la tabla-ranking del repo, la misma que el Ranking de proveedores de
@@ -252,6 +253,11 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     horizontal, porque una tarjeta de desglose mide 306-449px contra los 770
     del ranking y ahi el ancho decide el formato (regla #349) — ver
     `FORMATO_RANKING` y `FORMATO_DETALLE`.
+
+    `d_ant` (regla #614) es el mismo recorte en el año comparado: suma una
+    columna «vs <rotulo_ant>» con la variación de cada fila contra él —roja
+    si subió—, «nuevo» si ese año no hubo, y la del total en la fila TOTAL.
+    Lo que ese año hubo y hoy no, no tiene fila: el cuadro lista lo de hoy.
     """
     from st_aggrid import AgGrid, JsCode
 
@@ -297,6 +303,18 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     # nombre del ERP sino el rótulo de la fila de cierre.
     fila_total = {col_nombre: "TOTAL", etiqueta_valor: round(total, 2),
                   "%": round(sum(_pcts), 2)}
+    con_ant = d_ant is not None
+    col_ant = f"vs {rotulo_ant}".strip()
+    if con_ant:
+        _a = (pd.to_numeric(d_ant[col_val], errors="coerce").fillna(0)
+              .groupby(claves(d_ant, col_grp)).sum()
+              if len(d_ant) else pd.Series(dtype=float))
+        _antes = [float(_a.get(c, 0.0)) for c in serie.index]
+        tabla[col_ant] = [(_v - _b) / abs(_b) * 100 if _b else None
+                          for _v, _b in zip(serie.values, _antes)]
+        tabla["_ant"] = _antes
+        _ta = float(_a.sum())
+        fila_total[col_ant] = ((total - _ta) / abs(_ta) * 100) if _ta else None
 
     # La barra llega al 62% de la celda y el texto va a la DERECHA: asi nunca
     # se pisan (con la barra al 100% el monto caia sobre el morado, texto
@@ -348,6 +366,26 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     _js_pct = JsCode(
         "function(p){ return p.value==null ? '' :"
         " Math.round(p.value) + '%'; }")
+    # La variación contra el año comparado: «+25%», «−8%», y «nuevo» donde
+    # ese año no hubo (regla #614). Roja si subió: en estos cuadros más es
+    # más plata que se fue.
+    _js_vs = JsCode(
+        "function(p){ var v = p.value;"
+        " if (v==null) return (p.node && p.node.rowPinned) ? '' : 'nuevo';"
+        " if (v >= 900) return '\u00d7' + Math.round(v / 100 + 1);"
+        " var a = Math.abs(v);"
+        " if (Math.round(a) === 0) return '0%';"
+        " return (v > 0 ? '+' : '\\u2212') + Math.round(a) + '%'; }")
+    _js_vs_estilo = JsCode(
+        "function(p){ var v = p.value;"
+        " var b = {'textAlign':'right'};"
+        f" if (v==null) {{ b.color = '{GRIS_TEXTO_SUAVE}'; return b; }}"
+        f" b.color = v > 0 ? '{AJUSTE_NEG_TEXTO}' : '{AJUSTE_POS_TEXTO}';"
+        " b.fontWeight = '600'; return b; }")
+    _js_vs_tip = JsCode(
+        "function(p){ if (p.node && p.node.rowPinned) return null;"
+        f" return '{rotulo_ant}: S/ ' +"
+        " Math.round(p.data._ant||0).toLocaleString('es-PE'); }")
     # AG Grid, por si solo, NO deselecciona al reclickear la fila ya
     # seleccionada (pide Ctrl+clic, que nadie descubre). `setSelected(valor,
     # true)` limpia las demas -> sigue siendo seleccion unica. El guard de
@@ -416,6 +454,11 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                  "cellStyle": _js_barra, "valueFormatter": _js_soles},
                 {"field": "%", "width": ancho_pct, "type": "numericColumn",
                  "valueFormatter": _js_pct},
+                *([{"field": col_ant, "headerName": col_ant, "width": 64,
+                    "type": "numericColumn", "valueFormatter": _js_vs,
+                    "cellStyle": _js_vs_estilo,
+                    "tooltipValueGetter": _js_vs_tip},
+                   {"field": "_ant", "hide": True}] if con_ant else []),
                 {"field": "_barra", "hide": True},
                 {"field": "_neg", "hide": True},
                 {"field": "_crudo", "hide": True},
@@ -464,7 +507,8 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
 
 
 def tabla_detalle(d, col_next, nombre_next, col_val, key, ruta=(),
-                  formato=None, etiqueta_valor="Valorizado", con_cuenta=False):
+                  formato=None, etiqueta_valor="Valorizado", con_cuenta=False,
+                  d_ant=None, rotulo_ant=""):
     """Un eslabón más de la cadena: el desglose del recorte que ya está en
     foco — la pregunta natural después de "cuánto pidió COCINA" es "de qué se
     compone".
@@ -516,6 +560,8 @@ def tabla_detalle(d, col_next, nombre_next, col_val, key, ruta=(),
         dd, col_next, col_val, nombre_next, key,
         nombre_bonito=nombre_next in CATEGORIAS_NOMBRE_PROPIO,
         etiqueta_valor=etiqueta_valor,
+        d_ant=None if d_ant is None else recorte(d_ant, ruta),
+        rotulo_ant=rotulo_ant,
         **(formato or FORMATO_DETALLE[2]))
 
 
@@ -884,7 +930,8 @@ def claves_tarjetas_cuadros(pref, slug, n):
 
 
 def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
-                    etiqueta_valor="Valorizado", titulo=None, nota=None):
+                    etiqueta_valor="Valorizado", titulo=None, nota=None,
+                    d_ant=None, rotulo_ant="", aviso_falta=None):
     """Todos los niveles como CUADROS, repartidos en filas, y ninguno abre
     con foco.
 
@@ -923,7 +970,13 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
 
     `titulo` es el del primer cuadro (por defecto, «Valorizado por
     <nivel>»), y `nota`, un `(corto, largo)` que va pegado a él en letra
-    chica, con el largo de tooltip: lo que el recorte NO suma."""
+    chica, con el largo de tooltip: lo que el recorte NO suma.
+
+    `d_ant` y `rotulo_ant` (regla #614): el mismo recorte en el año que se
+    compara; cada cuadro suma la columna «vs <año>» (`tabla_ranking`), con
+    la misma ruta aplicada. `aviso_falta` es `{nombre del nivel: texto}`:
+    lo que dice el cuadro de un nivel cuya columna no llegó, en vez del
+    «No se encontró la columna» de siempre — para decir cómo se trae."""
     if sum(len(f) for f in filas) != len(niveles):
         raise ValueError(f"`filas` reparte {sum(len(f) for f in filas)} "
                          f"cuadros y `niveles` trae {len(niveles)}")
@@ -947,7 +1000,16 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
             with cols[j]:
                 with st.container(border=True, key=tarjetas[i]):
                     if not col_n:
-                        st.info(f"No se encontró la columna de {nombre_n}.")
+                        _falta = (aviso_falta or {}).get(nombre_n)
+                        if _falta:
+                            st.markdown(
+                                '<div class="inv-rank-tit">'
+                                + escape(f"{etiqueta_valor} por {nombre_n}")
+                                + "</div>", unsafe_allow_html=True)
+                            st.caption(_falta)
+                        else:
+                            st.info(f"No se encontró la columna de "
+                                    f"{nombre_n}.")
                     elif i == 0:
                         _n = claves(d, col_n).nunique()
                         st.markdown(
@@ -964,7 +1026,8 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                             d, col_n, col_val, nombre_n,
                             key=f"{pref}_rank_grid_{slug}",
                             nombre_bonito=nombre_n in CATEGORIAS_NOMBRE_PROPIO,
-                            etiqueta_valor=etiqueta_valor, **formato)
+                            etiqueta_valor=etiqueta_valor, d_ant=d_ant,
+                            rotulo_ant=rotulo_ant, **formato)
                     else:
                         # La key lleva la ruta con la POSICIÓN de cada
                         # eslabón: acá se pueden saltar niveles, y sin la
@@ -976,6 +1039,7 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                             d, col_n, nombre_n, col_val,
                             key=f"{pref}_det_grid_{slug}_{i}_{_k or 'todo'}",
                             ruta=tuple(ruta), formato=formato,
-                            etiqueta_valor=etiqueta_valor, con_cuenta=True)
+                            etiqueta_valor=etiqueta_valor, con_cuenta=True,
+                            d_ant=d_ant, rotulo_ant=rotulo_ant)
             ruta.append((col_n, foco, texto_cat(nombre_n, foco)))
             i += 1

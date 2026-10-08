@@ -178,6 +178,35 @@ def sql_movimientos(relacion, desde, hasta):
     """
 
 
+TIPOS_ENTRE_AREAS = ("97", "99")
+"""Transferencia y requerimiento: lo que una área entrega lo recibe otra.
+En el restaurante entero suman cero, y contados de un solo lado inflan lo
+que «entró»."""
+
+
+def sql_movimientos_mes(relacion, desde, hasta):
+    """Por MES, producto y tipo de documento, lo que entró y salió en el
+    RESTAURANTE ENTERO entre `desde` y `hasta` (inclusive): las áreas
+    sumadas, sin los movimientos entre áreas (`TIPOS_ENTRE_AREAS`) ni la
+    fila del saldo inicial. Es lo que lee «A dónde fue lo que entró» de
+    Movimientos (regla #614): por producto, cuánto se compró, produjo o
+    porcionó y en qué se fue."""
+    d0 = dt.datetime.combine(desde, dt.time(0, 0))
+    d1 = dt.datetime.combine(hasta, dt.time(0, 0)) + dt.timedelta(days=1)
+    fuera = ", ".join(f"'{t}'" for t in ("SI",) + TIPOS_ENTRE_AREAS)
+    return f"""
+        SELECT date_trunc('month', "{COL_FECHA}") AS mes,
+               "CODIGO PRODUCTO" AS cod, "COD TIPO" AS tipo,
+               sum("CANT INGRESO") AS cant_in, sum("CANT SALIDA") AS cant_out,
+               sum("VALOR INGRESO") AS val_in, sum("VALOR SALIDA") AS val_out
+        FROM {relacion}
+        WHERE "COD TIPO" NOT IN ({fuera})
+          AND "{COL_FECHA}" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}'
+          AND "{COL_FECHA}" < TIMESTAMP '{d1:%Y-%m-%d %H:%M:%S}'
+        GROUP BY 1, 2, 3
+    """
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # EL AJUSTE SEGÚN EL KARDEX (regla #612)
 # ═══════════════════════════════════════════════════════════════════════

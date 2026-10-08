@@ -97,7 +97,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import cortes
-from tema import GRIS_TEXTO, GRIS_TEXTO_SUAVE, PALETA_SERIES, TEXTO_PRINCIPAL
+from tema import (
+    AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
+    PALETA_SERIES, TEXTO_PRINCIPAL,
+)
 from graficos import alturas
 from graficos.base import _compras_layout, _compras_truncar, scope_rerun
 from graficos.compras._comun import (
@@ -493,6 +496,107 @@ def _no_suma_sin_procesar(lado):
     return lado is not None and not lado.suma_sin_procesar
 
 
+# ===========================================================================
+# LA COMPARACIÓN CON AÑOS ANTERIORES (2026-10-08, regla #614)
+# ===========================================================================
+# Sólo la pide la tarjeta de salidas, pero es del molde: cualquier lado que
+# reciba `hist` (el parquet entero, con los chips de la franja y sin el
+# recorte de fecha) la dibuja.
+
+_COLORES_COMP = (GRIS_TEXTO, GRIS_TEXTO_SUAVE)
+"""El trazo de cada año comparado sobre su barra: el año pasado más oscuro
+que el de hace dos. Grises, porque son referencia y no dato del rango."""
+
+
+def desfase_comparacion(gran, n):
+    """Lo que hay que restar a una fecha para caer en el MISMO período `n`
+    años atrás. En Día y Semana, 364 días por año: cae en el mismo día de la
+    semana, así que la semana ISO del año pasado es la misma semana y el
+    lunes compara contra un lunes. En Mes y Año, el calendario."""
+    if gran in ("Día", "Semana"):
+        return pd.Timedelta(days=364 * n)
+    return pd.DateOffset(years=n)
+
+
+def rotulo_anio(ini, fin, off):
+    """«2025», o «2024-25» si el rango corrido a `off` atrás cruza un año
+    (el mismo rótulo de Compras › Vs año pasado). `fin` es exclusivo."""
+    a0 = (ini - off).year
+    a1 = (fin - pd.Timedelta(days=1) - off).year
+    return str(a0) if a0 == a1 else f"{a0}-{str(a1)[-2:]}"
+
+
+def comparacion_periodos(bh, rango_ts, gran, claves, anios, lado=None):
+    """Lo mismo que muestra la barra, `anios` años atrás, período a período.
+
+    `bh` son las líneas del parquet ENTERO (`lineas_documentos`) con los
+    filtros de la tarjeta puestos; `rango_ts`, `(inicio, fin exclusivo)` del
+    rango de la franja como Timestamps; `claves`, las del eje. Cada año es
+    un dict: `rot` («2025»), `tot` —su valor en cada clave del eje, 0 donde
+    no hubo—, `total` del rango corrido entero y `docs`.
+
+    El rango se corre con `desfase_comparacion` y las fechas se traen de
+    vuelta al año de ahora antes de agruparlas: así el período del año pasado
+    cae en la MISMA clave que su barra, sin traducir rótulos. Pura."""
+    ini, fin = rango_ts
+    salida = []
+    for n in range(1, int(anios) + 1):
+        off = desfase_comparacion(gran, n)
+        h = bh[(bh["fecha"] >= ini - off) & (bh["fecha"] < fin - off)]
+        h = _validas(h, lado)
+        clave = _periodo_serie(h["fecha"] + off, gran)
+        por = h["valor"].groupby(clave.values).sum()
+        salida.append({
+            "n": n,
+            "rot": rotulo_anio(ini, fin, off),
+            "tot": [float(por.get(c, 0.0)) for c in claves],
+            "total": float(h["valor"].sum()),
+            "docs": int(h["doc"].nunique()),
+        })
+    return salida
+
+
+def variacion_pct(actual, antes):
+    """La variación en %, o None si antes no hubo nada contra qué medir."""
+    if not antes:
+        return None
+    return (actual - antes) / abs(antes) * 100.0
+
+
+def meses_poco_registro(bh, rango_ts, hoy, lado=None, umbral=0.5,
+                        minimo_ref=20):
+    """`[(mes, documentos, referencia)]`: los meses del rango con MENOS DE
+    LA MITAD de los documentos de lo normal — la mediana de los doce meses
+    anteriores a cada uno.
+
+    Nació de las salidas (regla #614): de ~250 por mes en ene–jul 2026 a 44
+    en agosto y 84 en septiembre, y una barra baja se lee como «hubo menos
+    merma» cuando puede ser «se registró menos». Sólo los meses ENTEROS
+    dentro del rango y ya cerrados (el que va en curso siempre tiene pocos),
+    con al menos seis meses de historia y una referencia de `minimo_ref`
+    documentos. `bh` son las líneas del parquet entero SIN los filtros de la
+    tarjeta: lo que se mide es cuánto se registra, no cuánto dio de baja un
+    área. Pura."""
+    ini, fin = rango_ts
+    dv = _validas(bh, lado)
+    if dv.empty:
+        return []
+    por_mes = dv.groupby(dv["fecha"].dt.to_period("M"))["doc"].nunique()
+    salida = []
+    for p in pd.period_range(ini, fin - pd.Timedelta(days=1), freq="M"):
+        if (p.start_time < ini or p.end_time >= fin
+                or p.end_time >= pd.Timestamp(hoy)):
+            continue
+        prev = por_mes.reindex(pd.period_range(p - 12, p - 1, freq="M")).dropna()
+        if len(prev) < 6:
+            continue
+        ref = float(prev.median())
+        n = int(por_mes.get(p, 0))
+        if ref >= minimo_ref and n < umbral * ref:
+            salida.append((p, n, ref))
+    return salida
+
+
 def _validas(bl, lado=None):
     """Las líneas que SUMAN: con producto y de un documento no anulado. En
     producción, además, de una orden PROCESADA (#575)."""
@@ -692,14 +796,20 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS):
     return v
 
 
-def figura_periodos(v, alto_fig, titulo="", foco=None):
+def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
     """La figura de la tarjeta a partir de `vista_periodos`.
 
     `foco` es la clave del período en foco (o None): lo demás se atenúa
     por COLOR, no con `marker.opacity` — esa lista sobre barras con texto
     `outside` crashea Plotly en el navegador (regla #476). El eje es
     LINEAL con los rótulos a mano, como el de Compras: el calendario de
-    Día y la traducción del clic hablan en índices."""
+    Día y la traducción del clic hablan en índices.
+
+    `comps` son los años de `comparacion_periodos`: cada uno, un TRAZO
+    horizontal gris a la altura que tuvo ese período, encima o adentro de su
+    barra (regla #614). Un trazo y no una barra al lado, a propósito: la
+    barra ya va partida por área y la etiqueta usa el ancho; una segunda
+    barra por período partía el ancho en dos y las etiquetas no entraban."""
     claves, gran, lado = v["claves"], v["gran"], v["lado"]
     n = len(claves)
     res = v["res"]
@@ -767,11 +877,34 @@ def figura_periodos(v, alto_fig, titulo="", foco=None):
     if len(trazas) > 1:
         fig.update_layout(barmode="stack")
 
+    # ── Los años comparados: un trazo por período ─────────────────────────
+    # El largo del trazo sigue al ancho de la barra (~0.8 del paso del eje
+    # sobre un lienzo de `_LIENZO_PX`), con techo y piso para que con dos
+    # barras no cruce la tarjeta ni con 60 desaparezca.
+    _largo = int(max(10, min(56, _LIENZO_PX / max(n, 1) * 0.55)))
+    tope_comp = 0.0
+    for j, comp in enumerate(comps or ()):
+        ys = [t if t else None for t in comp["tot"]]
+        tope_comp = max([tope_comp] + [t for t in comp["tot"] if t])
+        fig.add_scatter(
+            x=xs, y=ys, mode="markers", cliponaxis=False, name=comp["rot"],
+            marker=dict(symbol="line-ew", size=_largo,
+                        line=dict(width=3, color=_COLORES_COMP[
+                            min(j, len(_COLORES_COMP) - 1)])),
+            customdata=list(zip(v["hover"], [comp["rot"]] * n)),
+            hovertemplate=("%{customdata[0]}<br><b>Mismo período de "
+                           "%{customdata[1]}</b>: S/ %{y:,.2f}<extra></extra>"),
+        )
+
     _compras_layout(fig, alto=alto_fig)
     if plan:
         _y = _techo_etiquetas(max(v["tot"]), min(0.0, min(v["tot"])),
                               alto_fig, alto_etq)
         if _y:
+            # El trazo de un año que dio de baja MÁS que la barra más alta
+            # tiene que entrar: el techo lo pone el mayor de los dos.
+            if tope_comp > _y[1]:
+                _y = [_y[0], tope_comp * 1.06]
             fig.update_yaxes(range=_y)
     # SIN LEYENDA, a diferencia de Compras: la fila de KPI de la cabecera
     # ya nombra cada tramo con su color, su monto y su % (`_html_kpi`), así
@@ -807,8 +940,28 @@ def figura_periodos(v, alto_fig, titulo="", foco=None):
     return fig
 
 
-def tabla_resumen(v, foco=None):
-    """`(filas, total)` de la grilla del Resumen: una fila por barra."""
+def tabla_resumen(v, foco=None, comp=None):
+    """`(filas, total)` de la grilla del Resumen: una fila por barra.
+
+    Con `comp` —el año más cercano de `comparacion_periodos`— suma dos
+    columnas: lo de ese período ese año (`ant`) y la variación (`vs_ant`,
+    en %, vacía donde ese año no hubo nada). Regla #614."""
+    filas, total = _tabla_resumen(v, foco)
+    if comp:
+        # Antes de «Variación» y del Estado: la grilla muestra las columnas
+        # en el orden del df, y lo del año pasado se lee al lado del monto.
+        _i = filas.columns.get_loc("variacion")
+        filas.insert(_i, "vs_ant", [variacion_pct(a, b)
+                                    for a, b in zip(v["tot"], comp["tot"])])
+        filas.insert(_i, "ant", [round(t, 2) for t in comp["tot"]])
+        _var = variacion_pct(float(sum(v["tot"])), comp["total"])
+        total["ant"] = f"S/ {comp['total']:,.2f}"
+        total["vs_ant"] = ("" if _var is None
+                           else f"{'+' if _var > 0 else '−'}{abs(_var):.0f}%")
+    return filas, total
+
+
+def _tabla_resumen(v, foco=None):
     res, gran, lado = v["res"], v["gran"], v["lado"]
     tot_vista = float(sum(v["tot"])) or 0.0
     estados = [_texto_estado(int(a), int(s), lado)
@@ -1017,7 +1170,7 @@ def _mayor_valido(amb, lado=None):
 
 
 def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
-              costo_area=None):
+              costo_area=None, comps=(), aviso=None):
     """La fila de KPI: el total de la vista y una tarjeta por TRAMO de la
     barra, con el color del tramo. Es también la leyenda del gráfico, dicha
     con números. `nota` es `(corto, largo)` de lo que no suma, o None.
@@ -1026,18 +1179,41 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
     vista, que cierra la fila con su % de merma— y `costo_area`, `{área:
     lo porcionado}`, para que el tooltip de cada área diga cuánto pierde de
     lo que ELLA porciona: la parte de la merma total y la propia no son lo
-    mismo (Producción concentra la merma porque porciona casi todo)."""
-    def _t(rot, val, sub, clase="", tip="", color=None):
+    mismo (Producción concentra la merma porque porciona casi todo).
+
+    `comps` (regla #614) suma, pegada al total, una tarjeta por año
+    comparado: lo de ese año en el mismo rango y la variación, roja si
+    subió. Su cuadrito es el color del trazo que la representa en el
+    gráfico. `aviso` es `(corto, largo)` de los meses con pocos documentos
+    (`meses_poco_registro`), en ámbar al final de la fila."""
+    def _t(rot, val, sub, clase="", tip="", color=None, sub_color=None):
         sw = (f'<span class="mp-kpi-sw" style="background:{color}"></span>'
               if color else "")
+        _sc = f' style="color:{sub_color};font-weight:600"' if sub_color else ""
         return (f'<div class="mp-kpi {clase}" title="{escape(tip or rot)}">'
                 f'<span class="mp-kpi-rot">{sw}{escape(rot)}</span>'
                 f'<span class="mp-kpi-val">{escape(val)}'
-                f'<span class="mp-kpi-sub">{escape(sub)}</span></span></div>')
+                f'<span class="mp-kpi-sub"{_sc}>{escape(sub)}</span></span></div>')
 
     _n = lado.cuenta(n_docs)
     partes = [_t(lado.rot_total, fmt_k(total), _n, "mp-kpi-total",
                  f"{lado.rot_total}: S/ {total:,.2f} · {_n}")]
+    for j, comp in enumerate(comps or ()):
+        _v = variacion_pct(total, comp["total"])
+        _txt = ("sin datos" if not comp["total"]
+                else f"▲ ×{_v / 100 + 1:.0f}" if _v >= 900
+                else f"{'▲ +' if _v > 0 else '▼ −'}{abs(_v):.0f}%")
+        _col = (None if _v is None
+                else (AJUSTE_NEG_TEXTO if _v > 0 else AJUSTE_POS_TEXTO))
+        partes.append(_t(
+            f"Mismo rango {comp['rot']}", fmt_k(comp["total"]), _txt,
+            "mp-kpi-comp",
+            f"Mismo rango de fechas en {comp['rot']}: S/ {comp['total']:,.2f}"
+            f" · {lado.cuenta(comp['docs'])}"
+            + ("" if _v is None else
+               f". Este rango: S/ {total:,.2f} ({_v:+.1f}%)"),
+            color=_COLORES_COMP[min(j, len(_COLORES_COMP) - 1)],
+            sub_color=_col))
     if len(trazas) > 1:
         for nombre, color, vals in trazas:
             v = float(sum(vals))
@@ -1063,7 +1239,24 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
                          f"merma es el {_pm}"))
     if nota:
         partes.append(_t("No suman", nota[0], "", "mp-kpi-nota", nota[1]))
+    if aviso:
+        partes.append(_t("Pocas " + lado.plur, aviso[0], "", "mp-kpi-aviso",
+                         aviso[1]))
     return '<div class="mp-kpis">' + "".join(partes) + "</div>"
+
+
+def aviso_poco_registro(meses, lado):
+    """`(corto, largo)` de `meses_poco_registro`, o None."""
+    if not meses:
+        return None
+    corto = " · ".join(cortes.MESES_ABR_ES[p.month - 1] for p, _, _ in meses)
+    detalle = "; ".join(
+        f"{cortes.MESES_ABR_ES[p.month - 1]} {p.year}: {lado.cuenta(n)} "
+        f"(lo normal, ~{ref:,.0f})" for p, n, ref in meses)
+    return (corto,
+            f"Meses con menos de la mitad de {lado.los()} {lado.plur} de lo "
+            f"normal —la mediana de los 12 meses anteriores—: {detalle}. Una "
+            "barra baja ahí puede ser que no se registró, no que hubo menos.")
 
 
 def nota_no_suman(bl_scope, lado, vacios_nombrables=True):
@@ -1262,6 +1455,10 @@ _CSS_MOLDE = """<style>
     font-weight: 700;
 }
 .st-key-__C___kpi .mp-kpi-nota { max-width: 300px; }
+/* Los años comparados y el aviso de pocos documentos (regla #614). */
+.st-key-__C___kpi .mp-kpi-aviso { max-width: 220px; }
+.st-key-__C___kpi .mp-kpi-aviso .mp-kpi-rot,
+.st-key-__C___kpi .mp-kpi-aviso .mp-kpi-val { color: var(--warning-text); }
 .st-key-__C___kpi .mp-kpi-nota .mp-kpi-val {
     font-size: 12px;
     font-weight: 400;
@@ -1301,11 +1498,18 @@ def tarjeta_requerimientos_periodo(d, *, cols, orden=()):
     _tarjeta(d, REQUERIMIENTOS, cols, orden)
 
 
-def tarjeta_salidas_periodo(d, *, cols, orden=()):
+def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
+                            rot_fecha=""):
     """Salidas por período: la misma tarjeta sobre `salidas.parquet`, con el
     tipo de descargo como filtro y como columna del Detalle (`cols["tipo"]`).
-    Sin precio unitario en el parquet, se despeja de cada línea."""
-    _tarjeta(d, SALIDAS, cols, orden)
+    Sin precio unitario en el parquet, se despeja de cada línea.
+
+    `hist` es el parquet ENTERO con los chips de la franja (sin recorte de
+    fecha), y `anios` cuántos años atrás compara: 0, 1 o 2 (regla #614).
+    `cols["fecha"]` es la fecha que eligió el usuario —registro o
+    proceso—, y `rot_fecha` cómo se dice en el pie («fecha de registro»)."""
+    _tarjeta(d, SALIDAS, cols, orden, hist=hist, anios=anios,
+             rot_fecha=rot_fecha)
 
 
 def tarjeta_porcionamientos_periodo(d, *, cols, orden=()):
@@ -1333,7 +1537,7 @@ def tarjeta_produccion_periodo(d, *, cols, orden=()):
     _tarjeta(d, PRODUCCION, cols, orden)
 
 
-def _tarjeta(d, lado, cols, orden):
+def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha=""):
     k, c = lado.k, lado.c
     with st.container(border=True, key=lado.card):
         st.markdown(_css(lado), unsafe_allow_html=True)
@@ -1458,18 +1662,23 @@ def _tarjeta(d, lado, cols, orden):
         # Las vacías entran con los filtros de la cabecera (área y tipo son
         # del documento); con familia o producto puestos quedan afuera
         # solas, porque no tienen ni una ni otro.
-        m = pd.Series(True, index=base.index)
-        if area_sel != _AREA_TODAS:
-            m &= base["area"] == area_sel
-        if con_tipo and tipo_sel != lado.tipo_todos:
-            m &= base["tipo"] == tipo_sel
-        if fam_sel != _FAM_TODAS:
-            m &= base["fam"] == fam_sel
-        if prod_sel in etq_top:
-            m &= base["prod"].isin(prods[:etq_top[prod_sel]])
-        elif prod_sel != _PROD_TODOS:
-            m &= base["prod"] == prod_sel
-        bl = base[m].copy()
+        def _mascara(b):
+            # La misma para el rango y para los años que se comparan: lo
+            # del año pasado tiene que ser lo MISMO, en otra fecha.
+            m = pd.Series(True, index=b.index)
+            if area_sel != _AREA_TODAS:
+                m &= b["area"] == area_sel
+            if con_tipo and tipo_sel != lado.tipo_todos:
+                m &= b["tipo"] == tipo_sel
+            if fam_sel != _FAM_TODAS:
+                m &= b["fam"] == fam_sel
+            if prod_sel in etq_top:
+                m &= b["prod"].isin(prods[:etq_top[prod_sel]])
+            elif prod_sel != _PROD_TODOS:
+                m &= b["prod"] == prod_sel
+            return m
+
+        bl = base[_mascara(base)].copy()
         bl["clave"] = _periodo_serie(bl["fecha"], gran)
 
         _amb = [x for x in (
@@ -1505,6 +1714,19 @@ def _tarjeta(d, lado, cols, orden):
             return
         claves = v["claves"]
 
+        # ── Años anteriores y meses con poco registro (regla #614) ────────
+        # Sobre el parquet ENTERO: el recorte de la franja deja afuera
+        # justo lo que se quiere comparar.
+        comps, aviso = [], None
+        if hist is not None and rng is not None and not lado.merma:
+            bh = lineas_documentos(hist, **cols)
+            if anios:
+                comps = comparacion_periodos(bh[_mascara(bh)], rng, gran,
+                                             claves, anios, lado)
+            aviso = aviso_poco_registro(
+                meses_poco_registro(bh, rng, pd.Timestamp.today().normalize(),
+                                    lado), lado)
+
         # ── Lo que NO suma, dicho en la fila de KPI ───────────────────────
         nota = nota_no_suman(
             bl, lado,
@@ -1519,7 +1741,7 @@ def _tarjeta(d, lado, cols, orden):
             _html_kpi(float(sum(v["tot"])), int(dv["doc"].nunique()),
                       v["trazas"],
                       dv.groupby("area")["valor"].sum().loc[lambda s: s > 0],
-                      nota, lado, **kw_kpi),
+                      nota, lado, comps=comps, aviso=aviso, **kw_kpi),
             unsafe_allow_html=True)
 
         # ── Foco, modo y clic: se resuelven ANTES de dibujar (#398, #399) ─
@@ -1572,7 +1794,8 @@ def _tarjeta(d, lado, cols, orden):
 
         fig = figura_periodos(
             v, alto_fig, titulo=titulo,
-            foco=foco if (foco_ok and modo == _MODO_DETALLE) else None)
+            foco=foco if (foco_ok and modo == _MODO_DETALLE) else None,
+            comps=comps)
         # Lo que devuelve se ignora: el clic ya se leyó arriba.
         st.plotly_chart(fig, use_container_width=True, on_select="rerun",
                         selection_mode="points",
@@ -1605,7 +1828,8 @@ def _tarjeta(d, lado, cols, orden):
             # estrena cada vez que un clic en una fila lleva al Detalle: así
             # la grilla vuelve sin la selección vieja (regla #471).
             n_res = st.session_state.get(f"{k}_nres", 0)
-            k_res = f"{k}_res_grid_" + _clave_grilla(gran, ctx, rango, n_res)
+            k_res = f"{k}_res_grid_" + _clave_grilla(gran, ctx, rango, n_res,
+                                                     len(comps))
             with st.container(key=f"{c}_resumen"):
                 if lado.merma:
                     filas, total = tabla_resumen_porc(v, foco if foco_ok else None)
@@ -1614,14 +1838,19 @@ def _tarjeta(d, lado, cols, orden):
                         rotulo_periodo=_AGRUPADO_GRAN[gran].capitalize(),
                         ver_variacion=gran in _GRAN_VARIACION, total=total)
                 else:
-                    filas, total = tabla_resumen(v, foco if foco_ok else None)
+                    filas, total = tabla_resumen(
+                        v, foco if foco_ok else None,
+                        comp=comps[0] if comps else None)
                     clic_fila = renderizar_periodos_mov(
                         filas, altura=_ALTO_TABLA, key=k_res,
                         rotulo_periodo=_AGRUPADO_GRAN[gran].capitalize(),
                         rotulo_docs=lado.plur.capitalize(),
-                        ver_variacion=gran in _GRAN_VARIACION, total=total)
+                        ver_variacion=gran in _GRAN_VARIACION, total=total,
+                        rotulo_ant=comps[0]["rot"] if comps else "")
             pie.caption(
-                f"**{_del_al(dv['fecha'])}** · agrupado por "
+                f"**{_del_al(dv['fecha'])}**"
+                + (f" · por {rot_fecha}" if rot_fecha else "")
+                + " · agrupado por "
                 f"{_AGRUPADO_GRAN[gran]} — una fila por barra; un clic en "
                 "una fila (o en su barra) abre su detalle.")
             if clic_fila in set(claves):

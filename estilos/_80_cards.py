@@ -1479,8 +1479,9 @@ CSS = """    /* ================================================================
         /* puente le resta su veredicto); el piso queda de red.             */
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-compras_vap_card_hdr, > .st-key-compras_vap_card_puente, > .st-key-compras_vap_card_serie, > .st-key-compras_vap_card_tabla),
-        /* Los cinco cuadros de Movimientos › «Detalle de salidas»          */
-        /* (2026-09-24, regla #511), tres arriba y dos abajo. Cada grilla   */
+        /* Los seis cuadros de Movimientos › «Detalle de salidas»           */
+        /* (2026-09-24, regla #511; la causa, el sexto, desde el 2026-10-08,*/
+        /* #614), tres arriba y tres abajo. Cada grilla                     */
         /* mide las filas que trae hasta ocho, así que sin piso la fila de  */
         /* arriba cerraba en escalón: 7 tipos de baja, 10 áreas, 6          */
         /* familias. Son la primera fila de `ajuste_graf_card_` que entra   */
@@ -1488,7 +1489,7 @@ CSS = """    /* ================================================================
         /* arma `drill_tablas.claves_tarjetas_cuadros`, y                   */
         /* `test_graficos.py::_pruebas_detalle_salidas` exige verlas acá.   */
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-ajuste_graf_card_izq_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal_n2, > .st-key-ajuste_graf_card_der_mov_detsal_n3, > .st-key-ajuste_graf_card_der_mov_detsal_n4),
+        > div:has(> .st-key-ajuste_graf_card_izq_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal_n2, > .st-key-ajuste_graf_card_der_mov_detsal_n3, > .st-key-ajuste_graf_card_der_mov_detsal_n4, > .st-key-ajuste_graf_card_der_mov_detsal_n5),
         /* Y las tres de Movimientos › «Por sub almacén» (2026-09-30, a     */
         /* pedido: «la tarjeta del medio se ve más corta»). Con COCINA en   */
         /* foco, 8 sub almacenes, 6 familias y 8 subfamilias: la del medio  */
