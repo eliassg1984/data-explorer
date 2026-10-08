@@ -892,6 +892,9 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
 
     claves = g["clave"].tolist()
     n_per = len(claves)
+    # Los días que cubren los datos: deciden qué período quedó cortado, para
+    # su nombre y para su variación.
+    _rng_datos = (tabla["fecha"].min().date(), tabla["fecha"].max().date())
     # Cómo se nombra cada período: corto en el eje, largo en el hover y el
     # caption, y de fila en la tabla. Los de Semana y Mes son los de Compras.
     if gran == "Día":
@@ -900,7 +903,9 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
         largo = [f"{_fmt_dia(_x)}/{_x.year}" for _x in _dias]
         fila = [_fmt_dia(_x) for _x in _dias]
     else:
-        _rot = [_rotulo_periodo(c, gran) for c in claves]
+        # Con el rango de los datos: una semana cortada se nombra por sus
+        # días (regla #619).
+        _rot = [_rotulo_periodo(c, gran, _rng_datos) for c in claves]
         eje = [_r[0] for _r in _rot]
         largo = [_r[1] for _r in _rot]
         fila = ([f"{_e} {_limites_periodo(c, gran)[1].year}"
@@ -911,7 +916,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
     # un período que el rango de datos corta dice «parcial» y no un
     # porcentaje — un mes en curso contra uno entero daría «−40 %» sin que
     # nada haya cambiado.
-    _rng = (tabla["fecha"].min().date(), tabla["fecha"].max().date())
+    _rng = _rng_datos
     _vars = _variaciones(claves, g["total"].tolist(), gran, _rng)
     _var_hov = [_hover_var_venta(_v, largo[_v[2]] if _v[2] is not None
                                  else "") for _v in _vars]

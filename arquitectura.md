@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-618 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+619 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (202)
 
@@ -328,7 +328,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 
-**Plotly y figuras** (110)
+**Plotly y figuras** (111)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -440,6 +440,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#588** — El «Resumen del cruce» se lee de antes a después, dice qué cuenta cada fila, y la nota de los…
 - **#610** — El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico (con o sin número), puntos…
 - **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
+- **#619** — Una semana se nombra con sus días de la semana, y la que las fechas cortan, por los días que…
 
 **AgGrid y tablas** (89)
 
@@ -915,7 +916,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (157)
+**Decisiones de diseño y UX** (158)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1074,6 +1075,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
 - **#615** — La merma del «Reporte de Mermas» del Almacén vale al precio de HOY, y la app la muestra así…
 - **#617** — Cada vista de Movimientos tiene su propia fecha, y la franja del reporte ya no dibuja…
+- **#619** — Una semana se nombra con sus días de la semana, y la que las fechas cortan, por los días que…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -48630,6 +48632,33 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-08.)
 
+619. **Una semana se nombra con sus días de la semana, y la que las fechas
+     cortan, por los días que entran.** 2026-10-08, a pedido: con el
+     selector en «1 ago – 7 oct», la primera barra de «Compras por período»
+     se llamaba «27 jul–2 ago» y sumaba sólo el sábado 1 y el domingo 2
+     (S/ 415,51 y 6 documentos, contra los S/ 14.587,70 de la semana
+     entera, medido): el nombre prometía días que no estaban, y la pregunta
+     fue «¿a cuál obedece?». Los datos obedecían al selector; el rótulo no
+     lo decía.
+
+     `graficos/compras/semanal.py::_rotulo_periodo(clave, gran, rango=None)`
+     lleva el día de la semana de cada punta («lun 10–dom 16 ago») y, con
+     `rango`, nombra la semana cortada por sus días («sáb 1–dom 2 ago»,
+     «lun 5–mié 7 oct»); el hover dice además de qué semana es y que las
+     fechas la cortan. Lo reciben sus llamadores con el mismo rango con que
+     ya decidían «parcial» (`_cobertura`): Compras por período, las cuatro
+     «por período» de Movimientos y, en Ventas, Resumen, Mix de carta y
+     Control de pedidos (éstos con el rango de sus datos). Es el criterio de
+     «Por hora» con un mes a medias (#531).
+
+     Costo, medido: el nombre mide casi el doble («lun 28 set–dom 4 oct»,
+     20 caracteres), así que el eje rotula una barra de cada tres donde
+     antes rotulaba una de cada dos (`_TICK_PX_CARACTER`); la tabla los
+     lleva todos. Lo vigila `test_graficos.py` (los rótulos de semana, la
+     semana cortada en las dos puntas y la fila de Movimientos).
+
+     (2026-10-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48642,7 +48671,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#618**; la próxima toma el número siguiente.
+> última regla es la **#619**; la próxima toma el número siguiente.
 
 >
 

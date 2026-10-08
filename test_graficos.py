@@ -2709,10 +2709,29 @@ def _pruebas_puras():
           (_dt.date(2025, 12, 1), _dt.date(2025, 12, 31)))
     check("rótulo · semana dentro de un mes",
           _sem._rotulo_periodo("2026-S38", "Semana"),
-          ("14–20 set", "Semana del lun 14 al dom 20 set 2026"))
+          ("lun 14–dom 20 set", "Semana del lun 14 al dom 20 set 2026"))
     check("rótulo · semana que cruza de mes",
           _sem._rotulo_periodo("2026-S36", "Semana"),
-          ("31 ago–6 set", "Semana del lun 31 ago al dom 6 set 2026"))
+          ("lun 31 ago–dom 6 set", "Semana del lun 31 ago al dom 6 set 2026"))
+    # LA SEMANA QUE EL RANGO CORTA SE NOMBRA POR SUS DÍAS (regla #619): con
+    # el selector en «1 ago – 7 oct» la primera barra suma sólo el sábado 1 y
+    # el domingo 2, y decía «27 jul–2 ago».
+    _r619 = (_dt.date(2026, 8, 1), _dt.date(2026, 10, 7))
+    check("rótulo · semana cortada al principio: sus días",
+          _sem._rotulo_periodo("2026-S31", "Semana", _r619),
+          ("sáb 1–dom 2 ago",
+           "Del sáb 1 al dom 2 ago 2026 · la semana del lun 27 jul al dom 2 "
+           "ago 2026 queda cortada por las fechas"))
+    check("rótulo · semana cortada al final",
+          _sem._rotulo_periodo("2026-S41", "Semana", _r619)[0],
+          "lun 5–mié 7 oct")
+    check("rótulo · semana entera dentro del rango: igual que sin rango",
+          _sem._rotulo_periodo("2026-S36", "Semana", _r619),
+          _sem._rotulo_periodo("2026-S36", "Semana"))
+    check("rótulo · un solo día de la semana",
+          _sem._rotulo_periodo("2026-S31", "Semana",
+                               (_dt.date(2026, 8, 2), _dt.date(2026, 9, 1)))[0],
+          "dom 2 ago")
     check("rótulo · semana que cruza de año lleva los dos años",
           _sem._rotulo_periodo("2026-S01", "Semana")[1],
           "Semana del lun 29 dic 2025 al dom 4 ene 2026")
@@ -9493,7 +9512,7 @@ def _pruebas_movimientos_periodo():
            for x in v["variaciones"]],
           [("primera", None), ("ok", -87.8)])
     check("la fila de la semana dice su año", v["fila"],
-          ["7–13 set 2026", "14–20 set 2026"])
+          ["lun 7–dom 13 set 2026", "lun 14–dom 20 set 2026"])
 
     filas, total = mp.tabla_resumen(v, foco="2026-S38")
     check("Resumen: el Estado escribe sólo la excepción",

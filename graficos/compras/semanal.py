@@ -745,13 +745,25 @@ def _del_al(fechas):
             f"{fin.day} {_m[fin.month - 1]} {fin.year}")
 
 
-def _rotulo_periodo(clave, gran):
+def _rotulo_periodo(clave, gran, rango=None):
     """`(eje, largo)`: cómo se nombra el período en el eje y en el hover.
 
-        Semana   «14–20 set»      «Semana del lun 14 al dom 20 set 2026»
-                 «31 ago–6 set»   «Semana del lun 31 ago al dom 6 set 2026»
+        Semana   «lun 14–dom 20 set»      «Semana del lun 14 al dom 20 set 2026»
+                 «lun 31 ago–dom 6 set»   «Semana del lun 31 ago al dom 6 set 2026»
+                 «sáb 1–dom 2 ago»        «Del sáb 1 al dom 2 ago 2026 · la semana
+                  (cortada por el rango)   del lun 27 jul al dom 2 ago 2026 queda
+                                           cortada por las fechas»
         Mes      «set 2026»       «Set 2026»
         Año, Día la clave, que ya se lee
+
+    LA SEMANA DICE SUS DÍAS (2026-10-08, a pedido). Con el selector en «1 ago
+    – 7 oct», la primera barra se llamaba «27 jul–2 ago» y sumaba sólo el
+    sábado 1 y el domingo 2 (S/ 415 de los S/ 14.588 de la semana entera):
+    el nombre prometía días que no estaban. Ahora lleva el día de la semana
+    de cada punta y, con `rango` (las dos fechas de la tarjeta), una semana
+    que el rango corta se nombra por los días que SÍ entran. Es el criterio
+    de «Por hora» con un mes a medias (regla #531). Sin `rango`, la semana
+    entera. Regla #619.
 
     El año no va en el rótulo de la semana: lo pone el eje debajo, sólo en
     el primero y cuando cambia (`_anio_semana`), que es como lo hace Plotly
@@ -760,14 +772,38 @@ def _rotulo_periodo(clave, gran):
     if gran == "Semana":
         ini, fin = _limites_periodo(clave, gran)
         mi, mf = _m[ini.month - 1], _m[fin.month - 1]
-        if ini.month == fin.month:
-            return (f"{ini.day}–{fin.day} {mf}",
-                    f"Semana del lun {ini.day} al dom {fin.day} {mf} "
-                    f"{fin.year}")
         _ai = f" {ini.year}" if ini.year != fin.year else ""
-        return (f"{ini.day} {mi}–{fin.day} {mf}",
-                f"Semana del lun {ini.day} {mi}{_ai} al dom {fin.day} {mf} "
-                f"{fin.year}")
+        if ini.month == fin.month:
+            semana = (f"Semana del lun {ini.day} al dom {fin.day} {mf} "
+                      f"{fin.year}")
+        else:
+            semana = (f"Semana del lun {ini.day} {mi}{_ai} al dom {fin.day} "
+                      f"{mf} {fin.year}")
+        a, b = ini, fin
+        if rango:
+            a, b = max(ini, rango[0]), min(fin, rango[1])
+            if a > b:
+                a, b = ini, fin
+        _d = cortes.DIAS_ABR_ES
+
+        def _dia(x, con_mes):
+            return (f"{_d[x.weekday()]} {x.day}"
+                    + (f" {_m[x.month - 1]}" if con_mes else ""))
+
+        if a == b:
+            eje = _dia(a, True)
+        elif a.month == b.month:
+            eje = f"{_dia(a, False)}–{_dia(b, True)}"
+        else:
+            eje = f"{_dia(a, True)}–{_dia(b, True)}"
+        if (a, b) == (ini, fin):
+            return eje, semana
+        dias = (f"{_dia(a, True)} {a.year}" if a == b
+                else f"Del {_dia(a, a.month != b.month)} al {_dia(b, True)} "
+                     f"{b.year}")
+        return (eje, f"{dias[:1].upper()}{dias[1:]} · la "
+                     f"{semana[:1].lower()}{semana[1:]} queda cortada por las "
+                     "fechas")
     if gran == "Mes":
         ini, _ = _limites_periodo(clave, gran)
         txt = f"{_m[ini.month - 1]} {ini.year}"
@@ -1417,7 +1453,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             # clave sigue siendo la de siempre —es la que ordena y la que
             # guarda el foco—; esto es sólo cómo se escribe. Por clave y no
             # por fila: son decenas de períodos contra miles de filas.
-            _rot_de = {_c: _rotulo_periodo(_c, gran)
+            _rot_de = {_c: _rotulo_periodo(_c, gran, _rng)
                        for _c in dd["clave"].unique()}
             dd["lbl"] = dd["clave"].map(lambda _c: _rot_de[_c][0])
 

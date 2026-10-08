@@ -820,7 +820,8 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS,
          "lado": lado}
     if not claves:
         return v
-    rot = {c: _rotulo_periodo(c, gran) for c in claves}
+    # Con el rango: una semana cortada se nombra por sus días (regla #619).
+    rot = {c: _rotulo_periodo(c, gran, rango) for c in claves}
     if gran == "Día":
         dias = [pd.Timestamp(c).date() for c in claves]
         fer = set()

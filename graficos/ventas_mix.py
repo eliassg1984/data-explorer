@@ -289,14 +289,15 @@ def rango_ano_pasado(clave, gran, rango):
     return _un_ano_antes(ini), _un_ano_antes(fin)
 
 
-def _rotulos(claves, gran):
+def _rotulos(claves, gran, rango=None):
     """`(eje, largo)`: cómo se nombra cada período en el eje y en el hover.
-    Los de Semana y Mes son los de Compras; Día, los del Resumen."""
+    Los de Semana y Mes son los de Compras —con `rango`, una semana cortada
+    se nombra por sus días, regla #619—; Día, los del Resumen."""
     if gran == "Día":
         dias = [pd.Timestamp(c) for c in claves]
         return ([f"{x:%d/%m}" for x in dias],
                 [f"{_fmt_dia(x)}/{x.year}" for x in dias])
-    rot = [_rotulo_periodo(c, gran) for c in claves]
+    rot = [_rotulo_periodo(c, gran, rango) for c in claves]
     return [r[0] for r in rot], [r[1] for r in rot]
 
 
@@ -583,8 +584,8 @@ def _ventas_mix(d, filtrar_cb=None):
             _nota = f" Los últimos {MAX_DIAS} días con ventas."
     claves = sorted(b_todo["clave"].unique())
     n_per = len(claves)
-    eje, largo = _rotulos(claves, gran)
     rango = (b_todo["fecha"].min().date(), b_todo["fecha"].max().date())
+    eje, largo = _rotulos(claves, gran, rango)
     # El período en que cambió la tasa de IGV (regla #590): su columna se
     # marca cuando las celdas dicen el % de costo. El día sale de las líneas.
     _j_de = {k: j for j, k in enumerate(claves)}
