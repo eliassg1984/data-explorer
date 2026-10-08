@@ -45,9 +45,13 @@ un mockup: la MISMA tarjeta de las dos «por período», con un tercer `Lado`
 que en vez de un valorizado mide la MERMA EN SOLES de cada porcionamiento
 (`graficos/movimientos_periodo.py::tarjeta_porcionamientos_periodo`). Va
 como tercer grupo, al final. Su parquet lo carga la sección misma
-(`_cargar_porcionamientos_del_rango`) y lo recorta el chip «Sub Almacén»,
-no el de Familia: la consulta no trae la familia. Ver `arquitectura.md`
-regla #510.
+(`_cargar_porcionamientos`) y lo recorta el chip «Sub Almacén», no el de
+Familia: la consulta no trae la familia. Ver `arquitectura.md` regla #510.
+
+QUÉ PASÓ EL 2026-10-08. Cada vista tiene su propio botón de fecha y su
+propio rango (`CATEGORIA_VISTA`), y la franja de este reporte ya no dibuja
+calendario: las secciones reciben los parquets ENTEROS y cada una recorta
+el suyo. Ver `arquitectura.md` regla #617.
 
 QUÉ PASÓ EL 2026-09-23. «Top productos · requerim.» se retiró a pedido y en
 su lugar —y primera de la pila— entró «Requerimientos por período»
@@ -142,15 +146,18 @@ import unicodedata
 import pandas as pd
 import streamlit as st
 
+import franja_fecha
+import kardex
 from data import cargar as _cargar_reporte, secrets_disponibles, sello_datos
+from estado_rango import atajos_tarjeta
 from estilos import TAM_FUENTE
 from tablas import renderizar_aggrid_desktop
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills, _render_rail,
     _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
-    renderizar_graficos_genericos, seccion_perezosa,
+    rango_tarjeta, renderizar_graficos_genericos, seccion_perezosa,
+    selector_fecha_tarjeta,
 )
-from graficos.movimientos_comun import _rango_vigente
 # `_ANULADO` y `SALIDAS` son de la tarjeta «Salidas por período»: el
 # «Detalle de salidas» suma lo mismo que ella, y dos copias de «qué es una
 # salida anulada» —o de cómo se escribe «3 anuladas»— se separan al primer
@@ -245,10 +252,11 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
 # `recetas.py`. Requerimientos va primero por lo mismo que era el `archivo`
 # del reporte: es el lado grande (144.636 filas contra 17.355).
 #
-# La FECHA ya no la gobierna ninguna sección: el selector de tarjeta vivía en
-# la Evolución, que se retiró el 2026-09-13. Manda la píldora de la franja,
-# que este reporte sí dibuja (`app.py`: `_franja_dibuja_fecha = reporte !=
-# "Compras"`), y las secciones de Salidas la leen con `_rango_vigente()`.
+# LA FECHA LA GOBIERNA CADA SECCIÓN desde el 2026-10-08 (regla #617): cada
+# vista tiene su botón de fecha y su rango (`CATEGORIA_VISTA`, más abajo), y
+# la franja de este reporte ya no dibuja calendario (`app.py`,
+# `_franja_dibuja_fecha`). Hasta ese día mandaba la píldora de la franja,
+# sobre todas a la vez.
 _PILA = pila_sin_tablas((
     ("mov_sec_periodo",     "Requerimientos por período"),
     ("mov_sec_cadena",      "Por sub almacén"),
@@ -264,6 +272,103 @@ _PILA = pila_sin_tablas((
     ("mov_sec_prod",        "Producción"),
     ("mov_sec_consumo",     "Consumo según recetas"),
 ))
+
+
+# ── LA FECHA DE CADA VISTA (2026-10-08, regla #617) ──────────────────────
+# A pedido: «cada vista debe tener su propio selector de fecha». Una
+# categoría de rango por sección (la clave `rango_cat_Movimientos_<cat>` de
+# `estado_rango.clave_rango`), con el mismo botón y el mismo panel que las
+# tarjetas de Compras (`selector_fecha_tarjeta`, regla #616). Fuera
+# «Rendimiento por producto» y «Proveedor por kg útil»: ya tienen su propia
+# ventana (6/12/18 meses), que ahora termina en el último día con datos.
+#
+# Cada vista recorta SUS datos adentro de su sección, que es un fragment: un
+# cambio de fecha la recalcula a ella sola, sin escalar a la página (sin
+# `bandera`). Por eso los parquets llegan enteros (con los chips) y el
+# recorte es de cada dibujante.
+CATEGORIA_VISTA = {
+    "mov_sec_periodo":     "req_periodo",
+    "mov_sec_cadena":      "req_area",
+    "mov_sec_tabla_req":   "req_tabla",
+    "mov_sec_sal_periodo": "sal_periodo",
+    "mov_sec_detalle_sal": "sal_area",
+    "mov_sec_destino":     "destino",
+    "mov_sec_tabla_sal":   "sal_tabla",
+    "mov_sec_porc":        "porc",
+    "mov_sec_merma_rev":   "merma_rev",
+    "mov_sec_prod":        "prod",
+    "mov_sec_consumo":     "consumo",
+}
+VISTAS_EN_12_MESES = ("req_periodo", "sal_periodo", "porc", "prod")
+"""Las cuatro «por período» abren en «Últimos 12 meses»: dibujan una serie,
+y con un mes les queda una barra. Las demás, en «Últimos 30 días»."""
+
+
+def ctx_de_vista(categoria, fechas=None):
+    """El `ctx` de la franja para la vista `categoria`: los topes de SUS
+    datos (`fechas` = primer y último día con datos de su parquet; sin
+    ellos, los del reporte) y su rango de entrada como default. Lo leen el
+    recorte (`rango_de_vista`) y el botón (`fecha_de_vista`): con el mismo
+    ctx, los dos nombran la misma clave y siembran el mismo default."""
+    ctx = franja_fecha.contexto()
+    if not ctx:
+        return None
+    if fechas and all(fechas):
+        fmin, fmax = fechas
+    else:
+        fmin, fmax = ctx["fecha_min"], ctx["fecha_max"]
+    if not (fmin and fmax):
+        return None
+    hoy = ctx.get("hoy")
+    ancla = min(fmax, hoy) if hoy else fmax
+    pedido = "m12" if categoria in VISTAS_EN_12_MESES else "d30"
+    defecto = next((r for c, _n, _g, r in atajos_tarjeta(ancla, (fmin, fmax))
+                    if c == pedido), None)
+    return {**ctx, "fecha_min": fmin, "fecha_max": fmax,
+            "rango_default_cat": {categoria: defecto} if defecto else {}}
+
+
+def rango_de_vista(categoria, ctx_v):
+    """`(inicio, fin EXCLUSIVO)` de la vista, como Timestamps: la forma de
+    `movimientos_comun._rango_vigente`, porque estas fechas traen hora y el
+    borde de arriba va con `<` (regla #321). None sin contexto."""
+    r = rango_tarjeta(categoria, ctx_v) if ctx_v else None
+    if not r:
+        return None
+    return pd.Timestamp(r[0]), pd.Timestamp(r[1]) + pd.Timedelta(days=1)
+
+
+def fecha_de_vista(categoria, ctx_v):
+    """El que dibuja el botón de fecha de la vista: `dibujar(titulo_html)`.
+    Con título, comparten renglón (la fila de `selector_fecha_tarjeta`).
+    Las keys llevan el prefijo `mov_f_`, de donde cuelga su CSS
+    (`estilos/_80_cards.py`)."""
+    def dibujar(titulo_html=None):
+        if ctx_v:
+            selector_fecha_tarjeta(f"mov_f_{categoria}", None,
+                                   titulo_html=titulo_html,
+                                   categoria=categoria, ctx=ctx_v)
+        elif titulo_html:
+            st.markdown(titulo_html, unsafe_allow_html=True)
+    return dibujar
+
+
+def fechas_de(serie):
+    """`(primer, último)` día con datos de una serie de fechas, o None."""
+    if serie is None:
+        return None
+    f = pd.to_datetime(serie, errors="coerce").dropna()
+    if f.empty:
+        return None
+    return f.min().date(), f.max().date()
+
+
+def recortar_vista(d, rng, col="_fecha"):
+    """`d` en el rango `rng` (fin exclusivo). Sin rango, entero."""
+    if d is None or rng is None or col not in getattr(d, "columns", ()):
+        return d
+    f = pd.to_datetime(d[col], errors="coerce")
+    return d[(f >= rng[0]) & (f < rng[1])]
 
 
 # (Acá vivía `_barras_ranking`, las barras horizontales de los rankings de
@@ -479,14 +584,13 @@ dos filas con el mismo reparto: con la subfamilia en 0.8 su columna de
 valorizado salía cortada («V…»), medido a 1323px."""
 
 
-def _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel=(),
-                              fecha=FECHA_REGISTRO):
-    """`(d, hist, col_fecha)`: `salidas.parquet` recortado al MISMO rango,
-    familia y área que el resto (`d`), el parquet ENTERO con los mismos
-    chips (`hist`, para comparar con años anteriores y medir cuánto se
-    registra, regla #614) y la columna de fecha que se usó — la de
+def _cargar_salidas(col_fam_sal, fam_sel, sub_sel=(), fecha=FECHA_REGISTRO):
+    """`(hist, col_fecha)`: `salidas.parquet` ENTERO con la familia y el
+    área de los chips —cada vista lo recorta a SU fecha, regla #617; el
+    entero sirve además para comparar con años anteriores y medir cuánto
+    se registra, regla #614— y la columna de fecha que se usó — la de
     `fecha`, registro o proceso; sin la de proceso (un parquet viejo, el
-    demo), la de registro. `(None, None, None)` si no hay parquet.
+    demo), la de registro. `(None, None)` si no hay parquet.
 
     Por PROCESO, una salida generada y sin procesar no tiene fecha y no
     entra: todavía no movió el stock.
@@ -507,11 +611,11 @@ def _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel=(),
     """
     df = _cargar_reporte("salidas.parquet")
     if df is None or df.empty:
-        return None, None, None
+        return None, None
     col_fecha = (_resolver(df, _COLS_FECHA_SAL[fecha])
                  or _resolver(df, _COLS_FECHA_SAL[FECHA_REGISTRO]))
     if not col_fecha:
-        return None, None, None
+        return None, None
     d = con_causa(df, _resolver(df, _COLS_MOTIVO_SAL)).copy()
     d["_fecha"] = pd.to_datetime(d[col_fecha], errors="coerce")
     d = d.dropna(subset=["_fecha"])
@@ -521,12 +625,7 @@ def _cargar_salidas_del_rango(col_fam_sal, fam_sel, sub_sel=(),
     if sub_sel and col_area:
         _elegidas = {str(s).strip() for s in sub_sel}
         d = d[d[col_area].fillna("").astype(str).str.strip().isin(_elegidas)]
-    hist = d
-    rango = _rango_vigente()
-    if rango:
-        _ini, _fin = rango
-        d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
-    return d, hist, col_fecha
+    return d, col_fecha
 
 
 _COLS_PORC = {
@@ -551,30 +650,24 @@ consultas, 2026-09-23) por el nombre que pide `lineas_porcionamientos`.
 demo de `data.py`) también las encuentra."""
 
 
-def _cargar_porcionamientos_del_rango(sub_sel=()):
-    """`porcionamientos.parquet` recortado al rango de la franja y al chip
-    «Sub Almacén», o None si no está o no trae su fecha."""
-    return _cargar_porcionamientos(sub_sel)[0]
-
-
 def _cargar_porcionamientos(sub_sel=()):
-    """`(rango, todo)`: `porcionamientos.parquet` con el chip «Sub Almacén»,
-    recortado al rango de la franja y entero —lo normal de un producto y la
-    ventana de «Rendimiento» miran para atrás (regla #615)—; `(None, None)`
-    si no está o no trae su fecha.
+    """`porcionamientos.parquet` ENTERO con el chip «Sub Almacén», o None si
+    no está o no trae su fecha. Cada vista lo recorta a SU fecha (regla
+    #617); entero, además, es de donde salen lo normal de un producto y la
+    ventana de «Rendimiento», que miran para atrás (regla #615).
 
-    El borde superior va como `< fin + 1 día` por lo mismo que salidas:
-    `FEC REGIST` trae hora (regla #321). EL CHIP «FAMILIA» NO RECORTA ESTA
+    El borde superior del recorte va como `< fin + 1 día` por lo mismo que
+    salidas: `FEC REGIST` trae hora (regla #321). EL CHIP «FAMILIA» NO RECORTA ESTA
     SECCIÓN: la consulta no trae la familia del producto (se dejó para más
     adelante, regla #510), y filtrar por un dato que no está sería vaciarla
     en silencio. El de Sub Almacén sí: `SUB ALMACEN` es el mismo catálogo
     de áreas (`vArea`) que el de requerimientos."""
     df = _cargar_reporte("porcionamientos.parquet")
     if df is None or df.empty:
-        return None, None
+        return None
     col_fecha = _resolver(df, _COLS_PORC["fecha"])
     if not col_fecha:
-        return None, None
+        return None
     d = df.copy()
     d["_fecha"] = pd.to_datetime(d[col_fecha], errors="coerce")
     d = d.dropna(subset=["_fecha"])
@@ -582,12 +675,7 @@ def _cargar_porcionamientos(sub_sel=()):
     if sub_sel and col_area:
         _elegidas = {str(s).strip() for s in sub_sel}
         d = d[d[col_area].fillna("").astype(str).str.strip().isin(_elegidas)]
-    todo = d
-    rango = _rango_vigente()
-    if rango:
-        _ini, _fin = rango
-        d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
-    return d, todo
+    return d
 
 
 ARCHIVO_PRODUCCION = "ordenesproduccion.parquet"
@@ -615,9 +703,9 @@ usa `fRegistro` en las dos ramas). `CANTIDAD` va en la unidad de ENTRADA
 del producto (`UNIDAD`), la del kardex."""
 
 
-def _cargar_produccion_del_rango(fam_sel=(), sub_sel=()):
-    """`(df, falta)`: `ordenesproduccion.parquet` recortado al rango de la
-    franja y a sus dos chips.
+def _cargar_produccion(fam_sel=(), sub_sel=()):
+    """`(df, falta)`: `ordenesproduccion.parquet` ENTERO con sus dos chips;
+    la sección lo recorta a SU fecha (regla #617).
 
     `falta` es True si el parquet todavía no existe en R2 —la fila del Sheet
     no se agregó o la extracción no corrió—: la sección lo dice en vez del
@@ -640,10 +728,6 @@ def _cargar_produccion_del_rango(fam_sel=(), sub_sel=()):
     d = df.copy()
     d["_fecha"] = pd.to_datetime(d[col_fecha], errors="coerce")
     d = d.dropna(subset=["_fecha"])
-    rango = _rango_vigente()
-    if rango:
-        _ini, _fin = rango
-        d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
     col_area = _resolver(d, _COLS_PROD["area"])
     if sub_sel and col_area:
         _elegidas = {str(s).strip() for s in sub_sel}
@@ -657,14 +741,20 @@ def _cargar_produccion_del_rango(fam_sel=(), sub_sel=()):
 # ─── Punto de entrada público ───────────────────────────────────────────────
 def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                                     tabla_cb=None):
-    """Dashboard de Movimientos. `df_f` es requerimientos.parquet, ya
-    filtrado por la fecha de la franja; salidas.parquet se carga acá adentro
-    y se recorta al mismo rango.
+    """Dashboard de Movimientos. `df_f` es requerimientos.parquet filtrado
+    por la fecha de la franja y `df_full`, el mismo parquet entero: desde el
+    2026-10-08 cada sección recorta el suyo a SU fecha (regla #617), así
+    que se trabaja sobre `df_full`. salidas.parquet se carga acá adentro,
+    también entero.
 
     `tabla_cb`: callback que arma la Tabla de requerimientos (inyectado por
     app.py — la pivote). La de salidas va por `_tabla_salidas`, ver el
     docstring del módulo.
     """
+    # Cada sección recorta a su fecha: el parquet llega ENTERO. `df_f` (el
+    # rango de la franja, que en este reporte ya no se ve) queda sólo de
+    # respaldo para quien llame sin `df_full`.
+    df_req = df_full if df_full is not None else df_f
     # ── Columnas de REQUERIMIENTOS (df_f) ─────────────────────────────────
     col_prod = _resolver(df_f, ["Nombre Producto", "NOMBRE PRODUCTO", "Producto"])
     col_sub = _resolver(df_f, ["Sub Almacen", "SUB ALMACEN", "Subalmacen", "Sub Almacén"])
@@ -702,12 +792,12 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # de la vista sin que nada avise que hay más.
         _selectores_salidas()
         selector_valorizacion()
-        _, sub_sel = filtro_pills(df_f, col_sub,
+        _, sub_sel = filtro_pills(df_req, col_sub,
                                   "mov_graf_filtro_sub", "Sub Almacén")
-        _, fam_sel = filtro_pills(df_f, col_fam,
+        _, fam_sel = filtro_pills(df_req, col_fam,
                                   "mov_graf_filtro_fam", "Familia")
 
-    d = df_f
+    d = df_req
     if sub_sel and col_sub:
         d = d[d[col_sub].astype(str).isin(sub_sel)]
     if fam_sel and col_fam:
@@ -716,13 +806,25 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
     # Ve el lado de REQUERIMIENTOS, que es el `archivo` del reporte: la
     # herramienta de SQL corre sobre un df, y darle el otro parquet sin que
-    # lo pida sería contradecir el esquema que ya conoce.
+    # lo pida sería contradecir el esquema que ya conoce. Entero: cada vista
+    # tiene su fecha y no hay una de la página (regla #617).
     publicar_contexto_ia("Movimientos", d,
                          {"Sub Almacén": sub_sel, "Familia": fam_sel})
 
     if d is None or d.empty:
         st.info("No hay datos para los filtros seleccionados.")
         return
+
+    # La fecha de requerimientos, una vez: la recortan tres secciones.
+    _f_req = (pd.to_datetime(d[col_fecha], errors="coerce")
+              if col_fecha else None)
+    fechas_req = fechas_de(_f_req)
+
+    def _req_de(rng):
+        """Las líneas de requerimientos en `rng` (fin exclusivo)."""
+        if rng is None or _f_req is None:
+            return d
+        return d[(_f_req >= rng[0]) & (_f_req < rng[1])]
 
     # MÉTRICA FIJA EN VALORIZADO, igual que tenían los dos reportes por
     # separado (Salidas lo fijó el 2026-08-07 a pedido). `col_cant` queda
@@ -735,15 +837,23 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     col_fam_sal = "NOMBRE FAMILIA"
     fecha_sal = fecha_salidas()
     anios_comp = anios_comparar_salidas()
-    d_sal, hist_sal, col_fecha_sal = _cargar_salidas_del_rango(
+    hist_sal, col_fecha_sal = _cargar_salidas(
         col_fam_sal, fam_sel, sub_sel, fecha=fecha_sal)
     # Si se pidió proceso y el parquet no trae esa fecha, se usó la de
     # registro: el rótulo dice la que de verdad se usó.
     if col_fecha_sal and col_fecha_sal in _COLS_FECHA_SAL[FECHA_REGISTRO]:
         fecha_sal = FECHA_REGISTRO
+    fechas_sal = fechas_de(hist_sal["_fecha"]) if hist_sal is not None else None
 
     def _col_sal(*nombres):
-        return _resolver(d_sal, list(nombres)) if d_sal is not None else None
+        return (_resolver(hist_sal, list(nombres))
+                if hist_sal is not None else None)
+
+    def _rango_y_boton(clave_sec, fechas):
+        """`(rango, dibujante del botón)` de una sección (regla #617)."""
+        cat = CATEGORIA_VISTA[clave_sec]
+        ctx_v = ctx_de_vista(cat, fechas)
+        return rango_de_vista(cat, ctx_v), fecha_de_vista(cat, ctx_v)
 
     col_tipo = _col_sal("Tipo Descargo", "TIPO DESCARGO")
     col_prod_sal = _col_sal("Nombre Producto", "NOMBRE PRODUCTO")
@@ -798,21 +908,28 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # Inventario hubo que nombrarlo (GASTOS era el mayor pero no era
         # inventario contable, regla #405); acá el mayor es el que más pide,
         # que es exactamente la primera pantalla que se quiere ver.
+        #
+        # La fecha de la sección va en el renglón del título del primer
+        # cuadro (regla #617), que por eso se acortó: «Valorizado requerido
+        # por sub almacén» y el botón no entraban juntos en la tarjeta.
+        rng, fecha = _rango_y_boton("mov_sec_cadena", fechas_req)
         drill_tablas.seccion_cadena(
-            d, pref="mov", slug="subalm",
+            _req_de(rng), pref="mov", slug="subalm",
             niveles=((col_sub, "sub almacén"), (col_fam, "familia"),
                      (col_subfam, "subfamilia")),
             col_val=col_metrica, col_hoja=col_prod,
             col_ctx=col_sub, nombre_ctx="Sub almacén",
             col_cant=col_cant, col_punit=col_punit,
-            titulo_ranking="Valorizado requerido por sub almacén")
+            titulo_ranking="Requerido por sub almacén", fecha=fecha)
 
     def _dib_periodo():
         # La tarjeta abre su propio contenedor (con la key de su familia de
         # tarjetas) y sus grillas: vive entera en su módulo, como las de
-        # Compras. La fecha es la de la franja: ya viene recortada en `d`.
+        # Compras. La fecha es la SUYA (regla #617): se recorta acá y el
+        # botón lo dibuja la tarjeta.
+        rng, fecha = _rango_y_boton("mov_sec_periodo", fechas_req)
         tarjeta_requerimientos_periodo(
-            d, orden=orden,
+            _req_de(rng), orden=orden, rango=rng, fecha=fecha,
             cols=dict(fecha=col_fecha, doc=col_req, area=col_sub,
                       estado=col_estado, fam=col_fam, prod=col_prod,
                       cant=col_cant, punit=col_punit, val=col_val))
@@ -822,14 +939,16 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # «Tipo de descargo»): el área que dio de baja parte la barra, y el
         # tipo de descargo queda como filtro y como columna del Detalle. Sin
         # precio unitario en el parquet: lo despeja la tarjeta.
-        if d_sal is None:
+        if hist_sal is None:
             with st.container(border=True,
                               key="ajuste_graf_card_izq_mov_sal_vacia"):
                 _sin_salidas()
             return
+        rng, fecha = _rango_y_boton("mov_sec_sal_periodo", fechas_sal)
         tarjeta_salidas_periodo(
-            d_sal, orden=orden, hist=hist_sal, anios=anios_comp,
-            rot_fecha=_ROT_FECHA_SAL[fecha_sal],
+            recortar_vista(hist_sal, rng), orden=orden, hist=hist_sal,
+            anios=anios_comp, rot_fecha=_ROT_FECHA_SAL[fecha_sal],
+            rango=rng, fecha=fecha,
             cols=dict(fecha=col_fecha_sal,
                       doc=_col_sal("Cod Salida", "COD SALIDA"),
                       area=_col_sal(*_COLS_AREA_SALIDAS),
@@ -841,9 +960,11 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                       val=col_val_sal, tipo=col_tipo))
 
     def _dib_tabla_req():
+        rng, fecha = _rango_y_boton("mov_sec_tabla_req", fechas_req)
         with st.container(border=True, key="ajuste_graf_card_izq_mov_tabla_req"):
+            fecha()
             if tabla_cb is not None:
-                tabla_cb(d)
+                tabla_cb(_req_de(rng))
             else:
                 st.info("La tabla no está disponible en este contexto.")
 
@@ -861,7 +982,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # «Tipo de baja» es el TIPO DESCARGO del ERP, con el nombre que se
         # pidió; «Área», la que dio de baja, como en «Salidas por período».
         vacia = "ajuste_graf_card_izq_mov_detsal_vacia"
-        if d_sal is None:
+        if hist_sal is None:
             with st.container(border=True, key=vacia):
                 _sin_salidas()
             return
@@ -869,23 +990,30 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
             with st.container(border=True, key=vacia):
                 st.info("No hay columnas suficientes para esta sección.")
             return
+        rng, fecha = _rango_y_boton("mov_sec_detalle_sal", fechas_sal)
+        titulo = f"Por tipo de baja · {fecha_sal.lower()}"
         _kw_suman = dict(
             col_estado=_col_sal("Nombre Estado Salida",
                                 "NOMBRE ESTADO SALIDA"),
             col_prod=col_prod_sal, col_doc=_col_sal("Cod Salida", "COD SALIDA"),
             col_val=col_val_sal)
-        validas, nota = salidas_que_suman(d_sal, **_kw_suman)
+        validas, nota = salidas_que_suman(recortar_vista(hist_sal, rng),
+                                          **_kw_suman)
         if validas.empty:
+            # El botón de fecha va igual: sin él, unas fechas sin salidas
+            # dejaban la sección sin manera de cambiarlas.
             with st.container(border=True, key=vacia):
-                st.info("Sin salidas en el rango de fechas. Ampliá el rango "
-                        "en la franja de arriba.")
+                st.markdown(drill_tablas.CSS_TITULOS_DRILL,
+                            unsafe_allow_html=True)
+                fecha(f'<div class="inv-rank-tit">{titulo}</div>')
+                st.info("Sin salidas en estas fechas. Ampliá el rango con el "
+                        "botón de fecha.")
             return
         # El MISMO rango un año atrás, con los mismos chips y la misma
         # fecha: la columna «vs <año>» de cada cuadro (regla #614). Con
         # «Dos años» los cuadros comparan contra el más cercano; los dos
         # años van en el gráfico de «Salidas por período».
         d_ant, rot_ant = None, ""
-        rng = _rango_vigente()
         if anios_comp and rng and hist_sal is not None:
             off = pd.DateOffset(years=1)
             _h = hist_sal[(hist_sal["_fecha"] >= rng[0] - off)
@@ -903,7 +1031,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                       "subfamilia"),
                      (col_prod_sal, "producto")),
             filas=_FILAS_DETALLE_SAL, col_val=col_val_sal, nota=nota,
-            titulo=f"Por tipo de baja · {fecha_sal.lower()}",
+            titulo=titulo, fecha=fecha,
             d_ant=d_ant, rotulo_ant=rot_ant,
             aviso_falta={"causa": (
                 "La causa sale del motivo escrito en cada nota («PRODUCTO "
@@ -915,14 +1043,22 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     def _dib_destino():
         # Carga ACÁ, como Porcionamientos: el kardex por mes sólo hace falta
         # cuando la sección sale del esqueleto. La familia del chip recorta;
-        # el sub almacén no (la cuenta es del restaurante entero, #614).
-        tarjeta_destino(fam_sel, anios_comp)
+        # el sub almacén no (la cuenta es del restaurante entero, #614). Sus
+        # topes arrancan donde arranca el kardex, no el parquet del reporte.
+        rng, fecha = _rango_y_boton("mov_sec_destino",
+                            (kardex.INICIO, fechas_req[1]) if fechas_req
+                            else None)
+        tarjeta_destino(fam_sel, anios_comp, rango=rng, fecha=fecha)
 
     def _dib_tabla_sal():
         with st.container(border=True, key="ajuste_graf_card_izq_mov_tabla_sal"):
-            if d_sal is None:
+            if hist_sal is None:
                 _sin_salidas()
-            elif d_sal.empty:
+                return
+            rng, fecha = _rango_y_boton("mov_sec_tabla_sal", fechas_sal)
+            fecha()
+            d_sal = recortar_vista(hist_sal, rng)
+            if d_sal.empty:
                 st.info("Ningún registro coincide con los filtros seleccionados.")
             else:
                 _tabla_salidas(d_sal)
@@ -931,17 +1067,19 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # El tercer parquet se carga ACÁ y no arriba con el de salidas: sólo
         # hace falta cuando esta sección sale del esqueleto (la última de la
         # pila). `data.cargar` lo cachea igual.
-        d_porc = _cargar_porcionamientos_del_rango(sub_sel)
-        if d_porc is None:
+        d_todo_p = _cargar_porcionamientos(sub_sel)
+        if d_todo_p is None:
             with st.container(border=True,
                               key="ajuste_graf_card_izq_mov_porc_vacia"):
                 st.info("No se pudo cargar porcionamientos.parquet: esta "
                         "sección queda vacía.")
             return
+        rng, fecha = _rango_y_boton("mov_sec_porc", fechas_de(d_todo_p["_fecha"]))
+        d_porc = recortar_vista(d_todo_p, rng)
         # Con «Precio de hoy» (el default, regla #615) la merma vale lo
         # que el Reporte de Mermas del Almacén.
         tarjeta_porcionamientos_periodo(
-            d_porc, orden=orden,
+            d_porc, orden=orden, rango=rng, fecha=fecha,
             precios=precios_hoy() if valorizacion() == VALOR_HOY else None,
             cols={nombre: _resolver(d_porc, columna)
                   for nombre, columna in _COLS_PORC.items()})
@@ -949,27 +1087,33 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     def _dib_merma(tarjeta, con_rango):
         # Las tres de merma (regla #615) leen el parquet ENTERO con el chip
         # «Sub Almacén»: lo normal de un producto y sus ventanas miran para
-        # atrás del rango. Se carga acá, como Porcionamientos.
+        # atrás del rango. Se carga acá, como Porcionamientos. «Para
+        # revisar» tiene su fecha (regla #617); «Rendimiento» y «Proveedor»
+        # tienen su ventana de 6/12/18 meses, que termina en el último día
+        # con datos.
         def dibujar():
-            d_rng, d_todo = _cargar_porcionamientos(sub_sel)
-            if d_todo is None:
+            d_todo_p = _cargar_porcionamientos(sub_sel)
+            if d_todo_p is None:
                 with st.container(border=True,
                                   key=f"ajuste_graf_card_izq_mov_merma_vacia_{tarjeta.__name__}"):
                     st.info("No se pudo cargar porcionamientos.parquet: "
                             "esta sección queda vacía.")
                 return
-            cols = {nombre: _resolver(d_todo, columna)
+            cols = {nombre: _resolver(d_todo_p, columna)
                     for nombre, columna in _COLS_PORC.items()}
             if con_rango:
-                tarjeta(d_rng, d_todo, cols, _rango_vigente())
+                rng, fecha = _rango_y_boton("mov_sec_merma_rev",
+                                    fechas_de(d_todo_p["_fecha"]))
+                tarjeta(recortar_vista(d_todo_p, rng), d_todo_p, cols, rng,
+                        fecha=fecha)
             else:
-                tarjeta(d_todo, cols, _rango_vigente())
+                tarjeta(d_todo_p, cols, None)
         return dibujar
 
     def _dib_prod():
         # Se carga ACÁ, como Porcionamientos: sólo cuando la sección sale
         # del esqueleto. Los dos chips la recortan (regla #575).
-        d_prod, falta = _cargar_produccion_del_rango(fam_sel, sub_sel)
+        d_prod, falta = _cargar_produccion(fam_sel, sub_sel)
         if d_prod is None:
             with st.container(border=True,
                               key="ajuste_graf_card_izq_mov_prod_vacia"):
@@ -981,8 +1125,9 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                     st.info(f"No se pudo cargar {ARCHIVO_PRODUCCION}: esta "
                             "sección queda vacía.")
             return
+        rng, fecha = _rango_y_boton("mov_sec_prod", fechas_de(d_prod["_fecha"]))
         tarjeta_produccion_periodo(
-            d_prod, orden=orden,
+            recortar_vista(d_prod, rng), orden=orden, rango=rng, fecha=fecha,
             cols={nombre: _resolver(d_prod, columna)
                   for nombre, columna in _COLS_PROD.items()})
 
@@ -991,7 +1136,8 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # sale del esqueleto (la última de la pila). La familia del chip
         # recorta los insumos de compra; el sub almacén no aplica (regla
         # #558, `graficos/movimientos_consumo.py`).
-        tarjeta_consumo(fam_sel, sub_sel)
+        rng, fecha = _rango_y_boton("mov_sec_consumo", fechas_req)
+        tarjeta_consumo(fam_sel, sub_sel, rango=rng, fecha=fecha)
 
     _DIBUJANTES = {
         "mov_sec_periodo":     _dib_periodo,

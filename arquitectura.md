@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-616 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+617 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (200)
+**CSS y estilos** (201)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -234,6 +234,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 - **#607** — En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y «Modificar» abre también una…
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
+- **#617** — Cada vista de Movimientos tiene su propia fecha, y la franja del reporte ya no dibuja…
 
 **Layout y alturas** (88)
 
@@ -913,7 +914,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (156)
+**Decisiones de diseño y UX** (157)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1071,6 +1072,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#610** — El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico (con o sin número), puntos…
 - **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
 - **#615** — La merma del «Reporte de Mermas» del Almacén vale al precio de HOY, y la app la muestra así…
+- **#617** — Cada vista de Movimientos tiene su propia fecha, y la franja del reporte ya no dibuja…
 
 **Mantenimiento y trampas del lenguaje** (14)
 
@@ -48498,6 +48500,72 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-08.)
 
+617. **Cada vista de Movimientos tiene su propia fecha, y la franja del
+     reporte ya no dibuja calendario.** 2026-10-08, a pedido: «dentro de la
+     vista Salidas por período debo tener un selector de fecha; cada vista
+     debe tener su propio selector». Con la condición que se acordó antes de
+     hacerlo: si cada vista tiene su calendario, el de arriba sale —como en
+     Compras (reglas #326 y #363)—; con los dos, nadie sabe cuál manda. Es
+     lo que pasaba en «Destino de lo que entra», que desde esa misma mañana
+     tenía un `st.date_input` propio que seguía a la franja y se borraba
+     callado cuando la franja se movía (#614).
+
+     **Una categoría de rango por sección** (`movimientos.CATEGORIA_VISTA`,
+     clave `rango_cat_Movimientos_<cat>`), con el botón y el panel de la
+     regla #616 (`selector_fecha_tarjeta(f"mov_f_{cat}", None, categoria=,
+     ctx=)`). Tres piezas en `graficos/movimientos.py`:
+     - `ctx_de_vista(cat, fechas)`: el `ctx` de la franja con los topes de
+       SU parquet (salidas, porcionamientos, producción; el kardex arranca
+       en `kardex.INICIO`) y su default. Los topes deciden también el ancla
+       de los atajos: «hasta el último día con datos» es el de ese parquet.
+     - `rango_de_vista(cat, ctx)`: `(inicio, fin EXCLUSIVO)` en Timestamps,
+       la forma de `_rango_vigente` (las fechas traen hora, regla #321).
+     - `fecha_de_vista(cat, ctx)`: el que dibuja el botón; recibe el HTML
+       del título cuando comparten renglón.
+     El recorte y el botón usan el MISMO ctx: con dos, el default y los
+     topes se podían separar.
+
+     **Los parquets llegan ENTEROS** (con los chips) y cada dibujante
+     recorta el suyo adentro de su sección, que es un fragment: cambiar la
+     fecha recalcula esa vista sola, sin escalar a la página (`bandera=None`
+     en el selector). `renderizar_graficos_movimientos` trabaja sobre
+     `df_full`; los cargadores perdieron su recorte
+     (`_cargar_salidas_del_rango` → `_cargar_salidas`,
+     `_cargar_porcionamientos` devuelve uno, `_cargar_produccion`). Los
+     chips sacan sus opciones del histórico, y el asistente IA ve el
+     histórico con los chips: no hay una fecha de la página.
+
+     **Con qué abren**: las cuatro «por período» (Requerimientos, Salidas,
+     Porcionamientos, Producción) en «Últimos 12 meses» —dibujan una
+     serie—, y las demás en «Últimos 30 días» (`VISTAS_EN_12_MESES`).
+     «Rendimiento por producto» y «Proveedor por kg útil» no tienen botón:
+     su fecha es su ventana de 6/12/18 meses, que ahora termina en el último
+     día con datos (antes, en el fin del rango de la franja).
+
+     **Dónde va el botón**: en las «por período», a la derecha de la fila
+     de KPI (`{c}_kpifila`, un contenedor horizontal: la fila de controles
+     de Salidas va llena y una fila más le habría costado alto a la
+     figura); en las de tablas, «Destino», «Merma para revisar» y
+     «Consumo», en el renglón de su título. El título de «Requerimientos por
+     Área» pasó de «Valorizado requerido por sub almacén» a «Requerido por
+     sub almacén»: con el botón al lado no entraba. El CSS es uno solo, por
+     familia (`[class*="st-key-mov_f_"]`, en `estilos/_80_cards.py`). Y
+     donde una vista se queda sin datos, el botón se dibuja igual: sin él no
+     había manera de cambiar las fechas que la vaciaron. Medido a 1323 px con datos reales: las
+     once vistas abren con su botón —las «por período» de salidas,
+     porcionamientos y producción en «Últimos 12 meses · 8 oct 2025 – 7
+     oct 2026», la de requerimientos hasta el 8 (su parquet llega un día
+     más), y las demás en «Últimos 30 días»—; «Este mes» en Salidas por
+     Período la dejó en 1–7 oct (S/ 441, 14 salidas) y Requerimientos
+     por Período siguió en sus 12 meses.
+
+     Lo vigila `test_graficos.py::_pruebas_fecha_por_vista`: que toda
+     sección tenga su categoría y su dibujante la use, que `movimientos.py`
+     no vuelva a leer `_rango_vigente()`, y los defaults. En Cloud,
+     «Reboot app»: los módulos de `graficos/` ya están importados (#357).
+
+     (2026-10-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48510,7 +48578,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#616**; la próxima toma el número siguiente.
+> última regla es la **#617**; la próxima toma el número siguiente.
 
 >
 

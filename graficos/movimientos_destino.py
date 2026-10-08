@@ -263,58 +263,24 @@ def _fila_pct(mes, mes_ant, rot_ant):
             f'border-top:1px solid {GRIS_BORDE}">{filas}</table>')
 
 
-_K_FECHAS = "mov_destino_fechas"
-_K_FRANJA = "_mov_destino_franja"
-
-
-def _rango_propio():
-    """`(inicio, fin exclusivo)` de la tarjeta, de su PROPIO calendario
-    (2026-10-08, a pedido: «debería tener un selector de fecha»).
-
-    Abre en el rango de la franja y lo SIGUE mientras el usuario no elija
-    otro acá: cuando la franja cambia, el calendario se vuelve a sembrar con
-    ella —antes de dibujarlo, que es cuando se puede escribir su key—. Un
-    rango elegido acá vale hasta que se mueva la franja. Entre el primer y
-    el segundo clic del calendario hay una sola fecha: se lee como un día.
-    Desde `kardex.INICIO`: antes no hay movimientos."""
-    ss = st.session_state
-    franja = _rango_vigente()
-    if franja:
-        sem = (max(franja[0].date(), kardex.INICIO),
-               (franja[1] - pd.Timedelta(days=1)).date())
-        if sem[1] < sem[0]:
-            sem = (kardex.INICIO, sem[1]) if sem[1] >= kardex.INICIO else None
-        if sem and ss.get(_K_FRANJA) != sem:
-            ss[_K_FRANJA] = sem
-            ss[_K_FECHAS] = sem
-    if _K_FECHAS not in ss:
-        hoy = pd.Timestamp.today().date()
-        ss[_K_FECHAS] = (max(hoy.replace(day=1), kardex.INICIO), hoy)
-    sel = st.date_input(
-        "Fechas de esta tarjeta", key=_K_FECHAS, min_value=kardex.INICIO,
-        format="DD/MM/YYYY", label_visibility="collapsed",
-        help=("Las fechas de ESTA tarjeta. Abre en las de la franja de "
-              "arriba y las sigue mientras no elijas otras acá."))
-    sel = tuple(sel) if isinstance(sel, (list, tuple)) else (sel,)
-    if not sel:
-        return None
-    ini, fin = pd.Timestamp(sel[0]), pd.Timestamp(sel[-1])
-    return ini, fin + pd.Timedelta(days=1)
-
-
-def tarjeta_destino(fam_sel=(), anios=1):
+def tarjeta_destino(fam_sel=(), anios=1, rango=None, fecha=None):
     """La sección entera. `fam_sel` es el chip Familia de la franja;
     `anios`, si se compara con el año pasado (lo elige el panel «Filtros»
-    para todas las secciones de salidas: acá, uno o dos es lo mismo)."""
+    para todas las secciones de salidas: acá, uno o dos es lo mismo).
+
+    `rango` es `(inicio, fin exclusivo)` de la sección y `fecha` el que
+    dibuja su botón de fecha junto al título (regla #617). Hasta ese día,
+    a la mañana, la tarjeta tenía un `st.date_input` propio que seguía a la
+    franja mientras no se eligiera otra fecha ahí; con la franja sin
+    calendario, el botón de la sección lo reemplaza."""
     with st.container(border=True, key=CARD):
         st.markdown(CSS_TITULOS_DRILL, unsafe_allow_html=True)
-        # columnas-internas: el título y el calendario propio en un renglón.
-        c_tit, c_fecha = st.columns([3, 1], vertical_alignment="bottom")
-        with c_tit:
-            st.markdown('<div class="inv-rank-tit">A dónde fue lo que entró'
-                        '</div>', unsafe_allow_html=True)
-        with c_fecha:
-            rng = _rango_propio()
+        _tit = '<div class="inv-rank-tit">A dónde fue lo que entró</div>'
+        if fecha is not None:
+            fecha(_tit)
+        else:
+            st.markdown(_tit, unsafe_allow_html=True)
+        rng = rango if rango is not None else _rango_vigente()
         rk = _rango_kardex(rng) if rng else None
         if rk is None:
             st.info("El kardex empieza en enero de 2025: elegí fechas desde "

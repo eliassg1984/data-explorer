@@ -459,11 +459,17 @@ def _rot_valor(modo):
     return "a precio de hoy" if modo == VALOR_HOY else "al costo del día"
 
 
-def _titulo(texto, sub=""):
+def _titulo(texto, sub="", fecha=None):
+    """El título de una tarjeta. Con `fecha` (el que dibuja el botón de
+    fecha de la sección, regla #617), comparten renglón."""
     st.markdown(CSS_TITULOS_DRILL, unsafe_allow_html=True)
-    st.markdown(f'<div class="inv-rank-tit">{html.escape(texto)}'
-                + (f'<span class="inv-rank-tit-n">{html.escape(sub)}</span>'
-                   if sub else "") + "</div>", unsafe_allow_html=True)
+    tit = (f'<div class="inv-rank-tit">{html.escape(texto)}'
+           + (f'<span class="inv-rank-tit-n">{html.escape(sub)}</span>'
+              if sub else "") + "</div>")
+    if fecha is not None:
+        fecha(tit)
+    else:
+        st.markdown(tit, unsafe_allow_html=True)
 
 
 def _tiles(items):
@@ -548,7 +554,9 @@ def _alto_tabla(n, tope):
 
 def _ventana(key, fin):
     """El selector «6/12/18 meses» de una tarjeta y `(ini, fin)`: la
-    ventana termina donde termina el rango de la franja."""
+    ventana termina en `fin`. Es la fecha PROPIA de «Rendimiento» y de
+    «Proveedor»: desde el 2026-10-08 (regla #617) `fin` es el último día con
+    datos, porque la franja de Movimientos ya no tiene calendario."""
     v = st.segmented_control("Ventana", list(VENTANAS), default="12 meses",
                              required=True, key=key,
                              label_visibility="collapsed")
@@ -595,16 +603,17 @@ def _motivo(f, clave, u):
     return ""
 
 
-def tarjeta_revisar(d_rango, d_hist, cols, rango):
-    """La sección «Para revisar». `d_rango` son las filas del parquet del
-    rango de la franja; `d_hist`, las de todo el parquet (con el chip
-    «Sub Almacén» aplicado a las dos), de donde sale lo normal."""
+def tarjeta_revisar(d_rango, d_hist, cols, rango, fecha=None):
+    """La sección «Para revisar». `d_rango` son las filas del parquet en el
+    rango de la sección; `d_hist`, las de todo el parquet (con el chip
+    «Sub Almacén» aplicado a las dos), de donde sale lo normal. `fecha`
+    dibuja el botón de fecha de la sección junto al título (regla #617)."""
     with st.container(border=True, key=CARD_REV):
         modo = valorizacion()
         base, cortes = porcionamientos(d_rango, cols)
         if base.empty:
-            _titulo("Porcionamientos para revisar")
-            st.info("Sin porcionamientos en el rango de la franja.")
+            _titulo("Porcionamientos para revisar", fecha=fecha)
+            st.info("Sin porcionamientos en estas fechas.")
             return
         fin = rango[1] if rango else base["fecha"].max() + pd.Timedelta(days=1)
         hist, _ = porcionamientos(
@@ -615,7 +624,8 @@ def tarjeta_revisar(d_rango, d_hist, cols, rango):
         b = marcar(valorizar(b, modo, precios_hoy()), normales(hist), cortes)
         cuenta = {k: int(b[f"m_{k}"].sum()) for k in MARCAS}
         _titulo("Porcionamientos para revisar",
-                f"{len(b):,} en el rango · lo normal: sus últimos 18 meses")
+                f"{len(b):,} en el rango · lo normal: sus últimos 18 meses",
+                fecha=fecha)
         elegidas = st.pills(
             "Qué mostrar", list(MARCAS), selection_mode="multi",
             default=list(MARCAS_DE_ENTRADA), key="mov_merma_rev_marcas",
@@ -816,7 +826,8 @@ def _fig_precio(xs, mes, p_hoy, ini, fin, u):
 def tarjeta_rendimiento(d_hist, cols, rango):
     """La sección «Rendimiento por producto». `d_hist` es el parquet entero
     con el chip «Sub Almacén»; la ventana la elige la tarjeta y termina
-    donde termina el rango de la franja."""
+    donde termina `rango` o, sin él, en el último día con datos (regla
+    #617: Movimientos lo llama sin rango)."""
     with st.container(border=True, key=CARD_REND):
         modo = valorizacion()
         precios = precios_hoy()

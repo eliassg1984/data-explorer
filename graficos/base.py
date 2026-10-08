@@ -1469,9 +1469,10 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
     selector, solo afectaba a su tarjeta".
 
     Con `categoria` la tarjeta escribe `rango_cat_{reporte}_{categoria}` y
-    con `None` sigue escribiendo la canónica — que es lo que necesita
-    Movimientos, donde la franja SÍ dibuja su calendario y esto vuelve a
-    ser de verdad un atajo. Dos tarjetas que comparten categoría comparten
+    con `None` sigue escribiendo la canónica — que es lo que necesitan las
+    tarjetas de Ventas, donde la franja SÍ dibuja su calendario y esto
+    vuelve a ser de verdad un atajo. Movimientos usa una categoría por
+    VISTA desde el 2026-10-08 (regla #617). Dos tarjetas que comparten categoría comparten
     rango a propósito: es el caso de `cp_rank` y `cp_docs`, que son la
     misma sección y donde la tabla de documentos se calcula sobre los
     proveedores que rankeó el gráfico de arriba. Ver regla #363.

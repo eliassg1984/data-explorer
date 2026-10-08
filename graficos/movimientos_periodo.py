@@ -1435,8 +1435,15 @@ _CSS_MOLDE = """<style>
     width: auto !important;
     max-width: 260px !important;
 }
-.st-key-__C___fila > [data-testid="stLayoutWrapper"]:has(> .st-key-__C___kpi) {
+.st-key-__C___fila > [data-testid="stLayoutWrapper"]:has(> .st-key-__C___kpifila) {
     flex: 1 1 100% !important;
+    min-width: 0 !important;
+    width: auto !important;
+}
+/* Adentro, la fila de KPI se queda con lo que sobra y la fecha (regla
+   #617) mide lo suyo, pegada a la derecha. */
+.st-key-__C___kpifila > [data-testid="stLayoutWrapper"]:has(> .st-key-__C___kpi) {
+    flex: 1 1 auto !important;
     min-width: 0 !important;
     width: auto !important;
 }
@@ -1580,19 +1587,24 @@ def _css(lado):
 # LAS TARJETAS
 # ===========================================================================
 
-def tarjeta_requerimientos_periodo(d, *, cols, orden=()):
+def tarjeta_requerimientos_periodo(d, *, cols, orden=(), rango=None,
+                                   fecha=None):
     """Requerimientos por período: barras, Resumen y Detalle.
 
     `d` son las líneas de requerimientos ya recortadas por la fecha de la
-    franja y por sus chips (Sub Almacén, Familia); `cols` los nombres de
+    tarjeta y por los chips (Sub Almacén, Familia); `cols` los nombres de
     columna resueltos (`fecha`, `doc`, `area`, `estado`, `fam`, `prod`,
     `cant`, `punit`, `val`); `orden` el de `orden_areas`, que reparte los
-    colores por área."""
-    _tarjeta(d, REQUERIMIENTOS, cols, orden)
+    colores por área.
+
+    Las cuatro tarjetas «por período» reciben además `rango` —`(inicio, fin
+    EXCLUSIVO)` de SU fecha, regla #617— y `fecha`, el que dibuja su botón
+    de fecha (`movimientos.fecha_de_vista`). Sin `rango`, el de la franja."""
+    _tarjeta(d, REQUERIMIENTOS, cols, orden, rango_ts=rango, fecha=fecha)
 
 
 def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
-                            rot_fecha=""):
+                            rot_fecha="", rango=None, fecha=None):
     """Salidas por período: la misma tarjeta sobre `salidas.parquet`, con el
     tipo de descargo como filtro y como columna del Detalle (`cols["tipo"]`).
     Sin precio unitario en el parquet, se despeja de cada línea.
@@ -1602,10 +1614,11 @@ def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
     `cols["fecha"]` es la fecha que eligió el usuario —registro o
     proceso—, y `rot_fecha` cómo se dice en el pie («fecha de registro»)."""
     _tarjeta(d, SALIDAS, cols, orden, hist=hist, anios=anios,
-             rot_fecha=rot_fecha)
+             rot_fecha=rot_fecha, rango_ts=rango, fecha=fecha)
 
 
-def tarjeta_porcionamientos_periodo(d, *, cols, orden=(), precios=None):
+def tarjeta_porcionamientos_periodo(d, *, cols, orden=(), precios=None,
+                                    rango=None, fecha=None):
     """Porcionamientos: la misma tarjeta sobre `porcionamientos.parquet`,
     con la MERMA EN SOLES en la barra (regla #510).
 
@@ -1618,10 +1631,11 @@ def tarjeta_porcionamientos_periodo(d, *, cols, orden=(), precios=None):
     `precios` (regla #615): con el precio promedio de hoy de cada producto,
     la merma se valoriza como el Reporte de Mermas del Almacén
     (`a_precio_de_hoy`); sin él, al costo del día."""
-    _tarjeta(d, PORCIONAMIENTOS, cols, orden, precios=precios)
+    _tarjeta(d, PORCIONAMIENTOS, cols, orden, precios=precios,
+             rango_ts=rango, fecha=fecha)
 
 
-def tarjeta_produccion_periodo(d, *, cols, orden=()):
+def tarjeta_produccion_periodo(d, *, cols, orden=(), rango=None, fecha=None):
     """Producción: la misma tarjeta sobre `ordenesproduccion.parquet` (el
     reporte «Producción» del Almacén, `Sp_RepOrdenProduccion`), con el
     valorizado de lo producido en la barra (regla #575).
@@ -1631,11 +1645,11 @@ def tarjeta_produccion_periodo(d, *, cols, orden=()):
     orden) y `unid` (la unidad de la cantidad). Las órdenes GENERADAS no
     suman: no produjeron nada. `orden` es el de requerimientos, como en las
     otras tres."""
-    _tarjeta(d, PRODUCCION, cols, orden)
+    _tarjeta(d, PRODUCCION, cols, orden, rango_ts=rango, fecha=fecha)
 
 
 def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
-             precios=None):
+             precios=None, rango_ts=None, fecha=None):
     k, c = lado.k, lado.c
     with st.container(border=True, key=lado.card):
         st.markdown(_css(lado), unsafe_allow_html=True)
@@ -1763,8 +1777,18 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                          f"es el de mayor {lado.top}. «Top N por {lado.top}» "
                          "suma los N mayores en una sola serie. Se puede "
                          "escribir para buscar.")
-            with st.container(key=f"{c}_kpi"):
-                kpi = st.empty()
+            # La fila de KPI y, a su derecha, la fecha de la tarjeta (regla
+            # #617): ahí sobra lugar, y la fila de los controles va llena en
+            # Salidas. Un contenedor horizontal propio y no el `order` de un
+            # flex: así la fecha no abre un renglón más.
+            with st.container(horizontal=True, gap="small",
+                              vertical_alignment="center",
+                              key=f"{c}_kpifila"):
+                with st.container(key=f"{c}_kpi"):
+                    kpi = st.empty()
+                if fecha is not None:
+                    with st.container(key=f"{c}_fecha", width="content"):
+                        fecha()
         gran = gran or _GRAN_DEFAULT
         area_sel = area_sel or _AREA_TODAS
         tipo_sel = tipo_sel or lado.tipo_todos
@@ -1816,7 +1840,7 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                        "sin ella la barra no se parte. Se agrega en su "
                        "consulta y llega con «Refrescar».")
 
-        rng = _rango_vigente()
+        rng = rango_ts if rango_ts is not None else _rango_vigente()
         rango = ((rng[0].date(), (rng[1] - pd.Timedelta(days=1)).date())
                  if rng else None)
         # Las líneas del parquet ENTERO, una vez: años comparados, aviso de
@@ -1832,8 +1856,10 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                            orden_tipo=orden_tipo)
         if not v["claves"]:
             st.info(f"**{titulo}** — sin {lado.plur} que mostrar. Ampliá el "
-                    "rango de fechas (en la franja de arriba) o soltá algún "
-                    "filtro de la tarjeta.")
+                    "rango de fechas "
+                    + ("(el botón de fecha de esta tarjeta)" if fecha is not None
+                       else "(en la franja de arriba)")
+                    + " o soltá algún filtro de la tarjeta.")
             return
         claves = v["claves"]
 

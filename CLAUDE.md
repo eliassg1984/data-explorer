@@ -549,7 +549,8 @@ resto de `graficos/compras/`.
 - **Un widget que deja de renderizarse pierde su estado.** Por eso el
   `date_input` de la franja se dibuja en los TRES modos: esconderlo
   borraría la clave del rango del reporte. **Compras ya no lo dibuja
-  arriba** (2026-09-06): sus tarjetas traen el selector. **Ni Documentos
+  arriba** (2026-09-06): sus tarjetas traen el selector. **Ni Movimientos**
+  (2026-10-08): cada vista trae el suyo (regla #617). **Ni Documentos
   SUNAT**, que dibuja el calendario entero DENTRO de su tarjeta — de ahí
   el espejo `{k_rango}__eco`, que es lo que evita que el rango se pierda
   si nadie dibuja el widget. Vive en `estado_rango.restaurar_eco` (dueño
@@ -1095,10 +1096,10 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
 
 ## El selector de fecha de una tarjeta: un panel propio
 
-Las tarjetas de Compras y de Ventas eligen sus fechas con un botón propio
-(`base.py::selector_fecha_tarjeta`), que escribe el rango de su sección
-—o el de la franja, si no tiene categoría—. Desde el 2026-10-08 abre un
-**panel propio**, `graficos/panel_fecha.py` + su
+Las tarjetas de Compras, de Ventas y de Movimientos eligen sus fechas con
+un botón propio (`base.py::selector_fecha_tarjeta`), que escribe el rango
+de su sección —o el de la franja, si no tiene categoría—. Desde el
+2026-10-08 abre un **panel propio**, `graficos/panel_fecha.py` + su
 `.js` y su `.css`: la «opción A» que eligió el usuario sobre un mockup.
 Atajos escritos enteros y agrupados (en curso / hacia atrás / completos),
 los años como pestañas y los meses —o, con «Días», un calendario— como
@@ -1127,6 +1128,19 @@ Reemplazó a la **escala de tiempo** con línea deslizante
 (`selector_escala`, reglas #211-#222): su línea vivía dentro de UN mes o de
 UN año —no se podía elegir un rango que cruzara de mes—, sus atajos se
 anclaban a hoy y cada tirador recalculaba la página entera.
+
+**En Movimientos cada VISTA tiene su fecha** (2026-10-08, regla #617, a
+pedido) y la franja no dibuja calendario, como en Compras. Una categoría
+por sección (`graficos/movimientos.py::CATEGORIA_VISTA`), y tres piezas
+que comparten el MISMO ctx: `ctx_de_vista` (los topes de SU parquet y su
+default: 12 meses las cuatro «por período», 30 días las demás),
+`rango_de_vista` (el recorte) y `fecha_de_vista` (el botón). Los parquets
+llegan enteros y cada sección recorta el suyo dentro de su fragment, así
+que cambiar una fecha recalcula esa vista sola. «Rendimiento» y
+«Proveedor por kg útil» no llevan botón: su fecha es su ventana de
+6/12/18 meses. **Nada en `movimientos.py` lee `_rango_vigente()`**: sería
+el rango de una franja que ya no se ve. Lo vigila
+`test_graficos.py::_pruebas_fecha_por_vista`.
 
 ## Plotly — específicos de este proyecto
 

@@ -861,8 +861,14 @@ with _fila_top:
             # Documentos SUNAT, reporte propio desde el 2026-09-30 (regla
             # #577), tampoco: su tarjeta dibuja el pill entero adentro, y
             # dos widgets con la key del rango son una excepción.
+            #
+            # MOVIMIENTOS TAMPOCO, desde el 2026-10-08 (regla #617, a pedido:
+            # «cada vista debe tener su propio selector de fecha»): cada
+            # sección trae su botón de fecha y recorta sus datos. El
+            # contexto se sigue publicando: de él salen los topes y el
+            # default de cada vista.
             _franja_dibuja_fecha = (
-                reporte != "Compras"
+                reporte not in ("Compras", "Movimientos")
                 and reporte not in REPORTES_FECHA_EN_TARJETA_SUNAT)
             if _franja_dibuja_fecha:
                 franja_fecha.render()

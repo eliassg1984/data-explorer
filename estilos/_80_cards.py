@@ -5418,4 +5418,65 @@ CSS = """    /* ================================================================
         font-weight: 700 !important;
         fill: var(--accent-deep) !important;
     }
+
+    /* =================================================================== */
+    /* EL BOTÓN DE FECHA DE CADA VISTA DE MOVIMIENTOS (regla #617)          */
+    /* Lo dibuja `selector_fecha_tarjeta` con el prefijo `mov_f_<vista>`:   */
+    /* la fila (`_fila`) pone el título a la izquierda y el botón a la      */
+    /* derecha, y el botón es la píldora de las tarjetas de Compras. Por    */
+    /* familia (`[class*=…]`) y no por key exacta porque son once vistas, y */
+    /* ninguna de estas reglas va adentro de un :has (regla #469). El       */
+    /* `:not(_panel)`: el contenedor del panel también lleva «_escala» en   */
+    /* su key, y vive en el popover.                                        */
+    /* =================================================================== */
+    [class*="st-key-mov_f_"][class*="_fila"] {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    [class*="st-key-mov_f_"][class*="_fila"] > [data-testid="stElementContainer"] {
+        width: auto !important;
+    }
+    /* El título cede (con «…») y el botón no. */
+    [class*="st-key-mov_f_"][class*="_fila"] > [data-testid="stElementContainer"]:first-child {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    [class*="st-key-mov_f_"][class*="_fila"] .inv-rank-tit,
+    [class*="st-key-mov_f_"][class*="_fila"] .chart-card-hdr {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        margin-bottom: 0 !important;
+    }
+    [class*="st-key-mov_f_"][class*="_escala"]:not([class*="_panel"]) {
+        flex: 0 0 auto !important;
+    }
+    [class*="st-key-mov_f_"][class*="_escala"]:not([class*="_panel"]) button {
+        min-width: 0 !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        padding: 0 10px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        box-shadow: var(--shadow) !important;
+    }
+    [class*="st-key-mov_f_"][class*="_escala"]:not([class*="_panel"]) button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    /* El chevron de Streamlit: el WRAPPER, como en `cp_rank_escala`. */
+    [class*="st-key-mov_f_"][class*="_escala"]:not([class*="_panel"])
+        button > div > div:last-child:not(:first-child) {
+        display: none !important;
+    }
 """

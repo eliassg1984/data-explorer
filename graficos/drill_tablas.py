@@ -826,7 +826,8 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
                    nombre_hoja="Producto", titulo_hojas="Productos",
                    col_ctx=None, nombre_ctx="Área", col_cant=None,
                    col_punit=None, col_unidad=None, abre_en=(),
-                   etiqueta_valor="Valorizado", titulo_ranking=None):
+                   etiqueta_valor="Valorizado", titulo_ranking=None,
+                   fecha=None):
     """La sección entera: el ranking, sus desgloses y la tabla de hojas.
 
     `niveles` es la cadena de agrupación en pares (columna, nombre): el
@@ -844,7 +845,11 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
     `pref` es el prefijo de las keys, uno por dashboard ("inv", "mov"). Las
     tarjetas conservan el prefijo `ajuste_graf_card_`, de donde cuelga el CSS
     de tarjeta (`estilos/_80_cards.py` y `_20_compras_rail.py`): un nombre
-    nuevo las dejaría sin marco."""
+    nuevo las dejaría sin marco.
+
+    `fecha`, si viene, dibuja el título del primer cuadro junto con el botón
+    de fecha de la sección (`movimientos.fecha_de_vista`, regla #617):
+    recibe el HTML del título."""
     # Sin guard de "inyectar una sola vez": un `st.markdown` de estilos con
     # ese guard DESAPARECE en el rerun siguiente (regla #59).
     st.markdown(CSS_TITULOS_DRILL, unsafe_allow_html=True)
@@ -867,10 +872,13 @@ def seccion_cadena(d, *, pref, slug, niveles, col_val, col_hoja,
             if not col_grp:
                 st.info(f"No se encontró la columna de {nombre_grp}.")
             else:
-                st.markdown(
-                    '<div class="inv-rank-tit">'
-                    + (titulo_ranking or f"{etiqueta_valor} por {nombre_grp}")
-                    + "</div>", unsafe_allow_html=True)
+                _tit = ('<div class="inv-rank-tit">'
+                        + (titulo_ranking or f"{etiqueta_valor} por {nombre_grp}")
+                        + "</div>")
+                if fecha is not None:
+                    fecha(_tit)
+                else:
+                    st.markdown(_tit, unsafe_allow_html=True)
                 foco = tabla_ranking(
                     d, col_grp, col_val, nombre_grp,
                     key=f"{pref}_rank_grid_{slug}",
@@ -931,7 +939,7 @@ def claves_tarjetas_cuadros(pref, slug, n):
 
 def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                     etiqueta_valor="Valorizado", titulo=None, nota=None,
-                    d_ant=None, rotulo_ant="", aviso_falta=None):
+                    d_ant=None, rotulo_ant="", aviso_falta=None, fecha=None):
     """Todos los niveles como CUADROS, repartidos en filas, y ninguno abre
     con foco.
 
@@ -1012,16 +1020,21 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                                     f"{nombre_n}.")
                     elif i == 0:
                         _n = claves(d, col_n).nunique()
-                        st.markdown(
-                            '<div class="inv-rank-tit">'
-                            + escape(titulo or f"{etiqueta_valor} por "
-                                              f"{nombre_n}")
-                            + (f' <span class="inv-rank-tit-n">{_n:,}</span>'
-                               if _n > FILAS_RANK else "")
-                            + (f' <span class="inv-rank-tit-n" title="'
-                               f'{escape(nota[1])}">{escape(nota[0])}</span>'
-                               if nota else "")
-                            + "</div>", unsafe_allow_html=True)
+                        _tit = ('<div class="inv-rank-tit">'
+                                + escape(titulo or f"{etiqueta_valor} por "
+                                                  f"{nombre_n}")
+                                + (f' <span class="inv-rank-tit-n">{_n:,}</span>'
+                                   if _n > FILAS_RANK else "")
+                                + (f' <span class="inv-rank-tit-n" title="'
+                                   f'{escape(nota[1])}">{escape(nota[0])}</span>'
+                                   if nota else "")
+                                + "</div>")
+                        # Con `fecha`, el título comparte renglón con el
+                        # botón de fecha de la sección (regla #617).
+                        if fecha is not None:
+                            fecha(_tit)
+                        else:
+                            st.markdown(_tit, unsafe_allow_html=True)
                         foco = tabla_ranking(
                             d, col_n, col_val, nombre_n,
                             key=f"{pref}_rank_grid_{slug}",

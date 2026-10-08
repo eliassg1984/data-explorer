@@ -120,10 +120,12 @@ def recetas_editadas(recetas, desde):
     return {n: str(x.date()) for n, x in ult.items()}
 
 
-def rango_de_la_vista():
-    """`(ini, fin)` inclusive: el de la franja; sin él, los últimos 30 días
-    hasta ayer (el parquet de la madrugada no trae hoy entero)."""
-    rng = _rango_vigente()
+def rango_de_la_vista(rango=None):
+    """`(ini, fin)` inclusive: el de la sección (`rango`, `(inicio, fin
+    exclusivo)`, regla #617) o, sin él, el de la franja; sin ninguno, los
+    últimos 30 días hasta ayer (el parquet de la madrugada no trae hoy
+    entero)."""
+    rng = rango if rango is not None else _rango_vigente()
     if rng:
         return rng[0].date(), (rng[1] - pd.Timedelta(days=1)).date()
     fin = dt.date.today() - dt.timedelta(days=1)
@@ -305,16 +307,21 @@ def datos_de_la_vista(r, familias=(), compras=None, editadas=None):
     )
 
 
-def tarjeta_consumo(fam_sel=(), sub_sel=()):
+def tarjeta_consumo(fam_sel=(), sub_sel=(), rango=None, fecha=None):
     """La sección entera: la tarjeta con la página adentro.
 
     `fam_sel` y `sub_sel` son los chips de la franja: la familia recorta los
-    insumos de compra; el sub almacén no aplica y se dice."""
-    ini, fin = rango_de_la_vista()
+    insumos de compra; el sub almacén no aplica y se dice. `rango` es
+    `(inicio, fin exclusivo)` de la sección y `fecha` el que dibuja su botón
+    de fecha junto al título (regla #617)."""
+    ini, fin = rango_de_la_vista(rango)
     with st.container(border=True, key=CARD):
-        st.markdown('<p class="chart-card-hdr">Consumo según recetas · lo que usaron las ventas '
-                    'en insumos de compra, bajando por recetas base y porcionamientos</p>',
-                    unsafe_allow_html=True)
+        _tit = ('<p class="chart-card-hdr">Consumo según recetas · lo que usaron las ventas '
+                'en insumos de compra, bajando por recetas base y porcionamientos</p>')
+        if fecha is not None:
+            fecha(_tit)
+        else:
+            st.markdown(_tit, unsafe_allow_html=True)
         r = data.consumo_recetas_rango(ini, fin)
         if r is None:
             st.info("No se pudo calcular el consumo. Hacen falta cuatro parquets: el primer "
@@ -322,8 +329,8 @@ def tarjeta_consumo(fam_sel=(), sub_sel=()):
                     "los porcionamientos y el inventario valorizado.")
             return
         if r["filas"].empty:
-            st.info("Sin ventas con receta en el rango de fechas. Ampliá el rango en la "
-                    "franja de arriba.")
+            st.info("Sin ventas con receta en estas fechas. Ampliá el rango con el botón "
+                    "de fecha.")
             return
         # Lo comprado del rango (regla #560) y las recetas editadas desde su
         # primer día: dos parquets chicos que la app ya tiene cacheados.

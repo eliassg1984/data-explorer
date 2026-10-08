@@ -4080,6 +4080,93 @@ def _pruebas_panel_fecha():
     return fallos
 
 
+def _pruebas_fecha_por_vista():
+    """Movimientos: cada vista con su propia fecha (regla #617).
+
+    1. CADA SECCIÓN DE LA PILA TIENE SU CATEGORÍA DE RANGO, salvo las dos de
+       merma que traen su ventana (Rendimiento y Proveedor), y su dibujante
+       la usa: un `_rango_y_boton("<sección>", …)` por cada una. Olvidar una no da
+       error: la vista se quedaría con el histórico entero.
+    2. NADIE LEE LA FECHA DE LA FRANJA en `movimientos.py`: la franja de
+       este reporte ya no dibuja calendario, y lo que se leyera de ahí sería
+       un rango que el usuario no ve.
+    3. EL DEFAULT: las cuatro «por período» abren en 12 meses y las demás en
+       30 días, contados hasta el último día con datos DE SU parquet.
+    """
+    import datetime
+    import re
+    from pathlib import Path
+
+    import graficos.movimientos as mov
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    fecha por vista · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA fecha por vista · {nombre}: got={got!r} exp={exp!r}")
+
+    raiz = Path(__file__).parent
+    fuente = (raiz / "graficos" / "movimientos.py").read_text(encoding="utf-8")
+    con_ventana = {"mov_sec_merma_rend", "mov_sec_merma_prov"}
+    secciones = {c for c, _v in mov._PILA}
+    # La pila sin «Tabla» (MOSTRAR_VISTAS_TABLA apagado) igual las declara.
+    secciones |= {"mov_sec_tabla_req", "mov_sec_tabla_sal"}
+    check("toda sección (salvo las de ventana) tiene categoría",
+          sorted(secciones - con_ventana - set(mov.CATEGORIA_VISTA)), [])
+    check("las categorías no se repiten",
+          len(set(mov.CATEGORIA_VISTA.values())), len(mov.CATEGORIA_VISTA))
+    check("las de 12 meses son categorías de verdad",
+          set(mov.VISTAS_EN_12_MESES) <= set(mov.CATEGORIA_VISTA.values()), True)
+    usadas = set(re.findall(r'_rango_y_boton\("(mov_sec_\w+)"', fuente))
+    check("cada categoría la usa su dibujante",
+          sorted(set(mov.CATEGORIA_VISTA) - usadas), [])
+    check("movimientos.py no lee la fecha de la franja",
+          "_rango_vigente(" in fuente, False)
+    app = (raiz / "app.py").read_text(encoding="utf-8")
+    check("la franja de Movimientos no dibuja calendario",
+          bool(re.search(r'reporte not in \("Compras", "Movimientos"\)', app)), True)
+    css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
+    check("el botón de las vistas tiene su CSS (prefijo mov_f_)",
+          'st-key-mov_f_' in css, True)
+
+    D = datetime.date
+    ctx_falso = {"k_rango": "x", "fecha_min": D(2023, 1, 1),
+                 "fecha_max": D(2026, 10, 7), "hoy": D(2026, 10, 8),
+                 "reporte": "Movimientos", "usa_carga_rango": False,
+                 "rango_default": (D(2026, 10, 1), D(2026, 10, 7)),
+                 "rango_default_cat": {}}
+    real = mov.franja_fecha.contexto
+    mov.franja_fecha.contexto = lambda: dict(ctx_falso)
+    try:
+        c12 = mov.ctx_de_vista("sal_periodo", (D(2024, 5, 3), D(2026, 9, 30)))
+        c30 = mov.ctx_de_vista("sal_area", (D(2024, 5, 3), D(2026, 9, 30)))
+        sin = mov.ctx_de_vista("req_area")
+    finally:
+        mov.franja_fecha.contexto = real
+    check("los topes son los del parquet de la vista",
+          (c12["fecha_min"], c12["fecha_max"]), (D(2024, 5, 3), D(2026, 9, 30)))
+    check("«por período» abre en 12 meses hasta su último día con datos",
+          c12["rango_default_cat"]["sal_periodo"], (D(2025, 10, 1), D(2026, 9, 30)))
+    check("las demás abren en 30 días",
+          c30["rango_default_cat"]["sal_area"], (D(2026, 9, 1), D(2026, 9, 30)))
+    check("sin fechas propias, las del reporte",
+          sin["rango_default_cat"]["req_area"], (D(2026, 9, 8), D(2026, 10, 7)))
+
+    import pandas as pd
+    d = pd.DataFrame({"_fecha": pd.to_datetime(
+        ["2026-09-30 23:10", "2026-10-01 08:00", "2026-10-07 21:00"])})
+    rng = (pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-08"))
+    check("el recorte incluye el último día entero (fin exclusivo, #321)",
+          len(mov.recortar_vista(d, rng)), 2)
+    check("sin rango, entero", len(mov.recortar_vista(d, None)), 3)
+    check("fechas_de", mov.fechas_de(d["_fecha"]), (D(2026, 9, 30), D(2026, 10, 7)))
+    return fallos
+
+
 def _pruebas_regla_riel():
     """graficos/base.py — la regla de referencia bajo el riel de la escala.
 
@@ -10159,6 +10246,9 @@ def main():
 
     # ── El panel del selector de fecha de las tarjetas (regla #616) ──────
     fallos += _pruebas_panel_fecha()
+
+    # ── Movimientos: cada vista con su propia fecha (regla #617) ─────────
+    fallos += _pruebas_fecha_por_vista()
 
     fallos += _pruebas_anomalias()
 
