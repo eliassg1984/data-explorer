@@ -266,6 +266,17 @@ _EST_SIN_ITEMS = "sin ítems"
 """Lo que viaja en `__estado` de cada fila del Detalle: la grilla colorea y
 explica por estos tres valores, y los tres son neutros de género."""
 
+PARTIR_AREA = "Por área"
+PARTIR_TIPO = "Por tipo"
+"""Con qué se parte la barra en la tarjeta de SALIDAS (2026-10-08, a pedido:
+«¿tengo alguna forma de ver por tipo de salida?»): por área —quién dio de
+baja, como nació (#509)— o por tipo de descargo. Regla #614."""
+
+_TIPOS_TRAZA = 4
+"""Tipos con color propio cuando la barra se parte por tipo: los cuatro
+mayores llevan el 90 % (bajas, comida de personal, despacho a Mayta, uso en
+el área); el resto va en «Resto»."""
+
 _AREAS_TRAZA = 3
 """Áreas con color propio en la barra; el resto se suma en «Resto». Con
 cuatro o menos en la vista van todas, sin «Resto»: sería un tramo de una
@@ -684,22 +695,25 @@ def no_suman(bl, lado=None):
     return int(anul.sum()), int(sin_proc.sum()), int(sin_items.sum())
 
 
-def trazas_por_area(dv, ord_claves, orden):
+def trazas_por_area(dv, ord_claves, orden, col="area", n_traza=_AREAS_TRAZA):
     """`[(nombre, color, [valor por período]), …]`: los tramos de la barra.
 
     Las `_AREAS_TRAZA` mayores de la VISTA, de abajo hacia arriba, y
     «Resto» con lo que falta para el total de cada período — el resto no se
     vuelve a sumar por área, así la barra cierra por construcción. Con
     cuatro áreas o menos van todas y no hay «Resto». Un área que suma 0 no
-    tiene tramo (seguiría contando en «Áreas»)."""
-    tot = dv.groupby("area")["valor"].sum().sort_values(ascending=False)
+    tiene tramo (seguiría contando en «Áreas»).
+
+    `col` es la columna que parte la barra: `area`, o `tipo` con «Por tipo»
+    en salidas (#614), con `n_traza` tramos y los colores de `orden`."""
+    tot = dv.groupby(col)["valor"].sum().sort_values(ascending=False)
     tot = tot[tot > 0]
     if tot.empty:
         return []
-    por = (dv.groupby(["clave", "area"])["valor"].sum()
-             .unstack("area").reindex(ord_claves).fillna(0.0))
-    nombres = (list(tot.index) if len(tot) <= _AREAS_TRAZA + 1
-               else list(tot.index[:_AREAS_TRAZA]))
+    por = (dv.groupby(["clave", col])["valor"].sum()
+             .unstack(col).reindex(ord_claves).fillna(0.0))
+    nombres = (list(tot.index) if len(tot) <= n_traza + 1
+               else list(tot.index[:n_traza]))
     col = colores_area(orden, nombres)
     trazas = [(a, col[a], [float(v) for v in por[a]]) for a in nombres]
     if len(nombres) < len(tot):
@@ -761,7 +775,8 @@ def _renglones(total, n_doc, var, gran, lado, segundo=None):
     return salida
 
 
-def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS):
+def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS,
+                   partir=PARTIR_AREA, orden_tipo=()):
     """Todo lo que la tarjeta dibuja de un recorte, sin dibujar nada.
 
     `bl` son TODAS las líneas del recorte (las vacías incluidas: cuentan en
@@ -814,7 +829,10 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS):
         var_nota=[_nota_variacion(_v, gran, c, _ant(_v), rango,
                                   sustantivo=lado.plur)
                   for c, _v in zip(claves, variaciones)],
-        trazas=trazas_por_area(dv, claves, orden),
+        trazas=(trazas_por_area(dv, claves, orden_tipo, col="tipo",
+                                n_traza=_TIPOS_TRAZA)
+                if partir == PARTIR_TIPO else
+                trazas_por_area(dv, claves, orden)),
     )
     # Qué áreas hay en cada período, de mayor a menor: el tooltip de la
     # columna «Áreas» del Resumen.
@@ -1200,7 +1218,8 @@ def _mayor_valido(amb, lado=None):
 
 
 def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
-              costo_area=None, comps=(), aviso=None):
+              costo_area=None, comps=(), aviso=None,
+              unidad=("área", "áreas")):
     """La fila de KPI: el total de la vista y una tarjeta por TRAMO de la
     barra, con el color del tramo. Es también la leyenda del gráfico, dicha
     con números. `nota` es `(corto, largo)` de lo que no suma, o None.
@@ -1251,7 +1270,8 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
             propio = ""
             if nombre == "Resto":
                 n_resto = len(tot_area) - (len(trazas) - 1)
-                rot = f"{n_resto} área" + ("" if n_resto == 1 else "s") + " más"
+                rot = (f"{n_resto} "
+                       f"{unidad[0] if n_resto == 1 else unidad[1]} más")
             else:
                 rot = _nombre_area(nombre)
                 c_area = (costo_area or {}).get(nombre)
@@ -1423,6 +1443,7 @@ _CSS_MOLDE = """<style>
    al contenedor (CLAUDE.md: una regla colgada del contenedor captura los
    widgets que se agreguen después). */
 .st-key-__K___gran [data-testid="stButtonGroup"] button,
+.st-key-__K___partir [data-testid="stButtonGroup"] button,
 .st-key-__K___modo [data-testid="stButtonGroup"] button {
     min-height: 32px !important;
     height: 32px !important;
@@ -1653,6 +1674,17 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                 "Agrupar por", _GRAN_OPCIONES, default=_GRAN_DEFAULT,
                 required=True, key=f"{k}_gran",
                 label_visibility="collapsed")
+            # Sólo donde hay tipo (salidas): con qué se parte la barra.
+            partir = PARTIR_AREA
+            if con_tipo:
+                partir = st.segmented_control(
+                    "Partir por", (PARTIR_AREA, PARTIR_TIPO),
+                    default=PARTIR_AREA, required=True, key=f"{k}_partir",
+                    label_visibility="collapsed",
+                    help=("Con qué se parte cada barra: **por área** o **por "
+                          "tipo** de descargo —bajas, comida de personal, "
+                          "despacho a Mayta…—. La fila de abajo nombra cada "
+                          "tramo con su monto.")) or PARTIR_AREA
             with st.container(key=f"{c}_hdr_area"):
                 area_sel = st.selectbox(
                     "Área", ops_area, key=f"{k}_area",
@@ -1743,7 +1775,17 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         rng = _rango_vigente()
         rango = ((rng[0].date(), (rng[1] - pd.Timedelta(days=1)).date())
                  if rng else None)
-        v = vista_periodos(bl, gran, rango, orden, lado)
+        # Las líneas del parquet ENTERO, una vez: años comparados, aviso de
+        # poco registro y el orden ESTABLE de los tipos (sus colores, #614).
+        bh = (lineas_documentos(hist, **cols)
+              if hist is not None and not lado.merma else None)
+        orden_tipo = ()
+        if partir == PARTIR_TIPO:
+            _o = _validas(bh if bh is not None else base, lado)
+            orden_tipo = (_o.groupby("tipo")["valor"].sum()
+                          .sort_values(ascending=False).index.tolist())
+        v = vista_periodos(bl, gran, rango, orden, lado, partir=partir,
+                           orden_tipo=orden_tipo)
         if not v["claves"]:
             st.info(f"**{titulo}** — sin {lado.plur} que mostrar. Ampliá el "
                     "rango de fechas (en la franja de arriba) o soltá algún "
@@ -1755,8 +1797,7 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         # Sobre el parquet ENTERO: el recorte de la franja deja afuera
         # justo lo que se quiere comparar.
         comps, aviso = [], None
-        if hist is not None and rng is not None and not lado.merma:
-            bh = lineas_documentos(hist, **cols)
+        if bh is not None and rng is not None:
             if anios:
                 comps = comparacion_periodos(bh[_mascara(bh)], rng, gran,
                                              claves, anios, lado)
@@ -1777,8 +1818,11 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         kpi.markdown(
             _html_kpi(float(sum(v["tot"])), int(dv["doc"].nunique()),
                       v["trazas"],
-                      dv.groupby("area")["valor"].sum().loc[lambda s: s > 0],
-                      nota, lado, comps=comps, aviso=aviso, **kw_kpi),
+                      dv.groupby("tipo" if partir == PARTIR_TIPO else "area")
+                      ["valor"].sum().loc[lambda s: s > 0],
+                      nota, lado, comps=comps, aviso=aviso,
+                      unidad=(("tipo", "tipos") if partir == PARTIR_TIPO
+                              else ("área", "áreas")), **kw_kpi),
             unsafe_allow_html=True)
 
         # ── Foco, modo y clic: se resuelven ANTES de dibujar (#398, #399) ─
@@ -1786,7 +1830,7 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         # foco; el modo se lee de `session_state` porque el alto de la
         # figura depende de él; el clic de la barra se lee de la key que se
         # DIBUJÓ la corrida anterior, con un contador en la key.
-        ctx = (gran, area_sel, tipo_sel, fam_sel, prod_sel)
+        ctx = (gran, area_sel, tipo_sel, fam_sel, prod_sel, partir)
         if st.session_state.get(f"{k}_ctx_prev") != ctx:
             st.session_state[f"{k}_ctx_prev"] = ctx
             st.session_state[f"{k}_focus"] = None

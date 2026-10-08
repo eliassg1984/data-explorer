@@ -6973,6 +6973,13 @@ def _pruebas_salidas_comparar_y_destino():
                          pd.Timestamp("2026-10-01"), pd.DateOffset(years=1)),
           "2024-25")
     check("variación sin base es None", mp.variacion_pct(5.0, 0.0), None)
+    _dv = _lin([("2026-09-01", "a", "PROCESADO", 5.0),
+                ("2026-09-02", "b", "PROCESADO", 3.0)]).assign(
+        tipo=["Bajas", "Comida Personal"], clave="2026-09")
+    check("por tipo: un tramo por tipo de descargo",
+          [n for n, _c, _v in mp.trazas_por_area(
+              _dv, ["2026-09"], ["Bajas", "Comida Personal"], col="tipo",
+              n_traza=4)], ["Bajas", "Comida Personal"])
 
     # ── 3) El aviso de poco registro ──────────────────────────────────────
     filas = []
