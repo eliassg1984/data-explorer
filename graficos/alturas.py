@@ -394,6 +394,28 @@ DESTINO_FIG = 140
 """El gráfico mes a mes del producto elegido en «A dónde fue lo que entró»
 (regla #614): lo que entró, lo vendido y lo dado de baja."""
 
+# ── Movimientos › las tres vistas de merma (2026-10-08, regla #615) ─────
+# Cada tarjeta entra en la pantalla del usuario (~575px, regla #574); lo
+# que no entra se desliza dentro de su tabla.
+MERMA_TABLA = 27 * 9 + 38
+"""Tope de la lista de «Para revisar»: nueve filas de 27 y la cabecera."""
+
+MERMA_CORTES = 27 * 6 + 38
+"""Tope de los cortes del porcionamiento elegido, en la ficha de al lado."""
+
+MERMA_FIG = 190
+"""«Rendimiento por producto»: el % de merma de cada porcionamiento."""
+
+MERMA_FIG_PRECIO = 150
+"""«Rendimiento por producto»: el costo del día por unidad, debajo."""
+
+MERMA_CAMBIOS = 27 * 10 + 38
+"""Tope de «Productos que cambiaron», al lado de los dos gráficos
+(`MERMA_FIG` + `MERMA_FIG_PRECIO` ≈ 340)."""
+
+MERMA_PROV = 27 * 10 + 38
+"""Tope de las dos tablas de «Proveedor por kg útil»."""
+
 RB_COSTO_TABLA = 27 * 9 + 38
 """Tope de la tabla de Recetas › Costo recetas base (2026-09-30, regla
 #576): NUEVE filas de 27 más la cabecera y los bordes (trece en la primera

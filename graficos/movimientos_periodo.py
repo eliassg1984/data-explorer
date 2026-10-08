@@ -372,7 +372,8 @@ def fmt_cant(v):
 
 
 def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
-                           merma, fin, cant_fin, unid_fin, pprom, peso):
+                           merma, fin, cant_fin, unid_fin, pprom, peso,
+                           cod=None):
     """`(base, cortes)`: porcionamientos.parquet con los nombres de la tarjeta.
 
     EL GRANO ES LA TRAMPA (regla #510). El parquet trae una fila por CORTE
@@ -397,6 +398,11 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
     cant`. Un porcionamiento sin cortes cuesta 0 y no pierde nada, pero
     cuenta.
 
+    `costo` y `valor` son los del día: al PRECIO DE HOY, como el Reporte
+    de Mermas del Almacén, los pasa `a_precio_de_hoy` (regla #615), que
+    necesita `cod` —el código del producto inicial—; `costo_dia` guarda el
+    del día para quien quiera los dos.
+
     `cortes` son las filas del parquet con producto final, una por corte:
     `doc`, `fin`, `cant`, `unid` (la del corte), `pprom`, `peso` (en la
     unidad del producto INICIAL: es la parte de lo que entró que fue a ese
@@ -414,6 +420,7 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
         "area": _texto(d, area, "Sin área"),
         "tipo": _texto(d, tipo),
         "prod": _texto(d, prod),
+        "cod": _texto(d, cod),
         "unid": _texto(d, unid),
         "cant": _num(cant),
         "merma_cant": _num(merma),
@@ -433,6 +440,7 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
         "area": g["area"].first(),
         "tipo": g["tipo"].first(),
         "prod": g["prod"].first(),
+        "cod": g["cod"].first(),
         "unid": g["unid"].first(),
         "cant": g["cant"].first(),
         "merma_cant": g["merma_cant"].first(),
@@ -443,6 +451,7 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
     base["punit"] = (base["costo"] / base["cant"]).where(positiva)
     base["valor"] = ((base["costo"] * base["merma_cant"] / base["cant"])
                      .where(positiva).fillna(0.0))
+    base["costo_dia"] = base["costo"]
     base["estado"] = "PROCESADO"
     base["fam"] = ""
     base["vacio"] = False
@@ -452,6 +461,27 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
     cortes = cortes.rename(columns={"cant_fin": "cant", "unid_fin": "unid",
                                     "valor_fin": "valor"})
     return base, cortes.reset_index(drop=True)
+
+
+def a_precio_de_hoy(base, precios):
+    """`base` de `lineas_porcionamientos` valorizada como el REPORTE DE
+    MERMAS del Almacén (regla #615): la merma × el precio promedio ACTUAL
+    del producto inicial, no lo que costaba el día que se porcionó.
+
+    `SpReporteMerma` multiplica `MPORCIONAMIENTO.tMerma` por
+    `vProducto.nPrecioPromedio`, y `precios` es ese mismo precio —el
+    `PRECIO PROMEDIO` de `inventariovalorizado.parquet`, uno por producto:
+    con él septiembre 2026 da S/ 20.602,20, lo mismo que el PDF—, como una
+    Series código → precio. Lo porcionado (`costo`) pasa a la misma vara,
+    cantidad × precio, para que el % de merma en soles no mezcle dos
+    precios. Un producto sin precio vale 0, como el LEFT JOIN del SP. Pura:
+    devuelve una copia."""
+    b = base.copy()
+    p = pd.to_numeric(b["cod"].map(precios), errors="coerce").fillna(0.0)
+    b["costo"] = b["cant"].fillna(0.0) * p
+    b["valor"] = b["merma_cant"].fillna(0.0) * p
+    b["punit"] = p.where(b["cant"] > 0)
+    return b
 
 
 def orden_areas(df, col_area, col_val):
@@ -1512,7 +1542,7 @@ def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
              rot_fecha=rot_fecha)
 
 
-def tarjeta_porcionamientos_periodo(d, *, cols, orden=()):
+def tarjeta_porcionamientos_periodo(d, *, cols, orden=(), precios=None):
     """Porcionamientos: la misma tarjeta sobre `porcionamientos.parquet`,
     con la MERMA EN SOLES en la barra (regla #510).
 
@@ -1520,8 +1550,12 @@ def tarjeta_porcionamientos_periodo(d, *, cols, orden=()):
     (`fecha`, `doc`, `area`, `tipo` —el usuario—, `prod`, `unid`, `cant`,
     `merma`, `fin`, `cant_fin`, `unid_fin`, `pprom`, `peso`). `orden` es el
     de requerimientos, como en las otras dos: el color de un área es el
-    mismo en las tres tarjetas."""
-    _tarjeta(d, PORCIONAMIENTOS, cols, orden)
+    mismo en las tres tarjetas.
+
+    `precios` (regla #615): con el precio promedio de hoy de cada producto,
+    la merma se valoriza como el Reporte de Mermas del Almacén
+    (`a_precio_de_hoy`); sin él, al costo del día."""
+    _tarjeta(d, PORCIONAMIENTOS, cols, orden, precios=precios)
 
 
 def tarjeta_produccion_periodo(d, *, cols, orden=()):
@@ -1537,7 +1571,8 @@ def tarjeta_produccion_periodo(d, *, cols, orden=()):
     _tarjeta(d, PRODUCCION, cols, orden)
 
 
-def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha=""):
+def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
+             precios=None):
     k, c = lado.k, lado.c
     with st.container(border=True, key=lado.card):
         st.markdown(_css(lado), unsafe_allow_html=True)
@@ -1550,6 +1585,8 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha=""):
         # no una por fila del parquet (el grano, regla #510).
         if lado.merma:
             base, cortes_todos = lineas_porcionamientos(d, **cols)
+            if precios is not None:
+                base = a_precio_de_hoy(base, precios)
         else:
             base, cortes_todos = lineas_documentos(d, **cols), None
         lin = base[~base["vacio"]]

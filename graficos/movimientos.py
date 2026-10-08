@@ -164,6 +164,10 @@ from graficos.movimientos_periodo import (
 from graficos import drill_tablas
 from graficos.movimientos_consumo import tarjeta_consumo
 from graficos.movimientos_destino import tarjeta_destino
+from graficos.movimientos_merma import (
+    VALOR_HOY, precios_hoy, selector_valorizacion, tarjeta_proveedores,
+    tarjeta_rendimiento, tarjeta_revisar, valorizacion,
+)
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es horizontal
 # y aplana las categorías a una sola fila (ver `base.py::_render_rail`), así
@@ -213,7 +217,14 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # «Porcionamientos» (2026-09-24, regla #510): tercer grupo, al final, a
     # pedido. Una sola vista, con el nombre que se pidió; el ícono son las
     # tijeras del corte.
-    ("Porcionamientos", (("Porcionamientos", "Porcionamientos", ":material/content_cut:"),)),
+    # Las tres de MERMA (2026-10-08, regla #615): lo que el «Reporte de
+    # Mermas» del Almacén no dice — qué porcionamiento revisar, cómo rinde
+    # un producto en el tiempo y cuánto cuesta el kg útil según a quién se
+    # le compró. Viven en `graficos/movimientos_merma.py`.
+    ("Porcionamientos", (("Porcionamientos", "Porcionamientos", ":material/content_cut:"),
+                         ("Merma para revisar", "Para revisar", ":material/flag:"),
+                         ("Rendimiento por producto", "Rendimiento", ":material/monitoring:"),
+                         ("Proveedor por kg útil", "Costo por kg útil", ":material/local_shipping:"))),
     # «Producción» (2026-09-30, regla #575): las órdenes de producción del
     # Almacén, lo que las áreas preparan con sus recetas base. Va junto a
     # Porcionamientos —las dos transformaciones que se registran en el
@@ -247,6 +258,9 @@ _PILA = pila_sin_tablas((
     ("mov_sec_destino",     "Destino de lo que entra"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
     ("mov_sec_porc",        "Porcionamientos"),
+    ("mov_sec_merma_rev",   "Merma para revisar"),
+    ("mov_sec_merma_rend",  "Rendimiento por producto"),
+    ("mov_sec_merma_prov",  "Proveedor por kg útil"),
     ("mov_sec_prod",        "Producción"),
     ("mov_sec_consumo",     "Consumo según recetas"),
 ))
@@ -521,6 +535,7 @@ _COLS_PORC = {
     "area": "SUB ALMACEN",
     "tipo": "USUARIO REG",
     "prod": "PROD INICIAL",
+    "cod": "COD PROD INIC",
     "unid": "UNID PROD INIC",
     "cant": "CANT A PORCIONAR",
     "merma": "CANT MERMA",
@@ -538,7 +553,15 @@ demo de `data.py`) también las encuentra."""
 
 def _cargar_porcionamientos_del_rango(sub_sel=()):
     """`porcionamientos.parquet` recortado al rango de la franja y al chip
-    «Sub Almacén», o None si no está o no trae su fecha.
+    «Sub Almacén», o None si no está o no trae su fecha."""
+    return _cargar_porcionamientos(sub_sel)[0]
+
+
+def _cargar_porcionamientos(sub_sel=()):
+    """`(rango, todo)`: `porcionamientos.parquet` con el chip «Sub Almacén»,
+    recortado al rango de la franja y entero —lo normal de un producto y la
+    ventana de «Rendimiento» miran para atrás (regla #615)—; `(None, None)`
+    si no está o no trae su fecha.
 
     El borde superior va como `< fin + 1 día` por lo mismo que salidas:
     `FEC REGIST` trae hora (regla #321). EL CHIP «FAMILIA» NO RECORTA ESTA
@@ -548,22 +571,23 @@ def _cargar_porcionamientos_del_rango(sub_sel=()):
     de áreas (`vArea`) que el de requerimientos."""
     df = _cargar_reporte("porcionamientos.parquet")
     if df is None or df.empty:
-        return None
+        return None, None
     col_fecha = _resolver(df, _COLS_PORC["fecha"])
     if not col_fecha:
-        return None
+        return None, None
     d = df.copy()
     d["_fecha"] = pd.to_datetime(d[col_fecha], errors="coerce")
     d = d.dropna(subset=["_fecha"])
-    rango = _rango_vigente()
-    if rango:
-        _ini, _fin = rango
-        d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
     col_area = _resolver(d, _COLS_PORC["area"])
     if sub_sel and col_area:
         _elegidas = {str(s).strip() for s in sub_sel}
         d = d[d[col_area].fillna("").astype(str).str.strip().isin(_elegidas)]
-    return d
+    todo = d
+    rango = _rango_vigente()
+    if rango:
+        _ini, _fin = rango
+        d = d[(d["_fecha"] >= _ini) & (d["_fecha"] < _fin)]
+    return d, todo
 
 
 ARCHIVO_PRODUCCION = "ordenesproduccion.parquet"
@@ -677,6 +701,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # de 60vh y con las 13 áreas de Sub Almacén lo de abajo queda fuera
         # de la vista sin que nada avise que hay más.
         _selectores_salidas()
+        selector_valorizacion()
         _, sub_sel = filtro_pills(df_f, col_sub,
                                   "mov_graf_filtro_sub", "Sub Almacén")
         _, fam_sel = filtro_pills(df_f, col_fam,
@@ -913,10 +938,33 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                 st.info("No se pudo cargar porcionamientos.parquet: esta "
                         "sección queda vacía.")
             return
+        # Con «Precio de hoy» (el default, regla #615) la merma vale lo
+        # que el Reporte de Mermas del Almacén.
         tarjeta_porcionamientos_periodo(
             d_porc, orden=orden,
+            precios=precios_hoy() if valorizacion() == VALOR_HOY else None,
             cols={nombre: _resolver(d_porc, columna)
                   for nombre, columna in _COLS_PORC.items()})
+
+    def _dib_merma(tarjeta, con_rango):
+        # Las tres de merma (regla #615) leen el parquet ENTERO con el chip
+        # «Sub Almacén»: lo normal de un producto y sus ventanas miran para
+        # atrás del rango. Se carga acá, como Porcionamientos.
+        def dibujar():
+            d_rng, d_todo = _cargar_porcionamientos(sub_sel)
+            if d_todo is None:
+                with st.container(border=True,
+                                  key=f"ajuste_graf_card_izq_mov_merma_vacia_{tarjeta.__name__}"):
+                    st.info("No se pudo cargar porcionamientos.parquet: "
+                            "esta sección queda vacía.")
+                return
+            cols = {nombre: _resolver(d_todo, columna)
+                    for nombre, columna in _COLS_PORC.items()}
+            if con_rango:
+                tarjeta(d_rng, d_todo, cols, _rango_vigente())
+            else:
+                tarjeta(d_todo, cols, _rango_vigente())
+        return dibujar
 
     def _dib_prod():
         # Se carga ACÁ, como Porcionamientos: sólo cuando la sección sale
@@ -954,6 +1002,9 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         "mov_sec_destino":     _dib_destino,
         "mov_sec_tabla_sal":   _dib_tabla_sal,
         "mov_sec_porc":        _dib_porc,
+        "mov_sec_merma_rev":   _dib_merma(tarjeta_revisar, True),
+        "mov_sec_merma_rend":  _dib_merma(tarjeta_rendimiento, False),
+        "mov_sec_merma_prov":  _dib_merma(tarjeta_proveedores, False),
         "mov_sec_prod":        _dib_prod,
         "mov_sec_consumo":     _dib_consumo,
     }

@@ -6737,6 +6737,153 @@ def _pruebas_ajuste_kardex():
     return fallos
 
 
+def _pruebas_merma():
+    """Movimientos › las tres vistas de merma (regla #615).
+
+      1. A PRECIO DE HOY la merma vale lo que dice el Reporte de Mermas del
+         Almacén (`SpReporteMerma`: merma × precio promedio actual), un
+         producto sin precio vale 0 y lo porcionado pasa a la misma vara; al
+         COSTO DEL DÍA, la parte de lo que costaron los cortes.
+      2. LAS MARCAS: alta contra lo normal del MISMO producto, cero sólo
+         donde el producto suele perder, el corte sin peso y la fecha
+         anterior a su número; un porcionamiento normal no lleva ninguna.
+      3. EL PROVEEDOR es el de la última compra hasta 45 días antes, y es
+         «único» si nadie más vendió ese producto en los 21 días previos.
+      4. EL KG ÚTIL y lo pagado de más contra el mejor proveedor; los
+         cambios de los últimos 90 días, por nombre de columna.
+    """
+    import numpy as np
+    import pandas as pd
+
+    from graficos import movimientos_merma as mm
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    merma #615 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA merma #615 · {nombre}: {got!r} != {exp!r}")
+
+    # Diez porcionamientos normales de lomo (A, 10-19 %) y de pulpo (B,
+    # 50 %), y los raros: lomo al 80 %, pulpo sin merma, un corte sin peso
+    # y uno numerado en octubre con fecha de septiembre.
+    filas = []
+
+    def porc(doc, dia, cod, prod, cant, merma, cortes):
+        for fin, cant_fin, pprom, peso in cortes:
+            filas.append({
+                "COD PORC": doc, "FEC REGIST": pd.Timestamp(dia),
+                "SUB ALMACEN": "PRODUCCION", "USUARIO REG": "CARLOS",
+                "COD PROD INIC": cod, "PROD INICIAL": prod,
+                "UNID PROD INIC": "KILOS", "CANT A PORCIONAR": cant,
+                "CANT MERMA": merma, "PROD FINAL RESULT": fin,
+                "CANT RESULT": cant_fin, "UNID PROD FIN": "KILOS",
+                "PREC PROM PROD FIN": pprom, "PESO RESULT": peso})
+
+    for i in range(10):
+        m = 1.0 + i * 0.1
+        porc(f"2608{i:06d}", f"2026-08-{i + 1:02d} 10:00", "A", "Lomo", 10.0,
+             m, [("Medallón", 10.0 - m, 60.0 * 10 / (10.0 - m), 10.0 - m)])
+        porc(f"2608{i + 50:06d}", f"2026-08-{i + 1:02d} 11:00", "B", "Pulpo",
+             4.0, 2.0, [("Pulpo cocido", 2.0, 80.0, 2.0)])
+    porc("2609000001", "2026-09-10 10:00", "A", "Lomo", 10.0, 8.0,
+         [("Medallón", 2.0, 300.0, 2.0)])
+    porc("2609000002", "2026-09-11 10:00", "B", "Pulpo", 4.0, 0.0,
+         [("Pulpo cocido", 4.0, 80.0, 4.0)])
+    porc("2609000003", "2026-09-12 10:00", "A", "Lomo", 10.0, 1.5,
+         [("Medallón", 6.0, 60.0, 6.0), ("Trozos", 10.0, 0.0, 0.0)])
+    porc("2610000001", "2026-09-30 10:00", "A", "Lomo", 10.0, 1.4,
+         [("Medallón", 8.6, 69.77, 8.6)])
+    d = pd.DataFrame(filas)
+    cols = dict(fecha="FEC REGIST", doc="COD PORC", area="SUB ALMACEN",
+                tipo="USUARIO REG", prod="PROD INICIAL", cod="COD PROD INIC",
+                unid="UNID PROD INIC", cant="CANT A PORCIONAR",
+                merma="CANT MERMA", fin="PROD FINAL RESULT",
+                cant_fin="CANT RESULT", unid_fin="UNID PROD FIN",
+                pprom="PREC PROM PROD FIN", peso="PESO RESULT")
+    base, cortes = mm.porcionamientos(d, cols)
+    check("una fila por porcionamiento, con su código",
+          (len(base), base.loc[base["doc"] == "2609000003", "cod"].tolist()),
+          (24, ["A"]))
+
+    # ── 1. Las dos valorizaciones ─────────────────────────────────────────
+    precios = pd.Series({"A": 50.0})
+    hoy = mm.valorizar(base, mm.VALOR_HOY, precios)
+    sep = hoy["fecha"] >= "2026-09-01"
+    check("a precio de hoy: merma × precio promedio, como el SP; sin precio, 0",
+          (round(float(hoy.loc[sep, "valor"].sum()), 2),
+           float(hoy.loc[hoy["cod"] == "B", "valor"].sum())),
+          (round((8.0 + 1.5 + 1.4) * 50.0, 2), 0.0))
+    check("a precio de hoy, lo porcionado es cantidad × precio",
+          float(hoy.loc[hoy["doc"] == "2609000001", "costo"].iloc[0]), 500.0)
+    dia = mm.valorizar(base, mm.VALOR_DIA, precios)
+    f1 = dia[dia["doc"] == "2609000001"].iloc[0]
+    check("al costo del día: la parte de los cortes que se perdió",
+          (round(float(f1["valor"]), 2), round(float(f1["valor_hoy"]), 2)),
+          (round(600.0 * 0.8, 2), 400.0))
+
+    # ── 2. Las marcas ─────────────────────────────────────────────────────
+    hist = base[base["fecha"] < "2026-09-01"]
+    compras = mm.compras_para_proveedor(pd.DataFrame({
+        "COD_PRODUCTO": ["A", "A", "B"],
+        "FECHA_EMISION_DOC": pd.to_datetime(["2026-09-01", "2026-09-08",
+                                             "2026-09-01"]),
+        "NOMBRE_PROVEEDOR": ["X", "Y", "Z"],
+        "CANTIDAD_COMPRA": [10.0, 10.0, 4.0],
+        "VALOR_COMPRA": [600.0, 600.0, 320.0]}))
+    b = mm.marcar(mm.con_proveedor(hoy[sep].reset_index(drop=True), compras),
+                  mm.normales(hist), cortes)
+    marcas = {str(r["doc"]): sorted(k for k in mm.MARCAS if r[f"m_{k}"])
+              for _, r in b.iterrows()}
+    check("las marcas de cada porcionamiento raro, y ninguna en el normal",
+          marcas, {"2609000001": ["alta"], "2609000002": ["cero"],
+                   "2609000003": ["sinpeso"], "2610000001": ["fecha"]})
+    imp = mm.impacto(b, ["alta"])
+    med_a = float(np.median([1.0 + i * 0.1 for i in range(10)]) / 10)
+    check("el impacto de la merma alta es lo perdido de más contra la mediana",
+          round(float(imp[b["doc"] == "2609000001"].iloc[0]), 2),
+          round((0.8 - med_a) * 10 * 50.0, 2))
+
+    # ── 3. El proveedor ───────────────────────────────────────────────────
+    p = b.set_index("doc")
+    check("la última compra hasta 45 días antes, y si fue de uno solo",
+          (p.loc["2609000001", "prov"], bool(p.loc["2609000001", "unico"]),
+           p.loc["2610000001", "prov"], p.loc["2609000002", "prov"],
+           bool(p.loc["2609000002", "unico"])),
+          ("Y", False, "Y", "Z", True))
+    check("los días entre la compra y el porcionamiento",
+          int(p.loc["2609000001", "dias"]), 2)
+
+    # ── 4. El kg útil, lo pagado de más y los cambios ─────────────────────
+    q = pd.DataFrame({
+        "doc": [str(i) for i in range(10)], "cod": ["A"] * 10,
+        "prod": ["Lomo"] * 10, "unid": ["KILOS"] * 10,
+        "fecha": pd.date_range("2026-06-01", periods=10, freq="15D"),
+        "prov": ["P1"] * 5 + ["P2"] * 5, "unico": [True] * 10,
+        "dias": [1.0] * 10, "cant": [10.0] * 10,
+        "merma_cant": [1.0] * 5 + [3.0] * 5, "costo_dia": [100.0] * 10})
+    q["pct"] = q["merma_cant"] / q["cant"]
+    pp = mm.por_proveedor(q)
+    check("el kg útil: lo pagado ÷ lo que quedó, del más barato al más caro",
+          (pp.index.tolist(), [round(x, 4) for x in pp["util"]]),
+          (["P1", "P2"], [round(500 / 45, 4), round(500 / 35, 4)]))
+    r = mm.resumen_proveedores(q)
+    check("lo pagado de más contra el mejor proveedor",
+          (r.loc["A", "mejor"], r.loc["A", "peor"],
+           round(float(r.loc["A", "extra"]), 2)),
+          ("P1", "P2", round((500 / 35 - 500 / 45) * 35, 2)))
+    q["costo"] = q["costo_dia"]
+    ch = mm.cambios(q, pd.Timestamp("2026-11-01"))
+    check("los cambios de los últimos 90 días, por nombre de columna",
+          (ch.columns.tolist(),
+           [round(float(x), 3) for x in ch.loc["A", ["pct_ant", "pct_rec"]]]),
+          (["pct_ant", "pct_rec", "dpp", "dprecio", "impacto"], [0.1, 0.3]))
+    return fallos
+
+
 def _pruebas_salidas_comparar_y_destino():
     """Movimientos › salidas: la causa, los años anteriores y el destino de
     lo que entra (regla #614).
@@ -9946,6 +10093,7 @@ def main():
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
     fallos += _pruebas_salidas_comparar_y_destino()
+    fallos += _pruebas_merma()
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()

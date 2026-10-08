@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-614 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+615 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (199)
 
@@ -911,7 +911,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (155)
+**Decisiones de diseño y UX** (156)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1068,6 +1068,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#605** — «Consumo según recetas» cuenta la VENTA INTERNA de lo que se produce en casa el día que se…
 - **#610** — El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico (con o sin número), puntos…
 - **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
+- **#615** — La merma del «Reporte de Mermas» del Almacén vale al precio de HOY, y la app la muestra así…
 
 **Mantenimiento y trampas del lenguaje** (14)
 
@@ -48304,6 +48305,78 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-08.)
 
+615. **La merma del «Reporte de Mermas» del Almacén vale al precio de HOY,
+     y la app la muestra así por defecto; tres vistas nuevas la llevan al
+     porcionamiento, al producto y al proveedor.** 2026-10-08, a partir de
+     revisar el reporte del Almacén contra Movimientos › Porcionamientos, y
+     aprobadas sobre un mockup con los datos reales.
+
+     **El reporte del Almacén es `SpReporteMerma`**: la cabecera de cada
+     porcionamiento procesado (`MPORCIONAMIENTO`, `tEstado = '02'`) por su
+     `fRegistra` —la fecha final del formulario incluye el día entero—,
+     agrupada por área › familia › subfamilia › producto, con
+     `valor = tMerma × vProducto.nPrecioPromedio`: **el precio promedio de
+     HOY**, no el que tenía el producto el día que se porcionó. El mismo
+     mes reimpreso otro día da otro monto. Septiembre 2026: 267
+     porcionamientos, cantidad 2.960,478 y merma 627,77 IGUALES en la app;
+     S/ 20.602,20 en el PDF contra S/ 20.413,15 de la app, que valorizaba al
+     costo de los cortes. Su total de «Cantidad» suma kilos con unidades, y
+     la combinación Subfamilia + Área sin Familia no tiene rama en el SP
+     (sale vacío).
+
+     **Las dos valorizaciones se eligen** en «Filtros» («Valorizar la
+     merma», `graficos/movimientos_merma.py::K_VALOR`) y abren en «Precio
+     de hoy», a pedido. El precio de hoy es el `PRECIO PROMEDIO` de
+     `inventariovalorizado.parquet` —uno por producto, igual al de
+     `vProducto` en los 267 porcionamientos—, así que no hizo falta tocar la
+     consulta del Sheet. `movimientos_periodo.a_precio_de_hoy` lo aplica a
+     la tarjeta «Porcionamientos» y lo porcionado pasa a la misma vara
+     (cantidad × precio), para que el % de merma no mezcle dos precios.
+     `lineas_porcionamientos` trae desde ese día el código del producto
+     (`cod`) y `costo_dia`.
+
+     **Cruzar con el kardex del día no da una tercera valorización**:
+     el precio de salida del tipo 96 es el mismo costo de los cortes (sep
+     al céntimo; 12 meses, S/ 225.879 contra 226.373).
+
+     **Las tres vistas** (`graficos/movimientos_merma.py`, en el grupo
+     Porcionamientos del rail):
+     - **Para revisar**: los porcionamientos del rango fuera de lo normal
+       para su MISMO producto —la mitad central de sus últimos 18 meses,
+       más allá de dos rangos intercuartiles y nunca menos de 10 puntos—, y
+       los errores de registro: corte con cantidad y sin peso (el Almacén
+       cuenta ese peso como merma y lo valora en S/ 0: PO-2609000192, lomo
+       al 86,5 % que era ~11 %), merma cero en un producto que suele perder
+       5 % o más, costo del día fuera de 0,6–1,6 veces la última compra, y
+       número de otro mes que la fecha (el cierre del 30/09 se registró en
+       octubre: 15 porcionamientos). La ficha muestra los cortes.
+     - **Rendimiento por producto**: el % de merma de cada porcionamiento
+       sobre su rango normal y el costo del día por unidad contra el precio
+       de hoy, en una ventana de 6/12/18 meses que termina con el rango de
+       la franja; al lado, los productos cuya merma cambió en los últimos
+       90 días (5 porcionamientos o más de cada lado), por lo que cuesta.
+     - **Proveedor por kg útil**: lo pagado ÷ lo que quedó después de la
+       merma, por proveedor, y lo pagado de más contra el mejor de cada
+       producto. Siempre al costo del día: a precio de hoy todos los
+       proveedores costarían lo mismo.
+
+     **El proveedor es una atribución**: el de la última compra del
+     producto hasta 45 días antes (`con_proveedor`, `merge_asof`). El
+     Almacén no guarda de qué lote salió lo porcionado, y las compras
+     entran al almacén central y llegan a Producción por requerimiento: el
+     lote saldría de un FIFO de dos niveles. El interruptor «un solo
+     proveedor en los 21 días previos» deja sólo los casos sin ambigüedad;
+     con él, el orden de los proveedores no cambió en ninguno de los
+     productos medidos (lomo fino: Quality Beef S/ 72 por kg útil contra
+     León Medrano S/ 86).
+
+     Todo vectorizado (regla #537): 0,3 s por vista sobre el histórico. Lo
+     vigila `test_graficos.py::_pruebas_merma`. En Cloud, las vistas
+     aparecen después de «Reboot app»: `graficos.movimientos` ya está
+     importado (regla #357).
+
+     (2026-10-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48316,7 +48389,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#614**; la próxima toma el número siguiente.
+> última regla es la **#615**; la próxima toma el número siguiente.
 
 >
 
