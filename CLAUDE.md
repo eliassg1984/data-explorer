@@ -523,9 +523,10 @@ resto de `graficos/compras/`.
   lleva un valor (0, ±∞) que el Styler escribe como «—». Ver
   `arquitectura.md` #529.
 - **`selector_fecha_tarjeta(clave, …)` es dueño de su prefijo**: arma
-  `{clave}_escala`, `{clave}_fila`, `{clave}_atajo_sel`…, así que `clave`
-  no puede ser el prefijo de los widgets de la vista — `"vt_mix"` chocó con
-  el control `vt_mix_escala` y la vista murió con
+  `{clave}_fila`, `{clave}_escala`, `{clave}_escala_panel` y
+  `{clave}_panelf`, así que `clave` no puede ser el prefijo de los widgets
+  de la vista — `"vt_mix"` chocó con el control `vt_mix_escala` y la vista
+  murió con
   `StreamlitDuplicateElementKey`. Ver `arquitectura.md` #527.
   **Y en Ventas `categoria=` no le da un rango propio**: Ventas carga por
   rango, y ahí `clave_rango` devuelve la clave del loader antes de mirar la
@@ -1124,10 +1125,11 @@ aunque estén en años distintos. Regla #616.
   cerrarlo; abierto, cada corrida le vuelve a llamar la función con los
   datos nuevos sin rehacer el DOM. El estado del panel vive en su raíz.
 
-Reemplazó a la **escala de tiempo** con línea deslizante
-(`selector_escala`, reglas #211-#222): su línea vivía dentro de UN mes o de
-UN año —no se podía elegir un rango que cruzara de mes—, sus atajos se
-anclaban a hoy y cada tirador recalculaba la página entera.
+Reemplazó a la **escala de tiempo** con línea deslizante de las reglas
+#211-#222: su línea vivía dentro de UN mes o de UN año —no se podía elegir
+un rango que cruzara de mes—, sus atajos se anclaban a hoy y cada tirador
+recalculaba la página entera. Su código —el selector, el riel, sus
+ventanas por escala y su CSS— se borró entero el mismo día (regla #618).
 
 **En Movimientos cada VISTA tiene su fecha** (2026-10-08, regla #617, a
 pedido) y la franja no dibuja calendario, como en Compras. Una categoría

@@ -493,10 +493,10 @@ CSS = """    /* ================================================================
        envolver. Medido: ese panel (517-1221px) tapaba ENTERO al chip de
        Subfamilia (755-985px), que queda debajo.
        Fix: capar el panel a un ancho manejable y dejar que las opciones
-       ENVUELVAN en varias líneas — mismo patrón que ya usa el panel de
-       escala del Ranking de Proveedores (`cp_rank_escala_panel`,
-       `graficos/compras/_css_proveedor.py`), sólo que ahí el contenido ya
-       venía angosto y acá hay que forzarlo. `stPopoverBody` es un PORTAL
+       ENVUELVAN en varias líneas — mismo patrón que usaba el panel de la
+       escala de tiempo del Ranking de Proveedores (`cp_rank_escala_panel`,
+       `graficos/compras/_css_proveedor.py`, hasta el 2026-10-08), sólo que
+       ahí el contenido ya venía angosto y acá hay que forzarlo. `stPopoverBody` es un PORTAL
        (fuera de `chips_ajuste_tabla`), así que se alcanza con `:has()`
        sobre la key del `st.pills` de adentro, no colgando del contenedor.
        Por la clase `filtro-<clave>` del rótulo y no por la key del widget:

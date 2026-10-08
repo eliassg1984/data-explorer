@@ -9,8 +9,9 @@ atrás», «Completos»); a la derecha los años como pestañas y los meses —o
 con «Días», un calendario— como casilleros. Un clic elige un mes; un clic en
 otro suma los del medio, aunque estén en años distintos.
 
-Reemplazó a la escala de tiempo con línea deslizante (`selector_escala`,
-reglas #211-#222 y #298-#300), que tenía tres problemas de fondo, medidos:
+Reemplazó a la escala de tiempo con línea deslizante (reglas #211-#222 y
+#298-#300; su código se borró en la #618), que tenía tres problemas de
+fondo, medidos:
   · la línea vivía dentro de UN mes (Días) o UN año (Meses): no se podía
     elegir un rango que cruzara de mes o de año;
   · los atajos se anclaban a hoy y la tarjeta abría en un rango que no era
@@ -155,9 +156,10 @@ def panel_fecha(clave, ctx, bandera=None):
     `clave` es el prefijo de la tarjeta (el mismo de `selector_fecha_tarjeta`):
     el componente va con la key `{clave}_panelf`. `bandera`, si viene, se
     prende al aplicar —es la escalada a un rerun completo que esperan las
-    tarjetas de Compras y de Ventas, ver `_aplicar_escala` en la historia de
-    `base.py`—; una tarjeta que recorta sus datos dentro de su propio
-    fragment no la necesita."""
+    tarjetas de Compras y de Ventas: el filtro que lee el rango vive FUERA
+    del fragment de la tarjeta, así que sin ella el estado cambia y la
+    pantalla no (regla #180)—; una tarjeta que recorta sus datos dentro de
+    su propio fragment no la necesita."""
     if not _ctx_valido(ctx):
         return
     bounds = (ctx["fecha_min"], ctx["fecha_max"])

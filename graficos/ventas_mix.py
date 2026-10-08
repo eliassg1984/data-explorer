@@ -565,8 +565,9 @@ def _ventas_mix(d, filtrar_cb=None):
                      label_visibility="collapsed", on_change=_al_buscar)
     with ctrl[4]:
         # «vt_mixf» y no «vt_mix»: el selector arma SUS keys con ese prefijo
-        # (`_escala`, `_fila`, `_atajo_sel`…), y `vt_mix_escala` ya es el
-        # control de escala de esta vista — StreamlitDuplicateElementKey.
+        # (`_fila`, `_escala`, `_escala_panel`, `_panelf`), y `vt_mix_escala`
+        # ya es el control de escala de esta vista —
+        # StreamlitDuplicateElementKey.
         selector_fecha_tarjeta("vt_mixf", "vt_mix_fecha_flag", categoria=None)
 
     # ── 2) Períodos ──────────────────────────────────────────────────────

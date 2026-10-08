@@ -3287,9 +3287,6 @@ def _pruebas_widgets_de_fragment_escalado():
             "la escalada manda la ventana a HEREDA A PROPÓSITO (elegir un "
             "rango a mano es pedir que mande ese rango); su dueño es "
             "`_K_VENTANA`, que no es clave de widget",
-        ("movimientos_comun.py", "mov_evo_gran"):
-            "ya lo cubre el espejo `_K_GRAN_ECO`, que es la forma vieja de "
-            "la misma cura (regla #211, medida ahí el 2026-09-05)",
     }
 
     def _key_de(nodo):
@@ -3861,127 +3858,6 @@ def _pruebas_periodo_por_vista():
     return fallos
 
 
-def _pruebas_escala_tiempo():
-    """estado_rango.py — la escala de tiempo estilo tabla dinámica.
-
-    Tres asserts valen más que los otros y son la razón de esta tanda:
-
-    1. EL EXTREMO DERECHO SE EXPANDE. Las paradas del riel son fechas de
-       ARRANQUE de período, así que "hasta agosto" tiene que terminar el 31
-       y no el 1. Si se cuela el 1, el filtro pierde 30 días de datos y el
-       total sale bajo sin que nada avise — el bug clásico de un filtro por
-       mes, y el que este contrato existe para atrapar.
-
-    2. EL RECORTE A BOUNDS. En escala de Años, "2026" pide hasta el 31-dic,
-       pero los datos terminan en agosto. Sin recortar, el rango declara
-       cuatro meses que no existen y el eje de cualquier evolución dibuja el
-       vacío. Espeja lo que ya hace `atajos_rango`.
-
-    3. LA VUELTA ES ESTABLE. `escala_desde_rango` siembra el riel desde el
-       rango canónico en CADA render; si no fuera idempotente, un rango que
-       ya nació de la escala se ensancharía solo en cada rerun.
-    """
-    import datetime
-
-    from estado_rango import (ESCALAS, escala_a_rango, escala_desde_rango,
-                              escala_periodos)
-
-    fallos = 0
-
-    def check(nombre, got, exp):
-        nonlocal fallos
-        if got == exp:
-            print(f"OK    escala · {nombre}")
-        else:
-            fallos += 1
-            print(f"FALLA escala · {nombre}: got={got!r} exp={exp!r}")
-
-    # Bounds deliberadamente SUCIOS: no arrancan un día 1 ni terminan a fin
-    # de mes/año. Con bounds redondos los dos bugs de arriba pasan
-    # desapercibidos.
-    b = (datetime.date(2024, 3, 17), datetime.date(2026, 8, 25))
-    meses = escala_periodos("Meses", b)
-    anios = escala_periodos("Años", b)
-
-    check("las escalas son tres", ESCALAS, ("Días", "Meses", "Años"))
-
-    # ── Las paradas ────────────────────────────────────────────────────
-    check("meses: una parada por mes, mar-24 a ago-26", len(meses), 30)
-    check("meses: la parada es el día 1", meses[0], datetime.date(2024, 3, 1))
-    check("meses: cruza el fin de año sin saltearse enero",
-          meses[9], datetime.date(2024, 12, 1))
-    check("meses: la última es el mes del borde",
-          meses[-1], datetime.date(2026, 8, 1))
-    check("años: una parada por año presente",
-          anios, [datetime.date(y, 1, 1) for y in (2024, 2025, 2026)])
-    check("días: una parada por día, ambos bordes incluidos",
-          len(escala_periodos("Días", b)), 892)
-    check("bounds sin fecha no dan paradas",
-          escala_periodos("Meses", (None, None)), [])
-    check("bounds invertidos no dan paradas",
-          escala_periodos("Meses", (b[1], b[0])), [])
-
-    # ── (1) el extremo derecho se EXPANDE ──────────────────────────────
-    check("un mes suelto va del 1 a fin de mes",
-          escala_a_rango("Meses", datetime.date(2025, 4, 1),
-                         datetime.date(2025, 4, 1)),
-          (datetime.date(2025, 4, 1), datetime.date(2025, 4, 30)))
-    check("febrero bisiesto termina el 29",
-          escala_a_rango("Meses", datetime.date(2024, 2, 1),
-                         datetime.date(2024, 2, 1))[1],
-          datetime.date(2024, 2, 29))
-    check("diciembre no se pasa al año siguiente",
-          escala_a_rango("Meses", datetime.date(2025, 12, 1),
-                         datetime.date(2025, 12, 1))[1],
-          datetime.date(2025, 12, 31))
-    check("un año suelto va del 1-ene al 31-dic",
-          escala_a_rango("Años", datetime.date(2025, 1, 1),
-                         datetime.date(2025, 1, 1)),
-          (datetime.date(2025, 1, 1), datetime.date(2025, 12, 31)))
-    check("en días el extremo es el día mismo",
-          escala_a_rango("Días", datetime.date(2026, 8, 5),
-                         datetime.date(2026, 8, 23)),
-          (datetime.date(2026, 8, 5), datetime.date(2026, 8, 23)))
-    check("tiradores cruzados se enderezan",
-          escala_a_rango("Días", datetime.date(2026, 8, 23),
-                         datetime.date(2026, 8, 5)),
-          (datetime.date(2026, 8, 5), datetime.date(2026, 8, 23)))
-
-    # ── (2) el recorte a bounds ────────────────────────────────────────
-    check("el año del borde no promete meses sin datos",
-          escala_a_rango("Años", anios[-1], anios[-1], b),
-          (datetime.date(2026, 1, 1), datetime.date(2026, 8, 25)))
-    check("el primer año no arranca antes del primer dato",
-          escala_a_rango("Años", anios[0], anios[0], b),
-          (datetime.date(2024, 3, 17), datetime.date(2024, 12, 31)))
-    check("de punta a punta da exactamente los bounds",
-          escala_a_rango("Meses", meses[0], meses[-1], b), b)
-
-    # ── (3) la vuelta ──────────────────────────────────────────────────
-    r = (datetime.date(2026, 8, 5), datetime.date(2026, 8, 23))
-    check("un rango dentro de un mes cae en ese mes",
-          escala_desde_rango("Meses", r, b),
-          (datetime.date(2026, 8, 1), datetime.date(2026, 8, 1)))
-    check("un rango a caballo toma los dos meses",
-          escala_desde_rango("Meses",
-                             (datetime.date(2025, 6, 20),
-                              datetime.date(2025, 7, 3)), b),
-          (datetime.date(2025, 6, 1), datetime.date(2025, 7, 1)))
-    check("sin rango sembrado, el riel abre entero",
-          escala_desde_rango("Meses", None, b), (meses[0], meses[-1]))
-    check("un rango anterior a los datos se apoya en el borde",
-          escala_desde_rango("Meses", (datetime.date(2020, 1, 1),
-                                       datetime.date(2020, 2, 1)), b),
-          (meses[0], meses[0]))
-
-    ida = escala_a_rango("Meses", *escala_desde_rango("Meses", r, b), b)
-    vuelta = escala_a_rango("Meses", *escala_desde_rango("Meses", ida, b), b)
-    check("re-sembrar un rango que ya salió de la escala no lo mueve",
-          vuelta, ida)
-
-    return fallos
-
-
 def _pruebas_panel_fecha():
     """El selector de fecha de las tarjetas (regla #616): atajos y panel.
 
@@ -4164,154 +4040,6 @@ def _pruebas_fecha_por_vista():
           len(mov.recortar_vista(d, rng)), 2)
     check("sin rango, entero", len(mov.recortar_vista(d, None)), 3)
     check("fechas_de", mov.fechas_de(d["_fecha"]), (D(2026, 9, 30), D(2026, 10, 7)))
-    return fallos
-
-
-def _pruebas_regla_riel():
-    """graficos/base.py — la regla de referencia bajo el riel de la escala.
-
-    Dos cosas que el ojo no puede verificar en una captura:
-
-    1. QUE LOS RÓTULOS NO SE PISEN en ninguna ventana posible. Meses trae
-       entre 1 y 12 casilleros y Años entre 1 y 10, según cuánto los recorte
-       `bounds`, así que probar "el de hoy" (8 meses, 4 años) no dice nada
-       del día que la data llegue a doce meses.
-
-    2. QUE LOS BORDES Y LOS PERÍODOS SEAN LA MISMA COSA CONTADA DISTINTO.
-       El riel de Meses/Años para en los BORDES entre períodos (regla
-       #298), así que hay dos traducciones que tienen que cerrar: el borde
-       que cierra un período es el arranque del siguiente, y el rango que
-       sale de un par de bordes es el mismo que salía del par de períodos.
-       Si se desfasan una, el filtro se corre un mes entero sin avisar.
-
-    La cuenta de anchos usa el rótulo MÁS ANCHO de la escala para TODAS las
-    marcas, que es el peor caso: en pantalla sobra aire porque "jul" mide
-    la mitad que "may".
-    """
-    import datetime
-
-    from estado_rango import escala_a_rango, escala_periodos
-    from graficos.base import (_AIRE_ROTULO, _ANCHO_RIEL_PX, _ANCHO_ROTULO,
-                               _borde_siguiente, _indices_rotulados,
-                               _rotulo_periodos)
-
-    fallos = 0
-
-    def check(nombre, ok, detalle=""):
-        nonlocal fallos
-        if ok:
-            print(f"OK    regla riel · {nombre}")
-        else:
-            fallos += 1
-            print(f"FALLA regla riel · {nombre}: {detalle}")
-
-    # ── (1) los rótulos, centrados en su casillero ─────────────────────
-    for escala, tope in (("Meses", 12), ("Años", 10)):
-        ancho = _ANCHO_ROTULO[escala]
-        for n in range(1, tope + 1):
-            idx = _indices_rotulados(n, ancho)
-            slot = _ANCHO_RIEL_PX / n
-            check(f"{escala} n={n}: hay rótulos, en orden y dentro de rango",
-                  idx and idx == sorted(set(idx)) and idx[0] == 0
-                  and idx[-1] < n, f"idx={idx}")
-            # Todos van centrados en su casillero: medio rótulo de cada
-            # lado, sin la excepción de las puntas que tenía el modelo
-            # anterior (los rótulos ya no se pinean).
-            peor = min(((z - a) * slot - ancho, a, z)
-                       for a, z in zip(idx, idx[1:])) if len(idx) > 1 else None
-            if peor is not None:
-                check(f"{escala} n={n}: ningún par de rótulos se toca",
-                      peor[0] >= _AIRE_ROTULO,
-                      f"aire={peor[0]:.1f}px entre {peor[1]} y {peor[2]}")
-            # El primero y el último tienen que entrar ENTEROS en el riel:
-            # su centro está a media casilla del borde.
-            check(f"{escala} n={n}: los rótulos de las puntas no se cortan",
-                  slot >= ancho, f"casilla={slot:.1f}px, rótulo={ancho}px")
-
-    # ── (2) bordes ↔ períodos ──────────────────────────────────────────
-    b = (datetime.date(2024, 3, 17), datetime.date(2026, 8, 25))
-    for escala in ("Meses", "Años"):
-        paradas = escala_periodos(escala, b)
-        check(f"{escala}: el borde que cierra un período abre el siguiente",
-              all(_borde_siguiente(escala, p) == q
-                  for p, q in zip(paradas, paradas[1:])),
-              "")
-        # El borde extra del final NO existe entre las paradas: es el que
-        # le da ancho al último casillero.
-        check(f"{escala}: el borde final cae después de la última parada",
-              _borde_siguiente(escala, paradas[-1]) > paradas[-1], "")
-        # La traducción de vuelta: un par de bordes tiene que dar el mismo
-        # rango que daba el par de períodos equivalente.
-        for i, j in ((0, 0), (0, len(paradas) - 1), (1, 3)):
-            if j >= len(paradas):
-                continue
-            por_periodos = escala_a_rango(escala, paradas[i], paradas[j], b)
-            _b1 = _borde_siguiente(escala, paradas[j])
-            por_bordes = escala_a_rango(
-                escala, paradas[i], _b1 - datetime.timedelta(days=1), b)
-            check(f"{escala}: bordes [{i},{j}] dan el mismo rango que períodos",
-                  por_bordes == por_periodos,
-                  f"bordes={por_bordes} períodos={por_periodos}")
-        # UN SOLO período elegido tiene que seguir dando el período entero
-        # —que es el caso que motivó todo el cambio— y no un día suelto.
-        _uno = paradas[2] if len(paradas) > 2 else paradas[0]
-        _rango = escala_a_rango(
-            escala, _uno, _borde_siguiente(escala, _uno)
-            - datetime.timedelta(days=1), b)
-        check(f"{escala}: un período suelto abarca el período entero",
-              _rango == escala_a_rango(escala, _uno, _uno, b), str(_rango))
-
-    # Regresiones concretas, con la cuenta a la vista para que un cambio de
-    # los anchos medidos se lea como lo que es y no como un número mágico.
-    check("un año entero de Meses (12 casilleros de 19,8px) rotula 6",
-          _indices_rotulados(12, _ANCHO_ROTULO["Meses"]) == [0, 2, 4, 6, 8, 10],
-          str(_indices_rotulados(12, _ANCHO_ROTULO["Meses"])))
-    check("ocho meses entran todos",
-          _indices_rotulados(8, _ANCHO_ROTULO["Meses"]) == list(range(8)),
-          str(_indices_rotulados(8, _ANCHO_ROTULO["Meses"])))
-    check("una década de Años rotula uno por medio",
-          _indices_rotulados(10, _ANCHO_ROTULO["Años"]) == [0, 2, 4, 6, 8],
-          str(_indices_rotulados(10, _ANCHO_ROTULO["Años"])))
-    check("cuatro años entran todos",
-          _indices_rotulados(4, _ANCHO_ROTULO["Años"]) == [0, 1, 2, 3],
-          str(_indices_rotulados(4, _ANCHO_ROTULO["Años"])))
-    check("un riel sin casilleros no revienta",
-          _indices_rotulados(0, 18) == [], "")
-
-    # ── (3) el aviso de redondeo ───────────────────────────────────────
-    # El riel de Meses/Años PINTA casilleros enteros, así que con un rango
-    # más fino que la escala dibuja de más: el 31 de agosto suelto se ve
-    # como agosto entero. El caption lo canta comparando el rango que
-    # representan los casilleros contra el rango vigente — acá se fija que
-    # esa comparación distinga los dos casos, que es de lo que depende que
-    # el aviso salga cuando tiene que salir y NO salga cuando no.
-    _ago = datetime.date(2026, 8, 1)
-    _dia = (datetime.date(2026, 8, 31), datetime.date(2026, 8, 31))
-    _mes = (datetime.date(2026, 8, 1), datetime.date(2026, 8, 31))
-    _b2 = (datetime.date(2023, 1, 1), datetime.date(2026, 12, 31))
-    check("un día suelto NO es lo que pinta el casillero del mes",
-          escala_a_rango("Meses", _ago, _ago, _b2) != _dia, "")
-    check("el mes entero SÍ es lo que pinta su casillero",
-          escala_a_rango("Meses", _ago, _ago, _b2) == _mes, "")
-    # Y el caso que se lee al revés: si los datos cortan a mitad de mes, el
-    # casillero YA vale ese pedazo, así que el aviso no tiene que salir.
-    _b3 = (datetime.date(2023, 1, 1), datetime.date(2026, 8, 24))
-    check("con los datos cortados a mitad de mes no hay redondeo que avisar",
-          escala_a_rango("Meses", _ago, _ago, _b3)
-          == (datetime.date(2026, 8, 1), datetime.date(2026, 8, 24)), "")
-
-    check("el rótulo del tramo pintado lleva el año, y se abrevia si es uno",
-          [_rotulo_periodos("Meses", _ago, _ago),
-           _rotulo_periodos("Meses", datetime.date(2026, 7, 1), _ago),
-           _rotulo_periodos("Meses", datetime.date(2025, 12, 1),
-                            datetime.date(2026, 1, 1)),
-           _rotulo_periodos("Años", datetime.date(2024, 1, 1),
-                            datetime.date(2026, 1, 1))]
-          == ["ago 2026", "jul-ago 2026", "dic 2025 - ene 2026", "2024-2026"],
-          str([_rotulo_periodos("Meses", _ago, _ago),
-               _rotulo_periodos("Años", datetime.date(2024, 1, 1),
-                                datetime.date(2026, 1, 1))]))
-
     return fallos
 
 
@@ -5165,10 +4893,11 @@ def _pruebas_css_clonado():
     from graficos.compras import _css_proveedor as cssp
     clon = cssp.CSS_CP_DOCS
     n = clon.count("{")
-    # 41 el 2026-09-04. El umbral va abajo del numero real a proposito:
-    # que alguien SUME reglas a `cp_prod` no tiene por que romper el test,
-    # pero que se caigan a la mitad si.
-    check("se clonan las reglas de cp_prod (>=35)", n >= 35, n)
+    # 41 el 2026-09-04; 27 desde el 2026-10-08, cuando se fueron las 14 de
+    # la escala de tiempo vieja (regla #618). El umbral va abajo del numero
+    # real a proposito: que alguien SUME reglas a `cp_prod` no tiene por
+    # que romper el test, pero que se caigan a la mitad si.
+    check("se clonan las reglas de cp_prod (>=23)", n >= 23, n)
     check("el clon no quedo vacio", bool(clon.strip()))
     check("llaves balanceadas en el clon",
           clon.count("{") == clon.count("}"), n)
@@ -10237,19 +9966,13 @@ def main():
     fallos += _pruebas_encaje_pila()
     fallos += _pruebas_periodo_por_vista()
 
-    # ── Deteccion de anomalias en Ajuste ────────────────────────────────
-    # ── Escala de tiempo estilo tabla dinamica (estado_rango.py) ────────
-    fallos += _pruebas_escala_tiempo()
-
-    # ── La regla de referencia bajo el riel: que los rótulos no se pisen ─
-    fallos += _pruebas_regla_riel()
-
     # ── El panel del selector de fecha de las tarjetas (regla #616) ──────
     fallos += _pruebas_panel_fecha()
 
     # ── Movimientos: cada vista con su propia fecha (regla #617) ─────────
     fallos += _pruebas_fecha_por_vista()
 
+    # ── Deteccion de anomalias en Ajuste ────────────────────────────────
     fallos += _pruebas_anomalias()
 
     # ── El chip de la mini contra el corte anterior ──────────────────────

@@ -24,8 +24,8 @@ Estructura:
                           salidas). Eran DOS reportes que un chip
                           alternaba hasta el 2026-09-05 — ver regla #322.
         movimientos_comun.py → las piezas que miran los DOS parquets a la
-                          vez: la Evolución fusionada, el Comparativo
-                          (Pedido vs Baja) y el recorte por rango.
+                          vez: el recorte por rango y, sin caller desde la
+                          regla #411, el ranking de proporción dada de baja.
 
 Cómo agregar un dashboard nuevo (p.ej. "Mermas"):
     1. Crear graficos/mermas.py con `def renderizar_graficos_mermas(df, reporte, df_full=None): ...`

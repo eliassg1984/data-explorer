@@ -80,8 +80,10 @@ versión del mismo look acá adentro.
 
 Los dos builders que quedaron sin caller —`_evolucion_movimientos` y
 `_ranking_proporcion_baja`, en `graficos/movimientos_comun.py`— no se
-borraron: siguen ahí, completos y documentados, para que volver a colgarlos
-de la pila sea una línea. Lo dice también la cabecera de aquel módulo.
+borraron entonces, para que volver a colgarlos de la pila fuera una línea.
+La Evolución se borró el 2026-10-08 con la escala de tiempo vieja (regla
+#618); el ranking sigue ahí, completo y documentado. Lo dice también la
+cabecera de aquel módulo.
 
 POR QUÉ ERAN DOS REPORTES Y AHORA SON UNO. La separación tenía sentido
 mientras cada lado contestaba sólo por lo suyo. Dejó de tenerlo el

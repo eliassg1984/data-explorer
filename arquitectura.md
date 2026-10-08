@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-617 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+618 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (201)
+**CSS y estilos** (202)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -235,6 +235,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#607** — En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y «Modificar» abre también una…
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 - **#617** — Cada vista de Movimientos tiene su propia fecha, y la franja del reporte ya no dibuja…
+- **#618** — La escala de tiempo vieja se borró entera, y con ella la Evolución de Movimientos: «sin…
 
 **Layout y alturas** (88)
 
@@ -1074,7 +1075,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#615** — La merma del «Reporte de Mermas» del Almacén vale al precio de HOY, y la app la muestra así…
 - **#617** — Cada vista de Movimientos tiene su propia fecha, y la franja del reporte ya no dibuja…
 
-**Mantenimiento y trampas del lenguaje** (14)
+**Mantenimiento y trampas del lenguaje** (15)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -1090,6 +1091,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#356** — Al borrar una franja fija, lo que hay que borrar son TRES cosas: la superficie, la reserva…
 - **#408** — Un if nuevo se traga el bloque que tenía debajo, y Python no dice nada: la pila de CINCO…
 - **#595** — La venta por ÁREA DE PRODUCCIÓN: dónde se prepara, no qué grupo de la carta es
+- **#618** — La escala de tiempo vieja se borró entera, y con ella la Evolución de Movimientos: «sin…
 
 **Sin tema asignado** (2)
 
@@ -48566,6 +48568,68 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-08.)
 
+618. **La escala de tiempo vieja se borró entera, y con ella la Evolución
+     de Movimientos: «sin caller» se mide FUERA de los tests, y las guardas
+     que fallan al borrar se corrigen con su motivo, no se aflojan.**
+     2026-10-08, el mismo día en que el panel de la regla #616 la dejó sin
+     uso. Cada pieza se buscó con grep antes de borrarla.
+
+     **Qué se fue:**
+     - `graficos/base.py` (~800 líneas): `selector_escala` y sus 21
+       ayudantes —el riel, la regla de marcas bajo él, las flechas ‹ ›, el
+       arrastre con su relevo y su JS, los callbacks `_aplicar_escala*` y
+       los atajos cortos (`_ETIQ_CORTA_RANK`, `_aplicar_atajo_select`)—.
+     - `estado_rango.py` (215 líneas): `ESCALAS`, `escala_periodos`,
+       `escala_a_rango`, `escala_desde_rango` y las tres `ventana_*`.
+       `atajos_rango` se queda: es la píldora de la franja.
+     - `graficos/compras/_css_proveedor.py`: 38 reglas —24 propias y las 14
+       que `clonar_prefijo` copiaba a `cp_docs`—, con 15 `:has()` (de 45
+       quedan 30). Comparada la hoja regla por regla contra la anterior:
+       todas las que faltan son de la escala, y no cambió ninguna otra.
+     - `graficos/movimientos_comun.py`: la Evolución fusionada
+       (`_evolucion_movimientos`, sin caller desde la regla #411) con su
+       copia de 214 líneas del CSS del selector (`_CSS_SELECTOR_FECHA`, la
+       de la #320, que ya no vestía a nadie). El módulo NO se va:
+       `_rango_vigente` lo siguen importando tres módulos de Movimientos.
+       Queda también `_ranking_proporcion_baja`, sin caller desde la misma
+       #411 pero ajeno a la fecha.
+     - `test_graficos.py`: `_pruebas_escala_tiempo` y `_pruebas_regla_riel`.
+
+     **«Sin caller» se mide fuera de los tests.** `escala_a_rango` tenía
+     una veintena de llamadas en `test_graficos.py`, y las de la app
+     colgaban todas de `selector_escala`, que ya nadie llamaba: un test
+     verde sobre código que ningún usuario alcanza no prueba nada, y en un
+     grep hace que el código parezca vivo.
+
+     **Dos guardas fallaron al borrar, y las dos tenían razón:**
+     - `_pruebas_css_clonado` pedía 35 reglas clonadas o más (eran 41). El
+       clon copia TODO lo que nombra `cp_prod`, lo muerto también, así que
+       borrar CSS de Compras le baja la cuenta: quedan 27, y el umbral pasó
+       a 23 con el porqué escrito al lado. La guarda no se borra: sigue
+       cazando aquello para lo que nació, una regla de `cp_prod` que se muda
+       a un `@media` y deja de clonarse sin aviso.
+     - `_pruebas_widgets_de_fragment_escalado` falla si queda una exención
+       sin usar, y la de `mov_evo_gran` era de la Evolución borrada. Se fue
+       con ella. Al borrar una función, buscar su nombre y sus keys también
+       en las listas de excepciones de los tests.
+
+     **Los comentarios que la citaban no avisan.** Proveedor nombraba
+     `_aplicar_pan_riel` como el modelo de su relevo, Volatilidad a
+     `selector_escala` como el argumento de su key dinámica, `panel_fecha.py`
+     a `_aplicar_escala` como la explicación de la bandera; CLAUDE.md
+     listaba la key `{clave}_atajo_sel`. `test_docs.py` no ve nada de eso:
+     de CLAUDE.md verifica una lista FIJA de símbolos, y ninguno de éstos
+     estaba en ella. Se reescribieron como historia, con su número de regla;
+     lo que explicaba el código borrado sigue en las reglas #180 (la
+     bandera), #211 y #212 (la key que cambia) y #217 (el relevo).
+
+     **En Cloud no hace falta «Reboot app».** `app.py` no importa nada de
+     lo borrado ni llama a nada cuya firma cambiara (regla #357). Hasta el
+     próximo reinicio el proceso sigue con los módulos de antes, código
+     muerto incluido, y no se nota.
+
+     (2026-10-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48578,7 +48642,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#617**; la próxima toma el número siguiente.
+> última regla es la **#618**; la próxima toma el número siguiente.
 
 >
 

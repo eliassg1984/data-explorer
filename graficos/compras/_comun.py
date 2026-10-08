@@ -715,8 +715,8 @@ def documento_legible(num_documento):
 # Productos, y SUBIÓ a `graficos/base.py` el 2026-09-05, cuando lo pidió la
 # Evolución de Movimientos ("un selector de fecha, igual que el ranking de
 # proveedores"). Tercera vez que un tercero lo pide: el criterio no cambió,
-# cambió el alcance — ya no es un helper de Compras, es del proyecto, y vive
-# al lado de `selector_escala`, que es la pieza que abre adentro.
+# cambió el alcance — ya no es un helper de Compras, es del proyecto. Lo que
+# abre adentro es el panel de `graficos/panel_fecha.py` (regla #616).
 #
 # REEXPORT, no import muerto: `proveedor.py`, `producto.py` y `semanal.py`
 # siguen haciendo `from graficos.compras._comun import selector_fecha_tarjeta`
