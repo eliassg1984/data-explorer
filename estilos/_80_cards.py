@@ -4344,8 +4344,10 @@ CSS = """    /* ================================================================
         color: var(--accent-deep) !important;
     }
     [data-testid="stPopoverBody"]:has(.st-key-vh_fecha_escala_panel) {
-        width: 290px !important;
-        min-width: 290px !important;
+        /* El ancho lo pone el panel de fecha (regla #616); hasta el
+           2026-10-08 iba fijo en 290px, el del riel que reemplazó. */
+        width: auto !important;
+        min-width: 0 !important;
         padding: 12px 14px !important;
     }
     /* FRANJA DELGADA. Medido dentro de la tarjeta: la fila de controles mide

@@ -31,11 +31,12 @@ from tema import (
 )
 from cortes import MESES_ABR_ES
 from estado_rango import (ESCALAS, aplicar_atajo, asegurar_rango,
-                          atajos_rango, clave_rango,
+                          clave_rango,
                           escala_a_rango, escala_desde_rango, escala_periodos,
                           ventana_ano, ventana_decada, ventana_mes)
 import franja_fecha
 from graficos import alturas
+from graficos.panel_fecha import etiqueta_disparador, panel_fecha
 
 
 def _slug(texto):
@@ -1488,13 +1489,6 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
         # hace `rango_tarjeta` vía `asegurar_rango`, el dueño único.
         rango_tarjeta(categoria, ctx)
         ctx = {**ctx, "k_rango": k_rango_tarjeta(categoria, ctx)}
-    # De la lista completa (Todo + semana/mes/d30/año + un chip por año)
-    # sólo van los 4 relativos: "Todo" y los años sueltos se quedan en el
-    # popover de la franja, y acá el alto es el recurso escaso.
-    _claves = ("semana", "mes", "d30", "anio")
-    atajos = [a for a in atajos_rango(
-        ctx["hoy"], (ctx["fecha_min"], ctx["fecha_max"]))
-        if a[0] in _claves]
 
     with st.container(key=f"{clave}_fila"):
         # `titulo_html` OPCIONAL: el título de la tarjeta, para que comparta
@@ -1518,27 +1512,20 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
             extra()
         # El TRIGGER ES LA FECHA MISMA. Antes eran dos elementos —un botón
         # de puro ícono y, al lado, un caption con el rango— o sea el dato
-        # y su gesto separados. Sin rango todavía (media selección, o
-        # sesión recién abierta) cae a "Elegir rango": si el label quedara
+        # y su gesto separados. Desde el 2026-10-08 dice además QUÉ ATAJO
+        # está puesto («Últimos 30 días · 8 set – 7 oct»); sin rango todavía
+        # (sesión recién abierta) cae a «Elegir fechas»: si el label quedara
         # vacío no habría nada que apretar.
-        _rango = st.session_state.get(ctx["k_rango"])
-        _lbl = label or (franja_fecha.fmt_rango_es(*_rango)
-                         if (isinstance(_rango, (tuple, list))
-                             and len(_rango) == 2 and all(_rango))
-                         else "Elegir rango")
+        _lbl = label or etiqueta_disparador(ctx)
         with st.popover(_lbl, key=f"{clave}_escala",
                         use_container_width=False):
+            # EL PANEL ES UNA PIEZA PROPIA desde el 2026-10-08 (regla #616):
+            # atajos enteros, años como pestañas y meses o días como
+            # casilleros, en vez de los cuatro atajos cortos y la escala de
+            # tiempo con línea deslizante (`selector_escala`). El contenedor
+            # conserva su key, que es de donde cuelga el CSS del popover.
             with st.container(key=f"{clave}_escala_panel"):
-                if atajos:
-                    _k_at = f"{clave}_atajo_sel"
-                    _ops = {_ETIQ_CORTA_RANK.get(_ca, _et): _rg
-                            for _ca, _et, _rg in atajos}
-                    st.pills("Atajo de rango", list(_ops),
-                             selection_mode="single", key=_k_at,
-                             label_visibility="collapsed",
-                             on_change=_aplicar_atajo_select,
-                             args=(_k_at, None, _ops, ctx, bandera))
-                selector_escala(f"{clave}_esc", ctx, bandera=bandera)
+                panel_fecha(clave, ctx, bandera)
     return ctx
 
 

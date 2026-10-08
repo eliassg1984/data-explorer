@@ -19,6 +19,13 @@ from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
     clave_corte, corte_vigente, aplicar_corte, restaurar_eco,
 )
+try:
+    from estado_rango import atajos_tarjeta
+except ImportError:
+    # En Cloud, con el `estado_rango` de antes del 2026-10-08 todavía en
+    # memoria (regla #357): sin esto la app moría con un ImportError hasta
+    # el «Reboot app». Sin la función, el default cae a 30 días a mano.
+    atajos_tarjeta = None
 from cortes import cortes_disponibles, fecha_operativa
 import franja_fecha
 from graficos.compras import SEC_ABRE_EN_EL_MES
@@ -589,11 +596,22 @@ _ancla_mes_parquet = min(_hoy, _max_parquet) if _max_parquet else _hoy
 # sep». El mismo día y mes del mes anterior MÁS UN DÍA, para que sea un mes
 # y no un mes y un día; el recorte a los bounds lo sigue haciendo
 # `asegurar_rango`.
-_mes_default = (
-    (pd.Timestamp(_ancla_mes_parquet) - pd.DateOffset(months=1)
-     + pd.Timedelta(days=1)).date(),
-    _ancla_mes_parquet,
-)
+#
+# Y DESDE EL 2026-10-08 ES EL ATAJO «ÚLTIMOS 30 DÍAS» del panel de fecha
+# (regla #616), no el mes corrido: así la tarjeta abre en un atajo con
+# nombre y el botón lo dice. Son 30 días con el ancla adentro —«8 set – 7
+# oct»—; el mes corrido daba 31 o 28 según el mes, y entonces no era ningún
+# atajo. Sale de la misma función que el panel: dos cuentas del mismo
+# atajo se desincronizan.
+_mes_default = dict(
+    (_c, _r) for _c, _n, _g, _r in atajos_tarjeta(
+        _ancla_mes_parquet, (fecha_min_full, _max_parquet))
+).get("d30") if (atajos_tarjeta and fecha_min_full and _max_parquet) else None
+if _mes_default is None:
+    _mes_default = (
+        (pd.Timestamp(_ancla_mes_parquet) - pd.Timedelta(days=29)).date(),
+        _ancla_mes_parquet,
+    )
 
 # COMPRAS ABRE EN LOS ÚLTIMOS 12 MESES, y no es un default más: es la otra
 # mitad de haberle sacado el calendario a la franja (2026-09-06, a pedido).

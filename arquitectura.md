@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-615 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+616 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (199)
+**CSS y estilos** (200)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -233,8 +233,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#596** — La franja superior de contexto no lleva KPIs: dice dónde estás, no cuánto
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 - **#607** — En Nuevo Costeo lo nuevo se ANIDA, el PDF trae su detalle, y «Modificar» abre también una…
+- **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 
-**Layout y alturas** (87)
+**Layout y alturas** (88)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -323,6 +324,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#591** — El ticket de Ventas divide la venta de los canales que REGISTRAN clientes, no la venta…
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
+- **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 
 **Plotly y figuras** (110)
 
@@ -48398,6 +48400,104 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-08.)
 
+616. **El selector de fecha de las tarjetas es un panel PROPIO
+     (`st.components.v2`): atajos escritos enteros y anclados al último día
+     con datos, los años como pestañas y los meses o los días como
+     casilleros.** 2026-10-08, a pedido —«en lugar de verse como una línea
+     deslizante, que no es muy estable, que sea algo segmentado, y que diga
+     "Esta semana, Mes, 30 días, Año"»—, con la «opción A» elegida sobre un
+     mockup con las compras reales
+     (https://claude.ai/artifact/8uSazby41NyvTc68DzJuB9).
+
+     **Lo que fallaba en la escala de tiempo** (`selector_escala`, reglas
+     #211 a #222), medido en la app local con datos reales en «Compras por
+     período»:
+     - La línea vivía dentro de UN mes (Días, `ventana_mes`) o de UN año
+       (Meses, `ventana_ano`). No se podía elegir del 15 ago al 15 set ni
+       de nov 2025 a feb 2026, y el panel necesitaba la frase «el riel
+       muestra sólo oct 2026» para no mentir sobre el rango con que abría la
+       tarjeta (8 set – 7 oct). Las flechas ‹ ›, además, ELEGÍAN el mes o el
+       año entero en vez de sólo mostrarlo.
+     - Los atajos («Semana · Mes · 30 días · Año») se anclaban a
+       `date.today()` y eran un menú de acciones que volvía a «nada
+       elegido»: nada decía cuál estaba puesto, y la tarjeta abría en el mes
+       corrido, que no era ninguno («30 días» daba del 9 set al 7 oct).
+     - Cada tirador que se soltaba escalaba a `st.rerun(scope="app")`, y la
+       key del riel —que llevaba el rango adentro (#211)— lo volvía a montar
+       desde cero: es lo que se sentía inestable.
+
+     **El panel** vive en `graficos/panel_fecha.py`, con su `panel_fecha.js`
+     y su `panel_fecha.css` al lado (los lee el módulo al importarse; un
+     componente v2 sólo acepta rutas si es un paquete instalado). Lo monta
+     `selector_fecha_tarjeta` dentro del mismo popover y del mismo
+     contenedor `{clave}_escala_panel`, así que ninguna tarjeta cambió una
+     línea. Python calcula los nueve atajos (`estado_rango.atajos_tarjeta`,
+     en tres grupos: en curso, hacia atrás, completos) y se los pasa al JS
+     ya hechos —con el texto de su lista: «desde 8 set», «setiembre»—; el
+     JS sólo dibuja e interpreta los clics, y avisa con el trigger `rango`
+     (`{"a": ISO, "b": ISO}`), que `aplicar_atajo` escribe en
+     `ctx["k_rango"]` y prende la bandera de siempre. El botón dice el atajo
+     y sus fechas (`etiqueta_disparador`): «Últimos 30 días · 8 set – 7
+     oct», o las fechas con el año si no es un atajo.
+
+     **Ciclo de vida de un componente v2 dentro de un popover**, medido con
+     un prototipo (Streamlit 1.59): se MONTA al abrir el popover y se
+     DESMONTA al cerrarlo —corre la función de limpieza—, y un
+     `setTriggerValue` mandado desde esa limpieza SÍ llega a Python.
+     Abierto, cada corrida vuelve a llamar la función con `data` nuevo y el
+     DOM se conserva: no hay limpieza entre llamadas. Por eso el estado del
+     panel (qué año se ve, el primer clic de un rango) vive en su elemento
+     raíz, y lo que llega de Python no lo pisa mientras hay un aviso
+     pendiente. Un callback de componente no admite `args`: el valor se lee
+     de `st.session_state[key]["rango"]`. El desplegable toma el ancho del
+     contenido; el panel mide 506×403 px.
+
+     **Un aviso por elección.** Un atajo avisa al instante. Un mes suelto
+     espera 1,2 s —renovados mientras el cursor recorre otros casilleros, y
+     4 s al cambiar de año o de mes— para que un rango recalcule la tarjeta
+     UNA vez y no dos. Al vencer, el mes queda elegido y el clic siguiente
+     empieza de nuevo: sin eso, elegir marzo y después noviembre armaba
+     marzo-noviembre (pasó en la primera prueba). Si el panel se cierra con
+     la espera corriendo, avisa al cerrarse.
+
+     **La tarjeta abre en un atajo con nombre.** Las de un mes
+     (`SEC_ABRE_EN_EL_MES`) abren en «Últimos 30 días»: `app.py` toma su
+     `_mes_default` de `atajos_tarjeta`. Antes era el mes corrido, 28 a 31
+     días según el mes, que nunca coincidía con un atajo. El default de 12
+     meses de Compras (`periodo.ventana("12m")`) ya era «Últimos 12 meses».
+     Si se separan, el botón deja de decir el atajo: lo vigila el test.
+
+     **El desplegable deja de ir fijo en 290px**: las reglas de
+     `stPopoverBody` de `_css_proveedor.py` y de «Por hora» en
+     `_80_cards.py` pasaron a `width: auto`.
+
+     **El botón crece**: «Últimos 30 días · 8 set – 7 oct» mide 187 px
+     contra los 121 de «8 sep – 7 oct 2026». Medido a 1323 px: en la fila de «Compras por período» los cuatro
+     desplegables se angostan y sus textos se cortan («Todos los
+     proveec…»); en las demás tarjetas medidas —Proveedor, Producto,
+     Volatilidad, Documentos y Ventas › Resumen y Mix— entra sin tocar
+     nada. «Mapa por hora» conserva su rótulo corto propio (`label=`),
+     ahora con «set».
+
+     **«set», no «sep».** `franja_fecha._MESES_ES` era una lista propia que
+     decía «sep» mientras las tablas decían «set»; ahora es
+     `cortes.MESES_ABR_ES` (regla #241). Nacen `cortes.MESES_LARGOS_ES`
+     («setiembre») y `DIAS_LARGOS_ES`.
+
+     **Abrir el panel mientras la pila todavía construye secciones puede
+     cerrarlo** (visto con Playwright en el primer segundo después de
+     cargar; con la página quieta no pasa). Le pasaba igual al selector
+     viejo: es el popover, no el panel.
+
+     **En Cloud hace falta «Reboot app»** para verlo: `graficos.base` ya
+     está importado (regla #357). Hasta entonces sigue el selector viejo,
+     sin caerse: `app.py` importa `atajos_tarjeta` con un `try`, porque el
+     `estado_rango` viejo en memoria no la tiene.
+
+     Lo vigila `test_graficos.py::_pruebas_panel_fecha`.
+
+     (2026-10-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48410,7 +48510,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#615**; la próxima toma el número siguiente.
+> última regla es la **#616**; la próxima toma el número siguiente.
 
 >
 

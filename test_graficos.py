@@ -2365,7 +2365,7 @@ def _pruebas_puras():
           [_vh._fmt_rango_corto(_D(2026, 9, 1), _D(2026, 9, 24)),
            _vh._fmt_rango_corto(_D(2026, 8, 26), _D(2026, 9, 24)),
            _vh._fmt_rango_corto(_D(2025, 12, 28), _D(2026, 1, 3))],
-          ["1–24 sep 2026", "26 ago – 24 sep 2026",
+          ["1–24 set 2026", "26 ago – 24 set 2026",
            "28 dic 2025 – 3 ene 2026"])
     check("horario · el trozo no dibuja los días que no tiene",
           _vh._columnas(_p30[0], "Mes"),
@@ -3979,6 +3979,104 @@ def _pruebas_escala_tiempo():
     check("re-sembrar un rango que ya salió de la escala no lo mueve",
           vuelta, ida)
 
+    return fallos
+
+
+def _pruebas_panel_fecha():
+    """El selector de fecha de las tarjetas (regla #616): atajos y panel.
+
+    1. LOS ATAJOS CUENTAN HASTA EL ÚLTIMO DÍA CON DATOS, no hasta hoy: con
+       bounds sucios (no arrancan un 1 ni terminan a fin de mes) cada uno da
+       lo que dice su nombre, y el que no toca los datos se descarta.
+    2. LA TARJETA ABRE EN UN ATAJO CON NOMBRE. «Últimos 12 meses» es la
+       ventana con que abre Compras (`periodo.ventana("12m")`) y «Últimos
+       30 días» el default de las tarjetas de un mes, que `app.py` toma de
+       esta misma función. Si se separan, el botón deja de decir el atajo.
+    3. EL PANEL ES UNA PIEZA PROPIA y el selector la monta: sin `:has()` en
+       su CSS, sin atajos calculados en el JS (los manda Python) y sin la
+       escala de tiempo vieja adentro de `selector_fecha_tarjeta`.
+    """
+    import ast
+    import datetime
+    from pathlib import Path
+
+    from estado_rango import atajo_de, atajos_tarjeta, meses_atras
+    from graficos import periodo
+    from graficos.panel_fecha import etiqueta_de
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    panel fecha · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA panel fecha · {nombre}: got={got!r} exp={exp!r}")
+
+    D = datetime.date
+    b = (D(2024, 3, 17), D(2026, 8, 25))          # el 25 es martes
+    at = {c: r for c, _n, _g, r in atajos_tarjeta(D(2026, 8, 25), b)}
+    check("esta semana arranca el lunes", at["semana"], (D(2026, 8, 24), D(2026, 8, 25)))
+    check("este mes", at["mes"], (D(2026, 8, 1), D(2026, 8, 25)))
+    check("este año", at["anio"], (D(2026, 1, 1), D(2026, 8, 25)))
+    check("30 días son 30 con el ancla adentro", at["d30"], (D(2026, 7, 27), D(2026, 8, 25)))
+    check("3 meses", at["m3"], (D(2026, 5, 26), D(2026, 8, 25)))
+    check("12 meses", at["m12"], (D(2025, 8, 26), D(2026, 8, 25)))
+    check("mes pasado entero", at["mes_ant"], (D(2026, 7, 1), D(2026, 7, 31)))
+    check("año pasado entero", at["anio_ant"], (D(2025, 1, 1), D(2025, 12, 31)))
+    check("todo = los datos", at["todo"], b)
+    check("orden de los nueve",
+          [c for c, *_ in atajos_tarjeta(D(2026, 8, 25), b)],
+          ["semana", "mes", "anio", "d30", "m3", "m12", "mes_ant", "anio_ant", "todo"])
+    check("el ancla no pasa los datos",
+          dict((c, r) for c, _n, _g, r in atajos_tarjeta(D(2026, 9, 30), b))["mes"],
+          (D(2026, 8, 1), D(2026, 8, 25)))
+    nuevo = {c: r for c, _n, _g, r in atajos_tarjeta(D(2026, 8, 25), (D(2026, 2, 10), D(2026, 8, 25)))}
+    check("sin datos del año pasado no se ofrece", "anio_ant" in nuevo, False)
+    check("12 meses recortado al primer día con datos", nuevo["m12"], (D(2026, 2, 10), D(2026, 8, 25)))
+    check("meses_atras recorta el día (31 mar → 28 feb)", meses_atras(D(2026, 3, 31), 1), D(2026, 2, 28))
+    check("meses_atras en bisiesto", meses_atras(D(2024, 3, 31), 1), D(2024, 2, 29))
+    check("sin bounds no hay atajos", atajos_tarjeta(D(2026, 8, 25), None), [])
+
+    v12 = periodo.ventana("12m", D(2026, 8, 25), minimo=b[0])
+    check("«Últimos 12 meses» == la ventana con que abre Compras",
+          at["m12"], (v12[0].date(), v12[1].date()))
+    app = (Path(__file__).parent / "app.py").read_text(encoding="utf-8")
+    check("las tarjetas de un mes abren en «Últimos 30 días» (app.py)",
+          "atajos_tarjeta(" in app and '.get("d30")' in app, True)
+
+    lista = atajos_tarjeta(D(2026, 8, 25), b)
+    check("atajo_de reconoce el rango exacto", atajo_de(at["d30"], lista), "d30")
+    check("atajo_de: un día de más ya no es atajo",
+          atajo_de((D(2026, 7, 26), D(2026, 8, 25)), lista), None)
+    lunes_1 = atajos_tarjeta(D(2026, 6, 1), b)   # lunes 1: semana == mes
+    check("dos atajos iguales: gana el primero",
+          atajo_de((D(2026, 6, 1), D(2026, 6, 1)), lunes_1), "semana")
+
+    ctx = {"fecha_min": b[0], "fecha_max": b[1], "hoy": D(2026, 8, 26), "k_rango": "x"}
+    check("botón con atajo", etiqueta_de(at["d30"], ctx), "Últimos 30 días · 27 jul – 25 ago")
+    check("botón con atajo que cruza de año", etiqueta_de(at["m12"], ctx),
+          "Últimos 12 meses · 26 ago 2025 – 25 ago 2026")
+    check("botón con mes pasado", etiqueta_de(at["mes_ant"], ctx), "Mes pasado · julio")
+    check("botón sin atajo: fechas con año",
+          etiqueta_de((D(2026, 7, 15), D(2026, 8, 25)), ctx), "15 jul – 25 ago 2026")
+    check("botón sin rango", etiqueta_de(None, ctx), "Elegir fechas")
+
+    raiz = Path(__file__).parent / "graficos"
+    css = (raiz / "panel_fecha.css").read_text(encoding="utf-8")
+    js = (raiz / "panel_fecha.js").read_text(encoding="utf-8")
+    check("el CSS del panel no usa :has()", ":has(" in css, False)
+    check("el JS exporta la función del componente", "export default function" in js, True)
+    check("el JS no calcula atajos (los manda Python)", "Últimos" in js, False)
+    arbol = ast.parse((raiz / "base.py").read_text(encoding="utf-8"))
+    sel = next(n for n in arbol.body
+               if isinstance(n, ast.FunctionDef) and n.name == "selector_fecha_tarjeta")
+    llamadas = {n.func.id for n in ast.walk(sel)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    check("selector_fecha_tarjeta monta el panel", "panel_fecha" in llamadas, True)
+    check("selector_fecha_tarjeta ya no dibuja la escala vieja",
+          "selector_escala" in llamadas, False)
     return fallos
 
 
@@ -10058,6 +10156,9 @@ def main():
 
     # ── La regla de referencia bajo el riel: que los rótulos no se pisen ─
     fallos += _pruebas_regla_riel()
+
+    # ── El panel del selector de fecha de las tarjetas (regla #616) ──────
+    fallos += _pruebas_panel_fecha()
 
     fallos += _pruebas_anomalias()
 

@@ -1216,11 +1216,11 @@ CSS = """        <style>
         [data-testid="stPopoverBody"]:has(.st-key-cp_prod_escala_panel),
         [data-testid="stPopoverBody"]:has(.st-key-cp_sem_escala_panel),
         [data-testid="stPopoverBody"]:has(.st-key-cp_vol_escala_panel) {
-            /* 290px es el ancho MINIMO util del riel: con menos, las
-               etiquetas de las paradas de "Meses" (ene 24 ... ago 26) se
-               encabalgan y el slider deja de leerse. */
-            width: 290px !important;
-            min-width: 290px !important;
+            /* El ancho lo pone el panel (graficos/panel_fecha.css, regla
+               #616). Hasta el 2026-10-08 iba fijo en 290px, el mínimo útil
+               del riel de la escala de tiempo que el panel reemplazó. */
+            width: auto !important;
+            min-width: 0 !important;
             padding: 12px 14px !important;
         }
         /* La granularidad ocupa el ancho y reparte en tres. Sin esto el

@@ -246,6 +246,95 @@ def atajos_rango(hoy, bounds):
 
 
 # ===========================================================================
+# LOS ATAJOS DEL SELECTOR DE FECHA DE UNA TARJETA (2026-10-08, regla #616)
+# ===========================================================================
+# Los del panel de `graficos/panel_fecha.py`, la «opción A» que eligió el
+# usuario sobre un mockup: escritos enteros y agrupados por lo que significan.
+# Se distinguen de `atajos_rango` (los de la píldora de la franja) en el ANCLA:
+# cuentan hasta el ÚLTIMO DÍA CON DATOS, no hasta hoy. Con el ancla en hoy,
+# «Últimos 30 días» daba del 9 set al 7 oct (29 días de datos) y la tarjeta
+# abría en «8 sep – 7 oct», que no era ningún atajo: nada podía decir cuál
+# estaba puesto. Con este ancla, la tarjeta ABRE en un atajo con nombre — las
+# de un mes en «Últimos 30 días» y el reporte de Compras en «Últimos 12
+# meses» (`app.py` toma los dos de acá).
+#
+# (clave, nombre, grupo), en el orden en que se muestran.
+ATAJOS_TARJETA = (
+    ("semana", "Esta semana", "En curso"),
+    ("mes", "Este mes", "En curso"),
+    ("anio", "Este año", "En curso"),
+    ("d30", "Últimos 30 días", "Hacia atrás"),
+    ("m3", "Últimos 3 meses", "Hacia atrás"),
+    ("m12", "Últimos 12 meses", "Hacia atrás"),
+    ("mes_ant", "Mes pasado", "Completos"),
+    ("anio_ant", "Año pasado", "Completos"),
+    ("todo", "Todo el histórico", "Completos"),
+)
+
+
+def meses_atras(d, n):
+    """`d` corrido `n` meses atrás, con el día recortado al último del mes
+    (31 mar → 28 feb). Es la cuenta de `pd.DateOffset(months=n)`, la que usa
+    `graficos/periodo.py::ventana`: «Últimos 12 meses» tiene que dar lo
+    mismo que la ventana de 12 meses con que abre Compras."""
+    t = d.year * 12 + (d.month - 1) - n
+    y, m = divmod(t, 12)
+    m += 1
+    return datetime.date(y, m, min(d.day, _fin_de_mes(datetime.date(y, m, 1)).day))
+
+
+def atajos_tarjeta(ancla, bounds):
+    """`[(clave, nombre, grupo, (ini, fin))]` anclados a `ancla`, el último
+    día con datos, y recortados a `bounds`. Se descarta el que no toca los
+    datos (el año pasado de un parquet que empieza este año).
+
+    Los «hacia atrás» terminan en el ancla y arrancan el día siguiente al de
+    hace N: 30 días son 30 días con el ancla adentro. Los «en curso» van del
+    1 (o del lunes) al ancla. Los «completos», el período entero."""
+    if not (bounds and all(bounds)) or ancla is None:
+        return []
+    min_b, max_b = bounds
+    if min_b > max_b:
+        return []
+    ancla = min(max(ancla, min_b), max_b)
+    un_dia = datetime.timedelta(days=1)
+    ini_mes = ancla.replace(day=1)
+    fin_mes_ant = ini_mes - un_dia
+    crudos = {
+        "semana": (ancla - datetime.timedelta(days=ancla.weekday()), ancla),
+        "mes": (ini_mes, ancla),
+        "anio": (datetime.date(ancla.year, 1, 1), ancla),
+        "d30": (ancla - datetime.timedelta(days=29), ancla),
+        "m3": (meses_atras(ancla, 3) + un_dia, ancla),
+        "m12": (meses_atras(ancla, 12) + un_dia, ancla),
+        "mes_ant": (fin_mes_ant.replace(day=1), fin_mes_ant),
+        "anio_ant": (datetime.date(ancla.year - 1, 1, 1),
+                     datetime.date(ancla.year - 1, 12, 31)),
+        "todo": (min_b, max_b),
+    }
+    salida = []
+    for clave, nombre, grupo in ATAJOS_TARJETA:
+        ini, fin = crudos[clave]
+        if fin < min_b or ini > max_b:
+            continue
+        salida.append((clave, nombre, grupo, (max(ini, min_b), min(fin, max_b))))
+    return salida
+
+
+def atajo_de(rango, atajos):
+    """La clave del atajo que es EXACTAMENTE `rango`, o None. Si dos
+    coinciden (el lunes 1, «Esta semana» y «Este mes» son el mismo día), el
+    primero en el orden de `ATAJOS_TARJETA`."""
+    if not (isinstance(rango, (tuple, list)) and len(rango) == 2 and all(rango)):
+        return None
+    par = (min(rango), max(rango))
+    for clave, _nombre, _grupo, r in atajos:
+        if r == par:
+            return clave
+    return None
+
+
+# ===========================================================================
 # ESCALA — el mismo rango, elegido como PERÍODOS en vez de como dos fechas
 # ===========================================================================
 # 2026-08-25, a pedido ("el selector de rango de una tabla dinámica de

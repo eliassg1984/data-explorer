@@ -540,7 +540,9 @@ def _fmt_rango_corto(ini, fin):
     minúscula y con el año entero, como el resto de los selectores de fecha
     (`franja_fecha.fmt_rango_es`)."""
     def _m(f):
-        return _MESES_ES[f.month - 1].lower()
+        # La lista de todo el repo (regla #241): «set», como el panel de
+        # fecha que este botón abre (regla #616), y no el «sep» de la otra.
+        return cortes.MESES_ABR_ES[f.month - 1]
     if ini.year != fin.year:
         return (f"{ini.day} {_m(ini)} {ini.year} – "
                 f"{fin.day} {_m(fin)} {fin.year}")

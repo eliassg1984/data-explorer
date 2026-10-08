@@ -46,6 +46,18 @@ meses en español. Ésta nació capitalizada y privada en
 cuando el drill Semanal de Compras pidió la misma cosa. En minúscula, como
 sus vecinas — quien quiera «Sáb» tiene `.capitalize()`."""
 
+MESES_LARGOS_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio",
+                   "julio", "agosto", "setiembre", "octubre", "noviembre",
+                   "diciembre")
+"""Los mismos meses, enteros: «Del 8 de setiembre al 7 de octubre». Con
+«setiembre» y no «septiembre» para que la abreviatura siga siendo «set».
+Nació con el panel del selector de fecha de las tarjetas (2026-10-08,
+`graficos/panel_fecha.py`, regla #616)."""
+
+DIAS_LARGOS_ES = ("lunes", "martes", "miércoles", "jueves", "viernes",
+                  "sábado", "domingo")
+"""Día de semana entero, indexado por `date.weekday()`. Ver `MESES_LARGOS_ES`."""
+
 DIA_CIERRE_OPERATIVO = 6
 """Hasta qué día del mes un cierre de inventario es del mes ANTERIOR.
 

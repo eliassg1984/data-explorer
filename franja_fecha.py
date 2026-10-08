@@ -35,12 +35,14 @@ from estado_rango import (
     atajos_rango, aplicar_atajo, clave_modo, modo_fecha, aplicar_corte,
     alternar_corte, volver_a_rango, MODOS_FECHA,
 )
-from cortes import corte_contiguo
+from cortes import MESES_ABR_ES, corte_contiguo
 
 _CLAVE_CTX = "_franja_fecha_ctx"
 
-_MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun",
-             "jul", "ago", "sep", "oct", "nov", "dic"]
+# La lista de meses de todo el repo (regla #241). Hasta el 2026-10-08 había
+# acá una propia que decía «sep» mientras las tablas decían «set»; el panel
+# nuevo del selector de fecha (regla #616) dejó a la vista las dos a la vez.
+_MESES_ES = MESES_ABR_ES
 
 
 def fmt_rango_es(ini, fin):

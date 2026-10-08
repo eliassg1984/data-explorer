@@ -747,8 +747,11 @@ selector, solo afectaba a su tarjeta». Ver `arquitectura.md` regla #363.
 viven los dos en la cabecera de la tarjeta, y en Volatilidad están los dos
 en la misma fila:
 
-- El **trigger con el rango escrito** (`1 sep – 5 sep 2026`) —
-  `base.py::selector_fecha_tarjeta`. Escribe la clave de SU sección.
+- El **botón con el atajo y sus fechas** («Últimos 30 días · 8 set – 7
+  oct», o las fechas solas si no es un atajo) —
+  `base.py::selector_fecha_tarjeta`. Escribe la clave de SU sección. Abre
+  el panel de `graficos/panel_fecha.py` (ver «El selector de fecha de una
+  tarjeta», más abajo).
 - El **desplegable `Rango / 3m / 12m / 24m / Todo`** — `graficos/periodo.py`.
   Es la ventana relativa de esa tarjeta, y siempre fue por tarjeta.
 
@@ -766,9 +769,11 @@ rango compartido y el bug reaparece en una sola vista. Lo ataja
 **Con qué rango ABRE cada tarjeta es otra cosa.** El default del reporte
 son los últimos 12 meses; una categoría puede pedir otro sumándose a
 `SEC_ABRE_EN_EL_MES` (`graficos/compras/_comun.py`) — hoy Proveedores,
-Producto y Semanal, que abren en un MES CORRIDO hasta el último día con
-compras («11 ago – 10 sep»), no en «lo que va del mes»: a pedido, «como
-mínimo un mes» (Volatilidad sigue en los 12 meses). El mes lo calcula `app.py` y
+Producto y Semanal, que abren en «Últimos 30 días» hasta el último día con
+compras («8 set – 7 oct»), no en «lo que va del mes»: a pedido, «como
+mínimo un mes» (Volatilidad sigue en los 12 meses). Hasta el 2026-10-08
+era el mes corrido («11 ago – 10 sep», 28 a 31 días); pasó a ser el atajo
+para que el botón diga cuál está puesto (regla #616). El rango lo calcula `app.py` y
 lo publica en `rango_default_cat`; quien elige es `base.py::rango_tarjeta`,
 y tiene que ser ahí: esa función la llaman el trigger Y el recorte del
 dispatcher, y el recorte corre PRIMERO. Poner el default en el selector no
@@ -1084,41 +1089,44 @@ alterna. "Varios" nombra la unidad elegida; el verbo (suma) va en el
 caption de la lista, no en la pastilla. `_fusionar` une N cortes en un estado con la misma forma que uno,
 así el filtro `isin(dias)` no distingue el caso.
 
-Y desde el 2026-08-25 hay una tercera forma de tocar ese MISMO rango: la
-**escala de tiempo** estilo tabla dinámica de Excel — granularidad
-(Días/Meses/Años) + un riel de dos tiradores. Vive en el popover del ícono
-de calendario de la fila de atajos del Ranking de Proveedores. No es un
-filtro paralelo: `estado_rango.escala_periodos/escala_a_rango/
-escala_desde_rango` sólo TRADUCEN el gesto, y la escritura sigue pasando
-por `aplicar_atajo`. El widget reusable es
-`graficos.base.selector_escala()`, así que sumarlo a otra vista es una
-línea. En Días, además, se puede arrastrar la SELECCIÓN entera (sin cambiar
-su ancho) agarrando el tramo coloreado del medio — "como el slider de
-Excel". Sus trampas —el `rerun` que le borra el estado a los widgets del
-fragment, que borrar la clave no resetea un widget, y las dos de puppetear
-un widget ajeno desde JS (un `st.text_input` no confirma con
-`input`/`change`, sólo con un Enter real; y los dos `<input>` de un slider
-de rango no se pueden escribir uno-tras-otro)— están en `arquitectura.md`
-reglas #211 a #213 y #217 a #218.
-
-**El riel se abre por VENTANA, no sobre el histórico entero**
-(2026-08-26). Cada escala mira UN período de la escala de arriba: Días un
-mes (`estado_rango.ventana_mes`), Meses un año (`ventana_ano`), Años una
-década (`ventana_decada`). Con ~970 días —o 44 meses— en 250px no se puede
-elegir una fecha. La ventana se RECORTA a los datos, así que la cabecera
-dice "2023-2026" y no "2020-2029": mismo criterio que `escala_periodos` con
-el año del borde, no prometer períodos vacíos. La cabecera
-`‹ AGO 2026 ›` / `‹ 2026 ›` / `‹ 2023-2026 ›` dice cuál se ve y la cambia;
-en Días la regla de abajo numera los días del mes. Ir a otra
-ventana la SELECCIONA entera: el valor de un slider tiene que caer dentro
-de sus límites, así que una vista sin selección adentro no se puede
-representar. Y si el rango vigente se sale de la ventana, el caption lo
-canta — el riel lo dibuja apoyado en el borde, pero nunca lo reescribe
-solo. Ver reglas #219 y #222.
-
 `aplicar_corte` escribe el corte **y** el rango — el rango lo leen el
 `date_input`, el label del pill y el loader de R2, que no saben qué es un
 corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
+
+## El selector de fecha de una tarjeta: un panel propio
+
+Las tarjetas de Compras y de Ventas eligen sus fechas con un botón propio
+(`base.py::selector_fecha_tarjeta`), que escribe el rango de su sección
+—o el de la franja, si no tiene categoría—. Desde el 2026-10-08 abre un
+**panel propio**, `graficos/panel_fecha.py` + su
+`.js` y su `.css`: la «opción A» que eligió el usuario sobre un mockup.
+Atajos escritos enteros y agrupados (en curso / hacia atrás / completos),
+los años como pestañas y los meses —o, con «Días», un calendario— como
+casilleros: un clic elige un mes y un clic en otro suma los del medio,
+aunque estén en años distintos. Regla #616.
+
+- **Es un `st.components.v2`**: HTML/CSS/JS sin compilar y SIN iframe, con
+  los estilos en un shadow root que hereda las variables de
+  `estilos/_00_base.py`. A Python le llega sólo el trigger `rango`, que
+  `aplicar_atajo` escribe en la clave de siempre: no es un filtro paralelo.
+- **Los atajos los calcula Python** (`estado_rango.atajos_tarjeta`) y
+  cuentan hasta el ÚLTIMO DÍA CON DATOS, no hasta hoy: así la tarjeta abre
+  en un atajo con nombre y el botón lo dice. `app.py` saca de ahí el
+  default de las tarjetas de un mes («Últimos 30 días»); el de 12 meses de
+  Compras ya coincidía con «Últimos 12 meses».
+- **Un aviso por elección**: un mes suelto espera 1,2 s (y se renueva
+  mientras el cursor recorre otros meses) para que un rango recalcule la
+  tarjeta UNA vez y no dos. Al vencer, el mes queda elegido y el clic
+  siguiente empieza de nuevo. Si el panel se cierra con la espera
+  corriendo, avisa al cerrarse.
+- **Ciclo de vida, medido**: se monta al abrir el popover y se desmonta al
+  cerrarlo; abierto, cada corrida le vuelve a llamar la función con los
+  datos nuevos sin rehacer el DOM. El estado del panel vive en su raíz.
+
+Reemplazó a la **escala de tiempo** con línea deslizante
+(`selector_escala`, reglas #211-#222): su línea vivía dentro de UN mes o de
+UN año —no se podía elegir un rango que cruzara de mes—, sus atajos se
+anclaban a hoy y cada tirador recalculaba la página entera.
 
 ## Plotly — específicos de este proyecto
 

@@ -1,0 +1,123 @@
+/* Panel del selector de fecha de las tarjetas (regla #616).
+   Vive en el shadow root del componente (graficos/panel_fecha.py): ninguna
+   regla de acá sale del panel, y ninguna de estilos/ entra. Los colores son
+   las variables de estilos/_00_base.py, que SÍ cruzan el shadow root (una
+   propiedad personalizada se hereda como cualquier otra). Ningún selector
+   :has, por la regla #469 (lo vigila test_graficos.py). */
+
+.pf {
+  width: 476px;
+  max-width: calc(100vw - 72px);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.pf button { font: inherit; }
+.pf button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.pa { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 14px; }
+
+/* Atajos: el nombre a la izquierda, dónde empieza a la derecha. */
+.pa-atajos {
+  display: flex; flex-direction: column; gap: 8px;
+  padding-right: 12px; border-right: 1px solid var(--line-soft);
+}
+.grupo { display: flex; flex-direction: column; gap: 1px; }
+.grupo-tit {
+  padding: 0 8px 2px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted);
+}
+.atajo {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  border: 0; border-radius: 8px; padding: 5px 8px; text-align: left;
+  background: transparent; color: var(--text-primary); cursor: pointer;
+}
+.atajo:hover { background: var(--bg-primary); }
+.at-nom { font-size: 13px; font-weight: 500; white-space: nowrap; }
+.at-f { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.atajo[aria-pressed="true"] { background: var(--accent-light); color: var(--accent-deep); }
+.atajo[aria-pressed="true"] .at-nom { font-weight: 600; }
+.atajo[aria-pressed="true"] .at-f { color: var(--accent-deep); }
+
+/* Meses | Días */
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.seg button { border: 0; background: var(--bg-card); color: var(--text-secondary); padding: 5px 8px; font-size: 12.5px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--accent-light); color: var(--accent-deep); font-weight: 600; }
+
+/* Los años: pestañas de lo que se VE. */
+.anios {
+  display: flex; margin: 10px 0 8px; border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: none;
+}
+.anios::-webkit-scrollbar { display: none; }
+.anios button {
+  flex: 1 0 auto; min-width: 46px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: transparent; color: var(--text-secondary); padding: 6px 4px 7px; font-size: 13px; cursor: pointer;
+}
+.anios button:hover { color: var(--text-primary); }
+.anios button[aria-pressed="true"] { color: var(--accent-deep); font-weight: 600; border-bottom-color: var(--accent); }
+.anios button.con-sel::after {
+  content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 5px;
+  border-radius: 50%; background: var(--accent); vertical-align: middle;
+}
+
+.nav { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 6px; }
+.nav-tit { font-size: 13px; font-weight: 600; }
+.flecha {
+  width: 28px; height: 28px; display: grid; place-items: center; padding: 0;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-secondary); cursor: pointer;
+}
+.flecha svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.flecha:disabled { opacity: .35; cursor: default; }
+
+/* Casilleros: meses y días. */
+.cel {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: 8px; padding: 0;
+  background: var(--bg-primary); color: var(--text-primary); cursor: pointer; line-height: 1.15;
+  transition: background-color .12s, border-color .12s;
+}
+.cel small { margin-top: 2px; font-size: 10px; color: var(--text-muted); }
+.cel:hover:not(:disabled) { border-color: var(--border-lavender); }
+.cel:disabled { background: transparent; color: var(--text-muted); opacity: .55; cursor: default; }
+.cel.previa:not(.en) { background: var(--accent-tint); border: 1px dashed var(--border-lavender); }
+.cel.en { background: var(--accent-light); color: var(--accent-deep); }
+.cel.en small { color: var(--accent-deep); }
+.cel.en.parcial { background: var(--accent-tint); border: 1px dashed var(--border-lavender); }
+.cel.en.ini, .cel.en.fin { background: var(--accent); color: var(--bg-card); border: 1px solid var(--accent); }
+.cel.en.ini small, .cel.en.fin small { color: var(--bg-card); opacity: .85; }
+.cel.ancla { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--accent); }
+
+.g-meses { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.g-meses .cel { height: 44px; font-size: 13px; }
+
+.cal-sem, .cal-dias { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-sem span { padding: 2px 0; text-align: center; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.cal-dias .cel { height: 30px; font-size: 12.5px; border-radius: 7px; background: transparent; }
+.cal-dias .cel.en { background: var(--accent-light); }
+.cal-dias .cel.en.ini, .cal-dias .cel.en.fin { background: var(--accent); }
+.cel.ultimo { position: relative; }
+.cel.ultimo::after {
+  content: ""; position: absolute; bottom: 3px; left: 50%; width: 4px; height: 4px; margin-left: -2px;
+  border-radius: 50%; background: currentColor;
+}
+
+.pista { margin: 8px 0 0; min-height: 2.7em; font-size: 11.5px; color: var(--text-secondary); }
+.pie { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line-soft); }
+.pie-rango { margin: 0; font-size: 13px; }
+.pie-nota { margin: 2px 0 0; font-size: 11.5px; color: var(--text-muted); }
+
+@media (max-width: 600px) {
+  .pa { grid-template-columns: minmax(0, 1fr); }
+  .pa-atajos {
+    flex-direction: row; flex-wrap: wrap; gap: 4px 10px;
+    padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--line-soft);
+  }
+  .pa-atajos .grupo { flex: 1 1 150px; }
+  .atajo { flex-wrap: wrap; column-gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cel { transition: none; }
+}
