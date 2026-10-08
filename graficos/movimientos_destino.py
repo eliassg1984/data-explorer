@@ -263,19 +263,62 @@ def _fila_pct(mes, mes_ant, rot_ant):
             f'border-top:1px solid {GRIS_BORDE}">{filas}</table>')
 
 
+_K_FECHAS = "mov_destino_fechas"
+_K_FRANJA = "_mov_destino_franja"
+
+
+def _rango_propio():
+    """`(inicio, fin exclusivo)` de la tarjeta, de su PROPIO calendario
+    (2026-10-08, a pedido: «debería tener un selector de fecha»).
+
+    Abre en el rango de la franja y lo SIGUE mientras el usuario no elija
+    otro acá: cuando la franja cambia, el calendario se vuelve a sembrar con
+    ella —antes de dibujarlo, que es cuando se puede escribir su key—. Un
+    rango elegido acá vale hasta que se mueva la franja. Entre el primer y
+    el segundo clic del calendario hay una sola fecha: se lee como un día.
+    Desde `kardex.INICIO`: antes no hay movimientos."""
+    ss = st.session_state
+    franja = _rango_vigente()
+    if franja:
+        sem = (max(franja[0].date(), kardex.INICIO),
+               (franja[1] - pd.Timedelta(days=1)).date())
+        if sem[1] < sem[0]:
+            sem = (kardex.INICIO, sem[1]) if sem[1] >= kardex.INICIO else None
+        if sem and ss.get(_K_FRANJA) != sem:
+            ss[_K_FRANJA] = sem
+            ss[_K_FECHAS] = sem
+    if _K_FECHAS not in ss:
+        hoy = pd.Timestamp.today().date()
+        ss[_K_FECHAS] = (max(hoy.replace(day=1), kardex.INICIO), hoy)
+    sel = st.date_input(
+        "Fechas de esta tarjeta", key=_K_FECHAS, min_value=kardex.INICIO,
+        format="DD/MM/YYYY", label_visibility="collapsed",
+        help=("Las fechas de ESTA tarjeta. Abre en las de la franja de "
+              "arriba y las sigue mientras no elijas otras acá."))
+    sel = tuple(sel) if isinstance(sel, (list, tuple)) else (sel,)
+    if not sel:
+        return None
+    ini, fin = pd.Timestamp(sel[0]), pd.Timestamp(sel[-1])
+    return ini, fin + pd.Timedelta(days=1)
+
+
 def tarjeta_destino(fam_sel=(), anios=1):
     """La sección entera. `fam_sel` es el chip Familia de la franja;
     `anios`, si se compara con el año pasado (lo elige el panel «Filtros»
     para todas las secciones de salidas: acá, uno o dos es lo mismo)."""
     with st.container(border=True, key=CARD):
         st.markdown(CSS_TITULOS_DRILL, unsafe_allow_html=True)
-        st.markdown('<div class="inv-rank-tit">A dónde fue lo que entró</div>',
-                    unsafe_allow_html=True)
-        rng = _rango_vigente()
+        # columnas-internas: el título y el calendario propio en un renglón.
+        c_tit, c_fecha = st.columns([3, 1], vertical_alignment="bottom")
+        with c_tit:
+            st.markdown('<div class="inv-rank-tit">A dónde fue lo que entró'
+                        '</div>', unsafe_allow_html=True)
+        with c_fecha:
+            rng = _rango_propio()
         rk = _rango_kardex(rng) if rng else None
         if rk is None:
-            st.info("El kardex empieza en enero de 2025: elegí un rango "
-                    "desde ahí en la franja de arriba.")
+            st.info("El kardex empieza en enero de 2025: elegí fechas desde "
+                    "ahí.")
             return
         desde, hasta = rk
         kx = data.movimientos_kardex_mes(desde, hasta)
@@ -320,7 +363,7 @@ def tarjeta_destino(fam_sel=(), anios=1):
             "U.": t["unidad"].fillna(""),
             "Entró": t["entro"], "Vendido": t["vendido"],
             "En preparaciones": t["prep"], "Baja": t["baja"],
-            "S/ baja": t["baja_val"], "Otras salidas": t["otras"],
+            "Baja S/": t["baja_val"], "Otras salidas": t["otras"],
             "Ajuste": t["ajuste"], "Δ stock": t["quedo"],
             "% baja": t["pct_baja"].fillna(np.inf),
         })
@@ -338,7 +381,7 @@ def tarjeta_destino(fam_sel=(), anios=1):
         fmt_cols = {c: (lambda v: _fmt(v, 1)) for c in (
             "Entró", "Vendido", "En preparaciones", "Baja", "Otras salidas",
             "Ajuste", "Δ stock")}
-        fmt_cols["S/ baja"] = lambda v: _fmt(v, 0)
+        fmt_cols["Baja S/"] = lambda v: _fmt(v, 0)
         for c in tabla.columns:
             if c.startswith("% baja"):
                 fmt_cols[c] = lambda v: "—" if not np.isfinite(v) else f"{v:.1f} %"
@@ -362,6 +405,15 @@ def tarjeta_destino(fam_sel=(), anios=1):
                                          minimo=0)),
             column_config={
                 "Producto": st.column_config.TextColumn(width="medium"),
+                "Baja": st.column_config.Column(
+                    help="Lo dado de baja en el rango, en la unidad del "
+                         "producto (columna U.): las notas de salida del tipo "
+                         "«Bajas»."),
+                "Baja S/": st.column_config.Column(
+                    help="Lo mismo, en soles: lo que valía lo que se dio de "
+                         "baja, a su precio promedio del kardex el día de la "
+                         "nota (el valor de la nota de salida). La tabla va "
+                         "ordenada por esta columna."),
                 "Δ stock": st.column_config.Column(
                     help="Entró − vendido − en preparaciones − notas de "
                          "salida + ajuste: cuánto cambió el stock. Negativo, "

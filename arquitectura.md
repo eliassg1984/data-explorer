@@ -48300,6 +48300,27 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      otro código o stock de antes), así que el % de 2025 se lee con
      cuidado.
 
+     **Partir por área, por tipo o por producto** (el mismo día, a
+     pedido: «¿tengo alguna forma de ver por tipo de salida?» y «desde la
+     perspectiva de productos»). Un selector en la cabecera de «Salidas por
+     período»: los tramos de la barra son las áreas (3 y «Resto»), los tipos
+     de descargo (4) o los productos (4: con cinco la fila de KPI partía en
+     dos renglones a 1323px). `trazas_por_area(col=, n_traza=)` es la misma
+     cuenta con otra columna; los colores salen del orden en el HISTÓRICO,
+     para que un tipo no cambie de color con el rango. Con tipo o producto
+     el Resumen lleva una columna por tramo (`tabla_resumen(tramos=True)`,
+     la lista viaja en `filas.attrs["tramos"]`) y esconde «Áreas» y «% del
+     total» para entrar. Los tipos y productos se escriben como el Almacén:
+     en oración, «(P) Calamar» sería «(p) calamar» (`nombre_tramo`).
+
+     **«Destino de lo que entra» tiene su propio calendario**
+     (`movimientos_destino._rango_propio`): abre en el rango de la franja y
+     lo sigue —se vuelve a sembrar cuando la franja cambia, antes de
+     dibujar el widget— mientras no se elija otro ahí. «Baja S/» (antes «S/
+     baja», que no se entendía) es el valor de la nota de salida: la
+     cantidad a su precio promedio del kardex ese día; la tabla va ordenada
+     por ella.
+
      Lo vigila `test_graficos.py::_pruebas_salidas_comparar_y_destino`.
      Nada de esto cambia `salidas.parquet`.
 

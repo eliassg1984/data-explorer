@@ -177,7 +177,7 @@ no se lee. La fila TOTAL trae el texto ya escrito desde Python."""
 
 def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                             rotulo_docs="Requerimientos", ver_variacion=True,
-                            total=None, rotulo_ant=""):
+                            total=None, rotulo_ant="", tramos=()):
     """Una fila por BARRA del gráfico, en el orden del eje.
 
     `tp` trae `periodo` (el nombre de la barra, ya legible), los números
@@ -195,6 +195,10 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
     horizontal se esconden «Líneas» y la variación contra la barra anterior:
     con el año pasado al lado, la referencia que importa es ésa.
 
+    `tramos` son `(campo, rótulo)` de las columnas de cada tramo de la barra
+    cuando se parte por tipo o por producto (#614): van con su monto, y
+    para que entren se esconden «Áreas» y «% del total».
+
     SIN `initialSort`, como el Resumen de Compras: las filas abren en el
     orden del EJE porque la tabla es el gráfico escrito. Se ordenan igual con
     un clic en la cabecera, que no cuesta ninguna corrida.
@@ -211,7 +215,8 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
     # Los anchos, con la cuenta de Compras (`compras_semanal._COLS_ANCHA`):
     # lo que mide el peor dato a 13px, más 8+8 de padding y los ~14 de la
     # flecha de ordenar. «Período» es la única que se estira.
-    gb.configure_column("periodo", header_name=rotulo_periodo, minWidth=180,
+    gb.configure_column("periodo", header_name=rotulo_periodo,
+                        minWidth=120 if tramos else 180,
                         tooltipField="periodo")
     gb.configure_column("docs", header_name=rotulo_docs,
                         type=["numericColumn"], valueFormatter=_JS_ENTERO,
@@ -226,6 +231,7 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                       "producto es una línea",
                         width=82, minWidth=82, suppressSizeToFit=True)
     gb.configure_column("areas", header_name="Áreas", type=["numericColumn"],
+                        hide=bool(tramos),
                         valueFormatter=_JS_ENTERO, tooltipField="__anota",
                         headerTooltip="Cuántas áreas hay en el período. "
                                       "Cuáles, en el tooltip de la celda",
@@ -234,7 +240,7 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                         type=["numericColumn"], valueFormatter=_JS_VALOR_MOV,
                         headerTooltip="Valorizado del período",
                         width=130, minWidth=130, suppressSizeToFit=True)
-    gb.configure_column("parte", header_name="% del total",
+    gb.configure_column("parte", header_name="% del total", hide=bool(tramos),
                         type=["numericColumn"], valueFormatter=_JS_PARTE,
                         headerTooltip="Cuánto pesa esta barra en el total "
                                       "de la vista",
@@ -248,6 +254,11 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                       "del gráfico, no contra el período "
                                       "anterior del calendario",
                         width=104, minWidth=104, suppressSizeToFit=True)
+    for campo, rotulo in tramos:
+        gb.configure_column(campo, header_name=rotulo, headerTooltip=rotulo,
+                            type=["numericColumn"],
+                            valueFormatter=_JS_VALOR_MOV,
+                            width=112, minWidth=112, suppressSizeToFit=True)
     if con_ant:
         gb.configure_column("ant", header_name=rotulo_ant or "Año pasado",
                             type=["numericColumn"],

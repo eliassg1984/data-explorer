@@ -272,12 +272,40 @@ PARTIR_TIPO = "Por tipo"
 «¿tengo alguna forma de ver por tipo de salida?»): por área —quién dio de
 baja, como nació (#509)— o por tipo de descargo. Regla #614."""
 
+PARTIR_PRODUCTO = "Por producto"
+"""La tercera, el mismo día: «cómo verlo desde la perspectiva de productos».
+Los productos mayores de la vista, cada uno con su color, y el resto junto.
+Con el filtro de tipo en «Bajas», qué productos se tiran mes a mes."""
+
 _TIPOS_TRAZA = 4
 """Tipos con color propio cuando la barra se parte por tipo: los cuatro
 mayores llevan el 90 % (bajas, comida de personal, despacho a Mayta, uso en
 el área); el resto va en «Resto»."""
 
+_PRODUCTOS_TRAZA = 4
+"""Productos con color propio con «Por producto»: cuatro. Con cinco, medido
+a 1323px, la fila de KPI partía en dos renglones (los nombres de producto
+son largos) y el Resumen pedía scroll horizontal."""
+
 _AREAS_TRAZA = 3
+
+# Qué columna de las líneas parte la barra con cada opción, cuántos tramos
+# lleva y cómo se nombra lo que va en «Resto» (#614).
+_PARTIR_COL = {PARTIR_AREA: "area", PARTIR_TIPO: "tipo",
+               PARTIR_PRODUCTO: "prod"}
+_PARTIR_N = {PARTIR_AREA: _AREAS_TRAZA, PARTIR_TIPO: _TIPOS_TRAZA,
+             PARTIR_PRODUCTO: _PRODUCTOS_TRAZA}
+_PARTIR_UNIDAD = {PARTIR_AREA: ("área", "áreas"), PARTIR_TIPO: ("tipo", "tipos"),
+                  PARTIR_PRODUCTO: ("producto", "productos")}
+
+
+def nombre_tramo(nombre, partir=PARTIR_AREA):
+    """Cómo se escribe un tramo: el área en oración («Cocina personal»); el
+    tipo y el producto, como los escribe el Almacén —«(P) Calamar…» en
+    oración sería «(p) calamar…»—."""
+    if nombre == "Resto" or partir != PARTIR_AREA:
+        return nombre
+    return _nombre_area(nombre)
 """Áreas con color propio en la barra; el resto se suma en «Resto». Con
 cuatro o menos en la vista van todas, sin «Resto»: sería un tramo de una
 sola área con otro nombre. Medido en el último mes de requerimientos: Cocina
@@ -829,10 +857,12 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS,
         var_nota=[_nota_variacion(_v, gran, c, _ant(_v), rango,
                                   sustantivo=lado.plur)
                   for c, _v in zip(claves, variaciones)],
-        trazas=(trazas_por_area(dv, claves, orden_tipo, col="tipo",
-                                n_traza=_TIPOS_TRAZA)
-                if partir == PARTIR_TIPO else
+        trazas=(trazas_por_area(dv, claves, orden_tipo,
+                                col=_PARTIR_COL[partir],
+                                n_traza=_PARTIR_N[partir])
+                if partir in _PARTIR_COL and partir != PARTIR_AREA else
                 trazas_por_area(dv, claves, orden)),
+        partir=partir,
     )
     # Qué áreas hay en cada período, de mayor a menor: el tooltip de la
     # columna «Áreas» del Resumen.
@@ -906,7 +936,7 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
             for x in res["anulados"]]
     xs = list(range(n))
     for i, (nombre, color, vals) in enumerate(trazas):
-        rot = nombre if nombre == "Resto" else _nombre_area(nombre)
+        rot = nombre_tramo(nombre, v.get("partir", PARTIR_AREA))
         if foco is not None and foco in claves:
             color = [color if c == foco else _con_alpha(color, _ATENUADO)
                      for c in claves]
@@ -988,13 +1018,24 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
     return fig
 
 
-def tabla_resumen(v, foco=None, comp=None):
+def tabla_resumen(v, foco=None, comp=None, tramos=False):
     """`(filas, total)` de la grilla del Resumen: una fila por barra.
 
     Con `comp` —el año más cercano de `comparacion_periodos`— suma dos
     columnas: lo de ese período ese año (`ant`) y la variación (`vs_ant`,
     en %, vacía donde ese año no hubo nada). Regla #614."""
     filas, total = _tabla_resumen(v, foco)
+    # Con la barra partida por tipo o por producto (#614), una columna por
+    # TRAMO, en el orden de la barra: el gráfico escrito como tabla. La
+    # lista de `(campo, rótulo)` viaja en `filas.attrs["tramos"]`.
+    cols_tramo = []
+    if tramos and v.get("trazas"):
+        _i = filas.columns.get_loc("valor") + 1
+        for j, (nombre, _color, vals) in enumerate(v["trazas"]):
+            campo = f"tr_{j}"
+            filas.insert(_i + j, campo, [round(float(x), 2) for x in vals])
+            total[campo] = f"S/ {sum(vals):,.2f}"
+            cols_tramo.append((campo, nombre_tramo(nombre, v.get("partir"))))
     if comp:
         # Antes de «Variación» y del Estado: la grilla muestra las columnas
         # en el orden del df, y lo del año pasado se lee al lado del monto.
@@ -1006,6 +1047,7 @@ def tabla_resumen(v, foco=None, comp=None):
         total["ant"] = f"S/ {comp['total']:,.2f}"
         total["vs_ant"] = ("" if _var is None
                            else f"{'+' if _var > 0 else '−'}{abs(_var):.0f}%")
+    filas.attrs["tramos"] = cols_tramo
     return filas, total
 
 
@@ -1219,7 +1261,7 @@ def _mayor_valido(amb, lado=None):
 
 def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
               costo_area=None, comps=(), aviso=None,
-              unidad=("área", "áreas")):
+              unidad=("área", "áreas"), nombrar=_nombre_area):
     """La fila de KPI: el total de la vista y una tarjeta por TRAMO de la
     barra, con el color del tramo. Es también la leyenda del gráfico, dicha
     con números. `nota` es `(corto, largo)` de lo que no suma, o None.
@@ -1273,7 +1315,7 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
                 rot = (f"{n_resto} "
                        f"{unidad[0] if n_resto == 1 else unidad[1]} más")
             else:
-                rot = _nombre_area(nombre)
+                rot = nombrar(nombre)
                 c_area = (costo_area or {}).get(nombre)
                 if c_area:
                     propio = (f" · su merma es el {v / c_area:.1%} de lo que "
@@ -1678,13 +1720,15 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
             partir = PARTIR_AREA
             if con_tipo:
                 partir = st.segmented_control(
-                    "Partir por", (PARTIR_AREA, PARTIR_TIPO),
+                    "Partir por", (PARTIR_AREA, PARTIR_TIPO, PARTIR_PRODUCTO),
                     default=PARTIR_AREA, required=True, key=f"{k}_partir",
                     label_visibility="collapsed",
-                    help=("Con qué se parte cada barra: **por área** o **por "
+                    help=("Con qué se parte cada barra: **por área**, **por "
                           "tipo** de descargo —bajas, comida de personal, "
-                          "despacho a Mayta…—. La fila de abajo nombra cada "
-                          "tramo con su monto.")) or PARTIR_AREA
+                          "despacho a Mayta…— o **por producto** (los cuatro "
+                          "mayores). La fila de abajo nombra cada tramo con su "
+                          "monto, y el Resumen le da una columna a cada uno."
+                          )) or PARTIR_AREA
             with st.container(key=f"{c}_hdr_area"):
                 area_sel = st.selectbox(
                     "Área", ops_area, key=f"{k}_area",
@@ -1780,9 +1824,9 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         bh = (lineas_documentos(hist, **cols)
               if hist is not None and not lado.merma else None)
         orden_tipo = ()
-        if partir == PARTIR_TIPO:
+        if partir != PARTIR_AREA:
             _o = _validas(bh if bh is not None else base, lado)
-            orden_tipo = (_o.groupby("tipo")["valor"].sum()
+            orden_tipo = (_o.groupby(_PARTIR_COL[partir])["valor"].sum()
                           .sort_values(ascending=False).index.tolist())
         v = vista_periodos(bl, gran, rango, orden, lado, partir=partir,
                            orden_tipo=orden_tipo)
@@ -1818,11 +1862,11 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         kpi.markdown(
             _html_kpi(float(sum(v["tot"])), int(dv["doc"].nunique()),
                       v["trazas"],
-                      dv.groupby("tipo" if partir == PARTIR_TIPO else "area")
+                      dv.groupby(_PARTIR_COL.get(partir, "area"))
                       ["valor"].sum().loc[lambda s: s > 0],
                       nota, lado, comps=comps, aviso=aviso,
-                      unidad=(("tipo", "tipos") if partir == PARTIR_TIPO
-                              else ("área", "áreas")), **kw_kpi),
+                      unidad=_PARTIR_UNIDAD.get(partir, ("área", "áreas")),
+                      nombrar=lambda n: nombre_tramo(n, partir), **kw_kpi),
             unsafe_allow_html=True)
 
         # ── Foco, modo y clic: se resuelven ANTES de dibujar (#398, #399) ─
@@ -1921,13 +1965,15 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                 else:
                     filas, total = tabla_resumen(
                         v, foco if foco_ok else None,
-                        comp=comps[0] if comps else None)
+                        comp=comps[0] if comps else None,
+                        tramos=partir != PARTIR_AREA)
                     clic_fila = renderizar_periodos_mov(
                         filas, altura=_ALTO_TABLA, key=k_res,
                         rotulo_periodo=_AGRUPADO_GRAN[gran].capitalize(),
                         rotulo_docs=lado.plur.capitalize(),
                         ver_variacion=gran in _GRAN_VARIACION, total=total,
-                        rotulo_ant=comps[0]["rot"] if comps else "")
+                        rotulo_ant=comps[0]["rot"] if comps else "",
+                        tramos=filas.attrs.get("tramos", ()))
             pie.caption(
                 f"**{_del_al(dv['fecha'])}**"
                 + (f" · por {rot_fecha}" if rot_fecha else "")

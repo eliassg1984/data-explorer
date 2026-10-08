@@ -6976,6 +6976,11 @@ def _pruebas_salidas_comparar_y_destino():
     _dv = _lin([("2026-09-01", "a", "PROCESADO", 5.0),
                 ("2026-09-02", "b", "PROCESADO", 3.0)]).assign(
         tipo=["Bajas", "Comida Personal"], clave="2026-09")
+    check("el producto se escribe como lo escribe el Almacén",
+          mp.nombre_tramo("(P) Calamar limpio", mp.PARTIR_PRODUCTO),
+          "(P) Calamar limpio")
+    check("el área, en oración",
+          mp.nombre_tramo("COCINA PERSONAL", mp.PARTIR_AREA), "Cocina personal")
     check("por tipo: un tramo por tipo de descargo",
           [n for n, _c, _v in mp.trazas_por_area(
               _dv, ["2026-09"], ["Bajas", "Comida Personal"], col="tipo",
