@@ -48841,8 +48841,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      la que el usuario ya lo llevaba a mano. Una vista, «Costo de ventas»:
 
          Consumo operativo = inventario inicial + compras − inventario final
-         Consumo carta     = consumo operativo − bajas − costo de cortesías
-                             − las demás salidas
+         Consumo carta     = consumo operativo − consumos no vendidos
+                             (bajas + demás salidas + costo de cortesías)
 
      El consumo carta es el que se compara con el costo del POS (Paloteo
      de Producción › Comparativo › «(a) Ventas en el rango»); el operativo
@@ -48941,6 +48941,24 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      td` le ganaba a `tbody td.lab` y la celda del nombre sumaba 4 px por
      renglón (88 px en la tabla); y el rótulo de un bloque en la celda
      fija del concepto se cortaba — va en una celda que abarca la fila.
+
+     **«Consumos no vendidos», un grupo que se abre hacia abajo** (el
+     mismo día, a pedido). Las bajas, las demás notas de salida y el costo
+     de las cortesías son lo consumido que no se vendió: en control de
+     costos, lo que lleva del costo de lo consumido al de lo vendido
+     (Egan, *Introduction to Food Production and Service*, cap. 4.1). El
+     nombre se eligió para que lo lean administración, tesorería y
+     contabilidad; «créditos al costo» (el término en inglés) se confunde
+     con cuentas por cobrar, y «mermas» sólo son las bajas. El orden pasó a
+     ser el de esa cadena: consumo operativo, − consumos no vendidos, =
+     consumo carta. Cerrado (por defecto, `costos_grupo_abierto`) es UNA
+     fila con el total; abierto, sus filas debajo con sangría y franja
+     lavanda, en dos tramos —«Notas de salida del Almacén» y «Sistema
+     Restaurante»—, porque contablemente son cosas distintas (merma o
+     desmedro, gasto de personal, promoción). Con el grupo cerrado la tabla
+     tiene 15 filas y vuelve a renglones de 30 px sin `apretada` (a 1323 ×
+     619 termina en y=560); `ajustar` mide SIN las filas del grupo, así
+     que abrirlo no achica la letra: la página se desplaza.
 
      **Ventas › «Venta vs Compra» se quitó** el mismo día, a pedido: esta
      vista la reemplaza. En producción ya no dibujaba la compra (buscaba la

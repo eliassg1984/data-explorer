@@ -64,12 +64,15 @@ function porFamilia(st, data, w, b) {
     }
   }
   r.operativo = resta(suma(r.ii, r.c), r.fi);
-  let carta = resta(resta(r.operativo, r.bajas), r.cort);
+  // Consumos no vendidos: las bajas, el costo de las cortesías y las demás
+  // salidas que no se quitaron. Es lo que va del consumo operativo al carta.
+  let nv = suma(r.bajas, r.cort);
   for (const t of st.agregadas) {
     r[`s_${t}`] = de((data.salidas || {})[t]);
-    carta = resta(carta, r[`s_${t}`]);
+    nv = suma(nv, r[`s_${t}`]);
   }
-  r.carta = carta;
+  r.nv = nv;
+  r.carta = resta(r.operativo, nv);
   r.margen = resta(r.v, r.carta);
   r.dif = resta(r.carta, r.pos);
   return r;
@@ -82,16 +85,24 @@ function filas(st) {
     { k: 'ii', nom: 'Inventario inicial', tipo: 'ini', sentido: 'neutro', fuerte: true },
     { k: 'c', nom: 'Compras', signo: '+', tipo: 'suma', sentido: 'mal' },
     { k: 'fi', nom: 'Inventario final', signo: '−', tipo: 'fin', sentido: 'neutro' },
-    { k: 'bajas', nom: 'Bajas', signo: '−', tipo: 'suma', sentido: 'mal' },
-    { k: 'cort', nom: 'Costo de cortesías', signo: '−', tipo: 'suma', sentido: 'mal' },
+    { k: 'operativo', nom: 'Consumo operativo', nota: 'inventario inicial + compras − inventario final', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true },
+    { k: 'p_operativo', nom: '% costo operativo', tipo: 'pct', sentido: 'mal', num: 'operativo', den: 'v' },
+    // El grupo (a pedido, 2026-10-09): lo consumido que no se vendió, en su
+    // nombre de control de costos. Cerrado es UNA fila con el total; abierto
+    // crece hacia abajo con sus dos tramos —lo que viene del Almacén y lo
+    // que viene del Sistema Restaurante—, que contablemente son cosas
+    // distintas (merma o desmedro, gasto de personal, promoción).
+    { k: 'nv', nom: 'Consumos no vendidos', nota: 'bajas, consumo interno y cortesías', signo: '−', tipo: 'suma', sentido: 'mal', grupo: true, fuerte: true },
   ];
-  for (const t of st.agregadas) f.push({ k: `s_${t}`, nom: t, signo: '−', tipo: 'suma', sentido: 'mal', quitar: t });
-  f.push({ agregar: true });
-  // El operativo va DESPUÉS de las salidas pero no las resta: es el dato de
-  // antes, como en la planilla del usuario.
-  f.push({ k: 'operativo', nom: 'Consumo operativo', nota: 'sin restar salidas', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
-  f.push({ k: 'p_operativo', nom: '% costo operativo', tipo: 'pct', sentido: 'mal', num: 'operativo', den: 'v' });
-  f.push({ k: 'carta', nom: 'Consumo carta', nota: 'menos salidas y cortesías', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
+  if (st.grupoAbierto) {
+    f.push({ tramo: 'Notas de salida del Almacén' });
+    f.push({ k: 'bajas', nom: 'Bajas', tipo: 'suma', sentido: 'mal', hijo: true });
+    for (const t of st.agregadas) f.push({ k: `s_${t}`, nom: t, tipo: 'suma', sentido: 'mal', quitar: t, hijo: true });
+    f.push({ agregar: true });
+    f.push({ tramo: 'Sistema Restaurante' });
+    f.push({ k: 'cort', nom: 'Costo de cortesías', tipo: 'suma', sentido: 'mal', hijo: true });
+  }
+  f.push({ k: 'carta', nom: 'Consumo carta', nota: 'consumo operativo − consumos no vendidos', signo: '=', tipo: 'suma', sentido: 'mal', calc: true, fuerte: true });
   f.push({ k: 'p_carta', nom: '% costo carta real', tipo: 'pct', sentido: 'mal', num: 'carta', den: 'v', calc: true });
   f.push({ k: 'margen', nom: 'Margen bruto', nota: 'venta − consumo carta', signo: '=', tipo: 'suma', sentido: 'bien', calc: true, fuerte: true });
   f.push({ sec: 'Contra el Sistema Restaurante (Paloteo comparativo)' });
@@ -191,11 +202,14 @@ function dibujar(raiz) {
   for (const fila of filas(st)) {
     if (fila.sec) { cuerpo += `<tr class="sec"><td colspan="${n + 2}">${fila.sec}</td></tr>`; continue; }
     if (fila.agregar) { cuerpo += filaAgregar(st, data, w, F, n); continue; }
+    if (fila.tramo) { cuerpo += `<tr class="tramo"><td colspan="${n + 2}">${fila.tramo}</td></tr>`; continue; }
     const val = valores(st, data, w, fila, F);
     const abierta = st.abierta === fila.k;
-    const cls = ['fila', fila.calc ? 'calc' : '', fila.fuerte ? 'fuerte' : '', abierta ? 'abierta' : ''].join(' ');
+    const cls = ['fila', fila.calc ? 'calc' : '', fila.fuerte ? 'fuerte' : '', abierta ? 'abierta' : '',
+      fila.hijo ? 'hijo' : '', fila.grupo ? 'grupo' : '', fila.grupo && st.grupoAbierto ? 'grupo-abierto' : ''].join(' ');
     const tip = fila.nota ? ` title="${esc(`${fila.nom}: ${fila.nota}`)}"` : '';
     cuerpo += `<tr class="${cls}"><td class="lab"><div class="fila-lab">`
+      + (fila.grupo ? `<button type="button" class="chev" data-grupo aria-expanded="${!!st.grupoAbierto}" aria-label="${st.grupoAbierto ? 'Cerrar' : 'Abrir'} el detalle de ${esc(fila.nom)}">${st.grupoAbierto ? '▾' : '▸'}</button>` : '')
       + `<button type="button" class="fila-btn" data-fila="${esc(fila.k)}" aria-expanded="${abierta}"${tip}><span class="signo">${fila.signo || ''}</span>`
       + `<span class="nom">${esc(fila.nom)}</span><span class="flecha">▼</span></button>`
       + (fila.quitar ? `<button type="button" class="quitar" data-quitar="${esc(fila.quitar)}" aria-label="Quitar ${esc(fila.quitar)}">×</button>` : '')
@@ -223,7 +237,8 @@ function ajustar(raiz) {
   if (!t) return;
   raiz.classList.remove('apretada');
   const det = t.querySelector('tr.detalle');
-  const alto = t.offsetHeight - (det ? det.offsetHeight : 0);
+  const hijos = [...t.querySelectorAll('tr.hijo, tr.tramo, tr.agregar')].reduce((a, r) => a + r.offsetHeight, 0);
+  const alto = t.offsetHeight - (det ? det.offsetHeight : 0) - hijos;
   if (alto > window.innerHeight - CROMO_PX) raiz.classList.add('apretada');
 }
 
@@ -353,7 +368,7 @@ function notas(data, w) {
     <dt>Compras</dt><dd>Valor neto, sin IGV, con las notas de crédito de los proveedores restadas, por fecha del documento.</dd>
     <dt>Bajas y las otras salidas</dt><dd>Notas de salida procesadas, a su valor neto, por fecha de registro, como la «Relación de Notas de Salidas» del Almacén.</dd>
     <dt>Costo de cortesías</dt><dd>Lo que el Sistema Restaurante facturó como cortesía en Alimentos, Bebidas y Vinos, a precio costo. Se resta porque su costo, «(a) Ventas en el rango», no las incluye: en el Paloteo son otro origen, «(b) Cortesías».</dd>
-    <dt>Consumo operativo y consumo carta</dt><dd>Consumo operativo = inventario inicial + compras − inventario final: todo lo que salió del almacén, sin restar salidas ni cortesías; no se compara con el Sistema Restaurante. Consumo carta = consumo operativo − bajas − cortesías − las demás salidas (entran todas; la × quita una): lo que costó lo vendido, y es el que se compara con el Sistema Restaurante.</dd>
+    <dt>Consumo operativo, consumos no vendidos y consumo carta</dt><dd>Consumo operativo = inventario inicial + compras − inventario final: todo lo que salió del almacén; no se compara con el Sistema Restaurante. Consumos no vendidos: lo consumido que no se vendió —las bajas, las demás notas de salida (entran todas; abierto el grupo, la × quita una) y el costo de las cortesías—; en control de costos, las deducciones que llevan del costo de lo consumido al costo de lo vendido. Consumo carta = consumo operativo − consumos no vendidos: lo que costó lo vendido, y es el que se compara con el Sistema Restaurante.</dd>
     <dt>Costo según Sistema Restaurante</dt><dd>El costo a precio costo de lo vendido en esos grupos: lo del Paloteo de Producción, tipo Comparativo, con origen «(a) Ventas en el rango». El Paloteo fecha por la apertura de la mesa y esta tabla por el turno: un pedido de medianoche del último día puede caer en otro mes.</dd>
   </dl></details>
   <details class="nota alerta"><summary>Antes de leer la diferencia</summary><ul>
@@ -381,6 +396,10 @@ function enlazar(raiz) {
       st.quitadas = st.quitadas.filter((t) => t !== b.dataset.agregar);
       st.menu = false;
       guardar('costos_salidas_quitadas', st.quitadas);
+    } else if (b.hasAttribute('data-grupo')) {
+      st.grupoAbierto = !st.grupoAbierto;
+      if (!st.grupoAbierto && /^(bajas|cort|s_)/.test(st.abierta || '')) st.abierta = null;
+      guardar('costos_grupo_abierto', st.grupoAbierto);
     } else if (b.hasAttribute('data-menu')) {
       st.menu = !st.menu;
     } else if (b.dataset.modo) {
@@ -439,6 +458,7 @@ export default function (component) {
       quitadas: leer('costos_salidas_quitadas', []).filter((t) => typeof t === 'string'),
       agregadas: [],
       abierta: null, modo: 'total', menu: false, grano: leer('costos_grano', 'mes'),
+      grupoAbierto: leer('costos_grupo_abierto', false) === true,
       ini: { mes: Number.MAX_SAFE_INTEGER, quincena: Number.MAX_SAFE_INTEGER, semana: Number.MAX_SAFE_INTEGER },
     };
     enlazar(raiz);
