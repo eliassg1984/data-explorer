@@ -17,7 +17,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
+from tema import (
+    ACENTO, ERROR, EXITO, GRIS_TEXTO, PALETA_SERIES, TEXTO_PRINCIPAL,
+)
 from graficos.base import _compras_truncar, _slug
 # REEXPORT, no import muerto: `_es_movil` vivía definida acá y se movió a
 # graficos/base.py (2026-08-07, ver su docstring) porque graficos/ajuste.py
@@ -214,6 +216,31 @@ def moda_por_grupo(df, llave, col):
                         kind="stable"))
     top = n.drop_duplicates(llave, keep="first")
     return pd.Series(top[col].to_numpy(), index=top[llave].to_numpy())
+
+
+def colores_estables(orden, nombres):
+    """`{nombre: color}` para los de `nombres`, con el color que les toca
+    por su puesto en `orden` —el histórico— y no por su puesto en la vista:
+    filtrar o mover la fecha no puede repintar (el color sigue a la
+    entidad). Si dos de las que se dibujan juntas caen en el mismo color de
+    la paleta, la segunda toma el siguiente libre.
+
+    Nació en Movimientos para las áreas (`movimientos_periodo.colores_area`,
+    que hoy es este mismo nombre) y se mudó acá el 2026-10-08, cuando
+    «Compras por período» empezó a partir sus barras por subfamilia o por
+    proveedor (regla #620): dos copias de la misma regla se separan al
+    primer retoque."""
+    ix = {a: i for i, a in enumerate(orden)}
+    usados, salida = set(), {}
+    for a in nombres:
+        i = ix.get(a, len(orden) + len(salida))
+        c = PALETA_SERIES[i % len(PALETA_SERIES)]
+        while c in usados and len(usados) < len(PALETA_SERIES):
+            i += 1
+            c = PALETA_SERIES[i % len(PALETA_SERIES)]
+        usados.add(c)
+        salida[a] = c
+    return salida
 
 
 def _first_point(evt):

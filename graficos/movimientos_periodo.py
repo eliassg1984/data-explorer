@@ -106,6 +106,7 @@ from graficos.base import _compras_layout, _compras_truncar, scope_rerun
 from graficos.compras._comun import (
     GAP_DRILL, _UNIDAD_GRAN, _clave_grilla, _first_point, _fmt_variacion,
     _hover_variacion, _nota_variacion, _periodo_serie, _variaciones,
+    colores_estables,
 )
 # LAS CUENTAS DE LA GEMELA. Privadas de allá, y a propósito: estas tarjetas
 # tienen que leerse igual que «Compras por período», y dos copias de «cuánto
@@ -540,23 +541,11 @@ def orden_areas(df, col_area, col_val):
              .index.tolist())
 
 
-def colores_area(orden, nombres):
-    """`{área: color}` para las áreas de `nombres`, con el color que les
-    toca por su puesto en `orden` —el histórico— y no por su puesto en la
-    vista: filtrar no puede repintar (el color sigue a la entidad). Si dos
-    de las que se dibujan juntas caen en el mismo color de la paleta, la
-    segunda toma el siguiente libre."""
-    ix = {a: i for i, a in enumerate(orden)}
-    usados, salida = set(), {}
-    for a in nombres:
-        i = ix.get(a, len(orden) + len(salida))
-        c = PALETA_SERIES[i % len(PALETA_SERIES)]
-        while c in usados and len(usados) < len(PALETA_SERIES):
-            i += 1
-            c = PALETA_SERIES[i % len(PALETA_SERIES)]
-        usados.add(c)
-        salida[a] = c
-    return salida
+colores_area = colores_estables
+"""`{área: color}` por el puesto de cada área en `orden` —el histórico—, no
+en la vista. Es `_comun.colores_estables` con el nombre de siempre: se mudó
+allá el 2026-10-08, cuando «Compras por período» la necesitó para partir
+sus barras por subfamilia o por proveedor (regla #620)."""
 
 
 def _no_suma_sin_procesar(lado):

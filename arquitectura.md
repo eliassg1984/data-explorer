@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-619 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+620 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (202)
 
@@ -328,7 +328,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 
-**Plotly y figuras** (111)
+**Plotly y figuras** (112)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -441,6 +441,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#610** — El mapa de «Por hora» se dibuja como lo elige el usuario: mosaico (con o sin número), puntos…
 - **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
 - **#619** — Una semana se nombra con sus días de la semana, y la que las fechas cortan, por los días que…
+- **#620** — La barra de «Compras por período» se parte por lo que se elige —subfamilia, proveedor o…
 
 **AgGrid y tablas** (89)
 
@@ -48659,6 +48660,86 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-08.)
 
+620. **La barra de «Compras por período» se parte por lo que se elige
+     —subfamilia, proveedor o precio—, y el renglón del título del
+     gráfico pasó a HTML.** 2026-10-08, a pedido: «el color no me serviría
+     mucho, quisiera usar el espacio de la barra para que muestre alguna
+     otra información relevante». La barra se partía en tres tramos por
+     TAMAÑO de compra —la mayor, la 2ª y 3ª, el resto (#453)—, sólo dos
+     renglones del hover cambiaban de un tramo a otro y el reparto casi no
+     variaba entre semanas: era color sin respuesta.
+
+     Un selector «Partir por» (`compras_sem_partir`, en `_KEYS_WIDGET`)
+     con tres respuestas, todas en `graficos/compras/semanal.py`:
+
+     - **Subfamilia** (de entrada) y **Proveedor**: las cinco mayores de
+       la vista y el resto en gris (`partes_por_columna`), cada una con el
+       color de su puesto en el HISTÓRICO para que mover la fecha no
+       repinte —`_comun.colores_estables`, que era
+       `movimientos_periodo.colores_area` y se mudó para no tener dos
+       copias—. Medido en 12 meses con las cinco familias de entrada: cinco
+       subfamilias son casi el 80 % y cinco proveedores el 43 % de 138. Por
+       FAMILIA no servía: Alimentos es el 87 %. Los proveedores van sin la
+       forma jurídica del final («S.A.C.», «EIRL») y cortos: cinco nombres
+       enteros no entraban en el renglón.
+     - **Precio**: cuánto de cada barra se pagó por encima del precio
+       habitual. `precio_habitual` es la mediana del precio unitario del
+       MISMO producto en los 90 días ANTERIORES, sin el mismo día — un
+       cálculo propio, no un indicador estándar, y el hover lo dice. Cada
+       línea con referencia se parte en lo que habría costado a ese precio
+       (tope: lo pagado) y lo pagado de más; la que no tiene va a «Sin
+       precio previo». Las tres suman la barra por construcción, y el rojo
+       va ARRIBA. El hover suma lo pagado de menos, el neto y los tres
+       productos que más se pagaron de más. Del 1 de agosto al 7 de octubre
+       de 2026: S/ 12.575 de más, S/ 14.627 de menos, con referencia para el
+       96 % del gasto. La referencia sale de `d_full` (la primera compra del
+       rango también tiene sus 90 días) y viaja por (producto, día), no por
+       índice de fila.
+
+     `precio_habitual` es UN `groupby().rolling("90D", closed="left")` —no
+     un recorrido por producto (#537)—: 0,13 s sobre dos meses más su
+     ventana, 0,46 s sobre el histórico. Su resultado vuelve por POSICIÓN y
+     no por índice, porque el índice que arma el rolling no es el mismo en
+     pandas 2 y 3 (#481) y el del parquet puede repetirse; probado contra un
+     cálculo a fuerza bruta con pandas 2.3.3 (lo más cercano a Cloud que se
+     instala con Python 3.14) y 3.0.3.
+
+     El hover de cada parte nombra TODAS las de su barra, con la suya en
+     negrita: la pregunta es por la barra. El desglose por FAMILIA salió del
+     hover —con las partes daba 16 renglones y no entraba en la figura— y
+     sigue en la tabla de «Resumen Total», que tiene una fila por barra. En
+     «Por documento» la barra es una compra y no se parte: el selector se
+     dibuja APAGADO, no se esconde (un widget que deja de dibujarse pierde
+     su valor), y el hover conserva las familias.
+
+     **El título y la leyenda dejaron Plotly**: van en HTML en el renglón
+     `cp_sem_cab_graf`, junto al selector, `absolute` sobre los 30px del
+     margen de arriba de la figura, que eran del título —no le agrega un
+     píxel a la tarjeta— y con `right: 232px` para la barrita de Plotly.
+     La leyenda vivía debajo del eje y se montaba sobre el año del primer
+     rótulo. Dos trampas medidas ahí, las dos en `_css_proveedor.py`:
+
+     - **El renglón va por DEBAJO del gráfico.** Encima, las fichas de la
+       leyenda se pintaban sobre la primera línea del hover. Sin `z-index`,
+       el gráfico —que viene después y tiene fondo transparente— se pinta
+       encima, y el hover tapa al renglón.
+     - **Pero el `div.svg-container` de Plotly cubre la figura entera y se
+       come los clics**: con el renglón debajo, el clic en el selector no
+       llegaba (Playwright: «svg-container … intercepts pointer events»).
+       El selector, y sólo él, sube con su propio `z-index`; el envoltorio
+       no arma contexto de apilamiento, así que compite directo con el
+       gráfico. Por lo mismo un `title` en una ficha de la leyenda no se ve
+       nunca: lo que explica «Precio» va en el hover.
+
+     Las cuentas de las etiquetas siguen suponiendo la leyenda de abajo
+     (`_LEYENDA_Y`): calculan con un área de trazo menor que la real, así
+     que sobra aire. Lo vigila `test_graficos.py::_pruebas_partir_por` (el
+     precio habitual contra fuerza bruta, las partes que cierran, el color
+     del histórico, el hover) y, por la tupla de widgets, la guarda de la
+     #373.
+
+     (2026-10-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48671,7 +48752,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#619**; la próxima toma el número siguiente.
+> última regla es la **#620**; la próxima toma el número siguiente.
 
 >
 

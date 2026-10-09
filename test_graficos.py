@@ -3975,6 +3975,155 @@ def _pruebas_panel_fecha():
     return fallos
 
 
+def _pruebas_partir_por():
+    """Compras por período: de qué está hecha cada barra (regla #620).
+
+    1. EL PRECIO HABITUAL es la mediana del precio unitario del MISMO
+       producto en los 90 días ANTERIORES, sin contar el mismo día. Se
+       compara contra un cálculo a fuerza bruta, con los bordes: el día 90
+       entra y el 91 no, dos compras del mismo día no se miran entre sí, una
+       línea sin cantidad no da precio pero recibe el suyo, la primera
+       compra de un producto no tiene, y el índice puede venir repetido.
+    2. LAS PARTES CIERRAN: por subfamilia o proveedor (las cinco mayores y
+       el resto) y por precio (habitual, de más, sin precio) suman el total
+       de cada barra, y el color de una categoría sale de su puesto en el
+       HISTÓRICO, no en la vista.
+    3. El hover nombra todas las partes y marca en negrita sólo la suya.
+    """
+    import math
+
+    import numpy as np
+
+    import graficos.compras.semanal as sem
+    from tema import ERROR, GRIS_TEXTO_SUAVE, PALETA_SERIES, SERIE_PRINCIPAL
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    partir por · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA partir por · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── 1. El precio habitual ────────────────────────────────────────────
+    # 2026-04-01 menos 90 días es 2026-01-01: el borde de la ventana.
+    filas = [
+        ("A", "2026-01-01", 100.0, 10.0),   # 10
+        ("A", "2026-02-15", 120.0, 10.0),   # 12
+        ("A", "2026-03-01", 50.0, 0.0),     # sin cantidad: no da precio
+        ("A", "2026-04-01", 200.0, 10.0),   # 20 — ve el 01-01 y el 02-15
+        ("A", "2026-04-01", 300.0, 10.0),   # 30 — mismo día: no se miran
+        ("A", "2026-04-02", 90.0, 3.0),     # ve 12, 20 y 30: el 01-01 quedó afuera
+        ("B", "2026-04-01", 10.0, 1.0),     # primera compra de B
+        ("A", "2026-09-01", 50.0, 5.0),     # nada en los 90 días previos
+    ]
+    df = pd.DataFrame(filas, columns=["prod", "fecha", "valor", "cant"],
+                      index=[7, 7, 3, 9, 9, 1, 2, 4])   # índice REPETIDO
+    df["fecha"] = pd.to_datetime(df["fecha"])
+
+    def bruta(d, dias=90):
+        out = []
+        for p, f, *_ in d.itertuples(index=False):
+            v = d[(d["prod"] == p) & (d["fecha"] >= f - pd.Timedelta(days=dias))
+                  & (d["fecha"] < f) & (d["cant"] > 0) & (d["valor"] > 0)]
+            out.append(float((v["valor"] / v["cant"]).median())
+                       if len(v) else float("nan"))
+        return out
+
+    got = sem.precio_habitual(df["prod"], df["fecha"], df["valor"], df["cant"])
+    exp = bruta(df)
+
+    def _iguales(a, b):
+        return all((math.isnan(x) and math.isnan(y)) or abs(x - y) < 1e-9
+                   for x, y in zip(a, b))
+
+    check("igual que a fuerza bruta", _iguales(list(got), exp), True)
+    check("sale con el índice de la entrada, aunque se repita",
+          list(got.index), list(df.index))
+    check("los valores de los bordes",
+          [None if math.isnan(x) else round(x, 2) for x in got],
+          [None, 10.0, 11.0, 11.0, 11.0, 20.0, None, None])
+    # Al azar, con semilla: lo que no se me ocurrió.
+    rng = np.random.default_rng(620)
+    n = 400
+    dz = pd.DataFrame({
+        "prod": rng.choice(list("PQRST"), n),
+        "fecha": pd.Timestamp("2026-01-01")
+                 + pd.to_timedelta(rng.integers(0, 300, n), unit="D"),
+        "valor": rng.uniform(0, 100, n).round(2),
+        "cant": rng.choice([0.0, 0.5, 1.0, 2.0, 7.5], n),
+    }, index=rng.integers(0, 50, n))
+    check("al azar, igual que a fuerza bruta",
+          _iguales(list(sem.precio_habitual(dz["prod"], dz["fecha"],
+                                             dz["valor"], dz["cant"])),
+                   bruta(dz)), True)
+
+    # ── 2. Las partes por categoría ──────────────────────────────────────
+    claves = ["P1", "P2"]
+    dd = pd.DataFrame({
+        "clave": ["P1", "P2"] * 7,
+        "sub": [f"S{i}" for i in range(1, 8) for _ in range(2)],
+        "valor": [float(v) for i in range(7, 0, -1) for v in (i * 6, i * 4)],
+    })
+    tot = dd.groupby("clave")["valor"].sum().reindex(claves).tolist()
+    orden = ["S2", "S1", "S3", "S4", "S5", "S6", "S7"]
+    partes = sem.partes_por_columna(dd, "sub", claves, orden=orden)
+    check("las cinco mayores y el resto",
+          [r for r, _c, _v in partes],
+          ["S1", "S2", "S3", "S4", "S5", "Otras (2)"])
+    check("cada barra cierra en su total",
+          [round(sum(v[j] for _r, _c, v in partes), 6) for j in range(2)],
+          [round(x, 6) for x in tot])
+    check("el color sale del histórico, no de la vista",
+          [c for _r, c, _v in partes[:2]], [PALETA_SERIES[1], PALETA_SERIES[0]])
+    check("el resto va en gris", partes[-1][1], GRIS_TEXTO_SUAVE)
+    seis = sem.partes_por_columna(dd[dd["sub"] != "S7"], "sub", claves,
+                                  orden=orden)
+    check("con seis van todas, sin resto", len(seis), 6)
+
+    # ── 2b. Las partes por precio ────────────────────────────────────────
+    dp = pd.DataFrame({
+        "clave": ["P1", "P1", "P1", "P2"],
+        "prod": ["X", "Y", "Z", "X"],
+        "valor": [120.0, 45.0, 30.0, 100.0],
+        "cant": [10.0, 5.0, 3.0, 10.0],
+        "ref": [10.0, 10.0, float("nan"), 10.0],
+    })
+    pp, pila, extra = sem.partes_por_precio(dp, claves)
+    check("precio · las tres partes, en el orden de la leyenda",
+          [(r, c) for r, c, _v in pp],
+          [(sem._A_PRECIO_HABITUAL, SERIE_PRINCIPAL),
+           (sem._PAGADO_DE_MAS, ERROR),
+           (sem._SIN_PRECIO_PREVIO, GRIS_TEXTO_SUAVE)])
+    check("precio · los montos", [v for _r, _c, v in pp],
+          [[145.0, 100.0], [20.0, 0.0], [30.0, 0.0]])
+    check("precio · la pila: sin precio abajo, el rojo arriba", pila, [2, 0, 1])
+    check("precio · cada barra cierra en su total",
+          [sum(v[j] for _r, _c, v in pp) for j in range(2)], [195.0, 100.0])
+    check("precio · lo pagado de menos", "Pagado de menos: S/ 5.00" in extra["P1"],
+          True)
+    check("precio · el neto, con su signo y su %",
+          "+S/ 15.00 (+10%)" in extra["P1"], True)
+    check("precio · el producto pagado de más", "X: +S/ 20.00 (+20%)" in extra["P1"],
+          True)
+    pp2, pila2, _ = sem.partes_por_precio(dp[dp["clave"] == "P2"], claves)
+    check("precio · una parte en cero en toda la vista no se dibuja",
+          ([r for r, _c, _v in pp2], pila2), ([sem._A_PRECIO_HABITUAL], [0]))
+
+    # ── 3. El hover ──────────────────────────────────────────────────────
+    hov = sem._hover_partes(partes, tot, "Por subfamilia")
+    check("hover · una lista por parte, un texto por barra",
+          (len(hov), len(hov[0])), (len(partes), 2))
+    check("hover · nombra todas las partes de la barra",
+          all(r in hov[0][0] for r, _c, _v in partes), True)
+    check("hover · sólo la suya en negrita",
+          (hov[1][0].count("<b>"), "<b>S2:" in hov[1][0]), (1, True))
+
+    return fallos
+
+
 def _pruebas_fecha_por_vista():
     """Movimientos: cada vista con su propia fecha (regla #617).
 
@@ -9990,6 +10139,9 @@ def main():
 
     # ── Movimientos: cada vista con su propia fecha (regla #617) ─────────
     fallos += _pruebas_fecha_por_vista()
+
+    # ── Compras por período: «Partir por» (regla #620) ───────────────────
+    fallos += _pruebas_partir_por()
 
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────
     fallos += _pruebas_anomalias()

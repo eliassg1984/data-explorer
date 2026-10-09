@@ -71,17 +71,26 @@ cada barra suma, debajo del total, cuántos documentos la forman y —en Día,
 Semana y Mes— la variación contra la barra anterior, con «parcial» donde
 el rango corta el período. La semana se nombra «14–20 set» y no
 «2026-S38». Y la cabecera suma dos filtros: Subfamilia y Proveedor.
+
+2026-10-08 — «PARTIR POR» (regla #620). La barra deja de partirse en tres
+tramos por tamaño de compra y se parte por lo que se elige: subfamilia (de
+entrada), proveedor o precio —lo pagado al precio habitual, lo pagado de
+más y lo que no tiene precio previo—. El selector vive en el renglón del
+título del gráfico, que pasó a HTML junto con la leyenda.
 """
 
 
+from html import escape
+
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 import cortes
 from tema import (
-    ADVERTENCIA_TEXTO, GRIS_BORDE, GRIS_TEXTO, SERIE_PRINCIPAL,
-    SERIE_TRAMOS, TEXTO_PRINCIPAL,
+    ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
+    SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
@@ -99,8 +108,8 @@ from graficos.compras._comun import (
     _limites_periodo, _nota_variacion, _variaciones,
 )
 from graficos.compras._comun import (
-    CATEGORIA_SEC, GAP_DRILL, _first_point, _periodo_serie, documento_legible,
-    selector_fecha_tarjeta,
+    CATEGORIA_SEC, GAP_DRILL, _first_point, _periodo_serie, colores_estables,
+    documento_legible, selector_fecha_tarjeta,
 )
 # EL NOMBRE DEL PROVEEDOR SE ESCRIBE COMO NOMBRE PROPIO, no como lo grita el
 # ERP (2026-09-20, a pedido: «pongamos el nombre del proveedor en
@@ -108,6 +117,9 @@ from graficos.compras._comun import (
 # que esta vista compara (`dd["compra"]`) sigue llevando el nombre crudo.
 # Ver `_etiquetas_proveedor.nombre_propio` y `arquitectura.md` #379.
 from graficos.compras._etiquetas_proveedor import nombre_propio
+# Las formas jurídicas sin punto («SAC», «EIRL»): `_rotulo_proveedor` las saca
+# del final del nombre en la leyenda de «Partir por» (regla #620).
+from graficos.compras._etiquetas_proveedor import _SIGLAS_RAZON_SOCIAL
 from tablas.compras_semanal import (
     renderizar_proveedores_periodo,
     renderizar_documentos_semanal, renderizar_lineas_semanal,
@@ -210,17 +222,19 @@ _AYUDA_MODO = (
 
 _KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familia",
                 "compras_sem_subfamilia", "compras_sem_proveedor",
-                "compras_sem_producto", "compras_sem_modo")
+                "compras_sem_producto", "compras_sem_modo",
+                "compras_sem_partir")
 # (La tabla de «Resumen del Período» no va: su selección se CONSUME en la
 # corrida del clic —estrena la key con un contador—, así que no hay nada
 # que preservar.)
 """Los controles de la tarjeta, para que la escalada no se los lleve.
 
 Eran tres hasta el 2026-09-19, cuando se sumaron Subfamilia y Proveedor;
-el sexto, el modo de la zona de abajo, llegó el mismo día. Los cinco
-primeros viven en la cabecera y el último debajo del gráfico: lo que los
-junta acá no es dónde están sino de quién son — todos son widgets de ESTE
-fragment, y el `rerun` los recolecta a todos por igual.
+el sexto, el modo de la zona de abajo, llegó el mismo día, y el séptimo,
+«Partir por», el 2026-10-08 (regla #620). Los cinco primeros viven en la
+cabecera, el modo debajo del gráfico y «Partir por» en el renglón de su
+título: lo que los junta acá no es dónde están sino de quién son — todos
+son widgets de ESTE fragment, y el `rerun` los recolecta a todos por igual.
 
 No es una lista decorativa: la consume `preservar_widgets` en el
 `st.rerun(scope="app")` de más abajo, y sin ella mover la fecha de la
@@ -294,59 +308,51 @@ _ALTO_TABLA = alturas.SEMANAL_TABLA - alturas.FRANJA_MODO_SEMANAL
 
 
 # ===========================================================================
-# LA BARRA SE PARTE EN TRES (2026-09-17, regla #453)
+# DE QUÉ ESTÁ HECHA CADA BARRA: «PARTIR POR» (2026-10-08, regla #620)
 # ===========================================================================
-# Reemplaza al punto negro. El punto decía «ésta es la compra mayor» y no
-# decía nada más; el reparto del período —una compra grande o quince
-# chiquitas— quedaba fuera del gráfico.
+# A pedido, mirando los tres tonos de la barra: «el color no me serviría
+# mucho, quisiera usar el espacio de la barra para que muestre alguna otra
+# información relevante». La barra se parte ahora por lo que se elija en un
+# selector de la propia tarjeta —en el renglón del título del gráfico, que
+# estaba vacío—, con tres respuestas:
 #
-# DÍA Y SEMANA SÍ, MES Y AÑO NO. Medido con DuckDB contra `compras.parquet`,
-# el reparto MEDIO de cada período entre los tres tramos (y el rango del
-# primero, que es el que puede quedar fino):
+#   · SUBFAMILIA (de entrada): en qué se fue la plata. Medido en los últimos
+#     12 meses con las cinco familias con que abre Compras (S/ 1,63 millones):
+#     Carnes 39 %, Abarrotes 13 %, Verduras 9 %, Pescados y mariscos 9 %,
+#     Lácteos y quesos 8 % — juntas casi el 80 %. Y son las que más se mueven
+#     de una semana a otra (aves ±74 %, pescados ±50 %, carnes ±46 %): una
+#     semana alta se explica a la vista. Por FAMILIA no servía: Alimentos es
+#     el 87 % y las barras salían de un solo color.
+#   · PROVEEDOR: de quién se depende. Los cinco mayores son el 43 % de 138.
+#   · PRECIO: cuánto de cada barra se pagó por ENCIMA del precio habitual
+#     (`precio_habitual`). Es un cálculo propio, no un indicador estándar, y
+#     el hover lo dice. Del 1 de agosto al 7 de octubre de 2026: S/ 12.575
+#     pagados de más y S/ 14.627 de menos —neto, S/ 2.052 por debajo—, con
+#     referencia para el 96 % del gasto.
 #
-#     Día      42,9 / 38,5 / 21,4 %   la mayor entre 18,1 y 73,2   (30 per.)
-#     Semana   13,7 / 17,6 / 68,7 %   la mayor entre  6,5 y 28,7   (53 per.)
-#     Mes       4,7 / ...                                          — no entra
+# LAS DOS PRIMERAS VAN CON LAS `_PARTES_N` MAYORES DE LA VISTA y el resto en
+# gris, cada una con el color de su puesto en el HISTÓRICO
+# (`_comun.colores_estables`): mover la fecha no repinta Carnes de otro color.
+# El hover nombra TODAS las partes de la barra juntas, con la que está bajo
+# el cursor en negrita — la pregunta es por la barra, no por el tramo.
 #
-# En Mes la mayor es el 4,7 % de la barra: 3px que no se leen. En Semana el
-# peor caso es 6,5 %, pero sobre barras semanales —que son sumas de ~61
-# compras y llegan altas— eso sigue dando ~8px. Entra.
+# Y EL RESTO DE LA TARJETA NO CAMBIA: la etiqueta de arriba (total, docs,
+# variación), el clic, el foco y la tabla de abajo, que sigue dando una
+# columna por FAMILIA. El desglose por familia de cada barra salió del hover
+# (un hover de 16 renglones no entraba en la figura) y vive en esa tabla, que
+# tiene una fila por barra.
 #
-# LO QUE CAMBIA ENTRE LAS DOS NO ES SI SE VE, ES QUÉ DICE. En Día manda la
-# mayor (43 %) y la barra se lee «hubo una compra grande»; en Semana manda la
-# cola (69 %) y se lee «la semana son muchas compras medianas». Las dos son
-# ciertas y las dos son la misma pregunta —de qué está hecho este período—,
-# así que van con el mismo dibujo. Semana se sumó a pedido el 2026-09-17,
-# mirando la vista publicada: ahí los 8 puntos caían todos entre 0 y 5k
-# contra barras de 28-33k, o sea amontonados contra el cero, que es el bug
-# que el tope de `_tope_puntos` vino a mitigar y no a curar.
-#
-# POR QUÉ TRES Y NO UNA POR COMPRA. El día mediano trae 8,8 compras (mediana
-# histórica 13, máximo 46) y la cola a partir de la cuarta vale el 5 % del
-# total repartido entre todas: apilar una por compra da segmentos sub-píxel
-# y las líneas divisorias se los comen. Tres tramos es el corte más fino que
-# los datos sostienen.
-#
-# EL CLIC NO CAMBIA, y eso NO es una renuncia: la tabla de la derecha ya
-# abría en la compra mayor del período (`_sel = _docs["compra"].iloc[0]`),
-# así que en Día —donde el tope de puntos daba 1— clickear el punto hacía lo
-# mismo que clickear su barra. El punto era redundante justo en la
-# granularidad donde más se lo veía. Los tres tramos resuelven como barra.
-#
-# 2026-09-19: MES Y AÑO TAMBIÉN, a pedido («quitemos los puntos, deseo que
-# sea como en las otras opciones de día y semana, o sea partida»). La
-# medición de arriba sigue siendo cierta —en Mes la compra mayor es ~5 % de
-# la barra, una franja oscura fina contra el piso— y lo que cambió es cómo
-# se la lee: igual que en Semana, la barra no promete «ver la mayor», dice
-# de qué está hecho el período, y un mes casi todo claro dice «el mes son
-# cientos de compras chicas» — que es cierto y es información. Lo que sí se
-# fue con esto son los puntos, en todas las granularidades: ya no queda
-# ninguna traza de compras sueltas, así que el clic resuelve siempre como
-# barra y el `hovermode="closest"` ya no arbitra entre dos trazas.
+# LO DE ANTES (2026-09-17 → 2026-10-08, regla #453): la barra se partía en
+# tres tramos por TAMAÑO de compra —la mayor, la 2ª y 3ª, el resto— con tres
+# tonos del morado de la marca. Decía de qué estaba hecho el período (una
+# compra grande o muchas medianas), pero sólo dos renglones del hover
+# cambiaban de un tramo a otro y el reparto casi no variaba entre semanas:
+# era color sin respuesta.
 
 _GRAN_PARTIDA = ("Día", "Semana", "Mes", "Año")
-"""Granularidades cuya barra se parte en tramos: todas menos «Por
-documento», donde la barra YA es una compra y no hay nada que partir.
+"""Granularidades cuya barra se parte según «Partir por»: todas menos «Por
+documento», donde la barra YA es una compra y hay miles — ahí el selector
+se apaga (sigue dibujado: un widget que deja de dibujarse pierde su valor).
 
 Sumar una es sumarla acá y darle su entrada en `_TOTAL_DEL_PERIODO`, que es
 lo que evita que el hover diga «Total del día» sobre una semana."""
@@ -359,59 +365,312 @@ Era el literal «Total del día» mientras la barra partida vivía sólo en Día
 Al sumar Semana pasó a ser falso sin dar ningún error: el número era el de
 la semana y el rótulo decía día."""
 
-_TRAMOS = (
-    (0, 0, "La mayor"),
-    (1, 2, "2ª y 3ª"),
-    (3, None, "El resto"),
-)
-"""Los tres tramos, como (primer rango, último rango, rótulo de leyenda).
+_PARTIR_SUBFAMILIA = "Subfamilia"
+_PARTIR_PROVEEDOR = "Proveedor"
+_PARTIR_PRECIO = "Precio"
+_PARTIR_OPCIONES = (_PARTIR_SUBFAMILIA, _PARTIR_PROVEEDOR, _PARTIR_PRECIO)
+_PARTIR_DEFAULT = _PARTIR_SUBFAMILIA
+"""Las tres formas de partir la barra, en el orden del selector. Se ofrecen
+las que el parquet permite: sin columna de subfamilia, de proveedor o de
+cantidad, la suya no aparece (`_partir_disponibles`)."""
 
-El rango es el puesto de la compra dentro de su período ordenado por valor
-descendente, con 0 = la mayor. `None` como tope es «hasta el final»."""
+_PARTES_N = 5
+"""Subfamilias o proveedores con color propio; el resto va junto, en gris.
+Con una más que esto en la vista van todas: un «resto» de una sola sería
+esa misma con otro nombre. Cinco subfamilias son casi el 80 % del gasto."""
+
+_VENTANA_PRECIO = 90
+"""Días hacia atrás que mira el precio habitual de cada compra."""
+
+_PRODUCTOS_HOVER = 3
+"""Productos que nombra el hover de «Precio» entre los pagados de más."""
+
+_A_PRECIO_HABITUAL = "A precio habitual"
+_PAGADO_DE_MAS = "Pagado de más"
+_SIN_PRECIO_PREVIO = "Sin precio previo"
+
+_TITULO_PRECIO = (f"Contra el precio habitual · mediana de los "
+                  f"{_VENTANA_PRECIO} días anteriores")
+"""El renglón gris que abre las partes en el hover de «Precio»: quien lee
+«pagado de más» tiene que poder saber contra qué. Va en el hover y no en un
+`help=` del selector (con el rótulo oculto el «?» no se ve, regla #555) ni
+en un `title` de la leyenda (el contenedor de Plotly la tapa)."""
 
 
-def _tramos_del_periodo(dd, ord_claves):
-    """Un DataFrame por tramo, indexado por clave y alineado a `ord_claves`.
+def _partir_disponibles(hay_sub, hay_prov, hay_cant):
+    """Las opciones del selector que el parquet permite, en su orden."""
+    return [op for op, hay in ((_PARTIR_SUBFAMILIA, hay_sub),
+                               (_PARTIR_PROVEEDOR, hay_prov),
+                               (_PARTIR_PRECIO, hay_cant)) if hay]
 
-    Devuelve una lista de tres DataFrames con las columnas `valor` (la suma
-    del tramo), `n` (cuántas compras lo forman) y el `prov`/`doc` de la
-    primera de cada tramo —que en el primero es la compra mayor. Las claves
-    sin ese tramo —un día de una sola compra no tiene 2ª ni 3ª— salen en 0,
-    que es lo que Plotly necesita para que las tres trazas compartan eje."""
-    docs = (dd.groupby(["clave", "compra"], as_index=False)
-              .agg(valor=("valor", "sum"), prov=("prov", "first"),
-                   doc=("doc", "first")))
-    # `compra` de desempate para que el orden sea ESTABLE entre reruns, por
-    # el mismo motivo que el reparto de los puntos: dos compras del mismo
-    # valor no pueden intercambiarse entre una corrida y la siguiente.
-    docs = docs.sort_values(["clave", "valor", "compra"],
-                            ascending=[True, False, True])
-    docs["k"] = docs.groupby("clave").cumcount()
 
-    salida = []
-    for desde, hasta, _ in _TRAMOS:
-        sel = docs[docs["k"] >= desde]
-        if hasta is not None:
-            sel = sel[sel["k"] <= hasta]
-        agg = (sel.groupby("clave")
-                  .agg(valor=("valor", "sum"), n=("compra", "size"),
-                       prov=("prov", "first"), doc=("doc", "first")))
-        agg = agg.reindex(ord_claves)
-        agg["valor"] = agg["valor"].fillna(0.0)
-        agg["n"] = agg["n"].fillna(0).astype(int)
-        salida.append(agg)
-    return salida
+def precio_habitual(prod, fecha, valor, cant, dias=_VENTANA_PRECIO):
+    """El PRECIO HABITUAL de cada línea, alineado a `prod`: la mediana del
+    precio unitario (valor ÷ cantidad) del mismo producto en los `dias` días
+    ANTERIORES a su fecha, sin contar ese mismo día. NaN si en esa ventana no
+    hubo ninguna compra con precio.
+
+    Sin el mismo día a propósito: dos compras de una misma mañana no son una
+    la referencia de la otra. Las líneas sin cantidad o sin valor positivo no
+    dan precio, pero sí reciben el suyo. La mediana y no el promedio: una
+    compra de 200 g a un precio raro no mueve la referencia de un producto
+    que se compra por decenas de kilos.
+
+    Vectorizado: UN `groupby().rolling()` sobre todas las líneas, no un
+    recorrido por producto (regla #537). Medido sobre el histórico de las
+    cinco familias de entrada (45.026 líneas): 0,46 s; sobre un rango de dos
+    meses más su ventana, 0,13 s. La salida del rolling viene en el orden de
+    sus grupos, así que se devuelve por POSICIÓN —la columna `pos`— y no por
+    el índice, que en pandas 2 y 3 sale distinto (regla #481) y en el parquet
+    puede repetirse."""
+    n = len(prod)
+    valor = pd.to_numeric(valor, errors="coerce")
+    cant = pd.to_numeric(cant, errors="coerce")
+    pu = (valor / cant).where((cant > 0) & (valor > 0))
+    t = pd.DataFrame({
+        "prod": prod.astype(str).to_numpy(),
+        "fecha": pd.to_datetime(fecha, errors="coerce").dt.normalize().to_numpy(),
+        "pu": pu.to_numpy(dtype=float, na_value=np.nan),
+        "pos": np.arange(n),
+    }).dropna(subset=["fecha"])
+    out = np.full(n, np.nan)
+    if t.empty:
+        return pd.Series(out, index=prod.index)
+    t = t.sort_values(["prod", "fecha"], kind="stable")
+    med = (t.groupby("prod", sort=True)
+             .rolling(f"{int(dias)}D", on="fecha", closed="left")["pu"]
+             .median())
+    out[t["pos"].to_numpy()] = med.to_numpy(dtype=float, na_value=np.nan)
+    return pd.Series(out, index=prod.index)
+
+
+def partes_por_columna(dd, col, ord_claves, orden=(), n=_PARTES_N,
+                       resto="Otras", nombrar=str):
+    """Las partes de cada barra según la columna `col` de `dd` (subfamilia o
+    proveedor), como `[(rótulo, color, [valor por período]), …]` alineadas a
+    `ord_claves`, en el orden de lectura —la mayor primero— que es también
+    el de la pila, de abajo hacia arriba.
+
+    Las `n` mayores de la VISTA, con el color de su puesto en `orden` —el
+    histórico—, y arriba «Otras (k)» en gris con lo que falta para el total
+    de cada barra: el resto no se vuelve a sumar por categoría, así la barra
+    cierra por construcción. Con `n + 1` o menos van todas. Una categoría
+    que no suma nada positivo en la vista no tiene parte. Pura."""
+    tot = (dd.groupby(col)["valor"].sum()
+             .sort_values(ascending=False, kind="stable"))
+    tot = tot[tot > 0]
+    if tot.empty:
+        return []
+    por = (dd.groupby(["clave", col])["valor"].sum().unstack(col)
+             .reindex(ord_claves).fillna(0.0))
+    nombres = (list(tot.index) if len(tot) <= n + 1
+               else list(tot.index[:n]))
+    color = colores_estables(list(orden), nombres)
+    partes = [(nombrar(c), color[c], [float(v) for v in por[c]])
+              for c in nombres]
+    if len(nombres) < len(tot):
+        totales = (dd.groupby("clave")["valor"].sum()
+                     .reindex(ord_claves).fillna(0.0))
+        acum = por[nombres].sum(axis=1)
+        partes.append((f"{resto} ({len(tot) - len(nombres)})",
+                       GRIS_TEXTO_SUAVE,
+                       [max(float(t) - float(a), 0.0)
+                        for t, a in zip(totales, acum)]))
+    return partes
+
+
+def partes_por_precio(dd, ord_claves):
+    """`(partes, pila, extra)` de «Partir por» Precio.
+
+    `dd` trae `valor`, `cant`, `prod`, `clave` y `ref` —el precio habitual de
+    cada línea, de `precio_habitual`—. Cada línea con referencia se parte en
+    lo que habría costado a ese precio (tope: lo pagado) y lo que se pagó
+    por encima; la que no tiene, va entera a «Sin precio previo». Las tres
+    partes suman el total de la barra por construcción.
+
+    `partes` viene en el orden de lectura (el de la leyenda y el hover):
+    habitual, de más, sin precio. `pila` es el orden de abajo hacia arriba
+    —sin precio, habitual, de más—, para que el rojo quede ARRIBA de la
+    barra, que es donde se lo busca. Una parte que es cero en toda la vista
+    no se dibuja.
+
+    `extra` es, por clave, el texto del hover que no es una parte: lo pagado
+    de MENOS, el neto contra el precio habitual y los productos que más se
+    pagaron de más. Pura."""
+    v = dd["valor"].astype(float)
+    con = dd["ref"].notna() & (dd["cant"] > 0) & (v > 0)
+    hab = (dd["cant"] * dd["ref"]).where(con, 0.0)
+    de_mas = (v - hab).clip(lower=0).where(con, 0.0)
+    t = pd.DataFrame({
+        "clave": dd["clave"],
+        "sin": v.where(~con, 0.0),
+        "habitual_parte": (v - de_mas).where(con, 0.0),
+        "de_mas": de_mas,
+        "de_menos": (hab - v).clip(lower=0).where(con, 0.0),
+        "habitual": hab,
+        "pagado": v.where(con, 0.0),
+    })
+    g = (t.groupby("clave")[["sin", "habitual_parte", "de_mas", "de_menos",
+                             "habitual", "pagado"]].sum()
+           .reindex(ord_claves).fillna(0.0))
+    todas = [(_A_PRECIO_HABITUAL, SERIE_PRINCIPAL, "habitual_parte", 1),
+             (_PAGADO_DE_MAS, ERROR, "de_mas", 2),
+             (_SIN_PRECIO_PREVIO, GRIS_TEXTO_SUAVE, "sin", 0)]
+    vivas = [p for p in todas if float(g[p[2]].abs().sum()) > 0]
+    partes = [(rot, color, [float(x) for x in g[campo]])
+              for rot, color, campo, _ in vivas]
+    pila = sorted(range(len(vivas)), key=lambda i: vivas[i][3])
+
+    # Los productos pagados de más, por período: los `_PRODUCTOS_HOVER`
+    # mayores, con el % que se pagó por encima EN ESAS LÍNEAS. Un groupby
+    # sobre todas las filas, no un recorrido por período (#537).
+    sobre = con & (de_mas > 0)
+    pr = pd.DataFrame({"clave": dd.loc[sobre, "clave"],
+                       "prod": dd.loc[sobre, "prod"].astype(str),
+                       "de_mas": de_mas[sobre], "habitual": hab[sobre]})
+    pr = pr.groupby(["clave", "prod"], as_index=False)[
+        ["de_mas", "habitual"]].sum()
+    pr = pr.sort_values(["clave", "de_mas", "prod"],
+                        ascending=[True, False, True], kind="stable")
+    pr["k"] = pr.groupby("clave").cumcount()
+    pr = pr[pr["k"] < _PRODUCTOS_HOVER]
+    pr["txt"] = [f"{escape(_compras_truncar(p, 30))}: +S/ {m:,.2f} "
+                 f"(+{_pct_parte(m / h if h else 0.0)})"
+                 for p, m, h in zip(pr["prod"], pr["de_mas"], pr["habitual"])]
+    prods = pr.groupby("clave")["txt"].agg("<br>".join)
+
+    # Un texto por PERÍODO (decenas, a lo sumo un millar en «Día» sobre el
+    # histórico), armado con `zip` sobre las columnas ya sumadas.
+    prods = prods.to_dict()
+    extra = {}
+    for c, menos, habitual, pagado in zip(g.index, g["de_menos"],
+                                          g["habitual"], g["pagado"]):
+        renglones = []
+        if menos:
+            renglones.append(f"Pagado de menos: S/ {menos:,.2f}")
+        if habitual:
+            neto = pagado - habitual
+            txt_pct, color = _fmt_variacion(neto / habitual * 100)
+            signo = "+" if neto > 0 else ("−" if neto < 0 else "")
+            renglones.append(
+                f"Neto: <span style='color:{color}'><b>{signo}S/ "
+                f"{abs(neto):,.2f} ({txt_pct})</b></span> contra el precio "
+                "habitual")
+        if c in prods:
+            renglones.append(f"<span style='color:{GRIS_TEXTO}'>Lo que más "
+                             f"se pagó de más</span><br>{prods[c]}")
+        extra[c] = "".join(f"<br>{x}" for x in renglones)
+    return partes, pila, extra
+
+
+def _orden_historico(d, d_full, col, col_valor):
+    """Las categorías de `col` de mayor a menor en el HISTÓRICO (`d_full`,
+    con los chips de la franja; `d` si no viene): el orden estable con el que
+    `colores_estables` reparte los colores."""
+    src = (d_full if (d_full is not None and col in d_full.columns
+                      and col_valor in d_full.columns) else d)
+    return (pd.to_numeric(src[col_valor], errors="coerce").fillna(0)
+              .groupby(src[col].astype(str)).sum()
+              .sort_values(ascending=False, kind="stable").index.tolist())
+
+
+def _vacio(s):
+    """True si una categoría viene vacía: `astype(str)` escribe «nan»."""
+    return str(s).strip() in ("", "nan", "None", "<NA>")
+
+
+def _rotulo_subfamilia(s):
+    """«PESCADOS Y MARISCOS» → «Pescados y mariscos», como las familias."""
+    return "Sin subfamilia" if _vacio(s) else _nombre_familia(s)
+
+
+def _rotulo_proveedor(p):
+    """El proveedor como nombre propio, sin la forma jurídica del final
+    («S.A.C.», «EIRL») y corto: es una ficha de la leyenda, y cinco nombres
+    enteros no entraban en el renglón del título."""
+    if _vacio(p):
+        return "Sin proveedor"
+    pal = nombre_propio(p).split()
+    while (len(pal) > 1
+           and pal[-1].replace(".", "").upper() in _SIGLAS_RAZON_SOCIAL):
+        pal.pop()
+    return _compras_truncar(" ".join(pal), 20)
+
+
+def _precio_habitual_de(dd, d, d_full, col_prod, col_fecha, col_valor,
+                        col_cant):
+    """`precio_habitual` de cada fila de `dd`, como array alineado a ella.
+
+    SALE DEL HISTÓRICO, no del rango: la primera compra del rango también
+    tiene sus 90 días previos. Sólo los productos de la vista y sólo la
+    ventana que hace falta. Y es del producto y del DÍA —todas las líneas de
+    un producto en un mismo día comparten la suya—, así que viaja por
+    (producto, día) y no por índice de fila, que en el parquet puede
+    repetirse."""
+    src = (d_full if (d_full is not None and all(
+               c in d_full.columns
+               for c in (col_prod, col_fecha, col_valor, col_cant))) else d)
+    f_src = pd.to_datetime(src[col_fecha], errors="coerce")
+    p_src = src[col_prod].astype(str)
+    lo = dd["fecha"].min().normalize() - pd.Timedelta(days=_VENTANA_PRECIO)
+    m = (f_src >= lo) & (f_src <= dd["fecha"].max()) & p_src.isin(set(dd["prod"]))
+    ref = precio_habitual(p_src[m], f_src[m], src.loc[m, col_valor],
+                          src.loc[m, col_cant])
+    ref = pd.Series(ref.to_numpy(), index=pd.MultiIndex.from_arrays(
+        [p_src[m].to_numpy(), f_src[m].dt.normalize().to_numpy()]))
+    ref = ref[~ref.index.duplicated()]
+    return ref.reindex(pd.MultiIndex.from_arrays(
+        [dd["prod"].to_numpy(), dd["fecha"].dt.normalize().to_numpy()])
+    ).to_numpy()
+
+
+def _pct_parte(p):
+    """La parte de un total como «4.3%» o «39%»: un decimal por debajo del
+    10 %, como `_fmt_variacion`. Sin signo — es una parte, no un cambio."""
+    pct = p * 100
+    return f"{pct:.1f}%" if abs(pct) < 10 else f"{pct:.0f}%"
+
+
+def _hover_partes(partes, tot, titulo):
+    """El bloque del hover que nombra las partes de cada barra: una lista
+    por parte, con un texto por período, en el que la parte bajo el cursor
+    va en negrita y las demás normales — todas juntas, porque la pregunta es
+    por la barra. Las que en esa barra valen cero no se nombran. Empieza con
+    `<br>` para colgarse de un `hovertemplate`."""
+    cab = f"<br><span style='color:{GRIS_TEXTO}'>{titulo}</span>"
+    filas = []
+    for j, total in enumerate(tot):
+        filas.append([
+            (k, f"{escape(rot)}: S/ {vals[j]:,.2f} · "
+                f"{_pct_parte(vals[j] / total if total else 0.0)}")
+            for k, (rot, _c, vals) in enumerate(partes) if vals[j]])
+    return [[cab + "".join(f"<br><b>{txt}</b>" if k == i else f"<br>{txt}"
+                           for k, txt in fila)
+             for fila in filas]
+            for i in range(len(partes))]
+
+
+def _leyenda_html(partes):
+    """La leyenda de las partes como fichas de HTML, para el renglón del
+    título: la de Plotly vivía debajo del eje y se montaba sobre el año del
+    primer rótulo."""
+    fichas = "".join(f"<span class='cp-sem-ley-it'><i style='background:"
+                     f"{color}'></i>{escape(rot)}</span>"
+                     for rot, color, _vals in partes)
+    return f"<div class='cp-sem-ley'>{fichas}</div>"
 
 
 def _etiqueta_en_la_punta(tramos, textos):
     """El texto de cada TRAMO, con la etiqueta del total sólo en el de arriba.
 
-    `tramos` son los de `_tramos_del_periodo` (abajo → arriba) y `textos` el
-    total ya formateado de cada período, alineado al eje. Devuelve una lista
-    por tramo, con `None` donde no va nada.
+    `tramos` son las partes de la barra de abajo hacia arriba, cada una con
+    su `valor` por período (aquí, las de «Partir por»; en Ventas, las suyas)
+    y `textos` el total ya formateado de cada período, alineado al eje.
+    Devuelve una lista por tramo, con `None` donde no va nada.
 
-    Va en el tramo más alto CON VALOR, no en el último: un día de dos compras
-    no tiene «el resto», y Plotly pone el `outside` de una barra apilada sólo
+    Va en el tramo más alto CON VALOR, no en el último: una semana sin
+    compras de la quinta subfamilia no tiene esa parte, y Plotly pone el
+    `outside` de una barra apilada sólo
     en la que termina la pila (`_outmost` en su `cross_trace_calc`; a las
     demás las trata como `inside`). Colgar la etiqueta siempre del tercer
     tramo la dejaría, en esos días, dependiendo de cómo Plotly trate una
@@ -582,7 +841,12 @@ agranda el margen de abajo hasta que entre la leyenda, así que lo que la
 leyenda pide CRECE con la figura. Medido a 1366x768 (2026-09-14): figura
 449 → área 335, figura 240 → área 164. Las dos cierran con
 `(alto − _MARGEN_Y_FIG) / (1 + _LEYENDA_Y)`; un cromo fijo no cierra con
-las dos (salen 114 y 76px)."""
+las dos (salen 114 y 76px).
+
+Desde el 2026-10-08 (#620) ninguna de las dos figuras que usan esta cuenta
+dibuja la leyenda de Plotly —ni ésta ni las de Movimientos—: el área de
+trazo real es MAYOR que la calculada, y la diferencia es aire sobre las
+etiquetas. Se deja así a propósito: errar por ese lado no pisa nada."""
 
 
 def _alto_area_trazo(alto_fig):
@@ -1544,11 +1808,13 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         else:
             g["hov"] = g["clave"].map(lambda _c: _rot_de[_c][1])
 
-        # El desglose por familia de CADA barra, al final de su hover (regla
-        # #454). Mismo texto para los tres tramos de un día: la pregunta es
-        # por la barra, no por el tramo que quedó bajo el cursor.
-        _fam_de = _familias_por_clave(dd)
-        g["fam_hov"] = g["clave"].map(_fam_de).fillna("")
+        # El desglose por familia de cada barra, al final de su hover (regla
+        # #454), queda sólo en «Por documento». En las otras granularidades
+        # el hover nombra las partes de «Partir por», y el desglose por
+        # familia de cada barra vive en la tabla de abajo, que tiene una fila
+        # por barra (regla #620): los dos juntos no entraban en la figura.
+        g["fam_hov"] = (g["clave"].map(_familias_por_clave(dd)).fillna("")
+                        if gran == "Por documento" else "")
 
         # ── EL CLIC SE RESUELVE ANTES DE DIBUJAR (2026-09-13, #398 y #399) ─
         # La tarjeta mide lo que la de «Vs año pasado» con detalle o sin él,
@@ -1725,49 +1991,73 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             textangle=-90 if _plan_etq in ("girada", "unida") else 0,
             textfont=dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL))
 
+        # ── «PARTIR POR»: DE QUÉ ESTÁ HECHA CADA BARRA (regla #620) ──────
+        # SE LEE DE `session_state` Y NO DEL WIDGET, como el modo: el
+        # selector se dibuja en el renglón del título, pegado al gráfico, y
+        # las partes hacen falta antes, para armar la figura. Una clave con
+        # `key` se lee sin dibujarla y en la corrida del clic ya trae el
+        # valor nuevo. Se siembra acá, antes de que el widget exista, que es
+        # cuando se puede escribir.
+        _ops_partir = _partir_disponibles(_hay_sub, _hay_prov, bool(col_cant))
+        _partir = st.session_state.get("compras_sem_partir")
+        if _ops_partir and _partir not in _ops_partir:
+            _partir = (_PARTIR_DEFAULT if _PARTIR_DEFAULT in _ops_partir
+                       else _ops_partir[0])
+            st.session_state["compras_sem_partir"] = _partir
+        _partes, _pila, _extra_hov, _tit_partes = [], [], {}, ""
+        if gran in _GRAN_PARTIDA and _partir == _PARTIR_SUBFAMILIA:
+            _partes = partes_por_columna(
+                dd, "sub", _ord_claves,
+                orden=_orden_historico(d, d_full, col_subfam, col_valor),
+                resto="Otras", nombrar=_rotulo_subfamilia)
+            _tit_partes = "Por subfamilia"
+        elif gran in _GRAN_PARTIDA and _partir == _PARTIR_PROVEEDOR:
+            _partes = partes_por_columna(
+                dd, "prov", _ord_claves,
+                orden=_orden_historico(d, d_full, col_prov, col_valor),
+                resto="Otros", nombrar=_rotulo_proveedor)
+            _tit_partes = "Por proveedor"
+        elif gran in _GRAN_PARTIDA and _partir == _PARTIR_PRECIO:
+            dd["ref"] = _precio_habitual_de(dd, d, d_full, col_prod,
+                                            col_fecha, col_valor, col_cant)
+            _partes, _pila, _extra_hov = partes_por_precio(dd, _ord_claves)
+            _tit_partes = _TITULO_PRECIO
+        if not _pila:
+            _pila = list(range(len(_partes)))
+        _partida = bool(_partes)
+
         fig = go.Figure()
-        _partida = gran in _GRAN_PARTIDA
+        _colores_traza = [SERIE_PRINCIPAL]
         if _partida:
-            # ── La barra partida en tres (ver el bloque de `_TRAMOS`) ────
-            # El apilado va de la mayor ABAJO hacia la cola arriba: Plotly
-            # apila en el orden en que se agregan las trazas, y el orden del
-            # color es el orden del dato.
+            # ── La barra partida según «Partir por» ─────────────────────
+            # Plotly apila en el orden en que se agregan las trazas: `_pila`
+            # es ese orden, de abajo hacia arriba (la mayor abajo; en Precio,
+            # el rojo arriba). El hover de cada parte nombra TODAS las de su
+            # barra, con la suya en negrita (`_hover_partes`).
             _hov = _de_g["hov"].reindex(_ord_claves).tolist()
-            _famh = _de_g["fam_hov"].reindex(_ord_claves).tolist()
             _rot_total = _TOTAL_DEL_PERIODO.get(gran, "Total del período")
-            _tramos = _tramos_del_periodo(dd, _ord_claves)
-            _textos_tr = (_etiqueta_en_la_punta(_tramos, _textos)
-                          if _plan_etq else [None] * len(_tramos))
+            _cab_tot = [f"{_rot_total}: S/ {_t:,.2f}{_d}"
+                        for _t, _d in zip(_tot, _docs_hov)]
+            _hov_partes = _hover_partes(_partes, _tot, _tit_partes)
+            _extra = [_extra_hov.get(_c, "") for _c in _ord_claves]
+            _textos_tr = (_etiqueta_en_la_punta(
+                              [{"valor": pd.Series(_partes[_k][2])}
+                               for _k in _pila], _textos)
+                          if _plan_etq else [None] * len(_pila))
             _xs = list(range(_n_per))
-            for _i, (_tr, (_, _, _rot)) in enumerate(zip(_tramos, _TRAMOS)):
-                # El detalle del hover es distinto en el primero: ahí hay UNA
-                # compra y se la puede nombrar. En los otros dos la pregunta
-                # es cuántas son, no cuál.
-                if _i == 0:
-                    _det = [_compras_truncar(nombre_propio(_p))
-                            + (f" · {_d}" if _d else "")
-                            for _p, _d in zip(_tr["prov"].fillna(""),
-                                              _tr["doc"].fillna(""))]
-                else:
-                    _det = [f"{_n} compra" + ("" if _n == 1 else "s")
-                            for _n in _tr["n"]]
+            for _j, _k in enumerate(_pila):
+                _rot, _color, _vals = _partes[_k]
                 fig.add_bar(
-                    x=_xs, y=_tr["valor"], name=_rot,
-                    marker=dict(color=SERIE_TRAMOS[_i]),
-                    customdata=list(zip(_hov, _det, _tot, _famh, _docs_hov,
-                                        _var_hov)),
-                    hovertemplate=("%{customdata[0]}"
-                                   f"<br><b>{_rot}</b>: S/ %{{y:,.2f}}"
-                                   "<br>%{customdata[1]}"
-                                   f"<br>{_rot_total}: "
-                                   "S/ %{customdata[2]:,.2f}"
-                                   "%{customdata[4]}"
-                                   "%{customdata[5]}"
-                                   "%{customdata[3]}"
-                                   "<extra></extra>"),
+                    x=_xs, y=_vals, name=_rot, marker=dict(color=_color),
+                    customdata=list(zip(_hov, _cab_tot, _var_hov,
+                                        _hov_partes[_k], _extra)),
+                    hovertemplate=("%{customdata[0]}<br>%{customdata[1]}"
+                                   "%{customdata[2]}%{customdata[3]}"
+                                   "%{customdata[4]}<extra></extra>"),
                 )
                 if _plan_etq:
-                    fig.data[-1].update(text=_textos_tr[_i], **_estilo_etq)
+                    fig.data[-1].update(text=_textos_tr[_j], **_estilo_etq)
+            _colores_traza = [_partes[_k][1] for _k in _pila]
             # `stack` sólo acá: en «Por documento» la figura tiene una sola
             # traza y apilar no significa nada.
             fig.update_layout(barmode="stack")
@@ -1816,12 +2106,11 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _marcar_foco = (_con_detalle and _modo == _MODO_DETALLE
                         and not _prov_ok)
         if _marcar_foco and _partida:
-            # Las tres trazas comparten el eje `_ord_claves`, así que el
-            # mismo criterio sirve para las tres: lo que se marca es el
-            # PERÍODO, y un período en foco se ilumina entero. Cada tramo
-            # conserva su tono; sólo se atenúa el de los períodos sin foco.
-            for _i, _tr in enumerate(fig.data):
-                _base = SERIE_TRAMOS[_i]
+            # Las partes comparten el eje `_ord_claves`, así que el mismo
+            # criterio sirve para todas: lo que se marca es el PERÍODO, y un
+            # período en foco se ilumina entero. Cada parte conserva su
+            # color; sólo se atenúa el de los períodos sin foco.
+            for _tr, _base in zip(fig.data, _colores_traza):
                 _dim = _con_alpha(_base, _ATENUADO)
                 _tr.marker.color = [_base if _c == _focus else _dim
                                     for _c in _ord_claves]
@@ -1839,11 +2128,15 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             if _rng_y:
                 fig.update_yaxes(range=_rng_y)
         fig.update_layout(
-            title=_titulo,
-            # `y` sale de `_LEYENDA_Y`: la cuenta del techo de las etiquetas
-            # depende de dónde va la leyenda.
-            legend=dict(orientation="h", y=-_LEYENDA_Y, x=0,
-                        font=dict(size=10)),
+            # SIN TÍTULO NI LEYENDA DE PLOTLY desde el 2026-10-08 (#620): los
+            # dos viven en el renglón de arriba de la figura, en HTML, junto
+            # al selector «Partir por» (`cp_sem_cab_graf`). La leyenda vivía
+            # debajo del eje y se montaba sobre el año del primer rótulo; el
+            # título, arriba a la izquierda, en los mismos 30px de margen que
+            # ahora ocupa ese renglón. Las cuentas de las etiquetas siguen
+            # suponiendo la leyenda (`_LEYENDA_Y`): calculan con un área de
+            # trazo MENOR que la real, así que sobra aire y nada se pisa.
+            showlegend=False,
             # Era explícito por los puntos, que tenían que ganarle el hover a
             # la barra de abajo. Sin puntos no arbitra nada, pero sigue siendo
             # el default de Plotly y el que las trazas apiladas necesitan.
@@ -1918,9 +2211,33 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # El clic ya se resolvió ARRIBA, antes de armar el layout (ver «EL
         # CLIC SE RESUELVE ANTES DE DIBUJAR»): lo que devuelve esta llamada
         # no se lee, a propósito.
-        st.plotly_chart(
-            fig, use_container_width=True, on_select="rerun",
-            selection_mode="points", key=_key_graf)
+        # ── EL RENGLÓN DEL TÍTULO: título, «Partir por» y leyenda (#620) ──
+        # Va ENCIMA de la figura, en sus 30px de margen de arriba, que eran
+        # del título de Plotly: no le agrega un píxel a la tarjeta. El
+        # contenedor es `absolute` (`_css_proveedor.py`) y deja libre la
+        # esquina derecha, donde Plotly pone su barrita de zoom y foto.
+        #
+        # En «Por documento» el selector se dibuja APAGADO y no se esconde:
+        # un widget que deja de dibujarse pierde su valor, y volver a
+        # «Semana» lo devolvería a Subfamilia.
+        with st.container(key="cp_sem_graf"):
+            with st.container(horizontal=True, gap="small",
+                              vertical_alignment="center",
+                              key="cp_sem_cab_graf"):
+                st.markdown(f"<div class='cp-sem-tit'>{escape(_titulo)}</div>",
+                            unsafe_allow_html=True)
+                if _ops_partir:
+                    st.segmented_control(
+                        "Partir por", _ops_partir, required=True,
+                        key="compras_sem_partir",
+                        label_visibility="collapsed",
+                        disabled=gran not in _GRAN_PARTIDA)
+                if _partida:
+                    st.markdown(_leyenda_html(_partes),
+                                unsafe_allow_html=True)
+            st.plotly_chart(
+                fig, use_container_width=True, on_select="rerun",
+                selection_mode="points", key=_key_graf)
 
         # ── LA FILA QUE ELIGE QUÉ SE VE ABAJO (2026-09-19, regla #476) ───
         # A pedido: «podemos alternar esa zona donde aparecen estas dos

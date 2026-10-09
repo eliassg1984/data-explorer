@@ -1187,6 +1187,15 @@ el rango de una franja que ya no se ve. Lo vigila
   padding: 0 }`, que le gana a una clase sola: el marco de la fila de
   «Por hora» no se veía. Selector largo (`.js-plotly-plot .plotly
   div.mi-clase`). Regla #554.
+- **Un renglón de HTML puesto ENCIMA de una figura va por DEBAJO de
+  ella.** Por encima tapa el hover (las fichas de una leyenda se pintaban
+  sobre su primera línea); sin `z-index` —el fondo de la figura es
+  transparente— el hover lo tapa a él. Pero el `div.svg-container` de
+  Plotly cubre la figura entera y se come los clics: el control que tenga
+  que recibirlos sube solo, con su propio `z-index`, y un `title` en lo de
+  abajo no se ve nunca. Así va el título de «Compras por período» con su
+  selector «Partir por» (`cp_sem_cab_graf`, en
+  `graficos/compras/_css_proveedor.py`). Regla #620.
 
 ## AgGrid — específicos de este proyecto
 

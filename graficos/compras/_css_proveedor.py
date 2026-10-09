@@ -1072,6 +1072,126 @@ CSS = """        <style>
         .st-key-cp_sem_resumen .stCustomComponentV1 {
             display: block !important;
         }
+        /* ── EL RENGLÓN DEL TÍTULO DEL GRÁFICO (2026-10-08, regla #620) ──
+           El título, el selector «Partir por» y la leyenda de las partes,
+           ENCIMA de la figura: en sus 30px de margen de arriba, que eran
+           del título de Plotly, así que no le agregan un píxel a la
+           tarjeta. Lo que sale del flujo es el `stLayoutWrapper` que
+           envuelve a la key —el item del flex es él, regla #272—, y un
+           hijo `absolute` de un flex no cobra el `gap`. El `right` deja
+           libre la esquina donde Plotly pone su barrita de zoom y foto
+           (224px medidos a 1323).
+
+           VA POR DEBAJO DEL GRÁFICO, MENOS EL SELECTOR. Sin `z-index`, el
+           gráfico —que viene después— se pinta encima, y como su fondo es
+           transparente el renglón se sigue viendo; así el cuadro del hover
+           tapa al título y a la leyenda y no al revés (con el renglón
+           encima, las fichas de la leyenda se pintaban sobre la primera
+           línea del hover). Pero el `div.svg-container` de Plotly cubre la
+           figura entera y se queda con los clics: medido, el del selector
+           no llegaba. Por eso el selector, y sólo él, sube con su propio
+           `z-index` — el envoltorio no arma un contexto de apilamiento, así
+           que compite directo con el gráfico. */
+        .st-key-cp_sem_graf { position: relative !important; }
+        .st-key-cp_sem_graf
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_cab_graf) {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 232px !important;
+            width: auto !important;
+            height: 30px !important;
+        }
+        .st-key-cp_sem_cab_graf {
+            height: 30px !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            gap: 14px !important;
+            overflow: hidden !important;
+        }
+        /* El selector no cede; el título y la leyenda sí (con «…» el
+           título, recortada la leyenda: el hover nombra todas las partes). */
+        .st-key-cp_sem_cab_graf > [data-testid="stElementContainer"] {
+            width: auto !important;
+            flex: 0 1 auto !important;
+            min-width: 0 !important;
+        }
+        .st-key-cp_sem_cab_graf > .st-key-compras_sem_partir {
+            flex: 0 0 auto !important;
+            position: relative !important;
+            z-index: 3 !important;
+        }
+        /* El título mide lo suyo hasta el 40 % del renglón: con cinco
+           proveedores la leyenda parte en dos y, sin este tope, el que
+           cedía primero era el título («Compra por sema…»). */
+        .st-key-cp_sem_cab_graf > [data-testid="stElementContainer"]:first-child {
+            flex: 0 0 auto !important;
+            max-width: 40% !important;
+        }
+        .st-key-cp_sem_cab_graf [data-testid="stMarkdownContainer"] {
+            margin-bottom: 0 !important;
+        }
+        /* El título, como lo escribía Plotly: 16px y sin negrita. */
+        .st-key-cp_sem_cab_graf .cp-sem-tit {
+            font-size: 16px;
+            font-weight: 400;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-left: 4px;
+        }
+        /* Si no entra en un renglón, parte en dos: a 10.5px, dos líneas de
+           12 más su aire caben en los 30px. Lo que ni así entra se recorta
+           (el hover nombra todas las partes). */
+        .st-key-cp_sem_cab_graf .cp-sem-ley {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px 12px;
+            max-height: 28px;
+            overflow: hidden;
+            white-space: nowrap;
+            font-size: 10.5px;
+            line-height: 12px;
+            color: var(--text-secondary);
+        }
+        .st-key-cp_sem_cab_graf .cp-sem-ley-it {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .st-key-cp_sem_cab_graf .cp-sem-ley-it i {
+            flex: none;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+        /* Más chico que los toggles de la cabecera (32px): manda sobre el
+           gráfico, no sobre la tarjeta, y tiene que entrar en los 30px. */
+        .st-key-compras_sem_partir [data-testid="stButtonGroup"] button {
+            min-height: 24px !important;
+            height: 24px !important;
+            padding: 0 10px !important;
+            font-size: 11.5px !important;
+        }
+        /* En el celular el renglón vuelve al flujo y parte en dos: no hay
+           ancho para las tres cosas en uno, y encima tapaban las barras. */
+        @media (max-width: 768px) {
+            .st-key-cp_sem_graf
+                > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_cab_graf) {
+                position: static !important;
+                height: auto !important;
+            }
+            .st-key-cp_sem_cab_graf {
+                height: auto !important;
+                flex-wrap: wrap !important;
+            }
+            /* Con el renglón partido, el título tiene el suyo entero. */
+            .st-key-cp_sem_cab_graf
+                > [data-testid="stElementContainer"]:first-child {
+                max-width: none !important;
+            }
+        }
         /* (Acá vivía la fila de KPI de la vista, `.st-key-cp_sem_kpi`,
            regla #454. Se quitó el 2026-10-01, a pedido: la tabla de
            Resumen ya da el total y lo de cada familia. Sus 38px son de la
