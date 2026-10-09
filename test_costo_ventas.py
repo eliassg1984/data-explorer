@@ -156,7 +156,7 @@ ok(float(venta.loc[P("2026-09")].sum()) == 60.0, "Eventos no suma a la venta")
 # ── armar: la tabla entera ───────────────────────────────────────────────
 D = cv.armar(ajuste, compras, salidas, pgd)
 igual([x["k"] for x in D["periodos"]], ["2026-09", "2026-10"], "armar: meses")
-igual(D["periodos"][0]["sub"], "cierre 1 oct", "el mes dice la fecha de su cierre")
+igual(D["periodos"][0]["sub"], "1 oct", "el mes dice la fecha de su cierre")
 f = D["filas"]
 igual(f["inv_inicial"]["Alimentos"][0], 1200.0, "el inicial de setiembre es el final de agosto")
 igual(f["inv_final"]["Alimentos"][0], 950.0, "el final de setiembre")

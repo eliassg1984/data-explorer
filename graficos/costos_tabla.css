@@ -4,68 +4,73 @@
    variables de estilos/_00_base.py, que SÍ cruzan el shadow root. Ningún
    selector :has, por la regla #469. */
 
-.cv { display: grid; gap: 12px; color: var(--text-primary); font-size: 13px; line-height: 1.35; }
-.cv button { font: inherit; }
-.cv button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cv { display: grid; gap: 8px; color: var(--text-primary); font-size: 13px; line-height: 1.3; }
+.cv button, .cv select { font: inherit; }
+.cv button:focus-visible, .cv select:focus-visible, .dd summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.cv-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
-.cv-cab h2 { margin: 0; font-size: 16px; font-weight: 600; }
+/* UNA fila: título y rango a la izquierda, controles a la derecha. */
+.cv-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; }
+.cv-tit { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; }
+.cv-tit h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .cv-rango { color: var(--text-secondary); font-size: 12.5px; }
+.cv-kardex { color: var(--warning-text); font-size: 12px; cursor: help; white-space: nowrap; }
 .cv-ventana { display: inline-flex; gap: 4px; }
 .cv-ventana button { border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
   border-radius: 6px; padding: 0 7px; cursor: pointer; }
 .cv-ventana button:disabled { opacity: .4; cursor: default; }
 
-.cv-controles { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
-.cv-grupo { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.cv-rot { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); margin-right: 2px; }
-.chip { font-size: 12.5px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
-  border-radius: 999px; padding: 3px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.chip .pt { width: 8px; height: 8px; border-radius: 50%; }
-.chip[aria-pressed="true"] { border-color: var(--border-lavender); background: var(--accent-tint); color: var(--text-primary); font-weight: 600; }
-.interruptor { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.cv-controles { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.cv-rot { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); }
+.cv-campo { display: inline-flex; align-items: center; gap: 6px; }
+.cv-campo select { border: 1px solid var(--border-lavender); border-radius: 7px; background: var(--bg-card);
+  color: var(--text-primary); padding: 3px 8px; font-size: 12.5px; cursor: pointer; }
+.pt { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+/* Familias: un desplegable con casillas (un <details>, sin JS para abrirlo). */
+.dd { position: relative; }
+.dd summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.dd summary::-webkit-details-marker { display: none; }
+.dd-val { border: 1px solid var(--border-lavender); border-radius: 7px; background: var(--bg-card); padding: 3px 8px; font-size: 12.5px; }
+.dd-fl { color: var(--text-secondary); font-size: 10px; margin-left: -2px; }
+.dd-panel { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; background: var(--bg-card);
+  border: 1px solid var(--border-lavender); border-radius: 8px; box-shadow: var(--shadow-md); padding: 6px; display: grid; gap: 2px; min-width: 200px; }
+.dd-op { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
+.dd-op:hover { background: var(--accent-tint); }
+.dd-op input { accent-color: var(--accent); margin: 0; }
+.dd-nota { font-size: 11px; color: var(--text-secondary); padding: 4px 6px 2px; max-width: 220px; line-height: 1.35; }
+.interruptor { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
 .interruptor input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
 
-.cv-aviso { font-size: 12.5px; color: var(--warning-text); background: var(--warning-bg); border: 1px solid var(--warning-border);
-  border-radius: 8px; padding: 6px 10px; max-width: 90ch; }
-.cv-aviso b { font-weight: 600; }
-.cv-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
-.dato { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; display: grid; gap: 1px; min-width: 0; background: var(--bg-card); }
-.dato .k { font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); }
-.dato .v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.dato .s { font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.dato.foco { border-color: var(--border-lavender); background: var(--accent-tint); }
-
+/* La tabla entra a lo ancho: el concepto y el total con ancho fijo, los
+   períodos se reparten el resto. */
 .desliza { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
-table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 100%; min-width: 1360px; font-variant-numeric: tabular-nums; }
-col.c-lab { width: 250px; } col.c-mes { width: 86px; } col.c-tot { width: 108px; }
+table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 100%; min-width: 1060px; font-variant-numeric: tabular-nums; }
+col.c-lab { width: 260px; } col.c-tot { width: 92px; }
 th, td { padding: 0; }
 /* La cabecera en lavanda, para que se lea como cabecera y no como una fila
    más (a pedido, 2026-10-09); la del total, un tono más. */
-thead th { font-size: 12px; font-weight: 600; color: var(--accent-deep); text-align: right; padding: 7px 10px;
+thead th { font-size: 12px; font-weight: 600; color: var(--accent-deep); text-align: right; padding: 4px 8px;
   border-bottom: 1px solid var(--border-lavender); background: var(--accent-tint); }
-thead th .sub { display: block; font-weight: 400; font-size: 10.5px; color: var(--text-secondary); margin-top: 1px; white-space: nowrap; }
-thead th.lab { text-align: left; padding-left: 14px; background: var(--accent-tint); }
+thead th .sub { display: block; font-weight: 400; font-size: 10px; color: var(--text-secondary); margin-top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+thead th.lab { text-align: left; padding-left: 12px; background: var(--accent-tint); }
 td.tot { background: var(--line-soft); }
 thead th.tot { background: var(--accent-light); }
 .lab { position: sticky; left: 0; z-index: 1; background: var(--bg-card); text-align: left; border-right: 1px solid var(--border); }
-tbody td { font-size: 13px; text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+tbody td { font-size: 12.5px; text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
 tbody td.lab { padding: 0; }
 .fila-lab { display: flex; align-items: center; }
 .fila-btn { color: var(--text-primary); background: none; border: 0; flex: 1; min-width: 0; text-align: left;
-  padding: 7px 8px 7px 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  padding: 4px 6px 4px 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
 .fila-btn .signo { width: 12px; color: var(--text-muted); font-weight: 600; text-align: center; flex: none; }
 .fila-btn .nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.fila-btn .nom.con-nota { white-space: normal; line-height: 1.25; }
 .fila-btn .flecha { color: var(--text-muted); font-size: 10px; transition: transform .15s; }
-.nota-fila { font-weight: 400; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 tr.abierta .fila-btn .flecha { transform: rotate(180deg); color: var(--accent); }
 tr.fila:hover td, tr.fila:hover td.lab { background: var(--accent-tint); }
 tr.abierta td, tr.abierta td.lab { background: var(--accent-light); border-bottom-color: transparent; }
 tr.calc td { font-weight: 700; }
 tr.calc .nom { font-weight: 700; }
 tr.fuerte td { border-top: 1px solid var(--border); }
-tr.sec td { padding: 10px 14px 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+tr.sec td { padding: 5px 12px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
   color: var(--accent-deep); text-align: left; border-top: 1px solid var(--border-lavender);
   border-bottom: 1px solid var(--border-lavender); background: var(--accent-tint); }
 .quitar { border: 0; background: none; color: var(--text-muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 10px 0 2px; }
@@ -75,6 +80,9 @@ tr.sec td { padding: 10px 14px 6px; font-size: 10.5px; font-weight: 600; letter-
 
 tr.agregar td { border-bottom: 1px solid var(--line-soft); padding: 5px 10px 6px 14px; text-align: left; position: static; }
 .btn-agregar { font-size: 12px; color: var(--accent-deep); background: none; border: 1px dashed var(--border-lavender); border-radius: 6px; padding: 2px 10px; cursor: pointer; }
+.chip { font-size: 12px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary);
+  border-radius: 999px; padding: 2px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip:hover { border-color: var(--border-lavender); background: var(--accent-tint); }
 .menu { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 4px; }
 .menu .n { color: var(--text-muted); font-weight: 400; }
 
@@ -116,4 +124,13 @@ tr.detalle td.graf-celda { padding-left: 0; padding-right: 0; }
 .nota ul b { color: var(--text-primary); font-weight: 600; }
 .nota.alerta { background: var(--warning-bg); border-color: var(--warning-border); }
 .nota.alerta summary { color: var(--warning-text); }
+/* Si con eso no entra en la pantalla, un grado más apretada (la clase la
+   pone `ajustar` en el JS). */
+.cv.apretada { font-size: 12px; }
+.cv.apretada tbody td { font-size: 11.5px; padding: 2px 7px; }
+.cv.apretada .fila-btn { padding: 2px 6px 2px 12px; }
+.cv.apretada tbody td.lab { padding: 0; }
+.cv.apretada thead th { padding: 3px 7px; }
+.cv.apretada tr.sec td { padding: 3px 12px; }
+
 @media (prefers-reduced-motion: reduce) { .cv * { transition: none !important; } }

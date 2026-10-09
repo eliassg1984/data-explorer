@@ -163,64 +163,68 @@ function dibujar(raiz) {
   // «1–15 abr – 16–30 set» junta dos guiones: entre rótulos que ya llevan uno, «a».
   const sep = esMes ? ' – ' : ' a ';
 
-  // Cabecera y controles
+  // UNA fila arriba (a pedido, 2026-10-09): el título y el rango a la
+  // izquierda; Período, Familias y Eventos a la derecha. Sin KPIs: la tabla
+  // sube y entra entera en la pantalla.
   const hayMas = data.periodos.length > VENTANA;
-  let html = `<div class="cv-cab"><h2>Estado de costo de ventas</h2>
+  const aviso = esMes ? '' : `Por ${st.grano}, el inventario es el del kardex al final de cada período, no lo contado: el ajuste de cada cierre cae entero en el período del cierre, y por eso las ${plural(st.grano)} no suman el mes.`;
+  let html = `<div class="cv-cab"><div class="cv-tit"><h2>Estado de costo de ventas</h2>
     <span class="cv-rango">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)} · ${n} ${plural(st.grano)}${esMes ? ' operativos' : ''}</span>
     ${hayMas ? `<span class="cv-ventana"><button type="button" data-ventana="-1" aria-label="Períodos anteriores" ${w.ini === 0 ? 'disabled' : ''}>‹</button><button type="button" data-ventana="1" aria-label="Períodos siguientes" ${w.fin >= data.periodos.length ? 'disabled' : ''}>›</button></span>` : ''}
-    </div>`;
-  html += `<div class="cv-controles">`;
+    ${aviso ? `<span class="cv-kardex" title="${esc(aviso)}">inventario del kardex ⓘ</span>` : ''}</div>
+    <div class="cv-controles">`;
   if (hay.length > 1) {
-    html += `<div class="cv-grupo"><span class="cv-rot">Período</span>${hay.map(([g, nom]) =>
-      `<button type="button" class="chip" data-grano="${g}" aria-pressed="${st.grano === g}">${nom}</button>`).join('')}</div>`;
+    html += `<label class="cv-campo"><span class="cv-rot">Período</span><select data-grano-sel aria-label="Período">${hay.map(([g, nom]) =>
+      `<option value="${g}"${st.grano === g ? ' selected' : ''}>${nom}</option>`).join('')}</select></label>`;
   }
-  html += `<div class="cv-grupo"><span class="cv-rot">Familias</span>${BUCK.map((b) =>
-    `<button type="button" class="chip" data-fam="${b}" aria-pressed="${st.fams.has(b)}"><span class="pt" style="background:var(${COLOR[b]})"></span>${b}</button>`).join('')}</div>
-    <label class="interruptor"><input type="checkbox" data-extra ${st.extra ? 'checked' : ''}> Sumar Eventos y Venta interna a la venta</label></div>`;
-
-  // Resumen de la ventana
-  const T = (k) => valores(st, data, w, { k, tipo: 'suma' }, F).tot;
-  const v = T('v'), op = T('operativo'), ca = T('carta'), po = T('pos'), mg = T('margen');
-  const tiles = [
-    ['Venta neta', soles(v), `${n} ${plural(st.grano)}`],
-    ['Consumo operativo', soles(op), v ? `${pct(op / v)} costo operativo` : 'sin venta en estas familias'],
-    ['Consumo carta', soles(ca), v ? `${pct(ca / v)} costo carta real` : 'sin venta en estas familias', true],
-    ['Costo según Sistema Restaurante', soles(po), v ? `${pct(po / v)} de la venta` : '—'],
-    ['Diferencia', soles(ca - po), v ? `${pp((ca - po) / v)} sobre la venta` : '—'],
-    ['Margen bruto', soles(mg), v ? `${pct(mg / v)} de la venta` : '—'],
-  ];
-  if (!esMes) {
-    html += `<div class="cv-aviso">Por ${st.grano}, el inventario es el del <b>kardex</b> al final de cada período, no lo contado: el ajuste de cada cierre cae entero en el período del cierre, y por eso las ${plural(st.grano)} no suman el mes.</div>`;
-  }
-  html += `<div class="cv-resumen">${tiles.map(([k, val, s, foco]) =>
-    `<div class="dato${foco ? ' foco' : ''}"><span class="k">${k}</span><span class="v">${val}</span><span class="s">${s}</span></div>`).join('')}</div>`;
+  const famTxt = F.length === BUCK.length ? 'Todas' : F.length === 1 ? F[0] : `${F.length} de ${BUCK.length}`;
+  html += `<details class="dd"${st.ddAbierto ? ' open' : ''}><summary><span class="cv-rot">Familias</span><span class="dd-val">${famTxt}</span><span class="dd-fl">▾</span></summary>
+      <div class="dd-panel">${BUCK.map((b) => `<label class="dd-op"><input type="checkbox" data-fam-chk="${b}" ${st.fams.has(b) ? 'checked' : ''}><span class="pt" style="background:var(${COLOR[b]})"></span>${b}</label>`).join('')}
+      <span class="dd-nota">Para comparar contra el Sistema Restaurante, sin Envases: no los costea.</span></div></details>
+    <label class="interruptor"><input type="checkbox" data-extra ${st.extra ? 'checked' : ''}> Sumar Eventos y Venta interna</label>
+    </div></div>`;
 
   // La tabla
   const cols = `<col class="c-lab">${w.per.map(() => '<col class="c-mes">').join('')}<col class="c-tot">`;
   const ths = w.per.map((p) => `<th scope="col">${esc(p.rot)}<span class="sub">${esc(p.sub || '')}</span></th>`).join('');
   let cuerpo = '';
   for (const fila of filas(st)) {
-    if (fila.sec) { cuerpo += `<tr class="sec"><td class="lab">${fila.sec}</td><td colspan="${n + 1}"></td></tr>`; continue; }
+    if (fila.sec) { cuerpo += `<tr class="sec"><td colspan="${n + 2}">${fila.sec}</td></tr>`; continue; }
     if (fila.agregar) { cuerpo += filaAgregar(st, data, w, F, n); continue; }
     const val = valores(st, data, w, fila, F);
     const abierta = st.abierta === fila.k;
     const cls = ['fila', fila.calc ? 'calc' : '', fila.fuerte ? 'fuerte' : '', abierta ? 'abierta' : ''].join(' ');
-    const nota = fila.nota ? ` <span class="nota-fila">${fila.nota}</span>` : '';
+    const tip = fila.nota ? ` title="${esc(`${fila.nom}: ${fila.nota}`)}"` : '';
     cuerpo += `<tr class="${cls}"><td class="lab"><div class="fila-lab">`
-      + `<button type="button" class="fila-btn" data-fila="${esc(fila.k)}" aria-expanded="${abierta}"><span class="signo">${fila.signo || ''}</span>`
-      + `<span class="nom${fila.nota ? ' con-nota' : ''}">${esc(fila.nom)}${nota}</span><span class="flecha">▼</span></button>`
+      + `<button type="button" class="fila-btn" data-fila="${esc(fila.k)}" aria-expanded="${abierta}"${tip}><span class="signo">${fila.signo || ''}</span>`
+      + `<span class="nom">${esc(fila.nom)}</span><span class="flecha">▼</span></button>`
       + (fila.quitar ? `<button type="button" class="quitar" data-quitar="${esc(fila.quitar)}" aria-label="Quitar ${esc(fila.quitar)}">×</button>` : '')
       + `</div></td>${val.mes.map((x) => `<td class="${claseCelda(fila, x)}">${fmtCelda(fila, x)}</td>`).join('')}`
       + `<td class="tot ${claseCelda(fila, val.tot)}">${fmtCelda(fila, val.tot)}</td></tr>`;
     if (abierta) cuerpo += detalle(st, data, w, fila, F, val);
   }
-  html += `<div class="desliza"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">${esMes ? 'mes operativo' : 'inventario del kardex'}</span></th>${ths}<th class="tot" scope="col">${n} ${plural(st.grano)}<span class="sub">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+  html += `<div class="desliza"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">${esMes ? 'mes operativo · cierre' : 'kardex'}</span></th>${ths}<th class="tot" scope="col">${n} ${plural(st.grano)}<span class="sub">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   html += notas(data, w);
 
   const sx = raiz.querySelector('.desliza') ? raiz.querySelector('.desliza').scrollLeft : 0;
   raiz.innerHTML = html;
   const d = raiz.querySelector('.desliza');
   if (d) d.scrollLeft = sx;
+  ajustar(raiz);
+}
+
+// Que la tabla entre ENTERA en la pantalla: si no entra con la densidad de
+// siempre, se aprieta un grado (letra y renglones más chicos). Se mide sin
+// la fila abierta —abrir una no tiene que cambiar la densidad— y contra el
+// alto de la ventana menos el cromo de arriba y la fila del título.
+const CROMO_PX = 96;
+function ajustar(raiz) {
+  const t = raiz.querySelector('table');
+  if (!t) return;
+  raiz.classList.remove('apretada');
+  const det = t.querySelector('tr.detalle');
+  const alto = t.offsetHeight - (det ? det.offsetHeight : 0);
+  if (alto > window.innerHeight - CROMO_PX) raiz.classList.add('apretada');
 }
 
 function totalSalida(data, w, F, t) {
@@ -366,11 +370,7 @@ function enlazar(raiz) {
     const st = raiz.__st;
     const b = ev.target.closest('button');
     if (!b || !raiz.contains(b)) return;
-    if (b.dataset.fam) {
-      const f = b.dataset.fam;
-      if (st.fams.has(f)) { if (st.fams.size > 1) st.fams.delete(f); } else st.fams.add(f);
-      guardar('costos_fams', [...st.fams]);
-    } else if (b.dataset.fila) {
+    if (b.dataset.fila) {
       st.abierta = st.abierta === b.dataset.fila ? null : b.dataset.fila;
       st.modo = 'total';
     } else if (b.dataset.quitar) {
@@ -387,22 +387,40 @@ function enlazar(raiz) {
       st.modo = b.dataset.modo;
     } else if (b.dataset.ventana) {
       st.ini[st.grano] += Number(b.dataset.ventana) * VENTANA;
-    } else if (b.dataset.grano) {
-      st.grano = b.dataset.grano;
-      st.abierta = null;
-      guardar('costos_grano', st.grano);
     } else {
       return;
     }
     dibujar(raiz);
   });
   raiz.addEventListener('change', (ev) => {
-    if (ev.target.matches('[data-extra]')) {
-      raiz.__st.extra = ev.target.checked;
-      guardar('costos_extra', raiz.__st.extra);
-      dibujar(raiz);
+    const st = raiz.__st, el = ev.target;
+    if (el.matches('[data-extra]')) {
+      st.extra = el.checked;
+      guardar('costos_extra', st.extra);
+    } else if (el.matches('[data-grano-sel]')) {
+      st.grano = el.value;
+      st.abierta = null;
+      guardar('costos_grano', st.grano);
+    } else if (el.matches('[data-fam-chk]')) {
+      const f = el.dataset.famChk;
+      if (el.checked) st.fams.add(f); else if (st.fams.size > 1) st.fams.delete(f);
+      st.ddAbierto = true;
+      guardar('costos_fams', [...st.fams]);
+    } else {
+      return;
     }
+    dibujar(raiz);
   });
+  // El desplegable de familias se queda abierto mientras se marcan casillas
+  // (cada cambio redibuja) y se cierra con un clic fuera de él.
+  raiz.addEventListener('toggle', (ev) => {
+    if (ev.target.matches && ev.target.matches('details.dd')) raiz.__st.ddAbierto = ev.target.open;
+  }, true);
+  document.addEventListener('click', (ev) => {
+    const dd = raiz.querySelector('details.dd');
+    if (dd && dd.open && !ev.composedPath().includes(dd)) { dd.open = false; raiz.__st.ddAbierto = false; }
+  });
+  window.addEventListener('resize', () => ajustar(raiz));
 }
 
 export default function (component) {

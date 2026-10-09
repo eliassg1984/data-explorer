@@ -70,8 +70,9 @@ import pandas as pd
 
 from cortes import MESES_ABR_ES, fecha_operativa
 
-VERSION = 2
-"""Subirla cuando cambie QUÉ se calcula. 2: semanas y quincenas."""
+VERSION = 3
+"""Subirla cuando cambie QUÉ se calcula. 2: semanas y quincenas. 3: los
+rótulos de los períodos sin «cierre»/«kardex» (lo dice la cabecera)."""
 
 DESDE = pd.Period("2025-10", freq="M")
 """El primer mes que se muestra: antes los cierres no sirven (regla #612)."""
@@ -425,7 +426,8 @@ def armar(ajuste, compras, salidas, por_grupo_dia):
         sub = ""
         if fechas:
             a, z = fechas[0], fechas[-1]
-            sub = "cierre " + (_dia_mes(a) if a == z else f"{a.day}–{_dia_mes(z)}")
+            # «cierre» lo dice una vez la columna de conceptos.
+            sub = _dia_mes(a) if a == z else f"{a.day}–{_dia_mes(z)}"
         out["periodos"].append({"k": str(m), "rot": f"{MESES_ABR_ES[m.month - 1]} {str(m.year)[2:]}",
                                 "sub": sub})
     out.update(_tabla(meses, prev, inv, compras, salidas, por_grupo_dia, clave_mes))
@@ -451,7 +453,7 @@ def armar_kardex(grano, fotos, base, compras, salidas, por_grupo_dia, hasta):
     inv_ini = inv.iloc[:-1].set_axis(claves)
     for a, b in pers:
         out["periodos"].append({"k": a.isoformat(), "rot": rotulo_periodo(a, b),
-                                "sub": f"kardex al {_dia_mes(b)}"})
+                                "sub": f"al {_dia_mes(b)}"})
     out.update(_tabla(claves, inv_ini, inv_fin, compras, salidas, por_grupo_dia,
                       clave_de(pers)))
     return out

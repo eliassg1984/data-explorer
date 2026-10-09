@@ -48929,6 +48929,19 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Almacén entra sola. La cabecera de la tabla y la del bloque del
      Sistema Restaurante van en lavanda.
 
+     **La tabla entera en una pantalla** (el mismo día, a pedido): sin las
+     tarjetas de KPI de arriba, con Período (lista), Familias (desplegable
+     con casillas, un `<details>`) y la casilla de Eventos en la MISMA fila
+     del título, la nota de cada fila en el tooltip y las columnas de los
+     períodos repartiéndose el ancho (concepto 260 px, total 92). Si aun así
+     no entra en el alto de la ventana, `ajustar` (JS) le pone `apretada`:
+     letra 11,5 px y renglones de 20 px. Medido a 1323 × 619, la pantalla
+     del usuario: la tabla termina en y=548, sin barra de costado ni texto
+     cortado. Dos trampas que costaron una medición: `.cv.apretada tbody
+     td` le ganaba a `tbody td.lab` y la celda del nombre sumaba 4 px por
+     renglón (88 px en la tabla); y el rótulo de un bloque en la celda
+     fija del concepto se cortaba — va en una celda que abarca la fila.
+
      **Ventas › «Venta vs Compra» se quitó** el mismo día, a pedido: esta
      vista la reemplaza. En producción ya no dibujaba la compra (buscaba la
      fecha por nombres que `compras.parquet` no tiene) y normalizaba cada
