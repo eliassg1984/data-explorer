@@ -412,6 +412,22 @@ REPORTES = {
         # date_input del popover lo controla (ver app.py).
         "carga_por_rango": "FEC REG DOCUMENTO",
     },
+    # El costo de ventas por mes operativo (2026-10-09, regla #622): cruza
+    # cuatro parquets y ninguno es su dueño. `archivo` es el de los CIERRES de
+    # inventario —el que `app.py` carga y le pasa al dashboard—; compras,
+    # salidas y la venta por grupo los lee `graficos/costos.py`. Sin fecha en
+    # la franja: el eje son los meses operativos, que arma la tabla.
+    "Costos": {
+        "label_corto": "Costos",
+        "label_largo": "Costos",
+        "archivo": "ajusteinventario.parquet",
+        # Para que «Actualizar» pida también lo que suma la tabla. Ventas NO
+        # va, por lo mismo que en Recetas: regenerar el parquet más pesado
+        # para refrescar una fila; se actualiza con su reporte.
+        "archivos_extra": ("compras.parquet", "salidas.parquet"),
+        "icono": ":material/calculate:",
+        "fecha": None,
+    },
     "Inspector": {
         "label_corto": "Inspector",
         # Herramienta de verificación de datos crudos (no es un parquet propio):
@@ -1361,6 +1377,7 @@ def limpiar_cache(archivo):
     _rango_fechas_cacheable.clear()
     _resumen_kpis_cacheable.clear()
     _venta_por_producto_dia_cacheable.clear()
+    _venta_por_grupo_dia_cacheable.clear()
     _consumo_recetas_cacheable.clear()
     _demanda_nivel1_cacheable.clear()
     _stock_al_cacheable.clear()
@@ -1820,6 +1837,47 @@ def venta_por_producto_dia(archivo="ventas.parquet"):
         return None
     try:
         return _venta_por_producto_dia_cacheable(
+            archivo, sello_datos(archivo),
+            definicion=_version_preparar(archivo))
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _venta_por_grupo_dia_cacheable(archivo, sello, definicion=None):
+    """La venta y la cortesía de cada grupo de carta por día, sobre TODO el
+    parquet (`definicion_venta.por_grupo_dia`), fechada por el día del TURNO
+    de caja, el default de Ventas (regla #593). Si falla, LANZA: no se cachea.
+
+    El mismo camino que `_venta_por_producto_dia_cacheable`: sólo las
+    columnas que la definición lee, más el grupo, y la cuenta en pandas
+    (#524). Lo que se guarda son unas 7.000 filas por año."""
+    prep = _PREPARAR[archivo]
+    if not secrets_disponibles():
+        return prep.por_grupo_dia(prep.preparar(_datos_demo(archivo), turno=True))
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+    nombres = [r[0] for r in con.execute(
+        f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()]
+    vacio = pd.DataFrame(columns=nombres)
+    reales = list(dict.fromkeys(
+        c for c in (prep.columna(vacio, q) for q in (*prep.COLUMNAS, prep.GRUPO))
+        if c))
+    lista = ", ".join(f'"{c}"' for c in reales)
+    df = con.execute(f"SELECT {lista} FROM read_parquet('{url}')").df()
+    return prep.por_grupo_dia(prep.preparar(df, turno=True))
+
+
+def venta_por_grupo_dia(archivo="ventas.parquet"):
+    """La venta neta y el costo de cada grupo de carta por día, y el costo de
+    las cortesías (`definicion_venta.por_grupo_dia`), para el reporte Costos
+    (regla #622). `None` si no se pudo cargar. No cacheada (la interna sí),
+    por lo mismo que `cargar()`."""
+    if archivo not in _PREPARAR:
+        return None
+    try:
+        return _venta_por_grupo_dia_cacheable(
             archivo, sello_datos(archivo),
             definicion=_version_preparar(archivo))
     except Exception:

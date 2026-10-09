@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-621 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+622 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (202)
 
@@ -700,7 +700,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 
-**Datos, R2 y DuckDB** (93)
+**Datos, R2 y DuckDB** (94)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -795,6 +795,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#608** — Modificar › Combo: la ficha del combo sale de TCOMBO, en un parquet propio, y un grupo «a…
 - **#612** — El ajuste de un cierre tiene DOS versiones en el Almacén, y hasta agosto de 2025 no…
 - **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
+- **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
 
 **SUNAT y SIRE** (54)
 
@@ -919,7 +920,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (158)
+**Decisiones de diseño y UX** (159)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1079,6 +1080,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#615** — La merma del «Reporte de Mermas» del Almacén vale al precio de HOY, y la app la muestra así…
 - **#617** — Cada vista de Movimientos tiene su propia fecha, y la franja del reporte ya no dibuja…
 - **#619** — Una semana se nombra con sus días de la semana, y la que las fechas cortan, por los días que…
+- **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -48831,6 +48833,83 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-08.)
 
+622. **El reporte «Costos» arma el costo de ventas por MES OPERATIVO con
+     cuatro fuentes: el inventario es el del último cierre de cada área, y
+     lo que se elige en pantalla lo resuelve el navegador.** 2026-10-09, a
+     pedido, sobre un boceto con datos reales
+     (https://claude.ai/artifact/3NYnyS7axe6u5woDiyiZBD) y la planilla con
+     la que el usuario ya lo llevaba a mano. Una vista, «Costo de ventas»:
+
+         Consumo operativo = inventario inicial + compras − inventario final
+         Consumo carta     = consumo operativo − bajas − costo de cortesías
+                             − las otras salidas que se elijan
+
+     El consumo carta es el que se compara con el costo del POS (Paloteo
+     de Producción › Comparativo › «(a) Ventas en el rango»); el operativo
+     es el dato de antes y no se compara. Los nombres son los de la
+     planilla del usuario: en el boceto se llamaron «costo contable» y
+     «costo de ventas operativo», y «operativo» decía lo contrario. En
+     pantalla el POS se llama «Sistema Restaurante» («Costo según Sistema
+     Restaurante»), también a pedido.
+
+     - **Reporte propio, no vista de otro**: cruza los cierres de
+       inventario (su `archivo`, `ajusteinventario.parquet`), las compras,
+       las notas de salida y la venta por grupo de carta, y ninguno es su
+       dueño. `fecha: None`: el eje son los meses, que arma la tabla.
+       Ventas no va en `archivos_extra`, por lo mismo que en Recetas.
+     - **El inventario es el del MES OPERATIVO**: por área, el ÚLTIMO
+       cierre cuya `cortes.fecha_operativa` cae en el mes (#613) —un área
+       puede contar a mitad de mes y otra vez el día 1—, valorizado como se
+       contó (`VALORIZADO TOTAL`). El inicial es el final del mes anterior.
+       Los de fin de mes se registran el 1 o el 2 del siguiente.
+     - **Desde octubre 2025** (`costo_ventas.DESDE`): antes, mayo 2025 da
+       un costo de −S/ 112 mil y setiembre 2025 +S/ 754 mil por el ajuste
+       de S/ 627 mil de la limpieza (#612).
+     - **Las familias son cuatro cubetas**: Alimentos, Bebidas, Vinos y
+       Envases en inventario, compras y salidas (Costos de producción
+       fuera); la venta, de Alimentos, Bebidas con alcohol, sin alcohol y
+       calientes, y Vinos. Envases no tiene venta ni costo del POS: para
+       comparar contra el POS en igualdad se desmarca. Eventos y Venta
+       interna gastan inventario y no son la venta: viajan aparte y un
+       interruptor los suma a Alimentos (S/ 121 mil y 69 mil de venta en
+       12 meses).
+     - **Las cortesías se restan del consumo carta** porque el costo del
+       POS de origen (a) no las incluye: en el Paloteo son el origen (b).
+       Las bajas y las demás salidas, procesadas, a su valor neto y por
+       fecha de REGISTRO (#614): setiembre 2026 suma S/ 6.893, la cifra de
+       la «Relación de Notas de Salidas».
+     - **La venta sale de `definicion_venta.por_grupo_dia`** (venta y
+       cortesía por día y grupo, un ítem una vez) sobre TODO el parquet,
+       por el día del turno, cacheada con sello en
+       `data.venta_por_grupo_dia`: la primera vez de cada versión del
+       parquet tarda unos 15 s (de ahí el spinner); después son 4.900
+       filas.
+     - **La tabla es un `st.components.v2`** (`graficos/costos_tabla.js`,
+       como el panel de la #616): llegan las series por familia y el
+       navegador hace las restas, los totales y los %; elegir familias,
+       salidas o abrir una fila no recalcula la página. Lo que se eligió
+       queda en el navegador (`localStorage`), por persona. Una fila
+       abierta dibuja su línea alineada con las columnas de los meses
+       (medido: 2 px) y la variación contra el mes anterior en rojo o
+       verde según si la fila empeora, no según si sube.
+     - **Sin techo de alto** en la tarjeta (`_80_cards.py`): al abrir una
+       fila crece, y con techo sacaría barra propia (#382).
+
+     Cuadrado contra el boceto, mes por mes y familia por familia. Doce
+     meses a setiembre 2026: consumo carta 42,3 % de la venta neta contra
+     33,0 % del POS. Pendiente: cuadrarlo contra un Paloteo impreso (el
+     Paloteo fecha por la apertura de la mesa y la tabla por el turno), la
+     granularidad semana o quincena (el inventario sería el del kardex a
+     esa fecha, que no es lo contado, y el ajuste caería entero en la
+     semana del cierre) y Ventas › «Venta vs Compra», que en producción no
+     dibuja la compra (busca la fecha por nombres que `compras.parquet` no
+     tiene) y que esta vista reemplaza.
+
+     Lo vigila `test_costo_ventas.py`. Suma módulos y un reporte:
+     «Reboot app» en Cloud (#357).
+
+     (2026-10-09.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48843,7 +48922,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#621**; la próxima toma el número siguiente.
+> última regla es la **#622**; la próxima toma el número siguiente.
 
 >
 

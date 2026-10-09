@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -123,6 +123,12 @@ la generada que no cuenta, y con `ast` que `data.cargar` las reste para
 todos y que «Documentos SUNAT» las pida sin restar. La cifra contra el
 Almacén la da `herramientas/cuadrar_compras.py`. Ver `arquitectura.md`
 regla #603.
+
+`test_costo_ventas.py` vigila el COSTO DE VENTAS del reporte «Costos»
+(`costo_ventas.py`): cierres, compras, salidas y ventas de mentira con cada
+caso real —el cierre de setiembre registrado el 1 de octubre, el área que
+cuenta dos veces en el mes, la salida anulada, la cortesía, Eventos aparte—
+y que el reporte esté en el dispatcher. Ver `arquitectura.md` regla #622.
 
 ## El asistente IA no adivina: consulta
 
@@ -992,6 +998,23 @@ no lo lleva. Desde el 2026-10-08 «Filtros» de Compras elige **Documento**
 TODAS las vistas: con IGV, el dispatcher le pasa a cada drill
 `_comun.COL_CON_IGV` como `col_valor`, y el precio unitario sigue neto. El
 «Precio» de «Compras por período» se mide siempre sin IGV. Regla #621.
+
+## El costo de ventas: el reporte «Costos»
+
+Desde el 2026-10-09. Una vista, «Costo de ventas», por MES OPERATIVO:
+
+    Consumo operativo = inventario inicial + compras − inventario final
+    Consumo carta     = consumo operativo − bajas − cortesías − salidas elegidas
+
+El consumo carta se compara con el costo del POS (Paloteo › Comparativo ›
+«(a) Ventas en el rango»); el operativo es el dato de antes. Los nombres son
+los de la planilla del usuario. El inventario es el ÚLTIMO cierre de cada
+área en su mes operativo, valorizado como se contó; desde octubre 2025
+(antes los cierres no cuadran, #612). La cuenta es `costo_ventas.py`; la
+tabla, un `st.components.v2` (`graficos/costos_tabla.js`) que hace en el
+navegador las restas que dependen de lo elegido. Envases no tiene costo del
+POS y Eventos y Venta interna no son la venta: los dos se ajustan en
+pantalla. Regla #622.
 
 ## El stock también tiene UNA definición: lo ACTIVO
 

@@ -18,6 +18,9 @@ Estructura:
                           drill sigue en compras/documentos_sunat.py (era
                           una vista de Compras hasta el 2026-09-30).
         ventas.py      → dashboard Ventas (resumen, mix de carta, platos)
+        costos.py      → dashboard Costos: el costo de ventas por mes
+                          operativo (2026-10-09). La cuenta, en
+                          costo_ventas.py; la tabla, en costos_tabla.js.
         inventario.py  → dashboard Inventario Valorizado (v2)
         movimientos.py  → dashboard Movimientos: UNA página con los dos
                           parquets del flujo de stock (requerimientos +
@@ -48,6 +51,7 @@ from graficos.base import _card, crear_grafico, renderizar_graficos_genericos
 
 from graficos.ajuste import renderizar_graficos_ajuste                # noqa: F401
 from graficos.compras import renderizar_graficos_compras              # noqa: F401
+from graficos.costos import renderizar_graficos_costos                # noqa: F401
 from graficos.inventario import renderizar_graficos_inventario        # noqa: F401
 from graficos.movimientos import renderizar_graficos_movimientos      # noqa: F401
 from graficos.recetas import renderizar_graficos_recetas              # noqa: F401
@@ -56,6 +60,7 @@ from graficos.ventas import renderizar_graficos_ventas                # noqa: F4
 # Los rails de cada dashboard, para `vistas_de` (abajo).
 from graficos.ajuste import _AJUSTE_RAIL_CATEGORIAS
 from graficos.compras import _COMPRAS_RAIL_CATEGORIAS
+from graficos.costos import _COSTOS_RAIL_CATEGORIAS
 from graficos.inventario import _INVENTARIO_RAIL_CATEGORIAS
 from graficos.movimientos import _RAIL_CATEGORIAS as _MOV_RAIL
 from graficos.recetas import _RAIL_CATEGORIAS as _REC_RAIL
@@ -78,6 +83,8 @@ from graficos.ventas import _VENTAS_RAIL_CATEGORIAS
 _DASHBOARDS = {
     "Ajuste de Inventario": renderizar_graficos_ajuste,
     "Compras":               renderizar_graficos_compras,
+    # El costo de ventas por mes operativo (2026-10-09, regla #622).
+    "Costos":                renderizar_graficos_costos,
     # Reporte propio desde el 2026-09-30 (era una vista de Compras, regla #577).
     "Documentos SUNAT":      renderizar_graficos_sunat,
     "Inventario Valorizado": renderizar_graficos_inventario,
@@ -102,6 +109,7 @@ _DASHBOARDS = {
 _RAILS = {
     "Ajuste de Inventario":  (_AJUSTE_RAIL_CATEGORIAS, "ajuste_graf_tipo"),
     "Compras":               (_COMPRAS_RAIL_CATEGORIAS, "compras_graf_tipo"),
+    "Costos":                (_COSTOS_RAIL_CATEGORIAS, "costos_graf_tipo"),
     "Documentos SUNAT":      (_SUNAT_RAIL_CATEGORIAS, "sunat_graf_tipo"),
     "Inventario Valorizado": (_INVENTARIO_RAIL_CATEGORIAS, "inv_graf_tipo"),
     "Recetas":               (_REC_RAIL, "rec_graf_tipo"),

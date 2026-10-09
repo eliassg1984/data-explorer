@@ -1357,7 +1357,10 @@ CSS = """    /* ================================================================
         /* nacer el 2026-09-28: es un iframe que se mide solo, con la tabla  */
         /* dinámica y la ficha del insumo; adentro sólo scrollean las        */
         /* tablas. Con techo tendría barra propia encima. #558.              */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_mov_prod_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_platos):not(.st-key-ajuste_graf_card_izq_mov_consumo),
+        /* Y `…_izq_costos` (Costos › Costo de ventas), al nacer el          */
+        /* 2026-10-09: al abrir una fila la tabla crece una franja; con     */
+        /* techo la tarjeta sacaría barra propia. #622.                      */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_mov_prod_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_platos):not(.st-key-ajuste_graf_card_izq_mov_consumo):not(.st-key-ajuste_graf_card_izq_costos),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
