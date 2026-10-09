@@ -51,6 +51,11 @@ from graficos.compras._comun import (  # noqa: F401  (re-export)
     CATEGORIA_SEC, SEC_ABRE_EN_EL_MES,
     _es_movil, _first_point, _periodo_serie,
 )
+# Los dos controles de «Filtros» › Documento y Montos (regla #621).
+from graficos.compras._comun import (
+    COL_CON_IGV, CON_IGV, DOC_OPCIONES, DOC_TODOS, K_DOCUMENTO, K_MONTOS,
+    MONTOS_OPCIONES, SIN_IGV, con_igv, documento_elegido, filtrar_documento,
+)
 from graficos.compras.proveedor import _compras_proveedor_drill
 from graficos.compras._documentos_proveedor import (
     render_seccion as _docs_seccion,
@@ -462,6 +467,33 @@ _FAMILIAS_DE_ENTRADA = ("ALIMENTOS", "BEBIDAS CON ALCOHOL",
                         "ENVASES Y EMBALAJES")
 
 
+def _selectores_documento_y_montos():
+    """Documento y Montos en el panel «Filtros» de la franja (regla #621).
+
+    En el panel y no en una tarjeta: mandan sobre todas las vistas de
+    Compras, y una tarjeta que sacara las guías sola contradiría a las
+    otras. Es el sitio de los otros selectores de «qué entra» (la fecha de
+    la venta, #593; la de las salidas, #614). La ayuda va en el rótulo y no
+    en `help=`: con el rótulo del widget oculto el «?» no se ve (#555)."""
+    st.markdown('<div class="filtro-rotulo filtro-compras_documento">'
+                'Documento</div>', unsafe_allow_html=True)
+    st.segmented_control(
+        "Documento", list(DOC_OPCIONES), default=DOC_TODOS, required=True,
+        key=K_DOCUMENTO, label_visibility="collapsed")
+    st.caption("«Todos» es lo que suman los reportes de ingresos del "
+               "Almacén: facturas, guías que todavía no se canjearon por "
+               "su factura y, en otras familias, planillas y recibos.")
+    st.markdown('<div class="filtro-rotulo filtro-compras_montos">'
+                'Montos</div>', unsafe_allow_html=True)
+    st.segmented_control(
+        "Montos", list(MONTOS_OPCIONES), default=SIN_IGV, required=True,
+        key=K_MONTOS, label_visibility="collapsed")
+    st.caption("Sin IGV es el costo (el IGV de las compras vuelve como "
+               "crédito fiscal); con IGV, lo que se le paga al proveedor. "
+               "Verduras, pescados y frutas no pagan IGV, y una guía "
+               "tampoco, todavía.")
+
+
 def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard dedicado de Compras: 5 gráficos con pestañas + 5 mini-tops.
 
@@ -490,6 +522,10 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # precio sería incorrecto). Ninguna otra vista de Compras la resuelve, y
     # el demo local no la trae — por eso el drill la trata como opcional.
     col_moneda = _resolver(df_f, ["Tipo_moneda", "Tipo Moneda", "Moneda"])
+    # Los dos de «Filtros» › Documento y Montos (regla #621). Sin ellas (el
+    # demo) los controles no filtran nada.
+    col_tipo_doc = _resolver(df_f, ["Tipo_documento", "Tipo documento"])
+    col_igv = _resolver(df_f, ["Valor_igv_compra_mn", "Valor igv compra mn"])
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]) or "fecha" in _norm(str(_c)):
@@ -532,8 +568,12 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # De entrada, las cuatro familias del negocio (ver _FAMILIAS_DE_ENTRADA).
     sembrar_seleccion(_ops_src, col_fam, "compras_graf_filtro_fam",
                       _FAMILIAS_DE_ENTRADA)
-    with compartimento_filtros(contar_filtros("compras_graf_filtro_fam",
-                                              "compras_graf_filtro_sub")):
+    # Documento y Montos cuentan en el badge cuando no están en su valor
+    # de entrada; «Sin IGV» no es «Todos», así que van aparte de la cuenta.
+    _n_filtros = (contar_filtros("compras_graf_filtro_fam",
+                                 "compras_graf_filtro_sub")
+                  + (documento_elegido() != DOC_TODOS) + con_igv())
+    with compartimento_filtros(_n_filtros):
         _, fam_sel = filtro_pills(_ops_src, col_fam,
                                   "compras_graf_filtro_fam", "Familia")
         # CASCADA: Subfamilia sólo ofrece las que quedan bajo la Familia
@@ -568,6 +608,7 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             st.markdown('<div class="filtro-rotulo">Subfamilia</div>',
                         unsafe_allow_html=True)
             st.caption("Elegí una Familia para ver sus subfamilias.")
+        _selectores_documento_y_montos()
 
     d = df_f
     if fam_sel and col_fam:
@@ -576,8 +617,14 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         d = d[d[col_subfam].astype(str).isin(sub_sel)]
 
     # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
+    # Documento antes de publicar: el asistente tiene que ver lo mismo que
+    # la pantalla (regla #621).
+    _doc_sel = documento_elegido()
+    d = filtrar_documento(d, col_tipo_doc, _doc_sel)
     publicar_contexto_ia("Compras", d,
-                         {"Familia": fam_sel, "Subfamilia": sub_sel})
+                         {"Familia": fam_sel, "Subfamilia": sub_sel,
+                          "Documento": [_doc_sel],
+                          "Montos": [CON_IGV if con_igv() else SIN_IGV]})
 
     # Data SIN filtro de fecha (para el toggle "Todo el histórico" del Panel B
     # del drill Proveedor). Se le aplican los mismos chips Familia/Subfamilia,
@@ -587,6 +634,22 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         d_full = d_full[d_full[col_fam].astype(str).isin(fam_sel)]
     if sub_sel and col_subfam and col_subfam in d_full.columns:
         d_full = d_full[d_full[col_subfam].astype(str).isin(sub_sel)]
+    d_full = filtrar_documento(d_full, col_tipo_doc, _doc_sel)
+
+    # ── CON IGV: la columna de valor pasa a ser neto + IGV (regla #621) ───
+    # Para TODAS las vistas a la vez y sin tocarles el cuerpo: reciben otro
+    # `col_valor`. El precio unitario sigue neto, y «Compras por período»
+    # recibe además el neto y el IGV por separado (`col_valor_neto`,
+    # `col_igv`): su «Precio» se compara siempre sin IGV y su Detalle
+    # muestra las tres cifras.
+    col_valor_neto = col_valor
+    if con_igv() and col_igv:
+        def _con_igv(df_):
+            return df_.assign(**{COL_CON_IGV: (
+                pd.to_numeric(df_[col_valor], errors="coerce").fillna(0)
+                + pd.to_numeric(df_[col_igv], errors="coerce").fillna(0))})
+        d, d_full = _con_igv(d), _con_igv(d_full)
+        col_valor = COL_CON_IGV
 
     # ── EL `d` DE CADA SECCIÓN ────────────────────────────────────────────
     # Desde el 2026-09-08 cada sección de la pila tiene su propio rango de
@@ -833,7 +896,10 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
                                    col_prod, col_fecha, col_cant,
                                    col_punit, col_prov, col_docu,
                                    col_valor, col_fam=col_fam,
-                                   d_full=d_full, col_subfam=col_subfam)
+                                   d_full=d_full, col_subfam=col_subfam,
+                                   col_valor_neto=col_valor_neto,
+                                   col_igv=col_igv, col_tipo_doc=col_tipo_doc,
+                                   col_moneda=col_moneda)
 
     def _dib_tabla():
             # Cierra la página con el detalle: el mismo AgGrid de la vista

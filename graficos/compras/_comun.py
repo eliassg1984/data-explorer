@@ -605,6 +605,86 @@ SEC_ABRE_EN_EL_MES = ("sec_proveedor", "sec_producto", "sec_semanal")
 
 
 # ===========================================================================
+# QUÉ DOCUMENTOS Y CON QUÉ IMPUESTO (2026-10-08, regla #621)
+# ===========================================================================
+# Dos controles del panel «Filtros» de la franja, que valen para TODO
+# Compras: un filtro de documento que sacara las guías sólo de una tarjeta
+# dejaría a esa tarjeta contradiciendo a las otras.
+#
+# DOCUMENTO. `compras.parquet` es todo lo procesado en el Almacén (#603):
+# facturas, guías de remisión todavía SIN CANJEAR por su factura, planillas
+# de movilidad, recibos. «Todos» es lo que suman los reportes de ingresos
+# del Almacén, y es con lo que abre. En 12 meses, con las cinco familias de
+# entrada: 2.402 facturas, 5 guías (S/ 6.051) y un documento no domiciliado.
+#
+# MONTOS. `VALOR_COMPRA` es el valor NETO de la línea, en soles; el IGV
+# viene aparte (`VALOR_IGV_COMPRA_MN`). Abre sin IGV porque es el costo: el
+# IGV de las compras vuelve como crédito fiscal en el régimen general o el
+# MYPE tributario. Con IGV es lo que se le paga al proveedor. No es un 18 %
+# parejo: el 22,5 % de lo comprado en 12 meses no paga IGV (verduras,
+# pescados y mariscos, frutas: exonerados por el Apéndice I de la Ley del
+# IGV), y una guía tampoco, todavía: lo trae su factura.
+
+K_DOCUMENTO = "compras_graf_documento"
+K_MONTOS = "compras_graf_montos"
+DOC_TODOS = "Todos"
+DOC_FACTURAS = "Facturas"
+DOC_GUIAS = "Guías sin canjear"
+DOC_OPCIONES = (DOC_TODOS, DOC_FACTURAS, DOC_GUIAS)
+SIN_IGV = "Sin IGV"
+CON_IGV = "Con IGV"
+MONTOS_OPCIONES = (SIN_IGV, CON_IGV)
+COL_CON_IGV = "VALOR CON IGV"
+"""La columna que el dispatcher le agrega a la data con «Con IGV»: neto más
+IGV de cada línea. Con ella como `col_valor`, todas las vistas pasan a medir
+con IGV sin tocarles el cuerpo; el precio unitario (`PRECIO_UNIT`) sigue
+neto."""
+
+
+def documento_elegido():
+    """El tipo de documento elegido en «Filtros» (`DOC_TODOS` si nada)."""
+    v = st.session_state.get(K_DOCUMENTO)
+    return v if v in DOC_OPCIONES else DOC_TODOS
+
+
+def con_igv():
+    """True si «Filtros» pide los montos con IGV."""
+    return st.session_state.get(K_MONTOS) == CON_IGV
+
+
+def tipo_corto(tipos):
+    """`TIPO_DOCUMENTO` → «F» (factura), «G» (guía de remisión) u «O» (lo
+    demás: planilla, recibo, no domiciliado…). El Almacén los escribe
+    enteros («Guía de Remisión»), y una comparación por prefijo sobrevive a
+    la tilde."""
+    t = tipos.fillna("").astype(str).str.strip().str.upper()
+    return pd.Series(np.where(t == "FACTURA", "F",
+                              np.where(t.str.startswith("GU"), "G", "O")),
+                     index=tipos.index)
+
+
+def filtrar_documento(df, col_tipo, eleccion):
+    """`df` con sólo las facturas, sólo las guías, o entero. Sin columna de
+    tipo (el demo) no filtra: una marca que el parquet no trae no puede
+    decidir qué entra."""
+    if eleccion == DOC_TODOS or not col_tipo or col_tipo not in df.columns:
+        return df
+    return df[tipo_corto(df[col_tipo]) == ("F" if eleccion == DOC_FACTURAS
+                                           else "G")]
+
+
+def sufijo_montos(igv, documento=DOC_TODOS):
+    """« · sin IGV», « · con IGV · facturas»…: lo que el título de una
+    tarjeta suma para decir cómo mide."""
+    s = " · con IGV" if igv else " · sin IGV"
+    if documento == DOC_FACTURAS:
+        s += " · facturas"
+    elif documento == DOC_GUIAS:
+        s += " · guías sin canjear"
+    return s
+
+
+# ===========================================================================
 # LA BASE DEL DRILL DE PROVEEDOR
 # ===========================================================================
 # Salieron de `proveedor.py` el 2026-09-09, cuando «Detalle de documentos por

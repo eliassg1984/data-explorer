@@ -466,13 +466,17 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
                         width=94, minWidth=94, suppressSizeToFit=True)
     # 104: los 87px de «FF01-00012345» a 13px más los 8+8 de padding — la
     # misma cuenta que la columna de Volatilidad.
+    # 120 desde la regla #621: la marca «guía · » o «US$ · » va delante del
+    # número, y lo que se corta es el final.
     gb.configure_column("doc", header_name="Documento", hide=not ver_doc,
-                        width=104, minWidth=104, suppressSizeToFit=True)
+                        width=120, minWidth=120, suppressSizeToFit=True,
+                        tooltipField="doc")
     gb.configure_column("prov", header_name="Proveedor", width=140,
                         minWidth=80, tooltipField="prov")
-    gb.configure_column("lineas", header_name="Líneas", type=["numericColumn"],
-                        valueFormatter=_JS_ENTERO,
-                        width=76, minWidth=76, suppressSizeToFit=True)
+    if "lineas" in tp.columns:
+        gb.configure_column("lineas", header_name="Líneas",
+                            type=["numericColumn"], valueFormatter=_JS_ENTERO,
+                            width=76, minWidth=76, suppressSizeToFit=True)
     # 112: «S/ 123,456.78» mide ~86px a 13px, más el padding y la flecha.
     # Abre ordenada por acá, que es el orden en que el drill ya las
     # mandaba: la flecha dice por qué columna está ordenada antes de que
@@ -484,9 +488,30 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
     # que las recibe: medido el 2026-09-19, ordenar por Proveedor y
     # clickear un documento devolvía la tabla a Valor ↓. `initialSort` sólo
     # cuenta cuando la columna se crea (regla #471).
-    gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
-                        valueFormatter=_JS_SOLES, initialSort="desc",
-                        width=112, minWidth=112, suppressSizeToFit=True)
+    if "valor" in tp.columns:
+        gb.configure_column("valor", header_name="Valor",
+                            type=["numericColumn"], valueFormatter=_JS_SOLES,
+                            initialSort="desc",
+                            width=112, minWidth=112, suppressSizeToFit=True)
+    # NETO, IGV Y TOTAL (regla #621), cuando el drill los manda: los de
+    # «Compras por período». El IGV de una guía viene vacío y `_JS_SOLES`
+    # lo escribe «—».
+    if "neto" in tp.columns:
+        gb.configure_column("neto", header_name="Neto", type=["numericColumn"],
+                            valueFormatter=_JS_SOLES, initialSort="desc",
+                            width=108, minWidth=108, suppressSizeToFit=True,
+                            headerTooltip="Valor sin IGV")
+        gb.configure_column("igv", header_name="IGV", type=["numericColumn"],
+                            valueFormatter=_JS_SOLES,
+                            width=96, minWidth=96, suppressSizeToFit=True,
+                            headerTooltip="El IGV del documento. Vacío en "
+                                          "una guía: lo trae su factura")
+        gb.configure_column("total", header_name="Total",
+                            type=["numericColumn"], valueFormatter=_JS_SOLES,
+                            width=108, minWidth=108, suppressSizeToFit=True,
+                            headerTooltip="Neto + IGV: lo que dice el papel "
+                                          "(en soles, aunque la factura sea "
+                                          "en dólares)")
     gb.configure_column("__compra", hide=True)
     gb.configure_column("__sel", hide=True)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
@@ -512,7 +537,8 @@ def renderizar_documentos_semanal(tp, altura, key, ver_fecha=True,
     return None
 
 
-def renderizar_proveedores_periodo(tp, altura, key, total=None):
+def renderizar_proveedores_periodo(tp, altura, key, total=None,
+                                   rotulo_valor="Valor"):
     """Una fila por PROVEEDOR del rango: la tabla de «Resumen del Período»
     de «Compras por período» (2026-10-01, regla #580).
 
@@ -540,9 +566,11 @@ def renderizar_proveedores_periodo(tp, altura, key, total=None):
     # La única que se estira: los nombres son lo largo de la tabla.
     gb.configure_column("prov", header_name="Proveedor", minWidth=160,
                         tooltipField="prov")
-    gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
+    # `rotulo_valor` dice si es con o sin IGV («Filtros» › Montos, #621).
+    gb.configure_column("valor", header_name=rotulo_valor,
+                        type=["numericColumn"],
                         valueFormatter=_JS_SOLES, initialSort="desc",
-                        width=124, minWidth=124, suppressSizeToFit=True,
+                        width=136, minWidth=136, suppressSizeToFit=True,
                         headerTooltip="Valorizado de compra del proveedor "
                                       "en el período")
     gb.configure_column("parte", header_name="% del período",
@@ -746,12 +774,29 @@ def renderizar_lineas_semanal(tp, altura, key, total=None):
     gb.configure_column("cant", header_name="Cantidad", type=["numericColumn"],
                         valueFormatter=_JS_CANTIDAD,
                         width=98, minWidth=98, suppressSizeToFit=True)
-    gb.configure_column("punit", header_name="P. unit.", type=["numericColumn"],
-                        valueFormatter=_JS_SOLES,
-                        width=100, minWidth=100, suppressSizeToFit=True)
-    gb.configure_column("valor", header_name="Valor", type=["numericColumn"],
+    # Con la columna «igv» (regla #621) los montos son SIN IGV y el rótulo
+    # lo dice; la marca de cada línea va al final, angosta.
+    _sin = " sin IGV" if "igv" in tp.columns else ""
+    # El precio unitario no suma «sin IGV» al rótulo: lo dice su tooltip y
+    # la columna de al lado, y el ancho es del nombre del producto.
+    gb.configure_column("punit", header_name="P. unit.",
+                        type=["numericColumn"], valueFormatter=_JS_SOLES,
+                        width=100, minWidth=100, suppressSizeToFit=True,
+                        headerTooltip=("Precio unitario sin IGV" if _sin
+                                       else None))
+    gb.configure_column("valor", header_name=f"Valor{_sin}",
+                        type=["numericColumn"],
                         valueFormatter=_JS_SOLES, initialSort="desc",
-                        width=112, minWidth=112, suppressSizeToFit=True)
+                        width=112 + (16 if _sin else 0),
+                        minWidth=112 + (16 if _sin else 0),
+                        suppressSizeToFit=True)
+    if _sin:
+        gb.configure_column("igv", header_name="IGV", width=88, minWidth=88,
+                            suppressSizeToFit=True,
+                            headerTooltip="Qué IGV paga el producto: 18 %, "
+                                          "exonerado (verduras, pescados, "
+                                          "frutas) o guía (todavía sin "
+                                          "IGV: lo trae la factura)")
     gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         # Sin selección un clic no hace nada, pero AG Grid igual le dibuja el
@@ -771,7 +816,8 @@ def renderizar_lineas_semanal(tp, altura, key, total=None):
 
 def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
                         ver_docs=True, ver_variacion=True,
-                        familias=(), total=None, estrecha=False):
+                        familias=(), total=None, estrecha=False,
+                        rotulo_valor=None):
     """Una fila por BARRA del gráfico, en el orden del eje.
 
     La usan DOS vistas desde el 2026-09-20 —«Compra por período» y la
@@ -843,6 +889,7 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
     def _fijo(col, **kw):
         """`_si` con el rótulo y el ancho del juego que toca."""
         _rot, _w = _A[col]
+        _w = kw.pop("ancho", None) or _w
         _si(col, header_name=kw.pop("header_name", None) or _rot,
             width=_w, minWidth=_w, suppressSizeToFit=True, **kw)
 
@@ -862,7 +909,12 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
           headerTooltip="Cantidad comprada en el período, en la unidad de "
                         "medida del producto. El total la suma: es un solo "
                         "producto, una sola unidad")
+    # `rotulo_valor` dice si es con o sin IGV («Filtros» › Montos, #621);
+    # sin él, el rótulo del juego de anchos.
     _fijo("valor", type=["numericColumn"], valueFormatter=_JS_SOLES,
+          header_name=rotulo_valor,
+          # «Valorizado sin IGV» no entra en los 130 de «Valorizado».
+          ancho=(150 if rotulo_valor and not estrecha else None),
           headerTooltip="Valorizado de compra del período")
     _fijo("parte", type=["numericColumn"], valueFormatter=_JS_PARTE,
           headerTooltip="% del total · cuánto pesa esta barra en el total "

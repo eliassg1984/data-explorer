@@ -90,7 +90,7 @@ import streamlit as st
 import cortes
 from tema import (
     ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
-    SERIE_PRINCIPAL, TEXTO_PRINCIPAL,
+    SERIE_PRINCIPAL, SERIE_TRAMOS, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
@@ -111,12 +111,17 @@ from graficos.compras._comun import (
     CATEGORIA_SEC, GAP_DRILL, _first_point, _periodo_serie, colores_estables,
     documento_legible, selector_fecha_tarjeta,
 )
+# Documento y Montos, de «Filtros» (regla #621).
+from graficos.compras._comun import (
+    DOC_GUIAS, con_igv, documento_elegido, sufijo_montos, tipo_corto,
+)
 # EL NOMBRE DEL PROVEEDOR SE ESCRIBE COMO NOMBRE PROPIO, no como lo grita el
 # ERP (2026-09-20, a pedido: «pongamos el nombre del proveedor en
 # minúscula»). Es la ÚNICA del repo y es sólo para MOSTRAR: la clave con la
 # que esta vista compara (`dd["compra"]`) sigue llevando el nombre crudo.
 # Ver `_etiquetas_proveedor.nombre_propio` y `arquitectura.md` #379.
 from graficos.compras._etiquetas_proveedor import nombre_propio
+from graficos.compras._css_proveedor import CSS as CSS_PROVEEDOR
 # Las formas jurídicas sin punto («SAC», «EIRL»): `_rotulo_proveedor` las saca
 # del final del nombre en la leyenda de «Partir por» (regla #620).
 from graficos.compras._etiquetas_proveedor import _SIGLAS_RAZON_SOCIAL
@@ -223,7 +228,7 @@ _AYUDA_MODO = (
 _KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familia",
                 "compras_sem_subfamilia", "compras_sem_proveedor",
                 "compras_sem_producto", "compras_sem_modo",
-                "compras_sem_partir")
+                "compras_sem_partir", "compras_sem_res_*")
 # (La tabla de «Resumen del Período» no va: su selección se CONSUME en la
 # corrida del clic —estrena la key con un contador—, así que no hay nada
 # que preservar.)
@@ -631,33 +636,106 @@ def _pct_parte(p):
     return f"{pct:.1f}%" if abs(pct) < 10 else f"{pct:.0f}%"
 
 
-def _hover_partes(partes, tot, titulo):
-    """El bloque del hover que nombra las partes de cada barra: una lista
-    por parte, con un texto por período, en el que la parte bajo el cursor
-    va en negrita y las demás normales — todas juntas, porque la pregunta es
-    por la barra. Las que en esa barra valen cero no se nombran. Empieza con
-    `<br>` para colgarse de un `hovertemplate`."""
+def _hover_partes(partes, tot, titulo, marcada=None):
+    """El bloque del hover que nombra TODAS las partes de cada barra —la
+    pregunta es por la barra—, con la resaltada (`marcada`, su índice en
+    `partes`) en negrita. Un texto por período; las partes que en esa barra
+    valen cero no se nombran. Empieza con `<br>` para colgarse de un
+    `hovertemplate`.
+
+    Hasta la regla #621 devolvía una lista POR PARTE, con la parte bajo el
+    cursor en negrita: cada franja tenía su hover. Desde que el cursor
+    responde en la barra entera hay un solo hover por barra, y lo que se
+    marca es lo resaltado."""
     cab = f"<br><span style='color:{GRIS_TEXTO}'>{titulo}</span>"
-    filas = []
+    salida = []
     for j, total in enumerate(tot):
-        filas.append([
-            (k, f"{escape(rot)}: S/ {vals[j]:,.2f} · "
-                f"{_pct_parte(vals[j] / total if total else 0.0)}")
-            for k, (rot, _c, vals) in enumerate(partes) if vals[j]])
-    return [[cab + "".join(f"<br><b>{txt}</b>" if k == i else f"<br>{txt}"
-                           for k, txt in fila)
-             for fila in filas]
-            for i in range(len(partes))]
+        renglones = []
+        for k, (rot, _c, vals) in enumerate(partes):
+            if not vals[j]:
+                continue
+            txt = (f"{escape(rot)}: S/ {vals[j]:,.2f} · "
+                   f"{_pct_parte(vals[j] / total if total else 0.0)}")
+            renglones.append(f"<br><b>{txt}</b>" if k == marcada
+                             else f"<br>{txt}")
+        salida.append(cab + "".join(renglones))
+    return salida
 
 
-def _leyenda_html(partes):
-    """La leyenda de las partes como fichas de HTML, para el renglón del
-    título: la de Plotly vivía debajo del eje y se montaba sobre el año del
-    primer rótulo."""
-    fichas = "".join(f"<span class='cp-sem-ley-it'><i style='background:"
-                     f"{color}'></i>{escape(rot)}</span>"
-                     for rot, color, _vals in partes)
-    return f"<div class='cp-sem-ley'>{fichas}</div>"
+_K_RESALTADO = "compras_sem_resaltado"
+"""`{«Partir por»: lo resaltado, o None}` — una entrada por forma de partir,
+así volver de Proveedor a Subfamilia encuentra la misma subfamilia. Es una
+clave PROPIA y no la del widget: ver «QUÉ SE RESALTA» en el drill."""
+
+
+def _guias_por_clave(dd, ord_claves, igv=False, solo_guias=False):
+    """El renglón del hover que dice cuánto de cada barra es guía de
+    remisión sin canjear (regla #621), alineado a `ord_claves`; vacío donde
+    no hubo guías. Con «Con IGV» suma que la guía todavía no lo lleva; con
+    el filtro en «Guías sin canjear» lo dice una vez por barra, sin cifra:
+    la barra entera es guía."""
+    g = (dd[dd["tipo"] == "G"].groupby("clave")
+           .agg(v=("valor", "sum"), n=("compra", "nunique")))
+    nota = " · sin IGV todavía: lo trae la factura" if igv else ""
+    salida = []
+    for c in ord_claves:
+        if c not in g.index:
+            salida.append("")
+            continue
+        n, v = int(g.at[c, "n"]), float(g.at[c, "v"])
+        txt = ("Guías de remisión sin canjear" + nota if solo_guias else
+               f"Incluye {n} guía{'' if n == 1 else 's'} de remisión sin "
+               f"canjear: S/ {v:,.2f}{nota}")
+        salida.append(f"<br><span style='color:{ADVERTENCIA_TEXTO}'>{txt}"
+                      "</span>")
+    return salida
+
+
+def _es_resto(nombre):
+    """True si la parte es el «Otras (k)» / «Otros (k)» de
+    `partes_por_columna`: no se ofrece para resaltar."""
+    return str(nombre).startswith(("Otras (", "Otros ("))
+
+
+def opciones_resaltar(partes, partir):
+    """Lo que se puede resaltar en la barra (regla #621): las subfamilias o
+    proveedores con nombre —el resto no— o, en «Precio», lo pagado de más.
+    En el orden de la leyenda, que es el de las partes."""
+    if partir == _PARTIR_PRECIO:
+        return [r for r, _c, _v in partes if r == _PAGADO_DE_MAS]
+    return [r for r, _c, _v in partes if not _es_resto(r)]
+
+
+def renglon_resaltado(valor, total, precio=False):
+    """`(plano, html)` del segundo renglón de la etiqueta de una barra con
+    una parte resaltada, en lugar de los documentos (que siguen en el
+    hover): «S/ 11.8k · 41%» en el tono de la parte o, en «Precio»,
+    «+S/ 1.3k de más» en rojo. `None` en «Precio» si esa barra no tuvo nada
+    pagado de más: ahí el renglón de los documentos se queda."""
+    if precio:
+        if not valor:
+            return None
+        txt = f"+{fmt_k(valor)} de más"
+        return txt, f"<span style='color:{ERROR}'><b>{txt}</b></span>"
+    txt = f"{fmt_k(valor) if valor else 'S/ 0'} · "           f"{_pct_parte(valor / total if total else 0.0)}"
+    return txt, f"<span style='color:{SERIE_TRAMOS[0]}'><b>{txt}</b></span>"
+
+
+def igv_de_linea(neto, igv, tipo):
+    """La marca de IGV de una línea de compra: «18 %», «exonerado» (no pagó:
+    verduras, pescados, frutas), «guía» (todavía sin IGV: lo trae la
+    factura) u otra tasa con un decimal. Vectorizada: recibe tres Series
+    alineadas y devuelve otra."""
+    n = pd.to_numeric(neto, errors="coerce")
+    i = pd.to_numeric(igv, errors="coerce").fillna(0.0)
+    tasa = (i / n).where(n > 0)
+    otra = (tasa * 100).map(lambda x: f"{x:.1f} %" if pd.notna(x) else "—")
+    return pd.Series(
+        np.where(tipo == "G", "guía",
+                 np.where(i.abs() < 0.005, "exonerado",
+                          np.where((tasa - 0.18).abs() < 0.005, "18 %",
+                                   otra))),
+        index=n.index)
 
 
 def _etiqueta_en_la_punta(tramos, textos):
@@ -1351,7 +1429,9 @@ def _clave_del_clic(x, ord_claves):
 @st.fragment
 def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                            col_prov, col_docu, col_valor,
-                           col_fam=None, d_full=None, col_subfam=None):
+                           col_fam=None, d_full=None, col_subfam=None,
+                           col_valor_neto=None, col_igv=None,
+                           col_tipo_doc=None, col_moneda=None):
     """Compra por período (día/semana/mes/año o por documento) + detalle.
 
     `col_valor` entra como NOMBRE de columna y la serie numérica se arma
@@ -1409,6 +1489,14 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
     # el gráfico —ahora una serie única, no apilada por
     # producto— aprovecha mejor el ancho entero.
     with st.container(border=True, key="ajuste_graf_card_izq_sem"):
+        # EL CSS DE ESTA TARJETA VIVE EN `_css_proveedor.py` y hasta el
+        # 2026-10-08 lo inyectaba sólo el drill de Proveedor. Esta sección
+        # es la PRIMERA de la pila, así que se construía antes que aquélla y
+        # se veía sin estilo hasta que la precarga llegaba a Proveedor —
+        # medido: la cabecera sin alto fijo, y el renglón del título (#620,
+        # #621) en el flujo, con las fichas en dos renglones y la tarjeta
+        # más alta. Dos copias del mismo `<style>` no se pisan.
+        st.markdown(CSS_PROVEEDOR, unsafe_allow_html=True)
         if not (col_prod and col_fecha):
             st.info("No hay columnas suficientes para este gráfico.")
             return
@@ -1656,6 +1744,23 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                     else pd.Series("", index=d.index)),
             "sub": (d[col_subfam].astype(str) if _hay_sub
                     else pd.Series("", index=d.index)),
+            # Lo de «Filtros» › Montos (regla #621): `valor` es lo que se
+            # muestra (con IGV si así se pidió); `neto` e `igv`, las dos
+            # mitades, para «Precio» —que se compara siempre sin IGV— y para
+            # el Detalle, que dice las tres cifras. `tipo` (F/G/O) marca las
+            # guías y `usd` las facturas en dólares.
+            "neto": (pd.to_numeric(d[col_valor_neto], errors="coerce").fillna(0)
+                     if col_valor_neto and col_valor_neto in d.columns
+                     else _valor),
+            "igv": (pd.to_numeric(d[col_igv], errors="coerce").fillna(0)
+                    if col_igv and col_igv in d.columns
+                    else pd.Series(0.0, index=d.index)),
+            "tipo": (tipo_corto(d[col_tipo_doc])
+                     if col_tipo_doc and col_tipo_doc in d.columns
+                     else pd.Series("F", index=d.index)),
+            "usd": (d[col_moneda].astype(str).str.strip() == "02"
+                    if col_moneda and col_moneda in d.columns
+                    else pd.Series(False, index=d.index)),
         }).dropna(subset=["fecha"])
 
         # Los filtros de la tarjeta, en el orden en que se leen.
@@ -1669,6 +1774,38 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             dd = dd[dd["prod"].isin(_prods[:_etiq_top[prod_sel]])]
         elif prod_sel != _PROD_TODOS:
             dd = dd[dd["prod"] == prod_sel]
+
+        # ── «PARTIR POR» Y QUÉ SE RESALTA, LEÍDOS DE `session_state` ─────
+        # Como el modo: los dos selectores se dibujan en el renglón del
+        # título, pegado al gráfico, y hacen falta antes — para armar la
+        # figura y, en «Precio», para decidir con qué valor se mide TODO
+        # (ver el bloque de abajo). Una clave con `key` se lee sin dibujarla
+        # y en la corrida del clic ya trae el valor nuevo; se siembra acá,
+        # antes de que el widget exista, que es cuando se puede escribir.
+        _ops_partir = _partir_disponibles(_hay_sub, _hay_prov, bool(col_cant))
+        _partir = st.session_state.get("compras_sem_partir")
+        if _ops_partir and _partir not in _ops_partir:
+            _partir = (_PARTIR_DEFAULT if _PARTIR_DEFAULT in _ops_partir
+                       else _ops_partir[0])
+            st.session_state["compras_sem_partir"] = _partir
+        _partida_gran = gran in _GRAN_PARTIDA and bool(_ops_partir)
+
+        # ── «PRECIO» SE MIDE SIEMPRE SIN IGV (regla #621) ────────────────
+        # Con IGV, una compra hecha con guía —que todavía no lo lleva—
+        # parecería más barata que la misma con factura. Y una barra de
+        # «Precio» tiene que sumar lo que suman sus partes, que son netas:
+        # por eso en ese caso TODA la tarjeta pasa a neto (barras, etiquetas
+        # y tablas) y el título lo dice.
+        _igv = bool(con_igv() and col_valor_neto
+                    and col_valor_neto != col_valor)
+        _forzar_neto = _igv and _partida_gran and _partir == _PARTIR_PRECIO
+        if _forzar_neto:
+            dd["valor"] = dd["neto"]
+        _igv_vista = _igv and not _forzar_neto
+        _documento = documento_elegido()
+        _sufijo = sufijo_montos(_igv_vista, _documento) + (
+            " (Precio se compara sin IGV)" if _forzar_neto else "")
+        _rot_valor = "con IGV" if _igv_vista else "sin IGV"
 
         # El ÁMBITO va al título de la figura: con los filtros propios más
         # los chips de la franja, un gráfico que dice sólo "Compra por
@@ -1947,6 +2084,50 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _con_tabla = _con_detalle or _modo in (_MODO_RESUMEN, _MODO_PROVS)
         _alto_fig = (_ALTO_FIG_CON_TABLA if _con_tabla else _ALTO_FIG_SOLO)
 
+        # ── «PARTIR POR»: DE QUÉ ESTÁ HECHA CADA BARRA (reglas #620, #621) ─
+        # Las partes van ANTES de las etiquetas: con una parte resaltada, el
+        # segundo renglón de la etiqueta dice cuánto vale (`renglon_resaltado`).
+        _partes, _pila, _extra_hov, _tit_partes = [], [], {}, ""
+        if _partida_gran and _partir == _PARTIR_SUBFAMILIA:
+            _partes = partes_por_columna(
+                dd, "sub", _ord_claves,
+                orden=_orden_historico(d, d_full, col_subfam, col_valor),
+                resto="Otras", nombrar=_rotulo_subfamilia)
+            _tit_partes = "Por subfamilia"
+        elif _partida_gran and _partir == _PARTIR_PROVEEDOR:
+            _partes = partes_por_columna(
+                dd, "prov", _ord_claves,
+                orden=_orden_historico(d, d_full, col_prov, col_valor),
+                resto="Otros", nombrar=_rotulo_proveedor)
+            _tit_partes = "Por proveedor"
+        elif _partida_gran and _partir == _PARTIR_PRECIO:
+            # La referencia sale del histórico NETO, sea cual sea el selector.
+            dd["ref"] = _precio_habitual_de(dd, d, d_full, col_prod, col_fecha,
+                                            col_valor_neto or col_valor,
+                                            col_cant)
+            _partes, _pila, _extra_hov = partes_por_precio(dd, _ord_claves)
+            _tit_partes = _TITULO_PRECIO
+        _partida = bool(_partes)
+
+        # ── QUÉ SE RESALTA (regla #621) ──────────────────────────────────
+        # A pedido: «me hace mucho ruido visual y al ser espacios muy
+        # delgados, es casi imposible colocar el cursor». La barra vuelve a
+        # ser lisa y se resalta UNA parte, oscura y apoyada en la base, para
+        # compararla entre barras; las fichas del renglón del título la
+        # eligen y un segundo clic la suelta. Lo elegido vive en una clave
+        # propia, una por «Partir por» (`_K_RESALTADO`): la del widget lleva
+        # la firma de sus opciones, que cambian con la fecha y los filtros, y
+        # un widget con un valor que no está entre sus opciones revienta.
+        _ops_res = opciones_resaltar(_partes, _partir) if _partida else []
+        _resaltados = st.session_state.setdefault(_K_RESALTADO, {})
+        if _ops_res and (_partir not in _resaltados
+                         or (_resaltados[_partir] is not None
+                             and _resaltados[_partir] not in _ops_res)):
+            _resaltados[_partir] = _ops_res[0]
+        _resaltado = _resaltados.get(_partir) if _ops_res else None
+        _k_res = next((_k for _k, (_r, _c, _v) in enumerate(_partes)
+                       if _r == _resaltado), None)
+
         # ── LA ETIQUETA DE CADA BARRA (#440, #454 y #470) ────────────────
         # El total, los documentos debajo y la variación contra la barra
         # anterior, y de eso lo que ENTRA: `_plan_etiquetas` decide la forma
@@ -1978,6 +2159,14 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             _reng = [_renglones_etiqueta(fmt_k(_v) if _v else None, _n,
                                          _var, gran)
                      for _v, _n, _var in zip(_tot, _ndocs, _vars)]
+            # Con una parte resaltada, el renglón de los documentos (que
+            # siguen en el hover) dice cuánto vale esa parte en la barra.
+            if _k_res is not None:
+                for _j, _r in enumerate(_reng):
+                    _alt = renglon_resaltado(_partes[_k_res][2][_j], _tot[_j],
+                                             precio=_partir == _PARTIR_PRECIO)
+                    if len(_r) > 1 and _alt:
+                        _r[1] = _alt
             _plan_etq, _k_etq, _alto_etq = _plan_etiquetas(
                 _n_per, [[_p for _p, _ in _r] for _r in _reng], _alto_fig)
             if _plan_etq:
@@ -1991,76 +2180,66 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             textangle=-90 if _plan_etq in ("girada", "unida") else 0,
             textfont=dict(size=_ETQ_FUENTE, color=TEXTO_PRINCIPAL))
 
-        # ── «PARTIR POR»: DE QUÉ ESTÁ HECHA CADA BARRA (regla #620) ──────
-        # SE LEE DE `session_state` Y NO DEL WIDGET, como el modo: el
-        # selector se dibuja en el renglón del título, pegado al gráfico, y
-        # las partes hacen falta antes, para armar la figura. Una clave con
-        # `key` se lee sin dibujarla y en la corrida del clic ya trae el
-        # valor nuevo. Se siembra acá, antes de que el widget exista, que es
-        # cuando se puede escribir.
-        _ops_partir = _partir_disponibles(_hay_sub, _hay_prov, bool(col_cant))
-        _partir = st.session_state.get("compras_sem_partir")
-        if _ops_partir and _partir not in _ops_partir:
-            _partir = (_PARTIR_DEFAULT if _PARTIR_DEFAULT in _ops_partir
-                       else _ops_partir[0])
-            st.session_state["compras_sem_partir"] = _partir
-        _partes, _pila, _extra_hov, _tit_partes = [], [], {}, ""
-        if gran in _GRAN_PARTIDA and _partir == _PARTIR_SUBFAMILIA:
-            _partes = partes_por_columna(
-                dd, "sub", _ord_claves,
-                orden=_orden_historico(d, d_full, col_subfam, col_valor),
-                resto="Otras", nombrar=_rotulo_subfamilia)
-            _tit_partes = "Por subfamilia"
-        elif gran in _GRAN_PARTIDA and _partir == _PARTIR_PROVEEDOR:
-            _partes = partes_por_columna(
-                dd, "prov", _ord_claves,
-                orden=_orden_historico(d, d_full, col_prov, col_valor),
-                resto="Otros", nombrar=_rotulo_proveedor)
-            _tit_partes = "Por proveedor"
-        elif gran in _GRAN_PARTIDA and _partir == _PARTIR_PRECIO:
-            dd["ref"] = _precio_habitual_de(dd, d, d_full, col_prod,
-                                            col_fecha, col_valor, col_cant)
-            _partes, _pila, _extra_hov = partes_por_precio(dd, _ord_claves)
-            _tit_partes = _TITULO_PRECIO
-        if not _pila:
-            _pila = list(range(len(_partes)))
-        _partida = bool(_partes)
-
         fig = go.Figure()
         _colores_traza = [SERIE_PRINCIPAL]
         if _partida:
-            # ── La barra partida según «Partir por» ─────────────────────
-            # Plotly apila en el orden en que se agregan las trazas: `_pila`
-            # es ese orden, de abajo hacia arriba (la mayor abajo; en Precio,
-            # el rojo arriba). El hover de cada parte nombra TODAS las de su
-            # barra, con la suya en negrita (`_hover_partes`).
+            # ── La barra lisa o con UNA parte resaltada (regla #621) ─────
+            # Las franjas se apilan a mano (`base`) y en `barmode="overlay"`
+            # para que la ÚLTIMA traza —transparente, del alto de la barra y
+            # del ancho de su columna— quede encima de todo: ella lleva el
+            # hover, el clic y la etiqueta. Así el cursor responde en la
+            # barra entera y no en una franja de 4px. Las franjas de abajo
+            # van con `hoverinfo="skip"`, que también les apaga el clic
+            # (#388): el clic lo recibe la capa.
+            _xs = list(range(_n_per))
+            if _k_res is None:
+                _visibles = [(_tot, [0.0] * _n_per, SERIE_PRINCIPAL)]
+            elif _partir == _PARTIR_PRECIO:
+                _mas = _partes[_k_res][2]
+                _resto = [_t - _m for _t, _m in zip(_tot, _mas)]
+                _visibles = [(_resto, [0.0] * _n_per, SERIE_PRINCIPAL),
+                             (_mas, _resto, ERROR)]
+            else:
+                _parte = _partes[_k_res][2]
+                _resto = [_t - _v for _t, _v in zip(_tot, _parte)]
+                _visibles = [(_parte, [0.0] * _n_per, SERIE_TRAMOS[0]),
+                             (_resto, _parte, SERIE_TRAMOS[2])]
+            for _y, _base, _color in _visibles:
+                fig.add_bar(x=_xs, y=_y, base=_base, marker=dict(color=_color),
+                            hoverinfo="skip", showlegend=False)
+            _colores_traza = [_c for _y, _b, _c in _visibles]
+
+            # El hover: el período, el total (y su neto + IGV), la
+            # variación, TODAS las partes con la resaltada en negrita, lo
+            # propio de «Precio» y cuánto de la barra es guía.
             _hov = _de_g["hov"].reindex(_ord_claves).tolist()
             _rot_total = _TOTAL_DEL_PERIODO.get(gran, "Total del período")
-            _cab_tot = [f"{_rot_total}: S/ {_t:,.2f}{_d}"
+            _cab_tot = [f"{_rot_total} {_rot_valor}: S/ {_t:,.2f}{_d}"
                         for _t, _d in zip(_tot, _docs_hov)]
-            _hov_partes = _hover_partes(_partes, _tot, _tit_partes)
+            if _igv_vista:
+                _ni = dd.groupby("clave")[["neto", "igv"]].sum().reindex(
+                    _ord_claves).fillna(0.0)
+                _cab_tot = [f"{_c}<br><span style='color:{GRIS_TEXTO}'>neto "
+                            f"S/ {_n:,.2f} + IGV S/ {_i:,.2f}</span>"
+                            for _c, _n, _i in zip(_cab_tot, _ni["neto"],
+                                                  _ni["igv"])]
+            _hov_partes = _hover_partes(_partes, _tot, _tit_partes, _k_res)
             _extra = [_extra_hov.get(_c, "") for _c in _ord_claves]
-            _textos_tr = (_etiqueta_en_la_punta(
-                              [{"valor": pd.Series(_partes[_k][2])}
-                               for _k in _pila], _textos)
-                          if _plan_etq else [None] * len(_pila))
-            _xs = list(range(_n_per))
-            for _j, _k in enumerate(_pila):
-                _rot, _color, _vals = _partes[_k]
-                fig.add_bar(
-                    x=_xs, y=_vals, name=_rot, marker=dict(color=_color),
-                    customdata=list(zip(_hov, _cab_tot, _var_hov,
-                                        _hov_partes[_k], _extra)),
-                    hovertemplate=("%{customdata[0]}<br>%{customdata[1]}"
-                                   "%{customdata[2]}%{customdata[3]}"
-                                   "%{customdata[4]}<extra></extra>"),
-                )
-                if _plan_etq:
-                    fig.data[-1].update(text=_textos_tr[_j], **_estilo_etq)
-            _colores_traza = [_partes[_k][1] for _k in _pila]
-            # `stack` sólo acá: en «Por documento» la figura tiene una sola
-            # traza y apilar no significa nada.
-            fig.update_layout(barmode="stack")
+            _guias = _guias_por_clave(dd, _ord_claves, _igv_vista,
+                                      _documento == DOC_GUIAS)
+            fig.add_bar(
+                x=_xs, y=_tot, width=1.0, showlegend=False,
+                marker=dict(color="rgba(0,0,0,0)"),
+                customdata=list(zip(_hov, _cab_tot, _var_hov, _hov_partes,
+                                    _extra, _guias)),
+                hovertemplate=("%{customdata[0]}<br>%{customdata[1]}"
+                               "%{customdata[2]}%{customdata[3]}"
+                               "%{customdata[4]}%{customdata[5]}"
+                               "<extra></extra>"),
+            )
+            if _plan_etq:
+                fig.data[-1].update(text=_textos, **_estilo_etq)
+            fig.update_layout(barmode="overlay")
         else:
             fig.add_bar(
                 x=g["ix"], y=g["valor"], name="Valor total",
@@ -2224,7 +2403,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             with st.container(horizontal=True, gap="small",
                               vertical_alignment="center",
                               key="cp_sem_cab_graf"):
-                st.markdown(f"<div class='cp-sem-tit'>{escape(_titulo)}</div>",
+                st.markdown(f"<div class='cp-sem-tit'>{escape(_titulo)}"
+                            f"<small>{escape(_sufijo)}</small></div>",
                             unsafe_allow_html=True)
                 if _ops_partir:
                     st.segmented_control(
@@ -2232,9 +2412,24 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                         key="compras_sem_partir",
                         label_visibility="collapsed",
                         disabled=gran not in _GRAN_PARTIDA)
-                if _partida:
-                    st.markdown(_leyenda_html(_partes),
-                                unsafe_allow_html=True)
+                if _ops_res:
+                    # Las fichas que eligen qué resaltar. La key lleva la
+                    # firma de sus opciones: con otra fecha u otro filtro
+                    # cambian, y el widget nace de nuevo con lo elegido
+                    # (`default=`, de `_K_RESALTADO`).
+                    _wkey = (f"compras_sem_res_{_partir.lower()}_"
+                             f"{_clave_grilla(*_ops_res)}")
+
+                    def _copiar_resaltado(_wkey=_wkey, _partir=_partir):
+                        st.session_state[_K_RESALTADO][_partir] = (
+                            st.session_state.get(_wkey))
+
+                    st.pills(
+                        "Resaltar", _ops_res, selection_mode="single",
+                        default=_resaltado, key=_wkey,
+                        on_change=_copiar_resaltado,
+                        format_func=lambda _n: _compras_truncar(_n, 14),
+                        label_visibility="collapsed")
             st.plotly_chart(
                 fig, use_container_width=True, on_select="rerun",
                 selection_mode="points", key=_key_graf)
@@ -2408,7 +2603,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                                     else "Período"),
                     ver_docs=gran in _GRAN_CON_DOCS,
                     ver_variacion=gran in _GRAN_VARIACION,
-                    familias=_cols_fam, total=_tot_per)
+                    familias=_cols_fam, total=_tot_per,
+                    rotulo_valor=f"Valorizado {_rot_valor}")
             _pie.caption(
                 f"**{_del_al(dd['fecha'])}** · agrupado por "
                 f"{_AGRUPADO_GRAN[gran]} — una fila por barra, en el orden "
@@ -2444,7 +2640,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                     _tp_provs, altura=_ALTO_TABLA,
                     key=("compras_sem_provs_grid_"
                          + _clave_grilla(gran, _ctx, _rng, _pnclic)),
-                    total=_tot_p)
+                    total=_tot_p, rotulo_valor=f"Valor {_rot_valor}")
             _pie.caption(
                 f"**{_del_al(dd['fecha'])}** · una fila por proveedor — un "
                 "clic en uno abre sus documentos en Detalle.")
@@ -2527,7 +2723,9 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _docs = (_amb.groupby("compra", as_index=False)
                      .agg(fecha=("fecha", "min"), doc=("doc", "first"),
                           prov=("prov", "first"), lineas=("valor", "size"),
-                          valor=("valor", "sum"))
+                          valor=("valor", "sum"), neto=("neto", "sum"),
+                          igv=("igv", "sum"), tipo=("tipo", "first"),
+                          usd=("usd", "first"))
                      .sort_values(["valor", "compra"], ascending=[False, True])
                      .reset_index(drop=True))
 
@@ -2549,22 +2747,39 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # 2026-09-19: las dos tablas se ordenan con clic en la cabecera, y
         # un monto ya formateado se ordena como texto. El formato lo pone la
         # grilla (`tablas/compras_semanal.py`, regla #471).
+        # NETO, IGV Y TOTAL SIEMPRE, sea cual sea el selector (regla #621):
+        # es la tabla donde un documento se mira contra el papel, y el papel
+        # dice el total con IGV. Reemplazan a «Valor» y a «Líneas», que ya
+        # cuenta la tabla de al lado, para que las tres entren en la mitad de
+        # la tarjeta. La guía va con el IGV vacío («—»: todavía no lo
+        # lleva) y la marca delante del número, que es lo que se ve si la
+        # celda se corta; lo mismo la factura en dólares, cuyos montos van en
+        # soles y no coinciden con la cifra impresa.
+        _marca = pd.Series(np.where(_docs["tipo"] == "G", "guía · ",
+                                    np.where(_docs["usd"], "US$ · ", "")),
+                           index=_docs.index, dtype=object)
         _tp_docs = pd.DataFrame({
             "fecha": _docs["fecha"].dt.strftime("%Y-%m-%d"),
-            "doc": _docs["doc"].fillna("").map(lambda v: v or "—"),
+            "doc": _marca + _docs["doc"].fillna("").map(lambda v: v or "—"),
             # Como nombre propio, que es lo que se MUESTRA; la clave de
             # la compra sigue con el nombre crudo.
             "prov": [nombre_propio(_p) for _p in _docs["prov"]],
-            "lineas": _docs["lineas"].astype(int),
-            "valor": _docs["valor"].astype(float).round(2),
+            "neto": _docs["neto"].astype(float).round(2),
+            "igv": _docs["igv"].astype(float).round(2).where(
+                _docs["tipo"] != "G"),
+            "total": (_docs["neto"] + _docs["igv"]).astype(float).round(2),
             "__compra": _docs["compra"],
             "__sel": _docs["compra"] == _sel,
         })
+        # Las líneas, SIEMPRE sin IGV —el precio que se compara— y con la
+        # marca de qué IGV paga cada producto: «exonerado» explica por qué
+        # una factura de pescado casi no lleva impuesto.
         _tp_lin = pd.DataFrame({
             "prod": _lin["prod"],
             "cant": pd.to_numeric(_lin["cant"], errors="coerce").round(3),
             "punit": pd.to_numeric(_lin["punit"], errors="coerce").round(4),
-            "valor": _lin["valor"].astype(float).round(2),
+            "valor": _lin["neto"].astype(float).round(2),
+            "igv": igv_de_linea(_lin["neto"], _lin["igv"], _lin["tipo"]),
         })
 
         # ── Las filas TOTAL de las dos tablas (2026-09-17, regla #454) ────
@@ -2578,8 +2793,9 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _tot_docs = {
             "fecha": "", "doc": "",
             "prov": f"{_n_docs} compra" + ("" if _n_docs == 1 else "s"),
-            "lineas": f"{int(_docs['lineas'].sum()):,}",
-            "valor": f"S/ {_docs['valor'].sum():,.2f}",
+            "neto": f"S/ {_docs['neto'].sum():,.2f}",
+            "igv": f"S/ {_docs['igv'].sum():,.2f}",
+            "total": f"S/ {(_docs['neto'] + _docs['igv']).sum():,.2f}",
         }
         _col_rot = ("fecha" if gran != "Por documento"
                     else ("doc" if col_docu else None))
@@ -2591,7 +2807,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _tot_lin = {
             "prod": f"Total · {_n_lin} línea" + ("" if _n_lin == 1 else "s"),
             "cant": "", "punit": "",
-            "valor": f"S/ {_lin['valor'].sum():,.2f}",
+            "valor": f"S/ {_lin['neto'].sum():,.2f}", "igv": "",
         }
 
         with _hueco_tabla:

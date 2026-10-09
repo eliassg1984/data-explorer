@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-620 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+621 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (202)
 
@@ -328,7 +328,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 
-**Plotly y figuras** (112)
+**Plotly y figuras** (113)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -442,6 +442,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
 - **#619** — Una semana se nombra con sus días de la semana, y la que las fechas cortan, por los días que…
 - **#620** — La barra de «Compras por período» se parte por lo que se elige —subfamilia, proveedor o…
+- **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 
 **AgGrid y tablas** (89)
 
@@ -535,7 +536,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 - **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
 
-**Streamlit** (160)
+**Streamlit** (161)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -697,6 +698,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#585** — Ajuste › Evolución: sin «Semana», y la mitad de abajo alterna los mini-gráficos con una tabla…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
+- **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 
 **Datos, R2 y DuckDB** (93)
 
@@ -48740,6 +48742,95 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-08.)
 
+621. **En «Compras por período» se resalta UNA parte de la barra y el
+     cursor responde en la barra entera; y «Filtros» de Compras elige
+     Documento (todos, facturas, guías sin canjear) y Montos (sin o con
+     IGV) para todas las vistas.** 2026-10-08, a pedido y sobre un mockup:
+     la partición de la #620 hacía «mucho ruido visual y al ser espacios
+     muy delgados, es casi imposible colocar el cursor».
+
+     **Resaltar una** (`graficos/compras/semanal.py`). La barra vuelve a
+     ser lisa; unas fichas (`st.pills`) en el renglón del título, donde
+     estaba la leyenda, eligen UNA parte —una subfamilia o un proveedor de
+     los cinco mayores, o en «Precio» lo pagado de más—, que se pinta
+     oscura y apoyada en la base (`SERIE_TRAMOS[0]` sobre `[2]`; en Precio,
+     rojo arriba). Así se compara entre barras. Abre con la mayor elegida;
+     un segundo clic la suelta. El segundo renglón de la etiqueta dice
+     cuánto vale («S/ 11.8k · 41%», «+S/ 1.3k de más»;
+     `renglon_resaltado`) en lugar de los documentos, que siguen en el
+     hover.
+
+     - **El cursor**: las franjas se apilan a mano (`base`) en
+       `barmode="overlay"` y una ÚLTIMA traza transparente, del alto de la
+       barra y del ancho de su columna, lleva el hover, el clic y la
+       etiqueta. Las franjas van con `hoverinfo="skip"`, que también les
+       apaga el clic (#388): el clic lo recibe la capa. El hover nombra
+       todas las partes con la resaltada en negrita (`_hover_partes`, que
+       desde acá devuelve un texto por barra y no uno por parte).
+     - **Lo elegido vive en una clave propia** (`_K_RESALTADO`, una
+       entrada por «Partir por») y viaja al widget como `default=`; la key
+       del widget lleva la firma de sus opciones (`compras_sem_res_*`, en
+       `_KEYS_WIDGET` como prefijo). Las opciones cambian con la fecha y
+       los filtros, y un widget con un valor que no está entre ellas
+       revienta.
+     - **La píldora elegida se reconoce por `aria-checked="true"`**: en esta
+       versión de Streamlit no lleva `kind`. Y el `display: flex` que
+       parte las fichas en dos renglones es el `div` de ADENTRO del
+       `stButtonGroup`, que es `block` — medido: con el `nowrap` sólo en
+       éste salían dos renglones de 52px.
+
+     **El CSS de la tarjeta la acompaña.** Vive en `_css_proveedor.py` y lo
+     inyectaba sólo el drill de Proveedor, pero «Compras por período» es la
+     PRIMERA sección de la pila: se construía antes y se veía sin estilo
+     hasta que la precarga llegaba a Proveedor (cabecera sin alto, renglón
+     del título en el flujo, tarjeta más alta). Desde acá la tarjeta lo
+     inyecta también; dos copias del mismo `<style>` no se pisan, y la
+     tarjeta sigue midiendo 617px a 1323×619.
+
+     **Documento y Montos** (`graficos/compras/__init__.py::
+     _selectores_documento_y_montos`, constantes y filtros en `_comun.py`).
+     Van en «Filtros» y no en una tarjeta: una que sacara las guías sola
+     contradiría a las demás. Abren en «Todos» —lo que suman los reportes
+     de ingresos del Almacén (#603): facturas, guías todavía sin canjear,
+     planillas y recibos— y «Sin IGV».
+
+     - **`VALOR_COMPRA` es el NETO de la línea, en soles**; el IGV viene
+       aparte (`VALOR_IGV_COMPRA_MN`; neto + IGV = bruto en el 99,3 % de
+       las líneas). «Con IGV» le agrega a la data la columna
+       `COL_CON_IGV` y se la pasa a TODAS las vistas como `col_valor`, sin
+       tocarles el cuerpo; el precio unitario (`PRECIO_UNIT`) sigue neto.
+       En 12 meses: S/ 1,63 millones netos, S/ 227 mil de IGV. No es un
+       18 % parejo: el 22,5 % de lo comprado no paga IGV (verduras,
+       pescados y mariscos, frutas, exonerados por el Apéndice I de la Ley
+       del IGV), y una guía tampoco, todavía: lo trae su factura.
+     - **Sin IGV es el costo** si el IGV de las compras vuelve como crédito
+       fiscal (régimen general o MYPE tributario; a confirmar con el
+       contador del usuario). Con IGV, lo que se le paga al proveedor.
+     - **«Precio» se mide siempre sin IGV**: con IGV, una compra con guía
+       parecería más barata que la misma con factura. Con «Precio» y «Con
+       IGV», TODA la tarjeta pasa a neto (barras, etiquetas y tablas) y el
+       título lo dice. El precio habitual sale del histórico neto.
+     - **El título dice cómo mide** («Compra por semana · sin IGV ·
+       facturas», `sufijo_montos`) y el hover separa neto + IGV y avisa
+       cuánto de la barra es guía (`_guias_por_clave`).
+
+     **Las tablas de abajo**: Resumen Total y Resumen del Período siguen al
+     selector («Valorizado sin IGV / con IGV»). Detalle › Documentos lleva
+     siempre **Neto · IGV · Total** —es donde un documento se mira contra
+     el papel— en lugar de «Valor» y «Líneas»; la guía con «—» de IGV y la
+     marca «guía · » delante del número, que es lo que queda si la celda se
+     corta, igual que «US$ · » en una factura en dólares (sus montos van en
+     soles). Detalle › Líneas queda sin IGV y marca qué paga cada producto:
+     «18 %», «exonerado» o «guía» (`igv_de_linea`). El monto del IGV por
+     línea no, a propósito: sale de multiplicar, y el ancho es del nombre
+     del producto.
+
+     Lo vigila `test_graficos.py::_pruebas_partir_por` (lo resaltado, la
+     etiqueta, el IGV de cada línea, las guías del hover, el filtro de
+     documento y el sufijo del título).
+
+     (2026-10-08.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48752,7 +48843,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#620**; la próxima toma el número siguiente.
+> última regla es la **#621**; la próxima toma el número siguiente.
 
 >
 

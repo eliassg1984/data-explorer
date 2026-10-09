@@ -3976,7 +3976,7 @@ def _pruebas_panel_fecha():
 
 
 def _pruebas_partir_por():
-    """Compras por período: de qué está hecha cada barra (regla #620).
+    """Compras por período: de qué está hecha cada barra (reglas #620 y #621).
 
     1. EL PRECIO HABITUAL es la mediana del precio unitario del MISMO
        producto en los 90 días ANTERIORES, sin contar el mismo día. Se
@@ -4112,14 +4112,65 @@ def _pruebas_partir_por():
     check("precio · una parte en cero en toda la vista no se dibuja",
           ([r for r, _c, _v in pp2], pila2), ([sem._A_PRECIO_HABITUAL], [0]))
 
-    # ── 3. El hover ──────────────────────────────────────────────────────
-    hov = sem._hover_partes(partes, tot, "Por subfamilia")
-    check("hover · una lista por parte, un texto por barra",
-          (len(hov), len(hov[0])), (len(partes), 2))
+    # ── 3. El hover: uno por barra, con la resaltada en negrita (#621) ───
+    hov = sem._hover_partes(partes, tot, "Por subfamilia", marcada=1)
+    check("hover · un texto por barra", len(hov), 2)
     check("hover · nombra todas las partes de la barra",
-          all(r in hov[0][0] for r, _c, _v in partes), True)
-    check("hover · sólo la suya en negrita",
-          (hov[1][0].count("<b>"), "<b>S2:" in hov[1][0]), (1, True))
+          all(r in hov[0] for r, _c, _v in partes), True)
+    check("hover · sólo la resaltada en negrita",
+          (hov[0].count("<b>"), "<b>S2:" in hov[0]), (1, True))
+    check("hover · sin resaltada, ninguna en negrita",
+          sem._hover_partes(partes, tot, "x")[0].count("<b>"), 0)
+
+    # ── 4. Qué se puede resaltar y cómo lo dice la etiqueta (#621) ───────
+    check("resaltar · las de nombre, no el resto",
+          sem.opciones_resaltar(partes, sem._PARTIR_SUBFAMILIA),
+          ["S1", "S2", "S3", "S4", "S5"])
+    check("resaltar · en Precio, sólo lo pagado de más",
+          sem.opciones_resaltar(pp, sem._PARTIR_PRECIO), [sem._PAGADO_DE_MAS])
+    check("etiqueta · la parte con su %",
+          sem.renglon_resaltado(11834.05, 28902.04)[0], "S/ 11.8k · 41%")
+    check("etiqueta · en Precio, lo pagado de más",
+          sem.renglon_resaltado(1257.36, 28902.04, precio=True)[0],
+          "+S/ 1.3k de más")
+    check("etiqueta · en Precio sin nada de más, queda la de antes",
+          sem.renglon_resaltado(0.0, 100.0, precio=True), None)
+
+    # ── 5. El IGV de cada línea y las guías del hover (#621) ─────────────
+    marcas = sem.igv_de_linea(pd.Series([100.0, 50.0, 80.0, 10.0]),
+                              pd.Series([18.0, 0.0, 0.0, 1.05]),
+                              pd.Series(["F", "F", "G", "F"]))
+    check("igv · 18 %, exonerado, guía y otra tasa",
+          list(marcas), ["18 %", "exonerado", "guía", "10.5 %"])
+    dg = pd.DataFrame({"clave": ["P1", "P1", "P2"], "tipo": ["G", "F", "F"],
+                       "valor": [2018.5, 100.0, 50.0],
+                       "compra": ["a", "b", "c"]})
+    gu = sem._guias_por_clave(dg, claves)
+    check("guías · la barra que tiene, con su monto",
+          ("1 guía de remisión sin canjear: S/ 2,018.50" in gu[0], gu[1]),
+          (True, ""))
+    check("guías · con IGV avisa que todavía no lo lleva",
+          "sin IGV todavía" in sem._guias_por_clave(dg, claves, igv=True)[0],
+          True)
+
+    # ── 6. Documento y Montos de «Filtros» (#621) ────────────────────────
+    import graficos.compras._comun as cm
+    dt = pd.DataFrame({"t": ["Factura", "Guía de Remisión",
+                             "PLANILLA DE MOVILIDAD", None]})
+    check("documento · tipo corto", list(cm.tipo_corto(dt["t"])),
+          ["F", "G", "O", "O"])
+    check("documento · facturas",
+          len(cm.filtrar_documento(dt, "t", cm.DOC_FACTURAS)), 1)
+    check("documento · guías",
+          list(cm.filtrar_documento(dt, "t", cm.DOC_GUIAS)["t"]),
+          ["Guía de Remisión"])
+    check("documento · todos no filtra",
+          len(cm.filtrar_documento(dt, "t", cm.DOC_TODOS)), 4)
+    check("documento · sin columna no filtra",
+          len(cm.filtrar_documento(dt, None, cm.DOC_GUIAS)), 4)
+    check("montos · el sufijo del título",
+          (cm.sufijo_montos(False), cm.sufijo_montos(True, cm.DOC_GUIAS)),
+          (" · sin IGV", " · con IGV · guías sin canjear"))
 
     return fallos
 

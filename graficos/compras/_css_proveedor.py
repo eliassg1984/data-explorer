@@ -1141,30 +1141,53 @@ CSS = """        <style>
             text-overflow: ellipsis;
             padding-left: 4px;
         }
-        /* Si no entra en un renglón, parte en dos: a 10.5px, dos líneas de
-           12 más su aire caben en los 30px. Lo que ni así entra se recorta
-           (el hover nombra todas las partes). */
-        .st-key-cp_sem_cab_graf .cp-sem-ley {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 2px 12px;
-            max-height: 28px;
-            overflow: hidden;
-            white-space: nowrap;
-            font-size: 10.5px;
-            line-height: 12px;
+        /* El sufijo del título («· sin IGV», regla #621), más chico y gris:
+           dice cómo mide la barra, no qué es. */
+        .st-key-cp_sem_cab_graf .cp-sem-tit small {
+            font-size: 12px;
             color: var(--text-secondary);
+            margin-left: 4px;
         }
-        .st-key-cp_sem_cab_graf .cp-sem-ley-it {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
+        /* LAS FICHAS QUE ELIGEN QUÉ SE RESALTA (regla #621), en el lugar
+           de la leyenda. Suben con el selector por encima del gráfico, que
+           si no se come sus clics (ver arriba), y no parten renglón: lo que
+           no entra se recorta y el hover nombra todas las partes. La key
+           lleva la firma de sus opciones, de ahí el `[class*=...]` — afuera
+           de todo `:has()`. */
+        .st-key-cp_sem_cab_graf > [class*="st-key-compras_sem_res_"] {
+            position: relative !important;
+            z-index: 3 !important;
+            overflow: hidden !important;
         }
-        .st-key-cp_sem_cab_graf .cp-sem-ley-it i {
-            flex: none;
-            width: 10px;
-            height: 10px;
-            border-radius: 2px;
+        /* El que envuelve es el `div` de ADENTRO del `stButtonGroup`, que es
+           `block` (medido: con la regla sólo en éste, cinco subfamilias
+           salían en dos renglones de 52px). */
+        [class*="st-key-compras_sem_res_"] [data-testid="stButtonGroup"],
+        [class*="st-key-compras_sem_res_"] [data-testid="stButtonGroup"] > div {
+            flex-wrap: nowrap !important;
+            overflow: hidden !important;
+            gap: 6px !important;
+        }
+        [class*="st-key-compras_sem_res_"] [data-testid="stButtonGroup"] button {
+            min-height: 24px !important;
+            height: 24px !important;
+            padding: 0 10px !important;
+            font-size: 11.5px !important;
+            border-radius: 999px !important;
+            white-space: nowrap !important;
+            flex: 0 0 auto !important;
+        }
+        [class*="st-key-compras_sem_res_"] button[aria-checked="true"] {
+            background: var(--accent) !important;
+            border-color: var(--accent) !important;
+            color: var(--bg-card) !important;
+        }
+        [class*="st-key-compras_sem_res_precio"] button[aria-checked="true"] {
+            background: var(--danger) !important;
+            border-color: var(--danger) !important;
+        }
+        [class*="st-key-compras_sem_res_"] button[aria-checked="true"] p {
+            color: var(--bg-card) !important;
         }
         /* Más chico que los toggles de la cabecera (32px): manda sobre el
            gráfico, no sobre la tarjeta, y tiene que entrar en los 30px. */

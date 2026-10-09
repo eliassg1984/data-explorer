@@ -984,6 +984,15 @@ Los otros reportes de compras del Almacén y qué cuenta cada uno (los tres de
 «Ingresos» = `compras.parquet` al céntimo; los Rankings, sólo Mercadería y
 por fecha de ingreso; el Registro, sin guías ni planillas), en la regla #603.
 
+**`VALOR_COMPRA` es el NETO, sin IGV** (el IGV viene en
+`VALOR_IGV_COMPRA_MN`), y no es un 18 % parejo: el 22,5 % de lo comprado
+está exonerado (verduras, pescados, frutas) y una guía sin canjear todavía
+no lo lleva. Desde el 2026-10-08 «Filtros» de Compras elige **Documento**
+(todos / facturas / guías sin canjear) y **Montos** (sin / con IGV) para
+TODAS las vistas: con IGV, el dispatcher le pasa a cada drill
+`_comun.COL_CON_IGV` como `col_valor`, y el precio unitario sigue neto. El
+«Precio» de «Compras por período» se mide siempre sin IGV. Regla #621.
+
 ## El stock también tiene UNA definición: lo ACTIVO
 
 Desde el 2026-10-03 «Stock e Inventario» cuenta sólo lo que el POS da por
