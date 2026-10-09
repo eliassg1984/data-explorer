@@ -55,7 +55,8 @@ venta: el POS no costea los envases).
 
 EVENTOS Y VENTA INTERNA gastan inventario y no están en la venta de la
 definición. Viajan aparte (`venta_extra`, `costo_extra`) y la pantalla los
-suma a Alimentos con un interruptor.
+suma a Alimentos con una casilla cada uno: Eventos marcada por defecto, Venta
+interna no.
 
 DESDE OCTUBRE 2025. Antes, los cierres y el kardex no cuadran: setiembre
 2025 tuvo un ajuste de S/ 627 mil al limpiar el inventario (regla #612), y

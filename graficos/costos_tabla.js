@@ -16,6 +16,9 @@ const COLOR = { Alimentos: '--serie-0', Bebidas: '--serie-3', Vinos: '--serie-2'
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'];
 const VENTANA = 12;
 const BAJAS = 'Bajas';
+// Lo que gasta inventario sin ser la venta del reporte y se puede sumar a la
+// venta de Alimentos (las claves de `venta_extra` en costo_ventas.py).
+const EXTRAS = ['Eventos', 'Venta interna'];
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function leer(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (_) { return def; } }
@@ -57,8 +60,8 @@ function porFamilia(st, data, w, b) {
     v: de(f.venta), ii: de(f.inv_inicial), c: de(f.compras), fi: de(f.inv_final),
     bajas: de((data.salidas || {})[BAJAS]), cort: de(f.cortesias), pos: de(f.costo_pos),
   };
-  if (st.extra && b === 'Alimentos') {
-    for (const g of Object.keys(data.venta_extra || {})) {
+  if (b === 'Alimentos') {
+    for (const g of Object.keys(data.venta_extra || {}).filter((x) => st.extra.has(x))) {
       r.v = suma(r.v, cortar(data.venta_extra[g], w));
       r.pos = suma(r.pos, cortar((data.costo_extra || {})[g], w));
     }
@@ -192,7 +195,8 @@ function dibujar(raiz) {
   html += `<details class="dd"${st.ddAbierto ? ' open' : ''}><summary><span class="cv-rot">Familias</span><span class="dd-val">${famTxt}</span><span class="dd-fl">▾</span></summary>
       <div class="dd-panel">${BUCK.map((b) => `<label class="dd-op"><input type="checkbox" data-fam-chk="${b}" ${st.fams.has(b) ? 'checked' : ''}><span class="pt" style="background:var(${COLOR[b]})"></span>${b}</label>`).join('')}
       <span class="dd-nota">Para comparar contra el Sistema Restaurante, sin Envases: no los costea.</span></div></details>
-    <label class="interruptor"><input type="checkbox" data-extra ${st.extra ? 'checked' : ''}> Sumar Eventos y Venta interna</label>
+    <span class="cv-campo"><span class="cv-rot">Sumar a la venta</span>${EXTRAS.map((g) =>
+      `<label class="interruptor"><input type="checkbox" data-extra="${g}" ${st.extra.has(g) ? 'checked' : ''}> ${g}</label>`).join('')}</span>
     </div></div>`;
 
   // La tabla
@@ -373,7 +377,7 @@ function notas(data, w) {
   </dl></details>
   <details class="nota alerta"><summary>Antes de leer la diferencia</summary><ul>
     <li><b>Envases entra en inventario, compras y salidas, pero el Sistema Restaurante no lo costea.</b> Para comparar en igualdad, desmarcá Envases.</li>
-    <li><b>Eventos y Venta interna gastan inventario y no están en la venta.</b> En estos períodos vendieron S/ ${mil(tot(vEx[ev]))} y S/ ${mil(tot(vEx[vi]))}, con un costo de S/ ${mil(tot(cEx[ev]))} y S/ ${mil(tot(cEx[vi]))}. Fuera de la venta, su consumo agranda la diferencia; el interruptor los suma a Alimentos.</li>
+    <li><b>Eventos y Venta interna gastan inventario y no están en la venta.</b> En estos períodos vendieron S/ ${mil(tot(vEx[ev]))} y S/ ${mil(tot(vEx[vi]))}, con un costo de S/ ${mil(tot(cEx[ev]))} y S/ ${mil(tot(cEx[vi]))}. Fuera de la venta, su consumo agranda la diferencia: Eventos se suma a Alimentos por defecto, y Venta interna con su casilla.</li>
     <li><b>Costos de producción queda fuera</b> de inventarios, compras y salidas.</li>
     <li><b>Desde octubre 2025.</b> Antes, los cierres y el kardex no cuadran (setiembre 2025 tuvo un ajuste de S/ 627 mil al limpiar el inventario).</li>
   </ul></details></div>`;
@@ -414,8 +418,8 @@ function enlazar(raiz) {
   raiz.addEventListener('change', (ev) => {
     const st = raiz.__st, el = ev.target;
     if (el.matches('[data-extra]')) {
-      st.extra = el.checked;
-      guardar('costos_extra', st.extra);
+      if (el.checked) st.extra.add(el.dataset.extra); else st.extra.delete(el.dataset.extra);
+      guardar('costos_sumar', [...st.extra]);
     } else if (el.matches('[data-grano-sel]')) {
       st.grano = el.value;
       st.abierta = null;
@@ -452,7 +456,10 @@ export default function (component) {
     const fams = leer('costos_fams', BUCK).filter((b) => BUCK.includes(b));
     raiz.__st = {
       fams: new Set(fams.length ? fams : BUCK),
-      extra: leer('costos_extra', false) === true,
+      // Eventos entra por defecto a la venta (a pedido, 2026-10-09); Venta
+      // interna, sólo si se marca. Se guarda lo marcado, en otra clave que
+      // el interruptor único de antes (`costos_extra`, que se ignora).
+      extra: new Set(leer('costos_sumar', ['Eventos']).filter((g) => EXTRAS.includes(g))),
       // Lo que se guarda es lo QUITADO: todo lo demás entra. (Hasta el
       // 2026-10-09 se guardaba lo añadido, en `costos_salidas`, que se ignora.)
       quitadas: leer('costos_salidas_quitadas', []).filter((t) => typeof t === 'string'),

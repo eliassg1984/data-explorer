@@ -48870,9 +48870,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        fuera); la venta, de Alimentos, Bebidas con alcohol, sin alcohol y
        calientes, y Vinos. Envases no tiene venta ni costo del POS: para
        comparar contra el POS en igualdad se desmarca. Eventos y Venta
-       interna gastan inventario y no son la venta: viajan aparte y un
-       interruptor los suma a Alimentos (S/ 121 mil y 69 mil de venta en
-       12 meses).
+       interna gastan inventario y no son la venta: viajan aparte y una
+       casilla cada uno los suma a Alimentos (S/ 121 mil y 69 mil de venta
+       en 12 meses). Eventos va marcada por defecto (a pedido, el mismo
+       día; `costos_sumar` en el navegador); Venta interna, no.
      - **Las cortesías se restan del consumo carta** porque el costo del
        POS de origen (a) no las incluye: en el Paloteo son el origen (b).
        Las bajas y las demás salidas, procesadas, a su valor neto y por

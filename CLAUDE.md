@@ -1015,7 +1015,7 @@ los de la planilla del usuario. El inventario es el ÚLTIMO cierre de cada
 tabla, un `st.components.v2` (`graficos/costos_tabla.js`) que hace en el
 navegador las restas que dependen de lo elegido. Envases no tiene costo del
 POS y Eventos y Venta interna no son la venta: los dos se ajustan en
-pantalla. Por **quincena o semana** el inventario es el del KARDEX al final
+pantalla (Eventos se suma a la venta por defecto; Venta interna, no). Por **quincena o semana** el inventario es el del KARDEX al final
 del período (`costo_ventas.inventario_en_momentos`), no lo contado: las
 semanas no suman el mes. Reemplazó a Ventas › «Venta vs Compra». Regla #622.
 
