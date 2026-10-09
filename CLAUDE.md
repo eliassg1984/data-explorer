@@ -1004,7 +1004,7 @@ TODAS las vistas: con IGV, el dispatcher le pasa a cada drill
 Desde el 2026-10-09. Una vista, «Costo de ventas», por MES OPERATIVO:
 
     Consumo operativo = inventario inicial + compras − inventario final
-    Consumo carta     = consumo operativo − bajas − cortesías − salidas elegidas
+    Consumo carta     = consumo operativo − bajas − cortesías − demás salidas
 
 El consumo carta se compara con el costo del POS (Paloteo › Comparativo ›
 «(a) Ventas en el rango»); el operativo es el dato de antes. Los nombres son

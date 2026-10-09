@@ -48842,7 +48842,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
          Consumo operativo = inventario inicial + compras − inventario final
          Consumo carta     = consumo operativo − bajas − costo de cortesías
-                             − las otras salidas que se elijan
+                             − las demás salidas
 
      El consumo carta es el que se compara con el costo del POS (Paloteo
      de Producción › Comparativo › «(a) Ventas en el rango»); el operativo
@@ -48922,6 +48922,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      enteros (lunes a domingo; 1–15 y 16–fin) hasta el día anterior al
      último dato del kardex y de la venta. El rango de esos rótulos usa
      «a» y no «–»: «1–15 abr – 16–30 set» juntaba dos guiones.
+
+     **Todas las salidas entran por defecto** (el mismo día, a pedido):
+     la × de una la quita, y lo que se recuerda es lo QUITADO
+     (`costos_salidas_quitadas` en el navegador): así una salida nueva del
+     Almacén entra sola. La cabecera de la tabla y la del bloque del
+     Sistema Restaurante van en lavanda.
 
      **Ventas › «Venta vs Compra» se quitó** el mismo día, a pedido: esta
      vista la reemplaza. En producción ya no dibujaba la compra (buscaba la

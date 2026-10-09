@@ -156,6 +156,10 @@ function dibujar(raiz) {
   const F = BUCK.filter((b) => st.fams.has(b));
   const n = w.per.length;
   const esMes = st.grano === 'mes';
+  // Todas las salidas entran por defecto (a pedido, 2026-10-09); la × quita
+  // una y se recuerda cuál. Una sin movimientos en la ventana no se dibuja.
+  st.agregadas = Object.keys(data.salidas || {}).filter((t) => t !== BAJAS
+    && !st.quitadas.includes(t) && Math.abs(totalSalida(data, w, F, t)) > 0.5);
   // «1–15 abr – 16–30 set» junta dos guiones: entre rótulos que ya llevan uno, «a».
   const sep = esMes ? ' – ' : ' a ';
 
@@ -219,18 +223,23 @@ function dibujar(raiz) {
   if (d) d.scrollLeft = sx;
 }
 
+function totalSalida(data, w, F, t) {
+  return F.reduce((a, b) => a + cortar(((data.salidas || {})[t] || {})[b], w).reduce((x, y) => x + y, 0), 0);
+}
+
+// La fila para volver a sumar una salida que se quitó. Sin ninguna quitada,
+// no se dibuja.
 function filaAgregar(st, data, w, F, n) {
-  const totalDe = (t) => F.reduce((a, b) => a + cortar(((data.salidas || {})[t] || {})[b], w).reduce((x, y) => x + y, 0), 0);
+  const totalDe = (t) => totalSalida(data, w, F, t);
   const disp = Object.keys(data.salidas || {})
-    .filter((t) => t !== BAJAS && !st.agregadas.includes(t) && Math.abs(totalDe(t)) > 0.5);
+    .filter((t) => t !== BAJAS && st.quitadas.includes(t) && Math.abs(totalDe(t)) > 0.5);
+  if (!disp.length) return '';
   let menu = '';
   if (st.menu && disp.length) {
     menu = `<div class="menu">${disp.map((t) =>
       `<button type="button" class="chip" data-agregar="${esc(t)}">${esc(t)} <span class="n">S/ ${mil(totalDe(t))}</span></button>`).join('')}</div>`;
   }
-  const btn = disp.length
-    ? `<button type="button" class="btn-agregar" data-menu>${st.menu ? 'Cerrar' : '+ Añadir otra salida'}</button>`
-    : '<span class="cero">No hay otras salidas en estos períodos.</span>';
+  const btn = `<button type="button" class="btn-agregar" data-menu>${st.menu ? 'Cerrar' : '+ Volver a sumar una salida'}</button>`;
   return `<tr class="agregar"><td colspan="${n + 2}">${btn}${menu}</td></tr>`;
 }
 
@@ -340,7 +349,7 @@ function notas(data, w) {
     <dt>Compras</dt><dd>Valor neto, sin IGV, con las notas de crédito de los proveedores restadas, por fecha del documento.</dd>
     <dt>Bajas y las otras salidas</dt><dd>Notas de salida procesadas, a su valor neto, por fecha de registro, como la «Relación de Notas de Salidas» del Almacén.</dd>
     <dt>Costo de cortesías</dt><dd>Lo que el Sistema Restaurante facturó como cortesía en Alimentos, Bebidas y Vinos, a precio costo. Se resta porque su costo, «(a) Ventas en el rango», no las incluye: en el Paloteo son otro origen, «(b) Cortesías».</dd>
-    <dt>Consumo operativo y consumo carta</dt><dd>Consumo operativo = inventario inicial + compras − inventario final: todo lo que salió del almacén, sin restar salidas ni cortesías; no se compara con el Sistema Restaurante. Consumo carta = consumo operativo − bajas − cortesías − las otras salidas que se añadan: lo que costó lo vendido, y es el que se compara con el Sistema Restaurante.</dd>
+    <dt>Consumo operativo y consumo carta</dt><dd>Consumo operativo = inventario inicial + compras − inventario final: todo lo que salió del almacén, sin restar salidas ni cortesías; no se compara con el Sistema Restaurante. Consumo carta = consumo operativo − bajas − cortesías − las demás salidas (entran todas; la × quita una): lo que costó lo vendido, y es el que se compara con el Sistema Restaurante.</dd>
     <dt>Costo según Sistema Restaurante</dt><dd>El costo a precio costo de lo vendido en esos grupos: lo del Paloteo de Producción, tipo Comparativo, con origen «(a) Ventas en el rango». El Paloteo fecha por la apertura de la mesa y esta tabla por el turno: un pedido de medianoche del último día puede caer en otro mes.</dd>
   </dl></details>
   <details class="nota alerta"><summary>Antes de leer la diferencia</summary><ul>
@@ -365,13 +374,13 @@ function enlazar(raiz) {
       st.abierta = st.abierta === b.dataset.fila ? null : b.dataset.fila;
       st.modo = 'total';
     } else if (b.dataset.quitar) {
-      st.agregadas = st.agregadas.filter((t) => t !== b.dataset.quitar);
+      if (!st.quitadas.includes(b.dataset.quitar)) st.quitadas.push(b.dataset.quitar);
       if (st.abierta === `s_${b.dataset.quitar}`) st.abierta = null;
-      guardar('costos_salidas', st.agregadas);
+      guardar('costos_salidas_quitadas', st.quitadas);
     } else if (b.dataset.agregar) {
-      st.agregadas.push(b.dataset.agregar);
+      st.quitadas = st.quitadas.filter((t) => t !== b.dataset.agregar);
       st.menu = false;
-      guardar('costos_salidas', st.agregadas);
+      guardar('costos_salidas_quitadas', st.quitadas);
     } else if (b.hasAttribute('data-menu')) {
       st.menu = !st.menu;
     } else if (b.dataset.modo) {
@@ -407,7 +416,10 @@ export default function (component) {
     raiz.__st = {
       fams: new Set(fams.length ? fams : BUCK),
       extra: leer('costos_extra', false) === true,
-      agregadas: leer('costos_salidas', []).filter((t) => typeof t === 'string' && t !== BAJAS),
+      // Lo que se guarda es lo QUITADO: todo lo demás entra. (Hasta el
+      // 2026-10-09 se guardaba lo añadido, en `costos_salidas`, que se ignora.)
+      quitadas: leer('costos_salidas_quitadas', []).filter((t) => typeof t === 'string'),
+      agregadas: [],
       abierta: null, modo: 'total', menu: false, grano: leer('costos_grano', 'mes'),
       ini: { mes: Number.MAX_SAFE_INTEGER, quincena: Number.MAX_SAFE_INTEGER, semana: Number.MAX_SAFE_INTEGER },
     };
@@ -415,8 +427,5 @@ export default function (component) {
   }
   const st = raiz.__st;
   st.todo = data || {};
-  // Una salida guardada que estos datos no traen no se dibuja.
-  const tipos = new Set(Object.values(st.todo.granos || {}).flatMap((g) => Object.keys(g.salidas || {})));
-  st.agregadas = st.agregadas.filter((t) => tipos.has(t));
   dibujar(raiz);
 }

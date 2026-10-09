@@ -10,7 +10,8 @@ LA CUENTA, período por período y por familia:
 
     Consumo operativo = inventario inicial + compras − inventario final
     Consumo carta     = consumo operativo − bajas − costo de cortesías
-                        − las otras salidas que se elijan en pantalla
+                        − las demás salidas (entran todas; en pantalla
+                          se puede quitar una)
 
 El consumo operativo es todo lo que salió del almacén; el consumo carta, lo
 que costó lo vendido, y es el que se compara con el costo que dice el
