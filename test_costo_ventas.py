@@ -155,7 +155,8 @@ ok(float(venta.loc[P("2026-09")].sum()) == 60.0, "Eventos no suma a la venta")
 
 # ── armar: la tabla entera ───────────────────────────────────────────────
 D = cv.armar(ajuste, compras, salidas, pgd)
-igual(D["meses"], ["2026-09", "2026-10"], "armar: meses")
+igual([x["k"] for x in D["periodos"]], ["2026-09", "2026-10"], "armar: meses")
+igual(D["periodos"][0]["sub"], "cierre 1 oct", "el mes dice la fecha de su cierre")
 f = D["filas"]
 igual(f["inv_inicial"]["Alimentos"][0], 1200.0, "el inicial de setiembre es el final de agosto")
 igual(f["inv_final"]["Alimentos"][0], 950.0, "el final de setiembre")
@@ -165,10 +166,62 @@ igual(consumo, 750.0, "consumo operativo = inicial + compras − final")
 carta = consumo - D["salidas"]["Bajas"]["Alimentos"][0] - f["cortesias"]["Alimentos"][0]
 igual(carta, 718.0, "consumo carta = operativo − bajas − cortesías")
 igual(D["venta_extra"]["Eventos"][0], 500.0, "armar: Eventos aparte")
-ok(set(cv.tabla_larga(D).columns) == {"MES", "FAMILIA", "CONCEPTO", "SOLES"},
+ok(set(cv.tabla_larga(D).columns) == {"PERIODO", "FAMILIA", "CONCEPTO", "SOLES"},
    "la tabla para el asistente, con columnas por nombre")
-igual(cv.armar(ajuste.iloc[:0], compras, salidas, pgd)["meses"], [],
+igual(cv.armar(ajuste.iloc[:0], compras, salidas, pgd)["periodos"], [],
       "sin cierres no hay meses (y no revienta)")
+
+# ── Semanas y quincenas: el inventario del kardex ────────────────────────
+import datetime as dt  # noqa: E402
+
+D0, D1 = dt.date(2026, 9, 1), dt.date(2026, 10, 4)
+igual(cv.periodos("quincena", D0, D1)[:2],
+      [(dt.date(2026, 9, 1), dt.date(2026, 9, 15)), (dt.date(2026, 9, 16), dt.date(2026, 9, 30))],
+      "quincenas: 1–15 y 16–fin")
+igual(len(cv.periodos("quincena", D0, D1)), 2, "la quincena que el tope corta no entra")
+sem = cv.periodos("semana", D0, D1)
+igual((sem[0][0], sem[-1][1]), (dt.date(2026, 9, 7), dt.date(2026, 10, 4)),
+      "semanas de lunes a domingo, enteras")
+igual(cv.rotulo_periodo(dt.date(2026, 9, 29), dt.date(2026, 10, 5)), "29 set–5 oct",
+      "la semana que cruza de mes se nombra con los dos")
+clave = cv.clave_de(cv.periodos("quincena", D0, D1))
+k = clave(pd.Series(pd.to_datetime(["2026-09-15 22:00", "2026-09-16 00:00", "2026-10-02 00:00"])))
+igual([str(x.date()) if pd.notna(x) else None for x in k], ["2026-09-01", "2026-09-16", None],
+      "cada fecha a su quincena; fuera de todas, nada")
+
+# El kardex: dos movimientos de lomo en Cocina y uno de vino. La foto que vale
+# es la del MAYOR CORRELATIVO hasta el momento, aunque no sea la de hora más
+# tarde (la regla de `kardex.sql_stock_al`).
+fotos = pd.DataFrame({
+    "area": ["001", "001", "001", "000", "009"],
+    "cod": ["L1", "L1", "L1", "V1", "X1"],
+    "fecha": pd.to_datetime(["2026-09-10 10:00", "2026-09-14 09:00", "2026-09-20 12:00",
+                             "2026-09-05 08:00", "2026-09-05 08:00"]),
+    "correlativo": [1, 3, 4, 1, 1],
+    "stock": [10.0, 4.0, 2.0, 6.0, 99.0],
+    "precio": [50.0, 50.0, 50.0, 30.0, 1.0],
+})
+fotos.loc[len(fotos)] = ["001", "L1", pd.Timestamp("2026-09-15 08:00"), 2, 8.0, 50.0]
+maestro = pd.DataFrame({"CODIGO AREA": ["001", "000"], "CODIGO PRODUCTO": ["L1", "V1"],
+                        "NOMBRE FAMILIA": ["ALIMENTOS", "VINOS Y ESPUMANTES"]})
+base = cv.base_activa(maestro)
+inv_k = cv.inventario_en_momentos(fotos, base, [dt.datetime(2026, 9, 15, 23),
+                                                 dt.datetime(2026, 9, 30, 23)])
+igual(float(inv_k.iloc[0]["Alimentos"]), 200.0,
+      "al 15: manda el correlativo 3 (4 × 50), no el de hora más tarde")
+igual(float(inv_k.iloc[1]["Alimentos"]), 100.0, "al 30: el último movimiento")
+igual(float(inv_k.iloc[0]["Vinos"]), 180.0, "vinos al 15")
+ok(99.0 not in inv_k.to_numpy(), "lo que no está en la base activa no entra")
+
+K = cv.armar_kardex("quincena", fotos, base, compras, salidas, pgd, dt.date(2026, 9, 30))
+igual(K["periodos"][0]["rot"], "1–15 oct", "armar_kardex: arranca en octubre 2025")
+igual([x["rot"] for x in K["periodos"][-2:]], ["1–15 set", "16–30 set"], "armar_kardex: quincenas")
+igual(K["filas"]["inv_final"]["Alimentos"][-2:], [200.0, 100.0], "inventario final del kardex")
+igual(K["filas"]["inv_inicial"]["Alimentos"][-1], 200.0, "el inicial es el final de la anterior")
+igual(K["filas"]["compras"]["Alimentos"][-2:], [500.0, 0.0], "compras por quincena")
+igual(K["salidas"]["Comida Personal"]["Alimentos"][-2:], [100.0, 0.0], "salidas por quincena")
+igual(K["filas"]["venta"]["Bebidas"][-2:], [10.0, 0.0], "venta por quincena")
+igual(K["inventario"], "kardex", "la quincena dice de dónde sale su inventario")
 
 # ── Cableado ─────────────────────────────────────────────────────────────
 import graficos  # noqa: E402

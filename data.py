@@ -424,7 +424,8 @@ REPORTES = {
         # Para que «Actualizar» pida también lo que suma la tabla. Ventas NO
         # va, por lo mismo que en Recetas: regenerar el parquet más pesado
         # para refrescar una fila; se actualiza con su reporte.
-        "archivos_extra": ("compras.parquet", "salidas.parquet"),
+        # Y el kardex, del que salen las semanas y quincenas.
+        "archivos_extra": ("compras.parquet", "salidas.parquet", kardex.ARCHIVO),
         "icono": ":material/calculate:",
         "fecha": None,
     },
@@ -1381,6 +1382,7 @@ def limpiar_cache(archivo):
     _consumo_recetas_cacheable.clear()
     _demanda_nivel1_cacheable.clear()
     _stock_al_cacheable.clear()
+    _kardex_fotos_cacheable.clear()
     _movimientos_cacheable.clear()
     _movimientos_mes_cacheable.clear()
     _sello_r2.clear()
@@ -2009,6 +2011,30 @@ def _stock_al_cacheable(archivo, sello, cuando, version=None):
     bucket = st.secrets["R2_BUCKET"]
     rel = f"read_parquet('s3://{bucket}/{archivo}')"
     return con.execute(kardex.sql_stock_al(rel, cuando)).df()
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _kardex_fotos_cacheable(archivo, sello, version=None):
+    """Cada fila del kardex con sólo lo que hace falta para la foto del
+    stock (`kardex.sql_fotos`). Si falla, LANZA: no se cachea. `sello` y
+    `version` son la clave. Regla #622."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    return con.execute(kardex.sql_fotos(rel)).df()
+
+
+def kardex_fotos():
+    """Las fotos del kardex para sacar el stock en muchos momentos de una
+    vez (`costo_ventas.inventario_en_momentos`): las semanas y quincenas del
+    reporte Costos. `None` si no se pudo leer. No cacheada (la interna sí)."""
+    try:
+        return _kardex_fotos_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
+                                       version=kardex.VERSION)
+    except Exception:
+        return None
 
 
 def stock_al(cuando):

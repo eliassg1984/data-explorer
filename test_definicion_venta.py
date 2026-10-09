@@ -440,7 +440,11 @@ ok([ast.unparse(c.args[0]) for c in _llamadas] == ["d_todo"],
 _col_costo = next((n for n in ast.walk(_fn) if isinstance(n, ast.Assign)
                    and getattr(n.targets[0], "id", None) == "col_costo"), None)
 _txt_costo = ast.unparse(_col_costo.value) if _col_costo is not None else ""
-ok(0 <= _txt_costo.find("'Costo Venta'") < _txt_costo.find("'Precio Costo'"),
+# Desde el 2026-10-09 ninguna vista de ventas.py suma costo por su cuenta —la
+# que lo hacía, «Venta vs Compra», se quitó (regla #622)—, así que puede no
+# haber `col_costo`. Si vuelve, tiene que ser el de la línea.
+ok(_col_costo is None
+   or 0 <= _txt_costo.find("'Costo Venta'") < _txt_costo.find("'Precio Costo'"),
    "ventas.py: el costo que suman las vistas es el de la línea "
    "(«Costo Venta» antes que el unitario)", _txt_costo)
 

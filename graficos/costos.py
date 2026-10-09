@@ -27,13 +27,16 @@ fila la tabla crece, y con techo la tarjeta sacaría barra propia (#382).
 Regla #622.
 """
 
+import datetime as dt
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 import costo_ventas
 import data
 import definicion_venta
+import kardex
 from graficos.base import (
     _render_rail, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
 )
@@ -49,7 +52,8 @@ _COSTOS_RAIL_CATEGORIAS = rail_sin_tablas((
 # aparte») de `secciones=None`. Ver `graficos/sunat_reporte.py`.
 _PILA = pila_sin_tablas(())
 
-_ARCHIVOS = ("compras.parquet", "salidas.parquet", "ventas.parquet")
+_ARCHIVOS = ("compras.parquet", "salidas.parquet", "ventas.parquet",
+             "inventariovalorizado.parquet", kardex.ARCHIVO)
 
 _AQUI = Path(__file__).parent
 _TABLA = st.components.v2.component(
@@ -59,15 +63,27 @@ _TABLA = st.components.v2.component(
 )
 
 
+def _ultimo_dia_completo(fotos, ventas):
+    """El último día con datos ENTEROS en el kardex y en la venta: el día
+    anterior al menor de sus topes (la corrida de la madrugada trae algo del
+    día en curso)."""
+    topes = [pd.to_datetime(fotos["fecha"]).max(), pd.to_datetime(ventas["dia"]).max()]
+    topes = [t for t in topes if pd.notna(t)]
+    return min(topes).date() - dt.timedelta(days=1) if topes else None
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _datos(_ajuste, sellos, version):
-    """`costo_ventas.armar` sobre los cuatro parquets. Si falta uno, LANZA:
-    una tabla con la venta en cero no se cachea.
+    """Los tres granos de la tabla: `{"granos": {"mes": …, "quincena": …,
+    "semana": …}}`. El mes, con los cierres (`costo_ventas.armar`); la
+    quincena y la semana, con el kardex (`armar_kardex`). Si falta compras,
+    salidas o ventas, LANZA: una tabla con la venta en cero no se cachea.
+    Sin kardex o sin maestro sigue sólo con el mes.
 
     `_ajuste` no entra en la clave (el guion bajo): lo identifica su sello,
-    que va en `sellos` junto con los de los otros tres, y `version` lleva
-    las de la cuenta y la definición de venta. Sólo en memoria: lo pesado
-    —cada parquet— ya está en la caché de disco de `data.py`."""
+    que va en `sellos` junto con los de los demás, y `version` lleva las de
+    la cuenta, la definición de venta y el kardex. Sólo en memoria: lo
+    pesado —cada parquet— ya está en la caché de disco de `data.py`."""
     compras = data.cargar("compras.parquet")
     salidas = data.cargar("salidas.parquet")
     ventas = data.venta_por_grupo_dia()
@@ -75,7 +91,19 @@ def _datos(_ajuste, sellos, version):
                              ("ventas", ventas)) if d is None]
     if faltan:
         raise RuntimeError("no se pudo leer: " + ", ".join(faltan))
-    return costo_ventas.armar(_ajuste, compras, salidas, ventas)
+    granos = {"mes": costo_ventas.armar(_ajuste, compras, salidas, ventas)}
+    fotos = data.kardex_fotos()
+    maestro = data.cargar("inventariovalorizado.parquet")
+    if fotos is not None and not fotos.empty and maestro is not None and not ventas.empty:
+        # Lo activo, la misma regla que Stock (#598).
+        from graficos.inventario import separar_activos
+        base = costo_ventas.base_activa(separar_activos(maestro)[0])
+        hasta = _ultimo_dia_completo(fotos, ventas)
+        if hasta:
+            for grano in ("quincena", "semana"):
+                granos[grano] = costo_ventas.armar_kardex(
+                    grano, fotos, base, compras, salidas, ventas, hasta)
+    return {"granos": granos}
 
 
 def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None):
@@ -89,23 +117,24 @@ def renderizar_graficos_costos(df_f, nombre_reporte, df_full=None, tabla_cb=None
     ajuste = df_full if df_full is not None else df_f
     sellos = (data.sello_datos("ajusteinventario.parquet"),
               *(data.sello_datos(a) for a in _ARCHIVOS))
-    version = (costo_ventas.VERSION, definicion_venta.VERSION)
+    version = (costo_ventas.VERSION, definicion_venta.VERSION, kardex.VERSION)
     with st.container(border=True, key="ajuste_graf_card_izq_costos"):
         try:
             # La primera vez de cada versión de los parquets baja la venta
             # entera para agruparla (unos 15 s); después sale de la caché.
             with st.spinner("Calculando el costo de ventas…"):
                 datos = _datos(ajuste, sellos, version)
+            mes = datos["granos"]["mes"]
         except Exception as e:
             st.warning(f"No se pudo armar el costo de ventas ({e}). "
                        "Reintentá en unos segundos.")
             return
-        if not datos["meses"]:
+        if not mes["periodos"]:
             st.info("Todavía no hay dos cierres de inventario seguidos desde "
                     "octubre 2025: sin inventario inicial y final no hay "
                     "consumo que calcular.")
             return
         # El asistente responde sobre lo que suma la tabla, no sobre los
         # cierres sueltos que llegan en `df_f`.
-        publicar_contexto_ia("Costos", costo_ventas.tabla_larga(datos))
+        publicar_contexto_ia("Costos", costo_ventas.tabla_larga(mes))
         _TABLA(key="costos_tabla", data=datos, width="stretch")

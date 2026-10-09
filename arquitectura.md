@@ -48897,13 +48897,36 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      Cuadrado contra el boceto, mes por mes y familia por familia. Doce
      meses a setiembre 2026: consumo carta 42,3 % de la venta neta contra
-     33,0 % del POS. Pendiente: cuadrarlo contra un Paloteo impreso (el
-     Paloteo fecha por la apertura de la mesa y la tabla por el turno), la
-     granularidad semana o quincena (el inventario sería el del kardex a
-     esa fecha, que no es lo contado, y el ajuste caería entero en la
-     semana del cierre) y Ventas › «Venta vs Compra», que en producción no
-     dibuja la compra (busca la fecha por nombres que `compras.parquet` no
-     tiene) y que esta vista reemplaza.
+     33,0 % del POS.
+
+     **Contra el Paloteo impreso** (setiembre 2026, Comparativo, «(a)
+     Ventas en el rango»): la venta neta de cada grupo cuadra al céntimo
+     (S/ 313.372 contra 313.374, redondeo). El costo cuadra al céntimo en
+     Bebidas con alcohol, calientes, Vinos, Eventos y Venta interna; quedan
+     −S/ 829 (0,8 %): Lomo al Trapo 1kg (S/ 6.086 contra 6.858) y las aguas
+     Munay, que en el parquet tienen costo 0 en sus 950 líneas y el Paloteo
+     les pone S/ 57. Lo que suma el Paloteo ahí no viaja en
+     `DPEDIDO.nInsumo`; sin confirmar en el SQL. Ojo al leer el PDF: los
+     nombres se cortan y «Tostado» calza dentro de «Pollito Bebe Tostado».
+
+     **Semana y quincena** (el mismo día, a pedido): un selector «Mes |
+     Quincena | Semana». No hay conteo en esas fechas, así que el
+     inventario es el del KARDEX al final del último día
+     (`costo_ventas.inventario_en_momentos`: la regla de
+     `kardex.sql_stock_al` aplicada a todos los momentos sobre UNA lectura,
+     `data.kardex_fotos`, 562.000 filas, en vez de una consulta por
+     momento), sólo de lo activo (`base_activa`, #598). Verificado: al 30
+     de setiembre da S/ 52.818, lo de Stock › Movimientos. No es lo
+     contado —el ajuste de cada cierre cae entero en su período— y por eso
+     las semanas no suman el mes; la tabla lo dice en un aviso. Períodos
+     enteros (lunes a domingo; 1–15 y 16–fin) hasta el día anterior al
+     último dato del kardex y de la venta. El rango de esos rótulos usa
+     «a» y no «–»: «1–15 abr – 16–30 set» juntaba dos guiones.
+
+     **Ventas › «Venta vs Compra» se quitó** el mismo día, a pedido: esta
+     vista la reemplaza. En producción ya no dibujaba la compra (buscaba la
+     fecha por nombres que `compras.parquet` no tiene) y normalizaba cada
+     línea al primer día del rango.
 
      Lo vigila `test_costo_ventas.py`. Suma módulos y un reporte:
      «Reboot app» en Cloud (#357).

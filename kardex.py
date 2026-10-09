@@ -89,6 +89,21 @@ def sql_stock_al(relacion, cuando):
     """
 
 
+def sql_fotos(relacion):
+    """Lo mínimo para sacar el stock en MUCHOS momentos de una vez (el
+    reporte Costos por semana y quincena, regla #622): por fila, área,
+    producto, momento, correlativo y la foto que dejó (`stock`, `precio` a
+    tres decimales, como `sql_stock_al`). La regla del último movimiento la
+    aplica `costo_ventas.inventario_en_momentos`."""
+    return f"""
+        SELECT "CODIGO AREA" AS area, "CODIGO PRODUCTO" AS cod,
+               "{COL_FECHA}" AS fecha, "ULTIMO CORRELATIVO" AS correlativo,
+               "STOCK DESPUES" AS stock,
+               round("PRECIO PROMEDIO DESPUES", 3) AS precio
+        FROM {relacion}
+    """
+
+
 def sql_ultimo_movimiento(relacion):
     """El último momento con movimientos (sin la fila del saldo inicial): el
     tope del selector de fecha."""

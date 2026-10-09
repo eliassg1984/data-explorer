@@ -1,18 +1,20 @@
 """
-graficos.ventas — dashboard de Ventas: el dispatcher de sus vistas, y la que vive acá (Venta vs Compra).
+graficos.ventas — dashboard de Ventas: el dispatcher de sus vistas.
+
+«Venta vs Compra» vivía acá hasta el 2026-10-09: se quitó a pedido cuando
+la reemplazó el reporte «Costos» (regla #622). Normalizaba cada línea al
+primer día del rango y cruzaba compra y venta del mismo día, y en
+producción ya no dibujaba la compra: buscaba la fecha de `compras.parquet`
+por nombres que el parquet no tiene.
 """
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
 
 import definicion_venta as dv
-from data import cargar as _cargar_reporte
-from tema import ACENTO, GRIS_BORDE
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
-    PALETA_CALLAI, _compras_layout, _render_rail,
+    _render_rail,
     _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
     renderizar_graficos_genericos, seccion_perezosa,
 )
@@ -23,7 +25,6 @@ from graficos.ventas_mix import _ventas_mix
 from graficos.ventas_platos import _ventas_platos
 from graficos.ventas_meseros import _ventas_meseros
 from graficos.ventas_control import _ventas_control, cortesias_de
-from graficos import alturas
 
 def unico_por_item(df):
     """Una fila por ÍTEM del comprobante (regla #517 de arquitectura.md).
@@ -75,8 +76,7 @@ _VENTAS_RAIL_CATEGORIAS = rail_sin_tablas((
     ("Resumen",  (("Resumen ejecutivo", "Venta por Periodo", ":material/summarize:"),)),
     ("Tiempo",   (("Mix de carta",               "Mix de Ventas",           ":material/stacked_bar_chart:"),
                   ("Mapa por hora",               "Análisis por Hora",       ":material/schedule:"),
-                  ("Comparativo vs Año Pasado",   "Comparación Año Pasado",  ":material/compare_arrows:"),
-                  ("Venta vs Compra",            "Vs Compras",              ":material/balance:"))),
+                  ("Comparativo vs Año Pasado",   "Comparación Año Pasado",  ":material/compare_arrows:"))),
     ("Análisis", (("Análisis de platos",  "Análisis de Platos",  ":material/restaurant_menu:"),
                   ("Meseros",             "Análisis de Meseros", ":material/groups:"),
                   # Lo que pasa con los pedidos antes de la venta (#594).
@@ -97,7 +97,6 @@ _PILA = pila_sin_tablas((
     ("vt_sec_mix",        "Mix de carta"),
     ("vt_sec_hora",       "Mapa por hora"),
     ("vt_sec_ano_pasado", "Comparativo vs Año Pasado"),
-    ("vt_sec_vs_compra",  "Venta vs Compra"),
     ("vt_sec_platos",     "Análisis de platos"),
     ("vt_sec_meseros",    "Meseros"),
     ("vt_sec_control",    "Control de pedidos"),
@@ -132,137 +131,6 @@ def _selector_dia_venta():
         st.rerun(scope="app")
 
 
-def _ventas_cargar_compra_diaria(dia_min, dia_max):
-    """Compra por día, acotada a [dia_min, dia_max] (el rango de días que
-    ya tiene la vista de Ventas). Carga compras.parquet APARTE — Ventas y
-    Compras son reportes independientes, sin llave compartida más que la
-    fecha, así que esto es el gasto TOTAL en compras ese día, no el costo
-    de lo que se vendió ese día (una compra de insumos no se vende
-    necesariamente el mismo día). Sirve para comparar flujo de compra vs
-    venta, no como margen exacto por transacción. Los chips de Ventas
-    (Grupo/Sub Grupo/Canal/Servicio) no aplican acá: son categorías de
-    venta, sin equivalente en compras.parquet.
-    Retorna None si compras.parquet no está disponible o le faltan las
-    columnas de fecha/valor (mismo criterio de resolución que
-    graficos/compras/__init__.py)."""
-    df_c = _cargar_reporte("compras.parquet")
-    if df_c is None or df_c.empty:
-        return None
-    col_fecha_c = _resolver(df_c, ["Fecha_documento", "Fecha documento",
-                                   "Fecha_registro", "Fecha registro", "FECHA"])
-    col_valor_c = _resolver(df_c, ["Valor_compra", "Valor compra",
-                                   "Importe Total", "Valorizado"])
-    if not col_fecha_c or not col_valor_c:
-        return None
-    _fe = pd.to_datetime(df_c[col_fecha_c], errors="coerce").dt.normalize()
-    _val = pd.to_numeric(df_c[col_valor_c], errors="coerce").fillna(0)
-    g_c = pd.DataFrame({"dia": _fe, "compra": _val}).dropna(subset=["dia"])
-    g_c = g_c[(g_c["dia"] >= dia_min) & (g_c["dia"] <= dia_max)]
-    if g_c.empty:
-        return None
-    return g_c.groupby("dia", as_index=False)["compra"].sum()
-
-
-@st.fragment
-def _ventas_venta_compra_dia(g, hay_costo, hay_compra, hay_pax):
-    """'Venta vs Compra' — línea de Venta/Costo/Compra arriba (normalizadas
-    a % de variación desde el primer día del rango, con badge de color al
-    final de cada línea) + barras de Pax abajo en un subplot separado.
-    Mismo espíritu que un gráfico bursátil: % arriba con crosshair, volumen
-    abajo. Normaliza a % —Venta/Costo/Compra tienen escalas muy distintas
-    en soles—, así que compararlas desde el mismo punto de partida es lo
-    que las hace legibles juntas."""
-    _opts = ["Venta"]
-    if hay_costo:
-        _opts.append("Costo")
-    if hay_compra:
-        _opts.append("Compra")
-    sel = st.pills(
-        "Métricas", _opts, selection_mode="multi", default=list(_opts),
-        key="ventas_vc_metricas", label_visibility="collapsed",
-    ) or ["Venta"]
-
-    rows = 2 if hay_pax else 1
-    row_heights = [0.72, 0.28] if hay_pax else [1.0]
-    fig = make_subplots(rows=rows, cols=1, shared_xaxes=True,
-                        row_heights=row_heights, vertical_spacing=0.06)
-
-    _colores = {"Venta": ACENTO, "Costo": PALETA_CALLAI[1], "Compra": PALETA_CALLAI[2]}
-    for _serie, _col in (("Venta", "venta"), ("Costo", "costo"), ("Compra", "compra")):
-        if _serie in sel and _col in g.columns:
-            serie = g[_col]
-            # % de variación desde el primer valor != 0 del rango (si todo
-            # el rango es cero, no hay base válida: se muestra plano en 0%
-            # en vez de dividir por cero).
-            _base = next((v for v in serie if v), None)
-            pct = (serie / _base - 1) * 100 if _base else serie * 0
-            fig.add_trace(go.Scatter(
-                x=g["dia"], y=pct, name=_serie, mode="lines",
-                line=dict(color=_colores[_serie], width=2.2),
-                hovertemplate=("%{x|%d/%m/%Y}<br>" + _serie
-                               + ": %{y:+.2f}%<extra></extra>"),
-            ), row=1, col=1)
-            # Badge de color al final de la línea con el % acumulado del
-            # rango — como el "+110,71%" de la referencia. Sin bordes
-            # redondeados (Plotly no los soporta en anotaciones), pero
-            # mismo color de fondo que la línea + texto blanco.
-            fig.add_annotation(
-                x=g["dia"].iloc[-1], y=pct.iloc[-1], row=1, col=1,
-                text=f"{pct.iloc[-1]:+.2f}%", showarrow=False,
-                xanchor="left", xshift=8, align="left",
-                bgcolor=_colores[_serie], borderpad=4,
-                font=dict(color="white", size=11, family="DM Sans, sans-serif"),
-            )
-
-    if hay_pax:
-        fig.add_trace(go.Bar(
-            x=g["dia"], y=g["pax"], name="Pax",
-            marker=dict(color=GRIS_BORDE),
-            hovertemplate="%{x|%d/%m/%Y}<br>Pax: %{y:,.0f}<extra></extra>",
-        ), row=2, col=1)
-
-    _compras_layout(fig, alto=alturas.PROTAGONISTA if hay_pax else 460)
-    fig.update_layout(
-        title="Venta vs Compra por día (% de variación desde el inicio del rango)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-        margin=dict(l=10, r=64, t=30, b=10),
-        # Crosshair al pasar el mouse: línea vertical punteada que cruza
-        # ambos paneles (spikemode="across") + fecha en el eje X + un
-        # tooltip único con el valor de cada serie en esa fecha
-        # (hovermode="x unified"). Es la aproximación nativa de Plotly al
-        # crosshair-con-badges-en-el-borde de la referencia: los badges de
-        # la imagen SIGUEN al cursor en tiempo real, algo que Plotly no
-        # ofrece sin JS custom (ver arquitectura.md — CLAUDE.md prohíbe JS
-        # inyectado por markdown; haría falta un componente aparte). Este
-        # tooltip unificado da la misma información (fecha + % de cada
-        # serie), agrupada en un solo cuadro junto al cursor en vez de
-        # flotando en el borde derecho.
-        hovermode="x unified",
-    )
-    fig.update_xaxes(
-        type="date", tickmode="linear", tick0=g["dia"].min(),
-        dtick=86400000.0, tickformat="%d/%m", tickangle=-45,
-        tickfont=dict(size=10), row=rows, col=1,
-    )
-    # Spikes en TODAS las filas (no solo la de abajo): con shared_xaxes las
-    # X están "matched", pero cada eje decide por su cuenta si dibuja su
-    # propia línea de crosshair — si solo se lo pedís al de abajo, pasar el
-    # mouse por el panel de arriba (Venta/Costo/Compra) no muestra la cruz.
-    fig.update_xaxes(
-        showspikes=True, spikemode="across", spikesnap="cursor",
-        spikedash="dot", spikethickness=1, spikecolor=GRIS_BORDE,
-    )
-    fig.update_yaxes(ticksuffix="%", tickformat=",.2f", zeroline=True,
-                     zerolinecolor=GRIS_BORDE, row=1, col=1)
-    if hay_pax:
-        fig.update_yaxes(tickformat=",.0f", title="Pax", row=2, col=1)
-    if not hay_compra:
-        st.caption("Sin datos de Compra para este rango de fechas (o a "
-                   "compras.parquet le faltan las columnas de fecha/valor) "
-                   "— se omite esa serie.")
-    st.plotly_chart(fig, use_container_width=True, key="ventas_g_vc_dia")
-
-
 def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None):
     """Dashboard de Ventas: resumen ejecutivo, mix de carta por período,
     mapa por hora, año pasado, venta vs compra, análisis de platos y
@@ -278,13 +146,7 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_sub   = _resolver(df_f, ["Sub Grupo", "Sub_Grupo", "Subgrupo"])
     col_fecha = _resolver(df_f, ["Fec Reg Documento", "Fec_Reg_Documento",
                                  "Fecha Registro", "FECHA"])
-    # El costo de la LÍNEA (unitario × cantidad) que arma `definicion_venta`
-    # (regla #524): «Precio Costo» es POR UNIDAD, y sumarlo suelto daba un
-    # FoodCost de 24 % donde era 29 % (#542). Queda de respaldo para un df
-    # sin preparar.
-    col_costo  = _resolver(df_f, ["Costo Venta", "Precio Costo",
-                                  "Costo Item Ddocumento", "Costo"])
-    col_pax    = _resolver(df_f, ["Cant Pax", "Cantidad Pax", "Pax"])
+    col_pax   = _resolver(df_f, ["Cant Pax", "Cantidad Pax", "Pax"])
     col_pedido = _resolver(df_f, ["Llave Local Pedido", "Llave_Local_Pedido",
                                   "Nro Pedido", "Numero Pedido"])
     col_prod   = _resolver(df_f, ["Nomb Item Venta", "Nombre Producto",
@@ -296,7 +158,6 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
     col_serv   = _resolver(df_f, ["Servicio", "Tipo Servicio",
                                   "Nomb Servicio", "Nombre Servicio"])
     col_mesero  = _resolver(df_f, ["Nombre Mesero", "Nomb Mesero"])
-    col_ldoc    = _resolver(df_f, ["Llave Local Documento"])
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]):
@@ -393,8 +254,6 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         st.info("No hay datos para los filtros seleccionados.")
         return
 
-    _venta = pd.to_numeric(d[col_venta], errors="coerce").fillna(0)
-
     # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
     _render_rail(_VENTAS_RAIL_CATEGORIAS, "ventas_graf_tipo",
                  btn_prefix="ventas_rail_btn_", secciones=_PILA)
@@ -445,56 +304,6 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
                                 col_pedido=col_pedido, col_prod=col_prod,
                                 col_cant=col_cant, col_fam=col_fam,
                                 col_sub=col_sub, filtrar_cb=_filtrar_items)
-
-        # ── 1b) Venta vs Compra por día (líneas arriba, Pax en barras abajo) ─
-        # Vista aparte de "Venta por día": mismo espíritu que un gráfico
-        # bursátil (precio arriba, volumen abajo). Compra viene de
-        # compras.parquet, un reporte independiente — ver el docstring de
-        # _ventas_cargar_compra_diaria sobre qué significa (y qué NO significa)
-        # cruzarlo por fecha con Venta.
-        elif graf == "Venta vs Compra" and col_fecha:
-            _fe = pd.to_datetime(d[col_fecha], errors="coerce").dt.normalize()
-
-            _base = pd.DataFrame({"dia": _fe, "venta": _venta})
-            if col_costo:
-                _base["costo"] = pd.to_numeric(d[col_costo], errors="coerce").fillna(0)
-            _base = _base.dropna(subset=["dia"])
-            _agg = {c: "sum" for c in _base.columns if c != "dia"}
-            g = _base.groupby("dia", as_index=False).agg(_agg).sort_values("dia")
-
-            if col_pax:
-                _pdf = pd.DataFrame({
-                    "dia": _fe,
-                    "pax": pd.to_numeric(d[col_pax], errors="coerce").fillna(0),
-                })
-                if col_pedido:
-                    # Un valor por pedido, y el de una nota de crédito
-                    # resta (regla #524): ver `definicion_venta.pax_por`.
-                    _pdf["ped"] = d[col_pedido].astype(str)
-                    if col_ldoc:
-                        _pdf["doc"] = d[col_ldoc].astype(str)
-                    _pdf = _pdf.dropna(subset=["dia"])
-                    _pax_dia = (dv.pax_por(_pdf, "ped", "pax",
-                                           doc="doc" if col_ldoc else None,
-                                           por="dia")
-                                .rename("pax").reset_index())
-                else:
-                    _pdf = _pdf.dropna(subset=["dia"])
-                    _pax_dia = _pdf.groupby("dia", as_index=False)["pax"].sum()
-                g = g.merge(_pax_dia, on="dia", how="left")
-                g["pax"] = g["pax"].fillna(0)
-
-            if g.empty:
-                st.info("Sin fechas válidas en el rango.")
-            else:
-                g_compra = _ventas_cargar_compra_diaria(g["dia"].min(), g["dia"].max())
-                hay_compra = g_compra is not None
-                if hay_compra:
-                    g = g.merge(g_compra, on="dia", how="left")
-                    g["compra"] = g["compra"].fillna(0)
-                _ventas_venta_compra_dia(
-                    g, hay_costo=bool(col_costo), hay_compra=hay_compra,
-                    hay_pax=bool(col_pax))
 
         # ── 3) Análisis de platos: el ranking entre hasta 4 períodos
         # (graficos/ventas_platos.py, regla #529). Trae sus períodos aparte
@@ -554,7 +363,6 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         "vt_sec_mix":        _seccion("mix", "Mix de carta"),
         "vt_sec_hora":       _seccion("hora", "Mapa por hora"),
         "vt_sec_ano_pasado": _seccion("ano_pasado", "Comparativo vs Año Pasado"),
-        "vt_sec_vs_compra":  _seccion("vs_compra", "Venta vs Compra"),
         # Como el Resumen, arma SUS tarjetas: la del ranking y, con un
         # plato en foco, la de su evolución debajo (regla #529).
         "vt_sec_platos":     lambda: _cuerpo_grafico("Análisis de platos"),

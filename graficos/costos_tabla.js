@@ -5,8 +5,9 @@
 // familias, sumar Eventos y Venta interna, añadir salidas, abrir una fila.
 // Nada vuelve a Python: la tabla no recalcula la página.
 //
-// Python manda en `data` lo que arma `costo_ventas.armar`: los meses y, por
-// fila, una serie por familia («cubeta»). Las cuentas de abajo (consumo
+// Python manda en `data.granos` un grano por clave (mes, quincena, semana),
+// cada uno como lo arma `costo_ventas.armar`/`armar_kardex`: los períodos y,
+// por fila, una serie por familia («cubeta»). Las cuentas de abajo (consumo
 // operativo, consumo carta, margen, %) se hacen acá porque dependen de lo
 // que se elige en pantalla; sus definiciones son las de costo_ventas.py.
 
@@ -20,8 +21,9 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 function leer(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (_) { return def; } }
 function guardar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* sin almacenamiento */ } }
 
-function etiquetaMes(p) { const [y, m] = p.split('-'); return `${MES[+m - 1]} ${y.slice(2)}`; }
-function fechaCorta(s) { const [, m, d] = s.split('-'); return `${+d} ${MES[+m - 1]}`; }
+// El grano: Mes (inventario de los cierres) o Quincena / Semana (del kardex).
+const GRANOS = [['mes', 'Mes', 'meses'], ['quincena', 'Quincena', 'quincenas'], ['semana', 'Semana', 'semanas']];
+const plural = (g) => (GRANOS.find((x) => x[0] === g) || GRANOS[0])[2];
 function soles(v) {
   if (v == null || !isFinite(v)) return '—';
   return `${v < -0.5 ? '−' : ''}S/ ${Math.abs(Math.round(v)).toLocaleString('en-US')}`;
@@ -35,12 +37,12 @@ const pp = (v) => (v == null || !isFinite(v) ? '—' : `${v >= 0 ? '+' : '−'}$
 const mil = (v) => `${(v / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })} mil`;
 
 // ── Las series de la ventana ─────────────────────────────────────────────
-// `st.ini` es el primer mes visible: la tabla muestra VENTANA meses.
+// `st.ini[grano]` es el primer período visible: la tabla muestra VENTANA.
 function ventana(st, data) {
-  const n = data.meses.length;
-  const ini = Math.max(0, Math.min(st.ini, n - VENTANA));
+  const n = data.periodos.length;
+  const ini = Math.max(0, Math.min(st.ini[st.grano], n - VENTANA));
   const fin = Math.min(n, ini + VENTANA);
-  return { ini, fin, meses: data.meses.slice(ini, fin) };
+  return { ini, fin, per: data.periodos.slice(ini, fin) };
 }
 
 function cortar(arr, w) { return (arr || []).slice(w.ini, w.fin); }
@@ -142,20 +144,33 @@ function sentidoVar(fila, delta) {
 
 // ── Dibujo ───────────────────────────────────────────────────────────────
 function dibujar(raiz) {
-  const st = raiz.__st, data = st.data;
-  if (!data || !data.meses || !data.meses.length) { raiz.innerHTML = ''; return; }
+  const st = raiz.__st;
+  const granos = (st.todo && st.todo.granos) || {};
+  const hay = GRANOS.filter(([g]) => granos[g] && granos[g].periodos && granos[g].periodos.length);
+  if (!hay.length) { raiz.innerHTML = ''; return; }
+  if (!hay.some(([g]) => g === st.grano)) st.grano = hay[0][0];
+  const data = granos[st.grano];
+  st.data = data;
   const w = ventana(st, data);
-  st.ini = w.ini;
+  st.ini[st.grano] = w.ini;
   const F = BUCK.filter((b) => st.fams.has(b));
-  const n = w.meses.length;
+  const n = w.per.length;
+  const esMes = st.grano === 'mes';
+  // «1–15 abr – 16–30 set» junta dos guiones: entre rótulos que ya llevan uno, «a».
+  const sep = esMes ? ' – ' : ' a ';
 
   // Cabecera y controles
-  const hayMas = data.meses.length > VENTANA;
+  const hayMas = data.periodos.length > VENTANA;
   let html = `<div class="cv-cab"><h2>Estado de costo de ventas</h2>
-    <span class="cv-rango">${etiquetaMes(w.meses[0])} – ${etiquetaMes(w.meses[n - 1])} · ${n} meses operativos</span>
-    ${hayMas ? `<span class="cv-ventana"><button type="button" data-ventana="-1" aria-label="Meses anteriores" ${w.ini === 0 ? 'disabled' : ''}>‹</button><button type="button" data-ventana="1" aria-label="Meses siguientes" ${w.fin >= data.meses.length ? 'disabled' : ''}>›</button></span>` : ''}
+    <span class="cv-rango">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)} · ${n} ${plural(st.grano)}${esMes ? ' operativos' : ''}</span>
+    ${hayMas ? `<span class="cv-ventana"><button type="button" data-ventana="-1" aria-label="Períodos anteriores" ${w.ini === 0 ? 'disabled' : ''}>‹</button><button type="button" data-ventana="1" aria-label="Períodos siguientes" ${w.fin >= data.periodos.length ? 'disabled' : ''}>›</button></span>` : ''}
     </div>`;
-  html += `<div class="cv-controles"><div class="cv-grupo"><span class="cv-rot">Familias</span>${BUCK.map((b) =>
+  html += `<div class="cv-controles">`;
+  if (hay.length > 1) {
+    html += `<div class="cv-grupo"><span class="cv-rot">Período</span>${hay.map(([g, nom]) =>
+      `<button type="button" class="chip" data-grano="${g}" aria-pressed="${st.grano === g}">${nom}</button>`).join('')}</div>`;
+  }
+  html += `<div class="cv-grupo"><span class="cv-rot">Familias</span>${BUCK.map((b) =>
     `<button type="button" class="chip" data-fam="${b}" aria-pressed="${st.fams.has(b)}"><span class="pt" style="background:var(${COLOR[b]})"></span>${b}</button>`).join('')}</div>
     <label class="interruptor"><input type="checkbox" data-extra ${st.extra ? 'checked' : ''}> Sumar Eventos y Venta interna a la venta</label></div>`;
 
@@ -163,27 +178,22 @@ function dibujar(raiz) {
   const T = (k) => valores(st, data, w, { k, tipo: 'suma' }, F).tot;
   const v = T('v'), op = T('operativo'), ca = T('carta'), po = T('pos'), mg = T('margen');
   const tiles = [
-    ['Venta neta', soles(v), `${n} meses`],
+    ['Venta neta', soles(v), `${n} ${plural(st.grano)}`],
     ['Consumo operativo', soles(op), v ? `${pct(op / v)} costo operativo` : 'sin venta en estas familias'],
     ['Consumo carta', soles(ca), v ? `${pct(ca / v)} costo carta real` : 'sin venta en estas familias', true],
     ['Costo según Sistema Restaurante', soles(po), v ? `${pct(po / v)} de la venta` : '—'],
     ['Diferencia', soles(ca - po), v ? `${pp((ca - po) / v)} sobre la venta` : '—'],
     ['Margen bruto', soles(mg), v ? `${pct(mg / v)} de la venta` : '—'],
   ];
+  if (!esMes) {
+    html += `<div class="cv-aviso">Por ${st.grano}, el inventario es el del <b>kardex</b> al final de cada período, no lo contado: el ajuste de cada cierre cae entero en el período del cierre, y por eso las ${plural(st.grano)} no suman el mes.</div>`;
+  }
   html += `<div class="cv-resumen">${tiles.map(([k, val, s, foco]) =>
     `<div class="dato${foco ? ' foco' : ''}"><span class="k">${k}</span><span class="v">${val}</span><span class="s">${s}</span></div>`).join('')}</div>`;
 
   // La tabla
-  const cols = `<col class="c-lab">${w.meses.map(() => '<col class="c-mes">').join('')}<col class="c-tot">`;
-  const ths = w.meses.map((p) => {
-    const fechas = Object.values((data.cierres || {})[p] || {}).map((x) => x[0]).sort();
-    let sub = '';
-    if (fechas.length) {
-      const a = fechaCorta(fechas[0]), z = fechaCorta(fechas[fechas.length - 1]);
-      sub = `cierre ${a === z ? a : `${a.split(' ')[0]}–${z}`}`;
-    }
-    return `<th scope="col">${etiquetaMes(p)}<span class="sub">${sub}</span></th>`;
-  }).join('');
+  const cols = `<col class="c-lab">${w.per.map(() => '<col class="c-mes">').join('')}<col class="c-tot">`;
+  const ths = w.per.map((p) => `<th scope="col">${esc(p.rot)}<span class="sub">${esc(p.sub || '')}</span></th>`).join('');
   let cuerpo = '';
   for (const fila of filas(st)) {
     if (fila.sec) { cuerpo += `<tr class="sec"><td class="lab">${fila.sec}</td><td colspan="${n + 1}"></td></tr>`; continue; }
@@ -200,7 +210,7 @@ function dibujar(raiz) {
       + `<td class="tot ${claseCelda(fila, val.tot)}">${fmtCelda(fila, val.tot)}</td></tr>`;
     if (abierta) cuerpo += detalle(st, data, w, fila, F, val);
   }
-  html += `<div class="desliza"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">mes operativo</span></th>${ths}<th class="tot" scope="col">${n} meses<span class="sub">${etiquetaMes(w.meses[0])} – ${etiquetaMes(w.meses[n - 1])}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`;
+  html += `<div class="desliza"><table><colgroup>${cols}</colgroup><thead><tr><th class="lab" scope="col">Concepto<span class="sub">${esMes ? 'mes operativo' : 'inventario del kardex'}</span></th>${ths}<th class="tot" scope="col">${n} ${plural(st.grano)}<span class="sub">${esc(w.per[0].rot)}${sep}${esc(w.per[n - 1].rot)}</span></th></tr></thead><tbody>${cuerpo}</tbody></table></div>`;
   html += notas(data, w);
 
   const sx = raiz.querySelector('.desliza') ? raiz.querySelector('.desliza').scrollLeft : 0;
@@ -220,7 +230,7 @@ function filaAgregar(st, data, w, F, n) {
   }
   const btn = disp.length
     ? `<button type="button" class="btn-agregar" data-menu>${st.menu ? 'Cerrar' : '+ Añadir otra salida'}</button>`
-    : '<span class="cero">No hay otras salidas en estos meses.</span>';
+    : '<span class="cero">No hay otras salidas en estos períodos.</span>';
   return `<tr class="agregar"><td colspan="${n + 2}">${btn}${menu}</td></tr>`;
 }
 
@@ -295,9 +305,9 @@ function detalle(st, data, w, fila, F, val) {
   }
   const stats = `<div class="stats">
       <span>Promedio <b>${fmt(prom)}</b></span>
-      <span>Mínimo <b>${fmt(mn[0])}</b> · ${etiquetaMes(w.meses[mn[1]])}</span>
-      <span>Máximo <b>${fmt(mx[0])}</b> · ${etiquetaMes(w.meses[mx[1]])}</span>
-      <span>${etiquetaMes(w.meses[n - 1])} contra el promedio <b>${vsProm}</b></span>
+      <span>Mínimo <b>${fmt(mn[0])}</b> · ${esc(w.per[mn[1]].rot)}</span>
+      <span>Máximo <b>${fmt(mx[0])}</b> · ${esc(w.per[mx[1]].rot)}</span>
+      <span>${esc(w.per[n - 1].rot)} contra el promedio <b>${vsProm}</b></span>
       <div class="modo" role="group" aria-label="Qué dibujar">
         <button type="button" data-modo="total" aria-pressed="${st.modo === 'total'}">Total</button>
         <button type="button" data-modo="familia" aria-pressed="${st.modo === 'familia'}">Por familia</button>
@@ -326,7 +336,7 @@ function notas(data, w) {
   return `<div class="notas">
   <details class="nota"><summary>De dónde sale cada fila</summary><dl>
     <dt>Venta neta</dt><dd>Sin IGV ni recargo, sin cortesías ni anulados, con las notas de crédito restando, por día del turno de caja. Grupos Alimentos, Bebidas con alcohol, sin alcohol y calientes, y Vinos y Espumantes.</dd>
-    <dt>Inventario inicial y final</dt><dd>El cierre de inventario de cada área en su mes operativo: el que se registra del 1 al 6 cuenta para el mes anterior. Se toma el último cierre de cada área en el mes, valorizado como se contó (stock declarado × precio promedio). El inicial de un mes es el final del anterior. Alimentos, Bebidas, Vinos y Envases.</dd>
+    <dt>Inventario inicial y final</dt><dd>Por mes, el cierre de inventario de cada área en su mes operativo: el que se registra del 1 al 6 cuenta para el mes anterior. Se toma el último cierre de cada área en el mes, valorizado como se contó (stock declarado × precio promedio). Por quincena o semana no hay conteo: es el stock del kardex al final del último día, sólo de lo activo, con la regla del Histórico del Almacén. El inicial de un período es el final del anterior. Alimentos, Bebidas, Vinos y Envases.</dd>
     <dt>Compras</dt><dd>Valor neto, sin IGV, con las notas de crédito de los proveedores restadas, por fecha del documento.</dd>
     <dt>Bajas y las otras salidas</dt><dd>Notas de salida procesadas, a su valor neto, por fecha de registro, como la «Relación de Notas de Salidas» del Almacén.</dd>
     <dt>Costo de cortesías</dt><dd>Lo que el Sistema Restaurante facturó como cortesía en Alimentos, Bebidas y Vinos, a precio costo. Se resta porque su costo, «(a) Ventas en el rango», no las incluye: en el Paloteo son otro origen, «(b) Cortesías».</dd>
@@ -335,7 +345,7 @@ function notas(data, w) {
   </dl></details>
   <details class="nota alerta"><summary>Antes de leer la diferencia</summary><ul>
     <li><b>Envases entra en inventario, compras y salidas, pero el Sistema Restaurante no lo costea.</b> Para comparar en igualdad, desmarcá Envases.</li>
-    <li><b>Eventos y Venta interna gastan inventario y no están en la venta.</b> En estos meses vendieron S/ ${mil(tot(vEx[ev]))} y S/ ${mil(tot(vEx[vi]))}, con un costo de S/ ${mil(tot(cEx[ev]))} y S/ ${mil(tot(cEx[vi]))}. Fuera de la venta, su consumo agranda la diferencia; el interruptor los suma a Alimentos.</li>
+    <li><b>Eventos y Venta interna gastan inventario y no están en la venta.</b> En estos períodos vendieron S/ ${mil(tot(vEx[ev]))} y S/ ${mil(tot(vEx[vi]))}, con un costo de S/ ${mil(tot(cEx[ev]))} y S/ ${mil(tot(cEx[vi]))}. Fuera de la venta, su consumo agranda la diferencia; el interruptor los suma a Alimentos.</li>
     <li><b>Costos de producción queda fuera</b> de inventarios, compras y salidas.</li>
     <li><b>Desde octubre 2025.</b> Antes, los cierres y el kardex no cuadran (setiembre 2025 tuvo un ajuste de S/ 627 mil al limpiar el inventario).</li>
   </ul></details></div>`;
@@ -367,7 +377,11 @@ function enlazar(raiz) {
     } else if (b.dataset.modo) {
       st.modo = b.dataset.modo;
     } else if (b.dataset.ventana) {
-      st.ini += Number(b.dataset.ventana) * VENTANA;
+      st.ini[st.grano] += Number(b.dataset.ventana) * VENTANA;
+    } else if (b.dataset.grano) {
+      st.grano = b.dataset.grano;
+      st.abierta = null;
+      guardar('costos_grano', st.grano);
     } else {
       return;
     }
@@ -394,13 +408,15 @@ export default function (component) {
       fams: new Set(fams.length ? fams : BUCK),
       extra: leer('costos_extra', false) === true,
       agregadas: leer('costos_salidas', []).filter((t) => typeof t === 'string' && t !== BAJAS),
-      abierta: null, modo: 'total', menu: false, ini: Number.MAX_SAFE_INTEGER,
+      abierta: null, modo: 'total', menu: false, grano: leer('costos_grano', 'mes'),
+      ini: { mes: Number.MAX_SAFE_INTEGER, quincena: Number.MAX_SAFE_INTEGER, semana: Number.MAX_SAFE_INTEGER },
     };
     enlazar(raiz);
   }
   const st = raiz.__st;
-  st.data = data || {};
+  st.todo = data || {};
   // Una salida guardada que estos datos no traen no se dibuja.
-  st.agregadas = st.agregadas.filter((t) => (st.data.salidas || {})[t]);
+  const tipos = new Set(Object.values(st.todo.granos || {}).flatMap((g) => Object.keys(g.salidas || {})));
+  st.agregadas = st.agregadas.filter((t) => tipos.has(t));
   dibujar(raiz);
 }

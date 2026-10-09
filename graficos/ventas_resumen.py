@@ -837,7 +837,7 @@ def _ventas_resumen(d, col_venta, col_fecha, col_pax, col_pedido, col_prod,
                                  float(_top["po"]))
 
     # ── Volumen: Pax por período (dedup por pedido, `definicion_venta.
-    # pax_por`, como «Venta vs Compra») o, sin Pax, pedidos distintos ──────
+    # pax_por`) o, sin Pax, pedidos distintos ───────────────────────────────
     vol_label = None
     if col_pax:
         if col_pedido:
