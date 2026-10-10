@@ -102,7 +102,9 @@ from tema import (
     PALETA_SERIES, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
-from graficos.base import _compras_layout, _compras_truncar, scope_rerun
+from graficos.base import (
+    _compras_layout, _compras_truncar, scope_rerun, seleccion_multiple,
+)
 from graficos.compras._comun import (
     GAP_DRILL, _UNIDAD_GRAN, _clave_grilla, _first_point, _fmt_variacion,
     _hover_variacion, _nota_variacion, _periodo_serie, _variaciones,
@@ -223,10 +225,11 @@ PRODUCCION = Lado(
 # ===========================================================================
 # CENTINELAS, OPCIONES Y ESTADOS
 # ===========================================================================
-# Los centinelas se comparan por igualdad contra lo que devuelve el widget,
-# como en Compras: ninguna área, tipo, usuario, familia ni producto del
-# parquet empieza con «Todas las», «Todos los» ni «Top ». El del tipo es de
-# cada lado —«Todos los tipos», «Todos los usuarios»—: `Lado.tipo_todos`.
+# Desde el 2026-10-10 (regla #625) los cuatro filtros son `st.multiselect`,
+# como los de «Compras por período»: nada elegido es «todos», y los
+# «Todas las…» de abajo quedan como el PLACEHOLDER del campo vacío. El del
+# tipo es de cada lado —«Todos los tipos», «Todos los usuarios»—:
+# `Lado.tipo_todos`. Ningún producto del parquet empieza con «Top ».
 _AREA_TODAS = "Todas las áreas"
 _FAM_TODAS = "Todas las familias"
 _PROD_TODOS = "Todos los productos"
@@ -1478,6 +1481,40 @@ _CSS_MOLDE = """<style>
 .st-key-__C___hdr_tipo .react-aria-ComboBox input,
 .st-key-__C___hdr_familia .react-aria-ComboBox input,
 .st-key-__C___hdr_producto .react-aria-ComboBox input { font-size: 12px !important; }
+/* Desde el 2026-10-10 son `st.multiselect` (regla #625), con las DOS formas
+   del de Streamlit, como en «Compras por período» (#623): en la 1.64 de
+   Cloud las fichas van en un `stMultiSelectTagsContainer` de 38px que
+   estiraba la caja a 40; en la 1.59 de esta máquina es un
+   `[data-baseweb="select"]`. Las dos a los 32 de la fila, y lo que no entra
+   en un renglón se recorta: la lista abierta dice todo lo elegido. */
+.st-key-__C___hdr_area [data-testid="stMultiSelectTagsContainer"],
+.st-key-__C___hdr_tipo [data-testid="stMultiSelectTagsContainer"],
+.st-key-__C___hdr_familia [data-testid="stMultiSelectTagsContainer"],
+.st-key-__C___hdr_producto [data-testid="stMultiSelectTagsContainer"] {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    height: 30px !important;
+    min-height: 0 !important;
+    align-items: center !important;
+    overflow: hidden !important;
+}
+.st-key-__C___hdr_area [data-baseweb="select"] > div,
+.st-key-__C___hdr_tipo [data-baseweb="select"] > div,
+.st-key-__C___hdr_familia [data-baseweb="select"] > div,
+.st-key-__C___hdr_producto [data-baseweb="select"] > div {
+    min-height: 32px !important;
+    height: 32px !important;
+    font-size: 12px !important;
+}
+.st-key-__C___hdr_area [data-baseweb="select"] > div > div,
+.st-key-__C___hdr_tipo [data-baseweb="select"] > div > div,
+.st-key-__C___hdr_familia [data-baseweb="select"] > div > div,
+.st-key-__C___hdr_producto [data-baseweb="select"] > div > div {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    max-height: 30px !important;
+    overflow: hidden !important;
+}
 /* Los dos toggles —granularidad arriba, modo abajo— acotados a SU key y no
    al contenedor (CLAUDE.md: una regla colgada del contenedor captura los
    widgets que se agreguen después). */
@@ -1667,54 +1704,44 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                     .sort_values(ascending=False))
             return [x for x in s.index if x]
 
-        def _opciones(centinela, columna, mascara, key):
-            """`(opciones, previo, máscara siguiente)` de un desplegable.
+        def _opciones(columna, mascara, key):
+            """`(opciones, elegidos, máscara siguiente)` de un filtro.
 
-            Del valor vigente en `session_state`, que es lo que el widget va
-            a mostrar: cada lista ofrece lo que dejan los filtros de su
-            izquierda, ordenado por valor. Lo elegido que dejó de estar (el
-            rango se angostó) se AGREGA al final en vez de resetearse: la
-            vista sale vacía y un cartel dice por qué — el criterio de
-            Producto en Compras."""
-            ops = [centinela] + _rank(columna, mascara)
-            prev = st.session_state.get(key)
-            if prev is not None and prev not in ops:
-                ops.append(prev)
+            Cada lista ofrece lo que dejan los filtros de su izquierda,
+            ordenado por valor, y lo elegido que dejó de estar (el rango se
+            angostó) se AGREGA al final en vez de soltarse: la vista sale
+            vacía y un cartel dice por qué — el criterio de Producto en
+            Compras, hoy `base.seleccion_multiple` (regla #625). Las keys van
+            en PLURAL: las de antes guardaban el string de un selectbox."""
+            sel, ops = seleccion_multiple(key, _rank(columna, mascara),
+                                          conservar=True)
             sig = mascara.copy()
-            if prev not in (None, centinela):
-                sig &= lin[columna] == prev
-            return ops, sig
+            if sel:
+                sig &= lin[columna].isin(sel)
+            return ops, sel, sig
 
         # ── Las opciones, ANTES de dibujar los widgets ────────────────────
         todo = pd.Series(True, index=lin.index)
-        ops_area, m_area = _opciones(_AREA_TODAS, "area", todo, f"{k}_area")
+        ops_area, area_sel, m_area = _opciones("area", todo, f"{k}_areas")
+        ops_tipo, tipo_sel, m_tipo = [], [], m_area
         if con_tipo:
-            ops_tipo, m_tipo = _opciones(lado.tipo_todos, "tipo", m_area,
-                                         f"{k}_tipo")
-        else:
-            ops_tipo, m_tipo = [lado.tipo_todos], m_area
+            ops_tipo, tipo_sel, m_tipo = _opciones("tipo", m_area,
+                                                   f"{k}_tipos")
+        ops_fam, fam_sel, m_fam = [], [], m_tipo
         if lado.con_familia:
-            ops_fam, m_fam = _opciones(_FAM_TODAS, "fam", m_tipo,
-                                       f"{k}_familia")
-        else:
-            ops_fam, m_fam = [_FAM_TODAS], m_tipo
+            ops_fam, fam_sel, m_fam = _opciones("fam", m_tipo,
+                                                f"{k}_familias")
         prods = _rank("prod", m_fam)
         etq_top = {f"Top {_n} por {lado.top}": _n for _n in _TOPS}
-        ops_prod = ([_PROD_TODOS]
-                    + [_e for _e, _n in etq_top.items() if _n < len(prods)]
-                    + prods)
-        _p_prev = st.session_state.get(f"{k}_producto")
-        if _p_prev is not None and _p_prev not in ops_prod:
-            # Los centinelas «Top N» sí se resetean: «Top 20» no significa
-            # nada en un recorte donde quedan 8 productos.
-            if _p_prev == _PROD_TODOS or _p_prev in etq_top:
-                st.session_state[f"{k}_producto"] = _PROD_TODOS
-            else:
-                ops_prod.append(_p_prev)
+        # Los «Top N» se sueltan si dejan de ofrecerse: «Top 20» no significa
+        # nada en un recorte donde quedan 8 productos. Con varios elegidos,
+        # un «Top N» suma sus N a los productos sueltos.
+        prod_sel, ops_prod = seleccion_multiple(
+            f"{k}_productos",
+            [_e for _e, _n in etq_top.items() if _n < len(prods)] + prods,
+            conservar=True, soltar=etq_top)
 
         # ── La cabecera: granularidad, los filtros y la fila de KPI ───────
-        tipo_sel = lado.tipo_todos
-        fam_sel = _FAM_TODAS
         with st.container(horizontal=True, gap="small", key=f"{c}_fila"):
             gran = st.segmented_control(
                 "Agrupar por", _GRAN_OPCIONES, default=_GRAN_DEFAULT,
@@ -1733,40 +1760,44 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                           "mayores). La fila de abajo nombra cada tramo con su "
                           "monto, y el Resumen le da una columna a cada uno."
                           )) or PARTIR_AREA
+            # Los cuatro, de selección MÚLTIPLE (regla #625). Los valores ya
+            # se leyeron arriba; acá sólo se dibujan.
             with st.container(key=f"{c}_hdr_area"):
-                area_sel = st.selectbox(
-                    "Área", ops_area, key=f"{k}_area",
-                    format_func=lambda a: (a if a == _AREA_TODAS
-                                           else _nombre_area(a)),
+                st.multiselect(
+                    "Área", ops_area, key=f"{k}_areas",
+                    format_func=_nombre_area, placeholder=_AREA_TODAS,
                     label_visibility="collapsed",
-                    help=f"Acota ESTA tarjeta al área que {lado.accion}, "
-                         "encima de los chips de la franja. Ordenadas por "
-                         f"{lado.medida} en el rango.")
+                    help=f"Acota ESTA tarjeta a una o varias áreas que "
+                         f"{lado.accion}, encima de los chips de la franja. "
+                         f"Ordenadas por {lado.medida} en el rango.")
             if con_tipo:
                 with st.container(key=f"{c}_hdr_tipo"):
-                    tipo_sel = st.selectbox(
-                        lado.rotulo_tipo, ops_tipo, key=f"{k}_tipo",
+                    st.multiselect(
+                        lado.rotulo_tipo, ops_tipo, key=f"{k}_tipos",
+                        placeholder=lado.tipo_todos,
                         label_visibility="collapsed",
                         help=lado.ayuda_tipo or None)
             # Sin familia en el parquet (porcionamientos) no hay filtro: un
             # desplegable con una sola opción no filtra nada.
             if lado.con_familia:
                 with st.container(key=f"{c}_hdr_familia"):
-                    fam_sel = st.selectbox(
-                        "Familia", ops_fam, key=f"{k}_familia",
-                        format_func=lambda f: (f if f == _FAM_TODAS
-                                               else _oracion(f)),
+                    st.multiselect(
+                        "Familia", ops_fam, key=f"{k}_familias",
+                        format_func=_oracion, placeholder=_FAM_TODAS,
                         label_visibility="collapsed",
-                        help="Acota la tarjeta a una familia de productos. "
-                             "Ofrece las de los filtros de su izquierda.")
+                        help="Acota la tarjeta a una o varias familias de "
+                             "productos. Ofrece las de los filtros de su "
+                             "izquierda.")
             with st.container(key=f"{c}_hdr_producto"):
-                prod_sel = st.selectbox(
-                    "Producto", ops_prod, key=f"{k}_producto",
+                st.multiselect(
+                    "Producto", ops_prod, key=f"{k}_productos",
+                    placeholder=_PROD_TODOS,
                     label_visibility="collapsed",
                     help=f"Ordenados por {lado.medida} en el rango: el primero "
                          f"es el de mayor {lado.top}. «Top N por {lado.top}» "
-                         "suma los N mayores en una sola serie. Se puede "
-                         "escribir para buscar.")
+                         "suma los N mayores en una sola serie, y se puede "
+                         "combinar con productos sueltos. Se puede escribir "
+                         "para buscar.")
             # La fila de KPI y, a su derecha, la fecha de la tarjeta (regla
             # #617): ahí sobra lugar, y la fila de los controles va llena en
             # Salidas. Un contenedor horizontal propio y no el `order` de un
@@ -1780,10 +1811,11 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                     with st.container(key=f"{c}_fecha", width="content"):
                         fecha()
         gran = gran or _GRAN_DEFAULT
-        area_sel = area_sel or _AREA_TODAS
-        tipo_sel = tipo_sel or lado.tipo_todos
-        fam_sel = fam_sel or _FAM_TODAS
-        prod_sel = prod_sel or _PROD_TODOS
+        # Los productos de verdad: un «Top N» vale por sus N.
+        _n_top = max((etq_top[_p] for _p in prod_sel if _p in etq_top),
+                     default=0)
+        prods_sel = set(prods[:_n_top]) | {
+            _p for _p in prod_sel if _p not in etq_top}
 
         # ── El recorte de la tarjeta, sobre TODAS las líneas ──────────────
         # Las vacías entran con los filtros de la cabecera (área y tipo son
@@ -1792,28 +1824,34 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         def _mascara(b):
             # La misma para el rango y para los años que se comparan: lo
             # del año pasado tiene que ser lo MISMO, en otra fecha.
+            # Dentro de un filtro, la unión; entre filtros, la intersección.
             m = pd.Series(True, index=b.index)
-            if area_sel != _AREA_TODAS:
-                m &= b["area"] == area_sel
-            if con_tipo and tipo_sel != lado.tipo_todos:
-                m &= b["tipo"] == tipo_sel
-            if fam_sel != _FAM_TODAS:
-                m &= b["fam"] == fam_sel
-            if prod_sel in etq_top:
-                m &= b["prod"].isin(prods[:etq_top[prod_sel]])
-            elif prod_sel != _PROD_TODOS:
-                m &= b["prod"] == prod_sel
+            if area_sel:
+                m &= b["area"].isin(area_sel)
+            if con_tipo and tipo_sel:
+                m &= b["tipo"].isin(tipo_sel)
+            if fam_sel:
+                m &= b["fam"].isin(fam_sel)
+            if prod_sel:
+                m &= b["prod"].isin(prods_sel)
             return m
 
         bl = base[_mascara(base)].copy()
         bl["clave"] = _periodo_serie(bl["fecha"], gran)
 
+        # Con VARIOS elegidos, el título los cuenta en vez de nombrarlos.
+        def _amb_de(sel, cuantos, fmt=lambda x: x):
+            if not sel:
+                return None
+            return fmt(sel[0]) if len(sel) == 1 else f"{len(sel)} {cuantos}"
+
         _amb = [x for x in (
-            None if area_sel == _AREA_TODAS else _nombre_area(area_sel),
-            None if tipo_sel == lado.tipo_todos else tipo_sel,
-            None if fam_sel == _FAM_TODAS else _oracion(fam_sel),
-            (None if prod_sel == _PROD_TODOS
-             else _compras_truncar(prod_sel)))
+            _amb_de(area_sel, "áreas", _nombre_area),
+            _amb_de(tipo_sel, {"Usuario": "usuarios"}.get(
+                lado.rotulo_tipo, "tipos")),
+            _amb_de(fam_sel, "familias", _oracion),
+            (_amb_de(prod_sel, "productos", _compras_truncar)
+             if len(prod_sel) < 2 else f"{len(prods_sel)} productos"))
             if x]
         # El ÁMBITO va al título, como en Compras: con los filtros de la
         # tarjeta y los chips de la franja, «por semana» a secas no deja
@@ -1868,7 +1906,7 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         # ── Lo que NO suma, dicho en la fila de KPI ───────────────────────
         nota = nota_no_suman(
             bl, lado,
-            vacios_nombrables=fam_sel == _FAM_TODAS and prod_sel == _PROD_TODOS)
+            vacios_nombrables=not fam_sel and not prod_sel)
         dv = _validas(bl, lado)
         # Porcionamientos cierra la fila con lo porcionado y le da a cada
         # área su % de merma PROPIO en el tooltip (#510).
@@ -1890,7 +1928,8 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         # foco; el modo se lee de `session_state` porque el alto de la
         # figura depende de él; el clic de la barra se lee de la key que se
         # DIBUJÓ la corrida anterior, con un contador en la key.
-        ctx = (gran, area_sel, tipo_sel, fam_sel, prod_sel, partir)
+        ctx = (gran, tuple(area_sel), tuple(tipo_sel), tuple(fam_sel),
+               tuple(prod_sel), partir)
         if st.session_state.get(f"{k}_ctx_prev") != ctx:
             st.session_state[f"{k}_ctx_prev"] = ctx
             st.session_state[f"{k}_focus"] = None

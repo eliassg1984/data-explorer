@@ -430,6 +430,19 @@ tarjeta nace con `flex: 0 1 auto`. Detalle en `arquitectura.md` regla #145,
 que también lista los cuatro ejes distintos que quedan pendientes en el
 resto de `graficos/compras/`.
 
+## Un filtro de lista es un `st.multiselect`
+
+Área, familia, proveedor, producto… en la fila de una tarjeta: nada
+elegido es «todos», unión dentro de un filtro, intersección entre filtros,
+el «Todas las…» va de `placeholder`. Qué queda elegido cuando la lista
+cambia (y un multiselect revienta con un valor fuera de `options`) lo
+decide `graficos/base.py::seleccion_multiple`, antes de dibujar el widget —
+no se reescribe a mano. Lo usan «Compras por período» y las cuatro
+tarjetas «por período» de Movimientos. El CSS del multiselect tiene DOS
+formas (baseweb en la 1.59 local, `react-aria` + `stMultiSelectTagsContainer`
+en la 1.64 de Cloud): van las dos. `segmented_control` para elegir UNA
+forma de ver, `toggle` para sí/no. Reglas #623 y #625.
+
 ## Streamlit — trampas que ya costaron bugs
 
 - **`st.markdown` no ejecuta `<script>`.** Animaciones y DOM se hacen con CSS

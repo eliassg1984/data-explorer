@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-624 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+625 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (203)
+**CSS y estilos** (204)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -237,8 +237,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#617** — Cada vista de Movimientos tiene su propia fecha, y la franja del reporte ya no dibuja…
 - **#618** — La escala de tiempo vieja se borró entera, y con ella la Evolución de Movimientos: «sin…
 - **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
+- **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
 
-**Layout y alturas** (89)
+**Layout y alturas** (90)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -329,6 +330,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 - **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
+- **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
 
 **Plotly y figuras** (114)
 
@@ -49058,6 +49060,47 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-10.)
 
+625. **Un filtro de LISTA (área, familia, proveedor, producto…) en la fila
+     de una tarjeta es un `st.multiselect`, y qué queda elegido lo decide
+     `base.seleccion_multiple`.** 2026-10-10, a pedido: «también en Salidas
+     por período, Porcionamiento, Producción y Requerimientos está igual».
+     Las cuatro tarjetas «por período» de Movimientos
+     (`movimientos_periodo.py::_tarjeta`, un molde con cuatro `Lado`)
+     tenían Área, Tipo/Usuario, Familia y Producto en `st.selectbox`; pasan
+     a multiselect con las mismas reglas que «Compras por período» (#623):
+     nada elegido es «todos», unión dentro de un filtro, intersección entre
+     filtros, un «Top N» vale por sus N y se suma a los sueltos, el título
+     cuenta («2 áreas», «6 productos») y las keys van en plural
+     (`{k}_areas`…: las de antes guardaban un string).
+
+     **La regla vive UNA vez**: `base.seleccion_multiple(key, opciones,
+     conservar, soltar)` la usan las dos tarjetas. Hasta hoy cada una
+     escribía la suya a mano —tres variantes del mismo «¿qué hago con lo
+     elegido que ya no está en la lista?»—. Con `conservar=True` (opciones
+     del RANGO) se agrega al final; sin él (opciones del histórico) se
+     suelta; `soltar` dice qué se suelta igual (los «Top N»). Escribe la key
+     sólo si cambió, y antes del widget, que es cuando se puede.
+
+     Medido con datos reales: Requerimientos con Producción (702, S/ 859,8k)
+     y Cocina (3.064, S/ 1,2M) da 3.766 y S/ 2,1M con las dos. Las cuatro
+     cajas a 32px, con su «Todas las…» visible (el CSS del molde lleva las
+     dos formas del multiselect, como `_css_proveedor.py`).
+
+     **Inventario de selectores al 2026-10-10**, para la próxima: 46
+     `segmented_control`, 39 `selectbox`, 21 `toggle`, 19 `pills`, 7
+     `multiselect`. Los filtros de lista que siguen siendo de UNA opción:
+     Familia de «Vs año pasado», Grupo de Carta costeada, Área de Costo
+     Recetas Base y Proveedor de Documentos SUNAT. Y hay cuatro formas de
+     filtrar una lista: chips en «Filtros» (Familia/Subfamilia de Compras),
+     multiselect en la fila (Ventas › Por período, estas dos), selectbox en
+     la fila (los de arriba) y disparador con panel (Stock › Productos,
+     #467). El criterio que se propuso: lista de valores → multiselect con
+     esta función; elegir UNA forma de ver (granularidad, modo) →
+     `segmented_control`; sí/no → `toggle`; navegar a UN elemento (la
+     ficha de un producto) → selectbox.
+
+     (2026-10-10.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49070,7 +49113,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#624**; la próxima toma el número siguiente.
+> última regla es la **#625**; la próxima toma el número siguiente.
 
 >
 

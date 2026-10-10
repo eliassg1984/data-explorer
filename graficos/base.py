@@ -319,6 +319,40 @@ def seleccion_en_panel(widget, rotulo, clave, opciones, **kw):
                   on_change=_copiar, **kw)
 
 
+def seleccion_multiple(key, opciones, conservar=False, soltar=()):
+    """`(elegidos, opciones)` de un `st.multiselect` de FILTRO en la fila de
+    una tarjeta, leídos ANTES de dibujarlo (regla #625).
+
+    Es la regla única de los filtros de lista de «Compras por período» y de
+    las cuatro tarjetas «por período» de Movimientos, que hasta el
+    2026-10-10 la escribían cada una a su modo. Nada elegido es «todos».
+
+    Un multiselect revienta con un valor que no está en `options`, así que
+    lo elegido que dejó de ofrecerse se resuelve acá, antes del widget:
+
+    - `conservar=False` (Familia, Subfamilia: opciones del histórico) lo
+      SUELTA — no puede pasar salvo que cambie el filtro de la izquierda.
+    - `conservar=True` (Proveedor, Producto, Área…: opciones del RANGO) lo
+      AGREGA al final de la lista: angostar la fecha no borra lo elegido;
+      la vista sale vacía y su cartel dice por qué. Salvo lo que esté en
+      `soltar` —los «Top N»—, que fuera de la lista ya no significan nada.
+
+    Escribe la key sólo si cambió (va antes de que exista el widget)."""
+    previa = st.session_state.get(key)
+    previa = list(previa) if isinstance(previa, (list, tuple)) else []
+    ops = list(opciones)
+    en_lista = set(ops)
+    if conservar:
+        fuera = set(soltar)
+        vigente = [v for v in previa if v in en_lista or v not in fuera]
+        ops += [v for v in vigente if v not in en_lista]
+    else:
+        vigente = [v for v in previa if v in en_lista]
+    if st.session_state.get(key) != vigente:
+        st.session_state[key] = vigente
+    return vigente, ops
+
+
 def filtro_pills(df, col, clave, etiqueta, valores=None):
     """Un filtro categorico PLANO, para adentro de `compartimento_filtros()`.
 

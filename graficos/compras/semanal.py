@@ -95,7 +95,7 @@ from tema import (
 from graficos import alturas
 from graficos.base import (
     _compras_layout, _compras_truncar, preservar_widgets, rango_tarjeta,
-    scope_rerun,
+    scope_rerun, seleccion_multiple,
 )
 # Las cinco de la variación contra la barra anterior (#470) NACIERON acá y
 # se mudaron a `_comun.py` el 2026-09-20, cuando la Evolución de Producto
@@ -181,18 +181,8 @@ def _eleccion(key, opciones, default):
     return v
 
 
-def _seleccion_previa(key):
-    """Lo elegido en uno de los cuatro filtros, como lista (vacía = todos)."""
-    previa = st.session_state.get(key)
-    return list(previa) if isinstance(previa, (list, tuple)) else []
-
-
-def _fijar_seleccion(key, valor):
-    """Escribe la selección ANTES de dibujar el widget, y sólo si cambió:
-    un multiselect revienta con un valor que no está en `options`, así que
-    lo que se cayó de la lista se suelta acá."""
-    if st.session_state.get(key) != valor:
-        st.session_state[key] = valor
+# Qué queda elegido y qué se ofrece lo decide `base.seleccion_multiple`, la
+# regla compartida con las tarjetas «por período» de Movimientos (#625).
 
 _GRAN_DEFAULT = "Semana"
 """Con qué granularidad abre la vista.
@@ -1615,9 +1605,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                                         and col_fam in _d_full_ops.columns)
                         else d)
             _ops_fam = sorted(_src_fam[col_fam].dropna().astype(str).unique())
-        _fam_prev = [_f for _f in _seleccion_previa(_K_FAM)
-                     if _f in set(_ops_fam)]
-        _fijar_seleccion(_K_FAM, _fam_prev)
+        _fam_prev, _ops_fam = seleccion_multiple(_K_FAM, _ops_fam)
 
         # SUBFAMILIA (2026-09-19, a pedido): el mismo criterio que Familia
         # —opciones del HISTÓRICO, por el mismo borrado silencioso— y en
@@ -1635,9 +1623,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                                     .isin(_fam_prev)]
             _ops_sub = sorted(
                 _src_sub[col_subfam].dropna().astype(str).unique())
-        _sub_prev = [_s for _s in _seleccion_previa(_K_SUB)
-                     if _s in set(_ops_sub)]
-        _fijar_seleccion(_K_SUB, _sub_prev)
+        _sub_prev, _ops_sub = seleccion_multiple(_K_SUB, _ops_sub)
 
         # El recorte que ya se sabe ANTES de dibujar, y del que salen las dos
         # listas ordenadas por valor: Proveedor y Producto. Se va angostando
@@ -1661,10 +1647,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                          .groupby(d.loc[_mask, col_prov].astype(str))
                          .sum().sort_values(ascending=False)
                          .index.tolist())
-        _prov_prev = _seleccion_previa(_K_PROV)
-        _en_lista = set(_ops_prov)
-        _ops_prov += [_p for _p in _prov_prev if _p not in _en_lista]
-        _fijar_seleccion(_K_PROV, _prov_prev)
+        _prov_prev, _ops_prov = seleccion_multiple(_K_PROV, _ops_prov,
+                                                   conservar=True)
         if _hay_prov and _prov_prev:
             _mask &= d[col_prov].astype(str).isin(_prov_prev)
 
@@ -1693,11 +1677,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _etiq_top = {f"Top {_n} por valor": _n for _n in _TOPS}
         _tops = [_e for _e, _n in _etiq_top.items() if _n < len(_prods)]
         _ops_prod = _tops + _prods
-        _prod_prev = [_p for _p in _seleccion_previa(_K_PROD)
-                      if _p in _tops or _p not in _etiq_top]
-        _en_lista = set(_ops_prod)
-        _ops_prod += [_p for _p in _prod_prev if _p not in _en_lista]
-        _fijar_seleccion(_K_PROD, _prod_prev)
+        _prod_prev, _ops_prod = seleccion_multiple(
+            _K_PROD, _ops_prod, conservar=True, soltar=_etiq_top)
 
         # ── La fila de cabecera: granularidad + los filtros + fecha ──────
         # 2026-09-04: el MISMO componente de fecha que el Ranking de
