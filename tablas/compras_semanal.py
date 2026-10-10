@@ -281,13 +281,19 @@ gráfico—, también en la fila TOTAL; las barras sin nota, en gris."""
 _COLS_ANCHA = {
     "periodo": ("", 180), "precio": ("Precio prom.", 118),
     "valor": ("Valorizado", 130), "parte": ("% del total", 104),
-    "docs": ("Documentos", 106), "lineas": ("Líneas", 82),
-    "variacion": ("Variación", 104), "cant": ("Cantidad", 104),
+    "docs": ("Documentos", 110), "lineas": ("Líneas", 82),
+    "variacion": ("Variación", 92), "cant": ("Cantidad", 104),
 }
 """Rótulo y ancho de cada columna cuando la tabla ocupa una tarjeta a lo
 ancho (el caso de «Compra por período»). Los anchos son la cuenta de
-siempre: lo que mide el peor dato a 13px, más 8+8 de padding y los ~14 de
-la flecha de ordenar."""
+siempre: lo que mide el peor dato a 13px o el rótulo a 12px, más 8+8 de
+padding y, en el rótulo, los 24 de la flecha de ordenar (medida con una
+columna ordenada; no son ~14).
+
+Re-medidos el 2026-10-10 en la grilla (regla #629): «Documentos» mide 69
+y con la flecha pedía 109 — en 106 se leía «Documen…» al ordenarla; la
+«Variación», 49 + 24 + 16 = 89, y su peor dato («+12345%») ~68, así que
+104 le sobraban. Las fijas de «Compra por período» suman 718."""
 
 _COLS_ESTRECHA = {
     "periodo": ("", 64), "precio": ("Precio", 72),
@@ -880,7 +886,7 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
 
     `familias` son las columnas del desglose, como `(columna, rótulo)` y en
     el orden en que van: las arma el drill con las MISMAS familias que las
-    tarjetas de KPI de la cabecera (las cuatro mayores y «N más»), y viene
+    tarjetas de KPI de la cabecera (las tres mayores y «N más»), y viene
     vacío cuando la vista tiene una sola familia. Van al final, después de
     la variación: primero lo que dice la etiqueta de la barra, después de
     qué está hecha.

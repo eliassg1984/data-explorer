@@ -975,10 +975,15 @@ def _etiqueta_en_la_punta(tramos, textos):
 # de la fila en montos que no se leen. Por día aparecen 4 en promedio y 8 de
 # máximo; por documento, 1,09 — de ahí los dos topes de abajo.
 
-_KPI_FAMILIAS = 4
+_KPI_FAMILIAS = 3
 """Familias con columna propia en la tabla de Resumen; el resto va sumado
 en una. Ver la medición de arriba. (Nació como las tarjetas de la fila de
-KPI de la cabecera, que se fue el 2026-10-01.)"""
+KPI de la cabecera, que se fue el 2026-10-01.)
+
+Eran 4 hasta el 2026-10-10 (regla #629): a 1323px la grilla da 1134 y
+cuatro familias más «N más» (5 × 94) sobre las fijas pedían 1196 — la
+última columna salía cortada, sin barra que avisara. Las tres mayores son
+el 94 % del mes medido arriba."""
 
 _HOVER_FAMILIAS = 5
 """Familias que nombra el hover de una barra; el resto va en «N más».
@@ -1002,10 +1007,15 @@ def _familias_de(dd, n=_KPI_FAMILIAS):
     `n` mayores (`_KPI_FAMILIAS`) y el resto va sumado aparte, con cuántas
     son.
     Las familias en cero no cuentan: una familia con compras anuladas que
-    suman 0 no es una familia de la vista."""
+    suman 0 no es una familia de la vista.
+
+    Si el resto es UNA familia, va con su nombre: «1 más» ocupa la misma
+    columna y no dice cuál es (regla #629)."""
     total = float(dd["valor"].sum())
     s = dd.groupby("fam")["valor"].sum()
     s = s[s != 0].sort_values(ascending=False)
+    if len(s) == n + 1:
+        n += 1
     top = [(f, float(v), (float(v) / total) if total else 0.0)
            for f, v in s.iloc[:n].items()]
     resto = s.iloc[n:]
@@ -2803,19 +2813,20 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
 
             # ── UNA COLUMNA POR FAMILIA (2026-09-20, a pedido) ───────────
             # «Añadamos los datos por familia a la tabla». Salen de
-            # `_familias_de`: las cuatro mayores y el resto sumado. Desde el
+            # `_familias_de`: las tres mayores y el resto sumado. Desde el
             # 2026-10-01 son además el ÚNICO desglose de la vista por
             # familia: la fila de KPI de la cabecera, que las repetía, se
             # quitó a pedido porque esta tabla ya lo dice.
             #
             # Con UNA sola familia en la vista no se desglosa nada: la
             # columna repetiría Valorizado.
-            # Con la columna «Notas de crédito» (regla #628) van DOS familias
-            # menos: a 1323px la grilla da 1136 y sus 118 no entraban — las
-            # fijas suman 726 + 118, y quedan 282 para tres columnas de 94
-            # (las dos mayores y «N más»).
+            # El ANCHO manda cuántas (regla #629): a 1323px la grilla da 1134
+            # y las fijas suman 718, así que entran cuatro columnas de 94
+            # (las tres mayores y «N más»). Con la columna «Notas de
+            # crédito» (regla #628), sus 118 se comen una: 718 + 118 + 3 × 94
+            # = 1118 (las dos mayores y «N más»).
             _, _top_f, _resto_f = _familias_de(
-                dd, n=_KPI_FAMILIAS - (2 if _nc_tot > _NC_MINIMO else 0))
+                dd, n=_KPI_FAMILIAS - (1 if _nc_tot > _NC_MINIMO else 0))
             _cols_fam, _dat_fam, _tot_fam = [], {}, {}
             if len(_top_f) + _resto_f[0] > 1:
                 _por_fam = (dd.groupby(["clave", "fam"])["valor"].sum()

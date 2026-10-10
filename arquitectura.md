@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-628 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+629 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (204)
 
@@ -449,7 +449,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 
-**AgGrid y tablas** (90)
+**AgGrid y tablas** (91)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -541,6 +541,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 - **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
 - **#628** — «Compras por período» dice en su TABLA cuánto restaron las notas de crédito — la diferencia…
+- **#629** — En la grilla AgGrid «Resumen Total» de «Compras por período» van TRES familias más «N más»,…
 
 **Streamlit** (162)
 
@@ -49301,7 +49302,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        y el rótulo 87, más 16 de padding), y con ella van DOS columnas de
        familia menos (las dos mayores y «N más»): a 1323 px la grilla da
        1136 y las fijas suman 726. Sin notas quedan las de siempre — que
-       con cinco familias ya se pasaban 60 px antes de esto (pendiente).
+       con cinco familias ya se pasaban 60 px antes de esto (pendiente;
+       resuelto en la #629).
 
      **La primera versión del mismo día se descartó**, a pedido: un
      recuadro ámbar en la línea de Documento, un tramo RAYADO encima de la
@@ -49322,6 +49324,55 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-10.)
 
+629. **En la grilla AgGrid «Resumen Total» de «Compras por período» van
+     TRES familias más «N más», no cuatro: con el rótulo entero y la flecha de ordenar, las
+     fijas no dejaban sitio.** 2026-10-10. A 1323×619, con datos reales y
+     sin notas de crédito, la grilla da 1134 px (1149 del iframe menos los
+     15 del scroll vertical) y las columnas pedían 1196: las fijas 726
+     (Período 180, Valorizado sin IGV 150, % del total 104, Documentos
+     106, Líneas 82, Variación 104) más cinco de familia de 94 (las cuatro
+     mayores y «N más»). El canal horizontal está escondido a propósito
+     (`tablas/compras_semanal.py::_css`), así que la última familia salía
+     cortada, sin nada que avisara que había más.
+
+     - **Achicar anchos no alcanzaba, y se midió antes de elegir.** Lo que
+       pide una columna es lo MAYOR entre su peor dato (13px) y su rótulo
+       (12px semibold) más la flecha de ordenar, que mide **24 px** con la
+       columna ordenada —no los ~14 que decía `_COLS_ANCHA`—, más 8+8 de
+       padding. Con esa cuenta, recortando todo lo recortable sin acortar
+       ningún rótulo se liberaban ~42 px de los 62 que faltaban. Acortar
+       rótulos («Docs.», «%») es el juego de media tarjeta
+       (`_COLS_ESTRECHA`), no el de una tarjeta a lo ancho.
+     - **Con tres, sobra**: 718 + 4 × 94 = 1094 (Período se estira a 220, `flex`
+       de AG Grid).
+       Las tres mayores son el 94 % del mes medido en `_KPI_FAMILIAS`.
+       Con «Notas de crédito» (#628) va UNA menos y no dos: 718 + 118 +
+       3 × 94 = 1118.
+     - **Si el resto es UNA familia, va con su nombre**
+       (`semanal._familias_de`): «1 más» ocupaba la misma columna sin
+       decir cuál era.
+     - **De paso, dos anchos re-medidos**: «Documentos» (69 de rótulo)
+       pedía 109 con la flecha y medía 106 — ordenada se leía «Documen…»
+       desde que nació —, pasa a 110; «Variación» (49 de rótulo, peor dato
+       «+12345%» ~68) baja de 104 a 92. Las fijas quedan en 718.
+     - **Trampa al medir en el panel del navegador integrado**: con el
+       tamaño emulado, AG Grid dejaba el canal vertical de 15 px aunque
+       las filas cupieran, y `sizeColumnsToFit` estiraba «Período» como
+       si no estuviera — parecía que la última columna seguía cortada. En
+       Playwright con scrollbars clásicos
+       (`ignore_default_args=["--hide-scrollbars"]`, que es como los
+       dibuja el Chrome de Windows del usuario; sin eso el headless los
+       superpone y no ocupan ancho) el canal sale en 0 y la grilla entra
+       exacta (1149 de 1149). Para medir anchos de una grilla, así.
+
+     Verificado con datos reales a 1323×619, scrollbars clásicos: «Últimos 30
+     días» con nota (Alimentos, Vinos, «3 más»: 1134 de 1134), «Este mes»
+     por semana sin nota (2 filas, sin scroll: 1149 de 1149) y por día sin
+     nota (6 filas, con scroll: 1134 de 1134, las cuatro columnas de familia
+     enteras).
+
+     (2026-10-10.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49334,7 +49385,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#628**; la próxima toma el número siguiente.
+> última regla es la **#629**; la próxima toma el número siguiente.
 
 >
 
