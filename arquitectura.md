@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-627 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+628 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (204)
 
@@ -332,7 +332,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
 - **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
 
-**Plotly y figuras** (114)
+**Plotly y figuras** (115)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -448,6 +448,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#620** — La barra de «Compras por período» se parte por lo que se elige —subfamilia, proveedor o…
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
+- **#628** — «Compras por período» dice cuánto restaron las notas de crédito, y cuánto daría sin restarlas…
 
 **AgGrid y tablas** (89)
 
@@ -49255,6 +49256,61 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-10.)
 
+628. **«Compras por período» dice cuánto restaron las notas de crédito, y
+     cuánto daría sin restarlas — lo que suma el Resumen de Ingresos del
+     Almacén, que NUNCA las resta.** 2026-10-10, a pedido: el usuario puso
+     el Resumen de Ingresos de setiembre (ALIMENTOS, por emisión) al lado
+     de la tarjeta y no cuadraban — S/ 123,363.65 contra 119,805.43. La
+     diferencia, al céntimo, era la nota de Lara Angulo (#603), y nada en
+     la pantalla lo decía; el texto de la línea de Documento afirmaba
+     además que «Todos» era «lo que suman los reportes de ingresos del
+     Almacén», cierto sólo hasta la #603.
+
+     - **El Resumen de Ingresos no las resta nunca, ni después**: su SQL
+       vive escrito dentro de `Almacen.exe` (no es un SP), lee sólo
+       `MDOCUMENTO` + `DDOCUMENTO` y no nombra `MNOTACREDITO`; su opción
+       Ingreso/Emisión/Proceso sólo cambia la columna del `Between`. Y
+       procesar una nota NO toca la factura: sigue en estado 02 con sus
+       líneas enteras, y sólo su `nSaldo` (cuentas por pagar) queda en 0.
+       Verificado en la base con las 11 notas de 2026.
+     - **Qué se restó sale de `definicion_compra.lineas_restadas`**: las
+       líneas que tocó una nota, con las columnas de compras y la parte
+       restada en lugar de los montos — también las devueltas ENTERAS, que
+       `data.cargar` borra y por eso no están en ningún `d`.
+       `aplicar_notas` + esto = lo facturado (lo vigila
+       `test_definicion_compra.py`). La lee `data.notas_restadas_compras`
+       (en memoria, con los dos sellos); el dispatcher le pone los chips y
+       el rango de la tarjeta, y la tarjeta, sus filtros: los mismos de
+       `dd`, en una sola función (`_filtrar_vista`), para que la cifra sea
+       de lo MISMO que se muestra.
+     - **Tres sitios, en ámbar, sin un píxel de más**: la nota de la línea
+       de Documento («1 nota de crédito restada: −S/ 3,558.22 · sin
+       restarla: S/ 123,363.65…», con cada nota en el `title`); un tramo
+       RAYADO encima de la barra de la factura —no es compra, es lo que el
+       Almacén suma—, con su detalle en el hover; y en «Resumen Total» la
+       fila de esa barra en ámbar con «NC −S/ …» al lado del período, y la
+       suma en la fila TOTAL. En la celda y no en una columna (una fila de
+       cinco, #239) ni en un renglón de abajo (dos altos de fila, #462).
+     - **Una barra de alto cero dibuja su borde**: el tramo rayado con
+       `marker.line.width` fijo dejaba una raya ámbar encima de TODAS las
+       barras. El ancho va por barra (`_estilo_nc`).
+     - **La etiqueta de la barra sube al tope del tramo**: en la capa
+       transparente que ya llevaba el hover (con «Partir por») o en una
+       capa propia sin hover (en «Por documento», donde la barra no se
+       parte): en la barra quedaría tapada por el tramo.
+     - **Lo que no tiene barra lo dice sólo el aviso**: en «Por documento»
+       la factura anulada entera no es una barra, así que su tramo no se
+       dibuja; el aviso y la fila TOTAL suman todas.
+
+     Verificado con datos reales a 1323×619: ALIMENTOS, setiembre, da S/
+     123,363.65 sin IGV y S/ 140,021.82 con IGV —las dos cifras del PDF
+     del Almacén—, el tramo cae en la semana 21–27 set (la factura es del
+     23/09) y junio muestra sus dos notas parciales sobre sus facturas. La
+     nota mide 506 px y entra en su renglón de 26 px; más angosta se corta
+     con «…».
+
+     (2026-10-10.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49267,7 +49323,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#627**; la próxima toma el número siguiente.
+> última regla es la **#628**; la próxima toma el número siguiente.
 
 >
 

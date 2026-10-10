@@ -998,6 +998,14 @@ sirve las compras como antes.
 - **Tocar la regla es subir `definicion_compra.VERSION`** y correr
   `python herramientas/cuadrar_compras.py`, que cuadra proveedor por
   proveedor contra el Almacén.
+- **El Resumen de Ingresos del Almacén NO las resta nunca**: su SQL vive
+  escrito en `Almacen.exe`, no mira `MNOTACREDITO`, y procesar una nota
+  sólo deja la factura con saldo 0. En el mes de una nota, la app y ese
+  reporte no cuadran, y «Compras por período» lo dice en ámbar —la nota de
+  la línea de Documento, un tramo rayado sobre la barra de la factura y
+  una marca en su fila— con `definicion_compra.lineas_restadas`, que trae
+  también las líneas devueltas ENTERAS (las que `data.cargar` borra).
+  Regla #628.
 
 Los otros reportes de compras del Almacén y qué cuenta cada uno (los tres de
 «Ingresos» = `compras.parquet` al céntimo; los Rankings, sólo Mercadería y

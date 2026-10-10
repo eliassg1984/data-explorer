@@ -91,8 +91,8 @@ cubren lo dice el caption de la fila de modo. Misma regla #476.
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, ERROR, EXITO, GRIS_TEXTO, LAVANDA_CHIP,
-    LAVANDA_FONDO,
+    ACENTO, ACENTO_TEXTO_OSCURO, ADVERTENCIA, ADVERTENCIA_FONDO,
+    ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_TEXTO, LAVANDA_CHIP, LAVANDA_FONDO,
 )
 from tablas._config import _parchar_iconos
 from tablas._css import _css_grid
@@ -259,6 +259,55 @@ le ganaría al `getRowStyle` del TOTAL y esa celda saldría de otro color que
 sus vecinas (el total no lleva variación — sumar porcentajes de períodos
 distintos no mide nada)."""
 
+_CLASE_NC = "sem-nc"
+
+REGLAS_FILA_NC = {
+    _CLASE_SEL: REGLAS_FILA[_CLASE_SEL],
+    _CLASE_NC: JsCode(
+        "function(p){ return !!(p.data && !(p.node && p.node.rowPinned)"
+        " && p.data.__nc > 0.005); }"),
+}
+"""Las de `REGLAS_FILA` más la fila de una barra con nota de crédito restada
+(regla #628): fondo ámbar y raya a la izquierda. La fila TOTAL fija no la
+lleva —tiene su propio look de cierre—, pero sí la marca de su celda."""
+
+_RENDER_PERIODO = JsCode("""
+class PeriodoConNota {
+    init(p) {
+        this.eGui = document.createElement('span');
+        var t = document.createElement('span');
+        t.textContent = p.value == null ? '' : String(p.value);
+        this.eGui.appendChild(t);
+        var nc = p.data ? p.data.__nc : null;
+        if (typeof nc === 'number' && nc > 0.005) {
+            var m = document.createElement('span');
+            m.className = 'sem-nc-marca';
+            m.textContent = 'NC \\u2212S/ ' + nc.toLocaleString('es-PE',
+                {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            this.eGui.appendChild(m);
+        }
+    }
+    getGui() { return this.eGui; }
+    refresh() { return false; }
+}
+""")
+"""La celda del período con, si la barra tiene una nota de crédito restada,
+«NC −S/ 3,558.22» en ámbar al lado (regla #628). En la MISMA celda y no en
+una columna propia: en un mes la nota toca una fila de cinco, y una columna
+de «—» con un dato es la columna que la regla #239 manda a chip. Y en el
+mismo renglón, no en uno de abajo: una fila más alta que sus vecinas parte
+la tabla en dos (regla #462). Componente `init`/`getGui` por la regla #25."""
+
+_TOOLTIP_PERIODO = JsCode(
+    "function(p){ var d = p.data || {}; var s = d.periodo == null ? ''"
+    " : String(d.periodo);"
+    " if (typeof d.__nc === 'number' && d.__nc > 0.005) {"
+    "   s += ' \\u00b7 nota de cr\\u00e9dito restada: \\u2212S/ '"
+    "     + d.__nc.toLocaleString('es-PE', {minimumFractionDigits: 2,"
+    "       maximumFractionDigits: 2})"
+    "     + '. El Resumen de Ingresos del Almac\\u00e9n la suma.'; }"
+    " return s; }")
+
 _COLS_ANCHA = {
     "periodo": ("", 180), "precio": ("Precio prom.", 118),
     "valor": ("Valorizado", 130), "parte": ("% del total", 104),
@@ -418,6 +467,17 @@ def _css(estrecha=False):
     # la selección de AG Grid, que dura lo que tarda la corrida en estrenar
     # la grilla con la primera. La raya de 3px es la de la tabla de «Vs año
     # pasado» (`.ag-row-selected` de `tablas/compras_vs_ano_pasado.py`).
+    # La fila de una barra con nota de crédito restada (regla #628), ANTES
+    # que la marcada: si es las dos cosas, gana la lavanda del foco, y la
+    # marca ámbar de su celda sigue diciendo lo de la nota.
+    css[f".ag-row.{_CLASE_NC}"] = {
+        "background-color": f"{ADVERTENCIA_FONDO} !important",
+        "box-shadow": f"inset 3px 0 0 0 {ADVERTENCIA} !important",
+    }
+    css[".sem-nc-marca"] = {
+        "margin-left": "8px", "font-size": "11.5px", "font-weight": "600",
+        "color": ADVERTENCIA_TEXTO, "white-space": "nowrap",
+    }
     _marca = {
         "background-color": f"{LAVANDA_FONDO} !important",
         "box-shadow": f"inset 3px 0 0 0 {ACENTO} !important",
@@ -895,8 +955,15 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
 
     # La única que se estira: el resto mide lo que dice su peor dato (ver
     # `_COLS_ANCHA` y `_COLS_ESTRECHA`, que traen la cuenta).
-    _si("periodo", header_name=rotulo_periodo, minWidth=_A["periodo"][1],
-        tooltipField="periodo")
+    # Con `__nc` (la nota de crédito restada en la barra, regla #628) la
+    # celda la escribe al lado del nombre, en ámbar.
+    _con_nc = "__nc" in _cols
+    if _con_nc:
+        _si("periodo", header_name=rotulo_periodo, minWidth=_A["periodo"][1],
+            cellRenderer=_RENDER_PERIODO, tooltipValueGetter=_TOOLTIP_PERIODO)
+    else:
+        _si("periodo", header_name=rotulo_periodo, minWidth=_A["periodo"][1],
+            tooltipField="periodo")
     # El precio es un PROMEDIO, así que no se suma ni se promedia de nuevo:
     # la fila TOTAL lo deja en «—» a propósito (ver `_JS_SOLES`). Un
     # promedio de promedios no mide nada — la regla #199 es la misma
@@ -954,13 +1021,14 @@ def renderizar_periodos(tp, altura, key, rotulo_periodo="Período",
                             headerTooltip=f"{_rotulo} · valorizado de compra "
                                           "de esa familia en cada barra",
                             width=94, minWidth=94, suppressSizeToFit=True)
-    for oculta in ("__vtxt", "__nota", "__pnota", "__sel"):
+    for oculta in ("__vtxt", "__nota", "__pnota", "__sel", "__nc"):
         _si(oculta, hide=True)
     gb.configure_grid_options(**_con_total(dict(
         rowHeight=ALTO_FILA, headerHeight=32, tooltipShowDelay=200,
         # Sin selección: un clic no hace nada, pero AG Grid igual le dibuja
         # el recuadro de foco a la celda (lo mismo que en las hermanas).
-        suppressCellFocus=True, rowClassRules=REGLAS_FILA,
+        suppressCellFocus=True,
+        rowClassRules=REGLAS_FILA_NC if _con_nc else REGLAS_FILA,
         onGridReady=_AL_MONTAR, onRowDataUpdated=_AL_CAMBIAR_FILAS), total))
     grid_options = gb.build()
     _parchar_iconos(grid_options)  # arquitectura.md #159

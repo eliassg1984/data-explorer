@@ -1111,6 +1111,27 @@ CSS = """        <style>
             color: var(--text-muted);
             white-space: nowrap;
             margin-left: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Con notas de crédito en la vista (regla #628): la nota dice cuánto
+           se restó y cuánto da sin restar, en el ámbar del tramo rayado de
+           la barra y de la marca de su fila. Se corta con «…» antes que
+           partir la línea en dos —la paga la figura, con un alto fijo—, y
+           el detalle de cada nota va en su `title`. */
+        .cp-sem-doc-nota-nc {
+            color: var(--warning-text);
+            background: var(--warning-bg);
+            border: 1px solid var(--warning-border);
+            border-radius: 6px;
+            padding: 2px 8px;
+        }
+        .st-key-cp_sem_doc_nota {
+            min-width: 0 !important;
+        }
+        .st-key-cp_sem_doc_fila > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_doc_nota) {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
         }
         .st-key-compras_sem_documento [data-testid="stButtonGroup"] button,
         .st-key-compras_sem_montos [data-testid="stButtonGroup"] button {

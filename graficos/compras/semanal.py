@@ -88,8 +88,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import cortes
+import definicion_compra
 from tema import (
-    ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
+    ADVERTENCIA, ADVERTENCIA_FONDO, ADVERTENCIA_TEXTO, ERROR, GRIS_BORDE,
+    GRIS_TEXTO, GRIS_TEXTO_SUAVE,
     SERIE_PRINCIPAL, SERIE_TRAMOS, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
@@ -734,6 +736,112 @@ def _guias_por_clave(dd, ord_claves, igv=False, solo_guias=False):
         salida.append(f"<br><span style='color:{ADVERTENCIA_TEXTO}'>{txt}"
                       "</span>")
     return salida
+
+
+# ── LAS NOTAS DE CRÉDITO DE LA VISTA (regla #628) ─────────────────────────
+_NOTA_DOC = ('<div class="cp-sem-doc-nota">Sólo esta tarjeta · «Todos» es lo '
+             'que suman los reportes de ingresos del Almacén, menos las notas '
+             'de crédito</div>')
+"""La nota de la línea de Documento cuando en la vista no hubo notas de
+crédito. Hasta el 2026-10-10 decía «lo que suman los reportes de ingresos
+del Almacén» a secas, que dejó de ser cierto el 2026-10-04 (regla #603): el
+Resumen de Ingresos no resta las notas, y la app sí."""
+
+_NC_MINIMO = 0.005
+"""Desde cuánto lo restado se dice: medio céntimo. Una nota que no toca lo
+que se muestra suma 0, y un aviso de «−S/ 0.00» sería ruido."""
+
+def _estilo_nc(nc_eje):
+    """El tramo de la nota de crédito encima de su barra: rayado y en ámbar,
+    como la nota de la línea de Documento y la marca de su fila. Rayado y no
+    liso porque NO es compra: es lo que el Almacén suma y la tarjeta no.
+
+    El borde va POR BARRA, sólo donde hay nota: una barra de alto cero
+    igual dibuja su borde, y salía una raya ámbar encima de todas (medido
+    en la primera prueba)."""
+    return dict(marker=dict(
+        color=ADVERTENCIA_FONDO,
+        pattern=dict(shape="/", fgcolor=ADVERTENCIA, size=6, solidity=0.35),
+        line=dict(color=ADVERTENCIA,
+                  width=[1 if _v > _NC_MINIMO else 0 for _v in nc_eje])))
+
+
+def _lineas_nc(d_nc, col_fecha, col_prod, col_prov, col_docu, col_fam,
+               col_subfam, col_neto, col_igv, col_tipo_doc, documento):
+    """Las líneas que restó una nota de crédito (`d_nc`, con las columnas de
+    compras), con los nombres de `dd` para que les apliquen los mismos
+    filtros: `fecha`, `prod`, `prov`, `fam`, `sub`, `compra` (la misma
+    clave que en `dd`), `neto` e `igv` (lo restado) y `nota`. Vacío si no
+    hay notas o falta alguna columna — el demo, sin parquet de notas."""
+    cols = ("fecha", "prod", "prov", "docn", "fam", "sub", "neto", "igv",
+            "nota", "compra")
+    if (d_nc is None or d_nc.empty or not col_fecha or not col_prod
+            or not col_neto or any(c not in d_nc.columns
+                                   for c in (col_fecha, col_prod, col_neto,
+                                             definicion_compra.COL_NOTA))):
+        return pd.DataFrame(columns=cols)
+    d_nc = filtrar_documento(d_nc, col_tipo_doc, documento)
+
+    def _txt(col):
+        return (d_nc[col].astype(str) if col and col in d_nc.columns
+                else pd.Series("", index=d_nc.index))
+
+    def _num(col):
+        return (pd.to_numeric(d_nc[col], errors="coerce").fillna(0.0)
+                if col and col in d_nc.columns
+                else pd.Series(0.0, index=d_nc.index))
+
+    n = pd.DataFrame({
+        "fecha": pd.to_datetime(d_nc[col_fecha], errors="coerce"),
+        "prod": _txt(col_prod), "prov": _txt(col_prov), "docn": _txt(col_docu),
+        "fam": _txt(col_fam), "sub": _txt(col_subfam),
+        "neto": _num(col_neto), "igv": _num(col_igv),
+        "nota": d_nc[definicion_compra.COL_NOTA].astype(str),
+    }).dropna(subset=["fecha"])
+    # La clave de COMPRA de `dd` (fecha·proveedor·documento), para que en
+    # «Por documento» el tramo caiga sobre la barra de SU factura.
+    n["compra"] = (n["fecha"].dt.strftime("%Y-%m-%d") + "·" + n["prov"]
+                   + "·" + n["docn"])
+    return n[list(cols)]
+
+
+def _renglones_nc(ncd, por=("clave",)):
+    """Qué notas de crédito restaron en `ncd` y cuánto, agrupado por `por`:
+    una Series de LISTAS de renglones (uno por nota, con su proveedor y la
+    factura que corrige), de la mayor a la menor. Un solo `groupby`, sin
+    recorrer grupos (regla #537)."""
+    por = list(por)
+    t = (ncd.groupby(por + ["nota", "prov", "docn"], sort=False)
+            .agg(valor=("valor", "sum"), fecha=("fecha", "min"))
+            .reset_index().sort_values("valor", ascending=False))
+    doc = documento_legible(t["docn"])
+    t["txt"] = (t["nota"] + " · " + t["prov"].map(nombre_propio) + " · sobre "
+                + doc.where(doc.astype(bool), t["docn"]) + " del "
+                + t["fecha"].dt.strftime("%d/%m/%Y") + ": −S/ "
+                + t["valor"].map("{:,.2f}".format))
+    return t.groupby(por, sort=False).agg(
+        txt=("txt", list), valor=("valor", "sum"))
+
+
+def _hover_nc(ncd):
+    """`{clave: renglones del hover}` de la nota de crédito de cada barra,
+    en el ámbar de los avisos de la tarjeta."""
+    if ncd.empty:
+        return {}
+    r = _renglones_nc(ncd)
+    return {
+        _c: (f"<br><span style='color:{ADVERTENCIA_TEXTO}'>"
+             f"<b>Nota de crédito restada: −S/ {_v:,.2f}</b>"
+             + "".join(f"<br>{escape(_t)}" for _t in _txt)
+             + "<br>El Resumen de Ingresos del Almacén la suma</span>")
+        for _c, _txt, _v in zip(r.index, r["txt"], r["valor"])}
+
+
+def _titulo_nc(ncd):
+    """El `title` de la nota de la línea de Documento: las notas de toda la
+    vista, en texto plano."""
+    r = _renglones_nc(ncd.assign(_todo=0), por=("_todo",))
+    return "Notas de crédito restadas:\n" + "\n".join(r["txt"].iloc[0])
 
 
 def _es_resto(nombre):
@@ -1476,8 +1584,13 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                            col_prov, col_docu, col_valor,
                            col_fam=None, d_full=None, col_subfam=None,
                            col_valor_neto=None, col_igv=None,
-                           col_tipo_doc=None, col_moneda=None):
+                           col_tipo_doc=None, col_moneda=None, d_nc=None):
     """Compra por período (día/semana/mes/año o por documento) + detalle.
+
+    `d_nc` (regla #628) es lo que las notas de crédito restaron, con las
+    columnas de `d` (`data.notas_restadas_compras`, ya con los chips y el
+    rango de esta tarjeta). Con él la tarjeta dice cuánto restó en lo que
+    muestra: en la línea de Documento, encima de su barra y en su fila.
 
     `col_valor` entra como NOMBRE de columna y la serie numérica se arma
     acá: el dispatcher ya tenía una (`_valor`), pero pasar el Series
@@ -1788,10 +1901,13 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             st.segmented_control(
                 "Montos", list(MONTOS_OPCIONES), required=True,
                 key=_K_MONTOS, label_visibility="collapsed")
-            st.markdown(
-                '<div class="cp-sem-doc-nota">Sólo esta tarjeta · «Todos» es '
-                'lo que suman los reportes de ingresos del Almacén</div>',
-                unsafe_allow_html=True)
+            # La nota se RESERVA y se escribe abajo, cuando ya se sabe si en
+            # lo que muestra la tarjeta hubo notas de crédito (regla #628):
+            # el texto de siempre, o lo restado en ámbar. Se escribe ya el de
+            # siempre por las salidas tempranas (sin compras que mostrar).
+            with st.container(key="cp_sem_doc_nota"):
+                _slot_nota = st.empty()
+            _slot_nota.markdown(_NOTA_DOC, unsafe_allow_html=True)
         gran = _box.get("gran") or _GRAN_DEFAULT
         # Listas: vacía es «todos» (regla #623).
         fam_sel = list(_box.get("fam") or [])
@@ -1868,18 +1984,33 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # Los filtros de la tarjeta, en el orden en que se leen.
         # Dentro de un filtro, la unión de lo elegido; entre filtros, la
         # intersección. Un «Top N» vale por sus N productos.
-        if _hay_fam and fam_sel:
-            dd = dd[dd["fam"].isin(fam_sel)]
-        if _hay_sub and sub_sel:
-            dd = dd[dd["sub"].isin(sub_sel)]
-        if _hay_prov and prov_sel:
-            dd = dd[dd["prov"].isin(prov_sel)]
         if prod_sel:
             _n_top = max((_etiq_top[_p] for _p in prod_sel
                           if _p in _etiq_top), default=0)
             _prods_sel = set(_prods[:_n_top]) | {
                 _p for _p in prod_sel if _p not in _etiq_top}
-            dd = dd[dd["prod"].isin(_prods_sel)]
+
+        def _filtrar_vista(df_):
+            """Los cuatro filtros de la fila, sobre `dd` y sobre las notas de
+            crédito (regla #628): lo restado tiene que ser de lo MISMO que
+            se muestra, o el aviso diría una cifra de otra vista."""
+            if _hay_fam and fam_sel:
+                df_ = df_[df_["fam"].isin(fam_sel)]
+            if _hay_sub and sub_sel:
+                df_ = df_[df_["sub"].isin(sub_sel)]
+            if _hay_prov and prov_sel:
+                df_ = df_[df_["prov"].isin(prov_sel)]
+            if prod_sel:
+                df_ = df_[df_["prod"].isin(_prods_sel)]
+            return df_
+
+        dd = _filtrar_vista(dd)
+        # Lo que las notas de crédito restaron, con los mismos filtros. Las
+        # líneas devueltas enteras no están en `dd` (`data.cargar` las
+        # borra) y sí acá: es lo que el Almacén cuenta y la tarjeta no.
+        ncd = _filtrar_vista(_lineas_nc(
+            d_nc, col_fecha, col_prod, col_prov, col_docu, col_fam,
+            col_subfam, col_valor_neto, col_igv, col_tipo_doc, _documento))
 
         # ── «PARTIR POR» Y QUÉ SE RESALTA, LEÍDOS DE `session_state` ─────
         # Como el modo: los dos selectores se dibujan en el renglón del
@@ -1982,6 +2113,39 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # Cuántos períodos hay decide cuánto entra en la etiqueta de cada
         # barra (`_plan_etiquetas`) y cada cuánto se rotula el eje.
         _n_per = len(_ord_claves)
+
+        # ── LAS NOTAS DE CRÉDITO, A LA VISTA (regla #628) ────────────────
+        # El Resumen de Ingresos del Almacén no las resta NUNCA (su SQL no
+        # mira `MNOTACREDITO`, y procesar una nota sólo le pone saldo 0 a
+        # la factura), así que en el mes de una nota los dos no cuadran.
+        # Se dice en tres sitios, en ámbar: la nota de la línea de
+        # Documento (cuánto y cuánto daría sin restar), un tramo rayado
+        # encima de la barra de la factura y una marca en su fila. Medido
+        # como la barra: con IGV si la tarjeta mide con IGV.
+        _nc_de, _nc_hov, _nc_tot = {}, {}, 0.0
+        if not ncd.empty:
+            ncd = ncd.assign(valor=ncd["neto"] + (ncd["igv"] if _igv_vista
+                                                  else 0.0))
+            ncd["clave"] = (ncd["compra"] if gran == "Por documento"
+                            else _periodo_serie(ncd["fecha"], gran))
+            _nc_tot = float(ncd["valor"].sum())
+            _nc_de = ncd.groupby("clave")["valor"].sum().to_dict()
+            _nc_hov = _hover_nc(ncd)
+        if _nc_tot > _NC_MINIMO:
+            _sin_restar = float(dd["valor"].sum()) + _nc_tot
+            _n_nc = ncd["nota"].nunique()
+            _slot_nota.markdown(
+                f'<div class="cp-sem-doc-nota cp-sem-doc-nota-nc" '
+                f'title="{escape(_titulo_nc(ncd), quote=True)}">'
+                f'{_n_nc} nota{"" if _n_nc == 1 else "s"} de crédito '
+                f'restada{"" if _n_nc == 1 else "s"}: '
+                f'<b>−S/ {_nc_tot:,.2f}</b> · sin restar{"la" if _n_nc == 1 else "las"}: '
+                f'S/ {_sin_restar:,.2f}, lo del Resumen de Ingresos del '
+                'Almacén</div>', unsafe_allow_html=True)
+        # Una barra que no está en el eje (la factura anulada era la única
+        # compra de su período, o de su documento) no tiene dónde dibujarse:
+        # lo dice el aviso de arriba, que suma todas.
+        _nc_eje = [float(_nc_de.get(_c, 0.0)) for _c in _ord_claves]
 
         # Con una sola barra, "evolución" no se ve —el
         # cuadro no miente, pero tampoco explica por qué
@@ -2322,6 +2486,11 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 fig.add_bar(x=_xs, y=_y, base=_base, marker=dict(color=_color),
                             hoverinfo="skip", showlegend=False)
             _colores_traza = [_c for _y, _b, _c in _visibles]
+            # La nota de crédito, encima de la barra (regla #628). Sin hover:
+            # lo lleva la capa transparente, que sube hasta su tope.
+            if any(_nc_eje):
+                fig.add_bar(x=_xs, y=_nc_eje, base=_tot, hoverinfo="skip",
+                            showlegend=False, **_estilo_nc(_nc_eje))
 
             # El hover: el período, el total (y su neto + IGV), la
             # variación, TODAS las partes con la resaltada en negrita, lo
@@ -2338,11 +2507,13 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                             for _c, _n, _i in zip(_cab_tot, _ni["neto"],
                                                   _ni["igv"])]
             _hov_partes = _hover_partes(_partes, _tot, _tit_partes, _k_res)
-            _extra = [_extra_hov.get(_c, "") for _c in _ord_claves]
+            _extra = [_extra_hov.get(_c, "") + _nc_hov.get(_c, "")
+                      for _c in _ord_claves]
             _guias = _guias_por_clave(dd, _ord_claves, _igv_vista,
                                       _documento == DOC_GUIAS)
             fig.add_bar(
-                x=_xs, y=_tot, width=1.0, showlegend=False,
+                x=_xs, y=[_t + _n for _t, _n in zip(_tot, _nc_eje)],
+                width=1.0, showlegend=False,
                 marker=dict(color="rgba(0,0,0,0)"),
                 customdata=list(zip(_hov, _cab_tot, _var_hov, _hov_partes,
                                     _extra, _guias)),
@@ -2355,22 +2526,45 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 fig.data[-1].update(text=_textos, **_estilo_etq)
             fig.update_layout(barmode="overlay")
         else:
+            g["nc_hov"] = g["clave"].map(_nc_hov).fillna("")
             fig.add_bar(
                 x=g["ix"], y=g["valor"], name="Valor total",
                 marker=dict(color=SERIE_PRINCIPAL),
-                customdata=g[["hov", "cant", "fam_hov"]].to_numpy(),
+                customdata=g[["hov", "cant", "fam_hov", "nc_hov"]].to_numpy(),
                 hovertemplate=("%{customdata[0]}<br>Valor: S/ %{y:,.2f}"
                                "<br>Cantidad: %{customdata[1]:,.1f}"
-                               "%{customdata[2]}"
+                               "%{customdata[2]}%{customdata[3]}"
                                "<extra></extra>"),
             )
             # ── El total, escrito encima de cada barra (#440 y #454) ────
             # Por clave y no por posición: la traza va en el orden de `g`, y
             # `_textos` en el del eje.
-            if _plan_etq:
+            if _plan_etq and not any(_nc_eje):
                 _txt_de = dict(zip(_ord_claves, _textos))
                 fig.data[0].update(text=[_txt_de.get(_c) for _c in g["clave"]],
                                    **_estilo_etq)
+            elif any(_nc_eje):
+                # La nota de crédito, encima de la barra (regla #628), con su
+                # propio hover: el de la barra no llega hasta ese tramo. Y la
+                # etiqueta pasa a una capa transparente que sube hasta el tope
+                # de los dos: en la barra quedaría tapada por el tramo.
+                _xs = list(range(_n_per))
+                _de_g_hov = dict(zip(g["clave"], g["hov"]))
+                _tot_eje = g.set_index("clave")["valor"].reindex(
+                    _ord_claves).fillna(0.0).tolist()
+                fig.add_bar(
+                    x=_xs, y=_nc_eje, base=_tot_eje, showlegend=False,
+                    customdata=[[_de_g_hov.get(_c, ""), _nc_hov.get(_c, "")]
+                                for _c in _ord_claves],
+                    hovertemplate=("%{customdata[0]}%{customdata[1]}"
+                                   "<extra></extra>"),
+                    **_estilo_nc(_nc_eje))
+                if _plan_etq:
+                    fig.add_bar(
+                        x=_xs, y=[_t + _n for _t, _n in zip(_tot_eje, _nc_eje)],
+                        marker=dict(color="rgba(0,0,0,0)"), hoverinfo="skip",
+                        showlegend=False, text=_textos, **_estilo_etq)
+                fig.update_layout(barmode="overlay")
 
         # ── EL FOCO SE MARCA A MANO (regla #399) ────────────────────────
         # Con la key del foco, en la corrida del clic la barra quedaba
@@ -2415,7 +2609,12 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
 
         _compras_layout(fig, alto=_alto_fig)
         if _plan_etq:
-            _rng_y = _techo_etiquetas(float(g["valor"].max()),
+            # El techo cuenta el tramo de la nota de crédito: la etiqueta va
+            # encima de él (regla #628).
+            _rng_y = _techo_etiquetas(float(max(
+                                          (_v + _nc_de.get(_c, 0.0) for _c, _v
+                                           in zip(g["clave"], g["valor"])),
+                                          default=0.0)),
                                       float(g["valor"].min()),
                                       _alto_fig, _alto_etq)
             if _rng_y:
@@ -2679,6 +2878,9 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 **_dat_fam,
                 "__nota": _notas,
                 "__sel": [_c == _focus for _c in _ord_claves],
+                # La nota de crédito restada en la barra (regla #628): la
+                # grilla la escribe en ámbar al lado del período.
+                "__nc": _nc_eje,
             })
             # LA FILA TOTAL DICE ADEMÁS DE QUÉ HABLA LA TABLA: cuántas
             # filas, con qué grano están agrupadas y qué rango cubren
@@ -2701,6 +2903,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                 # no mide nada, y el total del rango no tiene contra qué
                 # compararse acá.
                 "variacion": "", "__vtxt": "", "__nota": "", "__sel": False,
+                # TODAS las de la vista, también las que no tienen barra.
+                "__nc": _nc_tot if _nc_tot > _NC_MINIMO else 0.0,
                 **_tot_fam,
             }
             # La key NO lleva el foco: la fila marcada la pone

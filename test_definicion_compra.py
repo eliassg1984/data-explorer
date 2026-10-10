@@ -174,6 +174,19 @@ igual(float(compras[dc.VALOR].sum() - out[dc.VALOR].sum()),
 igual(float(out[dc.COL_VALOR_NC].sum()), 379.0 + 10.0 + 125.0 + 30.0,
       "VALOR_NC suma lo restado a las líneas que QUEDAN")
 
+print("\n── lo restado, línea por línea (regla #628) ──")
+_rest = dc.lineas_restadas(compras, notas)
+igual(float(out[dc.VALOR].sum() + _rest[dc.VALOR].sum()),
+      float(compras[dc.VALOR].sum()),
+      "lo que queda más lo restado es lo facturado (lo del Resumen de Ingresos)")
+ok(list(_rest.columns[:len(compras.columns)]) == list(compras.columns)
+   and dc.COL_NOTA in _rest.columns,
+   "con las columnas de compras, más la nota")
+ok(set(_rest[dc.DOCUMENTO]) >= {"F-A"},
+   "también la línea devuelta ENTERA, que aplicar_notas borra")
+ok(_rest[dc.VALOR].gt(0).all(), "sólo las líneas que alguna nota tocó")
+ok(dc.lineas_restadas(compras, None) is None, "sin notas: None")
+
 print("\n── sin notas no cambia nada ──")
 ok(dc.aplicar_notas(compras, None) is compras, "sin parquet de notas: el mismo df")
 ok(dc.aplicar_notas(compras, notas.iloc[0:0]) is compras, "con el parquet vacío: igual")

@@ -31,6 +31,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import data
 from tema import SERIE_PRINCIPAL, TEXTO_PRINCIPAL, BLANCO
 from utils import _norm, fmt_k
 from graficos.base import (
@@ -845,13 +846,26 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # arriba). Los datos que se grafican siguen saliendo de `d`.
             # `col_subfam` (2026-09-19) es del filtro de Subfamilia, que se
             # sumó junto con el de Proveedor (este usa `col_prov`).
+            #
+            # `d_nc` (regla #628): lo que las notas de crédito restaron, con
+            # los mismos chips y el mismo rango que `d`. La tarjeta lo filtra
+            # con sus propios filtros y dice cuánto se restó en lo que
+            # muestra — la diferencia con el Resumen de Ingresos del Almacén.
+            _nc = data.notas_restadas_compras()
+            if _nc is not None and not _nc.empty:
+                if fam_sel and col_fam and col_fam in _nc.columns:
+                    _nc = _nc[_nc[col_fam].astype(str).isin(fam_sel)]
+                if sub_sel and col_subfam and col_subfam in _nc.columns:
+                    _nc = _nc[_nc[col_subfam].astype(str).isin(sub_sel)]
+                _nc = recortar_por_tarjeta(
+                    _nc, col_fecha, CATEGORIA_SEC["compras_sec_semanal"])
             _compras_semanal_drill(_d_sec("compras_sec_semanal"),
                                    col_prod, col_fecha, col_cant,
                                    col_punit, col_prov, col_docu,
                                    col_valor, col_fam=col_fam,
                                    d_full=d_full, col_subfam=col_subfam,
                                    col_igv=col_igv, col_tipo_doc=col_tipo_doc,
-                                   col_moneda=col_moneda)
+                                   col_moneda=col_moneda, d_nc=_nc)
 
     def _dib_tabla():
             # Cierra la página con el detalle: el mismo AgGrid de la vista

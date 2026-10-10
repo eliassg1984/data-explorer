@@ -1283,6 +1283,40 @@ def notas_credito_compras():
         return None
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _notas_restadas_cacheable(archivo, sello, sello_notas="", version=None):
+    """`definicion_compra.lineas_restadas`: lo que cada nota de crédito le
+    restó a cada línea de compra. Si falla, LANZA: no se cachea. Sólo en
+    memoria, como `_compras_netas_cacheable`: son unas decenas de filas
+    sacadas de dos parquets que ya están en el disco."""
+    if not sello_notas:
+        return None
+    compras = _cargar_cacheable(archivo, sello_datos(archivo))
+    notas = _cargar_cacheable(definicion_compra.ARCHIVO_NOTAS,
+                              sello_datos(definicion_compra.ARCHIVO_NOTAS))
+    return definicion_compra.lineas_restadas(compras, notas)
+
+
+def notas_restadas_compras():
+    """Las líneas de compra que tocó una nota de crédito, con la parte
+    restada en lugar de sus montos (`definicion_compra.lineas_restadas`).
+    La lee «Compras por período» para decir cuánto restó en lo que muestra
+    y cuánto daría sin restar, que es lo del Resumen de Ingresos del
+    Almacén (regla #628).
+
+    `None` si no hay notas (o no hay secrets) o si la lectura falla: la
+    tarjeta sigue sin el aviso."""
+    sello_notas = _sello_notas_compras()
+    if not sello_notas:
+        return None
+    try:
+        return _notas_restadas_cacheable(
+            definicion_compra.ARCHIVO, sello_datos(definicion_compra.ARCHIVO),
+            sello_notas, version=definicion_compra.VERSION)
+    except Exception:
+        return None
+
+
 def cargar(archivo, notas_credito=True):
     """
     Carga un archivo parquet desde R2.
@@ -1371,6 +1405,7 @@ def limpiar_cache(archivo):
     # y su clave lleva los dos sellos, así que un parquet nuevo ya es otra
     # entrada; se vacía para no esperar la hora de su `ttl` con dos copias.
     _compras_netas_cacheable.clear()
+    _notas_restadas_cacheable.clear()
     # El ajuste con el kardex al lado (regla #612): su clave lleva los dos
     # sellos, y se vacía entera por lo mismo que la de arriba.
     _ajuste_con_kardex_cacheable.clear()
