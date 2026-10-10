@@ -141,10 +141,37 @@ from utils import fmt_k
 # `vs_ano_pasado.py`: una familia que se llamara literalmente "Todas" lo
 # rompería, y por eso el texto lleva el sustantivo. Ninguna familia ni
 # producto del parquet empieza con "Todas las" ni con "Top ".
+#
+# Desde el 2026-10-10 (regla #623) ya no son valores: los cuatro filtros son
+# `st.multiselect` y «nada elegido» es «todos». Quedan como el PLACEHOLDER
+# del campo vacío, que es donde siguen diciendo qué está haciendo.
 _FAM_TODAS = "Todas las familias"
 _SUB_TODAS = "Todas las subfamilias"
 _PROV_TODOS = "Todos los proveedores"
 _PROD_TODOS = "Todos los productos"
+
+# Las keys de los cuatro filtros. En PLURAL a propósito: hasta el 2026-10-10
+# eran `st.selectbox` con keys en singular que guardaban un string, y una
+# sesión abierta de antes del cambio traería ese string a un multiselect, que
+# exige una lista. Con otra key el valor viejo queda huérfano y no estorba.
+_K_FAM = "compras_sem_familias"
+_K_SUB = "compras_sem_subfamilias"
+_K_PROV = "compras_sem_proveedores"
+_K_PROD = "compras_sem_productos"
+
+
+def _seleccion_previa(key):
+    """Lo elegido en uno de los cuatro filtros, como lista (vacía = todos)."""
+    previa = st.session_state.get(key)
+    return list(previa) if isinstance(previa, (list, tuple)) else []
+
+
+def _fijar_seleccion(key, valor):
+    """Escribe la selección ANTES de dibujar el widget, y sólo si cambió:
+    un multiselect revienta con un valor que no está en `options`, así que
+    lo que se cayó de la lista se suelta acá."""
+    if st.session_state.get(key) != valor:
+        st.session_state[key] = valor
 
 _GRAN_DEFAULT = "Semana"
 """Con qué granularidad abre la vista.
@@ -225,9 +252,11 @@ _AYUDA_MODO = (
     "que toques (o del proveedor que elijas) y las líneas del que elijas."
 )
 
-_KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familia",
-                "compras_sem_subfamilia", "compras_sem_proveedor",
-                "compras_sem_producto", "compras_sem_modo",
+# Escritas a mano y no con `_K_FAM`…: `test_graficos.py` las lee con `ast`
+# y sólo ve literales.
+_KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familias",
+                "compras_sem_subfamilias", "compras_sem_proveedores",
+                "compras_sem_productos", "compras_sem_modo",
                 "compras_sem_partir", "compras_sem_res_*")
 # (La tabla de «Resumen del Período» no va: su selección se CONSUME en la
 # corrida del clic —estrena la key con un contador—, así que no hay nada
@@ -1519,44 +1548,54 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # las que los chips dejaron pasar (`d_full` ya viene filtrado por
         # ellos), así que acá no se puede elegir una familia que arriba está
         # excluida.
-        _ops_fam = [_FAM_TODAS]
+        #
+        # VARIAS A LA VEZ (2026-10-10, regla #623, a pedido: «no puedo
+        # seleccionar varias opciones … como sí lo puedo hacer en ventas por
+        # período»). Los cuatro filtros son `st.multiselect`, como los de
+        # Ventas › Por período: nada elegido es «todos», y entre las elegidas
+        # de un mismo filtro manda la UNIÓN. Lo que estaba antes de este
+        # párrafo sigue valiendo, en plural: la cascada filtra por TODAS las
+        # familias elegidas, y lo que deja de ofrecerse se suelta (Familia,
+        # Subfamilia, los «Top N») o se conserva al final de la lista
+        # (Proveedor y Producto).
+        _ops_fam = []
         _hay_fam = bool(col_fam) and col_fam in d.columns
         if _hay_fam:
             _src_fam = (d_full if (d_full is not None
                                    and col_fam in d_full.columns) else d)
-            _ops_fam += sorted(_src_fam[col_fam].dropna().astype(str).unique())
-        if st.session_state.get("compras_sem_familia") not in _ops_fam:
-            st.session_state["compras_sem_familia"] = _FAM_TODAS
-        _fam_prev = st.session_state.get("compras_sem_familia", _FAM_TODAS)
+            _ops_fam = sorted(_src_fam[col_fam].dropna().astype(str).unique())
+        _fam_prev = [_f for _f in _seleccion_previa(_K_FAM)
+                     if _f in set(_ops_fam)]
+        _fijar_seleccion(_K_FAM, _fam_prev)
 
         # SUBFAMILIA (2026-09-19, a pedido): el mismo criterio que Familia
         # —opciones del HISTÓRICO, por el mismo borrado silencioso— y en
         # CASCADA: con una familia elegida ofrece sólo las suyas, igual que
         # los chips de la franja (`compras/__init__.py`). La que deja de
         # estar porque se cambió la familia vuelve a «todas».
-        _ops_sub = [_SUB_TODAS]
+        _ops_sub = []
         _hay_sub = bool(col_subfam) and col_subfam in d.columns
         if _hay_sub:
             _src_sub = (d_full if (d_full is not None
                                    and col_subfam in d_full.columns) else d)
-            if (_hay_fam and _fam_prev != _FAM_TODAS
-                    and col_fam in _src_sub.columns):
-                _src_sub = _src_sub[_src_sub[col_fam].astype(str) == _fam_prev]
-            _ops_sub += sorted(
+            if _hay_fam and _fam_prev and col_fam in _src_sub.columns:
+                _src_sub = _src_sub[_src_sub[col_fam].astype(str)
+                                    .isin(_fam_prev)]
+            _ops_sub = sorted(
                 _src_sub[col_subfam].dropna().astype(str).unique())
-        if st.session_state.get("compras_sem_subfamilia") not in _ops_sub:
-            st.session_state["compras_sem_subfamilia"] = _SUB_TODAS
-        _sub_prev = st.session_state.get("compras_sem_subfamilia", _SUB_TODAS)
+        _sub_prev = [_s for _s in _seleccion_previa(_K_SUB)
+                     if _s in set(_ops_sub)]
+        _fijar_seleccion(_K_SUB, _sub_prev)
 
         # El recorte que ya se sabe ANTES de dibujar, y del que salen las dos
         # listas ordenadas por valor: Proveedor y Producto. Se va angostando
         # en el orden de la fila, así que cada lista ofrece lo que dejan los
         # filtros de su izquierda.
         _mask = pd.Series(True, index=d.index)
-        if _hay_fam and _fam_prev != _FAM_TODAS:
-            _mask &= d[col_fam].astype(str) == _fam_prev
-        if _hay_sub and _sub_prev != _SUB_TODAS:
-            _mask &= d[col_subfam].astype(str) == _sub_prev
+        if _hay_fam and _fam_prev:
+            _mask &= d[col_fam].astype(str).isin(_fam_prev)
+        if _hay_sub and _sub_prev:
+            _mask &= d[col_subfam].astype(str).isin(_sub_prev)
 
         # PROVEEDOR (2026-09-19, a pedido): se porta como Producto y no como
         # Familia — opciones del RANGO, ordenadas por valor de compra, y lo
@@ -1564,17 +1603,18 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # Producto, que trae el porqué). Son ~200 nombres: el buscador propio
         # de `st.selectbox` es lo que lo hace usable.
         _hay_prov = bool(col_prov) and col_prov in d.columns
-        _ops_prov = [_PROV_TODOS]
+        _ops_prov = []
         if _hay_prov:
-            _ops_prov += (_valor[_mask]
-                          .groupby(d.loc[_mask, col_prov].astype(str))
-                          .sum().sort_values(ascending=False)
-                          .index.tolist())
-        _prov_prev = st.session_state.get("compras_sem_proveedor")
-        if _prov_prev is not None and _prov_prev not in _ops_prov:
-            _ops_prov.append(_prov_prev)
-        if _hay_prov and _prov_prev not in (None, _PROV_TODOS):
-            _mask &= d[col_prov].astype(str) == _prov_prev
+            _ops_prov = (_valor[_mask]
+                         .groupby(d.loc[_mask, col_prov].astype(str))
+                         .sum().sort_values(ascending=False)
+                         .index.tolist())
+        _prov_prev = _seleccion_previa(_K_PROV)
+        _en_lista = set(_ops_prov)
+        _ops_prov += [_p for _p in _prov_prev if _p not in _en_lista]
+        _fijar_seleccion(_K_PROV, _prov_prev)
+        if _hay_prov and _prov_prev:
+            _mask &= d[col_prov].astype(str).isin(_prov_prev)
 
         # PRODUCTO: al revés que Familia, sus opciones salen del RANGO (`d`)
         # y ordenadas por valor de compra descendente. Las dos cosas son el
@@ -1595,16 +1635,17 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                      .groupby(d.loc[_mask, col_prod].astype(str))
                      .sum().sort_values(ascending=False))
         _prods = _val_prod.index.tolist()
+        #
+        # Con varios elegidos, un «Top N» SUMA sus N productos a los que se
+        # eligieron uno por uno (la unión, como en los otros tres filtros).
         _etiq_top = {f"Top {_n} por valor": _n for _n in _TOPS}
-        _ops_prod = ([_PROD_TODOS]
-                     + [_e for _e, _n in _etiq_top.items() if _n < len(_prods)]
-                     + _prods)
-        _prod_prev = st.session_state.get("compras_sem_producto")
-        if _prod_prev is not None and _prod_prev not in _ops_prod:
-            if _prod_prev == _PROD_TODOS or _prod_prev in _etiq_top:
-                st.session_state["compras_sem_producto"] = _PROD_TODOS
-            else:
-                _ops_prod.append(_prod_prev)
+        _tops = [_e for _e, _n in _etiq_top.items() if _n < len(_prods)]
+        _ops_prod = _tops + _prods
+        _prod_prev = [_p for _p in _seleccion_previa(_K_PROD)
+                      if _p in _tops or _p not in _etiq_top]
+        _en_lista = set(_ops_prod)
+        _ops_prod += [_p for _p in _prod_prev if _p not in _en_lista]
+        _fijar_seleccion(_K_PROD, _prod_prev)
 
         # ── La fila de cabecera: granularidad + los filtros + fecha ──────
         # 2026-09-04: el MISMO componente de fecha que el Ranking de
@@ -1647,40 +1688,44 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
                     default=_GRAN_DEFAULT, required=True,
                     format_func=lambda g: _GRAN_ROTULO.get(g, g),
                     key="compras_sem_gran", label_visibility="collapsed")
-                if _hay_fam and len(_ops_fam) > 1:
+                if _hay_fam and _ops_fam:
                     with st.container(key="cp_sem_hdr_familia"):
-                        _box["fam"] = st.selectbox(
-                            "Familia", _ops_fam, key="compras_sem_familia",
+                        _box["fam"] = st.multiselect(
+                            "Familia", _ops_fam, key=_K_FAM,
+                            placeholder=_FAM_TODAS,
                             label_visibility="collapsed",
-                            help="Acota ESTA tarjeta a una familia, encima "
-                                 "de los chips de la franja. La lista "
-                                 "ofrece sólo las que los chips dejan "
-                                 "pasar.")
-                if _hay_sub and len(_ops_sub) > 1:
+                            help="Acota ESTA tarjeta a una o varias "
+                                 "familias, encima de los chips de la "
+                                 "franja. La lista ofrece sólo las que los "
+                                 "chips dejan pasar.")
+                if _hay_sub and _ops_sub:
                     with st.container(key="cp_sem_hdr_subfamilia"):
-                        _box["sub"] = st.selectbox(
-                            "Subfamilia", _ops_sub,
-                            key="compras_sem_subfamilia",
+                        _box["sub"] = st.multiselect(
+                            "Subfamilia", _ops_sub, key=_K_SUB,
+                            placeholder=_SUB_TODAS,
                             label_visibility="collapsed",
-                            help="Acota ESTA tarjeta a una subfamilia. Con "
-                                 "una familia elegida ofrece sólo las "
-                                 "suyas.")
+                            help="Acota ESTA tarjeta a una o varias "
+                                 "subfamilias. Con familias elegidas ofrece "
+                                 "sólo las suyas.")
                 if _hay_prov:
                     with st.container(key="cp_sem_hdr_proveedor"):
-                        _box["prov"] = st.selectbox(
-                            "Proveedor", _ops_prov,
-                            key="compras_sem_proveedor",
+                        _box["prov"] = st.multiselect(
+                            "Proveedor", _ops_prov, key=_K_PROV,
+                            placeholder=_PROV_TODOS,
                             label_visibility="collapsed",
                             help="Ordenados por VALOR de compra en el rango, "
-                                 "dentro de la familia y subfamilia "
-                                 "elegidas. Se puede escribir para buscar.")
+                                 "dentro de las familias y subfamilias "
+                                 "elegidas. Se pueden elegir varios; se "
+                                 "puede escribir para buscar.")
                 with st.container(key="cp_sem_hdr_producto"):
-                    _box["prod"] = st.selectbox(
-                        "Producto", _ops_prod, key="compras_sem_producto",
+                    _box["prod"] = st.multiselect(
+                        "Producto", _ops_prod, key=_K_PROD,
+                        placeholder=_PROD_TODOS,
                         label_visibility="collapsed",
                         help="Ordenados por VALOR de compra en el rango: el "
                              "primero es el que más compraste. «Top N por "
-                             "valor» suma los N mayores en una sola serie. "
+                             "valor» suma los N mayores en una sola serie, "
+                             "y se puede combinar con productos sueltos. "
                              "Se puede escribir para buscar.")
 
         _ctx_fecha = selector_fecha_tarjeta(
@@ -1693,10 +1738,11 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             # se dibujan sueltos.
             _controles()
         gran = _box.get("gran") or _GRAN_DEFAULT
-        fam_sel = _box.get("fam") or _FAM_TODAS
-        sub_sel = _box.get("sub") or _SUB_TODAS
-        prov_sel = _box.get("prov") or _PROV_TODOS
-        prod_sel = _box.get("prod") or _PROD_TODOS
+        # Listas: vacía es «todos» (regla #623).
+        fam_sel = list(_box.get("fam") or [])
+        sub_sel = list(_box.get("sub") or [])
+        prov_sel = list(_box.get("prov") or [])
+        prod_sel = list(_box.get("prod") or [])
 
         # El RANGO de la tarjeta, como dos `date`: lo necesita la variación
         # contra la barra anterior para saber qué período quedó cortado
@@ -1714,7 +1760,8 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # recorte. Mismo guard que `compras_vol_prod_prev` en volatilidad.py
         # al cambiar de producto, con todo en una tupla: son varios motivos
         # para lo mismo.
-        _ctx = (gran, fam_sel, sub_sel, prov_sel, prod_sel)
+        _ctx = (gran, tuple(fam_sel), tuple(sub_sel), tuple(prov_sel),
+                tuple(prod_sel))
         if st.session_state.get("compras_sem_ctx_prev") != _ctx:
             st.session_state["compras_sem_ctx_prev"] = _ctx
             st.session_state["compras_sem_focus"] = None
@@ -1764,16 +1811,20 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         }).dropna(subset=["fecha"])
 
         # Los filtros de la tarjeta, en el orden en que se leen.
-        if _hay_fam and fam_sel != _FAM_TODAS:
-            dd = dd[dd["fam"] == fam_sel]
-        if _hay_sub and sub_sel != _SUB_TODAS:
-            dd = dd[dd["sub"] == sub_sel]
-        if _hay_prov and prov_sel != _PROV_TODOS:
-            dd = dd[dd["prov"] == prov_sel]
-        if prod_sel in _etiq_top:
-            dd = dd[dd["prod"].isin(_prods[:_etiq_top[prod_sel]])]
-        elif prod_sel != _PROD_TODOS:
-            dd = dd[dd["prod"] == prod_sel]
+        # Dentro de un filtro, la unión de lo elegido; entre filtros, la
+        # intersección. Un «Top N» vale por sus N productos.
+        if _hay_fam and fam_sel:
+            dd = dd[dd["fam"].isin(fam_sel)]
+        if _hay_sub and sub_sel:
+            dd = dd[dd["sub"].isin(sub_sel)]
+        if _hay_prov and prov_sel:
+            dd = dd[dd["prov"].isin(prov_sel)]
+        if prod_sel:
+            _n_top = max((_etiq_top[_p] for _p in prod_sel
+                          if _p in _etiq_top), default=0)
+            _prods_sel = set(_prods[:_n_top]) | {
+                _p for _p in prod_sel if _p not in _etiq_top}
+            dd = dd[dd["prod"].isin(_prods_sel)]
 
         # ── «PARTIR POR» Y QUÉ SE RESALTA, LEÍDOS DE `session_state` ─────
         # Como el modo: los dos selectores se dibujan en el renglón del
@@ -1810,12 +1861,21 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # El ÁMBITO va al título de la figura: con los filtros propios más
         # los chips de la franja, un gráfico que dice sólo "Compra por
         # semana" no deja saber de qué son esas barras.
+        # Con VARIOS elegidos en un filtro, el título los cuenta en vez de
+        # nombrarlos: cinco nombres no entran en el renglón (regla #623).
+        def _amb_de(sel, plural, fmt=lambda x: x):
+            if not sel:
+                return None
+            return fmt(sel[0]) if len(sel) == 1 else f"{len(sel)} {plural}"
+
         _amb = [_a for _a in (
-                    None if fam_sel == _FAM_TODAS else fam_sel,
-                    None if sub_sel == _SUB_TODAS else sub_sel,
-                    (None if prov_sel == _PROV_TODOS
-                     else _compras_truncar(nombre_propio(prov_sel))),
-                    None if prod_sel == _PROD_TODOS else prod_sel)
+                    _amb_de(fam_sel, "familias"),
+                    _amb_de(sub_sel, "subfamilias"),
+                    _amb_de(prov_sel, "proveedores",
+                            lambda p: _compras_truncar(nombre_propio(p))),
+                    # Un «Top N» cuenta por sus N: «Top 5» + uno son 6.
+                    (_amb_de(prod_sel, "productos") if len(prod_sel) < 2
+                     else f"{len(_prods_sel)} productos"))
                 if _a]
         _tit_gran = {"Día": "por día", "Semana": "por semana",
                     "Mes": "por mes", "Año": "por año",

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-622 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+623 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (202)
 
@@ -328,7 +328,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 
-**Plotly y figuras** (113)
+**Plotly y figuras** (114)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -443,6 +443,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#619** — Una semana se nombra con sus días de la semana, y la que las fechas cortan, por los días que…
 - **#620** — La barra de «Compras por período» se parte por lo que se elige —subfamilia, proveedor o…
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
+- **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 
 **AgGrid y tablas** (89)
 
@@ -920,7 +921,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (159)
+**Decisiones de diseño y UX** (160)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1081,6 +1082,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#617** — Cada vista de Movimientos tiene su propia fecha, y la franja del reporte ya no dibuja…
 - **#619** — Una semana se nombra con sus días de la semana, y la que las fechas cortan, por los días que…
 - **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
+- **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -48971,6 +48973,44 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-09.)
 
+623. **Los cuatro filtros de «Compras por período» eligen VARIOS: nada
+     elegido es «todos», dentro de un filtro manda la unión y entre
+     filtros la intersección.** 2026-10-10, a pedido: «no puedo
+     seleccionar varias opciones de los selectores de familia, subfamilia,
+     proveedores… como sí lo puedo hacer en ventas por período». Familia,
+     Subfamilia, Proveedor y Producto pasaron de `st.selectbox` a
+     `st.multiselect`, como la fila de Ventas › Por período
+     (`ventas_resumen.py::_filtro`). Lo que ya decían los bloques de
+     `graficos/compras/semanal.py` sigue valiendo, en plural:
+
+     - **La cascada filtra por TODAS las familias elegidas**: Subfamilia
+       ofrece las de cualquiera de ellas, y Proveedor y Producto las del
+       recorte de su izquierda.
+     - **Lo que deja de ofrecerse**: Familia, Subfamilia y los «Top N» se
+       sueltan; Proveedor y Producto se conservan al final de la lista (un
+       multiselect revienta, igual que el selectbox, con un valor que no
+       está en `options`, así que la limpieza va ANTES de dibujarlo:
+       `_fijar_seleccion`).
+     - **Un «Top N» vale por sus N productos** y se suma a los elegidos
+       sueltos; el título de la figura cuenta los productos de verdad
+       («Top 5» + uno son «6 productos»). Con varios en un filtro, el
+       título los cuenta en vez de nombrarlos.
+     - **Las keys cambiaron a plural** (`compras_sem_familias`…): las de
+       antes guardaban un string, y una sesión abierta antes del cambio se
+       lo habría pasado a un widget que exige una lista.
+     - **La caja no crece con las fichas**: el multiselect tiene dos formas
+       (baseweb en la 1.59 de esta máquina, `.react-aria-ComboBox` con su
+       `stMultiSelectTagsContainer` en la 1.64 de Cloud) y las dos van a
+       los 32px de la fila, con lo que no entra recortado
+       (`_css_proveedor.py`), como en Ventas (#519). Medido a 1323px: la
+       fila sigue en un renglón (34px), con la fecha al lado.
+
+     Verificado en el navegador con datos reales: dos familias, dos
+     proveedores (la suma de cada uno por separado da la barra de los dos,
+     semana por semana) y «Top 5» + un producto.
+
+     (2026-10-10.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -48983,7 +49023,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#622**; la próxima toma el número siguiente.
+> última regla es la **#623**; la próxima toma el número siguiente.
 
 >
 

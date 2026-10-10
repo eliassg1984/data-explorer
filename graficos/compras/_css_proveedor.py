@@ -1030,6 +1030,44 @@ CSS = """        <style>
         .st-key-cp_sem_hdr_producto .react-aria-ComboBox input {
             font-size: 12px !important;
         }
+        /* DESDE EL 2026-10-10 SON `st.multiselect` (regla #623), y el de
+           Streamlit tiene DOS formas, como en la fila de Ventas › Por
+           período (`estilos/_80_cards.py`, regla #519): en la 1.64 de Cloud
+           es el `.react-aria-ComboBox` de arriba, pero con las fichas en un
+           `stMultiSelectTagsContainer` de 38px con relleno, que estiraba la
+           caja otra vez a 40; en la 1.59 de esta máquina es un
+           `[data-baseweb="select"]`. Las dos a los 32 de la fila. Lo que no
+           entra en un renglón se recorta —la lista abierta dice todo lo
+           elegido, y el título de la figura lo cuenta—: una caja que crece
+           con cada ficha correría el gráfico de abajo. */
+        .st-key-cp_sem_hdr_familia [data-testid="stMultiSelectTagsContainer"],
+        .st-key-cp_sem_hdr_subfamilia [data-testid="stMultiSelectTagsContainer"],
+        .st-key-cp_sem_hdr_proveedor [data-testid="stMultiSelectTagsContainer"],
+        .st-key-cp_sem_hdr_producto [data-testid="stMultiSelectTagsContainer"] {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            height: 30px !important;
+            min-height: 0 !important;
+            align-items: center !important;
+            overflow: hidden !important;
+        }
+        .st-key-cp_sem_hdr_familia [data-baseweb="select"] > div,
+        .st-key-cp_sem_hdr_subfamilia [data-baseweb="select"] > div,
+        .st-key-cp_sem_hdr_proveedor [data-baseweb="select"] > div,
+        .st-key-cp_sem_hdr_producto [data-baseweb="select"] > div {
+            min-height: 32px !important;
+            height: 32px !important;
+            font-size: 12px !important;
+        }
+        .st-key-cp_sem_hdr_familia [data-baseweb="select"] > div > div,
+        .st-key-cp_sem_hdr_subfamilia [data-baseweb="select"] > div > div,
+        .st-key-cp_sem_hdr_proveedor [data-baseweb="select"] > div > div,
+        .st-key-cp_sem_hdr_producto [data-baseweb="select"] > div > div {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            max-height: 30px !important;
+            overflow: hidden !important;
+        }
         /* ── LA GRANULARIDAD, UN TOGGLE LINEAL (2026-09-17) ─────────────
            Era `st.pills`; pasó a `st.segmented_control` a pedido («agrupado
            en un solo toggle que se vea lineal»). Acotado a SU key y no a
