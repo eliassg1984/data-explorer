@@ -2732,7 +2732,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"],
     .st-key-vt_pl_cabfila [data-testid="stMarkdownContainer"],
     .st-key-vt_mes_cabfila [data-testid="stMarkdownContainer"],
-    .st-key-vt_ctl_cabfila [data-testid="stMarkdownContainer"] {
+    .st-key-vt_ctl_cabfila [data-testid="stMarkdownContainer"],
+    .st-key-vt_frj_cabfila [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     /* El título y los KPI en un renglón (regla #519): el look de
@@ -2742,7 +2743,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-cab,
     .st-key-vt_pl_cabfila .vt-cab,
     .st-key-vt_mes_cabfila .vt-cab,
-    .st-key-vt_ctl_cabfila .vt-cab {
+    .st-key-vt_ctl_cabfila .vt-cab,
+    .st-key-vt_frj_cabfila .vt-cab {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -2754,7 +2756,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-cab-tit,
     .st-key-vt_pl_cabfila .vt-cab-tit,
     .st-key-vt_mes_cabfila .vt-cab-tit,
-    .st-key-vt_ctl_cabfila .vt-cab-tit {
+    .st-key-vt_ctl_cabfila .vt-cab-tit,
+    .st-key-vt_frj_cabfila .vt-cab-tit {
         font-size: 13px;
         font-weight: 600;
         line-height: 1.35;
@@ -2765,7 +2768,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpis,
     .st-key-vt_pl_cabfila .vt-kpis,
     .st-key-vt_mes_cabfila .vt-kpis,
-    .st-key-vt_ctl_cabfila .vt-kpis {
+    .st-key-vt_ctl_cabfila .vt-kpis,
+    .st-key-vt_frj_cabfila .vt-kpis {
         display: flex;
         flex-wrap: wrap;
         align-items: stretch;
@@ -2775,7 +2779,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi,
     .st-key-vt_pl_cabfila .vt-kpi,
     .st-key-vt_mes_cabfila .vt-kpi,
-    .st-key-vt_ctl_cabfila .vt-kpi {
+    .st-key-vt_ctl_cabfila .vt-kpi,
+    .st-key-vt_frj_cabfila .vt-kpi {
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -2789,7 +2794,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi:first-child,
     .st-key-vt_pl_cabfila .vt-kpi:first-child,
     .st-key-vt_mes_cabfila .vt-kpi:first-child,
-    .st-key-vt_ctl_cabfila .vt-kpi:first-child {
+    .st-key-vt_ctl_cabfila .vt-kpi:first-child,
+    .st-key-vt_frj_cabfila .vt-kpi:first-child {
         padding-left: 0;
         border-left: none;
         max-width: none;
@@ -2798,7 +2804,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-rot,
     .st-key-vt_pl_cabfila .vt-kpi-rot,
     .st-key-vt_mes_cabfila .vt-kpi-rot,
-    .st-key-vt_ctl_cabfila .vt-kpi-rot {
+    .st-key-vt_ctl_cabfila .vt-kpi-rot,
+    .st-key-vt_frj_cabfila .vt-kpi-rot {
         font-size: 10px;
         color: var(--text-secondary);
         white-space: nowrap;
@@ -2809,7 +2816,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_pl_cabfila .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_mes_cabfila .vt-kpi[style] .vt-kpi-rot::before,
-    .st-key-vt_ctl_cabfila .vt-kpi[style] .vt-kpi-rot::before {
+    .st-key-vt_ctl_cabfila .vt-kpi[style] .vt-kpi-rot::before,
+    .st-key-vt_frj_cabfila .vt-kpi[style] .vt-kpi-rot::before {
         content: "";
         display: inline-block;
         width: 8px;
@@ -2822,7 +2830,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-val,
     .st-key-vt_mes_cabfila .vt-kpi-val,
-    .st-key-vt_ctl_cabfila .vt-kpi-val {
+    .st-key-vt_ctl_cabfila .vt-kpi-val,
+    .st-key-vt_frj_cabfila .vt-kpi-val {
         font-size: 13px;
         font-weight: 600;
         color: var(--text-primary);
@@ -2832,7 +2841,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-sub,
     .st-key-vt_pl_cabfila .vt-kpi-sub,
     .st-key-vt_mes_cabfila .vt-kpi-sub,
-    .st-key-vt_ctl_cabfila .vt-kpi-sub {
+    .st-key-vt_ctl_cabfila .vt-kpi-sub,
+    .st-key-vt_frj_cabfila .vt-kpi-sub {
         margin-left: 4px;
         font-size: 10px;
         font-weight: 400;
@@ -2842,7 +2852,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-total .vt-kpi-val,
     .st-key-vt_mes_cabfila .vt-kpi-total .vt-kpi-val,
-    .st-key-vt_ctl_cabfila .vt-kpi-total .vt-kpi-val {
+    .st-key-vt_ctl_cabfila .vt-kpi-total .vt-kpi-val,
+    .st-key-vt_frj_cabfila .vt-kpi-total .vt-kpi-val {
         color: var(--accent-deep);
         font-weight: 700;
     }
@@ -2850,7 +2861,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_mes_cabfila .vt-kpi-alerta .vt-kpi-val,
-    .st-key-vt_ctl_cabfila .vt-kpi-alerta .vt-kpi-val {
+    .st-key-vt_ctl_cabfila .vt-kpi-alerta .vt-kpi-val,
+    .st-key-vt_frj_cabfila .vt-kpi-alerta .vt-kpi-val {
         color: var(--warning-text);
     }
 
@@ -3095,6 +3107,50 @@ CSS = """    /* ================================================================
        los del Resumen (más arriba). Sin el `nowrap` los KPI bajaban a un
        segundo renglón en cuanto no entraban. */
     .st-key-vt_pl_cabfila { flex-wrap: nowrap !important; }
+    /* Lo mismo en «Análisis por Hora» › «A medida» (regla #627): el
+       interruptor Mapa | A medida a su ancho y los KPI en lo que queda. */
+    .st-key-vt_frj_cabfila { flex-wrap: nowrap !important; }
+    .st-key-vt_frj_cabfila > .st-key-vh_modo { flex: 0 0 auto !important; }
+    .st-key-vt_frj_cabfila > :not(.st-key-vh_modo) {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    /* El interruptor y las botoneras del modo, del tamaño de las de
+       «Análisis de platos»: a 14px y 16 de relleno, el interruptor solo
+       pedía 155px y la cabecera del mapa no entraba en un renglón. */
+    .st-key-vh_modo [data-testid="stButtonGroup"] button,
+    .st-key-vt_frj_modo [data-testid="stButtonGroup"] button,
+    .st-key-vt_frj_agrupar [data-testid="stButtonGroup"] button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_frj_dias [data-testid="stButtonGroup"] button,
+    .st-key-vt_frj_canal [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 9px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_frj_fila, .st-key-vt_frj_fila2 {
+        gap: 10px !important;
+    }
+    /* La fecha a su ancho: el envoltorio que Streamlit le pone nace
+       `flex: 1 1 128px` y se estiraba (406 px medidos), empujando al resto
+       de la fila (lo mismo que `vh_tiempo > div`). Es el primero de la
+       fila. */
+    .st-key-vt_frj_fila > div:first-child,
+    .st-key-vt_frjf_fila {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    /* Tres modos: 8 px de relleno y no 10, que con «Comparar» la fila del
+       mapa entra justa a 1323 (regla #627). */
+    .st-key-vh_modo [data-testid="stButtonGroup"] button {
+        padding: 0 8px !important;
+    }
     .st-key-vt_pl_cabfila > .st-key-vt_pl_vista { flex: 0 0 auto !important; }
     .st-key-vt_pl_cabfila > :not(.st-key-vt_pl_vista) {
         flex: 1 1 0 !important;
@@ -4327,7 +4383,8 @@ CSS = """    /* ================================================================
         flex: 0 0 auto !important;
         width: auto !important;
     }
-    .st-key-vh_fecha_escala button {
+    .st-key-vh_fecha_escala button,
+    .st-key-vt_frjf_escala button {
         background: transparent !important;
         border: none !important;
         border-radius: 0 !important;
@@ -4342,11 +4399,13 @@ CSS = """    /* ================================================================
         padding: 3px 4px !important;
         white-space: nowrap !important;
     }
-    .st-key-vh_fecha_escala button:hover {
+    .st-key-vh_fecha_escala button:hover,
+    .st-key-vt_frjf_escala button:hover {
         background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;
     }
-    [data-testid="stPopoverBody"]:has(.st-key-vh_fecha_escala_panel) {
+    [data-testid="stPopoverBody"]:has(.st-key-vh_fecha_escala_panel),
+    [data-testid="stPopoverBody"]:has(.st-key-vt_frjf_escala_panel) {
         /* El ancho lo pone el panel de fecha (regla #616); hasta el
            2026-10-08 iba fijo en 290px, el del riel que reemplazó. */
         width: auto !important;
@@ -5266,7 +5325,11 @@ CSS = """    /* ================================================================
        con baseweb (`[data-baseweb="select"] > div`). Van los dos: el
        selector que no aplica no matchea nada. */
     .st-key-vh_cab [data-testid="stSelectbox"] [role="group"],
-    .st-key-vh_cab [data-baseweb="select"] > div {
+    .st-key-vh_cab [data-baseweb="select"] > div,
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] [role="group"],
+    .st-key-vt_frj_fila [data-baseweb="select"] > div,
+    .st-key-vt_frj_fila2 [data-testid="stSelectbox"] [role="group"],
+    .st-key-vt_frj_fila2 [data-baseweb="select"] > div {
         min-height: 0 !important;
         height: 28px !important;
         border: none !important;
@@ -5276,11 +5339,15 @@ CSS = """    /* ================================================================
         box-shadow: none !important;
     }
     .st-key-vh_cab [data-testid="stSelectbox"] [role="group"]:hover,
-    .st-key-vh_cab [data-baseweb="select"] > div:hover {
+    .st-key-vh_cab [data-baseweb="select"] > div:hover,
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] [role="group"]:hover,
+    .st-key-vt_frj_fila2 [data-testid="stSelectbox"] [role="group"]:hover {
         border-bottom-color: var(--accent) !important;
     }
     .st-key-vh_cab [data-testid="stSelectbox"] input,
-    .st-key-vh_cab [data-baseweb="select"] div[value] {
+    .st-key-vh_cab [data-baseweb="select"] div[value],
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] input,
+    .st-key-vt_frj_fila2 [data-testid="stSelectbox"] input {
         height: 26px !important;
         padding: 0 0 0 2px !important;
         font-size: 13px !important;
@@ -5289,7 +5356,9 @@ CSS = """    /* ================================================================
         background: transparent !important;
         cursor: pointer !important;
     }
-    .st-key-vh_cab [data-testid="stSelectbox"] [role="group"] button {
+    .st-key-vh_cab [data-testid="stSelectbox"] [role="group"] button,
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] [role="group"] button,
+    .st-key-vt_frj_fila2 [data-testid="stSelectbox"] [role="group"] button {
         width: 22px !important;
         height: 26px !important;
     }

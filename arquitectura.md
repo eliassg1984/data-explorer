@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-626 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+627 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (204)
 
@@ -541,7 +541,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 - **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
 
-**Streamlit** (161)
+**Streamlit** (162)
 
 - **#6** — CSS por key: acotar al widget, nunca colgar del contenedor
 - **#7** — Antes de estilar o agregar un widget, grep estilos/ por el prefijo de key del contenedor…
@@ -704,6 +704,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#600** — Stock por Producto se ve como los filtros de Compras y abre de la A a la Z por producto, sin…
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
+- **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
 **Datos, R2 y DuckDB** (94)
 
@@ -926,7 +927,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (161)
+**Decisiones de diseño y UX** (162)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1089,6 +1090,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 - **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
+- **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -49177,6 +49179,82 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-10.)
 
+627. **«Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A
+     medida» —el TOTAL de cualquier día y cualquier horario—.** El
+     interruptor del renglón del título alterna el mapa de calor simple,
+     el de comparar períodos y `graficos/ventas_franja.py` (2026-10-10). Nació de un pedido real —«cuánto se vendió por Rappi
+     los últimos 4 domingos de 5:30 pm a 11:30 pm»— que el mapa no podía
+     contestar: compara hasta 4 PERÍODOS de calendario, por horas enteras,
+     y deja la suma de las marcas a mano. El modo es un formulario: fechas
+     → días de la semana o días sueltos → desde/hasta por media hora →
+     canal y ámbito; y la respuesta, el total arriba, una fila por día y
+     una por plato. Cuadrado contra el POS (Rappi, 13 set – 4 oct, 17:30
+     a 23:30): S/ 1.895, 29 unidades y 10 pedidos, al céntimo y por día.
+
+     1. **Fue vista propia unas horas y pasó a ser un modo, a pedido**:
+        las dos responden «cuándo se vende», como el Ranking y la
+        Ingeniería de menú comparten tarjeta (#569). El código NO se
+        fundió: `_ventas_horario` llama a `ventas_franja.cuerpo` y vuelve,
+        importándolo adentro (`ventas_franja` → `ventas_platos` →
+        `ventas_horario`: arriba sería una importación circular).
+     2. **«Mapa» y «Comparar» son el mismo mapa con y sin la máquina de
+        paneles.** Hasta este día sólo existía «Comparar», y sus tres
+        controles —«Un panel por», el botón de períodos sueltos y «Lado a
+        lado / Diferencia»— se veían siempre, aunque la pregunta más común
+        (a qué hora se vende en estas fechas) no compara nada: con 30 días
+        y «Un panel por = Semana» salían cuatro mapas. En «Mapa» la
+        granularidad la decide el rango (`grano_automatico`: un día →
+        Día; si no, Mes mientras el rango toque hasta 4 meses; si no,
+        Año), no hay períodos sueltos y se lee lado a lado. Los controles
+        de «Comparar» se conservan con `preservar_widgets`, y sus lugares
+        de la fila ni se crean en «Mapa»: vacíos seguirían dibujando su
+        rótulo y su separador, que son pseudo-elementos. Cambiar de modo
+        cambia los paneles, así que las marcas se limpian (la firma de
+        paneles de siempre).
+     3. **El interruptor ocupa el lugar del TÍTULO del mapa**, que repetía
+        lo que dicen «Filas» y «Columnas» («Platos por hora»). Medido a
+        1323px (1117 de fila): sin interruptor la cabecera de «Comparar»
+        pedía 1101; con el de dos modos a 14px (155), dos renglones; con
+        el de tres a 12px y 8 de relleno (200) y el botón de períodos
+        sueltos como ícono —«Comparar ▾» decía lo mismo que el modo—,
+        1099. «Mapa» pide 839.
+     4. **Cada modo conserva los controles de los otros** con
+        `preservar_widgets` (`_KEYS_WIDGET_MAPA`, `ventas_franja.
+        _KEYS_WIDGET`): un widget que no se dibuja en una corrida pierde
+        su valor, y sin eso volver al mapa lo dejaba en sus defaults.
+     5. **La hora es la del PEDIDO y se carga por ella** (#530, #552).
+        «Hasta» no se incluye —«17:30 → 22:00» llega a las 21:59—, para
+        que dos horarios seguidos no cuenten dos veces el pedido de las
+        22:00. Un horario que cruza la medianoche («20:00 → 01:00») es del
+        día en que EMPEZÓ, como lo cierra la caja, y por eso se carga un
+        día de más.
+     6. **El detalle por día lista también los días SIN venta**: «4
+        domingos» con uno en cero es parte de la respuesta, y el «Por
+        día» divide por los días elegidos, no por los que vendieron.
+     7. **Los controles de «A medida» tienen la medida de los del mapa**:
+        dos filas de desplegables sin caja de 28 px (las reglas de
+        `.st-key-vh_cab` extendidas a `vt_frj_fila*`), la fecha como texto
+        y pastillas de 26. Con los controles de Streamlit a su tamaño —40
+        px, la fecha como cápsula de 50— el modo se veía desproporcionado
+        al lado del mapa (reportado con captura). El horario dice «de
+        17:30» «a 23:30» dentro del valor: con el rótulo oculto, un
+        `help=` no se ve (#555). Y el envoltorio de la fecha nace `flex: 1
+        1 128px`: medía 406 px y empujaba la fila (`> div:first-child`).
+     8. **Las tablas del detalle llevan su peso adentro de la celda**
+        (`ProgressColumn`, como la Carta costeada): «% del total» por día
+        —la barra más larga es el mejor día—, «% venta» por plato, el
+        ticket del día (venta ÷ pedidos) y las unidades «por día» de cada
+        plato (÷ los días ELEGIDOS). Los días sin venta van en gris.
+        `st.dataframe` y no AgGrid (#540), anchos en px medidos a 1323.
+     9. **Sin canal marcado entran todos.** Una pastilla «Todos» más se
+        quedaba prendida al marcar Rappi (las dos a la vez = todos) y
+        había que apagarla a mano.
+
+     Un combo cuenta como UNA unidad: los platos de adentro viven en
+     `INFOREST.DBO.CPEDIDO`, que ningún parquet trae (pendiente).
+
+     (2026-10-10.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49189,7 +49267,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#626**; la próxima toma el número siguiente.
+> última regla es la **#627**; la próxima toma el número siguiente.
 
 >
 

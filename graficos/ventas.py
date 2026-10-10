@@ -285,7 +285,8 @@ def renderizar_graficos_ventas(df_f, nombre_reporte, df_full=None, tabla_cb=None
         elif graf == "Mix de carta":
             _ventas_mix(d, filtrar_cb=_filtrar_items)
 
-        # ── 1a-bis) Mapa de calor día × hora, hasta 4 períodos ───────────
+        # ── 1a-bis) Mapa de calor día × hora, hasta 4 períodos, y su modo
+        # «A medida» (graficos/ventas_franja.py, regla #627) ─────────────
         # Trae sus propios tramos (uno por período comparado) con
         # data.cargar_rango y les aplica _filtrar_items, igual que el
         # comparativo: el `d` de acá está acotado al rango de la franja y los

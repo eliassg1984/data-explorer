@@ -8677,6 +8677,99 @@ def _pruebas_carta_costeada():
     return fallos
 
 
+def _pruebas_ventas_franja():
+    """Ventas › Análisis por Hora › «A medida» (regla #627): las cuentas.
+
+    Fija lo que no se ve hasta que miente: que «hasta» no se incluya (dos
+    horarios seguidos no cuentan dos veces el pedido de las 22:00), que un
+    horario que cruza la medianoche le dé lo de la madrugada al día ANTERIOR,
+    que los días elegidos sean los de la semana pedida dentro del rango, que
+    el detalle por día liste también los días SIN venta, que se agrupe por
+    nombre de columna, y que «Por hora» le pase su `filtrar_cb`: el
+    tramo viene aparte de R2.
+    """
+    import inspect
+    from datetime import date
+
+    from graficos import ventas_franja as _f
+    from graficos import ventas_horario as _h
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · franja · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · franja · {nombre}: got={got!r} exp={exp!r}")
+
+    check("17:30 son 1050 minutos", _f.a_minutos("17:30"), 1050)
+    check("24:00 es el fin del día", _f.a_minutos("24:00"), 1440)
+
+    doms = _f.dias_elegidos(date(2026, 9, 7), date(2026, 10, 9), [6])
+    check("los domingos de un rango",
+          doms, [date(2026, 9, 13), date(2026, 9, 20), date(2026, 9, 27),
+                 date(2026, 10, 4)])
+    check("rango al revés: ningún día",
+          _f.dias_elegidos(date(2026, 10, 9), date(2026, 10, 1), range(7)), [])
+
+    ts = pd.Series(pd.to_datetime([
+        "2026-10-04 17:29", "2026-10-04 17:30", "2026-10-04 21:59",
+        "2026-10-04 22:00", "2026-10-05 00:30", None]))
+    dentro, dia = _f.en_horario(ts, 1050, 1320)
+    check("17:30 → 22:00: entra de 17:30 a 21:59",
+          dentro.tolist(), [False, True, True, False, False, False])
+    dentro, dia = _f.en_horario(ts, 1200, 60)
+    check("20:00 → 01:00 cruza: la 00:30 entra",
+          dentro.tolist(), [False, False, True, True, True, False])
+    check("y la 00:30 del lunes es del DOMINGO",
+          dia[4].date(), date(2026, 10, 4))
+    check("cruza_medianoche", (_f.cruza_medianoche(1200, 60),
+                               _f.cruza_medianoche(0, 1440)), (True, False))
+
+    b = pd.DataFrame({
+        "dia": pd.to_datetime(["2026-09-13", "2026-09-13", "2026-09-27"]),
+        "grupo": ["Alimentos", "Alimentos", "Bebidas"],
+        "sub": ["Fondos", "Fondos", "Vinos"],
+        "prod": ["Lomo", "Lomo", "Malbec"],
+        "venta": [100.0, 50.0, 80.0], "cant": [2.0, 1.0, 1.0],
+        "pedido": ["P1", "P1", "P2"]})
+    pdia = _f.por_dia(b, doms)
+    check("por día: los 4 domingos, también los que no vendieron",
+          len(pdia), 4)
+    check("por día: el 20 sin venta queda en cero",
+          float(pdia.loc[pd.Timestamp("2026-09-20"), "venta"]), 0.0)
+    check("por día: pedidos distintos",
+          int(pdia.loc[pd.Timestamp("2026-09-13"), "pedidos"]), 1)
+    check("por día: columnas por nombre",
+          list(pdia.columns), ["venta", "cant", "pedidos"])
+    g = _f.por_grupo(b, "Plato")
+    check("por plato: columnas por nombre",
+          list(g.columns), ["grupo", "sub", "prod", "cant", "venta"])
+    check("por plato: el que más vende primero, sumado",
+          (g.loc[0, "prod"], float(g.loc[0, "venta"])), ("Lomo", 150.0))
+    check("por grupo", list(_f.por_grupo(b, "Grupo")["grupo"]),
+          ["Alimentos", "Bebidas"])
+
+    src = inspect.getsource(_h._ventas_horario)
+    check("«Por hora» le pasa su filtrar_cb al modo «A medida»",
+          "_franja.cuerpo(d, filtrar_cb," in src, True)
+    check("el interruptor tiene los tres modos",
+          _h.MODOS_VISTA, ("Mapa", "Comparar", "A medida"))
+    # «Mapa» elige solo cómo partir las fechas: un día, meses o años.
+    check("Mapa · un solo día va en Día",
+          _h.grano_automatico(date(2026, 10, 4), date(2026, 10, 4)), "Día")
+    check("Mapa · 30 días que cruzan de mes van en Mes",
+          _h.grano_automatico(date(2026, 9, 11), date(2026, 10, 10)), "Mes")
+    check("Mapa · cuatro meses todavía en Mes",
+          _h.grano_automatico(date(2026, 7, 1), date(2026, 10, 10)), "Mes")
+    check("Mapa · doce meses van en Año",
+          _h.grano_automatico(date(2025, 10, 11), date(2026, 10, 10)),
+          "Año")
+    return fallos
+
+
 def _pruebas_ventas_platos():
     """Ventas › Análisis de platos (regla #529): las cuentas del ranking.
 
@@ -10271,6 +10364,7 @@ def main():
 
     # ── Ventas › Análisis de platos: puestos, movimiento, por día ────────
     fallos += _pruebas_ventas_platos()
+    fallos += _pruebas_ventas_franja()
 
     # ── Ventas › Ingeniería de menú: la clasificación de Kasavana-Smith ──
     fallos += _pruebas_ventas_menu()

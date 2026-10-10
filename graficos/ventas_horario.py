@@ -101,7 +101,7 @@ from graficos import ventas_ficha_hora as _fh
 from inyecciones._iframe import inyectar_html
 from graficos.base import (
     _card, _resolver, ctx_rango_propio, franja_linea_inferior, paso_etiquetas,
-    publicar_var_px, rango_tarjeta, selector_fecha_tarjeta,
+    preservar_widgets, publicar_var_px, rango_tarjeta, selector_fecha_tarjeta,
 )
 from graficos.compras._comun import _first_point
 # Los helpers de calendario NO se duplican: son los mismos que usa la vista
@@ -2484,12 +2484,20 @@ def _boton_selector(n_extras):
     `_panel_comparar`.
 
     Cuenta sólo los períodos SUELTOS: los del rango ya los dice el selector
-    de fecha de al lado (regla #531)."""
-    st.button("Comparar" + (f" · {n_extras}" if n_extras else ""),
+    de fecha de al lado (regla #531).
+
+    Desde el 2026-10-10 (regla #627) es un ÍCONO con el número de sueltos,
+    sin la palabra: el modo de la tarjeta se llama «Comparar» y el botón
+    decía lo mismo, y con el interruptor de tres modos la fila pedía 62 px
+    más de los que hay a 1323. Lo que hace lo dice el tooltip."""
+    abierto = st.session_state.get(_K_SELECTOR)
+    st.button(f"{n_extras}" if n_extras else "",
               key="vh_btn_selector", on_click=_toggle_selector,
-              icon=(":material/keyboard_arrow_up:"
-                    if st.session_state.get(_K_SELECTOR) else
-                    ":material/keyboard_arrow_down:"))
+              icon=(":material/keyboard_arrow_up:" if abierto
+                    else ":material/library_add:"),
+              help=("Cerrar los períodos sueltos" if abierto else
+                    "Sumar períodos sueltos: el mismo del año pasado, el "
+                    "anterior u otra fecha"))
 
 
 def _ano_pasado(k, grano):
@@ -3101,6 +3109,54 @@ def _dibujar_filas(tramos, claves, grano, medida, filas, cols_filas, lectura,
 
 # ── Vista ───────────────────────────────────────────────────────────────────
 
+MODOS_VISTA = ("Mapa", "Comparar", "A medida")
+"""El interruptor del renglón del título (regla #627):
+
+    Mapa      UN mapa de las fechas elegidas: la granularidad la decide el
+              rango (`grano_automatico`) y no hay paneles que armar
+    Comparar  hasta 4 períodos, con «Un panel por», «Comparar» y
+              «Lado a lado / Diferencia»: el mapa de siempre
+    A medida  el total de los días y el horario que se elijan
+              (`ventas_franja`)
+
+Hasta el 2026-10-10 sólo existía «Comparar», y sus tres controles de
+paneles se veían siempre aunque la pregunta más común —a qué hora se vende
+en estas fechas— no compara nada."""
+
+_KEYS_WIDGET_COMPARAR = ("vh_grano", "vh_op_lect")
+"""Lo que sólo dibuja «Comparar»: «Mapa» los conserva (`preservar_widgets`)."""
+
+_KEYS_WIDGET_MAPA = _KEYS_WIDGET_COMPARAR + ("vh_op_filas", "vh_op_hora", _K_RAROS,
+                     _K_FORMA, _K_NUM, _K_TOT, _K_DIAS, _K_COLS, _K_ESC,
+                     _K_ESC_H, "vh_medida_mapa", "vh_medidas_arbol")
+"""Los controles del mapa que no tienen sombra propia: con «A medida» en
+pantalla no se dibujan, y un widget que no se dibuja pierde su valor
+(`base.preservar_widgets`). Sin botones: a un botón no se le escribe."""
+
+
+def _interruptor_modo():
+    st.segmented_control(
+        "Vista", MODOS_VISTA, default=MODOS_VISTA[0], required=True,
+        key="vh_modo", label_visibility="collapsed",
+        help="**Mapa**: las fechas elegidas, hora por hora. **Comparar**: "
+             "hasta 4 períodos lado a lado o restados. **A medida**: el "
+             "total de los días y el horario que elijas —los últimos "
+             "domingos de 17:30 a 23:30, unos días sueltos—, por canal, "
+             "grupo o subgrupo.")
+
+
+def grano_automatico(ini, fin, ultimo=None):
+    """La granularidad del modo «Mapa»: un solo día va en «Día»; si no, la
+    más fina —«Mes» o «Año»— en que el rango entra en `MAX_MARCAS` paneles.
+    «Mes» y no «Semana»: sus columnas son los días con su número, y un rango
+    que cruza de semana no se parte en dos mapas de lunes a domingo."""
+    if ini is None or fin is None or ini >= fin:
+        return "Día"
+    if len(_paneles_del_rango(ini, fin, "Mes", ultimo)) <= MAX_MARCAS:
+        return "Mes"
+    return "Año"
+
+
 @st.fragment
 def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     col_prod=None, col_cant=None, col_fam=None, col_sub=None,
@@ -3123,6 +3179,23 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
     _lim = rango_fechas(_cfg_v.get("archivo", "ventas.parquet"),
                         _cfg_v.get("carga_por_rango", "FEC REG DOCUMENTO"))
     ancla = _lim[1] if _lim else _fe.max().date()
+
+    # ── «A medida» (regla #627): otra pieza, la misma tarjeta ─────────────
+    # Importado acá y no arriba: `ventas_franja` importa `ventas_platos`,
+    # que importa de este módulo.
+    from graficos import ventas_franja as _franja
+    modo = st.session_state.get("vh_modo") or MODOS_VISTA[0]
+    if modo not in MODOS_VISTA:
+        modo = st.session_state["vh_modo"] = MODOS_VISTA[0]
+    comparar = modo == MODOS_VISTA[1]
+    if modo == MODOS_VISTA[2]:
+        preservar_widgets(_KEYS_WIDGET_MAPA)
+        with _card("vh_a_medida"):
+            _franja.cuerpo(d, filtrar_cb, interruptor=_interruptor_modo)
+        return
+    preservar_widgets(_franja._KEYS_WIDGET)
+    if not comparar:
+        preservar_widgets(_KEYS_WIDGET_COMPARAR)
 
     # Descuento: dos columnas distintas y sólo una es el MONTO.
     # `DESCUENTO ITEM DDOCUMENTO` es el descuento de la línea (ya
@@ -3175,33 +3248,46 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # después, cada uno cuando se conoce lo que necesita.
         with st.container(horizontal=True, gap="small",
                           vertical_alignment="center", key="vh_cab"):
-            s_tit = st.container(key="vh_cab_tit", width="content")
+            # El interruptor ocupa el lugar del TÍTULO (regla #627), que
+            # repetía lo que dicen «Filas» y «Columnas» («Platos por hora»):
+            # con los dos, la fila no entraba en un renglón a 1323px.
+            s_modo = st.container(key="vh_cab_modo", width="content")
             s_fecha = st.container(horizontal=True, gap="small",
                                    key="vh_tiempo", width="content")
-            s_grano = st.container(key="vh_cab_grano", width="content")
-            s_paneles = st.container(horizontal=True, gap="small",
-                                     vertical_alignment="center",
-                                     key="vh_paneles", width="content")
+            # Los de los paneles, sólo en «Comparar»: vacíos seguirían
+            # dibujando su rótulo y su separador (pseudo-elementos).
+            if comparar:
+                s_grano = st.container(key="vh_cab_grano", width="content")
+                s_paneles = st.container(horizontal=True, gap="small",
+                                         vertical_alignment="center",
+                                         key="vh_paneles", width="content")
             s_filas = st.container(key="vh_cab_filas", width="content")
             s_cols = st.container(key="vh_cab_cols", width="content")
             s_valor = st.container(key="vh_cab_valor", width="content")
             s_esc = st.container(key="vh_cab_esc", width="content")
             s_aj = st.container(key="vh_ajustes", width="content")
-        with s_tit:
-            # `_ph_titulo` se pinta DESPUÉS de conocer las filas (regla #108:
-            # el título depende de un control que vive en esta misma franja).
-            _ph_titulo = st.empty()
-        with s_grano:
-            if st.session_state.get("vh_grano") not in GRANOS:
-                st.session_state["vh_grano"] = _GRANO_DEF
-            grano = st.selectbox("Un panel por", list(GRANOS), key="vh_grano",
-                                 label_visibility="collapsed", width=86)
-
-        # Si cambió la granularidad, los períodos sueltos dejan de significar
-        # lo mismo (una columna de "Semana" no es una de "Mes").
-        if st.session_state.get("vh_grano_aplicado") != grano:
-            st.session_state["vh_grano_aplicado"] = grano
-            st.session_state[_K_EXTRAS] = []
+        with s_modo:
+            _interruptor_modo()
+        # El rango se lee primero: en «Mapa» decide la granularidad.
+        _ctx_h = ctx_rango_propio()
+        st.session_state.pop("vh_fecha_cambio", None)
+        _rng = (rango_tarjeta(_CAT_RANGO, _ctx_h) if _ctx_h else None) \
+            or (ancla.replace(day=1), ancla)
+        if comparar:
+            with s_grano:
+                if st.session_state.get("vh_grano") not in GRANOS:
+                    st.session_state["vh_grano"] = _GRANO_DEF
+                grano = st.selectbox("Un panel por", list(GRANOS),
+                                     key="vh_grano",
+                                     label_visibility="collapsed", width=86)
+            # Si cambió la granularidad, los períodos sueltos dejan de
+            # significar lo mismo (una columna de "Semana" no es una de
+            # "Mes"). Sólo en «Comparar», que es donde se arman.
+            if st.session_state.get("vh_grano_aplicado") != grano:
+                st.session_state["vh_grano_aplicado"] = grano
+                st.session_state[_K_EXTRAS] = []
+        else:
+            grano = grano_automatico(_rng[0], min(_rng[1], ancla), ancla)
 
         # ── LA FECHA DE LA VISTA (regla #531) ───────────────────────────
         # El mismo selector que el Resumen, Mix de carta y las tarjetas de
@@ -3209,14 +3295,10 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # la del loader de Ventas, así que mover esta fecha no toca la de
         # arriba ni recarga el parquet del reporte. Abre en el mes en curso
         # hasta el último día con datos —el default del reporte—, que es
-        # donde la vista abrió siempre.
-        _ctx_h = ctx_rango_propio()
-        # La bandera avisa que la fecha cambió; acá no hay nada que escalar:
-        # los paneles se traen de R2 dentro de esta misma tarjeta. El rango
-        # se lee ANTES de dibujar el selector: su callback ya corrió.
-        st.session_state.pop("vh_fecha_cambio", None)
-        _rng = (rango_tarjeta(_CAT_RANGO, _ctx_h) if _ctx_h else None) \
-            or (ancla.replace(day=1), ancla)
+        # donde la vista abrió siempre. La bandera avisa que la fecha
+        # cambió; acá no hay nada que escalar: los paneles se traen de R2
+        # dentro de esta misma tarjeta. El rango se lee ANTES de dibujar el
+        # selector (más arriba): su callback ya corrió.
         del_rango = _paneles_del_rango(_rng[0], min(_rng[1], ancla), grano,
                                        ancla)
         _n_rango = len(del_rango)
@@ -3224,7 +3306,7 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         _bases = {_base_clave(k) for k in del_rango}
         extras = [k for k in st.session_state.get(_K_EXTRAS) or []
                   if _base_clave(k) not in _bases
-                  ][:MAX_MARCAS - len(del_rango)]
+                  ][:MAX_MARCAS - len(del_rango)] if comparar else []
         # Orden cronológico SIEMPRE: los paneles se leen de izquierda (más
         # viejo) a derecha, y la base de la «Diferencia» y del drill es el
         # primero — con «Año pasado», el del año pasado.
@@ -3252,14 +3334,16 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                 selector_fecha_tarjeta(
                     "vh_fecha", "vh_fecha_cambio", categoria=_CAT_RANGO,
                     ctx=_ctx_h, label=_fmt_rango_corto(*_rng))
-        with s_paneles:
-            # «Lado a lado / Diferencia» junto a «Comparar»: los dos hablan de
-            # los PANELES, y «Diferencia» pide dos o más.
-            _boton_selector(len(extras))
-            lectura = _pastillas(
-                "Leer", _LECTURAS, "vh_op_lect", _K_LECT_VALOR,
-                _LECTURAS[0],
-                {_LECTURAS[1]: _mot_dif} if _mot_dif else None, ancho=104)
+        lectura = _LECTURAS[0]
+        if comparar:
+            with s_paneles:
+                # «Lado a lado / Diferencia» junto a «Comparar»: los dos
+                # hablan de los PANELES, y «Diferencia» pide dos o más.
+                _boton_selector(len(extras))
+                lectura = _pastillas(
+                    "Leer", _LECTURAS, "vh_op_lect", _K_LECT_VALOR,
+                    _LECTURAS[0],
+                    {_LECTURAS[1]: _mot_dif} if _mot_dif else None, ancho=104)
 
         with s_filas:
             filas = st.selectbox("Filas", list(_FILAS), key="vh_op_filas",
@@ -3439,7 +3523,8 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
         # El PANEL va fuera de las columnas, a lo ancho de la tarjeta: dentro
         # de una columna de la franja (168px) sus cinco columnas daban 30px
         # por botón y los períodos salían escritos en vertical.
-        _panel_comparar(ancla, grano, del_rango, extras)
+        if comparar:
+            _panel_comparar(ancla, grano, del_rango, extras)
         if _n_rango > MAX_MARCAS:
             _uni = {"Día": "días", "Semana": "semanas", "Mes": "meses",
                     "Año": "años"}[grano]
@@ -3455,13 +3540,6 @@ def _ventas_horario(d, col_venta, col_fecha, col_pax=None, col_pedido=None,
                     f"El rango tiene {_n_rango} {_uni}: se ven los últimos "
                     f"{MAX_MARCAS}."
                     + (f" Con «{_mayor}» entra entero." if _mayor else ""))
-
-        _nombre = (("Mapa por día de semana" if semanal
-                    else "Mapa por día y hora") if not en_filas else
-                   f"{filas} por " + ("hora" if cols_filas == _COLS_FILAS[0]
-                                      else "día de semana"))
-        _ph_titulo.markdown(f'<p class="vh-titulo">{_nombre}</p>',
-                            unsafe_allow_html=True)
 
         # Una sola línea al pie de la franja, no dos: el título ya no tiene
         # la suya porque comparte fila con los controles.
