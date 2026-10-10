@@ -111,9 +111,11 @@ from graficos.compras._comun import (
     CATEGORIA_SEC, GAP_DRILL, _first_point, _periodo_serie, colores_estables,
     documento_legible, selector_fecha_tarjeta,
 )
-# Documento y Montos, de «Filtros» (regla #621).
+# Documento y Montos (regla #621), propios de ESTA tarjeta desde el
+# 2026-10-10 (regla #624).
 from graficos.compras._comun import (
-    DOC_GUIAS, con_igv, documento_elegido, sufijo_montos, tipo_corto,
+    COL_CON_IGV, CON_IGV, DOC_GUIAS, DOC_OPCIONES, DOC_TODOS,
+    MONTOS_OPCIONES, SIN_IGV, filtrar_documento, sufijo_montos, tipo_corto,
 )
 # EL NOMBRE DEL PROVEEDOR SE ESCRIBE COMO NOMBRE PROPIO, no como lo grita el
 # ERP (2026-09-20, a pedido: «pongamos el nombre del proveedor en
@@ -158,6 +160,25 @@ _K_FAM = "compras_sem_familias"
 _K_SUB = "compras_sem_subfamilias"
 _K_PROV = "compras_sem_proveedores"
 _K_PROD = "compras_sem_productos"
+
+# DOCUMENTO Y MONTOS, DE ESTA TARJETA (2026-10-10, regla #624, a pedido:
+# «dentro de la tarjeta, como una línea para seleccionar, no en la franja de
+# arriba»). Hasta ese día vivían en «Filtros» y mandaban sobre todo Compras
+# (regla #621); se eligió que fueran sólo de esta tarjeta, así que las otras
+# vistas miden siempre todos los documentos y sin IGV.
+_K_DOCUMENTO = "compras_sem_documento"
+_K_MONTOS = "compras_sem_montos"
+
+
+def _eleccion(key, opciones, default):
+    """El valor de uno de los dos toggles, LEÍDO ANTES de dibujarlo: filtra
+    el `d` del que salen hasta las listas de la cabecera. Se siembra acá y
+    el widget va sin `default=`, como «Partir por»."""
+    v = st.session_state.get(key)
+    if v not in opciones:
+        v = default
+        st.session_state[key] = v
+    return v
 
 
 def _seleccion_previa(key):
@@ -256,7 +277,8 @@ _AYUDA_MODO = (
 # y sólo ve literales.
 _KEYS_WIDGET = ("compras_sem_gran", "compras_sem_familias",
                 "compras_sem_subfamilias", "compras_sem_proveedores",
-                "compras_sem_productos", "compras_sem_modo",
+                "compras_sem_productos", "compras_sem_documento",
+                "compras_sem_montos", "compras_sem_modo",
                 "compras_sem_partir", "compras_sem_res_*")
 # (La tabla de «Resumen del Período» no va: su selección se CONSUME en la
 # corrida del clic —estrena la key con un contador—, así que no hay nada
@@ -335,9 +357,13 @@ puntos de compra cabían en una barra de Mes y Año. Se fue con los puntos.)"""
 # Y la fila de KPI que se fue el 2026-10-01 le devuelve a la FIGURA lo que
 # medía, en los dos estados (`alturas.FRANJA_KPI_SEMANAL`): a pedido, «las
 # barras deben subir un poco más».
+#
+# Y la línea de Documento y Montos (2026-10-10, regla #624) se la cobra a la
+# figura, en los dos estados (`alturas.FRANJA_DOC_SEMANAL`).
 _ALTO_FIG_SOLO = (alturas.SEMANAL_SOLO - alturas.FRANJA_MODO_SEMANAL
-                  + alturas.FRANJA_KPI_SEMANAL)
-_ALTO_FIG_CON_TABLA = alturas.COMPACTO + alturas.FRANJA_KPI_SEMANAL
+                  + alturas.FRANJA_KPI_SEMANAL - alturas.FRANJA_DOC_SEMANAL)
+_ALTO_FIG_CON_TABLA = (alturas.COMPACTO + alturas.FRANJA_KPI_SEMANAL
+                       - alturas.FRANJA_DOC_SEMANAL)
 _ALTO_TABLA = alturas.SEMANAL_TABLA - alturas.FRANJA_MODO_SEMANAL
 
 
@@ -1475,6 +1501,30 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
     del mismo paquete, así que quedan viejos JUNTOS y son consistentes, pero
     el default cuesta cero y cubre igual al llamador que todavía no los pasa.
     """
+    # ── Documento y Montos, de esta tarjeta (regla #624) ──────────────────
+    # Lo que hasta el 2026-10-10 hacía el dispatcher para todo Compras. Antes
+    # de TODO: de `d` salen las listas de Proveedor y Producto. Las opciones
+    # de Familia y Subfamilia siguen saliendo del histórico SIN este filtro
+    # (`_d_full_ops`): elegir «Guías sin canjear» no puede borrar en silencio
+    # una familia elegida que no tuvo guías (el bug de `compras/__init__.py`).
+    _documento = _eleccion(_K_DOCUMENTO, DOC_OPCIONES, DOC_TODOS)
+    _con_igv = _eleccion(_K_MONTOS, MONTOS_OPCIONES, SIN_IGV) == CON_IGV
+    _d_full_ops = d_full
+    d = filtrar_documento(d, col_tipo_doc, _documento)
+    if d_full is not None:
+        d_full = filtrar_documento(d_full, col_tipo_doc, _documento)
+    # Con IGV la columna de valor pasa a ser neto + IGV; el precio unitario
+    # sigue neto, y `col_valor_neto` queda para «Precio» y el Detalle.
+    col_valor_neto = col_valor
+    if _con_igv and col_igv and col_igv in d.columns:
+        def _sumar_igv(df_):
+            return df_.assign(**{COL_CON_IGV: (
+                pd.to_numeric(df_[col_valor], errors="coerce").fillna(0)
+                + pd.to_numeric(df_[col_igv], errors="coerce").fillna(0))})
+        d = _sumar_igv(d)
+        if d_full is not None:
+            d_full = _sumar_igv(d_full)
+        col_valor = COL_CON_IGV
     _valor = pd.to_numeric(d[col_valor], errors="coerce").fillna(0)
     # ── Escalada a rerun COMPLETO tras un atajo de fecha ────────
     # La bandera del selector de fecha de esta tarjeta. El filtro
@@ -1561,8 +1611,9 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _ops_fam = []
         _hay_fam = bool(col_fam) and col_fam in d.columns
         if _hay_fam:
-            _src_fam = (d_full if (d_full is not None
-                                   and col_fam in d_full.columns) else d)
+            _src_fam = (_d_full_ops if (_d_full_ops is not None
+                                        and col_fam in _d_full_ops.columns)
+                        else d)
             _ops_fam = sorted(_src_fam[col_fam].dropna().astype(str).unique())
         _fam_prev = [_f for _f in _seleccion_previa(_K_FAM)
                      if _f in set(_ops_fam)]
@@ -1576,8 +1627,9 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         _ops_sub = []
         _hay_sub = bool(col_subfam) and col_subfam in d.columns
         if _hay_sub:
-            _src_sub = (d_full if (d_full is not None
-                                   and col_subfam in d_full.columns) else d)
+            _src_sub = (_d_full_ops if (_d_full_ops is not None
+                                        and col_subfam in _d_full_ops.columns)
+                        else d)
             if _hay_fam and _fam_prev and col_fam in _src_sub.columns:
                 _src_sub = _src_sub[_src_sub[col_fam].astype(str)
                                     .isin(_fam_prev)]
@@ -1737,6 +1789,28 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
             # izquierda, que son de esta vista y no de la fecha. En ese caso
             # se dibujan sueltos.
             _controles()
+
+        # ── LA LÍNEA DE DOCUMENTO Y MONTOS (regla #624) ──────────────────
+        # Debajo de la cabecera y no adentro: la cabecera ya llena su
+        # renglón a 1323px, y dos toggles más la partían en dos. Sus
+        # píxeles salen de la figura (`alturas.FRANJA_DOC_SEMANAL`). Los
+        # valores ya se leyeron arriba de todo; acá sólo se dibujan.
+        with st.container(horizontal=True, gap="small",
+                          vertical_alignment="center", key="cp_sem_doc_fila"):
+            st.markdown('<div class="cp-sem-doc-rot">Documento</div>',
+                        unsafe_allow_html=True)
+            st.segmented_control(
+                "Documento", list(DOC_OPCIONES), required=True,
+                key=_K_DOCUMENTO, label_visibility="collapsed")
+            st.markdown('<div class="cp-sem-doc-rot cp-sem-doc-rot-2">'
+                        'Montos</div>', unsafe_allow_html=True)
+            st.segmented_control(
+                "Montos", list(MONTOS_OPCIONES), required=True,
+                key=_K_MONTOS, label_visibility="collapsed")
+            st.markdown(
+                '<div class="cp-sem-doc-nota">Sólo esta tarjeta · «Todos» es '
+                'lo que suman los reportes de ingresos del Almacén</div>',
+                unsafe_allow_html=True)
         gran = _box.get("gran") or _GRAN_DEFAULT
         # Listas: vacía es «todos» (regla #623).
         fam_sel = list(_box.get("fam") or [])
@@ -1761,7 +1835,7 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # al cambiar de producto, con todo en una tupla: son varios motivos
         # para lo mismo.
         _ctx = (gran, tuple(fam_sel), tuple(sub_sel), tuple(prov_sel),
-                tuple(prod_sel))
+                tuple(prod_sel), _documento)
         if st.session_state.get("compras_sem_ctx_prev") != _ctx:
             st.session_state["compras_sem_ctx_prev"] = _ctx
             st.session_state["compras_sem_focus"] = None
@@ -1847,13 +1921,12 @@ def _compras_semanal_drill(d, col_prod, col_fecha, col_cant, col_punit,
         # «Precio» tiene que sumar lo que suman sus partes, que son netas:
         # por eso en ese caso TODA la tarjeta pasa a neto (barras, etiquetas
         # y tablas) y el título lo dice.
-        _igv = bool(con_igv() and col_valor_neto
+        _igv = bool(_con_igv and col_valor_neto
                     and col_valor_neto != col_valor)
         _forzar_neto = _igv and _partida_gran and _partir == _PARTIR_PRECIO
         if _forzar_neto:
             dd["valor"] = dd["neto"]
         _igv_vista = _igv and not _forzar_neto
-        _documento = documento_elegido()
         _sufijo = sufijo_montos(_igv_vista, _documento) + (
             " (Precio se compara sin IGV)" if _forzar_neto else "")
         _rot_valor = "con IGV" if _igv_vista else "sin IGV"

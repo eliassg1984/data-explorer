@@ -993,11 +993,15 @@ por fecha de ingreso; el Registro, sin guías ni planillas), en la regla #603.
 **`VALOR_COMPRA` es el NETO, sin IGV** (el IGV viene en
 `VALOR_IGV_COMPRA_MN`), y no es un 18 % parejo: el 22,5 % de lo comprado
 está exonerado (verduras, pescados, frutas) y una guía sin canjear todavía
-no lo lleva. Desde el 2026-10-08 «Filtros» de Compras elige **Documento**
-(todos / facturas / guías sin canjear) y **Montos** (sin / con IGV) para
-TODAS las vistas: con IGV, el dispatcher le pasa a cada drill
-`_comun.COL_CON_IGV` como `col_valor`, y el precio unitario sigue neto. El
-«Precio» de «Compras por período» se mide siempre sin IGV. Regla #621.
+no lo lleva. **Documento** (todos / facturas / guías sin canjear) y
+**Montos** (sin / con IGV) son una línea DENTRO de la tarjeta de «Compras
+por período» y mandan sólo sobre ella (2026-10-10, regla #624, a pedido);
+las demás vistas de Compras miden siempre todos los documentos y sin IGV.
+Del 2026-10-08 al 10 estuvieron en «Filtros», para todas (regla #621). Con
+IGV, la tarjeta mide con `_comun.COL_CON_IGV` como `col_valor` y el precio
+unitario sigue neto; su «Precio» se mide siempre sin IGV. Las opciones de
+Familia y Subfamilia salen del histórico SIN el filtro de Documento: elegir
+«Guías» no puede borrar una familia elegida.
 
 ## El costo de ventas: el reporte «Costos»
 

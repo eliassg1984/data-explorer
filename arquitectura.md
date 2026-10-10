@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-623 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+624 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (202)
+**CSS y estilos** (203)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -236,8 +236,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 - **#617** — Cada vista de Movimientos tiene su propia fecha, y la franja del reporte ya no dibuja…
 - **#618** — La escala de tiempo vieja se borró entera, y con ella la Evolución de Movimientos: «sin…
+- **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
 
-**Layout y alturas** (88)
+**Layout y alturas** (89)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -327,6 +328,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#592** — Ventas › Resumen › «Pagos»: lo cobrado por forma de pago, con la marca de cada tarjeta — y la…
 - **#597** — Nuevo Costeo acepta lo que el almacén TODAVÍA NO TIENE —compra, (P) o (Rs)—, y dice dónde se…
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
+- **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
 
 **Plotly y figuras** (114)
 
@@ -49011,6 +49013,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-10.)
 
+624. **Documento y Montos son una línea de la tarjeta de «Compras por
+     período» y mandan SÓLO sobre ella.** 2026-10-10, a pedido: «dentro de
+     la tarjeta, como una línea para seleccionar, no en la franja de
+     arriba». Revierte el alcance de la #621, que los puso en «Filtros» para
+     todo Compras: se preguntó, y el usuario eligió que fueran de esta
+     tarjeta sabiendo que las demás vistas quedan en todos los documentos y
+     sin IGV (la contradicción entre tarjetas que la #621 quería evitar es,
+     desde hoy, un estado elegido y dicho en el título de cada una).
+
+     - **El filtro y la suma del IGV los hace la tarjeta**, arriba de todo
+       (`semanal.py::_compras_semanal_drill`), sobre el `d` y el `d_full`
+       que le pasa el dispatcher enteros. Los valores se LEEN de
+       `session_state` antes de dibujar los toggles —de `d` salen las
+       listas de Proveedor y Producto—, sembrados por `_eleccion` y con
+       los widgets sin `default=`, como «Partir por».
+     - **Las opciones de Familia y Subfamilia salen del histórico SIN el
+       filtro de Documento** (`_d_full_ops`): con «Guías sin canjear» la
+       lista se encogería a las familias que tuvieron guías y la #623
+       soltaría en silencio la familia elegida — el bug medido de
+       `compras/__init__.py`.
+     - **Una línea propia, debajo de la cabecera**, y no adentro: la
+       cabecera llena su renglón a 1323px. Medido a 1366×768: la línea mide
+       26px y cuesta 42 con el gap; la paga la figura
+       (`alturas.FRANJA_DOC_SEMANAL`) y la tarjeta sigue en 619 en los dos
+       casos. Los rótulos son `st.markdown`: sin anular su `margin-bottom:
+       -16px` (#162) colgaban 8px por debajo de los botones.
+     - **De paso, un arreglo de la #623**: el contenedor de cada filtro de
+       la cabecera medía 37px — `.st-key-cp_sem_hdr_* > [stElementContainer]
+       {width:100%}` empataba con el `width:auto` de `.st-key-cp_sem_fila
+       [stElementContainer]`, y como `_css_proveedor.CSS` se inyecta DOS
+       veces, la copia de abajo ganaba. El selectbox lo tapaba con su ancho
+       mínimo; el multiselect de la 1.59 no tiene, y el «Todas las
+       familias» quedaba en una caja de 5px, invisible. Ahora el selector
+       lleva `.st-key-cp_sem_filtros` delante. Dos copias del mismo
+       `<style>` SÍ se pisan cuando dos reglas empatan.
+     - Se borraron `_comun.K_DOCUMENTO`, `K_MONTOS`, `documento_elegido` y
+       `con_igv`; las keys de la tarjeta son `compras_sem_documento` y
+       `compras_sem_montos`.
+
+     Verificado con datos reales a 1366×768: Facturas + Guías dan la barra
+     de Todos semana por semana (26,8k + 2,0k = 28,9k), Con IGV las sube y
+     el título dice cada caso.
+
+     (2026-10-10.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49023,7 +49070,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#623**; la próxima toma el número siguiente.
+> última regla es la **#624**; la próxima toma el número siguiente.
 
 >
 

@@ -966,10 +966,17 @@ CSS = """        <style>
         .st-key-cp_sem_hdr_subfamilia,
         .st-key-cp_sem_hdr_proveedor,
         .st-key-cp_sem_hdr_producto { width: 100% !important; }
-        .st-key-cp_sem_hdr_familia > [data-testid="stElementContainer"],
-        .st-key-cp_sem_hdr_subfamilia > [data-testid="stElementContainer"],
-        .st-key-cp_sem_hdr_proveedor > [data-testid="stElementContainer"],
-        .st-key-cp_sem_hdr_producto > [data-testid="stElementContainer"] {
+        /* CON EL `.st-key-cp_sem_filtros` DELANTE (2026-10-10, regla #624):
+           sin él empataba en especificidad con el `width: auto` de
+           `.st-key-cp_sem_fila [data-testid="stElementContainer"]`, y este
+           CSS se inyecta DOS veces (la sección y el drill de Proveedor):
+           la copia de abajo ganaba y el contenedor medía 37px. El selectbox
+           de antes lo tapaba con su ancho mínimo propio; el multiselect no
+           tiene, y el «Todas las familias» quedaba en una caja de 5px. */
+        .st-key-cp_sem_filtros .st-key-cp_sem_hdr_familia > [data-testid="stElementContainer"],
+        .st-key-cp_sem_filtros .st-key-cp_sem_hdr_subfamilia > [data-testid="stElementContainer"],
+        .st-key-cp_sem_filtros .st-key-cp_sem_hdr_proveedor > [data-testid="stElementContainer"],
+        .st-key-cp_sem_filtros .st-key-cp_sem_hdr_producto > [data-testid="stElementContainer"] {
             width: 100% !important;
         }
         /* A la altura de las pildoras de granularidad, que en esta fila
@@ -1067,6 +1074,50 @@ CSS = """        <style>
             padding-bottom: 0 !important;
             max-height: 30px !important;
             overflow: hidden !important;
+        }
+        /* ── LA LÍNEA DE DOCUMENTO Y MONTOS (2026-10-10, regla #624) ─────
+           Una fila propia debajo de la cabecera: rótulo + toggle, dos
+           veces, y una nota a la derecha. Más baja que la cabecera (26px)
+           porque es secundaria y la paga la figura
+           (`alturas.FRANJA_DOC_SEMANAL`). Acotado a SUS keys. */
+        .st-key-cp_sem_doc_fila {
+            gap: 8px !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+        }
+        .st-key-cp_sem_doc_fila > [data-testid="stElementContainer"],
+        .st-key-cp_sem_doc_fila > [data-testid="stLayoutWrapper"] {
+            width: auto !important;
+            flex: 0 0 auto !important;
+        }
+        .cp-sem-doc-rot {
+            font-size: 10.5px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .cp-sem-doc-rot-2 { margin-left: 10px; }
+        /* El `margin-bottom: -16px` de un `st.markdown` con HTML de bloque
+           (regla #162) dejaba su contenedor en 0,8px y el rótulo colgando
+           8px por debajo del centro de los botones (medido). Acá no hay
+           gap vertical que comerse: la fila es horizontal. */
+        .st-key-cp_sem_doc_fila [data-testid="stMarkdownContainer"] {
+            margin-bottom: 0 !important;
+        }
+        .cp-sem-doc-nota {
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            margin-left: 6px;
+        }
+        .st-key-compras_sem_documento [data-testid="stButtonGroup"] button,
+        .st-key-compras_sem_montos [data-testid="stButtonGroup"] button {
+            min-height: 26px !important;
+            height: 26px !important;
+            padding: 0 10px !important;
+            font-size: 11.5px !important;
         }
         /* ── LA GRANULARIDAD, UN TOGGLE LINEAL (2026-09-17) ─────────────
            Era `st.pills`; pasó a `st.segmented_control` a pedido («agrupado

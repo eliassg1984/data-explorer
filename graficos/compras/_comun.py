@@ -607,9 +607,12 @@ SEC_ABRE_EN_EL_MES = ("sec_proveedor", "sec_producto", "sec_semanal")
 # ===========================================================================
 # QUÉ DOCUMENTOS Y CON QUÉ IMPUESTO (2026-10-08, regla #621)
 # ===========================================================================
-# Dos controles del panel «Filtros» de la franja, que valen para TODO
-# Compras: un filtro de documento que sacara las guías sólo de una tarjeta
-# dejaría a esa tarjeta contradiciendo a las otras.
+# Dos controles que nacieron en el panel «Filtros» de la franja, para TODO
+# Compras, y desde el 2026-10-10 son una línea de la tarjeta de «Compras por
+# período», sólo para ella (regla #624, a pedido: el usuario eligió que
+# fueran de esa tarjeta sabiendo que las demás quedan en todos los
+# documentos y sin IGV). Las keys y la lectura viven en `semanal.py`; acá,
+# las opciones y las cuentas.
 #
 # DOCUMENTO. `compras.parquet` es todo lo procesado en el Almacén (#603):
 # facturas, guías de remisión todavía SIN CANJEAR por su factura, planillas
@@ -625,8 +628,6 @@ SEC_ABRE_EN_EL_MES = ("sec_proveedor", "sec_producto", "sec_semanal")
 # pescados y mariscos, frutas: exonerados por el Apéndice I de la Ley del
 # IGV), y una guía tampoco, todavía: lo trae su factura.
 
-K_DOCUMENTO = "compras_graf_documento"
-K_MONTOS = "compras_graf_montos"
 DOC_TODOS = "Todos"
 DOC_FACTURAS = "Facturas"
 DOC_GUIAS = "Guías sin canjear"
@@ -639,17 +640,6 @@ COL_CON_IGV = "VALOR CON IGV"
 IGV de cada línea. Con ella como `col_valor`, todas las vistas pasan a medir
 con IGV sin tocarles el cuerpo; el precio unitario (`PRECIO_UNIT`) sigue
 neto."""
-
-
-def documento_elegido():
-    """El tipo de documento elegido en «Filtros» (`DOC_TODOS` si nada)."""
-    v = st.session_state.get(K_DOCUMENTO)
-    return v if v in DOC_OPCIONES else DOC_TODOS
-
-
-def con_igv():
-    """True si «Filtros» pide los montos con IGV."""
-    return st.session_state.get(K_MONTOS) == CON_IGV
 
 
 def tipo_corto(tipos):

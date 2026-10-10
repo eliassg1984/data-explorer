@@ -280,6 +280,13 @@ Los 617 de las dos de antes salían con el caption ÚLTIMO, cuyo
 último es la tabla y ese padding se paga — de ahí que la cuenta con tabla
 sume los 16 y la otra no (su último hijo sigue siendo el `st.empty()`)."""
 
+FRANJA_DOC_SEMANAL = 42
+"""Lo que le cuesta a «Compra por período» la línea de Documento y Montos
+(2026-10-10, regla #624), que bajó de «Filtros» a la tarjeta: una fila
+PROPIA debajo de la cabecera, de 26px, más el gap de Streamlit. Como las
+otras franjas de esta tarjeta, la paga la FIGURA en los dos estados: la
+tarjeta sigue midiendo lo que la de «Vs año pasado» (617)."""
+
 VENTAS_RESUMEN_TABLA = 34 + 8 * 27
 """Alto de las grillas de abajo de Ventas › Resumen ejecutivo (Resumen y las
 dos del Detalle): SIETE filas visibles, a pedido (2026-09-24: «las tablas de
