@@ -224,6 +224,34 @@ r = ejecutar_sql(dv, 'SELECT SUM(p) AS p FROM (SELECT ANY_VALUE("MONTO PROPINA")
 ok(r.get("ok") and r["filas"][0]["p"] == 7.0,
    "ventas: la propina por pago suma 7 (por fila serían 12)")
 
+# ── Tablas adicionales (regla #626) ────────────────────────────────────────
+# Movimientos le da al modelo las SALIDAS además de `datos` (requerimientos).
+from asistente_datos import esquema_extras, tablas_validas  # noqa: E402
+
+sal = pd.DataFrame({"NOMBRE PRODUCTO": ["Arroz Blanco Granel", "Arroz Bomba"],
+                    "TIPO DESCARGO": ["Comida Personal", "Bajas"],
+                    "CANT SALIDA": [125.5, 1.0], "VALOR NETO": [580.0, 9.0]})
+extras = {"salidas": {"df": sal, "nota": "las notas de salida"},
+          "datos": {"df": sal}, "mal nombre": {"df": sal},
+          "vacia": {"df": pd.DataFrame()}}
+ok(list(tablas_validas(extras)) == ["salidas"],
+   "extras: sólo nombres simples, no `datos` y con filas")
+_e = esquema_extras(extras)
+ok("Tabla `salidas` (2 filas) — las notas de salida" in _e
+   and '"TIPO DESCARGO"' in _e, "extras: el prompt nombra la tabla y su esquema")
+ok(esquema_extras({}) == "", "sin extras, el prompt no cambia")
+r = ejecutar_sql(d, 'SELECT SUM("CANT SALIDA") AS kg FROM salidas WHERE '
+                 '"TIPO DESCARGO" = \'Comida Personal\' AND '
+                 '"NOMBRE PRODUCTO" ILIKE \'%arroz%\'', extras)
+ok(r.get("ok") and r["filas"][0]["kg"] == 125.5,
+   "extras: el SQL consulta `salidas` por su nombre")
+r = ejecutar_sql(d, "SELECT CANT SALIDA FROM salidas", extras)
+ok(not r.get("ok") and "CANT SALIDA" in r.get("error", ""),
+   "extras: la guarda de comillas cubre las columnas de las extras")
+r = ejecutar_sql(None, "SELECT COUNT(*) AS n FROM salidas", extras)
+ok(r.get("ok") and r["filas"][0]["n"] == 2,
+   "extras: sin `datos`, las extras se consultan igual")
+
 # ── Cierre ─────────────────────────────────────────────────────────────────
 print()
 if _fallos:

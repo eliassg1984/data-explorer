@@ -165,7 +165,9 @@ from graficos.base import (
 # salida anulada» —o de cómo se escribe «3 anuladas»— se separan al primer
 # retoque.
 from graficos.movimientos_periodo import (
-    _ANULADO, SALIDAS, orden_areas, rotulo_anio,
+    _ANULADO, SALIDAS, aviso_poco_registro, aviso_rango_poco_registro,
+    lineas_documentos, meses_poco_registro, orden_areas, rango_poco_registro,
+    rotulo_anio,
     tarjeta_porcionamientos_periodo,
     tarjeta_produccion_periodo, tarjeta_requerimientos_periodo,
     tarjeta_salidas_periodo,
@@ -175,7 +177,7 @@ from graficos.movimientos_consumo import tarjeta_consumo
 from graficos.movimientos_destino import tarjeta_destino
 from graficos.movimientos_merma import (
     VALOR_HOY, precios_hoy, selector_valorizacion, tarjeta_proveedores,
-    tarjeta_rendimiento, tarjeta_revisar, valorizacion,
+    tarjeta_rendimiento, tarjeta_revisar, unidades_kardex, valorizacion,
 )
 
 # El rótulo del rail es CORTO a propósito: la franja de Vistas es horizontal
@@ -532,9 +534,28 @@ _CAUSAS = (
     ("Producción", ("PRODUCCION",)),
     ("Tiempo de vida", ("VIDA", "VENC", "TIEMP", "TEIMP")),
     ("Manipulación", ("MANIPULACION", "ROMPIO", "ROTO", "GUARDAR", "CAYO")),
+    # Las dos de abajo (2026-10-10, regla #626): eran «Otra causa». «Uso en
+    # el área» se escribe como «USO EN AREA», «USO DE AREA» o «USO SALON»;
+    # «USO MENSUAL» sigue siendo otra cosa. La comida de personal se llama
+    # «FAMILIA» en la cocina: «PRODUCTOS DE BAJA / FAMILIA» es comida de
+    # personal registrada como baja (S/ 2.194 en doce meses).
+    ("Uso en el área", ("USO EN", "USO DE", "USO SALON")),
+    ("Comida de personal", ("FAMILIA", "PERSONAL")),
     ("Consumo directo", ("CONSUMO DIRECTO",)),
     ("No cumple el estándar", ("STANDAR", "ESTANDAR")),
 )
+TIPO_BAJAS = "BAJAS"
+"""El `TIPO DESCARGO` de la merma de verdad. La causa sólo se lee ahí."""
+NO_ES_BAJA = "No es baja"
+"""La causa de una salida de otro tipo —comida de personal, despacho a
+Mayta, uso en el área—: su motivo dice para qué salió, no por qué se
+perdió (regla #626). Sin esto el cuadro «Causa» abría con «Consumo directo
+55 %», que era la comida de personal."""
+CAUSA_DESDE = pd.Timestamp("2025-10-01")
+"""Desde cuándo el motivo se escribe con la forma «PRODUCTO DE BAJA /
+<causa>». Antes casi todo dice «PRODUCTOS DE BAJA» y nada más, así que
+comparar causas con un rango anterior marca «nuevo» lo que siempre pasó
+(«Tiempo de vida: nuevo» en sep 2026 contra sep 2025). Regla #626."""
 _PALABRAS_SIN_CAUSA = {"PRODUCTO", "PRODUCTOS", "PRODCUTO", "PRODCUTOS",
                        "PROUCTOS", "PRODUCCTOS", "BAJA", "BAJAS", "DE", "DEL",
                        "LA", "LAS", "EL", "LOS", "Y", "X", "POR"}
@@ -557,15 +578,25 @@ def causa_de_baja(motivo):
     return OTRA_CAUSA if resto else SIN_CAUSA
 
 
-def con_causa(d, col_motivo):
+def con_causa(d, col_motivo, col_tipo=None):
     """`d` con la columna `COL_CAUSA`, o `d` tal cual sin motivo. Cada texto
-    distinto se clasifica una vez."""
+    distinto se clasifica una vez. Con `col_tipo`, las salidas que no son
+    del tipo Bajas llevan `NO_ES_BAJA` (regla #626)."""
     if d is None or not col_motivo or col_motivo not in d.columns:
         return d
     m = d[col_motivo].fillna("").astype(str)
     mapa = {x: causa_de_baja(x) for x in m.unique()}
-    return d.assign(**{COL_CAUSA: m.map(mapa)})
+    causa = m.map(mapa)
+    if col_tipo and col_tipo in d.columns:
+        tipo = d[col_tipo].fillna("").astype(str).str.strip().str.upper()
+        causa = causa.where(tipo == TIPO_BAJAS, NO_ES_BAJA)
+    return d.assign(**{COL_CAUSA: causa})
 
+
+_COLS_TIPO_SAL = ["TIPO DESCARGO", "Tipo Descargo"]
+COL_UNIDAD_SAL = "UNIDAD"
+"""La unidad del kardex de cada línea de salidas, que `_cargar_salidas` le
+pega desde el maestro (`unidades_kardex`, regla #626)."""
 
 _COLS_AREA_SALIDAS = ["AREA", "Area", "SUB ALMACEN", "Sub Almacen"]
 """Cómo se llama el área en `salidas.parquet`. La trae desde el 2026-09-23
@@ -584,6 +615,37 @@ LA CAUSA VA SEGUNDA (2026-10-08, regla #614), y no al final: un clic en
 contesta «qué se vence, y en qué área»; al final no recortaría nada. Las
 dos filas con el mismo reparto: con la subfamilia en 0.8 su columna de
 valorizado salía cortada («V…»), medido a 1323px."""
+
+
+_COLS_SAL_SIN_IA = ("LLAVE SALIDAS", "LOCAL", "CODIGO ESTADO SALIDA")
+
+
+def salidas_para_ia(hist):
+    """Las salidas como las ve el asistente IA (regla #626): sin las
+    columnas internas —la causa y la fecha que usa la página salen con
+    nombre propio, `CAUSA` y `FECHA`— ni las que no dicen nada (el local es
+    uno solo). Pura."""
+    d = hist.drop(columns=[c for c in _COLS_SAL_SIN_IA if c in hist.columns])
+    d = d.rename(columns={COL_CAUSA: "CAUSA", "_fecha": "FECHA"})
+    return d[[c for c in d.columns if not str(c).startswith("_")]]
+
+
+def nota_salidas_ia(fecha):
+    """Qué es la tabla `salidas` y cómo se suma, para el system prompt."""
+    return (
+        "las notas de salida del Almacén, una fila por LÍNEA (producto) de "
+        "cada nota (\"COD SALIDA\"). \"FECHA\" es la de "
+        + _ROT_FECHA_SAL.get(fecha, "registro") + ", la que usa la página. "
+        "Para sumar, excluye WHERE \"NOMBRE ESTADO SALIDA\" <> 'ANULADO' y "
+        "las líneas sin producto. \"VALOR NETO\" es el valorizado en soles; "
+        "\"CANT SALIDA\" está en \"UNIDAD\" (la del kardex: KILOS, UND, "
+        "LITROS) — suma cantidades sólo de UN producto o de una misma "
+        "unidad. \"TIPO DESCARGO\" dice QUÉ salida es: sólo 'Bajas' es merma; "
+        "'Comida Personal' es la comida del personal, 'Despacho Mayta' una "
+        "venta interna, 'Uso en el Area' un consumo. \"CAUSA\" sale del "
+        "motivo escrito y sólo se lee en las Bajas (desde octubre de 2025). "
+        "Un mes con muchas menos notas que los anteriores puede ser falta "
+        "de registro y no menos merma: si lo ves, dilo.")
 
 
 def _cargar_salidas(col_fam_sal, fam_sel, sub_sel=(), fecha=FECHA_REGISTRO):
@@ -618,7 +680,16 @@ def _cargar_salidas(col_fam_sal, fam_sel, sub_sel=(), fecha=FECHA_REGISTRO):
                  or _resolver(df, _COLS_FECHA_SAL[FECHA_REGISTRO]))
     if not col_fecha:
         return None, None
-    d = con_causa(df, _resolver(df, _COLS_MOTIVO_SAL)).copy()
+    d = con_causa(df, _resolver(df, _COLS_MOTIVO_SAL),
+                  _resolver(df, _COLS_TIPO_SAL)).copy()
+    # La UNIDAD de cada cantidad (regla #626): sin ella «cuánto arroz»
+    # sólo se contestaba en soles.
+    col_cod = _resolver(d, ["COD PRODUCTO", "Cod Producto"])
+    if col_cod and COL_UNIDAD_SAL not in d.columns:
+        unid = unidades_kardex()
+        if unid is not None:
+            d[COL_UNIDAD_SAL] = (d[col_cod].fillna("").astype(str).str.strip()
+                                 .map(unid).fillna(""))
     d["_fecha"] = pd.to_datetime(d[col_fecha], errors="coerce")
     d = d.dropna(subset=["_fecha"])
     if fam_sel and col_fam_sal and col_fam_sal in d.columns:
@@ -846,6 +917,13 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     if col_fecha_sal and col_fecha_sal in _COLS_FECHA_SAL[FECHA_REGISTRO]:
         fecha_sal = FECHA_REGISTRO
     fechas_sal = fechas_de(hist_sal["_fecha"]) if hist_sal is not None else None
+    # El asistente IA ve también las SALIDAS (regla #626), como una tabla
+    # aparte: `datos` siguen siendo los requerimientos.
+    if hist_sal is not None:
+        publicar_contexto_ia(
+            "Movimientos", d, {"Sub Almacén": sub_sel, "Familia": fam_sel},
+            extras={"salidas": {"df": salidas_para_ia(hist_sal),
+                                "nota": nota_salidas_ia(fecha_sal)}})
 
     def _col_sal(*nombres):
         return (_resolver(hist_sal, list(nombres))
@@ -959,7 +1037,8 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                       fam=_col_sal("Nombre Familia", "NOMBRE FAMILIA"),
                       prod=col_prod_sal,
                       cant=_col_sal("Cant Salida", "CANT SALIDA"),
-                      val=col_val_sal, tipo=col_tipo))
+                      val=col_val_sal, tipo=col_tipo,
+                      unid=_col_sal(COL_UNIDAD_SAL)))
 
     def _dib_tabla_req():
         rng, fecha = _rango_y_boton("mov_sec_tabla_req", fechas_req)
@@ -1015,13 +1094,37 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # fecha: la columna «vs <año>» de cada cuadro (regla #614). Con
         # «Dos años» los cuadros comparan contra el más cercano; los dos
         # años van en el gráfico de «Salidas por período».
-        d_ant, rot_ant = None, ""
+        d_ant, rot_ant, sin_comparar = None, "", ()
         if anios_comp and rng and hist_sal is not None:
             off = pd.DateOffset(years=1)
             _h = hist_sal[(hist_sal["_fecha"] >= rng[0] - off)
                           & (hist_sal["_fecha"] < rng[1] - off)]
             d_ant, _ = salidas_que_suman(_h, **_kw_suman)
             rot_ant = rotulo_anio(rng[0], rng[1], off)
+            # Antes de que el motivo tuviera forma, las causas no se
+            # comparan: todo salía «nuevo» (regla #626).
+            if rng[0] - off < CAUSA_DESDE:
+                sin_comparar = ("causa",)
+        # Los meses con pocas salidas registradas, como en «Salidas por
+        # período» (regla #626): ahí una caída no es menos merma, y los
+        # cuadros no la pintan de verde.
+        aviso = None
+        if rng:
+            _bh = lineas_documentos(
+                hist_sal, fecha="_fecha", doc=_kw_suman["col_doc"],
+                area=None, estado=_kw_suman["col_estado"], fam=None,
+                prod=col_prod_sal, cant=None, val=col_val_sal)
+            # Primero los meses enteros; si el rango no tiene ninguno (los
+            # últimos 30 días cruzan dos), el rango entero.
+            aviso = (aviso_poco_registro(
+                meses_poco_registro(_bh, rng, pd.Timestamp.today().normalize(),
+                                    SALIDAS), SALIDAS)
+                or aviso_rango_poco_registro(
+                    rango_poco_registro(_bh, rng, SALIDAS), SALIDAS))
+            if aviso:
+                aviso = (f"⚠ Pocas salidas registradas en estas fechas "
+                         f"({aviso[0]}): una caída puede ser que no se "
+                         "registró, no menos merma.", aviso[1])
         hay_causa = COL_CAUSA in validas.columns
         drill_tablas.seccion_cuadros(
             validas, pref="mov", slug="detsal",
@@ -1034,7 +1137,10 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                      (col_prod_sal, "producto")),
             filas=_FILAS_DETALLE_SAL, col_val=col_val_sal, nota=nota,
             titulo=titulo, fecha=fecha,
-            d_ant=d_ant, rotulo_ant=rot_ant,
+            d_ant=d_ant, rotulo_ant=rot_ant, sin_comparar=sin_comparar,
+            aviso=aviso,
+            cantidad=(_col_sal("Cant Salida", "CANT SALIDA"),
+                      _col_sal(COL_UNIDAD_SAL)),
             aviso_falta={"causa": (
                 "La causa sale del motivo escrito en cada nota («PRODUCTO "
                 "DE BAJA / TIEMPO DE VIDA»), y la consulta de salidas "

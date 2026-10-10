@@ -151,7 +151,7 @@ def pila_sin_tablas(pila):
     return tuple(s for s in pila if not es_vista_tabla(s[1]))
 
 
-def publicar_contexto_ia(reporte, df, filtros=None):
+def publicar_contexto_ia(reporte, df, filtros=None, extras=None):
     """Publica el df EFECTIVO (con los chips ya aplicados) para el asistente IA.
 
     POR QUÉ existe: `app.py` llama a `inject_asistente(df_contexto=df_f)`, y
@@ -175,11 +175,16 @@ def publicar_contexto_ia(reporte, df, filtros=None):
 
     `filtros` es un dict {etiqueta: valor(es)} solo para CONTARLE al modelo
     qué está filtrado; el filtrado real ya viene hecho en `df`.
+
+    `extras` son otras tablas del reporte, `{nombre: {"df": …, "nota": …}}`
+    (regla #626): el modelo las consulta con su nombre. Movimientos le da
+    así las salidas además de los requerimientos.
     """
     st.session_state["_ia_contexto"] = {
         "reporte": reporte,
         "df": df,
         "filtros": {k: v for k, v in (filtros or {}).items() if v},
+        "extras": extras or {},
     }
 
 

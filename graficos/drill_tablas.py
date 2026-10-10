@@ -88,6 +88,13 @@ CSS_TITULOS_DRILL = """
    scrollea, sin el numero no se ve si son 12 productos o 400. */
 .inv-rank-tit-n { font-size: 12px; font-weight: 500; opacity: .55;
                   margin-left: 6px; }
+/* El aviso de poco registro (regla #626), en el ámbar de la fila de KPI
+   de las tarjetas «por período»: es el mismo aviso. Va en su propio
+   renglón, arriba de los cuadros: junto al título lo cortaba el «…». */
+.inv-rank-aviso { font-size: 12.5px; font-weight: 600;
+                  color: var(--warning-text); padding-left: 2px;
+                  white-space: nowrap; overflow: hidden;
+                  text-overflow: ellipsis; }
 </style>
 """
 
@@ -220,7 +227,8 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                   ancho_pct=80, flex_nombre=2, ancho_barra=0.62,
                   monto_corto=False, nombre_bonito=False, abre_en=(),
                   abrir_en_mayor=False, etiqueta_valor="Valorizado",
-                  d_ant=None, rotulo_ant=""):
+                  d_ant=None, rotulo_ant="", col_cant=None, col_unidad=None,
+                  vs_sin_verde=False, sin_ceros=False):
     """El ranking de un nivel, como TABLA con barra de progreso.
 
     Es la tabla-ranking del repo, la misma que el Ranking de proveedores de
@@ -258,11 +266,27 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     columna «vs <rotulo_ant>» con la variación de cada fila contra él —roja
     si subió—, «nuevo» si ese año no hubo, y la del total en la fila TOTAL.
     Lo que ese año hubo y hoy no, no tiene fila: el cuadro lista lo de hoy.
+    Con `vs_sin_verde` (regla #626) las caídas van en gris y no en verde:
+    en un rango con pocos registros, bajar no es gastar menos.
+
+    `sin_ceros` saca las filas de menos de medio sol (los cuadros de
+    `seccion_cuadros`, regla #626).
+
+    `col_cant` y `col_unidad` (regla #626) suman la columna «Cant.» con la
+    cantidad de cada fila y su unidad («1,317 kg»). Sólo tiene sentido en
+    un nivel cuyas filas son PRODUCTOS: sumar kilos de dos productos sí,
+    kilos con unidades no — la fila de un grupo con dos unidades queda sin
+    unidad y la del TOTAL, en blanco.
     """
     from st_aggrid import AgGrid, JsCode
 
     met = pd.to_numeric(d[col_val], errors="coerce").fillna(0)
     serie = met.groupby(claves(d, col_grp)).sum().sort_values(ascending=False)
+    # Con `sin_ceros` (regla #626) no van las filas que valen menos de
+    # medio sol: «PRODUCCION S/ 0 · −100 %» no dice nada. Salvo con la
+    # cantidad: una botella retornable sale a S/ 0 y sus unidades sí cuentan.
+    if sin_ceros and not (col_cant and col_cant in d.columns):
+        serie = serie[serie.abs() >= 0.5]
     if serie.empty:
         st.info("Sin datos.")
         return None
@@ -315,6 +339,26 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
         tabla["_ant"] = _antes
         _ta = float(_a.sum())
         fila_total[col_ant] = ((total - _ta) / abs(_ta) * 100) if _ta else None
+    con_cant = bool(col_cant and col_cant in d.columns)
+    if con_cant:
+        _grp = claves(d, col_grp)
+        _c = pd.to_numeric(d[col_cant], errors="coerce").fillna(0).groupby(
+            _grp).sum()
+        _um = pd.Series("", index=d.index)
+        if col_unidad and col_unidad in d.columns:
+            _um = d[col_unidad].fillna("").astype(str).str.strip()
+        _u = _um.groupby(_grp).agg(
+            lambda s: s.iloc[0] if s.nunique() == 1 else "")
+        # `cant` y no «Cant.»: AG Grid lee el punto de un `field` como una
+        # RUTA (`data["Cant"][""]`) y la columna salía vacía. El rótulo va
+        # en `headerName`.
+        tabla["cant"] = [round(float(_c.get(c, 0.0)), 3)
+                         for c in serie.index]
+        tabla["_um"] = [unidad_corta(_u.get(c, "")) for c in serie.index]
+        _unicas = set(_um)
+        fila_total["cant"] = (
+            f"{float(_c.sum()):,.0f} {unidad_corta(_unicas.pop())}"
+            if len(_unicas) == 1 and "" not in _unicas else "")
 
     # La barra llega al 62% de la celda y el texto va a la DERECHA: asi nunca
     # se pisan (con la barra al 100% el monto caia sobre el morado, texto
@@ -376,16 +420,29 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
         " var a = Math.abs(v);"
         " if (Math.round(a) === 0) return '0%';"
         " return (v > 0 ? '+' : '\\u2212') + Math.round(a) + '%'; }")
+    _baja = GRIS_TEXTO_SUAVE if vs_sin_verde else AJUSTE_POS_TEXTO
     _js_vs_estilo = JsCode(
         "function(p){ var v = p.value;"
         " var b = {'textAlign':'right'};"
         f" if (v==null) {{ b.color = '{GRIS_TEXTO_SUAVE}'; return b; }}"
-        f" b.color = v > 0 ? '{AJUSTE_NEG_TEXTO}' : '{AJUSTE_POS_TEXTO}';"
+        f" b.color = v > 0 ? '{AJUSTE_NEG_TEXTO}' : '{_baja}';"
         " b.fontWeight = '600'; return b; }")
+    _tip_poco = (" · hay meses con pocas salidas registradas: una caída "
+                 "puede ser que no se registró" if vs_sin_verde else "")
     _js_vs_tip = JsCode(
         "function(p){ if (p.node && p.node.rowPinned) return null;"
         f" return '{rotulo_ant}: S/ ' +"
-        " Math.round(p.data._ant||0).toLocaleString('es-PE'); }")
+        " Math.round(p.data._ant||0).toLocaleString('es-PE')"
+        f" + '{_tip_poco}'; }}")
+    # La cantidad con su unidad: «1,317 kg», «0.25 kg», «12 und». En la
+    # fila TOTAL llega ya escrita desde Python (o vacía).
+    _js_cant = JsCode(
+        "function(p){ var v = p.value;"
+        " if (typeof v !== 'number') return v == null ? '' : String(v);"
+        " var a = Math.abs(v), dec = a >= 100 ? 0 : (a >= 1 ? 1 : 2);"
+        " var t = v.toLocaleString('es-PE', {maximumFractionDigits: dec});"
+        " var u = (p.data && p.data._um) || '';"
+        " return u ? t + ' ' + u : t; }")
     # AG Grid, por si solo, NO deselecciona al reclickear la fila ya
     # seleccionada (pide Ctrl+clic, que nadie descubre). `setSelected(valor,
     # true)` limpia las demas -> sigue siendo seleccion unica. El guard de
@@ -450,10 +507,14 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                 # del resto de las tablas del repo (2026-09-24, #511).
                 {"field": col_nombre, "headerName": col_nombre,
                  "flex": flex_nombre, "tooltipField": col_nombre},
+                *([{"field": "cant", "headerName": "Cant.", "width": 72,
+                    "type": "numericColumn", "valueFormatter": _js_cant,
+                    "headerTooltip": "Cantidad, en la unidad del kardex"},
+                   {"field": "_um", "hide": True}] if con_cant else []),
                 {"field": etiqueta_valor, "flex": 2, "type": "numericColumn",
                  "cellStyle": _js_barra, "valueFormatter": _js_soles},
                 {"field": "%", "width": ancho_pct, "type": "numericColumn",
-                 "valueFormatter": _js_pct},
+                 "valueFormatter": _js_pct, "hide": con_cant},
                 *([{"field": col_ant, "headerName": col_ant, "width": 64,
                     "type": "numericColumn", "valueFormatter": _js_vs,
                     "cellStyle": _js_vs_estilo,
@@ -508,7 +569,7 @@ def tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
 
 def tabla_detalle(d, col_next, nombre_next, col_val, key, ruta=(),
                   formato=None, etiqueta_valor="Valorizado", con_cuenta=False,
-                  d_ant=None, rotulo_ant=""):
+                  d_ant=None, rotulo_ant="", **extra):
     """Un eslabón más de la cadena: el desglose del recorte que ya está en
     foco — la pregunta natural después de "cuánto pidió COCINA" es "de qué se
     compone".
@@ -561,7 +622,7 @@ def tabla_detalle(d, col_next, nombre_next, col_val, key, ruta=(),
         nombre_bonito=nombre_next in CATEGORIAS_NOMBRE_PROPIO,
         etiqueta_valor=etiqueta_valor,
         d_ant=None if d_ant is None else recorte(d_ant, ruta),
-        rotulo_ant=rotulo_ant,
+        rotulo_ant=rotulo_ant, **extra,
         **(formato or FORMATO_DETALLE[2]))
 
 
@@ -939,7 +1000,8 @@ def claves_tarjetas_cuadros(pref, slug, n):
 
 def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                     etiqueta_valor="Valorizado", titulo=None, nota=None,
-                    d_ant=None, rotulo_ant="", aviso_falta=None, fecha=None):
+                    d_ant=None, rotulo_ant="", aviso_falta=None, fecha=None,
+                    sin_comparar=(), aviso=None, cantidad=None):
     """Todos los niveles como CUADROS, repartidos en filas, y ninguno abre
     con foco.
 
@@ -984,7 +1046,14 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
     compara; cada cuadro suma la columna «vs <año>» (`tabla_ranking`), con
     la misma ruta aplicada. `aviso_falta` es `{nombre del nivel: texto}`:
     lo que dice el cuadro de un nivel cuya columna no llegó, en vez del
-    «No se encontró la columna» de siempre — para decir cómo se trae."""
+    «No se encontró la columna» de siempre — para decir cómo se trae.
+
+    Regla #626: `sin_comparar` son los nombres de nivel que NO llevan la
+    columna «vs <año>» (la causa, antes de que el motivo tuviera forma).
+    `aviso` es `(texto, tooltip)` del poco registro: va en ámbar en un
+    renglón arriba de los cuadros y apaga el verde de las caídas en todos. `cantidad` es `(col_cant, col_unidad)`: la columna «Cant.» del
+    ÚLTIMO nivel —el de los productos, el único donde sumar cantidades
+    tiene sentido—."""
     if sum(len(f) for f in filas) != len(niveles):
         raise ValueError(f"`filas` reparte {sum(len(f) for f in filas)} "
                          f"cuadros y `niveles` trae {len(niveles)}")
@@ -992,6 +1061,9 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
     # ese guard DESAPARECE en el rerun siguiente (regla #59).
     st.markdown(CSS_TITULOS_DRILL, unsafe_allow_html=True)
     tarjetas = claves_tarjetas_cuadros(pref, slug, len(niveles))
+    if aviso:
+        st.markdown(f'<div class="inv-rank-aviso" title="{escape(aviso[1])}">'
+                    f"{escape(aviso[0])}</div>", unsafe_allow_html=True)
     # La RUTA, como en `seccion_cadena`: tríos (columna, clave, texto), uno
     # por cuadro ya dibujado — con None en la clave si ese cuadro no tiene
     # fila elegida.
@@ -1004,6 +1076,10 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
         for j, peso in enumerate(reparto):
             col_n, nombre_n = niveles[i]
             formato = formato_por_ancho(peso / float(sum(reparto)))
+            _extra = {"vs_sin_verde": bool(aviso), "sin_ceros": True}
+            if cantidad and i == len(niveles) - 1:
+                _extra.update(col_cant=cantidad[0], col_unidad=cantidad[1])
+            _d_ant = None if nombre_n in sin_comparar else d_ant
             foco = None
             with cols[j]:
                 with st.container(border=True, key=tarjetas[i]):
@@ -1039,8 +1115,8 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                             d, col_n, col_val, nombre_n,
                             key=f"{pref}_rank_grid_{slug}",
                             nombre_bonito=nombre_n in CATEGORIAS_NOMBRE_PROPIO,
-                            etiqueta_valor=etiqueta_valor, d_ant=d_ant,
-                            rotulo_ant=rotulo_ant, **formato)
+                            etiqueta_valor=etiqueta_valor, d_ant=_d_ant,
+                            rotulo_ant=rotulo_ant, **_extra, **formato)
                     else:
                         # La key lleva la ruta con la POSICIÓN de cada
                         # eslabón: acá se pueden saltar niveles, y sin la
@@ -1053,6 +1129,6 @@ def seccion_cuadros(d, *, pref, slug, niveles, filas, col_val,
                             key=f"{pref}_det_grid_{slug}_{i}_{_k or 'todo'}",
                             ruta=tuple(ruta), formato=formato,
                             etiqueta_valor=etiqueta_valor, con_cuenta=True,
-                            d_ant=d_ant, rotulo_ant=rotulo_ant)
+                            d_ant=_d_ant, rotulo_ant=rotulo_ant, **_extra)
             ruta.append((col_n, foco, texto_cat(nombre_n, foco)))
             i += 1

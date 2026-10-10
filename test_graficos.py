@@ -7072,6 +7072,52 @@ def _pruebas_salidas_comparar_y_destino():
     check("sin columna de motivo, el df tal cual",
           mov.COL_CAUSA in mov.con_causa(d, None).columns, False)
 
+    # ── 1b) La causa sólo en las Bajas, y la unidad (regla #626) ──────────
+    for motivo, causa in (
+            ("PRODUCTO DE BAJA / USO EN AREA", "Uso en el área"),
+            ("PRODUCTOS BAJA USO SALON 31/10725", "Uso en el área"),
+            ("PRODUCTOS DE BAJA / FAMILIA", "Comida de personal"),
+            ("USO MENSUAL", mov.OTRA_CAUSA)):
+        check(f"causa #626 de «{motivo[:30]}»", mov.causa_de_baja(motivo),
+              causa)
+    d = pd.DataFrame({"MOTIVO": ["TIEMPO DE VIDA", "CONSUMO DIRECTO"],
+                      "TIPO DESCARGO": ["Bajas ", "Comida Personal"]})
+    check("la causa sólo se lee en las Bajas",
+          mov.con_causa(d, "MOTIVO", "TIPO DESCARGO")[mov.COL_CAUSA].tolist(),
+          ["Tiempo de vida", mov.NO_ES_BAJA])
+    _u = pd.DataFrame({"unid": ["KILOS", "KILOS"], "cant": [1.5, 2.0]})
+    check("una sola unidad: se escribe corta", mp.unidad_de_vista(_u), "kg")
+    check("dos unidades: no se suman",
+          mp.unidad_de_vista(_u.assign(unid=["KILOS", "UND"])), "")
+    check("una línea sin unidad: no se suma",
+          mp.unidad_de_vista(_u.assign(unid=["KILOS", ""])), "")
+    _ago = (pd.Period("2026-08", "M"), 44, 250.0)
+    check("las barras de un mes con poco registro",
+          mp.periodos_poco_registro(["2026-07", "2026-08", "2026-09"], "Mes",
+                                    [_ago]), [False, True, False])
+    check("una semana que cruza al mes con poco registro también",
+          mp.periodos_poco_registro(["2026-S31", "2026-S30"], "Semana",
+                                    [_ago]), [True, False])
+    _bh = pd.DataFrame({
+        "fecha": pd.to_datetime(
+            [f"2025-{m:02d}-{d:02d}" for m in range(9, 13) for d in range(1, 26)]
+            + [f"2026-{m:02d}-{d:02d}" for m in range(1, 9) for d in range(1, 26)]
+            + ["2026-09-12", "2026-09-20", "2026-10-02"]),
+        "estado": "PROCESADO", "vacio": False})
+    _bh["doc"] = range(len(_bh))
+    _r = (pd.Timestamp("2026-09-10"), pd.Timestamp("2026-10-10"))
+    check("un rango de 30 días con 3 salidas contra ~25 al mes: avisa",
+          mp.rango_poco_registro(_bh, _r, mp.SALIDAS)[0], 3)
+    check("el mismo rango un año antes, con lo normal: no avisa",
+          mp.rango_poco_registro(_bh, (pd.Timestamp("2026-07-01"),
+                                       pd.Timestamp("2026-08-01")),
+                                 mp.SALIDAS), None)
+    _ia = mov.salidas_para_ia(pd.DataFrame({
+        "LOCAL": ["SAPIENS"], "LLAVE SALIDAS": ["x"], mov.COL_CAUSA: ["c"],
+        "_fecha": [pd.Timestamp("2026-09-01")], "VALOR NETO": [1.0]}))
+    check("lo que ve el asistente: sin internas, CAUSA y FECHA con nombre",
+          list(_ia.columns), ["CAUSA", "FECHA", "VALOR NETO"])
+
     # ── 2) La comparación con años anteriores ─────────────────────────────
     def _lin(filas):
         return pd.DataFrame({

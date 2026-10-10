@@ -421,6 +421,28 @@ def precios_hoy():
     return t.dropna().drop_duplicates("cod").set_index("cod")["p"]
 
 
+def unidades_kardex():
+    """Código → unidad del KARDEX («KILOS», «UND», «LITROS»), del mismo
+    maestro que `precios_hoy`. None si no se puede leer.
+
+    Es la unidad en que vienen las cantidades de `salidas.parquet`, que no
+    la trae: medido el 2026-10-10 sobre los 342 productos con salidas desde
+    junio, valor ÷ cantidad da el precio promedio del maestro (mediana
+    1,00), y todos los códigos están en el maestro con UNA sola unidad
+    (regla #626)."""
+    inv = data.cargar(data.REPORTES["Inventario Valorizado"]["archivo"])
+    if inv is None or inv.empty:
+        return None
+    c_cod = _resolver(inv, ["CODIGO PRODUCTO", "Codigo Producto"])
+    c_u = _resolver(inv, ["UNIDAD KARDEX", "Unidad Kardex"])
+    if not (c_cod and c_u):
+        return None
+    t = pd.DataFrame({"cod": inv[c_cod].astype(str).str.strip(),
+                      "u": inv[c_u].fillna("").astype(str).str.strip()})
+    t = t[t["u"] != ""]
+    return t.drop_duplicates("cod").set_index("cod")["u"]
+
+
 def _compras():
     try:
         return compras_para_proveedor(data.cargar("compras.parquet"))

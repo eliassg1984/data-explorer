@@ -107,7 +107,7 @@ from graficos.base import (
 )
 from graficos.compras._comun import (
     GAP_DRILL, _UNIDAD_GRAN, _clave_grilla, _first_point, _fmt_variacion,
-    _hover_variacion, _nota_variacion, _periodo_serie, _variaciones,
+    _hover_variacion, _limites_periodo, _nota_variacion, _periodo_serie, _variaciones,
     colores_estables,
 )
 # LAS CUENTAS DE LA GEMELA. Privadas de allá, y a propósito: estas tarjetas
@@ -194,7 +194,11 @@ REQUERIMIENTOS = Lado(
 SALIDAS = Lado(
     k="mov_psal", c="mps", card="ajuste_graf_card_izq_mov_sal_periodo",
     sing="salida", plur="salidas", corto="sal.", fem=True,
-    titulo="Valorizado dado de baja", accion="dio de baja",
+    # «de salidas» y no «dado de baja» (regla #626): en doce meses la merma
+    # de verdad fue S/ 35 mil de S/ 192 mil; lo demás es comida de
+    # personal, el despacho a Mayta, uso en el área. Con el tipo elegido,
+    # el título lo nombra.
+    titulo="Valorizado de salidas", accion="dio de baja",
     rotulo_tipo="Tipo de descargo",
     ayuda_tipo="Acota la tarjeta a un tipo de descargo (Bajas, Comida "
                "personal, Uso en el área…). Ofrece los del área elegida, "
@@ -617,6 +621,76 @@ def comparacion_periodos(bh, rango_ts, gran, claves, anios, lado=None):
     return salida
 
 
+def rango_poco_registro(bh, rango_ts, lado=None, umbral=0.5,
+                        minimo_ref=20):
+    """`(documentos, referencia)` si el RANGO entero tiene menos de la mitad
+    de los documentos de lo normal, o None (regla #626).
+
+    `meses_poco_registro` sólo mira meses ENTEROS, y el rango de entrada de
+    «Salidas por Área» —los últimos 30 días, «10 set – 9 oct»— no tiene
+    ninguno: con 84 salidas en septiembre contra ~250 de costumbre, los
+    cuadros pintaban «−69 %» en verde sin aviso. La referencia es la mediana
+    mensual de los doce meses anteriores al rango, llevada a sus días.
+    Pura."""
+    ini, fin = rango_ts
+    dv = _validas(bh, lado)
+    if dv.empty:
+        return None
+    n = int(dv[(dv["fecha"] >= ini) & (dv["fecha"] < fin)]["doc"].nunique())
+    por_mes = dv.groupby(dv["fecha"].dt.to_period("M"))["doc"].nunique()
+    p0 = pd.Timestamp(ini).to_period("M")
+    prev = por_mes.reindex(pd.period_range(p0 - 12, p0 - 1, freq="M")).dropna()
+    if len(prev) < 6:
+        return None
+    ref = float(prev.median()) * (pd.Timestamp(fin) - pd.Timestamp(ini)).days / 30.4
+    if ref >= minimo_ref and n < umbral * ref:
+        return n, ref
+    return None
+
+
+def aviso_rango_poco_registro(poco, lado):
+    """`(corto, largo)` de `rango_poco_registro`, o None."""
+    if not poco:
+        return None
+    n, ref = poco
+    return (f"{n:,} vs ~{ref:,.0f}",
+            f"En estas fechas hay {lado.cuenta(n)}; lo normal serían "
+            f"~{ref:,.0f} (la mediana de los doce meses anteriores, llevada "
+            "a estos días). Una caída acá puede ser que no se registró, no "
+            "que se perdió menos.")
+
+
+def unidad_de_vista(dv):
+    """La unidad de las líneas `dv` si es UNA sola y la traen todas
+    («kg»), o "" — y entonces la cantidad no se suma: kilos más unidades no
+    es un número (regla #626). Pura."""
+    if dv is None or dv.empty or "unid" not in dv.columns:
+        return ""
+    u = dv["unid"].fillna("").astype(str).str.strip()
+    if (u == "").any() or u.nunique() != 1:
+        return ""
+    return unidad_corta(u.iloc[0])
+
+
+def periodos_poco_registro(claves, gran, meses):
+    """`[bool]`, uno por clave del eje: si el período toca un mes de
+    `meses_poco_registro` (regla #626). Ahí una caída contra el año pasado
+    no se pinta de verde. Pura."""
+    poco = {p for p, _, _ in meses or ()}
+    if not poco:
+        return [False] * len(claves)
+    salida = []
+    for c in claves:
+        try:
+            ini, fin = _limites_periodo(str(c), gran)
+        except (TypeError, ValueError):
+            salida.append(False)
+            continue
+        toca = pd.period_range(ini, fin, freq="M")
+        salida.append(any(m in poco for m in toca))
+    return salida
+
+
 def variacion_pct(actual, antes):
     """La variación en %, o None si antes no hubo nada contra qué medir."""
     if not antes:
@@ -671,7 +745,8 @@ def resumen_por_periodo(bl, lado=None):
     """Una fila por período —la columna `clave` de `bl`—, en orden.
 
     `bl` son TODAS las líneas del recorte, las vacías incluidas. Columnas,
-    por NOMBRE: `valor`, `lineas`, `docs` y `areas` de las líneas VÁLIDAS
+    por NOMBRE: `valor`, `lineas`, `docs`, `areas` y `cant` (regla #626:
+    sólo se MUESTRA si la vista es de una sola unidad) de las líneas VÁLIDAS
     (`_validas`), y `anulados` y `sin_procesar`, que se cuentan en
     documentos y sobre todas: un anulado sin ítems también es un anulado.
     Un período que sólo tiene documentos que no suman no tiene barra y no
@@ -684,7 +759,8 @@ def resumen_por_periodo(bl, lado=None):
     dv = _validas(bl, lado)
     g = (dv.groupby("clave")
            .agg(valor=("valor", "sum"), lineas=("valor", "size"),
-                docs=("doc", "nunique"), areas=("area", "nunique"))
+                docs=("doc", "nunique"), areas=("area", "nunique"),
+                cant=("cant", "sum"))
            .sort_index())
     for extra in ("costo", "cortes"):
         if extra in dv.columns:
@@ -771,7 +847,7 @@ def _etiqueta_arriba(trazas, textos):
     return salida
 
 
-def _renglones(total, n_doc, var, gran, lado, segundo=None):
+def _renglones(total, n_doc, var, gran, lado, segundo=None, poco=False):
     """Los renglones de la etiqueta de UNA barra como `(plano, html)`: el
     total, los documentos y la variación — la etiqueta de Compras con
     «req.» o «sal.» donde aquélla dice «docs». `segundo` reemplaza al
@@ -787,6 +863,9 @@ def _renglones(total, n_doc, var, gran, lado, segundo=None):
         estado, pct, _ = var
         if estado == "ok":
             _t, _c = _fmt_variacion(pct)
+            # Una caída en un mes con poco registro, en gris (regla #626).
+            if poco and pct < 0:
+                _c = GRIS_TEXTO
             salida.append((_t, f"<span style='color:{_c}'><b>{_t}</b></span>"))
         elif estado == "parcial":
             salida.append(("parcial",
@@ -897,9 +976,10 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
               else [None] * n)
     segundos = [(f"{t / c:.0%} merma" if (lado.merma and c) else None)
                 for t, c in zip(v["tot"], costos)]
-    reng = [_renglones(fmt_k(t) if t else None, r, var, gran, lado, s)
-            for t, r, var, s in zip(v["tot"], docs, v["variaciones"],
-                                    segundos)]
+    _poco = v.get("poco") or [False] * n
+    reng = [_renglones(fmt_k(t) if t else None, r, var, gran, lado, s, pc)
+            for t, r, var, s, pc in zip(v["tot"], docs, v["variaciones"],
+                                        segundos, _poco)]
     plan, k_etq, alto_etq = _plan_etiquetas(
         n, [[p for p, _ in r] for r in reng], alto_fig)
     textos = [None] * n
@@ -1011,18 +1091,33 @@ def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
     return fig
 
 
-def tabla_resumen(v, foco=None, comp=None, tramos=False):
+def tabla_resumen(v, foco=None, comp=None, tramos=False, unidad="",
+                  poco=None):
     """`(filas, total)` de la grilla del Resumen: una fila por barra.
 
     Con `comp` —el año más cercano de `comparacion_periodos`— suma dos
     columnas: lo de ese período ese año (`ant`) y la variación (`vs_ant`,
-    en %, vacía donde ese año no hubo nada). Regla #614."""
+    en %, vacía donde ese año no hubo nada). Regla #614.
+
+    Regla #626: con `unidad` («kg»), la columna `cant` con la cantidad de
+    cada barra —va en `filas.attrs["unidad"]` para la cabecera—; y `poco`,
+    un bool por barra (`periodos_poco_registro`), viaja oculto como
+    `__poco` para que la grilla no pinte de verde una caída de un mes con
+    poco registro."""
     filas, total = _tabla_resumen(v, foco)
+    if unidad:
+        _cant = [round(float(x), 3) for x in v["res"]["cant"]]
+        filas.insert(filas.columns.get_loc("valor"), "cant", _cant)
+        total["cant"] = f"{fmt_cant(round(sum(_cant), 1))} {unidad}"
+    filas.attrs["unidad"] = unidad
+    if poco is not None:
+        filas["__poco"] = list(poco)
     # Con la barra partida por tipo o por producto (#614), una columna por
     # TRAMO, en el orden de la barra: el gráfico escrito como tabla. La
     # lista de `(campo, rótulo)` viaja en `filas.attrs["tramos"]`.
     cols_tramo = []
-    if tramos and v.get("trazas"):
+    # Con UN tramo (un tipo elegido) su columna repetiría el valorizado.
+    if tramos and len(v.get("trazas") or ()) > 1:
         _i = filas.columns.get_loc("valor") + 1
         for j, (nombre, _color, vals) in enumerate(v["trazas"]):
             campo = f"tr_{j}"
@@ -1041,6 +1136,7 @@ def tabla_resumen(v, foco=None, comp=None, tramos=False):
         total["vs_ant"] = ("" if _var is None
                            else f"{'+' if _var > 0 else '−'}{abs(_var):.0f}%")
     filas.attrs["tramos"] = cols_tramo
+    filas.attrs["unidad"] = unidad
     return filas, total
 
 
@@ -1254,7 +1350,7 @@ def _mayor_valido(amb, lado=None):
 
 def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
               costo_area=None, comps=(), aviso=None,
-              unidad=("área", "áreas"), nombrar=_nombre_area):
+              unidad=("área", "áreas"), nombrar=_nombre_area, cantidad=""):
     """La fila de KPI: el total de la vista y una tarjeta por TRAMO de la
     barra, con el color del tramo. Es también la leyenda del gráfico, dicha
     con números. `nota` es `(corto, largo)` de lo que no suma, o None.
@@ -1269,7 +1365,10 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
     comparado: lo de ese año en el mismo rango y la variación, roja si
     subió. Su cuadrito es el color del trazo que la representa en el
     gráfico. `aviso` es `(corto, largo)` de los meses con pocos documentos
-    (`meses_poco_registro`), en ámbar al final de la fila."""
+    (`meses_poco_registro`), en ámbar al final de la fila; con él, una
+    caída contra el año comparado va en gris y no en verde (regla #626).
+    `cantidad` («1,317 kg») va junto a la cuenta de documentos del total,
+    sólo cuando la vista es de una unidad (`unidad_de_vista`, #626)."""
     def _t(rot, val, sub, clase="", tip="", color=None, sub_color=None):
         sw = (f'<span class="mp-kpi-sw" style="background:{color}"></span>'
               if color else "")
@@ -1279,7 +1378,7 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
                 f'<span class="mp-kpi-val">{escape(val)}'
                 f'<span class="mp-kpi-sub"{_sc}>{escape(sub)}</span></span></div>')
 
-    _n = lado.cuenta(n_docs)
+    _n = lado.cuenta(n_docs) + (f" · {cantidad}" if cantidad else "")
     partes = [_t(lado.rot_total, fmt_k(total), _n, "mp-kpi-total",
                  f"{lado.rot_total}: S/ {total:,.2f} · {_n}")]
     for j, comp in enumerate(comps or ()):
@@ -1288,7 +1387,8 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
                 else f"▲ ×{_v / 100 + 1:.0f}" if _v >= 900
                 else f"{'▲ +' if _v > 0 else '▼ −'}{abs(_v):.0f}%")
         _col = (None if _v is None
-                else (AJUSTE_NEG_TEXTO if _v > 0 else AJUSTE_POS_TEXTO))
+                else AJUSTE_NEG_TEXTO if _v > 0
+                else GRIS_TEXTO if aviso else AJUSTE_POS_TEXTO)
         partes.append(_t(
             f"Mismo rango {comp['rot']}", fmt_k(comp["total"]), _txt,
             "mp-kpi-comp",
@@ -1750,16 +1850,20 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
             # Sólo donde hay tipo (salidas): con qué se parte la barra.
             partir = PARTIR_AREA
             if con_tipo:
+                # Abre POR TIPO (regla #626): por área, la barra juntaba
+                # la merma con la comida de personal y el despacho a Mayta,
+                # y el tramo mayor —«Cocina personal»— era otra cosa que
+                # una baja.
                 partir = st.segmented_control(
                     "Partir por", (PARTIR_AREA, PARTIR_TIPO, PARTIR_PRODUCTO),
-                    default=PARTIR_AREA, required=True, key=f"{k}_partir",
+                    default=PARTIR_TIPO, required=True, key=f"{k}_partir",
                     label_visibility="collapsed",
                     help=("Con qué se parte cada barra: **por área**, **por "
                           "tipo** de descargo —bajas, comida de personal, "
                           "despacho a Mayta…— o **por producto** (los cuatro "
                           "mayores). La fila de abajo nombra cada tramo con su "
                           "monto, y el Resumen le da una columna a cada uno."
-                          )) or PARTIR_AREA
+                          )) or PARTIR_TIPO
             # Los cuatro, de selección MÚLTIPLE (regla #625). Los valores ya
             # se leyeron arriba; acá sólo se dibujan.
             with st.container(key=f"{c}_hdr_area"):
@@ -1894,20 +1998,27 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
         # ── Años anteriores y meses con poco registro (regla #614) ────────
         # Sobre el parquet ENTERO: el recorte de la franja deja afuera
         # justo lo que se quiere comparar.
-        comps, aviso = [], None
+        comps, aviso, meses_poco = [], None, []
         if bh is not None and rng is not None:
             if anios:
                 comps = comparacion_periodos(bh[_mascara(bh)], rng, gran,
                                              claves, anios, lado)
-            aviso = aviso_poco_registro(
-                meses_poco_registro(bh, rng, pd.Timestamp.today().normalize(),
-                                    lado), lado)
+            meses_poco = meses_poco_registro(
+                bh, rng, pd.Timestamp.today().normalize(), lado)
+            aviso = aviso_poco_registro(meses_poco, lado)
+        v["poco"] = periodos_poco_registro(claves, gran, meses_poco)
 
         # ── Lo que NO suma, dicho en la fila de KPI ───────────────────────
         nota = nota_no_suman(
             bl, lado,
             vacios_nombrables=not fam_sel and not prod_sel)
         dv = _validas(bl, lado)
+        # La cantidad, sólo con un filtro de PRODUCTO puesto y una sola
+        # unidad (regla #626): «cuánto arroz» se contesta en kilos.
+        unidad_v = (unidad_de_vista(dv)
+                    if prod_sel and not lado.merma else "")
+        cant_v = (f"{fmt_cant(round(float(dv['cant'].sum()), 1))} {unidad_v}"
+                  if unidad_v else "")
         # Porcionamientos cierra la fila con lo porcionado y le da a cada
         # área su % de merma PROPIO en el tooltip (#510).
         kw_kpi = (dict(costo=float(dv["costo"].sum()),
@@ -1920,7 +2031,8 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                       ["valor"].sum().loc[lambda s: s > 0],
                       nota, lado, comps=comps, aviso=aviso,
                       unidad=_PARTIR_UNIDAD.get(partir, ("área", "áreas")),
-                      nombrar=lambda n: nombre_tramo(n, partir), **kw_kpi),
+                      nombrar=lambda n: nombre_tramo(n, partir),
+                      cantidad=cant_v, **kw_kpi),
             unsafe_allow_html=True)
 
         # ── Foco, modo y clic: se resuelven ANTES de dibujar (#398, #399) ─
@@ -2021,14 +2133,16 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                     filas, total = tabla_resumen(
                         v, foco if foco_ok else None,
                         comp=comps[0] if comps else None,
-                        tramos=partir != PARTIR_AREA)
+                        tramos=partir != PARTIR_AREA, unidad=unidad_v,
+                        poco=v["poco"])
                     clic_fila = renderizar_periodos_mov(
                         filas, altura=_ALTO_TABLA, key=k_res,
                         rotulo_periodo=_AGRUPADO_GRAN[gran].capitalize(),
                         rotulo_docs=lado.plur.capitalize(),
                         ver_variacion=gran in _GRAN_VARIACION, total=total,
                         rotulo_ant=comps[0]["rot"] if comps else "",
-                        tramos=filas.attrs.get("tramos", ()))
+                        tramos=filas.attrs.get("tramos", ()),
+                        unidad=filas.attrs.get("unidad", ""))
             pie.caption(
                 f"**{_del_al(dv['fecha'])}**"
                 + (f" · por {rot_fecha}" if rot_fecha else "")

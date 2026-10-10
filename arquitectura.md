@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-625 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+626 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (204)
 
@@ -876,11 +876,12 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#609** — Consumo según recetas: un corte porcionado no sale de UN porcionamiento, sale de todos los de…
 - **#613** — El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo cuenta en su MES OPERATIVO
 
-**Asistente IA** (3)
+**Asistente IA** (4)
 
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 - **#613** — El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo cuenta en su MES OPERATIVO
+- **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
 
 **Herramientas de desarrollo** (40)
 
@@ -925,7 +926,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (160)
+**Decisiones de diseño y UX** (161)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1087,6 +1088,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#619** — Una semana se nombra con sus días de la semana, y la que las fechas cortan, por los días que…
 - **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
+- **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -49101,6 +49103,80 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-10.)
 
+626. **Una vista de salidas contesta en la unidad del producto, separa la
+     merma de lo que no es merma, y no pinta de verde lo que no se
+     registró.** 2026-10-10, a pedido, después de leer «Salidas por
+     Período» y «Salidas por Área» como un analista con los datos de R2
+     (17.772 líneas, 2023 – oct 2026). La prueba fue una pregunta de
+     verdad: «¿cuánto arroz se va en comida de personal?». La respuesta
+     —Arroz Blanco Granel, 125-138 kg al mes, 1.317 kg y S/ 5.978 en doce
+     meses— no salía en kilos de ninguna vista, y el asistente IA sólo veía
+     los requerimientos. Cinco cambios:
+
+     1. **La CANTIDAD, con su unidad.** `salidas.parquet` no trae unidad:
+        `_cargar_salidas` le pega `UNIDAD` desde el maestro del inventario
+        valorizado (`movimientos_merma.unidades_kardex`, la `UNIDAD
+        KARDEX`). Medido: en los 342 productos con salidas desde junio,
+        valor ÷ cantidad da el precio promedio del maestro (mediana 1,00) y
+        todos los códigos están, con UNA unidad. El cuadro de producto de
+        «Salidas por Área» lleva «Cant.» («57,3 kg», «7 und»; sin «%», que
+        no entraba), y «Salidas por Período», con un filtro de PRODUCTO y
+        una sola unidad (`unidad_de_vista`), suma «Cantidad (kg)» al
+        Resumen y los kilos al KPI. Kilos de dos productos sí, kilos con
+        unidades no: sin unidad común no se escribe. **El `field` de AG
+        Grid no puede llevar punto**: «Cant.» se lee como la ruta
+        `data["Cant"][""]` y la columna salía vacía; va `cant` con
+        `headerName`.
+
+     2. **«Salidas» no es «bajas».** Doce meses: S/ 192k de salidas, de las
+        que la merma (tipo Bajas) es S/ 35k; la comida de personal, S/ 83k;
+        el despacho a Mayta (venta interna), S/ 31k. La tarjeta se titulaba
+        «Valorizado dado de baja» y abría partida por área, con «Cocina
+        personal» de tramo mayor. Ahora es «Valorizado de salidas» y abre
+        **por tipo** (`PARTIR_TIPO`). Con un solo tipo elegido, su columna
+        de tramo no se dibuja (repetía el valorizado).
+
+     3. **La causa sólo se lee en las Bajas.** `con_causa(…, col_tipo)` le
+        pone `NO_ES_BAJA` a las otras: el cuadro abría con «Consumo directo
+        55 %», que era la comida de personal. Dos causas nuevas, que eran
+        «Otra causa»: «Uso en el área» (USO EN / USO DE / USO SALON; «USO
+        MENSUAL» sigue afuera) y «Comida de personal» (la cocina le dice
+        FAMILIA: «PRODUCTOS DE BAJA / FAMILIA», S/ 2.194 registrados como
+        baja). Y **la causa no se compara antes de `CAUSA_DESDE`**
+        (2025-10-01): el motivo recién tiene forma desde ahí y todo salía
+        «nuevo» («Tiempo de vida: nuevo» en sep 2026 contra sep 2025).
+
+     4. **Poco registro no es poca merma.** Desde julio de 2026 se
+        registran muchas menos salidas (bajas en 6-9 días al mes contra 30;
+        «Uso en el Área», Mayta y Eventos en cero) y las vistas lo
+        pintaban de verde: «Bajas −71 %». Ahora: en los meses de
+        `meses_poco_registro`, una CAÍDA va en gris —en la etiqueta de la
+        barra, el «vs <año>» del Resumen (`__poco`, `_STYLE_VS_ANT`) y el
+        KPI del año comparado—, y «Salidas por Área» lleva el aviso en
+        ámbar en un renglón propio arriba de los cuadros (junto al título
+        lo cortaba el «…»). Ese aviso tenía un hueco: sólo mira meses
+        ENTEROS, y el rango de entrada de la vista —los últimos 30 días—
+        cruza dos. `rango_poco_registro` compara el rango entero contra la
+        mediana mensual de los doce meses anteriores llevada a sus días
+        (10 set – 9 oct 2026: 104 salidas contra ~232). Los cuadros
+        tampoco listan filas de menos de medio sol (`sin_ceros`).
+
+     5. **El asistente IA ve las salidas.** `publicar_contexto_ia(…,
+        extras={"salidas": {"df", "nota"}})`: otras tablas además de
+        `datos`, que el modelo consulta por su nombre
+        (`asistente_datos.tablas_validas`, `esquema_extras`; la guarda de
+        comillas cubre sus columnas). La nota dice que sólo «Bajas» es
+        merma, que la cantidad va en `UNIDAD` y que se excluyen las
+        anuladas. Y una regla más del prompt: un producto se busca con
+        ILIKE y, si salen varios, por separado.
+
+     Para revisar en el Almacén (no son de la app): retazos de lomo en
+     comida de personal valorizados a S/ 183-280 el kg contra S/ 26
+     (~S/ 4.100 de más, enero y abril de 2026), 58,6 kg de Pollo Familia
+     registrados como Bajas, y 190 kg de arroz como Bajas.
+
+     (2026-10-10.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49113,7 +49189,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#625**; la próxima toma el número siguiente.
+> última regla es la **#626**; la próxima toma el número siguiente.
 
 >
 
