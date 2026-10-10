@@ -4153,6 +4153,42 @@ def _pruebas_partir_por():
           "sin IGV todavía" in sem._guias_por_clave(dg, claves, igv=True)[0],
           True)
 
+    # ── 5b. La nota de crédito como documento del Detalle (#628) ─────────
+    _f = pd.Timestamp("2026-09-23")
+    _fac, _anu = "2026-09-23·P1·F0F001000000010", "2026-09-23·P2·F0E001000001728"
+    ddn = pd.DataFrame({
+        "fecha": [_f, _f], "prod": ["Lomo", "Ajo"], "prov": ["P1", "P1"],
+        "docn": ["F0F001000000010"] * 2, "doc": ["F001-10"] * 2,
+        "cant": [15.0, 2.0], "punit": [40.0, 5.0], "valor": [600.0, 10.0],
+        "fam": ["A"] * 2, "sub": ["s"] * 2, "neto": [600.0, 10.0],
+        "igv": [108.0, 1.8], "tipo": ["F"] * 2, "usd": [False] * 2,
+        "compra": [_fac] * 2, "clave": ["S39"] * 2, "lbl": ["21–27 set"] * 2})
+    ncn = pd.DataFrame({
+        "fecha": [_f, _f], "prod": ["Lomo", "Pato"], "prov": ["P1", "P2"],
+        "docn": ["F0F001000000010", "F0E001000001728"], "fam": ["A", "A"],
+        "sub": ["s", "s"], "neto": [200.0, 3558.22], "igv": [36.0, 640.48],
+        "cant": [5.0, 40.0], "punit": [40.0, 88.9], "tipo": ["F", "F"],
+        "usd": [False, False],
+        "nota": ["N0F001000000099", "N0E001000000068"],
+        "fecha_nc": [pd.Timestamp("2026-09-28")] * 2,
+        "compra": [_fac, _anu], "valor": [200.0, 3558.22],
+        "clave": ["S39", "S39"]})
+    det = sem.detalle_con_notas(ddn, ncn, {"S39": "21–27 set"})
+    check("nc · las columnas de dd, por nombre",
+          list(det.columns), list(ddn.columns))
+    check("nc · lo que suma el período no cambia",
+          round(float(det["valor"].sum()), 2), 610.0)
+    _por = det.groupby("compra")["valor"].sum().round(2).to_dict()
+    check("nc · la factura parcial, como se facturó; la anulada, entera",
+          (_por[_fac], _por[_anu]), (810.0, 3558.22))
+    _nota = det[det["tipo"] == sem._TIPO_NC].set_index("doc")
+    check("nc · la nota, en negativo, decodificada y en su fecha",
+          (float(_nota.loc["E001-68", "valor"]),
+           _nota.loc["E001-68", "fecha"].strftime("%d/%m")),
+          (-3558.22, "28/09"))
+    check("nc · sin notas, dd tal cual",
+          sem.detalle_con_notas(ddn, ncn.iloc[0:0]) is ddn, True)
+
     # ── 6. Documento y Montos de «Filtros» (#621) ────────────────────────
     import graficos.compras._comun as cm
     dt = pd.DataFrame({"t": ["Factura", "Guía de Remisión",

@@ -99,6 +99,8 @@ MONTOS = (VALOR, "VALOR_IGV_COMPRA_MN", "VALOR_BRUTO_COMPRA_MN")
 moneda del documento) quedan como se emitió la factura."""
 COL_NOTA = "NOTA_CREDITO"
 """Columna NUEVA: la(s) nota(s) que tocaron la línea, separadas por coma."""
+COL_FECHA_NC = "FECHA_NC"
+"""Columna NUEVA de `lineas_restadas`: el día de la nota."""
 COL_VALOR_NC = "VALOR_NC"
 """Columna NUEVA: lo que la nota le restó a `VALOR_COMPRA`, en soles y en
 positivo. Sumada a `VALOR_COMPRA` da la línea tal como se facturó."""
@@ -333,7 +335,8 @@ def lineas_restadas(compras, notas):
     """LO QUE LAS NOTAS LE RESTARON a cada línea de compra: una fila por
     línea tocada —también las devueltas enteras, que `aplicar_notas` borra—
     con las MISMAS columnas que `compras` y los montos (`MONTOS`) y la
-    cantidad reemplazados por la parte restada, más `NOTA_CREDITO`.
+    cantidad reemplazados por la parte restada, más `NOTA_CREDITO` y
+    `FECHA_NC` (el día de la nota).
 
     Es la otra mitad de `aplicar_notas`: `aplicar_notas(c, n)` más esto dan,
     sumados, las compras tal como se facturaron — que es lo que suman el
@@ -354,6 +357,21 @@ def lineas_restadas(compras, notas):
             out[col] = _num(out[col]) * f_val
     out[CANTIDAD] = base.loc[tocadas, "cant"] * cr.loc[tocadas, "f_cant"]
     out[COL_NOTA] = cr.loc[tocadas, "notas"].astype(object)
+    # La fecha de la NOTA (la primera, si una línea la tocaron dos): las
+    # compras se fechan por su factura, y la nota es otro documento con su
+    # propio día — el que muestra el Detalle de «Compras por período».
+    # Por número Y proveedor: el número se repite entre emisores —la
+    # E001-68 de un proveedor de 2024 le prestaba su fecha a la de otro de
+    # 2026 (medido, regla #143).
+    out[COL_FECHA_NC] = pd.NaT
+    if NC_FECHA in notas.columns:
+        fechas = (pd.Series(
+            pd.to_datetime(notas[NC_FECHA], errors="coerce").to_numpy(),
+            index=_texto(notas[NC_NUMERO]) + "|" + _texto(notas[NC_PROVEEDOR]))
+            .groupby(level=0).min())
+        clave = (out[COL_NOTA].str.split(", ").str[0] + "|"
+                 + base.loc[tocadas, "prov"])
+        out[COL_FECHA_NC] = clave.map(fechas)
     return out
 
 

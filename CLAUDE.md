@@ -1001,11 +1001,13 @@ sirve las compras como antes.
 - **El Resumen de Ingresos del Almacén NO las resta nunca**: su SQL vive
   escrito en `Almacen.exe`, no mira `MNOTACREDITO`, y procesar una nota
   sólo deja la factura con saldo 0. En el mes de una nota, la app y ese
-  reporte no cuadran, y «Compras por período» lo dice en ámbar —la nota de
-  la línea de Documento, un tramo rayado sobre la barra de la factura y
-  una marca en su fila— con `definicion_compra.lineas_restadas`, que trae
-  también las líneas devueltas ENTERAS (las que `data.cargar` borra).
-  Regla #628.
+  reporte no cuadran, y «Compras por período» lo dice en su TABLA, porque
+  una nota es un documento: una columna «Notas de crédito» en «Resumen
+  Total» (sólo si hay alguna) y la nota como documento propio en
+  «Detalle», junto a su factura como se facturó. Sale de
+  `definicion_compra.lineas_restadas`, que trae también las líneas
+  devueltas ENTERAS (las que `data.cargar` borra). Un número de nota se
+  repite entre proveedores: se cruza por número Y proveedor. Regla #628.
 
 Los otros reportes de compras del Almacén y qué cuenta cada uno (los tres de
 «Ingresos» = `compras.parquet` al céntimo; los Rankings, sólo Mercadería y

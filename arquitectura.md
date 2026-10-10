@@ -332,7 +332,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
 - **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
 
-**Plotly y figuras** (115)
+**Plotly y figuras** (114)
 
 - **#5** — _LAYOUT_BASE de graficos.py no se puede desempacar con `
 - **#9** — Un bloque que aparece/desaparece necesita un *instance id* en las keys de sus hijos
@@ -448,9 +448,8 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#620** — La barra de «Compras por período» se parte por lo que se elige —subfamilia, proveedor o…
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
-- **#628** — «Compras por período» dice cuánto restaron las notas de crédito, y cuánto daría sin restarlas…
 
-**AgGrid y tablas** (89)
+**AgGrid y tablas** (90)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -541,6 +540,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#545** — Se quitó «Ranking & FoodCost» de Ventas: su comparación con el año pasado no podía salir bien…
 - **#567** — «Por mesa» es una grilla de 4 × 2 celdas iguales, con aire entre ella y «Contra lo normal»
 - **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
+- **#628** — «Compras por período» dice en su TABLA cuánto restaron las notas de crédito — la diferencia…
 
 **Streamlit** (162)
 
@@ -928,7 +928,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (162)
+**Decisiones de diseño y UX** (163)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1092,6 +1092,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 - **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
+- **#628** — «Compras por período» dice en su TABLA cuánto restaron las notas de crédito — la diferencia…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -49256,11 +49257,11 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-10.)
 
-628. **«Compras por período» dice cuánto restaron las notas de crédito, y
-     cuánto daría sin restarlas — lo que suma el Resumen de Ingresos del
-     Almacén, que NUNCA las resta.** 2026-10-10, a pedido: el usuario puso
-     el Resumen de Ingresos de setiembre (ALIMENTOS, por emisión) al lado
-     de la tarjeta y no cuadraban — S/ 123,363.65 contra 119,805.43. La
+628. **«Compras por período» dice en su TABLA cuánto restaron las notas de
+     crédito — la diferencia con el Resumen de Ingresos del Almacén, que
+     NUNCA las resta.** 2026-10-10, a pedido: el usuario puso el Resumen
+     de Ingresos de setiembre (ALIMENTOS, por emisión) al lado de la
+     tarjeta y no cuadraban — S/ 123,363.65 contra 119,805.43. La
      diferencia, al céntimo, era la nota de Lara Angulo (#603), y nada en
      la pantalla lo decía; el texto de la línea de Documento afirmaba
      además que «Todos» era «lo que suman los reportes de ingresos del
@@ -49276,38 +49277,48 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      - **Qué se restó sale de `definicion_compra.lineas_restadas`**: las
        líneas que tocó una nota, con las columnas de compras y la parte
        restada en lugar de los montos — también las devueltas ENTERAS, que
-       `data.cargar` borra y por eso no están en ningún `d`.
-       `aplicar_notas` + esto = lo facturado (lo vigila
-       `test_definicion_compra.py`). La lee `data.notas_restadas_compras`
-       (en memoria, con los dos sellos); el dispatcher le pone los chips y
-       el rango de la tarjeta, y la tarjeta, sus filtros: los mismos de
-       `dd`, en una sola función (`_filtrar_vista`), para que la cifra sea
-       de lo MISMO que se muestra.
-     - **Tres sitios, en ámbar, sin un píxel de más**: la nota de la línea
-       de Documento («1 nota de crédito restada: −S/ 3,558.22 · sin
-       restarla: S/ 123,363.65…», con cada nota en el `title`); un tramo
-       RAYADO encima de la barra de la factura —no es compra, es lo que el
-       Almacén suma—, con su detalle en el hover; y en «Resumen Total» la
-       fila de esa barra en ámbar con «NC −S/ …» al lado del período, y la
-       suma en la fila TOTAL. En la celda y no en una columna (una fila de
-       cinco, #239) ni en un renglón de abajo (dos altos de fila, #462).
-     - **Una barra de alto cero dibuja su borde**: el tramo rayado con
-       `marker.line.width` fijo dejaba una raya ámbar encima de TODAS las
-       barras. El ancho va por barra (`_estilo_nc`).
-     - **La etiqueta de la barra sube al tope del tramo**: en la capa
-       transparente que ya llevaba el hover (con «Partir por») o en una
-       capa propia sin hover (en «Por documento», donde la barra no se
-       parte): en la barra quedaría tapada por el tramo.
-     - **Lo que no tiene barra lo dice sólo el aviso**: en «Por documento»
-       la factura anulada entera no es una barra, así que su tramo no se
-       dibuja; el aviso y la fila TOTAL suman todas.
+       `data.cargar` borra y por eso no están en ningún `d` —, más la
+       nota y su fecha (`FECHA_NC`). `aplicar_notas` + esto = lo facturado
+       (lo vigila `test_definicion_compra.py`). La lee
+       `data.notas_restadas_compras` (en memoria, con los dos sellos); el
+       dispatcher le pone los chips y el rango de la tarjeta, y la tarjeta,
+       sus filtros: los mismos de `dd`, en una sola función
+       (`_filtrar_vista`), para que la cifra sea de lo MISMO que se muestra.
+     - **La fecha de la nota va por número Y proveedor**: el número se
+       repite entre emisores, y la E001-68 de un proveedor de 2024 le
+       prestaba su fecha a la de Lara Angulo de 2026 (medido; es la #143
+       otra vez, con notas).
+     - **Dónde se dice, y por qué ahí: es un DOCUMENTO.** «Resumen Total»
+       suma una columna «Notas de crédito» al lado del Valorizado, en
+       negativo y en ámbar, SÓLO si la vista tiene alguna (#239), con la
+       fila TOTAL y, en el tooltip, cuánto daría sin restarla y qué nota
+       es. «Detalle» muestra la factura como se FACTURÓ y la nota como un
+       documento más («NC · E001-68», en negativo y en su fecha), dentro
+       del período de su factura (`semanal.detalle_con_notas`): se
+       cancelan, así que el total del período no cambia, y el pie cuenta
+       «54 compras · 1 NC».
+     - **El ancho**: la columna mide 118 («−S/ 13,558.22» son 99 px a 13px
+       y el rótulo 87, más 16 de padding), y con ella van DOS columnas de
+       familia menos (las dos mayores y «N más»): a 1323 px la grilla da
+       1136 y las fijas suman 726. Sin notas quedan las de siempre — que
+       con cinco familias ya se pasaban 60 px antes de esto (pendiente).
 
-     Verificado con datos reales a 1323×619: ALIMENTOS, setiembre, da S/
-     123,363.65 sin IGV y S/ 140,021.82 con IGV —las dos cifras del PDF
-     del Almacén—, el tramo cae en la semana 21–27 set (la factura es del
-     23/09) y junio muestra sus dos notas parciales sobre sus facturas. La
-     nota mide 506 px y entra en su renglón de 26 px; más angosta se corta
-     con «…».
+     **La primera versión del mismo día se descartó**, a pedido: un
+     recuadro ámbar en la línea de Documento, un tramo RAYADO encima de la
+     barra de la factura y una marca dentro de la celda del período. «Se
+     me hace muy difusa la visualización, es un dato de un tipo de
+     documento». Dos cosas que dejó medidas: una barra de alto cero dibuja
+     su borde (el tramo con `marker.line.width` fijo pintaba una raya
+     ámbar encima de TODAS), y el `cellRenderer` de clase que escribía la
+     marca en la celda funcionó en local y NO se vio en Cloud (sin
+     diagnóstico: se reemplazó por una columna con `valueFormatter` y
+     `cellStyle`, que son lo que ya funcionaba allá).
+
+     Verificado con datos reales a 1323×619: ALIMENTOS, setiembre, sin
+     restar da S/ 123,363.65 sin IGV y S/ 140,021.82 con IGV —las dos
+     cifras del PDF del Almacén—; la nota cae en la semana 21–27 set (la
+     factura es del 23/09) y con las cinco familias la grilla entra justa
+     (1134 de 1134).
 
      (2026-10-10.)
 
