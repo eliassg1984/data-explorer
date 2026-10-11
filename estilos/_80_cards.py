@@ -1682,6 +1682,7 @@ CSS = """    /* ================================================================
     .st-key-sunat_res_cab [data-testid="stElementContainer"]:first-child {
         margin-right: auto;
     }
+    .st-key-sunat_res_medida button,
     .st-key-sunat_res_anios button,
     .st-key-sunat_res_vista button {
         min-height: 24px !important;
@@ -1690,9 +1691,105 @@ CSS = """    /* ================================================================
         font-size: 11.5px !important;
         line-height: 1 !important;
     }
+    .st-key-sunat_res_medida p,
     .st-key-sunat_res_anios p,
     .st-key-sunat_res_vista p {
         font-size: 11.5px !important;
+    }
+
+    /* ─────────────────────────────────────────────────────────────── */
+    /* LA FIDELIDAD RESPECTO DE SUNAT (2026-10-02, mockup aprobado)     */
+    /*                                                                  */
+    /* `_kpi_fidelidad_html` y `_barras_fidelidad`: la fidelidad grande */
+    /* y una barra apilada al 100 % por período, con «Fuera de SUNAT»   */
+    /* punteado al costado. Los tres tramos: cuadran (lavanda), con     */
+    /* diferencia (naranja claro) y falta cargar (naranja oscuro): se   */
+    /* distinguen por la luminosidad, no sólo por el tono. Regla #630.  */
+    /* ─────────────────────────────────────────────────────────────── */
+    /* Los dos bloques son `st.markdown`, y su `stMarkdownContainer` trae */
+    /* `margin-bottom: -16px` (regla #162): sin estos 16px de relleno, la  */
+    /* línea de abajo de la fidelidad se montaba sobre el renglón         */
+    /* siguiente y la última barra quedaba cortada por el borde de la     */
+    /* tarjeta.                                                           */
+    .sunat-fid-kpi { display: flex; flex-direction: column; gap: 2px; cursor: help; padding-bottom: 16px; }
+    .sunat-fid-kpi-rot {
+        font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+        text-transform: uppercase; color: var(--text-secondary);
+    }
+    .sunat-fid-kpi-fila { display: flex; align-items: center; gap: 10px; }
+    .sunat-fid-kpi-val {
+        font-size: 28px; font-weight: 700; line-height: 1.1;
+        color: var(--text-primary); font-variant-numeric: tabular-nums;
+    }
+    .sunat-fid-kpi-sub { font-size: 12px; color: var(--text-secondary); }
+    .sunat-fid-chip {
+        font-size: 12px; font-weight: 600; border-radius: 999px;
+        padding: 2px 9px; white-space: nowrap;
+        color: var(--text-secondary); background: var(--line-soft);
+        border: 1px solid var(--border);
+    }
+    .sunat-fid-chip.baja {
+        color: var(--warning-text); background: var(--warning-bg);
+        border-color: var(--warning-border);
+    }
+    .sunat-fid-chip.sube {
+        color: var(--success-text); background: var(--success-bg);
+        border-color: var(--success-bg);
+    }
+    .sunat-fid { display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; }
+    .sunat-fid-fila { display: flex; gap: 14px; align-items: center; }
+    .sunat-fid-per {
+        width: 160px; flex: none; display: flex; flex-direction: column;
+        font-size: 12.5px; color: var(--text-primary);
+    }
+    .sunat-fid-per b { font-weight: 400; }
+    .sunat-fid-fila.actual .sunat-fid-per b { font-weight: 700; }
+    .sunat-fid-per span { font-size: 11px; color: var(--text-secondary); }
+    .sunat-fid-medio { flex: 1; min-width: 0; }
+    .sunat-fid-fuera-col { width: 150px; flex: none; }
+    .sunat-fid-cab {
+        font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
+        text-transform: uppercase; color: var(--text-muted);
+    }
+    .sunat-fid-cab .sunat-fid-per { font-size: 10.5px; color: var(--text-muted); }
+    .sunat-fid-cab .sunat-fid-medio {
+        display: flex; justify-content: space-between; gap: 12px;
+    }
+    .sunat-fid-leyenda {
+        display: flex; gap: 12px; text-transform: none; letter-spacing: 0;
+        font-weight: 500; color: var(--text-secondary); white-space: nowrap;
+    }
+    .sunat-fid-leyenda span { display: inline-flex; align-items: center; gap: 5px; cursor: help; }
+    .sunat-fid-sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+    .sunat-fid-barra {
+        flex: 1; min-width: 0; height: 30px; display: flex;
+        border-radius: 8px; overflow: hidden; background: var(--line-soft);
+    }
+    .sunat-fid-fila.actual .sunat-fid-barra { box-shadow: 0 0 0 2px var(--accent-light); }
+    .sunat-fid-tramo {
+        height: 100%; display: flex; align-items: center; justify-content: center;
+        font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden;
+        font-variant-numeric: tabular-nums; cursor: help;
+    }
+    .sunat-fid-tramo.cuadran, .sunat-fid-sw.cuadran { background: var(--accent-hover); color: var(--bg-card); }
+    .sunat-fid-tramo.cuadran { justify-content: flex-start; padding-left: 10px; box-sizing: border-box; font-size: 12px; }
+    .sunat-fid-tramo.diferencia, .sunat-fid-sw.diferencia { background: var(--warning-border); color: var(--text-primary); }
+    .sunat-fid-tramo.falta, .sunat-fid-sw.falta { background: var(--warning-text); color: var(--bg-card); }
+    .sunat-fid-vacia {
+        flex: 1; display: flex; align-items: center; padding-left: 10px;
+        font-size: 11.5px; color: var(--text-secondary);
+    }
+    .sunat-fid-fuera {
+        width: 150px; flex: none; box-sizing: border-box;
+        display: flex; align-items: baseline; gap: 6px;
+        border: 1px dashed var(--text-muted); border-radius: 8px;
+        padding: 5px 9px; cursor: help;
+    }
+    .sunat-fid-fuera b { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .sunat-fid-fuera span { font-size: 11px; color: var(--text-secondary); }
+    .sunat-fid-nota { margin-top: -4px; }
+    .sunat-fid-nota .sunat-fid-medio {
+        text-align: right; font-size: 11px; color: var(--warning-text);
     }
 
     /* ─────────────────────────────────────────────────────────────── */

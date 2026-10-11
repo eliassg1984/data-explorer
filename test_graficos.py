@@ -1903,9 +1903,52 @@ def _pruebas_puras():
     check("resumen del cruce: sin cruce, todo en cero",
           set(_ds._conteos_cruce(None).values()), {0})
     _ds._publicar_conteos(_cruce)
-    check("el KPI del rail sigue recibiendo los conteos",
+    check("el KPI del rail: a revisar es lo de SUNAT con diferencia o sin "
+          "cargar; lo de fuera de SUNAT va aparte",
           _ds.st.session_state.pop("_cp_docs_cruce", None),
-          {"sunat": 5, "sistema": 7, "revisar": 5})
+          {"sunat": 5, "sistema": 7, "revisar": 2, "fuera": 3,
+           "fidelidad": "60.0%"})
+    # La fidelidad respecto de SUNAT (regla #630): la base son los 5 del
+    # SIRE, que se reparten en 3 + 1 + 1; los 3 de «Solo sistema» van
+    # aparte y no suman a la base.
+    _fid = _ds._fidelidad_cruce(_cruce)
+    check("fidelidad: documentos, con SUNAT como base",
+          _fid["doc"], {"sunat": 5, "cuadran": 3, "diferencia": 1,
+                        "falta": 1, "fuera": 3})
+    # En valor absoluto: las notas de crédito vienen en negativo (#604).
+    _ts = pd.to_numeric(_cruce["total_sunat"], errors="coerce").fillna(0).abs()
+    _tq = pd.to_numeric(_cruce["total_sistema"], errors="coerce").fillna(0).abs()
+    check("fidelidad: los soles de la base son los de SUNAT",
+          round(_fid["soles"]["sunat"], 2),
+          round(float(_ts[_cruce["estado"] != "Solo sistema"].sum()), 2))
+    check("fidelidad: los soles de fuera son los del sistema",
+          round(_fid["soles"]["fuera"], 2),
+          round(float(_tq[_cruce["estado"] == "Solo sistema"].sum()), 2))
+    check("fidelidad: los tres tramos suman la base, en soles",
+          round(sum(_fid["soles"][k] for k in ("cuadran", "diferencia",
+                                               "falta")), 2),
+          round(_fid["soles"]["sunat"], 2))
+    _con_nota = pd.DataFrame({
+        "estado": ["Coincide", "Solo SUNAT", "Solo SUNAT"],
+        "total_sunat": [100.0, 50.0, -30.0], "total_sistema": [100.0, None, None]})
+    check("fidelidad: una nota de crédito sin cargar suma a lo que falta, "
+          "no resta",
+          _ds._fidelidad_cruce(_con_nota)["soles"]["falta"], 80.0)
+    check("fidelidad: sin cruce, todo en cero",
+          _ds._fidelidad_cruce(None)["doc"],
+          {"sunat": 0, "cuadran": 0, "diferencia": 0, "falta": 0, "fuera": 0})
+    # Las barras: HTML con los tres tramos y el de fuera, sin romperse con
+    # un período vacío.
+    _per = [{"edad": 1, "rango": "1 ene – 2 oct 2025", "anio": "2025",
+             "f": _ds._fidelidad_cruce(None)},
+            {"edad": 0, "rango": "1 ene – 2 oct 2026", "f": _fid}]
+    _html = _ds._barras_fidelidad(_per, "doc")
+    check("barras de fidelidad: un tramo por caso con datos",
+          (_html.count("sunat-fid-tramo cuadran"),
+           _html.count("sunat-fid-tramo diferencia"),
+           _html.count("sunat-fid-tramo falta")), (1, 1, 1))
+    check("barras de fidelidad: el período sin SUNAT lo dice",
+          "SUNAT no tiene documentos" in _html, True)
     check("comparar con el año pasado corre el MISMO rango un año",
           _ds._rango_hace(_dt.date(2026, 9, 3), _dt.date(2026, 10, 2), 1),
           (_dt.date(2025, 9, 3), _dt.date(2025, 10, 2)))

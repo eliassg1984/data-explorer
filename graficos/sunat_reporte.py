@@ -102,12 +102,21 @@ def _kpi_de_la_vista():
     if _cruce.get("sunat") is None:
         return None, None
     _fmt = lambda n: f"{n:,}".replace(",", ".")  # noqa: E731
-    txt = (f"**Documentos:** {_fmt(_cruce.get('sistema') or 0)} en el sistema"
-           f" · {_fmt(_cruce['sunat'])} en SUNAT")
+    # Con SUNAT como referencia (regla #630): la fidelidad primero, después
+    # lo que hay que revisar contra SUNAT y, aparte, lo cargado sin
+    # comprobante en SUNAT, que no es parte de esa base.
+    txt = f"**Documentos:** {_fmt(_cruce['sunat'])} en SUNAT"
+    if _cruce.get("fidelidad"):
+        txt = (f"**Fidelidad respecto de SUNAT:** {_cruce['fidelidad']} · "
+               f"{_fmt(_cruce['sunat'])} documentos en SUNAT")
     estados = None
     if _cruce.get("revisar"):
-        txt += f" · {_cruce['revisar']} con diferencias a revisar"
+        txt += (f" · {_fmt(_cruce['revisar'])} a revisar (con diferencia o "
+                f"sin cargar)")
         estados = {"Documentos SUNAT": "warning"}
+    if _cruce.get("fuera"):
+        txt += (f" · {_fmt(_cruce['fuera'])} cargados sin comprobante en "
+                f"SUNAT")
     return {"Documentos SUNAT": txt}, estados
 
 
