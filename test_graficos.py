@@ -7752,10 +7752,13 @@ def _pruebas_detalle_salidas():
           float(validas["VALOR NETO"].sum()),
           float(mp._validas(bl)["valor"].sum()))
     # El texto con que la tarjeta de salidas cuenta sus anuladas
-    # (`Lado.anulados`), sobre SU cuenta: la guarda compara contra ella.
+    # (`Lado.anulados`), sobre SU cuenta: la guarda compara contra ella. Va
+    # en la fila TOTAL («TOTAL · sin 2 anuladas», regla #641).
     check("cuenta las anuladas por salida, como la fila de KPI de su vecina",
-          nota[0], f"{mp.SALIDAS.anulados(mp.no_suman(bl)[0])} no suman")
+          nota[0], f"sin {mp.SALIDAS.anulados(mp.no_suman(bl)[0])}")
     check("el tooltip dice cuánto no suma", "S/ 30" in nota[1], True)
+    check("el tooltip nombra a la vecina como el rail",
+          "«Salidas por Período»" in nota[1], True)
     _sin_anuladas, _nota_vacia = mov.salidas_que_suman(
         d[d["COD SALIDA"] != "S2"].iloc[:2], col_estado="NOMBRE ESTADO SALIDA",
         col_prod="NOMBRE PRODUCTO", col_doc="COD SALIDA", col_val="VALOR NETO")
@@ -7822,6 +7825,166 @@ def _pruebas_detalle_salidas():
     check("«Top productos · salidas» ya no está",
           ("Top productos · salidas" in ids_rail
            or "Top productos · salidas" in ids_pila), False)
+    return fallos
+
+
+def _pruebas_requerimientos_por_area():
+    """Movimientos › «Requerimientos por Área» suma lo que «por Período»
+    (regla #641).
+
+    Hasta el 2026-10-11 la cadena de tablas sumaba también los anulados:
+    S/ 238.884 contra los 238.118 de su vecina en los mismos 30 días. Tres
+    cosas que se rompen sin que nada avise:
+
+      1. QUÉ SUMA. El total de `requerimientos_que_suman` tiene que ser el
+         de `_validas` de la tarjeta «por Período» para las mismas líneas
+         —sin anulados ni líneas sin producto—, y la nota tiene que contar
+         los anulados por CÓDIGO, como su fila de KPI.
+      2. LA FILA TOTAL. La nota va en el rótulo de la fila TOTAL del primer
+         cuadro (`tabla_ranking(nota_total=)`), con el largo de tooltip: en
+         el renglón del título, desde el botón de fecha (#617), a 1323px no
+         se veía. Se arma con un AgGrid de mentira que guarda lo que recibe.
+      3. EL CABLEADO. `_dib_cadena` le pasa a `seccion_cadena` lo que
+         devuelve `requerimientos_que_suman`, con su nota; y las dos
+         secciones de `drill_tablas` usan la nota SÓLO para la fila TOTAL
+         (si vuelve al título, vuelve a quedar fuera de la vista).
+    """
+    import ast
+    import inspect
+    import sys
+    import textwrap
+    import types
+
+    from graficos import drill_tablas as dt
+    from graficos import movimientos as mov
+    from graficos import movimientos_periodo as mp
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    requerimientos por área · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA requerimientos por área · {nombre}: "
+                  f"got={got!r} exp={exp!r}")
+
+    # ── 1) Qué suma ───────────────────────────────────────────────────────
+    # R1 de Cocina con dos líneas; R2 ANULADO con valor; R3 de GASTOS SIN
+    # ÍTEMS (la forma de los 57 de esos 30 días); R4 de Barra; R5 anulado Y
+    # sin ítems (cuenta como anulado, una sola vez).
+    d = pd.DataFrame({
+        "FECHA REGISTRO": pd.to_datetime(
+            ["2026-09-12 10:00", "2026-09-12 10:00", "2026-09-13 11:00",
+             "2026-09-14 12:00", "2026-09-15 09:00", "2026-09-16 10:00"]),
+        "COD REQUERIMIENTO": ["R1", "R1", "R2", "R3", "R4", "R5"],
+        "NOMBRE ESTADO REQUERIMIENTO": ["PROCESADO", "PROCESADO", "ANULADO",
+                                        "PROCESADO", "GENERADO", " anulado"],
+        "SUB ALMACEN": ["COCINA", "COCINA", "PRODUCCION", "GASTOS", "BARRA",
+                        "COCINA"],
+        "NOMBRE FAMILIA": ["ALIMENTOS", "ALIMENTOS", "ALIMENTOS", None,
+                           "BEBIDAS SIN ALCOHOL", None],
+        "NOMBRE PRODUCTO": ["A", "B", "C", None, "D", " "],
+        "CANTIDAD": [1.0, 2.0, 3.0, None, 4.0, None],
+        "VALOR ITEM": [10.0, 20.0, 30.0, None, 40.0, None],
+    })
+    validas, nota = mov.requerimientos_que_suman(
+        d, col_estado="NOMBRE ESTADO REQUERIMIENTO",
+        col_prod="NOMBRE PRODUCTO", col_doc="COD REQUERIMIENTO",
+        col_val="VALOR ITEM")
+    check("suma sin anulados ni líneas sin producto (el generado con ítems "
+          "sí suma)", sorted(validas["COD REQUERIMIENTO"]), ["R1", "R1", "R4"])
+    bl = mp.lineas_documentos(
+        d, fecha="FECHA REGISTRO", doc="COD REQUERIMIENTO", area="SUB ALMACEN",
+        estado="NOMBRE ESTADO REQUERIMIENTO", fam="NOMBRE FAMILIA",
+        prod="NOMBRE PRODUCTO", cant="CANTIDAD", val="VALOR ITEM")
+    check("el total es el de «Requerimientos por Período»",
+          float(validas["VALOR ITEM"].sum()),
+          float(mp._validas(bl, mp.REQUERIMIENTOS)["valor"].sum()))
+    check("cuenta los anulados por código, como la fila de KPI de su vecina",
+          nota[0],
+          f"sin {mp.REQUERIMIENTOS.anulados(mp.no_suman(bl, mp.REQUERIMIENTOS)[0])}")
+    check("el tooltip dice cuánto no suma y nombra a la vecina como el rail",
+          ("S/ 30" in nota[1], "«Requerimientos por Período»" in nota[1]),
+          (True, True))
+    _, _sin_nota = mov.requerimientos_que_suman(
+        d[d["COD REQUERIMIENTO"].isin(["R1", "R3"])],
+        col_estado="NOMBRE ESTADO REQUERIMIENTO", col_prod="NOMBRE PRODUCTO",
+        col_doc="COD REQUERIMIENTO", col_val="VALOR ITEM")
+    check("sin anulados en el recorte no hay nota (los sin ítems no se "
+          "nombran: valen cero)", _sin_nota, None)
+
+    # ── 2) La fila TOTAL ──────────────────────────────────────────────────
+    recibido = {}
+
+    def _aggrid_falso(tabla, gridOptions=None, **kw):
+        recibido["opciones"] = gridOptions
+        return types.SimpleNamespace(selected_rows=None)
+
+    st_aggrid = sys.modules.get("st_aggrid") or __import__("st_aggrid")
+    _original = st_aggrid.AgGrid
+    st_aggrid.AgGrid = _aggrid_falso
+    try:
+        for con_nota in (True, False):
+            dt.tabla_ranking(
+                validas, "SUB ALMACEN", "VALOR ITEM", "sub almacén",
+                key="prueba_rank_641", nota_total=nota if con_nota else None)
+            op = recibido["opciones"]
+            total = op["pinnedBottomRowData"][0]
+            col_nombre = op["columnDefs"][0]
+            if con_nota:
+                check("con nota, la fila TOTAL la dice",
+                      total["Sub almacén"], f"TOTAL · {nota[0]}")
+                check("y su tooltip es el largo (la fila lo lleva en `_tip`)",
+                      (total.get("_tip"), "tooltipValueGetter" in col_nombre),
+                      (nota[1], True))
+                check("el TOTAL suma lo que suma la vista",
+                      total["Valorizado"], 70.0)
+            else:
+                check("sin nota, la fila TOTAL y su tooltip como siempre",
+                      (total["Sub almacén"], "_tip" in total,
+                       col_nombre.get("tooltipField")),
+                      ("TOTAL", False, "Sub almacén"))
+    finally:
+        st_aggrid.AgGrid = _original
+
+    # ── 3) El cableado ────────────────────────────────────────────────────
+    arbol = ast.parse(textwrap.dedent(
+        inspect.getsource(mov.renderizar_graficos_movimientos)))
+    dib = next((n for n in ast.walk(arbol) if isinstance(n, ast.FunctionDef)
+                and n.name == "_dib_cadena"), None)
+    asign = [n for n in ast.walk(dib) if isinstance(n, ast.Assign)
+             and isinstance(n.value, ast.Call)
+             and getattr(n.value.func, "id", None) == "requerimientos_que_suman"]
+    llamadas = [n for n in ast.walk(dib) if isinstance(n, ast.Call)
+                and getattr(n.func, "attr", None) == "seccion_cadena"]
+    nombres = ([e.id for e in asign[0].targets[0].elts]
+               if asign and isinstance(asign[0].targets[0], ast.Tuple) else [])
+    if len(nombres) == 2 and len(llamadas) == 1:
+        _c = llamadas[0]
+        _kw = {k.arg: k.value for k in _c.keywords}
+        check("`_dib_cadena` le pasa a la cadena lo que suma y su nota",
+              (getattr(_c.args[0], "id", None),
+               getattr(_kw.get("nota"), "id", None)), tuple(nombres))
+    else:
+        fallos += 1
+        print("FALLA requerimientos por área · `_dib_cadena` no arma "
+              "`validas, nota = requerimientos_que_suman(...)` ni llama una "
+              "vez a `seccion_cadena`")
+
+    fuente_dt = ast.parse(inspect.getsource(dt))
+    for fn in ("seccion_cadena", "seccion_cuadros"):
+        nodo = next(n for n in fuente_dt.body
+                    if isinstance(n, ast.FunctionDef) and n.name == fn)
+        usos = [n for n in ast.walk(nodo) if isinstance(n, ast.Name)
+                and n.id == "nota" and isinstance(n.ctx, ast.Load)]
+        al_total = [k for n in ast.walk(nodo) if isinstance(n, ast.Call)
+                    and getattr(n.func, "id", None) == "tabla_ranking"
+                    for k in n.keywords if k.arg == "nota_total"
+                    and getattr(k.value, "id", None) == "nota"]
+        check(f"`{fn}` usa la nota sólo para la fila TOTAL",
+              (len(al_total), len(usos)), (1, 1))
     return fallos
 
 
@@ -10831,6 +10994,7 @@ def main():
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
+    fallos += _pruebas_requerimientos_por_area()
     fallos += _pruebas_salidas_comparar_y_destino()
     fallos += _pruebas_merma()
 

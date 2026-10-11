@@ -125,19 +125,18 @@ Las dos Tablas NO se dibujan igual, y no es un descuido:
 QUÉ EXCLUYE CADA SECCIÓN, que es donde la página puede contradecirse:
 las dos tarjetas «por período» (2026-09-23, a pedido) descartan los
 documentos ANULADOS y los SIN ÍTEMS —una línea sin producto ni valor— y los
-nombran en su fila de KPI (reglas #508 y #509). «Detalle de salidas»
-(2026-09-24) nació con el mismo criterio que su vecina de salidas y nombra
-las anuladas junto al título de su primer cuadro (#511). Las demás miran sus
-datos con anulados incluidos, así que el valorizado de requerimientos es el
-mismo en la cadena de tablas y en la Tabla pivote. Las salidas anuladas de
-los últimos doce meses son 52, por S/ 11.129 (el 5,7 % de lo que sí se dio
-de baja, medido el 2026-09-24): lo que separa el total de la Tabla de
-salidas del de sus dos vecinas. Los requerimientos anulados son S/ 174.939
-de S/ 8.481.700 en el histórico (2,1%, medido contra R2 el 2026-09-13) y
-S/ 15.868 en 2026 (0,9%): lo que puede separar el total de «Requerimientos
-por período» del de «Por sub almacén». Las otras no se cambiaron porque
-mover números que nadie pidió mover es otra decisión; queda anotado en la
-regla #322.
+nombran en su fila de KPI (reglas #508 y #509). Las dos vistas «por Área»
+suman lo mismo que su vecina del mismo lado y nombran los anulados en la
+fila TOTAL de su primer cuadro: «Salidas por Área» (el «Detalle de
+salidas») desde que nació, el 2026-09-24 (#511), y «Requerimientos por
+Área» (la cadena) desde el 2026-10-11, a pedido (#641) — hasta ese día
+sumaba los anulados, S/ 766 en los últimos 30 días. Las dos Tablas
+(ocultas, #507) siguen con todo: son el dato crudo, con su columna de
+estado. Las salidas anuladas de los últimos doce meses son 52, por
+S/ 11.129 (el 5,7 % de lo que sí se dio de baja, medido el 2026-09-24); los
+requerimientos anulados, S/ 174.939 de S/ 8.481.700 en el histórico (2,1%,
+medido contra R2 el 2026-09-13) y S/ 15.868 en 2026 (0,9%). Lo que separa
+el total de cada Tabla del de sus vecinas.
 
 Punto de entrada público: renderizar_graficos_movimientos().
 """
@@ -160,12 +159,13 @@ from graficos.base import (
     rango_tarjeta, renderizar_graficos_genericos, seccion_perezosa,
     selector_fecha_tarjeta,
 )
-# `_ANULADO` y `SALIDAS` son de la tarjeta «Salidas por período»: el
-# «Detalle de salidas» suma lo mismo que ella, y dos copias de «qué es una
-# salida anulada» —o de cómo se escribe «3 anuladas»— se separan al primer
-# retoque.
+# `_ANULADO`, `SALIDAS` y `REQUERIMIENTOS` son de las tarjetas «por
+# período»: el «Detalle de salidas» y la cadena de requerimientos suman lo
+# mismo que ellas (reglas #511 y #641), y dos copias de «qué es un documento
+# anulado» —o de cómo se escribe «3 anuladas»— se separan al primer retoque.
 from graficos.movimientos_periodo import (
-    _ANULADO, SALIDAS, aviso_poco_registro, aviso_rango_poco_registro,
+    _ANULADO, REQUERIMIENTOS, SALIDAS, aviso_poco_registro,
+    aviso_rango_poco_registro,
     lineas_documentos, meses_poco_registro, orden_areas, rango_poco_registro,
     rotulo_anio,
     tarjeta_porcionamientos_periodo,
@@ -381,48 +381,80 @@ def recortar_vista(d, rng, col="_fecha"):
 # Top de requerimientos el 2026-09-23. Regla #511.)
 
 
-def salidas_que_suman(d, *, col_estado, col_prod, col_doc=None,
-                      col_val=None):
-    """`(validas, nota)`: las líneas de salidas que SUMAN y, si en el
-    recorte hay salidas anuladas, lo que no se sumó, para decirlo.
+def _rotulo_rail(vista):
+    """Cómo nombra el rail a la vista `vista` (su id): «Salidas por
+    Período», con la mayúscula que se pidió el 2026-10-01."""
+    return next((v[1] for _cat, vistas in _RAIL_CATEGORIAS for v in vistas
+                 if v[0] == vista), vista)
 
-    El criterio es el de «Salidas por período»
+
+def _que_suman(d, lado, vecina, *, col_estado, col_prod, col_doc=None,
+               col_val=None):
+    """`(validas, nota)`: las líneas de `d` que SUMAN y, si en el recorte
+    hay documentos anulados, lo que no se sumó, para decirlo.
+
+    El criterio es el de las tarjetas «por período»
     (`movimientos_periodo._validas`): una línea suma si trae producto y su
-    salida no está anulada. Las que no traen producto son las 91 salidas
-    sin ítems del histórico —48 generadas que todavía no movieron el
-    kardex, 42 anuladas y una procesada—, que valen cero; las anuladas en
-    conjunto no: 52 en los últimos doce meses, por S/ 11.129 (medido el
-    2026-09-24). Con el mismo criterio las dos secciones de
-    salidas dan el mismo total para el mismo rango, que es lo que la guarda
-    de `test_graficos.py::_pruebas_detalle_salidas` compara.
+    documento no está anulado. Las que no traen producto son los documentos
+    sin ítems, que valen cero; los anulados en conjunto no. `vecina` es el
+    id de la tarjeta «por período» del mismo lado, que la nota nombra.
 
     `nota` es `(corto, largo)` —la forma de `nota_no_suman`— o None: sólo
-    nombra las anuladas, porque las líneas sin producto no tienen nada que
-    mostrar en ningún cuadro. Las cuenta por SALIDA (`col_doc`), no por
-    línea, como la fila de KPI de su vecina; sin código, cada línea es una.
-    Sin columna de estado todo suma, que es lo que hace `lineas_documentos`.
-    """
+    nombra los anulados, porque las líneas sin producto no tienen nada que
+    mostrar en ninguna tabla. El corto completa el rótulo de la fila TOTAL
+    del primer cuadro («TOTAL · sin 33 anulados», `drill_tablas.
+    tabla_ranking(nota_total=)`, regla #641) y el largo es su tooltip. Los
+    cuenta por DOCUMENTO (`col_doc`), no por línea, como la fila de KPI de
+    su vecina; sin código, cada línea es una.
+
+    Sin columna de estado todo suma, que es lo que hace `lineas_documentos`;
+    sin columna de producto no se descarta ninguna línea por eso (la tarjeta
+    vecina no dibujaría nada, y la sección sin ella ya avisa que le faltan
+    columnas)."""
     idx = d.index
     if col_estado and col_estado in d.columns:
         estado = d[col_estado].fillna("").astype(str).str.strip().str.upper()
     else:
         estado = pd.Series("", index=idx)
-    prod = (d[col_prod].fillna("").astype(str).str.strip()
-            if col_prod and col_prod in d.columns else pd.Series("", index=idx))
-    anulada = estado == _ANULADO
-    validas = d[~anulada & (prod != "")]
-    if not anulada.any():
+    anulado = estado == _ANULADO
+    suma = ~anulado
+    if col_prod and col_prod in d.columns:
+        suma &= d[col_prod].fillna("").astype(str).str.strip() != ""
+    validas = d[suma]
+    if not anulado.any():
         return validas, None
-    an = d[anulada]
+    an = d[anulado]
     n = (int(an[col_doc].nunique()) if col_doc and col_doc in an.columns
          else len(an))
     valor = (float(pd.to_numeric(an[col_val], errors="coerce").fillna(0).sum())
              if col_val and col_val in an.columns else 0.0)
-    corto = f"{SALIDAS.anulados(n)} no suman"
-    largo = (f"No suman en ningún cuadro: {SALIDAS.anulados(n)}"
+    corto = f"sin {lado.anulados(n)}"
+    largo = (f"No suman en ninguna tabla de esta vista: {lado.anulados(n)}"
              + (f", por S/ {valor:,.0f}" if valor else "")
-             + ". El mismo criterio que «Salidas por período».")
+             + f". El mismo criterio que «{_rotulo_rail(vecina)}».")
     return validas, (corto, largo)
+
+
+def salidas_que_suman(d, **cols):
+    """`_que_suman` del lado de SALIDAS: lo que suma «Salidas por Área»
+    (el «Detalle de salidas», regla #511). Las 91 salidas sin ítems del
+    histórico son 48 generadas que todavía no movieron el kardex, 42
+    anuladas y una procesada; las anuladas, 52 en los últimos doce meses,
+    por S/ 11.129 (medido el 2026-09-24). Con el mismo criterio las dos
+    secciones de salidas dan el mismo total para el mismo rango, que es lo
+    que compara `test_graficos.py::_pruebas_detalle_salidas`."""
+    return _que_suman(d, SALIDAS, "Salidas por período", **cols)
+
+
+def requerimientos_que_suman(d, **cols):
+    """`_que_suman` del lado de REQUERIMIENTOS: lo que suma «Requerimientos
+    por Área» (la cadena de tablas, regla #641), que hasta el 2026-10-11
+    sumaba también los anulados —S/ 766 de S/ 238.884 en los últimos 30
+    días— y les pasaba a los cuadros las líneas sin ítems (57 de GASTOS),
+    que con pandas 2.2 se agrupan como «(sin dato)». Lo compara
+    `test_graficos.py::_pruebas_requerimientos_por_area`."""
+    return _que_suman(d, REQUERIMIENTOS, "Requerimientos por período",
+                      **cols)
 
 
 def _tabla_salidas(df_sal):
@@ -1059,9 +1091,19 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # La fecha de la sección va en el renglón del título del primer
         # cuadro (regla #617), que por eso se acortó: «Valorizado requerido
         # por sub almacén» y el botón no entraban juntos en la tarjeta.
+        #
+        # SUMA LO MISMO QUE «Requerimientos por Período» desde el
+        # 2026-10-11 (regla #641): sin los anulados ni las líneas sin
+        # producto. Las dos vistas de requerimientos dan el mismo total para
+        # el mismo rango, y lo que no suma lo dice la fila TOTAL del primer
+        # cuadro. La Tabla (oculta, #507) sigue con todo: es el dato crudo,
+        # con su columna de estado.
         rng, fecha = _rango_y_boton("mov_sec_cadena", fechas_req)
+        validas, nota = requerimientos_que_suman(
+            _req_de(rng), col_estado=col_estado, col_prod=col_prod,
+            col_doc=col_req, col_val=col_metrica)
         drill_tablas.seccion_cadena(
-            _req_de(rng), pref="mov", slug="subalm",
+            validas, pref="mov", slug="subalm", nota=nota,
             niveles=((col_sub, "sub almacén"), (col_fam, "familia"),
                      (col_subfam, "subfamilia")),
             col_val=col_metrica, col_hoja=col_prod,

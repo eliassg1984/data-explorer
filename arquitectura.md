@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-640 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+641 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (207)
 
@@ -714,7 +714,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
-**Datos, R2 y DuckDB** (96)
+**Datos, R2 y DuckDB** (97)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -812,6 +812,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
 - **#634** — El panel de la sesión de Ajuste es una pieza propia, como el de fechas: cada sesión dice su…
 - **#639** — Un requerimiento también tiene DOS fechas, y se elige como en salidas: «Fecha de los…
+- **#641** — «Requerimientos por Área» suma lo mismo que «por Período», y lo que no suma va en la fila…
 
 **SUNAT y SIRE** (57)
 
@@ -942,7 +943,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (168)
+**Decisiones de diseño y UX** (169)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1112,6 +1113,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#636** — Stock por Producto: Código · Familia · Subfamilia · Producto, y abre de la A a la Z en ese…
 - **#637** — Stock por Producto dice qué mirar: chips de estado, la evolución de lo filtrado y cinco…
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
+- **#641** — «Requerimientos por Área» suma lo mismo que «por Período», y lo que no suma va en la fila…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -42366,7 +42368,10 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      lo que sí se dio de baja). Lo que no suma se dice junto al título del
      primer cuadro, en letra chica («37 anuladas no suman», con el monto de
      tooltip); las líneas sin producto no se nombran: valen cero y no
-     tienen nada que mostrar en ningún cuadro.
+     tienen nada que mostrar en ningún cuadro. (Desde el 2026-10-11 va en
+     la fila TOTAL de ese cuadro, «TOTAL · sin 37 anuladas»: junto al
+     título, desde que ese renglón lleva el botón de fecha, no se veía.
+     Regla #641.)
 
      **Dos tarjetas de la misma fila miden lo mismo (#145), y esta es la
      primera fila de `ajuste_graf_card_` que entra en el piso** de
@@ -49977,6 +49982,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      Medido de paso, sin tocar: «Requerimientos por Área» suma también los
      anulados (S/ 766 de los 238.884 de esos 30 días) y «por Período» no.
+     (Lo arregló la #641, el mismo día.)
 
      (2026-10-11.)
 
@@ -50064,6 +50070,88 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      Tocar una lista, el umbral o el orden es subir `tipo_compra.VERSION`.
      (2026-10-11.)
 
+641. **«Requerimientos por Área» suma lo mismo que «por Período», y lo que
+     no suma va en la fila TOTAL de su primer cuadro — también en
+     «Salidas por Área», donde junto al título no se veía.** 2026-10-11, a
+     pedido (lo había dejado medido la #639): la cadena de tablas
+     (`movimientos.py::_dib_cadena` → `drill_tablas.seccion_cadena`)
+     sumaba todas las líneas de `requerimientos.parquet`, anulados
+     incluidos; la tarjeta «por Período» no (#508).
+
+     **Qué suma** (`movimientos.py::requerimientos_que_suman`): el
+     criterio de `movimientos_periodo._validas` —una línea suma si trae
+     producto y su requerimiento no está anulado; el GENERADO con ítems
+     sí suma—. Es la función de salidas de la #511, que pasó a ser
+     `_que_suman(d, lado, vecina, …)` con dos caras, `salidas_que_suman` y
+     `requerimientos_que_suman`; la nota cuenta los anulados por CÓDIGO
+     y nombra a la vecina con su rótulo del rail («Requerimientos por
+     Período», no el id en minúscula). Medido con datos reales, últimos 30
+     días por fecha de registro (10 sep – 9 oct 2026):
+     - DuckDB sobre R2: S/ 238.884 con todo y S/ 238.118,06 sin los 33
+       anulados (S/ 766). Las 63 líneas sin producto valen cero; 57 son
+       de GASTOS.
+     - En la app (Playwright a 1323×619, la pantalla del usuario):
+       «Requerimientos por Área» con TOTAL S/ 238,118 y «Requerimientos
+       por Período», puesta en el mismo atajo, «Total · 5 semanas»
+       S/ 238,118.06; «33 anulados» en las dos.
+     - Salidas, en 12 meses (10 oct 2025 – 9 oct 2026): «Salidas por
+       Área» S/ 191,931 y «Salidas por Período» S/ 191,931.19; 49 anuladas
+       en las dos.
+
+     **Las líneas sin ítems también salen, y no sólo por el número.** Con
+     pandas 3 (la laptop), `astype(str)` conserva el faltante, así que
+     `drill_tablas.claves` no lo convierte en «(sin dato)» y el `groupby`
+     lo descarta solo. Con pandas 2.2 (Cloud), `astype(str)` escribe
+     «nan» y las líneas sin familia salen como una fila «(sin dato)» de
+     S/ 0 en el cuadro de familia de GASTOS. Deducido de cómo cambió
+     pandas, NO medido: pandas 2.2 no se instala en la laptop (#481).
+     Sacándolas antes de la cadena, las dos versiones dibujan lo mismo.
+
+     **Dónde se dice lo que no suma: la fila TOTAL del primer cuadro**,
+     «TOTAL · sin 33 anulados», con el monto y el criterio de tooltip
+     (`drill_tablas.tabla_ranking(nota_total=)`, que reciben
+     `seccion_cadena` y `seccion_cuadros` como `nota`). La #511 la había
+     puesto junto al título, en letra chica. Desde el 2026-10-08 ese
+     renglón lo comparte con el botón de fecha (#617), y a 1323px el título
+     solo ya lo llena: «Requerido por sub almacén» mide 197px y le quedan
+     197. Medido en «Salidas por Área» inyectando el mismo `<span>` que
+     dibujaba Python: arrancaba en x=293 con el título cortado en 311 —
+     la nota no se veía nunca y además le cortaba el título—. En la fila
+     TOTAL no cuesta un píxel de alto, queda al lado del número que
+     explica y entra: «TOTAL · sin 33 anulados» ocupa 201 de los 202px de
+     su celda en la cadena, «TOTAL · sin 49 anuladas» 163 de 164 en
+     salidas. **Con poco margen**: una cuenta de cuatro cifras («sin 1,234
+     anulados») se cortaría con «…»; el detalle sigue entero en el
+     tooltip.
+
+     **El tooltip**: con nota, la columna del nombre cambia `tooltipField`
+     por un `tooltipValueGetter` que en la fila fijada devuelve el largo
+     que la fila trae en `_tip` (sin columna propia) y en las demás, el
+     nombre, como antes. Sin nota la columna queda como estaba. Visto con
+     el cursor encima en las dos vistas.
+
+     **Qué no cambió**, y queda pendiente porque mover un número que nadie
+     pidió mover es otra decisión:
+     - Las dos Tablas (ocultas, #507) siguen con todo: son el dato crudo,
+       con su columna de estado.
+     - El KPI del rail (`REPORTES["Movimientos"]["kpis"]`) suma
+       `VALOR ITEM` y cuenta `COD REQUERIMIENTO` sobre todas las filas.
+     - El asistente IA ve los requerimientos sin una nota que le diga que
+       no sume los anulados; a las salidas sí se la da
+       (`nota_salidas_ia`, #626).
+     - De paso: con «Últimos 12 meses», el botón de fecha de «Salidas por
+       Área» mide 271px y el título se corta en «Por tipo de baj…» (120
+       de 173px). Es del botón, no de esta regla.
+
+     La guarda es `test_graficos.py::_pruebas_requerimientos_por_area`:
+     el total contra `_validas` de la vecina, la cuenta de anulados contra
+     su `no_suman`, la fila TOTAL con un AgGrid de mentira que guarda lo
+     que recibe, el cableado de `_dib_cadena`, y que las dos secciones de
+     `drill_tablas` usen la nota SÓLO para la fila TOTAL. Con
+     `_dib_cadena` devuelto a `_req_de(rng)`, falla.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50076,7 +50164,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#640**; la próxima toma el número siguiente.
+> última regla es la **#641**; la próxima toma el número siguiente.
 
 >
 

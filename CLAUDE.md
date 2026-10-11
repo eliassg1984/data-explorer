@@ -890,11 +890,17 @@ y UNA fecha), y dos cosas inflan cualquier conteo sin sumar un sol: el
 cantidad ni valor, casi todos de GASTOS— y los **anulados**, que valen poco
 pero no cero (S/ 15.868 en 2026). «Requerimientos por período»
 (`graficos/movimientos_periodo.py::tarjeta_requerimientos_periodo`) descarta
-los dos y lo dice en su fila de KPI; el resto de Movimientos los suma. Su
+los dos y lo dice en su fila de KPI. Su
 gemela `tarjeta_salidas_periodo` es la MISMA tarjeta con otro `Lado` (en
 salidas el «sin procesar» no tiene ítems: sus líneas salen del kardex), y
 las dos IMPORTAN las cuentas de «Compras por período» (`semanal.py`): tocar
-una allá la cambia acá, a propósito. Reglas #508 y #509.
+una allá la cambia acá, a propósito. Reglas #508 y #509. Las dos vistas
+«por Área» suman lo mismo que su vecina del mismo lado
+(`graficos/movimientos.py::requerimientos_que_suman` y
+`salidas_que_suman`) y dicen lo que no suma en la fila TOTAL de su primer
+cuadro, «TOTAL · sin 33 anulados» — junto al título, con el botón de fecha,
+no se veía. Siguen con todo las Tablas (ocultas), el KPI del rail y lo que
+ve el asistente IA. Regla #641.
 
 La tercera, `porcionamientos.parquet`: **una fila por CORTE, con la cabecera
 del porcionamiento repetida en cada una** — sumar `CANT MERMA` por fila da
