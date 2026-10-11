@@ -27,27 +27,16 @@ Invariante de orden
 el widget en ESTE render — nunca después. Un recorte posterior al render se
 vería recién en el siguiente rerun (un render de retraso = desync visible).
 
-Los dos modos del eje temporal
-------------------------------
-Desde 2026-08-09 la franja sabe filtrar de DOS formas y este módulo es el
-dueño de las dos:
-
-  · Rango  → un intervalo `(ini, fin)`.  Clave: `clave_rango(...)`.
-  · Cortes → el CONJUNTO exacto de días de una sesión de inventario, que
-             no tiene por qué ser contiguo (ver `cortes.py`).
-             Clave: `clave_corte(...)`.
-
-Cuál de los dos manda lo dice `clave_modo(clave_corte)` — una clave
-derivada de la del corte, así la partición (por reporte / por categoría)
-es LA MISMA para los tres estados y no hay forma de que el modo apunte a
-un corte de otra categoría.
-
-Invariante del modo Cortes
---------------------------
-`aplicar_corte` escribe SIEMPRE el corte **y** el rango. El rango no es
-redundante: lo leen el `st.date_input`, el label de la píldora y el loader
-de R2, y ninguno de los tres sabe qué es un corte. El corte es un
-estrechamiento ADICIONAL sobre ese rango, no un reemplazo del estado.
+Un solo modo: el rango
+----------------------
+Del 2026-08-09 al 2026-10-11 la franja supo filtrar también por CORTE (el
+conjunto exacto de días de una sesión de inventario) y por VARIOS cortes
+sumados, y este módulo era el dueño de esos dos estados más el del modo
+(`clave_corte`, `clave_modo`, `aplicar_corte`…). Su único consumidor era
+Ajuste, que el 2026-10-11 pasó a elegir la sesión en cada vista (regla
+#632); la maquinaria quedó sin uso y se borró ese mismo día (regla #635).
+Las sesiones de Ajuste las calcula `cortes.sesiones_inventario` y las
+guarda cada vista: no pasan por acá.
 """
 
 import datetime
@@ -124,7 +113,7 @@ def restaurar_eco(clave):
     justo encima (regla #115 otra vez).
 
     Escribe la clave de un widget ANTES de instanciarlo, que es el patrón
-    sancionado (mismo que `aplicar_corte`): hacerlo DESPUÉS es un error de
+    sancionado (mismo que `aplicar_atajo`): hacerlo DESPUÉS es un error de
     Streamlit.
     """
     eco = clave_eco(clave)
@@ -394,215 +383,24 @@ def aplicar_atajo(clave, rango, reporte=None, usa_carga_rango=False):
         st.session_state[f"rango_carga_ok_{reporte}"] = rango
 
 
-# ===========================================================================
-# MODO CORTES — el eje temporal como CONJUNTO de días, no como intervalo
-# ===========================================================================
-
-def clave_corte(reporte, categoria=None):
-    """Clave de session_state del corte activo de `reporte`.
-
-    Espeja EXACTAMENTE la partición de `clave_rango`: si el reporte separa
-    rango por categoría (Ajuste por categoría del rail, Compras por sección
-    de la pila), el corte se separa igual. Si no espejara, cambiar de item
-    del rail dejaría vivo un corte que ya no corresponde al rango que se
-    está mostrando — el mismo bug de desync que motivó este módulo, con
-    otro nombre.
-
-    El reporte va adentro de la clave por el mismo motivo que en
-    `clave_rango`, y desde el mismo día: dos reportes con categorías se
-    pisarían.
-
-    A diferencia de `clave_rango` no distingue `usa_carga_rango`: el corte
-    nunca decide QUÉ se descarga de R2 (para eso ya escribió el rango),
-    solo estrecha lo que ya está en memoria.
-    """
-    if categoria:
-        return f"corte_cat_{reporte}_{categoria}"
-    return f"corte_franja_{reporte}"
-
-
-def clave_modo(clave_c):
-    """Clave del selector Rango/Cortes, DERIVADA de la del corte.
-
-    Derivada y no construida aparte a propósito: así los tres estados
-    (rango, corte, modo) comparten una sola partición. Con claves armadas
-    por separado se podría llegar a "modo = Cortes" apuntando al corte de
-    otra categoría, y eso no lo detecta nada.
-    """
-    return f"modo_{clave_c}"
-
-
-MODOS_FECHA = ("Rango", "Corte", "Varios")
-"""Los tres modos del eje temporal. Los tres nombran QUÉ unidad de tiempo
-se elige, no qué pasa después — de ahí que sean sustantivos:
-  · Rango  — un intervalo (ini, fin). El de siempre.
-  · Corte  — UNA sesión de inventario; el clic en la lista reemplaza.
-  · Varios — VARIAS sesiones; el clic alterna (agrega/saca).
-
-"Varios" se llamó "Comparar" hasta 2026-08-10 y era un nombre MENTIROSO:
-no compara nada, SUMA. Los días de las sesiones elegidas se unen en un
-solo conjunto y todo lo que se ve abajo (mapa, cascada, tabla) es el
-total de ese conjunto — no hay una vista lado a lado por ningún lado.
-Tampoco "Acumulado", que en inventario se lee como total corrido desde
-una fecha (YTD) cuando acá la selección es arbitraria: se puede elegir
-marzo y agosto salteando el medio.
-
-Corte y Varios comparten estado: son el mismo conjunto de días, con
-distinto gesto de selección. Por eso pasar de uno a otro no pierde nada."""
-
-
-def modo_fecha(clave_c):
-    """Modo vigente (uno de `MODOS_FECHA`). Default Rango: un reporte que
-    nunca abrió el panel se comporta como siempre.
-
-    Valida contra `MODOS_FECHA` y no devuelve lo que haya guardado tal
-    cual: una sesión abierta desde ANTES de un renombre de modo trae un
-    valor que ya no existe, y `st.segmented_control` con un `default` que
-    no está entre sus opciones no falla — arranca sin nada seleccionado y
-    el panel queda mudo. Cayendo a "Rango" el peor caso es el
-    comportamiento de siempre."""
-    _m = st.session_state.get(clave_modo(clave_c), "Rango")
-    return _m if _m in MODOS_FECHA else "Rango"
-
-
-def modo_por_cortes(clave_c):
-    """True si el modo vigente filtra por cortes (Corte o Varios).
-    Existe para que nadie escriba la comparación a mano y se olvide de uno
-    de los dos — que es como se cuelan los bugs de "funciona en Corte pero
-    no en Varios"."""
-    return modo_fecha(clave_c) in ("Corte", "Varios")
-
-
-def corte_vigente(clave_c):
-    """La SELECCIÓN de cortes que hay que APLICAR, o None.
-
-    Devuelve None si el modo es Rango aunque haya una selección guardada:
-    se conserva (volver a Corte/Comparar la restaura) pero no filtra. Es
-    la única función que debe consultarse para decidir el filtro — leer la
-    clave a mano se saltea justamente esta condición.
-    """
-    if not modo_por_cortes(clave_c):
-        return None
-    return st.session_state.get(clave_c)
-
-
-def _fusionar(cortes_sel):
-    """Une N cortes en UN estado con la misma FORMA que tenía uno solo.
-
-    Esta es la pieza que hace que la selección múltiple no cueste nada río
-    abajo: `dias` es la UNIÓN de los días de todos los cortes elegidos, y
-    el filtro (`df[fecha].isin(dias)`) no distingue si vienen de uno o de
-    cinco. `ini`/`fin` son los extremos del conjunto, que es lo que
-    necesita el rango espejo — y por eso el rango de una selección de 2
-    cortes abarca también el hueco entre ellos, mientras que los datos NO:
-    exactamente la diferencia que justifica el modo.
-    """
-    _dias = sorted({d for c in cortes_sel for d in c["dias"]})
-    _claves = [c["clave"] for c in cortes_sel]
-    if len(cortes_sel) == 1:
-        _etiqueta = cortes_sel[0]["etiqueta_anio"]
-    else:
-        _etiqueta = (f"{len(cortes_sel)} cortes · "
-                     f"{cortes_sel[0]['etiqueta']} … "
-                     f"{cortes_sel[-1]['etiqueta_anio']}")
-    return {
-        "claves": _claves,
-        "etiqueta": _etiqueta,
-        "dias": _dias,
-        "ini": _dias[0],
-        "fin": _dias[-1],
-        "n_dias": len(_dias),
-        "n_cortes": len(_claves),
-    }
-
-
-def aplicar_corte(clave_r, clave_c, corte, reporte=None, usa_carga_rango=False):
-    """Callback `on_click` que fija UN corte, reemplazando la selección.
-    Lo usan el clic normal de la lista y el stepper ‹ ›.
-
-    Corre antes del rerun, así que el `date_input` ve el rango nuevo al
-    instanciarse (misma mecánica que `aplicar_atajo`, y por el mismo
-    motivo: escribir la clave de un widget ya instanciado es un error de
-    Streamlit).
-    """
-    _fijar_seleccion(clave_r, clave_c, [corte], reporte, usa_carga_rango)
-
-
-def alternar_corte(clave_r, clave_c, corte, todos, reporte=None,
-                   usa_carga_rango=False):
-    """Callback `on_click` del modo Comparar: agrega o saca `corte` de la
-    selección.
-
-    `todos` es la lista COMPLETA de cortes disponibles y hace falta para
-    reconstruir la selección en orden cronológico — el estado guarda solo
-    las claves, no los cortes enteros, así que sin la lista no se puede
-    recomponer `dias`.
-
-    Nunca deja la selección vacía: sacar el último elemento se ignora. Una
-    selección vacía filtraría CERO filas y la pantalla quedaría en blanco
-    sin explicación; para ver todo está el modo Rango.
-    """
-    _sel = set(st.session_state.get(clave_c, {}).get("claves", []))
-    if corte["clave"] in _sel:
-        if len(_sel) == 1:
-            return
-        _sel.discard(corte["clave"])
-    else:
-        _sel.add(corte["clave"])
-    _fijar_seleccion(clave_r, clave_c,
-                     [c for c in todos if c["clave"] in _sel],
-                     reporte, usa_carga_rango)
-
-
-def _fijar_seleccion(clave_r, clave_c, cortes_sel, reporte, usa_carga_rango):
-    """Escribe los TRES estados de una vez. Punto único: si el corte se
-    escribiera sin el rango, el `date_input`, el label y el loader de R2
-    seguirían mostrando el rango viejo (ver el invariante del módulo)."""
-    if not cortes_sel:
-        return
-    _estado = _fusionar(cortes_sel)
-    st.session_state[clave_c] = _estado
-    # Si ya estamos en Comparar hay que QUEDARSE ahí: forzar "Corte" en
-    # cada alternar_corte sacaría al usuario del modo en el que está
-    # armando la selección, a mitad de armarla.
-    if not modo_por_cortes(clave_c):
-        st.session_state[clave_modo(clave_c)] = "Corte"
-    aplicar_atajo(clave_r, (_estado["ini"], _estado["fin"]),
-                  reporte=reporte, usa_carga_rango=usa_carga_rango)
-
-
-def volver_a_rango(clave_c):
-    """Callback del `date_input`: tocar el calendario a mano vuelve a modo
-    Rango.
-
-    Sin esto quedaba el estado contradictorio "el usuario elige 1-31 de
-    agosto y la app sigue mostrando los 3 días del corte" — el rango se
-    movía pero el corte, más estrecho, seguía mandando. El corte NO se
-    borra: se desactiva. Volver a la pestaña Cortes lo recupera.
-    """
-    st.session_state[clave_modo(clave_c)] = "Rango"
-
-
 def debug_estado_rango():
-    """Vuelca a la UI todas las claves de session_state del eje temporal
-    (rango, corte y modo). Para diagnosticar desyncs en Cloud sin
-    adivinar: llamar bajo `if st.query_params.get("debug"):`. Muestra la
-    VERDAD del estado, que es contra lo que hay que contrastar el overlay
-    y el calendario.
+    """Vuelca a la UI todas las claves de session_state del eje temporal:
+    los rangos y, en Ajuste, la sesión que eligió cada vista (`ajcas_corte`,
+    `hm_corte`…). Para diagnosticar desyncs en Cloud sin adivinar: llamar
+    bajo `if st.query_params.get("debug"):`. Muestra la VERDAD del estado,
+    que es contra lo que hay que contrastar el overlay y el calendario.
 
-    Incluye corte/modo desde que el eje tiene dos modos: ver un rango
-    correcto y datos que no le corresponden es EL síntoma de un corte
-    activo que no se esperaba, y sin estas claves a la vista se diagnostica
-    como un bug del rango.
+    Hasta el 2026-10-11 buscaba también `modo_`, la clave del modo
+    Rango/Corte/Varios de la franja; se fue con esos modos (regla #635).
 
-    Los valores booleanos quedan fuera: "corte" también aparece en la key
-    de cada BOTÓN de la lista de cortes (`corte_<reporte>_corte_042`), y
-    Streamlit guarda el estado de cada botón como bool. Con 12 cortes eso
-    enterraba las 3 claves que importan bajo 12 líneas de `=False`. El
-    estado del eje nunca es un bool (tupla, dict o string), así que el
-    filtro por tipo separa señal de ruido sin depender de los nombres."""
+    Los valores booleanos quedan fuera: "corte" y "rango" aparecen también
+    en la key de BOTONES, y Streamlit guarda el estado de cada botón como
+    bool — con la lista de cortes de la franja eran 12 líneas de `=False`
+    enterrando las 3 claves que importaban. El estado del eje nunca es un
+    bool (tupla, dict o string), así que el filtro por tipo separa señal de
+    ruido sin depender de los nombres."""
     claves = sorted(k for k in st.session_state
-                    if any(t in k.lower() for t in ("rango", "corte", "modo_"))
+                    if any(t in k.lower() for t in ("rango", "corte"))
                     and not isinstance(st.session_state[k], bool))
     if claves:
         st.caption(

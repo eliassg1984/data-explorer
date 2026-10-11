@@ -16,8 +16,7 @@ from data import (
 from tema import ADVERTENCIA_TEXTO
 from estilos import TAM_FUENTE, inject_css
 from estado_rango import (
-    clave_rango, asegurar_rango, debug_estado_rango,
-    clave_corte, corte_vigente, aplicar_corte, restaurar_eco,
+    clave_rango, asegurar_rango, debug_estado_rango, restaurar_eco,
 )
 try:
     from estado_rango import atajos_tarjeta
@@ -26,7 +25,6 @@ except ImportError:
     # memoria (regla #357): sin esto la app moría con un ImportError hasta
     # el «Reboot app». Sin la función, el default cae a 30 días a mano.
     atajos_tarjeta = None
-from cortes import cortes_disponibles
 import franja_fecha
 from graficos.compras import SEC_ABRE_EN_EL_MES
 from graficos.sunat_reporte import bounds_fecha as bounds_fecha_sunat
@@ -701,43 +699,11 @@ if _franja_con_fecha:
     )
     restaurar_eco(_k_rango_franja)
 
-# ── Modo CORTES de la franja (solo reportes con "cortes" en REPORTES) ──
-# Las claves del corte y del modo salen del mismo dueño único que el rango
-# y con la MISMA partición por categoría (ver estado_rango.clave_corte).
-#
-# Los cortes se calculan sobre `df_f` ANTES de aplicarle el rango (el
-# filtro está más abajo): si se calcularan después, elegir un corte
-# reduciría la lista a ese único corte y no habría cómo volver a los otros
-# — el clásico filtro que se come su propio selector.
-_k_corte = clave_corte(reporte)
-_cortes_franja = []
-if _franja_con_fecha and cfg.get("cortes"):
-    _cortes_franja = cortes_disponibles(df_f[col_fecha], maximo=12)
-    if len(_cortes_franja) < 2:
-        # Un solo corte = no hay nada que segmentar; la pestaña sobra.
-        _cortes_franja = []
-    # ABRE EN EL ÚLTIMO CORTE, no en un rango de calendario (2026-09-14, a
-    # pedido). Lo que se mira de Ajuste es una sesión de inventario, no un
-    # intervalo: abrir en "lo que va del mes" mezcla dos conteos o no
-    # agarra ninguno.
-    #
-    # Va ACÁ y no en el dashboard porque `aplicar_corte` escribe el rango,
-    # que es la key de un `st.date_input` — tiene que estar puesto ANTES de
-    # que la franja instancie el widget, y la franja se dibuja ~60 líneas
-    # abajo. Escribirlo después es un error de Streamlit.
-    #
-    # Sólo la PRIMERA vez: con la clave ya escrita el usuario eligió, y
-    # volver a sembrar le pisaría la elección en cada rerun.
-    #
-    # (Hoy ningún reporte declara "cortes": Ajuste, el único, eligió el
-    # 2026-10-11 una sesión por vista en vez de un corte en la franja,
-    # regla #632.)
-    if _cortes_franja and _k_corte not in st.session_state:
-        aplicar_corte(_k_rango_franja, _k_corte, _cortes_franja[-1],
-                      reporte=reporte, usa_carga_rango=_usa_carga_rango)
-# corte_vigente() devuelve None si el modo es Rango, aunque haya un corte
-# guardado. Es lo que decide el filtro de más abajo Y el label del pill.
-_corte_apl = corte_vigente(_k_corte) if _cortes_franja else None
+# Acá vivía el modo CORTES de la franja (2026-08-09 → 2026-10-11): para un
+# reporte con `"cortes": True` calculaba los últimos 12 cortes, abría en el
+# último y lo aplicaba como un filtro por CONJUNTO de días. Su único usuario
+# era Ajuste, que pasó a elegir la sesión en cada vista (regla #632); el
+# modo, su stepper ‹ n/12 › y su filtro se borraron (regla #635).
 
 # Evitar NameError antes de la franja superior
 _fecha_actualizacion = None
@@ -797,8 +763,7 @@ with _fila_top:
             # abrir en otra ventana — hoy el Ranking de Proveedores, en el
             # mes en curso. Vacío para los otros siete reportes.
             franja_fecha.publicar(
-                k_rango=_k_rango_franja, k_corte=_k_corte,
-                corte_apl=_corte_apl, cortes=_cortes_franja,
+                k_rango=_k_rango_franja,
                 fecha_min=fecha_min_full, fecha_max=fecha_max_full,
                 reporte=reporte, usa_carga_rango=_usa_carga_rango,
                 hoy=_hoy,
@@ -847,65 +812,11 @@ with _fila_top:
             if _franja_dibuja_fecha:
                 franja_fecha.render()
 
-            # ── Stepper del corte activo ──────────────────────────────────
-            # Recorrer conteo por conteo sin abrir el panel: es EL gesto de
-            # "revisar los últimos inventarios".
-            #
-            # Vive en un contenedor propio anclado a la derecha (el hueco
-            # que dejó libre el pill al mudarse a la izquierda en desktop) y
-            # NO dentro de `fecha_ajuste_pill`: ese pill tiene ancho FIJO de
-            # 210px y los chips se anclan a `left: 301px` =
-            # 85 + 210 + 6. Meter dos botones ahí adentro rompe esa
-            # aritmética de tres números acoplados (ver estilos/_50_fecha.py).
-            # Como el stepper solo existe con un corte activo, aparecer y
-            # desaparecer no mueve nada de lo demás.
-            # Solo con UN corte elegido: con varios no hay "el siguiente"
-            # (¿el siguiente de cuál?), y un ‹ › que reemplazara la
-            # selección entera por un corte suelto borraría en un clic lo
-            # que el usuario acaba de armar.
-            if _corte_apl and _corte_apl["n_cortes"] == 1 and _cortes_franja:
-                _claves = [_c["clave"] for _c in _cortes_franja]
-                try:
-                    _i_act = _claves.index(_corte_apl["claves"][0])
-                except ValueError:
-                    # El corte guardado ya no existe en la lista (cambió el
-                    # parquet o el reporte). Se deja pasar sin stepper: el
-                    # filtro sigue siendo válido y el panel permite reelegir.
-                    _i_act = None
-                if _i_act is not None:
-                    with st.container(key="fecha_corte_nav"):
-                        _n_ant, _n_txt, _n_sig = st.columns([1, 3.4, 1],
-                                                            vertical_alignment="center")
-                        with _n_ant:
-                            st.button(
-                                "‹", key="corte_nav_ant", disabled=_i_act == 0,
-                                help="Corte anterior",
-                                on_click=aplicar_corte,
-                                args=(_k_rango_franja, _k_corte,
-                                      _cortes_franja[max(0, _i_act - 1)],
-                                      reporte, _usa_carga_rango),
-                            )
-                        with _n_txt:
-                            # Solo la posición en la secuencia. El conteo de
-                            # días se sacó a pedido: el pill de al lado ya
-                            # dice QUÉ corte es, y acá lo único que no se
-                            # sabe de otra forma es dónde está parado uno.
-                            st.markdown(
-                                f"<div class='corte-nav-etq'>{_i_act + 1}"
-                                f"<span>/{len(_cortes_franja)}</span></div>",
-                                unsafe_allow_html=True,
-                            )
-                        with _n_sig:
-                            st.button(
-                                "›", key="corte_nav_sig",
-                                disabled=_i_act == len(_cortes_franja) - 1,
-                                help="Corte siguiente",
-                                on_click=aplicar_corte,
-                                args=(_k_rango_franja, _k_corte,
-                                      _cortes_franja[min(len(_cortes_franja) - 1,
-                                                         _i_act + 1)],
-                                      reporte, _usa_carga_rango),
-                            )
+            # El stepper del corte activo (‹ n/12 ›, `fecha_corte_nav`) vivió
+            # acá del 2026-08-09 al 2026-10-11: recorría los cortes de Ajuste
+            # sin abrir el panel. Hoy cada vista de Ajuste trae el suyo junto
+            # a su sesión (`graficos/ajuste/_comun.py::selector_sesion`,
+            # regla #632) y éste se borró con los modos de la franja (#635).
 
             # Los atajos de rango (Todo/Semana/Mes/30 días/Año) vivieron acá
             # entre el 2026-08-14 y el 2026-08-15, anclados a la derecha de
@@ -950,18 +861,12 @@ if isinstance(_fecha_actualizacion, datetime.datetime):
 # En carga_por_rango el widget puede dejar una tupla de 1 elemento mientras
 # el usuario elige la 2ª fecha: en ese caso no se filtra (se muestra lo ya
 # cargado) hasta que el rango quede completo.
-if _franja_con_fecha and _corte_apl:
-    # MODO CORTES — filtro por CONJUNTO, no por intervalo. Es toda la razón
-    # de ser del modo: los días de una sesión de inventario no tienen por
-    # qué ser contiguos, y el `between` de abajo arrastraría los ajustes
-    # diarios de los días intermedios (ver cortes.py).
-    # `.dt.normalize()` a los dos lados porque la columna trae hora (FECHA
-    # APERTURA INVENTARIO): sin normalizar, isin() contra medianoche no
-    # matchea ni una fila.
-    df_f = df_f[df_f[col_fecha].dt.normalize().isin(
-        [pd.Timestamp(_d) for _d in _corte_apl["dias"]]
-    )]
-elif _franja_con_fecha and not es_ajuste:
+#
+# Hasta el 2026-10-11 había antes una rama para el modo CORTES: filtraba por
+# el CONJUNTO de días del corte (`isin`), no por el intervalo. Se fue con los
+# modos de la franja (regla #635); el filtro por conjunto de una sesión lo
+# hacen hoy las vistas de Ajuste, cada una sobre el parquet entero.
+if _franja_con_fecha and not es_ajuste:
     # Ajuste no se filtra por la franja (regla #632): cada vista recorta el
     # parquet entero con su sesión o sus meses. Filtrarlo acá con el rango
     # por defecto —lo que va del mes— lo dejaría vacío los primeros días del

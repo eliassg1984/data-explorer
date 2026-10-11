@@ -2906,7 +2906,6 @@ def _pruebas_estado_y_utils():
     # ── estado_rango: qué clave usa cada reporte ────────────────────────
     from estado_rango import (
         _fin_de_mes, _recortar_media, atajos_rango, clave_rango,
-        clave_corte as _clave_corte, clave_modo as _clave_modo,
     )
 
     check("clave_rango carga_por_rango",
@@ -2927,19 +2926,6 @@ def _pruebas_estado_y_utils():
           clave_rango("Compras", False, categoria="sec_proveedor")
           != clave_rango("Compras", False, categoria="sec_semanal"),
           True)
-    # El corte espeja la partición del rango: si no, cambiar de sección
-    # dejaría vivo un corte que ya no corresponde al rango en pantalla.
-    check("clave_corte espeja la partición del rango",
-          _clave_corte("Compras", categoria="sec_proveedor")
-          != _clave_corte("Compras", categoria="sec_semanal"),
-          True)
-    check("clave_corte por categoría separa reportes",
-          _clave_corte("Compras", categoria="tiempo")
-          != _clave_corte("Ajuste de Inventario", categoria="tiempo"),
-          True)
-    check("clave_modo se deriva de la del corte",
-          _clave_modo(_clave_corte("Compras", categoria="sec_semanal")),
-          "modo_" + _clave_corte("Compras", categoria="sec_semanal"))
     check("clave_rango normal",
           clave_rango("Compras", False), "rango_franja_Compras")
     # carga_por_rango GANA sobre la categoría: el date-picker tiene que
@@ -3744,8 +3730,7 @@ def _pruebas_rango_por_tarjeta():
     por_defecto = (datetime.date(2025, 9, 6), f_max)   # los 12m de app.py
     ctx_previo = st.session_state.get("_franja_fecha_ctx")
     franja_fecha.publicar(
-        k_rango="rango_franja_Compras", k_corte="corte_franja_Compras",
-        corte_apl=None, cortes=[], fecha_min=f_min, fecha_max=f_max,
+        k_rango="rango_franja_Compras", fecha_min=f_min, fecha_max=f_max,
         reporte="Compras", usa_carga_rango=False,
         hoy=datetime.date(2026, 9, 8), rango_default=por_defecto,
     )
@@ -3775,8 +3760,7 @@ def _pruebas_rango_por_tarjeta():
     for _k in (k_prov, k_sem):
         st.session_state.pop(_k, None)
     franja_fecha.publicar(
-        k_rango="rango_franja_Compras", k_corte="corte_franja_Compras",
-        corte_apl=None, cortes=[], fecha_min=f_min, fecha_max=f_max,
+        k_rango="rango_franja_Compras", fecha_min=f_min, fecha_max=f_max,
         reporte="Compras", usa_carga_rango=False,
         hoy=datetime.date(2026, 9, 8), rango_default=por_defecto,
         rango_default_cat={"sec_proveedor": mes},
@@ -3809,8 +3793,7 @@ def _pruebas_rango_por_tarjeta():
     for _k in (k_prov, k_sem):
         st.session_state.pop(_k, None)
     franja_fecha.publicar(
-        k_rango="rango_franja_Compras", k_corte="corte_franja_Compras",
-        corte_apl=None, cortes=[], fecha_min=f_min, fecha_max=f_max,
+        k_rango="rango_franja_Compras", fecha_min=f_min, fecha_max=f_max,
         reporte="Compras", usa_carga_rango=False,
         hoy=datetime.date(2026, 9, 8), rango_default=por_defecto,
     )
@@ -6338,15 +6321,20 @@ def _pruebas_fechas_ajuste():
     _por_vista = re.search(r'REPORTES_FECHA_POR_VISTA = \(([^)]*)\)', app)
     check("la franja de Ajuste no dibuja fecha",
           bool(_por_vista and '"Ajuste de Inventario"' in _por_vista.group(1)), True)
+    # Era un `elif` detrás de la rama del modo Corte; desde la regla #635,
+    # que borró esa rama, es el `if` que abre el filtro por la franja.
     check("app.py no filtra Ajuste por la franja",
-          "elif _franja_con_fecha and not es_ajuste:" in app,
+          "if _franja_con_fecha and not es_ajuste:" in app,
           True)
     check("app.py ya no reparte el rango por categoría",
           "categoria_rango_ajuste" in app.split("# Hasta el 2026-10-11 Ajuste")[0],
           False)
     import data
-    check("Ajuste ya no pide los modos de corte de la franja",
-          "cortes" in data.REPORTES["Ajuste de Inventario"], False)
+    # Desde la regla #635 nadie lee `"cortes"`: los modos Corte / Varios de
+    # la franja se borraron. Un reporte que la declare esperaría una
+    # píldora con cortes y no pasaría nada, sin error que lo diga.
+    check("ningún reporte declara \"cortes\" (los modos de la franja ya no existen)",
+          [r for r, c in data.REPORTES.items() if "cortes" in c], [])
     from graficos import ajuste as aj
     check("una sola pila con las cinco vistas",
           [c for c, _v in aj._PILA],

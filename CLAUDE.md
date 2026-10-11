@@ -290,7 +290,7 @@ cualquier app con barra lateral, cada pieza con UN trabajo:
   reporte y la vista en pantalla a la izquierda —sin KPIs desde el
   2026-10-03, a pedido (regla #596)—, y la fecha,
   Filtros, la hora del dato y Actualizar a la derecha, cada uno a la
-  izquierda del anterior (`--barra-f`, `--barra-fecha`, `--barra-corte`).
+  izquierda del anterior (`--barra-f`, `--barra-fecha`, `--barra-sello`).
   **No está en reposo**: deja una tira de 12px contra el borde de arriba y
   aparece —con sus controles— cuando el cursor la toca. Por eso el
   contenido arranca en 20px y no en 52 (regla #473).
@@ -567,7 +567,8 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
 - **Detección móvil server-side:** para texto que Plotly dibuja en servidor,
   User-Agent vía `st.context.headers`. El layout va por CSS `@media`.
 - **Un widget que deja de renderizarse pierde su estado.** Por eso el
-  `date_input` de la franja se dibuja en los TRES modos: esconderlo
+  `date_input` de la franja se dibujaba también en los modos Corte y
+  Varios que la píldora tuvo hasta el 2026-10-11 (#635): esconderlo
   borraría la clave del rango del reporte. **Compras ya no lo dibuja
   arriba** (2026-09-06): sus tarjetas traen el selector. **Ni Movimientos**
   (2026-10-08): cada vista trae el suyo (regla #617). **Ni Ajuste**
@@ -1144,27 +1145,30 @@ Lo que ya mordió:
 
 Detalle, trampas y mediciones en `arquitectura.md` regla #558.
 
-## El eje temporal tiene TRES modos, y un solo dueño
+## El eje temporal de la franja es un RANGO, con un solo dueño
 
-**Hoy ningún reporte los usa** (2026-10-11, regla #632): Ajuste, el único
-con `"cortes"`, pasó a una sesión por vista. La pieza sigue entera en
-`franja_fecha.py` y `estado_rango.py`.
+`estado_rango.py` es el dueño único del rango de la franja (`clave_rango`,
+`asegurar_rango`, `aplicar_atajo`, `restaurar_eco`): nadie escribe esas
+claves fuera de él. `franja_fecha.render()` dibuja atajos y calendario, y
+`app.py` filtra por el intervalo.
 
-El calendario de la franja tiene tres modos: **Rango** (intervalo),
-**Corte** (el conjunto exacto de días de una sesión de inventario, que no
-tiene por qué ser contiguo) y **Varios** (suma varias sesiones en un
-solo período).
-`cortes.py` calcula los cortes; `estado_rango.py` es el dueño de los tres
-estados (rango, corte, modo) y nadie los escribe fuera.
+**Los modos Corte y Varios de la píldora ya no existen** (2026-10-11,
+regla #635). Filtraban por el CONJUNTO de días de una sesión de
+inventario, o de varias sumadas, con un stepper ‹ n/12 › al lado. Su único
+usuario era Ajuste (`"cortes": True`), que pasó a elegir la sesión en cada
+vista (#632); quedaron sin consumidores y se borraron enteros, CSS
+incluido.
 
-Corte y Varios comparten estado: solo cambia si el clic reemplaza o
-alterna. "Varios" nombra la unidad elegida; el verbo (suma) va en el
-caption de la lista, no en la pastilla. `_fusionar` une N cortes en un estado con la misma forma que uno,
-así el filtro `isin(dias)` no distingue el caso.
-
-`aplicar_corte` escribe el corte **y** el rango — el rango lo leen el
-`date_input`, el label del pill y el loader de R2, que no saben qué es un
-corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
+Lo que sigue vivo del corte está en `cortes.py`: las rachas
+(`cortes_por_racha`, el grano «Corte» de Evolución y de la tabla
+dinámica), las sesiones (`sesiones_inventario`, `ultimo_cierre`) y
+`fecha_operativa`. **Un corte sigue siendo un CONJUNTO de días, no un
+intervalo**: se filtra con `isin(sesión["dias"])`, nunca con un `between`
+que arrastre los ajustes de los días del medio. Si otro reporte necesita
+elegir sesiones, el modelo es `graficos/ajuste/_comun.py::selector_sesion`,
+uno por vista — no resucitar el modo de la franja: una píldora arriba que
+manda sobre unas vistas y no sobre otras es lo que dejaba Ajuste en blanco
+(#632). Cómo funcionaba, en `arquitectura.md` reglas #62 a #65.
 
 ## El selector de fecha de una tarjeta: un panel propio
 

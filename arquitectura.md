@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-634 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+635 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (206)
+**CSS y estilos** (207)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -240,6 +240,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
 - **#631** — Ajuste › Evolución: el neto en pastillas, el período más movido marcado y los totales del…
 - **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
+- **#635** — Los modos Corte / Varios de la píldora de la franja se borraron enteros: sin su único…
 
 **Layout y alturas** (90)
 
@@ -867,7 +868,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#630** — El «Resumen del cruce» de Documentos SUNAT mide la FIDELIDAD respecto de SUNAT: la base es…
 - **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
 
-**Fechas, rangos y cortes** (15)
+**Fechas, rangos y cortes** (16)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -884,6 +885,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#609** — Consumo según recetas: un corte porcionado no sale de UN porcionamiento, sale de todos los de…
 - **#613** — El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo cuenta en su MES OPERATIVO
 - **#632** — Ajuste de Inventario no tiene fecha en la franja: cada vista elige la suya —una SESIÓN de…
+- **#635** — Los modos Corte / Varios de la píldora de la franja se borraron enteros: sin su único…
 
 **Asistente IA** (4)
 
@@ -49686,6 +49688,79 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+635. **Los modos Corte / Varios de la píldora de la franja se borraron
+     enteros: sin su único consumidor (Ajuste, regla #632), eran código
+     que ningún usuario alcanzaba.** 2026-10-11, el mismo día de la #632,
+     con el método de la #618: cada pieza se buscó con grep —también en
+     `herramientas/`, en los tests y en los dos docs— antes de borrarla.
+     Ajuste era el único reporte con `"cortes": True` en `data.REPORTES`.
+
+     **Qué se fue:**
+     - `app.py` (95 líneas): el bloque «Modo CORTES de la franja»
+       (`cortes_disponibles(..., maximo=12)` y la siembra del último corte
+       con `aplicar_corte`), el stepper `fecha_corte_nav` (‹ n/12 ›) y la
+       rama que filtraba por CONJUNTO (`isin(dias)`) cuando había un corte
+       aplicado. El filtro por la franja vuelve a ser uno solo, por
+       intervalo, y sigue sin tocar a Ajuste (`not es_ajuste`, #632).
+     - `estado_rango.py` (~200 líneas): `clave_corte`, `clave_modo`,
+       `MODOS_FECHA`, `modo_fecha`, `modo_por_cortes`, `corte_vigente`,
+       `_fusionar`, `aplicar_corte`, `alternar_corte`, `_fijar_seleccion` y
+       `volver_a_rango`. `debug_estado_rango` ya no busca `modo_`; sigue
+       buscando `corte`, que hoy nombra la sesión de cada vista de Ajuste
+       (`ajcas_corte`, `hm_corte`).
+     - `franja_fecha.py`: el `st.segmented_control` de modos, la lista de
+       cortes, el caption «Corte contiguo…» / «Filtra N días de conteo…», el
+       label «Corte …» y el `on_change=volver_a_rango` del `date_input`.
+       `render()` se queda —atajos y calendario— para la franja de los
+       reportes que no eligen la fecha por vista; `publicar()` ya no lleva
+       `k_corte`, `corte_apl` ni `cortes`.
+     - `cortes.py`: `cortes_disponibles` (con su núcleo cacheado
+       `_cortes_desde_dias`), `etiqueta_corte_anio` y `corte_contiguo`, que
+       sólo los usaban la franja y su panel. Se quedan las rachas
+       (`_rachas`, `cortes_por_racha`: el grano «Corte» de Evolución y de la
+       tabla dinámica), las sesiones de la #632, `fecha_operativa`, los
+       meses y los feriados.
+     - `estilos/`: el stepper (`_50_fecha.py`, sus 8 reglas con la etiqueta
+       `.corte-nav-etq`), el estilo del segmentado del panel
+       (`.st-key-fecha_panel [data-testid="stButtonGroup"]`), la variable
+       `--barra-corte` con su `:root:has(.st-key-fecha_corte_nav)`
+       (`_28_arbol.py`; el sello y `--barra-der` la sumaban) y el stepper en
+       las listas de la capa de la cabecera, en `DISPARADORES_CABECERA` y en
+       el tramo de 769 a 900 px (`_26_rails_scroll.py`). El CSS global pasa
+       de 202 a 201 `:has()`. `.st-key-fecha_panel` se queda: es el panel
+       de la píldora que sigue viva.
+     - `test_graficos.py`: las tres pruebas de `clave_corte` / `clave_modo`
+       y los tres `k_corte=… corte_apl=… cortes=[]` con que las pruebas de
+       rango por tarjeta publicaban el contexto.
+
+     **Dos guardas de la #632 fallaban, y tenían razón** (como en la
+     #618): miraban el código que se borró, no lo que protegen.
+     - «app.py no filtra Ajuste por la franja» buscaba el texto
+       `elif _franja_con_fecha and not es_ajuste:`. Era un `elif` detrás de
+       la rama del corte; ahora es el `if` que abre el filtro. La guarda
+       busca el `if` y dice por qué cambió.
+     - «Ajuste ya no pide los modos de corte» miraba sólo a Ajuste. Ahora
+       mira TODOS los reportes: nadie lee `"cortes"`, y un reporte que la
+       declare esperaría una píldora con cortes sin error que avise.
+
+     **Lo que se queda del concepto, y por qué no se resucita.** Un corte
+     sigue siendo un CONJUNTO de días y no un intervalo (regla #62): las
+     vistas de Ajuste filtran por los `dias` de su sesión. Si otro reporte
+     necesita elegir sesiones, el modelo es el selector por vista de Ajuste
+     (`graficos/ajuste/_comun.py::selector_sesion`), no una píldora arriba
+     que manda sobre unas vistas y no sobre otras — eso es lo que dejaba a
+     Ajuste en blanco (#632). Las reglas #62 a #65 cuentan cómo funcionaba.
+
+     **En Cloud hace falta «Reboot app»** (regla #357). El `app.py` nuevo
+     publica el contexto de la franja SIN `k_corte`, y el `franja_fecha`
+     que el proceso ya tiene importado lee `ctx["k_corte"]` en su
+     `render()`: hasta el reinicio, todo reporte cuya franja dibuja la
+     fecha (Ventas, entre otros) muere con un `KeyError: 'k_corte'`. Los
+     imports de `app.py` no cambian de nombre —sólo se le quitan—, así que
+     no hay `ImportError`: el síntoma es ese `KeyError`.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49698,7 +49773,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#634**; la próxima toma el número siguiente.
+> última regla es la **#635**; la próxima toma el número siguiente.
 
 >
 

@@ -122,6 +122,9 @@ _ESPERA = "220ms"
 # abría la capa de la cabecera desde el medio de la página (regla #457).
 # Hoy esa tarjeta usa `selector_fecha_tarjeta` (#633); el acote queda por
 # si otra vuelve a llamarlo.
+#
+# El stepper del corte (`fecha_corte_nav`, ‹ n/12 ›) estuvo en la lista hasta
+# el 2026-10-11: se fue con los modos Corte / Varios de la franja (#635).
 # QUE ABRE LA CAPA DE LA COLUMNA (2026-09-18). La gemela de DISPARADORES_CABECERA,
 # para el otro eje. Se declara aparte y no se suma a aquella porque son dos
 # capas independientes: pasar por la franja de reportes no tiene por que
@@ -174,7 +177,6 @@ DISPARADORES_CABECERA = """.st-key-nav_franja_rep:hover,
             .st-key-nav_rail:hover,
             .st-key-chips_ajuste_tabla:hover,
             .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill:hover,
-            .st-key-fecha_corte_nav:hover,
             .st-key-chips_ajuste_tabla [aria-expanded="true"],
             .st-key-fila_ajuste_top .st-key-fecha_ajuste_pill [aria-expanded="true"]"""
 
@@ -473,8 +475,7 @@ CSS = f"""
     /* 1. LOS CONTROLES DEL REPORTE. Se ven en los dos estados: no dependen
           de donde estes en la pagina, y hasta hoy seguian pinchados arriba
           tambien al scrollear. */
-    :root[data-capa-cab] :is(.st-key-chips_ajuste_tabla, .st-key-fecha_ajuste_pill,
-              .st-key-fecha_corte_nav) {{
+    :root[data-capa-cab] :is(.st-key-chips_ajuste_tabla, .st-key-fecha_ajuste_pill) {{
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
@@ -507,8 +508,7 @@ CSS = f"""
        arriba, cada uno con su bloque, porque los dos tienen ademas su
        propia historia con el cruce por scroll. */
     .st-key-chips_ajuste_tabla,
-    .st-key-fecha_ajuste_pill,
-    .st-key-fecha_corte_nav {{
+    .st-key-fecha_ajuste_pill {{
         opacity: 0;
         visibility: hidden;
         pointer-events: none;

@@ -226,7 +226,8 @@ REPORTES = {
         # Sin `"cortes": True` desde el 2026-10-11 (regla #632): era lo que
         # le daba a la píldora de la franja los modos Corte y Varios, y la
         # franja de Ajuste ya no dibuja fecha. Cada vista elige su sesión de
-        # inventario (`cortes.sesiones_inventario`) o sus meses.
+        # inventario (`cortes.sesiones_inventario`) o sus meses. Los modos
+        # se borraron el mismo día (regla #635): la clave ya no la lee nadie.
         "graficos": [
             {"tipo": "line",
              "x": ["FECHA APERTURA INVENTARIO", "MES"],
