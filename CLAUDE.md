@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py && python test_tipo_compra.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -129,6 +129,14 @@ regla #603.
 caso real —el cierre de setiembre registrado el 1 de octubre, el área que
 cuenta dos veces en el mes, la salida anulada, la cortesía, Eventos aparte—
 y que el reporte esté en el dispatcher. Ver `arquitectura.md` regla #622.
+
+`test_tipo_compra.py` vigila QUÉ SE COMPRÓ (`tipo_compra.py`, la columna
+«Tipo» de «Documentos SUNAT»): un Almacén y un SIRE de mentira pasados por
+el cruce de verdad —el banco que factura sin IGV, la inmobiliaria
+exonerada, el supermercado al 92 %, la ferretería que vende de todo, la
+nota exonerada, el RUC con un espacio al final— y, con `ast`, que la vista
+clasifique el cruce y cachee con la versión de las reglas. Ver
+`arquitectura.md` regla #640.
 
 ## El asistente IA no adivina: consulta
 
@@ -1013,6 +1021,16 @@ sirve las compras como antes.
   `definicion_compra.lineas_restadas`, que trae también las líneas
   devueltas ENTERAS (las que `data.cargar` borra). Un número de nota se
   repite entre proveedores: se cruza por número Y proveedor. Regla #628.
+
+**Qué se compró —Alimentos, Otros bienes, Servicios, Financiero— no lo
+dice SUNAT** (2026-10-11, regla #640). El SIRE tiene el casillero pero lo
+llena el comprador (vacío), y el código de producto del XML viene en el
+15 % de las líneas. La columna «Tipo» de «Documentos SUNAT» sale de
+`tipo_compra.py`, en un orden MEDIDO: entidad financiera primero (los
+bancos facturan sin IGV y si no saldrían comida), después el documento en
+el Almacén, el proveedor (≥ 90 % de un tipo) y recién al final «toda la
+factura sin IGV» → Alimentos. Tocar una regla es subir
+`tipo_compra.VERSION`.
 
 Los otros reportes de compras del Almacén y qué cuenta cada uno (los tres de
 «Ingresos» = `compras.parquet` al céntimo; los Rankings, sólo Mercadería y

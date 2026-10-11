@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-639 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+640 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (207)
 
@@ -813,7 +813,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#634** — El panel de la sesión de Ajuste es una pieza propia, como el de fechas: cada sesión dice su…
 - **#639** — Un requerimiento también tiene DOS fechas, y se elige como en salidas: «Fecha de los…
 
-**SUNAT y SIRE** (56)
+**SUNAT y SIRE** (57)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -871,6 +871,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
 - **#630** — El «Resumen del cruce» de Documentos SUNAT mide la FIDELIDAD respecto de SUNAT: la base es…
 - **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
+- **#640** — «Tipo» en Documentos SUNAT: QUÉ se compró —Alimentos, Otros bienes, Servicios o Financiero—.…
 
 **Fechas, rangos y cortes** (16)
 
@@ -49979,6 +49980,90 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+640. **«Tipo» en Documentos SUNAT: QUÉ se compró —Alimentos, Otros
+     bienes, Servicios o Financiero—. Ni el SIRE ni el XML lo dicen: sale
+     del Almacén y de dos señales del registro, en un orden medido.**
+     2026-10-11, a pedido: «con información que me brinda el documento
+     oficial de SUNAT poder identificar si esto corresponde a alimentos o
+     servicios u otros». La cuenta es `tipo_compra.py` (puro, con
+     `test_tipo_compra.py`); la columna, `_tabla_documentos`.
+
+     **Lo que SUNAT trae, medido ese día** (16.763 facturas del SIRE,
+     5.041 XML en R2, contra la familia que el Almacén le puso a cada
+     compra):
+     - El registro tiene el casillero —`codBbss`, la «clasificación de los
+       bienes y servicios adquiridos» (1 mercadería… 5 otros gastos)—,
+       pero lo llena el COMPRADOR (obligatorio sólo con ingresos de más de
+       1.500 UIT): vacío en las 900 facturas de setiembre 2026.
+       `sunat._normalizar_registro` no lo guarda, ni `lisNumCasilla` ni
+       `porTasaIGV`, que la API también manda.
+     - El XML trae el «código de producto SUNAT» (UNSPSC) en el 14,6 % de
+       sus 18.668 líneas; 264 de 325 emisores no lo ponen nunca, y a veces
+       mal: 163 líneas de comida con el 48 (equipos de cocina), 44 con el
+       51 (medicamentos).
+     - Aciertan, pero no entraron: el código de detracción del XML (014 y
+       035 → 297 de 297 comida; 019/020/022/037 → 70 de 71 servicios) y el
+       tipo de operación 21xx (financiero). Sobre la cascada de abajo
+       suman 59 documentos, el 0,7 % de los soles, a cambio de leer miles
+       de XML de R2 o de mantener un índice.
+     - No sirven: la «D» de detracción sola (2 de cada 3 son carne) y la
+       unidad «ZZ» de servicio (el 72 % de esas líneas es comida).
+
+     **El orden de `clasificar`, y por qué ése** (el primero que contesta
+     gana):
+     1. **Entidad financiera**: comprobante tipo 30 o 42, o la razón social
+        (`es_entidad_financiera`). PRIMERO porque bancos, cajas y
+        aseguradoras facturan sin IGV —el BCP, 419 de 429; Diners, 74— y la
+        regla 4 los llamaría comida. En el historial no marca a ningún
+        proveedor que no lo sea.
+     2. **El documento está en el Almacén**: su tipo, el que más pesa; el
+        tooltip dice la parte si es mixto. El 98,1 % de los documentos es
+        de un solo tipo en un 95 % o más.
+     3. **El proveedor**: si lo que se le compra es ≥ 90 % de un tipo
+        (`PUREZA_PROVEEDOR`). Medido con cada factura FUERA de la cuenta de
+        su proveedor, que es lo que le pasa a un «Solo SUNAT»: con 95 %,
+        78,3 % de las facturas con tipo y 98,6 % de acierto; con 90 %,
+        92,3 % y 97,2 % (las que suma aciertan el 91 %); con 85 %, las que
+        suma aciertan el 85 %. Con 95 % el supermercado (93 % comida) se
+        quedaba sin tipo.
+     4. **Factura toda sin IGV** → Alimentos (verdura, fruta, pescado).
+        Sola acierta el 98,3 %, pero va DESPUÉS del proveedor: en las 60
+        facturas donde discrepan, el proveedor acierta el 95 % y la
+        exoneración el 2 % (BBVA, una inmobiliaria, APDAYC).
+
+     Doce meses (12 oct 2025 – 11 oct 2026, 4.634 filas del cruce):
+     Alimentos 2.603, Servicios 737, Financiero 586 (S/ 1,01 M), Otros
+     bienes 530 y sin tipo 178 (S/ 234 mil): proveedores nuevos, o que
+     venden de todo, con factura gravada.
+
+     **Del Almacén al tipo** (`tipo_de_linea`): las familias de alimentos
+     y bebidas, y ENVASES Y EMBALAJES; en las tres de gasto decide la
+     subfamilia (`SUBFAMILIAS_BIENES`: leña, gas, limpieza, menaje,
+     útiles, uniformes…; lo demás es servicio, incluido «Agua», que es
+     Sedapal). **Una familia sin regla NO cae en «Servicios» por
+     descarte**: queda sin tipo y el documento pasa a la regla siguiente.
+
+     Lo que mordió:
+     - **Recorrer una columna fila por fila con el texto en Arrow** (pandas
+       3) costaba 2 s en las 53.000 líneas del Almacén (`zip` de dos
+       columnas) y 1 s en las 4.600 del cruce (`to_dict("records")`). Ahora
+       el tipo se calcula por PAR (familia, subfamilia) y entra con un
+       `merge`, y el cruce se lee con `tolist()`. Lo caro
+       (`tablas_almacen`, 0,4-0,6 s) no depende del rango: lo cachea
+       `_tablas_tipo` por el sello del parquet y `tipo_compra.VERSION`;
+       `clasificar` cuesta 31 ms con 30 días y 73 ms con doce meses.
+     - **La tabla YA tenía una columna «Tipo»**, oculta: el tipo de
+       COMPROBANTE, que se ve como chip (#239). Su cabecera pasó a «Tipo de
+       comprobante»; «Tipo», la visible, es qué se compró.
+     - Se suma al cruce ANTES de los filtros, así que viaja al Excel
+       (`tipo` y `tipo_por`).
+     - En la laptop (Streamlit 1.59) el panel de abajo de este reporte
+       revienta con `st.container(wrap=)`, que es de la 1.64 de Cloud: no
+       es un bug de la nube, y la tabla se dibuja igual.
+
+     Tocar una lista, el umbral o el orden es subir `tipo_compra.VERSION`.
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49991,7 +50076,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#638**; la próxima toma el número siguiente.
+> última regla es la **#640**; la próxima toma el número siguiente.
 
 >
 
