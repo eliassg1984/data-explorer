@@ -111,11 +111,13 @@ CSS = """    /* ================================================================
        los números de `st.columns` dejarían de significar nada: el ancho lo
        decidiría entero este fichero y el `.py` mentiría. Ver regla #464. */
     .st-key-sunat_card_izq
-    [data-testid="stHorizontalBlock"]:has(.st-key-fecha_ajuste_pill) {
+    [data-testid="stHorizontalBlock"]:has(.st-key-sunat_f_fila) {
         gap: 8px 10px !important;
     }
-    .st-key-sunat_card_izq [data-testid="stColumn"]:has(.st-key-fecha_ajuste_pill) {
-        min-width: 200px !important;
+    .st-key-sunat_card_izq [data-testid="stColumn"]:has(.st-key-sunat_f_fila) {
+        /* 260 y no 200: el botón dice el atajo Y sus fechas («Últimos 12
+           meses · 12 oct 2025 – 11 oct 2026», 262px medidos a 1323 de ancho). */
+        min-width: 270px !important;
     }
     .st-key-sunat_card_izq [data-testid="stColumn"]:has(.st-key-sunat_mes_sunat) {
         min-width: 135px !important;
@@ -145,16 +147,6 @@ CSS = """    /* ================================================================
         flex: 0 0 78px !important;
         min-width: 78px !important;
     }
-    /* Y EL PILL NO PUEDE DESBORDAR SU COLUMNA. Su `width: 100%` de más
-       arriba resolvía contra el `stLayoutWrapper` que Streamlit le mete
-       alrededor, que nace en `width: fit-content` — o sea 210px, mida lo
-       que mida la columna. Con el wrapper al 100% el pill sigue a su
-       columna y, si algún día no cabe, el que cede es el texto. */
-    .st-key-sunat_card_izq
-    [data-testid="stLayoutWrapper"]:has(> .st-key-fecha_ajuste_pill) {
-        width: 100% !important;
-    }
-
     /* El GAP de la tarjeta: 6px y no el 1rem de Streamlit. Sus hijos son
        tres —el renglón de filtros, la tira de KPIs y la tabla— y los tres
        hablan de lo mismo, así que un rem entre cada par son 32px de aire
@@ -182,72 +174,53 @@ CSS = """    /* ================================================================
         border-color: var(--accent-light) !important;
     }
 
-    /* El pill de FECHA, cuando lo dibuja el drill dentro de su tarjeta.
-       ────────────────────────────────────────────────────────────────
-       Es el MISMO widget de la franja (`franja_fecha.render()`), sólo que
-       llamado desde otro sitio — no una copia. Y por eso arrastra el
-       `position: fixed` + coordenadas que le ponen `_40_ajuste_franja.py`
-       y `_50_fecha.py` para anclarlo arriba a la izquierda: sin devolverlo
-       al flujo normal se quedaría flotando sobre la franja, que es justo
-       de donde lo sacamos.
-
-       Scopeado por `sunat_card_izq`: la MISMA key `fecha_ajuste_pill` sigue
-       viviendo en la franja en todos los demás reportes y vistas, con su
-       posicionamiento intacto. */
-    .st-key-sunat_card_izq .st-key-fecha_ajuste_pill {
-        position: static !important;
-        top: auto !important; left: auto !important;
-        right: auto !important; bottom: auto !important;
+    /* La FECHA de la tarjeta: el botón de `selector_fecha_tarjeta`, con
+       la píldora de las tarjetas de Compras y Movimientos (regla #633).
+       Hasta el 2026-10-11 era el pill de la franja (`franja_fecha.render()`)
+       traído al flujo, con su propio panel de atajos + `date_input`.
+       El botón cede con «…» si la columna no le alcanza: el texto entero
+       («Últimos 12 meses · 12 oct 2025 – 11 oct 2026») es más ancho que el
+       piso de la columna. */
+    .st-key-sunat_f_fila {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
         width: 100% !important;
-        max-width: none !important;
-        /* Sin margen: los 2px de abajo eran para despegarlo del renglón de
-           selectores que tenía DEBAJO, y desde el 2026-09-18 va al lado de
-           ellos, no encima (regla #464). */
-        margin: 0 !important;
-        z-index: auto !important;
-        /* Y SE VE SIEMPRE. La misma key es cromo de la CABECERA en los
-           otros ocho reportes, y desde el 2026-09-13 esa cabecera es una
-           capa que aparece con el cursor: `_26_rails_scroll.py` deja en
-           reposo `opacity: 0; visibility: hidden; pointer-events: none`
-           sobre `.st-key-fecha_ajuste_pill` a secas. Acá el pill NO es
-           cromo —es EL filtro de la tarjeta, el rango que se le consulta
-           al SIRE— y esa regla lo apagaba: se reportó como "se perdió el
-           toggle de fecha acá" (2026-09-18) y en el DOM el contenedor
-           estaba en su sitio, invisible, con la fila de arriba de la
-           tarjeta vacía por la izquierda.
-           `!important` y no especificidad: la regla de reposo y la de
-           reveal tienen la misma, así que el empate lo rompe el orden del
-           fichero y un descendiente sin `!important` perdería contra el
-           reposo — que va DESPUÉS del reveal. `transition: none` porque el
-           fade de 160ms de esa capa acá no tiene nada que anunciar. Ver
-           `arquitectura.md` regla #457. */
-        opacity: 1 !important;
-        visibility: visible !important;
-        pointer-events: auto !important;
-        transition: none !important;
-    }
-    /* El trigger, con el mismo lenguaje que los dos selectores de al lado:
-       texto + icono, sin caja. Sin esto entra con el marco de 210px de
-       ancho fijo que necesita la franja para anclar los chips a su
-       derecha (esa aritmética de tres números vive en _50_fecha.py). */
-    .st-key-sunat_card_izq .st-key-fecha_ajuste_pill [data-testid="stPopover"] button {
         min-width: 0 !important;
-        width: 100% !important;
-        justify-content: flex-start !important;
-        height: 26px !important;
-        min-height: 0 !important;
-        padding: 0 !important;
-        border: none !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        font-size: 13px !important;
-        font-weight: 500 !important;
-        color: var(--text-primary) !important;
     }
-    .st-key-sunat_card_izq .st-key-fecha_ajuste_pill
-    [data-testid="stPopover"] button:hover {
-        background: transparent !important;
+    .st-key-sunat_f_fila > [data-testid="stElementContainer"],
+    .st-key-sunat_f_escala {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+    .st-key-sunat_f_escala button {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        height: 28px !important;
+        min-height: 28px !important;
+        padding: 0 12px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        box-shadow: var(--shadow) !important;
+    }
+    .st-key-sunat_f_escala button p {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    .st-key-sunat_f_escala button:hover {
+        background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;
+    }
+    /* El chevron de Streamlit: el WRAPPER, como en `cp_rank_escala`. */
+    .st-key-sunat_f_escala button > div > div:last-child:not(:first-child) {
+        display: none !important;
     }
 
     /* (Acá vivía la TIRA DE KPIs de la tabla de Documentos SUNAT: seis

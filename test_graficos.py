@@ -3691,7 +3691,14 @@ def _pruebas_rango_por_tarjeta():
     # ademas distingue una LLAMADA de un import o de la definicion misma.
     raiz = pathlib.Path(__file__).parent / "graficos" / "compras"
     sin_categoria, n_llamadas = [], 0
+    # `documentos_sunat.py` vive en este paquete por historia, pero es el
+    # drill de OTRO reporte (Documentos SUNAT, regla #577): su tarjeta es
+    # la única con fecha y escribe la clave canónica de SU reporte, sin
+    # categoría, a propósito (regla #633).
+    _OTRO_REPORTE = {"documentos_sunat.py"}
     for py, texto in _fuentes_py(raiz):
+        if py.name in _OTRO_REPORTE:
+            continue
         try:
             arbol = ast.parse(texto)
         except SyntaxError:                      # que lo cante otra guarda

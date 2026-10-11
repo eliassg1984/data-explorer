@@ -572,11 +572,14 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   arriba** (2026-09-06): sus tarjetas traen el selector. **Ni Movimientos**
   (2026-10-08): cada vista trae el suyo (regla #617). **Ni Ajuste**
   (2026-10-11): cada vista elige su sesión o sus meses (regla #632). **Ni Documentos
-  SUNAT**, que dibuja el calendario entero DENTRO de su tarjeta — de ahí
-  el espejo `{k_rango}__eco`, que es lo que evita que el rango se pierda
-  si nadie dibuja el widget. Vive en `estado_rango.restaurar_eco` (dueño
-  único) y lo llaman DOS: `app.py` en cada rerun completo y el propio
-  drill antes de leer el rango. Ver `arquitectura.md` #332 y #458.
+  SUNAT**, que trae la fecha DENTRO de su tarjeta — desde el 2026-10-11
+  con el panel de las demás (`selector_fecha_tarjeta` sin `categoria`,
+  regla #633) y no con la píldora de la franja. Del tiempo en que era un
+  `date_input` queda el espejo `{k_rango}__eco`, que evitaba que el rango
+  se perdiera si nadie dibujaba el widget; hoy es una red. Vive en
+  `estado_rango.restaurar_eco` (dueño único) y lo llaman DOS: `app.py` en
+  cada rerun completo y el propio drill antes de leer el rango. Ver
+  `arquitectura.md` #332 y #458.
   **Documentos SUNAT es un reporte propio desde el 2026-09-30** (antes, la
   única vista de Compras fuera de su pila): `graficos/sunat_reporte.py`
   despacha el drill, que sigue en `graficos/compras/documentos_sunat.py`,

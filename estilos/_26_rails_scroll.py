@@ -116,12 +116,12 @@ _ESPERA = "220ms"
 # cierra junta—, y sobre un rotulo no hay nada que ir a tocar.
 #
 # Y EL PILL DE FECHA VA ACOTADO A `fila_ajuste_top`, que es el contenedor de
-# la franja (`app.py` lo dibuja adentro). La MISMA key la usa una tarjeta:
-# Compras > Documentos SUNAT llama a `franja_fecha.render()` dentro de
-# `sunat_card_izq`, donde el pill no es cromo sino EL filtro de la tabla.
-# Sin acotar, pasar el cursor por ese control —o abrir su calendario, que
-# deja `aria-expanded="true"` puesto todo el rato— abría la capa de la
-# cabecera desde el medio de la página. Ver regla #457.
+# la franja (`app.py` lo dibuja adentro). Hasta el 2026-10-11 la MISMA key
+# la usaba una tarjeta —Documentos SUNAT llamaba a `franja_fecha.render()`
+# dentro de `sunat_card_izq`— y sin acotar, pasar el cursor por ese control
+# abría la capa de la cabecera desde el medio de la página (regla #457).
+# Hoy esa tarjeta usa `selector_fecha_tarjeta` (#633); el acote queda por
+# si otra vuelve a llamarlo.
 # QUE ABRE LA CAPA DE LA COLUMNA (2026-09-18). La gemela de DISPARADORES_CABECERA,
 # para el otro eje. Se declara aparte y no se suma a aquella porque son dos
 # capas independientes: pasar por la franja de reportes no tiene por que

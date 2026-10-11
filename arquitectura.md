@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-632 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+633 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (205)
+**CSS y estilos** (206)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -239,6 +239,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
 - **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
 - **#631** — Ajuste › Evolución: el neto en pastillas, el período más movido marcado y los totales del…
+- **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
 
 **Layout y alturas** (90)
 
@@ -806,7 +807,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
 - **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
 
-**SUNAT y SIRE** (55)
+**SUNAT y SIRE** (56)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -863,6 +864,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#606** — En el cruce de «Documentos SUNAT», un candidato ÚNICO con OTRO RUC sólo se empareja si los…
 - **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
 - **#630** — El «Resumen del cruce» de Documentos SUNAT mide la FIDELIDAD respecto de SUNAT: la base es…
+- **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
 
 **Fechas, rangos y cortes** (15)
 
@@ -49589,6 +49591,35 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+633. **Documentos SUNAT elige su fecha con el panel de las demás tarjetas,
+     no con la píldora de la franja.** Hasta el 2026-10-11 su tarjeta
+     llamaba a `franja_fecha.render()`: el pill de la franja traído al
+     flujo, con su panel viejo —ocho atajos cortos («Todo», «Esta semana»,
+     «2025»…) y un `date_input` de «Rango manual»—. Era el último sitio de
+     la app con ese panel fuera de Ventas, y se reportó tal cual: «no es
+     similar al de otros reportes».
+
+     Ahora es `base.py::selector_fecha_tarjeta("sunat_f", …)` (#616): atajos
+     enteros con su «desde…», años como pestañas, meses o días como
+     casilleros, y el botón dice el atajo y sus fechas. **Sin `categoria`, a
+     propósito**: el reporte tiene UNA tarjeta con fecha y su rango es la
+     clave canónica (`ctx["k_rango"]`, la misma que lee `_rango_vigente`),
+     igual que las tarjetas de Ventas. `test_graficos.py::_pruebas_rango_por_tarjeta`
+     exige `categoria` en `graficos/compras/`, donde el módulo vive por
+     historia (#577): lo exceptúa por nombre.
+
+     El rango ya no es la key de un widget, así que Streamlit no lo borra al
+     salir del reporte; el espejo de `restaurar_eco` (#458) queda como red y
+     no estorba. El CSS del pill viejo dentro de `sunat_card_izq` (el
+     `position: static` y el `opacity: 1` contra la capa de la franja, #457)
+     se fue con él; la píldora nueva vive en `estilos/_30_filtros.py` con
+     las keys `sunat_f_*`. **Medido a 1323px**: el rótulo de entrada
+     («Últimos 12 meses · 12 oct 2025 – 11 oct 2026») pide 262 px, así que
+     el piso de su columna pasó de 200 a 270 y la fila de filtros sigue en
+     un renglón.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49601,7 +49632,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#632**; la próxima toma el número siguiente.
+> última regla es la **#633**; la próxima toma el número siguiente.
 
 >
 

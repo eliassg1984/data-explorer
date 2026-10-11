@@ -93,14 +93,14 @@ import definicion_compra
 import sunat
 from cortes import MESES_ABR_ES
 from estado_rango import clave_rango, restaurar_eco
-import franja_fecha
 from tema import (
     ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR_FONDO, ERROR_TEXTO,
     GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
     LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO,
     TEXTO_PRINCIPAL,
 )
-from graficos.base import _compras_layout, _compras_truncar, una_vez_por_corrida
+from graficos.base import (
+    _compras_layout, _compras_truncar, selector_fecha_tarjeta, una_vez_por_corrida)
 from graficos.compras._comun import (
     ALTO_FILA_RANK, ALTO_HEADER_RANK, CROMO_GRID_RANK,
 )
@@ -4531,19 +4531,21 @@ def renderizar_documentos_sunat(d, col_fecha):
         c_fecha, c_mes, c_prov, c_est, c_act = st.columns(
             [1.5, 1.0, 2.1, 1.35, 0.95])
         with c_fecha:
-            # El pill de fecha, DENTRO de la tarjeta. Acá la fecha no es
-            # contexto global: es EL filtro de la tabla — el rango que se
-            # le consulta al SIRE. NO es una copia del de la franja: es la
-            # MISMA llamada, movida. `app.py` lo publica y NO lo dibuja
-            # —desde el 2026-09-06 en ninguna vista de Compras—, porque el
-            # widget no se puede duplicar: su key es la clave canónica del
-            # rango. O sea que ésta es la única tarjeta de todo el reporte
-            # que trae el calendario entero; las demás tocan ese mismo
-            # rango con `base.py::selector_fecha_tarjeta`.
+            # La fecha, DENTRO de la tarjeta: acá no es contexto global,
+            # es EL filtro de la tabla — el rango que se le consulta al
+            # SIRE. Hasta el 2026-10-11 era el pill viejo de la franja
+            # (`franja_fecha.render()`: atajos cortos + un `date_input`), el
+            # único que quedaba en la app; se reportó como «no es similar al
+            # de otros reportes». Ahora es el panel de las demás tarjetas
+            # (`selector_fecha_tarjeta`, regla #616) SIN `categoria`: escribe
+            # la clave canónica del reporte, que es la que lee
+            # `_rango_vigente`. Al no ser ya la key de un widget, Streamlit
+            # no la borra al salir del reporte; el espejo de
+            # `restaurar_eco` queda como red. Regla #633.
             #
             # El selector «Ver» que había acá bajó al panel del gráfico
             # (`_panel_grafico`), que es lo único que controlaba.
-            franja_fecha.render()
+            selector_fecha_tarjeta("sunat_f", "sunat_fecha_flag")
         with c_mes:
             mes_sunat = st.selectbox(
                 "Mes en SUNAT", list(_MES_SUNAT), key="sunat_mes_sunat",
