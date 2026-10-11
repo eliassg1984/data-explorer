@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-635 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+636 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (207)
 
@@ -452,7 +452,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 
-**AgGrid y tablas** (91)
+**AgGrid y tablas** (92)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -545,6 +545,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#602** — «Movimientos por Tipo»: por qué cambió el stock entre dos fechas, del kardex, y lo que no…
 - **#628** — «Compras por período» dice en su TABLA cuánto restaron las notas de crédito — la diferencia…
 - **#629** — En la grilla AgGrid «Resumen Total» de «Compras por período» van TRES familias más «N más»,…
+- **#636** — Stock por Producto: Código · Familia · Subfamilia · Producto, y abre de la A a la Z en ese…
 
 **Streamlit** (162)
 
@@ -937,7 +938,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (165)
+**Decisiones de diseño y UX** (166)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1104,6 +1105,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#631** — Ajuste › Evolución: el neto en pastillas, el período más movido marcado y los totales del…
 - **#632** — Ajuste de Inventario no tiene fecha en la franja: cada vista elige la suya —una SESIÓN de…
 - **#634** — El panel de la sesión de Ajuste es una pieza propia, como el de fechas: cada sesión dice su…
+- **#636** — Stock por Producto: Código · Familia · Subfamilia · Producto, y abre de la A a la Z en ese…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -47467,7 +47469,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        tamaño de Compras no entraban junto al título: medido a 1323, los
        seis controles piden ~1.070px de los 1.149 de la fila. La tarjeta
        mide 497 (cabe en los 619 de la pantalla del usuario).
-     - **La tabla**: Producto · Subfamilia · Familia · Código · …, y abre
+     - **La tabla** (hasta el 2026-10-11: la #636 la volvió a Código ·
+       Familia · Subfamilia · Producto): Producto · Subfamilia · Familia ·
+       Código · …, y abre
        ordenada por Producto (`initialSort`, no `sort`: #471) en vez de por
        valorizado. **El orden ignora el prefijo**: con «(P)», «(Rs)» o «(L)»
        el paréntesis va antes que cualquier letra y la tabla abría con
@@ -49761,6 +49765,35 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+636. **Stock por Producto: Código · Familia · Subfamilia · Producto, y abre
+     de la A a la Z en ese orden — familia, dentro de ella subfamilia y
+     dentro de ésta el producto.** 2026-10-11, a pedido: «ordenemos las
+     columnas… 1) Código 2) Familia 3) Subfamilia 4) Producto, y que tengan
+     el orden vertical de la A a la Z». Revierte la tabla de la #600
+     (Producto · Subfamilia · Familia · Código, por producto) y vuelve al
+     orden de columnas que pedía la #466.
+
+     - **«De la A a la Z» con cuatro columnas es un orden JERÁRQUICO**: el
+       código no se lee alfabético, y las otras tres sólo pueden leerse de
+       la A a la Z a la vez si cada una ordena dentro de la de su izquierda.
+       Python (`armar_listado`) ordena por las tres con `clave_orden` —sin el
+       prefijo «(P)»/«(Rs)» ni tildes, la regla de la #600— y la grilla hace
+       lo mismo con `initialSort` + `initialSortIndex` 0/1/2 y el mismo
+       comparador (`_JS_ORDEN_NOMBRE`) en las tres. La cabecera lo numera:
+       «Familia 1 ↑ · Subfamilia 2 ↑ · Producto 3 ↑».
+     - **Volver al orden de entrada no pide nada**: un clic en otra cabecera
+       ordena por ella sola (sin Shift, AG Grid reemplaza el orden
+       múltiple), y el tercer clic la suelta. Sin orden activo la grilla
+       muestra el `rowData` tal cual, que es el de Python: el mismo
+       jerárquico. Medido con clics reales en Valorizado: ascendente,
+       descendente y de vuelta a «Alimentos · Aceite De Ajonjolí».
+       `postSortRows` (#466) sigue colgando las áreas de su producto en los
+       tres estados.
+     - **«TOTAL» va en el Código**, la primera columna: en Producto, que
+       pasó a ser la cuarta, se leía a media fila.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49773,7 +49806,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#635**; la próxima toma el número siguiente.
+> última regla es la **#636**; la próxima toma el número siguiente.
 
 >
 

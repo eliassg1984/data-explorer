@@ -317,14 +317,19 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
     sin_stock = int((prods["areas"] == 0).sum())
     if not incluir_sin_stock:
         prods = prods[prods["areas"] > 0]
-    # De la A a la Z por NOMBRE, que es el orden con el que abre la columna
-    # (2026-10-03, a pedido: por valorizado «se ve desordenado»), con la
-    # regla de `clave_orden`. Las áreas de cada producto, por valorizado:
-    # dónde está la mayor parte.
-    prods = prods.assign(_orden=[clave_orden(n) for n in prods["nombre"]])
-    prods = (prods.sort_values(["_orden", "valorizado"],
-                               ascending=[True, False], kind="stable")
-             .drop(columns="_orden"))
+    # De la A a la Z por familia, dentro de ella por subfamilia y dentro de
+    # ésta por nombre, que es el orden con el que abre la grilla (2026-10-11,
+    # a pedido, regla #636; del 2026-10-03 a ese día era sólo por nombre), con
+    # la regla de `clave_orden` en las tres. Las áreas de cada producto, por
+    # valorizado: dónde está la mayor parte.
+    _claves = ["_o_fam", "_o_sub", "_o_nom"]
+    prods = prods.assign(**{
+        k: [clave_orden(x) for x in prods[c]]
+        for k, c in zip(_claves, ("familia", "subfamilia", "nombre"))})
+    prods = (prods.sort_values(_claves + ["valorizado"],
+                               ascending=[True, True, True, False],
+                               kind="stable")
+             .drop(columns=_claves))
     en_areas = en_areas.sort_values("valorizado", ascending=False,
                                     kind="stable")
     return Listado(prods, en_areas.reset_index(drop=True), sin_stock)
@@ -515,7 +520,8 @@ _JS_FLECHA = (
     " if (!d || d.__tipo !== 'p' || !(d.__n > 0)) return '';"
     f" return {_JS_ABIERTOS}[d.__id] ? '▾' : '▸'; }}")
 
-# El orden de la columna Producto: el mismo que `clave_orden` en Python.
+# El orden de Familia, Subfamilia y Producto: el mismo que `clave_orden` en
+# Python.
 _JS_ORDEN_NOMBRE = r"""
 function(a, b) {
     var k = function(v) {
@@ -692,21 +698,27 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
          "pinned": "left" if movil else None,
          "valueGetter": js(_JS_FLECHA), "cellStyle": js(_JS_FLECHA_ESTILO),
          "headerTooltip": "Clic en un producto para ver en qué áreas está."},
-        # Producto · Subfamilia · Familia, de lo particular a lo general, y
-        # la tabla abre de la A a la Z por producto (2026-10-03, a pedido).
-        # Los `width` de estas tres son la PROPORCIÓN en que se reparten lo
-        # que sobra, no su ancho final.
+        # Código · Familia · Subfamilia · Producto, de lo general a lo
+        # particular, y la tabla abre de la A a la Z en ese mismo orden:
+        # familia, dentro de ella subfamilia y dentro de ésta el producto
+        # (2026-10-11, a pedido, regla #636; del 2026-10-03 a ese día era
+        # Producto · Subfamilia · Familia · Código y sólo por producto). Las
+        # tres con `initialSortIndex`, que fija cuál manda primero; la
+        # cabecera lo numera (1, 2, 3). Los `width` de las tres de texto son
+        # la PROPORCIÓN en que se reparten lo que sobra, no su ancho final.
+        _col("codigo", "Código", width=76, minWidth=76,
+             suppressSizeToFit=True),
+        _col("familia", "Familia", width=140, minWidth=96,
+             tooltipField="familia", initialSort="asc", initialSortIndex=0,
+             comparator=js(_JS_ORDEN_NOMBRE)),
+        _col("subfamilia", "Subfamilia", width=170, minWidth=110,
+             tooltipField="subfamilia", initialSort="asc",
+             initialSortIndex=1, comparator=js(_JS_ORDEN_NOMBRE)),
         _col("nombre", "Producto", width=310, minWidth=160,
              tooltipField="nombre", valueFormatter=js(_JS_NOMBRE),
              cellStyle=js(_JS_ESTILO_NOMBRE), initialSort="asc",
-             comparator=js(_JS_ORDEN_NOMBRE),
+             initialSortIndex=2, comparator=js(_JS_ORDEN_NOMBRE),
              pinned="left" if movil else None),
-        _col("subfamilia", "Subfamilia", width=170, minWidth=110,
-             tooltipField="subfamilia"),
-        _col("familia", "Familia", width=140, minWidth=96,
-             tooltipField="familia"),
-        _col("codigo", "Código", width=76, minWidth=76,
-             suppressSizeToFit=True),
         _col("unidad", "Unidad kardex", width=100, minWidth=100,
              suppressSizeToFit=True, hide=bool(unidad_salida)),
         _col("precio", "Precio unitario", type=num, width=104, minWidth=104,
@@ -780,7 +792,9 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
         "onRowClicked": js(_JS_CLIC),
         "rowClassRules": {k: js(v) for k, v in _REGLAS_FILA.items()},
         "getRowStyle": js(_JS_ESTILO_FILA),
-        "pinnedBottomRowData": [{"nombre": "TOTAL",
+        # «TOTAL» en la PRIMERA columna de texto, que desde la regla #636 es
+        # el Código: en «Producto», la cuarta, se leía a media fila.
+        "pinnedBottomRowData": [{"codigo": "TOTAL",
                                  "valorizado": round(float(total), 2),
                                  **({"val_hoy": round(float(total_hoy), 2),
                                      "dif": round(float(total_hoy)
