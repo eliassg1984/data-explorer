@@ -3578,6 +3578,12 @@ def _pruebas_fragment_anidado_una_vez():
             script = pathlib.Path(tmp) / "pila_anidada.py"
             script.write_text(_SCRIPT_FRAGMENT_ANIDADO, encoding="utf-8")
             at = AppTest.from_file(str(script), default_timeout=30)
+            # Streamlit 1.64 crea el almacén en `AppTest` y se lo pasa al
+            # runner, que ya no construye uno propio: el parche de
+            # `lsr.MemoryFragmentStorage` de arriba sólo sirve en las
+            # versiones anteriores. Sin esta línea `registro` quedaba vacío
+            # y el arnés moría con StopIteration sin probar nada.
+            at._fragment_storage = registro
             at.run()
 
             padres = dict(registro._parent_by_id)

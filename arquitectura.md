@@ -934,7 +934,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (165)
+**Decisiones de diseño y UX** (164)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1016,7 +1016,6 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#436** — Meter un dato de CONTEXTO en una escala compartida la rompe: lo que no entra se TOPA, no se…
 - **#444** — Una fila de controles se ordena por ALCANCE, y el orden es la jerarquía: lo que manda sobre…
 - **#448** — Un rótulo encima de un número que puede ser NEGATIVO tiene que nombrar una diferencia, no una…
-- **#456** — Si un fragment y uno de sus ancestros caen en la misma cola, Streamlit 1.59 corre al hijo DOS…
 - **#459** — El jalón que sube la primera tarjeta de Compras nombra un wrap por su KEY, así que una vista…
 - **#461** — Un filtro cuyo censo es la tira de KPIs de al lado no puede recortarla: la dejaría repitiendo…
 - **#465** — Una columna que aparece con el cursor no puede MOVERSE al aparecer, y su tira tiene que…
@@ -38511,6 +38510,26 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      de las cuatro.
 
      (2026-09-17.)
+
+     **Addendum (2026-10-11): con la 1.64 el arnés no corría, y en la
+     laptop seguía en verde.** Desde que `requirements.txt` fija
+     `streamlit==1.64.0` (939ebb1, 2026-09-24), esta guarda imprimía «el
+     arnés no corrió: StopIteration» sin probar nada. En la 1.64
+     `AppTest.__init__` crea su propio `MemoryFragmentStorage` y se lo pasa
+     a `LocalScriptRunner(fragment_storage=...)`, que sólo construye uno
+     cuando recibe `None`: el parche de `lsr.MemoryFragmentStorage` ya no
+     llegaba, `registro` quedaba vacío y el `next(...)` que busca la raíz
+     reventaba. Va además `at._fragment_storage = registro`, justo después
+     de `from_file`. El parche viejo se queda: es el que sirve en la 1.59.2
+     de la laptop, donde asignar el atributo no hace nada. La laptop no lo
+     vio porque corre esa 1.59.2: es la misma brecha de versiones que la
+     de pandas (#481), y una prueba que toca internas de Streamlit es la
+     primera en caer en ella.
+
+     Y lo de «en Cloud la versión no está verificada» ya no vale: Cloud
+     corre la 1.64, que trae el arreglo de Streamlit, así que allá el
+     decorador no cambia nada y lo expuesto en la 1.59 queda sólo en la
+     laptop.
 
 457. **Una key que es CROMO en ocho reportes y CONTROL en una tarjeta no
      puede compartir el CSS de reposo: la capa de la cabecera apagó el
