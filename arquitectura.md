@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-630 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+631 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (204)
+**CSS y estilos** (205)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -238,6 +238,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#618** — La escala de tiempo vieja se borró entera, y con ella la Evolución de Movimientos: «sin…
 - **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
 - **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
+- **#631** — Ajuste › Evolución: el neto en pastillas, el período más movido marcado y los totales del…
 
 **Layout y alturas** (90)
 
@@ -930,7 +931,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (163)
+**Decisiones de diseño y UX** (164)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1095,6 +1096,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 - **#628** — «Compras por período» dice en su TABLA cuánto restaron las notas de crédito — la diferencia…
+- **#631** — Ajuste › Evolución: el neto en pastillas, el período más movido marcado y los totales del…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -49424,6 +49426,49 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+631. **Ajuste › Evolución: el neto en pastillas, el período más movido
+     marcado y los totales del rango bajo el título, sin que la tarjeta
+     crezca.** 2026-10-11, a pedido: «puedes darle mejor estilo a mi vista
+     de evolución», sobre un mockup de tres propuestas; se eligió la
+     «Pulida», con la condición de que los KPIs no empujaran los gráficos
+     de abajo.
+
+     - **El rótulo del neto es una ANOTACIÓN, no el `text` de la traza**
+       (`_rotulos_neto`). El texto iba negro encima de la barra roja
+       («S/ -20.3k» sobre el faltante) y se pisaba con su borde. La
+       anotación trae fondo blanco y borde, el color dice el signo
+       (`AJUSTE_POS_TEXTO` / `AJUSTE_NEG_TEXTO`) y va arriba del punto si
+       el neto es positivo y abajo si es negativo. Sigue el tope de
+       `_MAX_ROTULOS` y el apagado del foco. **Verificado en el navegador:
+       un clic sobre la pastilla sigue eligiendo el período** — la
+       anotación sin `captureevents` no se come el clic de la serie.
+     - **El período más movido** (`periodo_mas_movido`: el de más
+       sobrante − faltante) lleva una banda GRIS detrás y su monto arriba,
+       en el margen de la figura. Es el que el neto esconde: set 26 dio
+       +S/ 5.5k de neto sobre ~S/ 200k movidos. Gris y no lavanda: el
+       lavanda es el color de la SELECCIÓN (la fila en foco de la tabla).
+     - **Los totales del rango van en la columna del título**
+       (`kpis_rango_html`), en el MISMO `st.markdown` que el título — dos
+       se cobrarían el gap de 16px. La fila la manda el selector
+       Corte | Mes (32px), que mide lo que dos renglones de texto, así que
+       la línea no suma alto: **medido a 1366×768 en el modo demo, la
+       tarjeta mide 583px, lo mismo que en la #585.** Una fila de tarjetas
+       de KPI, como en el mockup, costaba ~56px y sacaba la tarjeta de la
+       laptop (#505). La línea es UN renglón con `overflow: hidden`
+       (`.ajevo-kpis`): un segundo renglón sí empujaría la serie.
+     - **Barras con la punta redondeada** (`barcornerradius`, 5 en la
+       serie y 3 en los paneles): en `barmode="relative"` Plotly redondea
+       el extremo de afuera de cada pila, así que el cero queda recto. La
+       línea del neto bajó de 1,6 a 1,3 y sus puntos llevan aro blanco.
+     - **El Área va pegada al grano**, a la derecha (columnas título |
+       foco | área | grano): al medio se leía suelta. Su etiqueta se
+       alinea a la derecha sólo acá
+       (`div.st-key-ajevo_ctrl_area div button…`, un `div` más de
+       especificidad que el `flex-start !important` de
+       `css_filtros_vista`).
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49436,7 +49481,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#630**; la próxima toma el número siguiente.
+> última regla es la **#631**; la próxima toma el número siguiente.
 
 >
 

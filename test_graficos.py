@@ -6174,6 +6174,43 @@ def _pruebas_evolucion_ajuste():
     check("tabla: el período en foco sale marcado",
           html.count(_ev.LAVANDA_SELECCION), 1)
 
+    # El estilo de la serie (regla #631): el neto se rotula en pastillas
+    # (anotaciones) y no con el `text` de la traza, que iba negro encima
+    # de la barra roja; el período más movido lleva su marca; los totales
+    # del rango van en una línea bajo el título.
+    sr = s.reset_index()
+    fig = _ev.fig_serie(sr)
+    _neto = [t for t in fig.data if t.name == "Neto"][0]
+    check("serie: la traza del neto ya no lleva texto",
+          (_neto.mode, _neto.text), ("lines+markers", None))
+    _pills = [a for a in fig.layout.annotations if a.yref != "paper"]
+    check("serie: una pastilla por período con conteo, con signo",
+          [a.text for a in _pills], ["S/ -100", "S/ +1"])
+    check("serie: la pastilla dice el signo con su color",
+          [a.font.color for a in _pills],
+          [_ev.AJUSTE_NEG_TEXTO, _ev.AJUSTE_POS_TEXTO])
+    check("serie: con foco, la pastilla de los otros períodos se apaga",
+          [a.opacity for a in _ev.fig_serie(sr, "2026-01").layout.annotations
+           if a.yref != "paper"], [_ev._APAGADO, 1.0])
+    check("serie: el más movido es el de más sobrante − faltante",
+          (_ev.periodo_mas_movido(sr) or {}).get("eje"), "nov 25")
+    check("serie: el más movido se rotula arriba, en el margen",
+          [a.text for a in fig.layout.annotations if a.yref == "paper"],
+          ["más movido · <b>S/ 300</b>"])
+    check("serie: con menos de tres períodos no hay más movido",
+          _ev.periodo_mas_movido(sr.iloc[:2]), None)
+    _largo = pd.concat([sr] * 6, ignore_index=True)
+    _largo["eje"] = [f"p{i}" for i in range(len(_largo))]
+    check("serie: con más de _MAX_ROTULOS períodos no hay pastillas",
+          len([a for a in _ev.fig_serie(_largo).layout.annotations
+               if a.yref != "paper"]), 0)
+    check("serie: las barras llevan la punta redondeada",
+          fig.layout.barcornerradius, _ev._RADIO_SERIE)
+    kp = _ev.kpis_rango_html(sr)
+    check("totales del rango: sobrante, faltante y neto, con signo",
+          [t in kp for t in ("S/ +106", "S/ -205", "S/ -99")],
+          [True, True, True])
+
     # La tabla parte el tiempo con los MISMOS períodos que la serie.
     wide, periodos = _pv._armar_tabla_pivote_ajuste(
         dp.dropna(subset=["FAM"]), orden, "FAM", None, "PROD", "AJ", "AV")
