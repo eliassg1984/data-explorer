@@ -5671,4 +5671,171 @@ CSS = """    /* ================================================================
         button > div > div:last-child:not(:first-child) {
         display: none !important;
     }
+
+    /* =================================================================== */
+    /* LAS FECHAS DE AJUSTE (regla #632)                                    */
+    /* Dos controles, los dos con la píldora de Compras:                    */
+    /*  · `ajf_<vista>` — el botón de MESES de Evolución, la tabla dinámica */
+    /*    y Distribución «Por meses»: `selector_fecha_tarjeta`, el mismo de */
+    /*    Movimientos, sin título en su fila. Al pie, «Mes del cierre».     */
+    /*  · `ajses_<vista>` — la SESIÓN de Por familia, Familia × Área y      */
+    /*    Distribución: ‹ [sesión] › y su panel, botones de Streamlit.      */
+    /* Por familia de key y sin `:has` (regla #469).                        */
+    /* =================================================================== */
+    [class*="st-key-ajf_"][class*="_fila"] {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        width: auto !important;
+    }
+    [class*="st-key-ajf_"][class*="_fila"] > [data-testid="stElementContainer"] {
+        width: auto !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) {
+        flex: 0 0 auto !important;
+        max-width: 100% !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) button,
+    [class*="st-key-ajses_"][class*="_pop"] button {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        padding: 0 10px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        box-shadow: var(--shadow) !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) button p,
+    [class*="st-key-ajses_"][class*="_pop"] button p {
+        font-size: 12px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) button:hover,
+    [class*="st-key-ajses_"][class*="_pop"] button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"])
+        button > div > div:last-child:not(:first-child),
+    [class*="st-key-ajses_"][class*="_pop"]
+        button > div > div:last-child:not(:first-child) {
+        display: none !important;
+    }
+    /* «Mes del cierre», al pie del panel de meses. */
+    [class*="st-key-ajf_"][class*="_pie"] {
+        max-width: 476px !important;   /* el ancho del panel (`.pf`) */
+        border-top: 1px solid var(--line-soft) !important;
+        padding-top: 8px !important;
+        gap: 6px !important;
+    }
+    .ajf-pie-rot {
+        font-size: 10.5px; font-weight: 600; letter-spacing: .07em;
+        text-transform: uppercase; color: var(--text-muted);
+        white-space: nowrap;
+    }
+    [class*="st-key-ajf_"][class*="_mcfila"] > [data-testid="stElementContainer"] {
+        width: auto !important;
+    }
+    [class*="st-key-ajf_"][class*="_mescierre_"] [data-testid="stButtonGroup"] button {
+        min-height: 26px !important; height: 26px !important;
+        padding: 0 10px !important; font-size: 12px !important;
+    }
+
+    /* La sesión: ‹ [píldora] ›, sin envolver. */
+    [class*="st-key-ajses_"][class*="_fila"] {
+        flex-wrap: nowrap !important;
+        gap: 4px !important;
+        width: auto !important;
+        max-width: 100% !important;
+    }
+    [class*="st-key-ajses_"][class*="_fila"] > [data-testid="stElementContainer"] {
+        width: auto !important;
+        min-width: 0 !important;
+    }
+    [class*="st-key-ajses_"][class*="_ant"] button,
+    [class*="st-key-ajses_"][class*="_sig"] button {
+        width: 24px !important;
+        min-width: 24px !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        padding: 0 !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        box-shadow: var(--shadow) !important;
+    }
+    [class*="st-key-ajses_"][class*="_ant"] button p,
+    [class*="st-key-ajses_"][class*="_sig"] button p {
+        font-size: 15px !important;
+        line-height: 1 !important;
+    }
+    [class*="st-key-ajses_"][class*="_ant"] button:hover:not(:disabled),
+    [class*="st-key-ajses_"][class*="_sig"] button:hover:not(:disabled) {
+        background: var(--accent-tint) !important;
+        border-color: var(--border-lavender) !important;
+        color: var(--accent-deep) !important;
+    }
+    [class*="st-key-ajses_"][class*="_ant"] button:disabled,
+    [class*="st-key-ajses_"][class*="_sig"] button:disabled {
+        opacity: .35 !important;
+    }
+    /* El panel: opciones y años chicos, la lista a lo ancho. */
+    [class*="st-key-ajses_"][class*="_panel"] {
+        min-width: 320px !important;
+        gap: 8px !important;
+    }
+    [class*="st-key-ajses_"][class*="_o_"] button,
+    [class*="st-key-ajses_"][class*="_a_"] button {
+        min-height: 24px !important;
+        height: 24px !important;
+        padding: 0 10px !important;
+        border-radius: 999px !important;
+    }
+    [class*="st-key-ajses_"][class*="_o_"] button p,
+    [class*="st-key-ajses_"][class*="_a_"] button p {
+        font-size: 12px !important;
+    }
+    /* La lista se desliza adentro: un año trae hasta 19 sesiones. */
+    [class*="st-key-ajses_"][class*="_lista"] {
+        max-height: 300px !important;
+        overflow-y: auto !important;
+        flex-wrap: nowrap !important;
+        gap: 3px !important;
+        padding-right: 4px !important;
+    }
+    [class*="st-key-ajses_"][class*="_l_"] button {
+        justify-content: flex-start !important;
+        min-height: 0 !important;
+        padding: 5px 10px !important;
+        border-radius: 7px !important;
+    }
+    /* El rótulo a la izquierda: Streamlit centra el contenido del botón. */
+    [class*="st-key-ajses_"][class*="_l_"] button > div {
+        justify-content: flex-start !important;
+        width: 100% !important;
+    }
+    [class*="st-key-ajses_"][class*="_l_"] button p {
+        font-size: 12px !important;
+        text-align: left !important;
+    }
+    /* «Por sesión / Por meses» de Distribución, a la talla de la fila. */
+    .st-key-ajdist_por [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 10px !important;
+    }
+    .st-key-ajdist_por [data-testid="stButtonGroup"] button p {
+        font-size: 12px !important;
+    }
 """

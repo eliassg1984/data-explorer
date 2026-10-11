@@ -223,12 +223,10 @@ REPORTES = {
             "Stock Declarado", "Ajuste", "Ajuste Valorizado",
         ],
         "derivar_periodo_pivote": True,
-        # El calendario de la franja ofrece la pestaña "Cortes" (filtrar por
-        # la sesión de conteo exacta en vez de por intervalo, ver cortes.py).
-        # Solo acá: en Ventas o Compras un "corte" no significa nada — las
-        # fechas son continuas y las rachas serían ruido. Sin este flag el
-        # panel de fecha queda idéntico a como estaba.
-        "cortes": True,
+        # Sin `"cortes": True` desde el 2026-10-11 (regla #632): era lo que
+        # le daba a la píldora de la franja los modos Corte y Varios, y la
+        # franja de Ajuste ya no dibuja fecha. Cada vista elige su sesión de
+        # inventario (`cortes.sesiones_inventario`) o sus meses.
         "graficos": [
             {"tipo": "line",
              "x": ["FECHA APERTURA INVENTARIO", "MES"],

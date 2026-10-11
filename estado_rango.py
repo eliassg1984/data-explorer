@@ -60,13 +60,12 @@ def clave_rango(reporte, usa_carga_rango, categoria=None):
 
     - carga_por_rango → misma clave que el loader R2 (`rango_carga_*`), así
       el date-picker controla directamente qué se descarga.
-    - `categoria` → una clave POR CATEGORÍA de gráfico. La usan DOS
-      reportes, y por motivos distintos:
-        · Ajuste de Inventario, con "visual" o "tiempo" (ver
-          graficos.ajuste.categoria_rango_ajuste): Cascada/Mapa de calor/
-          Distribución/Tabla funcionan mejor acotados a un período,
-          mientras Evolución/Comparativa necesitan varios meses o un año —
-          antes compartían una sola clave y se pisaban el rango entre sí.
+    - `categoria` → una clave POR CATEGORÍA de gráfico, o sea POR TARJETA:
+        · Ajuste de Inventario, una por vista de meses y por regla del mes
+          del cierre (`evo_op`, `det_reg`…, ver
+          graficos.ajuste._comun.ctx_meses, regla #632). Hasta el
+          2026-10-11 eran dos categorías del rail, "visual" y "tiempo", que
+          partían el rango de la franja.
         · Compras, con una categoría por SECCIÓN de su pila (ver
           graficos.compras.CATEGORIA_SEC): ahí la categoría no agrupa
           gráficos parecidos, separa TARJETAS. Cada una trae su propio
@@ -314,6 +313,53 @@ def atajos_tarjeta(ancla, bounds):
     }
     salida = []
     for clave, nombre, grupo in ATAJOS_TARJETA:
+        ini, fin = crudos[clave]
+        if fin < min_b or ini > max_b:
+            continue
+        salida.append((clave, nombre, grupo, (max(ini, min_b), min(fin, max_b))))
+    return salida
+
+
+# Los del MISMO panel cuando sólo elige MESES (regla #632): Ajuste de
+# Inventario, que se cuenta por cierres. Mismos grupos que `ATAJOS_TARJETA`,
+# pero sin lo que en meses no dice nada —«Esta semana», «Últimos 30 días»— y
+# con los «hacia atrás» en meses ENTEROS: «Últimos 12 meses» son doce barras
+# completas, no del 12 de un mes al 11 del otro. «Este mes» y «Mes pasado»
+# pasan a «Último mes»: con el mes operativo, el 11 de octubre el último mes
+# con cierre es setiembre, y llamarlo «este mes» mentiría.
+ATAJOS_MESES = (
+    ("anio", "Este año", "En curso"),
+    ("mes_ult", "Último mes", "Hacia atrás"),
+    ("mm3", "Últimos 3 meses", "Hacia atrás"),
+    ("mm12", "Últimos 12 meses", "Hacia atrás"),
+    ("anio_ant", "Año pasado", "Completos"),
+    ("todo", "Todo el histórico", "Completos"),
+)
+
+
+def atajos_meses(ancla, bounds):
+    """Como `atajos_tarjeta`, en meses enteros: `[(clave, nombre, grupo,
+    (ini, fin))]`, anclados al mes de `ancla` (el último día con datos) y
+    recortados a `bounds`. Los meses arrancan el día 1 y el último termina
+    en el ancla."""
+    if not (bounds and all(bounds)) or ancla is None:
+        return []
+    min_b, max_b = bounds
+    if min_b > max_b:
+        return []
+    ancla = min(max(ancla, min_b), max_b)
+    ini_mes = ancla.replace(day=1)
+    crudos = {
+        "anio": (datetime.date(ancla.year, 1, 1), ancla),
+        "mes_ult": (ini_mes, ancla),
+        "mm3": (meses_atras(ini_mes, 2), ancla),
+        "mm12": (meses_atras(ini_mes, 11), ancla),
+        "anio_ant": (datetime.date(ancla.year - 1, 1, 1),
+                     datetime.date(ancla.year - 1, 12, 31)),
+        "todo": (min_b, max_b),
+    }
+    salida = []
+    for clave, nombre, grupo in ATAJOS_MESES:
         ini, fin = crudos[clave]
         if fin < min_b or ini > max_b:
             continue

@@ -128,9 +128,9 @@ def rail_sin_tablas(categorias):
     es peor: `_render_rail` separa con una línea los ítems que no están en
     `secciones`, así que la Tabla saldría como un destino aparte sin nada
     detrás. Y en la declaración, no en `_render_rail`, para que coincidan
-    también los que leen esas tuplas sin dibujar el rail (`vista_activa`,
-    `categoria_rango_ajuste`): un `?vista=tabla` guardado cae en la primera
-    vista, como cualquier id que ya no existe.
+    también los que leen esas tuplas sin dibujar el rail (`vista_activa`):
+    un `?vista=tabla` guardado cae en la primera vista, como cualquier id
+    que ya no existe.
     """
     if MOSTRAR_VISTAS_TABLA:
         return categorias
@@ -960,7 +960,7 @@ def ctx_rango_propio(ctx=None):
 
 
 def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
-                           label=None, categoria=None, ctx=None):
+                           label=None, categoria=None, ctx=None, pie=None):
     """Trigger + panel de fecha para UNA tarjeta, en cualquier dashboard.
 
     El TRIGGER es el atajo vigente y sus fechas («Últimos 30 días · 8 set –
@@ -1013,6 +1013,11 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
 
     `ctx` PISA el de la franja. Lo necesita una tarjeta de Ventas con rango
     propio: ver `ctx_rango_propio`.
+
+    `pie` es un callable OPCIONAL que se dibuja ADENTRO del popover, debajo
+    del panel: un ajuste de cómo se leen las fechas que tiene sentido al lado
+    de ellas —«Mes del cierre» de Ajuste, regla #632—. Callable por lo mismo
+    que `extra`: el contenedor se elige entrando en él.
     """
     ctx = ctx if ctx is not None else franja_fecha.contexto()
     if not ctx:
@@ -1062,6 +1067,9 @@ def selector_fecha_tarjeta(clave, bandera, titulo_html=None, extra=None,
             # el CSS del popover.
             with st.container(key=f"{clave}_escala_panel"):
                 panel_fecha(clave, ctx, bandera)
+            if pie is not None:
+                with st.container(key=f"{clave}_pie"):
+                    pie()
     return ctx
 
 

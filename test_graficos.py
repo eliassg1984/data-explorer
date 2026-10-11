@@ -4301,8 +4301,10 @@ def _pruebas_fecha_por_vista():
     check("movimientos.py no lee la fecha de la franja",
           "_rango_vigente(" in fuente, False)
     app = (raiz / "app.py").read_text(encoding="utf-8")
+    _por_vista = re.search(r'REPORTES_FECHA_POR_VISTA = \(([^)]*)\)', app)
     check("la franja de Movimientos no dibuja calendario",
-          bool(re.search(r'reporte not in \("Compras", "Movimientos"\)', app)), True)
+          (bool(_por_vista and '"Movimientos"' in _por_vista.group(1)),
+           "reporte not in REPORTES_FECHA_POR_VISTA" in app), (True, True))
     css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
     check("el botón de las vistas tiene su CSS (prefijo mov_f_)",
           'st-key-mov_f_' in css, True)
@@ -6129,16 +6131,17 @@ def _pruebas_evolucion_ajuste():
     check("Corte: una sesión por racha de días",
           len(orden_c), 2)
 
-    # MES OPERATIVO (regla #613): el cierre registrado del 1 al 6 es del mes
-    # anterior, con su hora; el del 7 en adelante, del suyo.
+    # MES OPERATIVO (regla #613): el cierre registrado del 1 al 7 es del mes
+    # anterior, con su hora; el del 8 en adelante, del suyo. Era «del 1 al
+    # 6» hasta que el usuario definió el cierre de mes (regla #632).
     from cortes import fecha_operativa
     f_op = fecha_operativa(pd.Series(pd.to_datetime(
-        ["2026-10-03 14:20", "2026-10-06 09:00", "2026-10-07 08:00",
+        ["2026-10-03 14:20", "2026-10-07 09:00", "2026-10-08 08:00",
          "2026-03-01 10:00", "2025-01-05 00:00", None])))
-    check("mes operativo: del 1 al 6, al último día del mes anterior",
+    check("mes operativo: del 1 al 7, al último día del mes anterior",
           [str(x) for x in f_op],
           ["2026-09-30 14:20:00", "2026-09-30 09:00:00",
-           "2026-10-07 08:00:00", "2026-02-28 10:00:00",
+           "2026-10-08 08:00:00", "2026-02-28 10:00:00",
            "2024-12-31 00:00:00", "NaT"])
     d_op = pd.DataFrame({
         "F": pd.to_datetime(["2026-08-29", "2026-10-02", "2026-10-02",
@@ -6223,6 +6226,140 @@ def _pruebas_evolucion_ajuste():
     # cero). La serie sí la cuenta: -99 contra -100.
     check("total de la tabla = neto de la serie de las filas con familia",
           round(float(wide["tot_ajv"].sum()), 2), -100.0)
+    return fallos
+
+
+def _pruebas_fechas_ajuste():
+    """Las fechas de Ajuste de Inventario, una por vista (regla #632).
+
+    1. LA SESIÓN: un cierre de mes es lo registrado del 1 al 7 del mes
+       siguiente —y se juntan los conteos de esos días—; lo demás es
+       parcial. El año de una sesión es el del mes que cierra.
+    2. LOS MESES: el panel de Compras en modo «sólo meses», con sus atajos
+       en meses enteros y el botón que dice meses, no días.
+    3. LA FRANJA: Ajuste no dibuja fecha arriba ni la usa para filtrar, y
+       su pila es una sola.
+    """
+    import datetime
+    import re
+    from pathlib import Path
+
+    from cortes import DIA_CIERRE_OPERATIVO, sesiones_inventario, ultimo_cierre
+    from estado_rango import atajos_meses
+    from graficos.panel_fecha import etiqueta_de
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    fechas ajuste · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA fechas ajuste · {nombre}: got={got!r} exp={exp!r}")
+
+    D = datetime.date
+    check("el cierre es del 1 al 7", DIA_CIERRE_OPERATIVO, 7)
+
+    # Los casos reales: el cierre de setiembre 2026 contado el 1 de octubre
+    # con el recuento de Venta interna del 6; el de abril 2024, que empezó
+    # el 29; un parcial de quincena; y el de diciembre contado en enero.
+    f = pd.Series(pd.to_datetime([
+        "2024-04-29", "2024-04-30", "2024-05-01", "2024-05-06",
+        "2025-12-15", "2026-01-02",
+        "2026-09-02", "2026-09-15", "2026-09-16", "2026-09-17",
+        "2026-10-01 08:30", "2026-10-06 11:49", None], format="mixed"))
+    ses = sesiones_inventario(f)
+    check("una sesión por cierre o parcial, en orden",
+          [(x["tipo"], x["nombre"]) for x in ses],
+          [("cierre", "Cierre de abril"), ("parcial", "Parcial · 15 dic"),
+           ("cierre", "Cierre de diciembre"), ("cierre", "Cierre de agosto"),
+           ("parcial", "Parcial · 15-17 set"), ("cierre", "Cierre de setiembre")])
+    sep = ses[-1]
+    check("los conteos del 1 al 7 se juntan en un cierre",
+          (sep["juntas"], sep["etiqueta"], sep["n_dias"]), (2, "1 y 6 oct", 2))
+    check("el cierre que empezó a fin de mes trae la racha entera",
+          (ses[0]["juntas"], ses[0]["ini"], ses[0]["fin"]),
+          (2, D(2024, 4, 29), D(2024, 5, 6)))
+    check("el botón dice el mes que cierra", sep["corto"], "Cierre set 2026")
+    check("el de diciembre es del año que cierra, no del de su registro",
+          (ses[2]["mes"], ses[2]["corto"]), ((2025, 12), "Cierre dic 2025"))
+    check("las claves no dependen de cuántas sesiones hay antes",
+          [x["clave"] for x in ses[3:]],
+          ["cierre_2026-08", "parcial_2026-09-15", "cierre_2026-09"])
+    check("abre en el último cierre",
+          ultimo_cierre(ses)["clave"], "cierre_2026-09")
+    check("sin cierres, la última sesión",
+          ultimo_cierre(sesiones_inventario(pd.Series(pd.to_datetime(
+              ["2026-09-15", "2026-09-25"]))))["etiqueta"], "25 set")
+    check("sin fechas, sin sesiones", sesiones_inventario(pd.Series([], dtype="datetime64[ns]")), [])
+
+    # LOS MESES: anclados al último día con datos, en meses enteros.
+    at = {c: r for c, _n, _g, r in atajos_meses(D(2026, 9, 30),
+                                               (D(2023, 10, 1), D(2026, 9, 30)))}
+    check("los atajos de meses",
+          sorted(at), sorted(["anio", "mes_ult", "mm3", "mm12", "anio_ant", "todo"]))
+    check("últimos 12 meses: doce meses enteros",
+          at["mm12"], (D(2025, 10, 1), D(2026, 9, 30)))
+    check("último mes: el del ancla, entero",
+          at["mes_ult"], (D(2026, 9, 1), D(2026, 9, 30)))
+    ctx = {"k_rango": "x", "fecha_min": D(2023, 10, 1),
+           "fecha_max": D(2026, 9, 30), "hoy": D(2026, 10, 11),
+           "atajos_fn": atajos_meses, "solo_meses": True}
+    check("el botón dice meses",
+          etiqueta_de((D(2025, 10, 1), D(2026, 9, 30)), ctx),
+          "Últimos 12 meses · oct 2025 – set 2026")
+    check("un rango que no es atajo, también en meses",
+          etiqueta_de((D(2026, 3, 1), D(2026, 7, 31)), ctx), "mar – jul 2026")
+    check("el último mes, por su nombre",
+          etiqueta_de((D(2026, 9, 1), D(2026, 9, 30)), ctx),
+          "Último mes · setiembre")
+    js = (Path(__file__).parent / "graficos" / "panel_fecha.js").read_text(
+        encoding="utf-8")
+    check("el panel esconde «Días» en modo sólo meses",
+          "if (!st.soloMeses)" in js and "solo_meses" in js, True)
+
+    # LA FRANJA Y LA PILA.
+    raiz = Path(__file__).parent
+    app = (raiz / "app.py").read_text(encoding="utf-8")
+    _por_vista = re.search(r'REPORTES_FECHA_POR_VISTA = \(([^)]*)\)', app)
+    check("la franja de Ajuste no dibuja fecha",
+          bool(_por_vista and '"Ajuste de Inventario"' in _por_vista.group(1)), True)
+    check("app.py no filtra Ajuste por la franja",
+          "elif _franja_con_fecha and not es_ajuste:" in app,
+          True)
+    check("app.py ya no reparte el rango por categoría",
+          "categoria_rango_ajuste" in app.split("# Hasta el 2026-10-11 Ajuste")[0],
+          False)
+    import data
+    check("Ajuste ya no pide los modos de corte de la franja",
+          "cortes" in data.REPORTES["Ajuste de Inventario"], False)
+    from graficos import ajuste as aj
+    check("una sola pila con las cinco vistas",
+          [c for c, _v in aj._PILA],
+          ["aj_sec_cascada", "aj_sec_heatmap", "aj_sec_distribucion",
+           "aj_sec_evolucion", "aj_sec_detalle"])
+    check("se fue la partición del rango por categoría",
+          hasattr(aj, "categoria_rango_ajuste"), False)
+    fuentes = {n: (raiz / "graficos" / "ajuste" / f"{n}.py").read_text(
+        encoding="utf-8") for n in ("_cascada", "_heatmap", "_distribucion",
+                                    "_evolucion", "_pivote")}
+    check("las vistas de sesión dibujan el selector con flechas",
+          [n for n in ("_cascada", "_heatmap") if '"ajses_' not in fuentes[n]]
+          + ([] if 'selector_sesion("ajses_dist"' in fuentes["_distribucion"]
+             else ["_distribucion"]), [])
+    check("las vistas de meses dibujan su botón",
+          [n for n, k in (("_evolucion", '"ajf_evo"'), ("_pivote", '"ajf_det"'),
+                          ("_distribucion", '"ajf_dist"'))
+           if f"selector_meses({k}" not in fuentes[n]], [])
+    ini = (raiz / "graficos" / "ajuste" / "__init__.py").read_text(encoding="utf-8")
+    check("«Mes del cierre» se fue de Filtros",
+          "_selector_mes_ajuste" in ini, False)
+    check("las vistas de meses recargan si cambió el mes del cierre",
+          ini.count("recargar_si_cambio_mes()"), 3)
+    css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
+    check("los dos controles tienen su CSS",
+          ('st-key-ajf_' in css, 'st-key-ajses_' in css), (True, True))
     return fallos
 
 
@@ -6386,21 +6523,25 @@ def _pruebas_resumen_ajuste():
     check("áreas con stock por corte", [c["areas"] for c in _cortes], [2, 2])
 
     # LA SEMILLA DE FAMILIAS NO DEPENDE DEL CORTE CON QUE ABRE (regla #442).
-    # La vista abre en el último corte; si ese no trae una familia, la
-    # semilla nacía sin ella y el TOTAL de otro corte sumaba sin avisar.
+    # La vista abre en el último CIERRE (regla #632); si ese no trae una
+    # familia, la semilla nacía sin ella y el TOTAL de otro corte sumaba sin
+    # avisar. El parcial del 15 de agosto trae ENVASES; el cierre de agosto
+    # (2 set) y el parcial posterior (15 set), no.
     from graficos.ajuste._comun import FAMILIAS_DE_ENTRADA, estado_filtros_vista
     _full = pd.DataFrame({
-        "F": pd.to_datetime(["2026-09-02"] * 3 + ["2026-09-15"] * 2),
+        "F": pd.to_datetime(["2026-08-15"] * 3 + ["2026-09-02"] * 2
+                            + ["2026-09-15"]),
         "FAMILIA": ["ALIMENTOS", "ENVASES Y EMBALAJES", "VINOS Y ESPUMANTES",
-                    "ALIMENTOS", "VINOS Y ESPUMANTES"],
-        "AREA": ["X"] * 5, "AV": [-1.0, -2.0, 3.0, 4.0, -5.0],
+                    "ALIMENTOS", "VINOS Y ESPUMANTES", "ALIMENTOS"],
+        "AREA": ["X"] * 6, "AV": [-1.0, -2.0, 3.0, 4.0, -5.0, 1.0],
     })
     _est = estado_filtros_vista(
         _full, _full, "F", "FAMILIA", "AREA", "AV",
         k_corte="test_ajcas_corte", k_familia="test_ajcas_fam",
         k_area="test_ajcas_area", familias=FAMILIAS_DE_ENTRADA)
-    check("abre en el último corte, que no trae ENVASES",
-          _est["corte"]["etiqueta_anio"], "15 set 2026")
+    check("abre en el último CIERRE, no en el parcial que vino después",
+          (_est["corte"]["nombre"], _est["corte"]["etiqueta_anio"]),
+          ("Cierre de agosto", "2 set 2026"))
     check("...y la semilla igual incluye ENVASES",
           "ENVASES Y EMBALAJES" in _est["sel_fam"], True)
     check("las opciones de familia son las del parquet entero",
@@ -10457,6 +10598,7 @@ def main():
 
     # ── Ajuste › Evolución: períodos compartidos, sobrante/faltante/% ────
     fallos += _pruebas_evolucion_ajuste()
+    fallos += _pruebas_fechas_ajuste()
 
     # ── Ajuste › Mapa de calor: la cantidad es la que el monto multiplica ─
     fallos += _pruebas_cantidad_del_mapa_ajuste()

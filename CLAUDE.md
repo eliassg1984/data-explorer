@@ -570,7 +570,8 @@ forma de ver, `toggle` para sí/no. Reglas #623 y #625.
   `date_input` de la franja se dibuja en los TRES modos: esconderlo
   borraría la clave del rango del reporte. **Compras ya no lo dibuja
   arriba** (2026-09-06): sus tarjetas traen el selector. **Ni Movimientos**
-  (2026-10-08): cada vista trae el suyo (regla #617). **Ni Documentos
+  (2026-10-08): cada vista trae el suyo (regla #617). **Ni Ajuste**
+  (2026-10-11): cada vista elige su sesión o sus meses (regla #632). **Ni Documentos
   SUNAT**, que dibuja el calendario entero DENTRO de su tarjeta — de ahí
   el espejo `{k_rango}__eco`, que es lo que evita que el rango se pierda
   si nadie dibuja el widget. Vive en `estado_rango.restaurar_eco` (dueño
@@ -1079,11 +1080,12 @@ Desde sep 2025 los dos coinciden. `data.cargar` le suma `AJUSTE KARDEX` y
 `ajustekardex` del Sheet) y Ajuste › Evolución lo dibuja punteado. Para la
 merma de esos meses, la del kardex.
 
-**Y el cierre de fin de mes se registra del 1 al 6 del siguiente**: Ajuste
-lo cuenta en su MES OPERATIVO (`cortes.fecha_operativa`), con un selector
-«Mes del cierre» en «Filtros». Mueve el rango de la franja y el «Mes» de
-Evolución y la tabla dinámica; los cortes siguen con sus días de verdad, y
-el df no se toca. Regla #613.
+**Y el cierre de fin de mes se registra del 1 al 7 del siguiente**: Ajuste
+lo cuenta en su MES OPERATIVO (`cortes.fecha_operativa`), con «Mes del
+cierre» al pie del panel de meses de cada vista (en «Filtros» hasta el
+2026-10-11). Mueve los meses de Evolución, la tabla dinámica y Distribución
+«Por meses»; las sesiones siguen con sus días de verdad, y el df no se
+toca. Reglas #613 y #632.
 
 ## Una nota de salida tiene DOS fechas
 
@@ -1140,6 +1142,10 @@ Lo que ya mordió:
 Detalle, trampas y mediciones en `arquitectura.md` regla #558.
 
 ## El eje temporal tiene TRES modos, y un solo dueño
+
+**Hoy ningún reporte los usa** (2026-10-11, regla #632): Ajuste, el único
+con `"cortes"`, pasó a una sesión por vista. La pieza sigue entera en
+`franja_fecha.py` y `estado_rango.py`.
 
 El calendario de la franja tiene tres modos: **Rango** (intervalo),
 **Corte** (el conjunto exacto de días de una sesión de inventario, que no
@@ -1205,6 +1211,35 @@ que cambiar una fecha recalcula esa vista sola. «Rendimiento» y
 6/12/18 meses. **Nada en `movimientos.py` lee `_rango_vigente()`**: sería
 el rango de una franja que ya no se ve. Lo vigila
 `test_graficos.py::_pruebas_fecha_por_vista`.
+
+## Ajuste: una fecha por vista, y la unidad es la SESIÓN
+
+Desde el 2026-10-11 (regla #632) la franja de Ajuste no tiene fecha. Las
+tres vistas de arriba (Por familia, Familia × Área, Distribución) eligen una
+**sesión de inventario**; las dos de abajo (Evolución, tabla dinámica),
+**meses**. Lo que ya mordió:
+
+- **Una sesión es un cierre o un parcial** (`cortes.sesiones_inventario`).
+  Cierre de mes = lo registrado del 1 al 7 del mes siguiente —definición
+  del usuario—, y los conteos de esos días SE JUNTAN: setiembre 2026 son el
+  1 y el 6 de octubre. Sin juntarlos, el último «cierre» era un recuento de
+  Venta interna con dos productos, y la vista abría ahí. Las vistas abren
+  en el último CIERRE (`cortes.ultimo_cierre`).
+- **El selector de sesión** (`graficos/ajuste/_comun.py::selector_sesion`)
+  es la píldora de Compras con ‹ › a los costados; cada vista el suyo. Son
+  botones con callback, no widgets con estado: viven en un popover (#467).
+- **Los meses son el panel de Compras**, no una copia:
+  `_comun.py::selector_meses` le pasa `ctx["solo_meses"]` y
+  `ctx["atajos_fn"] = estado_rango.atajos_meses` (meses enteros).
+- **«Mes del cierre» es UN valor para todo el reporte**, al pie de cada
+  panel de meses. Cambiarlo pide una corrida completa DESPUÉS de dibujar la
+  vista (`_comun.py::recargar_si_cambio_mes`, #373) y cada vista conserva
+  su atajo con la otra regla (`_comun.py::_llevar_rango`).
+- **Un rango escrito con una regla de fechas y leído con otra vacía la
+  página.** Es lo que tenía la píldora vieja: el corte escribía 6–6 oct en
+  fechas de registro, «Rango» lo leía por mes operativo, no quedaba
+  ninguna fila y `st.stop()` se llevaba las cinco vistas. Por eso `app.py`
+  ya no filtra el `df_f` de Ajuste (`not es_ajuste`).
 
 ## Plotly — específicos de este proyecto
 
@@ -1464,11 +1499,10 @@ página hacía esperar a la vista pedida detrás de las dos de arriba: saltar
 a «Detalle docs.» tardaba 23 s, contra 2,6 s eligiendo por distancia. Ver
 `arquitectura.md` regla #538.
 
-**Excepción: Ajuste tiene DOS pilas, una por categoría del rail.** Sus
-categorías no son agrupación visual — cada una recuerda su propio rango de
-fecha (`estado_rango.clave_rango(categoria=...)`), porque Cascada quiere un
-mes y Evolución quiere un año. Se apila la categoría activa y la otra queda
-como destino aparte. Ver regla #220.
+**Ajuste tiene UNA pila desde el 2026-10-11** (regla #632). Hasta ese día
+eran dos, una por categoría del rail, porque cada categoría recordaba su
+propio rango de la franja (regla #220): Cascada quería un mes y Evolución
+un año. Desde que cada vista elige su fecha, esa razón no existe.
 
 **Las vistas «Tabla» están OCULTAS hasta nuevo aviso** (2026-09-23, a
 pedido). Las gobierna un interruptor, `graficos/base.py::MOSTRAR_VISTAS_TABLA`,

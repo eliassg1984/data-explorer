@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-631 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+632 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (205)
 
@@ -864,7 +864,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
 - **#630** — El «Resumen del cruce» de Documentos SUNAT mide la FIDELIDAD respecto de SUNAT: la base es…
 
-**Fechas, rangos y cortes** (14)
+**Fechas, rangos y cortes** (15)
 
 - **#24** — Un reporte puede necesitar MÁS DE UNA clave de rango de fecha, una por "familia" de gráfico
 - **#62** — El corte es un CONJUNTO de días, no un intervalo — por eso tiene su propio modo en el…
@@ -880,6 +880,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#531** — «Por hora» tiene su propia fecha: el rango se parte por la granularidad. Y en Ventas…
 - **#609** — Consumo según recetas: un corte porcionado no sale de UN porcionamiento, sale de todos los de…
 - **#613** — El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo cuenta en su MES OPERATIVO
+- **#632** — Ajuste de Inventario no tiene fecha en la franja: cada vista elige la suya —una SESIÓN de…
 
 **Asistente IA** (4)
 
@@ -931,7 +932,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (164)
+**Decisiones de diseño y UX** (165)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1097,6 +1098,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 - **#628** — «Compras por período» dice en su TABLA cuánto restaron las notas de crédito — la diferencia…
 - **#631** — Ajuste › Evolución: el neto en pastillas, el período más movido marcado y los totales del…
+- **#632** — Ajuste de Inventario no tiene fecha en la franja: cada vista elige la suya —una SESIÓN de…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -49469,6 +49471,124 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+632. **Ajuste de Inventario no tiene fecha en la franja: cada vista elige
+     la suya —una SESIÓN de inventario las tres de arriba, MESES las dos de
+     abajo— y «Mes del cierre» va al pie del panel de meses.** 2026-10-11, a
+     pedido, sobre un análisis y un mockup
+     (https://claude.ai/artifact/CZCb8ENCZTqjxTvqVEmspD).
+
+     **Por qué, medido con los datos de R2.** La píldora de la franja
+     (Rango / Corte / Varios) no era lógica ni funcional:
+     - **Dejaba la página en blanco.** Abría en «Corte 6 oct 2026»;
+       pasar a «Rango» dejaba el rango 6–6 oct, que en Rango se leía por
+       MES OPERATIVO (#613): lo registrado el 6 cuenta el 30 de setiembre,
+       así que no quedaba ninguna fila, `df_f` vacío y `st.stop()` —
+       «Ningún registro coincide con los filtros» y se iban las cinco
+       vistas, incluidas las que no usaban la franja—. El panel decía lo
+       contrario («Corte contiguo: mismo resultado que el rango»). «Esta
+       semana» y «Este mes» daban 0 filas del 1 al 7 de CADA mes.
+     - **En «Visual» sólo mandaba sobre Distribución.** Por familia y
+       Familia × Área tenían su corte propio desde el parquet entero
+       (#427): con la franja en «Corte 1 oct», las dos seguían en «6 oct»
+       y Distribución pasaba al 1 sin decirlo en ningún lado.
+     - «Últimos 12 meses» de Evolución daba **11 barras** (nov 25 – set
+       26): el cierre de octubre 2025 se registró en noviembre.
+     - Abría en el **6 oct, un recuento de Venta interna**: 1 área, 2
+       productos. Por familia decía «1 de 11 áreas con stock · 3 líneas».
+
+     **La sesión** (`cortes.sesiones_inventario`, con test). Lo definió el
+     usuario: «el cierre de mes ocurre entre el día 1 hasta el día 7
+     inclusive, y uno parcial es fuera de esas fechas». Sobre las rachas de
+     siempre (`_rachas`, salto ≤ 4 días):
+     - Una racha que toca del 1 al 7 es el **CIERRE del mes anterior** —el
+       mismo corrimiento que `fecha_operativa`, que pasó de 6 a 7 días
+       (`DIA_CIERRE_OPERATIVO`) para que sean UNA regla; no cambió ninguna
+       cifra: nunca se registró un ajuste un día 7—. Las demás son
+       PARCIALES.
+     - **Los conteos del 1 al 7 de un mismo mes se JUNTAN en un cierre**:
+       setiembre 2026 (1 y 6 oct) y abril 2024 (29 abr – 1 may y 6 may).
+       Sin juntarlos, el último «cierre» era el del 6 y la vista abría ahí.
+       Medido: 60 rachas → **36 cierres, uno por mes de oct 2023 a set
+       2026, sin huecos ni repetidos, y 22 parciales**.
+     - Claves estables (`cierre_2026-09`, `parcial_2026-09-15`), y el año
+       de una sesión es el del mes que CIERRA: el cierre de diciembre 2025,
+       contado el 1 y 2 de enero, va con 2025.
+     - Abre en el **último cierre** (`cortes.ultimo_cierre`), no en la
+       última sesión: hoy «Cierre set 2026», 9 de 11 áreas, 1.153 líneas.
+
+     **El selector de sesión** (`graficos/ajuste/_comun.py::
+     selector_sesion`): la píldora de los botones de fecha de Compras con
+     ‹ › a los costados, y su panel —«Todas» / «Sólo cierres», los años
+     como pestañas y la lista del año, que se desliza adentro (un año trae
+     19 sesiones: sin tope, el panel medía 834px)—. Con «Sólo cierres» las
+     flechas van de cierre en cierre. Lo usan Por familia, Familia × Área y
+     Distribución, **cada una el suyo** («cambia sólo esa», a pedido, como
+     Compras #363). Todo son botones con callback, nada de widgets con
+     estado: un widget dentro de un popover cerrado no se entera de lo que
+     Python le escribe (#467), y las flechas la reescriben todo el tiempo.
+     Una flecha recalcula SÓLO su vista (1,3 s medido); el popover viejo
+     hacía un `st.rerun()` de la página entera. Distribución suma
+     **«Varias»** (lo que era «Varios» de la franja): las sesiones marcadas
+     se suman, y con más de una las flechas se apagan.
+
+     **Los meses**: Evolución, la tabla dinámica y Distribución «Por meses»
+     usan el MISMO panel de Compras (`selector_fecha_tarjeta` +
+     `panel_fecha`, #616), configurado: `ctx["solo_meses"]` esconde «Días»
+     y el pie cuenta meses; `ctx["atajos_fn"] = estado_rango.atajos_meses`
+     da los atajos en meses ENTEROS (Este año · Último mes · Últimos 3 / 12
+     meses · Año pasado · Todo el histórico; sin «Esta semana» ni «Últimos
+     30 días», y «Último mes» en vez de «Este mes»: el 11 de octubre el
+     último mes con cierre es setiembre). El botón dice meses: «Últimos 12
+     meses · oct 2025 – set 2026». Cada vista guarda su rango
+     (`rango_cat_Ajuste de Inventario_<evo|det|dist>_<op|reg>`) y recorta
+     el parquet entero en su propio fragment. Evolución abre en 12 meses
+     —ahora 12 barras—; Distribución «Por meses», en el último (doce
+     meses son ~100.000 líneas en un solo gráfico).
+
+     **«Mes del cierre»** salió de «Filtros» al pie del panel de meses
+     (`selector_fecha_tarjeta(pie=)`, `_comun._pie_mes_cierre`), el único
+     lugar donde cambia algo. Es UN valor para todo el reporte
+     (`CLAVE_MES`, que ya no es key de ningún widget): con Evolución en
+     «operativo» y la tabla en «registro», setiembre valdría dos cifras. Por
+     eso, tres trampas:
+     - Tres paneles no pueden compartir key: una por panel **y por valor**
+       (`<prefijo>_mescierre_<valor>`), así el widget nace con el valor
+       nuevo cuando cambia.
+     - Manda sobre tres vistas que viven en tres fragments: el cambio pide
+       una corrida COMPLETA (`recargar_si_cambio_mes`), llamada DESPUÉS de
+       dibujar la vista entera, desde su dibujante (#373).
+     - **Al cambiar de regla, cada vista LLEVA su rango** (`_llevar_rango`):
+       el mismo atajo —«Año pasado» sigue siendo «Año pasado»— o, si eligió
+       meses a mano, los mismos meses. Sin esto cada modo abría en su
+       default y lo elegido se perdía (visto en la primera prueba).
+
+     **Una sola pila.** Las dos pilas (#220, #501) existían porque cada
+     categoría del rail guardaba su propio rango de la franja. Sin rango
+     compartido, Ajuste se lee bajando como los demás reportes: `_PILA`
+     única, `categoria_rango_ajuste` borrada, y `app.py` sin la partición,
+     sin la marca `_ajuste_cat_rango_aplicada` y sin la escalada. Tampoco
+     filtra el `df_f` de Ajuste por la franja (`not es_ajuste`): con el
+     rango por defecto —lo que va del mes— quedaba vacío del 1 al 7.
+     `REPORTES_FECHA_POR_VISTA` nombra los reportes cuya franja no dibuja
+     fecha (Compras, Movimientos, Ajuste).
+
+     **Medido a 1323px**: la columna de la sesión pasó de 168 a ~215 px
+     (columnas 1.3 : 1 : 1 de la fila de filtros; las flechas cuestan 56);
+     el botón de meses de Evolución mide 205 px y su rótulo entra entero;
+     el panel de sesiones, 561 × 400; el de meses, 476 de ancho con el pie.
+
+     **Quedó sin uso, a propósito**: los modos Corte / Varios de la píldora
+     y su flecha (`franja_fecha.py`, las funciones de corte de
+     `estado_rango`). Ningún reporte declara `"cortes"`; la píldora sigue
+     en Ventas y en la tarjeta de Documentos SUNAT. **Pendiente**: llevar
+     «Fecha de la venta» (#593) y «Fecha de las salidas» (#614) al pie de
+     su panel, como «Mes del cierre» (decidido el mismo día); y el grano
+     «Corte» de Evolución y de la tabla dinámica, que sigue por racha y no
+     junta los conteos del 1 al 7. Lo vigila
+     `test_graficos.py::_pruebas_fechas_ajuste`. En Cloud, «Reboot app».
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49481,7 +49601,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#631**; la próxima toma el número siguiente.
+> última regla es la **#632**; la próxima toma el número siguiente.
 
 >
 

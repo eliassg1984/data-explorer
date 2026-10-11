@@ -61,8 +61,8 @@ from graficos.base import publicar_contexto_ia
 from graficos import alturas
 from graficos.ajuste._comun import (
     FAMILIAS_DE_ENTRADA, _MESES_ABR_ES, _layout_aj, _periodo_pivote_ajuste,
-    css_filtros_vista, fechas_del_mes, filtro_area_en_titulo,
-    mes_operativo_activo,
+    css_filtros_vista, ctx_meses, fechas_del_mes, filtro_area_en_titulo,
+    mes_operativo_activo, rango_meses, recortar_meses, selector_meses,
 )
 from utils import fmt_k
 
@@ -743,8 +743,9 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
     desliza de costado. Medía 840px; ahora cabe en el `--alto-util` de
     1366x768.
 
-    `d` ya viene recortado por el rango de la franja y por la Familia del
-    compartimento de arriba de la pila. El Área la filtra la propia vista.
+    `d` llega ENTERO, con la Familia del compartimento de arriba de la pila:
+    los meses los elige la propia vista, con el panel de Compras en modo
+    «sólo meses» (regla #632), y el Área también.
 
     `col_kardex` es el ajuste valorizado que registró el kardex por cada
     línea (`kardex.COL_VALOR_KX`); sin él —falta `ajustekardex.parquet`— la
@@ -767,8 +768,9 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         # se sabe si hay foco.
         # El Área va pegada al grano, a la derecha: los dos son filtros de
         # la tarjeta. Al medio se leía suelta (regla #631).
-        c_tit, c_foco, c_area, c_gran = st.columns(
-            [3.4, 0.75, 0.95, 1.1],  # columnas-internas: titulo | foco | area | grano
+        c_tit, c_foco, c_fecha, c_area, c_gran = st.columns(
+            # columnas-internas: titulo | foco | meses | area | grano
+            [3.0, 0.7, 1.45, 0.95, 1.1],
             vertical_alignment="center")
         with c_gran:
             # Una sesión vieja puede traer «Semana» guardada (regla #585):
@@ -781,6 +783,12 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                 help="Agrupa la serie y los mini-gráficos por familia. "
                      "«Corte» es cada sesión de inventario.",
             ) or "Mes"
+        # LOS MESES DE ESTA VISTA (regla #632): su botón, y el recorte antes
+        # que el Área, que ofrece las áreas que movieron algo en el rango.
+        ctx_m = ctx_meses("evo", d[col_fecha])
+        with c_fecha:
+            selector_meses("ajf_evo", ctx_m)
+        d = recortar_meses(d, col_fecha, rango_meses(ctx_m))
         d = filtro_area_en_titulo(c_area, d, col_area, col_ajuste_val,
                                   _K_AREA, "ajevo_ctrl_area")
         # El asistente IA tiene que ver lo que ESTA tarjeta muestra (CLAUDE.md

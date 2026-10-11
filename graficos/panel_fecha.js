@@ -50,6 +50,15 @@ function fLargo(a, b) {
   return `Del ${da} de ${MES_L[ma - 1]} de ${ya} al ${db} de ${MES_L[mb - 1]} de ${yb}`;
 }
 const fDias = (n) => (n === 1 ? '1 día' : `${n.toLocaleString('en-US')} días`);
+// Con «sólo meses» (Ajuste, regla #632) el pie dice meses, no días.
+function fMesesLargo(a, b) {
+  const [ya, ma] = ymd(a), [yb, mb] = ymd(b);
+  if (ya === yb && ma === mb) return `${MES_L[mb - 1]} de ${yb}`;
+  if (ya === yb) return `De ${MES_L[ma - 1]} a ${MES_L[mb - 1]} de ${yb}`;
+  return `De ${MES_L[ma - 1]} de ${ya} a ${MES_L[mb - 1]} de ${yb}`;
+}
+const nMeses = (a, b) => idxMes(ymd(b)) - idxMes(ymd(a)) + 1;
+const fMeses = (n) => (n === 1 ? '1 mes' : `${n} meses`);
 
 // ── Estado ───────────────────────────────────────────────────────────────
 // Vive en el elemento raíz: la función se vuelve a llamar en cada corrida de
@@ -60,6 +69,7 @@ function sincronizar(st, data, primera) {
   st.max = deIso(data.max);
   st.atajos = (data.atajos || []).map((x) => ({ ...x, a: deIso(x.a), b: deIso(x.b) }));
   st.nota = data.nota || '';
+  st.soloMeses = !!data.solo_meses;
   const a = deIso(data.a), b = deIso(data.b);
   // Lo de Python manda, salvo que haya una elección todavía sin avisar: la
   // corrida en curso todavía no la conoce.
@@ -161,9 +171,11 @@ function dibujar(raiz) {
     h += '</div>';
   }
   h += '</div><div class="pa-der">';
-  h += '<div class="seg" role="group" aria-label="Elegir por">'
-    + `<button type="button" data-modo="meses" aria-pressed="${st.modo === 'meses'}">Meses</button>`
-    + `<button type="button" data-modo="dias" aria-pressed="${st.modo === 'dias'}">Días</button></div>`;
+  if (!st.soloMeses) {
+    h += '<div class="seg" role="group" aria-label="Elegir por">'
+      + `<button type="button" data-modo="meses" aria-pressed="${st.modo === 'meses'}">Meses</button>`
+      + `<button type="button" data-modo="dias" aria-pressed="${st.modo === 'dias'}">Días</button></div>`;
+  }
   // Los años son pestañas de lo que se VE; el punto marca dónde cae lo elegido.
   const verAnio = st.modo === 'meses' ? st.anio : st.mes[0];
   h += '<div class="anios" role="group" aria-label="Año">';
@@ -184,8 +196,10 @@ function dibujar(raiz) {
     h += calendario(st, y, m);
   }
   h += `<p class="pista" aria-live="polite">${textoPista(st)}</p></div></div>`;
-  h += `<div class="pie"><p class="pie-rango"><strong>${fLargo(st.a, st.b)}</strong> · ${fDias(st.b - st.a + 1)}</p>`
-    + `<p class="pie-nota">${esc(st.nota)}</p></div>`;
+  h += st.soloMeses
+    ? `<div class="pie"><p class="pie-rango"><strong>${fMesesLargo(st.a, st.b)}</strong> · ${fMeses(nMeses(st.a, st.b))}</p>`
+    : `<div class="pie"><p class="pie-rango"><strong>${fLargo(st.a, st.b)}</strong> · ${fDias(st.b - st.a + 1)}</p>`;
+  h += `<p class="pie-nota">${esc(st.nota)}</p></div>`;
   raiz.innerHTML = h;
   // Con muchos años las pestañas se deslizan: la que se ve, a la vista.
   const anios = raiz.querySelector('.anios');
