@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-638 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+639 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (207)
 
@@ -714,7 +714,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
-**Datos, R2 y DuckDB** (95)
+**Datos, R2 y DuckDB** (96)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -811,6 +811,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
 - **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
 - **#634** — El panel de la sesión de Ajuste es una pieza propia, como el de fechas: cada sesión dice su…
+- **#639** — Un requerimiento también tiene DOS fechas, y se elige como en salidas: «Fecha de los…
 
 **SUNAT y SIRE** (56)
 
@@ -49918,6 +49919,63 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
        veces el −16px del `st.markdown` (#162): el pie de «Qué más cambió»
        y el recuadro de los días le reservan ese aire adentro de su HTML,
        o su último renglón queda fuera de la tarjeta.
+
+     (2026-10-11.)
+
+639. **Un requerimiento también tiene DOS fechas, y se elige como en
+     salidas: «Fecha de los requerimientos», en «Filtros», abre en
+     REGISTRO y se puede pasar a PROCESO.** 2026-10-11, a pedido: «que
+     por defecto esté en la que está actual pero que pueda verlo también
+     por fecha de proceso».
+
+     `requerimientos.parquet` trae `FECHA REGISTRO`
+     (`MREQUERIMIENTO.fRegistro`: cuándo el área lo digitó) y `FECHA
+     PROCESADO` (`fProcesa`: cuándo el Almacén lo procesó). La tabla del
+     POS tiene además `fAtencion` y `fDiaContable`, que la consulta del
+     Sheet no trae. Medido en R2 ese día:
+     - De 19.740 requerimientos procesados, 10.131 (51 %) se procesaron
+       otro día y 461 (2 %) otro mes; el más lejano, a 31 días.
+     - Sin fecha de proceso: los 71 generados y 181 de los 595 anulados
+       (los otros 414 la tienen).
+     - Por mes, de abril a septiembre de 2026, el valorizado cambia entre
+       −S/ 4.533 (abril) y +7.685 (mayo) al pasar de registro a proceso.
+     - En la app, últimos 12 meses de «Requerimientos por Período»: 5.385
+       requerimientos y 106 anulados por registro, 5.398 y 42 por proceso.
+       «Requerimientos por Área», últimos 30 días: S/ 238.884 y 239.646.
+       Los cuatro, iguales a DuckDB directo sobre el parquet.
+
+     **Qué manda** (`graficos/movimientos.py::K_FECHA_REQ`): la columna
+     que recorta y agrupa las dos vistas de requerimientos —y la Tabla
+     oculta—. La elige `columna_de_fecha`, que cae a la de registro si el
+     parquet no trae la otra (el demo) y devuelve cuál usó, para que el
+     rótulo no nombre una fecha que no se usó. Por proceso, el
+     requerimiento sin procesar no tiene fecha y no entra en ningún rango,
+     como la salida generada (#614).
+
+     **Qué NO manda**: los topes del botón de fecha de «Destino de lo que
+     entra» y «Consumo según recetas», que salen de este parquet sin ser
+     requerimientos —siguen por registro (`fechas_reg`); si no, cambiar
+     la fecha de los requerimientos les movía su «Últimos 30 días»—; el
+     KPI del rail (`kpi_fecha` de `REPORTES`), y la fecha de las salidas,
+     que es su propio selector.
+
+     **Dónde se nota**:
+     - El pie de «Requerimientos por Período» dice «por fecha de registro»
+       o «de proceso», como el de salidas.
+     - La cabecera de la fecha en el Detalle dice «Registro» o «Proceso»
+       (`renderizar_documentos_mov(rotulo_fecha=)`). En salidas decía
+       «Registro» también por proceso, desde la #614.
+     - El título de «Requerimientos por Área» cambia una PALABRA, no suma
+       un sufijo: «Procesado por sub almacén». A 1323px, «Requerido por
+       sub almacén» (186px de texto) llena los 194px que le deja el botón
+       de fecha; con «· por proceso» medía 278 y salía cortado en «…».
+       «Procesado» mide 187.
+     - El asistente IA ve las dos columnas (`datos` es el parquet
+       entero); con proceso elegido, el contexto le dice cuál usa la
+       página.
+
+     Medido de paso, sin tocar: «Requerimientos por Área» suma también los
+     anulados (S/ 766 de los 238.884 de esos 30 días) y «por Período» no.
 
      (2026-10-11.)
 

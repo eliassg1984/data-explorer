@@ -459,8 +459,37 @@ _COLS_FECHA_SAL = {
     FECHA_REGISTRO: ["Fecha registro", "FECHA REGISTRO"],
     FECHA_PROCESO: ["Fecha procesado", "FECHA PROCESADO"],
 }
-_ROT_FECHA_SAL = {FECHA_REGISTRO: "fecha de registro",
-                  FECHA_PROCESO: "fecha de proceso"}
+_ROT_FECHA = {FECHA_REGISTRO: "fecha de registro",
+              FECHA_PROCESO: "fecha de proceso"}
+
+# ── LA FECHA DE LOS REQUERIMIENTOS (2026-10-11, regla #639) ───────────────
+# La gemela de la de salidas, a pedido: un requerimiento también tiene DOS
+# fechas —`MREQUERIMIENTO.fRegistro`, cuándo el área lo digitó, y
+# `fProcesa`, cuándo el Almacén lo procesó—, y el parquet trae las dos. La
+# mitad se procesa otro día y el 2 % otro mes: de abril a septiembre de
+# 2026 el mes cambia entre −S/ 4.533 y +7.685. Abre en REGISTRO, que es lo
+# que la página mostró siempre. Manda sobre las dos vistas que miran
+# requerimientos («por Período» y «por Área»); las otras secciones toman de
+# este parquet sólo los topes de su botón de fecha, y siguen por registro.
+K_FECHA_REQ = "mov_req_fecha"
+_COLS_FECHA_REQ = {
+    FECHA_REGISTRO: ["Fecha Registro", "FECHA REGISTRO"],
+    FECHA_PROCESO: ["Fecha Procesado", "FECHA PROCESADO"],
+}
+
+
+def columna_de_fecha(df, fecha, cols=None):
+    """`(columna, fecha usada)`: la columna de `df` para la fecha elegida
+    —`FECHA_REGISTRO` o `FECHA_PROCESO`— y cuál se usó de verdad. Sin la
+    de proceso (un parquet viejo, el demo) cae a la de registro, y la fecha
+    usada lo dice: el rótulo nombra la que se usó, no la que se pidió.
+    `(None, FECHA_REGISTRO)` sin ninguna. `cols` es el mapa de candidatos
+    de su parquet (por defecto, el de requerimientos). Pura."""
+    cols = cols or _COLS_FECHA_REQ
+    col = _resolver(df, cols[fecha]) if fecha in cols else None
+    if col:
+        return col, fecha
+    return _resolver(df, cols[FECHA_REGISTRO]), FECHA_REGISTRO
 
 COMPARAR_SAL = ("Sin comparar", "Año pasado", "Dos años")
 """Cuántos años atrás comparan las secciones de salidas: el índice es el
@@ -498,6 +527,30 @@ def _selectores_salidas():
         help=("El mismo rango de fechas uno o dos años atrás: un trazo gris "
               "sobre cada barra, una tarjeta con la variación y, en el "
               "Resumen y en los cuadros, una columna «vs <año>»."))
+
+
+def _selector_fecha_requerimientos():
+    """La fecha de las secciones de REQUERIMIENTOS, en «Filtros», encima de
+    la de las salidas (regla #639). En el panel por lo mismo que aquélla:
+    manda sobre dos secciones, y el parquet se lee afuera de sus
+    fragments."""
+    st.markdown('<div class="filtro-rotulo filtro-mov_req_fecha">Fecha de '
+                'los requerimientos</div>', unsafe_allow_html=True)
+    st.segmented_control(
+        "Fecha de los requerimientos", [FECHA_REGISTRO, FECHA_PROCESO],
+        default=FECHA_REGISTRO, required=True, key=K_FECHA_REQ,
+        label_visibility="collapsed",
+        help=("**Registro**: el día en que el área digitó el requerimiento. "
+              "**Proceso**: el día en que el Almacén lo procesó; uno sin "
+              "procesar todavía no tiene esa fecha y no entra. Cambia "
+              "«Requerimientos por Período» y «Requerimientos por Área»."))
+
+
+def fecha_requerimientos():
+    """La fecha elegida para los requerimientos (`FECHA_REGISTRO` por
+    defecto)."""
+    f = st.session_state.get(K_FECHA_REQ)
+    return f if f in _COLS_FECHA_REQ else FECHA_REGISTRO
 
 
 def fecha_salidas():
@@ -635,7 +688,7 @@ def nota_salidas_ia(fecha):
     return (
         "las notas de salida del Almacén, una fila por LÍNEA (producto) de "
         "cada nota (\"COD SALIDA\"). \"FECHA\" es la de "
-        + _ROT_FECHA_SAL.get(fecha, "registro") + ", la que usa la página. "
+        + _ROT_FECHA.get(fecha, "registro") + ", la que usa la página. "
         "Para sumar, excluye WHERE \"NOMBRE ESTADO SALIDA\" <> 'ANULADO' y "
         "las líneas sin producto. \"VALOR NETO\" es el valorizado en soles; "
         "\"CANT SALIDA\" está en \"UNIDAD\" (la del kardex: KILOS, UND, "
@@ -838,10 +891,13 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     col_val = _resolver(df_f, ["Valor Item", "VALOR ITEM", "Valorizado"])
     col_punit = _resolver(df_f, ["Precio Unit", "PRECIO UNIT",
                                  "Precio Unitario"])
-    # Las tres que usa sólo «Requerimientos por período»: la fecha que
-    # agrupa las barras, el código que cuenta requerimientos (el demo no lo
-    # trae: ahí cada fila cuenta como uno) y el estado.
-    col_fecha = _resolver(df_f, ["Fecha Registro", "FECHA REGISTRO"])
+    # La fecha que recorta las dos vistas de requerimientos y agrupa las
+    # barras: la que eligió el usuario en «Filtros», registro o proceso
+    # (regla #639). Y las dos que usa sólo «Requerimientos por período»: el
+    # código que cuenta requerimientos (el demo no lo trae: ahí cada fila
+    # cuenta como uno) y el estado.
+    col_fecha, fecha_req = columna_de_fecha(df_f, fecha_requerimientos())
+    col_fecha_reg, _ = columna_de_fecha(df_f, FECHA_REGISTRO)
     col_req = _resolver(df_f, ["Cod Requerimiento", "COD REQUERIMIENTO"])
     col_estado = _resolver(df_f, ["Nombre Estado Requerimiento",
                                   "NOMBRE ESTADO REQUERIMIENTO"])
@@ -862,7 +918,9 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                                               "mov_graf_filtro_fam")):
         # Primero, como el día de la venta en Ventas: el panel tiene techo
         # de 60vh y con las 13 áreas de Sub Almacén lo de abajo queda fuera
-        # de la vista sin que nada avise que hay más.
+        # de la vista sin que nada avise que hay más. Requerimientos antes
+        # que salidas: el orden de la página.
+        _selector_fecha_requerimientos()
         _selectores_salidas()
         selector_valorizacion()
         _, sub_sel = filtro_pills(df_req, col_sub,
@@ -880,18 +938,27 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # Ve el lado de REQUERIMIENTOS, que es el `archivo` del reporte: la
     # herramienta de SQL corre sobre un df, y darle el otro parquet sin que
     # lo pida sería contradecir el esquema que ya conoce. Entero: cada vista
-    # tiene su fecha y no hay una de la página (regla #617).
-    publicar_contexto_ia("Movimientos", d,
-                         {"Sub Almacén": sub_sel, "Familia": fam_sel})
+    # tiene su fecha y no hay una de la página (regla #617). Trae las dos
+    # fechas; con la de proceso elegida se le dice cuál usa la página.
+    filtros_ia = {"Sub Almacén": sub_sel, "Familia": fam_sel}
+    if fecha_req != FECHA_REGISTRO:
+        filtros_ia["Fecha de los requerimientos en pantalla"] = col_fecha
+    publicar_contexto_ia("Movimientos", d, filtros_ia)
 
     if d is None or d.empty:
         st.info("No hay datos para los filtros seleccionados.")
         return
 
-    # La fecha de requerimientos, una vez: la recortan tres secciones.
+    # La fecha de requerimientos, una vez: la recortan tres secciones. Por
+    # proceso, el requerimiento sin procesar queda sin fecha y no entra en
+    # ningún rango.
     _f_req = (pd.to_datetime(d[col_fecha], errors="coerce")
               if col_fecha else None)
     fechas_req = fechas_de(_f_req)
+    # Los TOPES de Destino y Consumo salen de este parquet pero no son
+    # requerimientos: siguen por registro, elija lo que elija el usuario.
+    fechas_reg = (fechas_req if col_fecha == col_fecha_reg
+                  else fechas_de(d[col_fecha_reg]) if col_fecha_reg else None)
 
     def _req_de(rng):
         """Las líneas de requerimientos en `rng` (fin exclusivo)."""
@@ -921,7 +988,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # aparte: `datos` siguen siendo los requerimientos.
     if hist_sal is not None:
         publicar_contexto_ia(
-            "Movimientos", d, {"Sub Almacén": sub_sel, "Familia": fam_sel},
+            "Movimientos", d, filtros_ia,
             extras={"salidas": {"df": salidas_para_ia(hist_sal),
                                 "nota": nota_salidas_ia(fecha_sal)}})
 
@@ -1000,7 +1067,13 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
             col_val=col_metrica, col_hoja=col_prod,
             col_ctx=col_sub, nombre_ctx="Sub almacén",
             col_cant=col_cant, col_punit=col_punit,
-            titulo_ranking="Requerido por sub almacén", fecha=fecha)
+            # Por proceso, el título lo dice cambiando la palabra y no
+            # sumando una (regla #639): a 1323px «Requerido por sub almacén»
+            # llena los 194px que el botón deja, y «· por proceso» lo cortaba
+            # en «…». «Procesado» mide lo mismo (187px contra 186).
+            titulo_ranking=("Procesado" if fecha_req == FECHA_PROCESO
+                            else "Requerido") + " por sub almacén",
+            fecha=fecha)
 
     def _dib_periodo():
         # La tarjeta abre su propio contenedor (con la key de su familia de
@@ -1010,6 +1083,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         rng, fecha = _rango_y_boton("mov_sec_periodo", fechas_req)
         tarjeta_requerimientos_periodo(
             _req_de(rng), orden=orden, rango=rng, fecha=fecha,
+            rot_fecha=_ROT_FECHA[fecha_req],
             cols=dict(fecha=col_fecha, doc=col_req, area=col_sub,
                       estado=col_estado, fam=col_fam, prod=col_prod,
                       cant=col_cant, punit=col_punit, val=col_val))
@@ -1027,7 +1101,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         rng, fecha = _rango_y_boton("mov_sec_sal_periodo", fechas_sal)
         tarjeta_salidas_periodo(
             recortar_vista(hist_sal, rng), orden=orden, hist=hist_sal,
-            anios=anios_comp, rot_fecha=_ROT_FECHA_SAL[fecha_sal],
+            anios=anios_comp, rot_fecha=_ROT_FECHA[fecha_sal],
             rango=rng, fecha=fecha,
             cols=dict(fecha=col_fecha_sal,
                       doc=_col_sal("Cod Salida", "COD SALIDA"),
@@ -1154,7 +1228,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # el sub almacén no (la cuenta es del restaurante entero, #614). Sus
         # topes arrancan donde arranca el kardex, no el parquet del reporte.
         rng, fecha = _rango_y_boton("mov_sec_destino",
-                            (kardex.INICIO, fechas_req[1]) if fechas_req
+                            (kardex.INICIO, fechas_reg[1]) if fechas_reg
                             else None)
         tarjeta_destino(fam_sel, anios_comp, rango=rng, fecha=fecha)
 
@@ -1244,7 +1318,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         # sale del esqueleto (la última de la pila). La familia del chip
         # recorta los insumos de compra; el sub almacén no aplica (regla
         # #558, `graficos/movimientos_consumo.py`).
-        rng, fecha = _rango_y_boton("mov_sec_consumo", fechas_req)
+        rng, fecha = _rango_y_boton("mov_sec_consumo", fechas_reg)
         tarjeta_consumo(fam_sel, sub_sel, rango=rng, fecha=fecha)
 
     _DIBUJANTES = {

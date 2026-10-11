@@ -4336,6 +4336,26 @@ def _pruebas_fecha_por_vista():
           len(mov.recortar_vista(d, rng)), 2)
     check("sin rango, entero", len(mov.recortar_vista(d, None)), 3)
     check("fechas_de", mov.fechas_de(d["_fecha"]), (D(2026, 9, 30), D(2026, 10, 7)))
+
+    # 4. LA FECHA DE LOS REQUERIMIENTOS (regla #639): registro o proceso,
+    # abre en registro, y sin la columna de proceso cae a la de registro
+    # diciendo que fue ésa la que se usó.
+    dos = pd.DataFrame({"FECHA REGISTRO": [], "FECHA PROCESADO": []})
+    sola = pd.DataFrame({"Fecha Registro": []})
+    check("requerimientos por registro",
+          mov.columna_de_fecha(dos, mov.FECHA_REGISTRO),
+          ("FECHA REGISTRO", mov.FECHA_REGISTRO))
+    check("requerimientos por proceso",
+          mov.columna_de_fecha(dos, mov.FECHA_PROCESO),
+          ("FECHA PROCESADO", mov.FECHA_PROCESO))
+    check("sin columna de proceso, la de registro y lo dice",
+          mov.columna_de_fecha(sola, mov.FECHA_PROCESO),
+          ("Fecha Registro", mov.FECHA_REGISTRO))
+    check("el selector de requerimientos abre en registro",
+          "default=FECHA_REGISTRO, required=True, key=K_FECHA_REQ" in fuente,
+          True)
+    check("las vistas de requerimientos usan la fecha elegida",
+          "columna_de_fecha(df_f, fecha_requerimientos())" in fuente, True)
     return fallos
 
 

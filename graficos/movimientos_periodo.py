@@ -1715,7 +1715,7 @@ def _css(lado):
 # ===========================================================================
 
 def tarjeta_requerimientos_periodo(d, *, cols, orden=(), rango=None,
-                                   fecha=None):
+                                   fecha=None, rot_fecha=""):
     """Requerimientos por período: barras, Resumen y Detalle.
 
     `d` son las líneas de requerimientos ya recortadas por la fecha de la
@@ -1726,8 +1726,12 @@ def tarjeta_requerimientos_periodo(d, *, cols, orden=(), rango=None,
 
     Las cuatro tarjetas «por período» reciben además `rango` —`(inicio, fin
     EXCLUSIVO)` de SU fecha, regla #617— y `fecha`, el que dibuja su botón
-    de fecha (`movimientos.fecha_de_vista`). Sin `rango`, el de la franja."""
-    _tarjeta(d, REQUERIMIENTOS, cols, orden, rango_ts=rango, fecha=fecha)
+    de fecha (`movimientos.fecha_de_vista`). Sin `rango`, el de la franja.
+
+    `cols["fecha"]` es la que eligió el usuario —registro o proceso, regla
+    #639— y `rot_fecha` cómo se dice en el pie, como en salidas."""
+    _tarjeta(d, REQUERIMIENTOS, cols, orden, rot_fecha=rot_fecha,
+             rango_ts=rango, fecha=fecha)
 
 
 def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
@@ -2217,10 +2221,14 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                         filas_doc, altura=_ALTO_TABLA,
                         key=f"{k}_doc_grid_{k_tablas}", total=total_doc)
                 else:
+                    # La cabecera de la fecha nombra la que se usó: decía
+                    # «Registro» también por proceso (regla #639).
                     clic_doc = renderizar_documentos_mov(
                         filas_doc, altura=_ALTO_TABLA,
                         key=f"{k}_doc_grid_{k_tablas}",
                         rotulo_tipo=lado.rotulo_tipo if con_tipo else "",
+                        rotulo_fecha=("Proceso" if rot_fecha.endswith("proceso")
+                                      else "Registro"),
                         total=total_doc)
             with c_lin:
                 if lado.merma:

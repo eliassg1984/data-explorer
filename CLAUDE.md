@@ -1104,6 +1104,14 @@ usa SIEMPRE la del kardex: si no, sus columnas no cierran. Y se registra
 por lotes —la comida de personal de un mes entero en 27 minutos—, así que
 ninguna de las dos es el día de la merma. Regla #614.
 
+**Un requerimiento también** (2026-10-11, regla #639): `FECHA REGISTRO`
+(cuándo el área lo digitó) y `FECHA PROCESADO` (cuándo el Almacén lo
+procesó); la mitad se procesa otro día. «Filtros» tiene «Fecha de los
+requerimientos» (`graficos/movimientos.py::K_FECHA_REQ`), que abre en
+registro y manda sobre las dos vistas de requerimientos. Los topes del
+botón de fecha de Destino y Consumo salen de ese parquet y siguen por
+registro, elija lo que elija.
+
 ## El consumo según recetas baja hasta lo que se COMPRA
 
 Movimientos › «Consumo según recetas» (2026-09-28): cada plato vendido,
