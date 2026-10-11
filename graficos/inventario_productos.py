@@ -603,7 +603,9 @@ function(params) {
 # datos nunca adentro del JsCode). El ancho es fijo: un cellRenderer no sabe
 # cuánto mide su celda mientras se construye. El clic abre la FICHA adentro
 # del iframe de la grilla —sin corrida al servidor— y no despliega la fila
-# (`stopPropagation`, y `_JS_CLIC` lo vuelve a mirar).
+# (`stopPropagation`, y `_JS_CLIC` lo vuelve a mirar). Los rankings de Stock
+# por Área y Familia la usan sin ficha y más angosta: `cellRendererParams`
+# `{"sinFicha": True, "ancho": 64}`, que AG Grid mezcla en `p` (regla #638).
 _JS_MINI_LINEA = r"""
 class MiniLinea {
   init(p) {
@@ -614,9 +616,10 @@ class MiniLinea {
     var v = String(d.__sp).split(',').map(Number);
     if (v.length < 2) return;
     var meses = (p.context && p.context.meses) || [];
+    this.eGui.title = (meses[0] || '') + ': ' + MiniLinea.s(v[0]) + ' → hoy: ' + MiniLinea.s(v[v.length - 1]) + (p.sinFicha ? '' : '. Clic para verla grande.');
+    this.eGui.appendChild(MiniLinea.svg(v, p.ancho || 92, 18, null));
+    if (p.sinFicha) return;
     this.eGui.className = 'inv-spk'; g.cursor = 'zoom-in';
-    this.eGui.title = (meses[0] || '') + ': ' + MiniLinea.s(v[0]) + ' → hoy: ' + MiniLinea.s(v[v.length - 1]) + '. Clic para verla grande.';
-    this.eGui.appendChild(MiniLinea.svg(v, 92, 18, null));
     this.eGui.addEventListener('click', function (e) { e.stopPropagation(); MiniLinea.ficha(p, v, meses); });
   }
   getGui() { return this.eGui; }

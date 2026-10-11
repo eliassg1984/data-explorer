@@ -6911,6 +6911,20 @@ def _pruebas_analisis_stock():
           ["kg", "kg", "kg", "Lt", "Lt"])
     check("sin historia el listado sigue como antes",
           armar_listado(d, **{**cols, "historia": None, "consumo": None}).serie, None)
+
+    # Stock por Área y Familia (regla #638).
+    top, total, cambiaron = A.lo_que_mas_cambio(
+        pd.DataFrame({0: [10, 0, 5, 3], 1: [0, 8, 5, 3.4]},
+                     index=["vacio", "nuevo", "igual", "poco"]), 0, n=1)
+    check("qué más cambió: el mayor cambio, aunque se haya vaciado",
+          top.to_dict(), {"vacio": -10.0})
+    check("qué más cambió: el total de todos y cuántos se movieron un sol",
+          (round(total, 6), cambiaron), (-1.6, 2))
+    from graficos.inventario import TODAS, _filtrar_ruta
+    _d = pd.DataFrame({"AREA": ["COCINA", "BARRA"], "FAM": ["A", "B"]})
+    check("«Todas las áreas» no recorta, la familia sí",
+          _filtrar_ruta(_d, (("AREA", TODAS, "Todas las áreas"),
+                             ("FAM", "B", "B"))).index.tolist(), [1])
     return fallos
 
 

@@ -182,3 +182,23 @@ def dias_del_conjunto(valorizado, cantidad, consumo, precio,
     con = q > 0
     diario = float((c[con] * p[con]).sum()) / ventana
     return float(v[con].clip(lower=0).sum()) / diario if diario > 0 else float("nan")
+
+
+def lo_que_mas_cambio(historia, ref, n=7):
+    """Los productos que más cambiaron entre el momento `ref` (una posición
+    de las columnas de `historia`) y hoy (la última): `(top, total,
+    cambiaron)`.
+
+    `historia` es el valor de cada producto en cada momento (filas =
+    productos, ya sumadas sus áreas). `top` es la Series producto → cambio
+    de los `n` de mayor cambio en valor absoluto —incluidos los que se
+    vaciaron—, `total` el cambio de todos juntos y `cambiaron` cuántos se
+    movieron al menos un sol. Los demás explican `total` menos lo de `top`.
+    Regla #638."""
+    if historia is None or historia.empty:
+        return pd.Series(dtype=float), 0.0, 0
+    cols = list(historia.columns)
+    d = (historia[cols[-1]] - historia[cols[ref]]).astype(float)
+    cambio = d[d.abs() >= 1]
+    orden = cambio.abs().sort_values(ascending=False, kind="stable").index[:n]
+    return cambio.reindex(orden), float(d.sum()), int(len(cambio))

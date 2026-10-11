@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-637 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+638 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (207)
 
@@ -452,7 +452,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 
-**AgGrid y tablas** (93)
+**AgGrid y tablas** (94)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -547,6 +547,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#629** — En la grilla AgGrid «Resumen Total» de «Compras por período» van TRES familias más «N más»,…
 - **#636** — Stock por Producto: Código · Familia · Subfamilia · Producto, y abre de la A a la Z en ese…
 - **#637** — Stock por Producto dice qué mirar: chips de estado, la evolución de lo filtrado y cinco…
+- **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 
 **Streamlit** (162)
 
@@ -939,7 +940,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (167)
+**Decisiones de diseño y UX** (168)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1108,6 +1109,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#634** — El panel de la sesión de Ajuste es una pieza propia, como el de fechas: cada sesión dice su…
 - **#636** — Stock por Producto: Código · Familia · Subfamilia · Producto, y abre de la A a la Z en ese…
 - **#637** — Stock por Producto dice qué mirar: chips de estado, la evolución de lo filtrado y cinco…
+- **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -49860,6 +49862,65 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+638. **Stock e Inventario son DOS vistas de stock: Stock por Producto y
+     Stock por Área y Familia. «Stock por Familia» es la fila «Todas las
+     áreas», y la tabla de productos de abajo —la de las casillas— se
+     fue.** 2026-10-11, a pedido, sobre el mockup aprobado: «quizás pueda
+     tener todo en dos vistas», «la opción 1, fila todas las áreas» y, de
+     la segunda vista, «me parece vacía abajo».
+
+     - **«Todas las áreas» es la PRIMERA fila del ranking de áreas** y se
+       elige como cualquier área (`_tabla_ranking(..., fila_todas=True)`
+       devuelve `TODAS`): las otras dos tarjetas pasan a ser del restaurante
+       entero, que es lo que hacía Stock por Familia. Su clave no es un
+       nombre del ERP: `_filtrar_ruta` la salta. Reemplaza a la fila TOTAL
+       de esa tarjeta, que diría el mismo número. La vista sigue abriendo
+       en Almacén Central (#405), a pedido: la opción de abrir en todas se
+       descartó. Un `?vista=por_familia` guardado cae en la primera vista,
+       como cualquier id que ya no existe: no hay alias.
+     - **Cada fila de los tres rankings lleva su mini-línea** de 12 meses,
+       la misma `MiniLinea` de Stock por Producto (#637) con
+       `cellRendererParams` `{"sinFicha": True, "ancho": 62}`, que AG Grid
+       mezcla en los parámetros del componente. La historia de cada fila de
+       `d` se cruza UNA vez al entrar al reporte (`hist_d`, por código de
+       área y de producto) y cada ranking la suma por su categoría.
+     - **La tabla de productos de abajo se fue**: la tabla de productos es
+       una sola, la de Stock por Producto. Tenía además tres errores
+       medidos ese día: «Selección %» se calculaba también en las filas NO
+       marcadas (108,2 %) y en el TOTAL (1.188,2 %), cada casilla iba al
+       servidor (el `update_on` de fábrica de st_aggrid trae
+       `selectionChanged`) y Python no leía la respuesta, y la suma de lo
+       marcado no se veía en ningún lado. **Vuelve sólo con «Inactivos y
+       servicios»**, que no tiene otra vista donde verse (#598), sin
+       casillas, sin «Selección %», con `update_on=[]` y sin Cantidad en el
+       TOTAL (sumaba kilos con litros: 7.576).
+     - **Abajo, una tarjeta del recorte elegido** (`_banda_area`): «Qué más
+       cambió» —los siete productos de mayor cambio entre un cierre y hoy,
+       `analisis_stock.lo_que_mas_cambio`, con los que se vaciaron y cuánto
+       explican del total— y «Dónde mirar» —días de inventario, negativos,
+       sin consumo y más de 60 días—. Se compara contra el cierre del mes
+       pasado (el antepenúltimo punto: el último cierre está a dos días de
+       «hoy») o el de hace 12 meses.
+     - **«Ver sus productos» y cada «Ver ↑» llevan a Stock por Producto
+       con el recorte y el chip puestos** (`_ir_a_productos`, un
+       `on_click`). La vista 1 es OTRO fragment: el callback deja el estado
+       y, al FINAL de la sección —con todos sus widgets ya registrados—,
+       `st.rerun(scope="app")`; un rerun antes los habría dado por viejos
+       (#373). En la corrida completa, `scroll_a_seccion` lleva la página
+       a la vista 1. Medido con clics: «Ver ↑» de Sin consumo en Almacén
+       Central → «Productos 59 de 294» con el chip puesto.
+     - **Alto**: la sección entra en los 575px de la pantalla del usuario
+       (el contenido termina en y=583 de 595). Los rankings bajan a siete
+       filas y los recuadros de «Dónde mirar» llevan el «Ver ↑» en la línea
+       del número: con un renglón propio la sección pasaba de largo. La
+       tabla de «Inactivos y servicios», por lo mismo, de ocho filas a seis
+       (termina en y=585). Y dos
+       veces el −16px del `st.markdown` (#162): el pie de «Qué más cambió»
+       y el recuadro de los días le reservan ese aire adentro de su HTML,
+       o su último renglón queda fuera de la tarjeta.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49872,7 +49933,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#637**; la próxima toma el número siguiente.
+> última regla es la **#638**; la próxima toma el número siguiente.
 
 >
 

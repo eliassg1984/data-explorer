@@ -22,6 +22,15 @@ las tres son clickeables en cadena. Ranking (izquierda) → desglose del nivel
 siguiente (derecha, era un `go.Bar` sin clic) → productos (franja de abajo),
 que ahora lista TODOS los del recorte en vez de un top-20: "ya que es una
 tabla, el usuario puede hacer scroll". Ver `arquitectura.md` regla #403.
+
+2026-10-11, a pedido (regla #638): el reporte queda en DOS vistas de stock.
+«Stock por Familia» se fue —era Stock por Área empezando por la familia— y
+su lugar lo ocupa la fila «Todas las áreas», la primera del ranking de
+áreas. La tabla de productos de abajo (la de las casillas y «Selección %»)
+también: la tabla de productos es una sola, la de Stock por Producto. Abajo
+quedan «Qué más cambió» y «Dónde mirar», que llevan a esa vista con el
+filtro puesto. La tabla de abajo sólo vuelve con «Inactivos y servicios»,
+que no tiene otra vista donde verse (regla #598).
 """
 
 import numpy as np
@@ -30,7 +39,8 @@ import streamlit as st
 
 
 from tema import (
-    ACENTO, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG, LAVANDA_BORDE,
+    ACENTO, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, AJUSTE_ALERTA_TEXTO, AJUSTE_NEG,
+    AJUSTE_NEG_TEXTO, GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_MEDIO, LAVANDA_BORDE,
     LAVANDA_CABECERA_GRUPO, LAVANDA_CHIP, LAVANDA_FILA, TEXTO_PRINCIPAL,
 )
 # El LOOK de una tabla-ranking del repo. Nació en `proveedor.py`, se
@@ -52,11 +62,20 @@ from graficos.compras._css_proveedor import CSS_RANKING_GRID
 from graficos.compras._etiquetas_proveedor import nombre_propio
 from graficos.base import (
     compartimento_filtros, contar_filtros, filtro_pills,
-    _render_rail, pila_sin_tablas, rail_sin_tablas,
-    _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos, seccion_perezosa,
+    _render_rail, pila_sin_tablas, rail_sin_tablas, poner_seleccion,
+    _resolver, _slug, publicar_contexto_ia, renderizar_graficos_genericos,
+    scroll_a_seccion, seccion_perezosa,
 )
 from graficos import alturas
-from graficos.inventario_productos import seccion_productos
+# La vista 1 (Stock por Producto): su sección, la mini-línea —la misma en
+# las dos vistas— y las claves de sus filtros, que «Ver sus productos» y
+# «Dónde mirar» escriben para llevar al usuario allá con el filtro puesto.
+from graficos.inventario_productos import (
+    _JS_MINI_LINEA, _K_A_FECHA, _K_AREAS, _K_BUSCAR, _K_ESTADO, _K_FAMILIAS,
+    _K_SUBFAMILIAS, _js_fijo, armar_listado, seccion_productos,
+)
+import analisis_stock
+import data
 from graficos.inventario_movimientos import seccion_movimientos
 from data import INVENTARIO_ACTIVO
 
@@ -148,6 +167,22 @@ div[class*="st-key-inv_excl_btn_"][class*="_on"] button p {{
 # candidato sigue sirviendo sin tocar código. Si ninguno está en los datos,
 # `_tabla_ranking` abre en la categoría mayor — nunca en vacío.
 ABRE_EN_AREA = ("ALMACEN CENTRAL",)
+
+# «Todas las áreas» (regla #638): la PRIMERA fila del ranking de áreas, que se
+# elige como cualquier área y deja las otras dos tarjetas con el restaurante
+# entero —lo que era Stock por Familia—. Su clave no es un nombre del ERP:
+# `_filtrar_ruta` la salta, así que no recorta nada.
+TODAS = "__todas__"
+ROTULO_TODAS = "Todas las áreas"
+
+
+def _filtrar_ruta(d, ruta):
+    """`d` recortado por los tríos (columna, valor crudo, texto) de `ruta`.
+    «Todas las áreas» y un eslabón sin elegir no recortan."""
+    for _col_r, _val_r, _ in ruta:
+        if _col_r and _val_r and _val_r != TODAS:
+            d = d[d[_col_r].astype(str) == _val_r]
+    return d
 
 # Reparto horizontal de la fila de arriba, por cantidad de cuadros.
 #
@@ -242,9 +277,12 @@ _FILAS_RANK = 8
 # La «Tabla» está OCULTA desde el 2026-09-23, con las de los demás reportes:
 # `rail_sin_tablas` acá y `pila_sin_tablas` en `_PILA`, de a par (#507).
 _INVENTARIO_RAIL_CATEGORIAS = rail_sin_tablas((
+    # «Stock por Familia» se fue el 2026-10-11 (regla #638): es la fila
+    # «Todas las áreas» de esta vista. Un `?vista=por_familia` guardado cae
+    # en la primera vista, como cualquier id que ya no existe.
     ("Vista", (("Productos",   "Stock por Producto", ":material/inventory_2:"),
-               ("Por área",    "Stock por Área",     ":material/space_dashboard:"),
-               ("Por familia", "Stock por Familia",  ":material/account_tree:"),
+               ("Por área",    "Stock por Área y Familia",
+                ":material/space_dashboard:"),
                ("Movimientos", "Movimientos por Tipo",
                 ":material/waterfall_chart:"))),
     ("Datos", (("Tabla", "Tabla", ":material/table_rows:"),)),
@@ -257,7 +295,6 @@ _INVENTARIO_RAIL_CATEGORIAS = rail_sin_tablas((
 _PILA = pila_sin_tablas((
     ("inv_sec_productos", "Productos"),
     ("inv_sec_area",    "Por área"),
-    ("inv_sec_familia", "Por familia"),
     # Por qué cambió el stock entre dos fechas, del kardex (regla #602).
     ("inv_sec_movimientos", "Movimientos"),
     ("inv_sec_tabla",   "Tabla"),
@@ -267,14 +304,22 @@ _PILA = pila_sin_tablas((
 def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                    ancho_pct=80, flex_nombre=2, ancho_barra=0.62,
                    monto_corto=False, nombre_bonito=False, abre_en=(),
-                   abrir_en_mayor=False, filas_vista=None):
+                   abrir_en_mayor=False, filas_vista=None, historia=None,
+                   meses=None, fila_todas=False):
     """Ranking de Por area/Por familia como TABLA con barra de progreso.
 
     Es la tabla-ranking del repo, la misma que el Ranking de proveedores de
     Compras: `CSS_RANKING_GRID` sobre `theme="streamlit"` (franja en vez de
     caja, todo blanco, sin lineas verticales, cuerpo de 11.5px), filas de
     `ALTO_FILA_RANK`, ocho a la vista y el resto por scroll interno, y una
-    fila TOTAL fija abajo. La barra NO es un `cellRenderer` (ni la clase
+    fila TOTAL fija abajo.
+
+    `historia` (regla #638): lo que valía cada fila de `d` después de cada
+    cierre (un DataFrame con el índice de `d`); con ella cada categoría lleva
+    su mini-línea de 12 meses —la de Stock por Producto, sin ficha—, y
+    `meses` son sus rótulos. `fila_todas` pone arriba «Todas las áreas», que
+    se elige como una fila más (devuelve `TODAS`) y reemplaza a la fila
+    TOTAL: las dos dirían el mismo número. La barra NO es un `cellRenderer` (ni la clase
     `init()/getGui()` de la regla #25, ni los sparklines de AG Grid, que son
     Enterprise) sino el FONDO de la celda, un `linear-gradient` cortado en
     el % del valor. Los colores salen de `tema.py` y no de `var(--accent)` a
@@ -354,7 +399,24 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
         # indistinguible de una compra grande.
         "_barra": [abs(v) / _mayor * 100 for v in serie.values],
         "_neg": [bool(v < 0) for v in serie.values],
+        "_todas": False,
     })
+    _sp_total = ""
+    if historia is not None:
+        _h = historia.loc[d.index].groupby(d[col_grp].astype(str)).sum()
+
+        def _txt(fila):
+            return ",".join(str(int(round(float(x)))) for x in fila)
+        tabla["__sp"] = [_txt(_h.loc[k]) if k in _h.index else ""
+                         for k in _crudos]
+        _sp_total = _txt(historia.loc[d.index].sum())
+    if fila_todas:
+        tabla = pd.concat([pd.DataFrame([{
+            col_nombre: ROTULO_TODAS, "Valorizado": total,
+            "%": 100.0 if (_positivo and not _hay_neg) else None,
+            "_crudo": TODAS, "_barra": 0.0, "_neg": False, "_todas": True,
+            **({"__sp": _sp_total} if historia is not None else {}),
+        }]), tabla], ignore_index=True)
     # La fila TOTAL reemplaza al KPI "Valorizado total" que vivia arriba de
     # esta tabla (pedido del 2026-09-13: "quitar el KPI"). Mismo mecanismo
     # que el Ranking de proveedores: un dict calculado en PYTHON +
@@ -382,7 +444,8 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
     # celda pinta ENCIMA de la fila.
     _js_barra = JsCode(
         "function(p){"
-        " if (p.node.rowPinned) return {'display':'flex',"
+        " if (p.node.rowPinned || (p.data && p.data._todas))"
+        " return {'display':'flex',"
         " 'alignItems':'center','justifyContent':'flex-end',"
         " 'fontWeight':'700'};"
         f" var w = Math.max(0, Math.min(100, p.data._barra||0)) * {ancho_barra};"
@@ -401,7 +464,11 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
         "function(p){ if(p.node.rowPinned){ return {"
         f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
         f"'color':'{ACENTO_TEXTO_OSCURO}'"
-        "}; } }")
+        "}; }"
+        # «Todas las áreas»: con el peso del total, pero se elige.
+        " if (p.data && p.data._todas) return {'fontWeight':'600',"
+        f"'background':'{LAVANDA_FILA}','color':'{ACENTO_TEXTO_OSCURO}'"
+        "}; }")
     # El monto abreviado a miles es para las celdas angostas (ver
     # `_FORMATO_DETALLE`): abajo de 1.000 sigue exacto, porque ahi el
     # redondeo a "S/ 0.4k" perderia el dato en vez de acortarlo.
@@ -477,10 +544,19 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
                  "cellStyle": _js_barra, "valueFormatter": _js_soles},
                 {"field": "%", "width": ancho_pct, "type": "numericColumn",
                  "valueFormatter": _js_pct},
+            ] + ([{"field": "__sp", "headerName": "12 meses", "width": 72,
+                   "minWidth": 72, "maxWidth": 72, "sortable": False,
+                   "cellRenderer": _js_fijo(_JS_MINI_LINEA),
+                   "cellRendererParams": {"sinFicha": True, "ancho": 62},
+                   "headerTooltip": "Lo que valió después de cada cierre (el "
+                                    "día 7 del mes siguiente) y hoy."}]
+                 if historia is not None else []) + [
                 {"field": "_barra", "hide": True},
                 {"field": "_neg", "hide": True},
+                {"field": "_todas", "hide": True},
                 {"field": "_crudo", "hide": True},
             ],
+            "context": {"meses": list(meses or [])},
             "rowSelection": {"mode": "singleRow", "checkboxes": False,
                              "enableClickSelection": False},
             "onRowClicked": _js_toggle,
@@ -488,7 +564,7 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
             "headerHeight": ALTO_HEADER_RANK,
             "suppressCellFocus": True,
             "suppressMovableColumns": True,
-            "pinnedBottomRowData": [fila_total],
+            "pinnedBottomRowData": [] if fila_todas else [fila_total],
             "getRowStyle": _js_fila_total,
         },
         allow_unsafe_jscode=True,
@@ -525,7 +601,7 @@ def _tabla_ranking(d, col_grp, col_val, nombre_grp, key, *,
 
 
 def _tabla_detalle_foco(d, col_next, nombre_next, col_val, key, ruta=(),
-                        formato=None):
+                        formato=None, historia=None, meses=None):
     """Al lado del ranking, un eslabón más de la cadena: el desglose del
     recorte que ya está en foco (Área → Familia → Subfamilia) — la pregunta
     natural después de "cuánto vale GASTOS" es "de qué se compone".
@@ -552,10 +628,7 @@ def _tabla_detalle_foco(d, col_next, nombre_next, col_val, key, ruta=(),
     es correcto —la selección es estado que se relee en cada run, no el
     evento que se repite de `plotly_chart(on_select=...)` (regla #399)—, y es
     lo que evita que un sub-foco sobreviva al área que lo justificaba."""
-    dd = d
-    for _col_r, _val_r, _ in ruta:
-        if _col_r and _val_r:
-            dd = dd[dd[_col_r].astype(str) == _val_r]
+    dd = _filtrar_ruta(d, ruta)
     # El titulo nombra sólo el ÚLTIMO eslabón, no la ruta entera: con tres
     # cuadros "ALMACEN CENTRAL › COSTOS PRODUCCION — por subfamilia" no entra
     # en 339px, y de qué área viene ya lo dice el cuadro de la izquierda. La
@@ -573,6 +646,7 @@ def _tabla_detalle_foco(d, col_next, nombre_next, col_val, key, ruta=(),
     return _tabla_ranking(
         dd, col_next, col_val, nombre_next, key,
         nombre_bonito=nombre_next in _CATEGORIAS_NOMBRE_PROPIO,
+        historia=historia, meses=meses, filas_vista=_FILAS_RANK - 1,
         **(formato or _FORMATO_DETALLE[2]))
 
 
@@ -605,23 +679,19 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
     le da sentido: 34 de qué. El TOTAL la deja vacía: sumar kg con L no da
     una unidad.
 
-    Barra de "Participación %" + checkbox con "Selección %" recalculada en
-    vivo (sin rerun de Streamlit): MISMO patrón ya usado en la Tabla
-    principal de este reporte (`tablas/desktop.py`, sección "Inventario
-    Valorizado: 2 columnas de % + checkbox de selección") — no un
-    componente nuevo, la barra-gradiente vive en `cellStyle` de AgGrid, no
-    en un Styler de pandas (ver `arquitectura.md` sobre por qué acá sí
-    hace falta JsCode y en `compras/volatilidad.py` no).
+    Desde el 2026-10-11 (regla #638) se dibuja SÓLO con «Inactivos y
+    servicios», que no tiene otra vista donde verse: la tabla de productos
+    del stock es la de Stock por Producto. Y sin las casillas ni «Selección
+    %»: calculaba un % también en las filas no marcadas (108,2 %) y en el
+    TOTAL (1.188,2 %), cada casilla iba al servidor y la suma de lo marcado
+    no se veía en ningún lado.
 
     `col_motivo` (regla #598): con «Inactivos y servicios» abierto, la tabla
     lista lo que NO es stock y suma una columna «Por qué» — el motivo es de
     la fila (producto × área), así que va junto al área."""
     from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
-    d_panel = d
-    for _col_r, _val_r, _ in ruta:
-        if _col_r and _val_r:
-            d_panel = d_panel[d_panel[_col_r].astype(str) == _val_r]
+    d_panel = _filtrar_ruta(d, ruta)
     if not (col_prod and col_area and _cant is not None and col_val):
         st.info("Faltan columnas para esta tabla.")
         return
@@ -667,7 +737,6 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
     g["Participación %"] = ((g["Valorizado"] / _total_foco * 100)
                             .where(g["Valorizado"] >= 0)
                             if _total_foco else 0.0)
-    g["Selección %"] = g["Participación %"]  # semilla; el valueGetter de abajo la recalcula en vivo
     g = g.sort_values("Valorizado", ascending=False)
 
     # El encabezado dice el recorte Y cuántas filas trae: sin el número, una
@@ -681,16 +750,14 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
 
     # Fila TOTAL, igual que las otras dos tablas de la sección. "Precio
     # unitario" queda VACÍA a propósito: es un ratio y un ratio no se suma ni
-    # se promedia sobre el agregado (la misma trampa que la regla #199). El
-    # "Selección %" tampoco lleva total — su valor lo calcula en vivo el
-    # valueGetter contra lo tildado, así que un número fijo ahí mentiría en
-    # cuanto se marque la primera fila.
+    # se promedia sobre el agregado (la misma trampa que la regla #199).
     _fila_total = {
         "Producto": "TOTAL",
         "Área": "",
         "Por qué": "",
         "UM": "",
-        "Cantidad": round(float(g["Cantidad"].sum()), 1),
+        # Sin Cantidad: sumar kilos con litros no da una unidad (regla #638;
+        # hasta ese día decía 7.576).
         "Valorizado": round(float(g["Valorizado"].sum()), 2),
         "Participación %": (None if _hay_neg_panel else
                             round(float(g["Participación %"].sum()), 1)),
@@ -698,15 +765,15 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
 
     gb = GridOptionsBuilder.from_dataframe(
         g[["Producto", "Área", "Por qué", "Cantidad", "UM", "Precio unitario",
-           "Valorizado", "Participación %", "Selección %"]])
+           "Valorizado", "Participación %"]])
     gb.configure_column("Por qué", minWidth=150, hide=not col_motivo)
     gb.configure_default_column(resizable=True, sortable=True, filter=False)
     # minWidths ajustados para que las 7 entren sin scroll horizontal en la
     # franja de abajo (~911-1117px medido en vivo): con los anchos "cómodos"
     # originales (170+110+100+120+120+140+140=900px de columnas centrales)
-    # quedaban ~19px cortos contra el ancho disponible real — Selección %,
-    # al ser la última, quedaba virtualizada fuera de vista (ni scrolleable
-    # a simple vista: parecía que la columna no existía).
+    # quedaban ~19px cortos contra el ancho disponible real y la última
+    # columna quedaba virtualizada fuera de vista (ni scrolleable a simple
+    # vista: parecía que no existía).
     gb.configure_column("Producto", pinned="left", minWidth=150)
     # El ÁREA se esconde cuando la cadena de arriba ya la fijó: con el foco
     # por defecto en ALMACEN CENTRAL, esa columna escribe la misma palabra
@@ -739,9 +806,8 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
     gb.configure_column("Valorizado", type=["numericColumn"], minWidth=110,
                         valueFormatter=_money_fmt, sort="desc")
 
-    # Misma barra-gradiente que tablas/desktop.py::_pct_bar_style — el "–"
-    # con value null cubre "Selección %" mientras no haya nada marcado
-    # (Participación % siempre tiene valor).
+    # Misma barra-gradiente que tablas/desktop.py::_pct_bar_style; el "–"
+    # con value null es el de una fila negativa, que no lleva participación.
     _pct_bar_style = JsCode(f"""
         function(params) {{
             var base = {{ textAlign: 'right', fontWeight: '500', paddingRight: '12px' }};
@@ -764,34 +830,8 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
     """)
     gb.configure_column("Participación %", minWidth=115, type=["numericColumn"],
                         cellStyle=_pct_bar_style, valueFormatter=_pct_fmt)
-    gb.configure_column(
-        "Selección %", minWidth=115, type=["numericColumn"],
-        cellStyle=_pct_bar_style, valueFormatter=_pct_fmt,
-        # Recalcula en vivo contra la suma de getSelectedNodes() — sin
-        # selección, null (el formatter de arriba pinta "–").
-        valueGetter=JsCode("""
-            function(params) {
-                if (!params.data) return null;
-                var val = Number(params.data["Valorizado"]);
-                if (isNaN(val)) return null;
-                var nodes = (params.api && params.api.getSelectedNodes)
-                    ? params.api.getSelectedNodes() : [];
-                if (!nodes || nodes.length === 0) return null;
-                var suma = 0;
-                nodes.forEach(function(n) {
-                    if (n.data) {
-                        var v = Number(n.data["Valorizado"]);
-                        if (!isNaN(v)) suma += v;
-                    }
-                });
-                if (suma <= 0) return null;
-                return (val / suma) * 100;
-            }
-        """),
-    )
-    gb.configure_selection("multiple", use_checkbox=True, header_checkbox=True)
     grid_options = gb.build()
-    # Sin esto, la última columna ("Selección %") quedaba virtualizada
+    # Sin esto, la última columna quedaba virtualizada
     # fuera de rango y NUNCA renderizaba celda — bug real, verificado en
     # vivo: el header aparecía pero la fila tenía un hueco vacío del ancho
     # de una columna. La grilla es chica (7 columnas, ~20 filas), así que
@@ -804,41 +844,239 @@ def _panel_top(d, ruta, col_prod, col_area, col_val, col_punit, _cant,
     grid_options["rowHeight"] = ALTO_FILA_RANK
     grid_options["headerHeight"] = ALTO_HEADER_RANK
     grid_options["pinnedBottomRowData"] = [_fila_total]
-    # La fila TOTAL con la paleta de cierre de las otras dos. `rowPinned`
-    # también apaga su checkbox: una fila que no es un producto no se puede
-    # sumar a la selección (y "Selección %" la contaría dos veces).
+    # La fila TOTAL con la paleta de cierre de las otras dos.
     grid_options["getRowStyle"] = JsCode(
         "function(p){ if(p.node.rowPinned){ return {"
         f"'fontWeight':'700','background':'{LAVANDA_CHIP}',"
         f"'color':'{ACENTO_TEXTO_OSCURO}'"
         "}; } }")
-    # AG Grid no sabe que un valueGetter "cambió" (no depende de ningún
-    # field propio) — sin este refreshCells forzado tras cada click de
-    # checkbox, "Selección %" se queda pintada con el valor anterior.
-    grid_options["onSelectionChanged"] = JsCode("""
-        function(params) {
-            try {
-                params.api.refreshCells({ columns: ['Selección %'], force: true });
-            } catch(e) {}
-        }
-    """)
 
     AgGrid(
         g, gridOptions=grid_options, theme="streamlit",
-        # Ocho filas reservadas y el resto por scroll interno, la misma
+        # Seis filas reservadas y el resto por scroll interno, la misma
         # cuenta que `_tabla_ranking` (ver el comentario de `extra` allá).
-        height=alturas.por_filas(min(_FILAS_RANK, max(1, len(g))),
+        # Seis y no ocho desde la regla #638: con ocho, en «Inactivos y
+        # servicios» la tabla salía por debajo de la pantalla del usuario.
+        height=alturas.por_filas(min(_FILAS_RANK - 2, max(1, len(g))),
                                  px_fila=ALTO_FILA_RANK,
                                  extra=CROMO_GRID_RANK + ALTO_FILA_RANK,
                                  minimo=0),
         custom_css=CSS_RANKING_GRID,
         allow_unsafe_jscode=True,
-        # La key lleva el recorte entero: cambiar de área o de familia
-        # estrena grilla, así los checkboxes de "Selección %" no quedan
-        # marcados sobre productos que ya no están en la tabla.
+        # Nada vuelve a Python: sin esto, el default de st_aggrid avisaba
+        # al servidor cada orden y cada casilla (regla #638).
+        update_on=[],
+        # La key lleva el recorte entero: cambiar de recorte estrena grilla.
         key="inv_top_grid_" + (_slug("_".join(str(v) for _, v, _ in ruta if v))
                                or "global"),
     )
+
+
+# ── Debajo de los rankings: qué más cambió y dónde mirar (regla #638) ─────
+# Los rankings dicen cuánto hay y las mini-líneas si sube o baja; esto dice
+# QUÉ productos explican el cambio y QUÉ conviene revisar, del recorte que
+# esté elegido, y lleva a Stock por Producto con ese filtro puesto.
+_K_IR = "inv_ir_productos"
+_K_SALTAR = "inv_saltar_a_productos"
+_MOVIDOS = 7
+
+CSS_BANDA_AREA = f"""
+<style>
+.inv-mov-t {{ font-size: 12px; color: {GRIS_TEXTO}; margin-bottom: 2px; }}
+.inv-mov-t b {{ color: {TEXTO_PRINCIPAL}; font-weight: 600; }}
+.inv-mov {{ display: grid; grid-template-columns: minmax(0, 1fr) 40% 92px;
+    align-items: center; gap: 10px; height: 21px; font-size: 12px; }}
+.inv-mov .n {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: {ACENTO_TEXTO}; }}
+.inv-mov .n small {{ color: {GRIS_TEXTO}; margin-left: 5px; }}
+.inv-mov .pista {{ position: relative; height: 12px; }}
+.inv-mov .pista::before {{ content: ""; position: absolute; left: 50%; top: -3px;
+    bottom: -3px; border-left: 1px solid {GRIS_BORDE}; }}
+.inv-mov .pista i {{ position: absolute; top: 1px; bottom: 1px; background: {ACENTO}; }}
+.inv-mov .pista i.baja {{ background: {AJUSTE_NEG}; }}
+.inv-mov .d {{ text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }}
+.inv-mov .d.baja {{ color: {AJUSTE_NEG_TEXTO}; }}
+/* El `padding-bottom` paga el −16px del `st.markdown` (regla #162): sin él,
+   este renglón quedaba fuera de la tarjeta cuando la columna de la izquierda
+   es la más alta. */
+.inv-mov-pie {{ font-size: 11.5px; color: {GRIS_TEXTO}; margin-top: 2px;
+    padding-bottom: 14px; }}
+.inv-tile .l {{ display: block; font-size: 11px; color: {GRIS_TEXTO}; }}
+.inv-tile .v {{ display: block; font-size: 17px; font-weight: 600;
+    font-variant-numeric: tabular-nums; color: {TEXTO_PRINCIPAL}; line-height: 1.25; }}
+.inv-tile .v.neg {{ color: {AJUSTE_NEG_TEXTO}; }}
+.inv-tile .v.alerta {{ color: {AJUSTE_ALERTA_TEXTO}; }}
+.inv-tile .s {{ display: block; font-size: 11.5px; color: {GRIS_TEXTO_MEDIO}; }}
+/* El de los días no lleva botón debajo: sin este aire, su último renglón
+   pisaba el borde (el −16px del `st.markdown`, regla #162). */
+.st-key-inv_donde_dias .inv-tile {{ padding-bottom: 8px; }}
+.st-key-inv_donde_dias, .st-key-inv_donde_neg, .st-key-inv_donde_sin,
+.st-key-inv_donde_alto {{ padding: 6px 10px !important; gap: 0 !important; }}
+/* «Ver ↑» a la DERECHA de la última línea del recuadro, la del monto: un
+   renglón propio hacía medir la sección 591px de los 575 de la pantalla. Esa
+   línea sólo lleva montos cortos («S/ 2,851»), así que no se pisan. */
+.st-key-inv_donde_btn_neg, .st-key-inv_donde_btn_sin,
+.st-key-inv_donde_btn_alto {{ align-self: flex-end !important; width: auto !important;
+    margin-top: -20px !important; }}
+.st-key-inv_donde_btn_neg button, .st-key-inv_donde_btn_sin button,
+.st-key-inv_donde_btn_alto button {{ min-height: 0 !important; padding: 0 2px !important;
+    height: 18px; }}
+.st-key-inv_donde_btn_neg button p, .st-key-inv_donde_btn_sin button p,
+.st-key-inv_donde_btn_alto button p {{ font-size: 11.5px !important; }}
+</style>
+"""
+
+
+def _ir_a_productos(areas, familias, subfamilias, chip):
+    """Deja Stock por Producto con este recorte y este chip, sin buscador ni
+    fecha, y pide el salto. Es un `on_click`: corre antes de la corrida del
+    fragment, y al final de la sección `_K_IR` escala a una corrida completa
+    —la vista 1 es OTRO fragment— cuando sus widgets ya se registraron
+    (regla #373)."""
+    poner_seleccion(_K_AREAS, areas)
+    poner_seleccion(_K_FAMILIAS, familias)
+    poner_seleccion(_K_SUBFAMILIAS, subfamilias)
+    st.session_state[_K_ESTADO] = chip
+    st.session_state[_K_BUSCAR] = ""
+    st.session_state[_K_A_FECHA] = False
+    st.session_state[_K_IR] = True
+    st.session_state[_K_SALTAR] = True
+
+
+def _soles(v):
+    return ("−" if v < 0 else "") + f"S/ {abs(v):,.0f}"
+
+
+def _banda_area(d, ruta, historia, meses, consumo, cols, slug):
+    """La tarjeta de abajo de Stock por Área y Familia: el recorte de `ruta`
+    —área (o todas), familia, subfamilia—, lo que más cambió en él desde un
+    cierre y los cuatro recuadros de «Dónde mirar»."""
+    d_rec = _filtrar_ruta(d, ruta)
+    sel = {c: str(v).strip() for c, v, _ in ruta if c and v and v != TODAS}
+    areas = [sel[cols["area"]]] if cols["area"] in sel else []
+    familias = [sel[cols["fam"]]] if cols["fam"] in sel else []
+    subfamilias = [sel[cols["subfam"]]] if cols["subfam"] in sel else []
+    nombre = " › ".join(str(t) for _, v, t in ruta if v)
+    listado = armar_listado(
+        d, col_cod=cols["cod"], col_prod=cols["prod"], col_fam=cols["fam"],
+        col_subfam=cols["subfam"], col_area=cols["area"],
+        col_unidad=cols["unidad"], col_punit=cols["punit"],
+        col_cant=cols["cant"], col_val=cols["val"], areas=areas,
+        familias=familias, subfamilias=subfamilias,
+        col_cod_area=cols["cod_area"], consumo=consumo)
+    p = listado.productos
+    with st.container(border=True, key=f"ajuste_graf_card_abajo_inv_{slug}"):
+        # columnas-internas: el nombre del recorte, desde qué cierre se
+        # compara y el botón a Stock por Producto, en la cabecera.
+        c_t, c_r, c_b = st.columns([3.2, 2.6, 1.6], vertical_alignment="center")
+        with c_t:
+            st.markdown(
+                f'<div class="inv-rank-tit" style="margin:0">{nombre}'
+                f'<span class="inv-rank-tit-n">{len(p):,} productos con stock'
+                '</span></div>', unsafe_allow_html=True)
+        _k_ref = f"inv_desde_{slug}"
+        _ops = [len(meses) - 3, 0] if meses and len(meses) > 3 else [0]
+        if st.session_state.get(_k_ref) not in _ops:
+            st.session_state[_k_ref] = _ops[0]
+        with c_r:
+            ref = st.segmented_control(
+                "Comparar con", _ops, key=_k_ref, label_visibility="collapsed",
+                format_func=lambda i: (f"desde el cierre de {meses[i]}"
+                                       if i == _ops[0]
+                                       else f"desde el de {meses[i]}")
+            ) if meses else None
+        with c_b:
+            st.button(f"Ver sus {len(p):,} productos ↑", key=f"inv_ir_{slug}",
+                      type="primary", width="stretch", on_click=_ir_a_productos,
+                      args=(areas, familias, subfamilias, "todos"))
+        # columnas-internas: lo que más cambió y dónde mirar, lado a lado.
+        c_m, c_d = st.columns([1.55, 1], gap="medium")
+        with c_m:
+            _lo_que_cambio(d_rec, historia, meses, ref if ref is not None else _ops[0],
+                           cols)
+        with c_d:
+            _donde_mirar(p, areas, familias, subfamilias)
+
+
+def _lo_que_cambio(d_rec, historia, meses, ref, cols):
+    """Los productos del recorte que más subieron o bajaron desde el cierre
+    `ref`, incluidos los que se vaciaron, y cuánto explican del total."""
+    if historia is None or not meses or d_rec.empty:
+        st.caption("Sin historia del kardex: falta la consulta «kardex».")
+        return
+    cod = d_rec[cols["cod"]].astype(str).str.strip()
+    por_prod = historia.loc[d_rec.index].groupby(cod).sum()
+    top, total, cambiaron = analisis_stock.lo_que_mas_cambio(por_prod, ref,
+                                                             _MOVIDOS)
+    nombres = d_rec[cols["prod"]].astype(str).groupby(cod).first()
+    hoy_val = (pd.to_numeric(d_rec[cols["val"]], errors="coerce").fillna(0)
+               .abs().groupby(cod).sum())
+    filas = []
+    mayor = float(top.abs().max()) if len(top) else 1.0
+    for c, delta in top.items():
+        baja = delta < 0
+        ancho = abs(delta) / mayor * 50
+        vacio = hoy_val.get(c, 0) < 0.5
+        antes, ahora = float(por_prod.loc[c].iloc[ref]), float(por_prod.loc[c].iloc[-1])
+        filas.append(
+            f'<div class="inv-mov" title="{_soles(antes)} → {_soles(ahora)}">'
+            f'<span class="n">{nombres.get(c, c)}'
+            + ("<small>se vació</small>" if vacio else "") + "</span>"
+            f'<span class="pista"><i class="{"baja" if baja else ""}" style="'
+            f'{"right" if baja else "left"}:50%;width:{ancho:.1f}%"></i></span>'
+            f'<span class="d{" baja" if baja else ""}">{"−" if baja else "+"}'
+            f'{_soles(abs(delta))}</span></div>')
+    explican = float(top.sum())
+    resto = cambiaron - len(top)
+    pie = (f"Estos {len(top)} explican {'−' if explican < 0 else '+'}"
+           f"{_soles(abs(explican))}"
+           + (f"; los otros {resto:,} que cambiaron, "
+              f"{'−' if total - explican < 0 else '+'}{_soles(abs(total - explican))}."
+              if resto > 0 else ".")) if len(top) else "Nada cambió en este recorte."
+    st.markdown(
+        f'<div class="inv-mov-t"><b>Qué más cambió</b> · '
+        f'{"subió" if total >= 0 else "bajó"} {_soles(abs(total))} desde el '
+        f'cierre de {meses[ref]}</div>' + "".join(filas)
+        + f'<div class="inv-mov-pie">{pie}</div>', unsafe_allow_html=True)
+
+
+def _donde_mirar(p, areas, familias, subfamilias):
+    """Cuatro recuadros: los días de inventario del recorte y, para los
+    negativos, lo que no se consumió y lo que sobra, cuántos son y cuánto
+    valen, con un «Ver ↑» que lleva a Stock por Producto con ese chip."""
+    st.markdown('<div class="inv-mov-t"><b>Dónde mirar</b></div>',
+                unsafe_allow_html=True)
+    e = p["estado"] if "estado" in p else pd.Series(dtype=object)
+    dias = (analisis_stock.dias_del_conjunto(p["valorizado"], p["cantidad"],
+                                             p["consumo"], p["precio"])
+            if "consumo" in p else float("nan"))
+    _v = analisis_stock.VENTANA_CONSUMO
+    recuadros = [
+        ("dias", "Días de inventario",
+         "–" if dias != dias else ("más de 365" if dias > 365 else f"{dias:,.0f}"),
+         f"al ritmo de consumo de {_v} días", ""),
+    ]
+    for k, rotulo, clase in (("neg", "Negativos", "neg"),
+                             ("sin", f"Sin consumo {_v} días", "alerta"),
+                             ("alto", f"Más de {analisis_stock.UMBRAL_DIAS} días",
+                              "alerta")):
+        m = e.eq(k)
+        recuadros.append((k, rotulo, f"{int(m.sum()):,}",
+                          _soles(float(p.loc[m, "valorizado"].sum())), clase))
+    for fila in (recuadros[:2], recuadros[2:]):
+        # columnas-internas: los recuadros de «Dónde mirar», de a dos.
+        for col, (k, rotulo, valor, sub, clase) in zip(st.columns(2, gap="small"),
+                                                       fila):
+            with col, st.container(border=True, key=f"inv_donde_{k}"):
+                st.markdown(
+                    f'<div class="inv-tile"><span class="l">{rotulo}</span>'
+                    f'<span class="v {clase}">{valor}</span>'
+                    f'<span class="s">{sub}</span></div>',
+                    unsafe_allow_html=True)
+                if k != "dias":
+                    st.button("Ver ↑", key=f"inv_donde_btn_{k}", type="tertiary",
+                              disabled=valor == "0", on_click=_ir_a_productos,
+                              args=(areas, familias, subfamilias, k))
 
 
 def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=None):
@@ -911,9 +1149,30 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     _cant = (pd.to_numeric(d[col_cant], errors="coerce").fillna(0)
              if col_cant else None)
 
+    # «Ver sus productos» y «Dónde mirar» (regla #638) dejaron Stock por
+    # Producto filtrado y pidieron esta corrida completa: ahora, el salto.
+    if st.session_state.pop(_K_SALTAR, False):
+        scroll_a_seccion("inv_sec_productos")
+
+    # La historia de cada fila de `d` después de cada cierre y el consumo del
+    # restaurante (regla #638): las mini-líneas de los rankings y la tarjeta
+    # de abajo. Sin kardex, los rankings van como antes.
+    meses = hist_d = consumo = None
+    _h = data.historia_stock() if (col_cod_area and col_cod) else None
+    if _h is not None:
+        meses, _momentos, _val = _h
+        _claves = pd.MultiIndex.from_arrays([
+            d[col_cod_area].astype(str).str.strip(),
+            d[col_cod].astype(str).str.strip()])
+        hist_d = pd.DataFrame(
+            np.nan_to_num(_val.reindex(_claves).to_numpy(dtype=float)),
+            index=d.index, columns=list(_val.columns))
+        consumo = data.consumo_stock(_momentos[-1].date())
+
     # Sin guard de "inyectar una sola vez": un `st.markdown` de estilos con
     # ese guard DESAPARECE en el rerun siguiente (regla #59).
-    st.markdown(CSS_TITULOS_INV + CSS_EXCLUIDOS, unsafe_allow_html=True)
+    st.markdown(CSS_TITULOS_INV + CSS_EXCLUIDOS + CSS_BANDA_AREA,
+                unsafe_allow_html=True)
 
     # El rail ya no ELIGE: con `secciones` marca dónde estás y scrollea.
     _render_rail(_INVENTARIO_RAIL_CATEGORIAS, "inv_graf_tipo",
@@ -927,6 +1186,8 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
     # sufijo. Se conserva el prefijo `ajuste_graf_card_`, de donde cuelga el
     # CSS de tarjeta (`estilos/_80_cards.py`).
     def _seccion_grupo(slug, niveles, abre_en=(), excluidos=None):
+        # (La historia, los meses y el consumo vienen de afuera: el fragment
+        # se re-ejecuta con lo de la última corrida del dashboard.)
         """Una de las dos vistas de ranking (Por área / Por familia).
 
         Las dos son el MISMO layout sobre otra cadena de agrupación, que es
@@ -984,15 +1245,22 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                     st.markdown(
                         f'<div class="inv-rank-tit">Valorizado por '
                         f'{nombre_grp}</div>', unsafe_allow_html=True)
+                    # Una fila menos que los desgloses de al lado: la
+                    # paga «Inactivos y servicios», debajo (regla #145).
                     foco = _tabla_ranking(d, col_grp, col_val, nombre_grp,
                                           key=f"inv_rank_grid_{slug}",
                                           abre_en=abre_en,
                                           abrir_en_mayor=True,
                                           nombre_bonito=_bonito_grp,
-                                          filas_vista=(_FILAS_RANK - 1
-                                                       if hay_excl else None),
+                                          filas_vista=(_FILAS_RANK - 2
+                                                       if hay_excl else
+                                                       _FILAS_RANK - 1),
+                                          historia=hist_d, meses=meses,
+                                          fila_todas=True,
                                           **_FORMATO_RANKING[len(niveles)])
-                    ruta.append((col_grp, foco, _texto_cat(nombre_grp, foco)))
+                    ruta.append((col_grp, foco,
+                                 ROTULO_TODAS if foco == TODAS
+                                 else _texto_cat(nombre_grp, foco)))
                     if hay_excl:
                         # Elegir un área del ranking suelta la fila de
                         # excluidos: el foco del ranking sólo cambia con un
@@ -1058,27 +1326,36 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
                     _sub = _tabla_detalle_foco(
                         d_drill, _col_n, _nombre_n, col_val,
                         key=f"inv_det_grid_{slug}_{_i}_{_k}", ruta=tuple(ruta),
-                        formato=_FORMATO_DETALLE[len(niveles)])
+                        formato=_FORMATO_DETALLE[len(niveles)],
+                        historia=None if modo_excl else hist_d, meses=meses)
                     ruta.append((_col_n, _sub, _texto_cat(_nombre_n, _sub)))
-        with st.container(border=True,
-                          key=f"ajuste_graf_card_abajo_inv_{slug}"):
-            _panel_top(d_drill, tuple(ruta), col_prod, col_area, col_val,
-                       col_punit,
-                       (pd.to_numeric(d_drill[col_cant], errors="coerce")
-                        .fillna(0) if col_cant else None),
-                       col_unidad=col_unidad, col_motivo=col_motivo)
+        if modo_excl:
+            # Lo que NO es stock no tiene otra vista donde verse: su lista
+            # sigue acá, con el motivo (regla #598).
+            with st.container(border=True,
+                              key=f"ajuste_graf_card_abajo_inv_{slug}"):
+                _panel_top(d_drill, tuple(ruta), col_prod, col_area, col_val,
+                           col_punit,
+                           (pd.to_numeric(d_drill[col_cant], errors="coerce")
+                            .fillna(0) if col_cant else None),
+                           col_unidad=col_unidad, col_motivo=col_motivo)
+        else:
+            _banda_area(d, tuple(ruta), hist_d, meses, consumo, dict(
+                area=col_area, fam=col_fam, subfam=col_subfam, cod=col_cod,
+                prod=col_prod, unidad=col_unidad, punit=col_punit,
+                cant=col_cant, val=col_val, cod_area=col_cod_area), slug)
+        # Un «Ver ↑» o «Ver sus productos» pidió ir a Stock por Producto: la
+        # vista 1 es otro fragment, así que hace falta una corrida completa.
+        # Al FINAL de la sección, con todos sus widgets ya registrados: un
+        # `st.rerun` antes los habría dado por viejos (regla #373).
+        if st.session_state.pop(_K_IR, False):
+            st.rerun(scope="app")
 
     def _dib_area():
         _seccion_grupo("area",
                        ((col_area, "área"), (col_fam, "familia"),
                         (col_subfam, "subfamilia")),
                        abre_en=ABRE_EN_AREA, excluidos=d_excl)
-
-    def _dib_familia():
-        # Dos niveles y no tres: el tercero sería el producto, y ése ya es
-        # la tabla de abajo.
-        _seccion_grupo("familia",
-                       ((col_fam, "familia"), (col_subfam, "subfamilia")))
 
     def _dib_productos():
         # UNA tarjeta a lo ancho y no el par ficha + panel de apoyo de
@@ -1113,7 +1390,6 @@ def renderizar_graficos_inventario(df_f, nombre_reporte, df_full=None, tabla_cb=
 
     _DIBUJANTES = {
         "inv_sec_area":    _dib_area,
-        "inv_sec_familia": _dib_familia,
         "inv_sec_productos": _dib_productos,
         "inv_sec_movimientos": _dib_movimientos,
         "inv_sec_tabla":   _dib_tabla,
