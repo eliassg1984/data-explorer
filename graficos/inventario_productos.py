@@ -40,6 +40,7 @@ escribir la familia a mano. Van en la fila del título y el recorte lo hace
 Python antes de armar las filas.
 """
 
+import functools
 import re
 import unicodedata
 import zlib
@@ -49,20 +50,24 @@ import datetime as dt
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
+import analisis_stock
 import data
 import kardex
 from cortes import MESES_ABR_ES
 
 from tema import (
-    ACENTO, ACENTO_TEXTO_OSCURO, AJUSTE_NEG_TEXTO, BLANCO, GRIS_BORDE,
-    GRIS_TEXTO_MEDIO, LAVANDA_BORDE, LAVANDA_CHIP, LAVANDA_FILA,
-    LAVANDA_SELECCION,
+    ACENTO, ACENTO_TEXTO, ACENTO_TEXTO_OSCURO, AJUSTE_ALERTA_TEXTO, AJUSTE_NEG,
+    AJUSTE_NEG_TEXTO, BLANCO, GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_MEDIO,
+    GRIS_TEXTO_SUAVE, LAVANDA_BORDE, LAVANDA_CHIP, LAVANDA_FILA,
+    LAVANDA_SELECCION, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
 from graficos.base import (
-    _es_movil, poner_seleccion, recortar_seleccion, seleccion_en_panel,
+    _compras_layout, _es_movil, poner_seleccion, recortar_seleccion,
+    seleccion_en_panel,
 )
 # El look de las otras tres tablas del dashboard (regla #404): mismo alto de
 # fila, misma cabecera, mismo CSS. Una tabla ancha con otro idioma de grilla
@@ -83,6 +88,11 @@ from graficos.compras._etiquetas_proveedor import nombre_propio
 # grilla no tiene que crecer (no podría: el alto lo fija Python).
 FILAS_LISTADO = 14
 
+# Con la banda del gráfico encima (regla #637) la tabla cede filas: la banda
+# mide `alturas.STOCK_EVOLUCION_FIG` más su marco, y la tarjeta tiene que
+# seguir entrando en los 575px útiles de la pantalla del usuario (1323×619).
+FILAS_LISTADO_BANDA = 10
+
 _EPS = 1e-9
 _VACIOS = ("", "nan", "none", "nat", "<na>", "null")
 
@@ -101,6 +111,8 @@ _K_A_FECHA = "inv_prod_a_fecha"
 _K_FECHA = "inv_prod_fecha"
 _K_HORA = "inv_prod_hora"
 _K_COMPARAR = "inv_prod_comparar"
+# El chip de estado (regla #637): «todos», «A», «neg», «sin», «alto».
+_K_ESTADO = "inv_prod_estado"
 
 # Con qué áreas ABRE el listado (2026-09-18, a pedido: «debe filtrar
 # inicialmente Almacén central, cocina, bar, producción, salón»; CAVA se sumó
@@ -153,10 +165,16 @@ class Listado:
     `productos` va indexado por código, con `areas` = en cuántas áreas tiene
     stock. `areas` es una fila por (código, área) con stock. `sin_stock` es
     cuántos productos del recorte quedaron FUERA por no tener stock en
-    ninguna área — lo que el interruptor «Ver sin stock» agregaría."""
+    ninguna área — lo que el interruptor «Ver sin stock» agregaría.
+
+    `serie` (regla #637): lo que valió el RECORTE —áreas, familias y
+    subfamilias elegidas, sin el buscador— después de cada cierre y hoy, con
+    todos sus productos, también los que hoy están en cero. None sin
+    historia."""
     productos: pd.DataFrame
     areas: pd.DataFrame
     sin_stock: int
+    serie: object = None
 
 
 def texto_unidad_salida(cantidad, factor, u_ent, u_sal):
@@ -205,7 +223,8 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
                   col_cant=None, col_val=None, areas=(), familias=(),
                   subfamilias=(), texto="", incluir_sin_stock=False,
                   col_factor=None, col_usal=None, col_cant_hoy=None,
-                  col_val_hoy=None):
+                  col_val_hoy=None, col_cod_area=None, historia=None,
+                  consumo=None):
     """El parquet (una fila por producto × área) llevado a un PRODUCTO por
     fila, más sus áreas aparte.
 
@@ -246,7 +265,16 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
     cualquiera de los dos momentos: lo que se terminó desde entonces también
     es parte de la respuesta. A una fecha el precio es el de CADA ÁREA (el
     kardex lleva uno por área, y el POS valoriza así): donde un producto
-    tiene más de uno, el suyo es el promedio ponderado de sus áreas."""
+    tiene más de uno, el suyo es el promedio ponderado de sus áreas.
+
+    `historia` y `consumo` (regla #637) son lo de `data.historia_stock` y
+    `data.consumo_stock`: el valor de cada (código de área, producto) después
+    de cada cierre, que se cruza por `col_cod_area`, y lo que consumió el
+    restaurante de cada producto. Con ellos cada producto y cada área llevan
+    su historia (`__h0`…), y cada producto su `consumo`, `dias`, `estado` y
+    `abc` (`analisis_stock`). El ABC se calcula sobre el RECORTE —áreas,
+    familias, subfamilias—, antes del buscador: buscar «pollo» no convierte al
+    pollo más caro en clase A."""
     nombre = _texto(d, col_prod)
     base = pd.DataFrame({
         "codigo": _texto(d, col_cod) if col_cod else nombre,
@@ -269,6 +297,14 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
         "val_hoy": (pd.to_numeric(d[col_val_hoy], errors="coerce").fillna(0)
                     if col_val_hoy else 0.0),
     })
+    hcols = []
+    if historia is not None and col_cod_area and len(historia.columns):
+        hcols = [f"__h{i}" for i in range(len(historia.columns))]
+        claves = pd.MultiIndex.from_arrays([_texto(d, col_cod_area),
+                                            base["codigo"]])
+        base = pd.concat([base, pd.DataFrame(
+            np.nan_to_num(historia.reindex(claves).to_numpy(dtype=float)),
+            index=base.index, columns=hcols)], axis=1)
     # Los tres recortes van sobre las FILAS, antes de agrupar. Familia y
     # subfamilia son atributos del producto (da lo mismo hacerlos antes o
     # después, y antes agrupa menos); el área no, y tiene que ir antes: es
@@ -279,6 +315,8 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
         base = base[base["familia"].isin(list(familias))]
     if subfamilias:
         base = base[base["subfamilia"].isin(list(subfamilias))]
+    serie = base[hcols].sum().to_numpy() if hcols else None
+    sumas_h = {c: (c, "sum") for c in hcols}
 
     prods = base.groupby("codigo", sort=False).agg(
         familia=("familia", "first"), subfamilia=("subfamilia", "first"),
@@ -287,12 +325,20 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
         precio=("precio", "first"), _pmin=("precio", "min"),
         _pmax=("precio", "max"), cantidad=("cantidad", "sum"),
         valorizado=("valorizado", "sum"), cant_hoy=("cant_hoy", "sum"),
-        val_hoy=("val_hoy", "sum"))
+        val_hoy=("val_hoy", "sum"), **sumas_h)
     _varios = (((prods["_pmax"] - prods["_pmin"]).abs() > _EPS)
                & (prods["cantidad"].abs() > _EPS))
     prods = prods.assign(precio=prods["precio"].where(
         ~_varios, prods["valorizado"] / prods["cantidad"].where(_varios, 1.0))
     ).drop(columns=["_pmin", "_pmax"])
+    if consumo is not None:
+        prods["consumo"] = (pd.Series(prods.index, index=prods.index)
+                            .map(consumo).astype(float).fillna(0.0))
+        prods["dias"] = analisis_stock.dias_de_inventario(prods["cantidad"],
+                                                          prods["consumo"])
+        prods["estado"] = analisis_stock.estado(prods["cantidad"],
+                                                prods["consumo"], prods["dias"])
+        prods["abc"] = analisis_stock.clase_abc(prods["valorizado"])
 
     # El buscador: todas las palabras tienen que estar, en el nombre o en el
     # código, sin mirar tildes ni mayúsculas. «pollo kg» encuentra «Muslo
@@ -309,7 +355,8 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
                 .groupby(["codigo", "area"], as_index=False, sort=False)
                 .agg(cantidad=("cantidad", "sum"),
                      valorizado=("valorizado", "sum"),
-                     cant_hoy=("cant_hoy", "sum"), val_hoy=("val_hoy", "sum")))
+                     cant_hoy=("cant_hoy", "sum"), val_hoy=("val_hoy", "sum"),
+                     **sumas_h))
     prods = prods.assign(
         areas=prods.index.map(en_areas.groupby("codigo").size())
         .fillna(0).astype(int))
@@ -332,7 +379,45 @@ def armar_listado(d, *, col_cod, col_prod, col_fam=None, col_subfam=None,
              .drop(columns=_claves))
     en_areas = en_areas.sort_values("valorizado", ascending=False,
                                     kind="stable")
-    return Listado(prods, en_areas.reset_index(drop=True), sin_stock)
+    return Listado(prods, en_areas.reset_index(drop=True), sin_stock, serie)
+
+
+ESTADOS = (
+    ("todos", "Todos"), ("A", "Clase A"), ("neg", "Negativos"),
+    ("sin", f"Sin consumo {analisis_stock.VENTANA_CONSUMO} días"),
+    ("alto", f"Más de {analisis_stock.UMBRAL_DIAS} días"),
+)
+"""Los chips de Stock por Producto (regla #637), en el orden en que se leen:
+todo, lo que hace el valor, y lo que hay que mirar de peor a menos malo."""
+
+
+def cuentas_estado(productos):
+    """Cuántos productos de `productos` caen en cada chip de `ESTADOS`."""
+    if "estado" not in productos:
+        return {k: (len(productos) if k == "todos" else 0) for k, _ in ESTADOS}
+    e = productos["estado"]
+    return {"todos": len(productos), "A": int((productos["abc"] == "A").sum()),
+            "neg": int((e == "neg").sum()), "sin": int((e == "sin").sum()),
+            "alto": int((e == "alto").sum())}
+
+
+def por_estado(listado, chip):
+    """El listado con sólo los productos del chip `chip` (una clave de
+    `ESTADOS`) y sus áreas. «todos», None o un listado sin análisis lo
+    devuelven igual. La `serie` no cambia: es la del recorte."""
+    p = listado.productos
+    if not chip or chip == "todos" or "estado" not in p:
+        return listado
+    p = p[p["abc"].eq("A")] if chip == "A" else p[p["estado"].eq(chip)]
+    a = listado.areas[listado.areas["codigo"].isin(p.index)]
+    return Listado(p, a.reset_index(drop=True), listado.sin_stock,
+                   listado.serie)
+
+
+def _texto_serie(fila, hcols):
+    """La historia de una fila como texto «v0,v1,…» en soles enteros: así
+    viaja a la grilla, que la dibuja en la mini-línea."""
+    return ",".join(str(int(round(float(fila[c])))) for c in hcols)
 
 
 COL_CANT_HOY = "__cant_hoy"
@@ -404,6 +489,14 @@ def filas_grilla(listado):
     HOY (`cant_hoy`, `val_hoy`) y `dif` = hoy − la fecha, en soles: cuánto
     cambió el stock desde entonces."""
     p = listado.productos.reset_index()
+    hcols = [c for c in p.columns if str(c).startswith("__h")]
+    # La unidad corta de cada fila (también las de área, que la heredan): la
+    # Cantidad y el Consumo la escriben al lado del número (regla #637).
+    _um = {c: unidad_corta(u) for c, u in zip(p["codigo"], p["unidad"])}
+    if hcols:
+        p["__sp"] = [_texto_serie(f, hcols) for _, f in p[hcols].iterrows()]
+        p = p.drop(columns=hcols)
+    p["__um"] = p["codigo"].map(_um)
     p["familia"] = [nombre_propio(x) if x else "" for x in p["familia"]]
     p["subfamilia"] = [nombre_propio(x) if x else "" for x in p["subfamilia"]]
     p["__tipo"] = "p"
@@ -413,6 +506,8 @@ def filas_grilla(listado):
     p["__o"] = range(len(p))
 
     a = listado.areas
+    sp_areas = ([_texto_serie(f, hcols) for _, f in a[hcols].iterrows()]
+                if hcols and all(c in a for c in hcols) else "")
     a = pd.DataFrame({
         "codigo": "", "familia": "", "subfamilia": "",
         "nombre": a["area"], "unidad": "", "precio": np.nan,
@@ -420,7 +515,8 @@ def filas_grilla(listado):
         "cant_hoy": a["cant_hoy"] if "cant_hoy" in a else 0.0,
         "val_hoy": a["val_hoy"] if "val_hoy" in a else 0.0,
         "__tipo": "a", "__id": a["codigo"] + "|" + a["area"],
-        "__padre": a["codigo"], "__n": 0,
+        "__padre": a["codigo"], "__n": 0, "__sp": sp_areas,
+        "__um": a["codigo"].map(_um),
         "__o": a["codigo"].map(dict(zip(p["codigo"], p["__o"]))),
     })
     a = a[a["__o"].notna()]
@@ -500,12 +596,165 @@ function(params) {
 }
 """
 
+# ── La mini-línea de 12 meses y su ficha (regla #637) ──────────────────────
+# Un componente con `init`/`getGui` (regla #25): el atajo que devuelve HTML no
+# pinta en st_aggrid. La historia viaja en la fila como texto («v0,v1,…»,
+# `__sp`) y los rótulos de los meses en `gridOptions.context` (regla #226: los
+# datos nunca adentro del JsCode). El ancho es fijo: un cellRenderer no sabe
+# cuánto mide su celda mientras se construye. El clic abre la FICHA adentro
+# del iframe de la grilla —sin corrida al servidor— y no despliega la fila
+# (`stopPropagation`, y `_JS_CLIC` lo vuelve a mirar).
+_JS_MINI_LINEA = r"""
+class MiniLinea {
+  init(p) {
+    this.eGui = document.createElement('div');
+    var g = this.eGui.style; g.display = 'flex'; g.alignItems = 'center'; g.height = '100%';
+    var d = p.data || {};
+    if ((p.node && p.node.rowPinned) || !d.__sp) return;
+    var v = String(d.__sp).split(',').map(Number);
+    if (v.length < 2) return;
+    var meses = (p.context && p.context.meses) || [];
+    this.eGui.className = 'inv-spk'; g.cursor = 'zoom-in';
+    this.eGui.title = (meses[0] || '') + ': ' + MiniLinea.s(v[0]) + ' → hoy: ' + MiniLinea.s(v[v.length - 1]) + '. Clic para verla grande.';
+    this.eGui.appendChild(MiniLinea.svg(v, 92, 18, null));
+    this.eGui.addEventListener('click', function (e) { e.stopPropagation(); MiniLinea.ficha(p, v, meses); });
+  }
+  getGui() { return this.eGui; }
+  static s(x) { return (x < 0 ? '−' : '') + 'S/ ' + Math.abs(Math.round(x)).toLocaleString('es-PE'); }
+  static n(x, u) { return (x < 0 ? '−' : '') + Math.abs(x).toLocaleString('es-PE', {maximumFractionDigits: 2}) + (u ? ' ' + u : ''); }
+  static el(t, a) { var e = document.createElementNS('http://www.w3.org/2000/svg', t); for (var k in a) e.setAttribute(k, a[k]); return e; }
+  static svg(v, w, h, meses) {
+    var L = meses ? 20 : 2, R = meses ? 14 : 4, T = meses ? 18 : 2, B = meses ? 18 : 2;
+    var mn = Math.min.apply(null, v.concat([0])), mx = Math.max.apply(null, v.concat([0]));
+    if (mx === mn) mx = mn + 1;
+    var X = function (i) { return L + i * (w - L - R) / (v.length - 1); };
+    var Y = function (x) { return T + (h - T - B) * (1 - (x - mn) / (mx - mn)); };
+    var s = MiniLinea.el('svg', {width: w, height: h, viewBox: '0 0 ' + w + ' ' + h});
+    s.style.display = 'block'; s.style.maxWidth = '100%';
+    if (mn < 0) s.appendChild(MiniLinea.el('line', {x1: L, x2: w - R, y1: Y(0), y2: Y(0), stroke: '__GRIS__', 'stroke-width': 0.7, 'stroke-dasharray': '2 2'}));
+    var pts = v.map(function (x, i) { return X(i).toFixed(1) + ',' + Y(x).toFixed(1); });
+    s.appendChild(MiniLinea.el('path', {d: 'M' + X(0) + ',' + Y(0) + ' L' + pts.join(' L') + ' L' + X(v.length - 1) + ',' + Y(0) + ' Z', fill: '__RELLENO__'}));
+    s.appendChild(MiniLinea.el('polyline', {points: pts.join(' '), fill: 'none', stroke: '__ACENTO__', 'stroke-width': meses ? 2 : 1.4, 'stroke-linejoin': 'round'}));
+    v.forEach(function (x, i) {
+      var ult = i === v.length - 1;
+      if (!(ult || x < 0 || meses)) return;
+      var c = MiniLinea.el('circle', {cx: X(i), cy: Y(x), r: ult ? (meses ? 4 : 2.4) : (meses ? 2.6 : 1.8), fill: x < 0 ? '__NEG__' : '__ACENTO__'});
+      if (meses) { var t = MiniLinea.el('title', {}); t.textContent = (ult ? 'Hoy' : 'Después del cierre de ' + (meses[i] || '')) + ': ' + MiniLinea.s(x); c.appendChild(t); }
+      s.appendChild(c);
+    });
+    if (!meses) return s;
+    v.forEach(function (x, i) {
+      if (i % 2 && i !== v.length - 1) return;
+      var t = MiniLinea.el('text', {x: X(i), y: h - 4, 'text-anchor': 'middle', 'font-size': 10, fill: i === v.length - 1 ? '__TINTA__' : '__GRIS__'});
+      t.textContent = meses[i] || ''; s.appendChild(t);
+    });
+    [0, v.length - 1].forEach(function (i) {
+      var t = MiniLinea.el('text', {x: X(i), y: Math.max(11, Y(v[i]) - 7), 'text-anchor': i ? 'end' : 'start', 'font-size': 11, 'font-weight': 600, fill: '__TINTA__'});
+      t.textContent = MiniLinea.s(v[i]); s.appendChild(t);
+    });
+    return s;
+  }
+  static ficha(p, v, meses) {
+    var viejo = document.getElementById('inv-ficha'); if (viejo) viejo.remove();
+    var d = p.data || {}, nombre = d.nombre, prod = d;
+    if (d.__tipo === 'a') { var pa = p.api.getRowNode(d.__padre); prod = (pa && pa.data) || {}; nombre = (prod.nombre || '') + ' · ' + d.nombre; }
+    var f = document.createElement('div'); f.id = 'inv-ficha';
+    f.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(24,24,29,.28)';
+    var c = document.createElement('div');
+    c.style.cssText = 'background:__BLANCO__;border-radius:12px;padding:12px 16px;width:min(560px,94vw);box-shadow:0 12px 40px rgba(24,24,29,.25);color:__TINTA__;font-size:12px';
+    var cab = document.createElement('div'); cab.style.cssText = 'display:flex;justify-content:space-between;gap:12px;margin-bottom:4px';
+    var tt = document.createElement('div'); tt.style.cssText = 'font-size:14px;font-weight:600'; tt.textContent = nombre;
+    var x = document.createElement('button'); x.textContent = '✕ Cerrar';
+    x.style.cssText = 'border:1px solid __LAVANDA__;background:__BLANCO__;color:__ACENTO_TXT__;border-radius:999px;font:inherit;font-size:11px;padding:2px 8px;cursor:pointer';
+    cab.appendChild(tt); cab.appendChild(x); c.appendChild(cab);
+    var u = d.__um || '', partes = ['Valorizado ' + MiniLinea.s(Number(d.valorizado) || 0), 'Cantidad ' + MiniLinea.n(Number(d.cantidad) || 0, u)];
+    if (d.__tipo !== 'a') {
+      partes.push('Consumo __VENTANA__ días ' + MiniLinea.n(Number(d.consumo) || 0, u));
+      partes.push('Días de inventario ' + (d.dias == null ? '–' : d.dias > 365 ? 'más de 365' : Math.round(d.dias)));
+      if (d.abc) partes.push('Clase ' + d.abc);
+    }
+    var sub = document.createElement('div'); sub.style.cssText = 'color:__GRIS__;margin-bottom:8px'; sub.textContent = partes.join(' · ');
+    c.appendChild(sub);
+    var tg = document.createElement('div'); tg.style.cssText = 'color:__GRIS__;font-size:11px';
+    tg.textContent = 'Valorizado después de cada cierre, de ' + (meses[0] || '') + ' a hoy'; c.appendChild(tg);
+    c.appendChild(MiniLinea.svg(v, 528, 150, meses)); f.appendChild(c);
+    var cerrar = function () { f.remove(); document.removeEventListener('keydown', esc); };
+    var esc = function (e) { if (e.key === 'Escape') cerrar(); };
+    f.addEventListener('click', function (e) { if (e.target === f) cerrar(); });
+    x.addEventListener('click', cerrar); document.addEventListener('keydown', esc);
+    document.body.appendChild(f);
+  }
+}
+"""
+
+
+@functools.lru_cache(maxsize=None)
+def _js_fijo(codigo):
+    """El `JsCode` de un código que no cambia, construido UNA vez por
+    proceso: `JsCode.__init__` cuesta cuadrático en el largo (regla #226) y
+    la mini-línea son ~6.000 caracteres, ~0,2 s si se armara en cada
+    corrida."""
+    from st_aggrid import JsCode
+    return JsCode(codigo)
+
+
+def _rgba(hex_color, alfa):
+    h = hex_color.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alfa})"
+
+
+_RELLENO = _rgba(ACENTO, 0.12)
+for _k, _v in (("__GRIS__", GRIS_TEXTO_SUAVE), ("__RELLENO__", _RELLENO),
+               ("__ACENTO__", ACENTO), ("__NEG__", AJUSTE_NEG),
+               ("__TINTA__", TEXTO_PRINCIPAL), ("__BLANCO__", BLANCO),
+               ("__LAVANDA__", LAVANDA_BORDE), ("__ACENTO_TXT__", ACENTO_TEXTO),
+               ("__VENTANA__", str(analisis_stock.VENTANA_CONSUMO))):
+    _JS_MINI_LINEA = _JS_MINI_LINEA.replace(_k, _v)
+
+# Cantidad y consumo con su unidad al lado («1.04 Lt»): con el análisis la
+# columna «Unidad kardex» se va para que entren las cinco nuevas, y la unidad
+# viaja en `__um` (la de su producto, también en las filas de área).
+_JS_CANT_UM = (
+    "function(p){ if (p.value == null || isNaN(p.value)"
+    " || (p.node && p.node.rowPinned)) return '';"
+    " var v = Number(p.value), u = (p.data && p.data.__um) || '';"
+    " return (v < 0 ? '−' : '') + Math.abs(v).toLocaleString("
+    "'es-PE', {maximumFractionDigits: 2}) + (u ? ' ' + u : ''); }")
+_JS_DIAS = (
+    "function(p){ if (p.node && p.node.rowPinned) return '';"
+    " if (p.value == null || isNaN(p.value))"
+    " return (p.data && p.data.__tipo === 'p') ? '–' : '';"
+    " var v = Number(p.value);"
+    " return v > 365 ? '> 365' : Math.round(v).toLocaleString('es-PE'); }")
+_ESTADO_TXT = {"neg": "▼ Negativo", "sin": "Sin consumo",
+               "alto": f"+{analisis_stock.UMBRAL_DIAS} días"}
+_JS_ESTADO = ("function(p){ var m = " + str(_ESTADO_TXT).replace("'", '"')
+              + "; return m[p.value] || ''; }")
+_JS_ESTADO_ESTILO = (
+    "function(p){ if (p.value === 'neg') return {'color': '" + AJUSTE_NEG_TEXTO
+    + "', 'fontWeight': '600'};"
+    " if (p.value === 'sin') return {'color': '" + AJUSTE_ALERTA_TEXTO
+    + "', 'fontWeight': '600'};"
+    " if (p.value === 'alto') return {'color': '" + AJUSTE_ALERTA_TEXTO + "'};"
+    " return {}; }")
+# Lo más grave primero al ordenar: negativo, sin consumo, sobra, nada.
+_JS_ESTADO_ORDEN = (
+    "function(a, b){ var o = {neg: 0, sin: 1, alto: 2};"
+    " var x = (a in o) ? o[a] : 3, y = (b in o) ? o[b] : 3; return x - y; }")
+_JS_ABC_ESTILO = (
+    "function(p){ if (p.value === 'A') return {'fontWeight': '700', 'color': '"
+    + ACENTO_TEXTO_OSCURO + "'};"
+    " if (p.value === 'C') return {'color': '" + GRIS_TEXTO + "'}; return {}; }")
+
+
 # El clic: abre o cierra el producto. `redrawRows` y no `refreshCells`
 # porque además de la flecha cambia la CLASE de la fila (`inv-fila-abierta`),
 # y las clases de fila sólo se reevalúan al redibujarla. Las filas de área y
 # la TOTAL no hacen nada.
 _JS_CLIC = """
 function(e) {
+    var t = e.event && e.event.target;
+    if (t && t.closest && t.closest('.inv-spk')) return;
     var d = e.data;
     if (e.node.rowPinned || !d || d.__tipo !== 'p' || !(d.__n > 0)) return;
     var ab = (window.__invAbiertos = window.__invAbiertos || {});
@@ -646,7 +895,8 @@ def _col_cantidad(campo, titulo, unidad_salida, sufijo="", ayuda=""):
 
 
 def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
-                       al=None, comparar=False, total_hoy=None):
+                       al=None, comparar=False, total_hoy=None,
+                       analisis=False, meses=None, n_filas=FILAS_LISTADO):
     """La grilla. `filas` sale de `filas_grilla`; `total` es el valorizado
     de la fila TOTAL.
 
@@ -660,7 +910,14 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
     23:59») si no es el de hoy; agrupa encima Cantidad y Valorizado. Y
     `comparar` suma el grupo «Hoy» y la Diferencia (hoy − la fecha, en
     soles); para que entre en una laptop, ahí no van «Unidad kardex» ni
-    «Precio unitario», que son de un momento y no de los dos."""
+    «Precio unitario», que son de un momento y no de los dos.
+
+    `analisis` (regla #637) suma cinco columnas después del valorizado —ABC,
+    la mini-línea de 12 meses (`meses` son sus rótulos), el consumo de 90
+    días, los días de inventario y el estado— y, para que entren en los
+    ~1.140px de la grilla en la pantalla del usuario, la unidad pasa adentro
+    de la Cantidad y se angostan las de texto. Sólo sin «Ver a una fecha»:
+    el consumo es de los últimos 90 días, no del momento elegido."""
     from st_aggrid import AgGrid, JsCode
 
     js = JsCode
@@ -736,6 +993,61 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
                            "áreas elegidas."
                            + (" Al precio promedio de esa fecha." if al else "")),
     ]
+    if analisis:
+        for c in columnas:
+            f = c.get("field")
+            if f == "cantidad" and not unidad_salida:
+                c.update(width=96, minWidth=96, valueFormatter=js(_JS_CANT_UM))
+            elif f == "unidad":
+                c["hide"] = True
+            elif f == "precio":
+                c.update(headerName="P. unitario", width=92, minWidth=92)
+            elif f == "valorizado":
+                c.update(headerName="Valorizado", width=112, minWidth=112)
+            elif f == "codigo":
+                c.update(width=70, minWidth=70)
+            elif f == "familia":
+                c["minWidth"] = 90
+            elif f == "subfamilia":
+                # «Subfamilia 2 ↑»: el rótulo, el número del orden y la flecha.
+                c["minWidth"] = 112
+            elif f == "nombre":
+                c["minWidth"] = 130
+        _v = analisis_stock.VENTANA_CONSUMO
+        columnas += [
+            _col("abc", "ABC", width=50, minWidth=50, suppressSizeToFit=True,
+                 cellStyle=js(_JS_ABC_ESTILO),
+                 headerTooltip="Análisis ABC (H. F. Dickie, General Electric, "
+                               "1951): A son los productos que hacen el 80 % "
+                               "del valor de lo filtrado, B hasta el 95 %, C "
+                               "el resto. Los cortes 80/95 son práctica "
+                               "difundida, no del estándar."),
+            {"colId": "spark", "field": "__sp", "headerName": "12 meses",
+             "width": 100, "minWidth": 100, "suppressSizeToFit": True,
+             "sortable": False, "cellRenderer": _js_fijo(_JS_MINI_LINEA),
+             "headerTooltip": "Lo que valió después de cada cierre (el día 7 "
+                              "del mes siguiente, ya contado) y hoy. Cada "
+                              "línea tiene su escala. Clic para verla grande."},
+            _col("consumo", f"Consumo {_v} d", type=num, width=98, minWidth=98,
+                 suppressSizeToFit=True, valueFormatter=js(_JS_CANT_UM),
+                 headerTooltip=f"Lo que consumió el restaurante entero en {_v} "
+                               "días: ventas, producción, porcionamiento, "
+                               "notas de salida, mermas. Sin transferencias "
+                               "entre áreas ni ajustes de inventario."),
+            _col("dias", "Días inv.", type=num, width=74, minWidth=74,
+                 suppressSizeToFit=True, valueFormatter=js(_JS_DIAS),
+                 headerTooltip="Días de inventario («inventory days of "
+                               "supply», modelo SCOR / ASCM): el stock ÷ el "
+                               f"consumo diario de los últimos {_v} días."),
+            _col("estado", "Estado", width=90, minWidth=90,
+                 suppressSizeToFit=True, valueFormatter=js(_JS_ESTADO),
+                 cellStyle=js(_JS_ESTADO_ESTILO),
+                 comparator=js(_JS_ESTADO_ORDEN),
+                 headerTooltip="Negativo: stock bajo cero. Sin consumo: con "
+                               f"stock y sin consumo en {_v} días. +"
+                               f"{analisis_stock.UMBRAL_DIAS} días: alcanza "
+                               "para más de eso al ritmo de consumo."),
+        ]
     if al:
         # Las dos últimas, agrupadas bajo la fecha: se lee «de cuándo» es el
         # número sin buscarlo en el título.
@@ -769,7 +1081,7 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
     # Las ocultas: sin columna no llegan al JS en todas las versiones del
     # componente, y el despliegue entero cuelga de ellas.
     columnas += [{"field": c, "hide": True}
-                 for c in ("__tipo", "__id", "__padre", "__n",
+                 for c in ("__tipo", "__id", "__padre", "__n", "__um",
                            "cant_salida", "cant_kardex", "cant_salida_hoy",
                            "cant_kardex_hoy")]
 
@@ -792,6 +1104,9 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
         "onRowClicked": js(_JS_CLIC),
         "rowClassRules": {k: js(v) for k, v in _REGLAS_FILA.items()},
         "getRowStyle": js(_JS_ESTILO_FILA),
+        # Los rótulos de los meses de la mini-línea: dato, no código
+        # (regla #226).
+        "context": {"meses": list(meses or [])},
         # «TOTAL» en la PRIMERA columna de texto, que desde la regla #636 es
         # el Código: en «Producto», la cuarta, se leía a media fila.
         "pinnedBottomRowData": [{"codigo": "TOTAL",
@@ -802,7 +1117,7 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
                                     if total_hoy is not None else {})}],
     }
 
-    alto = alturas.por_filas(FILAS_LISTADO, px_fila=ALTO_FILA_RANK,
+    alto = alturas.por_filas(n_filas, px_fila=ALTO_FILA_RANK,
                              extra=CROMO_GRID_RANK + ALTO_FILA_RANK,
                              minimo=0)
     # El alto, atado también desde el documento padre: la misma red que
@@ -819,6 +1134,124 @@ def renderizar_listado(filas, total, key, movil=False, unidad_salida=False,
         update_on=[],
         key=key,
     )
+
+
+# ── La banda de Stock por Producto (regla #637) ─────────────────────────
+# Cuatro números y el gráfico de lo filtrado, entre los filtros y la tabla.
+CSS_BANDA = f"""
+.st-key-inv_prod_banda {{ background: {LAVANDA_FILA}; border-radius: 10px;
+    padding: 4px 12px 0; }}
+.inv-kpis {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }}
+.inv-kpi .l {{ display: block; font-size: 11px; color: {GRIS_TEXTO}; }}
+.inv-kpi .v {{ display: block; font-size: 17px; font-weight: 600;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+    color: {TEXTO_PRINCIPAL}; }}
+.inv-kpi .v.neg {{ color: {AJUSTE_NEG_TEXTO}; }}
+"""
+
+
+def nombre_recorte(areas, familias, subfamilias):
+    """Cómo se escribe lo filtrado en el título del gráfico: «6 áreas ›
+    Alimentos», «ALMACEN CENTRAL», «Todas las áreas». Pura."""
+    def _uno(sel, plural, fmt=str):
+        return fmt(sel[0]) if len(sel) == 1 else f"{len(sel)} {plural}"
+    partes = [_uno(areas, "áreas") if areas else "Todas las áreas"]
+    if familias:
+        partes.append(_uno(familias, "familias", nombre_propio))
+    if subfamilias:
+        partes.append(_uno(subfamilias, "subfamilias", nombre_propio))
+    return " › ".join(partes)
+
+
+def _k(v):
+    a = abs(v)
+    t = f"{a / 1000:,.1f}k" if a >= 1000 else f"{a:,.0f}"
+    return ("−" if v < 0 else "") + "S/ " + t
+
+
+def fig_evolucion(serie, meses, nombre):
+    """Lo que valió lo filtrado después de cada cierre y hoy: una línea con
+    su área, los puntos bajo cero en rojo (regla #80) y los montos de las
+    puntas escritos —el eje Y va sin valores, como en todo el proyecto—. El
+    eje X es de CATEGORÍAS a propósito (regla #448)."""
+    meses = list(meses)
+    y = [float(v) for v in serie]
+    fig = go.Figure(go.Scatter(
+        x=meses, y=y, mode="lines", line=dict(color=ACENTO, width=2),
+        fill="tozeroy", fillcolor=_RELLENO,
+        customdata=["Hoy" if m == "hoy" else f"Después del cierre de {m}"
+                    for m in meses],
+        hovertemplate="%{customdata}<br><b>S/ %{y:,.0f}</b><extra></extra>"))
+    neg = [i for i, v in enumerate(y) if v < 0]
+    if neg:
+        fig.add_trace(go.Scatter(
+            x=[meses[i] for i in neg], y=[y[i] for i in neg], mode="markers",
+            marker=dict(color=AJUSTE_NEG, size=7), hoverinfo="skip"))
+    fig.add_trace(go.Scatter(
+        x=[meses[0], meses[-1]], y=[y[0], y[-1]], mode="markers+text",
+        marker=dict(color=ACENTO, size=[5, 8]), text=[_k(y[0]), _k(y[-1])],
+        textposition=["top right", "top left"],
+        textfont=dict(size=11, color=TEXTO_PRINCIPAL), hoverinfo="skip",
+        cliponaxis=False))
+    _compras_layout(fig, alto=alturas.STOCK_EVOLUCION_FIG)
+    fig.update_layout(
+        showlegend=False, hovermode="x", margin=dict(l=6, r=12, t=22, b=2),
+        title=dict(text=f"Valorizado después de cada cierre · <b>{nombre}</b>",
+                   font=dict(size=12), x=0, xanchor="left", y=0.97))
+    fig.update_xaxes(type="category", tickfont=dict(size=10), showgrid=False)
+    # Aire arriba para el monto de las puntas: sin él, la que es el máximo
+    # escribe su número debajo del título y se pierde.
+    lo, hi = min(0.0, min(y)), max(0.0, max(y))
+    fig.update_yaxes(showticklabels=False,
+                     range=[lo - (hi - lo) * 0.05, hi + (hi - lo) * 0.3 or 1])
+    return fig
+
+
+def _banda(visible, serie, meses, nombre):
+    """Los cuatro números y el gráfico de lo que está a la vista. `serie` es
+    la del recorte (con los productos que hoy están en cero) o None, y
+    entonces la suma de los productos a la vista."""
+    p = visible.productos
+    if serie is None:
+        serie = p[[c for c in p.columns if str(c).startswith("__h")]].sum().to_numpy()
+        nombre = f"los {len(p):,} productos a la vista"
+    val = float(p["valorizado"].sum())
+    ini, fin = float(serie[0]), float(serie[-1])
+    dlt = (fin / ini - 1) * 100 if ini > 0 and fin > 0 else None
+    dias = analisis_stock.dias_del_conjunto(p["valorizado"], p["cantidad"],
+                                            p["consumo"], p["precio"])
+    sin = float(p.loc[p["estado"].eq("sin"), "valorizado"].sum())
+
+    def _kpi(rotulo, valor, neg=False, ayuda=""):
+        return (f'<div class="inv-kpi" title="{ayuda}"><span class="l">{rotulo}'
+                f'</span><span class="v{" neg" if neg else ""}">{valor}</span></div>')
+
+    def _sol(v):
+        return ("−" if v < 0 else "") + f"S/ {abs(v):,.0f}"
+
+    html = ('<div class="inv-kpis">'
+            + _kpi("Valorizado", _sol(val), val < 0)
+            + _kpi(f"vs cierre {meses[0]}",
+                   "–" if dlt is None else f"{'+' if dlt > 0 else '−'}{abs(dlt):.0f} %",
+                   ayuda="Lo de hoy contra lo que valía después de ese cierre.")
+            + _kpi("Días de inventario",
+                   "–" if dias != dias else ("más de 365" if dias > 365 else f"{dias:,.0f}"),
+                   ayuda="Lo que vale el stock ÷ lo que se consume por día, en "
+                         "soles, con el consumo de los últimos "
+                         f"{analisis_stock.VENTANA_CONSUMO} días.")
+            + _kpi(f"Sin consumo {analisis_stock.VENTANA_CONSUMO} días", _sol(sin),
+                   ayuda="Lo que vale el stock que nadie consumió en ese tiempo.")
+            + "</div>")
+    with st.container(key="inv_prod_banda"):
+        # columnas-internas: los cuatro números y el gráfico, en la banda de
+        # la misma tarjeta.
+        c_k, c_g = st.columns([1, 3.2], vertical_alignment="center")
+        with c_k:
+            st.markdown(html, unsafe_allow_html=True)
+        with c_g:
+            st.plotly_chart(fig_evolucion(serie, meses, nombre),
+                            key="inv_prod_evo",
+                            config={"displayModeBar": False})
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -940,7 +1373,8 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         return
 
     # Sin guard de "una sola vez" (regla #59).
-    st.markdown("<style>" + CSS_FILTROS + "</style>", unsafe_allow_html=True)
+    st.markdown("<style>" + CSS_FILTROS + CSS_BANDA + "</style>",
+                unsafe_allow_html=True)
 
     # ── Opciones y estado, ANTES de dibujar: las etiquetas de los
     # disparadores leen lo elegido, y Streamlit las fija al construirlos.
@@ -1038,12 +1472,30 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         with c_us:
             en_salida = st.toggle("Ver en unidad de salida", key=_K_SALIDA)
 
-    # ── «Ver a una fecha» (regla #601), a la derecha del título ──────────
-    # columnas-internas: el título y los controles de la fecha, en el
-    # renglón de abajo de los filtros.
-    c_tt, c_af, c_fe, c_ho, c_cmp = c_tit.columns(
-        [2.4, 1.65, 1.3, 1.25, 1.65], vertical_alignment="center")
+    # ── El análisis (regla #637): la historia por cierre y el consumo ────
+    # Sólo con la tabla de HOY: «Ver a una fecha» es otra pregunta, y el
+    # consumo es de los últimos 90 días, no del momento elegido. El valor del
+    # interruptor se lee de su clave ANTES de dibujarlo, porque decide cómo
+    # se reparte el renglón donde vive.
     hay_fecha = bool(col_cod and col_cod_area)
+    historia = consumo = meses = None
+    if not (hay_fecha and st.session_state.get(_K_A_FECHA)) and col_cod_area:
+        _h = data.historia_stock()
+        if _h is not None:
+            meses, _momentos, historia = _h
+            consumo = data.consumo_stock(_momentos[-1].date())
+    analisis = historia is not None and consumo is not None
+
+    # ── «Ver a una fecha» (regla #601), a la derecha del título ──────────
+    # columnas-internas: el título, los chips de estado (o los controles de
+    # la fecha) y el interruptor, en el renglón de abajo de los filtros.
+    c_chips = c_fe = c_ho = c_cmp = None
+    if analisis:
+        c_tt, c_chips, c_af = c_tit.columns([2.0, 6.4, 1.65],
+                                            vertical_alignment="center")
+    else:
+        c_tt, c_af, c_fe, c_ho, c_cmp = c_tit.columns(
+            [2.4, 1.65, 1.3, 1.25, 1.65], vertical_alignment="center")
     al, comparar, d_vista, momento_al = None, False, d, None
     if hay_fecha:
         with c_af:
@@ -1102,8 +1554,23 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         texto=texto, incluir_sin_stock=incluir,
         col_factor=col_factor, col_usal=col_usal,
         col_cant_hoy=COL_CANT_HOY if (al and comparar) else None,
-        col_val_hoy=COL_VAL_HOY if (al and comparar) else None)
-    n = len(listado.productos)
+        col_val_hoy=COL_VAL_HOY if (al and comparar) else None,
+        col_cod_area=col_cod_area, historia=historia, consumo=consumo)
+
+    # ── Los chips de estado (regla #637): qué mirar, con su cuenta ───────
+    chip = "todos"
+    if analisis:
+        cuentas = cuentas_estado(listado.productos)
+        rotulos = dict(ESTADOS)
+        if st.session_state.get(_K_ESTADO) not in rotulos:
+            st.session_state[_K_ESTADO] = "todos"
+        with c_chips:
+            chip = st.segmented_control(
+                "Qué mirar", list(rotulos), key=_K_ESTADO,
+                format_func=lambda k: f"{rotulos[k]} {cuentas[k]:,}",
+                label_visibility="collapsed") or "todos"
+    visible = por_estado(listado, chip)
+    n = len(visible.productos)
 
     with c_tt:
         # El número va en el título (regla #403): en una tabla que scrollea,
@@ -1115,6 +1582,8 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
         _cuenta = f"{n:,} de {n + _ocultos:,}" if _ocultos else f"{n:,}"
         _nota = (f"{_ocultos:,} sin stock ocultos: «Ver sin stock» "
                  "los muestra." if _ocultos else "")
+        if chip != "todos":
+            _cuenta = f"{n:,} de {len(listado.productos):,}"
         st.markdown(
             f'<div class="inv-rank-tit" style="margin:0" title="{_nota}">'
             f'Productos <span class="inv-rank-tit-n">{_cuenta}'
@@ -1123,9 +1592,16 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
 
     if not n:
         st.info("Ningún producto coincide con los filtros."
-                if (areas or familias or subfamilias or texto.strip())
+                if (areas or familias or subfamilias or texto.strip()
+                    or chip != "todos")
                 else "No hay productos con stock en este recorte.")
         return
+
+    if analisis:
+        # Con buscador o chip, la línea es la de los productos a la vista;
+        # sin ellos, la del recorte entero (con los que hoy están en cero).
+        _banda(visible, listado.serie if (chip == "todos" and not texto.strip())
+               else None, meses, nombre_recorte(areas, familias, subfamilias))
 
     # La key lleva el recorte: con key estable y el `client_wins` de fábrica
     # el navegador puede quedarse con la tabla anterior (regla #227). Un
@@ -1135,11 +1611,14 @@ def seccion_productos(d, *, col_cod, col_prod, col_fam, col_subfam,
     recorte = "|".join([",".join(sorted(areas)), ",".join(sorted(familias)),
                         ",".join(sorted(subfamilias)), texto.strip(),
                         str(incluir), str(len(d)), str(en_salida),
-                        str(momento_al if al else ""), str(comparar)])
+                        str(momento_al if al else ""), str(comparar),
+                        chip, str(analisis)])
     key = f"inv_prod_grid_{zlib.crc32(recorte.encode('utf-8')):08x}"
-    renderizar_listado(filas_grilla(listado),
-                       float(listado.productos["valorizado"].sum()),
+    renderizar_listado(filas_grilla(visible),
+                       float(visible.productos["valorizado"].sum()),
                        key, movil=_es_movil(), unidad_salida=en_salida,
                        al=al, comparar=bool(al and comparar),
                        total_hoy=(float(listado.productos["val_hoy"].sum())
-                                  if (al and comparar) else None))
+                                  if (al and comparar) else None),
+                       analisis=analisis, meses=meses,
+                       n_filas=FILAS_LISTADO_BANDA if analisis else FILAS_LISTADO)

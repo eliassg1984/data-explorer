@@ -6801,6 +6801,119 @@ def _pruebas_listado_inventario():
     return fallos
 
 
+def _pruebas_analisis_stock():
+    """`analisis_stock.py` y el listado con historia (regla #637): los cierres
+    del día 7, la regla del correlativo en cada momento, el consumo del
+    restaurante (sin lo que va de un área a otra ni los ajustes), el ABC, los
+    días de inventario, el estado, y que el gráfico del recorte cuente
+    también los productos que hoy están en cero."""
+    import datetime as _dt
+    import analisis_stock as A
+    from graficos.inventario_productos import (
+        armar_listado, cuentas_estado, filas_grilla, por_estado)
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    analisis stock · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA analisis stock · {nombre}: got={got!r} exp={exp!r}")
+
+    m = A.momentos_de_cierre(_dt.datetime(2026, 10, 9, 14))
+    check("13 cierres y hoy", len(m), 14)
+    check("el primero, 12 meses antes del último", m[0][0], "set 25")
+    check("el cierre de setiembre se toma el 7 de octubre, ya contado",
+          m[-2], ("set 26", _dt.datetime(2026, 10, 7, 23)))
+    check("y al final, hoy", m[-1][0], "hoy")
+    check("con el kardex al 5, setiembre todavía no cerró",
+          A.momentos_de_cierre(_dt.datetime(2026, 10, 5, 9))[-2][0], "ago 26")
+
+    fotos = pd.DataFrame({
+        "area": ["001", "001", "001", "002"], "cod": ["P", "P", "P", "Q"],
+        "fecha": pd.to_datetime(["2026-01-10 08:00", "2026-02-03 10:00",
+                                 "2026-02-03 09:00", "2026-02-20 12:00"]),
+        # El de las 09:00 tiene el correlativo MAYOR: manda él, no el de las 10.
+        "correlativo": [1, 2, 3, 1],
+        "stock": [2.0, 5.0, 4.0, 1.0], "precio": [10.0, 10.0, 10.0, 3.0]})
+    v = A.valor_en_momentos(fotos, [_dt.datetime(2026, 1, 31, 23),
+                                    _dt.datetime(2026, 2, 28, 23)])
+    check("al primer momento, la foto de enero", v.loc[("001", "P"), 0], 20.0)
+    check("manda el mayor correlativo, no la hora más tardía",
+          v.loc[("001", "P"), 1], 40.0)
+    check("sin movimiento hasta un momento, vale cero", v.loc[("002", "Q"), 0], 0.0)
+
+    movs = pd.DataFrame({
+        "cod": ["P", "P", "P", "P", "P", "Q"],
+        "tipo": ["95", "97", "99", "93", "01", "96"],
+        "cant_out": [3.0, 50.0, 40.0, 7.0, 1.0, 2.0]})
+    c = A.consumo_por_producto(movs)
+    check("consumo: ventas sí; transferencia, requerimiento, ajuste y "
+          "compra no", float(c["P"]), 3.0)
+    check("el porcionamiento es consumo", float(c["Q"]), 2.0)
+
+    abc = A.clase_abc(pd.Series({"a": 70.0, "b": 20.0, "c": 6.0, "d": 4.0,
+                                 "e": -5.0, "f": 0.0}))
+    # b es A: lo acumulado ANTES de él (70 %) no llegaba al 80 %.
+    check("ABC: A mientras lo de antes no llega al 80 %, B al 95 %, C el resto",
+          list(abc), ["A", "A", "B", "C", None, None])
+    d = A.dias_de_inventario(pd.Series([9.0, 1.0, 0.0, -2.0]),
+                             pd.Series([90.0, 0.0, 90.0, 90.0]))
+    check("días: stock ÷ consumo diario", float(d[0]), 9.0)
+    check("días: sin consumo o sin stock no es un número",
+          [x != x for x in d[1:]], [True, True, True])
+    e = A.estado(pd.Series([-1.0, 5.0, 100.0, 1.0]), pd.Series([9.0, 0.0, 90.0, 90.0]),
+                 pd.Series([float("nan"), float("nan"), 100.0, 1.0]))
+    check("estado: negativo, sin consumo, más de 60 días, nada",
+          list(e), ["neg", "sin", "alto", ""])
+    check("días de un conjunto: valor ÷ consumo diario en soles",
+          round(A.dias_del_conjunto([100.0, 50.0], [10.0, 5.0], [90.0, 0.0],
+                                    [10.0, 10.0]), 6), 15.0)
+
+    d = pd.DataFrame({
+        "COD": ["01", "01", "02", "03"], "CA": ["000", "001", "001", "000"],
+        "PROD": ["Pollo", "Pollo", "Pisco", "Sal"],
+        "FAM": ["ALIMENTOS", "ALIMENTOS", "BEBIDAS", "ALIMENTOS"],
+        "SUB": ["AVES", "AVES", "PISCO", "ABARROTES"],
+        "AREA": ["ALMACEN", "COCINA", "COCINA", "ALMACEN"],
+        "UM": ["KILOS", "KILOS", "LITROS", "KILOS"], "PU": [10.0, 10.0, 30.0, 2.0],
+        "STK": [2.0, -1.0, 3.0, 0.0], "VAL": [20.0, -10.0, 90.0, 0.0]})
+    hist = pd.DataFrame(
+        [[5, 20], [0, -10], [60, 90], [40, 0]], columns=[0, 1],
+        index=pd.MultiIndex.from_tuples([("000", "01"), ("001", "01"),
+                                         ("001", "02"), ("000", "03")]))
+    cols = dict(col_cod="COD", col_prod="PROD", col_fam="FAM", col_subfam="SUB",
+                col_area="AREA", col_unidad="UM", col_punit="PU", col_cant="STK",
+                col_val="VAL", col_cod_area="CA", historia=hist,
+                consumo=pd.Series({"01": 9.0}))
+    L = armar_listado(d, **cols)
+    check("el gráfico del recorte cuenta la Sal, que hoy está en cero",
+          [float(x) for x in L.serie], [105.0, 100.0])
+    check("cada producto suma la historia de sus áreas",
+          (float(L.productos.loc["01", "__h0"]), float(L.productos.loc["01", "__h1"])),
+          (5.0, 10.0))
+    check("días y estado del producto",
+          (float(L.productos.loc["01", "dias"]), L.productos.loc["02", "estado"]),
+          (10.0, "sin"))
+    check("el buscador no cambia el ABC: es del recorte",
+          armar_listado(d, **cols, texto="pollo").productos.loc["01", "abc"], "B")
+    check("cuántos hay en cada chip", cuentas_estado(L.productos),
+          {"todos": 2, "A": 1, "neg": 0, "sin": 1, "alto": 0})
+    check("un chip deja sus productos y sus áreas",
+          (por_estado(L, "sin").productos.index.tolist(),
+           sorted(set(por_estado(L, "sin").areas["codigo"]))), (["02"], ["02"]))
+    f = filas_grilla(L)
+    check("la historia viaja como texto, en el producto y en cada área",
+          list(f["__sp"]), ["5,10", "5,20", "0,-10", "60,90", "60,90"])
+    check("la unidad corta también en las filas de área", list(f["__um"]),
+          ["kg", "kg", "kg", "Lt", "Lt"])
+    check("sin historia el listado sigue como antes",
+          armar_listado(d, **{**cols, "historia": None, "consumo": None}).serie, None)
+    return fallos
+
+
 def _pruebas_inventario_activos():
     """«Stock e Inventario» cuenta sólo lo ACTIVO (regla #598).
 
@@ -10650,6 +10763,7 @@ def main():
 
     # ── Inventario › Productos: el grano y el despliegue de áreas ────────
     fallos += _pruebas_listado_inventario()
+    fallos += _pruebas_analisis_stock()
     fallos += _pruebas_inventario_activos()
     fallos += _pruebas_kardex()
 

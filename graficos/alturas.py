@@ -383,6 +383,13 @@ CARTA_FIG = 180
 tiempo), regla #572: 60px menos que MINI (200 hasta la #574) para que el
 panel entre en ~575px junto a la receta de cinco filas."""
 
+STOCK_EVOLUCION_FIG = 118
+"""Stock por Producto (2026-10-11, regla #637): el gráfico de la banda de
+arriba de la tabla, lo que valió lo filtrado después de cada cierre. Lo paga
+la tabla, que muestra menos filas con la banda puesta
+(`inventario_productos.FILAS_LISTADO_BANDA`): la tarjeta sigue entrando en
+los 575px de la pantalla del usuario."""
+
 STOCK_MOVIMIENTOS = 340
 """Stock › Movimientos (2026-10-03, regla #602): el alto de la cascada «por
 qué cambió el stock» y el TOPE de la tabla de al lado —y de la de «Por

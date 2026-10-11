@@ -17,6 +17,7 @@ import definicion_venta
 import definicion_compra
 import consumo_recetas
 import kardex
+import analisis_stock
 
 
 # ===========================================================================
@@ -1417,6 +1418,7 @@ def limpiar_cache(archivo):
     _demanda_nivel1_cacheable.clear()
     _stock_al_cacheable.clear()
     _kardex_fotos_cacheable.clear()
+    _historia_stock_cacheable.clear()
     _movimientos_cacheable.clear()
     _movimientos_mes_cacheable.clear()
     _sello_r2.clear()
@@ -2121,6 +2123,54 @@ def movimientos_kardex_mes(desde, hasta):
                                           desde, hasta, version=kardex.VERSION)
     except Exception:
         return None
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _historia_stock_cacheable(archivo, sello, version=None):
+    """`(rótulos, momentos, valores)`: el valor de cada área y producto
+    después de cada cierre y hoy (`analisis_stock.momentos_de_cierre` y
+    `valor_en_momentos`), sobre las fotos del kardex. Son 14 pasadas sobre
+    medio millón de filas —unos segundos—, por eso va a disco con el sello.
+    Si falla, LANZA: no se cachea. Regla #637.
+
+    Las fotos se piden con `sello_datos(archivo)` y no con el `sello` que ya
+    llegó: es el mismo valor (vive 60 s en su caché), y `test_datos.py` exige
+    esa forma en toda llamada a una cacheable de disco (regla #367)."""
+    fotos = _kardex_fotos_cacheable(archivo, sello_datos(archivo), version=version)
+    if fotos is None or fotos.empty:
+        return None
+    tope = pd.to_datetime(fotos["fecha"], errors="coerce").max().to_pydatetime()
+    pares = analisis_stock.momentos_de_cierre(tope)
+    momentos = [m for _, m in pares]
+    return ([r for r, _ in pares], momentos,
+            analisis_stock.valor_en_momentos(fotos, momentos))
+
+
+def historia_stock():
+    """Lo que valía cada área y producto después de cada uno de los últimos
+    cierres y hoy: `(rótulos, momentos, valores)`, con `valores` indexado
+    por (código de área, código de producto). `None` si no se pudo leer el
+    kardex: quien lo pide no dibuja la historia. No cacheada (la interna
+    sí). Regla #637."""
+    try:
+        return _historia_stock_cacheable(kardex.ARCHIVO,
+                                         sello_datos(kardex.ARCHIVO),
+                                         version=kardex.VERSION)
+    except Exception:
+        return None
+
+
+def consumo_stock(hasta):
+    """Cuánto consumió el restaurante de cada producto en los
+    `analisis_stock.VENTANA_CONSUMO` días que terminan en `hasta` (`date`):
+    Series `cod` → cantidad. `None` si no se pudo leer. Sale de los
+    movimientos del kardex (cacheados) por `analisis_stock.consumo_por_producto`.
+    Regla #637."""
+    desde = hasta - timedelta(days=analisis_stock.VENTANA_CONSUMO - 1)
+    movs = movimientos_kardex(desde, hasta)
+    if movs is None:
+        return None
+    return analisis_stock.consumo_por_producto(movs)
 
 
 def movimientos_kardex(desde, hasta):

@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-636 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+637 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (207)
 
@@ -452,7 +452,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#623** — Los cuatro filtros de «Compras por período» eligen VARIOS: nada elegido es «todos», dentro de…
 
-**AgGrid y tablas** (92)
+**AgGrid y tablas** (93)
 
 - **#2** — Estilos de paneles AgGrid siempre ACOTADOS por panel
 - **#4** — Altura del grid: fijo + inyección
@@ -546,6 +546,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#628** — «Compras por período» dice en su TABLA cuánto restaron las notas de crédito — la diferencia…
 - **#629** — En la grilla AgGrid «Resumen Total» de «Compras por período» van TRES familias más «N más»,…
 - **#636** — Stock por Producto: Código · Familia · Subfamilia · Producto, y abre de la A a la Z en ese…
+- **#637** — Stock por Producto dice qué mirar: chips de estado, la evolución de lo filtrado y cinco…
 
 **Streamlit** (162)
 
@@ -938,7 +939,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (166)
+**Decisiones de diseño y UX** (167)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1106,6 +1107,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#632** — Ajuste de Inventario no tiene fecha en la franja: cada vista elige la suya —una SESIÓN de…
 - **#634** — El panel de la sesión de Ajuste es una pieza propia, como el de fechas: cada sesión dice su…
 - **#636** — Stock por Producto: Código · Familia · Subfamilia · Producto, y abre de la A a la Z en ese…
+- **#637** — Stock por Producto dice qué mirar: chips de estado, la evolución de lo filtrado y cinco…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -49794,6 +49796,70 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+637. **Stock por Producto dice qué mirar: chips de estado, la evolución de
+     lo filtrado y cinco columnas nuevas, con la historia del kardex
+     después de cada cierre y el consumo del RESTAURANTE.** 2026-10-11, a
+     pedido, sobre el mockup «Stock en dos vistas» que el usuario aprobó
+     («ok implementémoslo»). La vista 2 —Stock por Área y Familia— es la
+     regla siguiente.
+
+     - **La cuenta vive en `analisis_stock.py`** (puro, con prueba:
+       `test_graficos.py::_pruebas_analisis_stock`). La historia es la foto
+       del kardex con la regla del Histórico del POS (#601), un punto por
+       cierre de mes tomado el día `cortes.DIA_CIERRE_OPERATIVO` a las 23:00
+       del mes siguiente —ya contado: el cierre se registra del 1 al 7,
+       #613— y «hoy». 13 cierres: «set 25» a «set 26» son 12 meses de punta
+       a punta. A fin de mes el stock todavía no está contado y Cocina sale
+       con −S/ 7 mil. `data.historia_stock()` la cachea a disco con el sello
+       del kardex (son 14 pasadas sobre medio millón de filas: 11 s la
+       primera vez).
+     - **El consumo es del restaurante entero** (`TIPOS_CONSUMO`: ventas,
+       porcionamiento, producción, empacado, notas de salida, merma fija y
+       control interno), de los últimos 90 días. **Sin transferencias ni
+       requerimientos**: lo que el Almacén entrega lo recibe un área, y
+       sumarlo con lo que esa área vende lo contaría dos veces. Sin ajustes
+       ni compras. Consecuencia que hay que saber leer: con sólo Almacén
+       Central elegido, los días de inventario dicen para cuántos días de
+       consumo DEL RESTAURANTE alcanza lo guardado ahí.
+     - **Las columnas**: ABC (Dickie, General Electric, 1951; cortes 80/95,
+       práctica difundida), «12 meses», «Consumo 90 d», «Días inv.»
+       («inventory days of supply», SCOR/ASCM) y «Estado» —negativo, sin
+       consumo, más de 60 días—. Para que entren en los 1.159px de la
+       grilla en la pantalla del usuario, la unidad pasa ADENTRO de la
+       Cantidad («1.04 Lt», `__um`) y «Unidad kardex» se esconde; medido,
+       las 13 columnas llenan la grilla sin scroll horizontal y ninguna
+       cabecera se corta («Subfamilia 2 ↑» pide 112). El ABC se calcula
+       sobre el RECORTE, antes del buscador: buscar «pollo» no convierte al
+       pollo más caro en clase A.
+     - **La mini-línea es un componente** (`MiniLinea`, `init`/`getGui`,
+       #25): la historia viaja en la fila como texto («v0,v1,…», `__sp`) y
+       los meses en `gridOptions.context` (#226). Son ~5.900 caracteres, así
+       que su `JsCode` se arma UNA vez por proceso (`_js_fijo`, con
+       `lru_cache`): rearmarlo en cada corrida costaba ~0,2 s. **El clic
+       abre una ficha ADENTRO del iframe de la grilla** —sin corrida al
+       servidor— y no despliega la fila: `stopPropagation` en el componente
+       y, por si acaso, `_JS_CLIC` mira si el clic vino de `.inv-spk`.
+     - **La banda** (cuatro números y `fig_evolucion`) sigue a los filtros.
+       Sin buscador ni chip, la línea es la del RECORTE con todos sus
+       productos, también los que hoy están en cero (`Listado.serie`, sobre
+       las filas ANTES del filtro de stock): si no, lo que se vació no
+       aparecería en la historia. Con buscador o chip, la suma de los
+       productos a la vista. El eje Y va sin valores (como en todo el
+       proyecto) y los montos de las puntas se escriben con
+       `cliponaxis=False` y aire arriba: sin el aire, el máximo escribía su
+       número debajo del título.
+     - **«Ver a una fecha» apaga todo esto**: es otra pregunta, y el consumo
+       es de los últimos 90 días, no del momento elegido. La tabla vuelve a
+       sus columnas y a sus 14 filas. El valor del interruptor se lee de su
+       clave ANTES de dibujarlo, porque decide cómo se reparte el renglón
+       donde vive (título + chips + interruptor, o título + interruptor +
+       fecha + hora + comparar).
+     - **Alto**: con la banda la tabla muestra 10 filas
+       (`FILAS_LISTADO_BANDA`) y la tarjeta mide 561px, medido a 1323×619
+       (575 útiles).
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49806,7 +49872,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#636**; la próxima toma el número siguiente.
+> última regla es la **#637**; la próxima toma el número siguiente.
 
 >
 
