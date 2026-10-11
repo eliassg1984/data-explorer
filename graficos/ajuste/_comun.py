@@ -16,6 +16,9 @@ con los nombres privados de siempre para no tocar a sus consumidores.
 """
 
 
+from pathlib import Path
+
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -262,17 +265,28 @@ def recargar_si_cambio_mes():
         st.rerun(scope="app")
 
 
-# ── LA SESIÓN DE UNA VISTA: el selector con flechas (regla #632) ──────────
+# ── LA SESIÓN DE UNA VISTA: el selector con flechas (reglas #632 y #634) ──
 # Por familia, Familia × Área y Distribución miran UNA sesión de inventario
 # —un cierre de mes o un parcial, ver `cortes.sesiones_inventario`—, y cada
 # una elige la suya («cambia sólo esa», a pedido). El botón es la píldora de
 # los botones de fecha de Compras; a los costados, ‹ › van a la sesión
 # anterior o siguiente sin abrir nada. Abren en el ÚLTIMO CIERRE de mes, no
-# en la última sesión. Todos los controles son botones con callback: un
-# widget con estado dentro de un popover cerrado no se entera de lo que
-# Python le escribe (#467), y las flechas reescriben la sesión todo el
-# tiempo. Las keys llevan el prefijo de la vista (`ajses_<vista>`), de
-# donde cuelga el CSS (`estilos/_80_cards.py`).
+# en la última sesión. Las keys llevan el prefijo de la vista
+# (`ajses_<vista>`), de donde cuelga el CSS (`estilos/_80_cards.py`).
+#
+# EL PANEL ES UNA PIEZA PROPIA (regla #634), como el de fechas de Compras:
+# `panel_sesion.js` + `panel_sesion.css`, un `st.components.v2` sin iframe.
+# La primera versión eran botones de Streamlit, y un botón no tiene dos
+# renglones: la lista no podía decir el neto ni el detalle de cada sesión,
+# que es lo que distingue un cierre de un recuento sin abrirlo. A Python le
+# llega sólo el trigger «accion».
+_AQUI = Path(__file__).parent
+_PANEL_SESION = st.components.v2.component(
+    "panel_sesion_ajuste",
+    css=(_AQUI / "panel_sesion.css").read_text(encoding="utf-8"),
+    js=(_AQUI / "panel_sesion.js").read_text(encoding="utf-8"),
+)
+_ARCHIVO_AJUSTE = "ajusteinventario.parquet"
 
 
 def sesiones_de(df_full, col_fecha):
@@ -283,12 +297,93 @@ def sesiones_de(df_full, col_fecha):
                                               errors="coerce"))
 
 
+def _codigos(serie, limpiar=False):
+    """Un entero por valor distinto (-1 el nulo). Con `limpiar`, sin los
+    espacios de los bordes: «CAVA » y «CAVA» son la misma área (#424). Se
+    limpian los valores DISTINTOS, no las 250.000 filas."""
+    c, u = pd.factorize(serie)
+    if limpiar and len(u):
+        c2, _ = pd.factorize(pd.Index(u).astype(str).str.strip())
+        c = np.where(c >= 0, c2[c], -1)
+    return c
+
+
+def stats_sesiones(df, col_fecha, col_area, col_valor, col_producto, sesiones):
+    """`{clave: (neto, áreas, productos)}` de cada sesión: el ajuste
+    valorizado neto, cuántas áreas se contaron y cuántos productos cerraron
+    con diferencia. Pura. Con enteros y `bincount`, no con `groupby` sobre
+    texto: así eran 634 ms por vista sobre el parquet real, así 218."""
+    n = len(sesiones)
+    vacio = {s["clave"]: (0.0, 0, 0) for s in sesiones}
+    if not n or df is None or df.empty or not col_fecha \
+            or col_fecha not in df.columns:
+        return vacio
+    dia = pd.to_datetime(df[col_fecha], errors="coerce").dt.normalize()
+    cod_dia, dias = pd.factorize(dia)
+    de_dia = {pd.Timestamp(d): i for i, s in enumerate(sesiones)
+              for d in s["dias"]}
+    idx = np.array([de_dia.get(pd.Timestamp(d), -1) for d in dias], dtype=int)
+    ses = np.where(cod_dia >= 0, idx[cod_dia] if len(idx) else -1, -1)
+    ok = ses >= 0
+    v = (pd.to_numeric(df[col_valor], errors="coerce").fillna(0.0).to_numpy()
+         if col_valor and col_valor in df.columns else np.zeros(len(df)))
+    neto = np.bincount(ses[ok], weights=v[ok], minlength=n)
+
+    def _distintos(col, filas, limpiar=False):
+        if not col or col not in df.columns:
+            return np.zeros(n, dtype=int)
+        c = _codigos(df[col], limpiar)
+        par = pd.DataFrame({"s": ses[filas], "c": c[filas]})
+        par = par[par["c"] >= 0].drop_duplicates()
+        return np.bincount(par["s"].to_numpy(), minlength=n)
+
+    areas = _distintos(col_area, ok, limpiar=True)
+    prods = _distintos(col_producto, ok & (v != 0))
+    return {s["clave"]: (float(neto[i]), int(areas[i]), int(prods[i]))
+            for i, s in enumerate(sesiones)}
+
+
+@st.cache_data(show_spinner=False, max_entries=24)
+def _stats_cacheable(sello, familias, columnas, _df, _sesiones):
+    """`stats_sesiones` por versión del parquet y familias elegidas: las tres
+    vistas abren con las mismas cinco familias y lo calcula una sola. El df y
+    las sesiones no entran en la clave (`_`): los identifica el `sello`
+    (regla #367)."""
+    return stats_sesiones(_df, *columnas, _sesiones)
+
+
+def stats_de_vista(df_full, sesiones, col_fecha, col_area, col_valor,
+                   col_producto, col_familia=None, familias=()):
+    """Las cuentas de cada sesión con las FAMILIAS de la vista: el neto del
+    panel tiene que ser el total que la vista muestra."""
+    d = df_full
+    if familias and col_familia and col_familia in getattr(d, "columns", ()):
+        d = d[d[col_familia].astype(str).isin(familias)]
+    try:
+        from data import sello_datos
+        sello = sello_datos(_ARCHIVO_AJUSTE)
+    except Exception:  # sin secrets (modo demo) o sin red: sin caché fina
+        sello = ""
+    return _stats_cacheable(sello, tuple(sorted(familias or ())),
+                            (col_fecha, col_area, col_valor, col_producto),
+                            d, sesiones)
+
+
+def texto_familias(familias):
+    """De quién es el neto del panel: «las cinco familias de entrada»,
+    «las 3 familias elegidas», «Alimentos», «todas las familias»."""
+    fam = list(familias or ())
+    if not fam:
+        return "todas las familias"
+    if set(fam) == set(FAMILIAS_DE_ENTRADA):
+        return "las cinco familias de entrada"
+    if len(fam) == 1:
+        return fam[0].capitalize()
+    return f"las {len(fam)} familias elegidas"
+
+
 def _k_solo(k):
     return f"{k}__solo"
-
-
-def _k_anio(k):
-    return f"{k}__anio"
 
 
 def sesion_vigente(k, sesiones):
@@ -325,25 +420,6 @@ def _paso_sesion(k, orden, visibles, paso):
     cand = [c for c in visibles if (pos[c] < i if paso < 0 else pos[c] > i)]
     if cand:
         st.session_state[k] = cand[-1] if paso < 0 else cand[0]
-        st.session_state[_k_anio(k)] = None
-
-
-def _elegir_sesion(k, clave):
-    st.session_state[k] = clave
-
-
-def _alternar_sesion(k_varias, clave):
-    marcadas = list(st.session_state.get(k_varias) or [])
-    if clave in marcadas:
-        if len(marcadas) > 1:
-            marcadas.remove(clave)
-    else:
-        marcadas.append(clave)
-    st.session_state[k_varias] = marcadas
-
-
-def _fijar(k, valor):
-    st.session_state[k] = valor
 
 
 def _poner_multi(k_multi, k_varias, k, valor):
@@ -365,17 +441,51 @@ def _anio_sesion(s):
     return s["mes"][0]
 
 
-def _rotulo_lista(s):
+def detalle_sesion(s, stats=None):
+    """El segundo renglón de una sesión en el panel: «registrado el 1 y 6
+    oct (se juntan 2 conteos) · 13 áreas · 751 productos con diferencia»."""
     if s["tipo"] == "cierre":
-        return f"{s['nombre']} · {s['etiqueta']}"
-    n = s["n_dias"]
-    return f"{s['nombre']} · {n} día" + ("s" if n > 1 else "")
+        partes = [f"registrado el {s['etiqueta']}"
+                  + (f" (se juntan {s['juntas']} conteos)" if s["juntas"] > 1
+                     else "")]
+    else:
+        partes = [f"{s['n_dias']} día" + ("s" if s["n_dias"] > 1 else "")]
+    if stats:
+        _neto, areas, prods = stats
+        partes.append(f"{areas} área" + ("s" if areas != 1 else ""))
+        partes.append(f"{prods:,} producto"
+                      + ("s" if prods != 1 else "") + " con diferencia")
+    return " · ".join(partes)
 
 
-def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None):
-    """‹ [sesión] › y su panel: el tipo («Todas» / «Sólo cierres»), con
-    `k_multi` además «Una» / «Varias», los años como pestañas y la lista
-    del año. `prefijo` es el de TODAS sus keys (`ajses_<vista>`)."""
+def datos_panel_sesion(sesiones, actual, marcadas, multi, con_multi, solo,
+                       stats=None, familias_txt="las familias de esta vista"):
+    """Lo que recibe `panel_sesion.js`. Pura (la prueba `test_graficos.py`)."""
+    stats = stats or {}
+    return {
+        "sesiones": [{"k": s["clave"], "tipo": s["tipo"],
+                      "nombre": s["nombre"], "anio": _anio_sesion(s),
+                      "meta": detalle_sesion(s, stats.get(s["clave"])),
+                      "neto": (stats[s["clave"]][0] if s["clave"] in stats
+                               else None)}
+                     for s in sesiones],
+        "actual": actual["clave"] if actual else None,
+        "marcadas": sorted(marcadas),
+        "multi": bool(multi), "con_multi": bool(con_multi),
+        "solo": bool(solo),
+        "pie": [f"Neto de {familias_txt}. Las flechas ‹ › recorren esta "
+                "misma lista" + (", de cierre en cierre." if solo else "."),
+                "Elegir acá cambia sólo esta tarjeta."],
+        "pie_varias": ["Marca las sesiones que quieras: se suman como si "
+                       "fueran una.",
+                       "Con más de una, las flechas se apagan."],
+    }
+
+
+def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None,
+                    stats=None, familias_txt="las familias de esta vista"):
+    """‹ [sesión] › y su panel (`panel_sesion.js`). `prefijo` es el de TODAS
+    sus keys (`ajses_<vista>`); `stats`, lo de `stats_de_vista`."""
     if not sesiones:
         st.caption("Sin sesiones de inventario.")
         return
@@ -383,7 +493,6 @@ def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None):
     solo = bool(st.session_state.get(_k_solo(k)))
     actual = sesion_vigente(k, sesiones)
     elegidas = sesiones_elegidas(k, sesiones, k_varias, k_multi)
-    marcadas = {x["clave"] for x in elegidas}
     orden = [x["clave"] for x in sesiones]
     visibles = [x["clave"] for x in sesiones
                 if not solo or x["tipo"] == "cierre"]
@@ -394,6 +503,24 @@ def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None):
         etiqueta = f"{len(elegidas)} sesiones sumadas"
     else:
         etiqueta = (elegidas[0] if multi else actual)["corto"]
+    k_panel = f"{prefijo}_panels"
+
+    def _al_accion():
+        # Un callback de componente no recibe argumentos: lo elegido se lee
+        # de su key. Corre ANTES del rerun de la vista.
+        a = (st.session_state.get(k_panel) or {}).get("accion") or {}
+        tipo = a.get("tipo")
+        if tipo == "elegir" and a.get("k") in orden:
+            st.session_state[k] = a["k"]
+        elif tipo == "varias" and k_varias:
+            ks = [x for x in (a.get("ks") or []) if x in orden]
+            if ks:
+                st.session_state[k_varias] = ks
+        elif tipo == "solo":
+            st.session_state[_k_solo(k)] = bool(a.get("v"))
+        elif tipo == "multi" and k_multi:
+            _poner_multi(k_multi, k_varias, k, bool(a.get("v")))
+
     with st.container(key=f"{prefijo}_fila", horizontal=True, gap="small",
                       vertical_alignment="center"):
         st.button("‹", key=f"{prefijo}_ant", disabled=not hay_ant,
@@ -401,65 +528,12 @@ def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None):
                         else "Sesión anterior"),
                   on_click=_paso_sesion, args=(k, orden, visibles, -1))
         with st.popover(etiqueta, key=f"{prefijo}_pop"):
-            with st.container(key=f"{prefijo}_panel"):
-                with st.container(key=f"{prefijo}_opc", horizontal=True,
-                                  gap="small"):
-                    if k_multi:
-                        st.button("Una", key=f"{prefijo}_o_una",
-                                  type="primary" if not multi else "secondary",
-                                  on_click=_poner_multi,
-                                  args=(k_multi, k_varias, k, False))
-                        st.button("Varias", key=f"{prefijo}_o_varias",
-                                  type="primary" if multi else "secondary",
-                                  on_click=_poner_multi,
-                                  args=(k_multi, k_varias, k, True))
-                    st.button("Todas", key=f"{prefijo}_o_todas",
-                              type="primary" if not solo else "secondary",
-                              on_click=_fijar, args=(_k_solo(k), False))
-                    st.button("Sólo cierres", key=f"{prefijo}_o_cierres",
-                              type="primary" if solo else "secondary",
-                              on_click=_fijar, args=(_k_solo(k), True))
-                anios = sorted({_anio_sesion(x) for x in sesiones},
-                               reverse=True)
-                anio = st.session_state.get(_k_anio(k))
-                if anio not in anios:
-                    anio = _anio_sesion(elegidas[-1] if multi else actual)
-                con_sel = {_anio_sesion(x) for x in elegidas}
-                with st.container(key=f"{prefijo}_anios", horizontal=True,
-                                  gap="small"):
-                    for y in anios:
-                        st.button(f"{y}" + (" •" if y in con_sel else ""),
-                                  key=f"{prefijo}_a_{y}",
-                                  type="primary" if y == anio else "secondary",
-                                  on_click=_fijar, args=(_k_anio(k), y))
-                lista = [x for x in reversed(sesiones)
-                         if _anio_sesion(x) == anio
-                         and (not solo or x["tipo"] == "cierre")]
-                if not lista:
-                    st.caption(f"No hay {'cierres' if solo else 'sesiones'} "
-                               f"en {anio}.")
-                # La lista se desliza adentro (su alto máximo, en el CSS): un
-                # año trae hasta 19 sesiones y el panel medía 834px.
-                with st.container(key=f"{prefijo}_lista", gap="small"):
-                    for x in lista:
-                        st.button(
-                            _rotulo_lista(x),
-                            key=f"{prefijo}_l_{_slug(x['clave'])}",
-                            type=("primary" if x["clave"] in marcadas
-                                  else "secondary"),
-                            use_container_width=True,
-                            on_click=(_alternar_sesion if multi
-                                      else _elegir_sesion),
-                            args=((k_varias, x["clave"]) if multi
-                                  else (k, x["clave"])))
-                if multi:
-                    st.caption("Marca las sesiones que quieras: se suman como "
-                               "si fueran una.")
-                else:
-                    st.caption("Un cierre es lo registrado del 1 al 7 del mes "
-                               "siguiente; lo demás es parcial. ‹ › recorren "
-                               "esta lista"
-                               + (", de cierre en cierre." if solo else "."))
+            _PANEL_SESION(
+                key=k_panel,
+                data=datos_panel_sesion(
+                    sesiones, actual, {x["clave"] for x in elegidas}, multi,
+                    bool(k_multi), solo, stats, familias_txt),
+                on_accion_change=_al_accion, width="content")
         st.button("›", key=f"{prefijo}_sig", disabled=not hay_sig,
                   help=("Con varias sesiones las flechas se apagan" if multi
                         else "Sesión siguiente"),
@@ -579,7 +653,7 @@ def filtro_area_en_titulo(col, df, col_area, col_ajuste_val, clave, key_ctrl):
 def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
                          col_ajuste_val, k_corte, k_familia, k_area,
                          familias=FAMILIAS_DE_ENTRADA, historial=0,
-                         anio_cortes=False):
+                         anio_cortes=False, col_producto=None):
     """ESTADO PRIMERO, WIDGETS DESPUES: resuelve los tres filtros sin
     dibujar nada, y devuelve el dict que consume `render_filtros_vista`.
 
@@ -717,8 +791,15 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
             x = x[x[col_familia].astype(str).isin(sel_fam)]
         return x
 
+    # Lo que dice el panel de cada sesión —neto, áreas, productos con
+    # diferencia— con las familias de ESTA vista (regla #634).
+    stats = (stats_de_vista(df_full, cortes, col_fecha, col_area,
+                            col_ajuste_val, col_producto, col_familia, sel_fam)
+             if cortes else {})
+
     return {"base": base, "d": _aplicar(base), "corte": corte,
             "cortes": cortes, "corte_prev": corte_prev,
+            "stats_sesiones": stats, "familias_txt": texto_familias(sel_fam),
             "historial_cortes": hist_cortes, "d_historial": _aplicar(base_hist),
             "cortes_anio": cortes_anio, "d_anio": _aplicar(base_anio),
             "areas": areas, "familias": opc_fam,
@@ -743,7 +824,10 @@ def render_filtros_vista(cols, est, prefijo_ses):
     (`ajses_<vista>`).
     """
     with cols[0]:
-        selector_sesion(prefijo_ses, est["k_corte"], est["cortes"])
+        selector_sesion(prefijo_ses, est["k_corte"], est["cortes"],
+                        stats=est.get("stats_sesiones"),
+                        familias_txt=est.get("familias_txt",
+                                             "las familias de esta vista"))
     with cols[1]:
         _n_fam = len(est["sel_fam"])
         _et_fam = ("todas las familias" if not _n_fam

@@ -5769,7 +5769,7 @@ CSS = """    /* ================================================================
         height: 24px !important;
         min-height: 24px !important;
         padding: 0 !important;
-        border-radius: 999px !important;
+        border-radius: 7px !important;   /* como las flechas del mockup y del panel de fechas */
         border: 1px solid var(--border) !important;
         background: var(--bg-card) !important;
         color: var(--text-secondary) !important;
@@ -5790,44 +5790,14 @@ CSS = """    /* ================================================================
     [class*="st-key-ajses_"][class*="_sig"] button:disabled {
         opacity: .35 !important;
     }
-    /* El panel: opciones y años chicos, la lista a lo ancho. */
-    [class*="st-key-ajses_"][class*="_panel"] {
-        min-width: 320px !important;
-        gap: 8px !important;
-    }
-    [class*="st-key-ajses_"][class*="_o_"] button,
-    [class*="st-key-ajses_"][class*="_a_"] button {
-        min-height: 24px !important;
-        height: 24px !important;
-        padding: 0 10px !important;
-        border-radius: 999px !important;
-    }
-    [class*="st-key-ajses_"][class*="_o_"] button p,
-    [class*="st-key-ajses_"][class*="_a_"] button p {
-        font-size: 12px !important;
-    }
-    /* La lista se desliza adentro: un año trae hasta 19 sesiones. */
-    [class*="st-key-ajses_"][class*="_lista"] {
-        max-height: 300px !important;
-        overflow-y: auto !important;
-        flex-wrap: nowrap !important;
-        gap: 3px !important;
-        padding-right: 4px !important;
-    }
-    [class*="st-key-ajses_"][class*="_l_"] button {
-        justify-content: flex-start !important;
-        min-height: 0 !important;
-        padding: 5px 10px !important;
-        border-radius: 7px !important;
-    }
-    /* El rótulo a la izquierda: Streamlit centra el contenido del botón. */
-    [class*="st-key-ajses_"][class*="_l_"] button > div {
-        justify-content: flex-start !important;
-        width: 100% !important;
-    }
-    [class*="st-key-ajses_"][class*="_l_"] button p {
-        font-size: 12px !important;
-        text-align: left !important;
+    /* El panel es una pieza propia (`graficos/ajuste/panel_sesion.css`,
+       regla #634): acá sólo el botón que lo abre. Abierto, en lavanda, como
+       los demás triggers de Ajuste. */
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) button[aria-expanded="true"],
+    [class*="st-key-ajses_"][class*="_pop"] button[aria-expanded="true"] {
+        background: var(--accent-tint) !important;
+        border-color: var(--border-lavender) !important;
+        color: var(--accent-deep) !important;
     }
     /* «Por sesión / Por meses» de Distribución, a la talla de la fila. */
     .st-key-ajdist_por [data-testid="stButtonGroup"] button {

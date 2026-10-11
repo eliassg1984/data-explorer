@@ -315,7 +315,8 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     # de `estado_filtros_vista`.
     _est = estado_filtros_vista(
         df, df_full, col_fecha, col_familia, col_area, col_ajuste_val,
-        k_corte=_K_CORTE, k_familia=_K_FAMILIA, k_area=_K_AREA)
+        k_corte=_K_CORTE, k_familia=_K_FAMILIA, k_area=_K_AREA,
+        col_producto=col_producto)
     df = _est["d"]
 
     # ── Los tres filtros + Modo, en UNA fila. Hasta el 2026-09-18 la fila

@@ -1229,8 +1229,13 @@ tres vistas de arriba (Por familia, Familia × Área, Distribución) eligen una
   Venta interna con dos productos, y la vista abría ahí. Las vistas abren
   en el último CIERRE (`cortes.ultimo_cierre`).
 - **El selector de sesión** (`graficos/ajuste/_comun.py::selector_sesion`)
-  es la píldora de Compras con ‹ › a los costados; cada vista el suyo. Son
-  botones con callback, no widgets con estado: viven en un popover (#467).
+  es la píldora de Compras con ‹ › a los costados; cada vista el suyo. Las
+  flechas son botones con callback, no widgets con estado (#467), y el
+  panel es una pieza propia, `graficos/ajuste/panel_sesion.js`, como el de
+  fechas: cada sesión con su neto y su detalle en dos renglones, que en un
+  `st.button` no caben (regla #634). Esos números
+  (`_comun.py::stats_sesiones`) van con las familias de la vista y en
+  caché por el sello del parquet: sin caché eran 218 ms por vista.
 - **Los meses son el panel de Compras**, no una copia:
   `_comun.py::selector_meses` le pasa `ctx["solo_meses"]` y
   `ctx["atajos_fn"] = estado_rango.atajos_meses` (meses enteros).

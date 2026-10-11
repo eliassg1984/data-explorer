@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-633 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+634 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (206)
 
@@ -710,7 +710,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
-**Datos, R2 y DuckDB** (94)
+**Datos, R2 y DuckDB** (95)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -806,6 +806,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#612** — El ajuste de un cierre tiene DOS versiones en el Almacén, y hasta agosto de 2025 no…
 - **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
 - **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
+- **#634** — El panel de la sesión de Ajuste es una pieza propia, como el de fechas: cada sesión dice su…
 
 **SUNAT y SIRE** (56)
 
@@ -934,7 +935,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (164)
+**Decisiones de diseño y UX** (165)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1100,6 +1101,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#628** — «Compras por período» dice en su TABLA cuánto restaron las notas de crédito — la diferencia…
 - **#631** — Ajuste › Evolución: el neto en pastillas, el período más movido marcado y los totales del…
 - **#632** — Ajuste de Inventario no tiene fecha en la franja: cada vista elige la suya —una SESIÓN de…
+- **#634** — El panel de la sesión de Ajuste es una pieza propia, como el de fechas: cada sesión dice su…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -49639,6 +49641,51 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+634. **El panel de la sesión de Ajuste es una pieza propia, como el de
+     fechas: cada sesión dice su neto y su detalle, y eso no cabe en un
+     botón de Streamlit.** 2026-10-11, el mismo día de la #632, a partir de
+     una captura del usuario al lado del mockup: «¿así debería quedar?».
+
+     La #632 armó el panel con botones de Streamlit (`st.button` por sesión,
+     pastillas para «Todas / Sólo cierres» y para los años). Funcionaba,
+     pero un botón tiene UN renglón: la lista decía «Cierre de setiembre · 1
+     y 6 oct» y nada más, y lo que el mockup prometía —el neto de la sesión
+     a la derecha y, abajo, «registrado el 1 y 6 oct (se juntan 2 conteos) ·
+     13 áreas · 751 productos con diferencia»— es justo lo que distingue un
+     cierre de un recuento sin abrirlo. Además la elegida salía en morado
+     lleno y los años como pastillas, no como las pestañas del panel de
+     Compras.
+
+     - **`graficos/ajuste/panel_sesion.js` + `.css`**, un
+       `st.components.v2` sin iframe, montado dentro del popover del botón
+       de la sesión (`_comun.py::selector_sesion`) igual que
+       `panel_fecha.js` (#616). Los segmentados y las pestañas copian las
+       del panel de fechas, para que los dos se lean como uno. A Python le
+       llega un solo trigger, «accion» (`elegir`, `varias`, `solo`,
+       `multi`), con un sello de tiempo para que dos clics iguales sean dos
+       avisos; el año que se ve es del navegador. Las flechas ‹ › siguen
+       siendo botones con callback, afuera del popover.
+     - **Los números de cada sesión** (`_comun.py::stats_sesiones`, pura y
+       con test): neto, áreas contadas y productos con diferencia, con las
+       FAMILIAS de la vista —el neto del panel es el total que la vista
+       muestra, y el pie dice de qué familias es—. Con un `groupby` sobre
+       texto eran **634 ms por vista** sobre el parquet real (223.343
+       filas); con `pd.factorize` + `np.bincount`, 218. Y como las tres
+       vistas abren con las mismas cinco familias, va en un
+       `st.cache_data` con el `sello` del parquet y las familias en la
+       clave (`_stats_cacheable`, regla #367): se calcula una vez.
+     - El botón que abre el panel se pinta en lavanda mientras está abierto
+       (`aria-expanded`), y las flechas son cuadradas con esquinas de 7px,
+       como en el mockup y en el panel de fechas.
+
+     Verificado con Playwright a 1323 × 750: el panel mide 400 × 445, la
+     lista se desliza adentro, elegir desde el panel cambia sólo su
+     tarjeta, «Sólo cierres» hace que ‹ › salte de cierre en cierre y
+     «Varias» en Distribución marca con casilla y suma. Lo vigila
+     `test_graficos.py::_pruebas_fechas_ajuste`.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49651,7 +49698,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#633**; la próxima toma el número siguiente.
+> última regla es la **#634**; la próxima toma el número siguiente.
 
 >
 

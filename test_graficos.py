@@ -6359,7 +6359,8 @@ def _pruebas_fechas_ajuste():
                                     "_evolucion", "_pivote")}
     check("las vistas de sesión dibujan el selector con flechas",
           [n for n in ("_cascada", "_heatmap") if '"ajses_' not in fuentes[n]]
-          + ([] if 'selector_sesion("ajses_dist"' in fuentes["_distribucion"]
+          + ([] if re.search(r'selector_sesion\(\s*"ajses_dist"',
+                             fuentes["_distribucion"])
              else ["_distribucion"]), [])
     check("las vistas de meses dibujan su botón",
           [n for n, k in (("_evolucion", '"ajf_evo"'), ("_pivote", '"ajf_det"'),
@@ -6373,6 +6374,45 @@ def _pruebas_fechas_ajuste():
     css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
     check("los dos controles tienen su CSS",
           ('st-key-ajf_' in css, 'st-key-ajses_' in css), (True, True))
+
+    # EL PANEL DE LA SESIÓN (regla #634): una pieza propia, como el de
+    # fechas, con el neto y el detalle de cada sesión.
+    from graficos.ajuste._comun import (
+        datos_panel_sesion, stats_sesiones, texto_familias)
+    css_p = (raiz / "graficos" / "ajuste" / "panel_sesion.css").read_text(
+        encoding="utf-8")
+    js_p = (raiz / "graficos" / "ajuste" / "panel_sesion.js").read_text(
+        encoding="utf-8")
+    check("el panel de la sesión: sin :has() y con su función",
+          (":has(" in css_p, "export default function" in js_p), (False, True))
+    df_s = pd.DataFrame({
+        "F": pd.to_datetime(["2026-09-15", "2026-09-15", "2026-09-16",
+                             "2026-10-01", "2026-10-01", "2026-10-06",
+                             "2026-10-06"]),
+        "AREA": ["COCINA", "BARRA", "COCINA ", "COCINA", "CAVA", "VENTA", "VENTA"],
+        "AV": [-10.0, 5.0, 0.0, -100.0, 40.0, 7.0, 0.0],
+        "P": ["p1", "p2", "p1", "p1", "p3", "p4", "p5"],
+    })
+    ses_s = sesiones_inventario(df_s["F"])
+    st_s = stats_sesiones(df_s, "F", "AREA", "AV", "P", ses_s)
+    check("cuentas de cada sesión: neto, áreas (sin el espacio), productos",
+          (st_s["parcial_2026-09-15"], st_s["cierre_2026-09"]),
+          ((-5.0, 2, 2), (-53.0, 3, 3)))
+    dp = datos_panel_sesion(ses_s, ses_s[-1], {"cierre_2026-09"}, False,
+                            True, False, st_s, texto_familias(()))
+    fila = dp["sesiones"][-1]
+    check("el panel recibe el nombre, el neto y el detalle",
+          (fila["nombre"], fila["neto"], fila["meta"], fila["anio"]),
+          ("Cierre de setiembre", -53.0,
+           "registrado el 1 y 6 oct (se juntan 2 conteos) · 3 áreas · "
+           "3 productos con diferencia", 2026))
+    check("el pie dice de qué familias es el neto",
+          dp["pie"][0].startswith("Neto de todas las familias."), True)
+    check("las cinco familias de entrada se nombran así",
+          texto_familias(("ALIMENTOS", "BEBIDAS CON ALCOHOL",
+                          "BEBIDAS SIN ALCOHOL", "VINOS Y ESPUMANTES",
+                          "ENVASES Y EMBALAJES")),
+          "las cinco familias de entrada")
     return fallos
 
 

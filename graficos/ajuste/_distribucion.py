@@ -52,7 +52,7 @@ from tablas.ajuste_familias import renderizar_desglose_ajuste
 from graficos.ajuste._comun import (
     FAMILIAS_DE_ENTRADA, css_filtros_vista, ctx_meses, _fmt_corte, _layout_aj,
     rango_meses, recortar_meses, selector_meses, selector_sesion, sesiones_de,
-    sesiones_elegidas,
+    sesiones_elegidas, stats_de_vista, texto_familias,
 )
 
 # ── QUÉ MIRA LA VISTA (2026-10-11, regla #632) ─────────────────────────────
@@ -499,8 +499,17 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
             if _por == "Por meses":
                 selector_meses("ajf_dist", _ctx_m)
             elif _sesiones:
-                selector_sesion("ajses_dist", _K_SES, _sesiones,
-                                k_varias=_K_VARIAS, k_multi=_K_MULTI)
+                # El neto de cada sesión con las familias de ESTA vista, ya
+                # sembradas arriba (regla #634).
+                _fam_dist = [f for f in (st.session_state.get(
+                    "ajuste_dist_filtro_familia") or []) if f in _opc_fam]
+                selector_sesion(
+                    "ajses_dist", _K_SES, _sesiones,
+                    k_varias=_K_VARIAS, k_multi=_K_MULTI,
+                    stats=stats_de_vista(df_full, _sesiones, col_fecha,
+                                         col_area, col_ajuste_val,
+                                         col_producto, col_familia, _fam_dist),
+                    familias_txt=texto_familias(_fam_dist))
         # FILA DE ENCABEZADO, adentro de la tarjeta: título · modo · familia ·
         # Ampliar, en una línea. El modo es un `st.selectbox`; la familia, un
         # `st.popover` con las pills adentro; los dos con el trigger minimalista
