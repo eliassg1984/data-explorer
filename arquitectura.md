@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-629 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+630 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (204)
 
@@ -805,7 +805,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#614** — Una nota de salida tiene DOS fechas, y la app cuadra con los dos reportes del Almacén: las…
 - **#622** — El reporte «Costos» arma el costo de ventas por MES OPERATIVO con cuatro fuentes: el…
 
-**SUNAT y SIRE** (54)
+**SUNAT y SIRE** (55)
 
 - **#139** — Drill "Documentos SUNAT" de Compras (2026-08-19): un dashboard cuyo dato NO sale del parquet
 - **#140** — El flujo de descarga documentado por SUNAT para el SIRE Compras está roto, y el que funciona…
@@ -861,6 +861,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#604** — «Documentos SUNAT» cruza también las notas de crédito del Almacén, y empareja nota contra…
 - **#606** — En el cruce de «Documentos SUNAT», un candidato ÚNICO con OTRO RUC sólo se empareja si los…
 - **#611** — En la ficha de la hora, el RESULTADO contra lo normal va junto al título, y la frase en la…
+- **#630** — El «Resumen del cruce» de Documentos SUNAT mide la FIDELIDAD respecto de SUNAT: la base es…
 
 **Fechas, rangos y cortes** (14)
 
@@ -49373,6 +49374,56 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-10.)
 
+630. **El «Resumen del cruce» de Documentos SUNAT mide la FIDELIDAD
+     respecto de SUNAT: la base es SUNAT, no la unión de las dos fuentes.**
+     2026-10-11, a pedido y con el mockup aprobado: «mi referencia principal
+     debe ser SUNAT; el análisis es la fidelidad respecto de la data de
+     SUNAT». Hasta ahí eran siete barras agrupadas sobre la UNIÓN (cada
+     documento una vez, esté de un lado, del otro o de los dos), y «Total»
+     se leía como «¿total de qué?».
+
+     - **Fidelidad = cargados y cuadran ÷ lo que reporta SUNAT**, grande
+       arriba (`_kpi_fidelidad_html`), con la diferencia en puntos contra el
+       año anterior más cercano que se compare (verde si sube, ámbar si
+       baja).
+     - **Lo de SUNAT se reparte en tres tramos que suman su 100 %**
+       (`_TRAMOS_FIDELIDAD`): cuadran, con diferencia y falta cargar. «Solo
+       sistema» va APARTE, como «Fuera de SUNAT», punteado y sin %: no es
+       parte de la base. Las barras «Total» y «En sistema» se fueron.
+     - **Documentos o soles** (`sunat_res_medida`). Los soles van en VALOR
+       ABSOLUTO por documento: desde la #604 el cruce trae las notas de
+       crédito en negativo, y con su signo una nota sin cargar restaría de
+       lo que falta — hasta dejar un tramo negativo. Lo vigila
+       `test_graficos.py`.
+     - **Una barra horizontal apilada al 100 % por período** y no Plotly:
+       HTML con clases `.sunat-fid-*` en `estilos/_80_cards.py` (colores por
+       `var(--…)`) y el tooltip del navegador en cada tramo. Un tramo dice
+       su cifra sólo si le entra. La leyenda va en el mismo renglón que la
+       cabecera de las barras: no cuesta alto.
+     - **Lo que falta cargar de los últimos 7 días se dice aparte**, y sólo
+       si el período llega hasta esos días (`_DIAS_RECIENTES`): puede ser
+       demora de carga, no un error.
+     - **Los dos `st.markdown` llevan 16px de relleno abajo**: su
+       `stMarkdownContainer` trae `margin-bottom: -16px` (#162), y sin eso
+       la línea de abajo de la fidelidad se montaba sobre la cabecera de
+       las barras y la última barra se cortaba contra el borde de la
+       tarjeta.
+     - **La tabla** sigue la misma base: documentos en SUNAT (100 %), los
+       tres tramos —el de «cuadran» resaltado: es la fidelidad— y «Fuera de
+       SUNAT» en gris, por clase (`fid-gris`): el violeta de `.ag-cell` le
+       gana a un color puesto en la fila.
+     - **De rebote, en el resto de la vista**: «Solo sistema» pasa de rojo a
+       gris oscuro en la columna «Está vs Sistema», y el punto del rail
+       cuenta como «a revisar» sólo lo de SUNAT con diferencia o sin cargar;
+       lo cargado sin comprobante va aparte en su texto, con la fidelidad.
+     - **La caché de los años anteriores cambió de clave** (`sunat_res_fid_`):
+       la de antes guardaba los conteos de la unión, con otra forma, y una
+       sesión abierta la habría leído.
+     - Medido a 1366×768 en el modo demo: la tarjeta mide 219px con un año
+       comparado y 264 con dos (antes 304), así que entra con aire.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -49385,7 +49436,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#629**; la próxima toma el número siguiente.
+> última regla es la **#630**; la próxima toma el número siguiente.
 
 >
 
