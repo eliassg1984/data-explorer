@@ -1137,6 +1137,29 @@ CSS = """    /* ================================================================
         font-size: 12px;
         color: var(--text-secondary);
     }
+    /* Los totales del rango, debajo del título (regla #631). Un renglón
+       que se corta con «…»: no puede partirse en dos, porque la fila de la
+       cabecera la manda el selector Corte | Mes y un tercer renglón sí
+       empujaría la serie. */
+    .ajevo-kpis {
+        display: flex;
+        gap: 14px;
+        margin-top: 2px;
+        font-size: 11.5px;
+        line-height: 1.3;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* El Área va pegada al grano (regla #631): su etiqueta a la DERECHA de
+       su columna. `css_filtros_vista` la pone a la izquierda para todas las
+       vistas con `!important`; esto le gana por especificidad (un `div`
+       más), sólo en Evolución. */
+    div.st-key-ajevo_ctrl_area div button[data-testid="stPopoverButton"] {
+        justify-content: flex-end !important;
+    }
     /* Desde el 2026-10-02 (regla #585) la línea va en la FILA del divisor y
        no en el texto: la fila lleva también el selector Familias | Tabla,
        y una línea sobre el texto solo se cortaba en su columna. */
