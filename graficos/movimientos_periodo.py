@@ -97,12 +97,18 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import cortes
-from tema import GRIS_TEXTO, GRIS_TEXTO_SUAVE, PALETA_SERIES, TEXTO_PRINCIPAL
+from tema import (
+    AJUSTE_NEG_TEXTO, AJUSTE_POS_TEXTO, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
+    PALETA_SERIES, TEXTO_PRINCIPAL,
+)
 from graficos import alturas
-from graficos.base import _compras_layout, _compras_truncar, scope_rerun
+from graficos.base import (
+    _compras_layout, _compras_truncar, scope_rerun, seleccion_multiple,
+)
 from graficos.compras._comun import (
     GAP_DRILL, _UNIDAD_GRAN, _clave_grilla, _first_point, _fmt_variacion,
-    _hover_variacion, _nota_variacion, _periodo_serie, _variaciones,
+    _hover_variacion, _limites_periodo, _nota_variacion, _periodo_serie, _variaciones,
+    colores_estables,
 )
 # LAS CUENTAS DE LA GEMELA. Privadas de allá, y a propósito: estas tarjetas
 # tienen que leerse igual que «Compras por período», y dos copias de «cuánto
@@ -188,7 +194,11 @@ REQUERIMIENTOS = Lado(
 SALIDAS = Lado(
     k="mov_psal", c="mps", card="ajuste_graf_card_izq_mov_sal_periodo",
     sing="salida", plur="salidas", corto="sal.", fem=True,
-    titulo="Valorizado dado de baja", accion="dio de baja",
+    # «de salidas» y no «dado de baja» (regla #626): en doce meses la merma
+    # de verdad fue S/ 35 mil de S/ 192 mil; lo demás es comida de
+    # personal, el despacho a Mayta, uso en el área. Con el tipo elegido,
+    # el título lo nombra.
+    titulo="Valorizado de salidas", accion="dio de baja",
     rotulo_tipo="Tipo de descargo",
     ayuda_tipo="Acota la tarjeta a un tipo de descargo (Bajas, Comida "
                "personal, Uso en el área…). Ofrece los del área elegida, "
@@ -219,10 +229,11 @@ PRODUCCION = Lado(
 # ===========================================================================
 # CENTINELAS, OPCIONES Y ESTADOS
 # ===========================================================================
-# Los centinelas se comparan por igualdad contra lo que devuelve el widget,
-# como en Compras: ninguna área, tipo, usuario, familia ni producto del
-# parquet empieza con «Todas las», «Todos los» ni «Top ». El del tipo es de
-# cada lado —«Todos los tipos», «Todos los usuarios»—: `Lado.tipo_todos`.
+# Desde el 2026-10-10 (regla #625) los cuatro filtros son `st.multiselect`,
+# como los de «Compras por período»: nada elegido es «todos», y los
+# «Todas las…» de abajo quedan como el PLACEHOLDER del campo vacío. El del
+# tipo es de cada lado —«Todos los tipos», «Todos los usuarios»—:
+# `Lado.tipo_todos`. Ningún producto del parquet empieza con «Top ».
 _AREA_TODAS = "Todas las áreas"
 _FAM_TODAS = "Todas las familias"
 _PROD_TODOS = "Todos los productos"
@@ -263,7 +274,46 @@ _EST_SIN_ITEMS = "sin ítems"
 """Lo que viaja en `__estado` de cada fila del Detalle: la grilla colorea y
 explica por estos tres valores, y los tres son neutros de género."""
 
+PARTIR_AREA = "Por área"
+PARTIR_TIPO = "Por tipo"
+"""Con qué se parte la barra en la tarjeta de SALIDAS (2026-10-08, a pedido:
+«¿tengo alguna forma de ver por tipo de salida?»): por área —quién dio de
+baja, como nació (#509)— o por tipo de descargo. Regla #614."""
+
+PARTIR_PRODUCTO = "Por producto"
+"""La tercera, el mismo día: «cómo verlo desde la perspectiva de productos».
+Los productos mayores de la vista, cada uno con su color, y el resto junto.
+Con el filtro de tipo en «Bajas», qué productos se tiran mes a mes."""
+
+_TIPOS_TRAZA = 4
+"""Tipos con color propio cuando la barra se parte por tipo: los cuatro
+mayores llevan el 90 % (bajas, comida de personal, despacho a Mayta, uso en
+el área); el resto va en «Resto»."""
+
+_PRODUCTOS_TRAZA = 4
+"""Productos con color propio con «Por producto»: cuatro. Con cinco, medido
+a 1323px, la fila de KPI partía en dos renglones (los nombres de producto
+son largos) y el Resumen pedía scroll horizontal."""
+
 _AREAS_TRAZA = 3
+
+# Qué columna de las líneas parte la barra con cada opción, cuántos tramos
+# lleva y cómo se nombra lo que va en «Resto» (#614).
+_PARTIR_COL = {PARTIR_AREA: "area", PARTIR_TIPO: "tipo",
+               PARTIR_PRODUCTO: "prod"}
+_PARTIR_N = {PARTIR_AREA: _AREAS_TRAZA, PARTIR_TIPO: _TIPOS_TRAZA,
+             PARTIR_PRODUCTO: _PRODUCTOS_TRAZA}
+_PARTIR_UNIDAD = {PARTIR_AREA: ("área", "áreas"), PARTIR_TIPO: ("tipo", "tipos"),
+                  PARTIR_PRODUCTO: ("producto", "productos")}
+
+
+def nombre_tramo(nombre, partir=PARTIR_AREA):
+    """Cómo se escribe un tramo: el área en oración («Cocina personal»); el
+    tipo y el producto, como los escribe el Almacén —«(P) Calamar…» en
+    oración sería «(p) calamar…»—."""
+    if nombre == "Resto" or partir != PARTIR_AREA:
+        return nombre
+    return _nombre_area(nombre)
 """Áreas con color propio en la barra; el resto se suma en «Resto». Con
 cuatro o menos en la vista van todas, sin «Resto»: sería un tramo de una
 sola área con otro nombre. Medido en el último mes de requerimientos: Cocina
@@ -369,7 +419,8 @@ def fmt_cant(v):
 
 
 def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
-                           merma, fin, cant_fin, unid_fin, pprom, peso):
+                           merma, fin, cant_fin, unid_fin, pprom, peso,
+                           cod=None):
     """`(base, cortes)`: porcionamientos.parquet con los nombres de la tarjeta.
 
     EL GRANO ES LA TRAMPA (regla #510). El parquet trae una fila por CORTE
@@ -394,6 +445,11 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
     cant`. Un porcionamiento sin cortes cuesta 0 y no pierde nada, pero
     cuenta.
 
+    `costo` y `valor` son los del día: al PRECIO DE HOY, como el Reporte
+    de Mermas del Almacén, los pasa `a_precio_de_hoy` (regla #615), que
+    necesita `cod` —el código del producto inicial—; `costo_dia` guarda el
+    del día para quien quiera los dos.
+
     `cortes` son las filas del parquet con producto final, una por corte:
     `doc`, `fin`, `cant`, `unid` (la del corte), `pprom`, `peso` (en la
     unidad del producto INICIAL: es la parte de lo que entró que fue a ese
@@ -411,6 +467,7 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
         "area": _texto(d, area, "Sin área"),
         "tipo": _texto(d, tipo),
         "prod": _texto(d, prod),
+        "cod": _texto(d, cod),
         "unid": _texto(d, unid),
         "cant": _num(cant),
         "merma_cant": _num(merma),
@@ -430,6 +487,7 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
         "area": g["area"].first(),
         "tipo": g["tipo"].first(),
         "prod": g["prod"].first(),
+        "cod": g["cod"].first(),
         "unid": g["unid"].first(),
         "cant": g["cant"].first(),
         "merma_cant": g["merma_cant"].first(),
@@ -440,6 +498,7 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
     base["punit"] = (base["costo"] / base["cant"]).where(positiva)
     base["valor"] = ((base["costo"] * base["merma_cant"] / base["cant"])
                      .where(positiva).fillna(0.0))
+    base["costo_dia"] = base["costo"]
     base["estado"] = "PROCESADO"
     base["fam"] = ""
     base["vacio"] = False
@@ -449,6 +508,27 @@ def lineas_porcionamientos(d, *, fecha, doc, area, tipo, prod, unid, cant,
     cortes = cortes.rename(columns={"cant_fin": "cant", "unid_fin": "unid",
                                     "valor_fin": "valor"})
     return base, cortes.reset_index(drop=True)
+
+
+def a_precio_de_hoy(base, precios):
+    """`base` de `lineas_porcionamientos` valorizada como el REPORTE DE
+    MERMAS del Almacén (regla #615): la merma × el precio promedio ACTUAL
+    del producto inicial, no lo que costaba el día que se porcionó.
+
+    `SpReporteMerma` multiplica `MPORCIONAMIENTO.tMerma` por
+    `vProducto.nPrecioPromedio`, y `precios` es ese mismo precio —el
+    `PRECIO PROMEDIO` de `inventariovalorizado.parquet`, uno por producto:
+    con él septiembre 2026 da S/ 20.602,20, lo mismo que el PDF—, como una
+    Series código → precio. Lo porcionado (`costo`) pasa a la misma vara,
+    cantidad × precio, para que el % de merma en soles no mezcle dos
+    precios. Un producto sin precio vale 0, como el LEFT JOIN del SP. Pura:
+    devuelve una copia."""
+    b = base.copy()
+    p = pd.to_numeric(b["cod"].map(precios), errors="coerce").fillna(0.0)
+    b["costo"] = b["cant"].fillna(0.0) * p
+    b["valor"] = b["merma_cant"].fillna(0.0) * p
+    b["punit"] = p.where(b["cant"] > 0)
+    return b
 
 
 def orden_areas(df, col_area, col_val):
@@ -468,29 +548,188 @@ def orden_areas(df, col_area, col_val):
              .index.tolist())
 
 
-def colores_area(orden, nombres):
-    """`{área: color}` para las áreas de `nombres`, con el color que les
-    toca por su puesto en `orden` —el histórico— y no por su puesto en la
-    vista: filtrar no puede repintar (el color sigue a la entidad). Si dos
-    de las que se dibujan juntas caen en el mismo color de la paleta, la
-    segunda toma el siguiente libre."""
-    ix = {a: i for i, a in enumerate(orden)}
-    usados, salida = set(), {}
-    for a in nombres:
-        i = ix.get(a, len(orden) + len(salida))
-        c = PALETA_SERIES[i % len(PALETA_SERIES)]
-        while c in usados and len(usados) < len(PALETA_SERIES):
-            i += 1
-            c = PALETA_SERIES[i % len(PALETA_SERIES)]
-        usados.add(c)
-        salida[a] = c
-    return salida
+colores_area = colores_estables
+"""`{área: color}` por el puesto de cada área en `orden` —el histórico—, no
+en la vista. Es `_comun.colores_estables` con el nombre de siempre: se mudó
+allá el 2026-10-08, cuando «Compras por período» la necesitó para partir
+sus barras por subfamilia o por proveedor (regla #620)."""
 
 
 def _no_suma_sin_procesar(lado):
     """True si en `lado` un documento GENERADO no suma aunque tenga líneas
     (producción, #575). Sin lado, el criterio de siempre: sí suma."""
     return lado is not None and not lado.suma_sin_procesar
+
+
+# ===========================================================================
+# LA COMPARACIÓN CON AÑOS ANTERIORES (2026-10-08, regla #614)
+# ===========================================================================
+# Sólo la pide la tarjeta de salidas, pero es del molde: cualquier lado que
+# reciba `hist` (el parquet entero, con los chips de la franja y sin el
+# recorte de fecha) la dibuja.
+
+_COLORES_COMP = (GRIS_TEXTO, GRIS_TEXTO_SUAVE)
+"""El trazo de cada año comparado sobre su barra: el año pasado más oscuro
+que el de hace dos. Grises, porque son referencia y no dato del rango."""
+
+
+def desfase_comparacion(gran, n):
+    """Lo que hay que restar a una fecha para caer en el MISMO período `n`
+    años atrás. En Día y Semana, 364 días por año: cae en el mismo día de la
+    semana, así que la semana ISO del año pasado es la misma semana y el
+    lunes compara contra un lunes. En Mes y Año, el calendario."""
+    if gran in ("Día", "Semana"):
+        return pd.Timedelta(days=364 * n)
+    return pd.DateOffset(years=n)
+
+
+def rotulo_anio(ini, fin, off):
+    """«2025», o «2024-25» si el rango corrido a `off` atrás cruza un año
+    (el mismo rótulo de Compras › Vs año pasado). `fin` es exclusivo."""
+    a0 = (ini - off).year
+    a1 = (fin - pd.Timedelta(days=1) - off).year
+    return str(a0) if a0 == a1 else f"{a0}-{str(a1)[-2:]}"
+
+
+def comparacion_periodos(bh, rango_ts, gran, claves, anios, lado=None):
+    """Lo mismo que muestra la barra, `anios` años atrás, período a período.
+
+    `bh` son las líneas del parquet ENTERO (`lineas_documentos`) con los
+    filtros de la tarjeta puestos; `rango_ts`, `(inicio, fin exclusivo)` del
+    rango de la franja como Timestamps; `claves`, las del eje. Cada año es
+    un dict: `rot` («2025»), `tot` —su valor en cada clave del eje, 0 donde
+    no hubo—, `total` del rango corrido entero y `docs`.
+
+    El rango se corre con `desfase_comparacion` y las fechas se traen de
+    vuelta al año de ahora antes de agruparlas: así el período del año pasado
+    cae en la MISMA clave que su barra, sin traducir rótulos. Pura."""
+    ini, fin = rango_ts
+    salida = []
+    for n in range(1, int(anios) + 1):
+        off = desfase_comparacion(gran, n)
+        h = bh[(bh["fecha"] >= ini - off) & (bh["fecha"] < fin - off)]
+        h = _validas(h, lado)
+        clave = _periodo_serie(h["fecha"] + off, gran)
+        por = h["valor"].groupby(clave.values).sum()
+        salida.append({
+            "n": n,
+            "rot": rotulo_anio(ini, fin, off),
+            "tot": [float(por.get(c, 0.0)) for c in claves],
+            "total": float(h["valor"].sum()),
+            "docs": int(h["doc"].nunique()),
+        })
+    return salida
+
+
+def rango_poco_registro(bh, rango_ts, lado=None, umbral=0.5,
+                        minimo_ref=20):
+    """`(documentos, referencia)` si el RANGO entero tiene menos de la mitad
+    de los documentos de lo normal, o None (regla #626).
+
+    `meses_poco_registro` sólo mira meses ENTEROS, y el rango de entrada de
+    «Salidas por Área» —los últimos 30 días, «10 set – 9 oct»— no tiene
+    ninguno: con 84 salidas en septiembre contra ~250 de costumbre, los
+    cuadros pintaban «−69 %» en verde sin aviso. La referencia es la mediana
+    mensual de los doce meses anteriores al rango, llevada a sus días.
+    Pura."""
+    ini, fin = rango_ts
+    dv = _validas(bh, lado)
+    if dv.empty:
+        return None
+    n = int(dv[(dv["fecha"] >= ini) & (dv["fecha"] < fin)]["doc"].nunique())
+    por_mes = dv.groupby(dv["fecha"].dt.to_period("M"))["doc"].nunique()
+    p0 = pd.Timestamp(ini).to_period("M")
+    prev = por_mes.reindex(pd.period_range(p0 - 12, p0 - 1, freq="M")).dropna()
+    if len(prev) < 6:
+        return None
+    ref = float(prev.median()) * (pd.Timestamp(fin) - pd.Timestamp(ini)).days / 30.4
+    if ref >= minimo_ref and n < umbral * ref:
+        return n, ref
+    return None
+
+
+def aviso_rango_poco_registro(poco, lado):
+    """`(corto, largo)` de `rango_poco_registro`, o None."""
+    if not poco:
+        return None
+    n, ref = poco
+    return (f"{n:,} vs ~{ref:,.0f}",
+            f"En estas fechas hay {lado.cuenta(n)}; lo normal serían "
+            f"~{ref:,.0f} (la mediana de los doce meses anteriores, llevada "
+            "a estos días). Una caída acá puede ser que no se registró, no "
+            "que se perdió menos.")
+
+
+def unidad_de_vista(dv):
+    """La unidad de las líneas `dv` si es UNA sola y la traen todas
+    («kg»), o "" — y entonces la cantidad no se suma: kilos más unidades no
+    es un número (regla #626). Pura."""
+    if dv is None or dv.empty or "unid" not in dv.columns:
+        return ""
+    u = dv["unid"].fillna("").astype(str).str.strip()
+    if (u == "").any() or u.nunique() != 1:
+        return ""
+    return unidad_corta(u.iloc[0])
+
+
+def periodos_poco_registro(claves, gran, meses):
+    """`[bool]`, uno por clave del eje: si el período toca un mes de
+    `meses_poco_registro` (regla #626). Ahí una caída contra el año pasado
+    no se pinta de verde. Pura."""
+    poco = {p for p, _, _ in meses or ()}
+    if not poco:
+        return [False] * len(claves)
+    salida = []
+    for c in claves:
+        try:
+            ini, fin = _limites_periodo(str(c), gran)
+        except (TypeError, ValueError):
+            salida.append(False)
+            continue
+        toca = pd.period_range(ini, fin, freq="M")
+        salida.append(any(m in poco for m in toca))
+    return salida
+
+
+def variacion_pct(actual, antes):
+    """La variación en %, o None si antes no hubo nada contra qué medir."""
+    if not antes:
+        return None
+    return (actual - antes) / abs(antes) * 100.0
+
+
+def meses_poco_registro(bh, rango_ts, hoy, lado=None, umbral=0.5,
+                        minimo_ref=20):
+    """`[(mes, documentos, referencia)]`: los meses del rango con MENOS DE
+    LA MITAD de los documentos de lo normal — la mediana de los doce meses
+    anteriores a cada uno.
+
+    Nació de las salidas (regla #614): de ~250 por mes en ene–jul 2026 a 44
+    en agosto y 84 en septiembre, y una barra baja se lee como «hubo menos
+    merma» cuando puede ser «se registró menos». Sólo los meses ENTEROS
+    dentro del rango y ya cerrados (el que va en curso siempre tiene pocos),
+    con al menos seis meses de historia y una referencia de `minimo_ref`
+    documentos. `bh` son las líneas del parquet entero SIN los filtros de la
+    tarjeta: lo que se mide es cuánto se registra, no cuánto dio de baja un
+    área. Pura."""
+    ini, fin = rango_ts
+    dv = _validas(bh, lado)
+    if dv.empty:
+        return []
+    por_mes = dv.groupby(dv["fecha"].dt.to_period("M"))["doc"].nunique()
+    salida = []
+    for p in pd.period_range(ini, fin - pd.Timedelta(days=1), freq="M"):
+        if (p.start_time < ini or p.end_time >= fin
+                or p.end_time >= pd.Timestamp(hoy)):
+            continue
+        prev = por_mes.reindex(pd.period_range(p - 12, p - 1, freq="M")).dropna()
+        if len(prev) < 6:
+            continue
+        ref = float(prev.median())
+        n = int(por_mes.get(p, 0))
+        if ref >= minimo_ref and n < umbral * ref:
+            salida.append((p, n, ref))
+    return salida
 
 
 def _validas(bl, lado=None):
@@ -506,7 +745,8 @@ def resumen_por_periodo(bl, lado=None):
     """Una fila por período —la columna `clave` de `bl`—, en orden.
 
     `bl` son TODAS las líneas del recorte, las vacías incluidas. Columnas,
-    por NOMBRE: `valor`, `lineas`, `docs` y `areas` de las líneas VÁLIDAS
+    por NOMBRE: `valor`, `lineas`, `docs`, `areas` y `cant` (regla #626:
+    sólo se MUESTRA si la vista es de una sola unidad) de las líneas VÁLIDAS
     (`_validas`), y `anulados` y `sin_procesar`, que se cuentan en
     documentos y sobre todas: un anulado sin ítems también es un anulado.
     Un período que sólo tiene documentos que no suman no tiene barra y no
@@ -519,7 +759,8 @@ def resumen_por_periodo(bl, lado=None):
     dv = _validas(bl, lado)
     g = (dv.groupby("clave")
            .agg(valor=("valor", "sum"), lineas=("valor", "size"),
-                docs=("doc", "nunique"), areas=("area", "nunique"))
+                docs=("doc", "nunique"), areas=("area", "nunique"),
+                cant=("cant", "sum"))
            .sort_index())
     for extra in ("costo", "cortes"):
         if extra in dv.columns:
@@ -550,22 +791,25 @@ def no_suman(bl, lado=None):
     return int(anul.sum()), int(sin_proc.sum()), int(sin_items.sum())
 
 
-def trazas_por_area(dv, ord_claves, orden):
+def trazas_por_area(dv, ord_claves, orden, col="area", n_traza=_AREAS_TRAZA):
     """`[(nombre, color, [valor por período]), …]`: los tramos de la barra.
 
     Las `_AREAS_TRAZA` mayores de la VISTA, de abajo hacia arriba, y
     «Resto» con lo que falta para el total de cada período — el resto no se
     vuelve a sumar por área, así la barra cierra por construcción. Con
     cuatro áreas o menos van todas y no hay «Resto». Un área que suma 0 no
-    tiene tramo (seguiría contando en «Áreas»)."""
-    tot = dv.groupby("area")["valor"].sum().sort_values(ascending=False)
+    tiene tramo (seguiría contando en «Áreas»).
+
+    `col` es la columna que parte la barra: `area`, o `tipo` con «Por tipo»
+    en salidas (#614), con `n_traza` tramos y los colores de `orden`."""
+    tot = dv.groupby(col)["valor"].sum().sort_values(ascending=False)
     tot = tot[tot > 0]
     if tot.empty:
         return []
-    por = (dv.groupby(["clave", "area"])["valor"].sum()
-             .unstack("area").reindex(ord_claves).fillna(0.0))
-    nombres = (list(tot.index) if len(tot) <= _AREAS_TRAZA + 1
-               else list(tot.index[:_AREAS_TRAZA]))
+    por = (dv.groupby(["clave", col])["valor"].sum()
+             .unstack(col).reindex(ord_claves).fillna(0.0))
+    nombres = (list(tot.index) if len(tot) <= n_traza + 1
+               else list(tot.index[:n_traza]))
     col = colores_area(orden, nombres)
     trazas = [(a, col[a], [float(v) for v in por[a]]) for a in nombres]
     if len(nombres) < len(tot):
@@ -603,7 +847,7 @@ def _etiqueta_arriba(trazas, textos):
     return salida
 
 
-def _renglones(total, n_doc, var, gran, lado, segundo=None):
+def _renglones(total, n_doc, var, gran, lado, segundo=None, poco=False):
     """Los renglones de la etiqueta de UNA barra como `(plano, html)`: el
     total, los documentos y la variación — la etiqueta de Compras con
     «req.» o «sal.» donde aquélla dice «docs». `segundo` reemplaza al
@@ -619,6 +863,9 @@ def _renglones(total, n_doc, var, gran, lado, segundo=None):
         estado, pct, _ = var
         if estado == "ok":
             _t, _c = _fmt_variacion(pct)
+            # Una caída en un mes con poco registro, en gris (regla #626).
+            if poco and pct < 0:
+                _c = GRIS_TEXTO
             salida.append((_t, f"<span style='color:{_c}'><b>{_t}</b></span>"))
         elif estado == "parcial":
             salida.append(("parcial",
@@ -627,7 +874,8 @@ def _renglones(total, n_doc, var, gran, lado, segundo=None):
     return salida
 
 
-def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS):
+def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS,
+                   partir=PARTIR_AREA, orden_tipo=()):
     """Todo lo que la tarjeta dibuja de un recorte, sin dibujar nada.
 
     `bl` son TODAS las líneas del recorte (las vacías incluidas: cuentan en
@@ -643,7 +891,8 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS):
          "lado": lado}
     if not claves:
         return v
-    rot = {c: _rotulo_periodo(c, gran) for c in claves}
+    # Con el rango: una semana cortada se nombra por sus días (regla #619).
+    rot = {c: _rotulo_periodo(c, gran, rango) for c in claves}
     if gran == "Día":
         dias = [pd.Timestamp(c).date() for c in claves]
         fer = set()
@@ -680,7 +929,12 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS):
         var_nota=[_nota_variacion(_v, gran, c, _ant(_v), rango,
                                   sustantivo=lado.plur)
                   for c, _v in zip(claves, variaciones)],
-        trazas=trazas_por_area(dv, claves, orden),
+        trazas=(trazas_por_area(dv, claves, orden_tipo,
+                                col=_PARTIR_COL[partir],
+                                n_traza=_PARTIR_N[partir])
+                if partir in _PARTIR_COL and partir != PARTIR_AREA else
+                trazas_por_area(dv, claves, orden)),
+        partir=partir,
     )
     # Qué áreas hay en cada período, de mayor a menor: el tooltip de la
     # columna «Áreas» del Resumen.
@@ -692,14 +946,20 @@ def vista_periodos(bl, gran, rango=None, orden=(), lado=REQUERIMIENTOS):
     return v
 
 
-def figura_periodos(v, alto_fig, titulo="", foco=None):
+def figura_periodos(v, alto_fig, titulo="", foco=None, comps=()):
     """La figura de la tarjeta a partir de `vista_periodos`.
 
     `foco` es la clave del período en foco (o None): lo demás se atenúa
     por COLOR, no con `marker.opacity` — esa lista sobre barras con texto
     `outside` crashea Plotly en el navegador (regla #476). El eje es
     LINEAL con los rótulos a mano, como el de Compras: el calendario de
-    Día y la traducción del clic hablan en índices."""
+    Día y la traducción del clic hablan en índices.
+
+    `comps` son los años de `comparacion_periodos`: cada uno, un TRAZO
+    horizontal gris a la altura que tuvo ese período, encima o adentro de su
+    barra (regla #614). Un trazo y no una barra al lado, a propósito: la
+    barra ya va partida por área y la etiqueta usa el ancho; una segunda
+    barra por período partía el ancho en dos y las etiquetas no entraban."""
     claves, gran, lado = v["claves"], v["gran"], v["lado"]
     n = len(claves)
     res = v["res"]
@@ -716,9 +976,10 @@ def figura_periodos(v, alto_fig, titulo="", foco=None):
               else [None] * n)
     segundos = [(f"{t / c:.0%} merma" if (lado.merma and c) else None)
                 for t, c in zip(v["tot"], costos)]
-    reng = [_renglones(fmt_k(t) if t else None, r, var, gran, lado, s)
-            for t, r, var, s in zip(v["tot"], docs, v["variaciones"],
-                                    segundos)]
+    _poco = v.get("poco") or [False] * n
+    reng = [_renglones(fmt_k(t) if t else None, r, var, gran, lado, s, pc)
+            for t, r, var, s, pc in zip(v["tot"], docs, v["variaciones"],
+                                        segundos, _poco)]
     plan, k_etq, alto_etq = _plan_etiquetas(
         n, [[p for p, _ in r] for r in reng], alto_fig)
     textos = [None] * n
@@ -748,7 +1009,7 @@ def figura_periodos(v, alto_fig, titulo="", foco=None):
             for x in res["anulados"]]
     xs = list(range(n))
     for i, (nombre, color, vals) in enumerate(trazas):
-        rot = nombre if nombre == "Resto" else _nombre_area(nombre)
+        rot = nombre_tramo(nombre, v.get("partir", PARTIR_AREA))
         if foco is not None and foco in claves:
             color = [color if c == foco else _con_alpha(color, _ATENUADO)
                      for c in claves]
@@ -767,11 +1028,34 @@ def figura_periodos(v, alto_fig, titulo="", foco=None):
     if len(trazas) > 1:
         fig.update_layout(barmode="stack")
 
+    # ── Los años comparados: un trazo por período ─────────────────────────
+    # El largo del trazo sigue al ancho de la barra (~0.8 del paso del eje
+    # sobre un lienzo de `_LIENZO_PX`), con techo y piso para que con dos
+    # barras no cruce la tarjeta ni con 60 desaparezca.
+    _largo = int(max(10, min(56, _LIENZO_PX / max(n, 1) * 0.55)))
+    tope_comp = 0.0
+    for j, comp in enumerate(comps or ()):
+        ys = [t if t else None for t in comp["tot"]]
+        tope_comp = max([tope_comp] + [t for t in comp["tot"] if t])
+        fig.add_scatter(
+            x=xs, y=ys, mode="markers", cliponaxis=False, name=comp["rot"],
+            marker=dict(symbol="line-ew", size=_largo,
+                        line=dict(width=3, color=_COLORES_COMP[
+                            min(j, len(_COLORES_COMP) - 1)])),
+            customdata=list(zip(v["hover"], [comp["rot"]] * n)),
+            hovertemplate=("%{customdata[0]}<br><b>Mismo período de "
+                           "%{customdata[1]}</b>: S/ %{y:,.2f}<extra></extra>"),
+        )
+
     _compras_layout(fig, alto=alto_fig)
     if plan:
         _y = _techo_etiquetas(max(v["tot"]), min(0.0, min(v["tot"])),
                               alto_fig, alto_etq)
         if _y:
+            # El trazo de un año que dio de baja MÁS que la barra más alta
+            # tiene que entrar: el techo lo pone el mayor de los dos.
+            if tope_comp > _y[1]:
+                _y = [_y[0], tope_comp * 1.06]
             fig.update_yaxes(range=_y)
     # SIN LEYENDA, a diferencia de Compras: la fila de KPI de la cabecera
     # ya nombra cada tramo con su color, su monto y su % (`_html_kpi`), así
@@ -807,8 +1091,56 @@ def figura_periodos(v, alto_fig, titulo="", foco=None):
     return fig
 
 
-def tabla_resumen(v, foco=None):
-    """`(filas, total)` de la grilla del Resumen: una fila por barra."""
+def tabla_resumen(v, foco=None, comp=None, tramos=False, unidad="",
+                  poco=None):
+    """`(filas, total)` de la grilla del Resumen: una fila por barra.
+
+    Con `comp` —el año más cercano de `comparacion_periodos`— suma dos
+    columnas: lo de ese período ese año (`ant`) y la variación (`vs_ant`,
+    en %, vacía donde ese año no hubo nada). Regla #614.
+
+    Regla #626: con `unidad` («kg»), la columna `cant` con la cantidad de
+    cada barra —va en `filas.attrs["unidad"]` para la cabecera—; y `poco`,
+    un bool por barra (`periodos_poco_registro`), viaja oculto como
+    `__poco` para que la grilla no pinte de verde una caída de un mes con
+    poco registro."""
+    filas, total = _tabla_resumen(v, foco)
+    if unidad:
+        _cant = [round(float(x), 3) for x in v["res"]["cant"]]
+        filas.insert(filas.columns.get_loc("valor"), "cant", _cant)
+        total["cant"] = f"{fmt_cant(round(sum(_cant), 1))} {unidad}"
+    filas.attrs["unidad"] = unidad
+    if poco is not None:
+        filas["__poco"] = list(poco)
+    # Con la barra partida por tipo o por producto (#614), una columna por
+    # TRAMO, en el orden de la barra: el gráfico escrito como tabla. La
+    # lista de `(campo, rótulo)` viaja en `filas.attrs["tramos"]`.
+    cols_tramo = []
+    # Con UN tramo (un tipo elegido) su columna repetiría el valorizado.
+    if tramos and len(v.get("trazas") or ()) > 1:
+        _i = filas.columns.get_loc("valor") + 1
+        for j, (nombre, _color, vals) in enumerate(v["trazas"]):
+            campo = f"tr_{j}"
+            filas.insert(_i + j, campo, [round(float(x), 2) for x in vals])
+            total[campo] = f"S/ {sum(vals):,.2f}"
+            cols_tramo.append((campo, nombre_tramo(nombre, v.get("partir"))))
+    if comp:
+        # Antes de «Variación» y del Estado: la grilla muestra las columnas
+        # en el orden del df, y lo del año pasado se lee al lado del monto.
+        _i = filas.columns.get_loc("variacion")
+        filas.insert(_i, "vs_ant", [variacion_pct(a, b)
+                                    for a, b in zip(v["tot"], comp["tot"])])
+        filas.insert(_i, "ant", [round(t, 2) for t in comp["tot"]])
+        _var = variacion_pct(float(sum(v["tot"])), comp["total"])
+        total["ant"] = f"S/ {comp['total']:,.2f}"
+        total["vs_ant"] = ("" if _var is None
+                           else f"{'+' if _var > 0 else '−'}{abs(_var):.0f}%")
+    filas.attrs["tramos"] = cols_tramo
+    filas.attrs["unidad"] = unidad
+    return filas, total
+
+
+def _tabla_resumen(v, foco=None):
     res, gran, lado = v["res"], v["gran"], v["lado"]
     tot_vista = float(sum(v["tot"])) or 0.0
     estados = [_texto_estado(int(a), int(s), lado)
@@ -1017,7 +1349,8 @@ def _mayor_valido(amb, lado=None):
 
 
 def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
-              costo_area=None):
+              costo_area=None, comps=(), aviso=None,
+              unidad=("área", "áreas"), nombrar=_nombre_area, cantidad=""):
     """La fila de KPI: el total de la vista y una tarjeta por TRAMO de la
     barra, con el color del tramo. Es también la leyenda del gráfico, dicha
     con números. `nota` es `(corto, largo)` de lo que no suma, o None.
@@ -1026,18 +1359,45 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
     vista, que cierra la fila con su % de merma— y `costo_area`, `{área:
     lo porcionado}`, para que el tooltip de cada área diga cuánto pierde de
     lo que ELLA porciona: la parte de la merma total y la propia no son lo
-    mismo (Producción concentra la merma porque porciona casi todo)."""
-    def _t(rot, val, sub, clase="", tip="", color=None):
+    mismo (Producción concentra la merma porque porciona casi todo).
+
+    `comps` (regla #614) suma, pegada al total, una tarjeta por año
+    comparado: lo de ese año en el mismo rango y la variación, roja si
+    subió. Su cuadrito es el color del trazo que la representa en el
+    gráfico. `aviso` es `(corto, largo)` de los meses con pocos documentos
+    (`meses_poco_registro`), en ámbar al final de la fila; con él, una
+    caída contra el año comparado va en gris y no en verde (regla #626).
+    `cantidad` («1,317 kg») va junto a la cuenta de documentos del total,
+    sólo cuando la vista es de una unidad (`unidad_de_vista`, #626)."""
+    def _t(rot, val, sub, clase="", tip="", color=None, sub_color=None):
         sw = (f'<span class="mp-kpi-sw" style="background:{color}"></span>'
               if color else "")
+        _sc = f' style="color:{sub_color};font-weight:600"' if sub_color else ""
         return (f'<div class="mp-kpi {clase}" title="{escape(tip or rot)}">'
                 f'<span class="mp-kpi-rot">{sw}{escape(rot)}</span>'
                 f'<span class="mp-kpi-val">{escape(val)}'
-                f'<span class="mp-kpi-sub">{escape(sub)}</span></span></div>')
+                f'<span class="mp-kpi-sub"{_sc}>{escape(sub)}</span></span></div>')
 
-    _n = lado.cuenta(n_docs)
+    _n = lado.cuenta(n_docs) + (f" · {cantidad}" if cantidad else "")
     partes = [_t(lado.rot_total, fmt_k(total), _n, "mp-kpi-total",
                  f"{lado.rot_total}: S/ {total:,.2f} · {_n}")]
+    for j, comp in enumerate(comps or ()):
+        _v = variacion_pct(total, comp["total"])
+        _txt = ("sin datos" if not comp["total"]
+                else f"▲ ×{_v / 100 + 1:.0f}" if _v >= 900
+                else f"{'▲ +' if _v > 0 else '▼ −'}{abs(_v):.0f}%")
+        _col = (None if _v is None
+                else AJUSTE_NEG_TEXTO if _v > 0
+                else GRIS_TEXTO if aviso else AJUSTE_POS_TEXTO)
+        partes.append(_t(
+            f"Mismo rango {comp['rot']}", fmt_k(comp["total"]), _txt,
+            "mp-kpi-comp",
+            f"Mismo rango de fechas en {comp['rot']}: S/ {comp['total']:,.2f}"
+            f" · {lado.cuenta(comp['docs'])}"
+            + ("" if _v is None else
+               f". Este rango: S/ {total:,.2f} ({_v:+.1f}%)"),
+            color=_COLORES_COMP[min(j, len(_COLORES_COMP) - 1)],
+            sub_color=_col))
     if len(trazas) > 1:
         for nombre, color, vals in trazas:
             v = float(sum(vals))
@@ -1045,9 +1405,10 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
             propio = ""
             if nombre == "Resto":
                 n_resto = len(tot_area) - (len(trazas) - 1)
-                rot = f"{n_resto} área" + ("" if n_resto == 1 else "s") + " más"
+                rot = (f"{n_resto} "
+                       f"{unidad[0] if n_resto == 1 else unidad[1]} más")
             else:
-                rot = _nombre_area(nombre)
+                rot = nombrar(nombre)
                 c_area = (costo_area or {}).get(nombre)
                 if c_area:
                     propio = (f" · su merma es el {v / c_area:.1%} de lo que "
@@ -1063,7 +1424,24 @@ def _html_kpi(total, n_docs, trazas, tot_area, nota, lado, costo=None,
                          f"merma es el {_pm}"))
     if nota:
         partes.append(_t("No suman", nota[0], "", "mp-kpi-nota", nota[1]))
+    if aviso:
+        partes.append(_t("Pocas " + lado.plur, aviso[0], "", "mp-kpi-aviso",
+                         aviso[1]))
     return '<div class="mp-kpis">' + "".join(partes) + "</div>"
+
+
+def aviso_poco_registro(meses, lado):
+    """`(corto, largo)` de `meses_poco_registro`, o None."""
+    if not meses:
+        return None
+    corto = " · ".join(cortes.MESES_ABR_ES[p.month - 1] for p, _, _ in meses)
+    detalle = "; ".join(
+        f"{cortes.MESES_ABR_ES[p.month - 1]} {p.year}: {lado.cuenta(n)} "
+        f"(lo normal, ~{ref:,.0f})" for p, n, ref in meses)
+    return (corto,
+            f"Meses con menos de la mitad de {lado.los()} {lado.plur} de lo "
+            f"normal —la mediana de los 12 meses anteriores—: {detalle}. Una "
+            "barra baja ahí puede ser que no se registró, no que hubo menos.")
 
 
 def nota_no_suman(bl_scope, lado, vacios_nombrables=True):
@@ -1150,8 +1528,15 @@ _CSS_MOLDE = """<style>
     width: auto !important;
     max-width: 260px !important;
 }
-.st-key-__C___fila > [data-testid="stLayoutWrapper"]:has(> .st-key-__C___kpi) {
+.st-key-__C___fila > [data-testid="stLayoutWrapper"]:has(> .st-key-__C___kpifila) {
     flex: 1 1 100% !important;
+    min-width: 0 !important;
+    width: auto !important;
+}
+/* Adentro, la fila de KPI se queda con lo que sobra y la fecha (regla
+   #617) mide lo suyo, pegada a la derecha. */
+.st-key-__C___kpifila > [data-testid="stLayoutWrapper"]:has(> .st-key-__C___kpi) {
+    flex: 1 1 auto !important;
     min-width: 0 !important;
     width: auto !important;
 }
@@ -1196,10 +1581,45 @@ _CSS_MOLDE = """<style>
 .st-key-__C___hdr_tipo .react-aria-ComboBox input,
 .st-key-__C___hdr_familia .react-aria-ComboBox input,
 .st-key-__C___hdr_producto .react-aria-ComboBox input { font-size: 12px !important; }
+/* Desde el 2026-10-10 son `st.multiselect` (regla #625), con las DOS formas
+   del de Streamlit, como en «Compras por período» (#623): en la 1.64 de
+   Cloud las fichas van en un `stMultiSelectTagsContainer` de 38px que
+   estiraba la caja a 40; en la 1.59 de esta máquina es un
+   `[data-baseweb="select"]`. Las dos a los 32 de la fila, y lo que no entra
+   en un renglón se recorta: la lista abierta dice todo lo elegido. */
+.st-key-__C___hdr_area [data-testid="stMultiSelectTagsContainer"],
+.st-key-__C___hdr_tipo [data-testid="stMultiSelectTagsContainer"],
+.st-key-__C___hdr_familia [data-testid="stMultiSelectTagsContainer"],
+.st-key-__C___hdr_producto [data-testid="stMultiSelectTagsContainer"] {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    height: 30px !important;
+    min-height: 0 !important;
+    align-items: center !important;
+    overflow: hidden !important;
+}
+.st-key-__C___hdr_area [data-baseweb="select"] > div,
+.st-key-__C___hdr_tipo [data-baseweb="select"] > div,
+.st-key-__C___hdr_familia [data-baseweb="select"] > div,
+.st-key-__C___hdr_producto [data-baseweb="select"] > div {
+    min-height: 32px !important;
+    height: 32px !important;
+    font-size: 12px !important;
+}
+.st-key-__C___hdr_area [data-baseweb="select"] > div > div,
+.st-key-__C___hdr_tipo [data-baseweb="select"] > div > div,
+.st-key-__C___hdr_familia [data-baseweb="select"] > div > div,
+.st-key-__C___hdr_producto [data-baseweb="select"] > div > div {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    max-height: 30px !important;
+    overflow: hidden !important;
+}
 /* Los dos toggles —granularidad arriba, modo abajo— acotados a SU key y no
    al contenedor (CLAUDE.md: una regla colgada del contenedor captura los
    widgets que se agreguen después). */
 .st-key-__K___gran [data-testid="stButtonGroup"] button,
+.st-key-__K___partir [data-testid="stButtonGroup"] button,
 .st-key-__K___modo [data-testid="stButtonGroup"] button {
     min-height: 32px !important;
     height: 32px !important;
@@ -1262,6 +1682,10 @@ _CSS_MOLDE = """<style>
     font-weight: 700;
 }
 .st-key-__C___kpi .mp-kpi-nota { max-width: 300px; }
+/* Los años comparados y el aviso de pocos documentos (regla #614). */
+.st-key-__C___kpi .mp-kpi-aviso { max-width: 220px; }
+.st-key-__C___kpi .mp-kpi-aviso .mp-kpi-rot,
+.st-key-__C___kpi .mp-kpi-aviso .mp-kpi-val { color: var(--warning-text); }
 .st-key-__C___kpi .mp-kpi-nota .mp-kpi-val {
     font-size: 12px;
     font-weight: 400;
@@ -1290,25 +1714,38 @@ def _css(lado):
 # LAS TARJETAS
 # ===========================================================================
 
-def tarjeta_requerimientos_periodo(d, *, cols, orden=()):
+def tarjeta_requerimientos_periodo(d, *, cols, orden=(), rango=None,
+                                   fecha=None):
     """Requerimientos por período: barras, Resumen y Detalle.
 
     `d` son las líneas de requerimientos ya recortadas por la fecha de la
-    franja y por sus chips (Sub Almacén, Familia); `cols` los nombres de
+    tarjeta y por los chips (Sub Almacén, Familia); `cols` los nombres de
     columna resueltos (`fecha`, `doc`, `area`, `estado`, `fam`, `prod`,
     `cant`, `punit`, `val`); `orden` el de `orden_areas`, que reparte los
-    colores por área."""
-    _tarjeta(d, REQUERIMIENTOS, cols, orden)
+    colores por área.
+
+    Las cuatro tarjetas «por período» reciben además `rango` —`(inicio, fin
+    EXCLUSIVO)` de SU fecha, regla #617— y `fecha`, el que dibuja su botón
+    de fecha (`movimientos.fecha_de_vista`). Sin `rango`, el de la franja."""
+    _tarjeta(d, REQUERIMIENTOS, cols, orden, rango_ts=rango, fecha=fecha)
 
 
-def tarjeta_salidas_periodo(d, *, cols, orden=()):
+def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
+                            rot_fecha="", rango=None, fecha=None):
     """Salidas por período: la misma tarjeta sobre `salidas.parquet`, con el
     tipo de descargo como filtro y como columna del Detalle (`cols["tipo"]`).
-    Sin precio unitario en el parquet, se despeja de cada línea."""
-    _tarjeta(d, SALIDAS, cols, orden)
+    Sin precio unitario en el parquet, se despeja de cada línea.
+
+    `hist` es el parquet ENTERO con los chips de la franja (sin recorte de
+    fecha), y `anios` cuántos años atrás compara: 0, 1 o 2 (regla #614).
+    `cols["fecha"]` es la fecha que eligió el usuario —registro o
+    proceso—, y `rot_fecha` cómo se dice en el pie («fecha de registro»)."""
+    _tarjeta(d, SALIDAS, cols, orden, hist=hist, anios=anios,
+             rot_fecha=rot_fecha, rango_ts=rango, fecha=fecha)
 
 
-def tarjeta_porcionamientos_periodo(d, *, cols, orden=()):
+def tarjeta_porcionamientos_periodo(d, *, cols, orden=(), precios=None,
+                                    rango=None, fecha=None):
     """Porcionamientos: la misma tarjeta sobre `porcionamientos.parquet`,
     con la MERMA EN SOLES en la barra (regla #510).
 
@@ -1316,11 +1753,16 @@ def tarjeta_porcionamientos_periodo(d, *, cols, orden=()):
     (`fecha`, `doc`, `area`, `tipo` —el usuario—, `prod`, `unid`, `cant`,
     `merma`, `fin`, `cant_fin`, `unid_fin`, `pprom`, `peso`). `orden` es el
     de requerimientos, como en las otras dos: el color de un área es el
-    mismo en las tres tarjetas."""
-    _tarjeta(d, PORCIONAMIENTOS, cols, orden)
+    mismo en las tres tarjetas.
+
+    `precios` (regla #615): con el precio promedio de hoy de cada producto,
+    la merma se valoriza como el Reporte de Mermas del Almacén
+    (`a_precio_de_hoy`); sin él, al costo del día."""
+    _tarjeta(d, PORCIONAMIENTOS, cols, orden, precios=precios,
+             rango_ts=rango, fecha=fecha)
 
 
-def tarjeta_produccion_periodo(d, *, cols, orden=()):
+def tarjeta_produccion_periodo(d, *, cols, orden=(), rango=None, fecha=None):
     """Producción: la misma tarjeta sobre `ordenesproduccion.parquet` (el
     reporte «Producción» del Almacén, `Sp_RepOrdenProduccion`), con el
     valorizado de lo producido en la barra (regla #575).
@@ -1330,10 +1772,11 @@ def tarjeta_produccion_periodo(d, *, cols, orden=()):
     orden) y `unid` (la unidad de la cantidad). Las órdenes GENERADAS no
     suman: no produjeron nada. `orden` es el de requerimientos, como en las
     otras tres."""
-    _tarjeta(d, PRODUCCION, cols, orden)
+    _tarjeta(d, PRODUCCION, cols, orden, rango_ts=rango, fecha=fecha)
 
 
-def _tarjeta(d, lado, cols, orden):
+def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
+             precios=None, rango_ts=None, fecha=None):
     k, c = lado.k, lado.c
     with st.container(border=True, key=lado.card):
         st.markdown(_css(lado), unsafe_allow_html=True)
@@ -1346,6 +1789,8 @@ def _tarjeta(d, lado, cols, orden):
         # no una por fila del parquet (el grano, regla #510).
         if lado.merma:
             base, cortes_todos = lineas_porcionamientos(d, **cols)
+            if precios is not None:
+                base = a_precio_de_hoy(base, precios)
         else:
             base, cortes_todos = lineas_documentos(d, **cols), None
         lin = base[~base["vacio"]]
@@ -1359,125 +1804,158 @@ def _tarjeta(d, lado, cols, orden):
                     .sort_values(ascending=False))
             return [x for x in s.index if x]
 
-        def _opciones(centinela, columna, mascara, key):
-            """`(opciones, previo, máscara siguiente)` de un desplegable.
+        def _opciones(columna, mascara, key):
+            """`(opciones, elegidos, máscara siguiente)` de un filtro.
 
-            Del valor vigente en `session_state`, que es lo que el widget va
-            a mostrar: cada lista ofrece lo que dejan los filtros de su
-            izquierda, ordenado por valor. Lo elegido que dejó de estar (el
-            rango se angostó) se AGREGA al final en vez de resetearse: la
-            vista sale vacía y un cartel dice por qué — el criterio de
-            Producto en Compras."""
-            ops = [centinela] + _rank(columna, mascara)
-            prev = st.session_state.get(key)
-            if prev is not None and prev not in ops:
-                ops.append(prev)
+            Cada lista ofrece lo que dejan los filtros de su izquierda,
+            ordenado por valor, y lo elegido que dejó de estar (el rango se
+            angostó) se AGREGA al final en vez de soltarse: la vista sale
+            vacía y un cartel dice por qué — el criterio de Producto en
+            Compras, hoy `base.seleccion_multiple` (regla #625). Las keys van
+            en PLURAL: las de antes guardaban el string de un selectbox."""
+            sel, ops = seleccion_multiple(key, _rank(columna, mascara),
+                                          conservar=True)
             sig = mascara.copy()
-            if prev not in (None, centinela):
-                sig &= lin[columna] == prev
-            return ops, sig
+            if sel:
+                sig &= lin[columna].isin(sel)
+            return ops, sel, sig
 
         # ── Las opciones, ANTES de dibujar los widgets ────────────────────
         todo = pd.Series(True, index=lin.index)
-        ops_area, m_area = _opciones(_AREA_TODAS, "area", todo, f"{k}_area")
+        ops_area, area_sel, m_area = _opciones("area", todo, f"{k}_areas")
+        ops_tipo, tipo_sel, m_tipo = [], [], m_area
         if con_tipo:
-            ops_tipo, m_tipo = _opciones(lado.tipo_todos, "tipo", m_area,
-                                         f"{k}_tipo")
-        else:
-            ops_tipo, m_tipo = [lado.tipo_todos], m_area
+            ops_tipo, tipo_sel, m_tipo = _opciones("tipo", m_area,
+                                                   f"{k}_tipos")
+        ops_fam, fam_sel, m_fam = [], [], m_tipo
         if lado.con_familia:
-            ops_fam, m_fam = _opciones(_FAM_TODAS, "fam", m_tipo,
-                                       f"{k}_familia")
-        else:
-            ops_fam, m_fam = [_FAM_TODAS], m_tipo
+            ops_fam, fam_sel, m_fam = _opciones("fam", m_tipo,
+                                                f"{k}_familias")
         prods = _rank("prod", m_fam)
         etq_top = {f"Top {_n} por {lado.top}": _n for _n in _TOPS}
-        ops_prod = ([_PROD_TODOS]
-                    + [_e for _e, _n in etq_top.items() if _n < len(prods)]
-                    + prods)
-        _p_prev = st.session_state.get(f"{k}_producto")
-        if _p_prev is not None and _p_prev not in ops_prod:
-            # Los centinelas «Top N» sí se resetean: «Top 20» no significa
-            # nada en un recorte donde quedan 8 productos.
-            if _p_prev == _PROD_TODOS or _p_prev in etq_top:
-                st.session_state[f"{k}_producto"] = _PROD_TODOS
-            else:
-                ops_prod.append(_p_prev)
+        # Los «Top N» se sueltan si dejan de ofrecerse: «Top 20» no significa
+        # nada en un recorte donde quedan 8 productos. Con varios elegidos,
+        # un «Top N» suma sus N a los productos sueltos.
+        prod_sel, ops_prod = seleccion_multiple(
+            f"{k}_productos",
+            [_e for _e, _n in etq_top.items() if _n < len(prods)] + prods,
+            conservar=True, soltar=etq_top)
 
         # ── La cabecera: granularidad, los filtros y la fila de KPI ───────
-        tipo_sel = lado.tipo_todos
-        fam_sel = _FAM_TODAS
         with st.container(horizontal=True, gap="small", key=f"{c}_fila"):
             gran = st.segmented_control(
                 "Agrupar por", _GRAN_OPCIONES, default=_GRAN_DEFAULT,
                 required=True, key=f"{k}_gran",
                 label_visibility="collapsed")
-            with st.container(key=f"{c}_hdr_area"):
-                area_sel = st.selectbox(
-                    "Área", ops_area, key=f"{k}_area",
-                    format_func=lambda a: (a if a == _AREA_TODAS
-                                           else _nombre_area(a)),
+            # Sólo donde hay tipo (salidas): con qué se parte la barra.
+            partir = PARTIR_AREA
+            if con_tipo:
+                # Abre POR TIPO (regla #626): por área, la barra juntaba
+                # la merma con la comida de personal y el despacho a Mayta,
+                # y el tramo mayor —«Cocina personal»— era otra cosa que
+                # una baja.
+                partir = st.segmented_control(
+                    "Partir por", (PARTIR_AREA, PARTIR_TIPO, PARTIR_PRODUCTO),
+                    default=PARTIR_TIPO, required=True, key=f"{k}_partir",
                     label_visibility="collapsed",
-                    help=f"Acota ESTA tarjeta al área que {lado.accion}, "
-                         "encima de los chips de la franja. Ordenadas por "
-                         f"{lado.medida} en el rango.")
+                    help=("Con qué se parte cada barra: **por área**, **por "
+                          "tipo** de descargo —bajas, comida de personal, "
+                          "despacho a Mayta…— o **por producto** (los cuatro "
+                          "mayores). La fila de abajo nombra cada tramo con su "
+                          "monto, y el Resumen le da una columna a cada uno."
+                          )) or PARTIR_TIPO
+            # Los cuatro, de selección MÚLTIPLE (regla #625). Los valores ya
+            # se leyeron arriba; acá sólo se dibujan.
+            with st.container(key=f"{c}_hdr_area"):
+                st.multiselect(
+                    "Área", ops_area, key=f"{k}_areas",
+                    format_func=_nombre_area, placeholder=_AREA_TODAS,
+                    label_visibility="collapsed",
+                    help=f"Acota ESTA tarjeta a una o varias áreas que "
+                         f"{lado.accion}, encima de los chips de la franja. "
+                         f"Ordenadas por {lado.medida} en el rango.")
             if con_tipo:
                 with st.container(key=f"{c}_hdr_tipo"):
-                    tipo_sel = st.selectbox(
-                        lado.rotulo_tipo, ops_tipo, key=f"{k}_tipo",
+                    st.multiselect(
+                        lado.rotulo_tipo, ops_tipo, key=f"{k}_tipos",
+                        placeholder=lado.tipo_todos,
                         label_visibility="collapsed",
                         help=lado.ayuda_tipo or None)
             # Sin familia en el parquet (porcionamientos) no hay filtro: un
             # desplegable con una sola opción no filtra nada.
             if lado.con_familia:
                 with st.container(key=f"{c}_hdr_familia"):
-                    fam_sel = st.selectbox(
-                        "Familia", ops_fam, key=f"{k}_familia",
-                        format_func=lambda f: (f if f == _FAM_TODAS
-                                               else _oracion(f)),
+                    st.multiselect(
+                        "Familia", ops_fam, key=f"{k}_familias",
+                        format_func=_oracion, placeholder=_FAM_TODAS,
                         label_visibility="collapsed",
-                        help="Acota la tarjeta a una familia de productos. "
-                             "Ofrece las de los filtros de su izquierda.")
+                        help="Acota la tarjeta a una o varias familias de "
+                             "productos. Ofrece las de los filtros de su "
+                             "izquierda.")
             with st.container(key=f"{c}_hdr_producto"):
-                prod_sel = st.selectbox(
-                    "Producto", ops_prod, key=f"{k}_producto",
+                st.multiselect(
+                    "Producto", ops_prod, key=f"{k}_productos",
+                    placeholder=_PROD_TODOS,
                     label_visibility="collapsed",
                     help=f"Ordenados por {lado.medida} en el rango: el primero "
                          f"es el de mayor {lado.top}. «Top N por {lado.top}» "
-                         "suma los N mayores en una sola serie. Se puede "
-                         "escribir para buscar.")
-            with st.container(key=f"{c}_kpi"):
-                kpi = st.empty()
+                         "suma los N mayores en una sola serie, y se puede "
+                         "combinar con productos sueltos. Se puede escribir "
+                         "para buscar.")
+            # La fila de KPI y, a su derecha, la fecha de la tarjeta (regla
+            # #617): ahí sobra lugar, y la fila de los controles va llena en
+            # Salidas. Un contenedor horizontal propio y no el `order` de un
+            # flex: así la fecha no abre un renglón más.
+            with st.container(horizontal=True, gap="small",
+                              vertical_alignment="center",
+                              key=f"{c}_kpifila"):
+                with st.container(key=f"{c}_kpi"):
+                    kpi = st.empty()
+                if fecha is not None:
+                    with st.container(key=f"{c}_fecha", width="content"):
+                        fecha()
         gran = gran or _GRAN_DEFAULT
-        area_sel = area_sel or _AREA_TODAS
-        tipo_sel = tipo_sel or lado.tipo_todos
-        fam_sel = fam_sel or _FAM_TODAS
-        prod_sel = prod_sel or _PROD_TODOS
+        # Los productos de verdad: un «Top N» vale por sus N.
+        _n_top = max((etq_top[_p] for _p in prod_sel if _p in etq_top),
+                     default=0)
+        prods_sel = set(prods[:_n_top]) | {
+            _p for _p in prod_sel if _p not in etq_top}
 
         # ── El recorte de la tarjeta, sobre TODAS las líneas ──────────────
         # Las vacías entran con los filtros de la cabecera (área y tipo son
         # del documento); con familia o producto puestos quedan afuera
         # solas, porque no tienen ni una ni otro.
-        m = pd.Series(True, index=base.index)
-        if area_sel != _AREA_TODAS:
-            m &= base["area"] == area_sel
-        if con_tipo and tipo_sel != lado.tipo_todos:
-            m &= base["tipo"] == tipo_sel
-        if fam_sel != _FAM_TODAS:
-            m &= base["fam"] == fam_sel
-        if prod_sel in etq_top:
-            m &= base["prod"].isin(prods[:etq_top[prod_sel]])
-        elif prod_sel != _PROD_TODOS:
-            m &= base["prod"] == prod_sel
-        bl = base[m].copy()
+        def _mascara(b):
+            # La misma para el rango y para los años que se comparan: lo
+            # del año pasado tiene que ser lo MISMO, en otra fecha.
+            # Dentro de un filtro, la unión; entre filtros, la intersección.
+            m = pd.Series(True, index=b.index)
+            if area_sel:
+                m &= b["area"].isin(area_sel)
+            if con_tipo and tipo_sel:
+                m &= b["tipo"].isin(tipo_sel)
+            if fam_sel:
+                m &= b["fam"].isin(fam_sel)
+            if prod_sel:
+                m &= b["prod"].isin(prods_sel)
+            return m
+
+        bl = base[_mascara(base)].copy()
         bl["clave"] = _periodo_serie(bl["fecha"], gran)
 
+        # Con VARIOS elegidos, el título los cuenta en vez de nombrarlos.
+        def _amb_de(sel, cuantos, fmt=lambda x: x):
+            if not sel:
+                return None
+            return fmt(sel[0]) if len(sel) == 1 else f"{len(sel)} {cuantos}"
+
         _amb = [x for x in (
-            None if area_sel == _AREA_TODAS else _nombre_area(area_sel),
-            None if tipo_sel == lado.tipo_todos else tipo_sel,
-            None if fam_sel == _FAM_TODAS else _oracion(fam_sel),
-            (None if prod_sel == _PROD_TODOS
-             else _compras_truncar(prod_sel)))
+            _amb_de(area_sel, "áreas", _nombre_area),
+            _amb_de(tipo_sel, {"Usuario": "usuarios"}.get(
+                lado.rotulo_tipo, "tipos")),
+            _amb_de(fam_sel, "familias", _oracion),
+            (_amb_de(prod_sel, "productos", _compras_truncar)
+             if len(prod_sel) < 2 else f"{len(prods_sel)} productos"))
             if x]
         # El ÁMBITO va al título, como en Compras: con los filtros de la
         # tarjeta y los chips de la franja, «por semana» a secas no deja
@@ -1494,22 +1972,53 @@ def _tarjeta(d, lado, cols, orden):
                        "sin ella la barra no se parte. Se agrega en su "
                        "consulta y llega con «Refrescar».")
 
-        rng = _rango_vigente()
+        rng = rango_ts if rango_ts is not None else _rango_vigente()
         rango = ((rng[0].date(), (rng[1] - pd.Timedelta(days=1)).date())
                  if rng else None)
-        v = vista_periodos(bl, gran, rango, orden, lado)
+        # Las líneas del parquet ENTERO, una vez: años comparados, aviso de
+        # poco registro y el orden ESTABLE de los tipos (sus colores, #614).
+        bh = (lineas_documentos(hist, **cols)
+              if hist is not None and not lado.merma else None)
+        orden_tipo = ()
+        if partir != PARTIR_AREA:
+            _o = _validas(bh if bh is not None else base, lado)
+            orden_tipo = (_o.groupby(_PARTIR_COL[partir])["valor"].sum()
+                          .sort_values(ascending=False).index.tolist())
+        v = vista_periodos(bl, gran, rango, orden, lado, partir=partir,
+                           orden_tipo=orden_tipo)
         if not v["claves"]:
             st.info(f"**{titulo}** — sin {lado.plur} que mostrar. Ampliá el "
-                    "rango de fechas (en la franja de arriba) o soltá algún "
-                    "filtro de la tarjeta.")
+                    "rango de fechas "
+                    + ("(el botón de fecha de esta tarjeta)" if fecha is not None
+                       else "(en la franja de arriba)")
+                    + " o soltá algún filtro de la tarjeta.")
             return
         claves = v["claves"]
+
+        # ── Años anteriores y meses con poco registro (regla #614) ────────
+        # Sobre el parquet ENTERO: el recorte de la franja deja afuera
+        # justo lo que se quiere comparar.
+        comps, aviso, meses_poco = [], None, []
+        if bh is not None and rng is not None:
+            if anios:
+                comps = comparacion_periodos(bh[_mascara(bh)], rng, gran,
+                                             claves, anios, lado)
+            meses_poco = meses_poco_registro(
+                bh, rng, pd.Timestamp.today().normalize(), lado)
+            aviso = aviso_poco_registro(meses_poco, lado)
+        v["poco"] = periodos_poco_registro(claves, gran, meses_poco)
 
         # ── Lo que NO suma, dicho en la fila de KPI ───────────────────────
         nota = nota_no_suman(
             bl, lado,
-            vacios_nombrables=fam_sel == _FAM_TODAS and prod_sel == _PROD_TODOS)
+            vacios_nombrables=not fam_sel and not prod_sel)
         dv = _validas(bl, lado)
+        # La cantidad, sólo con un filtro de PRODUCTO puesto y una sola
+        # unidad (regla #626): «cuánto arroz» se contesta en kilos.
+        unidad_v = (unidad_de_vista(dv)
+                    if prod_sel and not lado.merma else "")
+        cant_v = (f"{fmt_cant(round(float(dv['cant'].sum()), 1))} {unidad_v}"
+                  if unidad_v else "")
         # Porcionamientos cierra la fila con lo porcionado y le da a cada
         # área su % de merma PROPIO en el tooltip (#510).
         kw_kpi = (dict(costo=float(dv["costo"].sum()),
@@ -1518,8 +2027,12 @@ def _tarjeta(d, lado, cols, orden):
         kpi.markdown(
             _html_kpi(float(sum(v["tot"])), int(dv["doc"].nunique()),
                       v["trazas"],
-                      dv.groupby("area")["valor"].sum().loc[lambda s: s > 0],
-                      nota, lado, **kw_kpi),
+                      dv.groupby(_PARTIR_COL.get(partir, "area"))
+                      ["valor"].sum().loc[lambda s: s > 0],
+                      nota, lado, comps=comps, aviso=aviso,
+                      unidad=_PARTIR_UNIDAD.get(partir, ("área", "áreas")),
+                      nombrar=lambda n: nombre_tramo(n, partir),
+                      cantidad=cant_v, **kw_kpi),
             unsafe_allow_html=True)
 
         # ── Foco, modo y clic: se resuelven ANTES de dibujar (#398, #399) ─
@@ -1527,7 +2040,8 @@ def _tarjeta(d, lado, cols, orden):
         # foco; el modo se lee de `session_state` porque el alto de la
         # figura depende de él; el clic de la barra se lee de la key que se
         # DIBUJÓ la corrida anterior, con un contador en la key.
-        ctx = (gran, area_sel, tipo_sel, fam_sel, prod_sel)
+        ctx = (gran, tuple(area_sel), tuple(tipo_sel), tuple(fam_sel),
+               tuple(prod_sel), partir)
         if st.session_state.get(f"{k}_ctx_prev") != ctx:
             st.session_state[f"{k}_ctx_prev"] = ctx
             st.session_state[f"{k}_focus"] = None
@@ -1572,7 +2086,8 @@ def _tarjeta(d, lado, cols, orden):
 
         fig = figura_periodos(
             v, alto_fig, titulo=titulo,
-            foco=foco if (foco_ok and modo == _MODO_DETALLE) else None)
+            foco=foco if (foco_ok and modo == _MODO_DETALLE) else None,
+            comps=comps)
         # Lo que devuelve se ignora: el clic ya se leyó arriba.
         st.plotly_chart(fig, use_container_width=True, on_select="rerun",
                         selection_mode="points",
@@ -1605,7 +2120,8 @@ def _tarjeta(d, lado, cols, orden):
             # estrena cada vez que un clic en una fila lleva al Detalle: así
             # la grilla vuelve sin la selección vieja (regla #471).
             n_res = st.session_state.get(f"{k}_nres", 0)
-            k_res = f"{k}_res_grid_" + _clave_grilla(gran, ctx, rango, n_res)
+            k_res = f"{k}_res_grid_" + _clave_grilla(gran, ctx, rango, n_res,
+                                                     len(comps))
             with st.container(key=f"{c}_resumen"):
                 if lado.merma:
                     filas, total = tabla_resumen_porc(v, foco if foco_ok else None)
@@ -1614,14 +2130,23 @@ def _tarjeta(d, lado, cols, orden):
                         rotulo_periodo=_AGRUPADO_GRAN[gran].capitalize(),
                         ver_variacion=gran in _GRAN_VARIACION, total=total)
                 else:
-                    filas, total = tabla_resumen(v, foco if foco_ok else None)
+                    filas, total = tabla_resumen(
+                        v, foco if foco_ok else None,
+                        comp=comps[0] if comps else None,
+                        tramos=partir != PARTIR_AREA, unidad=unidad_v,
+                        poco=v["poco"])
                     clic_fila = renderizar_periodos_mov(
                         filas, altura=_ALTO_TABLA, key=k_res,
                         rotulo_periodo=_AGRUPADO_GRAN[gran].capitalize(),
                         rotulo_docs=lado.plur.capitalize(),
-                        ver_variacion=gran in _GRAN_VARIACION, total=total)
+                        ver_variacion=gran in _GRAN_VARIACION, total=total,
+                        rotulo_ant=comps[0]["rot"] if comps else "",
+                        tramos=filas.attrs.get("tramos", ()),
+                        unidad=filas.attrs.get("unidad", ""))
             pie.caption(
-                f"**{_del_al(dv['fecha'])}** · agrupado por "
+                f"**{_del_al(dv['fecha'])}**"
+                + (f" · por {rot_fecha}" if rot_fecha else "")
+                + " · agrupado por "
                 f"{_AGRUPADO_GRAN[gran]} — una fila por barra; un clic en "
                 "una fila (o en su barra) abre su detalle.")
             if clic_fila in set(claves):

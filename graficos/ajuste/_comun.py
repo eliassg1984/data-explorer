@@ -34,10 +34,13 @@ from cortes import (  # noqa: F401
     cortes_por_racha as _cortes_por_racha,
     etiqueta_corte as _etiqueta_corte,
 )
-from cortes import corte_contiguo, cortes_disponibles, fecha_operativa
+from cortes import fecha_operativa, sesiones_inventario, ultimo_cierre
+from estado_rango import atajo_de, atajos_meses
+import franja_fecha
 from tema import ACENTO, GRIS_BORDE, GRIS_TEXTO, LAVANDA_SELECCION
 from graficos.base import (
-    _layout, _slug, filtro_pills, sembrar_seleccion,
+    _layout, _slug, filtro_pills, k_rango_tarjeta, rango_tarjeta,
+    selector_fecha_tarjeta, sembrar_seleccion,
 )
 # _periodo_serie vive en graficos/compras/_comun.py; se reusa desde acá vía
 # graficos.compras (que ya la re-exporta para test_graficos.py) en vez de
@@ -74,12 +77,18 @@ def _fmt_corte(fecha):
 
 
 # ── EL MES DE UN CIERRE: el operativo o el del registro (regla #613) ─────
-# El cierre de fin de mes se registra del 1 al 6 del siguiente
-# (`cortes.DIA_CIERRE_OPERATIVO`). Con «Mes operativo» (el default) el
-# rango de la franja y el «Mes» de Evolución y de la tabla dinámica lo
+# El cierre de fin de mes se registra del 1 al 7 del siguiente
+# (`cortes.DIA_CIERRE_OPERATIVO`). Con «Mes operativo» (el default) los
+# meses de Evolución, de la tabla dinámica y de Distribución «Por meses» lo
 # cuentan en el mes que cierra; con «Fecha de registro», en el del sistema.
-# Los cortes no cambian: un corte es una sesión de conteo y sus días son
-# los de verdad.
+# Las sesiones no cambian: una sesión es un conteo y sus días son los de
+# verdad.
+#
+# Desde el 2026-10-11 (regla #632) se elige al PIE DEL PANEL DE MESES de
+# cada vista, no en «Filtros»: es el único lugar donde cambia algo. Sigue
+# siendo UN valor para todo el reporte —esta clave, que ya no es la key de
+# ningún widget—: con Evolución en «operativo» y la tabla en «registro»,
+# setiembre valdría dos cifras en la misma página.
 CLAVE_MES = "ajuste_mes"
 MES_OPERATIVO = "Mes operativo"
 MES_REGISTRO = "Fecha de registro"
@@ -93,6 +102,368 @@ def mes_operativo_activo():
 def fechas_del_mes(fechas, operativo):
     """`fechas` tal cual, o en su mes operativo si `operativo`."""
     return fecha_operativa(fechas) if operativo else fechas
+
+
+# ── LOS MESES DE UNA VISTA (regla #632) ──────────────────────────────────
+# Evolución, la tabla dinámica y Distribución «Por meses» eligen su rango
+# con el MISMO panel que las tarjetas de Compras (`selector_fecha_tarjeta`
+# + `graficos/panel_fecha.py`), en modo «sólo meses» y con los atajos de
+# `estado_rango.atajos_meses`. Cada vista guarda su rango en su categoría
+# (`rango_cat_Ajuste de Inventario_<vista>_<op|reg>`): con el modo en la
+# clave, cambiar el mes del cierre no deja un rango leído en la otra regla.
+# Recortan SUS datos dentro de su sección, que es un fragment: cambiar la
+# fecha recalcula esa vista sola.
+_K_MES_RECARGA = "_ajuste_mes_recarga"
+# Las vistas que todavía tienen que LLEVAR su rango al otro modo después de
+# un cambio de «Mes del cierre» (ver `_llevar_rango`).
+_K_MES_LLEVAR = "_ajuste_mes_llevar"
+_VISTAS_MESES = ("evo", "det", "dist")
+
+
+def fechas_referencia(fechas):
+    """Las fechas con las que se cuentan los meses: las operativas o las de
+    registro, según «Mes del cierre»."""
+    f = pd.to_datetime(fechas, errors="coerce")
+    return fecha_operativa(f) if mes_operativo_activo() else f
+
+
+def _topes(fechas):
+    """Del primer día del primer mes al último día con datos, o None."""
+    f = fechas.dropna()
+    if f.empty:
+        return None
+    return f.min().date().replace(day=1), f.max().date()
+
+
+def _cat_meses(vista, operativo):
+    return f"{vista}_{'op' if operativo else 'reg'}"
+
+
+def ctx_meses(vista, fechas, defecto="mm12"):
+    """El `ctx` del panel de meses de la vista `vista` («evo», «det»,
+    «dist»): los topes de `fechas` leídas con el mes del cierre vigente y el
+    atajo `defecto` («Últimos 12 meses») como rango de entrada. Lo leen el
+    recorte (`rango_meses`) y el botón (`selector_meses`): con el mismo ctx
+    nombran la misma clave."""
+    base = franja_fecha.contexto()
+    if not base or fechas is None:
+        return None
+    topes = _topes(fechas_referencia(fechas))
+    if not topes:
+        return None
+    cat = _cat_meses(vista, mes_operativo_activo())
+    r_def = next((r for c, _n, _g, r in atajos_meses(topes[1], topes)
+                  if c == defecto), None)
+    ctx = {**base, "fecha_min": topes[0], "fecha_max": topes[1],
+           "rango_default_cat": {cat: r_def} if r_def else {},
+           "atajos_fn": atajos_meses, "solo_meses": True,
+           "categoria_meses": cat}
+    llevar = st.session_state.get(_K_MES_LLEVAR) or {}
+    if vista in llevar.get("vistas", ()):
+        llevar["vistas"] = [x for x in llevar["vistas"] if x != vista]
+        _llevar_rango(vista, fechas, llevar.get("de"), ctx)
+    return ctx
+
+
+def _llevar_rango(vista, fechas, de, ctx):
+    """Después de cambiar «Mes del cierre», la vista conserva lo que tenía:
+    el MISMO atajo («Año pasado» sigue siendo «Año pasado», contado con la
+    otra regla) o, si eligió meses a mano, los mismos meses. Sin esto cada
+    modo abría en su propio default y lo elegido se perdía."""
+    op_viejo = de == MES_OPERATIVO
+    f = pd.to_datetime(fechas, errors="coerce")
+    topes_v = _topes(fecha_operativa(f) if op_viejo else f)
+    r_v = st.session_state.get(k_rango_tarjeta(_cat_meses(vista, op_viejo), ctx))
+    if not (topes_v and isinstance(r_v, (tuple, list)) and len(r_v) == 2
+            and all(r_v)):
+        return
+    topes_n = (ctx["fecha_min"], ctx["fecha_max"])
+    clave = atajo_de(tuple(r_v), atajos_meses(topes_v[1], topes_v))
+    if clave:
+        r_n = next((r for c, _n, _g, r in atajos_meses(topes_n[1], topes_n)
+                    if c == clave), None)
+    else:
+        r_n = (max(min(r_v), topes_n[0]), min(max(r_v), topes_n[1]))
+    if r_n and r_n[0] <= r_n[1]:
+        st.session_state[k_rango_tarjeta(ctx["categoria_meses"], ctx)] = tuple(r_n)
+
+
+def rango_meses(ctx_m):
+    """`(inicio, fin EXCLUSIVO)` de la vista, en Timestamps, o None."""
+    if not ctx_m:
+        return None
+    r = rango_tarjeta(ctx_m["categoria_meses"], ctx_m)
+    if not r:
+        return None
+    return pd.Timestamp(r[0]), pd.Timestamp(r[1]) + pd.Timedelta(days=1)
+
+
+def recortar_meses(d, col_fecha, rng):
+    """`d` en el rango `rng`, contado con las fechas de referencia. Sin
+    rango (o sin columna), entero."""
+    if d is None or rng is None or not col_fecha or col_fecha not in d.columns:
+        return d
+    f = fechas_referencia(d[col_fecha])
+    return d[(f >= rng[0]) & (f < rng[1])]
+
+
+def _cambiar_mes_cierre(k):
+    v = st.session_state.get(k)
+    previo = st.session_state.get(CLAVE_MES, MES_OPERATIVO)
+    if v in (MES_OPERATIVO, MES_REGISTRO) and v != previo:
+        st.session_state[CLAVE_MES] = v
+        st.session_state[_K_MES_RECARGA] = True
+        st.session_state[_K_MES_LLEVAR] = {"de": previo,
+                                           "vistas": list(_VISTAS_MESES)}
+
+
+def _pie_mes_cierre(prefijo):
+    """«Mes del cierre», al pie del panel de meses. Una key por panel y por
+    valor: tres paneles no pueden compartir key, y un widget dentro de un
+    popover cerrado no se entera de lo que Python le escribe (#467), así
+    que cuando el valor cambia la key cambia con él y el widget nace con el
+    valor nuevo."""
+    actual = st.session_state.get(CLAVE_MES, MES_OPERATIVO)
+    if actual not in (MES_OPERATIVO, MES_REGISTRO):
+        actual = MES_OPERATIVO
+    k = f"{prefijo}_mescierre_{_slug(actual)}"
+    # Rótulo y control en UN renglón: apilados, el `st.markdown` se metía
+    # debajo de los botones.
+    with st.container(key=f"{prefijo}_mcfila", horizontal=True,
+                      vertical_alignment="center", gap="small"):
+        st.markdown('<div class="ajf-pie-rot">Mes del cierre</div>',
+                    unsafe_allow_html=True)
+        st.segmented_control(
+            "Mes del cierre", [MES_OPERATIVO, MES_REGISTRO], default=actual,
+            required=True, key=k, label_visibility="collapsed",
+            on_change=_cambiar_mes_cierre, args=(k,))
+    st.caption(
+        "**Mes operativo**: lo registrado del 1 al 7 cuenta en el mes "
+        "anterior, el que cierra. **Fecha de registro**: en el día en que se "
+        "abrió en el Almacén. Vale para todo el reporte.")
+
+
+def selector_meses(prefijo, ctx_m):
+    """El botón de meses de una vista, con «Mes del cierre» al pie. Las keys
+    llevan el prefijo `ajf_`, de donde cuelga su CSS (`estilos/_80_cards.py`,
+    el mismo de los botones de fecha de Movimientos)."""
+    if not ctx_m:
+        return
+    selector_fecha_tarjeta(prefijo, None, categoria=ctx_m["categoria_meses"],
+                           ctx=ctx_m, pie=lambda: _pie_mes_cierre(prefijo))
+
+
+def recargar_si_cambio_mes():
+    """Si «Mes del cierre» cambió en esta corrida, una corrida COMPLETA: el
+    widget vive en el fragment de UNA vista y el valor manda sobre tres. Se
+    llama DESPUÉS de dibujar la vista entera —en el dibujante de la sección—
+    para que ningún widget quede sin registrar (regla #373)."""
+    if st.session_state.pop(_K_MES_RECARGA, False):
+        st.rerun(scope="app")
+
+
+# ── LA SESIÓN DE UNA VISTA: el selector con flechas (regla #632) ──────────
+# Por familia, Familia × Área y Distribución miran UNA sesión de inventario
+# —un cierre de mes o un parcial, ver `cortes.sesiones_inventario`—, y cada
+# una elige la suya («cambia sólo esa», a pedido). El botón es la píldora de
+# los botones de fecha de Compras; a los costados, ‹ › van a la sesión
+# anterior o siguiente sin abrir nada. Abren en el ÚLTIMO CIERRE de mes, no
+# en la última sesión. Todos los controles son botones con callback: un
+# widget con estado dentro de un popover cerrado no se entera de lo que
+# Python le escribe (#467), y las flechas reescriben la sesión todo el
+# tiempo. Las keys llevan el prefijo de la vista (`ajses_<vista>`), de
+# donde cuelga el CSS (`estilos/_80_cards.py`).
+
+
+def sesiones_de(df_full, col_fecha):
+    """Las sesiones de inventario del parquet entero, o []."""
+    if df_full is None or not col_fecha or col_fecha not in df_full.columns:
+        return []
+    return sesiones_inventario(pd.to_datetime(df_full[col_fecha],
+                                              errors="coerce"))
+
+
+def _k_solo(k):
+    return f"{k}__solo"
+
+
+def _k_anio(k):
+    return f"{k}__anio"
+
+
+def sesion_vigente(k, sesiones):
+    """La sesión elegida en `k` o, si no hay o ya no existe, el último
+    cierre de mes (y la deja escrita)."""
+    s = next((x for x in sesiones if x["clave"] == st.session_state.get(k)),
+             None)
+    if s is None:
+        s = ultimo_cierre(sesiones)
+        if s is not None:
+            st.session_state[k] = s["clave"]
+    return s
+
+
+def sesiones_elegidas(k, sesiones, k_varias=None, k_multi=None):
+    """Las sesiones que mira la vista: la de `k` o, con «Varias» prendido
+    (`k_multi`), las de `k_varias` en orden. Nunca vacía si hay sesiones."""
+    actual = sesion_vigente(k, sesiones)
+    if not (k_multi and st.session_state.get(k_multi)):
+        return [actual] if actual else []
+    marcadas = set(st.session_state.get(k_varias) or [])
+    elegidas = [x for x in sesiones if x["clave"] in marcadas]
+    if not elegidas and actual:
+        elegidas = [actual]
+        st.session_state[k_varias] = [actual["clave"]]
+    return elegidas
+
+
+def _paso_sesion(k, orden, visibles, paso):
+    """Callback de ‹ ›: la sesión anterior o siguiente de las que se ven
+    (con «Sólo cierres», de cierre en cierre)."""
+    pos = {c: i for i, c in enumerate(orden)}
+    i = pos.get(st.session_state.get(k), len(orden) - 1)
+    cand = [c for c in visibles if (pos[c] < i if paso < 0 else pos[c] > i)]
+    if cand:
+        st.session_state[k] = cand[-1] if paso < 0 else cand[0]
+        st.session_state[_k_anio(k)] = None
+
+
+def _elegir_sesion(k, clave):
+    st.session_state[k] = clave
+
+
+def _alternar_sesion(k_varias, clave):
+    marcadas = list(st.session_state.get(k_varias) or [])
+    if clave in marcadas:
+        if len(marcadas) > 1:
+            marcadas.remove(clave)
+    else:
+        marcadas.append(clave)
+    st.session_state[k_varias] = marcadas
+
+
+def _fijar(k, valor):
+    st.session_state[k] = valor
+
+
+def _poner_multi(k_multi, k_varias, k, valor):
+    """«Una» / «Varias». Al prender, arranca con la sesión de `k`; al
+    apagar, la vista vuelve a la más nueva de las marcadas."""
+    st.session_state[k_multi] = valor
+    if valor:
+        st.session_state[k_varias] = [st.session_state.get(k)]
+    else:
+        marcadas = st.session_state.get(k_varias) or []
+        if marcadas:
+            st.session_state[k] = marcadas[-1]
+
+
+def _anio_sesion(s):
+    """El año con que se agrupa una sesión: el del mes que CIERRA, no el de
+    su registro. El cierre de diciembre de 2025 va con 2025 aunque se haya
+    contado el 2 de enero."""
+    return s["mes"][0]
+
+
+def _rotulo_lista(s):
+    if s["tipo"] == "cierre":
+        return f"{s['nombre']} · {s['etiqueta']}"
+    n = s["n_dias"]
+    return f"{s['nombre']} · {n} día" + ("s" if n > 1 else "")
+
+
+def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None):
+    """‹ [sesión] › y su panel: el tipo («Todas» / «Sólo cierres»), con
+    `k_multi` además «Una» / «Varias», los años como pestañas y la lista
+    del año. `prefijo` es el de TODAS sus keys (`ajses_<vista>`)."""
+    if not sesiones:
+        st.caption("Sin sesiones de inventario.")
+        return
+    multi = bool(k_multi and st.session_state.get(k_multi))
+    solo = bool(st.session_state.get(_k_solo(k)))
+    actual = sesion_vigente(k, sesiones)
+    elegidas = sesiones_elegidas(k, sesiones, k_varias, k_multi)
+    marcadas = {x["clave"] for x in elegidas}
+    orden = [x["clave"] for x in sesiones]
+    visibles = [x["clave"] for x in sesiones
+                if not solo or x["tipo"] == "cierre"]
+    i = orden.index(actual["clave"])
+    hay_ant = not multi and any(orden.index(c) < i for c in visibles)
+    hay_sig = not multi and any(orden.index(c) > i for c in visibles)
+    if multi and len(elegidas) > 1:
+        etiqueta = f"{len(elegidas)} sesiones sumadas"
+    else:
+        etiqueta = (elegidas[0] if multi else actual)["corto"]
+    with st.container(key=f"{prefijo}_fila", horizontal=True, gap="small",
+                      vertical_alignment="center"):
+        st.button("‹", key=f"{prefijo}_ant", disabled=not hay_ant,
+                  help=("Con varias sesiones las flechas se apagan" if multi
+                        else "Sesión anterior"),
+                  on_click=_paso_sesion, args=(k, orden, visibles, -1))
+        with st.popover(etiqueta, key=f"{prefijo}_pop"):
+            with st.container(key=f"{prefijo}_panel"):
+                with st.container(key=f"{prefijo}_opc", horizontal=True,
+                                  gap="small"):
+                    if k_multi:
+                        st.button("Una", key=f"{prefijo}_o_una",
+                                  type="primary" if not multi else "secondary",
+                                  on_click=_poner_multi,
+                                  args=(k_multi, k_varias, k, False))
+                        st.button("Varias", key=f"{prefijo}_o_varias",
+                                  type="primary" if multi else "secondary",
+                                  on_click=_poner_multi,
+                                  args=(k_multi, k_varias, k, True))
+                    st.button("Todas", key=f"{prefijo}_o_todas",
+                              type="primary" if not solo else "secondary",
+                              on_click=_fijar, args=(_k_solo(k), False))
+                    st.button("Sólo cierres", key=f"{prefijo}_o_cierres",
+                              type="primary" if solo else "secondary",
+                              on_click=_fijar, args=(_k_solo(k), True))
+                anios = sorted({_anio_sesion(x) for x in sesiones},
+                               reverse=True)
+                anio = st.session_state.get(_k_anio(k))
+                if anio not in anios:
+                    anio = _anio_sesion(elegidas[-1] if multi else actual)
+                con_sel = {_anio_sesion(x) for x in elegidas}
+                with st.container(key=f"{prefijo}_anios", horizontal=True,
+                                  gap="small"):
+                    for y in anios:
+                        st.button(f"{y}" + (" •" if y in con_sel else ""),
+                                  key=f"{prefijo}_a_{y}",
+                                  type="primary" if y == anio else "secondary",
+                                  on_click=_fijar, args=(_k_anio(k), y))
+                lista = [x for x in reversed(sesiones)
+                         if _anio_sesion(x) == anio
+                         and (not solo or x["tipo"] == "cierre")]
+                if not lista:
+                    st.caption(f"No hay {'cierres' if solo else 'sesiones'} "
+                               f"en {anio}.")
+                # La lista se desliza adentro (su alto máximo, en el CSS): un
+                # año trae hasta 19 sesiones y el panel medía 834px.
+                with st.container(key=f"{prefijo}_lista", gap="small"):
+                    for x in lista:
+                        st.button(
+                            _rotulo_lista(x),
+                            key=f"{prefijo}_l_{_slug(x['clave'])}",
+                            type=("primary" if x["clave"] in marcadas
+                                  else "secondary"),
+                            use_container_width=True,
+                            on_click=(_alternar_sesion if multi
+                                      else _elegir_sesion),
+                            args=((k_varias, x["clave"]) if multi
+                                  else (k, x["clave"])))
+                if multi:
+                    st.caption("Marca las sesiones que quieras: se suman como "
+                               "si fueran una.")
+                else:
+                    st.caption("Un cierre es lo registrado del 1 al 7 del mes "
+                               "siguiente; lo demás es parcial. ‹ › recorren "
+                               "esta lista"
+                               + (", de cierre en cierre." if solo else "."))
+        st.button("›", key=f"{prefijo}_sig", disabled=not hay_sig,
+                  help=("Con varias sesiones las flechas se apagan" if multi
+                        else "Sesión siguiente"),
+                  on_click=_paso_sesion, args=(k, orden, visibles, 1))
 
 
 def _periodo_pivote_ajuste(fechas, gran):
@@ -137,12 +508,6 @@ def _periodo_pivote_ajuste(fechas, gran):
 # Es un DEFAULT, no un filtro fijo: la familia sigue estando en el
 # compartimento a un clic de distancia. Ver la memoria del proyecto sobre
 # "fijo en X es un default".
-# Cuántos cortes ofrece el popover de fecha. Es la ventana OFRECIDA, no
-# la lista completa: `estado_filtros_vista` se guarda todos los cortes del
-# parquet aparte, porque el corte ANTERIOR al más viejo de los doce existe
-# igual y es contra el que hay que comparar.
-MAX_CORTES_OFRECIDOS = 12
-
 FAMILIAS_DE_ENTRADA = (
     "ALIMENTOS",
     "BEBIDAS CON ALCOHOL",
@@ -254,9 +619,11 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     una sola pasada y despues se etiqueta cada fila con su corte. Opt-in
     igual, porque el Mapa de calor no lo necesita.
 
-    Los cortes del historial salen de la lista COMPLETA, no de los
-    `MAX_CORTES_OFRECIDOS` que ofrece el popover: si no, el mas viejo de
-    los doce se quedaria sin comparacion por un limite que es de la UI.
+    Desde el 2026-10-11 (regla #632) un «corte» es una SESIÓN de
+    inventario (`cortes.sesiones_inventario`): un cierre de mes —todo lo
+    registrado del 1 al 7, aunque sean dos conteos— o un parcial. La lista
+    es la del parquet entero, por años, y la vista abre en el ÚLTIMO CIERRE,
+    no en la última sesión. El año de una sesión es el del mes que cierra.
 
     Claves del dict: `base` (el corte entero, sin area ni familia: es lo
     que ofrecen las pastillas), `d` (ya filtrado, lo que dibuja la vista),
@@ -272,20 +639,15 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
     if df_full is not None and col_fecha and col_fecha in df_full.columns:
         base = df_full
         _fechas = pd.to_datetime(df_full[col_fecha], errors="coerce").dt.date
-        _todos = cortes_disponibles(
-            pd.to_datetime(df_full[col_fecha], errors="coerce"))
-        cortes = _todos[-MAX_CORTES_OFRECIDOS:]
+        _todos = sesiones_de(df_full, col_fecha)
+        cortes = _todos
     corte = corte_prev = None
     hist_cortes = []
     cortes_anio, base_anio = [], None
     if cortes:
-        _clave = st.session_state.get(k_corte)
-        corte = next((c for c in cortes if c["clave"] == _clave), None)
-        if corte is None:
-            # Abre en el ULTIMO corte: lo que se mira de Ajuste es una
-            # sesion de inventario, no un intervalo de calendario.
-            corte = cortes[-1]
-            st.session_state[k_corte] = corte["clave"]
+        # Abre en el ÚLTIMO CIERRE de mes (regla #632): lo que se revisa es
+        # el cierre, no el recuento suelto que vino después.
+        corte = sesion_vigente(k_corte, cortes)
         if historial > 0:
             _i = next((i for i, c in enumerate(_todos)
                        if c["clave"] == corte["clave"]), 0)
@@ -301,8 +663,8 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
             # TODOS los cortes del año del elegido, mismo etiquetado por día
             # que el historial. Se calcula sobre `base` (aún = df_full) antes
             # de recortarla al corte elegido, unas líneas abajo.
-            _anio = corte["fin"].year
-            cortes_anio = [c for c in _todos if c["fin"].year == _anio]
+            _anio = _anio_sesion(corte)
+            cortes_anio = [c for c in _todos if _anio_sesion(c) == _anio]
             _de_dia_a = {_d: _c["clave"] for _c in cortes_anio
                          for _d in _c["dias"]}
             base_anio = base[_fechas.isin(_de_dia_a)].assign(
@@ -365,50 +727,23 @@ def estado_filtros_vista(df, df_full, col_fecha, col_familia, col_area,
             "k_corte": k_corte, "k_familia": k_familia, "k_area": k_area}
 
 
-def render_filtros_vista(cols, est):
-    """Los tres popovers, uno por columna: corte · familia · area.
+def render_filtros_vista(cols, est, prefijo_ses):
+    """Los tres controles, uno por columna: sesión · familia · area.
 
     Reciben las columnas ya creadas y no las crean ellos porque el
     llamador decide en que zona van: en Streamlit la posicion la da el
     orden en que se CREA el contenedor, no el orden en que se escribe
     en el. `est` es lo que devolvio `estado_filtros_vista`.
+
+    La sesión es `selector_sesion` desde el 2026-10-11 (regla #632): la
+    píldora de los botones de fecha de Compras con ‹ › a los costados y la
+    lista por años. Hasta ese día era un popover con las últimas doce, y
+    cada clic hacía un `st.rerun()` de la página entera; ahora es un
+    callback y recalcula sólo la vista. `prefijo_ses` es el de sus keys
+    (`ajses_<vista>`).
     """
-    _corte, _cortes = est["corte"], est["cortes"]
     with cols[0]:
-        _et = _corte["etiqueta_anio"] if _corte else "Sin cortes"
-        with st.popover(f":material/event: {_et}",
-                        use_container_width=True):
-            if not _cortes:
-                st.caption("No hay sesiones de inventario.")
-            else:
-                st.caption("Sesión de inventario")
-                # Del mas reciente al mas viejo: el conteo que se
-                # revisa es casi siempre el ultimo.
-                for _c in reversed(_cortes):
-                    _n = _c["n_dias"]
-                    _tramo = (_c["fin"] - _c["ini"]).days + 1
-                    # Un corte NO tiene por que ser contiguo: decir
-                    # "3 de 5 días" es lo unico que lo deja ver.
-                    _dias = (f"{_n} de {_tramo} días"
-                             if not corte_contiguo(_c)
-                             else f"{_n} día" + ("s" if _n > 1 else ""))
-                    _on = bool(_corte and _c["clave"] == _corte["clave"])
-                    if st.button(
-                            f"{_c['etiqueta_anio']}  ·  {_dias}",
-                            key=f"{est['k_corte']}_{_slug(_c['clave'])}",
-                            use_container_width=True,
-                            type="primary" if _on else "secondary"):
-                        st.session_state[est["k_corte"]] = _c["clave"]
-                        # Este rerun corta la corrida antes de que se
-                        # dibujen las pastillas, y eso le borraba lo
-                        # elegido al widget (#373) — acá iba un
-                        # `preservar_widgets` de la familia. Desde la #467
-                        # la selección vive FUERA del widget
-                        # (`base.seleccion_en_panel`) y el corte no la
-                        # toca: sobreviven las dos, y el área se recorta a
-                        # las que movieron algo en el corte nuevo
-                        # (`estado_filtros_vista`).
-                        st.rerun()
+        selector_sesion(prefijo_ses, est["k_corte"], est["cortes"])
     with cols[1]:
         _n_fam = len(est["sel_fam"])
         _et_fam = ("todas las familias" if not _n_fam

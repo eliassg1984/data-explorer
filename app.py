@@ -19,7 +19,14 @@ from estado_rango import (
     clave_rango, asegurar_rango, debug_estado_rango,
     clave_corte, corte_vigente, aplicar_corte, restaurar_eco,
 )
-from cortes import cortes_disponibles, fecha_operativa
+try:
+    from estado_rango import atajos_tarjeta
+except ImportError:
+    # En Cloud, con el `estado_rango` de antes del 2026-10-08 todavía en
+    # memoria (regla #357): sin esto la app moría con un ImportError hasta
+    # el «Reboot app». Sin la función, el default cae a 30 días a mano.
+    atajos_tarjeta = None
+from cortes import cortes_disponibles
 import franja_fecha
 from graficos.compras import SEC_ABRE_EN_EL_MES
 from graficos.sunat_reporte import bounds_fecha as bounds_fecha_sunat
@@ -32,7 +39,6 @@ from graficos import renderizar_graficos_reporte, tiene_dashboard
 from graficos import periodo
 from graficos.base import (_render_rail, compartimento_filtros,
                            contar_filtros, filtro_pills)
-from graficos.ajuste import categoria_rango_ajuste, mes_operativo_activo
 from asistente import inject_asistente
 from navegacion import inject_navegacion
 from aviso_ingreso import procesar_aviso_ingreso
@@ -475,6 +481,9 @@ REPORTES_INICIO_TABLA = ()
 # el pill (dos widgets con la key del rango son una excepción). Hoy uno,
 # Documentos SUNAT — una vista de Compras hasta el 2026-09-30, regla #577.
 REPORTES_FECHA_EN_TARJETA_SUNAT = ("Documentos SUNAT",)
+# Reportes cuya franja NO dibuja fecha porque cada vista trae la suya:
+# Compras (2026-09-06), Movimientos (#617) y Ajuste (#632).
+REPORTES_FECHA_POR_VISTA = ("Compras", "Movimientos", "Ajuste de Inventario")
 _vista_default = "Tabla" if reporte in REPORTES_INICIO_TABLA else "Gráficos"
 
 
@@ -483,30 +492,14 @@ perf.start_phase("Ajuste top row")                                          # �
 # DISEÑO UNIFICADO: la franja fija (título + fecha + pestañas) aplica a
 # TODOS los reportes. El rango de fecha vive en una clave por reporte
 # Clave del rango de la franja — vía DUEÑO ÚNICO (ver estado_rango.py).
-# Ajuste: cada categoría del rail (visual/tiempo) recuerda su propio rango
-# por separado (ver graficos.ajuste.categoria_rango_ajuste) — se resuelve
-# ANTES de clave_rango() porque "ajuste_graf_tipo" ya quedó escrito en
-# session_state por el on_click del rail en el rerun anterior. Si el rail
-# no se clickeó todavía, categoria_rango_ajuste(None) devuelve "visual",
-# que es la categoría por defecto.
 #
-# La categoría es AHORA el único discriminante que ve clave_rango(): None
-# = este reporte no separa rango por categoría. Los demás reportes no la
-# pasan y caen a su clave de franja.
-_categoria_ajuste_rango = (
-    categoria_rango_ajuste(st.session_state.get("ajuste_graf_tipo"))
-    if es_ajuste else None
-)
-_k_rango_franja = clave_rango(reporte, _usa_carga_rango,
-                              categoria=_categoria_ajuste_rango)
-# Con qué categoría se FILTRÓ `df_f` en esta corrida. El rail de Ajuste vive
-# dentro del fragment `_render_contenido`: un clic suyo re-ejecuta sólo el
-# fragment, y si cambia de categoría el dashboard recibía el `df_f` filtrado
-# con el rango de la OTRA — Evolución abría con el corte de un día de
-# Cascada. El dashboard compara contra esto y escala a una corrida completa
-# (`graficos/ajuste/__init__.py`, regla #501).
-if es_ajuste:
-    st.session_state["_ajuste_cat_rango_aplicada"] = _categoria_ajuste_rango
+# Hasta el 2026-10-11 Ajuste partía esta clave en dos categorías
+# (`categoria_rango_ajuste`: «visual» y «tiempo», cada una con su rango), y
+# un clic del rail que cambiaba de categoría escalaba a una corrida completa
+# para refiltrar (#501). Desde la regla #632 la franja de Ajuste no tiene
+# fecha —cada vista elige la suya y lee el parquet entero—, así que la
+# partición, la marca `_ajuste_cat_rango_aplicada` y la escalada se fueron.
+_k_rango_franja = clave_rango(reporte, _usa_carga_rango)
 _franja_con_fecha = bool(col_fecha) and fecha_min_full is not None
 
 # EL TOPE DEL PARQUET, ANTES DE QUE LO ENSANCHE UNA VISTA (2026-09-11). El
@@ -589,11 +582,22 @@ _ancla_mes_parquet = min(_hoy, _max_parquet) if _max_parquet else _hoy
 # sep». El mismo día y mes del mes anterior MÁS UN DÍA, para que sea un mes
 # y no un mes y un día; el recorte a los bounds lo sigue haciendo
 # `asegurar_rango`.
-_mes_default = (
-    (pd.Timestamp(_ancla_mes_parquet) - pd.DateOffset(months=1)
-     + pd.Timedelta(days=1)).date(),
-    _ancla_mes_parquet,
-)
+#
+# Y DESDE EL 2026-10-08 ES EL ATAJO «ÚLTIMOS 30 DÍAS» del panel de fecha
+# (regla #616), no el mes corrido: así la tarjeta abre en un atajo con
+# nombre y el botón lo dice. Son 30 días con el ancla adentro —«8 set – 7
+# oct»—; el mes corrido daba 31 o 28 según el mes, y entonces no era ningún
+# atajo. Sale de la misma función que el panel: dos cuentas del mismo
+# atajo se desincronizan.
+_mes_default = dict(
+    (_c, _r) for _c, _n, _g, _r in atajos_tarjeta(
+        _ancla_mes_parquet, (fecha_min_full, _max_parquet))
+).get("d30") if (atajos_tarjeta and fecha_min_full and _max_parquet) else None
+if _mes_default is None:
+    _mes_default = (
+        (pd.Timestamp(_ancla_mes_parquet) - pd.Timedelta(days=29)).date(),
+        _ancla_mes_parquet,
+    )
 
 # COMPRAS ABRE EN LOS ÚLTIMOS 12 MESES, y no es un default más: es la otra
 # mitad de haberle sacado el calendario a la franja (2026-09-06, a pedido).
@@ -641,25 +645,9 @@ if (reporte in ("Compras", *REPORTES_FECHA_EN_TARJETA_SUNAT)
     if _v12:
         fecha_ini_default, fecha_fin_default = _v12[0].date(), _v12[1].date()
 
-# AJUSTE › TIEMPO ABRE EN LOS ÚLTIMOS 12 MESES (2026-09-23, regla #501). El
-# default de arriba —el mes en curso— es el de Cascada, Mapa y Distribución,
-# que miran un período. Evolución mira una SERIE, y con un mes le queda una
-# barra: por eso la vieja «Por fecha de corte» ignoraba la franja y se
-# anclaba al año en curso. Con la fusión de las tres vistas de Tiempo la
-# tabla y la serie siguen al MISMO rango, y el default de esa categoría es
-# el que la serie necesita. Cada categoría guarda su rango en su propia
-# clave (`categoria_rango_ajuste`), así que esto no toca a la otra.
-#
-# DOCE MESES DE CALENDARIO, no `periodo.ventana("12m")`: ésa arranca el día
-# siguiente de hace un año (18 set 2025 – 17 set 2026), y en «Mes» la
-# primera barra sería un septiembre A MEDIAS al lado de uno entero — la
-# trampa de la regla #470. Acá arranca el 1 del mes, once meses atrás.
-if (es_ajuste and _categoria_ajuste_rango == "tiempo"
-        and fecha_min_full and fecha_max_full):
-    fecha_ini_default = max(
-        fecha_min_full,
-        (pd.Timestamp(_ancla_mes).to_period("M") - 11).to_timestamp().date())
-    fecha_fin_default = _ancla_mes
+# (Acá vivía el default de Ajuste › Tiempo, los últimos 12 meses de
+# calendario, regla #501. Desde la regla #632 cada vista de Ajuste abre en
+# su propio rango: `graficos/ajuste/_comun.py::ctx_meses`.)
 
 # ...Y UNA TARJETA PUEDE ABRIR EN OTRO (2026-09-11, a pedido). El default de
 # arriba es el del REPORTE: el que ve una sección sin selector de fecha
@@ -721,7 +709,7 @@ if _franja_con_fecha:
 # filtro está más abajo): si se calcularan después, elegir un corte
 # reduciría la lista a ese único corte y no habría cómo volver a los otros
 # — el clásico filtro que se come su propio selector.
-_k_corte = clave_corte(reporte, categoria=_categoria_ajuste_rango)
+_k_corte = clave_corte(reporte)
 _cortes_franja = []
 if _franja_con_fecha and cfg.get("cortes"):
     _cortes_franja = cortes_disponibles(df_f[col_fecha], maximo=12)
@@ -738,15 +726,13 @@ if _franja_con_fecha and cfg.get("cortes"):
     # que la franja instancie el widget, y la franja se dibuja ~60 líneas
     # abajo. Escribirlo después es un error de Streamlit.
     #
-    # Sólo para la categoría "visual" (Cascada / Mapa de calor /
-    # Distribución / Tabla): "tiempo" son Evolución y Comparativa, que
-    # necesitan varios meses — abrirlas en un corte de un solo día las deja
-    # con un punto.
-    #
-    # Y sólo la PRIMERA vez: con la clave ya escrita el usuario eligió, y
+    # Sólo la PRIMERA vez: con la clave ya escrita el usuario eligió, y
     # volver a sembrar le pisaría la elección en cada rerun.
-    if (_cortes_franja and _k_corte not in st.session_state
-            and _categoria_ajuste_rango == "visual"):
+    #
+    # (Hoy ningún reporte declara "cortes": Ajuste, el único, eligió el
+    # 2026-10-11 una sesión por vista en vez de un corte en la franja,
+    # regla #632.)
+    if _cortes_franja and _k_corte not in st.session_state:
         aplicar_corte(_k_rango_franja, _k_corte, _cortes_franja[-1],
                       reporte=reporte, usa_carga_rango=_usa_carga_rango)
 # corte_vigente() devuelve None si el modo es Rango, aunque haya un corte
@@ -843,8 +829,20 @@ with _fila_top:
             # Documentos SUNAT, reporte propio desde el 2026-09-30 (regla
             # #577), tampoco: su tarjeta dibuja el pill entero adentro, y
             # dos widgets con la key del rango son una excepción.
+            #
+            # MOVIMIENTOS TAMPOCO, desde el 2026-10-08 (regla #617, a pedido:
+            # «cada vista debe tener su propio selector de fecha»): cada
+            # sección trae su botón de fecha y recorta sus datos. El
+            # contexto se sigue publicando: de él salen los topes y el
+            # default de cada vista.
+            #
+            # NI AJUSTE, desde el 2026-10-11 (regla #632, a pedido): cada
+            # vista elige su sesión de inventario o sus meses, y una píldora
+            # arriba que no manda sobre ninguna sólo confunde. Era además la
+            # que dejaba la página en blanco: un corte pasado a «Rango» se
+            # leía por mes operativo y no quedaba ninguna fila.
             _franja_dibuja_fecha = (
-                reporte != "Compras"
+                reporte not in REPORTES_FECHA_POR_VISTA
                 and reporte not in REPORTES_FECHA_EN_TARJETA_SUNAT)
             if _franja_dibuja_fecha:
                 franja_fecha.render()
@@ -963,7 +961,11 @@ if _franja_con_fecha and _corte_apl:
     df_f = df_f[df_f[col_fecha].dt.normalize().isin(
         [pd.Timestamp(_d) for _d in _corte_apl["dias"]]
     )]
-elif _franja_con_fecha:
+elif _franja_con_fecha and not es_ajuste:
+    # Ajuste no se filtra por la franja (regla #632): cada vista recorta el
+    # parquet entero con su sesión o sus meses. Filtrarlo acá con el rango
+    # por defecto —lo que va del mes— lo dejaría vacío los primeros días del
+    # mes, y un `df_f` vacío corta la página entera (`st.stop`, abajo).
     _rango_apl = st.session_state.get(_k_rango_franja)
     if isinstance(_rango_apl, (tuple, list)) and len(_rango_apl) == 2 and all(_rango_apl):
         _ini_apl, _fin_apl = _rango_apl
@@ -974,12 +976,7 @@ elif _franja_con_fecha:
         # siendo INCLUSIVO aunque la columna traiga hora (que es el caso de
         # FECHA APERTURA INVENTARIO): con "<= fin" se perderia todo lo
         # posterior a la medianoche del ultimo dia.
-        # Ajuste cuenta cada cierre en su MES OPERATIVO salvo que «Filtros»
-        # diga otra cosa: el de fin de mes se registra del 1 al 6 del
-        # siguiente, y «septiembre» tiene que traerlo (regla #613). El modo
-        # Cortes de arriba no pasa por acá: un corte son sus días de verdad.
-        _f_rango = (fecha_operativa(df_f[col_fecha])
-                    if es_ajuste and mes_operativo_activo() else df_f[col_fecha])
+        _f_rango = df_f[col_fecha]
         df_f = df_f[
             (_f_rango >= pd.Timestamp(_ini_apl)) &
             (_f_rango < pd.Timestamp(_fin_apl) + pd.Timedelta(days=1))

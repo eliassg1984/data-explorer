@@ -62,7 +62,9 @@ _K_AREA = "hm_filtro_area"
 # UNA KEY POR CONTROL: `st.popover` no emite `st-key-*` propio, así que sin
 # su contenedor el inspector y el modo diseño resuelven hacia arriba hasta
 # la tarjeta entera. Es también el scope del CSS del trigger (#431).
-_K_CTRL = ("hm_ctrl_fecha", "hm_ctrl_familia", "hm_ctrl_area")
+# La de la sesión sin el prefijo `hm_ctrl_`: es la píldora de Compras, no
+# el trigger minimalista (regla #632).
+_K_CTRL = ("hm_fecha", "hm_ctrl_familia", "hm_ctrl_area")
 # La celda en foco, `(familia, área)` o None. Es la misma clave que usaba
 # el Mapa: un foco guardado de antes sigue valiendo.
 _K_FOCO = "hm_ajuste_focus"
@@ -339,9 +341,10 @@ def _graf_heatmap_ajuste(df, col_familia, col_area, col_ajuste_val,
     _card_tabla = st.container(border=True, key="chartcard_heatmap")
     with _card_tabla:
         # columnas-internas: los tres filtros + Modo, en fila
-        _cols_ctrl = st.columns([1.0, 1.0, 1.0, 2.2])
+        _cols_ctrl = st.columns([1.3, 1.0, 1.0, 2.2])
         render_filtros_vista(
-            [_c.container(key=_k) for _c, _k in zip(_cols_ctrl, _K_CTRL)], _est)
+            [_c.container(key=_k) for _c, _k in zip(_cols_ctrl, _K_CTRL)], _est,
+            "ajses_hm")
 
         _modo_val = False
         if _hay_valorizado:

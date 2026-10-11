@@ -42,7 +42,8 @@ pasa al tooltip— y su fila va apagada. Ver `arquitectura.md` reglas #508 y
 
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
-from tema import ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO_SUAVE
+from tema import (ADVERTENCIA_TEXTO, ERROR, EXITO, GRIS_TEXTO,
+                  GRIS_TEXTO_SUAVE)
 from tablas._config import _parchar_iconos
 # Privados de allá, y a propósito: son el look y los formatos de las
 # grillas de «Compra por período», que estas tarjetas calcan. Mismo criterio
@@ -160,9 +161,41 @@ def _css_mov():
     return css
 
 
+_JS_VS_ANT = JsCode(
+    "function(p){ var v = p.value;"
+    " if (typeof v !== 'number')"
+    "   return (p.node && p.node.rowPinned) ? v : '\\u2014';"
+    " if (v >= 900) return '\\u00d7' + Math.round(v / 100 + 1);"
+    " var dec = Math.abs(v) < 10 ? 1 : 0;"
+    " var a = Math.abs(v);"
+    " if (Number(a.toFixed(dec)) === 0) return '0%';"
+    " return (v > 0 ? '+' : '\\u2212') + a.toFixed(dec) + '%'; }")
+"""La variación contra el año comparado (regla #614): «+8.2%», «−3.0%», y
+«—» donde ese año no hubo nada en el período. Desde +900 % se escribe en
+veces —«×204»—: una semana de S/ 11.080 contra S/ 54 daba «+20308%», que
+no se lee. La fila TOTAL trae el texto ya escrito desde Python."""
+
+
+_STYLE_VS_ANT = JsCode(
+    "function(p){ if (p.node && p.node.rowPinned) return null;"
+    " var b = {textAlign: 'right'}, v = p.value;"
+    f" if (typeof v !== 'number') {{ b.color = '{GRIS_TEXTO_SUAVE}';"
+    " b.fontStyle = 'italic'; return b; }"
+    " var dec = Math.abs(v) < 10 ? 1 : 0;"
+    f" if (Number(Math.abs(v).toFixed(dec)) === 0) {{ b.color = '{GRIS_TEXTO}';"
+    " return b; }"
+    " var poco = p.data && p.data.__poco;"
+    f" b.color = v > 0 ? '{ERROR}' : (poco ? '{GRIS_TEXTO}' : '{EXITO}');"
+    " b.fontWeight = '600'; return b; }")
+"""El color de «vs <año>»: el de `_STYLE_VARIACION` (rojo sube, verde
+baja), salvo una CAÍDA en una barra de un mes con poco registro
+(`__poco`), que va en gris: ahí bajar puede ser que no se registró, no que
+se perdió menos. Regla #626."""
+
+
 def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                             rotulo_docs="Requerimientos", ver_variacion=True,
-                            total=None):
+                            total=None, rotulo_ant="", tramos=(), unidad=""):
     """Una fila por BARRA del gráfico, en el orden del eje.
 
     `tp` trae `periodo` (el nombre de la barra, ya legible), los números
@@ -173,6 +206,21 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
     estado), `__clave` (la clave del período, la del eje) y `__sel` (la
     barra en foco). `rotulo_docs` es la cabecera de la cuenta de documentos
     —«Requerimientos» o «Salidas»—.
+
+    Si `tp` trae `ant` y `vs_ant` —el mismo período del año comparado y la
+    variación contra él, regla #614—, van como dos columnas más con
+    `rotulo_ant` («2025») en la cabecera. Para que entren sin scroll
+    horizontal se esconden «Líneas» y la variación contra la barra anterior:
+    con el año pasado al lado, la referencia que importa es ésa.
+
+    `tramos` son `(campo, rótulo)` de las columnas de cada tramo de la barra
+    cuando se parte por tipo o por producto (#614): van con su monto, y
+    para que entren se esconden «Áreas» y «% del total».
+
+    Regla #626: si `tp` trae `cant` —la vista es de UNA unidad, `unidad`
+    («kg»)—, va la columna «Cantidad» antes del valorizado. Y `__poco`
+    marca las barras de un mes con poco registro: ahí una caída contra el
+    año comparado va en gris, no en verde.
 
     SIN `initialSort`, como el Resumen de Compras: las filas abren en el
     orden del EJE porque la tabla es el gráfico escrito. Se ordenan igual con
@@ -190,7 +238,8 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
     # Los anchos, con la cuenta de Compras (`compras_semanal._COLS_ANCHA`):
     # lo que mide el peor dato a 13px, más 8+8 de padding y los ~14 de la
     # flecha de ordenar. «Período» es la única que se estira.
-    gb.configure_column("periodo", header_name=rotulo_periodo, minWidth=180,
+    gb.configure_column("periodo", header_name=rotulo_periodo,
+                        minWidth=120 if tramos else 180,
                         tooltipField="periodo")
     gb.configure_column("docs", header_name=rotulo_docs,
                         type=["numericColumn"], valueFormatter=_JS_ENTERO,
@@ -198,33 +247,63 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                       "los anulados ni los que vienen sin "
                                       "ítems",
                         width=132, minWidth=132, suppressSizeToFit=True)
+    con_ant = "ant" in tp.columns and "vs_ant" in tp.columns
     gb.configure_column("lineas", header_name="Líneas", type=["numericColumn"],
-                        valueFormatter=_JS_ENTERO,
+                        hide=con_ant, valueFormatter=_JS_ENTERO,
                         headerTooltip="Líneas de esos documentos: un "
                                       "producto es una línea",
                         width=82, minWidth=82, suppressSizeToFit=True)
     gb.configure_column("areas", header_name="Áreas", type=["numericColumn"],
+                        hide=bool(tramos),
                         valueFormatter=_JS_ENTERO, tooltipField="__anota",
                         headerTooltip="Cuántas áreas hay en el período. "
                                       "Cuáles, en el tooltip de la celda",
                         width=78, minWidth=78, suppressSizeToFit=True)
+    if "cant" in tp.columns:
+        gb.configure_column("cant", header_name=f"Cantidad ({unidad})"
+                            if unidad else "Cantidad",
+                            type=["numericColumn"], valueFormatter=_JS_CANT_MOV,
+                            headerTooltip="Cantidad del período, en la unidad "
+                                          "del kardex",
+                            width=118, minWidth=118, suppressSizeToFit=True)
     gb.configure_column("valor", header_name="Valorizado",
                         type=["numericColumn"], valueFormatter=_JS_VALOR_MOV,
                         headerTooltip="Valorizado del período",
                         width=130, minWidth=130, suppressSizeToFit=True)
-    gb.configure_column("parte", header_name="% del total",
+    gb.configure_column("parte", header_name="% del total", hide=bool(tramos),
                         type=["numericColumn"], valueFormatter=_JS_PARTE,
                         headerTooltip="Cuánto pesa esta barra en el total "
                                       "de la vista",
                         width=104, minWidth=104, suppressSizeToFit=True)
     gb.configure_column("variacion", header_name="Variación",
-                        hide=not ver_variacion, type=["numericColumn"],
+                        hide=(not ver_variacion) or con_ant,
+                        type=["numericColumn"],
                         valueFormatter=_JS_VARIACION,
                         cellStyle=_STYLE_VARIACION, tooltipField="__nota",
                         headerTooltip="Variación contra la barra ANTERIOR "
                                       "del gráfico, no contra el período "
                                       "anterior del calendario",
                         width=104, minWidth=104, suppressSizeToFit=True)
+    for campo, rotulo in tramos:
+        gb.configure_column(campo, header_name=rotulo, headerTooltip=rotulo,
+                            type=["numericColumn"],
+                            valueFormatter=_JS_VALOR_MOV,
+                            width=112, minWidth=112, suppressSizeToFit=True)
+    if con_ant:
+        gb.configure_column("ant", header_name=rotulo_ant or "Año pasado",
+                            type=["numericColumn"],
+                            valueFormatter=_JS_VALOR_MOV,
+                            headerTooltip="El mismo período, en el año "
+                                          "comparado",
+                            width=120, minWidth=120, suppressSizeToFit=True)
+        gb.configure_column("vs_ant", header_name=f"vs {rotulo_ant}".strip(),
+                            type=["numericColumn"],
+                            valueFormatter=_JS_VS_ANT,
+                            cellStyle=_STYLE_VS_ANT,
+                            headerTooltip="Cuánto cambió contra el mismo "
+                                          "período del año comparado. Rojo: "
+                                          "subió",
+                            width=96, minWidth=96, suppressSizeToFit=True)
     gb.configure_column("estado", header_name="Estado",
                         cellClassRules=REGLAS_ESTADO,
                         headerTooltip="Sólo se escribe la excepción: "
@@ -232,7 +311,7 @@ def renderizar_periodos_mov(tp, altura, key, rotulo_periodo="Período",
                                       "todos se procesaron",
                         width=170, minWidth=120)
     for oculta in ("__vtxt", "__nota", "__anota", "__eclase", "__clave",
-                   "__sel"):
+                   "__sel", "__poco"):
         if oculta in tp.columns:
             gb.configure_column(oculta, hide=True)
     gb.configure_selection(selection_mode="single", use_checkbox=False)

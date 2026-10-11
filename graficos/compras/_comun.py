@@ -17,7 +17,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from tema import ACENTO, ERROR, EXITO, GRIS_TEXTO, TEXTO_PRINCIPAL
+from tema import (
+    ACENTO, ERROR, EXITO, GRIS_TEXTO, PALETA_SERIES, TEXTO_PRINCIPAL,
+)
 from graficos.base import _compras_truncar, _slug
 # REEXPORT, no import muerto: `_es_movil` vivía definida acá y se movió a
 # graficos/base.py (2026-08-07, ver su docstring) porque graficos/ajuste.py
@@ -214,6 +216,31 @@ def moda_por_grupo(df, llave, col):
                         kind="stable"))
     top = n.drop_duplicates(llave, keep="first")
     return pd.Series(top[col].to_numpy(), index=top[llave].to_numpy())
+
+
+def colores_estables(orden, nombres):
+    """`{nombre: color}` para los de `nombres`, con el color que les toca
+    por su puesto en `orden` —el histórico— y no por su puesto en la vista:
+    filtrar o mover la fecha no puede repintar (el color sigue a la
+    entidad). Si dos de las que se dibujan juntas caen en el mismo color de
+    la paleta, la segunda toma el siguiente libre.
+
+    Nació en Movimientos para las áreas (`movimientos_periodo.colores_area`,
+    que hoy es este mismo nombre) y se mudó acá el 2026-10-08, cuando
+    «Compras por período» empezó a partir sus barras por subfamilia o por
+    proveedor (regla #620): dos copias de la misma regla se separan al
+    primer retoque."""
+    ix = {a: i for i, a in enumerate(orden)}
+    usados, salida = set(), {}
+    for a in nombres:
+        i = ix.get(a, len(orden) + len(salida))
+        c = PALETA_SERIES[i % len(PALETA_SERIES)]
+        while c in usados and len(usados) < len(PALETA_SERIES):
+            i += 1
+            c = PALETA_SERIES[i % len(PALETA_SERIES)]
+        usados.add(c)
+        salida[a] = c
+    return salida
 
 
 def _first_point(evt):
@@ -578,6 +605,76 @@ SEC_ABRE_EN_EL_MES = ("sec_proveedor", "sec_producto", "sec_semanal")
 
 
 # ===========================================================================
+# QUÉ DOCUMENTOS Y CON QUÉ IMPUESTO (2026-10-08, regla #621)
+# ===========================================================================
+# Dos controles que nacieron en el panel «Filtros» de la franja, para TODO
+# Compras, y desde el 2026-10-10 son una línea de la tarjeta de «Compras por
+# período», sólo para ella (regla #624, a pedido: el usuario eligió que
+# fueran de esa tarjeta sabiendo que las demás quedan en todos los
+# documentos y sin IGV). Las keys y la lectura viven en `semanal.py`; acá,
+# las opciones y las cuentas.
+#
+# DOCUMENTO. `compras.parquet` es todo lo procesado en el Almacén (#603):
+# facturas, guías de remisión todavía SIN CANJEAR por su factura, planillas
+# de movilidad, recibos. «Todos» es lo que suman los reportes de ingresos
+# del Almacén, y es con lo que abre. En 12 meses, con las cinco familias de
+# entrada: 2.402 facturas, 5 guías (S/ 6.051) y un documento no domiciliado.
+#
+# MONTOS. `VALOR_COMPRA` es el valor NETO de la línea, en soles; el IGV
+# viene aparte (`VALOR_IGV_COMPRA_MN`). Abre sin IGV porque es el costo: el
+# IGV de las compras vuelve como crédito fiscal en el régimen general o el
+# MYPE tributario. Con IGV es lo que se le paga al proveedor. No es un 18 %
+# parejo: el 22,5 % de lo comprado en 12 meses no paga IGV (verduras,
+# pescados y mariscos, frutas: exonerados por el Apéndice I de la Ley del
+# IGV), y una guía tampoco, todavía: lo trae su factura.
+
+DOC_TODOS = "Todos"
+DOC_FACTURAS = "Facturas"
+DOC_GUIAS = "Guías sin canjear"
+DOC_OPCIONES = (DOC_TODOS, DOC_FACTURAS, DOC_GUIAS)
+SIN_IGV = "Sin IGV"
+CON_IGV = "Con IGV"
+MONTOS_OPCIONES = (SIN_IGV, CON_IGV)
+COL_CON_IGV = "VALOR CON IGV"
+"""La columna que el dispatcher le agrega a la data con «Con IGV»: neto más
+IGV de cada línea. Con ella como `col_valor`, todas las vistas pasan a medir
+con IGV sin tocarles el cuerpo; el precio unitario (`PRECIO_UNIT`) sigue
+neto."""
+
+
+def tipo_corto(tipos):
+    """`TIPO_DOCUMENTO` → «F» (factura), «G» (guía de remisión) u «O» (lo
+    demás: planilla, recibo, no domiciliado…). El Almacén los escribe
+    enteros («Guía de Remisión»), y una comparación por prefijo sobrevive a
+    la tilde."""
+    t = tipos.fillna("").astype(str).str.strip().str.upper()
+    return pd.Series(np.where(t == "FACTURA", "F",
+                              np.where(t.str.startswith("GU"), "G", "O")),
+                     index=tipos.index)
+
+
+def filtrar_documento(df, col_tipo, eleccion):
+    """`df` con sólo las facturas, sólo las guías, o entero. Sin columna de
+    tipo (el demo) no filtra: una marca que el parquet no trae no puede
+    decidir qué entra."""
+    if eleccion == DOC_TODOS or not col_tipo or col_tipo not in df.columns:
+        return df
+    return df[tipo_corto(df[col_tipo]) == ("F" if eleccion == DOC_FACTURAS
+                                           else "G")]
+
+
+def sufijo_montos(igv, documento=DOC_TODOS):
+    """« · sin IGV», « · con IGV · facturas»…: lo que el título de una
+    tarjeta suma para decir cómo mide."""
+    s = " · con IGV" if igv else " · sin IGV"
+    if documento == DOC_FACTURAS:
+        s += " · facturas"
+    elif documento == DOC_GUIAS:
+        s += " · guías sin canjear"
+    return s
+
+
+# ===========================================================================
 # LA BASE DEL DRILL DE PROVEEDOR
 # ===========================================================================
 # Salieron de `proveedor.py` el 2026-09-09, cuando «Detalle de documentos por
@@ -715,8 +812,8 @@ def documento_legible(num_documento):
 # Productos, y SUBIÓ a `graficos/base.py` el 2026-09-05, cuando lo pidió la
 # Evolución de Movimientos ("un selector de fecha, igual que el ranking de
 # proveedores"). Tercera vez que un tercero lo pide: el criterio no cambió,
-# cambió el alcance — ya no es un helper de Compras, es del proyecto, y vive
-# al lado de `selector_escala`, que es la pieza que abre adentro.
+# cambió el alcance — ya no es un helper de Compras, es del proyecto. Lo que
+# abre adentro es el panel de `graficos/panel_fecha.py` (regla #616).
 #
 # REEXPORT, no import muerto: `proveedor.py`, `producto.py` y `semanal.py`
 # siguen haciendo `from graficos.compras._comun import selector_fecha_tarjeta`

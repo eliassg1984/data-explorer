@@ -675,6 +675,57 @@ def por_producto_dia(df):
     return g
 
 
+GRUPO = "GRUPO"
+"""El grupo de carta del ítem («Alimentos», «Bebidas c/ Alcohol», …)."""
+
+POR_GRUPO_DIA = ("dia", "grupo", "clase", "neto", "costo")
+"""Las columnas de `por_grupo_dia`, con nombre fijo (regla #481)."""
+
+
+def por_grupo_dia(df):
+    """La venta y la cortesía de cada grupo de carta, día por día, sobre el
+    df PREPARADO: una fila por (día, grupo, clase) con el neto y el costo.
+
+    `clase` es VENTA —lo que suman las vistas: sin cortesías ni anulados,
+    con las notas de crédito restando— o CORTESIA, con su costo (el neto de
+    una cortesía es cero; su precio de carta no entra acá). Un ítem una vez
+    (regla #517). Lo lee el reporte Costos (`costo_ventas.py`): la venta
+    neta y el costo según el POS de cada mes, y el costo de las cortesías.
+    El día es el que trae el df: el del turno si se preparó con `turno`."""
+    vacio = pd.DataFrame(columns=list(POR_GRUPO_DIA))
+    if df is None or df.empty:
+        return vacio
+    c_fecha, c_grupo, c_clase = (columna(df, FECHA), columna(df, GRUPO),
+                                 columna(df, CLASE))
+    if not (c_fecha and c_grupo and c_clase):
+        return vacio
+    d = df[df[c_clase].isin(CLASES_VENTA + (CORTESIA,))]
+    c_item = columna(d, LLAVE_ITEM)
+    if c_item:
+        llave = d[c_item]
+        d = d[~(llave.duplicated() & llave.notna())]
+
+    def _num(nombre):
+        c = columna(d, nombre)
+        if c is None:
+            return pd.Series(0.0, index=d.index)
+        return pd.to_numeric(d[c], errors="coerce").fillna(0.0)
+
+    b = pd.DataFrame({
+        "dia": pd.to_datetime(d[c_fecha], errors="coerce").dt.normalize(),
+        "grupo": d[c_grupo].astype("string").str.strip(),
+        "clase": d[c_clase].where(d[c_clase] == CORTESIA, VENTA).astype(object),
+        "neto": _num(NETO_ITEM),
+        "costo": _num(COSTO),
+    }).dropna(subset=["dia", "grupo"])
+    if b.empty:
+        return vacio
+    g = b.groupby(["dia", "grupo", "clase"], as_index=False)[
+        ["neto", "costo"]].sum()
+    g["grupo"] = g["grupo"].astype(object)
+    return g
+
+
 def resumir(df, kpis, col_ped=None, col_item=None):
     """Los KPIs del rail (`REPORTES[...]["kpis"]`) sobre el df PREPARADO,
     con esta definición: venta sin cortesías ni anulados y con las notas

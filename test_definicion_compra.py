@@ -174,6 +174,28 @@ igual(float(compras[dc.VALOR].sum() - out[dc.VALOR].sum()),
 igual(float(out[dc.COL_VALOR_NC].sum()), 379.0 + 10.0 + 125.0 + 30.0,
       "VALOR_NC suma lo restado a las líneas que QUEDAN")
 
+print("\n── lo restado, línea por línea (regla #628) ──")
+_rest = dc.lineas_restadas(compras, notas)
+igual(float(out[dc.VALOR].sum() + _rest[dc.VALOR].sum()),
+      float(compras[dc.VALOR].sum()),
+      "lo que queda más lo restado es lo facturado (lo del Resumen de Ingresos)")
+ok(list(_rest.columns[:len(compras.columns)]) == list(compras.columns)
+   and dc.COL_NOTA in _rest.columns,
+   "con las columnas de compras, más la nota")
+ok(set(_rest[dc.DOCUMENTO]) >= {"F-A"},
+   "también la línea devuelta ENTERA, que aplicar_notas borra")
+ok(_rest[dc.VALOR].gt(0).all(), "sólo las líneas que alguna nota tocó")
+ok(dc.lineas_restadas(compras, None) is None, "sin notas: None")
+# El número se repite entre proveedores: la fecha va por número Y
+# proveedor, o la de una nota de otro emisor se cuela.
+_con_f = notas.assign(**{dc.NC_FECHA: "2026-09-28"})
+_otro = _con_f.iloc[[0]].assign(**{dc.NC_PROVEEDOR: "99999",
+                                   dc.NC_FECHA: "2020-01-01"})
+_r2 = dc.lineas_restadas(compras, pd.concat([_con_f, _otro]))
+_fa = _r2[_r2[dc.DOCUMENTO] == "F-A"][dc.COL_FECHA_NC].iloc[0]
+igual(str(pd.Timestamp(_fa).date()), "2026-09-28",
+      "la fecha de la nota es la de SU proveedor, no la de otro con el mismo número")
+
 print("\n── sin notas no cambia nada ──")
 ok(dc.aplicar_notas(compras, None) is compras, "sin parquet de notas: el mismo df")
 ok(dc.aplicar_notas(compras, notas.iloc[0:0]) is compras, "con el parquet vacío: igual")

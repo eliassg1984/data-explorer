@@ -223,12 +223,10 @@ REPORTES = {
             "Stock Declarado", "Ajuste", "Ajuste Valorizado",
         ],
         "derivar_periodo_pivote": True,
-        # El calendario de la franja ofrece la pestaña "Cortes" (filtrar por
-        # la sesión de conteo exacta en vez de por intervalo, ver cortes.py).
-        # Solo acá: en Ventas o Compras un "corte" no significa nada — las
-        # fechas son continuas y las rachas serían ruido. Sin este flag el
-        # panel de fecha queda idéntico a como estaba.
-        "cortes": True,
+        # Sin `"cortes": True` desde el 2026-10-11 (regla #632): era lo que
+        # le daba a la píldora de la franja los modos Corte y Varios, y la
+        # franja de Ajuste ya no dibuja fecha. Cada vista elige su sesión de
+        # inventario (`cortes.sesiones_inventario`) o sus meses.
         "graficos": [
             {"tipo": "line",
              "x": ["FECHA APERTURA INVENTARIO", "MES"],
@@ -411,6 +409,23 @@ REPORTES = {
         # aplicado vive en st.session_state[f"rango_carga_{reporte}"] y el
         # date_input del popover lo controla (ver app.py).
         "carga_por_rango": "FEC REG DOCUMENTO",
+    },
+    # El costo de ventas por mes operativo (2026-10-09, regla #622): cruza
+    # cuatro parquets y ninguno es su dueño. `archivo` es el de los CIERRES de
+    # inventario —el que `app.py` carga y le pasa al dashboard—; compras,
+    # salidas y la venta por grupo los lee `graficos/costos.py`. Sin fecha en
+    # la franja: el eje son los meses operativos, que arma la tabla.
+    "Costos": {
+        "label_corto": "Costos",
+        "label_largo": "Costos",
+        "archivo": "ajusteinventario.parquet",
+        # Para que «Actualizar» pida también lo que suma la tabla. Ventas NO
+        # va, por lo mismo que en Recetas: regenerar el parquet más pesado
+        # para refrescar una fila; se actualiza con su reporte.
+        # Y el kardex, del que salen las semanas y quincenas.
+        "archivos_extra": ("compras.parquet", "salidas.parquet", kardex.ARCHIVO),
+        "icono": ":material/calculate:",
+        "fecha": None,
     },
     "Inspector": {
         "label_corto": "Inspector",
@@ -1266,6 +1281,40 @@ def notas_credito_compras():
         return None
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _notas_restadas_cacheable(archivo, sello, sello_notas="", version=None):
+    """`definicion_compra.lineas_restadas`: lo que cada nota de crédito le
+    restó a cada línea de compra. Si falla, LANZA: no se cachea. Sólo en
+    memoria, como `_compras_netas_cacheable`: son unas decenas de filas
+    sacadas de dos parquets que ya están en el disco."""
+    if not sello_notas:
+        return None
+    compras = _cargar_cacheable(archivo, sello_datos(archivo))
+    notas = _cargar_cacheable(definicion_compra.ARCHIVO_NOTAS,
+                              sello_datos(definicion_compra.ARCHIVO_NOTAS))
+    return definicion_compra.lineas_restadas(compras, notas)
+
+
+def notas_restadas_compras():
+    """Las líneas de compra que tocó una nota de crédito, con la parte
+    restada en lugar de sus montos (`definicion_compra.lineas_restadas`).
+    La lee «Compras por período» para decir cuánto restó en lo que muestra
+    y cuánto daría sin restar, que es lo del Resumen de Ingresos del
+    Almacén (regla #628).
+
+    `None` si no hay notas (o no hay secrets) o si la lectura falla: la
+    tarjeta sigue sin el aviso."""
+    sello_notas = _sello_notas_compras()
+    if not sello_notas:
+        return None
+    try:
+        return _notas_restadas_cacheable(
+            definicion_compra.ARCHIVO, sello_datos(definicion_compra.ARCHIVO),
+            sello_notas, version=definicion_compra.VERSION)
+    except Exception:
+        return None
+
+
 def cargar(archivo, notas_credito=True):
     """
     Carga un archivo parquet desde R2.
@@ -1354,6 +1403,7 @@ def limpiar_cache(archivo):
     # y su clave lleva los dos sellos, así que un parquet nuevo ya es otra
     # entrada; se vacía para no esperar la hora de su `ttl` con dos copias.
     _compras_netas_cacheable.clear()
+    _notas_restadas_cacheable.clear()
     # El ajuste con el kardex al lado (regla #612): su clave lleva los dos
     # sellos, y se vacía entera por lo mismo que la de arriba.
     _ajuste_con_kardex_cacheable.clear()
@@ -1361,10 +1411,13 @@ def limpiar_cache(archivo):
     _rango_fechas_cacheable.clear()
     _resumen_kpis_cacheable.clear()
     _venta_por_producto_dia_cacheable.clear()
+    _venta_por_grupo_dia_cacheable.clear()
     _consumo_recetas_cacheable.clear()
     _demanda_nivel1_cacheable.clear()
     _stock_al_cacheable.clear()
+    _kardex_fotos_cacheable.clear()
     _movimientos_cacheable.clear()
+    _movimientos_mes_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -1826,6 +1879,47 @@ def venta_por_producto_dia(archivo="ventas.parquet"):
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _venta_por_grupo_dia_cacheable(archivo, sello, definicion=None):
+    """La venta y la cortesía de cada grupo de carta por día, sobre TODO el
+    parquet (`definicion_venta.por_grupo_dia`), fechada por el día del TURNO
+    de caja, el default de Ventas (regla #593). Si falla, LANZA: no se cachea.
+
+    El mismo camino que `_venta_por_producto_dia_cacheable`: sólo las
+    columnas que la definición lee, más el grupo, y la cuenta en pandas
+    (#524). Lo que se guarda son unas 7.000 filas por año."""
+    prep = _PREPARAR[archivo]
+    if not secrets_disponibles():
+        return prep.por_grupo_dia(prep.preparar(_datos_demo(archivo), turno=True))
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+    nombres = [r[0] for r in con.execute(
+        f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()]
+    vacio = pd.DataFrame(columns=nombres)
+    reales = list(dict.fromkeys(
+        c for c in (prep.columna(vacio, q) for q in (*prep.COLUMNAS, prep.GRUPO))
+        if c))
+    lista = ", ".join(f'"{c}"' for c in reales)
+    df = con.execute(f"SELECT {lista} FROM read_parquet('{url}')").df()
+    return prep.por_grupo_dia(prep.preparar(df, turno=True))
+
+
+def venta_por_grupo_dia(archivo="ventas.parquet"):
+    """La venta neta y el costo de cada grupo de carta por día, y el costo de
+    las cortesías (`definicion_venta.por_grupo_dia`), para el reporte Costos
+    (regla #622). `None` si no se pudo cargar. No cacheada (la interna sí),
+    por lo mismo que `cargar()`."""
+    if archivo not in _PREPARAR:
+        return None
+    try:
+        return _venta_por_grupo_dia_cacheable(
+            archivo, sello_datos(archivo),
+            definicion=_version_preparar(archivo))
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
 def _consumo_recetas_cacheable(archivo, sello, ini, fin, sellos=(), version=None):
     """El consumo de insumos de compra del rango (`consumo_recetas.calcular`,
     regla #558). Si falla, LANZA: no se cachea.
@@ -1952,6 +2046,30 @@ def _stock_al_cacheable(archivo, sello, cuando, version=None):
     return con.execute(kardex.sql_stock_al(rel, cuando)).df()
 
 
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _kardex_fotos_cacheable(archivo, sello, version=None):
+    """Cada fila del kardex con sólo lo que hace falta para la foto del
+    stock (`kardex.sql_fotos`). Si falla, LANZA: no se cachea. `sello` y
+    `version` son la clave. Regla #622."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    return con.execute(kardex.sql_fotos(rel)).df()
+
+
+def kardex_fotos():
+    """Las fotos del kardex para sacar el stock en muchos momentos de una
+    vez (`costo_ventas.inventario_en_momentos`): las semanas y quincenas del
+    reporte Costos. `None` si no se pudo leer. No cacheada (la interna sí)."""
+    try:
+        return _kardex_fotos_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
+                                       version=kardex.VERSION)
+    except Exception:
+        return None
+
+
 def stock_al(cuando):
     """El stock de cada área y producto al momento `cuando` (un `datetime`;
     cuenta su hora entera, ver `kardex.momento`). `None` si no se pudo leer
@@ -1977,6 +2095,31 @@ def _movimientos_cacheable(archivo, sello, desde, hasta, version=None):
     bucket = st.secrets["R2_BUCKET"]
     rel = f"read_parquet('s3://{bucket}/{archivo}')"
     return con.execute(kardex.sql_movimientos(rel, desde, hasta)).df()
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _movimientos_mes_cacheable(archivo, sello, desde, hasta, version=None):
+    """Lo que entró y salió de cada producto por mes y tipo, en el
+    restaurante entero (`kardex.sql_movimientos_mes`). Si falla, LANZA: no
+    se cachea. `sello` y `version` son la clave. Regla #614."""
+    if not secrets_disponibles():
+        return None
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    rel = f"read_parquet('s3://{bucket}/{archivo}')"
+    return con.execute(kardex.sql_movimientos_mes(rel, desde, hasta)).df()
+
+
+def movimientos_kardex_mes(desde, hasta):
+    """Los movimientos del kardex por mes, producto y tipo entre dos fechas
+    (`date`), sin los que van de un área a otra. `None` si no se pudo leer:
+    quien lo pide avisa. No cacheada (la interna sí)."""
+    try:
+        return _movimientos_mes_cacheable(kardex.ARCHIVO,
+                                          sello_datos(kardex.ARCHIVO),
+                                          desde, hasta, version=kardex.VERSION)
+    except Exception:
+        return None
 
 
 def movimientos_kardex(desde, hasta):

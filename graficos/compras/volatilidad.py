@@ -56,8 +56,9 @@ que se dibuja es OTRO y nace con su `index` en el valor nuevo. Escribir la
 clave del widget no alcanza: el navegador vuelve a mandar el valor viejo y
 Streamlit lo re-aplica (arquitectura.md regla #212, medida otra vez acá el
 2026-09-06). El espíritu de "sin key dinámica" se respeta igual, con el
-mismo argumento que `selector_escala`: el dueño del dato es esta clave, y
-el widget es una VISTA que se recalcula de ella en cada render."""
+mismo argumento que el riel de la escala de tiempo de la regla #212: el
+dueño del dato es esta clave, y el widget es una VISTA que se recalcula de
+ella en cada render."""
 
 _KEYS_WIDGET = ("compras_vol_q", "compras_vol_cols", "compras_vol_grano",
                 "compras_vol_tabla_modo_*",
@@ -1045,8 +1046,8 @@ def _compras_volatilidad_drill(d, col_prod, col_prov, col_punit, col_fecha,
     # el NAVEGADOR le gana al que escribe el servidor, así que un widget no
     # se resetea desde `session_state`; hay que cambiarle la KEY. Por eso
     # `_K_VENTANA` es una clave normal (nadie la recolecta) y la key del
-    # `selectbox` la lleva adentro, exactamente como el riel de
-    # `base.py::selector_escala` lleva su rango.
+    # `selectbox` la lleva adentro, exactamente como el riel de la escala de
+    # tiempo llevaba su rango (su código se borró en la regla #618).
     #
     # Y `preservar_widgets` por lo de siempre: el rerun aborta ACÁ, antes
     # de que los controles se registren, y Streamlit recolecta el estado de

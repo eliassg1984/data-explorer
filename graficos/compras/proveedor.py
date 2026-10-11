@@ -437,9 +437,10 @@ def _relevo_producto():
     """`on_change` del relevo: el producto clickeado pasa a ser el foco de
     la Evolución, y clickear el que ya estaba en foco lo suelta.
 
-    El patrón es el del riel de Días (`graficos/base.py::_aplicar_pan_riel`,
-    regla #217): un `st.text_input` invisible que el JS llena y CONFIRMA con
-    un Enter de teclado de verdad — `input`/`change` no alcanzan."""
+    El patrón es el del arrastre del riel de Días (regla #217; aquel código
+    se borró con la escala de tiempo en la #618): un `st.text_input`
+    invisible que el JS llena y CONFIRMA con un Enter de teclado de verdad
+    — `input`/`change` no alcanzan."""
     raw = st.session_state.get(_K_RELEVO_PROD) or ""
     prod = raw.rsplit(_SEP_RELEVO, 1)[0]
     if not prod:

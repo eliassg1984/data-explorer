@@ -344,8 +344,46 @@ def _con_limite(sql: str, limite: int = MAX_FILAS_RESULTADO) -> str:
     return f"{limpio}\nLIMIT {limite}"
 
 
-def ejecutar_sql(df: pd.DataFrame, sql: str) -> dict:
-    """Corre `sql` (solo lectura) contra `df`, expuesto como tabla `datos`.
+# ─── Tablas adicionales ────────────────────────────────────────────────────
+# Un reporte puede darle al modelo más de una tabla (regla #626): en
+# Movimientos, `datos` son los requerimientos y las SALIDAS van aparte —sin
+# ellas «¿cuánto arroz salió en comida de personal?» se contestaba con los
+# requerimientos o no se contestaba—. Cada una es `{nombre: {"df": …,
+# "nota": …}}`; la nota dice QUÉ ES y cómo se suma.
+_NOMBRE_VALIDO = re.compile(r"^[a-z_][a-z0-9_]*$")
+
+
+def tablas_validas(extras) -> dict:
+    """`{nombre: df}` de las tablas adicionales que se pueden registrar:
+    nombre de identificador simple, distinto de `datos`, y un df con filas."""
+    salida = {}
+    for nombre, info in (extras or {}).items():
+        df = (info or {}).get("df")
+        if (_NOMBRE_VALIDO.match(str(nombre)) and nombre != _NOMBRE_TABLA
+                and df is not None and not df.empty):
+            salida[nombre] = df
+    return salida
+
+
+def esquema_extras(extras) -> str:
+    """El trozo del system prompt que presenta las tablas adicionales, o ""."""
+    tablas = tablas_validas(extras)
+    if not tablas:
+        return ""
+    partes = []
+    for nombre, df in tablas.items():
+        nota = (extras[nombre].get("nota") or "").strip()
+        partes.append(f"Tabla `{nombre}` ({len(df):,} filas)"
+                      + (f" — {nota}" if nota else "") + "\n"
+                      + esquema_para_prompt(df))
+    return ("\nADEMÁS de `datos` tienes estas tablas, que se consultan con la "
+            "misma herramienta (FROM <nombre>):\n\n" + "\n\n".join(partes)
+            + "\n")
+
+
+def ejecutar_sql(df: pd.DataFrame, sql: str, extras=None) -> dict:
+    """Corre `sql` (solo lectura) contra `df`, expuesto como tabla `datos`, y
+    contra las tablas adicionales de `extras` con su nombre (regla #626).
 
     Devuelve SIEMPRE un dict serializable — nunca lanza. Un error tiene que
     volver al modelo como texto para que pueda corregir la consulta y
@@ -355,14 +393,18 @@ def ejecutar_sql(df: pd.DataFrame, sql: str) -> dict:
     if motivo:
         return {"ok": False, "error": f"Consulta rechazada: {motivo}"}
 
-    if df is None or df.empty:
+    tablas = tablas_validas(extras)
+    if (df is None or df.empty) and not tablas:
         return {"ok": False, "error": "No hay filas visibles con los filtros actuales."}
 
     # Guarda contra el fallo SILENCIOSO de las columnas con espacios sin
     # comillas (ver columnas_sin_comillas). Se rechaza con instrucciones para
     # que el modelo corrija y reintente — es preferible una ronda extra a una
     # cifra equivocada que nadie puede detectar.
-    culpables = columnas_sin_comillas(sql, df.columns)
+    _todas = [] if df is None else list(df.columns)
+    for _t in tablas.values():
+        _todas += [c for c in _t.columns if c not in _todas]
+    culpables = columnas_sin_comillas(sql, _todas)
     if culpables:
         lista = ", ".join(f'"{c}"' for c in culpables)
         return {"ok": False, "error": (
@@ -383,7 +425,10 @@ def ejecutar_sql(df: pd.DataFrame, sql: str) -> dict:
         # Conexión NUEVA y en memoria por consulta: nada persiste entre
         # llamadas, así una consulta no puede dejarle estado a la siguiente.
         con = duckdb.connect(database=":memory:")
-        con.register(_NOMBRE_TABLA, df)
+        if df is not None:
+            con.register(_NOMBRE_TABLA, df)
+        for _nombre, _t in tablas.items():
+            con.register(_nombre, _t)
         res = con.sql(final).df()
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}",

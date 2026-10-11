@@ -95,9 +95,9 @@ from cortes import MESES_ABR_ES
 from estado_rango import clave_rango, restaurar_eco
 import franja_fecha
 from tema import (
-    ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR, ERROR_FONDO, ERROR_TEXTO,
+    ACENTO, ACENTO_TEXTO, ADVERTENCIA_TEXTO, ERROR_FONDO, ERROR_TEXTO,
     GRIS_BORDE, GRIS_FONDO, GRIS_TEXTO, GRIS_TEXTO_MEDIO, GRIS_TEXTO_SUAVE,
-    LAVANDA_BORDE, LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO,
+    LAVANDA_CABECERA_GRUPO, LAVANDA_FOCO, LAVANDA_FONDO,
     TEXTO_PRINCIPAL,
 )
 from graficos.base import _compras_layout, _compras_truncar, una_vez_por_corrida
@@ -877,36 +877,76 @@ suman 100 % y «En SUNAT» + «En sistema» suman más (los que coinciden o
 difieren están en los dos)."""
 
 
-_NOMBRE_CRUCE = {
-    "Total": "Documentos del período",
-    "En SUNAT": "Registrados en SUNAT",
-    "En sistema": "Cargados en el sistema",
-    "Coinciden": "En los dos, montos iguales",
-    "Con diferencia": "En los dos, montos distintos",
-    "Solo SUNAT": "Sólo en SUNAT",
-    "Solo sistema": "Sólo en el sistema",
-}
-"""Lo que dice cada barra en la TABLA y en el tooltip del gráfico. Los
-nombres cortos de `_BARRAS_CRUCE` siguen en el eje del gráfico, donde no
-entra más; en la tabla se leían como preguntas («Total, ¿de qué?»,
-«Coinciden, ¿en qué?» — 2026-10-02, a pedido)."""
+_TRAMOS_FIDELIDAD = (
+    ("cuadran", "Coincide", "Cargados y cuadran",
+     f"Están en SUNAT y en el sistema, y cuadran base, IGV y total (hasta "
+     f"S/ {_TOLERANCIA_CENTAVOS:.2f} de diferencia)."),
+    ("diferencia", "Diferencia", "Cargados con diferencia",
+     "Están en SUNAT y en el sistema, pero la base, el IGV o el total no "
+     "cuadran: revisar."),
+    ("falta", "Solo SUNAT", "Falta cargar en el sistema",
+     "SUNAT los tiene y el sistema todavía no."),
+)
+"""Los tres casos en que se reparte lo que reporta SUNAT, y que suman su
+100 %: `(clave, estado del cruce, nombre, explicación)`. Desde el
+2026-10-02 el «Resumen del cruce» mide la FIDELIDAD respecto de SUNAT (a
+pedido: «mi referencia principal debe ser SUNAT»): la base es SUNAT y no
+la unión de las dos fuentes. Regla #630."""
 
-_AYUDA_CRUCE = {
-    "Total": ("Cada documento una vez, esté en SUNAT, en el sistema o en los "
-              "dos. Es el 100 % de las demás filas."),
-    "En SUNAT": ("Están en el registro de compras de SUNAT (SIRE), cargados "
-                 "o no en el sistema."),
-    "En sistema": ("Están cargados en el sistema de almacén, los reporte "
-                   "SUNAT o no."),
-    "Coinciden": (f"Están en los dos y cuadran base, IGV y total (hasta "
-                  f"S/ {_TOLERANCIA_CENTAVOS:.2f} de diferencia)."),
-    "Con diferencia": ("Están en los dos, pero la base, el IGV o el total no "
-                       "cuadran: revisar."),
-    "Solo SUNAT": "SUNAT los tiene y el sistema todavía no: falta cargarlos.",
-    "Solo sistema": ("Cargados en el sistema sin comprobante en SUNAT, al "
-                     "menos por ahora."),
-}
-"""La explicación larga de cada fila: el tooltip de su nombre en la tabla."""
+_AYUDA_FUERA = ("Cargados en el sistema sin comprobante en SUNAT, al menos "
+                "por ahora. No son parte de lo que reporta SUNAT: no suman "
+                "al 100 %.")
+"""El tooltip de «Fuera de SUNAT» (el estado «Solo sistema»)."""
+
+_DIAS_RECIENTES = 7
+"""Cuántos días hacia atrás cuentan como «recientes» en lo que falta cargar:
+un comprobante emitido hace tres días que todavía no está en el sistema
+puede ser sólo demora de carga, no un error. El resumen lo dice aparte."""
+
+
+def _fidelidad_cruce(df, recientes_desde=None):
+    """La fidelidad de un cruce respecto de SUNAT, en documentos y en soles.
+
+    `{"doc": {...}, "soles": {...}, "recientes": (n, soles)}`, con las
+    claves `sunat` (la base: cuadran + diferencia + falta), las de
+    `_TRAMOS_FIDELIDAD` y `fuera` («Solo sistema», que no suma a la base).
+
+    Los soles de lo que está en SUNAT salen de `total_sunat` (el registro
+    viene en soles, regla #313); los de «fuera», de `total_sistema`, que
+    es lo único que hay. EN VALOR ABSOLUTO: desde la #604 el cruce trae las
+    notas de crédito, en negativo, y sumadas con su signo una nota sin
+    cargar RESTARÍA de lo que falta — hasta dejar un tramo en negativo. Una
+    nota de −S/ 5,000 sin cargar es S/ 5,000 que no cuadran con SUNAT.
+    `recientes` cuenta lo que falta cargar emitido desde `recientes_desde`
+    (`fecha_sunat`); sin fecha, ceros.
+    """
+    claves = ("sunat",) + tuple(t[0] for t in _TRAMOS_FIDELIDAD) + ("fuera",)
+    out = {"doc": dict.fromkeys(claves, 0),
+           "soles": dict.fromkeys(claves, 0.0), "recientes": (0, 0.0)}
+    if df is None or getattr(df, "empty", True) or "estado" not in df.columns:
+        return out
+
+    def _montos(col):
+        if col not in df.columns:
+            return pd.Series(0.0, index=df.index)
+        return pd.to_numeric(df[col], errors="coerce").fillna(0.0).abs()
+
+    est = df["estado"].astype(str)
+    t_sunat, t_sis = _montos("total_sunat"), _montos("total_sistema")
+    for clave, estado, _n, _a in _TRAMOS_FIDELIDAD:
+        m = est == estado
+        out["doc"][clave] = int(m.sum())
+        out["soles"][clave] = float(t_sunat[m].sum())
+    m_fuera = est == "Solo sistema"
+    out["doc"]["fuera"] = int(m_fuera.sum())
+    out["soles"]["fuera"] = float(t_sis[m_fuera].sum())
+    for medida in ("doc", "soles"):
+        out[medida]["sunat"] = sum(out[medida][t[0]] for t in _TRAMOS_FIDELIDAD)
+    if recientes_desde is not None and "fecha_sunat" in df.columns:
+        f = pd.to_datetime(df["fecha_sunat"], errors="coerce").dt.date
+        m = (est == "Solo SUNAT") & f.notna() & (f >= recientes_desde)
+        out["recientes"] = (int(m.sum()), float(t_sunat[m].sum()))
+    return out
 
 
 def _conteos_cruce(df):
@@ -934,14 +974,18 @@ def _publicar_conteos(df):
     correcta.
     """
     k = _conteos_cruce(df)
+    f = _fidelidad_cruce(df)["doc"]
     st.session_state["_cp_docs_cruce"] = {
         "sunat": k["En SUNAT"],
         "sistema": k["En sistema"],
-        # Lo que NO cuadra, en un solo número: el rail lo pinta como
-        # excepción (ámbar), y los dos totales no lo dicen — 204 y 207 se
-        # leen como «casi igual» cuando pueden ser 7 documentos mal por los
-        # dos lados.
-        "revisar": k["Solo sistema"] + k["Solo SUNAT"] + k["Con diferencia"],
+        # Lo que NO cuadra CONTRA SUNAT, en un solo número: el rail lo
+        # pinta como excepción (ámbar). Desde el 2026-10-02 (#630) son los
+        # documentos de SUNAT con diferencia o sin cargar; los cargados sin
+        # comprobante en SUNAT («fuera») van aparte, porque no son parte de
+        # la base contra la que se mide.
+        "revisar": f["diferencia"] + f["falta"],
+        "fuera": f["fuera"],
+        "fidelidad": _pct_de(f["cuadran"], f["sunat"]),
     }
 
 
@@ -1323,16 +1367,19 @@ def _tabla_documentos(df_cruce, df_sire):
                       "Sin marca, se pide desde la ficha del documento.",
         cellStyle={"color": ACENTO, "fontWeight": "700",
                    "textAlign": "center"})
-    # Misma convención de color que tenía «Estado»: ámbar = revisar, rojo =
-    # plata cargada sin comprobante electrónico que la respalde.
-    # «Coincide» no se destaca — lo normal no compite por atención.
+    # Ámbar = revisar contra SUNAT (con diferencia o sin cargar). «Coincide»
+    # no se destaca — lo normal no compite por atención.
+    # «Solo sistema» en GRIS OSCURO desde el 2026-10-02 (antes rojo): con
+    # SUNAT como referencia, lo cargado sin comprobante en SUNAT queda
+    # FUERA de la base, igual que en el «Resumen del cruce» (regla #630).
     gb.configure_column(
         _COL_ESTADO, width=126, minWidth=126,
         cellStyle=JsCode(
             "function(p){ var m={'Diferencia':'%s','Solo SUNAT':'%s',"
             "'Solo sistema':'%s'}; var c=m[p.value]; "
             "return c ? {'color':c,'fontWeight':'600'} : {'color':'%s'}; }"
-            % (ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, ERROR, GRIS_TEXTO)))
+            % (ADVERTENCIA_TEXTO, ADVERTENCIA_TEXTO, GRIS_TEXTO_MEDIO,
+               GRIS_TEXTO)))
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     gb.configure_grid_options(
         headerHeight=ALTO_HEADER_RANK,
@@ -3577,13 +3624,6 @@ de fechas, corrido uno o dos años atrás. Mes corriente contra el mismo mes
 del año pasado o del antepasado, que es lo pedido (2026-10-02). Los botones
 no dicen estos nombres sino el año (`_rotulo_anio`), también a pedido."""
 
-_COLORES_PERIODO = (ACENTO, LAVANDA_FOCO, LAVANDA_BORDE)
-"""Actual, año pasado, hace dos años: UN tono que se aclara hacia atrás,
-porque los períodos tienen orden y no son categorías sueltas. Los dos claros
-tienen poco contraste contra el blanco, así que cada barra lleva su número
-escrito: el color nombra el período, la cifra no depende de él."""
-
-
 def _rango_hace(f_ini, f_fin, anos):
     """`(ini, fin)` corridos `anos` años atrás (29-feb cae en el 28)."""
     return ((pd.Timestamp(f_ini) - pd.DateOffset(years=anos)).date(),
@@ -3632,19 +3672,7 @@ def _conteos_de_periodo(d, col_fecha, ini, fin, prov):
             d, col_fecha, ini, fin, notas=data.notas_credito_compras()))
     if prov:
         cr = cr[_claves_proveedor_cruce(cr) == prov]
-    return _conteos_cruce(cr), None
-
-
-def _rotulo_corto(ini, fin):
-    """El rango en corto para la leyenda: «3 set–2 oct 26», «1–30 set 26»."""
-    ini, fin = pd.Timestamp(ini), pd.Timestamp(fin)
-    m1, m2 = MESES_ABR_ES[ini.month - 1], MESES_ABR_ES[fin.month - 1]
-    if (ini.year, ini.month) == (fin.year, fin.month):
-        return f"{ini.day}–{fin.day} {m2} {fin.year % 100:02d}"
-    a = f"{ini.day} {m1}"
-    if ini.year != fin.year:
-        a += f" {ini.year % 100:02d}"
-    return f"{a}–{fin.day} {m2} {fin.year % 100:02d}"
+    return _fidelidad_cruce(cr), None
 
 
 def _rotulo_anio(ini, fin):
@@ -3654,27 +3682,53 @@ def _rotulo_anio(ini, fin):
     return str(b) if a == b else f"{a}-{b % 100:02d}"
 
 
+def _soles_corto(v):
+    """«S/ 2.72 M», «S/ 84.3 K», «S/ 950»: lo que entra adentro de un tramo."""
+    v = float(v or 0)
+    if abs(v) >= 1e6:
+        return f"S/ {v / 1e6:.2f} M"
+    if abs(v) >= 1e3:
+        return f"S/ {v / 1e3:.1f} K"
+    return f"S/ {v:,.0f}"
+
+
+def _valor_fid(v, medida, corto=False):
+    if medida == "doc":
+        return f"{int(v):,}"
+    return _soles_corto(v) if corto else f"S/ {float(v):,.0f}"
+
+
+def _pct_num(n, total):
+    return None if not total else n / total * 100
+
+
 def _panel_resumen(d, resumen):
-    """«Resumen del cruce»: cuántos documentos hay de cada lado y cómo se
-    reparten, en barras o en tabla, contra el mismo período de años
-    anteriores.
+    """«Resumen del cruce»: la FIDELIDAD del sistema respecto de SUNAT, en
+    el período y contra el mismo período de años anteriores.
 
-    Es lo que decía la tira de KPIs de la tabla al pasar el cursor por
-    «Está vs Sistema» (2026-09-18 a 2026-10-02): se fue de ahí a pedido,
-    porque ocupaba un renglón, y volvió acá como gráfico, también a pedido,
-    con la comparación entre períodos.
+    Desde el 2026-10-02 la base es SUNAT (a pedido: «mi referencia principal
+    debe ser SUNAT; el análisis es la fidelidad respecto de la data de
+    SUNAT»), con el mockup aprobado ese día. Hasta ahí eran siete barras
+    sobre la UNIÓN de las dos fuentes, y «Total» se leía como «¿total de
+    qué?». Ahora:
 
-    TODO EL CONTROL VA EN UN RENGLÓN (mismo día, a pedido): la leyenda
-    —el rango actual en corto y los años que se comparan, cada uno con su
-    color—, los botones de los años («2025», «2024»: el año, no «Año
-    pasado») y Gráfico / Tabla. El gráfico ya no lleva título ni leyenda
-    propios: los dos le costaban un renglón y repetían lo de arriba.
+      · **La fidelidad arriba, grande**: cargados y cuadran ÷ lo que reporta
+        SUNAT, con la diferencia en puntos contra el año anterior más
+        cercano que se esté comparando.
+      · **Documentos o soles** (`sunat_res_medida`): un documento de
+        S/ 15,000 sin cargar pesa más que diez de S/ 20.
+      · **Una barra apilada al 100 % por período**, del más viejo al
+        actual (`_barras_fidelidad`): cuadran, con diferencia, falta cargar.
+        **«Fuera de SUNAT»** («Solo sistema») va al costado, punteado: no
+        es parte de la base y no suma al 100 %.
+      · **Lo que falta cargar de los últimos días** se dice aparte, y sólo
+        si el período llega hasta esos días: puede ser demora de carga.
 
     El período actual es el CENSO de la tabla: rango, «Mes en SUNAT» y
     proveedor aplicados, «Está vs Sistema» no (es el filtro que elige
     dentro de este censo, ver `_filtro_estado`). Los anteriores se cachean
     en `session_state` por rango y proveedor: el cruce de un año cuesta
-    ~0,4 s y el selector de la tarjeta la re-corre en cada clic.
+    ~0,4 s y el selector de la tarjeta la re-corre en cada clic. Regla #630.
     """
     if not resumen or resumen.get("censo") is None:
         st.caption("Sin comprobantes en el rango para resumir.")
@@ -3685,10 +3739,15 @@ def _panel_resumen(d, resumen):
 
     with st.container(horizontal=True, vertical_alignment="center",
                       gap="small", key="sunat_res_cab"):
-        _slot_leyenda = st.empty()
+        _slot_kpi = st.empty()
+        medida = st.pills(
+            "Medir en", ["doc", "soles"], selection_mode="single",
+            default="doc", key="sunat_res_medida",
+            format_func=lambda m: "Documentos" if m == "doc" else "Soles",
+            label_visibility="collapsed") or "doc"
         # Las opciones son 1 y 2 (años atrás) y el rótulo es el año: así
         # el valor guardado no cambia cuando el rango pasa a otro año. Del
-        # más viejo al más nuevo, como la leyenda y la tabla.
+        # más viejo al más nuevo, como las barras y la tabla.
         comparar = st.pills(
             "Comparar con", sorted(rangos, reverse=True),
             selection_mode="multi",
@@ -3702,63 +3761,53 @@ def _panel_resumen(d, resumen):
                                    else ":material/table_rows:"),
             label_visibility="collapsed") or "grafico"
 
-    # Cada período con su edad (0 = el actual, 1 = el año pasado…): de ahí
-    # sale su color, que no depende de la posición.
-    periodos = [{"edad": 0, "rot": _rotulo_corto(f_ini, f_fin),
-                 "rango": _rotulo_rango(f_ini, f_fin),
-                 "k": _conteos_cruce(resumen["censo"])}]
+    # Lo que falta cargar de los últimos días sólo cuenta si el período
+    # llega hasta ellos: en un rango cerrado hace meses no es demora.
+    hoy = datetime.date.today()
+    desde_rec = hoy - datetime.timedelta(days=_DIAS_RECIENTES)
+    recientes_desde = (max(pd.Timestamp(f_ini).date(), desde_rec)
+                       if pd.Timestamp(f_fin).date() >= desde_rec else None)
+
+    periodos = [{"edad": 0, "rango": _rotulo_rango(f_ini, f_fin),
+                 "f": _fidelidad_cruce(resumen["censo"], recientes_desde)}]
     avisos = []
     for anios in sorted(comparar):
         ini, fin = rangos[anios]
-        k_cache = (f"sunat_res_cache_{ini}_{fin}_{prov or ''}_"
+        # `fid` en la clave: hasta el 2026-10-02 esta caché guardaba los
+        # conteos de la unión, con otra forma (regla #630).
+        k_cache = (f"sunat_res_fid_{ini}_{fin}_{prov or ''}_"
                    f"{len(d) if d is not None else 0}")
         if k_cache not in st.session_state:
             with st.spinner(f"Cruzando {_rotulo_rango(ini, fin)}…"):
                 st.session_state[k_cache] = _conteos_de_periodo(
                     d, col_fecha, ini, fin, prov)
-        conteos, motivo = st.session_state[k_cache]
-        if conteos is None:
+        fid, motivo = st.session_state[k_cache]
+        if fid is None:
             avisos.append(f"{_rotulo_anio(ini, fin)} "
-                          f"({_rotulo_rango(ini, fin)}): sin barra — "
+                          f"({_rotulo_rango(ini, fin)}): sin datos — "
                           f"{motivo}.")
         else:
-            periodos.append({"edad": anios, "rot": _rotulo_anio(ini, fin),
-                             "rango": _rotulo_rango(ini, fin), "k": conteos})
-    # DEL MÁS VIEJO AL ACTUAL, de izquierda a derecha (2026-10-02, a pedido:
-    # «que el orden sea de antes, a la izquierda, a después, a la
-    # derecha»). En la leyenda, en las barras de cada grupo y en las
-    # columnas de la tabla: el tiempo corre para el mismo lado en las tres.
+            periodos.append({"edad": anios, "rango": _rotulo_rango(ini, fin),
+                             "anio": _rotulo_anio(ini, fin), "f": fid})
+    # DEL MÁS VIEJO AL ACTUAL, de arriba abajo en las barras y de izquierda
+    # a derecha en la tabla (regla #588).
     periodos.sort(key=lambda p: -p["edad"])
 
-    # La nota que explica los % ya no va debajo (a pedido, mismo día): es
-    # el tooltip de la leyenda y de las cabeceras de la tabla. Debajo sólo
-    # quedan los avisos de un año sin barra, que dicen por qué falta algo
-    # que se pidió.
-    nota = ("% sobre los documentos de cada período: los que están en "
-            "SUNAT, en el sistema o en los dos. Origen del período actual: "
+    nota = ("Fidelidad = cargados y cuadran ÷ lo que reporta SUNAT en el "
+            "período (documentos o soles). Lo cargado sin comprobante en "
+            "SUNAT va aparte y no suma al 100 %. Origen del período actual: "
             f"{_sello_origen(resumen.get('origen'))}.")
     if resumen.get("mes_filtrado") and len(periodos) > 1:
         nota += (" «Mes en SUNAT» se aplica sólo al período actual: en los "
                  "años anteriores todos los meses están presentados.")
 
-    # La leyenda, en el renglón de los controles: un cuadrado del color de
-    # cada período y su rótulo; el rango entero y la nota, en el tooltip.
-    _slot_leyenda.markdown(
-        '<div style="display:flex;gap:12px;align-items:center;'
-        f'font-size:11.5px;color:{GRIS_TEXTO_MEDIO};white-space:nowrap;">'
-        + "".join(
-            f'<span title="{html.escape(p["rango"] + " · " + nota)}" '
-            f'style="display:inline-flex;align-items:center;gap:5px;'
-            f'cursor:help;"><span style="width:9px;height:9px;'
-            f'border-radius:2px;background:{_COLORES_PERIODO[p["edad"]]};">'
-            f'</span>{p["rot"]}</span>'
-            for p in periodos)
-        + '</div>', unsafe_allow_html=True)
-
+    _slot_kpi.markdown(_kpi_fidelidad_html(periodos, medida, nota),
+                       unsafe_allow_html=True)
     if vista == "tabla":
-        _tabla_resumen(periodos, nota)
+        _tabla_resumen(periodos, medida, nota)
     else:
-        _grafico_resumen(periodos)
+        st.markdown(_barras_fidelidad(periodos, medida),
+                    unsafe_allow_html=True)
 
     if avisos:
         st.markdown(
@@ -3766,100 +3815,211 @@ def _panel_resumen(d, resumen):
             + "<br>".join(avisos) + "</div>", unsafe_allow_html=True)
 
 
-def _grafico_resumen(periodos):
-    """Las barras del «Resumen del cruce»: una serie por período, del más
-    viejo al actual (así llegan de `_panel_resumen`)."""
-    fig = go.Figure()
-    for p in periodos:
-        k, total = p["k"], p["k"]["Total"]
-        ys = [k[b] for b in _BARRAS_CRUCE]
-        pcts = [_pct_de(v, total) or "—" for v in ys]
-        # La cifra arriba de cada barra; el % en un segundo renglón salvo en
-        # «Total», que es el 100 % por definición.
-        textos = [f"{v:,}" if b == "Total" else f"{v:,}<br>{pc}"
-                  for b, v, pc in zip(_BARRAS_CRUCE, ys, pcts)]
-        fig.add_trace(go.Bar(
-            name=p["rot"], x=list(_BARRAS_CRUCE), y=ys, text=textos,
-            textposition="outside", cliponaxis=False,
-            textfont=dict(size=10.5, color=GRIS_TEXTO_MEDIO),
-            marker=dict(color=_COLORES_PERIODO[p["edad"]], cornerradius=4),
-            customdata=[[_NOMBRE_CRUCE[b], pc] for b, pc in
-                        zip(_BARRAS_CRUCE, pcts)],
-            hovertemplate=(f"<b>%{{customdata[0]}}</b><br>{p['rango']}<br>"
-                           "%{y:,} documentos · %{customdata[1]} del período"
-                           "<extra></extra>"),
-        ))
-    _compras_layout(fig, alto=alturas.MINI)
-    _ymax = max((max(p["k"].values()) for p in periodos), default=0)
-    # Sin título ni leyenda: los dice el renglón de los controles. Y casi
-    # sin margen arriba: el gráfico arranca pegado a ese renglón.
-    fig.update_layout(barmode="group", bargap=0.28, bargroupgap=0.06,
-                      showlegend=False, title=None,
-                      margin=dict(t=2, b=24, l=8, r=8))
-    # Aire arriba para el rótulo de dos renglones de la barra más alta
-    # (×1.2 alcanza a 240px; con ×1.3 sobraba una franja vacía arriba). Y
-    # sin números en el eje: cada barra ya lleva el suyo escrito.
-    fig.update_yaxes(range=[0, (_ymax or 1) * 1.2], showticklabels=False)
-    st.plotly_chart(fig, use_container_width=True, key="sunat_g_resumen")
+def _kpi_fidelidad_html(periodos, medida, nota):
+    """La fidelidad del período actual, grande, con la diferencia en puntos
+    contra el período anterior más cercano que se esté comparando."""
+    actual = next(p for p in periodos if p["edad"] == 0)
+    f = actual["f"][medida]
+    pct = _pct_num(f["cuadran"], f["sunat"])
+    chip = ""
+    previos = [p for p in periodos if p["edad"] > 0]
+    if pct is not None and previos:
+        prev = min(previos, key=lambda p: p["edad"])
+        fp = prev["f"][medida]
+        pct_prev = _pct_num(fp["cuadran"], fp["sunat"])
+        if pct_prev is not None:
+            dif = round(pct - pct_prev, 1)
+            if dif > 0:
+                chip = (f'<span class="sunat-fid-chip sube">▲ {dif:.1f} pts vs '
+                        f'{prev["anio"]}</span>')
+            elif dif < 0:
+                chip = (f'<span class="sunat-fid-chip baja">▼ {abs(dif):.1f} '
+                        f'pts vs {prev["anio"]}</span>')
+            else:
+                chip = (f'<span class="sunat-fid-chip">= igual que '
+                        f'{prev["anio"]}</span>')
+    if f["sunat"]:
+        que = ("documentos de SUNAT" if medida == "doc"
+               else "facturados en SUNAT")
+        sub = (f'{_valor_fid(f["cuadran"], medida)} de los '
+               f'{_valor_fid(f["sunat"], medida)} {que} están cargados y '
+               f'cuadran · {actual["rango"]}')
+    else:
+        sub = f'SUNAT no tiene documentos en el período · {actual["rango"]}'
+    rot = "Fidelidad respecto de SUNAT" + (" · en soles" if medida == "soles"
+                                           else "")
+    return (
+        f'<div class="sunat-fid-kpi" title="{html.escape(nota)}">'
+        f'<div class="sunat-fid-kpi-rot">{rot}</div>'
+        f'<div class="sunat-fid-kpi-fila"><span class="sunat-fid-kpi-val">'
+        f'{"—" if pct is None else f"{pct:.1f}%"}</span>{chip}</div>'
+        f'<div class="sunat-fid-kpi-sub">{sub}</div></div>')
 
 
-def _tabla_resumen(periodos, nota=""):
-    """El «Resumen del cruce» como tabla: una fila por barra, una columna
-    por período —del más viejo, a la izquierda, al actual—, «cantidad · %»
-    en cada celda.
+def _barras_fidelidad(periodos, medida):
+    """Una barra apilada al 100 % por período: en qué se reparte lo que
+    reporta SUNAT. Al costado, «Fuera de SUNAT», punteado.
 
-    Cada fila dice qué cuenta (`_NOMBRE_CRUCE`) y su nombre explica más en
-    el tooltip (`_AYUDA_CRUCE`). Cada columna lleva de cabecera su RANGO
-    de fechas, no el año (a pedido, 2026-10-02: «debe decir de qué fecha y
-    mes»), y la nota de los % en el tooltip. Tooltips del NAVEGADOR
-    (`enableBrowserTooltips`): los de AG Grid se dibujan dentro del iframe
-    del componente y se cortan contra su borde.
-
-    CON EL LOOK DE LA TABLA DE DOCUMENTOS de arriba, a pedido (2026-10-02:
-    «que tenga el mismo estilo que la tabla superior»): mismo AgGrid, tema
-    `streamlit` + `CSS_RANKING_GRID`, filas de `ALTO_FILA_RANK` y cabecera
-    de `ALTO_HEADER_RANK` — el alto y el CSS viajan juntos (regla #404). La
-    primera versión fue un `st.dataframe`, que es otro idioma visual
-    (otra letra, otras líneas, cabecera gris). Paga una grilla más (#540),
-    pero sólo cuando se elige la vista de tabla.
+    HTML y no Plotly: son tres barras horizontales con su texto adentro, y
+    el tooltip de cada tramo es el del navegador (`title`). Los colores
+    viven en `estilos/_80_cards.py` (`.sunat-fid-*`). Un tramo dice su
+    cifra sólo si le entra; si no, la dice su tooltip.
     """
-    filas = []
-    for b in _BARRAS_CRUCE:
-        fila = {"Documentos": _NOMBRE_CRUCE[b], "_ayuda": _AYUDA_CRUCE[b]}
-        for p in periodos:
-            v = p["k"][b]
-            pc = _pct_de(v, p["k"]["Total"])
-            fila[p["rango"]] = (f"{v:,}" if b == "Total" or pc is None
-                                else f"{v:,} · {pc}")
-        filas.append(fila)
+    que = ("cada documento de SUNAT" if medida == "doc"
+           else "lo facturado en SUNAT")
+    leyenda = "".join(
+        f'<span title="{html.escape(ayuda)}"><i class="sunat-fid-sw {clave}">'
+        f'</i>{nombre}</span>' for clave, _e, nombre, ayuda in _TRAMOS_FIDELIDAD)
+    filas = [
+        '<div class="sunat-fid-fila sunat-fid-cab">'
+        '<div class="sunat-fid-per">Período</div>'
+        f'<div class="sunat-fid-medio"><span>Qué pasó con {que}</span>'
+        f'<span class="sunat-fid-leyenda">{leyenda}</span></div>'
+        f'<div class="sunat-fid-fuera-col" title="{html.escape(_AYUDA_FUERA)}">'
+        'Fuera de SUNAT</div></div>']
+    nota_rec = ""
+    for p in periodos:
+        f = p["f"][medida]
+        base = f["sunat"]
+        actual = p["edad"] == 0
+        sub = (f'{_valor_fid(base, medida, corto=True)} en SUNAT'
+               + (" · actual" if actual else ""))
+        tramos = []
+        for clave, _e, nombre, ayuda in _TRAMOS_FIDELIDAD:
+            v = f[clave]
+            pc = _pct_num(v, base)
+            if not pc:
+                continue
+            pct_txt = _pct_de(v, base)
+            val_c = _valor_fid(v, medida, corto=True)
+            umbral_val = 3.5 if medida == "doc" else 7
+            if pc >= (22 if clave == "cuadran" else 12):
+                txt = f"{val_c} · {pct_txt}"
+            elif clave == "cuadran" and pc >= 8:
+                txt = pct_txt
+            elif clave != "cuadran" and pc >= umbral_val:
+                txt = val_c
+            else:
+                txt = ""
+            tip = (f"{nombre}: {_valor_fid(v, medida)} · {pct_txt} de lo que "
+                   f"reporta SUNAT. {ayuda}")
+            tramos.append(
+                f'<div class="sunat-fid-tramo {clave}" style="width:{pc:.3f}%"'
+                f' title="{html.escape(tip)}">{txt}</div>')
+        barra = ("".join(tramos) if tramos else
+                 '<div class="sunat-fid-vacia">SUNAT no tiene documentos en '
+                 'el período</div>')
+        fuera = f["fuera"]
+        fuera_txt = (f'+{_valor_fid(fuera, medida)}' if fuera else "0")
+        filas.append(
+            f'<div class="sunat-fid-fila{" actual" if actual else ""}">'
+            f'<div class="sunat-fid-per"><b>{p["rango"]}</b>'
+            f'<span>{sub}</span></div>'
+            f'<div class="sunat-fid-barra">{barra}</div>'
+            f'<div class="sunat-fid-fuera" title="{html.escape(_AYUDA_FUERA)}">'
+            f'<b>{fuera_txt}</b>'
+            + ('<span>sin comprobante</span>' if medida == "doc" else "")
+            + '</div></div>')
+        if actual:
+            n_rec, s_rec = p["f"]["recientes"]
+            falta = f["falta"]
+            rec = n_rec if medida == "doc" else s_rec
+            if n_rec and falta:
+                nota_rec = (
+                    '<div class="sunat-fid-fila sunat-fid-nota">'
+                    '<div class="sunat-fid-per"></div>'
+                    f'<div class="sunat-fid-medio">↳ {_valor_fid(rec, medida)} '
+                    f'de los {_valor_fid(falta, medida)} que faltan cargar son '
+                    f'de los últimos {_DIAS_RECIENTES} días: puede ser sólo '
+                    'demora de carga</div><div class="sunat-fid-fuera-col">'
+                    '</div></div>')
+                filas.append(nota_rec)
+    return '<div class="sunat-fid">' + "".join(filas) + "</div>"
+
+
+def _tabla_resumen(periodos, medida, nota=""):
+    """La fidelidad como tabla: una fila por caso —la base, los tres tramos
+    y «Fuera de SUNAT» aparte—, una columna por período del más viejo al
+    actual, «cantidad · %» en cada celda (el % sobre lo de SUNAT).
+
+    La fila de «cuadran» va resaltada: es la fidelidad. «Fuera de SUNAT»
+    va en gris y sin %: no es parte de la base. Cada fila explica qué
+    cuenta en el tooltip de su nombre, y cada columna, la nota de los %
+    en el de su cabecera — tooltips del NAVEGADOR (`enableBrowserTooltips`),
+    que no se cortan contra el iframe del componente.
+
+    CON EL LOOK DE LA TABLA DE DOCUMENTOS de arriba (2026-10-02): mismo
+    AgGrid, tema `streamlit` + `CSS_RANKING_GRID`, filas de `ALTO_FILA_RANK`
+    y cabecera de `ALTO_HEADER_RANK` — el alto y el CSS viajan juntos
+    (regla #404). Paga una grilla más (#540), sólo en la vista de tabla.
+    """
+    base_rot = ("Documentos en SUNAT (la base)" if medida == "doc"
+                else "Facturado en SUNAT (la base)")
+    col_rot = "Respecto de lo que reporta SUNAT"
+    filas = [{col_rot: base_rot,
+              "_ayuda": "Todo lo que reporta SUNAT en el período: el 100 %.",
+              "_fid": False, "_gris": False}]
+    for clave, _e, nombre, ayuda in _TRAMOS_FIDELIDAD:
+        filas.append({col_rot: nombre + (" = fidelidad" if clave == "cuadran"
+                                         else ""),
+                      "_ayuda": ayuda, "_fid": clave == "cuadran",
+                      "_gris": False})
+    filas.append({col_rot: "Fuera de SUNAT: cargados sin comprobante",
+                  "_ayuda": _AYUDA_FUERA, "_fid": False, "_gris": True})
+    claves = ("sunat",) + tuple(t[0] for t in _TRAMOS_FIDELIDAD) + ("fuera",)
+    for p in periodos:
+        f = p["f"][medida]
+        for fila, clave in zip(filas, claves):
+            v = f[clave]
+            if clave == "fuera":
+                txt = _valor_fid(v, medida)
+            else:
+                txt = f"{_valor_fid(v, medida)} · {_pct_de(v, f['sunat']) or '—'}"
+            if clave == "falta" and p["edad"] == 0:
+                n_rec, s_rec = p["f"]["recientes"]
+                if n_rec and v:
+                    rec = n_rec if medida == "doc" else s_rec
+                    txt += (f" ({_valor_fid(rec, medida)} de los últimos "
+                            f"{_DIAS_RECIENTES} días)")
+            fila[p["rango"]] = txt
     tv = pd.DataFrame(filas)
 
     gb = GridOptionsBuilder.from_dataframe(tv)
     gb.configure_default_column(resizable=True, sortable=False, filter=False,
                                 editable=False, suppressMovable=True)
-    gb.configure_column("Documentos", minWidth=190, flex=1.3,
+    gb.configure_column(col_rot, minWidth=230, flex=1.4,
                         tooltipField="_ayuda",
                         headerTooltip="Pasá el cursor por cada fila para "
                                       "ver qué cuenta.")
-    gb.configure_column("_ayuda", hide=True)
+    for oculta in ("_ayuda", "_fid", "_gris"):
+        gb.configure_column(oculta, hide=True)
     for p in periodos:
-        gb.configure_column(p["rango"], minWidth=140, flex=1,
+        gb.configure_column(p["rango"], minWidth=150, flex=1,
                             type=["rightAligned"],
                             headerTooltip=f"{p['rango']} · {nota}")
     gb.configure_grid_options(
         headerHeight=ALTO_HEADER_RANK, rowHeight=ALTO_FILA_RANK,
         suppressCellFocus=True, enableBrowserTooltips=True,
+        getRowStyle=JsCode(
+            "function(p){ return (p.data && p.data._fid)"
+            " ? {'background':'%s','fontWeight':'600'} : null; }"
+            % LAVANDA_FONDO),
+        # El gris de «Fuera de SUNAT» va por CLASE: el violeta de `.ag-cell`
+        # (`CSS_RANKING_GRID`) le gana a un color puesto en la fila.
+        rowClassRules={"fid-gris": "data && data._gris"},
         onGridSizeChanged=JsCode("function(p){ p.api.sizeColumnsToFit(); }"))
     AgGrid(
         tv, gridOptions=gb.build(),
         height=alturas.por_filas(len(tv), px_fila=ALTO_FILA_RANK,
                                  extra=CROMO_GRID_RANK, minimo=0),
-        theme="streamlit", custom_css=CSS_RANKING_GRID,
+        theme="streamlit",
+        custom_css={**CSS_RANKING_GRID,
+                    ".fid-gris .ag-cell": {"color": f"{GRIS_TEXTO} !important"}},
         allow_unsafe_jscode=True, fit_columns_on_grid_load=True,
-        # La key lleva los períodos: con otro año elegido son otras
-        # columnas, y la grilla tiene que estrenarse (regla #556).
-        key="sunat_t_resumen_" + "_".join(
-            re.sub(r"\W+", "", p["rot"]) for p in periodos),
+        # La key lleva la medida y los períodos: con otro año o en soles
+        # son otras celdas, y la grilla tiene que estrenarse (regla #556).
+        key=f"sunat_t_fid_{medida}_" + "_".join(
+            re.sub(r"\W+", "", p["rango"]) for p in periodos),
     )
 
 

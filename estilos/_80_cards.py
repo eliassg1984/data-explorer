@@ -1137,6 +1137,29 @@ CSS = """    /* ================================================================
         font-size: 12px;
         color: var(--text-secondary);
     }
+    /* Los totales del rango, debajo del título (regla #631). Un renglón
+       que se corta con «…»: no puede partirse en dos, porque la fila de la
+       cabecera la manda el selector Corte | Mes y un tercer renglón sí
+       empujaría la serie. */
+    .ajevo-kpis {
+        display: flex;
+        gap: 14px;
+        margin-top: 2px;
+        font-size: 11.5px;
+        line-height: 1.3;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* El Área va pegada al grano (regla #631): su etiqueta a la DERECHA de
+       su columna. `css_filtros_vista` la pone a la izquierda para todas las
+       vistas con `!important`; esto le gana por especificidad (un `div`
+       más), sólo en Evolución. */
+    div.st-key-ajevo_ctrl_area div button[data-testid="stPopoverButton"] {
+        justify-content: flex-end !important;
+    }
     /* Desde el 2026-10-02 (regla #585) la línea va en la FILA del divisor y
        no en el texto: la fila lleva también el selector Familias | Tabla,
        y una línea sobre el texto solo se cortaba en su columna. */
@@ -1357,7 +1380,10 @@ CSS = """    /* ================================================================
         /* nacer el 2026-09-28: es un iframe que se mide solo, con la tabla  */
         /* dinámica y la ficha del insumo; adentro sólo scrollean las        */
         /* tablas. Con techo tendría barra propia encima. #558.              */
-        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_mov_prod_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_platos):not(.st-key-ajuste_graf_card_izq_mov_consumo),
+        /* Y `…_izq_costos` (Costos › Costo de ventas), al nacer el          */
+        /* 2026-10-09: al abrir una fila la tabla crece una franja; con     */
+        /* techo la tarjeta sacaría barra propia. #622.                      */
+        div[class*="st-key-ajuste_graf_card_"]:not(.st-key-ajuste_graf_card_izq_sem):not(.st-key-ajuste_graf_card_izq_evo):not(.st-key-ajuste_graf_card_izq_mov_periodo):not(.st-key-ajuste_graf_card_izq_mov_sal_periodo):not(.st-key-ajuste_graf_card_izq_mov_porc_periodo):not(.st-key-ajuste_graf_card_izq_mov_prod_periodo):not(.st-key-ajuste_graf_card_izq_ventas_resumen):not(.st-key-ajuste_graf_card_izq_ventas_platos):not(.st-key-ajuste_graf_card_izq_mov_consumo):not(.st-key-ajuste_graf_card_izq_costos),
         div[class*="st-key-compras_prov_card_"],
         div[class*="st-key-sunat_card_"] {
             max-height: var(--alto-util);
@@ -1479,8 +1505,9 @@ CSS = """    /* ================================================================
         /* puente le resta su veredicto); el piso queda de red.             */
         .stColumn > .stVerticalBlock
         > div:has(> .st-key-compras_vap_card_hdr, > .st-key-compras_vap_card_puente, > .st-key-compras_vap_card_serie, > .st-key-compras_vap_card_tabla),
-        /* Los cinco cuadros de Movimientos › «Detalle de salidas»          */
-        /* (2026-09-24, regla #511), tres arriba y dos abajo. Cada grilla   */
+        /* Los seis cuadros de Movimientos › «Detalle de salidas»           */
+        /* (2026-09-24, regla #511; la causa, el sexto, desde el 2026-10-08,*/
+        /* #614), tres arriba y tres abajo. Cada grilla                     */
         /* mide las filas que trae hasta ocho, así que sin piso la fila de  */
         /* arriba cerraba en escalón: 7 tipos de baja, 10 áreas, 6          */
         /* familias. Son la primera fila de `ajuste_graf_card_` que entra   */
@@ -1488,7 +1515,7 @@ CSS = """    /* ================================================================
         /* arma `drill_tablas.claves_tarjetas_cuadros`, y                   */
         /* `test_graficos.py::_pruebas_detalle_salidas` exige verlas acá.   */
         .stColumn > .stVerticalBlock
-        > div:has(> .st-key-ajuste_graf_card_izq_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal_n2, > .st-key-ajuste_graf_card_der_mov_detsal_n3, > .st-key-ajuste_graf_card_der_mov_detsal_n4),
+        > div:has(> .st-key-ajuste_graf_card_izq_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal, > .st-key-ajuste_graf_card_der_mov_detsal_n2, > .st-key-ajuste_graf_card_der_mov_detsal_n3, > .st-key-ajuste_graf_card_der_mov_detsal_n4, > .st-key-ajuste_graf_card_der_mov_detsal_n5),
         /* Y las tres de Movimientos › «Por sub almacén» (2026-09-30, a     */
         /* pedido: «la tarjeta del medio se ve más corta»). Con COCINA en   */
         /* foco, 8 sub almacenes, 6 familias y 8 subfamilias: la del medio  */
@@ -1678,6 +1705,7 @@ CSS = """    /* ================================================================
     .st-key-sunat_res_cab [data-testid="stElementContainer"]:first-child {
         margin-right: auto;
     }
+    .st-key-sunat_res_medida button,
     .st-key-sunat_res_anios button,
     .st-key-sunat_res_vista button {
         min-height: 24px !important;
@@ -1686,9 +1714,105 @@ CSS = """    /* ================================================================
         font-size: 11.5px !important;
         line-height: 1 !important;
     }
+    .st-key-sunat_res_medida p,
     .st-key-sunat_res_anios p,
     .st-key-sunat_res_vista p {
         font-size: 11.5px !important;
+    }
+
+    /* ─────────────────────────────────────────────────────────────── */
+    /* LA FIDELIDAD RESPECTO DE SUNAT (2026-10-02, mockup aprobado)     */
+    /*                                                                  */
+    /* `_kpi_fidelidad_html` y `_barras_fidelidad`: la fidelidad grande */
+    /* y una barra apilada al 100 % por período, con «Fuera de SUNAT»   */
+    /* punteado al costado. Los tres tramos: cuadran (lavanda), con     */
+    /* diferencia (naranja claro) y falta cargar (naranja oscuro): se   */
+    /* distinguen por la luminosidad, no sólo por el tono. Regla #630.  */
+    /* ─────────────────────────────────────────────────────────────── */
+    /* Los dos bloques son `st.markdown`, y su `stMarkdownContainer` trae */
+    /* `margin-bottom: -16px` (regla #162): sin estos 16px de relleno, la  */
+    /* línea de abajo de la fidelidad se montaba sobre el renglón         */
+    /* siguiente y la última barra quedaba cortada por el borde de la     */
+    /* tarjeta.                                                           */
+    .sunat-fid-kpi { display: flex; flex-direction: column; gap: 2px; cursor: help; padding-bottom: 16px; }
+    .sunat-fid-kpi-rot {
+        font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+        text-transform: uppercase; color: var(--text-secondary);
+    }
+    .sunat-fid-kpi-fila { display: flex; align-items: center; gap: 10px; }
+    .sunat-fid-kpi-val {
+        font-size: 28px; font-weight: 700; line-height: 1.1;
+        color: var(--text-primary); font-variant-numeric: tabular-nums;
+    }
+    .sunat-fid-kpi-sub { font-size: 12px; color: var(--text-secondary); }
+    .sunat-fid-chip {
+        font-size: 12px; font-weight: 600; border-radius: 999px;
+        padding: 2px 9px; white-space: nowrap;
+        color: var(--text-secondary); background: var(--line-soft);
+        border: 1px solid var(--border);
+    }
+    .sunat-fid-chip.baja {
+        color: var(--warning-text); background: var(--warning-bg);
+        border-color: var(--warning-border);
+    }
+    .sunat-fid-chip.sube {
+        color: var(--success-text); background: var(--success-bg);
+        border-color: var(--success-bg);
+    }
+    .sunat-fid { display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; }
+    .sunat-fid-fila { display: flex; gap: 14px; align-items: center; }
+    .sunat-fid-per {
+        width: 160px; flex: none; display: flex; flex-direction: column;
+        font-size: 12.5px; color: var(--text-primary);
+    }
+    .sunat-fid-per b { font-weight: 400; }
+    .sunat-fid-fila.actual .sunat-fid-per b { font-weight: 700; }
+    .sunat-fid-per span { font-size: 11px; color: var(--text-secondary); }
+    .sunat-fid-medio { flex: 1; min-width: 0; }
+    .sunat-fid-fuera-col { width: 150px; flex: none; }
+    .sunat-fid-cab {
+        font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
+        text-transform: uppercase; color: var(--text-muted);
+    }
+    .sunat-fid-cab .sunat-fid-per { font-size: 10.5px; color: var(--text-muted); }
+    .sunat-fid-cab .sunat-fid-medio {
+        display: flex; justify-content: space-between; gap: 12px;
+    }
+    .sunat-fid-leyenda {
+        display: flex; gap: 12px; text-transform: none; letter-spacing: 0;
+        font-weight: 500; color: var(--text-secondary); white-space: nowrap;
+    }
+    .sunat-fid-leyenda span { display: inline-flex; align-items: center; gap: 5px; cursor: help; }
+    .sunat-fid-sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+    .sunat-fid-barra {
+        flex: 1; min-width: 0; height: 30px; display: flex;
+        border-radius: 8px; overflow: hidden; background: var(--line-soft);
+    }
+    .sunat-fid-fila.actual .sunat-fid-barra { box-shadow: 0 0 0 2px var(--accent-light); }
+    .sunat-fid-tramo {
+        height: 100%; display: flex; align-items: center; justify-content: center;
+        font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden;
+        font-variant-numeric: tabular-nums; cursor: help;
+    }
+    .sunat-fid-tramo.cuadran, .sunat-fid-sw.cuadran { background: var(--accent-hover); color: var(--bg-card); }
+    .sunat-fid-tramo.cuadran { justify-content: flex-start; padding-left: 10px; box-sizing: border-box; font-size: 12px; }
+    .sunat-fid-tramo.diferencia, .sunat-fid-sw.diferencia { background: var(--warning-border); color: var(--text-primary); }
+    .sunat-fid-tramo.falta, .sunat-fid-sw.falta { background: var(--warning-text); color: var(--bg-card); }
+    .sunat-fid-vacia {
+        flex: 1; display: flex; align-items: center; padding-left: 10px;
+        font-size: 11.5px; color: var(--text-secondary);
+    }
+    .sunat-fid-fuera {
+        width: 150px; flex: none; box-sizing: border-box;
+        display: flex; align-items: baseline; gap: 6px;
+        border: 1px dashed var(--text-muted); border-radius: 8px;
+        padding: 5px 9px; cursor: help;
+    }
+    .sunat-fid-fuera b { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .sunat-fid-fuera span { font-size: 11px; color: var(--text-secondary); }
+    .sunat-fid-nota { margin-top: -4px; }
+    .sunat-fid-nota .sunat-fid-medio {
+        text-align: right; font-size: 11px; color: var(--warning-text);
     }
 
     /* ─────────────────────────────────────────────────────────────── */
@@ -2725,13 +2849,14 @@ CSS = """    /* ================================================================
        fila haga también de leyenda. Vive acá y no allá porque ese CSS sólo
        se inyecta en Compras. Desde el 2026-10-05 la usa también el total de
        la ventana de «Comparativo vs Año Pasado» (`ventas_comp_tot`, regla
-       #614), que también hace de leyenda. */
+       #633), que también hace de leyenda. */
     .st-key-ventas_comp_tot [data-testid="stMarkdownContainer"],
     .st-key-vt_resumen_kpi [data-testid="stMarkdownContainer"],
     .st-key-vt_mix_cabfila [data-testid="stMarkdownContainer"],
     .st-key-vt_pl_cabfila [data-testid="stMarkdownContainer"],
     .st-key-vt_mes_cabfila [data-testid="stMarkdownContainer"],
-    .st-key-vt_ctl_cabfila [data-testid="stMarkdownContainer"] {
+    .st-key-vt_ctl_cabfila [data-testid="stMarkdownContainer"],
+    .st-key-vt_frj_cabfila [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
     /* El título y los KPI en un renglón (regla #519): el look de
@@ -2742,7 +2867,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-cab,
     .st-key-vt_pl_cabfila .vt-cab,
     .st-key-vt_mes_cabfila .vt-cab,
-    .st-key-vt_ctl_cabfila .vt-cab {
+    .st-key-vt_ctl_cabfila .vt-cab,
+    .st-key-vt_frj_cabfila .vt-cab {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -2755,7 +2881,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-cab-tit,
     .st-key-vt_pl_cabfila .vt-cab-tit,
     .st-key-vt_mes_cabfila .vt-cab-tit,
-    .st-key-vt_ctl_cabfila .vt-cab-tit {
+    .st-key-vt_ctl_cabfila .vt-cab-tit,
+    .st-key-vt_frj_cabfila .vt-cab-tit {
         font-size: 13px;
         font-weight: 600;
         line-height: 1.35;
@@ -2767,7 +2894,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpis,
     .st-key-vt_pl_cabfila .vt-kpis,
     .st-key-vt_mes_cabfila .vt-kpis,
-    .st-key-vt_ctl_cabfila .vt-kpis {
+    .st-key-vt_ctl_cabfila .vt-kpis,
+    .st-key-vt_frj_cabfila .vt-kpis {
         display: flex;
         flex-wrap: wrap;
         align-items: stretch;
@@ -2778,7 +2906,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi,
     .st-key-vt_pl_cabfila .vt-kpi,
     .st-key-vt_mes_cabfila .vt-kpi,
-    .st-key-vt_ctl_cabfila .vt-kpi {
+    .st-key-vt_ctl_cabfila .vt-kpi,
+    .st-key-vt_frj_cabfila .vt-kpi {
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -2793,7 +2922,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi:first-child,
     .st-key-vt_pl_cabfila .vt-kpi:first-child,
     .st-key-vt_mes_cabfila .vt-kpi:first-child,
-    .st-key-vt_ctl_cabfila .vt-kpi:first-child {
+    .st-key-vt_ctl_cabfila .vt-kpi:first-child,
+    .st-key-vt_frj_cabfila .vt-kpi:first-child {
         padding-left: 0;
         border-left: none;
         max-width: none;
@@ -2803,7 +2933,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-rot,
     .st-key-vt_pl_cabfila .vt-kpi-rot,
     .st-key-vt_mes_cabfila .vt-kpi-rot,
-    .st-key-vt_ctl_cabfila .vt-kpi-rot {
+    .st-key-vt_ctl_cabfila .vt-kpi-rot,
+    .st-key-vt_frj_cabfila .vt-kpi-rot {
         font-size: 10px;
         color: var(--text-secondary);
         white-space: nowrap;
@@ -2815,7 +2946,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_pl_cabfila .vt-kpi[style] .vt-kpi-rot::before,
     .st-key-vt_mes_cabfila .vt-kpi[style] .vt-kpi-rot::before,
-    .st-key-vt_ctl_cabfila .vt-kpi[style] .vt-kpi-rot::before {
+    .st-key-vt_ctl_cabfila .vt-kpi[style] .vt-kpi-rot::before,
+    .st-key-vt_frj_cabfila .vt-kpi[style] .vt-kpi-rot::before {
         content: "";
         display: inline-block;
         width: 8px;
@@ -2829,7 +2961,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-val,
     .st-key-vt_mes_cabfila .vt-kpi-val,
-    .st-key-vt_ctl_cabfila .vt-kpi-val {
+    .st-key-vt_ctl_cabfila .vt-kpi-val,
+    .st-key-vt_frj_cabfila .vt-kpi-val {
         font-size: 13px;
         font-weight: 600;
         color: var(--text-primary);
@@ -2840,7 +2973,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-sub,
     .st-key-vt_pl_cabfila .vt-kpi-sub,
     .st-key-vt_mes_cabfila .vt-kpi-sub,
-    .st-key-vt_ctl_cabfila .vt-kpi-sub {
+    .st-key-vt_ctl_cabfila .vt-kpi-sub,
+    .st-key-vt_frj_cabfila .vt-kpi-sub {
         margin-left: 4px;
         font-size: 10px;
         font-weight: 400;
@@ -2851,7 +2985,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-total .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-total .vt-kpi-val,
     .st-key-vt_mes_cabfila .vt-kpi-total .vt-kpi-val,
-    .st-key-vt_ctl_cabfila .vt-kpi-total .vt-kpi-val {
+    .st-key-vt_ctl_cabfila .vt-kpi-total .vt-kpi-val,
+    .st-key-vt_frj_cabfila .vt-kpi-total .vt-kpi-val {
         color: var(--accent-deep);
         font-weight: 700;
     }
@@ -2860,7 +2995,8 @@ CSS = """    /* ================================================================
     .st-key-vt_mix_cabfila .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_pl_cabfila .vt-kpi-alerta .vt-kpi-val,
     .st-key-vt_mes_cabfila .vt-kpi-alerta .vt-kpi-val,
-    .st-key-vt_ctl_cabfila .vt-kpi-alerta .vt-kpi-val {
+    .st-key-vt_ctl_cabfila .vt-kpi-alerta .vt-kpi-val,
+    .st-key-vt_frj_cabfila .vt-kpi-alerta .vt-kpi-val {
         color: var(--warning-text);
     }
 
@@ -3105,6 +3241,50 @@ CSS = """    /* ================================================================
        los del Resumen (más arriba). Sin el `nowrap` los KPI bajaban a un
        segundo renglón en cuanto no entraban. */
     .st-key-vt_pl_cabfila { flex-wrap: nowrap !important; }
+    /* Lo mismo en «Análisis por Hora» › «A medida» (regla #627): el
+       interruptor Mapa | A medida a su ancho y los KPI en lo que queda. */
+    .st-key-vt_frj_cabfila { flex-wrap: nowrap !important; }
+    .st-key-vt_frj_cabfila > .st-key-vh_modo { flex: 0 0 auto !important; }
+    .st-key-vt_frj_cabfila > :not(.st-key-vh_modo) {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    /* El interruptor y las botoneras del modo, del tamaño de las de
+       «Análisis de platos»: a 14px y 16 de relleno, el interruptor solo
+       pedía 155px y la cabecera del mapa no entraba en un renglón. */
+    .st-key-vh_modo [data-testid="stButtonGroup"] button,
+    .st-key-vt_frj_modo [data-testid="stButtonGroup"] button,
+    .st-key-vt_frj_agrupar [data-testid="stButtonGroup"] button {
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 10px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_frj_dias [data-testid="stButtonGroup"] button,
+    .st-key-vt_frj_canal [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 9px !important;
+        font-size: 12px !important;
+    }
+    .st-key-vt_frj_fila, .st-key-vt_frj_fila2 {
+        gap: 10px !important;
+    }
+    /* La fecha a su ancho: el envoltorio que Streamlit le pone nace
+       `flex: 1 1 128px` y se estiraba (406 px medidos), empujando al resto
+       de la fila (lo mismo que `vh_tiempo > div`). Es el primero de la
+       fila. */
+    .st-key-vt_frj_fila > div:first-child,
+    .st-key-vt_frjf_fila {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    /* Tres modos: 8 px de relleno y no 10, que con «Comparar» la fila del
+       mapa entra justa a 1323 (regla #627). */
+    .st-key-vh_modo [data-testid="stButtonGroup"] button {
+        padding: 0 8px !important;
+    }
     .st-key-vt_pl_cabfila > .st-key-vt_pl_vista { flex: 0 0 auto !important; }
     .st-key-vt_pl_cabfila > :not(.st-key-vt_pl_vista) {
         flex: 1 1 0 !important;
@@ -4128,7 +4308,7 @@ CSS = """    /* ================================================================
     }
     /* La fila es un `st.container(horizontal=True, gap=None)` con cada
        grupo a su ancho de contenido y un `st.space("stretch")` que empuja
-       «Vista» a la DERECHA (regla #614). Hasta el 2026-10-05 eran
+       «Vista» a la DERECHA (regla #633). Hasta el 2026-10-05 eran
        `st.columns` proporcionales: el sobrante de cada columna caía a la
        derecha de su grupo y la línea quedaba a 102-113px del anterior y a
        17 del siguiente. Ahora el aire lo pone el `padding-left` del
@@ -4436,7 +4616,8 @@ CSS = """    /* ================================================================
         flex: 0 0 auto !important;
         width: auto !important;
     }
-    .st-key-vh_fecha_escala button {
+    .st-key-vh_fecha_escala button,
+    .st-key-vt_frjf_escala button {
         background: transparent !important;
         border: none !important;
         border-radius: 0 !important;
@@ -4451,13 +4632,17 @@ CSS = """    /* ================================================================
         padding: 3px 4px !important;
         white-space: nowrap !important;
     }
-    .st-key-vh_fecha_escala button:hover {
+    .st-key-vh_fecha_escala button:hover,
+    .st-key-vt_frjf_escala button:hover {
         background: var(--accent-tint) !important;
         color: var(--accent-deep) !important;
     }
-    [data-testid="stPopoverBody"]:has(.st-key-vh_fecha_escala_panel) {
-        width: 290px !important;
-        min-width: 290px !important;
+    [data-testid="stPopoverBody"]:has(.st-key-vh_fecha_escala_panel),
+    [data-testid="stPopoverBody"]:has(.st-key-vt_frjf_escala_panel) {
+        /* El ancho lo pone el panel de fecha (regla #616); hasta el
+           2026-10-08 iba fijo en 290px, el del riel que reemplazó. */
+        width: auto !important;
+        min-width: 0 !important;
         padding: 12px 14px !important;
     }
     /* FRANJA DELGADA. Medido dentro de la tarjeta: la fila de controles mide
@@ -5373,7 +5558,11 @@ CSS = """    /* ================================================================
        con baseweb (`[data-baseweb="select"] > div`). Van los dos: el
        selector que no aplica no matchea nada. */
     .st-key-vh_cab [data-testid="stSelectbox"] [role="group"],
-    .st-key-vh_cab [data-baseweb="select"] > div {
+    .st-key-vh_cab [data-baseweb="select"] > div,
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] [role="group"],
+    .st-key-vt_frj_fila [data-baseweb="select"] > div,
+    .st-key-vt_frj_fila2 [data-testid="stSelectbox"] [role="group"],
+    .st-key-vt_frj_fila2 [data-baseweb="select"] > div {
         min-height: 0 !important;
         height: 28px !important;
         border: none !important;
@@ -5383,11 +5572,15 @@ CSS = """    /* ================================================================
         box-shadow: none !important;
     }
     .st-key-vh_cab [data-testid="stSelectbox"] [role="group"]:hover,
-    .st-key-vh_cab [data-baseweb="select"] > div:hover {
+    .st-key-vh_cab [data-baseweb="select"] > div:hover,
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] [role="group"]:hover,
+    .st-key-vt_frj_fila2 [data-testid="stSelectbox"] [role="group"]:hover {
         border-bottom-color: var(--accent) !important;
     }
     .st-key-vh_cab [data-testid="stSelectbox"] input,
-    .st-key-vh_cab [data-baseweb="select"] div[value] {
+    .st-key-vh_cab [data-baseweb="select"] div[value],
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] input,
+    .st-key-vt_frj_fila2 [data-testid="stSelectbox"] input {
         height: 26px !important;
         padding: 0 0 0 2px !important;
         font-size: 13px !important;
@@ -5396,7 +5589,9 @@ CSS = """    /* ================================================================
         background: transparent !important;
         cursor: pointer !important;
     }
-    .st-key-vh_cab [data-testid="stSelectbox"] [role="group"] button {
+    .st-key-vh_cab [data-testid="stSelectbox"] [role="group"] button,
+    .st-key-vt_frj_fila [data-testid="stSelectbox"] [role="group"] button,
+    .st-key-vt_frj_fila2 [data-testid="stSelectbox"] [role="group"] button {
         width: 22px !important;
         height: 26px !important;
     }
@@ -5527,5 +5722,233 @@ CSS = """    /* ================================================================
     .js-plotly-plot .ytick text.vh-hora-activa {
         font-weight: 700 !important;
         fill: var(--accent-deep) !important;
+    }
+
+    /* =================================================================== */
+    /* EL BOTÓN DE FECHA DE CADA VISTA DE MOVIMIENTOS (regla #617)          */
+    /* Lo dibuja `selector_fecha_tarjeta` con el prefijo `mov_f_<vista>`:   */
+    /* la fila (`_fila`) pone el título a la izquierda y el botón a la      */
+    /* derecha, y el botón es la píldora de las tarjetas de Compras. Por    */
+    /* familia (`[class*=…]`) y no por key exacta porque son once vistas, y */
+    /* ninguna de estas reglas va adentro de un :has (regla #469). El       */
+    /* `:not(_panel)`: el contenedor del panel también lleva «_escala» en   */
+    /* su key, y vive en el popover.                                        */
+    /* =================================================================== */
+    [class*="st-key-mov_f_"][class*="_fila"] {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    [class*="st-key-mov_f_"][class*="_fila"] > [data-testid="stElementContainer"] {
+        width: auto !important;
+    }
+    /* El título cede (con «…») y el botón no. */
+    [class*="st-key-mov_f_"][class*="_fila"] > [data-testid="stElementContainer"]:first-child {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    [class*="st-key-mov_f_"][class*="_fila"] .inv-rank-tit,
+    [class*="st-key-mov_f_"][class*="_fila"] .chart-card-hdr {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        margin-bottom: 0 !important;
+    }
+    [class*="st-key-mov_f_"][class*="_escala"]:not([class*="_panel"]) {
+        flex: 0 0 auto !important;
+    }
+    [class*="st-key-mov_f_"][class*="_escala"]:not([class*="_panel"]) button {
+        min-width: 0 !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        padding: 0 10px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        box-shadow: var(--shadow) !important;
+    }
+    [class*="st-key-mov_f_"][class*="_escala"]:not([class*="_panel"]) button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    /* El chevron de Streamlit: el WRAPPER, como en `cp_rank_escala`. */
+    [class*="st-key-mov_f_"][class*="_escala"]:not([class*="_panel"])
+        button > div > div:last-child:not(:first-child) {
+        display: none !important;
+    }
+
+    /* =================================================================== */
+    /* LAS FECHAS DE AJUSTE (regla #632)                                    */
+    /* Dos controles, los dos con la píldora de Compras:                    */
+    /*  · `ajf_<vista>` — el botón de MESES de Evolución, la tabla dinámica */
+    /*    y Distribución «Por meses»: `selector_fecha_tarjeta`, el mismo de */
+    /*    Movimientos, sin título en su fila. Al pie, «Mes del cierre».     */
+    /*  · `ajses_<vista>` — la SESIÓN de Por familia, Familia × Área y      */
+    /*    Distribución: ‹ [sesión] › y su panel, botones de Streamlit.      */
+    /* Por familia de key y sin `:has` (regla #469).                        */
+    /* =================================================================== */
+    [class*="st-key-ajf_"][class*="_fila"] {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        width: auto !important;
+    }
+    [class*="st-key-ajf_"][class*="_fila"] > [data-testid="stElementContainer"] {
+        width: auto !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) {
+        flex: 0 0 auto !important;
+        max-width: 100% !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) button,
+    [class*="st-key-ajses_"][class*="_pop"] button {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        padding: 0 10px !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        box-shadow: var(--shadow) !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) button p,
+    [class*="st-key-ajses_"][class*="_pop"] button p {
+        font-size: 12px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"]) button:hover,
+    [class*="st-key-ajses_"][class*="_pop"] button:hover {
+        background: var(--accent-tint) !important;
+        color: var(--accent-deep) !important;
+    }
+    [class*="st-key-ajf_"][class*="_escala"]:not([class*="_panel"])
+        button > div > div:last-child:not(:first-child),
+    [class*="st-key-ajses_"][class*="_pop"]
+        button > div > div:last-child:not(:first-child) {
+        display: none !important;
+    }
+    /* «Mes del cierre», al pie del panel de meses. */
+    [class*="st-key-ajf_"][class*="_pie"] {
+        max-width: 476px !important;   /* el ancho del panel (`.pf`) */
+        border-top: 1px solid var(--line-soft) !important;
+        padding-top: 8px !important;
+        gap: 6px !important;
+    }
+    .ajf-pie-rot {
+        font-size: 10.5px; font-weight: 600; letter-spacing: .07em;
+        text-transform: uppercase; color: var(--text-muted);
+        white-space: nowrap;
+    }
+    [class*="st-key-ajf_"][class*="_mcfila"] > [data-testid="stElementContainer"] {
+        width: auto !important;
+    }
+    [class*="st-key-ajf_"][class*="_mescierre_"] [data-testid="stButtonGroup"] button {
+        min-height: 26px !important; height: 26px !important;
+        padding: 0 10px !important; font-size: 12px !important;
+    }
+
+    /* La sesión: ‹ [píldora] ›, sin envolver. */
+    [class*="st-key-ajses_"][class*="_fila"] {
+        flex-wrap: nowrap !important;
+        gap: 4px !important;
+        width: auto !important;
+        max-width: 100% !important;
+    }
+    [class*="st-key-ajses_"][class*="_fila"] > [data-testid="stElementContainer"] {
+        width: auto !important;
+        min-width: 0 !important;
+    }
+    [class*="st-key-ajses_"][class*="_ant"] button,
+    [class*="st-key-ajses_"][class*="_sig"] button {
+        width: 24px !important;
+        min-width: 24px !important;
+        height: 24px !important;
+        min-height: 24px !important;
+        padding: 0 !important;
+        border-radius: 999px !important;
+        border: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        color: var(--text-secondary) !important;
+        box-shadow: var(--shadow) !important;
+    }
+    [class*="st-key-ajses_"][class*="_ant"] button p,
+    [class*="st-key-ajses_"][class*="_sig"] button p {
+        font-size: 15px !important;
+        line-height: 1 !important;
+    }
+    [class*="st-key-ajses_"][class*="_ant"] button:hover:not(:disabled),
+    [class*="st-key-ajses_"][class*="_sig"] button:hover:not(:disabled) {
+        background: var(--accent-tint) !important;
+        border-color: var(--border-lavender) !important;
+        color: var(--accent-deep) !important;
+    }
+    [class*="st-key-ajses_"][class*="_ant"] button:disabled,
+    [class*="st-key-ajses_"][class*="_sig"] button:disabled {
+        opacity: .35 !important;
+    }
+    /* El panel: opciones y años chicos, la lista a lo ancho. */
+    [class*="st-key-ajses_"][class*="_panel"] {
+        min-width: 320px !important;
+        gap: 8px !important;
+    }
+    [class*="st-key-ajses_"][class*="_o_"] button,
+    [class*="st-key-ajses_"][class*="_a_"] button {
+        min-height: 24px !important;
+        height: 24px !important;
+        padding: 0 10px !important;
+        border-radius: 999px !important;
+    }
+    [class*="st-key-ajses_"][class*="_o_"] button p,
+    [class*="st-key-ajses_"][class*="_a_"] button p {
+        font-size: 12px !important;
+    }
+    /* La lista se desliza adentro: un año trae hasta 19 sesiones. */
+    [class*="st-key-ajses_"][class*="_lista"] {
+        max-height: 300px !important;
+        overflow-y: auto !important;
+        flex-wrap: nowrap !important;
+        gap: 3px !important;
+        padding-right: 4px !important;
+    }
+    [class*="st-key-ajses_"][class*="_l_"] button {
+        justify-content: flex-start !important;
+        min-height: 0 !important;
+        padding: 5px 10px !important;
+        border-radius: 7px !important;
+    }
+    /* El rótulo a la izquierda: Streamlit centra el contenido del botón. */
+    [class*="st-key-ajses_"][class*="_l_"] button > div {
+        justify-content: flex-start !important;
+        width: 100% !important;
+    }
+    [class*="st-key-ajses_"][class*="_l_"] button p {
+        font-size: 12px !important;
+        text-align: left !important;
+    }
+    /* «Por sesión / Por meses» de Distribución, a la talla de la fila. */
+    .st-key-ajdist_por [data-testid="stButtonGroup"] button {
+        min-height: 26px !important;
+        height: 26px !important;
+        padding: 0 10px !important;
+    }
+    .st-key-ajdist_por [data-testid="stButtonGroup"] button p {
+        font-size: 12px !important;
     }
 """

@@ -17,8 +17,9 @@ POR QUÉ EXISTE (2026-08-18)
         rango daba menos de 2 períodos. Sin control del usuario: se
         enteraba por un caption DESPUÉS ("· todo el histórico").
       · `ajuste/` partió el rango de la franja POR CATEGORÍA del rail
-        (`categoria_rango_ajuste`): Cascada quiere un mes, Evolución un
-        año, y compartir una sola clave hacía que se pisaran.
+        (`categoria_rango_ajuste`, hasta el 2026-10-11): Cascada quería un
+        mes, Evolución un año, y compartir una sola clave hacía que se
+        pisaran. Hoy cada vista de Ajuste elige su fecha (regla #632).
       · `ventas_horario.py` se armó su propia lista de períodos con su
         propio `date_input`.
 

@@ -1903,9 +1903,52 @@ def _pruebas_puras():
     check("resumen del cruce: sin cruce, todo en cero",
           set(_ds._conteos_cruce(None).values()), {0})
     _ds._publicar_conteos(_cruce)
-    check("el KPI del rail sigue recibiendo los conteos",
+    check("el KPI del rail: a revisar es lo de SUNAT con diferencia o sin "
+          "cargar; lo de fuera de SUNAT va aparte",
           _ds.st.session_state.pop("_cp_docs_cruce", None),
-          {"sunat": 5, "sistema": 7, "revisar": 5})
+          {"sunat": 5, "sistema": 7, "revisar": 2, "fuera": 3,
+           "fidelidad": "60.0%"})
+    # La fidelidad respecto de SUNAT (regla #630): la base son los 5 del
+    # SIRE, que se reparten en 3 + 1 + 1; los 3 de «Solo sistema» van
+    # aparte y no suman a la base.
+    _fid = _ds._fidelidad_cruce(_cruce)
+    check("fidelidad: documentos, con SUNAT como base",
+          _fid["doc"], {"sunat": 5, "cuadran": 3, "diferencia": 1,
+                        "falta": 1, "fuera": 3})
+    # En valor absoluto: las notas de crédito vienen en negativo (#604).
+    _ts = pd.to_numeric(_cruce["total_sunat"], errors="coerce").fillna(0).abs()
+    _tq = pd.to_numeric(_cruce["total_sistema"], errors="coerce").fillna(0).abs()
+    check("fidelidad: los soles de la base son los de SUNAT",
+          round(_fid["soles"]["sunat"], 2),
+          round(float(_ts[_cruce["estado"] != "Solo sistema"].sum()), 2))
+    check("fidelidad: los soles de fuera son los del sistema",
+          round(_fid["soles"]["fuera"], 2),
+          round(float(_tq[_cruce["estado"] == "Solo sistema"].sum()), 2))
+    check("fidelidad: los tres tramos suman la base, en soles",
+          round(sum(_fid["soles"][k] for k in ("cuadran", "diferencia",
+                                               "falta")), 2),
+          round(_fid["soles"]["sunat"], 2))
+    _con_nota = pd.DataFrame({
+        "estado": ["Coincide", "Solo SUNAT", "Solo SUNAT"],
+        "total_sunat": [100.0, 50.0, -30.0], "total_sistema": [100.0, None, None]})
+    check("fidelidad: una nota de crédito sin cargar suma a lo que falta, "
+          "no resta",
+          _ds._fidelidad_cruce(_con_nota)["soles"]["falta"], 80.0)
+    check("fidelidad: sin cruce, todo en cero",
+          _ds._fidelidad_cruce(None)["doc"],
+          {"sunat": 0, "cuadran": 0, "diferencia": 0, "falta": 0, "fuera": 0})
+    # Las barras: HTML con los tres tramos y el de fuera, sin romperse con
+    # un período vacío.
+    _per = [{"edad": 1, "rango": "1 ene – 2 oct 2025", "anio": "2025",
+             "f": _ds._fidelidad_cruce(None)},
+            {"edad": 0, "rango": "1 ene – 2 oct 2026", "f": _fid}]
+    _html = _ds._barras_fidelidad(_per, "doc")
+    check("barras de fidelidad: un tramo por caso con datos",
+          (_html.count("sunat-fid-tramo cuadran"),
+           _html.count("sunat-fid-tramo diferencia"),
+           _html.count("sunat-fid-tramo falta")), (1, 1, 1))
+    check("barras de fidelidad: el período sin SUNAT lo dice",
+          "SUNAT no tiene documentos" in _html, True)
     check("comparar con el año pasado corre el MISMO rango un año",
           _ds._rango_hace(_dt.date(2026, 9, 3), _dt.date(2026, 10, 2), 1),
           (_dt.date(2025, 9, 3), _dt.date(2025, 10, 2)))
@@ -1936,7 +1979,7 @@ def _pruebas_puras():
           _vc._fecha_equivalente(_dt.date(2024, 2, 29), "calendario"),
           _dt.date(2023, 2, 28))
 
-    # «Mismo día de semana»: 364 días antes (regla #614), no la misma semana
+    # «Mismo día de semana»: 364 días antes (regla #633), no la misma semana
     # ISO — 2026 tiene 53 semanas ISO y en 2027 eso daba 371 días.
     _orig = _dt.date(2026, 8, 5)                      # miércoles
     _eq = _vc._fecha_equivalente(_orig, "semana")
@@ -1974,7 +2017,7 @@ def _pruebas_puras():
     check("claves mes cruzan el año", _cl_m, [(2025, 11), (2025, 12), (2026, 1)])
 
     # Clave AP: el mes, el mismo un año antes; la semana, la que empieza 364
-    # días antes (regla #614) — casi siempre el mismo número, no siempre.
+    # días antes (regla #633) — casi siempre el mismo número, no siempre.
     check("clave AP mes", _vc._clave_ap((2026, 3), "Mes", "semana"), (2025, 3))
     check("clave AP semana", _vc._clave_ap((2026, 20), "Semana", "semana"),
           (2025, 20))
@@ -1986,7 +2029,7 @@ def _pruebas_puras():
           _vc._clave_ap((2026, 53), "Semana", "semana"), (2026, 1))
 
     # LAS TRES VISTAS QUE COMPARAN CONTRA EL AÑO PASADO DICEN LO MISMO (regla
-    # #614): el Comparativo, Mix › Detalle › «Año pasado» y Por hora. Día por
+    # #633): el Comparativo, Mix › Detalle › «Año pasado» y Por hora. Día por
     # día y semana por semana, de 2025 a 2029 (cruza la S53 de 2026).
     from graficos import ventas_horario as _vh_ap
     from graficos.ventas_mix import rango_ano_pasado as _mix_ap
@@ -2081,7 +2124,7 @@ def _pruebas_puras():
         [(2026, 7)], [(2025, 7)], "Mes", _dt.date(2026, 7, 31))
     check("recorte: mes completo no marca parcial", _parc2, set())
 
-    # ── El total de la ventana (regla #614) ─────────────────────────────
+    # ── El total de la ventana (regla #633) ─────────────────────────────
     # Se cuenta sobre la UNIÓN de los rangos, no sumando las barras: en
     # «Misma fecha» el 28 y el 29 de febrero de un bisiesto caen los dos en
     # el 28 del año anterior, y una cuenta partida entre dos días es UN
@@ -2111,7 +2154,7 @@ def _pruebas_puras():
     check("total ventana · el pedido partido en dos días es una mesa",
           _tot_t["pax"], 4.0)
 
-    # ── Qué explica la diferencia del período (regla #614) ──────────────
+    # ── Qué explica la diferencia del período (regla #633) ──────────────
     # Ordena por |Δ S/|: el plato que el año pasado vendía y hoy no —venta
     # actual 0— va PRIMERO. Hasta el 2026-10-05 el top era por venta actual
     # y ése quedaba siempre afuera.
@@ -2463,7 +2506,7 @@ def _pruebas_puras():
           [_vh._fmt_rango_corto(_D(2026, 9, 1), _D(2026, 9, 24)),
            _vh._fmt_rango_corto(_D(2026, 8, 26), _D(2026, 9, 24)),
            _vh._fmt_rango_corto(_D(2025, 12, 28), _D(2026, 1, 3))],
-          ["1–24 sep 2026", "26 ago – 24 sep 2026",
+          ["1–24 set 2026", "26 ago – 24 set 2026",
            "28 dic 2025 – 3 ene 2026"])
     check("horario · el trozo no dibuja los días que no tiene",
           _vh._columnas(_p30[0], "Mes"),
@@ -2807,10 +2850,29 @@ def _pruebas_puras():
           (_dt.date(2025, 12, 1), _dt.date(2025, 12, 31)))
     check("rótulo · semana dentro de un mes",
           _sem._rotulo_periodo("2026-S38", "Semana"),
-          ("14–20 set", "Semana del lun 14 al dom 20 set 2026"))
+          ("lun 14–dom 20 set", "Semana del lun 14 al dom 20 set 2026"))
     check("rótulo · semana que cruza de mes",
           _sem._rotulo_periodo("2026-S36", "Semana"),
-          ("31 ago–6 set", "Semana del lun 31 ago al dom 6 set 2026"))
+          ("lun 31 ago–dom 6 set", "Semana del lun 31 ago al dom 6 set 2026"))
+    # LA SEMANA QUE EL RANGO CORTA SE NOMBRA POR SUS DÍAS (regla #619): con
+    # el selector en «1 ago – 7 oct» la primera barra suma sólo el sábado 1 y
+    # el domingo 2, y decía «27 jul–2 ago».
+    _r619 = (_dt.date(2026, 8, 1), _dt.date(2026, 10, 7))
+    check("rótulo · semana cortada al principio: sus días",
+          _sem._rotulo_periodo("2026-S31", "Semana", _r619),
+          ("sáb 1–dom 2 ago",
+           "Del sáb 1 al dom 2 ago 2026 · la semana del lun 27 jul al dom 2 "
+           "ago 2026 queda cortada por las fechas"))
+    check("rótulo · semana cortada al final",
+          _sem._rotulo_periodo("2026-S41", "Semana", _r619)[0],
+          "lun 5–mié 7 oct")
+    check("rótulo · semana entera dentro del rango: igual que sin rango",
+          _sem._rotulo_periodo("2026-S36", "Semana", _r619),
+          _sem._rotulo_periodo("2026-S36", "Semana"))
+    check("rótulo · un solo día de la semana",
+          _sem._rotulo_periodo("2026-S31", "Semana",
+                               (_dt.date(2026, 8, 2), _dt.date(2026, 9, 1)))[0],
+          "dom 2 ago")
     check("rótulo · semana que cruza de año lleva los dos años",
           _sem._rotulo_periodo("2026-S01", "Semana")[1],
           "Semana del lun 29 dic 2025 al dom 4 ene 2026")
@@ -3385,9 +3447,6 @@ def _pruebas_widgets_de_fragment_escalado():
             "la escalada manda la ventana a HEREDA A PROPÓSITO (elegir un "
             "rango a mano es pedir que mande ese rango); su dueño es "
             "`_K_VENTANA`, que no es clave de widget",
-        ("movimientos_comun.py", "mov_evo_gran"):
-            "ya lo cubre el espejo `_K_GRAN_ECO`, que es la forma vieja de "
-            "la misma cura (regla #211, medida ahí el 2026-09-05)",
     }
 
     def _key_de(nodo):
@@ -3965,272 +4024,426 @@ def _pruebas_periodo_por_vista():
     return fallos
 
 
-def _pruebas_escala_tiempo():
-    """estado_rango.py — la escala de tiempo estilo tabla dinámica.
+def _pruebas_panel_fecha():
+    """El selector de fecha de las tarjetas (regla #616): atajos y panel.
 
-    Tres asserts valen más que los otros y son la razón de esta tanda:
-
-    1. EL EXTREMO DERECHO SE EXPANDE. Las paradas del riel son fechas de
-       ARRANQUE de período, así que "hasta agosto" tiene que terminar el 31
-       y no el 1. Si se cuela el 1, el filtro pierde 30 días de datos y el
-       total sale bajo sin que nada avise — el bug clásico de un filtro por
-       mes, y el que este contrato existe para atrapar.
-
-    2. EL RECORTE A BOUNDS. En escala de Años, "2026" pide hasta el 31-dic,
-       pero los datos terminan en agosto. Sin recortar, el rango declara
-       cuatro meses que no existen y el eje de cualquier evolución dibuja el
-       vacío. Espeja lo que ya hace `atajos_rango`.
-
-    3. LA VUELTA ES ESTABLE. `escala_desde_rango` siembra el riel desde el
-       rango canónico en CADA render; si no fuera idempotente, un rango que
-       ya nació de la escala se ensancharía solo en cada rerun.
+    1. LOS ATAJOS CUENTAN HASTA EL ÚLTIMO DÍA CON DATOS, no hasta hoy: con
+       bounds sucios (no arrancan un 1 ni terminan a fin de mes) cada uno da
+       lo que dice su nombre, y el que no toca los datos se descarta.
+    2. LA TARJETA ABRE EN UN ATAJO CON NOMBRE. «Últimos 12 meses» es la
+       ventana con que abre Compras (`periodo.ventana("12m")`) y «Últimos
+       30 días» el default de las tarjetas de un mes, que `app.py` toma de
+       esta misma función. Si se separan, el botón deja de decir el atajo.
+    3. EL PANEL ES UNA PIEZA PROPIA y el selector la monta: sin `:has()` en
+       su CSS, sin atajos calculados en el JS (los manda Python) y sin la
+       escala de tiempo vieja adentro de `selector_fecha_tarjeta`.
     """
+    import ast
     import datetime
+    from pathlib import Path
 
-    from estado_rango import (ESCALAS, escala_a_rango, escala_desde_rango,
-                              escala_periodos)
+    from estado_rango import atajo_de, atajos_tarjeta, meses_atras
+    from graficos import periodo
+    from graficos.panel_fecha import etiqueta_de
 
     fallos = 0
 
     def check(nombre, got, exp):
         nonlocal fallos
         if got == exp:
-            print(f"OK    escala · {nombre}")
+            print(f"OK    panel fecha · {nombre}")
         else:
             fallos += 1
-            print(f"FALLA escala · {nombre}: got={got!r} exp={exp!r}")
+            print(f"FALLA panel fecha · {nombre}: got={got!r} exp={exp!r}")
 
-    # Bounds deliberadamente SUCIOS: no arrancan un día 1 ni terminan a fin
-    # de mes/año. Con bounds redondos los dos bugs de arriba pasan
-    # desapercibidos.
-    b = (datetime.date(2024, 3, 17), datetime.date(2026, 8, 25))
-    meses = escala_periodos("Meses", b)
-    anios = escala_periodos("Años", b)
+    D = datetime.date
+    b = (D(2024, 3, 17), D(2026, 8, 25))          # el 25 es martes
+    at = {c: r for c, _n, _g, r in atajos_tarjeta(D(2026, 8, 25), b)}
+    check("esta semana arranca el lunes", at["semana"], (D(2026, 8, 24), D(2026, 8, 25)))
+    check("este mes", at["mes"], (D(2026, 8, 1), D(2026, 8, 25)))
+    check("este año", at["anio"], (D(2026, 1, 1), D(2026, 8, 25)))
+    check("30 días son 30 con el ancla adentro", at["d30"], (D(2026, 7, 27), D(2026, 8, 25)))
+    check("3 meses", at["m3"], (D(2026, 5, 26), D(2026, 8, 25)))
+    check("12 meses", at["m12"], (D(2025, 8, 26), D(2026, 8, 25)))
+    check("mes pasado entero", at["mes_ant"], (D(2026, 7, 1), D(2026, 7, 31)))
+    check("año pasado entero", at["anio_ant"], (D(2025, 1, 1), D(2025, 12, 31)))
+    check("todo = los datos", at["todo"], b)
+    check("orden de los nueve",
+          [c for c, *_ in atajos_tarjeta(D(2026, 8, 25), b)],
+          ["semana", "mes", "anio", "d30", "m3", "m12", "mes_ant", "anio_ant", "todo"])
+    check("el ancla no pasa los datos",
+          dict((c, r) for c, _n, _g, r in atajos_tarjeta(D(2026, 9, 30), b))["mes"],
+          (D(2026, 8, 1), D(2026, 8, 25)))
+    nuevo = {c: r for c, _n, _g, r in atajos_tarjeta(D(2026, 8, 25), (D(2026, 2, 10), D(2026, 8, 25)))}
+    check("sin datos del año pasado no se ofrece", "anio_ant" in nuevo, False)
+    check("12 meses recortado al primer día con datos", nuevo["m12"], (D(2026, 2, 10), D(2026, 8, 25)))
+    check("meses_atras recorta el día (31 mar → 28 feb)", meses_atras(D(2026, 3, 31), 1), D(2026, 2, 28))
+    check("meses_atras en bisiesto", meses_atras(D(2024, 3, 31), 1), D(2024, 2, 29))
+    check("sin bounds no hay atajos", atajos_tarjeta(D(2026, 8, 25), None), [])
 
-    check("las escalas son tres", ESCALAS, ("Días", "Meses", "Años"))
+    v12 = periodo.ventana("12m", D(2026, 8, 25), minimo=b[0])
+    check("«Últimos 12 meses» == la ventana con que abre Compras",
+          at["m12"], (v12[0].date(), v12[1].date()))
+    app = (Path(__file__).parent / "app.py").read_text(encoding="utf-8")
+    check("las tarjetas de un mes abren en «Últimos 30 días» (app.py)",
+          "atajos_tarjeta(" in app and '.get("d30")' in app, True)
 
-    # ── Las paradas ────────────────────────────────────────────────────
-    check("meses: una parada por mes, mar-24 a ago-26", len(meses), 30)
-    check("meses: la parada es el día 1", meses[0], datetime.date(2024, 3, 1))
-    check("meses: cruza el fin de año sin saltearse enero",
-          meses[9], datetime.date(2024, 12, 1))
-    check("meses: la última es el mes del borde",
-          meses[-1], datetime.date(2026, 8, 1))
-    check("años: una parada por año presente",
-          anios, [datetime.date(y, 1, 1) for y in (2024, 2025, 2026)])
-    check("días: una parada por día, ambos bordes incluidos",
-          len(escala_periodos("Días", b)), 892)
-    check("bounds sin fecha no dan paradas",
-          escala_periodos("Meses", (None, None)), [])
-    check("bounds invertidos no dan paradas",
-          escala_periodos("Meses", (b[1], b[0])), [])
+    lista = atajos_tarjeta(D(2026, 8, 25), b)
+    check("atajo_de reconoce el rango exacto", atajo_de(at["d30"], lista), "d30")
+    check("atajo_de: un día de más ya no es atajo",
+          atajo_de((D(2026, 7, 26), D(2026, 8, 25)), lista), None)
+    lunes_1 = atajos_tarjeta(D(2026, 6, 1), b)   # lunes 1: semana == mes
+    check("dos atajos iguales: gana el primero",
+          atajo_de((D(2026, 6, 1), D(2026, 6, 1)), lunes_1), "semana")
 
-    # ── (1) el extremo derecho se EXPANDE ──────────────────────────────
-    check("un mes suelto va del 1 a fin de mes",
-          escala_a_rango("Meses", datetime.date(2025, 4, 1),
-                         datetime.date(2025, 4, 1)),
-          (datetime.date(2025, 4, 1), datetime.date(2025, 4, 30)))
-    check("febrero bisiesto termina el 29",
-          escala_a_rango("Meses", datetime.date(2024, 2, 1),
-                         datetime.date(2024, 2, 1))[1],
-          datetime.date(2024, 2, 29))
-    check("diciembre no se pasa al año siguiente",
-          escala_a_rango("Meses", datetime.date(2025, 12, 1),
-                         datetime.date(2025, 12, 1))[1],
-          datetime.date(2025, 12, 31))
-    check("un año suelto va del 1-ene al 31-dic",
-          escala_a_rango("Años", datetime.date(2025, 1, 1),
-                         datetime.date(2025, 1, 1)),
-          (datetime.date(2025, 1, 1), datetime.date(2025, 12, 31)))
-    check("en días el extremo es el día mismo",
-          escala_a_rango("Días", datetime.date(2026, 8, 5),
-                         datetime.date(2026, 8, 23)),
-          (datetime.date(2026, 8, 5), datetime.date(2026, 8, 23)))
-    check("tiradores cruzados se enderezan",
-          escala_a_rango("Días", datetime.date(2026, 8, 23),
-                         datetime.date(2026, 8, 5)),
-          (datetime.date(2026, 8, 5), datetime.date(2026, 8, 23)))
+    ctx = {"fecha_min": b[0], "fecha_max": b[1], "hoy": D(2026, 8, 26), "k_rango": "x"}
+    check("botón con atajo", etiqueta_de(at["d30"], ctx), "Últimos 30 días · 27 jul – 25 ago")
+    check("botón con atajo que cruza de año", etiqueta_de(at["m12"], ctx),
+          "Últimos 12 meses · 26 ago 2025 – 25 ago 2026")
+    check("botón con mes pasado", etiqueta_de(at["mes_ant"], ctx), "Mes pasado · julio")
+    check("botón sin atajo: fechas con año",
+          etiqueta_de((D(2026, 7, 15), D(2026, 8, 25)), ctx), "15 jul – 25 ago 2026")
+    check("botón sin rango", etiqueta_de(None, ctx), "Elegir fechas")
 
-    # ── (2) el recorte a bounds ────────────────────────────────────────
-    check("el año del borde no promete meses sin datos",
-          escala_a_rango("Años", anios[-1], anios[-1], b),
-          (datetime.date(2026, 1, 1), datetime.date(2026, 8, 25)))
-    check("el primer año no arranca antes del primer dato",
-          escala_a_rango("Años", anios[0], anios[0], b),
-          (datetime.date(2024, 3, 17), datetime.date(2024, 12, 31)))
-    check("de punta a punta da exactamente los bounds",
-          escala_a_rango("Meses", meses[0], meses[-1], b), b)
+    raiz = Path(__file__).parent / "graficos"
+    css = (raiz / "panel_fecha.css").read_text(encoding="utf-8")
+    js = (raiz / "panel_fecha.js").read_text(encoding="utf-8")
+    check("el CSS del panel no usa :has()", ":has(" in css, False)
+    check("el JS exporta la función del componente", "export default function" in js, True)
+    check("el JS no calcula atajos (los manda Python)", "Últimos" in js, False)
+    arbol = ast.parse((raiz / "base.py").read_text(encoding="utf-8"))
+    sel = next(n for n in arbol.body
+               if isinstance(n, ast.FunctionDef) and n.name == "selector_fecha_tarjeta")
+    llamadas = {n.func.id for n in ast.walk(sel)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    check("selector_fecha_tarjeta monta el panel", "panel_fecha" in llamadas, True)
+    check("selector_fecha_tarjeta ya no dibuja la escala vieja",
+          "selector_escala" in llamadas, False)
+    return fallos
 
-    # ── (3) la vuelta ──────────────────────────────────────────────────
-    r = (datetime.date(2026, 8, 5), datetime.date(2026, 8, 23))
-    check("un rango dentro de un mes cae en ese mes",
-          escala_desde_rango("Meses", r, b),
-          (datetime.date(2026, 8, 1), datetime.date(2026, 8, 1)))
-    check("un rango a caballo toma los dos meses",
-          escala_desde_rango("Meses",
-                             (datetime.date(2025, 6, 20),
-                              datetime.date(2025, 7, 3)), b),
-          (datetime.date(2025, 6, 1), datetime.date(2025, 7, 1)))
-    check("sin rango sembrado, el riel abre entero",
-          escala_desde_rango("Meses", None, b), (meses[0], meses[-1]))
-    check("un rango anterior a los datos se apoya en el borde",
-          escala_desde_rango("Meses", (datetime.date(2020, 1, 1),
-                                       datetime.date(2020, 2, 1)), b),
-          (meses[0], meses[0]))
 
-    ida = escala_a_rango("Meses", *escala_desde_rango("Meses", r, b), b)
-    vuelta = escala_a_rango("Meses", *escala_desde_rango("Meses", ida, b), b)
-    check("re-sembrar un rango que ya salió de la escala no lo mueve",
-          vuelta, ida)
+def _pruebas_partir_por():
+    """Compras por período: de qué está hecha cada barra (reglas #620 y #621).
+
+    1. EL PRECIO HABITUAL es la mediana del precio unitario del MISMO
+       producto en los 90 días ANTERIORES, sin contar el mismo día. Se
+       compara contra un cálculo a fuerza bruta, con los bordes: el día 90
+       entra y el 91 no, dos compras del mismo día no se miran entre sí, una
+       línea sin cantidad no da precio pero recibe el suyo, la primera
+       compra de un producto no tiene, y el índice puede venir repetido.
+    2. LAS PARTES CIERRAN: por subfamilia o proveedor (las cinco mayores y
+       el resto) y por precio (habitual, de más, sin precio) suman el total
+       de cada barra, y el color de una categoría sale de su puesto en el
+       HISTÓRICO, no en la vista.
+    3. El hover nombra todas las partes y marca en negrita sólo la suya.
+    """
+    import math
+
+    import numpy as np
+
+    import graficos.compras.semanal as sem
+    from tema import ERROR, GRIS_TEXTO_SUAVE, PALETA_SERIES, SERIE_PRINCIPAL
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    partir por · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA partir por · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── 1. El precio habitual ────────────────────────────────────────────
+    # 2026-04-01 menos 90 días es 2026-01-01: el borde de la ventana.
+    filas = [
+        ("A", "2026-01-01", 100.0, 10.0),   # 10
+        ("A", "2026-02-15", 120.0, 10.0),   # 12
+        ("A", "2026-03-01", 50.0, 0.0),     # sin cantidad: no da precio
+        ("A", "2026-04-01", 200.0, 10.0),   # 20 — ve el 01-01 y el 02-15
+        ("A", "2026-04-01", 300.0, 10.0),   # 30 — mismo día: no se miran
+        ("A", "2026-04-02", 90.0, 3.0),     # ve 12, 20 y 30: el 01-01 quedó afuera
+        ("B", "2026-04-01", 10.0, 1.0),     # primera compra de B
+        ("A", "2026-09-01", 50.0, 5.0),     # nada en los 90 días previos
+    ]
+    df = pd.DataFrame(filas, columns=["prod", "fecha", "valor", "cant"],
+                      index=[7, 7, 3, 9, 9, 1, 2, 4])   # índice REPETIDO
+    df["fecha"] = pd.to_datetime(df["fecha"])
+
+    def bruta(d, dias=90):
+        out = []
+        for p, f, *_ in d.itertuples(index=False):
+            v = d[(d["prod"] == p) & (d["fecha"] >= f - pd.Timedelta(days=dias))
+                  & (d["fecha"] < f) & (d["cant"] > 0) & (d["valor"] > 0)]
+            out.append(float((v["valor"] / v["cant"]).median())
+                       if len(v) else float("nan"))
+        return out
+
+    got = sem.precio_habitual(df["prod"], df["fecha"], df["valor"], df["cant"])
+    exp = bruta(df)
+
+    def _iguales(a, b):
+        return all((math.isnan(x) and math.isnan(y)) or abs(x - y) < 1e-9
+                   for x, y in zip(a, b))
+
+    check("igual que a fuerza bruta", _iguales(list(got), exp), True)
+    check("sale con el índice de la entrada, aunque se repita",
+          list(got.index), list(df.index))
+    check("los valores de los bordes",
+          [None if math.isnan(x) else round(x, 2) for x in got],
+          [None, 10.0, 11.0, 11.0, 11.0, 20.0, None, None])
+    # Al azar, con semilla: lo que no se me ocurrió.
+    rng = np.random.default_rng(620)
+    n = 400
+    dz = pd.DataFrame({
+        "prod": rng.choice(list("PQRST"), n),
+        "fecha": pd.Timestamp("2026-01-01")
+                 + pd.to_timedelta(rng.integers(0, 300, n), unit="D"),
+        "valor": rng.uniform(0, 100, n).round(2),
+        "cant": rng.choice([0.0, 0.5, 1.0, 2.0, 7.5], n),
+    }, index=rng.integers(0, 50, n))
+    check("al azar, igual que a fuerza bruta",
+          _iguales(list(sem.precio_habitual(dz["prod"], dz["fecha"],
+                                             dz["valor"], dz["cant"])),
+                   bruta(dz)), True)
+
+    # ── 2. Las partes por categoría ──────────────────────────────────────
+    claves = ["P1", "P2"]
+    dd = pd.DataFrame({
+        "clave": ["P1", "P2"] * 7,
+        "sub": [f"S{i}" for i in range(1, 8) for _ in range(2)],
+        "valor": [float(v) for i in range(7, 0, -1) for v in (i * 6, i * 4)],
+    })
+    tot = dd.groupby("clave")["valor"].sum().reindex(claves).tolist()
+    orden = ["S2", "S1", "S3", "S4", "S5", "S6", "S7"]
+    partes = sem.partes_por_columna(dd, "sub", claves, orden=orden)
+    check("las cinco mayores y el resto",
+          [r for r, _c, _v in partes],
+          ["S1", "S2", "S3", "S4", "S5", "Otras (2)"])
+    check("cada barra cierra en su total",
+          [round(sum(v[j] for _r, _c, v in partes), 6) for j in range(2)],
+          [round(x, 6) for x in tot])
+    check("el color sale del histórico, no de la vista",
+          [c for _r, c, _v in partes[:2]], [PALETA_SERIES[1], PALETA_SERIES[0]])
+    check("el resto va en gris", partes[-1][1], GRIS_TEXTO_SUAVE)
+    seis = sem.partes_por_columna(dd[dd["sub"] != "S7"], "sub", claves,
+                                  orden=orden)
+    check("con seis van todas, sin resto", len(seis), 6)
+
+    # ── 2b. Las partes por precio ────────────────────────────────────────
+    dp = pd.DataFrame({
+        "clave": ["P1", "P1", "P1", "P2"],
+        "prod": ["X", "Y", "Z", "X"],
+        "valor": [120.0, 45.0, 30.0, 100.0],
+        "cant": [10.0, 5.0, 3.0, 10.0],
+        "ref": [10.0, 10.0, float("nan"), 10.0],
+    })
+    pp, pila, extra = sem.partes_por_precio(dp, claves)
+    check("precio · las tres partes, en el orden de la leyenda",
+          [(r, c) for r, c, _v in pp],
+          [(sem._A_PRECIO_HABITUAL, SERIE_PRINCIPAL),
+           (sem._PAGADO_DE_MAS, ERROR),
+           (sem._SIN_PRECIO_PREVIO, GRIS_TEXTO_SUAVE)])
+    check("precio · los montos", [v for _r, _c, v in pp],
+          [[145.0, 100.0], [20.0, 0.0], [30.0, 0.0]])
+    check("precio · la pila: sin precio abajo, el rojo arriba", pila, [2, 0, 1])
+    check("precio · cada barra cierra en su total",
+          [sum(v[j] for _r, _c, v in pp) for j in range(2)], [195.0, 100.0])
+    check("precio · lo pagado de menos", "Pagado de menos: S/ 5.00" in extra["P1"],
+          True)
+    check("precio · el neto, con su signo y su %",
+          "+S/ 15.00 (+10%)" in extra["P1"], True)
+    check("precio · el producto pagado de más", "X: +S/ 20.00 (+20%)" in extra["P1"],
+          True)
+    pp2, pila2, _ = sem.partes_por_precio(dp[dp["clave"] == "P2"], claves)
+    check("precio · una parte en cero en toda la vista no se dibuja",
+          ([r for r, _c, _v in pp2], pila2), ([sem._A_PRECIO_HABITUAL], [0]))
+
+    # ── 3. El hover: uno por barra, con la resaltada en negrita (#621) ───
+    hov = sem._hover_partes(partes, tot, "Por subfamilia", marcada=1)
+    check("hover · un texto por barra", len(hov), 2)
+    check("hover · nombra todas las partes de la barra",
+          all(r in hov[0] for r, _c, _v in partes), True)
+    check("hover · sólo la resaltada en negrita",
+          (hov[0].count("<b>"), "<b>S2:" in hov[0]), (1, True))
+    check("hover · sin resaltada, ninguna en negrita",
+          sem._hover_partes(partes, tot, "x")[0].count("<b>"), 0)
+
+    # ── 4. Qué se puede resaltar y cómo lo dice la etiqueta (#621) ───────
+    check("resaltar · las de nombre, no el resto",
+          sem.opciones_resaltar(partes, sem._PARTIR_SUBFAMILIA),
+          ["S1", "S2", "S3", "S4", "S5"])
+    check("resaltar · en Precio, sólo lo pagado de más",
+          sem.opciones_resaltar(pp, sem._PARTIR_PRECIO), [sem._PAGADO_DE_MAS])
+    check("etiqueta · la parte con su %",
+          sem.renglon_resaltado(11834.05, 28902.04)[0], "S/ 11.8k · 41%")
+    check("etiqueta · en Precio, lo pagado de más",
+          sem.renglon_resaltado(1257.36, 28902.04, precio=True)[0],
+          "+S/ 1.3k de más")
+    check("etiqueta · en Precio sin nada de más, queda la de antes",
+          sem.renglon_resaltado(0.0, 100.0, precio=True), None)
+
+    # ── 5. El IGV de cada línea y las guías del hover (#621) ─────────────
+    marcas = sem.igv_de_linea(pd.Series([100.0, 50.0, 80.0, 10.0]),
+                              pd.Series([18.0, 0.0, 0.0, 1.05]),
+                              pd.Series(["F", "F", "G", "F"]))
+    check("igv · 18 %, exonerado, guía y otra tasa",
+          list(marcas), ["18 %", "exonerado", "guía", "10.5 %"])
+    dg = pd.DataFrame({"clave": ["P1", "P1", "P2"], "tipo": ["G", "F", "F"],
+                       "valor": [2018.5, 100.0, 50.0],
+                       "compra": ["a", "b", "c"]})
+    gu = sem._guias_por_clave(dg, claves)
+    check("guías · la barra que tiene, con su monto",
+          ("1 guía de remisión sin canjear: S/ 2,018.50" in gu[0], gu[1]),
+          (True, ""))
+    check("guías · con IGV avisa que todavía no lo lleva",
+          "sin IGV todavía" in sem._guias_por_clave(dg, claves, igv=True)[0],
+          True)
+
+    # ── 5b. La nota de crédito como documento del Detalle (#628) ─────────
+    _f = pd.Timestamp("2026-09-23")
+    _fac, _anu = "2026-09-23·P1·F0F001000000010", "2026-09-23·P2·F0E001000001728"
+    ddn = pd.DataFrame({
+        "fecha": [_f, _f], "prod": ["Lomo", "Ajo"], "prov": ["P1", "P1"],
+        "docn": ["F0F001000000010"] * 2, "doc": ["F001-10"] * 2,
+        "cant": [15.0, 2.0], "punit": [40.0, 5.0], "valor": [600.0, 10.0],
+        "fam": ["A"] * 2, "sub": ["s"] * 2, "neto": [600.0, 10.0],
+        "igv": [108.0, 1.8], "tipo": ["F"] * 2, "usd": [False] * 2,
+        "compra": [_fac] * 2, "clave": ["S39"] * 2, "lbl": ["21–27 set"] * 2})
+    ncn = pd.DataFrame({
+        "fecha": [_f, _f], "prod": ["Lomo", "Pato"], "prov": ["P1", "P2"],
+        "docn": ["F0F001000000010", "F0E001000001728"], "fam": ["A", "A"],
+        "sub": ["s", "s"], "neto": [200.0, 3558.22], "igv": [36.0, 640.48],
+        "cant": [5.0, 40.0], "punit": [40.0, 88.9], "tipo": ["F", "F"],
+        "usd": [False, False],
+        "nota": ["N0F001000000099", "N0E001000000068"],
+        "fecha_nc": [pd.Timestamp("2026-09-28")] * 2,
+        "compra": [_fac, _anu], "valor": [200.0, 3558.22],
+        "clave": ["S39", "S39"]})
+    det = sem.detalle_con_notas(ddn, ncn, {"S39": "21–27 set"})
+    check("nc · las columnas de dd, por nombre",
+          list(det.columns), list(ddn.columns))
+    check("nc · lo que suma el período no cambia",
+          round(float(det["valor"].sum()), 2), 610.0)
+    _por = det.groupby("compra")["valor"].sum().round(2).to_dict()
+    check("nc · la factura parcial, como se facturó; la anulada, entera",
+          (_por[_fac], _por[_anu]), (810.0, 3558.22))
+    _nota = det[det["tipo"] == sem._TIPO_NC].set_index("doc")
+    check("nc · la nota, en negativo, decodificada y en su fecha",
+          (float(_nota.loc["E001-68", "valor"]),
+           _nota.loc["E001-68", "fecha"].strftime("%d/%m")),
+          (-3558.22, "28/09"))
+    check("nc · sin notas, dd tal cual",
+          sem.detalle_con_notas(ddn, ncn.iloc[0:0]) is ddn, True)
+
+    # ── 6. Documento y Montos de «Filtros» (#621) ────────────────────────
+    import graficos.compras._comun as cm
+    dt = pd.DataFrame({"t": ["Factura", "Guía de Remisión",
+                             "PLANILLA DE MOVILIDAD", None]})
+    check("documento · tipo corto", list(cm.tipo_corto(dt["t"])),
+          ["F", "G", "O", "O"])
+    check("documento · facturas",
+          len(cm.filtrar_documento(dt, "t", cm.DOC_FACTURAS)), 1)
+    check("documento · guías",
+          list(cm.filtrar_documento(dt, "t", cm.DOC_GUIAS)["t"]),
+          ["Guía de Remisión"])
+    check("documento · todos no filtra",
+          len(cm.filtrar_documento(dt, "t", cm.DOC_TODOS)), 4)
+    check("documento · sin columna no filtra",
+          len(cm.filtrar_documento(dt, None, cm.DOC_GUIAS)), 4)
+    check("montos · el sufijo del título",
+          (cm.sufijo_montos(False), cm.sufijo_montos(True, cm.DOC_GUIAS)),
+          (" · sin IGV", " · con IGV · guías sin canjear"))
 
     return fallos
 
 
-def _pruebas_regla_riel():
-    """graficos/base.py — la regla de referencia bajo el riel de la escala.
+def _pruebas_fecha_por_vista():
+    """Movimientos: cada vista con su propia fecha (regla #617).
 
-    Dos cosas que el ojo no puede verificar en una captura:
-
-    1. QUE LOS RÓTULOS NO SE PISEN en ninguna ventana posible. Meses trae
-       entre 1 y 12 casilleros y Años entre 1 y 10, según cuánto los recorte
-       `bounds`, así que probar "el de hoy" (8 meses, 4 años) no dice nada
-       del día que la data llegue a doce meses.
-
-    2. QUE LOS BORDES Y LOS PERÍODOS SEAN LA MISMA COSA CONTADA DISTINTO.
-       El riel de Meses/Años para en los BORDES entre períodos (regla
-       #298), así que hay dos traducciones que tienen que cerrar: el borde
-       que cierra un período es el arranque del siguiente, y el rango que
-       sale de un par de bordes es el mismo que salía del par de períodos.
-       Si se desfasan una, el filtro se corre un mes entero sin avisar.
-
-    La cuenta de anchos usa el rótulo MÁS ANCHO de la escala para TODAS las
-    marcas, que es el peor caso: en pantalla sobra aire porque "jul" mide
-    la mitad que "may".
+    1. CADA SECCIÓN DE LA PILA TIENE SU CATEGORÍA DE RANGO, salvo las dos de
+       merma que traen su ventana (Rendimiento y Proveedor), y su dibujante
+       la usa: un `_rango_y_boton("<sección>", …)` por cada una. Olvidar una no da
+       error: la vista se quedaría con el histórico entero.
+    2. NADIE LEE LA FECHA DE LA FRANJA en `movimientos.py`: la franja de
+       este reporte ya no dibuja calendario, y lo que se leyera de ahí sería
+       un rango que el usuario no ve.
+    3. EL DEFAULT: las cuatro «por período» abren en 12 meses y las demás en
+       30 días, contados hasta el último día con datos DE SU parquet.
     """
     import datetime
+    import re
+    from pathlib import Path
 
-    from estado_rango import escala_a_rango, escala_periodos
-    from graficos.base import (_AIRE_ROTULO, _ANCHO_RIEL_PX, _ANCHO_ROTULO,
-                               _borde_siguiente, _indices_rotulados,
-                               _rotulo_periodos)
+    import graficos.movimientos as mov
 
     fallos = 0
 
-    def check(nombre, ok, detalle=""):
+    def check(nombre, got, exp):
         nonlocal fallos
-        if ok:
-            print(f"OK    regla riel · {nombre}")
+        if got == exp:
+            print(f"OK    fecha por vista · {nombre}")
         else:
             fallos += 1
-            print(f"FALLA regla riel · {nombre}: {detalle}")
+            print(f"FALLA fecha por vista · {nombre}: got={got!r} exp={exp!r}")
 
-    # ── (1) los rótulos, centrados en su casillero ─────────────────────
-    for escala, tope in (("Meses", 12), ("Años", 10)):
-        ancho = _ANCHO_ROTULO[escala]
-        for n in range(1, tope + 1):
-            idx = _indices_rotulados(n, ancho)
-            slot = _ANCHO_RIEL_PX / n
-            check(f"{escala} n={n}: hay rótulos, en orden y dentro de rango",
-                  idx and idx == sorted(set(idx)) and idx[0] == 0
-                  and idx[-1] < n, f"idx={idx}")
-            # Todos van centrados en su casillero: medio rótulo de cada
-            # lado, sin la excepción de las puntas que tenía el modelo
-            # anterior (los rótulos ya no se pinean).
-            peor = min(((z - a) * slot - ancho, a, z)
-                       for a, z in zip(idx, idx[1:])) if len(idx) > 1 else None
-            if peor is not None:
-                check(f"{escala} n={n}: ningún par de rótulos se toca",
-                      peor[0] >= _AIRE_ROTULO,
-                      f"aire={peor[0]:.1f}px entre {peor[1]} y {peor[2]}")
-            # El primero y el último tienen que entrar ENTEROS en el riel:
-            # su centro está a media casilla del borde.
-            check(f"{escala} n={n}: los rótulos de las puntas no se cortan",
-                  slot >= ancho, f"casilla={slot:.1f}px, rótulo={ancho}px")
+    raiz = Path(__file__).parent
+    fuente = (raiz / "graficos" / "movimientos.py").read_text(encoding="utf-8")
+    con_ventana = {"mov_sec_merma_rend", "mov_sec_merma_prov"}
+    secciones = {c for c, _v in mov._PILA}
+    # La pila sin «Tabla» (MOSTRAR_VISTAS_TABLA apagado) igual las declara.
+    secciones |= {"mov_sec_tabla_req", "mov_sec_tabla_sal"}
+    check("toda sección (salvo las de ventana) tiene categoría",
+          sorted(secciones - con_ventana - set(mov.CATEGORIA_VISTA)), [])
+    check("las categorías no se repiten",
+          len(set(mov.CATEGORIA_VISTA.values())), len(mov.CATEGORIA_VISTA))
+    check("las de 12 meses son categorías de verdad",
+          set(mov.VISTAS_EN_12_MESES) <= set(mov.CATEGORIA_VISTA.values()), True)
+    usadas = set(re.findall(r'_rango_y_boton\("(mov_sec_\w+)"', fuente))
+    check("cada categoría la usa su dibujante",
+          sorted(set(mov.CATEGORIA_VISTA) - usadas), [])
+    check("movimientos.py no lee la fecha de la franja",
+          "_rango_vigente(" in fuente, False)
+    app = (raiz / "app.py").read_text(encoding="utf-8")
+    _por_vista = re.search(r'REPORTES_FECHA_POR_VISTA = \(([^)]*)\)', app)
+    check("la franja de Movimientos no dibuja calendario",
+          (bool(_por_vista and '"Movimientos"' in _por_vista.group(1)),
+           "reporte not in REPORTES_FECHA_POR_VISTA" in app), (True, True))
+    css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
+    check("el botón de las vistas tiene su CSS (prefijo mov_f_)",
+          'st-key-mov_f_' in css, True)
 
-    # ── (2) bordes ↔ períodos ──────────────────────────────────────────
-    b = (datetime.date(2024, 3, 17), datetime.date(2026, 8, 25))
-    for escala in ("Meses", "Años"):
-        paradas = escala_periodos(escala, b)
-        check(f"{escala}: el borde que cierra un período abre el siguiente",
-              all(_borde_siguiente(escala, p) == q
-                  for p, q in zip(paradas, paradas[1:])),
-              "")
-        # El borde extra del final NO existe entre las paradas: es el que
-        # le da ancho al último casillero.
-        check(f"{escala}: el borde final cae después de la última parada",
-              _borde_siguiente(escala, paradas[-1]) > paradas[-1], "")
-        # La traducción de vuelta: un par de bordes tiene que dar el mismo
-        # rango que daba el par de períodos equivalente.
-        for i, j in ((0, 0), (0, len(paradas) - 1), (1, 3)):
-            if j >= len(paradas):
-                continue
-            por_periodos = escala_a_rango(escala, paradas[i], paradas[j], b)
-            _b1 = _borde_siguiente(escala, paradas[j])
-            por_bordes = escala_a_rango(
-                escala, paradas[i], _b1 - datetime.timedelta(days=1), b)
-            check(f"{escala}: bordes [{i},{j}] dan el mismo rango que períodos",
-                  por_bordes == por_periodos,
-                  f"bordes={por_bordes} períodos={por_periodos}")
-        # UN SOLO período elegido tiene que seguir dando el período entero
-        # —que es el caso que motivó todo el cambio— y no un día suelto.
-        _uno = paradas[2] if len(paradas) > 2 else paradas[0]
-        _rango = escala_a_rango(
-            escala, _uno, _borde_siguiente(escala, _uno)
-            - datetime.timedelta(days=1), b)
-        check(f"{escala}: un período suelto abarca el período entero",
-              _rango == escala_a_rango(escala, _uno, _uno, b), str(_rango))
+    D = datetime.date
+    ctx_falso = {"k_rango": "x", "fecha_min": D(2023, 1, 1),
+                 "fecha_max": D(2026, 10, 7), "hoy": D(2026, 10, 8),
+                 "reporte": "Movimientos", "usa_carga_rango": False,
+                 "rango_default": (D(2026, 10, 1), D(2026, 10, 7)),
+                 "rango_default_cat": {}}
+    real = mov.franja_fecha.contexto
+    mov.franja_fecha.contexto = lambda: dict(ctx_falso)
+    try:
+        c12 = mov.ctx_de_vista("sal_periodo", (D(2024, 5, 3), D(2026, 9, 30)))
+        c30 = mov.ctx_de_vista("sal_area", (D(2024, 5, 3), D(2026, 9, 30)))
+        sin = mov.ctx_de_vista("req_area")
+    finally:
+        mov.franja_fecha.contexto = real
+    check("los topes son los del parquet de la vista",
+          (c12["fecha_min"], c12["fecha_max"]), (D(2024, 5, 3), D(2026, 9, 30)))
+    check("«por período» abre en 12 meses hasta su último día con datos",
+          c12["rango_default_cat"]["sal_periodo"], (D(2025, 10, 1), D(2026, 9, 30)))
+    check("las demás abren en 30 días",
+          c30["rango_default_cat"]["sal_area"], (D(2026, 9, 1), D(2026, 9, 30)))
+    check("sin fechas propias, las del reporte",
+          sin["rango_default_cat"]["req_area"], (D(2026, 9, 8), D(2026, 10, 7)))
 
-    # Regresiones concretas, con la cuenta a la vista para que un cambio de
-    # los anchos medidos se lea como lo que es y no como un número mágico.
-    check("un año entero de Meses (12 casilleros de 19,8px) rotula 6",
-          _indices_rotulados(12, _ANCHO_ROTULO["Meses"]) == [0, 2, 4, 6, 8, 10],
-          str(_indices_rotulados(12, _ANCHO_ROTULO["Meses"])))
-    check("ocho meses entran todos",
-          _indices_rotulados(8, _ANCHO_ROTULO["Meses"]) == list(range(8)),
-          str(_indices_rotulados(8, _ANCHO_ROTULO["Meses"])))
-    check("una década de Años rotula uno por medio",
-          _indices_rotulados(10, _ANCHO_ROTULO["Años"]) == [0, 2, 4, 6, 8],
-          str(_indices_rotulados(10, _ANCHO_ROTULO["Años"])))
-    check("cuatro años entran todos",
-          _indices_rotulados(4, _ANCHO_ROTULO["Años"]) == [0, 1, 2, 3],
-          str(_indices_rotulados(4, _ANCHO_ROTULO["Años"])))
-    check("un riel sin casilleros no revienta",
-          _indices_rotulados(0, 18) == [], "")
-
-    # ── (3) el aviso de redondeo ───────────────────────────────────────
-    # El riel de Meses/Años PINTA casilleros enteros, así que con un rango
-    # más fino que la escala dibuja de más: el 31 de agosto suelto se ve
-    # como agosto entero. El caption lo canta comparando el rango que
-    # representan los casilleros contra el rango vigente — acá se fija que
-    # esa comparación distinga los dos casos, que es de lo que depende que
-    # el aviso salga cuando tiene que salir y NO salga cuando no.
-    _ago = datetime.date(2026, 8, 1)
-    _dia = (datetime.date(2026, 8, 31), datetime.date(2026, 8, 31))
-    _mes = (datetime.date(2026, 8, 1), datetime.date(2026, 8, 31))
-    _b2 = (datetime.date(2023, 1, 1), datetime.date(2026, 12, 31))
-    check("un día suelto NO es lo que pinta el casillero del mes",
-          escala_a_rango("Meses", _ago, _ago, _b2) != _dia, "")
-    check("el mes entero SÍ es lo que pinta su casillero",
-          escala_a_rango("Meses", _ago, _ago, _b2) == _mes, "")
-    # Y el caso que se lee al revés: si los datos cortan a mitad de mes, el
-    # casillero YA vale ese pedazo, así que el aviso no tiene que salir.
-    _b3 = (datetime.date(2023, 1, 1), datetime.date(2026, 8, 24))
-    check("con los datos cortados a mitad de mes no hay redondeo que avisar",
-          escala_a_rango("Meses", _ago, _ago, _b3)
-          == (datetime.date(2026, 8, 1), datetime.date(2026, 8, 24)), "")
-
-    check("el rótulo del tramo pintado lleva el año, y se abrevia si es uno",
-          [_rotulo_periodos("Meses", _ago, _ago),
-           _rotulo_periodos("Meses", datetime.date(2026, 7, 1), _ago),
-           _rotulo_periodos("Meses", datetime.date(2025, 12, 1),
-                            datetime.date(2026, 1, 1)),
-           _rotulo_periodos("Años", datetime.date(2024, 1, 1),
-                            datetime.date(2026, 1, 1))]
-          == ["ago 2026", "jul-ago 2026", "dic 2025 - ene 2026", "2024-2026"],
-          str([_rotulo_periodos("Meses", _ago, _ago),
-               _rotulo_periodos("Años", datetime.date(2024, 1, 1),
-                                datetime.date(2026, 1, 1))]))
-
+    import pandas as pd
+    d = pd.DataFrame({"_fecha": pd.to_datetime(
+        ["2026-09-30 23:10", "2026-10-01 08:00", "2026-10-07 21:00"])})
+    rng = (pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-08"))
+    check("el recorte incluye el último día entero (fin exclusivo, #321)",
+          len(mov.recortar_vista(d, rng)), 2)
+    check("sin rango, entero", len(mov.recortar_vista(d, None)), 3)
+    check("fechas_de", mov.fechas_de(d["_fecha"]), (D(2026, 9, 30), D(2026, 10, 7)))
     return fallos
 
 
@@ -5084,10 +5297,11 @@ def _pruebas_css_clonado():
     from graficos.compras import _css_proveedor as cssp
     clon = cssp.CSS_CP_DOCS
     n = clon.count("{")
-    # 41 el 2026-09-04. El umbral va abajo del numero real a proposito:
-    # que alguien SUME reglas a `cp_prod` no tiene por que romper el test,
-    # pero que se caigan a la mitad si.
-    check("se clonan las reglas de cp_prod (>=35)", n >= 35, n)
+    # 41 el 2026-09-04; 27 desde el 2026-10-08, cuando se fueron las 14 de
+    # la escala de tiempo vieja (regla #618). El umbral va abajo del numero
+    # real a proposito: que alguien SUME reglas a `cp_prod` no tiene por
+    # que romper el test, pero que se caigan a la mitad si.
+    check("se clonan las reglas de cp_prod (>=23)", n >= 23, n)
     check("el clon no quedo vacio", bool(clon.strip()))
     check("llaves balanceadas en el clon",
           clon.count("{") == clon.count("}"), n)
@@ -6021,16 +6235,17 @@ def _pruebas_evolucion_ajuste():
     check("Corte: una sesión por racha de días",
           len(orden_c), 2)
 
-    # MES OPERATIVO (regla #613): el cierre registrado del 1 al 6 es del mes
-    # anterior, con su hora; el del 7 en adelante, del suyo.
+    # MES OPERATIVO (regla #613): el cierre registrado del 1 al 7 es del mes
+    # anterior, con su hora; el del 8 en adelante, del suyo. Era «del 1 al
+    # 6» hasta que el usuario definió el cierre de mes (regla #632).
     from cortes import fecha_operativa
     f_op = fecha_operativa(pd.Series(pd.to_datetime(
-        ["2026-10-03 14:20", "2026-10-06 09:00", "2026-10-07 08:00",
+        ["2026-10-03 14:20", "2026-10-07 09:00", "2026-10-08 08:00",
          "2026-03-01 10:00", "2025-01-05 00:00", None])))
-    check("mes operativo: del 1 al 6, al último día del mes anterior",
+    check("mes operativo: del 1 al 7, al último día del mes anterior",
           [str(x) for x in f_op],
           ["2026-09-30 14:20:00", "2026-09-30 09:00:00",
-           "2026-10-07 08:00:00", "2026-02-28 10:00:00",
+           "2026-10-08 08:00:00", "2026-02-28 10:00:00",
            "2024-12-31 00:00:00", "NaT"])
     d_op = pd.DataFrame({
         "F": pd.to_datetime(["2026-08-29", "2026-10-02", "2026-10-02",
@@ -6066,6 +6281,43 @@ def _pruebas_evolucion_ajuste():
     check("tabla: el período en foco sale marcado",
           html.count(_ev.LAVANDA_SELECCION), 1)
 
+    # El estilo de la serie (regla #631): el neto se rotula en pastillas
+    # (anotaciones) y no con el `text` de la traza, que iba negro encima
+    # de la barra roja; el período más movido lleva su marca; los totales
+    # del rango van en una línea bajo el título.
+    sr = s.reset_index()
+    fig = _ev.fig_serie(sr)
+    _neto = [t for t in fig.data if t.name == "Neto"][0]
+    check("serie: la traza del neto ya no lleva texto",
+          (_neto.mode, _neto.text), ("lines+markers", None))
+    _pills = [a for a in fig.layout.annotations if a.yref != "paper"]
+    check("serie: una pastilla por período con conteo, con signo",
+          [a.text for a in _pills], ["S/ -100", "S/ +1"])
+    check("serie: la pastilla dice el signo con su color",
+          [a.font.color for a in _pills],
+          [_ev.AJUSTE_NEG_TEXTO, _ev.AJUSTE_POS_TEXTO])
+    check("serie: con foco, la pastilla de los otros períodos se apaga",
+          [a.opacity for a in _ev.fig_serie(sr, "2026-01").layout.annotations
+           if a.yref != "paper"], [_ev._APAGADO, 1.0])
+    check("serie: el más movido es el de más sobrante − faltante",
+          (_ev.periodo_mas_movido(sr) or {}).get("eje"), "nov 25")
+    check("serie: el más movido se rotula arriba, en el margen",
+          [a.text for a in fig.layout.annotations if a.yref == "paper"],
+          ["más movido · <b>S/ 300</b>"])
+    check("serie: con menos de tres períodos no hay más movido",
+          _ev.periodo_mas_movido(sr.iloc[:2]), None)
+    _largo = pd.concat([sr] * 6, ignore_index=True)
+    _largo["eje"] = [f"p{i}" for i in range(len(_largo))]
+    check("serie: con más de _MAX_ROTULOS períodos no hay pastillas",
+          len([a for a in _ev.fig_serie(_largo).layout.annotations
+               if a.yref != "paper"]), 0)
+    check("serie: las barras llevan la punta redondeada",
+          fig.layout.barcornerradius, _ev._RADIO_SERIE)
+    kp = _ev.kpis_rango_html(sr)
+    check("totales del rango: sobrante, faltante y neto, con signo",
+          [t in kp for t in ("S/ +106", "S/ -205", "S/ -99")],
+          [True, True, True])
+
     # La tabla parte el tiempo con los MISMOS períodos que la serie.
     wide, periodos = _pv._armar_tabla_pivote_ajuste(
         dp.dropna(subset=["FAM"]), orden, "FAM", None, "PROD", "AJ", "AV")
@@ -6078,6 +6330,140 @@ def _pruebas_evolucion_ajuste():
     # cero). La serie sí la cuenta: -99 contra -100.
     check("total de la tabla = neto de la serie de las filas con familia",
           round(float(wide["tot_ajv"].sum()), 2), -100.0)
+    return fallos
+
+
+def _pruebas_fechas_ajuste():
+    """Las fechas de Ajuste de Inventario, una por vista (regla #632).
+
+    1. LA SESIÓN: un cierre de mes es lo registrado del 1 al 7 del mes
+       siguiente —y se juntan los conteos de esos días—; lo demás es
+       parcial. El año de una sesión es el del mes que cierra.
+    2. LOS MESES: el panel de Compras en modo «sólo meses», con sus atajos
+       en meses enteros y el botón que dice meses, no días.
+    3. LA FRANJA: Ajuste no dibuja fecha arriba ni la usa para filtrar, y
+       su pila es una sola.
+    """
+    import datetime
+    import re
+    from pathlib import Path
+
+    from cortes import DIA_CIERRE_OPERATIVO, sesiones_inventario, ultimo_cierre
+    from estado_rango import atajos_meses
+    from graficos.panel_fecha import etiqueta_de
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    fechas ajuste · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA fechas ajuste · {nombre}: got={got!r} exp={exp!r}")
+
+    D = datetime.date
+    check("el cierre es del 1 al 7", DIA_CIERRE_OPERATIVO, 7)
+
+    # Los casos reales: el cierre de setiembre 2026 contado el 1 de octubre
+    # con el recuento de Venta interna del 6; el de abril 2024, que empezó
+    # el 29; un parcial de quincena; y el de diciembre contado en enero.
+    f = pd.Series(pd.to_datetime([
+        "2024-04-29", "2024-04-30", "2024-05-01", "2024-05-06",
+        "2025-12-15", "2026-01-02",
+        "2026-09-02", "2026-09-15", "2026-09-16", "2026-09-17",
+        "2026-10-01 08:30", "2026-10-06 11:49", None], format="mixed"))
+    ses = sesiones_inventario(f)
+    check("una sesión por cierre o parcial, en orden",
+          [(x["tipo"], x["nombre"]) for x in ses],
+          [("cierre", "Cierre de abril"), ("parcial", "Parcial · 15 dic"),
+           ("cierre", "Cierre de diciembre"), ("cierre", "Cierre de agosto"),
+           ("parcial", "Parcial · 15-17 set"), ("cierre", "Cierre de setiembre")])
+    sep = ses[-1]
+    check("los conteos del 1 al 7 se juntan en un cierre",
+          (sep["juntas"], sep["etiqueta"], sep["n_dias"]), (2, "1 y 6 oct", 2))
+    check("el cierre que empezó a fin de mes trae la racha entera",
+          (ses[0]["juntas"], ses[0]["ini"], ses[0]["fin"]),
+          (2, D(2024, 4, 29), D(2024, 5, 6)))
+    check("el botón dice el mes que cierra", sep["corto"], "Cierre set 2026")
+    check("el de diciembre es del año que cierra, no del de su registro",
+          (ses[2]["mes"], ses[2]["corto"]), ((2025, 12), "Cierre dic 2025"))
+    check("las claves no dependen de cuántas sesiones hay antes",
+          [x["clave"] for x in ses[3:]],
+          ["cierre_2026-08", "parcial_2026-09-15", "cierre_2026-09"])
+    check("abre en el último cierre",
+          ultimo_cierre(ses)["clave"], "cierre_2026-09")
+    check("sin cierres, la última sesión",
+          ultimo_cierre(sesiones_inventario(pd.Series(pd.to_datetime(
+              ["2026-09-15", "2026-09-25"]))))["etiqueta"], "25 set")
+    check("sin fechas, sin sesiones", sesiones_inventario(pd.Series([], dtype="datetime64[ns]")), [])
+
+    # LOS MESES: anclados al último día con datos, en meses enteros.
+    at = {c: r for c, _n, _g, r in atajos_meses(D(2026, 9, 30),
+                                               (D(2023, 10, 1), D(2026, 9, 30)))}
+    check("los atajos de meses",
+          sorted(at), sorted(["anio", "mes_ult", "mm3", "mm12", "anio_ant", "todo"]))
+    check("últimos 12 meses: doce meses enteros",
+          at["mm12"], (D(2025, 10, 1), D(2026, 9, 30)))
+    check("último mes: el del ancla, entero",
+          at["mes_ult"], (D(2026, 9, 1), D(2026, 9, 30)))
+    ctx = {"k_rango": "x", "fecha_min": D(2023, 10, 1),
+           "fecha_max": D(2026, 9, 30), "hoy": D(2026, 10, 11),
+           "atajos_fn": atajos_meses, "solo_meses": True}
+    check("el botón dice meses",
+          etiqueta_de((D(2025, 10, 1), D(2026, 9, 30)), ctx),
+          "Últimos 12 meses · oct 2025 – set 2026")
+    check("un rango que no es atajo, también en meses",
+          etiqueta_de((D(2026, 3, 1), D(2026, 7, 31)), ctx), "mar – jul 2026")
+    check("el último mes, por su nombre",
+          etiqueta_de((D(2026, 9, 1), D(2026, 9, 30)), ctx),
+          "Último mes · setiembre")
+    js = (Path(__file__).parent / "graficos" / "panel_fecha.js").read_text(
+        encoding="utf-8")
+    check("el panel esconde «Días» en modo sólo meses",
+          "if (!st.soloMeses)" in js and "solo_meses" in js, True)
+
+    # LA FRANJA Y LA PILA.
+    raiz = Path(__file__).parent
+    app = (raiz / "app.py").read_text(encoding="utf-8")
+    _por_vista = re.search(r'REPORTES_FECHA_POR_VISTA = \(([^)]*)\)', app)
+    check("la franja de Ajuste no dibuja fecha",
+          bool(_por_vista and '"Ajuste de Inventario"' in _por_vista.group(1)), True)
+    check("app.py no filtra Ajuste por la franja",
+          "elif _franja_con_fecha and not es_ajuste:" in app,
+          True)
+    check("app.py ya no reparte el rango por categoría",
+          "categoria_rango_ajuste" in app.split("# Hasta el 2026-10-11 Ajuste")[0],
+          False)
+    import data
+    check("Ajuste ya no pide los modos de corte de la franja",
+          "cortes" in data.REPORTES["Ajuste de Inventario"], False)
+    from graficos import ajuste as aj
+    check("una sola pila con las cinco vistas",
+          [c for c, _v in aj._PILA],
+          ["aj_sec_cascada", "aj_sec_heatmap", "aj_sec_distribucion",
+           "aj_sec_evolucion", "aj_sec_detalle"])
+    check("se fue la partición del rango por categoría",
+          hasattr(aj, "categoria_rango_ajuste"), False)
+    fuentes = {n: (raiz / "graficos" / "ajuste" / f"{n}.py").read_text(
+        encoding="utf-8") for n in ("_cascada", "_heatmap", "_distribucion",
+                                    "_evolucion", "_pivote")}
+    check("las vistas de sesión dibujan el selector con flechas",
+          [n for n in ("_cascada", "_heatmap") if '"ajses_' not in fuentes[n]]
+          + ([] if 'selector_sesion("ajses_dist"' in fuentes["_distribucion"]
+             else ["_distribucion"]), [])
+    check("las vistas de meses dibujan su botón",
+          [n for n, k in (("_evolucion", '"ajf_evo"'), ("_pivote", '"ajf_det"'),
+                          ("_distribucion", '"ajf_dist"'))
+           if f"selector_meses({k}" not in fuentes[n]], [])
+    ini = (raiz / "graficos" / "ajuste" / "__init__.py").read_text(encoding="utf-8")
+    check("«Mes del cierre» se fue de Filtros",
+          "_selector_mes_ajuste" in ini, False)
+    check("las vistas de meses recargan si cambió el mes del cierre",
+          ini.count("recargar_si_cambio_mes()"), 3)
+    css = (raiz / "estilos" / "_80_cards.py").read_text(encoding="utf-8")
+    check("los dos controles tienen su CSS",
+          ('st-key-ajf_' in css, 'st-key-ajses_' in css), (True, True))
     return fallos
 
 
@@ -6241,21 +6627,25 @@ def _pruebas_resumen_ajuste():
     check("áreas con stock por corte", [c["areas"] for c in _cortes], [2, 2])
 
     # LA SEMILLA DE FAMILIAS NO DEPENDE DEL CORTE CON QUE ABRE (regla #442).
-    # La vista abre en el último corte; si ese no trae una familia, la
-    # semilla nacía sin ella y el TOTAL de otro corte sumaba sin avisar.
+    # La vista abre en el último CIERRE (regla #632); si ese no trae una
+    # familia, la semilla nacía sin ella y el TOTAL de otro corte sumaba sin
+    # avisar. El parcial del 15 de agosto trae ENVASES; el cierre de agosto
+    # (2 set) y el parcial posterior (15 set), no.
     from graficos.ajuste._comun import FAMILIAS_DE_ENTRADA, estado_filtros_vista
     _full = pd.DataFrame({
-        "F": pd.to_datetime(["2026-09-02"] * 3 + ["2026-09-15"] * 2),
+        "F": pd.to_datetime(["2026-08-15"] * 3 + ["2026-09-02"] * 2
+                            + ["2026-09-15"]),
         "FAMILIA": ["ALIMENTOS", "ENVASES Y EMBALAJES", "VINOS Y ESPUMANTES",
-                    "ALIMENTOS", "VINOS Y ESPUMANTES"],
-        "AREA": ["X"] * 5, "AV": [-1.0, -2.0, 3.0, 4.0, -5.0],
+                    "ALIMENTOS", "VINOS Y ESPUMANTES", "ALIMENTOS"],
+        "AREA": ["X"] * 6, "AV": [-1.0, -2.0, 3.0, 4.0, -5.0, 1.0],
     })
     _est = estado_filtros_vista(
         _full, _full, "F", "FAMILIA", "AREA", "AV",
         k_corte="test_ajcas_corte", k_familia="test_ajcas_fam",
         k_area="test_ajcas_area", familias=FAMILIAS_DE_ENTRADA)
-    check("abre en el último corte, que no trae ENVASES",
-          _est["corte"]["etiqueta_anio"], "15 set 2026")
+    check("abre en el último CIERRE, no en el parcial que vino después",
+          (_est["corte"]["nombre"], _est["corte"]["etiqueta_anio"]),
+          ("Cierre de agosto", "2 set 2026"))
     check("...y la semilla igual incluye ENVASES",
           "ENVASES Y EMBALAJES" in _est["sel_fam"], True)
     check("las opciones de familia son las del parquet entero",
@@ -6841,6 +7231,365 @@ def _pruebas_ajuste_kardex():
     return fallos
 
 
+def _pruebas_merma():
+    """Movimientos › las tres vistas de merma (regla #615).
+
+      1. A PRECIO DE HOY la merma vale lo que dice el Reporte de Mermas del
+         Almacén (`SpReporteMerma`: merma × precio promedio actual), un
+         producto sin precio vale 0 y lo porcionado pasa a la misma vara; al
+         COSTO DEL DÍA, la parte de lo que costaron los cortes.
+      2. LAS MARCAS: alta contra lo normal del MISMO producto, cero sólo
+         donde el producto suele perder, el corte sin peso y la fecha
+         anterior a su número; un porcionamiento normal no lleva ninguna.
+      3. EL PROVEEDOR es el de la última compra hasta 45 días antes, y es
+         «único» si nadie más vendió ese producto en los 21 días previos.
+      4. EL KG ÚTIL y lo pagado de más contra el mejor proveedor; los
+         cambios de los últimos 90 días, por nombre de columna.
+    """
+    import numpy as np
+    import pandas as pd
+
+    from graficos import movimientos_merma as mm
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    merma #615 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA merma #615 · {nombre}: {got!r} != {exp!r}")
+
+    # Diez porcionamientos normales de lomo (A, 10-19 %) y de pulpo (B,
+    # 50 %), y los raros: lomo al 80 %, pulpo sin merma, un corte sin peso
+    # y uno numerado en octubre con fecha de septiembre.
+    filas = []
+
+    def porc(doc, dia, cod, prod, cant, merma, cortes):
+        for fin, cant_fin, pprom, peso in cortes:
+            filas.append({
+                "COD PORC": doc, "FEC REGIST": pd.Timestamp(dia),
+                "SUB ALMACEN": "PRODUCCION", "USUARIO REG": "CARLOS",
+                "COD PROD INIC": cod, "PROD INICIAL": prod,
+                "UNID PROD INIC": "KILOS", "CANT A PORCIONAR": cant,
+                "CANT MERMA": merma, "PROD FINAL RESULT": fin,
+                "CANT RESULT": cant_fin, "UNID PROD FIN": "KILOS",
+                "PREC PROM PROD FIN": pprom, "PESO RESULT": peso})
+
+    for i in range(10):
+        m = 1.0 + i * 0.1
+        porc(f"2608{i:06d}", f"2026-08-{i + 1:02d} 10:00", "A", "Lomo", 10.0,
+             m, [("Medallón", 10.0 - m, 60.0 * 10 / (10.0 - m), 10.0 - m)])
+        porc(f"2608{i + 50:06d}", f"2026-08-{i + 1:02d} 11:00", "B", "Pulpo",
+             4.0, 2.0, [("Pulpo cocido", 2.0, 80.0, 2.0)])
+    porc("2609000001", "2026-09-10 10:00", "A", "Lomo", 10.0, 8.0,
+         [("Medallón", 2.0, 300.0, 2.0)])
+    porc("2609000002", "2026-09-11 10:00", "B", "Pulpo", 4.0, 0.0,
+         [("Pulpo cocido", 4.0, 80.0, 4.0)])
+    porc("2609000003", "2026-09-12 10:00", "A", "Lomo", 10.0, 1.5,
+         [("Medallón", 6.0, 60.0, 6.0), ("Trozos", 10.0, 0.0, 0.0)])
+    porc("2610000001", "2026-09-30 10:00", "A", "Lomo", 10.0, 1.4,
+         [("Medallón", 8.6, 69.77, 8.6)])
+    d = pd.DataFrame(filas)
+    cols = dict(fecha="FEC REGIST", doc="COD PORC", area="SUB ALMACEN",
+                tipo="USUARIO REG", prod="PROD INICIAL", cod="COD PROD INIC",
+                unid="UNID PROD INIC", cant="CANT A PORCIONAR",
+                merma="CANT MERMA", fin="PROD FINAL RESULT",
+                cant_fin="CANT RESULT", unid_fin="UNID PROD FIN",
+                pprom="PREC PROM PROD FIN", peso="PESO RESULT")
+    base, cortes = mm.porcionamientos(d, cols)
+    check("una fila por porcionamiento, con su código",
+          (len(base), base.loc[base["doc"] == "2609000003", "cod"].tolist()),
+          (24, ["A"]))
+
+    # ── 1. Las dos valorizaciones ─────────────────────────────────────────
+    precios = pd.Series({"A": 50.0})
+    hoy = mm.valorizar(base, mm.VALOR_HOY, precios)
+    sep = hoy["fecha"] >= "2026-09-01"
+    check("a precio de hoy: merma × precio promedio, como el SP; sin precio, 0",
+          (round(float(hoy.loc[sep, "valor"].sum()), 2),
+           float(hoy.loc[hoy["cod"] == "B", "valor"].sum())),
+          (round((8.0 + 1.5 + 1.4) * 50.0, 2), 0.0))
+    check("a precio de hoy, lo porcionado es cantidad × precio",
+          float(hoy.loc[hoy["doc"] == "2609000001", "costo"].iloc[0]), 500.0)
+    dia = mm.valorizar(base, mm.VALOR_DIA, precios)
+    f1 = dia[dia["doc"] == "2609000001"].iloc[0]
+    check("al costo del día: la parte de los cortes que se perdió",
+          (round(float(f1["valor"]), 2), round(float(f1["valor_hoy"]), 2)),
+          (round(600.0 * 0.8, 2), 400.0))
+
+    # ── 2. Las marcas ─────────────────────────────────────────────────────
+    hist = base[base["fecha"] < "2026-09-01"]
+    compras = mm.compras_para_proveedor(pd.DataFrame({
+        "COD_PRODUCTO": ["A", "A", "B"],
+        "FECHA_EMISION_DOC": pd.to_datetime(["2026-09-01", "2026-09-08",
+                                             "2026-09-01"]),
+        "NOMBRE_PROVEEDOR": ["X", "Y", "Z"],
+        "CANTIDAD_COMPRA": [10.0, 10.0, 4.0],
+        "VALOR_COMPRA": [600.0, 600.0, 320.0]}))
+    b = mm.marcar(mm.con_proveedor(hoy[sep].reset_index(drop=True), compras),
+                  mm.normales(hist), cortes)
+    marcas = {str(r["doc"]): sorted(k for k in mm.MARCAS if r[f"m_{k}"])
+              for _, r in b.iterrows()}
+    check("las marcas de cada porcionamiento raro, y ninguna en el normal",
+          marcas, {"2609000001": ["alta"], "2609000002": ["cero"],
+                   "2609000003": ["sinpeso"], "2610000001": ["fecha"]})
+    imp = mm.impacto(b, ["alta"])
+    med_a = float(np.median([1.0 + i * 0.1 for i in range(10)]) / 10)
+    check("el impacto de la merma alta es lo perdido de más contra la mediana",
+          round(float(imp[b["doc"] == "2609000001"].iloc[0]), 2),
+          round((0.8 - med_a) * 10 * 50.0, 2))
+
+    # ── 3. El proveedor ───────────────────────────────────────────────────
+    p = b.set_index("doc")
+    check("la última compra hasta 45 días antes, y si fue de uno solo",
+          (p.loc["2609000001", "prov"], bool(p.loc["2609000001", "unico"]),
+           p.loc["2610000001", "prov"], p.loc["2609000002", "prov"],
+           bool(p.loc["2609000002", "unico"])),
+          ("Y", False, "Y", "Z", True))
+    check("los días entre la compra y el porcionamiento",
+          int(p.loc["2609000001", "dias"]), 2)
+
+    # ── 4. El kg útil, lo pagado de más y los cambios ─────────────────────
+    q = pd.DataFrame({
+        "doc": [str(i) for i in range(10)], "cod": ["A"] * 10,
+        "prod": ["Lomo"] * 10, "unid": ["KILOS"] * 10,
+        "fecha": pd.date_range("2026-06-01", periods=10, freq="15D"),
+        "prov": ["P1"] * 5 + ["P2"] * 5, "unico": [True] * 10,
+        "dias": [1.0] * 10, "cant": [10.0] * 10,
+        "merma_cant": [1.0] * 5 + [3.0] * 5, "costo_dia": [100.0] * 10})
+    q["pct"] = q["merma_cant"] / q["cant"]
+    pp = mm.por_proveedor(q)
+    check("el kg útil: lo pagado ÷ lo que quedó, del más barato al más caro",
+          (pp.index.tolist(), [round(x, 4) for x in pp["util"]]),
+          (["P1", "P2"], [round(500 / 45, 4), round(500 / 35, 4)]))
+    r = mm.resumen_proveedores(q)
+    check("lo pagado de más contra el mejor proveedor",
+          (r.loc["A", "mejor"], r.loc["A", "peor"],
+           round(float(r.loc["A", "extra"]), 2)),
+          ("P1", "P2", round((500 / 35 - 500 / 45) * 35, 2)))
+    q["costo"] = q["costo_dia"]
+    ch = mm.cambios(q, pd.Timestamp("2026-11-01"))
+    check("los cambios de los últimos 90 días, por nombre de columna",
+          (ch.columns.tolist(),
+           [round(float(x), 3) for x in ch.loc["A", ["pct_ant", "pct_rec"]]]),
+          (["pct_ant", "pct_rec", "dpp", "dprecio", "impacto"], [0.1, 0.3]))
+    return fallos
+
+
+def _pruebas_salidas_comparar_y_destino():
+    """Movimientos › salidas: la causa, los años anteriores y el destino de
+    lo que entra (regla #614).
+
+      1. LA CAUSA sale del motivo escrito, con erratas y sin tildes, y lo
+         que sólo dice «producto de baja» no inventa una.
+      2. LA COMPARACIÓN cae en la MISMA clave del eje que su barra: por mes
+         con el calendario, por semana con 364 días (el mismo día de la
+         semana). Lo anulado tampoco suma el año pasado.
+      3. EL AVISO DE POCO REGISTRO: sólo meses enteros, cerrados y con menos
+         de la mitad de la mediana de los doce anteriores.
+      4. EL DESTINO cierra: entró − vendido − preparaciones − notas + ajuste
+         es lo que quedó, las bajas salen de las notas y no se cuentan dos
+         veces, y lo que va entre áreas no infla lo que entró.
+    """
+    import pandas as pd
+
+    from graficos import movimientos as mov
+    from graficos import movimientos_destino as md
+    from graficos import movimientos_periodo as mp
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    salidas #614 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA salidas #614 · {nombre}: {got!r} != {exp!r}")
+
+    # ── 1) La causa ───────────────────────────────────────────────────────
+    for motivo, causa in (
+            ("PRODUCTO DE BAJA / TIEMPO DE VIDA", "Tiempo de vida"),
+            ("PRODCUTOS DE BAJA / TEIMPIO DE VIDA", "Tiempo de vida"),
+            ("PRODUCTO DE BAJA (MANIPULACION DE COCINA / TIEMPO DE VIDA )",
+             "Tiempo de vida"),
+            ("Producto de baja / cocción", "Cocción o término"),
+            ("BAJA DE PRODUCTO / FRIO MALOGRADO", "Equipo malogrado o frío"),
+            ("PRODUCTO DE BAJA / SE ROMPIO", "Manipulación"),
+            ("BAJA DE PRODUCTO / NO CUMPLE STANDAR", "No cumple el estándar"),
+            ("CONSUMO DIRECTO", "Consumo directo"),
+            ("PRODUCTOS DE BAJA", mov.SIN_CAUSA),
+            (".\r\n", mov.SIN_CAUSA),
+            (None, mov.SIN_CAUSA),
+            ("USO MENSUAL", mov.OTRA_CAUSA)):
+        check(f"causa de «{str(motivo).strip()[:30]}»",
+              mov.causa_de_baja(motivo), causa)
+    d = pd.DataFrame({"MOTIVO": ["PRODUCTO DE BAJA / TERMINO", None]})
+    check("con_causa agrega la columna",
+          mov.con_causa(d, "MOTIVO")[mov.COL_CAUSA].tolist(),
+          ["Cocción o término", mov.SIN_CAUSA])
+    check("sin columna de motivo, el df tal cual",
+          mov.COL_CAUSA in mov.con_causa(d, None).columns, False)
+
+    # ── 1b) La causa sólo en las Bajas, y la unidad (regla #626) ──────────
+    for motivo, causa in (
+            ("PRODUCTO DE BAJA / USO EN AREA", "Uso en el área"),
+            ("PRODUCTOS BAJA USO SALON 31/10725", "Uso en el área"),
+            ("PRODUCTOS DE BAJA / FAMILIA", "Comida de personal"),
+            ("USO MENSUAL", mov.OTRA_CAUSA)):
+        check(f"causa #626 de «{motivo[:30]}»", mov.causa_de_baja(motivo),
+              causa)
+    d = pd.DataFrame({"MOTIVO": ["TIEMPO DE VIDA", "CONSUMO DIRECTO"],
+                      "TIPO DESCARGO": ["Bajas ", "Comida Personal"]})
+    check("la causa sólo se lee en las Bajas",
+          mov.con_causa(d, "MOTIVO", "TIPO DESCARGO")[mov.COL_CAUSA].tolist(),
+          ["Tiempo de vida", mov.NO_ES_BAJA])
+    _u = pd.DataFrame({"unid": ["KILOS", "KILOS"], "cant": [1.5, 2.0]})
+    check("una sola unidad: se escribe corta", mp.unidad_de_vista(_u), "kg")
+    check("dos unidades: no se suman",
+          mp.unidad_de_vista(_u.assign(unid=["KILOS", "UND"])), "")
+    check("una línea sin unidad: no se suma",
+          mp.unidad_de_vista(_u.assign(unid=["KILOS", ""])), "")
+    _ago = (pd.Period("2026-08", "M"), 44, 250.0)
+    check("las barras de un mes con poco registro",
+          mp.periodos_poco_registro(["2026-07", "2026-08", "2026-09"], "Mes",
+                                    [_ago]), [False, True, False])
+    check("una semana que cruza al mes con poco registro también",
+          mp.periodos_poco_registro(["2026-S31", "2026-S30"], "Semana",
+                                    [_ago]), [True, False])
+    _bh = pd.DataFrame({
+        "fecha": pd.to_datetime(
+            [f"2025-{m:02d}-{d:02d}" for m in range(9, 13) for d in range(1, 26)]
+            + [f"2026-{m:02d}-{d:02d}" for m in range(1, 9) for d in range(1, 26)]
+            + ["2026-09-12", "2026-09-20", "2026-10-02"]),
+        "estado": "PROCESADO", "vacio": False})
+    _bh["doc"] = range(len(_bh))
+    _r = (pd.Timestamp("2026-09-10"), pd.Timestamp("2026-10-10"))
+    check("un rango de 30 días con 3 salidas contra ~25 al mes: avisa",
+          mp.rango_poco_registro(_bh, _r, mp.SALIDAS)[0], 3)
+    check("el mismo rango un año antes, con lo normal: no avisa",
+          mp.rango_poco_registro(_bh, (pd.Timestamp("2026-07-01"),
+                                       pd.Timestamp("2026-08-01")),
+                                 mp.SALIDAS), None)
+    _ia = mov.salidas_para_ia(pd.DataFrame({
+        "LOCAL": ["SAPIENS"], "LLAVE SALIDAS": ["x"], mov.COL_CAUSA: ["c"],
+        "_fecha": [pd.Timestamp("2026-09-01")], "VALOR NETO": [1.0]}))
+    check("lo que ve el asistente: sin internas, CAUSA y FECHA con nombre",
+          list(_ia.columns), ["CAUSA", "FECHA", "VALOR NETO"])
+
+    # ── 2) La comparación con años anteriores ─────────────────────────────
+    def _lin(filas):
+        return pd.DataFrame({
+            "fecha": pd.to_datetime([f for f, *_ in filas]),
+            "doc": [doc for _, doc, *_ in filas],
+            "estado": [e for *_, e, _ in filas],
+            "valor": [v for *_, v in filas],
+            "vacio": False, "area": "COCINA", "tipo": "", "fam": "",
+            "prod": "x"})
+    bh = _lin([("2025-08-05", "a", "PROCESADO", 10.0),
+               ("2025-09-10", "b", "PROCESADO", 20.0),
+               ("2025-09-11", "c", "ANULADO", 99.0),
+               ("2024-09-02", "d", "PROCESADO", 7.0)])
+    rng = (pd.Timestamp("2026-08-01"), pd.Timestamp("2026-10-01"))
+    comps = mp.comparacion_periodos(bh, rng, "Mes", ["2026-08", "2026-09"],
+                                    2)
+    check("por mes, el año pasado cae en la barra de su mes",
+          comps[0]["tot"], [10.0, 20.0])
+    check("lo anulado no suma el año pasado", comps[0]["total"], 30.0)
+    check("el rótulo del año", (comps[0]["rot"], comps[1]["rot"]),
+          ("2025", "2024"))
+    check("dos años atrás", comps[1]["tot"], [0.0, 7.0])
+    # Por semana: el miércoles 10/09/2025 es, 364 días después, el miércoles
+    # 09/09/2026 — la semana ISO 37 de los dos años.
+    sem = mp.comparacion_periodos(
+        bh, (pd.Timestamp("2026-09-07"), pd.Timestamp("2026-09-14")),
+        "Semana", ["2026-S37"], 1)
+    check("por semana, 364 días: el mismo día de la semana",
+          sem[0]["tot"], [20.0])
+    check("un rango que cruza el año se rotula «2024-25»",
+          mp.rotulo_anio(pd.Timestamp("2025-10-01"),
+                         pd.Timestamp("2026-10-01"), pd.DateOffset(years=1)),
+          "2024-25")
+    check("variación sin base es None", mp.variacion_pct(5.0, 0.0), None)
+    _dv = _lin([("2026-09-01", "a", "PROCESADO", 5.0),
+                ("2026-09-02", "b", "PROCESADO", 3.0)]).assign(
+        tipo=["Bajas", "Comida Personal"], clave="2026-09")
+    check("el producto se escribe como lo escribe el Almacén",
+          mp.nombre_tramo("(P) Calamar limpio", mp.PARTIR_PRODUCTO),
+          "(P) Calamar limpio")
+    check("el área, en oración",
+          mp.nombre_tramo("COCINA PERSONAL", mp.PARTIR_AREA), "Cocina personal")
+    check("por tipo: un tramo por tipo de descargo",
+          [n for n, _c, _v in mp.trazas_por_area(
+              _dv, ["2026-09"], ["Bajas", "Comida Personal"], col="tipo",
+              n_traza=4)], ["Bajas", "Comida Personal"])
+
+    # ── 3) El aviso de poco registro ──────────────────────────────────────
+    filas = []
+    for i, mes in enumerate(pd.period_range("2025-08", "2026-07", freq="M")):
+        for k in range(40):
+            filas.append((str(mes.start_time.date()), f"{mes}-{k}",
+                          "PROCESADO", 1.0))
+    filas += [("2026-08-03", f"ago-{k}", "PROCESADO", 1.0) for k in range(10)]
+    filas += [("2026-09-03", f"sep-{k}", "PROCESADO", 1.0) for k in range(35)]
+    poco = mp.meses_poco_registro(
+        _lin(filas), (pd.Timestamp("2026-08-01"), pd.Timestamp("2026-10-01")),
+        pd.Timestamp("2026-10-08"))
+    check("agosto con 10 de ~40 avisa; septiembre con 35 no",
+          [(str(p), n) for p, n, _ in poco], [("2026-08", 10)])
+    pocas_sep = [f for f in filas if not f[1].startswith("sep-")] + [
+        ("2026-09-03", f"sep-{k}", "PROCESADO", 1.0) for k in range(5)]
+    check("el mes en curso no se juzga aunque traiga pocas",
+          mp.meses_poco_registro(
+              _lin(pocas_sep), (pd.Timestamp("2026-08-01"),
+                                pd.Timestamp("2026-10-01")),
+              pd.Timestamp("2026-09-15")),
+          [(pd.Period("2026-08", "M"), 10, 40.0)])
+
+    # ── 4) El destino de lo que entra ─────────────────────────────────────
+    m = pd.Timestamp("2026-09-01")
+    kx = pd.DataFrame([
+        # cod, tipo, entra, sale
+        ("T", "94", 100.0, 0.0),   # la orden produjo 100 tartas
+        ("T", "95", 0.0, 70.0),    # se vendieron 70
+        ("T", "98", 0.0, 25.0),    # 25 en notas: 20 bajas + 5 personal
+        ("T", "93", 0.0, 2.0),     # faltaron 2 en el cierre
+        ("T", "99", 50.0, 50.0),   # un requerimiento: no entra
+        ("Q", "01", 10.0, 0.0),    # el queso, comprado
+        ("Q", "07", 0.0, 1.0),     # una nota de crédito
+        ("Q", "94", 0.0, 6.0),     # usado en la orden de la tarta
+    ], columns=["cod", "tipo", "cant_in", "cant_out"]).assign(mes=m)
+    kx = kx[kx["tipo"] != "99"]   # `sql_movimientos_mes` ya los saca
+    bajas = pd.DataFrame({"cod": ["T"], "mes": [m], "cant": [20.0],
+                          "valor": [190.0]})
+    r = md.armar_destino(kx, bajas).set_index("cod")
+    check("tarta: entró, vendido, baja, otras, ajuste, quedó",
+          [round(float(r.loc["T", c]), 2) for c in
+           ("entro", "vendido", "baja", "otras", "ajuste", "quedo")],
+          [100.0, 70.0, 20.0, 5.0, -2.0, 3.0])
+    check("tarta: % baja sobre lo que entró", round(r.loc["T", "pct_baja"], 1),
+          20.0)
+    check("queso: lo comprado neto de la nota de crédito y lo usado",
+          [float(r.loc["Q", c]) for c in ("entro", "prep", "quedo")],
+          [9.0, 6.0, 3.0])
+    check("queso: entró y no se dio de baja, 0 %",
+          float(r.loc["Q", "pct_baja"]), 0.0)
+    s = pd.DataFrame({
+        "FECHA PROCESADO": pd.to_datetime(["2026-09-02", "2026-09-03",
+                                           "2026-09-04", "2026-10-01"]),
+        "NOMBRE ESTADO SALIDA": ["PROCESADO", "ANULADO", "PROCESADO",
+                                 "PROCESADO"],
+        "COD PRODUCTO": ["T", "T", "T", "T"],
+        "TIPO DESCARGO": ["Bajas", "Bajas", "Comida Personal", "Bajas"],
+        "CANT SALIDA": [1.0, 2.0, 4.0, 8.0], "VALOR NETO": [1.0] * 4})
+    b = md.bajas_de(s, pd.Timestamp("2026-09-01"), pd.Timestamp("2026-10-01"))
+    check("bajas: sólo Bajas, sin anuladas, en el rango", b["cant"].tolist(),
+          [1.0])
+    return fallos
+
+
 def _pruebas_detalle_salidas():
     """Movimientos › «Detalle de salidas» (regla #511).
 
@@ -6939,8 +7688,8 @@ def _pruebas_detalle_salidas():
     check("formato · desglose de tres cuadros (1 de 3.2)",
           dt.formato_por_ancho(1 / 3.2), dt.FORMATO_DETALLE[3])
     filas = mov._FILAS_DETALLE_SAL
-    check("cinco cuadros en las filas del Detalle",
-          sum(len(f) for f in filas), 5)
+    check("seis cuadros en las filas del Detalle (la causa, #614)",
+          sum(len(f) for f in filas), 6)
     check("las dos filas cortan la primera columna en el mismo sitio",
           len({round(f[0] / sum(f), 6) for f in filas}), 1)
 
@@ -6969,7 +7718,7 @@ def _pruebas_detalle_salidas():
             llamadas.append((py.name, pref, slug, n))
     check("hay UNA llamada a seccion_cuadros (la de Movimientos)",
           [(a, p, s, n) for a, p, s, n in llamadas],
-          [("movimientos.py", "mov", "detsal", 5)])
+          [("movimientos.py", "mov", "detsal", 6)])
     faltan = [k for _a, p, s, n in llamadas
               for k in dt.claves_tarjetas_cuadros(p, s, n)
               if f".st-key-{k}," not in cards and f".st-key-{k})" not in cards]
@@ -8289,6 +9038,99 @@ def _pruebas_carta_costeada():
     return fallos
 
 
+def _pruebas_ventas_franja():
+    """Ventas › Análisis por Hora › «A medida» (regla #627): las cuentas.
+
+    Fija lo que no se ve hasta que miente: que «hasta» no se incluya (dos
+    horarios seguidos no cuentan dos veces el pedido de las 22:00), que un
+    horario que cruza la medianoche le dé lo de la madrugada al día ANTERIOR,
+    que los días elegidos sean los de la semana pedida dentro del rango, que
+    el detalle por día liste también los días SIN venta, que se agrupe por
+    nombre de columna, y que «Por hora» le pase su `filtrar_cb`: el
+    tramo viene aparte de R2.
+    """
+    import inspect
+    from datetime import date
+
+    from graficos import ventas_franja as _f
+    from graficos import ventas_horario as _h
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ventas · franja · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ventas · franja · {nombre}: got={got!r} exp={exp!r}")
+
+    check("17:30 son 1050 minutos", _f.a_minutos("17:30"), 1050)
+    check("24:00 es el fin del día", _f.a_minutos("24:00"), 1440)
+
+    doms = _f.dias_elegidos(date(2026, 9, 7), date(2026, 10, 9), [6])
+    check("los domingos de un rango",
+          doms, [date(2026, 9, 13), date(2026, 9, 20), date(2026, 9, 27),
+                 date(2026, 10, 4)])
+    check("rango al revés: ningún día",
+          _f.dias_elegidos(date(2026, 10, 9), date(2026, 10, 1), range(7)), [])
+
+    ts = pd.Series(pd.to_datetime([
+        "2026-10-04 17:29", "2026-10-04 17:30", "2026-10-04 21:59",
+        "2026-10-04 22:00", "2026-10-05 00:30", None]))
+    dentro, dia = _f.en_horario(ts, 1050, 1320)
+    check("17:30 → 22:00: entra de 17:30 a 21:59",
+          dentro.tolist(), [False, True, True, False, False, False])
+    dentro, dia = _f.en_horario(ts, 1200, 60)
+    check("20:00 → 01:00 cruza: la 00:30 entra",
+          dentro.tolist(), [False, False, True, True, True, False])
+    check("y la 00:30 del lunes es del DOMINGO",
+          dia[4].date(), date(2026, 10, 4))
+    check("cruza_medianoche", (_f.cruza_medianoche(1200, 60),
+                               _f.cruza_medianoche(0, 1440)), (True, False))
+
+    b = pd.DataFrame({
+        "dia": pd.to_datetime(["2026-09-13", "2026-09-13", "2026-09-27"]),
+        "grupo": ["Alimentos", "Alimentos", "Bebidas"],
+        "sub": ["Fondos", "Fondos", "Vinos"],
+        "prod": ["Lomo", "Lomo", "Malbec"],
+        "venta": [100.0, 50.0, 80.0], "cant": [2.0, 1.0, 1.0],
+        "pedido": ["P1", "P1", "P2"]})
+    pdia = _f.por_dia(b, doms)
+    check("por día: los 4 domingos, también los que no vendieron",
+          len(pdia), 4)
+    check("por día: el 20 sin venta queda en cero",
+          float(pdia.loc[pd.Timestamp("2026-09-20"), "venta"]), 0.0)
+    check("por día: pedidos distintos",
+          int(pdia.loc[pd.Timestamp("2026-09-13"), "pedidos"]), 1)
+    check("por día: columnas por nombre",
+          list(pdia.columns), ["venta", "cant", "pedidos"])
+    g = _f.por_grupo(b, "Plato")
+    check("por plato: columnas por nombre",
+          list(g.columns), ["grupo", "sub", "prod", "cant", "venta"])
+    check("por plato: el que más vende primero, sumado",
+          (g.loc[0, "prod"], float(g.loc[0, "venta"])), ("Lomo", 150.0))
+    check("por grupo", list(_f.por_grupo(b, "Grupo")["grupo"]),
+          ["Alimentos", "Bebidas"])
+
+    src = inspect.getsource(_h._ventas_horario)
+    check("«Por hora» le pasa su filtrar_cb al modo «A medida»",
+          "_franja.cuerpo(d, filtrar_cb," in src, True)
+    check("el interruptor tiene los tres modos",
+          _h.MODOS_VISTA, ("Mapa", "Comparar", "A medida"))
+    # «Mapa» elige solo cómo partir las fechas: un día, meses o años.
+    check("Mapa · un solo día va en Día",
+          _h.grano_automatico(date(2026, 10, 4), date(2026, 10, 4)), "Día")
+    check("Mapa · 30 días que cruzan de mes van en Mes",
+          _h.grano_automatico(date(2026, 9, 11), date(2026, 10, 10)), "Mes")
+    check("Mapa · cuatro meses todavía en Mes",
+          _h.grano_automatico(date(2026, 7, 1), date(2026, 10, 10)), "Mes")
+    check("Mapa · doce meses van en Año",
+          _h.grano_automatico(date(2025, 10, 11), date(2026, 10, 10)),
+          "Año")
+    return fallos
+
+
 def _pruebas_ventas_platos():
     """Ventas › Análisis de platos (regla #529): las cuentas del ranking.
 
@@ -9370,7 +10212,7 @@ def _pruebas_movimientos_periodo():
            for x in v["variaciones"]],
           [("primera", None), ("ok", -87.8)])
     check("la fila de la semana dice su año", v["fila"],
-          ["7–13 set 2026", "14–20 set 2026"])
+          ["lun 7–dom 13 set 2026", "lun 14–dom 20 set 2026"])
 
     filas, total = mp.tabla_resumen(v, foco="2026-S38")
     check("Resumen: el Estado escribe sólo la excepción",
@@ -9843,13 +10685,16 @@ def main():
     fallos += _pruebas_encaje_pila()
     fallos += _pruebas_periodo_por_vista()
 
+    # ── El panel del selector de fecha de las tarjetas (regla #616) ──────
+    fallos += _pruebas_panel_fecha()
+
+    # ── Movimientos: cada vista con su propia fecha (regla #617) ─────────
+    fallos += _pruebas_fecha_por_vista()
+
+    # ── Compras por período: «Partir por» (regla #620) ───────────────────
+    fallos += _pruebas_partir_por()
+
     # ── Deteccion de anomalias en Ajuste ────────────────────────────────
-    # ── Escala de tiempo estilo tabla dinamica (estado_rango.py) ────────
-    fallos += _pruebas_escala_tiempo()
-
-    # ── La regla de referencia bajo el riel: que los rótulos no se pisen ─
-    fallos += _pruebas_regla_riel()
-
     fallos += _pruebas_anomalias()
 
     # ── El chip de la mini contra el corte anterior ──────────────────────
@@ -9857,6 +10702,7 @@ def main():
 
     # ── Ajuste › Evolución: períodos compartidos, sobrante/faltante/% ────
     fallos += _pruebas_evolucion_ajuste()
+    fallos += _pruebas_fechas_ajuste()
 
     # ── Ajuste › Mapa de calor: la cantidad es la que el monto multiplica ─
     fallos += _pruebas_cantidad_del_mapa_ajuste()
@@ -9880,6 +10726,7 @@ def main():
 
     # ── Ventas › Análisis de platos: puestos, movimiento, por día ────────
     fallos += _pruebas_ventas_platos()
+    fallos += _pruebas_ventas_franja()
 
     # ── Ventas › Ingeniería de menú: la clasificación de Kasavana-Smith ──
     fallos += _pruebas_ventas_menu()
@@ -9895,6 +10742,8 @@ def main():
 
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
+    fallos += _pruebas_salidas_comparar_y_destino()
+    fallos += _pruebas_merma()
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────
     fallos += _pruebas_carta_costeada()

@@ -97,11 +97,10 @@ _MODOS = ("Por producto", "Por área", "Por corte")
 _K_FOCO = "ajuste_cascada_focus"
 _K_AREA = "ajcas_filtro_area"
 _K_FAMILIA = "ajcas_filtro_familia"
-# El corte de ESTA vista. No usa `estado_rango.clave_corte`, que es el
-# estado de la FRANJA del reporte: ahi el corte lo comparten las cuatro
-# vistas de la categoria "visual" y ademas arrastra el rango, que es la key
-# de un `st.date_input`. Aca la vista se filtra sola desde `df_full`, asi
-# que le alcanza con recordar que clave de corte eligio. Ver regla #427.
+# La sesión de ESTA vista (su clave, ver `cortes.sesiones_inventario`). La
+# vista se filtra sola desde `df_full` y cada vista recuerda la suya: elegir
+# otra en Por familia no mueve Familia × Área («cambia sólo esa», regla
+# #632). Ver también la regla #427.
 _K_CORTE = "ajcas_corte"
 # El modo del detalle, con su ESPEJO: un clic en la tabla de familias hace
 # `st.rerun()` antes de que el selector se dibuje, y eso se lleva su estado
@@ -112,7 +111,9 @@ _K_MODO_ECO = "ajcas_detalle_modo__eco"
 # UNA KEY POR CONTROL. `st.popover` no emite `st-key-*` propio: el inspector
 # y el modo diseno resuelven hacia arriba hasta el `st-key-*` mas cercano,
 # que sin esto era la tarjeta ENTERA. Ver arquitectura.md #431.
-_K_CTRL = ("ajcas_ctrl_fecha", "ajcas_ctrl_familia", "ajcas_ctrl_area")
+# La de la sesión NO lleva el prefijo `ajcas_ctrl_`: de él cuelga el trigger
+# minimalista (`css_filtros_vista`), y la sesión es la píldora de Compras.
+_K_CTRL = ("ajcas_fecha", "ajcas_ctrl_familia", "ajcas_ctrl_area")
 
 
 # ── Las cuentas (puras: las prueba `test_graficos.py`) ───────────────────
@@ -393,12 +394,14 @@ def _graf_waterfall_ajuste(df, col_familia, col_area, col_ajuste_val,
     with st.container(key="ajcas_cuerpo"):
         with st.container(border=True, key="ajcas_card_resumen"):
             # columnas-internas: los tres filtros y la cobertura del corte.
-            # El reparto de los filtros es el de antes (tres de ~156px, que
-            # es lo que pide "todas las áreas", regla #434).
-            _cf = st.columns([1, 1, 1, 3.4], gap="small",
+            # Familia y área, ~165px a 1323 (lo que pide "todas las áreas",
+            # regla #434); la sesión, ~215: sus flechas ‹ › cuestan 56
+            # (regla #632).
+            _cf = st.columns([1.3, 1, 1, 3.4], gap="small",
                              vertical_alignment="center")
             render_filtros_vista([c.container(key=k)
-                                  for c, k in zip(_cf, _K_CTRL)], _est)
+                                  for c, k in zip(_cf, _K_CTRL)], _est,
+                                 "ajses_cas")
             if not fams:
                 # Sin datos la tarjeta se dibuja IGUAL: sin ella se irían
                 # los tres controles y no habría forma de deshacer el

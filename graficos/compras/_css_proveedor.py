@@ -802,7 +802,7 @@ CSS = """        <style>
            ADENTRO de aquella: es un item mas de un flex ajeno, no la fila.
            Lo que se le hace medir su contenido esta alla, pegado al resto
            de las reglas de esa cabecera. Todo lo demas —pildora del
-           trigger, panel, riel, atajos— si lo comparte, con las reglas
+           trigger y panel— si lo comparte, con las reglas
            colgadas de `cp_vol_escala` y no de la fila, por el mismo motivo
            que `cp_sem`. */
         .st-key-cp_rank_fila,
@@ -966,10 +966,17 @@ CSS = """        <style>
         .st-key-cp_sem_hdr_subfamilia,
         .st-key-cp_sem_hdr_proveedor,
         .st-key-cp_sem_hdr_producto { width: 100% !important; }
-        .st-key-cp_sem_hdr_familia > [data-testid="stElementContainer"],
-        .st-key-cp_sem_hdr_subfamilia > [data-testid="stElementContainer"],
-        .st-key-cp_sem_hdr_proveedor > [data-testid="stElementContainer"],
-        .st-key-cp_sem_hdr_producto > [data-testid="stElementContainer"] {
+        /* CON EL `.st-key-cp_sem_filtros` DELANTE (2026-10-10, regla #624):
+           sin él empataba en especificidad con el `width: auto` de
+           `.st-key-cp_sem_fila [data-testid="stElementContainer"]`, y este
+           CSS se inyecta DOS veces (la sección y el drill de Proveedor):
+           la copia de abajo ganaba y el contenedor medía 37px. El selectbox
+           de antes lo tapaba con su ancho mínimo propio; el multiselect no
+           tiene, y el «Todas las familias» quedaba en una caja de 5px. */
+        .st-key-cp_sem_filtros .st-key-cp_sem_hdr_familia > [data-testid="stElementContainer"],
+        .st-key-cp_sem_filtros .st-key-cp_sem_hdr_subfamilia > [data-testid="stElementContainer"],
+        .st-key-cp_sem_filtros .st-key-cp_sem_hdr_proveedor > [data-testid="stElementContainer"],
+        .st-key-cp_sem_filtros .st-key-cp_sem_hdr_producto > [data-testid="stElementContainer"] {
             width: 100% !important;
         }
         /* A la altura de las pildoras de granularidad, que en esta fila
@@ -1030,6 +1037,88 @@ CSS = """        <style>
         .st-key-cp_sem_hdr_producto .react-aria-ComboBox input {
             font-size: 12px !important;
         }
+        /* DESDE EL 2026-10-10 SON `st.multiselect` (regla #623), y el de
+           Streamlit tiene DOS formas, como en la fila de Ventas › Por
+           período (`estilos/_80_cards.py`, regla #519): en la 1.64 de Cloud
+           es el `.react-aria-ComboBox` de arriba, pero con las fichas en un
+           `stMultiSelectTagsContainer` de 38px con relleno, que estiraba la
+           caja otra vez a 40; en la 1.59 de esta máquina es un
+           `[data-baseweb="select"]`. Las dos a los 32 de la fila. Lo que no
+           entra en un renglón se recorta —la lista abierta dice todo lo
+           elegido, y el título de la figura lo cuenta—: una caja que crece
+           con cada ficha correría el gráfico de abajo. */
+        .st-key-cp_sem_hdr_familia [data-testid="stMultiSelectTagsContainer"],
+        .st-key-cp_sem_hdr_subfamilia [data-testid="stMultiSelectTagsContainer"],
+        .st-key-cp_sem_hdr_proveedor [data-testid="stMultiSelectTagsContainer"],
+        .st-key-cp_sem_hdr_producto [data-testid="stMultiSelectTagsContainer"] {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            height: 30px !important;
+            min-height: 0 !important;
+            align-items: center !important;
+            overflow: hidden !important;
+        }
+        .st-key-cp_sem_hdr_familia [data-baseweb="select"] > div,
+        .st-key-cp_sem_hdr_subfamilia [data-baseweb="select"] > div,
+        .st-key-cp_sem_hdr_proveedor [data-baseweb="select"] > div,
+        .st-key-cp_sem_hdr_producto [data-baseweb="select"] > div {
+            min-height: 32px !important;
+            height: 32px !important;
+            font-size: 12px !important;
+        }
+        .st-key-cp_sem_hdr_familia [data-baseweb="select"] > div > div,
+        .st-key-cp_sem_hdr_subfamilia [data-baseweb="select"] > div > div,
+        .st-key-cp_sem_hdr_proveedor [data-baseweb="select"] > div > div,
+        .st-key-cp_sem_hdr_producto [data-baseweb="select"] > div > div {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            max-height: 30px !important;
+            overflow: hidden !important;
+        }
+        /* ── LA LÍNEA DE DOCUMENTO Y MONTOS (2026-10-10, regla #624) ─────
+           Una fila propia debajo de la cabecera: rótulo + toggle, dos
+           veces, y una nota a la derecha. Más baja que la cabecera (26px)
+           porque es secundaria y la paga la figura
+           (`alturas.FRANJA_DOC_SEMANAL`). Acotado a SUS keys. */
+        .st-key-cp_sem_doc_fila {
+            gap: 8px !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+        }
+        .st-key-cp_sem_doc_fila > [data-testid="stElementContainer"],
+        .st-key-cp_sem_doc_fila > [data-testid="stLayoutWrapper"] {
+            width: auto !important;
+            flex: 0 0 auto !important;
+        }
+        .cp-sem-doc-rot {
+            font-size: 10.5px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .cp-sem-doc-rot-2 { margin-left: 10px; }
+        /* El `margin-bottom: -16px` de un `st.markdown` con HTML de bloque
+           (regla #162) dejaba su contenedor en 0,8px y el rótulo colgando
+           8px por debajo del centro de los botones (medido). Acá no hay
+           gap vertical que comerse: la fila es horizontal. */
+        .st-key-cp_sem_doc_fila [data-testid="stMarkdownContainer"] {
+            margin-bottom: 0 !important;
+        }
+        .cp-sem-doc-nota {
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            margin-left: 6px;
+        }
+        .st-key-compras_sem_documento [data-testid="stButtonGroup"] button,
+        .st-key-compras_sem_montos [data-testid="stButtonGroup"] button {
+            min-height: 26px !important;
+            height: 26px !important;
+            padding: 0 10px !important;
+            font-size: 11.5px !important;
+        }
         /* ── LA GRANULARIDAD, UN TOGGLE LINEAL (2026-09-17) ─────────────
            Era `st.pills`; pasó a `st.segmented_control` a pedido («agrupado
            en un solo toggle que se vea lineal»). Acotado a SU key y no a
@@ -1071,6 +1160,149 @@ CSS = """        <style>
            bloque normal, así que se le dice `block` a mano. */
         .st-key-cp_sem_resumen .stCustomComponentV1 {
             display: block !important;
+        }
+        /* ── EL RENGLÓN DEL TÍTULO DEL GRÁFICO (2026-10-08, regla #620) ──
+           El título, el selector «Partir por» y la leyenda de las partes,
+           ENCIMA de la figura: en sus 30px de margen de arriba, que eran
+           del título de Plotly, así que no le agregan un píxel a la
+           tarjeta. Lo que sale del flujo es el `stLayoutWrapper` que
+           envuelve a la key —el item del flex es él, regla #272—, y un
+           hijo `absolute` de un flex no cobra el `gap`. El `right` deja
+           libre la esquina donde Plotly pone su barrita de zoom y foto
+           (224px medidos a 1323).
+
+           VA POR DEBAJO DEL GRÁFICO, MENOS EL SELECTOR. Sin `z-index`, el
+           gráfico —que viene después— se pinta encima, y como su fondo es
+           transparente el renglón se sigue viendo; así el cuadro del hover
+           tapa al título y a la leyenda y no al revés (con el renglón
+           encima, las fichas de la leyenda se pintaban sobre la primera
+           línea del hover). Pero el `div.svg-container` de Plotly cubre la
+           figura entera y se queda con los clics: medido, el del selector
+           no llegaba. Por eso el selector, y sólo él, sube con su propio
+           `z-index` — el envoltorio no arma un contexto de apilamiento, así
+           que compite directo con el gráfico. */
+        .st-key-cp_sem_graf { position: relative !important; }
+        .st-key-cp_sem_graf
+            > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_cab_graf) {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 232px !important;
+            width: auto !important;
+            height: 30px !important;
+        }
+        .st-key-cp_sem_cab_graf {
+            height: 30px !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            gap: 14px !important;
+            overflow: hidden !important;
+        }
+        /* El selector no cede; el título y la leyenda sí (con «…» el
+           título, recortada la leyenda: el hover nombra todas las partes). */
+        .st-key-cp_sem_cab_graf > [data-testid="stElementContainer"] {
+            width: auto !important;
+            flex: 0 1 auto !important;
+            min-width: 0 !important;
+        }
+        .st-key-cp_sem_cab_graf > .st-key-compras_sem_partir {
+            flex: 0 0 auto !important;
+            position: relative !important;
+            z-index: 3 !important;
+        }
+        /* El título mide lo suyo hasta el 40 % del renglón: con cinco
+           proveedores la leyenda parte en dos y, sin este tope, el que
+           cedía primero era el título («Compra por sema…»). */
+        .st-key-cp_sem_cab_graf > [data-testid="stElementContainer"]:first-child {
+            flex: 0 0 auto !important;
+            max-width: 40% !important;
+        }
+        .st-key-cp_sem_cab_graf [data-testid="stMarkdownContainer"] {
+            margin-bottom: 0 !important;
+        }
+        /* El título, como lo escribía Plotly: 16px y sin negrita. */
+        .st-key-cp_sem_cab_graf .cp-sem-tit {
+            font-size: 16px;
+            font-weight: 400;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-left: 4px;
+        }
+        /* El sufijo del título («· sin IGV», regla #621), más chico y gris:
+           dice cómo mide la barra, no qué es. */
+        .st-key-cp_sem_cab_graf .cp-sem-tit small {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+        /* LAS FICHAS QUE ELIGEN QUÉ SE RESALTA (regla #621), en el lugar
+           de la leyenda. Suben con el selector por encima del gráfico, que
+           si no se come sus clics (ver arriba), y no parten renglón: lo que
+           no entra se recorta y el hover nombra todas las partes. La key
+           lleva la firma de sus opciones, de ahí el `[class*=...]` — afuera
+           de todo `:has()`. */
+        .st-key-cp_sem_cab_graf > [class*="st-key-compras_sem_res_"] {
+            position: relative !important;
+            z-index: 3 !important;
+            overflow: hidden !important;
+        }
+        /* El que envuelve es el `div` de ADENTRO del `stButtonGroup`, que es
+           `block` (medido: con la regla sólo en éste, cinco subfamilias
+           salían en dos renglones de 52px). */
+        [class*="st-key-compras_sem_res_"] [data-testid="stButtonGroup"],
+        [class*="st-key-compras_sem_res_"] [data-testid="stButtonGroup"] > div {
+            flex-wrap: nowrap !important;
+            overflow: hidden !important;
+            gap: 6px !important;
+        }
+        [class*="st-key-compras_sem_res_"] [data-testid="stButtonGroup"] button {
+            min-height: 24px !important;
+            height: 24px !important;
+            padding: 0 10px !important;
+            font-size: 11.5px !important;
+            border-radius: 999px !important;
+            white-space: nowrap !important;
+            flex: 0 0 auto !important;
+        }
+        [class*="st-key-compras_sem_res_"] button[aria-checked="true"] {
+            background: var(--accent) !important;
+            border-color: var(--accent) !important;
+            color: var(--bg-card) !important;
+        }
+        [class*="st-key-compras_sem_res_precio"] button[aria-checked="true"] {
+            background: var(--danger) !important;
+            border-color: var(--danger) !important;
+        }
+        [class*="st-key-compras_sem_res_"] button[aria-checked="true"] p {
+            color: var(--bg-card) !important;
+        }
+        /* Más chico que los toggles de la cabecera (32px): manda sobre el
+           gráfico, no sobre la tarjeta, y tiene que entrar en los 30px. */
+        .st-key-compras_sem_partir [data-testid="stButtonGroup"] button {
+            min-height: 24px !important;
+            height: 24px !important;
+            padding: 0 10px !important;
+            font-size: 11.5px !important;
+        }
+        /* En el celular el renglón vuelve al flujo y parte en dos: no hay
+           ancho para las tres cosas en uno, y encima tapaban las barras. */
+        @media (max-width: 768px) {
+            .st-key-cp_sem_graf
+                > [data-testid="stLayoutWrapper"]:has(> .st-key-cp_sem_cab_graf) {
+                position: static !important;
+                height: auto !important;
+            }
+            .st-key-cp_sem_cab_graf {
+                height: auto !important;
+                flex-wrap: wrap !important;
+            }
+            /* Con el renglón partido, el título tiene el suyo entero. */
+            .st-key-cp_sem_cab_graf
+                > [data-testid="stElementContainer"]:first-child {
+                max-width: none !important;
+            }
         }
         /* (Acá vivía la fila de KPI de la vista, `.st-key-cp_sem_kpi`,
            regla #454. Se quitó el 2026-10-01, a pedido: la tabla de
@@ -1159,7 +1391,7 @@ CSS = """        <style>
             background: #f0edfe !important;
             color: #4d3fb3 !important;
         }
-        /* El trigger de la escala de tiempo: desde el 2026-08-26 su label
+        /* El trigger del selector de fecha: desde el 2026-08-26 su label
            es EL RANGO ACTIVO ("1 ago - 24 ago 2026"), no un icono de
            calendario -- ver el comentario largo en proveedor.py. Hereda la
            pildora de `.st-key-cp_rank_fila button` (misma
@@ -1216,412 +1448,12 @@ CSS = """        <style>
         [data-testid="stPopoverBody"]:has(.st-key-cp_prod_escala_panel),
         [data-testid="stPopoverBody"]:has(.st-key-cp_sem_escala_panel),
         [data-testid="stPopoverBody"]:has(.st-key-cp_vol_escala_panel) {
-            /* 290px es el ancho MINIMO util del riel: con menos, las
-               etiquetas de las paradas de "Meses" (ene 24 ... ago 26) se
-               encabalgan y el slider deja de leerse. */
-            width: 290px !important;
-            min-width: 290px !important;
-            padding: 12px 14px !important;
-        }
-        /* La granularidad ocupa el ancho y reparte en tres. Sin esto el
-           segmented_control mide su contenido y queda un bloque chico
-           pegado a la izquierda, desalineado del riel de abajo (medido:
-           191px contra los 250px del slider).
-           Van DOS reglas y no una: el `stVerticalBlock` del panel nace con
-           `align-items: start`, asi que su hijo queda `flex: 0 1 auto` y
-           encogido — el `width:100%` del ButtonGroup se resolvia contra un
-           padre que ya media 191px. Se ensancha primero el contenedor del
-           widget (su ANCLA PROPIA, no el del panel: tocar el panel movería
-           tambien al slider y al caption). */
-        .st-key-cp_rank_esc_gran,
-        .st-key-cp_prod_esc_gran,
-        .st-key-cp_sem_esc_gran,
-        .st-key-cp_vol_esc_gran {
-            width: 100% !important;
-        }
-        /* `display: flex` explicito: el ButtonGroup nace BLOCK (medido), y
-           sobre un padre block el `flex: 1 1 0` de los botones no hace
-           nada — quedaban tres botones de 64px pegados a la izquierda de
-           un contenedor de 250.
-           El `> div` tampoco es paranoia: entre el ButtonGroup y los
-           botones hay un div SIN testid ni clase estable que nace en
-           `fit-content` (191px). Ensanchar solo el ButtonGroup no
-           alcanzaba porque el `flex:1` de los botones se repartia ese 191
-           y no el 250. Se descubrio midiendo `button.parentElement`, que
-           no aparece en ningun selector del proyecto.
-           Y es `> div` y NO `> *` porque el otro hijo del ButtonGroup es
-           el `<label>` del widget, que sigue en el DOM aunque este
-           `label_visibility="collapsed"`: con `> *` se llevaba la mitad
-           del ancho (125 y 125) y los botones quedaban en 42px. */
-        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"],
-        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"],
-        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"],
-        .st-key-cp_vol_esc_gran [data-testid="stButtonGroup"],
-        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] > div,
-        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] > div,
-        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"] > div,
-        .st-key-cp_vol_esc_gran [data-testid="stButtonGroup"] > div {
-            display: flex !important;
-            width: 100% !important;
-            /* El `width` solo no alcanza: la clase de emotion del div
-               interno trae `max-width: fit-content`, que lo volvia a
-               clampear en 191px aunque el 100% ganara la cascada. Un
-               ancho que "gana" y no se ve es casi siempre esto. */
-            max-width: none !important;
-        }
-        .st-key-cp_rank_esc_gran [data-testid="stButtonGroup"] button,
-        .st-key-cp_prod_esc_gran [data-testid="stButtonGroup"] button,
-        .st-key-cp_sem_esc_gran [data-testid="stButtonGroup"] button,
-        .st-key-cp_vol_esc_gran [data-testid="stButtonGroup"] button {
-            flex: 1 1 0 !important;
-        }
-        /* El caption del total de dias: al ras del riel, no como parrafo. */
-        .st-key-cp_rank_escala_panel [data-testid="stCaptionContainer"],
-        .st-key-cp_prod_escala_panel [data-testid="stCaptionContainer"],
-        .st-key-cp_sem_escala_panel [data-testid="stCaptionContainer"],
-        .st-key-cp_vol_escala_panel [data-testid="stCaptionContainer"] {
-            margin-top: -4px !important;
-            font-size: 11px !important;
-        }
-        /* ── EL POPOVER DE LA ESCALA, COMPACTO ───────────────────────────
-           2026-08-26, tercera vuelta, a pedido ("lo veo muy largo
-           verticalmente... quizás apegar más los números a la línea").
-           MEDIDO antes de tocar nada: de los 249px que medía el popover,
-           88 eran aire — cuatro gaps de 16px del `stVerticalBlock` (el
-           default de Streamlit, pensado para una página, no para una caja
-           de 250px) más 12+12 de padding. Las cinco piezas de adentro
-           sumaban 135px reales.
-
-           Se acota con `:has()` al popover que CONTIENE el selector de
-           escala, misma técnica que los popovers de Familia/Subfamilia en
-           estilos/_40_ajuste_franja.py. Sin ese `:has()` esto apretaría
-           TODOS los popovers de la app, que es justo el error que
-           CLAUDE.md advierte de las reglas colgadas de un contenedor. */
-        [data-testid="stPopoverBody"]:has(.st-key-cp_rank_esc_gran),
-        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_esc_gran),
-        [data-testid="stPopoverBody"]:has(.st-key-cp_sem_esc_gran),
-        [data-testid="stPopoverBody"]:has(.st-key-cp_vol_esc_gran) {
-            padding-top: 8px !important;
-            padding-bottom: 8px !important;
-        }
-        [data-testid="stPopoverBody"]:has(.st-key-cp_rank_esc_gran)
-            [data-testid="stVerticalBlock"],
-        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_esc_gran)
-            [data-testid="stVerticalBlock"],
-        [data-testid="stPopoverBody"]:has(.st-key-cp_sem_esc_gran)
-            [data-testid="stVerticalBlock"],
-        [data-testid="stPopoverBody"]:has(.st-key-cp_vol_esc_gran)
-            [data-testid="stVerticalBlock"] {
-            gap: 4px !important;
-        }
-        /* El desplegable de atajos traía además su propio margen inferior,
-           que se sumaba al gap.
-
-           OJO con la coma: las dos mitades tienen que repetir el `:has()`
-           del popover ENTERAS. Escrito como
-           `…:has(A) [class*=B], [class*=C] {…}` la segunda mitad queda
-           SUELTA -- matchea ese widget en cualquier parte de la app, no
-           dentro de este popover. Es el error que CLAUDE.md advierte de
-           las reglas por familia, y lo cometió el script que duplicó estos
-           selectores para el prefijo `cp_prod` (2026-08-26). */
-        [data-testid="stPopoverBody"]:has(.st-key-cp_rank_esc_gran)
-            [class*="st-key-cp_rank_atajo_sel"],
-        [data-testid="stPopoverBody"]:has(.st-key-cp_prod_esc_gran)
-            [class*="st-key-cp_prod_atajo_sel"],
-        [data-testid="stPopoverBody"]:has(.st-key-cp_sem_esc_gran)
-            [class*="st-key-cp_sem_atajo_sel"],
-        [data-testid="stPopoverBody"]:has(.st-key-cp_vol_esc_gran)
-            [class*="st-key-cp_vol_atajo_sel"] {
-            margin-bottom: 0 !important;
-        }
-        /* ── CABECERA "‹ AGO 2026 ›" del riel de Días ────────────────────
-           2026-08-26, segunda vuelta, a pedido y con la captura del
-           selector de fecha de Excel al lado: el riel pasó a mostrar UN
-           mes (graficos/base.py::_nav_mes) y necesita decir CUÁL, más las
-           dos flechas para cambiarlo. Rótulo centrado entre ellas, igual
-           que en la captura.
-
-           Las flechas se acotan por sus keys PROPIAS (`_mes_prev` /
-           `_mes_sig`) y no por el contenedor: el popover ya tiene reglas
-           colgadas de contenedores —el aviso de CLAUDE.md sobre widgets
-           que heredan estilo sin que el .py lo insinúe— y este par no
-           tiene por qué arrastrar al `segmented_control` de escala ni al
-           desplegable de atajos que viven en la misma caja. */
-        .cp-riel-mes {
-            text-align: center;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-            color: var(--text-primary);
-            line-height: 22px;
-        }
-        [class*="st-key-cp_rank_esc_mes_prev"] button,
-        [class*="st-key-cp_prod_esc_mes_prev"] button,
-        [class*="st-key-cp_sem_esc_mes_prev"] button,
-        [class*="st-key-cp_vol_esc_mes_prev"] button,
-        [class*="st-key-cp_rank_esc_mes_sig"] button,
-        [class*="st-key-cp_prod_esc_mes_sig"] button,
-        [class*="st-key-cp_sem_esc_mes_sig"] button,
-        [class*="st-key-cp_vol_esc_mes_sig"] button {
-            min-height: 22px !important;
-            height: 22px !important;
-            padding: 0 !important;
-            line-height: 1 !important;
-            font-size: 15px !important;
-            border-radius: 7px !important;
-        }
-        /* ── REGLA de referencia, LAS TRES ESCALAS ───────────────────────
-           2026-08-26, a pedido ("la línea no tiene ninguna indicación de
-           qué día o mes estoy seleccionando"). Fila propia DEBAJO del
-           riel (no overlay: ver el comentario largo en
-           graficos/base.py::selector_escala) — mismo ancho ÚTIL que el
-           riel, así que el 0%-100% de acá coincide con el suyo.
-           `position:relative` + hijos `position:absolute; left:X%` es la
-           misma técnica que ya usa el riel de select_slider para sus
-           propias paradas (más abajo, la granularidad).
-
-           Nació rotulando AÑOS (el riel abarcaba todo el histórico) y
-           pasó a rotular DÍAS DEL MES el mismo día, cuando el riel se
-           acotó a un mes. La clase no cambió de nombre: lo que hace
-           —marcas de referencia bajo el riel— es lo mismo, y desde el
-           2026-09-03 lo hace para las TRES escalas (Meses rotula el mes,
-           Años el año), que es lo que se pidió esa vez. */
-        .cp-riel-regla {
-            position: relative;
-            height: 11px;
-            /* Margen NEGATIVO a propósito ("apegar más los números a la
-               línea", 2026-08-26). MEDIDO dentro de la caja de 40px del
-               `st.slider`: la línea va de 18 a 22, los tiradores de 14 a
-               26, y de 26 a 40 no hay NADA — son los 14px que ocupaba el
-               `stSliderTickBar`, que acá va oculto. Los -22px meten la
-               regla en ese hueco en vez de sumar una banda nueva abajo.
-               El número reparte un presupuesto FIJO: lo que se le saca de
-               arriba (holgura con el tirador) se le da abajo (holgura con
-               el caption, que no se mueve porque su contenedor mide 0).
-               Con -22 quedan ~4px de cada lado; con -20 el caption se
-               pegaba a 1px. Si algún día se deja de ocultar el tick bar,
-               este número miente.
-
-               Los 6px LATERALES son el otro medio de la alineación, y son
-               medidos (2026-09-03): el `[role="group"]` con que Streamlit
-               envuelve al riel lleva `padding: 0 6px` —el radio del
-               tirador, para que no se salga—, así que el 0% del tirador
-               está en x=6 y el 100% en x=244, no en 0 y 250. Sin el inset
-               la regla erraba 6px en cada punta (0 en el medio, que es
-               por qué en Días no saltaba a la vista); con marcas cada
-               21,6px, como las de un año de Meses, esos 6px son un tercio
-               de casillero. Ver `_ANCHO_RIEL_PX` en graficos/base.py. */
-            margin: -22px 6px 0;
-        }
-        .cp-riel-regla span {
-            position: absolute;
-            top: 0;
-            transform: translateX(-50%);
-            font-size: 9px;
-            color: var(--text-muted);
-            white-space: nowrap;
-        }
-        /* El primero y el último se pinean al borde sin centrarse: a mitad
-           de camino fuera del riel se leerían cortados contra el padding
-           del popover. */
-        .cp-riel-regla span:first-child { transform: translateX(0); }
-        .cp-riel-regla span:last-child { transform: translateX(-100%); }
-        /* …salvo en Meses/Años, donde el rótulo nombra un CASILLERO y ya va
-           centrado en él (`(i+½)/n` en graficos/base.py). Ahí no hay nada
-           que pinear: el primer centro cae a media casilla del borde, que
-           es más de medio rótulo, así que no se corta. Va DESPUÉS de las
-           dos reglas de arriba a propósito — misma especificidad, gana la
-           última (la misma doctrina que el orden de `_SECCIONES`). */
-        .cp-riel-centrada span:first-child,
-        .cp-riel-centrada span:last-child { transform: translateX(-50%); }
-        /* Los rótulos que caen DENTRO de la selección se encienden
-           (2026-09-03, segunda mitad del pedido de los casilleros). En
-           Meses/Años es la única pieza que dice qué períodos entraron,
-           porque los tiradores van sin etiqueta; en Días es redundante con
-           la banda, pero las tres escalas tienen que leerse igual. */
-        .cp-riel-regla span.on {
-            color: var(--accent);
-            font-weight: 600;
-        }
-        /* 2026-08-26, a pedido ("no es necesario ver en la línea los días
-           del 2023 2024 si mi selección es de días"): el `stSliderTickBar`
-           NATIVO de Streamlit queda redundante apenas se agrega
-           `.cp-riel-regla` arriba. Con la ventana de un mes ya no dice
-           "01/01/23 — 24/08/26" sino los bordes del mes, que es justo lo
-           que ya rotulan la cabecera `.cp-riel-mes` y las dos marcas
-           extremas de la regla — tres veces lo mismo en tres renglones
-           seguidos.
-
-           2026-09-03: pasa de estar acotado a `_dias_` a valer para las
-           TRES escalas, porque ahora las tres traen regla propia. Y no es
-           sólo higiene: en Meses/Años el tick bar es un vecino
-           IMPREDECIBLE — Streamlit se lo lleva a `opacity: 0` cuando un
-           tirador le cae encima (medido: con los dos tiradores en "ago 26"
-           el DOM traía "ene 26 / ago 26" y en pantalla no había nada) y
-           además se DESBORDA 10px por debajo de la caja de 40px del
-           slider, justo donde la regla se mete con su margen negativo.
-           Dejarlo apagado saca de la ecuación una regla ajena que aparece
-           y desaparece sola.
-
-           El selector es por prefijo de FAMILIA (`cp_rank_esc_`) y no por
-           las tres keys de escala, con el aviso de CLAUDE.md presente: lo
-           único que puede capturar de más es otro `stSliderTickBar` dentro
-           del mismo popover de escala, o sea otro riel de este control —
-           que es exactamente lo que se quiere ocultar. */
-        [class*="st-key-cp_rank_esc_"] [data-testid="stSliderTickBar"],
-        [class*="st-key-cp_prod_esc_"] [data-testid="stSliderTickBar"],
-        [class*="st-key-cp_sem_esc_"] [data-testid="stSliderTickBar"],
-        [class*="st-key-cp_vol_esc_"] [data-testid="stSliderTickBar"] {
-            display: none !important;
-        }
-        /* Etiquetas de los TIRADORES, sólo en Meses/Años. Es el precio del
-           modelo de casilleros (2026-09-03): con el riel parando en los
-           BORDES, el tirador derecho marca el arranque del período que ya
-           NO entra, así que seleccionar agosto lo dejaría diciendo
-           "sep 26" — un mes que no está en el filtro. `format_func` no
-           puede rotular distinto a cada tirador (es UNA lista de opciones),
-           así que la salida es no rotularlos: el rango entero ya lo dice la
-           píldora que abre el popover, un renglón más arriba, y qué meses
-           entraron lo dice la regla encendida de abajo. Es además lo que
-           hace Excel, que tampoco pone texto en los manijas.
-           En DÍAS se quedan: ahí el tirador ES la fecha, sin traducción. */
-        [class*="st-key-cp_rank_esc_meses_"] [data-testid="stSliderThumbValue"],
-        [class*="st-key-cp_rank_esc_anos_"] [data-testid="stSliderThumbValue"],
-        [class*="st-key-cp_prod_esc_meses_"] [data-testid="stSliderThumbValue"],
-        [class*="st-key-cp_prod_esc_anos_"] [data-testid="stSliderThumbValue"],
-        [class*="st-key-cp_sem_esc_meses_"] [data-testid="stSliderThumbValue"],
-        [class*="st-key-cp_sem_esc_anos_"] [data-testid="stSliderThumbValue"],
-        [class*="st-key-cp_vol_esc_meses_"] [data-testid="stSliderThumbValue"],
-        [class*="st-key-cp_vol_esc_anos_"] [data-testid="stSliderThumbValue"] {
-            display: none !important;
-        }
-
-        /* Relevo oculto del arrastre "como Excel" (graficos/base.py::
-           _aplicar_pan_riel). Mismo patrón que `.st-key-pila_go_*`
-           (estilos/_27_pila.py): invisible pero PRESENTE, nunca
-           `display:none` — un widget que no se dibuja no existe para
-           Streamlit. Acotado por PREFIJO (cp_rank_esc_) Y sufijo (_pan):
-           sin el prefijo, un `[class*="_pan"]` suelto también apaga
-           `cp_prov_prods_tab_{_pan_inst}` de esta misma vista y los
-           `{key_prefix}_pan_topn/_pan_rango` de recetas_comun.py — los
-           tres traen "_pan" de casualidad, sin relación con este. */
-        [class*="st-key-cp_rank_esc_"][class*="_pan"],
-        [class*="st-key-cp_prod_esc_"][class*="_pan"],
-        [class*="st-key-cp_sem_esc_"][class*="_pan"],
-        [class*="st-key-cp_vol_esc_"][class*="_pan"] {
-            position: absolute !important;
-            width: 1px !important;
-            height: 1px !important;
-            overflow: hidden !important;
-            opacity: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-
-        /* ── Atajos del Ranking: de TRES píldoras a UN desplegable ──────────
-           2026-08-25, a pedido ("esto ocupa mucho espacio... una lista
-           desplegable minimalista"): mismas palabras y misma receta que ya
-           resolvió `cp_evo_ctrl`/`gran_float` más abajo (2026-08-23) —
-           `st.selectbox` aplanado a TEXTO, sin caja ni sombra, con el
-           chevron como única affordance de "esto despliega".
-
-           2026-08-25, 2da vuelta ("podemos unificar estas dos?"): el
-           desplegable se MUDA de ser un tercer hijo de
-           `cp_rank_fila` a vivir DENTRO del panel de escala
-           (`cp_rank_escala_panel`) — un solo popover para "elegí un
-           atajo" y "afiná a mano", no dos triggers para el mismo dato.
-           2026-08-26, 3ra vuelta ("«Atajos» no significa nada para el
-           usuario"): deja de ser un `st.selectbox` y pasa a ser
-           `st.pills` APLANADO A TEXTO, con los cuatro atajos a la vista
-           separados por "·". El desplegable gastaba 22px en una palabra
-           que no era ninguna de las opciones. Se eligió entre tres
-           mockups; ganó el de texto por ser el más liviano en ALTO, que
-           es el recurso escaso de este panel.
-
-           Vive en el portal de `stPopoverBody`, así que
-           `.st-key-cp_rank_fila button` (la píldora blanca de
-           la fila de afuera) no lo alcanza — igual se resetea todo a
-           mano, para no depender de qué ande suelto por ese lado. */
-        .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"],
-        .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"],
-        .st-key-cp_sem_atajo_sel [data-testid="stButtonGroup"],
-        .st-key-cp_vol_atajo_sel [data-testid="stButtonGroup"] {
-            display: flex !important;
-            flex-wrap: wrap !important;
-            gap: 0 !important;
-            row-gap: 2px !important;
-            width: 100% !important;
-            max-width: none !important;
-        }
-        .st-key-cp_rank_atajo_sel [data-testid="stButtonGroup"] button,
-        .st-key-cp_prod_atajo_sel [data-testid="stButtonGroup"] button,
-        .st-key-cp_sem_atajo_sel [data-testid="stButtonGroup"] button,
-        .st-key-cp_vol_atajo_sel [data-testid="stButtonGroup"] button {
+            /* El ancho lo pone el panel (graficos/panel_fecha.css, regla
+               #616). Hasta el 2026-10-08 iba fijo en 290px, el mínimo útil
+               del riel de la escala de tiempo que el panel reemplazó. */
+            width: auto !important;
             min-width: 0 !important;
-            min-height: 0 !important;
-            height: auto !important;
-            padding: 0 !important;
-            border: none !important;
-            border-radius: 0 !important;
-            background: transparent !important;
-            box-shadow: none !important;
-            color: var(--accent-deep) !important;
-            font-size: 12px !important;
-            font-weight: 400 !important;
-            line-height: 1.5 !important;
-        }
-        /* El separador va en un `::after` y no como elemento propio: con
-           cuatro atajos serian tres nodos mas que Streamlit no sabe
-           dibujar entre las pastillas de un `stButtonGroup`. Y al colgar
-           del boton, si un atajo no aplica (los recorta `atajos_rango`
-           cuando su rango no toca los datos) su separador se va con el:
-           no queda un "·" huerfano al final. */
-        .st-key-cp_rank_atajo_sel
-            [data-testid="stButtonGroup"] button:not(:last-child)::after,
-        .st-key-cp_sem_atajo_sel
-            [data-testid="stButtonGroup"] button:not(:last-child)::after,
-        .st-key-cp_vol_atajo_sel
-            [data-testid="stButtonGroup"] button:not(:last-child)::after {
-            content: "·";
-            color: var(--text-muted);
-            padding: 0 7px;
-            font-weight: 400;
-        }
-        .st-key-cp_rank_atajo_sel
-            [data-testid="stButtonGroup"] button:hover,
-        .st-key-cp_sem_atajo_sel
-            [data-testid="stButtonGroup"] button:hover,
-        .st-key-cp_vol_atajo_sel
-            [data-testid="stButtonGroup"] button:hover {
-            text-decoration: underline !important;
-        }
-        /* Es un MENU DE ACCIONES: el callback devuelve la seleccion a
-           `None` en la misma corrida, asi que nada deberia quedar marcado.
-           Este reset cubre el parpadeo entre el clic y el rerun -- sin el,
-           el atajo apretado se pinta un instante como pastilla activa y el
-           texto salta. */
-        .st-key-cp_rank_atajo_sel
-            [data-testid="stButtonGroup"] button[aria-checked="true"],
-        .st-key-cp_rank_atajo_sel
-            [data-testid="stButtonGroup"] button[aria-pressed="true"],
-        .st-key-cp_sem_atajo_sel
-            [data-testid="stButtonGroup"] button[aria-checked="true"],
-        .st-key-cp_sem_atajo_sel
-            [data-testid="stButtonGroup"] button[aria-pressed="true"],
-        .st-key-cp_vol_atajo_sel
-            [data-testid="stButtonGroup"] button[aria-checked="true"],
-        .st-key-cp_vol_atajo_sel
-            [data-testid="stButtonGroup"] button[aria-pressed="true"] {
-            background: transparent !important;
-            color: var(--accent-deep) !important;
-        }
-        .st-key-cp_rank_atajo_sel,
-        .st-key-cp_prod_atajo_sel,
-        .st-key-cp_sem_atajo_sel,
-        .st-key-cp_vol_atajo_sel {
-            width: 100% !important;
-            max-width: none !important;
-            margin-bottom: 8px !important;
+            padding: 12px 14px !important;
         }
 
         /* Flechas: mas chicas en X, glifo mas grande. */
@@ -2108,8 +1940,8 @@ CSS = """        <style>
         .cp-pm-fila:hover { background: var(--bg-primary); }
         .cp-pm-fila.foco { background: var(--accent-tint); }
         /* El relevo del clic (`cp_prov_prod_relevo`): invisible pero
-           PRESENTE, como el de `_aplicar_pan_riel` — un widget con
-           `display:none` no existe para Streamlit. */
+           PRESENTE, como los botones `pila_go_` de estilos/_27_pila.py — un
+           widget con `display:none` no existe para Streamlit. */
         .st-key-cp_prov_prod_relevo {
             position: absolute !important;
             width: 1px !important; height: 1px !important;

@@ -21,7 +21,8 @@ import streamlit as st
 from tema import GRIS_TEXTO, TEXTO_PRINCIPAL
 from graficos.base import _resolver
 from graficos.ajuste._comun import (
-    css_filtros_vista, filtro_area_en_titulo, mes_operativo_activo,
+    css_filtros_vista, ctx_meses, filtro_area_en_titulo, mes_operativo_activo,
+    rango_meses, recortar_meses, selector_meses,
 )
 from graficos.ajuste._evolucion import GRANOS, periodos_ajuste
 
@@ -119,17 +120,17 @@ def vista_detalle_ajuste(d, col_fecha, col_familia, col_area, col_ajuste_val,
                          col_producto, col_cantidad):
     """«Detalle por producto»: la tabla pivote en su propia tarjeta, con su
     área y su selector Corte / Mes en la cabecera (sin Semana desde el
-    2026-10-02, regla #585). Misma categoría
-    del rail que Evolución, así que el mismo rango de la franja y la misma
-    Familia del compartimento de arriba."""
+    2026-10-02, regla #585). Elige SUS meses, independientes de los de
+    Evolución, con el panel de Compras en modo «sólo meses» (regla #632); la
+    Familia es la del compartimento de arriba, como la de Evolución."""
     if not col_fecha or col_fecha not in d.columns:
         st.info("Sin columna de fecha: no se puede armar el detalle.")
         return
     st.markdown(f"<style>{css_filtros_vista('ajdet_ctrl_', 'ajdet_corte_')}"
                 "</style>", unsafe_allow_html=True)
     with st.container(border=True, key="ajuste_graf_card_izq_detalle"):
-        c_tit, c_area, c_gran = st.columns(
-            [3, 0.95, 1.1],  # columnas-internas: titulo | area | grano
+        c_tit, c_fecha, c_area, c_gran = st.columns(
+            [2.6, 1.45, 0.95, 1.1],  # columnas-internas: titulo | meses | area | grano
             vertical_alignment="center")
         with c_gran:
             # Una sesión vieja puede traer «Semana» guardada (regla #585).
@@ -141,6 +142,10 @@ def vista_detalle_ajuste(d, col_fecha, col_familia, col_area, col_ajuste_val,
                 help="Una columna por período. «Corte» es cada sesión de "
                      "inventario.",
             ) or "Mes"
+        ctx_m = ctx_meses("det", d[col_fecha])
+        with c_fecha:
+            selector_meses("ajf_det", ctx_m)
+        d = recortar_meses(d, col_fecha, rango_meses(ctx_m))
         d = filtro_area_en_titulo(c_area, d, col_area, col_ajuste_val,
                                   _K_AREA_DETALLE, "ajdet_ctrl_area")
         with c_tit:

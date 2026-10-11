@@ -14,11 +14,14 @@ ultimos 200 commits, 2,7x el siguiente) y sus dos funciones mayores
     _distribucion.py     vista Distribucion
 
 Este __init__ se queda con lo que define el dashboard como tal: la
-config del rail, a que categoria de rango pertenece cada item, y el
-punto de entrada publico renderizar_graficos_ajuste().
+config del rail, su pila y el punto de entrada publico
+renderizar_graficos_ajuste().
 
-La API publica NO cambio: `from graficos.ajuste import
-categoria_rango_ajuste, renderizar_graficos_ajuste` sigue igual.
+Desde el 2026-10-11 (regla #632) Ajuste no tiene fecha en la franja: cada
+vista elige la suya —una sesion de inventario las tres de arriba, meses las
+dos de abajo— y lee el parquet ENTERO. Con eso se fue
+`categoria_rango_ajuste`, que repartia el rango de la franja entre las dos
+categorias del rail, y las dos pilas se hicieron una.
 """
 
 import datetime as _dt
@@ -60,7 +63,7 @@ from graficos.compras import _periodo_serie
 # entran al namespace del paquete y no solo al del modulo que las define.
 from graficos.ajuste._comun import (  # noqa: F401
     CLAVE_MES, FAMILIAS_DE_ENTRADA, MES_OPERATIVO, MES_REGISTRO, _fmt_corte,
-    _layout_aj, mes_operativo_activo,
+    _layout_aj, mes_operativo_activo, recargar_si_cambio_mes,
 )
 from graficos.ajuste._evolucion import (  # noqa: F401
     fig_familias, fig_serie, periodos_ajuste, serie_ajuste,
@@ -103,85 +106,23 @@ _AJUSTE_RAIL_CATEGORIAS = rail_sin_tablas((
 ))
 
 
-# ORDEN DE LAS PILAS — UNA POR CATEGORÍA DE RANGO, y eso no es capricho.
+# LA PILA — UNA SOLA desde el 2026-10-11 (regla #632).
 #
-# El resto de los reportes apila TODAS sus vistas en una página que se lee
-# bajando. Ajuste no puede: cada categoría del rail recuerda su PROPIO rango
-# de fecha (`estado_rango.clave_rango(categoria=...)`, alimentada por
-# `categoria_rango_ajuste` de abajo) porque Cascada/Mapa de calor/
-# Distribución/Tabla se leen acotadas a un período y Evolución necesita
-# varios meses o un año. Antes compartían una sola clave
-# y se pisaban el rango entre sí — apilar las siete juntas sería volver a
-# ESE bug, con la página mostrando a la vez dos vistas que piden rangos
-# distintos y una sola fecha activa para las dos.
-#
-# Así que cada categoría es su propia pila, y saltar de una a la otra sigue
-# siendo una navegación de verdad: cambia el ítem del rail Y la clave del
-# rango, que es exactamente lo que tiene que pasar. Adentro de cada
-# categoría, en cambio, el rango SÍ es el mismo, así que apilar es seguro.
-#
-# `_render_rail` ya dibuja la línea que separa los ítems de la pila activa
-# de los que son destino aparte (nació para Documentos SUNAT en Compras),
-# así que la frontera entre categorías se ve sin agregar nada.
-_PILA_VISUAL = pila_sin_tablas((
+# Hasta ese día eran dos, una por categoría del rail, porque cada categoría
+# recordaba su PROPIO rango de la franja: Cascada/Mapa de calor/Distribución
+# se leían en un período corto y Evolución en un año, y apiladas juntas
+# habrían mostrado dos vistas que piden rangos distintos con una sola fecha
+# activa (#220). Desde que cada vista elige su fecha —una sesión las tres de
+# arriba, meses las dos de abajo— esa razón no existe y Ajuste se lee bajando
+# como los demás reportes. Las categorías del rail quedan como grupos.
+_PILA = pila_sin_tablas((
     ("aj_sec_cascada",      "Cascada"),
     ("aj_sec_heatmap",      "Mapa de calor"),
     ("aj_sec_distribucion", "Distribución"),
+    ("aj_sec_evolucion",    "Evolución"),
+    ("aj_sec_detalle",      "Detalle por producto"),
     ("aj_sec_tabla",        "Tabla"),
 ))
-_PILA_TIEMPO = pila_sin_tablas((
-    ("aj_sec_evolucion",   "Evolución"),
-    ("aj_sec_detalle",     "Detalle por producto"),
-))
-_PILAS = {"visual": _PILA_VISUAL, "tiempo": _PILA_TIEMPO}
-
-
-def categoria_rango_ajuste(graf_id):
-    """A qué categoría de rango de fecha pertenece un item del rail de
-    Ajuste: "tiempo" (Evolución — necesita varios meses o un año para decir
-    algo; abre en los últimos 12, ver `app.py`) o "visual" (Cascada/Mapa de calor/Distribución/
-    Tabla — snapshot de un período, tiene sentido acotado a un mes).
-
-    `app.py` usa esto para decidir qué clave de `session_state` lee/escribe
-    la franja de fecha (`ajuste_rango_aplicado_visual` vs `_tiempo`, ver
-    `estado_rango.clave_rango`) — así cada categoría recuerda su propio
-    rango sin pisar al otro. Única fuente de verdad: `_AJUSTE_RAIL_CATEGORIAS`
-    de arriba; si se agrega un item nuevo al rail, esto no hay que tocarlo."""
-    for cat_nombre, items in _AJUSTE_RAIL_CATEGORIAS:
-        # `item[0]` y no `for oid, _ in items`: desde el 2026-09-19 cada
-        # item lleva un tercer elemento (el ícono del rail en árbol) y el
-        # desempaque de a dos reventaba con ValueError.
-        if cat_nombre == "Tiempo" and any(item[0] == graf_id for item in items):
-            return "tiempo"
-    return "visual"
-
-
-_K_MES_RECARGA = "_ajuste_mes_recarga"
-
-
-def _selector_mes_ajuste():
-    """En qué mes cuenta un cierre (regla #613): el OPERATIVO —el que
-    cierra: lo registrado del 1 al 6 es del mes anterior— o el de la fecha
-    de REGISTRO en el Almacén.
-
-    Cambiarlo cambia el filtro de fecha, que aplica `app.py` fuera del
-    fragment del contenido: un rerun del fragment volvería a dibujar el df
-    viejo. Por eso pide una corrida COMPLETA, después de que el widget
-    quedó registrado (mismo patrón que `ventas._selector_dia_venta`)."""
-    st.markdown('<div class="filtro-rotulo filtro-ajuste_mes">Mes del '
-                'cierre</div>', unsafe_allow_html=True)
-    st.segmented_control(
-        "Mes del cierre", [MES_OPERATIVO, MES_REGISTRO],
-        default=MES_OPERATIVO, required=True, key=CLAVE_MES,
-        label_visibility="collapsed",
-        on_change=lambda: st.session_state.__setitem__(_K_MES_RECARGA, True),
-        help=("**Mes operativo**: el cierre registrado del 1 al 6 cuenta en "
-              "el mes anterior, el que cierra. **Fecha de registro**: en el "
-              "día en que se abrió en el Almacén. Cambia el rango de fechas y "
-              "el «Mes» de Evolución y de la tabla dinámica; los cortes "
-              "siguen con sus días."))
-    if st.session_state.pop(_K_MES_RECARGA, False):
-        st.rerun(scope="app")
 
 
 def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None):
@@ -214,34 +155,17 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         renderizar_graficos_genericos(df_f, nombre_reporte)
         return
 
-    # La pila que se APILA es la de la categoría del ítem activo; la otra
-    # queda como destino aparte (el rail le dibuja la línea divisoria sola).
-    # `categoria_rango_ajuste(None)` devuelve "visual", que es la categoría
-    # por defecto y la misma que asume `app.py` al resolver la clave del
-    # rango — las dos tienen que coincidir o la página mostraría una pila
-    # filtrada por el rango de la otra.
-    _cat = categoria_rango_ajuste(st.session_state.get("ajuste_graf_tipo"))
-    _pila = _PILAS[_cat]
     # El valor de vuelta se ignora: con `secciones` el rail dejó de ELEGIR
     # contenido (la página dibuja la pila entera) y pasó a MARCAR dónde
-    # estás. Quien decide QUÉ se apila es `_cat`, unas líneas arriba.
+    # estás.
     _render_rail(_AJUSTE_RAIL_CATEGORIAS, "ajuste_graf_tipo",
-                 btn_prefix="aj_rail_btn_", secciones=_pila)
+                 btn_prefix="aj_rail_btn_", secciones=_PILA)
 
-    # ¿EL RANGO CON QUE LLEGÓ `df_f` ES EL DE ESTA CATEGORÍA? El rail vive
-    # dentro del fragment de `app.py::_render_contenido`, así que un clic que
-    # cambia de categoría (Cascada → Evolución) re-ejecuta SÓLO el fragment,
-    # y el filtro de fecha —que está afuera— sigue siendo el de la otra: la
-    # Evolución abría con el corte de un día que tenía Cascada, o sea una
-    # barra. Mismo caso para un `?vista=evolucion` en la primera carga: el
-    # rail recién resuelve la vista acá, después de que `app.py` filtró.
-    # Se escala a una corrida completa; los widgets que se pierden en el
-    # corte son los de la pila que se deja, que no se iban a dibujar igual
-    # (#373). Regla #501.
-    _cat_rail = categoria_rango_ajuste(st.session_state.get("ajuste_graf_tipo"))
-    _cat_aplicada = st.session_state.get("_ajuste_cat_rango_aplicada")
-    if _cat_aplicada is not None and _cat_rail != _cat_aplicada:
-        st.rerun(scope="app")
+    # EL PARQUET ENTERO (regla #632). La franja de Ajuste ya no tiene fecha:
+    # cada vista recorta lo suyo. `app.py` ya no filtra el `df_f` de este
+    # reporte por rango, pero `df_full` es el nombre de lo que se quiere.
+    if df_full is None:
+        df_full = df_f
 
     ambito = "actual"
 
@@ -253,7 +177,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # 2025 son -S/ 594k en 138 filas, que con un rango que lo incluya
     # aplastan la serie entera contra el cero. Es un default, no un piso
     # (#501).
-    sembrar_seleccion(df_f, col_familia, "ajuste_graf_filtro_familia",
+    sembrar_seleccion(df_full, col_familia, "ajuste_graf_filtro_familia",
                       list(FAMILIAS_DE_ENTRADA))
     # SÓLO FAMILIA desde el 2026-09-23. El Área se mudó a la fila del título
     # de cada vista de Tiempo, a pedido («añadamos un filtro de áreas, en la
@@ -261,10 +185,12 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # vistas independientes (#504) y un área elegida en una no tiene por qué
     # recortar la otra sin decirlo. Regla #505.
     area_sel, fam_sel = [], []
+    # «Mes del cierre» vivía acá hasta el 2026-10-11: pasó al pie del panel
+    # de meses de cada vista, que es el único lugar donde cambia algo
+    # (`_comun._pie_mes_cierre`, regla #632).
     with compartimento_filtros(contar_filtros("ajuste_graf_filtro_familia")):
-        _, fam_sel = filtro_pills(df_f, col_familia,
+        _, fam_sel = filtro_pills(df_full, col_familia,
                                   "ajuste_graf_filtro_familia", "Familia")
-        _selector_mes_ajuste()
 
     if ambito == "Histórico":
         base = df_full if df_full is not None else df_f
@@ -278,7 +204,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             "El rango de fechas del popover no aplica aquí."
         )
     else:
-        d = df_f
+        d = df_full
 
     # Cascada, Mapa de calor y Distribución NO pasan por estos chips: tienen
     # los suyos. Cascada y Mapa de calor traen la fila entera de tres (corte ·
@@ -289,7 +215,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # sumó al mismo régimen. Se guarda el df de acá, antes de recortar, porque
     # filtrar dos veces dejaría la vista mostrando la intersección de dos
     # compartimentos y sólo uno visible. De los chips de arriba hoy sólo
-    # cuelga Evolución (en la otra pila). Ver arquitectura.md regla #425.
+    # cuelgan Evolución y la tabla dinámica. Ver arquitectura.md regla #425.
     d_sin_chips = d
 
     if area_sel and col_area and col_area in d.columns:
@@ -370,10 +296,14 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             d_sin_chips, col_familia, col_area, col_ajuste_val, col_producto,
             col_codigo=col_codigo, col_cantidad=col_cantidad,
             col_fecha=col_fecha, col_unidad=col_unidad, df_full=df_full)
+        # Con «Por meses», su panel lleva «Mes del cierre»: si cambió, una
+        # corrida completa, después de dibujar la vista entera (regla #632).
+        recargar_si_cambio_mes()
 
     def _dib_evolucion():
         """Evolución dibuja su propia tarjeta (serie + familias), así que no
-        va en `_en_tarjeta`. Recibe `d`: rango de la franja + chips."""
+        va en `_en_tarjeta`. Recibe `d`: el parquet entero con los chips; los
+        meses los elige ella (regla #632)."""
         if _vacio:
             with st.container(border=True, key="ajuste_graf_card_izq_evo_vacio"):
                 st.info("No hay datos para los filtros seleccionados.")
@@ -381,6 +311,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
         vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                                col_ajuste_val, col_valorizado,
                                col_kardex=col_kardex)
+        recargar_si_cambio_mes()
 
     def _dib_detalle():
         """La tabla por producto, con su propio grano (#504). Mismo `d`."""
@@ -390,6 +321,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
             return
         vista_detalle_ajuste(d, col_fecha, col_familia, col_area,
                              col_ajuste_val, col_producto, col_cantidad)
+        recargar_si_cambio_mes()
 
     def _dib_tabla():
         # `df_f` y no `d`: Ajuste no tiene chips propios para la Tabla —
@@ -415,7 +347,7 @@ def renderizar_graficos_ajuste(df_f, nombre_reporte, df_full=None, tabla_cb=None
     # El contenedor con la key va AFUERA del fragment: es el que observan el
     # scrollspy y la precarga, y tiene que sobrevivir a que el fragment de
     # adentro se re-dibuje (mismo bucle que Compras y Receta Base).
-    for _i, (_clave, _vista) in enumerate(_pila):
+    for _i, (_clave, _vista) in enumerate(_PILA):
         with st.container(key=_clave):
             seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
                              activa_de_entrada=(_i == 0))

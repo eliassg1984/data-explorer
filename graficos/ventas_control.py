@@ -440,10 +440,11 @@ def _boton(nombre):
             f'el detalle de {escape(nombre)} →</button></div>')
 
 
-def _rotulos(claves, gran):
+def _rotulos(claves, gran, rango=None):
     if gran == "Día":
         return [_fmt_dia(pd.Timestamp(c)) for c in claves]
-    return [_rotulo_periodo(c, gran)[1] for c in claves]
+    # Con `rango`, una semana cortada se nombra por sus días (regla #619).
+    return [_rotulo_periodo(c, gran, rango)[1] for c in claves]
 
 
 def _celda(r, campo, valor, texto, nota=""):
@@ -814,7 +815,8 @@ def _ventas_control(cortesias=frozenset(), canales=()):
             st.markdown(_html_cab(p, t, b, pico), unsafe_allow_html=True)
 
         claves = sorted(set(p["clave"]))
-        fila = _rotulos(claves, gran)
+        fila = _rotulos(claves, gran, (pd.Timestamp(ini).date(),
+                                       pd.Timestamp(fin).date()))
         foco = ss.get("vt_ctl_foco")
         if foco not in set(claves) or ss.get("vt_ctl_foco_ctx") != (gran, ini,
                                                                     fin):

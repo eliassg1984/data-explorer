@@ -31,6 +31,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import data
 from tema import SERIE_PRINCIPAL, TEXTO_PRINCIPAL, BLANCO
 from utils import _norm, fmt_k
 from graficos.base import (
@@ -490,6 +491,11 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # precio sería incorrecto). Ninguna otra vista de Compras la resuelve, y
     # el demo local no la trae — por eso el drill la trata como opcional.
     col_moneda = _resolver(df_f, ["Tipo_moneda", "Tipo Moneda", "Moneda"])
+    # Las de Documento y Montos de «Compras por período» (reglas #621 y
+    # #624). Sin ellas (el
+    # demo) los controles no filtran nada.
+    col_tipo_doc = _resolver(df_f, ["Tipo_documento", "Tipo documento"])
+    col_igv = _resolver(df_f, ["Valor_igv_compra_mn", "Valor igv compra mn"])
     if not col_fecha:
         for _c in df_f.columns:
             if pd.api.types.is_datetime64_any_dtype(df_f[_c]) or "fecha" in _norm(str(_c)):
@@ -532,8 +538,11 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
     # De entrada, las cuatro familias del negocio (ver _FAMILIAS_DE_ENTRADA).
     sembrar_seleccion(_ops_src, col_fam, "compras_graf_filtro_fam",
                       _FAMILIAS_DE_ENTRADA)
-    with compartimento_filtros(contar_filtros("compras_graf_filtro_fam",
-                                              "compras_graf_filtro_sub")):
+    # Documento y Montos ya no están acá: desde el 2026-10-10 son de la
+    # tarjeta de «Compras por período» (regla #624).
+    _n_filtros = contar_filtros("compras_graf_filtro_fam",
+                                "compras_graf_filtro_sub")
+    with compartimento_filtros(_n_filtros):
         _, fam_sel = filtro_pills(_ops_src, col_fam,
                                   "compras_graf_filtro_fam", "Familia")
         # CASCADA: Subfamilia sólo ofrece las que quedan bajo la Familia
@@ -576,6 +585,8 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         d = d[d[col_subfam].astype(str).isin(sub_sel)]
 
     # El asistente IA tiene que ver ESTO (post-chips), no el df_f de app.py.
+    # Todos los documentos y sin IGV: Documento y Montos son sólo de la
+    # tarjeta de «Compras por período» (regla #624).
     publicar_contexto_ia("Compras", d,
                          {"Familia": fam_sel, "Subfamilia": sub_sel})
 
@@ -587,6 +598,12 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
         d_full = d_full[d_full[col_fam].astype(str).isin(fam_sel)]
     if sub_sel and col_subfam and col_subfam in d_full.columns:
         d_full = d_full[d_full[col_subfam].astype(str).isin(sub_sel)]
+
+    # ── DOCUMENTO Y MONTOS: SÓLO «COMPRAS POR PERÍODO» (regla #624) ───────
+    # Del 2026-10-08 al 10 se aplicaban acá, a TODAS las vistas (regla
+    # #621). Se bajaron a la tarjeta, a pedido, y las demás miden todos los
+    # documentos y sin IGV. Esa tarjeta recibe `col_igv` y `col_tipo_doc` y
+    # hace el filtro y la suma por su cuenta (`semanal.py`).
 
     # ── EL `d` DE CADA SECCIÓN ────────────────────────────────────────────
     # Desde el 2026-09-08 cada sección de la pila tiene su propio rango de
@@ -829,11 +846,26 @@ def renderizar_graficos_compras(df_f, nombre_reporte, df_full=None, tabla_cb=Non
             # arriba). Los datos que se grafican siguen saliendo de `d`.
             # `col_subfam` (2026-09-19) es del filtro de Subfamilia, que se
             # sumó junto con el de Proveedor (este usa `col_prov`).
+            #
+            # `d_nc` (regla #628): lo que las notas de crédito restaron, con
+            # los mismos chips y el mismo rango que `d`. La tarjeta lo filtra
+            # con sus propios filtros y dice cuánto se restó en lo que
+            # muestra — la diferencia con el Resumen de Ingresos del Almacén.
+            _nc = data.notas_restadas_compras()
+            if _nc is not None and not _nc.empty:
+                if fam_sel and col_fam and col_fam in _nc.columns:
+                    _nc = _nc[_nc[col_fam].astype(str).isin(fam_sel)]
+                if sub_sel and col_subfam and col_subfam in _nc.columns:
+                    _nc = _nc[_nc[col_subfam].astype(str).isin(sub_sel)]
+                _nc = recortar_por_tarjeta(
+                    _nc, col_fecha, CATEGORIA_SEC["compras_sec_semanal"])
             _compras_semanal_drill(_d_sec("compras_sec_semanal"),
                                    col_prod, col_fecha, col_cant,
                                    col_punit, col_prov, col_docu,
                                    col_valor, col_fam=col_fam,
-                                   d_full=d_full, col_subfam=col_subfam)
+                                   d_full=d_full, col_subfam=col_subfam,
+                                   col_igv=col_igv, col_tipo_doc=col_tipo_doc,
+                                   col_moneda=col_moneda, d_nc=_nc)
 
     def _dib_tabla():
             # Cierra la página con el detalle: el mismo AgGrid de la vista

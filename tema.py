@@ -224,9 +224,12 @@ SERIE_TRAMOS = ["#5a4ad9", "#9385ec", "#cdc6f7"]
 barra en tramos ordenados por importancia — no para distinguir categorías
 (eso es `PALETA_SERIES`, que son hues distintos).
 
-Lo usa Compras › Semanal en granularidad Día: la barra del día se parte en
-la compra mayor / la 2ª y 3ª / el resto. El orden del color ES el orden del
-dato, así que la rampa va de oscuro (lo que más pesa) a claro.
+Lo usó Compras › «Compras por período» hasta el 2026-10-08: la barra se
+partía en la compra mayor / la 2ª y 3ª / el resto. Desde la regla #620 se
+parte por subfamilia, proveedor o precio —categorías, con `PALETA_SERIES`—
+y la rampa quedó sin consumidor; se deja para la próxima barra que se parta
+por IMPORTANCIA. El orden del color ES el orden del dato, así que la rampa
+va de oscuro (lo que más pesa) a claro.
 
 Los tres están separados a propósito: el medio es el `#9385ec` que ya estaba
 en `PALETA_SERIES`, y los bordes se abren hacia `ACENTO_FUERTE` y hacia el

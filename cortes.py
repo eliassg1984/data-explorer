@@ -46,12 +46,29 @@ meses en español. Ésta nació capitalizada y privada en
 cuando el drill Semanal de Compras pidió la misma cosa. En minúscula, como
 sus vecinas — quien quiera «Sáb» tiene `.capitalize()`."""
 
-DIA_CIERRE_OPERATIVO = 6
+MESES_LARGOS_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio",
+                   "julio", "agosto", "setiembre", "octubre", "noviembre",
+                   "diciembre")
+"""Los mismos meses, enteros: «Del 8 de setiembre al 7 de octubre». Con
+«setiembre» y no «septiembre» para que la abreviatura siga siendo «set».
+Nació con el panel del selector de fecha de las tarjetas (2026-10-08,
+`graficos/panel_fecha.py`, regla #616)."""
+
+DIAS_LARGOS_ES = ("lunes", "martes", "miércoles", "jueves", "viernes",
+                  "sábado", "domingo")
+"""Día de semana entero, indexado por `date.weekday()`. Ver `MESES_LARGOS_ES`."""
+
+DIA_CIERRE_OPERATIVO = 7
 """Hasta qué día del mes un cierre de inventario es del mes ANTERIOR.
 
 El Almacén fecha el cierre el día en que se abre en el sistema, y el de fin
-de mes se abre del 1 al 6 del siguiente: el «cierre de septiembre» lleva
-fecha de octubre. Lo dijo el usuario (2026-10-05). Regla #613."""
+de mes se abre en los primeros días del siguiente: el «cierre de septiembre»
+lleva fecha de octubre. Lo dijo el usuario (2026-10-05). Regla #613.
+
+Era 6 hasta el 2026-10-11, cuando el usuario definió el cierre de mes como
+lo registrado «entre el día 1 hasta el día 7 inclusive» y las dos reglas
+pasaron a ser una (regla #632). En los datos de ese día no cambió ninguna
+cifra: nunca se había registrado un ajuste un día 7."""
 
 
 def fecha_operativa(fechas, dia=DIA_CIERRE_OPERATIVO):
@@ -311,6 +328,113 @@ def cortes_disponibles(fechas, maximo=None):
     if maximo is not None and len(_todos) > maximo:
         _todos = _todos[-maximo:]
     return [dict(c) for c in _todos]
+
+
+# ── LAS SESIONES DE INVENTARIO: cierres de mes y parciales (regla #632) ────
+# Lo que eligen las vistas de Ajuste que miran UNA sesión (Por familia,
+# Familia × Área, Distribución). Parten de las mismas rachas que los cortes
+# y les agregan lo que el usuario definió el 2026-10-11: «el cierre de mes
+# ocurre entre el día 1 hasta el día 7 inclusive, y uno parcial es fuera de
+# esas fechas». De ahí dos cosas que una racha sola no sabe:
+#
+#   · QUÉ ES: una racha que toca del día 1 al 7 es el CIERRE del mes
+#     anterior —el mismo corrimiento que `fecha_operativa`—; las demás son
+#     PARCIALES.
+#   · QUÉ SE JUNTA: los conteos del 1 al 7 de un mismo mes son UN cierre
+#     aunque las rachas los separen. Setiembre 2026 se contó el 1 de
+#     octubre (12 áreas) y Venta interna se recontó el 6: sin juntarlos, el
+#     último «cierre» era el del 6, con un área y dos productos, y la vista
+#     abría ahí.
+#
+# Medido sobre las 60 rachas de nov 2023 a oct 2026: 36 cierres, uno por mes
+# sin huecos ni repetidos, y 22 parciales.
+
+
+def _es_del_cierre(d):
+    return d.day <= DIA_CIERRE_OPERATIVO
+
+
+def _mes_anterior(d):
+    return (d.year, d.month - 1) if d.month > 1 else (d.year - 1, 12)
+
+
+def _etiqueta_dias(rachas):
+    """«1 oct», «1-5 ago», «1 y 6 oct», «29 abr - 1 may y 6 may»: las rachas
+    de una sesión, juntando el mes cuando todas caen en el mismo."""
+    partes = [etiqueta_corte(r[0], r[-1]) for r in rachas]
+    if len(rachas) > 1 and all(r[0].month == r[-1].month == rachas[0][0].month
+                               for r in rachas):
+        mes = MESES_ABR_ES[rachas[0][0].month - 1]
+        partes = [p.rsplit(" ", 1)[0] for p in partes]
+        return " y ".join(partes) + f" {mes}"
+    return " y ".join(partes)
+
+
+@lru_cache(maxsize=32)
+def _sesiones_desde_dias(dias):
+    """Núcleo cacheado de `sesiones_inventario`, con el mismo criterio que
+    `_cortes_desde_dias`: una TUPLA de fechas, hashable."""
+    cierres, sesiones = {}, []
+    for racha in _rachas(list(dias)):
+        del_cierre = [d for d in racha if _es_del_cierre(d)]
+        if del_cierre:
+            mes = _mes_anterior(del_cierre[0])
+            if mes in cierres:
+                cierres[mes].append(racha)
+                continue
+            cierres[mes] = [racha]
+            sesiones.append(("cierre", mes, cierres[mes]))
+        else:
+            sesiones.append(("parcial", (racha[0].year, racha[0].month), [racha]))
+    salida = []
+    for tipo, (y, m), rachas in sesiones:
+        todos = tuple(sorted(d for r in rachas for d in r))
+        ini, fin = todos[0], todos[-1]
+        dias_txt = _etiqueta_dias(rachas)
+        if tipo == "cierre":
+            clave = f"cierre_{y}-{m:02d}"
+            nombre = f"Cierre de {MESES_LARGOS_ES[m - 1]}"
+            corto = f"Cierre {MESES_ABR_ES[m - 1]} {y}"
+        else:
+            clave = f"parcial_{ini.isoformat()}"
+            nombre = f"Parcial · {dias_txt}"
+            corto = f"Parcial {dias_txt} {fin.year}"
+        salida.append({
+            "clave": clave, "tipo": tipo, "mes": (y, m),
+            "nombre": nombre, "corto": corto,
+            "etiqueta": dias_txt, "etiqueta_anio": f"{dias_txt} {fin.year}",
+            "dias": todos, "ini": ini, "fin": fin,
+            "n_dias": len(todos), "juntas": len(rachas),
+        })
+    return tuple(salida)
+
+
+def sesiones_inventario(fechas):
+    """Las sesiones de inventario de `fechas` (Series de pandas), de la más
+    vieja a la más nueva: cada una un dict con `clave` (estable: no depende
+    de cuántas hay antes), `tipo` («cierre» o «parcial»), `mes` (el mes que
+    cierra, o el de la sesión si es parcial), `nombre` («Cierre de
+    setiembre», «Parcial · 15-17 set»), `corto` (el del botón), `etiqueta`
+    / `etiqueta_anio` (sus días: «1 y 6 oct»), `dias`, `ini`, `fin`,
+    `n_dias` y `juntas` (cuántos conteos se juntaron). Lista vacía sin
+    fechas."""
+    if fechas is None or len(fechas) == 0:
+        return []
+    _f = fechas.dropna()
+    if _f.empty:
+        return []
+    _dias = tuple(sorted({_a_date(d) for d in _f.dt.normalize().unique()}))
+    return [dict(s) for s in _sesiones_desde_dias(_dias)]
+
+
+def ultimo_cierre(sesiones):
+    """El último cierre de mes de la lista, o la última sesión si no hay
+    ningún cierre (None sin sesiones). Con él abren las vistas por sesión:
+    lo que se revisa es el cierre, no el recuento suelto que vino después."""
+    for s in reversed(sesiones):
+        if s["tipo"] == "cierre":
+            return s
+    return sesiones[-1] if sesiones else None
 
 
 def corte_contiguo(corte):

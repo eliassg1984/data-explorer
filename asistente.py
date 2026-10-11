@@ -50,6 +50,7 @@ import streamlit as st
 from asistente_datos import (
     HERRAMIENTAS,
     ejecutar_sql,
+    esquema_extras,
     esquema_para_prompt,
     resumen_para_prompt,
 )
@@ -85,7 +86,7 @@ pantalla (rango de fechas y filtros ya aplicados). Su esquema:
 
 Estado actual de la pantalla:
 {resumen}
-
+{extras}
 REGLAS QUE NO SE NEGOCIAN
 1. Los nombres de columna llevan ESPACIOS: enciérralos siempre en comillas \
 dobles en el SQL ("AJUSTE VALORIZADO"). Sin comillas la consulta falla.
@@ -101,6 +102,9 @@ no consultaste, no inventes: consulta.
 5. Si la pregunta es sobre precios de mercado, proveedores o cualquier cosa \
 que NO esté en `datos`, usa buscar_web. Para lo que sí está en `datos`, NO \
 busques en la web.
+6. Para buscar un producto por su nombre usa ILIKE ('%arroz%') y, si salen \
+varios, muéstralos por separado: el nombre del sistema no es el que dice el \
+usuario.
 
 CÓMO INTERPRETAR ESTE NEGOCIO
 · Moneda: soles peruanos (S/).
@@ -144,8 +148,8 @@ def _df_efectivo(reporte: str, df_fallback):
     """
     ctx = st.session_state.get("_ia_contexto") or {}
     if ctx.get("reporte") == reporte and ctx.get("df") is not None:
-        return ctx["df"], ctx.get("filtros") or {}
-    return df_fallback, {}
+        return ctx["df"], ctx.get("filtros") or {}, ctx.get("extras") or {}
+    return df_fallback, {}, {}
 
 
 # ─── Búsqueda web (Tavily) ─────────────────────────────────────────────────
@@ -188,7 +192,8 @@ def _cliente():
     return Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 
-def _despachar(nombre: str, argumentos: dict, df) -> tuple[dict, dict | None]:
+def _despachar(nombre: str, argumentos: dict, df,
+               extras=None) -> tuple[dict, dict | None]:
     """Ejecuta una herramienta. Devuelve (resultado_para_el_modelo, rastro_ui).
 
     El `rastro_ui` es lo que se le muestra al usuario (el SQL ejecutado, las
@@ -197,7 +202,7 @@ def _despachar(nombre: str, argumentos: dict, df) -> tuple[dict, dict | None]:
     """
     if nombre == "consultar_datos":
         sql = argumentos.get("sql", "")
-        res = ejecutar_sql(df, sql)
+        res = ejecutar_sql(df, sql, extras)
         rastro = {"tipo": "sql", "sql": res.get("sql") or sql,
                   "ok": res.get("ok", False),
                   "filas": res.get("filas_devueltas"),
@@ -224,12 +229,14 @@ def _hoy_peru():
     return datetime.datetime.now(ZoneInfo("America/Lima")).date()
 
 
-def _mensajes_base(pregunta: str, df, reporte: str, filtros: dict) -> list[dict]:
+def _mensajes_base(pregunta: str, df, reporte: str, filtros: dict,
+                   extras=None) -> list[dict]:
     hoy = _hoy_peru()
     sistema = _SYSTEM_PROMPT.format(
         hoy=hoy.strftime("%d/%m/%Y"), anio=hoy.year,
         esquema=esquema_para_prompt(df),
         resumen=resumen_para_prompt(df, reporte, filtros),
+        extras=esquema_extras(extras),
     )
     msgs = [{"role": "system", "content": sistema}]
     # Solo role/content del historial: se descartan claves propias de la UI
@@ -241,7 +248,7 @@ def _mensajes_base(pregunta: str, df, reporte: str, filtros: dict) -> list[dict]
 
 
 def _resolver_turno(pregunta: str, df, reporte: str, filtros: dict,
-                    on_paso=None) -> dict:
+                    on_paso=None, extras=None) -> dict:
     """Corre el turno completo: rondas de herramientas + respuesta final.
 
     Devuelve {"texto": str, "rastros": [...]}. No lanza nunca: cualquier
@@ -261,7 +268,7 @@ def _resolver_turno(pregunta: str, df, reporte: str, filtros: dict,
         return {"texto": ("⚠️ Falta la librería `groq` en el servidor "
                           "(`requirements.txt`)."), "rastros": []}
 
-    msgs = _mensajes_base(pregunta, df, reporte, filtros)
+    msgs = _mensajes_base(pregunta, df, reporte, filtros, extras)
     rastros = []
 
     for _ in range(_MAX_RONDAS):
@@ -297,7 +304,8 @@ def _resolver_turno(pregunta: str, df, reporte: str, filtros: dict,
                 args = json.loads(tc.function.arguments or "{}")
             except json.JSONDecodeError:
                 args = {}
-            resultado, rastro = _despachar(tc.function.name, args, df)
+            resultado, rastro = _despachar(tc.function.name, args, df,
+                                           extras)
             if rastro:
                 rastros.append(rastro)
                 if on_paso:
@@ -347,7 +355,7 @@ def _sugerencias(reporte: str) -> list[str]:
         "Movimientos": [
             "¿Qué sub almacén requiere más valorizado?",
             "¿Cuáles son los 10 productos más requeridos?",
-            "¿Qué familia pesa más en los requerimientos?",
+            "¿Cuántos kg de arroz salieron en comida de personal este año, mes a mes?",
         ],
     }
     return por_reporte.get(reporte, [
@@ -398,7 +406,7 @@ def _encolar(pregunta: str) -> None:
 
 # ─── Fragment del asistente ────────────────────────────────────────────────
 @st.fragment
-def _asistente_fragment(reporte: str, df, filtros: dict):
+def _asistente_fragment(reporte: str, df, filtros: dict, extras=None):
     with st.container(key="ai_float_wrap"):
         with st.popover("💬", use_container_width=False):
             # Container keyed: el popover se renderiza en un portal, así que
@@ -464,7 +472,8 @@ def _asistente_fragment(reporte: str, df, filtros: dict):
                                 hueco.caption(texto)
 
                             out = _resolver_turno(pendiente, df, reporte,
-                                                  filtros, on_paso=_aviso)
+                                                  filtros, on_paso=_aviso,
+                                                  extras=extras)
                             hueco.empty()
                             st.markdown(out["texto"])
                             if out["rastros"]:
@@ -510,5 +519,5 @@ def inject_asistente(reporte_activo: str = "", df_contexto=None) -> None:
     """Inyecta el asistente. Llamar al final de app.py (después del contenido:
     los dashboards publican su df post-chips durante su propio render)."""
     _init_estado()
-    df, filtros = _df_efectivo(reporte_activo, df_contexto)
-    _asistente_fragment(reporte_activo, df, filtros)
+    df, filtros, extras = _df_efectivo(reporte_activo, df_contexto)
+    _asistente_fragment(reporte_activo, df, filtros, extras)

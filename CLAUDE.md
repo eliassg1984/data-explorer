@@ -56,7 +56,7 @@ DuckDB y los muestra en tablas AgGrid y dashboards Plotly.
 Antes de pushear, dos comandos (segundos, no minutos):
 
 ```bash
-python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py
+python -m ruff check . && python test_graficos.py && python test_asistente_datos.py && python test_datos.py && python test_definicion_venta.py && python test_docs.py && python test_consumo_recetas.py && python test_definicion_compra.py && python test_costo_ventas.py
 ```
 
 `ruff` usa `ruff.toml`: solo reglas **`F`** (pyflakes) a propósito — las de
@@ -123,6 +123,12 @@ la generada que no cuenta, y con `ast` que `data.cargar` las reste para
 todos y que «Documentos SUNAT» las pida sin restar. La cifra contra el
 Almacén la da `herramientas/cuadrar_compras.py`. Ver `arquitectura.md`
 regla #603.
+
+`test_costo_ventas.py` vigila el COSTO DE VENTAS del reporte «Costos»
+(`costo_ventas.py`): cierres, compras, salidas y ventas de mentira con cada
+caso real —el cierre de setiembre registrado el 1 de octubre, el área que
+cuenta dos veces en el mes, la salida anulada, la cortesía, Eventos aparte—
+y que el reporte esté en el dispatcher. Ver `arquitectura.md` regla #622.
 
 ## El asistente IA no adivina: consulta
 
@@ -424,6 +430,19 @@ tarjeta nace con `flex: 0 1 auto`. Detalle en `arquitectura.md` regla #145,
 que también lista los cuatro ejes distintos que quedan pendientes en el
 resto de `graficos/compras/`.
 
+## Un filtro de lista es un `st.multiselect`
+
+Área, familia, proveedor, producto… en la fila de una tarjeta: nada
+elegido es «todos», unión dentro de un filtro, intersección entre filtros,
+el «Todas las…» va de `placeholder`. Qué queda elegido cuando la lista
+cambia (y un multiselect revienta con un valor fuera de `options`) lo
+decide `graficos/base.py::seleccion_multiple`, antes de dibujar el widget —
+no se reescribe a mano. Lo usan «Compras por período» y las cuatro
+tarjetas «por período» de Movimientos. El CSS del multiselect tiene DOS
+formas (baseweb en la 1.59 local, `react-aria` + `stMultiSelectTagsContainer`
+en la 1.64 de Cloud): van las dos. `segmented_control` para elegir UNA
+forma de ver, `toggle` para sí/no. Reglas #623 y #625.
+
 ## Streamlit — trampas que ya costaron bugs
 
 - **`st.markdown` no ejecuta `<script>`.** Animaciones y DOM se hacen con CSS
@@ -523,9 +542,10 @@ resto de `graficos/compras/`.
   lleva un valor (0, ±∞) que el Styler escribe como «—». Ver
   `arquitectura.md` #529.
 - **`selector_fecha_tarjeta(clave, …)` es dueño de su prefijo**: arma
-  `{clave}_escala`, `{clave}_fila`, `{clave}_atajo_sel`…, así que `clave`
-  no puede ser el prefijo de los widgets de la vista — `"vt_mix"` chocó con
-  el control `vt_mix_escala` y la vista murió con
+  `{clave}_fila`, `{clave}_escala`, `{clave}_escala_panel` y
+  `{clave}_panelf`, así que `clave` no puede ser el prefijo de los widgets
+  de la vista — `"vt_mix"` chocó con el control `vt_mix_escala` y la vista
+  murió con
   `StreamlitDuplicateElementKey`. Ver `arquitectura.md` #527.
   **Y en Ventas `categoria=` no le da un rango propio**: Ventas carga por
   rango, y ahí `clave_rango` devuelve la clave del loader antes de mirar la
@@ -549,7 +569,9 @@ resto de `graficos/compras/`.
 - **Un widget que deja de renderizarse pierde su estado.** Por eso el
   `date_input` de la franja se dibuja en los TRES modos: esconderlo
   borraría la clave del rango del reporte. **Compras ya no lo dibuja
-  arriba** (2026-09-06): sus tarjetas traen el selector. **Ni Documentos
+  arriba** (2026-09-06): sus tarjetas traen el selector. **Ni Movimientos**
+  (2026-10-08): cada vista trae el suyo (regla #617). **Ni Ajuste**
+  (2026-10-11): cada vista elige su sesión o sus meses (regla #632). **Ni Documentos
   SUNAT**, que dibuja el calendario entero DENTRO de su tarjeta — de ahí
   el espejo `{k_rango}__eco`, que es lo que evita que el rango se pierda
   si nadie dibuja el widget. Vive en `estado_rango.restaurar_eco` (dueño
@@ -747,8 +769,11 @@ selector, solo afectaba a su tarjeta». Ver `arquitectura.md` regla #363.
 viven los dos en la cabecera de la tarjeta, y en Volatilidad están los dos
 en la misma fila:
 
-- El **trigger con el rango escrito** (`1 sep – 5 sep 2026`) —
-  `base.py::selector_fecha_tarjeta`. Escribe la clave de SU sección.
+- El **botón con el atajo y sus fechas** («Últimos 30 días · 8 set – 7
+  oct», o las fechas solas si no es un atajo) —
+  `base.py::selector_fecha_tarjeta`. Escribe la clave de SU sección. Abre
+  el panel de `graficos/panel_fecha.py` (ver «El selector de fecha de una
+  tarjeta», más abajo).
 - El **desplegable `Rango / 3m / 12m / 24m / Todo`** — `graficos/periodo.py`.
   Es la ventana relativa de esa tarjeta, y siempre fue por tarjeta.
 
@@ -766,9 +791,11 @@ rango compartido y el bug reaparece en una sola vista. Lo ataja
 **Con qué rango ABRE cada tarjeta es otra cosa.** El default del reporte
 son los últimos 12 meses; una categoría puede pedir otro sumándose a
 `SEC_ABRE_EN_EL_MES` (`graficos/compras/_comun.py`) — hoy Proveedores,
-Producto y Semanal, que abren en un MES CORRIDO hasta el último día con
-compras («11 ago – 10 sep»), no en «lo que va del mes»: a pedido, «como
-mínimo un mes» (Volatilidad sigue en los 12 meses). El mes lo calcula `app.py` y
+Producto y Semanal, que abren en «Últimos 30 días» hasta el último día con
+compras («8 set – 7 oct»), no en «lo que va del mes»: a pedido, «como
+mínimo un mes» (Volatilidad sigue en los 12 meses). Hasta el 2026-10-08
+era el mes corrido («11 ago – 10 sep», 28 a 31 días); pasó a ser el atajo
+para que el botón diga cuál está puesto (regla #616). El rango lo calcula `app.py` y
 lo publica en `rango_default_cat`; quien elige es `base.py::rango_tarjeta`,
 y tiene que ser ahí: esa función la llaman el trigger Y el recorte del
 dispatcher, y el recorte corre PRIMERO. Poner el default en el selector no
@@ -950,7 +977,7 @@ Mes y Año, contra la misma fecha del calendario un año antes. La semana
 ISO da lo mismo casi siempre, pero 2026 tiene 53: en todo 2027 compara
 contra 371 días antes — el Día de la Madre contra un domingo cualquiera.
 Comparativo, Mix › Detalle › «Año pasado» y Por hora lo cuentan igual, y
-`test_graficos.py` los compara día por día de 2025 a 2029. Regla #614.
+`test_graficos.py` los compara día por día de 2025 a 2029. Regla #633.
 
 ## La compra resta las notas de crédito: `definicion_compra.py`
 
@@ -982,10 +1009,53 @@ sirve las compras como antes.
 - **Tocar la regla es subir `definicion_compra.VERSION`** y correr
   `python herramientas/cuadrar_compras.py`, que cuadra proveedor por
   proveedor contra el Almacén.
+- **El Resumen de Ingresos del Almacén NO las resta nunca**: su SQL vive
+  escrito en `Almacen.exe`, no mira `MNOTACREDITO`, y procesar una nota
+  sólo deja la factura con saldo 0. En el mes de una nota, la app y ese
+  reporte no cuadran, y «Compras por período» lo dice en su TABLA, porque
+  una nota es un documento: una columna «Notas de crédito» en «Resumen
+  Total» (sólo si hay alguna) y la nota como documento propio en
+  «Detalle», junto a su factura como se facturó. Sale de
+  `definicion_compra.lineas_restadas`, que trae también las líneas
+  devueltas ENTERAS (las que `data.cargar` borra). Un número de nota se
+  repite entre proveedores: se cruza por número Y proveedor. Regla #628.
 
 Los otros reportes de compras del Almacén y qué cuenta cada uno (los tres de
 «Ingresos» = `compras.parquet` al céntimo; los Rankings, sólo Mercadería y
 por fecha de ingreso; el Registro, sin guías ni planillas), en la regla #603.
+
+**`VALOR_COMPRA` es el NETO, sin IGV** (el IGV viene en
+`VALOR_IGV_COMPRA_MN`), y no es un 18 % parejo: el 22,5 % de lo comprado
+está exonerado (verduras, pescados, frutas) y una guía sin canjear todavía
+no lo lleva. **Documento** (todos / facturas / guías sin canjear) y
+**Montos** (sin / con IGV) son una línea DENTRO de la tarjeta de «Compras
+por período» y mandan sólo sobre ella (2026-10-10, regla #624, a pedido);
+las demás vistas de Compras miden siempre todos los documentos y sin IGV.
+Del 2026-10-08 al 10 estuvieron en «Filtros», para todas (regla #621). Con
+IGV, la tarjeta mide con `_comun.COL_CON_IGV` como `col_valor` y el precio
+unitario sigue neto; su «Precio» se mide siempre sin IGV. Las opciones de
+Familia y Subfamilia salen del histórico SIN el filtro de Documento: elegir
+«Guías» no puede borrar una familia elegida.
+
+## El costo de ventas: el reporte «Costos»
+
+Desde el 2026-10-09. Una vista, «Costo de ventas», por MES OPERATIVO:
+
+    Consumo operativo = inventario inicial + compras − inventario final
+    Consumo carta     = consumo operativo − consumos no vendidos
+                        (bajas + demás notas de salida + cortesías)
+
+El consumo carta se compara con el costo del POS (Paloteo › Comparativo ›
+«(a) Ventas en el rango»); el operativo es el dato de antes. Los nombres son
+los de la planilla del usuario. El inventario es el ÚLTIMO cierre de cada
+área en su mes operativo, valorizado como se contó; desde octubre 2025
+(antes los cierres no cuadran, #612). La cuenta es `costo_ventas.py`; la
+tabla, un `st.components.v2` (`graficos/costos_tabla.js`) que hace en el
+navegador las restas que dependen de lo elegido. Envases no tiene costo del
+POS y Eventos y Venta interna no son la venta: los dos se ajustan en
+pantalla (Eventos se suma a la venta por defecto; Venta interna, no). Por **quincena o semana** el inventario es el del KARDEX al final
+del período (`costo_ventas.inventario_en_momentos`), no lo contado: las
+semanas no suman el mes. Reemplazó a Ventas › «Venta vs Compra». Regla #622.
 
 ## El stock también tiene UNA definición: lo ACTIVO
 
@@ -1020,11 +1090,25 @@ Desde sep 2025 los dos coinciden. `data.cargar` le suma `AJUSTE KARDEX` y
 `ajustekardex` del Sheet) y Ajuste › Evolución lo dibuja punteado. Para la
 merma de esos meses, la del kardex.
 
-**Y el cierre de fin de mes se registra del 1 al 6 del siguiente**: Ajuste
-lo cuenta en su MES OPERATIVO (`cortes.fecha_operativa`), con un selector
-«Mes del cierre» en «Filtros». Mueve el rango de la franja y el «Mes» de
-Evolución y la tabla dinámica; los cortes siguen con sus días de verdad, y
-el df no se toca. Regla #613.
+**Y el cierre de fin de mes se registra del 1 al 7 del siguiente**: Ajuste
+lo cuenta en su MES OPERATIVO (`cortes.fecha_operativa`), con «Mes del
+cierre» al pie del panel de meses de cada vista (en «Filtros» hasta el
+2026-10-11). Mueve los meses de Evolución, la tabla dinámica y Distribución
+«Por meses»; las sesiones siguen con sus días de verdad, y el df no se
+toca. Reglas #613 y #632.
+
+## Una nota de salida tiene DOS fechas
+
+Registro (cuándo se digitó: la «Relación de Notas de Salidas» del Almacén)
+y proceso (cuándo movió el stock: el kardex, la «Relación de Salidas» y
+Stock › Movimientos por Tipo). Septiembre 2026: S/ 6.893 contra 7.703, las
+dos cuadradas al céntimo; difieren las notas que cruzan de mes. Las
+secciones de salidas de Movimientos abren por REGISTRO (a pedido) y se
+cambian en «Filtros» (`graficos/movimientos.py::K_FECHA_SAL`), junto al
+selector que las compara con años anteriores. «Destino de lo que entra»
+usa SIEMPRE la del kardex: si no, sus columnas no cierran. Y se registra
+por lotes —la comida de personal de un mes entero en 27 minutos—, así que
+ninguna de las dos es el día de la merma. Regla #614.
 
 ## El consumo según recetas baja hasta lo que se COMPRA
 
@@ -1069,6 +1153,10 @@ Detalle, trampas y mediciones en `arquitectura.md` regla #558.
 
 ## El eje temporal tiene TRES modos, y un solo dueño
 
+**Hoy ningún reporte los usa** (2026-10-11, regla #632): Ajuste, el único
+con `"cortes"`, pasó a una sesión por vista. La pieza sigue entera en
+`franja_fecha.py` y `estado_rango.py`.
+
 El calendario de la franja tiene tres modos: **Rango** (intervalo),
 **Corte** (el conjunto exacto de días de una sesión de inventario, que no
 tiene por qué ser contiguo) y **Varios** (suma varias sesiones en un
@@ -1081,41 +1169,87 @@ alterna. "Varios" nombra la unidad elegida; el verbo (suma) va en el
 caption de la lista, no en la pastilla. `_fusionar` une N cortes en un estado con la misma forma que uno,
 así el filtro `isin(dias)` no distingue el caso.
 
-Y desde el 2026-08-25 hay una tercera forma de tocar ese MISMO rango: la
-**escala de tiempo** estilo tabla dinámica de Excel — granularidad
-(Días/Meses/Años) + un riel de dos tiradores. Vive en el popover del ícono
-de calendario de la fila de atajos del Ranking de Proveedores. No es un
-filtro paralelo: `estado_rango.escala_periodos/escala_a_rango/
-escala_desde_rango` sólo TRADUCEN el gesto, y la escritura sigue pasando
-por `aplicar_atajo`. El widget reusable es
-`graficos.base.selector_escala()`, así que sumarlo a otra vista es una
-línea. En Días, además, se puede arrastrar la SELECCIÓN entera (sin cambiar
-su ancho) agarrando el tramo coloreado del medio — "como el slider de
-Excel". Sus trampas —el `rerun` que le borra el estado a los widgets del
-fragment, que borrar la clave no resetea un widget, y las dos de puppetear
-un widget ajeno desde JS (un `st.text_input` no confirma con
-`input`/`change`, sólo con un Enter real; y los dos `<input>` de un slider
-de rango no se pueden escribir uno-tras-otro)— están en `arquitectura.md`
-reglas #211 a #213 y #217 a #218.
-
-**El riel se abre por VENTANA, no sobre el histórico entero**
-(2026-08-26). Cada escala mira UN período de la escala de arriba: Días un
-mes (`estado_rango.ventana_mes`), Meses un año (`ventana_ano`), Años una
-década (`ventana_decada`). Con ~970 días —o 44 meses— en 250px no se puede
-elegir una fecha. La ventana se RECORTA a los datos, así que la cabecera
-dice "2023-2026" y no "2020-2029": mismo criterio que `escala_periodos` con
-el año del borde, no prometer períodos vacíos. La cabecera
-`‹ AGO 2026 ›` / `‹ 2026 ›` / `‹ 2023-2026 ›` dice cuál se ve y la cambia;
-en Días la regla de abajo numera los días del mes. Ir a otra
-ventana la SELECCIONA entera: el valor de un slider tiene que caer dentro
-de sus límites, así que una vista sin selección adentro no se puede
-representar. Y si el rango vigente se sale de la ventana, el caption lo
-canta — el riel lo dibuja apoyado en el borde, pero nunca lo reescribe
-solo. Ver reglas #219 y #222.
-
 `aplicar_corte` escribe el corte **y** el rango — el rango lo leen el
 `date_input`, el label del pill y el loader de R2, que no saben qué es un
 corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
+
+## El selector de fecha de una tarjeta: un panel propio
+
+Las tarjetas de Compras, de Ventas y de Movimientos eligen sus fechas con
+un botón propio (`base.py::selector_fecha_tarjeta`), que escribe el rango
+de su sección —o el de la franja, si no tiene categoría—. Desde el
+2026-10-08 abre un **panel propio**, `graficos/panel_fecha.py` + su
+`.js` y su `.css`: la «opción A» que eligió el usuario sobre un mockup.
+Atajos escritos enteros y agrupados (en curso / hacia atrás / completos),
+los años como pestañas y los meses —o, con «Días», un calendario— como
+casilleros: un clic elige un mes y un clic en otro suma los del medio,
+aunque estén en años distintos. Regla #616.
+
+- **Es un `st.components.v2`**: HTML/CSS/JS sin compilar y SIN iframe, con
+  los estilos en un shadow root que hereda las variables de
+  `estilos/_00_base.py`. A Python le llega sólo el trigger `rango`, que
+  `aplicar_atajo` escribe en la clave de siempre: no es un filtro paralelo.
+- **Los atajos los calcula Python** (`estado_rango.atajos_tarjeta`) y
+  cuentan hasta el ÚLTIMO DÍA CON DATOS, no hasta hoy: así la tarjeta abre
+  en un atajo con nombre y el botón lo dice. `app.py` saca de ahí el
+  default de las tarjetas de un mes («Últimos 30 días»); el de 12 meses de
+  Compras ya coincidía con «Últimos 12 meses».
+- **Un aviso por elección**: un mes suelto espera 1,2 s (y se renueva
+  mientras el cursor recorre otros meses) para que un rango recalcule la
+  tarjeta UNA vez y no dos. Al vencer, el mes queda elegido y el clic
+  siguiente empieza de nuevo. Si el panel se cierra con la espera
+  corriendo, avisa al cerrarse.
+- **Ciclo de vida, medido**: se monta al abrir el popover y se desmonta al
+  cerrarlo; abierto, cada corrida le vuelve a llamar la función con los
+  datos nuevos sin rehacer el DOM. El estado del panel vive en su raíz.
+
+Reemplazó a la **escala de tiempo** con línea deslizante de las reglas
+#211-#222: su línea vivía dentro de UN mes o de UN año —no se podía elegir
+un rango que cruzara de mes—, sus atajos se anclaban a hoy y cada tirador
+recalculaba la página entera. Su código —el selector, el riel, sus
+ventanas por escala y su CSS— se borró entero el mismo día (regla #618).
+
+**En Movimientos cada VISTA tiene su fecha** (2026-10-08, regla #617, a
+pedido) y la franja no dibuja calendario, como en Compras. Una categoría
+por sección (`graficos/movimientos.py::CATEGORIA_VISTA`), y tres piezas
+que comparten el MISMO ctx: `ctx_de_vista` (los topes de SU parquet y su
+default: 12 meses las cuatro «por período», 30 días las demás),
+`rango_de_vista` (el recorte) y `fecha_de_vista` (el botón). Los parquets
+llegan enteros y cada sección recorta el suyo dentro de su fragment, así
+que cambiar una fecha recalcula esa vista sola. «Rendimiento» y
+«Proveedor por kg útil» no llevan botón: su fecha es su ventana de
+6/12/18 meses. **Nada en `movimientos.py` lee `_rango_vigente()`**: sería
+el rango de una franja que ya no se ve. Lo vigila
+`test_graficos.py::_pruebas_fecha_por_vista`.
+
+## Ajuste: una fecha por vista, y la unidad es la SESIÓN
+
+Desde el 2026-10-11 (regla #632) la franja de Ajuste no tiene fecha. Las
+tres vistas de arriba (Por familia, Familia × Área, Distribución) eligen una
+**sesión de inventario**; las dos de abajo (Evolución, tabla dinámica),
+**meses**. Lo que ya mordió:
+
+- **Una sesión es un cierre o un parcial** (`cortes.sesiones_inventario`).
+  Cierre de mes = lo registrado del 1 al 7 del mes siguiente —definición
+  del usuario—, y los conteos de esos días SE JUNTAN: setiembre 2026 son el
+  1 y el 6 de octubre. Sin juntarlos, el último «cierre» era un recuento de
+  Venta interna con dos productos, y la vista abría ahí. Las vistas abren
+  en el último CIERRE (`cortes.ultimo_cierre`).
+- **El selector de sesión** (`graficos/ajuste/_comun.py::selector_sesion`)
+  es la píldora de Compras con ‹ › a los costados; cada vista el suyo. Son
+  botones con callback, no widgets con estado: viven en un popover (#467).
+- **Los meses son el panel de Compras**, no una copia:
+  `_comun.py::selector_meses` le pasa `ctx["solo_meses"]` y
+  `ctx["atajos_fn"] = estado_rango.atajos_meses` (meses enteros).
+- **«Mes del cierre» es UN valor para todo el reporte**, al pie de cada
+  panel de meses. Cambiarlo pide una corrida completa DESPUÉS de dibujar la
+  vista (`_comun.py::recargar_si_cambio_mes`, #373) y cada vista conserva
+  su atajo con la otra regla (`_comun.py::_llevar_rango`).
+- **Un rango escrito con una regla de fechas y leído con otra vacía la
+  página.** Es lo que tenía la píldora vieja: el corte escribía 6–6 oct en
+  fechas de registro, «Rango» lo leía por mes operativo, no quedaba
+  ninguna fila y `st.stop()` se llevaba las cinco vistas. Por eso `app.py`
+  ya no filtra el `df_f` de Ajuste (`not es_ajuste`).
 
 ## Plotly — específicos de este proyecto
 
@@ -1160,6 +1294,15 @@ corte. Detalle y trampas en `arquitectura.md` reglas #62 a #65.
   padding: 0 }`, que le gana a una clase sola: el marco de la fila de
   «Por hora» no se veía. Selector largo (`.js-plotly-plot .plotly
   div.mi-clase`). Regla #554.
+- **Un renglón de HTML puesto ENCIMA de una figura va por DEBAJO de
+  ella.** Por encima tapa el hover (las fichas de una leyenda se pintaban
+  sobre su primera línea); sin `z-index` —el fondo de la figura es
+  transparente— el hover lo tapa a él. Pero el `div.svg-container` de
+  Plotly cubre la figura entera y se come los clics: el control que tenga
+  que recibirlos sube solo, con su propio `z-index`, y un `title` en lo de
+  abajo no se ve nunca. Así va el título de «Compras por período» con su
+  selector «Partir por» (`cp_sem_cab_graf`, en
+  `graficos/compras/_css_proveedor.py`). Regla #620.
 
 ## AgGrid — específicos de este proyecto
 
@@ -1366,11 +1509,10 @@ página hacía esperar a la vista pedida detrás de las dos de arriba: saltar
 a «Detalle docs.» tardaba 23 s, contra 2,6 s eligiendo por distancia. Ver
 `arquitectura.md` regla #538.
 
-**Excepción: Ajuste tiene DOS pilas, una por categoría del rail.** Sus
-categorías no son agrupación visual — cada una recuerda su propio rango de
-fecha (`estado_rango.clave_rango(categoria=...)`), porque Cascada quiere un
-mes y Evolución quiere un año. Se apila la categoría activa y la otra queda
-como destino aparte. Ver regla #220.
+**Ajuste tiene UNA pila desde el 2026-10-11** (regla #632). Hasta ese día
+eran dos, una por categoría del rail, porque cada categoría recordaba su
+propio rango de la franja (regla #220): Cascada quería un mes y Evolución
+un año. Desde que cada vista elige su fecha, esa razón no existe.
 
 **Las vistas «Tabla» están OCULTAS hasta nuevo aviso** (2026-09-23, a
 pedido). Las gobierna un interruptor, `graficos/base.py::MOSTRAR_VISTAS_TABLA`,

@@ -99,6 +99,8 @@ MONTOS = (VALOR, "VALOR_IGV_COMPRA_MN", "VALOR_BRUTO_COMPRA_MN")
 moneda del documento) quedan como se emitió la factura."""
 COL_NOTA = "NOTA_CREDITO"
 """Columna NUEVA: la(s) nota(s) que tocaron la línea, separadas por coma."""
+COL_FECHA_NC = "FECHA_NC"
+"""Columna NUEVA de `lineas_restadas`: el día de la nota."""
 COL_VALOR_NC = "VALOR_NC"
 """Columna NUEVA: lo que la nota le restó a `VALOR_COMPRA`, en soles y en
 positivo. Sumada a `VALOR_COMPRA` da la línea tal como se facturó."""
@@ -275,21 +277,16 @@ def _creditos(base, n):
     }, index=base.index)
 
 
-def aplicar_notas(compras, notas):
-    """`compras` con las notas de crédito procesadas restadas de las líneas
-    que corrigen, en la fecha de su factura. Ver el docstring del módulo.
-
-    Devuelve `compras` tal cual (el mismo objeto) si no hay notas que
-    aplicar o si a alguno de los dos le faltan columnas — el demo, o un
-    parquet de notas todavía sin la fila del Sheet. Si aplica, devuelve una
-    copia con dos columnas nuevas (`NOTA_CREDITO`, `VALOR_NC`) y sin las
-    líneas devueltas enteras."""
+def _creditos_de(compras, notas):
+    """`(base, cr, tocadas)` de `_creditos` sobre `compras`, o `None` si no
+    hay nada que aplicar: el demo, un parquet de notas todavía sin la fila
+    del Sheet, o notas que no tocan ninguna línea."""
     if compras is None or compras.empty or any(c not in compras.columns
                                                for c in _COLUMNAS_COMPRAS):
-        return compras
+        return None
     n = notas_validas(notas)
     if n.empty:
-        return compras
+        return None
     base = pd.DataFrame({
         "doc": _texto(compras[DOCUMENTO]),
         "prov": _texto(compras[PROVEEDOR]),
@@ -301,7 +298,23 @@ def aplicar_notas(compras, notas):
     cr = _creditos(base, n)
     tocadas = cr["f_valor"].gt(0) | cr["f_cant"].gt(0)
     if not tocadas.any():
+        return None
+    return base, cr, tocadas
+
+
+def aplicar_notas(compras, notas):
+    """`compras` con las notas de crédito procesadas restadas de las líneas
+    que corrigen, en la fecha de su factura. Ver el docstring del módulo.
+
+    Devuelve `compras` tal cual (el mismo objeto) si no hay notas que
+    aplicar o si a alguno de los dos le faltan columnas — el demo, o un
+    parquet de notas todavía sin la fila del Sheet. Si aplica, devuelve una
+    copia con dos columnas nuevas (`NOTA_CREDITO`, `VALOR_NC`) y sin las
+    líneas devueltas enteras."""
+    calc = _creditos_de(compras, notas)
+    if calc is None:
         return compras
+    base, cr, tocadas = calc
 
     out = compras.copy()
     out[COL_NOTA] = cr["notas"].where(tocadas, "").astype(object)
@@ -316,6 +329,50 @@ def aplicar_notas(compras, notas):
     # céntimos — un precio unitario infinito para Volatilidad y Producto.
     devuelta = cr["f_valor"].ge(_ENTERA) | cr["f_cant"].ge(_ENTERA)
     return out[~devuelta]
+
+
+def lineas_restadas(compras, notas):
+    """LO QUE LAS NOTAS LE RESTARON a cada línea de compra: una fila por
+    línea tocada —también las devueltas enteras, que `aplicar_notas` borra—
+    con las MISMAS columnas que `compras` y los montos (`MONTOS`) y la
+    cantidad reemplazados por la parte restada, más `NOTA_CREDITO` y
+    `FECHA_NC` (el día de la nota).
+
+    Es la otra mitad de `aplicar_notas`: `aplicar_notas(c, n)` más esto dan,
+    sumados, las compras tal como se facturaron — que es lo que suman el
+    Resumen de Ingresos y los otros reportes de ingresos del Almacén, que
+    nunca restan las notas (regla #628). Con las mismas columnas, una vista
+    filtra esto con sus propios filtros (familia, proveedor, documento,
+    fecha de la factura) y dice cuánto se restó en lo que muestra.
+
+    `None` si no hay nada que restar (ver `_creditos_de`)."""
+    calc = _creditos_de(compras, notas)
+    if calc is None:
+        return None
+    base, cr, tocadas = calc
+    out = compras[tocadas].copy()
+    f_val = cr.loc[tocadas, "f_valor"]
+    for col in MONTOS:
+        if col in out.columns:
+            out[col] = _num(out[col]) * f_val
+    out[CANTIDAD] = base.loc[tocadas, "cant"] * cr.loc[tocadas, "f_cant"]
+    out[COL_NOTA] = cr.loc[tocadas, "notas"].astype(object)
+    # La fecha de la NOTA (la primera, si una línea la tocaron dos): las
+    # compras se fechan por su factura, y la nota es otro documento con su
+    # propio día — el que muestra el Detalle de «Compras por período».
+    # Por número Y proveedor: el número se repite entre emisores —la
+    # E001-68 de un proveedor de 2024 le prestaba su fecha a la de otro de
+    # 2026 (medido, regla #143).
+    out[COL_FECHA_NC] = pd.NaT
+    if NC_FECHA in notas.columns:
+        fechas = (pd.Series(
+            pd.to_datetime(notas[NC_FECHA], errors="coerce").to_numpy(),
+            index=_texto(notas[NC_NUMERO]) + "|" + _texto(notas[NC_PROVEEDOR]))
+            .groupby(level=0).min())
+        clave = (out[COL_NOTA].str.split(", ").str[0] + "|"
+                 + base.loc[tocadas, "prov"])
+        out[COL_FECHA_NC] = clave.map(fechas)
+    return out
 
 
 def como_documentos(notas, compras=None):

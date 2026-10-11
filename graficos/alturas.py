@@ -280,6 +280,13 @@ Los 617 de las dos de antes salían con el caption ÚLTIMO, cuyo
 último es la tabla y ese padding se paga — de ahí que la cuenta con tabla
 sume los 16 y la otra no (su último hijo sigue siendo el `st.empty()`)."""
 
+FRANJA_DOC_SEMANAL = 42
+"""Lo que le cuesta a «Compra por período» la línea de Documento y Montos
+(2026-10-10, regla #624), que bajó de «Filtros» a la tarjeta: una fila
+PROPIA debajo de la cabecera, de 26px, más el gap de Streamlit. Como las
+otras franjas de esta tarjeta, la paga la FIGURA en los dos estados: la
+tarjeta sigue midiendo lo que la de «Vs año pasado» (617)."""
+
 VENTAS_RESUMEN_TABLA = 34 + 8 * 27
 """Alto de las grillas de abajo de Ventas › Resumen ejecutivo (Resumen y las
 dos del Detalle): SIETE filas visibles, a pedido (2026-09-24: «las tablas de
@@ -320,7 +327,7 @@ abajo (`VENTAS_MIX_TABLA`)."""
 
 VENTAS_COMP_FIG = 296
 """Alto de la figura de Ventas › Comparativo vs Año Pasado (2026-10-05,
-regla #614). Era 340, literal en el `.py`. La fila del TOTAL de la ventana
+regla #633). Era 340, literal en el `.py`. La fila del TOTAL de la ventana
 que entró arriba del gráfico mide 28 + 16 de separación, y esos 44 los paga
 la figura para que la tarjeta no crezca. El área de trazo igual CRECE 21px
 con etiquetas (232 en Día medido a 1440): el legend de Plotly —que la fila
@@ -396,6 +403,39 @@ qué cambió el stock» y el TOPE de la tabla de al lado —y de la de «Por
 área»—, que se desliza por dentro. Con la fila de filtros (40), el título
 y el aviso de ventas sin costo, la tarjeta entra en los ~575px de la
 pantalla del usuario (regla #574)."""
+
+DESTINO_TABLA = 27 * 6 + 38
+"""Tope de la tabla de Movimientos › «A dónde fue lo que entró» (2026-10-08,
+regla #614): seis filas de 27 más la cabecera. El producto elegido se abre
+DEBAJO —su gráfico (`DESTINO_FIG`) y el % de baja mes a mes—, y las dos
+cosas entran en la pantalla del usuario (~575px de tarjeta, regla #574); lo
+que no entra se desliza dentro de la tabla."""
+
+DESTINO_FIG = 140
+"""El gráfico mes a mes del producto elegido en «A dónde fue lo que entró»
+(regla #614): lo que entró, lo vendido y lo dado de baja."""
+
+# ── Movimientos › las tres vistas de merma (2026-10-08, regla #615) ─────
+# Cada tarjeta entra en la pantalla del usuario (~575px, regla #574); lo
+# que no entra se desliza dentro de su tabla.
+MERMA_TABLA = 27 * 9 + 38
+"""Tope de la lista de «Para revisar»: nueve filas de 27 y la cabecera."""
+
+MERMA_CORTES = 27 * 6 + 38
+"""Tope de los cortes del porcionamiento elegido, en la ficha de al lado."""
+
+MERMA_FIG = 190
+"""«Rendimiento por producto»: el % de merma de cada porcionamiento."""
+
+MERMA_FIG_PRECIO = 150
+"""«Rendimiento por producto»: el costo del día por unidad, debajo."""
+
+MERMA_CAMBIOS = 27 * 10 + 38
+"""Tope de «Productos que cambiaron», al lado de los dos gráficos
+(`MERMA_FIG` + `MERMA_FIG_PRECIO` ≈ 340)."""
+
+MERMA_PROV = 27 * 10 + 38
+"""Tope de las dos tablas de «Proveedor por kg útil»."""
 
 RB_COSTO_TABLA = 27 * 9 + 38
 """Tope de la tabla de Recetas › Costo recetas base (2026-09-30, regla

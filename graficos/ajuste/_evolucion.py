@@ -54,15 +54,15 @@ import streamlit as st
 
 from tema import (
     AJUSTE_ALERTA_TEXTO, AJUSTE_NEG, AJUSTE_NEG_TEXTO, AJUSTE_POS,
-    AJUSTE_POS_TEXTO, BLANCO, GRIS_BORDE, GRIS_TEXTO, GRIS_TEXTO_SUAVE,
-    LAVANDA_SELECCION, TEXTO_PRINCIPAL,
+    AJUSTE_POS_TEXTO, BLANCO, GRIS_BORDE, GRIS_LINEA, GRIS_TEXTO,
+    GRIS_TEXTO_SUAVE, LAVANDA_SELECCION, TEXTO_PRINCIPAL,
 )
 from graficos.base import publicar_contexto_ia
 from graficos import alturas
 from graficos.ajuste._comun import (
     FAMILIAS_DE_ENTRADA, _MESES_ABR_ES, _layout_aj, _periodo_pivote_ajuste,
-    css_filtros_vista, fechas_del_mes, filtro_area_en_titulo,
-    mes_operativo_activo,
+    css_filtros_vista, ctx_meses, fechas_del_mes, filtro_area_en_titulo,
+    mes_operativo_activo, rango_meses, recortar_meses, selector_meses,
 )
 from utils import fmt_k
 
@@ -90,6 +90,12 @@ _MAX_ROTULOS = 16
 
 # Opacidad de los periodos que NO estan en foco.
 _APAGADO = 0.3
+
+# Redondeo de la PUNTA de las barras (regla #631). En `barmode="relative"`
+# Plotly redondea el extremo de afuera de cada pila, no la base: el verde
+# por arriba y el rojo por abajo, y el cero queda recto.
+_RADIO_SERIE = 5
+_RADIO_PANEL = 3
 
 # Desde cuántos soles el neto según el kardex «difiere» del del cierre: por
 # debajo es redondeo del precio promedio (regla #612).
@@ -215,11 +221,12 @@ def serie_ajuste(d, orden, col_ajuste_val, col_valorizado=None, col_grupo=None,
     return s[base + (["grupo"] if col_grupo else []) + medidas]
 
 
-def _fmt(v):
-    """Rotulo compacto del neto: «S/ -11.2k»."""
+def _fmt(v, signo=False):
+    """Rotulo compacto del neto: «S/ -11.2k» (con `signo`, «S/ +5.5k»)."""
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return ""
-    return fmt_k(v)
+    txt = fmt_k(v)
+    return txt.replace("S/ ", "S/ +", 1) if signo and v > 0 else txt
 
 
 def con_kardex(s):
@@ -264,12 +271,13 @@ def _texto_kardex(neto, kx):
     return f"S/ {kx:,.0f} · difiere en S/ {kx - neto:,.0f}"
 
 
-def _trazas(s, foco, leyenda=True, rotulos=True):
+def _trazas(s, foco, leyenda=True):
     """Las trazas de una serie: dos barras, la linea del neto y, si la serie
     lo trae, la del neto según el kardex (regla #612).
 
     Las comparten la serie grande y cada mini-grafico, asi los dos dicen lo
-    mismo con la misma forma. `foco` apaga los otros periodos.
+    mismo con la misma forma. `foco` apaga los otros periodos. Los rotulos
+    del neto NO van aca: son anotaciones de `fig_serie` (regla #631).
 
     LA DEL KARDEX VA ABAJO DE LA DEL NETO, punteada y un poco más fina:
     donde los dos coinciden —todo desde sep 2025— la tapa la línea del neto
@@ -294,7 +302,6 @@ def _trazas(s, foco, leyenda=True, rotulos=True):
         hovertemplate=f"Faltante: {fmt_hover}<extra></extra>",
     )
     neto_y = s["neto"]
-    con_texto = rotulos and len(s) <= _MAX_ROTULOS
     # Contado en el hover del neto: cuanto valor se conto para producir
     # ese ajuste. Contexto, no denominador (ver el docstring del modulo).
     datos = [[c] for c in s["contado"]]
@@ -306,12 +313,11 @@ def _trazas(s, foco, leyenda=True, rotulos=True):
         hover += "<br>Kardex: %{customdata[1]}"
     neto = go.Scatter(
         x=s["eje"], y=neto_y, name="Neto",
-        mode="lines+markers+text" if con_texto else "lines+markers",
-        text=[_fmt(v) for v in neto_y] if con_texto else None,
-        textposition="top center",
-        textfont=dict(size=10, color=TEXTO_PRINCIPAL),
-        line=dict(color=TEXTO_PRINCIPAL, width=1.6),
-        marker=dict(size=5, color=TEXTO_PRINCIPAL, opacity=opac),
+        mode="lines+markers",
+        line=dict(color=TEXTO_PRINCIPAL, width=1.3),
+        # El aro blanco despega el punto de la barra que tiene detrás.
+        marker=dict(size=7, color=TEXTO_PRINCIPAL, opacity=opac,
+                    line=dict(color=BLANCO, width=1.5)),
         connectgaps=False,
         showlegend=leyenda, legendgroup="neto",
         customdata=datos,
@@ -361,6 +367,60 @@ _ROTULOS_PANEL = 4
 PX_PANEL = 400
 
 
+def _rotulos_neto(fig, s, foco):
+    """El neto de cada periodo, en una pastilla blanca pegada a su punto.
+
+    Hasta el 2026-10-02 era el `text` de la traza, negro y encima de la
+    barra: «S/ -20.3k» se leia mal sobre el rojo y se pisaba con el borde
+    (regla #631). Una anotacion trae fondo y borde; el color dice el signo,
+    y va ARRIBA del punto si el neto es positivo y ABAJO si es negativo,
+    hacia afuera de la linea. Con mas de `_MAX_ROTULOS` periodos se pisan
+    entre si y no se dibujan: el valor queda en el hover."""
+    if len(s) > _MAX_ROTULOS:
+        return
+    for eje, clave, v in zip(s["eje"], s["_clave"], s["neto"]):
+        if pd.isna(v):
+            continue
+        fig.add_annotation(
+            x=eje, y=v, text=_fmt(v, signo=True), showarrow=False,
+            yshift=14 if v >= 0 else -14,
+            font=dict(size=10, color=AJUSTE_POS_TEXTO if v >= 0
+                      else AJUSTE_NEG_TEXTO),
+            bgcolor=BLANCO, bordercolor=GRIS_BORDE, borderwidth=1,
+            borderpad=2,
+            opacity=1.0 if foco is None or clave == foco else _APAGADO,
+        )
+
+
+def periodo_mas_movido(s):
+    """El periodo con mas ajuste BRUTO (sobrante − faltante), o None.
+
+    Es el que el neto esconde: set 26 dio +S/ 5.5k de neto sobre ~S/ 200k
+    movidos. Con menos de tres periodos no hay contra qué destacarlo."""
+    bruto = s["sobrante"].fillna(0) - s["faltante"].fillna(0)
+    if len(s) < 3 or not (bruto > 0).any():
+        return None
+    i = int(bruto.to_numpy().argmax())
+    return {"i": i, "eje": s["eje"].iloc[i], "bruto": float(bruto.iloc[i])}
+
+
+def _marca_mas_movido(fig, s):
+    """Banda gris detrás del periodo más movido y su rótulo arriba, en el
+    margen de la figura (regla #631). Gris y no lavanda: el lavanda es el
+    color de la SELECCIÓN (la fila en foco de la tabla), y esto no lo es."""
+    m = periodo_mas_movido(s)
+    if m is None:
+        return
+    # En un eje de categorías la posición i es la categoría i.
+    fig.add_vrect(x0=m["i"] - 0.45, x1=m["i"] + 0.45, fillcolor=GRIS_LINEA,
+                  line_width=0, layer="below")
+    fig.add_annotation(
+        x=m["eje"], y=1, yref="paper", yanchor="bottom", showarrow=False,
+        text=f"más movido · <b>{fmt_k(m['bruto'])}</b>",
+        font=dict(size=10, color=GRIS_TEXTO),
+    )
+
+
 def fig_serie(s, foco=None, alto=alturas.APOYO):
     """La serie grande: barras divergentes + neto, en eje de CATEGORIAS.
 
@@ -371,6 +431,7 @@ def fig_serie(s, foco=None, alto=alturas.APOYO):
     fig.update_layout(**_layout_aj(
         barmode="relative",
         bargap=0.35,
+        barcornerradius=_RADIO_SERIE,
         hovermode="x unified",
         height=alto,
         # Sin leyenda: la dice la fila del título (`_leyenda_html`), que ya
@@ -384,6 +445,8 @@ def fig_serie(s, foco=None, alto=alturas.APOYO):
     _marcas = _marcas_eje(s["eje"], _ROTULOS_SERIE)
     fig.update_xaxes(tickmode="array", tickvals=_marcas, ticktext=_marcas)
     fig.add_hline(y=0, line_color=GRIS_TEXTO, line_width=1)
+    _marca_mas_movido(fig, s)
+    _rotulos_neto(fig, s, foco)
     return fig
 
 
@@ -443,12 +506,13 @@ def fig_familias(sf, foco=None):
                         horizontal_spacing=min(0.2, 44 / (n * PX_PANEL)))
     for i, g in enumerate(grupos):
         sg = sf[sf["grupo"] == g]
-        for t in _trazas(sg, foco, leyenda=False, rotulos=False):
+        for t in _trazas(sg, foco, leyenda=False):
             fig.add_trace(t, row=1, col=i + 1)
 
     fig.update_layout(**_layout_aj(
         barmode="relative",
         bargap=0.3,
+        barcornerradius=_RADIO_PANEL,
         hovermode="x unified",
         showlegend=False,
         height=alto_multiplos(),
@@ -629,6 +693,27 @@ def _leyenda_html(kardex=False):
             + (_item(_puntos, "Kardex", AYUDA_KARDEX) if kardex else ""))
 
 
+def kpis_rango_html(s):
+    """Los totales del rango —sobrante, faltante y neto— en UNA línea, para
+    ir debajo del título (regla #631). Hasta el 2026-10-02 el total del
+    rango no salía en ninguna parte de la tarjeta, salvo al pie de la tabla.
+
+    Va en la columna del título y no en una fila propia: esa fila la manda
+    el selector Corte | Mes, que mide lo que dos renglones de texto, así
+    que la línea no empuja la serie ni los mini-gráficos hacia abajo (la
+    tarjeta tiene que entrar en la laptop, regla #505)."""
+    def _item(nombre, v, color):
+        return (f"<span>{nombre} <b style='color:{color};font-weight:600'>"
+                f"{_fmt(v, signo=True) or '—'}</b></span>")
+    tot = {c: float(s[c].sum()) for c in ("sobrante", "faltante", "neto")}
+    return ("<div class='ajevo-kpis' title='Total del rango de fechas y del "
+            "área elegidos'>"
+            + _item("Sobrante", tot["sobrante"], AJUSTE_POS_TEXTO)
+            + _item("Faltante", tot["faltante"], AJUSTE_NEG_TEXTO)
+            + _item("Neto", tot["neto"], TEXTO_PRINCIPAL)
+            + "</div>")
+
+
 def _soltar_foco():
     """Callback de la pastilla «jul 26 ✕»: suelta el periodo en foco.
 
@@ -658,8 +743,9 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
     desliza de costado. Medía 840px; ahora cabe en el `--alto-util` de
     1366x768.
 
-    `d` ya viene recortado por el rango de la franja y por la Familia del
-    compartimento de arriba de la pila. El Área la filtra la propia vista.
+    `d` llega ENTERO, con la Familia del compartimento de arriba de la pila:
+    los meses los elige la propia vista, con el panel de Compras en modo
+    «sólo meses» (regla #632), y el Área también.
 
     `col_kardex` es el ajuste valorizado que registró el kardex por cada
     línea (`kardex.COL_VALOR_KX`); sin él —falta `ajustekardex.parquet`— la
@@ -680,8 +766,11 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         # orden de ejecucion es el orden en que se leen los valores. Las
         # columnas se crean aca y la pastilla se llena mas abajo, cuando ya
         # se sabe si hay foco.
-        c_tit, c_area, c_foco, c_gran = st.columns(
-            [2.5, 0.95, 0.75, 1.1],  # columnas-internas: titulo | area | foco | grano
+        # El Área va pegada al grano, a la derecha: los dos son filtros de
+        # la tarjeta. Al medio se leía suelta (regla #631).
+        c_tit, c_foco, c_fecha, c_area, c_gran = st.columns(
+            # columnas-internas: titulo | foco | meses | area | grano
+            [3.0, 0.7, 1.45, 0.95, 1.1],
             vertical_alignment="center")
         with c_gran:
             # Una sesión vieja puede traer «Semana» guardada (regla #585):
@@ -694,6 +783,12 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
                 help="Agrupa la serie y los mini-gráficos por familia. "
                      "«Corte» es cada sesión de inventario.",
             ) or "Mes"
+        # LOS MESES DE ESTA VISTA (regla #632): su botón, y el recorte antes
+        # que el Área, que ofrece las áreas que movieron algo en el rango.
+        ctx_m = ctx_meses("evo", d[col_fecha])
+        with c_fecha:
+            selector_meses("ajf_evo", ctx_m)
+        d = recortar_meses(d, col_fecha, rango_meses(ctx_m))
         d = filtro_area_en_titulo(c_area, d, col_area, col_ajuste_val,
                                   _K_AREA, "ajevo_ctrl_area")
         # El asistente IA tiene que ver lo que ESTA tarjeta muestra (CLAUDE.md
@@ -730,11 +825,14 @@ def vista_evolucion_ajuste(d, col_fecha, col_familia, col_area,
         s = serie_ajuste(dp, orden, col_ajuste_val, col_valorizado,
                          col_kardex=col_kardex)
         with c_tit:
+            # Título y totales en UN `st.markdown`: dos se cobrarían el gap
+            # de 16px de Streamlit entre ellos.
             st.markdown(
                 f"<div style='font-size:14px;font-weight:600;"
                 f"color:{TEXTO_PRINCIPAL};line-height:1.3;white-space:nowrap' "
                 f"title='Clic en una barra para resaltar ese período'>"
-                f"Sobrante, faltante y neto{_leyenda_html(con_kardex(s))}</div>",
+                f"Sobrante, faltante y neto{_leyenda_html(con_kardex(s))}</div>"
+                + kpis_rango_html(s),
                 unsafe_allow_html=True)
         if foco is not None:
             with c_foco:

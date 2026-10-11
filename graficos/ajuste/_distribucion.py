@@ -50,8 +50,44 @@ from tablas.ajuste_familias import renderizar_desglose_ajuste
 # única — "alimentos, bebidas, vinos y embalajes"), para que las tres vistas
 # del bloque Visual abran con el mismo recorte de familias.
 from graficos.ajuste._comun import (
-    FAMILIAS_DE_ENTRADA, css_filtros_vista, _fmt_corte, _layout_aj,
+    FAMILIAS_DE_ENTRADA, css_filtros_vista, ctx_meses, _fmt_corte, _layout_aj,
+    rango_meses, recortar_meses, selector_meses, selector_sesion, sesiones_de,
+    sesiones_elegidas,
 )
+
+# ── QUÉ MIRA LA VISTA (2026-10-11, regla #632) ─────────────────────────────
+# A pedido: «por sesión, con la opción de ver por meses, y si se puede, por
+# varios cortes o meses». Una sesión (con ‹ ›), varias sumadas («Varias», lo
+# que antes era «Varios» en la franja) o un rango de meses con el panel de
+# Compras. Elige SU período, como Por familia y Familia × Área: la fecha de la
+# franja ya no existe en Ajuste.
+_POR = ("Por sesión", "Por meses")
+_K_POR = "ajdist_por"
+_K_SES = "ajdist_corte"
+_K_VARIAS = "ajdist_varias"
+_K_MULTI = "ajdist_multi"
+
+
+def _periodo_distribucion(df, df_full, col_fecha):
+    """`(d, por, ctx_m, sesiones)`: las filas del período elegido, sacadas del
+    parquet ENTERO. Sin `df_full` (o sin fecha) devuelve `df` tal cual."""
+    por = st.session_state.get(_K_POR)
+    if por not in _POR:
+        por = _POR[0]
+    if df_full is None or not col_fecha or col_fecha not in df_full.columns:
+        return df, por, None, []
+    if por == "Por meses":
+        # Abre en el último mes: es una distribución de productos, y doce
+        # meses son ~100.000 líneas en un solo gráfico.
+        ctx_m = ctx_meses("dist", df_full[col_fecha], defecto="mes_ult")
+        return recortar_meses(df_full, col_fecha, rango_meses(ctx_m)), por, ctx_m, []
+    sesiones = sesiones_de(df_full, col_fecha)
+    elegidas = sesiones_elegidas(_K_SES, sesiones, _K_VARIAS, _K_MULTI)
+    if not elegidas:
+        return df_full.iloc[0:0], por, None, sesiones
+    dias = {pd.Timestamp(x) for ses in elegidas for x in ses["dias"]}
+    f = pd.to_datetime(df_full[col_fecha], errors="coerce").dt.normalize()
+    return df_full[f.isin(dias)], por, None, sesiones
 
 
 # Alto de la figura, más largo que el default (APOYO=380) a pedido
@@ -375,6 +411,12 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     # minimalista de Cascada/Mapa (`css_filtros_vista`), así que el rótulo ES
     # el valor vigente. El título vive en esta fila —los gráficos ya no llevan
     # `title=`— y la figura de abajo gana alto (`_ALTO_FIG`).
+    #
+    # El PERÍODO va en su propia fila, arriba de esa (regla #632): «Por
+    # sesión» / «Por meses» y, al lado, la sesión con ‹ › (o «Varias») o el
+    # botón de meses. Se resuelve ANTES que todo, desde el parquet entero: el
+    # `df` que llega ya no lo recorta nadie.
+    df, _por, _ctx_m, _sesiones = _periodo_distribucion(df, df_full, col_fecha)
     # Estado de AMPLIAR: sube el alto de la figura a `alturas.AMPLIADO`, que
     # supera una pantalla a propósito (ver `alturas`, regla #494). Sin card
     # envolvente que la clampee, la tarjeta crece y la página scrollea.
@@ -449,6 +491,16 @@ def _graf_distribucion_ajuste(df, col_familia, col_area, col_ajuste_val, col_pro
     _es_pareto = False
 
     with _col_g, st.container(border=True, key="ajdist_card_grafico"):
+        with st.container(key="ajdist_periodo", horizontal=True, gap="small",
+                          vertical_alignment="center"):
+            st.segmented_control("Distribución por", _POR, default=_POR[0],
+                                 required=True, key=_K_POR,
+                                 label_visibility="collapsed")
+            if _por == "Por meses":
+                selector_meses("ajf_dist", _ctx_m)
+            elif _sesiones:
+                selector_sesion("ajses_dist", _K_SES, _sesiones,
+                                k_varias=_K_VARIAS, k_multi=_K_MULTI)
         # FILA DE ENCABEZADO, adentro de la tarjeta: título · modo · familia ·
         # Ampliar, en una línea. El modo es un `st.selectbox`; la familia, un
         # `st.popover` con las pills adentro; los dos con el trigger minimalista

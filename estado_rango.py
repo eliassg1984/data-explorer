@@ -60,13 +60,12 @@ def clave_rango(reporte, usa_carga_rango, categoria=None):
 
     - carga_por_rango → misma clave que el loader R2 (`rango_carga_*`), así
       el date-picker controla directamente qué se descarga.
-    - `categoria` → una clave POR CATEGORÍA de gráfico. La usan DOS
-      reportes, y por motivos distintos:
-        · Ajuste de Inventario, con "visual" o "tiempo" (ver
-          graficos.ajuste.categoria_rango_ajuste): Cascada/Mapa de calor/
-          Distribución/Tabla funcionan mejor acotados a un período,
-          mientras Evolución/Comparativa necesitan varios meses o un año —
-          antes compartían una sola clave y se pisaban el rango entre sí.
+    - `categoria` → una clave POR CATEGORÍA de gráfico, o sea POR TARJETA:
+        · Ajuste de Inventario, una por vista de meses y por regla del mes
+          del cierre (`evo_op`, `det_reg`…, ver
+          graficos.ajuste._comun.ctx_meses, regla #632). Hasta el
+          2026-10-11 eran dos categorías del rail, "visual" y "tiempo", que
+          partían el rango de la franja.
         · Compras, con una categoría por SECCIÓN de su pila (ver
           graficos.compras.CATEGORIA_SEC): ahí la categoría no agrupa
           gráficos parecidos, separa TARJETAS. Cada una trae su propio
@@ -246,218 +245,139 @@ def atajos_rango(hoy, bounds):
 
 
 # ===========================================================================
-# ESCALA — el mismo rango, elegido como PERÍODOS en vez de como dos fechas
+# LOS ATAJOS DEL SELECTOR DE FECHA DE UNA TARJETA (2026-10-08, regla #616)
 # ===========================================================================
-# 2026-08-25, a pedido ("el selector de rango de una tabla dinámica de
-# Excel... en realidad me interesaba por los días"). La Escala de tiempo de
-# Excel es un riel de períodos con DOS tiradores y un selector de
-# granularidad arriba (AÑOS / TRIMESTRES / MESES / DÍAS). No es un
-# calendario: no dibuja la grilla del mes ni deja saltar a un día suelto, y
-# por eso es barato — es un slider sobre una lista.
+# Los del panel de `graficos/panel_fecha.py`, la «opción A» que eligió el
+# usuario sobre un mockup: escritos enteros y agrupados por lo que significan.
+# Se distinguen de `atajos_rango` (los de la píldora de la franja) en el ANCLA:
+# cuentan hasta el ÚLTIMO DÍA CON DATOS, no hasta hoy. Con el ancla en hoy,
+# «Últimos 30 días» daba del 9 set al 7 oct (29 días de datos) y la tarjeta
+# abría en «8 sep – 7 oct», que no era ningún atajo: nada podía decir cuál
+# estaba puesto. Con este ancla, la tarjeta ABRE en un atajo con nombre — las
+# de un mes en «Últimos 30 días» y el reporte de Compras en «Últimos 12
+# meses» (`app.py` toma los dos de acá).
 #
-# Estas tres funciones son la TRADUCCIÓN entre ese gesto y la clave canónica
-# del rango; ninguna escribe nada. La escritura sigue pasando por
-# `aplicar_atajo`, que es el dueño único (ver la "Regla de oro" del módulo).
-# Son puras y las fija `test_graficos.py`.
-#
-# Viven acá y no en `graficos/periodo.py` aunque el nombre tiente: `periodo`
-# es la ventana RELATIVA de una tarjeta ("últimos 12 meses", anclada al
-# último día con datos) y a propósito NO toca el estado global. Esto es lo
-# contrario — un rango absoluto que reemplaza al de la franja, igual que un
-# atajo. De ahí que quede al lado de `atajos_rango`.
+# (clave, nombre, grupo), en el orden en que se muestran.
+ATAJOS_TARJETA = (
+    ("semana", "Esta semana", "En curso"),
+    ("mes", "Este mes", "En curso"),
+    ("anio", "Este año", "En curso"),
+    ("d30", "Últimos 30 días", "Hacia atrás"),
+    ("m3", "Últimos 3 meses", "Hacia atrás"),
+    ("m12", "Últimos 12 meses", "Hacia atrás"),
+    ("mes_ant", "Mes pasado", "Completos"),
+    ("anio_ant", "Año pasado", "Completos"),
+    ("todo", "Todo el histórico", "Completos"),
+)
 
-ESCALAS = ("Días", "Meses", "Años")
+
+def meses_atras(d, n):
+    """`d` corrido `n` meses atrás, con el día recortado al último del mes
+    (31 mar → 28 feb). Es la cuenta de `pd.DateOffset(months=n)`, la que usa
+    `graficos/periodo.py::ventana`: «Últimos 12 meses» tiene que dar lo
+    mismo que la ventana de 12 meses con que abre Compras."""
+    t = d.year * 12 + (d.month - 1) - n
+    y, m = divmod(t, 12)
+    m += 1
+    return datetime.date(y, m, min(d.day, _fin_de_mes(datetime.date(y, m, 1)).day))
 
 
-def escala_periodos(escala, bounds):
-    """Los períodos de `escala` que cubren `bounds`, como fecha de ARRANQUE.
+def atajos_tarjeta(ancla, bounds):
+    """`[(clave, nombre, grupo, (ini, fin))]` anclados a `ancla`, el último
+    día con datos, y recortados a `bounds`. Se descarta el que no toca los
+    datos (el año pasado de un parquet que empieza este año).
 
-    Devuelve `date`s y no etiquetas a propósito: el slider guarda lo que se
-    le pasa, y volver de "ago 26" a un mes real obligaría a parsear texto en
-    español. Cómo se lee se decide al DIBUJAR (`format_func`), que es el
-    único lugar donde importa.
-
-    Total sobre las tres escalas, pero en la app sólo la llaman "Meses" y
-    "Años" —36 y 3 elementos en un histórico típico—. "Días" serían ~970 y
-    un riel de 970 paradas en 250px da 4 días por píxel: ahí no se puede
-    elegir una fecha. Esa escala se dibuja con un `st.slider` de fechas, que
-    es continuo y afina con las flechas del teclado. Ver
-    `graficos/base.py::selector_escala`.
-    """
-    if not (bounds and all(bounds)):
+    Los «hacia atrás» terminan en el ancla y arrancan el día siguiente al de
+    hace N: 30 días son 30 días con el ancla adentro. Los «en curso» van del
+    1 (o del lunes) al ancla. Los «completos», el período entero."""
+    if not (bounds and all(bounds)) or ancla is None:
         return []
     min_b, max_b = bounds
     if min_b > max_b:
         return []
-    if escala == "Años":
-        return [datetime.date(y, 1, 1)
-                for y in range(min_b.year, max_b.year + 1)]
-    if escala == "Meses":
-        salida, cur = [], min_b.replace(day=1)
-        while cur <= max_b:
-            salida.append(cur)
-            cur = _fin_de_mes(cur) + datetime.timedelta(days=1)
-        return salida
-    return [min_b + datetime.timedelta(days=i)
-            for i in range((max_b - min_b).days + 1)]
-
-
-def escala_a_rango(escala, desde, hasta, bounds=None):
-    """`(ini, fin)` real que cubre de `desde` a `hasta`, ambos INCLUSIVE.
-
-    Los dos argumentos son fechas de arranque de período (lo que devuelve
-    `escala_periodos`), así que el extremo derecho hay que EXPANDIRLO: en
-    escala de Meses, "hasta agosto" termina el 31 de agosto y no el 1.
-    Olvidarse de eso es el bug clásico de un filtro por mes — se pierden 30
-    días de datos y el total sale bajo sin que nada avise.
-
-    El recorte a `bounds` no es cosmético y espeja el de `atajos_rango`: en
-    escala de Años, "2026" pide hasta el 31-dic, pero los datos terminan el
-    25-ago. Sin recortar, el rango declara cuatro meses que no existen y el
-    eje de cualquier evolución dibuja el vacío.
-    """
-    if desde > hasta:
-        desde, hasta = hasta, desde
-    if escala == "Años":
-        ini = datetime.date(desde.year, 1, 1)
-        fin = datetime.date(hasta.year, 12, 31)
-    elif escala == "Meses":
-        ini = desde.replace(day=1)
-        fin = _fin_de_mes(hasta)
-    else:
-        ini, fin = desde, hasta
-    if bounds and all(bounds):
-        min_b, max_b = bounds
-        ini = min(max(ini, min_b), max_b)
-        fin = min(max(fin, min_b), max_b)
-    return (ini, fin)
-
-
-def escala_desde_rango(escala, rango, bounds):
-    """La vuelta de `escala_a_rango`: el par de períodos que muestra `rango`.
-
-    Sirve para SEMBRAR el riel en cada render desde la clave canónica. Sin
-    esto, cambiar la fecha por el calendario de la franja dejaría el riel
-    quieto en su último valor — dos controles del mismo dato diciendo cosas
-    distintas, que es exactamente la desincronización que este módulo existe
-    para evitar (ver la memoria `streamlit-widget-value-cacheado`).
-
-    Redondea hacia AFUERA, igual que Excel: en escala de Meses, del 5 al 23
-    de agosto se ve como "agosto" entero. Eso NO reescribe el rango —el
-    riel sólo escribe cuando el usuario mueve un tirador—, así que cambiar
-    de granularidad y volver recupera el rango exacto.
-    """
-    periodos = escala_periodos(escala, bounds)
-    if not periodos:
-        return None
-    if not (rango and len(rango) == 2 and all(rango)):
-        return (periodos[0], periodos[-1])
-    ini, fin = min(rango), max(rango)
-    # El período que CONTIENE cada extremo = el último arranque que no lo
-    # pasa. Con `bounds` recortando la lista, un extremo que cae fuera se
-    # apoya en el borde en vez de quedar sin período.
-    izq = [p for p in periodos if p <= ini]
-    der = [p for p in periodos if p <= fin]
-    return (izq[-1] if izq else periodos[0],
-            der[-1] if der else periodos[0])
-
-
-def ventana_mes(ancla, bounds):
-    """La ventana VISIBLE del riel de Días: el mes de `ancla`, en `bounds`.
-
-    Existe porque en escala de Días el riel NO puede abarcar el histórico
-    entero: ~970 días en 250px son 4 días por píxel y ahí no se elige una
-    fecha (el mismo motivo por el que `escala_periodos` no dibuja Días).
-    A pedido, 2026-08-26, con la captura del selector de fecha de Excel al
-    lado: su nivel "DÍAS" rotula UN mes arriba ("AGO 2026"), muestra sólo
-    los días de ese mes, y para ir a otro están las flechas.
-
-    Recorta a `bounds` por lo mismo que `escala_a_rango`: ofrecer el 25 al
-    31 de agosto cuando la data termina el 24 es dibujar vacío.
-
-    GARANTIZA DOS DÍAS DISTINTOS. Un `st.slider` con `min_value ==
-    max_value` no tiene riel donde moverse, y el caso pasa de verdad
-    cuando el mes del ancla se recorta a un solo día (la data arranca un
-    31, o termina un 1). Ahí se toma prestado el día vecino que `bounds`
-    permita; quien llama ya garantizó que `bounds` abarca dos días o más,
-    así que siempre hay uno de los dos lados libre.
-    """
-    if not (bounds and all(bounds)) or bounds[0] >= bounds[1]:
-        return None
-    min_b, max_b = bounds
     ancla = min(max(ancla, min_b), max_b)
-    ini = min(max(ancla.replace(day=1), min_b), max_b)
-    fin = min(max(_fin_de_mes(ancla), min_b), max_b)
-    if ini >= fin:
-        if fin > min_b:
-            ini = fin - datetime.timedelta(days=1)
-        else:
-            fin = ini + datetime.timedelta(days=1)
-    return (ini, fin)
+    un_dia = datetime.timedelta(days=1)
+    ini_mes = ancla.replace(day=1)
+    fin_mes_ant = ini_mes - un_dia
+    crudos = {
+        "semana": (ancla - datetime.timedelta(days=ancla.weekday()), ancla),
+        "mes": (ini_mes, ancla),
+        "anio": (datetime.date(ancla.year, 1, 1), ancla),
+        "d30": (ancla - datetime.timedelta(days=29), ancla),
+        "m3": (meses_atras(ancla, 3) + un_dia, ancla),
+        "m12": (meses_atras(ancla, 12) + un_dia, ancla),
+        "mes_ant": (fin_mes_ant.replace(day=1), fin_mes_ant),
+        "anio_ant": (datetime.date(ancla.year - 1, 1, 1),
+                     datetime.date(ancla.year - 1, 12, 31)),
+        "todo": (min_b, max_b),
+    }
+    salida = []
+    for clave, nombre, grupo in ATAJOS_TARJETA:
+        ini, fin = crudos[clave]
+        if fin < min_b or ini > max_b:
+            continue
+        salida.append((clave, nombre, grupo, (max(ini, min_b), min(fin, max_b))))
+    return salida
 
 
-def ventana_ano(ancla, bounds):
-    """La ventana VISIBLE del riel de Meses: el año de `ancla`, en `bounds`.
+# Los del MISMO panel cuando sólo elige MESES (regla #632): Ajuste de
+# Inventario, que se cuenta por cierres. Mismos grupos que `ATAJOS_TARJETA`,
+# pero sin lo que en meses no dice nada —«Esta semana», «Últimos 30 días»— y
+# con los «hacia atrás» en meses ENTEROS: «Últimos 12 meses» son doce barras
+# completas, no del 12 de un mes al 11 del otro. «Este mes» y «Mes pasado»
+# pasan a «Último mes»: con el mes operativo, el 11 de octubre el último mes
+# con cierre es setiembre, y llamarlo «este mes» mentiría.
+ATAJOS_MESES = (
+    ("anio", "Este año", "En curso"),
+    ("mes_ult", "Último mes", "Hacia atrás"),
+    ("mm3", "Últimos 3 meses", "Hacia atrás"),
+    ("mm12", "Últimos 12 meses", "Hacia atrás"),
+    ("anio_ant", "Año pasado", "Completos"),
+    ("todo", "Todo el histórico", "Completos"),
+)
 
-    Gemela de `ventana_mes`, y por la segunda mitad del mismo pedido
-    (2026-08-26): "me gusta en la visualización de día, pero también en la
-    de mes, debe mostrar inicialmente solo lo del año en curso". El riel de
-    Meses abría con TODOS los meses del histórico —44 paradas de ene-23 a
-    ago-26 en 250px— y elegir marzo de 2025 era apuntar a una de esas 44.
 
-    GARANTIZA DOS MESES DISTINTOS, por el mismo motivo que su gemela
-    garantiza dos días: un `st.select_slider` con una sola parada no tiene
-    riel donde moverse. Pasa cuando el año del ancla se recorta a un solo
-    mes (la data arranca en diciembre, o termina en enero). Ahí se toma
-    prestado el mes vecino que `bounds` permita.
-    """
-    if not (bounds and all(bounds)) or bounds[0] >= bounds[1]:
-        return None
+def atajos_meses(ancla, bounds):
+    """Como `atajos_tarjeta`, en meses enteros: `[(clave, nombre, grupo,
+    (ini, fin))]`, anclados al mes de `ancla` (el último día con datos) y
+    recortados a `bounds`. Los meses arrancan el día 1 y el último termina
+    en el ancla."""
+    if not (bounds and all(bounds)) or ancla is None:
+        return []
     min_b, max_b = bounds
+    if min_b > max_b:
+        return []
     ancla = min(max(ancla, min_b), max_b)
-    ini = min(max(datetime.date(ancla.year, 1, 1), min_b), max_b)
-    fin = min(max(datetime.date(ancla.year, 12, 31), min_b), max_b)
-    if len(escala_periodos("Meses", (ini, fin))) < 2:
-        _prev = ini.replace(day=1) - datetime.timedelta(days=1)
-        if _prev >= min_b:
-            ini = max(min_b, _prev.replace(day=1))
-        else:
-            fin = min(max_b, _fin_de_mes(_fin_de_mes(fin)
-                                         + datetime.timedelta(days=1)))
-    return (ini, fin)
+    ini_mes = ancla.replace(day=1)
+    crudos = {
+        "anio": (datetime.date(ancla.year, 1, 1), ancla),
+        "mes_ult": (ini_mes, ancla),
+        "mm3": (meses_atras(ini_mes, 2), ancla),
+        "mm12": (meses_atras(ini_mes, 11), ancla),
+        "anio_ant": (datetime.date(ancla.year - 1, 1, 1),
+                     datetime.date(ancla.year - 1, 12, 31)),
+        "todo": (min_b, max_b),
+    }
+    salida = []
+    for clave, nombre, grupo in ATAJOS_MESES:
+        ini, fin = crudos[clave]
+        if fin < min_b or ini > max_b:
+            continue
+        salida.append((clave, nombre, grupo, (max(ini, min_b), min(fin, max_b))))
+    return salida
 
 
-def ventana_decada(ancla, bounds):
-    """La ventana VISIBLE del riel de Años: la década de `ancla`, en `bounds`.
-
-    Tercera de la familia (`ventana_mes` → `ventana_ano` → ésta), a pedido
-    2026-08-26: "cuando es años, también debe seguir la lógica de mostrar
-    sólo años". Con el histórico de hoy —cuatro años— el riel se ve igual
-    que antes, porque la década recortada a los datos ES el histórico; lo
-    que cambia es que deja de crecer sin techo cuando la data crezca, y
-    que las tres escalas pasan a explicarse con la misma frase.
-
-    RECORTA A LOS DATOS, y por eso la cabecera dice "2023-2026" y no
-    "2020-2029": el mismo criterio que `escala_periodos` aplica al año del
-    borde — no prometer períodos que no tienen nada adentro.
-
-    GARANTIZA DOS AÑOS DISTINTOS *si `bounds` da para eso*. Si toda la data
-    vive en un solo año, la escala de Años tiene una sola parada la mires
-    como la mires: eso no lo arregla ninguna ventana, y ya era así antes.
-    """
-    if not (bounds and all(bounds)) or bounds[0] >= bounds[1]:
+def atajo_de(rango, atajos):
+    """La clave del atajo que es EXACTAMENTE `rango`, o None. Si dos
+    coinciden (el lunes 1, «Esta semana» y «Este mes» son el mismo día), el
+    primero en el orden de `ATAJOS_TARJETA`."""
+    if not (isinstance(rango, (tuple, list)) and len(rango) == 2 and all(rango)):
         return None
-    min_b, max_b = bounds
-    ancla = min(max(ancla, min_b), max_b)
-    _d0 = ancla.year - ancla.year % 10
-    ini = min(max(datetime.date(_d0, 1, 1), min_b), max_b)
-    fin = min(max(datetime.date(_d0 + 9, 12, 31), min_b), max_b)
-    if len(escala_periodos("Años", (ini, fin))) < 2:
-        if datetime.date(ini.year - 1, 12, 31) >= min_b:
-            ini = max(min_b, datetime.date(ini.year - 1, 1, 1))
-        else:
-            fin = min(max_b, datetime.date(fin.year + 1, 12, 31))
-    return (ini, fin)
+    par = (min(rango), max(rango))
+    for clave, _nombre, _grupo, r in atajos:
+        if r == par:
+            return clave
+    return None
 
 
 def aplicar_atajo(clave, rango, reporte=None, usa_carga_rango=False):
