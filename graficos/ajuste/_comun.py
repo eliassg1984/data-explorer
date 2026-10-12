@@ -459,13 +459,21 @@ def detalle_sesion(s, stats=None):
 
 
 def datos_panel_sesion(sesiones, actual, marcadas, multi, con_multi, solo,
-                       stats=None, familias_txt="las familias de esta vista"):
-    """Lo que recibe `panel_sesion.js`. Pura (la prueba `test_graficos.py`)."""
+                       stats=None, familias_txt="las familias de esta vista",
+                       pie=None, meta=None):
+    """Lo que recibe `panel_sesion.js`. Pura (la prueba `test_graficos.py`).
+
+    `pie` y `meta` (`{clave: texto}`) reemplazan el pie y el segundo
+    renglón de cada sesión cuando el neto NO es el ajuste: Movimientos ›
+    «Sin plato, cierre por cierre» lista los cierres con lo que salió sin
+    plato (regla #645)."""
     stats = stats or {}
+    meta = meta or {}
     return {
         "sesiones": [{"k": s["clave"], "tipo": s["tipo"],
                       "nombre": s["nombre"], "anio": _anio_sesion(s),
-                      "meta": detalle_sesion(s, stats.get(s["clave"])),
+                      "meta": meta.get(s["clave"])
+                      or detalle_sesion(s, stats.get(s["clave"])),
                       "neto": (stats[s["clave"]][0] if s["clave"] in stats
                                else None)}
                      for s in sesiones],
@@ -473,9 +481,10 @@ def datos_panel_sesion(sesiones, actual, marcadas, multi, con_multi, solo,
         "marcadas": sorted(marcadas),
         "multi": bool(multi), "con_multi": bool(con_multi),
         "solo": bool(solo),
-        "pie": [f"Neto de {familias_txt}. Las flechas ‹ › recorren esta "
-                "misma lista" + (", de cierre en cierre." if solo else "."),
-                "Elegir acá cambia sólo esta tarjeta."],
+        "pie": pie or [f"Neto de {familias_txt}. Las flechas ‹ › recorren "
+                       "esta misma lista"
+                       + (", de cierre en cierre." if solo else "."),
+                       "Elegir acá cambia sólo esta tarjeta."],
         "pie_varias": ["Marca las sesiones que quieras: se suman como si "
                        "fueran una.",
                        "Con más de una, las flechas se apagan."],
@@ -483,9 +492,11 @@ def datos_panel_sesion(sesiones, actual, marcadas, multi, con_multi, solo,
 
 
 def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None,
-                    stats=None, familias_txt="las familias de esta vista"):
+                    stats=None, familias_txt="las familias de esta vista",
+                    pie=None, meta=None):
     """‹ [sesión] › y su panel (`panel_sesion.js`). `prefijo` es el de TODAS
-    sus keys (`ajses_<vista>`); `stats`, lo de `stats_de_vista`."""
+    sus keys (`ajses_<vista>`); `stats`, lo de `stats_de_vista`; `pie` y
+    `meta`, ver `datos_panel_sesion`."""
     if not sesiones:
         st.caption("Sin sesiones de inventario.")
         return
@@ -532,7 +543,7 @@ def selector_sesion(prefijo, k, sesiones, k_varias=None, k_multi=None,
                 key=k_panel,
                 data=datos_panel_sesion(
                     sesiones, actual, {x["clave"] for x in elegidas}, multi,
-                    bool(k_multi), solo, stats, familias_txt),
+                    bool(k_multi), solo, stats, familias_txt, pie, meta),
                 on_accion_change=_al_accion, width="content")
         st.button("›", key=f"{prefijo}_sig", disabled=not hay_sig,
                   help=("Con varias sesiones las flechas se apagan" if multi

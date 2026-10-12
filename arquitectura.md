@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-644 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+645 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (209)
 
@@ -716,7 +716,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
-**Datos, R2 y DuckDB** (97)
+**Datos, R2 y DuckDB** (98)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -815,6 +815,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#634** — El panel de la sesión de Ajuste es una pieza propia, como el de fechas: cada sesión dice su…
 - **#639** — Un requerimiento también tiene DOS fechas, y se elige como en salidas: «Fecha de los…
 - **#641** — «Requerimientos por Área» suma lo mismo que «por Período», y lo que no suma va en la fila…
+- **#645** — «En qué se fue lo que entró» se cuenta de CIERRE A CIERRE de inventario, en dos vistas de una…
 
 **SUNAT y SIRE** (57)
 
@@ -946,7 +947,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (171)
+**Decisiones de diseño y UX** (172)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1119,6 +1120,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#641** — «Requerimientos por Área» suma lo mismo que «por Período», y lo que no suma va en la fila…
 - **#642** — El panel de fecha elige también por SEMANAS, de lunes a domingo: cada semana del mes es UNA…
 - **#644** — «Filtros» tiene sólo lo que vale para TODO el reporte: lo que cambia unas vistas se elige en…
+- **#645** — «En qué se fue lo que entró» se cuenta de CIERRE A CIERRE de inventario, en dos vistas de una…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -50384,6 +50386,112 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+645. **«En qué se fue lo que entró» se cuenta de CIERRE A CIERRE de
+     inventario, en dos vistas de una pantalla: «Sin plato, cierre por
+     cierre» y «En qué se fue cada producto».** 2026-10-12, a pedido, sobre
+     un boceto con los datos reales (https://claude.ai/artifact/PGPfFuLb6MRGe42cscGtrQ),
+     después de preguntar qué decía «Destino de lo que entra» (#614): «¿se
+     refiere a lo que entró a los porcionamientos, las compras, las
+     órdenes? ¿venta es sólo lo cobrado o también la cortesía?».
+
+     **Lo que tenía la vista vieja, medido**: la cuenta cerraba contra las
+     fotos del kardex (1 de 57 productos difería en decimales), pero
+     listaba sólo los productos CON BAJA —57 de los 609 con entradas en 30
+     días— sobre un rango cualquiera de fechas, y dividía la baja por lo
+     que entró (en 20 de las 57 filas había salido más de lo que entró:
+     stock de antes). Lo que más pesa quedaba afuera: en setiembre 2026,
+     S/ 1.071 de bajas contra S/ 50.730 de faltante en los conteos, con
+     S/ 45.694 de sobrante en otros productos.
+
+     **El período va de cierre a cierre**: del día después del último
+     conteo del cierre anterior al último conteo de este
+     (`cortes.sesiones_inventario` sobre los días con ajuste del kardex,
+     `kardex.sql_dias_ajuste`; setiembre 2026 = 3 set – 6 oct). Con un
+     rango de fechas el faltante cae o no según si hay un conteo adentro.
+     Desde el cierre de setiembre 2025 (`sin_plato.DESDE`): ese trae la
+     limpieza de S/ 627 mil (#612), y por eso el % se compara contra los
+     seis cierres anteriores y no contra el año pasado. Cada vista elige
+     su cierre con la píldora de Ajuste (`selector_sesion`, que ganó
+     `meta` y `pie` para decir otra cosa que el ajuste); no tienen botón
+     de fecha, y `test_graficos.py::_pruebas_fecha_por_vista` las cuenta
+     junto a las de ventana.
+
+     **«A un plato» es el descargo de ventas (95), y trae las cortesías.**
+     Medido sobre los productos que se venden 1:1 (ene–sep 2026): el
+     encurtido de vegetales, 6,6 en venta + 366,84 en cortesía = 373,44 en
+     el kardex, exacto; un vodka con 0 vendido y 0,5 en cortesía, 0,5. Los
+     anulados no. Se parte con lo vendido por plato, día y clase
+     (`definicion_venta.unidades_por_clase_dia`, nueva) × lo que descuenta
+     cada plato: su receta de venta o, si el POS lo descuenta DIRECTO, una
+     unidad del producto enlazado (`cartacosteada.parquet`, `TIPO DESC` =
+     DIRECTO: 493 platos, los cortes de parrilla, las aguas, los chorizos
+     de Mayta). Con las recetas solas quedaba sin explicar el 37 % de lo
+     vendido; con los directos, el 12 %: lo servido dentro de combos, que
+     no llega a ningún parquet y queda en «venta». Nunca se reparte más de
+     lo que el kardex descontó.
+
+     **Los insumos de operación van aparte**: la familia «COSTOS
+     PRODUCCION» (carbón, leña, limpieza, descartables). Ninguna receta los
+     descarga y su consumo sólo aparece al contar: mezclados, eran los
+     faltantes más grandes (carbón S/ 59 mil y leña S/ 33 mil en
+     ene–sep 2026).
+
+     **El restaurante cierra**: compras = a un plato + bajas + otras +
+     faltante neto + operación + Δ stock + valorización
+     (`sin_plato.totales`). Setiembre 2026: S/ 175.054 = 123.007 + 1.071 +
+     5.971 + 5.035 + 11.383 + 28.830 − 243. La cuenta de cada producto
+     cierra contra el kardex en 1.138 de 1.144. Esa cuenta del restaurante
+     se parece a la del reporte Costos (#622), así que en la vista va en
+     UNA línea al pie: la vista se dedica a lo que Costos no separa.
+
+     **Dos vistas y no una** porque una sola medía 1.550px contra los 575
+     de la tarjeta en la pantalla del usuario: la primera con las seis
+     cifras, las columnas de los cierres (bajas, otras y faltante arriba,
+     el sobrante abajo; un clic en una elige ese cierre, #399) y «Dónde se
+     concentra», cuyo clic abre la segunda en ese cierre y con ese producto
+     (`navegacion.CLAVE_SALTO_VISTA`, el salto del panel del rail, y un
+     `st.rerun(scope="app")` DESPUÉS de dibujar la tarjeta, #373); la
+     segunda con la tabla y la ficha del elegido al costado —en qué se fue,
+     su cuenta contra el kardex, y la pista del «otro lado del conteo»
+     (`sin_plato.parejas`: el mismo rubro con el ajuste contrario; con el
+     Lomo Saltado, trozos −98 und y medallón +261,5)—. Medidas a 1323×619
+     con Playwright: 518 y 565px, sin desborde.
+
+     **Cuatro cosas que costaron una vuelta:**
+     - **El último renglón de una tarjeta**, un markdown o un caption, se
+       mete 16px debajo del borde: su `margin-bottom: -16px` (#162) lo
+       compensa el `gap` del que sigue, y no sigue nada. La tarjeta se
+       deslizaba 8px por dentro. Van en un contenedor con key
+       (`mov_sp_pie`, `mov_pr_pie`) y una regla que les quita el margen.
+     - **El estilo fila por fila de una tabla larga es caro**: pintar la
+       fila elegida con un `apply(axis=1)` se llevaba 0,7 s de los 0,94 que
+       costaba estilar 862 filas; por columna (`set_properties`, `apply` con
+       `np.where`) son 0,18.
+     - **Un símbolo de línea de Plotly (`line-ew`) se pinta con su `color`,
+       no con el de `line`**: la raya de «Entró» salía con el primero de la
+       paleta.
+     - **Los ids del rail y de la pila van escritos**: `test_graficos.py`
+       los lee con `ast.literal_eval`, y un nombre de constante ahí tumba la
+       batería entera.
+
+     Y una que queda: cambiar algo en la vista 2 tarda ~2 s más cuando
+     pasó un minuto sin consultar R2, porque la caché pide la versión de
+     sus seis parquets (`_sello_r2`, 0,28 s cada uno). El dibujo en sí son
+     1,7 s en la laptop.
+
+     Se fue `kardex.sql_movimientos_mes` con `data.movimientos_kardex_mes`
+     (su único usuario era la vista vieja; la nueva lee
+     `kardex.sql_movimientos_cortes`, por período). Los colores de las
+     partes viven en `tema.COLORES_DESTINO`, validados para daltonismo
+     (por eso «otras» es azul y no el ámbar de la paleta). La cuenta la
+     vigila `test_graficos.py::_pruebas_sin_plato`; la clase de cada
+     unidad vendida, `test_definicion_venta.py`.
+
+     **En Cloud hace falta «Reboot app»** (#357): cambian `data.py`,
+     `kardex.py` y el paquete `graficos`, y `app.py` no.
+
+     (2026-10-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50396,7 +50504,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#644**; la próxima toma el número siguiente.
+> última regla es la **#645**; la próxima toma el número siguiente.
 
 >
 

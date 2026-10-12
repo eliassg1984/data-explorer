@@ -199,26 +199,45 @@ En el restaurante entero suman cero, y contados de un solo lado inflan lo
 que «entró»."""
 
 
-def sql_movimientos_mes(relacion, desde, hasta):
-    """Por MES, producto y tipo de documento, lo que entró y salió en el
-    RESTAURANTE ENTERO entre `desde` y `hasta` (inclusive): las áreas
-    sumadas, sin los movimientos entre áreas (`TIPOS_ENTRE_AREAS`) ni la
-    fila del saldo inicial. Es lo que lee «A dónde fue lo que entró» de
-    Movimientos (regla #614): por producto, cuánto se compró, produjo o
-    porcionó y en qué se fue."""
-    d0 = dt.datetime.combine(desde, dt.time(0, 0))
-    d1 = dt.datetime.combine(hasta, dt.time(0, 0)) + dt.timedelta(days=1)
-    fuera = ", ".join(f"'{t}'" for t in ("SI",) + TIPOS_ENTRE_AREAS)
+def sql_dias_ajuste(relacion):
+    """Los días con algún ajuste de inventario (tipo 93): de ahí salen las
+    sesiones de conteo (`cortes.sesiones_inventario`) que cortan los
+    períodos de cierre a cierre de `sin_plato.py` (regla #645)."""
     return f"""
-        SELECT date_trunc('month', "{COL_FECHA}") AS mes,
+        SELECT DISTINCT CAST("{COL_FECHA}" AS DATE) AS dia
+        FROM {relacion} WHERE "COD TIPO" = '93'
+    """
+
+
+def sql_movimientos_cortes(relacion, cortes):
+    """Por PERÍODO, producto y tipo de documento, lo que entró y salió en el
+    RESTAURANTE ENTERO: las áreas sumadas, sin los movimientos entre áreas
+    (`TIPOS_ENTRE_AREAS`) ni la fila del saldo inicial. `cortes` es una
+    lista de `(t0, t1)` (Timestamps, `t1` exclusivo) y `k` el índice del
+    período: los de `sin_plato.periodos`, de cierre a cierre de inventario
+    (regla #645; hasta ese día era `sql_movimientos_mes`, por mes
+    calendario, la de «A dónde fue lo que entró», #614). Fuera de todos, no
+    entra."""
+    if not cortes:
+        return f'SELECT NULL AS k, NULL AS cod, NULL AS tipo FROM {relacion} WHERE false'
+    fuera = ", ".join(f"'{t}'" for t in ("SI",) + TIPOS_ENTRE_AREAS)
+
+    def ts(x):
+        return f"TIMESTAMP '{x:%Y-%m-%d %H:%M:%S}'"
+    casos = " ".join(
+        f'WHEN "{COL_FECHA}" >= {ts(a)} AND "{COL_FECHA}" < {ts(b)} THEN {i}'
+        for i, (a, b) in enumerate(cortes))
+    return f"""
+        SELECT CASE {casos} END AS k,
                "CODIGO PRODUCTO" AS cod, "COD TIPO" AS tipo,
                sum("CANT INGRESO") AS cant_in, sum("CANT SALIDA") AS cant_out,
                sum("VALOR INGRESO") AS val_in, sum("VALOR SALIDA") AS val_out
         FROM {relacion}
         WHERE "COD TIPO" NOT IN ({fuera})
-          AND "{COL_FECHA}" >= TIMESTAMP '{d0:%Y-%m-%d %H:%M:%S}'
-          AND "{COL_FECHA}" < TIMESTAMP '{d1:%Y-%m-%d %H:%M:%S}'
+          AND "{COL_FECHA}" >= {ts(cortes[0][0])}
+          AND "{COL_FECHA}" < {ts(cortes[-1][1])}
         GROUP BY 1, 2, 3
+        HAVING k IS NOT NULL
     """
 
 

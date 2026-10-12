@@ -1126,8 +1126,9 @@ Stock › Movimientos por Tipo). Septiembre 2026: S/ 6.893 contra 7.703, las
 dos cuadradas al céntimo; difieren las notas que cruzan de mes. Las
 secciones de salidas de Movimientos abren por REGISTRO (a pedido) y se
 cambian en el panel de fecha de cada una (`graficos/movimientos.py::K_FECHA_SAL`),
-junto a «Comparar con», que las compara con años anteriores. «Destino de lo que entra»
-usa SIEMPRE la del kardex: si no, sus columnas no cierran. Y se registra
+junto a «Comparar con», que las compara con años anteriores. Las dos vistas de
+cierre a cierre (#645) usan SIEMPRE la del kardex: si no, sus columnas no
+cierran. Y se registra
 por lotes —la comida de personal de un mes entero en 27 minutos—, así que
 ninguna de las dos es el día de la merma. Regla #614.
 
@@ -1135,8 +1136,8 @@ ninguna de las dos es el día de la merma. Regla #614.
 (cuándo el área lo digitó) y `FECHA PROCESADO` (cuándo el Almacén lo
 procesó); la mitad se procesa otro día. «Fecha de los requerimientos»
 (`graficos/movimientos.py::K_FECHA_REQ`) abre en registro y manda sobre
-las dos vistas de requerimientos. Los topes del botón de fecha de Destino
-y Consumo salen de ese parquet y siguen por registro, elija lo que elija.
+las dos vistas de requerimientos. Los topes del botón de fecha de
+Consumo salen de ese parquet y siguen por registro, elija lo que elija.
 
 **«Filtros» tiene sólo lo que vale para TODO el reporte** (2026-10-11,
 regla #644): en Movimientos, Sub Almacén y Familia. Las dos fechas y
@@ -1149,6 +1150,41 @@ son cortes del mismo total—: lo pinta en cada sitio
 completa (`graficos/movimientos_comun.py::recargar_si_cambio`), porque los parquets se
 leen afuera de las secciones. Lo vigila
 `test_graficos.py::_pruebas_ajustes_compartidos`.
+
+## En qué se fue cada producto: de cierre a cierre
+
+Movimientos › Salidas, desde el 2026-10-12 (regla #645): «Sin plato,
+cierre por cierre» (el restaurante entero) y «En qué se fue cada producto»
+(la tabla y la ficha del elegido), en `graficos/movimientos_destino.py`. La
+cuenta es `sin_plato.py` (puro, lo vigila
+`test_graficos.py::_pruebas_sin_plato`) y la carga `data.sin_plato_por_cierre`,
+cacheada con los sellos de seis parquets: la primera vez del día tarda
+~40 s. Reemplazaron a «Destino de lo que entra» (#614), que listaba sólo los
+productos con baja: en setiembre 2026, S/ 1.071 de bajas contra S/ 50.730
+de faltante del conteo.
+
+- **El período va de CIERRE A CIERRE de inventario**, no es un rango de
+  fechas: sin un conteo adentro, el faltante no existe. Por eso no tienen
+  botón de fecha sino la píldora de sesiones de Ajuste
+  (`graficos/ajuste/_comun.py::selector_sesion`, con `meta` y `pie`
+  propios), una por vista.
+- **«A un plato» es el descargo de ventas del kardex (95), y trae las
+  cortesías** (medido: el POS las descuenta; los anulados no). Se parte con
+  lo vendido por plato × su receta y, para los platos que el POS descuenta
+  DIRECTO (cortes de parrilla, aguas, los chorizos de Mayta), con el enlace
+  de `cartacosteada.parquet`; lo que la venta no explica es lo servido
+  dentro de combos y queda en «venta». Sin los directos quedaba sin
+  explicar el 37 %; con ellos, el 12 %.
+- **Los insumos de operación (familia «COSTOS PRODUCCION») van aparte**:
+  ninguna receta los descarga, así que su consumo sólo aparece al contar, y
+  mezclados con la comida eran los faltantes más grandes.
+- **El último renglón de una tarjeta no puede ser un markdown ni un caption
+  sueltos**: Streamlit les pone −16px de margen abajo, que no compensa
+  nadie, y la tarjeta se desliza 8px por dentro. Van en un contenedor con
+  key y una regla que les quita el margen (`mov_sp_pie`, `mov_pr_pie`).
+- **Los ids del rail y de la pila se escriben literales**: `test_graficos.py`
+  los lee con `ast` (un nombre de constante ahí revienta la batería).
+- **Tocar la cuenta es subir `sin_plato.VERSION`.**
 
 ## El consumo según recetas baja hasta lo que se COMPRA
 

@@ -148,7 +148,6 @@ import pandas as pd
 import streamlit as st
 
 import franja_fecha
-import kardex
 from data import cargar as _cargar_reporte, secrets_disponibles, sello_datos
 from estado_rango import atajos_tarjeta
 from estilos import TAM_FUENTE
@@ -175,7 +174,7 @@ from graficos.movimientos_periodo import (
 )
 from graficos import drill_tablas
 from graficos.movimientos_consumo import tarjeta_consumo
-from graficos.movimientos_destino import tarjeta_destino
+from graficos.movimientos_destino import tarjeta_por_producto, tarjeta_sin_plato
 from graficos.movimientos_merma import (
     VALOR_HOY, control_valorizacion, precios_hoy, tarjeta_proveedores,
     tarjeta_rendimiento, tarjeta_revisar, unidades_kardex, valorizacion,
@@ -219,12 +218,19 @@ _RAIL_CATEGORIAS = rail_sin_tablas((
     # productos · salidas», que se retiró ese día. Nombre sin sufijo: no
     # tiene gemela del lado de requerimientos. El ícono es el de un tablero
     # partido en paneles, que es lo que dibuja —cinco cuadros, 3 + 2—.
-    # «Destino de lo que entra» (2026-10-08, regla #614): las bajas
-    # contra lo que se compró, produjo o porcionó, producto por producto.
-    # Va con las salidas porque su pregunta es «cuánto de esto se tiró».
+    # «Sin plato, cierre por cierre» y «En qué se fue cada producto»
+    # (2026-10-12, regla #645) reemplazaron a «Destino de lo que entra»
+    # (#614), que listaba sólo los productos con baja. Las dos cuentan, de
+    # cierre a cierre, qué fue a un plato y qué no: la primera en el
+    # restaurante entero, la segunda producto por producto. Van con las
+    # salidas porque su pregunta es «cuánto de esto se fue sin plato». Los
+    # ids van escritos (los lee con `ast` `test_graficos.py`) y son los de
+    # `movimientos_destino.VISTA_CIERRE` y `VISTA_PRODUCTO`, que usa el salto
+    # de una a otra: lo vigila `_pruebas_sin_plato`.
     ("Salidas", (("Salidas por período", "Salidas por Período", ":material/calendar_view_week:"),
                  ("Detalle de salidas",  "Salidas por Área",    ":material/view_quilt:"),
-                 ("Destino de lo que entra", "Destino de lo que entra", ":material/alt_route:"),
+                 ("Sin plato por cierre", "Sin plato, cierre por cierre", ":material/no_meals:"),
+                 ("En qué se fue cada producto", "En qué se fue cada producto", ":material/alt_route:"),
                  ("Tabla · salidas",     "Tabla · sal.",        ":material/table_view:"))),
     # «Porcionamientos» (2026-09-24, regla #510): tercer grupo, al final, a
     # pedido. Una sola vista, con el nombre que se pidió; el ícono son las
@@ -268,7 +274,8 @@ _PILA = pila_sin_tablas((
     ("mov_sec_tabla_req",   "Tabla · requerim."),
     ("mov_sec_sal_periodo", "Salidas por período"),
     ("mov_sec_detalle_sal", "Detalle de salidas"),
-    ("mov_sec_destino",     "Destino de lo que entra"),
+    ("mov_sec_sinplato",    "Sin plato por cierre"),
+    ("mov_sec_destino",     "En qué se fue cada producto"),
     ("mov_sec_tabla_sal",   "Tabla · salidas"),
     ("mov_sec_porc",        "Porcionamientos"),
     ("mov_sec_merma_rev",   "Merma para revisar"),
@@ -297,7 +304,6 @@ CATEGORIA_VISTA = {
     "mov_sec_tabla_req":   "req_tabla",
     "mov_sec_sal_periodo": "sal_periodo",
     "mov_sec_detalle_sal": "sal_area",
-    "mov_sec_destino":     "destino",
     "mov_sec_tabla_sal":   "sal_tabla",
     "mov_sec_porc":        "porc",
     "mov_sec_merma_rev":   "merma_rev",
@@ -571,20 +577,19 @@ _AJUSTES = {
 }
 AJUSTES_PIE = {
     # categoría de la vista (`CATEGORIA_VISTA`): los ajustes de su pie.
-    # «Destino» compara pero no elige fecha: va siempre por la del kardex
-    # (regla #614).
+    # Las dos de cierre a cierre (regla #645) no tienen panel de fecha: eligen
+    # un cierre y comparan contra los seis anteriores.
     "req_periodo": ("req_fecha",),
     "req_area":    ("req_fecha",),
     "req_tabla":   ("req_fecha",),
     "sal_periodo": ("sal_fecha", "comparar"),
     "sal_area":    ("sal_fecha", "comparar"),
     "sal_tabla":   ("sal_fecha",),
-    "destino":     ("comparar",),
 }
-_NOTA_PIE = {
-    ("destino", "comparar"): "Esta vista compara sólo con el año pasado: "
-                             "«Dos años» es lo mismo acá.",
-}
+_NOTA_PIE = {}
+"""`{(categoría, ajuste): texto}` que se suma a la explicación de un ajuste
+en el pie de una vista. Vacío desde la regla #645: lo usaba «Destino de lo
+que entra», que comparaba sólo con un año."""
 
 
 def vistas_con_ajuste(ajuste, salvo=None):
@@ -1034,7 +1039,7 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     _f_req = (pd.to_datetime(d[col_fecha], errors="coerce")
               if col_fecha else None)
     fechas_req = fechas_de(_f_req)
-    # Los TOPES de Destino y Consumo salen de este parquet pero no son
+    # Los TOPES de Consumo salen de este parquet pero no son
     # requerimientos: siguen por registro, elija lo que elija el usuario.
     fechas_reg = (fechas_req if col_fecha == col_fecha_reg
                   else fechas_de(d[col_fecha_reg]) if col_fecha_reg else None)
@@ -1311,15 +1316,16 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
                 "`ALMACEN.DBO.MSUBSALIDA.tMotivo AS 'MOTIVO'` y llega con "
                 "«Refrescar».")})
 
-    def _dib_destino():
-        # Carga ACÁ, como Porcionamientos: el kardex por mes sólo hace falta
-        # cuando la sección sale del esqueleto. La familia del chip recorta;
-        # el sub almacén no (la cuenta es del restaurante entero, #614). Sus
-        # topes arrancan donde arranca el kardex, no el parquet del reporte.
-        rng, fecha = _rango_y_boton("mov_sec_destino",
-                            (kardex.INICIO, fechas_reg[1]) if fechas_reg
-                            else None)
-        tarjeta_destino(fam_sel, anios_comp, rango=rng, fecha=fecha)
+    def _dib_sin_plato():
+        # Carga ACÁ, como Porcionamientos: la cuenta de cierre a cierre
+        # (`data.sin_plato_por_cierre`, cacheada) sólo hace falta cuando la
+        # sección sale del esqueleto. La familia del chip recorta; el sub
+        # almacén no: la cuenta es del restaurante entero (regla #645). Sin
+        # botón de fecha: cada vista elige un CIERRE.
+        tarjeta_sin_plato(fam_sel)
+
+    def _dib_producto():
+        tarjeta_por_producto(fam_sel)
 
     def _dib_tabla_sal():
         with st.container(border=True, key="ajuste_graf_card_izq_mov_tabla_sal"):
@@ -1419,7 +1425,8 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         "mov_sec_tabla_req":   _dib_tabla_req,
         "mov_sec_sal_periodo": _dib_sal_periodo,
         "mov_sec_detalle_sal": _dib_detalle_sal,
-        "mov_sec_destino":     _dib_destino,
+        "mov_sec_sinplato":    _dib_sin_plato,
+        "mov_sec_destino":     _dib_producto,
         "mov_sec_tabla_sal":   _dib_tabla_sal,
         "mov_sec_porc":        _dib_porc,
         "mov_sec_merma_rev":   _dib_merma(tarjeta_revisar, True),

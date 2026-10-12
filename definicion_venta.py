@@ -678,6 +678,51 @@ def por_producto_dia(df):
 GRUPO = "GRUPO"
 """El grupo de carta del ítem («Alimentos», «Bebidas c/ Alcohol», …)."""
 
+POR_CLASE_DIA = ("producto", "dia", "grupo", "clase", "unidades")
+"""Las columnas de `unidades_por_clase_dia`, con nombre fijo (regla #481)."""
+
+
+def unidades_por_clase_dia(df):
+    """Las unidades de cada producto por día, grupo de carta y clase sobre el
+    df PREPARADO: una fila por (producto, día, grupo, clase), con `clase`
+    VENTA —las notas de crédito restando— o CORTESIA. Sin anulados; un ítem
+    una vez (regla #517).
+
+    Lo lee «En qué se fue cada producto» de Movimientos (`sin_plato.py`,
+    regla #645): el descargo de ventas del kardex resta del stock lo vendido
+    Y las cortesías —medido: el encurtido de vegetales, 6,6 en venta y
+    366,84 en cortesía, 373,44 en el kardex—, y esto es lo que las separa.
+    El día es el que trae el df (sin `turno`, el del comprobante)."""
+    vacio = pd.DataFrame(columns=list(POR_CLASE_DIA))
+    if df is None or df.empty:
+        return vacio
+    c_prod, c_fecha, c_cant, c_clase = (columna(df, PRODUCTO), columna(df, FECHA),
+                                        columna(df, CANTIDAD), columna(df, CLASE))
+    if not (c_prod and c_fecha and c_cant and c_clase):
+        return vacio
+    d = df[df[c_clase].isin(CLASES_VENTA + (CORTESIA,))]
+    c_item = columna(d, LLAVE_ITEM)
+    if c_item:
+        llave = d[c_item]
+        d = d[~(llave.duplicated() & llave.notna())]
+    c_grupo = columna(d, GRUPO)
+    b = pd.DataFrame({
+        "producto": d[c_prod].astype("string").str.strip(),
+        "dia": pd.to_datetime(d[c_fecha], errors="coerce").dt.normalize(),
+        "grupo": (d[c_grupo].astype("string").fillna("").str.strip()
+                  if c_grupo else ""),
+        "clase": d[c_clase].where(d[c_clase] == CORTESIA, VENTA).astype(object),
+        "unidades": pd.to_numeric(d[c_cant], errors="coerce").fillna(0.0),
+    }).dropna(subset=["producto", "dia"])
+    b = b[b["producto"] != ""]
+    if b.empty:
+        return vacio
+    g = b.groupby(["producto", "dia", "grupo", "clase"], as_index=False)[
+        "unidades"].sum()
+    for c in ("producto", "grupo"):
+        g[c] = g[c].astype(object)
+    return g[list(POR_CLASE_DIA)]
+
 POR_GRUPO_DIA = ("dia", "grupo", "clase", "neto", "costo")
 """Las columnas de `por_grupo_dia`, con nombre fijo (regla #481)."""
 

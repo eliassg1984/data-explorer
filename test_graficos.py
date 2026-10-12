@@ -4291,7 +4291,10 @@ def _pruebas_fecha_por_vista():
 
     raiz = Path(__file__).parent
     fuente = (raiz / "graficos" / "movimientos.py").read_text(encoding="utf-8")
-    con_ventana = {"mov_sec_merma_rend", "mov_sec_merma_prov"}
+    # Sin categoría: las dos de merma traen su ventana, y las dos de cierre
+    # a cierre (regla #645) eligen un CIERRE de inventario, no un rango.
+    con_ventana = {"mov_sec_merma_rend", "mov_sec_merma_prov",
+                   "mov_sec_sinplato", "mov_sec_destino"}
     secciones = {c for c, _v in mov._PILA}
     # La pila sin «Tabla» (MOSTRAR_VISTAS_TABLA apagado) igual las declara.
     secciones |= {"mov_sec_tabla_req", "mov_sec_tabla_sal"}
@@ -4475,9 +4478,9 @@ def _pruebas_ajustes_compartidos():
     for ajuste in mov._AJUSTES:
         check(f"«{mov._AJUSTES[ajuste][1]}» se ve en dos vistas o más",
               len(mov.vistas_con_ajuste(ajuste)) >= 2, True)
-    check("las salidas comparan en su vista y en Destino",
+    check("las salidas comparan en su vista y en la de área",
           mov.vistas_con_ajuste("comparar", salvo="sal_periodo"),
-          ["Salidas por Área", "Destino de lo que entra"])
+          ["Salidas por Área"])
 
     # 4. Quien lee la valorización la muestra.
     sin_control = []
@@ -7611,9 +7614,8 @@ def _pruebas_merma():
     return fallos
 
 
-def _pruebas_salidas_comparar_y_destino():
-    """Movimientos › salidas: la causa, los años anteriores y el destino de
-    lo que entra (regla #614).
+def _pruebas_salidas_comparar():
+    """Movimientos › salidas: la causa y los años anteriores (regla #614).
 
       1. LA CAUSA sale del motivo escrito, con erratas y sin tildes, y lo
          que sólo dice «producto de baja» no inventa una.
@@ -7622,14 +7624,13 @@ def _pruebas_salidas_comparar_y_destino():
          semana). Lo anulado tampoco suma el año pasado.
       3. EL AVISO DE POCO REGISTRO: sólo meses enteros, cerrados y con menos
          de la mitad de la mediana de los doce anteriores.
-      4. EL DESTINO cierra: entró − vendido − preparaciones − notas + ajuste
-         es lo que quedó, las bajas salen de las notas y no se cuentan dos
-         veces, y lo que va entre áreas no infla lo que entró.
+
+    El «destino de lo que entra», que también vivía acá, pasó a
+    `_pruebas_sin_plato` con las dos vistas que lo reemplazaron (#645).
     """
     import pandas as pd
 
     from graficos import movimientos as mov
-    from graficos import movimientos_destino as md
     from graficos import movimientos_periodo as mp
 
     fallos = 0
@@ -7781,45 +7782,205 @@ def _pruebas_salidas_comparar_y_destino():
               pd.Timestamp("2026-09-15")),
           [(pd.Period("2026-08", "M"), 10, 40.0)])
 
-    # ── 4) El destino de lo que entra ─────────────────────────────────────
-    m = pd.Timestamp("2026-09-01")
-    kx = pd.DataFrame([
+    return fallos
+
+
+def _pruebas_sin_plato():
+    """Movimientos › las dos vistas de cierre a cierre (regla #645):
+    `sin_plato.py` sobre un kardex de mentira con cada caso real.
+
+      1. LOS PERÍODOS van de cierre a cierre: el día después del último
+         conteo del cierre anterior hasta el último conteo de este, y los
+         conteos del 1 al 7 se juntan en un cierre (#632).
+      2. LA CUENTA CIERRA: había + entró − a un plato − preparaciones −
+         bajas − otras + ajuste = quedó, producto por producto.
+      3. LO VENDIDO SE PARTE con el POS: la cortesía y los eventos por
+         receta, el plato DIRECTO por su enlace, lo que el POS no explica
+         queda en combos, y nunca se reparte más de lo que el kardex
+         descontó.
+      4. EL RESTAURANTE CIERRA: compras = a un plato + bajas + otras +
+         faltante neto + operación + Δ stock, con valorización cero cuando
+         los precios no cambian; los insumos de operación van aparte.
+      5. LO QUE LEEN LAS VISTAS: sin salida registrada, la pareja del
+         otro lado del conteo, el % de los cierres anteriores.
+      6. LA PILA: las dos vistas en el rail y en la pila, la vieja en
+         ninguno, y ningún módulo sigue leyendo el kardex por mes.
+    """
+    import datetime as dt
+    import pathlib
+
+    import pandas as pd
+
+    import cortes
+    import definicion_venta as dv
+    import sin_plato as sp
+    from graficos import movimientos as mov
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    sin plato #645 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA sin plato #645 · {nombre}: got={got!r} exp={exp!r}")
+
+    # ── 1) Los períodos ────────────────────────────────────────────────
+    dias = pd.to_datetime(["2025-09-02", "2025-10-01", "2025-10-02",
+                           "2025-10-15", "2025-11-03", "2025-11-05",
+                           "2025-12-02"])
+    per = sp.periodos(cortes.sesiones_inventario(pd.Series(dias)))
+    check("dos períodos desde el cierre de setiembre 2025",
+          [(p["corto"], str(p["desde"]), str(p["hasta"])) for p in per],
+          [("oct 25", "2025-10-03", "2025-11-05"),
+           ("nov 25", "2025-11-06", "2025-12-02")])
+    check("el parcial del 15 de octubre no corta un período",
+          [p["nombre"] for p in per], ["Octubre 2025", "Noviembre 2025"])
+    check("las fotos: antes del primero y al final de cada uno",
+          sp.momentos(per),
+          [dt.datetime(2025, 10, 2, 23), dt.datetime(2025, 11, 5, 23),
+           dt.datetime(2025, 12, 2, 23)])
+
+    # ── 2-4) Un período con todo lo que pasa ─────────────────────────────
+    per1 = per[:1]
+    PR = {"T": 1.2, "Q": 20.0, "C": 2.0, "M": 30.0, "L": 25.0}
+    filas_kx = [
         # cod, tipo, entra, sale
         ("T", "94", 100.0, 0.0),   # la orden produjo 100 tartas
-        ("T", "95", 0.0, 70.0),    # se vendieron 70
+        ("T", "95", 0.0, 70.0),    # el POS descontó 70
         ("T", "98", 0.0, 25.0),    # 25 en notas: 20 bajas + 5 personal
         ("T", "93", 0.0, 2.0),     # faltaron 2 en el cierre
-        ("T", "99", 50.0, 50.0),   # un requerimiento: no entra
         ("Q", "01", 10.0, 0.0),    # el queso, comprado
-        ("Q", "07", 0.0, 1.0),     # una nota de crédito
+        ("Q", "07", 0.0, 1.0),     # su nota de crédito
         ("Q", "94", 0.0, 6.0),     # usado en la orden de la tarta
-    ], columns=["cod", "tipo", "cant_in", "cant_out"]).assign(mes=m)
-    kx = kx[kx["tipo"] != "99"]   # `sql_movimientos_mes` ya los saca
-    bajas = pd.DataFrame({"cod": ["T"], "mes": [m], "cant": [20.0],
-                          "valor": [190.0]})
-    r = md.armar_destino(kx, bajas).set_index("cod")
-    check("tarta: entró, vendido, baja, otras, ajuste, quedó",
-          [round(float(r.loc["T", c]), 2) for c in
-           ("entro", "vendido", "baja", "otras", "ajuste", "quedo")],
-          [100.0, 70.0, 20.0, 5.0, -2.0, 3.0])
-    check("tarta: % baja sobre lo que entró", round(r.loc["T", "pct_baja"], 1),
-          20.0)
-    check("queso: lo comprado neto de la nota de crédito y lo usado",
-          [float(r.loc["Q", c]) for c in ("entro", "prep", "quedo")],
-          [9.0, 6.0, 3.0])
-    check("queso: entró y no se dio de baja, 0 %",
-          float(r.loc["Q", "pct_baja"]), 0.0)
-    s = pd.DataFrame({
-        "FECHA PROCESADO": pd.to_datetime(["2026-09-02", "2026-09-03",
-                                           "2026-09-04", "2026-10-01"]),
+        ("C", "01", 50.0, 0.0),    # carbón
+        ("C", "93", 0.0, 40.0),    # se usó, y sólo lo dice el conteo
+        ("M", "95", 0.0, 10.0),    # medallón, vendido DIRECTO
+        ("M", "93", 5.0, 0.0),     # sobrante
+        ("L", "93", 0.0, 4.0),     # lomo trozos: faltante, nada más
+    ]
+    kx = pd.DataFrame(filas_kx, columns=["cod", "tipo", "cant_in", "cant_out"])
+    kx["k"] = 0
+    kx["val_in"] = kx["cant_in"] * kx["cod"].map(PR)
+    kx["val_out"] = kx["cant_out"] * kx["cod"].map(PR)
+    t_ini = pd.Timestamp("2025-10-01 10:00")
+    t_fin = pd.Timestamp("2025-11-04 10:00")
+    fotos = pd.DataFrame([
+        # area, cod, fecha, correlativo, stock
+        ("A", "Q", t_ini, 1, 2.0), ("A", "M", t_ini, 2, 20.0),
+        ("A", "L", t_ini, 3, 10.0),
+        ("A", "T", t_fin, 10, 3.0), ("A", "Q", t_fin, 11, 5.0),
+        ("A", "C", t_fin, 12, 10.0), ("A", "M", t_fin, 13, 15.0),
+        ("A", "L", t_fin, 14, 6.0),
+    ], columns=["area", "cod", "fecha", "correlativo", "stock"])
+    fotos["precio"] = fotos["cod"].map(PR)
+    salidas = pd.DataFrame({
+        "FECHA PROCESADO": pd.to_datetime(["2025-10-10", "2025-10-11",
+                                           "2025-10-12", "2025-12-20"]),
         "NOMBRE ESTADO SALIDA": ["PROCESADO", "ANULADO", "PROCESADO",
                                  "PROCESADO"],
         "COD PRODUCTO": ["T", "T", "T", "T"],
         "TIPO DESCARGO": ["Bajas", "Bajas", "Comida Personal", "Bajas"],
-        "CANT SALIDA": [1.0, 2.0, 4.0, 8.0], "VALOR NETO": [1.0] * 4})
-    b = md.bajas_de(s, pd.Timestamp("2026-09-01"), pd.Timestamp("2026-10-01"))
-    check("bajas: sólo Bajas, sin anuladas, en el rango", b["cant"].tolist(),
-          [1.0])
+        "CANT SALIDA": [20.0, 9.0, 5.0, 8.0],
+        "VALOR NETO": [24.0, 10.8, 6.0, 9.6]})
+    vend = pd.DataFrame({
+        "producto": ["P1", "P1", "P1", "P2", "P1"],
+        "dia": pd.to_datetime(["2025-10-05", "2025-10-06", "2025-10-07",
+                               "2025-10-08", "2025-12-25"]),
+        "grupo": ["Alimentos", "Alimentos", "Eventos", "Alimentos",
+                  "Alimentos"],
+        "clase": [dv.VENTA, dv.CORTESIA, dv.VENTA, dv.VENTA, dv.VENTA],
+        "unidades": [60.0, 5.0, 2.0, 10.0, 99.0]})
+    recetas = pd.DataFrame({"COD PLATO": ["P1", "P9"], "COD INS": ["T", "Q"],
+                            "CANTIDAD": [1.0, 500.0], "FACTOR": [1.0, 1000.0],
+                            "DESCARG": ["SI", "NO"]})
+    carta = pd.DataFrame({"COD PLATO": ["P2", "P1"],
+                          "TIPO DESC": ["DIRECTO", "DIRECTO"],
+                          "COD ITEM O RECETA": ["M", "Q"]})
+    maestro = pd.DataFrame({
+        "CODIGO PRODUCTO": ["T", "Q", "C", "M", "L"],
+        "NOMBRE PRODUCTO": ["(Rs) Tarta de queso", "Queso crema",
+                            "Carbon Vegetal", "(P) Lomo Medallon 170gr",
+                            "(P) Lomo trozos saltado 170gr"],
+        "UNIDAD KARDEX": ["UND", "KILOS", "KILOS", "UND", "UND"],
+        "NOMBRE FAMILIA": ["ALIMENTOS", "ALIMENTOS", "COSTOS PRODUCCION",
+                           "ALIMENTOS", "ALIMENTOS"]})
+    r = sp.calcular(per1, kx, fotos, salidas, vend, recetas, carta, maestro)
+    f = r["filas"].set_index("cod")
+    cuadre = (f["ini_q"] + f["entro_q"] - f["plato_q"] - f["prep_q"]
+              - f["baja_q"] - f["otras_q"] + f["aj_q"] - f["fin_q"])
+    check("la cuenta de cada producto cierra contra el kardex",
+          {c: round(float(v), 6) for c, v in cuadre.items()},
+          {c: 0.0 for c in cuadre.index})
+    check("tarta: entró, bajas (sin la anulada), otras, faltante",
+          [round(float(f.loc["T", c]), 2) for c in
+           ("entro_q", "baja_q", "otras_q", "falt_q", "sinplato_q")],
+          [100.0, 20.0, 5.0, 2.0, 27.0])
+    check("tarta: venta, cortesía, eventos y lo de combos",
+          [round(float(f.loc["T", c]), 2) for c in
+           ("venta_q", "cort_q", "evvi_q", "combos_q", "plato_q")],
+          [63.0, 5.0, 2.0, 3.0, 70.0])
+    check("tarta: % sin plato sobre todo lo que salió",
+          round(float(f.loc["T", "pct"]), 4), round(27 / 97, 4))
+    check("queso: lo comprado neto de la nota y lo usado en la orden",
+          [float(f.loc["Q", c]) for c in ("entro_q", "prep_q", "compra_v")],
+          [9.0, 6.0, 180.0])
+    check("el plato DIRECTO no pisa una receta (P1 sigue por la tarta)",
+          float(f.loc["Q", "plato_q"]), 0.0)
+    check("medallón: vendido directo, sobrante",
+          [float(f.loc["M", c]) for c in ("venta_q", "sobr_q", "fin_q")],
+          [10.0, 5.0, 15.0])
+    check("carbón: insumo de operación", f.loc["C", "clase"], sp.OPERACION)
+    t = r["totales"].iloc[0]
+    check("el restaurante: compras, a un plato, faltante y sobrante",
+          [round(float(t[c]), 2) for c in
+           ("compras", "venta", "cort", "evvi", "falt", "sobr", "operacion")],
+          [280.0, 375.6, 6.0, 2.4, 102.4, 150.0, 80.0])
+    check("y cierra: la valorización es cero con los precios quietos",
+          round(float(t["valorizacion"]), 6), 0.0)
+    # Más cortesía que lo que el kardex descontó: se reparte a escala.
+    vend2 = vend.assign(unidades=[60.0, 50.0, 2.0, 10.0, 0.0])
+    f2 = sp.calcular(per1, kx, fotos, salidas, vend2, recetas, carta,
+                     maestro)["filas"].set_index("cod")
+    check("nunca se reparte más de lo que el kardex descontó",
+          round(float(f2.loc["T", "venta_q"] + f2.loc["T", "cort_q"]
+                      + f2.loc["T", "evvi_q"]), 6), 70.0)
+
+    # ── 5) Lo que leen las vistas ───────────────────────────────────────
+    fk = r["filas"]
+    fa = fk[fk["clase"] == sp.ALIMENTOS]
+    check("lomo trozos: sin salida registrada; la tarta no",
+          sorted(fa.loc[sp.sin_salida_registrada(fa), "cod"]), ["L"])
+    check("la palabra que dice qué es", sp.palabra_clave(
+        "(P) Lomo trozos saltado 170gr x und"), "lomo")
+    check("del otro lado del conteo: el medallón con sobrante",
+          sp.parejas(fk, "L")["cod"].tolist(), ["M"])
+    fp = pd.DataFrame({"cod": ["X"] * 3, "k": [0, 1, 2],
+                       "sinplato_v": [10.0, 30.0, 5.0],
+                       "salio_v": [100.0, 100.0, 50.0]})
+    check("el % de los cierres anteriores, sumados",
+          round(float(sp.pct_previo(fp, 2)["X"]), 4), 0.2)
+
+    # ── 6) La pila ──────────────────────────────────────────────────────
+    ids = [v[0] for _c, vs in mov._RAIL_CATEGORIAS for v in vs]
+    from graficos import movimientos_destino as md
+    nuevas = ("Sin plato por cierre", "En qué se fue cada producto")
+    check("los ids escritos son los del salto entre las dos",
+          (md.VISTA_CIERRE, md.VISTA_PRODUCTO), nuevas)
+    check("las dos vistas en el rail", [x in ids for x in nuevas],
+          [True, True])
+    check("y en la pila, una tras otra",
+          [v for _c, v in mov._PILA if v in nuevas], list(nuevas))
+    check("la vieja en ninguno",
+          "Destino de lo que entra" in ids
+          or any(v == "Destino de lo que entra" for _c, v in mov._PILA), False)
+    raiz = pathlib.Path(__file__).parent
+    usan_mes = [str(p.relative_to(raiz)) for p in
+                [*raiz.glob("*.py"), *(raiz / "graficos").rglob("*.py")]
+                if "movimientos_kardex_mes" in p.read_text(encoding="utf-8")
+                and p.name != "test_graficos.py"]
+    check("nadie lee ya el kardex por mes", usan_mes, [])
     return fallos
 
 
@@ -11141,7 +11302,8 @@ def main():
     # ── Movimientos › Detalle de salidas: suma lo mismo que su vecina ────
     fallos += _pruebas_detalle_salidas()
     fallos += _pruebas_requerimientos_por_area()
-    fallos += _pruebas_salidas_comparar_y_destino()
+    fallos += _pruebas_salidas_comparar()
+    fallos += _pruebas_sin_plato()
     fallos += _pruebas_merma()
 
     # ── Recetas › Carta costeada: la carta entera, combos incluidos ──────

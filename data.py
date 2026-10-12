@@ -18,6 +18,8 @@ import definicion_compra
 import consumo_recetas
 import kardex
 import analisis_stock
+import sin_plato
+from cortes import sesiones_inventario
 
 
 # ===========================================================================
@@ -1420,7 +1422,8 @@ def limpiar_cache(archivo):
     _kardex_fotos_cacheable.clear()
     _historia_stock_cacheable.clear()
     _movimientos_cacheable.clear()
-    _movimientos_mes_cacheable.clear()
+    _venta_clase_dia_cacheable.clear()
+    _sin_plato_cacheable.clear()
     _sello_r2.clear()
     _SELLOS.pop(archivo, None)
 
@@ -2101,26 +2104,83 @@ def _movimientos_cacheable(archivo, sello, desde, hasta, version=None):
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
-def _movimientos_mes_cacheable(archivo, sello, desde, hasta, version=None):
-    """Lo que entró y salió de cada producto por mes y tipo, en el
-    restaurante entero (`kardex.sql_movimientos_mes`). Si falla, LANZA: no
-    se cachea. `sello` y `version` son la clave. Regla #614."""
+def _venta_clase_dia_cacheable(archivo, sello, definicion=None):
+    """Las unidades vendidas y dadas en cortesía de cada producto, por día y
+    grupo de carta, sobre TODO el parquet (`definicion_venta.
+    unidades_por_clase_dia`), fechadas por el comprobante. Si falla, LANZA:
+    no se cachea.
+
+    El mismo camino que `_venta_por_grupo_dia_cacheable`: sólo las columnas
+    que la definición lee, más el grupo, y la cuenta en pandas (#524). La
+    lee `sin_plato.py` para partir el descargo de ventas del kardex en
+    venta, cortesía y eventos (regla #645)."""
+    prep = _PREPARAR[archivo]
+    if not secrets_disponibles():
+        return prep.unidades_por_clase_dia(prep.preparar(_datos_demo(archivo)))
+    con = get_conn()
+    bucket = st.secrets["R2_BUCKET"]
+    url = f"s3://{bucket}/{archivo}"
+    nombres = [r[0] for r in con.execute(
+        f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()]
+    vacio = pd.DataFrame(columns=nombres)
+    reales = list(dict.fromkeys(
+        c for c in (prep.columna(vacio, q) for q in (*prep.COLUMNAS, prep.GRUPO))
+        if c))
+    lista = ", ".join(f'"{c}"' for c in reales)
+    df = con.execute(f"SELECT {lista} FROM read_parquet('{url}')").df()
+    return prep.unidades_por_clase_dia(prep.preparar(df))
+
+
+# Los parquets que, además del kardex, lee la cuenta de cierre a cierre
+# (`sin_plato.calcular`): sus sellos van en la clave de la caché.
+_ARCHIVOS_SIN_PLATO = ("salidas.parquet", "ventas.parquet",
+                       "recetaventa.parquet", "cartacosteada.parquet",
+                       "inventariovalorizado.parquet")
+
+
+@st.cache_data(ttl=3600, persist="disk", show_spinner=False)
+def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
+    """En qué se fue cada producto, de cierre a cierre de inventario
+    (`sin_plato.calcular`, regla #645). Si falla, LANZA: no se cachea.
+
+    `archivo` es el kardex, que manda; `sellos`, los de los otros cinco
+    parquets (`_ARCHIVOS_SIN_PLATO`), y `version`, la de la cuenta. Ninguno
+    se usa en el cuerpo: son la clave (ver el bloque del sello). Del kardex
+    se baja lo agregado por período, producto y tipo (unas 30 mil filas) y
+    las fotos del stock, que ya cachea `_kardex_fotos_cacheable`."""
     if not secrets_disponibles():
         return None
     con = get_conn()
     bucket = st.secrets["R2_BUCKET"]
     rel = f"read_parquet('s3://{bucket}/{archivo}')"
-    return con.execute(kardex.sql_movimientos_mes(rel, desde, hasta)).df()
+    dias = con.execute(kardex.sql_dias_ajuste(rel)).df()
+    per = sin_plato.periodos(sesiones_inventario(pd.to_datetime(dias["dia"])))
+    if not per:
+        return None
+    kx = con.execute(kardex.sql_movimientos_cortes(
+        rel, [(p["t0"], p["t1"]) for p in per])).df()
+    fotos = _kardex_fotos_cacheable(kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
+                                    version=kardex.VERSION)
+    vend = _venta_clase_dia_cacheable(
+        "ventas.parquet", sello_datos("ventas.parquet"),
+        definicion=_version_preparar("ventas.parquet"))
+    return sin_plato.calcular(
+        per, kx, fotos, cargar("salidas.parquet"), vend,
+        cargar("recetaventa.parquet"), cargar("cartacosteada.parquet"),
+        cargar("inventariovalorizado.parquet"))
 
 
-def movimientos_kardex_mes(desde, hasta):
-    """Los movimientos del kardex por mes, producto y tipo entre dos fechas
-    (`date`), sin los que van de un área a otra. `None` si no se pudo leer:
-    quien lo pide avisa. No cacheada (la interna sí)."""
+def sin_plato_por_cierre():
+    """`{"periodos", "filas", "totales"}` de `sin_plato.calcular`: lo que
+    dibujan «Sin plato, cierre por cierre» y «En qué se fue cada producto»
+    (regla #645). `None` si no se pudo calcular —sin secrets, R2 caído, el
+    kardex sin cierres—: quien lo pide avisa. No cacheada (la interna sí)."""
     try:
-        return _movimientos_mes_cacheable(kardex.ARCHIVO,
-                                          sello_datos(kardex.ARCHIVO),
-                                          desde, hasta, version=kardex.VERSION)
+        return _sin_plato_cacheable(
+            kardex.ARCHIVO, sello_datos(kardex.ARCHIVO),
+            sellos=tuple((a, sello_datos(a)) for a in _ARCHIVOS_SIN_PLATO),
+            version=(sin_plato.VERSION, kardex.VERSION,
+                     _version_preparar("ventas.parquet")))
     except Exception:
         return None
 

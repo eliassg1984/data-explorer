@@ -431,8 +431,10 @@ raros = next((ast.literal_eval(n.value) for n in ast.walk(arbol)
 ok(raros is not None and tuple(raros) == tuple(cr.GRUPOS_NO_SERVICIO),
    "la venta interna es la misma de Ventas › Por hora (GRUPOS_RAROS)", f"{raros!r}")
 _data = ast.parse((RAIZ / "data.py").read_text(encoding="utf-8"))
+# Sólo las de `consumo_recetas`: `sin_plato.calcular` (#645) es otra cuenta.
 _calc = [n for n in ast.walk(_data) if isinstance(n, ast.Call)
-         and getattr(n.func, "attr", "") == "calcular"]
+         and getattr(n.func, "attr", "") == "calcular"
+         and getattr(n.func.value, "id", "") == "consumo_recetas"]
 ok(_calc and all({"anual", "ordenes"} <= {k.arg for k in c.keywords} for c in _calc),
    "la app le pasa al cálculo los 12 meses y las órdenes de producción (regla #605)")
 ok(cr.ARCHIVOS.get("ordenes") == "ordenesproduccion.parquet",

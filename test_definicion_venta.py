@@ -369,6 +369,21 @@ _sin_cod = pd.DataFrame({"Fec Reg Documento": [pd.Timestamp(D1)],
 ok(dv.por_producto_dia(None).empty and dv.por_producto_dia(_sin_cod).empty,
    "sin datos, o sin código de producto, sale vacío")
 
+print("\n── venta y cortesía por producto y día (Movimientos, #645) ──")
+# El kardex descuenta lo vendido Y las cortesías; esto las separa.
+_uc = dv.unidades_por_clase_dia(dv.preparar(_x.assign(GRUPO="Alimentos"),
+                                            D1, D3))
+ok(list(_uc.columns) == list(dv.POR_CLASE_DIA),
+   "columnas de nombre fijo (regla #481)", str(list(_uc.columns)))
+_uci = _uc.groupby(["producto", "clase"])["unidades"].sum()
+igual(float(_uci.get(("Postre", dv.CORTESIA), 0.0)), 1.0,
+      "la cortesía, como cortesía")
+igual(float(_uci.get(("Lomo", dv.VENTA), 0.0)), 1.0,
+      "el Lomo: una unidad, sin el anulado y con el canje restando")
+ok(dv.ANULADO not in set(_uc["clase"]), "sin anulados")
+igual(set(_uc["grupo"]), {"Alimentos"}, "con su grupo de carta")
+ok(dv.unidades_por_clase_dia(None).empty, "sin datos, vacío")
+
 print("\n── sin las columnas de la nota (el demo): sólo clasifica ──")
 demo = pd.DataFrame({"Fec Reg Documento": [pd.Timestamp(D1)] * 2,
                      "Venta Item Ddocumento": [10.0, 5.0],

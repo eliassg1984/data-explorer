@@ -397,16 +397,23 @@ qué cambió el stock» y el TOPE de la tabla de al lado —y de la de «Por
 y el aviso de ventas sin costo, la tarjeta entra en los ~575px de la
 pantalla del usuario (regla #574)."""
 
-DESTINO_TABLA = 27 * 6 + 38
-"""Tope de la tabla de Movimientos › «A dónde fue lo que entró» (2026-10-08,
-regla #614): seis filas de 27 más la cabecera. El producto elegido se abre
-DEBAJO —su gráfico (`DESTINO_FIG`) y el % de baja mes a mes—, y las dos
-cosas entran en la pantalla del usuario (~575px de tarjeta, regla #574); lo
-que no entra se desliza dentro de la tabla."""
+SIN_PLATO_FIG = 270
+"""Movimientos › «Sin plato, cierre por cierre» (2026-10-12, regla #645): las
+columnas de los cierres y, al lado, la lista de «Dónde se concentra», que
+mide lo mismo. Con la cabecera, la fila de seis cifras y la cuenta del pie,
+la tarjeta entra en los 575px de la pantalla del usuario (regla #574)."""
+
+DESTINO_TABLA = 27 * 12 + 38
+"""Tope de la tabla de Movimientos › «En qué se fue cada producto»
+(2026-10-12, regla #645): doce filas de 27 y la cabecera. El producto elegido
+se abre AL COSTADO —su cuenta y su gráfico (`DESTINO_FIG`)—, no debajo como
+en «A dónde fue lo que entró» (#614): debajo, la tarjeta pasaba de una
+pantalla. Lo que no entra se desliza dentro de la tabla."""
 
 DESTINO_FIG = 140
-"""El gráfico mes a mes del producto elegido en «A dónde fue lo que entró»
-(regla #614): lo que entró, lo vendido y lo dado de baja."""
+"""El gráfico de los cierres del producto elegido en «En qué se fue cada
+producto» (regla #645): lo que salió apilado, el sobrante debajo del cero y
+una raya con lo que entró."""
 
 # ── Movimientos › las tres vistas de merma (2026-10-08, regla #615) ─────
 # Cada tarjeta entra en la pantalla del usuario (~575px, regla #574); lo
