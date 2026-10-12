@@ -1749,7 +1749,7 @@ def tarjeta_salidas_periodo(d, *, cols, orden=(), hist=None, anios=0,
 
 
 def tarjeta_porcionamientos_periodo(d, *, cols, orden=(), precios=None,
-                                    rango=None, fecha=None):
+                                    rango=None, fecha=None, valorizar=None):
     """Porcionamientos: la misma tarjeta sobre `porcionamientos.parquet`,
     con la MERMA EN SOLES en la barra (regla #510).
 
@@ -1761,9 +1761,11 @@ def tarjeta_porcionamientos_periodo(d, *, cols, orden=(), precios=None,
 
     `precios` (regla #615): con el precio promedio de hoy de cada producto,
     la merma se valoriza como el Reporte de Mermas del Almacén
-    (`a_precio_de_hoy`); sin él, al costo del día."""
+    (`a_precio_de_hoy`); sin él, al costo del día. `valorizar` dibuja el
+    control que elige entre los dos, en la fila de controles de la tarjeta
+    (regla #644): lo pone `movimientos_merma`, que este módulo no importa."""
     _tarjeta(d, PORCIONAMIENTOS, cols, orden, precios=precios,
-             rango_ts=rango, fecha=fecha)
+             rango_ts=rango, fecha=fecha, control=valorizar)
 
 
 def tarjeta_produccion_periodo(d, *, cols, orden=(), rango=None, fecha=None):
@@ -1780,7 +1782,7 @@ def tarjeta_produccion_periodo(d, *, cols, orden=(), rango=None, fecha=None):
 
 
 def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
-             precios=None, rango_ts=None, fecha=None):
+             precios=None, rango_ts=None, fecha=None, control=None):
     k, c = lado.k, lado.c
     with st.container(border=True, key=lado.card):
         st.markdown(_css(lado), unsafe_allow_html=True)
@@ -1868,6 +1870,10 @@ def _tarjeta(d, lado, cols, orden, hist=None, anios=0, rot_fecha="",
                           "mayores). La fila de abajo nombra cada tramo con su "
                           "monto, y el Resumen le da una columna a cada uno."
                           )) or PARTIR_TIPO
+            # Otro control de la tarjeta, en el sitio de «Partir por»: la
+            # valorización de la merma en Porcionamientos (regla #644).
+            if control is not None:
+                control()
             # Los cuatro, de selección MÚLTIPLE (regla #625). Los valores ya
             # se leyeron arriba; acá sólo se dibujan.
             with st.container(key=f"{c}_hdr_area"):

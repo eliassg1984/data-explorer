@@ -5738,7 +5738,7 @@ CSS = """    /* ================================================================
         padding-top: 8px !important;
         gap: 6px !important;
     }
-    .ajf-pie-rot {
+    .ajf-pie-rot, .mov-pie-rot {
         font-size: 10.5px; font-weight: 600; letter-spacing: .07em;
         text-transform: uppercase; color: var(--text-muted);
         white-space: nowrap;
@@ -5746,9 +5746,77 @@ CSS = """    /* ================================================================
     [class*="st-key-ajf_"][class*="_mcfila"] > [data-testid="stElementContainer"] {
         width: auto !important;
     }
-    [class*="st-key-ajf_"][class*="_mescierre_"] [data-testid="stButtonGroup"] button {
+    [class*="st-key-ajf_"][class*="_mescierre_"] [data-testid="stButtonGroup"] button,
+    [class*="st-key-mov_f_"][class*="_aj_"] [data-testid="stButtonGroup"] button {
         min-height: 26px !important; height: 26px !important;
         padding: 0 10px !important; font-size: 12px !important;
+    }
+
+    /* =================================================================== */
+    /* LOS AJUSTES DE LAS FECHAS DE MOVIMIENTOS, AL COSTADO DEL PANEL       */
+    /* (regla #644): «Fecha de las salidas», «Comparar con»… en una columna */
+    /* a la derecha del panel de fecha (`pie_al_costado`). Debajo, el      */
+    /* popover pasaba su techo de 70vh y quedaban tras un scroll. El        */
+    /* popover tiene además un ancho máximo propio que aplastaba el panel: */
+    /* se suelta sólo para éstos, por la clase del rótulo (una clase sola  */
+    /* adentro del :has, regla #469).                                      */
+    /* =================================================================== */
+    [data-testid="stPopoverBody"]:has(.mov-pie-rot) {
+        max-width: calc(100vw - 24px) !important;
+    }
+    [class*="st-key-mov_f_"][class*="_cuerpo"] {
+        flex-wrap: wrap !important;
+        align-items: flex-start !important;
+    }
+    /* Cada hijo mide lo suyo: con el `flex: 1 1` de Streamlit los dos     */
+    /* medían 369px y el panel (476) se metía debajo de la columna.        */
+    [class*="st-key-mov_f_"][class*="_cuerpo"] > * {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+    /* El panel se monta ~1 s después de abrir el popover: sin su ancho    */
+    /* reservado, la columna aparecía a la izquierda y saltaba a su lugar  */
+    /* (lo que abre una capa no se mueve al abrirse, regla #465).          */
+    [class*="st-key-mov_f_"][class*="_cuerpo"] > :first-child {
+        min-width: min(476px, calc(100vw - 72px)) !important;
+    }
+    /* 290px: «Sin comparar · Año pasado · Dos años» mide 271 en un        */
+    /* renglón; con menos, «Dos años» bajaba solo.                         */
+    [class*="st-key-mov_f_"][class*="_pie"] {
+        flex: 0 0 290px !important;
+        width: 290px !important;
+        border-left: 1px solid var(--line-soft) !important;
+        padding-left: 14px !important;
+        gap: 14px !important;
+    }
+    /* Por debajo de ~860px el panel y la columna no caben juntos (782px  */
+    /* más el padding del popover) y la columna baja: la línea va arriba.  */
+    @media (max-width: 860px) {
+        [class*="st-key-mov_f_"][class*="_pie"] {
+            border-left: 0 !important;
+            padding-left: 0 !important;
+            border-top: 1px solid var(--line-soft) !important;
+            padding-top: 8px !important;
+        }
+    }
+    [class*="st-key-mov_f_"][class*="_aj_"] {
+        gap: 6px !important;
+    }
+    /* El rótulo, apilado sobre su control: el -16px de abajo que trae     */
+    /* `stMarkdownContainer` lo dejaba debajo de los botones.              */
+    [class*="st-key-mov_f_"][class*="_aj_"] [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+    /* «Valorizar la merma» en «Para revisar», en el renglón del caption   */
+    /* que antes decía dónde cambiarla: compacto, para no estirarlo.       */
+    .st-key-mov_merma_rev_pie [data-testid="stButtonGroup"] button {
+        min-height: 26px !important; height: 26px !important;
+        padding: 0 10px !important; font-size: 12px !important;
+    }
+    [class*="st-key-mov_f_"][class*="_aj_"] [data-testid="stCaptionContainer"] p {
+        font-size: 11.5px !important;
+        line-height: 1.4 !important;
     }
 
     /* La sesión: ‹ [píldora] ›, sin envolver. */

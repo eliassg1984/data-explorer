@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-643 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+644 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (208)
+**CSS y estilos** (209)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -242,6 +242,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
 - **#635** — Los modos Corte / Varios de la píldora de la franja se borraron enteros: sin su único…
 - **#642** — El panel de fecha elige también por SEMANAS, de lunes a domingo: cada semana del mes es UNA…
+- **#644** — «Filtros» tiene sólo lo que vale para TODO el reporte: lo que cambia unas vistas se elige en…
 
 **Layout y alturas** (90)
 
@@ -945,7 +946,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (170)
+**Decisiones de diseño y UX** (171)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1117,6 +1118,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#641** — «Requerimientos por Área» suma lo mismo que «por Período», y lo que no suma va en la fila…
 - **#642** — El panel de fecha elige también por SEMANAS, de lunes a domingo: cada semana del mes es UNA…
+- **#644** — «Filtros» tiene sólo lo que vale para TODO el reporte: lo que cambia unas vistas se elige en…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -50280,6 +50282,108 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+644. **«Filtros» tiene sólo lo que vale para TODO el reporte: lo que
+     cambia unas vistas se elige en esas vistas.** 2026-10-11, a pedido,
+     sobre una captura del panel «Filtros» de Movimientos: «¿es adecuado
+     que estos filtros figuren ahí? ¿algo ocultos? Quizás puedan estar en
+     cada tarjeta».
+
+     **Qué había**: cinco controles en el panel de la franja, y sólo dos
+     valían para todo —Sub Almacén y Familia—. Los otros tres cambiaban
+     dos o tres de las once vistas: «Fecha de los requerimientos» (#639) las
+     dos de requerimientos, «Fecha de las salidas» y «Comparar salidas con»
+     (#614) las de salidas y Destino, y «Valorizar la merma» (#615) tres de
+     merma. Desde arriba no se sabía a cuáles; el contador del botón no los
+     contaba, así que con «Proceso» elegido nada lo avisaba; y como iban
+     PRIMERO —para que las 13 áreas no los taparan—, los dos chips que sí
+     son de todo el reporte quedaban debajo del borde del panel (en la
+     captura, Sub Almacén asomaba cortado y Familia no se veía).
+
+     **Dónde fue cada uno**:
+     - Las dos fechas y «Comparar con», **en el panel de fecha de cada
+       vista que gobiernan** (`movimientos.py::AJUSTES_PIE`), como «Mes del
+       cierre» en Ajuste (#632). Es lo que el usuario había decidido para
+       «Fecha de las salidas» cuando se hizo aquélla.
+     - «Valorizar la merma», **dentro de las tres tarjetas** que valorizan
+       (`movimientos_merma.control_valorizacion`): en Porcionamientos, en
+       la fila de controles, donde Salidas tiene «Partir por» (la fila
+       envolvía ya en dos renglones y cabe en el primero: 1.135 de 1.149px);
+       en «Para revisar», en el renglón que decía «(se cambia en
+       «Filtros»)», compacto a 26px; en «Rendimiento», junto a la ventana,
+       con la columna del medio ensanchada a 2.0 (con 0.9 la ventana y la
+       valorización se apilaban y la cabecera pasaba de 32 a 80px).
+     - «Filtros» quedó con los dos chips. Lo vigila
+       `test_graficos.py::_pruebas_ajustes_compartidos` con `ast`: adentro
+       del `compartimento_filtros` de Movimientos no se llama a nada más que
+       `filtro_pills`.
+
+     **Un valor por AJUSTE, no por vista.** «por Período» y «por Área» son
+     dos cortes del mismo total: con una fecha cada una darían, para los
+     mismos días, S/ 6.893 y S/ 7.703 (septiembre de 2026), lo que la #641
+     acababa de corregir. Lo elegido en una vista sale elegido en las otras
+     y el panel las nombra («Cambia también «Salidas por Área»»). La pieza
+     es `base.eleccion_compartida`: el valor vive en su clave de siempre
+     (`K_FECHA_REQ`, `K_FECHA_SAL`, `K_COMP_SAL`, `K_VALOR`, que dejaron
+     de ser keys de widget) y cada sitio dibuja su propio
+     `segmented_control` con una key que lleva el VALOR — cambiado en una
+     vista, el de la vecina nace de nuevo con el nuevo, aunque viva en un
+     popover cerrado (#467).
+
+     **El widget vive en el fragment de UNA sección y el valor manda sobre
+     varias**: cambiarlo enciende `movimientos_comun.K_RECARGA`, y cada
+     sección, DESPUÉS de dibujarse entera (`_y_recargar`, #373), pide la
+     corrida completa con `recargar_si_cambio`. La corrida completa apaga la
+     marca al empezar (`renderizar_graficos_movimientos`), así que una que
+     ya lo es no pide otra. Es lo que costaba antes: en la franja, cada
+     cambio ya era una corrida completa.
+
+     **Al COSTADO del panel, no debajo** (`selector_fecha_tarjeta(...,
+     pie_al_costado=True)`). Debajo, el pie de Salidas medía 191px y el
+     popover tiene techo de 70vh: a 1024×768, 629px de contenido en 538 de
+     alto; a 1323×619, la pantalla del usuario, el techo es 433 y el panel
+     solo mide ~400, así que el pie entero quedaba tras un scroll — el mismo
+     «algo ocultos» del pedido. Al costado, a 1323×619 el popover mide
+     846×425 sin scroll. Tres cosas que hubo que resolver, medidas:
+     - **Streamlit le pone al popover `max-width: 704px`**: con la columna,
+       el panel se aplastaba. Se suelta sólo para éstos con
+       `[data-testid="stPopoverBody"]:has(.mov-pie-rot)` —la clase del
+       rótulo, una clase sola adentro del `:has` (#469)—.
+     - **Los dos hijos del contenedor horizontal nacen con `flex: 1 1
+       128px`**: medían 369px cada uno y el panel (476) se metía debajo de
+       la columna. Van con `flex: 0 0 auto`.
+     - **El panel se monta ~250ms después de abrir el popover** (es un
+       componente que se arma al montarse, #616): sin su ancho reservado,
+       la columna aparecía a la izquierda y saltaba a su lugar (#465). Con
+       `min-width: min(476px, …)` en el primer hijo, la columna está en
+       x=850 desde el primer cuarto de segundo.
+     Y dos de detalle: el rótulo apilado sobre su control quedaba debajo de
+     los botones por el `margin-bottom: -16px` de `stMarkdownContainer`
+     (#162), y la columna mide 290px porque «Sin comparar · Año pasado ·
+     Dos años» pide 271 en un renglón. Por debajo de ~860px de ancho la
+     columna baja debajo del panel (el contenedor envuelve) y su línea pasa
+     arriba. Ajuste conserva «Mes del cierre» debajo: su panel de meses es
+     más bajo y nadie lo pidió.
+
+     **Medido en la app con datos reales** (navegador integrado, 1323×619):
+     «Proceso» en el panel de «Requerimientos por Período» → la tarjeta
+     dice «por fecha de proceso», «Requerimientos por Área» pasa a
+     «Procesado por sub almacén» con «Proceso» marcado en su panel, y de
+     vuelta a «Registro» desde ésta; «Dos años» en «Salidas por Período» →
+     «Mismo rango 2023-24» en su fila de KPI y «Dos años» marcado en
+     «Salidas por Área» y Destino; «Costo del día» en Rendimiento →
+     Porcionamientos de S/ 242,1k a 228,0k, la merma del producto de
+     S/ 10.862 a 9.755 «al costo del día», y «Para revisar» con «Costo del
+     día» marcado. La guarda de `eleccion_compartida` es un AppTest (el
+     mismo valor en dos sitios, ida y vuelta), verde con la 1.59 y la 1.64;
+     y la de «quien lee `valorizacion()` dibuja `control_valorizacion`»,
+     con `ast`. Rotas a propósito —un `st.toggle` en «Filtros», el control
+     quitado de Rendimiento—, las dos fallan.
+
+     **En Cloud hace falta «Reboot app» para verlo** (#357): `app.py` no
+     cambió, así que sin el reboot sigue el paquete viejo, sin caerse.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50292,7 +50396,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#643**; la próxima toma el número siguiente.
+> última regla es la **#644**; la próxima toma el número siguiente.
 
 >
 

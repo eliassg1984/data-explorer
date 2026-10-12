@@ -265,8 +265,9 @@ def _fila_pct(mes, mes_ant, rot_ant):
 
 def tarjeta_destino(fam_sel=(), anios=1, rango=None, fecha=None):
     """La sección entera. `fam_sel` es el chip Familia de la franja;
-    `anios`, si se compara con el año pasado (lo elige el panel «Filtros»
-    para todas las secciones de salidas: acá, uno o dos es lo mismo).
+    `anios`, si se compara con el año pasado («Comparar con», en el
+    panel de fecha de esta sección y de las dos de salidas, regla #644: acá,
+    uno o dos es lo mismo).
 
     `rango` es `(inicio, fin exclusivo)` de la sección y `fecha` el que
     dibuja su botón de fecha junto al título (regla #617). Hasta ese día,

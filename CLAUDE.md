@@ -1125,19 +1125,30 @@ y proceso (cuándo movió el stock: el kardex, la «Relación de Salidas» y
 Stock › Movimientos por Tipo). Septiembre 2026: S/ 6.893 contra 7.703, las
 dos cuadradas al céntimo; difieren las notas que cruzan de mes. Las
 secciones de salidas de Movimientos abren por REGISTRO (a pedido) y se
-cambian en «Filtros» (`graficos/movimientos.py::K_FECHA_SAL`), junto al
-selector que las compara con años anteriores. «Destino de lo que entra»
+cambian en el panel de fecha de cada una (`graficos/movimientos.py::K_FECHA_SAL`),
+junto a «Comparar con», que las compara con años anteriores. «Destino de lo que entra»
 usa SIEMPRE la del kardex: si no, sus columnas no cierran. Y se registra
 por lotes —la comida de personal de un mes entero en 27 minutos—, así que
 ninguna de las dos es el día de la merma. Regla #614.
 
 **Un requerimiento también** (2026-10-11, regla #639): `FECHA REGISTRO`
 (cuándo el área lo digitó) y `FECHA PROCESADO` (cuándo el Almacén lo
-procesó); la mitad se procesa otro día. «Filtros» tiene «Fecha de los
-requerimientos» (`graficos/movimientos.py::K_FECHA_REQ`), que abre en
-registro y manda sobre las dos vistas de requerimientos. Los topes del
-botón de fecha de Destino y Consumo salen de ese parquet y siguen por
-registro, elija lo que elija.
+procesó); la mitad se procesa otro día. «Fecha de los requerimientos»
+(`graficos/movimientos.py::K_FECHA_REQ`) abre en registro y manda sobre
+las dos vistas de requerimientos. Los topes del botón de fecha de Destino
+y Consumo salen de ese parquet y siguen por registro, elija lo que elija.
+
+**«Filtros» tiene sólo lo que vale para TODO el reporte** (2026-10-11,
+regla #644): en Movimientos, Sub Almacén y Familia. Las dos fechas y
+«Comparar con» van en una columna AL COSTADO del panel de fecha de cada
+vista que gobiernan (`graficos/movimientos.py::AJUSTES_PIE`; debajo quedaban tras
+un scroll a 619px de alto), y «Valorizar la merma» dentro de sus tres
+tarjetas. Un valor por ajuste, no por vista —«por Período» y «por Área»
+son cortes del mismo total—: lo pinta en cada sitio
+`graficos/base.py::eleccion_compartida`, y cambiarlo pide una corrida
+completa (`graficos/movimientos_comun.py::recargar_si_cambio`), porque los parquets se
+leen afuera de las secciones. Lo vigila
+`test_graficos.py::_pruebas_ajustes_compartidos`.
 
 ## El consumo según recetas baja hasta lo que se COMPRA
 

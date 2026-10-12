@@ -4362,10 +4362,145 @@ def _pruebas_fecha_por_vista():
           mov.columna_de_fecha(sola, mov.FECHA_PROCESO),
           ("Fecha Registro", mov.FECHA_REGISTRO))
     check("el selector de requerimientos abre en registro",
-          "default=FECHA_REGISTRO, required=True, key=K_FECHA_REQ" in fuente,
-          True)
+          mov._AJUSTES["req_fecha"][::3], (mov.K_FECHA_REQ, mov.FECHA_REGISTRO))
     check("las vistas de requerimientos usan la fecha elegida",
           "columna_de_fecha(df_f, fecha_requerimientos())" in fuente, True)
+    return fallos
+
+
+_SCRIPT_ELECCION_COMPARTIDA = '''
+import streamlit as st
+from graficos.base import eleccion_compartida
+
+for _sitio in ("t_a", "t_b"):
+    eleccion_compartida("t_valor", "Valor", ("Uno", "Dos"), "Uno", _sitio,
+                        recarga="t_recarga")
+'''
+
+
+def _pruebas_ajustes_compartidos():
+    """Movimientos: «Filtros» tiene sólo lo que vale para todo el reporte
+    (regla #644).
+
+    1. EL MISMO VALOR EN VARIOS SITIOS (`base.eleccion_compartida`): elegido
+       en uno, sale elegido en el otro, y pide la corrida completa. Con
+       AppTest, que corre el Streamlit de verdad.
+    2. «FILTROS» SÓLO TIENE LOS CHIPS: adentro del `compartimento_filtros`
+       de Movimientos no se llama a nada más que `filtro_pills`. Las fechas,
+       la comparación y la valorización estaban ahí y no decían a qué vistas
+       cambiaban.
+    3. CADA AJUSTE DEL PIE se ve en TODAS las vistas que gobierna (al menos
+       dos visibles: si no, no es compartido), y cada categoría del pie es
+       la de una vista de verdad.
+    4. QUIEN LEE LA VALORIZACIÓN LA MUESTRA: toda función de Movimientos que
+       llama a `valorizacion()` dibuja también `control_valorizacion`. Una
+       tarjeta que valorizara sin el control cambiaría de monto por un clic
+       hecho en otra.
+    """
+    import ast
+    import pathlib
+    import tempfile
+
+    import graficos.movimientos as mov
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    ajustes compartidos · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA ajustes compartidos · {nombre}: got={got!r} exp={exp!r}")
+
+    # 1. El mismo valor en dos sitios.
+    try:
+        from streamlit.testing.v1 import AppTest
+        with tempfile.TemporaryDirectory() as tmp:
+            script = pathlib.Path(tmp) / "eleccion_compartida.py"
+            script.write_text(_SCRIPT_ELECCION_COMPARTIDA, encoding="utf-8")
+            at = AppTest.from_file(str(script), default_timeout=30)
+            at.run()
+            check("abre en el default, en los dos sitios",
+                  [at.segmented_control(key=k).value
+                   for k in ("t_a_uno", "t_b_uno")], ["Uno", "Uno"])
+            at.segmented_control(key="t_a_uno").set_value("Dos").run()
+            check("elegido en uno, sale elegido en el otro",
+                  [at.segmented_control(key=k).value
+                   for k in ("t_a_dos", "t_b_dos")], ["Dos", "Dos"])
+            check("el valor vive en su clave",
+                  at.session_state["t_valor"], "Dos")
+            check("y pide la corrida completa",
+                  at.session_state["t_recarga"], True)
+            at.session_state["t_recarga"] = False
+            at.segmented_control(key="t_b_dos").set_value("Uno").run()
+            check("y de vuelta desde el otro",
+                  ([at.segmented_control(key=k).value
+                    for k in ("t_a_uno", "t_b_uno")],
+                   at.session_state["t_valor"]), (["Uno", "Uno"], "Uno"))
+            check("sin excepciones", [e.value for e in at.exception], [])
+    except Exception as e:  # el arnés en sí: que se vea qué se movió
+        fallos += 1
+        print(f"FALLA ajustes compartidos · el arnés no corrió: "
+              f"{type(e).__name__}: {e}")
+
+    # 2. «Filtros» sólo con los chips.
+    raiz = pathlib.Path(__file__).parent
+    arbol = ast.parse((raiz / "graficos" / "movimientos.py")
+                      .read_text(encoding="utf-8"))
+    adentro = []
+    for nodo in ast.walk(arbol):
+        if not isinstance(nodo, ast.With):
+            continue
+        if not any(isinstance(i.context_expr, ast.Call)
+                   and getattr(i.context_expr.func, "id", "")
+                   == "compartimento_filtros" for i in nodo.items):
+            continue
+        for sub in nodo.body:
+            for c in ast.walk(sub):
+                if isinstance(c, ast.Call):
+                    f = c.func
+                    adentro.append(f.id if isinstance(f, ast.Name)
+                                   else getattr(f, "attr", "?"))
+    check("«Filtros» de Movimientos dibuja sólo los chips",
+          sorted(set(adentro)), ["filtro_pills"])
+
+    # 3. Los ajustes del pie.
+    cats = set(mov.CATEGORIA_VISTA.values())
+    check("cada pie es el de una vista de verdad",
+          sorted(set(mov.AJUSTES_PIE) - cats), [])
+    check("cada ajuste del pie existe",
+          sorted({a for v in mov.AJUSTES_PIE.values() for a in v}
+                 - set(mov._AJUSTES)), [])
+    for ajuste in mov._AJUSTES:
+        check(f"«{mov._AJUSTES[ajuste][1]}» se ve en dos vistas o más",
+              len(mov.vistas_con_ajuste(ajuste)) >= 2, True)
+    check("las salidas comparan en su vista y en Destino",
+          mov.vistas_con_ajuste("comparar", salvo="sal_periodo"),
+          ["Salidas por Área", "Destino de lo que entra"])
+
+    # 4. Quien lee la valorización la muestra.
+    sin_control = []
+    for modulo in ("movimientos.py", "movimientos_merma.py"):
+        arbol = ast.parse((raiz / "graficos" / modulo)
+                          .read_text(encoding="utf-8"))
+        for fn in ast.walk(arbol):
+            if not isinstance(fn, ast.FunctionDef) or fn.name == "valorizacion":
+                continue
+            llamadas = {c.func.id for c in ast.walk(fn)
+                        if isinstance(c, ast.Call)
+                        and isinstance(c.func, ast.Name)}
+            # Las funciones anidadas cuentan en la de afuera y en ellas
+            # mismas: se mira la más chica que lee el valor.
+            hijas = [h for h in ast.walk(fn) if h is not fn
+                     and isinstance(h, ast.FunctionDef)
+                     and any(isinstance(c, ast.Call)
+                             and getattr(c.func, "id", "") == "valorizacion"
+                             for c in ast.walk(h))]
+            if "valorizacion" in llamadas and not hijas \
+                    and "control_valorizacion" not in llamadas:
+                sin_control.append(f"{modulo}::{fn.name}")
+    check("quien lee la valorización dibuja su control", sin_control, [])
     return fallos
 
 
@@ -10951,6 +11086,7 @@ def main():
 
     # ── Movimientos: cada vista con su propia fecha (regla #617) ─────────
     fallos += _pruebas_fecha_por_vista()
+    fallos += _pruebas_ajustes_compartidos()
 
     # ── Compras por período: «Partir por» (regla #620) ───────────────────
     fallos += _pruebas_partir_por()

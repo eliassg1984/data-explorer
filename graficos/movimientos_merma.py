@@ -11,8 +11,10 @@ nPrecioPromedio`) — no al que tenía el día que se porcionó. Septiembre
 2026: 267 porcionamientos, 627,77 de merma, S/ 20.602,20, y la app da lo
 mismo (`movimientos_periodo.a_precio_de_hoy`). Al costo del día —el de los
 cortes, el mismo con que el kardex descargó el insumo— son S/ 20.413,15.
-Las dos se eligen en «Filtros» (`selector_valorizacion`); abre como el
-Almacén, a pedido.
+Las dos se eligen DENTRO de las tarjetas que valorizan —Porcionamientos,
+Para revisar y Rendimiento— con `control_valorizacion`, un valor para las
+tres (regla #644; hasta el 2026-10-11, en «Filtros»); abre como el Almacén,
+a pedido.
 
 LO QUE AGREGAN LAS TRES VISTAS, que el reporte no tiene:
 
@@ -61,13 +63,14 @@ from tema import (
     GRIS_LINEA, GRIS_TEXTO, LAVANDA_FILA, LAVANDA_FONDO, TEXTO_PRINCIPAL,
 )
 from graficos import alturas
-from graficos.base import _compras_layout, _resolver
+from graficos.base import _compras_layout, _resolver, eleccion_compartida
 from graficos.drill_tablas import CSS_TITULOS_DRILL
+from graficos.movimientos_comun import K_RECARGA
 from graficos.movimientos_periodo import (
     a_precio_de_hoy, lineas_porcionamientos, unidad_corta,
 )
 
-# ── La valorización (el selector de «Filtros») ─────────────────────────────
+# ── La valorización (`control_valorizacion`, en cada tarjeta) ──────────────
 VALOR_HOY = "Precio de hoy"
 VALOR_DIA = "Costo del día"
 K_VALOR = "mov_porc_valor"
@@ -382,20 +385,18 @@ def por_mes(xs):
 # ═══════════════════════════════════════════════════════════════════════════
 # LO QUE LEEN DE AFUERA
 # ═══════════════════════════════════════════════════════════════════════════
-def selector_valorizacion():
-    """«Valorizar la merma», en el panel «Filtros» de Movimientos. Manda
-    sobre la tarjeta «Porcionamientos» y sobre «Para revisar» y
-    «Rendimiento»; abre como el Reporte de Mermas del Almacén, a pedido."""
-    st.markdown('<div class="filtro-rotulo filtro-mov_porc_valor">Valorizar '
-                'la merma</div>', unsafe_allow_html=True)
-    st.segmented_control(
-        "Valorizar la merma", [VALOR_HOY, VALOR_DIA], default=VALOR_HOY,
-        required=True, key=K_VALOR, label_visibility="collapsed",
-        help=("**Precio de hoy**: la merma × el precio promedio actual del "
-              "producto, como el «Reporte de Mermas» del Almacén — reimpreso "
-              "otro día, da otro monto. **Costo del día**: lo que costaba el "
-              "producto el día que se porcionó, el mismo precio con que el "
-              "kardex lo descargó."))
+def control_valorizacion(prefijo):
+    """«Valorizar la merma» DENTRO de una tarjeta (regla #644): «Precio de
+    hoy» —la merma × el precio promedio actual del producto, como el
+    «Reporte de Mermas» del Almacén, que reimpreso otro día da otro monto— o
+    «Costo del día» —lo que costaba el día que se porcionó, el precio con
+    que el kardex lo descargó—. Un valor para las tres tarjetas que lo
+    muestran (Porcionamientos, Para revisar y Rendimiento): elegido en una,
+    sale elegido en las otras. `prefijo` es el de la key del widget, uno
+    por tarjeta. Abre como el Almacén, a pedido. Devuelve el vigente."""
+    return eleccion_compartida(K_VALOR, "Valorizar la merma",
+                               (VALOR_HOY, VALOR_DIA), VALOR_HOY,
+                               f"{prefijo}_valor", recarga=K_RECARGA)
 
 
 def valorizacion():
@@ -703,8 +704,13 @@ def tarjeta_revisar(d_rango, d_hist, cols, rango, fecha=None):
                  "Lo normal": st.column_config.Column(
                      help="La mitad central de los porcionamientos del "
                           "producto en los últimos 18 meses.")})
-            st.caption(f"Valorizado {_rot_valor(modo)} (se cambia en "
-                       "«Filtros»). Clic en una fila para ver sus cortes.")
+            # La valorización, en el renglón que antes decía dónde
+            # cambiarla —«(se cambia en «Filtros»)»—: la tarjeta no crece
+            # (regla #644).
+            with st.container(key="mov_merma_rev_pie", horizontal=True,
+                              vertical_alignment="center", gap="small"):
+                control_valorizacion("mov_merma_rev_ctl")
+                st.caption("Clic en una fila para ver sus cortes.")
         with c_ficha:
             _ficha(x.iloc[pos], cortes, modo)
 
@@ -855,12 +861,17 @@ def tarjeta_rendimiento(d_hist, cols, rango):
         precios = precios_hoy()
         fin_f = (rango[1] if rango
                  else d_hist["_fecha"].max() + pd.Timedelta(days=1))
-        # columnas-internas: el título a la izquierda, la ventana y el
-        # producto a la derecha, en el mismo renglón.
-        c_tit, c_ven, c_prod = st.columns([1.2, 0.9, 1.5],
+        # columnas-internas: el título a la izquierda, la ventana, la
+        # valorización (regla #644) y el producto a la derecha, en el mismo
+        # renglón. La del medio pide 492px —258 de la ventana y 226 de la
+        # valorización—: con menos, las dos se apilaban y la cabecera pasaba
+        # de 32 a 80px (medido a 1323px).
+        c_tit, c_ven, c_prod = st.columns([0.8, 2.0, 1.4],
                                           vertical_alignment="center")
-        with c_ven:
+        with c_ven, st.container(key="mov_merma_rend_ctl", horizontal=True,
+                                 vertical_alignment="center", gap="small"):
             ini, fin = _ventana("mov_merma_rend_ventana", fin_f)
+            control_valorizacion("mov_merma_rend_ctl")
         todo, cortes = porcionamientos(
             d_hist[(d_hist["_fecha"] >= fin - pd.Timedelta(days=DIAS_NORMAL))
                    & (d_hist["_fecha"] < fin)], cols)

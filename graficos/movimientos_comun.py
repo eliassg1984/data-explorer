@@ -73,6 +73,28 @@ from graficos import alturas
 import franja_fecha
 
 
+# ─── Los ajustes que valen para VARIAS vistas (regla #644) ─────────────────
+# «Fecha de los requerimientos», «Fecha de las salidas», «Comparar con» y
+# «Valorizar la merma» se eligen DENTRO de las vistas que gobiernan —en su
+# panel de fecha, o en la tarjeta—, y cada uno vale para todas las que
+# lo muestran (`base.eleccion_compartida`). El widget vive en el fragment de
+# UNA sección, así que cambiarlo pide una corrida completa: lo enciende
+# `K_RECARGA` y lo cumple `recargar_si_cambio`, que cada sección llama
+# DESPUÉS de dibujarse entera (regla #373: un `st.rerun` antes esconde los
+# widgets que no llegaron a registrarse).
+K_RECARGA = "_mov_recarga"
+
+
+def recargar_si_cambio():
+    """Si un ajuste compartido cambió en esta corrida de fragment, una
+    corrida completa: los parquets se leen afuera de las secciones y las
+    otras vistas que lo muestran tienen que enterarse. La corrida completa
+    apaga la marca al empezar (`renderizar_graficos_movimientos`), así que
+    una que ya lo es no pide otra."""
+    if st.session_state.pop(K_RECARGA, False):
+        st.rerun(scope="app")
+
+
 # ─── El rango vigente, en una sola función ─────────────────────────────────
 def _rango_vigente():
     """`(inicio, fin_EXCLUSIVO)` del rango canónico del reporte, o None.

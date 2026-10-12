@@ -154,11 +154,12 @@ from estado_rango import atajos_tarjeta
 from estilos import TAM_FUENTE
 from tablas import renderizar_aggrid_desktop
 from graficos.base import (
-    compartimento_filtros, contar_filtros, filtro_pills, _render_rail,
-    _resolver, pila_sin_tablas, publicar_contexto_ia, rail_sin_tablas,
-    rango_tarjeta, renderizar_graficos_genericos, seccion_perezosa,
-    selector_fecha_tarjeta,
+    compartimento_filtros, contar_filtros, eleccion_compartida, filtro_pills,
+    _render_rail, _resolver, pila_sin_tablas, publicar_contexto_ia,
+    rail_sin_tablas, rango_tarjeta, renderizar_graficos_genericos,
+    seccion_perezosa, selector_fecha_tarjeta,
 )
+from graficos.movimientos_comun import K_RECARGA, recargar_si_cambio
 # `_ANULADO`, `SALIDAS` y `REQUERIMIENTOS` son de las tarjetas «por
 # período»: el «Detalle de salidas» y la cadena de requerimientos suman lo
 # mismo que ellas (reglas #511 y #641), y dos copias de «qué es un documento
@@ -176,7 +177,7 @@ from graficos import drill_tablas
 from graficos.movimientos_consumo import tarjeta_consumo
 from graficos.movimientos_destino import tarjeta_destino
 from graficos.movimientos_merma import (
-    VALOR_HOY, precios_hoy, selector_valorizacion, tarjeta_proveedores,
+    VALOR_HOY, control_valorizacion, precios_hoy, tarjeta_proveedores,
     tarjeta_rendimiento, tarjeta_revisar, unidades_kardex, valorizacion,
 )
 
@@ -346,12 +347,17 @@ def fecha_de_vista(categoria, ctx_v):
     """El que dibuja el botón de fecha de la vista: `dibujar(titulo_html)`.
     Con título, comparten renglón (la fila de `selector_fecha_tarjeta`).
     Las keys llevan el prefijo `mov_f_`, de donde cuelga su CSS
-    (`estilos/_80_cards.py`)."""
+    (`estilos/_80_cards.py`). Al costado del panel, los ajustes de cómo se
+    leen sus fechas (`AJUSTES_PIE`, regla #644)."""
+    pie = ((lambda: _pie_ajustes(categoria)) if AJUSTES_PIE.get(categoria)
+           else None)
+
     def dibujar(titulo_html=None):
         if ctx_v:
             selector_fecha_tarjeta(f"mov_f_{categoria}", None,
                                    titulo_html=titulo_html,
-                                   categoria=categoria, ctx=ctx_v)
+                                   categoria=categoria, ctx=ctx_v, pie=pie,
+                                   pie_al_costado=True)
         elif titulo_html:
             st.markdown(titulo_html, unsafe_allow_html=True)
     return dibujar
@@ -529,53 +535,87 @@ número de años. Abre en «Año pasado», como el mockup aprobado."""
 K_COMP_SAL = "mov_sal_comparar"
 
 
-def _selectores_salidas():
-    """La fecha y la comparación de las secciones de SALIDAS, en el panel
-    «Filtros» de la franja (regla #614).
+# ── LOS AJUSTES DE LAS FECHAS, AL COSTADO DE SU PANEL (2026-10-11, #644) ─
+# «Fecha de los requerimientos», «Fecha de las salidas» y «Comparar con» se
+# eligen en el panel de fecha de CADA vista que gobiernan, como «Mes del
+# cierre» en Ajuste (#632), en una columna a su derecha: debajo quedaban
+# tras un scroll en la pantalla del usuario (`pie_al_costado`). Hasta ese día estaban en «Filtros», arriba
+# de los chips: desde ahí no se sabía a cuáles de las once vistas les
+# cambiaban algo, el contador del botón no los contaba —con «Proceso»
+# elegido nada lo avisaba— y empujaban a Sub Almacén y Familia, que sí
+# valen para todo, debajo del borde del panel.
+#
+# Un valor por AJUSTE, no por vista: «por Período» y «por Área» son dos
+# cortes del mismo total, y con una fecha cada una darían montos distintos
+# para los mismos días (S/ 6.893 contra 7.703 en septiembre de 2026), lo
+# que la regla #641 acababa de corregir. Lo elegido en una vista se ve
+# elegido en las otras, y el panel las nombra. Cambiarlo pide una corrida
+# completa: los parquets se leen afuera de las secciones
+# (`movimientos_comun.recargar_si_cambio`).
+_AJUSTES = {
+    # ajuste: (clave del valor, rótulo, opciones, default, qué es)
+    "req_fecha": (
+        K_FECHA_REQ, "Fecha de los requerimientos",
+        (FECHA_REGISTRO, FECHA_PROCESO), FECHA_REGISTRO,
+        "**Registro**: el día en que el área lo digitó. **Proceso**: el día "
+        "en que el Almacén lo procesó; uno sin procesar no entra."),
+    "sal_fecha": (
+        K_FECHA_SAL, "Fecha de las salidas",
+        (FECHA_REGISTRO, FECHA_PROCESO), FECHA_REGISTRO,
+        "**Registro**: el día en que se digitó la nota, como la «Relación de "
+        "Notas de Salidas» del Almacén. **Proceso**: el día en que movió el "
+        "stock, como el kardex."),
+    "comparar": (
+        K_COMP_SAL, "Comparar con", COMPARAR_SAL, COMPARAR_SAL[1],
+        "El mismo rango de fechas, uno o dos años atrás."),
+}
+AJUSTES_PIE = {
+    # categoría de la vista (`CATEGORIA_VISTA`): los ajustes de su pie.
+    # «Destino» compara pero no elige fecha: va siempre por la del kardex
+    # (regla #614).
+    "req_periodo": ("req_fecha",),
+    "req_area":    ("req_fecha",),
+    "req_tabla":   ("req_fecha",),
+    "sal_periodo": ("sal_fecha", "comparar"),
+    "sal_area":    ("sal_fecha", "comparar"),
+    "sal_tabla":   ("sal_fecha",),
+    "destino":     ("comparar",),
+}
+_NOTA_PIE = {
+    ("destino", "comparar"): "Esta vista compara sólo con el año pasado: "
+                             "«Dos años» es lo mismo acá.",
+}
 
-    En el panel y no en una tarjeta por dos razones: mandan sobre TRES
-    secciones a la vez —por período, por área y el destino—, y un control
-    adentro de una sección vive en su fragment, que no vuelve a cargar el
-    parquet (lo carga `renderizar_graficos_movimientos`, afuera). Y en la
-    franja no le cuestan alto a ninguna tarjeta. Es el lugar de los otros
-    dos selectores de «qué fecha cuenta»: el día de la venta (#593) y el
-    mes del cierre (#613)."""
-    st.markdown('<div class="filtro-rotulo filtro-mov_sal_fecha">Fecha de '
-                'las salidas</div>', unsafe_allow_html=True)
-    st.segmented_control(
-        "Fecha de las salidas", [FECHA_REGISTRO, FECHA_PROCESO],
-        default=FECHA_REGISTRO, required=True, key=K_FECHA_SAL,
-        label_visibility="collapsed",
-        help=("**Registro**: el día en que se digitó la nota, como la "
-              "«Relación de Notas de Salidas» del Almacén. **Proceso**: el "
-              "día en que movió el stock, como el kardex, la «Relación de "
-              "Salidas» y Stock › Movimientos por Tipo. Sólo cambian las "
-              "notas que cruzan de mes."))
-    st.markdown('<div class="filtro-rotulo filtro-mov_sal_comparar">Comparar '
-                'salidas con</div>', unsafe_allow_html=True)
-    st.segmented_control(
-        "Comparar salidas con", list(COMPARAR_SAL), default=COMPARAR_SAL[1],
-        required=True, key=K_COMP_SAL, label_visibility="collapsed",
-        help=("El mismo rango de fechas uno o dos años atrás: un trazo gris "
-              "sobre cada barra, una tarjeta con la variación y, en el "
-              "Resumen y en los cuadros, una columna «vs <año>»."))
+
+def vistas_con_ajuste(ajuste, salvo=None):
+    """Los rótulos del rail de las vistas VISIBLES que muestran `ajuste` al
+    panel de fecha, sin la de categoría `salvo`: a quién más cambia."""
+    return [_rotulo_rail(v) for sec, v in _PILA
+            if CATEGORIA_VISTA.get(sec) != salvo
+            and ajuste in AJUSTES_PIE.get(CATEGORIA_VISTA.get(sec), ())]
 
 
-def _selector_fecha_requerimientos():
-    """La fecha de las secciones de REQUERIMIENTOS, en «Filtros», encima de
-    la de las salidas (regla #639). En el panel por lo mismo que aquélla:
-    manda sobre dos secciones, y el parquet se lee afuera de sus
-    fragments."""
-    st.markdown('<div class="filtro-rotulo filtro-mov_req_fecha">Fecha de '
-                'los requerimientos</div>', unsafe_allow_html=True)
-    st.segmented_control(
-        "Fecha de los requerimientos", [FECHA_REGISTRO, FECHA_PROCESO],
-        default=FECHA_REGISTRO, required=True, key=K_FECHA_REQ,
-        label_visibility="collapsed",
-        help=("**Registro**: el día en que el área digitó el requerimiento. "
-              "**Proceso**: el día en que el Almacén lo procesó; uno sin "
-              "procesar todavía no tiene esa fecha y no entra. Cambia "
-              "«Requerimientos por Período» y «Requerimientos por Área»."))
+def _pie_ajustes(categoria):
+    """Los ajustes del panel de fecha de la vista `categoria`, en una
+    columna a la DERECHA del panel (`pie_al_costado`): cada uno con su
+    rótulo, su control y debajo qué es y a qué otras vistas cambia. Debajo
+    del panel quedaban fuera de la vista en la pantalla del usuario."""
+    pref = f"mov_f_{categoria}"
+    for ajuste in AJUSTES_PIE[categoria]:
+        clave, rotulo, opciones, defecto, que_es = _AJUSTES[ajuste]
+        with st.container(key=f"{pref}_aj_{ajuste}", gap="small"):
+            st.markdown(f'<div class="mov-pie-rot">{rotulo}</div>',
+                        unsafe_allow_html=True)
+            eleccion_compartida(clave, rotulo, opciones, defecto,
+                                f"{pref}_{ajuste}", recarga=K_RECARGA)
+            otras = [f"«{v}»" for v in vistas_con_ajuste(ajuste, categoria)]
+            if otras:
+                que_es += (" Cambia también "
+                           + (" y ".join([", ".join(otras[:-1]), otras[-1]])
+                              if len(otras) > 1 else otras[0]) + ".")
+            if (categoria, ajuste) in _NOTA_PIE:
+                que_es += " " + _NOTA_PIE[(categoria, ajuste)]
+            st.caption(que_es)
 
 
 def fecha_requerimientos():
@@ -909,6 +949,9 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     app.py — la pivote). La de salidas va por `_tabla_salidas`, ver el
     docstring del módulo.
     """
+    # Esta corrida ya lee los ajustes compartidos con su valor nuevo: la
+    # sección que los cambió no tiene que pedir otra (regla #644).
+    st.session_state.pop(K_RECARGA, None)
     # Cada sección recorta a su fecha: el parquet llega ENTERO. `df_f` (el
     # rango de la franja, que en este reporte ya no se ve) queda sólo de
     # respaldo para quien llame sin `df_full`.
@@ -924,8 +967,8 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     col_punit = _resolver(df_f, ["Precio Unit", "PRECIO UNIT",
                                  "Precio Unitario"])
     # La fecha que recorta las dos vistas de requerimientos y agrupa las
-    # barras: la que eligió el usuario en «Filtros», registro o proceso
-    # (regla #639). Y las dos que usa sólo «Requerimientos por período»: el
+    # barras: la que eligió el usuario en el panel de fecha de esas
+    # vistas, registro o proceso (reglas #639 y #644). Y las dos que usa sólo «Requerimientos por período»: el
     # código que cuenta requerimientos (el demo no lo trae: ahí cada fila
     # cuenta como uno) y el estado.
     col_fecha, fecha_req = columna_de_fecha(df_f, fecha_requerimientos())
@@ -946,15 +989,14 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # ignoraban; ahora la trae (`AREA`, regla #509) y es el mismo catálogo.
     # Sus opciones siguen saliendo de requerimientos, que es el `archivo`
     # del reporte. FAMILIA existe en los dos, con las mismas seis familias.
+    #
+    # «Filtros» tiene SÓLO lo que vale para todo el reporte (regla #644).
+    # Las fechas de requerimientos y salidas y la comparación van en el
+    # panel de fecha de sus vistas, y la valorización de la merma en sus
+    # tarjetas: acá arriba no decían a qué vistas cambiaban, y con ellos
+    # encima los dos chips quedaban debajo del borde del panel.
     with compartimento_filtros(contar_filtros("mov_graf_filtro_sub",
                                               "mov_graf_filtro_fam")):
-        # Primero, como el día de la venta en Ventas: el panel tiene techo
-        # de 60vh y con las 13 áreas de Sub Almacén lo de abajo queda fuera
-        # de la vista sin que nada avise que hay más. Requerimientos antes
-        # que salidas: el orden de la página.
-        _selector_fecha_requerimientos()
-        _selectores_salidas()
-        selector_valorizacion()
         _, sub_sel = filtro_pills(df_req, col_sub,
                                   "mov_graf_filtro_sub", "Sub Almacén")
         _, fam_sel = filtro_pills(df_req, col_fam,
@@ -1306,10 +1348,13 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
         rng, fecha = _rango_y_boton("mov_sec_porc", fechas_de(d_todo_p["_fecha"]))
         d_porc = recortar_vista(d_todo_p, rng)
         # Con «Precio de hoy» (el default, regla #615) la merma vale lo
-        # que el Reporte de Mermas del Almacén.
+        # que el Reporte de Mermas del Almacén. Se elige en la fila de
+        # controles de la tarjeta (regla #644), donde Salidas tiene
+        # «Partir por».
         tarjeta_porcionamientos_periodo(
             d_porc, orden=orden, rango=rng, fecha=fecha,
             precios=precios_hoy() if valorizacion() == VALOR_HOY else None,
+            valorizar=lambda: control_valorizacion("mov_porc_ctl"),
             cols={nombre: _resolver(d_porc, columna)
                   for nombre, columna in _COLS_PORC.items()})
 
@@ -1389,5 +1434,16 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # fragment de adentro se re-dibuje.
     for _i, (_clave, _vista) in enumerate(_PILA):
         with st.container(key=_clave):
-            seccion_perezosa(_clave, _vista, _DIBUJANTES[_clave],
+            seccion_perezosa(_clave, _vista, _y_recargar(_DIBUJANTES[_clave]),
                              activa_de_entrada=(_i == 0))
+
+
+def _y_recargar(dibujar):
+    """`dibujar` y, si en él cambió un ajuste compartido —una fecha en su
+    panel, la valorización de la merma—, la corrida completa que lo
+    lleva a las otras vistas (regla #644). Después de dibujar la sección
+    ENTERA, para que ningún widget suyo quede sin registrar (#373)."""
+    def dibujar_y_recargar():
+        dibujar()
+        recargar_si_cambio()
+    return dibujar_y_recargar
