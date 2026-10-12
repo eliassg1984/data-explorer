@@ -1210,7 +1210,8 @@ de su sección —o el de la franja, si no tiene categoría—. Desde el
 2026-10-08 abre un **panel propio**, `graficos/panel_fecha.py` + su
 `.js` y su `.css`: la «opción A» que eligió el usuario sobre un mockup.
 Atajos escritos enteros y agrupados (en curso / hacia atrás / completos),
-los años como pestañas y los meses —o, con «Días», un calendario— como
+los años como pestañas y los meses —o, con «Semanas», las semanas de lunes
+a domingo como filas (regla #642); con «Días», un calendario— como
 casilleros: un clic elige un mes y un clic en otro suma los del medio,
 aunque estén en años distintos. Regla #616.
 

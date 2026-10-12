@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-641 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+642 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (207)
+**CSS y estilos** (208)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -241,6 +241,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#631** — Ajuste › Evolución: el neto en pastillas, el período más movido marcado y los totales del…
 - **#633** — Documentos SUNAT elige su fecha con el panel de las demás tarjetas, no con la píldora de la…
 - **#635** — Los modos Corte / Varios de la píldora de la franja se borraron enteros: sin su único…
+- **#642** — El panel de fecha elige también por SEMANAS, de lunes a domingo: cada semana del mes es UNA…
 
 **Layout y alturas** (90)
 
@@ -943,7 +944,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#481** — La máquina de desarrollo NO corre las versiones de requirements.txt. «Pasa en local» no es…
 - **#539** — Una herramienta de desarrollo que se inyecta en TODAS las corridas cuesta en todas, aunque…
 
-**Decisiones de diseño y UX** (169)
+**Decisiones de diseño y UX** (170)
 
 - **#17** — La franja transparente + fecha-pill-izquierda + chips-centrados-blancos es el DEFAULT para…
 - **#18** — Los 8 reportes usan el rail derecho (_render_rail) desde 2026-08-04
@@ -1114,6 +1115,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#637** — Stock por Producto dice qué mirar: chips de estado, la evolución de lo filtrado y cinco…
 - **#638** — Stock e Inventario son DOS vistas de stock: Stock por Producto y Stock por Área y Familia.…
 - **#641** — «Requerimientos por Área» suma lo mismo que «por Período», y lo que no suma va en la fila…
+- **#642** — El panel de fecha elige también por SEMANAS, de lunes a domingo: cada semana del mes es UNA…
 
 **Mantenimiento y trampas del lenguaje** (15)
 
@@ -50152,6 +50154,69 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+642. **El panel de fecha elige también por SEMANAS, de lunes a domingo:
+     cada semana del mes es UNA fila, y un clic la elige entera.**
+     2026-10-11, a pedido, sobre una captura del panel de la regla #616:
+     «tengo opción de elegir mes y día, ¿puedo tener también la de semana?».
+     El segmentado pasó a «Meses | Semanas | Días», de grueso a fino.
+
+     **Filas y no casilleros como los meses.** Un año son 52 o 53 semanas,
+     y «S37» suelta no dice qué días son: nadie sabe de memoria qué fechas
+     tiene una semana por su número. Así que Semanas navega por MES, como
+     Días (las mismas flechas y las mismas pestañas de año), y cada fila
+     lleva su número a la izquierda y los siete días. La fila entera es un
+     solo `<button>` con la clase `.cel` de siempre: la marca de lo elegido,
+     la del primer clic y la vista previa al pasar el cursor
+     (`tramo`, `clases`, `previa`) no supieron que existía.
+
+     **Lunes a domingo, semana ISO.** Es la semana de «Esta semana»
+     (`estado_rango.atajos_tarjeta`, «desde el lun 5») y el número es el
+     que Ventas pone en sus barras («S41», `ventas_comparativo.py`): el del
+     año de su JUEVES. Verificado contra `date.isocalendar()` en el cambio
+     de año: el lunes 29 dic 2025 es la S1 de 2026, y diciembre de 2025
+     termina S49…S52, S1.
+
+     **La semana que cruza de mes sale en los dos**, con los días del otro
+     mes apagados: la fila sigue siendo la semana entera, y elegirla en
+     setiembre o en octubre es lo mismo. Los días apagados —de otro mes o
+     sin datos— van por OPACIDAD y no por color, así siguen el color de
+     su fila: blancos sobre la morada del primer y del último tramo,
+     morados sobre la lavanda del medio.
+
+     **Abre en Semanas si lo vigente son semanas enteras** (del lunes al
+     domingo, o al último día con datos) **y no meses enteros.** El modo no
+     se puede guardar en el panel: el componente se DESMONTA al cerrar el
+     popover (#616), así que se deduce del rango. Quien eligió del 7 al 27
+     de setiembre lo vuelve a ver como lo eligió; «Esta semana» abre en
+     Semanas; «Este mes», «Últimos 30 días» y los demás, en Meses, como
+     antes. Días no se deduce: sigue abriendo en Meses.
+
+     **El pie cuenta semanas** cuando el rango son semanas enteras:
+     «Del 7 al 27 de setiembre de 2026 · 3 semanas · 21 días».
+
+     **De paso: un clic se recorta a los datos en el JS**, no sólo en
+     Python. Elegir octubre con datos hasta el 11 decía «Del 1 al 31 de
+     octubre · 31 días» hasta que volvía la corrida; ahora dice del 1 al 11
+     y «Este mes» se marca en el instante. En Semanas importa más: la
+     semana en curso diría el domingo que todavía no tiene datos.
+
+     **Python no se enteró.** El panel sigue mandando `{a, b}`; el botón,
+     sin atajo, dice las fechas («7–27 set 2026», `etiqueta_de`). Ajuste
+     (`solo_meses`, #632) no lo ve: no tiene segmentado.
+
+     Medido con Playwright en «Compras por período» (datos reales, hasta el
+     11 oct): S37 + S39 → del 7 al 27 de setiembre, tres semanas, el botón
+     dice «7–27 set 2026» y al reabrir el panel está en Semanas, en
+     setiembre; las semanas posteriores al 11 de octubre salen apagadas y
+     sin clic; Meses y Días, igual que antes. Lo vigila
+     `test_graficos.py::_pruebas_panel_fecha`.
+
+     **En Cloud hace falta «Reboot app» para verlo**: el JS y el CSS los lee
+     `graficos.panel_fecha` al importarse (#357). Sin el reboot sigue el
+     panel de dos modos, sin caerse.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50164,7 +50229,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#641**; la próxima toma el número siguiente.
+> última regla es la **#642**; la próxima toma el número siguiente.
 
 >
 

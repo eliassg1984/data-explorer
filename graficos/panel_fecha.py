@@ -6,8 +6,9 @@ selector_fecha_tarjeta`): la «opción A» que eligió el usuario el 2026-10-08
 sobre un mockup (https://claude.ai/artifact/8uSazby41NyvTc68DzJuB9). A la
 izquierda los atajos, escritos enteros y agrupados («En curso», «Hacia
 atrás», «Completos»); a la derecha los años como pestañas y los meses —o,
-con «Días», un calendario— como casilleros. Un clic elige un mes; un clic en
-otro suma los del medio, aunque estén en años distintos.
+con «Semanas», las semanas del mes como filas; con «Días», un calendario—
+como casilleros. Un clic elige un mes; un clic en otro suma los del medio,
+aunque estén en años distintos.
 
 Reemplazó a la escala de tiempo con línea deslizante (reglas #211-#222 y
 #298-#300; su código se borró en la #618), que tenía tres problemas de
@@ -49,6 +50,12 @@ no ofrece «Días», sus atajos salen de `ctx["atajos_fn"]` (los de
 `estado_rango.atajos_meses`, en meses enteros) y el botón dice los meses
 («Últimos 12 meses · oct 2025 – set 2026»). Es la MISMA pieza que la de
 Compras: lo que cambia es la configuración, no el panel.
+
+SEMANAS (2026-10-11, regla #642). Entre Meses y Días: cada semana del mes es
+UNA fila, de lunes a domingo —la de «Esta semana»— con su número ISO a la
+izquierda («S41», como las rotula Ventas). Es sólo del JS: a Python le llega
+el mismo `{a, b}` y el botón dice las fechas («7–27 set 2026»). El panel abre
+en Semanas si lo vigente son semanas enteras y no meses enteros.
 """
 
 import datetime

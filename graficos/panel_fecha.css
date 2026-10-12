@@ -40,8 +40,8 @@
 .atajo[aria-pressed="true"] .at-nom { font-weight: 600; }
 .atajo[aria-pressed="true"] .at-f { color: var(--accent-deep); }
 
-/* Meses | Días */
-.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+/* Meses | Semanas | Días */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
 .seg button { border: 0; background: var(--bg-card); color: var(--text-secondary); padding: 5px 8px; font-size: 12.5px; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button[aria-pressed="true"] { background: var(--accent-light); color: var(--accent-deep); font-weight: 600; }
@@ -98,8 +98,28 @@
 .cal-dias .cel { height: 30px; font-size: 12.5px; border-radius: 7px; background: transparent; }
 .cal-dias .cel.en { background: var(--accent-light); }
 .cal-dias .cel.en.ini, .cal-dias .cel.en.fin { background: var(--accent); }
-.cel.ultimo { position: relative; }
-.cel.ultimo::after {
+/* Semanas: la fila entera es UN botón (lunes a domingo) y su número va a la
+   izquierda. Los días de otro mes y los que no tienen datos se apagan con
+   opacidad y no con un color: así siguen el color de la fila elegida. */
+.sem-cab, .g-semanas .cel { grid-template-columns: 30px repeat(7, 1fr); }
+.sem-cab { gap: 0; padding: 0 1px; }
+.g-semanas { display: flex; flex-direction: column; gap: 2px; }
+.g-semanas .cel {
+  display: grid; align-items: stretch; width: 100%; height: 30px;
+  font-size: 12.5px; border-radius: 7px; background: transparent;
+}
+/* Cada día ocupa el alto de la fila: el punto del último día con datos va
+   abajo del número, como en Días. */
+.g-semanas .cel > span { display: flex; align-items: center; justify-content: center; }
+.g-semanas .cel.en { background: var(--accent-light); }
+.g-semanas .cel.en.parcial { background: var(--accent-tint); }
+.g-semanas .cel.en.ini, .g-semanas .cel.en.fin { background: var(--accent); }
+.g-semanas .num { font-size: 10.5px; opacity: .6; }
+.g-semanas .fuera { opacity: .45; }
+.g-semanas .sin { opacity: .3; }
+
+.cel.ultimo, .g-semanas .ultimo { position: relative; }
+.cel.ultimo::after, .g-semanas .ultimo::after {
   content: ""; position: absolute; bottom: 3px; left: 50%; width: 4px; height: 4px; margin-left: -2px;
   border-radius: 50%; background: currentColor;
 }

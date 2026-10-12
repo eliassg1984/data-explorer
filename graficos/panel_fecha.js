@@ -1,4 +1,4 @@
-// Panel del selector de fecha de las tarjetas (regla #616).
+// Panel del selector de fecha de las tarjetas (regla #616; Semanas, #642).
 //
 // Lo monta graficos/panel_fecha.py con st.components.v2 (sin iframe, estilos
 // en un shadow root). Todo lo que pasa acá adentro es del navegador; a Python
@@ -50,6 +50,14 @@ function fLargo(a, b) {
   return `Del ${da} de ${MES_L[ma - 1]} de ${ya} al ${db} de ${MES_L[mb - 1]} de ${yb}`;
 }
 const fDias = (n) => (n === 1 ? '1 día' : `${n.toLocaleString('en-US')} días`);
+// Semanas de lunes a domingo, como «Esta semana» y la semana ISO con que
+// Ventas rotula las suyas («S41»): su número es el del año de su jueves.
+const lunes = (n) => n - dow(n);
+const nSemana = (l) => { const j = l + 3; return Math.floor((j - dn(ymd(j)[0], 1, 1)) / 7) + 1; };
+const fSemanas = (n) => (n === 1 ? '1 semana' : `${n} semanas`);
+// Semanas enteras: del lunes al domingo, o al último día con datos.
+const enSemanas = (st, a, b) => dow(a) === 0 && (dow(b) === 6 || b === st.max);
+const enMeses = (st, a, b) => (dia(a) === 1 || a === st.min) && (b === finMes(...ymd(b).slice(0, 2)) || b === st.max);
 // Con «sólo meses» (Ajuste, regla #632) el pie dice meses, no días.
 function fMesesLargo(a, b) {
   const [ya, ma] = ymd(a), [yb, mb] = ymd(b);
@@ -78,7 +86,10 @@ function sincronizar(st, data, primera) {
     else if (st.a == null) { st.a = st.min; st.b = st.max; }
   }
   if (primera) {
-    st.modo = 'meses';
+    // Abre en Semanas si lo vigente son semanas enteras y no meses enteros:
+    // quien eligió del 28 set al 11 oct lo quiere ver como lo eligió.
+    st.modo = !st.soloMeses && st.a != null && enSemanas(st, st.a, st.b) && !enMeses(st, st.a, st.b)
+      ? 'semanas' : 'meses';
     st.ancla = null;
     st.timer = null;
     verHasta(st, st.b);
@@ -137,19 +148,45 @@ function calendario(st, y, m) {
   return h + '</div>';
 }
 
+// Semanas: cada fila es UN botón, de lunes a domingo, con su número a la
+// izquierda. La que cruza de mes sale en los dos, con los días del otro mes
+// apagados: la fila sigue siendo la semana entera.
+function semanas(st, y, m) {
+  const s = dn(y, m, 1), e = finMes(y, m);
+  let h = '<div class="cal-sem sem-cab"><span></span>' + DSEM.map((d) => `<span>${d}</span>`).join('')
+    + '</div><div class="g-semanas">';
+  for (let l = lunes(s); l <= e; l += 7) {
+    const r = tramo(st, l, l + 6), [, ma, da] = ymd(l), [, mb, db] = ymd(l + 6), n = nSemana(l);
+    let tit = `Semana ${n} · del ${da}${ma !== mb ? ` de ${MES_L[ma - 1]}` : ''} al ${db} de ${MES_L[mb - 1]}`;
+    if (r.dis) tit += ' · sin datos';
+    else if (l + 6 > st.max) tit += ` · con datos hasta el ${dia(st.max)}`;
+    h += `<button type="button" class="${clases(r)}" data-s="${l}" data-e="${l + 6}"${r.dis ? ' disabled' : ''}`
+      + ` aria-pressed="${!!r.en}" title="${tit}"><span class="num">S${n}</span>`;
+    for (let d = l; d <= l + 6; d++) {
+      const c = [d < s || d > e ? 'fuera' : '', d < st.min || d > st.max ? 'sin' : '', d === st.max ? 'ultimo' : '']
+        .filter(Boolean).join(' ');
+      h += `<span${c ? ` class="${c}"` : ''}>${dia(d)}</span>`;
+    }
+    h += '</button>';
+  }
+  return h + '</div>';
+}
+
 const flecha = (d, ok) => `<button type="button" class="flecha" data-nav="${d}"${ok ? '' : ' disabled'}`
   + ` aria-label="${d < 0 ? 'Mes anterior' : 'Mes siguiente'}">${d < 0 ? IC_IZQ : IC_DER}</button>`;
 
 function textoPista(st) {
   if (st.ancla) {
     const [y, m, d] = ymd(st.ancla[0]);
-    return st.modo === 'meses'
-      ? `Elegido: ${MES_L[m - 1]} ${y}. Un clic en otro mes suma los del medio.`
-      : `Elegido: ${d} de ${MES_L[m - 1]}. Un clic en otro día suma los del medio.`;
+    if (st.modo === 'meses') return `Elegido: ${MES_L[m - 1]} ${y}. Un clic en otro mes suma los del medio.`;
+    if (st.modo === 'semanas') {
+      return `Elegida: semana ${nSemana(st.ancla[0])}. Un clic en otra semana suma las del medio.`;
+    }
+    return `Elegido: ${d} de ${MES_L[m - 1]}. Un clic en otro día suma los del medio.`;
   }
-  return st.modo === 'meses'
-    ? 'Un clic elige un mes. Para varios: clic en el primero y en el último.'
-    : 'Un clic elige un día. Para un rango: clic en el primero y en el último.';
+  if (st.modo === 'meses') return 'Un clic elige un mes. Para varios: clic en el primero y en el último.';
+  if (st.modo === 'semanas') return 'Un clic elige una semana, de lunes a domingo. Para varias: clic en la primera y en la última.';
+  return 'Un clic elige un día. Para un rango: clic en el primero y en el último.';
 }
 
 function dibujar(raiz) {
@@ -174,6 +211,7 @@ function dibujar(raiz) {
   if (!st.soloMeses) {
     h += '<div class="seg" role="group" aria-label="Elegir por">'
       + `<button type="button" data-modo="meses" aria-pressed="${st.modo === 'meses'}">Meses</button>`
+      + `<button type="button" data-modo="semanas" aria-pressed="${st.modo === 'semanas'}">Semanas</button>`
       + `<button type="button" data-modo="dias" aria-pressed="${st.modo === 'dias'}">Días</button></div>`;
   }
   // Los años son pestañas de lo que se VE; el punto marca dónde cae lo elegido.
@@ -193,12 +231,13 @@ function dibujar(raiz) {
     const [y, m] = st.mes;
     h += `<div class="nav">${flecha(-1, dn(y, m, 1) > st.min)}<span class="nav-tit">${MES_L[m - 1]} ${y}</span>`
       + `${flecha(1, finMes(y, m) < st.max)}</div>`;
-    h += calendario(st, y, m);
+    h += st.modo === 'semanas' ? semanas(st, y, m) : calendario(st, y, m);
   }
   h += `<p class="pista" aria-live="polite">${textoPista(st)}</p></div></div>`;
   h += st.soloMeses
     ? `<div class="pie"><p class="pie-rango"><strong>${fMesesLargo(st.a, st.b)}</strong> · ${fMeses(nMeses(st.a, st.b))}</p>`
-    : `<div class="pie"><p class="pie-rango"><strong>${fLargo(st.a, st.b)}</strong> · ${fDias(st.b - st.a + 1)}</p>`;
+    : `<div class="pie"><p class="pie-rango"><strong>${fLargo(st.a, st.b)}</strong> · ${
+      dow(st.a) === 0 && (st.b - st.a + 1) % 7 === 0 ? `${fSemanas((st.b - st.a + 1) / 7)} · ` : ''}${fDias(st.b - st.a + 1)}</p>`;
   h += `<p class="pie-nota">${esc(st.nota)}</p></div>`;
   raiz.innerHTML = h;
   // Con muchos años las pestañas se deslizan: la que se ve, a la vista.
@@ -241,17 +280,19 @@ function estirarEspera(raiz, ms) {
 
 function clicCelda(raiz, s, e) {
   const st = raiz.__st;
+  // Lo elegido se recorta a los datos acá y no sólo en Python: el pie dice
+  // «del 5 al 10 de octubre», no el domingo 11 que todavía no tiene datos.
   if (!st.ancla) {
     st.ancla = [s, e];
-    st.a = s;
-    st.b = e;
+    st.a = Math.max(s, st.min);
+    st.b = Math.min(e, st.max);
     avisar(raiz, false);
     return;
   }
   const [as, ae] = st.ancla;
   st.ancla = null;
-  st.a = Math.min(as, s);
-  st.b = Math.max(ae, e);
+  st.a = Math.max(Math.min(as, s), st.min);
+  st.b = Math.min(Math.max(ae, e), st.max);
   avisar(raiz, true);
 }
 
@@ -282,11 +323,12 @@ function enlazar(raiz) {
       if (b.dataset.modo === st.modo) return;
       if (st.timer) enviarYa(st);
       st.ancla = null;
-      if (b.dataset.modo === 'dias') {
+      // Semanas y Días navegan por mes (st.mes); Meses, por año (st.anio).
+      if (b.dataset.modo === 'meses') {
+        st.anio = st.mes[0];
+      } else if (st.modo === 'meses') {
         const [yb, mb] = ymd(st.b);
         st.mes = topeMes(st, [st.anio, yb === st.anio ? mb : st.mes[1]]);
-      } else {
-        st.anio = st.mes[0];
       }
       st.modo = b.dataset.modo;
       dibujar(raiz);

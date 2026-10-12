@@ -4003,6 +4003,16 @@ def _pruebas_panel_fecha():
     check("el CSS del panel no usa :has()", ":has(" in css, False)
     check("el JS exporta la función del componente", "export default function" in js, True)
     check("el JS no calcula atajos (los manda Python)", "Últimos" in js, False)
+    # Semanas (regla #642): entre Meses y Días, de lunes a domingo —la
+    # semana de «Esta semana»—, y lo elegido recortado a los datos en el JS.
+    check("el panel ofrece Semanas entre Meses y Días",
+          js.index('data-modo="meses"') < js.index('data-modo="semanas"')
+          < js.index('data-modo="dias"'), True)
+    check("las semanas arrancan el lunes",
+          "const lunes = (n) => n - dow(n);" in js
+          and "getUTCDay() + 6) % 7" in js, True)
+    check("un clic se recorta a los datos en el JS",
+          "Math.min(e, st.max)" in js and "Math.max(s, st.min)" in js, True)
     arbol = ast.parse((raiz / "base.py").read_text(encoding="utf-8"))
     sel = next(n for n in arbol.body
                if isinstance(n, ast.FunctionDef) and n.name == "selector_fecha_tarjeta")
