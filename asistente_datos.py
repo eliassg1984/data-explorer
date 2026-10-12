@@ -129,10 +129,13 @@ def _col_valor(df: pd.DataFrame) -> str | None:
     cada ítem — su suma no significa nada (regla #517). Y "valor_compra"
     por lo mismo en Compras: ahí la primera con "total" es TOTAL NETO, la
     cabecera de la factura, y el resumen sumaba eso (visto el 2026-10-04,
-    regla #603: 500 líneas daban S/ 267 mil)."""
+    regla #603: 500 líneas daban S/ 267 mil). Y "valor item" antes que
+    "precio": en Movimientos ninguna palabra de la lista nombraba `VALOR
+    ITEM` y el resumen sumaba `PRECIO UNIT` — S/ 3.005.731 de precios
+    unitarios con cara de soles (medido el 2026-10-11, regla #643)."""
     for kw in ("ajuste valorizado", "valorizado total", "venta item",
-               "valor_compra", "importe", "valorizado", "total", "monto",
-               "precio"):
+               "valor_compra", "valor item", "importe", "valorizado",
+               "total", "monto", "precio"):
         for c in df.columns:
             if kw in str(c).lower() and pd.api.types.is_numeric_dtype(df[c]):
                 return c
@@ -174,7 +177,10 @@ def resumen_para_prompt(df: pd.DataFrame, reporte: str,
             break
 
     grano = nota_de_grano(df)
-    cv = _col_valor(df)
+    filtro_req = filtro_requerimientos(df)
+    cv = None if filtro_req else _col_valor(df)
+    if filtro_req:
+        partes += _sumas_requerimientos(df, filtro_req)
     if cv:
         try:
             llave = _columna(df, _LLAVE_ITEM) if grano else None
@@ -217,14 +223,15 @@ def nota_de_grano(df: pd.DataFrame) -> str | None:
     Sale cuando están las dos llaves (ítem y pago): es la forma de
     `ventas.parquet`, y ningún otro reporte las tiene. Los nombres van con
     el caso REAL de las columnas, para que el modelo los copie tal cual.
-    Sin ellas, la de compras si trae las notas de crédito restadas
-    (`_nota_compras`, regla #603).
+    Sin ellas, la de requerimientos si trae su estado
+    (`_nota_requerimientos`, regla #643) o la de compras si trae las notas
+    de crédito restadas (`_nota_compras`, regla #603).
     """
     if df is None or df.empty:
         return None
     item, pago = _columna(df, _LLAVE_ITEM), _columna(df, _LLAVE_PAGO)
     if not (item and pago):
-        return _nota_compras(df)
+        return _nota_requerimientos(df) or _nota_compras(df)
     doc = _columna(df, _LLAVE_DOC) or _LLAVE_DOC
     nota = (
         "GRANO DE `datos` — LEER ANTES DE SUMAR: hay una fila por ÍTEM Y POR "
@@ -275,6 +282,133 @@ def _nota_compras(df: pd.DataFrame) -> str | None:
         "por devoluciones o notas de crédito. TOTAL NETO / TOTAL IGV / TOTAL "
         "DOCUMENTO son la CABECERA de la factura tal como se emitió, repetida "
         "en cada línea: no los sumes.")
+
+
+# ─── Requerimientos ────────────────────────────────────────────────────────
+# `requerimientos.parquet` —el `datos` de Movimientos— trae una fila por
+# LÍNEA de cada requerimiento. Las dos vistas que lo suman, «Requerimientos
+# por Período» (`movimientos_periodo._validas`) y «por Área»
+# (`movimientos.requerimientos_que_suman`, regla #641), dejan afuera los
+# ANULADOS y las líneas sin producto, que son los requerimientos sin ítems
+# (#508). El modelo no lo sabía y sumaba todo: últimos 30 días, S/ 238.884
+# contra los 238.118 de la pantalla (regla #643). La tabla se reconoce por
+# su columna de estado, que ningún otro parquet trae.
+# `test_asistente_datos.py` corre el filtro de acá contra
+# `requerimientos_que_suman`: si las vistas cambian de criterio, falla.
+_REQ_ESTADO = "NOMBRE ESTADO REQUERIMIENTO"
+_REQ_PRODUCTO = "NOMBRE PRODUCTO"
+_REQ_CODIGO = "COD REQUERIMIENTO"
+_REQ_VALOR = "VALOR ITEM"
+_REQ_PRECIO = "PRECIO UNIT"
+_REQ_FECHAS = (
+    ("FECHA REGISTRO", "cuándo el área lo pidió"),
+    ("FECHA PROCESADO", "cuándo el Almacén lo procesó; vacía en los sin "
+                        "procesar"),
+)
+_REQ_ANULADO = "ANULADO"
+"""El `_ANULADO` de `graficos/movimientos_periodo.py`. No se importa: esta
+es la capa de datos del asistente y no carga los gráficos."""
+
+
+def _sql_estado(estado: str) -> str:
+    """El estado como lo compara `_que_suman`: sin distinguir mayúsculas ni
+    espacios de los bordes, y el vacío como ''."""
+    return f"coalesce(upper(trim(\"{estado}\")), '')"
+
+
+def filtro_requerimientos(df: pd.DataFrame) -> str | None:
+    """El WHERE de las líneas de requerimientos que SUMAN en la página, con
+    los nombres reales de las columnas, o None si `df` no es de
+    requerimientos. Lo copia el modelo (va en la nota) y lo corre el
+    resumen de arranque: los dos no pueden dar números distintos."""
+    if df is None or df.empty:
+        return None
+    estado = _columna(df, _REQ_ESTADO)
+    if not estado:
+        return None
+    filtro = f"{_sql_estado(estado)} <> '{_REQ_ANULADO}'"
+    prod = _columna(df, _REQ_PRODUCTO)
+    if prod:
+        filtro += f" AND coalesce(trim(\"{prod}\"), '') <> ''"
+    return filtro
+
+
+def _nota_requerimientos(df: pd.DataFrame) -> str | None:
+    """La nota de requerimientos: qué suma, qué es un requerimiento y de
+    qué período es `datos` (regla #643). None si `df` no es de
+    requerimientos."""
+    filtro = filtro_requerimientos(df)
+    if not filtro:
+        return None
+    nota = (
+        "REQUERIMIENTOS — LEER ANTES DE SUMAR: hay una fila por LÍNEA "
+        "(producto) de cada requerimiento al Almacén.\n"
+        "· Lo que suma la página —valorizado, cantidades, rankings por "
+        "producto, área o familia— sale SÓLO de "
+        f"FROM (SELECT * FROM datos WHERE {filtro}). Los anulados no suman: "
+        "infórmalos aparte si los preguntan. Las líneas sin producto son "
+        "requerimientos SIN ÍTEMS y no valen nada.")
+    cod = _columna(df, _REQ_CODIGO)
+    if cod:
+        nota += (
+            f"\n· Un requerimiento es un \"{cod}\", no una fila: tiene UN "
+            "área, UN estado y UNA fecha, repetidos en sus líneas. Cuéntalos "
+            f"con COUNT(DISTINCT \"{cod}\") sobre esas mismas líneas, nunca "
+            "con COUNT(*).")
+    valor, precio = _columna(df, _REQ_VALOR), _columna(df, _REQ_PRECIO)
+    if valor:
+        nota += (f"\n· \"{valor}\" es el valorizado en soles"
+                 + (f"; \"{precio}\" es por unidad: no lo sumes" if precio
+                    else "")
+                 + ". La cantidad no trae unidad: súmala sólo de UN "
+                   "producto.")
+    fechas = [(c, txt) for c, txt in
+              ((_columna(df, n), txt) for n, txt in _REQ_FECHAS) if c]
+    if fechas:
+        nota += ("\n· Fechas: "
+                 + "; ".join(f"\"{c}\" ({txt})" for c, txt in fechas)
+                 + ". La página usa la de registro, salvo que los filtros "
+                   "digan otra.")
+    nota += (
+        "\n· `datos` NO está recortado a la fecha de una vista: cada vista de "
+        "la página elige su propio período. Acota por fecha lo que "
+        "pregunten y di qué período usaste.")
+    return nota
+
+
+def _sumas_requerimientos(df: pd.DataFrame, filtro: str) -> list[str]:
+    """Las líneas del resumen de arranque para requerimientos: lo que suma
+    la página y, aparte, los anulados. Corre el MISMO `filtro` que la nota
+    le da al modelo."""
+    valor = _columna(df, _REQ_VALOR)
+    cod = _columna(df, _REQ_CODIGO)
+    anulado = f"{_sql_estado(_columna(df, _REQ_ESTADO))} = '{_REQ_ANULADO}'"
+    sel = []
+    if valor:
+        sel += [f'SUM("{valor}") FILTER (WHERE {filtro}) AS v',
+                f'SUM("{valor}") FILTER (WHERE {anulado}) AS va']
+    if cod:
+        sel += [f'COUNT(DISTINCT "{cod}") FILTER (WHERE {filtro}) AS n',
+                f'COUNT(DISTINCT "{cod}") FILTER (WHERE {anulado}) AS na']
+    if not sel:
+        return []
+    r = ejecutar_sql(df, f"SELECT {', '.join(sel)} FROM datos")
+    if not r.get("ok"):
+        return []
+    f = r["filas"][0]
+    partes = []
+    if valor:
+        partes.append(f"Suma de \"{valor}\" sin anulados ni líneas sin "
+                      f"producto, como la página: S/ {f['v'] or 0:,.2f}")
+    if cod:
+        partes.append(f"Requerimientos que suman: {f['n'] or 0:,}")
+        anul = f"{f['na'] or 0:,} requerimientos"
+        if valor:
+            anul += f" por S/ {f['va'] or 0:,.2f}"
+    else:
+        anul = f"S/ {f['va'] or 0:,.2f}"
+    partes.append(f"Anulados, aparte: {anul}")
+    return partes
 
 
 # ─── Ejecución de SQL ──────────────────────────────────────────────────────

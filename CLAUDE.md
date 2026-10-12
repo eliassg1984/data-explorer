@@ -899,8 +899,11 @@ una allá la cambia acá, a propósito. Reglas #508 y #509. Las dos vistas
 (`graficos/movimientos.py::requerimientos_que_suman` y
 `salidas_que_suman`) y dicen lo que no suma en la fila TOTAL de su primer
 cuadro, «TOTAL · sin 33 anulados» — junto al título, con el botón de fecha,
-no se veía. Siguen con todo las Tablas (ocultas), el KPI del rail y lo que
-ve el asistente IA. Regla #641.
+no se veía. Siguen con todo las Tablas (ocultas) y el KPI del rail. Regla
+#641. El asistente IA suma como ellas desde la #643: la nota sale de
+`asistente_datos.nota_de_grano`, que reconoce los requerimientos por su
+columna de estado — no de `publicar_contexto_ia`, que no lleva nota para
+`datos` (sólo para las tablas extra, como `nota_salidas_ia`).
 
 La tercera, `porcionamientos.parquet`: **una fila por CORTE, con la cabecera
 del porcionamiento repetida en cada una** — sumar `CANT MERMA` por fila da

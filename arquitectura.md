@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-642 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+643 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (208)
 
@@ -894,12 +894,13 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#632** — Ajuste de Inventario no tiene fecha en la franja: cada vista elige la suya —una SESIÓN de…
 - **#635** — Los modos Corte / Varios de la píldora de la franja se borraron enteros: sin su único…
 
-**Asistente IA** (4)
+**Asistente IA** (5)
 
 - **#64** — El stepper del corte NO va dentro de fecha_ajuste_pill (2026-08-09)
 - **#69** — El asistente IA consulta los datos con tool calling — y las trampas son de SEMÁNTICA, no de…
 - **#613** — El cierre de fin de mes se registra en el mes SIGUIENTE: Ajuste lo cuenta en su MES OPERATIVO
 - **#626** — Una vista de salidas contesta en la unidad del producto, separa la merma de lo que no es…
+- **#643** — El asistente IA suma los requerimientos como la página: sin anulados ni líneas sin producto,…
 
 **Herramientas de desarrollo** (40)
 
@@ -50217,6 +50218,68 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-11.)
 
+643. **El asistente IA suma los requerimientos como la página: sin
+     anulados ni líneas sin producto, y contando códigos, no filas.**
+     2026-10-11, el pendiente que dejó la #641. Movimientos le publica los
+     requerimientos como `datos` (`publicar_contexto_ia("Movimientos", d,
+     filtros_ia)`) y nada le decía cómo sumarlos: últimos 30 días por
+     fecha de registro, el modelo sumaba S/ 238.883,59 donde las dos
+     vistas dicen S/ 238.118,06.
+
+     **Dónde vive la nota: `asistente_datos.nota_de_grano`, no
+     `publicar_contexto_ia`.** El canal que usan las salidas
+     (`extras={"salidas": {"df", "nota"}}`, #626) es sólo para las tablas
+     EXTRA: `publicar_contexto_ia` no lleva nota para `datos`. Las notas de
+     `datos` salen de la FORMA de la tabla —ventas por sus dos llaves
+     (#517), compras por `VALOR_NC` (#603)— y los requerimientos se
+     reconocen por su columna de estado, `NOMBRE ESTADO REQUERIMIENTO`, que ningún
+     otro parquet trae. Así la nota llega también si el asistente cae al
+     `df_f` de `app.py`. `resumen_para_prompt` la pega en `{resumen}` del
+     system prompt.
+
+     **Qué dice** (`_nota_requerimientos`): lo que suma la página sale
+     sólo de `FROM (SELECT * FROM datos WHERE <filtro>)`, con el filtro
+     armado con los nombres REALES de las columnas
+     (`filtro_requerimientos`: `upper(trim(estado)) <> 'ANULADO'` y
+     producto no vacío, que es lo que compara `_que_suman`); un
+     requerimiento es un `COD REQUERIMIENTO` y se cuenta con
+     `COUNT(DISTINCT …)` (#508); `PRECIO UNIT` no se suma; las dos fechas
+     (#639); y que `datos` NO está recortado a la fecha de una vista —el
+     system prompt dice «EXACTAMENTE las filas visibles en pantalla», y en
+     Movimientos `datos` es el histórico entero, porque cada vista elige su
+     período (#617)—.
+
+     **El resumen de arranque sumaba `PRECIO UNIT`.** `_col_valor` elige
+     la columna «de dinero» por palabras y ninguna nombraba `VALOR ITEM`:
+     la que caía era «precio». El modelo recibía «Suma de "PRECIO UNIT":
+     S/ 3,005,731.32», precios unitarios con cara de soles. Ahora
+     `_col_valor` busca «valor item» antes que «precio» y, con
+     requerimientos, el resumen corre el MISMO filtro que la nota
+     (`_sumas_requerimientos`): S/ 8,502,822.85 en 16.816 requerimientos y,
+     aparte, 595 anulados por S/ 175,704.90 en el histórico.
+
+     **Medido sobre R2** (148.448 líneas, 2 ene 2023 – 9 oct 2026): el SQL
+     de la nota contra `requerimientos_que_suman` da lo mismo al céntimo,
+     en los 30 días (S/ 238.118,06 y 566 requerimientos, «sin 33
+     anulados») y en el histórico entero.
+
+     **Qué sigue sin cambiar: el KPI del rail.** `REPORTES["Movimientos"]
+     ["kpis"]` suma `VALOR ITEM` y cuenta `COD REQUERIMIENTO` sobre todas
+     las filas del mes en curso. Octubre 2026 hasta el 9: S/ 60.404,74 y
+     155 requerimientos contra S/ 59.698,99 y 127 con el criterio de las
+     vistas — la cuenta se infla un 22 % porque cuenta también los
+     anulados y los requerimientos sin ítems. Cambiarlo es mover un
+     número que el usuario ve todos los días: queda a su decisión.
+
+     La guarda es `test_asistente_datos.py` (sección «requerimientos»): que
+     la nota traiga el filtro EXACTO, que ese filtro pase el validador y
+     sume lo mismo que `graficos.movimientos.requerimientos_que_suman` —si
+     las vistas cambian de criterio, el asistente queda atrás y falla—, el
+     resumen sin `PRECIO UNIT`, y la caja del demo («Anulado», «Nombre
+     Producto»). Con el filtro sin la condición de producto, fallan cuatro.
+
+     (2026-10-11.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50229,7 +50292,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#642**; la próxima toma el número siguiente.
+> última regla es la **#643**; la próxima toma el número siguiente.
 
 >
 

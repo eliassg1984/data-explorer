@@ -972,6 +972,11 @@ def renderizar_graficos_movimientos(df_f, nombre_reporte, df_full=None,
     # lo pida sería contradecir el esquema que ya conoce. Entero: cada vista
     # tiene su fecha y no hay una de la página (regla #617). Trae las dos
     # fechas; con la de proceso elegida se le dice cuál usa la página.
+    # Cómo se suman —sin anulados ni líneas sin producto, como
+    # `requerimientos_que_suman`— no viaja desde acá: se lo dice
+    # `asistente_datos.nota_de_grano`, que reconoce la tabla por su columna
+    # de estado (regla #643). Las salidas, que van como extra, sí llevan su
+    # nota desde acá (`nota_salidas_ia`).
     filtros_ia = {"Sub Almacén": sub_sel, "Familia": fam_sel}
     if fecha_req != FECHA_REGISTRO:
         filtros_ia["Fecha de los requerimientos en pantalla"] = col_fecha
