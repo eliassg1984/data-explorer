@@ -117,6 +117,11 @@ def render_seccion(d, col_prov, col_prod, col_cant, col_valor, col_punit,
     if not (col_prov and col_valor):
         return
     gran = st.session_state.get("compras_prov_gran") or "Mes"
+    # «Documento» es un grano de la curva de Proveedor desde el 2026-10-12
+    # (regla #646), no una columna de pivote: un documento por columna son
+    # cientos. Acá cae a «Mes».
+    if gran not in ("Día", "Semana", "Mes", "Año"):
+        gran = "Mes"
     base = base_normalizada(d, col_prov, col_prod, col_cant, col_valor,
                             col_punit, col_um, col_fecha, col_docu)
     if base.empty or base["valor"].sum() == 0:

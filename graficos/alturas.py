@@ -740,6 +740,16 @@ dentro de su propio bloque, sale de su alto — si no, el bloque crece y su eje
 X termina debajo del borde.
 """
 
+CURVA_FICHA = 150
+"""Alto de la curva de la ficha de Compras › Proveedor (2026-10-12, regla
+#646): la del proveedor elegido o, con un producto en foco, la de ese
+producto. FIJO a propósito y no sacado de la tarjeta de al lado: la ficha
+es una pila de cifras, curva y tabla que tiene que entrar en el
+`--alto-util` de la laptop (575px a 1323×619), y lo que se lleva la curva
+es lo que pierde la tabla. 150 deja seis filas de la tabla a la vista. En
+la maqueta, una curva que crecía con el ancho se comía la tabla cuando la
+ficha ocupaba la pantalla entera."""
+
 FRANJA_CTRL_EVO = 30
 """Alto de la fila de controles de tiempo (`cp_evo_ctrl`) de la tarjeta de
 Evolución de Compras › Proveedor: la ventana (`cp_evo_periodo`) y la

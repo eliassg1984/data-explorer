@@ -6123,19 +6123,16 @@ def _pruebas_grilla_horizontal():
           "(usar COLUMNAS_DRILL, o marcar `# columnas-internas:`)",
           not culpables, ", ".join(culpables[:6]))
 
-    # ── 2) Las dos filas del drill de Proveedor usan las constantes ─────
-    # Positiva, no negativa: sin esto, borrar las dos llamadas dejaría la
-    # guarda #1 en verde. Desde el 2026-10-01 son dos constantes PROPIAS
-    # —arriba `COLUMNAS_DRILL_TABLAS`, abajo `COLUMNAS_DRILL_ABAJO`, reglas
-    # #578 y #579—, y se pide cada una por su nombre: el prefijo solo dejaba
-    # pasar dos filas partidas con la misma.
+    # ── 2) La fila del drill de Proveedor usa su constante ──────────────
+    # Positiva, no negativa: sin esto, borrar la llamada dejaría la guarda
+    # #1 en verde. Desde el 2026-10-12 es UNA fila, Ranking | ficha, con
+    # `COLUMNAS_DRILL_FICHA` (regla #646); hasta ese día eran dos, con
+    # `COLUMNAS_DRILL_TABLAS` y `COLUMNAS_DRILL_ABAJO` (reglas #578 y #579).
     prov = (raiz / "graficos" / "compras" / "proveedor.py").read_text(
         encoding="utf-8")
-    n_filas = [len(re.findall(r"st\.columns\(%s\b" % c, prov))
-               for c in ("COLUMNAS_DRILL_TABLAS", "COLUMNAS_DRILL_ABAJO")]
-    check("las 2 filas del drill de Proveedor parten con "
-          "COLUMNAS_DRILL_TABLAS y COLUMNAS_DRILL_ABAJO",
-          n_filas == [1, 1], f"se encontraron {n_filas}")
+    n_filas = len(re.findall(r"st\.columns\(COLUMNAS_DRILL_FICHA\b", prov))
+    check("la fila del drill de Proveedor parte con COLUMNAS_DRILL_FICHA",
+          n_filas == 1, f"se encontraron {n_filas}")
 
     # ── 3) La constante tiene UN dueño ──────────────────────────────────
     intrusos = []

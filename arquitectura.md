@@ -30,9 +30,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-645 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+646 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
-**CSS y estilos** (209)
+**CSS y estilos** (210)
 
 - **#1** — Colores desde la paleta central — DOS fuentes coordinadas
 - **#3** — Nada de formateo % en plantillas JS/CSS de components.html
@@ -243,8 +243,9 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#635** — Los modos Corte / Varios de la píldora de la franja se borraron enteros: sin su único…
 - **#642** — El panel de fecha elige también por SEMANAS, de lunes a domingo: cada semana del mes es UNA…
 - **#644** — «Filtros» tiene sólo lo que vale para TODO el reporte: lo que cambia unas vistas se elige en…
+- **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
 
-**Layout y alturas** (90)
+**Layout y alturas** (91)
 
 - **#13** — Verificar el layout SIEMPRE al ancho real del usuario
 - **#38** — El margin-top: -80px de [class*="st-key-ajuste_graf_card_izq_"] (estilos/_20_compras_rail.py)…
@@ -336,6 +337,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#616** — El selector de fecha de las tarjetas es un panel PROPIO (st.components.v2): atajos escritos…
 - **#624** — Documento y Montos son una línea de la tarjeta de «Compras por período» y mandan SÓLO sobre…
 - **#625** — Un filtro de LISTA (área, familia, proveedor, producto…) en la fila de una tarjeta es un…
+- **#646** — Compras › Proveedor es UNA fila: el Ranking a toda la altura y la FICHA del proveedor…
 
 **Plotly y figuras** (114)
 
@@ -50492,6 +50494,103 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-12.)
 
+646. **Compras › Proveedor es UNA fila: el Ranking a toda la altura y la
+     FICHA del proveedor elegido, que manda sobre todo lo de la derecha.**
+     2026-10-12, a pedido («vamos con la opción A»), elegida sobre tres
+     maquetas clicables con los datos reales
+     (https://claude.ai/artifact/KDLjtKLC9LMgoSVVT2Auk8), después de una
+     crítica de la vista como analista y como diseñador. Reemplaza el
+     reparto en cuatro tarjetas de las reglas #578 y #579. En
+     `graficos/compras/proveedor.py`, `_comun.py`, `_css_proveedor.py`,
+     `_documentos_proveedor.py`, `graficos/alturas.py`,
+     `estilos/_80_cards.py` y `test_graficos.py`.
+
+     **Por qué**: sin clic, Productos y Documentos hablaban del primero
+     del ranking y la Evolución del mayor de SU ventana (Vibej Colibri
+     contra Doble G): tres tarjetas, dos proveedores. Ahora el sujeto es
+     uno, `_prov` en el drill: el foco o, sin clic, la primera fila, que
+     el ranking marca como elegida (`rowClassRules` con
+     `context.defecto` y `api.getSelectedNodes()`; `onRowClicked` llama a
+     `redrawRows` para que la marca y la barra en acento se recalculen).
+
+     **Lo que muerde, medido:**
+     - **El período en curso no se compara con un período entero.** Al 11
+       de octubre, el Desglose («Por mes» hasta ese día) decía ▼75 % en
+       verde en casi todas las filas, y el KPI de la Evolución
+       «oct 26: S/ 0, ▼100 %». Es el calendario. `_comun.tramo_parcial`
+       da el tramo a medias (mes, semana o año) y el mismo tramo del
+       período anterior: soles y cantidad se comparan con los mismos días
+       (Vibej, 1–11 oct contra 1–11 set: −28,9 %), el precio con el
+       anterior entero (un promedio sí se compara con un mes a medias).
+       En la curva va rayado, punteado y con la raya de los mismos días.
+     - **Y el otro borde**: «12 meses» al 11-oct arrancaba el 12-oct del
+       año anterior, así que el PRIMER mes de la curva también era de 20
+       días. `inicio_de_periodo` alinea el inicio de la ventana
+       (`_recortar_alineado`).
+     - **En grano Día el rótulo se repetía**: «11 Oct» de 2025 y de 2026
+       en una ventana de 12 meses, y un eje de categorías juntaba los dos
+       días en uno. La curva y las tablas usan la CLAVE (`_per_sort`,
+       única) y el rótulo sale de `_etq` (`_con_clave`).
+     - **Un símbolo hueco de Plotly (`circle-open`, `line-ew-open`) se
+       pinta con `marker.color`, no con `marker.line.color`**: sin color
+       salían verde y naranja, los del colorway.
+     - **`st.markdown` con HTML de bloque cobra -16px** (#162): al pasar el
+       título del ranking a su renglón (el ranking es más angosto, se
+       cortaba a «R…»), el filtro le caía encima. `min-height` en su
+       contenedor.
+     - **Presupuesto vertical**: la ficha tiene que entrar en
+       `--alto-util` (575px a 1323×619) sin barra propia. La curva es FIJA
+       (`alturas.CURVA_FICHA`, 150): en la maqueta crecía con el ancho y
+       se comía la tabla. Los controles de la curva van en UN renglón
+       (`flex-wrap: nowrap`; cede el rótulo): con un nombre largo el
+       grano bajaba de línea y la ficha pedía 618. Medido con Playwright:
+       entrada 564, Desglose 564, Documentos 575, sin scroll interno.
+
+     **Qué ganó cada pieza:**
+     - Ranking: Δ contra el período anterior de IGUAL largo, «nuevo» /
+       «vuelve» cuando no hay contra qué (`_contra_anterior`, `_estado`:
+       cuenta descriptiva, no un estándar) y el pie «N proveedores hacen
+       el 80 %» (Pareto). Pierde Docs, que va a la ficha. Su CSS es
+       `CSS_RANKING_PROV` y no `CSS_RANKING_GRID`, que lo comparten seis
+       grillas: números en negro, violeta sólo lo elegido.
+     - Cifras del rango: compra, Δ, % del total, documentos y ticket, y
+       «vs. precio habitual» (`_ppv`: la forma de la variación de precio
+       de compra de costos, con la mediana de 90 días de
+       `semanal.precio_habitual` como referencia — si un proveedor es casi
+       el único, el habitual es SU precio y dice «no subió», no «es
+       barato»).
+     - Curva: grano Día / Semana / Mes / Año y **Documento** (nuevo en
+       `agregar_periodo`), medida Soles / Cantidad / Precio (las dos
+       últimas, con un producto en foco), eje Y con valores, y el hover
+       con el % del total, la variación y los documentos. El tamaño de la
+       ventana y las flechas aparecen sólo con «Rango».
+     - Productos «Total del rango»: unidad en la cantidad, precio
+       promedio y «vs. habitual». El despliegue lista los proveedores de
+       los últimos 90 días con el precio PROMEDIO (antes, el último precio
+       de cada uno: el «más barato» comparaba junio con octubre) y sigue
+       «Todo el histórico».
+     - **Desglose** (antes «Por mes»): obedece al grano de la curva, seis
+       columnas, la fila Total es la curva, y la Tendencia son los trece
+       últimos puntos con una franja sobre las seis columnas (antes,
+       cuatro barritas con los mismos números). En Precio la celda se
+       pinta si cambió más de 2 % (umbral propio). Entre un día o un
+       documento y otro sólo se compara el precio.
+     - Documentos: «Días» desde la compra anterior y «Subió de precio»
+       (el producto que más subió contra su compra anterior al mismo
+       proveedor, `_historia_docs`) en lugar de la «Var. %» contra la
+       factura anterior, que era ruido.
+     - Se fueron «Nombres en barras» (nadie leía `cp_prov_show_names`
+       desde que el ranking es tabla) y la medida propia del Desglose: la
+       medida es una. «Detalle docs.» lee el grano de esta curva y cae a
+       «Mes» con «Documento».
+
+     **En Cloud hace falta «Reboot app»** (#357): `proveedor.py` importa
+     nombres nuevos de `_comun.py` (`COLUMNAS_DRILL_FICHA`,
+     `tramo_parcial`, `inicio_de_periodo`) y de `semanal.py`, y deja de
+     importar `COLUMNAS_DRILL_TABLAS`, que ya no existe.
+
+     (2026-10-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50504,7 +50603,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#645**; la próxima toma el número siguiente.
+> última regla es la **#646**; la próxima toma el número siguiente.
 
 >
 

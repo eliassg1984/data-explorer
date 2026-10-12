@@ -413,12 +413,18 @@ en 450px, así que el alto sale de `fig.layout.height`, o sea de Python.
 Tercera cara del mismo patrón (color / alto / **eje horizontal**). La
 proporción que parte en dos una fila de un drill de Compras sale de
 `graficos/compras/_comun.py::COLUMNAS_DRILL`, no de un literal. Proveedor
-tiene las suyas desde el 2026-10-01, en el mismo sitio: `COLUMNAS_DRILL_TABLAS`
-(Ranking | Productos) y `COLUMNAS_DRILL_ABAJO` (Documentos | Evolución,
-derivada de la de arriba para que las dos filas compartan el eje; los
-proveedores de un producto se despliegan debajo de su fila). Reglas #578 y
-#579. Y Producto la suya, `COLUMNAS_DRILL_PRODUCTO` (1 : 1.25, la
-Evolución a la izquierda), desde el 2026-10-02: regla #583.
+tiene la suya desde el 2026-10-12, en el mismo sitio: `COLUMNAS_DRILL_FICHA`
+(0.92 : 1.5), UNA fila con el Ranking a toda la altura y la ficha del
+proveedor elegido —cifras, curva, Productos | Documentos—; la fila marcada
+del ranking manda sobre toda la ficha (regla #646, que reemplazó las cuatro
+tarjetas de las #578 y #579). Y Producto la suya, `COLUMNAS_DRILL_PRODUCTO`
+(1 : 1.25, la Evolución a la izquierda), desde el 2026-10-02: regla #583.
+
+**El período en curso no se compara con uno entero**: al 11 de octubre,
+«octubre contra septiembre» da ▼75 % en verde en casi todo, y es el
+calendario. `_comun.tramo_parcial` da el mismo tramo del período anterior
+(1–11 oct contra 1–11 set) y `inicio_de_periodo` alinea el otro borde de
+una ventana («12 meses» arrancaba a mitad de mes). Regla #646.
 
 Nació de un bug con captura: el drill de Proveedor partía la fila de arriba
 con `[1.6, 1]` y la de abajo con `st.columns(2)`. Los dos números son

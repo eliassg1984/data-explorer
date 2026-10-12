@@ -82,30 +82,19 @@ fila de Proveedor. `COLUMNAS_DRILL_ESPEJO` —que era eso, nacida el
 2026-09-12 cuando el gráfico pasó a la IZQUIERDA (regla #382)— se borró
 el mismo día: Producto era su único usuario."""
 
-COLUMNAS_DRILL_TABLAS = [1, 1]
-"""Fila de arriba del drill de Proveedor: el Ranking y los Productos del
-proveedor en foco, lado a lado (abajo, `COLUMNAS_DRILL_ABAJO`).
+COLUMNAS_DRILL_FICHA = [0.92, 1.5]
+"""La ÚNICA fila del drill de Proveedor: el Ranking a la izquierda, a toda
+la altura, y la FICHA del proveedor elegido a la derecha (sus cifras, su
+curva y sus productos y documentos en pestañas).
 
-Desde el 2026-10-01, a pedido («la tabla ranking de proveedores y la tabla
-de los productos... ambos arriba, uno al lado de otro»). Mitad y mitad, y
-no el 1.6/1 de `COLUMNAS_DRILL`: la derecha ya no es un panel de apoyo sino
-OTRA tabla, con cinco columnas (Producto, Valor con su barra, %, Cant.,
-UM). En el 1 de aquella proporción le quedaban ~115px al nombre del
-producto en una laptop; a la mitad, ~185. Y el Ranking no pierde nada: sus
-cuatro columnas sobraban en el 1.6. Ver regla #578."""
-
-COLUMNAS_DRILL_ABAJO = COLUMNAS_DRILL_TABLAS
-"""Fila de abajo del drill de Proveedor: los Documentos del proveedor en
-foco y la Evolución — partida IGUAL que la de arriba.
-
-Fue `COLUMNAS_DRILL_TRES` (1/1.3/1) y después [1, 1.35], las dos el
-2026-10-01: la tercera tarjeta —los Proveedores del producto en foco— se
-fue ese día a desplegarse debajo de su producto (regla #579), y más tarde
-el mismo día se pidió simetría: «que la tarjeta del gráfico sea del mismo
-ancho que la tarjeta de arriba». Derivada de `COLUMNAS_DRILL_TABLAS` y no
-un [1, 1] propio: lo que se pidió es que las dos filas compartan el EJE,
-y si una cambia, la otra tiene que cambiar con ella. Ver reglas #578 y
-#579."""
+Desde el 2026-10-12 (regla #646): la «opción A», elegida sobre tres
+maquetas clicables de cómo fusionar las cuatro tarjetas que había desde el
+2026-10-01 (Ranking | Productos arriba, Documentos | Evolución abajo,
+`COLUMNAS_DRILL_TABLAS` y `COLUMNAS_DRILL_ABAJO`, reglas #578 y #579). El
+ranking pasa de 7 filas a la vista a ~17, y la curva de ~400px de ancho a
+~740 en una laptop. 0.92 y no 1: el ranking tiene cuatro columnas y la
+ficha una tabla de ocho (el Desglose: producto, tendencia, seis períodos
+y la variación)."""
 
 GAP_DRILL = "small"
 """Gap entre las columnas de un drill. Va con `COLUMNAS_DRILL`: si las dos
@@ -757,6 +746,19 @@ def agregar_periodo(df, gran):
     elif gran == "Año":
         df["_per_sort"] = _fe.dt.year.astype("Int64").astype(str)
         df["per"] = df["_per_sort"]
+    elif gran == "Documento":
+        # Un período por COMPROBANTE (2026-10-12, regla #646): la curva y el
+        # Desglose de Proveedor pueden mirarse factura por factura. El rótulo
+        # es el número legible; el orden, la fecha y después el número (dos
+        # documentos del mismo día no empatan). Los que no traen número
+        # quedan afuera, como en la columna Docs del Ranking.
+        _doc = df["docu"].astype(str).str.strip() if "docu" in df.columns \
+            else pd.Series("", index=df.index)
+        _leg = pd.Series(documento_legible(_doc).to_numpy(), index=df.index)
+        df["_per_sort"] = (_fe.dt.strftime("%Y-%m-%d") + "|" + _doc).where(
+            _doc != "")
+        df["per"] = _leg.where(_doc != "")
+        return df[df["per"].notna()]
     else:  # Mes
         df["_per_sort"] = _fe.dt.to_period("M").astype(str)
         df["per"] = df["_per_sort"]
@@ -775,6 +777,73 @@ def periodos_ordenados(base):
                   .sort_values("_per_sort")["per"].tolist())
         return list(dict.fromkeys(_orden))
     return sorted(base["per"].dropna().unique())
+
+
+def tramo_parcial(gran, ultimo):
+    """El ÚLTIMO período de `gran` a la fecha `ultimo`, si está A MEDIAS.
+
+    `None` si el período está completo (o si el grano no tiene «a medias»:
+    un día o un documento no se parten). Si no, un dict con:
+
+    · `ini`/`fin`: el tramo que ya pasó del período en curso (1–11 oct).
+    · `ref_ini`/`ref_fin`: el MISMO tramo del período anterior (1–11 set),
+      que es contra lo que se compara: el mes en curso contra el mes entero
+      anterior da ▼75 % en verde en todas las filas, y no es la compra, es
+      el calendario (regla #646).
+    · `rot`/`rot_ref`: cómo se escriben los dos.
+
+    Pura: `ultimo` es el último día CON DATOS (el ancla de
+    `graficos/periodo.py`), no `hoy`."""
+    if ultimo is None or pd.isna(ultimo):
+        return None
+    u = pd.Timestamp(ultimo).normalize()
+    from cortes import MESES_ABR_ES as _M
+    if gran == "Mes":
+        fin_mes = (u + pd.offsets.MonthEnd(0)).normalize()
+        if u >= fin_mes:
+            return None
+        ini = u.replace(day=1)
+        ref_ini = (ini - pd.Timedelta(days=1)).replace(day=1)
+        ref_fin = min(ref_ini + pd.Timedelta(days=u.day - 1),
+                      ini - pd.Timedelta(days=1))
+        return {"ini": ini, "fin": u, "ref_ini": ref_ini, "ref_fin": ref_fin,
+                "rot": f"{_M[u.month - 1]} 1–{u.day}",
+                "rot_ref": f"1–{ref_fin.day} {_M[ref_ini.month - 1]}"}
+    if gran == "Semana":
+        if u.weekday() == 6:
+            return None
+        ini = u - pd.Timedelta(days=u.weekday())
+        return {"ini": ini, "fin": u, "ref_ini": ini - pd.Timedelta(days=7),
+                "ref_fin": u - pd.Timedelta(days=7),
+                "rot": f"hasta el {u.day} {_M[u.month - 1]}",
+                "rot_ref": "los mismos días de la semana anterior"}
+    if gran == "Año":
+        if u.month == 12 and u.day == 31:
+            return None
+        ini = u.replace(month=1, day=1)
+        ref_fin = u - pd.DateOffset(years=1)
+        return {"ini": ini, "fin": u, "ref_ini": ini - pd.DateOffset(years=1),
+                "ref_fin": ref_fin,
+                "rot": f"{u.year} al {u.day} {_M[u.month - 1]}",
+                "rot_ref": f"{u.year - 1} al {ref_fin.day} {_M[ref_fin.month - 1]}"}
+    return None
+
+
+def inicio_de_periodo(fecha, gran):
+    """El primer día del período de `gran` que contiene `fecha`.
+
+    Para alinear una ventana: «12 meses» que termina el 11 de octubre
+    arranca el 12 de octubre del año anterior, y ese primer mes de la curva
+    sale con 20 días — un período a medias en el otro borde, que se lee
+    igual de mal que el del final (regla #646)."""
+    f = pd.Timestamp(fecha).normalize()
+    if gran == "Mes":
+        return f.replace(day=1)
+    if gran == "Semana":
+        return f - pd.Timedelta(days=f.weekday())
+    if gran == "Año":
+        return f.replace(month=1, day=1)
+    return f
 
 
 def _llave_documento_parquet(num_documento):
