@@ -2135,7 +2135,7 @@ def _venta_clase_dia_cacheable(archivo, sello, definicion=None):
 # (`sin_plato.calcular`): sus sellos van en la clave de la caché.
 _ARCHIVOS_SIN_PLATO = ("salidas.parquet", "ventas.parquet",
                        "recetaventa.parquet", "cartacosteada.parquet",
-                       "inventariovalorizado.parquet")
+                       "inventariovalorizado.parquet", "recetabase.parquet")
 
 
 @st.cache_data(ttl=3600, persist="disk", show_spinner=False)
@@ -2143,7 +2143,7 @@ def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
     """En qué se fue cada producto, de cierre a cierre de inventario
     (`sin_plato.calcular`, regla #645). Si falla, LANZA: no se cachea.
 
-    `archivo` es el kardex, que manda; `sellos`, los de los otros cinco
+    `archivo` es el kardex, que manda; `sellos`, los de los otros seis
     parquets (`_ARCHIVOS_SIN_PLATO`), y `version`, la de la cuenta. Ninguno
     se usa en el cuerpo: son la clave (ver el bloque del sello). Del kardex
     se baja lo agregado por período, producto y tipo (unas 30 mil filas) y
@@ -2167,7 +2167,8 @@ def _sin_plato_cacheable(archivo, sello, sellos=(), version=None):
     return sin_plato.calcular(
         per, kx, fotos, cargar("salidas.parquet"), vend,
         cargar("recetaventa.parquet"), cargar("cartacosteada.parquet"),
-        cargar("inventariovalorizado.parquet"))
+        cargar("inventariovalorizado.parquet"),
+        recetabase=cargar("recetabase.parquet"))
 
 
 def sin_plato_por_cierre():

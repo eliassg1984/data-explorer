@@ -1170,7 +1170,7 @@ cierre por cierre» (el restaurante entero) y «En qué se fue cada producto»
 (la tabla y la ficha del elegido), en `graficos/movimientos_destino.py`. La
 cuenta es `sin_plato.py` (puro, lo vigila
 `test_graficos.py::_pruebas_sin_plato`) y la carga `data.sin_plato_por_cierre`,
-cacheada con los sellos de seis parquets: la primera vez del día tarda
+cacheada con los sellos de siete parquets: la primera vez del día tarda
 ~40 s. Reemplazaron a «Destino de lo que entra» (#614), que listaba sólo los
 productos con baja: en setiembre 2026, S/ 1.071 de bajas contra S/ 50.730
 de faltante del conteo.
@@ -1187,6 +1187,12 @@ de faltante del conteo.
   de `cartacosteada.parquet`; lo que la venta no explica es lo servido
   dentro de combos y queda en «venta». Sin los directos quedaba sin
   explicar el 37 %; con ellos, el 12 %.
+- **Una línea de receta «por insumo» (`T DESCARG` = INSUMO) no descuenta
+  su receta base: descuenta SUS insumos**, y cada línea de
+  `recetabase.parquet` dice a su vez cómo se descarga la suya. Leída como
+  producto, lo vendido iba a un código que el kardex no movió y la palta,
+  el ají o el huevo quedaban sin explicar (`sin_plato.mapa_descargo`):
+  abriéndolas, lo sin explicar baja al 10 %. Regla #648.
 - **Los insumos de operación (familia «COSTOS PRODUCCION») van aparte**:
   ninguna receta los descarga, así que su consumo sólo aparece al contar, y
   mezclados con la comida eran los faltantes más grandes.

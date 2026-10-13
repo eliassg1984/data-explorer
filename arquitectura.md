@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-647 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+648 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (210)
 
@@ -718,7 +718,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#621** — En «Compras por período» se resalta UNA parte de la barra y el cursor responde en la barra…
 - **#627** — «Análisis por Hora» tiene tres modos: «Mapa», «Comparar» y «A medida» —el TOTAL de cualquier…
 
-**Datos, R2 y DuckDB** (98)
+**Datos, R2 y DuckDB** (99)
 
 - **#10** — Ajuste SÍ se puede verificar en local desde 2026-08-05
 - **#19** — @st.cache_data NO debe envolver la función que devuelve None/vacío ante un fallo transitorio:…
@@ -818,6 +818,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#639** — Un requerimiento también tiene DOS fechas, y se elige como en salidas: «Fecha de los…
 - **#641** — «Requerimientos por Área» suma lo mismo que «por Período», y lo que no suma va en la fila…
 - **#645** — «En qué se fue lo que entró» se cuenta de CIERRE A CIERRE de inventario, en dos vistas de una…
+- **#648** — Una línea de receta «por insumo» no descuenta su receta base: descuenta SUS insumos, y «En…
 
 **SUNAT y SIRE** (57)
 
@@ -50704,6 +50705,65 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-12.)
 
+648. **Una línea de receta «por insumo» no descuenta su receta base:
+     descuenta SUS insumos, y «En qué se fue cada producto» baja como el
+     POS.** 2026-10-12, sobre la #645. En `sin_plato.py`
+     (`mapa_descargo`, `lineas_receta_base`, `_abrir_por_insumo`),
+     `data.py` y `test_graficos.py::_pruebas_sin_plato`.
+
+     **Qué pasaba.** Cada línea de receta —de venta en
+     `recetaventa.parquet`, de receta base en `recetabase.parquet`— lleva
+     `T DESCARG`: PRODUCTO o INSUMO, el check «descarga por insumo» del
+     POS. Con INSUMO el kardex no toca la receta base que nombra la línea
+     sino los insumos de su receta, y cada línea de ésa dice a su vez cómo
+     se descarga la suya. `mapa_descargo` leía toda línea como producto: lo
+     vendido iba a un código que el descargo de ventas (95) no movió, el
+     recorte («nunca más de lo que el kardex descontó») lo dejaba en cero,
+     y lo que el kardex sí descontó de sus insumos quedaba sin explicar, o
+     sea «dentro de combos». La ficha de la Palta Fuerte decía que sus
+     48,8 kg de setiembre 2026 se sirvieron dentro de combos.
+
+     **Medido sobre R2 (setiembre 2026, 3 set – 6 oct):** 157 líneas de
+     venta por insumo (2.438 por producto) y 294 de receta base (2.436).
+     De las 17 recetas base que una línea por insumo nombra en platos
+     vendidos, el kardex no movió 7; las otras 10 las nombra como PRODUCTO
+     alguna otra receta de venta, y movieron mucho menos de lo que se les
+     atribuía (el tomate limpio, 1,7 kg contra 9,9). Abriéndolas, lo que el
+     POS no explica pasa de S/ 14.273 a S/ 12.361 —del 11,6 % al 10,0 % de
+     los S/ 123.007 del descargo de ventas—; agosto, −S/ 1.701; julio,
+     −S/ 896. Los 25 productos que sólo explica la apertura quedan en 0,96
+     de lo que descontó el kardex (palta 57,1 kg contra 48,8; ají amarillo
+     22,1 contra 18,1; huevo de corral 33,8 contra 29,5, donde antes se
+     explicaban 12,1): la escala cierra. Un lote de receta base es una
+     unidad de entrada de su producto, `CANT / FACTOR INS` por unidad, como
+     en `consumo_recetas` (#558). Lo único que se mueve es el reparto de «a
+     un plato» —la cortesía gana S/ 57—, no el faltante ni la
+     valorización.
+
+     **Cómo baja**: nivel por nivel, sólo la receta ACTIVA (`RB ACT`) y
+     las líneas que descargan (`DESCARGA` = DESC), hasta `NIVELES_MAX`.
+     Una línea por insumo cuyo código no tiene receta activa queda como
+     producto (abrirla por su receta inactiva no mueve un sol, medido), y
+     también la que vuelve sobre su propio camino. Los códigos llegan con 7
+     dígitos en todo lo que esta cuenta cruza —kardex, venta, las dos
+     recetas, los directos de la carta—: acá no hace falta quitar ceros,
+     que sí hace falta contra `ajusteinventario.parquet` (10 dígitos).
+
+     **Lo que queda en «combos»** sigue siendo lo servido dentro de combos
+     (CPEDIDO no llega a ningún parquet), más lo que separa la receta de
+     HOY de la que descontó en su día.
+
+     `sin_plato.VERSION` pasó a 2 y `recetabase.parquet` entra en los
+     sellos de la caché (`data._ARCHIVOS_SIN_PLATO`: siete parquets con el
+     kardex).
+
+     **En Cloud hace falta «Reboot app»** (#357): `data.py` le pasa a
+     `sin_plato.calcular` un argumento nuevo (`recetabase=`). Con uno de
+     los dos viejo no se cae: la carga va en `try` y la vista avisa que no
+     pudo calcular, o calcula como antes.
+
+     (2026-10-12.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -50716,7 +50776,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#647**; la próxima toma el número siguiente.
+> última regla es la **#648**; la próxima toma el número siguiente.
 
 >
 

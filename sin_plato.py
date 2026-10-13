@@ -49,9 +49,19 @@ unidades_por_clase_dia`) × lo que cada plato descuenta: su receta de venta
 (`recetaventa.parquet`) o, si el POS lo descuenta DIRECTO, una unidad del
 producto enlazado (`cartacosteada.parquet`, `TIPO DESC` = DIRECTO: los cortes
 de parrilla, los chorizos de Mayta, las aguas). Con las recetas solas
-quedaba sin explicar el 37 % de lo vendido; con los directos, el 12 %, que
-es lo servido dentro de combos (CPEDIDO no llega a ningún parquet) y queda
-en «venta». Nunca se reparte más de lo que el kardex descontó.
+quedaba sin explicar el 37 % de lo vendido; con los directos, el 12 %.
+
+UNA LÍNEA «POR INSUMO» NO DESCUENTA SU RECETA BASE (regla #648). Con el
+check «descarga por insumo» del POS (`T DESCARG` = INSUMO) el kardex no
+toca la receta base que nombra la línea sino SUS insumos, y cada línea de
+`recetabase.parquet` vuelve a decir cómo se descarga la suya. Leída como
+producto, la línea se llevaba lo vendido a un código que el kardex no movió
+(setiembre 2026: de las 17 recetas base así nombradas en platos vendidos,
+no movió 7, y las otras 10 las nombra como producto otro plato), el recorte
+la dejaba en cero y sus insumos —la palta, el ají amarillo, el huevo—
+quedaban sin explicar. Abriéndolas, lo que queda sin explicar baja al 10 %, y es lo
+servido dentro de combos (CPEDIDO no llega a ningún parquet), que va en
+«venta». Nunca se reparte más de lo que el kardex descontó.
 
 INSUMOS DE OPERACIÓN: la familia «COSTOS PRODUCCION» (carbón, leña,
 limpieza, descartables). Ninguna receta los descarga, así que su consumo
@@ -69,9 +79,10 @@ import pandas as pd
 import definicion_venta as dv
 from cortes import MESES_ABR_ES, MESES_LARGOS_ES
 
-VERSION = 1
+VERSION = 2
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
-cambie QUÉ se calcula."""
+cambie QUÉ se calcula. La 2: las líneas que se descargan por insumo bajan
+por su receta base (regla #648)."""
 
 DESDE = (2025, 9)
 """El cierre desde el que se cuenta: el primer período es octubre 2025.
@@ -93,6 +104,14 @@ TIPO_VENTAS = "95"
 TIPO_AJUSTE = "93"
 TIPOS_NOTAS = ("91", "92", "98")
 TIPO_BAJAS = "BAJAS"
+
+POR_INSUMO = "INSUMO"
+"""El `T DESCARG` de una línea que el POS descarga por los insumos de su
+receta base, y no por el producto (el otro valor es PRODUCTO)."""
+RECETA_ACTIVA = "RB.ACTIV"
+NIVELES_MAX = 12
+"""Hasta cuántas recetas base anidadas se baja (`consumo_recetas` usa las
+mismas): una receta que se nombra a sí misma no cuelga la cuenta."""
 
 ALIMENTOS = "alimentos"
 OPERACION = "operacion"
@@ -277,15 +296,82 @@ def stock_en_momentos(fotos, instantes):
     return out[["cod", "i", "q", "v"]]
 
 
-def mapa_descargo(recetaventa, carta=None):
+def lineas_receta_base(recetabase):
+    """Lo que descuenta UNA unidad del kardex de cada receta base abierta
+    por sus insumos: una fila por (`prod` la receta base, `ci` insumo, `t`)
+    con `q` en la unidad del kardex del insumo (la línea habla en la de
+    salida: se divide por su `FACTOR INS`; un lote es una unidad de entrada,
+    como en `consumo_recetas`). `t` es el `T DESCARG` de la línea: si vuelve
+    a ser POR_INSUMO, ese insumo se abre a su vez. Sólo la receta activa y
+    las líneas que descargan. Pura."""
+    vacio = pd.DataFrame(columns=["prod", "ci", "t", "q"])
+    if recetabase is None or recetabase.empty:
+        return vacio
+    rb = recetabase
+    c_p, c_i = _col(rb, "COD PROD RB"), _col(rb, "COD INS RB")
+    c_c, c_f = _col(rb, "CANT"), _col(rb, "FACTOR INS")
+    if not (c_p and c_i and c_c):
+        return vacio
+    c_a, c_d, c_t = _col(rb, "RB ACT"), _col(rb, "DESCARGA"), _col(rb, "T DESCARG")
+    if c_a:
+        rb = rb[_cod(rb[c_a]).str.upper() == RECETA_ACTIVA]
+    if c_d:
+        rb = rb[_cod(rb[c_d]).str.upper() == "DESC"]
+    fac = (_num(rb[c_f]).replace(0, 1.0) if c_f
+           else pd.Series(1.0, index=rb.index))
+    e = pd.DataFrame({"prod": _cod(rb[c_p]), "ci": _cod(rb[c_i]),
+                      "t": _cod(rb[c_t]).str.upper() if c_t else "",
+                      "q": _num(rb[c_c]) / fac})
+    e = e[(e["prod"] != "") & (e["ci"] != "")]
+    return e.groupby(["prod", "ci", "t"], as_index=False)["q"].sum()
+
+
+def _abrir_por_insumo(lineas, rb):
+    """`lineas` (`cp`, `ci`, `q`, `t`) con cada una que se descarga
+    POR_INSUMO cambiada por las de su receta base (`lineas_receta_base`),
+    nivel por nivel, hasta que ninguna lo pida o hasta NIVELES_MAX. Una
+    línea POR_INSUMO cuyo código no tiene receta activa, o que ya está en
+    su propio camino (una receta que se nombra a sí misma), queda como
+    producto. Pura."""
+    if rb.empty:
+        return lineas
+    abribles = set(rb["prod"])
+    m = lineas.assign(ruta="/" + lineas["ci"] + "/")
+    hechas = []
+    for _ in range(NIVELES_MAX):
+        abrir = (m["t"] == POR_INSUMO) & m["ci"].isin(abribles)
+        hechas.append(m[~abrir])
+        if not abrir.any():
+            m = m.iloc[0:0]
+            break
+        x = m[abrir].merge(rb.rename(columns={"prod": "ci", "ci": "hijo",
+                                              "t": "t_hijo", "q": "coef"}),
+                           on="ci")
+        ruta = x["ruta"] + x["hijo"] + "/"
+        vuelve = [f"/{h}/" in r for h, r in zip(x["hijo"], x["ruta"])]
+        m = pd.DataFrame({"cp": x["cp"], "ci": x["hijo"],
+                          "q": x["q"] * x["coef"],
+                          "t": np.where(vuelve, "", x["t_hijo"]), "ruta": ruta})
+    hechas.append(m)
+    return pd.concat(hechas, ignore_index=True).drop(columns="ruta")
+
+
+def mapa_descargo(recetaventa, carta=None, recetabase=None):
     """Qué descuenta del stock cada plato que se vende: una fila por
     (`cp` plato, `ci` producto) con `q`, la cantidad por plato en la unidad
     del KARDEX (la receta habla en la de salida: se divide por su `FACTOR`).
+
+    Una línea con `T DESCARG` = INSUMO no descuenta el producto que nombra
+    sino los insumos de su receta base (`recetabase`, la de
+    `recetabase.parquet`), y así hacia abajo según el `T DESCARG` de cada
+    línea de la receta base (regla #648). Sin `recetabase`, o sin la
+    columna, toda línea descuenta su producto.
 
     Los platos sin receta que el POS descuenta DIRECTO —un plato, una unidad
     del producto enlazado— salen de `carta` (`cartacosteada.parquet`, `TIPO
     DESC` = DIRECTO). Pura."""
     partes = []
+    con_receta = set()
     if recetaventa is not None and not recetaventa.empty:
         r = recetaventa
         c_d = _col(r, "DESCARG")
@@ -293,18 +379,22 @@ def mapa_descargo(recetaventa, carta=None):
             r = r[_cod(r[c_d]).str.upper() == "SI"]
         c_p, c_i = _col(r, "COD PLATO"), _col(r, "COD INS")
         c_c, c_f = _col(r, "CANTIDAD"), _col(r, "FACTOR")
+        c_t = _col(r, "T DESCARG")
         if c_p and c_i and c_c:
             fac = (_num(r[c_f]).replace(0, 1.0) if c_f
                    else pd.Series(1.0, index=r.index))
-            partes.append(pd.DataFrame({"cp": _cod(r[c_p]), "ci": _cod(r[c_i]),
-                                        "q": _num(r[c_c]) / fac}))
+            lineas = pd.DataFrame({"cp": _cod(r[c_p]), "ci": _cod(r[c_i]),
+                                   "q": _num(r[c_c]) / fac,
+                                   "t": _cod(r[c_t]).str.upper() if c_t else ""})
+            con_receta = set(lineas["cp"])
+            partes.append(_abrir_por_insumo(
+                lineas, lineas_receta_base(recetabase))[["cp", "ci", "q"]])
     if carta is not None and not carta.empty:
         c_t, c_p = _col(carta, "TIPO DESC"), _col(carta, "COD PLATO")
         c_i = _col(carta, "COD ITEM O RECETA")
         if c_t and c_p and c_i:
             d = carta[_cod(carta[c_t]).str.upper() == "DIRECTO"]
             d = pd.DataFrame({"cp": _cod(d[c_p]), "ci": _cod(d[c_i]), "q": 1.0})
-            con_receta = set(partes[0]["cp"]) if partes else set()
             partes.append(d[(d["ci"] != "") & ~d["cp"].isin(con_receta)])
     if not partes:
         return pd.DataFrame(columns=["cp", "ci", "q"])
@@ -366,9 +456,11 @@ def _maestro(maestro):
 # LA CUENTA
 # ═══════════════════════════════════════════════════════════════════════
 
-def calcular(per, kx, fotos, salidas, vend, recetaventa, carta, maestro):
+def calcular(per, kx, fotos, salidas, vend, recetaventa, carta, maestro,
+             recetabase=None):
     """Todo lo que dibujan las dos vistas: `{"periodos", "filas",
-    "totales"}`.
+    "totales"}`. `recetabase` abre las líneas que se descargan por insumo
+    (`mapa_descargo`, regla #648).
 
     `filas`: una por (`cod`, `k`) con algún movimiento o stock, con
     `producto`, `unidad`, `familia`, `clase` (ALIMENTOS u OPERACION) y cada
@@ -396,7 +488,7 @@ def calcular(per, kx, fotos, salidas, vend, recetaventa, carta, maestro):
 
     # Lo vendido, repartido con el POS. Nunca más de lo que el kardex
     # descontó; lo que el POS no explica es lo servido dentro de combos.
-    r = reparto_venta(vend, mapa_descargo(recetaventa, carta), per)
+    r = reparto_venta(vend, mapa_descargo(recetaventa, carta, recetabase), per)
     g = g.merge(r, on=["cod", "k"], how="left")
     for c in ("venta", "cort", "evvi"):
         g[c] = g[c].fillna(0.0)

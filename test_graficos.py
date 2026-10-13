@@ -7978,7 +7978,7 @@ def _pruebas_sin_plato():
       3. LO VENDIDO SE PARTE con el POS: la cortesía y los eventos por
          receta, el plato DIRECTO por su enlace, lo que el POS no explica
          queda en combos, y nunca se reparte más de lo que el kardex
-         descontó.
+         descontó. Una línea POR INSUMO baja por su receta base (#648).
       4. EL RESTAURANTE CIERRA: compras = a un plato + bajas + otras +
          faltante neto + operación + Δ stock, con valorización cero cuando
          los precios no cambian; los insumos de operación van aparte.
@@ -8127,6 +8127,63 @@ def _pruebas_sin_plato():
     check("nunca se reparte más de lo que el kardex descontó",
           round(float(f2.loc["T", "venta_q"] + f2.loc["T", "cort_q"]
                       + f2.loc["T", "evvi_q"]), 6), 70.0)
+
+    # ── 3b) La descarga POR INSUMO (#648) ───────────────────────────────
+    # P3 lleva 500 g de la salsa S «por insumo»: el POS no toca S sino su
+    # ajo A y su caldo B, y el caldo —también por insumo— baja a sus huesos
+    # H. La línea de T pide «por insumo» pero T no tiene receta: queda como
+    # producto. P4 lleva la misma salsa como PRODUCTO: ésa descuenta S.
+    rv_ins = pd.DataFrame({
+        "COD PLATO": ["P3", "P3", "P4"], "COD INS": ["S", "T", "S"],
+        "CANTIDAD": [500.0, 1.0, 250.0], "FACTOR": [1000.0, 1.0, 1000.0],
+        "DESCARG": ["SI"] * 3, "T DESCARG": ["INSUMO", "INSUMO", "PRODUCTO"]})
+    rb_ins = pd.DataFrame({
+        # S: 200 g de ajo y 300 ml de caldo por kilo; la receta vieja de S,
+        # inactiva, llevaba Z. B: 2 huesos por litro.
+        "COD PROD RB": ["S", "S", "S", "B"],
+        "COD INS RB": ["A", "B", "Z", "H"],
+        "CANT": [200.0, 300.0, 50.0, 2.0],
+        "FACTOR INS": [1000.0, 1000.0, 1000.0, 1.0],
+        "T DESCARG": ["PRODUCTO", "INSUMO", "PRODUCTO", "PRODUCTO"],
+        "RB ACT": ["RB.ACTIV", "RB.ACTIV", "RB.INACT", "RB.ACTIV"],
+        "DESCARGA": ["DESC"] * 4})
+
+    def _mapa(m):
+        return {(a, b): round(float(q), 6) for a, b, q in
+                m[["cp", "ci", "q"]].itertuples(index=False)}
+    check("por insumo: la salsa no se descuenta, su ajo y los huesos del "
+          "caldo sí; T sin receta y la línea PRODUCTO, como producto",
+          _mapa(sp.mapa_descargo(rv_ins, None, rb_ins)),
+          {("P3", "A"): 0.1, ("P3", "H"): 0.3, ("P3", "T"): 1.0,
+           ("P4", "S"): 0.25})
+    check("sin recetabase, cada línea descuenta lo que nombra",
+          _mapa(sp.mapa_descargo(rv_ins)),
+          {("P3", "S"): 0.5, ("P3", "T"): 1.0, ("P4", "S"): 0.25})
+    rb_ciclo = pd.concat([rb_ins, pd.DataFrame({
+        "COD PROD RB": ["B"], "COD INS RB": ["S"], "CANT": [100.0],
+        "FACTOR INS": [1000.0], "T DESCARG": ["INSUMO"],
+        "RB ACT": ["RB.ACTIV"], "DESCARGA": ["DESC"]})], ignore_index=True)
+    check("una receta que se nombra a sí misma termina, y ahí queda como "
+          "producto", _mapa(sp.mapa_descargo(rv_ins, None, rb_ciclo)).get(
+              ("P3", "S")), round(0.5 * 0.3 * 0.1, 6))
+    # En el kardex: 10 P3 vendidos descontaron 1 kg de ajo y 3 huesos, y
+    # nada de salsa. Leída como producto, el ajo quedaba entero en combos.
+    kx3 = pd.DataFrame({"cod": ["A", "H"], "tipo": ["95", "95"],
+                        "cant_in": [0.0, 0.0], "cant_out": [1.0, 3.0],
+                        "val_in": [0.0, 0.0], "val_out": [10.0, 6.0], "k": 0})
+    vend3 = pd.DataFrame({"producto": ["P3"],
+                          "dia": pd.to_datetime(["2025-10-05"]),
+                          "grupo": ["Alimentos"], "clase": [dv.VENTA],
+                          "unidades": [10.0]})
+    for nombre, rb_, exp in (("abierta por sus insumos", rb_ins,
+                              [1.0, 0.0, 3.0, 0.0]),
+                             ("sin recetabase (como hasta la #645)", None,
+                              [1.0, 1.0, 3.0, 3.0])):
+        f3 = sp.calcular(per1, kx3, None, None, vend3, rv_ins, None, None,
+                         recetabase=rb_).get("filas").set_index("cod")
+        check(f"ajo y huesos: venta y combos, {nombre}",
+              [round(float(f3.loc[c, p]), 6) for c in ("A", "H")
+               for p in ("venta_q", "combos_q")], exp)
 
     # ── 5) Lo que leen las vistas ───────────────────────────────────────
     fk = r["filas"]
