@@ -30,7 +30,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 ## Índice por tema
 
-653 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
+654 reglas. Una misma regla aparece bajo todos los temas que le corresponden — por eso los totales suman más que el total.
 
 **CSS y estilos** (211)
 
@@ -1136,7 +1136,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#651** — «Análisis de diferencias» mira los COMBOS, no descarta las líneas sin precio y reconoce lo…
 - **#653** — Compras › Producto es una fila: el ranking a la izquierda y la ficha del producto elegido a…
 
-**Mantenimiento y trampas del lenguaje** (15)
+**Mantenimiento y trampas del lenguaje** (16)
 
 - **#21** — Columnas reales de salidas.parquet confirmadas 2026-08-04
 - **#43** — st.plotly_chart(..., selection_mode="points") NO agrega las herramientas de caja/lazo al…
@@ -1153,6 +1153,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 - **#408** — Un if nuevo se traga el bloque que tenía debajo, y Python no dice nada: la pila de CINCO…
 - **#595** — La venta por ÁREA DE PRODUCCIÓN: dónde se prepara, no qué grupo de la carta es
 - **#618** — La escala de tiempo vieja se borró entera, y con ella la Evolución de Movimientos: «sin…
+- **#654** — «Análisis de diferencias» reconoce lo descontado desde un ÁREA a la que la receta ya no apunta
 
 **Sin tema asignado** (2)
 
@@ -51223,6 +51224,47 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
      (2026-10-13.)
 
+654. **«Análisis de diferencias» reconoce lo descontado desde un ÁREA a la
+     que la receta ya no apunta.** 2026-10-13, sobre la #650. En
+     `diferencias_ajuste.py` (`area_de_descargo`, el tipo «desc», `VERSION`
+     4), `graficos/ajuste/_diferencias.py` y
+     `test_graficos.py::_pruebas_diferencias_area_descargo`.
+
+     **Qué pasaba.** El usuario lo vio en el Pollito bb confitado (+54 und
+     en Cocina Personal, +S/ 796): «ahora la receta descarga del área de
+     Cocina, y antes descargaba de Cocina Personal, que no es un subalmacén
+     con recetas: es de tránsito». En setiembre 2026 las ventas lo
+     descontaron de Cocina Personal —54 und, los 54 Pollito Bebe Tostado
+     vendidos—, el área nunca lo recibió, el sistema quedó en −54 y el
+     conteo lo devolvió como sobrante; mientras tanto Cocina, donde sí
+     estaba, terminó con −10,5. Las recetas se editaron el 7 oct, después
+     del conteo: la ficha decía «receta editada 7 oct», pero ninguna pista
+     lo explicaba.
+
+     **La pista.** Para un sobrante con el sistema en negativo: lo que las
+     ventas descontaron desde ESTA área entre los dos conteos pasa de largo
+     (> 1,2×) lo que las recetas de HOY descargan desde aquí, y un plato
+     que lo lleva se editó desde el conteo anterior y hoy lo descarga desde
+     OTRA área. Entonces: «antes lo descargaba desde aquí», y si el área no
+     recibió el producto, por qué quedó en negativo. Fuerte.
+
+     **Por qué sólo con un plato EDITADO.** Sin esa condición salían 21
+     líneas, casi todas ruido: un plato que el POS descuenta DIRECTO no
+     dice su área (`cartacosteada`), y las recetas piden otra cantidad por
+     canal (`CANT DELIV`), así que «recetas × vendido desde aquí» no
+     alcanzaba a lo descontado sin que hubiera ningún error. Con la edición
+     quedan 5, todas de las ediciones del 7 oct (Pollito Bebe Tostado,
+     Sarten de Arroz con Pollo, Arroz Mar y Montaña): el Pollito
+     confitado, los dos colágenos y la zanahoria bb en Cocina Personal, y
+     la sal Maldon en Cocina. Un plato DIRECTO cuenta como de aquí, para no
+     acusar lo que no se sabe.
+
+     **Y un dato que salió de paso:** a esa fecha «Sarten de Arroz con
+     Pollo» es el ÚNICO plato activo con líneas que descargan desde Cocina
+     Personal (16). Si el área es de tránsito, esas líneas están mal.
+
+     (2026-10-13.)
+
 <!-- REGLAS:FIN — lo de abajo no es una regla -->
 
 
@@ -51235,7 +51277,7 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
 
 > de sitio, para no partir la serie de SUNAT, que se lee seguida. La
 
-> última regla es la **#653**; la próxima toma el número siguiente.
+> última regla es la **#654**; la próxima toma el número siguiente.
 
 >
 

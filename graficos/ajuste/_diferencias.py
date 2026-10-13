@@ -69,7 +69,7 @@ _ICONO = {"receta": ":material/error:", "prod": ":material/precision_manufacturi
           "area": ":material/swap_horiz:", "neg": ":material/remove:",
           "rev": ":material/undo:", "nada": ":material/block:",
           "combo": ":material/restaurant_menu:", "sunat": ":material/receipt_long:",
-          "req": ":material/pending_actions:",
+          "req": ":material/pending_actions:", "desc": ":material/alt_route:",
           "nadie": ":material/no_meals:", "rubro": ":material/compare_arrows:"}
 
 _SIN_DATOS = ("No se pudo armar el análisis de esta sesión: hace falta el "

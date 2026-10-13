@@ -35,6 +35,10 @@ LAS PISTAS, en el orden en que se muestran (fuertes primero):
   receta   la línea ES una receta base que los platos descargan como
            producto y no tuvo órdenes en seis meses; o una DD que algún plato
            descarga como producto
+  desc     las ventas lo descontaron desde ESTA área más de lo que las recetas
+           de hoy descargan desde aquí, y un plato que lo lleva se editó
+           desde el conteo anterior y hoy lo descarga desde OTRA: la receta
+           apuntaba a un área que no recibe el producto (#654)
   prod     falta un insumo y sobra lo que se hace con él (o al revés), por
            receta base o porcionamiento
   combo    va en un combo que se vendió y esos días no lo descontó (#651):
@@ -75,7 +79,7 @@ import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 3
+VERSION = 4
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula."""
 
@@ -95,13 +99,14 @@ USOS_FICHA = 10
 
 FAMILIA_OPERACION = "COSTOS PRODUCCION"
 
-TIPOS = ("receta", "prod", "combo", "sunat", "req", "area", "rubro", "neg", "rev", "nada",
-         "nadie")
+TIPOS = ("receta", "desc", "prod", "combo", "sunat", "req", "area", "rubro", "neg", "rev",
+         "nada", "nadie")
 """Los tipos de pista, en el orden en que se muestran a igual fuerza. «rubro»
 va antes que «neg» y «nada» desde la #651: cuando es fuerte («vendido con el
 código del otro») explica por qué hay un negativo o por qué no salió nada."""
 
-NOMBRE_TIPO = {"receta": "Receta", "prod": "Producción", "combo": "Combo",
+NOMBRE_TIPO = {"receta": "Receta", "desc": "Área de descargo", "prod": "Producción",
+               "combo": "Combo",
                "sunat": "Factura sin ingresar", "req": "Sin procesar",
                "area": "Otra área",
                "neg": "Sistema negativo", "rev": "Revierte",
@@ -849,6 +854,37 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                  & (h[0] <= np.datetime64(t1 + pd.Timedelta(days=DIAS_TARDE)))]
         return pd.Timestamp(f.min()) if len(f) else None
 
+    def area_de_descargo(x, usos, salio, sin_ing):
+        """La pista del área de descargo (#654): lo que las ventas descontaron
+        desde esta área en el período pasa de largo lo que las recetas de HOY
+        descargan desde aquí, y un plato que lo lleva se editó desde el
+        conteo anterior y hoy lo descarga desde OTRA área. El Pollito bb
+        confitado, setiembre 2026: Cocina Personal descontó 54 —los 54
+        Pollito Bebe Tostado vendidos— y el 7 oct esa receta pasó a Cocina.
+        Un plato que el POS descuenta DIRECTO no dice su área: cuenta como de
+        aquí, para no acusar lo que no se sabe."""
+        kx = sum(m[1] for m in salio if m[0] == "Descargo de ventas")
+        if kx <= 0:
+            return None
+        platos = [u_ for u_ in usos
+                  if u_["via"] in ("plato", "plato_ins") and u_["t"] == "PRODUCTO"]
+        aqui = sum(u_["d"] for u_ in platos if u_["aqui"] or not u_["a"])
+        editados = [u_ for u_ in platos if u_.get("ed") is not None and u_["aqui"] is False]
+        if not editados or kx <= 1.2 * aqui + 0.5:
+            return None
+        un = x["u"] or "und"
+        e = max(editados, key=lambda u_: u_["nv"])
+        de_aqui = [u_["n"] for u_ in platos if u_["aqui"] and u_["d"] > 0]
+        tx = (f"Las ventas lo descontaron de {_titulo(x['area'])}: {es(kx)} {un} entre los dos "
+              f"conteos, y con las recetas de hoy desde aquí saldrían {es(aqui)}"
+              + (f" ({', '.join(de_aqui[:2])})" if de_aqui else "") + ". "
+              f"{e['n']} se editó el {fecha_corta(e['ed'])} y hoy lo descarga desde "
+              f"{_titulo(e['a'])}: antes lo descargaba desde aquí.")
+        if sin_ing:
+            tx += (f" Esta área no recibió el producto (ni compra, ni requerimiento, ni "
+                   f"producción): por eso el sistema quedó en {es(x['s'])}.")
+        return {"t": "desc", "f": 1, "ti": "Se descontó desde otra área", "tx": tx}
+
     def combo_sin_descontar(x, usos, salio):
         """La pista de combo: un combo que lleva un plato de este producto, que
         se vendió entre los dos conteos y que no lo descontó.
@@ -1112,6 +1148,11 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                           "tx": f"Es DD, pero {rec['prod']} receta(s) la descargan como producto "
                                 f"({', '.join(rec['prod_l'][:3])}). Si debía ir por insumo, "
                                 "ahí falta el check."})
+        # desc — se descontó desde un área a la que ya no apunta su receta
+        if q > 0 and x["s"] < 0:
+            pd_ = area_de_descargo(x, usos_todos[i], f["sal"], sin_ing)
+            if pd_ is not None:
+                P.append(pd_)
         # prod — falta el insumo y sobra lo que se hace con él (o al revés)
         if q < 0:
             cand = []

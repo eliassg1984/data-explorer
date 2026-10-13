@@ -1233,7 +1233,10 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
 - **Las recetas se leen línea por línea con `T DESCARG`** (#648): «se
   produjo sin orden» sólo vale para una receta base que algo descarga
   COMO PRODUCTO; una DD va por insumo y no lleva orden.
-- **El área de descargo de un plato es `SUBALM INS`**, no `AREA PROD`.
+- **El área de descargo de un plato es `SUBALM INS`**, no `AREA PROD`. Y puede
+  cambiar: si las ventas descontaron desde un área más de lo que las
+  recetas de hoy descargan desde ahí, y un plato se editó y hoy apunta a
+  otra, la pista «Se descontó desde otra área» lo dice (#654).
 - **Mira los combos** (`combosdetalle.parquet`, #651) y los compara por
   TOTALES del período, no por día: el POS descuenta las ventas en lotes, a
   la mañana siguiente y juntando días. Lo elegido en un combo a elegir

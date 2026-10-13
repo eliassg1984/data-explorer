@@ -8374,6 +8374,87 @@ def _pruebas_diferencias_req_sunat():
     return fallos
 
 
+def _pruebas_diferencias_area_descargo():
+    """Ajuste › «Análisis de diferencias», el ÁREA DE DESCARGO (regla #654),
+    con el caso real del cierre de setiembre 2026: Cocina Personal descontó
+    54 Pollito bb confitado —los 54 Pollito Bebe Tostado vendidos— sin
+    recibirlo nunca, y el 7 oct esa receta pasó a descargarlo desde Cocina.
+    Con las recetas de HOY, desde Cocina Personal sólo saldrían los 25 del
+    Sarten (50 × 0,5): la pista lo dice, nombra el plato editado y el área
+    de antes. Y no acusa cuando lo que salió calza con las recetas de hoy.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #654 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #654 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {1: "COCINA", 10: "COCINA PERSONAL"}
+
+    def fila(t, a, c, n, s, k):
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": "ALIMENTOS", "SUBFAMILIA": "AVES",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": "UND",
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": 14.7, "AJUSTE VALORIZADO": (k - s) * 14.7}
+    t0, t1 = "2026-09-02 10:00", "2026-10-01 17:35"
+    n60, n61 = "(Rb) Pollito bb confitado x und (parrilla)", "Pato confitado x und"
+    ajuste = pd.DataFrame([fila(t0, 10, 60, n60, 0, 0), fila(t0, 1, 61, n61, 0, 0),
+                           fila(t1, 10, 60, n60, -54, 0), fila(t1, 1, 61, n61, -10, 0)])
+
+    def kx(t, a, c, sal, stock):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": "95", "CANT INGRESO": 0.0,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
+    kardex = pd.DataFrame([kx("2026-09-20 09:00", 10, 60, 54.0, -54.0),
+                           kx("2026-09-20 09:00", 1, 61, 10.0, -10.0)])
+    rv = pd.DataFrame([
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": f"{cp:07d}", "NOMB PLATO": pl, "COD INS": f"{ci:07d}", "CANTIDAD": q,
+         "FACTOR": 1.0, "SUBALM INS": ar, "T DESCARG": "PRODUCTO",
+         "FECH MODIF": pd.Timestamp(fm)}
+        for cp, pl, ci, q, ar, fm in (
+            (701, "Pollito Bebe Tostado", 60, 1.0, "COCINA", "2026-10-07 09:19"),
+            (702, "Sarten de Arroz con Pollo", 60, 0.5, "COCINA PERSONAL", "2026-05-01"),
+            (703, "Pato a la brasa", 61, 1.0, "COCINA", "2026-10-07 09:00"))])
+    vacia = lambda *cols: pd.DataFrame(columns=list(cols))
+    rb = vacia("RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO", "CANT",
+               "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG")
+    carta = vacia("TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA")
+    porc = vacia("COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT", "PROD INICIAL",
+                 "COD PORC", "FEC REGIST", "CANT A PORCIONAR")
+    ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
+    venta = pd.DataFrame([
+        {"producto": f"{cp:07d}", "dia": pd.Timestamp("2026-09-19"), "unidades": u,
+         "costo": 0.0, "unidades_costeadas": 0.0}
+        for cp, u in ((701, 54.0), (702, 50.0), (703, 10.0))])
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, None, venta)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+    p60 = [p for p in F[de[(10, "60")]["id"]]["pistas"] if p["t"] == "desc"]
+    check("se descontó desde un área a la que ya no apunta su receta",
+          [(p["ti"], p["f"]) for p in p60], [("Se descontó desde otra área", 1)])
+    check("nombra el plato editado y el área de hoy",
+          "Pollito Bebe Tostado se editó el 7 oct y hoy lo descarga desde Cocina" in p60[0]["tx"],
+          True)
+    check("y que con las recetas de hoy desde aquí saldrían 25",
+          "desde aquí saldrían 25 (Sarten de Arroz con Pollo)" in p60[0]["tx"], True)
+    check("no acusa cuando lo que salió calza con las recetas de hoy",
+          [p["t"] for p in F[de[(1, "61")]["id"]]["pistas"] if p["t"] == "desc"], [])
+    return fallos
+
+
 def _pruebas_detalle_salidas():
     """Movimientos › «Detalle de salidas» (regla #511).
 
@@ -11772,6 +11853,7 @@ def main():
     fallos += _pruebas_diferencias_ajuste()
     fallos += _pruebas_diferencias_combos()
     fallos += _pruebas_diferencias_req_sunat()
+    fallos += _pruebas_diferencias_area_descargo()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
 
