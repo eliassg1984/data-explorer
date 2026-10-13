@@ -2749,6 +2749,15 @@ def _pie_comprobante(doc, lineas, totales=None):
     total = _del_registro(doc, "total")
     total = None if total is None else _s(total)
 
+    # El total del PAPEL (`PayableAmount`) puede diferir del registro: el
+    # recargo al consumo y el redondeo del retail no entran al total del
+    # registro del SIRE. Se usa para rotular el total y para explicar la
+    # diferencia más abajo.
+    pagable = _num((totales or {}).get("total"))
+    cargos = _num((totales or {}).get("cargos"))
+    _diverge = (total is not None and pagable is not None
+                and abs(abs(pagable) - abs(total)) > _TOLERANCIA_CENTAVOS)
+
     filas = []
     if grav:
         filas.append(("Gravado", grav, False))
@@ -2756,7 +2765,11 @@ def _pie_comprobante(doc, lineas, totales=None):
         filas.append(("No gravado", ngrav, False))
     filas.append(("IGV", igv, False))
     if total is not None:
-        filas.append(("TOTAL", total, True))
+        # «TOTAL» cuando el registro coincide con el papel; «Total registro»
+        # cuando NO —recargo al consumo, redondeo—, para no leerse como si
+        # se contradijera con el total del comprobante (el PDF). La
+        # diferencia la explica la línea de abajo.
+        filas.append(("Total registro" if _diverge else "TOTAL", total, True))
 
     _bloque_totales([_renglon_total(e, v, sim, f) for e, v, f in filas])
 
@@ -2793,13 +2806,26 @@ def _pie_comprobante(doc, lineas, totales=None):
     # redondeo que explicar — hay un descuadre, y se dice así.
     import sunat_importacion as _simp
 
-    pagable = _num((totales or {}).get("total"))
     _dif = (None if pagable is None or total is None
             else round(abs(pagable) - abs(total), 2))
     if _dif and abs(_dif) <= _simp.REDONDEO_MAXIMO + 1e-9:
         st.caption(f"El comprobante redondea el total a {sim} "
                    f"{abs(pagable):,.2f} ({_dif:+.2f}); SUNAT anota "
                    f"{sim} {abs(total):,.2f}. Se carga lo del comprobante.")
+    elif _dif and cargos and abs(abs(_dif) - abs(cargos)) <= _TOLERANCIA_CENTAVOS:
+        # EL HUECO TIENE NOMBRE cuando es el recargo al consumo. SUNAT no lo
+        # suma al total del registro —no es parte de la operación gravada—
+        # pero el `PayableAmount` del papel sí, y el importador lo carga
+        # DENTRO del neto (ver `sunat_importacion`): el documento entra por
+        # el total del comprobante y cuadra. Es normal y explicable, como el
+        # ISC: se explica en vez de mandar a "revisar" un documento que el
+        # Almacén acepta. Ver regla #314.
+        st.caption(f"El comprobante cobra {sim} {abs(pagable):,.2f}; el "
+                   f"registro anota {sim} {abs(total):,.2f}. La diferencia "
+                   f"es el recargo al consumo ({sim} {abs(cargos):,.2f}), "
+                   "que SUNAT no suma al registro. Al Almacén entra dentro "
+                   "del neto, así que el documento se carga por el total del "
+                   "comprobante.")
     elif _dif:
         st.caption(f"⚠ El comprobante declara {sim} {abs(pagable):,.2f} y "
                    f"el registro {sim} {abs(total):,.2f} "
