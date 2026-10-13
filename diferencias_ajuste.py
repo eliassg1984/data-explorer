@@ -537,7 +537,18 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
     K95 = K[(K["t"] == "95") & (K["sal"] > 0)]
     k95_de = {c: (g["hora"].to_numpy(), g["sal"].to_numpy())
               for c, g in K95.groupby("cod")}
-    comp = K[_es_compra(K["t"]) & (K["ent"] > 0)].groupby("cod")["hora"].max()
+    # Las compras de cada producto, para «última compra»: la última HASTA el
+    # conteo, no la que llegó después (una sesión de dos días lee el kardex
+    # hasta el último).
+    comp_de = {c: np.sort(g["hora"].to_numpy())
+               for c, g in K[_es_compra(K["t"]) & (K["ent"] > 0)].groupby("cod")}
+
+    def ultima_compra(c, t1):
+        h = comp_de.get(c)
+        if h is None:
+            return None
+        h = h[h <= np.datetime64(t1)]
+        return pd.Timestamp(h[-1]) if len(h) else None
 
     # ── Recetas, órdenes, porcionamientos, ventas ─────────────────────
     RVD, RB = recetas(recetaventa, recetabase, carta)
@@ -790,7 +801,7 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
             "hist": [(lab,) + hist.get((x["acod"], c, j), (None, None))
                      for j, lab in enumerate(hist_lab)],
             "usos": usos[:USOS_FICHA], "usos_n": len(usos), "rec": rec,
-            "viene": {"compra": comp.get(c), "porc": porc_origen.get(c),
+            "viene": {"compra": ultima_compra(c, x["t1"]), "porc": porc_origen.get(c),
                       "uporc": ult_porc_fin.get(c)},
         }
         fichas[i]["pide"], fichas[i]["pend"] = quien_pide(x)

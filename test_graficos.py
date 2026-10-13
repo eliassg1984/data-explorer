@@ -8555,6 +8555,8 @@ def _pruebas_diferencias_req_sunat():
                 "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": stock}
     kardex = pd.DataFrame([kx("2026-09-27 14:00", 6, 95, "99", 8, 0, 47.05),
                            kx("2026-09-27 14:00", 0, 95, "99", 0, 8, 0),
+                           kx("2026-09-27 14:00", 0, 95, "01", 8, 0, 8),
+                           kx("2026-10-06 14:00", 0, 95, "01", 10.2, 0, 10.2),
                            kx("2026-09-25 13:00", 2, 96, "95", 0, 2, -2)])
     vacia = lambda *cols: pd.DataFrame(columns=list(cols))
     rv = vacia("ITEM VENTA ACTIVO", "RV ACTIV", "DESCARG", "COD PLATO", "NOMB PLATO", "COD INS",
@@ -8595,6 +8597,8 @@ def _pruebas_diferencias_req_sunat():
     check("lo pedido por área en 90 días, sin lo de después del conteo",
           [(a, q, n, w) for a, q, n, _f, w in F[de[(6, "95")]["id"]]["pide"]],
           [("PRODUCCION", 27.5, 2, 8.0), ("COCINA", 12.0, 1, 0.0)])
+    check("la última compra es la de ANTES del conteo, no la que llegó después",
+          F[de[(6, "95")]["id"]]["viene"]["compra"], pd.Timestamp("2026-09-27 14:00"))
     check("ninguna receta lo usa, y lo pide Producción",
           [("Produccion lo pidió por requerimiento: 27.5 kg en 2 requerimientos" in p["tx"])
            for p in pistas(6, "95") if p["t"] == "nadie"], [True])
