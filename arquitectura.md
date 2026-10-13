@@ -50854,6 +50854,56 @@ El mapa del proyecto (tabla de ficheros, pipeline de datos, configuración de
      con el módulo viejo en memoria la página sigue dibujando las barras de
      colores hasta el reinicio.
 
+     **Addendum (mismo día, otra ronda): el PERFIL DE SALIDA y textos según
+     qué es el producto.** En `diferencias_ajuste.py` (`perfil`,
+     `salida_habitual`, `sin_receta`, `familia_de`, la pista «uso»,
+     `VERSION` 5), `graficos/ajuste/_diferencias.py` («Cómo sale») y
+     `test_graficos.py::_pruebas_diferencias_perfil`. Va como anexo y no
+     como regla nueva porque, mientras se escribía, otra sesión tenía la #655
+     sin commitear y ya citada en su código.
+
+     Dos quejas del usuario, las dos ciertas:
+     - «"Sus platos no se vendieron" es genérico: algunos ítems son vinos o
+       bebidas». Medido: 64 de las 69 líneas con esa pista eran bebidas (58
+       de «Bebidas con alcohol»), y el consejo —«falta en una receta»— no
+       les cabe. Ahora es «No se vendió nada que lo lleve», con un consejo
+       por familia (`familia_de`: a una bebida, «vendido con otro código, una
+       cortesía o un evento sin marcar, una rotura sin nota»; a un envase,
+       «pedidos cuya receta no lo lleva») y, si antes se vendía, cuánto.
+     - «"Ninguna receta lo usa" no es exacto: un producto puede salir por
+       porcionamiento o por una salida como comida de personal o prueba».
+       Y peor: los bowls ensaladera y el secador de tela no están en ninguna
+       receta, activa ni inactiva, ni en un descargo directo, y el KARDEX
+       los descuenta por ventas (1.190 bowls en 180 días): lo agrega algo
+       que no llega a los parquets, quizá el envase que el POS suma por
+       canal.
+
+     **El perfil de salida.** Cómo salió cada producto en los `DIAS_ATRAS`
+     días antes de la sesión, en el restaurante entero: por ventas (95), por
+     producción o porcionamiento (94/96/90), o por notas, partidas por el
+     `TIPO DESCARGO` de `salidas.parquet` (lo que el 98 tiene y salidas no
+     parte queda «Nota de salida»; 91 y 92, «Control interno» y «Merma
+     fija»). La ficha lo muestra («Cómo sale») y decide qué pista va:
+     - **Ningún documento en 180 días** → «Ninguna receta lo usa» (el hueso
+       de pollo).
+     - **Sólo notas** → «Sale sólo por notas» (las bolsas al vacío: «Uso en
+       el Area», 1.750 und).
+     - **El kardex lo descuenta por ventas o producción sin receta
+       visible** → «Se descuenta sin receta visible», POSIBLE (los bowls, el
+       secador).
+     - **Sale sobre todo por notas de UN tipo** (≥ 60 % notas y ese tipo ≥
+       50 % del total) → la pista «uso», «Suele salir por "Comida
+       Personal"»: lo de siempre (lo de 180 días, por día, por los días entre
+       los dos conteos) contra lo registrado; si se registró menos de la
+       mitad, la diferencia se compara con lo que falta, y es fuerte si calza
+       (0,5–2×). Setiembre 2026: 43 líneas, por «Uso en el Area», «Evento»,
+       «Prueba», «Comida Personal», «Bajas».
+
+     Cuánto mueve: las pistas fuertes pasan de cubrir el 57,1 % al 55,2 %
+     del faltante en soles, porque «Se descuenta sin receta visible» es
+     posible donde antes «Ninguna receta lo usa» era fuerte. Es lo honesto:
+     el kardex dice que algo lo descuenta.
+
      (2026-10-13.)
 
 650. **Por qué no cuadra cada línea de un conteo: Ajuste › «Análisis de

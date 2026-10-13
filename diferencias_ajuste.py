@@ -54,6 +54,10 @@ LAS PISTAS, en el orden en que se muestran (fuertes primero):
   neg      el sistema terminó en negativo: el sobrante corrige un descargo
            que se hizo sin ingreso, no es mercadería que apareció
   rev      revierte el conteo anterior de la misma línea
+  uso      en los 6 meses anteriores el producto salió sobre todo por NOTAS
+           de un tipo (comida de personal, prueba, uso en el área…), y entre
+           los dos conteos se registró mucho menos que lo de siempre: lo que
+           falta se parece a esas notas sin registrar (#650)
   nada     no salió nada del área con un documento; y POR QUÉ, siguiendo cada
            receta que debía descontarlo (`por_que_nada`)
   nadie    ningún plato, receta base ni porcionamiento lo usa
@@ -79,7 +83,7 @@ import pandas as pd
 
 from sin_plato import palabra_clave
 
-VERSION = 4
+VERSION = 5
 """Va en la clave de la caché de disco (que no caduca): subirla cuando
 cambie QUÉ se calcula."""
 
@@ -99,13 +103,14 @@ USOS_FICHA = 10
 
 FAMILIA_OPERACION = "COSTOS PRODUCCION"
 
-TIPOS = ("receta", "desc", "prod", "combo", "sunat", "req", "area", "rubro", "neg", "rev",
-         "nada", "nadie")
+TIPOS = ("receta", "desc", "prod", "combo", "sunat", "req", "area", "rubro", "uso", "neg",
+         "rev", "nada", "nadie")
 """Los tipos de pista, en el orden en que se muestran a igual fuerza. «rubro»
 va antes que «neg» y «nada» desde la #651: cuando es fuerte («vendido con el
 código del otro») explica por qué hay un negativo o por qué no salió nada."""
 
-NOMBRE_TIPO = {"receta": "Receta", "desc": "Área de descargo", "prod": "Producción",
+NOMBRE_TIPO = {"receta": "Receta", "desc": "Área de descargo", "uso": "Salida habitual",
+               "prod": "Producción",
                "combo": "Combo",
                "sunat": "Factura sin ingresar", "req": "Sin procesar",
                "area": "Otra área",
@@ -538,6 +543,42 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                           "f": _fecha(sa["FECHA PROCESADO"]), "q": _num(sa["CANT SALIDA"]),
                           "tipo": sa["TIPO DESCARGO"].fillna("").astype(str).str.strip()})
     MOT = motivos(W, K, L, S, area_de)
+
+    # El PERFIL DE SALIDA de cada producto (#650): cómo salió en los
+    # DIAS_ATRAS días antes de la sesión, en el restaurante entero —por
+    # ventas, por producción o porcionamiento, o por notas, y de qué tipo—.
+    # Dice si «ninguna receta lo usa» es cierto (el kardex lo descuenta por
+    # ventas o no) y qué es lo habitual para un producto que sale por notas.
+    Kp = K[(K["hora"] < ini) & (K["sal"] > 0)]
+    _G = {"95": "ventas", "94": "prod", "96": "prod", "90": "prod", "98": "n98",
+          "91": "Control interno", "92": "Merma fija"}
+    perfil = {}
+    for (c_, g_), qv in (Kp.assign(g=Kp["t"].map(_G)).dropna(subset=["g"])
+                         .groupby(["cod", "g"])["sal"].sum().items()):
+        p_ = perfil.setdefault(c_, {"ventas": 0.0, "prod": 0.0, "n98": 0.0, "notas": {}})
+        if g_ in ("ventas", "prod", "n98"):
+            p_[g_] += float(qv)
+        else:
+            p_["notas"][g_] = p_["notas"].get(g_, 0.0) + float(qv)
+    notas_de = {}
+    if S is not None:
+        for (c_, tp), qv in (S[(S["f"] >= desde) & (S["f"] < ini)]
+                             .groupby(["cod", "tipo"])["q"].sum().items()):
+            p_ = perfil.get(c_)
+            if p_ is not None:
+                p_["notas"][tp or "Nota de salida"] = p_["notas"].get(tp or "Nota de salida", 0.0) + float(qv)
+        notas_de = {c_: (g["f"].to_numpy(), g["tipo"].to_numpy(), g["q"].to_numpy())
+                    for c_, g in S.groupby("cod")}
+    for p_ in perfil.values():
+        # Lo del kardex (98) que salidas.parquet no partió por tipo.
+        resto = p_["n98"] - sum(v_ for k_, v_ in p_["notas"].items()
+                                if k_ not in ("Control interno", "Merma fija"))
+        if resto > 0.01:
+            p_["notas"]["Nota de salida"] = p_["notas"].get("Nota de salida", 0.0) + resto
+        p_["n_notas"] = sum(p_["notas"].values())
+        p_["notas_l"] = sorted(([k_, v_] for k_, v_ in p_["notas"].items() if v_ > 1e-9),
+                               key=lambda t_: -t_[1])
+        p_["total"] = p_["ventas"] + p_["prod"] + p_["n_notas"]
     CAM = caminos_del_stock(W, L)
     K95 = K[(K["t"] == "95") & (K["sal"] > 0)]
     k95_de = {c: (g["hora"].to_numpy(), g["sal"].to_numpy())
@@ -810,6 +851,11 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                       "uporc": ult_porc_fin.get(c)},
         }
         fichas[i]["pide"], fichas[i]["pend"] = quien_pide(x)
+        pf = perfil.get(c)
+        fichas[i]["perfil"] = None if not pf or pf["total"] <= 0 else {
+            "ventas": pf["ventas"], "prod": pf["prod"], "total": pf["total"],
+            "notas": pf["notas_l"],
+            "dias": DIAS_ATRAS}
 
     # ── Las pistas ───────────────────────────────────────────────────
     E = pd.concat([
@@ -989,6 +1035,80 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         return {"t": "req", "f": int(0.6 <= qq / max(abs(q), 1e-9) <= 1.6),
                 "ti": "Requerimiento sin procesar", "tx": tx}
 
+    def familia_de(x):
+        """bebida, envase o alimento: qué consejo se le da a lo que no salió."""
+        f_ = str(x["familia"]).upper()
+        if "BEBIDA" in f_ or "VINO" in f_ or "LICOR" in f_:
+            return "bebida"
+        if "ENVASE" in f_ or "EMBALAJE" in f_ or "LIMPIEZA" in f_:
+            return "envase"
+        return "alimento"
+
+    def salida_habitual(x, perfil_x):
+        """La pista «uso» (#650): el producto sale casi siempre por NOTAS de un
+        tipo (comida de personal, prueba, uso en el área…) y entre los dos
+        conteos se registró bastante menos que lo de siempre. Lo de siempre es
+        lo de los DIAS_ATRAS días anteriores, por día, por los días entre los
+        dos conteos. Fuerte si lo que falta calza (0,5–2×) con lo que no se
+        registró."""
+        if not perfil_x or perfil_x["total"] <= 0 or not perfil_x["notas_l"]:
+            return None
+        tp, q6 = perfil_x["notas_l"][0]
+        if perfil_x["n_notas"] / perfil_x["total"] < 0.6 or q6 / perfil_x["total"] < 0.5:
+            return None
+        dias = max((x["t1"] - x["t0w"]).days, 1)
+        esperado = q6 / DIAS_ATRAS * dias
+        reg = 0.0
+        h = notas_de.get(x["cod"])
+        if h is not None:
+            f_, t_, q_ = h
+            m = ((f_ > np.datetime64(x["t0w"].normalize())) & (f_ <= np.datetime64(x["t1"]))
+                 & (t_ == tp))
+            reg = float(q_[m].sum())
+        if reg >= 0.5 * esperado or esperado <= 1e-9:
+            return None
+        falta = abs(float(x["q"]))
+        sin = esperado - reg
+        un = x["u"] or "und"
+        pct = round(100 * q6 / perfil_x["total"])
+        calza = 0.5 <= falta / max(sin, 1e-9) <= 2.0
+        tx = (f"En los {DIAS_ATRAS} días anteriores, el {pct} % de lo que salió de este producto "
+              f"fue por notas de «{tp}»: {es(q6)} {un}, unos {es(q6 / DIAS_ATRAS * 30)} {un} por mes. "
+              f"Entre los dos conteos ({dias} días) se registraron {es(reg)} {un}, cuando lo de "
+              f"siempre serían unos {es(esperado)}. ")
+        tx += (f"Lo que falta ({es(falta)} {un}) calza con lo que no se registró: es, "
+               f"probablemente, «{tp.lower()}» sin nota." if calza else
+               f"Parte de lo que falta ({es(falta)} {un}) puede ser «{tp.lower()}» sin nota.")
+        return {"t": "uso", "f": int(calza), "ti": f"Suele salir por «{tp}»", "tx": tx}
+
+    def sin_receta(x, pf, pide):
+        """La pista de un producto que no está en ninguna receta, porcionamiento
+        ni descargo directo (#650). «Ninguna receta lo usa» no alcanzaba: el
+        kardex puede descontarlo por ventas igual (los bowls y el secador de
+        tela, setiembre 2026: lo agrega algo que no llega a los parquets), y
+        puede salir habitualmente por notas (comida de personal, uso en el
+        área). El perfil de 6 meses dice cuál de las tres es."""
+        un = x["u"] or "und"
+        vend = pf["ventas"] + pf["prod"] if pf else 0.0
+        if vend > 1e-9:
+            return {"t": "nadie", "f": 0, "ti": "Se descuenta sin receta visible",
+                    "tx": f"No está en ninguna receta, porcionamiento ni descargo directo, pero en "
+                          f"los {DIAS_ATRAS} días anteriores el kardex lo descontó por ventas o "
+                          f"producción ({es(vend)} {un}): lo agrega algo que la app no ve (el "
+                          "envase que el POS suma por canal, la receta de un plato inactivo). "
+                          "Lo que falta puede ser ese uso, de otra área." + lo_pide(x, pide)}
+        if pf and pf["n_notas"] > 1e-9:
+            tipos = ", ".join(f"«{k_}» {es(v_)} {un}" for k_, v_ in pf["notas_l"][:2])
+            return {"t": "nadie", "f": 1, "ti": "Sale sólo por notas",
+                    "tx": f"No está en ninguna receta ni porcionamiento: en los {DIAS_ATRAS} días "
+                          f"anteriores salió sólo por notas de salida ({tipos}). Lo que falta es "
+                          "uso que no se registró con una nota." + lo_pide(x, pide)}
+        return {"t": "nadie", "f": 1, "ti": "Ninguna receta lo usa",
+                "tx": f"No está en ninguna receta ni porcionamiento, y en los {DIAS_ATRAS} días "
+                      "anteriores no salió con ningún documento: su uso sólo aparece al contar. "
+                      "Si se usa en cocina, falta en una receta; si es merma, comida de personal "
+                      "o uso del área, va en una nota de salida." + lo_pide(x, pide)}
+
     def lo_pide(x, pide):
         """Quién lo pide, en una frase, para las pistas de lo que nada
         descargó: si se gasta, es en el área que lo pide (#652)."""
@@ -1093,10 +1213,22 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
                           for t_ in combos_de.get(cp, ())})
             ni = (f", ni sueltos ni en {'el combo' if len(cbs) == 1 else 'los combos'} que "
                   f"los lleva{'n' if len(cbs) > 1 else ''} ({', '.join(cbs[:2])})" if cbs else "")
-            return {"t": "nada", "f": 1, "ti": "Sus platos no se vendieron",
-                    "tx": f"Sólo lo descargan {', '.join(nom[:3])}{' y otros' if len(nom) > 3 else ''}, "
-                          f"y no se vendieron entre los dos conteos{ni}. Si se gastó, fue en "
-                          "platos cuya receta no lo lleva: ahí falta en una receta."}
+            # Qué se hace con lo que no salió depende de qué es (#650): un vino
+            # que falta no «falta en una receta».
+            consejo = {
+                "bebida": "Si salió, fue sin registrar: vendido con otro código, servido en una "
+                          "cortesía o un evento sin marcar, o una rotura sin nota.",
+                "envase": "Si se usó, fue en pedidos cuya receta no lo lleva (para llevar, "
+                          "delivery) o sin nota de salida.",
+                "alimento": "Si se gastó, fue en platos cuya receta no lo lleva: ahí falta en una "
+                            "receta."}[familia_de(x)]
+            pf = perfil.get(c)
+            antes = (f" En los {DIAS_ATRAS} días anteriores sí se vendió ({es(pf['ventas'])} "
+                     f"{x['u'] or 'und'}): en este período, no."
+                     if pf and pf["ventas"] > 1e-9 else "")
+            return {"t": "nada", "f": 1, "ti": "No se vendió nada que lo lleve",
+                    "tx": f"Lo llevan {', '.join(nom[:3])}{' y otros' if len(nom) > 3 else ''}, "
+                          f"y no se vendieron entre los dos conteos{ni}.{antes} {consejo}"}
         if quieta:
             return {"t": "nada", "f": 1, "ti": "Su receta base no se movió",
                     "tx": f"Va en {quieta[0][0].rbn}, que no se vendió ni se produjo entre los "
@@ -1242,16 +1374,17 @@ def calcular(ajuste, sesion, sesiones, kardex, recetaventa, recetabase,
         pr = sin_procesar(x, f["pend"])
         if pr is not None:
             P.append(pr)
+        # uso — sale casi siempre por notas de un tipo, y esta vez no
+        if q < 0:
+            pu = salida_habitual(x, perfil.get(c))
+            if pu is not None:
+                P.append(pu)
         # combo — va en un combo que se vendió y no lo descontó
         pc = combo_sin_descontar(x, usos_todos[i], f["sal"]) if q < 0 else None
         # nada / nadie
         if q < 0:
             if c not in usados:
-                P.append({"t": "nadie", "f": 1, "ti": "Ninguna receta lo usa",
-                          "tx": "Ningún plato, receta base ni porcionamiento lo usa: su consumo "
-                                "sólo aparece al contar. Si se usa en cocina, falta en una "
-                                "receta; si es merma o uso del área, va en una nota de salida."
-                                + lo_pide(x, f["pide"])})
+                P.append(sin_receta(x, perfil.get(c), f["pide"]))
             elif x["sal"] <= 1e-9:
                 p_ = por_que_nada(x)
                 antes_ = (desde_[0].upper() + desde_[1:] + " no salió nada de esta área con "

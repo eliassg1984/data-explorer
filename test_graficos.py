@@ -8113,7 +8113,7 @@ def _pruebas_diferencias_ajuste():
     check("lo que ninguna receta usa", de[(1, "50")]["pista_t"], "nadie")
     check("el conteo que revierte al anterior", ("rev", 1) in pistas(1, "60"), True)
     check("los platos que no se vendieron", ti(1, "70", "nada"),
-          ["Sus platos no se vendieron"])
+          ["No se vendió nada que lo lleve"])
     # 3 — descarga por insumo
     check("una DD por insumo no es una producción sin registrar",
           [t for t, _ in pistas(1, "31") + pistas(1, "30") if t == "prod"], [])
@@ -8452,6 +8452,122 @@ def _pruebas_diferencias_area_descargo():
           "desde aquí saldrían 25 (Sarten de Arroz con Pollo)" in p60[0]["tx"], True)
     check("no acusa cuando lo que salió calza con las recetas de hoy",
           [p["t"] for p in F[de[(1, "61")]["id"]]["pistas"] if p["t"] == "desc"], [])
+    return fallos
+
+
+def _pruebas_diferencias_perfil():
+    """Ajuste › «Análisis de diferencias», el PERFIL DE SALIDA (regla #650, el anexo del perfil):
+    cómo salió cada producto en los 180 días antes de la sesión decide qué se
+    dice de lo que nada descargó, con los casos reales de setiembre 2026.
+
+      1. LO QUE SALE POR NOTAS: la zanahoria sale por «Comida Personal» (1 kg
+         por día) y entre los dos conteos no se registró ninguna: lo que falta
+         calza, pista fuerte. Las bolsas al vacío salen sólo por «Uso en el
+         Area»: «Sale sólo por notas», no «Ninguna receta lo usa».
+      2. LO QUE EL KARDEX DESCUENTA SIN RECETA: los bowls no están en ninguna
+         receta y el kardex los descuenta por ventas: «Se descuenta sin
+         receta visible», posible.
+      3. NADA EN 180 DÍAS: «Ninguna receta lo usa», como antes.
+      4. UNA BEBIDA que no se vendió no «falta en una receta»: el consejo es
+         el de las bebidas, y dice que antes sí se vendía.
+    """
+    import pandas as pd
+
+    import cortes
+    import diferencias_ajuste as da
+
+    fallos = 0
+
+    def check(nombre, got, exp):
+        nonlocal fallos
+        if got == exp:
+            print(f"OK    diferencias #650 · {nombre}")
+        else:
+            fallos += 1
+            print(f"FALLA diferencias #650 · {nombre}: got={got!r} exp={exp!r}")
+
+    AREA = {1: "COCINA", 2: "CAVA", 6: "PRODUCCION"}
+    PROD = {70: ("Bolsas Al Vacio 20x33x70", "UND", 0.13, "ENVASES Y EMBALAJES"),
+            71: ("Zanahoria", "KILOS", 2.0, "ALIMENTOS"),
+            72: ("Bowl Ensaladera Bio 1300 Ml", "UND", 1.0, "ENVASES Y EMBALAJES"),
+            73: ("Hueso De Pollo", "KILOS", 4.0, "ALIMENTOS"),
+            74: ("Varietal Malbec Roble 750ml", "UND", 55.0, "VINOS Y ESPUMANTES")}
+
+    def fila(t, a, c, s, k):
+        n, u, p, fam = PROD[c]
+        return {"FECHA APERTURA INVENTARIO": pd.Timestamp(t), "CODIGO AREA": f"{a:010d}",
+                "AREA": AREA[a], "FAMILIA": fam, "SUBFAMILIA": "VARIOS",
+                "CODIGO PRODUCTO": f"{c:010d}", "PRODUCTO": n, "UNIDAD MEDIDA": u,
+                "STOCK AL CIERRE": s, "STOCK DECLARADO": k, "AJUSTE": k - s,
+                "PRECIO PROMEDIO": p, "AJUSTE VALORIZADO": (k - s) * p}
+    t0, t1 = "2026-09-16 17:30", "2026-10-01 17:35"
+    lineas = ((1, 70, 500, 200), (6, 71, 30, 16), (1, 72, 50, 30), (6, 73, 40, 0), (2, 74, 6, 0))
+    ajuste = pd.DataFrame([fila(t0, a, c, s, s) for a, c, s, _ in lineas]
+                          + [fila(t1, *x) for x in lineas])
+
+    def kx(t, a, c, tipo, sal):
+        return {"FECHA HORA": pd.Timestamp(t), "CODIGO AREA": f"{a:03d}",
+                "CODIGO PRODUCTO": f"{c:07d}", "COD TIPO": tipo, "CANT INGRESO": 0.0,
+                "CANT SALIDA": sal, "MOVIMIENTOS": 1, "STOCK DESPUES": 0.0}
+    # La historia: los 180 días antes de la sesión (desde el 4 abr).
+    kardex = pd.DataFrame([kx("2026-06-15 10:00", 1, 70, "98", 1750.0),
+                           kx("2026-06-15 10:00", 6, 71, "98", 180.0),
+                           kx("2026-06-15 10:00", 1, 72, "95", 1190.0),
+                           kx("2026-06-15 10:00", 2, 74, "95", 23.0)])
+    salidas = pd.DataFrame([
+        {"NOMBRE ESTADO SALIDA": "PROCESADO", "AREA": a, "COD PRODUCTO": f"{c:07d}",
+         "FECHA PROCESADO": pd.Timestamp("2026-06-15 10:00"), "CANT SALIDA": q,
+         "TIPO DESCARGO": tp}
+        for a, c, q, tp in (("COCINA", 70, 1750.0, "Uso en el Area"),
+                            ("PRODUCCION", 71, 180.0, "Comida Personal"))])
+    rv = pd.DataFrame([
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": "0000801", "NOMB PLATO": "(Bt) Varietal Malbec Roble",
+         "COD INS": "0000074", "CANTIDAD": 1.0, "FACTOR": 1.0, "SUBALM INS": "CAVA",
+         "T DESCARG": "PRODUCTO", "FECH MODIF": pd.Timestamp("2026-05-01")},
+        {"ITEM VENTA ACTIVO": "ACTIV", "RV ACTIV": "RV ACT", "DESCARG": "SI",
+         "COD PLATO": "0000802", "NOMB PLATO": "Ensalada de la casa",
+         "COD INS": "0000071", "CANTIDAD": 0.1, "FACTOR": 1.0, "SUBALM INS": "PRODUCCION",
+         "T DESCARG": "PRODUCTO", "FECH MODIF": pd.Timestamp("2026-05-01")}])
+    vacia = lambda *cols: pd.DataFrame(columns=list(cols))
+    rb = vacia("RB ACT", "COD PROD RB", "RB NOMBRE", "COD INS RB", "INSUMO", "CANT",
+               "FACTOR INS", "AREA DESC RB", "T DESCARG", "FECH REG")
+    carta = vacia("TIPO DESC", "COD PLATO", "ITEM VENT", "COD ITEM O RECETA")
+    porc = vacia("COD PROD INIC", "COD PROD FINAL", "PROD FINAL RESULT", "PROD INICIAL",
+                 "COD PORC", "FEC REGIST", "CANT A PORCIONAR")
+    ordenes = vacia("NOMBRE ESTADO", "COD PRODUCTO", "FECHA PROCESO", "CANTIDAD")
+    venta = vacia("producto", "dia", "unidades", "costo", "unidades_costeadas")
+    ses = cortes.sesiones_inventario(ajuste["FECHA APERTURA INVENTARIO"])
+    cierre = [s for s in ses if s["tipo"] == "cierre"][-1]
+    r = da.calcular(ajuste, cierre, ses, kardex, rv, rb, carta, porc, ordenes, salidas, venta)
+    L, F = r["lineas"], r["fichas"]
+    de = {(a, c): x for a, c, x in zip(L["acod"], L["cod"], L.to_dict("records"))}
+
+    def pistas(a, c):
+        return [(p["t"], p["ti"], p["f"]) for p in F[de[(a, c)]["id"]]["pistas"]]
+
+    # 1 — lo que sale por notas
+    check("la zanahoria suele salir por comida de personal, y esta vez no",
+          [p for p in pistas(6, "71") if p[0] == "uso"],
+          [("uso", "Suele salir por «Comida Personal»", 1)])
+    check("el perfil en la ficha, con el tipo de nota",
+          F[de[(6, "71")]["id"]]["perfil"]["notas"], [["Comida Personal", 180.0]])
+    check("las bolsas salen sólo por notas",
+          [p[1] for p in pistas(1, "70") if p[0] == "nadie"], ["Sale sólo por notas"])
+    # 2 — lo que el kardex descuenta sin receta
+    check("los bowls se descuentan sin receta visible",
+          [p for p in pistas(1, "72") if p[0] == "nadie"],
+          [("nadie", "Se descuenta sin receta visible", 0)])
+    # 3 — nada en 180 días
+    check("sin salidas en 180 días: ninguna receta lo usa",
+          [p[1] for p in pistas(6, "73") if p[0] == "nadie"], ["Ninguna receta lo usa"])
+    # 4 — una bebida que no se vendió
+    vino = [p for p in F[de[(2, "74")]["id"]]["pistas"] if p["t"] == "nada"]
+    check("una bebida: «No se vendió nada que lo lleve»",
+          [p["ti"] for p in vino], ["No se vendió nada que lo lleve"])
+    check("con el consejo de las bebidas y lo que antes sí se vendía",
+          ("vendido con otro código" in vino[0]["tx"], "sí se vendió (23 und)" in vino[0]["tx"]),
+          (True, True))
     return fallos
 
 
@@ -11854,6 +11970,7 @@ def main():
     fallos += _pruebas_diferencias_combos()
     fallos += _pruebas_diferencias_req_sunat()
     fallos += _pruebas_diferencias_area_descargo()
+    fallos += _pruebas_diferencias_perfil()
     fallos += _pruebas_merma()
     fallos += _pruebas_cortes_y_peso()
 

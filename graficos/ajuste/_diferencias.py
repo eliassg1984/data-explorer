@@ -70,6 +70,7 @@ _ICONO = {"receta": ":material/error:", "prod": ":material/precision_manufacturi
           "rev": ":material/undo:", "nada": ":material/block:",
           "combo": ":material/restaurant_menu:", "sunat": ":material/receipt_long:",
           "req": ":material/pending_actions:", "desc": ":material/alt_route:",
+          "uso": ":material/history:",
           "nadie": ":material/no_meals:", "rubro": ":material/compare_arrows:"}
 
 _SIN_DATOS = ("No se pudo armar el análisis de esta sesión: hace falta el "
@@ -383,6 +384,21 @@ def _viene_html(x, fi):
     return '<div class="dif-viene">' + "".join(f"<div>{t}</div>" for t in out) + "</div>"
 
 
+def _perfil_html(x, fi):
+    """Cómo sale el producto (#650): lo de los últimos meses, en el
+    restaurante entero, por ventas, producción o notas y de qué tipo."""
+    pf = fi.get("perfil")
+    if not pf:
+        return '<div class="dif-nota">No salió con ningún documento en ese tiempo.</div>'
+    u = _e(x["u"] or "und")
+    t = pf["total"]
+    partes = [("ventas", pf["ventas"]), ("producción o porcionamiento", pf["prod"])]
+    h = " · ".join(f"{n} {round(100 * v / t)} %" for n, v in partes if v > 1e-9)
+    notas = " · ".join(f"{_e(k)} {round(100 * v / t)} %" for k, v in pf["notas"][:3])
+    return ('<div class="dif-viene"><div>' + " · ".join(p for p in (h, notas) if p)
+            + f'</div><div class="dif-nota">{_cant(t)} {u} en total</div></div>')
+
+
 def _pide_html(x, fi):
     """Quién lo pide: los requerimientos del producto por área (#652). No
     mueven consumo, pero dicen qué área lo usa."""
@@ -493,6 +509,8 @@ def _ficha(x, fi, por_clave):
         st.plotly_chart(_fig_camino(x, fi), width="stretch", key="ajdif_camino",
                         config={"displaylogo": False, "displayModeBar": False})
     st.markdown('<div class="dif-h">De dónde viene</div>' + _viene_html(x, fi)
+                + f'<div class="dif-h">Cómo sale ({da.DIAS_ATRAS} días antes del conteo)</div>'
+                + _perfil_html(x, fi)
                 + '<div class="dif-h">Quién lo pide (requerimientos, 90 días)</div>'
                 + _pide_html(x, fi)
                 + '<div class="dif-h">Dónde se usa</div>'

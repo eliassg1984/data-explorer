@@ -1255,6 +1255,12 @@ vista, `graficos/ajuste/_diferencias.py`. Lo que ya mordió:
   las líneas a ±10 %): en la ficha va con «≈», sin compararlo.
 - **El 74 % del sobrante de un cierre es el sistema en negativo**: se
   descargó antes de que entrara nada. No es mercadería que apareció.
+- **«Ninguna receta lo usa» lo decide el PERFIL DE SALIDA de 180 días**
+  (ventas, producción, notas por tipo; anexo de la #650): hay productos que
+  el kardex descuenta por ventas sin estar en ninguna receta (los bowls), y
+  otros que salen siempre por notas (comida de personal, uso en el área).
+  Y lo que no se vendió se aconseja según qué es: un vino no «falta en una
+  receta».
 - **Tocar la cuenta es subir `diferencias_ajuste.VERSION`.**
 
 ## El consumo según recetas baja hasta lo que se COMPRA
